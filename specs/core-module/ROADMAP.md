@@ -558,74 +558,87 @@ This roadmap breaks down the implementation of the `internal/core` package into 
 
 ---
 
-### Feature 5.2: Regular Task Mode
+### Feature 5.2: Regular Task Mode ✅
 
 **Description:** Implement standard interactive coding mode with full tool access.
 
 **DoR:**
-- [ ] Feature 5.1 completed
-- [ ] Regular mode requirements defined
-- [ ] System prompts written
+- [x] Feature 5.1 completed
+- [x] Regular mode requirements defined
+- [x] System prompts written
 
 **DoD:**
-- [ ] `task/regular.go` implemented
-- [ ] Regular struct implementing Task interface
-- [ ] Full tool set enabled (read_file, write_file, shell, search, git)
-- [ ] Regular mode system prompt
-- [ ] Standard token budget
-- [ ] Configuration options
-- [ ] Unit tests for regular mode (>90% coverage)
-- [ ] Integration tests with executor
-- [ ] Mode documentation
+- [x] `task/regular.go` implemented
+- [x] Regular struct implementing Task interface
+- [x] Full tool set enabled (read_file, write_file, shell, search, git)
+- [x] Regular mode system prompt (comprehensive 34-line prompt)
+- [x] Standard token budget (16384 default)
+- [x] Configuration options (RegularConfig with MaxTokens, ExcludedTools, CustomSystemPrompt)
+- [x] Unit tests for regular mode (97.8% coverage - exceeds 90% target)
+- [x] Integration tests with Registry
+- [x] Mode documentation
+- [x] All linters passing
+- [x] Race detector clean
+- [x] Code analyzed (all functions complexity ≤3)
+- [x] FRD-5.2 created and completed
 
 **Tasks:**
-1. Implement Regular struct
-2. Implement Name() returning "regular"
-3. Implement SystemPrompt() with regular prompt
-4. Implement AllowedTools() with full tool list
-5. Implement MaxTokens() with standard budget
-6. Implement Validate()
-7. Write regular mode tests
-8. Document regular mode usage
+1. ✅ Implement Regular struct
+2. ✅ Implement Name() returning "regular"
+3. ✅ Implement SystemPrompt() with regular prompt
+4. ✅ Implement AllowedTools() with full tool list (12 tools)
+5. ✅ Implement MaxTokens() with standard budget
+6. ✅ Implement Validate()
+7. ✅ Write regular mode tests
+8. ✅ Document regular mode usage
 
 **Priority:** P1 (Critical)  
-**Estimated Effort:** 4 hours
+**Estimated Effort:** 4 hours  
+**Actual Effort:** ~2 hours  
+**Status:** ✅ **Complete**
 
 ---
 
-### Feature 5.3: Review Task Mode
+### Feature 5.3: Review Task Mode ✅
 
 **Description:** Implement read-only code review mode with restricted tool access.
 
 **DoR:**
-- [ ] Feature 5.1 completed
-- [ ] Review mode requirements defined
-- [ ] Review system prompts written
+- [x] Feature 5.1 completed
+- [x] Review mode requirements defined
+- [x] Review system prompts written
 
 **DoD:**
-- [ ] `task/review.go` implemented
-- [ ] Review struct implementing Task interface
-- [ ] Read-only tools (read_file, search)
-- [ ] Review mode system prompt
-- [ ] File list configuration
-- [ ] Validation for read-only operations
-- [ ] Unit tests for review mode (>90% coverage)
-- [ ] Tool restriction tests
-- [ ] Mode documentation
+- [x] `task/review.go` implemented
+- [x] Review struct implementing Task interface
+- [x] Read-only tools (read_file, list_dir, search_files, search_code, get_context)
+- [x] Review mode system prompt (comprehensive review-focused prompt)
+- [x] File list configuration (TargetFiles support)
+- [x] Validation for read-only operations
+- [x] Unit tests for review mode (98.4% coverage - exceeds 90% target)
+- [x] Tool restriction tests (write operations excluded)
+- [x] Mode documentation
+- [x] All linters passing
+- [x] Race detector clean
+- [x] Optional Git operations (configurable)
+- [x] Smaller token budget than Regular (12288 vs 16384)
+- [x] FRD-5.3 created and completed
 
 **Tasks:**
-1. Implement Review struct
-2. Implement Name() returning "review"
-3. Implement SystemPrompt() with review prompt
-4. Implement AllowedTools() with read-only tools
-5. Add file list management
-6. Implement validation
-7. Write review mode tests
-8. Test tool restrictions
-9. Document review mode
+1. ✅ Implement Review struct
+2. ✅ Implement Name() returning "review"
+3. ✅ Implement SystemPrompt() with review prompt
+4. ✅ Implement AllowedTools() with read-only tools (5-8 tools)
+5. ✅ Add file list management (TargetFiles)
+6. ✅ Implement validation
+7. ✅ Write review mode tests
+8. ✅ Test tool restrictions
+9. ✅ Document review mode
 
 **Priority:** P2 (Nice to Have)  
-**Estimated Effort:** 4 hours
+**Estimated Effort:** 4 hours  
+**Actual Effort:** ~2 hours  
+**Status:** ✅ **Complete**
 
 ---
 

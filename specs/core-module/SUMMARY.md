@@ -117,8 +117,8 @@ At this point you have a working MVP (~120 hours)
 
 ### Phase 5: Task Execution Modes 🔄
 - [x] 5.1: Task Interface & Registry (6h) ✅
-- [ ] 5.2: Regular Task Mode (4h)
-- [ ] 5.3: Review Task Mode (4h)
+- [x] 5.2: Regular Task Mode (4h) ✅
+- [x] 5.3: Review Task Mode (4h) ✅
 - [ ] 5.4: Compact Task Mode (4h)
 
 ### Phase 6: Agent Core ☐
