@@ -93,13 +93,13 @@ At this point you have a working MVP (~120 hours)
 
 ## Feature Checklist
 
-### Phase 0: Foundation & Setup ☐
+### Phase 0: Foundation & Setup ✅
 - [x] 0.1: Project Structure & Dependencies (4h) ✅
 - [x] 0.2: Core Types & Errors (6h) ✅
-- [ ] 0.3: Configuration System (8h)
+- [x] 0.3: Configuration System (8h) ✅
 
-### Phase 1: State Management ☐
-- [ ] 1.1: Session Management (12h)
+### Phase 1: State Management 🚧
+- [x] 1.1: Session Management (12h) ✅
 - [ ] 1.2: Turn State Machine (10h)
 - [ ] 1.3: History Management (10h)
 

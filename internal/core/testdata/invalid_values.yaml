@@ -1,0 +1,8 @@
+# Valid YAML but invalid values
+provider: ""
+model: ""
+max_turns: -1
+timeout: -5s
+sandbox_mode: invalid-mode
+work_dir: /tmp
+

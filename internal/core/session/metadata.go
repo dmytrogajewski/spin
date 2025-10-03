@@ -1,6 +1,11 @@
 package session
 
-// Metadata contains session metadata information.
+// Metadata contains session metadata.
 type Metadata struct {
-	// TODO: Implementation in Feature 1.1
+	Title       string   // User-friendly session title
+	Description string   // Session description
+	Tags        []string // User-defined tags
+	TotalTurns  int      // Total turn count
+	TokensUsed  int      // Total tokens consumed
+	LastError   string   // Last error message (if any)
 }

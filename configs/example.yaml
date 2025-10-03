@@ -1,0 +1,122 @@
+# Spin AI Agent Configuration Example
+# Copy this file to ~/.spin/config.yaml and customize
+
+# ============================================================================
+# LLM Provider Configuration
+# ============================================================================
+
+# Provider type: ollama, openai, lmstudio, etc.
+provider: ollama
+
+# Model name (provider-specific)
+model: codellama:13b
+
+# Provider-specific configuration
+provider_config:
+  temperature: 0.7
+  top_p: 0.9
+  # Additional provider-specific options can be added here
+
+# ============================================================================
+# Execution Configuration
+# ============================================================================
+
+# Maximum number of agent turns per task
+max_turns: 50
+
+# Timeout for operations (e.g., 5m, 10m, 1h)
+timeout: 5m
+
+# Working directory (defaults to current directory if not set)
+# work_dir: /path/to/project
+
+# ============================================================================
+# Security Configuration
+# ============================================================================
+
+# Sandbox mode: read-only, workspace-only, full-access
+sandbox_mode: workspace-only
+
+# Path to security policy file (Starlark)
+# policy_file: ~/.spin/policy.star
+
+# Commands that are always allowed (in addition to policy)
+allowed_commands:
+  - git
+  - make
+  - go
+  - npm
+  - python
+
+# ============================================================================
+# Feature Flags
+# ============================================================================
+
+# Enable Model Context Protocol support
+enable_mcp: false
+
+# MCP Server configurations
+mcp_servers:
+  - name: filesystem
+    command: mcp-server-filesystem
+    args:
+      - /workspace
+  
+  # - name: github
+  #   command: mcp-server-github
+  #   env:
+  #     GITHUB_TOKEN: ${GITHUB_TOKEN}
+
+# Enable Git integration
+enable_git: true
+
+# Enable shell command execution
+enable_shell: true
+
+# ============================================================================
+# Performance Configuration
+# ============================================================================
+
+# Maximum tokens for LLM context
+max_tokens: 8192
+
+# Stream buffer size for real-time updates
+stream_buffer: 100
+
+# Enable command result caching
+cache_commands: false
+
+# ============================================================================
+# Storage Configuration
+# ============================================================================
+
+# Directory for session storage
+session_dir: ~/.spin/sessions
+
+# Maximum number of history messages to keep
+history_limit: 1000
+
+# ============================================================================
+# Notes
+# ============================================================================
+#
+# - Environment variables can be used with ${VAR_NAME} syntax
+# - Tilde (~) expands to home directory
+# - CLI flags override environment variables
+# - Environment variables override file configuration
+# - File configuration overrides defaults
+#
+# Environment Variables:
+# - SPIN_PROVIDER: LLM provider
+# - SPIN_MODEL: Model name
+# - SPIN_WORKDIR or SPIN_WORK_DIR: Working directory
+# - SPIN_SANDBOX_MODE: Sandbox mode
+# - SPIN_MAX_TURNS: Maximum turns
+# - SPIN_TIMEOUT: Operation timeout
+# - SPIN_MAX_TOKENS: Maximum tokens
+# - SPIN_ENABLE_GIT: Enable Git (true/false)
+# - SPIN_ENABLE_SHELL: Enable shell (true/false)
+# - SPIN_ENABLE_MCP: Enable MCP (true/false)
+#
+# For more information, see: https://github.com/yourusername/spin
+
