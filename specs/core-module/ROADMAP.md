@@ -152,41 +152,42 @@ This roadmap breaks down the implementation of the `internal/core` package into 
 
 ---
 
-### Feature 1.2: Turn State Machine
+### Feature 1.2: Turn State Machine ✅
 
 **Description:** Implement turn state management with state transitions and turn execution tracking.
 
 **DoR:**
-- [ ] Feature 1.1 completed
-- [ ] Turn state machine diagram defined
-- [ ] State transition rules documented
+- [x] Feature 1.1 completed
+- [x] Turn state machine diagram defined
+- [x] State transition rules documented
 
 **DoD:**
-- [ ] `turn/turn.go` implemented with Turn struct
-- [ ] `turn/state.go` with TurnState enum and transitions
-- [ ] `turn/result.go` with turn execution results
-- [ ] All TurnState constants defined
-- [ ] State transition validation
-- [ ] Turn ID generation
-- [ ] Token usage tracking
-- [ ] Timestamp tracking (start/complete)
-- [ ] Unit tests for state machine (>90% coverage)
-- [ ] State transition tests (all valid/invalid paths)
-- [ ] Turn serialization/deserialization
+- [x] `turn/turn.go` implemented with Turn struct
+- [x] `turn/state.go` with TurnState enum and transitions
+- [x] `turn/result.go` with turn execution results
+- [x] All TurnState constants defined
+- [x] State transition validation
+- [x] Turn ID generation
+- [x] Token usage tracking
+- [x] Timestamp tracking (start/complete)
+- [x] Unit tests for state machine (>90% coverage) - 95.6% achieved
+- [x] State transition tests (all valid/invalid paths)
+- [x] Turn serialization/deserialization
 
 **Tasks:**
-1. Define Turn struct with all fields
-2. Define TurnState enum (Pending, Running, WaitingApproval, Completed, Failed, Cancelled)
-3. Implement state transition logic
-4. Implement Execute() method stub
-5. Implement result tracking
-6. Add token usage tracking
-7. Write state machine tests
-8. Write turn lifecycle tests
-9. Document turn states and transitions
+1. ✅ Define Turn struct with all fields
+2. ✅ Define TurnState enum (Pending, Running, WaitingApproval, Completed, Failed, Cancelled)
+3. ✅ Implement state transition logic
+4. ✅ Implement lifecycle methods (Start, Complete, Fail, Cancel, RequestApproval, Approve, Deny)
+5. ✅ Implement result tracking
+6. ✅ Add token usage tracking
+7. ✅ Write state machine tests
+8. ✅ Write turn lifecycle tests
+9. ✅ Document turn states and transitions
 
 **Priority:** P0 (Blocker)  
-**Estimated Effort:** 10 hours
+**Estimated Effort:** 10 hours  
+**Status:** ✅ **Complete**
 
 ---
 

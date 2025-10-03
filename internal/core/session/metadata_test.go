@@ -46,21 +46,21 @@ func TestMetadata_TokenTracking(t *testing.T) {
 
 	// Add turns with different token counts
 	_ = session.AddTurn(&turn.Turn{
-		ID:         "turn-1",
-		SessionID:  session.ID,
-		TokensUsed: 100,
+		ID:        "turn-1",
+		SessionID: session.ID,
+		Tokens:    turn.TokenUsage{TotalTokens: 100},
 	})
 
 	_ = session.AddTurn(&turn.Turn{
-		ID:         "turn-2",
-		SessionID:  session.ID,
-		TokensUsed: 250,
+		ID:        "turn-2",
+		SessionID: session.ID,
+		Tokens:    turn.TokenUsage{TotalTokens: 250},
 	})
 
 	_ = session.AddTurn(&turn.Turn{
-		ID:         "turn-3",
-		SessionID:  session.ID,
-		TokensUsed: 150,
+		ID:        "turn-3",
+		SessionID: session.ID,
+		Tokens:    turn.TokenUsage{TotalTokens: 150},
 	})
 
 	expectedTokens := 100 + 250 + 150

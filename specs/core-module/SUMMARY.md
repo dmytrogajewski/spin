@@ -100,7 +100,7 @@ At this point you have a working MVP (~120 hours)
 
 ### Phase 1: State Management 🚧
 - [x] 1.1: Session Management (12h) ✅
-- [ ] 1.2: Turn State Machine (10h)
+- [x] 1.2: Turn State Machine (10h) ✅
 - [ ] 1.3: History Management (10h)
 
 ### Phase 2: Safety & Execution ☐

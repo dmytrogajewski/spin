@@ -107,10 +107,10 @@ func TestSession_AddTurn(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	turn := &turn.Turn{
-		ID:         "turn-1",
-		SessionID:  session.ID,
-		UserInput:  "Test input",
-		TokensUsed: 100,
+		ID:        "turn-1",
+		SessionID: session.ID,
+		UserInput: "Test input",
+		Tokens:    turn.TokenUsage{TotalTokens: 100},
 	}
 
 	err := session.AddTurn(turn)
@@ -157,9 +157,9 @@ func TestSession_AddTurn_Multiple(t *testing.T) {
 
 	for i := 1; i <= 5; i++ {
 		turn := &turn.Turn{
-			ID:         fmt.Sprintf("turn-%d", i),
-			SessionID:  session.ID,
-			TokensUsed: i * 100,
+			ID:        fmt.Sprintf("turn-%d", i),
+			SessionID: session.ID,
+			Tokens:    turn.TokenUsage{TotalTokens: i * 100},
 		}
 
 		err := session.AddTurn(turn)
@@ -431,8 +431,8 @@ func TestSession_Validate_DuplicateTurnIDs(t *testing.T) {
 func TestSession_Validate_InconsistentMetadata(t *testing.T) {
 	session := NewSession("/test/workdir", core.DefaultConfig())
 
-	session.AddTurn(&turn.Turn{ID: "turn-1", SessionID: session.ID, TokensUsed: 100})
-	session.AddTurn(&turn.Turn{ID: "turn-2", SessionID: session.ID, TokensUsed: 200})
+	session.AddTurn(&turn.Turn{ID: "turn-1", SessionID: session.ID, Tokens: turn.TokenUsage{TotalTokens: 100}})
+	session.AddTurn(&turn.Turn{ID: "turn-2", SessionID: session.ID, Tokens: turn.TokenUsage{TotalTokens: 200}})
 
 	// Manually corrupt metadata
 	session.Metadata.TotalTurns = 5 // Wrong count

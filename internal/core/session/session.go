@@ -93,7 +93,7 @@ func (s *Session) AddTurn(t *turn.Turn) error {
 	s.Turns = append(s.Turns, t)
 	s.UpdatedAt = time.Now()
 	s.Metadata.TotalTurns++
-	s.Metadata.TokensUsed += t.TokensUsed
+	s.Metadata.TokensUsed += t.Tokens.TotalTokens
 
 	return nil
 }
@@ -270,7 +270,7 @@ func (s *Session) Validate() error {
 	// Validate token count consistency
 	actualTokens := 0
 	for _, t := range s.Turns {
-		actualTokens += t.TokensUsed
+		actualTokens += t.Tokens.TotalTokens
 	}
 	if s.Metadata.TokensUsed != actualTokens {
 		errs = append(errs, fmt.Errorf("metadata tokens used (%d) does not match actual (%d)",
