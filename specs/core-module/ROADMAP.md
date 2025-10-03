@@ -374,47 +374,53 @@ This roadmap breaks down the implementation of the `internal/core` package into 
 
 ## Phase 3: Context & Environment
 
-### Feature 3.1: Environment Context Gathering
+### Feature 3.1: Environment Context Gathering ✅
 
 **Description:** Implement comprehensive environment context collection including OS, Git, project structure, and environment variables.
 
 **DoR:**
-- [ ] Feature 0.2 completed
-- [ ] Context gathering requirements documented
-- [ ] Privacy/security considerations defined
+- [x] Feature 0.2 completed
+- [x] Context gathering requirements documented
+- [x] Privacy/security considerations defined
 
 **DoD:**
-- [ ] `context.go` implemented with Context struct
-- [ ] Gather() function for context collection
-- [ ] OSInfo gathering (OS, arch, kernel, shell)
-- [ ] GitInfo gathering (branch, changes, remotes)
-- [ ] FileInfo scanning (project structure)
-- [ ] Project type detection (Go, Python, Node.js, etc.)
-- [ ] Language detection from files
-- [ ] Environment variable filtering (exclude sensitive vars)
-- [ ] Git repository detection and info extraction
-- [ ] Unit tests for context gathering (>85% coverage)
-- [ ] Integration tests with real project directories
-- [ ] Tests for non-git directories
-- [ ] Sensitive data filtering tests
-- [ ] Context serialization for LLM prompts
+- [x] `context.go` implemented with Context struct
+- [x] Gather() function for context collection
+- [x] OSInfo gathering (OS, arch, kernel, shell)
+- [x] GitInfo gathering (branch, changes, remotes)
+- [x] FileInfo scanning (project structure)
+- [x] Project type detection (Go, Python, Node.js, etc.)
+- [x] Language detection from files
+- [x] Environment variable filtering (exclude sensitive vars)
+- [x] Git repository detection and info extraction
+- [x] Unit tests for context gathering (89.3% coverage)
+- [x] Integration tests with real project directories
+- [x] Tests for non-git directories
+- [x] Sensitive data filtering tests
+- [x] Context serialization for LLM prompts
+- [x] Godoc comments for all exported symbols
+- [x] All linters passing
+- [x] Cyclomatic complexity ≤5 for all functions
+- [x] FRD-3.1 created and completed
 
 **Tasks:**
-1. Implement Context struct with all info types
-2. Implement OSInfo struct and gathering
-3. Implement GitInfo struct and gathering
-4. Implement FileInfo struct and scanning
-5. Implement Gather() orchestration
-6. Add project type detection logic
-7. Add language detection from extensions
-8. Implement environment variable filtering
-9. Add Git repository detection
-10. Write context gathering tests
-11. Write integration tests
-12. Document context structure
+1. ✅ Implement Context struct with all info types
+2. ✅ Implement OSInfo struct and gathering
+3. ✅ Implement GitInfo struct and gathering
+4. ✅ Implement FileInfo struct and scanning
+5. ✅ Implement Gather() orchestration
+6. ✅ Add project type detection logic
+7. ✅ Add language detection from extensions
+8. ✅ Implement environment variable filtering
+9. ✅ Add Git repository detection
+10. ✅ Write context gathering tests
+11. ✅ Write integration tests
+12. ✅ Document context structure
 
 **Priority:** P1 (Critical)  
-**Estimated Effort:** 14 hours
+**Estimated Effort:** 14 hours  
+**Actual Effort:** ~10 hours  
+**Status:** ✅ **Complete**
 
 ---
 
