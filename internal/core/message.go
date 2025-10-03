@@ -1,0 +1,71 @@
+package core
+
+import "time"
+
+// Role represents a message role in the conversation.
+type Role string
+
+// Standard message roles compatible with LLM APIs.
+const (
+	RoleSystem    Role = "system"
+	RoleUser      Role = "user"
+	RoleAssistant Role = "assistant"
+	RoleTool      Role = "tool"
+)
+
+// Message represents a single message in the conversation history.
+//
+// Messages follow the format expected by LLM APIs like OpenAI's Chat API,
+// supporting system messages, user input, assistant responses, and tool
+// interaction results.
+type Message struct {
+	// ID is a unique identifier for this message
+	ID string `json:"id"`
+
+	// Role indicates who created this message
+	Role Role `json:"role"`
+
+	// Content is the text content of the message
+	Content string `json:"content"`
+
+	// ToolCalls contains tool invocations from assistant messages
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+
+	// ToolCallID links a tool role message to the corresponding tool call
+	ToolCallID string `json:"tool_call_id,omitempty"`
+
+	// Timestamp records when this message was created
+	Timestamp time.Time `json:"timestamp"`
+
+	// Tokens is the estimated token count for this message
+	Tokens int `json:"tokens"`
+
+	// Name is an optional name field for the message author
+	Name string `json:"name,omitempty"`
+
+	// Metadata stores additional extensible data
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// ToolCall represents a tool invocation in an assistant message.
+//
+// This structure follows the OpenAI Chat API format for tool calls.
+type ToolCall struct {
+	// ID is a unique identifier for this tool call
+	ID string `json:"id"`
+
+	// Type is the tool call type, typically "function"
+	Type string `json:"type"`
+
+	// Function contains the function call details
+	Function ToolCallFunction `json:"function"`
+}
+
+// ToolCallFunction contains the details of a function call.
+type ToolCallFunction struct {
+	// Name is the function name to call
+	Name string `json:"name"`
+
+	// Arguments is a JSON string containing the function arguments
+	Arguments string `json:"arguments"`
+}

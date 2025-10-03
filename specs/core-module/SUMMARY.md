@@ -98,10 +98,10 @@ At this point you have a working MVP (~120 hours)
 - [x] 0.2: Core Types & Errors (6h) ✅
 - [x] 0.3: Configuration System (8h) ✅
 
-### Phase 1: State Management 🚧
+### Phase 1: State Management ✅
 - [x] 1.1: Session Management (12h) ✅
 - [x] 1.2: Turn State Machine (10h) ✅
-- [ ] 1.3: History Management (10h)
+- [x] 1.3: History Management (10h) ✅
 
 ### Phase 2: Safety & Execution ☐
 - [ ] 2.1: Command Validator (12h)
