@@ -46,22 +46,22 @@ This roadmap breaks down the implementation of the `internal/core` package into 
 
 ---
 
-### Feature 0.2: Core Types & Errors
+### Feature 0.2: Core Types & Errors ✅
 
 **Description:** Define fundamental types, error definitions, and common interfaces used across the core module.
 
 **DoR:**
-- [ ] Feature 0.1 completed
-- [ ] Error handling patterns documented
+- [x] Feature 0.1 completed
+- [x] Error handling patterns documented
 
 **DoD:**
-- [ ] `error.go` implemented with all core error types
-- [ ] Error wrapping with `Error` struct implemented
-- [ ] Error matching with `Is()` and `Unwrap()` implemented
-- [ ] Error codes defined as constants
-- [ ] Unit tests for error handling (>90% coverage)
-- [ ] Error documentation with usage examples
-- [ ] Common type definitions (State, Filter, etc.)
+- [x] `error.go` implemented with all core error types
+- [x] Error wrapping with `Error` struct implemented
+- [x] Error matching with `Is()` and `Unwrap()` implemented
+- [x] Error codes defined as constants
+- [x] Unit tests for error handling (92.2% coverage)
+- [x] Error documentation with usage examples
+- [x] Common type definitions (State, Filter, etc.)
 
 **Tasks:**
 1. Implement core error types (ErrInvalidInput, ErrSessionNotFound, etc.)

@@ -36,6 +36,7 @@ linters-settings:
     enable-all: true
     disable:
       - shadow  # Too strict for some cases
+      - fieldalignment  # Not critical, can reduce readability
 
   revive:
     rules:

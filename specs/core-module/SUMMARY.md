@@ -95,7 +95,7 @@ At this point you have a working MVP (~120 hours)
 
 ### Phase 0: Foundation & Setup ☐
 - [x] 0.1: Project Structure & Dependencies (4h) ✅
-- [ ] 0.2: Core Types & Errors (6h)
+- [x] 0.2: Core Types & Errors (6h) ✅
 - [ ] 0.3: Configuration System (8h)
 
 ### Phase 1: State Management ☐
