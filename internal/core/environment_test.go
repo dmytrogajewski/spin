@@ -12,7 +12,7 @@ import (
 
 // TestContext_Structure tests Context struct serialization
 func TestContext_Structure(t *testing.T) {
-	ctx := &Context{
+	ctx := &Environment{
 		OS: OSInfo{
 			OS:   "linux",
 			Arch: "amd64",
@@ -29,7 +29,7 @@ func TestContext_Structure(t *testing.T) {
 	}
 
 	// Can deserialize from JSON
-	var decoded Context
+	var decoded Environment
 	err = json.Unmarshal(data, &decoded)
 	if err != nil {
 		t.Fatalf("Unmarshal() failed: %v", err)
@@ -357,9 +357,9 @@ func TestGather_FullContext(t *testing.T) {
 		"main.go": "package main\n",
 	})
 
-	ctx, err := Gather(dir)
+	ctx, err := GatherEnvironment(dir)
 	if err != nil {
-		t.Fatalf("Gather() failed: %v", err)
+		t.Fatalf("GatherEnvironment() failed: %v", err)
 	}
 
 	// OS info populated
@@ -406,9 +406,9 @@ func TestGather_FullContext(t *testing.T) {
 func TestGather_NonGitDirectory(t *testing.T) {
 	dir := t.TempDir()
 
-	ctx, err := Gather(dir)
+	ctx, err := GatherEnvironment(dir)
 	if err != nil {
-		t.Fatalf("Gather() failed: %v", err)
+		t.Fatalf("GatherEnvironment() failed: %v", err)
 	}
 
 	// Git info should be nil
@@ -428,9 +428,9 @@ func TestGather_WithOptions(t *testing.T) {
 		}
 	}
 
-	ctx, err := Gather(dir, WithMaxFiles(50))
+	ctx, err := GatherEnvironment(dir, WithMaxFiles(50))
 	if err != nil {
-		t.Fatalf("Gather() failed: %v", err)
+		t.Fatalf("GatherEnvironment() failed: %v", err)
 	}
 
 	// Should respect max files
@@ -462,9 +462,9 @@ func TestGather_WithMaxDepth(t *testing.T) {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	ctx, err := Gather(dir, WithMaxDepth(2))
+	ctx, err := GatherEnvironment(dir, WithMaxDepth(2))
 	if err != nil {
-		t.Fatalf("Gather() failed: %v", err)
+		t.Fatalf("GatherEnvironment() failed: %v", err)
 	}
 
 	// Should not include files deeper than level 2
@@ -485,9 +485,9 @@ func TestGather_WithSkipGit(t *testing.T) {
 
 	dir := setupTestGitRepo(t)
 
-	ctx, err := Gather(dir, WithSkipGit(true))
+	ctx, err := GatherEnvironment(dir, WithSkipGit(true))
 	if err != nil {
-		t.Fatalf("Gather() failed: %v", err)
+		t.Fatalf("GatherEnvironment() failed: %v", err)
 	}
 
 	// Git info should be nil
@@ -498,7 +498,7 @@ func TestGather_WithSkipGit(t *testing.T) {
 
 // TestContext_String tests context serialization
 func TestContext_String(t *testing.T) {
-	ctx := &Context{
+	ctx := &Environment{
 		OS: OSInfo{
 			OS:     "linux",
 			Arch:   "amd64",
@@ -546,7 +546,7 @@ func TestContext_String(t *testing.T) {
 
 // TestContext_String_CleanGit tests context string with clean git repo
 func TestContext_String_CleanGit(t *testing.T) {
-	ctx := &Context{
+	ctx := &Environment{
 		OS: OSInfo{
 			OS:   "linux",
 			Arch: "amd64",
@@ -580,9 +580,9 @@ func TestContext_NoSensitiveData(t *testing.T) {
 
 	os.Setenv("OPENAI_API_KEY", "sk-secret123")
 
-	ctx, err := Gather(t.TempDir())
+	ctx, err := GatherEnvironment(t.TempDir())
 	if err != nil {
-		t.Fatalf("Gather() failed: %v", err)
+		t.Fatalf("GatherEnvironment() failed: %v", err)
 	}
 
 	// Should not contain API key
@@ -594,7 +594,7 @@ func TestContext_NoSensitiveData(t *testing.T) {
 }
 
 // BenchmarkGather benchmarks context gathering performance
-func BenchmarkGather(b *testing.B) {
+func BenchmarkGatherEnvironment(b *testing.B) {
 	// Setup test project
 	dir := b.TempDir()
 	for i := 0; i < 100; i++ {
@@ -606,7 +606,7 @@ func BenchmarkGather(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := Gather(dir)
+		_, err := GatherEnvironment(dir)
 		if err != nil {
 			b.Fatal(err)
 		}

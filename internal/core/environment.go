@@ -12,10 +12,10 @@ import (
 	"strings"
 )
 
-// Context contains environment information for the AI agent.
+// Environment contains environment information for the AI agent.
 // It provides comprehensive information about the operating system,
 // Git repository (if present), project structure, and filtered environment variables.
-type Context struct {
+type Environment struct {
 	OS          OSInfo            `json:"os"`
 	Git         *GitInfo          `json:"git,omitempty"`
 	WorkDir     string            `json:"work_dir"`
@@ -56,33 +56,33 @@ type FileInfo struct {
 	Lines    int    `json:"lines"`
 }
 
-// ContextOption configures context gathering.
-type ContextOption func(*contextConfig)
+// EnvironmentOption configures context gathering.
+type EnvironmentOption func(*environmentConfig)
 
-// contextConfig holds configuration for context gathering.
-type contextConfig struct {
+// environmentConfig holds configuration for context gathering.
+type environmentConfig struct {
 	maxFiles int
 	maxDepth int
 	skipGit  bool
 }
 
 // WithMaxFiles limits the number of files scanned.
-func WithMaxFiles(max int) ContextOption {
-	return func(c *contextConfig) {
+func WithMaxFiles(max int) EnvironmentOption {
+	return func(c *environmentConfig) {
 		c.maxFiles = max
 	}
 }
 
 // WithMaxDepth limits directory traversal depth.
-func WithMaxDepth(depth int) ContextOption {
-	return func(c *contextConfig) {
+func WithMaxDepth(depth int) EnvironmentOption {
+	return func(c *environmentConfig) {
 		c.maxDepth = depth
 	}
 }
 
 // WithSkipGit disables Git information gathering.
-func WithSkipGit(skip bool) ContextOption {
-	return func(c *contextConfig) {
+func WithSkipGit(skip bool) EnvironmentOption {
+	return func(c *environmentConfig) {
 		c.skipGit = skip
 	}
 }
@@ -90,9 +90,9 @@ func WithSkipGit(skip bool) ContextOption {
 // Gather collects environment context for the AI agent.
 // It gathers OS information, Git repository info (if present),
 // project files, and filtered environment variables.
-func Gather(workDir string, opts ...ContextOption) (*Context, error) {
+func GatherEnvironment(workDir string, opts ...EnvironmentOption) (*Environment, error) {
 	// Apply options
-	cfg := &contextConfig{
+	cfg := &environmentConfig{
 		maxFiles: 1000,
 		maxDepth: 10,
 		skipGit:  false,
@@ -129,7 +129,7 @@ func Gather(workDir string, opts ...ContextOption) (*Context, error) {
 	// Filter environment variables
 	environment := filterEnvironment(os.Environ())
 
-	return &Context{
+	return &Environment{
 		OS:          osInfo,
 		Git:         gitInfo,
 		WorkDir:     workDir,
@@ -513,7 +513,7 @@ func filterEnvironment(env []string) map[string]string {
 
 // String returns a human-readable representation of the context.
 // The format is optimized for LLM consumption.
-func (c *Context) String() string {
+func (c *Environment) String() string {
 	var sb strings.Builder
 
 	sb.WriteString("Environment Context:\n")

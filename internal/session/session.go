@@ -15,20 +15,78 @@ import (
 const CurrentSchemaVersion = 1
 
 // State represents session execution state.
-type State string
+// NOTE: This is intentionally kept as int (not string) to match core.State
+// and allow for future unification without breaking changes.
+type State int
 
+// Session states - values match core.State for compatibility.
 const (
-	// StateActive indicates session is active
-	StateActive State = "active"
+	// StateActive indicates session is active (idle, not running)
+	StateActive State = 0 // Matches core.StateIdle
+	// StateRunning indicates session has active execution
+	StateRunning State = 1 // Matches core.StateRunning
+	// StatePaused indicates session is paused
+	StatePaused State = 2 // Matches core.StatePaused
 	// StateCompleted indicates session completed successfully
-	StateCompleted State = "completed"
+	StateCompleted State = 3 // Matches core.StateCompleted
 	// StateFailed indicates session failed
-	StateFailed State = "failed"
-	// StateArchived indicates session archived
-	StateArchived State = "archived"
+	StateFailed State = 4 // Matches core.StateFailed
 	// StateCancelled indicates session cancelled by user
-	StateCancelled State = "cancelled"
+	StateCancelled State = 5 // Matches core.StateCancelled
+	// StateArchived indicates session archived
+	StateArchived State = 6 // Matches core.StateArchived
 )
+
+// String returns the string representation of State.
+func (s State) String() string {
+	switch s {
+	case StateActive:
+		return "active"
+	case StateRunning:
+		return "running"
+	case StatePaused:
+		return "paused"
+	case StateCompleted:
+		return "completed"
+	case StateFailed:
+		return "failed"
+	case StateCancelled:
+		return "cancelled"
+	case StateArchived:
+		return "archived"
+	default:
+		return "unknown"
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler for JSON encoding.
+func (s State) MarshalText() ([]byte, error) {
+	return []byte(s.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler for JSON decoding.
+func (s *State) UnmarshalText(text []byte) error {
+	str := string(text)
+	switch str {
+	case "active", "idle": // "idle" for backwards compat with core.StateIdle
+		*s = StateActive
+	case "running":
+		*s = StateRunning
+	case "paused":
+		*s = StatePaused
+	case "completed":
+		*s = StateCompleted
+	case "failed":
+		*s = StateFailed
+	case "cancelled":
+		*s = StateCancelled
+	case "archived":
+		*s = StateArchived
+	default:
+		return fmt.Errorf("invalid state: %s", str)
+	}
+	return nil
+}
 
 // Session represents a persistent conversation session.
 type Session struct {

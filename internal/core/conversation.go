@@ -26,7 +26,7 @@ type Conversation struct {
 
 	// State & control
 	mu         sync.RWMutex
-	state      string // idle | running | stopped
+	state      State // idle | running | cancelled (stopped)
 	turnCancel context.CancelFunc
 	turnGuard  chan struct{} // binary semaphore to prevent overlap
 }
@@ -44,7 +44,7 @@ func NewConversation(agent *Agent, history *History, emitter *EventEmitter) *Con
 		emitter:       emitter,
 		events:        make(chan Event, DefaultEventBufferSize),
 		forwarderDone: make(chan struct{}),
-		state:         "idle",
+		state:         StateIdle,
 		turnGuard:     make(chan struct{}, 1),
 	}
 
@@ -114,11 +114,11 @@ func (c *Conversation) RunTurn(ctx context.Context, userInput string) error {
 
 	// Ensure only one turn runs at a time
 	c.mu.Lock()
-	if c.state == "stopped" {
+	if c.state == StateCancelled {
 		c.mu.Unlock()
 		return errors.New("conversation is stopped")
 	}
-	c.state = "running"
+	c.state = StateRunning
 
 	// Prepare a cancellable context for the turn
 	turnCtx, cancel := context.WithCancel(ctx)
@@ -128,7 +128,7 @@ func (c *Conversation) RunTurn(ctx context.Context, userInput string) error {
 	// Ensure state cleanup
 	defer func() {
 		c.mu.Lock()
-		c.state = "idle"
+		c.state = StateIdle
 		c.turnCancel = nil
 		c.mu.Unlock()
 	}()
@@ -181,11 +181,11 @@ func (c *Conversation) Stream() <-chan Event {
 // unsubscribes from the shared emitter, and closes the stream.
 func (c *Conversation) Stop(ctx context.Context) error {
 	c.mu.Lock()
-	if c.state == "stopped" {
+	if c.state == StateCancelled {
 		c.mu.Unlock()
 		return nil
 	}
-	c.state = "stopped"
+	c.state = StateCancelled
 	cancel := c.turnCancel
 	c.turnCancel = nil
 	subID := c.subscriptionID
@@ -236,8 +236,8 @@ func (c *Conversation) Stop(ctx context.Context) error {
 	return nil
 }
 
-// State returns the current conversation state (idle | running | stopped).
-func (c *Conversation) State() string {
+// State returns the current conversation state.
+func (c *Conversation) State() State {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.state

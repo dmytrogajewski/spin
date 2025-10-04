@@ -75,7 +75,7 @@
 //   - Go Idioms: Accept interfaces, return structs
 //   - Concurrency: Safe concurrent access with proper synchronization
 //   - Error Handling: Errors are wrapped with context using fmt.Errorf with %w
-//   - Context Propagation: context.Context used throughout for cancellation
+//   - Context Propagation: context.Environment used throughout for cancellation
 //
 // # Dependencies
 //

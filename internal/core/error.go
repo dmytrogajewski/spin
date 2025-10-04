@@ -135,69 +135,104 @@ func (e *Error) Is(target error) bool {
 	return false
 }
 
-// State represents the execution state of conversations, turns, and tasks
-type State int
+// NOTE: State type has been moved to state.go for better organization
+// and to serve as the unified state management type across the entire package.
 
-const (
-	// StateIdle indicates no active execution
-	StateIdle State = iota
-	// StateRunning indicates active execution
-	StateRunning
-	// StatePaused indicates execution is paused
-	StatePaused
-	// StateCompleted indicates successful completion
-	StateCompleted
-	// StateFailed indicates execution failed
-	StateFailed
-	// StateCancelled indicates execution was cancelled
-	StateCancelled
-)
+// Error Constructor Helpers
+// These functions provide a consistent way to create errors with proper
+// error codes and operation context throughout the codebase.
 
-// String returns the string representation of State
-func (s State) String() string {
-	switch s {
-	case StateIdle:
-		return "idle"
-	case StateRunning:
-		return "running"
-	case StatePaused:
-		return "paused"
-	case StateCompleted:
-		return "completed"
-	case StateFailed:
-		return "failed"
-	case StateCancelled:
-		return "cancelled"
-	default:
-		return "unknown"
+// NewValidationError creates an error for validation failures.
+func NewValidationError(op, message string) error {
+	return &Error{
+		Op:   op,
+		Code: ErrCodeInvalidInput,
+		Err:  fmt.Errorf("%s", message),
 	}
 }
 
-// MarshalText implements encoding.TextMarshaler for JSON encoding
-func (s State) MarshalText() ([]byte, error) {
-	return []byte(s.String()), nil
+// NewNotFoundError creates an error for resource not found cases.
+func NewNotFoundError(op, resource string) error {
+	return &Error{
+		Op:   op,
+		Code: ErrCodeNotFound,
+		Err:  fmt.Errorf("%s not found", resource),
+	}
 }
 
-// UnmarshalText implements encoding.TextUnmarshaler for JSON decoding
-func (s *State) UnmarshalText(text []byte) error {
-	str := string(text)
-	switch str {
-	case "idle":
-		*s = StateIdle
-	case "running":
-		*s = StateRunning
-	case "paused":
-		*s = StatePaused
-	case "completed":
-		*s = StateCompleted
-	case "failed":
-		*s = StateFailed
-	case "cancelled":
-		*s = StateCancelled
-	default:
-		return fmt.Errorf("invalid state: %s", str)
+// NewExecutionError wraps an execution failure with context.
+func NewExecutionError(op string, err error) error {
+	return &Error{
+		Op:   op,
+		Code: ErrCodeExternal,
+		Err:  err,
 	}
-	return nil
+}
+
+// NewTimeoutError creates an error for timeout cases.
+func NewTimeoutError(op string) error {
+	return &Error{
+		Op:   op,
+		Code: ErrCodeTimeout,
+		Err:  ErrTimeout,
+	}
+}
+
+// NewCancelledError creates an error for cancelled operations.
+func NewCancelledError(op string) error {
+	return &Error{
+		Op:   op,
+		Code: ErrCodeCancelled,
+		Err:  ErrCancelled,
+	}
+}
+
+// NewInternalError wraps an internal error with context.
+func NewInternalError(op string, err error) error {
+	return &Error{
+		Op:   op,
+		Code: ErrCodeInternal,
+		Err:  err,
+	}
+}
+
+// NewPermissionError creates an error for permission denied cases.
+func NewPermissionError(op, message string) error {
+	return &Error{
+		Op:   op,
+		Code: ErrCodePermissionDenied,
+		Err:  fmt.Errorf("%s", message),
+	}
+}
+
+// NewAlreadyExistsError creates an error for duplicate resource cases.
+func NewAlreadyExistsError(op, resource string) error {
+	return &Error{
+		Op:   op,
+		Code: ErrCodeAlreadyExists,
+		Err:  fmt.Errorf("%s already exists", resource),
+	}
+}
+
+// WrapError wraps an existing error with operation context.
+// If err is nil, returns nil. If err is already an *Error, updates the Op.
+func WrapError(op string, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// If already a core.Error, update the operation
+	if e, ok := err.(*Error); ok {
+		e.Op = op + ": " + e.Op
+		return e
+	}
+
+	// Otherwise, create new error wrapping the original
+	return &Error{
+		Op:   op,
+		Code: ErrCodeUnknown,
+		Err:  err,
+	}
 }
 
 // Filter provides filtering options for listing conversations and sessions

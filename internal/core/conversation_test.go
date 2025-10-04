@@ -49,7 +49,7 @@ func TestConversation_RunTurn_Basic(t *testing.T) {
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
-	ctxEnv := &Context{WorkDir: workDir}
+	ctxEnv := &Environment{WorkDir: workDir}
 
 	agent, err := NewAgent(llm, executor, validator, ctxEnv, emitter)
 	if err != nil {
@@ -105,7 +105,7 @@ func TestConversation_RunTurn_NoOverlap(t *testing.T) {
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
-	ctxEnv := &Context{WorkDir: workDir}
+	ctxEnv := &Environment{WorkDir: workDir}
 	agent, _ := NewAgent(llm, executor, validator, ctxEnv, emitter)
 	history := NewHistoryWithDefaults()
 	_ = history.AddSystemMessage("sys")
@@ -147,7 +147,7 @@ func TestConversation_Stop_ClosesStream(t *testing.T) {
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
-	ctxEnv := &Context{WorkDir: workDir}
+	ctxEnv := &Environment{WorkDir: workDir}
 	agent, _ := NewAgent(llm, executor, validator, ctxEnv, emitter)
 	history := NewHistoryWithDefaults()
 	_ = history.AddSystemMessage("sys")

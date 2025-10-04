@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/core/session"
+	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/core/turn"
 	"github.com/dmytrogajewski/spin/internal/llm"
 )

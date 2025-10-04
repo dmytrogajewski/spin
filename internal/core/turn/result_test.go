@@ -167,6 +167,6 @@ func TestResult_ContextSize(t *testing.T) {
 	// Context size should be at least the length of input + response
 	expectedMinSize := len(turn.UserInput) + len(turn.AIResponse)
 	if result.ContextSize < expectedMinSize {
-		t.Errorf("Result.ContextSize = %v, want >= %v", result.ContextSize, expectedMinSize)
+		t.Errorf("Result.EnvironmentSize = %v, want >= %v", result.ContextSize, expectedMinSize)
 	}
 }

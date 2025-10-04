@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -136,6 +137,61 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// LoadWithViper loads configuration using Viper for enhanced features.
+// Supports YAML, JSON, TOML formats and environment variables.
+// Precedence: Defaults -> Config File -> Environment Variables
+func LoadWithViper(path string) (*Config, error) {
+	const op = "LoadWithViper"
+
+	// Create viper loader
+	loader := config.NewLoader()
+
+	// Set defaults
+	setViperDefaults(loader)
+
+	// Load config file
+	var err error
+	if path != "" {
+		err = loader.LoadFromFile(path)
+	} else {
+		err = loader.Load("")
+	}
+
+	if err != nil {
+		return nil, WrapError(op, err)
+	}
+
+	// Unmarshal into Config struct
+	cfg := &Config{}
+	if err := loader.Unmarshal(cfg); err != nil {
+		return nil, NewInternalError(op, fmt.Errorf("failed to unmarshal config: %w", err))
+	}
+
+	// Validate
+	if err := cfg.Validate(); err != nil {
+		return nil, NewValidationError(op, err.Error())
+	}
+
+	return cfg, nil
+}
+
+// setViperDefaults sets default values in the Viper loader.
+func setViperDefaults(loader *config.Loader) {
+	defaults := DefaultConfig()
+
+	loader.SetDefault("max_turns", defaults.MaxTurns)
+	loader.SetDefault("timeout", defaults.Timeout)
+	loader.SetDefault("max_tokens", defaults.MaxTokens)
+	loader.SetDefault("stream_buffer", defaults.StreamBuffer)
+	loader.SetDefault("history_limit", defaults.HistoryLimit)
+	loader.SetDefault("session_dir", defaults.SessionDir)
+	loader.SetDefault("enable_git", defaults.EnableGit)
+	loader.SetDefault("enable_shell", defaults.EnableShell)
+	loader.SetDefault("sandbox_mode", defaults.SandboxMode)
+	loader.SetDefault("cache_commands", defaults.CacheCommands)
+	loader.SetDefault("enable_mcp", defaults.EnableMCP)
 }
 
 // Validate validates the configuration.

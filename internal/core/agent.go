@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -44,7 +42,7 @@ type Agent struct {
 	llm             llm.Provider                // LLM provider interface
 	executor        *Executor                   // Command executor
 	validator       *Validator                  // Command validator
-	context         *Context                    // Environment context
+	context         *Environment                    // Environment context
 	emitter         *EventEmitter               // Event emitter
 	config          *AgentConfig                // Agent configuration
 	toolRegistry    *tools.Registry             // Tool registry
@@ -97,7 +95,7 @@ type AgentRequest struct {
 	History []Message
 
 	// Context is the environment context (optional, will use agent's context if nil)
-	Context *Context
+	Context *Environment
 
 	// Task is the task mode (optional, uses regular mode if nil)
 	Task Task
@@ -130,24 +128,6 @@ type AgentResponse struct {
 	Error error
 }
 
-// ToolResult represents a tool execution result.
-type ToolResult struct {
-	// ID matches the ToolCall.ID
-	ID string
-
-	// Success indicates if execution was successful
-	Success bool
-
-	// Output is the tool output
-	Output string
-
-	// Error is any error that occurred
-	Error error
-
-	// ExitCode is the exit code (for commands)
-	ExitCode int
-}
-
 // AgentOption is a functional option for configuring the Agent.
 type AgentOption func(*Agent) error
 
@@ -159,7 +139,7 @@ func NewAgent(
 	provider llm.Provider,
 	executor *Executor,
 	validator *Validator,
-	context *Context,
+	context *Environment,
 	emitter *EventEmitter,
 	opts ...AgentOption,
 ) (*Agent, error) {
@@ -720,131 +700,4 @@ func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string
 
 	// Default to deny if no handler
 	return false
-}
-
-// readFile reads a file's contents.
-func (a *Agent) readFile(ctx context.Context, id string, args map[string]interface{}) (*ToolResult, error) {
-	// Extract path
-	path, ok := args["path"].(string)
-	if !ok || path == "" {
-		return &ToolResult{
-			ID:      id,
-			Success: false,
-			Error:   errors.New("path argument must be a non-empty string"),
-		}, nil
-	}
-
-	// Make path absolute if relative
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(a.context.WorkDir, path)
-	}
-
-	// Read file
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return &ToolResult{
-			ID:      id,
-			Success: false,
-			Error:   fmt.Errorf("failed to read file: %w", err),
-		}, nil
-	}
-
-	return &ToolResult{
-		ID:      id,
-		Success: true,
-		Output:  string(content),
-	}, nil
-}
-
-// writeFile writes content to a file.
-func (a *Agent) writeFile(ctx context.Context, id string, args map[string]interface{}) (*ToolResult, error) {
-	// Extract path
-	path, ok := args["path"].(string)
-	if !ok || path == "" {
-		return &ToolResult{
-			ID:      id,
-			Success: false,
-			Error:   errors.New("path argument must be a non-empty string"),
-		}, nil
-	}
-
-	// Extract content
-	content, ok := args["content"].(string)
-	if !ok {
-		return &ToolResult{
-			ID:      id,
-			Success: false,
-			Error:   errors.New("content argument must be a string"),
-		}, nil
-	}
-
-	// Make path absolute if relative
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(a.context.WorkDir, path)
-	}
-
-	// Write file
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		return &ToolResult{
-			ID:      id,
-			Success: false,
-			Error:   fmt.Errorf("failed to write file: %w", err),
-		}, nil
-	}
-
-	return &ToolResult{
-		ID:      id,
-		Success: true,
-		Output:  fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path),
-	}, nil
-}
-
-// listDirectory lists directory contents.
-func (a *Agent) listDirectory(ctx context.Context, id string, args map[string]interface{}) (*ToolResult, error) {
-	// Extract path
-	path, ok := args["path"].(string)
-	if !ok || path == "" {
-		return &ToolResult{
-			ID:      id,
-			Success: false,
-			Error:   errors.New("path argument must be a non-empty string"),
-		}, nil
-	}
-
-	// Make path absolute if relative
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(a.context.WorkDir, path)
-	}
-
-	// Read directory
-	entries, err := os.ReadDir(path)
-	if err != nil {
-		return &ToolResult{
-			ID:      id,
-			Success: false,
-			Error:   fmt.Errorf("failed to read directory: %w", err),
-		}, nil
-	}
-
-	// Format output
-	var output strings.Builder
-	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-
-		typeStr := "file"
-		if entry.IsDir() {
-			typeStr = "dir"
-		}
-
-		fmt.Fprintf(&output, "%s\t%s\t%d bytes\n", entry.Name(), typeStr, info.Size())
-	}
-
-	return &ToolResult{
-		ID:      id,
-		Success: true,
-		Output:  output.String(),
-	}, nil
 }

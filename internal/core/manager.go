@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dmytrogajewski/spin/internal/core/session"
+	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
@@ -100,7 +100,7 @@ func (m *Manager) NewConversation(ctx context.Context, workDir string) (*Convers
 	if err != nil {
 		return nil, err
 	}
-	ctxEnv := &Context{WorkDir: workDir}
+	ctxEnv := &Environment{WorkDir: workDir}
 
 	// Build agent with optional tool registry
 	var agentOpts []AgentOption
@@ -138,7 +138,7 @@ func (m *Manager) ResumeConversation(ctx context.Context, sessionID string) (*Co
 	if err != nil {
 		return nil, fmt.Errorf("create executor: %w", err)
 	}
-	ctxEnv := &Context{WorkDir: sess.WorkDir}
+	ctxEnv := &Environment{WorkDir: sess.WorkDir}
 
 	// Build agent with optional tool registry
 	var agentOpts []AgentOption

@@ -385,7 +385,7 @@ func TestSession_Validate_InvalidTimestamps(t *testing.T) {
 
 func TestSession_Validate_InvalidState(t *testing.T) {
 	session := NewSession("/test/workdir")
-	session.State = State("invalid")
+	session.State = State(999) // Invalid state value
 
 	err := session.Validate()
 	if err == nil {

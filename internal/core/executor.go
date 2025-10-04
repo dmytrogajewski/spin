@@ -157,6 +157,7 @@ type OutputChunk struct {
 //	Executor is thread-safe and can execute commands concurrently.
 type Executor struct {
 	validator *Validator
+	sandbox   interface{} // sandbox.Sandbox interface (avoiding import cycle)
 	workDir   string
 	timeout   time.Duration
 	maxOutput int64
@@ -171,7 +172,7 @@ type ExecutorOption func(*Executor) error
 func WithValidator(v *Validator) ExecutorOption {
 	return func(e *Executor) error {
 		if v == nil {
-			return errors.New("validator cannot be nil")
+			return NewValidationError("Executor.WithValidator", "validator cannot be nil")
 		}
 		e.validator = v
 		return nil
@@ -182,7 +183,7 @@ func WithValidator(v *Validator) ExecutorOption {
 func WithTimeout(d time.Duration) ExecutorOption {
 	return func(e *Executor) error {
 		if d <= 0 {
-			return errors.New("timeout must be positive")
+			return NewValidationError("Executor.WithTimeout", "timeout must be positive")
 		}
 		e.timeout = d
 		return nil
@@ -193,7 +194,7 @@ func WithTimeout(d time.Duration) ExecutorOption {
 func WithMaxOutputSize(size int64) ExecutorOption {
 	return func(e *Executor) error {
 		if size <= 0 {
-			return errors.New("max output size must be positive")
+			return NewValidationError("Executor.WithMaxOutputSize", "max output size must be positive")
 		}
 		e.maxOutput = size
 		return nil
@@ -204,9 +205,18 @@ func WithMaxOutputSize(size int64) ExecutorOption {
 func WithEnvironment(env map[string]string) ExecutorOption {
 	return func(e *Executor) error {
 		if env == nil {
-			return errors.New("environment cannot be nil")
+			return NewValidationError("Executor.WithEnvironment", "environment cannot be nil")
 		}
 		e.env = env
+		return nil
+	}
+}
+
+// WithSandbox sets the sandbox for command isolation.
+// The sandbox parameter should implement the sandbox.Sandbox interface.
+func WithSandbox(s interface{}) ExecutorOption {
+	return func(e *Executor) error {
+		e.sandbox = s
 		return nil
 	}
 }

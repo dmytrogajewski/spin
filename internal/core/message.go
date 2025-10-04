@@ -46,26 +46,3 @@ type Message struct {
 	// Metadata stores additional extensible data
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
-
-// ToolCall represents a tool invocation in an assistant message.
-//
-// This structure follows the OpenAI Chat API format for tool calls.
-type ToolCall struct {
-	// ID is a unique identifier for this tool call
-	ID string `json:"id"`
-
-	// Type is the tool call type, typically "function"
-	Type string `json:"type"`
-
-	// Function contains the function call details
-	Function ToolCallFunction `json:"function"`
-}
-
-// ToolCallFunction contains the details of a function call.
-type ToolCallFunction struct {
-	// Name is the function name to call
-	Name string `json:"name"`
-
-	// Arguments is a JSON string containing the function arguments
-	Arguments string `json:"arguments"`
-}

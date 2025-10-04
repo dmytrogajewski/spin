@@ -37,7 +37,7 @@ func TestNewAgent(t *testing.T) {
 			// Create dependencies
 			validator := NewValidator()
 			executor, _ := NewExecutor(t.TempDir())
-			ctx := &Context{WorkDir: t.TempDir()}
+			ctx := &Environment{WorkDir: t.TempDir()}
 			emitter := NewEventEmitter(100)
 
 			agent, err := NewAgent(tt.llm, executor, validator, ctx, emitter)
@@ -70,7 +70,7 @@ func TestNewAgent_WithOptions(t *testing.T) {
 	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	tests := []struct {
@@ -162,7 +162,7 @@ func TestAgent_Execute_SingleTurn(t *testing.T) {
 	llm := llm.NewMockProvider("Here are the files: file1.go, file2.go")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
@@ -214,7 +214,7 @@ func TestAgent_Execute_Timeout(t *testing.T) {
 	llm := llm.NewMockProvider("response")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter,
@@ -252,7 +252,7 @@ func TestAgent_Execute_LLMError(t *testing.T) {
 	llm := llm.NewMockProvider("mock", llm.WithError(llmErr))
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
@@ -280,7 +280,7 @@ func TestAgent_Execute_InvalidRequest(t *testing.T) {
 	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
@@ -331,7 +331,7 @@ func TestAgent_ShouldApprove(t *testing.T) {
 	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter,
@@ -403,7 +403,7 @@ func TestAgent_ShouldApprove_ApprovalDisabled(t *testing.T) {
 	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter,
@@ -430,7 +430,7 @@ func TestAgent_buildPrompt(t *testing.T) {
 	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{
+	ctx := &Environment{
 		WorkDir: t.TempDir(),
 		OS: OSInfo{
 			OS:   "linux",
@@ -488,7 +488,7 @@ func TestAgent_buildPrompt_WithTask(t *testing.T) {
 	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
@@ -538,7 +538,7 @@ func TestAgent_EventEmission(t *testing.T) {
 	llm := llm.NewMockProvider("test response")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	// Subscribe to events
@@ -626,7 +626,7 @@ func TestAgent_ConcurrentExecute(t *testing.T) {
 	llm := llm.NewMockProvider("test response")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
@@ -676,7 +676,7 @@ func TestAgent_validateToolCall(t *testing.T) {
 	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
@@ -747,7 +747,7 @@ func TestAgent_parseToolArguments(t *testing.T) {
 	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
-	ctx := &Context{WorkDir: t.TempDir()}
+	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
@@ -846,7 +846,7 @@ func TestAgent_executeCommand(t *testing.T) {
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
-	ctx := &Context{WorkDir: workDir}
+	ctx := &Environment{WorkDir: workDir}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
@@ -927,7 +927,7 @@ func TestAgent_executeCommand_WithApproval(t *testing.T) {
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
-	ctx := &Context{WorkDir: workDir}
+	ctx := &Environment{WorkDir: workDir}
 	emitter := NewEventEmitter(100)
 
 	// Create agent with approval required
@@ -1000,249 +1000,9 @@ func TestAgent_executeCommand_WithApproval(t *testing.T) {
 	}
 }
 
-// TestAgent_readFile tests file reading
-func TestAgent_readFile(t *testing.T) {
-	llm := llm.NewMockProvider("test")
-	validator := NewValidator()
-	workDir := t.TempDir()
-	executor, _ := NewExecutor(workDir)
-	ctx := &Context{WorkDir: workDir}
-	emitter := NewEventEmitter(100)
-
-	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
-	if err != nil {
-		t.Fatalf("NewAgent() error: %v", err)
-	}
-
-	// Create test file
-	testFile := filepath.Join(workDir, "test.txt")
-	testContent := "hello world"
-	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
-	tests := []struct {
-		name    string
-		args    map[string]interface{}
-		wantErr bool
-		check   func(*testing.T, *ToolResult)
-	}{
-		{
-			name: "read existing file",
-			args: map[string]interface{}{
-				"path": testFile,
-			},
-			wantErr: false,
-			check: func(t *testing.T, result *ToolResult) {
-				if !result.Success {
-					t.Errorf("expected success, got error: %v", result.Error)
-				}
-				if result.Output != testContent {
-					t.Errorf("Output = %q, want %q", result.Output, testContent)
-				}
-			},
-		},
-		{
-			name: "read non-existent file",
-			args: map[string]interface{}{
-				"path": "/nonexistent/file.txt",
-			},
-			wantErr: false,
-			check: func(t *testing.T, result *ToolResult) {
-				if result.Success {
-					t.Error("expected failure for non-existent file")
-				}
-			},
-		},
-		{
-			name:    "missing path",
-			args:    map[string]interface{}{},
-			wantErr: false,
-			check: func(t *testing.T, result *ToolResult) {
-				if result.Success {
-					t.Error("expected failure for missing path")
-				}
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := agent.readFile(context.Background(), "test_call", tt.args)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("readFile() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if tt.check != nil {
-				tt.check(t, result)
-			}
-		})
-	}
-}
-
-// TestAgent_writeFile tests file writing
-func TestAgent_writeFile(t *testing.T) {
-	llm := llm.NewMockProvider("test")
-	validator := NewValidator()
-	workDir := t.TempDir()
-	executor, _ := NewExecutor(workDir)
-	ctx := &Context{WorkDir: workDir}
-	emitter := NewEventEmitter(100)
-
-	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
-	if err != nil {
-		t.Fatalf("NewAgent() error: %v", err)
-	}
-
-	tests := []struct {
-		name    string
-		args    map[string]interface{}
-		wantErr bool
-		check   func(*testing.T, *ToolResult, string)
-	}{
-		{
-			name: "write new file",
-			args: map[string]interface{}{
-				"path":    filepath.Join(workDir, "new.txt"),
-				"content": "test content",
-			},
-			wantErr: false,
-			check: func(t *testing.T, result *ToolResult, path string) {
-				if !result.Success {
-					t.Errorf("expected success, got error: %v", result.Error)
-				}
-				// Verify file was written
-				content, err := os.ReadFile(path)
-				if err != nil {
-					t.Errorf("failed to read written file: %v", err)
-				}
-				if string(content) != "test content" {
-					t.Errorf("file content = %q, want %q", string(content), "test content")
-				}
-			},
-		},
-		{
-			name: "missing path",
-			args: map[string]interface{}{
-				"content": "test",
-			},
-			wantErr: false,
-			check: func(t *testing.T, result *ToolResult, path string) {
-				if result.Success {
-					t.Error("expected failure for missing path")
-				}
-			},
-		},
-		{
-			name: "missing content",
-			args: map[string]interface{}{
-				"path": filepath.Join(workDir, "test.txt"),
-			},
-			wantErr: false,
-			check: func(t *testing.T, result *ToolResult, path string) {
-				if result.Success {
-					t.Error("expected failure for missing content")
-				}
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var path string
-			if p, ok := tt.args["path"].(string); ok {
-				path = p
-			}
-
-			result, err := agent.writeFile(context.Background(), "test_call", tt.args)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("writeFile() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if tt.check != nil {
-				tt.check(t, result, path)
-			}
-		})
-	}
-}
-
-// TestAgent_listDirectory tests directory listing
-func TestAgent_listDirectory(t *testing.T) {
-	llm := llm.NewMockProvider("test")
-	validator := NewValidator()
-	workDir := t.TempDir()
-	executor, _ := NewExecutor(workDir)
-	ctx := &Context{WorkDir: workDir}
-	emitter := NewEventEmitter(100)
-
-	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
-	if err != nil {
-		t.Fatalf("NewAgent() error: %v", err)
-	}
-
-	// Create test files
-	testFiles := []string{"file1.txt", "file2.txt", "file3.txt"}
-	for _, f := range testFiles {
-		path := filepath.Join(workDir, f)
-		if err := os.WriteFile(path, []byte("test"), 0644); err != nil {
-			t.Fatalf("failed to create test file: %v", err)
-		}
-	}
-
-	tests := []struct {
-		name    string
-		args    map[string]interface{}
-		wantErr bool
-		check   func(*testing.T, *ToolResult)
-	}{
-		{
-			name: "list directory",
-			args: map[string]interface{}{
-				"path": workDir,
-			},
-			wantErr: false,
-			check: func(t *testing.T, result *ToolResult) {
-				if !result.Success {
-					t.Errorf("expected success, got error: %v", result.Error)
-				}
-				// Check that output contains our test files
-				for _, f := range testFiles {
-					if !contains(result.Output, f) {
-						t.Errorf("output missing file %s", f)
-					}
-				}
-			},
-		},
-		{
-			name: "non-existent directory",
-			args: map[string]interface{}{
-				"path": "/nonexistent/directory",
-			},
-			wantErr: false,
-			check: func(t *testing.T, result *ToolResult) {
-				if result.Success {
-					t.Error("expected failure for non-existent directory")
-				}
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := agent.listDirectory(context.Background(), "test_call", tt.args)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("listDirectory() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if tt.check != nil {
-				tt.check(t, result)
-			}
-		})
-	}
-}
+// NOTE: File operation tests (read_file, write_file, list_directory) have been moved
+// to internal/tools/builtin_test.go where the actual implementation now lives.
+// The Agent delegates to the tool registry for these operations.
 
 // TestAgent_ProcessToolCall_Complete tests the complete ProcessToolCall method
 func TestAgent_ProcessToolCall_Complete(t *testing.T) {
@@ -1250,7 +1010,7 @@ func TestAgent_ProcessToolCall_Complete(t *testing.T) {
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
-	ctx := &Context{WorkDir: workDir}
+	ctx := &Environment{WorkDir: workDir}
 	emitter := NewEventEmitter(100)
 
 	agent, err := NewAgent(llm, executor, validator, ctx, emitter)
@@ -1388,7 +1148,7 @@ func TestAgent_ProcessToolCall_Events(t *testing.T) {
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
-	ctx := &Context{WorkDir: workDir}
+	ctx := &Environment{WorkDir: workDir}
 	emitter := NewEventEmitter(100)
 
 	// Subscribe to events
