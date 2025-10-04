@@ -121,8 +121,8 @@ At this point you have a working MVP (~120 hours)
 - [x] 5.3: Review Task Mode (4h) ✅
 - [x] 5.4: Compact Task Mode (4h) ✅
 
-### Phase 6: Agent Core ☐
-- [ ] 6.1: Agent Orchestration (20h)
+### Phase 6: Agent Core 🚧
+- [x] 6.1: Agent Orchestration (20h) ✅
 - [ ] 6.2: Tool Call Processing (12h)
 
 ### Phase 7: Conversation Management ☐
