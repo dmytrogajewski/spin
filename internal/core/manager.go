@@ -99,6 +99,9 @@ func NewManager(cfg *Config, opts ...ManagerOption) (*Manager, error) {
 
 // NewConversation starts a new conversation for the given workDir
 func (m *Manager) NewConversation(ctx context.Context, workDir string) (*Conversation, error) {
+	logger := withContext(ctx)
+	logger.Info("creating new conversation", "work_dir", workDir)
+
 	if workDir == "" {
 		workDir = m.cfg.WorkDir
 	}
@@ -107,6 +110,7 @@ func (m *Manager) NewConversation(ctx context.Context, workDir string) (*Convers
 	validator := NewValidator()
 	executor, err := NewExecutor(workDir)
 	if err != nil {
+		logger.Error("failed to create executor", "error", err, "work_dir", workDir)
 		return nil, err
 	}
 	ctxEnv := &Environment{WorkDir: workDir}
@@ -115,16 +119,19 @@ func (m *Manager) NewConversation(ctx context.Context, workDir string) (*Convers
 	var agentOpts []AgentOption
 	if m.toolRegistry != nil {
 		agentOpts = append(agentOpts, WithToolRegistry(m.toolRegistry))
+		logger.Debug("using custom tool registry", "tool_count", len(m.toolRegistry.ListSchemas()))
 	}
 
 	agent, err := NewAgent(m.llm, executor, validator, ctxEnv, m.emitter, agentOpts...)
 	if err != nil {
+		logger.Error("failed to create agent", "error", err)
 		return nil, err
 	}
 	history := NewHistoryWithDefaults()
 	_ = history.AddSystemMessage("You are a helpful AI coding assistant.")
 
 	conv := NewConversation(agent, history, m.emitter)
+	logger.Info("conversation created successfully")
 	return conv, nil
 }
 
@@ -135,16 +142,25 @@ func (m *Manager) ResumeConversation(ctx context.Context, sessionID string) (*Co
 		return nil, errors.New("sessionID is required")
 	}
 
+	// Add session ID to context for logging
+	ctx = WithSessionID(ctx, sessionID)
+	logger := withContext(ctx)
+	logger.Info("resuming conversation", "session_id", sessionID)
+
 	// Load full session from storage
 	sess, err := m.storage.Load(sessionID)
 	if err != nil {
+		logger.Error("failed to load session", "error", err, "session_id", sessionID)
 		return nil, fmt.Errorf("load session: %w", err)
 	}
+
+	logger.Debug("session loaded", "work_dir", sess.WorkDir, "turn_count", len(sess.Turns))
 
 	// Build agent with session workdir
 	validator := NewValidator()
 	executor, err := NewExecutor(sess.WorkDir)
 	if err != nil {
+		logger.Error("failed to create executor", "error", err, "work_dir", sess.WorkDir)
 		return nil, fmt.Errorf("create executor: %w", err)
 	}
 	ctxEnv := &Environment{WorkDir: sess.WorkDir}
@@ -157,6 +173,7 @@ func (m *Manager) ResumeConversation(ctx context.Context, sessionID string) (*Co
 
 	agent, err := NewAgent(m.llm, executor, validator, ctxEnv, m.emitter, agentOpts...)
 	if err != nil {
+		logger.Error("failed to create agent", "error", err)
 		return nil, fmt.Errorf("create agent: %w", err)
 	}
 
@@ -175,12 +192,16 @@ func (m *Manager) ResumeConversation(ctx context.Context, sessionID string) (*Co
 	}
 
 	conv := NewConversation(agent, history, m.emitter)
+	logger.Info("conversation resumed successfully", "session_id", sessionID, "history_messages", len(history.Messages()))
 	return conv, nil
 }
 
 // ListConversations returns session metadata with optional filtering.
 // The filter parameter can be a session.Filter or nil for all sessions.
 func (m *Manager) ListConversations(ctx context.Context, filter any) ([]*session.Metadata, error) {
+	logger := withContext(ctx)
+	logger.Debug("listing conversations")
+
 	var f session.Filter
 	if filter != nil {
 		if sf, ok := filter.(session.Filter); ok {
@@ -188,11 +209,21 @@ func (m *Manager) ListConversations(ctx context.Context, filter any) ([]*session
 		}
 	}
 
-	return m.storage.ListMetadata(f)
+	metadata, err := m.storage.ListMetadata(f)
+	if err != nil {
+		logger.Error("failed to list conversations", "error", err)
+		return nil, err
+	}
+
+	logger.Info("conversations listed", "count", len(metadata))
+	return metadata, nil
 }
 
 // ArchiveConversation marks a session as archived by updating its state and persisting.
 func (m *Manager) ArchiveConversation(ctx context.Context, sessionID string) error {
+	logger := withContext(ctx)
+	logger.Info("archiving conversation", "session_id", sessionID)
+
 	if sessionID == "" {
 		return errors.New("sessionID is required")
 	}
@@ -200,6 +231,7 @@ func (m *Manager) ArchiveConversation(ctx context.Context, sessionID string) err
 	// Load session
 	sess, err := m.storage.Load(sessionID)
 	if err != nil {
+		logger.Error("failed to load session for archival", "error", err, "session_id", sessionID)
 		return fmt.Errorf("load session: %w", err)
 	}
 
@@ -209,9 +241,11 @@ func (m *Manager) ArchiveConversation(ctx context.Context, sessionID string) err
 
 	// Save back to storage
 	if err := m.storage.Save(sess); err != nil {
+		logger.Error("failed to save archived session", "error", err, "session_id", sessionID)
 		return fmt.Errorf("save archived session: %w", err)
 	}
 
+	logger.Info("conversation archived successfully", "session_id", sessionID)
 	return nil
 }
 

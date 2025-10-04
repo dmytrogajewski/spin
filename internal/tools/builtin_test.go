@@ -2,8 +2,10 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -327,4 +329,512 @@ func TestBuiltinToolsIntegration(t *testing.T) {
 // Mock Context for testing
 type Context struct {
 	WorkDir string
+}
+
+// Mock executor for ExecuteCommandTool tests
+type mockExecutor struct {
+	executeFunc func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error)
+}
+
+func (m *mockExecutor) Execute(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+	if m.executeFunc != nil {
+		return m.executeFunc(ctx, cmd, opts)
+	}
+	return nil, nil
+}
+
+// Mock result that matches core.Result structure
+type mockResult struct {
+	Stdout   string
+	Stderr   string
+	ExitCode int
+}
+
+func TestExecuteCommandTool_NilExecutor(t *testing.T) {
+	tool := NewExecuteCommandTool(nil, nil)
+
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "echo hello",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result.Success {
+		t.Error("expected failure with nil executor")
+	}
+
+	if !strings.Contains(result.Error, "executor not configured") {
+		t.Errorf("expected 'executor not configured' error, got: %s", result.Error)
+	}
+}
+
+func TestExecuteCommandTool_InvalidCommand(t *testing.T) {
+	executor := &mockExecutor{}
+	tool := NewExecuteCommandTool(executor, nil)
+
+	tests := []struct {
+		name        string
+		params      map[string]interface{}
+		wantErrMsg  string
+	}{
+		{
+			name:       "missing command parameter",
+			params:     map[string]interface{}{},
+			wantErrMsg: "command parameter must be a non-empty string",
+		},
+		{
+			name:       "empty command",
+			params:     map[string]interface{}{"command": ""},
+			wantErrMsg: "command parameter must be a non-empty string",
+		},
+		{
+			name:       "whitespace-only command",
+			params:     map[string]interface{}{"command": "   "},
+			wantErrMsg: "command cannot be empty",
+		},
+		{
+			name:       "non-string command",
+			params:     map[string]interface{}{"command": 123},
+			wantErrMsg: "command parameter must be a non-empty string",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tool.Execute(context.Background(), tt.params)
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if result.Success {
+				t.Error("expected failure")
+			}
+
+			if !strings.Contains(result.Error, tt.wantErrMsg) {
+				t.Errorf("expected error containing %q, got: %s", tt.wantErrMsg, result.Error)
+			}
+		})
+	}
+}
+
+func TestExecuteCommandTool_SimpleCommand(t *testing.T) {
+	executor := &mockExecutor{
+		executeFunc: func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+			return &mockResult{
+				Stdout:   "hello world",
+				Stderr:   "",
+				ExitCode: 0,
+			}, nil
+		},
+	}
+
+	tool := NewExecuteCommandTool(executor, nil)
+
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "echo hello world",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+
+	if result.Output != "hello world" {
+		t.Errorf("expected output 'hello world', got: %q", result.Output)
+	}
+}
+
+func TestExecuteCommandTool_CommandWithArgs(t *testing.T) {
+	var capturedCmd interface{}
+
+	executor := &mockExecutor{
+		executeFunc: func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+			capturedCmd = cmd
+			return &mockResult{
+				Stdout:   "command executed",
+				Stderr:   "",
+				ExitCode: 0,
+			}, nil
+		},
+	}
+
+	tool := NewExecuteCommandTool(executor, nil)
+
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "git status --short",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+
+	// Verify command was parsed correctly using reflection
+	if capturedCmd == nil {
+		t.Fatal("command was not captured")
+	}
+
+	cmdVal := reflect.ValueOf(capturedCmd)
+	if cmdVal.Kind() == reflect.Ptr {
+		cmdVal = cmdVal.Elem()
+	}
+
+	// Check Program field
+	programField := cmdVal.FieldByName("Program")
+	if programField.IsValid() && programField.String() != "git" {
+		t.Errorf("expected Program 'git', got: %s", programField.String())
+	}
+
+	// Check Args field
+	argsField := cmdVal.FieldByName("Args")
+	if argsField.IsValid() && argsField.Len() != 2 {
+		t.Errorf("expected 2 args, got: %d", argsField.Len())
+	}
+}
+
+func TestExecuteCommandTool_WithWorkdir(t *testing.T) {
+	var capturedCmd interface{}
+
+	executor := &mockExecutor{
+		executeFunc: func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+			capturedCmd = cmd
+			return &mockResult{
+				Stdout:   "ok",
+				Stderr:   "",
+				ExitCode: 0,
+			}, nil
+		},
+	}
+
+	tool := NewExecuteCommandTool(executor, nil)
+
+	tmpDir := t.TempDir()
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "ls",
+		"workdir": tmpDir,
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+
+	// Verify workdir was set
+	if capturedCmd == nil {
+		t.Fatal("command was not captured")
+	}
+
+	cmdVal := reflect.ValueOf(capturedCmd)
+	if cmdVal.Kind() == reflect.Ptr {
+		cmdVal = cmdVal.Elem()
+	}
+
+	workDirField := cmdVal.FieldByName("WorkDir")
+	if workDirField.IsValid() && workDirField.String() != tmpDir {
+		t.Errorf("expected WorkDir %q, got: %s", tmpDir, workDirField.String())
+	}
+}
+
+func TestExecuteCommandTool_CommandFailure(t *testing.T) {
+	executor := &mockExecutor{
+		executeFunc: func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+			return &mockResult{
+				Stdout:   "",
+				Stderr:   "command not found",
+				ExitCode: 127,
+			}, nil
+		},
+	}
+
+	tool := NewExecuteCommandTool(executor, nil)
+
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "nonexistent-command",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result.Success {
+		t.Error("expected failure for non-zero exit code")
+	}
+
+	if !strings.Contains(result.Output, "command not found") {
+		t.Errorf("expected stderr in output, got: %q", result.Output)
+	}
+}
+
+func TestExecuteCommandTool_ExecutionError(t *testing.T) {
+	executor := &mockExecutor{
+		executeFunc: func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+			return &mockResult{
+				Stdout:   "",
+				Stderr:   "execution failed",
+				ExitCode: 1,
+			}, fmt.Errorf("command execution error")
+		},
+	}
+
+	tool := NewExecuteCommandTool(executor, nil)
+
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "failing-command",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result.Success {
+		t.Error("expected failure")
+	}
+
+	if !strings.Contains(result.Error, "command execution error") {
+		t.Errorf("expected execution error, got: %s", result.Error)
+	}
+}
+
+func TestExecuteCommandTool_StdoutAndStderr(t *testing.T) {
+	executor := &mockExecutor{
+		executeFunc: func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+			return &mockResult{
+				Stdout:   "standard output",
+				Stderr:   "standard error",
+				ExitCode: 0,
+			}, nil
+		},
+	}
+
+	tool := NewExecuteCommandTool(executor, nil)
+
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "command-with-stderr",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+
+	// Both stdout and stderr should be in output
+	if !strings.Contains(result.Output, "standard output") {
+		t.Errorf("expected stdout in output, got: %q", result.Output)
+	}
+
+	if !strings.Contains(result.Output, "standard error") {
+		t.Errorf("expected stderr in output, got: %q", result.Output)
+	}
+}
+
+// GetContextTool tests
+
+// Mock type that implements String() for testing
+type mockEnvironment struct {
+	data string
+}
+
+func (m *mockEnvironment) String() string {
+	return m.data
+}
+
+func TestGetContextTool_Success(t *testing.T) {
+	// Create a valid mock context with String() method
+	env := &mockEnvironment{
+		data: `Environment Context:
+- OS: linux (amd64)
+- Working Directory: /test/project
+- Project Type: go
+- Languages: Go`,
+	}
+
+	tool := NewGetContextTool(env)
+	result, err := tool.Execute(context.Background(), map[string]interface{}{})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+
+	// Verify output contains expected sections
+	expectedStrings := []string{
+		"Environment Context:",
+		"linux",
+		"amd64",
+		"/test/project",
+		"go",
+		"Go",
+	}
+
+	for _, expected := range expectedStrings {
+		if !strings.Contains(result.Output, expected) {
+			t.Errorf("expected output to contain %q, got: %q", expected, result.Output)
+		}
+	}
+}
+
+func TestGetContextTool_NilContext(t *testing.T) {
+	tool := NewGetContextTool(nil)
+	result, err := tool.Execute(context.Background(), map[string]interface{}{})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Success {
+		t.Errorf("expected failure for nil context")
+	}
+
+	if result.Error != "context not available" {
+		t.Errorf("expected error message 'context not available', got: %s", result.Error)
+	}
+}
+
+func TestGetContextTool_InvalidType(t *testing.T) {
+	// Type without String() method
+	type InvalidContext struct {
+		Data string
+	}
+
+	tool := NewGetContextTool(&InvalidContext{Data: "test"})
+	result, err := tool.Execute(context.Background(), map[string]interface{}{})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Success {
+		t.Errorf("expected failure for invalid context type")
+	}
+
+	if result.Error != "context does not implement String() method" {
+		t.Errorf("expected error message about missing String() method, got: %s", result.Error)
+	}
+}
+
+func TestGetContextTool_WithGitInfo(t *testing.T) {
+	// Create mock environment with Git information
+	env := &mockEnvironment{
+		data: `Environment Context:
+- OS: darwin (arm64)
+- Working Directory: /Users/test/project
+- Project Type: go
+- Languages: Go
+- Git Branch: master (dirty)`,
+	}
+
+	tool := NewGetContextTool(env)
+	result, err := tool.Execute(context.Background(), map[string]interface{}{})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+
+	// Verify Git information is in output
+	if !strings.Contains(result.Output, "master") {
+		t.Errorf("expected output to contain Git branch 'master', got: %q", result.Output)
+	}
+
+	if !strings.Contains(result.Output, "dirty") {
+		t.Errorf("expected output to contain 'dirty' status, got: %q", result.Output)
+	}
+}
+
+func TestGetContextTool_OutputFormat(t *testing.T) {
+	// Verify the String() method is called correctly via reflection
+	env := &mockEnvironment{
+		data: `Environment Context:
+- OS: linux (amd64)
+- Kernel: 6.16.8
+- Shell: /bin/bash
+- Working Directory: /home/user/project
+- Project Type: go
+- Languages: Go, Python
+
+Project Structure: 2 files
+- main.go (Go, 100 lines)
+- test.py (Python, 50 lines)`,
+	}
+
+	tool := NewGetContextTool(env)
+	result, err := tool.Execute(context.Background(), map[string]interface{}{})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+
+	// Verify output format matches Environment.String() structure
+	expectedSections := []string{
+		"Environment Context:",
+		"- OS:",
+		"- Kernel:",
+		"- Shell:",
+		"- Working Directory:",
+		"- Project Type:",
+		"- Languages:",
+		"Project Structure:",
+	}
+
+	for _, section := range expectedSections {
+		if !strings.Contains(result.Output, section) {
+			t.Errorf("expected output to contain section %q, got: %q", section, result.Output)
+		}
+	}
+
+	// Verify specific values
+	if !strings.Contains(result.Output, "6.16.8") {
+		t.Errorf("expected kernel version in output")
+	}
+
+	if !strings.Contains(result.Output, "/bin/bash") {
+		t.Errorf("expected shell in output")
+	}
+
+	if !strings.Contains(result.Output, "Go, Python") {
+		t.Errorf("expected languages list in output")
+	}
+}
+
+func TestGetContextTool_Schema(t *testing.T) {
+	tool := NewGetContextTool(nil)
+	schema := tool.Schema()
+
+	if schema.Function.Name != "get_context" {
+		t.Errorf("expected name 'get_context', got: %s", schema.Function.Name)
+	}
+
+	if schema.Function.Description == "" {
+		t.Errorf("expected non-empty description")
+	}
+
+	// Tool should have no required parameters
+	if len(schema.Function.Parameters.Required) != 0 {
+		t.Errorf("expected no required parameters, got: %d", len(schema.Function.Parameters.Required))
+	}
 }

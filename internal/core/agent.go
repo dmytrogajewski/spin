@@ -42,7 +42,7 @@ type Agent struct {
 	llm             llm.Provider                // LLM provider interface
 	executor        *Executor                   // Command executor
 	validator       *Validator                  // Command validator
-	context         *Environment                    // Environment context
+	context         *Environment                // Environment context
 	emitter         *EventEmitter               // Event emitter
 	config          *AgentConfig                // Agent configuration
 	toolRegistry    *tools.Registry             // Tool registry
@@ -268,11 +268,21 @@ func WithToolRegistry(registry *tools.Registry) AgentOption {
 //
 // The agent respects the context timeout and max turns limit.
 func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse, error) {
-	// Validate request
+	// Validate request first (before accessing req fields)
 	if req == nil {
 		return nil, ErrNilRequest
 	}
+
+	// Start tracing span (after validation)
+	ctx, span := StartSpan(ctx, "Agent.Execute",
+		StringAttr("input_length", fmt.Sprintf("%d", len(req.Input))),
+		IntAttr("max_turns", a.config.MaxTurns),
+	)
+	defer span.End()
+
+	// Validate input
 	if req.Input == "" {
+		span.SetError(ErrEmptyInput)
 		return nil, ErrEmptyInput
 	}
 
@@ -295,7 +305,8 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 	messages := a.buildPrompt(req)
 
 	// Agent loop
-	for turn := 0; turn < a.config.MaxTurns; turn++ {
+	maxTurns := a.config.MaxTurns
+	for turn := 0; turn < maxTurns; turn++ {
 		// Check context cancellation
 		select {
 		case <-ctx.Done():
@@ -338,12 +349,105 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 			})
 		}
 
-		// Check if we're done (no tool calls means completion)
-		// For now, we consider the response complete after one turn
-		// TODO: In Phase 6.2, add proper tool call processing
-		// Note: This is a temporary break until multi-turn support is added
-		resp.FinishReason = "stop"
-		break // nolint:staticcheck // Placeholder for Feature 6.2
+		// Update token usage
+		resp.TokensUsed += llmResp.Usage.TotalTokens
+
+		// Process tool calls if any
+		if len(llmResp.ToolCalls) > 0 {
+			// Create assistant message with tool calls
+			assistantMsg := Message{
+				Role:      RoleAssistant,
+				Content:   llmResp.Content,
+				Timestamp: time.Now(),
+			}
+
+			// Convert and process each tool call
+			for i := range llmResp.ToolCalls {
+				toolCall := &llmResp.ToolCalls[i]
+
+				// Convert llm.ToolCall to core.ToolCall
+				coreToolCall := &ToolCall{
+					ID:   toolCall.ID,
+					Type: toolCall.Type,
+					Function: ToolCallFunction{
+						Name:      toolCall.Function.Name,
+						Arguments: toolCall.Function.Arguments,
+					},
+				}
+
+				// Add to assistant message
+				assistantMsg.ToolCalls = append(assistantMsg.ToolCalls, *coreToolCall)
+
+				// Emit tool call start event
+				a.emitter.Emit(Event{
+					Type:      EventToolCallStart,
+					Timestamp: time.Now(),
+					Data: map[string]interface{}{
+						"tool_id":   coreToolCall.ID,
+						"tool_name": coreToolCall.Function.Name,
+					},
+				})
+
+				// Process the tool call
+				toolResult, err := a.ProcessToolCall(ctx, coreToolCall)
+				if err != nil {
+					// Emit tool error event
+					a.emitter.Emit(Event{
+						Type:      EventToolCallComplete,
+						Timestamp: time.Now(),
+						Data: map[string]interface{}{
+							"tool_id":   coreToolCall.ID,
+							"tool_name": coreToolCall.Function.Name,
+							"error":     err.Error(),
+						},
+					})
+
+					// Add error message to conversation
+					messages = append(messages, Message{
+						Role: RoleTool,
+						Content: fmt.Sprintf("Tool %s failed: %v",
+							coreToolCall.Function.Name, err),
+						ToolCallID: coreToolCall.ID,
+						Timestamp:  time.Now(),
+					})
+				} else {
+					// Emit tool completion event
+					a.emitter.Emit(Event{
+						Type:      EventToolCallComplete,
+						Timestamp: time.Now(),
+						Data: map[string]interface{}{
+							"tool_id":   coreToolCall.ID,
+							"tool_name": coreToolCall.Function.Name,
+							"success":   toolResult.Success,
+						},
+					})
+
+					// Add tool result to conversation
+					messages = append(messages, Message{
+						Role:       RoleTool,
+						Content:    toolResult.Output,
+						ToolCallID: coreToolCall.ID,
+						Timestamp:  time.Now(),
+					})
+
+					// Track tool call in response
+					resp.ToolCalls = append(resp.ToolCalls, coreToolCall)
+				}
+			}
+
+			// Add assistant message with tool calls to conversation history
+			messages = append(messages, assistantMsg)
+
+			// Continue loop to get next LLM response with tool results
+			continue
+		}
+
+		// No tool calls means we're done
+		resp.FinishReason = llmResp.FinishReason
+		if resp.FinishReason == "" {
+			resp.FinishReason = "stop"
+		}
+		break
 	}
 
 	// Check if we hit max turns
@@ -362,6 +466,11 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 		},
 	})
 
+	// Add span attributes before returning
+	span.SetAttribute("finish_reason", resp.FinishReason)
+	span.SetAttribute("turns_used", resp.TurnsUsed)
+	span.SetAttribute("tokens_used", resp.TokensUsed)
+
 	return resp, nil
 }
 
@@ -370,10 +479,28 @@ func (a *Agent) callLLM(ctx context.Context, messages []Message) (*llm.Completio
 	// Convert messages to LLM format
 	llmMessages := make([]llm.Message, len(messages))
 	for i, msg := range messages {
-		llmMessages[i] = llm.Message{
-			Role:    string(msg.Role),
-			Content: msg.Content,
+		llmMsg := llm.Message{
+			Role:       string(msg.Role),
+			Content:    msg.Content,
+			ToolCallID: msg.ToolCallID,
 		}
+
+		// Convert tool calls if present
+		if len(msg.ToolCalls) > 0 {
+			llmMsg.ToolCalls = make([]llm.ToolCall, len(msg.ToolCalls))
+			for j, tc := range msg.ToolCalls {
+				llmMsg.ToolCalls[j] = llm.ToolCall{
+					ID:   tc.ID,
+					Type: tc.Type,
+					Function: llm.FunctionCall{
+						Name:      tc.Function.Name,
+						Arguments: tc.Function.Arguments,
+					},
+				}
+			}
+		}
+
+		llmMessages[i] = llmMsg
 	}
 
 	// Build LLM request
@@ -381,6 +508,22 @@ func (a *Agent) callLLM(ctx context.Context, messages []Message) (*llm.Completio
 		Messages:    llmMessages,
 		Temperature: a.config.Temperature,
 		MaxTokens:   a.config.MaxTokens,
+	}
+
+	// Add tool schemas if tool registry is available
+	if a.toolRegistry != nil {
+		toolSchemas := a.toolRegistry.ListSchemas()
+		req.Tools = make([]llm.Tool, len(toolSchemas))
+		for i, schema := range toolSchemas {
+			req.Tools[i] = llm.Tool{
+				Type: schema.Type,
+				Function: llm.Function{
+					Name:        schema.Function.Name,
+					Description: schema.Function.Description,
+					Parameters:  schema.Function.Parameters,
+				},
+			}
+		}
 	}
 
 	// Call LLM

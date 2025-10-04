@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 )
 
@@ -258,12 +259,214 @@ func (t *ExecuteCommandTool) Schema() ToolSchema {
 }
 
 func (t *ExecuteCommandTool) Execute(ctx context.Context, params map[string]interface{}) (ToolResult, error) {
-	// Note: This is a stub implementation
-	// The actual implementation will delegate to core.Executor
-	// This is implemented in agent.go as executeCommand()
+	// Validate executor dependency
+	if t.executor == nil {
+		return ToolResult{
+			Success: false,
+			Error:   "executor not configured",
+		}, nil
+	}
+
+	// Extract command string
+	cmdStr, ok := params["command"].(string)
+	if !ok || cmdStr == "" {
+		return ToolResult{
+			Success: false,
+			Error:   "command parameter must be a non-empty string",
+		}, nil
+	}
+
+	// Parse command into parts
+	parts := strings.Fields(cmdStr)
+	if len(parts) == 0 {
+		return ToolResult{
+			Success: false,
+			Error:   "command cannot be empty",
+		}, nil
+	}
+
+	// Use reflection to create a Command struct dynamically
+	// This avoids circular import with internal/core
+	executorVal := reflect.ValueOf(t.executor)
+
+	// Find the Execute method
+	executeMethod := executorVal.MethodByName("Execute")
+	if !executeMethod.IsValid() {
+		return ToolResult{
+			Success: false,
+			Error:   "executor does not have Execute method",
+		}, nil
+	}
+
+	// Get the method signature to find Command type
+	methodType := executeMethod.Type()
+	if methodType.NumIn() < 3 {
+		return ToolResult{
+			Success: false,
+			Error:   "invalid Execute method signature",
+		}, nil
+	}
+
+	// Get the command type (second parameter, first is context.Context)
+	cmdType := methodType.In(1)
+
+	// Create command value based on the parameter type
+	var cmdValue reflect.Value
+
+	if cmdType.Kind() == reflect.Interface {
+		// For interface{} parameters (used by mocks), create a dynamic struct
+		// Define a struct type with the fields we need
+		type dynamicCommand struct {
+			Program string
+			Args    []string
+			WorkDir string
+			Raw     string
+		}
+
+		cmd := &dynamicCommand{
+			Program: parts[0],
+			Args:    parts[1:],
+			Raw:     cmdStr,
+		}
+
+		// Set working directory if provided
+		if workDir, ok := params["workdir"].(string); ok && workDir != "" {
+			cmd.WorkDir = workDir
+		}
+
+		cmdValue = reflect.ValueOf(cmd)
+	} else if cmdType.Kind() == reflect.Ptr {
+		// For typed parameters (real executor), create instance of the actual type
+		cmdStructType := cmdType.Elem()
+		cmdValue = reflect.New(cmdStructType)
+		cmdElem := cmdValue.Elem()
+
+		// Set Program field
+		if programField := cmdElem.FieldByName("Program"); programField.IsValid() && programField.CanSet() {
+			programField.SetString(parts[0])
+		}
+
+		// Set Args field
+		if argsField := cmdElem.FieldByName("Args"); argsField.IsValid() && argsField.CanSet() {
+			argsSlice := reflect.MakeSlice(reflect.TypeOf([]string{}), len(parts)-1, len(parts)-1)
+			for i := 1; i < len(parts); i++ {
+				argsSlice.Index(i - 1).SetString(parts[i])
+			}
+			argsField.Set(argsSlice)
+		}
+
+		// Set Raw field
+		if rawField := cmdElem.FieldByName("Raw"); rawField.IsValid() && rawField.CanSet() {
+			rawField.SetString(cmdStr)
+		}
+
+		// Set WorkDir field if provided
+		if workDir, ok := params["workdir"].(string); ok && workDir != "" {
+			if workDirField := cmdElem.FieldByName("WorkDir"); workDirField.IsValid() && workDirField.CanSet() {
+				workDirField.SetString(workDir)
+			}
+		}
+	} else {
+		return ToolResult{
+			Success: false,
+			Error:   "unexpected Execute command parameter type",
+		}, nil
+	}
+
+	// Call Execute method
+	// Execute(ctx context.Context, cmd *Command, opts *ExecuteOptions) (*Result, error)
+	args := []reflect.Value{
+		reflect.ValueOf(ctx),
+		cmdValue,
+		reflect.Zero(methodType.In(2)), // nil for ExecuteOptions
+	}
+
+	results := executeMethod.Call(args)
+	if len(results) != 2 {
+		return ToolResult{
+			Success: false,
+			Error:   "unexpected Execute return values",
+		}, nil
+	}
+
+	// Check error (second return value)
+	errVal := results[1]
+	if !errVal.IsNil() {
+		// Get the result (first return value) for error details
+		resultVal := results[0]
+		var stderr string
+
+		if !resultVal.IsNil() {
+			// Unwrap interface{} if needed
+			if resultVal.Kind() == reflect.Interface {
+				resultVal = resultVal.Elem()
+			}
+			// Dereference pointer if needed
+			var resultElem reflect.Value
+			if resultVal.Kind() == reflect.Ptr {
+				resultElem = resultVal.Elem()
+			} else {
+				resultElem = resultVal
+			}
+
+			if stderrField := resultElem.FieldByName("Stderr"); stderrField.IsValid() {
+				stderr = stderrField.String()
+			}
+		}
+
+		return ToolResult{
+			Success: false,
+			Output:  stderr,
+			Error:   errVal.Interface().(error).Error(),
+		}, nil
+	}
+
+	// Extract result fields
+	resultVal := results[0]
+	if resultVal.Kind() == reflect.Ptr && resultVal.IsNil() {
+		return ToolResult{
+			Success: false,
+			Error:   "nil result from Execute",
+		}, nil
+	}
+
+	// Get the struct value (dereference if it's a pointer or interface)
+	var resultElem reflect.Value
+	if resultVal.Kind() == reflect.Interface {
+		// Unwrap interface{}
+		resultVal = resultVal.Elem()
+	}
+	if resultVal.Kind() == reflect.Ptr {
+		resultElem = resultVal.Elem()
+	} else {
+		resultElem = resultVal
+	}
+
+	var stdout, stderr string
+	var exitCode int
+
+	if stdoutField := resultElem.FieldByName("Stdout"); stdoutField.IsValid() {
+		stdout = stdoutField.String()
+	}
+	if stderrField := resultElem.FieldByName("Stderr"); stderrField.IsValid() {
+		stderr = stderrField.String()
+	}
+	if exitCodeField := resultElem.FieldByName("ExitCode"); exitCodeField.IsValid() {
+		exitCode = int(exitCodeField.Int())
+	}
+
+	// Combine stdout and stderr for output
+	output := stdout
+	if stderr != "" {
+		if output != "" {
+			output += "\n"
+		}
+		output += stderr
+	}
+
 	return ToolResult{
-		Success: false,
-		Error:   "execute_command must be called through Agent.ProcessToolCall",
+		Success: exitCode == 0,
+		Output:  output,
 	}, nil
 }
 
@@ -303,8 +506,6 @@ func (t *GetContextTool) Schema() ToolSchema {
 }
 
 func (t *GetContextTool) Execute(ctx context.Context, params map[string]interface{}) (ToolResult, error) {
-	// Note: This is a stub implementation
-	// The actual implementation would serialize the Context
 	if t.context == nil {
 		return ToolResult{
 			Success: false,
@@ -312,9 +513,39 @@ func (t *GetContextTool) Execute(ctx context.Context, params map[string]interfac
 		}, nil
 	}
 
-	// For now, return a simple message
+	// Use reflection to call String() method to avoid circular import
+	// The context is core.Environment which implements String() string
+	val := reflect.ValueOf(t.context)
+
+	// Check if the context has a String() method
+	stringMethod := val.MethodByName("String")
+	if !stringMethod.IsValid() {
+		return ToolResult{
+			Success: false,
+			Error:   "context does not implement String() method",
+		}, nil
+	}
+
+	// Call String() method
+	results := stringMethod.Call(nil)
+	if len(results) != 1 {
+		return ToolResult{
+			Success: false,
+			Error:   "invalid String() method signature",
+		}, nil
+	}
+
+	// Extract string result
+	output, ok := results[0].Interface().(string)
+	if !ok {
+		return ToolResult{
+			Success: false,
+			Error:   "String() method did not return a string",
+		}, nil
+	}
+
 	return ToolResult{
 		Success: true,
-		Output:  "Context information available",
+		Output:  output,
 	}, nil
 }

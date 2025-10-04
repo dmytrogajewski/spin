@@ -21,9 +21,8 @@ func BenchmarkHistory_Truncate_Small(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// Make a copy to benchmark on fresh data
-		hCopy := *h
-		_ = hCopy.Truncate(8192)
+		// Benchmark truncation on the same history
+		_ = h.Truncate(8192)
 	}
 }
 

@@ -301,7 +301,22 @@ func (e *Executor) Validate(cmd *Command) error {
 //	    log.Fatal(err)
 //	}
 //	fmt.Println(result.Stdout)
+//
+//nolint:gocyclo // Execute requires comprehensive validation and error handling
 func (e *Executor) Execute(ctx context.Context, cmd *Command, opts *ExecuteOptions) (*Result, error) {
+	// Start tracing span
+	var cmdStr string
+	if cmd != nil {
+		cmdStr = cmd.Program
+		if len(cmd.Args) > 0 {
+			cmdStr += " " + cmd.Args[0]
+		}
+	}
+	ctx, span := StartSpan(ctx, "Executor.Execute",
+		StringAttr("command", cmdStr),
+	)
+	defer span.End()
+
 	// Use default options if not provided
 	if opts == nil {
 		opts = DefaultExecuteOptions()
@@ -412,6 +427,14 @@ func (e *Executor) Execute(ctx context.Context, cmd *Command, opts *ExecuteOptio
 	}
 
 	result.ExitCode = 0
+
+	// Add span attributes
+	span.SetAttribute("exit_code", result.ExitCode)
+	span.SetAttribute("duration_ms", result.Duration.Milliseconds())
+	if result.Error != nil {
+		span.SetError(result.Error)
+	}
+
 	return result, nil
 }
 

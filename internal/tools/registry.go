@@ -114,9 +114,14 @@ func (r *Registry) validateParams(schema ToolSchema, params map[string]interface
 	for name, value := range params {
 		propDef, exists := paramSchema.Properties[name]
 		if !exists {
-			// Unknown parameter - could be allowed or rejected depending on policy
-			// For now, we'll allow unknown parameters
-			continue
+			// Strict validation: reject unknown parameters
+			// Build list of valid parameter names for helpful error message
+			validParams := make([]string, 0, len(paramSchema.Properties))
+			for pname := range paramSchema.Properties {
+				validParams = append(validParams, pname)
+			}
+			return fmt.Errorf("%w: unknown parameter %q (valid parameters: %v)",
+				ErrInvalidParameters, name, validParams)
 		}
 
 		if !r.validateType(value, propDef.Type) {

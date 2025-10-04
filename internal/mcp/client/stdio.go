@@ -192,14 +192,52 @@ func (c *StdioClient) CallTool(ctx context.Context, name string, arguments json.
 	return &resp, nil
 }
 
-// ListResources lists available resources (stub for future implementation).
+// ListResources lists available resources from the server.
 func (c *StdioClient) ListResources(ctx context.Context) (*types.ListResourcesResponse, error) {
-	return nil, &Error{Op: "ListResources", Err: fmt.Errorf("not implemented")}
+	if !c.initialized {
+		return nil, &Error{Op: "ListResources", Err: fmt.Errorf("client not initialized")}
+	}
+
+	params, err := json.Marshal(types.ListResourcesRequest{})
+	if err != nil {
+		return nil, &Error{Op: "ListResources.Marshal", Err: err}
+	}
+
+	result, err := c.call(ctx, "resources/list", params)
+	if err != nil {
+		return nil, &Error{Op: "ListResources.Call", Err: err}
+	}
+
+	var resp types.ListResourcesResponse
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, &Error{Op: "ListResources.Unmarshal", Err: err}
+	}
+
+	return &resp, nil
 }
 
-// ReadResource reads a resource (stub for future implementation).
+// ReadResource reads a resource by its URI.
 func (c *StdioClient) ReadResource(ctx context.Context, uri string) (*types.ReadResourceResponse, error) {
-	return nil, &Error{Op: "ReadResource", Err: fmt.Errorf("not implemented")}
+	if !c.initialized {
+		return nil, &Error{Op: "ReadResource", Err: fmt.Errorf("client not initialized")}
+	}
+
+	params, err := json.Marshal(types.ReadResourceRequest{URI: uri})
+	if err != nil {
+		return nil, &Error{Op: "ReadResource.Marshal", Err: err}
+	}
+
+	result, err := c.call(ctx, "resources/read", params)
+	if err != nil {
+		return nil, &Error{Op: "ReadResource.Call", Err: err}
+	}
+
+	var resp types.ReadResourceResponse
+	if err := json.Unmarshal(result, &resp); err != nil {
+		return nil, &Error{Op: "ReadResource.Unmarshal", Err: err}
+	}
+
+	return &resp, nil
 }
 
 // Close closes the client and cleans up resources.

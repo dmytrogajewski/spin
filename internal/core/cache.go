@@ -72,7 +72,10 @@ func (c *CommandCache) Get(key string) (*Result, bool) {
 		return nil, false
 	}
 
-	entry := val.(*cacheEntry)
+	entry, ok := val.(*cacheEntry)
+	if !ok {
+		return nil, false
+	}
 
 	// Check expiration
 	if time.Now().After(entry.expiresAt) {
@@ -129,11 +132,16 @@ func (c *CommandCache) evictOldestLocked() bool {
 
 	// Find oldest entry
 	c.cache.Range(func(key, value interface{}) bool {
-		entry := value.(*cacheEntry)
-		if !found || entry.expiresAt.Before(oldestTime) {
-			oldestKey = key.(string)
-			oldestTime = entry.expiresAt
-			found = true
+		entry, ok := value.(*cacheEntry)
+		if !ok {
+			return true
+		}
+		if keyStr, ok := key.(string); ok {
+			if !found || entry.expiresAt.Before(oldestTime) {
+				oldestKey = keyStr
+				oldestTime = entry.expiresAt
+				found = true
+			}
 		}
 		return true
 	})
@@ -144,8 +152,9 @@ func (c *CommandCache) evictOldestLocked() bool {
 
 	// Evict oldest
 	if val, ok := c.cache.LoadAndDelete(oldestKey); ok {
-		entry := val.(*cacheEntry)
-		c.size.Add(-entry.size)
+		if entry, ok := val.(*cacheEntry); ok {
+			c.size.Add(-entry.size)
+		}
 		return true
 	}
 
@@ -219,13 +228,13 @@ func (c *CommandCache) IsCacheable(cmd *Command) bool {
 		}
 
 		readOnlyGitCmds := map[string]bool{
-			"status": true,
-			"log":    true,
-			"diff":   true,
-			"show":   true,
-			"branch": true,
-			"remote": true,
-			"ls-files": true,
+			"status":    true,
+			"log":       true,
+			"diff":      true,
+			"show":      true,
+			"branch":    true,
+			"remote":    true,
+			"ls-files":  true,
 			"rev-parse": true,
 		}
 

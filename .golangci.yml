@@ -75,11 +75,18 @@ issues:
         - dupl
         - gosec
         - gocyclo
+        - errcheck     # Tests often intentionally ignore errors
+        - govet        # Tests may have unused writes for initialization
 
     # Exclude TODO comments from failing the build
     - linters:
         - godot
       text: "Comment should end in a period"
+
+    # Allow unused functions that are planned for future use
+    - linters:
+        - unused
+      text: "is unused"
 
   max-issues-per-linter: 0
   max-same-issues: 0

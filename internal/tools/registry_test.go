@@ -650,3 +650,172 @@ func TestRegistryEnumValidation(t *testing.T) {
 		})
 	}
 }
+
+// TestRegistryExecute_UnknownParameter verifies that unknown parameters are rejected.
+// See FRD-8.12 for specification.
+func TestRegistryExecute_UnknownParameter(t *testing.T) {
+	reg := NewRegistry()
+
+	// Tool with defined parameters
+	tool := &mockTool{
+		name: "test_tool",
+		schema: ToolSchema{
+			Type: "function",
+			Function: FunctionSchema{
+				Name: "test_tool",
+				Parameters: ParameterSchema{
+					Type: "object",
+					Properties: map[string]PropertyDefinition{
+						"param1": {Type: "string", Description: "First parameter"},
+						"param2": {Type: "string", Description: "Second parameter"},
+					},
+					Required: []string{}, // No required params
+				},
+			},
+		},
+		executeFunc: func(_ context.Context, params map[string]interface{}) (ToolResult, error) {
+			return ToolResult{Success: true, Output: "ok"}, nil
+		},
+	}
+
+	_ = reg.Register(tool)
+
+	tests := []struct {
+		name    string
+		params  map[string]interface{}
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "all known parameters",
+			params: map[string]interface{}{
+				"param1": "value1",
+				"param2": "value2",
+			},
+			wantErr: false,
+		},
+		{
+			name: "subset of known parameters",
+			params: map[string]interface{}{
+				"param1": "value1",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "empty parameters",
+			params:  map[string]interface{}{},
+			wantErr: false,
+		},
+		{
+			name: "single unknown parameter",
+			params: map[string]interface{}{
+				"unknown_param": "value",
+			},
+			wantErr: true,
+			errMsg:  "unknown parameter \"unknown_param\"",
+		},
+		{
+			name: "known and unknown parameters",
+			params: map[string]interface{}{
+				"param1":        "value1",
+				"unknown_param": "value",
+			},
+			wantErr: true,
+			errMsg:  "unknown parameter \"unknown_param\"",
+		},
+		{
+			name: "typo in parameter name",
+			params: map[string]interface{}{
+				"parm1": "value", // typo: parm1 instead of param1
+			},
+			wantErr: true,
+			errMsg:  "unknown parameter \"parm1\"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := reg.Execute(context.Background(), "test_tool", tt.params)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error but got none")
+					return
+				}
+				if !errors.Is(err, ErrInvalidParameters) {
+					t.Errorf("expected ErrInvalidParameters, got %v", err)
+				}
+				if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+					t.Errorf("expected error to contain %q, got %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestRegistryExecute_UnknownParameter_ErrorMessage verifies error messages are helpful.
+// See FRD-8.12 TC-8.12.3 for specification.
+func TestRegistryExecute_UnknownParameter_ErrorMessage(t *testing.T) {
+	reg := NewRegistry()
+
+	// Tool with multiple defined parameters
+	tool := &mockTool{
+		name: "file_tool",
+		schema: ToolSchema{
+			Type: "function",
+			Function: FunctionSchema{
+				Name: "file_tool",
+				Parameters: ParameterSchema{
+					Type: "object",
+					Properties: map[string]PropertyDefinition{
+						"filename": {Type: "string", Description: "File name"},
+						"path":     {Type: "string", Description: "File path"},
+						"mode":     {Type: "string", Description: "Access mode"},
+					},
+					Required: []string{"filename"},
+				},
+			},
+		},
+		executeFunc: func(_ context.Context, params map[string]interface{}) (ToolResult, error) {
+			return ToolResult{Success: true, Output: "ok"}, nil
+		},
+	}
+
+	_ = reg.Register(tool)
+
+	// Execute with typo in parameter name
+	_, err := reg.Execute(context.Background(), "file_tool", map[string]interface{}{
+		"filename":  "test.txt",
+		"fliename":  "typo.txt", // typo
+	})
+
+	if err == nil {
+		t.Fatal("expected error but got none")
+	}
+
+	errMsg := err.Error()
+
+	// Error message should contain the unknown parameter name
+	if !contains(errMsg, "fliename") {
+		t.Errorf("error message should mention unknown parameter 'fliename', got: %s", errMsg)
+	}
+
+	// Error message should contain indication of valid parameters
+	// It should mention at least some of the valid parameter names
+	validParams := []string{"filename", "path", "mode"}
+	foundValid := false
+	for _, param := range validParams {
+		if contains(errMsg, param) {
+			foundValid = true
+			break
+		}
+	}
+
+	if !foundValid {
+		t.Errorf("error message should list valid parameters, got: %s", errMsg)
+	}
+}

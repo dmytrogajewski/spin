@@ -203,6 +203,8 @@ func (r *Regular) MaxTokens() int {
 //
 // A nil config is always valid (uses defaults).
 // Multiple validation errors are joined together.
+//
+//nolint:dupl // Validation logic is similar but validates different config fields per mode
 func (r *Regular) Validate() error {
 	if r.config == nil {
 		return nil // Default config is always valid

@@ -157,11 +157,11 @@ func createTestProject(tb testing.TB, dir string) {
 	tb.Helper()
 
 	files := map[string]string{
-		"main.go":         "package main\n\nfunc main() {}\n",
-		"go.mod":          "module test\n\ngo 1.24\n",
-		"README.md":       "# Test Project\n",
-		"src/app.go":      "package src\n",
-		"src/util.go":     "package src\n",
+		"main.go":          "package main\n\nfunc main() {}\n",
+		"go.mod":           "module test\n\ngo 1.24\n",
+		"README.md":        "# Test Project\n",
+		"src/app.go":       "package src\n",
+		"src/util.go":      "package src\n",
 		"test/app_test.go": "package test\n",
 	}
 

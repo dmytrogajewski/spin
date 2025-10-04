@@ -42,6 +42,14 @@ type Config struct {
 	// Storage Configuration
 	SessionDir   string `yaml:"session_dir"`
 	HistoryLimit int    `yaml:"history_limit"`
+
+	// Logging Configuration
+	LogLevel  string `yaml:"log_level"`  // debug, info, warn, error
+	LogFormat string `yaml:"log_format"` // text, json
+	Debug     bool   `yaml:"debug"`      // Enable debug mode
+
+	// Tracing Configuration
+	EnableTrace bool `yaml:"enable_trace"` // Enable OpenTelemetry tracing
 }
 
 // MCPServerConfig represents configuration for an MCP server.
@@ -66,6 +74,10 @@ func DefaultConfig() *Config {
 		SandboxMode:   "workspace-only",
 		CacheCommands: false,
 		EnableMCP:     false,
+		LogLevel:      "info",
+		LogFormat:     "text",
+		Debug:         false,
+		EnableTrace:   false,
 	}
 }
 
@@ -192,6 +204,10 @@ func setViperDefaults(loader *config.Loader) {
 	loader.SetDefault("sandbox_mode", defaults.SandboxMode)
 	loader.SetDefault("cache_commands", defaults.CacheCommands)
 	loader.SetDefault("enable_mcp", defaults.EnableMCP)
+	loader.SetDefault("log_level", defaults.LogLevel)
+	loader.SetDefault("log_format", defaults.LogFormat)
+	loader.SetDefault("debug", defaults.Debug)
+	loader.SetDefault("enable_trace", defaults.EnableTrace)
 }
 
 // Validate validates the configuration.
@@ -271,6 +287,10 @@ func (c *Config) copyConfig() *Config {
 		CacheCommands:   c.CacheCommands,
 		SessionDir:      c.SessionDir,
 		HistoryLimit:    c.HistoryLimit,
+		LogLevel:        c.LogLevel,
+		LogFormat:       c.LogFormat,
+		Debug:           c.Debug,
+		EnableTrace:     c.EnableTrace,
 	}
 
 	// Copy ProviderConfig map from base
@@ -307,6 +327,12 @@ func (c *Config) mergeStringFields(other *Config) {
 	}
 	if other.SessionDir != "" {
 		c.SessionDir = other.SessionDir
+	}
+	if other.LogLevel != "" {
+		c.LogLevel = other.LogLevel
+	}
+	if other.LogFormat != "" {
+		c.LogFormat = other.LogFormat
 	}
 }
 
@@ -353,6 +379,12 @@ func (c *Config) mergeBoolFields(base, other *Config) {
 	if other.CacheCommands != base.CacheCommands {
 		c.CacheCommands = other.CacheCommands
 	}
+	if other.Debug != base.Debug {
+		c.Debug = other.Debug
+	}
+	if other.EnableTrace != base.EnableTrace {
+		c.EnableTrace = other.EnableTrace
+	}
 }
 
 // loadFromEnv loads configuration from environment variables.
@@ -385,6 +417,8 @@ func loadStringEnvVars(cfg *Config) {
 		"SPIN_SANDBOX_MODE": &cfg.SandboxMode,
 		"SPIN_POLICY_FILE":  &cfg.PolicyFile,
 		"SPIN_SESSION_DIR":  &cfg.SessionDir,
+		"SPIN_LOG_LEVEL":    &cfg.LogLevel,
+		"SPIN_LOG_FORMAT":   &cfg.LogFormat,
 	}
 
 	for key, dest := range envMap {
@@ -419,6 +453,7 @@ func loadBoolEnvVars(cfg *Config) {
 		"SPIN_ENABLE_GIT":     &cfg.EnableGit,
 		"SPIN_ENABLE_SHELL":   &cfg.EnableShell,
 		"SPIN_CACHE_COMMANDS": &cfg.CacheCommands,
+		"SPIN_ENABLE_TRACE":   &cfg.EnableTrace,
 	}
 
 	for key, dest := range boolEnvMap {
@@ -426,6 +461,14 @@ func loadBoolEnvVars(cfg *Config) {
 			if b, err := strconv.ParseBool(v); err == nil {
 				*dest = b
 			}
+		}
+	}
+
+	// Special handling for SPIN_DEBUG (can be "1" or "true")
+	if v := os.Getenv("SPIN_DEBUG"); v != "" {
+		if v == "1" || v == "true" {
+			cfg.Debug = true
+			cfg.LogLevel = "debug"
 		}
 	}
 }

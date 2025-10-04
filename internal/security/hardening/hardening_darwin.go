@@ -2,6 +2,16 @@
 
 package hardening
 
+/*
+#include <sys/types.h>
+#include <sys/ptrace.h>
+
+// Wrapper to call ptrace with PT_DENY_ATTACH
+int deny_ptrace_attach(void) {
+    return ptrace(PT_DENY_ATTACH, 0, 0, 0);
+}
+*/
+import "C"
 import (
 	"fmt"
 	"syscall"
@@ -20,10 +30,12 @@ func disableCoreDumps() error {
 }
 
 // disablePtrace prevents debugger attachment on macOS.
-// Note: This would require calling ptrace(PT_DENY_ATTACH) via cgo.
-// For now, we return nil as a stub.
+// It calls ptrace(PT_DENY_ATTACH) to prevent debuggers from attaching to this process.
+// This is a security measure to prevent tampering with the running process.
 func disablePtrace() error {
-	// TODO: Implement PT_DENY_ATTACH via cgo
-	// For now, return nil to avoid build errors
+	ret := C.deny_ptrace_attach()
+	if ret != 0 {
+		return fmt.Errorf("ptrace(PT_DENY_ATTACH) failed with code %d", ret)
+	}
 	return nil
 }

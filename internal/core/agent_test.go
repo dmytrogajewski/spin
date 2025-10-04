@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -56,6 +55,7 @@ func TestNewAgent(t *testing.T) {
 
 			if agent == nil {
 				t.Error("NewAgent() returned nil agent")
+				return
 			}
 
 			if agent.llm != tt.llm {
@@ -517,20 +517,6 @@ func TestAgent_buildPrompt_WithTask(t *testing.T) {
 	if systemMsg.Content == "" {
 		t.Error("buildPrompt() system message should not be empty")
 	}
-}
-
-// TestAgent_ProcessToolCall tests tool call processing
-// NOTE: Deprecated in favor of TestAgent_ProcessToolCall_Complete
-// Kept for backward compatibility
-func TestAgent_ProcessToolCall(t *testing.T) {
-	t.Skip("Deprecated - use TestAgent_ProcessToolCall_Complete")
-}
-
-// TestAgent_ProcessToolCall_WithApproval tests tool call with approval flow
-// NOTE: Deprecated in favor of TestAgent_executeCommand_WithApproval
-// Kept for backward compatibility
-func TestAgent_ProcessToolCall_WithApproval(t *testing.T) {
-	t.Skip("Deprecated - use TestAgent_executeCommand_WithApproval")
 }
 
 // TestAgent_EventEmission tests that agent emits appropriate events
@@ -1221,9 +1207,4 @@ checkEvents:
 	if !hasComplete {
 		t.Error("Expected EventToolCallComplete")
 	}
-}
-
-// Helper function for string contains check
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
 }
