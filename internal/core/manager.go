@@ -7,15 +7,17 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/core/session"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // Manager coordinates conversation lifecycle and state management.
 // It serves as the main entry point for creating and managing conversations.
 type Manager struct {
-	cfg     *Config
-	llm     llm.Provider
-	emitter *EventEmitter
-	storage session.Storage
+	cfg          *Config
+	llm          llm.Provider
+	emitter      *EventEmitter
+	storage      session.Storage
+	toolRegistry *tools.Registry
 }
 
 // Functional options
@@ -41,6 +43,14 @@ func WithEmitter(e *EventEmitter) ManagerOption {
 func WithStorage(s session.Storage) ManagerOption {
 	return func(m *Manager) error {
 		m.storage = s
+		return nil
+	}
+}
+
+// WithManagerToolRegistry sets a custom tool registry for all conversations created by this manager
+func WithManagerToolRegistry(registry *tools.Registry) ManagerOption {
+	return func(m *Manager) error {
+		m.toolRegistry = registry
 		return nil
 	}
 }
@@ -91,7 +101,14 @@ func (m *Manager) NewConversation(ctx context.Context, workDir string) (*Convers
 		return nil, err
 	}
 	ctxEnv := &Context{WorkDir: workDir}
-	agent, err := NewAgent(m.llm, executor, validator, ctxEnv, m.emitter)
+
+	// Build agent with optional tool registry
+	var agentOpts []AgentOption
+	if m.toolRegistry != nil {
+		agentOpts = append(agentOpts, WithToolRegistry(m.toolRegistry))
+	}
+
+	agent, err := NewAgent(m.llm, executor, validator, ctxEnv, m.emitter, agentOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +139,14 @@ func (m *Manager) ResumeConversation(ctx context.Context, sessionID string) (*Co
 		return nil, fmt.Errorf("create executor: %w", err)
 	}
 	ctxEnv := &Context{WorkDir: sess.WorkDir}
-	agent, err := NewAgent(m.llm, executor, validator, ctxEnv, m.emitter)
+
+	// Build agent with optional tool registry
+	var agentOpts []AgentOption
+	if m.toolRegistry != nil {
+		agentOpts = append(agentOpts, WithToolRegistry(m.toolRegistry))
+	}
+
+	agent, err := NewAgent(m.llm, executor, validator, ctxEnv, m.emitter, agentOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("create agent: %w", err)
 	}

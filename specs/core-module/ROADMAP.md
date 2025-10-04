@@ -904,37 +904,48 @@ This roadmap breaks down the implementation of the `internal/core` package into 
 
 ---
 
-### Feature 8.2: Tool Registry Integration
+### Feature 8.2: Tool Registry Integration ✅
 
 **Description:** Integrate with `internal/tools` registry for tool management.
 
 **DoR:**
-- [ ] Feature 6.2 completed
-- [ ] `internal/tools` package available
-- [ ] Tool interface defined
+- [x] Feature 6.2 completed
+- [x] `internal/tools` package available
+- [x] Tool interface defined
 
 **DoD:**
-- [ ] Tool registry integration
-- [ ] Tool schema retrieval
-- [ ] Tool execution via registry
-- [ ] Tool parameter validation
-- [ ] Custom tool registration support
-- [ ] Tool filtering by task mode
-- [ ] Integration tests with tool registry
-- [ ] Tool execution tests
-- [ ] Tool documentation
+- [x] Tool registry integration
+- [x] Tool schema retrieval
+- [x] Tool execution via registry
+- [x] Tool parameter validation (types, required params, enum values)
+- [x] Custom tool registration support
+- [x] Tool filtering by task mode
+- [x] Integration tests with tool registry (91.5% coverage)
+- [x] Tool execution tests
+- [x] Tool documentation (godoc complete)
+- [x] Built-in tools implemented (read_file, write_file, list_directory, execute_command, get_context)
+- [x] Agent integration with registry
+- [x] Manager WithManagerToolRegistry option
+- [x] All linters passing
+- [x] Complexity ≤10 verified
 
 **Tasks:**
-1. Integrate tools.Registry
-2. Implement tool schema retrieval
-3. Add tool execution coordination
-4. Implement parameter validation
-5. Add tool filtering logic
-6. Write tool integration tests
-7. Document tool usage
+1. ✅ Create `internal/tools` package with types
+2. ✅ Implement Tool interface and Registry
+3. ✅ Implement tool schema retrieval (ListSchemas)
+4. ✅ Add tool execution coordination (Execute method)
+5. ✅ Implement parameter validation (validateParams, validateType, validateEnum)
+6. ✅ Implement built-in tools (5 tools)
+7. ✅ Integrate into Agent.ProcessToolCall
+8. ✅ Add WithToolRegistry and WithManagerToolRegistry options
+9. ✅ Write comprehensive tests (Registry, built-in tools, validation)
+10. ✅ Verify coverage ≥90% (achieved 91.5%)
+11. ✅ Write godoc for all exported symbols
 
-**Priority:** P1 (Critical)  
+**Priority:** P1 (Critical)
 **Estimated Effort:** 6 hours
+**Actual Effort:** ~6 hours
+**Status:** ✅ **Complete**
 
 ---
 

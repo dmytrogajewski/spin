@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // Default agent configuration values
@@ -46,6 +47,7 @@ type Agent struct {
 	context         *Context                    // Environment context
 	emitter         *EventEmitter               // Event emitter
 	config          *AgentConfig                // Agent configuration
+	toolRegistry    *tools.Registry             // Tool registry
 	approvalHandler func(*Command, string) bool // Approval handler for testing
 }
 
@@ -178,13 +180,22 @@ func NewAgent(
 		return nil, ErrNilEmitter
 	}
 
+	// Create default tool registry with built-in tools
+	registry := tools.NewRegistry()
+	_ = registry.Register(tools.NewReadFileTool())
+	_ = registry.Register(tools.NewWriteFileTool())
+	_ = registry.Register(tools.NewListDirectoryTool())
+	_ = registry.Register(tools.NewExecuteCommandTool(executor, validator))
+	_ = registry.Register(tools.NewGetContextTool(context))
+
 	// Create agent with defaults
 	agent := &Agent{
-		llm:       provider,
-		executor:  executor,
-		validator: validator,
-		context:   context,
-		emitter:   emitter,
+		llm:          provider,
+		executor:     executor,
+		validator:    validator,
+		context:      context,
+		emitter:      emitter,
+		toolRegistry: registry,
 		config: &AgentConfig{
 			MaxTurns:        DefaultMaxTurns,
 			Timeout:         DefaultAgentTimeout,
@@ -252,6 +263,17 @@ func WithMaxTokens(maxTokens int) AgentOption {
 func WithRequireApproval(require bool) AgentOption {
 	return func(a *Agent) error {
 		a.config.RequireApproval = require
+		return nil
+	}
+}
+
+// WithToolRegistry sets a custom tool registry for the agent.
+func WithToolRegistry(registry *tools.Registry) AgentOption {
+	return func(a *Agent) error {
+		if registry == nil {
+			return errors.New("tool registry cannot be nil")
+		}
+		a.toolRegistry = registry
 		return nil
 	}
 }
@@ -541,27 +563,33 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 		},
 	})
 
-	// 4. Execute based on tool type
+	// 4. Execute tool
 	var result *ToolResult
-	//nolint:staticcheck // err values intentionally unused - methods return nil for agent continuation
-	switch call.Function.Name {
-	case "execute_command":
-		result, err = a.executeCommand(ctx, call.ID, args)
-	case "read_file":
-		result, err = a.readFile(ctx, call.ID, args)
-	case "write_file":
-		result, err = a.writeFile(ctx, call.ID, args)
-	case "list_directory":
-		result, err = a.listDirectory(ctx, call.ID, args)
-	default:
-		err = fmt.Errorf("unknown tool: %s", call.Function.Name)
-		result = &ToolResult{
-			ID:      call.ID,
-			Success: false,
-			Error:   err,
+
+	// execute_command needs special handling for approval workflow
+	if call.Function.Name == "execute_command" {
+		result, _ = a.executeCommand(ctx, call.ID, args)
+	} else {
+		// Use tool registry for other tools
+		toolResult, err := a.toolRegistry.Execute(ctx, call.Function.Name, args)
+		if err != nil {
+			result = &ToolResult{
+				ID:      call.ID,
+				Success: false,
+				Error:   err,
+			}
+		} else {
+			// Convert tools.ToolResult to core.ToolResult
+			result = &ToolResult{
+				ID:      call.ID,
+				Success: toolResult.Success,
+				Output:  toolResult.Output,
+			}
+			if toolResult.Error != "" {
+				result.Error = errors.New(toolResult.Error)
+			}
 		}
 	}
-	_ = err // Mark as intentionally unused
 
 	// 5. Emit completion event
 	a.emitter.Emit(Event{
