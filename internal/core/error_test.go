@@ -202,6 +202,209 @@ func TestError_WithContext(t *testing.T) {
 	}
 }
 
+// TestNewValidationError tests NewValidationError constructor
+func TestNewValidationError(t *testing.T) {
+	err := NewValidationError("TestOp", "invalid input")
+	if err == nil {
+		t.Fatal("NewValidationError() returned nil")
+	}
+
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("NewValidationError() did not return *Error type")
+	}
+
+	if e.Op != "TestOp" {
+		t.Errorf("Op = %q, want %q", e.Op, "TestOp")
+	}
+	if e.Code != ErrCodeInvalidInput {
+		t.Errorf("Code = %v, want %v", e.Code, ErrCodeInvalidInput)
+	}
+}
+
+// TestNewNotFoundError tests NewNotFoundError constructor
+func TestNewNotFoundError(t *testing.T) {
+	err := NewNotFoundError("LoadSession", "session-123")
+	if err == nil {
+		t.Fatal("NewNotFoundError() returned nil")
+	}
+
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("NewNotFoundError() did not return *Error type")
+	}
+
+	if e.Op != "LoadSession" {
+		t.Errorf("Op = %q, want %q", e.Op, "LoadSession")
+	}
+	if e.Code != ErrCodeNotFound {
+		t.Errorf("Code = %v, want %v", e.Code, ErrCodeNotFound)
+	}
+}
+
+// TestNewExecutionError tests NewExecutionError constructor
+func TestNewExecutionError(t *testing.T) {
+	innerErr := errors.New("command failed")
+	err := NewExecutionError("ExecuteCommand", innerErr)
+	if err == nil {
+		t.Fatal("NewExecutionError() returned nil")
+	}
+
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("NewExecutionError() did not return *Error type")
+	}
+
+	if e.Op != "ExecuteCommand" {
+		t.Errorf("Op = %q, want %q", e.Op, "ExecuteCommand")
+	}
+	if e.Code != ErrCodeExternal {
+		t.Errorf("Code = %v, want %v", e.Code, ErrCodeExternal)
+	}
+	if !errors.Is(err, innerErr) {
+		t.Error("NewExecutionError() did not wrap inner error")
+	}
+}
+
+// TestNewTimeoutError tests NewTimeoutError constructor
+func TestNewTimeoutError(t *testing.T) {
+	err := NewTimeoutError("WaitForResponse")
+	if err == nil {
+		t.Fatal("NewTimeoutError() returned nil")
+	}
+
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("NewTimeoutError() did not return *Error type")
+	}
+
+	if e.Op != "WaitForResponse" {
+		t.Errorf("Op = %q, want %q", e.Op, "WaitForResponse")
+	}
+	if e.Code != ErrCodeTimeout {
+		t.Errorf("Code = %v, want %v", e.Code, ErrCodeTimeout)
+	}
+}
+
+// TestNewCancelledError tests NewCancelledError constructor
+func TestNewCancelledError(t *testing.T) {
+	err := NewCancelledError("RunTurn")
+	if err == nil {
+		t.Fatal("NewCancelledError() returned nil")
+	}
+
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("NewCancelledError() did not return *Error type")
+	}
+
+	if e.Op != "RunTurn" {
+		t.Errorf("Op = %q, want %q", e.Op, "RunTurn")
+	}
+	if e.Code != ErrCodeCancelled {
+		t.Errorf("Code = %v, want %v", e.Code, ErrCodeCancelled)
+	}
+}
+
+// TestNewInternalError tests NewInternalError constructor
+func TestNewInternalError(t *testing.T) {
+	innerErr := errors.New("database connection failed")
+	err := NewInternalError("SaveSession", innerErr)
+	if err == nil {
+		t.Fatal("NewInternalError() returned nil")
+	}
+
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("NewInternalError() did not return *Error type")
+	}
+
+	if e.Op != "SaveSession" {
+		t.Errorf("Op = %q, want %q", e.Op, "SaveSession")
+	}
+	if e.Code != ErrCodeInternal {
+		t.Errorf("Code = %v, want %v", e.Code, ErrCodeInternal)
+	}
+	if !errors.Is(err, innerErr) {
+		t.Error("NewInternalError() did not wrap inner error")
+	}
+}
+
+// TestNewPermissionError tests NewPermissionError constructor
+func TestNewPermissionError(t *testing.T) {
+	err := NewPermissionError("WriteFile", "access denied to /etc/hosts")
+	if err == nil {
+		t.Fatal("NewPermissionError() returned nil")
+	}
+
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("NewPermissionError() did not return *Error type")
+	}
+
+	if e.Op != "WriteFile" {
+		t.Errorf("Op = %q, want %q", e.Op, "WriteFile")
+	}
+	if e.Code != ErrCodePermissionDenied {
+		t.Errorf("Code = %v, want %v", e.Code, ErrCodePermissionDenied)
+	}
+}
+
+// TestNewAlreadyExistsError tests NewAlreadyExistsError constructor
+func TestNewAlreadyExistsError(t *testing.T) {
+	err := NewAlreadyExistsError("CreateSession", "session-456")
+	if err == nil {
+		t.Fatal("NewAlreadyExistsError() returned nil")
+	}
+
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("NewAlreadyExistsError() did not return *Error type")
+	}
+
+	if e.Op != "CreateSession" {
+		t.Errorf("Op = %q, want %q", e.Op, "CreateSession")
+	}
+	if e.Code != ErrCodeAlreadyExists {
+		t.Errorf("Code = %v, want %v", e.Code, ErrCodeAlreadyExists)
+	}
+}
+
+// TestWrapError tests WrapError helper function
+func TestWrapError(t *testing.T) {
+	// Test wrapping a regular error
+	innerErr := errors.New("original error")
+	wrapped := WrapError("Operation", innerErr)
+
+	var e *Error
+	if !errors.As(wrapped, &e) {
+		t.Fatalf("WrapError() did not return *Error type")
+	}
+
+	if e.Op != "Operation" {
+		t.Errorf("Op = %q, want %q", e.Op, "Operation")
+	}
+	if !errors.Is(wrapped, innerErr) {
+		t.Error("WrapError() did not preserve error chain")
+	}
+
+	// Test wrapping an already-wrapped error
+	doubleWrapped := WrapError("OuterOp", wrapped)
+	var e2 *Error
+	if !errors.As(doubleWrapped, &e2) {
+		t.Fatalf("WrapError() did not return *Error type on double wrap")
+	}
+
+	// WrapError concatenates operations when wrapping a core.Error
+	expectedOp := "OuterOp: Operation"
+	if e2.Op != expectedOp {
+		t.Errorf("Op = %q, want %q", e2.Op, expectedOp)
+	}
+	if !errors.Is(doubleWrapped, innerErr) {
+		t.Error("WrapError() did not preserve error chain through double wrap")
+	}
+}
+
 // TestErrorCodes verifies all error codes are defined
 func TestErrorCodes(t *testing.T) {
 	codes := []ErrorCode{

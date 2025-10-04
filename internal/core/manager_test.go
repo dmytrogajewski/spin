@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/core/turn"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/session"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 func TestNewManager_AndNewConversation(t *testing.T) {
@@ -36,6 +37,83 @@ func TestNewManager_AndNewConversation(t *testing.T) {
 	defer cancel()
 	if err := conv.RunTurn(ctx, "say hi"); err != nil {
 		t.Fatalf("RunTurn() error: %v", err)
+	}
+}
+
+func TestWithStorage(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider = "mock"
+	cfg.Model = "mock"
+	cfg.WorkDir = t.TempDir()
+	cfg.SessionDir = t.TempDir()
+
+	customStorage, err := session.NewFileStorage(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileStorage() error: %v", err)
+	}
+	llm := llm.NewMockProvider("ok")
+	emitter := NewEventEmitter(50)
+
+	// Create manager with custom storage
+	m, err := NewManager(cfg, WithLLM(llm), WithEmitter(emitter), WithStorage(customStorage))
+	if err != nil {
+		t.Fatalf("NewManager() with WithStorage error: %v", err)
+	}
+
+	// Verify storage was set by creating and listing conversations
+	conv, err := m.NewConversation(context.Background(), cfg.WorkDir)
+	if err != nil {
+		t.Fatalf("NewConversation() error: %v", err)
+	}
+
+	sess := createSessionForTest(t, cfg.WorkDir, conv)
+	if err := m.storage.Save(sess); err != nil {
+		t.Fatalf("Save session error: %v", err)
+	}
+
+	// List should find the session
+	metas, err := m.ListConversations(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListConversations() error: %v", err)
+	}
+
+	if len(metas) != 1 {
+		t.Errorf("expected 1 session, got %d", len(metas))
+	}
+}
+
+func TestWithManagerToolRegistry(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider = "mock"
+	cfg.Model = "mock"
+	cfg.WorkDir = t.TempDir()
+	cfg.SessionDir = t.TempDir()
+
+	// Create a custom tool registry
+	customRegistry := tools.NewRegistry()
+
+	llm := llm.NewMockProvider("ok")
+	emitter := NewEventEmitter(50)
+
+	// Create manager with custom tool registry
+	m, err := NewManager(cfg, WithLLM(llm), WithEmitter(emitter), WithManagerToolRegistry(customRegistry))
+	if err != nil {
+		t.Fatalf("NewManager() with WithManagerToolRegistry error: %v", err)
+	}
+
+	// Verify manager was created successfully
+	if m == nil {
+		t.Fatal("NewManager() returned nil")
+	}
+
+	// Create a conversation and verify tool registry is used
+	conv, err := m.NewConversation(context.Background(), cfg.WorkDir)
+	if err != nil {
+		t.Fatalf("NewConversation() error: %v", err)
+	}
+
+	if conv == nil {
+		t.Fatal("NewConversation() returned nil")
 	}
 }
 
@@ -86,6 +164,44 @@ func TestManager_ResumeConversation_NotFound(t *testing.T) {
 
 	if _, err := m.ResumeConversation(context.Background(), "does-not-exist"); err == nil {
 		t.Error("expected error for non-existent session in ResumeConversation")
+	}
+}
+
+func TestManager_WithMCPManager(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider = "mock"
+	cfg.Model = "mock"
+	cfg.WorkDir = t.TempDir()
+	cfg.SessionDir = t.TempDir()
+
+	mcpMgr := NewMCPManager()
+	m, err := NewManager(cfg, WithMCPManager(mcpMgr))
+	if err != nil {
+		t.Fatalf("NewManager() error: %v", err)
+	}
+
+	if m.MCPManager() == nil {
+		t.Error("MCPManager() should return the configured manager")
+	}
+	if m.MCPManager() != mcpMgr {
+		t.Error("MCPManager() should return the same manager instance")
+	}
+}
+
+func TestManager_WithoutMCPManager(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider = "mock"
+	cfg.Model = "mock"
+	cfg.WorkDir = t.TempDir()
+	cfg.SessionDir = t.TempDir()
+
+	m, err := NewManager(cfg)
+	if err != nil {
+		t.Fatalf("NewManager() error: %v", err)
+	}
+
+	if m.MCPManager() != nil {
+		t.Error("MCPManager() should return nil when not configured")
 	}
 }
 

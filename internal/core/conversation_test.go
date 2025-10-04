@@ -170,6 +170,86 @@ func TestConversation_Stop_ClosesStream(t *testing.T) {
 	}
 }
 
+func TestConversation_State(t *testing.T) {
+	llm := llm.NewMockProvider("ok")
+	emitter := NewEventEmitter(100)
+	validator := NewValidator()
+	workDir := t.TempDir()
+	executor, _ := NewExecutor(workDir)
+	ctxEnv := &Environment{WorkDir: workDir}
+	agent, _ := NewAgent(llm, executor, validator, ctxEnv, emitter)
+	history := NewHistoryWithDefaults()
+	_ = history.AddSystemMessage("sys")
+	c := NewTestConversation(t, agent, history, emitter)
+
+	// Initial state should be idle
+	if state := c.State(); state != StateIdle {
+		t.Errorf("initial State() = %v, want %v", state, StateIdle)
+	}
+
+	// After Stop, state should be cancelled
+	if err := c.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop() error: %v", err)
+	}
+
+	if state := c.State(); state != StateCancelled {
+		t.Errorf("after Stop(), State() = %v, want %v", state, StateCancelled)
+	}
+}
+
+func TestConversation_Stop_AlreadyStopped(t *testing.T) {
+	llm := llm.NewMockProvider("ok")
+	emitter := NewEventEmitter(100)
+	validator := NewValidator()
+	workDir := t.TempDir()
+	executor, _ := NewExecutor(workDir)
+	ctxEnv := &Environment{WorkDir: workDir}
+	agent, _ := NewAgent(llm, executor, validator, ctxEnv, emitter)
+	history := NewHistoryWithDefaults()
+	_ = history.AddSystemMessage("sys")
+	c := NewTestConversation(t, agent, history, emitter)
+
+	// Stop once
+	if err := c.Stop(context.Background()); err != nil {
+		t.Fatalf("first Stop() error: %v", err)
+	}
+
+	// Stop again should be idempotent and not error
+	if err := c.Stop(context.Background()); err != nil {
+		t.Errorf("second Stop() error: %v, expected nil", err)
+	}
+
+	// State should still be cancelled
+	if state := c.State(); state != StateCancelled {
+		t.Errorf("after double Stop(), State() = %v, want %v", state, StateCancelled)
+	}
+}
+
+func TestConversation_Stop_WithTimeout(t *testing.T) {
+	llm := llm.NewMockProvider("ok")
+	emitter := NewEventEmitter(100)
+	validator := NewValidator()
+	workDir := t.TempDir()
+	executor, _ := NewExecutor(workDir)
+	ctxEnv := &Environment{WorkDir: workDir}
+	agent, _ := NewAgent(llm, executor, validator, ctxEnv, emitter)
+	history := NewHistoryWithDefaults()
+	_ = history.AddSystemMessage("sys")
+	c := NewTestConversation(t, agent, history, emitter)
+
+	// Stop with a very short timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+	defer cancel()
+
+	// Even if context times out, Stop should handle it gracefully
+	_ = c.Stop(ctx) // err may be context.DeadlineExceeded, which is acceptable
+
+	// State should still be cancelled even with timeout
+	if state := c.State(); state != StateCancelled {
+		t.Errorf("after Stop() with timeout, State() = %v, want %v", state, StateCancelled)
+	}
+}
+
 // NewTestConversation is a testing helper that will be implemented in conversation.go
 func NewTestConversation(t *testing.T, agent *Agent, history *History, emitter *EventEmitter) *Conversation {
 	t.Helper()

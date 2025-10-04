@@ -313,12 +313,16 @@ func (h *History) Truncate(budget int) error {
 	}
 
 	// Keep recent messages that fit in budget
-	truncated := []Message{}
+	// Pre-allocate with max possible size
+	truncated := make([]Message, 0, len(messages)+1)
 	if systemMsg != nil {
 		truncated = append(truncated, *systemMsg)
 	}
 
 	tokens := systemTokens
+
+	// Collect messages in reverse order (most recent first)
+	tempMessages := make([]Message, 0, len(messages))
 
 	// Iterate from most recent backwards
 	for i := len(messages) - 1; i >= 0; i-- {
@@ -326,9 +330,13 @@ func (h *History) Truncate(budget int) error {
 		if tokens+msgTokens > budget {
 			break
 		}
-		// Prepend to maintain order
-		truncated = append([]Message{messages[i]}, truncated...)
+		tempMessages = append(tempMessages, messages[i])
 		tokens += msgTokens
+	}
+
+	// Reverse tempMessages to maintain chronological order
+	for i := len(tempMessages) - 1; i >= 0; i-- {
+		truncated = append(truncated, tempMessages[i])
 	}
 
 	h.messages = truncated

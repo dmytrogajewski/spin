@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -18,6 +18,7 @@ type Manager struct {
 	emitter      *EventEmitter
 	storage      session.Storage
 	toolRegistry *tools.Registry
+	mcpManager   *MCPManager
 }
 
 // Functional options
@@ -51,6 +52,14 @@ func WithStorage(s session.Storage) ManagerOption {
 func WithManagerToolRegistry(registry *tools.Registry) ManagerOption {
 	return func(m *Manager) error {
 		m.toolRegistry = registry
+		return nil
+	}
+}
+
+// WithMCPManager sets the MCP manager for connecting to external MCP servers
+func WithMCPManager(mcpMgr *MCPManager) ManagerOption {
+	return func(m *Manager) error {
+		m.mcpManager = mcpMgr
 		return nil
 	}
 }
@@ -204,4 +213,9 @@ func (m *Manager) ArchiveConversation(ctx context.Context, sessionID string) err
 	}
 
 	return nil
+}
+
+// MCPManager returns the MCP manager if configured, or nil.
+func (m *Manager) MCPManager() *MCPManager {
+	return m.mcpManager
 }
