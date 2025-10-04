@@ -2,8 +2,12 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	coretesting "github.com/dmytrogajewski/spin/internal/core/testing"
@@ -36,12 +40,13 @@ var (
 // environment. It processes user requests through multiple turns of LLM calls
 // and tool executions until the task is complete or limits are reached.
 type Agent struct {
-	llm       coretesting.LLMProvider // LLM provider interface
-	executor  *Executor               // Command executor
-	validator *Validator              // Command validator
-	context   *Context                // Environment context
-	emitter   *EventEmitter           // Event emitter
-	config    *AgentConfig            // Agent configuration
+	llm             coretesting.LLMProvider     // LLM provider interface
+	executor        *Executor                   // Command executor
+	validator       *Validator                  // Command validator
+	context         *Context                    // Environment context
+	emitter         *EventEmitter               // Event emitter
+	config          *AgentConfig                // Agent configuration
+	approvalHandler func(*Command, string) bool // Approval handler for testing
 }
 
 // Task defines the interface for different execution modes.
@@ -500,13 +505,318 @@ Always explain your reasoning and ask for clarification when needed.`
 
 // ProcessToolCall processes a single tool call from the LLM.
 //
-// This method will be fully implemented in Feature 6.2 (Tool Call Processing).
-// For now, it returns a placeholder implementation.
+// This method validates the tool call, parses arguments, executes the appropriate
+// tool based on the function name, and returns the result. It handles:
+// - Command execution with approval workflow
+// - File operations (read, write, list)
+// - Event emission for tool lifecycle
+// - Error handling and recovery
 func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResult, error) {
-	// TODO: Full implementation in Feature 6.2
+	// 1. Validate tool call
+	if err := a.validateToolCall(call); err != nil {
+		return &ToolResult{
+			ID:      call.ID,
+			Success: false,
+			Error:   err,
+		}, nil // Return nil error so agent continues
+	}
+
+	// 2. Parse arguments
+	args, err := a.parseToolArguments(call)
+	if err != nil {
+		return &ToolResult{
+			ID:      call.ID,
+			Success: false,
+			Error:   err,
+		}, nil
+	}
+
+	// 3. Emit tool start event
+	a.emitter.Emit(Event{
+		Type:      EventToolCallStart,
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"tool_id":   call.ID,
+			"tool_name": call.Function.Name,
+		},
+	})
+
+	// 4. Execute based on tool type
+	var result *ToolResult
+	//nolint:staticcheck // err values intentionally unused - methods return nil for agent continuation
+	switch call.Function.Name {
+	case "execute_command":
+		result, err = a.executeCommand(ctx, call.ID, args)
+	case "read_file":
+		result, err = a.readFile(ctx, call.ID, args)
+	case "write_file":
+		result, err = a.writeFile(ctx, call.ID, args)
+	case "list_directory":
+		result, err = a.listDirectory(ctx, call.ID, args)
+	default:
+		err = fmt.Errorf("unknown tool: %s", call.Function.Name)
+		result = &ToolResult{
+			ID:      call.ID,
+			Success: false,
+			Error:   err,
+		}
+	}
+	_ = err // Mark as intentionally unused
+
+	// 5. Emit completion event
+	a.emitter.Emit(Event{
+		Type:      EventToolCallComplete,
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"tool_id": call.ID,
+			"success": result.Success,
+		},
+	})
+
+	return result, nil // Always return nil error so agent continues
+}
+
+// validateToolCall validates the tool call structure.
+func (a *Agent) validateToolCall(call *ToolCall) error {
+	if call == nil {
+		return errors.New("tool call cannot be nil")
+	}
+	if call.ID == "" {
+		return errors.New("tool call ID cannot be empty")
+	}
+	if call.Function.Name == "" {
+		return errors.New("tool function name cannot be empty")
+	}
+	return nil
+}
+
+// parseToolArguments extracts and parses JSON arguments from tool call.
+func (a *Agent) parseToolArguments(call *ToolCall) (map[string]interface{}, error) {
+	if call.Function.Arguments == "" {
+		return nil, errors.New("tool arguments cannot be empty")
+	}
+
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
+		return nil, fmt.Errorf("failed to parse tool arguments: %w", err)
+	}
+
+	return args, nil
+}
+
+// executeCommand executes a shell command with approval workflow.
+func (a *Agent) executeCommand(ctx context.Context, id string, args map[string]interface{}) (*ToolResult, error) {
+	// Extract command string
+	cmdStr, ok := args["command"].(string)
+	if !ok {
+		return &ToolResult{
+			ID:      id,
+			Success: false,
+			Error:   errors.New("command argument must be a string"),
+		}, nil
+	}
+
+	// Parse command into parts
+	parts := strings.Fields(cmdStr)
+	if len(parts) == 0 {
+		return &ToolResult{
+			ID:      id,
+			Success: false,
+			Error:   errors.New("command cannot be empty"),
+		}, nil
+	}
+
+	// Create Command struct
+	cmd := &Command{
+		Program: parts[0],
+		Args:    parts[1:],
+		Raw:     cmdStr,
+	}
+
+	// Set working directory if provided
+	if workDir, ok := args["workdir"].(string); ok {
+		cmd.WorkDir = workDir
+	} else {
+		cmd.WorkDir = a.context.WorkDir
+	}
+
+	// Check if command needs approval
+	if needsApproval, reason := a.ShouldApprove(cmd); needsApproval {
+		// Request approval
+		approved := a.requestApproval(ctx, cmd, reason)
+		if !approved {
+			return &ToolResult{
+				ID:      id,
+				Success: false,
+				Error:   errors.New("command denied by user"),
+			}, nil
+		}
+	}
+
+	// Execute command (use default options)
+	result, err := a.executor.Execute(ctx, cmd, nil)
+	if err != nil {
+		return &ToolResult{
+			ID:       id,
+			Success:  false,
+			Output:   result.Stderr,
+			Error:    err,
+			ExitCode: result.ExitCode,
+		}, nil
+	}
+
 	return &ToolResult{
-		ID:      call.ID,
-		Success: false,
-		Error:   errors.New("tool call processing not yet implemented"),
-	}, errors.New("tool call processing not yet implemented")
+		ID:       id,
+		Success:  result.ExitCode == 0,
+		Output:   result.Stdout,
+		ExitCode: result.ExitCode,
+	}, nil
+}
+
+// requestApproval requests user approval for a command.
+func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string) bool {
+	// Emit approval request event
+	a.emitter.Emit(Event{
+		Type:      EventCommandApproval,
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"command": cmd.Raw,
+			"reason":  reason,
+		},
+	})
+
+	// Use approval handler if set (for testing)
+	if a.approvalHandler != nil {
+		return a.approvalHandler(cmd, reason)
+	}
+
+	// Default to deny if no handler
+	return false
+}
+
+// readFile reads a file's contents.
+func (a *Agent) readFile(ctx context.Context, id string, args map[string]interface{}) (*ToolResult, error) {
+	// Extract path
+	path, ok := args["path"].(string)
+	if !ok || path == "" {
+		return &ToolResult{
+			ID:      id,
+			Success: false,
+			Error:   errors.New("path argument must be a non-empty string"),
+		}, nil
+	}
+
+	// Make path absolute if relative
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(a.context.WorkDir, path)
+	}
+
+	// Read file
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return &ToolResult{
+			ID:      id,
+			Success: false,
+			Error:   fmt.Errorf("failed to read file: %w", err),
+		}, nil
+	}
+
+	return &ToolResult{
+		ID:      id,
+		Success: true,
+		Output:  string(content),
+	}, nil
+}
+
+// writeFile writes content to a file.
+func (a *Agent) writeFile(ctx context.Context, id string, args map[string]interface{}) (*ToolResult, error) {
+	// Extract path
+	path, ok := args["path"].(string)
+	if !ok || path == "" {
+		return &ToolResult{
+			ID:      id,
+			Success: false,
+			Error:   errors.New("path argument must be a non-empty string"),
+		}, nil
+	}
+
+	// Extract content
+	content, ok := args["content"].(string)
+	if !ok {
+		return &ToolResult{
+			ID:      id,
+			Success: false,
+			Error:   errors.New("content argument must be a string"),
+		}, nil
+	}
+
+	// Make path absolute if relative
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(a.context.WorkDir, path)
+	}
+
+	// Write file
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return &ToolResult{
+			ID:      id,
+			Success: false,
+			Error:   fmt.Errorf("failed to write file: %w", err),
+		}, nil
+	}
+
+	return &ToolResult{
+		ID:      id,
+		Success: true,
+		Output:  fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path),
+	}, nil
+}
+
+// listDirectory lists directory contents.
+func (a *Agent) listDirectory(ctx context.Context, id string, args map[string]interface{}) (*ToolResult, error) {
+	// Extract path
+	path, ok := args["path"].(string)
+	if !ok || path == "" {
+		return &ToolResult{
+			ID:      id,
+			Success: false,
+			Error:   errors.New("path argument must be a non-empty string"),
+		}, nil
+	}
+
+	// Make path absolute if relative
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(a.context.WorkDir, path)
+	}
+
+	// Read directory
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return &ToolResult{
+			ID:      id,
+			Success: false,
+			Error:   fmt.Errorf("failed to read directory: %w", err),
+		}, nil
+	}
+
+	// Format output
+	var output strings.Builder
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		typeStr := "file"
+		if entry.IsDir() {
+			typeStr = "dir"
+		}
+
+		fmt.Fprintf(&output, "%s\t%s\t%d bytes\n", entry.Name(), typeStr, info.Size())
+	}
+
+	return &ToolResult{
+		ID:      id,
+		Success: true,
+		Output:  output.String(),
+	}, nil
 }
