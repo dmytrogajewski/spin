@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/dmytrogajewski/spin/internal/core"
 )
 
 // Test FileStorage Creation
@@ -64,7 +62,7 @@ func TestFileStorage_Save(t *testing.T) {
 		t.Fatalf("NewFileStorage() error = %v", err)
 	}
 
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	err = storage.Save(session)
 	if err != nil {
@@ -84,7 +82,7 @@ func TestFileStorage_Save_AtomicWrite(t *testing.T) {
 		t.Fatalf("NewFileStorage() error = %v", err)
 	}
 
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	// Save session
 	err = storage.Save(session)
@@ -105,7 +103,7 @@ func TestFileStorage_Save_Overwrite(t *testing.T) {
 		t.Fatalf("NewFileStorage() error = %v", err)
 	}
 
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	// Save session
 	err = storage.Save(session)
@@ -137,7 +135,7 @@ func TestFileStorage_Save_InvalidSession(t *testing.T) {
 		t.Fatalf("NewFileStorage() error = %v", err)
 	}
 
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 	session.ID = "" // Invalid
 
 	err = storage.Save(session)
@@ -154,7 +152,7 @@ func TestFileStorage_Load(t *testing.T) {
 		t.Fatalf("NewFileStorage() error = %v", err)
 	}
 
-	original := NewSession("/test/workdir", core.DefaultConfig())
+	original := NewSession("/test/workdir")
 	original.SetTitle("Test Session")
 
 	// Save session
@@ -219,7 +217,7 @@ func TestFileStorage_Delete(t *testing.T) {
 		t.Fatalf("NewFileStorage() error = %v", err)
 	}
 
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	// Save session
 	err = storage.Save(session)
@@ -261,7 +259,7 @@ func TestFileStorage_Exists(t *testing.T) {
 		t.Fatalf("NewFileStorage() error = %v", err)
 	}
 
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	// Should not exist initially
 	exists, err := storage.Exists(session.ID)
@@ -298,7 +296,7 @@ func TestFileStorage_List(t *testing.T) {
 
 	// Create and save multiple sessions
 	for i := 0; i < 5; i++ {
-		session := NewSession("/test/workdir", core.DefaultConfig())
+		session := NewSession("/test/workdir")
 		err = storage.Save(session)
 		if err != nil {
 			t.Fatalf("Save() error = %v", err)
@@ -342,7 +340,7 @@ func TestFileStorage_ListMetadata(t *testing.T) {
 
 	// Create sessions with different metadata
 	for i := 0; i < 3; i++ {
-		session := NewSession("/test/workdir", core.DefaultConfig())
+		session := NewSession("/test/workdir")
 		session.SetTitle(fmt.Sprintf("Session %d", i))
 		err = storage.Save(session)
 		if err != nil {
@@ -370,15 +368,15 @@ func TestFileStorage_List_WithFilter_State(t *testing.T) {
 	}
 
 	// Create sessions with different states
-	s1 := NewSession("/test/workdir", core.DefaultConfig())
+	s1 := NewSession("/test/workdir")
 	s1.SetState(StateActive)
 	storage.Save(s1)
 
-	s2 := NewSession("/test/workdir", core.DefaultConfig())
+	s2 := NewSession("/test/workdir")
 	s2.SetState(StateCompleted)
 	storage.Save(s2)
 
-	s3 := NewSession("/test/workdir", core.DefaultConfig())
+	s3 := NewSession("/test/workdir")
 	s3.SetState(StateCompleted)
 	storage.Save(s3)
 
@@ -403,13 +401,13 @@ func TestFileStorage_List_WithFilter_WorkDir(t *testing.T) {
 	}
 
 	// Create sessions with different work directories
-	s1 := NewSession("/project/a", core.DefaultConfig())
+	s1 := NewSession("/project/a")
 	storage.Save(s1)
 
-	s2 := NewSession("/project/b", core.DefaultConfig())
+	s2 := NewSession("/project/b")
 	storage.Save(s2)
 
-	s3 := NewSession("/project/a", core.DefaultConfig())
+	s3 := NewSession("/project/a")
 	storage.Save(s3)
 
 	// Filter by work directory
@@ -436,17 +434,17 @@ func TestFileStorage_List_WithFilter_Date(t *testing.T) {
 	twoHoursAgo := now.Add(-2 * time.Hour)
 
 	// Create sessions with different timestamps
-	s1 := NewSession("/test/workdir", core.DefaultConfig())
+	s1 := NewSession("/test/workdir")
 	s1.CreatedAt = twoHoursAgo
 	s1.UpdatedAt = twoHoursAgo
 	storage.Save(s1)
 
-	s2 := NewSession("/test/workdir", core.DefaultConfig())
+	s2 := NewSession("/test/workdir")
 	s2.CreatedAt = oneHourAgo
 	s2.UpdatedAt = oneHourAgo
 	storage.Save(s2)
 
-	s3 := NewSession("/test/workdir", core.DefaultConfig())
+	s3 := NewSession("/test/workdir")
 	// s3 has current timestamp
 	storage.Save(s3)
 
@@ -471,15 +469,15 @@ func TestFileStorage_List_WithFilter_Tags(t *testing.T) {
 	}
 
 	// Create sessions with different tags
-	s1 := NewSession("/test/workdir", core.DefaultConfig())
+	s1 := NewSession("/test/workdir")
 	s1.AddTag("auth")
 	storage.Save(s1)
 
-	s2 := NewSession("/test/workdir", core.DefaultConfig())
+	s2 := NewSession("/test/workdir")
 	s2.AddTag("database")
 	storage.Save(s2)
 
-	s3 := NewSession("/test/workdir", core.DefaultConfig())
+	s3 := NewSession("/test/workdir")
 	s3.AddTag("auth")
 	s3.AddTag("api")
 	storage.Save(s3)
@@ -505,7 +503,7 @@ func TestFileStorage_List_WithPagination(t *testing.T) {
 
 	// Create 10 sessions
 	for i := 0; i < 10; i++ {
-		session := NewSession("/test/workdir", core.DefaultConfig())
+		session := NewSession("/test/workdir")
 		err = storage.Save(session)
 		if err != nil {
 			t.Fatalf("Save() error = %v", err)
@@ -557,7 +555,7 @@ func TestFileStorage_ConcurrentSaves(t *testing.T) {
 	// Start multiple concurrent savers
 	for i := 0; i < 10; i++ {
 		go func() {
-			session := NewSession("/test/workdir", core.DefaultConfig())
+			session := NewSession("/test/workdir")
 			err := storage.Save(session)
 			if err != nil {
 				t.Errorf("Save() error = %v", err)
@@ -589,7 +587,7 @@ func TestFileStorage_ConcurrentReads(t *testing.T) {
 	}
 
 	// Create a session
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 	err = storage.Save(session)
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)

@@ -5,17 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/core"
 	"github.com/dmytrogajewski/spin/internal/core/turn"
 )
 
 // Test Session Creation
 
 func TestNewSession(t *testing.T) {
-	cfg := core.DefaultConfig()
 	workDir := "/test/workdir"
 
-	session := NewSession(workDir, cfg)
+	session := NewSession(workDir)
 
 	if session == nil {
 		t.Fatal("NewSession() returned nil")
@@ -55,38 +53,20 @@ func TestNewSession(t *testing.T) {
 }
 
 func TestNewSession_GeneratesUniqueIDs(t *testing.T) {
-	cfg := core.DefaultConfig()
 	workDir := "/test/workdir"
 
-	s1 := NewSession(workDir, cfg)
-	s2 := NewSession(workDir, cfg)
+	s1 := NewSession(workDir)
+	s2 := NewSession(workDir)
 
 	if s1.ID == s2.ID {
 		t.Error("NewSession() generated duplicate IDs")
 	}
 }
 
-func TestNewSession_CopiesConfig(t *testing.T) {
-	cfg := core.DefaultConfig()
-	cfg.MaxTurns = 10
-	workDir := "/test/workdir"
-
-	session := NewSession(workDir, cfg)
-
-	// Modify original config
-	cfg.MaxTurns = 20
-
-	// Session config should be unchanged
-	if session.Config.MaxTurns != 10 {
-		t.Errorf("Config was not copied, MaxTurns = %d, want 10", session.Config.MaxTurns)
-	}
-}
-
 func TestNewSession_InitializesMetadata(t *testing.T) {
-	cfg := core.DefaultConfig()
 	workDir := "/test/workdir"
 
-	session := NewSession(workDir, cfg)
+	session := NewSession(workDir)
 
 	if session.Metadata.TotalTurns != 0 {
 		t.Errorf("Metadata.TotalTurns = %d, want 0", session.Metadata.TotalTurns)
@@ -100,7 +80,7 @@ func TestNewSession_InitializesMetadata(t *testing.T) {
 // Test Turn Management
 
 func TestSession_AddTurn(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 	originalUpdatedAt := session.UpdatedAt
 
 	// Wait a bit to ensure timestamp difference
@@ -140,7 +120,7 @@ func TestSession_AddTurn(t *testing.T) {
 }
 
 func TestSession_AddTurn_NilTurn(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	err := session.AddTurn(nil)
 	if err == nil {
@@ -153,7 +133,7 @@ func TestSession_AddTurn_NilTurn(t *testing.T) {
 }
 
 func TestSession_AddTurn_Multiple(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	for i := 1; i <= 5; i++ {
 		turn := &turn.Turn{
@@ -183,7 +163,7 @@ func TestSession_AddTurn_Multiple(t *testing.T) {
 }
 
 func TestSession_GetTurn(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	turn1 := &turn.Turn{ID: "turn-1", SessionID: session.ID}
 	turn2 := &turn.Turn{ID: "turn-2", SessionID: session.ID}
@@ -202,7 +182,7 @@ func TestSession_GetTurn(t *testing.T) {
 }
 
 func TestSession_GetTurn_NotFound(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	_, err := session.GetTurn("nonexistent")
 	if err == nil {
@@ -211,7 +191,7 @@ func TestSession_GetTurn_NotFound(t *testing.T) {
 }
 
 func TestSession_LastTurn(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	turn1 := &turn.Turn{ID: "turn-1", SessionID: session.ID}
 	turn2 := &turn.Turn{ID: "turn-2", SessionID: session.ID}
@@ -226,7 +206,7 @@ func TestSession_LastTurn(t *testing.T) {
 }
 
 func TestSession_LastTurn_EmptySession(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	last := session.LastTurn()
 	if last != nil {
@@ -235,7 +215,7 @@ func TestSession_LastTurn_EmptySession(t *testing.T) {
 }
 
 func TestSession_TurnCount(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	if session.TurnCount() != 0 {
 		t.Errorf("TurnCount() = %d, want 0", session.TurnCount())
@@ -252,7 +232,7 @@ func TestSession_TurnCount(t *testing.T) {
 // Test Metadata Operations
 
 func TestSession_UpdateMetadata(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	err := session.UpdateMetadata(func(m *Metadata) {
 		m.Title = "Test Session"
@@ -273,7 +253,7 @@ func TestSession_UpdateMetadata(t *testing.T) {
 }
 
 func TestSession_SetState(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	err := session.SetState(StateCompleted)
 	if err != nil {
@@ -286,7 +266,7 @@ func TestSession_SetState(t *testing.T) {
 }
 
 func TestSession_SetState_InvalidTransition(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	// Archive the session
 	err := session.SetState(StateArchived)
@@ -302,7 +282,7 @@ func TestSession_SetState_InvalidTransition(t *testing.T) {
 }
 
 func TestSession_AddTag(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	err := session.AddTag("test-tag")
 	if err != nil {
@@ -319,7 +299,7 @@ func TestSession_AddTag(t *testing.T) {
 }
 
 func TestSession_AddTag_Duplicate(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	session.AddTag("test-tag")
 	session.AddTag("test-tag") // Add same tag again
@@ -330,7 +310,7 @@ func TestSession_AddTag_Duplicate(t *testing.T) {
 }
 
 func TestSession_RemoveTag(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	session.AddTag("tag1")
 	session.AddTag("tag2")
@@ -350,7 +330,7 @@ func TestSession_RemoveTag(t *testing.T) {
 }
 
 func TestSession_SetTitle(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	err := session.SetTitle("My Session")
 	if err != nil {
@@ -365,7 +345,7 @@ func TestSession_SetTitle(t *testing.T) {
 // Test Validation
 
 func TestSession_Validate_Valid(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	err := session.Validate()
 	if err != nil {
@@ -374,7 +354,7 @@ func TestSession_Validate_Valid(t *testing.T) {
 }
 
 func TestSession_Validate_EmptyID(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 	session.ID = ""
 
 	err := session.Validate()
@@ -384,7 +364,7 @@ func TestSession_Validate_EmptyID(t *testing.T) {
 }
 
 func TestSession_Validate_EmptyWorkDir(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 	session.WorkDir = ""
 
 	err := session.Validate()
@@ -394,7 +374,7 @@ func TestSession_Validate_EmptyWorkDir(t *testing.T) {
 }
 
 func TestSession_Validate_InvalidTimestamps(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 	session.UpdatedAt = session.CreatedAt.Add(-1 * time.Hour) // UpdatedAt before CreatedAt
 
 	err := session.Validate()
@@ -404,7 +384,7 @@ func TestSession_Validate_InvalidTimestamps(t *testing.T) {
 }
 
 func TestSession_Validate_InvalidState(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 	session.State = State("invalid")
 
 	err := session.Validate()
@@ -414,7 +394,7 @@ func TestSession_Validate_InvalidState(t *testing.T) {
 }
 
 func TestSession_Validate_DuplicateTurnIDs(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	turn1 := &turn.Turn{ID: "turn-1", SessionID: session.ID}
 	turn2 := &turn.Turn{ID: "turn-1", SessionID: session.ID} // Duplicate ID
@@ -429,7 +409,7 @@ func TestSession_Validate_DuplicateTurnIDs(t *testing.T) {
 }
 
 func TestSession_Validate_InconsistentMetadata(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	session.AddTurn(&turn.Turn{ID: "turn-1", SessionID: session.ID, Tokens: turn.TokenUsage{TotalTokens: 100}})
 	session.AddTurn(&turn.Turn{ID: "turn-2", SessionID: session.ID, Tokens: turn.TokenUsage{TotalTokens: 200}})
@@ -446,7 +426,7 @@ func TestSession_Validate_InconsistentMetadata(t *testing.T) {
 // Test Concurrent Access
 
 func TestSession_ConcurrentReads(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	for i := 0; i < 10; i++ {
 		session.AddTurn(&turn.Turn{
@@ -474,7 +454,7 @@ func TestSession_ConcurrentReads(t *testing.T) {
 }
 
 func TestSession_ConcurrentWrites(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {
@@ -501,7 +481,7 @@ func TestSession_ConcurrentWrites(t *testing.T) {
 }
 
 func TestSession_ConcurrentReadWrite(t *testing.T) {
-	session := NewSession("/test/workdir", core.DefaultConfig())
+	session := NewSession("/test/workdir")
 
 	done := make(chan bool)
 

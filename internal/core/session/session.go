@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/core"
 	"github.com/dmytrogajewski/spin/internal/core/turn"
 	"github.com/google/uuid"
 )
@@ -40,31 +39,13 @@ type Session struct {
 	Turns     []*turn.Turn // Conversation turns
 	Metadata  Metadata     // Session metadata
 	State     State        // Current session state
-	Config    *core.Config // Session-specific configuration
 	Version   int          // Schema version for migrations
 	mu        sync.RWMutex // Protects all fields
 }
 
 // NewSession creates a new session.
-func NewSession(workDir string, cfg *core.Config) *Session {
+func NewSession(workDir string) *Session {
 	now := time.Now()
-
-	// Deep copy config to prevent mutations
-	cfgCopy := *cfg
-	if cfg.ProviderConfig != nil {
-		cfgCopy.ProviderConfig = make(map[string]interface{})
-		for k, v := range cfg.ProviderConfig {
-			cfgCopy.ProviderConfig[k] = v
-		}
-	}
-	if cfg.AllowedCommands != nil {
-		cfgCopy.AllowedCommands = make([]string, len(cfg.AllowedCommands))
-		copy(cfgCopy.AllowedCommands, cfg.AllowedCommands)
-	}
-	if cfg.MCPServers != nil {
-		cfgCopy.MCPServers = make([]core.MCPServerConfig, len(cfg.MCPServers))
-		copy(cfgCopy.MCPServers, cfg.MCPServers)
-	}
 
 	return &Session{
 		ID:        uuid.New().String(),
@@ -76,7 +57,6 @@ func NewSession(workDir string, cfg *core.Config) *Session {
 			Tags: make([]string, 0),
 		},
 		State:   StateActive,
-		Config:  &cfgCopy,
 		Version: CurrentSchemaVersion,
 	}
 }

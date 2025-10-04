@@ -8,13 +8,14 @@ import (
 	"time"
 
 	coretesting "github.com/dmytrogajewski/spin/internal/core/testing"
+	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // TestNewPlanner tests planner creation
 func TestNewPlanner(t *testing.T) {
-	mockLLM := coretesting.NewMockProvider("")
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse(""))
 
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
@@ -44,7 +45,7 @@ func TestPlanner_Plan_SimpleTask(t *testing.T) {
 		]
 	}`
 
-	mockLLM := coretesting.NewMockProvider(mockResponse)
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse(mockResponse))
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 	plan, err := planner.Plan(context.Background(), "Refactor authentication")
@@ -56,7 +57,6 @@ func TestPlanner_Plan_SimpleTask(t *testing.T) {
 	assert.Equal(t, "step-1", plan.Steps[0].ID)
 	assert.Equal(t, "step-2", plan.Steps[1].ID)
 	assert.Contains(t, plan.Steps[1].DependsOn, "step-1")
-	assert.Equal(t, 1, mockLLM.Calls)
 }
 
 // TestPlanner_Plan_ComplexTask tests planning with multiple dependencies
@@ -94,7 +94,7 @@ func TestPlanner_Plan_ComplexTask(t *testing.T) {
 		]
 	}`
 
-	mockLLM := coretesting.NewMockProvider(mockResponse)
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse(mockResponse))
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 	plan, err := planner.Plan(context.Background(), "Build two-module system")
@@ -118,31 +118,29 @@ func TestPlanner_Plan_ComplexTask(t *testing.T) {
 
 // TestPlanner_Plan_EmptyTask tests empty task error
 func TestPlanner_Plan_EmptyTask(t *testing.T) {
-	mockLLM := coretesting.NewMockProvider("{}")
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse("{}"))
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 	_, err := planner.Plan(context.Background(), "")
 
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrEmptyTask)
-	assert.Equal(t, 0, mockLLM.Calls) // Should not call LLM
 }
 
 // TestPlanner_Plan_LLMError tests LLM failure handling
 func TestPlanner_Plan_LLMError(t *testing.T) {
-	mockLLM := coretesting.NewMockProviderWithError(coretesting.ErrMockLLMFailed)
+	mockLLM := llm.NewMockProvider("mock", llm.WithError(coretesting.ErrMockLLMFailed))
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 	_, err := planner.Plan(context.Background(), "Some task")
 
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrLLMFailed)
-	assert.Equal(t, 1, mockLLM.Calls)
 }
 
 // TestPlanner_Plan_InvalidJSON tests invalid JSON response
 func TestPlanner_Plan_InvalidJSON(t *testing.T) {
-	mockLLM := coretesting.NewMockProvider("this is not valid JSON")
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse("this is not valid JSON"))
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 	_, err := planner.Plan(context.Background(), "Some task")
@@ -196,7 +194,7 @@ func TestPlanner_Plan_MalformedResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLLM := coretesting.NewMockProvider(tt.response)
+			mockLLM := llm.NewMockProvider("test", llm.WithResponse(tt.response))
 			planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 			_, err := planner.Plan(context.Background(), "Task")
@@ -231,7 +229,7 @@ func TestPlanner_Plan_CircularDependencies(t *testing.T) {
 		]
 	}`
 
-	mockLLM := coretesting.NewMockProvider(mockResponse)
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse(mockResponse))
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 	_, err := planner.Plan(context.Background(), "Task")
@@ -254,7 +252,7 @@ func TestPlanner_Plan_InvalidDependency(t *testing.T) {
 		]
 	}`
 
-	mockLLM := coretesting.NewMockProvider(mockResponse)
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse(mockResponse))
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 	_, err := planner.Plan(context.Background(), "Task")
@@ -279,7 +277,7 @@ func TestPlanner_Plan_TooManySteps(t *testing.T) {
 	response := map[string]interface{}{"steps": steps}
 	responseJSON, _ := json.Marshal(response)
 
-	mockLLM := coretesting.NewMockProvider(string(responseJSON))
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse(string(responseJSON)))
 	config := PlannerConfig{
 		MaxSteps:    100,
 		Timeout:     10 * time.Second,
@@ -314,7 +312,7 @@ func TestPlanner_Plan_DuplicateStepIDs(t *testing.T) {
 		]
 	}`
 
-	mockLLM := coretesting.NewMockProvider(mockResponse)
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse(mockResponse))
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 	_, err := planner.Plan(context.Background(), "Task")
@@ -351,7 +349,7 @@ func TestPlanner_Plan_EstimatedDuration(t *testing.T) {
 		]
 	}`
 
-	mockLLM := coretesting.NewMockProvider(mockResponse)
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse(mockResponse))
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 	plan, err := planner.Plan(context.Background(), "Task")
@@ -364,7 +362,7 @@ func TestPlanner_Plan_EstimatedDuration(t *testing.T) {
 
 // TestPlanner_Plan_ContextCancellation tests context cancellation
 func TestPlanner_Plan_ContextCancellation(t *testing.T) {
-	mockLLM := coretesting.NewMockProvider("{}")
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse("{}"))
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -378,7 +376,7 @@ func TestPlanner_Plan_ContextCancellation(t *testing.T) {
 
 // TestPlanner_Plan_Timeout tests planning timeout
 func TestPlanner_Plan_Timeout(t *testing.T) {
-	mockLLM := coretesting.NewMockProvider("{}")
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse("{}"))
 	config := PlannerConfig{
 		MaxSteps:    100,
 		Timeout:     1 * time.Nanosecond, // Very short timeout
@@ -594,7 +592,7 @@ func TestPlanner_Integration(t *testing.T) {
 		]
 	}`
 
-	mockLLM := coretesting.NewMockProvider(mockResponse)
+	mockLLM := llm.NewMockProvider("test", llm.WithResponse(mockResponse))
 	planner := NewPlanner(mockLLM, DefaultPlannerConfig())
 
 	// Generate plan

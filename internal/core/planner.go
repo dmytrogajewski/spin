@@ -9,7 +9,7 @@ import (
 	"text/template"
 	"time"
 
-	coretesting "github.com/dmytrogajewski/spin/internal/core/testing"
+	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
 // Planner-related errors
@@ -34,7 +34,7 @@ var (
 //	    fmt.Printf("%s: %s\n", step.ID, step.Description)
 //	}
 type Planner struct {
-	llm     coretesting.LLMProvider
+	llm     llm.Provider
 	config  PlannerConfig
 	prompts *planningPrompts
 }
@@ -149,12 +149,12 @@ Example for "Refactor authentication to use JWT":
 Now create a plan for the given task. Respond with ONLY the JSON, no additional text.`
 
 // NewPlanner creates a new planner with the given LLM provider and configuration
-func NewPlanner(llm coretesting.LLMProvider, config PlannerConfig) *Planner {
+func NewPlanner(provider llm.Provider, config PlannerConfig) *Planner {
 	// Parse prompt template
 	tmpl := template.Must(template.New("planning").Parse(planningPromptTemplate))
 
 	return &Planner{
-		llm:    llm,
+		llm:    provider,
 		config: config,
 		prompts: &planningPrompts{
 			systemPrompt: tmpl,
@@ -197,8 +197,8 @@ func (p *Planner) Plan(ctx context.Context, task string) (*Plan, error) {
 	}
 
 	// Call LLM
-	req := coretesting.CompletionRequest{
-		Messages: []coretesting.Message{
+	req := llm.CompletionRequest{
+		Messages: []llm.Message{
 			{
 				Role:    "user",
 				Content: prompt,

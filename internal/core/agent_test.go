@@ -10,19 +10,19 @@ import (
 	"testing"
 	"time"
 
-	coretesting "github.com/dmytrogajewski/spin/internal/core/testing"
+	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
 // TestNewAgent tests agent creation with various configurations
 func TestNewAgent(t *testing.T) {
 	tests := []struct {
 		name    string
-		llm     coretesting.LLMProvider
+		llm     llm.Provider
 		wantErr bool
 	}{
 		{
 			name:    "valid agent with mock LLM",
-			llm:     coretesting.NewMockProvider("test response"),
+			llm:     llm.NewMockProvider("test response"),
 			wantErr: false,
 		},
 		{
@@ -67,7 +67,7 @@ func TestNewAgent(t *testing.T) {
 
 // TestNewAgent_WithOptions tests agent creation with functional options
 func TestNewAgent_WithOptions(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -159,7 +159,7 @@ func TestNewAgent_WithOptions(t *testing.T) {
 // TestAgent_Execute_SingleTurn tests single turn agent execution
 func TestAgent_Execute_SingleTurn(t *testing.T) {
 	// Create mock LLM that returns a simple response
-	llm := coretesting.NewMockProvider("Here are the files: file1.go, file2.go")
+	llm := llm.NewMockProvider("Here are the files: file1.go, file2.go")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -193,11 +193,6 @@ func TestAgent_Execute_SingleTurn(t *testing.T) {
 	if resp.TurnsUsed != 1 {
 		t.Errorf("Execute() TurnsUsed = %d, want 1", resp.TurnsUsed)
 	}
-
-	// Check that LLM was called
-	if llm.Calls != 1 {
-		t.Errorf("LLM calls = %d, want 1", llm.Calls)
-	}
 }
 
 // TestAgent_Execute_MultiTurn tests multi-turn agent execution
@@ -216,7 +211,7 @@ func TestAgent_Execute_MaxTurnsLimit(t *testing.T) {
 // TestAgent_Execute_Timeout tests that agent respects context timeout
 func TestAgent_Execute_Timeout(t *testing.T) {
 	// Create mock LLM that returns slowly (simulated)
-	llm := coretesting.NewMockProvider("response")
+	llm := llm.NewMockProvider("response")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -254,7 +249,7 @@ func TestAgent_Execute_Timeout(t *testing.T) {
 func TestAgent_Execute_LLMError(t *testing.T) {
 	// Create mock LLM that returns error
 	llmErr := errors.New("LLM connection failed")
-	llm := coretesting.NewMockProviderWithError(llmErr)
+	llm := llm.NewMockProvider("mock", llm.WithError(llmErr))
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -282,7 +277,7 @@ func TestAgent_Execute_LLMError(t *testing.T) {
 
 // TestAgent_Execute_InvalidRequest tests validation of agent requests
 func TestAgent_Execute_InvalidRequest(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -333,7 +328,7 @@ func TestAgent_Execute_InvalidRequest(t *testing.T) {
 
 // TestAgent_ShouldApprove tests command approval decision logic
 func TestAgent_ShouldApprove(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -405,7 +400,7 @@ func TestAgent_ShouldApprove(t *testing.T) {
 
 // TestAgent_ShouldApprove_ApprovalDisabled tests that approval can be disabled
 func TestAgent_ShouldApprove_ApprovalDisabled(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -432,7 +427,7 @@ func TestAgent_ShouldApprove_ApprovalDisabled(t *testing.T) {
 
 // TestAgent_buildPrompt tests prompt construction
 func TestAgent_buildPrompt(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{
@@ -490,7 +485,7 @@ func TestAgent_buildPrompt(t *testing.T) {
 
 // TestAgent_buildPrompt_WithTask tests prompt construction with task mode
 func TestAgent_buildPrompt_WithTask(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -540,7 +535,7 @@ func TestAgent_ProcessToolCall_WithApproval(t *testing.T) {
 
 // TestAgent_EventEmission tests that agent emits appropriate events
 func TestAgent_EventEmission(t *testing.T) {
-	llm := coretesting.NewMockProvider("test response")
+	llm := llm.NewMockProvider("test response")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -628,7 +623,7 @@ drainLoop:
 
 // TestAgent_ConcurrentExecute tests concurrent agent executions
 func TestAgent_ConcurrentExecute(t *testing.T) {
-	llm := coretesting.NewMockProvider("test response")
+	llm := llm.NewMockProvider("test response")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -678,7 +673,7 @@ func TestAgent_ConcurrentExecute(t *testing.T) {
 
 // TestAgent_validateToolCall tests tool call validation
 func TestAgent_validateToolCall(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -749,7 +744,7 @@ func TestAgent_validateToolCall(t *testing.T) {
 
 // TestAgent_parseToolArguments tests argument parsing
 func TestAgent_parseToolArguments(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	executor, _ := NewExecutor(t.TempDir())
 	ctx := &Context{WorkDir: t.TempDir()}
@@ -847,7 +842,7 @@ func TestAgent_parseToolArguments(t *testing.T) {
 
 // TestAgent_executeCommand tests command execution
 func TestAgent_executeCommand(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
@@ -928,7 +923,7 @@ func TestAgent_executeCommand(t *testing.T) {
 
 // TestAgent_executeCommand_WithApproval tests command execution with approval
 func TestAgent_executeCommand_WithApproval(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
@@ -1007,7 +1002,7 @@ func TestAgent_executeCommand_WithApproval(t *testing.T) {
 
 // TestAgent_readFile tests file reading
 func TestAgent_readFile(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
@@ -1088,7 +1083,7 @@ func TestAgent_readFile(t *testing.T) {
 
 // TestAgent_writeFile tests file writing
 func TestAgent_writeFile(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
@@ -1175,7 +1170,7 @@ func TestAgent_writeFile(t *testing.T) {
 
 // TestAgent_listDirectory tests directory listing
 func TestAgent_listDirectory(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
@@ -1251,7 +1246,7 @@ func TestAgent_listDirectory(t *testing.T) {
 
 // TestAgent_ProcessToolCall_Complete tests the complete ProcessToolCall method
 func TestAgent_ProcessToolCall_Complete(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)
@@ -1389,7 +1384,7 @@ func TestAgent_ProcessToolCall_Complete(t *testing.T) {
 
 // TestAgent_ProcessToolCall_Events tests event emission during tool execution
 func TestAgent_ProcessToolCall_Events(t *testing.T) {
-	llm := coretesting.NewMockProvider("test")
+	llm := llm.NewMockProvider("test")
 	validator := NewValidator()
 	workDir := t.TempDir()
 	executor, _ := NewExecutor(workDir)

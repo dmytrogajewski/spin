@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	coretesting "github.com/dmytrogajewski/spin/internal/core/testing"
+	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
 // Default agent configuration values
@@ -40,7 +40,7 @@ var (
 // environment. It processes user requests through multiple turns of LLM calls
 // and tool executions until the task is complete or limits are reached.
 type Agent struct {
-	llm             coretesting.LLMProvider     // LLM provider interface
+	llm             llm.Provider                // LLM provider interface
 	executor        *Executor                   // Command executor
 	validator       *Validator                  // Command validator
 	context         *Context                    // Environment context
@@ -154,7 +154,7 @@ type AgentOption func(*Agent) error
 // The agent requires an LLM provider, executor, validator, context, and event
 // emitter. Optional configuration can be provided via functional options.
 func NewAgent(
-	llm coretesting.LLMProvider,
+	provider llm.Provider,
 	executor *Executor,
 	validator *Validator,
 	context *Context,
@@ -162,7 +162,7 @@ func NewAgent(
 	opts ...AgentOption,
 ) (*Agent, error) {
 	// Validate required dependencies
-	if llm == nil {
+	if provider == nil {
 		return nil, ErrNilLLM
 	}
 	if executor == nil {
@@ -180,7 +180,7 @@ func NewAgent(
 
 	// Create agent with defaults
 	agent := &Agent{
-		llm:       llm,
+		llm:       provider,
 		executor:  executor,
 		validator: validator,
 		context:   context,
@@ -364,18 +364,18 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 }
 
 // callLLM calls the LLM provider with the given messages.
-func (a *Agent) callLLM(ctx context.Context, messages []Message) (*coretesting.CompletionResponse, error) {
+func (a *Agent) callLLM(ctx context.Context, messages []Message) (*llm.CompletionResponse, error) {
 	// Convert messages to LLM format
-	llmMessages := make([]coretesting.Message, len(messages))
+	llmMessages := make([]llm.Message, len(messages))
 	for i, msg := range messages {
-		llmMessages[i] = coretesting.Message{
+		llmMessages[i] = llm.Message{
 			Role:    string(msg.Role),
 			Content: msg.Content,
 		}
 	}
 
 	// Build LLM request
-	req := coretesting.CompletionRequest{
+	req := llm.CompletionRequest{
 		Messages:    llmMessages,
 		Temperature: a.config.Temperature,
 		MaxTokens:   a.config.MaxTokens,
