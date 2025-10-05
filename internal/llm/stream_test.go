@@ -2,6 +2,8 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -683,4 +685,285 @@ func TestStreamResponse_ScannerError(t *testing.T) {
 	}
 
 	// Test passes if no panic occurs
+}
+
+// Tests for StreamSSE
+
+func TestStreamSSE_WithCustomParser(t *testing.T) {
+	input := `data: {"content":"hello"}
+
+data: {"content":" world"}
+
+data: [DONE]
+
+`
+	chunks := make(chan StreamChunk, 10)
+	ctx := context.Background()
+
+	// Custom parser for test format
+	parser := func(data []byte) (*StreamChunk, error) {
+		var obj struct {
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal(data, &obj); err != nil {
+			return nil, err
+		}
+		return &StreamChunk{
+			Type:    ChunkTypeContentDelta,
+			Content: obj.Content,
+		}, nil
+	}
+
+	go func() {
+		defer close(chunks)
+		if err := StreamSSE(ctx, strings.NewReader(input), chunks, parser); err != nil {
+			t.Errorf("StreamSSE() error = %v", err)
+		}
+	}()
+
+	var received []StreamChunk
+	for chunk := range chunks {
+		received = append(received, chunk)
+	}
+
+	if len(received) != 3 {
+		t.Fatalf("got %d chunks, want 3", len(received))
+	}
+
+	if received[0].Content != "hello" {
+		t.Errorf("chunk[0] content = %q, want %q", received[0].Content, "hello")
+	}
+	if received[1].Content != " world" {
+		t.Errorf("chunk[1] content = %q, want %q", received[1].Content, " world")
+	}
+	if received[2].Type != ChunkTypeDone {
+		t.Errorf("chunk[2] type = %v, want %v", received[2].Type, ChunkTypeDone)
+	}
+}
+
+func TestStreamSSE_ParserError(t *testing.T) {
+	input := "data: {invalid json}\n\n"
+	chunks := make(chan StreamChunk, 10)
+	ctx := context.Background()
+
+	parser := func(data []byte) (*StreamChunk, error) {
+		return nil, fmt.Errorf("parse error")
+	}
+
+	go func() {
+		defer close(chunks)
+		StreamSSE(ctx, strings.NewReader(input), chunks, parser)
+	}()
+
+	hasErrorChunk := false
+	for chunk := range chunks {
+		if chunk.Type == ChunkTypeError {
+			hasErrorChunk = true
+		}
+	}
+
+	if !hasErrorChunk {
+		t.Error("expected error chunk for parser error")
+	}
+}
+
+func TestStreamSSE_ContextCancellation(t *testing.T) {
+	input := strings.Repeat("data: test\n\n", 1000)
+	chunks := make(chan StreamChunk) // Unbuffered to force blocking
+	ctx, cancel := context.WithCancel(context.Background())
+
+	parser := func(data []byte) (*StreamChunk, error) {
+		return &StreamChunk{Type: ChunkTypeContentDelta, Content: "test"}, nil
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	errCh := make(chan error, 1)
+	go func() {
+		defer wg.Done()
+		err := StreamSSE(ctx, strings.NewReader(input), chunks, parser)
+		errCh <- err
+		close(chunks)
+	}()
+
+	// Cancel immediately
+	cancel()
+
+	// Wait for goroutine
+	wg.Wait()
+
+	// Should get context.Canceled error
+	select {
+	case err := <-errCh:
+		if err != context.Canceled {
+			t.Errorf("expected context.Canceled error, got %v", err)
+		}
+	default:
+		// No error is acceptable if stream finished before cancellation
+	}
+}
+
+func TestStreamSSE_ParserReturnsNil(t *testing.T) {
+	input := "data: skip\n\ndata: process\n\ndata: [DONE]\n\n"
+	chunks := make(chan StreamChunk, 10)
+	ctx := context.Background()
+
+	parser := func(data []byte) (*StreamChunk, error) {
+		if string(data) == "skip" {
+			return nil, nil // Skip this chunk
+		}
+		return &StreamChunk{
+			Type:    ChunkTypeContentDelta,
+			Content: string(data),
+		}, nil
+	}
+
+	go func() {
+		defer close(chunks)
+		StreamSSE(ctx, strings.NewReader(input), chunks, parser)
+	}()
+
+	var received []StreamChunk
+	for chunk := range chunks {
+		received = append(received, chunk)
+	}
+
+	// Should have 2 chunks: "process" + [DONE]
+	if len(received) != 2 {
+		t.Fatalf("got %d chunks, want 2", len(received))
+	}
+	if received[0].Content != "process" {
+		t.Errorf("content = %q, want %q", received[0].Content, "process")
+	}
+	if received[1].Type != ChunkTypeDone {
+		t.Errorf("type = %v, want %v", received[1].Type, ChunkTypeDone)
+	}
+}
+
+func TestStreamSSE_MultipleChunks(t *testing.T) {
+	input := `data: chunk1
+
+data: chunk2
+
+data: chunk3
+
+data: [DONE]
+
+`
+	chunks := make(chan StreamChunk, 10)
+	ctx := context.Background()
+
+	callCount := 0
+	parser := func(data []byte) (*StreamChunk, error) {
+		callCount++
+		return &StreamChunk{
+			Type:    ChunkTypeContentDelta,
+			Content: string(data),
+		}, nil
+	}
+
+	go func() {
+		defer close(chunks)
+		StreamSSE(ctx, strings.NewReader(input), chunks, parser)
+	}()
+
+	var received []StreamChunk
+	for chunk := range chunks {
+		received = append(received, chunk)
+	}
+
+	// Should call parser 3 times (not for [DONE])
+	if callCount != 3 {
+		t.Errorf("parser called %d times, want 3", callCount)
+	}
+
+	// Should have 4 chunks: 3 content + 1 done
+	if len(received) != 4 {
+		t.Fatalf("got %d chunks, want 4", len(received))
+	}
+
+	for i := 0; i < 3; i++ {
+		if received[i].Type != ChunkTypeContentDelta {
+			t.Errorf("chunk[%d] type = %v, want %v", i, received[i].Type, ChunkTypeContentDelta)
+		}
+	}
+
+	if received[3].Type != ChunkTypeDone {
+		t.Errorf("final chunk type = %v, want %v", received[3].Type, ChunkTypeDone)
+	}
+}
+
+func TestStreamSSE_EmptyInput(t *testing.T) {
+	input := ""
+	chunks := make(chan StreamChunk, 10)
+	ctx := context.Background()
+
+	parser := func(data []byte) (*StreamChunk, error) {
+		t.Error("parser should not be called for empty input")
+		return nil, nil
+	}
+
+	go func() {
+		defer close(chunks)
+		StreamSSE(ctx, strings.NewReader(input), chunks, parser)
+	}()
+
+	count := 0
+	for range chunks {
+		count++
+	}
+
+	if count != 0 {
+		t.Errorf("got %d chunks for empty input, want 0", count)
+	}
+}
+
+func TestStreamSSE_ParserErrorThenSuccess(t *testing.T) {
+	input := `data: bad
+
+data: good
+
+data: [DONE]
+
+`
+	chunks := make(chan StreamChunk, 10)
+	ctx := context.Background()
+
+	parser := func(data []byte) (*StreamChunk, error) {
+		if string(data) == "bad" {
+			return nil, fmt.Errorf("bad chunk")
+		}
+		return &StreamChunk{
+			Type:    ChunkTypeContentDelta,
+			Content: string(data),
+		}, nil
+	}
+
+	go func() {
+		defer close(chunks)
+		StreamSSE(ctx, strings.NewReader(input), chunks, parser)
+	}()
+
+	var received []StreamChunk
+	for chunk := range chunks {
+		received = append(received, chunk)
+	}
+
+	// Should have 3 chunks: error + good content + done
+	if len(received) != 3 {
+		t.Fatalf("got %d chunks, want 3", len(received))
+	}
+
+	if received[0].Type != ChunkTypeError {
+		t.Errorf("chunk[0] type = %v, want %v", received[0].Type, ChunkTypeError)
+	}
+	if received[1].Type != ChunkTypeContentDelta {
+		t.Errorf("chunk[1] type = %v, want %v", received[1].Type, ChunkTypeContentDelta)
+	}
+	if received[1].Content != "good" {
+		t.Errorf("chunk[1] content = %q, want %q", received[1].Content, "good")
+	}
+	if received[2].Type != ChunkTypeDone {
+		t.Errorf("chunk[2] type = %v, want %v", received[2].Type, ChunkTypeDone)
+	}
 }

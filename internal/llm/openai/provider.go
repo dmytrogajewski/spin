@@ -317,39 +317,18 @@ func (p *Provider) convertResponse(resp *chatCompletionResponse) *llm.Completion
 	return result
 }
 
-// streamResponse processes streaming response.
+// streamResponse processes streaming response using the shared StreamSSE function.
 func (p *Provider) streamResponse(ctx context.Context, r io.Reader, chunks chan<- llm.StreamChunk) error {
-	scanner := llm.NewSSEScanner(r)
+	return llm.StreamSSE(ctx, r, chunks, p.parseChunk)
+}
 
-	for scanner.Scan() {
-		// Check context cancellation
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		event := scanner.Event()
-
-		// Handle [DONE] marker
-		if event.IsDone() {
-			chunks <- llm.StreamChunk{Type: llm.ChunkTypeDone}
-			return nil
-		}
-
-		// Parse chunk
-		var chunk chatCompletionChunk
-		if err := json.Unmarshal([]byte(event.Data), &chunk); err != nil {
-			continue // Skip malformed chunks
-		}
-
-		// Convert to stream chunk
-		if streamChunk := p.convertChunk(&chunk); streamChunk != nil {
-			chunks <- *streamChunk
-		}
+// parseChunk parses OpenAI SSE event data into a StreamChunk.
+func (p *Provider) parseChunk(data []byte) (*llm.StreamChunk, error) {
+	var chunk chatCompletionChunk
+	if err := json.Unmarshal(data, &chunk); err != nil {
+		return nil, nil // Skip malformed chunks
 	}
-
-	return scanner.Err()
+	return p.convertChunk(&chunk), nil
 }
 
 // convertChunk converts OpenAI chunk to common format.

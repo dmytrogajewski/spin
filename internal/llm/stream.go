@@ -103,27 +103,44 @@ func (s *SSEScanner) Err() error {
 	return s.err
 }
 
-// streamResponse processes streaming SSE response and sends chunks to the channel.
+// ChunkParser is a function that parses SSE event data into a StreamChunk.
+//
+// Returns:
+//   - (*StreamChunk, nil) if parsing succeeds
+//   - (nil, nil) if the chunk should be skipped
+//   - (nil, error) if parsing fails and an error chunk should be sent
+type ChunkParser func(data []byte) (*StreamChunk, error)
+
+// StreamSSE processes Server-Sent Events and streams chunks to the channel.
 //
 // This function:
-//   - Parses SSE events from the reader
-//   - Converts JSON deltas to StreamChunk
+//   - Parses SSE events from the reader using NewSSEScanner
+//   - Calls the parser function to convert event data to StreamChunks
 //   - Sends chunks to the provided channel
 //   - Handles context cancellation
 //   - Sends error chunks on parse failures
+//   - Stops on [DONE] marker or stream end
 //
 // The channel is NOT closed by this function - the caller must close it.
 //
 // Example:
 //
-//	chunks := make(chan StreamChunk, 10)
+//	parser := func(data []byte) (*llm.StreamChunk, error) {
+//	    var chunk OpenAIChunk
+//	    if err := json.Unmarshal(data, &chunk); err != nil {
+//	        return nil, err
+//	    }
+//	    return convertToStreamChunk(&chunk), nil
+//	}
+//
+//	chunks := make(chan llm.StreamChunk, 10)
 //	go func() {
 //	    defer close(chunks)
-//	    if err := streamResponse(ctx, resp.Body, chunks); err != nil {
+//	    if err := llm.StreamSSE(ctx, resp.Body, chunks, parser); err != nil {
 //	        log.Printf("stream error: %v", err)
 //	    }
 //	}()
-func streamResponse(ctx context.Context, r io.Reader, chunks chan<- StreamChunk) error {
+func StreamSSE(ctx context.Context, r io.Reader, chunks chan<- StreamChunk, parser ChunkParser) error {
 	scanner := NewSSEScanner(r)
 
 	for scanner.Scan() {
@@ -139,9 +156,9 @@ func streamResponse(ctx context.Context, r io.Reader, chunks chan<- StreamChunk)
 			return nil
 		}
 
-		// Parse JSON delta
-		var delta chatCompletionChunk
-		if err := json.Unmarshal([]byte(event.Data), &delta); err != nil {
+		// Parse chunk using provider-specific parser
+		chunk, err := parser([]byte(event.Data))
+		if err != nil {
 			// Send error chunk but continue processing
 			select {
 			case chunks <- StreamChunk{Type: ChunkTypeError, Error: err}:
@@ -151,17 +168,33 @@ func streamResponse(ctx context.Context, r io.Reader, chunks chan<- StreamChunk)
 			continue
 		}
 
-		// Convert and send chunk
-		if chunk := convertDelta(&delta); chunk != nil {
-			select {
-			case chunks <- *chunk:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+		// Skip nil chunks (parser indicates this chunk should be ignored)
+		if chunk == nil {
+			continue
+		}
+
+		// Send chunk
+		select {
+		case chunks <- *chunk:
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 
 	return scanner.Err()
+}
+
+// streamResponse processes streaming SSE response and sends chunks to the channel.
+// Deprecated: Use StreamSSE with a custom parser instead.
+func streamResponse(ctx context.Context, r io.Reader, chunks chan<- StreamChunk) error {
+	parser := func(data []byte) (*StreamChunk, error) {
+		var delta chatCompletionChunk
+		if err := json.Unmarshal(data, &delta); err != nil {
+			return nil, err
+		}
+		return convertDelta(&delta), nil
+	}
+	return StreamSSE(ctx, r, chunks, parser)
 }
 
 // convertDelta converts a chatCompletionChunk to a StreamChunk.

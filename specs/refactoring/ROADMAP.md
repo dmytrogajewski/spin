@@ -866,8 +866,8 @@ func TestProvider_MissingAPIKey(t *testing.T)
 - [x] Commit: "refactor: consolidate SSE scanner implementation"
 
 **Tuesday:**
-- [ ] Eliminate stream processing duplication
-- [ ] Update OpenAI provider to use shared streaming
+- [x] Eliminate stream processing duplication
+- [x] Update OpenAI provider to use shared streaming
 - [ ] Run full test suite
 - [ ] Commit: "refactor: consolidate stream processing"
 
