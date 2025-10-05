@@ -1,0 +1,45 @@
+# Example Spin configuration for custom OpenAI-compatible API
+#
+# This works with any API that implements the OpenAI chat completions format
+# Examples: Together AI, Anyscale, Perplexity, local inference servers, etc.
+#
+# Save this as ~/.spin/spin.yaml or ~/.config/spin/config.yaml
+# Or use with: spin --config-file config-custom.yaml
+
+llm:
+  # Provider type
+  provider: openai-compatible
+
+  # Model name (provider-specific)
+  model: mixtral-8x7b-instruct
+
+  # Custom API endpoint
+  base_url: https://api.together.xyz/v1
+
+  # Request timeout
+  timeout: 60s
+
+  # Authentication (required for most APIs)
+  # Option 1: Keystore (recommended)
+  key_name: my-together-key
+
+  # Option 2: Direct API key (deprecated)
+  # api_key: your-api-key-here
+
+  # Option 3: Environment variable
+  # export OPENAI_API_KEY=your-api-key-here
+
+  # Provider-specific options (optional)
+  options:
+    temperature: 0.7
+    max_tokens: 4000
+    top_p: 0.9
+
+# Sandbox settings
+sandbox:
+  mode: workspace-write
+
+# Appearance
+appearance:
+  theme: auto
+  no_color: false

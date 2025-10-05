@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/dmytrogajewski/spin/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -30,8 +28,8 @@ and integrates with IDEs via JSON-RPC.
 Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible API.`,
 		Version: version.ShortVersion(),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Default behavior: would launch TUI (not implemented yet)
-			return fmt.Errorf("TUI mode not yet implemented. Try: spin --help")
+			// Default behavior: launch TUI when no subcommand is provided
+			return runTUI(cmd, args)
 		},
 		SilenceUsage: true,
 	}
@@ -48,6 +46,7 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 	cmd.PersistentFlags().StringSliceVarP(&flagConfig, "config", "c", nil, "Config overrides (key=value)")
 
 	// Add commands
+	cmd.AddCommand(tuiCmd)           // TUI mode (explicit 'spin tui')
 	cmd.AddCommand(newVersionCmd())
 	cmd.AddCommand(newCompletionCmd())
 	cmd.AddCommand(newExecCmd())

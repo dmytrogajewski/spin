@@ -10,12 +10,15 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
-// runTask executes the task using the core module.
-func runTask(ctx context.Context, args *ExecArgs) error {
+// RunWithProvider executes the task with a provided LLM provider.
+// This is the main entry point for exec mode with real providers.
+func RunWithProvider(ctx context.Context, args *ExecArgs, provider llm.Provider) error {
 	// Create core config with defaults
 	coreConfig := core.DefaultConfig()
-	coreConfig.Provider = "mock" // Set provider for validation
-	coreConfig.Model = "default" // Set model for validation
+
+	// Set dummy provider/model to pass validation (actual provider passed via WithLLM)
+	coreConfig.Provider = "provided"
+	coreConfig.Model = "provided"
 
 	// Override with command-line settings
 	if args.AutoApprove {
@@ -25,10 +28,7 @@ func runTask(ctx context.Context, args *ExecArgs) error {
 		slog.Warn("auto-approve enabled - all commands will execute without validation")
 	}
 
-	// Create LLM provider (mock for Phase 2.4 testing)
-	provider := llm.NewMockProvider("default")
-
-	// Create manager
+	// Create manager with provided provider
 	mgr, err := core.NewManager(coreConfig, core.WithLLM(provider))
 	if err != nil {
 		return fmt.Errorf("create manager: %w", err)
@@ -49,6 +49,14 @@ func runTask(ctx context.Context, args *ExecArgs) error {
 
 	// Execute turn and stream output
 	return executeTurn(ctx, conv, args.Prompt, args.AutoApprove)
+}
+
+// runTask executes the task using the core module (legacy, uses mock provider).
+// Deprecated: Use RunWithProvider instead.
+func runTask(ctx context.Context, args *ExecArgs) error {
+	// Create mock provider for backward compatibility
+	provider := llm.NewMockProvider("default")
+	return RunWithProvider(ctx, args, provider)
 }
 
 // executeTurn runs a conversation turn and streams output to stdout.
@@ -96,8 +104,13 @@ func handleEvent(event core.Event, auditLogger *slog.Logger, autoApprove bool) e
 	switch event.Type {
 	case core.EventContentDelta:
 		// Stream content delta to stdout
+		// Event.Data can be either *ContentDeltaData or map[string]interface{}
 		if data, ok := event.Data.(*core.ContentDeltaData); ok {
 			fmt.Print(data.Content)
+		} else if dataMap, ok := event.Data.(map[string]interface{}); ok {
+			if content, ok := dataMap["content"].(string); ok {
+				fmt.Print(content)
+			}
 		}
 
 	case core.EventCommandApproval:

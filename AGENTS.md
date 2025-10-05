@@ -12,6 +12,7 @@
 3. **SOLID**: Single Responsibility, Open/Closed, Liskov, Interface Segregation, Dependency Inversion
 4. **Clean Code**: DRY, KISS, Clean Architecture
 5. **Go 1.24+**: Follow [Effective Go](https://go.dev/doc/effective_go)
+6. No need for backward-compatibility!
 
 ---
 

@@ -1,0 +1,581 @@
+package ui
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// MaxTranscriptMessages is the maximum number of messages to keep in memory.
+const MaxTranscriptMessages = 1000
+
+// Chat represents the chat interface component.
+type Chat struct {
+	viewport  viewport.Model
+	messages  []Message
+	width     int
+	height    int
+	formatter *Formatter
+
+	// Rendering state
+	content      string // Cached rendered content
+	contentDirty bool   // Needs re-render
+	atBottom     bool   // Auto-scroll to bottom
+
+	// Scroll tracking
+	scrollPercent float64 // Current scroll position (0.0-100.0)
+	userScrolled  bool    // User has manually scrolled
+}
+
+// NewChat creates a new chat component.
+func NewChat(width, height int) Chat {
+	vp := viewport.New(width, height)
+	vp.SetContent("")
+
+	formatter, _ := NewFormatter(width)
+
+	return Chat{
+		viewport:      vp,
+		messages:      make([]Message, 0),
+		width:         width,
+		height:        height,
+		formatter:     formatter,
+		content:       "",
+		contentDirty:  false,
+		atBottom:      true,
+		scrollPercent: 100.0,
+		userScrolled:  false,
+	}
+}
+
+// SetSize updates the chat dimensions.
+func (c *Chat) SetSize(width, height int) {
+	c.width = width
+	c.height = height
+	c.viewport.Width = width
+	c.viewport.Height = height
+
+	// Update formatter width
+	if c.formatter != nil {
+		_ = c.formatter.SetWidth(width) // Ignore error (non-critical)
+	}
+
+	c.contentDirty = true
+}
+
+// AddMessage adds a new message to the chat.
+func (c *Chat) AddMessage(msg Message) {
+	c.messages = append(c.messages, msg)
+
+	// Trim old messages if limit exceeded
+	if len(c.messages) > MaxTranscriptMessages {
+		c.messages = c.messages[len(c.messages)-MaxTranscriptMessages:]
+	}
+
+	c.contentDirty = true
+}
+
+// StreamDelta appends content to the last message (for streaming responses).
+func (c *Chat) StreamDelta(delta string) {
+	if len(c.messages) == 0 {
+		return
+	}
+
+	lastIdx := len(c.messages) - 1
+	c.messages[lastIdx].Content += delta
+	c.messages[lastIdx].Streaming = true
+	c.contentDirty = true
+}
+
+// FinishStreaming marks the last message as complete.
+func (c *Chat) FinishStreaming() {
+	if len(c.messages) == 0 {
+		return
+	}
+
+	lastIdx := len(c.messages) - 1
+	c.messages[lastIdx].Streaming = false
+	c.contentDirty = true
+}
+
+// GetMessages returns all messages.
+func (c Chat) GetMessages() []Message {
+	return c.messages
+}
+
+// Clear removes all messages.
+func (c *Chat) Clear() {
+	c.messages = make([]Message, 0)
+	c.contentDirty = true
+}
+
+// Update handles Bubble Tea messages.
+func (c Chat) Update(msg tea.Msg) (Chat, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		c.SetSize(msg.Width, msg.Height)
+		return c, nil
+
+	case tea.KeyMsg:
+		// Handle scroll navigation keys
+		switch msg.String() {
+		case "pgup":
+			c.PageUp()
+			return c, nil
+		case "pgdown":
+			c.PageDown()
+			return c, nil
+		case "home":
+			c.GotoTop()
+			return c, nil
+		case "end":
+			c.GotoBottom()
+			return c, nil
+		}
+	}
+
+	// Re-render if needed
+	if c.contentDirty {
+		c.renderContent()
+		c.viewport.SetContent(c.content)
+		c.contentDirty = false
+
+		// Auto-scroll to bottom (only if user hasn't manually scrolled)
+		if c.atBottom && !c.userScrolled {
+			c.viewport.GotoBottom()
+		}
+	}
+
+	// Update viewport
+	c.viewport, cmd = c.viewport.Update(msg)
+	c.updateScrollState()
+
+	return c, cmd
+}
+
+// View renders the chat with scroll indicator.
+func (c Chat) View() string {
+	view := c.viewport.View()
+
+	// Add scroll position indicator if not at 100%
+	if c.scrollPercent < 99.9 && c.viewport.TotalLineCount() > c.viewport.Height {
+		indicator := fmt.Sprintf(" %d%% ", int(c.scrollPercent))
+		indicatorStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("8")).
+			Background(lipgloss.Color("0")).
+			Padding(0, 1)
+
+		// Position indicator in bottom-right corner
+		lines := strings.Split(view, "\n")
+		if len(lines) > 0 {
+			lastLine := lines[len(lines)-1]
+			availableWidth := c.width - lipgloss.Width(lastLine) - lipgloss.Width(indicator)
+
+			if availableWidth > 0 {
+				padding := strings.Repeat(" ", availableWidth)
+				lines[len(lines)-1] = lastLine + padding + indicatorStyle.Render(indicator)
+				view = strings.Join(lines, "\n")
+			}
+		}
+	}
+
+	return view
+}
+
+// renderContent renders all messages to a string.
+func (c *Chat) renderContent() {
+	parts := make([]string, 0, len(c.messages)*2) // Pre-allocate with messages + blanks
+
+	for _, msg := range c.messages {
+		rendered := c.renderMessage(msg)
+		parts = append(parts, rendered)
+		parts = append(parts, "") // Blank line between messages
+	}
+
+	c.content = strings.Join(parts, "\n")
+}
+
+// renderMessage renders a single message.
+func (c *Chat) renderMessage(msg Message) string {
+	var parts []string
+
+	// Header
+	header := c.renderMessageHeader(msg)
+	parts = append(parts, header)
+
+	// Reasoning (if present)
+	if msg.Reasoning != "" {
+		reasoning := c.renderReasoning(msg.Reasoning)
+		parts = append(parts, reasoning)
+	}
+
+	// Content
+	content := c.renderMessageContent(msg)
+	parts = append(parts, content)
+
+	// Tool call/result
+	if msg.ToolCall != nil {
+		toolCall := c.renderToolCall(msg.ToolCall)
+		parts = append(parts, toolCall)
+	}
+	if msg.ToolResult != nil {
+		toolResult := c.renderToolResult(msg.ToolResult)
+		parts = append(parts, toolResult)
+	}
+
+	// Streaming indicator
+	if msg.Streaming {
+		parts = append(parts, "▊")
+	}
+
+	rendered := strings.Join(parts, "\n")
+
+	// Apply highlight border if message is selected (Phase 3.8)
+	if msg.Highlighted {
+		rendered = c.renderHighlightBorder(rendered)
+	}
+
+	return rendered
+}
+
+// renderHighlightBorder adds a visual border around highlighted message.
+// Phase 3.8: Backtrack Mode
+func (c *Chat) renderHighlightBorder(content string) string {
+	highlightStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("12")). // Blue highlight
+		Padding(0, 1)
+
+	return highlightStyle.Render(content)
+}
+
+// renderMessageHeader renders the message header (role and timestamp).
+func (c *Chat) renderMessageHeader(msg Message) string {
+	var roleText string
+	var style lipgloss.Style
+
+	switch msg.Role {
+	case RoleUser:
+		roleText = "You"
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Bold(true)
+	case RoleAssistant:
+		roleText = "Assistant"
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	case RoleSystem:
+		roleText = "System"
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
+	case RoleTool:
+		roleText = "Tool"
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Bold(true)
+	default:
+		roleText = string(msg.Role)
+		style = lipgloss.NewStyle().Bold(true)
+	}
+
+	// Format: "You │ 14:32:01"
+	timestamp := msg.Timestamp.Format("15:04:05")
+	return style.Render(roleText) + " │ " + timestamp
+}
+
+// renderMessageContent renders message content with formatting.
+func (c *Chat) renderMessageContent(msg Message) string {
+	if c.formatter == nil {
+		return msg.Content
+	}
+
+	// Use formatter for assistant messages (markdown + code)
+	if msg.Role == RoleAssistant {
+		rendered, err := c.formatter.RenderContent(msg.Content)
+		if err != nil {
+			return msg.Content
+		}
+		return rendered
+	}
+
+	// Plain text for other roles
+	return msg.Content
+}
+
+// renderReasoning renders a reasoning block.
+func (c *Chat) renderReasoning(reasoning string) string {
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("63")). // Purple
+		Padding(0, 1)
+
+	return style.Render("💭 " + reasoning)
+}
+
+// renderToolCall renders a tool call.
+func (c *Chat) renderToolCall(tc *ToolCall) string {
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("226")). // Yellow
+		Padding(0, 1)
+
+	var parts []string
+	parts = append(parts, fmt.Sprintf("🔧 Tool: %s", tc.Name))
+
+	// Format arguments
+	if len(tc.Arguments) > 0 {
+		parts = append(parts, "Arguments:")
+		for key, val := range tc.Arguments {
+			parts = append(parts, fmt.Sprintf("  %s: %v", key, val))
+		}
+	}
+
+	return style.Render(strings.Join(parts, "\n"))
+}
+
+// renderToolResult renders a tool result.
+func (c *Chat) renderToolResult(tr *ToolResult) string {
+	var style lipgloss.Style
+
+	if tr.Error != "" {
+		// Error style
+		style = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("9")). // Red
+			Padding(0, 1)
+
+		return style.Render("❌ Error:\n" + tr.Error)
+	}
+
+	// Success style
+	style = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("10")). // Green
+		Padding(0, 1)
+
+	return style.Render("✓ Output:\n" + tr.Output)
+}
+
+// updateScrollState checks if viewport is at bottom and calculates scroll position.
+func (c *Chat) updateScrollState() {
+	c.atBottom = c.viewport.AtBottom()
+
+	// Calculate scroll percentage
+	if c.viewport.TotalLineCount() > 0 {
+		// YOffset is the top line visible, TotalLineCount is total lines
+		// We want percentage = (current_position / total_scrollable_area) * 100
+		totalScrollable := c.viewport.TotalLineCount() - c.viewport.Height
+		if totalScrollable > 0 {
+			c.scrollPercent = (float64(c.viewport.YOffset) / float64(totalScrollable)) * 100.0
+		} else {
+			c.scrollPercent = 100.0 // No scrolling needed
+		}
+	} else {
+		c.scrollPercent = 0.0
+	}
+
+	// Clamp to 0-100
+	if c.scrollPercent < 0 {
+		c.scrollPercent = 0
+	}
+	if c.scrollPercent > 100 {
+		c.scrollPercent = 100
+	}
+}
+
+// PageUp scrolls up by one page.
+func (c *Chat) PageUp() {
+	c.viewport.PageUp()
+	c.userScrolled = true
+	c.updateScrollState()
+}
+
+// PageDown scrolls down by one page.
+func (c *Chat) PageDown() {
+	c.viewport.PageDown()
+	c.userScrolled = true
+	c.updateScrollState()
+}
+
+// GotoTop scrolls to the top of the transcript.
+func (c *Chat) GotoTop() {
+	c.viewport.GotoTop()
+	c.userScrolled = true
+	c.updateScrollState()
+}
+
+// GotoBottom scrolls to the bottom of the transcript.
+func (c *Chat) GotoBottom() {
+	c.viewport.GotoBottom()
+	c.userScrolled = false // Re-enable auto-scroll
+	c.updateScrollState()
+}
+
+// ScrollPercent returns the current scroll position (0-100).
+func (c Chat) ScrollPercent() float64 {
+	return c.scrollPercent
+}
+
+// ScrollToBottom is an alias for GotoBottom (for convenience).
+// Phase 3.9 implementation.
+func (c *Chat) ScrollToBottom() {
+	c.GotoBottom()
+}
+
+// ResetUserScroll resets the user scrolled flag (e.g., when user sends message).
+func (c *Chat) ResetUserScroll() {
+	c.userScrolled = false
+}
+
+// GetUserMessageIndices returns the indices of all user messages in the chat.
+// Used for backtrack navigation (Phase 3.8).
+func (c Chat) GetUserMessageIndices() []int {
+	indices := make([]int, 0)
+	for i, msg := range c.messages {
+		if msg.Role == RoleUser {
+			indices = append(indices, i)
+		}
+	}
+	return indices
+}
+
+// SetHighlight highlights a specific message (for backtrack mode).
+// Phase 3.8: Backtrack Mode
+func (c *Chat) SetHighlight(idx int) {
+	// Clear all highlights first
+	for i := range c.messages {
+		c.messages[i].Highlighted = false
+	}
+
+	// Set highlight on specified message
+	if idx >= 0 && idx < len(c.messages) {
+		c.messages[idx].Highlighted = true
+		c.contentDirty = true
+	}
+}
+
+// ClearHighlight removes all highlights from messages.
+// Phase 3.8: Backtrack Mode
+func (c *Chat) ClearHighlight() {
+	for i := range c.messages {
+		c.messages[i].Highlighted = false
+	}
+	c.contentDirty = true
+}
+
+// TruncateAfter removes all messages after the specified index.
+// Phase 3.8: Conversation forking in backtrack mode
+func (c *Chat) TruncateAfter(idx int) {
+	if idx >= 0 && idx < len(c.messages) {
+		c.messages = c.messages[:idx+1]
+		c.contentDirty = true
+	}
+}
+
+// CurrentMessage returns the content of the last message (for tests/debugging).
+func (c Chat) CurrentMessage() string {
+	if len(c.messages) == 0 {
+		return ""
+	}
+	return c.messages[len(c.messages)-1].Content
+}
+
+// AppendDelta appends content to the last message (streaming).
+// If there's no message or last message is not streaming, creates a new assistant message.
+func (c *Chat) AppendDelta(delta string) {
+	if len(c.messages) == 0 || !c.messages[len(c.messages)-1].Streaming {
+		// Start new streaming message
+		c.AddMessage(Message{
+			Role:      "assistant",
+			Content:   delta,
+			Streaming: true,
+		})
+		return
+	}
+
+	// Append to existing streaming message
+	c.StreamDelta(delta)
+}
+
+// FinalizeMessage marks the last message as complete (end streaming).
+func (c *Chat) FinalizeMessage() {
+	c.FinishStreaming()
+}
+
+// AllMessages returns all messages (for tests).
+func (c Chat) AllMessages() []Message {
+	return c.messages
+}
+
+// AddUserMessage adds a user message to the chat.
+func (c *Chat) AddUserMessage(content string) {
+	c.AddMessage(Message{
+		Role:    "user",
+		Content: content,
+	})
+}
+
+// AddError adds an error message to the chat (Phase 3.12).
+// Errors are displayed inline in the transcript with formatting.
+func (c *Chat) AddError(err ErrorDisplay) {
+	msg := Message{
+		Role:      RoleSystem,
+		Content:   c.formatErrorMessage(err),
+		IsError:   true,
+		Timestamp: time.Now(),
+	}
+	c.AddMessage(msg)
+	c.ScrollToBottom() // Auto-scroll to show error
+}
+
+// formatErrorMessage formats an error for display in the chat transcript.
+// Returns formatted error with icon, operation, code, and details.
+func (c *Chat) formatErrorMessage(err ErrorDisplay) string {
+	var parts []string
+
+	// Icon + Message header
+	icon := c.getErrorIcon(err.Severity)
+	parts = append(parts, fmt.Sprintf("%s Error: %s", icon, err.Message))
+
+	// Operation (if present)
+	if err.Operation != "" {
+		parts = append(parts, fmt.Sprintf("├─ Operation: %s", err.Operation))
+	}
+
+	// Error code
+	parts = append(parts, fmt.Sprintf("├─ Code: %s", err.Code))
+
+	// Timestamp (if present)
+	if err.Timestamp != "" {
+		parts = append(parts, fmt.Sprintf("├─ Time: %s", err.Timestamp))
+	}
+
+	// Details (if present)
+	if err.Details != "" {
+		parts = append(parts, fmt.Sprintf("└─ Details: %s", err.Details))
+	} else {
+		// Replace last ├─ with └─ if no details
+		if len(parts) > 1 {
+			lastIdx := len(parts) - 1
+			parts[lastIdx] = strings.Replace(parts[lastIdx], "├─", "└─", 1)
+		}
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+// getErrorIcon returns the emoji icon for error severity.
+func (c *Chat) getErrorIcon(severity int) string {
+	switch severity {
+	case 0:
+		return "ℹ️" // Info
+	case 1:
+		return "⚠️" // Warning
+	case 2:
+		return "❌" // Error
+	case 3:
+		return "🔥" // Critical
+	default:
+		return "❓"
+	}
+}

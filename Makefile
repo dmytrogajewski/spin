@@ -1,4 +1,4 @@
-.PHONY: build test test-coverage test-race lint fmt clean help deadcode
+.PHONY: build test test-coverage test-race test-e2e test-all lint fmt clean help deadcode
 
 # Go parameters
 GOCMD=go
@@ -48,6 +48,22 @@ test-coverage:
 test-race:
 	@echo "Running tests with race detector..."
 	@$(GOTEST) -race $(CORE_PKG)
+
+## test-e2e: Run end-to-end TUI tests (requires Ollama running)
+test-e2e: build
+	@echo "Running E2E TUI tests (requires: Ollama, models qwen3:0.6b, qwen3:1.7b, qwen2.5-coder:1.5b)..."
+	@$(GOTEST) -v -timeout 5m ./tests
+	@echo "✓ E2E tests complete"
+
+## test-e2e-quick: Run quick E2E tests only
+test-e2e-quick: build
+	@echo "Running quick E2E tests..."
+	@$(GOTEST) -v -timeout 30s -run "TestTUILaunch|TestTUIExit" ./tests
+	@echo "✓ Quick E2E tests complete"
+
+## test-all: Run all tests (unit + e2e)
+test-all: test test-e2e
+	@echo "✓ All tests passed"
 
 ## lint: Run linters and deadcode analysis
 lint:

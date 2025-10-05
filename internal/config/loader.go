@@ -20,11 +20,12 @@ type Loader struct {
 func NewLoader() *Loader {
 	v := viper.New()
 
-	// Set config name and type
+	// Set config name (Viper will look for spin.yaml, spin.yml, spin.json, spin.toml)
+	// Note: Using SetConfigName without extension to support multiple formats
 	v.SetConfigName("spin")
-	v.SetConfigType("yaml")
+	v.SetConfigType("yaml") // Default type
 
-	// Add config search paths
+	// Add config search paths in order of precedence
 	v.AddConfigPath(".")                    // Current directory
 	v.AddConfigPath("$HOME/.spin")          // Home directory
 	v.AddConfigPath("/etc/spin")            // System directory
@@ -50,6 +51,22 @@ func (l *Loader) Load(path string) error {
 	if err := l.v.ReadInConfig(); err != nil {
 		// Config file not found is acceptable - use defaults + env vars
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			// Check if the error is due to reading a non-config file (e.g., binary)
+			configFile := l.v.ConfigFileUsed()
+			if configFile != "" {
+				ext := filepath.Ext(configFile)
+				// If no extension or invalid extension, treat as "not found" rather than error
+				if ext == "" || (ext != ".yaml" && ext != ".yml" && ext != ".json" && ext != ".toml") {
+					// Invalid config file (likely a binary or non-config file)
+					// Clear the config file reference and continue with defaults
+					l.v = viper.New()
+					// Re-initialize with same settings but no file
+					l.v.SetEnvPrefix("SPIN")
+					l.v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+					l.v.AutomaticEnv()
+					return nil
+				}
+			}
 			return fmt.Errorf("failed to read config: %w", err)
 		}
 	}
@@ -150,4 +167,9 @@ func (l *Loader) AllSettings() map[string]interface{} {
 // IsSet checks if a key is set.
 func (l *Loader) IsSet(key string) bool {
 	return l.v.IsSet(key)
+}
+
+// WriteConfig writes the configuration to a file.
+func (l *Loader) WriteConfig(filename string) error {
+	return l.v.WriteConfigAs(filename)
 }

@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/dmytrogajewski/spin/internal/auth"
+	"github.com/dmytrogajewski/spin/internal/config"
 	execpkg "github.com/dmytrogajewski/spin/internal/exec"
+	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/llm/builder"
 	"github.com/spf13/cobra"
 )
 
@@ -36,16 +40,32 @@ Examples:
 
 // runExec executes the exec mode.
 func runExec(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
+
 	// Parse arguments using internal/exec package
 	execArgs, err := execpkg.Parse(args, os.Stdin)
 	if err != nil {
 		return err
 	}
 
-	// Create context
-	ctx := context.Background()
-	var cancel context.CancelFunc
+	// Load configuration
+	configLoader, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
 
+	// Create auth manager
+	authMgr := createAuthManager()
+
+	// Build LLM provider
+	provider, err := buildProvider(ctx, configLoader, authMgr)
+	if err != nil {
+		return fmt.Errorf("create provider: %w", err)
+	}
+	defer provider.Close()
+
+	// Create context with timeout
+	var cancel context.CancelFunc
 	if execArgs.Timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, execArgs.Timeout)
 	} else {
@@ -56,11 +76,51 @@ func runExec(cmd *cobra.Command, args []string) error {
 	// Setup signal handling
 	_ = execpkg.SetupSignals(ctx, cancel)
 
-	// Execute task
-	if err := execpkg.Run(ctx, execArgs); err != nil {
+	// Execute task with real provider
+	if err := execpkg.RunWithProvider(ctx, execArgs, provider); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", execpkg.FormatError(err))
 		os.Exit(int(execpkg.GetExitCode(err)))
 	}
 
 	return nil
+}
+
+// loadConfig loads configuration from file or defaults.
+func loadConfig() (*config.Loader, error) {
+	configLoader := config.NewLoader()
+
+	// Load from explicit config file if provided
+	if flagConfigFile != "" {
+		if err := configLoader.LoadFromFile(flagConfigFile); err != nil {
+			return nil, err
+		}
+	} else {
+		// Try to load from default locations (ignore error if not found)
+		_ = configLoader.Load("")
+	}
+
+	return configLoader, nil
+}
+
+// createAuthManager creates an auth manager with platform-specific keystore.
+func createAuthManager() *auth.Manager {
+	keystore := auth.NewKeystore()
+	return auth.NewManager(keystore)
+}
+
+// buildProvider creates an LLM provider from configuration.
+func buildProvider(ctx context.Context, configLoader *config.Loader, authMgr *auth.Manager) (llm.Provider, error) {
+	// Create builder
+	b := builder.NewBuilder(configLoader, authMgr)
+
+	// Build provider with flags as overrides
+	cfg := builder.Config{
+		Provider: flagProvider,
+		Model:    flagModel,
+		// Additional flags can be added here in the future
+		// BaseURL:  flagBaseURL,
+		// KeyName:  flagKeyName,
+	}
+
+	return b.Build(ctx, cfg)
 }

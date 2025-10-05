@@ -1,0 +1,30 @@
+# Example Spin configuration for LMStudio
+#
+# Save this as ~/.spin/spin.yaml or ~/.config/spin/config.yaml
+# Or use with: spin --config-file config-lmstudio.yaml
+
+llm:
+  # Provider type
+  provider: lmstudio
+
+  # Model name (as shown in LMStudio)
+  model: codellama-13b
+
+  # API endpoint (default for local LMStudio)
+  base_url: http://localhost:1234/v1
+
+  # Request timeout
+  timeout: 45s
+
+  # No authentication required for local LMStudio
+  # key_name: (not needed)
+  # api_key: (not needed)
+
+# Sandbox settings
+sandbox:
+  mode: workspace-write
+
+# Appearance
+appearance:
+  theme: auto
+  no_color: false
