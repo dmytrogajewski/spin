@@ -10,6 +10,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/google/uuid"
 )
 
 // Default agent configuration values
@@ -39,14 +40,14 @@ var (
 // environment. It processes user requests through multiple turns of LLM calls
 // and tool executions until the task is complete or limits are reached.
 type Agent struct {
-	llm             llm.Provider                // LLM provider interface
-	executor        *Executor                   // Command executor
-	validator       *Validator                  // Command validator
-	context         *Environment                // Environment context
-	emitter         *EventEmitter               // Event emitter
-	config          *AgentConfig                // Agent configuration
-	toolRegistry    *tools.Registry             // Tool registry
-	approvalHandler func(*Command, string) bool // Approval handler for testing
+	llm             llm.Provider    // LLM provider interface
+	executor        *Executor       // Command executor
+	validator       *Validator      // Command validator
+	context         *Environment    // Environment context
+	emitter         *EventEmitter   // Event emitter
+	config          *AgentConfig    // Agent configuration
+	toolRegistry    *tools.Registry // Tool registry
+	approvalHandler ApprovalHandler // Approval handler for user approval requests
 }
 
 // Task defines the interface for different execution modes.
@@ -84,7 +85,54 @@ type AgentConfig struct {
 
 	// RequireApproval determines if dangerous commands need approval
 	RequireApproval bool
+
+	// ApprovalTimeout is the maximum time to wait for approval response (default: 60s)
+	ApprovalTimeout time.Duration
 }
+
+// ApprovalRequest represents a command approval request sent to the approval handler.
+type ApprovalRequest struct {
+	// ID is a unique identifier for this approval request (UUID)
+	ID string
+
+	// Command is the command requiring approval
+	Command *Command
+
+	// Reason explains why approval is needed (from Validator)
+	Reason string
+
+	// WorkDir is the working directory where the command will execute
+	WorkDir string
+
+	// Timestamp is when the request was created
+	Timestamp time.Time
+}
+
+// ApprovalResponse represents the user's approval decision.
+type ApprovalResponse struct {
+	// RequestID must match the ApprovalRequest.ID
+	RequestID string
+
+	// Approved indicates whether the command was approved (true) or denied (false)
+	Approved bool
+
+	// Reason is an optional user-provided reason for the decision
+	Reason string
+
+	// ModifiedCommand is an optional modified version of the command.
+	// If provided, the original command will be replaced and re-validated.
+	// If empty, the original command is used as-is.
+	ModifiedCommand string
+
+	// Timestamp is when the response was created
+	Timestamp time.Time
+}
+
+// ApprovalHandler is a callback function for handling approval requests.
+// It receives an ApprovalRequest and must return an ApprovalResponse.
+// The handler should block until the user makes a decision or timeout occurs.
+// If the handler is nil, commands requiring approval are automatically denied.
+type ApprovalHandler func(ApprovalRequest) ApprovalResponse
 
 // AgentRequest represents a request to the agent.
 type AgentRequest struct {
@@ -243,6 +291,16 @@ func WithMaxTokens(maxTokens int) AgentOption {
 func WithRequireApproval(require bool) AgentOption {
 	return func(a *Agent) error {
 		a.config.RequireApproval = require
+		return nil
+	}
+}
+
+// WithApprovalHandler sets the approval handler for the agent.
+// The handler is called when a command requires user approval.
+// If no handler is set, commands requiring approval are automatically denied.
+func WithApprovalHandler(handler ApprovalHandler) AgentOption {
+	return func(a *Agent) error {
+		a.approvalHandler = handler
 		return nil
 	}
 }
@@ -825,22 +883,156 @@ func (a *Agent) executeCommand(ctx context.Context, id string, args map[string]i
 }
 
 // requestApproval requests user approval for a command.
+// It emits an EventCommandApproval event, invokes the approval handler (if set),
+// and emits the result (EventCommandApproved or EventCommandDenied).
 func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string) bool {
+	// Generate unique request ID
+	reqID := uuid.New().String()
+
+	// Create approval request
+	req := ApprovalRequest{
+		ID:        reqID,
+		Command:   cmd,
+		Reason:    reason,
+		WorkDir:   a.context.WorkDir,
+		Timestamp: time.Now(),
+	}
+
 	// Emit approval request event
 	a.emitter.Emit(Event{
 		Type:      EventCommandApproval,
-		Timestamp: time.Now(),
-		Data: map[string]interface{}{
-			"command": cmd.Raw,
-			"reason":  reason,
-		},
+		Timestamp: req.Timestamp,
+		Data:      req,
 	})
 
-	// Use approval handler if set (for testing)
-	if a.approvalHandler != nil {
-		return a.approvalHandler(cmd, reason)
+	// If no handler, auto-deny
+	if a.approvalHandler == nil {
+		a.emitter.Emit(Event{
+			Type:      EventCommandDenied,
+			Timestamp: time.Now(),
+			Data: map[string]interface{}{
+				"request_id": reqID,
+				"reason":     "no approval handler configured",
+			},
+		})
+		return false
 	}
 
-	// Default to deny if no handler
+	// Determine approval timeout
+	timeout := a.config.ApprovalTimeout
+	if timeout == 0 {
+		timeout = 60 * time.Second // default 60 seconds
+	}
+
+	// Create timeout context
+	approvalCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Invoke handler in goroutine with timeout
+	respChan := make(chan ApprovalResponse, 1)
+	go func() {
+		resp := a.approvalHandler(req)
+		respChan <- resp
+	}()
+
+	// Wait for response or timeout
+	var resp ApprovalResponse
+	select {
+	case resp = <-respChan:
+		// Got response
+	case <-approvalCtx.Done():
+		// Timeout or cancellation
+		a.emitter.Emit(Event{
+			Type:      EventCommandDenied,
+			Timestamp: time.Now(),
+			Data: map[string]interface{}{
+				"request_id": reqID,
+				"reason":     "approval timeout or context cancelled",
+			},
+		})
+		return false
+	}
+
+	// Validate response request ID
+	if resp.RequestID != reqID {
+		a.emitter.Emit(Event{
+			Type:      EventCommandDenied,
+			Timestamp: time.Now(),
+			Data: map[string]interface{}{
+				"request_id": reqID,
+				"reason":     "response request ID mismatch",
+			},
+		})
+		return false
+	}
+
+	// Handle command modification
+	if resp.Approved && resp.ModifiedCommand != "" {
+		// Parse modified command
+		modCmd, err := ParseCommand(resp.ModifiedCommand)
+		if err != nil {
+			a.emitter.Emit(Event{
+				Type:      EventCommandDenied,
+				Timestamp: time.Now(),
+				Data: map[string]interface{}{
+					"request_id": reqID,
+					"reason":     "modified command parse error: " + err.Error(),
+				},
+			})
+			return false
+		}
+
+		// Re-validate modified command
+		result, err := a.validator.Classify(modCmd)
+		if err != nil {
+			a.emitter.Emit(Event{
+				Type:      EventCommandDenied,
+				Timestamp: time.Now(),
+				Data: map[string]interface{}{
+					"request_id": reqID,
+					"reason":     "modified command validation error: " + err.Error(),
+				},
+			})
+			return false
+		}
+		if result.Classification != CommandSafe {
+			a.emitter.Emit(Event{
+				Type:      EventCommandDenied,
+				Timestamp: time.Now(),
+				Data: map[string]interface{}{
+					"request_id": reqID,
+					"reason":     fmt.Sprintf("modified command failed validation: %s", result.Classification.String()),
+				},
+			})
+			return false
+		}
+
+		// Update command with modified version
+		*cmd = *modCmd
+	}
+
+	// Emit result event
+	if resp.Approved {
+		a.emitter.Emit(Event{
+			Type:      EventCommandApproved,
+			Timestamp: time.Now(),
+			Data: map[string]interface{}{
+				"request_id": reqID,
+				"command":    cmd.Raw,
+				"reason":     resp.Reason,
+			},
+		})
+		return true
+	}
+
+	// Denied
+	a.emitter.Emit(Event{
+		Type:      EventCommandDenied,
+		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"request_id": reqID,
+			"reason":     resp.Reason,
+		},
+	})
 	return false
 }

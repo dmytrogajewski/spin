@@ -218,3 +218,18 @@ func (e *EventEmitter) Close() {
 		delete(e.subscribers, id)
 	}
 }
+
+// Events returns a channel for receiving events (convenience method for testing).
+// This is a simple wrapper around Subscribe() that returns only the channel.
+// The subscription ID is not returned, so Unsubscribe cannot be called.
+// Use Subscribe() directly if you need to unsubscribe later.
+func (e *EventEmitter) Events() <-chan Event {
+	_, ch, err := e.Subscribe()
+	if err != nil {
+		// Return closed channel if subscription fails
+		closedCh := make(chan Event)
+		close(closedCh)
+		return closedCh
+	}
+	return ch
+}

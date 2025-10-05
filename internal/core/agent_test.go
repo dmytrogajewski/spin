@@ -926,8 +926,12 @@ func TestAgent_executeCommand_WithApproval(t *testing.T) {
 
 	// Set up approval handler
 	approved := true
-	agent.approvalHandler = func(cmd *Command, reason string) bool {
-		return approved
+	agent.approvalHandler = func(req ApprovalRequest) ApprovalResponse {
+		return ApprovalResponse{
+			RequestID: req.ID,
+			Approved:  approved,
+			Timestamp: time.Now(),
+		}
 	}
 
 	tests := []struct {
