@@ -2,18 +2,70 @@
 
 ## Overview
 
-Spin provides multiple user interface options for different use cases. This document covers:
+Spin is a **single binary** that provides multiple user interface modes for different use cases:
 
-1. **tui** - Interactive terminal user interface (primary)
-2. **exec** - Non-interactive/headless mode (automation)
-3. **cli** - Main CLI multitool (entry point)
+1. **tui** - Interactive terminal user interface (`spin` or `spin tui`)
+2. **exec** - Non-interactive/headless mode (`spin exec`)
+3. **cli** - Management commands (`spin config`, `spin mcp`, etc.)
+
+**Single Binary Architecture:**
+- One `spin` binary with subcommands
+- TUI mode is the default when run without arguments
+- All functionality accessible via `spin <command>`
+- Simplifies distribution, installation, and updates
 
 ---
 
-## Module 1: spin-tui
+## Binary Structure
 
-**Path:** `cmd/spin-tui/`  
+```
+spin [GLOBAL_OPTIONS] [COMMAND] [COMMAND_OPTIONS]
+
+Commands:
+  (default/tui)    Start interactive TUI (default)
+  exec             Non-interactive execution
+  serve            Start JSON-RPC app server
+  mcp-server       Start MCP server
+  mcp              Manage MCP server configurations
+  completion       Generate shell completions
+  debug            Debug/test subcommands
+  config           Manage configuration
+  version          Show version information
+
+Global Options:
+  --model <MODEL>          Model to use
+  --provider <PROVIDER>    Provider (ollama, lmstudio, openai, anthropic)
+  --sandbox <MODE>         Sandbox mode
+  --cd <DIR>               Change working directory
+  -c, --config <KEY=VAL>   Config overrides
+  --help                   Show help
+  --version                Show version
+```
+
+**Usage Examples:**
+```bash
+# Start TUI (default)
+spin
+spin tui
+
+# Execute headless task
+spin exec "fix linting errors"
+
+# Manage configuration
+spin config show
+spin mcp add filesystem npx @modelcontextprotocol/server-filesystem /workspace
+
+# Debug sandbox
+spin debug sandbox ls -la
+```
+
+---
+
+## Mode 1: Interactive TUI
+
+**Command:** `spin` or `spin tui`
 **Purpose:** Full-featured terminal user interface for interactive coding sessions
+**Implementation:** `cmd/spin/tui.go` + `internal/tui/`
 
 ### Overview
 
@@ -24,8 +76,15 @@ The TUI is the primary interface for Spin, providing a rich, interactive experie
 ### Architecture
 
 ```
-cmd/spin-tui/
-├── main.go              # Entry point
+cmd/spin/
+├── main.go              # Entry point + Cobra setup
+├── tui.go               # TUI mode command
+├── exec.go              # Exec mode command
+├── config.go            # Config commands
+├── mcp.go               # MCP commands
+└── ...
+
+internal/tui/
 ├── app.go               # Application model (Bubble Tea model)
 ├── ui/
 │   ├── chat.go          # Chat message display
@@ -42,11 +101,6 @@ cmd/spin-tui/
 │   └── styles.go        # Lipgloss styles
 └── state/
     └── state.go         # UI state management
-
-internal/tui/
-├── model.go             # Shared TUI models
-├── messages.go          # Bubble Tea messages
-└── styles.md            # Style guide
 ```
 
 ### Key Features
@@ -181,19 +235,19 @@ type Model struct {
     transcript  []Message
     statusBar   StatusBar
     filePicker  FilePicker
-    
+
     // Tool approval state
     pendingTool *ToolCall
-    
+
     // Backtrack state
     backtrackIdx int
-    
+
     // Core communication
     coreChan    chan CoreEvent
-    
+
     // Viewport for scrolling
     viewport    viewport.Model
-    
+
     // Dimensions
     width       int
     height      int
@@ -267,10 +321,10 @@ var (
     UserStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("12")).
         Bold(true)
-    
+
     AssistantStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("10"))
-    
+
     ErrorStyle = lipgloss.NewStyle().
         Foreground(lipgloss.Color("9")).
         Bold(true)
@@ -365,7 +419,6 @@ func (m Model) showError(err error) Model {
 
 **Test Execution:**
 ```bash
-go test ./cmd/spin-tui/...
 go test ./internal/tui/...
 ```
 
@@ -378,11 +431,11 @@ func TestBacktrackMode(t *testing.T) {
         {Role: "assistant", Content: "Response"},
         {Role: "user", Content: "Second message"},
     }
-    
+
     // Enter backtrack mode
     m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
     m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-    
+
     assert.Equal(t, StateBacktrackMode, m.state)
     assert.Equal(t, 2, m.backtrackIdx) // Points to last user message
 }
@@ -404,10 +457,11 @@ func TestBacktrackMode(t *testing.T) {
 
 ---
 
-## Module 2: spin-exec
+## Mode 2: Exec (Headless)
 
-**Path:** `cmd/spin-exec/`  
+**Command:** `spin exec <prompt>`
 **Purpose:** Non-interactive, headless execution mode
+**Implementation:** `cmd/spin/exec.go` + `internal/exec/`
 
 ### Overview
 
@@ -482,7 +536,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install Spin
-        run: go install github.com/yourusername/spin/cmd/spin@latest
+        run: go install github.com/yourusername/spin@latest
       - name: Fix linter errors
         run: spin exec "Fix all linter errors"
       - name: Show changes
@@ -508,7 +562,7 @@ done
 
 ```dockerfile
 FROM golang:1.24
-RUN go install github.com/yourusername/spin/cmd/spin@latest
+RUN go install github.com/yourusername/spin@latest
 COPY . /workspace
 WORKDIR /workspace
 RUN spin exec "Build and test"
@@ -554,63 +608,6 @@ spin exec --format json "Analyze code" | jq
 
 ### Architecture
 
-```go
-// cmd/spin-exec/main.go
-package main
-
-import (
-    "context"
-    "flag"
-    "fmt"
-    "os"
-    "time"
-    
-    "github.com/yourusername/spin/internal/core"
-    "github.com/yourusername/spin/internal/config"
-)
-
-func main() {
-    if err := run(); err != nil {
-        fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-        os.Exit(1)
-    }
-}
-
-func run() error {
-    args := parseArgs()
-    cfg, err := config.Load(args.ConfigPath)
-    if err != nil {
-        return fmt.Errorf("load config: %w", err)
-    }
-    
-    // Apply CLI overrides
-    cfg = cfg.WithOverrides(args.Overrides)
-    
-    // Initialize core
-    ctx := context.Background()
-    if args.Timeout > 0 {
-        var cancel context.CancelFunc
-        ctx, cancel = context.WithTimeout(ctx, args.Timeout)
-        defer cancel()
-    }
-    
-    core, err := core.New(cfg)
-    if err != nil {
-        return fmt.Errorf("initialize core: %w", err)
-    }
-    defer core.Close()
-    
-    // Run task
-    result, err := core.RunTask(ctx, args.Prompt)
-    if err != nil {
-        return fmt.Errorf("run task: %w", err)
-    }
-    
-    // Output results
-    return outputResults(result, args.Format)
-}
-```
-
 **Simplified Architecture:**
 - No UI components
 - Direct output to stdout/stderr
@@ -624,33 +621,6 @@ func run() error {
 - Exit immediately on critical errors
 - Retry transient failures (network, rate limits)
 - Log full error chain
-
-**Example:**
-```go
-func formatError(err error) string {
-    var b strings.Builder
-    b.WriteString("Error: ")
-    b.WriteString(err.Error())
-    
-    // Unwrap error chain
-    if unwrapper, ok := err.(interface{ Unwrap() error }); ok {
-        b.WriteString("\nCaused by:")
-        for i := 0; ; i++ {
-            err = unwrapper.Unwrap()
-            if err == nil {
-                break
-            }
-            fmt.Fprintf(&b, "\n  %d: %v", i, err)
-            unwrapper, ok = err.(interface{ Unwrap() error })
-            if !ok {
-                break
-            }
-        }
-    }
-    
-    return b.String()
-}
-```
 
 ### Integration with Core
 
@@ -667,47 +637,15 @@ func formatError(err error) string {
 
 ---
 
-## Module 3: spin-cli
+## Mode 3: Management Commands
 
-**Path:** `cmd/spin/`  
-**Purpose:** Main CLI multitool and entry point
-
-### Overview
-
-`spin` is the unified entry point that dispatches to different modes:
-- Interactive TUI (default)
-- Exec mode (`spin exec`)
-- App server (`spin serve`)
-- MCP server (`spin mcp-server`)
-- Utility commands (`spin completion`, `spin mcp`, etc.)
+**Commands:** `spin config`, `spin mcp`, `spin debug`, etc.
+**Purpose:** Configuration, debugging, and utility commands
+**Implementation:** `cmd/spin/*.go`
 
 ### Command Structure
 
-```
-spin [GLOBAL_OPTIONS] [COMMAND] [COMMAND_OPTIONS]
-
-Commands:
-  (default)        Start interactive TUI
-  exec             Non-interactive execution
-  serve            Start JSON-RPC app server
-  mcp-server       Start MCP server
-  mcp              Manage MCP server configurations
-  completion       Generate shell completions
-  debug            Debug/test subcommands
-  config           Manage configuration
-  version          Show version information
-
-Global Options:
-  --model <MODEL>          Model to use
-  --provider <PROVIDER>    Provider (ollama, lmstudio, openai, anthropic)
-  --sandbox <MODE>         Sandbox mode
-  --cd <DIR>               Change working directory
-  -c, --config <KEY=VAL>   Config overrides
-  --help                   Show help
-  --version                Show version
-```
-
-### Implementation
+**Implementation (Cobra):**
 
 ```go
 // cmd/spin/main.go
@@ -716,9 +654,8 @@ package main
 import (
     "fmt"
     "os"
-    
+
     "github.com/spf13/cobra"
-    "github.com/yourusername/spin/internal/version"
 )
 
 func main() {
@@ -728,26 +665,27 @@ func main() {
         Long:  "Spin is an open-source AI coding assistant compatible with multiple LLM providers",
         RunE:  runTUI, // Default to TUI
     }
-    
+
     // Global flags
     rootCmd.PersistentFlags().String("model", "", "Model to use")
     rootCmd.PersistentFlags().String("provider", "", "Provider")
     rootCmd.PersistentFlags().String("sandbox", "workspace-write", "Sandbox mode")
     rootCmd.PersistentFlags().String("cd", "", "Working directory")
     rootCmd.PersistentFlags().StringSliceP("config", "c", nil, "Config overrides")
-    
+
     // Subcommands
     rootCmd.AddCommand(
-        newExecCmd(),
-        newServeCmd(),
-        newMCPServerCmd(),
-        newMCPCmd(),
-        newCompletionCmd(),
-        newDebugCmd(),
-        newConfigCmd(),
-        newVersionCmd(),
+        newTUICmd(),        // Explicit TUI mode
+        newExecCmd(),       // Headless execution
+        newServeCmd(),      // JSON-RPC server
+        newMCPServerCmd(),  // MCP server
+        newMCPCmd(),        // MCP management
+        newCompletionCmd(), // Shell completions
+        newDebugCmd(),      // Debug utilities
+        newConfigCmd(),     // Config management
+        newVersionCmd(),    // Version info
     )
-    
+
     if err := rootCmd.Execute(); err != nil {
         fmt.Fprintf(os.Stderr, "Error: %v\n", err)
         os.Exit(1)
@@ -755,7 +693,7 @@ func main() {
 }
 ```
 
-### Special Modes
+### Special Commands
 
 #### 1. Debug Sandbox
 
@@ -779,32 +717,6 @@ spin completion zsh > /usr/local/share/zsh/site-functions/_spin
 spin completion fish > ~/.config/fish/completions/spin.fish
 ```
 
-Implementation:
-```go
-func newCompletionCmd() *cobra.Command {
-    cmd := &cobra.Command{
-        Use:   "completion [bash|zsh|fish|powershell]",
-        Short: "Generate shell completion script",
-        Args:  cobra.ExactArgs(1),
-        RunE: func(cmd *cobra.Command, args []string) error {
-            switch args[0] {
-            case "bash":
-                return cmd.Root().GenBashCompletion(os.Stdout)
-            case "zsh":
-                return cmd.Root().GenZshCompletion(os.Stdout)
-            case "fish":
-                return cmd.Root().GenFishCompletion(os.Stdout, true)
-            case "powershell":
-                return cmd.Root().GenPowerShellCompletion(os.Stdout)
-            default:
-                return fmt.Errorf("unsupported shell: %s", args[0])
-            }
-        },
-    }
-    return cmd
-}
-```
-
 #### 3. MCP Management
 
 ```bash
@@ -812,34 +724,6 @@ spin mcp add server-name command args...
 spin mcp list
 spin mcp get server-name
 spin mcp remove server-name
-```
-
-### Binary Name Detection
-
-**Special Behavior:**
-
-```go
-func main() {
-    arg0 := os.Args[0]
-    
-    // Check for special binary names (symlinks)
-    switch filepath.Base(arg0) {
-    case "spin-apply-patch":
-        os.Exit(runApplyPatchMode())
-    case "spin-sandbox":
-        os.Exit(runSandboxMode())
-    }
-    
-    // Check for special flags
-    for _, arg := range os.Args[1:] {
-        if arg == "--spin-run-as-apply-patch" {
-            os.Exit(runApplyPatchMode())
-        }
-    }
-    
-    // Normal CLI execution
-    main()
-}
 ```
 
 ### Configuration Loading
@@ -886,31 +770,6 @@ servers = [
 
 **Using log/slog (Go 1.21+)**
 
-```go
-import "log/slog"
-
-func setupLogging(level string) {
-    var logLevel slog.Level
-    switch level {
-    case "debug":
-        logLevel = slog.LevelDebug
-    case "info":
-        logLevel = slog.LevelInfo
-    case "warn":
-        logLevel = slog.LevelWarn
-    case "error":
-        logLevel = slog.LevelError
-    default:
-        logLevel = slog.LevelInfo
-    }
-    
-    handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-        Level: logLevel,
-    })
-    slog.SetDefault(slog.New(handler))
-}
-```
-
 **Environment Variable:** `SPIN_LOG_LEVEL`
 
 **Examples:**
@@ -927,7 +786,7 @@ SPIN_LOG_LEVEL=error spin exec "task"
 
 ---
 
-## Cross-Module Comparison
+## Cross-Mode Comparison
 
 | Feature | TUI | Exec | App Server | MCP Server |
 |---------|-----|------|------------|------------|
@@ -958,7 +817,7 @@ SPIN_LOG_LEVEL=error spin exec "task"
 
 ### For Developers
 
-1. **Test Both Modes:** TUI and exec have different code paths
+1. **Test All Modes:** TUI and exec have different code paths
 2. **Handle SIGINT:** Graceful shutdown on Ctrl+C
 3. **Stream Output:** Don't buffer large responses
 4. **Respect NO_COLOR:** Support color-disabled terminals
@@ -968,23 +827,20 @@ SPIN_LOG_LEVEL=error spin exec "task"
 
 ## Performance Characteristics
 
-### TUI
-- **Startup:** ~80ms
+### Single Binary
+- **Startup (TUI):** ~80ms
+- **Startup (Exec):** ~40ms (no UI initialization)
+- **Startup (Dispatch):** ~5ms (just Cobra parsing)
+- **Binary size:** ~15MB (statically linked, includes all modes)
+
+### TUI Mode
 - **Input latency:** <5ms
 - **Render rate:** 60 FPS
 - **Memory:** ~30MB
-- **Binary size:** ~15MB (statically linked)
 
-### Exec
-- **Startup:** ~40ms (no UI)
+### Exec Mode
 - **Overhead:** ~3% vs. direct API
 - **Memory:** ~20MB
-- **Binary size:** ~12MB
-
-### CLI (dispatch)
-- **Startup:** ~5ms (just parsing with cobra)
-- **Dispatch:** <1ms
-- **Binary size:** ~15MB (includes all subcommands)
 
 ---
 
@@ -993,17 +849,22 @@ SPIN_LOG_LEVEL=error spin exec "task"
 ```
 spin/
 ├── cmd/
-│   ├── spin/           # Main CLI entry point
-│   ├── spin-tui/       # TUI implementation
-│   └── spin-exec/      # Exec mode implementation
+│   └── spin/              # Single binary entry point
+│       ├── main.go        # Main + Cobra setup
+│       ├── tui.go         # TUI mode command
+│       ├── exec.go        # Exec mode command
+│       ├── config.go      # Config commands
+│       ├── mcp.go         # MCP commands
+│       └── ...
 ├── internal/
-│   ├── core/           # Core business logic
-│   ├── tui/            # TUI shared components
-│   ├── filesearch/     # File search functionality
-│   ├── config/         # Configuration management
-│   └── sandbox/        # Sandbox implementations
+│   ├── core/              # Core business logic
+│   ├── tui/               # TUI implementation
+│   ├── exec/              # Exec implementation
+│   ├── filesearch/        # File search functionality
+│   ├── config/            # Configuration management
+│   └── sandbox/           # Sandbox implementations
 ├── pkg/
-│   └── spin/           # Public API (if needed)
+│   └── spin/              # Public API (if needed)
 ├── go.mod
 ├── go.sum
 ├── README.md
@@ -1017,15 +878,15 @@ spin/
 ### Key Go Libraries
 
 **TUI:**
-- `github.com/charmbracelet/bubbletea` - TUI framework (The Elm Architecture)
+- `github.com/charmbracelet/bubbletea` - TUI framework
 - `github.com/charmbracelet/lipgloss` - Styling
-- `github.com/charmbracelet/bubbles` - UI components (textinput, viewport, etc.)
+- `github.com/charmbracelet/bubbles` - UI components
 - `github.com/charmbracelet/glamour` - Markdown rendering
 - `github.com/alecthomas/chroma` - Syntax highlighting
 
 **CLI:**
 - `github.com/spf13/cobra` - CLI framework
-- `github.com/spf13/viper` - Configuration management (optional)
+- `github.com/spf13/viper` - Configuration management
 
 **Core:**
 - Standard library (net/http, context, io, etc.)
@@ -1038,33 +899,9 @@ spin/
 
 ---
 
-## Future Enhancements
-
-### TUI
-- [ ] Split panes (code + chat side-by-side)
-- [ ] Inline diff viewer using `go-diff`
-- [ ] Rich media support (images via sixel/kitty protocol, tables)
-- [ ] Plugin system (custom commands via Go plugins or WASM)
-- [ ] Themes and customization via config file
-
-### Exec
-- [ ] Progress reporting (`--progress` flag)
-- [ ] Checkpoint/resume for long tasks
-- [ ] Parallel execution (multiple tasks with goroutines)
-- [ ] Interactive mode toggle (`--interactive`)
-
-### CLI
-- [ ] Config profiles (`--profile dev`)
-- [ ] Global undo (`spin undo`)
-- [ ] Session management (`spin sessions list`)
-- [ ] Built-in tutorials (`spin tutorial`)
-- [ ] Self-update command (`spin update`)
-
----
-
 ## Related Documentation
 
-- **core-module.md** - Business logic used by all UIs
+- **core-module.md** - Business logic used by all modes
 - **protocol-modules.md** - Event protocol
 - **llm-auth-sdk.md** - LLM provider integration (vendor-agnostic)
 - **mcp-modules.md** - MCP support
@@ -1073,11 +910,15 @@ spin/
 
 ## Conclusion
 
-Spin's UI modules provide flexible interfaces for different use cases:
-- **TUI** for interactive development
-- **Exec** for automation and CI/CD
-- **CLI** as a unified, convenient entry point
+Spin is a **single binary** with multiple modes:
+- **`spin` / `spin tui`** for interactive development
+- **`spin exec`** for automation and CI/CD
+- **`spin <command>`** for configuration and utilities
 
-By sharing the same core logic (following clean architecture principles), all interfaces provide consistent behavior while optimizing for their specific use cases. The implementation follows Go best practices and is fully open-source with support for multiple LLM providers (Ollama, LMStudio, OpenAI, Anthropic, etc.).
+By using a single binary with subcommands (Cobra pattern), Spin provides:
+- **Simple installation:** One binary to download
+- **Consistent UX:** All functionality via `spin <cmd>`
+- **Shared core logic:** All modes use the same business logic
+- **Efficient distribution:** One artifact, smaller footprint
 
-
+The implementation follows Go best practices and is fully open-source with support for multiple LLM providers (Ollama, LMStudio, OpenAI, Anthropic, etc.).

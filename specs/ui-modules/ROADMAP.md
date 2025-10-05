@@ -2,10 +2,16 @@
 
 ## Overview
 
-This roadmap covers the implementation of all three UI modules for Spin:
-- **spin-tui**: Interactive terminal user interface (Bubble Tea)
-- **spin-exec**: Non-interactive/headless execution mode
-- **spin-cli**: Main CLI multitool and entry point
+This roadmap covers the implementation of Spin as a **single binary** with multiple modes:
+- **TUI mode** (`spin` or `spin tui`): Interactive terminal user interface (Bubble Tea)
+- **Exec mode** (`spin exec`): Non-interactive/headless execution mode
+- **Management commands** (`spin config`, `spin mcp`, etc.): Configuration and utilities
+
+**Architecture:** Single `spin` binary at `cmd/spin/` with:
+- Main entry point + Cobra command structure
+- TUI implementation in `cmd/spin/tui.go` + `internal/tui/`
+- Exec implementation in `cmd/spin/exec.go` + `internal/exec/`
+- Management commands in `cmd/spin/*.go`
 
 All implementations follow TDD principles, SOLID design, and the quality standards defined in [AGENTS.md](../../AGENTS.md).
 
@@ -90,11 +96,13 @@ WARNING: We use spf13/viper, you should review configuration management and base
 
 ---
 
-## Phase 2: Non-Interactive Mode (spin-exec)
+## Phase 2: Non-Interactive Mode (`spin exec`)
 
 **Implementation Strategy:**
 - **Phases 2.1-2.3**: Build infrastructure (args, output, approval) with placeholder logic
 - **Phase 2.4**: Connect everything to the core module (⚡ actual integration happens here)
+
+**Location:** `cmd/spin/exec.go` + `internal/exec/`
 
 This approach allows us to:
 1. Build and test the exec infrastructure independently
@@ -109,7 +117,7 @@ This approach allows us to:
 - [x] Output format requirements clear
 
 **Implementation:**
-- [x] Create `cmd/spin-exec/main.go`
+- [x] Create `cmd/spin/exec.go` as Cobra subcommand
 - [x] Implement argument parsing (prompt from args or stdin)
 - [x] Add exec-specific flags (--auto-approve, --timeout, --format)
 - [x] Implement run() function with context
@@ -197,7 +205,7 @@ This approach allows us to:
 - [x] Phases 2.1, 2.2, 2.3 complete ✅
 
 **Implementation:**
-- [x] Create `cmd/spin-exec/runner.go` ✅
+- [x] Create `internal/exec/runner.go` ✅
 - [x] Implement runTask() function ✅
 - [x] Setup core event channel handling ✅
 - [x] Add streaming delta processing (EventContentDelta) ✅
@@ -205,6 +213,7 @@ This approach allows us to:
 - [x] Error propagation from core (EventError) ✅
 - [x] Integrated with core.Validator for command approval ✅
 - [x] Added audit logging for approval decisions ✅
+- [x] Wire up in `cmd/spin/exec.go` Cobra command ✅
 
 **DoD:**
 - [x] Integration with real core ✅
@@ -443,19 +452,21 @@ emitter := core.NewEventEmitterWithConfig(core.EventEmitterConfig{
 
 ---
 
-## Phase 3: Interactive TUI (spin-tui) - BLOCKED ⚠️
+## Phase 3: Interactive TUI (`spin` / `spin tui`)
 
-**Status:** ⚠️ **BLOCKED** - Waiting for Phase 0 complete
+**Status:** ✅ **READY** - Phase 0 complete (0.1, 0.2, 0.3 done)
 
-**Blockers:**
-- ❌ Need Phase 0.1: Approval response mechanism (critical for approval dialogs)
-- ❌ Need Phase 0.2: Pause/Resume capability (important for interactive flow)
-- ❌ Need Phase 0.3: Event backpressure control (critical for UI updates)
-- ⚠️ Phase 0.4: Provider factory integration (important for real LLM usage)
+**Blockers Resolved:**
+- ✅ Phase 0.1: Approval response mechanism (critical for approval dialogs)
+- ✅ Phase 0.2: Pause/Resume capability (important for interactive flow)
+- ✅ Phase 0.3: Event backpressure control (critical for UI updates)
+- ⚠️ Phase 0.4: Provider factory integration (important for real LLM usage) - can be done in parallel
+
+**Location:** `cmd/spin/tui.go` + `internal/tui/`
 
 **Implementation Strategy:**
-- **Phases 3.1-3.10**: Build TUI infrastructure (can start while Phase 0 is being fixed)
-- **Phase 3.11**: Connect to core module (⚡ requires Phase 0 complete)
+- **Phases 3.1-3.10**: Build TUI infrastructure
+- **Phase 3.11**: Connect to core module (⚡ now unblocked)
 - **Phase 3.12**: Error handling integration
 
 ### 3.1 Bubble Tea Application Setup
@@ -466,8 +477,8 @@ emitter := core.NewEventEmitterWithConfig(core.EventEmitterConfig{
 - [ ] TUI state machine designed
 
 **Implementation:**
-- [ ] Create `cmd/spin-tui/main.go`
-- [ ] Implement Model struct (Bubble Tea model)
+- [ ] Create `cmd/spin/tui.go` as Cobra subcommand (default when no args)
+- [ ] Create `internal/tui/app.go` with Model struct (Bubble Tea model)
 - [ ] Create AppState enum (Idle, WaitingResponse, ToolApproval, etc.)
 - [ ] Implement Init() function
 - [ ] Implement Update() function (message routing)
@@ -477,7 +488,7 @@ emitter := core.NewEventEmitterWithConfig(core.EventEmitterConfig{
 **DoD:**
 - [ ] Tests for state transitions (≥85% coverage)
 - [ ] Tests for message routing
-- [ ] Basic TUI launches successfully
+- [ ] Basic TUI launches successfully via `spin` or `spin tui`
 - [ ] Window resize works correctly
 - [ ] Render latency <16ms (60 FPS)
 
