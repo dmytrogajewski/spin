@@ -1,9 +1,13 @@
 package tui
 
 import (
+	"fmt"
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/tui/ui"
 )
 
@@ -83,6 +87,43 @@ func NewModelWithConfig(cfg *Config) Model {
 	return m
 }
 
+// NewModelWithLLM creates a new TUI model with LLM integration.
+func NewModelWithLLM(tuiCfg *Config, coreCfg *core.Config, provider llm.Provider) (Model, error) {
+	m := NewModelWithConfig(tuiCfg)
+
+	Info("Creating TUI model with LLM", "provider", coreCfg.Provider, "model", coreCfg.Model)
+
+	// Create core manager
+	coreManager, err := NewCoreManager(coreCfg, provider)
+	if err != nil {
+		Error("Failed to create core manager", "error", err)
+		return m, fmt.Errorf("create core manager: %w", err)
+	}
+
+	// Start conversation and get event stream
+	events, err := coreManager.StartConversation()
+	if err != nil {
+		Error("Failed to start conversation", "error", err)
+		coreManager.Close()
+		return m, fmt.Errorf("start conversation: %w", err)
+	}
+
+	Info("Conversation started successfully", "has_events", events != nil)
+
+	m.coreManager = coreManager
+	m.events = events
+
+	return m, nil
+}
+
+// Close cleans up TUI resources.
+func (m Model) Close() error {
+	if m.coreManager != nil {
+		return m.coreManager.Close()
+	}
+	return nil
+}
+
 // Err returns any error that occurred during TUI operation.
 func (m Model) Err() error {
 	return m.err
@@ -96,9 +137,36 @@ func (m Model) State() AppState {
 // Init is called when the program starts.
 // It returns any initial commands to run.
 func (m Model) Init() tea.Cmd {
-	// Focus input initially (Phase 3.3)
-	// Note: The command returned here will be executed by Bubble Tea
+	Info("Init called", "has_core_manager", m.coreManager != nil, "has_events", m.events != nil)
+
+	// Start listening to core events if manager exists
+	if m.coreManager != nil && m.events != nil {
+		Info("Starting event listener and ticker")
+		return tea.Batch(
+			m.input.Focus(),
+			waitForCoreEvent(m.events),
+			tickCmd(), // Start periodic ticks for rendering
+		)
+	}
+
+	// Focus input initially
+	Info("No core manager, just focusing input")
 	return m.input.Focus()
+}
+
+// tickCmd creates a command that sends periodic tick messages for UI updates.
+func tickCmd() tea.Cmd {
+	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
+// tickMsg represents a periodic tick for UI updates.
+type tickMsg time.Time
+
+// llmErrorMsg represents an error from the LLM.
+type llmErrorMsg struct {
+	err error
 }
 
 // Update handles incoming messages and returns an updated model.
@@ -122,6 +190,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ErrorMsg:
 		m.err = msg.Err
 		return m, tea.Quit
+
+	case tickMsg:
+		// Periodic tick for UI updates (streaming, etc.)
+		// Update chat to trigger re-render if dirty
+		m.chat, cmd = m.chat.Update(msg)
+		cmds = append(cmds, cmd)
+		// Schedule next tick
+		return m, tea.Batch(cmd, tickCmd())
 	}
 
 	// Update chat component
@@ -225,7 +301,7 @@ func (m Model) handleEnterPress() (tea.Model, tea.Cmd) {
 
 	switch m.state {
 	case StateIdle:
-		// Handle message submission (Phase 3.3)
+		// Handle message submission
 		if m.input.GetValue() != "" {
 			message := m.input.GetValue()
 
@@ -250,7 +326,32 @@ func (m Model) handleEnterPress() (tea.Model, tea.Cmd) {
 			// Reset backtrack state
 			m.backtrackIdx = -1
 
-			// TODO: Send to core in Phase 3.11
+			// Send to LLM
+			if m.coreManager != nil {
+				Info("Sending message to LLM", "message", message)
+
+				// Add a system message to confirm we're trying
+				m.chat.AddMessage(ui.Message{
+					Role:    ui.RoleSystem,
+					Content: "[Sending to LLM...]",
+				})
+
+				// Transition to waiting state immediately
+				m.state = StateWaitingResponse
+				Info("State changed to WaitingResponse")
+
+				go func() {
+					Info("SendMessage goroutine started")
+					if err := m.coreManager.SendMessage(message); err != nil {
+						Error("SendMessage failed", "error", err)
+					} else {
+						Info("SendMessage completed successfully")
+					}
+				}()
+			} else {
+				Warn("No core manager available")
+			}
+
 			return m, nil
 		}
 
@@ -377,6 +478,9 @@ func (m Model) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.statusBar.SetWidth(m.width)           // Phase 3.6
 	m.help.SetSize(m.width, m.height)       // Phase 3.9
 	m.errorModal.Resize(m.width, m.height)  // Phase 3.12
+
+	// Force chat to re-render
+	m.chat.Update(msg)
 
 	return m, nil
 }

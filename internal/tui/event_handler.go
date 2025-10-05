@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dmytrogajewski/spin/internal/core"
 	"github.com/dmytrogajewski/spin/internal/tui/ui"
@@ -15,10 +17,13 @@ type CoreEventMsg struct {
 // It converts core events into Bubble Tea messages.
 func waitForCoreEvent(events <-chan core.Event) tea.Cmd {
 	return func() tea.Msg {
+		Debug("Waiting for core event...")
 		event, ok := <-events
 		if !ok {
+			Warn("Events channel closed")
 			return nil // Channel closed
 		}
+		Info("Received core event", "type", event.Type)
 		return CoreEventMsg{Event: event}
 	}
 }
@@ -70,9 +75,23 @@ func (m Model) handleTurnStart(event core.Event) Model {
 
 // handleStreamDelta processes streaming content deltas.
 func (m Model) handleStreamDelta(event core.Event) Model {
-	if data, ok := event.Data.(*core.ContentDeltaData); ok {
-		m.chat.AppendDelta(data.Content)
+	// Try map[string]interface{} first (current implementation)
+	if dataMap, ok := event.Data.(map[string]interface{}); ok {
+		if content, ok := dataMap["content"].(string); ok {
+			Debug("Appending delta", "content_length", len(content))
+			m.chat.AppendDelta(content)
+			return m
+		}
 	}
+
+	// Fallback to struct pointer (future implementation)
+	if data, ok := event.Data.(*core.ContentDeltaData); ok {
+		Debug("Appending delta from struct", "content_length", len(data.Content))
+		m.chat.AppendDelta(data.Content)
+		return m
+	}
+
+	Warn("ContentDelta event with invalid data type", "type", fmt.Sprintf("%T", event.Data))
 	return m
 }
 

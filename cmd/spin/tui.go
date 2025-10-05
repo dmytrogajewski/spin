@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
+	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/llm/builder"
 	"github.com/dmytrogajewski/spin/internal/tui"
 )
 
@@ -35,6 +39,8 @@ This is the default mode when running 'spin' without arguments.`,
 
 // runTUI starts the Bubble Tea TUI application.
 func runTUI(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
+
 	// Load configuration
 	configLoader, err := loadConfig()
 	if err != nil {
@@ -55,14 +61,61 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		configLoader.Set("work_dir", flagWorkDir)
 	}
 
-	// Unmarshal to TUI Config
-	var cfg tui.Config
-	if err := configLoader.Unmarshal(&cfg); err != nil {
+	// Unmarshal to TUI Config (for display)
+	var tuiCfg tui.Config
+	if err := configLoader.Unmarshal(&tuiCfg); err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// Create TUI model with config
-	m := tui.NewModelWithConfig(&cfg)
+	// Apply defaults to TUI config
+	if tuiCfg.SandboxMode == "" {
+		tuiCfg.SandboxMode = "workspace-write"
+	}
+	if tuiCfg.WorkDir == "" {
+		wd, err := os.Getwd()
+		if err == nil {
+			tuiCfg.WorkDir = wd
+		}
+	}
+
+	// Start with defaults and overlay config
+	coreCfg := core.DefaultConfig()
+	if err := configLoader.Unmarshal(coreCfg); err != nil {
+		return fmt.Errorf("failed to unmarshal core config: %w", err)
+	}
+
+	// Set working directory if not already set
+	if coreCfg.WorkDir == "" {
+		wd, err := os.Getwd()
+		if err == nil {
+			coreCfg.WorkDir = wd
+		}
+	}
+
+	// Create auth manager and build LLM provider
+	authMgr := createAuthManager()
+	b := builder.NewBuilder(configLoader, authMgr)
+	providerCfg := builder.Config{
+		Provider: flagProvider,
+		Model:    flagModel,
+	}
+	provider, err := b.Build(ctx, providerCfg)
+	if err != nil {
+		return fmt.Errorf("failed to create provider: %w", err)
+	}
+	defer provider.Close()
+
+	// Initialize debug logging
+	if err := tui.InitDebugLogging(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to init debug logging: %v\n", err)
+	}
+
+	// Create TUI model with config and provider
+	m, err := tui.NewModelWithLLM(&tuiCfg, coreCfg, provider)
+	if err != nil {
+		return fmt.Errorf("failed to create TUI model: %w", err)
+	}
+	defer m.Close()
 
 	// Configure Bubble Tea program options
 	p := tea.NewProgram(
