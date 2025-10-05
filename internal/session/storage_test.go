@@ -611,3 +611,100 @@ func TestFileStorage_ConcurrentReads(t *testing.T) {
 		<-done
 	}
 }
+
+func TestLoad_Standalone(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessionID := "test-session"
+
+	// Create a test session file
+	session := &Session{
+		ID:        sessionID,
+		CreatedAt: time.Now(),
+	}
+	storage, err := NewFileStorage(tmpDir)
+	if err != nil {
+		t.Fatalf("NewFileStorage() error = %v", err)
+	}
+	err = storage.Save(session)
+	if err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	// Test the Load function
+	loaded, err := Load(storage, sessionID)
+	if err != nil {
+		t.Errorf("Load() error = %v", err)
+	}
+	if loaded.ID != sessionID {
+		t.Errorf("Load() ID = %v, want %v", loaded.ID, sessionID)
+	}
+}
+
+func TestDelete_Standalone(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessionID := "test-session"
+
+	// Create a test session
+	session := &Session{
+		ID:        sessionID,
+		CreatedAt: time.Now(),
+	}
+	storage, err := NewFileStorage(tmpDir)
+	if err != nil {
+		t.Fatalf("NewFileStorage() error = %v", err)
+	}
+	err = storage.Save(session)
+	if err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	// Test the Delete function
+	err = Delete(storage, sessionID)
+	if err != nil {
+		t.Errorf("Delete() error = %v", err)
+	}
+
+	// Verify session is deleted
+	_, err = storage.Load(sessionID)
+	if err == nil {
+		t.Error("Expected error loading deleted session")
+	}
+}
+
+func TestExists_Standalone(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessionID := "test-session"
+
+	storage, err := NewFileStorage(tmpDir)
+	if err != nil {
+		t.Fatalf("NewFileStorage() error = %v", err)
+	}
+
+	// Initially should not exist
+	exists, err := Exists(storage, sessionID)
+	if err != nil {
+		t.Errorf("Exists() error = %v", err)
+	}
+	if exists {
+		t.Error("Exists() = true, want false")
+	}
+
+	// Create a session
+	session := &Session{
+		ID:        sessionID,
+		CreatedAt: time.Now(),
+	}
+	err = storage.Save(session)
+	if err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	// Now should exist
+	exists, err = Exists(storage, sessionID)
+	if err != nil {
+		t.Errorf("Exists() error = %v", err)
+	}
+	if !exists {
+		t.Error("Exists() = false, want true")
+	}
+}

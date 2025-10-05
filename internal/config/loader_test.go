@@ -128,6 +128,32 @@ enable_git: true
 	assert.Equal(t, true, cfg.EnableGit)
 }
 
+func TestLoader_LoadFromFile_TOML(t *testing.T) {
+	// Create temp TOML file
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "test.toml")
+
+	tomlContent := `
+provider = "ollama"
+model = "llama3.2"
+max_turns = 75
+enable_git = false
+`
+	err := os.WriteFile(configFile, []byte(tomlContent), 0644)
+	require.NoError(t, err)
+
+	// Load config
+	loader := NewLoader()
+	err = loader.LoadFromFile(configFile)
+	require.NoError(t, err)
+
+	// Verify values
+	assert.Equal(t, "ollama", loader.GetString("provider"))
+	assert.Equal(t, "llama3.2", loader.GetString("model"))
+	assert.Equal(t, 75, loader.GetInt("max_turns"))
+	assert.Equal(t, false, loader.GetBool("enable_git"))
+}
+
 func TestLoader_UnsupportedFormat(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "test.xml")
@@ -139,4 +165,112 @@ func TestLoader_UnsupportedFormat(t *testing.T) {
 	err = loader.LoadFromFile(configFile)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported config format")
+}
+
+func TestLoader_Get(t *testing.T) {
+	loader := NewLoader()
+	loader.Set("test.key", "value")
+
+	result := loader.Get("test.key")
+	assert.Equal(t, "value", result)
+}
+
+func TestLoader_GetStringSlice(t *testing.T) {
+	loader := NewLoader()
+	loader.Set("test.slice", []string{"a", "b", "c"})
+
+	result := loader.GetStringSlice("test.slice")
+	assert.Equal(t, []string{"a", "b", "c"}, result)
+}
+
+func TestLoader_Set(t *testing.T) {
+	loader := NewLoader()
+	loader.Set("custom.value", 42)
+
+	assert.Equal(t, 42, loader.GetInt("custom.value"))
+}
+
+func TestLoader_UnmarshalKey(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "test.yaml")
+
+	yamlContent := `
+llm:
+  provider: openai
+  model: gpt-4
+`
+	err := os.WriteFile(configFile, []byte(yamlContent), 0644)
+	require.NoError(t, err)
+
+	loader := NewLoader()
+	err = loader.LoadFromFile(configFile)
+	require.NoError(t, err)
+
+	type LLMConfig struct {
+		Provider string `mapstructure:"provider"`
+		Model    string `mapstructure:"model"`
+	}
+
+	var llm LLMConfig
+	err = loader.UnmarshalKey("llm", &llm)
+	require.NoError(t, err)
+	assert.Equal(t, "openai", llm.Provider)
+	assert.Equal(t, "gpt-4", llm.Model)
+}
+
+func TestLoader_ConfigFileUsed(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "test.yaml")
+
+	yamlContent := `test: value`
+	err := os.WriteFile(configFile, []byte(yamlContent), 0644)
+	require.NoError(t, err)
+
+	loader := NewLoader()
+	err = loader.LoadFromFile(configFile)
+	require.NoError(t, err)
+
+	usedFile := loader.ConfigFileUsed()
+	assert.Equal(t, configFile, usedFile)
+}
+
+func TestLoader_AllSettings(t *testing.T) {
+	loader := NewLoader()
+	loader.Set("key1", "value1")
+	loader.Set("key2", 42)
+
+	settings := loader.AllSettings()
+	assert.Equal(t, "value1", settings["key1"])
+	assert.Equal(t, 42, settings["key2"])
+}
+
+func TestLoader_IsSet(t *testing.T) {
+	loader := NewLoader()
+	loader.Set("existing.key", "value")
+
+	assert.True(t, loader.IsSet("existing.key"))
+	assert.False(t, loader.IsSet("nonexistent.key"))
+}
+
+func TestLoader_WatchConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "test.yaml")
+
+	yamlContent := `test: initial`
+	err := os.WriteFile(configFile, []byte(yamlContent), 0644)
+	require.NoError(t, err)
+
+	loader := NewLoader()
+	err = loader.LoadFromFile(configFile)
+	require.NoError(t, err)
+
+	// Test that WatchConfig doesn't panic
+	// Note: We can't easily test the actual file watching in a unit test
+	// without complex setup, but we can verify the function is callable
+	loader.WatchConfig(func() {
+		// Callback would be called on config change
+	})
+
+	// Just verify the function didn't panic
+	assert.NotNil(t, loader)
 }

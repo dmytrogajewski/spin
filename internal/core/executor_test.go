@@ -933,3 +933,17 @@ func BenchmarkExecutor_Execute_WithValidation(b *testing.B) {
 		_, _ = executor.Execute(context.Background(), cmd, opts)
 	}
 }
+
+func TestWithSandbox(t *testing.T) {
+	// Create a mock sandbox
+	mockSandbox := struct{ name string }{name: "test-sandbox"}
+
+	executor, err := NewExecutor("/tmp", WithSandbox(mockSandbox))
+	if err != nil {
+		t.Fatalf("NewExecutor() with WithSandbox failed: %v", err)
+	}
+
+	if executor.sandbox == nil {
+		t.Error("WithSandbox() should set sandbox, got nil")
+	}
+}

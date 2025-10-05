@@ -1,0 +1,60 @@
+package main
+
+import (
+	"os"
+	"os/exec"
+
+	"github.com/spf13/cobra"
+)
+
+// newExecCmd creates the exec command that delegates to spin-exec binary.
+func newExecCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "exec [prompt]",
+		Short: "Non-interactive execution mode",
+		Long: `Execute Spin in non-interactive mode for CI/CD and automation.
+
+Examples:
+  spin exec "run all tests and fix failures"
+  echo "refactor authentication" | spin exec
+  spin exec --timeout 5m "deploy to staging"
+  spin exec --format json "analyze code" | jq`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Find spin-exec binary (should be in same directory as spin)
+			spinExecPath, err := exec.LookPath("spin-exec")
+			if err != nil {
+				// Try in same directory as current binary
+				execPath, _ := os.Executable()
+				if execPath != "" {
+					// TODO: Implement fallback to same directory
+				}
+				return err
+			}
+
+			// Forward all args to spin-exec
+			execCmd := exec.Command(spinExecPath, args...)
+			execCmd.Stdin = os.Stdin
+			execCmd.Stdout = os.Stdout
+			execCmd.Stderr = os.Stderr
+
+			// Run and return exit code
+			if err := execCmd.Run(); err != nil {
+				if exitErr, ok := err.(*exec.ExitError); ok {
+					os.Exit(exitErr.ExitCode())
+				}
+				return err
+			}
+
+			return nil
+		},
+	}
+
+	// Exec-specific flags (defined here for help text, handled by spin-exec)
+	cmd.Flags().Bool("auto-approve", false, "Automatically approve all operations (DANGEROUS)")
+	cmd.Flags().String("timeout", "", "Maximum execution time (e.g., 5m, 1h)")
+	cmd.Flags().String("format", "text", "Output format (text, json)")
+	cmd.Flags().Bool("no-stream", false, "Disable streaming output")
+	cmd.Flags().Bool("exit-on-error", true, "Exit immediately on first error")
+
+	return cmd
+}

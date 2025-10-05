@@ -381,3 +381,13 @@ func BenchmarkContextCreation(b *testing.B) {
 		}
 	})
 }
+
+func TestInitLogger_Public(t *testing.T) {
+	cfg := &Config{
+		LogLevel: "info",
+	}
+
+	// Test that InitLogger doesn't panic
+	InitLogger(cfg)
+	// Just verify it doesn't panic - logger is initialized
+}

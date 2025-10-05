@@ -1,0 +1,246 @@
+package jsonrpc
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+)
+
+type mockHandler struct {
+	handleFunc func(ctx context.Context, method string, params json.RawMessage) (interface{}, error)
+}
+
+func (m *mockHandler) HandleRequest(ctx context.Context, method string, params json.RawMessage) (interface{}, error) {
+	if m.handleFunc != nil {
+		return m.handleFunc(ctx, method, params)
+	}
+	return map[string]string{"status": "ok"}, nil
+}
+
+func TestServer_Serve_Success(t *testing.T) {
+	handler := &mockHandler{
+		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (interface{}, error) {
+			return map[string]string{"result": "success"}, nil
+		},
+	}
+
+	server := NewServer(handler)
+
+	// Prepare request
+	reqID := StringID("1")
+	req := Request{
+		JSONRPC: "2.0",
+		ID:      &reqID,
+		Method:  "test_method",
+		Params:  json.RawMessage(`{}`),
+	}
+
+	reqData, _ := json.Marshal(req)
+	input := bytes.NewReader(append(reqData, '\n'))
+	output := &bytes.Buffer{}
+
+	// Serve (will return when input is exhausted)
+	ctx := context.Background()
+	err := server.Serve(ctx, input, output)
+	if err != nil {
+		t.Fatalf("Serve failed: %v", err)
+	}
+
+	// Check response
+	var resp Response
+	if err := json.NewDecoder(output).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if resp.Error != nil {
+		t.Errorf("Expected no error, got %v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Error("Expected result, got nil")
+	}
+}
+
+func TestServer_Serve_Error(t *testing.T) {
+	handler := &mockHandler{
+		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (interface{}, error) {
+			return nil, NewError(MethodNotFound, "method not found")
+		},
+	}
+
+	server := NewServer(handler)
+
+	// Prepare request
+	reqID := StringID("1")
+	req := Request{
+		JSONRPC: "2.0",
+		ID:      &reqID,
+		Method:  "unknown_method",
+		Params:  json.RawMessage(`{}`),
+	}
+
+	reqData, _ := json.Marshal(req)
+	input := bytes.NewReader(append(reqData, '\n'))
+	output := &bytes.Buffer{}
+
+	// Serve
+	ctx := context.Background()
+	err := server.Serve(ctx, input, output)
+	if err != nil {
+		t.Fatalf("Serve failed: %v", err)
+	}
+
+	// Check response
+	var resp Response
+	if err := json.NewDecoder(output).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if resp.Error == nil {
+		t.Error("Expected error, got nil")
+	}
+	if resp.Error.Code != MethodNotFound {
+		t.Errorf("Expected code %d, got %d", MethodNotFound, resp.Error.Code)
+	}
+}
+
+func TestServer_Serve_ParseError(t *testing.T) {
+	handler := &mockHandler{}
+	server := NewServer(handler)
+
+	// Invalid JSON
+	input := strings.NewReader("invalid json\n")
+	output := &bytes.Buffer{}
+
+	// Serve
+	ctx := context.Background()
+	err := server.Serve(ctx, input, output)
+	if err != nil {
+		t.Fatalf("Serve failed: %v", err)
+	}
+
+	// Check response
+	var resp Response
+	if err := json.NewDecoder(output).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if resp.Error == nil {
+		t.Error("Expected parse error, got nil")
+	}
+	if resp.Error.Code != ParseError {
+		t.Errorf("Expected code %d, got %d", ParseError, resp.Error.Code)
+	}
+}
+
+func TestServer_Serve_Notification(t *testing.T) {
+	called := false
+	handler := &mockHandler{
+		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (interface{}, error) {
+			called = true
+			return nil, nil
+		},
+	}
+
+	server := NewServer(handler)
+
+	// Prepare notification (no ID)
+	notif := Notification{
+		JSONRPC: "2.0",
+		Method:  "notification",
+		Params:  json.RawMessage(`{}`),
+	}
+
+	notifData, _ := json.Marshal(notif)
+	input := bytes.NewReader(append(notifData, '\n'))
+	output := &bytes.Buffer{}
+
+	// Serve
+	ctx := context.Background()
+	err := server.Serve(ctx, input, output)
+	if err != nil {
+		t.Fatalf("Serve failed: %v", err)
+	}
+
+	// Handler should have been called
+	if !called {
+		t.Error("Handler should have been called for notification")
+	}
+
+	// No response should be sent for notifications
+	if output.Len() > 0 {
+		t.Error("No response should be sent for notifications")
+	}
+}
+
+func TestServer_SendNotification(t *testing.T) {
+	server := NewServer(&mockHandler{})
+	output := &bytes.Buffer{}
+
+	params := map[string]string{"key": "value"}
+	err := server.SendNotification(output, "test_notification", params)
+	if err != nil {
+		t.Fatalf("SendNotification failed: %v", err)
+	}
+
+	var notif Notification
+	if err := json.NewDecoder(output).Decode(&notif); err != nil {
+		t.Fatalf("Failed to decode notification: %v", err)
+	}
+
+	if notif.JSONRPC != "2.0" {
+		t.Errorf("Expected jsonrpc '2.0', got '%s'", notif.JSONRPC)
+	}
+	if notif.Method != "test_notification" {
+		t.Errorf("Expected method 'test_notification', got '%s'", notif.Method)
+	}
+}
+
+func TestServer_Context_Cancellation(t *testing.T) {
+	handler := &mockHandler{
+		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (interface{}, error) {
+			// Simulate slow operation
+			time.Sleep(100 * time.Millisecond)
+			return nil, nil
+		},
+	}
+	server := NewServer(handler)
+
+	// Create a pipe to simulate blocking read
+	r, w := bytes.NewReader(nil), &bytes.Buffer{}
+
+	// Prepare one request
+	reqID := StringID("1")
+	req := Request{
+		JSONRPC: "2.0",
+		ID:      &reqID,
+		Method:  "test",
+		Params:  json.RawMessage(`{}`),
+	}
+	reqData, _ := json.Marshal(req)
+	r = bytes.NewReader(append(reqData, '\n'))
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		done <- server.Serve(ctx, r, w)
+	}()
+
+	// Cancel after a short delay
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		// Context cancellation may return nil if request finished first
+		// or context.Canceled if cancellation was processed
+		if err != nil && err != context.Canceled {
+			t.Errorf("Expected nil or context.Canceled, got %v", err)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Server did not stop after context cancellation")
+	}
+}

@@ -663,3 +663,15 @@ func TestPlan_ValidateStructure(t *testing.T) {
 		})
 	}
 }
+
+func TestNewPlan(t *testing.T) {
+	taskDesc := "Implement new feature"
+	plan := NewPlan(taskDesc)
+
+	assert.NotNil(t, plan)
+	assert.NotEmpty(t, plan.ID)
+	assert.Equal(t, taskDesc, plan.Task)
+	assert.Equal(t, PlanStatusPending, plan.Status)
+	assert.NotNil(t, plan.Steps)
+	assert.Len(t, plan.Steps, 0)
+}

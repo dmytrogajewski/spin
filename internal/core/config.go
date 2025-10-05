@@ -14,50 +14,50 @@ import (
 // Config contains core configuration for the Spin agent.
 type Config struct {
 	// LLM Provider Configuration
-	Provider       string                 `yaml:"provider"`
-	Model          string                 `yaml:"model"`
-	ProviderConfig map[string]interface{} `yaml:"provider_config"`
+	Provider       string                 `yaml:"provider" mapstructure:"provider"`
+	Model          string                 `yaml:"model" mapstructure:"model"`
+	ProviderConfig map[string]interface{} `yaml:"provider_config" mapstructure:"provider_config"`
 
 	// Execution Configuration
-	MaxTurns int           `yaml:"max_turns"`
-	Timeout  time.Duration `yaml:"timeout"`
-	WorkDir  string        `yaml:"work_dir"`
+	MaxTurns int           `yaml:"max_turns" mapstructure:"max_turns"`
+	Timeout  time.Duration `yaml:"timeout" mapstructure:"timeout"`
+	WorkDir  string        `yaml:"work_dir" mapstructure:"work_dir"`
 
 	// Security Configuration
-	SandboxMode     string   `yaml:"sandbox_mode"`
-	PolicyFile      string   `yaml:"policy_file"`
-	AllowedCommands []string `yaml:"allowed_commands"`
+	SandboxMode     string   `yaml:"sandbox_mode" mapstructure:"sandbox_mode"`
+	PolicyFile      string   `yaml:"policy_file" mapstructure:"policy_file"`
+	AllowedCommands []string `yaml:"allowed_commands" mapstructure:"allowed_commands"`
 
 	// Feature Flags
-	EnableMCP   bool              `yaml:"enable_mcp"`
-	MCPServers  []MCPServerConfig `yaml:"mcp_servers"`
-	EnableGit   bool              `yaml:"enable_git"`
-	EnableShell bool              `yaml:"enable_shell"`
+	EnableMCP   bool              `yaml:"enable_mcp" mapstructure:"enable_mcp"`
+	MCPServers  []MCPServerConfig `yaml:"mcp_servers" mapstructure:"mcp_servers"`
+	EnableGit   bool              `yaml:"enable_git" mapstructure:"enable_git"`
+	EnableShell bool              `yaml:"enable_shell" mapstructure:"enable_shell"`
 
 	// Performance Configuration
-	MaxTokens     int  `yaml:"max_tokens"`
-	StreamBuffer  int  `yaml:"stream_buffer"`
-	CacheCommands bool `yaml:"cache_commands"`
+	MaxTokens     int  `yaml:"max_tokens" mapstructure:"max_tokens"`
+	StreamBuffer  int  `yaml:"stream_buffer" mapstructure:"stream_buffer"`
+	CacheCommands bool `yaml:"cache_commands" mapstructure:"cache_commands"`
 
 	// Storage Configuration
-	SessionDir   string `yaml:"session_dir"`
-	HistoryLimit int    `yaml:"history_limit"`
+	SessionDir   string `yaml:"session_dir" mapstructure:"session_dir"`
+	HistoryLimit int    `yaml:"history_limit" mapstructure:"history_limit"`
 
 	// Logging Configuration
-	LogLevel  string `yaml:"log_level"`  // debug, info, warn, error
-	LogFormat string `yaml:"log_format"` // text, json
-	Debug     bool   `yaml:"debug"`      // Enable debug mode
+	LogLevel  string `yaml:"log_level" mapstructure:"log_level"`   // debug, info, warn, error
+	LogFormat string `yaml:"log_format" mapstructure:"log_format"` // text, json
+	Debug     bool   `yaml:"debug" mapstructure:"debug"`           // Enable debug mode
 
 	// Tracing Configuration
-	EnableTrace bool `yaml:"enable_trace"` // Enable OpenTelemetry tracing
+	EnableTrace bool `yaml:"enable_trace" mapstructure:"enable_trace"` // Enable OpenTelemetry tracing
 }
 
 // MCPServerConfig represents configuration for an MCP server.
 type MCPServerConfig struct {
-	Name    string            `yaml:"name"`
-	Command string            `yaml:"command"`
-	Args    []string          `yaml:"args"`
-	Env     map[string]string `yaml:"env"`
+	Name    string            `yaml:"name" mapstructure:"name"`
+	Command string            `yaml:"command" mapstructure:"command"`
+	Args    []string          `yaml:"args" mapstructure:"args"`
+	Env     map[string]string `yaml:"env" mapstructure:"env"`
 }
 
 // DefaultConfig returns a new Config with sensible defaults.

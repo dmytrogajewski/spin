@@ -12,10 +12,17 @@ Your task is to:
 
 1. Read document
 2. Take first item (feature) from roadmap
-3. Write feature requirements document and put it to specs/frds/FRD-{id}.md
-4. Read FRD
-5. Write tests
-6. analyze code with tool 'uast parse {filename} | herr analyze'
-7. Do your best for fixing code
-8. Iterate until all tests pass
-9. Close roadmap item in roadmap
+3. Read all docs in docs/ (!!!)
+4. Write feature requirements document and put it to specs/frds/FRD-{id}.md
+5. Read FRD
+6. Write tests
+7. Write implementation
+8. analyze code with tool 'uast parse {filename} | herr analyze'
+9. Run `make lint`
+10. Do your best for fixing code by that analysis. No lint errors or deadcode should present!!
+11. Iterate until all tests pass
+12. Close roadmap item in roadmap
+13. Update documentation in docs/
+14. Update AGENTS.md if needed
+
+Follow this instructions and do every step described here. Do not skip

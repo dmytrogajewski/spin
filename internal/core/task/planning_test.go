@@ -294,3 +294,37 @@ func TestPlanning_PromptFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestPlanning_getMaxSteps(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *PlanningConfig
+		want   int
+	}{
+		{
+			name:   "nil config uses default",
+			config: nil,
+			want:   100,
+		},
+		{
+			name:   "config with MaxSteps set",
+			config: &PlanningConfig{MaxSteps: 50},
+			want:   50,
+		},
+		{
+			name:   "config with zero MaxSteps uses default",
+			config: &PlanningConfig{MaxSteps: 0},
+			want:   100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Planning{config: tt.config}
+			got := p.getMaxSteps()
+			if got != tt.want {
+				t.Errorf("getMaxSteps() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}

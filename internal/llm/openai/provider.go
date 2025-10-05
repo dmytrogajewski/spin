@@ -435,4 +435,3 @@ func (p *Provider) getModel(model string) string {
 	}
 	return p.model
 }
-

@@ -278,3 +278,26 @@ func TestCommandCache_NilCommand(t *testing.T) {
 		t.Error("IsCacheable(nil) = true, want false")
 	}
 }
+
+func TestCacheStats_String(t *testing.T) {
+	stats := CacheStats{
+		Size:     5000,
+		MaxSize:  10000,
+		Entries:  10,
+		HitRate:  0.67,
+		MissRate: 0.33,
+	}
+
+	result := stats.String()
+
+	// Verify string contains key information
+	if !strings.Contains(result, "10 entries") {
+		t.Errorf("String() should contain entry count, got: %s", result)
+	}
+	if !strings.Contains(result, "50.00%") {
+		t.Errorf("String() should contain utilization percentage, got: %s", result)
+	}
+	if !strings.Contains(result, "5000/10000") {
+		t.Errorf("String() should contain size info, got: %s", result)
+	}
+}

@@ -5,6 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestDefaultConfig verifies default configuration values
@@ -440,4 +444,36 @@ func TestConfig_ProviderConfig(t *testing.T) {
 	if cfg.ProviderConfig["top_p"] != 0.9 {
 		t.Errorf("top_p = %v, want 0.9", cfg.ProviderConfig["top_p"])
 	}
+}
+
+func TestLoadWithViper(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "spin.yaml")
+
+	yamlContent := `
+provider: openai
+model: gpt-4
+max_turns: 100
+`
+	err := os.WriteFile(configFile, []byte(yamlContent), 0644)
+	require.NoError(t, err)
+
+	cfg, err := LoadWithViper(configFile)
+	require.NoError(t, err)
+	assert.Equal(t, "openai", cfg.Provider)
+	assert.Equal(t, "gpt-4", cfg.Model)
+	assert.Equal(t, 100, cfg.MaxTurns)
+}
+
+func TestSetViperDefaults(t *testing.T) {
+	loader := config.NewLoader()
+	setViperDefaults(loader)
+
+	// Verify defaults were set (provider and model are not defaulted)
+	assert.Equal(t, 50, loader.GetInt("max_turns"))
+	assert.Equal(t, 8192, loader.GetInt("max_tokens"))
+	assert.Equal(t, "workspace-only", loader.GetString("sandbox_mode"))
+	assert.True(t, loader.GetBool("enable_git"))
+	assert.True(t, loader.GetBool("enable_shell"))
+	assert.Equal(t, "info", loader.GetString("log_level"))
 }
