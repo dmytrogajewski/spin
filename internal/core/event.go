@@ -119,26 +119,98 @@ type CommandApprovalData struct {
 	RequestID string `json:"request_id"`
 }
 
+// BackpressureMode defines how the emitter handles slow consumers.
+type BackpressureMode int
+
+const (
+	// BackpressureDrop drops events when subscriber buffer is full (fire-and-forget)
+	// Best for: Non-critical events, high-throughput scenarios
+	BackpressureDrop BackpressureMode = iota
+
+	// BackpressureBlock blocks the emitter until subscriber is ready
+	// Best for: Critical events that must be delivered (approvals, errors)
+	BackpressureBlock
+
+	// BackpressureBuffer uses dynamic buffer growth up to limit
+	// Best for: Bursty workloads where temporary slowdowns are acceptable
+	BackpressureBuffer
+)
+
+// String returns the string representation of BackpressureMode.
+func (m BackpressureMode) String() string {
+	switch m {
+	case BackpressureDrop:
+		return "drop"
+	case BackpressureBlock:
+		return "block"
+	case BackpressureBuffer:
+		return "buffer"
+	default:
+		return "unknown"
+	}
+}
+
+// EventEmitterConfig configures event emitter behavior.
+type EventEmitterConfig struct {
+	// BufferSize is the initial channel buffer size per subscriber
+	BufferSize int
+
+	// BackpressureMode determines how to handle slow consumers
+	BackpressureMode BackpressureMode
+
+	// BufferLimit is the maximum buffer size for BackpressureBuffer mode
+	// Ignored for other modes. Default: 10000 events
+	BufferLimit int
+}
+
 // EventEmitter manages event subscriptions and distribution using pub/sub pattern.
 // It allows multiple subscribers to receive events in real-time with thread-safe
-// operations and fire-and-forget semantics to prevent slow subscribers from
-// blocking the system.
+// operations and configurable backpressure strategies to handle slow consumers.
 type EventEmitter struct {
 	subscribers map[string]chan Event
 	mu          sync.RWMutex
 	bufferSize  int
 	closed      bool
+
+	// Backpressure configuration
+	config   EventEmitterConfig
+	buffers  map[string][]Event // Dynamic buffers for BackpressureBuffer mode
+	bufferMu sync.Mutex         // Protects buffers map
 }
 
-// NewEventEmitter creates a new EventEmitter with the specified channel buffer size.
+// NewEventEmitter creates a new EventEmitter with default config (BackpressureDrop).
 // The buffer size determines how many events can be queued per subscriber before
 // events are dropped for slow consumers.
+// Maintains backward compatibility with existing code.
 func NewEventEmitter(bufferSize int) *EventEmitter {
-	return &EventEmitter{
+	return NewEventEmitterWithConfig(EventEmitterConfig{
+		BufferSize:       bufferSize,
+		BackpressureMode: BackpressureDrop,
+		BufferLimit:      0,
+	})
+}
+
+// NewEventEmitterWithConfig creates a new EventEmitter with custom configuration.
+// This allows selecting different backpressure strategies for handling slow consumers.
+func NewEventEmitterWithConfig(config EventEmitterConfig) *EventEmitter {
+	// Set default buffer limit if not specified
+	if config.BufferLimit == 0 {
+		config.BufferLimit = 10000
+	}
+
+	emitter := &EventEmitter{
 		subscribers: make(map[string]chan Event),
-		bufferSize:  bufferSize,
+		bufferSize:  config.BufferSize,
+		config:      config,
 		closed:      false,
 	}
+
+	// Initialize buffers map for BackpressureBuffer mode
+	if config.BackpressureMode == BackpressureBuffer {
+		emitter.buffers = make(map[string][]Event)
+	}
+
+	return emitter
 }
 
 // Subscribe creates a new subscription and returns a unique ID and event channel.
@@ -159,6 +231,13 @@ func (e *EventEmitter) Subscribe() (id string, events <-chan Event, err error) {
 	ch := make(chan Event, e.bufferSize)
 	e.subscribers[id] = ch
 
+	// Initialize buffer for BackpressureBuffer mode
+	if e.config.BackpressureMode == BackpressureBuffer {
+		e.bufferMu.Lock()
+		e.buffers[id] = make([]Event, 0)
+		e.bufferMu.Unlock()
+	}
+
 	return id, ch, nil
 }
 
@@ -171,12 +250,18 @@ func (e *EventEmitter) Unsubscribe(id string) {
 	if ch, exists := e.subscribers[id]; exists {
 		close(ch)
 		delete(e.subscribers, id)
+
+		// Clean up buffer for BackpressureBuffer mode
+		if e.config.BackpressureMode == BackpressureBuffer {
+			e.bufferMu.Lock()
+			delete(e.buffers, id)
+			e.bufferMu.Unlock()
+		}
 	}
 }
 
-// Emit sends an event to all active subscribers using fire-and-forget semantics.
-// If a subscriber's channel is full, the event is dropped for that subscriber
-// to prevent blocking. The timestamp is automatically set if not provided.
+// Emit sends an event to all active subscribers using the configured backpressure strategy.
+// The timestamp is automatically set if not provided.
 func (e *EventEmitter) Emit(event Event) {
 	// Set timestamp if not provided
 	if event.Timestamp.IsZero() {
@@ -184,22 +269,108 @@ func (e *EventEmitter) Emit(event Event) {
 	}
 
 	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	// Don't emit if closed
 	if e.closed {
+		e.mu.RUnlock()
 		return
 	}
 
-	// Fan-out to all subscribers (non-blocking)
-	for _, ch := range e.subscribers {
+	mode := e.config.BackpressureMode
+
+	// For non-blocking modes, keep lock and emit directly
+	if mode == BackpressureDrop || mode == BackpressureBuffer {
+		for id, ch := range e.subscribers {
+			switch mode {
+			case BackpressureDrop:
+				e.emitDrop(ch, event)
+			case BackpressureBuffer:
+				e.emitBuffer(id, ch, event)
+			}
+		}
+		e.mu.RUnlock()
+		return
+	}
+
+	// For BackpressureBlock, we need to release the lock to avoid deadlock
+	// Take snapshot of subscribers
+	subscribers := make(map[string]chan Event)
+	for id, ch := range e.subscribers {
+		subscribers[id] = ch
+	}
+	e.mu.RUnlock()
+
+	// Emit with blocking (might take time)
+	for _, ch := range subscribers {
+		e.emitBlock(ch, event)
+	}
+}
+
+// emitDrop implements fire-and-forget (drops events if channel full).
+func (e *EventEmitter) emitDrop(ch chan Event, event Event) {
+	select {
+	case ch <- event:
+		// Successfully sent
+	default:
+		// Subscriber slow/blocked, drop event
+	}
+}
+
+// emitBlock implements blocking send (ensures delivery).
+func (e *EventEmitter) emitBlock(ch chan Event, event Event) {
+	ch <- event // Blocks until consumer ready
+}
+
+// emitBuffer implements dynamic buffering (buffers events up to limit).
+func (e *EventEmitter) emitBuffer(id string, ch chan Event, event Event) {
+	// First try to flush any existing buffered events
+	e.tryFlushBuffer(id, ch)
+
+	// Then try to send current event
+	select {
+	case ch <- event:
+		// Successfully sent
+	default:
+		// Channel full, add to dynamic buffer
+		e.addToBuffer(id, event)
+	}
+}
+
+// addToBuffer adds event to dynamic buffer (if under limit).
+func (e *EventEmitter) addToBuffer(id string, event Event) {
+	e.bufferMu.Lock()
+	defer e.bufferMu.Unlock()
+
+	buffer := e.buffers[id]
+	if len(buffer) < e.config.BufferLimit {
+		e.buffers[id] = append(buffer, event)
+	}
+	// If over limit, drop event (similar to BackpressureDrop)
+}
+
+// tryFlushBuffer attempts to flush buffered events to channel (non-blocking).
+func (e *EventEmitter) tryFlushBuffer(id string, ch chan Event) {
+	e.bufferMu.Lock()
+	defer e.bufferMu.Unlock()
+
+	buffer := e.buffers[id]
+	if len(buffer) == 0 {
+		return
+	}
+
+	// Try to send buffered events (non-blocking)
+	sent := 0
+	for i, event := range buffer {
 		select {
 		case ch <- event:
-			// Successfully sent
+			sent = i + 1
 		default:
-			// Subscriber slow/blocked, drop event
-			// This prevents one slow subscriber from blocking others
+			break
 		}
+	}
+
+	// Remove sent events from buffer
+	if sent > 0 {
+		e.buffers[id] = buffer[sent:]
 	}
 }
 
@@ -220,6 +391,15 @@ func (e *EventEmitter) Close() {
 	for id, ch := range e.subscribers {
 		close(ch)
 		delete(e.subscribers, id)
+	}
+
+	// Clean up buffers for BackpressureBuffer mode
+	if e.config.BackpressureMode == BackpressureBuffer {
+		e.bufferMu.Lock()
+		for id := range e.buffers {
+			delete(e.buffers, id)
+		}
+		e.bufferMu.Unlock()
 	}
 }
 
