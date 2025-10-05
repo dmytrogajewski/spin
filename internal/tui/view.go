@@ -9,6 +9,12 @@ func (m Model) renderPlaceholder() string {
 	// Render chat component (Phase 3.2)
 	chatView := m.chat.View()
 
+	// Add spinner line if active
+	if m.spinner.IsActive() {
+		spinnerLine := m.spinner.ViewWithText("Thinking...")
+		chatView = lipgloss.JoinVertical(lipgloss.Top, chatView, "", spinnerLine)
+	}
+
 	// Render input widget (Phase 3.3)
 	inputView := m.input.View()
 

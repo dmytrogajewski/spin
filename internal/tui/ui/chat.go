@@ -29,6 +29,10 @@ type Chat struct {
 	// Scroll tracking
 	scrollPercent float64 // Current scroll position (0.0-100.0)
 	userScrolled  bool    // User has manually scrolled
+
+	// Thinking/reasoning display
+	thinkingParser *ThinkingParser // Parser for <think>...</think> tags
+	showThinking   bool            // Whether to show full thinking or collapse
 }
 
 // NewChat creates a new chat component.
@@ -39,16 +43,18 @@ func NewChat(width, height int) Chat {
 	formatter, _ := NewFormatter(width)
 
 	return Chat{
-		viewport:      vp,
-		messages:      make([]Message, 0),
-		width:         width,
-		height:        height,
-		formatter:     formatter,
-		content:       "",
-		contentDirty:  false,
-		atBottom:      true,
-		scrollPercent: 100.0,
-		userScrolled:  false,
+		viewport:       vp,
+		messages:       make([]Message, 0),
+		width:          width,
+		height:         height,
+		formatter:      formatter,
+		content:        "",
+		contentDirty:   false,
+		atBottom:       true,
+		scrollPercent:  100.0,
+		userScrolled:   false,
+		thinkingParser: NewThinkingParser(),
+		showThinking:   false, // Default: collapsed (show "Thinking...")
 	}
 }
 
@@ -209,10 +215,17 @@ func (c *Chat) renderMessage(msg Message) string {
 	header := c.renderMessageHeader(msg)
 	parts = append(parts, header)
 
-	// Reasoning (if present)
-	if msg.Reasoning != "" {
-		reasoning := c.renderReasoning(msg.Reasoning)
-		parts = append(parts, reasoning)
+	// Thinking (if present)
+	if msg.Thinking != "" {
+		if c.showThinking {
+			// Show full thinking content
+			thinking := c.renderThinking(msg.Thinking)
+			parts = append(parts, thinking)
+		} else {
+			// Show collapsed thinking indicator
+			thinkingIndicator := c.renderThinkingCollapsed()
+			parts = append(parts, thinkingIndicator)
+		}
 	}
 
 	// Content
@@ -302,14 +315,25 @@ func (c *Chat) renderMessageContent(msg Message) string {
 	return msg.Content
 }
 
-// renderReasoning renders a reasoning block.
-func (c *Chat) renderReasoning(reasoning string) string {
+// renderThinking renders the full thinking content (expanded).
+func (c *Chat) renderThinking(thinking string) string {
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("63")). // Purple
 		Padding(0, 1)
 
-	return style.Render("💭 " + reasoning)
+	return style.Render("💭 " + thinking)
+}
+
+// renderThinkingCollapsed renders a collapsed thinking indicator.
+func (c *Chat) renderThinkingCollapsed() string {
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")). // Gray
+		Padding(0, 1).
+		Faint(true)
+
+	return style.Render("💭 Thinking... (Press Ctrl+T to expand)")
 }
 
 // renderToolCall renders a tool call.
@@ -482,24 +506,39 @@ func (c Chat) CurrentMessage() string {
 
 // AppendDelta appends content to the last message (streaming).
 // If there's no message or last message is not streaming, creates a new assistant message.
+// Automatically parses <think>...</think> tags and separates them from regular content.
 func (c *Chat) AppendDelta(delta string) {
+	// Parse thinking tags
+	regularContent, thinkingContent := c.thinkingParser.Parse(delta)
+
 	if len(c.messages) == 0 || !c.messages[len(c.messages)-1].Streaming {
 		// Start new streaming message
 		c.AddMessage(Message{
 			Role:      "assistant",
-			Content:   delta,
+			Content:   regularContent,
+			Thinking:  thinkingContent,
 			Streaming: true,
+			Timestamp: time.Now(),
 		})
 		return
 	}
 
 	// Append to existing streaming message
-	c.StreamDelta(delta)
+	lastIdx := len(c.messages) - 1
+	if regularContent != "" {
+		c.messages[lastIdx].Content += regularContent
+	}
+	if thinkingContent != "" {
+		c.messages[lastIdx].Thinking += thinkingContent
+	}
+	c.messages[lastIdx].Streaming = true
+	c.contentDirty = true
 }
 
 // FinalizeMessage marks the last message as complete (end streaming).
 func (c *Chat) FinalizeMessage() {
 	c.FinishStreaming()
+	c.thinkingParser.Reset() // Reset parser for next message
 }
 
 // AllMessages returns all messages (for tests).
@@ -578,4 +617,15 @@ func (c *Chat) getErrorIcon(severity int) string {
 	default:
 		return "❓"
 	}
+}
+
+// ToggleThinking toggles the thinking display mode (collapsed/expanded).
+func (c *Chat) ToggleThinking() {
+	c.showThinking = !c.showThinking
+	c.contentDirty = true // Force re-render
+}
+
+// IsShowingThinking returns true if thinking is expanded.
+func (c Chat) IsShowingThinking() bool {
+	return c.showThinking
 }

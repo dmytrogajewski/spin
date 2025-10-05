@@ -32,7 +32,7 @@ type Message struct {
 	// Optional fields
 	ToolCall   *ToolCall   // If this message includes a tool call
 	ToolResult *ToolResult // If this message includes a tool result
-	Reasoning  string      // Reasoning block (for compatible models)
+	Thinking   string      // Thinking content from <think>...</think> tags
 
 	// Backtrack mode (Phase 3.8)
 	Highlighted bool // True if this message is selected in backtrack mode

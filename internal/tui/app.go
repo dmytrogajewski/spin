@@ -34,10 +34,14 @@ type Model struct {
 	help       ui.Help          // Help modal (Phase 3.9)
 	approval   ui.ApprovalModal // Approval modal (Phase 3.5)
 	errorModal ui.ErrorModal    // Error modal (Phase 3.12)
+	spinner    ui.Spinner       // Loading spinner
 
 	// Backtrack mode (Phase 3.8)
 	backtrackIdx  int // Index of selected message in backtrack mode (-1 = not in backtrack)
 	escPressCount int // Count consecutive Esc presses for Esc-Esc detection
+
+	// Display preferences
+	showThinking bool // Whether to show full thinking or collapse it
 
 	// Core integration (Phase 3.11)
 	coreManager *CoreManager      // Core manager
@@ -63,6 +67,7 @@ func NewModel() Model {
 		help:          ui.NewHelp(0, 0),       // Will be sized on first resize (Phase 3.9)
 		approval:      ui.NewApproval(),       // Approval modal (Phase 3.5)
 		errorModal:    ui.NewErrorModal(0, 0), // Will be sized on first resize (Phase 3.12)
+		spinner:       ui.NewSpinner(),        // Loading spinner
 		backtrackIdx:  -1,                     // Not in backtrack mode
 		escPressCount: 0,
 	}
@@ -192,10 +197,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case tickMsg:
-		// Periodic tick for UI updates (streaming, etc.)
+		// Periodic tick for UI updates (streaming, spinner animation, etc.)
+		// Animate spinner
+		m.spinner.Tick()
+
 		// Update chat to trigger re-render if dirty
 		m.chat, cmd = m.chat.Update(msg)
 		cmds = append(cmds, cmd)
+
 		// Schedule next tick
 		return m, tea.Batch(cmd, tickCmd())
 	}
@@ -234,11 +243,15 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+d":
 		return m.handleCtrlD()
 
-	case "ctrl+h", "?":
+	case "ctrl+h":
+		// Only Ctrl+H for help, not '?' (which is a regular character)
 		return m.handleHelp()
 
 	case "ctrl+l":
 		return m.handleCtrlL()
+
+	case "ctrl+t":
+		return m.handleCtrlT()
 
 	case "esc":
 		return m.handleEscPress()
@@ -330,11 +343,8 @@ func (m Model) handleEnterPress() (tea.Model, tea.Cmd) {
 			if m.coreManager != nil {
 				Info("Sending message to LLM", "message", message)
 
-				// Add a system message to confirm we're trying
-				m.chat.AddMessage(ui.Message{
-					Role:    ui.RoleSystem,
-					Content: "[Sending to LLM...]",
-				})
+				// Start spinner
+				m.spinner.Start()
 
 				// Transition to waiting state immediately
 				m.state = StateWaitingResponse
@@ -591,6 +601,16 @@ func (m Model) handleCtrlL() (tea.Model, tea.Cmd) {
 
 	// Scroll chat to bottom (clear screen effect)
 	m.chat.ScrollToBottom()
+
+	return m, nil
+}
+
+// handleCtrlT toggles thinking display (expanded/collapsed).
+func (m Model) handleCtrlT() (tea.Model, tea.Cmd) {
+	m.escPressCount = 0
+
+	// Toggle thinking display
+	m.chat.ToggleThinking()
 
 	return m, nil
 }

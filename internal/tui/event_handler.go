@@ -75,6 +75,11 @@ func (m Model) handleTurnStart(event core.Event) Model {
 
 // handleStreamDelta processes streaming content deltas.
 func (m Model) handleStreamDelta(event core.Event) Model {
+	// Stop spinner when we start receiving content
+	if m.spinner.IsActive() {
+		m.spinner.Stop()
+	}
+
 	// Try map[string]interface{} first (current implementation)
 	if dataMap, ok := event.Data.(map[string]interface{}); ok {
 		if content, ok := dataMap["content"].(string); ok {
@@ -113,6 +118,9 @@ func (m Model) handleApprovalResult(event core.Event, approved bool) Model {
 
 // handleTurnComplete processes turn completion events.
 func (m Model) handleTurnComplete(event core.Event) Model {
+	// Stop spinner
+	m.spinner.Stop()
+
 	// Extract tokens from event data (map[string]interface{})
 	if data, ok := event.Data.(map[string]interface{}); ok {
 		if tokensUsed, ok := data["tokens_used"].(int); ok {
