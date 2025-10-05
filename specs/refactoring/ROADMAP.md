@@ -872,10 +872,10 @@ func TestProvider_MissingAPIKey(t *testing.T)
 - [ ] Commit: "refactor: consolidate stream processing"
 
 **Wednesday:**
-- [ ] Standardize HTTP client usage in Ollama
-- [ ] Add retry logic tests
-- [ ] Run full test suite
-- [ ] Commit: "fix: use HTTPClient in Ollama provider for retry support"
+- [x] Standardize HTTP client usage in Ollama
+- [x] Add retry logic tests
+- [x] Run full test suite
+- [x] Commit: "fix: use HTTPClient in Ollama provider for retry support"
 
 **Thursday:**
 - [ ] Update architecture documentation
