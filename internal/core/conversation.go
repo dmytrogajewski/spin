@@ -3,9 +3,36 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
+
+// ControlSignal represents a control signal sent to a running turn.
+type ControlSignal int
+
+const (
+	// SignalPause requests the turn to pause execution
+	SignalPause ControlSignal = iota
+	// SignalResume requests the turn to resume from paused state
+	SignalResume
+	// SignalCancel requests the turn to cancel immediately
+	SignalCancel
+)
+
+// String returns the string representation of ControlSignal.
+func (s ControlSignal) String() string {
+	switch s {
+	case SignalPause:
+		return "pause"
+	case SignalResume:
+		return "resume"
+	case SignalCancel:
+		return "cancel"
+	default:
+		return "unknown"
+	}
+}
 
 // Conversation represents an active conversation with the AI agent.
 //
@@ -25,10 +52,12 @@ type Conversation struct {
 	forwarderDone  chan struct{}
 
 	// State & control
-	mu         sync.RWMutex
-	state      State // idle | running | cancelled (stopped)
-	turnCancel context.CancelFunc
-	turnGuard  chan struct{} // binary semaphore to prevent overlap
+	mu          sync.RWMutex
+	state       State // idle | running | paused | cancelled (stopped)
+	turnCancel  context.CancelFunc
+	turnGuard   chan struct{} // binary semaphore to prevent overlap
+	controlChan chan ControlSignal
+	controlMu   sync.Mutex // Protects controlChan creation/access
 }
 
 // NewConversation creates a new Conversation instance wired to the provided
@@ -125,12 +154,28 @@ func (c *Conversation) RunTurn(ctx context.Context, userInput string) error {
 	c.turnCancel = cancel
 	c.mu.Unlock()
 
-	// Ensure state cleanup
+	// Create control channel for this turn
+	c.controlMu.Lock()
+	c.controlChan = make(chan ControlSignal, 1)
+	controlChan := c.controlChan
+	c.controlMu.Unlock()
+
+	// Ensure state and control channel cleanup
 	defer func() {
 		c.mu.Lock()
-		c.state = StateIdle
+		// Only set to Idle if not already Cancelled by Stop()
+		if c.state != StateCancelled {
+			c.state = StateIdle
+		}
 		c.turnCancel = nil
 		c.mu.Unlock()
+
+		c.controlMu.Lock()
+		if c.controlChan != nil {
+			close(c.controlChan)
+			c.controlChan = nil
+		}
+		c.controlMu.Unlock()
 	}()
 
 	// Record user message
@@ -157,19 +202,91 @@ func (c *Conversation) RunTurn(ctx context.Context, userInput string) error {
 		WorkDir: workDir,
 	}
 
-	// Execute agent
-	resp, err := c.agent.Execute(turnCtx, req)
-	if err != nil {
-		// Error already meaningful from agent; propagate
-		return err
-	}
+	// Execute turn with control signal checking
+	return c.runTurnWithControl(turnCtx, req, controlChan)
+}
 
-	// Append assistant response if present
-	if resp != nil && resp.Content != "" && c.history != nil {
-		_ = c.history.AddAssistantMessage(resp.Content)
-	}
+// runTurnWithControl executes agent with control signal monitoring
+func (c *Conversation) runTurnWithControl(ctx context.Context, req *AgentRequest, controlChan <-chan ControlSignal) error {
+	// Execute agent in goroutine
+	done := make(chan error, 1)
+	var resp *AgentResponse
+	var respMu sync.Mutex
 
-	return nil
+	go func() {
+		r, err := c.agent.Execute(ctx, req)
+		respMu.Lock()
+		resp = r
+		respMu.Unlock()
+		done <- err
+	}()
+
+	// Monitor for completion or control signals
+	for {
+		select {
+		case err := <-done:
+			// Turn completed
+			if err != nil {
+				return err
+			}
+
+			// Append assistant response
+			respMu.Lock()
+			if resp != nil && resp.Content != "" && c.history != nil {
+				_ = c.history.AddAssistantMessage(resp.Content)
+			}
+			respMu.Unlock()
+
+			return nil
+
+		case signal := <-controlChan:
+			switch signal {
+			case SignalPause:
+				// Enter paused state, wait for resume or cancel
+				if err := c.waitForResume(ctx, controlChan); err != nil {
+					return err
+				}
+
+			case SignalCancel:
+				// Cancel requested
+				return context.Canceled
+
+			case SignalResume:
+				// Already running, ignore
+				continue
+			}
+
+		case <-ctx.Done():
+			// Context cancelled (e.g., by Stop())
+			return ctx.Err()
+		}
+	}
+}
+
+// waitForResume blocks until resume or cancel signal is received
+func (c *Conversation) waitForResume(ctx context.Context, controlChan <-chan ControlSignal) error {
+	for {
+		select {
+		case signal := <-controlChan:
+			switch signal {
+			case SignalResume:
+				// Resume execution
+				return nil
+
+			case SignalCancel:
+				// Cancel while paused
+				return context.Canceled
+
+			case SignalPause:
+				// Already paused, ignore
+				continue
+			}
+
+		case <-ctx.Done():
+			// Context cancelled while paused
+			return ctx.Err()
+		}
+	}
 }
 
 // Stream returns the per-conversation event stream.
@@ -191,6 +308,18 @@ func (c *Conversation) Stop(ctx context.Context) error {
 	subID := c.subscriptionID
 	c.subscriptionID = ""
 	c.mu.Unlock()
+
+	// Send cancel signal if control channel exists
+	c.controlMu.Lock()
+	if c.controlChan != nil {
+		select {
+		case c.controlChan <- SignalCancel:
+			// Signal sent
+		default:
+			// Channel full or closed, ignore
+		}
+	}
+	c.controlMu.Unlock()
 
 	// Cancel running turn if any
 	if cancel != nil {
@@ -241,4 +370,80 @@ func (c *Conversation) State() State {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.state
+}
+
+// Pause pauses the currently running turn.
+// Returns an error if no turn is running or conversation is stopped.
+func (c *Conversation) Pause() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Validate state
+	if c.state != StateRunning {
+		return fmt.Errorf("cannot pause: conversation is %s", c.state.String())
+	}
+
+	// Send pause signal (non-blocking)
+	c.controlMu.Lock()
+	if c.controlChan != nil {
+		select {
+		case c.controlChan <- SignalPause:
+			// Signal sent
+		default:
+			// Channel full, pause already requested
+		}
+	}
+	c.controlMu.Unlock()
+
+	// Transition to paused state
+	c.state = StatePaused
+
+	// Emit event
+	if c.emitter != nil {
+		c.emitter.Emit(Event{
+			Type:      EventTurnPaused,
+			Timestamp: time.Now(),
+			Data:      map[string]interface{}{"reason": "user requested"},
+		})
+	}
+
+	return nil
+}
+
+// Resume resumes a paused turn.
+// Returns an error if no turn is paused.
+func (c *Conversation) Resume() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Validate state
+	if c.state != StatePaused {
+		return fmt.Errorf("cannot resume: conversation is %s", c.state.String())
+	}
+
+	// Send resume signal (non-blocking)
+	c.controlMu.Lock()
+	if c.controlChan != nil {
+		select {
+		case c.controlChan <- SignalResume:
+			// Signal sent
+		default:
+			// Channel full, resume already requested
+		}
+	}
+	c.controlMu.Unlock()
+
+	// Transition back to running
+	c.state = StateRunning
+
+	// Emit event
+	if c.emitter != nil {
+		c.emitter.Emit(Event{
+			Type:      EventTurnResumed,
+			Timestamp: time.Now(),
+			Data:      map[string]interface{}{"reason": "user requested"},
+		})
+	}
+
+	return nil
 }

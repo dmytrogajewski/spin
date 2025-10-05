@@ -34,6 +34,8 @@ const (
 	EventTurnStart
 	EventTurnComplete
 	EventTurnFailed
+	EventTurnPaused
+	EventTurnResumed
 
 	// Approval events - user approval required
 	EventCommandApproval
@@ -57,6 +59,8 @@ func (e EventType) String() string {
 		"turn_start",
 		"turn_complete",
 		"turn_failed",
+		"turn_paused",
+		"turn_resumed",
 		"command_approval",
 		"command_approved",
 		"command_denied",
