@@ -878,10 +878,10 @@ func TestProvider_MissingAPIKey(t *testing.T)
 - [x] Commit: "fix: use HTTPClient in Ollama provider for retry support"
 
 **Thursday:**
-- [ ] Update architecture documentation
-- [ ] Document new utility files
-- [ ] Document auth module status
-- [ ] Commit: "docs: update architecture to match implementation"
+- [x] Update architecture documentation
+- [x] Document new utility files
+- [x] Document auth module status
+- [x] Commit: "docs: update architecture to match implementation"
 
 **Friday:**
 - [ ] Code review for Week 1 changes

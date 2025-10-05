@@ -53,14 +53,21 @@ spin/
 ├── internal/              # Private application code
 │   ├── core/             # Core agent orchestration
 │   ├── llm/              # LLM provider implementations
+│   │   ├── client.go     # HTTP client with retry logic
+│   │   ├── stream.go     # SSE stream processing
+│   │   ├── errors.go     # Error definitions
+│   │   ├── tokenizer.go  # Token counting
+│   │   ├── factory/      # Provider factory
 │   │   ├── openai/       # OpenAI-compatible API
 │   │   ├── ollama/       # Ollama-specific optimizations
 │   │   ├── lmstudio/     # LMStudio-specific optimizations
 │   │   └── provider.go   # Provider interface
+│   ├── auth/             # Authentication & credentials
 │   ├── security/         # Sandbox and execution policy
 │   ├── mcp/              # Model Context Protocol
 │   ├── tools/            # Agent tools (file ops, git, etc.)
 │   ├── protocol/         # Internal protocol definitions
+│   ├── session/          # Session state management
 │   └── config/           # Configuration management
 ├── pkg/                  # Public library code
 │   ├── sdk/              # SDK for programmatic access
@@ -115,23 +122,93 @@ spin/
 
 #### B. LLM Provider Abstraction (`internal/llm/`)
 
-**Purpose:** Vendor-agnostic LLM integration.
+**Purpose:** Vendor-agnostic LLM integration with robust HTTP handling and streaming support.
 
-**Interface:**
+**Module Structure:**
+```
+internal/llm/
+├── provider.go     # Provider interface
+├── client.go       # HTTP client with retry logic
+├── stream.go       # SSE stream processing
+├── errors.go       # Error definitions
+├── tokenizer.go    # Token counting utilities
+├── types.go        # Shared types
+├── factory/        # Provider factory
+│   └── factory.go
+├── openai/         # OpenAI implementation
+│   ├── provider.go
+│   ├── types.go
+│   └── doc.go
+├── ollama/         # Ollama implementation
+│   ├── provider.go
+│   ├── types.go
+│   └── doc.go
+└── lmstudio/       # LMStudio implementation
+    └── provider.go
+```
+
+**Core Interface:**
 ```go
 type Provider interface {
     Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error)
-    Stream(ctx context.Context, req CompletionRequest) (<-chan CompletionChunk, error)
+    Stream(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error)
     Models(ctx context.Context) ([]Model, error)
     Capabilities() Capabilities
+    Name() string
+    Close() error
 }
 ```
 
-**Implementations:**
-- `openai/` - OpenAI-compatible APIs (default)
-- `ollama/` - Ollama-specific features (local models)
-- `lmstudio/` - LMStudio optimizations
-- `anthropic/` - Anthropic Claude (if API compatible)
+**Utility Files:**
+
+**`client.go`** - HTTP client with retry logic
+- ✅ Automatic retry on 429, 503, 504 errors
+- ✅ Exponential backoff (base delay: 1s)
+- ✅ Respects Retry-After header
+- ✅ Configurable timeout and max retries (default: 3)
+- Used by all providers for consistent reliability
+
+**`stream.go`** - Server-Sent Events (SSE) processing
+- ✅ `SSEScanner` - Parse SSE events from streams
+- ✅ `StreamSSE` - Generic streaming with callback parser
+- ✅ `ChunkParser` - Provider-specific chunk parsing interface
+- ✅ Handles [DONE] markers, multi-line data, context cancellation
+- Shared by OpenAI and compatible providers
+
+**`errors.go`** - Error definitions
+- ✅ Provider-specific error types
+- ✅ Error wrapping with context
+- ✅ HTTP status code mapping
+
+**`tokenizer.go`** - Token counting utilities
+- ✅ Estimate token counts for requests
+- ✅ Support for different encoding schemes
+- ✅ Context window management
+
+**Provider Implementations:**
+
+**`openai/`** - OpenAI-compatible APIs
+- Full Chat Completions API support
+- Streaming with SSE
+- Function calling support
+- Uses shared HTTPClient and StreamSSE
+
+**`ollama/`** - Ollama local models
+- Ollama-specific API format
+- Streaming support with line-based JSON
+- Model listing and management
+- Uses shared HTTPClient for retry logic
+
+**`lmstudio/`** - LMStudio integration
+- Delegates to OpenAI provider (API compatible)
+- Local model support
+- Streaming enabled
+
+**`factory/`** - Provider factory
+- ✅ Dynamic provider instantiation based on config
+- ✅ Type-safe factory pattern
+- ✅ Multi-provider support
+- ✅ Validation and error handling
 
 **Configuration:**
 ```yaml
@@ -150,7 +227,99 @@ providers:
     type: openai-compatible
 ```
 
-#### C. Security & Sandboxing (`internal/security/`)
+**Module Responsibilities:**
+- ✅ Provide unified LLM interface
+- ✅ Handle HTTP retries and transient errors
+- ✅ Parse streaming responses (SSE)
+- ✅ Count tokens for context management
+- ✅ Abstract provider-specific differences
+- ✅ Factory-based provider creation
+
+#### C. Authentication & Credentials (`internal/auth/`)
+
+**Status:** ✅ Implemented | ⏳ Integration Pending
+
+**Purpose:** Secure credential storage using platform-specific keystores.
+
+**Module Structure:**
+```
+internal/auth/
+├── manager.go              # Authentication manager
+├── keystore.go             # Keystore interface
+├── keystore_darwin.go      # macOS Keychain
+├── keystore_linux.go       # Linux Secret Service
+├── keystore_windows.go     # Windows Credential Manager
+└── *_test.go               # Tests
+```
+
+**Core Interface:**
+```go
+type Keystore interface {
+    Get(key string) (string, error)
+    Set(key, value string) error
+    Delete(key string) error
+    List() ([]string, error)
+}
+
+type Manager struct {
+    // Manages provider credentials
+    // Uses platform keystore
+}
+```
+
+**Platform Implementations:**
+
+**macOS** (`keystore_darwin.go`)
+- ✅ Uses macOS Keychain
+- ✅ Secure storage in user keychain
+- ✅ Integration with system security
+
+**Linux** (`keystore_linux.go`)
+- ✅ Uses freedesktop.org Secret Service API
+- ✅ Supports GNOME Keyring, KWallet
+- ✅ D-Bus integration
+- ✅ Fallback to in-memory if unavailable
+
+**Windows** (`keystore_windows.go`)
+- ✅ Uses Windows Credential Manager
+- ✅ Native credential encryption
+- ✅ User-specific storage
+
+**Security Features:**
+- ✅ OS-native keystore integration
+- ✅ No credentials in memory longer than necessary
+- ✅ Automatic fallback to in-memory storage
+- ✅ Platform-specific encryption
+- ✅ No credential values in logs or errors
+
+**Current Integration Status:**
+- ✅ Keystore implementations complete (100% coverage)
+- ✅ Platform support (macOS, Linux, Windows)
+- ✅ Unit tests and integration tests passing
+- ✅ Manager implementation complete
+- ⏳ **Integration with provider factory (Week 2 - planned)**
+- ⏳ **Migration from direct API keys (Week 2 - planned)**
+
+**Planned Integration (Week 2):**
+1. Update ProviderConfig to support keystore keys
+2. Integrate Manager with factory
+3. Add migration helpers for existing configs
+4. Update provider documentation
+
+**Usage (Post-Integration):**
+```go
+// Future API
+manager := auth.NewManager()
+apiKey, err := manager.GetCredential("openai-api-key")
+
+// Providers will use manager instead of direct keys
+provider := openai.NewProvider(openai.Config{
+    Credentials: manager,
+    Model: "gpt-4",
+})
+```
+
+#### D. Security & Sandboxing (`internal/security/`)
 
 **Packages:**
 - `policy/` - Command validation engine
@@ -606,6 +775,157 @@ routing:
       provider: powerful
     - if: "task.type == 'chat'"
       provider: local
+```
+
+## Module Responsibility Matrix
+
+| Module | Primary Responsibility | Key Files | Status |
+|--------|----------------------|-----------|--------|
+| `internal/llm/` | LLM provider abstraction | provider.go, client.go, stream.go, tokenizer.go | ✅ Complete |
+| `internal/llm/openai/` | OpenAI API implementation | provider.go, types.go | ✅ Complete |
+| `internal/llm/ollama/` | Ollama API implementation | provider.go, types.go | ✅ Complete |
+| `internal/llm/lmstudio/` | LMStudio implementation | provider.go | ✅ Complete |
+| `internal/llm/factory/` | Provider instantiation | factory.go | ✅ Complete |
+| `internal/auth/` | Credential management | manager.go, keystore_*.go | ✅ Implemented, ⏳ Integration pending |
+| `internal/core/` | Agent orchestration | agent/, session/, executor/ | 🔄 In Progress |
+| `internal/tools/` | Agent capabilities | filesystem/, git/, shell/ | 🔄 In Progress |
+| `internal/security/` | Sandboxing & policy | policy/, sandbox/ | 📋 Planned |
+| `internal/mcp/` | Model Context Protocol | client/, server/ | 📋 Planned |
+| `internal/config/` | Configuration | config.go | ✅ Complete |
+| `internal/session/` | State management | session.go | 🔄 In Progress |
+| `pkg/sdk/` | Public Go SDK | client.go | 📋 Planned |
+
+**Legend:**
+- ✅ Complete - Fully implemented and tested
+- 🔄 In Progress - Under active development
+- ⏳ Pending - Implemented but awaiting integration
+- 📋 Planned - Designed but not yet implemented
+
+## LLM Provider Architecture Diagrams
+
+### Provider Creation Flow
+
+```
+┌─────────────────┐
+│  User Config    │
+│  (YAML/JSON)    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Factory       │
+│   .Create()     │
+└────────┬────────┘
+         │
+         │ 1. Parse config & select type
+         ├──────────────────┬──────────────────┐
+         │                  │                  │
+         ▼                  ▼                  ▼
+    ┌─────────┐        ┌─────────┐       ┌──────────┐
+    │ OpenAI  │        │ Ollama  │       │LMStudio  │
+    │Provider │        │Provider │       │Provider  │
+    └────┬────┘        └────┬────┘       └─────┬────┘
+         │                  │                   │
+         │ 2. Create HTTPClient with retry
+         ├──────────────────┴───────────────────┤
+         │                                      │
+         ▼                                      ▼
+    ┌────────────────────────────────────────────┐
+    │            HTTPClient                      │
+    │  - MaxRetries: 3                           │
+    │  - RetryDelay: 1s (exponential backoff)    │
+    │  - Respects Retry-After header             │
+    │  - Handles 429, 503, 504 errors            │
+    └────────────────────────────────────────────┘
+```
+
+### Request Flow with Retry Logic
+
+```
+Provider.Complete(req)
+       │
+       ▼
+HTTPClient.Do(httpReq)
+       │
+       ├──► [429] Rate Limit ──► Wait (Retry-After) ──► Retry (attempt 2)
+       ├──► [503] Unavailable ──► Backoff 1s ────────► Retry (attempt 2)
+       ├──► [504] Timeout ──────► Backoff 2s ────────► Retry (attempt 3)
+       │
+       ├──► Max Retries (3) Exceeded? ──► Return Error
+       │
+       ▼
+  [200] Success
+       │
+       ▼
+  Parse JSON Response
+       │
+       ▼
+  Convert to CompletionResponse
+       │
+       ▼
+  Return to Caller
+```
+
+### Streaming Flow with SSE
+
+```
+Provider.Stream(req)
+       │
+       ▼
+HTTPClient.Do(httpReq) [with retry]
+       │
+       ▼
+  Response Body (SSE stream)
+       │
+       ▼
+StreamSSE(body, parseChunk)
+       │
+       ├──► SSEScanner.Scan() ──► Parse SSE events
+       │                          │
+       │                          ├─► "data: {...}\n\n"
+       │                          ├─► "data: [DONE]\n\n"
+       │                          └─► Multi-line events
+       │
+       ├──► ChunkParser(eventData)
+       │          │
+       │          ├─► OpenAI: Parse ChatCompletionChunk
+       │          └─► Ollama: Parse GenerateResponse
+       │
+       ▼
+  StreamChunk {Type, Content, ...}
+       │
+       ▼
+  Channel ──► Consumer (Agent/UI)
+       │
+       └──► [DONE] ──► Close Channel
+```
+
+### Authentication Flow (Planned - Week 2)
+
+```
+Provider Config
+       │
+       ▼
+┌──────────────────┐
+│   Auth Manager   │
+│  .GetCredential()│
+└────────┬─────────┘
+         │
+         ▼
+┌────────────────────────┐
+│  Platform Keystore     │
+│  ┌──────────────────┐  │
+│  │ macOS: Keychain  │  │
+│  │ Linux: Secret Svc│  │
+│  │ Win: Cred Manager│  │
+│  └──────────────────┘  │
+└────────┬───────────────┘
+         │
+         ▼
+    API Key (secure)
+         │
+         ▼
+  Provider.Complete()
 ```
 
 ## Next Steps
