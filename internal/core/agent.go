@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -419,6 +420,9 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 				Timestamp: time.Now(),
 			}
 
+			// Add assistant message FIRST (before tool results)
+			messages = append(messages, assistantMsg)
+
 			// Convert and process each tool call
 			for i := range llmResp.ToolCalls {
 				toolCall := &llmResp.ToolCalls[i]
@@ -433,8 +437,8 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 					},
 				}
 
-				// Add to assistant message
-				assistantMsg.ToolCalls = append(assistantMsg.ToolCalls, *coreToolCall)
+				// Add to assistant message (note: message already appended above)
+				messages[len(messages)-1].ToolCalls = append(messages[len(messages)-1].ToolCalls, *coreToolCall)
 
 				// Emit tool call start event
 				a.emitter.Emit(Event{
@@ -460,7 +464,7 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 						},
 					})
 
-					// Add error message to conversation
+					// Add error message to conversation (after assistant message)
 					messages = append(messages, Message{
 						Role: RoleTool,
 						Content: fmt.Sprintf("Tool %s failed: %v",
@@ -480,7 +484,9 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 						},
 					})
 
-					// Add tool result to conversation
+					// Add tool result to conversation (after assistant message)
+					log.Printf("[Agent] Tool result: tool=%s, output_len=%d, success=%v",
+						coreToolCall.Function.Name, len(toolResult.Output), toolResult.Success)
 					messages = append(messages, Message{
 						Role:       RoleTool,
 						Content:    toolResult.Output,
@@ -492,9 +498,6 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 					resp.ToolCalls = append(resp.ToolCalls, coreToolCall)
 				}
 			}
-
-			// Add assistant message with tool calls to conversation history
-			messages = append(messages, assistantMsg)
 
 			// Continue loop to get next LLM response with tool results
 			continue
@@ -573,19 +576,65 @@ func (a *Agent) callLLM(ctx context.Context, messages []Message) (*llm.Completio
 		toolSchemas := a.toolRegistry.ListSchemas()
 		req.Tools = make([]llm.Tool, len(toolSchemas))
 		for i, schema := range toolSchemas {
+			// Convert ParameterSchema struct to map[string]interface{}
+			params := convertParameterSchemaToMap(schema.Function.Parameters)
+
 			req.Tools[i] = llm.Tool{
 				Type: schema.Type,
 				Function: llm.Function{
 					Name:        schema.Function.Name,
 					Description: schema.Function.Description,
-					Parameters:  schema.Function.Parameters,
+					Parameters:  params,
 				},
 			}
 		}
 	}
 
-	// Call LLM
-	return a.llm.Complete(ctx, req)
+	// Call LLM with streaming
+	chunks, err := a.llm.Stream(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start LLM stream: %w", err)
+	}
+
+	// Accumulate response from streaming chunks
+	response := &llm.CompletionResponse{
+		Content:      "",
+		ToolCalls:    []llm.ToolCall{},
+		Usage:        llm.Usage{},
+		FinishReason: "",
+	}
+
+	for chunk := range chunks {
+		if chunk.Error != nil {
+			return nil, fmt.Errorf("stream error: %w", chunk.Error)
+		}
+
+		// Accumulate content
+		response.Content += chunk.Content
+
+		// Emit content delta immediately for real-time streaming
+		if chunk.Content != "" {
+			a.emitter.Emit(Event{
+				Type:      EventContentDelta,
+				Timestamp: time.Now(),
+				Data: map[string]interface{}{
+					"content": chunk.Content,
+				},
+			})
+		}
+
+		// Accumulate tool calls
+		if chunk.ToolCall != nil {
+			response.ToolCalls = append(response.ToolCalls, *chunk.ToolCall)
+		}
+
+		// Update finish reason
+		if chunk.FinishReason != "" {
+			response.FinishReason = chunk.FinishReason
+		}
+	}
+
+	return response, nil
 }
 
 // ShouldApprove determines if a command needs user approval.
@@ -1035,4 +1084,23 @@ func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string
 		},
 	})
 	return false
+}
+
+// convertParameterSchemaToMap converts a ParameterSchema struct to map[string]interface{}.
+// This is needed because LLM providers expect parameters as a JSON-compatible map.
+func convertParameterSchemaToMap(params tools.ParameterSchema) map[string]interface{} {
+	// Convert struct to map via JSON marshaling
+	data, err := json.Marshal(params)
+	if err != nil {
+		// Fallback to empty object if marshaling fails
+		return map[string]interface{}{"type": "object"}
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		// Fallback to empty object if unmarshaling fails
+		return map[string]interface{}{"type": "object"}
+	}
+
+	return result
 }

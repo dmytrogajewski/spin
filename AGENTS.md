@@ -1,5 +1,7 @@
 # Agent Guidelines for Spin Development
 
+NEVER DO GIT OPERATIONS
+
 **📋 Implementation Workflow:** See [instructions/istr-implement.md](instructions/istr-implement.md)  
 **📚 Package Documentation:** See [docs/packages/](docs/packages/)
 

@@ -147,6 +147,16 @@ func (p *MockProvider) Stream(ctx context.Context, req CompletionRequest) (<-cha
 			}
 		} else {
 			// Stream response as single chunk
+			// Apply delay before sending if configured
+			if p.delay > 0 {
+				select {
+				case <-time.After(p.delay):
+				case <-ctx.Done():
+					chunks <- StreamChunk{Type: ChunkTypeError, Error: ctx.Err()}
+					return
+				}
+			}
+
 			select {
 			case <-ctx.Done():
 				chunks <- StreamChunk{Type: ChunkTypeError, Error: ctx.Err()}

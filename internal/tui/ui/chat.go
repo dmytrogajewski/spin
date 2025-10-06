@@ -215,15 +215,15 @@ func (c *Chat) renderMessage(msg Message) string {
 	header := c.renderMessageHeader(msg)
 	parts = append(parts, header)
 
-	// Thinking (if present)
-	if msg.Thinking != "" {
+	// Thinking (if present or currently parsing)
+	if msg.Thinking != "" || (msg.Streaming && c.thinkingParser.IsInThinking()) {
 		if c.showThinking {
-			// Show full thinking content
-			thinking := c.renderThinking(msg.Thinking)
+			// Show full thinking content (streaming in real-time)
+			thinking := c.renderThinking(msg.Thinking, msg.Streaming)
 			parts = append(parts, thinking)
 		} else {
 			// Show collapsed thinking indicator
-			thinkingIndicator := c.renderThinkingCollapsed()
+			thinkingIndicator := c.renderThinkingCollapsed(msg.Streaming)
 			parts = append(parts, thinkingIndicator)
 		}
 	}
@@ -316,24 +316,40 @@ func (c *Chat) renderMessageContent(msg Message) string {
 }
 
 // renderThinking renders the full thinking content (expanded).
-func (c *Chat) renderThinking(thinking string) string {
+func (c *Chat) renderThinking(thinking string, streaming bool) string {
+	// Calculate max width (chat width - border - padding)
+	maxWidth := c.width - 4 // 2 for border, 2 for padding
+
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("63")). // Purple
-		Padding(0, 1)
+		Padding(0, 1).
+		Width(maxWidth)
 
-	return style.Render("💭 " + thinking)
+	content := "💭 " + thinking
+	if streaming {
+		content += " ▊" // Show cursor while streaming
+	}
+
+	return style.Render(content)
 }
 
 // renderThinkingCollapsed renders a collapsed thinking indicator.
-func (c *Chat) renderThinkingCollapsed() string {
+func (c *Chat) renderThinkingCollapsed(streaming bool) string {
 	style := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240")). // Gray
 		Padding(0, 1).
 		Faint(true)
 
-	return style.Render("💭 Thinking... (Press Ctrl+T to expand)")
+	text := "💭 Thinking..."
+	if streaming {
+		text += " ▊" // Show cursor while streaming
+	} else {
+		text += " (Press Ctrl+T to expand)"
+	}
+
+	return style.Render(text)
 }
 
 // renderToolCall renders a tool call.

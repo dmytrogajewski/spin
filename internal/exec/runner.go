@@ -8,6 +8,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/core"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // RunWithProvider executes the task with a provided LLM provider.
@@ -28,8 +29,25 @@ func RunWithProvider(ctx context.Context, args *ExecArgs, provider llm.Provider)
 		slog.Warn("auto-approve enabled - all commands will execute without validation")
 	}
 
-	// Create manager with provided provider
-	mgr, err := core.NewManager(coreConfig, core.WithLLM(provider))
+	// Create tool registry with builtin tools
+	registry := tools.NewRegistry()
+	builtinTools := []tools.Tool{
+		tools.NewReadFileTool(),
+		tools.NewWriteFileTool(),
+		tools.NewListDirectoryTool(),
+		tools.NewExecuteCommandTool(nil, nil), // executor/validator will be set by agent
+		tools.NewGetContextTool(nil),          // context will be set by agent
+	}
+	for _, tool := range builtinTools {
+		if err := registry.Register(tool); err != nil {
+			return fmt.Errorf("register tool %s: %w", tool.Name(), err)
+		}
+	}
+
+	// Create manager with provided provider and tool registry
+	mgr, err := core.NewManager(coreConfig,
+		core.WithLLM(provider),
+		core.WithManagerToolRegistry(registry))
 	if err != nil {
 		return fmt.Errorf("create manager: %w", err)
 	}

@@ -178,18 +178,13 @@ func (c *Conversation) RunTurn(ctx context.Context, userInput string) error {
 		c.controlMu.Unlock()
 	}()
 
-	// Record user message
-	if c.history != nil {
-		_ = c.history.AddUserMessage(userInput)
-	}
-
 	// WorkDir preference: agent context
 	workDir := ""
 	if c.agent != nil && c.agent.context != nil {
 		workDir = c.agent.context.WorkDir
 	}
 
-	// Build request
+	// Build request with history (BEFORE adding current user message)
 	var historyMsgs []Message
 	if c.history != nil {
 		historyMsgs = c.history.MessagesForLLM()
@@ -230,12 +225,16 @@ func (c *Conversation) runTurnWithControl(ctx context.Context, req *AgentRequest
 				return err
 			}
 
-			// Append assistant response
-			respMu.Lock()
-			if resp != nil && resp.Content != "" && c.history != nil {
-				_ = c.history.AddAssistantMessage(resp.Content)
+			// Add both user and assistant messages to history
+			if c.history != nil {
+				_ = c.history.AddUserMessage(req.Input)
+
+				respMu.Lock()
+				if resp != nil && resp.Content != "" {
+					_ = c.history.AddAssistantMessage(resp.Content)
+				}
+				respMu.Unlock()
 			}
-			respMu.Unlock()
 
 			return nil
 

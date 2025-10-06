@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -130,6 +131,11 @@ func (p *Provider) Complete(ctx context.Context, req llm.CompletionRequest) (*ll
 
 // Stream performs a streaming completion request.
 func (p *Provider) Stream(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
+	// Use chat API if tools are present, otherwise use generate API
+	if len(req.Tools) > 0 {
+		return p.streamChat(ctx, req)
+	}
+
 	// Build prompt from messages
 	prompt := p.buildPrompt(req.Messages)
 
@@ -220,7 +226,7 @@ func (p *Provider) Models(ctx context.Context) ([]llm.Model, error) {
 func (p *Provider) Capabilities() llm.Capabilities {
 	return llm.Capabilities{
 		Streaming:       true,
-		FunctionCalling: false, // Ollama doesn't support function calling natively
+		FunctionCalling: true, // Supported via /api/chat endpoint
 		Vision:          false,
 	}
 }
@@ -383,4 +389,232 @@ func (p *Provider) getModel(model string) string {
 		return model
 	}
 	return p.model
+}
+
+// streamChat performs a streaming chat request (with tool support).
+func (p *Provider) streamChat(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
+	// Convert messages to chat format
+	chatMessages := make([]chatMessage, 0, len(req.Messages))
+	for _, msg := range req.Messages {
+		chatMsg := chatMessage{
+			Role:       msg.Role,
+			Content:    msg.Content,
+			ToolCallID: msg.ToolCallID,
+		}
+
+		// Convert tool calls if present
+		if len(msg.ToolCalls) > 0 {
+			chatMsg.ToolCalls = make([]chatToolCall, len(msg.ToolCalls))
+			for j, tc := range msg.ToolCalls {
+				// Ollama expects arguments as object, not string
+				// Parse JSON string into map[string]interface{}
+				var args interface{}
+				if tc.Function.Arguments != "" {
+					var argsMap map[string]interface{}
+					if err := json.Unmarshal([]byte(tc.Function.Arguments), &argsMap); err == nil {
+						args = argsMap
+					} else {
+						// Fallback to string if parsing fails
+						args = tc.Function.Arguments
+					}
+				} else {
+					args = map[string]interface{}{}
+				}
+
+				chatMsg.ToolCalls[j] = chatToolCall{
+					ID:   tc.ID,
+					Type: tc.Type,
+					Function: chatToolCallFunction{
+						Name:      tc.Function.Name,
+						Arguments: args,
+					},
+				}
+			}
+		}
+
+		chatMessages = append(chatMessages, chatMsg)
+	}
+
+	// Convert tools to chat format
+	var chatTools []chatTool
+	if len(req.Tools) > 0 {
+		chatTools = make([]chatTool, len(req.Tools))
+		for i, tool := range req.Tools {
+			// Convert parameters (interface{} to map[string]interface{})
+			params := make(map[string]interface{})
+			if tool.Function.Parameters != nil {
+				if p, ok := tool.Function.Parameters.(map[string]interface{}); ok {
+					params = p
+				}
+			}
+
+			chatTools[i] = chatTool{
+				Type: tool.Type,
+				Function: chatToolFunction{
+					Name:        tool.Function.Name,
+					Description: tool.Function.Description,
+					Parameters:  params,
+				},
+			}
+		}
+	}
+
+	// Build chat request
+	chatReq := chatRequest{
+		Model:    p.getModel(req.Model),
+		Messages: chatMessages,
+		Tools:    chatTools,
+		Stream:   true,
+	}
+
+	if req.Temperature > 0 {
+		chatReq.Options = &chatOptions{
+			Temperature: req.Temperature,
+		}
+	}
+
+	if req.MaxTokens > 0 {
+		if chatReq.Options == nil {
+			chatReq.Options = &chatOptions{}
+		}
+		chatReq.Options.NumPredict = req.MaxTokens
+	}
+
+	log.Printf("[Ollama] Sending chat request: messages=%d, tools=%d", len(chatMessages), len(chatTools))
+
+	// Debug: log message roles and content lengths
+	for i, msg := range chatMessages {
+		log.Printf("[Ollama]   Msg %d: role=%s, content_len=%d, tool_calls=%d, tool_call_id=%s",
+			i, msg.Role, len(msg.Content), len(msg.ToolCalls), msg.ToolCallID)
+	}
+
+	// Create HTTP request
+	httpReq, err := p.newRequest(ctx, http.MethodPost, "/api/chat", chatReq)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	// Make HTTP request
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("http request: %w", err)
+	}
+
+	// Handle non-200 responses
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, p.handleError(resp)
+	}
+
+	// Create channel for chunks
+	chunks := make(chan llm.StreamChunk, 10)
+
+	// Start streaming in goroutine
+	go func() {
+		defer close(chunks)
+		defer resp.Body.Close()
+
+		if err := p.streamChatResponse(ctx, resp.Body, chunks); err != nil {
+			chunks <- llm.StreamChunk{
+				Type:  llm.ChunkTypeError,
+				Error: err,
+			}
+		}
+	}()
+
+	return chunks, nil
+}
+
+// streamChatResponse processes streaming chat response (with tool calls).
+func (p *Provider) streamChatResponse(ctx context.Context, r io.Reader, chunks chan<- llm.StreamChunk) error {
+	scanner := bufio.NewScanner(r)
+	lineCount := 0
+
+	log.Printf("[Ollama] Starting chat stream processing")
+
+	for scanner.Scan() {
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		line := scanner.Bytes()
+		lineCount++
+
+		// Parse JSON chunk
+		var chunk chatResponse
+		if err := json.Unmarshal(line, &chunk); err != nil {
+			log.Printf("[Ollama] Failed to parse chunk line %d: %v", lineCount, err)
+			continue // Skip malformed chunks
+		}
+
+		// Log every chunk
+		log.Printf("[Ollama] Chunk %d: content_len=%d, tool_calls=%d, done=%v",
+			lineCount, len(chunk.Message.Content), len(chunk.Message.ToolCalls), chunk.Done)
+
+		// Send content chunk if there's content
+		if chunk.Message.Content != "" {
+			log.Printf("[Ollama] Sending content chunk: %q", chunk.Message.Content)
+			chunks <- llm.StreamChunk{
+				Type:    llm.ChunkTypeContentDelta,
+				Content: chunk.Message.Content,
+			}
+		}
+
+		// Send tool calls if present
+		if len(chunk.Message.ToolCalls) > 0 {
+			log.Printf("[Ollama] Processing %d tool calls", len(chunk.Message.ToolCalls))
+			for i, tc := range chunk.Message.ToolCalls {
+				// Generate ID if not provided by Ollama
+				id := tc.ID
+				if id == "" {
+					id = fmt.Sprintf("call_%d", i)
+				}
+
+				// Get type, default to "function"
+				tcType := tc.Type
+				if tcType == "" {
+					tcType = "function"
+				}
+
+				// Convert arguments to JSON string if it's an object
+				var argsStr string
+				switch args := tc.Function.Arguments.(type) {
+				case string:
+					argsStr = args
+				case map[string]interface{}, []interface{}:
+					argsBytes, _ := json.Marshal(args)
+					argsStr = string(argsBytes)
+				default:
+					argsStr = "{}"
+				}
+
+				log.Printf("[Ollama] Sending tool call: name=%s, id=%s", tc.Function.Name, id)
+				chunks <- llm.StreamChunk{
+					Type: llm.ChunkTypeToolCallStart,
+					ToolCall: &llm.ToolCall{
+						ID:   id,
+						Type: tcType,
+						Function: llm.FunctionCall{
+							Name:      tc.Function.Name,
+							Arguments: argsStr,
+						},
+					},
+				}
+			}
+		}
+
+		// Send done chunk
+		if chunk.Done {
+			log.Printf("[Ollama] Received done chunk")
+			chunks <- llm.StreamChunk{
+				Type: llm.ChunkTypeDone,
+			}
+		}
+	}
+
+	log.Printf("[Ollama] Stream processing ended, total lines: %d", lineCount)
+	return scanner.Err()
 }
