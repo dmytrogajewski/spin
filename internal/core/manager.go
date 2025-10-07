@@ -13,12 +13,13 @@ import (
 // Manager coordinates conversation lifecycle and state management.
 // It serves as the main entry point for creating and managing conversations.
 type Manager struct {
-	cfg          *Config
-	llm          llm.Provider
-	emitter      *EventEmitter
-	storage      session.Storage
-	toolRegistry *tools.Registry
-	mcpManager   *MCPManager
+	cfg             *Config
+	llm             llm.Provider
+	emitter         *EventEmitter
+	storage         session.Storage
+	toolRegistry    *tools.Registry
+	mcpManager      *MCPManager
+	approvalHandler ApprovalHandler
 }
 
 // Functional options
@@ -60,6 +61,14 @@ func WithManagerToolRegistry(registry *tools.Registry) ManagerOption {
 func WithMCPManager(mcpMgr *MCPManager) ManagerOption {
 	return func(m *Manager) error {
 		m.mcpManager = mcpMgr
+		return nil
+	}
+}
+
+// WithManagerApprovalHandler sets the approval handler for all agents created by this manager
+func WithManagerApprovalHandler(handler ApprovalHandler) ManagerOption {
+	return func(m *Manager) error {
+		m.approvalHandler = handler
 		return nil
 	}
 }
@@ -115,8 +124,14 @@ func (m *Manager) NewConversation(ctx context.Context, workDir string) (*Convers
 	}
 	ctxEnv := &Environment{WorkDir: workDir}
 
-	// Build agent with optional tool registry
+	// Build agent with optional tool registry and approval
 	var agentOpts []AgentOption
+	// Enable approval for dangerous commands
+	agentOpts = append(agentOpts, WithRequireApproval(true))
+	// Set approval handler if configured
+	if m.approvalHandler != nil {
+		agentOpts = append(agentOpts, WithApprovalHandler(m.approvalHandler))
+	}
 	if m.toolRegistry != nil {
 		agentOpts = append(agentOpts, WithToolRegistry(m.toolRegistry))
 		logger.Debug("using custom tool registry", "tool_count", len(m.toolRegistry.ListSchemas()))
@@ -165,8 +180,14 @@ func (m *Manager) ResumeConversation(ctx context.Context, sessionID string) (*Co
 	}
 	ctxEnv := &Environment{WorkDir: sess.WorkDir}
 
-	// Build agent with optional tool registry
+	// Build agent with optional tool registry and approval
 	var agentOpts []AgentOption
+	// Enable approval for dangerous commands
+	agentOpts = append(agentOpts, WithRequireApproval(true))
+	// Set approval handler if configured
+	if m.approvalHandler != nil {
+		agentOpts = append(agentOpts, WithApprovalHandler(m.approvalHandler))
+	}
 	if m.toolRegistry != nil {
 		agentOpts = append(agentOpts, WithToolRegistry(m.toolRegistry))
 	}
@@ -197,16 +218,15 @@ func (m *Manager) ResumeConversation(ctx context.Context, sessionID string) (*Co
 }
 
 // ListConversations returns session metadata with optional filtering.
-// The filter parameter can be a session.Filter or nil for all sessions.
-func (m *Manager) ListConversations(ctx context.Context, filter any) ([]*session.Metadata, error) {
+// Pass nil filter to retrieve all sessions, or provide a *session.Filter for filtering.
+func (m *Manager) ListConversations(ctx context.Context, filter *session.Filter) ([]*session.Metadata, error) {
 	logger := withContext(ctx)
 	logger.Debug("listing conversations")
 
-	var f session.Filter
+	// Use an empty filter if nil is provided
+	f := session.Filter{}
 	if filter != nil {
-		if sf, ok := filter.(session.Filter); ok {
-			f = sf
-		}
+		f = *filter
 	}
 
 	metadata, err := m.storage.ListMetadata(f)

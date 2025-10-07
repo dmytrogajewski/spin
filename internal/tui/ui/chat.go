@@ -196,12 +196,18 @@ func (c Chat) View() string {
 
 // renderContent renders all messages to a string.
 func (c *Chat) renderContent() {
-	parts := make([]string, 0, len(c.messages)*2) // Pre-allocate with messages + blanks
+	parts := make([]string, 0, len(c.messages))
 
-	for _, msg := range c.messages {
+	for i, msg := range c.messages {
 		rendered := c.renderMessage(msg)
 		parts = append(parts, rendered)
-		parts = append(parts, "") // Blank line between messages
+		// Only add spacing between messages, not after the last one
+		if i < len(c.messages)-1 {
+			// Add minimal spacing - single empty line only between different speakers
+			if i+1 < len(c.messages) && c.messages[i].Role != c.messages[i+1].Role {
+				parts = append(parts, "") // Blank line between different roles
+			}
+		}
 	}
 
 	c.content = strings.Join(parts, "\n")

@@ -79,14 +79,14 @@ func TestMessage_WithToolResult(t *testing.T) {
 	assert.Empty(t, msg.ToolResult.Error)
 }
 
-func TestMessage_WithReasoning(t *testing.T) {
+func TestMessage_WithThinking(t *testing.T) {
 	msg := Message{
-		Role:      RoleAssistant,
-		Content:   "I'll help with that",
-		Reasoning: "User needs assistance with file operations",
+		Role:     RoleAssistant,
+		Content:  "I'll help with that",
+		Thinking: "User needs assistance with file operations",
 	}
 
-	assert.Equal(t, "User needs assistance with file operations", msg.Reasoning)
+	assert.Equal(t, "User needs assistance with file operations", msg.Thinking)
 }
 
 func TestMessage_Timestamp(t *testing.T) {

@@ -158,11 +158,12 @@ func TestChat_RenderMessage_Streaming(t *testing.T) {
 	assert.Contains(t, rendered, "▊") // Streaming cursor
 }
 
-func TestChat_RenderMessage_WithReasoning(t *testing.T) {
+func TestChat_RenderMessage_WithThinking(t *testing.T) {
 	c := NewChat(80, 24)
+	c.ToggleThinking() // Expand thinking content
 
 	msg := NewAssistantMessage("I'll help")
-	msg.Reasoning = "User needs assistance"
+	msg.Thinking = "User needs assistance"
 
 	rendered := c.renderMessage(msg)
 

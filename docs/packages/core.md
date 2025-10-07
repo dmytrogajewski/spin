@@ -12,7 +12,7 @@ This package implements all the essential functionality needed for an autonomous
 - **Agent Orchestration**: Coordinate LLM interactions, tool calls, and decision-making
 - **Task Execution**: Safe command execution with validation and sandboxing
 - **State Management**: Track sessions, turns, and conversation history
-- **Event Streaming**: Real-time UI updates through event channels
+- **Event Streaming**: Real-time UI updates through strongly typed event payloads
 - **Security**: Command validation and safety classification
 - **Observability**: Structured logging and OpenTelemetry tracing
 
@@ -33,8 +33,7 @@ The package is organized into several layers:
 - **Executor**: Safe command execution
 - **Validator**: Command safety classification
 
-### Supporting Infrastructure
-- **event.go**: Event types and emission
+- **event.go**: Event emitter and typed payload definitions
 - **config.go**: Configuration management
 - **logger.go**: Structured logging
 - **tracing.go**: Distributed tracing
@@ -267,23 +266,17 @@ agent, _ := core.NewAgent(llm, executor, validator, ctx, emitter,
 
 ## Events
 
-The core package emits events for real-time updates:
+### Event Payloads
 
-```go
-type EventType string
+The event stream delivers concrete structs instead of loosely typed maps. Key payload types include:
 
-const (
-    EventTypeStreamStart   EventType = "stream_start"
-    EventTypeStreamContent EventType = "stream_content"
-    EventTypeStreamEnd     EventType = "stream_end"
-    EventTypeTurnStart     EventType = "turn_start"
-    EventTypeTurnComplete  EventType = "turn_complete"
-    EventTypeToolCall      EventType = "tool_call"
-    EventTypeToolResult    EventType = "tool_result"
-    EventTypeError         EventType = "error"
-    EventTypeThinking      EventType = "thinking"
-)
-```
+- `ContentDeltaData` – incremental assistant/tool content
+- `ToolCallStartData`, `ToolCallProgressData`, `ToolCallCompleteData`
+- `TurnEventData` – turn counters, status, and limits
+- `ApprovalEventData` – approval requests and decisions
+- `ErrorData` / `SystemEventData` – structured status messages
+
+`ToolCallStartData` exposes parameters via `types.ToolCallArguments`, allowing consumers to safely decode tool arguments in the UI and protocol layers.
 
 ## State Management
 

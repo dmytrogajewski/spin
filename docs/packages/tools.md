@@ -11,25 +11,22 @@ The `tools` package provides a registry for LLM-callable tools (functions) and i
 
 ## Key Features
 
-- **Tool Registry**: Central registration system
-- **Built-in Tools**: Common operations pre-implemented
-- **Custom Tools**: Easy custom tool creation
-- **Schema Validation**: JSON Schema for parameters
-- **Type Safety**: Strongly typed tool definitions
-- **Async Execution**: Non-blocking tool calls
+- **Tool Registry**: Central registration system with strict schema validation
+- **Built-in Tools**: Command execution, file access, and search utilities
+- **Custom Tools**: Functional interface that matches OpenAI function calling
+- **Argument Helpers**: Shared `ToolCallArguments` container for tool interop
+- **Async Execution**: Non-blocking invocation with structured results
 
 ## Package Structure
 
 ```
 internal/tools/
-├── types.go        # Tool interface and schema types
-├── registry.go     # Tool registry implementation
-├── builtin.go      # All built-in tool implementations
-├── builtin_test.go # Built-in tools tests
-└── registry_test.go # Registry tests
+├── types.go            # Tool interface, results, and schema types
+├── registry.go         # Tool registry implementation with validation
+├── builtin.go          # Built-in tools (bash, read_file, write_file, etc.)
+├── builtin_test.go     # Built-in tool tests
+└── registry_test.go    # Registry tests
 ```
-
-**Note:** All built-in tools (bash, read_file, write_file, edit_file, grep) are implemented in a single `builtin.go` file for easy discovery and maintenance.
 
 ## Tool Interface
 
@@ -37,8 +34,39 @@ internal/tools/
 type Tool interface {
     Name() string
     Description() string
-    InputSchema() Schema
-    Execute(ctx context.Context, input map[string]any) (string, error)
+    Schema() ToolSchema
+    Execute(ctx context.Context, params map[string]interface{}) (ToolResult, error)
+}
+```
+
+### ToolResult
+
+```go
+type ToolResult struct {
+    Success bool   `json:"success"`
+    Output  string `json:"output"`
+    Error   string `json:"error,omitempty"`
+}
+```
+
+### ToolSchema
+
+```go
+type ToolSchema struct {
+    Type     string         `json:"type"`
+    Function FunctionSchema `json:"function"`
+}
+
+type FunctionSchema struct {
+    Name        string          `json:"name"`
+    Description string          `json:"description"`
+    Parameters  ParameterSchema `json:"parameters"`
+}
+
+type ParameterSchema struct {
+    Type       string                       `json:"type"`
+    Properties map[string]PropertyDefinition `json:"properties"`
+    Required   []string                     `json:"required,omitempty"`
 }
 ```
 
@@ -95,33 +123,34 @@ for _, tool := range registry.List() {
 ### Custom Tool
 
 ```go
-// Define custom tool
 type MyTool struct{}
 
-func (t *MyTool) Name() string {
-    return "my_tool"
-}
+func (t *MyTool) Name() string        { return "my_tool" }
+func (t *MyTool) Description() string { return "Does something useful" }
 
-func (t *MyTool) Description() string {
-    return "Does something useful"
-}
-
-func (t *MyTool) InputSchema() tools.Schema {
-    return tools.Schema{
-        Type: "object",
-        Properties: map[string]tools.Property{
-            "input": {
-                Type:        "string",
-                Description: "Input parameter",
+func (t *MyTool) Schema() tools.ToolSchema {
+    return tools.ToolSchema{
+        Type: "function",
+        Function: tools.FunctionSchema{
+            Name:        "my_tool",
+            Description: "Does something useful",
+            Parameters: tools.ParameterSchema{
+                Type: "object",
+                Properties: map[string]tools.PropertyDefinition{
+                    "input": {
+                        Type:        "string",
+                        Description: "Input parameter",
+                    },
+                },
+                Required: []string{"input"},
             },
         },
-        Required: []string{"input"},
     }
 }
 
-func (t *MyTool) Execute(ctx context.Context, input map[string]any) (string, error) {
-    inputStr := input["input"].(string)
-    return fmt.Sprintf("Processed: %s", inputStr), nil
+func (t *MyTool) Execute(ctx context.Context, params map[string]interface{}) (tools.ToolResult, error) {
+    inputStr, _ := params["input"].(string)
+    return tools.ToolResult{Success: true, Output: "Processed: " + inputStr}, nil
 }
 
 // Register
@@ -143,18 +172,18 @@ fmt.Println(result)
 ## Tool Schema
 
 ```go
-type Schema struct {
-    Type        string              `json:"type"`
-    Properties  map[string]Property `json:"properties"`
-    Required    []string            `json:"required"`
-    Description string              `json:"description,omitempty"`
-}
-
-type Property struct {
+type PropertyDefinition struct {
     Type        string   `json:"type"`
     Description string   `json:"description"`
     Enum        []string `json:"enum,omitempty"`
 }
+
+// Strict validation rejects unknown parameters and mismatched types.
+```
+
+## Shared Parameter Helpers
+
+Use `types.ToolCallArguments` (from `internal/types`) to safely extract typed parameters and to convert between raw maps and structured arguments when integrating with the TUI and core event system.
 ```
 
 ---

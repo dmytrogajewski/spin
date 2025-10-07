@@ -9,15 +9,22 @@ import (
 	"github.com/google/uuid"
 )
 
+func makeApprovalEvent(command, reason, workdir string) core.ApprovalEventData {
+	return core.ApprovalEventData{
+		RequestID: uuid.New().String(),
+		Command:   command,
+		Reason:    reason,
+		WorkDir:   workdir,
+		Timestamp: time.Now(),
+	}
+}
+
 // TestApprovalModal_Create tests modal creation.
+
 func TestApprovalModal_Create(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "rm -rf /tmp/cache",
-			Program: "rm",
-			Args:    []string{"-rf", "/tmp/cache"},
-		},
+	req := core.ApprovalEventData{
+		RequestID: uuid.New().String(),
+		Command:   "rm -rf /tmp/cache",
 		Reason:    "destructive operation",
 		WorkDir:   "/home/user/project",
 		Timestamp: time.Now(),
@@ -25,8 +32,8 @@ func TestApprovalModal_Create(t *testing.T) {
 
 	modal := NewApprovalModal(req, 80, 24)
 
-	if modal.request.ID != req.ID {
-		t.Errorf("expected request ID %s, got %s", req.ID, modal.request.ID)
+	if modal.request.ID != req.RequestID {
+		t.Errorf("expected request ID %s, got %s", req.RequestID, modal.request.ID)
 	}
 
 	if modal.editing {
@@ -48,17 +55,7 @@ func TestApprovalModal_Create(t *testing.T) {
 
 // TestApprovalModal_ApproveKey tests approval with 'a' key.
 func TestApprovalModal_ApproveKey(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "ls -la",
-			Program: "ls",
-			Args:    []string{"-la"},
-		},
-		Reason:    "test",
-		WorkDir:   "/tmp",
-		Timestamp: time.Now(),
-	}
+	req := makeApprovalEvent("ls -la", "test", "/tmp")
 
 	modal := NewApprovalModal(req, 80, 24)
 
@@ -72,17 +69,7 @@ func TestApprovalModal_ApproveKey(t *testing.T) {
 
 // TestApprovalModal_ApproveKeyUppercase tests approval with 'A' key.
 func TestApprovalModal_ApproveKeyUppercase(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "ls -la",
-			Program: "ls",
-			Args:    []string{"-la"},
-		},
-		Reason:    "test",
-		WorkDir:   "/tmp",
-		Timestamp: time.Now(),
-	}
+	req := makeApprovalEvent("ls -la", "test", "/tmp")
 
 	modal := NewApprovalModal(req, 80, 24)
 
@@ -96,17 +83,7 @@ func TestApprovalModal_ApproveKeyUppercase(t *testing.T) {
 
 // TestApprovalModal_DenyKey tests denial with 'd' key.
 func TestApprovalModal_DenyKey(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "rm -rf /",
-			Program: "rm",
-			Args:    []string{"-rf", "/"},
-		},
-		Reason:    "extremely dangerous",
-		WorkDir:   "/",
-		Timestamp: time.Now(),
-	}
+	req := makeApprovalEvent("rm -rf /", "extremely dangerous", "/")
 
 	modal := NewApprovalModal(req, 80, 24)
 
@@ -120,17 +97,7 @@ func TestApprovalModal_DenyKey(t *testing.T) {
 
 // TestApprovalModal_DenyKeyUppercase tests denial with 'D' key.
 func TestApprovalModal_DenyKeyUppercase(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "rm -rf /",
-			Program: "rm",
-			Args:    []string{"-rf", "/"},
-		},
-		Reason:    "extremely dangerous",
-		WorkDir:   "/",
-		Timestamp: time.Now(),
-	}
+	req := makeApprovalEvent("rm -rf /", "extremely dangerous", "/")
 
 	modal := NewApprovalModal(req, 80, 24)
 
@@ -144,17 +111,7 @@ func TestApprovalModal_DenyKeyUppercase(t *testing.T) {
 
 // TestApprovalModal_ModifyKey tests entering edit mode with 'm' key.
 func TestApprovalModal_ModifyKey(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "git push --force",
-			Program: "git",
-			Args:    []string{"push", "--force"},
-		},
-		Reason:    "force push",
-		WorkDir:   "/home/user/repo",
-		Timestamp: time.Now(),
-	}
+	req := makeApprovalEvent("git push --force", "force push", "/home/user/repo")
 
 	modal := NewApprovalModal(req, 80, 24)
 
@@ -165,24 +122,14 @@ func TestApprovalModal_ModifyKey(t *testing.T) {
 		t.Error("expected editing to be true after pressing 'm'")
 	}
 
-	if updatedModal.editValue != req.Command.Raw {
-		t.Errorf("expected editValue to be %s, got %s", req.Command.Raw, updatedModal.editValue)
+	if updatedModal.editValue != req.Command {
+		t.Errorf("expected editValue to be %s, got %s", req.Command, updatedModal.editValue)
 	}
 }
 
 // TestApprovalModal_ModifyKeyUppercase tests entering edit mode with 'M' key.
 func TestApprovalModal_ModifyKeyUppercase(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "git push --force",
-			Program: "git",
-			Args:    []string{"push", "--force"},
-		},
-		Reason:    "force push",
-		WorkDir:   "/home/user/repo",
-		Timestamp: time.Now(),
-	}
+	req := makeApprovalEvent("git push --force", "force push", "/home/user/repo")
 
 	modal := NewApprovalModal(req, 80, 24)
 
@@ -193,24 +140,14 @@ func TestApprovalModal_ModifyKeyUppercase(t *testing.T) {
 		t.Error("expected editing to be true after pressing 'M'")
 	}
 
-	if updatedModal.editValue != req.Command.Raw {
-		t.Errorf("expected editValue to be %s, got %s", req.Command.Raw, updatedModal.editValue)
+	if updatedModal.editValue != req.Command {
+		t.Errorf("expected editValue to be %s, got %s", req.Command, updatedModal.editValue)
 	}
 }
 
 // TestApprovalModal_EditModeEnter tests confirming edit with Enter.
 func TestApprovalModal_EditModeEnter(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "git push",
-			Program: "git",
-			Args:    []string{"push"},
-		},
-		Reason:    "test",
-		WorkDir:   "/tmp",
-		Timestamp: time.Now(),
-	}
+	req := makeApprovalEvent("git push", "test", "/tmp")
 
 	modal := NewApprovalModal(req, 80, 24)
 
@@ -230,17 +167,7 @@ func TestApprovalModal_EditModeEnter(t *testing.T) {
 
 // TestApprovalModal_EditModeEscape tests canceling edit with Escape.
 func TestApprovalModal_EditModeEscape(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "git push",
-			Program: "git",
-			Args:    []string{"push"},
-		},
-		Reason:    "test",
-		WorkDir:   "/tmp",
-		Timestamp: time.Now(),
-	}
+	req := makeApprovalEvent("git push", "test", "/tmp")
 
 	modal := NewApprovalModal(req, 80, 24)
 
@@ -264,17 +191,7 @@ func TestApprovalModal_EditModeEscape(t *testing.T) {
 
 // TestApprovalModal_Resize tests modal resizing.
 func TestApprovalModal_Resize(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "test",
-			Program: "test",
-			Args:    []string{},
-		},
-		Reason:    "test",
-		WorkDir:   "/tmp",
-		Timestamp: time.Now(),
-	}
+	req := makeApprovalEvent("test", "test", "/tmp")
 
 	modal := NewApprovalModal(req, 80, 24)
 
@@ -292,17 +209,7 @@ func TestApprovalModal_Resize(t *testing.T) {
 
 // TestApprovalModal_View tests view rendering.
 func TestApprovalModal_View(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "rm -rf /tmp",
-			Program: "rm",
-			Args:    []string{"-rf", "/tmp"},
-		},
-		Reason:    "destructive",
-		WorkDir:   "/home/user",
-		Timestamp: time.Now(),
-	}
+	req := makeApprovalEvent("rm -rf /tmp", "destructive", "/home/user")
 
 	modal := NewApprovalModal(req, 80, 24)
 
@@ -328,17 +235,7 @@ func TestApprovalModal_View(t *testing.T) {
 
 // TestApprovalModal_ViewEditMode tests view rendering in edit mode.
 func TestApprovalModal_ViewEditMode(t *testing.T) {
-	req := core.ApprovalRequest{
-		ID: uuid.New().String(),
-		Command: &core.Command{
-			Raw:     "git push",
-			Program: "git",
-			Args:    []string{"push"},
-		},
-		Reason:    "test",
-		WorkDir:   "/tmp",
-		Timestamp: time.Now(),
-	}
+	req := makeApprovalEvent("git push", "test", "/tmp")
 
 	modal := NewApprovalModal(req, 80, 24)
 

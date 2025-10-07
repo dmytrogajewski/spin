@@ -29,6 +29,22 @@ func (m Model) renderChat() string {
 		statusView,
 	)
 
+	// Overlay approval modal if in approval state (Phase 3.5)
+	if m.state == StateToolApproval {
+		approvalOverlay := m.approval.View()
+		if approvalOverlay != "" {
+			return lipgloss.Place(
+				m.width,
+				m.height,
+				lipgloss.Center,
+				lipgloss.Center,
+				approvalOverlay,
+				lipgloss.WithWhitespaceChars(" "),
+				lipgloss.WithWhitespaceForeground(lipgloss.Color("0")),
+			)
+		}
+	}
+
 	// Overlay error modal if visible (Phase 3.12)
 	errorOverlay := m.errorModal.View()
 	if errorOverlay != "" {

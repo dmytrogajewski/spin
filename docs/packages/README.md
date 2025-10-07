@@ -25,6 +25,12 @@ This directory contains comprehensive documentation for all internal packages in
 | [session](session.md) | Session state management | ✅ Complete | - |
 | [tools](tools.md) | Tool registry and implementations | ✅ Complete | - |
 
+### Shared Utilities
+
+| Package | Description | Status | Coverage |
+|---------|-------------|--------|----------|
+| [types](types.md) | Shared helper types for tool arguments | ✅ Complete | - |
+
 ### UI Modules
 
 | Package | Description | Status | Coverage |
@@ -68,11 +74,14 @@ Persistent conversation sessions.
 ### [tools](tools.md)
 Tool registry and built-in tools.
 
+### [types](types.md)
+Shared tool argument helpers and error contracts.
+
 ### [exec](exec.md)
 Non-interactive execution mode for CI/CD and automation.
 
 ---
 
 **Last Updated:** 2025-10-05
-**Total Packages:** 12
+**Total Packages:** 13
 **Status:** ✅ All packages fully documented

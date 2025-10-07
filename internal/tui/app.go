@@ -202,6 +202,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle batched core events for better streaming performance
 		return m.handleBatchedEvents(msg)
 
+	case ui.ApprovalDecisionMsg:
+		// Handle approval decision from modal
+		if m.coreManager != nil && m.coreManager.ApprovalBridge() != nil {
+			// Send the response to the approval bridge
+			m.coreManager.ApprovalBridge().SendResponse(msg.Response)
+		}
+		// Clear the approval modal and return to waiting state
+		m.approval.Clear()
+		m.state = StateWaitingResponse
+		return m, nil
+
 	case ErrorMsg:
 		m.err = msg.Err
 		return m, tea.Quit
@@ -241,6 +252,12 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case StateHelp:
 		// Any key dismisses help
 		return m.dismissHelp()
+
+	case StateToolApproval:
+		// Handle approval modal keys
+		updatedApproval, cmd := m.approval.Update(msg)
+		m.approval = updatedApproval
+		return m, cmd
 
 	case StateExiting:
 		// Ignore all input during exit

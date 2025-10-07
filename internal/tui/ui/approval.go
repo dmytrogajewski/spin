@@ -16,11 +16,19 @@ type ApprovalDecisionMsg struct {
 	Response core.ApprovalResponse
 }
 
+type approvalRequestState struct {
+	ID        string
+	Command   string
+	WorkDir   string
+	Reason    string
+	Timestamp time.Time
+}
+
 // ApprovalModal is a modal overlay for command approval.
 // It displays a command that requires approval and allows the user to
 // approve, deny, or modify the command before execution.
 type ApprovalModal struct {
-	request   core.ApprovalRequest
+	request   approvalRequestState
 	editing   bool
 	editValue string
 	editInput textinput.Model
@@ -29,13 +37,19 @@ type ApprovalModal struct {
 }
 
 // NewApprovalModal creates a new approval modal.
-func NewApprovalModal(req core.ApprovalRequest, width, height int) ApprovalModal {
+func NewApprovalModal(req core.ApprovalEventData, width, height int) ApprovalModal {
 	ti := textinput.New()
 	ti.Placeholder = "Enter modified command..."
 	ti.CharLimit = 500
 
 	return ApprovalModal{
-		request:   req,
+		request: approvalRequestState{
+			ID:        req.RequestID,
+			Command:   req.Command,
+			WorkDir:   req.WorkDir,
+			Reason:    req.Reason,
+			Timestamp: req.Timestamp,
+		},
 		editing:   false,
 		editValue: "",
 		editInput: ti,
@@ -72,7 +86,7 @@ func (m ApprovalModal) Update(msg tea.Msg) (ApprovalModal, tea.Cmd) {
 		case "m", "M":
 			// Enter modification mode
 			m.editing = true
-			m.editValue = m.request.Command.Raw
+			m.editValue = m.request.Command
 			m.editInput.SetValue(m.editValue)
 			m.editInput.Focus()
 			return m, textinput.Blink
@@ -198,7 +212,7 @@ func (m ApprovalModal) renderApprovalMode() string {
 	// Command
 	cmdStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11"))
 	content.WriteString(contentStyle.Render(
-		fmt.Sprintf("Command:  %s", cmdStyle.Render(m.request.Command.Raw)),
+		fmt.Sprintf("Command:  %s", cmdStyle.Render(m.request.Command)),
 	))
 	content.WriteString("\n")
 
@@ -294,7 +308,7 @@ func NewApproval() ApprovalModal {
 	ti.CharLimit = 500
 
 	return ApprovalModal{
-		request:   core.ApprovalRequest{},
+		request:   approvalRequestState{},
 		editing:   false,
 		editValue: "",
 		editInput: ti,
@@ -304,15 +318,19 @@ func NewApproval() ApprovalModal {
 }
 
 // SetRequest sets the approval request.
-func (m *ApprovalModal) SetRequest(req *core.ApprovalRequest) {
-	if req != nil {
-		m.request = *req
+func (m *ApprovalModal) SetRequest(req core.ApprovalEventData) {
+	m.request = approvalRequestState{
+		ID:        req.RequestID,
+		Command:   req.Command,
+		WorkDir:   req.WorkDir,
+		Reason:    req.Reason,
+		Timestamp: req.Timestamp,
 	}
 }
 
 // Clear clears the approval state.
 func (m *ApprovalModal) Clear() {
-	m.request = core.ApprovalRequest{}
+	m.request = approvalRequestState{}
 	m.editing = false
 	m.editValue = ""
 	m.editInput.SetValue("")
@@ -320,9 +338,16 @@ func (m *ApprovalModal) Clear() {
 }
 
 // Request returns the current approval request (for testing).
-func (m ApprovalModal) Request() *core.ApprovalRequest {
+func (m ApprovalModal) Request() *core.ApprovalEventData {
 	if m.request.ID == "" {
 		return nil
 	}
-	return &m.request
+	return &core.ApprovalEventData{
+		RequestID: m.request.ID,
+		Command:   m.request.Command,
+		WorkDir:   m.request.WorkDir,
+		Reason:    m.request.Reason,
+		Status:    "pending",
+		Timestamp: m.request.Timestamp,
+	}
 }

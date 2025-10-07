@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,11 +26,13 @@ func waitForBatchedEvents(events <-chan core.Event, batchTimeout time.Duration) 
 			select {
 			case event, ok := <-events:
 				if !ok {
-					// Channel closed
+					// Channel closed - but we should keep listening
+					// This might happen temporarily between turns
 					if len(batch) > 0 {
 						return BatchedEventsMsg{Events: batch}
 					}
-					return nil
+					// Return empty batch to keep the event loop alive
+					return BatchedEventsMsg{Events: []core.Event{}}
 				}
 				batch = append(batch, event)
 
@@ -40,7 +43,11 @@ func waitForBatchedEvents(events <-chan core.Event, batchTimeout time.Duration) 
 						select {
 						case e, ok := <-events:
 							if !ok {
-								return BatchedEventsMsg{Events: batch}
+								// Channel closed, return what we have
+								if len(batch) > 0 {
+									return BatchedEventsMsg{Events: batch}
+								}
+								return BatchedEventsMsg{Events: []core.Event{}}
 							}
 							batch = append(batch, e)
 							// Break if we get a different event type
@@ -73,7 +80,7 @@ func waitForBatchedEvents(events <-chan core.Event, batchTimeout time.Duration) 
 				// Reset timer for next batch
 				timer.Reset(batchTimeout)
 			}
-			continueWaiting:
+		continueWaiting:
 		}
 	}
 }
@@ -101,57 +108,61 @@ func (m Model) processSingleEvent(event core.Event) Model {
 		}
 
 		// Process content delta
-		if dataMap, ok := event.Data.(map[string]interface{}); ok {
-			if content, ok := dataMap["content"].(string); ok {
-				m.chat.AppendDelta(content)
-			}
-		} else if data, ok := event.Data.(*core.ContentDeltaData); ok {
+		switch data := event.Data.(type) {
+		case core.ContentDeltaData:
+			m.chat.AppendDelta(data.Content)
+		case *core.ContentDeltaData:
 			m.chat.AppendDelta(data.Content)
 		}
 
 	case core.EventToolCallStart:
 		// Add tool call message to chat
-		if data, ok := event.Data.(map[string]interface{}); ok {
-			toolName, _ := data["tool_name"].(string)
-			toolID, _ := data["tool_id"].(string)
-
-			if toolName != "" {
-				// Create a tool call message
-				toolCall := ui.ToolCall{
-					Name:      toolName,
-					Arguments: make(map[string]interface{}),
-					ID:        toolID,
-				}
-
-				// Extract arguments if present
-				if args, ok := data["arguments"].(map[string]interface{}); ok {
-					toolCall.Arguments = args
-				}
-
-				// Add message with tool call
-				msg := ui.Message{
-					Role:      ui.RoleAssistant,
-					ToolCall:  &toolCall,
-					Timestamp: time.Now(),
-				}
-				m.chat.AddMessage(msg)
+		switch data := event.Data.(type) {
+		case core.ToolCallStartData:
+			toolCall := ui.ToolCall{
+				Name:      data.ToolName,
+				Arguments: data.Parameters.ToMap(),
+				ID:        data.ToolID,
 			}
+			msg := ui.Message{
+				Role:      ui.RoleAssistant,
+				ToolCall:  &toolCall,
+				Timestamp: time.Now(),
+			}
+			m.chat.AddMessage(msg)
+		case *core.ToolCallStartData:
+			toolCall := ui.ToolCall{
+				Name:      data.ToolName,
+				Arguments: data.Parameters.ToMap(),
+				ID:        data.ToolID,
+			}
+			msg := ui.Message{
+				Role:      ui.RoleAssistant,
+				ToolCall:  &toolCall,
+				Timestamp: time.Now(),
+			}
+			m.chat.AddMessage(msg)
 		}
 
 	case core.EventToolCallComplete:
 		// Add tool result message to chat
-		if data, ok := event.Data.(map[string]interface{}); ok {
-			toolResult := ui.ToolResult{}
-
-			// Extract output and error
-			if output, ok := data["output"].(string); ok {
-				toolResult.Output = output
+		switch data := event.Data.(type) {
+		case core.ToolCallCompleteData:
+			toolResult := ui.ToolResult{
+				Output: data.Output,
+				Error:  data.Error,
 			}
-			if errStr, ok := data["error"].(string); ok {
-				toolResult.Error = errStr
+			msg := ui.Message{
+				Role:       ui.RoleTool,
+				ToolResult: &toolResult,
+				Timestamp:  time.Now(),
 			}
-
-			// Add message with tool result
+			m.chat.AddMessage(msg)
+		case *core.ToolCallCompleteData:
+			toolResult := ui.ToolResult{
+				Output: data.Output,
+				Error:  data.Error,
+			}
 			msg := ui.Message{
 				Role:       ui.RoleTool,
 				ToolResult: &toolResult,
@@ -161,20 +172,40 @@ func (m Model) processSingleEvent(event core.Event) Model {
 		}
 
 	case core.EventCommandApproval:
-		if req, ok := event.Data.(*core.ApprovalRequest); ok {
+		switch data := event.Data.(type) {
+		case core.ApprovalEventData:
 			m.state = StateToolApproval
-			m.approval.SetRequest(req)
+			m.approval.SetRequest(data)
+		case *core.ApprovalEventData:
+			m.state = StateToolApproval
+			m.approval.SetRequest(*data)
 		}
 
 	case core.EventCommandApproved, core.EventCommandDenied:
 		m.state = StateWaitingResponse
+		if data, ok := event.Data.(core.ApprovalEventData); ok {
+			if data.Status == "denied" {
+				m.chat.AddMessage(ui.Message{
+					Role:    ui.RoleSystem,
+					Content: fmt.Sprintf("Command denied: %s", data.Reason),
+				})
+			}
+		} else if dataPtr, ok := event.Data.(*core.ApprovalEventData); ok {
+			if dataPtr.Status == "denied" {
+				m.chat.AddMessage(ui.Message{
+					Role:    ui.RoleSystem,
+					Content: fmt.Sprintf("Command denied: %s", dataPtr.Reason),
+				})
+			}
+		}
 
 	case core.EventTurnComplete, core.EventTurnFailed:
 		m.spinner.Stop()
-		if data, ok := event.Data.(map[string]interface{}); ok {
-			if tokensUsed, ok := data["tokens_used"].(int); ok {
-				m.statusBar.SetTokens(tokensUsed, 0)
-			}
+		switch data := event.Data.(type) {
+		case core.TurnEventData:
+			m.statusBar.SetTokens(data.TokensUsed, 0)
+		case *core.TurnEventData:
+			m.statusBar.SetTokens(data.TokensUsed, 0)
 		}
 		m.state = StateIdle
 		m.chat.FinalizeMessage()

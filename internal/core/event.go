@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/types"
 	"github.com/google/uuid"
 )
 
@@ -78,14 +79,14 @@ func (e EventType) String() string {
 // ContentDeltaData contains incremental content from LLM.
 type ContentDeltaData struct {
 	Content string `json:"content"`
-	Role    string `json:"role"` // assistant, tool
+	Role    string `json:"role"`
 }
 
-// ToolCallData contains tool execution information.
-type ToolCallData struct {
-	ToolName   string                 `json:"tool_name"`
-	ToolID     string                 `json:"tool_id"`
-	Parameters map[string]interface{} `json:"parameters"`
+// ToolCallStartData contains tool execution start information.
+type ToolCallStartData struct {
+	ToolName   string                  `json:"tool_name"`
+	ToolID     string                  `json:"tool_id"`
+	Parameters types.ToolCallArguments `json:"parameters"`
 }
 
 // ToolProgressData contains tool progress updates.
@@ -95,12 +96,43 @@ type ToolProgressData struct {
 	Message string `json:"message"`
 }
 
-// ToolResultData contains tool execution results.
-type ToolResultData struct {
+// ToolCallCompleteData contains tool execution results.
+type ToolCallCompleteData struct {
 	ToolID   string `json:"tool_id"`
 	ToolName string `json:"tool_name"`
-	Result   string `json:"result"`
+	Success  bool   `json:"success"`
+	Output   string `json:"output"`
 	Error    string `json:"error,omitempty"`
+}
+
+// TurnEventData contains turn lifecycle information.
+type TurnEventData struct {
+	Turn       int    `json:"turn"`
+	TurnID     string `json:"turn_id,omitempty"`
+	Status     string `json:"status,omitempty"`
+	Message    string `json:"message,omitempty"`
+	TurnsUsed  int    `json:"turns_used,omitempty"`
+	TokensUsed int    `json:"tokens_used,omitempty"`
+	MaxTurns   int    `json:"max_turns,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+// ApprovalEventData contains approval request and status information.
+type ApprovalEventData struct {
+	RequestID       string    `json:"request_id"`
+	Command         string    `json:"command"`
+	WorkDir         string    `json:"work_dir,omitempty"`
+	Reason          string    `json:"reason,omitempty"`
+	Status          string    `json:"status,omitempty"`
+	ModifiedCommand string    `json:"modified_command,omitempty"`
+	Timestamp       time.Time `json:"timestamp"`
+}
+
+// SystemEventData contains informational or warning messages.
+type SystemEventData struct {
+	Level   string `json:"level"`
+	Message string `json:"message"`
+	Details string `json:"details,omitempty"`
 }
 
 // ErrorData contains error information.
@@ -108,15 +140,6 @@ type ErrorData struct {
 	Message string `json:"message"`
 	Code    string `json:"code"`
 	Details string `json:"details,omitempty"`
-}
-
-// CommandApprovalData contains approval request information.
-type CommandApprovalData struct {
-	Command   string `json:"command"`
-	Class     string `json:"class"` // dangerous, interactive
-	Reason    string `json:"reason"`
-	WorkDir   string `json:"work_dir"`
-	RequestID string `json:"request_id"`
 }
 
 // BackpressureMode defines how the emitter handles slow consumers.

@@ -14,7 +14,8 @@ func TestNewInput(t *testing.T) {
 	assert.NotNil(t, i.history)
 	assert.Equal(t, 80, i.width)
 	assert.Equal(t, 3, i.height)
-	assert.False(t, i.focused)
+	assert.True(t, i.focused)
+	assert.True(t, i.textarea.Focused())
 	assert.Equal(t, -1, i.triggerPos)
 }
 

@@ -66,13 +66,9 @@ func TestHandleStreamDelta_MultipleDeltas(t *testing.T) {
 func TestHandleApprovalRequest(t *testing.T) {
 	m := NewTestModel()
 
-	req := &core.ApprovalRequest{
-		ID: "test-123",
-		Command: &core.Command{
-			Program: "rm",
-			Raw:     "rm -rf node_modules",
-			Args:    []string{"rm", "-rf", "node_modules"},
-		},
+	req := core.ApprovalEventData{
+		RequestID: "test-123",
+		Command:   "rm -rf node_modules",
 		Reason:    "dangerous command",
 		WorkDir:   "/test",
 		Timestamp: time.Now(),
@@ -90,8 +86,8 @@ func TestHandleApprovalRequest(t *testing.T) {
 	// Use Request() accessor
 	request := m.approval.Request()
 	assert.NotNil(t, request)
-	assert.Equal(t, "test-123", request.ID)
-	assert.Equal(t, "rm -rf node_modules", request.Command.Raw)
+	assert.Equal(t, "test-123", request.RequestID)
+	assert.Equal(t, "rm -rf node_modules", request.Command)
 }
 
 func TestHandleApprovalResult_Approved(t *testing.T) {
@@ -101,9 +97,10 @@ func TestHandleApprovalResult_Approved(t *testing.T) {
 	event := core.Event{
 		Type:      core.EventCommandApproved,
 		Timestamp: time.Now(),
-		Data: map[string]interface{}{
-			"command":  "rm -rf node_modules",
-			"approved": true,
+		Data: core.ApprovalEventData{
+			RequestID: "req-1",
+			Command:   "rm -rf node_modules",
+			Status:    "approved",
 		},
 	}
 
@@ -119,10 +116,11 @@ func TestHandleApprovalResult_Denied(t *testing.T) {
 	event := core.Event{
 		Type:      core.EventCommandDenied,
 		Timestamp: time.Now(),
-		Data: map[string]interface{}{
-			"command":  "rm -rf node_modules",
-			"approved": false,
-			"reason":   "user denied",
+		Data: core.ApprovalEventData{
+			RequestID: "req-1",
+			Command:   "rm -rf node_modules",
+			Status:    "denied",
+			Reason:    "user denied",
 		},
 	}
 
@@ -153,9 +151,9 @@ func TestHandleTurnComplete(t *testing.T) {
 	event := core.Event{
 		Type:      core.EventTurnComplete,
 		Timestamp: time.Now(),
-		Data: map[string]interface{}{
-			"turn_id":     "turn-123",
-			"tokens_used": 150,
+		Data: core.TurnEventData{
+			TurnID:     "turn-123",
+			TokensUsed: 150,
 		},
 	}
 

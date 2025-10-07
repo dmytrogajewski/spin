@@ -374,73 +374,58 @@ func (c *Conversation) State() State {
 // Pause pauses the currently running turn.
 // Returns an error if no turn is running or conversation is stopped.
 func (c *Conversation) Pause() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Validate state
-	if c.state != StateRunning {
-		return fmt.Errorf("cannot pause: conversation is %s", c.state.String())
-	}
-
-	// Send pause signal (non-blocking)
-	c.controlMu.Lock()
-	if c.controlChan != nil {
-		select {
-		case c.controlChan <- SignalPause:
-			// Signal sent
-		default:
-			// Channel full, pause already requested
-		}
-	}
-	c.controlMu.Unlock()
-
-	// Transition to paused state
-	c.state = StatePaused
-
-	// Emit event
-	if c.emitter != nil {
-		c.emitter.Emit(Event{
-			Type:      EventTurnPaused,
-			Timestamp: time.Now(),
-			Data:      map[string]interface{}{"reason": "user requested"},
-		})
-	}
-
-	return nil
+	return c.transitionState(
+		StateRunning,
+		StatePaused,
+		SignalPause,
+		"cannot pause: conversation is %s",
+		"paused",
+		"user requested",
+		EventTurnPaused,
+	)
 }
 
 // Resume resumes a paused turn.
 // Returns an error if no turn is paused.
 func (c *Conversation) Resume() error {
+	return c.transitionState(
+		StatePaused,
+		StateRunning,
+		SignalResume,
+		"cannot resume: conversation is %s",
+		"resumed",
+		"user requested",
+		EventTurnResumed,
+	)
+}
+
+func (c *Conversation) transitionState(expected, next State, signal ControlSignal, errTemplate, status, message string, eventType EventType) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Validate state
-	if c.state != StatePaused {
-		return fmt.Errorf("cannot resume: conversation is %s", c.state.String())
+	if c.state != expected {
+		return fmt.Errorf(errTemplate, c.state.String())
 	}
 
-	// Send resume signal (non-blocking)
 	c.controlMu.Lock()
 	if c.controlChan != nil {
 		select {
-		case c.controlChan <- SignalResume:
-			// Signal sent
+		case c.controlChan <- signal:
 		default:
-			// Channel full, resume already requested
 		}
 	}
 	c.controlMu.Unlock()
 
-	// Transition back to running
-	c.state = StateRunning
+	c.state = next
 
-	// Emit event
 	if c.emitter != nil {
 		c.emitter.Emit(Event{
-			Type:      EventTurnResumed,
+			Type:      eventType,
 			Timestamp: time.Now(),
-			Data:      map[string]interface{}{"reason": "user requested"},
+			Data: TurnEventData{
+				Status:  status,
+				Message: message,
+			},
 		})
 	}
 

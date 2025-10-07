@@ -11,6 +11,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/internal/types"
 	"github.com/google/uuid"
 )
 
@@ -381,8 +382,8 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 		a.emitter.Emit(Event{
 			Type:      EventTurnStart,
 			Timestamp: time.Now(),
-			Data: map[string]interface{}{
-				"turn": turn + 1,
+			Data: TurnEventData{
+				Turn: turn + 1,
 			},
 		})
 
@@ -432,35 +433,18 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 				// Add to assistant message (note: message already appended above)
 				messages[len(messages)-1].ToolCalls = append(messages[len(messages)-1].ToolCalls, *coreToolCall)
 
-				// Parse arguments for the event
-				var toolArgs map[string]interface{}
-				if coreToolCall.Function.Arguments != "" {
-					_ = json.Unmarshal([]byte(coreToolCall.Function.Arguments), &toolArgs)
-				}
-
-				// Emit tool call start event
-				a.emitter.Emit(Event{
-					Type:      EventToolCallStart,
-					Timestamp: time.Now(),
-					Data: map[string]interface{}{
-						"tool_id":    coreToolCall.ID,
-						"tool_name":  coreToolCall.Function.Name,
-						"arguments":  toolArgs,
-					},
-				})
-
-				// Process the tool call
+				// Process the tool call (ProcessToolCall will emit EventToolCallStart)
 				toolResult, err := a.ProcessToolCall(ctx, coreToolCall)
 				if err != nil {
 					// Emit tool error event
 					a.emitter.Emit(Event{
 						Type:      EventToolCallComplete,
 						Timestamp: time.Now(),
-						Data: map[string]interface{}{
-							"tool_id":   coreToolCall.ID,
-							"tool_name": coreToolCall.Function.Name,
-							"success":   false,
-							"error":     err.Error(),
+						Data: ToolCallCompleteData{
+							ToolID:   coreToolCall.ID,
+							ToolName: coreToolCall.Function.Name,
+							Success:  false,
+							Error:    err.Error(),
 						},
 					})
 
@@ -474,20 +458,20 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 					})
 				} else {
 					// Emit tool completion event
-					eventData := map[string]interface{}{
-						"tool_id":   coreToolCall.ID,
-						"tool_name": coreToolCall.Function.Name,
-						"success":   toolResult.Success,
+					completion := ToolCallCompleteData{
+						ToolID:   coreToolCall.ID,
+						ToolName: coreToolCall.Function.Name,
+						Success:  toolResult.Success,
 					}
 					if toolResult.Success {
-						eventData["output"] = toolResult.Output
+						completion.Output = toolResult.Output
 					} else if toolResult.Error != nil {
-						eventData["error"] = toolResult.Error.Error()
+						completion.Error = toolResult.Error.Error()
 					}
 					a.emitter.Emit(Event{
 						Type:      EventToolCallComplete,
 						Timestamp: time.Now(),
-						Data:      eventData,
+						Data:      completion,
 					})
 
 					// Add tool result to conversation (after assistant message)
@@ -525,10 +509,12 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 	a.emitter.Emit(Event{
 		Type:      EventTurnComplete,
 		Timestamp: time.Now(),
-		Data: map[string]interface{}{
-			"turns_used":    resp.TurnsUsed,
-			"tokens_used":   resp.TokensUsed,
-			"finish_reason": resp.FinishReason,
+		Data: TurnEventData{
+			TurnsUsed:  resp.TurnsUsed,
+			TokensUsed: resp.TokensUsed,
+			Status:     "complete",
+			Message:    resp.FinishReason,
+			MaxTurns:   a.config.MaxTurns,
 		},
 	})
 
@@ -622,8 +608,9 @@ func (a *Agent) callLLM(ctx context.Context, messages []Message) (*llm.Completio
 			a.emitter.Emit(Event{
 				Type:      EventContentDelta,
 				Timestamp: time.Now(),
-				Data: map[string]interface{}{
-					"content": chunk.Content,
+				Data: ContentDeltaData{
+					Content: chunk.Content,
+					Role:    "assistant",
 				},
 			})
 		}
@@ -789,13 +776,16 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 	}
 
 	// 3. Emit tool start event
+	// Convert args to ToolCallArguments
+	toolArgs, _ := types.FromMap(args)
+
 	a.emitter.Emit(Event{
 		Type:      EventToolCallStart,
 		Timestamp: time.Now(),
-		Data: map[string]interface{}{
-			"tool_id":    call.ID,
-			"tool_name":  call.Function.Name,
-			"arguments":  args,
+		Data: ToolCallStartData{
+			ToolID:     call.ID,
+			ToolName:   call.Function.Name,
+			Parameters: toolArgs,
 		},
 	})
 
@@ -828,20 +818,20 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 	}
 
 	// 5. Emit completion event
-	eventData := map[string]interface{}{
-		"tool_id":   call.ID,
-		"tool_name": call.Function.Name,
-		"success":   result.Success,
+	completion := ToolCallCompleteData{
+		ToolID:   call.ID,
+		ToolName: call.Function.Name,
+		Success:  result.Success,
 	}
 	if result.Success {
-		eventData["output"] = result.Output
+		completion.Output = result.Output
 	} else if result.Error != nil {
-		eventData["error"] = result.Error.Error()
+		completion.Error = result.Error.Error()
 	}
 	a.emitter.Emit(Event{
 		Type:      EventToolCallComplete,
 		Timestamp: time.Now(),
-		Data:      eventData,
+		Data:      completion,
 	})
 
 	return result, nil // Always return nil error so agent continues
@@ -964,7 +954,14 @@ func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string
 	a.emitter.Emit(Event{
 		Type:      EventCommandApproval,
 		Timestamp: req.Timestamp,
-		Data:      req,
+		Data: ApprovalEventData{
+			RequestID: req.ID,
+			Command:   cmd.Raw,
+			WorkDir:   req.WorkDir,
+			Reason:    req.Reason,
+			Status:    "pending",
+			Timestamp: req.Timestamp,
+		},
 	})
 
 	// If no handler, auto-deny
@@ -972,9 +969,13 @@ func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string
 		a.emitter.Emit(Event{
 			Type:      EventCommandDenied,
 			Timestamp: time.Now(),
-			Data: map[string]interface{}{
-				"request_id": reqID,
-				"reason":     "no approval handler configured",
+			Data: ApprovalEventData{
+				RequestID: reqID,
+				Command:   cmd.Raw,
+				WorkDir:   cmd.WorkDir,
+				Reason:    "no approval handler configured",
+				Status:    "denied",
+				Timestamp: time.Now(),
 			},
 		})
 		return false
@@ -1007,9 +1008,13 @@ func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string
 		a.emitter.Emit(Event{
 			Type:      EventCommandDenied,
 			Timestamp: time.Now(),
-			Data: map[string]interface{}{
-				"request_id": reqID,
-				"reason":     "approval timeout or context cancelled",
+			Data: ApprovalEventData{
+				RequestID: reqID,
+				Command:   cmd.Raw,
+				WorkDir:   cmd.WorkDir,
+				Reason:    "approval timeout or context cancelled",
+				Status:    "denied",
+				Timestamp: time.Now(),
 			},
 		})
 		return false
@@ -1020,9 +1025,13 @@ func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string
 		a.emitter.Emit(Event{
 			Type:      EventCommandDenied,
 			Timestamp: time.Now(),
-			Data: map[string]interface{}{
-				"request_id": reqID,
-				"reason":     "response request ID mismatch",
+			Data: ApprovalEventData{
+				RequestID: reqID,
+				Command:   cmd.Raw,
+				WorkDir:   cmd.WorkDir,
+				Reason:    "response request ID mismatch",
+				Status:    "denied",
+				Timestamp: time.Now(),
 			},
 		})
 		return false
@@ -1036,9 +1045,13 @@ func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string
 			a.emitter.Emit(Event{
 				Type:      EventCommandDenied,
 				Timestamp: time.Now(),
-				Data: map[string]interface{}{
-					"request_id": reqID,
-					"reason":     "modified command parse error: " + err.Error(),
+				Data: ApprovalEventData{
+					RequestID: reqID,
+					Command:   cmd.Raw,
+					WorkDir:   cmd.WorkDir,
+					Reason:    "modified command parse error: " + err.Error(),
+					Status:    "denied",
+					Timestamp: time.Now(),
 				},
 			})
 			return false
@@ -1050,9 +1063,13 @@ func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string
 			a.emitter.Emit(Event{
 				Type:      EventCommandDenied,
 				Timestamp: time.Now(),
-				Data: map[string]interface{}{
-					"request_id": reqID,
-					"reason":     "modified command validation error: " + err.Error(),
+				Data: ApprovalEventData{
+					RequestID: reqID,
+					Command:   cmd.Raw,
+					WorkDir:   cmd.WorkDir,
+					Reason:    "modified command validation error: " + err.Error(),
+					Status:    "denied",
+					Timestamp: time.Now(),
 				},
 			})
 			return false
@@ -1061,9 +1078,13 @@ func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string
 			a.emitter.Emit(Event{
 				Type:      EventCommandDenied,
 				Timestamp: time.Now(),
-				Data: map[string]interface{}{
-					"request_id": reqID,
-					"reason":     fmt.Sprintf("modified command failed validation: %s", result.Classification.String()),
+				Data: ApprovalEventData{
+					RequestID: reqID,
+					Command:   cmd.Raw,
+					WorkDir:   cmd.WorkDir,
+					Reason:    fmt.Sprintf("modified command failed validation: %s", result.Classification.String()),
+					Status:    "denied",
+					Timestamp: time.Now(),
 				},
 			})
 			return false
@@ -1078,10 +1099,14 @@ func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string
 		a.emitter.Emit(Event{
 			Type:      EventCommandApproved,
 			Timestamp: time.Now(),
-			Data: map[string]interface{}{
-				"request_id": reqID,
-				"command":    cmd.Raw,
-				"reason":     resp.Reason,
+			Data: ApprovalEventData{
+				RequestID:       reqID,
+				Command:         cmd.Raw,
+				WorkDir:         cmd.WorkDir,
+				Reason:          resp.Reason,
+				Status:          "approved",
+				ModifiedCommand: resp.ModifiedCommand,
+				Timestamp:       time.Now(),
 			},
 		})
 		return true
@@ -1091,9 +1116,13 @@ func (a *Agent) requestApproval(ctx context.Context, cmd *Command, reason string
 	a.emitter.Emit(Event{
 		Type:      EventCommandDenied,
 		Timestamp: time.Now(),
-		Data: map[string]interface{}{
-			"request_id": reqID,
-			"reason":     resp.Reason,
+		Data: ApprovalEventData{
+			RequestID: reqID,
+			Command:   cmd.Raw,
+			WorkDir:   cmd.WorkDir,
+			Reason:    resp.Reason,
+			Status:    "denied",
+			Timestamp: time.Now(),
 		},
 	})
 	return false

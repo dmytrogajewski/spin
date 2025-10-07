@@ -80,41 +80,54 @@ func (m Model) handleStreamDelta(event core.Event) Model {
 		m.spinner.Stop()
 	}
 
-	// Try map[string]interface{} first (current implementation)
-	if dataMap, ok := event.Data.(map[string]interface{}); ok {
-		if content, ok := dataMap["content"].(string); ok {
-			Debug("Appending delta", "content_length", len(content), "total_messages_before", len(m.chat.AllMessages()))
-			m.chat.AppendDelta(content)
-			Debug("After append", "total_messages_after", len(m.chat.AllMessages()))
-			return m
-		}
-	}
-
-	// Fallback to struct pointer (future implementation)
-	if data, ok := event.Data.(*core.ContentDeltaData); ok {
-		Debug("Appending delta from struct", "content_length", len(data.Content), "total_messages_before", len(m.chat.AllMessages()))
+	switch data := event.Data.(type) {
+	case core.ContentDeltaData:
+		Debug("Appending delta", "content_length", len(data.Content), "total_messages_before", len(m.chat.AllMessages()))
 		m.chat.AppendDelta(data.Content)
 		Debug("After append", "total_messages_after", len(m.chat.AllMessages()))
-		return m
+	case *core.ContentDeltaData:
+		Debug("Appending delta", "content_length", len(data.Content), "total_messages_before", len(m.chat.AllMessages()))
+		m.chat.AppendDelta(data.Content)
+	default:
+		Warn("ContentDelta event with invalid data type", "type", fmt.Sprintf("%T", event.Data))
 	}
 
-	Warn("ContentDelta event with invalid data type", "type", fmt.Sprintf("%T", event.Data))
 	return m
 }
 
 // handleApprovalRequest processes command approval requests.
 func (m Model) handleApprovalRequest(event core.Event) Model {
-	if req, ok := event.Data.(*core.ApprovalRequest); ok {
+	if data, ok := event.Data.(core.ApprovalEventData); ok {
 		m.state = StateToolApproval
-		m.approval.SetRequest(req)
+		m.approval.SetRequest(data)
+	} else if dataPtr, ok := event.Data.(*core.ApprovalEventData); ok {
+		m.state = StateToolApproval
+		m.approval.SetRequest(*dataPtr)
+	} else {
+		Warn("Approval event with unexpected payload", "type", fmt.Sprintf("%T", event.Data))
 	}
 	return m
 }
 
 // handleApprovalResult processes approval decision results.
 func (m Model) handleApprovalResult(event core.Event, approved bool) Model {
+	if data, ok := event.Data.(core.ApprovalEventData); ok {
+		if data.Status == "denied" {
+			m.chat.AddMessage(ui.Message{
+				Role:    ui.RoleSystem,
+				Content: fmt.Sprintf("Command denied: %s", data.Reason),
+			})
+		}
+	} else if dataPtr, ok := event.Data.(*core.ApprovalEventData); ok {
+		if dataPtr.Status == "denied" {
+			m.chat.AddMessage(ui.Message{
+				Role:    ui.RoleSystem,
+				Content: fmt.Sprintf("Command denied: %s", dataPtr.Reason),
+			})
+		}
+	}
 	m.state = StateWaitingResponse
-	// TODO: Add approval result to transcript
+
 	return m
 }
 
@@ -123,11 +136,12 @@ func (m Model) handleTurnComplete(event core.Event) Model {
 	// Stop spinner
 	m.spinner.Stop()
 
-	// Extract tokens from event data (map[string]interface{})
-	if data, ok := event.Data.(map[string]interface{}); ok {
-		if tokensUsed, ok := data["tokens_used"].(int); ok {
-			m.statusBar.SetTokens(tokensUsed, 0) // Set turn tokens, session total TBD
-		}
+	// Extract tokens from event data
+	switch data := event.Data.(type) {
+	case core.TurnEventData:
+		m.statusBar.SetTokens(data.TokensUsed, 0)
+	case *core.TurnEventData:
+		m.statusBar.SetTokens(data.TokensUsed, 0)
 	}
 
 	m.state = StateIdle

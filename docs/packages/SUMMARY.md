@@ -17,9 +17,10 @@ All internal packages have been fully documented.
 | [security.md](security.md) | 2.2KB | internal/security | ✅ Complete |
 | [session.md](session.md) | 2.7KB | internal/session | ✅ Complete |
 | [tools.md](tools.md) | 3.5KB | internal/tools | ✅ Complete |
+| [types.md](types.md) | 1.7KB | internal/types | ✅ Complete |
 | [README.md](README.md) | 2.2KB | Index | ✅ Complete |
 
-**Total Documentation:** ~67KB across 12 files
+**Total Documentation:** ~69KB across 13 files
 
 ## Documentation Coverage
 
@@ -35,6 +36,7 @@ All internal packages have been fully documented.
 - ✅ **security** - Sandboxing and security
 - ✅ **session** - Session persistence
 - ✅ **tools** - Tool registry
+- ✅ **types** - Shared helper types (tool arguments)
 
 ## What Each Document Contains
 
@@ -121,6 +123,11 @@ All documentation follows a consistent structure:
 - Custom tool creation
 - Schema validation
 
+### types
+- Shared `ToolCallArguments` container
+- Typed accessors and conversions
+- Common error contracts
+
 ## Usage
 
 Start with the [README.md](README.md) index for navigation.
@@ -140,4 +147,4 @@ Future enhancements:
 
 **Created:** 2025-10-05  
 **Status:** ✅ Complete  
-**Total Packages:** 11
+**Total Packages:** 12

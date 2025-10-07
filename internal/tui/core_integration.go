@@ -11,10 +11,11 @@ import (
 // CoreManager wraps core functionality for TUI.
 // It manages the Manager and active Conversation, handling lifecycle and communication.
 type CoreManager struct {
-	manager *core.Manager
-	conv    *core.Conversation
-	ctx     context.Context
-	cancel  context.CancelFunc
+	manager        *core.Manager
+	conv           *core.Conversation
+	ctx            context.Context
+	cancel         context.CancelFunc
+	approvalBridge *ApprovalBridge
 }
 
 // NewCoreManager creates a new CoreManager for TUI.
@@ -26,10 +27,18 @@ func NewCoreManager(cfg *core.Config, provider llm.Provider) (*CoreManager, erro
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Create manager with provider
+	// Create emitter for events
+	emitter := core.NewEventEmitter(core.DefaultEventBufferSize)
+
+	// Create approval bridge
+	approvalBridge := NewApprovalBridge(emitter)
+
+	// Create manager with provider and approval handler
 	mgr, err := core.NewManager(
 		cfg,
 		core.WithLLM(provider),
+		core.WithEmitter(emitter),
+		core.WithManagerApprovalHandler(approvalBridge.Handler()),
 	)
 	if err != nil {
 		cancel()
@@ -37,9 +46,10 @@ func NewCoreManager(cfg *core.Config, provider llm.Provider) (*CoreManager, erro
 	}
 
 	return &CoreManager{
-		manager: mgr,
-		ctx:     ctx,
-		cancel:  cancel,
+		manager:        mgr,
+		ctx:            ctx,
+		cancel:         cancel,
+		approvalBridge: approvalBridge,
 	}, nil
 }
 
@@ -86,6 +96,11 @@ func (cm *CoreManager) Resume() error {
 		return nil
 	}
 	return cm.conv.Resume()
+}
+
+// ApprovalBridge returns the approval bridge for handling user responses.
+func (cm *CoreManager) ApprovalBridge() *ApprovalBridge {
+	return cm.approvalBridge
 }
 
 // Close cleanup resources.

@@ -19,8 +19,8 @@ func FromCoreEvent(event core.Event) (Message, bool) {
 		}
 
 	case core.EventToolCallStart:
-		if data, ok := event.Data.(core.ToolCallData); ok {
-			argsJSON, _ := json.Marshal(data.Parameters)
+		if data, ok := event.Data.(core.ToolCallStartData); ok {
+			argsJSON, _ := json.Marshal(data.Parameters.ToMap())
 			return NewToolCallProposedMessage(ToolCallProposed{
 				ToolCallID:       data.ToolID,
 				ToolName:         data.ToolName,
@@ -37,12 +37,12 @@ func FromCoreEvent(event core.Event) (Message, bool) {
 		}
 
 	case core.EventToolCallComplete:
-		if data, ok := event.Data.(core.ToolResultData); ok {
+		if data, ok := event.Data.(core.ToolCallCompleteData); ok {
 			var result ToolResult
-			if data.Error != "" {
+			if !data.Success && data.Error != "" {
 				result = NewErrorResult(data.Error)
 			} else {
-				result = NewSuccessResult(data.Result)
+				result = NewSuccessResult(data.Output)
 			}
 			return NewToolCallResultMessage(ToolCallResult{
 				ToolCallID: data.ToolID,
