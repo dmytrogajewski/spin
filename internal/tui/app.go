@@ -188,6 +188,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		return m.handleResize(msg)
 
+	case tea.MouseMsg:
+		// Handle mouse events - only pass to chat for scrolling
+		// DO NOT pass to input component to prevent symbols appearing
+		m.chat, cmd = m.chat.Update(msg)
+		return m, cmd
+
 	case CoreEventMsg:
 		// Handle core events (Phase 3.11)
 		return m.handleCoreEvent(msg)
@@ -207,17 +213,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Schedule next tick
 		return m, tea.Batch(cmd, tickCmd())
+
+	default:
+		// For all other message types, update both components
+		// Update chat component
+		m.chat, cmd = m.chat.Update(msg)
+		cmds = append(cmds, cmd)
+
+		// Update input component (Phase 3.3)
+		m.input, cmd = m.input.Update(msg)
+		cmds = append(cmds, cmd)
+
+		return m, tea.Batch(cmds...)
 	}
-
-	// Update chat component
-	m.chat, cmd = m.chat.Update(msg)
-	cmds = append(cmds, cmd)
-
-	// Update input component (Phase 3.3)
-	m.input, cmd = m.input.Update(msg)
-	cmds = append(cmds, cmd)
-
-	return m, tea.Batch(cmds...)
 }
 
 // handleKeyPress processes keyboard input.

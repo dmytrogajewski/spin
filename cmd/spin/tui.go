@@ -120,8 +120,9 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	// Configure Bubble Tea program options
 	p := tea.NewProgram(
 		m,
-		tea.WithAltScreen(),       // Use alternate screen buffer (preserves terminal history)
-		tea.WithMouseCellMotion(), // Enable mouse support for future phases
+		tea.WithAltScreen(), // Use alternate screen buffer (preserves terminal history)
+		// Mouse support disabled to prevent scroll wheel from generating escape sequences
+		// tea.WithMouseCellMotion(), // Commented out to fix input corruption on scroll
 	)
 
 	// Run the program
