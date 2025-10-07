@@ -397,16 +397,8 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 		// Accumulate content
 		resp.Content += llmResp.Content
 
-		// Emit content event
-		if llmResp.Content != "" {
-			a.emitter.Emit(Event{
-				Type:      EventContentDelta,
-				Timestamp: time.Now(),
-				Data: map[string]interface{}{
-					"content": llmResp.Content,
-				},
-			})
-		}
+		// Note: EventContentDelta is already emitted by callLLM during streaming,
+		// so we don't emit it again here to avoid duplication
 
 		// Update token usage
 		resp.TokensUsed += llmResp.Usage.TotalTokens

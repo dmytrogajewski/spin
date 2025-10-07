@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -480,12 +480,18 @@ func (p *Provider) streamChat(ctx context.Context, req llm.CompletionRequest) (<
 		chatReq.Options.NumPredict = req.MaxTokens
 	}
 
-	log.Printf("[Ollama] Sending chat request: messages=%d, tools=%d", len(chatMessages), len(chatTools))
+	slog.Debug("Ollama sending chat request",
+		"messages", len(chatMessages),
+		"tools", len(chatTools))
 
 	// Debug: log message roles and content lengths
 	for i, msg := range chatMessages {
-		log.Printf("[Ollama]   Msg %d: role=%s, content_len=%d, tool_calls=%d, tool_call_id=%s",
-			i, msg.Role, len(msg.Content), len(msg.ToolCalls), msg.ToolCallID)
+		slog.Debug("Ollama message",
+			"index", i,
+			"role", msg.Role,
+			"content_len", len(msg.Content),
+			"tool_calls", len(msg.ToolCalls),
+			"tool_call_id", msg.ToolCallID)
 	}
 
 	// Create HTTP request
@@ -530,7 +536,7 @@ func (p *Provider) streamChatResponse(ctx context.Context, r io.Reader, chunks c
 	scanner := bufio.NewScanner(r)
 	lineCount := 0
 
-	log.Printf("[Ollama] Starting chat stream processing")
+	slog.Debug("Ollama starting chat stream processing")
 
 	for scanner.Scan() {
 		// Check context cancellation
@@ -546,17 +552,20 @@ func (p *Provider) streamChatResponse(ctx context.Context, r io.Reader, chunks c
 		// Parse JSON chunk
 		var chunk chatResponse
 		if err := json.Unmarshal(line, &chunk); err != nil {
-			log.Printf("[Ollama] Failed to parse chunk line %d: %v", lineCount, err)
+			slog.Debug("Ollama failed to parse chunk", "line", lineCount, "error", err)
 			continue // Skip malformed chunks
 		}
 
 		// Log every chunk
-		log.Printf("[Ollama] Chunk %d: content_len=%d, tool_calls=%d, done=%v",
-			lineCount, len(chunk.Message.Content), len(chunk.Message.ToolCalls), chunk.Done)
+		slog.Debug("Ollama chunk received",
+			"line", lineCount,
+			"content_len", len(chunk.Message.Content),
+			"tool_calls", len(chunk.Message.ToolCalls),
+			"done", chunk.Done)
 
 		// Send content chunk if there's content
 		if chunk.Message.Content != "" {
-			log.Printf("[Ollama] Sending content chunk: %q", chunk.Message.Content)
+			slog.Debug("Ollama sending content chunk", "content", chunk.Message.Content)
 			chunks <- llm.StreamChunk{
 				Type:    llm.ChunkTypeContentDelta,
 				Content: chunk.Message.Content,
@@ -565,7 +574,7 @@ func (p *Provider) streamChatResponse(ctx context.Context, r io.Reader, chunks c
 
 		// Send tool calls if present
 		if len(chunk.Message.ToolCalls) > 0 {
-			log.Printf("[Ollama] Processing %d tool calls", len(chunk.Message.ToolCalls))
+			slog.Debug("Ollama processing tool calls", "count", len(chunk.Message.ToolCalls))
 			for i, tc := range chunk.Message.ToolCalls {
 				// Generate ID if not provided by Ollama
 				id := tc.ID
@@ -591,7 +600,7 @@ func (p *Provider) streamChatResponse(ctx context.Context, r io.Reader, chunks c
 					argsStr = "{}"
 				}
 
-				log.Printf("[Ollama] Sending tool call: name=%s, id=%s", tc.Function.Name, id)
+				slog.Debug("Ollama sending tool call", "name", tc.Function.Name, "id", id)
 				chunks <- llm.StreamChunk{
 					Type: llm.ChunkTypeToolCallStart,
 					ToolCall: &llm.ToolCall{
@@ -608,13 +617,13 @@ func (p *Provider) streamChatResponse(ctx context.Context, r io.Reader, chunks c
 
 		// Send done chunk
 		if chunk.Done {
-			log.Printf("[Ollama] Received done chunk")
+			slog.Debug("Ollama received done chunk")
 			chunks <- llm.StreamChunk{
 				Type: llm.ChunkTypeDone,
 			}
 		}
 	}
 
-	log.Printf("[Ollama] Stream processing ended, total lines: %d", lineCount)
+	slog.Debug("Ollama stream processing ended", "total_lines", lineCount)
 	return scanner.Err()
 }

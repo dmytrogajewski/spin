@@ -530,7 +530,7 @@ func (c *Chat) AppendDelta(delta string) {
 	if len(c.messages) == 0 || !c.messages[len(c.messages)-1].Streaming {
 		// Start new streaming message
 		c.AddMessage(Message{
-			Role:      "assistant",
+			Role:      RoleAssistant,
 			Content:   regularContent,
 			Thinking:  thinkingContent,
 			Streaming: true,

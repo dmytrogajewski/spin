@@ -83,16 +83,18 @@ func (m Model) handleStreamDelta(event core.Event) Model {
 	// Try map[string]interface{} first (current implementation)
 	if dataMap, ok := event.Data.(map[string]interface{}); ok {
 		if content, ok := dataMap["content"].(string); ok {
-			Debug("Appending delta", "content_length", len(content))
+			Debug("Appending delta", "content_length", len(content), "total_messages_before", len(m.chat.AllMessages()))
 			m.chat.AppendDelta(content)
+			Debug("After append", "total_messages_after", len(m.chat.AllMessages()))
 			return m
 		}
 	}
 
 	// Fallback to struct pointer (future implementation)
 	if data, ok := event.Data.(*core.ContentDeltaData); ok {
-		Debug("Appending delta from struct", "content_length", len(data.Content))
+		Debug("Appending delta from struct", "content_length", len(data.Content), "total_messages_before", len(m.chat.AllMessages()))
 		m.chat.AppendDelta(data.Content)
+		Debug("After append", "total_messages_after", len(m.chat.AllMessages()))
 		return m
 	}
 
