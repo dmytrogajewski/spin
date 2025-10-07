@@ -3,7 +3,7 @@ package factory
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"sync"
 	"time"
@@ -218,7 +218,7 @@ func (f *Factory) resolveCredential(ctx context.Context, cfg ProviderConfig, req
 	// Priority 2: APIKey (deprecated, direct)
 	if cfg.APIKey != "" {
 		// Log deprecation warning
-		log.Printf("WARNING: Direct APIKey is deprecated for security reasons. Use KeyName with secure keystore instead (provider type: %s)", cfg.Type)
+		slog.Warn("Direct APIKey is deprecated for security reasons. Use KeyName with secure keystore instead", "provider_type", cfg.Type)
 		return cfg.APIKey, nil
 	}
 

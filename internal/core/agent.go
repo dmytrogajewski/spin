@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -477,8 +477,7 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 					})
 
 					// Add tool result to conversation (after assistant message)
-					log.Printf("[Agent] Tool result: tool=%s, output_len=%d, success=%v",
-						coreToolCall.Function.Name, len(toolResult.Output), toolResult.Success)
+					slog.Debug("Agent tool result", "tool", coreToolCall.Function.Name, "output_len", len(toolResult.Output), "success", toolResult.Success)
 					messages = append(messages, Message{
 						Role:       RoleTool,
 						Content:    toolResult.Output,
