@@ -3,16 +3,16 @@ package llm
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
 )
 
-// HTTPClient wraps http.Client with retry logic and exponential backoff.
-// It automatically retries requests on retryable errors (429, 503, 504)
-// with configurable retry parameters.
+// HTTPClient wraps http.Client with retry logic and exponential backoff for regular (non-streaming) calls.
 type HTTPClient struct {
 	client     *http.Client
 	maxRetries int
@@ -20,18 +20,7 @@ type HTTPClient struct {
 }
 
 // NewHTTPClient creates an HTTP client with retry logic.
-// Default configuration:
-//   - Timeout: 5 minutes
-//   - Max retries: 3
-//   - Retry delay: 1 second (with exponential backoff)
-//
-// The client can be customized using functional options:
-//
-//	client := NewHTTPClient(
-//	    WithTimeout(2 * time.Minute),
-//	    WithMaxRetries(5),
-//	    WithRetryDelay(2 * time.Second),
-//	)
+// Defaults: Timeout=5m, MaxRetries=3, RetryDelay=1s
 func NewHTTPClient(opts ...ClientOption) *HTTPClient {
 	c := &HTTPClient{
 		client: &http.Client{
@@ -40,31 +29,47 @@ func NewHTTPClient(opts ...ClientOption) *HTTPClient {
 		maxRetries: 3,
 		retryDelay: time.Second,
 	}
-
 	for _, opt := range opts {
 		opt(c)
 	}
-
 	return c
 }
 
-// Do executes HTTP request with retry logic and exponential backoff.
-//
-// Retry behavior:
-//   - Retries on 429 (Too Many Requests), 503 (Service Unavailable), 504 (Gateway Timeout)
-//   - Uses exponential backoff: delay * 2^(attempt-1)
-//   - Respects Retry-After header for 429 responses
-//   - Buffers request body for retries
-//   - Respects context cancellation
-//
-// Example:
-//
-//	req, _ := http.NewRequest("GET", "https://api.example.com/v1/models", nil)
-//	resp, err := client.Do(req)
-//	if err != nil {
-//	    return err
-//	}
-//	defer resp.Body.Close()
+// NewStreamingHTTPClient creates an HTTP client suitable for long-lived streaming responses.
+// - No global client timeout (ctx governs lifetime)
+// - No automatic retries (streams should not be retried mid-body)
+// - Transport tuned for keep-alive, no compression (avoid proxy buffering), HTTP/1.1 only
+func NewStreamingHTTPClient() *HTTPClient {
+	transport := &http.Transport{
+		// Force HTTP/1.1 only (avoids some H2 buffering behaviors in proxies/middlwares).
+		// For HTTPS, disabling HTTP/2:
+		TLSNextProto: make(map[string]func(string, *tls.Conn) http.RoundTripper),
+		// Reasonable dial timeouts; no read deadline on body (we want long streams).
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		// Keep connections warm for repeated calls to same host.
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 100,
+		IdleConnTimeout:     90 * time.Second,
+		// If the server sends compressed NDJSON, some proxies will buffer; disable compression.
+		DisableCompression: true,
+		// No ResponseHeaderTimeout here; Ollama responds quickly with headers.
+		// If you run through a slow proxy, you can set e.g. 15s.
+	}
+
+	return &HTTPClient{
+		client: &http.Client{
+			Timeout:   0, // no global deadline; the request's context controls it
+			Transport: transport,
+		},
+		maxRetries: 0, // do not retry streams
+		retryDelay: 0, // unused
+	}
+}
+
+// Do executes HTTP request with retry logic (for non-streaming requests).
 func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	bodyBytes, err := c.bufferRequestBody(req)
 	if err != nil {
@@ -94,7 +99,6 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 			lastErr = err
 			continue
 		}
-
 		if newResp != nil {
 			return newResp, nil
 		}
@@ -106,12 +110,23 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
 }
 
-// bufferRequestBody reads and buffers request body for retries
+// DoStream executes an HTTP request intended for a long-lived streaming response.
+// - Single attempt, no retries
+// - No request body buffering
+// - The provided context controls lifetime
+func (c *HTTPClient) DoStream(req *http.Request) (*http.Response, error) {
+	// Ensure the underlying client has no global timeout for streams.
+	// If a timeout is set on c.client, users should build with NewStreamingHTTPClient.
+	return c.client.Do(req)
+}
+
+// --- internals for Do (non-stream) ---
+
+// bufferRequestBody reads and buffers request body for retries (non-streaming only).
 func (c *HTTPClient) bufferRequestBody(req *http.Request) ([]byte, error) {
 	if req.Body == nil {
 		return nil, nil
 	}
-
 	bodyBytes, err := io.ReadAll(req.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read request body: %w", err)
@@ -120,12 +135,10 @@ func (c *HTTPClient) bufferRequestBody(req *http.Request) ([]byte, error) {
 	return bodyBytes, nil
 }
 
-// waitForRetry implements exponential backoff delay
 func (c *HTTPClient) waitForRetry(ctx context.Context, attempt int) error {
 	if attempt == 0 {
 		return nil
 	}
-
 	delay := c.calculateBackoff(attempt)
 	select {
 	case <-time.After(delay):
@@ -135,48 +148,41 @@ func (c *HTTPClient) waitForRetry(ctx context.Context, attempt int) error {
 	}
 }
 
-// calculateBackoff calculates exponential backoff delay
 func (c *HTTPClient) calculateBackoff(attempt int) time.Duration {
 	if attempt <= 0 {
 		return 0
 	}
-	// Calculate shift with overflow protection
 	shift := attempt - 1
-	if shift > 30 { // Prevent overflow
+	if shift > 30 { // prevent overflow
 		shift = 30
 	}
-	// #nosec G115 -- shift is bounded to [0, 30] above
 	return c.retryDelay * time.Duration(1<<uint(shift))
 }
 
-// restoreRequestBody restores buffered body to request
 func (c *HTTPClient) restoreRequestBody(req *http.Request, bodyBytes []byte) {
 	if bodyBytes != nil {
 		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	}
 }
 
-// handleRetryAfter handles Retry-After header for rate limiting
 func (c *HTTPClient) handleRetryAfter(req *http.Request, resp *http.Response, bodyBytes []byte) (*http.Response, error) {
 	if resp.StatusCode != http.StatusTooManyRequests {
 		return nil, nil
 	}
-
 	retryAfter := resp.Header.Get("Retry-After")
 	if retryAfter == "" {
 		return nil, nil
 	}
-
 	seconds, err := strconv.Atoi(retryAfter)
 	if err != nil {
 		return nil, nil
 	}
 
-	waitDuration := time.Duration(seconds) * time.Second
+	wait := time.Duration(seconds) * time.Second
 	resp.Body.Close()
 
 	select {
-	case <-time.After(waitDuration):
+	case <-time.After(wait):
 	case <-req.Context().Done():
 		return nil, req.Context().Err()
 	}
@@ -186,76 +192,38 @@ func (c *HTTPClient) handleRetryAfter(req *http.Request, resp *http.Response, bo
 	if err != nil {
 		return nil, err
 	}
-
 	if !c.isRetryable(newResp.StatusCode) {
 		return newResp, nil
 	}
-
 	newResp.Body.Close()
 	return nil, nil
 }
 
-// isRetryable returns true for status codes that should be retried.
-// Retryable status codes:
-//   - 429 Too Many Requests (rate limiting)
-//   - 503 Service Unavailable (temporary server issue)
-//   - 504 Gateway Timeout (upstream timeout)
 func (c *HTTPClient) isRetryable(code int) bool {
 	return code == http.StatusTooManyRequests ||
 		code == http.StatusServiceUnavailable ||
 		code == http.StatusGatewayTimeout
 }
 
-// ClientOption configures HTTPClient.
+// --- options ---
+
 type ClientOption func(*HTTPClient)
 
-// WithTimeout sets the request timeout for the HTTP client.
-// The timeout applies to the entire request including retries.
-//
-// Example:
-//
-//	client := NewHTTPClient(WithTimeout(2 * time.Minute))
 func WithTimeout(d time.Duration) ClientOption {
 	return func(c *HTTPClient) {
 		c.client.Timeout = d
 	}
 }
-
-// WithMaxRetries sets the maximum number of retry attempts.
-// The total number of attempts will be maxRetries + 1 (initial attempt).
-//
-// Example:
-//
-//	client := NewHTTPClient(WithMaxRetries(5))
 func WithMaxRetries(n int) ClientOption {
 	return func(c *HTTPClient) {
 		c.maxRetries = n
 	}
 }
-
-// WithRetryDelay sets the base delay for exponential backoff.
-// Actual delay for retry N is: retryDelay * 2^(N-1)
-//
-// Example:
-//
-//	client := NewHTTPClient(WithRetryDelay(2 * time.Second))
-//	// First retry: 2s, second: 4s, third: 8s, etc.
 func WithRetryDelay(d time.Duration) ClientOption {
 	return func(c *HTTPClient) {
 		c.retryDelay = d
 	}
 }
-
-// WithTransport sets a custom HTTP transport for the client.
-// This allows configuring connection pooling, TLS settings, proxies, etc.
-//
-// Example:
-//
-//	transport := &http.Transport{
-//	    MaxIdleConns:    100,
-//	    IdleConnTimeout: 90 * time.Second,
-//	}
-//	client := NewHTTPClient(WithTransport(transport))
 func WithTransport(transport *http.Transport) ClientOption {
 	return func(c *HTTPClient) {
 		c.client.Transport = transport

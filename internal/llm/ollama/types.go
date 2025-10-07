@@ -94,10 +94,12 @@ type chatOptions struct {
 
 // chatResponse represents an Ollama chat API response.
 type chatResponse struct {
-	Model     string      `json:"model"`
-	Message   chatMessage `json:"message"`
-	Done      bool        `json:"done"`
-	CreatedAt time.Time   `json:"created_at"`
+	Model   string      `json:"model"`
+	Message chatMessage `json:"message"`
+	// Some Ollama builds still emit deltas under "response" in streaming mode (legacy).
+	Response  string    `json:"response,omitempty"`
+	Done      bool      `json:"done"`
+	CreatedAt time.Time `json:"created_at"`
 
 	// Token usage stats (when done=true)
 	TotalDuration      int64 `json:"total_duration,omitempty"`

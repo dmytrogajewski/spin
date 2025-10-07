@@ -13,10 +13,10 @@ import (
 
 // Config contains TUI-specific configuration extracted from core.Config.
 type Config struct {
-	Model        string `mapstructure:"model"`
-	Provider     string `mapstructure:"provider"`
-	SandboxMode  string `mapstructure:"sandbox_mode"`
-	WorkDir      string `mapstructure:"work_dir"`
+	Model       string `mapstructure:"model"`
+	Provider    string `mapstructure:"provider"`
+	SandboxMode string `mapstructure:"sandbox_mode"`
+	WorkDir     string `mapstructure:"work_dir"`
 }
 
 // Model represents the TUI application state following The Elm Architecture pattern.
@@ -149,7 +149,7 @@ func (m Model) Init() tea.Cmd {
 		Info("Starting event listener and ticker")
 		return tea.Batch(
 			m.input.Focus(),
-			waitForCoreEvent(m.events),
+			waitForBatchedEvents(m.events, time.Millisecond*8),
 			tickCmd(), // Start periodic ticks for rendering
 		)
 	}
@@ -161,7 +161,7 @@ func (m Model) Init() tea.Cmd {
 
 // tickCmd creates a command that sends periodic tick messages for UI updates.
 func tickCmd() tea.Cmd {
-	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Millisecond*16, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
@@ -195,8 +195,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case CoreEventMsg:
-		// Handle core events (Phase 3.11)
+		// Handle single core event (backward compatibility)
 		return m.handleCoreEvent(msg)
+
+	case BatchedEventsMsg:
+		// Handle batched core events for better streaming performance
+		return m.handleBatchedEvents(msg)
 
 	case ErrorMsg:
 		m.err = msg.Err
@@ -270,6 +274,14 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Reset Esc counter on any other key
 	m.escPressCount = 0
+
+	// Handle scrolling keys - pass to chat viewport
+	switch msg.String() {
+	case "pgup", "pgdown", "home", "end":
+		var cmd tea.Cmd
+		m.chat, cmd = m.chat.Update(msg)
+		return m, cmd
+	}
 
 	// Pass all other keys to input component (typing, arrows, etc.)
 	var cmd tea.Cmd
@@ -548,7 +560,6 @@ func (m Model) cancelTurn() (tea.Model, tea.Cmd) {
 }
 
 // denyApproval denies the pending tool approval.
-// Phase 3.9 - Stub implementation.
 func (m Model) denyApproval() (tea.Model, tea.Cmd) {
 	// Add denial message
 	m.chat.AddMessage(ui.Message{
@@ -566,7 +577,6 @@ func (m Model) denyApproval() (tea.Model, tea.Cmd) {
 }
 
 // exitBacktrack exits backtrack mode without selection.
-// Phase 3.9 implementation.
 func (m Model) exitBacktrack() (tea.Model, tea.Cmd) {
 	// Clear highlight
 	m.chat.ClearHighlight()
@@ -584,7 +594,6 @@ func (m Model) exitBacktrack() (tea.Model, tea.Cmd) {
 }
 
 // handleCtrlD handles Ctrl+D for graceful exit.
-// Phase 3.9 implementation.
 func (m Model) handleCtrlD() (tea.Model, tea.Cmd) {
 	// Transition to Exiting
 	m.state = StateExiting
@@ -598,7 +607,6 @@ func (m Model) handleCtrlD() (tea.Model, tea.Cmd) {
 }
 
 // handleCtrlL handles Ctrl+L for screen clear.
-// Phase 3.9 implementation.
 func (m Model) handleCtrlL() (tea.Model, tea.Cmd) {
 	// Only works in Idle state
 	if m.state != StateIdle {
@@ -623,8 +631,6 @@ func (m Model) handleCtrlT() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleHelp shows the help modal.
-// Phase 3.9 implementation.
 func (m Model) handleHelp() (tea.Model, tea.Cmd) {
 	// Can show help from most states
 	if !m.state.CanTransitionTo(StateHelp) {
@@ -637,8 +643,6 @@ func (m Model) handleHelp() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// dismissHelp dismisses the help modal and returns to previous state.
-// Phase 3.9 implementation.
 func (m Model) dismissHelp() (tea.Model, tea.Cmd) {
 	// Return to Idle (simplification - could track previous state)
 	if m.state.CanTransitionTo(StateIdle) {
@@ -656,12 +660,9 @@ func (m Model) View() string {
 		return ""
 	}
 
-	// Show help modal overlay if in help state
 	if m.state == StateHelp {
 		return m.help.View()
 	}
 
-	// Placeholder view for Phase 3.1
-	// Real UI components will be added in later phases (3.2-3.10)
-	return m.renderPlaceholder()
+	return m.renderChat()
 }

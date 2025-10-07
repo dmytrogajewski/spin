@@ -1,4 +1,4 @@
-.PHONY: build test test-coverage test-race test-e2e test-all lint fmt clean help deadcode
+.PHONY: build install install-user uninstall uninstall-user test test-coverage test-race test-e2e test-all lint fmt clean help deadcode
 
 # Go parameters
 GOCMD=go
@@ -25,6 +25,36 @@ build:
 	@echo "  Usage: spin          # Start TUI"
 	@echo "         spin exec ... # Non-interactive mode"
 	@echo "         spin --help   # Show all commands"
+
+## install: Build and install spin binary to /usr/local/bin (requires sudo)
+install: build
+	@echo "Installing spin to /usr/local/bin..."
+	@sudo cp bin/spin /usr/local/bin/spin
+	@sudo chmod 755 /usr/local/bin/spin
+	@echo "✓ Installed successfully to /usr/local/bin/spin"
+	@echo "  You can now run 'spin' from anywhere"
+
+## install-user: Build and install spin binary to ~/.local/bin (no sudo required)
+install-user: build
+	@echo "Installing spin to ~/.local/bin..."
+	@mkdir -p ~/.local/bin
+	@cp bin/spin ~/.local/bin/spin
+	@chmod 755 ~/.local/bin/spin
+	@echo "✓ Installed successfully to ~/.local/bin/spin"
+	@echo "  Make sure ~/.local/bin is in your PATH"
+	@echo "  You can add it with: export PATH=\"$$HOME/.local/bin:$$PATH\""
+
+## uninstall: Remove installed spin binary from /usr/local/bin
+uninstall:
+	@echo "Removing spin from /usr/local/bin..."
+	@sudo rm -f /usr/local/bin/spin
+	@echo "✓ Uninstalled successfully"
+
+## uninstall-user: Remove installed spin binary from ~/.local/bin
+uninstall-user:
+	@echo "Removing spin from ~/.local/bin..."
+	@rm -f ~/.local/bin/spin
+	@echo "✓ Uninstalled successfully"
 
 ## build-core: Build the core module (compile check)
 build-core:

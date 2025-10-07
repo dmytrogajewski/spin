@@ -352,48 +352,106 @@ func (c *Chat) renderThinkingCollapsed(streaming bool) string {
 	return style.Render(text)
 }
 
-// renderToolCall renders a tool call.
+// renderToolCall renders a tool call in Claude-like style.
 func (c *Chat) renderToolCall(tc *ToolCall) string {
-	style := lipgloss.NewStyle().
+	// Container style with subtle border
+	containerStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("226")). // Yellow
-		Padding(0, 1)
+		BorderForeground(lipgloss.Color("240")). // Gray border
+		Padding(0, 1).
+		MarginLeft(2).
+		Width(c.width - 6) // Account for margins and borders
 
+	// Header style (tool name)
+	headerStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("33")) // Blue
+
+	// Build the tool call display
 	var parts []string
-	parts = append(parts, fmt.Sprintf("🔧 Tool: %s", tc.Name))
 
-	// Format arguments
+	// Tool name header with icon
+	toolIcon := c.getToolIcon(tc.Name)
+	header := fmt.Sprintf("%s %s", toolIcon, tc.Name)
+	parts = append(parts, headerStyle.Render(header))
+
+	// Format arguments in a structured way
 	if len(tc.Arguments) > 0 {
-		parts = append(parts, "Arguments:")
+		argStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("245")). // Light gray
+			MarginLeft(2)
+
 		for key, val := range tc.Arguments {
-			parts = append(parts, fmt.Sprintf("  %s: %v", key, val))
+			// Format the value based on its type
+			formattedVal := c.formatArgumentValue(val)
+			argLine := fmt.Sprintf("%s: %s", key, formattedVal)
+			parts = append(parts, argStyle.Render(argLine))
 		}
 	}
 
-	return style.Render(strings.Join(parts, "\n"))
+	return containerStyle.Render(strings.Join(parts, "\n"))
 }
 
-// renderToolResult renders a tool result.
+// renderToolResult renders a tool result in Claude-like style.
 func (c *Chat) renderToolResult(tr *ToolResult) string {
-	var style lipgloss.Style
+	// Determine if this is an error or success
+	isError := tr.Error != ""
 
-	if tr.Error != "" {
-		// Error style
-		style = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("9")). // Red
-			Padding(0, 1)
+	// Container style
+	containerStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")). // Gray border
+		Padding(0, 1).
+		MarginLeft(2).
+		Width(c.width - 6) // Account for margins and borders
 
-		return style.Render("❌ Error:\n" + tr.Error)
+	// Header style based on success/error
+	var headerStyle lipgloss.Style
+	var headerText string
+	if isError {
+		headerStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("196")) // Red for errors
+		headerText = "❌ Tool Error"
+	} else {
+		headerStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("70")) // Green for success
+		headerText = "✓ Tool Result"
 	}
 
-	// Success style
-	style = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("10")). // Green
-		Padding(0, 1)
+	// Content style
+	contentStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252")). // Light gray
+		MarginLeft(2)
 
-	return style.Render("✓ Output:\n" + tr.Output)
+	// Build the display
+	var parts []string
+	parts = append(parts, headerStyle.Render(headerText))
+
+	// Add the content (error or output)
+	content := tr.Output
+	if isError {
+		content = tr.Error
+	}
+
+	// Truncate very long output
+	if len(content) > 500 {
+		content = content[:497] + "..."
+	}
+
+	// Format the content
+	if content != "" {
+		// Split into lines and indent each
+		lines := strings.Split(content, "\n")
+		for _, line := range lines {
+			if line != "" {
+				parts = append(parts, contentStyle.Render(line))
+			}
+		}
+	}
+
+	return containerStyle.Render(strings.Join(parts, "\n"))
 }
 
 // updateScrollState checks if viewport is at bottom and calculates scroll position.
@@ -632,6 +690,60 @@ func (c *Chat) getErrorIcon(severity int) string {
 		return "🔥" // Critical
 	default:
 		return "❓"
+	}
+}
+
+// getToolIcon returns an appropriate icon for the tool.
+func (c *Chat) getToolIcon(toolName string) string {
+	switch toolName {
+	case "execute_command", "shell", "bash":
+		return "💻"
+	case "read_file", "read":
+		return "📖"
+	case "write_file", "write":
+		return "✍️"
+	case "list_directory", "ls":
+		return "📁"
+	case "get_context", "context":
+		return "🔍"
+	case "search", "grep":
+		return "🔎"
+	case "git":
+		return "🔀"
+	case "docker":
+		return "🐳"
+	case "python", "py":
+		return "🐍"
+	case "node", "npm", "yarn":
+		return "📦"
+	default:
+		return "🔧"
+	}
+}
+
+// formatArgumentValue formats a tool argument value for display.
+func (c *Chat) formatArgumentValue(val interface{}) string {
+	switch v := val.(type) {
+	case string:
+		// Truncate long strings
+		if len(v) > 100 {
+			return fmt.Sprintf("%q...", v[:97])
+		}
+		return fmt.Sprintf("%q", v)
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	case nil:
+		return "null"
+	default:
+		// For numbers, arrays, objects, etc.
+		str := fmt.Sprintf("%v", v)
+		if len(str) > 100 {
+			return str[:97] + "..."
+		}
+		return str
 	}
 }
 

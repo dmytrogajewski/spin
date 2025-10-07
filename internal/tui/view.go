@@ -5,7 +5,7 @@ import (
 )
 
 // renderPlaceholder renders the TUI view with all components.
-func (m Model) renderPlaceholder() string {
+func (m Model) renderChat() string {
 	// Render chat component (Phase 3.2)
 	chatView := m.chat.View()
 

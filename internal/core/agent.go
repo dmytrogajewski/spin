@@ -432,13 +432,20 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 				// Add to assistant message (note: message already appended above)
 				messages[len(messages)-1].ToolCalls = append(messages[len(messages)-1].ToolCalls, *coreToolCall)
 
+				// Parse arguments for the event
+				var toolArgs map[string]interface{}
+				if coreToolCall.Function.Arguments != "" {
+					_ = json.Unmarshal([]byte(coreToolCall.Function.Arguments), &toolArgs)
+				}
+
 				// Emit tool call start event
 				a.emitter.Emit(Event{
 					Type:      EventToolCallStart,
 					Timestamp: time.Now(),
 					Data: map[string]interface{}{
-						"tool_id":   coreToolCall.ID,
-						"tool_name": coreToolCall.Function.Name,
+						"tool_id":    coreToolCall.ID,
+						"tool_name":  coreToolCall.Function.Name,
+						"arguments":  toolArgs,
 					},
 				})
 
@@ -452,6 +459,7 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 						Data: map[string]interface{}{
 							"tool_id":   coreToolCall.ID,
 							"tool_name": coreToolCall.Function.Name,
+							"success":   false,
 							"error":     err.Error(),
 						},
 					})
@@ -466,14 +474,20 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 					})
 				} else {
 					// Emit tool completion event
+					eventData := map[string]interface{}{
+						"tool_id":   coreToolCall.ID,
+						"tool_name": coreToolCall.Function.Name,
+						"success":   toolResult.Success,
+					}
+					if toolResult.Success {
+						eventData["output"] = toolResult.Output
+					} else if toolResult.Error != nil {
+						eventData["error"] = toolResult.Error.Error()
+					}
 					a.emitter.Emit(Event{
 						Type:      EventToolCallComplete,
 						Timestamp: time.Now(),
-						Data: map[string]interface{}{
-							"tool_id":   coreToolCall.ID,
-							"tool_name": coreToolCall.Function.Name,
-							"success":   toolResult.Success,
-						},
+						Data:      eventData,
 					})
 
 					// Add tool result to conversation (after assistant message)
@@ -779,8 +793,9 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 		Type:      EventToolCallStart,
 		Timestamp: time.Now(),
 		Data: map[string]interface{}{
-			"tool_id":   call.ID,
-			"tool_name": call.Function.Name,
+			"tool_id":    call.ID,
+			"tool_name":  call.Function.Name,
+			"arguments":  args,
 		},
 	})
 
@@ -813,13 +828,20 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 	}
 
 	// 5. Emit completion event
+	eventData := map[string]interface{}{
+		"tool_id":   call.ID,
+		"tool_name": call.Function.Name,
+		"success":   result.Success,
+	}
+	if result.Success {
+		eventData["output"] = result.Output
+	} else if result.Error != nil {
+		eventData["error"] = result.Error.Error()
+	}
 	a.emitter.Emit(Event{
 		Type:      EventToolCallComplete,
 		Timestamp: time.Now(),
-		Data: map[string]interface{}{
-			"tool_id": call.ID,
-			"success": result.Success,
-		},
+		Data:      eventData,
 	})
 
 	return result, nil // Always return nil error so agent continues
