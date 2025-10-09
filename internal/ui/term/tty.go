@@ -1,0 +1,192 @@
+package term
+
+import (
+	"fmt"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+
+	"golang.org/x/term"
+)
+
+// TTY manages terminal state for raw mode interaction.
+// It handles entering/exiting raw mode, window size detection,
+// and resize event callbacks without using alt-screen buffer.
+type TTY struct {
+	inFD      int
+	outFD     int
+	origState *term.State
+	mu        sync.RWMutex
+	width     int
+	height    int
+	onResize  []func(int, int)
+	entered   bool
+	sigCh     chan os.Signal
+}
+
+// New creates a TTY from file descriptors.
+// inFD is typically os.Stdin.Fd(), outFD is os.Stdout.Fd().
+// Returns error if the input FD is not a terminal.
+func New(inFD, outFD int) (*TTY, error) {
+	if !isTerminal(inFD) {
+		return nil, fmt.Errorf("inFD %d is not a terminal", inFD)
+	}
+
+	tty := &TTY{
+		inFD:  inFD,
+		outFD: outFD,
+	}
+
+	// Read initial size
+	if err := tty.updateSize(); err != nil {
+		return nil, fmt.Errorf("failed to get terminal size: %w", err)
+	}
+
+	// Start SIGWINCH handler
+	tty.startSigwinchHandler()
+
+	return tty, nil
+}
+
+// Enter enables raw mode and hides cursor.
+// Raw mode disables line buffering, echo, and signals.
+// Returns error if already in raw mode or if terminal state cannot be saved.
+func (tty *TTY) Enter() error {
+	tty.mu.Lock()
+	defer tty.mu.Unlock()
+
+	if tty.entered {
+		return fmt.Errorf("already in raw mode")
+	}
+
+	// Save original terminal state
+	state, err := term.MakeRaw(tty.inFD)
+	if err != nil {
+		return fmt.Errorf("failed to enter raw mode: %w", err)
+	}
+
+	tty.origState = state
+	tty.entered = true
+
+	// Hide cursor
+	fmt.Fprint(os.Stdout, HideCursor)
+
+	return nil
+}
+
+// Exit restores terminal state and shows cursor.
+// Safe to call multiple times (idempotent).
+// Should be called via defer to ensure cleanup on panic.
+func (tty *TTY) Exit() error {
+	tty.mu.Lock()
+	defer tty.mu.Unlock()
+
+	if !tty.entered || tty.origState == nil {
+		return nil // Already exited or never entered
+	}
+
+	// Show cursor first
+	fmt.Fprint(os.Stdout, ShowCursor)
+
+	// Restore terminal state
+	if err := term.Restore(tty.inFD, tty.origState); err != nil {
+		return fmt.Errorf("failed to restore terminal: %w", err)
+	}
+
+	tty.entered = false
+	tty.origState = nil
+
+	// Stop signal handler goroutine
+	// Must acquire lock before accessing sigCh
+	ch := tty.sigCh
+	if ch != nil {
+		signal.Stop(ch)
+		tty.sigCh = nil // Set to nil first, goroutine will see this and exit
+		close(ch)        // Then close channel
+	}
+
+	return nil
+}
+
+// Size returns cached terminal dimensions (width, height).
+// This is an O(1) operation reading from cache updated by SIGWINCH.
+func (tty *TTY) Size() (width, height int) {
+	tty.mu.RLock()
+	defer tty.mu.RUnlock()
+	return tty.width, tty.height
+}
+
+// OnResize registers a callback for window size changes.
+// Callback is invoked synchronously when SIGWINCH is received.
+// Multiple callbacks can be registered.
+func (tty *TTY) OnResize(cb func(int, int)) {
+	tty.mu.Lock()
+	defer tty.mu.Unlock()
+	tty.onResize = append(tty.onResize, cb)
+}
+
+// updateSize reads current terminal dimensions and updates cache.
+// Called internally on SIGWINCH and during initialization.
+func (tty *TTY) updateSize() error {
+	w, h, err := term.GetSize(tty.outFD)
+	if err != nil {
+		return err
+	}
+
+	tty.mu.Lock()
+	tty.width, tty.height = w, h
+	tty.mu.Unlock()
+
+	return nil
+}
+
+// startSigwinchHandler installs a SIGWINCH signal handler to detect
+// terminal resize events and invoke registered callbacks.
+func (tty *TTY) startSigwinchHandler() {
+	tty.mu.Lock()
+	tty.sigCh = make(chan os.Signal, 1)
+	tty.mu.Unlock()
+
+	signal.Notify(tty.sigCh, syscall.SIGWINCH)
+
+	go func() {
+		for {
+			tty.mu.RLock()
+			ch := tty.sigCh
+			tty.mu.RUnlock()
+
+			if ch == nil {
+				return // Channel was closed, exit goroutine
+			}
+
+			sig, ok := <-ch
+			if !ok {
+				return // Channel closed
+			}
+
+			_ = sig // Ignore signal value
+
+			if err := tty.updateSize(); err != nil {
+				// Log error but continue (terminal might be temporarily unavailable)
+				continue
+			}
+
+			// Invoke callbacks with new dimensions
+			tty.mu.RLock()
+			cbs := make([]func(int, int), len(tty.onResize))
+			copy(cbs, tty.onResize)
+			w, h := tty.width, tty.height
+			tty.mu.RUnlock()
+
+			for _, cb := range cbs {
+				cb(w, h)
+			}
+		}
+	}()
+}
+
+// isTerminal returns true if fd refers to a terminal.
+func isTerminal(fd int) bool {
+	return term.IsTerminal(fd)
+}
