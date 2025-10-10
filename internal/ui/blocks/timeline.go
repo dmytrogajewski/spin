@@ -125,6 +125,16 @@ func (t *Timeline) GetViewport() Viewport {
 	return t.viewport
 }
 
+// GetViewportHeight returns the viewport height.
+func (t *Timeline) GetViewportHeight() int {
+	return t.viewport.Height
+}
+
+// GetScrollPosition returns the current scroll position.
+func (t *Timeline) GetScrollPosition() int {
+	return t.scrollPos
+}
+
 // GetVisibleBlocks returns the blocks currently visible in the viewport,
 // after applying any active filter. If viewport height is 0 or unset,
 // returns all filtered blocks.
