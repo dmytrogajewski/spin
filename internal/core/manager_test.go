@@ -89,8 +89,11 @@ func TestWithManagerToolRegistry(t *testing.T) {
 	cfg.WorkDir = t.TempDir()
 	cfg.SessionDir = t.TempDir()
 
-	// Create a custom tool registry
+	// Create a custom tool registry with only file tools (missing execute_command)
 	customRegistry := tools.NewRegistry()
+	_ = customRegistry.Register(tools.NewReadFileTool())
+	_ = customRegistry.Register(tools.NewWriteFileTool())
+	_ = customRegistry.Register(tools.NewListDirectoryTool())
 
 	llm := llm.NewMockProvider("ok")
 	emitter := NewEventEmitter(50)
@@ -115,6 +118,41 @@ func TestWithManagerToolRegistry(t *testing.T) {
 	if conv == nil {
 		t.Fatal("NewConversation() returned nil")
 	}
+
+	// REGRESSION TEST for bug: verify that default tools (execute_command, get_context)
+	// are still available even though custom registry didn't include them
+	toolSchemas := conv.agent.toolRegistry.ListSchemas()
+
+	// Build a map of tool names for easier lookup
+	toolMap := make(map[string]bool)
+	for _, schema := range toolSchemas {
+		toolMap[schema.Function.Name] = true
+	}
+
+	// Verify all expected tools are present
+	expectedTools := []string{
+		"read_file",
+		"write_file",
+		"list_directory",
+		"execute_command", // This was missing before the fix!
+		"get_context",     // This was missing before the fix!
+	}
+
+	for _, expectedTool := range expectedTools {
+		if !toolMap[expectedTool] {
+			t.Errorf("Expected tool %q not found in agent's tool registry. Available tools: %v",
+				expectedTool, getToolNames(toolSchemas))
+		}
+	}
+}
+
+// Helper function to get tool names from schemas
+func getToolNames(schemas []tools.ToolSchema) []string {
+	names := make([]string, len(schemas))
+	for i, schema := range schemas {
+		names[i] = schema.Function.Name
+	}
+	return names
 }
 
 func TestManager_ListAndArchive(t *testing.T) {

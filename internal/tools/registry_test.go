@@ -68,6 +68,84 @@ func TestNewRegistry(t *testing.T) {
 	}
 }
 
+func TestRegistryRegisterOrReplace(t *testing.T) {
+	t.Run("register new tool", func(t *testing.T) {
+		reg := NewRegistry()
+		tool1 := newMockTool("tool1")
+
+		err := reg.RegisterOrReplace(tool1)
+		if err != nil {
+			t.Fatalf("RegisterOrReplace() unexpected error: %v", err)
+		}
+
+		// Verify tool was registered
+		retrieved, err := reg.Get("tool1")
+		if err != nil {
+			t.Fatalf("Get() error: %v", err)
+		}
+		if retrieved.Name() != "tool1" {
+			t.Errorf("expected tool name 'tool1', got %q", retrieved.Name())
+		}
+	})
+
+	t.Run("replace existing tool", func(t *testing.T) {
+		reg := NewRegistry()
+
+		// Register initial tool
+		tool1 := newMockTool("tool1")
+		tool1.description = "Original description"
+		_ = reg.Register(tool1)
+
+		// Replace with new tool
+		tool1Updated := newMockTool("tool1")
+		tool1Updated.description = "Updated description"
+		err := reg.RegisterOrReplace(tool1Updated)
+		if err != nil {
+			t.Fatalf("RegisterOrReplace() unexpected error: %v", err)
+		}
+
+		// Verify tool was replaced
+		retrieved, err := reg.Get("tool1")
+		if err != nil {
+			t.Fatalf("Get() error: %v", err)
+		}
+		if retrieved.Description() != "Updated description" {
+			t.Errorf("expected description 'Updated description', got %q", retrieved.Description())
+		}
+	})
+
+	t.Run("replace does not affect other tools", func(t *testing.T) {
+		reg := NewRegistry()
+
+		// Register multiple tools
+		_ = reg.Register(newMockTool("tool1"))
+		_ = reg.Register(newMockTool("tool2"))
+		_ = reg.Register(newMockTool("tool3"))
+
+		// Replace tool2
+		tool2Updated := newMockTool("tool2")
+		tool2Updated.description = "Updated tool2"
+		_ = reg.RegisterOrReplace(tool2Updated)
+
+		// Verify all tools are still present
+		tools := reg.List()
+		if len(tools) != 3 {
+			t.Errorf("expected 3 tools, got %d", len(tools))
+		}
+
+		// Verify tool1 and tool3 are unchanged
+		tool1, _ := reg.Get("tool1")
+		if tool1.Description() != "Mock tool for testing" {
+			t.Error("tool1 should not have been modified")
+		}
+
+		tool3, _ := reg.Get("tool3")
+		if tool3.Description() != "Mock tool for testing" {
+			t.Error("tool3 should not have been modified")
+		}
+	})
+}
+
 func TestRegistryRegister(t *testing.T) {
 	tests := []struct {
 		name      string

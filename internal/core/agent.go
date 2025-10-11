@@ -307,13 +307,23 @@ func WithApprovalHandler(handler ApprovalHandler) AgentOption {
 	}
 }
 
-// WithToolRegistry sets a custom tool registry for the agent.
+// WithToolRegistry merges a custom tool registry with the agent's default tools.
+// Custom tools will override default tools with the same name.
+// This ensures default tools (execute_command, get_context, etc.) are always available.
 func WithToolRegistry(registry *tools.Registry) AgentOption {
 	return func(a *Agent) error {
 		if registry == nil {
 			return errors.New("tool registry cannot be nil")
 		}
-		a.toolRegistry = registry
+
+		// Merge custom tools into the agent's existing registry
+		// Custom tools override defaults with the same name
+		for _, tool := range registry.List() {
+			if err := a.toolRegistry.RegisterOrReplace(tool); err != nil {
+				return fmt.Errorf("failed to register tool %s: %w", tool.Name(), err)
+			}
+		}
+
 		return nil
 	}
 }

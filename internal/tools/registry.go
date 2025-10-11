@@ -35,6 +35,16 @@ func (r *Registry) Register(tool Tool) error {
 	return nil
 }
 
+// RegisterOrReplace adds a tool to the registry, replacing any existing tool with the same name.
+// This is useful when you want to override default tools with custom implementations.
+func (r *Registry) RegisterOrReplace(tool Tool) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.tools[tool.Name()] = tool
+	return nil
+}
+
 // Get retrieves a tool by name.
 // Returns ErrToolNotFound if the tool doesn't exist.
 func (r *Registry) Get(name string) (Tool, error) {
