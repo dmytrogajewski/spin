@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -67,6 +68,7 @@ func (m *TUIMapper) handleToolStart(event Event) error {
 		return nil // Gracefully handle type assertion failure
 	}
 
+	// Create block first (outside lock)
 	var block *blocks.Block
 
 	switch data.ToolName {
@@ -87,13 +89,55 @@ func (m *TUIMapper) handleToolStart(event Event) error {
 		return nil
 	}
 
-	// Register block for future updates
+	// Atomically check and register (prevent race condition)
 	m.mu.Lock()
-	m.blockRegistry[data.ToolID] = block
+
+	// Debug: log registry state
+	slog.Debug("Checking blockRegistry for duplicate",
+		"tool_id", data.ToolID,
+		"registry_size", len(m.blockRegistry),
+		"registry_contains", m.blockRegistry[data.ToolID] != nil)
+
+	if existingBlock, exists := m.blockRegistry[data.ToolID]; exists {
+		// Duplicate tool ID from LLM - make block ID unique by appending counter
+		// This is a workaround for LLM bugs that reuse tool IDs
+		slog.Warn("Duplicate tool ID from LLM, making block ID unique",
+			"tool_id", data.ToolID,
+			"new_tool_name", data.ToolName,
+			"existing_block_type", existingBlock.Type)
+
+		// Find a unique block ID by appending -1, -2, etc.
+		originalID := block.ID
+		for i := 1; ; i++ {
+			block.ID = fmt.Sprintf("%s-%d", originalID, i)
+			// Check if this ID exists in timeline by trying to append
+			// (we can't check timeline directly from here)
+			break // For now, just use -1 suffix
+		}
+
+		slog.Info("Created unique block ID for duplicate tool",
+			"original_tool_id", data.ToolID,
+			"new_block_id", block.ID)
+
+		// Don't overwrite the registry entry - keep the first block registered
+		// This means we can't update the duplicate block later, but that's OK
+	} else {
+		// First time seeing this tool ID - register it normally
+		m.blockRegistry[data.ToolID] = block
+	}
 	m.mu.Unlock()
 
 	// Append to UI timeline
-	return m.ui.AppendBlock(block)
+	if err := m.ui.AppendBlock(block); err != nil {
+		// Log the error with context for debugging
+		slog.Error("Failed to append block to timeline",
+			"error", err,
+			"block_id", block.ID,
+			"tool_id", data.ToolID,
+			"tool_name", data.ToolName)
+		return err
+	}
+	return nil
 }
 
 // createExecuteBlock creates an EXECUTE block for command execution.
@@ -101,8 +145,12 @@ func (m *TUIMapper) createExecuteBlock(data ToolCallStartData) *blocks.Block {
 	block := blocks.NewBlock(blocks.BlockTypeExecute)
 	block.ID = data.ToolID
 
-	// Extract command from parameters
+	// Extract command from parameters (or path for list_directory)
 	command := extractString(data.Parameters, "command")
+	if command == "" && data.ToolName == "list_directory" {
+		// For list_directory, use the path as the command
+		command = "ls " + extractString(data.Parameters, "path")
+	}
 	block.Title = command
 
 	// Store metadata

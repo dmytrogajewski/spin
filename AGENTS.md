@@ -17,6 +17,7 @@
 * No flaky tests. Flake is a bug. Fix or quarantine then fix.
 * No "TODO: tests later". Tests come first or alongside.
 * No lint errors, no unused code, tools must be at least YELLOW in uast/herr and then improved to clean.
+* Always fix root cause, not symptoms
 
 ## Working Loop – Always Follow
 

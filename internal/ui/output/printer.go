@@ -70,7 +70,9 @@ func (p *Printer) PrintLine(s string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	_, err := io.WriteString(p.out, s+"\n")
+	// Convert \n to \r\n for raw terminal mode
+	output := strings.ReplaceAll(s+"\n", "\n", "\r\n")
+	_, err := io.WriteString(p.out, output)
 	return err
 }
 
@@ -96,8 +98,11 @@ func (p *Printer) PrintChunks(ctx context.Context, chunks <-chan string) error {
 			return nil
 		}
 
+		// Convert \n to \r\n for raw terminal mode
+		output := strings.ReplaceAll(buf.String(), "\n", "\r\n")
+
 		p.mu.Lock()
-		_, err := io.WriteString(p.out, buf.String())
+		_, err := io.WriteString(p.out, output)
 		p.mu.Unlock()
 
 		buf.Reset()
@@ -122,8 +127,10 @@ func (p *Printer) PrintChunks(ctx context.Context, chunks <-chan string) error {
 				if err := flush(); err != nil {
 					return err
 				}
+				// Convert \n to \r\n for raw terminal mode
+				output := strings.ReplaceAll(chunk, "\n", "\r\n")
 				p.mu.Lock()
-				_, err := io.WriteString(p.out, chunk)
+				_, err := io.WriteString(p.out, output)
 				p.mu.Unlock()
 				if err != nil {
 					return err
@@ -169,8 +176,9 @@ func (p *Printer) printChunksImmediate(ctx context.Context, chunks <-chan string
 		case <-ctx.Done():
 			// Flush remaining buffer
 			if buf.Len() > 0 {
+				output := strings.ReplaceAll(buf.String(), "\n", "\r\n")
 				p.mu.Lock()
-				io.WriteString(p.out, buf.String())
+				io.WriteString(p.out, output)
 				p.mu.Unlock()
 			}
 			return ctx.Err()
@@ -179,8 +187,9 @@ func (p *Printer) printChunksImmediate(ctx context.Context, chunks <-chan string
 			if !ok {
 				// Channel closed, flush and return
 				if buf.Len() > 0 {
+					output := strings.ReplaceAll(buf.String(), "\n", "\r\n")
 					p.mu.Lock()
-					_, err := io.WriteString(p.out, buf.String())
+					_, err := io.WriteString(p.out, output)
 					p.mu.Unlock()
 					return err
 				}

@@ -1,100 +1,86 @@
-# Spin Core Examples
+# Spin Examples
 
-This directory contains runnable examples demonstrating how to use the Spin core package.
+This directory contains examples demonstrating how to use Spin's TUI (Terminal User Interface) and configuration files.
 
-## Examples
+## TUI Examples
 
-### 1. Basic Conversation
+### 1. Minimal TUI Demo
 
-Location: `basic-conversation/`
+Location: [`tui-demo/`](tui-demo/)
 
-Demonstrates:
-- Creating a conversation manager
-- Starting a conversation
-- Sending messages to the agent
-- Processing streaming events
-
-Run:
-```bash
-go run examples/basic-conversation/main.go
-```
-
-### 2. Custom Tool Registration
-
-Location: `custom-tool/`
-
-Demonstrates:
-- Defining custom tools
-- Registering tools with the registry
-- Tool schema definition
-- Tool execution
+The simplest possible TUI usage (~50 lines). Demonstrates:
+- Initializing the PureTTY adapter
+- Printing lines to output
+- Accepting user input
+- Clean shutdown with Ctrl-C or Ctrl-D
 
 Run:
 ```bash
-go run examples/custom-tool/main.go
+cd examples/tui-demo
+go run main.go
 ```
 
-### 3. Task Mode Switching
+**Learn more:** [tui-demo/README.md](tui-demo/README.md)
 
-Location: `task-modes/`
+### 2. Streaming Demo
 
-Demonstrates:
-- Different task modes (regular, review, compact)
-- Mode-specific behaviors
-- Switching between modes
-- Use cases for each mode
+Location: [`tui-streaming/`](tui-streaming/)
+
+Shows how to stream LLM responses token-by-token. Demonstrates:
+- Word-by-word and character-by-character streaming
+- Realistic LLM response timing simulation
+- Coalescing behavior with fast streams (8.7M chunks/sec)
+- Transient status indicators
 
 Run:
 ```bash
-go run examples/task-modes/main.go
+cd examples/tui-streaming
+go run main.go
 ```
+
+**Learn more:** [tui-streaming/README.md](tui-streaming/README.md)
+
+### 3. Block Types Demo
+
+Location: [`tui-blocks/`](tui-blocks/)
+
+Comprehensive demonstration of all 9 block types with navigation. Demonstrates:
+- All block types (EXECUTE, PLAN, READ, GREP, APPLY_PATCH, SUMMARY, TESTING, NOTICE, ERROR)
+- Block metadata and rendering
+- Timeline navigation (PgUp/PgDn, jump, filter)
+- Block actions (fold/expand, copy, save, rerun)
+
+Run:
+```bash
+cd examples/tui-blocks
+go run main.go
+```
+
+**Learn more:** [tui-blocks/README.md](tui-blocks/README.md)
+
+## Configuration Examples
+
+Configuration files for different LLM providers:
+
+- [`config-openai.yaml`](config-openai.yaml) - OpenAI/Azure OpenAI setup
+- [`config-anthropic.yaml`](config-anthropic.yaml) - Anthropic Claude setup
+- [`config-ollama.yaml`](config-ollama.yaml) - Ollama (local models) setup
+- [`config-lmstudio.yaml`](config-lmstudio.yaml) - LM Studio setup
+- [`config-custom.yaml`](config-custom.yaml) - Custom provider template
+
+**Provider configuration guide:** [PROVIDER-CONFIG.md](PROVIDER-CONFIG.md)
 
 ## Prerequisites
 
-Make sure you have Go 1.24 or later installed:
+- Go 1.23 or later
+- A terminal that supports ANSI escape codes
 
 ```bash
 go version
 ```
 
-## Running Examples
-
-All examples are self-contained and can be run directly:
-
-```bash
-# Run a specific example
-go run examples/<example-name>/main.go
-
-# Or build and run
-go build -o example examples/<example-name>/main.go
-./example
-```
-
-## Note on LLM Providers
-
-These examples use mock LLM providers for demonstration purposes. In a production environment, you would:
-
-1. Use a real LLM provider (e.g., Anthropic's Claude API)
-2. Set up API credentials
-3. Configure the provider in the manager
-
-Example with real provider:
-```go
-import "github.com/dmytrogajewski/spin/internal/llm/anthropic"
-
-provider, err := anthropic.NewProvider(apiKey)
-if err != nil {
-    log.Fatal(err)
-}
-
-mgr, err := core.NewManager(cfg,
-    core.WithLLMProvider(provider),
-)
-```
-
 ## More Information
 
-For more details, see:
-- [Core Package README](../internal/core/README.md)
-- [Project Documentation](../README.md)
-- [API Reference](https://pkg.go.dev/github.com/dmytrogajewski/spin/internal/core)
+- [TUI Documentation](../docs/tui.md) - Complete guide with keymap, block types, troubleshooting
+- [Performance Benchmarks](../docs/performance.md) - TUI scalability and throughput
+- [Project README](../README.md) - Main project documentation

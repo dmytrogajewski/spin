@@ -566,18 +566,9 @@ func (u *PureTTY) formatFilterChips(f *blocks.Filter) string {
 	return strings.Join(chips, " ")
 }
 
-// render redraws the entire UI: timeline + prompt.
+// render redraws UI elements (filter, prompt).
+// Note: Blocks are printed via AppendBlock in append-only mode.
 func (u *PureTTY) render() {
-	// For now: simple stub (full implementation would render blocks)
-	// This is minimal to pass tests
-
-	// Future: render visible blocks
-	// visible := u.timeline.GetVisibleBlocks()
-	// for _, block := range visible {
-	//     rendered := u.blockRenderer.Render(block)
-	//     fmt.Fprint(u.out, rendered)
-	// }
-
 	// Render filter UI if active
 	if u.mode == ModeFilter || u.timeline.GetFilter() != nil {
 		u.renderFilterUI()
@@ -674,19 +665,45 @@ func (u *PureTTY) handleToggleWrap() {
 	u.coord.PrintLine("[Toggle wrap not implemented yet]")
 }
 
-// AppendBlock appends a new block to timeline and re-renders.
+// AppendBlock appends a new block to timeline and prints it.
 func (u *PureTTY) AppendBlock(block *blocks.Block) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	if err := u.timeline.Append(block); err != nil {
+	// Handle duplicate block IDs by appending a suffix
+	// This handles the case where LLM reuses tool IDs for different tool calls
+	originalID := block.ID
+	suffix := 1
+	for {
+		if err := u.timeline.Append(block); err != nil {
+			// Check if error is due to duplicate ID
+			if err == blocks.ErrDuplicateID {
+				// Make ID unique by appending -1, -2, etc.
+				block.ID = fmt.Sprintf("%s-%d", originalID, suffix)
+				suffix++
+				continue // Retry with new ID
+			}
+			// Other error, return it
+			return err
+		}
+		// Successfully appended
+		break
+	}
+
+	// Render only the new block (append-only UI)
+	rendered, err := u.blockRenderer.Render(block)
+	if err != nil {
 		return err
 	}
-	u.render()
+
+	// Print via coordinator to maintain prompt integrity
+	u.coord.PrintLine(strings.ReplaceAll(rendered, "\n", "\r\n"))
 	return nil
 }
 
-// UpdateBlock updates an existing block and re-renders.
+// UpdateBlock updates an existing block in the timeline.
+// Note: In append-only mode, we don't re-print updated blocks.
+// Updates are stored but not visually reflected (for now).
 func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -694,7 +711,8 @@ func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
 	if err := u.timeline.Update(blockID, block); err != nil {
 		return err
 	}
-	u.render()
+	// Don't re-render in append-only mode
+	// Future: could print a delta or status update
 	return nil
 }
 

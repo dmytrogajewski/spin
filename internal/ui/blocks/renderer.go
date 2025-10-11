@@ -84,12 +84,14 @@ func (r *Renderer) RenderHeader(b *Block) string {
 	// Spacing after accent bar
 	out.WriteString(strings.Repeat(" ", S2))
 
-	// Tag pill
-	out.WriteString(string(tagColor))
+	// Tag badge with colored background
+	// Get background color and label for block type
+	bgColor := r.getBlockTypeColor(b.Type)
+	label := r.getBlockTypeLabel(b.Type)
+	out.WriteString(fmt.Sprintf("\x1b[48;5;%dm", bgColor)) // Background color
+	out.WriteString("\x1b[38;5;232m")                      // Black text for contrast
 	out.WriteString(string(ColorBold))
-	out.WriteString("▐")
-	out.WriteString(string(b.Type))
-	out.WriteString("▌")
+	out.WriteString(fmt.Sprintf(" %s ", label))
 	out.WriteString(string(ColorReset))
 
 	// Spacing after tag
@@ -97,7 +99,8 @@ func (r *Renderer) RenderHeader(b *Block) string {
 
 	// Title/Meta (left-aligned)
 	title := r.formatTitle(b)
-	maxTitleWidth := r.width - 1 - S2 - len(string(b.Type))+2 - S2 - S3 - 20 // Reserve ~20 for right meta
+	// Calculate available width: total - bar - spacing - label - spacing - rightmeta
+	maxTitleWidth := r.width - 1 - S2 - len(label) - 2 - S2 - S3 - 20 // -2 for spaces around label
 	if maxTitleWidth < 10 {
 		maxTitleWidth = 10
 	}
@@ -108,40 +111,75 @@ func (r *Renderer) RenderHeader(b *Block) string {
 }
 
 // formatTitle formats the title/meta line based on block type.
+// Format: toolname argument (parameters: key "value", ...)
 func (r *Renderer) formatTitle(b *Block) string {
 	var parts []string
 
-	if b.Title != "" {
-		parts = append(parts, string(ColorBold)+b.Title+string(ColorReset))
-	}
-
-	// Add type-specific metadata hints
+	// For tool blocks (EXECUTE), show: tool_name argument (parameters: ...)
+	// For others, show title + metadata
 	switch b.Type {
 	case BlockTypeExecute:
 		if meta, err := ParseExecuteMeta(b); err == nil {
-			metaStr := fmt.Sprintf("(cmd: %q, cwd: %q)", meta.Command, meta.CWD)
-			parts = append(parts, string(ColorDim)+metaStr+string(ColorReset))
+			// Extract tool name and primary argument from command
+			// Format: tool_name primary_arg (parameters: param1 "value1", param2 "value2")
+			toolName := "execute" // Default
+			primaryArg := ""
+			params := []string{}
+
+			// If title is set, use it as tool name
+			if b.Title != "" {
+				toolName = b.Title
+			}
+
+			// Try to extract primary argument (first non-option arg)
+			// For now, just use command as primary arg
+			primaryArg = meta.Command
+			if meta.CWD != "." {
+				params = append(params, fmt.Sprintf("cwd %q", meta.CWD))
+			}
+
+			// Build output
+			parts = append(parts, string(ColorBold)+toolName+string(ColorReset))
+			if primaryArg != "" {
+				parts = append(parts, primaryArg)
+			}
+			if len(params) > 0 {
+				paramsStr := strings.Join(params, ", ")
+				parts = append(parts, string(ColorDim)+fmt.Sprintf("(parameters: %s)", paramsStr)+string(ColorReset))
+			}
 		}
 	case BlockTypeRead:
 		if meta, err := ParseReadMeta(b); err == nil {
-			metaStr := fmt.Sprintf("(file: %s)", meta.File)
-			parts = append(parts, string(ColorDim)+metaStr+string(ColorReset))
+			parts = append(parts, string(ColorBold)+"read_file"+string(ColorReset))
+			parts = append(parts, meta.File)
+			parts = append(parts, string(ColorDim)+"(parameters: path "+fmt.Sprintf("%q", meta.File)+")"+string(ColorReset))
 		}
 	case BlockTypeGrep:
 		if meta, err := ParseGrepMeta(b); err == nil {
-			metaStr := fmt.Sprintf("(pattern: %q, mode: %s)", meta.Pattern, meta.Mode)
-			parts = append(parts, string(ColorDim)+metaStr+string(ColorReset))
+			parts = append(parts, string(ColorBold)+"grep"+string(ColorReset))
+			parts = append(parts, meta.Pattern)
+			params := []string{fmt.Sprintf("pattern %q", meta.Pattern), fmt.Sprintf("mode %q", meta.Mode)}
+			parts = append(parts, string(ColorDim)+fmt.Sprintf("(parameters: %s)", strings.Join(params, ", "))+string(ColorReset))
 		}
 	case BlockTypeApplyPatch:
 		if meta, err := ParsePatchMeta(b); err == nil {
-			metaStr := fmt.Sprintf("(file: %s)", meta.File)
-			parts = append(parts, string(ColorDim)+metaStr+string(ColorReset))
+			parts = append(parts, string(ColorBold)+"apply_patch"+string(ColorReset))
+			parts = append(parts, meta.File)
+			parts = append(parts, string(ColorDim)+fmt.Sprintf("(parameters: file %q)", meta.File)+string(ColorReset))
 		}
 	case BlockTypePlan:
+		if b.Title != "" {
+			parts = append(parts, string(ColorBold)+b.Title+string(ColorReset))
+		}
 		if meta, err := ParsePlanMeta(b); err == nil {
 			metaStr := fmt.Sprintf("Updated: %d total (%d pending, %d in progress, %d completed)",
 				meta.Total, meta.Pending, meta.InProgress, meta.Completed)
 			parts = append(parts, metaStr)
+		}
+	default:
+		// For other types, use title if available
+		if b.Title != "" {
+			parts = append(parts, string(ColorBold)+b.Title+string(ColorReset))
 		}
 	}
 
@@ -444,4 +482,43 @@ func calcGutterWidth(lineCount int) int {
 		return 5
 	}
 	return 6
+}
+
+// getBlockTypeColor returns the 256-color background color for a block type badge.
+func (r *Renderer) getBlockTypeColor(blockType BlockType) int {
+	switch blockType {
+	case BlockTypeExecute:
+		return 063 // Blue
+	case BlockTypeRead:
+		return 208 // Orange
+	case BlockTypeGrep:
+		return 220 // Yellow
+	case BlockTypeApplyPatch:
+		return 205 // Magenta
+	case BlockTypePlan:
+		return 141 // Purple
+	case BlockTypeSummary:
+		return 045 // Cyan
+	case BlockTypeTesting:
+		return 034 // Green
+	case BlockTypeNotice:
+		return 244 // Gray
+	case BlockTypeError:
+		return 196 // Red
+	default:
+		return 244 // Gray (fallback)
+	}
+}
+
+// getBlockTypeLabel returns the display label for a block type.
+// Some types use shorter/friendlier names (e.g., "TOOL" instead of "EXECUTE").
+func (r *Renderer) getBlockTypeLabel(blockType BlockType) string {
+	switch blockType {
+	case BlockTypeExecute:
+		return "TOOL"
+	case BlockTypeApplyPatch:
+		return "PATCH"
+	default:
+		return string(blockType)
+	}
 }

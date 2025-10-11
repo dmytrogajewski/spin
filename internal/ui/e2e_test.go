@@ -576,15 +576,15 @@ func TestE2E_Debug(t *testing.T) {
 	keyboard := testkit.NewFakeKeyboard()
 	defer keyboard.Close()
 	fakeTTY := testkit.NewFakeTTY(80, 24)
-	
+
 	t.Log("Creating components...")
 	model := prompt.NewModel(100)
 	renderer := prompt.NewRenderer(writer, 80, "> ")
 	printer := output.NewPrinter(writer)
-	
+
 	rendererAdapter := &rendererAdapter{renderer: renderer}
 	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
-	
+
 	t.Log("Creating PureTTY...")
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
@@ -595,10 +595,10 @@ func TestE2E_Debug(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPureTTY() error = %v", err)
 	}
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	
+
 	t.Log("Starting UI.Run()...")
 	runErr := make(chan error, 1)
 	go func() {
@@ -606,14 +606,14 @@ func TestE2E_Debug(t *testing.T) {
 		t.Logf("UI.Run() returned: %v", err)
 		runErr <- err
 	}()
-	
+
 	time.Sleep(100 * time.Millisecond)
 	t.Logf("TTY entered: %v", fakeTTY.IsEntered())
-	
+
 	t.Log("Injecting keys...")
 	keyboard.InjectString("test")
 	keyboard.InjectEnter()
-	
+
 	t.Log("Waiting for input...")
 	select {
 	case line := <-ui.RequestInput():
@@ -625,7 +625,94 @@ func TestE2E_Debug(t *testing.T) {
 		t.Error("TIMEOUT waiting for input")
 		t.Logf("Output so far: %q", writer.Snapshot())
 	}
-	
+
 	cancel()
 	<-runErr
+}
+
+// TestE2E_DuplicateToolID_MultipleSequentialCalls tests the bug where LLM
+// reuses the same tool ID (e.g., "call_0") for multiple different tool calls.
+// This simulates the real-world scenario where call_0 is used for list_directory,
+// then reused for read_file, causing "block ID already exists" errors.
+func TestE2E_DuplicateToolID_MultipleSequentialCalls(t *testing.T) {
+	writer := testkit.NewFakeWriter()
+	keyboard := testkit.NewFakeKeyboard()
+	defer keyboard.Close()
+	fakeTTY := testkit.NewFakeTTY(80, 24)
+
+	model := prompt.NewModel(100)
+	renderer := prompt.NewRenderer(writer, 80, "> ")
+	printer := output.NewPrinter(writer)
+	rendererAdapter := &rendererAdapter{renderer: renderer}
+	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
+
+	ui, err := adapters.NewPureTTY(writer,
+		adapters.WithTTY(fakeTTY),
+		adapters.WithModel(model),
+		adapters.WithCoordinator(coord),
+		adapters.WithKeyboardEvents(keyboard.Events()),
+	)
+	if err != nil {
+		t.Fatalf("NewPureTTY() error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- ui.Run(ctx)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Simulate LLM sending multiple tool calls with the SAME tool ID ("call_0")
+	// This is the bug: LLM reuses tool IDs for different tools
+	block1 := blocks.NewBlock(blocks.BlockTypeExecute)
+	block1.ID = "call_0" // First tool with ID "call_0"
+	block1.Title = "list_directory /home"
+	block1.Body = ""
+
+	block2 := blocks.NewBlock(blocks.BlockTypeRead)
+	block2.ID = "call_0" // DUPLICATE: Same ID as block1
+	block2.Title = "read_file config.yaml"
+	block2.Body = ""
+
+	block3 := blocks.NewBlock(blocks.BlockTypeExecute)
+	block3.ID = "call_0" // DUPLICATE: Same ID again
+	block3.Title = "execute_command ls -la"
+	block3.Body = ""
+
+	// Append blocks sequentially (simulating real LLM tool calls)
+	if err := ui.AppendBlock(block1); err != nil {
+		t.Errorf("AppendBlock(block1) failed: %v", err)
+	}
+
+	// Second block with duplicate ID should NOT error - it should be handled gracefully
+	// by appending a suffix to make the ID unique (call_0-1)
+	if err := ui.AppendBlock(block2); err != nil {
+		t.Errorf("AppendBlock(block2) with duplicate ID failed: %v", err)
+	}
+
+	// Third block with duplicate ID should also be handled (call_0-2)
+	if err := ui.AppendBlock(block3); err != nil {
+		t.Errorf("AppendBlock(block3) with duplicate ID failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify all three blocks appear in output
+	snapshot := writer.Snapshot()
+	if !strings.Contains(snapshot, "list_directory") {
+		t.Error("output missing block 1 (list_directory)")
+	}
+	if !strings.Contains(snapshot, "read_file") {
+		t.Error("output missing block 2 (read_file)")
+	}
+	if !strings.Contains(snapshot, "execute_command") {
+		t.Error("output missing block 3 (execute_command)")
+	}
+
+	cancel()
+	testkit.WaitForShutdown(t, runErr, 1*time.Second)
 }

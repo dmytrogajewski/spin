@@ -435,3 +435,57 @@ func TestMapEvent_MultipleTools(t *testing.T) {
 		assert.Equal(t, string(rune('a'+i)), block.Body)
 	}
 }
+
+// TestMapEvent_DuplicateToolID verifies that duplicate tool IDs are handled gracefully
+func TestMapEvent_DuplicateToolID(t *testing.T) {
+	ui := NewFakeUI()
+	mapper := NewTUIMapper(ui)
+	defer mapper.Close()
+
+	// Send first tool call start event
+	event1 := Event{
+		Type:      EventToolCallStart,
+		Timestamp: time.Now(),
+		Data: ToolCallStartData{
+			ToolName: "read_file",
+			ToolID:   "duplicate-tool-id",
+			Parameters: makeParams(map[string]interface{}{
+				"path": "test.txt",
+			}).Parameters,
+		},
+	}
+
+	err := mapper.MapEvent(event1)
+	require.NoError(t, err)
+
+	// Should have created 1 block
+	assert.Len(t, ui.Blocks, 1)
+	assert.Equal(t, "duplicate-tool-id", ui.Blocks[0].ID)
+
+	// Send second tool call start event with SAME tool ID (duplicate)
+	event2 := Event{
+		Type:      EventToolCallStart,
+		Timestamp: time.Now(),
+		Data: ToolCallStartData{
+			ToolName: "read_file",
+			ToolID:   "duplicate-tool-id", // Same ID!
+			Parameters: makeParams(map[string]interface{}{
+				"path": "different.txt",
+			}).Parameters,
+		},
+	}
+
+	err = mapper.MapEvent(event2)
+	require.NoError(t, err)
+
+	// Should now have 2 blocks (duplicate gets unique ID)
+	assert.Len(t, ui.Blocks, 2)
+	assert.Equal(t, "duplicate-tool-id", ui.Blocks[0].ID)
+	assert.Equal(t, "duplicate-tool-id-1", ui.Blocks[1].ID)
+
+	// Original block should be unchanged
+	assert.Equal(t, "test.txt", ui.Blocks[0].Title)
+
+	// New block should have different content
+	assert.Equal(t, "different.txt", ui.Blocks[1].Title)
+}
