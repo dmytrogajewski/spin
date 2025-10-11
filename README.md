@@ -91,12 +91,24 @@ Extensible tool framework:
 - Custom tool registration
 - MCP tool integration
 
-### TUI (`internal/tui`)
-Interactive terminal interface:
-- Real-time streaming responses
-- Markdown rendering
-- Command approval workflows
-- Event visualization
+### Terminal UI (TUI) (`internal/ui`)
+Native-scrollback terminal interface with block-based timeline rendering:
+- **Factory Droid principle**: Append-only transcript, preserves native scrollback
+- **Block timeline**: Visual blocks for all agent actions (EXECUTE, PLAN, diffs, summaries)
+- **Streaming output**: Real-time LLM response with coalescing (8.7M chunks/sec)
+- **Keyboard navigation**: PgUp/PgDn, filtering, collapse/expand, copy/save
+- **Performance**: 100k+ blocks without lag (0.52ms viewport render)
+- **Command palette**: Fuzzy search with Ctrl-P
+- **Works in**: SSH, tmux, screen (no alt-screen buffer)
+
+**Documentation:**
+- [Full TUI docs](docs/tui.md) - Complete guide with keymap, block types, troubleshooting
+- [Performance](docs/performance.md) - Benchmarks and scalability
+
+**Examples:**
+- [Minimal TUI](examples/tui-demo/) - Simplest possible usage (~50 lines)
+- [Streaming demo](examples/tui-streaming/) - LLM token streaming simulation
+- [Block types demo](examples/tui-blocks/) - All 9 block types with navigation
 
 ## Type Safety
 

@@ -29,9 +29,7 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 		Version: version.ShortVersion(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Default behavior: launch TUI when no subcommand is provided
-			// TODO: Implement new TUI (Phase 7.4)
-			cmd.Println("TUI is being reimplemented. Use 'spin exec' for non-interactive mode.")
-			return cmd.Help()
+			return runTUI(cmd, args)
 		},
 		SilenceUsage: true,
 	}
@@ -48,8 +46,7 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 	cmd.PersistentFlags().StringSliceVarP(&flagConfig, "config", "c", nil, "Config overrides (key=value)")
 
 	// Add commands
-	// TODO: Re-add tuiCmd when new TUI is complete (Phase 7.4)
-	// cmd.AddCommand(tuiCmd)           // TUI mode (explicit 'spin tui')
+	cmd.AddCommand(newTUICmd())       // TUI mode (Phase 7.4 complete!)
 	cmd.AddCommand(newVersionCmd())
 	cmd.AddCommand(newCompletionCmd())
 	cmd.AddCommand(newExecCmd())

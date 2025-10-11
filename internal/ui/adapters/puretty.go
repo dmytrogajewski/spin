@@ -12,6 +12,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/output"
+	"github.com/dmytrogajewski/spin/internal/ui/overlay"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 	"github.com/dmytrogajewski/spin/internal/ui/prompt"
 	"github.com/dmytrogajewski/spin/internal/ui/term"
@@ -27,17 +28,24 @@ const (
 	ModeTimeline
 	// ModeFilter is the mode where keys edit the filter string.
 	ModeFilter
+	// ModePalette is the mode where keys control the command palette.
+	ModePalette
 )
 
 // PureTTY implements ports.UI using native terminal control without alt-screen buffer.
 // It follows Factory Droid principles: append-only transcript, single-line prompt redraw.
 type PureTTY struct {
-	tty      *term.TTY
+	tty      term.TerminalController
 	model    *prompt.Model
 	renderer *prompt.Renderer
 	coord    *output.CoordinatedWriter
 	out      io.Writer
-	inputs   <-chan string
+
+	// Internal prompt loop channel (consumed by Run)
+	promptInputs <-chan string
+
+	// External input channel (for RequestInput callers)
+	externalInputs chan string
 
 	// Timeline and block rendering (Phase 6.1)
 	timeline       *blocks.Timeline
@@ -45,6 +53,14 @@ type PureTTY struct {
 	viewportHeight int
 	mode           UIMode
 	filterInput    string
+
+	// Command palette (Phase 6.2)
+	palette         *overlay.Palette
+	paletteRegistry *overlay.CommandRegistry
+	paletteRenderer *overlay.PaletteRenderer
+
+	// Testing support
+	keyboardEvents <-chan term.KeyEvent // If set, use this instead of ReadKeys
 
 	mu      sync.Mutex
 	running bool
@@ -56,7 +72,7 @@ type PureTTY struct {
 type PureTTYOption func(*PureTTY) error
 
 // WithTTY sets a custom TTY implementation (for testing).
-func WithTTY(tty *term.TTY) PureTTYOption {
+func WithTTY(tty term.TerminalController) PureTTYOption {
 	return func(p *PureTTY) error {
 		p.tty = tty
 		return nil
@@ -95,12 +111,22 @@ func WithBlockRenderer(r *blocks.Renderer) PureTTYOption {
 	}
 }
 
+// WithKeyboardEvents sets a custom keyboard event channel (for testing).
+// When set, Run() will use this channel instead of term.ReadKeys().
+func WithKeyboardEvents(events <-chan term.KeyEvent) PureTTYOption {
+	return func(p *PureTTY) error {
+		p.keyboardEvents = events
+		return nil
+	}
+}
+
 // NewPureTTY creates a new PureTTY adapter.
 // Defaults: stdin/stdout TTY, 100-entry history, "> " prefix.
 func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 	p := &PureTTY{
-		out:  out,
-		mode: ModeInput, // Start in input mode (backward compat)
+		out:            out,
+		mode:           ModeInput,            // Start in input mode (backward compat)
+		externalInputs: make(chan string, 100), // Buffered channel for RequestInput() callers
 	}
 
 	// Apply options
@@ -152,6 +178,19 @@ func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 		p.blockRenderer = blocks.NewRenderer(w)
 	}
 
+	// Create command palette (Phase 6.2)
+	if p.paletteRegistry == nil {
+		p.paletteRegistry = overlay.NewCommandRegistry()
+		p.registerDefaultCommands()
+	}
+	if p.palette == nil {
+		p.palette = overlay.NewPalette(p.paletteRegistry)
+	}
+	if p.paletteRenderer == nil {
+		w, h := p.tty.Size()
+		p.paletteRenderer = overlay.NewPaletteRenderer(w, h)
+	}
+
 	return p, nil
 }
 
@@ -186,16 +225,24 @@ func (u *PureTTY) Run(ctx context.Context) error {
 	}
 	defer u.tty.Exit()
 
-	// Start keyboard reader
-	keys, err := term.ReadKeys(ctx, os.Stdin, nil)
-	if err != nil {
-		return fmt.Errorf("start keyboard reader: %w", err)
+	// Start keyboard reader (or use injected events for testing)
+	var keys <-chan term.KeyEvent
+	if u.keyboardEvents != nil {
+		// Use injected keyboard events (for testing)
+		keys = u.keyboardEvents
+	} else {
+		// Use real keyboard reader
+		var err error
+		keys, err = term.ReadKeys(ctx, os.Stdin, nil)
+		if err != nil {
+			return fmt.Errorf("start keyboard reader: %w", err)
+		}
 	}
 
 	// Start prompt loop
 	inputs := u.startPromptLoop(ctx, keys)
 	u.mu.Lock()
-	u.inputs = inputs
+	u.promptInputs = inputs
 	u.mu.Unlock()
 
 	// Setup SIGWINCH handler
@@ -206,15 +253,28 @@ func (u *PureTTY) Run(ctx context.Context) error {
 	// Initial prompt draw
 	u.coord.RedrawPrompt()
 
+	// Ensure external inputs channel is closed on exit
+	defer close(u.externalInputs)
+
 	// Event loop
 	for {
 		select {
 		case line, ok := <-inputs:
 			if !ok {
-				// Prompt loop closed (Ctrl-C or Ctrl-D)
-				return nil
+				// Prompt loop closed (Ctrl-C, Ctrl-D, or context cancel)
+				// Check if it was context cancel
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+					return nil
+				}
 			}
+			// Handle line internally
 			u.handleSubmittedLine(line)
+
+			// Forward to external consumers (buffered, will block if full)
+			u.externalInputs <- line
 
 		case <-ctx.Done():
 			return ctx.Err()
@@ -256,9 +316,8 @@ func (u *PureTTY) SetStatus(text string) error {
 
 // RequestInput returns a channel that emits user-submitted lines.
 func (u *PureTTY) RequestInput() <-chan string {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	return u.inputs
+	// Return external inputs channel that receives forwarded messages from Run()
+	return u.externalInputs
 }
 
 // startPromptLoop starts the prompt input loop in a background goroutine.
@@ -307,7 +366,17 @@ func (u *PureTTY) calculateViewport() {
 
 // handleKey dispatches key events based on current mode.
 func (u *PureTTY) handleKey(key term.KeyEvent) {
+	// Global: Ctrl-P opens palette from any mode
+	if key.Kind == term.KeyCtrlP && u.mode != ModePalette {
+		u.palette.Open()
+		u.mode = ModePalette
+		u.renderPaletteOverlay()
+		return
+	}
+
 	switch u.mode {
+	case ModePalette:
+		u.handlePaletteKey(key)
 	case ModeTimeline:
 		u.handleTimelineKey(key)
 	case ModeInput:
@@ -413,6 +482,40 @@ func (u *PureTTY) handleFilterKey(key term.KeyEvent) {
 	}
 }
 
+// handlePaletteKey handles command palette interactions.
+func (u *PureTTY) handlePaletteKey(key term.KeyEvent) {
+	switch key.Kind {
+	case term.KeyEscape:
+		// Close palette, return to input mode
+		u.palette.Close()
+		u.mode = ModeInput
+		u.render()
+	case term.KeyEnter:
+		// Execute selected command
+		if cmd := u.palette.SelectedCommand(); cmd != nil {
+			_ = cmd.Execute(context.Background())
+		}
+		u.palette.Close()
+		u.mode = ModeInput
+		u.render()
+	case term.KeyUp:
+		u.palette.MoveUp()
+		u.renderPaletteOverlay()
+	case term.KeyDown:
+		u.palette.MoveDown()
+		u.renderPaletteOverlay()
+	case term.KeyBackspace:
+		u.palette.Backspace()
+		u.renderPaletteOverlay()
+	case term.KeyCtrlU:
+		u.palette.ClearQuery()
+		u.renderPaletteOverlay()
+	case term.KeyRune:
+		u.palette.Insert(key.Rune)
+		u.renderPaletteOverlay()
+	}
+}
+
 // parseFilter parses filter string into blocks.Filter.
 // Syntax: "type:EXECUTE file:foo.go exit:0 impact:high"
 func (u *PureTTY) parseFilter(input string) *blocks.Filter {
@@ -502,6 +605,17 @@ func (u *PureTTY) renderFilterUI() {
 			term.HideCursor,
 		)
 	}
+}
+
+// renderPaletteOverlay renders the command palette overlay.
+func (u *PureTTY) renderPaletteOverlay() {
+	// Update renderer size (in case of resize)
+	w, h := u.tty.Size()
+	u.paletteRenderer.SetSize(w, h)
+
+	// Render palette
+	paletteOutput := u.paletteRenderer.Render(u.palette)
+	fmt.Fprint(u.out, paletteOutput)
 }
 
 // enterFilterMode switches to filter mode.
@@ -603,6 +717,75 @@ func (u *PureTTY) SetMode(mode UIMode) {
 
 	u.mode = mode
 	u.render()
+}
+
+// registerDefaultCommands registers built-in command palette commands.
+func (u *PureTTY) registerDefaultCommands() {
+	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+		"Run...",
+		"Execute shell command",
+		"Edit",
+		'▶',
+		func(ctx context.Context, args ...interface{}) error {
+			// TODO: Implement run command
+			return nil
+		},
+	))
+
+	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+		"Search in repo...",
+		"Grep/search files",
+		"Tools",
+		'🔍',
+		func(ctx context.Context, args ...interface{}) error {
+			// TODO: Implement search command
+			return nil
+		},
+	))
+
+	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+		"Open recent file...",
+		"File picker",
+		"File",
+		'📄',
+		func(ctx context.Context, args ...interface{}) error {
+			// TODO: Implement file picker
+			return nil
+		},
+	))
+
+	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+		"New plan...",
+		"Create plan block",
+		"Edit",
+		'📋',
+		func(ctx context.Context, args ...interface{}) error {
+			// TODO: Implement new plan
+			return nil
+		},
+	))
+
+	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+		"Toggle mode...",
+		"Switch Auto/Manual",
+		"System",
+		'🔄',
+		func(ctx context.Context, args ...interface{}) error {
+			// TODO: Implement toggle mode
+			return nil
+		},
+	))
+
+	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+		"Change theme...",
+		"Switch Dark/Light",
+		"System",
+		'🎨',
+		func(ctx context.Context, args ...interface{}) error {
+			// TODO: Implement theme change
+			return nil
+		},
+	))
 }
 
 // Verify PureTTY implements ports.UI

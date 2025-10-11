@@ -32,6 +32,7 @@ const (
 	KeyCtrlK // kill line right
 	KeyCtrlW // delete word left
 	KeyCtrlL // redraw
+	KeyCtrlP // command palette
 	KeyPaste // bracketed paste
 	KeyF1
 	KeyF2
@@ -71,6 +72,7 @@ func (k KeyKind) String() string {
 		KeyCtrlK:     "Ctrl-K",
 		KeyCtrlW:     "Ctrl-W",
 		KeyCtrlL:     "Ctrl-L",
+		KeyCtrlP:     "Ctrl-P",
 		KeyPaste:     "Paste",
 		KeyF1:        "F1",
 		KeyF2:        "F2",
@@ -190,6 +192,8 @@ func (p *keyParser) parseByte(ctx context.Context, b byte) KeyEvent {
 		return KeyEvent{Kind: KeyCtrlK, Raw: []byte{b}}
 	case 0x0c: // Ctrl-L
 		return KeyEvent{Kind: KeyCtrlL, Raw: []byte{b}}
+	case 0x10: // Ctrl-P
+		return KeyEvent{Kind: KeyCtrlP, Raw: []byte{b}}
 	case 0x15: // Ctrl-U
 		return KeyEvent{Kind: KeyCtrlU, Raw: []byte{b}}
 	case 0x17: // Ctrl-W
