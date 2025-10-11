@@ -119,8 +119,10 @@ func runTUI(cmd *cobra.Command, args []string) error {
 
 	// Start streaming channel
 	streamCh := mapper.StartStreaming()
+	streamDone := make(chan struct{})
 	go func() {
 		ui.PrintChunks(ctx, streamCh)
+		close(streamDone)
 	}()
 
 	// Print welcome message
@@ -195,6 +197,21 @@ _____/\\\\\\\\\_____/\\\\\\\\\\\_______________/\\\\\\\\\________/\\\\\\\\\\\\__
 
 			// Send message and handle errors
 			err := conv.RunTurn(turnCtx, line)
+
+			// Stop streaming to close the channel (this triggers final newline in PrintChunks)
+			mapper.StopStreaming()
+
+			// Wait for streaming to complete
+			<-streamDone
+
+			// Reset streamDone for next turn
+			streamDone = make(chan struct{})
+			streamCh = mapper.StartStreaming()
+			go func() {
+				ui.PrintChunks(ctx, streamCh)
+				close(streamDone)
+			}()
+
 			if err != nil {
 				ui.PrintLine(fmt.Sprintf("✗ Error: %v\n", err))
 			}

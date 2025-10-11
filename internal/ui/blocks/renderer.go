@@ -4,20 +4,37 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dmytrogajewski/spin/internal/ui/theme"
 	"github.com/rivo/uniseg"
 )
 
 // Renderer renders blocks to ANSI terminal output.
 type Renderer struct {
-	width int // Terminal width in columns
+	width int          // Terminal width in columns
+	theme theme.Theme  // Color theme (optional, uses legacy colors if nil)
 }
 
 // NewRenderer creates a new block renderer with the given terminal width.
+// Uses legacy hardcoded colors for backward compatibility.
 func NewRenderer(width int) *Renderer {
 	if width <= 0 {
 		width = 80 // Default width
 	}
-	return &Renderer{width: width}
+	return &Renderer{
+		width: width,
+		theme: nil, // nil theme uses legacy colors
+	}
+}
+
+// NewRendererWithTheme creates a new block renderer with a theme.
+func NewRendererWithTheme(width int, th theme.Theme) *Renderer {
+	if width <= 0 {
+		width = 80 // Default width
+	}
+	return &Renderer{
+		width: width,
+		theme: th,
+	}
 }
 
 // SetWidth updates the terminal width (e.g., on window resize).

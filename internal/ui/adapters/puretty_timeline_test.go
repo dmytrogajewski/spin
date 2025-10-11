@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"bytes"
+	"os"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/output"
 	"github.com/dmytrogajewski/spin/internal/ui/prompt"
 	"github.com/dmytrogajewski/spin/internal/ui/term"
+	"github.com/dmytrogajewski/spin/internal/ui/testkit"
 )
 
 // Helper to create a test PureTTY instance with all dependencies
@@ -680,4 +682,160 @@ func createTestBlock(id int, typ blocks.BlockType) *blocks.Block {
 
 func intPtr(i int) *int {
 	return &i
+}
+
+// TestFilePreviewAnchorDetection tests opening file preview from block with anchor
+func TestFilePreviewAnchorDetection(t *testing.T) {
+	ui, _ := newTestPureTTY(t, 80, 24)
+
+	// Create a temp file for testing
+	tmpFile := t.TempDir() + "/test.go"
+	content := "package main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n"
+	if err := writeFile(tmpFile, content); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Create block with file anchor
+	block := createTestBlock(1, blocks.BlockTypeExecute)
+	block.Body = "Check " + tmpFile + ":3 for the main function"
+	ui.timeline.Append(block)
+	ui.timeline.FocusBlock(block.ID)
+
+	// Mock TTY size
+	fakeTTY := testkit.NewFakeTTY(80, 24)
+	ui.tty = fakeTTY
+
+	// Trigger 'o' key to open file preview
+	ui.handleOpenFilePreview()
+
+	// Verify mode switched to file preview
+	if ui.mode != ModeFilePreview {
+		t.Errorf("mode = %v, want ModeFilePreview after handleOpenFilePreview", ui.mode)
+	}
+
+	// Verify file preview was created
+	if ui.filePreview == nil {
+		t.Fatal("filePreview is nil after handleOpenFilePreview")
+	}
+
+	// Verify file content loaded
+	if len(ui.filePreview.Lines) != 5 {
+		t.Errorf("filePreview.Lines = %d lines, want 5", len(ui.filePreview.Lines))
+	}
+
+	// Verify target line set correctly (line 3)
+	if ui.filePreview.TargetLine != 3 {
+		t.Errorf("filePreview.TargetLine = %d, want 3", ui.filePreview.TargetLine)
+	}
+}
+
+// TestFilePreviewNavigation tests navigation keys in file preview mode
+func TestFilePreviewNavigation(t *testing.T) {
+	ui, _ := newTestPureTTY(t, 80, 24)
+
+	// Create a large file for scroll testing
+	tmpFile := t.TempDir() + "/large.go"
+	content := "package main\n\n"
+	for i := 0; i < 100; i++ {
+		content += "// Line " + string(rune(i)) + "\n"
+	}
+	if err := writeFile(tmpFile, content); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Setup file preview
+	block := createTestBlock(1, blocks.BlockTypeExecute)
+	block.Body = "See " + tmpFile + ":50"
+	ui.timeline.Append(block)
+	ui.timeline.FocusBlock(block.ID)
+
+	fakeTTY := testkit.NewFakeTTY(80, 24)
+	ui.tty = fakeTTY
+	ui.handleOpenFilePreview()
+
+	if ui.filePreview == nil {
+		t.Fatal("filePreview is nil")
+	}
+
+	// Test scroll down
+	initialScrollPos := ui.filePreview.ScrollPos
+	ui.handleFilePreviewKey(term.KeyEvent{Kind: term.KeyDown})
+	if ui.filePreview.ScrollPos <= initialScrollPos {
+		t.Error("ScrollPos did not increase after KeyDown")
+	}
+
+	// Test scroll up
+	ui.handleFilePreviewKey(term.KeyEvent{Kind: term.KeyUp})
+	if ui.filePreview.ScrollPos != initialScrollPos {
+		t.Error("ScrollPos did not return to initial after KeyUp")
+	}
+
+	// Test scroll to top (g key)
+	ui.filePreview.ScrollPos = 50
+	ui.handleFilePreviewKey(term.KeyEvent{Kind: term.KeyRune, Rune: 'g'})
+	if ui.filePreview.ScrollPos != 0 {
+		t.Errorf("ScrollPos = %d after 'g', want 0", ui.filePreview.ScrollPos)
+	}
+
+	// Test Escape closes preview
+	ui.handleFilePreviewKey(term.KeyEvent{Kind: term.KeyEscape})
+	if ui.mode != ModeTimeline {
+		t.Errorf("mode = %v after Escape, want ModeTimeline", ui.mode)
+	}
+	if ui.filePreview != nil {
+		t.Error("filePreview should be nil after closing")
+	}
+}
+
+// TestFilePreviewNoAnchor tests handling when block has no anchors
+func TestFilePreviewNoAnchor(t *testing.T) {
+	ui, out := newTestPureTTY(t, 80, 24)
+
+	// Create block without any file anchors
+	block := createTestBlock(1, blocks.BlockTypeNotice)
+	block.Body = "This is just a notice with no file references"
+	ui.timeline.Append(block)
+	ui.timeline.FocusBlock(block.ID)
+
+	// Try to open file preview
+	ui.handleOpenFilePreview()
+
+	// Should stay in timeline mode
+	if ui.mode != ModeInput {
+		t.Errorf("mode = %v, want ModeInput (should not switch to preview)", ui.mode)
+	}
+
+	// Should print error message
+	output := out.String()
+	if !contains(output, "No file anchors found") {
+		t.Error("Expected 'No file anchors found' message in output")
+	}
+}
+
+// Helper to write file content
+func writeFile(path, content string) error {
+	f, err := create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.WriteString(content)
+	return err
+}
+
+func contains(s, substr string) bool {
+	return len(s) > 0 && len(substr) > 0 && indexHelper(s, substr) >= 0
+}
+
+func indexHelper(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
+
+func create(name string) (*os.File, error) {
+	return os.Create(name)
 }

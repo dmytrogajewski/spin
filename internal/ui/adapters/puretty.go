@@ -30,6 +30,8 @@ const (
 	ModeFilter
 	// ModePalette is the mode where keys control the command palette.
 	ModePalette
+	// ModeFilePreview is the mode where a file preview popup is shown.
+	ModeFilePreview
 )
 
 // PureTTY implements ports.UI using native terminal control without alt-screen buffer.
@@ -58,6 +60,11 @@ type PureTTY struct {
 	palette         *overlay.Palette
 	paletteRegistry *overlay.CommandRegistry
 	paletteRenderer *overlay.PaletteRenderer
+
+	// File preview (Phase 6.3)
+	filePreview         *overlay.FilePreview
+	filePreviewRenderer *overlay.FilePreviewRenderer
+	searchMatches       []int // current search matches in file preview
 
 	// Testing support
 	keyboardEvents <-chan term.KeyEvent // If set, use this instead of ReadKeys
@@ -377,6 +384,8 @@ func (u *PureTTY) handleKey(key term.KeyEvent) {
 	switch u.mode {
 	case ModePalette:
 		u.handlePaletteKey(key)
+	case ModeFilePreview:
+		u.handleFilePreviewKey(key)
 	case ModeTimeline:
 		u.handleTimelineKey(key)
 	case ModeInput:
@@ -419,6 +428,9 @@ func (u *PureTTY) handleTimelineKey(key term.KeyEvent) {
 			u.handleToggleWrap()
 		case '/':
 			u.enterFilterMode()
+		case 'o':
+			// Open file preview for anchor under cursor
+			u.handleOpenFilePreview()
 		case ':':
 			// Switch to input mode (for commands)
 			u.mode = ModeInput
@@ -663,6 +675,127 @@ func (u *PureTTY) handleRerunBlock() {
 func (u *PureTTY) handleToggleWrap() {
 	// TODO: Implement wrap toggle (requires renderer state)
 	u.coord.PrintLine("[Toggle wrap not implemented yet]")
+}
+
+// handleOpenFilePreview opens a file preview for anchor under cursor.
+func (u *PureTTY) handleOpenFilePreview() {
+	// Get focused block
+	block, err := u.timeline.GetFocusedBlock()
+	if err != nil {
+		return
+	}
+
+	// Detect anchors in block body
+	anchors := overlay.DetectAnchors(block.Body)
+	if len(anchors) == 0 {
+		u.coord.PrintLine("[No file anchors found in focused block]")
+		return
+	}
+
+	// Use first anchor for now (TODO: let user pick if multiple)
+	anchor := anchors[0]
+
+	// Resolve absolute path (try relative to cwd)
+	cwd, _ := os.Getwd()
+	absPath := overlay.GetAbsolutePath(cwd, anchor.FilePath)
+
+	// Calculate popup dimensions
+	w, h := u.tty.Size()
+	popupWidth, popupHeight := overlay.CalculatePopupDimensions(w, h)
+
+	// Open file preview
+	fp, err := overlay.NewFilePreview(absPath, anchor.Line, popupWidth, popupHeight)
+	if err != nil {
+		u.coord.PrintLine(fmt.Sprintf("[Failed to open file: %v]", err))
+		return
+	}
+
+	u.filePreview = fp
+	u.filePreviewRenderer = overlay.NewFilePreviewRenderer(popupWidth)
+	u.searchMatches = nil
+	u.mode = ModeFilePreview
+	u.renderFilePreviewOverlay()
+}
+
+// handleFilePreviewKey handles file preview navigation keys.
+func (u *PureTTY) handleFilePreviewKey(key term.KeyEvent) {
+	if u.filePreview == nil {
+		return
+	}
+
+	switch key.Kind {
+	case term.KeyEscape:
+		// Close preview, return to timeline mode
+		u.filePreview = nil
+		u.filePreviewRenderer = nil
+		u.searchMatches = nil
+		u.mode = ModeTimeline
+		u.render()
+		return
+
+	case term.KeyUp:
+		u.filePreview.ScrollUp(1)
+		u.renderFilePreviewOverlay()
+
+	case term.KeyDown:
+		u.filePreview.ScrollDown(1)
+		u.renderFilePreviewOverlay()
+
+	case term.KeyPgUp:
+		// Scroll up by viewport height
+		contentHeight := u.filePreview.Height - 3
+		u.filePreview.ScrollUp(contentHeight)
+		u.renderFilePreviewOverlay()
+
+	case term.KeyPgDn:
+		// Scroll down by viewport height
+		contentHeight := u.filePreview.Height - 3
+		u.filePreview.ScrollDown(contentHeight)
+		u.renderFilePreviewOverlay()
+
+	case term.KeyRune:
+		switch key.Rune {
+		case 'g':
+			u.filePreview.ScrollToTop()
+			u.renderFilePreviewOverlay()
+		case 'G':
+			u.filePreview.ScrollToBottom()
+			u.renderFilePreviewOverlay()
+		case '/':
+			// TODO: Enter search mode (Phase 6.3 stretch goal)
+			u.coord.PrintLine("[Search in preview not implemented yet]")
+		case 'n':
+			// Next search match
+			if len(u.searchMatches) > 0 {
+				u.filePreview.NextMatch(u.searchMatches)
+				u.renderFilePreviewOverlay()
+			}
+		case 'N':
+			// Previous search match
+			if len(u.searchMatches) > 0 {
+				u.filePreview.PrevMatch(u.searchMatches)
+				u.renderFilePreviewOverlay()
+			}
+		}
+	}
+}
+
+// renderFilePreviewOverlay renders the file preview popup.
+func (u *PureTTY) renderFilePreviewOverlay() {
+	if u.filePreview == nil || u.filePreviewRenderer == nil {
+		return
+	}
+
+	// Update dimensions in case of resize
+	w, h := u.tty.Size()
+	popupWidth, popupHeight := overlay.CalculatePopupDimensions(w, h)
+	u.filePreview.Width = popupWidth
+	u.filePreview.Height = popupHeight
+	u.filePreviewRenderer = overlay.NewFilePreviewRenderer(popupWidth)
+
+	// Render preview
+	previewOutput := u.filePreviewRenderer.Render(u.filePreview)
+	fmt.Fprint(u.out, previewOutput)
 }
 
 // AppendBlock appends a new block to timeline and prints it.

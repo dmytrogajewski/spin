@@ -9,6 +9,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/types"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
+	"github.com/dmytrogajewski/spin/internal/ui/output"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 )
 
@@ -22,6 +23,7 @@ type TUIMapper struct {
 	streamMu      sync.Mutex               // Protects streamCh
 	streamCtx     context.Context
 	streamCancel  context.CancelFunc
+	thinkFilter   *output.ThinkFilter      // Filter for <think> tags
 	mu            sync.RWMutex // Protects blockRegistry
 }
 
@@ -32,6 +34,7 @@ func NewTUIMapper(ui ports.UI) *TUIMapper {
 	return &TUIMapper{
 		ui:            ui,
 		blockRegistry: make(map[string]*blocks.Block),
+		thinkFilter:   output.NewThinkFilter(),
 	}
 }
 
@@ -286,13 +289,16 @@ func (m *TUIMapper) handleContentDelta(event Event) error {
 		return nil
 	}
 
-	// If streaming is active, send chunk
+	// Filter <think> tags and apply formatting
+	filtered := m.thinkFilter.Process(data.Content)
+
+	// If streaming is active, send filtered chunk
 	m.streamMu.Lock()
 	defer m.streamMu.Unlock()
 
-	if m.streamCh != nil {
+	if m.streamCh != nil && filtered != "" {
 		select {
-		case m.streamCh <- data.Content:
+		case m.streamCh <- filtered:
 		case <-m.streamCtx.Done():
 			// Stream closed, drop
 		default:
@@ -365,6 +371,17 @@ func (m *TUIMapper) StopStreaming() {
 	m.streamMu.Lock()
 	defer m.streamMu.Unlock()
 
+	// Flush any buffered think content
+	if m.streamCh != nil {
+		if flushed := m.thinkFilter.Flush(); flushed != "" {
+			select {
+			case m.streamCh <- flushed:
+			default:
+				// Channel full or closed, drop
+			}
+		}
+	}
+
 	if m.streamCancel != nil {
 		m.streamCancel()
 	}
@@ -373,6 +390,9 @@ func (m *TUIMapper) StopStreaming() {
 		close(m.streamCh)
 		m.streamCh = nil
 	}
+
+	// Reset filter for next turn
+	m.thinkFilter.Reset()
 }
 
 // Close cleans up mapper resources (closes stream channels).

@@ -162,7 +162,7 @@ func TestPrintChunks_SingleChunk(t *testing.T) {
 	}
 
 	got := w.String()
-	want := "Hello"
+	want := "Hello\r\n" // Auto-newline added after streaming completes
 	if got != want {
 		t.Errorf("PrintChunks output mismatch:\ngot:  %q\nwant: %q", got, want)
 	}
@@ -187,7 +187,7 @@ func TestPrintChunks_MultipleChunks(t *testing.T) {
 	}
 
 	got := w.String()
-	want := "Hello world!"
+	want := "Hello world!\r\n" // Auto-newline added after streaming completes
 	if got != want {
 		t.Errorf("PrintChunks output mismatch:\ngot:  %q\nwant: %q", got, want)
 	}
@@ -218,7 +218,7 @@ func TestPrintChunks_NewlineFlush(t *testing.T) {
 	}
 
 	got := w.String()
-	want := "Line 1\nLine 2\n"
+	want := "Line 1\r\nLine 2\r\n\r\n" // \n→\r\n conversion + auto-newline
 	if got != want {
 		t.Errorf("PrintChunks output mismatch:\ngot:  %q\nwant: %q", got, want)
 	}
@@ -298,8 +298,9 @@ func TestPrintChunks_LargeChunk(t *testing.T) {
 	}
 
 	got := w.String()
-	if got != largeChunk {
-		t.Errorf("PrintChunks output mismatch: got %d bytes, want %d bytes", len(got), len(largeChunk))
+	want := largeChunk + "\r\n" // Auto-newline added
+	if got != want {
+		t.Errorf("PrintChunks output mismatch: got %d bytes, want %d bytes", len(got), len(want))
 	}
 }
 
@@ -336,7 +337,7 @@ func TestPrintChunks_CoalesceDelay(t *testing.T) {
 	}
 
 	got := w.String()
-	want := "ABC"
+	want := "ABC\r\n" // Auto-newline added
 	if got != want {
 		t.Errorf("PrintChunks output mismatch:\ngot:  %q\nwant: %q", got, want)
 	}
@@ -360,7 +361,7 @@ func TestPrintChunks_ZeroDelay(t *testing.T) {
 	}
 
 	got := w.String()
-	want := "ABC"
+	want := "ABC\r\n" // Auto-newline added
 	if got != want {
 		t.Errorf("PrintChunks output mismatch:\ngot:  %q\nwant: %q", got, want)
 	}
@@ -550,7 +551,7 @@ func TestPrintChunks_ImmediateMode_MultipleChunks(t *testing.T) {
 	}
 
 	got := w.String()
-	want := "ABCDE"
+	want := "ABCDE\r\n" // Auto-newline added
 	if got != want {
 		t.Errorf("PrintChunks output mismatch:\ngot:  %q\nwant: %q", got, want)
 	}
