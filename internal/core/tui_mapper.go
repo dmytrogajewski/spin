@@ -23,8 +23,8 @@ type TUIMapper struct {
 	streamMu      sync.Mutex               // Protects streamCh
 	streamCtx     context.Context
 	streamCancel  context.CancelFunc
-	thinkFilter   *output.ThinkFilter      // Filter for <think> tags
-	mu            sync.RWMutex // Protects blockRegistry
+	thinkFilter   *output.ThinkFilter // Filter for <think> tags
+	mu            sync.RWMutex        // Protects blockRegistry
 }
 
 // NewTUIMapper creates a new TUI event mapper.
@@ -71,24 +71,10 @@ func (m *TUIMapper) handleToolStart(event Event) error {
 		return nil // Gracefully handle type assertion failure
 	}
 
-	// Create block first (outside lock)
-	var block *blocks.Block
-
-	switch data.ToolName {
-	case "execute_command":
-		block = m.createExecuteBlock(data)
-	case "read_file":
-		block = m.createReadBlock(data)
-	case "write_file":
-		block = m.createApplyPatchBlock(data)
-	case "list_directory":
-		block = m.createExecuteBlock(data) // Treat as EXECUTE
-	default:
-		// Unknown tool, ignore
-		return nil
-	}
-
+	// Create block based on tool type (block header provides compact feedback)
+	block := m.createBlockForTool(data)
 	if block == nil {
+		// Unknown tool type, skip block creation
 		return nil
 	}
 
@@ -143,6 +129,23 @@ func (m *TUIMapper) handleToolStart(event Event) error {
 	return nil
 }
 
+// createBlockForTool creates the appropriate block type for a tool call.
+func (m *TUIMapper) createBlockForTool(data ToolCallStartData) *blocks.Block {
+	switch data.ToolName {
+	case "execute_command":
+		return m.createExecuteBlock(data)
+	case "read_file":
+		return m.createReadBlock(data)
+	case "write_file":
+		return m.createApplyPatchBlock(data)
+	case "list_directory":
+		return m.createExecuteBlock(data) // Treat as EXECUTE
+	default:
+		// Unknown tool, no block created
+		return nil
+	}
+}
+
 // createExecuteBlock creates an EXECUTE block for command execution.
 func (m *TUIMapper) createExecuteBlock(data ToolCallStartData) *blocks.Block {
 	block := blocks.NewBlock(blocks.BlockTypeExecute)
@@ -154,7 +157,10 @@ func (m *TUIMapper) createExecuteBlock(data ToolCallStartData) *blocks.Block {
 		// For list_directory, use the path as the command
 		command = "ls " + extractString(data.Parameters, "path")
 	}
-	block.Title = command
+
+	// Don't set block.Title for execute blocks - the renderer will use the
+	// tool name (data.ToolName) and command from metadata. Setting Title
+	// causes duplication in the block header.
 
 	// Store metadata
 	cwd := extractString(data.Parameters, "cwd")
@@ -168,7 +174,7 @@ func (m *TUIMapper) createExecuteBlock(data ToolCallStartData) *blocks.Block {
 	}
 	if err := blocks.SetExecuteMeta(block, meta); err != nil {
 		// Validation failed, set as raw map to preserve data
-		block.Meta = map[string]interface{}{
+		block.Meta = map[string]any{
 			"command": command,
 			"cwd":     cwd,
 		}
@@ -192,7 +198,7 @@ func (m *TUIMapper) createReadBlock(data ToolCallStartData) *blocks.Block {
 	}
 	if err := blocks.SetReadMeta(block, meta); err != nil {
 		// Validation failed, set as raw map
-		block.Meta = map[string]interface{}{
+		block.Meta = map[string]any{
 			"file": path,
 		}
 	}
@@ -217,7 +223,7 @@ func (m *TUIMapper) createApplyPatchBlock(data ToolCallStartData) *blocks.Block 
 	}
 	if err := blocks.SetPatchMeta(block, meta); err != nil {
 		// Validation failed, set as raw map
-		block.Meta = map[string]interface{}{
+		block.Meta = map[string]any{
 			"file": path,
 		}
 	}
@@ -271,7 +277,7 @@ func (m *TUIMapper) handleToolComplete(event Event) error {
 		}
 	}
 
-	// Update in UI
+	// Update in UI (block rendering will show completion status line)
 	err := m.ui.UpdateBlock(data.ToolID, block)
 
 	// Clean up registry

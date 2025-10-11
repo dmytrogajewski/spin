@@ -10,8 +10,9 @@ import (
 
 // Renderer renders blocks to ANSI terminal output.
 type Renderer struct {
-	width int          // Terminal width in columns
-	theme theme.Theme  // Color theme (optional, uses legacy colors if nil)
+	width           int                      // Terminal width in columns
+	theme           theme.Theme              // Color theme (optional, uses legacy colors if nil)
+	paramsFormatter *ParamsFormatterRegistry // Tool parameter formatter (Strategy pattern)
 }
 
 // NewRenderer creates a new block renderer with the given terminal width.
@@ -21,8 +22,9 @@ func NewRenderer(width int) *Renderer {
 		width = 80 // Default width
 	}
 	return &Renderer{
-		width: width,
-		theme: nil, // nil theme uses legacy colors
+		width:           width,
+		theme:           nil, // nil theme uses legacy colors
+		paramsFormatter: NewParamsFormatterRegistry(),
 	}
 }
 
@@ -32,8 +34,9 @@ func NewRendererWithTheme(width int, th theme.Theme) *Renderer {
 		width = 80 // Default width
 	}
 	return &Renderer{
-		width: width,
-		theme: th,
+		width:           width,
+		theme:           th,
+		paramsFormatter: NewParamsFormatterRegistry(),
 	}
 }
 
@@ -57,6 +60,13 @@ func (r *Renderer) Render(b *Block) (string, error) {
 	header := r.RenderHeader(b)
 	out.WriteString(header)
 	out.WriteString("\n")
+
+	// Render completion status line (if tool has completed)
+	statusLine := r.RenderCompletionStatus(b)
+	if statusLine != "" {
+		out.WriteString(statusLine)
+		out.WriteString("\n")
+	}
 
 	// Render body (if expanded)
 	if b.FoldState == FoldStateExpanded && b.Body != "" {
@@ -128,63 +138,17 @@ func (r *Renderer) RenderHeader(b *Block) string {
 }
 
 // formatTitle formats the title/meta line based on block type.
-// Format: toolname argument (parameters: key "value", ...)
+// Delegates to tool-specific formatters using Strategy pattern.
 func (r *Renderer) formatTitle(b *Block) string {
-	var parts []string
+	// Try tool-specific formatter first (for EXECUTE, READ, WRITE, GREP)
+	if formatted := r.paramsFormatter.FormatTitle(b); formatted != "" {
+		return formatted
+	}
 
-	// For tool blocks (EXECUTE), show: tool_name argument (parameters: ...)
-	// For others, show title + metadata
+	// Fallback for special block types without dedicated formatters
 	switch b.Type {
-	case BlockTypeExecute:
-		if meta, err := ParseExecuteMeta(b); err == nil {
-			// Extract tool name and primary argument from command
-			// Format: tool_name primary_arg (parameters: param1 "value1", param2 "value2")
-			toolName := "execute" // Default
-			primaryArg := ""
-			params := []string{}
-
-			// If title is set, use it as tool name
-			if b.Title != "" {
-				toolName = b.Title
-			}
-
-			// Try to extract primary argument (first non-option arg)
-			// For now, just use command as primary arg
-			primaryArg = meta.Command
-			if meta.CWD != "." {
-				params = append(params, fmt.Sprintf("cwd %q", meta.CWD))
-			}
-
-			// Build output
-			parts = append(parts, string(ColorBold)+toolName+string(ColorReset))
-			if primaryArg != "" {
-				parts = append(parts, primaryArg)
-			}
-			if len(params) > 0 {
-				paramsStr := strings.Join(params, ", ")
-				parts = append(parts, string(ColorDim)+fmt.Sprintf("(parameters: %s)", paramsStr)+string(ColorReset))
-			}
-		}
-	case BlockTypeRead:
-		if meta, err := ParseReadMeta(b); err == nil {
-			parts = append(parts, string(ColorBold)+"read_file"+string(ColorReset))
-			parts = append(parts, meta.File)
-			parts = append(parts, string(ColorDim)+"(parameters: path "+fmt.Sprintf("%q", meta.File)+")"+string(ColorReset))
-		}
-	case BlockTypeGrep:
-		if meta, err := ParseGrepMeta(b); err == nil {
-			parts = append(parts, string(ColorBold)+"grep"+string(ColorReset))
-			parts = append(parts, meta.Pattern)
-			params := []string{fmt.Sprintf("pattern %q", meta.Pattern), fmt.Sprintf("mode %q", meta.Mode)}
-			parts = append(parts, string(ColorDim)+fmt.Sprintf("(parameters: %s)", strings.Join(params, ", "))+string(ColorReset))
-		}
-	case BlockTypeApplyPatch:
-		if meta, err := ParsePatchMeta(b); err == nil {
-			parts = append(parts, string(ColorBold)+"apply_patch"+string(ColorReset))
-			parts = append(parts, meta.File)
-			parts = append(parts, string(ColorDim)+fmt.Sprintf("(parameters: file %q)", meta.File)+string(ColorReset))
-		}
 	case BlockTypePlan:
+		var parts []string
 		if b.Title != "" {
 			parts = append(parts, string(ColorBold)+b.Title+string(ColorReset))
 		}
@@ -193,14 +157,14 @@ func (r *Renderer) formatTitle(b *Block) string {
 				meta.Total, meta.Pending, meta.InProgress, meta.Completed)
 			parts = append(parts, metaStr)
 		}
+		return strings.Join(parts, " ")
 	default:
-		// For other types, use title if available
+		// Generic fallback: use title
 		if b.Title != "" {
-			parts = append(parts, string(ColorBold)+b.Title+string(ColorReset))
+			return string(ColorBold) + b.Title + string(ColorReset)
 		}
+		return ""
 	}
-
-	return strings.Join(parts, " ")
 }
 
 // RenderBody renders only the block body based on type.
@@ -528,14 +492,99 @@ func (r *Renderer) getBlockTypeColor(blockType BlockType) int {
 }
 
 // getBlockTypeLabel returns the display label for a block type.
-// Some types use shorter/friendlier names (e.g., "TOOL" instead of "EXECUTE").
+// Labels match ToolFormatter tags for consistency.
 func (r *Renderer) getBlockTypeLabel(blockType BlockType) string {
 	switch blockType {
 	case BlockTypeExecute:
-		return "TOOL"
+		return "EXECUTE"
 	case BlockTypeApplyPatch:
-		return "PATCH"
+		return "WRITE" // Match FRD format (WRITE instead of APPLY_PATCH)
 	default:
 		return string(blockType)
 	}
+}
+
+// renderCompletionStatus renders the completion status line (↳ ...) for completed tools.
+// Returns empty string if tool hasn't completed or has no status to show.
+func (r *Renderer) RenderCompletionStatus(b *Block) string {
+	if b == nil {
+		return ""
+	}
+
+	switch b.Type {
+	case BlockTypeExecute:
+		return r.renderExecuteCompletionStatus(b)
+	case BlockTypeRead:
+		return r.renderReadCompletionStatus(b)
+	case BlockTypeApplyPatch:
+		return r.renderWriteCompletionStatus(b)
+	case BlockTypeGrep:
+		return r.renderGrepCompletionStatus(b)
+	default:
+		return ""
+	}
+}
+
+// renderExecuteCompletionStatus renders completion status for EXECUTE blocks.
+func (r *Renderer) renderExecuteCompletionStatus(b *Block) string {
+	meta, err := ParseExecuteMeta(b)
+	if err != nil || meta == nil || meta.ExitCode == nil {
+		return "" // Not completed yet
+	}
+
+	var parts []string
+
+	// Exit code
+	if *meta.ExitCode == 0 {
+		parts = append(parts, "Exit code: 0")
+	} else {
+		parts = append(parts, fmt.Sprintf("Exit code: %d", *meta.ExitCode))
+	}
+
+	// Output summary
+	if meta.LinesOut != nil {
+		if *meta.LinesOut == 0 {
+			parts = append(parts, "No output")
+		} else if *meta.LinesOut == 1 {
+			parts = append(parts, "Output: 1 line")
+		} else {
+			parts = append(parts, fmt.Sprintf("Output: %d lines", *meta.LinesOut))
+		}
+	}
+
+	// Duration
+	if meta.DurationMS != nil && *meta.DurationMS > 0 {
+		dur := float64(*meta.DurationMS) / 1000.0
+		parts = append(parts, fmt.Sprintf("Duration: %.1fs", dur))
+	}
+
+	result := strings.Join(parts, ". ") + "."
+	return fmt.Sprintf(" %s %s", string(ColorMuted)+"↳"+string(ColorReset), result)
+}
+
+// renderReadCompletionStatus renders completion status for READ blocks.
+func (r *Renderer) renderReadCompletionStatus(b *Block) string {
+	// Read blocks typically don't show completion status
+	// (the body contains the file content)
+	return ""
+}
+
+// renderWriteCompletionStatus renders completion status for WRITE blocks.
+func (r *Renderer) renderWriteCompletionStatus(b *Block) string {
+	meta, err := ParsePatchMeta(b)
+	if err != nil || meta == nil {
+		return ""
+	}
+
+	if meta.Succeeded {
+		return fmt.Sprintf(" %s File written successfully.", string(ColorMuted)+"↳"+string(ColorReset))
+	}
+	return fmt.Sprintf(" %s Failed to write file.", string(ColorMuted)+"↳"+string(ColorReset))
+}
+
+// renderGrepCompletionStatus renders completion status for GREP blocks.
+func (r *Renderer) renderGrepCompletionStatus(b *Block) string {
+	// Grep blocks typically don't show completion status
+	// (the body contains the matches)
+	return ""
 }

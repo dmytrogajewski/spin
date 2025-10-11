@@ -835,8 +835,11 @@ func (u *PureTTY) AppendBlock(block *blocks.Block) error {
 }
 
 // UpdateBlock updates an existing block in the timeline.
-// Note: In append-only mode, we don't re-print updated blocks.
-// Updates are stored but not visually reflected (for now).
+// In append-only mode, prints the completion status line for completed blocks.
+//
+// IMPORTANT: This method MUST print the completion status line when tools complete.
+// Simply updating the timeline internal state is not enough - the user needs to SEE
+// the completion status. This is tested in TestToolCallFormatting_ListDirectory.
 func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -844,8 +847,18 @@ func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
 	if err := u.timeline.Update(blockID, block); err != nil {
 		return err
 	}
-	// Don't re-render in append-only mode
-	// Future: could print a delta or status update
+
+	// Print completion status line for tool blocks that have completed
+	// This shows the "↳ Exit code: 0..." line without re-rendering the entire block
+	statusLine := u.blockRenderer.RenderCompletionStatus(block)
+	if statusLine != "" {
+		// Move cursor up one line (to overwrite the prompt), clear the line, write status, then redraw prompt
+		// Sequence: ESC[1A (up), ESC[2K (clear line), write status, newline, redraw prompt
+		fmt.Fprint(u.out, "\x1b[1A\x1b[2K")                                      // Up + clear line
+		fmt.Fprint(u.out, strings.ReplaceAll(statusLine, "\n", "\r\n")+"\r\n") // Write status
+		u.renderer.Redraw(u.model, "")                                           // Redraw prompt
+	}
+
 	return nil
 }
 

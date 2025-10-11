@@ -113,6 +113,12 @@ func TestRenderExecuteBlock(t *testing.T) {
 	if !strings.Contains(output, "[dur: 4.2s]") {
 		t.Error("Output should contain duration chip")
 	}
+	if !strings.Contains(output, "↳") {
+		t.Error("Output should contain completion status line with arrow")
+	}
+	if !strings.Contains(output, "Exit code: 0") {
+		t.Error("Output should contain exit code in completion status")
+	}
 }
 
 func TestRenderPlanBlock(t *testing.T) {
@@ -206,8 +212,8 @@ func TestRenderPatchBlock(t *testing.T) {
 		t.Fatalf("Render() error = %v", err)
 	}
 
-	if !strings.Contains(output, "APPLY_PATCH") {
-		t.Error("Output should contain APPLY_PATCH tag")
+	if !strings.Contains(output, "WRITE") {
+		t.Error("Output should contain WRITE tag")
 	}
 	if !strings.Contains(output, "main.go") {
 		t.Error("Output should contain filename")

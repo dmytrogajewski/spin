@@ -113,8 +113,14 @@ func TestMapEvent_ToolCallStart_Execute(t *testing.T) {
 
 	assert.Equal(t, blocks.BlockTypeExecute, block.Type)
 	assert.Equal(t, "tool-123", block.ID)
-	assert.Equal(t, "ls -la", block.Title)
+	// Title should be empty for execute blocks to avoid duplication in renderer
+	assert.Equal(t, "", block.Title)
+	// Command should be in metadata
 	assert.NotNil(t, block.Meta)
+	meta, err := blocks.ParseExecuteMeta(block)
+	require.NoError(t, err)
+	assert.Equal(t, "ls -la", meta.Command)
+	assert.Equal(t, "/home/user", meta.CWD)
 }
 
 // TestMapEvent_ToolCallComplete_Execute verifies EXECUTE block update
