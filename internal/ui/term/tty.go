@@ -1,13 +1,30 @@
 package term
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
 	"golang.org/x/term"
+)
+
+// Terminal size constraints (Phase 8.2: Defensive error handling)
+const (
+	MinTerminalWidth  = 40
+	MinTerminalHeight = 10
+	MaxTerminalWidth  = 1000
+	MaxTerminalHeight = 1000
+)
+
+// Errors (Phase 8.2)
+var (
+	ErrNotATTY          = errors.New("not a terminal")
+	ErrTerminalTooSmall = errors.New("terminal too small (minimum 40x10)")
 )
 
 // TTY manages terminal state for raw mode interaction.
@@ -189,4 +206,92 @@ func (tty *TTY) startSigwinchHandler() {
 // isTerminal returns true if fd refers to a terminal.
 func isTerminal(fd int) bool {
 	return term.IsTerminal(fd)
+}
+
+// ============================================================================
+// Phase 8.2: Defensive Error Handling
+// ============================================================================
+
+// IsTTY returns true if the given file descriptor refers to a terminal.
+// This is the exported version of isTerminal for external use.
+func IsTTY(fd int) bool {
+	return term.IsTerminal(fd)
+}
+
+// ValidateTerminalType checks the $TERM environment variable and returns
+// true if it's a known problematic terminal type (dumb, empty, unknown).
+// This function logs a warning for problematic terminals but does not fail.
+//
+// Returns: true if terminal type should warn, false if OK.
+func ValidateTerminalType() bool {
+	termType := os.Getenv("TERM")
+
+	// Empty TERM
+	if termType == "" {
+		slog.Warn("TERM environment variable is empty, terminal features may not work correctly")
+		return true
+	}
+
+	// Known problematic terminals
+	problematic := []string{"dumb", "unknown"}
+	for _, p := range problematic {
+		if termType == p {
+			slog.Warn("Terminal type may have limited features",
+				"term", termType,
+				"recommendation", "use xterm, xterm-256color, or similar")
+			return true
+		}
+	}
+
+	// Unknown terminal (heuristic: very short or contains "unknown")
+	if len(termType) < 3 || strings.Contains(strings.ToLower(termType), "unknown") {
+		slog.Warn("Unknown terminal type, features may be limited",
+			"term", termType)
+		return true
+	}
+
+	return false
+}
+
+// ValidateWindowSize validates terminal dimensions and clamps to safe limits.
+// Returns validated (possibly clamped) dimensions and error if too small.
+//
+// Rules:
+//   - Minimum: 40x10 (returns ErrTerminalTooSmall if below)
+//   - Maximum: 1000x1000 (clamps silently with warning if above)
+//   - Negative or zero: returns ErrTerminalTooSmall
+//
+// Returns: (validatedWidth, validatedHeight, error)
+func ValidateWindowSize(width, height int) (int, int, error) {
+	// Check for invalid dimensions
+	if width <= 0 || height <= 0 {
+		return 0, 0, fmt.Errorf("%w: got %dx%d", ErrTerminalTooSmall, width, height)
+	}
+
+	// Check minimum
+	if width < MinTerminalWidth || height < MinTerminalHeight {
+		return 0, 0, fmt.Errorf("%w: got %dx%d, need at least %dx%d",
+			ErrTerminalTooSmall, width, height, MinTerminalWidth, MinTerminalHeight)
+	}
+
+	// Clamp maximum
+	clamped := false
+	if width > MaxTerminalWidth {
+		slog.Warn("Terminal width exceeds maximum, clamping",
+			"width", width, "max", MaxTerminalWidth)
+		width = MaxTerminalWidth
+		clamped = true
+	}
+	if height > MaxTerminalHeight {
+		slog.Warn("Terminal height exceeds maximum, clamping",
+			"height", height, "max", MaxTerminalHeight)
+		height = MaxTerminalHeight
+		clamped = true
+	}
+
+	if clamped {
+		slog.Info("Terminal dimensions clamped", "width", width, "height", height)
+	}
+
+	return width, height, nil
 }

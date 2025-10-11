@@ -3,6 +3,7 @@ package blocks
 import (
 	"errors"
 	"strings"
+	"sync"
 )
 
 var (
@@ -32,7 +33,9 @@ type Filter struct {
 }
 
 // Timeline manages an ordered collection of blocks with viewport and filtering support.
+// Thread-safe: all operations are protected by RWMutex (Phase 8.2 fix).
 type Timeline struct {
+	mu        sync.RWMutex // Protects all fields below
 	blocks    []*Block
 	scrollPos int
 	focusedID string
@@ -53,6 +56,9 @@ func NewTimeline() *Timeline {
 
 // Append adds a block to the end of the timeline.
 func (t *Timeline) Append(block *Block) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	// Check for duplicate ID
 	for _, b := range t.blocks {
 		if b.ID == block.ID {
@@ -67,6 +73,9 @@ func (t *Timeline) Append(block *Block) error {
 
 // Update replaces an existing block with the same ID.
 func (t *Timeline) Update(blockID string, block *Block) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	for i, b := range t.blocks {
 		if b.ID == blockID {
 			t.blocks[i] = block
@@ -78,6 +87,9 @@ func (t *Timeline) Update(blockID string, block *Block) error {
 
 // Delete removes a block from the timeline.
 func (t *Timeline) Delete(blockID string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	for i, b := range t.blocks {
 		if b.ID == blockID {
 			t.blocks = append(t.blocks[:i], t.blocks[i+1:]...)
@@ -93,6 +105,9 @@ func (t *Timeline) Delete(blockID string) error {
 
 // Get retrieves a block by ID.
 func (t *Timeline) Get(blockID string) (*Block, error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
 	for _, b := range t.blocks {
 		if b.ID == blockID {
 			return b, nil
@@ -103,6 +118,9 @@ func (t *Timeline) Get(blockID string) (*Block, error) {
 
 // GetByIndex retrieves a block by index.
 func (t *Timeline) GetByIndex(index int) (*Block, error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
 	if index < 0 || index >= len(t.blocks) {
 		return nil, ErrInvalidIndex
 	}
@@ -111,27 +129,38 @@ func (t *Timeline) GetByIndex(index int) (*Block, error) {
 
 // Len returns the number of blocks in the timeline.
 func (t *Timeline) Len() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	return len(t.blocks)
 }
 
 // SetViewportHeight sets the viewport height in blocks.
 func (t *Timeline) SetViewportHeight(height int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.viewport.Height = height
 	t.updateViewport()
 }
 
 // GetViewport returns the current viewport state.
 func (t *Timeline) GetViewport() Viewport {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	return t.viewport
 }
 
 // GetViewportHeight returns the viewport height.
 func (t *Timeline) GetViewportHeight() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	return t.viewport.Height
 }
 
 // GetScrollPosition returns the current scroll position.
 func (t *Timeline) GetScrollPosition() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	return t.scrollPos
 }
 
@@ -139,6 +168,9 @@ func (t *Timeline) GetScrollPosition() int {
 // after applying any active filter. If viewport height is 0 or unset,
 // returns all filtered blocks.
 func (t *Timeline) GetVisibleBlocks() []*Block {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
 	// Apply filter first
 	blocks := t.getFilteredBlocks()
 
@@ -166,6 +198,9 @@ func (t *Timeline) GetVisibleBlocks() []*Block {
 
 // ScrollUp scrolls the viewport up by the specified number of blocks.
 func (t *Timeline) ScrollUp(lines int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.scrollPos -= lines
 	if t.scrollPos < 0 {
 		t.scrollPos = 0
@@ -175,6 +210,9 @@ func (t *Timeline) ScrollUp(lines int) {
 
 // ScrollDown scrolls the viewport down by the specified number of blocks.
 func (t *Timeline) ScrollDown(lines int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.scrollPos += lines
 	t.clampScrollPos()
 	t.updateViewport()
@@ -182,12 +220,18 @@ func (t *Timeline) ScrollDown(lines int) {
 
 // ScrollToTop scrolls to the beginning of the timeline.
 func (t *Timeline) ScrollToTop() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.scrollPos = 0
 	t.updateViewport()
 }
 
 // ScrollToBottom scrolls to the end of the timeline.
 func (t *Timeline) ScrollToBottom() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	blocks := t.getFilteredBlocks()
 	maxScroll := len(blocks) - t.viewport.Height
 	if maxScroll < 0 {
@@ -199,6 +243,9 @@ func (t *Timeline) ScrollToBottom() {
 
 // ScrollToBlock scrolls to make the specified block visible at the top of the viewport.
 func (t *Timeline) ScrollToBlock(blockID string) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	blocks := t.getFilteredBlocks()
 	for i, b := range blocks {
 		if b.ID == blockID {
@@ -213,25 +260,42 @@ func (t *Timeline) ScrollToBlock(blockID string) error {
 
 // FocusBlock sets the focused block.
 func (t *Timeline) FocusBlock(blockID string) error {
-	// Verify block exists
-	_, err := t.Get(blockID)
-	if err != nil {
-		return err
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Verify block exists (call without lock since we already hold it)
+	found := false
+	for _, b := range t.blocks {
+		if b.ID == blockID {
+			found = true
+			break
+		}
 	}
+	if !found {
+		return ErrBlockNotFound
+	}
+
 	t.focusedID = blockID
 	return nil
 }
 
 // GetFocusedBlock returns the currently focused block.
 func (t *Timeline) GetFocusedBlock() (*Block, error) {
-	if t.focusedID == "" {
+	t.mu.RLock()
+	focusedID := t.focusedID
+	t.mu.RUnlock()
+
+	if focusedID == "" {
 		return nil, ErrNoFocusedBlock
 	}
-	return t.Get(t.focusedID)
+	return t.Get(focusedID)
 }
 
 // NextBlock moves focus to the next block in the (filtered) timeline.
 func (t *Timeline) NextBlock() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if t.focusedID == "" {
 		return ErrNoFocusedBlock
 	}
@@ -264,6 +328,9 @@ func (t *Timeline) NextBlock() error {
 
 // PrevBlock moves focus to the previous block in the (filtered) timeline.
 func (t *Timeline) PrevBlock() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if t.focusedID == "" {
 		return ErrNoFocusedBlock
 	}
@@ -296,9 +363,19 @@ func (t *Timeline) PrevBlock() error {
 
 // ToggleFold toggles the fold state of a block.
 func (t *Timeline) ToggleFold(blockID string) error {
-	block, err := t.Get(blockID)
-	if err != nil {
-		return err
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// Find block
+	var block *Block
+	for _, b := range t.blocks {
+		if b.ID == blockID {
+			block = b
+			break
+		}
+	}
+	if block == nil {
+		return ErrBlockNotFound
 	}
 
 	if block.FoldState == FoldStateExpanded {
@@ -312,6 +389,9 @@ func (t *Timeline) ToggleFold(blockID string) error {
 
 // ExpandAll expands all blocks in the timeline.
 func (t *Timeline) ExpandAll() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	for _, block := range t.blocks {
 		block.FoldState = FoldStateExpanded
 	}
@@ -319,6 +399,9 @@ func (t *Timeline) ExpandAll() {
 
 // CollapseAll collapses all blocks in the timeline.
 func (t *Timeline) CollapseAll() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	for _, block := range t.blocks {
 		block.FoldState = FoldStateCollapsed
 	}
@@ -326,6 +409,9 @@ func (t *Timeline) CollapseAll() {
 
 // SetFilter sets the active filter.
 func (t *Timeline) SetFilter(filter *Filter) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.filter = filter
 	// Reset scroll position when filter changes
 	t.scrollPos = 0
@@ -334,6 +420,9 @@ func (t *Timeline) SetFilter(filter *Filter) {
 
 // ClearFilter clears the active filter.
 func (t *Timeline) ClearFilter() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.filter = nil
 	t.scrollPos = 0
 	t.updateViewport()
@@ -341,6 +430,8 @@ func (t *Timeline) ClearFilter() {
 
 // GetFilter returns the active filter, or nil if no filter is set.
 func (t *Timeline) GetFilter() *Filter {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 	return t.filter
 }
 
