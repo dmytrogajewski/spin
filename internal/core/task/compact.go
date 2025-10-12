@@ -129,11 +129,11 @@ Remember: Speed and clarity over comprehensiveness. Answer the question directly
 //
 // If AdditionalTools are configured, they are appended to the base set.
 func (c *Compact) AllowedTools() []string {
-	// Minimal essential tool set for Compact mode
+	// Minimal essential tool set for Compact mode (3 tools)
 	tools := []string{
 		"read_file",
-		"list_dir",
-		"search_code",
+		"get_context",
+		"file_search",
 	}
 
 	// Add any additional tools if configured

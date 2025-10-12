@@ -149,60 +149,21 @@ func TestReview_AllowedTools(t *testing.T) {
 		minCount     int
 	}{
 		{
-			name:   "default with git",
+			name:   "default review mode",
 			config: nil,
 			wantContains: []string{
 				"read_file",
-				"list_dir",
-				"search_files",
-				"search_code",
+				"list_directory",
 				"get_context",
-				"git_status",
-				"git_diff",
-				"git_log",
+				"file_search",
+				"git_context",
 			},
 			wantExcludes: []string{
 				"write_file",
-				"shell",
-				"git_add",
-				"git_commit",
-			},
-			minCount: 8,
-		},
-		{
-			name: "without git ops",
-			config: &ReviewConfig{
-				IncludeGitOps: false,
-			},
-			wantContains: []string{
-				"read_file",
-				"list_dir",
-				"search_code",
-			},
-			wantExcludes: []string{
-				"write_file",
-				"shell",
-				"git_status",
-				"git_diff",
-				"git_add",
+				"execute_command",
+				"apply_patch",
 			},
 			minCount: 5,
-		},
-		{
-			name: "explicitly enable git",
-			config: &ReviewConfig{
-				IncludeGitOps: true,
-			},
-			wantContains: []string{
-				"read_file",
-				"git_status",
-				"git_diff",
-			},
-			wantExcludes: []string{
-				"write_file",
-				"shell",
-			},
-			minCount: 8,
 		},
 	}
 

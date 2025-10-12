@@ -120,7 +120,7 @@ func TestPlanning_AllowedTools(t *testing.T) {
 	tools := p.AllowedTools()
 
 	// Planning mode should have limited tools
-	expectedTools := []string{"get_context", "read_file", "list_dir"}
+	expectedTools := []string{"get_context", "get_context", "file_search"}
 
 	if len(tools) != len(expectedTools) {
 		t.Errorf("AllowedTools() returned %d tools, want %d", len(tools), len(expectedTools))

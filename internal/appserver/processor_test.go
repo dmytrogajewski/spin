@@ -269,3 +269,230 @@ func TestGenerateTurnID(t *testing.T) {
 		t.Errorf("Turn ID should start with 'turn-', got '%s'", id1)
 	}
 }
+
+// Task Mode Tests
+
+func TestProcessor_NewConversationWithTaskMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	processor, err := NewProcessor(ProcessorConfig{WorkspacePath: tmpDir, Version: "0.1.0"})
+	if err != nil {
+		t.Fatalf("Failed to create processor: %v", err)
+	}
+
+	mode := "review"
+	params := jsonrpc.SendMessageParams{
+		Message:  "Hello",
+		TaskMode: &mode,
+	}
+
+	result, err := processor.HandleSendMessage(context.Background(), params)
+	if err != nil {
+		t.Fatalf("HandleSendMessage failed: %v", err)
+	}
+
+	if result.TaskMode != "review" {
+		t.Errorf("Expected task mode 'review', got '%s'", result.TaskMode)
+	}
+
+	// Verify conversation has the task mode
+	processor.mu.Lock()
+	conv := processor.conversations[result.ConversationID]
+	processor.mu.Unlock()
+
+	conv.mu.RLock()
+	taskMode := conv.taskMode
+	conv.mu.RUnlock()
+
+	if taskMode != "review" {
+		t.Errorf("Expected conversation task mode 'review', got '%s'", taskMode)
+	}
+}
+
+func TestProcessor_SwitchTaskMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	processor, err := NewProcessor(ProcessorConfig{WorkspacePath: tmpDir, Version: "0.1.0"})
+	if err != nil {
+		t.Fatalf("Failed to create processor: %v", err)
+	}
+
+	// Create conversation in regular mode
+	regularMode := "regular"
+	params1 := jsonrpc.SendMessageParams{
+		Message:  "Hello",
+		TaskMode: &regularMode,
+	}
+	result1, err := processor.HandleSendMessage(context.Background(), params1)
+	if err != nil {
+		t.Fatalf("First HandleSendMessage failed: %v", err)
+	}
+
+	if result1.TaskMode != "regular" {
+		t.Errorf("Expected task mode 'regular', got '%s'", result1.TaskMode)
+	}
+
+	// Switch to review mode
+	reviewMode := "review"
+	params2 := jsonrpc.SendMessageParams{
+		ConversationID: &result1.ConversationID,
+		Message:        "Review code",
+		TaskMode:       &reviewMode,
+	}
+	result2, err := processor.HandleSendMessage(context.Background(), params2)
+	if err != nil {
+		t.Fatalf("Second HandleSendMessage failed: %v", err)
+	}
+
+	if result2.TaskMode != "review" {
+		t.Errorf("Expected task mode 'review', got '%s'", result2.TaskMode)
+	}
+
+	// Verify conversation was updated
+	processor.mu.Lock()
+	conv := processor.conversations[result1.ConversationID]
+	processor.mu.Unlock()
+
+	conv.mu.RLock()
+	taskMode := conv.taskMode
+	conv.mu.RUnlock()
+
+	if taskMode != "review" {
+		t.Errorf("Expected conversation task mode 'review', got '%s'", taskMode)
+	}
+}
+
+func TestProcessor_InvalidTaskMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	processor, err := NewProcessor(ProcessorConfig{WorkspacePath: tmpDir, Version: "0.1.0"})
+	if err != nil {
+		t.Fatalf("Failed to create processor: %v", err)
+	}
+
+	invalidMode := "invalid"
+	params := jsonrpc.SendMessageParams{
+		Message:  "Hello",
+		TaskMode: &invalidMode,
+	}
+
+	_, err = processor.HandleSendMessage(context.Background(), params)
+	if err == nil {
+		t.Fatal("Expected error for invalid task mode")
+	}
+
+	rpcErr, ok := err.(*jsonrpc.Error)
+	if !ok {
+		t.Fatalf("Expected JSON-RPC error, got %T", err)
+	}
+
+	if rpcErr.Code != jsonrpc.InvalidParams {
+		t.Errorf("Expected error code %d, got %d", jsonrpc.InvalidParams, rpcErr.Code)
+	}
+
+	if !contains(rpcErr.Message, "invalid task mode") {
+		t.Errorf("Expected error message to contain 'invalid task mode', got '%s'", rpcErr.Message)
+	}
+}
+
+func TestProcessor_NoTaskModeUsesDefault(t *testing.T) {
+	tmpDir := t.TempDir()
+	processor, err := NewProcessor(ProcessorConfig{WorkspacePath: tmpDir, Version: "0.1.0"})
+	if err != nil {
+		t.Fatalf("Failed to create processor: %v", err)
+	}
+
+	params := jsonrpc.SendMessageParams{
+		Message: "Hello",
+		// TaskMode is nil
+	}
+
+	result, err := processor.HandleSendMessage(context.Background(), params)
+	if err != nil {
+		t.Fatalf("HandleSendMessage failed: %v", err)
+	}
+
+	if result.TaskMode != "regular" {
+		t.Errorf("Expected default task mode 'regular', got '%s'", result.TaskMode)
+	}
+}
+
+func TestProcessor_AllTaskModesValid(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	validModes := []string{"regular", "review", "compact", "planning"}
+
+	for _, mode := range validModes {
+		t.Run(mode, func(t *testing.T) {
+			processor, err := NewProcessor(ProcessorConfig{WorkspacePath: tmpDir, Version: "0.1.0"})
+			if err != nil {
+				t.Fatalf("Failed to create processor: %v", err)
+			}
+
+			modePtr := mode
+			params := jsonrpc.SendMessageParams{
+				Message:  "Test message",
+				TaskMode: &modePtr,
+			}
+
+			result, err := processor.HandleSendMessage(context.Background(), params)
+			if err != nil {
+				t.Fatalf("HandleSendMessage failed for mode '%s': %v", mode, err)
+			}
+
+			if result.TaskMode != mode {
+				t.Errorf("Expected task mode '%s', got '%s'", mode, result.TaskMode)
+			}
+		})
+	}
+}
+
+func TestProcessor_TaskModePersistsAcrossTurns(t *testing.T) {
+	tmpDir := t.TempDir()
+	processor, err := NewProcessor(ProcessorConfig{WorkspacePath: tmpDir, Version: "0.1.0"})
+	if err != nil {
+		t.Fatalf("Failed to create processor: %v", err)
+	}
+
+	// Create conversation in compact mode
+	compactMode := "compact"
+	params1 := jsonrpc.SendMessageParams{
+		Message:  "First message",
+		TaskMode: &compactMode,
+	}
+	result1, err := processor.HandleSendMessage(context.Background(), params1)
+	if err != nil {
+		t.Fatalf("First HandleSendMessage failed: %v", err)
+	}
+
+	if result1.TaskMode != "compact" {
+		t.Errorf("Expected task mode 'compact', got '%s'", result1.TaskMode)
+	}
+
+	// Send second message without specifying task mode
+	params2 := jsonrpc.SendMessageParams{
+		ConversationID: &result1.ConversationID,
+		Message:        "Second message",
+		// TaskMode not specified - should use current mode
+	}
+	result2, err := processor.HandleSendMessage(context.Background(), params2)
+	if err != nil {
+		t.Fatalf("Second HandleSendMessage failed: %v", err)
+	}
+
+	// Should still be in compact mode
+	if result2.TaskMode != "compact" {
+		t.Errorf("Expected task mode to persist as 'compact', got '%s'", result2.TaskMode)
+	}
+}
+
+// Helper function for string contains check
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || (len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

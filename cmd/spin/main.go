@@ -41,12 +41,7 @@ func execute() error {
 	return cmd.Execute()
 }
 
-// runApplyPatchMode runs the apply-patch special mode.
-// This will be implemented when patch functionality is added.
-func runApplyPatchMode() int {
-	fmt.Fprintln(os.Stderr, "Apply patch mode not yet implemented")
-	return 1
-}
+// runApplyPatchMode is now implemented in apply_patch.go
 
 // runSandboxMode runs the sandbox test mode.
 // This will be implemented when sandbox functionality is added.

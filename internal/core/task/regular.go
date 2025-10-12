@@ -142,33 +142,29 @@ Remember: You are a helpful assistant that augments human capabilities, not a re
 // By default, all available tools are allowed. If ExcludedTools
 // is configured, those tools will be filtered out.
 //
-// Available tools include:
-//   - File operations: read_file, write_file, list_dir, search_files
-//   - Shell operations: shell
-//   - Git operations: git_status, git_diff, git_log, git_add, git_commit
-//   - Code operations: search_code, get_context
+// Available tools include (8 total):
+//   - File operations: read_file, write_file, list_directory
+//   - Command execution: execute_command
+//   - Context and search: get_context, file_search
+//   - Advanced operations: apply_patch, git_context
 func (r *Regular) AllowedTools() []string {
-	// Default tool set for Regular mode
+	// Default tool set for Regular mode - all available tools
 	tools := []string{
 		// File operations
 		"read_file",
 		"write_file",
-		"list_dir",
-		"search_files",
+		"list_directory",
 
-		// Shell operations
-		"shell",
+		// Command execution
+		"execute_command",
 
-		// Git operations
-		"git_status",
-		"git_diff",
-		"git_log",
-		"git_add",
-		"git_commit",
-
-		// Code operations
-		"search_code",
+		// Context and search
 		"get_context",
+		"file_search",
+
+		// Advanced operations
+		"apply_patch",
+		"git_context",
 	}
 
 	// Filter out excluded tools if configured

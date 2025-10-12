@@ -131,21 +131,37 @@ mgr, _ := core.NewManager(cfg,
 
 ### Task Modes
 
+Task modes provide specialized agent behavior with specific tool access and token budgets. The agent automatically initializes with 4 built-in modes:
+
+- **regular**: Full-featured interactive coding (16K tokens, all tools) - default
+- **review**: Read-only code analysis (12K tokens, read-only tools)
+- **compact**: Quick queries (4K tokens, minimal tools)
+- **planning**: Task decomposition (4K tokens, context tools)
+
 ```go
-// Create task registry
-taskRegistry := task.NewRegistry()
+// Agent automatically includes all 4 modes by default
+agent, _ := core.NewAgent(llm, executor, validator, ctx, emitter)
 
-// Register modes
-taskRegistry.Register("regular", task.NewRegular(cfg))
-taskRegistry.Register("review", task.NewReview(cfg))
-taskRegistry.Register("compact", task.NewCompact(cfg))
-taskRegistry.SetDefault("regular")
+// List available modes
+modes := agent.ListTaskModes()
+// Returns: ["compact", "planning", "regular", "review"]
 
-// Create manager with task modes
-mgr, _ := core.NewManager(cfg,
-    core.WithTaskRegistry(taskRegistry),
+// Get the task registry
+registry := agent.GetTaskRegistry()
+task, _ := registry.Get("review")
+fmt.Println("Review mode allows:", task.AllowedTools())
+
+// Provide custom task registry (replaces defaults)
+customRegistry := task.NewRegistry()
+customRegistry.Register("my-mode", task.NewCompact())
+customRegistry.SetDefault("my-mode")
+
+agent, _ := core.NewAgent(llm, executor, validator, ctx, emitter,
+    core.WithTaskRegistry(customRegistry),
 )
 ```
+
+See [task package documentation](./task.md) for detailed information on task modes.
 
 ### With Observability
 
@@ -206,17 +222,49 @@ type Config struct {
 // WithLLMProvider sets the LLM provider
 core.WithLLMProvider(provider llm.Provider)
 
-// WithToolRegistry sets the tool registry
-core.WithToolRegistry(registry *tools.Registry)
+// WithToolRegistry sets the tool registry for all conversations
+core.WithManagerToolRegistry(registry *tools.Registry)
 
-// WithTaskRegistry sets the task registry
-core.WithTaskRegistry(registry *task.Registry)
+// WithManagerTaskRegistry sets the task registry for all conversations
+core.WithManagerTaskRegistry(registry *task.Registry)
 
 // WithEventEmitter sets custom event emitter
 core.WithEventEmitter(emitter EventEmitter)
 
 // WithApprovalHandler sets the command approval handler
-core.WithApprovalHandler(handler ApprovalHandler)
+core.WithManagerApprovalHandler(handler ApprovalHandler)
+```
+
+### Creating Conversations with Task Modes
+
+The Manager provides two methods for creating conversations:
+
+**NewConversation** - Creates conversation with default task mode (regular):
+```go
+conv, err := mgr.NewConversation(ctx, workDir)
+// Conversation starts in "regular" mode
+```
+
+**NewConversationWithTask** - Creates conversation in specific mode:
+```go
+// Start directly in review mode (read-only)
+conv, err := mgr.NewConversationWithTask(ctx, workDir, "review")
+
+// All 4 built-in modes available:
+// - "regular"  : Full-featured interactive coding
+// - "review"   : Read-only code analysis
+// - "compact"  : Quick queries with minimal tools
+// - "planning" : Task decomposition
+```
+
+You can also customize available modes using WithManagerTaskRegistry:
+```go
+registry := task.NewRegistry()
+registry.Register("custom", task.NewCompact())
+registry.SetDefault("custom")
+
+mgr := NewManager(cfg, WithManagerTaskRegistry(registry))
+conv, _ := mgr.NewConversationWithTask(ctx, workDir, "custom")
 ```
 
 ### Approval Handler

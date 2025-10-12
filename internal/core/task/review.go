@@ -175,31 +175,22 @@ Remember: Your goal is to help improve code quality through insightful analysis,
 //   - No shell
 //   - No git_add or git_commit
 func (r *Review) AllowedTools() []string {
-	// Base read-only tools
+	// Read-only tools for code review (5 tools)
 	tools := []string{
 		// File operations (read-only)
 		"read_file",
-		"list_dir",
-		"search_files",
+		"list_directory",
 
-		// Code operations (read-only)
-		"search_code",
+		// Context and search (read-only)
 		"get_context",
+		"file_search",
+		"git_context",
 	}
 
-	// Add Git read operations if enabled (default: true)
-	includeGit := true
-	if r.config != nil {
-		includeGit = r.config.IncludeGitOps
-	}
-
-	if includeGit {
-		tools = append(tools, []string{
-			"git_status",
-			"git_diff",
-			"git_log",
-		}...)
-	}
+	// Review mode excludes write operations:
+	// - No write_file
+	// - No execute_command
+	// - No apply_patch
 
 	return tools
 }

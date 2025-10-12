@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dmytrogajewski/spin/internal/core/task"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tools"
@@ -18,6 +19,7 @@ type Manager struct {
 	emitter         *EventEmitter
 	storage         session.Storage
 	toolRegistry    *tools.Registry
+	taskRegistry    *task.Registry // Task registry for all conversations
 	mcpManager      *MCPManager
 	approvalHandler ApprovalHandler
 }
@@ -73,6 +75,26 @@ func WithManagerApprovalHandler(handler ApprovalHandler) ManagerOption {
 	}
 }
 
+// WithManagerTaskRegistry sets a custom task registry for all agents created by this manager.
+// The task registry defines available task modes (e.g., regular, review, compact, planning)
+// and their configurations. If not provided, agents will use their default task registry.
+//
+// Example:
+//
+//	registry := task.NewRegistry()
+//	registry.Register("custom", task.NewCompact())
+//	registry.SetDefault("custom")
+//	mgr := NewManager(cfg, WithManagerTaskRegistry(registry))
+func WithManagerTaskRegistry(registry *task.Registry) ManagerOption {
+	return func(m *Manager) error {
+		if registry == nil {
+			return errors.New("task registry cannot be nil")
+		}
+		m.taskRegistry = registry
+		return nil
+	}
+}
+
 // NewManager creates a new Manager
 func NewManager(cfg *Config, opts ...ManagerOption) (*Manager, error) {
 	if cfg == nil {
@@ -124,7 +146,7 @@ func (m *Manager) NewConversation(ctx context.Context, workDir string) (*Convers
 	}
 	ctxEnv := &Environment{WorkDir: workDir}
 
-	// Build agent with optional tool registry and approval
+	// Build agent with optional tool registry, task registry, and approval
 	var agentOpts []AgentOption
 	// Enable approval for dangerous commands
 	agentOpts = append(agentOpts, WithRequireApproval(true))
@@ -135,6 +157,11 @@ func (m *Manager) NewConversation(ctx context.Context, workDir string) (*Convers
 	if m.toolRegistry != nil {
 		agentOpts = append(agentOpts, WithToolRegistry(m.toolRegistry))
 		logger.Debug("using custom tool registry", "tool_count", len(m.toolRegistry.ListSchemas()))
+	}
+	// Pass task registry if configured
+	if m.taskRegistry != nil {
+		agentOpts = append(agentOpts, WithTaskRegistry(m.taskRegistry))
+		logger.Debug("using custom task registry", "task_count", len(m.taskRegistry.List()))
 	}
 
 	agent, err := NewAgent(m.llm, executor, validator, ctxEnv, m.emitter, agentOpts...)
@@ -147,6 +174,50 @@ func (m *Manager) NewConversation(ctx context.Context, workDir string) (*Convers
 
 	conv := NewConversation(agent, history, m.emitter)
 	logger.Info("conversation created successfully")
+	return conv, nil
+}
+
+// NewConversationWithTask creates a new conversation starting in a specific task mode.
+// This is a convenience method that calls NewConversation and then SetTaskMode.
+//
+// Parameters:
+//   - ctx: Context for the operation
+//   - workDir: Working directory for the conversation (empty string uses config default)
+//   - taskName: Name of the task mode ("regular", "review", "compact", "planning")
+//
+// Returns:
+//   - *Conversation: The new conversation in the specified mode
+//   - error: If conversation creation fails or task mode is invalid
+//
+// Example:
+//
+//	conv, err := mgr.NewConversationWithTask(ctx, "/path/to/project", "review")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	// Conversation is now in review mode (read-only)
+func (m *Manager) NewConversationWithTask(ctx context.Context, workDir string, taskName string) (*Conversation, error) {
+	logger := withContext(ctx)
+	logger.Info("creating new conversation with task mode", "work_dir", workDir, "task_mode", taskName)
+
+	// Validate task name before creating conversation
+	if taskName == "" {
+		return nil, errors.New("task name cannot be empty")
+	}
+
+	// Create conversation
+	conv, err := m.NewConversation(ctx, workDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set task mode
+	if err := conv.SetTaskMode(taskName); err != nil {
+		logger.Error("failed to set task mode", "error", err, "task_mode", taskName)
+		return nil, fmt.Errorf("set task mode: %w", err)
+	}
+
+	logger.Info("conversation created successfully with task mode", "task_mode", taskName)
 	return conv, nil
 }
 
@@ -180,7 +251,7 @@ func (m *Manager) ResumeConversation(ctx context.Context, sessionID string) (*Co
 	}
 	ctxEnv := &Environment{WorkDir: sess.WorkDir}
 
-	// Build agent with optional tool registry and approval
+	// Build agent with optional tool registry, task registry, and approval
 	var agentOpts []AgentOption
 	// Enable approval for dangerous commands
 	agentOpts = append(agentOpts, WithRequireApproval(true))
@@ -190,6 +261,11 @@ func (m *Manager) ResumeConversation(ctx context.Context, sessionID string) (*Co
 	}
 	if m.toolRegistry != nil {
 		agentOpts = append(agentOpts, WithToolRegistry(m.toolRegistry))
+	}
+	// Pass task registry if configured
+	if m.taskRegistry != nil {
+		agentOpts = append(agentOpts, WithTaskRegistry(m.taskRegistry))
+		logger.Debug("using custom task registry for resumed conversation", "task_count", len(m.taskRegistry.List()))
 	}
 
 	agent, err := NewAgent(m.llm, executor, validator, ctxEnv, m.emitter, agentOpts...)

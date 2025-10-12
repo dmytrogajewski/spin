@@ -153,7 +153,8 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		"\x1b[49m \x1b[38;2;233;233;223;48;2;242;241;233m▄\x1b[38;2;244;243;235;48;2;247;245;237m▄\x1b[38;2;243;242;233;48;2;249;247;239m▄\x1b[38;2;248;245;237;48;2;250;248;239m▄\x1b[38;2;244;243;235;48;2;247;246;237m▄\x1b[38;2;244;243;236;48;2;249;247;238m▄\x1b[38;2;241;239;229;48;2;249;248;239m▄\x1b[38;2;245;242;235;48;2;247;247;238m▄\x1b[38;2;249;249;243;48;2;248;247;238m▄\x1b[49;38;2;248;247;238m▀\x1b[49;38;2;249;248;240m▀\x1b[49m  \x1b[38;2;250;248;241;48;2;248;247;238m▄\x1b[38;2;250;248;242;48;2;249;247;238m▄\x1b[38;2;247;247;239;48;2;250;249;242m▄\x1b[49m          \x1b[38;2;250;250;246;48;2;251;251;249m▄\x1b[38;2;243;242;233;48;2;249;248;239m▄\x1b[38;2;245;245;236;48;2;250;248;239m▄\x1b[49m   \x1b[38;2;245;244;235;48;2;248;246;238m▄\x1b[38;2;243;243;235;48;2;249;248;239m▄\x1b[38;2;241;241;233;48;2;242;243;233m▄\x1b[49m    \x1b[49;38;2;249;246;238m▀\x1b[38;2;245;245;236;48;2;249;247;238m▄\x1b[38;2;247;246;238;48;2;249;247;238m▄\x1b[38;2;245;245;238;48;2;248;246;237m▄\x1b[38;2;253;253;252;48;2;253;254;252m▄\x1b[49m \x1b[m\n" +
 		"\x1b[49m                                              \x1b[m\n"
 	ui.PrintLine(logo)
-	ui.PrintLine("Type your prompt and press Enter. Press Ctrl-D to exit.\n")
+	ui.PrintLine("Type your prompt and press Enter.")
+	ui.PrintLine("Commands: /mode [name], /help, /exit (or press Ctrl-D)\n")
 
 	// Subscribe to conversation events
 	events := conv.Stream()
@@ -194,6 +195,23 @@ func runTUI(cmd *cobra.Command, args []string) error {
 			}
 
 			if line == "" {
+				continue
+			}
+
+			// Check if input is a command
+			cmdResult := parseCommand(line)
+
+			if cmdResult.isCommand {
+				// Handle command
+				_, err := handleCommand(ui, conv, cmdResult)
+				if err != nil {
+					if err.Error() == "exit requested" {
+						<-eventDone
+						return nil
+					}
+					ui.PrintLine(fmt.Sprintf("Command error: %v\n", err))
+				}
+				// Skip conversation turn for commands
 				continue
 			}
 

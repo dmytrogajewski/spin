@@ -24,6 +24,8 @@ This directory contains documentation for Spin's internal packages.
 | [security](security.md) | Sandbox and security enforcement | - |
 | [session](session.md) | Session state management | - |
 | [tools](tools.md) | Tool registry and implementations | - |
+| [filesearch](filesearch.md) | File scanning and fuzzy matching with gitignore support | 93.6% |
+| [git](git.md) | Git repository operations and context gathering | 27.3% |
 
 ### UI Packages
 
@@ -37,6 +39,10 @@ This directory contains documentation for Spin's internal packages.
 
 | Package | Description | Coverage |
 |---------|-------------|----------|
+| [pathutil](pathutil.md) | Secure path validation and manipulation | 84.6% |
+| [strutil](strutil.md) | String manipulation utilities for code processing | 95.5% |
+| [ansi](ansi.md) | ANSI escape sequence handling for terminal formatting | 97.9% |
+| [patchapply](patchapply.md) | AI-friendly patch format parser for safe file modifications | 91.1% |
 | [types](types.md) | Shared helper types for tool arguments | - |
 
 ---
@@ -79,6 +85,14 @@ This directory contains documentation for Spin's internal packages.
 
 ### Utilities
 
+**[pathutil](pathutil.md)** - Secure path validation and manipulation utilities preventing path traversal attacks.
+
+**[strutil](strutil.md)** - String manipulation utilities including line operations, indentation detection, similarity algorithms, and case conversion.
+
+**[ansi](ansi.md)** - ANSI escape sequence handling for terminal formatting with parsing, stripping, and fluent styling API.
+
+**[patchapply](patchapply.md)** - AI-friendly patch format parser for safe file modifications with comprehensive path validation and error reporting.
+
 **[types](types.md)** - Shared `ToolCallArguments` container with typed accessors and error contracts.
 
 **[version](version.md)** - Build-time version injection via ldflags.
@@ -93,4 +107,7 @@ This directory contains documentation for Spin's internal packages.
 
 ---
 
-**Last Updated:** 2025-10-11
+**Last Updated:** 2025-10-12
+**Latest Additions:**
+- patchapply - Patch Parser for AI-Friendly File Modifications (91.1% coverage)
+- filesearch - File Scanning and Fuzzy Matching with Gitignore Support (93.6% coverage)

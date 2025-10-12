@@ -296,3 +296,150 @@ func TestFileMatch(t *testing.T) {
 		t.Error("Score mismatch")
 	}
 }
+
+// Task Mode Tests
+
+func TestSendMessageParams_WithTaskMode(t *testing.T) {
+	mode := "review"
+	params := SendMessageParams{
+		Message:  "Hello",
+		TaskMode: &mode,
+	}
+
+	data, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var decoded SendMessageParams
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if decoded.TaskMode == nil {
+		t.Fatal("TaskMode should not be nil")
+	}
+	if *decoded.TaskMode != "review" {
+		t.Errorf("Expected task mode 'review', got '%s'", *decoded.TaskMode)
+	}
+}
+
+func TestSendMessageParams_WithoutTaskMode(t *testing.T) {
+	params := SendMessageParams{
+		Message: "Hello",
+	}
+
+	data, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var decoded SendMessageParams
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if decoded.TaskMode != nil {
+		t.Errorf("TaskMode should be nil, got %v", *decoded.TaskMode)
+	}
+}
+
+func TestSendMessageResult_WithTaskMode(t *testing.T) {
+	result := SendMessageResult{
+		ConversationID: "conv-123",
+		TurnID:         "turn-456",
+		TaskMode:       "compact",
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var decoded SendMessageResult
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if decoded.TaskMode != "compact" {
+		t.Errorf("Expected task mode 'compact', got '%s'", decoded.TaskMode)
+	}
+}
+
+func TestValidateTaskMode_Valid(t *testing.T) {
+	tests := []string{"regular", "review", "compact", "planning", ""}
+
+	for _, mode := range tests {
+		t.Run(mode, func(t *testing.T) {
+			err := ValidateTaskMode(mode)
+			if err != nil {
+				t.Errorf("ValidateTaskMode(%q) returned error: %v", mode, err)
+			}
+		})
+	}
+}
+
+func TestValidateTaskMode_Invalid(t *testing.T) {
+	tests := []string{"invalid", "REGULAR", "Review", "compact-mode", "plan"}
+
+	for _, mode := range tests {
+		t.Run(mode, func(t *testing.T) {
+			err := ValidateTaskMode(mode)
+			if err == nil {
+				t.Errorf("ValidateTaskMode(%q) should return error", mode)
+			}
+		})
+	}
+}
+
+func TestSendMessageParams_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		wantMode *string
+	}{
+		{
+			name:     "with task_mode",
+			json:     `{"message":"Hello","task_mode":"review"}`,
+			wantMode: strPtr("review"),
+		},
+		{
+			name:     "without task_mode",
+			json:     `{"message":"Hello"}`,
+			wantMode: nil,
+		},
+		{
+			name:     "task_mode null",
+			json:     `{"message":"Hello","task_mode":null}`,
+			wantMode: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var params SendMessageParams
+			err := json.Unmarshal([]byte(tt.json), &params)
+			if err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+
+			if tt.wantMode == nil {
+				if params.TaskMode != nil {
+					t.Errorf("Expected TaskMode to be nil, got %v", *params.TaskMode)
+				}
+			} else {
+				if params.TaskMode == nil {
+					t.Fatal("TaskMode should not be nil")
+				}
+				if *params.TaskMode != *tt.wantMode {
+					t.Errorf("Expected task mode %q, got %q", *tt.wantMode, *params.TaskMode)
+				}
+			}
+		})
+	}
+}
+
+// Helper function
+func strPtr(s string) *string {
+	return &s
+}

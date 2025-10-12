@@ -174,13 +174,13 @@ func TestCompact_AllowedTools(t *testing.T) {
 			config: nil,
 			wantContains: []string{
 				"read_file",
-				"list_dir",
-				"search_code",
+				"get_context",
+				"file_search",
 			},
 			wantExcludes: []string{
 				"write_file",
-				"shell",
-				"git_status",
+				"execute_command",
+				"git_context",
 			},
 			exactCount: 3,
 		},
@@ -191,13 +191,13 @@ func TestCompact_AllowedTools(t *testing.T) {
 			},
 			wantContains: []string{
 				"read_file",
-				"list_dir",
-				"search_code",
+				"get_context",
+				"file_search",
 				"get_context",
 			},
 			wantExcludes: []string{
 				"write_file",
-				"shell",
+				"execute_command",
 			},
 			exactCount: 4,
 		},
@@ -220,8 +220,8 @@ func TestCompact_AllowedTools(t *testing.T) {
 			},
 			wantContains: []string{
 				"read_file",
-				"list_dir",
-				"search_code",
+				"get_context",
+				"file_search",
 			},
 			exactCount: 3,
 		},
@@ -268,7 +268,7 @@ func TestCompact_AllowedTools_Minimal(t *testing.T) {
 	}
 
 	// Essential tools should be present
-	essentialTools := []string{"read_file", "list_dir", "search_code"}
+	essentialTools := []string{"read_file", "get_context", "file_search"}
 	for _, tool := range essentialTools {
 		if !contains(tools, tool) {
 			t.Errorf("Compact mode missing essential tool: %q", tool)
@@ -283,7 +283,7 @@ func TestCompact_AllowedTools_NoWriteOperations(t *testing.T) {
 
 	writeTools := []string{
 		"write_file",
-		"shell",
+		"execute_command",
 		"git_add",
 		"git_commit",
 	}
@@ -444,7 +444,7 @@ func TestCompact_Validate(t *testing.T) {
 				AdditionalTools: []string{
 					"get_context",
 					"search_files",
-					"git_status",
+					"git_context",
 				},
 			},
 			wantErr: false,
@@ -609,7 +609,7 @@ func TestCompact_AdditionalTools(t *testing.T) {
 		},
 		{
 			name:            "multiple additional tools",
-			additionalTools: []string{"get_context", "search_files", "git_status"},
+			additionalTools: []string{"get_context", "search_files", "git_context"},
 			wantValid:       true,
 			expectedCount:   6,
 		},

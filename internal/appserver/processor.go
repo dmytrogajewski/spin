@@ -27,10 +27,12 @@ type Processor struct {
 
 // Conversation tracks a single conversation state
 type Conversation struct {
-	ID      protocol.ConversationID
-	TurnID  string
-	History []core.Message
-	cancel  context.CancelFunc
+	ID       protocol.ConversationID
+	TurnID   string
+	History  []core.Message
+	cancel   context.CancelFunc
+	taskMode string         // current task mode name
+	mu       sync.RWMutex   // protects taskMode access
 }
 
 // ProcessorConfig contains processor configuration
@@ -129,8 +131,9 @@ func (p *Processor) HandleSendMessage(ctx context.Context, params jsonrpc.SendMe
 		convID := protocol.NewConversationID()
 
 		conv = &Conversation{
-			ID:      convID,
-			History: []core.Message{},
+			ID:       convID,
+			History:  []core.Message{},
+			taskMode: "regular", // default mode
 		}
 		p.conversations[convID.String()] = conv
 	} else {
@@ -143,6 +146,31 @@ func (p *Processor) HandleSendMessage(ctx context.Context, params jsonrpc.SendMe
 				jsonrpc.NewError(jsonrpc.ConversationNotFound, "conversation not found")
 		}
 	}
+
+	// Handle task mode switch
+	if params.TaskMode != nil {
+		taskMode := *params.TaskMode
+
+		// Validate task mode
+		if err := jsonrpc.ValidateTaskMode(taskMode); err != nil {
+			p.mu.Unlock()
+			return jsonrpc.SendMessageResult{},
+				jsonrpc.NewError(jsonrpc.InvalidParams, err.Error())
+		}
+
+		// Apply task mode
+		conv.mu.Lock()
+		conv.taskMode = taskMode
+		conv.mu.Unlock()
+	}
+
+	// Get current task mode for response
+	conv.mu.RLock()
+	currentMode := conv.taskMode
+	if currentMode == "" {
+		currentMode = "regular"
+	}
+	conv.mu.RUnlock()
 
 	// Generate turn ID
 	turnID := generateTurnID()
@@ -160,6 +188,7 @@ func (p *Processor) HandleSendMessage(ctx context.Context, params jsonrpc.SendMe
 	return jsonrpc.SendMessageResult{
 		ConversationID: conv.ID.String(),
 		TurnID:         turnID,
+		TaskMode:       currentMode,
 	}, nil
 }
 
@@ -183,10 +212,19 @@ func (p *Processor) runTurn(ctx context.Context, conv *Conversation, message str
 		return
 	}
 
-	// Create agent request
+	// Get current task mode
+	conv.mu.RLock()
+	taskMode := conv.taskMode
+	if taskMode == "" {
+		taskMode = "regular"
+	}
+	conv.mu.RUnlock()
+
+	// Create agent request with task mode
 	req := &core.AgentRequest{
-		Input:   message,
-		History: conv.History,
+		Input:    message,
+		History:  conv.History,
+		TaskName: taskMode,
 	}
 
 	// Subscribe to agent events

@@ -867,8 +867,8 @@ func TestRegistryExecute_UnknownParameter_ErrorMessage(t *testing.T) {
 
 	// Execute with typo in parameter name
 	_, err := reg.Execute(context.Background(), "file_tool", map[string]interface{}{
-		"filename":  "test.txt",
-		"fliename":  "typo.txt", // typo
+		"filename": "test.txt",
+		"fliename": "typo.txt", // typo
 	})
 
 	if err == nil {

@@ -22,7 +22,7 @@ func TestNewRegular(t *testing.T) {
 func TestNewRegularWithConfig(t *testing.T) {
 	config := &RegularConfig{
 		MaxTokens:     8192,
-		ExcludedTools: []string{"shell"},
+		ExcludedTools: []string{"execute_command"},
 	}
 
 	r := NewRegularWithConfig(config)
@@ -154,36 +154,36 @@ func TestRegular_AllowedTools(t *testing.T) {
 			wantContains: []string{
 				"read_file",
 				"write_file",
-				"shell",
-				"git_status",
-				"search_code",
-				"list_dir",
+				"execute_command",
+				"git_context",
+				"file_search",
+				"list_directory",
 			},
 			wantExcludes: nil,
-			minCount:     10,
+			minCount:     8,
 		},
 		{
-			name: "excluded shell",
+			name: "excluded execute_command",
 			config: &RegularConfig{
-				ExcludedTools: []string{"shell"},
+				ExcludedTools: []string{"execute_command"},
 			},
 			wantContains: []string{
 				"read_file",
 				"write_file",
 			},
-			wantExcludes: []string{"shell"},
-			minCount:     5,
+			wantExcludes: []string{"execute_command"},
+			minCount:     7,
 		},
 		{
 			name: "multiple exclusions",
 			config: &RegularConfig{
-				ExcludedTools: []string{"shell", "write_file"},
+				ExcludedTools: []string{"execute_command", "write_file"},
 			},
 			wantContains: []string{
 				"read_file",
 			},
-			wantExcludes: []string{"shell", "write_file"},
-			minCount:     3,
+			wantExcludes: []string{"execute_command", "write_file"},
+			minCount:     6,
 		},
 		{
 			name: "empty exclusion list",
@@ -192,10 +192,10 @@ func TestRegular_AllowedTools(t *testing.T) {
 			},
 			wantContains: []string{
 				"read_file",
-				"shell",
+				"execute_command",
 			},
 			wantExcludes: nil,
-			minCount:     10,
+			minCount:     8,
 		},
 	}
 
@@ -309,7 +309,7 @@ func TestRegular_Validate(t *testing.T) {
 			name: "valid custom config",
 			config: &RegularConfig{
 				MaxTokens:          8192,
-				ExcludedTools:      []string{"shell"},
+				ExcludedTools:      []string{"execute_command"},
 				CustomSystemPrompt: "This is a valid custom system prompt for testing purposes that meets the minimum length",
 			},
 			wantErr: false,
@@ -338,7 +338,7 @@ func TestRegular_Validate(t *testing.T) {
 		{
 			name: "empty string in excluded tools",
 			config: &RegularConfig{
-				ExcludedTools: []string{"shell", "", "git"},
+				ExcludedTools: []string{"execute_command", "", "git"},
 			},
 			wantErr: true,
 		},
@@ -570,7 +570,7 @@ func BenchmarkRegular_AllowedTools(b *testing.B) {
 
 func BenchmarkRegular_AllowedTools_WithExclusions(b *testing.B) {
 	r := NewRegularWithConfig(&RegularConfig{
-		ExcludedTools: []string{"shell", "write_file"},
+		ExcludedTools: []string{"execute_command", "write_file"},
 	})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

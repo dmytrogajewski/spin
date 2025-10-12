@@ -47,7 +47,7 @@ func TestGlobalFlags(t *testing.T) {
 	cmd := newRootCmd()
 
 	// Check that global flags are registered
-	flags := []string{"model", "provider", "sandbox", "cd", "config", "config-file"}
+	flags := []string{"model", "provider", "sandbox", "cd", "config", "config-file", "mode"}
 
 	for _, flagName := range flags {
 		flag := cmd.PersistentFlags().Lookup(flagName)
@@ -192,5 +192,212 @@ func TestConfigOverrides(t *testing.T) {
 	}
 	if config[1] != "key2=value2" {
 		t.Errorf("config[1] = %s, want 'key2=value2'", config[1])
+	}
+}
+
+// TestValidateTaskMode tests the task mode validation function
+func TestValidateTaskMode(t *testing.T) {
+	tests := []struct {
+		name    string
+		mode    string
+		wantErr bool
+	}{
+		{
+			name:    "valid regular mode",
+			mode:    "regular",
+			wantErr: false,
+		},
+		{
+			name:    "valid review mode",
+			mode:    "review",
+			wantErr: false,
+		},
+		{
+			name:    "valid compact mode",
+			mode:    "compact",
+			wantErr: false,
+		},
+		{
+			name:    "valid planning mode",
+			mode:    "planning",
+			wantErr: false,
+		},
+		{
+			name:    "invalid mode",
+			mode:    "invalid",
+			wantErr: true,
+		},
+		{
+			name:    "empty mode",
+			mode:    "",
+			wantErr: true,
+		},
+		{
+			name:    "uppercase mode",
+			mode:    "REGULAR",
+			wantErr: true,
+		},
+		{
+			name:    "mixed case mode",
+			mode:    "Regular",
+			wantErr: true,
+		},
+		{
+			name:    "mode with spaces",
+			mode:    "regular ",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateTaskMode(tt.mode)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateTaskMode(%q) error = %v, wantErr %v", tt.mode, err, tt.wantErr)
+			}
+
+			// Verify error message format for invalid modes
+			if err != nil && tt.mode != "" {
+				errMsg := err.Error()
+				if !strings.Contains(errMsg, "invalid task mode") {
+					t.Errorf("error message should contain 'invalid task mode', got: %s", errMsg)
+				}
+				if !strings.Contains(errMsg, "regular") || !strings.Contains(errMsg, "review") {
+					t.Errorf("error message should list valid modes, got: %s", errMsg)
+				}
+			}
+		})
+	}
+}
+
+// TestTaskModeFlag tests the --mode flag functionality
+func TestTaskModeFlag(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantMode string
+	}{
+		{
+			name:     "default mode",
+			args:     []string{"--help"},
+			wantMode: "regular",
+		},
+		{
+			name:     "explicit regular mode",
+			args:     []string{"--mode", "regular", "--help"},
+			wantMode: "regular",
+		},
+		{
+			name:     "review mode",
+			args:     []string{"--mode", "review", "--help"},
+			wantMode: "review",
+		},
+		{
+			name:     "compact mode",
+			args:     []string{"--mode", "compact", "--help"},
+			wantMode: "compact",
+		},
+		{
+			name:     "planning mode",
+			args:     []string{"--mode", "planning", "--help"},
+			wantMode: "planning",
+		},
+		{
+			name:     "short flag",
+			args:     []string{"-m", "compact", "--help"},
+			wantMode: "compact",
+		},
+		{
+			name:     "short flag review",
+			args:     []string{"-m", "review", "--help"},
+			wantMode: "review",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset global flagTaskMode to default
+			flagTaskMode = "regular"
+
+			cmd := newRootCmd()
+			cmd.SetArgs(tt.args)
+
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+
+			// Execute should not error with --help
+			err := cmd.Execute()
+			if err != nil {
+				t.Fatalf("Execute() error = %v, output: %s", err, out.String())
+			}
+
+			// Check flag value
+			mode, err := cmd.Flags().GetString("mode")
+			if err != nil {
+				t.Fatalf("Failed to get mode flag: %v", err)
+			}
+
+			if mode != tt.wantMode {
+				t.Errorf("mode flag = %q, want %q", mode, tt.wantMode)
+			}
+		})
+	}
+}
+
+// TestTaskModeFlagHelp verifies the mode flag appears in help output
+func TestTaskModeFlagHelp(t *testing.T) {
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--help"})
+
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Fatalf("Help command failed: %v", err)
+	}
+
+	output := out.String()
+
+	// Check that mode flag is documented
+	if !strings.Contains(output, "--mode") && !strings.Contains(output, "-m") {
+		t.Error("Help output should contain '--mode' or '-m' flag")
+	}
+
+	// Check that valid modes are mentioned in help
+	modes := []string{"regular", "review", "compact", "planning"}
+	for _, mode := range modes {
+		if !strings.Contains(output, mode) {
+			t.Errorf("Help output should mention mode %q", mode)
+		}
+	}
+}
+
+// TestTaskModeFlagDefault verifies the default value
+func TestTaskModeFlagDefault(t *testing.T) {
+	cmd := newRootCmd()
+
+	flag := cmd.PersistentFlags().Lookup("mode")
+	if flag == nil {
+		t.Fatal("--mode flag not found")
+	}
+
+	if flag.DefValue != "regular" {
+		t.Errorf("mode flag default = %q, want %q", flag.DefValue, "regular")
+	}
+}
+
+// TestTaskModeFlagShorthand verifies the short form
+func TestTaskModeFlagShorthand(t *testing.T) {
+	cmd := newRootCmd()
+
+	flag := cmd.PersistentFlags().Lookup("mode")
+	if flag == nil {
+		t.Fatal("--mode flag not found")
+	}
+
+	if flag.Shorthand != "m" {
+		t.Errorf("mode flag shorthand = %q, want %q", flag.Shorthand, "m")
 	}
 }

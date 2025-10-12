@@ -5,6 +5,7 @@ Spin is a powerful AI coding agent designed to help developers with autonomous t
 ## Features
 
 - **🤖 Autonomous AI Agent**: Powered by state-of-the-art language models with tool-calling capabilities
+- **🎯 Task Modes**: Four specialized modes (regular, review, compact, planning) with optimized token budgets and tool access
 - **🛡️ Security-First Design**: Multi-layered security with command validation, sandboxing, and process hardening
 - **🔧 Extensible Tool System**: Built-in tools with support for custom tool registration
 - **📝 Type-Safe Architecture**: Fully typed with Go generics, eliminating runtime type errors
@@ -40,6 +41,69 @@ make test
 # Use with specific provider
 ./bin/spin exec --provider openai --model gpt-4 "explain this code"
 ```
+
+### Task Modes
+
+Spin supports four specialized task modes, each optimized for specific workflows:
+
+```bash
+# Regular mode (default) - Full-featured interactive coding
+./bin/spin --mode regular
+# or just: ./bin/spin
+
+# Review mode - Read-only code analysis
+./bin/spin --mode review
+
+# Compact mode - Quick queries (75% cost savings)
+./bin/spin --mode compact
+
+# Planning mode - Architectural planning
+./bin/spin --mode planning
+```
+
+**Mode Comparison:**
+
+| Mode | Token Budget | Tools | Best For |
+|------|--------------|-------|----------|
+| **regular** | 16K | All tools | Feature implementation, debugging |
+| **review** | 12K | Read-only | Code review, security audits |
+| **compact** | 4K | Minimal | Quick questions, fast lookups |
+| **planning** | 4K | Context | Architecture, task breakdown |
+
+**Interactive Mode Switching:**
+
+```bash
+$ ./bin/spin
+> /mode review
+Switched to review mode
+
+> /mode
+Current mode: review
+
+> /help
+Commands:
+  /mode [name]  - Show or switch task mode
+  /help         - Show this help
+  /exit         - Exit the session
+```
+
+**Examples:**
+
+```bash
+# Review code safely (read-only, cannot modify files)
+./bin/spin --mode review
+> Review auth.go for security vulnerabilities
+
+# Quick query (fast, cost-effective)
+./bin/spin --mode compact
+> What does the validateUser function do?
+
+# Plan a feature
+./bin/spin --mode planning
+> Design a rate limiting system for our API
+```
+
+See [Task Modes Guide](./docs/modes.md) for detailed documentation.
 
 ## Architecture
 

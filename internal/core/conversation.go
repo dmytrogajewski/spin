@@ -58,6 +58,10 @@ type Conversation struct {
 	turnGuard   chan struct{} // binary semaphore to prevent overlap
 	controlChan chan ControlSignal
 	controlMu   sync.Mutex // Protects controlChan creation/access
+
+	// Task mode tracking
+	currentTask Task   // Current task object (resolved from taskName)
+	taskName    string // Current task mode name (for queries/UI)
 }
 
 // NewConversation creates a new Conversation instance wired to the provided
@@ -190,11 +194,19 @@ func (c *Conversation) RunTurn(ctx context.Context, userInput string) error {
 		historyMsgs = c.history.MessagesForLLM()
 	}
 
+	// Get current task mode for this turn
+	c.mu.RLock()
+	task := c.currentTask
+	taskName := c.taskName
+	c.mu.RUnlock()
+
 	req := &AgentRequest{
-		Input:   userInput,
-		History: historyMsgs,
-		Context: c.agent.context,
-		WorkDir: workDir,
+		Input:    userInput,
+		History:  historyMsgs,
+		Context:  c.agent.context,
+		WorkDir:  workDir,
+		Task:     task,     // Pass current task object
+		TaskName: taskName, // Pass current task name
 	}
 
 	// Execute turn with control signal checking
@@ -430,4 +442,77 @@ func (c *Conversation) transitionState(expected, next State, signal ControlSigna
 	}
 
 	return nil
+}
+
+// SetTaskMode switches the conversation to a different task mode.
+// Returns an error if the task mode is not registered in the agent's task registry.
+//
+// This method is thread-safe and can be called concurrently with other operations.
+// Mode switching takes effect on the next turn execution.
+//
+// Example:
+//
+//	if err := conv.SetTaskMode("review"); err != nil {
+//	    return fmt.Errorf("failed to switch mode: %w", err)
+//	}
+func (c *Conversation) SetTaskMode(taskName string) error {
+	// Validate that agent has task registry
+	if c.agent == nil {
+		return errors.New("conversation agent is nil")
+	}
+
+	registry := c.agent.GetTaskRegistry()
+	if registry == nil {
+		return errors.New("agent task registry not initialized")
+	}
+
+	// Validate mode exists in agent's registry
+	task, err := registry.Get(taskName)
+	if err != nil {
+		return fmt.Errorf("invalid task mode %q: %w", taskName, err)
+	}
+
+	// Validate task
+	if err := task.Validate(); err != nil {
+		return fmt.Errorf("task %q validation failed: %w", taskName, err)
+	}
+
+	// Update state (thread-safe)
+	c.mu.Lock()
+	c.currentTask = task
+	c.taskName = taskName
+	c.mu.Unlock()
+
+	// Emit system event for UI/logging
+	if c.emitter != nil {
+		c.emitter.Emit(Event{
+			Type:      EventInfo,
+			Timestamp: time.Now(),
+			Data: SystemEventData{
+				Message: fmt.Sprintf("Switched to %s mode", taskName),
+			},
+		})
+	}
+
+	return nil
+}
+
+// GetTaskMode returns the name of the current task mode.
+// Returns "regular" if no mode has been explicitly set.
+//
+// This method is thread-safe and can be called concurrently with other operations.
+//
+// Example:
+//
+//	currentMode := conv.GetTaskMode()
+//	fmt.Printf("Current mode: %s\n", currentMode)
+func (c *Conversation) GetTaskMode() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// Return explicitly set mode, or default to "regular"
+	if c.taskName != "" {
+		return c.taskName
+	}
+	return "regular"
 }

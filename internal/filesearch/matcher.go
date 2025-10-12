@@ -1,6 +1,7 @@
 package filesearch
 
 import (
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -12,7 +13,7 @@ type Match struct {
 	Indices []int // Matched character indices
 }
 
-// Matcher performs fuzzy matching on file paths.
+// Matcher performs fuzzy matching on file paths with advanced scoring.
 type Matcher struct {
 	caseSensitive bool
 }
@@ -24,8 +25,17 @@ func NewMatcher(caseSensitive bool) *Matcher {
 	}
 }
 
-// Score calculates the fuzzy match score for a path.
+// Score calculates the advanced fuzzy match score for a path.
 // Returns -1 if no match, otherwise returns score (higher is better) and matched indices.
+//
+// Scoring algorithm (priority order):
+//  1. Exact filename match: 100
+//  2. Filename starts with query: 90
+//  3. Filename contains query (early): 80-70 (position-weighted)
+//  4. Path segment exact match: 60
+//  5. Path segment prefix: 50
+//  6. Fuzzy match (consecutive): 40+
+//  7. Fuzzy match (scattered): 20+
 func (m *Matcher) Score(query, path string) (int, []int) {
 	if query == "" {
 		return 0, nil
@@ -35,19 +45,121 @@ func (m *Matcher) Score(query, path string) (int, []int) {
 	queryLower := strings.ToLower(query)
 	pathLower := strings.ToLower(path)
 
+	// Extract filename for prioritized matching
+	filename := filepath.Base(pathLower)
+
+	// 1. Exact filename match - highest priority
+	if filename == queryLower {
+		return 100, m.allIndicesInPath(path, len(path)-len(filename), len(filename))
+	}
+
+	// 2. Filename starts with query
+	if strings.HasPrefix(filename, queryLower) {
+		startIdx := len(path) - len(filename)
+		return 90, m.prefixIndices(startIdx, len(query))
+	}
+
+	// 3. Filename contains query (position-weighted)
+	if idx := strings.Index(filename, queryLower); idx >= 0 {
+		score := 80 - (idx * 10 / len(filename))
+		if score < 70 {
+			score = 70
+		}
+		startIdx := len(path) - len(filename) + idx
+		return score, m.prefixIndices(startIdx, len(query))
+	}
+
+	// 4 & 5. Path segment matching
+	dir := filepath.Dir(pathLower)
+	if dir != "." && dir != "/" {
+		segments := strings.Split(dir, string(filepath.Separator))
+		for _, seg := range segments {
+			// Exact segment match
+			if seg == queryLower {
+				return 60, m.findSegmentIndices(path, seg)
+			}
+			// Segment prefix match
+			if strings.HasPrefix(seg, queryLower) {
+				return 50, m.findSegmentIndices(path, seg[:len(query)])
+			}
+		}
+	}
+
+	// 6 & 7. Fuzzy matching (existing algorithm)
 	score, indices := m.matchCharacters(queryLower, pathLower)
 	if score == -1 {
 		return -1, nil
 	}
 
+	// Add filename bonus if match is primarily in filename
+	if m.isMatchInFilename(path, indices) {
+		score += 30
+	}
+
 	// Add path length bonus
 	score += m.pathLengthBonus(path)
 
+	// Ensure positive score
 	if score < 1 {
-		score = 1 // Ensure positive score
+		score = 1
 	}
 
 	return score, indices
+}
+
+// allIndicesInPath returns indices for all characters in a substring.
+func (m *Matcher) allIndicesInPath(path string, start, length int) []int {
+	indices := make([]int, length)
+	for i := 0; i < length; i++ {
+		indices[i] = start + i
+	}
+	return indices
+}
+
+// prefixIndices returns indices for prefix match starting at given position.
+func (m *Matcher) prefixIndices(start, length int) []int {
+	indices := make([]int, length)
+	for i := 0; i < length; i++ {
+		indices[i] = start + i
+	}
+	return indices
+}
+
+// findSegmentIndices finds indices of segment in path.
+func (m *Matcher) findSegmentIndices(path, segment string) []int {
+	pathLower := strings.ToLower(path)
+	segLower := strings.ToLower(segment)
+
+	idx := strings.Index(pathLower, segLower)
+	if idx == -1 {
+		return nil
+	}
+
+	indices := make([]int, len(segment))
+	for i := 0; i < len(segment); i++ {
+		indices[i] = idx + i
+	}
+	return indices
+}
+
+// isMatchInFilename checks if most of the matched indices are in the filename.
+func (m *Matcher) isMatchInFilename(path string, indices []int) bool {
+	if len(indices) == 0 {
+		return false
+	}
+
+	filename := filepath.Base(path)
+	filenameStart := len(path) - len(filename)
+
+	matchesInFilename := 0
+	for _, idx := range indices {
+		if idx >= filenameStart {
+			matchesInFilename++
+		}
+	}
+
+	// More than 50% of matches in filename
+	return matchesInFilename > len(indices)/2
 }
 
 // matchCharacters finds matching characters and calculates base score.

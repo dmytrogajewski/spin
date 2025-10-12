@@ -179,11 +179,11 @@ Now create a plan for the user's task. Respond with ONLY the JSON, no additional
 // Planning mode has restricted tool access since it focuses on
 // plan generation rather than execution.
 func (p *Planning) AllowedTools() []string {
-	// Planning mode uses minimal tools - primarily for context gathering
+	// Planning mode uses context gathering tools (3 tools)
 	return []string{
 		"get_context", // Gather environment and project context
-		"read_file",   // Read files to understand current state
-		"list_dir",    // List directory contents
+		"file_search", // Search for relevant files
+		"git_context", // Get Git repository context
 	}
 }
 

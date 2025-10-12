@@ -140,14 +140,28 @@ type InitializeResult struct {
 
 // SendMessageParams contains message sending parameters
 type SendMessageParams struct {
-	ConversationID *string `json:"conversation_id,omitempty"` // nil = new conversation
-	Message        string  `json:"message"`
+	// ConversationID identifies the conversation (nil = new conversation)
+	ConversationID *string `json:"conversation_id,omitempty"`
+
+	// Message is the user's input
+	Message string `json:"message"`
+
+	// TaskMode optionally specifies the task mode to use for this turn.
+	// Valid values: "regular", "review", "compact", "planning"
+	// If nil, uses the conversation's current mode (default: "regular")
+	TaskMode *string `json:"task_mode,omitempty"`
 }
 
 // SendMessageResult is the response to send_message
 type SendMessageResult struct {
+	// ConversationID uniquely identifies the conversation
 	ConversationID string `json:"conversation_id"`
-	TurnID         string `json:"turn_id"`
+
+	// TurnID uniquely identifies this turn
+	TurnID string `json:"turn_id"`
+
+	// TaskMode is the current task mode for the conversation
+	TaskMode string `json:"task_mode"`
 }
 
 // ApproveToolParams contains tool approval parameters
@@ -187,4 +201,24 @@ type SearchFilesResult struct {
 type FileMatch struct {
 	Path  string  `json:"path"`
 	Score float64 `json:"score,omitempty"`
+}
+
+// ValidTaskModes are the allowed task mode names
+var ValidTaskModes = map[string]bool{
+	"regular":  true,
+	"review":   true,
+	"compact":  true,
+	"planning": true,
+}
+
+// ValidateTaskMode checks if a task mode name is valid.
+// Empty string is valid (means use default).
+func ValidateTaskMode(mode string) error {
+	if mode == "" {
+		return nil
+	}
+	if !ValidTaskModes[mode] {
+		return fmt.Errorf("invalid task mode: %s (valid: regular, review, compact, planning)", mode)
+	}
+	return nil
 }

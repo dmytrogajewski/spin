@@ -1,10 +1,13 @@
 package adapters
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
+	"github.com/dmytrogajewski/spin/internal/ui/output"
+	"github.com/dmytrogajewski/spin/internal/ui/prompt"
 )
 
 // TestUpdateBlock_PrintsCompletionStatus verifies that UpdateBlock prints the completion status line.
@@ -154,12 +157,29 @@ func TestUpdateBlock_HandlesReadBlocks(t *testing.T) {
 func setupPureTTY(t *testing.T) *PureTTY {
 	t.Helper()
 
-	p, err := New(80, 24)
-	if err != nil {
-		t.Fatalf("New() failed: %v", err)
+	out := &bytes.Buffer{}
+	model := prompt.NewModel(100)
+	renderer := prompt.NewRenderer(out, 80, "> ")
+	printer := output.NewPrinter(out)
+	rendererAdapter := &testRendererAdapter{renderer: renderer}
+	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
+	timeline := blocks.NewTimeline()
+	blockRenderer := blocks.NewRenderer(80)
+
+	// Create PureTTY directly, bypassing constructor
+	ui := &PureTTY{
+		model:          model,
+		renderer:       renderer,
+		coord:          coord,
+		out:            out,
+		timeline:       timeline,
+		blockRenderer:  blockRenderer,
+		viewportHeight: 0,
+		mode:           ModeInput,
+		filterInput:    "",
 	}
 
-	return p
+	return ui
 }
 
 // Helper: captureOutput returns all output written to the PureTTY

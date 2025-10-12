@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/core/task"
 	"github.com/dmytrogajewski/spin/internal/core/turn"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/session"
@@ -241,6 +242,228 @@ func TestManager_WithoutMCPManager(t *testing.T) {
 	if m.MCPManager() != nil {
 		t.Error("MCPManager() should return nil when not configured")
 	}
+}
+
+// P2.2: Manager Task Support Tests
+
+func TestManager_WithTaskRegistry(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider = "mock"
+	cfg.Model = "mock"
+	cfg.WorkDir = t.TempDir()
+	cfg.SessionDir = t.TempDir()
+
+	// Create custom task registry
+	customRegistry := task.NewRegistry()
+	_ = customRegistry.Register("custom", task.NewCompact())
+	_ = customRegistry.SetDefault("custom")
+
+	// Create manager with custom registry
+	mgr, err := NewManager(cfg, WithManagerTaskRegistry(customRegistry))
+	if err != nil {
+		t.Fatalf("NewManager() with WithManagerTaskRegistry error: %v", err)
+	}
+	if mgr == nil {
+		t.Fatal("NewManager() returned nil")
+	}
+	if mgr.taskRegistry == nil {
+		t.Fatal("taskRegistry not set")
+	}
+	if len(mgr.taskRegistry.List()) != 1 {
+		t.Errorf("expected 1 task in registry, got %d", len(mgr.taskRegistry.List()))
+	}
+}
+
+func TestManager_NewConversationWithTask_Success(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider = "mock"
+	cfg.Model = "mock"
+	cfg.WorkDir = t.TempDir()
+	cfg.SessionDir = t.TempDir()
+
+	llm := llm.NewMockProvider("ok")
+	emitter := NewEventEmitter(50)
+
+	mgr, err := NewManager(cfg, WithLLM(llm), WithEmitter(emitter))
+	if err != nil {
+		t.Fatalf("NewManager() error: %v", err)
+	}
+
+	// Create conversation in review mode
+	conv, err := mgr.NewConversationWithTask(context.Background(), cfg.WorkDir, "review")
+	if err != nil {
+		t.Fatalf("NewConversationWithTask() error: %v", err)
+	}
+	if conv == nil {
+		t.Fatal("NewConversationWithTask() returned nil")
+	}
+
+	// Verify mode is set
+	if conv.GetTaskMode() != "review" {
+		t.Errorf("expected task mode 'review', got '%s'", conv.GetTaskMode())
+	}
+}
+
+func TestManager_NewConversationWithTask_InvalidMode(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider = "mock"
+	cfg.Model = "mock"
+	cfg.WorkDir = t.TempDir()
+	cfg.SessionDir = t.TempDir()
+
+	llm := llm.NewMockProvider("ok")
+	emitter := NewEventEmitter(50)
+
+	mgr, err := NewManager(cfg, WithLLM(llm), WithEmitter(emitter))
+	if err != nil {
+		t.Fatalf("NewManager() error: %v", err)
+	}
+
+	// Try to create conversation with invalid mode
+	conv, err := mgr.NewConversationWithTask(context.Background(), cfg.WorkDir, "invalid")
+	if err == nil {
+		t.Error("expected error for invalid mode, got nil")
+	}
+	if conv != nil {
+		t.Error("expected nil conversation for invalid mode")
+	}
+	if err != nil && !containsManagerTest(err.Error(), "not found") {
+		t.Errorf("expected 'not found' in error message, got: %v", err)
+	}
+}
+
+func TestManager_NewConversationWithTask_EmptyTaskName(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider = "mock"
+	cfg.Model = "mock"
+	cfg.WorkDir = t.TempDir()
+	cfg.SessionDir = t.TempDir()
+
+	mgr, err := NewManager(cfg)
+	if err != nil {
+		t.Fatalf("NewManager() error: %v", err)
+	}
+
+	// Try to create conversation with empty task name
+	conv, err := mgr.NewConversationWithTask(context.Background(), cfg.WorkDir, "")
+	if err == nil {
+		t.Error("expected error for empty task name, got nil")
+	}
+	if conv != nil {
+		t.Error("expected nil conversation for empty task name")
+	}
+	if err != nil && !containsManagerTest(err.Error(), "cannot be empty") {
+		t.Errorf("expected 'cannot be empty' in error message, got: %v", err)
+	}
+}
+
+func TestManager_TaskRegistryPassedToAgent(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider = "mock"
+	cfg.Model = "mock"
+	cfg.WorkDir = t.TempDir()
+	cfg.SessionDir = t.TempDir()
+
+	// Create custom task registry with custom mode
+	customRegistry := task.NewRegistry()
+	customTask := task.NewCompact() // Use compact as base
+	_ = customRegistry.Register("custom-mode", customTask)
+	_ = customRegistry.SetDefault("custom-mode")
+
+	llm := llm.NewMockProvider("ok")
+	emitter := NewEventEmitter(50)
+
+	// Create manager with custom registry
+	mgr, err := NewManager(cfg, WithLLM(llm), WithEmitter(emitter), WithManagerTaskRegistry(customRegistry))
+	if err != nil {
+		t.Fatalf("NewManager() error: %v", err)
+	}
+
+	// Create conversation
+	conv, err := mgr.NewConversation(context.Background(), cfg.WorkDir)
+	if err != nil {
+		t.Fatalf("NewConversation() error: %v", err)
+	}
+
+	// Verify agent has the custom registry
+	modes := conv.agent.ListTaskModes()
+	if !containsStringManagerTest(modes, "custom-mode") {
+		t.Errorf("expected 'custom-mode' in agent's task modes, got: %v", modes)
+	}
+	if len(modes) != 1 {
+		t.Errorf("expected 1 task mode, got %d", len(modes))
+	}
+
+	// Verify can switch to custom mode
+	err = conv.SetTaskMode("custom-mode")
+	if err != nil {
+		t.Errorf("SetTaskMode() error: %v", err)
+	}
+	if conv.GetTaskMode() != "custom-mode" {
+		t.Errorf("expected task mode 'custom-mode', got '%s'", conv.GetTaskMode())
+	}
+}
+
+func TestManager_Integration_TaskModeEndToEnd(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider = "mock"
+	cfg.Model = "mock"
+	cfg.WorkDir = t.TempDir()
+	cfg.SessionDir = t.TempDir()
+
+	llm := llm.NewMockProvider("ok")
+	emitter := NewEventEmitter(100)
+
+	mgr, err := NewManager(cfg, WithLLM(llm), WithEmitter(emitter))
+	if err != nil {
+		t.Fatalf("NewManager() error: %v", err)
+	}
+
+	// Test all 4 built-in modes
+	modes := []string{"regular", "review", "compact", "planning"}
+	for _, mode := range modes {
+		t.Run(mode, func(t *testing.T) {
+			conv, err := mgr.NewConversationWithTask(context.Background(), cfg.WorkDir, mode)
+			if err != nil {
+				t.Fatalf("NewConversationWithTask(%s) error: %v", mode, err)
+			}
+			if conv.GetTaskMode() != mode {
+				t.Errorf("expected task mode '%s', got '%s'", mode, conv.GetTaskMode())
+			}
+
+			// Run a turn to ensure everything is wired correctly
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			err = conv.RunTurn(ctx, "test message")
+			if err != nil {
+				t.Errorf("RunTurn() error in mode %s: %v", mode, err)
+			}
+		})
+	}
+}
+
+// Helper functions for P2.2 tests
+
+func containsManagerTest(s, substr string) bool {
+	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) >= len(substr) && findSubstringManagerTest(s, substr))
+}
+
+func findSubstringManagerTest(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+func containsStringManagerTest(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }
 
 // Integration tests with real file storage

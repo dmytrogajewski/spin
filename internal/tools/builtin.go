@@ -6,6 +6,11 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
+
+	"github.com/dmytrogajewski/spin/internal/filesearch"
+	"github.com/dmytrogajewski/spin/internal/git"
+	"github.com/dmytrogajewski/spin/internal/patchapply"
 )
 
 // ReadFileTool implements file reading functionality.
@@ -547,5 +552,440 @@ func (t *GetContextTool) Execute(ctx context.Context, params map[string]interfac
 	return ToolResult{
 		Success: true,
 		Output:  output,
+	}, nil
+}
+
+// ApplyPatchTool implements structured patch application functionality.
+type ApplyPatchTool struct {
+	workspaceRoot string
+}
+
+// NewApplyPatchTool creates a new apply patch tool.
+func NewApplyPatchTool(workspaceRoot string) *ApplyPatchTool {
+	return &ApplyPatchTool{
+		workspaceRoot: workspaceRoot,
+	}
+}
+
+func (t *ApplyPatchTool) Name() string {
+	return "apply_patch"
+}
+
+func (t *ApplyPatchTool) Description() string {
+	return "Apply a structured patch to modify files in the workspace"
+}
+
+func (t *ApplyPatchTool) Schema() ToolSchema {
+	return ToolSchema{
+		Type: "function",
+		Function: FunctionSchema{
+			Name:        t.Name(),
+			Description: t.Description(),
+			Parameters: ParameterSchema{
+				Type: "object",
+				Properties: map[string]PropertyDefinition{
+					"patch_text": {
+						Type:        "string",
+						Description: "The patch text in Spin's patch format (*** Begin Patch...*** End Patch)",
+					},
+					"workspace_root": {
+						Type:        "string",
+						Description: "The workspace root directory (optional, defaults to tool's workspace)",
+					},
+					"dry_run": {
+						Type:        "boolean",
+						Description: "If true, validate without applying changes",
+					},
+					"force": {
+						Type:        "boolean",
+						Description: "If true, allow overwriting existing files on Add operations",
+					},
+				},
+				Required: []string{"patch_text"},
+			},
+		},
+	}
+}
+
+func (t *ApplyPatchTool) Execute(ctx context.Context, params map[string]interface{}) (ToolResult, error) {
+	// Extract patch_text parameter
+	patchText, ok := params["patch_text"].(string)
+	if !ok || patchText == "" {
+		return ToolResult{
+			Success: false,
+			Error:   "patch_text parameter must be a non-empty string",
+		}, nil
+	}
+
+	// Extract workspace_root parameter (optional)
+	workspaceRoot := t.workspaceRoot
+	if customRoot, ok := params["workspace_root"].(string); ok && customRoot != "" {
+		workspaceRoot = customRoot
+	}
+
+	// Extract dry_run parameter (optional)
+	dryRun := false
+	if dryRunVal, ok := params["dry_run"].(bool); ok {
+		dryRun = dryRunVal
+	}
+
+	// Extract force parameter (optional)
+	force := false
+	if forceVal, ok := params["force"].(bool); ok {
+		force = forceVal
+	}
+
+	// Parse the patch
+	parser := patchapply.NewParser(patchText)
+	patch, err := parser.Parse()
+	if err != nil {
+		return ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("parse error: %v", err),
+		}, nil
+	}
+
+	// Create applier
+	applier, err := patchapply.NewApplier(workspaceRoot)
+	if err != nil {
+		return ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("failed to create applier: %v", err),
+		}, nil
+	}
+
+	// Configure applier
+	applier.SetDryRun(dryRun)
+	applier.SetForceOverwrite(force)
+
+	// Apply the patch
+	result, err := applier.Apply(patch)
+	if err != nil {
+		// Extract error message
+		errMsg := err.Error()
+		return ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("failed to apply patch: %v", errMsg),
+		}, nil
+	}
+
+	// Format output
+	var output strings.Builder
+	if dryRun {
+		output.WriteString("Dry run completed successfully. No files were modified.\n\n")
+	} else {
+		output.WriteString("Patch applied successfully.\n\n")
+	}
+
+	if len(result.FilesCreated) > 0 {
+		output.WriteString(fmt.Sprintf("Created %d file(s):\n", len(result.FilesCreated)))
+		for _, file := range result.FilesCreated {
+			output.WriteString(fmt.Sprintf("  + %s\n", file))
+		}
+	}
+
+	if len(result.FilesDeleted) > 0 {
+		output.WriteString(fmt.Sprintf("Deleted %d file(s):\n", len(result.FilesDeleted)))
+		for _, file := range result.FilesDeleted {
+			output.WriteString(fmt.Sprintf("  - %s\n", file))
+		}
+	}
+
+	if len(result.FilesUpdated) > 0 {
+		output.WriteString(fmt.Sprintf("Updated %d file(s):\n", len(result.FilesUpdated)))
+		for _, file := range result.FilesUpdated {
+			output.WriteString(fmt.Sprintf("  ~ %s\n", file))
+		}
+	}
+
+	if len(result.FilesMoved) > 0 {
+		output.WriteString(fmt.Sprintf("Moved %d file(s):\n", len(result.FilesMoved)))
+		for oldPath, newPath := range result.FilesMoved {
+			output.WriteString(fmt.Sprintf("  %s → %s\n", oldPath, newPath))
+		}
+	}
+
+	return ToolResult{
+		Success: true,
+		Output:  output.String(),
+	}, nil
+}
+
+// FileSearchTool implements file search functionality with fuzzy matching.
+type FileSearchTool struct {
+	workspaceRoot string
+	searcher      *filesearch.Searcher
+	mu            sync.RWMutex
+}
+
+// NewFileSearchTool creates a new file search tool.
+func NewFileSearchTool(workspaceRoot string) *FileSearchTool {
+	return &FileSearchTool{
+		workspaceRoot: workspaceRoot,
+	}
+}
+
+func (t *FileSearchTool) Name() string {
+	return "file_search"
+}
+
+func (t *FileSearchTool) Description() string {
+	return "Search for files in the workspace using fuzzy matching with .gitignore support"
+}
+
+func (t *FileSearchTool) Schema() ToolSchema {
+	return ToolSchema{
+		Type: "function",
+		Function: FunctionSchema{
+			Name:        t.Name(),
+			Description: t.Description(),
+			Parameters: ParameterSchema{
+				Type: "object",
+				Properties: map[string]PropertyDefinition{
+					"query": {
+						Type:        "string",
+						Description: "The search query (fuzzy matched against file paths)",
+					},
+					"workspace_root": {
+						Type:        "string",
+						Description: "The workspace root directory (optional, defaults to tool's workspace)",
+					},
+					"limit": {
+						Type:        "integer",
+						Description: "Maximum number of results to return (default: 10)",
+					},
+				},
+				Required: []string{"query"},
+			},
+		},
+	}
+}
+
+func (t *FileSearchTool) Execute(ctx context.Context, params map[string]interface{}) (ToolResult, error) {
+	// Extract query parameter
+	query, ok := params["query"].(string)
+	if !ok || query == "" {
+		return ToolResult{
+			Success: false,
+			Error:   "query parameter must be a non-empty string",
+		}, nil
+	}
+
+	// Extract workspace_root parameter (optional)
+	workspaceRoot := t.workspaceRoot
+	if customRoot, ok := params["workspace_root"].(string); ok && customRoot != "" {
+		workspaceRoot = customRoot
+	}
+
+	// Extract limit parameter (optional, default 10)
+	limit := 10
+	if limitVal, ok := params["limit"].(float64); ok {
+		limit = int(limitVal)
+	} else if limitVal, ok := params["limit"].(int); ok {
+		limit = limitVal
+	}
+
+	// Get or create searcher for this workspace
+	searcher, err := t.getOrCreateSearcher(workspaceRoot)
+	if err != nil {
+		return ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("failed to create searcher: %v", err),
+		}, nil
+	}
+
+	// Index if not already indexed
+	if !searcher.IsIndexed() {
+		if err := searcher.IndexAsync(ctx); err != nil {
+			return ToolResult{
+				Success: false,
+				Error:   fmt.Sprintf("failed to index workspace: %v", err),
+			}, nil
+		}
+	}
+
+	// Search
+	matches := searcher.Search(query, limit)
+
+	// Format output
+	var output strings.Builder
+	if len(matches) == 0 {
+		output.WriteString(fmt.Sprintf("No files found matching '%s'\n", query))
+	} else {
+		output.WriteString(fmt.Sprintf("Found %d file(s) matching '%s':\n\n", len(matches), query))
+		for i, match := range matches {
+			output.WriteString(fmt.Sprintf("%d. %s (score: %d)\n", i+1, match.Path, match.Score))
+		}
+	}
+
+	return ToolResult{
+		Success: true,
+		Output:  output.String(),
+	}, nil
+}
+
+// getOrCreateSearcher returns the searcher for the given workspace, creating it if needed.
+func (t *FileSearchTool) getOrCreateSearcher(workspaceRoot string) (*filesearch.Searcher, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// If searcher exists and matches workspace, return it
+	if t.searcher != nil && t.workspaceRoot == workspaceRoot {
+		return t.searcher, nil
+	}
+
+	// Create new searcher
+	searcher, err := filesearch.NewSearcher(workspaceRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update state
+	t.searcher = searcher
+	t.workspaceRoot = workspaceRoot
+
+	return searcher, nil
+}
+
+// GitContextTool implements Git repository context retrieval.
+type GitContextTool struct {
+	workspaceRoot string
+}
+
+// NewGitContextTool creates a new git context tool.
+func NewGitContextTool(workspaceRoot string) *GitContextTool {
+	return &GitContextTool{
+		workspaceRoot: workspaceRoot,
+	}
+}
+
+func (t *GitContextTool) Name() string {
+	return "git_context"
+}
+
+func (t *GitContextTool) Description() string {
+	return "Get Git repository context including branch, status, and modifications"
+}
+
+func (t *GitContextTool) Schema() ToolSchema {
+	return ToolSchema{
+		Type: "function",
+		Function: FunctionSchema{
+			Name:        t.Name(),
+			Description: t.Description(),
+			Parameters: ParameterSchema{
+				Type: "object",
+				Properties: map[string]PropertyDefinition{
+					"workspace_root": {
+						Type:        "string",
+						Description: "The workspace root directory (optional, defaults to tool's workspace)",
+					},
+					"include_diff": {
+						Type:        "boolean",
+						Description: "If true, include diff summary (default: false)",
+					},
+				},
+				Required: []string{},
+			},
+		},
+	}
+}
+
+func (t *GitContextTool) Execute(ctx context.Context, params map[string]interface{}) (ToolResult, error) {
+	// Extract workspace_root parameter (optional)
+	workspaceRoot := t.workspaceRoot
+	if customRoot, ok := params["workspace_root"].(string); ok && customRoot != "" {
+		workspaceRoot = customRoot
+	}
+
+	// Extract include_diff parameter (optional)
+	includeDiff := false
+	if diffVal, ok := params["include_diff"].(bool); ok {
+		includeDiff = diffVal
+	}
+
+	// Discover repository
+	repo, err := git.Discover(ctx, workspaceRoot)
+	if err != nil {
+		// Not a git repository - return graceful error
+		return ToolResult{
+			Success: true,
+			Output:  "Not a Git repository. Initialize with 'git init' to enable version control.\n",
+		}, nil
+	}
+
+	// Get status
+	status, err := repo.Status(ctx)
+	if err != nil {
+		return ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("failed to get git status: %v", err),
+		}, nil
+	}
+
+	// Format output
+	var output strings.Builder
+	output.WriteString("Git Repository Context:\n\n")
+	output.WriteString(fmt.Sprintf("Repository Root: %s\n", repo.Root()))
+
+	if status.Detached {
+		output.WriteString(fmt.Sprintf("Branch: (detached HEAD at %s)\n", status.Hash[:7]))
+	} else {
+		output.WriteString(fmt.Sprintf("Branch: %s\n", status.Branch))
+	}
+
+	if status.RemoteBranch != "" {
+		output.WriteString(fmt.Sprintf("Tracking: %s", status.RemoteBranch))
+		if status.Ahead > 0 || status.Behind > 0 {
+			output.WriteString(fmt.Sprintf(" [ahead %d, behind %d]", status.Ahead, status.Behind))
+		}
+		output.WriteString("\n")
+	}
+
+	output.WriteString(fmt.Sprintf("Commit: %s\n\n", status.Hash[:7]))
+
+	// Status summary
+	totalModified := len(status.ModifiedFiles)
+	totalUntracked := len(status.UntrackedFiles)
+
+	if totalModified == 0 && totalUntracked == 0 {
+		output.WriteString("Working tree clean.\n")
+	} else {
+		if totalModified > 0 {
+			output.WriteString(fmt.Sprintf("Modified/Staged: %d file(s)\n", totalModified))
+			// Show first 10 modified files
+			for i, file := range status.ModifiedFiles {
+				if i >= 10 {
+					output.WriteString(fmt.Sprintf("  ... and %d more\n", totalModified-10))
+					break
+				}
+				// Format status: show staging/worktree status codes
+				statusStr := file.Staging.String() + file.Worktree.String()
+				output.WriteString(fmt.Sprintf("  %s %s\n", statusStr, file.Path))
+			}
+		}
+
+		if totalUntracked > 0 {
+			output.WriteString(fmt.Sprintf("\nUntracked: %d file(s)\n", totalUntracked))
+			// Show first 10 untracked files
+			for i, file := range status.UntrackedFiles {
+				if i >= 10 {
+					output.WriteString(fmt.Sprintf("  ... and %d more\n", totalUntracked-10))
+					break
+				}
+				output.WriteString(fmt.Sprintf("  %s\n", file))
+			}
+		}
+	}
+
+	// Optionally include diff summary
+	if includeDiff && totalModified > 0 {
+		output.WriteString("\nNote: include_diff=true requested but full diff not yet implemented.\n")
+		output.WriteString("Use git diff commands for detailed changes.\n")
+	}
+
+	return ToolResult{
+		Success: true,
+		Output:  output.String(),
 	}, nil
 }
