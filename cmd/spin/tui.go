@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/core"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/tools"
@@ -75,8 +76,8 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	maxTurns, _ := cmd.Flags().GetInt("max-turns")
 	requireApproval, _ := cmd.Flags().GetBool("require-approval")
 
-	// Create core manager
-	mgr, err := createManagerForTUI(provider, maxTurns, requireApproval)
+	// Create core manager with config loader
+	mgr, err := createManagerForTUI(provider, maxTurns, requireApproval, configLoader)
 	if err != nil {
 		return fmt.Errorf("create manager: %w", err)
 	}
@@ -244,7 +245,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 }
 
 // createManagerForTUI creates a core.Manager configured for TUI mode.
-func createManagerForTUI(provider llm.Provider, maxTurns int, requireApproval bool) (*core.Manager, error) {
+func createManagerForTUI(provider llm.Provider, maxTurns int, requireApproval bool, configLoader *config.Loader) (*core.Manager, error) {
 	// Get current working directory
 	workDir, err := os.Getwd()
 	if err != nil {
@@ -256,12 +257,40 @@ func createManagerForTUI(provider llm.Provider, maxTurns int, requireApproval bo
 		workDir = flagWorkDir
 	}
 
-	// Create core configuration with defaults
+	// Start with default config
 	cfg := core.DefaultConfig()
-	cfg.MaxTurns = maxTurns
+
+	// Layer 1: Load from config file
+	var fileCfg core.Config
+	if err := configLoader.Unmarshal(&fileCfg); err == nil {
+		if fileCfg.Provider != "" {
+			cfg.Provider = fileCfg.Provider
+		}
+		if fileCfg.Model != "" {
+			cfg.Model = fileCfg.Model
+		}
+		if fileCfg.MaxTurns > 0 {
+			cfg.MaxTurns = fileCfg.MaxTurns
+		}
+		if fileCfg.Timeout > 0 {
+			cfg.Timeout = fileCfg.Timeout
+		}
+		if fileCfg.MaxTokens > 0 {
+			cfg.MaxTokens = fileCfg.MaxTokens
+		}
+	}
+
+	// Layer 2: Override with CLI flags (if provided)
+	if maxTurns > 0 {
+		cfg.MaxTurns = maxTurns
+	}
 	cfg.WorkDir = workDir
-	cfg.Provider = flagProvider
-	cfg.Model = flagModel
+	if flagProvider != "" {
+		cfg.Provider = flagProvider
+	}
+	if flagModel != "" {
+		cfg.Model = flagModel
+	}
 
 	// Create tool registry with simple tools (no dependencies)
 	registry := tools.NewRegistry()

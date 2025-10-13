@@ -1,200 +1,254 @@
-# E2E TUI Tests
+# Spin Test Suite
 
-Automated end-to-end tests for Spin's terminal UI using `go-expect`.
+Comprehensive test coverage for the Spin AI coding assistant.
 
-## Overview
+## Directory Structure
 
-These tests launch the real `spin` binary in a PTY (pseudo-terminal) and interact with it programmatically by sending keyboard input and verifying output.
-
-## Running Tests
-
-### All E2E Tests
-```bash
-make test-e2e
+```
+tests/
+├── e2e/                    # End-to-end tests (hermetic, fast)
+│   ├── e2e_test.go        # Core functionality (config, exec, MCP)
+│   ├── tui_e2e_test.go    # TUI mode tests
+│   ├── statusbar_interactive_test.go  # Status bar user flows
+│   ├── statusbar_regression_test.go   # Bug regression tests
+│   ├── statusbar_diagnostic_test.go   # Rendering diagnostics
+│   └── README.md          # E2E test documentation
+│
+├── emulator/              # Real terminal emulator tests (slow, requires Ollama)
+│   ├── statusbar_pty_test.go  # PTY-based status bar tests
+│   ├── test_config.yaml       # Test configuration
+│   └── README.md              # Emulator test documentation
+│
+└── README.md              # This file
 ```
 
-### Specific Test
+## Test Types
+
+### 1. Unit Tests
+
+Located in package directories (e.g., `internal/ui/sticky/*_test.go`):
+- Test individual components in isolation
+- Fast, deterministic, hermetic
+- **Run**: `go test ./internal/...`
+
+### 2. Integration Tests
+
+Located in package directories with `_integration_test.go` suffix:
+- Test component interactions
+- May use test fixtures or mocks
+- **Run**: `go test ./internal/... -run Integration`
+
+### 3. End-to-End Tests (`tests/e2e/`)
+
+Complete user workflows with simulated terminals:
+- Uses **fake TTY** for speed and determinism
+- Tests real user interactions
+- Hermetic (no external services)
+- **Run**: `go test ./tests/e2e/... -v`
+
+### 4. Emulator Tests (`tests/emulator/`)
+
+Real pseudo-terminal tests using go-expect:
+- Uses **real PTY** for terminal validation
+- Catches ANSI rendering bugs
+- **Requires Ollama running**
+- **Run**: `go test ./tests/emulator/... -v`
+
+## Quick Start
+
 ```bash
-go test ./tests -run TestTUILaunch -v
+# Run all tests
+make test
+
+# Run with race detection
+make test-race
+
+# Run only fast tests (skip emulator)
+go test ./... -short
+
+# Run specific test suite
+go test ./tests/e2e/... -v
+go test ./tests/emulator/... -v
+
+# Run specific test
+go test ./tests/e2e/... -v -run TestInteractiveFlow_UserTypesAndSeesPrompt
+
+# Coverage report
+make coverage
 ```
 
-### Skip E2E Tests (for CI/local quick runs)
+## Test Categories by Feature
+
+### Status Bar Feature
+
+| Test File | Type | What It Tests |
+|-----------|------|---------------|
+| `internal/ui/sticky/statusbar_test.go` | Unit | StatusBar data model |
+| `internal/ui/sticky/coordinator_test.go` | Unit | Sticky bottom coordinator |
+| `internal/ui/sticky/renderer_test.go` | Unit | Adaptive rendering |
+| `internal/ui/sticky/statusbar_integration_test.go` | Integration | Status bar + aggregator |
+| `tests/e2e/statusbar_interactive_test.go` | E2E | User typing & interaction |
+| `tests/e2e/statusbar_regression_test.go` | E2E | Bug regressions |
+| `tests/e2e/statusbar_diagnostic_test.go` | E2E | Rendering diagnostics |
+| `tests/emulator/statusbar_pty_test.go` | Emulator | Real PTY validation |
+
+### Core Functionality
+
+| Test File | Type | What It Tests |
+|-----------|------|---------------|
+| `tests/e2e/e2e_test.go` | E2E | Config, exec mode, MCP |
+| `tests/e2e/tui_e2e_test.go` | E2E | TUI modes, navigation |
+| `internal/core/*_test.go` | Unit | Core logic |
+| `internal/llm/*_test.go` | Unit | LLM providers |
+
+## Coverage Targets
+
+- **Unit tests**: ≥90% coverage
+- **Integration tests**: ≥85% coverage
+- **Critical paths**: ≥90% coverage
+- **New features**: ≥90% coverage
+
+Check coverage:
 ```bash
-go test -short ./...  # E2E tests are skipped in short mode
+make coverage
+# Opens HTML report in browser
 ```
 
-## Available Tests
+## Test Infrastructure
 
-| Test | Description | Duration |
-|------|-------------|----------|
-| `TestTUILaunch` | Verifies TUI starts without errors | ~2s |
-| `TestTUIBasicChat` | Sends message and receives LLM response | ~15s |
-| `TestTUIFilePickerTrigger` | Tests `@` key opens file picker | ~2s |
-| `TestTUIHelpModal` | Tests `Ctrl+H` opens help | ~2s |
-| `TestTUIExitWithCtrlD` | Tests `Ctrl+D` exits cleanly | ~1s |
-| `TestTUIToolApproval` | Tests approval workflow with file creation | ~30s |
-| `TestTUIMultiTurn` | Tests conversation context retention | ~25s |
-| `TestTUIStopStreaming` | Tests `Ctrl+C` stops streaming | ~5s |
+### Test Utilities (`internal/ui/testkit/`)
 
-## Requirements
+- `fake_tty.go` - Simulated terminal
+- `safe_buffer.go` - Thread-safe output capture
+- `interactive_tui_test.go` - TUI interaction helpers
+- `fake_keyboard.go` - Keyboard event simulation
 
-- **Built binary**: Tests require `bin/spin` to exist
-  ```bash
-  make build
-  ```
+### Mock Providers (`internal/llm/mock/`)
 
-- **Running LLM**: Tests use Ollama by default
-  ```bash
-  # Check if Ollama is running
-  curl http://127.0.0.1:11434/api/tags
+- `provider.go` - Mock LLM for hermetic tests
+- No external API calls
+- Configurable responses
+- Call history tracking
 
-  # Pull required models
-  ollama pull qwen3:0.6b
-  ollama pull qwen3:1.7b
-  ollama pull qwen2.5-coder:1.5b
-  ```
+## Prerequisites
 
-- **PTY support**: Tests require a Unix-like system with PTY support (Linux, macOS, WSL)
+### For E2E Tests
 
-## How It Works
+None! E2E tests are fully hermetic.
 
-### Test Flow
-1. Create pseudo-terminal (PTY) using `go-expect`
-2. Launch `bin/spin` with stdin/stdout/stderr attached to PTY
-3. Send keyboard input (text, `Enter`, `Ctrl+C`, etc.)
-4. Verify expected behavior (no crashes, clean exits, responses)
+### For Emulator Tests
 
-### Example Test Anatomy
+1. **Ollama running**: `ollama serve`
+2. **Model available**: `ollama pull qwen3:1.7b`
+3. **Network access**: http://localhost:11434
 
-```go
-func TestTUIBasicChat(t *testing.T) {
-    // 1. Create console (PTY)
-    console, _ := expect.NewConsole()
-    defer console.Close()
+## Continuous Integration
 
-    // 2. Launch TUI
-    cmd := exec.Command(getBinPath(t), "--model", "qwen3:0.6b")
-    cmd.Stdin = console.Tty()
-    cmd.Stdout = console.Tty()
-    cmd.Start()
+```bash
+# CI pipeline should run:
+make lint          # Linter checks
+make test          # All unit + integration + e2e tests
+make test-race     # Race detector
 
-    // 3. Interact
-    console.SendLine("Hello!")
-
-    // 4. Verify
-    console.ExpectString("Hello") // Wait for response
-}
+# Emulator tests should run separately (require Ollama):
+go test ./tests/emulator/... -v
 ```
 
 ## Writing New Tests
 
-### Best Practices
-
-1. **Use `testing.Short()` skip**:
-   ```go
-   if testing.Short() {
-       t.Skip("Skipping E2E test in short mode")
-   }
-   ```
-
-2. **Set reasonable timeouts**:
-   ```go
-   func TestMyTUI(t *testing.T) {
-       // Test timeout
-       time.Sleep(2 * time.Second) // Wait for UI to render
-
-       // Or use ExpectString with context
-       ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-       defer cancel()
-   }
-   ```
-
-3. **Clean up resources**:
-   ```go
-   defer func() {
-       console.Send("\x04") // Ctrl+D to exit
-       cmd.Wait()
-   }()
-   ```
-
-4. **Avoid flaky tests**:
-   - Use `time.Sleep()` for UI rendering (not ExpectString with fragile patterns)
-   - Don't rely on exact screen output (ANSI codes, formatting vary)
-   - Test behavior, not UI aesthetics
-
-### Common Keyboard Inputs
+### 1. Unit Test (Component Package)
 
 ```go
-console.SendLine("text")     // Type text + Enter
-console.Send("@")             // Single key
-console.Send("\x03")          // Ctrl+C
-console.Send("\x04")          // Ctrl+D
-console.Send("\x08")          // Ctrl+H
-console.Send("\x1b")          // Esc
-console.Send("\x1b\x1b")      // Esc Esc (backtrack)
+// internal/ui/sticky/newfeature_test.go
+package sticky
+
+func TestNewFeature(t *testing.T) {
+    // Test isolated component
+}
 ```
+
+### 2. Integration Test (Component Package)
+
+```go
+// internal/ui/sticky/integration_test.go
+package sticky
+
+func TestFeatureIntegration(t *testing.T) {
+    // Test multiple components together
+}
+```
+
+### 3. E2E Test (tests/e2e/)
+
+```go
+// tests/e2e/feature_test.go
+package e2e
+
+func TestFeature_UserFlow(t *testing.T) {
+    // Simulate complete user workflow
+}
+```
+
+### 4. Emulator Test (tests/emulator/)
+
+```go
+// tests/emulator/feature_pty_test.go
+package emulator
+
+func TestPTY_Feature(t *testing.T) {
+    if testing.Short() {
+        t.Skip("Skipping PTY test in short mode")
+    }
+    // Test with real PTY
+}
+```
+
+## Debugging Test Failures
+
+### Race Conditions
+
+```bash
+go test ./tests/e2e/... -race -v
+```
+
+Look for concurrent access to shared state.
+
+### Flaky Tests
+
+```bash
+# Run test 100 times
+go test ./tests/e2e/... -run TestFlaky -count 100
+```
+
+### PTY Issues
+
+```bash
+# See raw ANSI output
+go test ./tests/emulator/... -v -run TestPTY 2>&1 | cat -v
+```
+
+## Best Practices
+
+1. **Test pyramid**: More unit tests, fewer e2e tests, minimal emulator tests
+2. **Hermetic first**: Use fake TTY for most tests, real PTY only when necessary
+3. **Fast feedback**: Keep tests fast (<100ms for unit, <1s for e2e)
+4. **Clear names**: Test names should describe what they verify
+5. **Deterministic**: No sleeps, use synchronization primitives
+6. **Isolated**: Each test should be independent
 
 ## Troubleshooting
 
-### Test Hangs
-- Increase timeout: `-timeout 60s`
-- Check if LLM provider is running
-- Verify binary exists: `ls bin/spin`
+| Issue | Solution |
+|-------|----------|
+| "No such file or directory: bin/spin" | Run `make build` first |
+| "Ollama connection refused" | Start Ollama: `ollama serve` |
+| "Model not found" | Pull model: `ollama pull qwen3:1.7b` |
+| Race detector failures | Fix concurrent access, use `SafeBuffer` |
+| Test timeouts | Increase timeout or check for deadlocks |
 
-### "fork/exec: no such file or directory"
-```bash
-make build  # Rebuild binary
-```
+---
 
-### "connection refused" / LLM errors
-```bash
-# Start Ollama
-systemctl start ollama  # Linux
-brew services start ollama  # macOS
-```
-
-### Tests fail on CI
-- Use `-short` flag to skip E2E tests on CI without PTY support
-- Or use GitHub Actions with full terminal support
-
-## Integration with CI
-
-### GitHub Actions Example
-```yaml
-name: Tests
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v4
-
-      # Unit tests (fast)
-      - run: go test -short ./...
-
-      # E2E tests (slow, requires Ollama)
-      - uses: ollama/setup-ollama@v1
-      - run: ollama pull qwen3:0.6b
-      - run: make build
-      - run: make test-e2e
-```
-
-## Technical Details
-
-### Dependencies
-- [`github.com/Netflix/go-expect`](https://github.com/Netflix/go-expect) - PTY interaction
-- [`github.com/creack/pty`](https://github.com/creack/pty) - PTY creation (transitive)
-
-### Limitations
-- **Platform**: Requires Unix-like PTY support (no native Windows)
-- **Speed**: E2E tests are slow (~1-30s each) due to real LLM calls
-- **Flakiness**: Timing-sensitive; may fail on slow systems
-
-### Future Improvements
-- [ ] Mock LLM responses for faster tests
-- [ ] Screen capture/snapshot testing
-- [ ] Parallel test execution
-- [ ] Headless mode for CI
-- [ ] Coverage reports for TUI code
+**For more details, see:**
+- `tests/e2e/README.md` - E2E test documentation
+- `tests/emulator/README.md` - Emulator test documentation
+- `docs/testing.md` - Testing philosophy and guidelines

@@ -614,12 +614,14 @@ func TestFileStorage_ConcurrentReads(t *testing.T) {
 
 func TestLoad_Standalone(t *testing.T) {
 	tmpDir := t.TempDir()
-	sessionID := "test-session"
+	sessionID := "550e8400-e29b-41d4-a716-446655440000" // Valid UUID
 
 	// Create a test session file
 	session := &Session{
 		ID:        sessionID,
+		WorkDir:   "/tmp",
 		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	storage, err := NewFileStorage(tmpDir)
 	if err != nil {
@@ -642,12 +644,15 @@ func TestLoad_Standalone(t *testing.T) {
 
 func TestDelete_Standalone(t *testing.T) {
 	tmpDir := t.TempDir()
-	sessionID := "test-session"
+	sessionID := "550e8400-e29b-41d4-a716-446655440001" // Valid UUID
 
 	// Create a test session
+	now := time.Now()
 	session := &Session{
 		ID:        sessionID,
-		CreatedAt: time.Now(),
+		WorkDir:   "/tmp",
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 	storage, err := NewFileStorage(tmpDir)
 	if err != nil {
@@ -673,7 +678,7 @@ func TestDelete_Standalone(t *testing.T) {
 
 func TestExists_Standalone(t *testing.T) {
 	tmpDir := t.TempDir()
-	sessionID := "test-session"
+	sessionID := "550e8400-e29b-41d4-a716-446655440002" // Valid UUID
 
 	storage, err := NewFileStorage(tmpDir)
 	if err != nil {
@@ -690,9 +695,12 @@ func TestExists_Standalone(t *testing.T) {
 	}
 
 	// Create a session
+	now := time.Now()
 	session := &Session{
 		ID:        sessionID,
-		CreatedAt: time.Now(),
+		WorkDir:   "/tmp",
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 	err = storage.Save(session)
 	if err != nil {

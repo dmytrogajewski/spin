@@ -110,7 +110,7 @@ func TestNewPureTTY(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "with custom components",
+			name: "with custom components",
 			opts: []PureTTYOption{
 				WithModel(prompt.NewModel(50)),
 			},
@@ -145,15 +145,10 @@ func TestRun_Basic(t *testing.T) {
 	// Create components manually
 	fakeTTY := newFakeTTY(80, 24)
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(out, 80, "> ")
-	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := NewPureTTY(out,
 		WithTTY(fakeTTY),
 		WithModel(model),
-		WithCoordinator(coord),
 		WithKeyboardEvents(fakeTTY.events))
 	if err != nil {
 		t.Fatalf("NewPureTTY() error = %v", err)
@@ -218,15 +213,10 @@ func TestRun_ContextCancel(t *testing.T) {
 	out := &safeBuffer{}
 	fakeTTY := newFakeTTY(80, 24)
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(out, 80, "> ")
-	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := NewPureTTY(out,
 		WithTTY(fakeTTY),
 		WithModel(model),
-		WithCoordinator(coord),
 		WithKeyboardEvents(fakeTTY.events))
 	if err != nil {
 		t.Fatalf("NewPureTTY() error = %v", err)
@@ -263,12 +253,7 @@ func TestRun_CtrlC(t *testing.T) {
 	out := &safeBuffer{}
 	fakeTTY := newFakeTTY(80, 24)
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(out, 80, "> ")
-	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
-
-	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model), WithCoordinator(coord))
+	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model))
 	if err != nil {
 		t.Fatalf("NewPureTTY() error = %v", err)
 	}
@@ -300,12 +285,7 @@ func TestRun_CtrlD(t *testing.T) {
 	out := &safeBuffer{}
 	fakeTTY := newFakeTTY(80, 24)
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(out, 80, "> ")
-	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
-
-	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model), WithCoordinator(coord))
+	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model))
 	if err != nil {
 		t.Fatalf("NewPureTTY() error = %v", err)
 	}
@@ -337,12 +317,7 @@ func TestStop_Idempotent(t *testing.T) {
 	out := &safeBuffer{}
 	fakeTTY := newFakeTTY(80, 24)
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(out, 80, "> ")
-	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
-
-	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model), WithCoordinator(coord))
+	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model))
 	if err != nil {
 		t.Fatalf("NewPureTTY() error = %v", err)
 	}
@@ -360,12 +335,7 @@ func TestPrintLine(t *testing.T) {
 	out := &safeBuffer{}
 	fakeTTY := newFakeTTY(80, 24)
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(out, 80, "> ")
-	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
-
-	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model), WithCoordinator(coord))
+	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model))
 	if err != nil {
 		t.Fatalf("NewPureTTY() error = %v", err)
 	}
@@ -397,12 +367,7 @@ func TestPrintChunks(t *testing.T) {
 	out := &safeBuffer{}
 	fakeTTY := newFakeTTY(80, 24)
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(out, 80, "> ")
-	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
-
-	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model), WithCoordinator(coord))
+	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model))
 	if err != nil {
 		t.Fatalf("NewPureTTY() error = %v", err)
 	}
@@ -442,12 +407,7 @@ func TestSetStatus(t *testing.T) {
 	out := &safeBuffer{}
 	fakeTTY := newFakeTTY(80, 24)
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(out, 80, "> ")
-	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
-
-	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model), WithCoordinator(coord))
+	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model))
 	if err != nil {
 		t.Fatalf("NewPureTTY() error = %v", err)
 	}
@@ -472,15 +432,10 @@ func TestRequestInput(t *testing.T) {
 	out := &safeBuffer{}
 	fakeTTY := newFakeTTY(80, 24)
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(out, 80, "> ")
-	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := NewPureTTY(out,
 		WithTTY(fakeTTY),
 		WithModel(model),
-		WithCoordinator(coord),
 		WithKeyboardEvents(fakeTTY.events))
 	if err != nil {
 		t.Fatalf("NewPureTTY() error = %v", err)
@@ -525,12 +480,7 @@ func TestCleanShutdown(t *testing.T) {
 	out := &safeBuffer{}
 	fakeTTY := newFakeTTY(80, 24)
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(out, 80, "> ")
-	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
-
-	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model), WithCoordinator(coord))
+	ui, err := NewPureTTY(out, WithTTY(fakeTTY), WithModel(model))
 	if err != nil {
 		t.Fatalf("NewPureTTY() error = %v", err)
 	}

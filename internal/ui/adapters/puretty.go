@@ -10,11 +10,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dmytrogajewski/spin/internal/core"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/output"
 	"github.com/dmytrogajewski/spin/internal/ui/overlay"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 	"github.com/dmytrogajewski/spin/internal/ui/prompt"
+	"github.com/dmytrogajewski/spin/internal/ui/status"
 	"github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
@@ -65,6 +67,12 @@ type PureTTY struct {
 	filePreview         *overlay.FilePreview
 	filePreviewRenderer *overlay.FilePreviewRenderer
 	searchMatches       []int // current search matches in file preview
+
+	// Status management (Phase 1)
+	statusManager    *status.Manager
+	statusAggregator *status.Aggregator
+	statusRenderer   *status.Renderer
+	lastStatusText   string // Track last status to avoid unnecessary updates
 
 	// Testing support
 	keyboardEvents <-chan term.KeyEvent // If set, use this instead of ReadKeys
@@ -132,7 +140,7 @@ func WithKeyboardEvents(events <-chan term.KeyEvent) PureTTYOption {
 func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 	p := &PureTTY{
 		out:            out,
-		mode:           ModeInput,            // Start in input mode (backward compat)
+		mode:           ModeInput,              // Start in input mode (backward compat)
 		externalInputs: make(chan string, 100), // Buffered channel for RequestInput() callers
 	}
 
@@ -159,8 +167,9 @@ func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 
 	// Create renderer if not provided
 	if p.renderer == nil {
-		w, _ := p.tty.Size()
+		w, h := p.tty.Size()
 		p.renderer = prompt.NewRenderer(out, w, "> ")
+		p.renderer.SetHeight(h)
 	}
 
 	if p.coord == nil {
@@ -198,6 +207,23 @@ func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 		p.paletteRenderer = overlay.NewPaletteRenderer(w, h)
 	}
 
+	// Create status management components (Phase 1)
+	if p.statusManager == nil {
+		p.statusManager = status.NewManager()
+	}
+	if p.statusAggregator == nil {
+		p.statusAggregator = status.NewAggregator(p.statusManager)
+	}
+	if p.statusRenderer == nil {
+		w, h := p.tty.Size()
+		p.statusRenderer = status.NewRenderer(p.out, w, h)
+	}
+
+	// Connect scroll manager to coordinator
+	if p.coord != nil && p.statusRenderer != nil {
+		p.coord.SetScrollManager(p.statusRenderer)
+	}
+
 	return p, nil
 }
 
@@ -230,7 +256,11 @@ func (u *PureTTY) Run(ctx context.Context) error {
 	if err := u.tty.Enter(); err != nil {
 		return fmt.Errorf("enter raw mode: %w", err)
 	}
-	defer u.tty.Exit()
+	defer func() {
+		// Reset scrolling region before exiting
+		fmt.Fprint(u.out, "\x1b[r") // Reset scroll region to full screen
+		u.tty.Exit()
+	}()
 
 	// Start keyboard reader (or use injected events for testing)
 	var keys <-chan term.KeyEvent
@@ -259,6 +289,12 @@ func (u *PureTTY) Run(ctx context.Context) error {
 
 	// Initial prompt draw
 	u.coord.RedrawPrompt()
+
+	// Initialize status bar with "Ready" message
+	if u.statusManager != nil {
+		u.statusManager.SetStatus("Ready")
+		u.updateStatusBar()
+	}
 
 	// Ensure external inputs channel is closed on exit
 	defer close(u.externalInputs)
@@ -321,6 +357,61 @@ func (u *PureTTY) SetStatus(text string) error {
 	return u.coord.SetStatus(text)
 }
 
+// ProcessEvent processes a core.Event and updates the status manager.
+// This method is called by the event mapper to update status information.
+func (u *PureTTY) ProcessEvent(event *core.Event) {
+	if u.statusAggregator != nil {
+		u.statusAggregator.ProcessEvent(event)
+		// Update status display for meaningful events
+		switch event.Type {
+		case core.EventTurnStart:
+			// Show when turn starts
+			u.updateStatusBar()
+		case core.EventToolCallStart:
+			// Show "Executing tool..." when tools start
+			u.updateStatusBar()
+		case core.EventToolCallComplete:
+			// Show "Tool complete" when tools finish
+			u.updateStatusBar()
+		case core.EventContentDelta:
+			// Show "Generating content..." during streaming
+			u.updateStatusBar()
+		case core.EventContentComplete:
+			// Show completion status
+			u.updateStatusBar()
+		case core.EventTurnComplete:
+			// Show turn complete
+			u.updateStatusBar()
+		}
+	}
+}
+
+// updateStatusBar updates the sticky status bar with the current status from StatusManager.
+// Only updates if the status text has actually changed to avoid unnecessary redraws.
+func (u *PureTTY) updateStatusBar() {
+	if u.statusManager == nil || u.statusRenderer == nil {
+		return
+	}
+
+	// Get formatted status from manager
+	newStatusText := u.statusManager.FormatCompact()
+
+	// Only update if status actually changed
+	u.mu.Lock()
+	lastStatusText := u.lastStatusText
+	u.mu.Unlock()
+
+	if newStatusText != lastStatusText {
+		// Update sticky status bar
+		_ = u.statusRenderer.Render(newStatusText)
+
+		// Remember the last status text
+		u.mu.Lock()
+		u.lastStatusText = newStatusText
+		u.mu.Unlock()
+	}
+}
+
 // RequestInput returns a channel that emits user-submitted lines.
 func (u *PureTTY) RequestInput() <-chan string {
 	// Return external inputs channel that receives forwarded messages from Run()
@@ -333,9 +424,19 @@ func (u *PureTTY) startPromptLoop(ctx context.Context, keys <-chan term.KeyEvent
 	return loop.Run(ctx)
 }
 
-// handleResize updates renderer width and redraws prompt on SIGWINCH.
+// handleResize updates renderer dimensions and redraws prompt on SIGWINCH.
 func (u *PureTTY) handleResize(w, h int) {
-	u.renderer.SetWidth(w)
+	// Update prompt renderer dimensions
+	u.renderer.SetSize(w, h)
+
+	// Update status renderer dimensions
+	if u.statusRenderer != nil {
+		u.statusRenderer.SetSize(w, h)
+		// Redraw status bar with new dimensions
+		u.updateStatusBar()
+	}
+
+	// Redraw prompt
 	u.coord.RedrawPrompt()
 }
 
@@ -854,9 +955,9 @@ func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
 	if statusLine != "" {
 		// Move cursor up one line (to overwrite the prompt), clear the line, write status, then redraw prompt
 		// Sequence: ESC[1A (up), ESC[2K (clear line), write status, newline, redraw prompt
-		fmt.Fprint(u.out, "\x1b[1A\x1b[2K")                                      // Up + clear line
+		fmt.Fprint(u.out, "\x1b[1A\x1b[2K")                                    // Up + clear line
 		fmt.Fprint(u.out, strings.ReplaceAll(statusLine, "\n", "\r\n")+"\r\n") // Write status
-		u.renderer.Redraw(u.model, "")                                           // Redraw prompt
+		u.renderer.Redraw(u.model, "")                                         // Redraw prompt
 	}
 
 	return nil

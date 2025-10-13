@@ -84,16 +84,7 @@ func TestStubCommands_NotImplemented(t *testing.T) {
 		name string
 		args []string
 	}{
-		// Note: "exec" removed - now implemented in Phase 2.1
-		{"config show", []string{"config", "show"}},
-		{"config validate", []string{"config", "validate"}},
-		{"config edit", []string{"config", "edit"}},
-		{"config path", []string{"config", "path"}},
-		{"mcp add", []string{"mcp", "add", "test", "cmd"}},
-		{"mcp list", []string{"mcp", "list"}},
-		{"mcp get", []string{"mcp", "get", "test"}},
-		{"mcp remove", []string{"mcp", "remove", "test"}},
-		{"debug sandbox", []string{"debug", "sandbox", "ls"}},
+		// Only test truly unimplemented commands
 		{"debug landlock", []string{"debug", "landlock", "ls"}},
 	}
 
@@ -107,8 +98,10 @@ func TestStubCommands_NotImplemented(t *testing.T) {
 			rootCmd.SetErr(&out)
 
 			err := rootCmd.Execute()
+
 			if err == nil {
 				t.Errorf("%s should return 'not implemented' error", tt.name)
+				return
 			}
 
 			if !strings.Contains(err.Error(), "not yet implemented") {

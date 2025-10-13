@@ -47,6 +47,11 @@ func (m *TUIMapper) MapEvent(event Event) error {
 		return nil
 	}
 
+	// Process event for status updates (Phase 1)
+	if statusUI, ok := m.ui.(interface{ ProcessEvent(*Event) }); ok {
+		statusUI.ProcessEvent(&event)
+	}
+
 	switch event.Type {
 	case EventToolCallStart:
 		return m.handleToolStart(event)

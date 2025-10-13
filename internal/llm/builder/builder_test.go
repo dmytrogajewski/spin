@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -63,6 +64,7 @@ func TestBuild_AllProviders(t *testing.T) {
 				Provider: "openai",
 				Model:    "gpt-4o",
 				BaseURL:  "https://api.openai.com/v1",
+				// No APIKey, no KeyName, and test must clear OPENAI_API_KEY env var
 			},
 			wantErr: true,
 			errMsg:  "authentication required",
@@ -78,6 +80,20 @@ func TestBuild_AllProviders(t *testing.T) {
 			keystore := newTestKeystore()
 			authMgr := auth.NewManager(keystore)
 			builder := NewBuilder(configLoader, authMgr)
+
+			// Clear environment variables that might interfere with auth tests
+			oldOpenAI := os.Getenv("OPENAI_API_KEY")
+			oldAnthropic := os.Getenv("ANTHROPIC_API_KEY")
+			os.Unsetenv("OPENAI_API_KEY")
+			os.Unsetenv("ANTHROPIC_API_KEY")
+			defer func() {
+				if oldOpenAI != "" {
+					os.Setenv("OPENAI_API_KEY", oldOpenAI)
+				}
+				if oldAnthropic != "" {
+					os.Setenv("ANTHROPIC_API_KEY", oldAnthropic)
+				}
+			}()
 
 			// Execute
 			provider, err := builder.Build(ctx, tt.cfg)

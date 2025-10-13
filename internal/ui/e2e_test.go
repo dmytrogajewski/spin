@@ -23,17 +23,10 @@ func TestE2E_InputSubmit_PromptsRedraw(t *testing.T) {
 
 	// Create UI components
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(writer, 80, "> ")
-	printer := output.NewPrinter(writer)
-
-	// Adapter for coordinator
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
 		adapters.WithModel(model),
-		adapters.WithCoordinator(coord),
 		adapters.WithKeyboardEvents(keyboard.Events()),
 	)
 	if err != nil {
@@ -86,15 +79,10 @@ func TestE2E_StreamingChunks_PromptAtBottom(t *testing.T) {
 	fakeTTY := testkit.NewFakeTTY(80, 24)
 
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(writer, 80, "> ")
-	printer := output.NewPrinter(writer)
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
 		adapters.WithModel(model),
-		adapters.WithCoordinator(coord),
 		adapters.WithKeyboardEvents(keyboard.Events()),
 	)
 	if err != nil {
@@ -163,15 +151,10 @@ func TestE2E_ShutdownCtrlC_ExitsCleanly(t *testing.T) {
 	fakeTTY := testkit.NewFakeTTY(80, 24)
 
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(writer, 80, "> ")
-	printer := output.NewPrinter(writer)
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
 		adapters.WithModel(model),
-		adapters.WithCoordinator(coord),
 		adapters.WithKeyboardEvents(keyboard.Events()),
 	)
 	if err != nil {
@@ -209,15 +192,10 @@ func TestE2E_ShutdownContextCancel_ExitsCleanly(t *testing.T) {
 	fakeTTY := testkit.NewFakeTTY(80, 24)
 
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(writer, 80, "> ")
-	printer := output.NewPrinter(writer)
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
 		adapters.WithModel(model),
-		adapters.WithCoordinator(coord),
 		adapters.WithKeyboardEvents(keyboard.Events()),
 	)
 	if err != nil {
@@ -256,15 +234,10 @@ func TestE2E_ShutdownCtrlD_ExitsOnEOF(t *testing.T) {
 	fakeTTY := testkit.NewFakeTTY(80, 24)
 
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(writer, 80, "> ")
-	printer := output.NewPrinter(writer)
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
 		adapters.WithModel(model),
-		adapters.WithCoordinator(coord),
 		adapters.WithKeyboardEvents(keyboard.Events()),
 	)
 	if err != nil {
@@ -302,15 +275,10 @@ func TestE2E_LargePayload_StreamsWithoutHang(t *testing.T) {
 	fakeTTY := testkit.NewFakeTTY(80, 24)
 
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(writer, 80, "> ")
-	printer := output.NewPrinter(writer)
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
 		adapters.WithModel(model),
-		adapters.WithCoordinator(coord),
 		adapters.WithKeyboardEvents(keyboard.Events()),
 	)
 	if err != nil {
@@ -347,7 +315,8 @@ func TestE2E_LargePayload_StreamsWithoutHang(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	snapshot := writer.Snapshot()
-	lineCount := strings.Count(snapshot, "line\n")
+	// Printer adds \r\n for TTY compatibility
+	lineCount := strings.Count(snapshot, "line\r\n")
 	if lineCount != 10000 {
 		t.Errorf("output contains %d lines, want 10000", lineCount)
 	}
@@ -364,15 +333,10 @@ func TestE2E_ConcurrentOperations_NoRaceConditions(t *testing.T) {
 	fakeTTY := testkit.NewFakeTTY(80, 24)
 
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(writer, 80, "> ")
-	printer := output.NewPrinter(writer)
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
 		adapters.WithModel(model),
-		adapters.WithCoordinator(coord),
 		adapters.WithKeyboardEvents(keyboard.Events()),
 	)
 	if err != nil {
@@ -447,15 +411,10 @@ func TestE2E_BlockAppendAndRender(t *testing.T) {
 	fakeTTY := testkit.NewFakeTTY(80, 24)
 
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(writer, 80, "> ")
-	printer := output.NewPrinter(writer)
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
 		adapters.WithModel(model),
-		adapters.WithCoordinator(coord),
 		adapters.WithKeyboardEvents(keyboard.Events()),
 	)
 	if err != nil {
@@ -508,15 +467,10 @@ func TestE2E_TerminalResize_RedrawsWithNewWidth(t *testing.T) {
 	fakeTTY := testkit.NewFakeTTY(80, 24)
 
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(writer, 80, "> ")
-	printer := output.NewPrinter(writer)
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
 		adapters.WithModel(model),
-		adapters.WithCoordinator(coord),
 		adapters.WithKeyboardEvents(keyboard.Events()),
 	)
 	if err != nil {
@@ -579,17 +533,11 @@ func TestE2E_Debug(t *testing.T) {
 
 	t.Log("Creating components...")
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(writer, 80, "> ")
-	printer := output.NewPrinter(writer)
-
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	t.Log("Creating PureTTY...")
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
 		adapters.WithModel(model),
-		adapters.WithCoordinator(coord),
 		adapters.WithKeyboardEvents(keyboard.Events()),
 	)
 	if err != nil {
@@ -641,15 +589,10 @@ func TestE2E_DuplicateToolID_MultipleSequentialCalls(t *testing.T) {
 	fakeTTY := testkit.NewFakeTTY(80, 24)
 
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(writer, 80, "> ")
-	printer := output.NewPrinter(writer)
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
 	ui, err := adapters.NewPureTTY(writer,
 		adapters.WithTTY(fakeTTY),
 		adapters.WithModel(model),
-		adapters.WithCoordinator(coord),
 		adapters.WithKeyboardEvents(keyboard.Events()),
 	)
 	if err != nil {
