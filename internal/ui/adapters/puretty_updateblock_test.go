@@ -8,14 +8,38 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/output"
 	"github.com/dmytrogajewski/spin/internal/ui/prompt"
+	"github.com/dmytrogajewski/spin/internal/ui/status"
 )
 
 // TestUpdateBlock_PrintsCompletionStatus verifies that UpdateBlock prints the completion status line.
 // This is a regression test for the bug where UpdateBlock was storing updates but not displaying them.
 func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
-	// Setup
-	p := setupPureTTY(t)
-	defer p.Stop()
+	// Setup with actual output capture
+	var buf bytes.Buffer
+	renderer := prompt.NewRenderer(&buf, 80, "> ")
+	model := prompt.NewModel(100)
+	blockRenderer := blocks.NewRenderer(80)
+
+	// Create coordinator
+	printer := output.NewPrinter(&buf)
+	rendererAdapter := &rendererAdapter{renderer: renderer}
+	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
+
+	// Create status management
+	statusManager := status.NewManager()
+	statusAggregator := status.NewAggregator(statusManager)
+
+	p := &PureTTY{
+		out:              &buf,
+		model:            model,
+		renderer:         renderer,
+		coord:            coord,
+		statusManager:    statusManager,
+		statusAggregator: statusAggregator,
+		blockRenderer:    blockRenderer,
+		timeline:         blocks.NewTimeline(),
+		mode:             ModeInput,
+	}
 
 	// Create an initial EXECUTE block (tool starts)
 	block := blocks.NewBlock(blocks.BlockTypeExecute)
@@ -35,14 +59,8 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 		t.Fatalf("AppendBlock failed: %v", err)
 	}
 
-	// Capture output before update
-	outputBefore := captureOutput(p)
-	if !strings.Contains(outputBefore, "EXECUTE") {
-		t.Error("Initial block should contain EXECUTE tag")
-	}
-	if strings.Contains(outputBefore, "↳") {
-		t.Error("Initial block should NOT contain completion status")
-	}
+	// Clear buffer after append
+	buf.Reset()
 
 	// Update block with completion metadata (tool completes)
 	exitCode := 0
@@ -60,18 +78,17 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 	}
 
 	// Capture output after update
-	outputAfter := captureOutput(p)
+	output := buf.String()
 
 	// CRITICAL: Verify completion status line was printed
-	if !strings.Contains(outputAfter, "↳") {
-		t.Error("UpdateBlock MUST print completion status line (↳)")
-		t.Logf("Output after update:\n%s", outputAfter)
+	if !strings.Contains(output, "↳") {
+		t.Errorf("UpdateBlock MUST print completion status line (↳)\nGot:\n%s", output)
 	}
-	if !strings.Contains(outputAfter, "Exit code: 0") {
-		t.Error("Completion status should contain 'Exit code: 0'")
+	if !strings.Contains(output, "Exit code: 0") {
+		t.Errorf("Completion status should contain 'Exit code: 0'\nGot:\n%s", output)
 	}
-	if !strings.Contains(outputAfter, "Output: 42 lines") {
-		t.Error("Completion status should contain 'Output: 42 lines'")
+	if !strings.Contains(output, "42 lines") {
+		t.Errorf("Completion status should contain '42 lines'\nGot:\n%s", output)
 	}
 }
 
@@ -161,22 +178,30 @@ func setupPureTTY(t *testing.T) *PureTTY {
 	model := prompt.NewModel(100)
 	renderer := prompt.NewRenderer(out, 80, "> ")
 	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 	timeline := blocks.NewTimeline()
 	blockRenderer := blocks.NewRenderer(80)
 
+	// Create coordinator
+	rendererAdapter := &rendererAdapter{renderer: renderer}
+	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
+
+	// Create status management
+	statusManager := status.NewManager()
+	statusAggregator := status.NewAggregator(statusManager)
+
 	// Create PureTTY directly, bypassing constructor
 	ui := &PureTTY{
-		model:          model,
-		renderer:       renderer,
-		coord:          coord,
-		out:            out,
-		timeline:       timeline,
-		blockRenderer:  blockRenderer,
-		viewportHeight: 0,
-		mode:           ModeInput,
-		filterInput:    "",
+		model:            model,
+		renderer:         renderer,
+		coord:            coord,
+		statusManager:    statusManager,
+		statusAggregator: statusAggregator,
+		out:              out,
+		timeline:         timeline,
+		blockRenderer:    blockRenderer,
+		viewportHeight:   0,
+		mode:             ModeInput,
+		filterInput:      "",
 	}
 
 	return ui

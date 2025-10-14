@@ -31,6 +31,7 @@ This directory contains documentation for Spin's internal packages.
 
 | Package | Description | Coverage |
 |---------|-------------|----------|
+| [ui-status](ui-status.md) | Persistent status bar with real-time metrics | 95%+ |
 | [ui-blocks](ui-blocks.md) | Block data model and rendering system | - |
 | [ui-output](ui-output.md) | Append-only output with streaming support | - |
 | [exec](exec.md) | Non-interactive/headless execution mode | 76.7% |
@@ -60,6 +61,8 @@ This directory contains documentation for Spin's internal packages.
 ### User Interfaces
 
 **[exec](exec.md)** - Non-interactive execution mode for CI/CD and automation.
+
+**[ui-status](ui-status.md)** - Persistent status bar with real-time agent metrics, adaptive layout, and event-driven updates.
 
 **[ui-blocks](ui-blocks.md)** - Block-based timeline rendering for TUI (EXECUTE, PLAN, READ, GREP, APPLY_PATCH, SUMMARY, TESTING, NOTICE, ERROR).
 
@@ -107,7 +110,8 @@ This directory contains documentation for Spin's internal packages.
 
 ---
 
-**Last Updated:** 2025-10-12
+**Last Updated:** 2025-10-14
 **Latest Additions:**
+- ui-status - Persistent Status Bar with Real-Time Metrics (95%+ coverage) - NEW!
 - patchapply - Patch Parser for AI-Friendly File Modifications (91.1% coverage)
 - filesearch - File Scanning and Fuzzy Matching with Gitignore Support (93.6% coverage)

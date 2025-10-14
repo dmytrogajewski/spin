@@ -23,7 +23,7 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 			cursor:     0,
 			status:     "",
 			width:      80,
-			want:       "\r\x1b[2K> \x1b[3G",
+			want:       "\x1b[24;1H\x1b[2K> \x1b[3G", // Changed: absolute positioning
 		},
 		{
 			name:       "simple text cursor at start",
@@ -32,7 +32,7 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 			cursor:     0,
 			status:     "",
 			width:      80,
-			want:       "\r\x1b[2K> hello\x1b[3G",
+			want:       "\x1b[24;1H\x1b[2K> hello\x1b[3G", // Changed: absolute positioning
 		},
 		{
 			name:       "simple text cursor in middle",
@@ -41,7 +41,7 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 			cursor:     2,
 			status:     "",
 			width:      80,
-			want:       "\r\x1b[2K> hello\x1b[5G",
+			want:       "\x1b[24;1H\x1b[2K> hello\x1b[5G", // Changed: absolute positioning
 		},
 		{
 			name:       "simple text cursor at end",
@@ -50,7 +50,7 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 			cursor:     5,
 			status:     "",
 			width:      80,
-			want:       "\r\x1b[2K> hello\x1b[8G",
+			want:       "\x1b[24;1H\x1b[2K> hello\x1b[8G", // Changed: absolute positioning
 		},
 		{
 			name:       "right-aligned status with space",
@@ -59,8 +59,8 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 			cursor:     4,
 			status:     "typing",
 			width:      80,
-			// "> test" = 7 cells, "typing" = 6 cells, padding = 80 - (2+4) - 6 = 68
-			want: "\r\x1b[2K> test" + repeatSpace(68) + "typing\x1b[7G",
+			// Changed: absolute positioning + "> test" + padding + "typing"
+			want: "\x1b[24;1H\x1b[2K> test" + repeatSpace(68) + "typing\x1b[7G",
 		},
 		{
 			name:       "status omitted when no space",
@@ -82,7 +82,7 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 			width:      80,
 			// "Hi 👋" = "H"(1) + "i"(1) + " "(1) + "👋"(2) = 5 cells
 			// cursor at 3 = "Hi " = 3 cells, so column = 2 (prefix) + 3 = 5
-			want: "\r\x1b[2K> Hi 👋\x1b[6G",
+			want: "\x1b[24;1H\x1b[2K> Hi 👋\x1b[6G", // Changed: absolute positioning
 		},
 		{
 			name:       "wide character CJK",
@@ -93,7 +93,7 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 			width:      80,
 			// "你"(2) + "好"(2) = 4 cells
 			// cursor at 1 = "你" = 2 cells, column = 2 + 2 = 4
-			want: "\r\x1b[2K> 你好\x1b[5G",
+			want: "\x1b[24;1H\x1b[2K> 你好\x1b[5G", // Changed: absolute positioning
 		},
 		{
 			name:       "combining mark",
@@ -104,7 +104,7 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 			width:      80,
 			// "e\u0301" = 1 cell (combining mark is zero-width)
 			// cursor at 1 = "e\u0301" = 1 cell, column = 2 + 1 = 3
-			want: "\r\x1b[2K> e\u0301\x1b[4G",
+			want: "\x1b[24;1H\x1b[2K> e\u0301\x1b[4G", // Changed: absolute positioning
 		},
 		{
 			name:       "very narrow terminal",
@@ -150,19 +150,19 @@ func TestRenderer_Redraw_CursorPositioning(t *testing.T) {
 		cursor     int
 		wantCol    int // expected cursor column (1-indexed)
 	}{
-		{"empty", "", 0, 3},                   // "> " = 2 chars, col 3
-		{"ascii start", "hello", 0, 3},        // cursor before 'h'
-		{"ascii mid", "hello", 2, 5},          // cursor before 'l' (2nd)
-		{"ascii end", "hello", 5, 8},          // cursor after 'o'
-		{"emoji start", "👋 hi", 0, 3},        // cursor before emoji
-		{"emoji after", "👋 hi", 1, 5},        // cursor after emoji (2 cells)
-		{"emoji end", "👋 hi", 4, 8},          // cursor at end: 👋(2) + " "(1) + "hi"(2) = 5, prefix(2) + 5 + 1 = 8
-		{"CJK start", "你好", 0, 3},            // cursor before first char
-		{"CJK mid", "你好", 1, 5},              // cursor after 你 (2 cells)
-		{"CJK end", "你好", 2, 7},              // cursor at end
-		{"combining", "e\u0301", 1, 4},        // cursor after "é" (1 cell)
-		{"mixed", "Hi👋世界", 2, 5},             // cursor after "Hi" (2 cells)
-		{"mixed mid", "Hi👋世界", 3, 7},         // cursor after "Hi👋" (2+2=4 cells)
+		{"empty", "", 0, 3},            // "> " = 2 chars, col 3
+		{"ascii start", "hello", 0, 3}, // cursor before 'h'
+		{"ascii mid", "hello", 2, 5},   // cursor before 'l' (2nd)
+		{"ascii end", "hello", 5, 8},   // cursor after 'o'
+		{"emoji start", "👋 hi", 0, 3},  // cursor before emoji
+		{"emoji after", "👋 hi", 1, 5},  // cursor after emoji (2 cells)
+		{"emoji end", "👋 hi", 4, 8},    // cursor at end: 👋(2) + " "(1) + "hi"(2) = 5, prefix(2) + 5 + 1 = 8
+		{"CJK start", "你好", 0, 3},      // cursor before first char
+		{"CJK mid", "你好", 1, 5},        // cursor after 你 (2 cells)
+		{"CJK end", "你好", 2, 7},        // cursor at end
+		{"combining", "e\u0301", 1, 4}, // cursor after "é" (1 cell)
+		{"mixed", "Hi👋世界", 2, 5},       // cursor after "Hi" (2 cells)
+		{"mixed mid", "Hi👋世界", 3, 7},   // cursor after "Hi👋" (2+2=4 cells)
 	}
 
 	for _, tt := range tests {
@@ -199,9 +199,9 @@ func TestRenderer_Redraw_StatusRendering(t *testing.T) {
 		bufferText     string
 		status         string
 		width          int
-		wantStatusFull bool   // true if full status should appear
-		wantEllipsis   bool   // true if status truncated with ellipsis
-		wantOmitted    bool   // true if status omitted
+		wantStatusFull bool // true if full status should appear
+		wantEllipsis   bool // true if status truncated with ellipsis
+		wantOmitted    bool // true if status omitted
 	}{
 		{
 			name:           "status fits with padding",
@@ -268,42 +268,42 @@ func TestRenderer_Redraw_StatusRendering(t *testing.T) {
 // TestRenderer_Redraw_HorizontalScrolling tests scrolling for long lines.
 func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
 	tests := []struct {
-		name          string
-		bufferText    string
-		cursor        int
-		width         int
+		name              string
+		bufferText        string
+		cursor            int
+		width             int
 		wantLeftEllipsis  bool
 		wantRightEllipsis bool
 	}{
 		{
-			name:       "no scroll short line",
-			bufferText: "hello",
-			cursor:     2,
-			width:      80,
+			name:              "no scroll short line",
+			bufferText:        "hello",
+			cursor:            2,
+			width:             80,
 			wantLeftEllipsis:  false,
 			wantRightEllipsis: false,
 		},
 		{
-			name:       "scroll long line cursor at start",
-			bufferText: "this is a very long line that exceeds terminal width by a lot",
-			cursor:     0,
-			width:      20,
+			name:              "scroll long line cursor at start",
+			bufferText:        "this is a very long line that exceeds terminal width by a lot",
+			cursor:            0,
+			width:             20,
 			wantLeftEllipsis:  false, // cursor at start, no left scroll
 			wantRightEllipsis: true,  // content continues right
 		},
 		{
-			name:       "scroll long line cursor in middle",
-			bufferText: "this is a very long line that exceeds terminal width by a lot",
-			cursor:     30,
-			width:      20,
-			wantLeftEllipsis:  true,  // scrolled past start
-			wantRightEllipsis: true,  // content continues right
+			name:              "scroll long line cursor in middle",
+			bufferText:        "this is a very long line that exceeds terminal width by a lot",
+			cursor:            30,
+			width:             20,
+			wantLeftEllipsis:  true, // scrolled past start
+			wantRightEllipsis: true, // content continues right
 		},
 		{
-			name:       "scroll long line cursor at end",
-			bufferText: "this is a very long line that exceeds terminal width by a lot",
-			cursor:     61,
-			width:      20,
+			name:              "scroll long line cursor at end",
+			bufferText:        "this is a very long line that exceeds terminal width by a lot",
+			cursor:            61,
+			width:             20,
 			wantLeftEllipsis:  true,  // scrolled past start
 			wantRightEllipsis: false, // at end
 		},

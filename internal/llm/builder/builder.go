@@ -170,6 +170,32 @@ func (b *Builder) mergeConfig(explicit Config) Config {
 		}
 	}
 
+	// Provider options from config file
+	if merged.Options == nil {
+		merged.Options = make(map[string]interface{})
+	}
+	// Merge llm.options map if present
+	if raw := b.configLoader.Get("llm.options"); raw != nil {
+		if m, ok := raw.(map[string]interface{}); ok {
+			for k, v := range m {
+				if _, exists := merged.Options[k]; !exists {
+					merged.Options[k] = v
+				}
+			}
+		}
+	}
+	// Convenience keys with defaults: auto_tune=true, headroom=1024
+	if b.configLoader.IsSet("llm.auto_tune") {
+		merged.Options["auto_tune"] = b.configLoader.GetBool("llm.auto_tune")
+	} else if _, exists := merged.Options["auto_tune"]; !exists {
+		merged.Options["auto_tune"] = true
+	}
+	if b.configLoader.IsSet("llm.vram.headroom_mib") {
+		merged.Options["vram_headroom_mib"] = b.configLoader.GetInt("llm.vram.headroom_mib")
+	} else if _, exists := merged.Options["vram_headroom_mib"]; !exists {
+		merged.Options["vram_headroom_mib"] = 1024
+	}
+
 	// Timeout default
 	if merged.Timeout == 0 {
 		merged.Timeout = 30 * time.Second

@@ -9,6 +9,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/output"
 	"github.com/dmytrogajewski/spin/internal/ui/prompt"
+	"github.com/dmytrogajewski/spin/internal/ui/status"
 	"github.com/dmytrogajewski/spin/internal/ui/term"
 	"github.com/dmytrogajewski/spin/internal/ui/testkit"
 )
@@ -21,22 +22,32 @@ func newTestPureTTY(t *testing.T, w, h int) (*PureTTY, *bytes.Buffer) {
 	model := prompt.NewModel(100)
 	renderer := prompt.NewRenderer(out, w, "> ")
 	printer := output.NewPrinter(out)
-	rendererAdapter := &testRendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 	timeline := blocks.NewTimeline()
 	blockRenderer := blocks.NewRenderer(w)
 
+	// Create renderer adapter
+	rendererAdapter := &rendererAdapter{renderer: renderer}
+
+	// Create coordinator
+	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
+
+	// Create status management components
+	statusManager := status.NewManager()
+	statusAggregator := status.NewAggregator(statusManager)
+
 	// Create PureTTY directly, bypassing constructor
 	ui := &PureTTY{
-		model:          model,
-		renderer:       renderer,
-		coord:          coord,
-		out:            out,
-		timeline:       timeline,
-		blockRenderer:  blockRenderer,
-		viewportHeight: 0,
-		mode:           ModeInput,
-		filterInput:    "",
+		model:            model,
+		renderer:         renderer,
+		coord:            coord,
+		statusManager:    statusManager,
+		statusAggregator: statusAggregator,
+		out:              out,
+		timeline:         timeline,
+		blockRenderer:    blockRenderer,
+		viewportHeight:   0,
+		mode:             ModeInput,
+		filterInput:      "",
 	}
 
 	// For tests that need TTY (like calculateViewport), we'll mock it via test setup
@@ -48,9 +59,9 @@ func newTestPureTTY(t *testing.T, w, h int) (*PureTTY, *bytes.Buffer) {
 // TestCalculateViewport tests viewport height calculation logic
 func TestCalculateViewport(t *testing.T) {
 	tests := []struct {
-		name           string
-		termHeight     int
-		wantViewport   int
+		name         string
+		termHeight   int
+		wantViewport int
 	}{
 		{
 			name:         "standard terminal 24 rows",
@@ -98,9 +109,9 @@ func TestCalculateViewport(t *testing.T) {
 // TestParseFilter tests filter string parsing
 func TestParseFilter(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  string
-		want   *blocks.Filter
+		name  string
+		input string
+		want  *blocks.Filter
 	}{
 		{
 			name:  "type filter",

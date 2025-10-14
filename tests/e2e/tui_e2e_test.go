@@ -1,4 +1,4 @@
-package tests
+package e2e
 
 import (
 	"os"
@@ -13,10 +13,10 @@ import (
 
 // getBinPath returns absolute path to spin binary
 func getBinPath(t *testing.T) string {
-	// Get workspace root (go up from tests/ to root)
+	// Get workspace root (go up from tests/e2e/ to root)
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	root := filepath.Dir(wd) // tests/ -> root
+	root := filepath.Dir(filepath.Dir(wd)) // tests/e2e/ -> tests/ -> root
 	return filepath.Join(root, "bin", "spin")
 }
 

@@ -13,6 +13,7 @@ import (
 type Renderer struct {
 	out    io.Writer // output destination
 	width  int       // terminal width in cells
+	height int       // terminal height in lines (for positioning at bottom)
 	prefix string    // prompt prefix (e.g., "> ")
 }
 
@@ -22,6 +23,7 @@ func NewRenderer(out io.Writer, width int, prefix string) *Renderer {
 	return &Renderer{
 		out:    out,
 		width:  width,
+		height: 24, // default height
 		prefix: prefix,
 	}
 }
@@ -96,8 +98,15 @@ func (r *Renderer) Redraw(model *Model, status string) error {
 	// Build output
 	var out strings.Builder
 
-	// Clear line and return to start
-	out.WriteString("\r\x1b[2K") // \r + ClearLine
+	// Position cursor at the prompt line (last line of terminal)
+	if r.height > 0 {
+		out.WriteString(fmt.Sprintf("\x1b[%d;1H", r.height))
+	} else {
+		out.WriteString("\r") // fallback to carriage return
+	}
+
+	// Clear the prompt line
+	out.WriteString("\x1b[2K")
 
 	// Write prefix
 	out.WriteString(r.prefix)
@@ -136,6 +145,17 @@ func (r *Renderer) Redraw(model *Model, status string) error {
 // SetWidth updates the terminal width (call on SIGWINCH).
 func (r *Renderer) SetWidth(width int) {
 	r.width = width
+}
+
+// SetHeight updates the terminal height (call on SIGWINCH).
+func (r *Renderer) SetHeight(height int) {
+	r.height = height
+}
+
+// SetSize updates both terminal dimensions (call on SIGWINCH).
+func (r *Renderer) SetSize(width, height int) {
+	r.width = width
+	r.height = height
 }
 
 // SetPrefix updates the prompt prefix.

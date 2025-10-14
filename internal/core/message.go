@@ -46,3 +46,18 @@ type Message struct {
 	// Metadata stores additional extensible data
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
+
+// GetRole returns the message role (implements cycle.Message interface)
+func (m Message) GetRole() string {
+	return string(m.Role)
+}
+
+// GetContent returns the message content (implements cycle.Message interface)
+func (m Message) GetContent() string {
+	return m.Content
+}
+
+// GetTimestamp returns the message timestamp (implements cycle.Message interface)
+func (m Message) GetTimestamp() time.Time {
+	return m.Timestamp
+}

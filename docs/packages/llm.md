@@ -78,6 +78,27 @@ provider, err := ollama.NewProvider(ollama.Config{
 })
 ```
 
+#### VRAM Auto-Tuning (Ollama)
+
+Spin can auto-tune local model settings based on available VRAM. When enabled, it detects VRAM and selects best-fit context length (num_ctx) and GPU layers to avoid OOM while preserving quality.
+
+Configuration (YAML):
+
+```yaml
+llm:
+  provider: ollama
+  model: llama3.1
+  # auto_tune defaults to true; set false to disable
+  auto_tune: true
+  vram:
+    # headroom_mib defaults to 1024 if omitted
+    headroom_mib: 1024  # reserve 1GiB for system
+```
+
+Notes:
+- Quantization choice is inferred from model tag (e.g., q4_0); auto-tune primarily sets num_ctx and GPU layers.
+- Auto-tune is best-effort and will not block if VRAM detection is unavailable.
+
 ### 3. LMStudio Provider
 
 Local models via LMStudio's OpenAI-compatible API.

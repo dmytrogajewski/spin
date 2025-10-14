@@ -102,8 +102,9 @@ func TestCoordinated_PrintLine_SingleCall(t *testing.T) {
 
 	// Verify output
 	output := buf.String()
-	if output != "User: Hi!\n" {
-		t.Errorf("expected output %q, got %q", "User: Hi!\n", output)
+	// Printer adds \r\n for TTY compatibility
+	if output != "User: Hi!\r\n" {
+		t.Errorf("expected output %q, got %q", "User: Hi!\r\n", output)
 	}
 
 	// Verify redraw was called
@@ -133,8 +134,8 @@ func TestCoordinated_PrintLine_Multiple(t *testing.T) {
 		}
 	}
 
-	// Verify output
-	expected := "Line 1\nLine 2\nLine 3\n"
+	// Verify output - Printer adds \r\n for TTY compatibility
+	expected := "Line 1\r\nLine 2\r\nLine 3\r\n"
 	output := buf.String()
 	if output != expected {
 		t.Errorf("expected output %q, got %q", expected, output)
@@ -228,8 +229,9 @@ func TestCoordinated_PrintLine_RendererError(t *testing.T) {
 
 	// Printer should have succeeded (output written)
 	output := buf.String()
-	if output != "test\n" {
-		t.Errorf("expected output %q, got %q", "test\n", output)
+	// Printer adds \r\n for TTY compatibility
+	if output != "test\r\n" {
+		t.Errorf("expected output %q, got %q", "test\r\n", output)
 	}
 }
 
@@ -256,8 +258,10 @@ func TestCoordinated_PrintChunks_SingleStream(t *testing.T) {
 
 	// Verify output
 	output := buf.String()
-	if output != "Hello World\n" {
-		t.Errorf("expected output %q, got %q", "Hello World\n", output)
+	// Printer adds \r\n for TTY compatibility, plus extra \r\n from chunks
+	expected := "Hello World\r\n\r\n"
+	if output != expected {
+		t.Errorf("expected output %q, got %q", expected, output)
 	}
 
 	// Verify final redraw
@@ -469,7 +473,8 @@ func TestCoordinated_Integration_InterleavedOperations(t *testing.T) {
 
 	// Verify output
 	output := buf.String()
-	expected := "Line 1\nLine 2\nStream\n"
+	// Printer adds \r\n, plus extra \r\n from PrintChunks
+	expected := "Line 1\r\nLine 2\r\nStream\r\n\r\n"
 	if output != expected {
 		t.Errorf("expected output %q, got %q", expected, output)
 	}

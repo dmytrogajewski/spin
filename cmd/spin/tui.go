@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/core"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/tools"
@@ -75,8 +76,8 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	maxTurns, _ := cmd.Flags().GetInt("max-turns")
 	requireApproval, _ := cmd.Flags().GetBool("require-approval")
 
-	// Create core manager
-	mgr, err := createManagerForTUI(provider, maxTurns, requireApproval)
+	// Create core manager with config loader
+	mgr, err := createManagerForTUI(provider, maxTurns, requireApproval, configLoader)
 	if err != nil {
 		return fmt.Errorf("create manager: %w", err)
 	}
@@ -112,6 +113,28 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
+
+	// Initialize status bar with conversation metadata
+	// Get task mode from conversation
+	taskMode := conv.GetTaskMode()
+	ui.SetTaskMode(taskMode)
+
+	// Get max tokens from the conversation's current task
+	maxTokens := int64(conv.GetMaxTokens())
+	ui.SetMaxTokens(maxTokens)
+
+	// Set provider info
+	providerName := provider.Name()
+	modelName := flagModel // Use the model flag directly
+	ui.SetProviderInfo(providerName, modelName)
+
+	// Get session ID from conversation
+	sessionID := conv.GetSessionID()
+	ui.SetConversationID(sessionID)
+
+	// Set initial token count
+	tokenCount := int64(conv.GetTokenCount())
+	ui.SetTokenCount(tokenCount)
 
 	// Create event mapper
 	mapper := core.NewTUIMapper(ui)
@@ -173,6 +196,13 @@ func runTUI(cmd *cobra.Command, args []string) error {
 				}
 				if err := mapper.MapEvent(event); err != nil {
 					ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", err))
+				}
+
+				// Update token count from conversation history after each event
+				// This ensures the status bar always shows current cumulative total
+				if event.Type == core.EventTurnComplete || event.Type == core.EventContentComplete {
+					tokenCount := int64(conv.GetTokenCount())
+					ui.SetTokenCount(tokenCount)
 				}
 			}
 		}
@@ -244,7 +274,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 }
 
 // createManagerForTUI creates a core.Manager configured for TUI mode.
-func createManagerForTUI(provider llm.Provider, maxTurns int, requireApproval bool) (*core.Manager, error) {
+func createManagerForTUI(provider llm.Provider, maxTurns int, requireApproval bool, configLoader *config.Loader) (*core.Manager, error) {
 	// Get current working directory
 	workDir, err := os.Getwd()
 	if err != nil {
@@ -256,12 +286,40 @@ func createManagerForTUI(provider llm.Provider, maxTurns int, requireApproval bo
 		workDir = flagWorkDir
 	}
 
-	// Create core configuration with defaults
+	// Start with default config
 	cfg := core.DefaultConfig()
-	cfg.MaxTurns = maxTurns
+
+	// Layer 1: Load from config file
+	var fileCfg core.Config
+	if err := configLoader.Unmarshal(&fileCfg); err == nil {
+		if fileCfg.Provider != "" {
+			cfg.Provider = fileCfg.Provider
+		}
+		if fileCfg.Model != "" {
+			cfg.Model = fileCfg.Model
+		}
+		if fileCfg.MaxTurns > 0 {
+			cfg.MaxTurns = fileCfg.MaxTurns
+		}
+		if fileCfg.Timeout > 0 {
+			cfg.Timeout = fileCfg.Timeout
+		}
+		if fileCfg.MaxTokens > 0 {
+			cfg.MaxTokens = fileCfg.MaxTokens
+		}
+	}
+
+	// Layer 2: Override with CLI flags (if provided)
+	if maxTurns > 0 {
+		cfg.MaxTurns = maxTurns
+	}
 	cfg.WorkDir = workDir
-	cfg.Provider = flagProvider
-	cfg.Model = flagModel
+	if flagProvider != "" {
+		cfg.Provider = flagProvider
+	}
+	if flagModel != "" {
+		cfg.Model = flagModel
+	}
 
 	// Create tool registry with simple tools (no dependencies)
 	registry := tools.NewRegistry()

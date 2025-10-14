@@ -56,7 +56,7 @@ func TestPrintLine_SingleLine(t *testing.T) {
 	}
 
 	got := w.String()
-	want := "Hello, world!\n"
+	want := "Hello, world!\r\n" // Printer adds \r\n for TTY compatibility
 	if got != want {
 		t.Errorf("PrintLine output mismatch:\ngot:  %q\nwant: %q", got, want)
 	}
@@ -73,7 +73,7 @@ func TestPrintLine_EmptyString(t *testing.T) {
 	}
 
 	got := w.String()
-	want := "\n"
+	want := "\r\n" // Printer adds \r\n for TTY compatibility
 	if got != want {
 		t.Errorf("PrintLine output mismatch:\ngot:  %q\nwant: %q", got, want)
 	}
@@ -92,7 +92,7 @@ func TestPrintLine_MultipleLines(t *testing.T) {
 	}
 
 	got := w.String()
-	want := "Line 1\nLine 2\nLine 3\n"
+	want := "Line 1\r\nLine 2\r\nLine 3\r\n" // Printer adds \r\n for TTY compatibility
 	if got != want {
 		t.Errorf("PrintLine output mismatch:\ngot:  %q\nwant: %q", got, want)
 	}
@@ -610,7 +610,8 @@ func TestPrintChunks_TimerDrainRace(t *testing.T) {
 	// Verify all lines are present
 	got := w.String()
 	for i := 0; i < 10; i++ {
-		expected := fmt.Sprintf("Line %d\n", i)
+		// Printer adds \r\n for TTY compatibility
+		expected := fmt.Sprintf("Line %d\r\n", i)
 		if !strings.Contains(got, expected) {
 			t.Errorf("Missing line: %q", expected)
 		}

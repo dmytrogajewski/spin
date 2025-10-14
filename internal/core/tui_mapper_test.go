@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -247,6 +248,253 @@ func TestMapEvent_ToolCallStart_WriteFile(t *testing.T) {
 	block := ui.Blocks[0]
 	assert.Equal(t, blocks.BlockTypeApplyPatch, block.Type)
 	assert.Equal(t, "config.yaml", block.Title)
+}
+
+// Integration: WRITE block should NOT show status before completion
+func TestWriteBlock_NoStatusBeforeCompletion_Render(t *testing.T) {
+	ui := NewFakeUI()
+	mapper := NewTUIMapper(ui)
+	defer mapper.Close()
+
+	// Start write_file
+	params := makeParams(map[string]interface{}{
+		"path":    "file.txt",
+		"content": "hello",
+	})
+	start := Event{Type: EventToolCallStart, Data: ToolCallStartData{ToolName: "write_file", ToolID: "w1", Parameters: params.Parameters}}
+	require.NoError(t, mapper.MapEvent(start))
+
+	// One block appended
+	require.Len(t, ui.Blocks, 1)
+	b := ui.Blocks[0]
+	require.Equal(t, blocks.BlockTypeApplyPatch, b.Type)
+
+	// Render and assert no status/footer yet
+	r := blocks.NewRenderer(80)
+	out, err := r.Render(b)
+	require.NoError(t, err)
+	if strings.Contains(out, "Failed to write file.") || strings.Contains(out, "File written successfully.") || strings.Contains(out, "● Failed") || strings.Contains(out, "✓ Succeeded") {
+		t.Fatalf("WRITE block rendered premature status before completion. Output:\n%s", out)
+	}
+}
+
+// Integration: After completion success, WRITE block shows success and not failed
+func TestWriteBlock_AfterCompletionSuccess_Render(t *testing.T) {
+	ui := NewFakeUI()
+	mapper := NewTUIMapper(ui)
+	defer mapper.Close()
+
+	// Start
+	params := makeParams(map[string]interface{}{"path": "ok.txt", "content": "x"})
+	require.NoError(t, mapper.MapEvent(Event{Type: EventToolCallStart, Data: ToolCallStartData{ToolName: "write_file", ToolID: "w2", Parameters: params.Parameters}}))
+
+	// Complete success
+	require.NoError(t, mapper.MapEvent(Event{Type: EventToolCallComplete, Data: ToolCallCompleteData{ToolID: "w2", ToolName: "write_file", Success: true, Output: "done"}}))
+
+	b := ui.BlocksByID["w2"]
+	require.NotNil(t, b)
+
+	r := blocks.NewRenderer(80)
+	out, err := r.Render(b)
+	require.NoError(t, err)
+	assert.Contains(t, out, "File written successfully.")
+	assert.Contains(t, out, "✓ Succeeded")
+	assert.NotContains(t, out, "● Failed")
+}
+
+// Integration: After completion failure, WRITE block shows failure
+func TestWriteBlock_AfterCompletionFailure_Render(t *testing.T) {
+	ui := NewFakeUI()
+	mapper := NewTUIMapper(ui)
+	defer mapper.Close()
+
+	// Start
+	params := makeParams(map[string]interface{}{"path": "fail.txt", "content": "x"})
+	require.NoError(t, mapper.MapEvent(Event{Type: EventToolCallStart, Data: ToolCallStartData{ToolName: "write_file", ToolID: "w3", Parameters: params.Parameters}}))
+
+	// Complete failure
+	require.NoError(t, mapper.MapEvent(Event{Type: EventToolCallComplete, Data: ToolCallCompleteData{ToolID: "w3", ToolName: "write_file", Success: false, Error: "disk full"}}))
+
+	b := ui.BlocksByID["w3"]
+	require.NotNil(t, b)
+
+	r := blocks.NewRenderer(80)
+	out, err := r.Render(b)
+	require.NoError(t, err)
+	assert.Contains(t, out, "Failed to write file.")
+	assert.Contains(t, out, "● Failed")
+}
+
+// TestMapEvent_DuplicateWriteBlocks_Complete verifies both WRITE blocks reflect success
+func TestMapEvent_DuplicateWriteBlocks_Complete(t *testing.T) {
+	ui := NewFakeUI()
+	mapper := NewTUIMapper(ui)
+	defer mapper.Close()
+
+	// Start first write_file
+	start1 := Event{
+		Type: EventToolCallStart,
+		Data: ToolCallStartData{
+			ToolName:   "write_file",
+			ToolID:     "write-dup",
+			Parameters: makeParams(map[string]interface{}{"path": "a.txt", "content": "hello"}).Parameters,
+		},
+	}
+	require.NoError(t, mapper.MapEvent(start1))
+
+	// Start second write_file with same ToolID (duplicate) to same path
+	start2 := Event{
+		Type: EventToolCallStart,
+		Data: ToolCallStartData{
+			ToolName:   "write_file",
+			ToolID:     "write-dup",
+			Parameters: makeParams(map[string]interface{}{"path": "a.txt", "content": "world"}).Parameters,
+		},
+	}
+	require.NoError(t, mapper.MapEvent(start2))
+
+	// Coalescing by path means only one block exists, updated in place
+	require.Len(t, ui.Blocks, 1)
+	assert.Equal(t, "write-dup", ui.Blocks[0].ID)
+	assert.Equal(t, blocks.BlockTypeApplyPatch, ui.Blocks[0].Type)
+
+	// Complete tool call successfully
+	complete := Event{
+		Type: EventToolCallComplete,
+		Data: ToolCallCompleteData{
+			ToolID:   "write-dup",
+			ToolName: "write_file",
+			Success:  true,
+			Output:   "Successfully wrote bytes",
+		},
+	}
+	require.NoError(t, mapper.MapEvent(complete))
+
+	// Block should show success and have body set
+	b0 := ui.BlocksByID["write-dup"]
+	require.NotNil(t, b0)
+
+	assert.Equal(t, blocks.SeverityInfo, b0.Severity)
+	meta0, err := blocks.ParsePatchMeta(b0)
+	require.NoError(t, err)
+	assert.True(t, meta0.Succeeded)
+}
+
+// TestMapEvent_ToolCallStart_ApplyPatch verifies APPLY_PATCH block for apply_patch tool
+func TestMapEvent_ToolCallStart_ApplyPatch(t *testing.T) {
+	ui := NewFakeUI()
+	mapper := NewTUIMapper(ui)
+	defer mapper.Close()
+
+	patch := "*** Begin Patch\n*** End Patch\n"
+	params := makeParams(map[string]interface{}{
+		"patch_text":     patch,
+		"workspace_root": ".",
+	})
+
+	event := Event{
+		Type: EventToolCallStart,
+		Data: ToolCallStartData{
+			ToolName:   "apply_patch",
+			ToolID:     "patch-1",
+			Parameters: params.Parameters,
+		},
+	}
+
+	err := mapper.MapEvent(event)
+	require.NoError(t, err)
+
+	require.Len(t, ui.Blocks, 1)
+	block := ui.Blocks[0]
+	assert.Equal(t, blocks.BlockTypeApplyPatch, block.Type)
+	assert.Equal(t, ".", block.Title)
+	assert.Contains(t, block.Body, "*** Begin Patch")
+}
+
+// TestMapEvent_ToolCallComplete_ApplyPatch verifies completion metadata update
+func TestMapEvent_ToolCallComplete_ApplyPatch(t *testing.T) {
+	ui := NewFakeUI()
+	mapper := NewTUIMapper(ui)
+	defer mapper.Close()
+
+	// Start
+	start := Event{
+		Type: EventToolCallStart,
+		Data: ToolCallStartData{
+			ToolName:   "apply_patch",
+			ToolID:     "patch-2",
+			Parameters: makeParams(map[string]interface{}{"patch_text": "x", "workspace_root": "."}).Parameters,
+		},
+	}
+	require.NoError(t, mapper.MapEvent(start))
+
+	// Complete (success)
+	complete := Event{
+		Type: EventToolCallComplete,
+		Data: ToolCallCompleteData{
+			ToolID:   "patch-2",
+			ToolName: "apply_patch",
+			Success:  true,
+			Output:   "Patch applied successfully.",
+		},
+	}
+	require.NoError(t, mapper.MapEvent(complete))
+
+	block := ui.BlocksByID["patch-2"]
+	require.NotNil(t, block)
+	meta, err := blocks.ParsePatchMeta(block)
+	require.NoError(t, err)
+	assert.True(t, meta.Succeeded)
+}
+
+// TestMapEvent_ToolCallStart_FileSearch verifies GREP block for file_search tool
+func TestMapEvent_ToolCallStart_FileSearch(t *testing.T) {
+	ui := NewFakeUI()
+	mapper := NewTUIMapper(ui)
+	defer mapper.Close()
+
+	params := makeParams(map[string]interface{}{"query": "main.go"})
+	event := Event{
+		Type: EventToolCallStart,
+		Data: ToolCallStartData{
+			ToolName:   "file_search",
+			ToolID:     "search-1",
+			Parameters: params.Parameters,
+		},
+	}
+
+	err := mapper.MapEvent(event)
+	require.NoError(t, err)
+
+	require.Len(t, ui.Blocks, 1)
+	block := ui.Blocks[0]
+	assert.Equal(t, blocks.BlockTypeGrep, block.Type)
+	meta, err := blocks.ParseGrepMeta(block)
+	require.NoError(t, err)
+	assert.Equal(t, "main.go", meta.Pattern)
+	assert.Equal(t, "files_with_matches", meta.Mode)
+}
+
+// TestMapEvent_ToolCallStart_GitAndContext verifies NOTICE blocks
+func TestMapEvent_ToolCallStart_GitAndContext(t *testing.T) {
+	ui := NewFakeUI()
+	mapper := NewTUIMapper(ui)
+	defer mapper.Close()
+
+	// git_context
+	_ = mapper.MapEvent(Event{
+		Type: EventToolCallStart,
+		Data: ToolCallStartData{ToolName: "git_context", ToolID: "git-1", Parameters: makeParams(map[string]interface{}{}).Parameters},
+	})
+	// get_context
+	_ = mapper.MapEvent(Event{
+		Type: EventToolCallStart,
+		Data: ToolCallStartData{ToolName: "get_context", ToolID: "ctx-1", Parameters: makeParams(map[string]interface{}{}).Parameters},
+	})
+
+	require.Len(t, ui.Blocks, 2)
+	assert.Equal(t, blocks.BlockTypeNotice, ui.Blocks[0].Type)
+	assert.Equal(t, blocks.BlockTypeNotice, ui.Blocks[1].Type)
 }
 
 // TestMapEvent_ContentDelta verifies streaming
@@ -494,4 +742,24 @@ func TestMapEvent_DuplicateToolID(t *testing.T) {
 
 	// New block should have different content
 	assert.Equal(t, "different.txt", ui.Blocks[1].Title)
+
+	// Complete event should update both blocks now
+	complete := Event{
+		Type: EventToolCallComplete,
+		Data: ToolCallCompleteData{
+			ToolID:   "duplicate-tool-id",
+			ToolName: "read_file",
+			Success:  true,
+			Output:   "file content",
+		},
+	}
+	require.NoError(t, mapper.MapEvent(complete))
+
+	// Both blocks registered under the same ToolID should be updated
+	b0 := ui.BlocksByID["duplicate-tool-id"]
+	b1 := ui.BlocksByID["duplicate-tool-id-1"]
+	require.NotNil(t, b0)
+	require.NotNil(t, b1)
+	assert.Equal(t, "file content", b0.Body)
+	assert.Equal(t, "file content", b1.Body)
 }

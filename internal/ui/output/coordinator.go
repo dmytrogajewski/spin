@@ -19,6 +19,13 @@ type PromptRenderer interface {
 	Redraw(model PromptModel, status string) error
 }
 
+// ScrollRegionManager is an optional interface for managing scrolling regions.
+// If the status renderer implements this, it will be used to move the cursor
+// back to the scrolling region after rendering the prompt.
+type ScrollRegionManager interface {
+	MoveToScrollRegion() error
+}
+
 // CoordinatedWriter wraps a Printer and PromptRenderer to ensure
 // atomic write-then-redraw operations. All output writes are followed
 // by automatic prompt redraws to keep the prompt at the bottom without
@@ -27,11 +34,12 @@ type PromptRenderer interface {
 // CoordinatedWriter is thread-safe and can be used concurrently from
 // multiple goroutines.
 type CoordinatedWriter struct {
-	printer  *Printer
-	renderer PromptRenderer
-	model    PromptModel
-	mu       sync.Mutex
-	status   string // Current status text (protected by mu)
+	printer       *Printer
+	renderer      PromptRenderer
+	model         PromptModel
+	scrollManager ScrollRegionManager // Optional: for scrolling region support
+	mu            sync.Mutex
+	status        string // Current status text (protected by mu)
 }
 
 // NewCoordinatedWriter creates a new coordinator that wraps a printer
@@ -57,6 +65,13 @@ func NewCoordinatedWriter(
 	}
 }
 
+// SetScrollManager sets the scroll region manager for coordinating cursor position.
+func (c *CoordinatedWriter) SetScrollManager(mgr ScrollRegionManager) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.scrollManager = mgr
+}
+
 // PrintLine writes a line and redraws the prompt atomically.
 // Thread-safe. Can be called concurrently.
 //
@@ -67,6 +82,11 @@ func (c *CoordinatedWriter) PrintLine(s string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Move to scrolling region BEFORE writing content
+	if c.scrollManager != nil {
+		_ = c.scrollManager.MoveToScrollRegion()
+	}
+
 	// Write line via printer
 	if err := c.printer.PrintLine(s); err != nil {
 		return fmt.Errorf("print line: %w", err)
@@ -75,6 +95,11 @@ func (c *CoordinatedWriter) PrintLine(s string) error {
 	// Redraw prompt
 	if err := c.renderer.Redraw(c.model, c.status); err != nil {
 		return fmt.Errorf("redraw prompt: %w", err)
+	}
+
+	// Move cursor back to scrolling region after redrawing prompt
+	if c.scrollManager != nil {
+		_ = c.scrollManager.MoveToScrollRegion()
 	}
 
 	return nil
@@ -89,6 +114,13 @@ func (c *CoordinatedWriter) PrintLine(s string) error {
 //
 // Returns context.Canceled if context is canceled, or any write/redraw error.
 func (c *CoordinatedWriter) PrintChunks(ctx context.Context, chunks <-chan string) error {
+	// Move to scrolling region BEFORE streaming content
+	c.mu.Lock()
+	if c.scrollManager != nil {
+		_ = c.scrollManager.MoveToScrollRegion()
+	}
+	c.mu.Unlock()
+
 	// Let printer handle streaming (it has internal coordination)
 	err := c.printer.PrintChunks(ctx, chunks)
 
@@ -102,6 +134,11 @@ func (c *CoordinatedWriter) PrintChunks(ctx context.Context, chunks <-chan strin
 		}
 		// If both printer and renderer failed, return printer error
 		// (redraw error is secondary)
+	}
+
+	// Move cursor back to scrolling region after redrawing prompt
+	if c.scrollManager != nil {
+		_ = c.scrollManager.MoveToScrollRegion()
 	}
 
 	return err
@@ -129,6 +166,11 @@ func (c *CoordinatedWriter) SetStatus(status string) error {
 		return fmt.Errorf("redraw prompt: %w", err)
 	}
 
+	// Move cursor back to scrolling region if manager is set
+	if c.scrollManager != nil {
+		_ = c.scrollManager.MoveToScrollRegion()
+	}
+
 	return nil
 }
 
@@ -148,6 +190,11 @@ func (c *CoordinatedWriter) RedrawPrompt() error {
 
 	if err := c.renderer.Redraw(c.model, c.status); err != nil {
 		return fmt.Errorf("redraw prompt: %w", err)
+	}
+
+	// Move cursor back to scrolling region if manager is set
+	if c.scrollManager != nil {
+		_ = c.scrollManager.MoveToScrollRegion()
 	}
 
 	return nil

@@ -218,6 +218,10 @@ func (r *Renderer) RenderFooter(b *Block) string {
 		}
 	case BlockTypeApplyPatch:
 		if meta, err := ParsePatchMeta(b); err == nil {
+			// Only show footer chips after completion
+			if !meta.Completed {
+				break
+			}
 			if meta.Succeeded {
 				prefix := string(ColorGreen) + "✓" + string(ColorReset)
 				msg := " Succeeded. File edited."
@@ -573,6 +577,11 @@ func (r *Renderer) renderReadCompletionStatus(b *Block) string {
 func (r *Renderer) renderWriteCompletionStatus(b *Block) string {
 	meta, err := ParsePatchMeta(b)
 	if err != nil || meta == nil {
+		return ""
+	}
+
+	// Only render status once the write/apply has completed
+	if !meta.Completed {
 		return ""
 	}
 

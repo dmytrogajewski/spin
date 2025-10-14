@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/core/cycle"
 	"github.com/dmytrogajewski/spin/internal/core/task"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/tools"
@@ -52,6 +53,7 @@ type Agent struct {
 	toolRegistry    *tools.Registry // Tool registry
 	taskRegistry    *task.Registry  // Task registry for execution modes
 	approvalHandler ApprovalHandler // Approval handler for user approval requests
+	cycleDetector   *cycle.Detector // Cycle detection and intervention
 }
 
 // Task defines the interface for different execution modes.
@@ -92,6 +94,24 @@ type AgentConfig struct {
 
 	// ApprovalTimeout is the maximum time to wait for approval response (default: 60s)
 	ApprovalTimeout time.Duration
+
+	// CycleDetection configures automatic cycle detection and intervention
+	CycleDetection struct {
+		// Enabled controls whether cycle detection is active (default: true)
+		Enabled bool
+
+		// WindowSize is the number of snapshots to compare for pattern detection (default: 3)
+		WindowSize int
+
+		// SimilarityThresh is the threshold for response similarity detection (default: 0.8)
+		SimilarityThresh float64
+
+		// ToolRepeatLimit is the max identical tool calls before triggering cycle (default: 3)
+		ToolRepeatLimit int
+
+		// ErrorRepeatLimit is the max identical errors before triggering cycle (default: 3)
+		ErrorRepeatLimit int
+	}
 }
 
 // ApprovalRequest represents a command approval request sent to the approval handler.
@@ -165,6 +185,11 @@ type AgentRequest struct {
 type AgentResponse struct {
 	// Content is the response content
 	Content string
+
+	// Messages contains all messages generated during turn execution.
+	// This includes assistant messages with tool calls and tool result messages.
+	// These should be added to conversation history to maintain context.
+	Messages []Message
 
 	// ToolCalls are the tools that were called
 	ToolCalls []*ToolCall
@@ -246,21 +271,44 @@ func NewAgent(
 		return nil, fmt.Errorf("failed to set default task: %w", err)
 	}
 
+	// Create cycle detection config
+	cycleConfig := cycle.Config{
+		WindowSize:       3,
+		SimilarityThresh: 0.8,
+		ToolRepeatLimit:  3,
+		ErrorRepeatLimit: 3,
+		Enabled:          true,
+	}
+
 	// Create agent with defaults
 	agent := &Agent{
-		llm:          provider,
-		executor:     executor,
-		validator:    validator,
-		context:      context,
-		emitter:      emitter,
-		toolRegistry: registry,
-		taskRegistry: taskRegistry,
+		llm:           provider,
+		executor:      executor,
+		validator:     validator,
+		context:       context,
+		emitter:       emitter,
+		toolRegistry:  registry,
+		taskRegistry:  taskRegistry,
+		cycleDetector: cycle.NewDetector(cycleConfig),
 		config: &AgentConfig{
 			MaxTurns:        DefaultMaxTurns,
 			Timeout:         DefaultAgentTimeout,
 			Temperature:     DefaultTemperature,
 			MaxTokens:       DefaultMaxTokens,
 			RequireApproval: false,
+			CycleDetection: struct {
+				Enabled          bool
+				WindowSize       int
+				SimilarityThresh float64
+				ToolRepeatLimit  int
+				ErrorRepeatLimit int
+			}{
+				Enabled:          true,
+				WindowSize:       3,
+				SimilarityThresh: 0.8,
+				ToolRepeatLimit:  3,
+				ErrorRepeatLimit: 3,
+			},
 		},
 	}
 
@@ -457,6 +505,7 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 
 	// Initialize response
 	resp := &AgentResponse{
+		Messages:    make([]Message, 0),
 		ToolCalls:   make([]*ToolCall, 0),
 		ToolResults: make([]*ToolResult, 0),
 		TurnsUsed:   0,
@@ -465,6 +514,7 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 
 	// Build initial prompt
 	messages := a.buildPrompt(req)
+	historyLen := len(messages)
 
 	// Agent loop
 	maxTurns := a.config.MaxTurns
@@ -489,7 +539,6 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 			},
 		})
 
-		// Call LLM with filtered tools for task mode
 		llmResp, err := a.callLLM(ctx, messages, task)
 		if err != nil {
 			resp.Error = fmt.Errorf("LLM call failed: %w", err)
@@ -497,105 +546,75 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 			return resp, err
 		}
 
-		// Accumulate content
 		resp.Content += llmResp.Content
-
-		// Note: EventContentDelta is already emitted by callLLM during streaming,
-		// so we don't emit it again here to avoid duplication
-
-		// Update token usage
 		resp.TokensUsed += llmResp.Usage.TotalTokens
 
-		// Process tool calls if any
-		if len(llmResp.ToolCalls) > 0 {
-			// Create assistant message with tool calls
-			assistantMsg := Message{
-				Role:      RoleAssistant,
-				Content:   llmResp.Content,
+		// Record snapshot for cycle detection (before processing tool calls)
+		if a.config.CycleDetection.Enabled && a.cycleDetector != nil {
+			snapshot := cycle.Snapshot{
+				Turn:      turn + 1,
+				Response:  llmResp.Content,
+				ToolCalls: extractToolNames(llmResp.ToolCalls),
+				Error:     "", // No error at this point
 				Timestamp: time.Now(),
 			}
+			a.cycleDetector.Record(snapshot)
 
-			// Add assistant message FIRST (before tool results)
-			messages = append(messages, assistantMsg)
-
-			// Convert and process each tool call
-			for i := range llmResp.ToolCalls {
-				toolCall := &llmResp.ToolCalls[i]
-
-				// Convert llm.ToolCall to core.ToolCall
-				coreToolCall := &ToolCall{
-					ID:   toolCall.ID,
-					Type: toolCall.Type,
-					Function: ToolCallFunction{
-						Name:      toolCall.Function.Name,
-						Arguments: toolCall.Function.Arguments,
-					},
-				}
-
-				// Add to assistant message (note: message already appended above)
-				messages[len(messages)-1].ToolCalls = append(messages[len(messages)-1].ToolCalls, *coreToolCall)
-
-				// Process the tool call (ProcessToolCall will emit EventToolCallStart)
-				toolResult, err := a.ProcessToolCall(ctx, coreToolCall)
-				if err != nil {
-					// Emit tool error event
-					a.emitter.Emit(Event{
-						Type:      EventToolCallComplete,
-						Timestamp: time.Now(),
-						Data: ToolCallCompleteData{
-							ToolID:   coreToolCall.ID,
-							ToolName: coreToolCall.Function.Name,
-							Success:  false,
-							Error:    err.Error(),
-						},
-					})
-
-					// Add error message to conversation (after assistant message)
-					messages = append(messages, Message{
-						Role: RoleTool,
-						Content: fmt.Sprintf("Tool %s failed: %v",
-							coreToolCall.Function.Name, err),
-						ToolCallID: coreToolCall.ID,
-						Timestamp:  time.Now(),
-					})
-				} else {
-					// Emit tool completion event
-					completion := ToolCallCompleteData{
-						ToolID:   coreToolCall.ID,
-						ToolName: coreToolCall.Function.Name,
-						Success:  toolResult.Success,
+			// Check for cycles and apply interventions
+			if cycleResult, err := a.cycleDetector.Check(); err == nil && cycleResult.Type != cycle.CycleNone {
+				// Apply intervention
+				intervention := a.selectIntervention(cycleResult.Type, turn+1)
+				if intervention != nil {
+					// Convert messages to cycle.Message interface
+					cycleMessages := make([]cycle.Message, len(messages))
+					for i, msg := range messages {
+						cycleMessages[i] = msg
 					}
-					if toolResult.Success {
-						completion.Output = toolResult.Output
-					} else if toolResult.Error != nil {
-						completion.Error = toolResult.Error.Error()
+
+					modifiedCycleMessages, err := intervention.Apply(ctx, cycleMessages)
+					if err != nil {
+						slog.Warn("cycle intervention failed", "error", err, "cycle_type", cycleResult.Type)
+					} else {
+						// Convert back to core.Message slice
+						messages = make([]Message, len(modifiedCycleMessages))
+						for i, msg := range modifiedCycleMessages {
+							// Convert interface back to concrete Message type
+							messages[i] = Message{
+								Role:      Role(msg.GetRole()),
+								Content:   msg.GetContent(),
+								Timestamp: msg.GetTimestamp(),
+							}
+						}
+
+						// Emit cycle detection event
+						a.emitter.Emit(Event{
+							Type:      EventWarning,
+							Timestamp: time.Now(),
+							Data: SystemEventData{
+								Level:   "warning",
+								Message: fmt.Sprintf("Cycle detected: %s. Applied intervention: %s", cycleResult.Type, intervention.Name()),
+								Details: cycleResult.Details,
+							},
+						})
+
+						// If this was an escalation intervention, pause the agent
+						if intervention.Severity() >= 3 {
+							resp.FinishReason = "cycle_intervention"
+							return resp, nil
+						}
 					}
-					a.emitter.Emit(Event{
-						Type:      EventToolCallComplete,
-						Timestamp: time.Now(),
-						Data:      completion,
-					})
-
-					// Add tool result to conversation (after assistant message)
-					slog.Debug("Agent tool result", "tool", coreToolCall.Function.Name, "output_len", len(toolResult.Output), "success", toolResult.Success)
-					messages = append(messages, Message{
-						Role:       RoleTool,
-						Content:    toolResult.Output,
-						ToolCallID: coreToolCall.ID,
-						Timestamp:  time.Now(),
-					})
-
-					// Track tool call in response
-					resp.ToolCalls = append(resp.ToolCalls, coreToolCall)
 				}
 			}
+		}
 
-			// Continue loop to get next LLM response with tool results
+		if len(llmResp.ToolCalls) > 0 {
+			messages = a.processToolCalls(ctx, messages, llmResp, resp)
 			continue
 		}
 
-		// No tool calls means we're done
+		messages = a.addFinalMessage(messages, llmResp.Content)
 		resp.FinishReason = llmResp.FinishReason
+
 		if resp.FinishReason == "" {
 			resp.FinishReason = "stop"
 		}
@@ -605,6 +624,12 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 	// Check if we hit max turns
 	if resp.TurnsUsed >= a.config.MaxTurns {
 		resp.FinishReason = "max_turns"
+	}
+
+	// Capture all new messages generated during this turn (everything after history)
+	// This includes assistant messages with tool calls, tool result messages, and final assistant message
+	if len(messages) > historyLen {
+		resp.Messages = messages[historyLen:]
 	}
 
 	// Emit completion event
@@ -840,6 +865,108 @@ func (a *Agent) ShouldApprove(cmd *Command) (bool, string) {
 	}
 }
 
+// processToolCalls handles all tool calls from an LLM response.
+// It adds the assistant message with tool calls, executes each tool,
+// and adds tool result messages to the conversation.
+func (a *Agent) processToolCalls(ctx context.Context, messages []Message, llmResp *llm.CompletionResponse, resp *AgentResponse) []Message {
+	// Create assistant message with tool calls
+	assistantMsg := Message{
+		Role:      RoleAssistant,
+		Content:   llmResp.Content,
+		Timestamp: time.Now(),
+	}
+
+	// Add assistant message FIRST (before tool results)
+	messages = append(messages, assistantMsg)
+
+	// Convert and process each tool call
+	for i := range llmResp.ToolCalls {
+		toolCall := &llmResp.ToolCalls[i]
+
+		// Convert llm.ToolCall to core.ToolCall
+		coreToolCall := &ToolCall{
+			ID:   toolCall.ID,
+			Type: toolCall.Type,
+			Function: ToolCallFunction{
+				Name:      toolCall.Function.Name,
+				Arguments: toolCall.Function.Arguments,
+			},
+		}
+
+		// Add to assistant message (note: message already appended above)
+		messages[len(messages)-1].ToolCalls = append(messages[len(messages)-1].ToolCalls, *coreToolCall)
+
+		// Process the tool call (ProcessToolCall will emit EventToolCallStart)
+		toolResult, err := a.ProcessToolCall(ctx, coreToolCall)
+		if err != nil {
+			// Emit tool error event
+			a.emitter.Emit(Event{
+				Type:      EventToolCallComplete,
+				Timestamp: time.Now(),
+				Data: ToolCallCompleteData{
+					ToolID:   coreToolCall.ID,
+					ToolName: coreToolCall.Function.Name,
+					Success:  false,
+					Error:    err.Error(),
+				},
+			})
+
+			// Add error message to conversation (after assistant message)
+			messages = append(messages, Message{
+				Role: RoleTool,
+				Content: fmt.Sprintf("Tool %s failed: %v",
+					coreToolCall.Function.Name, err),
+				ToolCallID: coreToolCall.ID,
+				Timestamp:  time.Now(),
+			})
+		} else {
+			// Emit tool completion event
+			completion := ToolCallCompleteData{
+				ToolID:   coreToolCall.ID,
+				ToolName: coreToolCall.Function.Name,
+				Success:  toolResult.Success,
+			}
+			if toolResult.Success {
+				completion.Output = toolResult.Output
+			} else if toolResult.Error != nil {
+				completion.Error = toolResult.Error.Error()
+			}
+			a.emitter.Emit(Event{
+				Type:      EventToolCallComplete,
+				Timestamp: time.Now(),
+				Data:      completion,
+			})
+
+			// Add tool result to conversation (after assistant message)
+			slog.Debug("Agent tool result", "tool", coreToolCall.Function.Name, "output_len", len(toolResult.Output), "success", toolResult.Success)
+			messages = append(messages, Message{
+				Role:       RoleTool,
+				Content:    toolResult.Output,
+				ToolCallID: coreToolCall.ID,
+				Timestamp:  time.Now(),
+			})
+
+			// Track tool call in response
+			resp.ToolCalls = append(resp.ToolCalls, coreToolCall)
+		}
+	}
+
+	return messages
+}
+
+// addFinalMessage adds the final assistant message to the messages array.
+// This is called when the agent is done (no more tool calls).
+func (a *Agent) addFinalMessage(messages []Message, content string) []Message {
+	if content != "" {
+		messages = append(messages, Message{
+			Role:      RoleAssistant,
+			Content:   content,
+			Timestamp: time.Now(),
+		})
+	}
+	return messages
+}
+
 // buildPrompt constructs the LLM prompt with context and history.
 func (a *Agent) buildPrompt(req *AgentRequest) []Message {
 	messages := make([]Message, 0)
@@ -874,15 +1001,21 @@ func (a *Agent) buildSystemMessage(req *AgentRequest) string {
 	if req.Task != nil {
 		prompt = req.Task.SystemPrompt()
 	} else {
-		// Default system prompt
-		prompt = `You are a helpful AI coding assistant. You can help with:
-- Reading and analyzing code
-- Writing and modifying code
-- Running commands
-- Searching files
-- Managing git operations
+		// Default system prompt (agentic, action-oriented)
+		prompt = `You are a decisive AI coding agent.
 
-Always explain your reasoning and ask for clarification when needed.`
+	CAPABILITIES:
+	- Read/modify files, run commands (with safety), search code, use Git
+
+	BEHAVIOR:
+	- Make decisions and proceed; state assumptions briefly when unsure
+	- Prefer applying edits via tools over suggesting snippets only
+	- Validate after changes (tests, lints, or checks) and iterate
+	- Keep explanations concise; focus on actions and code
+
+	OUTPUT:
+	- Provide concrete edits and commands, then execute with tools when appropriate
+	- Summarize impact at the end`
 	}
 
 	// Add environment context
@@ -1315,6 +1448,60 @@ func convertParameterSchemaToMap(params tools.ParameterSchema) map[string]interf
 	}
 
 	return result
+}
+
+// selectIntervention chooses the appropriate intervention based on cycle type and turn count
+func (a *Agent) selectIntervention(cycleType cycle.CycleType, turnCount int) cycle.Intervention {
+	// Escalation ladder based on turn count
+	switch {
+	case turnCount < 10:
+		// Early cycles: Use soft intervention (reflection)
+		return &cycle.ReflectionIntervention{}
+
+	case turnCount < 30:
+		// Mid-stage cycles: Use medium intervention (context summarization)
+		// For now, use reflection as fallback since summarization needs compressor integration
+		return &cycle.ReflectionIntervention{}
+
+	default:
+		// Late-stage/persistent cycles: Escalate to user
+		return &cycle.EscalateIntervention{
+			Emitter: &eventEmitterAdapter{emitter: a.emitter},
+		}
+	}
+}
+
+// eventEmitterAdapter adapts core.EventEmitter to cycle.EventEmitter interface
+type eventEmitterAdapter struct {
+	emitter *EventEmitter
+}
+
+func (a *eventEmitterAdapter) Emit(event cycle.Event) {
+	// Convert cycle.Event to core.Event
+	// Map event type based on string value
+	var eventType EventType
+	switch event.GetType() {
+	case "turn_paused":
+		eventType = EventTurnPaused
+	default:
+		eventType = EventWarning // fallback
+	}
+
+	coreEvent := Event{
+		Type:      eventType,
+		Timestamp: event.GetTimestamp(),
+		Data:      event.GetData(),
+	}
+	a.emitter.Emit(coreEvent)
+}
+
+// extractToolNames extracts tool names from LLM tool calls for cycle detection
+func extractToolNames(toolCalls []llm.ToolCall) []string {
+	names := make([]string, len(toolCalls))
+	for i, tc := range toolCalls {
+		names[i] = tc.Function.Name
+	}
+	return names
 }
 
 // GetTaskRegistry returns the agent's task registry.

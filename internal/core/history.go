@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/core/history/compress"
 	"github.com/google/uuid"
 )
 
@@ -49,10 +51,39 @@ var (
 //	    history.Truncate(3000)
 //	}
 type History struct {
-	messages  []Message
-	maxTokens int
-	tokenizer Tokenizer
-	mu        sync.RWMutex
+	messages   []Message
+	maxTokens  int
+	tokenizer  Tokenizer
+	compressor compress.Compressor
+	config     *HistoryConfig
+	emitter    *EventEmitter
+	mu         sync.RWMutex
+}
+
+// HistoryConfig configures history compression behavior.
+type HistoryConfig struct {
+	// CompressionEnabled enables automatic compression
+	CompressionEnabled bool
+
+	// CompressionThreshold is the token usage ratio to trigger compression (0.0-1.0)
+	// Example: 0.8 means compress at 80% capacity
+	CompressionThreshold float64
+
+	// PreserveCritical ensures critical messages are always kept
+	PreserveCritical bool
+
+	// MinRetention is the minimum fraction of messages to keep (0.0-1.0)
+	MinRetention float64
+}
+
+// DefaultHistoryConfig returns sensible default configuration.
+func DefaultHistoryConfig() *HistoryConfig {
+	return &HistoryConfig{
+		CompressionEnabled:   true,
+		CompressionThreshold: 0.8,
+		PreserveCritical:     true,
+		MinRetention:         0.3,
+	}
 }
 
 // historyExport represents the JSON structure for history export.
@@ -76,11 +107,55 @@ func NewHistory(maxTokens int, tokenizer Tokenizer) *History {
 		tokenizer = &SimpleTokenizer{}
 	}
 
+	cfg := DefaultHistoryConfig()
+
 	return &History{
-		messages:  make([]Message, 0),
-		maxTokens: maxTokens,
-		tokenizer: tokenizer,
+		messages:   make([]Message, 0),
+		maxTokens:  maxTokens,
+		tokenizer:  tokenizer,
+		compressor: compress.NewDefaultHybridCompressor(),
+		config:     cfg,
 	}
+}
+
+// NewHistoryWithConfig creates a history with custom configuration.
+func NewHistoryWithConfig(maxTokens int, tokenizer Tokenizer, config *HistoryConfig) *History {
+	if tokenizer == nil {
+		tokenizer = &SimpleTokenizer{}
+	}
+
+	if config == nil {
+		config = DefaultHistoryConfig()
+	}
+
+	// Create compressor with matching config
+	compressorConfig := compress.CompressorConfig{
+		PreserveCritical: config.PreserveCritical,
+		MinRetention:     config.MinRetention,
+	}
+
+	return &History{
+		messages:   make([]Message, 0),
+		maxTokens:  maxTokens,
+		tokenizer:  tokenizer,
+		compressor: compress.NewHybridCompressor(compressorConfig),
+		config:     config,
+		emitter:    nil, // Set via SetEventEmitter if needed
+	}
+}
+
+// SetEventEmitter sets the event emitter for compression notifications.
+func (h *History) SetEventEmitter(emitter *EventEmitter) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.emitter = emitter
+}
+
+// SetCompressor sets a custom compressor (for testing or custom strategies).
+func (h *History) SetCompressor(c compress.Compressor) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.compressor = c
 }
 
 // NewHistoryWithDefaults creates a history with sensible default values.
@@ -96,6 +171,9 @@ func NewHistoryWithDefaults() *History {
 //
 // The message is validated before adding. Token count is automatically
 // calculated if not already set. This method is thread-safe.
+//
+// If compression is enabled and token usage exceeds the threshold,
+// automatic compression will be triggered.
 //
 // Returns an error if the message is invalid (e.g., empty role).
 func (h *History) AddMessage(msg Message) error {
@@ -124,7 +202,151 @@ func (h *History) AddMessage(msg Message) error {
 	}
 
 	h.messages = append(h.messages, msg)
+
+	// Check if compression needed
+	if h.shouldCompressLocked() {
+		// Use background context with timeout for compression
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := h.compressLocked(ctx); err != nil {
+			// Log error but don't fail (compression is best-effort)
+			// In production, this would use proper logging
+			_ = err
+		}
+	}
+
 	return nil
+}
+
+// shouldCompressLocked checks if compression threshold exceeded.
+// Must be called with lock held.
+func (h *History) shouldCompressLocked() bool {
+	if h.config == nil || !h.config.CompressionEnabled || h.compressor == nil {
+		return false
+	}
+
+	totalTokens := h.tokenCountLocked()
+	threshold := int(float64(h.maxTokens) * h.config.CompressionThreshold)
+
+	return totalTokens > threshold
+}
+
+// compressLocked performs compression.
+// Must be called with lock held.
+func (h *History) compressLocked(ctx context.Context) error {
+	beforeCount := len(h.messages)
+	beforeTokens := h.tokenCountLocked()
+
+	// Calculate target tokens (70% of max to give headroom)
+	targetTokens := int(float64(h.maxTokens) * 0.7)
+
+	// Convert core.Message to compress.CompressibleMessage
+	compressible := h.toCompressibleMessages(h.messages)
+
+	// Create tokenizer adapter
+	tokenizerAdapter := &tokenizerAdapter{tokenizer: h.tokenizer}
+
+	// Perform compression
+	compressed, err := h.compressor.Compress(ctx, compressible, targetTokens, tokenizerAdapter)
+	if err != nil {
+		return err
+	}
+
+	// Convert back to core.Message
+	h.messages = h.fromCompressibleMessages(compressed)
+
+	afterCount := len(h.messages)
+	afterTokens := h.tokenCountLocked()
+
+	// Emit compression event if emitter available
+	h.emitCompressionEvent(beforeCount, beforeTokens, afterCount, afterTokens)
+
+	return nil
+}
+
+// emitCompressionEvent sends compression statistics via event emitter.
+func (h *History) emitCompressionEvent(beforeCount, beforeTokens, afterCount, afterTokens int) {
+	if h.emitter == nil {
+		return // No emitter configured
+	}
+
+	// Calculate compression ratio
+	ratio := 0.0
+	if beforeCount > 0 {
+		ratio = float64(beforeCount-afterCount) / float64(beforeCount)
+	}
+
+	// Format details as JSON-like string for SystemEventData
+	details := fmt.Sprintf("messages: %d→%d (%.1f%% reduction), tokens: %d→%d",
+		beforeCount, afterCount, ratio*100, beforeTokens, afterTokens)
+
+	// Emit system event
+	h.emitter.Emit(Event{
+		Type:      EventInfo,
+		Timestamp: time.Now(),
+		Data: SystemEventData{
+			Level:   "info",
+			Message: "Context history compressed",
+			Details: details,
+		},
+	})
+}
+
+// toCompressibleMessages converts core.Message to compress.CompressibleMessage
+func (h *History) toCompressibleMessages(messages []Message) []compress.CompressibleMessage {
+	result := make([]compress.CompressibleMessage, len(messages))
+	for i, msg := range messages {
+		result[i] = compress.CompressibleMessage{
+			ID:            msg.ID,
+			Role:          string(msg.Role),
+			Content:       msg.Content,
+			ToolCallCount: len(msg.ToolCalls),
+			Tokens:        msg.Tokens,
+		}
+	}
+	return result
+}
+
+// fromCompressibleMessages converts compress.CompressibleMessage back to core.Message
+func (h *History) fromCompressibleMessages(messages []compress.CompressibleMessage) []Message {
+	result := make([]Message, len(messages))
+	for i, msg := range messages {
+		// Find original message to preserve all fields
+		original := h.findMessageByID(msg.ID)
+		if original != nil {
+			result[i] = *original
+		} else {
+			// Fallback: create minimal message
+			result[i] = Message{
+				ID:        msg.ID,
+				Role:      Role(msg.Role),
+				Content:   msg.Content,
+				Tokens:    msg.Tokens,
+				Timestamp: time.Now(),
+			}
+		}
+	}
+	return result
+}
+
+// findMessageByID finds a message in the current history by ID
+func (h *History) findMessageByID(id string) *Message {
+	for i := range h.messages {
+		if h.messages[i].ID == id {
+			return &h.messages[i]
+		}
+	}
+	return nil
+}
+
+// tokenizerAdapter adapts core.Tokenizer to compress.Tokenizer
+type tokenizerAdapter struct {
+	tokenizer Tokenizer
+}
+
+func (t *tokenizerAdapter) Count(text string) int {
+	return t.tokenizer.Count(text)
 }
 
 // AddSystemMessage adds a system message to the history.

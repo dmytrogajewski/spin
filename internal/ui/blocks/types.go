@@ -16,6 +16,8 @@ const (
 	BlockTypeApplyPatch BlockType = "APPLY_PATCH"
 	// BlockTypeSummary represents a human-readable changeset summary block.
 	BlockTypeSummary BlockType = "SUMMARY"
+	// BlockTypeTool represents a tool execution block.
+	BlockTypeTool BlockType = "TOOL"
 	// BlockTypeTesting represents a test execution rubric block.
 	BlockTypeTesting BlockType = "TESTING"
 	// BlockTypeNotice represents a system notification block.

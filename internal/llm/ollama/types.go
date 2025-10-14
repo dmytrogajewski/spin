@@ -90,6 +90,9 @@ type chatToolCallFunction struct {
 type chatOptions struct {
 	Temperature float64 `json:"temperature,omitempty"`
 	NumPredict  int     `json:"num_predict,omitempty"`
+	// VRAM auto-tune related options (supported by Ollama)
+	NumCtx int `json:"num_ctx,omitempty"`
+	NumGPU int `json:"num_gpu,omitempty"`
 }
 
 // chatResponse represents an Ollama chat API response.
