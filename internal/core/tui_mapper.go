@@ -17,14 +17,15 @@ import (
 // It translates the event stream from the core agent into visual blocks
 // that are displayed in the terminal UI timeline.
 type TUIMapper struct {
-	ui            ports.UI
-	blockRegistry map[string]*blocks.Block // toolID → block (for updates)
-	streamCh      chan string              // Content streaming channel
-	streamMu      sync.Mutex               // Protects streamCh
-	streamCtx     context.Context
-	streamCancel  context.CancelFunc
-	thinkFilter   *output.ThinkFilter // Filter for <think> tags
-	mu            sync.RWMutex        // Protects blockRegistry
+	ui               ports.UI
+	blockRegistry    map[string][]*blocks.Block // toolID → blocks (supports duplicates)
+	applyPatchByFile map[string]*blocks.Block   // file path → latest APPLY_PATCH block (write_file)
+	streamCh         chan string                // Content streaming channel
+	streamMu         sync.Mutex                 // Protects streamCh
+	streamCtx        context.Context
+	streamCancel     context.CancelFunc
+	thinkFilter      *output.ThinkFilter // Filter for <think> tags
+	mu               sync.RWMutex        // Protects blockRegistry
 }
 
 // NewTUIMapper creates a new TUI event mapper.
@@ -32,9 +33,10 @@ type TUIMapper struct {
 // that are appended to or updated in the UI timeline.
 func NewTUIMapper(ui ports.UI) *TUIMapper {
 	return &TUIMapper{
-		ui:            ui,
-		blockRegistry: make(map[string]*blocks.Block),
-		thinkFilter:   output.NewThinkFilter(),
+		ui:               ui,
+		blockRegistry:    make(map[string][]*blocks.Block),
+		applyPatchByFile: make(map[string]*blocks.Block),
+		thinkFilter:      output.NewThinkFilter(),
 	}
 }
 
@@ -90,34 +92,30 @@ func (m *TUIMapper) handleToolStart(event Event) error {
 	slog.Debug("Checking blockRegistry for duplicate",
 		"tool_id", data.ToolID,
 		"registry_size", len(m.blockRegistry),
-		"registry_contains", m.blockRegistry[data.ToolID] != nil)
+		"registry_contains", len(m.blockRegistry[data.ToolID]) > 0)
 
-	if existingBlock, exists := m.blockRegistry[data.ToolID]; exists {
+	if _, exists := m.blockRegistry[data.ToolID]; exists {
 		// Duplicate tool ID from LLM - make block ID unique by appending counter
 		// This is a workaround for LLM bugs that reuse tool IDs
 		slog.Warn("Duplicate tool ID from LLM, making block ID unique",
 			"tool_id", data.ToolID,
 			"new_tool_name", data.ToolName,
-			"existing_block_type", existingBlock.Type)
+			"existing_blocks_count", len(m.blockRegistry[data.ToolID]))
 
 		// Find a unique block ID by appending -1, -2, etc.
 		originalID := block.ID
-		for i := 1; ; i++ {
-			block.ID = fmt.Sprintf("%s-%d", originalID, i)
-			// Check if this ID exists in timeline by trying to append
-			// (we can't check timeline directly from here)
-			break // For now, just use -1 suffix
-		}
+		// Use the number of existing blocks as suffix to avoid collisions
+		block.ID = fmt.Sprintf("%s-%d", originalID, len(m.blockRegistry[data.ToolID]))
 
 		slog.Info("Created unique block ID for duplicate tool",
 			"original_tool_id", data.ToolID,
 			"new_block_id", block.ID)
 
-		// Don't overwrite the registry entry - keep the first block registered
-		// This means we can't update the duplicate block later, but that's OK
+		// Register duplicate block under the same tool ID for later updates
+		m.blockRegistry[data.ToolID] = append(m.blockRegistry[data.ToolID], block)
 	} else {
 		// First time seeing this tool ID - register it normally
-		m.blockRegistry[data.ToolID] = block
+		m.blockRegistry[data.ToolID] = []*blocks.Block{block}
 	}
 	m.mu.Unlock()
 
@@ -142,12 +140,23 @@ func (m *TUIMapper) createBlockForTool(data ToolCallStartData) *blocks.Block {
 	case "read_file":
 		return m.createReadBlock(data)
 	case "write_file":
-		return m.createApplyPatchBlock(data)
+		return m.createOrReuseApplyPatchBlock(data)
 	case "list_directory":
 		return m.createExecuteBlock(data) // Treat as EXECUTE
+	case "apply_patch":
+		// Dedicated apply_patch tool (structured patch). Show the patch text as a diff.
+		return m.createApplyPatchFromPatchTool(data)
+	case "file_search":
+		// Map file_search to GREP block type (files_with_matches style)
+		return m.createGrepBlockFromSearch(data)
+	case "git_context":
+		// Map to NOTICE block; details will be filled on completion
+		return m.createNoticeBlock(data, "Git Context")
+	case "get_context":
+		// Map to NOTICE block for environment context
+		return m.createNoticeBlock(data, "Environment Context")
 	default:
-		// Unknown tool, no block created
-		return nil
+		return m.createToolBlock(data)
 	}
 }
 
@@ -211,6 +220,26 @@ func (m *TUIMapper) createReadBlock(data ToolCallStartData) *blocks.Block {
 	return block
 }
 
+// createExecuteBlock creates an TOOL block for command execution.
+func (m *TUIMapper) createToolBlock(data ToolCallStartData) *blocks.Block {
+	block := blocks.NewBlock(blocks.BlockTypeTool)
+	block.ID = data.ToolID
+
+	// Extract command from parameters (or path for list_directory)
+	command := extractString(data.Parameters, "tool_name")
+
+	meta := &blocks.ToolMeta{
+		ToolName: command,
+	}
+	if err := blocks.SetToolMeta(block, meta); err != nil {
+		// Validation failed, set as raw map to preserve data
+		block.Meta = map[string]any{
+			"tool_name": command,
+		}
+	}
+	return block
+}
+
 // createApplyPatchBlock creates an APPLY_PATCH block for file writing.
 func (m *TUIMapper) createApplyPatchBlock(data ToolCallStartData) *blocks.Block {
 	block := blocks.NewBlock(blocks.BlockTypeApplyPatch)
@@ -224,7 +253,8 @@ func (m *TUIMapper) createApplyPatchBlock(data ToolCallStartData) *blocks.Block 
 	block.Body = content
 
 	meta := &blocks.PatchMeta{
-		File: path,
+		File:      path,
+		Completed: false,
 	}
 	if err := blocks.SetPatchMeta(block, meta); err != nil {
 		// Validation failed, set as raw map
@@ -236,6 +266,112 @@ func (m *TUIMapper) createApplyPatchBlock(data ToolCallStartData) *blocks.Block 
 	return block
 }
 
+// createOrReuseApplyPatchBlock coalesces write_file blocks by file path.
+// If a block for the same path exists, it updates and reuses it, and registers
+// the current tool ID to point to that existing block for completion updates.
+func (m *TUIMapper) createOrReuseApplyPatchBlock(data ToolCallStartData) *blocks.Block {
+	path := extractString(data.Parameters, "path")
+	content := extractString(data.Parameters, "content")
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if existing, ok := m.applyPatchByFile[path]; ok && existing != nil {
+		// Map this tool ID to the existing block so completion updates it
+		m.blockRegistry[data.ToolID] = append(m.blockRegistry[data.ToolID], existing)
+
+		// Update body/title to reflect the latest write intent
+		if content != "" {
+			existing.Body = content
+		}
+		if existing.Title == "" {
+			existing.Title = path
+		}
+
+		// Push in-place update; ignore error (best-effort)
+		_ = m.ui.UpdateBlock(existing.ID, existing)
+
+		// Returning nil tells caller not to append a new block
+		return nil
+	}
+
+	// First write for this path: create a new block and remember it
+	block := blocks.NewBlock(blocks.BlockTypeApplyPatch)
+	block.ID = data.ToolID
+	block.Title = path
+	block.Body = content
+
+	meta := &blocks.PatchMeta{File: path}
+	if err := blocks.SetPatchMeta(block, meta); err != nil {
+		block.Meta = map[string]any{"file": path}
+	}
+
+	m.applyPatchByFile[path] = block
+	return block
+}
+
+// createApplyPatchFromPatchTool creates an APPLY_PATCH block for apply_patch tool.
+// It renders the provided patch text as a diff and sets minimal metadata so that
+// completion status can be displayed later.
+func (m *TUIMapper) createApplyPatchFromPatchTool(data ToolCallStartData) *blocks.Block {
+	block := blocks.NewBlock(blocks.BlockTypeApplyPatch)
+	block.ID = data.ToolID
+
+	// Title: show workspace root if provided, otherwise generic label
+	workspaceRoot := extractString(data.Parameters, "workspace_root")
+	if workspaceRoot == "" {
+		workspaceRoot = "."
+	}
+	block.Title = workspaceRoot
+
+	// Body: show the raw patch text so the user sees exactly what will be applied
+	patchText := extractString(data.Parameters, "patch_text")
+	block.Body = patchText
+
+	// Metadata: PatchMeta requires a non-empty File; use workspace root as scope indicator
+	meta := &blocks.PatchMeta{
+		File:      workspaceRoot,
+		Completed: false,
+	}
+	if err := blocks.SetPatchMeta(block, meta); err != nil {
+		// Fallback to raw map if validation fails for any reason
+		block.Meta = map[string]any{
+			"file": workspaceRoot,
+		}
+	}
+
+	return block
+}
+
+// createGrepBlockFromSearch creates a GREP block for file_search tool.
+func (m *TUIMapper) createGrepBlockFromSearch(data ToolCallStartData) *blocks.Block {
+	block := blocks.NewBlock(blocks.BlockTypeGrep)
+	block.ID = data.ToolID
+
+	query := extractString(data.Parameters, "query")
+	// Map file_search semantics to GREP meta for consistent rendering
+	meta := &blocks.GrepMeta{
+		Pattern: query,
+		Mode:    "files_with_matches",
+	}
+	if err := blocks.SetGrepMeta(block, meta); err != nil {
+		block.Meta = map[string]any{
+			"pattern": query,
+			"mode":    "files_with_matches",
+		}
+	}
+
+	return block
+}
+
+// createNoticeBlock creates a NOTICE block with the given title.
+func (m *TUIMapper) createNoticeBlock(data ToolCallStartData, title string) *blocks.Block {
+	block := blocks.NewBlock(blocks.BlockTypeNotice)
+	block.ID = data.ToolID
+	block.Title = title
+	return block
+}
+
 // handleToolComplete updates an existing block when tool execution completes.
 func (m *TUIMapper) handleToolComplete(event Event) error {
 	data, ok := event.Data.(ToolCallCompleteData)
@@ -243,54 +379,70 @@ func (m *TUIMapper) handleToolComplete(event Event) error {
 		return nil
 	}
 
-	// Find block
+	// Find blocks
 	m.mu.RLock()
-	block, exists := m.blockRegistry[data.ToolID]
+	blocksToUpdate, exists := m.blockRegistry[data.ToolID]
 	m.mu.RUnlock()
 
-	if !exists {
-		// Block not found (tool started before mapper attached), ignore
+	if !exists || len(blocksToUpdate) == 0 {
+		// Blocks not found (tool started before mapper attached), ignore
 		return nil
 	}
 
-	// Update block with results
-	block.Body = data.Output
-
-	// Set severity based on success
-	if !data.Success {
-		block.Severity = blocks.SeverityError
-		if data.Error != "" {
-			block.Body += "\n\nError: " + data.Error
+	var lastErr error
+	for _, block := range blocksToUpdate {
+		if block == nil {
+			continue
 		}
-	} else {
-		block.Severity = blocks.SeverityInfo
-	}
 
-	// Update metadata for EXECUTE blocks
-	if block.Type == blocks.BlockTypeExecute {
-		meta, err := blocks.ParseExecuteMeta(block)
-		if err == nil && meta != nil {
-			// Parse exit code from output (heuristic)
-			if !data.Success {
-				meta.ExitCode = intPtr(1) // Assume non-zero on failure
-			} else {
-				meta.ExitCode = intPtr(0)
+		// Update block with results
+		block.Body = data.Output
+
+		// Set severity based on success
+		if !data.Success {
+			block.Severity = blocks.SeverityError
+			if data.Error != "" {
+				block.Body += "\n\nError: " + data.Error
 			}
-			meta.LinesOut = countLinesPtr(data.Output)
-			// Update metadata, ignore validation errors as block already has output
-			_ = blocks.SetExecuteMeta(block, meta)
+		} else {
+			block.Severity = blocks.SeverityInfo
+		}
+
+		// Update metadata for EXECUTE blocks
+		if block.Type == blocks.BlockTypeExecute {
+			meta, err := blocks.ParseExecuteMeta(block)
+			if err == nil && meta != nil {
+				if !data.Success {
+					meta.ExitCode = intPtr(1)
+				} else {
+					meta.ExitCode = intPtr(0)
+				}
+				meta.LinesOut = countLinesPtr(data.Output)
+				_ = blocks.SetExecuteMeta(block, meta)
+			}
+		}
+
+		// Update metadata for APPLY_PATCH blocks to reflect success/failure
+		if block.Type == blocks.BlockTypeApplyPatch {
+			if meta, err := blocks.ParsePatchMeta(block); err == nil && meta != nil {
+				meta.Succeeded = data.Success
+				meta.Completed = true
+				_ = blocks.SetPatchMeta(block, meta)
+			}
+		}
+
+		// Update in UI (block rendering will show completion status line)
+		if err := m.ui.UpdateBlock(block.ID, block); err != nil {
+			lastErr = err
 		}
 	}
 
-	// Update in UI (block rendering will show completion status line)
-	err := m.ui.UpdateBlock(data.ToolID, block)
-
-	// Clean up registry
+	// Clean up registry for this tool id
 	m.mu.Lock()
 	delete(m.blockRegistry, data.ToolID)
 	m.mu.Unlock()
 
-	return err
+	return lastErr
 }
 
 // handleContentDelta streams assistant content to the UI.
@@ -411,7 +563,8 @@ func (m *TUIMapper) Close() error {
 	m.StopStreaming()
 
 	m.mu.Lock()
-	m.blockRegistry = make(map[string]*blocks.Block)
+	m.blockRegistry = make(map[string][]*blocks.Block)
+	m.applyPatchByFile = make(map[string]*blocks.Block)
 	m.mu.Unlock()
 
 	return nil

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/ansi"
 )
 
 // Renderer handles rendering the status bar to the terminal.
@@ -77,17 +79,25 @@ func (r *Renderer) Render(statusText string) error {
 
 	// Render status text if provided
 	if statusText != "" {
-		// Truncate if too long
-		if len(statusText) > r.width-2 {
-			statusText = statusText[:r.width-5] + "..."
+		// Strip any existing ANSI codes to prevent color bleeding
+		cleanText := ansi.Strip(statusText)
+
+		// Truncate if too long (now measuring actual visible length)
+		if len(cleanText) > r.width-2 {
+			cleanText = cleanText[:r.width-5] + "..."
 		}
 
 		// Center the status text
-		padding := (r.width - len(statusText)) / 2
+		padding := (r.width - len(cleanText)) / 2
 		if padding > 0 {
 			fmt.Fprint(r.out, strings.Repeat(" ", padding))
 		}
-		fmt.Fprint(r.out, statusText)
+
+		// Apply consistent color: bright white for status bar
+		fmt.Fprint(r.out, "\x1b[0m")    // Reset any previous formatting
+		fmt.Fprint(r.out, "\x1b[37;1m") // Bright white
+		fmt.Fprint(r.out, cleanText)    // Render clean text
+		fmt.Fprint(r.out, "\x1b[0m")    // Reset formatting
 	}
 
 	// Restore cursor position

@@ -191,3 +191,62 @@ func TestManager_Concurrency(t *testing.T) {
 		t.Errorf("Expected turn count %d, got %d", expectedTurns, metrics.TurnCount)
 	}
 }
+
+func TestManager_SetAgentState(t *testing.T) {
+	m := NewManager()
+
+	m.SetAgentState("Calling tools")
+
+	metrics := m.GetMetrics()
+	if metrics.AgentState != "Calling tools" {
+		t.Errorf("Expected agent state 'Calling tools', got '%s'", metrics.AgentState)
+	}
+}
+
+func TestManager_SetTaskMode(t *testing.T) {
+	m := NewManager()
+
+	m.SetTaskMode("review")
+
+	metrics := m.GetMetrics()
+	if metrics.TaskMode != "review" {
+		t.Errorf("Expected task mode 'review', got '%s'", metrics.TaskMode)
+	}
+}
+
+func TestManager_SetConversationID(t *testing.T) {
+	m := NewManager()
+
+	testID := "abc123def456"
+	m.SetConversationID(testID)
+
+	metrics := m.GetMetrics()
+	if metrics.ConversationID != testID {
+		t.Errorf("Expected conversation ID '%s', got '%s'", testID, metrics.ConversationID)
+	}
+}
+
+func TestManager_CalculateTPS(t *testing.T) {
+	m := NewManager()
+
+	// 100 tokens in 2 seconds = 50 tok/s
+	m.CalculateTPS(100, 2*time.Second)
+
+	metrics := m.GetMetrics()
+	expected := 50.0
+	if metrics.TokensPerSec != expected {
+		t.Errorf("Expected TPS %.1f, got %.1f", expected, metrics.TokensPerSec)
+	}
+}
+
+func TestManager_CalculateTPS_ZeroDuration(t *testing.T) {
+	m := NewManager()
+
+	// Zero duration should not cause panic
+	m.CalculateTPS(100, 0)
+
+	metrics := m.GetMetrics()
+	if metrics.TokensPerSec != 0 {
+		t.Errorf("Expected TPS 0 for zero duration, got %.1f", metrics.TokensPerSec)
+	}
+}

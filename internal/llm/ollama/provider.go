@@ -16,7 +16,15 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/llm/vram"
 )
+
+// vramNewDetector is a test seam for creating a VRAM detector.
+// It defaults to vram.NewDetector, but tests may override it.
+var vramNewDetector = vram.NewDetector
+
+// newRequirementsCalculator is a test seam for creating a VRAM requirements calculator.
+var newRequirementsCalculator = vram.NewRequirementsCalculator
 
 const (
 	// DefaultBaseURL is the default Ollama API endpoint.
@@ -50,6 +58,13 @@ type Provider struct {
 	model         string
 	timeout       time.Duration
 	streamTimeout time.Duration
+
+	// auto-tune fields (optional)
+	autoTuneCtxLen    int
+	autoTuneGPULayers int
+
+	// autoTuneWarning holds a human-readable note when auto-tune had to degrade settings
+	autoTuneWarning string
 }
 
 // NewProvider creates a new Ollama provider with automatic retry logic.
@@ -98,6 +113,70 @@ func NewProvider(cfg Config) (*Provider, error) {
 	}, nil
 }
 
+// AutoTune queries model info and hardware to set optimal runtime options.
+// This is optional; callers may ignore errors and proceed.
+func (p *Provider) AutoTune(ctx context.Context, headroomBytes int64) error {
+	// Get model metadata for size via /api/tags (first matching)
+	req, err := p.newRequest(ctx, http.MethodGet, "/api/tags", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return p.handleError(resp)
+	}
+	var tags tagsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
+		return err
+	}
+	var size int64
+	modelName := p.model
+	for _, m := range tags.Models {
+		if m.Name == modelName {
+			size = m.Size
+			break
+		}
+	}
+	if size == 0 {
+		// best-effort: cannot tune without size
+		return nil
+	}
+
+	det := vramNewDetector(nil)
+	calc := newRequirementsCalculator(det, headroomBytes)
+	reqs, err := calc.Calculate(size, 4096)
+	if err != nil {
+		return err
+	}
+	if reqs != nil {
+		if reqs.ContextLength > 0 {
+			p.autoTuneCtxLen = reqs.ContextLength
+		}
+		if reqs.NumGPULayers > 0 {
+			p.autoTuneGPULayers = reqs.NumGPULayers
+		}
+		// Heuristic warnings for low-VRAM fallbacks
+		if reqs.Quantization == "q4_0" && reqs.ContextLength == 2048 && reqs.NumGPULayers == 16 {
+			p.autoTuneWarning = "VRAM low: applied minimal context and partial GPU layers; quality may be reduced"
+		}
+		if reqs.RecommendedVRAM == 0 {
+			if name, _ := det.GPUName(); name == "cpu" {
+				p.autoTuneWarning = "No GPU VRAM detected; CPU-only fallback in effect"
+			}
+		}
+	}
+	return nil
+}
+
+// GetAutoTuneWarning returns the last auto-tune warning message, if any.
+func (p *Provider) GetAutoTuneWarning() string {
+	return p.autoTuneWarning
+}
+
 // Complete performs a synchronous completion request.
 func (p *Provider) Complete(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
 	prompt := p.buildPrompt(req.Messages)
@@ -107,6 +186,14 @@ func (p *Provider) Complete(ctx context.Context, req llm.CompletionRequest) (*ll
 		Prompt:      prompt,
 		Stream:      false,
 		Temperature: req.Temperature,
+	}
+
+	// Apply auto-tuned options if present
+	if p.autoTuneCtxLen > 0 {
+		if genReq.Options == nil {
+			genReq.Options = make(map[string]interface{})
+		}
+		genReq.Options["num_ctx"] = p.autoTuneCtxLen
 	}
 
 	httpReq, err := p.newRequest(ctx, http.MethodPost, "/api/generate", genReq)
@@ -441,6 +528,19 @@ func (p *Provider) streamChat(ctx context.Context, req llm.CompletionRequest) (<
 			chatReq.Options = &chatOptions{}
 		}
 		chatReq.Options.NumPredict = req.MaxTokens
+	}
+	// Apply auto-tuned options if present
+	if p.autoTuneCtxLen > 0 {
+		if chatReq.Options == nil {
+			chatReq.Options = &chatOptions{}
+		}
+		chatReq.Options.NumCtx = p.autoTuneCtxLen
+	}
+	if p.autoTuneGPULayers > 0 {
+		if chatReq.Options == nil {
+			chatReq.Options = &chatOptions{}
+		}
+		chatReq.Options.NumGPU = p.autoTuneGPULayers
 	}
 
 	slog.Debug("Ollama sending chat request", "messages", len(chatMessages), "tools", len(chatTools))

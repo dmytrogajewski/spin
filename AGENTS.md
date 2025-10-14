@@ -10,9 +10,11 @@
 * Golang 1.24 only. Idiomatic project layout. No vendor lock. OSS-first.
 * Compatible with popular local runtimes like Ollama and LM Studio out of the box.
 * Documentation is a deliverable. Tests are documentation in motion.
+* TODOs are prohibited. Implement, or stop
 
 ## Non-Negotiables
 
+* Always ask yourself "Is it implemented somewhere in code - and search for it"
 * No feature merges without e2e coverage that exercises the actual user path.
 * No flaky tests. Flake is a bug. Fix or quarantine then fix.
 * No "TODO: tests later". Tests come first or alongside.

@@ -114,6 +114,28 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("create conversation: %w", err)
 	}
 
+	// Initialize status bar with conversation metadata
+	// Get task mode from conversation
+	taskMode := conv.GetTaskMode()
+	ui.SetTaskMode(taskMode)
+
+	// Get max tokens from the conversation's current task
+	maxTokens := int64(conv.GetMaxTokens())
+	ui.SetMaxTokens(maxTokens)
+
+	// Set provider info
+	providerName := provider.Name()
+	modelName := flagModel // Use the model flag directly
+	ui.SetProviderInfo(providerName, modelName)
+
+	// Get session ID from conversation
+	sessionID := conv.GetSessionID()
+	ui.SetConversationID(sessionID)
+
+	// Set initial token count
+	tokenCount := int64(conv.GetTokenCount())
+	ui.SetTokenCount(tokenCount)
+
 	// Create event mapper
 	mapper := core.NewTUIMapper(ui)
 	defer mapper.Close()
@@ -174,6 +196,13 @@ func runTUI(cmd *cobra.Command, args []string) error {
 				}
 				if err := mapper.MapEvent(event); err != nil {
 					ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", err))
+				}
+
+				// Update token count from conversation history after each event
+				// This ensures the status bar always shows current cumulative total
+				if event.Type == core.EventTurnComplete || event.Type == core.EventContentComplete {
+					tokenCount := int64(conv.GetTokenCount())
+					ui.SetTokenCount(tokenCount)
 				}
 			}
 		}

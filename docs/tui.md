@@ -70,14 +70,23 @@ The Spin TUI is a **native-scrollback terminal user interface** for interactive 
 │ │    }                                                                    │
 │ │ ✓ Succeeded. File edited. (+1 added)                                   │
 │───────────────────────────────────────────────────────────────────────────│
-│ > _                                                                       │
+│ [●] 42% (8.5K/20K)  Thinking  ollama/qwen3  125tok/s  ?:help ^C:quit     │ ← Status Bar
+│ > _                                                                       │ ← Prompt
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Regions:**
 - **Timeline**: Vertically scrolling blocks (virtualized for performance)
+- **Status Bar**: Fixed at second-to-last line, displays real-time metrics
+  - Activity indicator: [●] (active) or [○] (idle)
+  - Context usage: percentage and absolute values
+  - Agent state: Current activity (Thinking, Calling tools, etc.)
+  - Provider/model: LLM backend information
+  - Performance: Tokens per second during generation
+  - Task mode: Current mode (review, compact, planning) if not default
+  - Conversation ID: Session identifier
+  - Hotkeys: Quick reference (on wide terminals ≥120 cols)
 - **Prompt line**: Single-line input with `>` prefix (always at bottom)
-- **Status** (optional): Right-aligned transient status indicators
 
 ---
 
@@ -570,7 +579,80 @@ Press ? for help, Ctrl-D to exit
 
 ## 6. Advanced Features
 
-### 6.1 Command Palette (Ctrl-P)
+### 6.1 Persistent Status Bar
+
+**Feature:** Real-time metrics display at bottom of terminal
+
+The status bar provides continuous visibility into agent operation without disrupting scrollback. It automatically adapts to terminal width and updates based on agent events.
+
+**Status Bar Components:**
+
+| Component | Description | Example | Always Shown |
+|-----------|-------------|---------|--------------|
+| Activity Indicator | Connection status | `[●]` (active), `[○]` (idle) | Yes |
+| Context Usage | Token consumption | `42% (8.5K/20K)` | If tokens tracked |
+| Agent State | Current activity | `Thinking`, `Calling tools`, `Ready` | Yes |
+| Task Mode | Current mode | `Review`, `Compact`, `Planning` | If not default |
+| Provider/Model | LLM backend | `ollama/qwen3:1.7b` | If configured |
+| Tokens/Sec | Generation speed | `125 tok/s` | During streaming |
+| Conversation ID | Session ID | `conv:abc123` | If available |
+| Hotkeys | Quick reference | `?:help ^C:quit` | Wide terminals only |
+
+**Adaptive Layout:**
+
+The status bar automatically adjusts based on terminal width:
+
+**Narrow (<60 cols):**
+```
+[●] 42% Thinking
+```
+
+**Medium (60-100 cols):**
+```
+[●] 42% Thinking  ollama/qwen  125tok/s
+```
+
+**Wide (≥100 cols):**
+```
+[●] 42% (8.5K/20K)  Thinking  ollama/qwen3:1.7b  125 tok/s  conv:abc123
+```
+
+**Extra Wide (≥120 cols):**
+```
+[●] 42% (8.5K/20K)  Thinking  ollama/qwen3:1.7b  125 tok/s  conv:abc123  ?:help ^C:quit
+```
+
+**Agent States:**
+
+| Event | Status Display |
+|-------|----------------|
+| Turn starting | `Starting` |
+| LLM thinking | `Thinking` |
+| Tool execution | `Calling: {tool_name}` |
+| Tool progress | `Executing` |
+| Tool complete | `Complete` |
+| Turn complete | `Ready` |
+| Waiting for approval | `Waiting approval` |
+| Error occurred | `Error` |
+| Warning | `Warning` |
+
+**Technical Details:**
+
+- **Update Frequency**: Event-driven (no polling)
+- **Performance**: <5ms render time
+- **Positioning**: ANSI scrolling region reserves bottom 2 lines
+- **Thread Safety**: All updates are thread-safe
+- **Configuration**: Can be disabled via config (future)
+
+**Files:**
+- `internal/ui/status/manager.go` - Status data management
+- `internal/ui/status/aggregator.go` - Event processing
+- `internal/ui/status/renderer.go` - ANSI rendering
+- `internal/ui/status/formatter.go` - Adaptive formatting
+
+---
+
+### 6.2 Command Palette (Ctrl-P)
 
 **Activation:** Press `Ctrl-P`
 

@@ -16,6 +16,11 @@ llm:
   # Request timeout
   timeout: 45s
 
+  # Optional: VRAM auto-tuning (LMStudio may ignore GPU-layer settings)
+  auto_tune: true
+  vram:
+    headroom_mib: 1024
+
   # No authentication required for local LMStudio
   # key_name: (not needed)
   # api_key: (not needed)

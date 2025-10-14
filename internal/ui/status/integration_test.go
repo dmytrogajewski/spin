@@ -23,9 +23,10 @@ func TestIntegration_StatusDisplayWithEvents(t *testing.T) {
 	aggregator.ProcessEvent(event)
 
 	// Check status was updated
-	status := manager.FormatCompact()
-	if status != "Generating content..." {
-		t.Errorf("Expected 'Generating content...', got '%s'", status)
+	status := manager.FormatCompact(80)
+	// New behavior: AgentState set to "Thinking"
+	if !contains(status, "Thinking") {
+		t.Errorf("Expected 'Thinking', got '%s'", status)
 	}
 }
 
@@ -40,31 +41,24 @@ func TestIntegration_StatusFormatting(t *testing.T) {
 	manager.SetResponseTime(1000000000, 300) // 1 second, 300 tokens
 
 	// Get formatted status
-	status := manager.FormatCompact()
+	status := manager.FormatCompact(80)
 
 	// Check it contains expected parts
 	if status == "" {
 		t.Error("Expected non-empty status")
 	}
 
-	// Should contain provider
-	if !contains(status, "ollama") {
-		t.Errorf("Expected status to contain 'ollama', got: %s", status)
+	// New format should contain activity indicator
+	if !contains(status, "[●]") && !contains(status, "[○]") {
+		t.Errorf("Expected status to contain activity indicator, got: %s", status)
 	}
 
-	// Should contain turn count
-	if !contains(status, "T:1") {
-		t.Errorf("Expected status to contain 'T:1', got: %s", status)
-	}
+	// Should contain context percentage (if we set maxTokens)
+	// (Note: we didn't set maxTokens in this test, so percentage might be 0%)
 
-	// Should contain token count
-	if !contains(status, "Tok:300") {
-		t.Errorf("Expected status to contain 'Tok:300', got: %s", status)
-	}
-
-	// Should contain TPS
-	if !contains(status, "TPS:") {
-		t.Errorf("Expected status to contain 'TPS:', got: %s", status)
+	// Should contain agent state (default is "Ready")
+	if !contains(status, "Ready") {
+		t.Errorf("Expected status to contain 'Ready', got: %s", status)
 	}
 
 	t.Logf("Formatted status: %s", status)
@@ -80,7 +74,7 @@ func TestIntegration_StatusDisabled(t *testing.T) {
 	manager.Disable()
 
 	// Should return empty status
-	status := manager.FormatCompact()
+	status := manager.FormatCompact(80)
 	if status != "" {
 		t.Errorf("Expected empty status when disabled, got: %s", status)
 	}
@@ -93,7 +87,7 @@ func TestIntegration_StatusPriority(t *testing.T) {
 	manager.SetStatus("Waiting for user input...")
 
 	// Should return explicit status text, not metrics
-	status := manager.FormatCompact()
+	status := manager.FormatCompact(80)
 	if status != "Waiting for user input..." {
 		t.Errorf("Expected 'Waiting for user input...', got: %s", status)
 	}
@@ -103,10 +97,10 @@ func TestIntegration_StatusPriority(t *testing.T) {
 func TestIntegration_EmptyStatus(t *testing.T) {
 	manager := NewManager()
 
-	// No data set, should return empty
-	status := manager.FormatCompact()
-	if status != "" {
-		t.Errorf("Expected empty status with no data, got: %s", status)
+	// No data set, should show default "[○] Ready"
+	status := manager.FormatCompact(80)
+	if !contains(status, "Ready") {
+		t.Errorf("Expected default 'Ready' status, got: %s", status)
 	}
 }
 

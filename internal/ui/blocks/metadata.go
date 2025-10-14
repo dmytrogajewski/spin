@@ -104,6 +104,33 @@ func (m *GrepMeta) Validate() error {
 	return nil
 }
 
+// ToolMeta holds metadata for TOOL blocks.
+type ToolMeta struct {
+	// ToolName is the name of the tool.
+	ToolName string `json:"tool_name"`
+}
+
+// Validate validates the tool metadata.
+func (m *ToolMeta) Validate() error {
+	if m.ToolName == "" {
+		return fmt.Errorf("tool_name is required")
+	}
+	return nil
+}
+
+// ParseToolMeta extracts ToolMeta from a block's metadata.
+func ParseToolMeta(b *Block) (*ToolMeta, error) {
+	data, err := json.Marshal(b.Meta)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+	var meta ToolMeta
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal ToolMeta: %w", err)
+	}
+	return &meta, nil
+}
+
 // PatchMeta holds metadata for APPLY_PATCH blocks.
 type PatchMeta struct {
 	// File is the target file path.
@@ -111,6 +138,10 @@ type PatchMeta struct {
 
 	// Succeeded indicates if the patch applied successfully.
 	Succeeded bool `json:"succeeded"`
+
+	// Completed indicates whether the write/apply operation has finished.
+	// Rendering should suppress success/failure lines until Completed is true.
+	Completed bool `json:"completed,omitempty"`
 
 	// LinesAdded is the number of lines added (optional).
 	LinesAdded *int `json:"lines_added,omitempty"`
@@ -279,6 +310,23 @@ func SetGrepMeta(b *Block, m *GrepMeta) error {
 	data, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("failed to marshal GrepMeta: %w", err)
+	}
+	var meta map[string]interface{}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return fmt.Errorf("failed to unmarshal to map: %w", err)
+	}
+	b.Meta = meta
+	return nil
+}
+
+// SetToolMeta sets ToolMeta on a block.
+func SetToolMeta(b *Block, m *ToolMeta) error {
+	if err := m.Validate(); err != nil {
+		return fmt.Errorf("invalid ToolMeta: %w", err)
+	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("failed to marshal ToolMeta: %w", err)
 	}
 	var meta map[string]interface{}
 	if err := json.Unmarshal(data, &meta); err != nil {

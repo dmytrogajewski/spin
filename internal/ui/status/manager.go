@@ -2,6 +2,7 @@ package status
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -22,6 +23,11 @@ type Metrics struct {
 	Provider  string
 	Model     string
 	Connected bool
+
+	// Agent state
+	AgentState     string // Current agent activity (e.g., "Calling tools", "Thinking")
+	TaskMode       string // Task mode: regular, review, compact, planning
+	ConversationID string // Session/conversation identifier
 
 	// Timestamps
 	LastUpdate   time.Time
@@ -138,6 +144,37 @@ func (m *Manager) SetConnected(connected bool) {
 	})
 }
 
+// SetAgentState sets the current agent activity state.
+func (m *Manager) SetAgentState(state string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.status.Metrics.AgentState = state
+	m.status.Metrics.LastUpdate = time.Now()
+}
+
+// SetTaskMode sets the current task mode.
+func (m *Manager) SetTaskMode(mode string) {
+	m.UpdateMetrics(func(m *Metrics) {
+		m.TaskMode = mode
+	})
+}
+
+// SetConversationID sets the conversation/session identifier.
+func (m *Manager) SetConversationID(id string) {
+	m.UpdateMetrics(func(m *Metrics) {
+		m.ConversationID = id
+	})
+}
+
+// CalculateTPS calculates tokens per second from token count and duration.
+func (m *Manager) CalculateTPS(tokens int64, duration time.Duration) {
+	m.UpdateMetrics(func(m *Metrics) {
+		if duration > 0 {
+			m.TokensPerSec = float64(tokens) / duration.Seconds()
+		}
+	})
+}
+
 // Enable/Disable controls whether the status manager is active.
 func (m *Manager) Enable() {
 	m.mu.Lock()
@@ -169,9 +206,10 @@ func (m *Manager) Reset() {
 	}
 }
 
-// FormatCompact formats the status as a compact string suitable for display in the prompt line.
-// Returns an empty string if the manager is disabled or there's no meaningful data.
-func (m *Manager) FormatCompact() string {
+// FormatCompact formats status for narrow terminals (<60 columns).
+// Shows: activity indicator, context%, and agent state only.
+// NOTE: This replaces the old FormatCompact() implementation.
+func (m *Manager) FormatCompact(width int) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -179,59 +217,40 @@ func (m *Manager) FormatCompact() string {
 		return ""
 	}
 
-	// If there's explicit status text, return it
+	// If there's explicit status text, return it (legacy behavior)
 	if m.status.Text != "" {
 		return m.status.Text
 	}
 
-	// Otherwise, format metrics compactly
-	// Priority: Show most useful info in limited space
-	var parts []string
+	parts := []string{}
 
-	// Show provider/model if set
-	if m.status.Metrics.Provider != "" {
-		parts = append(parts, m.status.Metrics.Provider)
+	// Activity indicator
+	if m.status.Metrics.Connected {
+		parts = append(parts, "[●]")
+	} else {
+		parts = append(parts, "[○]")
 	}
 
-	// Show turn count
-	if m.status.Metrics.TurnCount > 0 {
-		parts = append(parts, "T:"+intToStr(m.status.Metrics.TurnCount))
+	// Context percentage (if available)
+	if m.status.Metrics.MaxTokens > 0 {
+		pct := fmt.Sprintf("%.0f%%", m.status.Metrics.TokenUsage)
+		parts = append(parts, pct)
 	}
 
-	// Show tokens if non-zero
-	if m.status.Metrics.TokenCount > 0 {
-		parts = append(parts, "Tok:"+int64ToStr(m.status.Metrics.TokenCount))
+	// Agent state
+	state := m.status.Metrics.AgentState
+	if state == "" {
+		state = "Ready"
 	}
-
-	// Show TPS if non-zero
-	if m.status.Metrics.TokensPerSec > 0 {
-		parts = append(parts, "TPS:"+floatToStr(m.status.Metrics.TokensPerSec))
+	// Truncate state to fit narrow terminal
+	if len(state) > 15 {
+		state = state[:12] + "..."
 	}
+	parts = append(parts, state)
 
 	if len(parts) == 0 {
 		return ""
 	}
 
-	// Join with " | " separator
-	result := ""
-	for i, part := range parts {
-		if i > 0 {
-			result += " | "
-		}
-		result += part
-	}
-	return result
-}
-
-// Helper functions for compact formatting
-func intToStr(i int) string {
-	return fmt.Sprintf("%d", i)
-}
-
-func int64ToStr(i int64) string {
-	return fmt.Sprintf("%d", i)
-}
-
-func floatToStr(f float64) string {
-	return fmt.Sprintf("%.1f", f)
+	return strings.Join(parts, " ")
 }

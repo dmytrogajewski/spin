@@ -357,6 +357,53 @@ func (u *PureTTY) SetStatus(text string) error {
 	return u.coord.SetStatus(text)
 }
 
+// SetTaskMode sets the task mode for display in status bar.
+func (u *PureTTY) SetTaskMode(mode string) {
+	if u.statusManager != nil {
+		u.statusManager.SetTaskMode(mode)
+		u.updateStatusBar()
+	}
+}
+
+// SetConversationID sets the conversation/session ID for display in status bar.
+func (u *PureTTY) SetConversationID(id string) {
+	if u.statusManager != nil {
+		u.statusManager.SetConversationID(id)
+		u.updateStatusBar()
+	}
+}
+
+// SetProviderInfo sets the LLM provider and model information for display in status bar.
+func (u *PureTTY) SetProviderInfo(provider, model string) {
+	if u.statusManager != nil {
+		u.statusManager.SetProvider(provider, model)
+		u.statusManager.SetConnected(true)
+		u.updateStatusBar()
+	}
+}
+
+// SetMaxTokens sets the maximum token limit for context percentage calculation.
+func (u *PureTTY) SetMaxTokens(maxTokens int64) {
+	if u.statusManager != nil {
+		u.statusManager.SetMaxTokens(maxTokens)
+		u.updateStatusBar()
+	}
+}
+
+// SetTokenCount sets the current token count for context percentage calculation.
+func (u *PureTTY) SetTokenCount(tokenCount int64) {
+	if u.statusManager != nil {
+		// Set token count directly (this is the cumulative total)
+		u.statusManager.UpdateMetrics(func(m *status.Metrics) {
+			m.TokenCount = tokenCount
+			if m.MaxTokens > 0 {
+				m.TokenUsage = float64(tokenCount) / float64(m.MaxTokens) * 100
+			}
+		})
+		u.updateStatusBar()
+	}
+}
+
 // ProcessEvent processes a core.Event and updates the status manager.
 // This method is called by the event mapper to update status information.
 func (u *PureTTY) ProcessEvent(event *core.Event) {
@@ -393,8 +440,11 @@ func (u *PureTTY) updateStatusBar() {
 		return
 	}
 
-	// Get formatted status from manager
-	newStatusText := u.statusManager.FormatCompact()
+	// Get terminal width for adaptive formatting
+	w, _ := u.tty.Size()
+
+	// Get formatted status from manager (adaptive based on width)
+	newStatusText := u.statusManager.FormatAdaptive(w)
 
 	// Only update if status actually changed
 	u.mu.Lock()
@@ -958,6 +1008,10 @@ func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
 		fmt.Fprint(u.out, "\x1b[1A\x1b[2K")                                    // Up + clear line
 		fmt.Fprint(u.out, strings.ReplaceAll(statusLine, "\n", "\r\n")+"\r\n") // Write status
 		u.renderer.Redraw(u.model, "")                                         // Redraw prompt
+		// Move cursor back to scrolling region after redrawing prompt
+		if u.statusRenderer != nil {
+			_ = u.statusRenderer.MoveToScrollRegion()
+		}
 	}
 
 	return nil

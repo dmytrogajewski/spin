@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/llm/vram"
 )
 
 // TestNewProvider tests provider construction
@@ -707,6 +708,93 @@ func TestHandleError(t *testing.T) {
 				t.Errorf("Error = %q, want to contain %q", err.Error(), tt.wantErr)
 			}
 		})
+	}
+}
+
+// --- VRAM AutoTune tests ---
+
+type fakeDetector struct {
+	total int64
+	free  int64
+	name  string
+}
+
+func (f *fakeDetector) TotalVRAM() (int64, error)     { return f.total, nil }
+func (f *fakeDetector) AvailableVRAM() (int64, error) { return f.free, nil }
+func (f *fakeDetector) GPUName() (string, error)      { return f.name, nil }
+
+func TestAutoTune_LowVRAMFallback_Warning(t *testing.T) {
+	// Override seams
+	oldNewDetector := vramNewDetector
+	oldNewCalc := newRequirementsCalculator
+	t.Cleanup(func() { vramNewDetector = oldNewDetector; newRequirementsCalculator = oldNewCalc })
+
+	vramNewDetector = func(_ vram.CommandRunner) vram.Detector {
+		return &fakeDetector{total: 2 << 30, free: 512 << 20, name: "nvidia"}
+	}
+	newRequirementsCalculator = func(d vram.Detector, headroom int64) *vram.RequirementsCalculator {
+		return vram.NewRequirementsCalculator(d, headroom)
+	}
+
+	// Fake /api/tags to provide model size
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, `{"models":[{"name":"llama2","size":%d}]}`, 7<<30) // 7 GiB model
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	p, err := NewProvider(Config{BaseURL: server.URL, Model: "llama2"})
+	if err != nil {
+		t.Fatalf("NewProvider error: %v", err)
+	}
+
+	// Headroom 1GiB to force aggressive fallback
+	if err := p.AutoTune(context.Background(), 1<<30); err != nil {
+		t.Fatalf("AutoTune error: %v", err)
+	}
+
+	warn := p.GetAutoTuneWarning()
+	if warn == "" {
+		t.Errorf("expected warning for low VRAM fallback, got empty")
+	}
+}
+
+func TestAutoTune_CPUFallback_Warning(t *testing.T) {
+	oldNewDetector := vramNewDetector
+	oldNewCalc := newRequirementsCalculator
+	t.Cleanup(func() { vramNewDetector = oldNewDetector; newRequirementsCalculator = oldNewCalc })
+
+	vramNewDetector = func(_ vram.CommandRunner) vram.Detector { return &fakeDetector{total: 0, free: 0, name: "cpu"} }
+	newRequirementsCalculator = func(d vram.Detector, headroom int64) *vram.RequirementsCalculator {
+		return vram.NewRequirementsCalculator(d, headroom)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, `{"models":[{"name":"llama2","size":%d}]}`, 2<<30)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	p, err := NewProvider(Config{BaseURL: server.URL, Model: "llama2"})
+	if err != nil {
+		t.Fatalf("NewProvider error: %v", err)
+	}
+
+	if err := p.AutoTune(context.Background(), 0); err != nil {
+		t.Fatalf("AutoTune error: %v", err)
+	}
+
+	warn := p.GetAutoTuneWarning()
+	if !strings.Contains(strings.ToLower(warn), "cpu") {
+		t.Errorf("expected CPU fallback warning, got: %q", warn)
 	}
 }
 

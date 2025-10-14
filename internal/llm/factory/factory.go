@@ -310,7 +310,34 @@ func (f *Factory) newOllamaProvider(ctx context.Context, cfg ProviderConfig) (ll
 		Timeout: cfg.Timeout,
 	}
 
-	return ollama.NewProvider(ollamaCfg)
+	p, err := ollama.NewProvider(ollamaCfg)
+	if err != nil {
+		return nil, err
+	}
+	// Auto-tune by default unless explicitly disabled via Options["auto_tune"]=false
+	enable := true
+	if cfg.Options != nil {
+		if at, ok := cfg.Options["auto_tune"].(bool); ok {
+			enable = at
+		}
+	}
+	if enable {
+		var headroom int64
+		if cfg.Options != nil {
+			if v, ok := cfg.Options["vram_headroom_mib"].(int); ok {
+				headroom = int64(v) * 1024 * 1024
+			}
+			if v, ok := cfg.Options["vram_headroom_mib"].(float64); ok {
+				headroom = int64(v) * 1024 * 1024
+			}
+		}
+		if headroom == 0 {
+			headroom = 1024 * 1024 * 1024
+		}
+		// best-effort; ignore error
+		_ = p.AutoTune(ctx, headroom)
+	}
+	return p, nil
 }
 
 // newLMStudioProvider creates an LMStudio provider from config (with auth support).

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dmytrogajewski/spin/internal/core/history"
+	"github.com/dmytrogajewski/spin/internal/core/history/compress"
 	"github.com/dmytrogajewski/spin/internal/core/task"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/session"
@@ -169,10 +171,23 @@ func (m *Manager) NewConversation(ctx context.Context, workDir string) (*Convers
 		logger.Error("failed to create agent", "error", err)
 		return nil, err
 	}
-	history := NewHistoryWithDefaults()
-	_ = history.AddSystemMessage("You are a helpful AI coding assistant.")
 
-	conv := NewConversation(agent, history, m.emitter)
+	// Create history with LLM summarization + hybrid fallback (if LLM available)
+	hist := NewHistoryWithDefaults()
+
+	if m.llm != nil {
+		// Use composite compressor: LLM summarization (primary) + hybrid (fallback)
+		adapter := history.NewLLMProviderAdapter(m.llm)
+		compressor := compress.NewDefaultLLMWithHybridFallback(adapter)
+		hist.SetCompressor(compressor)
+	}
+
+	// Set event emitter for compression notifications
+	hist.SetEventEmitter(m.emitter)
+
+	_ = hist.AddSystemMessage("You are a helpful AI coding assistant.")
+
+	conv := NewConversation(agent, hist, m.emitter)
 	logger.Info("conversation created successfully")
 	return conv, nil
 }
@@ -274,22 +289,33 @@ func (m *Manager) ResumeConversation(ctx context.Context, sessionID string) (*Co
 		return nil, fmt.Errorf("create agent: %w", err)
 	}
 
-	// Restore history from session turns
-	history := NewHistoryWithDefaults()
+	// Restore history from session turns with LLM summarization support
+	hist := NewHistoryWithDefaults()
+
+	if m.llm != nil {
+		// Use composite compressor: LLM summarization (primary) + hybrid (fallback)
+		adapter := history.NewLLMProviderAdapter(m.llm)
+		compressor := compress.NewDefaultLLMWithHybridFallback(adapter)
+		hist.SetCompressor(compressor)
+	}
+
+	// Set event emitter for compression notifications
+	hist.SetEventEmitter(m.emitter)
+
 	for _, t := range sess.Turns {
 		// Add user input
 		if t.UserInput != "" {
-			_ = history.AddUserMessage(t.UserInput)
+			_ = hist.AddUserMessage(t.UserInput)
 		}
 		// Add assistant response
 		if t.AIResponse != "" {
-			_ = history.AddAssistantMessage(t.AIResponse)
+			_ = hist.AddAssistantMessage(t.AIResponse)
 		}
 		// Note: Tool messages not yet supported in turn history restoration
 	}
 
-	conv := NewConversation(agent, history, m.emitter)
-	logger.Info("conversation resumed successfully", "session_id", sessionID, "history_messages", len(history.Messages()))
+	conv := NewConversation(agent, hist, m.emitter)
+	logger.Info("conversation resumed successfully", "session_id", sessionID, "history_messages", len(hist.Messages()))
 	return conv, nil
 }
 

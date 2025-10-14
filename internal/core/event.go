@@ -18,6 +18,21 @@ type Event struct {
 	Data      interface{} `json:"data"`
 }
 
+// GetType returns the event type (implements cycle.Event interface)
+func (e Event) GetType() string {
+	return e.Type.String()
+}
+
+// GetTimestamp returns the event timestamp (implements cycle.Event interface)
+func (e Event) GetTimestamp() time.Time {
+	return e.Timestamp
+}
+
+// GetData returns the event data (implements cycle.Event interface)
+func (e Event) GetData() interface{} {
+	return e.Data
+}
+
 // EventType represents the category of event.
 type EventType int
 

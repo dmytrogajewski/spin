@@ -10,45 +10,43 @@ func TestAggregator_ProcessEvent(t *testing.T) {
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
-	// Test content generation
-	event := &core.Event{Type: core.EventContentDelta}
+	// Test turn start
+	event := &core.Event{Type: core.EventTurnStart}
 	aggregator.ProcessEvent(event)
 
-	status := manager.GetStatus()
-	if status.Text != "Generating content..." {
-		t.Errorf("Expected status 'Generating content...', got %q", status.Text)
+	metrics := manager.GetMetrics()
+	if metrics.AgentState != "Starting" {
+		t.Errorf("Expected agent state 'Starting', got %q", metrics.AgentState)
+	}
+	if metrics.TurnCount != 1 {
+		t.Errorf("Expected turn count 1 (incremented on turn start), got %d", metrics.TurnCount)
+	}
+
+	// Test content generation
+	event = &core.Event{Type: core.EventContentDelta}
+	aggregator.ProcessEvent(event)
+
+	metrics = manager.GetMetrics()
+	if metrics.AgentState != "Thinking" {
+		t.Errorf("Expected agent state 'Thinking', got %q", metrics.AgentState)
 	}
 
 	// Test tool execution
 	event = &core.Event{Type: core.EventToolCallStart}
 	aggregator.ProcessEvent(event)
 
-	status = manager.GetStatus()
-	if status.Text != "Executing tool..." {
-		t.Errorf("Expected status 'Executing tool...', got %q", status.Text)
-	}
-
-	// Test tool complete (increments turn)
-	event = &core.Event{Type: core.EventToolCallComplete}
-	aggregator.ProcessEvent(event)
-
-	status = manager.GetStatus()
-	if status.Text != "Tool complete" {
-		t.Errorf("Expected status 'Tool complete', got %q", status.Text)
-	}
-
-	metrics := manager.GetMetrics()
-	if metrics.TurnCount != 1 {
-		t.Errorf("Expected turn count 1, got %d", metrics.TurnCount)
+	metrics = manager.GetMetrics()
+	if metrics.AgentState != "Calling tools" {
+		t.Errorf("Expected agent state 'Calling tools', got %q", metrics.AgentState)
 	}
 
 	// Test content complete
 	event = &core.Event{Type: core.EventContentComplete}
 	aggregator.ProcessEvent(event)
 
-	status = manager.GetStatus()
-	if status.Text != "Content complete" {
-		t.Errorf("Expected status 'Content complete', got %q", status.Text)
+	metrics = manager.GetMetrics()
+	if metrics.AgentState != "Ready" {
+		t.Errorf("Expected agent state 'Ready', got %q", metrics.AgentState)
 	}
 }
 
@@ -61,10 +59,10 @@ func TestAggregator_ProcessEvent_Disabled(t *testing.T) {
 	event := &core.Event{Type: core.EventToolCallStart}
 	aggregator.ProcessEvent(event)
 
-	// Status should not change because manager is disabled
-	status := manager.GetStatus()
-	if status.Text != "" {
-		t.Errorf("Expected empty status (manager disabled), got %q", status.Text)
+	// Agent state should not change because manager is disabled
+	metrics := manager.GetMetrics()
+	if metrics.AgentState != "" {
+		t.Errorf("Expected empty agent state (manager disabled), got %q", metrics.AgentState)
 	}
 }
 
@@ -89,15 +87,16 @@ func TestAggregator_SetMaxTokens(t *testing.T) {
 
 func TestAggregator_UnknownEvent(t *testing.T) {
 	manager := NewManager()
+	manager.SetAgentState("InitialState") // Set an initial state
 	aggregator := NewAggregator(manager)
 
 	// Process unknown event type (use a high number that doesn't exist)
 	event := &core.Event{Type: core.EventType(999)}
 	aggregator.ProcessEvent(event)
 
-	// Should set default status for unknown events
-	status := manager.GetStatus()
-	if status.Text != "Processing..." {
-		t.Errorf("Expected status 'Processing...' (unknown event), got %q", status.Text)
+	// Unknown events should NOT change the state (new behavior)
+	metrics := manager.GetMetrics()
+	if metrics.AgentState != "InitialState" {
+		t.Errorf("Expected agent state to remain 'InitialState' for unknown event, got %q", metrics.AgentState)
 	}
 }

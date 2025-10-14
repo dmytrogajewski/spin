@@ -82,6 +82,11 @@ func (c *CoordinatedWriter) PrintLine(s string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Move to scrolling region BEFORE writing content
+	if c.scrollManager != nil {
+		_ = c.scrollManager.MoveToScrollRegion()
+	}
+
 	// Write line via printer
 	if err := c.printer.PrintLine(s); err != nil {
 		return fmt.Errorf("print line: %w", err)
@@ -92,7 +97,7 @@ func (c *CoordinatedWriter) PrintLine(s string) error {
 		return fmt.Errorf("redraw prompt: %w", err)
 	}
 
-	// Move cursor back to scrolling region if manager is set
+	// Move cursor back to scrolling region after redrawing prompt
 	if c.scrollManager != nil {
 		_ = c.scrollManager.MoveToScrollRegion()
 	}
@@ -109,6 +114,13 @@ func (c *CoordinatedWriter) PrintLine(s string) error {
 //
 // Returns context.Canceled if context is canceled, or any write/redraw error.
 func (c *CoordinatedWriter) PrintChunks(ctx context.Context, chunks <-chan string) error {
+	// Move to scrolling region BEFORE streaming content
+	c.mu.Lock()
+	if c.scrollManager != nil {
+		_ = c.scrollManager.MoveToScrollRegion()
+	}
+	c.mu.Unlock()
+
 	// Let printer handle streaming (it has internal coordination)
 	err := c.printer.PrintChunks(ctx, chunks)
 
@@ -124,7 +136,7 @@ func (c *CoordinatedWriter) PrintChunks(ctx context.Context, chunks <-chan strin
 		// (redraw error is secondary)
 	}
 
-	// Move cursor back to scrolling region if manager is set
+	// Move cursor back to scrolling region after redrawing prompt
 	if c.scrollManager != nil {
 		_ = c.scrollManager.MoveToScrollRegion()
 	}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ControlSignal represents a control signal sent to a running turn.
@@ -62,6 +64,9 @@ type Conversation struct {
 	// Task mode tracking
 	currentTask Task   // Current task object (resolved from taskName)
 	taskName    string // Current task mode name (for queries/UI)
+
+	// Session tracking
+	sessionID string // Unique session identifier (lazy-generated)
 }
 
 // NewConversation creates a new Conversation instance wired to the provided
@@ -237,13 +242,20 @@ func (c *Conversation) runTurnWithControl(ctx context.Context, req *AgentRequest
 				return err
 			}
 
-			// Add both user and assistant messages to history
+			// Add all messages to history: user input + all turn messages
 			if c.history != nil {
+				// Add user message first
 				_ = c.history.AddUserMessage(req.Input)
 
+				// Add all messages generated during the turn (tool calls, tool results, etc.)
 				respMu.Lock()
-				if resp != nil && resp.Content != "" {
-					_ = c.history.AddAssistantMessage(resp.Content)
+				if resp != nil && len(resp.Messages) > 0 {
+					for _, msg := range resp.Messages {
+						// Skip user messages (already added above)
+						if msg.Role != RoleUser {
+							_ = c.history.AddMessage(msg)
+						}
+					}
 				}
 				respMu.Unlock()
 			}
@@ -515,4 +527,46 @@ func (c *Conversation) GetTaskMode() string {
 		return c.taskName
 	}
 	return "regular"
+}
+
+// GetMaxTokens returns the maximum token limit for the current task mode.
+// This method is thread-safe and can be called concurrently.
+func (c *Conversation) GetMaxTokens() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.currentTask != nil {
+		return c.currentTask.MaxTokens()
+	}
+
+	// Fallback: return default (16K for regular mode)
+	return 16384
+}
+
+// GetSessionID returns the session ID for this conversation.
+// Generates a new UUID if not already set (lazy initialization).
+// This method is thread-safe and can be called concurrently.
+func (c *Conversation) GetSessionID() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.sessionID == "" {
+		// Lazy generate session ID
+		c.sessionID = uuid.New().String()
+	}
+
+	return c.sessionID
+}
+
+// GetTokenCount returns the total token count from conversation history.
+// This method is thread-safe and can be called concurrently.
+func (c *Conversation) GetTokenCount() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.history != nil {
+		return c.history.TokenCount()
+	}
+
+	return 0
 }
