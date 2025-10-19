@@ -76,30 +76,3 @@ type ShellCompleted struct {
 type ShellFailed struct {
 	Error string `json:"error"`
 }
-
-// NewPendingStatus creates a pending status
-func NewPendingStatus() LocalShellStatus {
-	return LocalShellStatus{Pending: &struct{}{}}
-}
-
-// NewRunningStatus creates a running status
-func NewRunningStatus() LocalShellStatus {
-	return LocalShellStatus{Running: &struct{}{}}
-}
-
-// NewCompletedStatus creates a completed status
-func NewCompletedStatus(exitCode int, output string) LocalShellStatus {
-	return LocalShellStatus{
-		Completed: &ShellCompleted{
-			ExitCode: exitCode,
-			Output:   output,
-		},
-	}
-}
-
-// NewFailedStatus creates a failed status
-func NewFailedStatus(err string) LocalShellStatus {
-	return LocalShellStatus{
-		Failed: &ShellFailed{Error: err},
-	}
-}

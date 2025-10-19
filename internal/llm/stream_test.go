@@ -526,7 +526,7 @@ func TestStreamResponse_NoGoroutineLeak(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		chunks := make(chan StreamChunk, 10)
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 
 		go func() {
 			defer close(chunks)
@@ -536,10 +536,12 @@ func TestStreamResponse_NoGoroutineLeak(t *testing.T) {
 		// Consume all chunks
 		for range chunks {
 		}
+
+		cancel()
 	}
 
-	// If there's a goroutine leak, this test will timeout or fail with -race
-	time.Sleep(10 * time.Millisecond)
+	// Allow goroutines to clean up
+	time.Sleep(50 * time.Millisecond)
 }
 
 // Test channel buffering

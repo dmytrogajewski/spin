@@ -71,14 +71,6 @@ func NewRegular() *Regular {
 	}
 }
 
-// NewRegularWithConfig creates a new Regular task mode with custom configuration.
-// Pass nil config to use all defaults (equivalent to NewRegular()).
-func NewRegularWithConfig(config *RegularConfig) *Regular {
-	return &Regular{
-		config: config,
-	}
-}
-
 // Name returns the unique identifier for this task mode.
 // Always returns "regular".
 func (r *Regular) Name() string {
@@ -211,59 +203,82 @@ func (r *Regular) MaxTokens() int {
 //
 // A nil config is always valid (uses defaults).
 // Multiple validation errors are joined together.
-//
-//nolint:dupl // Validation logic is similar but validates different config fields per mode
 func (r *Regular) Validate() error {
 	if r.config == nil {
 		return nil // Default config is always valid
 	}
 
 	var errs []error
+	errs = append(errs, r.validateMaxTokens()...)
+	errs = append(errs, r.validateExcludedTools()...)
+	errs = append(errs, r.validateCustomSystemPrompt()...)
 
-	// Validate max tokens
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+// validateMaxTokens validates the max tokens configuration.
+func (r *Regular) validateMaxTokens() []error {
+	var errs []error
 	if r.config.MaxTokens < 0 {
 		errs = append(errs, fmt.Errorf("max tokens cannot be negative: %d", r.config.MaxTokens))
 	}
 	if r.config.MaxTokens > MaxAllowedTokens {
 		errs = append(errs, fmt.Errorf("max tokens (%d) exceeds maximum allowed (%d)", r.config.MaxTokens, MaxAllowedTokens))
 	}
+	return errs
+}
 
-	// Validate excluded tools
+// validateExcludedTools validates the excluded tools configuration.
+func (r *Regular) validateExcludedTools() []error {
+	var errs []error
 	for i, tool := range r.config.ExcludedTools {
 		if tool == "" {
 			errs = append(errs, fmt.Errorf("excluded tool at index %d cannot be empty", i))
 		}
 	}
+	return errs
+}
 
-	// Validate custom system prompt
+// validateCustomSystemPrompt validates the custom system prompt configuration.
+func (r *Regular) validateCustomSystemPrompt() []error {
+	var errs []error
 	if r.config.CustomSystemPrompt != "" && len(r.config.CustomSystemPrompt) < MinPromptLength {
 		errs = append(errs, fmt.Errorf("custom system prompt too short (%d characters, minimum %d)", len(r.config.CustomSystemPrompt), MinPromptLength))
 	}
-
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-
-	return nil
+	return errs
 }
 
 // filterTools removes excluded tools from the tool list.
 // Returns a new slice with excluded tools removed, preserving order.
 // If a tool in excluded is not in tools, it is silently ignored.
 func filterTools(tools []string, excluded []string) []string {
-	// Build exclusion map for O(1) lookup
+	if len(excluded) == 0 {
+		return tools
+	}
+
+	excludeMap := buildExclusionMap(excluded)
+	return filterToolsWithMap(tools, excludeMap)
+}
+
+// buildExclusionMap builds a map for O(1) lookup of excluded tools.
+func buildExclusionMap(excluded []string) map[string]bool {
 	excludeMap := make(map[string]bool, len(excluded))
 	for _, tool := range excluded {
 		excludeMap[tool] = true
 	}
+	return excludeMap
+}
 
-	// Filter tools
+// filterToolsWithMap filters tools using the exclusion map.
+func filterToolsWithMap(tools []string, excludeMap map[string]bool) []string {
 	filtered := make([]string, 0, len(tools))
 	for _, tool := range tools {
 		if !excludeMap[tool] {
 			filtered = append(filtered, tool)
 		}
 	}
-
 	return filtered
 }

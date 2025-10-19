@@ -25,6 +25,62 @@ func TestFormatCompact(t *testing.T) {
 	}
 }
 
+func TestFormatCompact_WithExplicitStatusText(t *testing.T) {
+	m := NewManager()
+	m.SetStatus("Custom Status Message")
+	m.SetAgentState("Thinking")
+
+	result := m.FormatCompact(50)
+
+	// Should return the explicit status text
+	if result != "Custom Status Message" {
+		t.Errorf("Expected explicit status text, got: %s", result)
+	}
+}
+
+func TestFormatCompact_LongStateName(t *testing.T) {
+	m := NewManager()
+	// Set a very long state name that will be truncated
+	m.SetAgentState("This is a very long agent state name that should be truncated")
+
+	result := m.FormatCompact(50)
+
+	// Should contain truncated state with ellipsis
+	if !strings.Contains(result, "...") {
+		t.Errorf("Expected truncation for long state name, got: %s", result)
+	}
+	// Should not contain the full state name
+	if len(result) > 50 {
+		t.Errorf("Result should fit in terminal width, got length %d: %s", len(result), result)
+	}
+}
+
+func TestFormatCompact_ConnectedState(t *testing.T) {
+	m := NewManager()
+	m.SetConnected(true)
+	m.SetAgentState("Ready")
+
+	result := m.FormatCompact(50)
+
+	// Should show connected indicator
+	if !strings.Contains(result, "[●]") {
+		t.Errorf("Expected connected indicator, got: %s", result)
+	}
+}
+
+func TestFormatCompact_DisconnectedState(t *testing.T) {
+	m := NewManager()
+	m.SetConnected(false)
+	m.SetAgentState("Ready")
+
+	result := m.FormatCompact(50)
+
+	// Should show disconnected indicator
+	if !strings.Contains(result, "[○]") {
+		t.Errorf("Expected disconnected indicator, got: %s", result)
+	}
+}
+
 func TestFormatMedium(t *testing.T) {
 	m := NewManager()
 	m.SetAgentState("Calling tools")
@@ -47,6 +103,75 @@ func TestFormatMedium(t *testing.T) {
 	}
 	if !strings.Contains(result, "125tok/s") {
 		t.Errorf("Expected '125tok/s', got: %s", result)
+	}
+}
+
+func TestFormatMedium_NoMaxTokens(t *testing.T) {
+	m := NewManager()
+	m.SetAgentState("Ready")
+	m.SetProvider("openai", "gpt-4")
+	// MaxTokens is 0 by default
+
+	result := m.FormatMedium(80)
+
+	// Should NOT contain percentage when MaxTokens is 0
+	if strings.Contains(result, "%") {
+		t.Errorf("Should not show percentage when MaxTokens is 0, got: %s", result)
+	}
+	// Should still show state and provider
+	if !strings.Contains(result, "Ready") {
+		t.Errorf("Expected 'Ready', got: %s", result)
+	}
+	if !strings.Contains(result, "openai") {
+		t.Errorf("Expected 'openai', got: %s", result)
+	}
+}
+
+func TestFormatMedium_LowTPS(t *testing.T) {
+	m := NewManager()
+	m.SetAgentState("Thinking")
+	m.CalculateTPS(1, 1000000000) // Exactly 1.0 tok/s (below threshold)
+
+	result := m.FormatMedium(80)
+
+	// Should NOT show TPS when it's <= 1.0
+	if strings.Contains(result, "tok/s") {
+		t.Errorf("Should not show TPS when <= 1.0, got: %s", result)
+	}
+}
+
+func TestFormatMedium_HighTPS(t *testing.T) {
+	m := NewManager()
+	m.SetAgentState("Thinking")
+	m.CalculateTPS(2, 1000000000) // 2.0 tok/s (above threshold)
+
+	result := m.FormatMedium(80)
+
+	// Should show TPS when > 1.0
+	if !strings.Contains(result, "2tok/s") {
+		t.Errorf("Expected TPS to be shown when > 1.0, got: %s", result)
+	}
+}
+
+func TestFormatMedium_NoProvider(t *testing.T) {
+	m := NewManager()
+	m.SetAgentState("Ready")
+	m.SetMaxTokens(1000)
+	m.AddTokens(500, 0)
+	// Provider is not set
+
+	result := m.FormatMedium(80)
+
+	// Should NOT show provider when it's empty
+	if strings.Contains(result, "/") {
+		t.Errorf("Should not show provider when empty, got: %s", result)
+	}
+	// Should still show other fields
+	if !strings.Contains(result, "50%") {
+		t.Errorf("Expected percentage, got: %s", result)
+	}
+	if !strings.Contains(result, "Ready") {
+		t.Errorf("Expected state, got: %s", result)
 	}
 }
 
@@ -186,6 +311,9 @@ func TestTruncate(t *testing.T) {
 		{"abc", 3, "abc"},                                // 3 chars, fits exactly
 		{"abcd", 3, "..."},                               // 4 chars, truncate to 3 (0 chars + "...")
 		{"verylongmodelname", 12, "verylongm..."},        // truncate to 12 (12-3=9 chars + "...")
+		{"hello", 2, "he"},                               // maxLen < 3, no ellipsis
+		{"hi", 1, "h"},                                   // maxLen = 1
+		{"text", 0, ""},                                  // maxLen = 0
 	}
 
 	for _, tt := range tests {

@@ -117,16 +117,17 @@ func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Prov
 	}
 
 	// Create provider based on type
-	switch cfg.Type {
-	case "openai", "openai-compatible":
-		return f.newOpenAIProvider(ctx, cfg)
-	case "ollama":
-		return f.newOllamaProvider(ctx, cfg)
-	case "lmstudio":
-		return f.newLMStudioProvider(ctx, cfg)
-	default:
-		return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
+	providers := map[string]func(context.Context, ProviderConfig) (llm.Provider, error){
+		"openai":            f.newOpenAIProvider,
+		"openai-compatible": f.newOpenAIProvider,
+		"ollama":            f.newOllamaProvider,
+		"lmstudio":          f.newLMStudioProvider,
 	}
+
+	if provider, exists := providers[cfg.Type]; exists {
+		return provider(ctx, cfg)
+	}
+	return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
 }
 
 // NewProvider creates a provider from configuration (legacy, backward compatible).
@@ -149,24 +150,6 @@ func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Prov
 //	    Timeout: 30 * time.Second,
 //	}
 //	provider, err := factory.NewProvider(cfg)
-func NewProvider(cfg ProviderConfig) (llm.Provider, error) {
-	// Validate configuration
-	if err := validateConfig(cfg); err != nil {
-		return nil, err
-	}
-
-	// Lookup factory
-	factoryMu.RLock()
-	factory, exists := factories[cfg.Type]
-	factoryMu.RUnlock()
-
-	if !exists {
-		return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
-	}
-
-	// Create provider using legacy factory
-	return factory(cfg)
-}
 
 // RegisterProvider registers a custom provider factory.
 //
@@ -186,11 +169,6 @@ func NewProvider(cfg ProviderConfig) (llm.Provider, error) {
 //	    Type: "custom",
 //	    // ...
 //	})
-func RegisterProvider(name string, factory ProviderFactory) {
-	factoryMu.Lock()
-	defer factoryMu.Unlock()
-	factories[name] = factory
-}
 
 // resolveCredential resolves a credential from configuration.
 //
@@ -236,44 +214,63 @@ func validateConfig(cfg ProviderConfig) error {
 		return fmt.Errorf("provider type is required")
 	}
 
-	// Type-specific validation
-	switch cfg.Type {
-	case "openai", "openai-compatible":
-		if cfg.BaseURL == "" {
-			return fmt.Errorf("baseURL is required for %s", cfg.Type)
-		}
-		// Auth validation: require either KeyName or APIKey
-		if cfg.KeyName == "" && cfg.APIKey == "" {
-			return fmt.Errorf("authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated)", cfg.Type)
-		}
-		if cfg.Model == "" {
-			return fmt.Errorf("model is required for %s", cfg.Type)
-		}
-
-	case "ollama":
-		if cfg.BaseURL == "" {
-			return fmt.Errorf("baseURL is required for ollama")
-		}
-		if cfg.Model == "" {
-			return fmt.Errorf("model is required for ollama")
-		}
-		// Auth is optional for Ollama (local provider)
-
-	case "lmstudio":
-		if cfg.Model == "" {
-			return fmt.Errorf("model is required for lmstudio")
-		}
-		// BaseURL is optional (defaults to localhost:1234)
-		// Auth is optional for LMStudio (local provider)
+	validators := map[string]func(ProviderConfig) error{
+		"openai":            validateOpenAIConfig,
+		"openai-compatible": validateOpenAIConfig,
+		"ollama":            validateOllamaConfig,
+		"lmstudio":          validateLMStudioConfig,
 	}
 
-	// URL validation (if provided)
-	if cfg.BaseURL != "" {
-		if _, err := url.Parse(cfg.BaseURL); err != nil {
-			return fmt.Errorf("invalid baseURL: %w", err)
+	if validator, exists := validators[cfg.Type]; exists {
+		if err := validator(cfg); err != nil {
+			return err
 		}
 	}
 
+	return validateBaseURL(cfg.BaseURL)
+}
+
+// validateOpenAIConfig validates OpenAI provider configuration.
+func validateOpenAIConfig(cfg ProviderConfig) error {
+	if cfg.BaseURL == "" {
+		return fmt.Errorf("baseURL is required for %s", cfg.Type)
+	}
+	if cfg.KeyName == "" && cfg.APIKey == "" {
+		return fmt.Errorf("authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated)", cfg.Type)
+	}
+	if cfg.Model == "" {
+		return fmt.Errorf("model is required for %s", cfg.Type)
+	}
+	return nil
+}
+
+// validateOllamaConfig validates Ollama provider configuration.
+func validateOllamaConfig(cfg ProviderConfig) error {
+	if cfg.BaseURL == "" {
+		return fmt.Errorf("baseURL is required for ollama")
+	}
+	if cfg.Model == "" {
+		return fmt.Errorf("model is required for ollama")
+	}
+	return nil
+}
+
+// validateLMStudioConfig validates LMStudio provider configuration.
+func validateLMStudioConfig(cfg ProviderConfig) error {
+	if cfg.Model == "" {
+		return fmt.Errorf("model is required for lmstudio")
+	}
+	return nil
+}
+
+// validateBaseURL validates the base URL if provided.
+func validateBaseURL(baseURL string) error {
+	if baseURL == "" {
+		return nil
+	}
+	if _, err := url.Parse(baseURL); err != nil {
+		return fmt.Errorf("invalid baseURL: %w", err)
+	}
 	return nil
 }
 
@@ -285,11 +282,16 @@ func (f *Factory) newOpenAIProvider(ctx context.Context, cfg ProviderConfig) (ll
 		return nil, err
 	}
 
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = llm.DefaultTimeout
+	}
+
 	openaiCfg := openai.Config{
 		BaseURL: cfg.BaseURL,
 		APIKey:  apiKey,
 		Model:   cfg.Model,
-		Timeout: cfg.Timeout,
+		Timeout: timeout,
 	}
 
 	return openai.NewProvider(openaiCfg)
@@ -304,40 +306,55 @@ func (f *Factory) newOllamaProvider(ctx context.Context, cfg ProviderConfig) (ll
 		return nil, err
 	}
 
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = llm.DefaultTimeout
+	}
+
 	ollamaCfg := ollama.Config{
 		BaseURL: cfg.BaseURL,
 		Model:   cfg.Model,
-		Timeout: cfg.Timeout,
+		Timeout: timeout,
 	}
 
 	p, err := ollama.NewProvider(ollamaCfg)
 	if err != nil {
 		return nil, err
 	}
-	// Auto-tune by default unless explicitly disabled via Options["auto_tune"]=false
-	enable := true
-	if cfg.Options != nil {
-		if at, ok := cfg.Options["auto_tune"].(bool); ok {
-			enable = at
-		}
-	}
-	if enable {
-		var headroom int64
-		if cfg.Options != nil {
-			if v, ok := cfg.Options["vram_headroom_mib"].(int); ok {
-				headroom = int64(v) * 1024 * 1024
-			}
-			if v, ok := cfg.Options["vram_headroom_mib"].(float64); ok {
-				headroom = int64(v) * 1024 * 1024
-			}
-		}
-		if headroom == 0 {
-			headroom = 1024 * 1024 * 1024
-		}
+
+	if f.shouldAutoTune(cfg.Options) {
+		headroom := f.extractVRAMHeadroom(cfg.Options)
 		// best-effort; ignore error
 		_ = p.AutoTune(ctx, headroom)
 	}
 	return p, nil
+}
+
+// shouldAutoTune determines if auto-tuning should be enabled.
+func (f *Factory) shouldAutoTune(options map[string]interface{}) bool {
+	if options == nil {
+		return true // Auto-tune by default
+	}
+	if at, ok := options["auto_tune"].(bool); ok {
+		return at
+	}
+	return true
+}
+
+// extractVRAMHeadroom extracts VRAM headroom from options.
+func (f *Factory) extractVRAMHeadroom(options map[string]interface{}) int64 {
+	if options == nil {
+		return 1024 * 1024 * 1024 // Default 1GB
+	}
+
+	if v, ok := options["vram_headroom_mib"].(int); ok {
+		return int64(v) * 1024 * 1024
+	}
+	if v, ok := options["vram_headroom_mib"].(float64); ok {
+		return int64(v) * 1024 * 1024
+	}
+
+	return 1024 * 1024 * 1024 // Default 1GB
 }
 
 // newLMStudioProvider creates an LMStudio provider from config (with auth support).
@@ -348,10 +365,15 @@ func (f *Factory) newLMStudioProvider(ctx context.Context, cfg ProviderConfig) (
 		return nil, err
 	}
 
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = llm.DefaultTimeout
+	}
+
 	lmstudioCfg := lmstudio.Config{
 		BaseURL: cfg.BaseURL,
 		Model:   cfg.Model,
-		Timeout: cfg.Timeout,
+		Timeout: timeout,
 	}
 
 	return lmstudio.NewProvider(lmstudioCfg)
@@ -361,11 +383,16 @@ func (f *Factory) newLMStudioProvider(ctx context.Context, cfg ProviderConfig) (
 
 // legacyNewOpenAIProvider creates an OpenAI provider from config (legacy).
 func legacyNewOpenAIProvider(cfg ProviderConfig) (llm.Provider, error) {
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = llm.DefaultTimeout
+	}
+
 	openaiCfg := openai.Config{
 		BaseURL: cfg.BaseURL,
 		APIKey:  cfg.APIKey,
 		Model:   cfg.Model,
-		Timeout: cfg.Timeout,
+		Timeout: timeout,
 	}
 
 	return openai.NewProvider(openaiCfg)
@@ -373,10 +400,15 @@ func legacyNewOpenAIProvider(cfg ProviderConfig) (llm.Provider, error) {
 
 // legacyNewOllamaProvider creates an Ollama provider from config (legacy).
 func legacyNewOllamaProvider(cfg ProviderConfig) (llm.Provider, error) {
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = llm.DefaultTimeout
+	}
+
 	ollamaCfg := ollama.Config{
 		BaseURL: cfg.BaseURL,
 		Model:   cfg.Model,
-		Timeout: cfg.Timeout,
+		Timeout: timeout,
 	}
 
 	return ollama.NewProvider(ollamaCfg)
@@ -384,10 +416,20 @@ func legacyNewOllamaProvider(cfg ProviderConfig) (llm.Provider, error) {
 
 // legacyNewLMStudioProvider creates an LMStudio provider from config (legacy).
 func legacyNewLMStudioProvider(cfg ProviderConfig) (llm.Provider, error) {
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = llm.DefaultTimeout
+	}
+
+	baseURL := cfg.BaseURL
+	if baseURL == "" {
+		baseURL = lmstudio.DefaultBaseURL
+	}
+
 	lmstudioCfg := lmstudio.Config{
-		BaseURL: cfg.BaseURL,
+		BaseURL: baseURL,
 		Model:   cfg.Model,
-		Timeout: cfg.Timeout,
+		Timeout: timeout,
 	}
 
 	return lmstudio.NewProvider(lmstudioCfg)

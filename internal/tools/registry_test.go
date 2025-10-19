@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -487,7 +488,7 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 
 	// Register initial tools
 	for i := 0; i < 5; i++ {
-		_ = reg.Register(newMockTool("tool" + string(rune('0'+i))))
+		_ = reg.Register(newMockTool(fmt.Sprintf("tool-%d", i)))
 	}
 
 	// Concurrent reads and writes
@@ -518,7 +519,7 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			_ = reg.Register(newMockTool("concurrent" + string(rune('0'+idx))))
+			_ = reg.Register(newMockTool(fmt.Sprintf("concurrent-%d", idx)))
 		}(i)
 	}
 

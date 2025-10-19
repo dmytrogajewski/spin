@@ -24,6 +24,11 @@ const (
 // Color represents an ANSI escape code for terminal colors.
 type Color string
 
+// String returns the ANSI escape code as a string.
+func (c Color) String() string {
+	return string(c)
+}
+
 // Color constants define the color palette per TUI specification.
 const (
 	// ColorReset resets all attributes.
@@ -89,9 +94,4 @@ func GetTagColor(bt BlockType) Color {
 		return color
 	}
 	return ColorMuted
-}
-
-// String converts a Color to a string (the ANSI escape code).
-func (c Color) String() string {
-	return string(c)
 }

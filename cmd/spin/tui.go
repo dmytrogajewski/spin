@@ -28,6 +28,7 @@ The TUI provides a native-scrollback interface with:
   • Keyboard-first navigation (PgUp/PgDn, g/G)
   • Command palette (Ctrl-P)
   • Timeline filtering (/)
+  • Approval dialogs for dangerous commands
 
 Examples:
   spin tui
@@ -38,7 +39,6 @@ Examples:
 
 	// TUI-specific flags
 	cmd.Flags().Int("max-turns", 50, "Maximum conversation turns")
-	cmd.Flags().Bool("require-approval", false, "Require user approval for dangerous commands")
 
 	return cmd
 }
@@ -48,44 +48,29 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Setup signal handling
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		cancel()
-	}()
+	setupSignalHandling(cancel)
 
-	// Load configuration
 	configLoader, err := loadConfig()
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	// Create auth manager
 	authMgr := createAuthManager()
-
-	// Build LLM provider
 	provider, err := buildProvider(ctx, configLoader, authMgr)
 	if err != nil {
 		return fmt.Errorf("create provider: %w", err)
 	}
 	defer provider.Close()
 
-	// Get flags
 	maxTurns, _ := cmd.Flags().GetInt("max-turns")
-	requireApproval, _ := cmd.Flags().GetBool("require-approval")
-
-	// Create core manager with config loader
-	mgr, err := createManagerForTUI(provider, maxTurns, requireApproval, configLoader)
-	if err != nil {
-		return fmt.Errorf("create manager: %w", err)
-	}
-
-	// Initialize TUI
 	ui, err := adapters.NewPureTTY(os.Stdout)
 	if err != nil {
 		return fmt.Errorf("create TUI: %w", err)
+	}
+
+	mgr, err := createManagerForTUI(provider, maxTurns, configLoader, ui)
+	if err != nil {
+		return fmt.Errorf("create manager: %w", err)
 	}
 
 	// Start UI in background
@@ -99,42 +84,14 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}()
 	defer ui.Stop()
 
-	// Get working directory
-	workDir, err := os.Getwd()
-	if err != nil {
-		workDir = "."
-	}
-	if flagWorkDir != "" {
-		workDir = flagWorkDir
-	}
-
-	// Create conversation
+	workDir := getWorkingDirectory()
 	conv, err := mgr.NewConversation(ctx, workDir)
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
+	defer mgr.Close()
 
-	// Initialize status bar with conversation metadata
-	// Get task mode from conversation
-	taskMode := conv.GetTaskMode()
-	ui.SetTaskMode(taskMode)
-
-	// Get max tokens from the conversation's current task
-	maxTokens := int64(conv.GetMaxTokens())
-	ui.SetMaxTokens(maxTokens)
-
-	// Set provider info
-	providerName := provider.Name()
-	modelName := flagModel // Use the model flag directly
-	ui.SetProviderInfo(providerName, modelName)
-
-	// Get session ID from conversation
-	sessionID := conv.GetSessionID()
-	ui.SetConversationID(sessionID)
-
-	// Set initial token count
-	tokenCount := int64(conv.GetTokenCount())
-	ui.SetTokenCount(tokenCount)
+	initializeUI(ui, conv, provider)
 
 	// Create event mapper
 	mapper := core.NewTUIMapper(ui)
@@ -274,52 +231,9 @@ func runTUI(cmd *cobra.Command, args []string) error {
 }
 
 // createManagerForTUI creates a core.Manager configured for TUI mode.
-func createManagerForTUI(provider llm.Provider, maxTurns int, requireApproval bool, configLoader *config.Loader) (*core.Manager, error) {
-	// Get current working directory
-	workDir, err := os.Getwd()
-	if err != nil {
-		workDir = "."
-	}
-
-	// Override with flag if provided
-	if flagWorkDir != "" {
-		workDir = flagWorkDir
-	}
-
-	// Start with default config
-	cfg := core.DefaultConfig()
-
-	// Layer 1: Load from config file
-	var fileCfg core.Config
-	if err := configLoader.Unmarshal(&fileCfg); err == nil {
-		if fileCfg.Provider != "" {
-			cfg.Provider = fileCfg.Provider
-		}
-		if fileCfg.Model != "" {
-			cfg.Model = fileCfg.Model
-		}
-		if fileCfg.MaxTurns > 0 {
-			cfg.MaxTurns = fileCfg.MaxTurns
-		}
-		if fileCfg.Timeout > 0 {
-			cfg.Timeout = fileCfg.Timeout
-		}
-		if fileCfg.MaxTokens > 0 {
-			cfg.MaxTokens = fileCfg.MaxTokens
-		}
-	}
-
-	// Layer 2: Override with CLI flags (if provided)
-	if maxTurns > 0 {
-		cfg.MaxTurns = maxTurns
-	}
-	cfg.WorkDir = workDir
-	if flagProvider != "" {
-		cfg.Provider = flagProvider
-	}
-	if flagModel != "" {
-		cfg.Model = flagModel
-	}
+func createManagerForTUI(provider llm.Provider, maxTurns int, configLoader *config.Loader, ui *adapters.PureTTY) (*core.Manager, error) {
+	workDir := getWorkingDirectory()
+	cfg := buildConfig(configLoader, maxTurns, workDir)
 
 	// Create tool registry with simple tools (no dependencies)
 	registry := tools.NewRegistry()
@@ -332,14 +246,111 @@ func createManagerForTUI(provider llm.Provider, maxTurns int, requireApproval bo
 	// Note: ExecuteCommandTool and GetContextTool are registered by Agent
 	// as they require executor, validator, and context dependencies
 
+	// Create approval handler (always enabled)
+	approvalHandler := func(req core.ApprovalRequest) core.ApprovalResponse {
+		return ui.ShowApprovalDialog(req)
+	}
+
 	// Create manager with options
-	mgr, err := core.NewManager(cfg,
-		core.WithLLM(provider),
-		core.WithManagerToolRegistry(registry),
-	)
+	var opts []core.ManagerOption
+	opts = append(opts, core.WithLLM(provider))
+	opts = append(opts, core.WithManagerToolRegistry(registry))
+	opts = append(opts, core.WithManagerApprovalHandler(approvalHandler))
+
+	mgr, err := core.NewManager(cfg, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create manager: %w", err)
 	}
 
 	return mgr, nil
+}
+
+// setupSignalHandling sets up signal handling for graceful shutdown.
+func setupSignalHandling(cancel context.CancelFunc) {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
+}
+
+// getWorkingDirectory returns the working directory for the conversation.
+func getWorkingDirectory() string {
+	workDir, err := os.Getwd()
+	if err != nil {
+		workDir = "."
+	}
+	if flagWorkDir != "" {
+		workDir = flagWorkDir
+	}
+	return workDir
+}
+
+// initializeUI initializes the UI with conversation metadata.
+func initializeUI(ui *adapters.PureTTY, conv *core.Conversation, provider llm.Provider) {
+	taskMode := conv.GetTaskMode()
+	ui.SetTaskMode(taskMode)
+
+	maxTokens := int64(conv.GetMaxTokens())
+	ui.SetMaxTokens(maxTokens)
+
+	providerName := provider.Name()
+	modelName := flagModel
+	ui.SetProviderInfo(providerName, modelName)
+
+	sessionID := conv.GetSessionID()
+	ui.SetConversationID(sessionID)
+
+	tokenCount := int64(conv.GetTokenCount())
+	ui.SetTokenCount(tokenCount)
+}
+
+// buildConfig builds the configuration from multiple sources.
+func buildConfig(configLoader *config.Loader, maxTurns int, workDir string) *core.Config {
+	cfg := core.DefaultConfig()
+	cfg.WorkDir = workDir
+
+	// Layer 1: Load from config file
+	var fileCfg core.Config
+	if err := configLoader.Unmarshal(&fileCfg); err == nil {
+		applyFileConfig(cfg, &fileCfg)
+	}
+
+	// Layer 2: Override with CLI flags
+	applyCLIFlags(cfg, maxTurns)
+
+	return cfg
+}
+
+// applyFileConfig applies configuration from file to the main config.
+func applyFileConfig(cfg *core.Config, fileCfg *core.Config) {
+	if fileCfg.Provider != "" {
+		cfg.Provider = fileCfg.Provider
+	}
+	if fileCfg.Model != "" {
+		cfg.Model = fileCfg.Model
+	}
+	if fileCfg.MaxTurns > 0 {
+		cfg.MaxTurns = fileCfg.MaxTurns
+	}
+	if fileCfg.Timeout > 0 {
+		cfg.Timeout = fileCfg.Timeout
+	}
+	if fileCfg.MaxTokens > 0 {
+		cfg.MaxTokens = fileCfg.MaxTokens
+	}
+}
+
+// applyCLIFlags applies CLI flags to the configuration.
+func applyCLIFlags(cfg *core.Config, maxTurns int) {
+	if maxTurns > 0 {
+		cfg.MaxTurns = maxTurns
+	}
+	if flagProvider != "" {
+		cfg.Provider = flagProvider
+	}
+	if flagModel != "" {
+		cfg.Model = flagModel
+	}
 }

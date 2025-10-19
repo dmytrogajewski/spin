@@ -1,182 +1,97 @@
 package task
 
 import (
-	"strings"
 	"testing"
 )
 
-// TestNewPlanning tests the default constructor
 func TestNewPlanning(t *testing.T) {
-	p := NewPlanning()
-	if p == nil {
+	planning := NewPlanning()
+
+	if planning == nil {
 		t.Fatal("NewPlanning() returned nil")
 	}
 
-	if p.config != nil {
-		t.Error("NewPlanning() should have nil config for defaults")
+	if planning.config != nil {
+		t.Errorf("NewPlanning() config = %v, want nil", planning.config)
 	}
 }
 
-// TestNewPlanningWithConfig tests constructor with custom config
-func TestNewPlanningWithConfig(t *testing.T) {
-	config := &PlanningConfig{
-		MaxSteps: 50,
-		MinSteps: 3,
-	}
-
-	p := NewPlanningWithConfig(config)
-	if p == nil {
-		t.Fatal("NewPlanningWithConfig() returned nil")
-	}
-
-	if p.config != config {
-		t.Error("NewPlanningWithConfig() did not set config")
-	}
-}
-
-// TestNewPlanningWithConfig_Nil tests constructor with nil config
-func TestNewPlanningWithConfig_Nil(t *testing.T) {
-	p := NewPlanningWithConfig(nil)
-	if p == nil {
-		t.Fatal("NewPlanningWithConfig(nil) returned nil")
-	}
-
-	if p.config != nil {
-		t.Error("NewPlanningWithConfig(nil) should have nil config")
-	}
-}
-
-// TestPlanning_Name tests the Name() method
 func TestPlanning_Name(t *testing.T) {
+	planning := NewPlanning()
+
+	name := planning.Name()
+
+	if name != "planning" {
+		t.Errorf("Planning.Name() = %s, want 'planning'", name)
+	}
+}
+
+func TestPlanning_SystemPrompt(t *testing.T) {
 	tests := []struct {
 		name   string
 		config *PlanningConfig
+		want   string
 	}{
 		{
-			name:   "default config",
+			name:   "default prompt",
 			config: nil,
-		},
-		{
-			name: "custom config",
-			config: &PlanningConfig{
-				MaxSteps: 50,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := NewPlanningWithConfig(tt.config)
-			if got := p.Name(); got != "planning" {
-				t.Errorf("Name() = %q, want %q", got, "planning")
-			}
-		})
-	}
-}
-
-// TestPlanning_SystemPrompt tests the SystemPrompt() method
-func TestPlanning_SystemPrompt(t *testing.T) {
-	tests := []struct {
-		name         string
-		config       *PlanningConfig
-		wantContains string
-		minLength    int
-	}{
-		{
-			name:         "default prompt",
-			config:       nil,
-			wantContains: "task planning assistant",
-			minLength:    500,
+			want:   planningSystemPrompt,
 		},
 		{
 			name: "custom prompt",
 			config: &PlanningConfig{
-				CustomPrompt: "Custom planning prompt for testing purposes that is long enough to meet minimum",
+				CustomPrompt: "Custom planning prompt",
 			},
-			wantContains: "Custom planning prompt",
-			minLength:    50,
+			want: "Custom planning prompt",
+		},
+		{
+			name: "empty custom prompt",
+			config: &PlanningConfig{
+				CustomPrompt: "",
+			},
+			want: planningSystemPrompt,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := NewPlanningWithConfig(tt.config)
-			prompt := p.SystemPrompt()
+			planning := &Planning{config: tt.config}
 
-			if len(prompt) < tt.minLength {
-				t.Errorf("SystemPrompt() length = %d, want >= %d", len(prompt), tt.minLength)
-			}
+			prompt := planning.SystemPrompt()
 
-			if !strings.Contains(prompt, tt.wantContains) {
-				t.Errorf("SystemPrompt() does not contain %q", tt.wantContains)
+			if prompt != tt.want {
+				t.Errorf("Planning.SystemPrompt() = %s, want %s", prompt, tt.want)
 			}
 		})
 	}
 }
 
-// TestPlanning_AllowedTools tests the AllowedTools() method
 func TestPlanning_AllowedTools(t *testing.T) {
-	p := NewPlanning()
-	tools := p.AllowedTools()
+	planning := NewPlanning()
+	tools := planning.AllowedTools()
 
-	// Planning mode should have limited tools
-	expectedTools := []string{"get_context", "get_context", "file_search"}
+	expectedTools := []string{"get_context", "file_search", "git_context"}
 
 	if len(tools) != len(expectedTools) {
-		t.Errorf("AllowedTools() returned %d tools, want %d", len(tools), len(expectedTools))
+		t.Errorf("Planning.AllowedTools() length = %d, want %d", len(tools), len(expectedTools))
 	}
 
-	// Check all expected tools are present
-	toolMap := make(map[string]bool)
-	for _, tool := range tools {
-		toolMap[tool] = true
-	}
-
-	for _, expected := range expectedTools {
-		if !toolMap[expected] {
-			t.Errorf("AllowedTools() missing expected tool %q", expected)
-		}
-	}
-
-	// Should NOT include execution tools
-	dangerousTools := []string{"shell", "write_file", "git_commit"}
-	for _, dangerous := range dangerousTools {
-		if toolMap[dangerous] {
-			t.Errorf("AllowedTools() should not include %q in planning mode", dangerous)
+	for i, tool := range tools {
+		if tool != expectedTools[i] {
+			t.Errorf("Planning.AllowedTools() [%d] = %s, want %s", i, tool, expectedTools[i])
 		}
 	}
 }
 
-// TestPlanning_MaxTokens tests the MaxTokens() method
 func TestPlanning_MaxTokens(t *testing.T) {
-	tests := []struct {
-		name   string
-		config *PlanningConfig
-		want   int
-	}{
-		{
-			name:   "default config",
-			config: nil,
-			want:   PlanningMaxTokens,
-		},
-		{
-			name:   "custom config (ignored - always uses constant)",
-			config: &PlanningConfig{MaxSteps: 50},
-			want:   PlanningMaxTokens,
-		},
-	}
+	planning := NewPlanning()
+	maxTokens := planning.MaxTokens()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := NewPlanningWithConfig(tt.config)
-			if got := p.MaxTokens(); got != tt.want {
-				t.Errorf("MaxTokens() = %d, want %d", got, tt.want)
-			}
-		})
+	if maxTokens != PlanningMaxTokens {
+		t.Errorf("Planning.MaxTokens() = %d, want %d", maxTokens, PlanningMaxTokens)
 	}
 }
 
-// TestPlanning_Validate tests the Validate() method
 func TestPlanning_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -184,15 +99,16 @@ func TestPlanning_Validate(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "nil config is valid",
+			name:    "nil config",
 			config:  nil,
 			wantErr: false,
 		},
 		{
 			name: "valid config",
 			config: &PlanningConfig{
-				MaxSteps: 50,
-				MinSteps: 3,
+				MaxSteps:     10,
+				MinSteps:     3,
+				CustomPrompt: "Custom prompt with sufficient length that meets minimum requirements",
 			},
 			wantErr: false,
 		},
@@ -200,13 +116,6 @@ func TestPlanning_Validate(t *testing.T) {
 			name: "negative max steps",
 			config: &PlanningConfig{
 				MaxSteps: -1,
-			},
-			wantErr: true,
-		},
-		{
-			name: "negative min steps",
-			config: &PlanningConfig{
-				MinSteps: -1,
 			},
 			wantErr: true,
 		},
@@ -219,6 +128,13 @@ func TestPlanning_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "negative min steps",
+			config: &PlanningConfig{
+				MinSteps: -1,
+			},
+			wantErr: true,
+		},
+		{
 			name: "custom prompt too short",
 			config: &PlanningConfig{
 				CustomPrompt: "short",
@@ -226,105 +142,203 @@ func TestPlanning_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "custom prompt valid",
+			name: "multiple validation errors",
 			config: &PlanningConfig{
-				CustomPrompt: "This is a valid custom planning prompt that meets the minimum length requirement for testing",
+				MaxSteps:     -1,
+				MinSteps:     -1,
+				CustomPrompt: "short",
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := NewPlanningWithConfig(tt.config)
-			err := p.Validate()
+			planning := &Planning{config: tt.config}
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			err := planning.Validate()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("Planning.Validate() expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Planning.Validate() unexpected error: %v", err)
+				}
 			}
 		})
 	}
 }
 
-// TestPlanning_DefaultValues tests that default values are correct
-func TestPlanning_DefaultValues(t *testing.T) {
-	p := NewPlanning()
-
-	if p.Name() != "planning" {
-		t.Errorf("Default Name() = %q, want %q", p.Name(), "planning")
+func TestPlanning_Validate_ErrorMessages(t *testing.T) {
+	// Test specific error messages
+	planning := &Planning{
+		config: &PlanningConfig{
+			MaxSteps:     -1,
+			MinSteps:     -1,
+			CustomPrompt: "short",
+		},
 	}
 
-	if p.MaxTokens() != PlanningMaxTokens {
-		t.Errorf("Default MaxTokens() = %d, want %d", p.MaxTokens(), PlanningMaxTokens)
+	err := planning.Validate()
+
+	if err == nil {
+		t.Fatal("Planning.Validate() expected error, got nil")
 	}
 
-	tools := p.AllowedTools()
-	if len(tools) == 0 {
-		t.Error("Default AllowedTools() should not be empty")
+	// Check that multiple errors are joined
+	errStr := err.Error()
+	if !containsPlanning(errStr, "max steps cannot be negative: -1") {
+		t.Errorf("Planning.Validate() error should contain max steps error")
 	}
 
-	prompt := p.SystemPrompt()
-	if len(prompt) == 0 {
-		t.Error("Default SystemPrompt() should not be empty")
+	if !containsPlanning(errStr, "min steps cannot be negative: -1") {
+		t.Errorf("Planning.Validate() error should contain min steps error")
 	}
 
-	if err := p.Validate(); err != nil {
-		t.Errorf("Default config should be valid, got error: %v", err)
-	}
-}
-
-// TestPlanning_PromptFormat tests that the planning prompt has required elements
-func TestPlanning_PromptFormat(t *testing.T) {
-	p := NewPlanning()
-	prompt := p.SystemPrompt()
-
-	requiredElements := []string{
-		"JSON",
-		"steps",
-		"id",
-		"description",
-		"action",
-		"depends_on",
-		"estimated_minutes",
-	}
-
-	for _, elem := range requiredElements {
-		if !strings.Contains(prompt, elem) {
-			t.Errorf("SystemPrompt() missing required element %q", elem)
-		}
+	if !containsPlanning(errStr, "custom prompt too short") {
+		t.Errorf("Planning.Validate() error should contain prompt length error")
 	}
 }
 
-func TestPlanning_getMaxSteps(t *testing.T) {
+func TestPlanning_GetMinSteps(t *testing.T) {
 	tests := []struct {
 		name   string
 		config *PlanningConfig
 		want   int
 	}{
 		{
-			name:   "nil config uses default",
+			name:   "nil config",
 			config: nil,
-			want:   100,
+			want:   PlanningMinSteps,
 		},
 		{
-			name:   "config with MaxSteps set",
-			config: &PlanningConfig{MaxSteps: 50},
-			want:   50,
+			name: "zero min steps",
+			config: &PlanningConfig{
+				MinSteps: 0,
+			},
+			want: PlanningMinSteps,
 		},
 		{
-			name:   "config with zero MaxSteps uses default",
-			config: &PlanningConfig{MaxSteps: 0},
-			want:   100,
+			name: "custom min steps",
+			config: &PlanningConfig{
+				MinSteps: 5,
+			},
+			want: 5,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &Planning{config: tt.config}
-			got := p.getMaxSteps()
-			if got != tt.want {
-				t.Errorf("getMaxSteps() = %d, want %d", got, tt.want)
+			planning := &Planning{config: tt.config}
+
+			minSteps := planning.getMinSteps()
+
+			if minSteps != tt.want {
+				t.Errorf("Planning.getMinSteps() = %d, want %d", minSteps, tt.want)
 			}
 		})
 	}
+}
+
+func TestPlanning_DefaultPrompt(t *testing.T) {
+	planning := NewPlanning()
+	prompt := planning.SystemPrompt()
+
+	// Check that default prompt contains key elements
+	expectedElements := []string{
+		"task planning assistant",
+		"decompose",
+		"executable steps",
+		"dependencies",
+		"duration",
+		"JSON",
+		"steps",
+	}
+
+	for _, element := range expectedElements {
+		if !containsPlanning(prompt, element) {
+			t.Errorf("Planning default prompt should contain '%s'", element)
+		}
+	}
+}
+
+func TestPlanning_DefaultTools(t *testing.T) {
+	planning := NewPlanning()
+	tools := planning.AllowedTools()
+
+	expectedTools := []string{"get_context", "file_search", "git_context"}
+
+	if len(tools) != len(expectedTools) {
+		t.Errorf("Planning.AllowedTools() length = %d, want %d", len(tools), len(expectedTools))
+	}
+
+	for i, tool := range tools {
+		if tool != expectedTools[i] {
+			t.Errorf("Planning.AllowedTools() [%d] = %s, want %s", i, tool, expectedTools[i])
+		}
+	}
+}
+
+func TestPlanning_DefaultMaxTokens(t *testing.T) {
+	planning := NewPlanning()
+	maxTokens := planning.MaxTokens()
+
+	if maxTokens != PlanningMaxTokens {
+		t.Errorf("Planning.MaxTokens() = %d, want %d", maxTokens, PlanningMaxTokens)
+	}
+}
+
+func TestPlanning_Concurrency(t *testing.T) {
+	planning := NewPlanning()
+
+	// Test concurrent access to methods
+	done := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			// These methods should be safe for concurrent access
+			planning.Name()
+			planning.SystemPrompt()
+			planning.AllowedTools()
+			planning.MaxTokens()
+			planning.Validate()
+			done <- true
+		}()
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+}
+
+func TestPlanning_Constants(t *testing.T) {
+	// Test that constants are properly defined
+	if PlanningMaxTokens <= 0 {
+		t.Errorf("PlanningMaxTokens = %d, want > 0", PlanningMaxTokens)
+	}
+
+	if PlanningMinSteps <= 0 {
+		t.Errorf("PlanningMinSteps = %d, want > 0", PlanningMinSteps)
+	}
+
+	if PlanningMaxSteps <= 0 {
+		t.Errorf("PlanningMaxSteps = %d, want > 0", PlanningMaxSteps)
+	}
+
+	if PlanningMinEstimate <= 0 {
+		t.Errorf("PlanningMinEstimate = %d, want > 0", PlanningMinEstimate)
+	}
+
+	// Test relationships
+	if PlanningMinSteps > PlanningMaxSteps {
+		t.Errorf("PlanningMinSteps (%d) > PlanningMaxSteps (%d)", PlanningMinSteps, PlanningMaxSteps)
+	}
+}
+
+// Helper function to check if a string contains a substring
+func containsPlanning(s, substr string) bool {
+	return len(s) >= len(substr) && s[:len(substr)] == substr ||
+		len(s) > len(substr) && containsPlanning(s[1:], substr)
 }

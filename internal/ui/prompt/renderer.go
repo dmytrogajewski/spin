@@ -31,115 +31,189 @@ func NewRenderer(out io.Writer, width int, prefix string) *Renderer {
 // Redraw renders the prompt model to the output.
 // It emits: \r + ClearLine + prefix + buffer + cursor positioning + status.
 func (r *Renderer) Redraw(model *Model, status string) error {
-	// Get buffer text and cursor position
 	bufferText := model.Text()
 	cursorRune := model.Cursor()
 
-	// Calculate widths using uniseg
+	widths := r.calculateWidths(bufferText, status)
+	cursorInfo := r.calculateCursorInfo(bufferText, cursorRune, widths.prefixWidth)
+	visibleInfo := r.calculateVisibleContent(bufferText, cursorInfo, widths)
+
+	return r.renderOutput(model, status, visibleInfo, cursorInfo, widths)
+}
+
+// widthInfo holds calculated width information.
+type widthInfo struct {
+	prefixWidth    int
+	bufferWidth    int
+	statusWidth    int
+	availableWidth int
+}
+
+// cursorInfo holds cursor position information.
+type cursorInfo struct {
+	cursorOffset int
+	cursorCol    int
+}
+
+// visibleInfo holds visible content information.
+type visibleInfo struct {
+	visibleBuffer string
+	scrollOffset  int
+}
+
+// calculateWidths calculates all width-related values.
+func (r *Renderer) calculateWidths(bufferText, status string) widthInfo {
 	prefixWidth := uniseg.StringWidth(r.prefix)
 	bufferWidth := uniseg.StringWidth(bufferText)
 	statusWidth := uniseg.StringWidth(status)
-
-	// Calculate cursor column (1-indexed for ANSI)
-	textBeforeCursor := string([]rune(bufferText)[:cursorRune])
-	cursorOffset := uniseg.StringWidth(textBeforeCursor)
-	cursorCol := prefixWidth + cursorOffset + 1 // +1 for 1-indexed
-
-	// Determine available width for content
 	availableWidth := r.width - prefixWidth
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
 
-	// Determine visible content (with or without scrolling)
-	var visibleBuffer string
-	var scrollOffset int
-	if bufferWidth <= availableWidth {
-		// No scrolling needed
-		visibleBuffer = bufferText
-		scrollOffset = 0
-	} else {
-		// Need horizontal scrolling
-		scrollWindowWidth := availableWidth - 2 // reserve for ellipses
-		if scrollWindowWidth < 1 {
-			scrollWindowWidth = 1
-		}
+	return widthInfo{
+		prefixWidth:    prefixWidth,
+		bufferWidth:    bufferWidth,
+		statusWidth:    statusWidth,
+		availableWidth: availableWidth,
+	}
+}
 
-		// Center scroll window around cursor
-		scrollStart := cursorOffset - scrollWindowWidth/2
+// calculateCursorInfo calculates cursor position information.
+func (r *Renderer) calculateCursorInfo(bufferText string, cursorRune int, prefixWidth int) cursorInfo {
+	textBeforeCursor := string([]rune(bufferText)[:cursorRune])
+	cursorOffset := uniseg.StringWidth(textBeforeCursor)
+	cursorCol := prefixWidth + cursorOffset + 1 // +1 for 1-indexed
+
+	return cursorInfo{
+		cursorOffset: cursorOffset,
+		cursorCol:    cursorCol,
+	}
+}
+
+// calculateVisibleContent calculates visible content with scrolling.
+func (r *Renderer) calculateVisibleContent(bufferText string, cursorInfo cursorInfo, widths widthInfo) visibleInfo {
+	if widths.bufferWidth <= widths.availableWidth {
+		return visibleInfo{
+			visibleBuffer: bufferText,
+			scrollOffset:  0,
+		}
+	}
+
+	return r.calculateScrolledContent(bufferText, cursorInfo, widths)
+}
+
+// calculateScrolledContent calculates content when scrolling is needed.
+func (r *Renderer) calculateScrolledContent(bufferText string, cursorInfo cursorInfo, widths widthInfo) visibleInfo {
+	scrollWindowWidth := widths.availableWidth - 2 // reserve for ellipses
+	if scrollWindowWidth < 1 {
+		scrollWindowWidth = 1
+	}
+
+	scrollStart, scrollEnd := r.calculateScrollBounds(cursorInfo.cursorOffset, scrollWindowWidth, widths.bufferWidth)
+	visibleBuffer, scrollOffset := extractVisibleSlice(bufferText, scrollStart, scrollEnd)
+
+	visibleBuffer = r.addEllipses(visibleBuffer, scrollStart, scrollEnd, widths.bufferWidth)
+
+	return visibleInfo{
+		visibleBuffer: visibleBuffer,
+		scrollOffset:  scrollOffset,
+	}
+}
+
+// calculateScrollBounds calculates scroll window bounds.
+func (r *Renderer) calculateScrollBounds(cursorOffset, scrollWindowWidth, bufferWidth int) (int, int) {
+	scrollStart := cursorOffset - scrollWindowWidth/2
+	if scrollStart < 0 {
+		scrollStart = 0
+	}
+	scrollEnd := scrollStart + scrollWindowWidth
+	if scrollEnd > bufferWidth {
+		scrollEnd = bufferWidth
+		scrollStart = scrollEnd - scrollWindowWidth
 		if scrollStart < 0 {
 			scrollStart = 0
 		}
-		scrollEnd := scrollStart + scrollWindowWidth
-		if scrollEnd > bufferWidth {
-			scrollEnd = bufferWidth
-			scrollStart = scrollEnd - scrollWindowWidth
-			if scrollStart < 0 {
-				scrollStart = 0
-			}
-		}
-
-		// Extract visible slice using grapheme boundaries
-		visibleBuffer, scrollOffset = extractVisibleSlice(bufferText, scrollStart, scrollEnd)
-
-		// Add ellipses
-		if scrollStart > 0 {
-			visibleBuffer = "…" + visibleBuffer
-			scrollOffset++ // adjust for left ellipsis
-		}
-		if scrollEnd < bufferWidth {
-			visibleBuffer = visibleBuffer + "…"
-		}
-
-		// Adjust cursor column for scroll offset
-		cursorCol = prefixWidth + cursorOffset - scrollStart + scrollOffset + 1
 	}
+	return scrollStart, scrollEnd
+}
 
-	// Build output
+// addEllipses adds ellipses to indicate scrolling.
+func (r *Renderer) addEllipses(visibleBuffer string, scrollStart, scrollEnd, bufferWidth int) string {
+	if scrollStart > 0 {
+		visibleBuffer = "…" + visibleBuffer
+	}
+	if scrollEnd < bufferWidth {
+		visibleBuffer = visibleBuffer + "…"
+	}
+	return visibleBuffer
+}
+
+// renderOutput renders the final output.
+func (r *Renderer) renderOutput(model *Model, status string, visibleInfo visibleInfo, cursorInfo cursorInfo, widths widthInfo) error {
 	var out strings.Builder
 
-	// Position cursor at the prompt line (last line of terminal)
+	r.writePromptLine(&out)
+	r.writePrefix(&out)
+	r.writeVisibleBuffer(&out, visibleInfo.visibleBuffer)
+	r.writeStatus(&out, status, widths)
+
+	cursorCol := widths.prefixWidth + cursorInfo.cursorOffset + 1
+	out.WriteString(fmt.Sprintf("\x1b[%dG", cursorCol))
+
+	_, err := r.out.Write([]byte(out.String()))
+	return err
+}
+
+// writePromptLine writes the prompt line positioning.
+func (r *Renderer) writePromptLine(out *strings.Builder) {
 	if r.height > 0 {
 		out.WriteString(fmt.Sprintf("\x1b[%d;1H", r.height))
 	} else {
 		out.WriteString("\r") // fallback to carriage return
 	}
+	out.WriteString("\x1b[2K") // Clear the prompt line
+}
 
-	// Clear the prompt line
-	out.WriteString("\x1b[2K")
-
-	// Write prefix
+// writePrefix writes the prompt prefix.
+func (r *Renderer) writePrefix(out *strings.Builder) {
 	out.WriteString(r.prefix)
+}
 
-	// Write visible buffer
+// writeVisibleBuffer writes the visible buffer content.
+func (r *Renderer) writeVisibleBuffer(out *strings.Builder, visibleBuffer string) {
 	out.WriteString(visibleBuffer)
+}
 
-	// Determine status rendering
-	if status != "" && !r.isScrolling(bufferWidth, availableWidth) {
-		contentWidth := prefixWidth + bufferWidth
-		requiredSpace := contentWidth + 3 + statusWidth // 3 = minimum gap
-
-		if requiredSpace <= r.width {
-			// Full status fits
-			padding := r.width - contentWidth - statusWidth
-			out.WriteString(strings.Repeat(" ", padding))
-			out.WriteString(status)
-		} else if r.width-contentWidth >= 3 {
-			// Truncate status from left
-			availableStatusWidth := r.width - contentWidth - 3
-			truncatedStatus := truncateLeft(status, availableStatusWidth)
-			out.WriteString(strings.Repeat(" ", 3))
-			out.WriteString(truncatedStatus)
-		}
-		// else: omit status entirely
+// writeStatus writes the status text if there's space.
+func (r *Renderer) writeStatus(out *strings.Builder, status string, widths widthInfo) {
+	if status == "" || r.isScrolling(widths.bufferWidth, widths.availableWidth) {
+		return
 	}
 
-	// Position cursor
-	out.WriteString(fmt.Sprintf("\x1b[%dG", cursorCol))
+	contentWidth := widths.prefixWidth + widths.bufferWidth
+	requiredSpace := contentWidth + 3 + widths.statusWidth // 3 = minimum gap
 
-	// Write to output
-	_, err := r.out.Write([]byte(out.String()))
-	return err
+	if requiredSpace <= r.width {
+		r.writeFullStatus(out, contentWidth, status, widths.statusWidth)
+	} else if r.width-contentWidth >= 3 {
+		r.writeTruncatedStatus(out, contentWidth, status)
+	}
+}
+
+// writeFullStatus writes the full status text.
+func (r *Renderer) writeFullStatus(out *strings.Builder, contentWidth int, status string, statusWidth int) {
+	padding := r.width - contentWidth - statusWidth
+	out.WriteString(strings.Repeat(" ", padding))
+	out.WriteString(status)
+}
+
+// writeTruncatedStatus writes a truncated status text.
+func (r *Renderer) writeTruncatedStatus(out *strings.Builder, contentWidth int, status string) {
+	availableStatusWidth := r.width - contentWidth - 3
+	truncatedStatus := truncateLeft(status, availableStatusWidth)
+	out.WriteString(strings.Repeat(" ", 3))
+	out.WriteString(truncatedStatus)
 }
 
 // SetWidth updates the terminal width (call on SIGWINCH).

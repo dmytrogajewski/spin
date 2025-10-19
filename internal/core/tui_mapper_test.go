@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -182,7 +183,7 @@ func TestMapEvent_ToolCallComplete_Execute_Error(t *testing.T) {
 		},
 	})
 
-	mapper.MapEvent(Event{
+	_ = mapper.MapEvent(Event{
 		Type: EventToolCallComplete,
 		Data: ToolCallCompleteData{
 			ToolID:   "tool-456",
@@ -195,6 +196,28 @@ func TestMapEvent_ToolCallComplete_Execute_Error(t *testing.T) {
 
 	block := ui.BlocksByID["tool-456"]
 	assert.Equal(t, blocks.SeverityError, block.Severity)
+	// Body should contain the error since output is empty
+	assert.Contains(t, block.Body, "exit status 1")
+}
+
+// New test: failed execute with non-empty error must not render "No output"
+func TestMapEvent_ToolCallComplete_Execute_Error_NoOutputBody(t *testing.T) {
+	ui := NewFakeUI()
+	mapper := NewTUIMapper(ui)
+	defer mapper.Close()
+
+	// Start block
+	_ = mapper.MapEvent(Event{Type: EventToolCallStart, Data: ToolCallStartData{ToolName: "execute_command", ToolID: "e1", Parameters: makeParams(map[string]interface{}{"command": "python t.py"}).Parameters}})
+
+	// Complete with no stdout/stderr in Output but with Error message
+	_ = mapper.MapEvent(Event{Type: EventToolCallComplete, Data: ToolCallCompleteData{ToolID: "e1", ToolName: "execute_command", Success: false, Output: "", Error: "Traceback: NameError"}})
+
+	b := ui.BlocksByID["e1"]
+	if b == nil {
+		t.Fatalf("block not found")
+	}
+	// Body should show the error text so users see what failed
+	assert.Contains(t, b.Body, "Traceback: NameError")
 }
 
 // TestMapEvent_ToolCallStart_ReadFile verifies READ block creation
@@ -298,8 +321,8 @@ func TestWriteBlock_AfterCompletionSuccess_Render(t *testing.T) {
 	out, err := r.Render(b)
 	require.NoError(t, err)
 	assert.Contains(t, out, "File written successfully.")
-	assert.Contains(t, out, "✓ Succeeded")
-	assert.NotContains(t, out, "● Failed")
+	assert.Contains(t, out, "Succeeded. File edited.")
+	assert.NotContains(t, out, "Failed")
 }
 
 // Integration: After completion failure, WRITE block shows failure
@@ -322,7 +345,7 @@ func TestWriteBlock_AfterCompletionFailure_Render(t *testing.T) {
 	out, err := r.Render(b)
 	require.NoError(t, err)
 	assert.Contains(t, out, "Failed to write file.")
-	assert.Contains(t, out, "● Failed")
+	assert.Contains(t, out, "Failed")
 }
 
 // TestMapEvent_DuplicateWriteBlocks_Complete verifies both WRITE blocks reflect success
@@ -650,14 +673,15 @@ func TestMapEvent_MultipleTools(t *testing.T) {
 
 	// Start multiple tools
 	for i := 0; i < 5; i++ {
+		toolID := fmt.Sprintf("tool-%d", i)
 		params := makeParams(map[string]interface{}{
-			"command": "echo " + string(rune('a'+i)),
+			"command": fmt.Sprintf("echo test-%d", i),
 		})
 		event := Event{
 			Type: EventToolCallStart,
 			Data: ToolCallStartData{
 				ToolName:   "execute_command",
-				ToolID:     string(rune('a' + i)), // "a", "b", "c", etc.
+				ToolID:     toolID,
 				Parameters: params.Parameters,
 			},
 		}
@@ -669,13 +693,14 @@ func TestMapEvent_MultipleTools(t *testing.T) {
 
 	// Complete them
 	for i := 0; i < 5; i++ {
+		toolID := fmt.Sprintf("tool-%d", i)
 		event := Event{
 			Type: EventToolCallComplete,
 			Data: ToolCallCompleteData{
-				ToolID:   string(rune('a' + i)),
+				ToolID:   toolID,
 				ToolName: "execute_command",
 				Success:  true,
-				Output:   string(rune('a' + i)),
+				Output:   fmt.Sprintf("test-%d", i),
 			},
 		}
 		err := mapper.MapEvent(event)
@@ -684,9 +709,10 @@ func TestMapEvent_MultipleTools(t *testing.T) {
 
 	// All should be updated
 	for i := 0; i < 5; i++ {
-		block := ui.BlocksByID[string(rune('a'+i))]
+		toolID := fmt.Sprintf("tool-%d", i)
+		block := ui.BlocksByID[toolID]
 		assert.NotNil(t, block)
-		assert.Equal(t, string(rune('a'+i)), block.Body)
+		assert.Equal(t, fmt.Sprintf("test-%d", i), block.Body)
 	}
 }
 

@@ -25,67 +25,72 @@ func NewScanner(baseDir string, ignoreGit bool) *Scanner {
 	}
 }
 
-// NewScannerWithIgnore creates a scanner with a custom IgnoreHandler.
-// This allows advanced configuration and testing.
-func NewScannerWithIgnore(baseDir string, handler *IgnoreHandler) *Scanner {
-	return &Scanner{
-		baseDir:       baseDir,
-		ignoreGit:     false, // Not needed when using custom handler
-		maxDepth:      20,
-		ignoreHandler: handler,
-	}
-}
-
 // Scan returns all files in the directory recursively.
 // Returns relative paths from baseDir.
 // Files matching .gitignore or .spinignore patterns are excluded.
 func (s *Scanner) Scan() ([]string, error) {
 	var files []string
 
-	// Auto-create IgnoreHandler if not provided
-	if s.ignoreHandler == nil && s.baseDir != "" {
-		handler, _ := NewIgnoreHandler(s.baseDir)
-		s.ignoreHandler = handler
-	}
+	s.ensureIgnoreHandler()
 
 	err := filepath.WalkDir(s.baseDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			// Skip errors (permission denied, etc.)
-			return nil
+			return nil // Skip errors (permission denied, etc.)
 		}
 
-		// Get relative path
-		relPath, err := filepath.Rel(s.baseDir, path)
-		if err != nil {
-			// Skip if can't get relative path
-			return nil
+		relPath, shouldSkip := s.processPath(path, d)
+		if shouldSkip {
+			return filepath.SkipDir
 		}
 
-		// Convert to forward slashes for consistency
-		relPath = filepath.ToSlash(relPath)
-
-		// Check if path should be ignored
-		if s.ignoreHandler != nil && s.ignoreHandler.IsIgnored(relPath, d.IsDir()) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
+		if relPath != "" {
+			files = append(files, relPath)
 		}
-
-		// Legacy ignoreGit support (for backward compatibility)
-		// This is now redundant since IgnoreHandler has .git/** by default,
-		// but we keep it for explicit backward compatibility
-		if d.IsDir() {
-			if s.ignoreGit && d.Name() == ".git" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Add file to results
-		files = append(files, relPath)
 		return nil
 	})
 
 	return files, err
+}
+
+// ensureIgnoreHandler creates an IgnoreHandler if not provided.
+func (s *Scanner) ensureIgnoreHandler() {
+	if s.ignoreHandler == nil && s.baseDir != "" {
+		handler, _ := NewIgnoreHandler(s.baseDir)
+		s.ignoreHandler = handler
+	}
+}
+
+// processPath processes a single path and returns the relative path and skip flag.
+func (s *Scanner) processPath(path string, d os.DirEntry) (string, bool) {
+	relPath, err := filepath.Rel(s.baseDir, path)
+	if err != nil {
+		return "", false // Skip if can't get relative path
+	}
+
+	relPath = filepath.ToSlash(relPath) // Convert to forward slashes for consistency
+
+	if s.shouldIgnorePath(relPath, d) {
+		return "", d.IsDir() // Skip directory if ignored
+	}
+
+	if d.IsDir() {
+		return "", false // Don't add directories to results
+	}
+
+	return relPath, false
+}
+
+// shouldIgnorePath checks if a path should be ignored.
+func (s *Scanner) shouldIgnorePath(relPath string, d os.DirEntry) bool {
+	// Check ignore handler first
+	if s.ignoreHandler != nil && s.ignoreHandler.IsIgnored(relPath, d.IsDir()) {
+		return true
+	}
+
+	// Legacy ignoreGit support (for backward compatibility)
+	if d.IsDir() && s.ignoreGit && d.Name() == ".git" {
+		return true
+	}
+
+	return false
 }

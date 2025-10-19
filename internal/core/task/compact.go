@@ -69,14 +69,6 @@ func NewCompact() *Compact {
 	}
 }
 
-// NewCompactWithConfig creates a new Compact task mode with custom configuration.
-// Pass nil config to use all defaults (equivalent to NewCompact()).
-func NewCompactWithConfig(config *CompactConfig) *Compact {
-	return &Compact{
-		config: config,
-	}
-}
-
 // Name returns the unique identifier for this task mode.
 // Always returns "compact".
 func (c *Compact) Name() string {
@@ -169,8 +161,6 @@ func (c *Compact) MaxTokens() int {
 //
 // A nil config is always valid (uses defaults).
 // Multiple validation errors are joined together.
-//
-//nolint:dupl // Validation logic is similar but validates different config fields per mode
 func (c *Compact) Validate() error {
 	if c.config == nil {
 		return nil // Default config is always valid

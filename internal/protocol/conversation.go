@@ -48,12 +48,3 @@ func NewConversationID() ConversationID {
 func (c ConversationID) String() string {
 	return c.ID.String()
 }
-
-// ParseConversationID parses a conversation ID from string
-func ParseConversationID(s string) (ConversationID, error) {
-	id, err := uuid.Parse(s)
-	if err != nil {
-		return ConversationID{}, err
-	}
-	return ConversationID{ID: id}, nil
-}

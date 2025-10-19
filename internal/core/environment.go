@@ -2,6 +2,7 @@ package core
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Environment contains environment information for the AI agent.
@@ -168,8 +170,12 @@ func gatherGitInfo(workDir string) (*GitInfo, error) {
 		return nil, nil // Git not available
 	}
 
+	// Create context with timeout for git commands
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	// Find git root
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
 	cmd.Dir = workDir
 	output, err := cmd.Output()
 	if err != nil {
@@ -183,14 +189,14 @@ func gatherGitInfo(workDir string) (*GitInfo, error) {
 	}
 
 	// Get current branch
-	cmd = exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd = exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
 	cmd.Dir = workDir
 	if output, err := cmd.Output(); err == nil {
 		info.Branch = strings.TrimSpace(string(output))
 	}
 
 	// Check for changes
-	cmd = exec.Command("git", "status", "--porcelain")
+	cmd = exec.CommandContext(ctx, "git", "status", "--porcelain")
 	cmd.Dir = workDir
 	if output, err := cmd.Output(); err == nil {
 		statusOutput := string(output)
@@ -206,7 +212,7 @@ func gatherGitInfo(workDir string) (*GitInfo, error) {
 	}
 
 	// Get remotes
-	cmd = exec.Command("git", "remote", "-v")
+	cmd = exec.CommandContext(ctx, "git", "remote", "-v")
 	cmd.Dir = workDir
 	if output, err := cmd.Output(); err == nil {
 		remoteMap := make(map[string]string)

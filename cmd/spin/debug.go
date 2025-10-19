@@ -48,7 +48,7 @@ machine-readable output, or --filter to show specific event types only.`,
   spin debug events --filter tool "run tests"
 
   # JSON output for parsing
-  spin debug events --format json "fix linting" | jq`,
+  spin debug events --format json "build project"`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDebugEvents(cmd.Context(), strings.Join(args, " "), format, filterStr)
@@ -95,23 +95,29 @@ func runDebugEvents(ctx context.Context, prompt, format, filterStr string) error
 	return logger.Run(ctx, prompt)
 }
 
-// newDebugSandboxCmd creates the macOS sandbox testing command.
+// newDebugSandboxCmd creates the sandbox debugging command.
 func newDebugSandboxCmd() *cobra.Command {
 	var mode string
 	var workspace string
+	var readOnly bool
+	var network bool
+	var timeout string
 
 	cmd := &cobra.Command{
-		Use:   "sandbox <command> [args...]",
-		Short: "Test macOS sandbox behavior (macOS only)",
-		Long: `Execute a command in the macOS sandbox to verify behavior.
+		Use:   "sandbox <command>",
+		Short: "Execute a command in a sandboxed environment",
+		Long: `Execute a command with sandbox restrictions to verify behavior.
 
-This command is only available on macOS and uses sandbox-exec to
-test different sandbox modes before deploying in production.`,
-		Example: `  # Test read-only mode
-  spin debug sandbox --mode read-only ls -la
+This command is only available on macOS and uses sandbox-exec to test
+filesystem restrictions before deploying in production.`,
+		Example: `  # Test sandbox restrictions
+  spin debug sandbox "ls -la"
 
-  # Test workspace-write mode
-  spin debug sandbox --mode workspace-write touch test.txt`,
+  # Test network access
+  spin debug sandbox --network "curl https://example.com"
+
+  # Test write access
+  spin debug sandbox --read-only=false "touch test.txt"`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Check platform
@@ -124,6 +130,51 @@ test different sandbox modes before deploying in production.`,
 
 	cmd.Flags().StringVar(&mode, "mode", "workspace-write", "Sandbox mode (read-only|workspace-write|full-access)")
 	cmd.Flags().StringVar(&workspace, "workspace", ".", "Workspace directory")
+	cmd.Flags().BoolVar(&readOnly, "read-only", true, "Enable read-only mode")
+	cmd.Flags().BoolVar(&network, "network", false, "Enable network access")
+	cmd.Flags().StringVar(&timeout, "timeout", "30s", "Command timeout")
+
+	return cmd
+}
+
+// newDebugLandlockCmd creates the Landlock debugging command.
+func newDebugLandlockCmd() *cobra.Command {
+	var mode string
+	var workspace string
+	var allowRead bool
+	var allowWrite bool
+	var timeout string
+
+	cmd := &cobra.Command{
+		Use:   "landlock <command>",
+		Short: "Execute a command with Landlock restrictions",
+		Long: `Execute a command with Landlock LSM restrictions to verify behavior.
+
+This command is only available on Linux and uses Landlock to test
+filesystem restrictions before deploying in production.`,
+		Example: `  # Test Landlock restrictions
+  spin debug landlock "ls -la"
+
+  # Test write access
+  spin debug landlock --allow-write "touch test.txt"
+
+  # Test read-only mode
+  spin debug landlock --allow-read=false "cat file.txt"`,
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Check platform
+			if runtime.GOOS != "linux" {
+				return fmt.Errorf("landlock command is only available on Linux (current: %s)", runtime.GOOS)
+			}
+			return runDebugLandlock(cmd.Context(), args[0], args[1:], mode, workspace)
+		},
+	}
+
+	cmd.Flags().StringVar(&mode, "mode", "workspace-write", "Sandbox mode (read-only|workspace-write|full-access)")
+	cmd.Flags().StringVar(&workspace, "workspace", ".", "Workspace directory")
+	cmd.Flags().BoolVar(&allowRead, "allow-read", true, "Allow read access")
+	cmd.Flags().BoolVar(&allowWrite, "allow-write", false, "Allow write access")
+	cmd.Flags().StringVar(&timeout, "timeout", "30s", "Command timeout")
 
 	return cmd
 }
@@ -137,39 +188,6 @@ func runDebugSandbox(ctx context.Context, command string, args []string, mode, w
 	// TODO: Implement actual sandbox execution via internal/security/sandbox
 	// For now, just return unimplemented
 	return fmt.Errorf("sandbox testing not yet implemented")
-}
-
-// newDebugLandlockCmd creates the Linux Landlock testing command.
-func newDebugLandlockCmd() *cobra.Command {
-	var mode string
-	var workspace string
-
-	cmd := &cobra.Command{
-		Use:   "landlock <command> [args...]",
-		Short: "Test Linux Landlock restrictions (Linux only)",
-		Long: `Execute a command with Landlock LSM restrictions to verify behavior.
-
-This command is only available on Linux and uses Landlock to test
-filesystem restrictions before deploying in production.`,
-		Example: `  # Test Landlock restrictions
-  spin debug landlock --mode read-only ls /etc
-
-  # Test workspace access
-  spin debug landlock --mode workspace-write touch file.txt`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Check platform
-			if runtime.GOOS != "linux" {
-				return fmt.Errorf("landlock command is only available on Linux (current: %s)", runtime.GOOS)
-			}
-			return runDebugLandlock(cmd.Context(), args[0], args[1:], mode, workspace)
-		},
-	}
-
-	cmd.Flags().StringVar(&mode, "mode", "workspace-write", "Sandbox mode (read-only|workspace-write|full-access)")
-	cmd.Flags().StringVar(&workspace, "workspace", ".", "Workspace directory")
-
-	return cmd
 }
 
 // runDebugLandlock executes the Landlock testing command.

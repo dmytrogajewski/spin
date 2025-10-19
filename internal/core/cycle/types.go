@@ -74,7 +74,7 @@ type Snapshot struct {
 
 // Config contains configuration for cycle detection
 type Config struct {
-	// WindowSize is the number of snapshots to compare for pattern detection (default: 3)
+	// WindowSize is the number of snapshots to compare for pattern detection (default: 10)
 	WindowSize int
 
 	// SimilarityThresh is the threshold for response similarity detection (default: 0.8)
@@ -88,17 +88,6 @@ type Config struct {
 
 	// Enabled controls whether cycle detection is active (default: true)
 	Enabled bool
-}
-
-// DefaultConfig returns sensible defaults for cycle detection
-func DefaultConfig() Config {
-	return Config{
-		WindowSize:       3,
-		SimilarityThresh: 0.8,
-		ToolRepeatLimit:  3,
-		ErrorRepeatLimit: 3,
-		Enabled:          true,
-	}
 }
 
 // CycleResult contains the result of cycle detection
@@ -132,20 +121,6 @@ const (
 	// InterventionEscalate pauses agent and requests user guidance
 	InterventionEscalate
 )
-
-// String returns the string representation of the intervention type
-func (it InterventionType) String() string {
-	switch it {
-	case InterventionReflection:
-		return "reflection"
-	case InterventionSummarize:
-		return "summarize"
-	case InterventionEscalate:
-		return "escalate"
-	default:
-		return "none"
-	}
-}
 
 // InterventionResult contains the result of applying an intervention
 type InterventionResult struct {

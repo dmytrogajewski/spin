@@ -9,9 +9,8 @@ import (
 
 func TestLLMProviderAdapter(t *testing.T) {
 	// Create a mock LLM provider
-	mock := llm.NewMockProvider("test",
-		llm.WithResponse("This is a test summary"),
-	)
+	mock := llm.NewMockProvider("test")
+	mock.SetResponse("This is a test summary")
 
 	// Create adapter
 	adapter := NewLLMProviderAdapter(mock)
@@ -35,9 +34,8 @@ func TestLLMProviderAdapter(t *testing.T) {
 }
 
 func TestLLMProviderAdapter_InvalidPromptType(t *testing.T) {
-	mock := llm.NewMockProvider("test",
-		llm.WithResponse("Response"),
-	)
+	mock := llm.NewMockProvider("test")
+	mock.SetResponse("Response")
 
 	adapter := NewLLMProviderAdapter(mock)
 

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/core"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
@@ -32,8 +32,8 @@ const (
 	ModeFilter
 	// ModePalette is the mode where keys control the command palette.
 	ModePalette
-	// ModeFilePreview is the mode where a file preview popup is shown.
-	ModeFilePreview
+	// ModeApproval is the mode where an approval dialog is shown.
+	ModeApproval
 )
 
 // PureTTY implements ports.UI using native terminal control without alt-screen buffer.
@@ -63,10 +63,11 @@ type PureTTY struct {
 	paletteRegistry *overlay.CommandRegistry
 	paletteRenderer *overlay.PaletteRenderer
 
-	// File preview (Phase 6.3)
-	filePreview         *overlay.FilePreview
-	filePreviewRenderer *overlay.FilePreviewRenderer
-	searchMatches       []int // current search matches in file preview
+	// File preview (Phase 6.3) - REMOVED
+	searchMatches []int // current search matches in file preview
+
+	// Approval dialog (Feature 5)
+	approvalDialog *overlay.ApprovalDialog
 
 	// Status management (Phase 1)
 	statusManager    *status.Manager
@@ -90,47 +91,6 @@ type PureTTYOption func(*PureTTY) error
 func WithTTY(tty term.TerminalController) PureTTYOption {
 	return func(p *PureTTY) error {
 		p.tty = tty
-		return nil
-	}
-}
-
-// WithModel sets a custom prompt model (for testing).
-func WithModel(model *prompt.Model) PureTTYOption {
-	return func(p *PureTTY) error {
-		p.model = model
-		return nil
-	}
-}
-
-// WithCoordinator sets a custom coordinated writer (for testing).
-func WithCoordinator(coord *output.CoordinatedWriter) PureTTYOption {
-	return func(p *PureTTY) error {
-		p.coord = coord
-		return nil
-	}
-}
-
-// WithTimeline sets a custom timeline (for testing).
-func WithTimeline(timeline *blocks.Timeline) PureTTYOption {
-	return func(p *PureTTY) error {
-		p.timeline = timeline
-		return nil
-	}
-}
-
-// WithBlockRenderer sets a custom block renderer (for testing).
-func WithBlockRenderer(r *blocks.Renderer) PureTTYOption {
-	return func(p *PureTTY) error {
-		p.blockRenderer = r
-		return nil
-	}
-}
-
-// WithKeyboardEvents sets a custom keyboard event channel (for testing).
-// When set, Run() will use this channel instead of term.ReadKeys().
-func WithKeyboardEvents(events <-chan term.KeyEvent) PureTTYOption {
-	return func(p *PureTTY) error {
-		p.keyboardEvents = events
 		return nil
 	}
 }
@@ -407,29 +367,29 @@ func (u *PureTTY) SetTokenCount(tokenCount int64) {
 // ProcessEvent processes a core.Event and updates the status manager.
 // This method is called by the event mapper to update status information.
 func (u *PureTTY) ProcessEvent(event *core.Event) {
-	if u.statusAggregator != nil {
-		u.statusAggregator.ProcessEvent(event)
-		// Update status display for meaningful events
-		switch event.Type {
-		case core.EventTurnStart:
-			// Show when turn starts
-			u.updateStatusBar()
-		case core.EventToolCallStart:
-			// Show "Executing tool..." when tools start
-			u.updateStatusBar()
-		case core.EventToolCallComplete:
-			// Show "Tool complete" when tools finish
-			u.updateStatusBar()
-		case core.EventContentDelta:
-			// Show "Generating content..." during streaming
-			u.updateStatusBar()
-		case core.EventContentComplete:
-			// Show completion status
-			u.updateStatusBar()
-		case core.EventTurnComplete:
-			// Show turn complete
-			u.updateStatusBar()
-		}
+	if u.statusAggregator == nil {
+		return
+	}
+
+	u.statusAggregator.ProcessEvent(event)
+
+	if u.shouldUpdateStatusBar(event.Type) {
+		u.updateStatusBar()
+	}
+}
+
+// shouldUpdateStatusBar determines if the status bar should be updated for the given event type.
+func (u *PureTTY) shouldUpdateStatusBar(eventType core.EventType) bool {
+	switch eventType {
+	case core.EventTurnStart,
+		core.EventToolCallStart,
+		core.EventToolCallComplete,
+		core.EventContentDelta,
+		core.EventContentComplete,
+		core.EventTurnComplete:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -507,231 +467,60 @@ func (a *rendererAdapter) Redraw(model output.PromptModel, status string) error 
 	return a.renderer.Redraw(promptModel, status)
 }
 
-// calculateViewport computes viewport height based on terminal size.
-func (u *PureTTY) calculateViewport() {
-	_, h := u.tty.Size()
-
-	// Reserve space for UI elements
-	inputBarHeight := 2   // 2 rows (mode line + prompt)
-	statusLineHeight := 1 // 1 row
-	padding := 2          // Top + bottom padding
-
-	u.viewportHeight = h - inputBarHeight - statusLineHeight - padding
-
-	// Update timeline viewport
-	u.timeline.SetViewportHeight(u.viewportHeight)
-}
-
-// handleKey dispatches key events based on current mode.
-func (u *PureTTY) handleKey(key term.KeyEvent) {
-	// Global: Ctrl-P opens palette from any mode
-	if key.Kind == term.KeyCtrlP && u.mode != ModePalette {
-		u.palette.Open()
-		u.mode = ModePalette
-		u.renderPaletteOverlay()
-		return
-	}
-
-	switch u.mode {
-	case ModePalette:
-		u.handlePaletteKey(key)
-	case ModeFilePreview:
-		u.handleFilePreviewKey(key)
-	case ModeTimeline:
-		u.handleTimelineKey(key)
-	case ModeInput:
-		u.handleInputKey(key)
-	case ModeFilter:
-		u.handleFilterKey(key)
-	}
-}
-
-// handleTimelineKey handles navigation and block actions.
-func (u *PureTTY) handleTimelineKey(key term.KeyEvent) {
-	switch key.Kind {
-	case term.KeyPgUp:
-		u.timeline.ScrollUp(u.viewportHeight)
-		u.render()
-	case term.KeyPgDn:
-		u.timeline.ScrollDown(u.viewportHeight)
-		u.render()
-	case term.KeyRune:
-		switch key.Rune {
-		case 'g':
-			u.timeline.ScrollToTop()
-			u.render()
-		case 'G':
-			u.timeline.ScrollToBottom()
-			u.render()
-		case '[':
-			u.timeline.PrevBlock()
-			u.render()
-		case ']':
-			u.timeline.NextBlock()
-			u.render()
-		case 'y':
-			u.handleCopyBlock()
-		case 'S':
-			u.handleSaveBlock()
-		case 'r':
-			u.handleRerunBlock()
-		case 'w':
-			u.handleToggleWrap()
-		case '/':
-			u.enterFilterMode()
-		case 'o':
-			// Open file preview for anchor under cursor
-			u.handleOpenFilePreview()
-		case ':':
-			// Switch to input mode (for commands)
-			u.mode = ModeInput
-			u.render()
-		default:
-			// Any other char: switch to input mode, insert char
-			u.mode = ModeInput
-			u.model.Insert(key.Rune)
-			u.render()
-		}
-	case term.KeyEnter:
-		// Toggle fold on focused block
-		focused, err := u.timeline.GetFocusedBlock()
-		if err == nil {
-			u.timeline.ToggleFold(focused.ID)
-			u.render()
-		}
-	case term.KeyEscape:
-		// Exit timeline mode → input mode
-		u.mode = ModeInput
-		u.render()
-	}
-}
-
-// handleInputKey delegates to existing prompt logic.
-func (u *PureTTY) handleInputKey(key term.KeyEvent) {
-	// New: Esc switches to timeline mode
-	if key.Kind == term.KeyEscape {
-		u.mode = ModeTimeline
-		u.render()
-		return
-	}
-
-	// Existing prompt key handling would go here
-	// (delegated to prompt.Loop in actual implementation)
-}
-
-// handleFilterKey handles filter input editing.
-func (u *PureTTY) handleFilterKey(key term.KeyEvent) {
-	switch key.Kind {
-	case term.KeyEscape:
-		// Clear filter, return to timeline mode
-		u.filterInput = ""
-		u.timeline.SetFilter(nil)
-		u.mode = ModeTimeline
-		u.render()
-	case term.KeyEnter:
-		// Apply filter, return to timeline mode
-		filter := u.parseFilter(u.filterInput)
-		u.timeline.SetFilter(filter)
-		u.mode = ModeTimeline
-		u.render()
-	case term.KeyBackspace:
-		if len(u.filterInput) > 0 {
-			u.filterInput = u.filterInput[:len(u.filterInput)-1]
-			u.render()
-		}
-	case term.KeyRune:
-		u.filterInput += string(key.Rune)
-		u.render()
-	}
-}
-
-// handlePaletteKey handles command palette interactions.
-func (u *PureTTY) handlePaletteKey(key term.KeyEvent) {
-	switch key.Kind {
-	case term.KeyEscape:
-		// Close palette, return to input mode
-		u.palette.Close()
-		u.mode = ModeInput
-		u.render()
-	case term.KeyEnter:
-		// Execute selected command
-		if cmd := u.palette.SelectedCommand(); cmd != nil {
-			_ = cmd.Execute(context.Background())
-		}
-		u.palette.Close()
-		u.mode = ModeInput
-		u.render()
-	case term.KeyUp:
-		u.palette.MoveUp()
-		u.renderPaletteOverlay()
-	case term.KeyDown:
-		u.palette.MoveDown()
-		u.renderPaletteOverlay()
-	case term.KeyBackspace:
-		u.palette.Backspace()
-		u.renderPaletteOverlay()
-	case term.KeyCtrlU:
-		u.palette.ClearQuery()
-		u.renderPaletteOverlay()
-	case term.KeyRune:
-		u.palette.Insert(key.Rune)
-		u.renderPaletteOverlay()
-	}
-}
-
-// parseFilter parses filter string into blocks.Filter.
-// Syntax: "type:EXECUTE file:foo.go exit:0 impact:high"
-func (u *PureTTY) parseFilter(input string) *blocks.Filter {
-	filter := &blocks.Filter{}
-
-	parts := strings.Fields(input)
-	for _, part := range parts {
-		kv := strings.SplitN(part, ":", 2)
-		if len(kv) != 2 {
-			continue
-		}
-
-		key, val := kv[0], kv[1]
-		switch key {
-		case "type":
-			filter.Types = append(filter.Types, blocks.BlockType(val))
-		case "file":
-			filter.File = val
-		case "exit":
-			if code, err := strconv.Atoi(val); err == nil {
-				filter.ExitCode = &code
-			}
-		case "impact":
-			filter.Impact = val
-		}
-	}
-
-	return filter
-}
-
 // formatFilterChips formats active filter as colored chips.
 func (u *PureTTY) formatFilterChips(f *blocks.Filter) string {
 	var chips []string
 
-	for _, typ := range f.Types {
-		chips = append(chips, fmt.Sprintf("[type:%s]", typ))
-	}
-	if f.File != "" {
-		chips = append(chips, fmt.Sprintf("[file:%s]", f.File))
-	}
-	if f.ExitCode != nil {
-		chips = append(chips, fmt.Sprintf("[exit:%d]", *f.ExitCode))
-	}
-	if f.Impact != "" {
-		chips = append(chips, fmt.Sprintf("[impact:%s]", f.Impact))
-	}
+	chips = append(chips, u.formatTypeChips(f.Types)...)
+	chips = append(chips, u.formatFileChip(f.File)...)
+	chips = append(chips, u.formatExitCodeChip(f.ExitCode)...)
+	chips = append(chips, u.formatImpactChip(f.Impact)...)
 
 	return strings.Join(chips, " ")
+}
+
+// formatTypeChips formats type filter chips.
+func (u *PureTTY) formatTypeChips(types []blocks.BlockType) []string {
+	var chips []string
+	for _, typ := range types {
+		chips = append(chips, fmt.Sprintf("[type:%s]", typ))
+	}
+	return chips
+}
+
+// formatFileChip formats file filter chip.
+func (u *PureTTY) formatFileChip(file string) []string {
+	if file == "" {
+		return nil
+	}
+	return []string{fmt.Sprintf("[file:%s]", file)}
+}
+
+// formatExitCodeChip formats exit code filter chip.
+func (u *PureTTY) formatExitCodeChip(exitCode *int) []string {
+	if exitCode == nil {
+		return nil
+	}
+	return []string{fmt.Sprintf("[exit:%d]", *exitCode)}
+}
+
+// formatImpactChip formats impact filter chip.
+func (u *PureTTY) formatImpactChip(impact string) []string {
+	if impact == "" {
+		return nil
+	}
+	return []string{fmt.Sprintf("[impact:%s]", impact)}
 }
 
 // render redraws UI elements (filter, prompt).
 // Note: Blocks are printed via AppendBlock in append-only mode.
 func (u *PureTTY) render() {
+	// Render approval dialog if active
+	if u.mode == ModeApproval && u.approvalDialog != nil {
+		u.renderApprovalOverlay()
+		return
+	}
+
 	// Render filter UI if active
 	if u.mode == ModeFilter || u.timeline.GetFilter() != nil {
 		u.renderFilterUI()
@@ -761,192 +550,40 @@ func (u *PureTTY) renderFilterUI() {
 	}
 }
 
-// renderPaletteOverlay renders the command palette overlay.
-func (u *PureTTY) renderPaletteOverlay() {
-	// Update renderer size (in case of resize)
+// ShowApprovalDialog displays an approval dialog for the given request.
+func (u *PureTTY) ShowApprovalDialog(req core.ApprovalRequest) core.ApprovalResponse {
+	// Create approval dialog
+	u.approvalDialog = overlay.NewApprovalDialog(req, 60*time.Second)
+	u.mode = ModeApproval
+
+	// Render the dialog
+	u.renderApprovalOverlay()
+
+	// Wait for user response
+	ctx := context.Background()
+	response := u.approvalDialog.Show(ctx)
+
+	// Clean up
+	u.approvalDialog = nil
+	u.mode = ModeInput
+
+	return response
+}
+
+// renderApprovalOverlay renders the approval dialog overlay.
+func (u *PureTTY) renderApprovalOverlay() {
+	if u.approvalDialog == nil {
+		return
+	}
+
+	// Get terminal dimensions
 	w, h := u.tty.Size()
-	u.paletteRenderer.SetSize(w, h)
 
-	// Render palette
-	paletteOutput := u.paletteRenderer.Render(u.palette)
-	fmt.Fprint(u.out, paletteOutput)
-}
-
-// enterFilterMode switches to filter mode.
-func (u *PureTTY) enterFilterMode() {
-	u.mode = ModeFilter
-	u.filterInput = ""
-	u.render()
-}
-
-// handleCopyBlock copies focused block body to clipboard.
-func (u *PureTTY) handleCopyBlock() {
-	block, err := u.timeline.GetFocusedBlock()
-	if err != nil {
-		return
+	// Render the dialog
+	output := u.approvalDialog.Render(w, h)
+	if output != "" {
+		fmt.Fprint(u.out, output)
 	}
-
-	// Copy to clipboard (platform-specific, use external cmd)
-	// For now: just log (clipboard support is optional)
-	u.coord.PrintLine(fmt.Sprintf("[Copied block %s]", block.ID))
-}
-
-// handleSaveBlock saves focused block to file.
-func (u *PureTTY) handleSaveBlock() {
-	block, err := u.timeline.GetFocusedBlock()
-	if err != nil {
-		return
-	}
-
-	// Prompt for filename (simple implementation: use block ID)
-	filename := fmt.Sprintf("block_%s.txt", block.ID)
-
-	// Write body to file
-	if err := os.WriteFile(filename, []byte(block.Body), 0644); err != nil {
-		u.coord.PrintLine(fmt.Sprintf("[Error saving: %v]", err))
-		return
-	}
-
-	u.coord.PrintLine(fmt.Sprintf("[Saved to %s]", filename))
-}
-
-// handleRerunBlock emits rerun event for EXECUTE blocks.
-func (u *PureTTY) handleRerunBlock() {
-	block, err := u.timeline.GetFocusedBlock()
-	if err != nil || block.Type != blocks.BlockTypeExecute {
-		return
-	}
-
-	// Emit rerun event (to be consumed by application)
-	// For now: just log
-	u.coord.PrintLine(fmt.Sprintf("[Rerun requested for block %s]", block.ID))
-}
-
-// handleToggleWrap toggles line wrapping for block.
-func (u *PureTTY) handleToggleWrap() {
-	// TODO: Implement wrap toggle (requires renderer state)
-	u.coord.PrintLine("[Toggle wrap not implemented yet]")
-}
-
-// handleOpenFilePreview opens a file preview for anchor under cursor.
-func (u *PureTTY) handleOpenFilePreview() {
-	// Get focused block
-	block, err := u.timeline.GetFocusedBlock()
-	if err != nil {
-		return
-	}
-
-	// Detect anchors in block body
-	anchors := overlay.DetectAnchors(block.Body)
-	if len(anchors) == 0 {
-		u.coord.PrintLine("[No file anchors found in focused block]")
-		return
-	}
-
-	// Use first anchor for now (TODO: let user pick if multiple)
-	anchor := anchors[0]
-
-	// Resolve absolute path (try relative to cwd)
-	cwd, _ := os.Getwd()
-	absPath := overlay.GetAbsolutePath(cwd, anchor.FilePath)
-
-	// Calculate popup dimensions
-	w, h := u.tty.Size()
-	popupWidth, popupHeight := overlay.CalculatePopupDimensions(w, h)
-
-	// Open file preview
-	fp, err := overlay.NewFilePreview(absPath, anchor.Line, popupWidth, popupHeight)
-	if err != nil {
-		u.coord.PrintLine(fmt.Sprintf("[Failed to open file: %v]", err))
-		return
-	}
-
-	u.filePreview = fp
-	u.filePreviewRenderer = overlay.NewFilePreviewRenderer(popupWidth)
-	u.searchMatches = nil
-	u.mode = ModeFilePreview
-	u.renderFilePreviewOverlay()
-}
-
-// handleFilePreviewKey handles file preview navigation keys.
-func (u *PureTTY) handleFilePreviewKey(key term.KeyEvent) {
-	if u.filePreview == nil {
-		return
-	}
-
-	switch key.Kind {
-	case term.KeyEscape:
-		// Close preview, return to timeline mode
-		u.filePreview = nil
-		u.filePreviewRenderer = nil
-		u.searchMatches = nil
-		u.mode = ModeTimeline
-		u.render()
-		return
-
-	case term.KeyUp:
-		u.filePreview.ScrollUp(1)
-		u.renderFilePreviewOverlay()
-
-	case term.KeyDown:
-		u.filePreview.ScrollDown(1)
-		u.renderFilePreviewOverlay()
-
-	case term.KeyPgUp:
-		// Scroll up by viewport height
-		contentHeight := u.filePreview.Height - 3
-		u.filePreview.ScrollUp(contentHeight)
-		u.renderFilePreviewOverlay()
-
-	case term.KeyPgDn:
-		// Scroll down by viewport height
-		contentHeight := u.filePreview.Height - 3
-		u.filePreview.ScrollDown(contentHeight)
-		u.renderFilePreviewOverlay()
-
-	case term.KeyRune:
-		switch key.Rune {
-		case 'g':
-			u.filePreview.ScrollToTop()
-			u.renderFilePreviewOverlay()
-		case 'G':
-			u.filePreview.ScrollToBottom()
-			u.renderFilePreviewOverlay()
-		case '/':
-			// TODO: Enter search mode (Phase 6.3 stretch goal)
-			u.coord.PrintLine("[Search in preview not implemented yet]")
-		case 'n':
-			// Next search match
-			if len(u.searchMatches) > 0 {
-				u.filePreview.NextMatch(u.searchMatches)
-				u.renderFilePreviewOverlay()
-			}
-		case 'N':
-			// Previous search match
-			if len(u.searchMatches) > 0 {
-				u.filePreview.PrevMatch(u.searchMatches)
-				u.renderFilePreviewOverlay()
-			}
-		}
-	}
-}
-
-// renderFilePreviewOverlay renders the file preview popup.
-func (u *PureTTY) renderFilePreviewOverlay() {
-	if u.filePreview == nil || u.filePreviewRenderer == nil {
-		return
-	}
-
-	// Update dimensions in case of resize
-	w, h := u.tty.Size()
-	popupWidth, popupHeight := overlay.CalculatePopupDimensions(w, h)
-	u.filePreview.Width = popupWidth
-	u.filePreview.Height = popupHeight
-	u.filePreviewRenderer = overlay.NewFilePreviewRenderer(popupWidth)
-
-	// Render preview
-	previewOutput := u.filePreviewRenderer.Render(u.filePreview)
-	fmt.Fprint(u.out, previewOutput)
 }
 
 // AppendBlock appends a new block to timeline and prints it.

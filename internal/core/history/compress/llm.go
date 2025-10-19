@@ -68,11 +68,6 @@ func NewLLMSummarizer(llm LLMProvider, config LLMSummarizerConfig) *LLMSummarize
 	}
 }
 
-// NewDefaultLLMSummarizer creates a summarizer with default configuration.
-func NewDefaultLLMSummarizer(llm LLMProvider) *LLMSummarizer {
-	return NewLLMSummarizer(llm, DefaultLLMSummarizerConfig())
-}
-
 // Compress implements the Compressor interface using LLM-based summarization.
 func (s *LLMSummarizer) Compress(
 	ctx context.Context,

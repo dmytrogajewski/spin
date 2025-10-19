@@ -3,10 +3,8 @@ package llm
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -35,40 +33,6 @@ func NewHTTPClient(opts ...ClientOption) *HTTPClient {
 	return c
 }
 
-// NewStreamingHTTPClient creates an HTTP client suitable for long-lived streaming responses.
-// - No global client timeout (ctx governs lifetime)
-// - No automatic retries (streams should not be retried mid-body)
-// - Transport tuned for keep-alive, no compression (avoid proxy buffering), HTTP/1.1 only
-func NewStreamingHTTPClient() *HTTPClient {
-	transport := &http.Transport{
-		// Force HTTP/1.1 only (avoids some H2 buffering behaviors in proxies/middlwares).
-		// For HTTPS, disabling HTTP/2:
-		TLSNextProto: make(map[string]func(string, *tls.Conn) http.RoundTripper),
-		// Reasonable dial timeouts; no read deadline on body (we want long streams).
-		DialContext: (&net.Dialer{
-			Timeout:   10 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		// Keep connections warm for repeated calls to same host.
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 100,
-		IdleConnTimeout:     90 * time.Second,
-		// If the server sends compressed NDJSON, some proxies will buffer; disable compression.
-		DisableCompression: true,
-		// No ResponseHeaderTimeout here; Ollama responds quickly with headers.
-		// If you run through a slow proxy, you can set e.g. 15s.
-	}
-
-	return &HTTPClient{
-		client: &http.Client{
-			Timeout:   0, // no global deadline; the request's context controls it
-			Transport: transport,
-		},
-		maxRetries: 0, // do not retry streams
-		retryDelay: 0, // unused
-	}
-}
-
 // Do executes HTTP request with retry logic (for non-streaming requests).
 func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	bodyBytes, err := c.bufferRequestBody(req)
@@ -76,15 +40,18 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
+	return c.executeWithRetries(req, bodyBytes)
+}
+
+// executeWithRetries executes the request with retry logic.
+func (c *HTTPClient) executeWithRetries(req *http.Request, bodyBytes []byte) (*http.Response, error) {
 	var lastErr error
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		if err := c.waitForRetry(req.Context(), attempt); err != nil {
 			return nil, err
 		}
 
-		c.restoreRequestBody(req, bodyBytes)
-
-		resp, err := c.client.Do(req)
+		resp, err := c.executeSingleAttempt(req, bodyBytes)
 		if err != nil {
 			lastErr = err
 			continue
@@ -94,13 +61,13 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 			return resp, nil
 		}
 
-		newResp, err := c.handleRetryAfter(req, resp, bodyBytes)
+		result, err := c.handleRetryableResponse(req, resp, bodyBytes)
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		if newResp != nil {
-			return newResp, nil
+		if result != nil {
+			return result, nil
 		}
 
 		resp.Body.Close()
@@ -108,6 +75,21 @@ func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	}
 
 	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+}
+
+// handleRetryableResponse handles retryable responses and returns a successful response or error.
+func (c *HTTPClient) handleRetryableResponse(req *http.Request, resp *http.Response, bodyBytes []byte) (*http.Response, error) {
+	newResp, err := c.handleRetryAfter(req, resp, bodyBytes)
+	if err != nil {
+		return nil, err
+	}
+	return newResp, nil
+}
+
+// executeSingleAttempt executes a single HTTP request attempt.
+func (c *HTTPClient) executeSingleAttempt(req *http.Request, bodyBytes []byte) (*http.Response, error) {
+	c.restoreRequestBody(req, bodyBytes)
+	return c.client.Do(req)
 }
 
 // DoStream executes an HTTP request intended for a long-lived streaming response.
@@ -169,24 +151,45 @@ func (c *HTTPClient) handleRetryAfter(req *http.Request, resp *http.Response, bo
 	if resp.StatusCode != http.StatusTooManyRequests {
 		return nil, nil
 	}
-	retryAfter := resp.Header.Get("Retry-After")
-	if retryAfter == "" {
+
+	waitDuration := c.parseRetryAfter(resp.Header.Get("Retry-After"))
+	if waitDuration == 0 {
 		return nil, nil
+	}
+
+	resp.Body.Close()
+
+	if err := c.waitForDuration(req.Context(), waitDuration); err != nil {
+		return nil, err
+	}
+
+	return c.retryRequest(req, bodyBytes)
+}
+
+// parseRetryAfter parses the Retry-After header value.
+func (c *HTTPClient) parseRetryAfter(retryAfter string) time.Duration {
+	if retryAfter == "" {
+		return 0
 	}
 	seconds, err := strconv.Atoi(retryAfter)
 	if err != nil {
-		return nil, nil
+		return 0
 	}
+	return time.Duration(seconds) * time.Second
+}
 
-	wait := time.Duration(seconds) * time.Second
-	resp.Body.Close()
-
+// waitForDuration waits for the specified duration or context cancellation.
+func (c *HTTPClient) waitForDuration(ctx context.Context, wait time.Duration) error {
 	select {
 	case <-time.After(wait):
-	case <-req.Context().Done():
-		return nil, req.Context().Err()
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
+}
 
+// retryRequest retries the request after waiting.
+func (c *HTTPClient) retryRequest(req *http.Request, bodyBytes []byte) (*http.Response, error) {
 	c.restoreRequestBody(req, bodyBytes)
 	newResp, err := c.client.Do(req)
 	if err != nil {
@@ -195,6 +198,7 @@ func (c *HTTPClient) handleRetryAfter(req *http.Request, resp *http.Response, bo
 	if !c.isRetryable(newResp.StatusCode) {
 		return newResp, nil
 	}
+
 	newResp.Body.Close()
 	return nil, nil
 }
@@ -222,10 +226,5 @@ func WithMaxRetries(n int) ClientOption {
 func WithRetryDelay(d time.Duration) ClientOption {
 	return func(c *HTTPClient) {
 		c.retryDelay = d
-	}
-}
-func WithTransport(transport *http.Transport) ClientOption {
-	return func(c *HTTPClient) {
-		c.client.Transport = transport
 	}
 }

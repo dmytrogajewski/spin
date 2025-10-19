@@ -41,24 +41,26 @@ func TestNvidiaDetector_ParseMiB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("total: %v", err)
 	}
-	if total == 0 {
-		t.Fatalf("expected total > 0")
+	expectedTotal := int64(24576) * 1024 * 1024 // Convert MiB to bytes
+	if total != expectedTotal {
+		t.Fatalf("expected total %d bytes (24576 MiB), got %d", expectedTotal, total)
 	}
 
 	free, err := d.AvailableVRAM()
 	if err != nil {
 		t.Fatalf("free: %v", err)
 	}
-	if free == 0 {
-		t.Fatalf("expected free > 0")
+	expectedFree := int64(8192) * 1024 * 1024 // Convert MiB to bytes
+	if free != expectedFree {
+		t.Fatalf("expected free %d bytes (8192 MiB), got %d", expectedFree, free)
 	}
 
 	name, err := d.GPUName()
 	if err != nil {
 		t.Fatalf("name: %v", err)
 	}
-	if name == "" {
-		t.Fatalf("expected name")
+	if name != "RTX 4090" {
+		t.Fatalf("expected name 'RTX 4090', got %q", name)
 	}
 }
 

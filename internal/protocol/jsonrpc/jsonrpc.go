@@ -60,16 +60,6 @@ func (r RequestID) String() string {
 	return ""
 }
 
-// StringID creates a string request ID
-func StringID(s string) RequestID {
-	return RequestID{Str: &s}
-}
-
-// NumberID creates a number request ID
-func NumberID(n int64) RequestID {
-	return RequestID{Num: &n}
-}
-
 // Response represents a JSON-RPC 2.0 response
 type Response struct {
 	JSONRPC string          `json:"jsonrpc"` // Always "2.0"
@@ -109,12 +99,6 @@ const (
 // NewError creates a new error
 func NewError(code int, message string) *Error {
 	return &Error{Code: code, Message: message}
-}
-
-// NewErrorWithData creates a new error with data
-func NewErrorWithData(code int, message string, data interface{}) *Error {
-	dataJSON, _ := json.Marshal(data)
-	return &Error{Code: code, Message: message, Data: dataJSON}
 }
 
 // Notification represents a JSON-RPC notification (no response expected)

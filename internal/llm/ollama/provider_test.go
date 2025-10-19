@@ -1068,3 +1068,154 @@ func TestProvider_Models_RetryOn504(t *testing.T) {
 		t.Errorf("Expected at least 2 attempts (1 retry), got %d", attempts)
 	}
 }
+
+// TestProvider_streamChat tests the internal streamChat method
+func TestProvider_streamChat(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"response":"Hello","done":false}` + "\n" + `{"response":" there","done":true}` + "\n"))
+	}))
+	defer server.Close()
+
+	p, err := NewProvider(Config{
+		BaseURL: server.URL,
+		Model:   "llama2",
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	req := llm.CompletionRequest{
+		Messages: []llm.Message{{Role: "user", Content: "Hello"}},
+	}
+
+	chunks, err := p.streamChat(context.Background(), req)
+	if err != nil {
+		t.Errorf("streamChat() unexpected error = %v", err)
+		return
+	}
+
+	// Collect chunks
+	var collected []llm.StreamChunk
+	for chunk := range chunks {
+		collected = append(collected, chunk)
+	}
+
+	if len(collected) != 3 {
+		t.Errorf("streamChat() got %d chunks, want 3", len(collected))
+	}
+
+	if collected[0].Content != "Hello" {
+		t.Errorf("streamChat() first chunk content = %q, want %q", collected[0].Content, "Hello")
+	}
+
+	if collected[1].Content != " there" {
+		t.Errorf("streamChat() second chunk content = %q, want %q", collected[1].Content, " there")
+	}
+}
+
+// TestProvider_streamChat_Error tests streamChat with server error
+func TestProvider_streamChat_Error(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"internal server error"}`))
+	}))
+	defer server.Close()
+
+	p, err := NewProvider(Config{
+		BaseURL: server.URL,
+		Model:   "llama2",
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	req := llm.CompletionRequest{
+		Messages: []llm.Message{{Role: "user", Content: "Hello"}},
+	}
+
+	_, err = p.streamChat(context.Background(), req)
+	if err == nil {
+		t.Error("streamChat() expected error, got nil")
+	}
+}
+
+// TestProvider_streamChatResponse tests the internal streamChatResponse method
+func TestProvider_streamChatResponse(t *testing.T) {
+	p, _ := NewProvider(Config{Model: "llama2"})
+
+	// Test data with valid JSON responses
+	data := `{"response":"Hello","done":false}` + "\n" +
+		`{"response":" there","done":false}` + "\n" +
+		`{"response":"","done":true}` + "\n"
+
+	chunks := make(chan llm.StreamChunk, 10)
+	go func() {
+		defer close(chunks)
+		err := p.streamChatResponse(context.Background(), strings.NewReader(data), chunks)
+		if err != nil {
+			t.Errorf("streamChatResponse() unexpected error = %v", err)
+		}
+	}()
+
+	var collected []llm.StreamChunk
+	for chunk := range chunks {
+		collected = append(collected, chunk)
+	}
+
+	if len(collected) != 3 {
+		t.Errorf("streamChatResponse() got %d chunks, want 3", len(collected))
+	}
+
+	if collected[0].Content != "Hello" {
+		t.Errorf("streamChatResponse() first chunk content = %q, want %q", collected[0].Content, "Hello")
+	}
+
+	if collected[1].Content != " there" {
+		t.Errorf("streamChatResponse() second chunk content = %q, want %q", collected[1].Content, " there")
+	}
+}
+
+// TestProvider_streamChatResponse_ContextCancellation tests context cancellation
+func TestProvider_streamChatResponse_ContextCancellation(t *testing.T) {
+	p, _ := NewProvider(Config{Model: "llama2"})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	chunks := make(chan llm.StreamChunk, 10)
+	err := p.streamChatResponse(ctx, strings.NewReader(`{"response":"test","done":false}`), chunks)
+
+	if err == nil {
+		t.Error("streamChatResponse() expected context cancellation error, got nil")
+	}
+}
+
+// TestProvider_streamChatResponse_MalformedJSON tests handling of malformed JSON
+func TestProvider_streamChatResponse_MalformedJSON(t *testing.T) {
+	p, _ := NewProvider(Config{Model: "llama2"})
+
+	// Mix of valid and invalid JSON
+	data := `{"response":"valid","done":false}` + "\n" +
+		`{invalid json}` + "\n" +
+		`{"response":"more","done":true}` + "\n"
+
+	chunks := make(chan llm.StreamChunk, 10)
+	go func() {
+		defer close(chunks)
+		err := p.streamChatResponse(context.Background(), strings.NewReader(data), chunks)
+		if err != nil {
+			t.Errorf("streamChatResponse() unexpected error = %v", err)
+		}
+	}()
+
+	var collected []llm.StreamChunk
+	for chunk := range chunks {
+		collected = append(collected, chunk)
+	}
+
+	// Should get 3 chunks (malformed one skipped, but done chunk added)
+	if len(collected) != 3 {
+		t.Errorf("streamChatResponse() got %d chunks, want 3", len(collected))
+	}
+}

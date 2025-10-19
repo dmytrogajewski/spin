@@ -53,13 +53,15 @@ func TestWriteRender_AfterSuccess_ShowsSuccess(t *testing.T) {
 		t.Fatalf("render: %v", err)
 	}
 
-	if !strings.Contains(out, "File written successfully.") {
+	plainOut := stripANSI(out)
+
+	if !strings.Contains(plainOut, "File written successfully.") {
 		t.Errorf("expected success status line in output: %s", out)
 	}
-	if !strings.Contains(out, "✓ Succeeded") {
+	if !strings.Contains(plainOut, "Succeeded. File edited.") {
 		t.Errorf("expected success footer chip in output: %s", out)
 	}
-	if strings.Contains(out, "● Failed") {
+	if strings.Contains(plainOut, "Failed") {
 		t.Errorf("should not show failed footer chip on success")
 	}
 }
@@ -81,10 +83,34 @@ func TestWriteRender_AfterFailure_ShowsFailure(t *testing.T) {
 		t.Fatalf("render: %v", err)
 	}
 
-	if !strings.Contains(out, "Failed to write file.") {
+	plainOut := stripANSI(out)
+
+	if !strings.Contains(plainOut, "Failed to write file.") {
 		t.Errorf("expected failure status line in output: %s", out)
 	}
-	if !strings.Contains(out, "● Failed") {
+	if !strings.Contains(plainOut, "Failed: boom") {
 		t.Errorf("expected failed footer chip in output: %s", out)
 	}
+}
+
+// stripANSI removes ANSI escape codes from a string for testing purposes
+func stripANSI(s string) string {
+	// Simple ANSI stripper (strips \x1b[...m sequences)
+	result := ""
+	inEscape := false
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+			inEscape = true
+			i++ // Skip '['
+			continue
+		}
+		if inEscape {
+			if s[i] == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		result += string(s[i])
+	}
+	return result
 }

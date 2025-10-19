@@ -141,31 +141,47 @@ func (p *Palette) updateFilter() {
 	}
 
 	queryStr := string(p.query)
-
-	// Empty query: return all commands
-	if strings.TrimSpace(queryStr) == "" {
-		p.filtered = make([]fuzzy.Match, len(commands))
-		for i := range commands {
-			p.filtered[i] = fuzzy.Match{Index: i, Score: 0}
-		}
+	if p.isEmptyQuery(queryStr) {
+		p.setAllCommands(commands)
 		return
 	}
 
-	// Build searchable strings: "Name Description"
+	p.performFuzzySearch(commands, queryStr)
+	p.clampSelection()
+}
+
+// isEmptyQuery checks if the query is empty or whitespace only.
+func (p *Palette) isEmptyQuery(queryStr string) bool {
+	return strings.TrimSpace(queryStr) == ""
+}
+
+// setAllCommands sets all commands as filtered results.
+func (p *Palette) setAllCommands(commands []Command) {
+	p.filtered = make([]fuzzy.Match, len(commands))
+	for i := range commands {
+		p.filtered[i] = fuzzy.Match{Index: i, Score: 0}
+	}
+}
+
+// performFuzzySearch performs fuzzy search on commands.
+func (p *Palette) performFuzzySearch(commands []Command, queryStr string) {
+	searchStrings := p.buildSearchStrings(commands)
+	matches := fuzzy.Find(queryStr, searchStrings)
+	p.filtered = matches
+}
+
+// buildSearchStrings builds searchable strings from commands.
+func (p *Palette) buildSearchStrings(commands []Command) []string {
 	searchStrings := make([]string, len(commands))
 	for i, cmd := range commands {
 		searchStrings[i] = cmd.Name() + " " + cmd.Description()
 	}
+	return searchStrings
+}
 
-	// Run fuzzy search
-	matches := fuzzy.Find(queryStr, searchStrings)
-	p.filtered = matches
-
-	// Clamp selection
+// clampSelection ensures selection is within bounds.
+func (p *Palette) clampSelection() {
 	if p.selection >= len(p.filtered) {
 		p.selection = 0
-		if len(p.filtered) > 0 {
-			p.selection = 0
-		}
 	}
 }

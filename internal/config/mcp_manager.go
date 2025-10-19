@@ -118,52 +118,6 @@ func (m *MCPManager) Remove(name string) error {
 	return m.writeConfig()
 }
 
-// Update updates an existing MCP server configuration.
-// Only non-zero fields in updates are applied.
-func (m *MCPManager) Update(name string, updates MCPServer) error {
-	// Get current server
-	current, err := m.Get(name)
-	if err != nil {
-		return err
-	}
-
-	// Apply updates (partial update)
-	if updates.Command != "" {
-		current.Command = updates.Command
-	}
-	if updates.Args != nil {
-		current.Args = updates.Args
-	}
-	if updates.Env != nil {
-		current.Env = updates.Env
-	}
-
-	// Validate
-	if err := m.validate(*current); err != nil {
-		return err
-	}
-
-	// Get all servers
-	servers, err := m.List()
-	if err != nil {
-		return err
-	}
-
-	// Replace updated server
-	for i, server := range servers {
-		if server.Name == name {
-			servers[i] = *current
-			break
-		}
-	}
-
-	// Update config
-	m.loader.Set("mcp.servers", servers)
-
-	// Write config
-	return m.writeConfig()
-}
-
 // validate validates an MCP server configuration.
 func (m *MCPManager) validate(server MCPServer) error {
 	if server.Name == "" {

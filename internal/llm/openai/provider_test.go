@@ -25,14 +25,16 @@ func TestNewProvider(t *testing.T) {
 				BaseURL: "https://api.openai.com/v1",
 				APIKey:  "test-key",
 				Model:   "gpt-4",
+				Timeout: llm.DefaultTimeout,
 			},
 			wantErr: false,
 		},
 		{
 			name: "empty base URL",
 			cfg: Config{
-				APIKey: "test-key",
-				Model:  "gpt-4",
+				APIKey:  "test-key",
+				Model:   "gpt-4",
+				Timeout: llm.DefaultTimeout,
 			},
 			wantErr: true,
 			errMsg:  "base URL",
@@ -42,6 +44,7 @@ func TestNewProvider(t *testing.T) {
 			cfg: Config{
 				BaseURL: "http://localhost:11434/v1",
 				Model:   "llama2",
+				Timeout: llm.DefaultTimeout,
 			},
 			wantErr: false,
 		},
@@ -51,6 +54,7 @@ func TestNewProvider(t *testing.T) {
 				BaseURL: "https://api.openai.com/v1/",
 				APIKey:  "test-key",
 				Model:   "gpt-4",
+				Timeout: llm.DefaultTimeout,
 			},
 			wantErr: false,
 		},
@@ -59,6 +63,7 @@ func TestNewProvider(t *testing.T) {
 			cfg: Config{
 				BaseURL: "https://api.openai.com/v1",
 				Model:   "gpt-4",
+				Timeout: llm.DefaultTimeout,
 			},
 			wantErr: false,
 		},
@@ -106,6 +111,7 @@ func TestProvider_Name(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: "https://api.openai.com/v1",
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	name := p.Name()
@@ -121,6 +127,7 @@ func TestProvider_Capabilities(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: "https://api.openai.com/v1",
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	caps := p.Capabilities()
@@ -291,6 +298,7 @@ func TestProvider_Complete(t *testing.T) {
 				BaseURL: server.URL,
 				APIKey:  "test-key",
 				Model:   "gpt-4",
+				Timeout: llm.DefaultTimeout,
 			})
 			if err != nil {
 				t.Fatalf("NewProvider() error = %v", err)
@@ -335,6 +343,7 @@ func TestProvider_Complete_ContextCancellation(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: server.URL,
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -424,6 +433,7 @@ func TestProvider_Stream(t *testing.T) {
 			p, _ := NewProvider(Config{
 				BaseURL: server.URL,
 				Model:   "gpt-4",
+				Timeout: llm.DefaultTimeout,
 			})
 
 			// Call Stream
@@ -510,6 +520,7 @@ func TestProvider_Models(t *testing.T) {
 			p, _ := NewProvider(Config{
 				BaseURL: server.URL,
 				Model:   "gpt-4",
+				Timeout: llm.DefaultTimeout,
 			})
 
 			models, err := p.Models(context.Background())
@@ -538,6 +549,7 @@ func TestProvider_Close(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: "https://api.openai.com/v1",
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	err := p.Close()
@@ -563,6 +575,7 @@ func TestProvider_Stream_ContextCancellation(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: server.URL,
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -609,6 +622,7 @@ func TestProvider_Stream_ErrorResponse(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: server.URL,
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	_, err := p.Stream(context.Background(), llm.CompletionRequest{
@@ -625,6 +639,7 @@ func TestGetModel(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: "https://api.openai.com/v1",
 		Model:   "default-model",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	tests := []struct {
@@ -659,6 +674,7 @@ func TestHandleError(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: "https://api.openai.com/v1",
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	tests := []struct {
@@ -729,6 +745,7 @@ func TestStreamResponse_ScannerError(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: "https://api.openai.com/v1",
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	// Create a reader that will cause scanner errors by returning very long lines
@@ -749,6 +766,7 @@ func TestConvertChunk(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: "https://api.openai.com/v1",
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	tests := []struct {
@@ -822,6 +840,7 @@ func TestNewRequest(t *testing.T) {
 		BaseURL: "https://api.openai.com/v1",
 		APIKey:  "test-key",
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	tests := []struct {
@@ -902,6 +921,7 @@ func TestProvider_Complete_ParseError(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: server.URL,
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	_, err := p.Complete(context.Background(), llm.CompletionRequest{
@@ -924,6 +944,7 @@ func TestProvider_Models_ParseError(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: server.URL,
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	_, err := p.Models(context.Background())
@@ -938,6 +959,7 @@ func TestConvertResponse(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: "https://api.openai.com/v1",
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	resp := &chatCompletionResponse{
@@ -962,6 +984,7 @@ func TestBuildRequest(t *testing.T) {
 	p, _ := NewProvider(Config{
 		BaseURL: "https://api.openai.com/v1",
 		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
 	})
 
 	tests := []struct {
@@ -1058,6 +1081,214 @@ func TestBuildRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			reqBody := p.buildRequest(tt.req, tt.stream)
 			tt.check(t, reqBody)
+		})
+	}
+}
+
+// TestProvider_ConvertToolCalls tests the convertToolCalls method
+func TestProvider_ConvertToolCalls(t *testing.T) {
+	p, err := NewProvider(Config{
+		BaseURL: "https://api.openai.com/v1",
+		APIKey:  "test-key",
+		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		toolCalls []llm.ToolCall
+		wantCount int
+	}{
+		{
+			name:      "empty tool calls",
+			toolCalls: []llm.ToolCall{},
+			wantCount: 0,
+		},
+		{
+			name: "single tool call",
+			toolCalls: []llm.ToolCall{
+				{
+					ID:   "call_123",
+					Type: "function",
+					Function: llm.FunctionCall{
+						Name:      "read_file",
+						Arguments: `{"path": "test.txt"}`,
+					},
+				},
+			},
+			wantCount: 1,
+		},
+		{
+			name: "multiple tool calls",
+			toolCalls: []llm.ToolCall{
+				{
+					ID:   "call_123",
+					Type: "function",
+					Function: llm.FunctionCall{
+						Name:      "read_file",
+						Arguments: `{"path": "test.txt"}`,
+					},
+				},
+				{
+					ID:   "call_456",
+					Type: "function",
+					Function: llm.FunctionCall{
+						Name:      "write_file",
+						Arguments: `{"path": "output.txt", "content": "hello"}`,
+					},
+				},
+			},
+			wantCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := p.convertToolCalls(tt.toolCalls)
+
+			if len(result) != tt.wantCount {
+				t.Errorf("convertToolCalls() got %d results, want %d", len(result), tt.wantCount)
+			}
+
+			// Verify structure of each tool call
+			for i, tc := range tt.toolCalls {
+				if i >= len(result) {
+					break
+				}
+
+				converted := result[i]
+
+				// Check required fields
+				if converted["id"] != tc.ID {
+					t.Errorf("convertToolCalls()[%d].id = %v, want %v", i, converted["id"], tc.ID)
+				}
+				if converted["type"] != tc.Type {
+					t.Errorf("convertToolCalls()[%d].type = %v, want %v", i, converted["type"], tc.Type)
+				}
+
+				// Check function field
+				function, ok := converted["function"].(map[string]interface{})
+				if !ok {
+					t.Errorf("convertToolCalls()[%d].function should be map[string]interface{}", i)
+					continue
+				}
+
+				if function["name"] != tc.Function.Name {
+					t.Errorf("convertToolCalls()[%d].function.name = %v, want %v", i, function["name"], tc.Function.Name)
+				}
+				if function["arguments"] != tc.Function.Arguments {
+					t.Errorf("convertToolCalls()[%d].function.arguments = %v, want %v", i, function["arguments"], tc.Function.Arguments)
+				}
+			}
+		})
+	}
+}
+
+func TestProvider_ParseChunk(t *testing.T) {
+	p, err := NewProvider(Config{
+		BaseURL: "https://api.openai.com/v1",
+		APIKey:  "test-key",
+		Model:   "gpt-4",
+		Timeout: llm.DefaultTimeout,
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		data    []byte
+		wantNil bool
+	}{
+		{
+			name: "valid chunk",
+			data: []byte(`{
+				"choices": [
+					{
+						"delta": {
+							"content": "Hello"
+						},
+						"finish_reason": null
+					}
+				]
+			}`),
+			wantNil: false,
+		},
+		{
+			name: "chunk with empty choices",
+			data: []byte(`{
+				"choices": []
+			}`),
+			wantNil: true,
+		},
+		{
+			name:    "malformed JSON",
+			data:    []byte(`invalid json`),
+			wantNil: true,
+		},
+		{
+			name:    "empty data",
+			data:    []byte(``),
+			wantNil: true,
+		},
+		{
+			name: "chunk with tool calls",
+			data: []byte(`{
+				"choices": [
+					{
+						"delta": {
+							"tool_calls": [
+								{
+									"id": "call_123",
+									"type": "function",
+									"function": {
+										"name": "read_file",
+										"arguments": "{\"path\": \"test.txt\"}"
+									}
+								}
+							]
+						},
+						"finish_reason": null
+					}
+				]
+			}`),
+			wantNil: false,
+		},
+		{
+			name: "chunk with finish reason",
+			data: []byte(`{
+				"choices": [
+					{
+						"delta": {},
+						"finish_reason": "stop"
+					}
+				]
+			}`),
+			wantNil: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chunk, err := p.parseChunk(tt.data)
+
+			if err != nil {
+				t.Errorf("parseChunk() unexpected error: %v", err)
+				return
+			}
+
+			if tt.wantNil {
+				if chunk != nil {
+					t.Errorf("parseChunk() expected nil chunk, got %v", chunk)
+				}
+			} else {
+				if chunk == nil {
+					t.Error("parseChunk() expected non-nil chunk, got nil")
+				}
+			}
 		})
 	}
 }

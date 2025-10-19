@@ -118,19 +118,6 @@ func (m *ToolMeta) Validate() error {
 	return nil
 }
 
-// ParseToolMeta extracts ToolMeta from a block's metadata.
-func ParseToolMeta(b *Block) (*ToolMeta, error) {
-	data, err := json.Marshal(b.Meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
-	}
-	var meta ToolMeta
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal ToolMeta: %w", err)
-	}
-	return &meta, nil
-}
-
 // PatchMeta holds metadata for APPLY_PATCH blocks.
 type PatchMeta struct {
 	// File is the target file path.
@@ -344,23 +331,6 @@ func SetPatchMeta(b *Block, m *PatchMeta) error {
 	data, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("failed to marshal PatchMeta: %w", err)
-	}
-	var meta map[string]interface{}
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return fmt.Errorf("failed to unmarshal to map: %w", err)
-	}
-	b.Meta = meta
-	return nil
-}
-
-// SetPlanMeta sets PlanMeta on a block.
-func SetPlanMeta(b *Block, m *PlanMeta) error {
-	if err := m.Validate(); err != nil {
-		return fmt.Errorf("invalid PlanMeta: %w", err)
-	}
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal PlanMeta: %w", err)
 	}
 	var meta map[string]interface{}
 	if err := json.Unmarshal(data, &meta); err != nil {

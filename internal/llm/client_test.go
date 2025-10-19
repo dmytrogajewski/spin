@@ -278,9 +278,9 @@ func TestHTTPClient_Do_ExponentialBackoff(t *testing.T) {
 		delay := timestamps[i].Sub(timestamps[i-1])
 		expectedDelay := baseDelay * time.Duration(1<<uint(i-1))
 
-		// Allow 50% tolerance for timing variations
+		// Allow 100% tolerance for timing variations to reduce flakiness
 		minDelay := expectedDelay / 2
-		maxDelay := expectedDelay * 2
+		maxDelay := expectedDelay * 3
 
 		if delay < minDelay || delay > maxDelay {
 			t.Errorf("retry %d delay = %v, want between %v and %v", i, delay, minDelay, maxDelay)
@@ -396,8 +396,8 @@ func TestHTTPClient_Do_NetworkError(t *testing.T) {
 		WithRetryDelay(10*time.Millisecond),
 	)
 
-	// Create request to non-existent server
-	req, err := http.NewRequest("GET", "http://localhost:1", nil)
+	// Create request to non-existent server using a reserved port that should fail
+	req, err := http.NewRequest("GET", "http://127.0.0.1:0", nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}

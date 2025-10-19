@@ -175,7 +175,12 @@ func TestTimeline_StressConcurrent(t *testing.T) {
 					return
 				}
 
-				time.Sleep(1 * time.Millisecond)
+				// Small delay to interleave operations without race conditions
+				select {
+				case <-time.After(1 * time.Millisecond):
+				case <-ctx.Done():
+					return
+				}
 			}
 		}(i)
 	}
@@ -193,7 +198,11 @@ func TestTimeline_StressConcurrent(t *testing.T) {
 					timeline.ScrollDown(1)
 					timeline.ScrollUp(1)
 					timeline.GetVisibleBlocks()
-					time.Sleep(5 * time.Millisecond)
+					select {
+					case <-time.After(5 * time.Millisecond):
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}()
@@ -213,7 +222,11 @@ func TestTimeline_StressConcurrent(t *testing.T) {
 					timeline.SetFilter(filter)
 					timeline.GetVisibleBlocks()
 					timeline.ClearFilter()
-					time.Sleep(10 * time.Millisecond)
+					select {
+					case <-time.After(10 * time.Millisecond):
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}()

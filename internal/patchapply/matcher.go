@@ -1,10 +1,7 @@
 package patchapply
 
 import (
-	"fmt"
 	"strings"
-
-	"github.com/dmytrogajewski/spin/pkg/strutil"
 )
 
 // Matcher finds hunk context in file content using fuzzy matching algorithms.
@@ -104,16 +101,6 @@ func (m *Matcher) FindContext(contextLines []string, header string) int {
 // Example:
 //
 //	m := NewMatcher(fileLines)
-//	if err := m.SetThreshold(0.90); err != nil {
-//	    log.Fatal(err)
-//	}
-func (m *Matcher) SetThreshold(threshold float64) error {
-	if threshold < 0.0 || threshold > 1.0 {
-		return fmt.Errorf("threshold must be between 0.0 and 1.0, got %.2f", threshold)
-	}
-	m.threshold = threshold
-	return nil
-}
 
 // findInRange searches for context within a specific range of file lines.
 // Returns the starting line index or -1 if not found.
@@ -319,7 +306,7 @@ func (m *Matcher) computeSimilarity(contextLines, windowLines []string) float64 
 
 	totalSimilarity := 0.0
 	for i := range contextLines {
-		similarity := strutil.Similarity(contextLines[i], windowLines[i])
+		similarity := calculateSimilarity(contextLines[i], windowLines[i])
 		totalSimilarity += similarity
 	}
 
@@ -331,9 +318,44 @@ func (m *Matcher) computeSimilarity(contextLines, windowLines []string) float64 
 func (m *Matcher) normalizeLines(lines []string) []string {
 	normalized := make([]string, len(lines))
 	for i, line := range lines {
-		normalized[i] = strutil.NormalizeWhitespace(line)
+		normalized[i] = normalizeWhitespace(line)
 	}
 	return normalized
+}
+
+// calculateSimilarity calculates similarity between two strings using simple character matching.
+func calculateSimilarity(s1, s2 string) float64 {
+	if s1 == s2 {
+		return 1.0
+	}
+	if len(s1) == 0 || len(s2) == 0 {
+		return 0.0
+	}
+
+	// Simple similarity based on common characters
+	common := 0
+	maxLen := len(s1)
+	if len(s2) > maxLen {
+		maxLen = len(s2)
+	}
+
+	for i := 0; i < len(s1) && i < len(s2); i++ {
+		if s1[i] == s2[i] {
+			common++
+		}
+	}
+
+	return float64(common) / float64(maxLen)
+}
+
+// normalizeWhitespace normalizes whitespace in a string.
+func normalizeWhitespace(s string) string {
+	// Replace multiple spaces with single space and trim
+	result := strings.ReplaceAll(s, "\t", " ")
+	for strings.Contains(result, "  ") {
+		result = strings.ReplaceAll(result, "  ", " ")
+	}
+	return strings.TrimSpace(result)
 }
 
 // Helper functions for min/max/abs

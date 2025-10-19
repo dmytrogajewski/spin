@@ -22,9 +22,11 @@ type requestCapturingMockProvider struct {
 	requestCount int
 }
 
-func newRequestCapturingMock(opts ...llm.MockOption) *requestCapturingMockProvider {
+func newRequestCapturingMock(response string) *requestCapturingMockProvider {
+	mock := llm.NewMockProvider("test-mock")
+	mock.SetResponse(response)
 	return &requestCapturingMockProvider{
-		MockProvider: llm.NewMockProvider("test-mock", opts...),
+		MockProvider: mock,
 		allRequests:  make([]llm.CompletionRequest, 0),
 	}
 }
@@ -67,7 +69,7 @@ func (m *requestCapturingMockProvider) getRequestCount() int {
 
 // Test helpers
 
-func extractToolNames(tools []llm.Tool) []string {
+func extractToolNamesFromTools(tools []llm.Tool) []string {
 	names := make([]string, len(tools))
 	for i, tool := range tools {
 		names[i] = tool.Function.Name
@@ -119,7 +121,7 @@ func setupTestConversationWithMockLLM(t *testing.T, mockLLM llm.Provider) *Conve
 // Test 1: Mode Switch Affects Tool Availability
 func TestConversation_Integration_ModeSwitchAffectsTools(t *testing.T) {
 	// Setup
-	mockLLM := newRequestCapturingMock(llm.WithResponse("Done"))
+	mockLLM := newRequestCapturingMock("Done")
 	conv := setupTestConversationWithMockLLM(t, mockLLM)
 
 	ctx := context.Background()
@@ -130,7 +132,7 @@ func TestConversation_Integration_ModeSwitchAffectsTools(t *testing.T) {
 	// Verify regular mode had all tools
 	req1 := mockLLM.getLastRequest()
 	require.NotNil(t, req1, "request should be captured")
-	toolNames1 := extractToolNames(req1.Tools)
+	toolNames1 := extractToolNamesFromTools(req1.Tools)
 	assert.Contains(t, toolNames1, "read_file", "regular mode should have read_file")
 	assert.Contains(t, toolNames1, "write_file", "regular mode should have write_file")
 	assert.Contains(t, toolNames1, "execute_command", "regular mode should have execute_command")
@@ -146,7 +148,7 @@ func TestConversation_Integration_ModeSwitchAffectsTools(t *testing.T) {
 	// Verify review mode has only read tools
 	req2 := mockLLM.getLastRequest()
 	require.NotNil(t, req2, "request should be captured")
-	toolNames2 := extractToolNames(req2.Tools)
+	toolNames2 := extractToolNamesFromTools(req2.Tools)
 	assert.Contains(t, toolNames2, "read_file", "review mode should have read_file")
 	assert.NotContains(t, toolNames2, "write_file", "review mode should NOT have write_file")
 	assert.NotContains(t, toolNames2, "execute_command", "review mode should NOT have execute_command")
@@ -159,7 +161,7 @@ func TestConversation_Integration_ModeSwitchAffectsTools(t *testing.T) {
 // Test 2: Mode Switch Affects Token Budget
 func TestConversation_Integration_ModeSwitchAffectsTokenBudget(t *testing.T) {
 	// Setup
-	mockLLM := newRequestCapturingMock(llm.WithResponse("Done"))
+	mockLLM := newRequestCapturingMock("Done")
 	agent := setupTestAgentWithMockLLM(t, mockLLM)
 	agent.config.MaxTokens = 16384 // Agent default: 16K
 
@@ -203,7 +205,7 @@ func TestConversation_Integration_ModeSwitchAffectsTokenBudget(t *testing.T) {
 // Test 3: Mode Persists Across Multiple Turns
 func TestConversation_Integration_ModePersistsAcrossTurns(t *testing.T) {
 	// Setup
-	mockLLM := newRequestCapturingMock(llm.WithResponse("OK"))
+	mockLLM := newRequestCapturingMock("OK")
 	conv := setupTestConversationWithMockLLM(t, mockLLM)
 
 	ctx := context.Background()
@@ -220,7 +222,7 @@ func TestConversation_Integration_ModePersistsAcrossTurns(t *testing.T) {
 	assert.Equal(t, "review", conv.GetTaskMode())
 	req1 := mockLLM.getLastRequest()
 	require.NotNil(t, req1)
-	toolNames1 := extractToolNames(req1.Tools)
+	toolNames1 := extractToolNamesFromTools(req1.Tools)
 	assert.NotContains(t, toolNames1, "write_file", "turn 1: review mode should not have write_file")
 
 	// Turn 2 (no mode change)
@@ -230,7 +232,7 @@ func TestConversation_Integration_ModePersistsAcrossTurns(t *testing.T) {
 	assert.Equal(t, "review", conv.GetTaskMode())
 	req2 := mockLLM.getLastRequest()
 	require.NotNil(t, req2)
-	toolNames2 := extractToolNames(req2.Tools)
+	toolNames2 := extractToolNamesFromTools(req2.Tools)
 	assert.NotContains(t, toolNames2, "write_file", "turn 2: review mode should not have write_file")
 
 	// Turn 3 (no mode change)
@@ -240,7 +242,7 @@ func TestConversation_Integration_ModePersistsAcrossTurns(t *testing.T) {
 	assert.Equal(t, "review", conv.GetTaskMode())
 	req3 := mockLLM.getLastRequest()
 	require.NotNil(t, req3)
-	toolNames3 := extractToolNames(req3.Tools)
+	toolNames3 := extractToolNamesFromTools(req3.Tools)
 	assert.NotContains(t, toolNames3, "write_file", "turn 3: review mode should not have write_file")
 
 	// Verify all 3 requests were in review mode
@@ -251,7 +253,7 @@ func TestConversation_Integration_ModePersistsAcrossTurns(t *testing.T) {
 // Test 4: Concurrent Mode Switches Are Safe
 func TestConversation_Integration_ConcurrentModeSwitches(t *testing.T) {
 	// Setup
-	mockLLM := newRequestCapturingMock(llm.WithResponse("OK"))
+	mockLLM := newRequestCapturingMock("OK")
 	conv := setupTestConversationWithMockLLM(t, mockLLM)
 
 	var wg sync.WaitGroup
@@ -270,9 +272,6 @@ func TestConversation_Integration_ConcurrentModeSwitches(t *testing.T) {
 				return
 			}
 		}(i)
-
-		// Small sleep to avoid overwhelming the system
-		time.Sleep(10 * time.Millisecond)
 	}
 
 	// Start 20 concurrent mode switches
@@ -286,8 +285,6 @@ func TestConversation_Integration_ConcurrentModeSwitches(t *testing.T) {
 				t.Logf("SetTaskMode %s error: %v", mode, err)
 			}
 		}(i)
-
-		time.Sleep(10 * time.Millisecond)
 	}
 
 	// Wait for all to complete
@@ -316,7 +313,7 @@ func TestConversation_Integration_ConcurrentModeSwitches(t *testing.T) {
 // Test 5: Invalid Mode Handling
 func TestConversation_Integration_InvalidModeHandling(t *testing.T) {
 	// Setup
-	mockLLM := newRequestCapturingMock(llm.WithResponse("Works"))
+	mockLLM := newRequestCapturingMock("Works")
 	conv := setupTestConversationWithMockLLM(t, mockLLM)
 
 	ctx := context.Background()
@@ -335,14 +332,14 @@ func TestConversation_Integration_InvalidModeHandling(t *testing.T) {
 	// Should use regular mode
 	req := mockLLM.getLastRequest()
 	require.NotNil(t, req)
-	toolNames := extractToolNames(req.Tools)
+	toolNames := extractToolNamesFromTools(req.Tools)
 	assert.Contains(t, toolNames, "write_file", "should still have all tools in regular mode")
 }
 
 // Test 6: All Task Modes End-to-End
 func TestConversation_Integration_AllTaskModes(t *testing.T) {
 	// Setup
-	mockLLM := newRequestCapturingMock(llm.WithResponse("Done"))
+	mockLLM := newRequestCapturingMock("Done")
 	conv := setupTestConversationWithMockLLM(t, mockLLM)
 
 	ctx := context.Background()
@@ -392,7 +389,7 @@ func TestConversation_Integration_AllTaskModes(t *testing.T) {
 			// Verify tools
 			req := mockLLM.getLastRequest()
 			require.NotNil(t, req, "request should be captured for mode %s", tc.mode)
-			toolNames := extractToolNames(req.Tools)
+			toolNames := extractToolNamesFromTools(req.Tools)
 
 			for _, expectedTool := range tc.expectedTools {
 				assert.Contains(t, toolNames, expectedTool,
@@ -414,7 +411,7 @@ func TestConversation_Integration_AllTaskModes(t *testing.T) {
 // Test 7: Mode Info Included in System Messages
 func TestConversation_Integration_ModeChangeEmitsEvent(t *testing.T) {
 	// Setup
-	mockLLM := newRequestCapturingMock(llm.WithResponse("Done"))
+	mockLLM := newRequestCapturingMock("Done")
 	conv := setupTestConversationWithMockLLM(t, mockLLM)
 
 	// Subscribe to event stream

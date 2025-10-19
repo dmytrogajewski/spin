@@ -26,8 +26,8 @@ var (
 
 // Default values for execution.
 const (
-	DefaultTimeout       = 5 * time.Minute
-	DefaultMaxOutputSize = 10 * 1024 * 1024 // 10MB
+	DefaultExecutionTimeout = 5 * time.Minute
+	DefaultMaxOutputSize    = 10 * 1024 * 1024 // 10MB
 )
 
 // Result contains the outcome of command execution.
@@ -117,8 +117,8 @@ func DefaultExecuteOptions() *ExecuteOptions {
 		Timeout:       0, // Use executor's default timeout
 		WorkDir:       "",
 		Env:           make(map[string]string),
-		InheritEnv:    false,
-		MaxOutputSize: 0, // Use executor's default max output size
+		InheritEnv:    true, // Inherit environment by default
+		MaxOutputSize: 0,    // Use executor's default max output size
 		StreamOutput:  false,
 		ValidateFirst: false,
 		Sandbox:       false,
@@ -151,18 +151,21 @@ type OutputChunk struct {
 //   - Timeout enforcement
 //   - Output size limits
 //   - Environment isolation
+//   - Command result caching
 //
 // Thread Safety:
 //
 //	Executor is thread-safe and can execute commands concurrently.
 type Executor struct {
-	validator *Validator
-	sandbox   interface{} // sandbox.Sandbox interface (avoiding import cycle)
-	workDir   string
-	timeout   time.Duration
-	maxOutput int64
-	env       map[string]string
-	mu        sync.RWMutex
+	validator       *Validator
+	approvalService *ApprovalService
+	sandbox         interface{} // sandbox.Sandbox interface (avoiding import cycle)
+	cache           *CommandCache
+	workDir         string
+	timeout         time.Duration
+	maxOutput       int64
+	env             map[string]string
+	mu              sync.RWMutex
 }
 
 // ExecutorOption is a functional option for Executor.
@@ -179,6 +182,14 @@ func WithValidator(v *Validator) ExecutorOption {
 	}
 }
 
+// WithApprovalService sets the approval service for the executor.
+func WithApprovalService(s *ApprovalService) ExecutorOption {
+	return func(e *Executor) error {
+		e.approvalService = s
+		return nil
+	}
+}
+
 // WithTimeout sets the default timeout.
 func WithTimeout(d time.Duration) ExecutorOption {
 	return func(e *Executor) error {
@@ -190,33 +201,10 @@ func WithTimeout(d time.Duration) ExecutorOption {
 	}
 }
 
-// WithMaxOutputSize sets the maximum output size.
-func WithMaxOutputSize(size int64) ExecutorOption {
+// WithCache sets the command cache for result caching.
+func WithCache(c *CommandCache) ExecutorOption {
 	return func(e *Executor) error {
-		if size <= 0 {
-			return NewValidationError("Executor.WithMaxOutputSize", "max output size must be positive")
-		}
-		e.maxOutput = size
-		return nil
-	}
-}
-
-// WithEnvironment sets the environment variables.
-func WithEnvironment(env map[string]string) ExecutorOption {
-	return func(e *Executor) error {
-		if env == nil {
-			return NewValidationError("Executor.WithEnvironment", "environment cannot be nil")
-		}
-		e.env = env
-		return nil
-	}
-}
-
-// WithSandbox sets the sandbox for command isolation.
-// The sandbox parameter should implement the sandbox.Sandbox interface.
-func WithSandbox(s interface{}) ExecutorOption {
-	return func(e *Executor) error {
-		e.sandbox = s
+		e.cache = c
 		return nil
 	}
 }
@@ -229,7 +217,7 @@ func NewExecutor(workDir string, opts ...ExecutorOption) (*Executor, error) {
 
 	e := &Executor{
 		workDir:   workDir,
-		timeout:   DefaultTimeout,
+		timeout:   DefaultExecutionTimeout,
 		maxOutput: DefaultMaxOutputSize,
 		env:       make(map[string]string),
 	}
@@ -241,6 +229,99 @@ func NewExecutor(workDir string, opts ...ExecutorOption) (*Executor, error) {
 	}
 
 	return e, nil
+}
+
+// errorResult creates an error result with proper timestamps.
+func (e *Executor) errorResult(cmd *Command, err error) *Result {
+	now := time.Now()
+	return &Result{
+		Command:     cmd,
+		Error:       err,
+		StartedAt:   now,
+		CompletedAt: now,
+		Duration:    0,
+		ExitCode:    -1,
+	}
+}
+
+// checkCache checks for a cached result.
+func (e *Executor) checkCache(cmd *Command) *Result {
+	e.mu.RLock()
+	cache := e.cache
+	e.mu.RUnlock()
+
+	if cache == nil || !cache.IsCacheable(cmd) {
+		return nil
+	}
+
+	key := cache.Key(cmd)
+	if cachedResult, ok := cache.Get(key); ok {
+		return cachedResult
+	}
+
+	return nil
+}
+
+// cacheResultIfEligible caches the result if eligible.
+func (e *Executor) cacheResultIfEligible(cmd *Command, result *Result) {
+	e.mu.RLock()
+	cache := e.cache
+	e.mu.RUnlock()
+
+	if cache == nil || result.Error != nil || !cache.IsCacheable(cmd) {
+		return
+	}
+
+	key := cache.Key(cmd)
+	cache.Set(key, result)
+}
+
+// validateCommand runs the validation pipeline.
+func (e *Executor) validateCommand(cmd *Command, opts *ExecuteOptions) error {
+	if cmd == nil {
+		return ErrNilCommand
+	}
+
+	if cmd.Program == "" {
+		return ErrEmptyProgram
+	}
+
+	// If ValidateFirst option is set, run full validation
+	if opts.ValidateFirst {
+		if err := e.Validate(cmd); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// requestApprovalIfNeeded requests approval if command needs it.
+func (e *Executor) requestApprovalIfNeeded(ctx context.Context, cmd *Command, opts *ExecuteOptions) error {
+	e.mu.RLock()
+	validator := e.validator
+	approvalService := e.approvalService
+	e.mu.RUnlock()
+
+	if approvalService == nil {
+		return nil
+	}
+
+	workDir := opts.WorkDir
+	if workDir == "" {
+		workDir = e.workDir
+	}
+
+	approved, err := approvalService.RequestApprovalWithValidator(ctx, cmd, validator, workDir)
+	if err != nil {
+		return fmt.Errorf("approval request failed: %w", err)
+	}
+
+	if !approved {
+		return fmt.Errorf("command execution denied by user")
+	}
+
+	return nil
 }
 
 // Validate checks if a command can be executed.
@@ -301,53 +382,42 @@ func (e *Executor) Validate(cmd *Command) error {
 //	    log.Fatal(err)
 //	}
 //	fmt.Println(result.Stdout)
-//
-//nolint:gocyclo // Execute requires comprehensive validation and error handling
 func (e *Executor) Execute(ctx context.Context, cmd *Command, opts *ExecuteOptions) (*Result, error) {
-	// Start tracing span
-	var cmdStr string
-	if cmd != nil {
-		cmdStr = cmd.Program
-		if len(cmd.Args) > 0 {
-			cmdStr += " " + cmd.Args[0]
-		}
-	}
-	ctx, span := StartSpan(ctx, "Executor.Execute",
-		StringAttr("command", cmdStr),
-	)
-	defer span.End()
-
 	// Use default options if not provided
 	if opts == nil {
 		opts = DefaultExecuteOptions()
 	}
 
+	// Validate command
+	if err := e.validateCommand(cmd, opts); err != nil {
+		return e.errorResult(cmd, err), err
+	}
+
+	// Check cache
+	if cached := e.checkCache(cmd); cached != nil {
+		return cached, nil
+	}
+
+	// Request approval if needed
+	if err := e.requestApprovalIfNeeded(ctx, cmd, opts); err != nil {
+		return e.errorResult(cmd, err), err
+	}
+
+	// Execute command
+	result := e.executeCommand(ctx, cmd, opts)
+
+	// Cache successful results
+	e.cacheResultIfEligible(cmd, result)
+
+	return result, result.Error
+}
+
+// executeCommand performs the actual command execution.
+func (e *Executor) executeCommand(ctx context.Context, cmd *Command, opts *ExecuteOptions) *Result {
 	// Create result
 	result := &Result{
 		Command:   cmd,
 		StartedAt: time.Now(),
-	}
-
-	// Validate command
-	if opts.ValidateFirst {
-		if err := e.Validate(cmd); err != nil {
-			result.Error = err
-			result.CompletedAt = time.Now()
-			result.Duration = result.CompletedAt.Sub(result.StartedAt)
-			return result, err
-		}
-	} else if cmd == nil {
-		err := ErrNilCommand
-		result.Error = err
-		result.CompletedAt = time.Now()
-		result.Duration = result.CompletedAt.Sub(result.StartedAt)
-		return result, err
-	} else if cmd.Program == "" {
-		err := ErrEmptyProgram
-		result.Error = err
-		result.CompletedAt = time.Now()
-		result.Duration = result.CompletedAt.Sub(result.StartedAt)
-		return result, err
 	}
 
 	// Apply timeout
@@ -367,6 +437,19 @@ func (e *Executor) Execute(ctx context.Context, cmd *Command, opts *ExecuteOptio
 	// Set environment
 	execCmd.Env = e.buildEnvironment(opts)
 
+	// Debug: check if PATH is set
+	hasPath := false
+	for _, env := range execCmd.Env {
+		if strings.HasPrefix(env, "PATH=") {
+			hasPath = true
+			break
+		}
+	}
+	if !hasPath {
+		// Add minimal PATH if not present
+		execCmd.Env = append(execCmd.Env, "PATH=/usr/bin:/bin")
+	}
+
 	// Capture output
 	var stdoutBuf, stderrBuf bytes.Buffer
 	execCmd.Stdout = &stdoutBuf
@@ -378,7 +461,7 @@ func (e *Executor) Execute(ctx context.Context, cmd *Command, opts *ExecuteOptio
 		result.ExitCode = -1
 		result.CompletedAt = time.Now()
 		result.Duration = result.CompletedAt.Sub(result.StartedAt)
-		return result, result.Error
+		return result
 	}
 
 	// Wait for completion
@@ -396,7 +479,7 @@ func (e *Executor) Execute(ctx context.Context, cmd *Command, opts *ExecuteOptio
 		e.mu.RUnlock()
 	}
 
-	// Capture and limit output
+	// Capture and limit output (always capture, even on error)
 	result.Stdout, result.Stderr, result.Truncated = e.captureOutput(
 		&stdoutBuf,
 		&stderrBuf,
@@ -408,12 +491,12 @@ func (e *Executor) Execute(ctx context.Context, cmd *Command, opts *ExecuteOptio
 		if execCtx.Err() == context.DeadlineExceeded {
 			result.Error = ErrTimeout
 			result.ExitCode = -1
-			return result, result.Error
+			return result
 		}
 		if execCtx.Err() == context.Canceled {
 			result.Error = context.Canceled
 			result.ExitCode = -1
-			return result, result.Error
+			return result
 		}
 
 		// Extract exit code
@@ -423,19 +506,11 @@ func (e *Executor) Execute(ctx context.Context, cmd *Command, opts *ExecuteOptio
 			result.ExitCode = -1
 		}
 		result.Error = fmt.Errorf("%w: %v", ErrExecutionFailed, err)
-		return result, result.Error
+		return result
 	}
 
 	result.ExitCode = 0
-
-	// Add span attributes
-	span.SetAttribute("exit_code", result.ExitCode)
-	span.SetAttribute("duration_ms", result.Duration.Milliseconds())
-	if result.Error != nil {
-		span.SetError(result.Error)
-	}
-
-	return result, nil
+	return result
 }
 
 // ExecuteStreaming runs a command and streams output in real-time.

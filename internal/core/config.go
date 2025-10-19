@@ -3,25 +3,25 @@ package core
 import (
 	"errors"
 	"fmt"
-	"os"
-	"strconv"
 	"time"
-
-	"github.com/dmytrogajewski/spin/internal/config"
-	"gopkg.in/yaml.v3"
 )
 
-// Config contains core configuration for the Spin agent.
+// Config contains unified configuration for the Spin agent.
+// This replaces both core.Config and core.AgentConfig for consistency.
 type Config struct {
 	// LLM Provider Configuration
 	Provider       string                 `yaml:"provider" mapstructure:"provider"`
 	Model          string                 `yaml:"model" mapstructure:"model"`
 	ProviderConfig map[string]interface{} `yaml:"provider_config" mapstructure:"provider_config"`
+	Temperature    float64                `yaml:"temperature" mapstructure:"temperature"`
 
-	// Execution Configuration
-	MaxTurns int           `yaml:"max_turns" mapstructure:"max_turns"`
-	Timeout  time.Duration `yaml:"timeout" mapstructure:"timeout"`
-	WorkDir  string        `yaml:"work_dir" mapstructure:"work_dir"`
+	// Agent Configuration
+	MaxTurns        int           `yaml:"max_turns" mapstructure:"max_turns"`
+	Timeout         time.Duration `yaml:"timeout" mapstructure:"timeout"`
+	WorkDir         string        `yaml:"work_dir" mapstructure:"work_dir"`
+	MaxTokens       int           `yaml:"max_tokens" mapstructure:"max_tokens"`
+	RequireApproval bool          `yaml:"require_approval" mapstructure:"require_approval"`
+	ApprovalTimeout time.Duration `yaml:"approval_timeout" mapstructure:"approval_timeout"`
 
 	// Security Configuration
 	SandboxMode     string   `yaml:"sandbox_mode" mapstructure:"sandbox_mode"`
@@ -35,9 +35,13 @@ type Config struct {
 	EnableShell bool              `yaml:"enable_shell" mapstructure:"enable_shell"`
 
 	// Performance Configuration
-	MaxTokens     int  `yaml:"max_tokens" mapstructure:"max_tokens"`
 	StreamBuffer  int  `yaml:"stream_buffer" mapstructure:"stream_buffer"`
 	CacheCommands bool `yaml:"cache_commands" mapstructure:"cache_commands"`
+
+	// Environment Configuration
+	MaxFiles int  `yaml:"max_files" mapstructure:"max_files"`
+	MaxDepth int  `yaml:"max_depth" mapstructure:"max_depth"`
+	SkipGit  bool `yaml:"skip_git" mapstructure:"skip_git"`
 
 	// Storage Configuration
 	SessionDir   string `yaml:"session_dir" mapstructure:"session_dir"`
@@ -48,8 +52,26 @@ type Config struct {
 	LogFormat string `yaml:"log_format" mapstructure:"log_format"` // text, json
 	Debug     bool   `yaml:"debug" mapstructure:"debug"`           // Enable debug mode
 
-	// Tracing Configuration
-	EnableTrace bool `yaml:"enable_trace" mapstructure:"enable_trace"` // Enable OpenTelemetry tracing
+	// Cycle Detection Configuration
+	CycleDetection CycleDetectionConfig `yaml:"cycle_detection" mapstructure:"cycle_detection"`
+}
+
+// CycleDetectionConfig configures automatic cycle detection and intervention.
+type CycleDetectionConfig struct {
+	// Enabled controls whether cycle detection is active (default: true)
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
+
+	// WindowSize is the number of snapshots to compare for pattern detection (default: 3)
+	WindowSize int `yaml:"window_size" mapstructure:"window_size"`
+
+	// SimilarityThresh is the threshold for response similarity detection (default: 0.8)
+	SimilarityThresh float64 `yaml:"similarity_thresh" mapstructure:"similarity_thresh"`
+
+	// ToolRepeatLimit is the max identical tool calls before triggering cycle (default: 3)
+	ToolRepeatLimit int `yaml:"tool_repeat_limit" mapstructure:"tool_repeat_limit"`
+
+	// ErrorRepeatLimit is the max identical errors before triggering cycle (default: 3)
+	ErrorRepeatLimit int `yaml:"error_repeat_limit" mapstructure:"error_repeat_limit"`
 }
 
 // MCPServerConfig represents configuration for an MCP server.
@@ -63,151 +85,46 @@ type MCPServerConfig struct {
 // DefaultConfig returns a new Config with sensible defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		MaxTurns:      50,
-		Timeout:       5 * time.Minute,
-		MaxTokens:     8192,
+		// LLM Provider defaults
+		Temperature: 0.7,
+
+		// Agent defaults
+		MaxTurns:        50,
+		Timeout:         5 * time.Minute,
+		MaxTokens:       8192,
+		RequireApproval: false,
+		ApprovalTimeout: 60 * time.Second,
+
+		// Security defaults
+		SandboxMode: "workspace-only",
+
+		// Feature flags
+		EnableGit:   true,
+		EnableShell: true,
+		EnableMCP:   false,
+
+		// Performance defaults
 		StreamBuffer:  100,
-		HistoryLimit:  1000,
-		SessionDir:    "~/.spin/sessions",
-		EnableGit:     true,
-		EnableShell:   true,
-		SandboxMode:   "workspace-only",
 		CacheCommands: false,
-		EnableMCP:     false,
-		LogLevel:      "info",
-		LogFormat:     "text",
-		Debug:         false,
-		EnableTrace:   false,
+
+		// Storage defaults
+		SessionDir:   "~/.spin/sessions",
+		HistoryLimit: 1000,
+
+		// Logging defaults
+		LogLevel:  "info",
+		LogFormat: "text",
+		Debug:     false,
+
+		// Cycle detection defaults
+		CycleDetection: CycleDetectionConfig{
+			Enabled:          true,
+			WindowSize:       3,
+			SimilarityThresh: 0.8,
+			ToolRepeatLimit:  3,
+			ErrorRepeatLimit: 3,
+		},
 	}
-}
-
-// Load loads configuration from a YAML file.
-func Load(path string) (*Config, error) {
-	const op = "Config.Load"
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, &Error{
-			Op:   op,
-			Err:  err,
-			Code: ErrCodeNotFound,
-			Context: map[string]interface{}{
-				"path": path,
-			},
-		}
-	}
-
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, &Error{
-			Op:   op,
-			Err:  err,
-			Code: ErrCodeInvalidInput,
-			Context: map[string]interface{}{
-				"path": path,
-			},
-		}
-	}
-
-	return &cfg, nil
-}
-
-// LoadConfig loads configuration with full precedence chain:
-// Defaults -> File -> Environment Variables
-func LoadConfig(path string) (*Config, error) {
-	const op = "LoadConfig"
-
-	// Start with defaults
-	cfg := DefaultConfig()
-
-	// Load from file if exists
-	if path != "" {
-		fileCfg, err := Load(path)
-		if err != nil {
-			// Only return error if it's not a "file not found" error
-			var e *Error
-			if errors.As(err, &e) && e.Code != ErrCodeNotFound {
-				return nil, &Error{Op: op, Err: err}
-			}
-		}
-		if fileCfg != nil {
-			cfg = cfg.Merge(fileCfg)
-		}
-	}
-
-	// Override with environment variables
-	envCfg := loadFromEnv()
-	cfg = cfg.Merge(envCfg)
-
-	// Validate final configuration
-	if err := cfg.Validate(); err != nil {
-		return nil, &Error{
-			Op:   op,
-			Err:  err,
-			Code: ErrCodeInvalidInput,
-		}
-	}
-
-	return cfg, nil
-}
-
-// LoadWithViper loads configuration using Viper for enhanced features.
-// Supports YAML, JSON, TOML formats and environment variables.
-// Precedence: Defaults -> Config File -> Environment Variables
-func LoadWithViper(path string) (*Config, error) {
-	const op = "LoadWithViper"
-
-	// Create viper loader
-	loader := config.NewLoader()
-
-	// Set defaults
-	setViperDefaults(loader)
-
-	// Load config file
-	var err error
-	if path != "" {
-		err = loader.LoadFromFile(path)
-	} else {
-		err = loader.Load("")
-	}
-
-	if err != nil {
-		return nil, WrapError(op, err)
-	}
-
-	// Unmarshal into Config struct
-	cfg := &Config{}
-	if err := loader.Unmarshal(cfg); err != nil {
-		return nil, NewInternalError(op, fmt.Errorf("failed to unmarshal config: %w", err))
-	}
-
-	// Validate
-	if err := cfg.Validate(); err != nil {
-		return nil, NewValidationError(op, err.Error())
-	}
-
-	return cfg, nil
-}
-
-// setViperDefaults sets default values in the Viper loader.
-func setViperDefaults(loader *config.Loader) {
-	defaults := DefaultConfig()
-
-	loader.SetDefault("max_turns", defaults.MaxTurns)
-	loader.SetDefault("timeout", defaults.Timeout)
-	loader.SetDefault("max_tokens", defaults.MaxTokens)
-	loader.SetDefault("stream_buffer", defaults.StreamBuffer)
-	loader.SetDefault("history_limit", defaults.HistoryLimit)
-	loader.SetDefault("session_dir", defaults.SessionDir)
-	loader.SetDefault("enable_git", defaults.EnableGit)
-	loader.SetDefault("enable_shell", defaults.EnableShell)
-	loader.SetDefault("sandbox_mode", defaults.SandboxMode)
-	loader.SetDefault("cache_commands", defaults.CacheCommands)
-	loader.SetDefault("enable_mcp", defaults.EnableMCP)
-	loader.SetDefault("log_level", defaults.LogLevel)
-	loader.SetDefault("log_format", defaults.LogFormat)
-	loader.SetDefault("debug", defaults.Debug)
-	loader.SetDefault("enable_trace", defaults.EnableTrace)
 }
 
 // Validate validates the configuration.
@@ -230,6 +147,18 @@ func (c *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("timeout must be > 0, got %v", c.Timeout))
 	}
 
+	if c.MaxTokens <= 0 {
+		errs = append(errs, fmt.Errorf("max_tokens must be > 0, got %d", c.MaxTokens))
+	}
+
+	if c.Temperature < 0 || c.Temperature > 2 {
+		errs = append(errs, fmt.Errorf("temperature must be between 0 and 2, got %f", c.Temperature))
+	}
+
+	if c.ApprovalTimeout <= 0 {
+		errs = append(errs, fmt.Errorf("approval_timeout must be > 0, got %v", c.ApprovalTimeout))
+	}
+
 	// Validate sandbox mode
 	validModes := []string{"read-only", "workspace-only", "full-access"}
 	validMode := false
@@ -243,8 +172,36 @@ func (c *Config) Validate() error {
 		errs = append(errs, fmt.Errorf("invalid sandbox_mode: %s (must be one of: read-only, workspace-only, full-access)", c.SandboxMode))
 	}
 
-	if c.MaxTokens <= 0 {
-		errs = append(errs, fmt.Errorf("max_tokens must be > 0, got %d", c.MaxTokens))
+	// Validate cycle detection config
+	if err := c.CycleDetection.Validate(); err != nil {
+		errs = append(errs, fmt.Errorf("cycle_detection: %w", err))
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	return nil
+}
+
+// Validate validates the cycle detection configuration.
+func (c *CycleDetectionConfig) Validate() error {
+	var errs []error
+
+	if c.WindowSize <= 0 {
+		errs = append(errs, fmt.Errorf("window_size must be > 0, got %d", c.WindowSize))
+	}
+
+	if c.SimilarityThresh < 0 || c.SimilarityThresh > 1 {
+		errs = append(errs, fmt.Errorf("similarity_thresh must be between 0 and 1, got %f", c.SimilarityThresh))
+	}
+
+	if c.ToolRepeatLimit <= 0 {
+		errs = append(errs, fmt.Errorf("tool_repeat_limit must be > 0, got %d", c.ToolRepeatLimit))
+	}
+
+	if c.ErrorRepeatLimit <= 0 {
+		errs = append(errs, fmt.Errorf("error_repeat_limit must be > 0, got %d", c.ErrorRepeatLimit))
 	}
 
 	if len(errs) > 0 {
@@ -263,34 +220,80 @@ func (c *Config) Merge(other *Config) *Config {
 	merged.mergeIntFields(other)
 	merged.mergeSliceFields(other)
 	merged.mergeBoolFields(c, other)
+	merged.mergeFloatFields(other)
+	merged.mergeCycleDetection(other)
 	return merged
+}
+
+// mergeFloatFields merges float configuration fields
+func (c *Config) mergeFloatFields(other *Config) {
+	if other.Temperature != 0 {
+		c.Temperature = other.Temperature
+	}
+}
+
+// mergeCycleDetection merges cycle detection configuration
+func (c *Config) mergeCycleDetection(other *Config) {
+	if other.CycleDetection.Enabled != c.CycleDetection.Enabled {
+		c.CycleDetection.Enabled = other.CycleDetection.Enabled
+	}
+	if other.CycleDetection.WindowSize != 0 {
+		c.CycleDetection.WindowSize = other.CycleDetection.WindowSize
+	}
+	if other.CycleDetection.SimilarityThresh != 0 {
+		c.CycleDetection.SimilarityThresh = other.CycleDetection.SimilarityThresh
+	}
+	if other.CycleDetection.ToolRepeatLimit != 0 {
+		c.CycleDetection.ToolRepeatLimit = other.CycleDetection.ToolRepeatLimit
+	}
+	if other.CycleDetection.ErrorRepeatLimit != 0 {
+		c.CycleDetection.ErrorRepeatLimit = other.CycleDetection.ErrorRepeatLimit
+	}
 }
 
 // copyConfig creates a copy of the configuration
 func (c *Config) copyConfig() *Config {
 	copied := &Config{
-		Provider:        c.Provider,
-		Model:           c.Model,
-		ProviderConfig:  make(map[string]interface{}),
+		// LLM Provider fields
+		Provider:       c.Provider,
+		Model:          c.Model,
+		ProviderConfig: make(map[string]interface{}),
+		Temperature:    c.Temperature,
+
+		// Agent fields
 		MaxTurns:        c.MaxTurns,
 		Timeout:         c.Timeout,
 		WorkDir:         c.WorkDir,
+		MaxTokens:       c.MaxTokens,
+		RequireApproval: c.RequireApproval,
+		ApprovalTimeout: c.ApprovalTimeout,
+
+		// Security fields
 		SandboxMode:     c.SandboxMode,
 		PolicyFile:      c.PolicyFile,
 		AllowedCommands: append([]string{}, c.AllowedCommands...),
-		EnableMCP:       c.EnableMCP,
-		MCPServers:      append([]MCPServerConfig{}, c.MCPServers...),
-		EnableGit:       c.EnableGit,
-		EnableShell:     c.EnableShell,
-		MaxTokens:       c.MaxTokens,
-		StreamBuffer:    c.StreamBuffer,
-		CacheCommands:   c.CacheCommands,
-		SessionDir:      c.SessionDir,
-		HistoryLimit:    c.HistoryLimit,
-		LogLevel:        c.LogLevel,
-		LogFormat:       c.LogFormat,
-		Debug:           c.Debug,
-		EnableTrace:     c.EnableTrace,
+
+		// Feature flags
+		EnableMCP:   c.EnableMCP,
+		MCPServers:  append([]MCPServerConfig{}, c.MCPServers...),
+		EnableGit:   c.EnableGit,
+		EnableShell: c.EnableShell,
+
+		// Performance fields
+		StreamBuffer:  c.StreamBuffer,
+		CacheCommands: c.CacheCommands,
+
+		// Storage fields
+		SessionDir:   c.SessionDir,
+		HistoryLimit: c.HistoryLimit,
+
+		// Logging fields
+		LogLevel:  c.LogLevel,
+		LogFormat: c.LogFormat,
+		Debug:     c.Debug,
+
+		// Cycle detection fields
+		CycleDetection: c.CycleDetection,
 	}
 
 	// Copy ProviderConfig map from base
@@ -353,6 +356,9 @@ func (c *Config) mergeIntFields(other *Config) {
 	if other.HistoryLimit != 0 {
 		c.HistoryLimit = other.HistoryLimit
 	}
+	if other.ApprovalTimeout != 0 {
+		c.ApprovalTimeout = other.ApprovalTimeout
+	}
 }
 
 // mergeSliceFields merges slice configuration fields
@@ -382,93 +388,7 @@ func (c *Config) mergeBoolFields(base, other *Config) {
 	if other.Debug != base.Debug {
 		c.Debug = other.Debug
 	}
-	if other.EnableTrace != base.EnableTrace {
-		c.EnableTrace = other.EnableTrace
-	}
-}
-
-// loadFromEnv loads configuration from environment variables.
-func loadFromEnv() *Config {
-	cfg := &Config{
-		ProviderConfig: make(map[string]interface{}),
-	}
-
-	loadStringEnvVars(cfg)
-	loadIntEnvVars(cfg)
-	loadBoolEnvVars(cfg)
-
-	// Parse duration
-	if v := os.Getenv("SPIN_TIMEOUT"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			cfg.Timeout = d
-		}
-	}
-
-	return cfg
-}
-
-// loadStringEnvVars loads string environment variables into config
-func loadStringEnvVars(cfg *Config) {
-	envMap := map[string]*string{
-		"SPIN_PROVIDER":     &cfg.Provider,
-		"SPIN_MODEL":        &cfg.Model,
-		"SPIN_WORKDIR":      &cfg.WorkDir,
-		"SPIN_WORK_DIR":     &cfg.WorkDir,
-		"SPIN_SANDBOX_MODE": &cfg.SandboxMode,
-		"SPIN_POLICY_FILE":  &cfg.PolicyFile,
-		"SPIN_SESSION_DIR":  &cfg.SessionDir,
-		"SPIN_LOG_LEVEL":    &cfg.LogLevel,
-		"SPIN_LOG_FORMAT":   &cfg.LogFormat,
-	}
-
-	for key, dest := range envMap {
-		if v := os.Getenv(key); v != "" {
-			*dest = v
-		}
-	}
-}
-
-// loadIntEnvVars loads integer environment variables into config
-func loadIntEnvVars(cfg *Config) {
-	intEnvMap := map[string]*int{
-		"SPIN_MAX_TURNS":     &cfg.MaxTurns,
-		"SPIN_MAX_TOKENS":    &cfg.MaxTokens,
-		"SPIN_STREAM_BUFFER": &cfg.StreamBuffer,
-		"SPIN_HISTORY_LIMIT": &cfg.HistoryLimit,
-	}
-
-	for key, dest := range intEnvMap {
-		if v := os.Getenv(key); v != "" {
-			if i, err := strconv.Atoi(v); err == nil {
-				*dest = i
-			}
-		}
-	}
-}
-
-// loadBoolEnvVars loads boolean environment variables into config
-func loadBoolEnvVars(cfg *Config) {
-	boolEnvMap := map[string]*bool{
-		"SPIN_ENABLE_MCP":     &cfg.EnableMCP,
-		"SPIN_ENABLE_GIT":     &cfg.EnableGit,
-		"SPIN_ENABLE_SHELL":   &cfg.EnableShell,
-		"SPIN_CACHE_COMMANDS": &cfg.CacheCommands,
-		"SPIN_ENABLE_TRACE":   &cfg.EnableTrace,
-	}
-
-	for key, dest := range boolEnvMap {
-		if v := os.Getenv(key); v != "" {
-			if b, err := strconv.ParseBool(v); err == nil {
-				*dest = b
-			}
-		}
-	}
-
-	// Special handling for SPIN_DEBUG (can be "1" or "true")
-	if v := os.Getenv("SPIN_DEBUG"); v != "" {
-		if v == "1" || v == "true" {
-			cfg.Debug = true
-			cfg.LogLevel = "debug"
-		}
+	if other.RequireApproval != base.RequireApproval {
+		c.RequireApproval = other.RequireApproval
 	}
 }

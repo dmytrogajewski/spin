@@ -15,7 +15,7 @@ Your task is to:
 3. Read all docs in docs/ (!!!)
 4. Write feature requirements document and put it to specs/frds/FRD-{id}.md
 5. Read FRD
-6. Write tests
+6. Write tests (min 90% coverage)
 7. Write implementation
 8. analyze code with tool 'uast parse {filename} | herr analyze'
 9. Run `make lint`

@@ -74,14 +74,6 @@ func NewReview() *Review {
 	}
 }
 
-// NewReviewWithConfig creates a new Review task mode with custom configuration.
-// Pass nil config to use all defaults (equivalent to NewReview()).
-func NewReviewWithConfig(config *ReviewConfig) *Review {
-	return &Review{
-		config: config,
-	}
-}
-
 // Name returns the unique identifier for this task mode.
 // Always returns "review".
 func (r *Review) Name() string {
@@ -220,38 +212,50 @@ func (r *Review) MaxTokens() int {
 //
 // A nil config is always valid (uses defaults).
 // Multiple validation errors are joined together.
-//
-//nolint:dupl // Validation logic is similar but validates different config fields per mode
 func (r *Review) Validate() error {
 	if r.config == nil {
 		return nil // Default config is always valid
 	}
 
 	var errs []error
+	errs = append(errs, r.validateMaxTokens()...)
+	errs = append(errs, r.validateTargetFiles()...)
+	errs = append(errs, r.validateCustomSystemPrompt()...)
 
-	// Validate max tokens
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+// validateMaxTokens validates the max tokens configuration.
+func (r *Review) validateMaxTokens() []error {
+	var errs []error
 	if r.config.MaxTokens < 0 {
 		errs = append(errs, fmt.Errorf("max tokens cannot be negative: %d", r.config.MaxTokens))
 	}
 	if r.config.MaxTokens > MaxAllowedTokens {
 		errs = append(errs, fmt.Errorf("max tokens (%d) exceeds maximum allowed (%d)", r.config.MaxTokens, MaxAllowedTokens))
 	}
+	return errs
+}
 
-	// Validate target files
+// validateTargetFiles validates the target files configuration.
+func (r *Review) validateTargetFiles() []error {
+	var errs []error
 	for i, pattern := range r.config.TargetFiles {
 		if pattern == "" {
 			errs = append(errs, fmt.Errorf("target file pattern at index %d cannot be empty", i))
 		}
 	}
+	return errs
+}
 
-	// Validate custom system prompt
+// validateCustomSystemPrompt validates the custom system prompt configuration.
+func (r *Review) validateCustomSystemPrompt() []error {
+	var errs []error
 	if r.config.CustomSystemPrompt != "" && len(r.config.CustomSystemPrompt) < MinPromptLength {
 		errs = append(errs, fmt.Errorf("custom system prompt too short (%d characters, minimum %d)", len(r.config.CustomSystemPrompt), MinPromptLength))
 	}
-
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-
-	return nil
+	return errs
 }

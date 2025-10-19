@@ -3,13 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
-	execpkg "github.com/dmytrogajewski/spin/internal/exec"
+	"github.com/dmytrogajewski/spin/internal/core"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
+	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	"github.com/spf13/cobra"
 )
 
@@ -38,12 +42,15 @@ Examples:
 	return cmd
 }
 
-// runExec executes the exec mode.
+// runExec executes the exec mode using unified TUI logic but non-interactive.
 func runExec(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// Parse arguments using internal/exec package
-	execArgs, err := execpkg.Parse(args, os.Stdin)
+	setupSignalHandling(cancel)
+
+	// Parse prompt from args or stdin
+	prompt, err := parsePrompt(args)
 	if err != nil {
 		return err
 	}
@@ -64,25 +71,38 @@ func runExec(cmd *cobra.Command, args []string) error {
 	}
 	defer provider.Close()
 
-	// Create context with timeout
-	var cancel context.CancelFunc
-	if execArgs.Timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, execArgs.Timeout)
-	} else {
-		ctx, cancel = context.WithCancel(ctx)
+	// Get exec-specific flags
+	autoApprove, _ := cmd.Flags().GetBool("auto-approve")
+	timeout, _ := cmd.Flags().GetString("timeout")
+	format, _ := cmd.Flags().GetString("format")
+	noStream, _ := cmd.Flags().GetBool("no-stream")
+	exitOnError, _ := cmd.Flags().GetBool("exit-on-error")
+
+	// Apply timeout if specified
+	if timeout != "" {
+		duration, err := parseDuration(timeout)
+		if err != nil {
+			return fmt.Errorf("invalid timeout: %w", err)
+		}
+		ctx, cancel = context.WithTimeout(ctx, duration)
+		defer cancel()
 	}
-	defer cancel()
 
-	// Setup signal handling
-	_ = execpkg.SetupSignals(ctx, cancel)
-
-	// Execute task with real provider
-	if err := execpkg.RunWithProvider(ctx, execArgs, provider); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", execpkg.FormatError(err))
-		os.Exit(int(execpkg.GetExitCode(err)))
+	// Create manager using same logic as TUI
+	mgr, err := createManagerForExec(provider, configLoader, autoApprove)
+	if err != nil {
+		return fmt.Errorf("create manager: %w", err)
 	}
 
-	return nil
+	workDir := getWorkingDirectory()
+	conv, err := mgr.NewConversation(ctx, workDir)
+	if err != nil {
+		return fmt.Errorf("create conversation: %w", err)
+	}
+	defer mgr.Close()
+
+	// Execute the prompt non-interactively with TUI display
+	return executePromptWithTUI(ctx, conv, prompt, format, noStream, exitOnError)
 }
 
 // loadConfig loads configuration from file or defaults.
@@ -123,4 +143,169 @@ func buildProvider(ctx context.Context, configLoader *config.Loader, authMgr *au
 	}
 
 	return b.Build(ctx, cfg)
+}
+
+// parsePrompt parses the prompt from command line args or stdin.
+func parsePrompt(args []string) (string, error) {
+	if len(args) > 0 {
+		// Join all args as prompt
+		return args[0], nil
+	}
+
+	// Read from stdin
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return "", fmt.Errorf("read stdin: %w", err)
+	}
+
+	prompt := string(data)
+	if len(prompt) == 0 {
+		return "", fmt.Errorf("no prompt provided (use command line args or stdin)")
+	}
+
+	return prompt, nil
+}
+
+// parseDuration parses a duration string like "5m", "1h", etc.
+func parseDuration(s string) (time.Duration, error) {
+	return time.ParseDuration(s)
+}
+
+// createManagerForExec creates a core.Manager configured for exec mode.
+func createManagerForExec(provider llm.Provider, configLoader *config.Loader, autoApprove bool) (*core.Manager, error) {
+	workDir := getWorkingDirectory()
+	cfg := buildConfig(configLoader, 0, workDir) // No max turns limit for exec
+
+	// Create tool registry with same tools as TUI
+	registry := tools.NewRegistry()
+	registry.Register(tools.NewReadFileTool())
+	registry.Register(tools.NewWriteFileTool())
+	registry.Register(tools.NewListDirectoryTool())
+
+	// Create approval handler for exec mode
+	var approvalHandler func(core.ApprovalRequest) core.ApprovalResponse
+	if autoApprove {
+		approvalHandler = func(req core.ApprovalRequest) core.ApprovalResponse {
+			return core.ApprovalResponse{Approved: true, Reason: "auto-approved"}
+		}
+	} else {
+		approvalHandler = func(req core.ApprovalRequest) core.ApprovalResponse {
+			// In exec mode without auto-approve, deny dangerous commands
+			return core.ApprovalResponse{Approved: false, Reason: "exec mode requires --auto-approve for dangerous operations"}
+		}
+	}
+
+	// Create manager with options
+	var opts []core.ManagerOption
+	opts = append(opts, core.WithLLM(provider))
+	opts = append(opts, core.WithManagerToolRegistry(registry))
+	opts = append(opts, core.WithManagerApprovalHandler(approvalHandler))
+
+	mgr, err := core.NewManager(cfg, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create manager: %w", err)
+	}
+
+	return mgr, nil
+}
+
+// mockTTY implements term.TerminalController for non-terminal environments.
+type mockTTY struct {
+	width, height int
+}
+
+func (m *mockTTY) Enter() error               { return nil }
+func (m *mockTTY) Exit() error                { return nil }
+func (m *mockTTY) Size() (int, int)           { return m.width, m.height }
+func (m *mockTTY) OnResize(cb func(w, h int)) {}
+
+// executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
+func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, format string, noStream, exitOnError bool) error {
+	// Create TUI adapter with mock TTY for non-terminal environments
+	mockTty := &mockTTY{width: 120, height: 30} // Default terminal size
+	ui, err := adapters.NewPureTTY(os.Stdout, adapters.WithTTY(mockTty))
+	if err != nil {
+		return fmt.Errorf("create TUI: %w", err)
+	}
+	defer ui.Stop()
+
+	// Initialize UI with conversation metadata
+	// Note: We need to get the provider from the conversation's manager
+	// For now, we'll skip the provider-specific initialization
+	ui.SetTaskMode(conv.GetTaskMode())
+	ui.SetMaxTokens(int64(conv.GetMaxTokens()))
+	ui.SetConversationID(conv.GetSessionID())
+	ui.SetTokenCount(int64(conv.GetTokenCount()))
+
+	// Create event mapper
+	mapper := core.NewTUIMapper(ui)
+	defer mapper.Close()
+
+	// Start streaming channel
+	streamCh := mapper.StartStreaming()
+	streamDone := make(chan struct{})
+	go func() {
+		ui.PrintChunks(ctx, streamCh)
+		close(streamDone)
+	}()
+
+	// Subscribe to conversation events
+	events := conv.Stream()
+
+	// Start turn in background
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- conv.RunTurn(ctx, prompt)
+	}()
+
+	// Process events and map them to TUI
+	eventDone := make(chan struct{})
+	go func() {
+		defer close(eventDone)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-events:
+				if !ok {
+					return
+				}
+				if err := mapper.MapEvent(event); err != nil {
+					ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", err))
+				}
+
+				// Update token count from conversation history after each event
+				if event.Type == core.EventTurnComplete || event.Type == core.EventContentComplete {
+					tokenCount := int64(conv.GetTokenCount())
+					ui.SetTokenCount(tokenCount)
+				}
+			}
+		}
+	}()
+
+	// Wait for completion
+	select {
+	case <-ctx.Done():
+		<-eventDone
+		return ctx.Err()
+
+	case err := <-errChan:
+		// Stop streaming to close the channel
+		mapper.StopStreaming()
+
+		// Wait for streaming to complete
+		<-streamDone
+
+		// Wait for event processing to finish
+		<-eventDone
+
+		if err != nil {
+			if exitOnError {
+				return err
+			}
+			ui.PrintLine(fmt.Sprintf("✗ Error: %v\n", err))
+		}
+
+		return nil
+	}
 }

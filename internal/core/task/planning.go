@@ -67,13 +67,6 @@ func NewPlanning() *Planning {
 	}
 }
 
-// NewPlanningWithConfig creates a new Planning task mode with custom configuration.
-func NewPlanningWithConfig(config *PlanningConfig) *Planning {
-	return &Planning{
-		config: config,
-	}
-}
-
 // Name returns the unique identifier for this task mode.
 func (p *Planning) Name() string {
 	return "planning"
@@ -199,38 +192,44 @@ func (p *Planning) Validate() error {
 	}
 
 	var errs []error
+	errs = append(errs, p.validateMaxSteps()...)
+	errs = append(errs, p.validateMinSteps()...)
+	errs = append(errs, p.validateCustomPrompt()...)
 
-	// Validate max steps
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+// validateMaxSteps validates the max steps configuration.
+func (p *Planning) validateMaxSteps() []error {
+	var errs []error
 	if p.config.MaxSteps < 0 {
 		errs = append(errs, fmt.Errorf("max steps cannot be negative: %d", p.config.MaxSteps))
 	}
 	if p.config.MaxSteps > 0 && p.config.MaxSteps < p.getMinSteps() {
 		errs = append(errs, fmt.Errorf("max steps (%d) must be >= min steps (%d)", p.config.MaxSteps, p.getMinSteps()))
 	}
+	return errs
+}
 
-	// Validate min steps
+// validateMinSteps validates the min steps configuration.
+func (p *Planning) validateMinSteps() []error {
+	var errs []error
 	if p.config.MinSteps < 0 {
 		errs = append(errs, fmt.Errorf("min steps cannot be negative: %d", p.config.MinSteps))
 	}
+	return errs
+}
 
-	// Validate custom prompt
+// validateCustomPrompt validates the custom prompt configuration.
+func (p *Planning) validateCustomPrompt() []error {
+	var errs []error
 	if p.config.CustomPrompt != "" && len(p.config.CustomPrompt) < MinPromptLength {
 		errs = append(errs, fmt.Errorf("custom prompt too short (%d characters, minimum %d)", len(p.config.CustomPrompt), MinPromptLength))
 	}
-
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-
-	return nil
-}
-
-// getMaxSteps returns the effective max steps setting
-func (p *Planning) getMaxSteps() int {
-	if p.config != nil && p.config.MaxSteps > 0 {
-		return p.config.MaxSteps
-	}
-	return PlanningMaxSteps
+	return errs
 }
 
 // getMinSteps returns the effective min steps setting

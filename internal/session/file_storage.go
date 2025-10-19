@@ -169,36 +169,73 @@ func (fs *FileStorage) ListMetadata(filter Filter) ([]*Metadata, error) {
 	fs.mu.RLock()
 	defer fs.mu.RUnlock()
 
-	// Read all session files
+	entries, err := fs.readSessionEntries()
+	if err != nil {
+		return nil, err
+	}
+
+	metadataList := fs.collectMetadata(entries, filter)
+	return fs.applyPagination(metadataList, filter), nil
+}
+
+// readSessionEntries reads all session files from the directory.
+func (fs *FileStorage) readSessionEntries() ([]os.DirEntry, error) {
 	entries, err := os.ReadDir(fs.baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("read directory: %w", err)
 	}
+	return entries, nil
+}
 
+// collectMetadata collects metadata from session files.
+func (fs *FileStorage) collectMetadata(entries []os.DirEntry, filter Filter) []*Metadata {
 	var metadataList []*Metadata
+
 	for _, entry := range entries {
-		// Skip directories and non-JSON files
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		if !fs.isValidSessionFile(entry) {
 			continue
 		}
 
-		// Extract session ID from filename
-		id := strings.TrimSuffix(entry.Name(), ".json")
-
-		// Load and extract metadata
-		if session, err := fs.loadSession(id); err == nil {
-			if fs.sessionMatchesFilter(session, filter) {
-				metadataList = append(metadataList, &session.Metadata)
-			}
+		id := fs.extractSessionID(entry.Name())
+		if metadata := fs.loadSessionMetadata(id, filter); metadata != nil {
+			metadataList = append(metadataList, metadata)
 		}
 	}
 
-	// Apply pagination
+	return metadataList
+}
+
+// isValidSessionFile checks if an entry is a valid session file.
+func (fs *FileStorage) isValidSessionFile(entry os.DirEntry) bool {
+	return !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json")
+}
+
+// extractSessionID extracts session ID from filename.
+func (fs *FileStorage) extractSessionID(filename string) string {
+	return strings.TrimSuffix(filename, ".json")
+}
+
+// loadSessionMetadata loads and filters session metadata.
+func (fs *FileStorage) loadSessionMetadata(id string, filter Filter) *Metadata {
+	session, err := fs.loadSession(id)
+	if err != nil {
+		return nil
+	}
+
+	if !fs.sessionMatchesFilter(session, filter) {
+		return nil
+	}
+
+	return &session.Metadata
+}
+
+// applyPagination applies pagination to the metadata list.
+func (fs *FileStorage) applyPagination(metadataList []*Metadata, filter Filter) []*Metadata {
 	start, end := fs.paginationRange(len(metadataList), filter.Offset, filter.Limit)
 	if start >= len(metadataList) {
-		return []*Metadata{}, nil
+		return []*Metadata{}
 	}
-	return metadataList[start:end], nil
+	return metadataList[start:end]
 }
 
 // sessionPath returns the file path for a session ID.
@@ -313,19 +350,4 @@ func (fs *FileStorage) paginationRange(total, offset, limit int) (start, end int
 	}
 
 	return start, end
-}
-
-// Load is a convenience function that creates a FileStorage and loads a session.
-func Load(storage Storage, id string) (*Session, error) {
-	return storage.Load(id)
-}
-
-// Delete is a convenience function for deleting a session.
-func Delete(storage Storage, id string) error {
-	return storage.Delete(id)
-}
-
-// Exists is a convenience function for checking session existence.
-func Exists(storage Storage, id string) (bool, error) {
-	return storage.Exists(id)
 }

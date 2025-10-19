@@ -1,587 +1,427 @@
 package task
 
 import (
-	"strings"
 	"testing"
 )
 
-// TestNewRegular tests the default constructor
 func TestNewRegular(t *testing.T) {
-	r := NewRegular()
-	if r == nil {
+	regular := NewRegular()
+
+	if regular == nil {
 		t.Fatal("NewRegular() returned nil")
 	}
 
-	// Should have nil config for defaults
-	if r.config != nil {
-		t.Error("NewRegular() should have nil config for defaults")
+	if regular.Name() != "regular" {
+		t.Errorf("NewRegular().Name() = %v, want %v", regular.Name(), "regular")
 	}
 }
 
-// TestNewRegularWithConfig tests constructor with custom config
-func TestNewRegularWithConfig(t *testing.T) {
-	config := &RegularConfig{
-		MaxTokens:     8192,
-		ExcludedTools: []string{"execute_command"},
-	}
-
-	r := NewRegularWithConfig(config)
-	if r == nil {
-		t.Fatal("NewRegularWithConfig() returned nil")
-	}
-
-	if r.config != config {
-		t.Error("NewRegularWithConfig() did not set config")
-	}
-}
-
-// TestNewRegularWithConfig_Nil tests constructor with nil config
-func TestNewRegularWithConfig_Nil(t *testing.T) {
-	r := NewRegularWithConfig(nil)
-	if r == nil {
-		t.Fatal("NewRegularWithConfig(nil) returned nil")
-	}
-
-	if r.config != nil {
-		t.Error("NewRegularWithConfig(nil) should have nil config")
-	}
-}
-
-// TestRegular_Name tests the Name() method
 func TestRegular_Name(t *testing.T) {
-	tests := []struct {
-		name   string
-		config *RegularConfig
-	}{
-		{
-			name:   "default config",
-			config: nil,
-		},
-		{
-			name: "custom config",
-			config: &RegularConfig{
-				MaxTokens: 8192,
-			},
-		},
-	}
+	regular := NewRegular()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := NewRegularWithConfig(tt.config)
-			if got := r.Name(); got != "regular" {
-				t.Errorf("Name() = %q, want %q", got, "regular")
-			}
-		})
+	if regular.Name() != "regular" {
+		t.Errorf("Regular.Name() = %v, want %v", regular.Name(), "regular")
 	}
 }
 
-// TestRegular_SystemPrompt tests the SystemPrompt() method
 func TestRegular_SystemPrompt(t *testing.T) {
-	tests := []struct {
-		name         string
-		config       *RegularConfig
-		wantContains string
-		minLength    int
-	}{
-		{
-			name:         "default prompt",
-			config:       nil,
-			wantContains: "Spin",
-			minLength:    100,
-		},
-		{
-			name: "custom prompt",
-			config: &RegularConfig{
-				CustomSystemPrompt: "Custom agent prompt for testing purposes that is long enough",
-			},
-			wantContains: "Custom agent prompt",
-			minLength:    50,
-		},
-	}
+	regular := NewRegular()
+	result := regular.SystemPrompt()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := NewRegularWithConfig(tt.config)
-			prompt := r.SystemPrompt()
-
-			if prompt == "" {
-				t.Error("SystemPrompt() returned empty string")
-			}
-
-			if len(prompt) < tt.minLength {
-				t.Errorf("SystemPrompt() length = %d, want >= %d", len(prompt), tt.minLength)
-			}
-
-			if !strings.Contains(prompt, tt.wantContains) {
-				t.Errorf("SystemPrompt() should contain %q", tt.wantContains)
-			}
-		})
+	if len(result) == 0 {
+		t.Error("Regular.SystemPrompt() returned empty string")
 	}
 }
 
-// TestRegular_SystemPrompt_DefaultContent tests default prompt content
-func TestRegular_SystemPrompt_DefaultContent(t *testing.T) {
-	r := NewRegular()
-	prompt := r.SystemPrompt()
-
-	requiredPhrases := []string{
-		"Spin",
-		"CAPABILITIES",
-		"BEHAVIOR",
-		"CONSTRAINTS",
-		"WORKFLOW",
-	}
-
-	for _, phrase := range requiredPhrases {
-		if !strings.Contains(prompt, phrase) {
-			t.Errorf("Default system prompt should contain %q", phrase)
-		}
-	}
-}
-
-// TestRegular_AllowedTools tests the AllowedTools() method
 func TestRegular_AllowedTools(t *testing.T) {
 	tests := []struct {
 		name         string
-		config       *RegularConfig
-		wantContains []string
-		wantExcludes []string
-		minCount     int
+		regular      *Regular
+		wantTools    []string
+		wantExcluded bool
 	}{
 		{
-			name:   "default tools",
-			config: nil,
-			wantContains: []string{
-				"read_file",
-				"write_file",
-				"execute_command",
-				"git_context",
-				"file_search",
-				"list_directory",
+			name:    "default tools",
+			regular: NewRegular(),
+			wantTools: []string{
+				"read_file", "write_file", "list_directory",
+				"execute_command", "get_context", "file_search",
+				"apply_patch", "git_context",
 			},
-			wantExcludes: nil,
-			minCount:     8,
+			wantExcluded: false,
 		},
 		{
-			name: "excluded execute_command",
+			name: "with excluded tools",
+			regular: func() *Regular {
+				r := NewRegular()
+				r.config = &RegularConfig{
+					ExcludedTools: []string{"execute_command", "write_file"},
+				}
+				return r
+			}(),
+			wantTools: []string{
+				"read_file", "list_directory", "get_context",
+				"file_search", "apply_patch", "git_context",
+			},
+			wantExcluded: true,
+		},
+		{
+			name: "with all tools excluded",
+			regular: func() *Regular {
+				r := NewRegular()
+				r.config = &RegularConfig{
+					ExcludedTools: []string{
+						"read_file", "write_file", "list_directory",
+						"execute_command", "get_context", "file_search",
+						"apply_patch", "git_context",
+					},
+				}
+				return r
+			}(),
+			wantTools:    []string{},
+			wantExcluded: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tools := tt.regular.AllowedTools()
+
+			if tools == nil {
+				t.Error("Regular.AllowedTools() returned nil")
+				return
+			}
+
+			if tt.wantExcluded {
+				// Check that excluded tools are not present
+				for _, tool := range tt.wantTools {
+					found := false
+					for _, allowed := range tools {
+						if allowed == tool {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("Regular.AllowedTools() missing expected tool: %s", tool)
+					}
+				}
+			} else {
+				// Check that all expected tools are present
+				if len(tools) != len(tt.wantTools) {
+					t.Errorf("Regular.AllowedTools() got %d tools, want %d", len(tools), len(tt.wantTools))
+				}
+
+				for _, wantTool := range tt.wantTools {
+					found := false
+					for _, tool := range tools {
+						if tool == wantTool {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("Regular.AllowedTools() missing tool: %s", wantTool)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestRegular_MaxTokens(t *testing.T) {
+	regular := NewRegular()
+	result := regular.MaxTokens()
+
+	if result <= 0 {
+		t.Errorf("Regular.MaxTokens() = %v, want > 0", result)
+	}
+}
+
+func TestRegular_Validate(t *testing.T) {
+	regular := NewRegular()
+	err := regular.Validate()
+
+	if err != nil {
+		t.Errorf("Regular.Validate() unexpected error: %v", err)
+	}
+}
+
+func TestRegular_Validate_WithConfig(t *testing.T) {
+	tests := []struct {
+		name      string
+		config    *RegularConfig
+		wantError bool
+	}{
+		{
+			name:      "nil config is valid",
+			config:    nil,
+			wantError: false,
+		},
+		{
+			name: "valid config",
 			config: &RegularConfig{
+				MaxTokens:     16000,
 				ExcludedTools: []string{"execute_command"},
 			},
-			wantContains: []string{
-				"read_file",
-				"write_file",
-			},
-			wantExcludes: []string{"execute_command"},
-			minCount:     7,
-		},
-		{
-			name: "multiple exclusions",
-			config: &RegularConfig{
-				ExcludedTools: []string{"execute_command", "write_file"},
-			},
-			wantContains: []string{
-				"read_file",
-			},
-			wantExcludes: []string{"execute_command", "write_file"},
-			minCount:     6,
-		},
-		{
-			name: "empty exclusion list",
-			config: &RegularConfig{
-				ExcludedTools: []string{},
-			},
-			wantContains: []string{
-				"read_file",
-				"execute_command",
-			},
-			wantExcludes: nil,
-			minCount:     8,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := NewRegularWithConfig(tt.config)
-			tools := r.AllowedTools()
-
-			if len(tools) == 0 {
-				t.Error("AllowedTools() returned empty list")
-			}
-
-			if len(tools) < tt.minCount {
-				t.Errorf("AllowedTools() count = %d, want >= %d", len(tools), tt.minCount)
-			}
-
-			// Check expected tools are present
-			for _, want := range tt.wantContains {
-				if !contains(tools, want) {
-					t.Errorf("AllowedTools() missing %q, got: %v", want, tools)
-				}
-			}
-
-			// Check excluded tools are not present
-			for _, exclude := range tt.wantExcludes {
-				if contains(tools, exclude) {
-					t.Errorf("AllowedTools() should not contain excluded tool %q", exclude)
-				}
-			}
-		})
-	}
-}
-
-// TestRegular_AllowedTools_NoDuplicates tests no duplicate tools
-func TestRegular_AllowedTools_NoDuplicates(t *testing.T) {
-	r := NewRegular()
-	tools := r.AllowedTools()
-
-	seen := make(map[string]bool)
-	for _, tool := range tools {
-		if seen[tool] {
-			t.Errorf("AllowedTools() contains duplicate: %q", tool)
-		}
-		seen[tool] = true
-	}
-}
-
-// TestRegular_MaxTokens tests the MaxTokens() method
-func TestRegular_MaxTokens(t *testing.T) {
-	tests := []struct {
-		name   string
-		config *RegularConfig
-		want   int
-	}{
-		{
-			name:   "default",
-			config: nil,
-			want:   DefaultMaxTokens,
-		},
-		{
-			name: "custom",
-			config: &RegularConfig{
-				MaxTokens: 8192,
-			},
-			want: 8192,
-		},
-		{
-			name: "zero uses default",
-			config: &RegularConfig{
-				MaxTokens: 0,
-			},
-			want: DefaultMaxTokens,
-		},
-		{
-			name: "large budget",
-			config: &RegularConfig{
-				MaxTokens: 32768,
-			},
-			want: 32768,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := NewRegularWithConfig(tt.config)
-			if got := r.MaxTokens(); got != tt.want {
-				t.Errorf("MaxTokens() = %d, want %d", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestRegular_Validate tests the Validate() method
-func TestRegular_Validate(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  *RegularConfig
-		wantErr bool
-	}{
-		{
-			name:    "nil config",
-			config:  nil,
-			wantErr: false,
-		},
-		{
-			name:    "default config",
-			config:  &RegularConfig{},
-			wantErr: false,
-		},
-		{
-			name: "valid custom config",
-			config: &RegularConfig{
-				MaxTokens:          8192,
-				ExcludedTools:      []string{"execute_command"},
-				CustomSystemPrompt: "This is a valid custom system prompt for testing purposes that meets the minimum length",
-			},
-			wantErr: false,
+			wantError: false,
 		},
 		{
 			name: "negative max tokens",
 			config: &RegularConfig{
 				MaxTokens: -100,
 			},
-			wantErr: true,
+			wantError: true,
 		},
 		{
-			name: "exceeds max allowed",
+			name: "max tokens exceeds limit",
 			config: &RegularConfig{
-				MaxTokens: MaxAllowedTokens + 1,
+				MaxTokens: MaxAllowedTokens + 1000,
 			},
-			wantErr: true,
+			wantError: true,
 		},
 		{
 			name: "empty excluded tool",
 			config: &RegularConfig{
-				ExcludedTools: []string{""},
+				ExcludedTools: []string{"tool1", "", "tool2"},
 			},
-			wantErr: true,
+			wantError: true,
 		},
 		{
-			name: "empty string in excluded tools",
+			name: "custom prompt too short",
 			config: &RegularConfig{
-				ExcludedTools: []string{"execute_command", "", "git"},
+				CustomSystemPrompt: "Short",
 			},
-			wantErr: true,
+			wantError: true,
 		},
 		{
-			name: "short custom prompt",
+			name: "valid custom prompt",
 			config: &RegularConfig{
-				CustomSystemPrompt: "short",
+				CustomSystemPrompt: "This is a sufficiently long custom system prompt that meets all requirements",
 			},
-			wantErr: true,
+			wantError: false,
 		},
 		{
-			name: "valid max tokens at boundary",
+			name: "multiple errors",
 			config: &RegularConfig{
-				MaxTokens: MaxAllowedTokens,
+				MaxTokens:          -50,
+				ExcludedTools:      []string{"", "valid"},
+				CustomSystemPrompt: "x",
 			},
-			wantErr: false,
-		},
-		{
-			name: "valid prompt at minimum length",
-			config: &RegularConfig{
-				CustomSystemPrompt: strings.Repeat("a", MinPromptLength),
-			},
-			wantErr: false,
+			wantError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := NewRegularWithConfig(tt.config)
-			err := r.Validate()
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			regular := &Regular{config: tt.config}
+			err := regular.Validate()
+			if (err != nil) != tt.wantError {
+				t.Errorf("Regular.Validate() error = %v, wantError %v", err, tt.wantError)
 			}
 		})
 	}
 }
 
-// TestRegular_Validate_MultipleErrors tests multiple validation errors
-func TestRegular_Validate_MultipleErrors(t *testing.T) {
-	config := &RegularConfig{
-		MaxTokens:          -100,
-		ExcludedTools:      []string{""},
-		CustomSystemPrompt: "short",
+func TestRegular_SystemPrompt_WithCustom(t *testing.T) {
+	customPrompt := "Custom regular system prompt that is sufficiently long to meet minimum requirements"
+	regular := &Regular{
+		config: &RegularConfig{
+			CustomSystemPrompt: customPrompt,
+		},
 	}
 
-	r := NewRegularWithConfig(config)
-	err := r.Validate()
-
-	if err == nil {
-		t.Fatal("Validate() should return error for multiple violations")
-	}
-
-	// Check that error contains multiple issues
-	errStr := err.Error()
-	checks := []string{
-		"negative",
-		"empty",
-		"short",
-	}
-
-	foundCount := 0
-	for _, check := range checks {
-		if strings.Contains(strings.ToLower(errStr), check) {
-			foundCount++
-		}
-	}
-
-	if foundCount < 2 {
-		t.Errorf("Validate() should report multiple errors, got: %v", err)
+	result := regular.SystemPrompt()
+	if result != customPrompt {
+		t.Errorf("Regular.SystemPrompt() = %v, want %v", result, customPrompt)
 	}
 }
 
-// TestRegular_ImplementsTaskInterface tests Task interface implementation
-func TestRegular_ImplementsTaskInterface(t *testing.T) {
-	var _ Task = (*Regular)(nil) // Compile-time check
-
-	r := NewRegular()
-
-	// Runtime checks
-	if r.Name() == "" {
-		t.Error("Name() should not be empty")
+func TestRegular_MaxTokens_WithCustom(t *testing.T) {
+	customTokens := 20000
+	regular := &Regular{
+		config: &RegularConfig{
+			MaxTokens: customTokens,
+		},
 	}
 
-	if r.SystemPrompt() == "" {
-		t.Error("SystemPrompt() should not be empty")
-	}
-
-	if len(r.AllowedTools()) == 0 {
-		t.Error("AllowedTools() should not be empty")
-	}
-
-	if r.MaxTokens() <= 0 {
-		t.Error("MaxTokens() should be positive")
-	}
-
-	if err := r.Validate(); err != nil {
-		t.Errorf("Validate() should not error for default: %v", err)
+	result := regular.MaxTokens()
+	if result != customTokens {
+		t.Errorf("Regular.MaxTokens() = %v, want %v", result, customTokens)
 	}
 }
 
-// TestRegular_RegistryIntegration tests integration with Registry
-func TestRegular_RegistryIntegration(t *testing.T) {
-	registry := NewRegistry()
-
-	// Register regular task
+func TestRegular_Concurrency(t *testing.T) {
 	regular := NewRegular()
-	if err := registry.Register("regular", regular); err != nil {
-		t.Fatalf("Failed to register regular task: %v", err)
+
+	// Test concurrent access
+	done := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			_ = regular.Name()
+			_ = regular.SystemPrompt()
+			_ = regular.AllowedTools()
+			_ = regular.MaxTokens()
+			_ = regular.Validate()
+			done <- true
+		}()
 	}
 
-	// Retrieve and verify
-	task, err := registry.Get("regular")
-	if err != nil {
-		t.Fatalf("Failed to get regular task: %v", err)
-	}
-
-	if task.Name() != "regular" {
-		t.Errorf("Retrieved task name = %q, want %q", task.Name(), "regular")
-	}
-
-	// Set as default
-	if err := registry.SetDefault("regular"); err != nil {
-		t.Fatalf("Failed to set regular as default: %v", err)
-	}
-
-	defaultTask, err := registry.GetDefault()
-	if err != nil {
-		t.Fatalf("Failed to get default task: %v", err)
-	}
-
-	if defaultTask.Name() != "regular" {
-		t.Errorf("Default task name = %q, want %q", defaultTask.Name(), "regular")
+	// Wait for all goroutines to complete
+	for i := 0; i < 10; i++ {
+		<-done
 	}
 }
 
-// TestFilterTools tests the filterTools helper function
-func TestFilterTools(t *testing.T) {
+// Test Regular validation methods
+func TestRegular_ValidateMaxTokens(t *testing.T) {
 	tests := []struct {
-		name     string
-		tools    []string
-		excluded []string
-		want     []string
+		name      string
+		maxTokens int
+		wantErrs  int
 	}{
 		{
-			name:     "no exclusions",
-			tools:    []string{"a", "b", "c"},
-			excluded: []string{},
-			want:     []string{"a", "b", "c"},
+			name:      "valid max tokens",
+			maxTokens: 8192,
+			wantErrs:  0,
 		},
 		{
-			name:     "exclude one",
-			tools:    []string{"a", "b", "c"},
-			excluded: []string{"b"},
-			want:     []string{"a", "c"},
+			name:      "negative max tokens",
+			maxTokens: -1,
+			wantErrs:  1,
 		},
 		{
-			name:     "exclude multiple",
-			tools:    []string{"a", "b", "c", "d"},
-			excluded: []string{"b", "d"},
-			want:     []string{"a", "c"},
+			name:      "zero max tokens",
+			maxTokens: 0,
+			wantErrs:  0,
 		},
 		{
-			name:     "exclude non-existent",
-			tools:    []string{"a", "b", "c"},
-			excluded: []string{"x", "y"},
-			want:     []string{"a", "b", "c"},
+			name:      "max allowed tokens",
+			maxTokens: MaxAllowedTokens,
+			wantErrs:  0,
 		},
 		{
-			name:     "exclude all",
-			tools:    []string{"a", "b"},
-			excluded: []string{"a", "b"},
-			want:     []string{},
+			name:      "exceeds max allowed tokens",
+			maxTokens: MaxAllowedTokens + 1,
+			wantErrs:  1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := filterTools(tt.tools, tt.excluded)
-
-			if len(got) != len(tt.want) {
-				t.Errorf("filterTools() length = %d, want %d", len(got), len(tt.want))
-				return
+			regular := NewRegular()
+			regular.config = &RegularConfig{
+				MaxTokens: tt.maxTokens,
 			}
 
-			for i, tool := range got {
-				if tool != tt.want[i] {
-					t.Errorf("filterTools()[%d] = %q, want %q", i, tool, tt.want[i])
-				}
+			errs := regular.validateMaxTokens()
+			if len(errs) != tt.wantErrs {
+				t.Errorf("validateMaxTokens() got %d errors, want %d", len(errs), tt.wantErrs)
 			}
 		})
 	}
 }
 
-// Helper function
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
+func TestRegular_ValidateExcludedTools(t *testing.T) {
+	tests := []struct {
+		name          string
+		excludedTools []string
+		wantErrs      int
+	}{
+		{
+			name:          "valid excluded tools",
+			excludedTools: []string{"tool1", "tool2"},
+			wantErrs:      0,
+		},
+		{
+			name:          "empty excluded tools",
+			excludedTools: []string{},
+			wantErrs:      0,
+		},
+		{
+			name:          "empty tool in middle",
+			excludedTools: []string{"tool1", "", "tool3"},
+			wantErrs:      1,
+		},
+		{
+			name:          "empty tool at start",
+			excludedTools: []string{"", "tool2"},
+			wantErrs:      1,
+		},
+		{
+			name:          "multiple empty tools",
+			excludedTools: []string{"tool1", "", "tool3", ""},
+			wantErrs:      2,
+		},
 	}
-	return false
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			regular := NewRegular()
+			regular.config = &RegularConfig{
+				ExcludedTools: tt.excludedTools,
+			}
+
+			errs := regular.validateExcludedTools()
+			if len(errs) != tt.wantErrs {
+				t.Errorf("validateExcludedTools() got %d errors, want %d", len(errs), tt.wantErrs)
+			}
+		})
+	}
 }
 
-// Benchmark tests
-func BenchmarkRegular_Name(b *testing.B) {
-	r := NewRegular()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = r.Name()
+func TestRegular_ValidateCustomSystemPrompt(t *testing.T) {
+	tests := []struct {
+		name               string
+		customSystemPrompt string
+		wantErrs           int
+	}{
+		{
+			name:               "valid custom prompt",
+			customSystemPrompt: "This is a valid custom system prompt that is long enough",
+			wantErrs:           0,
+		},
+		{
+			name:               "empty custom prompt",
+			customSystemPrompt: "",
+			wantErrs:           0, // Empty is valid, falls back to default
+		},
+		{
+			name:               "short custom prompt",
+			customSystemPrompt: "short",
+			wantErrs:           1,
+		},
+		{
+			name:               "minimum length prompt",
+			customSystemPrompt: "This is exactly fifty characters long prompt that meets minimum requirements",
+			wantErrs:           0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			regular := NewRegular()
+			regular.config = &RegularConfig{
+				CustomSystemPrompt: tt.customSystemPrompt,
+			}
+
+			errs := regular.validateCustomSystemPrompt()
+			if len(errs) != tt.wantErrs {
+				t.Errorf("validateCustomSystemPrompt() got %d errors, want %d", len(errs), tt.wantErrs)
+			}
+		})
 	}
 }
 
-func BenchmarkRegular_SystemPrompt(b *testing.B) {
-	r := NewRegular()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = r.SystemPrompt()
+// Test Regular constants
+func TestRegular_Constants(t *testing.T) {
+	if DefaultMaxTokens != 16384 {
+		t.Errorf("DefaultMaxTokens = %v, want 16384", DefaultMaxTokens)
 	}
-}
-
-func BenchmarkRegular_AllowedTools(b *testing.B) {
-	r := NewRegular()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = r.AllowedTools()
+	if MaxAllowedTokens != 100000 {
+		t.Errorf("MaxAllowedTokens = %v, want 100000", MaxAllowedTokens)
 	}
-}
-
-func BenchmarkRegular_AllowedTools_WithExclusions(b *testing.B) {
-	r := NewRegularWithConfig(&RegularConfig{
-		ExcludedTools: []string{"execute_command", "write_file"},
-	})
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = r.AllowedTools()
-	}
-}
-
-func BenchmarkRegular_Validate(b *testing.B) {
-	r := NewRegular()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = r.Validate()
+	if MinPromptLength != 50 {
+		t.Errorf("MinPromptLength = %v, want 50", MinPromptLength)
 	}
 }

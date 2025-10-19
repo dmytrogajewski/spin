@@ -41,13 +41,26 @@ func (m *Matcher) Score(query, path string) (int, []int) {
 		return 0, nil
 	}
 
-	// Convert to lowercase for case-insensitive matching
 	queryLower := strings.ToLower(query)
 	pathLower := strings.ToLower(path)
-
-	// Extract filename for prioritized matching
 	filename := filepath.Base(pathLower)
 
+	// Try filename matches first (highest priority)
+	if score, indices := m.scoreFilenameMatch(queryLower, filename, path); score > 0 {
+		return score, indices
+	}
+
+	// Try path segment matches
+	if score, indices := m.scorePathSegmentMatch(queryLower, pathLower, path); score > 0 {
+		return score, indices
+	}
+
+	// Fall back to fuzzy matching
+	return m.scoreFuzzyMatch(queryLower, pathLower, path)
+}
+
+// scoreFilenameMatch scores filename-based matches.
+func (m *Matcher) scoreFilenameMatch(queryLower, filename, path string) (int, []int) {
 	// 1. Exact filename match - highest priority
 	if filename == queryLower {
 		return 100, m.allIndicesInPath(path, len(path)-len(filename), len(filename))
@@ -56,36 +69,52 @@ func (m *Matcher) Score(query, path string) (int, []int) {
 	// 2. Filename starts with query
 	if strings.HasPrefix(filename, queryLower) {
 		startIdx := len(path) - len(filename)
-		return 90, m.prefixIndices(startIdx, len(query))
+		return 90, m.prefixIndices(startIdx, len(queryLower))
 	}
 
 	// 3. Filename contains query (position-weighted)
 	if idx := strings.Index(filename, queryLower); idx >= 0 {
-		score := 80 - (idx * 10 / len(filename))
-		if score < 70 {
-			score = 70
-		}
+		score := m.calculatePositionScore(idx, len(filename))
 		startIdx := len(path) - len(filename) + idx
-		return score, m.prefixIndices(startIdx, len(query))
+		return score, m.prefixIndices(startIdx, len(queryLower))
 	}
 
-	// 4 & 5. Path segment matching
+	return 0, nil
+}
+
+// calculatePositionScore calculates score based on position in filename.
+func (m *Matcher) calculatePositionScore(idx, filenameLen int) int {
+	score := 80 - (idx * 10 / filenameLen)
+	if score < 70 {
+		score = 70
+	}
+	return score
+}
+
+// scorePathSegmentMatch scores path segment-based matches.
+func (m *Matcher) scorePathSegmentMatch(queryLower, pathLower, path string) (int, []int) {
 	dir := filepath.Dir(pathLower)
-	if dir != "." && dir != "/" {
-		segments := strings.Split(dir, string(filepath.Separator))
-		for _, seg := range segments {
-			// Exact segment match
-			if seg == queryLower {
-				return 60, m.findSegmentIndices(path, seg)
-			}
-			// Segment prefix match
-			if strings.HasPrefix(seg, queryLower) {
-				return 50, m.findSegmentIndices(path, seg[:len(query)])
-			}
+	if dir == "." || dir == "/" {
+		return 0, nil
+	}
+
+	segments := strings.Split(dir, string(filepath.Separator))
+	for _, seg := range segments {
+		// Exact segment match
+		if seg == queryLower {
+			return 60, m.findSegmentIndices(path, seg)
+		}
+		// Segment prefix match
+		if strings.HasPrefix(seg, queryLower) {
+			return 50, m.findSegmentIndices(path, seg[:len(queryLower)])
 		}
 	}
 
-	// 6 & 7. Fuzzy matching (existing algorithm)
+	return 0, nil
+}
+
+// scoreFuzzyMatch scores fuzzy matches with bonuses.
+func (m *Matcher) scoreFuzzyMatch(queryLower, pathLower, path string) (int, []int) {
 	score, indices := m.matchCharacters(queryLower, pathLower)
 	if score == -1 {
 		return -1, nil

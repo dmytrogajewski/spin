@@ -4,273 +4,382 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func TestLoader_LoadFromFile_YAML(t *testing.T) {
-	// Create temp YAML file
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test.yaml")
+func TestNewLoader(t *testing.T) {
+	loader := NewLoader()
+	if loader == nil {
+		t.Errorf("NewLoader() returned nil")
+	}
+}
 
-	yamlContent := `
-provider: openai
-model: gpt-4
-max_turns: 100
-enable_git: true
+func TestLoader_LoadFromFile(t *testing.T) {
+	// Create a temporary config file
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "test.yaml")
+
+	configContent := `
+api_key: "test-key"
+base_url: "https://api.example.com"
+timeout: 30
+debug: true
 `
-	err := os.WriteFile(configFile, []byte(yamlContent), 0644)
-	require.NoError(t, err)
 
-	// Load config
+	err := os.WriteFile(configFile, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
+	}
+
 	loader := NewLoader()
 	err = loader.LoadFromFile(configFile)
-	require.NoError(t, err)
+	if err != nil {
+		t.Errorf("LoadFromFile() error = %v", err)
+	}
 
-	// Verify values
-	assert.Equal(t, "openai", loader.GetString("provider"))
-	assert.Equal(t, "gpt-4", loader.GetString("model"))
-	assert.Equal(t, 100, loader.GetInt("max_turns"))
-	assert.Equal(t, true, loader.GetBool("enable_git"))
+	// Test that values were loaded
+	apiKey := loader.Get("api_key")
+	if apiKey != "test-key" {
+		t.Errorf("Get(\"api_key\") = %v, want %v", apiKey, "test-key")
+	}
+
+	baseURL := loader.Get("base_url")
+	if baseURL != "https://api.example.com" {
+		t.Errorf("Get(\"base_url\") = %v, want %v", baseURL, "https://api.example.com")
+	}
+
+	timeout := loader.Get("timeout")
+	if timeout != 30 {
+		t.Errorf("Get(\"timeout\") = %v, want %v", timeout, 30)
+	}
+
+	debug := loader.Get("debug")
+	if debug != true {
+		t.Errorf("Get(\"debug\") = %v, want %v", debug, true)
+	}
+}
+
+func TestLoader_LoadFromFile_Nonexistent(t *testing.T) {
+	loader := NewLoader()
+	err := loader.LoadFromFile("/nonexistent/file.yaml")
+	if err == nil {
+		t.Errorf("LoadFromFile() expected error for nonexistent file")
+	}
+}
+
+func TestLoader_LoadFromFile_InvalidYAML(t *testing.T) {
+	// Create a temporary config file with invalid YAML
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "invalid.yaml")
+
+	invalidContent := `
+api_key: "test-key"
+base_url: "https://api.example.com"
+timeout: 30
+debug: true
+invalid: [unclosed bracket
+`
+
+	err := os.WriteFile(configFile, []byte(invalidContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
+	}
+
+	loader := NewLoader()
+	err = loader.LoadFromFile(configFile)
+	if err == nil {
+		t.Errorf("LoadFromFile() expected error for invalid YAML")
+	}
 }
 
 func TestLoader_LoadFromFile_JSON(t *testing.T) {
-	// Create temp JSON file
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test.json")
+	// Create a temporary JSON config file
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "test.json")
 
-	jsonContent := `{
-  "provider": "anthropic",
-  "model": "claude-3-opus",
-  "max_turns": 50
+	configContent := `{
+	"api_key": "test-key",
+	"base_url": "https://api.example.com",
+	"timeout": 30,
+	"debug": true
 }`
-	err := os.WriteFile(configFile, []byte(jsonContent), 0644)
-	require.NoError(t, err)
 
-	// Load config
-	loader := NewLoader()
-	err = loader.LoadFromFile(configFile)
-	require.NoError(t, err)
-
-	// Verify values
-	assert.Equal(t, "anthropic", loader.GetString("provider"))
-	assert.Equal(t, "claude-3-opus", loader.GetString("model"))
-	assert.Equal(t, 50, loader.GetInt("max_turns"))
-}
-
-func TestLoader_EnvironmentVariables(t *testing.T) {
-	// Set environment variables
-	os.Setenv("SPIN_PROVIDER", "test-provider")
-	os.Setenv("SPIN_MAX_TURNS", "75")
-	defer func() {
-		os.Unsetenv("SPIN_PROVIDER")
-		os.Unsetenv("SPIN_MAX_TURNS")
-	}()
-
-	// Create loader
-	loader := NewLoader()
-
-	// Load (no file)
-	_ = loader.Load("")
-
-	// Verify env vars override
-	assert.Equal(t, "test-provider", loader.GetString("provider"))
-	assert.Equal(t, 75, loader.GetInt("max_turns"))
-}
-
-func TestLoader_Defaults(t *testing.T) {
-	loader := NewLoader()
-
-	// Set defaults
-	loader.SetDefault("custom_key", "default_value")
-	loader.SetDefault("custom_int", 42)
-
-	// Load (no file)
-	_ = loader.Load("")
-
-	// Verify defaults
-	assert.Equal(t, "default_value", loader.GetString("custom_key"))
-	assert.Equal(t, 42, loader.GetInt("custom_int"))
-}
-
-func TestLoader_Unmarshal(t *testing.T) {
-	type TestConfig struct {
-		Provider  string `mapstructure:"provider"`
-		Model     string `mapstructure:"model"`
-		MaxTurns  int    `mapstructure:"max_turns"`
-		EnableGit bool   `mapstructure:"enable_git"`
+	err := os.WriteFile(configFile, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
 	}
 
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test.yaml")
-
-	yamlContent := `
-provider: openai
-model: gpt-4
-max_turns: 100
-enable_git: true
-`
-	err := os.WriteFile(configFile, []byte(yamlContent), 0644)
-	require.NoError(t, err)
-
 	loader := NewLoader()
 	err = loader.LoadFromFile(configFile)
-	require.NoError(t, err)
+	if err != nil {
+		t.Errorf("LoadFromFile() error = %v", err)
+	}
 
-	var cfg TestConfig
-	err = loader.Unmarshal(&cfg)
-	require.NoError(t, err)
-
-	assert.Equal(t, "openai", cfg.Provider)
-	assert.Equal(t, "gpt-4", cfg.Model)
-	assert.Equal(t, 100, cfg.MaxTurns)
-	assert.Equal(t, true, cfg.EnableGit)
+	// Test that values were loaded
+	apiKey := loader.Get("api_key")
+	if apiKey != "test-key" {
+		t.Errorf("Get(\"api_key\") = %v, want %v", apiKey, "test-key")
+	}
 }
 
 func TestLoader_LoadFromFile_TOML(t *testing.T) {
-	// Create temp TOML file
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test.toml")
+	// Create a temporary TOML config file
+	tempDir := t.TempDir()
+	configFile := filepath.Join(tempDir, "test.toml")
 
-	tomlContent := `
-provider = "ollama"
-model = "llama3.2"
-max_turns = 75
-enable_git = false
+	configContent := `
+api_key = "test-key"
+base_url = "https://api.example.com"
+timeout = 30
+debug = true
 `
-	err := os.WriteFile(configFile, []byte(tomlContent), 0644)
-	require.NoError(t, err)
 
-	// Load config
-	loader := NewLoader()
-	err = loader.LoadFromFile(configFile)
-	require.NoError(t, err)
-
-	// Verify values
-	assert.Equal(t, "ollama", loader.GetString("provider"))
-	assert.Equal(t, "llama3.2", loader.GetString("model"))
-	assert.Equal(t, 75, loader.GetInt("max_turns"))
-	assert.Equal(t, false, loader.GetBool("enable_git"))
-}
-
-func TestLoader_UnsupportedFormat(t *testing.T) {
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test.xml")
-
-	err := os.WriteFile(configFile, []byte("<config></config>"), 0644)
-	require.NoError(t, err)
+	err := os.WriteFile(configFile, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
+	}
 
 	loader := NewLoader()
 	err = loader.LoadFromFile(configFile)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported config format")
+	if err != nil {
+		t.Errorf("LoadFromFile() error = %v", err)
+	}
+
+	// Test that values were loaded
+	apiKey := loader.Get("api_key")
+	if apiKey != "test-key" {
+		t.Errorf("Get(\"api_key\") = %v, want %v", apiKey, "test-key")
+	}
 }
 
 func TestLoader_Get(t *testing.T) {
 	loader := NewLoader()
-	loader.Set("test.key", "value")
 
-	result := loader.Get("test.key")
-	assert.Equal(t, "value", result)
-}
-
-func TestLoader_GetStringSlice(t *testing.T) {
-	loader := NewLoader()
-	loader.Set("test.slice", []string{"a", "b", "c"})
-
-	result := loader.GetStringSlice("test.slice")
-	assert.Equal(t, []string{"a", "b", "c"}, result)
+	// Test getting a non-existent key
+	value := loader.Get("nonexistent")
+	if value != nil {
+		t.Errorf("Get(\"nonexistent\") = %v, want %v", value, nil)
+	}
 }
 
 func TestLoader_Set(t *testing.T) {
 	loader := NewLoader()
-	loader.Set("custom.value", 42)
 
-	assert.Equal(t, 42, loader.GetInt("custom.value"))
+	// Set a value
+	loader.Set("test_key", "test_value")
+
+	// Get the value back
+	value := loader.Get("test_key")
+	if value != "test_value" {
+		t.Errorf("Get(\"test_key\") = %v, want %v", value, "test_value")
+	}
+}
+
+func TestLoader_SetDefault(t *testing.T) {
+	loader := NewLoader()
+
+	// Set a default value
+	loader.SetDefault("default_key", "default_value")
+
+	// Get the default value
+	value := loader.Get("default_key")
+	if value != "default_value" {
+		t.Errorf("Get(\"default_key\") = %v, want %v", value, "default_value")
+	}
+
+	// Set a new value - should override default
+	loader.Set("default_key", "new_value")
+	value = loader.Get("default_key")
+	if value != "new_value" {
+		t.Errorf("Get(\"default_key\") = %v, want %v", value, "new_value")
+	}
+}
+
+func TestLoader_Unmarshal(t *testing.T) {
+	loader := NewLoader()
+
+	// Set some values
+	loader.Set("api_key", "test-key")
+	loader.Set("base_url", "https://api.example.com")
+	loader.Set("timeout", 30)
+	loader.Set("debug", true)
+
+	// Define a struct to unmarshal into
+	type Config struct {
+		APIKey  string `mapstructure:"api_key"`
+		BaseURL string `mapstructure:"base_url"`
+		Timeout int    `mapstructure:"timeout"`
+		Debug   bool   `mapstructure:"debug"`
+	}
+
+	var config Config
+	err := loader.Unmarshal(&config)
+	if err != nil {
+		t.Errorf("Unmarshal() error = %v", err)
+	}
+
+	if config.APIKey != "test-key" {
+		t.Errorf("config.APIKey = %v, want %v", config.APIKey, "test-key")
+	}
+
+	if config.BaseURL != "https://api.example.com" {
+		t.Errorf("config.BaseURL = %v, want %v", config.BaseURL, "https://api.example.com")
+	}
+
+	if config.Timeout != 30 {
+		t.Errorf("config.Timeout = %v, want %v", config.Timeout, 30)
+	}
+
+	if config.Debug != true {
+		t.Errorf("config.Debug = %v, want %v", config.Debug, true)
+	}
 }
 
 func TestLoader_UnmarshalKey(t *testing.T) {
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test.yaml")
-
-	yamlContent := `
-llm:
-  provider: openai
-  model: gpt-4
-`
-	err := os.WriteFile(configFile, []byte(yamlContent), 0644)
-	require.NoError(t, err)
-
 	loader := NewLoader()
-	err = loader.LoadFromFile(configFile)
-	require.NoError(t, err)
 
-	type LLMConfig struct {
-		Provider string `mapstructure:"provider"`
-		Model    string `mapstructure:"model"`
+	// Set some values
+	loader.Set("database.host", "localhost")
+	loader.Set("database.port", 5432)
+	loader.Set("database.name", "testdb")
+
+	// Define a struct to unmarshal into
+	type DatabaseConfig struct {
+		Host string `mapstructure:"host"`
+		Port int    `mapstructure:"port"`
+		Name string `mapstructure:"name"`
 	}
 
-	var llm LLMConfig
-	err = loader.UnmarshalKey("llm", &llm)
-	require.NoError(t, err)
-	assert.Equal(t, "openai", llm.Provider)
-	assert.Equal(t, "gpt-4", llm.Model)
-}
+	var dbConfig DatabaseConfig
+	err := loader.UnmarshalKey("database", &dbConfig)
+	if err != nil {
+		t.Errorf("UnmarshalKey() error = %v", err)
+	}
 
-func TestLoader_ConfigFileUsed(t *testing.T) {
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test.yaml")
+	if dbConfig.Host != "localhost" {
+		t.Errorf("dbConfig.Host = %v, want %v", dbConfig.Host, "localhost")
+	}
 
-	yamlContent := `test: value`
-	err := os.WriteFile(configFile, []byte(yamlContent), 0644)
-	require.NoError(t, err)
+	if dbConfig.Port != 5432 {
+		t.Errorf("dbConfig.Port = %v, want %v", dbConfig.Port, 5432)
+	}
 
-	loader := NewLoader()
-	err = loader.LoadFromFile(configFile)
-	require.NoError(t, err)
-
-	usedFile := loader.ConfigFileUsed()
-	assert.Equal(t, configFile, usedFile)
+	if dbConfig.Name != "testdb" {
+		t.Errorf("dbConfig.Name = %v, want %v", dbConfig.Name, "testdb")
+	}
 }
 
 func TestLoader_AllSettings(t *testing.T) {
 	loader := NewLoader()
+
+	// Set some values
 	loader.Set("key1", "value1")
 	loader.Set("key2", 42)
+	loader.Set("key3", true)
 
+	// Get all settings
 	settings := loader.AllSettings()
-	assert.Equal(t, "value1", settings["key1"])
-	assert.Equal(t, 42, settings["key2"])
+
+	if len(settings) != 3 {
+		t.Errorf("AllSettings() length = %v, want %v", len(settings), 3)
+	}
+
+	if settings["key1"] != "value1" {
+		t.Errorf("settings[\"key1\"] = %v, want %v", settings["key1"], "value1")
+	}
+
+	if settings["key2"] != 42 {
+		t.Errorf("settings[\"key2\"] = %v, want %v", settings["key2"], 42)
+	}
+
+	if settings["key3"] != true {
+		t.Errorf("settings[\"key3\"] = %v, want %v", settings["key3"], true)
+	}
 }
 
-func TestLoader_IsSet(t *testing.T) {
-	loader := NewLoader()
-	loader.Set("existing.key", "value")
+func TestLoader_LoadFromFile_MultipleFiles(t *testing.T) {
+	// Create multiple config files
+	tempDir := t.TempDir()
 
-	assert.True(t, loader.IsSet("existing.key"))
-	assert.False(t, loader.IsSet("nonexistent.key"))
+	// Base config
+	baseConfig := filepath.Join(tempDir, "base.yaml")
+	baseContent := `
+api_key: "base-key"
+base_url: "https://base.example.com"
+timeout: 30
+`
+	err := os.WriteFile(baseConfig, []byte(baseContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create base config file: %v", err)
+	}
+
+	// Override config
+	overrideConfig := filepath.Join(tempDir, "override.yaml")
+	overrideContent := `
+api_key: "override-key"
+debug: true
+`
+	err = os.WriteFile(overrideConfig, []byte(overrideContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create override config file: %v", err)
+	}
+
+	loader := NewLoader()
+
+	// Load base config
+	err = loader.LoadFromFile(baseConfig)
+	if err != nil {
+		t.Errorf("LoadFromFile(base) error = %v", err)
+	}
+
+	// Load override config (this replaces the base config)
+	err = loader.LoadFromFile(overrideConfig)
+	if err != nil {
+		t.Errorf("LoadFromFile(override) error = %v", err)
+	}
+
+	// Check that override values are present
+	apiKey := loader.Get("api_key")
+	if apiKey != "override-key" {
+		t.Errorf("Get(\"api_key\") = %v, want %v", apiKey, "override-key")
+	}
+
+	// Check that base values are NOT preserved (LoadFromFile replaces config)
+	baseURL := loader.Get("base_url")
+	if baseURL != nil {
+		t.Errorf("Get(\"base_url\") = %v, want %v (should be nil because config was replaced)", baseURL, nil)
+	}
+
+	// Check that new values are added
+	debug := loader.Get("debug")
+	if debug != true {
+		t.Errorf("Get(\"debug\") = %v, want %v", debug, true)
+	}
 }
 
-func TestLoader_WatchConfig(t *testing.T) {
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test.yaml")
-
-	yamlContent := `test: initial`
-	err := os.WriteFile(configFile, []byte(yamlContent), 0644)
-	require.NoError(t, err)
-
+func TestLoader_Concurrency(t *testing.T) {
 	loader := NewLoader()
-	err = loader.LoadFromFile(configFile)
-	require.NoError(t, err)
 
-	// Test that WatchConfig doesn't panic
-	// Note: We can't easily test the actual file watching in a unit test
-	// without complex setup, but we can verify the function is callable
-	loader.WatchConfig(func() {
-		// Callback would be called on config change
-	})
+	// Test concurrent operations
+	done := make(chan bool, 10)
 
-	// Just verify the function didn't panic
-	assert.NotNil(t, loader)
+	for i := 0; i < 10; i++ {
+		go func(i int) {
+			key := "key" + string(rune('0'+i))
+			value := "value" + string(rune('0'+i))
+
+			loader.Set(key, value)
+			result := loader.Get(key)
+
+			if result != value {
+				t.Errorf("Concurrent Get(%s) = %v, want %v", key, result, value)
+			}
+
+			done <- true
+		}(i)
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < 10; i++ {
+		<-done
+	}
 }

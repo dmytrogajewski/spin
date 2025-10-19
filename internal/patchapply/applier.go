@@ -6,9 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/dmytrogajewski/spin/pkg/pathutil"
-	"github.com/dmytrogajewski/spin/pkg/strutil"
 )
 
 // Error types for patch application.
@@ -141,14 +138,6 @@ func (a *Applier) SetDryRun(enabled bool) {
 	a.dryRun = enabled
 }
 
-// SetBackup enables or disables backup creation before modifications.
-//
-// When enabled, the applier creates backup copies of all modified
-// files with a .bak extension before making changes.
-func (a *Applier) SetBackup(enabled bool) {
-	a.createBackup = enabled
-}
-
 // SetForceOverwrite enables or disables overwriting existing files.
 //
 // When enabled, Add operations will overwrite existing files.
@@ -168,48 +157,67 @@ func (a *Applier) SetForceOverwrite(enabled bool) {
 //
 // Returns ApplyResult on success, Error on failure.
 func (a *Applier) Apply(patch *Patch) (*ApplyResult, error) {
-	// Reset modifications tracking
-	a.modifications = make([]*fileModification, 0)
+	a.resetModifications()
 
-	// Phase 1: Validate all operations
-	if err := a.ValidatePatch(patch); err != nil {
+	if err := a.validatePatch(patch); err != nil {
 		return nil, err
 	}
 
-	// Dry-run mode: return without applying
 	if a.dryRun {
 		return &ApplyResult{DryRun: true}, nil
 	}
 
-	// Phase 2: Apply operations
-	result := &ApplyResult{
+	result := a.createApplyResult()
+	if err := a.applyOperations(patch.Operations, result); err != nil {
+		a.rollback()
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// resetModifications resets the modifications tracking.
+func (a *Applier) resetModifications() {
+	a.modifications = make([]*fileModification, 0)
+}
+
+// validatePatch validates the patch without applying it.
+func (a *Applier) validatePatch(patch *Patch) error {
+	return a.ValidatePatch(patch)
+}
+
+// createApplyResult creates a new ApplyResult with initialized slices.
+func (a *Applier) createApplyResult() *ApplyResult {
+	return &ApplyResult{
 		FilesCreated: make([]string, 0),
 		FilesDeleted: make([]string, 0),
 		FilesUpdated: make([]string, 0),
 		FilesMoved:   make(map[string]string),
 	}
+}
 
-	for _, op := range patch.Operations {
-		var err error
-		switch op := op.(type) {
-		case *AddFile:
-			err = a.applyAddFile(op, result)
-		case *DeleteFile:
-			err = a.applyDeleteFile(op, result)
-		case *UpdateFile:
-			err = a.applyUpdateFile(op, result)
-		default:
-			err = fmt.Errorf("unknown operation type: %T", op)
-		}
-
-		if err != nil {
-			// Rollback all changes
-			a.rollback()
-			return nil, err
+// applyOperations applies all operations in the patch.
+func (a *Applier) applyOperations(operations []FileOperation, result *ApplyResult) error {
+	for _, op := range operations {
+		if err := a.applyOperation(op, result); err != nil {
+			return err
 		}
 	}
+	return nil
+}
 
-	return result, nil
+// applyOperation applies a single operation.
+func (a *Applier) applyOperation(op FileOperation, result *ApplyResult) error {
+	switch op := op.(type) {
+	case *AddFile:
+		return a.applyAddFile(op, result)
+	case *DeleteFile:
+		return a.applyDeleteFile(op, result)
+	case *UpdateFile:
+		return a.applyUpdateFile(op, result)
+	default:
+		return fmt.Errorf("unknown operation type: %T", op)
+	}
 }
 
 // ValidatePatch validates the patch without applying it.
@@ -313,13 +321,15 @@ func (a *Applier) validateUpdateFile(op *UpdateFile) error {
 // Returns the absolute path if valid, error if outside workspace or invalid.
 func (a *Applier) resolvePath(relPath string) (string, error) {
 	// Validate relative path
-	if err := pathutil.ValidateRelativePath(relPath); err != nil {
+	if strings.Contains(relPath, "..") || filepath.IsAbs(relPath) {
 		return "", ErrPathOutsideWorkspace
 	}
 
 	// Safely join with workspace root
-	fullPath, err := pathutil.SafeJoin(a.workspaceRoot, relPath)
-	if err != nil {
+	fullPath := filepath.Join(a.workspaceRoot, relPath)
+
+	// Ensure the resolved path is still within workspace
+	if !strings.HasPrefix(fullPath, a.workspaceRoot) {
 		return "", ErrPathOutsideWorkspace
 	}
 
@@ -372,24 +382,37 @@ func (a *Applier) applyDeleteFile(op *DeleteFile, result *ApplyResult) error {
 		return a.wrapError("Delete", op.FilePath, err, "")
 	}
 
-	// Read original content for rollback
+	originalContent, err := a.readFileForRollback(fullPath, op.FilePath)
+	if err != nil {
+		return err
+	}
+
+	if err := a.deleteFile(fullPath, op.FilePath); err != nil {
+		return err
+	}
+
+	a.trackModification(op.FilePath, opDelete, originalContent)
+	result.FilesDeleted = append(result.FilesDeleted, op.FilePath)
+	return nil
+}
+
+// readFileForRollback reads the original file content for rollback purposes.
+func (a *Applier) readFileForRollback(fullPath, filePath string) ([]byte, error) {
 	originalContent, err := os.ReadFile(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return a.wrapError("Delete", op.FilePath, ErrFileNotFound, "")
+			return nil, a.wrapError("Delete", filePath, ErrFileNotFound, "")
 		}
-		return a.wrapError("Delete", op.FilePath, err, "failed to read file")
+		return nil, a.wrapError("Delete", filePath, err, "failed to read file")
 	}
+	return originalContent, nil
+}
 
-	// Delete file
+// deleteFile deletes the file from the filesystem.
+func (a *Applier) deleteFile(fullPath, filePath string) error {
 	if err := os.Remove(fullPath); err != nil {
-		return a.wrapError("Delete", op.FilePath, err, "failed to delete file")
+		return a.wrapError("Delete", filePath, err, "failed to delete file")
 	}
-
-	// Track for rollback
-	a.trackModification(op.FilePath, opDelete, originalContent)
-
-	result.FilesDeleted = append(result.FilesDeleted, op.FilePath)
 	return nil
 }
 
@@ -410,7 +433,7 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 	}
 
 	// Parse lines
-	lines := strutil.SplitLines(string(originalContent))
+	lines := strings.Split(string(originalContent), "\n")
 
 	// Apply each hunk
 	for i, hunk := range op.Hunks {
@@ -436,7 +459,7 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 	}
 
 	// Write modified content
-	newContent := strutil.JoinLines(lines)
+	newContent := strings.Join(lines, "\n")
 	if err := os.WriteFile(targetPath, []byte(newContent), 0644); err != nil {
 		return a.wrapError("Update", op.FilePath, err, "failed to write file")
 	}
@@ -536,7 +559,12 @@ func (a *Applier) trackModification(path string, op modOperation, originalConten
 
 // rollback reverses all tracked modifications.
 func (a *Applier) rollback() {
-	// Reverse order of modifications
+	a.rollbackModifications()
+	a.clearModifications()
+}
+
+// rollbackModifications rolls back all modifications in reverse order.
+func (a *Applier) rollbackModifications() {
 	for i := len(a.modifications) - 1; i >= 0; i-- {
 		mod := a.modifications[i]
 		fullPath, err := a.resolvePath(mod.path)
@@ -544,23 +572,39 @@ func (a *Applier) rollback() {
 			// Best effort rollback, log and continue
 			continue
 		}
-
-		switch mod.operation {
-		case opCreate:
-			// Remove created file
-			os.Remove(fullPath)
-
-		case opUpdate:
-			// Restore original content
-			os.WriteFile(fullPath, mod.originalContent, 0644)
-
-		case opDelete:
-			// Recreate deleted file
-			os.WriteFile(fullPath, mod.originalContent, 0644)
-		}
+		a.rollbackModification(mod, fullPath)
 	}
+}
 
-	// Clear modifications
+// rollbackModification rolls back a single modification.
+func (a *Applier) rollbackModification(mod *fileModification, fullPath string) {
+	switch mod.operation {
+	case opCreate:
+		a.rollbackCreate(fullPath)
+	case opUpdate:
+		a.rollbackUpdate(fullPath, mod.originalContent)
+	case opDelete:
+		a.rollbackDelete(fullPath, mod.originalContent)
+	}
+}
+
+// rollbackCreate removes a created file.
+func (a *Applier) rollbackCreate(fullPath string) {
+	os.Remove(fullPath)
+}
+
+// rollbackUpdate restores original content for an updated file.
+func (a *Applier) rollbackUpdate(fullPath string, originalContent []byte) {
+	os.WriteFile(fullPath, originalContent, 0644)
+}
+
+// rollbackDelete recreates a deleted file.
+func (a *Applier) rollbackDelete(fullPath string, originalContent []byte) {
+	os.WriteFile(fullPath, originalContent, 0644)
+}
+
+// clearModifications clears the modifications tracking.
+func (a *Applier) clearModifications() {
 	a.modifications = make([]*fileModification, 0)
 }
 

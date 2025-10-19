@@ -1406,3 +1406,346 @@ func TestGitContextTool_Schema(t *testing.T) {
 		t.Errorf("expected 'include_diff' parameter to be defined")
 	}
 }
+
+// TypedCommand is a typed command struct for testing typed executor
+type TypedCommand struct {
+	Program string
+	Args    []string
+	Raw     string
+	WorkDir string
+}
+
+// typedExecutor is a mock executor with typed command parameter
+type typedExecutor struct {
+	executeFunc func(ctx context.Context, cmd *TypedCommand, opts interface{}) (interface{}, error)
+}
+
+func (t *typedExecutor) Execute(ctx context.Context, cmd *TypedCommand, opts interface{}) (interface{}, error) {
+	if t.executeFunc != nil {
+		return t.executeFunc(ctx, cmd, opts)
+	}
+	return nil, nil
+}
+
+func TestExecuteCommandTool_TypedExecutor(t *testing.T) {
+	var capturedCmd *TypedCommand
+
+	executor := &typedExecutor{
+		executeFunc: func(ctx context.Context, cmd *TypedCommand, opts interface{}) (interface{}, error) {
+			capturedCmd = cmd
+			return &mockResult{
+				Stdout:   "typed command executed",
+				Stderr:   "",
+				ExitCode: 0,
+			}, nil
+		},
+	}
+
+	tool := NewExecuteCommandTool(executor, nil)
+
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "git status --short",
+		"workdir": "/tmp/test",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+
+	if capturedCmd == nil {
+		t.Fatal("command was not captured")
+	}
+
+	if capturedCmd.Program != "git" {
+		t.Errorf("expected Program 'git', got: %s", capturedCmd.Program)
+	}
+
+	if len(capturedCmd.Args) != 2 {
+		t.Errorf("expected 2 args, got %d", len(capturedCmd.Args))
+	}
+
+	if capturedCmd.WorkDir != "/tmp/test" {
+		t.Errorf("expected WorkDir '/tmp/test', got: %s", capturedCmd.WorkDir)
+	}
+
+	if capturedCmd.Raw != "git status --short" {
+		t.Errorf("expected Raw 'git status --short', got: %s", capturedCmd.Raw)
+	}
+}
+
+func TestExecuteCommandTool_TypedExecutor_WithoutWorkdir(t *testing.T) {
+	var capturedCmd *TypedCommand
+
+	executor := &typedExecutor{
+		executeFunc: func(ctx context.Context, cmd *TypedCommand, opts interface{}) (interface{}, error) {
+			capturedCmd = cmd
+			return &mockResult{
+				Stdout:   "ok",
+				Stderr:   "",
+				ExitCode: 0,
+			}, nil
+		},
+	}
+
+	tool := NewExecuteCommandTool(executor, nil)
+
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "echo hello",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+	}
+
+	if capturedCmd == nil {
+		t.Fatal("command was not captured")
+	}
+
+	// WorkDir should be empty when not provided
+	if capturedCmd.WorkDir != "" {
+		t.Errorf("expected empty WorkDir, got: %s", capturedCmd.WorkDir)
+	}
+}
+
+func TestExecuteCommandTool_InvalidMethodSignature(t *testing.T) {
+	// Executor with no Execute method
+	type badExecutor struct{}
+
+	tool := NewExecuteCommandTool(&badExecutor{}, nil)
+
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "echo hello",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result.Success {
+		t.Error("expected failure result")
+	}
+}
+
+func TestExecuteCommandTool_UnsupportedCommandType(t *testing.T) {
+	// Executor with unsupported command parameter type (not interface or pointer)
+	type unsupportedExecutor struct {
+		executeFunc func(ctx context.Context, cmd string, opts interface{}) (interface{}, error)
+	}
+
+	executor := &unsupportedExecutor{
+		executeFunc: func(ctx context.Context, cmd string, opts interface{}) (interface{}, error) {
+			return &mockResult{Stdout: "ok", ExitCode: 0}, nil
+		},
+	}
+
+	tool := NewExecuteCommandTool(executor, nil)
+
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "echo hello",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result.Success {
+		t.Error("expected failure result")
+	}
+}
+
+func TestExecuteCommandTool_ExecuteReturnsError(t *testing.T) {
+	executor := &mockExecutor{
+		executeFunc: func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+			return nil, fmt.Errorf("execution failed")
+		},
+	}
+
+	tool := NewExecuteCommandTool(executor, nil)
+
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "failing command",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result.Success {
+		t.Error("expected failure result")
+	}
+}
+
+func TestWriteFileTool_ErrorCases(t *testing.T) {
+	tool := NewWriteFileTool()
+
+	tests := []struct {
+		name   string
+		params map[string]interface{}
+	}{
+		{
+			name:   "missing path",
+			params: map[string]interface{}{"content": "test"},
+		},
+		{
+			name:   "missing content",
+			params: map[string]interface{}{"path": "test.txt"},
+		},
+		{
+			name:   "invalid path type",
+			params: map[string]interface{}{"path": 123, "content": "test"},
+		},
+		{
+			name:   "invalid content type",
+			params: map[string]interface{}{"path": "test.txt", "content": 123},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tool.Execute(context.Background(), tt.params)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if result.Success {
+				t.Error("expected failure result")
+			}
+		})
+	}
+}
+
+func TestListDirectoryTool_ErrorCases(t *testing.T) {
+	tool := NewListDirectoryTool()
+
+	tests := []struct {
+		name   string
+		params map[string]interface{}
+	}{
+		{
+			name:   "missing path",
+			params: map[string]interface{}{},
+		},
+		{
+			name:   "invalid path type",
+			params: map[string]interface{}{"path": 123},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tool.Execute(context.Background(), tt.params)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if result.Success {
+				t.Error("expected failure result")
+			}
+		})
+	}
+}
+
+func TestGetContextTool_ErrorCases(t *testing.T) {
+	tool := NewGetContextTool(nil)
+
+	tests := []struct {
+		name   string
+		params map[string]interface{}
+	}{
+		{
+			name:   "invalid query type",
+			params: map[string]interface{}{"query": 123},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tool.Execute(context.Background(), tt.params)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if result.Success {
+				t.Error("expected failure result")
+			}
+		})
+	}
+}
+
+func TestApplyPatchTool_ErrorCases(t *testing.T) {
+	tool := NewApplyPatchTool("/tmp/test")
+
+	tests := []struct {
+		name   string
+		params map[string]interface{}
+	}{
+		{
+			name:   "missing patch_text",
+			params: map[string]interface{}{},
+		},
+		{
+			name:   "invalid patch_text type",
+			params: map[string]interface{}{"patch_text": 123},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tool.Execute(context.Background(), tt.params)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if result.Success {
+				t.Error("expected failure result")
+			}
+		})
+	}
+}
+
+func TestFileSearchTool_ErrorCases(t *testing.T) {
+	tool := NewFileSearchTool("/tmp/test")
+
+	tests := []struct {
+		name   string
+		params map[string]interface{}
+	}{
+		{
+			name:   "missing query",
+			params: map[string]interface{}{},
+		},
+		{
+			name:   "invalid query type",
+			params: map[string]interface{}{"query": 123},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tool.Execute(context.Background(), tt.params)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if result.Success {
+				t.Error("expected failure result")
+			}
+		})
+	}
+}
+
+func TestGitContextTool_ErrorCases(t *testing.T) {
+	tool := NewGitContextTool("/tmp/test")
+
+	// GitContextTool has only optional parameters, so it doesn't fail on invalid params
+	// Testing that it handles defaults properly
+	_, err := tool.Execute(context.Background(), map[string]interface{}{})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	// Git context tool might succeed or fail depending on git availability,
+	// so we just check it doesn't panic
+}
