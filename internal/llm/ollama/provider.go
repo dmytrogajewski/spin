@@ -59,6 +59,9 @@ type Provider struct {
 	timeout       time.Duration
 	streamTimeout time.Duration
 
+	// errorMapper provides standardized error handling
+	errorMapper *llm.ErrorMapper
+
 	// auto-tune fields (optional)
 	autoTuneCtxLen    int
 	autoTuneGPULayers int
@@ -103,6 +106,9 @@ func NewProvider(cfg Config) (*Provider, error) {
 		llm.WithRetryDelay(0),
 	)
 
+	// Create error mapper for standardized error handling
+	errorMapper := llm.NewErrorMapper("ollama")
+
 	return &Provider{
 		client:        client,
 		streamClient:  streamClient,
@@ -110,6 +116,7 @@ func NewProvider(cfg Config) (*Provider, error) {
 		model:         cfg.Model,
 		timeout:       timeout,
 		streamTimeout: streamTimeout,
+		errorMapper:   errorMapper,
 	}, nil
 }
 

@@ -13,9 +13,9 @@ type Searcher struct {
 	scanner *Scanner
 	matcher *Matcher
 
-	indexMu sync.RWMutex
-	index   []string
-	indexed bool
+	indexMu  sync.RWMutex
+	index    []string
+	indexed  bool
 	indexErr error
 }
 
@@ -40,38 +40,46 @@ func NewSearcher(root string) (*Searcher, error) {
 // If indexing is already complete, returns immediately.
 // If indexing is in progress, waits for it to complete.
 func (s *Searcher) IndexAsync(ctx context.Context) error {
-	// Check if already indexed
-	s.indexMu.RLock()
-	if s.indexed {
-		s.indexMu.RUnlock()
-		return s.indexErr
+	if s.isAlreadyIndexed() {
+		return s.getIndexError()
 	}
-	s.indexMu.RUnlock()
 
-	// Acquire write lock for indexing
+	return s.performIndexing(ctx)
+}
+
+// isAlreadyIndexed checks if the searcher is already indexed.
+func (s *Searcher) isAlreadyIndexed() bool {
+	s.indexMu.RLock()
+	defer s.indexMu.RUnlock()
+	return s.indexed
+}
+
+// getIndexError returns the current index error.
+func (s *Searcher) getIndexError() error {
+	s.indexMu.RLock()
+	defer s.indexMu.RUnlock()
+	return s.indexErr
+}
+
+// performIndexing performs the actual indexing operation.
+func (s *Searcher) performIndexing(ctx context.Context) error {
 	s.indexMu.Lock()
+	defer s.indexMu.Unlock()
 
 	// Double-check after acquiring lock (another goroutine may have indexed)
 	if s.indexed {
-		err := s.indexErr
-		s.indexMu.Unlock()
-		return err
+		return s.indexErr
 	}
 
-	// Run scanning with context support
 	files, err := s.scanWithContext(ctx)
-
 	if err != nil {
 		s.indexErr = err
-		s.indexMu.Unlock()
 		return err
 	}
 
 	s.index = files
 	s.indexed = true
 	s.indexErr = nil
-	s.indexMu.Unlock()
-
 	return nil
 }
 

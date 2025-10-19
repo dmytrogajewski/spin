@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 )
 
@@ -26,14 +25,14 @@ func NewLoader() *Loader {
 	v.SetConfigType("yaml") // Default type
 
 	// Add config search paths in order of precedence
-	v.AddConfigPath(".")                    // Current directory
-	v.AddConfigPath("$HOME/.spin")          // Home directory
-	v.AddConfigPath("/etc/spin")            // System directory
+	v.AddConfigPath(".")           // Current directory
+	v.AddConfigPath("$HOME/.spin") // Home directory
+	v.AddConfigPath("/etc/spin")   // System directory
 
 	// Environment variable support
-	v.SetEnvPrefix("SPIN")                  // Prefix for env vars (SPIN_*)
+	v.SetEnvPrefix("SPIN") // Prefix for env vars (SPIN_*)
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-	v.AutomaticEnv()                        // Read env vars automatically
+	v.AutomaticEnv() // Read env vars automatically
 
 	return &Loader{v: v}
 }
@@ -43,35 +42,58 @@ func NewLoader() *Loader {
 // Supports YAML, JSON, and TOML formats.
 func (l *Loader) Load(path string) error {
 	if path != "" {
-		// Explicit path provided
 		l.v.SetConfigFile(path)
 	}
 
-	// Read config file
 	if err := l.v.ReadInConfig(); err != nil {
-		// Config file not found is acceptable - use defaults + env vars
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			// Check if the error is due to reading a non-config file (e.g., binary)
-			configFile := l.v.ConfigFileUsed()
-			if configFile != "" {
-				ext := filepath.Ext(configFile)
-				// If no extension or invalid extension, treat as "not found" rather than error
-				if ext == "" || (ext != ".yaml" && ext != ".yml" && ext != ".json" && ext != ".toml") {
-					// Invalid config file (likely a binary or non-config file)
-					// Clear the config file reference and continue with defaults
-					l.v = viper.New()
-					// Re-initialize with same settings but no file
-					l.v.SetEnvPrefix("SPIN")
-					l.v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-					l.v.AutomaticEnv()
-					return nil
-				}
-			}
-			return fmt.Errorf("failed to read config: %w", err)
-		}
+		return l.handleConfigReadError(err)
 	}
 
 	return nil
+}
+
+// handleConfigReadError handles errors when reading configuration files.
+func (l *Loader) handleConfigReadError(err error) error {
+	if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+		return nil // Config file not found is acceptable - use defaults + env vars
+	}
+
+	if l.isInvalidConfigFile() {
+		l.reinitializeViper()
+		return nil
+	}
+
+	return fmt.Errorf("failed to read config: %w", err)
+}
+
+// isInvalidConfigFile checks if the error is due to an invalid config file.
+func (l *Loader) isInvalidConfigFile() bool {
+	configFile := l.v.ConfigFileUsed()
+	if configFile == "" {
+		return false
+	}
+
+	ext := filepath.Ext(configFile)
+	return ext == "" || !l.isValidConfigExtension(ext)
+}
+
+// isValidConfigExtension checks if the file extension is valid for config files.
+func (l *Loader) isValidConfigExtension(ext string) bool {
+	validExts := []string{".yaml", ".yml", ".json", ".toml"}
+	for _, validExt := range validExts {
+		if ext == validExt {
+			return true
+		}
+	}
+	return false
+}
+
+// reinitializeViper reinitializes Viper with default settings.
+func (l *Loader) reinitializeViper() {
+	l.v = viper.New()
+	l.v.SetEnvPrefix("SPIN")
+	l.v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+	l.v.AutomaticEnv()
 }
 
 // LoadFromFile loads configuration from a specific file.
@@ -118,19 +140,9 @@ func (l *Loader) GetBool(key string) bool {
 	return l.v.GetBool(key)
 }
 
-// GetStringSlice retrieves a string slice value.
-func (l *Loader) GetStringSlice(key string) []string {
-	return l.v.GetStringSlice(key)
-}
-
 // Set sets a configuration value.
 func (l *Loader) Set(key string, value interface{}) {
 	l.v.Set(key, value)
-}
-
-// SetDefault sets a default value for a key.
-func (l *Loader) SetDefault(key string, value interface{}) {
-	l.v.SetDefault(key, value)
 }
 
 // Unmarshal unmarshals configuration into a struct.
@@ -141,17 +153,6 @@ func (l *Loader) Unmarshal(rawVal interface{}) error {
 // UnmarshalKey unmarshals a specific key into a struct.
 func (l *Loader) UnmarshalKey(key string, rawVal interface{}) error {
 	return l.v.UnmarshalKey(key, rawVal)
-}
-
-// WatchConfig enables live config reloading.
-// The onChange callback is called when config changes.
-func (l *Loader) WatchConfig(onChange func()) {
-	l.v.WatchConfig()
-	l.v.OnConfigChange(func(e fsnotify.Event) {
-		if onChange != nil {
-			onChange()
-		}
-	})
 }
 
 // ConfigFileUsed returns the config file being used.
@@ -167,9 +168,4 @@ func (l *Loader) AllSettings() map[string]interface{} {
 // IsSet checks if a key is set.
 func (l *Loader) IsSet(key string) bool {
 	return l.v.IsSet(key)
-}
-
-// WriteConfig writes the configuration to a file.
-func (l *Loader) WriteConfig(filename string) error {
-	return l.v.WriteConfigAs(filename)
 }

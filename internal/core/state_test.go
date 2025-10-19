@@ -3,6 +3,8 @@ package core
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/dmytrogajewski/spin/internal/state"
 )
 
 func TestStateString(t *testing.T) {
@@ -11,14 +13,14 @@ func TestStateString(t *testing.T) {
 		state State
 		want  string
 	}{
-		{"idle", StateIdle, "idle"},
-		{"running", StateRunning, "running"},
-		{"paused", StatePaused, "paused"},
-		{"completed", StateCompleted, "completed"},
-		{"failed", StateFailed, "failed"},
-		{"cancelled", StateCancelled, "cancelled"},
-		{"archived", StateArchived, "archived"},
-		{"unknown", State(999), "unknown"},
+		{"idle", state.StateIdle, "idle"},
+		{"running", state.StateRunning, "running"},
+		{"paused", state.StatePaused, "paused"},
+		{"completed", state.StateCompleted, "completed"},
+		{"failed", state.StateFailed, "failed"},
+		{"cancelled", state.StateCancelled, "cancelled"},
+		{"archived", state.StateArchived, "archived"},
+		{"unknown", state.State(999), "unknown"},
 	}
 
 	for _, tt := range tests {
@@ -40,9 +42,9 @@ func TestState_MarshalJSON(t *testing.T) {
 		state State
 		want  string
 	}{
-		{"idle", StateIdle, `{"state":"idle"}`},
-		{"running", StateRunning, `{"state":"running"}`},
-		{"completed", StateCompleted, `{"state":"completed"}`},
+		{"idle", state.StateIdle, `{"state":"idle"}`},
+		{"running", state.StateRunning, `{"state":"running"}`},
+		{"completed", state.StateCompleted, `{"state":"completed"}`},
 	}
 
 	for _, tt := range tests {
@@ -70,15 +72,15 @@ func TestState_UnmarshalJSON(t *testing.T) {
 		want    State
 		wantErr bool
 	}{
-		{"idle", `{"state":"idle"}`, StateIdle, false},
-		{"running", `{"state":"running"}`, StateRunning, false},
-		{"paused", `{"state":"paused"}`, StatePaused, false},
-		{"completed", `{"state":"completed"}`, StateCompleted, false},
-		{"failed", `{"state":"failed"}`, StateFailed, false},
-		{"cancelled", `{"state":"cancelled"}`, StateCancelled, false},
-		{"archived", `{"state":"archived"}`, StateArchived, false},
-		{"invalid", `{"state":"invalid"}`, StateIdle, true},
-		{"empty", `{"state":""}`, StateIdle, true},
+		{"idle", `{"state":"idle"}`, state.StateIdle, false},
+		{"running", `{"state":"running"}`, state.StateRunning, false},
+		{"paused", `{"state":"paused"}`, state.StatePaused, false},
+		{"completed", `{"state":"completed"}`, state.StateCompleted, false},
+		{"failed", `{"state":"failed"}`, state.StateFailed, false},
+		{"cancelled", `{"state":"cancelled"}`, state.StateCancelled, false},
+		{"archived", `{"state":"archived"}`, state.StateArchived, false},
+		{"invalid", `{"state":"invalid"}`, state.StateIdle, true},
+		{"empty", `{"state":""}`, state.StateIdle, true},
 	}
 
 	for _, tt := range tests {
@@ -102,13 +104,13 @@ func TestState_IsTerminal(t *testing.T) {
 		state State
 		want  bool
 	}{
-		{"idle is not terminal", StateIdle, false},
-		{"running is not terminal", StateRunning, false},
-		{"paused is not terminal", StatePaused, false},
-		{"completed is terminal", StateCompleted, true},
-		{"failed is terminal", StateFailed, true},
-		{"cancelled is terminal", StateCancelled, true},
-		{"archived is terminal", StateArchived, true},
+		{"idle is not terminal", state.StateIdle, false},
+		{"running is not terminal", state.StateRunning, false},
+		{"paused is not terminal", state.StatePaused, false},
+		{"completed is terminal", state.StateCompleted, true},
+		{"failed is terminal", state.StateFailed, true},
+		{"cancelled is terminal", state.StateCancelled, true},
+		{"archived is terminal", state.StateArchived, true},
 	}
 
 	for _, tt := range tests {
@@ -126,13 +128,13 @@ func TestState_IsActive(t *testing.T) {
 		state State
 		want  bool
 	}{
-		{"idle is not active", StateIdle, false},
-		{"running is active", StateRunning, true},
-		{"paused is active", StatePaused, true},
-		{"completed is not active", StateCompleted, false},
-		{"failed is not active", StateFailed, false},
-		{"cancelled is not active", StateCancelled, false},
-		{"archived is not active", StateArchived, false},
+		{"idle is not active", state.StateIdle, false},
+		{"running is active", state.StateRunning, true},
+		{"paused is active", state.StatePaused, true},
+		{"completed is not active", state.StateCompleted, false},
+		{"failed is not active", state.StateFailed, false},
+		{"cancelled is not active", state.StateCancelled, false},
+		{"archived is not active", state.StateArchived, false},
 	}
 
 	for _, tt := range tests {
@@ -153,51 +155,51 @@ func TestState_CanTransitionTo(t *testing.T) {
 		reason string
 	}{
 		// From Idle
-		{"idle to running", StateIdle, StateRunning, true, "can start execution"},
-		{"idle to archived", StateIdle, StateArchived, true, "can archive without running"},
-		{"idle to completed", StateIdle, StateCompleted, false, "can't complete without running"},
-		{"idle to paused", StateIdle, StatePaused, false, "can't pause without running"},
+		{"idle to running", state.StateIdle, state.StateRunning, true, "can start execution"},
+		{"idle to archived", state.StateIdle, state.StateArchived, true, "can archive without running"},
+		{"idle to completed", state.StateIdle, state.StateCompleted, false, "can't complete without running"},
+		{"idle to paused", state.StateIdle, state.StatePaused, false, "can't pause without running"},
 
 		// From Running
-		{"running to paused", StateRunning, StatePaused, true, "can pause execution"},
-		{"running to completed", StateRunning, StateCompleted, true, "can complete"},
-		{"running to failed", StateRunning, StateFailed, true, "can fail"},
-		{"running to cancelled", StateRunning, StateCancelled, true, "can be cancelled"},
-		{"running to idle", StateRunning, StateIdle, false, "can't go back to idle"},
-		{"running to archived", StateRunning, StateArchived, false, "can't archive while running"},
+		{"running to paused", state.StateRunning, state.StatePaused, true, "can pause execution"},
+		{"running to completed", state.StateRunning, state.StateCompleted, true, "can complete"},
+		{"running to failed", state.StateRunning, state.StateFailed, true, "can fail"},
+		{"running to cancelled", state.StateRunning, state.StateCancelled, true, "can be cancelled"},
+		{"running to idle", state.StateRunning, state.StateIdle, false, "can't go back to idle"},
+		{"running to archived", state.StateRunning, state.StateArchived, false, "can't archive while running"},
 
 		// From Paused
-		{"paused to running", StatePaused, StateRunning, true, "can resume"},
-		{"paused to cancelled", StatePaused, StateCancelled, true, "can cancel"},
-		{"paused to archived", StatePaused, StateArchived, true, "can archive"},
-		{"paused to completed", StatePaused, StateCompleted, false, "can't complete while paused"},
-		{"paused to idle", StatePaused, StateIdle, false, "can't go back to idle"},
+		{"paused to running", state.StatePaused, state.StateRunning, true, "can resume"},
+		{"paused to cancelled", state.StatePaused, state.StateCancelled, true, "can cancel"},
+		{"paused to archived", state.StatePaused, state.StateArchived, true, "can archive"},
+		{"paused to completed", state.StatePaused, state.StateCompleted, false, "can't complete while paused"},
+		{"paused to idle", state.StatePaused, state.StateIdle, false, "can't go back to idle"},
 
 		// From Completed
-		{"completed to archived", StateCompleted, StateArchived, true, "can archive"},
-		{"completed to running", StateCompleted, StateRunning, false, "terminal state"},
-		{"completed to idle", StateCompleted, StateIdle, false, "terminal state"},
-		{"completed to failed", StateCompleted, StateFailed, false, "terminal state"},
+		{"completed to archived", state.StateCompleted, state.StateArchived, true, "can archive"},
+		{"completed to running", state.StateCompleted, state.StateRunning, false, "terminal state"},
+		{"completed to idle", state.StateCompleted, state.StateIdle, false, "terminal state"},
+		{"completed to failed", state.StateCompleted, state.StateFailed, false, "terminal state"},
 
 		// From Failed
-		{"failed to archived", StateFailed, StateArchived, true, "can archive"},
-		{"failed to running", StateFailed, StateRunning, false, "terminal state"},
-		{"failed to completed", StateFailed, StateCompleted, false, "terminal state"},
+		{"failed to archived", state.StateFailed, state.StateArchived, true, "can archive"},
+		{"failed to running", state.StateFailed, state.StateRunning, false, "terminal state"},
+		{"failed to completed", state.StateFailed, state.StateCompleted, false, "terminal state"},
 
 		// From Cancelled
-		{"cancelled to archived", StateCancelled, StateArchived, true, "can archive"},
-		{"cancelled to running", StateCancelled, StateRunning, false, "terminal state"},
-		{"cancelled to idle", StateCancelled, StateIdle, false, "terminal state"},
+		{"cancelled to archived", state.StateCancelled, state.StateArchived, true, "can archive"},
+		{"cancelled to running", state.StateCancelled, state.StateRunning, false, "terminal state"},
+		{"cancelled to idle", state.StateCancelled, state.StateIdle, false, "terminal state"},
 
 		// From Archived
-		{"archived to running", StateArchived, StateRunning, false, "archived is final"},
-		{"archived to idle", StateArchived, StateIdle, false, "archived is final"},
-		{"archived to completed", StateArchived, StateCompleted, false, "archived is final"},
-		{"archived to archived", StateArchived, StateArchived, false, "already archived"},
+		{"archived to running", state.StateArchived, state.StateRunning, false, "archived is final"},
+		{"archived to idle", state.StateArchived, state.StateIdle, false, "archived is final"},
+		{"archived to completed", state.StateArchived, state.StateCompleted, false, "archived is final"},
+		{"archived to archived", state.StateArchived, state.StateArchived, false, "already archived"},
 
 		// Self-transitions (generally invalid)
-		{"idle to idle", StateIdle, StateIdle, false, "no self-transition"},
-		{"running to running", StateRunning, StateRunning, false, "no self-transition"},
+		{"idle to idle", state.StateIdle, state.StateIdle, false, "no self-transition"},
+		{"running to running", state.StateRunning, state.StateRunning, false, "no self-transition"},
 	}
 
 	for _, tt := range tests {
@@ -210,82 +212,20 @@ func TestState_CanTransitionTo(t *testing.T) {
 	}
 }
 
-func TestParseState(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		want    State
-		wantErr bool
-	}{
-		{"idle", "idle", StateIdle, false},
-		{"running", "running", StateRunning, false},
-		{"paused", "paused", StatePaused, false},
-		{"completed", "completed", StateCompleted, false},
-		{"failed", "failed", StateFailed, false},
-		{"cancelled", "cancelled", StateCancelled, false},
-		{"archived", "archived", StateArchived, false},
-		{"invalid", "invalid", StateIdle, true},
-		{"empty", "", StateIdle, true},
-		{"uppercase", "RUNNING", StateIdle, true},
-		{"mixed case", "Running", StateIdle, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseState(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseState() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && got != tt.want {
-				t.Errorf("ParseState() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestState_RoundTrip(t *testing.T) {
-	// Test that String() -> ParseState() works correctly
-	states := []State{
-		StateIdle,
-		StateRunning,
-		StatePaused,
-		StateCompleted,
-		StateFailed,
-		StateCancelled,
-		StateArchived,
-	}
-
-	for _, original := range states {
-		t.Run(original.String(), func(t *testing.T) {
-			str := original.String()
-			parsed, err := ParseState(str)
-			if err != nil {
-				t.Errorf("ParseState() error = %v", err)
-				return
-			}
-			if parsed != original {
-				t.Errorf("round trip failed: %v -> %s -> %v",
-					original, str, parsed)
-			}
-		})
-	}
-}
-
 func TestState_JSONRoundTrip(t *testing.T) {
 	// Test that JSON marshaling/unmarshaling works correctly
 	type wrapper struct {
 		State State `json:"state"`
 	}
 
-	states := []State{
-		StateIdle,
-		StateRunning,
-		StatePaused,
-		StateCompleted,
-		StateFailed,
-		StateCancelled,
-		StateArchived,
+	states := []state.State{
+		state.StateIdle,
+		state.StateRunning,
+		state.StatePaused,
+		state.StateCompleted,
+		state.StateFailed,
+		state.StateCancelled,
+		state.StateArchived,
 	}
 
 	for _, original := range states {

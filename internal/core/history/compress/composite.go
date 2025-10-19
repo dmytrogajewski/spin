@@ -18,17 +18,6 @@ type CompositeCompressor struct {
 	fallback Compressor
 }
 
-// NewCompositeCompressor creates a new composite compressor.
-//
-// The primary strategy is tried first. If it fails or returns an error,
-// the fallback strategy is used automatically.
-func NewCompositeCompressor(primary, fallback Compressor) *CompositeCompressor {
-	return &CompositeCompressor{
-		primary:  primary,
-		fallback: fallback,
-	}
-}
-
 // NewLLMWithHybridFallback creates a composite with LLM summarization as primary
 // and hybrid compression as fallback.
 //

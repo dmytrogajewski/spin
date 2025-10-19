@@ -113,41 +113,62 @@ func (r *Registry) Execute(ctx context.Context, name string, params map[string]i
 func (r *Registry) validateParams(schema ToolSchema, params map[string]interface{}) error {
 	paramSchema := schema.Function.Parameters
 
-	// Check required parameters
+	if err := r.validateRequiredParams(paramSchema, params); err != nil {
+		return err
+	}
+
+	return r.validateParameterTypes(paramSchema, params)
+}
+
+// validateRequiredParams checks that all required parameters are present.
+func (r *Registry) validateRequiredParams(paramSchema ParameterSchema, params map[string]interface{}) error {
 	for _, required := range paramSchema.Required {
 		if _, exists := params[required]; !exists {
 			return fmt.Errorf("%w: missing required parameter %s", ErrInvalidParameters, required)
 		}
 	}
+	return nil
+}
 
-	// Check parameter types
+// validateParameterTypes validates the types and values of all parameters.
+func (r *Registry) validateParameterTypes(paramSchema ParameterSchema, params map[string]interface{}) error {
 	for name, value := range params {
-		propDef, exists := paramSchema.Properties[name]
-		if !exists {
-			// Strict validation: reject unknown parameters
-			// Build list of valid parameter names for helpful error message
-			validParams := make([]string, 0, len(paramSchema.Properties))
-			for pname := range paramSchema.Properties {
-				validParams = append(validParams, pname)
-			}
-			return fmt.Errorf("%w: unknown parameter %q (valid parameters: %v)",
-				ErrInvalidParameters, name, validParams)
+		if err := r.validateParameter(paramSchema, name, value); err != nil {
+			return err
 		}
+	}
+	return nil
+}
 
-		if !r.validateType(value, propDef.Type) {
-			return fmt.Errorf("%w: parameter %s has wrong type (expected %s)",
-				ErrInvalidParameters, name, propDef.Type)
-		}
+// validateParameter validates a single parameter.
+func (r *Registry) validateParameter(paramSchema ParameterSchema, name string, value interface{}) error {
+	propDef, exists := paramSchema.Properties[name]
+	if !exists {
+		return r.createUnknownParameterError(name, paramSchema.Properties)
+	}
 
-		// Check enum values
-		if len(propDef.Enum) > 0 {
-			if err := r.validateEnum(value, propDef.Enum); err != nil {
-				return fmt.Errorf("%w: parameter %s %v", ErrInvalidParameters, name, err)
-			}
+	if !r.validateType(value, propDef.Type) {
+		return fmt.Errorf("%w: parameter %s has wrong type (expected %s)",
+			ErrInvalidParameters, name, propDef.Type)
+	}
+
+	if len(propDef.Enum) > 0 {
+		if err := r.validateEnum(value, propDef.Enum); err != nil {
+			return fmt.Errorf("%w: parameter %s %v", ErrInvalidParameters, name, err)
 		}
 	}
 
 	return nil
+}
+
+// createUnknownParameterError creates an error for unknown parameters.
+func (r *Registry) createUnknownParameterError(name string, properties map[string]PropertyDefinition) error {
+	validParams := make([]string, 0, len(properties))
+	for pname := range properties {
+		validParams = append(validParams, pname)
+	}
+	return fmt.Errorf("%w: unknown parameter %q (valid parameters: %v)",
+		ErrInvalidParameters, name, validParams)
 }
 
 // validateType checks if a value matches the expected JSON schema type.

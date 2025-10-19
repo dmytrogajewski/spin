@@ -557,10 +557,11 @@ func TestManager_ContextTimeout(t *testing.T) {
 	ks := newMockKeystore()
 	m := NewManager(ks)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	time.Sleep(5 * time.Millisecond) // Ensure timeout
+	// Sleep longer than timeout to ensure it triggers
+	time.Sleep(20 * time.Millisecond)
 
 	_, err := m.GetCredential(ctx, "test")
 	if err == nil {

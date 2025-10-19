@@ -1,73 +1,22 @@
 package turn
 
-// TurnState represents turn execution state.
-// It defines the lifecycle states a turn can be in, from creation through completion.
-type TurnState int
+import "github.com/dmytrogajewski/spin/internal/state"
 
+// TurnState is now unified with state.State for consistency.
+// Use state.State instead of this type.
+type TurnState = state.State
+
+// Turn states - now using unified state constants.
 const (
-	// StatePending indicates turn is pending execution
-	StatePending TurnState = iota
-	// StateRunning indicates turn is currently executing
-	StateRunning
-	// StateWaitingApproval indicates turn is paused waiting for user approval
-	StateWaitingApproval
-	// StateCompleted indicates turn completed successfully
-	StateCompleted
-	// StateFailed indicates turn failed with an error
-	StateFailed
-	// StateCancelled indicates turn was cancelled by user
-	StateCancelled
+	StatePending         = state.StateIdle            // Turn is pending execution
+	StateRunning         = state.StateRunning         // Turn is currently executing
+	StateWaitingApproval = state.StateWaitingApproval // Turn is paused waiting for user approval
+	StateCompleted       = state.StateCompleted       // Turn completed successfully
+	StateFailed          = state.StateFailed          // Turn failed with an error
+	StateCancelled       = state.StateCancelled       // Turn was cancelled by user
 )
-
-// String returns the string representation of TurnState.
-func (s TurnState) String() string {
-	switch s {
-	case StatePending:
-		return "pending"
-	case StateRunning:
-		return "running"
-	case StateWaitingApproval:
-		return "waiting_approval"
-	case StateCompleted:
-		return "completed"
-	case StateFailed:
-		return "failed"
-	case StateCancelled:
-		return "cancelled"
-	default:
-		return "unknown"
-	}
-}
 
 // CanTransition returns true if transition from 'from' state to 'to' state is valid.
 func CanTransition(from, to TurnState) bool {
-	validTransitions := map[TurnState]map[TurnState]bool{
-		StatePending: {
-			StateRunning: true,
-		},
-		StateRunning: {
-			StateWaitingApproval: true,
-			StateCompleted:       true,
-			StateFailed:          true,
-			StateCancelled:       true,
-		},
-		StateWaitingApproval: {
-			StateRunning:   true,
-			StateCancelled: true,
-		},
-		// Terminal states cannot transition
-		StateCompleted: {},
-		StateFailed:    {},
-		StateCancelled: {},
-	}
-
-	if targets, ok := validTransitions[from]; ok {
-		return targets[to]
-	}
-	return false
-}
-
-// IsTerminal returns true if the state is a terminal state (cannot transition further).
-func IsTerminal(state TurnState) bool {
-	return state == StateCompleted || state == StateFailed || state == StateCancelled
+	return from.CanTransitionTo(to)
 }

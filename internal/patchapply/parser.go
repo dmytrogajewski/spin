@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"strings"
-
-	"github.com/dmytrogajewski/spin/pkg/pathutil"
 )
 
 // Parser parses patch text into structured Patch AST.
@@ -132,8 +130,8 @@ func (p *Parser) parseOperation(line string) (FileOperation, error) {
 // parseAddFile parses an add file operation.
 func (p *Parser) parseAddFile(path string) (*AddFile, error) {
 	// Validate path
-	if err := pathutil.ValidateRelativePath(path); err != nil {
-		return nil, fmt.Errorf("invalid path %q: %w", path, err)
+	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
+		return nil, fmt.Errorf("invalid path %q: path outside workspace", path)
 	}
 
 	lines := make([]string, 0)
@@ -167,8 +165,8 @@ func (p *Parser) parseAddFile(path string) (*AddFile, error) {
 // parseDeleteFile parses a delete file operation.
 func (p *Parser) parseDeleteFile(path string) (*DeleteFile, error) {
 	// Validate path
-	if err := pathutil.ValidateRelativePath(path); err != nil {
-		return nil, fmt.Errorf("invalid path %q: %w", path, err)
+	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
+		return nil, fmt.Errorf("invalid path %q: path outside workspace", path)
 	}
 
 	return &DeleteFile{
@@ -179,8 +177,8 @@ func (p *Parser) parseDeleteFile(path string) (*DeleteFile, error) {
 // parseUpdateFile parses an update file operation.
 func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
 	// Validate path
-	if err := pathutil.ValidateRelativePath(path); err != nil {
-		return nil, fmt.Errorf("invalid path %q: %w", path, err)
+	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
+		return nil, fmt.Errorf("invalid path %q: path outside workspace", path)
 	}
 
 	update := &UpdateFile{
@@ -200,8 +198,8 @@ func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
 	if strings.HasPrefix(line, "*** Move to: ") {
 		p.nextLine() // consume the peeked line
 		newPath := strings.TrimSpace(strings.TrimPrefix(line, "*** Move to: "))
-		if err := pathutil.ValidateRelativePath(newPath); err != nil {
-			return nil, fmt.Errorf("invalid new path %q: %w", newPath, err)
+		if strings.Contains(newPath, "..") || strings.HasPrefix(newPath, "/") {
+			return nil, fmt.Errorf("invalid new path %q: path outside workspace", newPath)
 		}
 		update.NewPath = newPath
 
@@ -242,10 +240,7 @@ func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
 
 // parseHunk parses a single hunk starting with @@.
 func (p *Parser) parseHunk(firstLine string) (*Hunk, error) {
-	hunk := &Hunk{
-		Header:  strings.TrimSpace(strings.TrimPrefix(firstLine, "@@")),
-		Changes: make([]LineChange, 0),
-	}
+	hunk := p.createHunk(firstLine)
 
 	for {
 		line, ok := p.peek()
@@ -253,51 +248,72 @@ func (p *Parser) parseHunk(firstLine string) (*Hunk, error) {
 			break
 		}
 
-		trimmed := strings.TrimSpace(line)
-
-		// Check for end of hunk
-		if strings.HasPrefix(trimmed, "@@") || strings.HasPrefix(trimmed, "***") {
+		if p.isHunkEnd(line) {
 			break
 		}
 
-		// Consume the line
 		line, _ = p.nextLine()
-
-		// Handle empty lines as context
-		if len(line) == 0 {
-			hunk.Changes = append(hunk.Changes, LineChange{
-				Type: LineContext,
-				Text: "",
-			})
-			continue
-		}
-
-		prefix := line[0]
-		text := ""
-		if len(line) > 1 {
-			text = line[1:]
-		}
-
-		switch prefix {
-		case ' ':
-			hunk.Changes = append(hunk.Changes, LineChange{
-				Type: LineContext,
-				Text: text,
-			})
-		case '-':
-			hunk.Changes = append(hunk.Changes, LineChange{
-				Type: LineDelete,
-				Text: text,
-			})
-		case '+':
-			hunk.Changes = append(hunk.Changes, LineChange{
-				Type: LineInsert,
-				Text: text,
-			})
-		default:
-			return nil, fmt.Errorf("invalid line prefix: expected ' ', '-', or '+', got %q", prefix)
+		if err := p.parseHunkLine(hunk, line); err != nil {
+			return nil, err
 		}
 	}
 
 	return hunk, nil
+}
+
+// createHunk creates a new hunk with the given header.
+func (p *Parser) createHunk(firstLine string) *Hunk {
+	return &Hunk{
+		Header:  strings.TrimSpace(strings.TrimPrefix(firstLine, "@@")),
+		Changes: make([]LineChange, 0),
+	}
+}
+
+// isHunkEnd checks if the line indicates the end of a hunk.
+func (p *Parser) isHunkEnd(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.HasPrefix(trimmed, "@@") || strings.HasPrefix(trimmed, "***")
+}
+
+// parseHunkLine parses a single line within a hunk.
+func (p *Parser) parseHunkLine(hunk *Hunk, line string) error {
+	if len(line) == 0 {
+		hunk.Changes = append(hunk.Changes, LineChange{
+			Type: LineContext,
+			Text: "",
+		})
+		return nil
+	}
+
+	prefix := line[0]
+	text := ""
+	if len(line) > 1 {
+		text = line[1:]
+	}
+
+	return p.addLineChange(hunk, prefix, text)
+}
+
+// addLineChange adds a line change to the hunk based on the prefix.
+func (p *Parser) addLineChange(hunk *Hunk, prefix byte, text string) error {
+	switch prefix {
+	case ' ':
+		hunk.Changes = append(hunk.Changes, LineChange{
+			Type: LineContext,
+			Text: text,
+		})
+	case '-':
+		hunk.Changes = append(hunk.Changes, LineChange{
+			Type: LineDelete,
+			Text: text,
+		})
+	case '+':
+		hunk.Changes = append(hunk.Changes, LineChange{
+			Type: LineInsert,
+			Text: text,
+		})
+	default:
+		return fmt.Errorf("invalid line prefix: expected ' ', '-', or '+', got %q", prefix)
+	}
+	return nil
 }

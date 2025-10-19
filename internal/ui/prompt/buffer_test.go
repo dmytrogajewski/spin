@@ -578,3 +578,68 @@ func TestBuffer_SetCursor(t *testing.T) {
 		t.Errorf("SetCursor(3) resulted in Cursor() = %d, want 3", got)
 	}
 }
+
+func TestBuffer_DeleteWord_Punctuation(t *testing.T) {
+	tests := []struct {
+		name       string
+		initial    string
+		cursor     int
+		wantText   string
+		wantCursor int
+	}{
+		{
+			name:       "delete punctuation word",
+			initial:    "hello!!!",
+			cursor:     8, // After all punctuation
+			wantText:   "hello",
+			wantCursor: 5,
+		},
+		{
+			name:       "delete mixed punctuation",
+			initial:    "test@#$%",
+			cursor:     7,       // After all punctuation
+			wantText:   "test%", // Only the last punctuation remains
+			wantCursor: 4,
+		},
+		{
+			name:       "delete single punctuation",
+			initial:    "word!",
+			cursor:     5, // After '!'
+			wantText:   "word",
+			wantCursor: 4,
+		},
+		{
+			name:       "delete punctuation with spaces",
+			initial:    "word !@#",
+			cursor:     7,        // After '#'
+			wantText:   "word #", // Only the last punctuation remains
+			wantCursor: 5,
+		},
+		{
+			name:       "delete only punctuation",
+			initial:    "!!!",
+			cursor:     3, // After all punctuation
+			wantText:   "",
+			wantCursor: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := prompt.NewBuffer()
+			for _, r := range tt.initial {
+				b.Insert(r)
+			}
+			b.SetCursor(tt.cursor)
+
+			b.DeleteWord()
+
+			if got := b.Text(); got != tt.wantText {
+				t.Errorf("DeleteWord() text = %q, want %q", got, tt.wantText)
+			}
+			if got := b.Cursor(); got != tt.wantCursor {
+				t.Errorf("DeleteWord() cursor = %d, want %d", got, tt.wantCursor)
+			}
+		})
+	}
+}

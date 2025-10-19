@@ -11,10 +11,24 @@ import (
 // This is a simple but effective measure for detecting when LLM responses
 // are repeating similar content without being identical strings.
 func calculateSimilarity(a, b string) float64 {
-	// Extract words from both strings (case-insensitive, ignore punctuation)
 	wordsA := extractWords(a)
 	wordsB := extractWords(b)
 
+	if similarity := handleEmptyCases(wordsA, wordsB); similarity >= 0 {
+		return similarity
+	}
+
+	setA := createWordSet(wordsA)
+	setB := createWordSet(wordsB)
+
+	intersection := calculateIntersection(setA, setB)
+	union := calculateUnion(setA, setB, intersection)
+
+	return calculateJaccardSimilarity(intersection, union)
+}
+
+// handleEmptyCases handles cases where one or both word sets are empty.
+func handleEmptyCases(wordsA, wordsB []string) float64 {
 	if len(wordsA) == 0 && len(wordsB) == 0 {
 		return 1.0 // Both empty strings are identical
 	}
@@ -23,32 +37,39 @@ func calculateSimilarity(a, b string) float64 {
 		return 0.0 // One empty, one non-empty are dissimilar
 	}
 
-	// Create sets for intersection and union calculation
-	setA := make(map[string]bool, len(wordsA))
-	for _, word := range wordsA {
-		setA[word] = true
-	}
+	return -1 // Not an empty case
+}
 
-	setB := make(map[string]bool, len(wordsB))
-	for _, word := range wordsB {
-		setB[word] = true
+// createWordSet creates a set from a slice of words.
+func createWordSet(words []string) map[string]bool {
+	set := make(map[string]bool, len(words))
+	for _, word := range words {
+		set[word] = true
 	}
+	return set
+}
 
-	// Calculate intersection size
+// calculateIntersection calculates the size of the intersection of two sets.
+func calculateIntersection(setA, setB map[string]bool) int {
 	intersection := 0
 	for word := range setA {
 		if setB[word] {
 			intersection++
 		}
 	}
+	return intersection
+}
 
-	// Calculate union size
-	union := len(setA) + len(setB) - intersection
+// calculateUnion calculates the size of the union of two sets.
+func calculateUnion(setA, setB map[string]bool, intersection int) int {
+	return len(setA) + len(setB) - intersection
+}
 
+// calculateJaccardSimilarity calculates the Jaccard similarity coefficient.
+func calculateJaccardSimilarity(intersection, union int) float64 {
 	if union == 0 {
 		return 1.0 // Both sets are empty (shouldn't happen due to earlier check)
 	}
-
 	return float64(intersection) / float64(union)
 }
 
@@ -56,13 +77,15 @@ func calculateSimilarity(a, b string) float64 {
 // Words are converted to lowercase and punctuation is removed.
 // This provides a normalized word set for similarity comparison.
 func extractWords(text string) []string {
-	// Simple word extraction: split on whitespace and filter
-	fields := strings.Fields(text)
+	// Split on whitespace and punctuation
+	fields := strings.FieldsFunc(text, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsPunct(r) || unicode.IsSymbol(r)
+	})
 
 	words := make([]string, 0, len(fields))
 	for _, field := range fields {
-		// Convert to lowercase and remove punctuation
-		word := strings.ToLower(removePunctuation(field))
+		// Convert to lowercase
+		word := strings.ToLower(field)
 
 		// Skip empty words and very short words (likely not meaningful)
 		if len(word) > 2 {
@@ -71,16 +94,4 @@ func extractWords(text string) []string {
 	}
 
 	return words
-}
-
-// removePunctuation removes common punctuation characters from a word.
-// This helps normalize words for better similarity comparison.
-func removePunctuation(word string) string {
-	return strings.Map(func(r rune) rune {
-		// Remove common punctuation characters
-		if unicode.IsPunct(r) {
-			return -1 // Remove this character
-		}
-		return r
-	}, word)
 }

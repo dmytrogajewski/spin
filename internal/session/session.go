@@ -8,85 +8,29 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/core/turn"
+	"github.com/dmytrogajewski/spin/internal/state"
 	"github.com/google/uuid"
 )
 
 // CurrentSchemaVersion is the current session schema version for migrations.
 const CurrentSchemaVersion = 1
 
-// State represents session execution state.
-// NOTE: This is intentionally kept as int (not string) to match core.State
-// and allow for future unification without breaking changes.
-type State int
+// State is now unified with state.State for consistency.
+// Use state.State instead of this type.
+type State = state.State
 
-// Session states - values match core.State for compatibility.
+// Session states - now using unified state constants.
 const (
-	// StateActive indicates session is active (idle, not running)
-	StateActive State = 0 // Matches core.StateIdle
-	// StateRunning indicates session has active execution
-	StateRunning State = 1 // Matches core.StateRunning
-	// StatePaused indicates session is paused
-	StatePaused State = 2 // Matches core.StatePaused
-	// StateCompleted indicates session completed successfully
-	StateCompleted State = 3 // Matches core.StateCompleted
-	// StateFailed indicates session failed
-	StateFailed State = 4 // Matches core.StateFailed
-	// StateCancelled indicates session cancelled by user
-	StateCancelled State = 5 // Matches core.StateCancelled
-	// StateArchived indicates session archived
-	StateArchived State = 6 // Matches core.StateArchived
+	StateActive    = state.StateIdle      // Session is active (idle, not running)
+	StateRunning   = state.StateRunning   // Session has active execution
+	StatePaused    = state.StatePaused    // Session is paused
+	StateCompleted = state.StateCompleted // Session completed successfully
+	StateFailed    = state.StateFailed    // Session failed
+	StateCancelled = state.StateCancelled // Session cancelled by user
+	StateArchived  = state.StateArchived  // Session archived
 )
 
-// String returns the string representation of State.
-func (s State) String() string {
-	switch s {
-	case StateActive:
-		return "active"
-	case StateRunning:
-		return "running"
-	case StatePaused:
-		return "paused"
-	case StateCompleted:
-		return "completed"
-	case StateFailed:
-		return "failed"
-	case StateCancelled:
-		return "cancelled"
-	case StateArchived:
-		return "archived"
-	default:
-		return "unknown"
-	}
-}
-
-// MarshalText implements encoding.TextMarshaler for JSON encoding.
-func (s State) MarshalText() ([]byte, error) {
-	return []byte(s.String()), nil
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler for JSON decoding.
-func (s *State) UnmarshalText(text []byte) error {
-	str := string(text)
-	switch str {
-	case "active", "idle": // "idle" for backwards compat with core.StateIdle
-		*s = StateActive
-	case "running":
-		*s = StateRunning
-	case "paused":
-		*s = StatePaused
-	case "completed":
-		*s = StateCompleted
-	case "failed":
-		*s = StateFailed
-	case "cancelled":
-		*s = StateCancelled
-	case "archived":
-		*s = StateArchived
-	default:
-		return fmt.Errorf("invalid state: %s", str)
-	}
-	return nil
-}
+// Session-specific state methods are now handled by core.UnifiedState.
 
 // Session represents a persistent conversation session.
 type Session struct {
@@ -99,24 +43,6 @@ type Session struct {
 	State     State        // Current session state
 	Version   int          // Schema version for migrations
 	mu        sync.RWMutex // Protects all fields
-}
-
-// NewSession creates a new session.
-func NewSession(workDir string) *Session {
-	now := time.Now()
-
-	return &Session{
-		ID:        uuid.New().String(),
-		WorkDir:   workDir,
-		CreatedAt: now,
-		UpdatedAt: now,
-		Turns:     make([]*turn.Turn, 0),
-		Metadata: Metadata{
-			Tags: make([]string, 0),
-		},
-		State:   StateActive,
-		Version: CurrentSchemaVersion,
-	}
 }
 
 // AddTurn appends a turn to the session.
@@ -265,13 +191,25 @@ func (s *Session) Validate() error {
 
 	var errs []error
 
+	errs = append(errs, s.validateBasicFields()...)
+	errs = append(errs, s.validateTurns()...)
+	errs = append(errs, s.validateMetadata()...)
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	return nil
+}
+
+// validateBasicFields validates basic session fields.
+func (s *Session) validateBasicFields() []error {
+	var errs []error
+
 	// Validate ID
 	if s.ID == "" {
 		errs = append(errs, errors.New("session ID is empty"))
-	}
-
-	// Validate UUID format
-	if _, err := uuid.Parse(s.ID); err != nil {
+	} else if _, err := uuid.Parse(s.ID); err != nil {
 		errs = append(errs, fmt.Errorf("session ID is not a valid UUID: %w", err))
 	}
 
@@ -290,6 +228,13 @@ func (s *Session) Validate() error {
 		errs = append(errs, fmt.Errorf("invalid state: %s", s.State))
 	}
 
+	return errs
+}
+
+// validateTurns validates turn-related fields.
+func (s *Session) validateTurns() []error {
+	var errs []error
+
 	// Check for duplicate turn IDs
 	turnIDs := make(map[string]bool)
 	for _, t := range s.Turns {
@@ -299,27 +244,36 @@ func (s *Session) Validate() error {
 		turnIDs[t.ID] = true
 	}
 
-	// Validate metadata consistency
+	return errs
+}
+
+// validateMetadata validates metadata consistency.
+func (s *Session) validateMetadata() []error {
+	var errs []error
+
+	// Validate turn count consistency
 	if s.Metadata.TotalTurns != len(s.Turns) {
 		errs = append(errs, fmt.Errorf("metadata turn count (%d) does not match actual turns (%d)",
 			s.Metadata.TotalTurns, len(s.Turns)))
 	}
 
 	// Validate token count consistency
-	actualTokens := 0
-	for _, t := range s.Turns {
-		actualTokens += t.Tokens.TotalTokens
-	}
+	actualTokens := s.calculateActualTokens()
 	if s.Metadata.TokensUsed != actualTokens {
 		errs = append(errs, fmt.Errorf("metadata tokens used (%d) does not match actual (%d)",
 			s.Metadata.TokensUsed, actualTokens))
 	}
 
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
+	return errs
+}
 
-	return nil
+// calculateActualTokens calculates the total tokens from all turns.
+func (s *Session) calculateActualTokens() int {
+	actualTokens := 0
+	for _, t := range s.Turns {
+		actualTokens += t.Tokens.TotalTokens
+	}
+	return actualTokens
 }
 
 // isValidState checks if a state value is valid.

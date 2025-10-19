@@ -1,0 +1,8 @@
+# Deadcode Whitelist
+# Functions that appear as "dead" but are actually required for interface compliance
+# or other legitimate reasons that the deadcode analyzer doesn't recognize.
+
+# PatchApply interface methods - required by FileOperation interface for type assertions
+internal/patchapply/types.go:23:19: AddFile.isFileOperation
+internal/patchapply/types.go:31:22: DeleteFile.isFileOperation  
+internal/patchapply/types.go:42:21: UpdateFile.isFileOperation

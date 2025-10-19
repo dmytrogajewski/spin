@@ -6,367 +6,349 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/mcp/types"
 )
 
-// StdioClient implements Client using stdio transport with JSON-RPC 2.0.
+// StdioClient implements MCP client using stdio transport.
 type StdioClient struct {
-	cfg    Config
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
-
-	// JSON-RPC state
-	nextID      atomic.Int64
-	pendingMu   sync.RWMutex
-	pending     map[int64]chan *jsonrpcResponse
-	initialized bool
-
-	// Lifecycle
-	ctx    context.Context
-	cancel context.CancelFunc
-	done   chan struct{}
-	closeOnce sync.Once
-	err       error
+	config      Config
+	cmd         *exec.Cmd
+	stdin       io.WriteCloser
+	stdout      io.ReadCloser
+	stderr      io.ReadCloser
+	scanner     *bufio.Scanner
+	mu          sync.RWMutex
+	closed      bool
+	closeOnce   sync.Once
+	requestID   int64
+	responses   map[string]chan json.RawMessage
+	responsesMu sync.RWMutex
 }
 
-// jsonrpcRequest represents a JSON-RPC 2.0 request.
-type jsonrpcRequest struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      int64           `json:"id"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params,omitempty"`
+// NewStdioClient creates a new stdio-based MCP client.
+func NewStdioClient(config Config) *StdioClient {
+	return &StdioClient{
+		config:    config,
+		responses: make(map[string]chan json.RawMessage),
+	}
 }
 
-// jsonrpcResponse represents a JSON-RPC 2.0 response.
-type jsonrpcResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      int64           `json:"id"`
-	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *jsonrpcError   `json:"error,omitempty"`
-}
-
-// jsonrpcError represents a JSON-RPC 2.0 error.
-type jsonrpcError struct {
-	Code    int             `json:"code"`
-	Message string          `json:"message"`
-	Data    json.RawMessage `json:"data,omitempty"`
-}
-
-// NewStdioClient creates a new MCP client using stdio transport.
-func NewStdioClient(cfg Config) (*StdioClient, error) {
-	if err := cfg.Validate(); err != nil {
-		return nil, &Error{Op: "NewStdioClient.Validate", Err: err}
-	}
-
-	// Create command
-	cmd := exec.Command(cfg.Command, cfg.Args...)
-
-	// Set environment variables
-	if len(cfg.Env) > 0 {
-		env := make([]string, 0, len(cfg.Env))
-		for k, v := range cfg.Env {
-			env = append(env, fmt.Sprintf("%s=%s", k, v))
-		}
-		cmd.Env = append(cmd.Env, env...)
-	}
-
-	// Get stdin/stdout pipes
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, &Error{Op: "NewStdioClient.StdinPipe", Err: err}
-	}
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		stdin.Close()
-		return nil, &Error{Op: "NewStdioClient.StdoutPipe", Err: err}
-	}
-
-	// Start process
-	if err := cmd.Start(); err != nil {
-		stdin.Close()
-		stdout.Close()
-		return nil, &Error{Op: "NewStdioClient.Start", Err: ErrSpawnFailed}
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	client := &StdioClient{
-		cfg:     cfg,
-		cmd:     cmd,
-		stdin:   stdin,
-		stdout:  stdout,
-		pending: make(map[int64]chan *jsonrpcResponse),
-		ctx:     ctx,
-		cancel:  cancel,
-		done:    make(chan struct{}),
-	}
-
-	// Start message pump
-	go client.readLoop()
-
-	return client, nil
-}
-
-// Initialize initializes the MCP connection.
+// Initialize establishes the MCP connection and negotiates capabilities.
 func (c *StdioClient) Initialize(ctx context.Context, req types.InitializeRequest) (*types.InitializeResponse, error) {
-	params, err := json.Marshal(req)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return nil, fmt.Errorf("client is closed")
+	}
+
+	// Start the server process
+	if err := c.startProcess(); err != nil {
+		return nil, fmt.Errorf("failed to start MCP server: %w", err)
+	}
+
+	// Send initialize request
+	resp, err := c.sendRequest(ctx, "initialize", req)
 	if err != nil {
-		return nil, &Error{Op: "Initialize.Marshal", Err: err}
+		c.closeProcess()
+		return nil, fmt.Errorf("initialize request failed: %w", err)
 	}
 
-	result, err := c.call(ctx, "initialize", params)
-	if err != nil {
-		return nil, &Error{Op: "Initialize.Call", Err: err}
+	// Parse response
+	var initResp types.InitializeResponse
+	if err := json.Unmarshal(resp, &initResp); err != nil {
+		c.closeProcess()
+		return nil, fmt.Errorf("failed to parse initialize response: %w", err)
 	}
 
-	var resp types.InitializeResponse
-	if err := json.Unmarshal(result, &resp); err != nil {
-		return nil, &Error{Op: "Initialize.Unmarshal", Err: err}
-	}
-
-	c.initialized = true
-	return &resp, nil
+	return &initResp, nil
 }
 
-// ListTools lists available tools from the server.
+// ListTools retrieves available tools from the server.
 func (c *StdioClient) ListTools(ctx context.Context) (*types.ListToolsResponse, error) {
-	if !c.initialized {
-		return nil, &Error{Op: "ListTools", Err: fmt.Errorf("client not initialized")}
-	}
-
-	params, err := json.Marshal(types.ListToolsRequest{})
+	resp, err := c.sendRequest(ctx, "tools/list", nil)
 	if err != nil {
-		return nil, &Error{Op: "ListTools.Marshal", Err: err}
+		return nil, fmt.Errorf("list tools request failed: %w", err)
 	}
 
-	result, err := c.call(ctx, "tools/list", params)
-	if err != nil {
-		return nil, &Error{Op: "ListTools.Call", Err: err}
+	var toolsResp types.ListToolsResponse
+	if err := json.Unmarshal(resp, &toolsResp); err != nil {
+		return nil, fmt.Errorf("failed to parse list tools response: %w", err)
 	}
 
-	var resp types.ListToolsResponse
-	if err := json.Unmarshal(result, &resp); err != nil {
-		return nil, &Error{Op: "ListTools.Unmarshal", Err: err}
-	}
-
-	return &resp, nil
+	return &toolsResp, nil
 }
 
 // CallTool invokes a tool on the server.
 func (c *StdioClient) CallTool(ctx context.Context, name string, arguments json.RawMessage) (*types.CallToolResponse, error) {
-	if !c.initialized {
-		return nil, &Error{Op: "CallTool", Err: fmt.Errorf("client not initialized")}
-	}
-
 	req := types.CallToolRequest{
 		Name:      name,
 		Arguments: arguments,
 	}
 
-	params, err := json.Marshal(req)
+	resp, err := c.sendRequest(ctx, "tools/call", req)
 	if err != nil {
-		return nil, &Error{Op: "CallTool.Marshal", Err: err}
+		return nil, fmt.Errorf("call tool request failed: %w", err)
 	}
 
-	result, err := c.call(ctx, "tools/call", params)
-	if err != nil {
-		return nil, &Error{Op: "CallTool.Call", Err: err}
+	var callResp types.CallToolResponse
+	if err := json.Unmarshal(resp, &callResp); err != nil {
+		return nil, fmt.Errorf("failed to parse call tool response: %w", err)
 	}
 
-	var resp types.CallToolResponse
-	if err := json.Unmarshal(result, &resp); err != nil {
-		return nil, &Error{Op: "CallTool.Unmarshal", Err: err}
-	}
-
-	if resp.IsError {
-		return &resp, &Error{Op: "CallTool", Err: ErrToolFailed}
-	}
-
-	return &resp, nil
+	return &callResp, nil
 }
 
-// ListResources lists available resources from the server.
+// ListResources retrieves available resources from the server.
 func (c *StdioClient) ListResources(ctx context.Context) (*types.ListResourcesResponse, error) {
-	if !c.initialized {
-		return nil, &Error{Op: "ListResources", Err: fmt.Errorf("client not initialized")}
-	}
-
-	params, err := json.Marshal(types.ListResourcesRequest{})
+	resp, err := c.sendRequest(ctx, "resources/list", nil)
 	if err != nil {
-		return nil, &Error{Op: "ListResources.Marshal", Err: err}
+		return nil, fmt.Errorf("list resources request failed: %w", err)
 	}
 
-	result, err := c.call(ctx, "resources/list", params)
-	if err != nil {
-		return nil, &Error{Op: "ListResources.Call", Err: err}
+	var resourcesResp types.ListResourcesResponse
+	if err := json.Unmarshal(resp, &resourcesResp); err != nil {
+		return nil, fmt.Errorf("failed to parse list resources response: %w", err)
 	}
 
-	var resp types.ListResourcesResponse
-	if err := json.Unmarshal(result, &resp); err != nil {
-		return nil, &Error{Op: "ListResources.Unmarshal", Err: err}
-	}
-
-	return &resp, nil
+	return &resourcesResp, nil
 }
 
-// ReadResource reads a resource by its URI.
+// ReadResource reads a specific resource.
 func (c *StdioClient) ReadResource(ctx context.Context, uri string) (*types.ReadResourceResponse, error) {
-	if !c.initialized {
-		return nil, &Error{Op: "ReadResource", Err: fmt.Errorf("client not initialized")}
+	req := types.ReadResourceRequest{
+		URI: uri,
 	}
 
-	params, err := json.Marshal(types.ReadResourceRequest{URI: uri})
+	resp, err := c.sendRequest(ctx, "resources/read", req)
 	if err != nil {
-		return nil, &Error{Op: "ReadResource.Marshal", Err: err}
+		return nil, fmt.Errorf("read resource request failed: %w", err)
 	}
 
-	result, err := c.call(ctx, "resources/read", params)
-	if err != nil {
-		return nil, &Error{Op: "ReadResource.Call", Err: err}
+	var readResp types.ReadResourceResponse
+	if err := json.Unmarshal(resp, &readResp); err != nil {
+		return nil, fmt.Errorf("failed to parse read resource response: %w", err)
 	}
 
-	var resp types.ReadResourceResponse
-	if err := json.Unmarshal(result, &resp); err != nil {
-		return nil, &Error{Op: "ReadResource.Unmarshal", Err: err}
-	}
-
-	return &resp, nil
+	return &readResp, nil
 }
 
-// Close closes the client and cleans up resources.
+// Close closes the connection and cleans up resources.
 func (c *StdioClient) Close() error {
 	var err error
 	c.closeOnce.Do(func() {
-		// Cancel context to stop read loop
-		c.cancel()
+		c.mu.Lock()
+		c.closed = true
+		c.mu.Unlock()
 
-		// Close stdin to signal server to exit
-		if c.stdin != nil {
-			c.stdin.Close()
+		if closeErr := c.closeProcess(); closeErr != nil {
+			err = closeErr
 		}
+	})
+	return err
+}
 
-		// Wait for process with timeout
+// startProcess starts the MCP server process.
+func (c *StdioClient) startProcess() error {
+	// Create command
+	c.cmd = exec.Command(c.config.Command, c.config.Args...)
+	c.cmd.Env = os.Environ()
+
+	// Add custom environment variables
+	for key, value := range c.config.Env {
+		c.cmd.Env = append(c.cmd.Env, fmt.Sprintf("%s=%s", key, value))
+	}
+
+	// Set up stdio
+	var err error
+	c.stdin, err = c.cmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdin pipe: %w", err)
+	}
+
+	c.stdout, err = c.cmd.StdoutPipe()
+	if err != nil {
+		c.stdin.Close()
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	c.stderr, err = c.cmd.StderrPipe()
+	if err != nil {
+		c.stdin.Close()
+		c.stdout.Close()
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	// Start the process
+	if err := c.cmd.Start(); err != nil {
+		c.stdin.Close()
+		c.stdout.Close()
+		c.stderr.Close()
+		return fmt.Errorf("failed to start process: %w", err)
+	}
+
+	// Set up scanner for reading responses
+	c.scanner = bufio.NewScanner(c.stdout)
+
+	// Start response reader goroutine
+	go c.readResponses()
+
+	return nil
+}
+
+// closeProcess closes the MCP server process.
+func (c *StdioClient) closeProcess() error {
+	var err error
+
+	if c.stdin != nil {
+		if closeErr := c.stdin.Close(); closeErr != nil {
+			err = closeErr
+		}
+	}
+
+	if c.stdout != nil {
+		if closeErr := c.stdout.Close(); closeErr != nil {
+			if err == nil {
+				err = closeErr
+			}
+		}
+	}
+
+	if c.stderr != nil {
+		if closeErr := c.stderr.Close(); closeErr != nil {
+			if err == nil {
+				err = closeErr
+			}
+		}
+	}
+
+	if c.cmd != nil && c.cmd.Process != nil {
+		// Give the process a chance to exit gracefully
 		done := make(chan error, 1)
 		go func() {
 			done <- c.cmd.Wait()
 		}()
 
 		select {
-		case err = <-done:
+		case <-done:
+			// Process exited
 		case <-time.After(5 * time.Second):
-			// Force kill if not exited
-			if c.cmd.Process != nil {
-				c.cmd.Process.Kill()
+			// Force kill if it doesn't exit
+			if killErr := c.cmd.Process.Kill(); killErr != nil {
+				if err == nil {
+					err = killErr
+				}
 			}
-			err = fmt.Errorf("server did not exit gracefully")
 		}
+	}
 
-		// Wait for read loop to finish
-		<-c.done
-	})
 	return err
 }
 
-// call sends a JSON-RPC request and waits for the response.
-func (c *StdioClient) call(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+// sendRequest sends a JSON-RPC request and waits for response.
+func (c *StdioClient) sendRequest(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
+	c.mu.RLock()
+	if c.closed {
+		c.mu.RUnlock()
+		return nil, fmt.Errorf("client is closed")
+	}
+	c.mu.RUnlock()
+
 	// Generate request ID
-	id := c.nextID.Add(1)
+	c.mu.Lock()
+	c.requestID++
+	id := fmt.Sprintf("%d", c.requestID)
+	c.mu.Unlock()
+
+	// Create JSON-RPC request
+	req := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"id":      id,
+		"method":  method,
+	}
+
+	if params != nil {
+		req["params"] = params
+	}
+
+	// Marshal request
+	reqData, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
 
 	// Create response channel
-	respCh := make(chan *jsonrpcResponse, 1)
-	c.pendingMu.Lock()
-	c.pending[id] = respCh
-	c.pendingMu.Unlock()
+	c.responsesMu.Lock()
+	responseChan := make(chan json.RawMessage, 1)
+	c.responses[id] = responseChan
+	c.responsesMu.Unlock()
 
-	// Clean up on exit
+	// Clean up response channel when done
 	defer func() {
-		c.pendingMu.Lock()
-		delete(c.pending, id)
-		c.pendingMu.Unlock()
+		c.responsesMu.Lock()
+		delete(c.responses, id)
+		c.responsesMu.Unlock()
 	}()
 
-	// Build request
-	req := jsonrpcRequest{
-		JSONRPC: "2.0",
-		ID:      id,
-		Method:  method,
-		Params:  params,
-	}
-
 	// Send request
-	data, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
+	if _, err := c.stdin.Write(append(reqData, '\n')); err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
-	data = append(data, '\n')
-	if _, err := c.stdin.Write(data); err != nil {
-		return nil, err
-	}
-
-	// Wait for response with timeout
-	timeout := c.cfg.Timeout
-	if deadline, ok := ctx.Deadline(); ok {
-		timeout = time.Until(deadline)
-	}
-
+	// Wait for response
 	select {
-	case resp := <-respCh:
-		if resp.Error != nil {
-			return nil, fmt.Errorf("%s: %s", resp.Error.Message, string(resp.Error.Data))
-		}
-		return resp.Result, nil
-	case <-time.After(timeout):
-		return nil, ErrTimeout
+	case resp := <-responseChan:
+		return resp, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-c.done:
-		return nil, ErrConnectionClosed
+	case <-time.After(c.config.Timeout):
+		return nil, fmt.Errorf("request timeout")
 	}
 }
 
-// readLoop reads JSON-RPC responses from stdout.
-func (c *StdioClient) readLoop() {
-	defer close(c.done)
-
-	scanner := bufio.NewScanner(c.stdout)
-	for scanner.Scan() {
-		select {
-		case <-c.ctx.Done():
-			return
-		default:
-		}
-
-		line := scanner.Bytes()
-		var resp jsonrpcResponse
-		if err := json.Unmarshal(line, &resp); err != nil {
-			// Invalid JSON-RPC message, skip
+// readResponses reads JSON-RPC responses from stdout.
+func (c *StdioClient) readResponses() {
+	for c.scanner.Scan() {
+		line := c.scanner.Text()
+		if line == "" {
 			continue
 		}
 
-		// Deliver to waiting caller
-		c.pendingMu.RLock()
-		ch, ok := c.pending[resp.ID]
-		c.pendingMu.RUnlock()
+		// Parse JSON-RPC response
+		var resp map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &resp); err != nil {
+			continue // Skip malformed responses
+		}
 
-		if ok {
-			select {
-			case ch <- &resp:
-			default:
-				// Channel full, drop message
+		// Check if this is a response (has id)
+		if id, ok := resp["id"].(string); ok {
+			c.responsesMu.RLock()
+			responseChan, exists := c.responses[id]
+			c.responsesMu.RUnlock()
+
+			if exists {
+				// Send result or error
+				if result, ok := resp["result"]; ok {
+					resultData, _ := json.Marshal(result)
+					responseChan <- json.RawMessage(resultData)
+				} else if err, ok := resp["error"]; ok {
+					errData, _ := json.Marshal(err)
+					responseChan <- json.RawMessage(errData)
+				}
 			}
 		}
 	}
 
-	// Scanner finished (EOF or error)
-	if err := scanner.Err(); err != nil {
-		c.err = err
+	// Scanner stopped, close all pending responses
+	c.responsesMu.Lock()
+	for _, ch := range c.responses {
+		close(ch)
 	}
+	c.responses = make(map[string]chan json.RawMessage)
+	c.responsesMu.Unlock()
 }

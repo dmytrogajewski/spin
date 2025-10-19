@@ -18,41 +18,50 @@ import (
 
 // Config configures the OpenAI provider.
 type Config struct {
-	// BaseURL is the API endpoint URL (e.g., https://api.openai.com/v1)
 	BaseURL string
-
-	// APIKey is the API key for authentication (optional for local providers)
-	APIKey string
-
-	// Model is the default model name to use
-	Model string
-
-	// Timeout is the request timeout (defaults to 5 minutes)
+	APIKey  string
+	Model   string
 	Timeout time.Duration
+}
+
+// Validate validates the OpenAI configuration.
+func (c *Config) Validate() error {
+	if c.BaseURL == "" {
+		return fmt.Errorf("base URL is required")
+	}
+	if c.Model == "" {
+		return fmt.Errorf("model is required")
+	}
+	if c.Timeout <= 0 {
+		return fmt.Errorf("timeout must be > 0, got %v", c.Timeout)
+	}
+	return nil
 }
 
 // Provider implements the OpenAI-compatible LLM provider.
 type Provider struct {
-	client  *llm.HTTPClient
-	baseURL string
-	apiKey  string
-	model   string
-	timeout time.Duration
+	client      *llm.HTTPClient
+	errorMapper *llm.ErrorMapper
+	baseURL     string
+	apiKey      string
+	model       string
+	timeout     time.Duration
 }
 
 // NewProvider creates a new OpenAI-compatible provider.
 func NewProvider(cfg Config) (*Provider, error) {
-	if cfg.BaseURL == "" {
-		return nil, fmt.Errorf("base URL is required")
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
 	// Normalize URL (remove trailing slash)
 	baseURL := strings.TrimSuffix(cfg.BaseURL, "/")
 
-	// Default timeout
+	// Use timeout from config or default
 	timeout := cfg.Timeout
 	if timeout == 0 {
-		timeout = 5 * time.Minute
+		timeout = llm.DefaultTimeout
 	}
 
 	// Create HTTP client with timeout
@@ -61,12 +70,16 @@ func NewProvider(cfg Config) (*Provider, error) {
 		llm.WithMaxRetries(3),
 	)
 
+	// Create error mapper for standardized error handling
+	errorMapper := llm.NewErrorMapper("openai")
+
 	return &Provider{
-		client:  client,
-		baseURL: baseURL,
-		apiKey:  cfg.APIKey,
-		model:   cfg.Model,
-		timeout: timeout,
+		client:      client,
+		errorMapper: errorMapper,
+		baseURL:     baseURL,
+		apiKey:      cfg.APIKey,
+		model:       cfg.Model,
+		timeout:     timeout,
 	}, nil
 }
 
@@ -84,13 +97,13 @@ func (p *Provider) Complete(ctx context.Context, req llm.CompletionRequest) (*ll
 	// Make HTTP request
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("http request: %w", err)
+		return nil, p.errorMapper.MapError(fmt.Errorf("http request: %w", err))
 	}
 	defer resp.Body.Close()
 
 	// Handle non-200 responses
 	if resp.StatusCode != http.StatusOK {
-		return nil, p.handleError(resp)
+		return nil, p.errorMapper.MapError(p.handleError(resp))
 	}
 
 	// Parse response
@@ -117,13 +130,13 @@ func (p *Provider) Stream(ctx context.Context, req llm.CompletionRequest) (<-cha
 	// Make HTTP request
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("http request: %w", err)
+		return nil, p.errorMapper.MapError(fmt.Errorf("http request: %w", err))
 	}
 
 	// Handle non-200 responses
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, p.handleError(resp)
+		return nil, p.errorMapper.MapError(p.handleError(resp))
 	}
 
 	// Create channel for chunks
@@ -210,71 +223,91 @@ func (p *Provider) Close() error {
 
 // buildRequest builds the OpenAI API request body.
 func (p *Provider) buildRequest(req llm.CompletionRequest, stream bool) map[string]interface{} {
-	// Convert messages
-	messages := make([]interface{}, len(req.Messages))
-	for i, msg := range req.Messages {
-		m := map[string]interface{}{
-			"role":    msg.Role,
-			"content": msg.Content,
-		}
+	messages := p.convertMessages(req.Messages)
 
-		// Add tool calls if present
-		if len(msg.ToolCalls) > 0 {
-			toolCalls := make([]map[string]interface{}, len(msg.ToolCalls))
-			for j, tc := range msg.ToolCalls {
-				toolCalls[j] = map[string]interface{}{
-					"id":   tc.ID,
-					"type": tc.Type,
-					"function": map[string]interface{}{
-						"name":      tc.Function.Name,
-						"arguments": tc.Function.Arguments,
-					},
-				}
-			}
-			m["tool_calls"] = toolCalls
-		}
-
-		// Add tool call ID if present (for tool responses)
-		if msg.ToolCallID != "" {
-			m["tool_call_id"] = msg.ToolCallID
-		}
-
-		messages[i] = m
-	}
-
-	// Build request body
 	body := map[string]interface{}{
 		"model":    p.getModel(req.Model),
 		"messages": messages,
 		"stream":   stream,
 	}
 
-	// Add optional parameters
+	p.addOptionalParameters(body, req)
+	p.addTools(body, req.Tools)
+
+	return body
+}
+
+// convertMessages converts LLM messages to OpenAI format.
+func (p *Provider) convertMessages(messages []llm.Message) []interface{} {
+	result := make([]interface{}, len(messages))
+	for i, msg := range messages {
+		result[i] = p.convertMessage(msg)
+	}
+	return result
+}
+
+// convertMessage converts a single LLM message to OpenAI format.
+func (p *Provider) convertMessage(msg llm.Message) map[string]interface{} {
+	m := map[string]interface{}{
+		"role":    msg.Role,
+		"content": msg.Content,
+	}
+
+	if len(msg.ToolCalls) > 0 {
+		m["tool_calls"] = p.convertToolCalls(msg.ToolCalls)
+	}
+
+	if msg.ToolCallID != "" {
+		m["tool_call_id"] = msg.ToolCallID
+	}
+
+	return m
+}
+
+// convertToolCalls converts LLM tool calls to OpenAI format.
+func (p *Provider) convertToolCalls(toolCalls []llm.ToolCall) []map[string]interface{} {
+	result := make([]map[string]interface{}, len(toolCalls))
+	for i, tc := range toolCalls {
+		result[i] = map[string]interface{}{
+			"id":   tc.ID,
+			"type": tc.Type,
+			"function": map[string]interface{}{
+				"name":      tc.Function.Name,
+				"arguments": tc.Function.Arguments,
+			},
+		}
+	}
+	return result
+}
+
+// addOptionalParameters adds optional parameters to the request body.
+func (p *Provider) addOptionalParameters(body map[string]interface{}, req llm.CompletionRequest) {
 	if req.MaxTokens > 0 {
 		body["max_tokens"] = req.MaxTokens
 	}
-
 	if req.Temperature > 0 {
 		body["temperature"] = req.Temperature
 	}
+}
 
-	// Add tools if present
-	if len(req.Tools) > 0 {
-		tools := make([]map[string]interface{}, len(req.Tools))
-		for i, tool := range req.Tools {
-			tools[i] = map[string]interface{}{
-				"type": tool.Type,
-				"function": map[string]interface{}{
-					"name":        tool.Function.Name,
-					"description": tool.Function.Description,
-					"parameters":  tool.Function.Parameters,
-				},
-			}
-		}
-		body["tools"] = tools
+// addTools adds tools to the request body.
+func (p *Provider) addTools(body map[string]interface{}, tools []llm.Tool) {
+	if len(tools) == 0 {
+		return
 	}
 
-	return body
+	result := make([]map[string]interface{}, len(tools))
+	for i, tool := range tools {
+		result[i] = map[string]interface{}{
+			"type": tool.Type,
+			"function": map[string]interface{}{
+				"name":        tool.Function.Name,
+				"description": tool.Function.Description,
+				"parameters":  tool.Function.Parameters,
+			},
+		}
+	}
+	body["tools"] = result
 }
 
 // convertResponse converts OpenAI response to common format.
@@ -287,7 +320,15 @@ func (p *Provider) convertResponse(resp *chatCompletionResponse) *llm.Completion
 	}
 
 	choice := resp.Choices[0]
-	result := &llm.CompletionResponse{
+	result := p.buildBaseResponse(resp, choice)
+	result.ToolCalls = p.convertResponseToolCalls(choice.Message.ToolCalls)
+
+	return result
+}
+
+// buildBaseResponse builds the base response structure.
+func (p *Provider) buildBaseResponse(resp *chatCompletionResponse, choice chatCompletionChoice) *llm.CompletionResponse {
+	return &llm.CompletionResponse{
 		ID:           resp.ID,
 		Model:        resp.Model,
 		Content:      choice.Message.Content,
@@ -298,22 +339,25 @@ func (p *Provider) convertResponse(resp *chatCompletionResponse) *llm.Completion
 			TotalTokens:      resp.Usage.TotalTokens,
 		},
 	}
+}
 
-	// Convert tool calls if present
-	if len(choice.Message.ToolCalls) > 0 {
-		result.ToolCalls = make([]llm.ToolCall, len(choice.Message.ToolCalls))
-		for i, tc := range choice.Message.ToolCalls {
-			result.ToolCalls[i] = llm.ToolCall{
-				ID:   tc.ID,
-				Type: tc.Type,
-				Function: llm.FunctionCall{
-					Name:      tc.Function.Name,
-					Arguments: tc.Function.Arguments,
-				},
-			}
-		}
+// convertResponseToolCalls converts OpenAI tool calls to LLM format.
+func (p *Provider) convertResponseToolCalls(toolCalls []chatToolCall) []llm.ToolCall {
+	if len(toolCalls) == 0 {
+		return nil
 	}
 
+	result := make([]llm.ToolCall, len(toolCalls))
+	for i, tc := range toolCalls {
+		result[i] = llm.ToolCall{
+			ID:   tc.ID,
+			Type: tc.Type,
+			Function: llm.FunctionCall{
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			},
+		}
+	}
 	return result
 }
 

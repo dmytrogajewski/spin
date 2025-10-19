@@ -240,32 +240,6 @@ func (m *TUIMapper) createToolBlock(data ToolCallStartData) *blocks.Block {
 	return block
 }
 
-// createApplyPatchBlock creates an APPLY_PATCH block for file writing.
-func (m *TUIMapper) createApplyPatchBlock(data ToolCallStartData) *blocks.Block {
-	block := blocks.NewBlock(blocks.BlockTypeApplyPatch)
-	block.ID = data.ToolID
-
-	path := extractString(data.Parameters, "path")
-	block.Title = path
-
-	// Store content as body (will be formatted as diff if possible)
-	content := extractString(data.Parameters, "content")
-	block.Body = content
-
-	meta := &blocks.PatchMeta{
-		File:      path,
-		Completed: false,
-	}
-	if err := blocks.SetPatchMeta(block, meta); err != nil {
-		// Validation failed, set as raw map
-		block.Meta = map[string]any{
-			"file": path,
-		}
-	}
-
-	return block
-}
-
 // createOrReuseApplyPatchBlock coalesces write_file blocks by file path.
 // If a block for the same path exists, it updates and reuses it, and registers
 // the current tool ID to point to that existing block for completion updates.
@@ -379,13 +353,8 @@ func (m *TUIMapper) handleToolComplete(event Event) error {
 		return nil
 	}
 
-	// Find blocks
-	m.mu.RLock()
-	blocksToUpdate, exists := m.blockRegistry[data.ToolID]
-	m.mu.RUnlock()
-
+	blocksToUpdate, exists := m.getBlocksForTool(data.ToolID)
 	if !exists || len(blocksToUpdate) == 0 {
-		// Blocks not found (tool started before mapper attached), ignore
 		return nil
 	}
 
@@ -395,54 +364,101 @@ func (m *TUIMapper) handleToolComplete(event Event) error {
 			continue
 		}
 
-		// Update block with results
-		block.Body = data.Output
-
-		// Set severity based on success
-		if !data.Success {
-			block.Severity = blocks.SeverityError
-			if data.Error != "" {
-				block.Body += "\n\nError: " + data.Error
-			}
-		} else {
-			block.Severity = blocks.SeverityInfo
-		}
-
-		// Update metadata for EXECUTE blocks
-		if block.Type == blocks.BlockTypeExecute {
-			meta, err := blocks.ParseExecuteMeta(block)
-			if err == nil && meta != nil {
-				if !data.Success {
-					meta.ExitCode = intPtr(1)
-				} else {
-					meta.ExitCode = intPtr(0)
-				}
-				meta.LinesOut = countLinesPtr(data.Output)
-				_ = blocks.SetExecuteMeta(block, meta)
-			}
-		}
-
-		// Update metadata for APPLY_PATCH blocks to reflect success/failure
-		if block.Type == blocks.BlockTypeApplyPatch {
-			if meta, err := blocks.ParsePatchMeta(block); err == nil && meta != nil {
-				meta.Succeeded = data.Success
-				meta.Completed = true
-				_ = blocks.SetPatchMeta(block, meta)
-			}
-		}
-
-		// Update in UI (block rendering will show completion status line)
-		if err := m.ui.UpdateBlock(block.ID, block); err != nil {
+		if err := m.updateBlockWithToolResult(block, data); err != nil {
 			lastErr = err
 		}
 	}
 
-	// Clean up registry for this tool id
-	m.mu.Lock()
-	delete(m.blockRegistry, data.ToolID)
-	m.mu.Unlock()
-
+	m.cleanupToolRegistry(data.ToolID)
 	return lastErr
+}
+
+// getBlocksForTool retrieves blocks associated with a tool ID.
+func (m *TUIMapper) getBlocksForTool(toolID string) ([]*blocks.Block, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	blocksToUpdate, exists := m.blockRegistry[toolID]
+	return blocksToUpdate, exists
+}
+
+// updateBlockWithToolResult updates a single block with tool execution results.
+func (m *TUIMapper) updateBlockWithToolResult(block *blocks.Block, data ToolCallCompleteData) error {
+	// Update block content
+	m.updateBlockContent(block, data)
+
+	// Update block severity
+	m.updateBlockSeverity(block, data)
+
+	// Update block metadata based on type
+	m.updateBlockMetadata(block, data)
+
+	// Update in UI
+	return m.ui.UpdateBlock(block.ID, block)
+}
+
+// updateBlockContent sets the block body content.
+func (m *TUIMapper) updateBlockContent(block *blocks.Block, data ToolCallCompleteData) {
+	block.Body = data.Output
+	if block.Body == "" && data.Error != "" {
+		block.Body = "Error: " + data.Error
+	}
+}
+
+// updateBlockSeverity sets the block severity based on success/failure.
+func (m *TUIMapper) updateBlockSeverity(block *blocks.Block, data ToolCallCompleteData) {
+	if !data.Success {
+		block.Severity = blocks.SeverityError
+		if data.Error != "" {
+			block.Body += "\n\nError: " + data.Error
+		}
+	} else {
+		block.Severity = blocks.SeverityInfo
+	}
+}
+
+// updateBlockMetadata updates metadata based on block type.
+func (m *TUIMapper) updateBlockMetadata(block *blocks.Block, data ToolCallCompleteData) {
+	switch block.Type {
+	case blocks.BlockTypeExecute:
+		m.updateExecuteBlockMetadata(block, data)
+	case blocks.BlockTypeApplyPatch:
+		m.updatePatchBlockMetadata(block, data)
+	}
+}
+
+// updateExecuteBlockMetadata updates metadata for EXECUTE blocks.
+func (m *TUIMapper) updateExecuteBlockMetadata(block *blocks.Block, data ToolCallCompleteData) {
+	meta, err := blocks.ParseExecuteMeta(block)
+	if err != nil || meta == nil {
+		return
+	}
+
+	if !data.Success {
+		meta.ExitCode = intPtr(1)
+	} else {
+		meta.ExitCode = intPtr(0)
+	}
+	meta.LinesOut = countLinesPtr(block.Body)
+	_ = blocks.SetExecuteMeta(block, meta)
+}
+
+// updatePatchBlockMetadata updates metadata for APPLY_PATCH blocks.
+func (m *TUIMapper) updatePatchBlockMetadata(block *blocks.Block, data ToolCallCompleteData) {
+	meta, err := blocks.ParsePatchMeta(block)
+	if err != nil || meta == nil {
+		return
+	}
+
+	meta.Succeeded = data.Success
+	meta.Completed = true
+	_ = blocks.SetPatchMeta(block, meta)
+}
+
+// cleanupToolRegistry removes tool ID from registry.
+func (m *TUIMapper) cleanupToolRegistry(toolID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.blockRegistry, toolID)
 }
 
 // handleContentDelta streams assistant content to the UI.

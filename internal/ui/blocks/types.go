@@ -35,7 +35,7 @@ func (bt BlockType) String() string {
 func (bt BlockType) Valid() bool {
 	switch bt {
 	case BlockTypeExecute, BlockTypePlan, BlockTypeRead, BlockTypeGrep,
-		BlockTypeApplyPatch, BlockTypeSummary, BlockTypeTesting,
+		BlockTypeApplyPatch, BlockTypeSummary, BlockTypeTool, BlockTypeTesting,
 		BlockTypeNotice, BlockTypeError:
 		return true
 	}

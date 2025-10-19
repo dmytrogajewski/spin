@@ -6,7 +6,6 @@ package client
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/mcp/types"
@@ -46,15 +45,4 @@ type Config struct {
 
 	// Timeout is the maximum duration for operations (default: 30s)
 	Timeout time.Duration
-}
-
-// Validate validates the client configuration.
-func (c *Config) Validate() error {
-	if c.Command == "" {
-		return fmt.Errorf("command is required")
-	}
-	if c.Timeout == 0 {
-		c.Timeout = 30 * time.Second
-	}
-	return nil
 }

@@ -62,22 +62,24 @@ build-core:
 	@$(GOBUILD) $(CORE_PKG)
 	@echo "✓ Core build successful"
 
-## test: Run all tests
+## test: Run all tests with deadcode analysis
 test:
 	@echo "Running tests..."
-	@$(GOTEST) -v $(CORE_PKG)
+	@$(GOTEST) -v -timeout 30s $(CORE_PKG)
+	@echo "Running deadcode analysis..."
+	@./scripts/deadcode-filter.sh ./cmd/... ./internal/...
 
 ## test-coverage: Run tests with coverage report
 test-coverage:
 	@echo "Running tests with coverage..."
-	@$(GOTEST) -cover -coverprofile=coverage.out $(CORE_PKG)
+	@$(GOTEST) -cover -coverprofile=coverage.out -timeout 30s $(CORE_PKG)
 	@$(GOCMD) tool cover -html=coverage.out -o coverage.html
 	@echo "✓ Coverage report generated: coverage.html"
 
 ## test-race: Run tests with race detector
 test-race:
 	@echo "Running tests with race detector..."
-	@$(GOTEST) -race $(CORE_PKG)
+	@$(GOTEST) -race -timeout 30s $(CORE_PKG)
 
 ## test-e2e: Run end-to-end TUI tests (requires Ollama running)
 test-e2e: build
@@ -100,7 +102,7 @@ lint:
 	@echo "Running linters..."
 	@$(GOLINT) run $(CORE_PKG)
 	@echo "Running deadcode analysis..."
-	@$(DEADCODE) -test ./cmd/... ./internal/... 2>&1 | grep -v "^$$" || echo "✓ No dead code found"
+	@./scripts/deadcode-filter.sh -test ./cmd/... ./internal/...
 	@echo "✓ Linting complete"
 
 ## deadcode: Run deadcode analysis with detailed output (requires: go install golang.org/x/tools/cmd/deadcode@latest)
@@ -110,6 +112,38 @@ deadcode:
 	@$(DEADCODE) -test ./cmd/... ./internal/... || echo "Note: Review any unreachable functions listed above"
 	@echo ""
 	@echo "Tip: Use 'deadcode -whylive <function>' to understand why a function is considered reachable"
+
+## deadcode-prod: Run deadcode analysis excluding tests (production-only dead code)
+deadcode-prod:
+	@echo "Running deadcode analysis (production only)..."
+	@echo "Analyzing cmd/ and internal/ packages..."
+	@./scripts/deadcode-filter.sh ./cmd/... ./internal/...
+
+## deadcode-test-only: Find functions used only by tests (requires jq)
+deadcode-test-only:
+	@echo "Finding functions used only by tests..."
+	@echo "This compares deadcode results with and without tests..."
+	@mkdir -p .deadcode-tmp
+	@$(DEADCODE) -json ./cmd/... ./internal/... | jq -r '.[] | .Funcs[].Name' | sort > .deadcode-tmp/dead_prod.txt
+	@$(DEADCODE) -test -json ./cmd/... ./internal/... | jq -r '.[] | .Funcs[].Name' | sort > .deadcode-tmp/dead_with_tests.txt
+	@echo "Functions used only by tests:"
+	@comm -23 .deadcode-tmp/dead_prod.txt .deadcode-tmp/dead_with_tests.txt || echo "No test-only functions found"
+	@rm -rf .deadcode-tmp
+
+## deadcode-json: Run deadcode analysis with JSON output
+deadcode-json:
+	@echo "Running deadcode analysis (JSON output)..."
+	@$(DEADCODE) -json ./cmd/... ./internal/...
+
+## deadcode-why: Show why a function is not dead (usage: make deadcode-why FUNC=functionName)
+deadcode-why:
+	@if [ -z "$(FUNC)" ]; then \
+		echo "Usage: make deadcode-why FUNC=functionName"; \
+		echo "Example: make deadcode-why FUNC=bytes.Buffer.String"; \
+		exit 1; \
+	fi
+	@echo "Showing why function '$(FUNC)' is not dead..."
+	@$(DEADCODE) -whylive="$(FUNC)" ./cmd/... ./internal/...
 
 ## fmt: Format code
 fmt:

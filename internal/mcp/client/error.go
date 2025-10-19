@@ -2,7 +2,6 @@ package client
 
 import (
 	"errors"
-	"fmt"
 )
 
 // Sentinel errors for common MCP client failures.
@@ -36,23 +35,4 @@ type Error struct {
 
 	// Err is the underlying error
 	Err error
-}
-
-// Error implements the error interface.
-func (e *Error) Error() string {
-	return fmt.Sprintf("mcp client: %s: %v", e.Op, e.Err)
-}
-
-// Unwrap returns the underlying error.
-func (e *Error) Unwrap() error {
-	return e.Err
-}
-
-// Is implements error matching for Error types.
-func (e *Error) Is(target error) bool {
-	t, ok := target.(*Error)
-	if !ok {
-		return false
-	}
-	return e.Op == t.Op && errors.Is(e.Err, t.Err)
 }

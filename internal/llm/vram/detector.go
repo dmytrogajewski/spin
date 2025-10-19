@@ -54,14 +54,6 @@ func hasAMD(runner CommandRunner) bool {
 	return err == nil && len(bytes.TrimSpace(out)) >= 0
 }
 
-// hasMetal checks if MetalDetector is available (only on macOS).
-// This function is primarily for documentation and testing purposes.
-func hasMetal(runner CommandRunner) bool {
-	// MetalDetector is only available on macOS (darwin)
-	// Since metal.go has //go:build darwin constraint, this will only be true on macOS
-	return false // MetalDetector can be constructed directly by callers on macOS
-}
-
 // CPUFallback is returned when no GPU detector is available.
 type CPUFallback struct{}
 

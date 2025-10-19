@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/state"
 	"github.com/google/uuid"
 )
 
@@ -21,20 +22,6 @@ const (
 	// SignalCancel requests the turn to cancel immediately
 	SignalCancel
 )
-
-// String returns the string representation of ControlSignal.
-func (s ControlSignal) String() string {
-	switch s {
-	case SignalPause:
-		return "pause"
-	case SignalResume:
-		return "resume"
-	case SignalCancel:
-		return "cancel"
-	default:
-		return "unknown"
-	}
-}
 
 // Conversation represents an active conversation with the AI agent.
 //
@@ -82,7 +69,7 @@ func NewConversation(agent *Agent, history *History, emitter *EventEmitter) *Con
 		emitter:       emitter,
 		events:        make(chan Event, DefaultEventBufferSize),
 		forwarderDone: make(chan struct{}),
-		state:         StateIdle,
+		state:         state.StateIdle,
 		turnGuard:     make(chan struct{}, 1),
 	}
 
@@ -152,11 +139,11 @@ func (c *Conversation) RunTurn(ctx context.Context, userInput string) error {
 
 	// Ensure only one turn runs at a time
 	c.mu.Lock()
-	if c.state == StateCancelled {
+	if c.state == state.StateCancelled {
 		c.mu.Unlock()
 		return errors.New("conversation is stopped")
 	}
-	c.state = StateRunning
+	c.state = state.StateRunning
 
 	// Prepare a cancellable context for the turn
 	turnCtx, cancel := context.WithCancel(ctx)
@@ -173,8 +160,8 @@ func (c *Conversation) RunTurn(ctx context.Context, userInput string) error {
 	defer func() {
 		c.mu.Lock()
 		// Only set to Idle if not already Cancelled by Stop()
-		if c.state != StateCancelled {
-			c.state = StateIdle
+		if c.state != state.StateCancelled {
+			c.state = state.StateIdle
 		}
 		c.turnCancel = nil
 		c.mu.Unlock()
@@ -321,11 +308,11 @@ func (c *Conversation) Stream() <-chan Event {
 // unsubscribes from the shared emitter, and closes the stream.
 func (c *Conversation) Stop(ctx context.Context) error {
 	c.mu.Lock()
-	if c.state == StateCancelled {
+	if c.state == state.StateCancelled {
 		c.mu.Unlock()
 		return nil
 	}
-	c.state = StateCancelled
+	c.state = state.StateCancelled
 	cancel := c.turnCancel
 	c.turnCancel = nil
 	subID := c.subscriptionID
@@ -388,74 +375,6 @@ func (c *Conversation) Stop(ctx context.Context) error {
 	return nil
 }
 
-// State returns the current conversation state.
-func (c *Conversation) State() State {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.state
-}
-
-// Pause pauses the currently running turn.
-// Returns an error if no turn is running or conversation is stopped.
-func (c *Conversation) Pause() error {
-	return c.transitionState(
-		StateRunning,
-		StatePaused,
-		SignalPause,
-		"cannot pause: conversation is %s",
-		"paused",
-		"user requested",
-		EventTurnPaused,
-	)
-}
-
-// Resume resumes a paused turn.
-// Returns an error if no turn is paused.
-func (c *Conversation) Resume() error {
-	return c.transitionState(
-		StatePaused,
-		StateRunning,
-		SignalResume,
-		"cannot resume: conversation is %s",
-		"resumed",
-		"user requested",
-		EventTurnResumed,
-	)
-}
-
-func (c *Conversation) transitionState(expected, next State, signal ControlSignal, errTemplate, status, message string, eventType EventType) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.state != expected {
-		return fmt.Errorf(errTemplate, c.state.String())
-	}
-
-	c.controlMu.Lock()
-	if c.controlChan != nil {
-		select {
-		case c.controlChan <- signal:
-		default:
-		}
-	}
-	c.controlMu.Unlock()
-
-	c.state = next
-
-	if c.emitter != nil {
-		c.emitter.Emit(Event{
-			Type:      eventType,
-			Timestamp: time.Now(),
-			Data: TurnEventData{
-				Status:  status,
-				Message: message,
-			},
-		})
-	}
-
-	return nil
-}
-
 // SetTaskMode switches the conversation to a different task mode.
 // Returns an error if the task mode is not registered in the agent's task registry.
 //
@@ -501,6 +420,7 @@ func (c *Conversation) SetTaskMode(taskName string) error {
 			Type:      EventInfo,
 			Timestamp: time.Now(),
 			Data: SystemEventData{
+				Level:   "info",
 				Message: fmt.Sprintf("Switched to %s mode", taskName),
 			},
 		})

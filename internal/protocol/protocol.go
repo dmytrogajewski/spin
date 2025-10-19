@@ -114,12 +114,6 @@ type Message struct {
 	Data json.RawMessage `json:"data"`
 }
 
-// NewTurnStartMessage creates a turn_start message
-func NewTurnStartMessage(ts TurnStart) Message {
-	data, _ := json.Marshal(ts)
-	return Message{Type: "turn_start", Data: data}
-}
-
 // NewAssistantDeltaMessage creates an assistant_delta message
 func NewAssistantDeltaMessage(ad AssistantDelta) Message {
 	data, _ := json.Marshal(ad)
@@ -144,12 +138,6 @@ func NewToolCallResultMessage(tcr ToolCallResult) Message {
 	return Message{Type: "tool_call_result", Data: data}
 }
 
-// NewTurnCompleteMessage creates a turn_complete message
-func NewTurnCompleteMessage(tc TurnComplete) Message {
-	data, _ := json.Marshal(tc)
-	return Message{Type: "turn_complete", Data: data}
-}
-
 // NewStatusUpdateMessage creates a status_update message
 func NewStatusUpdateMessage(su StatusUpdate) Message {
 	data, _ := json.Marshal(su)
@@ -158,50 +146,97 @@ func NewStatusUpdateMessage(su StatusUpdate) Message {
 
 // ParseMessage parses a message by type
 func ParseMessage(msg Message) (interface{}, error) {
-	switch msg.Type {
-	case "turn_start":
-		var ts TurnStart
-		if err := json.Unmarshal(msg.Data, &ts); err != nil {
-			return nil, err
-		}
-		return ts, nil
-	case "assistant_delta":
-		var ad AssistantDelta
-		if err := json.Unmarshal(msg.Data, &ad); err != nil {
-			return nil, err
-		}
-		return ad, nil
-	case "tool_call_proposed":
-		var tcp ToolCallProposed
-		if err := json.Unmarshal(msg.Data, &tcp); err != nil {
-			return nil, err
-		}
-		return tcp, nil
-	case "tool_call_executing":
-		var tce ToolCallExecuting
-		if err := json.Unmarshal(msg.Data, &tce); err != nil {
-			return nil, err
-		}
-		return tce, nil
-	case "tool_call_result":
-		var tcr ToolCallResult
-		if err := json.Unmarshal(msg.Data, &tcr); err != nil {
-			return nil, err
-		}
-		return tcr, nil
-	case "turn_complete":
-		var tc TurnComplete
-		if err := json.Unmarshal(msg.Data, &tc); err != nil {
-			return nil, err
-		}
-		return tc, nil
-	case "status_update":
-		var su StatusUpdate
-		if err := json.Unmarshal(msg.Data, &su); err != nil {
-			return nil, err
-		}
-		return su, nil
-	default:
+	parser := getMessageParser(msg.Type)
+	if parser == nil {
 		return nil, fmt.Errorf("unknown message type: %s", msg.Type)
 	}
+	return parser(msg.Data)
+}
+
+// messageParser is a function that parses message data into a specific type.
+type messageParser func([]byte) (interface{}, error)
+
+// getMessageParser returns the appropriate parser for a message type.
+func getMessageParser(msgType string) messageParser {
+	switch msgType {
+	case "turn_start":
+		return parseTurnStart
+	case "assistant_delta":
+		return parseAssistantDelta
+	case "tool_call_proposed":
+		return parseToolCallProposed
+	case "tool_call_executing":
+		return parseToolCallExecuting
+	case "tool_call_result":
+		return parseToolCallResult
+	case "turn_complete":
+		return parseTurnComplete
+	case "status_update":
+		return parseStatusUpdate
+	default:
+		return nil
+	}
+}
+
+// parseTurnStart parses a TurnStart message.
+func parseTurnStart(data []byte) (interface{}, error) {
+	var ts TurnStart
+	if err := json.Unmarshal(data, &ts); err != nil {
+		return nil, err
+	}
+	return ts, nil
+}
+
+// parseAssistantDelta parses an AssistantDelta message.
+func parseAssistantDelta(data []byte) (interface{}, error) {
+	var ad AssistantDelta
+	if err := json.Unmarshal(data, &ad); err != nil {
+		return nil, err
+	}
+	return ad, nil
+}
+
+// parseToolCallProposed parses a ToolCallProposed message.
+func parseToolCallProposed(data []byte) (interface{}, error) {
+	var tcp ToolCallProposed
+	if err := json.Unmarshal(data, &tcp); err != nil {
+		return nil, err
+	}
+	return tcp, nil
+}
+
+// parseToolCallExecuting parses a ToolCallExecuting message.
+func parseToolCallExecuting(data []byte) (interface{}, error) {
+	var tce ToolCallExecuting
+	if err := json.Unmarshal(data, &tce); err != nil {
+		return nil, err
+	}
+	return tce, nil
+}
+
+// parseToolCallResult parses a ToolCallResult message.
+func parseToolCallResult(data []byte) (interface{}, error) {
+	var tcr ToolCallResult
+	if err := json.Unmarshal(data, &tcr); err != nil {
+		return nil, err
+	}
+	return tcr, nil
+}
+
+// parseTurnComplete parses a TurnComplete message.
+func parseTurnComplete(data []byte) (interface{}, error) {
+	var tc TurnComplete
+	if err := json.Unmarshal(data, &tc); err != nil {
+		return nil, err
+	}
+	return tc, nil
+}
+
+// parseStatusUpdate parses a StatusUpdate message.
+func parseStatusUpdate(data []byte) (interface{}, error) {
+	var su StatusUpdate
+	if err := json.Unmarshal(data, &su); err != nil {
+		return nil, err
+	}
+	return su, nil
 }

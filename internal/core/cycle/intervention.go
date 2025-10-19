@@ -2,7 +2,6 @@ package cycle
 
 import (
 	"context"
-	"fmt"
 	"time"
 )
 
@@ -88,52 +87,6 @@ type SummarizeIntervention struct {
 	}
 }
 
-// Apply compresses the conversation context to help break the cycle
-func (i *SummarizeIntervention) Apply(ctx context.Context, messages []Message) ([]Message, error) {
-	if i.compressor == nil {
-		return messages, fmt.Errorf("compressor not configured for summarization intervention")
-	}
-
-	// Compress to approximately 50% of current message count
-	// This provides a significant reduction while preserving key information
-	targetCount := len(messages) / 2
-	if targetCount < 1 {
-		targetCount = 1
-	}
-
-	compressed, err := i.compressor.Compress(messages, targetCount)
-	if err != nil {
-		return messages, fmt.Errorf("failed to compress context for intervention: %w", err)
-	}
-
-	// Add a system message explaining the summarization
-	systemMsg := &messageImpl{
-		role:      "system",
-		content:   "Context has been summarized to help focus on the current task and break potential reasoning loops. Key information has been preserved while reducing redundancy.",
-		timestamp: time.Now(),
-	}
-
-	// Return compressed messages plus the system explanation
-	result := append(compressed, systemMsg)
-
-	return result, nil
-}
-
-// Name returns the intervention name
-func (i *SummarizeIntervention) Name() string {
-	return "Context Summarization"
-}
-
-// Description returns a detailed description
-func (i *SummarizeIntervention) Description() string {
-	return "Compresses conversation context to approximately 50% of original size to help the agent refocus and break cycles"
-}
-
-// Severity returns the severity level (medium)
-func (i *SummarizeIntervention) Severity() int {
-	return 2
-}
-
 // EscalateIntervention implements a hard intervention that pauses the agent
 // and requests user guidance when automated interventions have failed.
 type EscalateIntervention struct {
@@ -180,50 +133,6 @@ func (i *EscalateIntervention) Severity() int {
 type InterventionSelector struct {
 	// Track previous interventions to implement escalation
 	previousInterventions []InterventionResult
-}
-
-// NewInterventionSelector creates a new intervention selector
-func NewInterventionSelector() *InterventionSelector {
-	return &InterventionSelector{
-		previousInterventions: make([]InterventionResult, 0),
-	}
-}
-
-// SelectIntervention chooses the best intervention for the given cycle and context
-func (is *InterventionSelector) SelectIntervention(cycleType CycleType, turnCount int) Intervention {
-	// Base selection on cycle type and turn count (escalation ladder)
-	switch {
-	case turnCount < 10:
-		// Early cycles: Use soft intervention
-		return &ReflectionIntervention{}
-
-	case turnCount < 30:
-		// Mid-stage cycles: Use medium intervention
-		return &SummarizeIntervention{}
-
-	default:
-		// Late-stage/persistent cycles: Escalate to user
-		return &EscalateIntervention{}
-	}
-}
-
-// RecordIntervention records that an intervention was applied
-// This helps track escalation and prevents repeated soft interventions
-func (is *InterventionSelector) RecordIntervention(result InterventionResult) {
-	is.previousInterventions = append(is.previousInterventions, result)
-
-	// Keep only recent interventions (last 10)
-	if len(is.previousInterventions) > 10 {
-		is.previousInterventions = is.previousInterventions[1:]
-	}
-}
-
-// GetPreviousInterventions returns the history of applied interventions
-func (is *InterventionSelector) GetPreviousInterventions() []InterventionResult {
-	// Return a copy to prevent external modification
-	results := make([]InterventionResult, len(is.previousInterventions))
-	copy(results, is.previousInterventions)
-	return results
 }
 
 // messageImpl implements the Message interface for intervention use

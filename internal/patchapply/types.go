@@ -39,8 +39,8 @@ type UpdateFile struct {
 	Hunks    []Hunk
 }
 
-func (u *UpdateFile) isFileOperation() {}
-func (u *UpdateFile) Path() string     { return u.FilePath }
+func (u UpdateFile) isFileOperation() {}
+func (u UpdateFile) Path() string     { return u.FilePath }
 
 // Hunk represents a change section within a file update.
 // Each hunk has an optional context header (e.g., "func MyFunc") and a list of changes.

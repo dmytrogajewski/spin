@@ -22,6 +22,8 @@ The package is organized into several layers:
 
 ### Public API Layer
 - **Manager**: High-level conversation manager (entry point)
+  - Refactored (2025-10-19): NewConversation method complexity reduced from 47 to 5
+  - Clean separation of concerns with 15+ helper methods
 - **Conversation**: Active conversation instance
 - **Agent**: Core agent orchestration
 

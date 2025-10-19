@@ -2,8 +2,6 @@
 // window size detection, and ANSI escape sequence helpers.
 package term
 
-import "fmt"
-
 // ANSI escape sequences for terminal control without alt-screen buffer.
 // These are zero-allocation constants for use in hot paths.
 const (
@@ -27,10 +25,3 @@ const (
 	// CarriageRet moves cursor to column 0 of current line.
 	CarriageRet = "\r"
 )
-
-// MoveCursorToCol returns an ANSI escape sequence to move the cursor
-// to the specified column (1-indexed) on the current line.
-// Column 1 is the leftmost position.
-func MoveCursorToCol(col int) string {
-	return fmt.Sprintf("\x1b[%dG", col)
-}

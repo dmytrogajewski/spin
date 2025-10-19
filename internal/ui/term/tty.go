@@ -3,10 +3,8 @@ package term
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 
@@ -120,7 +118,7 @@ func (tty *TTY) Exit() error {
 	if ch != nil {
 		signal.Stop(ch)
 		tty.sigCh = nil // Set to nil first, goroutine will see this and exit
-		close(ch)        // Then close channel
+		close(ch)       // Then close channel
 	}
 
 	return nil
@@ -161,46 +159,72 @@ func (tty *TTY) updateSize() error {
 // startSigwinchHandler installs a SIGWINCH signal handler to detect
 // terminal resize events and invoke registered callbacks.
 func (tty *TTY) startSigwinchHandler() {
+	tty.setupSignalChannel()
+	signal.Notify(tty.sigCh, syscall.SIGWINCH)
+	go tty.handleSigwinchLoop()
+}
+
+// setupSignalChannel initializes the signal channel.
+func (tty *TTY) setupSignalChannel() {
 	tty.mu.Lock()
 	tty.sigCh = make(chan os.Signal, 1)
 	tty.mu.Unlock()
+}
 
-	signal.Notify(tty.sigCh, syscall.SIGWINCH)
-
-	go func() {
-		for {
-			tty.mu.RLock()
-			ch := tty.sigCh
-			tty.mu.RUnlock()
-
-			if ch == nil {
-				return // Channel was closed, exit goroutine
-			}
-
-			sig, ok := <-ch
-			if !ok {
-				return // Channel closed
-			}
-
-			_ = sig // Ignore signal value
-
-			if err := tty.updateSize(); err != nil {
-				// Log error but continue (terminal might be temporarily unavailable)
-				continue
-			}
-
-			// Invoke callbacks with new dimensions
-			tty.mu.RLock()
-			cbs := make([]func(int, int), len(tty.onResize))
-			copy(cbs, tty.onResize)
-			w, h := tty.width, tty.height
-			tty.mu.RUnlock()
-
-			for _, cb := range cbs {
-				cb(w, h)
-			}
+// handleSigwinchLoop handles SIGWINCH signals in a loop.
+func (tty *TTY) handleSigwinchLoop() {
+	for {
+		if !tty.waitForSignal() {
+			return // Channel closed or nil
 		}
-	}()
+
+		if !tty.updateSizeAndNotify() {
+			continue // Error updating size, try again
+		}
+	}
+}
+
+// waitForSignal waits for a SIGWINCH signal.
+func (tty *TTY) waitForSignal() bool {
+	tty.mu.RLock()
+	ch := tty.sigCh
+	tty.mu.RUnlock()
+
+	if ch == nil {
+		return false // Channel was closed, exit goroutine
+	}
+
+	sig, ok := <-ch
+	if !ok {
+		return false // Channel closed
+	}
+
+	_ = sig // Ignore signal value
+	return true
+}
+
+// updateSizeAndNotify updates terminal size and notifies callbacks.
+func (tty *TTY) updateSizeAndNotify() bool {
+	if err := tty.updateSize(); err != nil {
+		// Log error but continue (terminal might be temporarily unavailable)
+		return false
+	}
+
+	tty.notifyResizeCallbacks()
+	return true
+}
+
+// notifyResizeCallbacks invokes all resize callbacks with current dimensions.
+func (tty *TTY) notifyResizeCallbacks() {
+	tty.mu.RLock()
+	cbs := make([]func(int, int), len(tty.onResize))
+	copy(cbs, tty.onResize)
+	w, h := tty.width, tty.height
+	tty.mu.RUnlock()
+
+	for _, cb := range cbs {
+		cb(w, h)
+	}
 }
 
 // isTerminal returns true if fd refers to a terminal.
@@ -211,87 +235,3 @@ func isTerminal(fd int) bool {
 // ============================================================================
 // Phase 8.2: Defensive Error Handling
 // ============================================================================
-
-// IsTTY returns true if the given file descriptor refers to a terminal.
-// This is the exported version of isTerminal for external use.
-func IsTTY(fd int) bool {
-	return term.IsTerminal(fd)
-}
-
-// ValidateTerminalType checks the $TERM environment variable and returns
-// true if it's a known problematic terminal type (dumb, empty, unknown).
-// This function logs a warning for problematic terminals but does not fail.
-//
-// Returns: true if terminal type should warn, false if OK.
-func ValidateTerminalType() bool {
-	termType := os.Getenv("TERM")
-
-	// Empty TERM
-	if termType == "" {
-		slog.Warn("TERM environment variable is empty, terminal features may not work correctly")
-		return true
-	}
-
-	// Known problematic terminals
-	problematic := []string{"dumb", "unknown"}
-	for _, p := range problematic {
-		if termType == p {
-			slog.Warn("Terminal type may have limited features",
-				"term", termType,
-				"recommendation", "use xterm, xterm-256color, or similar")
-			return true
-		}
-	}
-
-	// Unknown terminal (heuristic: very short or contains "unknown")
-	if len(termType) < 3 || strings.Contains(strings.ToLower(termType), "unknown") {
-		slog.Warn("Unknown terminal type, features may be limited",
-			"term", termType)
-		return true
-	}
-
-	return false
-}
-
-// ValidateWindowSize validates terminal dimensions and clamps to safe limits.
-// Returns validated (possibly clamped) dimensions and error if too small.
-//
-// Rules:
-//   - Minimum: 40x10 (returns ErrTerminalTooSmall if below)
-//   - Maximum: 1000x1000 (clamps silently with warning if above)
-//   - Negative or zero: returns ErrTerminalTooSmall
-//
-// Returns: (validatedWidth, validatedHeight, error)
-func ValidateWindowSize(width, height int) (int, int, error) {
-	// Check for invalid dimensions
-	if width <= 0 || height <= 0 {
-		return 0, 0, fmt.Errorf("%w: got %dx%d", ErrTerminalTooSmall, width, height)
-	}
-
-	// Check minimum
-	if width < MinTerminalWidth || height < MinTerminalHeight {
-		return 0, 0, fmt.Errorf("%w: got %dx%d, need at least %dx%d",
-			ErrTerminalTooSmall, width, height, MinTerminalWidth, MinTerminalHeight)
-	}
-
-	// Clamp maximum
-	clamped := false
-	if width > MaxTerminalWidth {
-		slog.Warn("Terminal width exceeds maximum, clamping",
-			"width", width, "max", MaxTerminalWidth)
-		width = MaxTerminalWidth
-		clamped = true
-	}
-	if height > MaxTerminalHeight {
-		slog.Warn("Terminal height exceeds maximum, clamping",
-			"height", height, "max", MaxTerminalHeight)
-		height = MaxTerminalHeight
-		clamped = true
-	}
-
-	if clamped {
-		slog.Info("Terminal dimensions clamped", "width", width, "height", height)
-	}
-
-	return width, height, nil
-}

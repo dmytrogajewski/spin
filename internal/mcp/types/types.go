@@ -109,29 +109,3 @@ type Content struct {
 	// URI references a resource (for type="resource")
 	URI *string `json:"uri,omitempty"`
 }
-
-// TextContent creates a text content object.
-func TextContent(text string) Content {
-	return Content{
-		Type: "text",
-		Text: &text,
-	}
-}
-
-// ImageContent creates an image content object with base64-encoded data.
-func ImageContent(base64Data, mimeType string) Content {
-	return Content{
-		Type:     "image",
-		Data:     &base64Data,
-		MimeType: &mimeType,
-	}
-}
-
-// ResourceContent creates a resource content object.
-func ResourceContent(uri string, mimeType *string) Content {
-	return Content{
-		Type:     "resource",
-		URI:      &uri,
-		MimeType: mimeType,
-	}
-}

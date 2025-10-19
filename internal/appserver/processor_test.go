@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/dmytrogajewski/spin/internal/protocol/jsonrpc"
@@ -387,7 +389,7 @@ func TestProcessor_InvalidTaskMode(t *testing.T) {
 		t.Errorf("Expected error code %d, got %d", jsonrpc.InvalidParams, rpcErr.Code)
 	}
 
-	if !contains(rpcErr.Message, "invalid task mode") {
+	if !strings.Contains(rpcErr.Message, "invalid task mode") {
 		t.Errorf("Expected error message to contain 'invalid task mode', got '%s'", rpcErr.Message)
 	}
 }
@@ -483,16 +485,215 @@ func TestProcessor_TaskModePersistsAcrossTurns(t *testing.T) {
 	}
 }
 
-// Helper function for string contains check
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || (len(s) > 0 && len(substr) > 0 && findSubstring(s, substr)))
+// TestHandler_HandleRequest tests the Handler.HandleRequest method
+func TestHandler_HandleRequest(t *testing.T) {
+	tmpDir := t.TempDir()
+	processor, err := NewProcessor(ProcessorConfig{
+		WorkspacePath: tmpDir,
+		Version:       "0.1.0",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create processor: %v", err)
+	}
+
+	handler := &Handler{processor: processor}
+
+	tests := []struct {
+		name    string
+		method  string
+		params  json.RawMessage
+		wantErr bool
+		errCode int
+	}{
+		{
+			name:    "initialize method",
+			method:  "initialize",
+			params:  json.RawMessage(`{"workspacePath":"/tmp","config":{}}`),
+			wantErr: false,
+		},
+		{
+			name:    "send_message method",
+			method:  "send_message",
+			params:  json.RawMessage(`{"message":"test","sessionId":"test-session"}`),
+			wantErr: false,
+		},
+		{
+			name:    "approve_tool method",
+			method:  "approve_tool",
+			params:  json.RawMessage(`{"toolCallId":"test-id","approved":true}`),
+			wantErr: false,
+		},
+		{
+			name:    "cancel_turn method",
+			method:  "cancel_turn",
+			params:  json.RawMessage(`{"turnId":"test-turn"}`),
+			wantErr: true, // This will fail because turn doesn't exist
+			errCode: jsonrpc.InvalidState,
+		},
+		{
+			name:    "search_files method",
+			method:  "search_files",
+			params:  json.RawMessage(`{"query":"test","limit":10}`),
+			wantErr: false,
+		},
+		{
+			name:    "unknown method",
+			method:  "unknown_method",
+			params:  json.RawMessage(`{}`),
+			wantErr: true,
+			errCode: jsonrpc.MethodNotFound,
+		},
+		{
+			name:    "invalid params for initialize",
+			method:  "initialize",
+			params:  json.RawMessage(`invalid json`),
+			wantErr: true,
+			errCode: jsonrpc.InvalidParams,
+		},
+		{
+			name:    "invalid params for send_message",
+			method:  "send_message",
+			params:  json.RawMessage(`invalid json`),
+			wantErr: true,
+			errCode: jsonrpc.InvalidParams,
+		},
+		{
+			name:    "invalid params for approve_tool",
+			method:  "approve_tool",
+			params:  json.RawMessage(`invalid json`),
+			wantErr: true,
+			errCode: jsonrpc.InvalidParams,
+		},
+		{
+			name:    "invalid params for cancel_turn",
+			method:  "cancel_turn",
+			params:  json.RawMessage(`invalid json`),
+			wantErr: true,
+			errCode: jsonrpc.InvalidParams,
+		},
+		{
+			name:    "invalid params for search_files",
+			method:  "search_files",
+			params:  json.RawMessage(`invalid json`),
+			wantErr: true,
+			errCode: jsonrpc.InvalidParams,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := handler.HandleRequest(context.Background(), tt.method, tt.params)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("HandleRequest() expected error, got nil")
+					return
+				}
+				if jsonrpcErr, ok := err.(*jsonrpc.Error); ok {
+					if jsonrpcErr.Code != tt.errCode {
+						t.Errorf("HandleRequest() error code = %v, want %v", jsonrpcErr.Code, tt.errCode)
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("HandleRequest() unexpected error = %v", err)
+					return
+				}
+				if result == nil {
+					t.Error("HandleRequest() expected result, got nil")
+				}
+			}
+		})
+	}
 }
 
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
+// TestProcessor_HandleSearchFiles tests the HandleSearchFiles method
+func TestProcessor_HandleSearchFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create some test files
+	testFiles := []string{"test1.go", "test2.py", "test3.js", "readme.md"}
+	for _, file := range testFiles {
+		// Create file path
+		filePath := tmpDir + "/" + file
+		// Create file content
+		content := "// Test file: " + file
+		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to create test file %s: %v", file, err)
 		}
 	}
-	return false
+
+	processor, err := NewProcessor(ProcessorConfig{
+		WorkspacePath: tmpDir,
+		Version:       "0.1.0",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create processor: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		params    jsonrpc.SearchFilesParams
+		wantFiles int
+		wantErr   bool
+	}{
+		{
+			name: "search for go files",
+			params: jsonrpc.SearchFilesParams{
+				Query: "test",
+				Limit: 10,
+			},
+			wantFiles: 3, // All test files contain "test" (may be less due to file search implementation)
+			wantErr:   false,
+		},
+		{
+			name: "search with limit",
+			params: jsonrpc.SearchFilesParams{
+				Query: "test",
+				Limit: 2,
+			},
+			wantFiles: 2, // Limited to 2 results
+			wantErr:   false,
+		},
+		{
+			name: "search for specific file",
+			params: jsonrpc.SearchFilesParams{
+				Query: "readme",
+				Limit: 10,
+			},
+			wantFiles: 1, // Only readme.md
+			wantErr:   false,
+		},
+		{
+			name: "search for non-existent file",
+			params: jsonrpc.SearchFilesParams{
+				Query: "nonexistent",
+				Limit: 10,
+			},
+			wantFiles: 0, // No matches
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := processor.HandleSearchFiles(context.Background(), tt.params)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("HandleSearchFiles() expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("HandleSearchFiles() unexpected error = %v", err)
+				return
+			}
+
+			if len(result.Files) != tt.wantFiles {
+				t.Errorf("HandleSearchFiles() got %d files, want %d", len(result.Files), tt.wantFiles)
+			}
+		})
+	}
 }

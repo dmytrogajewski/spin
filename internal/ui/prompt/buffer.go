@@ -109,32 +109,59 @@ func (b *Buffer) DeleteWord() {
 		return
 	}
 
-	// Find the start of the previous word
-	pos := b.cursor - 1
+	wordStart := b.findWordStart()
+	b.deleteFromPosition(wordStart)
+}
 
-	// Skip trailing spaces
+// findWordStart finds the start position of the word before the cursor.
+func (b *Buffer) findWordStart() int {
+	pos := b.cursor - 1
+	pos = b.skipTrailingSpaces(pos)
+
+	if pos < 0 {
+		return pos
+	}
+
+	return b.skipWordCharacters(pos)
+}
+
+// skipTrailingSpaces skips trailing spaces before the word.
+func (b *Buffer) skipTrailingSpaces(pos int) int {
 	for pos >= 0 && unicode.IsSpace(b.runes[pos]) {
 		pos--
 	}
+	return pos
+}
 
-	// Determine word type at current position
-	if pos >= 0 {
-		isAlnum := unicode.IsLetter(b.runes[pos]) || unicode.IsDigit(b.runes[pos])
-		if isAlnum {
-			// Skip alphanumeric characters
-			for pos >= 0 && (unicode.IsLetter(b.runes[pos]) || unicode.IsDigit(b.runes[pos])) {
-				pos--
-			}
-		} else {
-			// Skip punctuation/symbol characters
-			for pos >= 0 && !unicode.IsSpace(b.runes[pos]) && !unicode.IsLetter(b.runes[pos]) && !unicode.IsDigit(b.runes[pos]) {
-				pos--
-			}
-		}
+// skipWordCharacters skips characters of the current word type.
+func (b *Buffer) skipWordCharacters(pos int) int {
+	isAlnum := unicode.IsLetter(b.runes[pos]) || unicode.IsDigit(b.runes[pos])
+
+	if isAlnum {
+		return b.skipAlphanumericCharacters(pos)
 	}
+	return b.skipPunctuationCharacters(pos)
+}
 
-	// Delete from word start to cursor
-	deleteFrom := pos + 1
+// skipAlphanumericCharacters skips alphanumeric characters.
+func (b *Buffer) skipAlphanumericCharacters(pos int) int {
+	for pos >= 0 && (unicode.IsLetter(b.runes[pos]) || unicode.IsDigit(b.runes[pos])) {
+		pos--
+	}
+	return pos
+}
+
+// skipPunctuationCharacters skips punctuation/symbol characters.
+func (b *Buffer) skipPunctuationCharacters(pos int) int {
+	for pos >= 0 && !unicode.IsSpace(b.runes[pos]) && !unicode.IsLetter(b.runes[pos]) && !unicode.IsDigit(b.runes[pos]) {
+		pos--
+	}
+	return pos
+}
+
+// deleteFromPosition deletes characters from the given position to the cursor.
+func (b *Buffer) deleteFromPosition(deleteFrom int) {
+	deleteFrom++ // Adjust for 0-based indexing
 	b.runes = append(b.runes[:deleteFrom], b.runes[b.cursor:]...)
 	b.cursor = deleteFrom
 }

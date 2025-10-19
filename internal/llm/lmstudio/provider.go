@@ -34,20 +34,32 @@ type Provider struct {
 
 // NewProvider creates a new LMStudio provider.
 func NewProvider(cfg Config) (*Provider, error) {
-	// Set LMStudio defaults
+	// Set defaults
+	baseURL := cfg.BaseURL
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
+	}
+
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = llm.DefaultTimeout
+	}
+
+	model := cfg.Model
+	// If model is empty, use a placeholder - LMStudio can accept empty model
+	// as it may use the loaded model automatically
+	if model == "" {
+		model = "local-model"
+	}
+
+	// Create OpenAI provider with resolved config
 	openaiCfg := openai.Config{
-		BaseURL: cfg.BaseURL,
+		BaseURL: baseURL,
 		APIKey:  "", // No API key for local LMStudio
-		Model:   cfg.Model,
-		Timeout: cfg.Timeout,
+		Model:   model,
+		Timeout: timeout,
 	}
 
-	// Use default base URL if not specified
-	if openaiCfg.BaseURL == "" {
-		openaiCfg.BaseURL = DefaultBaseURL
-	}
-
-	// Create OpenAI provider
 	openaiProvider, err := openai.NewProvider(openaiCfg)
 	if err != nil {
 		return nil, err

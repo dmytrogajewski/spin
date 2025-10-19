@@ -39,13 +39,6 @@ func NewLoop(model *Model, renderer PromptRenderer, keys <-chan term.KeyEvent) *
 	}
 }
 
-// SetRenderCallback sets a callback to be called when render is needed.
-// If skipDirect is true, the loop will call the callback instead of rendering directly.
-func (l *Loop) SetRenderCallback(callback func(), skipDirect bool) {
-	l.onRender = callback
-	l.skipRender = skipDirect
-}
-
 // Run starts the input loop. It blocks until the context is canceled,
 // the key channel closes, or a quit signal is received.
 // Returns a channel that emits submitted lines.
@@ -75,93 +68,182 @@ func (l *Loop) loop(ctx context.Context) {
 }
 
 func (l *Loop) handleEvent(ctx context.Context, event term.KeyEvent) bool {
+	return l.dispatchKeyEvent(ctx, event)
+}
+
+// dispatchKeyEvent dispatches key events to appropriate handlers.
+func (l *Loop) dispatchKeyEvent(ctx context.Context, event term.KeyEvent) bool {
 	switch event.Kind {
 	case term.KeyRune:
-		l.model.Insert(event.Rune)
-		l.redraw()
-
+		return l.handleRune(event)
 	case term.KeyBackspace:
-		l.model.Backspace()
-		l.redraw()
-
+		return l.handleBackspace()
 	case term.KeyDelete:
-		l.model.Delete()
-		l.redraw()
-
+		return l.handleDelete()
 	case term.KeyLeft:
-		l.model.MoveLeft()
-		l.redraw()
-
+		return l.handleLeft()
 	case term.KeyRight:
-		l.model.MoveRight()
-		l.redraw()
-
+		return l.handleRight()
 	case term.KeyHome:
-		l.model.MoveStart()
-		l.redraw()
-
+		return l.handleHome()
 	case term.KeyEnd:
-		l.model.MoveEnd()
-		l.redraw()
-
+		return l.handleEnd()
 	case term.KeyUp:
-		l.model.PrevHistory()
-		l.redraw()
-
+		return l.handleUp()
 	case term.KeyDown:
-		l.model.NextHistory()
-		l.redraw()
-
+		return l.handleDown()
 	case term.KeyCtrlU:
-		l.model.ClearLineLeft()
-		l.redraw()
-
+		return l.handleCtrlU()
 	case term.KeyCtrlK:
-		l.model.ClearLineRight()
-		l.redraw()
-
+		return l.handleCtrlK()
 	case term.KeyCtrlW:
-		l.model.DeleteWord()
-		l.redraw()
-
+		return l.handleCtrlW()
 	case term.KeyCtrlL:
-		// Clear screen and redraw
-		l.renderer.ClearScreen()
-		l.redraw()
-
+		return l.handleCtrlL()
 	case term.KeyEnter:
-		line := l.model.Submit()
-		l.redraw()
-		select {
-		case l.out <- line:
-		case <-ctx.Done():
-			return true // Exit on context cancel
-		}
-
+		return l.handleEnter(ctx)
 	case term.KeyCtrlC:
-		// Exit loop on Ctrl-C
-		return true
-
+		return l.handleCtrlC()
 	case term.KeyCtrlD:
-		// EOF on empty buffer, otherwise delete
-		if l.model.Text() == "" {
-			return true // Exit on EOF
-		}
-		l.model.Delete()
-		l.redraw()
-
+		return l.handleCtrlD()
 	case term.KeyPaste:
-		// Insert paste content rune by rune
-		for _, r := range []rune(string(event.Paste)) {
-			l.model.Insert(r)
-		}
-		l.redraw()
-
+		return l.handlePaste(event)
 	default:
-		// Unknown key, ignore
+		return l.handleUnknown()
 	}
+}
 
-	return false // Continue loop
+// handleRune handles rune input.
+func (l *Loop) handleRune(event term.KeyEvent) bool {
+	l.model.Insert(event.Rune)
+	l.redraw()
+	return false
+}
+
+// handleBackspace handles backspace key.
+func (l *Loop) handleBackspace() bool {
+	l.model.Backspace()
+	l.redraw()
+	return false
+}
+
+// handleDelete handles delete key.
+func (l *Loop) handleDelete() bool {
+	l.model.Delete()
+	l.redraw()
+	return false
+}
+
+// handleLeft handles left arrow key.
+func (l *Loop) handleLeft() bool {
+	l.model.MoveLeft()
+	l.redraw()
+	return false
+}
+
+// handleRight handles right arrow key.
+func (l *Loop) handleRight() bool {
+	l.model.MoveRight()
+	l.redraw()
+	return false
+}
+
+// handleHome handles home key.
+func (l *Loop) handleHome() bool {
+	l.model.MoveStart()
+	l.redraw()
+	return false
+}
+
+// handleEnd handles end key.
+func (l *Loop) handleEnd() bool {
+	l.model.MoveEnd()
+	l.redraw()
+	return false
+}
+
+// handleUp handles up arrow key.
+func (l *Loop) handleUp() bool {
+	l.model.PrevHistory()
+	l.redraw()
+	return false
+}
+
+// handleDown handles down arrow key.
+func (l *Loop) handleDown() bool {
+	l.model.NextHistory()
+	l.redraw()
+	return false
+}
+
+// handleCtrlU handles Ctrl+U (clear line left).
+func (l *Loop) handleCtrlU() bool {
+	l.model.ClearLineLeft()
+	l.redraw()
+	return false
+}
+
+// handleCtrlK handles Ctrl+K (clear line right).
+func (l *Loop) handleCtrlK() bool {
+	l.model.ClearLineRight()
+	l.redraw()
+	return false
+}
+
+// handleCtrlW handles Ctrl+W (delete word).
+func (l *Loop) handleCtrlW() bool {
+	l.model.DeleteWord()
+	l.redraw()
+	return false
+}
+
+// handleCtrlL handles Ctrl+L (clear screen).
+func (l *Loop) handleCtrlL() bool {
+	l.renderer.ClearScreen()
+	l.redraw()
+	return false
+}
+
+// handleEnter handles enter key.
+func (l *Loop) handleEnter(ctx context.Context) bool {
+	line := l.model.Submit()
+	l.redraw()
+	select {
+	case l.out <- line:
+	case <-ctx.Done():
+		return true // Exit on context cancel
+	}
+	return false
+}
+
+// handleCtrlC handles Ctrl+C (exit).
+func (l *Loop) handleCtrlC() bool {
+	return true // Exit loop on Ctrl-C
+}
+
+// handleCtrlD handles Ctrl+D (EOF or delete).
+func (l *Loop) handleCtrlD() bool {
+	if l.model.Text() == "" {
+		return true // Exit on EOF
+	}
+	l.model.Delete()
+	l.redraw()
+	return false
+}
+
+// handlePaste handles paste events.
+func (l *Loop) handlePaste(event term.KeyEvent) bool {
+	for _, r := range []rune(string(event.Paste)) {
+		l.model.Insert(r)
+	}
+	l.redraw()
+	return false
+}
+
+// handleUnknown handles unknown keys.
+func (l *Loop) handleUnknown() bool {
+	// Unknown key, ignore
+	return false
 }
 
 // redraw triggers a prompt redraw, either via callback or directly.

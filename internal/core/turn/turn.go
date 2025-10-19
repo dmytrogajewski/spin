@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // Common errors
@@ -92,25 +90,6 @@ type TokenUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`     // Tokens in prompt
 	CompletionTokens int `json:"completion_tokens"` // Tokens in completion
 	TotalTokens      int `json:"total_tokens"`      // Total tokens used
-}
-
-// NewTurn creates a new turn in the Pending state.
-//
-// Parameters:
-//   - sessionID: The parent session ID
-//   - userInput: The user's input message
-//
-// Returns a new Turn with a generated UUID and initialized collections.
-func NewTurn(sessionID, userInput string) *Turn {
-	return &Turn{
-		ID:          uuid.New().String(),
-		SessionID:   sessionID,
-		UserInput:   userInput,
-		State:       StatePending,
-		ToolCalls:   make([]ToolCall, 0),
-		ToolResults: make([]ToolResult, 0),
-		Metadata:    make(map[string]interface{}),
-	}
 }
 
 // Start transitions the turn from Pending to Running state.

@@ -83,14 +83,3 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 
 	return scanner.Err()
 }
-
-// SendNotification sends a notification to the client
-func (s *Server) SendNotification(w io.Writer, method string, params interface{}) error {
-	paramsJSON, _ := json.Marshal(params)
-	notif := Notification{
-		JSONRPC: "2.0",
-		Method:  method,
-		Params:  paramsJSON,
-	}
-	return json.NewEncoder(w).Encode(notif)
-}

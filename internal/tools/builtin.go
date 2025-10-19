@@ -264,122 +264,150 @@ func (t *ExecuteCommandTool) Schema() ToolSchema {
 }
 
 func (t *ExecuteCommandTool) Execute(ctx context.Context, params map[string]interface{}) (ToolResult, error) {
-	// Validate executor dependency
-	if t.executor == nil {
-		return ToolResult{
-			Success: false,
-			Error:   "executor not configured",
-		}, nil
+	if err := t.validateExecutor(); err != nil {
+		return ToolResult{Success: false, Error: err.Error()}, nil
 	}
 
-	// Extract command string
+	cmdStr, err := t.extractCommand(params)
+	if err != nil {
+		return ToolResult{Success: false, Error: err.Error()}, nil
+	}
+
+	parts := t.parseCommand(cmdStr)
+	if len(parts) == 0 {
+		return ToolResult{Success: false, Error: "command cannot be empty"}, nil
+	}
+
+	executeMethod, err := t.getExecuteMethod()
+	if err != nil {
+		return ToolResult{Success: false, Error: err.Error()}, nil
+	}
+
+	cmdValue, err := t.createCommand(executeMethod.Type(), parts, params)
+	if err != nil {
+		return ToolResult{Success: false, Error: err.Error()}, nil
+	}
+
+	return t.executeCommand(ctx, executeMethod, cmdValue)
+}
+
+// validateExecutor validates that the executor is configured.
+func (t *ExecuteCommandTool) validateExecutor() error {
+	if t.executor == nil {
+		return fmt.Errorf("executor not configured")
+	}
+	return nil
+}
+
+// extractCommand extracts and validates the command parameter.
+func (t *ExecuteCommandTool) extractCommand(params map[string]interface{}) (string, error) {
 	cmdStr, ok := params["command"].(string)
 	if !ok || cmdStr == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "command parameter must be a non-empty string",
-		}, nil
+		return "", fmt.Errorf("command parameter must be a non-empty string")
 	}
+	return cmdStr, nil
+}
 
-	// Parse command into parts
-	parts := strings.Fields(cmdStr)
-	if len(parts) == 0 {
-		return ToolResult{
-			Success: false,
-			Error:   "command cannot be empty",
-		}, nil
-	}
+// parseCommand parses the command string into parts.
+func (t *ExecuteCommandTool) parseCommand(cmdStr string) []string {
+	return strings.Fields(cmdStr)
+}
 
-	// Use reflection to create a Command struct dynamically
-	// This avoids circular import with internal/core
+// getExecuteMethod gets the Execute method using reflection.
+func (t *ExecuteCommandTool) getExecuteMethod() (reflect.Value, error) {
 	executorVal := reflect.ValueOf(t.executor)
-
-	// Find the Execute method
 	executeMethod := executorVal.MethodByName("Execute")
 	if !executeMethod.IsValid() {
-		return ToolResult{
-			Success: false,
-			Error:   "executor does not have Execute method",
-		}, nil
+		return reflect.Value{}, fmt.Errorf("executor does not have Execute method")
 	}
 
-	// Get the method signature to find Command type
 	methodType := executeMethod.Type()
 	if methodType.NumIn() < 3 {
-		return ToolResult{
-			Success: false,
-			Error:   "invalid Execute method signature",
-		}, nil
+		return reflect.Value{}, fmt.Errorf("invalid Execute method signature")
 	}
 
-	// Get the command type (second parameter, first is context.Context)
+	return executeMethod, nil
+}
+
+// createCommand creates a command value based on the method signature.
+func (t *ExecuteCommandTool) createCommand(methodType reflect.Type, parts []string, params map[string]interface{}) (reflect.Value, error) {
 	cmdType := methodType.In(1)
 
-	// Create command value based on the parameter type
-	var cmdValue reflect.Value
+	switch cmdType.Kind() {
+	case reflect.Interface:
+		return t.createDynamicCommand(parts, params), nil
+	case reflect.Ptr:
+		return t.createTypedCommand(cmdType, parts, params)
+	default:
+		return reflect.Value{}, fmt.Errorf("unexpected Execute command parameter type")
+	}
+}
 
-	if cmdType.Kind() == reflect.Interface {
-		// For interface{} parameters (used by mocks), create a dynamic struct
-		// Define a struct type with the fields we need
-		type dynamicCommand struct {
-			Program string
-			Args    []string
-			WorkDir string
-			Raw     string
-		}
-
-		cmd := &dynamicCommand{
-			Program: parts[0],
-			Args:    parts[1:],
-			Raw:     cmdStr,
-		}
-
-		// Set working directory if provided
-		if workDir, ok := params["workdir"].(string); ok && workDir != "" {
-			cmd.WorkDir = workDir
-		}
-
-		cmdValue = reflect.ValueOf(cmd)
-	} else if cmdType.Kind() == reflect.Ptr {
-		// For typed parameters (real executor), create instance of the actual type
-		cmdStructType := cmdType.Elem()
-		cmdValue = reflect.New(cmdStructType)
-		cmdElem := cmdValue.Elem()
-
-		// Set Program field
-		if programField := cmdElem.FieldByName("Program"); programField.IsValid() && programField.CanSet() {
-			programField.SetString(parts[0])
-		}
-
-		// Set Args field
-		if argsField := cmdElem.FieldByName("Args"); argsField.IsValid() && argsField.CanSet() {
-			argsSlice := reflect.MakeSlice(reflect.TypeOf([]string{}), len(parts)-1, len(parts)-1)
-			for i := 1; i < len(parts); i++ {
-				argsSlice.Index(i - 1).SetString(parts[i])
-			}
-			argsField.Set(argsSlice)
-		}
-
-		// Set Raw field
-		if rawField := cmdElem.FieldByName("Raw"); rawField.IsValid() && rawField.CanSet() {
-			rawField.SetString(cmdStr)
-		}
-
-		// Set WorkDir field if provided
-		if workDir, ok := params["workdir"].(string); ok && workDir != "" {
-			if workDirField := cmdElem.FieldByName("WorkDir"); workDirField.IsValid() && workDirField.CanSet() {
-				workDirField.SetString(workDir)
-			}
-		}
-	} else {
-		return ToolResult{
-			Success: false,
-			Error:   "unexpected Execute command parameter type",
-		}, nil
+// createDynamicCommand creates a dynamic command for interface{} parameters.
+func (t *ExecuteCommandTool) createDynamicCommand(parts []string, params map[string]interface{}) reflect.Value {
+	type dynamicCommand struct {
+		Program string
+		Args    []string
+		WorkDir string
+		Raw     string
 	}
 
-	// Call Execute method
-	// Execute(ctx context.Context, cmd *Command, opts *ExecuteOptions) (*Result, error)
+	cmd := &dynamicCommand{
+		Program: parts[0],
+		Args:    parts[1:],
+		Raw:     strings.Join(parts, " "),
+	}
+
+	if workDir, ok := params["workdir"].(string); ok && workDir != "" {
+		cmd.WorkDir = workDir
+	}
+
+	return reflect.ValueOf(cmd)
+}
+
+// createTypedCommand creates a typed command for pointer parameters.
+func (t *ExecuteCommandTool) createTypedCommand(cmdType reflect.Type, parts []string, params map[string]interface{}) (reflect.Value, error) {
+	cmdStructType := cmdType.Elem()
+	cmdValue := reflect.New(cmdStructType)
+	cmdElem := cmdValue.Elem()
+
+	t.setCommandFields(cmdElem, parts, params)
+
+	return cmdValue, nil
+}
+
+// setCommandFields sets the fields of a typed command.
+func (t *ExecuteCommandTool) setCommandFields(cmdElem reflect.Value, parts []string, params map[string]interface{}) {
+	t.setStringField(cmdElem, "Program", parts[0])
+	t.setStringSliceField(cmdElem, "Args", parts[1:])
+	t.setStringField(cmdElem, "Raw", strings.Join(parts, " "))
+
+	if workDir, ok := params["workdir"].(string); ok && workDir != "" {
+		t.setStringField(cmdElem, "WorkDir", workDir)
+	}
+}
+
+// setStringField sets a string field if it exists and is settable.
+func (t *ExecuteCommandTool) setStringField(cmdElem reflect.Value, fieldName, value string) {
+	if field := cmdElem.FieldByName(fieldName); field.IsValid() && field.CanSet() {
+		field.SetString(value)
+	}
+}
+
+// setStringSliceField sets a string slice field if it exists and is settable.
+func (t *ExecuteCommandTool) setStringSliceField(cmdElem reflect.Value, fieldName string, values []string) {
+	if field := cmdElem.FieldByName(fieldName); field.IsValid() && field.CanSet() {
+		argsSlice := reflect.MakeSlice(reflect.TypeOf([]string{}), len(values), len(values))
+		for i, val := range values {
+			argsSlice.Index(i).SetString(val)
+		}
+		field.Set(argsSlice)
+	}
+}
+
+// executeCommand executes the command and returns the result.
+func (t *ExecuteCommandTool) executeCommand(ctx context.Context, executeMethod reflect.Value, cmdValue reflect.Value) (ToolResult, error) {
+	methodType := executeMethod.Type()
 	args := []reflect.Value{
 		reflect.ValueOf(ctx),
 		cmdValue,
@@ -388,91 +416,94 @@ func (t *ExecuteCommandTool) Execute(ctx context.Context, params map[string]inte
 
 	results := executeMethod.Call(args)
 	if len(results) != 2 {
-		return ToolResult{
-			Success: false,
-			Error:   "unexpected Execute return values",
-		}, nil
+		return ToolResult{Success: false, Error: "unexpected Execute return values"}, nil
 	}
 
-	// Check error (second return value)
-	errVal := results[1]
-	if !errVal.IsNil() {
-		// Get the result (first return value) for error details
-		resultVal := results[0]
-		var stderr string
-
-		if !resultVal.IsNil() {
-			// Unwrap interface{} if needed
-			if resultVal.Kind() == reflect.Interface {
-				resultVal = resultVal.Elem()
-			}
-			// Dereference pointer if needed
-			var resultElem reflect.Value
-			if resultVal.Kind() == reflect.Ptr {
-				resultElem = resultVal.Elem()
-			} else {
-				resultElem = resultVal
-			}
-
-			if stderrField := resultElem.FieldByName("Stderr"); stderrField.IsValid() {
-				stderr = stderrField.String()
-			}
-		}
-
-		return ToolResult{
-			Success: false,
-			Output:  stderr,
-			Error:   errVal.Interface().(error).Error(),
-		}, nil
+	if !results[1].IsNil() {
+		return t.handleExecuteError(results[0], results[1])
 	}
 
-	// Extract result fields
-	resultVal := results[0]
-	if resultVal.Kind() == reflect.Ptr && resultVal.IsNil() {
-		return ToolResult{
-			Success: false,
-			Error:   "nil result from Execute",
-		}, nil
+	return t.extractExecuteResult(results[0])
+}
+
+// handleExecuteError handles execution errors.
+func (t *ExecuteCommandTool) handleExecuteError(resultVal, errVal reflect.Value) (ToolResult, error) {
+	stderr := t.extractStderr(resultVal)
+	return ToolResult{
+		Success: false,
+		Output:  stderr,
+		Error:   errVal.Interface().(error).Error(),
+	}, nil
+}
+
+// extractStderr extracts stderr from the result value.
+func (t *ExecuteCommandTool) extractStderr(resultVal reflect.Value) string {
+	if resultVal.IsNil() {
+		return ""
 	}
 
-	// Get the struct value (dereference if it's a pointer or interface)
-	var resultElem reflect.Value
-	if resultVal.Kind() == reflect.Interface {
-		// Unwrap interface{}
-		resultVal = resultVal.Elem()
-	}
-	if resultVal.Kind() == reflect.Ptr {
-		resultElem = resultVal.Elem()
-	} else {
-		resultElem = resultVal
-	}
-
-	var stdout, stderr string
-	var exitCode int
-
-	if stdoutField := resultElem.FieldByName("Stdout"); stdoutField.IsValid() {
-		stdout = stdoutField.String()
-	}
+	resultElem := t.dereferenceValue(resultVal)
 	if stderrField := resultElem.FieldByName("Stderr"); stderrField.IsValid() {
-		stderr = stderrField.String()
+		return stderrField.String()
 	}
-	if exitCodeField := resultElem.FieldByName("ExitCode"); exitCodeField.IsValid() {
-		exitCode = int(exitCodeField.Int())
+	return ""
+}
+
+// extractExecuteResult extracts the execution result.
+func (t *ExecuteCommandTool) extractExecuteResult(resultVal reflect.Value) (ToolResult, error) {
+	if resultVal.Kind() == reflect.Ptr && resultVal.IsNil() {
+		return ToolResult{Success: false, Error: "nil result from Execute"}, nil
 	}
 
-	// Combine stdout and stderr for output
-	output := stdout
-	if stderr != "" {
-		if output != "" {
-			output += "\n"
-		}
-		output += stderr
-	}
+	resultElem := t.dereferenceValue(resultVal)
+	stdout := t.extractField(resultElem, "Stdout")
+	stderr := t.extractField(resultElem, "Stderr")
+	exitCode := t.extractIntField(resultElem, "ExitCode")
+
+	output := t.combineOutput(stdout, stderr)
 
 	return ToolResult{
 		Success: exitCode == 0,
 		Output:  output,
 	}, nil
+}
+
+// dereferenceValue dereferences a reflect value if it's a pointer or interface.
+func (t *ExecuteCommandTool) dereferenceValue(value reflect.Value) reflect.Value {
+	if value.Kind() == reflect.Interface {
+		value = value.Elem()
+	}
+	if value.Kind() == reflect.Ptr {
+		value = value.Elem()
+	}
+	return value
+}
+
+// extractField extracts a string field from a struct.
+func (t *ExecuteCommandTool) extractField(resultElem reflect.Value, fieldName string) string {
+	if field := resultElem.FieldByName(fieldName); field.IsValid() {
+		return field.String()
+	}
+	return ""
+}
+
+// extractIntField extracts an int field from a struct.
+func (t *ExecuteCommandTool) extractIntField(resultElem reflect.Value, fieldName string) int {
+	if field := resultElem.FieldByName(fieldName); field.IsValid() {
+		return int(field.Int())
+	}
+	return 0
+}
+
+// combineOutput combines stdout and stderr into a single output string.
+func (t *ExecuteCommandTool) combineOutput(stdout, stderr string) string {
+	if stderr == "" {
+		return stdout
+	}
+	if stdout == "" {
+		return stderr
+	}
+	return stdout + "\n" + stderr
 }
 
 // GetContextTool implements environment context retrieval.

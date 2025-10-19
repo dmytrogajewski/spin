@@ -3,7 +3,6 @@ package llm
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"io"
 	"strings"
 )
@@ -182,67 +181,6 @@ func StreamSSE(ctx context.Context, r io.Reader, chunks chan<- StreamChunk, pars
 	}
 
 	return scanner.Err()
-}
-
-// streamResponse processes streaming SSE response and sends chunks to the channel.
-// Deprecated: Use StreamSSE with a custom parser instead.
-func streamResponse(ctx context.Context, r io.Reader, chunks chan<- StreamChunk) error {
-	parser := func(data []byte) (*StreamChunk, error) {
-		var delta chatCompletionChunk
-		if err := json.Unmarshal(data, &delta); err != nil {
-			return nil, err
-		}
-		return convertDelta(&delta), nil
-	}
-	return StreamSSE(ctx, r, chunks, parser)
-}
-
-// convertDelta converts a chatCompletionChunk to a StreamChunk.
-//
-// This function handles different types of deltas:
-//   - Content deltas (text generation)
-//   - Tool call deltas (function calling)
-//   - Finish reason markers
-//
-// Returns nil if the delta is empty or has no meaningful content.
-func convertDelta(delta *chatCompletionChunk) *StreamChunk {
-	if len(delta.Choices) == 0 {
-		return nil
-	}
-
-	choice := delta.Choices[0]
-	chunk := &StreamChunk{}
-
-	// Handle content delta
-	if choice.Delta.Content != "" {
-		chunk.Type = ChunkTypeContentDelta
-		chunk.Content = choice.Delta.Content
-		return chunk
-	}
-
-	// Handle tool call delta
-	if len(choice.Delta.ToolCalls) > 0 {
-		tc := choice.Delta.ToolCalls[0]
-		chunk.Type = ChunkTypeToolCallDelta
-		chunk.ToolCall = &ToolCall{
-			ID:   tc.ID,
-			Type: tc.Type,
-			Function: FunctionCall{
-				Name:      tc.Function.Name,
-				Arguments: tc.Function.Arguments,
-			},
-		}
-		return chunk
-	}
-
-	// Handle finish reason
-	if choice.FinishReason != nil && *choice.FinishReason != "" {
-		chunk.Type = ChunkTypeDone
-		chunk.FinishReason = *choice.FinishReason
-		return chunk
-	}
-
-	return nil
 }
 
 // chatCompletionChunk represents a streaming chunk from the chat completion API.

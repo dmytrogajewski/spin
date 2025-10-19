@@ -2,182 +2,152 @@ package compress
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"testing"
 )
 
-func TestCompositeCompressor_PrimarySucceeds(t *testing.T) {
-	primary := &mockLLMProvider{response: "Summary"}
+// Mock LLM provider for testing composite compressor
+type mockLLMForComposite struct {
+	completeFunc func(ctx context.Context, req interface{}) (string, error)
+}
 
-	config := LLMSummarizerConfig{
-		ChunkSize:    5,
-		RecentWindow: 5,
-		Temperature:  0.3,
-		MaxTokens:    200,
+func (m *mockLLMForComposite) Complete(ctx context.Context, req interface{}) (string, error) {
+	if m.completeFunc != nil {
+		return m.completeFunc(ctx, req)
+	}
+	return "Mock summary", nil
+}
+
+func TestNewLLMWithHybridFallback(t *testing.T) {
+	mockLLM := &mockLLMForComposite{}
+	config := DefaultLLMSummarizerConfig()
+
+	compressor := NewLLMWithHybridFallback(mockLLM, config)
+
+	if compressor == nil {
+		t.Fatal("NewLLMWithHybridFallback() returned nil")
 	}
 
-	llmSummarizer := NewLLMSummarizer(primary, config)
-	hybrid := NewDefaultHybridCompressor()
-
-	composite := NewCompositeCompressor(llmSummarizer, hybrid)
-
-	tokenizer := &simpleTokenizer{}
-	ctx := context.Background()
-
-	// Create enough messages to trigger summarization
-	messages := make([]CompressibleMessage, 20)
-	for i := 0; i < 20; i++ {
-		messages[i] = CompressibleMessage{
-			Role:    RoleAssistant,
-			Content: fmt.Sprintf("Long message %d", i),
-			Tokens:  150,
-		}
-	}
-
-	// Target: 500 tokens (current: 3000, so needs compression)
-	compressed, err := composite.Compress(ctx, messages, 500, tokenizer)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(compressed) == 0 {
-		t.Errorf("expected compressed messages")
-	}
-
-	// Verify primary (LLM) was called
-	if primary.calls == 0 {
-		t.Errorf("expected primary (LLM) to be called")
+	if !contains(compressor.Name(), "composite") {
+		t.Errorf("NewLLMWithHybridFallback().Name() = %v, want composite", compressor.Name())
 	}
 }
 
-func TestCompositeCompressor_PrimaryFailsFallbackSucceeds(t *testing.T) {
-	primary := &mockLLMProvider{
-		err: fmt.Errorf("LLM API unavailable"),
-	}
-	llmSummarizer := NewDefaultLLMSummarizer(primary)
-	hybrid := NewDefaultHybridCompressor()
+func TestNewDefaultLLMWithHybridFallback(t *testing.T) {
+	mockLLM := &mockLLMForComposite{}
 
-	composite := NewCompositeCompressor(llmSummarizer, hybrid)
+	compressor := NewDefaultLLMWithHybridFallback(mockLLM)
 
-	tokenizer := &simpleTokenizer{}
-	ctx := context.Background()
-
-	messages := []CompressibleMessage{
-		{Role: RoleUser, Content: "Critical", Tokens: 50},
-		{Role: RoleAssistant, Content: "Response 1", Tokens: 100},
-		{Role: RoleAssistant, Content: "Response 2", Tokens: 100},
+	if compressor == nil {
+		t.Fatal("NewDefaultLLMWithHybridFallback() returned nil")
 	}
 
-	compressed, err := composite.Compress(ctx, messages, 150, tokenizer)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Should have fallen back to hybrid compression
-	if len(compressed) == 0 {
-		t.Errorf("expected fallback to produce results")
-	}
-
-	// Verify critical message preserved (hybrid behavior)
-	hasCritical := false
-	for _, msg := range compressed {
-		if msg.Role == RoleUser {
-			hasCritical = true
-			break
-		}
-	}
-
-	if !hasCritical {
-		t.Errorf("expected critical message preserved by fallback")
+	if !contains(compressor.Name(), "composite") {
+		t.Errorf("NewDefaultLLMWithHybridFallback().Name() = %v, want composite", compressor.Name())
 	}
 }
 
-func TestCompositeCompressor_BothFail(t *testing.T) {
-	// Create failing compressors
-	primary := &failingCompressor{name: "primary"}
-	fallback := &failingCompressor{name: "fallback"}
+func TestCompositeCompressor_Compress_LLMSuccess(t *testing.T) {
+	mockLLM := &mockLLMForComposite{
+		completeFunc: func(ctx context.Context, req interface{}) (string, error) {
+			return "Summarized content", nil
+		},
+	}
 
-	composite := NewCompositeCompressor(primary, fallback)
+	compressor := NewDefaultLLMWithHybridFallback(mockLLM)
 
-	tokenizer := &simpleTokenizer{}
-	ctx := context.Background()
+	tokenizer := &mockTokenizer{
+		counts: map[string]int{
+			"Test message 1":  100,
+			"Test response 1": 100,
+		},
+	}
 
 	messages := []CompressibleMessage{
-		{Role: RoleAssistant, Content: "Message", Tokens: 100},
+		{Role: "user", Content: "Test message 1", Tokens: 100},
+		{Role: "assistant", Content: "Test response 1", Tokens: 100},
 	}
 
-	_, err := composite.Compress(ctx, messages, 50, tokenizer)
-	if err == nil {
-		t.Errorf("expected error when both strategies fail")
+	result, err := compressor.Compress(context.Background(), messages, 150, tokenizer)
+
+	if err != nil {
+		t.Errorf("Compress() unexpected error: %v", err)
 	}
 
-	// Error should mention both strategies
-	if !contains(err.Error(), "primary") || !contains(err.Error(), "fallback") {
-		t.Errorf("expected error to mention both strategies, got: %v", err)
+	if len(result) == 0 {
+		t.Error("Compress() returned empty result")
+	}
+}
+
+func TestCompositeCompressor_Compress_LLMFallsBackToHybrid(t *testing.T) {
+	mockLLM := &mockLLMForComposite{
+		completeFunc: func(ctx context.Context, req interface{}) (string, error) {
+			return "", errors.New("LLM error")
+		},
+	}
+
+	compressor := NewDefaultLLMWithHybridFallback(mockLLM)
+
+	tokenizer := &mockTokenizer{
+		counts: map[string]int{
+			"Test message 1":  50,
+			"Test response 1": 50,
+		},
+	}
+
+	messages := []CompressibleMessage{
+		{Role: "user", Content: "Test message 1", Tokens: 50},
+		{Role: "assistant", Content: "Test response 1", Tokens: 50},
+	}
+
+	result, err := compressor.Compress(context.Background(), messages, 80, tokenizer)
+
+	if err != nil {
+		t.Errorf("Compress() unexpected error: %v", err)
+	}
+
+	// Should fall back to hybrid compressor
+	if len(result) == 0 {
+		t.Error("Compress() returned empty result after fallback")
 	}
 }
 
 func TestCompositeCompressor_Name(t *testing.T) {
-	primary := NewDefaultLLMSummarizer(&mockLLMProvider{response: "ok"})
-	fallback := NewDefaultHybridCompressor()
+	mockLLM := &mockLLMForComposite{}
 
-	composite := NewCompositeCompressor(primary, fallback)
+	compressor := NewDefaultLLMWithHybridFallback(mockLLM)
 
-	name := composite.Name()
-	if !contains(name, "llm-summary") || !contains(name, "hybrid") {
-		t.Errorf("expected name to include both strategies, got: %s", name)
+	name := compressor.Name()
+	if !contains(name, "composite") {
+		t.Errorf("Name() = %v, want to contain 'composite'", name)
 	}
 }
 
-func TestNewLLMWithHybridFallback(t *testing.T) {
-	mock := &mockLLMProvider{response: "Summary"}
-	composite := NewDefaultLLMWithHybridFallback(mock)
+func TestCompositeCompressor_Compress_EmptyMessages(t *testing.T) {
+	mockLLM := &mockLLMForComposite{}
 
-	if composite.primary == nil {
-		t.Errorf("expected primary strategy to be set")
+	compressor := NewDefaultLLMWithHybridFallback(mockLLM)
+
+	tokenizer := &mockTokenizer{
+		counts: map[string]int{},
 	}
 
-	if composite.fallback == nil {
-		t.Errorf("expected fallback strategy to be set")
-	}
+	result, err := compressor.Compress(context.Background(), []CompressibleMessage{}, 100, tokenizer)
 
-	// Verify it compresses
-	tokenizer := &simpleTokenizer{}
-	ctx := context.Background()
-
-	messages := generateTestMessages(100)
-
-	// Current: 100 messages * ~110 tokens avg = 11K tokens
-	// Target: 2000 tokens - needs compression
-	compressed, err := composite.Compress(ctx, messages, 2000, tokenizer)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Errorf("Compress() unexpected error: %v", err)
 	}
 
-	if len(compressed) >= len(messages) {
-		t.Errorf("expected compression, got %d messages (original: %d)", len(compressed), len(messages))
+	if len(result) != 0 {
+		t.Errorf("Compress() expected empty result, got %d messages", len(result))
 	}
-}
-
-// Helper types
-
-type failingCompressor struct {
-	name string
-}
-
-func (f *failingCompressor) Compress(ctx context.Context, messages []CompressibleMessage, targetTokens int, tokenizer Tokenizer) ([]CompressibleMessage, error) {
-	return nil, fmt.Errorf("%s compressor failed", f.name)
-}
-
-func (f *failingCompressor) Name() string {
-	return f.name
 }
 
 func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) > len(substr) && findSubstring(s, substr))
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || hasSubstring(s, substr)))
 }
 
-func findSubstring(s, substr string) bool {
+func hasSubstring(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
 			return true

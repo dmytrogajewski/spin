@@ -176,8 +176,21 @@ func (p *keyParser) run(ctx context.Context, ch chan<- KeyEvent) {
 // parseByte parses a single byte and returns the corresponding key event.
 // It may read additional bytes for escape sequences.
 func (p *keyParser) parseByte(ctx context.Context, b byte) KeyEvent {
+	if event := p.parseControlChar(b); event.Kind != KeyUnknown {
+		return event
+	}
+
+	if b == 0x1b {
+		return p.parseEscapeSequence(ctx)
+	}
+
+	// UTF-8 or ASCII printable
+	return p.parseRune(ctx, b)
+}
+
+// parseControlChar parses control characters.
+func (p *keyParser) parseControlChar(b byte) KeyEvent {
 	switch b {
-	// Control characters
 	case 0x03: // Ctrl-C
 		return KeyEvent{Kind: KeyCtrlC, Raw: []byte{b}}
 	case 0x04: // Ctrl-D
@@ -198,11 +211,8 @@ func (p *keyParser) parseByte(ctx context.Context, b byte) KeyEvent {
 		return KeyEvent{Kind: KeyCtrlU, Raw: []byte{b}}
 	case 0x17: // Ctrl-W
 		return KeyEvent{Kind: KeyCtrlW, Raw: []byte{b}}
-	case 0x1b: // ESC - start of escape sequence
-		return p.parseEscapeSequence(ctx)
 	default:
-		// UTF-8 or ASCII printable
-		return p.parseRune(ctx, b)
+		return KeyEvent{Kind: KeyUnknown, Raw: []byte{b}}
 	}
 }
 
@@ -414,36 +424,51 @@ func (p *keyParser) parseRune(ctx context.Context, b byte) KeyEvent {
 	}
 
 	// Multi-byte UTF-8
-	// Determine expected length from first byte
-	var expectedLen int
-	if b&0xe0 == 0xc0 {
-		expectedLen = 2
-	} else if b&0xf0 == 0xe0 {
-		expectedLen = 3
-	} else if b&0xf8 == 0xf0 {
-		expectedLen = 4
-	} else {
-		// Invalid UTF-8 start byte
+	expectedLen := p.getUTF8Length(b)
+	if expectedLen == 0 {
 		return KeyEvent{Kind: KeyUnknown, Raw: raw}
 	}
 
-	// Read continuation bytes
+	raw = p.readUTF8Continuation(raw, expectedLen)
+	if len(raw) != expectedLen {
+		return KeyEvent{Kind: KeyUnknown, Raw: raw}
+	}
+
+	return p.decodeUTF8Rune(raw)
+}
+
+// getUTF8Length determines the expected length of a UTF-8 sequence.
+func (p *keyParser) getUTF8Length(b byte) int {
+	if b&0xe0 == 0xc0 {
+		return 2
+	}
+	if b&0xf0 == 0xe0 {
+		return 3
+	}
+	if b&0xf8 == 0xf0 {
+		return 4
+	}
+	return 0 // Invalid UTF-8 start byte
+}
+
+// readUTF8Continuation reads continuation bytes for UTF-8 sequence.
+func (p *keyParser) readUTF8Continuation(raw []byte, expectedLen int) []byte {
 	for i := 1; i < expectedLen; i++ {
 		n, err := p.r.Read(p.buf[:])
 		if err != nil || n == 0 {
-			// Incomplete UTF-8 sequence
-			return KeyEvent{Kind: KeyUnknown, Raw: raw}
+			return raw // Incomplete UTF-8 sequence
 		}
 		raw = append(raw, p.buf[0])
 	}
+	return raw
+}
 
-	// Decode rune
+// decodeUTF8Rune decodes a UTF-8 sequence into a rune.
+func (p *keyParser) decodeUTF8Rune(raw []byte) KeyEvent {
 	r, size := utf8.DecodeRune(raw)
 	if r == utf8.RuneError && size == 1 {
-		// Invalid UTF-8
 		return KeyEvent{Kind: KeyUnknown, Raw: raw}
 	}
-
 	return KeyEvent{Kind: KeyRune, Rune: r, Raw: raw}
 }
 

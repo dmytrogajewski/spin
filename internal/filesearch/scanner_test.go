@@ -322,27 +322,6 @@ func TestScanner_WithBothIgnoreFiles(t *testing.T) {
 	assert.NotContains(t, files, "test.tmp")
 }
 
-func TestScanner_WithCustomIgnoreHandler(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create a custom ignore handler
-	handler, err := NewIgnoreHandler(tmpDir)
-	require.NoError(t, err)
-
-	// Create files
-	os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(""), 0644)
-	os.MkdirAll(filepath.Join(tmpDir, ".vscode"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, ".vscode", "settings.json"), []byte(""), 0644)
-
-	s := NewScannerWithIgnore(tmpDir, handler)
-	files, err := s.Scan()
-
-	assert.NoError(t, err)
-	assert.Contains(t, files, "test.txt")
-	// .vscode is in default patterns
-	assert.NotContains(t, files, ".vscode/settings.json")
-}
-
 func TestScanner_RealWorldNodeProject(t *testing.T) {
 	tmpDir := t.TempDir()
 

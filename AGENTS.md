@@ -20,6 +20,7 @@
 * No "TODO: tests later". Tests come first or alongside.
 * No lint errors, no unused code, tools must be at least YELLOW in uast/herr and then improved to clean.
 * Always fix root cause, not symptoms
+* Refactor, but never simplify implementation
 
 ## Working Loop – Always Follow
 
@@ -264,6 +265,12 @@ const (
 - [tools](docs/packages/tools.md) - Tool registry
 - [mcp](docs/packages/mcp.md) - Model Context Protocol
 
+**UI:**
+- [ui-blocks](docs/packages/ui-blocks.md) - Block-based timeline rendering
+- [ui-output](docs/packages/ui-output.md) - Append-only output system
+- [ui-status](docs/packages/ui-status.md) - Real-time status bar
+- `internal/ui/overlay/` - Modal dialogs (approval, file preview, command palette)
+
 ---
 
 ## Testing
@@ -294,10 +301,73 @@ make coverage          # Coverage report
 uast parse {file} | herr analyze   # Complexity
 gocyclo -over 15 ./...              # Cyclomatic complexity
 
+# Deadcode Analysis
+make deadcode          # Basic deadcode analysis
+make deadcode-prod     # Production-only dead code
+make deadcode-test-only # Test-only functions
+make deadcode-why FUNC=functionName # Why function is not dead
+./scripts/deadcode-analysis.sh # Comprehensive analysis
+
 # Testing
 go test ./...          # All
 go test -race ./...    # Race
 go test -v ./...       # Verbose
+```
+
+---
+
+## Approval System
+
+Spin provides a general-purpose approval system that can be used by any component requiring user approval for potentially dangerous operations.
+
+### Usage
+
+**TUI Mode (Always Enabled):**
+```bash
+# Approval dialogs are always enabled
+spin tui
+
+# Example dangerous command that triggers approval dialog
+rm -rf /tmp/build
+python dangerous_script.py
+```
+
+**Approval Dialog Features:**
+- Modal overlay with command details
+- Keyboard shortcuts: 'A' approve, 'D' deny, 'ESC' cancel
+- 60-second timeout with countdown
+- Responsive layout adapting to terminal size
+- Thread-safe operations with mutex protection
+
+### Architecture
+
+**Core Components:**
+- `internal/core/approval.go` - ApprovalService (centralized approval handling)
+- `internal/core/agent.go` - ApprovalRequest/ApprovalResponse types
+- `internal/core/validator.go` - Command classification and approval logic
+
+**UI Components:**
+- `internal/ui/overlay/approval.go` - ApprovalDialog component
+- `internal/ui/adapters/puretty.go` - TUI integration with ModeApproval
+- `cmd/spin/tui.go` - Approval handler wiring
+
+**Usage Examples:**
+- `internal/core/approval_examples.go` - Examples for tools, agents, and file operations
+
+### Extending Approval System
+
+Any component can use the approval service:
+
+```go
+// Create approval service
+approvalService := core.NewApprovalService(approvalHandler)
+
+// Request approval for any operation
+approved, err := approvalService.RequestApproval(ctx, core.Operation{
+    Command: cmd,
+    Reason:  "Dangerous operation",
+    WorkDir: "/path/to/workdir",
+})
 ```
 
 ---
@@ -330,7 +400,8 @@ go test -v ./...       # Verbose
 **Tests fail:** `go test -v ./...` with `-race`  
 **Linter errors:** `make lint` - fix all  
 **High complexity:** `uast parse | herr analyze` - refactor  
-**Low coverage:** Add edge cases and error paths
+**Low coverage:** Add edge cases and error paths  
+**Dead code:** `make deadcode` - review and remove unreachable functions
 
 ---
 

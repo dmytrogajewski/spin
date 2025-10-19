@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
-	"github.com/dmytrogajewski/spin/pkg/ansi"
 )
 
 // Renderer handles rendering the status bar to the terminal.
@@ -80,7 +78,7 @@ func (r *Renderer) Render(statusText string) error {
 	// Render status text if provided
 	if statusText != "" {
 		// Strip any existing ANSI codes to prevent color bleeding
-		cleanText := ansi.Strip(statusText)
+		cleanText := stripANSI(statusText)
 
 		// Truncate if too long (now measuring actual visible length)
 		if len(cleanText) > r.width-2 {
@@ -128,4 +126,119 @@ func (r *Renderer) MoveToScrollRegion() error {
 	scrollableLines := r.height - 2
 	fmt.Fprintf(r.out, "\x1b[%d;1H", scrollableLines)
 	return nil
+}
+
+// RenderMetrics renders comprehensive completion metrics in the status bar.
+func (r *Renderer) RenderMetrics(metrics *Metrics) error {
+	if r.height < 3 || r.width < 10 {
+		// Terminal too small, don't render status bar
+		return nil
+	}
+
+	// Save cursor position
+	fmt.Fprint(r.out, "\x1b7")
+
+	// Position cursor at the status bar line (second to last line)
+	statusLine := r.height - 1
+	fmt.Fprintf(r.out, "\x1b[%d;1H", statusLine)
+
+	// Clear the status bar line
+	fmt.Fprint(r.out, "\x1b[2K")
+
+	// Build comprehensive status line
+	metricsLine := r.buildMetricsLine(metrics)
+
+	// Render the status line
+	fmt.Fprint(r.out, "\x1b[0m")    // Reset formatting
+	fmt.Fprint(r.out, "\x1b[37;1m") // Bright white
+	fmt.Fprint(r.out, metricsLine)
+	fmt.Fprint(r.out, "\x1b[0m") // Reset formatting
+
+	// Restore cursor position
+	fmt.Fprint(r.out, "\x1b8")
+	return nil
+}
+
+// buildMetricsLine builds the comprehensive metrics status line.
+func (r *Renderer) buildMetricsLine(metrics *Metrics) string {
+	var parts []string
+
+	// Activity indicator
+	if metrics.AgentState != "" {
+		parts = append(parts, "[●]")
+	} else {
+		parts = append(parts, "[○]")
+	}
+
+	// Context usage percentage
+	if metrics.MaxTokens > 0 {
+		percentage := float64(metrics.TokenCount) / float64(metrics.MaxTokens) * 100
+		usageStr := fmt.Sprintf("%.0f%%", percentage)
+		if percentage > 80 {
+			usageStr = fmt.Sprintf("\x1b[33m%s\x1b[0m", usageStr) // Yellow for high usage
+		}
+		parts = append(parts, usageStr)
+	} else {
+		parts = append(parts, "N/A")
+	}
+
+	// Agent state
+	if metrics.AgentState != "" {
+		parts = append(parts, metrics.AgentState)
+	}
+
+	// Provider and model
+	if metrics.Provider != "" && metrics.Model != "" {
+		parts = append(parts, fmt.Sprintf("%s/%s", metrics.Provider, metrics.Model))
+	}
+
+	// Tokens per second
+	if metrics.TokensPerSec > 0 {
+		parts = append(parts, fmt.Sprintf("%.0f tok/s", metrics.TokensPerSec))
+	}
+
+	// Conversation ID (shortened)
+	if metrics.ConversationID != "" {
+		shortID := metrics.ConversationID
+		if len(shortID) > 8 {
+			shortID = shortID[:8]
+		}
+		parts = append(parts, fmt.Sprintf("conv:%s", shortID))
+	}
+
+	// Hotkey hint
+	parts = append(parts, "?:help")
+
+	// Join parts with spaces
+	fullLine := strings.Join(parts, " ")
+
+	// Truncate if too long
+	if len(fullLine) > r.width-2 {
+		fullLine = fullLine[:r.width-5] + "..."
+	}
+
+	return fullLine
+}
+
+// stripANSI removes ANSI escape sequences from text.
+func stripANSI(text string) string {
+	// Simple ANSI strip - remove escape sequences
+	var result strings.Builder
+	inEscape := false
+
+	for _, r := range text {
+		if r == '\x1b' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' {
+				inEscape = false
+			}
+			continue
+		}
+		result.WriteRune(r)
+	}
+
+	return result.String()
 }

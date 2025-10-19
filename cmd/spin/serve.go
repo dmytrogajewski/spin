@@ -56,60 +56,22 @@ Examples:
 
 // runServer starts the JSON-RPC server.
 func runServer(workDir, providerType, baseURL, model, apiKey string) error {
-	// Create LLM provider
-	var provider llm.Provider
-	var err error
-
-	switch providerType {
-	case "ollama":
-		provider, err = ollama.NewProvider(ollama.Config{
-			BaseURL: baseURL,
-			Model:   model,
-		})
-
-	case "openai":
-		provider, err = openai.NewProvider(openai.Config{
-			BaseURL: baseURL,
-			APIKey:  apiKey,
-			Model:   model,
-		})
-
-	default:
-		return fmt.Errorf("unknown provider type: %s", providerType)
-	}
-
+	provider, err := createProvider(providerType, baseURL, model, apiKey)
 	if err != nil {
 		return fmt.Errorf("failed to create provider: %w", err)
 	}
 	defer provider.Close()
 
-	// Create app server
-	server, err := appserver.New(appserver.Config{
-		WorkspacePath: workDir,
-		Version:       version.ShortVersion(),
-		Provider:      provider,
-	})
+	server, err := createAppServer(workDir, provider)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %w", err)
 	}
 
-	// Set up context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle signals
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-sigChan
-		fmt.Fprintln(os.Stderr, "\nShutting down server...")
-		cancel()
-	}()
-
-	// Start server on stdin/stdout
-	log.Println("Starting JSON-RPC server on stdin/stdout...")
-	log.Printf("Provider: %s, Model: %s", providerType, model)
-	log.Printf("Workspace: %s", workDir)
+	setupServerSignalHandling(cancel)
+	logServerStart(providerType, model, workDir)
 
 	if err := server.Serve(ctx, os.Stdin, os.Stdout); err != nil {
 		if err != context.Canceled {
@@ -119,4 +81,52 @@ func runServer(workDir, providerType, baseURL, model, apiKey string) error {
 
 	log.Println("Server stopped")
 	return nil
+}
+
+// createProvider creates an LLM provider based on the provider type.
+func createProvider(providerType, baseURL, model, apiKey string) (llm.Provider, error) {
+	switch providerType {
+	case "ollama":
+		return ollama.NewProvider(ollama.Config{
+			BaseURL: baseURL,
+			Model:   model,
+			Timeout: llm.DefaultTimeout,
+		})
+	case "openai":
+		return openai.NewProvider(openai.Config{
+			BaseURL: baseURL,
+			APIKey:  apiKey,
+			Model:   model,
+			Timeout: llm.DefaultTimeout,
+		})
+	default:
+		return nil, fmt.Errorf("unknown provider type: %s", providerType)
+	}
+}
+
+// createAppServer creates the application server.
+func createAppServer(workDir string, provider llm.Provider) (*appserver.Server, error) {
+	return appserver.New(appserver.Config{
+		WorkspacePath: workDir,
+		Version:       version.ShortVersion(),
+		Provider:      provider,
+	})
+}
+
+// setupServerSignalHandling sets up signal handling for graceful shutdown.
+func setupServerSignalHandling(cancel context.CancelFunc) {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		fmt.Fprintln(os.Stderr, "\nShutting down server...")
+		cancel()
+	}()
+}
+
+// logServerStart logs server startup information.
+func logServerStart(providerType, model, workDir string) {
+	log.Println("Starting JSON-RPC server on stdin/stdout...")
+	log.Printf("Provider: %s, Model: %s", providerType, model)
+	log.Printf("Workspace: %s", workDir)
 }

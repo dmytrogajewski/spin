@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -492,45 +493,49 @@ func (t *Timeline) matchesFilter(block *Block) bool {
 		return true
 	}
 
-	// Check type filter
-	if len(t.filter.Types) > 0 {
-		found := false
-		for _, filterType := range t.filter.Types {
-			if block.Type == filterType {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
+	return t.matchesTypeFilter(block) &&
+		t.matchesFileFilter(block) &&
+		t.matchesExitCodeFilter(block) &&
+		t.matchesImpactFilter(block)
+}
+
+// matchesTypeFilter checks if the block matches the type filter.
+func (t *Timeline) matchesTypeFilter(block *Block) bool {
+	if len(t.filter.Types) == 0 {
+		return true
 	}
 
-	// Check file filter
-	if t.filter.File != "" {
-		file := extractFile(block)
-		if !strings.Contains(file, t.filter.File) {
-			return false
-		}
+	return slices.Contains(t.filter.Types, block.Type)
+}
+
+// matchesFileFilter checks if the block matches the file filter.
+func (t *Timeline) matchesFileFilter(block *Block) bool {
+	if t.filter.File == "" {
+		return true
 	}
 
-	// Check exit code filter
-	if t.filter.ExitCode != nil {
-		exitCode := extractExitCode(block)
-		if exitCode == nil || *exitCode != *t.filter.ExitCode {
-			return false
-		}
+	file := extractFile(block)
+	return strings.Contains(file, t.filter.File)
+}
+
+// matchesExitCodeFilter checks if the block matches the exit code filter.
+func (t *Timeline) matchesExitCodeFilter(block *Block) bool {
+	if t.filter.ExitCode == nil {
+		return true
 	}
 
-	// Check impact filter
-	if t.filter.Impact != "" {
-		impact := extractImpact(block)
-		if impact != t.filter.Impact {
-			return false
-		}
+	exitCode := extractExitCode(block)
+	return exitCode != nil && *exitCode == *t.filter.ExitCode
+}
+
+// matchesImpactFilter checks if the block matches the impact filter.
+func (t *Timeline) matchesImpactFilter(block *Block) bool {
+	if t.filter.Impact == "" {
+		return true
 	}
 
-	return true
+	impact := extractImpact(block)
+	return impact == t.filter.Impact
 }
 
 // extractFile extracts the file path from block metadata.

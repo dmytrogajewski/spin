@@ -250,3 +250,21 @@ func TestManager_CalculateTPS_ZeroDuration(t *testing.T) {
 		t.Errorf("Expected TPS 0 for zero duration, got %.1f", metrics.TokensPerSec)
 	}
 }
+
+func TestManager_SetConnected(t *testing.T) {
+	m := NewManager()
+
+	// Test setting connected to true
+	m.SetConnected(true)
+	metrics := m.GetMetrics()
+	if !metrics.Connected {
+		t.Error("Expected connected to be true")
+	}
+
+	// Test setting connected to false
+	m.SetConnected(false)
+	metrics = m.GetMetrics()
+	if metrics.Connected {
+		t.Error("Expected connected to be false")
+	}
+}

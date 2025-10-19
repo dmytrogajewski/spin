@@ -151,90 +151,6 @@ func NewValidationError(op, message string) error {
 	}
 }
 
-// NewNotFoundError creates an error for resource not found cases.
-func NewNotFoundError(op, resource string) error {
-	return &Error{
-		Op:   op,
-		Code: ErrCodeNotFound,
-		Err:  fmt.Errorf("%s not found", resource),
-	}
-}
-
-// NewExecutionError wraps an execution failure with context.
-func NewExecutionError(op string, err error) error {
-	return &Error{
-		Op:   op,
-		Code: ErrCodeExternal,
-		Err:  err,
-	}
-}
-
-// NewTimeoutError creates an error for timeout cases.
-func NewTimeoutError(op string) error {
-	return &Error{
-		Op:   op,
-		Code: ErrCodeTimeout,
-		Err:  ErrTimeout,
-	}
-}
-
-// NewCancelledError creates an error for cancelled operations.
-func NewCancelledError(op string) error {
-	return &Error{
-		Op:   op,
-		Code: ErrCodeCancelled,
-		Err:  ErrCancelled,
-	}
-}
-
-// NewInternalError wraps an internal error with context.
-func NewInternalError(op string, err error) error {
-	return &Error{
-		Op:   op,
-		Code: ErrCodeInternal,
-		Err:  err,
-	}
-}
-
-// NewPermissionError creates an error for permission denied cases.
-func NewPermissionError(op, message string) error {
-	return &Error{
-		Op:   op,
-		Code: ErrCodePermissionDenied,
-		Err:  fmt.Errorf("%s", message),
-	}
-}
-
-// NewAlreadyExistsError creates an error for duplicate resource cases.
-func NewAlreadyExistsError(op, resource string) error {
-	return &Error{
-		Op:   op,
-		Code: ErrCodeAlreadyExists,
-		Err:  fmt.Errorf("%s already exists", resource),
-	}
-}
-
-// WrapError wraps an existing error with operation context.
-// If err is nil, returns nil. If err is already an *Error, updates the Op.
-func WrapError(op string, err error) error {
-	if err == nil {
-		return nil
-	}
-
-	// If already a core.Error, update the operation
-	if e, ok := err.(*Error); ok {
-		e.Op = op + ": " + e.Op
-		return e
-	}
-
-	// Otherwise, create new error wrapping the original
-	return &Error{
-		Op:   op,
-		Code: ErrCodeUnknown,
-		Err:  err,
-	}
-}
-
 // Filter provides filtering options for listing conversations and sessions
 type Filter struct {
 	// StartTime filters by creation time (after this time)
@@ -256,54 +172,6 @@ type Filter struct {
 	State State
 }
 
-// Validate validates the filter parameters
-func (f *Filter) Validate() error {
-	if f.Limit < 0 {
-		return &Error{
-			Op:   "Filter.Validate",
-			Err:  ErrInvalidInput,
-			Code: ErrCodeInvalidInput,
-			Context: map[string]interface{}{
-				"field": "limit",
-				"value": f.Limit,
-			},
-		}
-	}
-
-	if f.Offset < 0 {
-		return &Error{
-			Op:   "Filter.Validate",
-			Err:  ErrInvalidInput,
-			Code: ErrCodeInvalidInput,
-			Context: map[string]interface{}{
-				"field": "offset",
-				"value": f.Offset,
-			},
-		}
-	}
-
-	// Validate time range if both are set
-	if f.StartTime != nil && f.EndTime != nil {
-		// For actual implementation, would compare time.Time values
-		// For now, check if end is "before" start using string comparison
-		startStr, startOK := f.StartTime.(string)
-		endStr, endOK := f.EndTime.(string)
-		if startOK && endOK && endStr < startStr {
-			return &Error{
-				Op:   "Filter.Validate",
-				Err:  ErrInvalidInput,
-				Code: ErrCodeInvalidInput,
-				Context: map[string]interface{}{
-					"field": "time_range",
-					"error": "end_time before start_time",
-				},
-			}
-		}
-	}
-
-	return nil
-}
-
 // TokenUsage tracks token consumption for LLM API calls
 type TokenUsage struct {
 	// PromptTokens is the number of tokens in the prompt
@@ -314,13 +182,4 @@ type TokenUsage struct {
 
 	// TotalTokens is the total number of tokens used
 	TotalTokens int
-}
-
-// Add returns a new TokenUsage with the sum of two usages
-func (t TokenUsage) Add(other TokenUsage) TokenUsage {
-	return TokenUsage{
-		PromptTokens:     t.PromptTokens + other.PromptTokens,
-		CompletionTokens: t.CompletionTokens + other.CompletionTokens,
-		TotalTokens:      t.TotalTokens + other.TotalTokens,
-	}
 }

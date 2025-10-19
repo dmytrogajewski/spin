@@ -4,14 +4,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dmytrogajewski/spin/internal/ui/theme"
 	"github.com/rivo/uniseg"
 )
 
 // Renderer renders blocks to ANSI terminal output.
 type Renderer struct {
 	width           int                      // Terminal width in columns
-	theme           theme.Theme              // Color theme (optional, uses legacy colors if nil)
 	paramsFormatter *ParamsFormatterRegistry // Tool parameter formatter (Strategy pattern)
 }
 
@@ -23,19 +21,6 @@ func NewRenderer(width int) *Renderer {
 	}
 	return &Renderer{
 		width:           width,
-		theme:           nil, // nil theme uses legacy colors
-		paramsFormatter: NewParamsFormatterRegistry(),
-	}
-}
-
-// NewRendererWithTheme creates a new block renderer with a theme.
-func NewRendererWithTheme(width int, th theme.Theme) *Renderer {
-	if width <= 0 {
-		width = 80 // Default width
-	}
-	return &Renderer{
-		width:           width,
-		theme:           th,
 		paramsFormatter: NewParamsFormatterRegistry(),
 	}
 }
@@ -148,23 +133,32 @@ func (r *Renderer) formatTitle(b *Block) string {
 	// Fallback for special block types without dedicated formatters
 	switch b.Type {
 	case BlockTypePlan:
-		var parts []string
-		if b.Title != "" {
-			parts = append(parts, string(ColorBold)+b.Title+string(ColorReset))
-		}
-		if meta, err := ParsePlanMeta(b); err == nil {
-			metaStr := fmt.Sprintf("Updated: %d total (%d pending, %d in progress, %d completed)",
-				meta.Total, meta.Pending, meta.InProgress, meta.Completed)
-			parts = append(parts, metaStr)
-		}
-		return strings.Join(parts, " ")
+		return r.formatPlanTitle(b)
 	default:
-		// Generic fallback: use title
-		if b.Title != "" {
-			return string(ColorBold) + b.Title + string(ColorReset)
-		}
-		return ""
+		return r.formatGenericTitle(b)
 	}
+}
+
+// formatPlanTitle formats the title for plan blocks.
+func (r *Renderer) formatPlanTitle(b *Block) string {
+	var parts []string
+	if b.Title != "" {
+		parts = append(parts, string(ColorBold)+b.Title+string(ColorReset))
+	}
+	if meta, err := ParsePlanMeta(b); err == nil {
+		metaStr := fmt.Sprintf("Updated: %d total (%d pending, %d in progress, %d completed)",
+			meta.Total, meta.Pending, meta.InProgress, meta.Completed)
+		parts = append(parts, metaStr)
+	}
+	return strings.Join(parts, " ")
+}
+
+// formatGenericTitle formats the title for generic blocks.
+func (r *Renderer) formatGenericTitle(b *Block) string {
+	if b.Title != "" {
+		return string(ColorBold) + b.Title + string(ColorReset)
+	}
+	return ""
 }
 
 // RenderBody renders only the block body based on type.
@@ -173,24 +167,23 @@ func (r *Renderer) RenderBody(b *Block) (string, error) {
 		return "", nil
 	}
 
-	// Dispatch to type-specific renderer
-	switch b.Type {
-	case BlockTypeExecute, BlockTypeNotice:
-		return r.renderTranscript(b)
-	case BlockTypeRead:
-		return r.renderCode(b)
-	case BlockTypeApplyPatch:
-		return r.renderDiff(b)
-	case BlockTypePlan, BlockTypeSummary, BlockTypeTesting:
-		return r.renderList(b)
-	case BlockTypeGrep:
-		return r.renderCode(b) // Similar to READ
-	case BlockTypeError:
-		return r.renderError(b)
-	default:
-		// Fallback: plain text
-		return r.renderTranscript(b)
+	renderers := map[BlockType]func(*Block) (string, error){
+		BlockTypeExecute:    r.renderTranscript,
+		BlockTypeNotice:     r.renderTranscript,
+		BlockTypeRead:       r.renderCode,
+		BlockTypeApplyPatch: r.renderDiff,
+		BlockTypePlan:       r.renderList,
+		BlockTypeSummary:    r.renderList,
+		BlockTypeTesting:    r.renderList,
+		BlockTypeGrep:       r.renderCode,
+		BlockTypeError:      r.renderError,
 	}
+
+	if renderer, exists := renderers[b.Type]; exists {
+		return renderer(b)
+	}
+	// Fallback: plain text
+	return r.renderTranscript(b)
 }
 
 // RenderFooter renders only the block footer.
@@ -199,47 +192,7 @@ func (r *Renderer) RenderFooter(b *Block) string {
 		return ""
 	}
 
-	var chips []string
-
-	// Type-specific footer chips
-	switch b.Type {
-	case BlockTypeExecute:
-		if meta, err := ParseExecuteMeta(b); err == nil {
-			if meta.ExitCode != nil {
-				chips = append(chips, fmt.Sprintf("[exit: %d]", *meta.ExitCode))
-			}
-			if meta.LinesOut != nil {
-				chips = append(chips, fmt.Sprintf("[out: %d lines]", *meta.LinesOut))
-			}
-			if meta.DurationMS != nil {
-				dur := float64(*meta.DurationMS) / 1000.0
-				chips = append(chips, fmt.Sprintf("[dur: %.1fs]", dur))
-			}
-		}
-	case BlockTypeApplyPatch:
-		if meta, err := ParsePatchMeta(b); err == nil {
-			// Only show footer chips after completion
-			if !meta.Completed {
-				break
-			}
-			if meta.Succeeded {
-				prefix := string(ColorGreen) + "✓" + string(ColorReset)
-				msg := " Succeeded. File edited."
-				if meta.LinesAdded != nil && *meta.LinesAdded > 0 {
-					msg += fmt.Sprintf(" (+%d added)", *meta.LinesAdded)
-				}
-				chips = append(chips, prefix+msg)
-			} else {
-				prefix := string(ColorRed) + "●" + string(ColorReset)
-				msg := " Failed"
-				if meta.ErrorMsg != "" {
-					msg += ": " + meta.ErrorMsg
-				}
-				chips = append(chips, prefix+msg)
-			}
-		}
-	}
-
+	chips := r.getFooterChips(b)
 	if len(chips) == 0 {
 		return ""
 	}
@@ -248,6 +201,77 @@ func (r *Renderer) RenderFooter(b *Block) string {
 	out.WriteString(strings.Repeat(" ", S2))
 	out.WriteString(strings.Join(chips, " "))
 	return out.String()
+}
+
+// getFooterChips returns footer chips based on block type.
+func (r *Renderer) getFooterChips(b *Block) []string {
+	switch b.Type {
+	case BlockTypeExecute:
+		return r.getExecuteFooterChips(b)
+	case BlockTypeApplyPatch:
+		return r.getPatchFooterChips(b)
+	default:
+		return nil
+	}
+}
+
+// getExecuteFooterChips returns footer chips for execute blocks.
+func (r *Renderer) getExecuteFooterChips(b *Block) []string {
+	meta, err := ParseExecuteMeta(b)
+	if err != nil {
+		return nil
+	}
+
+	var chips []string
+	if meta.ExitCode != nil {
+		chips = append(chips, fmt.Sprintf("[exit: %d]", *meta.ExitCode))
+	}
+	if meta.LinesOut != nil {
+		chips = append(chips, fmt.Sprintf("[out: %d lines]", *meta.LinesOut))
+	}
+	if meta.DurationMS != nil {
+		dur := float64(*meta.DurationMS) / 1000.0
+		chips = append(chips, fmt.Sprintf("[dur: %.1fs]", dur))
+	}
+	return chips
+}
+
+// getPatchFooterChips returns footer chips for patch blocks.
+func (r *Renderer) getPatchFooterChips(b *Block) []string {
+	meta, err := ParsePatchMeta(b)
+	if err != nil {
+		return nil
+	}
+
+	// Only show footer chips after completion
+	if !meta.Completed {
+		return nil
+	}
+
+	if meta.Succeeded {
+		return r.getPatchSuccessChips(meta)
+	}
+	return r.getPatchFailureChips(meta)
+}
+
+// getPatchSuccessChips returns success chips for patch blocks.
+func (r *Renderer) getPatchSuccessChips(meta *PatchMeta) []string {
+	prefix := string(ColorGreen) + "✓" + string(ColorReset)
+	msg := " Succeeded. File edited."
+	if meta.LinesAdded != nil && *meta.LinesAdded > 0 {
+		msg += fmt.Sprintf(" (+%d added)", *meta.LinesAdded)
+	}
+	return []string{prefix + msg}
+}
+
+// getPatchFailureChips returns failure chips for patch blocks.
+func (r *Renderer) getPatchFailureChips(meta *PatchMeta) []string {
+	prefix := string(ColorRed) + "●" + string(ColorReset)
+	msg := " Failed"
+	if meta.ErrorMsg != "" {
+		msg += ": " + meta.ErrorMsg
+	}
+	return []string{prefix + msg}
 }
 
 // renderTranscript renders plain text transcript (for EXECUTE, NOTICE).
@@ -409,29 +433,50 @@ func (r *Renderer) renderError(b *Block) (string, error) {
 // midEllipsize truncates a string with middle ellipsis (60/40 split).
 // Example: "very long filename.go" → "very long…name.go"
 func midEllipsize(s string, maxWidth int) string {
-	gr := uniseg.NewGraphemes(s)
-	var graphemes []string
-	for gr.Next() {
-		graphemes = append(graphemes, gr.Str())
-	}
-
-	totalWidth := 0
-	for _, g := range graphemes {
-		totalWidth += uniseg.StringWidth(g)
-	}
+	graphemes := extractGraphemes(s)
+	totalWidth := calculateTotalWidth(graphemes)
 
 	if totalWidth <= maxWidth {
 		return s
 	}
 
-	// Calculate split point (60/40)
+	leftWidth, rightWidth := calculateSplitWidths(maxWidth)
+	left := buildLeftPart(graphemes, leftWidth)
+	right := buildRightPart(graphemes, rightWidth)
+
+	return strings.Join(left, "") + "…" + strings.Join(right, "")
+}
+
+// extractGraphemes extracts graphemes from a string.
+func extractGraphemes(s string) []string {
+	gr := uniseg.NewGraphemes(s)
+	var graphemes []string
+	for gr.Next() {
+		graphemes = append(graphemes, gr.Str())
+	}
+	return graphemes
+}
+
+// calculateTotalWidth calculates the total width of graphemes.
+func calculateTotalWidth(graphemes []string) int {
+	totalWidth := 0
+	for _, g := range graphemes {
+		totalWidth += uniseg.StringWidth(g)
+	}
+	return totalWidth
+}
+
+// calculateSplitWidths calculates left and right widths for splitting.
+func calculateSplitWidths(maxWidth int) (int, int) {
 	leftWidth := int(float64(maxWidth-1) * 0.6) // -1 for ellipsis
 	rightWidth := maxWidth - leftWidth - 1
+	return leftWidth, rightWidth
+}
 
-	var left, right []string
+// buildLeftPart builds the left part of the ellipsized string.
+func buildLeftPart(graphemes []string, leftWidth int) []string {
+	var left []string
 	currentWidth := 0
-
-	// Build left part
 	for _, g := range graphemes {
 		w := uniseg.StringWidth(g)
 		if currentWidth+w > leftWidth {
@@ -440,9 +485,13 @@ func midEllipsize(s string, maxWidth int) string {
 		left = append(left, g)
 		currentWidth += w
 	}
+	return left
+}
 
-	// Build right part (from end)
-	currentWidth = 0
+// buildRightPart builds the right part of the ellipsized string.
+func buildRightPart(graphemes []string, rightWidth int) []string {
+	var right []string
+	currentWidth := 0
 	for i := len(graphemes) - 1; i >= 0; i-- {
 		g := graphemes[i]
 		w := uniseg.StringWidth(g)
@@ -452,8 +501,7 @@ func midEllipsize(s string, maxWidth int) string {
 		right = append([]string{g}, right...)
 		currentWidth += w
 	}
-
-	return strings.Join(left, "") + "…" + strings.Join(right, "")
+	return right
 }
 
 // calcGutterWidth calculates the gutter width for line numbers.
@@ -471,28 +519,22 @@ func calcGutterWidth(lineCount int) int {
 
 // getBlockTypeColor returns the 256-color background color for a block type badge.
 func (r *Renderer) getBlockTypeColor(blockType BlockType) int {
-	switch blockType {
-	case BlockTypeExecute:
-		return 063 // Blue
-	case BlockTypeRead:
-		return 208 // Orange
-	case BlockTypeGrep:
-		return 220 // Yellow
-	case BlockTypeApplyPatch:
-		return 205 // Magenta
-	case BlockTypePlan:
-		return 141 // Purple
-	case BlockTypeSummary:
-		return 045 // Cyan
-	case BlockTypeTesting:
-		return 034 // Green
-	case BlockTypeNotice:
-		return 244 // Gray
-	case BlockTypeError:
-		return 196 // Red
-	default:
-		return 244 // Gray (fallback)
+	colorMap := map[BlockType]int{
+		BlockTypeExecute:    063, // Blue
+		BlockTypeRead:       208, // Orange
+		BlockTypeGrep:       220, // Yellow
+		BlockTypeApplyPatch: 205, // Magenta
+		BlockTypePlan:       141, // Purple
+		BlockTypeSummary:    045, // Cyan
+		BlockTypeTesting:    034, // Green
+		BlockTypeNotice:     244, // Gray
+		BlockTypeError:      196, // Red
 	}
+
+	if color, exists := colorMap[blockType]; exists {
+		return color
+	}
+	return 244 // Gray (fallback)
 }
 
 // getBlockTypeLabel returns the display label for a block type.
@@ -515,18 +557,17 @@ func (r *Renderer) RenderCompletionStatus(b *Block) string {
 		return ""
 	}
 
-	switch b.Type {
-	case BlockTypeExecute:
-		return r.renderExecuteCompletionStatus(b)
-	case BlockTypeRead:
-		return r.renderReadCompletionStatus(b)
-	case BlockTypeApplyPatch:
-		return r.renderWriteCompletionStatus(b)
-	case BlockTypeGrep:
-		return r.renderGrepCompletionStatus(b)
-	default:
-		return ""
+	renderers := map[BlockType]func(*Block) string{
+		BlockTypeExecute:    r.renderExecuteCompletionStatus,
+		BlockTypeRead:       r.renderReadCompletionStatus,
+		BlockTypeApplyPatch: r.renderWriteCompletionStatus,
+		BlockTypeGrep:       r.renderGrepCompletionStatus,
 	}
+
+	if renderer, exists := renderers[b.Type]; exists {
+		return renderer(b)
+	}
+	return ""
 }
 
 // renderExecuteCompletionStatus renders completion status for EXECUTE blocks.

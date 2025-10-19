@@ -4,217 +4,150 @@ import (
 	"testing"
 )
 
-func TestClassifier_UserMessage(t *testing.T) {
-	classifier := &MessageClassifier{}
-
-	msg := &CompressibleMessage{
-		Role:    RoleUser,
-		Content: "Please help me debug this issue",
-	}
-
-	importance := classifier.Classify(msg)
-
-	if importance != ImportanceCritical {
-		t.Errorf("expected ImportanceCritical, got %v", importance)
-	}
-}
-
-func TestClassifier_ToolResult(t *testing.T) {
-	classifier := &MessageClassifier{}
-
-	msg := &CompressibleMessage{
-		Role:    RoleTool,
-		Content: "Command output: test passed",
-	}
-
-	importance := classifier.Classify(msg)
-
-	if importance != ImportanceCritical {
-		t.Errorf("expected ImportanceCritical for tool result, got %v", importance)
-	}
-}
-
-func TestClassifier_MessageWithToolCalls(t *testing.T) {
-	classifier := &MessageClassifier{}
-
-	msg := &CompressibleMessage{
-		Role:          RoleAssistant,
-		Content:       "Let me read that file for you",
-		ToolCallCount: 1, // Has tool calls
-	}
-
-	importance := classifier.Classify(msg)
-
-	if importance != ImportanceCritical {
-		t.Errorf("expected ImportanceCritical for message with tool calls, got %v", importance)
-	}
-}
-
-func TestClassifier_ErrorMessage(t *testing.T) {
+func TestMessageClassifier_Classify(t *testing.T) {
 	classifier := &MessageClassifier{}
 
 	tests := []struct {
-		name    string
-		content string
+		name     string
+		msg      Message
+		expected MessageImportance
 	}{
 		{
-			name:    "error in content (lowercase)",
-			content: "error: file not found",
+			name:     "system message",
+			msg:      &mockMessage{role: RoleSystem, content: "System prompt"},
+			expected: ImportanceCritical,
 		},
 		{
-			name:    "error in content (uppercase)",
-			content: "ERROR: permission denied",
+			name:     "user message",
+			msg:      &mockMessage{role: RoleUser, content: "User input"},
+			expected: ImportanceCritical,
 		},
 		{
-			name:    "error in content (mixed)",
-			content: "An Error occurred during processing",
+			name:     "tool message",
+			msg:      &mockMessage{role: RoleTool, content: "Tool result"},
+			expected: ImportanceCritical,
 		},
 		{
-			name:    "failed in content",
-			content: "failed: command execution failed",
+			name:     "message with tool calls",
+			msg:      &mockMessage{role: RoleAssistant, content: "Response", toolCallCount: 1},
+			expected: ImportanceCritical,
 		},
 		{
-			name:    "exception in content",
-			content: "exception: null pointer exception",
+			name:     "error message",
+			msg:      &mockMessage{role: RoleAssistant, content: "Error: something failed"},
+			expected: ImportanceCritical,
+		},
+		{
+			name:     "assistant with code block",
+			msg:      &mockMessage{role: RoleAssistant, content: "Here's the code:\n```go\nfunc main() {}\n```"},
+			expected: ImportanceHigh,
+		},
+		{
+			name:     "assistant with diff",
+			msg:      &mockMessage{role: RoleAssistant, content: "Here's the diff:\n@@ -1,3 +1,3 @@"},
+			expected: ImportanceHigh,
+		},
+		{
+			name:     "verbose assistant response",
+			msg:      &mockMessage{role: RoleAssistant, content: string(make([]byte, 1001))},
+			expected: ImportanceLow,
+		},
+		{
+			name:     "empty assistant response",
+			msg:      &mockMessage{role: RoleAssistant, content: "   "},
+			expected: ImportanceLow,
+		},
+		{
+			name:     "regular assistant response",
+			msg:      &mockMessage{role: RoleAssistant, content: "Regular response"},
+			expected: ImportanceMedium,
+		},
+		{
+			name:     "unknown role",
+			msg:      &mockMessage{role: "unknown", content: "Unknown role message"},
+			expected: ImportanceLow,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			msg := &CompressibleMessage{
-				Role:    RoleAssistant,
-				Content: tt.content,
-			}
-
-			importance := classifier.Classify(msg)
-
-			if importance != ImportanceCritical {
-				t.Errorf("expected ImportanceCritical for error message, got %v", importance)
+			result := classifier.Classify(tt.msg)
+			if result != tt.expected {
+				t.Errorf("MessageClassifier.Classify() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
 }
 
-func TestClassifier_CodeBlock(t *testing.T) {
+func TestMessageClassifier_IsError(t *testing.T) {
 	classifier := &MessageClassifier{}
 
-	msg := &CompressibleMessage{
-		Role: RoleAssistant,
-		Content: `Let me show you the implementation:
-
-` + "```go" + `
-func main() {
-    fmt.Println("Hello")
-}
-` + "```",
+	tests := []struct {
+		name     string
+		content  string
+		expected bool
+	}{
+		{"no error", "This is a normal message", false},
+		{"error keyword", "Error: something went wrong", true},
+		{"error space", "Error something went wrong", true},
+		{"failed keyword", "Failed: operation failed", true},
+		{"failed space", "Failed operation failed", true},
+		{"exception keyword", "Exception: something happened", true},
+		{"exception space", "Exception something happened", true},
+		{"case insensitive", "ERROR: something went wrong", true},
+		{"mixed case", "Failed: operation failed", true},
 	}
 
-	importance := classifier.Classify(msg)
-
-	if importance != ImportanceHigh {
-		t.Errorf("expected ImportanceHigh for code block, got %v", importance)
-	}
-}
-
-func TestClassifier_DiffBlock(t *testing.T) {
-	classifier := &MessageClassifier{}
-
-	msg := &CompressibleMessage{
-		Role: RoleAssistant,
-		Content: `Here's the patch:
-
-@@ -1,3 +1,4 @@
- package main
-+import "log"
- 
- func main() {`,
-	}
-
-	importance := classifier.Classify(msg)
-
-	if importance != ImportanceHigh {
-		t.Errorf("expected ImportanceHigh for diff block, got %v", importance)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifier.isError(tt.content)
+			if result != tt.expected {
+				t.Errorf("MessageClassifier.isError() = %v, want %v", result, tt.expected)
+			}
+		})
 	}
 }
 
-func TestClassifier_VerboseResponse(t *testing.T) {
+func TestMessageClassifier_ClassifyAssistantMessage(t *testing.T) {
 	classifier := &MessageClassifier{}
 
-	// Generate a long response (> 1000 chars) without code
-	longContent := `I understand you need help with this issue. Let me think through this carefully. `
-	for i := 0; i < 20; i++ {
-		longContent += `First, we need to consider the architecture and how the components interact. `
+	tests := []struct {
+		name     string
+		content  string
+		expected MessageImportance
+	}{
+		{"empty", "", ImportanceLow},
+		{"whitespace", "   \n\t  ", ImportanceLow},
+		{"with code", "```go\nfunc main() {}\n```", ImportanceHigh},
+		{"with diff", "@@ -1,3 +1,3 @@", ImportanceHigh},
+		{"verbose", string(make([]byte, 1001)), ImportanceLow},
+		{"regular", "Regular response", ImportanceMedium},
 	}
 
-	msg := &CompressibleMessage{
-		Role:    RoleAssistant,
-		Content: longContent,
-	}
-
-	importance := classifier.Classify(msg)
-
-	if importance != ImportanceLow {
-		t.Errorf("expected ImportanceLow for verbose response, got %v", importance)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifier.classifyAssistantMessage(tt.content)
+			if result != tt.expected {
+				t.Errorf("MessageClassifier.classifyAssistantMessage() = %v, want %v", result, tt.expected)
+			}
+		})
 	}
 }
 
-func TestClassifier_RegularResponse(t *testing.T) {
-	classifier := &MessageClassifier{}
-
-	msg := &CompressibleMessage{
-		Role:    RoleAssistant,
-		Content: "I'll help you with that task.",
-	}
-
-	importance := classifier.Classify(msg)
-
-	if importance != ImportanceMedium {
-		t.Errorf("expected ImportanceMedium for regular response, got %v", importance)
-	}
+type mockMessage struct {
+	role          string
+	content       string
+	toolCallCount int
 }
 
-func TestClassifier_SystemMessage(t *testing.T) {
-	classifier := &MessageClassifier{}
-
-	msg := &CompressibleMessage{
-		Role:    RoleSystem,
-		Content: "You are a helpful coding assistant",
-	}
-
-	importance := classifier.Classify(msg)
-
-	// System messages should be critical (always preserved)
-	if importance != ImportanceCritical {
-		t.Errorf("expected ImportanceCritical for system message, got %v", importance)
-	}
+func (m *mockMessage) GetRole() string {
+	return m.role
 }
 
-func TestClassifier_EmptyMessage(t *testing.T) {
-	classifier := &MessageClassifier{}
-
-	msg := &CompressibleMessage{
-		Role:    RoleAssistant,
-		Content: "",
-	}
-
-	importance := classifier.Classify(msg)
-
-	// Empty messages should be low importance
-	if importance != ImportanceLow {
-		t.Errorf("expected ImportanceLow for empty message, got %v", importance)
-	}
+func (m *mockMessage) GetContent() string {
+	return m.content
 }
 
-// Benchmark classifier performance
-func BenchmarkClassifier(b *testing.B) {
-	classifier := &MessageClassifier{}
-	msg := &CompressibleMessage{
-		Role:    RoleAssistant,
-		Content: "This is a test message for benchmarking",
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = classifier.Classify(msg)
-	}
+func (m *mockMessage) GetToolCallCount() int {
+	return m.toolCallCount
 }
