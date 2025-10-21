@@ -219,8 +219,8 @@ func (t *ListDirectoryTool) Execute(ctx context.Context, params map[string]inter
 // ExecuteCommandTool implements command execution functionality.
 // It requires an Executor and Validator from the core package.
 type ExecuteCommandTool struct {
-	executor  interface{} // core.Executor - using interface{} to avoid circular import
-	validator interface{} // core.Validator - using interface{} to avoid circular import
+	executor  interface{} // agent.Executor - using interface{} to avoid circular import
+	validator interface{} // security.Validator - using interface{} to avoid circular import
 }
 
 // NewExecuteCommandTool creates a new execute command tool.
@@ -508,7 +508,7 @@ func (t *ExecuteCommandTool) combineOutput(stdout, stderr string) string {
 
 // GetContextTool implements environment context retrieval.
 type GetContextTool struct {
-	context interface{} // core.Context - using interface{} to avoid circular import
+	context interface{} // agent.Environment - using interface{} to avoid circular import
 }
 
 // NewGetContextTool creates a new get context tool.
@@ -550,7 +550,7 @@ func (t *GetContextTool) Execute(ctx context.Context, params map[string]interfac
 	}
 
 	// Use reflection to call String() method to avoid circular import
-	// The context is core.Environment which implements String() string
+	// The context is agent.Environment which implements String() string
 	val := reflect.ValueOf(t.context)
 
 	// Check if the context has a String() method
@@ -923,96 +923,70 @@ func (t *GitContextTool) Schema() ToolSchema {
 }
 
 func (t *GitContextTool) Execute(ctx context.Context, params map[string]interface{}) (ToolResult, error) {
-	// Extract workspace_root parameter (optional)
+	// Get workspace root
 	workspaceRoot := t.workspaceRoot
-	if customRoot, ok := params["workspace_root"].(string); ok && customRoot != "" {
-		workspaceRoot = customRoot
+	if root, ok := params["workspace_root"].(string); ok && root != "" {
+		workspaceRoot = root
 	}
 
-	// Extract include_diff parameter (optional)
-	includeDiff := false
-	if diffVal, ok := params["include_diff"].(bool); ok {
-		includeDiff = diffVal
-	}
-
-	// Discover repository
+	// Discover git repository
 	repo, err := git.Discover(ctx, workspaceRoot)
 	if err != nil {
-		// Not a git repository - return graceful error
+		// Gracefully handle non-git directories
 		return ToolResult{
 			Success: true,
-			Output:  "Not a Git repository. Initialize with 'git init' to enable version control.\n",
+			Output:  fmt.Sprintf("Not a Git repository: %v\n", err),
 		}, nil
 	}
 
-	// Get status
+	var output strings.Builder
+	output.WriteString("Git Repository Context:\n")
+	output.WriteString("======================\n\n")
+
+	// Get status (includes branch info)
 	status, err := repo.Status(ctx)
 	if err != nil {
 		return ToolResult{
 			Success: false,
-			Error:   fmt.Sprintf("failed to get git status: %v", err),
+			Output:  fmt.Sprintf("Failed to get git status: %v\n", err),
 		}, nil
 	}
 
-	// Format output
-	var output strings.Builder
-	output.WriteString("Git Repository Context:\n\n")
-	output.WriteString(fmt.Sprintf("Repository Root: %s\n", repo.Root()))
-
-	if status.Detached {
-		output.WriteString(fmt.Sprintf("Branch: (detached HEAD at %s)\n", status.Hash[:7]))
-	} else {
-		output.WriteString(fmt.Sprintf("Branch: %s\n", status.Branch))
-	}
-
+	// Branch info
+	output.WriteString(fmt.Sprintf("Branch: %s\n", status.Branch))
 	if status.RemoteBranch != "" {
-		output.WriteString(fmt.Sprintf("Tracking: %s", status.RemoteBranch))
-		if status.Ahead > 0 || status.Behind > 0 {
-			output.WriteString(fmt.Sprintf(" [ahead %d, behind %d]", status.Ahead, status.Behind))
-		}
-		output.WriteString("\n")
+		output.WriteString(fmt.Sprintf("Remote: %s\n", status.RemoteBranch))
+		output.WriteString(fmt.Sprintf("Ahead: %d, Behind: %d\n", status.Ahead, status.Behind))
+	}
+	if status.Detached {
+		output.WriteString("(detached HEAD)\n")
 	}
 
-	output.WriteString(fmt.Sprintf("Commit: %s\n\n", status.Hash[:7]))
-
-	// Status summary
-	totalModified := len(status.ModifiedFiles)
-	totalUntracked := len(status.UntrackedFiles)
-
-	if totalModified == 0 && totalUntracked == 0 {
-		output.WriteString("Working tree clean.\n")
-	} else {
-		if totalModified > 0 {
-			output.WriteString(fmt.Sprintf("Modified/Staged: %d file(s)\n", totalModified))
-			// Show first 10 modified files
-			for i, file := range status.ModifiedFiles {
-				if i >= 10 {
-					output.WriteString(fmt.Sprintf("  ... and %d more\n", totalModified-10))
-					break
-				}
-				// Format status: show staging/worktree status codes
-				statusStr := file.Staging.String() + file.Worktree.String()
-				output.WriteString(fmt.Sprintf("  %s %s\n", statusStr, file.Path))
-			}
+	// Commit hash
+	if status.Hash != "" {
+		hashLen := len(status.Hash)
+		if hashLen > 8 {
+			hashLen = 8
 		}
+		output.WriteString(fmt.Sprintf("Commit: %s\n", status.Hash[:hashLen]))
+	}
 
-		if totalUntracked > 0 {
-			output.WriteString(fmt.Sprintf("\nUntracked: %d file(s)\n", totalUntracked))
-			// Show first 10 untracked files
-			for i, file := range status.UntrackedFiles {
-				if i >= 10 {
-					output.WriteString(fmt.Sprintf("  ... and %d more\n", totalUntracked-10))
-					break
-				}
-				output.WriteString(fmt.Sprintf("  %s\n", file))
-			}
+	// File status
+	output.WriteString(fmt.Sprintf("\nModified files: %d\n", len(status.ModifiedFiles)))
+	output.WriteString(fmt.Sprintf("Untracked files: %d\n", len(status.UntrackedFiles)))
+
+	if len(status.ModifiedFiles) > 0 {
+		output.WriteString("\nModified:\n")
+		for _, file := range status.ModifiedFiles {
+			output.WriteString(fmt.Sprintf("  - %s (%s)\n", file.Path, file.Worktree))
 		}
 	}
 
-	// Optionally include diff summary
-	if includeDiff && totalModified > 0 {
-		output.WriteString("\nNote: include_diff=true requested but full diff not yet implemented.\n")
-		output.WriteString("Use git diff commands for detailed changes.\n")
+	if len(status.UntrackedFiles) > 0 && len(status.UntrackedFiles) < 20 {
+		output.WriteString("\nUntracked:\n")
+		for _, file := range status.UntrackedFiles {
+			output.WriteString(fmt.Sprintf("  - %s\n", file))
+		}
 	}
 
 	return ToolResult{

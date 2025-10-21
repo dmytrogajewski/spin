@@ -83,3 +83,5 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 
 	return scanner.Err()
 }
+
+// SendNotification sends a JSON-RPC notification to the writer

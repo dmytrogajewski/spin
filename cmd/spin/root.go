@@ -78,6 +78,7 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 	cmd.AddCommand(newExecCmd())
 	cmd.AddCommand(newServeCmd())
 	cmd.AddCommand(newConfigCmd())
+	cmd.AddCommand(newAuthCmd())      // Auth management
 	cmd.AddCommand(newMCPCmd())
 	cmd.AddCommand(newDebugCmd())
 	cmd.AddCommand(newApplyPatchCmd()) // Apply patch CLI (Feature 2.4)

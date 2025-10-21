@@ -1,0 +1,143 @@
+package conversation
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/history"
+	"github.com/dmytrogajewski/spin/internal/message"
+)
+
+// Conversation represents an active conversation instance.
+type Conversation struct {
+	agent     *agent.Agent
+	history   *history.History
+	emitter   *events.EventEmitter
+	taskMode  string // Current task mode (regular, review, compact, planning)
+	sessionID string // Session identifier for tracking and persistence
+}
+
+// NewConversation creates a new conversation instance.
+func NewConversation(agent *agent.Agent, history *history.History, emitter *events.EventEmitter, sessionID string) *Conversation {
+	return &Conversation{
+		agent:     agent,
+		history:   history,
+		emitter:   emitter,
+		taskMode:  "regular", // Default task mode
+		sessionID: sessionID,
+	}
+}
+
+// RunTurn executes a single turn in the conversation.
+func (c *Conversation) RunTurn(ctx context.Context, input string) error {
+	// Get current task mode (default to "regular" if not set)
+	taskMode := c.taskMode
+	if taskMode == "" {
+		taskMode = "regular"
+	}
+
+	// Get conversation history for context
+	historyMessages := c.history.MessagesForLLM()
+	agentHistory := c.convertHistoryToAgentMessages(historyMessages)
+
+	// Create agent request with task mode and history
+	req := &agent.AgentRequest{
+		Input:    input,
+		TaskName: taskMode,
+		History:  agentHistory,
+	}
+
+	// Execute agent
+	resp, err := c.agent.Execute(ctx, req)
+	if err != nil {
+		return fmt.Errorf("agent execution failed: %w", err)
+	}
+
+	// Add user message to history
+	err = c.history.AddUserMessage(input)
+	if err != nil {
+		return fmt.Errorf("failed to add user message: %w", err)
+	}
+
+	// Add assistant response to history
+	if resp.Output != "" {
+		err = c.history.AddMessage(message.Message{
+			Role:    message.RoleAssistant,
+			Content: resp.Output,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to add assistant message: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// convertHistoryToAgentMessages converts history messages to agent messages.
+func (c *Conversation) convertHistoryToAgentMessages(historyMsgs []message.Message) []agent.Message {
+	agentMsgs := make([]agent.Message, 0, len(historyMsgs))
+	for _, msg := range historyMsgs {
+		agentMsgs = append(agentMsgs, agent.Message{
+			Role:      string(msg.Role),
+			Content:   msg.Content,
+			Timestamp: msg.Timestamp,
+		})
+	}
+	return agentMsgs
+}
+
+// validTaskModes defines the valid task modes
+var validTaskModes = map[string]bool{
+	"regular":  true,
+	"review":   true,
+	"compact":  true,
+	"planning": true,
+}
+
+// SetTaskMode sets the task mode for the conversation.
+func (c *Conversation) SetTaskMode(mode string) error {
+	if !validTaskModes[mode] {
+		return fmt.Errorf("invalid task mode: %s (must be one of: regular, review, compact, planning)", mode)
+	}
+	c.taskMode = mode
+
+	// Emit mode switch event
+	if c.emitter != nil {
+		c.emitter.Emit(events.Event{
+			Type: events.EventInfo,
+			Data: events.SystemEventData{
+				Message: fmt.Sprintf("Switched to %s mode", mode),
+			},
+		})
+	}
+
+	return nil
+}
+
+// GetTaskMode returns the current task mode for the conversation.
+func (c *Conversation) GetTaskMode() string {
+	return c.taskMode
+}
+
+// GetTokenCount returns the total number of tokens used in the conversation history.
+func (c *Conversation) GetTokenCount() int {
+	return c.history.TokenCount()
+}
+
+// GetSessionID returns the session identifier for this conversation.
+func (c *Conversation) GetSessionID() string {
+	return c.sessionID
+}
+
+// Stream returns the event stream for this conversation.
+func (c *Conversation) Stream() <-chan events.Event {
+	return c.emitter.Events()
+}
+
+// Close closes the conversation and cleans up resources.
+func (c *Conversation) Close() error {
+	// Cleanup logic would go here
+	return nil
+}

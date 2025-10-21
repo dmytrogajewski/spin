@@ -64,8 +64,11 @@ func TestRunServer(t *testing.T) {
 			// but we can verify the function doesn't panic and handles errors properly
 			err := runServer(tt.workDir, tt.providerType, tt.baseURL, tt.model, tt.apiKey)
 
-			// For now, we expect errors since we can't start a real server in tests
-			if !tt.expectError && err == nil {
+			// Check error expectations
+			if tt.expectError && err == nil {
+				t.Errorf("runServer() expected error but got none")
+			}
+			if !tt.expectError && err != nil {
 				t.Errorf("runServer() expected no error but got: %v", err)
 			}
 		})
@@ -144,19 +147,4 @@ func TestServeCmdExamples(t *testing.T) {
 }
 
 // Helper function to check if a string contains a substring
-func containsServe(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr ||
-		(len(s) > len(substr) &&
-			(s[:len(substr)] == substr ||
-				s[len(s)-len(substr):] == substr ||
-				findSubstringServe(s, substr))))
-}
 
-func findSubstringServe(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}

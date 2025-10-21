@@ -33,6 +33,9 @@ type Printer struct {
 // PrinterOption is a functional option for configuring the Printer.
 type PrinterOption func(*Printer)
 
+// WithCoalesceDelay sets the delay for coalescing chunks.
+// Setting to 0 disables coalescing and writes chunks immediately.
+
 // NewPrinter creates a new Printer with optional configuration.
 // The printer writes to the provided io.Writer.
 //

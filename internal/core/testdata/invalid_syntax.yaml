@@ -1,5 +1,0 @@
-# Invalid YAML syntax - unclosed quote
-provider: "ollama
-model: codellama:13b
-work_dir: /tmp
-

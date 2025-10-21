@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/events"
 )
 
 func TestEventLogger_New(t *testing.T) {
@@ -40,25 +40,25 @@ func TestEventLogger_ShouldLog(t *testing.T) {
 	tests := []struct {
 		name     string
 		filter   []string
-		event    core.Event
+		event    events.Event
 		expected bool
 	}{
 		{
 			name:     "no filter logs all",
 			filter:   nil,
-			event:    core.Event{Type: core.EventContentDelta},
+			event:    events.Event{Type: events.EventContentDelta},
 			expected: true,
 		},
 		{
 			name:     "filter matches",
 			filter:   []string{"content_delta", "tool_call_start"},
-			event:    core.Event{Type: core.EventContentDelta},
+			event:    events.Event{Type: events.EventContentDelta},
 			expected: true,
 		},
 		{
 			name:     "filter does not match",
 			filter:   []string{"tool_call_start"},
-			event:    core.Event{Type: core.EventContentDelta},
+			event:    events.Event{Type: events.EventContentDelta},
 			expected: false,
 		},
 	}
@@ -81,8 +81,8 @@ func TestEventLogger_LogEvent_Text(t *testing.T) {
 	var buf bytes.Buffer
 	logger.writer = &buf
 
-	event := core.Event{
-		Type: core.EventToolCallStart,
+	event := events.Event{
+		Type: events.EventToolCallStart,
 		Data: map[string]interface{}{
 			"tool": "bash",
 			"args": map[string]string{"command": "ls"},
@@ -107,8 +107,8 @@ func TestEventLogger_LogEvent_JSON(t *testing.T) {
 	var buf bytes.Buffer
 	logger.writer = &buf
 
-	event := core.Event{
-		Type: core.EventContentDelta,
+	event := events.Event{
+		Type: events.EventContentDelta,
 		Data: map[string]interface{}{
 			"delta": "Hello",
 		},
@@ -228,18 +228,18 @@ func TestEventLogger_Filter_Multiple(t *testing.T) {
 	logger := NewEventLogger("text", []string{"tool_call_start", "tool_call_complete"})
 
 	tests := []struct {
-		eventType core.EventType
+		eventType events.EventType
 		expected  bool
 	}{
-		{core.EventToolCallStart, true},
-		{core.EventToolCallComplete, true},
-		{core.EventContentDelta, false},
-		{core.EventTurnStart, false},
+		{events.EventToolCallStart, true},
+		{events.EventToolCallComplete, true},
+		{events.EventContentDelta, false},
+		{events.EventTurnStart, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.eventType.String(), func(t *testing.T) {
-			event := core.Event{Type: tt.eventType}
+			event := events.Event{Type: tt.eventType}
 			result := logger.shouldLog(event)
 			if result != tt.expected {
 				t.Errorf("for event %s: expected %v, got %v", tt.eventType, tt.expected, result)
@@ -253,8 +253,8 @@ func TestEventLogger_LogEventJSON(t *testing.T) {
 	var buf bytes.Buffer
 	logger.writer = &buf
 
-	event := core.Event{
-		Type: core.EventContentDelta,
+	event := events.Event{
+		Type: events.EventContentDelta,
 		Data: map[string]interface{}{
 			"delta": "Hello",
 		},
@@ -279,8 +279,8 @@ func TestEventLogger_LogEventText(t *testing.T) {
 	var buf bytes.Buffer
 	logger.writer = &buf
 
-	event := core.Event{
-		Type: core.EventTurnStart,
+	event := events.Event{
+		Type: events.EventTurnStart,
 		Data: "Starting turn",
 	}
 
@@ -304,8 +304,8 @@ func TestEventLogger_LogEventJSON_InvalidData(t *testing.T) {
 	logger.writer = &buf
 
 	// Create event with data that can't be marshaled to JSON
-	event := core.Event{
-		Type: core.EventError,
+	event := events.Event{
+		Type: events.EventError,
 		Data: func() {}, // Function can't be marshaled to JSON
 	}
 
@@ -329,8 +329,8 @@ func TestEventLogger_LogEventJSON_EncodeError(t *testing.T) {
 
 	// Create event with unmarshalable output structure
 	// This will trigger the error path at line 129-131
-	event := core.Event{
-		Type: core.EventError,
+	event := events.Event{
+		Type: events.EventError,
 		Data: "normal data",
 	}
 
@@ -357,8 +357,8 @@ func TestEventLogger_LogEventJSON_MarshalError(t *testing.T) {
 		Chan chan int
 	}
 
-	event := core.Event{
-		Type: core.EventError,
+	event := events.Event{
+		Type: events.EventError,
 		Data: unmarshalable{Chan: make(chan int)},
 	}
 
@@ -389,8 +389,8 @@ func TestEventLogger_Concurrency(t *testing.T) {
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func(i int) {
-			event := core.Event{
-				Type: core.EventContentDelta,
+			event := events.Event{
+				Type: events.EventContentDelta,
 				Data: fmt.Sprintf("message %d", i),
 			}
 			logger.logEvent(event)

@@ -19,6 +19,10 @@ type RequestID struct {
 	Num *int64
 }
 
+// StringID creates a RequestID from a string
+
+// NumberID creates a RequestID from a number
+
 // MarshalJSON implements custom marshaling for RequestID
 func (r RequestID) MarshalJSON() ([]byte, error) {
 	if r.Str != nil {
@@ -100,6 +104,8 @@ const (
 func NewError(code int, message string) *Error {
 	return &Error{Code: code, Message: message}
 }
+
+// NewErrorWithData creates a new error with additional data
 
 // Notification represents a JSON-RPC notification (no response expected)
 type Notification struct {

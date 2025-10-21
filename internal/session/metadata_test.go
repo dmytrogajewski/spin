@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/core/turn"
+	"github.com/dmytrogajewski/spin/internal/orchestration"
 )
 
 // Test Metadata Initialization
@@ -44,22 +44,22 @@ func TestMetadata_TokenTracking(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	// Add turns with different token counts
-	_ = session.AddTurn(&turn.Turn{
+	_ = session.AddTurn(&orchestration.Turn{
 		ID:        "turn-1",
 		SessionID: session.ID,
-		Tokens:    turn.TokenUsage{TotalTokens: 100},
+		Tokens:    orchestration.TokenUsage{TotalTokens: 100},
 	})
 
-	_ = session.AddTurn(&turn.Turn{
+	_ = session.AddTurn(&orchestration.Turn{
 		ID:        "turn-2",
 		SessionID: session.ID,
-		Tokens:    turn.TokenUsage{TotalTokens: 250},
+		Tokens:    orchestration.TokenUsage{TotalTokens: 250},
 	})
 
-	_ = session.AddTurn(&turn.Turn{
+	_ = session.AddTurn(&orchestration.Turn{
 		ID:        "turn-3",
 		SessionID: session.ID,
-		Tokens:    turn.TokenUsage{TotalTokens: 150},
+		Tokens:    orchestration.TokenUsage{TotalTokens: 150},
 	})
 
 	expectedTokens := 100 + 250 + 150
@@ -75,7 +75,7 @@ func TestMetadata_TurnCountConsistency(t *testing.T) {
 
 	// Add multiple turns
 	for i := 0; i < 10; i++ {
-		_ = session.AddTurn(&turn.Turn{
+		_ = session.AddTurn(&orchestration.Turn{
 			ID:        fmt.Sprintf("turn-%d", i),
 			SessionID: session.ID,
 		})

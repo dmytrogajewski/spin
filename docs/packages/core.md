@@ -18,14 +18,23 @@ This package implements all the essential functionality needed for an autonomous
 
 ## Architecture
 
+**MAJOR REFACTORING (2025-10-19)**: Agent decomposed into service-based architecture
+
 The package is organized into several layers:
 
 ### Public API Layer
 - **Manager**: High-level conversation manager (entry point)
-  - Refactored (2025-10-19): NewConversation method complexity reduced from 47 to 5
+  - Builds and injects services into Agent
   - Clean separation of concerns with 15+ helper methods
 - **Conversation**: Active conversation instance
-- **Agent**: Core agent orchestration
+- **Agent**: Core agent orchestration (refactored to use services)
+
+### Service Layer (NEW)
+- **SecurityService**: Command validation and approval management
+- **DetectionService**: Cycle and pattern detection
+- **OrchestrationService**: Tool execution and task management
+
+These services decompose the Agent's responsibilities for better testability and maintainability.
 
 ### State Management Layer
 - **turn/**: Turn state machine
@@ -34,11 +43,95 @@ The package is organized into several layers:
 ### Task Execution Layer
 - **Executor**: Safe command execution
 - **Validator**: Command safety classification
+- **ToolExecutor**: Centralized tool execution (used by OrchestrationService)
 
+### Infrastructure
 - **event.go**: Event emitter and typed payload definitions
 - **config.go**: Configuration management
 - **logger.go**: Structured logging
 - **tracing.go**: Distributed tracing
+
+## Service-Based Architecture
+
+### SecurityService
+
+Handles all security-related operations:
+- Command validation and classification
+- Approval request management
+- Integration with ApprovalService
+
+```go
+// Create security service
+validator := core.NewValidator()
+approvalService := core.NewApprovalService(approvalHandler)
+security := core.NewSecurityService(validator, approvalService)
+
+// Validate a command
+result, err := security.ValidateCommand(cmd)
+
+// Request approval
+approved, err := security.RequestApproval(ctx, operation)
+```
+
+### DetectionService
+
+Handles cycle and pattern detection:
+- Records agent behavior snapshots
+- Detects cycles (repeated tools, similar responses, errors)
+- Provides pattern analysis
+
+```go
+// Create detection service
+cycleDetector := cycle.NewDetector(cycleConfig)
+patternDetector := cycle.NewPatternDetector(cycleConfig)
+detection := core.NewDetectionService(cycleDetector, patternDetector)
+
+// Record snapshot
+detection.RecordSnapshot(snapshot)
+
+// Check for cycles
+result, err := detection.CheckCycle()
+```
+
+### OrchestrationService
+
+Handles tool execution and task management:
+- Executes tools via ToolExecutor
+- Manages task registry
+- Coordinates execution planning
+
+```go
+// Create orchestration service
+toolExecutor := core.NewToolExecutor(config)
+orchestration := core.NewOrchestrationService(toolExecutor, toolRegistry, taskRegistry)
+
+// Execute tool
+result, err := orchestration.ExecuteTool(ctx, toolCall)
+
+// Get task
+task, err := orchestration.GetTask("review")
+```
+
+### Agent Creation with Services
+
+```go
+// Build services
+security := core.NewSecurityService(validator, approvalService)
+detection := core.NewDetectionService(cycleDetector, patternDetector)
+orchestration := core.NewOrchestrationService(toolExecutor, toolRegistry, taskRegistry)
+
+// Create agent
+agent, err := core.NewAgent(
+    llmProvider,
+    security,
+    detection,
+    orchestration,
+    environment,
+    emitter,
+    core.WithMaxTurns(50),
+    core.WithTemperature(0.7),
+)
+```
 
 ## Quick Start
 

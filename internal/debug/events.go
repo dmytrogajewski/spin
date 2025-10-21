@@ -8,7 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/manager"
 )
 
 // EventLogger captures and logs all core events for debugging.
@@ -42,8 +43,8 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	}
 
 	// Create core manager with default config
-	cfg := core.DefaultConfig()
-	mgr, err := core.NewManager(cfg)
+	cfg := manager.DefaultConfig()
+	mgr, err := manager.NewManager(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to create manager: %w", err)
 	}
@@ -53,10 +54,10 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create conversation: %w", err)
 	}
-	defer conv.Stop(ctx)
+	defer conv.Close()
 
 	// Get event stream
-	events := conv.Stream()
+	eventStream := conv.Stream()
 
 	// Start turn in goroutine
 	errChan := make(chan error, 1)
@@ -65,18 +66,18 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	}()
 
 	// Log all events
-	for event := range events {
+	for event := range eventStream {
 		if el.shouldLog(event) {
 			el.logEvent(event)
 		}
 
 		// Check for errors
-		if event.Type == core.EventError {
+		if event.Type == events.EventError {
 			return fmt.Errorf("task failed: %v", event.Data)
 		}
 
 		// Stop on turn complete or failed
-		if event.Type == core.EventTurnComplete || event.Type == core.EventTurnFailed {
+		if event.Type == events.EventTurnComplete || event.Type == events.EventTurnFailed {
 			break
 		}
 	}
@@ -94,7 +95,7 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 }
 
 // shouldLog checks if an event should be logged based on the filter.
-func (el *EventLogger) shouldLog(event core.Event) bool {
+func (el *EventLogger) shouldLog(event events.Event) bool {
 	if len(el.filter) == 0 {
 		return true // No filter = log all
 	}
@@ -102,7 +103,7 @@ func (el *EventLogger) shouldLog(event core.Event) bool {
 }
 
 // logEvent prints an event to the configured writer.
-func (el *EventLogger) logEvent(event core.Event) {
+func (el *EventLogger) logEvent(event events.Event) {
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 
 	if el.format == "json" {
@@ -113,7 +114,7 @@ func (el *EventLogger) logEvent(event core.Event) {
 }
 
 // logEventJSON logs event in JSON format.
-func (el *EventLogger) logEventJSON(timestamp string, event core.Event) {
+func (el *EventLogger) logEventJSON(timestamp string, event events.Event) {
 	data, err := json.Marshal(event.Data)
 	if err != nil {
 		data = []byte("{}")
@@ -135,7 +136,7 @@ func (el *EventLogger) logEventJSON(timestamp string, event core.Event) {
 }
 
 // logEventText logs event in human-readable text format.
-func (el *EventLogger) logEventText(timestamp string, event core.Event) {
+func (el *EventLogger) logEventText(timestamp string, event events.Event) {
 	dataStr := fmt.Sprintf("%v", event.Data)
 	fmt.Fprintf(el.writer, "[%s] %s %s\n", timestamp, event.Type, dataStr)
 }

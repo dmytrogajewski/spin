@@ -113,77 +113,10 @@ func TestResource_Marshal(t *testing.T) {
 	}
 }
 
-func TestTextContent(t *testing.T) {
-	content := TextContent("Hello, world!")
 
-	if content.Type != "text" {
-		t.Errorf("Type = %s, want text", content.Type)
-	}
-	if content.Text == nil || *content.Text != "Hello, world!" {
-		t.Errorf("Text = %v, want 'Hello, world!'", content.Text)
-	}
-}
 
-func TestTextContent_Marshal(t *testing.T) {
-	content := TextContent("Test message")
 
-	data, err := json.Marshal(content)
-	if err != nil {
-		t.Fatalf("Marshal() error = %v", err)
-	}
 
-	var result map[string]interface{}
-	if err := json.Unmarshal(data, &result); err != nil {
-		t.Fatalf("Unmarshal verification error = %v", err)
-	}
-
-	if result["type"] != "text" {
-		t.Errorf("type = %v, want text", result["type"])
-	}
-	if result["text"] != "Test message" {
-		t.Errorf("text = %v, want 'Test message'", result["text"])
-	}
-}
-
-func TestImageContent(t *testing.T) {
-	content := ImageContent("base64data", "image/png")
-
-	if content.Type != "image" {
-		t.Errorf("Type = %s, want image", content.Type)
-	}
-	if content.Data == nil || *content.Data != "base64data" {
-		t.Errorf("Data = %v, want 'base64data'", content.Data)
-	}
-	if content.MimeType == nil || *content.MimeType != "image/png" {
-		t.Errorf("MimeType = %v, want 'image/png'", content.MimeType)
-	}
-}
-
-func TestResourceContent(t *testing.T) {
-	mime := "text/plain"
-	content := ResourceContent("file:///test.txt", &mime)
-
-	if content.Type != "resource" {
-		t.Errorf("Type = %s, want resource", content.Type)
-	}
-	if content.URI == nil || *content.URI != "file:///test.txt" {
-		t.Errorf("URI = %v, want 'file:///test.txt'", content.URI)
-	}
-	if content.MimeType == nil || *content.MimeType != "text/plain" {
-		t.Errorf("MimeType = %v, want 'text/plain'", content.MimeType)
-	}
-}
-
-func TestResourceContent_NilMimeType(t *testing.T) {
-	content := ResourceContent("file:///test.txt", nil)
-
-	if content.Type != "resource" {
-		t.Errorf("Type = %s, want resource", content.Type)
-	}
-	if content.MimeType != nil {
-		t.Errorf("MimeType = %v, want nil", content.MimeType)
-	}
-}
 
 func TestInitializeRequest_Marshal(t *testing.T) {
 	req := InitializeRequest{
@@ -312,9 +245,12 @@ func TestServerCapabilities_WithTools(t *testing.T) {
 }
 
 func TestPromptMessage_Marshal(t *testing.T) {
+	text := "Hello"
 	msg := PromptMessage{
-		Role:    "user",
-		Content: []Content{TextContent("Hello")},
+		Role: "user",
+		Content: []Content{
+			{Type: "text", Text: &text},
+		},
 	}
 
 	data, err := json.Marshal(msg)

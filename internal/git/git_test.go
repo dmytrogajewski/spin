@@ -10,7 +10,6 @@ import (
 	"time"
 
 	gogit "github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -59,47 +58,6 @@ func setupTestRepo(t *testing.T) string {
 }
 
 // setupTestRepoWithBranches creates a test repo with multiple branches
-func setupTestRepoWithBranches(t *testing.T, branchNames []string) string {
-	t.Helper()
-
-	tmpDir := setupTestRepo(t)
-
-	repo, err := gogit.PlainOpen(tmpDir)
-	if err != nil {
-		t.Fatalf("failed to open repo: %v", err)
-	}
-
-	w, err := repo.Worktree()
-	if err != nil {
-		t.Fatalf("failed to get worktree: %v", err)
-	}
-
-	// Get HEAD reference
-	head, err := repo.Head()
-	if err != nil {
-		t.Fatalf("failed to get HEAD: %v", err)
-	}
-
-	// Create branches
-	for _, name := range branchNames {
-		ref := head.Name().Short() + "_" + name
-		if err := w.Checkout(&gogit.CheckoutOptions{
-			Branch: plumbing.NewBranchReferenceName(ref),
-			Create: true,
-		}); err != nil {
-			t.Fatalf("failed to create branch %s: %v", ref, err)
-		}
-	}
-
-	// Checkout back to main/master
-	if err := w.Checkout(&gogit.CheckoutOptions{
-		Branch: head.Name(),
-	}); err != nil {
-		t.Fatalf("failed to checkout main: %v", err)
-	}
-
-	return tmpDir
-}
 
 // setupTestRepoWithModifications creates a test repo with modified files
 func setupTestRepoWithModifications(t *testing.T) string {

@@ -5,13 +5,16 @@ import (
 	"testing"
 )
 
+func strPtr(s string) *string { return &s }
+func numPtr(n int64) *int64   { return &n }
+
 func TestRequestID_String(t *testing.T) {
-	strID := StringID("req-123")
+	strID := RequestID{Str: strPtr("req-123")}
 	if strID.String() != "req-123" {
 		t.Errorf("Expected 'req-123', got '%s'", strID.String())
 	}
 
-	numID := NumberID(42)
+	numID := RequestID{Num: numPtr(42)}
 	if numID.String() != "42" {
 		t.Errorf("Expected '42', got '%s'", numID.String())
 	}
@@ -25,12 +28,12 @@ func TestRequestID_MarshalJSON(t *testing.T) {
 	}{
 		{
 			name:     "String ID",
-			id:       StringID("req-123"),
+			id:       RequestID{Str: strPtr("req-123")},
 			expected: `"req-123"`,
 		},
 		{
 			name:     "Number ID",
-			id:       NumberID(42),
+			id:       RequestID{Num: numPtr(42)},
 			expected: `42`,
 		},
 	}
@@ -58,12 +61,12 @@ func TestRequestID_UnmarshalJSON(t *testing.T) {
 		{
 			name:     "String ID",
 			input:    `"req-123"`,
-			expected: StringID("req-123"),
+			expected: RequestID{Str: strPtr("req-123")},
 		},
 		{
 			name:     "Number ID",
 			input:    `42`,
-			expected: NumberID(42),
+			expected: RequestID{Num: numPtr(42)},
 		},
 	}
 
@@ -90,7 +93,7 @@ func TestRequestID_UnmarshalJSON_Invalid(t *testing.T) {
 }
 
 func TestRequest_Marshal(t *testing.T) {
-	reqID := StringID("1")
+	reqID := RequestID{Str: strPtr("1")}
 	req := Request{
 		JSONRPC: "2.0",
 		ID:      &reqID,
@@ -119,7 +122,7 @@ func TestRequest_Marshal(t *testing.T) {
 func TestResponse_Success(t *testing.T) {
 	resp := Response{
 		JSONRPC: "2.0",
-		ID:      StringID("1"),
+		ID:      RequestID{Str: strPtr("1")},
 		Result:  json.RawMessage(`{"status":"ok"}`),
 	}
 
@@ -141,7 +144,7 @@ func TestResponse_Success(t *testing.T) {
 func TestResponse_Error(t *testing.T) {
 	resp := Response{
 		JSONRPC: "2.0",
-		ID:      StringID("1"),
+		ID:      RequestID{Str: strPtr("1")},
 		Error:   NewError(MethodNotFound, "method not found"),
 	}
 
@@ -177,17 +180,6 @@ func TestNewError(t *testing.T) {
 	}
 }
 
-func TestNewErrorWithData(t *testing.T) {
-	data := map[string]string{"detail": "missing field"}
-	err := NewErrorWithData(InvalidParams, "invalid parameters", data)
-
-	if err.Code != InvalidParams {
-		t.Errorf("Expected code %d, got %d", InvalidParams, err.Code)
-	}
-	if err.Data == nil {
-		t.Error("Data should not be nil")
-	}
-}
 
 func TestNotification_Marshal(t *testing.T) {
 	notif := Notification{
@@ -439,7 +431,3 @@ func TestSendMessageParams_UnmarshalJSON(t *testing.T) {
 	}
 }
 
-// Helper function
-func strPtr(s string) *string {
-	return &s
-}

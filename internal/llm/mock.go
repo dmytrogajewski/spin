@@ -237,3 +237,58 @@ func (p *MockProvider) SetToolCalls(calls []ToolCall) {
 
 // MockOption configures a MockProvider.
 type MockOption func(*MockProvider)
+
+// WithResponse sets a custom response for the mock provider.
+func WithResponse(response string) MockOption {
+	return func(p *MockProvider) {
+		p.response = response
+	}
+}
+
+// WithError sets an error to be returned by the mock provider.
+func WithError(err error) MockOption {
+	return func(p *MockProvider) {
+		p.err = err
+	}
+}
+
+// WithToolCalls sets tool calls to be returned by the mock provider.
+func WithToolCalls(calls []ToolCall) MockOption {
+	return func(p *MockProvider) {
+		p.toolCalls = calls
+	}
+}
+
+// WithStreaming sets chunks to be streamed by the mock provider.
+func WithStreaming(chunks []string) MockOption {
+	return func(p *MockProvider) {
+		p.streamChunks = chunks
+		// Build response from chunks
+		var combined string
+		for _, chunk := range chunks {
+			combined += chunk
+		}
+		p.response = combined
+	}
+}
+
+// WithCapabilities sets the capabilities of the mock provider.
+func WithCapabilities(caps Capabilities) MockOption {
+	return func(p *MockProvider) {
+		p.capabilities = caps
+	}
+}
+
+// WithModels sets the models available from the mock provider.
+func WithModels(models []Model) MockOption {
+	return func(p *MockProvider) {
+		p.models = models
+	}
+}
+
+// WithDelay sets a delay to simulate latency in the mock provider.
+func WithDelay(delay time.Duration) MockOption {
+	return func(p *MockProvider) {
+		p.delay = delay
+	}
+}

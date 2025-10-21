@@ -90,13 +90,12 @@ func BenchmarkRendererRender_Plan(b *testing.B) {
 	block := blocks.NewBlock(blocks.BlockTypePlan)
 	block.Title = "Implementation plan"
 	block.Body = generatePlanList(50)
-	meta := &blocks.PlanMeta{
-		Total:      50,
-		Pending:    10,
-		InProgress: 5,
-		Completed:  35,
+	block.Meta = map[string]interface{}{
+		"total":       50,
+		"pending":     10,
+		"in_progress": 5,
+		"completed":   35,
 	}
-	blocks.SetPlanMeta(block, meta)
 
 	b.ResetTimer()
 

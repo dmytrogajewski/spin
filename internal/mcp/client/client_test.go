@@ -78,23 +78,6 @@ func TestError_Unwrap(t *testing.T) {
 	}
 }
 
-func TestTextContent_Helpers(t *testing.T) {
-	// Test that we can create and marshal content using helper functions
-	text := types.TextContent("test")
-	data, err := json.Marshal(text)
-	if err != nil {
-		t.Fatalf("Marshal() error = %v", err)
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(data, &result); err != nil {
-		t.Fatalf("Unmarshal() error = %v", err)
-	}
-
-	if result["type"] != "text" {
-		t.Errorf("type = %v, want text", result["type"])
-	}
-}
 
 func TestJSONRPCRequest_Marshal(t *testing.T) {
 	req := jsonrpcRequest{

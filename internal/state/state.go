@@ -1,148 +1,123 @@
 package state
 
-import (
-	"fmt"
-)
+import "fmt"
 
-// State represents the execution state for all components in the system.
-// This replaces core.State, session.State, and turn.TurnState for consistency.
-//
-// State Transitions:
-//
-//	Idle → Running → Completed
-//	               → Failed
-//	               → Cancelled
-//	     → Paused → Running
-//	     → WaitingApproval → Running (turns only)
-//	     → Archived (sessions only)
-//
-// Thread Safety: State values are immutable and safe for concurrent use.
-type State int
+// State represents the current state of the system.
+type State string
 
+// State constants
 const (
-	// StateIdle indicates no active execution (initial state)
-	StateIdle State = iota
-
-	// StateRunning indicates active execution in progress
-	StateRunning
-
-	// StatePaused indicates execution is temporarily paused
-	StatePaused
-
-	// StateWaitingApproval indicates execution is paused waiting for user approval (turns only)
-	StateWaitingApproval
-
-	// StateCompleted indicates successful completion
-	StateCompleted
-
-	// StateFailed indicates execution failed with an error
-	StateFailed
-
-	// StateCancelled indicates execution was cancelled by user
-	StateCancelled
-
-	// StateArchived indicates archived/inactive session (sessions only)
-	StateArchived
+	StateIdle            State = "idle"
+	StateRunning         State = "running"
+	StateWaitingApproval State = "waiting_approval"
+	StateCompleted       State = "completed"
+	StateFailed          State = "failed"
+	StateCancelled       State = "cancelled"
+	StatePaused          State = "paused"
+	StateArchived        State = "archived"
+	StateActive          State = "active"
 )
 
-// String returns the string representation of State.
-func (s State) String() string {
-	switch s {
-	case StateIdle:
-		return "idle"
-	case StateRunning:
-		return "running"
-	case StatePaused:
-		return "paused"
-	case StateWaitingApproval:
-		return "waiting_approval"
-	case StateCompleted:
-		return "completed"
-	case StateFailed:
-		return "failed"
-	case StateCancelled:
-		return "cancelled"
-	case StateArchived:
-		return "archived"
-	default:
-		return "unknown"
-	}
+// validStates is the set of all valid states for validation.
+var validStates = map[State]bool{
+	StateIdle:            true,
+	StateRunning:         true,
+	StateWaitingApproval: true,
+	StateCompleted:       true,
+	StateFailed:          true,
+	StateCancelled:       true,
+	StatePaused:          true,
+	StateArchived:        true,
+	StateActive:          true,
 }
 
-// MarshalText implements encoding.TextMarshaler for JSON encoding.
-func (s State) MarshalText() ([]byte, error) {
-	return []byte(s.String()), nil
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler for JSON decoding.
-func (s *State) UnmarshalText(text []byte) error {
-	str := string(text)
-	switch str {
-	case "idle":
-		*s = StateIdle
-	case "running":
-		*s = StateRunning
-	case "paused":
-		*s = StatePaused
-	case "waiting_approval":
-		*s = StateWaitingApproval
-	case "completed":
-		*s = StateCompleted
-	case "failed":
-		*s = StateFailed
-	case "cancelled":
-		*s = StateCancelled
-	case "archived":
-		*s = StateArchived
-	default:
-		return fmt.Errorf("invalid state: %s", str)
-	}
-	return nil
-}
-
-// IsTerminal returns true if the state is a terminal state.
-func (s State) IsTerminal() bool {
-	return s == StateCompleted || s == StateFailed || s == StateCancelled || s == StateArchived
-}
-
-// IsActive returns true if the state indicates active or ongoing execution.
-func (s State) IsActive() bool {
-	return s == StateRunning || s == StatePaused || s == StateWaitingApproval
-}
-
-// CanTransitionTo validates if a transition to the target state is valid.
+// CanTransitionTo returns true if transition to the target state is valid.
 func (s State) CanTransitionTo(target State) bool {
-	// Terminal states can't transition (except to archived for sessions)
-	if s.IsTerminal() && target != StateArchived {
+	// Cannot transition from unknown states
+	if !validStates[s] {
 		return false
 	}
 
+	// Cannot transition to same state
+	if s == target {
+		return false
+	}
+
+	// State-specific transition rules
 	switch s {
 	case StateIdle:
-		// Idle can start running or be archived
+		// Idle can only go to running or archived
 		return target == StateRunning || target == StateArchived
 
 	case StateRunning:
-		// Running can pause, wait for approval, complete, fail, or be cancelled
+		// Running can go to paused, waiting_approval, completed, failed, or cancelled
 		return target == StatePaused || target == StateWaitingApproval ||
 			target == StateCompleted || target == StateFailed || target == StateCancelled
 
 	case StatePaused:
-		// Paused can resume running, be cancelled, or archived
+		// Paused can go to running, cancelled, or archived
 		return target == StateRunning || target == StateCancelled || target == StateArchived
 
 	case StateWaitingApproval:
-		// Waiting approval can resume running or be cancelled
+		// WaitingApproval can go to running or cancelled
 		return target == StateRunning || target == StateCancelled
 
 	case StateCompleted, StateFailed, StateCancelled:
-		// Terminal states can only transition to archived (for sessions)
+		// Terminal states can only go to archived
 		return target == StateArchived
 
 	case StateArchived:
-		// Archived is a final state
+		// Archived is final - cannot transition anywhere
 		return false
 
+	default:
+		return false
+	}
+}
+
+// String returns the string representation of the state.
+// Returns "unknown" for unrecognized states.
+func (s State) String() string {
+	if validStates[s] {
+		return string(s)
+	}
+	return "unknown"
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s State) MarshalText() ([]byte, error) {
+	return []byte(s), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+// Returns an error for invalid or empty states.
+func (s *State) UnmarshalText(text []byte) error {
+	state := State(text)
+	if len(text) == 0 {
+		return fmt.Errorf("state cannot be empty")
+	}
+	if !validStates[state] {
+		return fmt.Errorf("invalid state: %s", text)
+	}
+	*s = state
+	return nil
+}
+
+// IsTerminal returns true if the state is terminal (completed, failed, cancelled, archived).
+func (s State) IsTerminal() bool {
+	switch s {
+	case StateCompleted, StateFailed, StateCancelled, StateArchived:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsActive returns true if the state is actively working (running, paused, or waiting for approval).
+func (s State) IsActive() bool {
+	switch s {
+	case StateRunning, StatePaused, StateWaitingApproval:
+		return true
 	default:
 		return false
 	}

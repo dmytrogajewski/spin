@@ -8,9 +8,13 @@ import (
 	"syscall"
 
 	"github.com/dmytrogajewski/spin/internal/config"
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/conversation"
+	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/manager"
+	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	"github.com/spf13/cobra"
 )
@@ -94,7 +98,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	initializeUI(ui, conv, provider)
 
 	// Create event mapper
-	mapper := core.NewTUIMapper(ui)
+	mapper := tui.NewTUIMapper(ui)
 	defer mapper.Close()
 
 	// Start streaming channel
@@ -137,7 +141,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	ui.PrintLine("Commands: /mode [name], /help, /exit (or press Ctrl-D)\n")
 
 	// Subscribe to conversation events
-	events := conv.Stream()
+	eventStream := conv.Stream()
 
 	// Start event processing loop
 	eventDone := make(chan struct{})
@@ -147,7 +151,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 			select {
 			case <-ctx.Done():
 				return
-			case event, ok := <-events:
+			case event, ok := <-eventStream:
 				if !ok {
 					return
 				}
@@ -157,7 +161,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 
 				// Update token count from conversation history after each event
 				// This ensures the status bar always shows current cumulative total
-				if event.Type == core.EventTurnComplete || event.Type == core.EventContentComplete {
+				if event.Type == events.EventTurnComplete || event.Type == events.EventContentComplete {
 					tokenCount := int64(conv.GetTokenCount())
 					ui.SetTokenCount(tokenCount)
 				}
@@ -231,7 +235,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 }
 
 // createManagerForTUI creates a core.Manager configured for TUI mode.
-func createManagerForTUI(provider llm.Provider, maxTurns int, configLoader *config.Loader, ui *adapters.PureTTY) (*core.Manager, error) {
+func createManagerForTUI(provider llm.Provider, maxTurns int, configLoader *config.Loader, ui *adapters.PureTTY) (*manager.Manager, error) {
 	workDir := getWorkingDirectory()
 	cfg := buildConfig(configLoader, maxTurns, workDir)
 
@@ -247,17 +251,17 @@ func createManagerForTUI(provider llm.Provider, maxTurns int, configLoader *conf
 	// as they require executor, validator, and context dependencies
 
 	// Create approval handler (always enabled)
-	approvalHandler := func(req core.ApprovalRequest) core.ApprovalResponse {
+	approvalHandler := func(req security.ApprovalRequest) security.ApprovalResponse {
 		return ui.ShowApprovalDialog(req)
 	}
 
 	// Create manager with options
-	var opts []core.ManagerOption
-	opts = append(opts, core.WithLLM(provider))
-	opts = append(opts, core.WithManagerToolRegistry(registry))
-	opts = append(opts, core.WithManagerApprovalHandler(approvalHandler))
+	var opts []manager.ManagerOption
+	opts = append(opts, manager.WithLLM(provider))
+	opts = append(opts, manager.WithManagerToolRegistry(registry))
+	opts = append(opts, manager.WithManagerApprovalHandler(approvalHandler))
 
-	mgr, err := core.NewManager(cfg, opts...)
+	mgr, err := manager.NewManager(cfg, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create manager: %w", err)
 	}
@@ -288,31 +292,28 @@ func getWorkingDirectory() string {
 }
 
 // initializeUI initializes the UI with conversation metadata.
-func initializeUI(ui *adapters.PureTTY, conv *core.Conversation, provider llm.Provider) {
+func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provider llm.Provider) {
 	taskMode := conv.GetTaskMode()
 	ui.SetTaskMode(taskMode)
-
-	maxTokens := int64(conv.GetMaxTokens())
-	ui.SetMaxTokens(maxTokens)
 
 	providerName := provider.Name()
 	modelName := flagModel
 	ui.SetProviderInfo(providerName, modelName)
 
-	sessionID := conv.GetSessionID()
-	ui.SetConversationID(sessionID)
-
 	tokenCount := int64(conv.GetTokenCount())
 	ui.SetTokenCount(tokenCount)
+
+	sessionID := conv.GetSessionID()
+	ui.SetConversationID(sessionID)
 }
 
 // buildConfig builds the configuration from multiple sources.
-func buildConfig(configLoader *config.Loader, maxTurns int, workDir string) *core.Config {
-	cfg := core.DefaultConfig()
+func buildConfig(configLoader *config.Loader, maxTurns int, workDir string) *manager.Config {
+	cfg := manager.DefaultConfig()
 	cfg.WorkDir = workDir
 
 	// Layer 1: Load from config file
-	var fileCfg core.Config
+	var fileCfg manager.Config
 	if err := configLoader.Unmarshal(&fileCfg); err == nil {
 		applyFileConfig(cfg, &fileCfg)
 	}
@@ -324,7 +325,7 @@ func buildConfig(configLoader *config.Loader, maxTurns int, workDir string) *cor
 }
 
 // applyFileConfig applies configuration from file to the main config.
-func applyFileConfig(cfg *core.Config, fileCfg *core.Config) {
+func applyFileConfig(cfg *manager.Config, fileCfg *manager.Config) {
 	if fileCfg.Provider != "" {
 		cfg.Provider = fileCfg.Provider
 	}
@@ -343,7 +344,7 @@ func applyFileConfig(cfg *core.Config, fileCfg *core.Config) {
 }
 
 // applyCLIFlags applies CLI flags to the configuration.
-func applyCLIFlags(cfg *core.Config, maxTurns int) {
+func applyCLIFlags(cfg *manager.Config, maxTurns int) {
 	if maxTurns > 0 {
 		cfg.MaxTurns = maxTurns
 	}

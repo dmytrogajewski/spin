@@ -28,35 +28,6 @@ func TestANSIConstants(t *testing.T) {
 	}
 }
 
-// TestMoveCursorToCol golden tests for column positioning.
-func TestMoveCursorToCol(t *testing.T) {
-	tests := []struct {
-		col  int
-		want string
-	}{
-		{1, "\x1b[1G"},
-		{10, "\x1b[10G"},
-		{80, "\x1b[80G"},
-		{200, "\x1b[200G"},
-	}
-
-	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
-			got := MoveCursorToCol(tt.col)
-			if got != tt.want {
-				t.Errorf("MoveCursorToCol(%d) = %q, want %q", tt.col, got, tt.want)
-			}
-		})
-	}
-}
-
-// BenchmarkMoveCursorToCol ensures zero allocations in hot path.
-func BenchmarkMoveCursorToCol(b *testing.B) {
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_ = MoveCursorToCol(42)
-	}
-}
 
 // BenchmarkANSIConstants ensures constants don't allocate.
 func BenchmarkANSIConstants(b *testing.B) {

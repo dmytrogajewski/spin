@@ -177,6 +177,7 @@ func (r *Renderer) RenderBody(b *Block) (string, error) {
 		BlockTypeTesting:    r.renderList,
 		BlockTypeGrep:       r.renderCode,
 		BlockTypeError:      r.renderError,
+		BlockTypeTool:       r.renderToolBody,
 	}
 
 	if renderer, exists := renderers[b.Type]; exists {
@@ -545,6 +546,8 @@ func (r *Renderer) getBlockTypeLabel(blockType BlockType) string {
 		return "EXECUTE"
 	case BlockTypeApplyPatch:
 		return "WRITE" // Match FRD format (WRITE instead of APPLY_PATCH)
+	case BlockTypeTool:
+		return "TOOL"
 	default:
 		return string(blockType)
 	}
@@ -562,6 +565,7 @@ func (r *Renderer) RenderCompletionStatus(b *Block) string {
 		BlockTypeRead:       r.renderReadCompletionStatus,
 		BlockTypeApplyPatch: r.renderWriteCompletionStatus,
 		BlockTypeGrep:       r.renderGrepCompletionStatus,
+		BlockTypeTool:       r.renderToolCompletionStatus,
 	}
 
 	if renderer, exists := renderers[b.Type]; exists {
@@ -637,4 +641,21 @@ func (r *Renderer) renderGrepCompletionStatus(b *Block) string {
 	// Grep blocks typically don't show completion status
 	// (the body contains the matches)
 	return ""
+}
+
+// renderToolBody renders the body content for TOOL blocks.
+func (r *Renderer) renderToolBody(b *Block) (string, error) {
+	// Tool blocks typically show their raw output/result
+	return r.renderTranscript(b)
+}
+
+// renderToolCompletionStatus renders completion status for TOOL blocks.
+func (r *Renderer) renderToolCompletionStatus(b *Block) string {
+	meta, err := ParseToolMeta(b)
+	if err != nil || meta == nil {
+		return ""
+	}
+
+	// Show simple completion message
+	return fmt.Sprintf(" %s Tool completed: %s", string(ColorMuted)+"↳"+string(ColorReset), meta.ToolName)
 }

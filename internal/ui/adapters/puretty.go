@@ -10,7 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/output"
 	"github.com/dmytrogajewski/spin/internal/ui/overlay"
@@ -94,6 +95,10 @@ func WithTTY(tty term.TerminalController) PureTTYOption {
 		return nil
 	}
 }
+
+// WithModel sets a custom prompt model (for testing).
+
+// WithKeyboardEvents sets a custom keyboard event channel (for testing).
 
 // NewPureTTY creates a new PureTTY adapter.
 // Defaults: stdin/stdout TTY, 100-entry history, "> " prefix.
@@ -364,9 +369,9 @@ func (u *PureTTY) SetTokenCount(tokenCount int64) {
 	}
 }
 
-// ProcessEvent processes a core.Event and updates the status manager.
+// ProcessEvent processes an events.Event and updates the status manager.
 // This method is called by the event mapper to update status information.
-func (u *PureTTY) ProcessEvent(event *core.Event) {
+func (u *PureTTY) ProcessEvent(event *events.Event) {
 	if u.statusAggregator == nil {
 		return
 	}
@@ -379,14 +384,14 @@ func (u *PureTTY) ProcessEvent(event *core.Event) {
 }
 
 // shouldUpdateStatusBar determines if the status bar should be updated for the given event type.
-func (u *PureTTY) shouldUpdateStatusBar(eventType core.EventType) bool {
+func (u *PureTTY) shouldUpdateStatusBar(eventType events.EventType) bool {
 	switch eventType {
-	case core.EventTurnStart,
-		core.EventToolCallStart,
-		core.EventToolCallComplete,
-		core.EventContentDelta,
-		core.EventContentComplete,
-		core.EventTurnComplete:
+	case events.EventTurnStart,
+		events.EventToolCallStart,
+		events.EventToolCallComplete,
+		events.EventContentDelta,
+		events.EventContentComplete,
+		events.EventTurnComplete:
 		return true
 	default:
 		return false
@@ -551,7 +556,7 @@ func (u *PureTTY) renderFilterUI() {
 }
 
 // ShowApprovalDialog displays an approval dialog for the given request.
-func (u *PureTTY) ShowApprovalDialog(req core.ApprovalRequest) core.ApprovalResponse {
+func (u *PureTTY) ShowApprovalDialog(req security.ApprovalRequest) security.ApprovalResponse {
 	// Create approval dialog
 	u.approvalDialog = overlay.NewApprovalDialog(req, 60*time.Second)
 	u.mode = ModeApproval

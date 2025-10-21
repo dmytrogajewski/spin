@@ -22,7 +22,7 @@ Your task is to:
 10. Do your best for fixing code by that analysis. No lint errors or deadcode should present!!
 11. Iterate until all tests pass
 12. Close roadmap item in roadmap
-13. Update documentation in docs/
+13. Update documentation in docs/ ALWAYS
 14. Update AGENTS.md if needed
 
 Follow this instructions and do every step described here. Do not skip

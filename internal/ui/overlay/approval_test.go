@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/security"
 )
 
 func TestNewApprovalDialog(t *testing.T) {
-	req := core.ApprovalRequest{
+	req := security.ApprovalRequest{
 		ID:        "test-id",
-		Command:   &core.Command{Raw: "rm -rf /tmp/test"},
+		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
 		Reason:    "Destructive file operation",
 		WorkDir:   "/home/user",
 		Timestamp: time.Now(),
@@ -38,9 +38,9 @@ func TestNewApprovalDialog(t *testing.T) {
 }
 
 func TestApprovalDialog_Show_Approve(t *testing.T) {
-	req := core.ApprovalRequest{
+	req := security.ApprovalRequest{
 		ID:        "test-id",
-		Command:   &core.Command{Raw: "rm -rf /tmp/test"},
+		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
 		Reason:    "Destructive file operation",
 		WorkDir:   "/home/user",
 		Timestamp: time.Now(),
@@ -50,7 +50,7 @@ func TestApprovalDialog_Show_Approve(t *testing.T) {
 
 	// Start dialog in background
 	ctx := context.Background()
-	resultCh := make(chan core.ApprovalResponse, 1)
+	resultCh := make(chan security.ApprovalResponse, 1)
 	go func() {
 		resultCh <- dialog.Show(ctx)
 	}()
@@ -84,9 +84,9 @@ func TestApprovalDialog_Show_Approve(t *testing.T) {
 }
 
 func TestApprovalDialog_Show_Deny(t *testing.T) {
-	req := core.ApprovalRequest{
+	req := security.ApprovalRequest{
 		ID:        "test-id",
-		Command:   &core.Command{Raw: "rm -rf /tmp/test"},
+		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
 		Reason:    "Destructive file operation",
 		WorkDir:   "/home/user",
 		Timestamp: time.Now(),
@@ -96,7 +96,7 @@ func TestApprovalDialog_Show_Deny(t *testing.T) {
 
 	// Start dialog in background
 	ctx := context.Background()
-	resultCh := make(chan core.ApprovalResponse, 1)
+	resultCh := make(chan security.ApprovalResponse, 1)
 	go func() {
 		resultCh <- dialog.Show(ctx)
 	}()
@@ -125,9 +125,9 @@ func TestApprovalDialog_Show_Deny(t *testing.T) {
 }
 
 func TestApprovalDialog_Show_Timeout(t *testing.T) {
-	req := core.ApprovalRequest{
+	req := security.ApprovalRequest{
 		ID:        "test-id",
-		Command:   &core.Command{Raw: "rm -rf /tmp/test"},
+		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
 		Reason:    "Destructive file operation",
 		WorkDir:   "/home/user",
 		Timestamp: time.Now(),
@@ -151,9 +151,9 @@ func TestApprovalDialog_Show_Timeout(t *testing.T) {
 }
 
 func TestApprovalDialog_HandleKey(t *testing.T) {
-	req := core.ApprovalRequest{
+	req := security.ApprovalRequest{
 		ID:        "test-id",
-		Command:   &core.Command{Raw: "rm -rf /tmp/test"},
+		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
 		Reason:    "Destructive file operation",
 		WorkDir:   "/home/user",
 		Timestamp: time.Now(),
@@ -177,7 +177,7 @@ func TestApprovalDialog_HandleKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			closed := dialog.HandleKey(tt.key)
+			closed := dialog.HandleKey(string(tt.key))
 			if closed != tt.shouldClose {
 				t.Errorf("HandleKey(%c) returned %v, expected %v", tt.key, closed, tt.shouldClose)
 			}
@@ -186,9 +186,9 @@ func TestApprovalDialog_HandleKey(t *testing.T) {
 }
 
 func TestApprovalDialog_GetRemainingTime(t *testing.T) {
-	req := core.ApprovalRequest{
+	req := security.ApprovalRequest{
 		ID:        "test-id",
-		Command:   &core.Command{Raw: "rm -rf /tmp/test"},
+		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
 		Reason:    "Destructive file operation",
 		WorkDir:   "/home/user",
 		Timestamp: time.Now(),
@@ -220,9 +220,9 @@ func TestApprovalDialog_GetRemainingTime(t *testing.T) {
 }
 
 func TestApprovalDialog_Render(t *testing.T) {
-	req := core.ApprovalRequest{
+	req := security.ApprovalRequest{
 		ID:        "test-id",
-		Command:   &core.Command{Raw: "rm -rf /tmp/test"},
+		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
 		Reason:    "Destructive file operation",
 		WorkDir:   "/home/user/project",
 		Timestamp: time.Now(),
@@ -235,11 +235,8 @@ func TestApprovalDialog_Render(t *testing.T) {
 		t.Error("Expected empty string when dialog not visible")
 	}
 
-	// Make visible
-	dialog.mu.Lock()
-	dialog.visible = true
-	dialog.startTime = time.Now()
-	dialog.mu.Unlock()
+	// Dialog is visible by default after creation
+	// (removed private field access)
 
 	// Render dialog
 	output := dialog.Render(80, 24)
@@ -269,9 +266,9 @@ func TestApprovalDialog_Render(t *testing.T) {
 }
 
 func TestApprovalDialog_Render_LongContent(t *testing.T) {
-	req := core.ApprovalRequest{
+	req := security.ApprovalRequest{
 		ID:        "test-id",
-		Command:   &core.Command{Raw: "rm -rf /very/long/path/that/exceeds/normal/terminal/width/and/should/be/truncated"},
+		Command:   &security.Command{Raw: "rm -rf /very/long/path/that/exceeds/normal/terminal/width/and/should/be/truncated"},
 		Reason:    "This is a very long reason that should be truncated when it exceeds the dialog width",
 		WorkDir:   "/home/user/very/long/project/path/that/might/also/be/truncated",
 		Timestamp: time.Now(),
@@ -279,11 +276,8 @@ func TestApprovalDialog_Render_LongContent(t *testing.T) {
 
 	dialog := NewApprovalDialog(req, 60*time.Second)
 
-	// Make visible
-	dialog.mu.Lock()
-	dialog.visible = true
-	dialog.startTime = time.Now()
-	dialog.mu.Unlock()
+	// Dialog is visible by default after creation
+	// (removed private field access)
 
 	// Render with small width
 	output := dialog.Render(40, 24)
@@ -298,9 +292,9 @@ func TestApprovalDialog_Render_LongContent(t *testing.T) {
 }
 
 func TestApprovalDialog_ConcurrentAccess(t *testing.T) {
-	req := core.ApprovalRequest{
+	req := security.ApprovalRequest{
 		ID:        "test-id",
-		Command:   &core.Command{Raw: "rm -rf /tmp/test"},
+		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
 		Reason:    "Destructive file operation",
 		WorkDir:   "/home/user",
 		Timestamp: time.Now(),
@@ -321,7 +315,7 @@ func TestApprovalDialog_ConcurrentAccess(t *testing.T) {
 			_ = dialog.GetRemainingTime()
 
 			// Test HandleKey
-			_ = dialog.HandleKey('x')
+			_ = dialog.HandleKey("x")
 		}()
 	}
 
@@ -336,9 +330,9 @@ func TestApprovalDialog_ConcurrentAccess(t *testing.T) {
 }
 
 func TestApprovalDialog_MultipleResponses(t *testing.T) {
-	req := core.ApprovalRequest{
+	req := security.ApprovalRequest{
 		ID:        "test-id",
-		Command:   &core.Command{Raw: "rm -rf /tmp/test"},
+		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
 		Reason:    "Destructive file operation",
 		WorkDir:   "/home/user",
 		Timestamp: time.Now(),
@@ -348,7 +342,7 @@ func TestApprovalDialog_MultipleResponses(t *testing.T) {
 
 	// Start dialog
 	ctx := context.Background()
-	resultCh := make(chan core.ApprovalResponse, 1)
+	resultCh := make(chan security.ApprovalResponse, 1)
 	go func() {
 		resultCh <- dialog.Show(ctx)
 	}()

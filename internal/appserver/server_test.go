@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/security"
 )
 
 func TestServer_New(t *testing.T) {
@@ -23,8 +24,8 @@ func TestServer_New(t *testing.T) {
 				Version:       "1.0.0",
 				Provider:      llm.NewMockProvider("test"),
 				Executor:      createTestExecutor(t),
-				Validator:     core.NewValidator(),
-				Environment:   &core.Environment{WorkDir: "/tmp"},
+				Validator:     security.NewValidator(),
+				Environment:   &agent.Environment{WorkDir: "/tmp"},
 			},
 			wantErr: false,
 		},
@@ -91,8 +92,8 @@ func TestServer_Serve(t *testing.T) {
 		Version:       "1.0.0",
 		Provider:      llm.NewMockProvider("test"),
 		Executor:      createTestExecutor(t),
-		Validator:     core.NewValidator(),
-		Environment:   &core.Environment{WorkDir: t.TempDir()},
+		Validator:     security.NewValidator(),
+		Environment:   &agent.Environment{WorkDir: t.TempDir()},
 	}
 
 	server, err := New(config)
@@ -153,8 +154,8 @@ func TestServer_Serve_ContextCancellation(t *testing.T) {
 		Version:       "1.0.0",
 		Provider:      llm.NewMockProvider("test"),
 		Executor:      createTestExecutor(t),
-		Validator:     core.NewValidator(),
-		Environment:   &core.Environment{WorkDir: t.TempDir()},
+		Validator:     security.NewValidator(),
+		Environment:   &agent.Environment{WorkDir: t.TempDir()},
 	}
 
 	server, err := New(config)
@@ -184,8 +185,8 @@ func TestServer_Serve_ProcessorOutput(t *testing.T) {
 		Version:       "1.0.0",
 		Provider:      llm.NewMockProvider("test"),
 		Executor:      createTestExecutor(t),
-		Validator:     core.NewValidator(),
-		Environment:   &core.Environment{WorkDir: t.TempDir()},
+		Validator:     security.NewValidator(),
+		Environment:   &agent.Environment{WorkDir: t.TempDir()},
 	}
 
 	server, err := New(config)
@@ -212,8 +213,8 @@ func TestServer_Serve_ProcessorOutput(t *testing.T) {
 }
 
 // Helper function to create a test executor
-func createTestExecutor(t *testing.T) *core.Executor {
-	executor, err := core.NewExecutor(t.TempDir())
+func createTestExecutor(t *testing.T) *agent.Executor {
+	executor, err := agent.NewExecutor(t.TempDir())
 	if err != nil {
 		t.Fatalf("Failed to create test executor: %v", err)
 	}

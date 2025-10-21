@@ -378,17 +378,6 @@ func TestHTTPClient_Do_RequestBodyBuffering(t *testing.T) {
 	}
 }
 
-func TestHTTPClient_WithTransport(t *testing.T) {
-	customTransport := &http.Transport{
-		MaxIdleConns: 100,
-	}
-
-	client := NewHTTPClient(WithTransport(customTransport))
-
-	if client.client.Transport != customTransport {
-		t.Error("WithTransport() did not set custom transport")
-	}
-}
 
 func TestHTTPClient_Do_NetworkError(t *testing.T) {
 	client := NewHTTPClient(

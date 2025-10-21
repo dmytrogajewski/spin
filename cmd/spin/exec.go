@@ -9,10 +9,14 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/conversation"
+	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
+	"github.com/dmytrogajewski/spin/internal/manager"
+	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	"github.com/spf13/cobra"
 )
@@ -172,7 +176,7 @@ func parseDuration(s string) (time.Duration, error) {
 }
 
 // createManagerForExec creates a core.Manager configured for exec mode.
-func createManagerForExec(provider llm.Provider, configLoader *config.Loader, autoApprove bool) (*core.Manager, error) {
+func createManagerForExec(provider llm.Provider, configLoader *config.Loader, autoApprove bool) (*manager.Manager, error) {
 	workDir := getWorkingDirectory()
 	cfg := buildConfig(configLoader, 0, workDir) // No max turns limit for exec
 
@@ -183,25 +187,25 @@ func createManagerForExec(provider llm.Provider, configLoader *config.Loader, au
 	registry.Register(tools.NewListDirectoryTool())
 
 	// Create approval handler for exec mode
-	var approvalHandler func(core.ApprovalRequest) core.ApprovalResponse
+	var approvalHandler func(security.ApprovalRequest) security.ApprovalResponse
 	if autoApprove {
-		approvalHandler = func(req core.ApprovalRequest) core.ApprovalResponse {
-			return core.ApprovalResponse{Approved: true, Reason: "auto-approved"}
+		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
+			return security.ApprovalResponse{Approved: true, Reason: "auto-approved"}
 		}
 	} else {
-		approvalHandler = func(req core.ApprovalRequest) core.ApprovalResponse {
+		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
 			// In exec mode without auto-approve, deny dangerous commands
-			return core.ApprovalResponse{Approved: false, Reason: "exec mode requires --auto-approve for dangerous operations"}
+			return security.ApprovalResponse{Approved: false, Reason: "exec mode requires --auto-approve for dangerous operations"}
 		}
 	}
 
 	// Create manager with options
-	var opts []core.ManagerOption
-	opts = append(opts, core.WithLLM(provider))
-	opts = append(opts, core.WithManagerToolRegistry(registry))
-	opts = append(opts, core.WithManagerApprovalHandler(approvalHandler))
+	var opts []manager.ManagerOption
+	opts = append(opts, manager.WithLLM(provider))
+	opts = append(opts, manager.WithManagerToolRegistry(registry))
+	opts = append(opts, manager.WithManagerApprovalHandler(approvalHandler))
 
-	mgr, err := core.NewManager(cfg, opts...)
+	mgr, err := manager.NewManager(cfg, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create manager: %w", err)
 	}
@@ -220,7 +224,7 @@ func (m *mockTTY) Size() (int, int)           { return m.width, m.height }
 func (m *mockTTY) OnResize(cb func(w, h int)) {}
 
 // executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
-func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, format string, noStream, exitOnError bool) error {
+func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, format string, noStream, exitOnError bool) error {
 	// Create TUI adapter with mock TTY for non-terminal environments
 	mockTty := &mockTTY{width: 120, height: 30} // Default terminal size
 	ui, err := adapters.NewPureTTY(os.Stdout, adapters.WithTTY(mockTty))
@@ -230,15 +234,10 @@ func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, 
 	defer ui.Stop()
 
 	// Initialize UI with conversation metadata
-	// Note: We need to get the provider from the conversation's manager
-	// For now, we'll skip the provider-specific initialization
 	ui.SetTaskMode(conv.GetTaskMode())
-	ui.SetMaxTokens(int64(conv.GetMaxTokens()))
-	ui.SetConversationID(conv.GetSessionID())
-	ui.SetTokenCount(int64(conv.GetTokenCount()))
 
 	// Create event mapper
-	mapper := core.NewTUIMapper(ui)
+	mapper := tui.NewTUIMapper(ui)
 	defer mapper.Close()
 
 	// Start streaming channel
@@ -250,7 +249,7 @@ func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, 
 	}()
 
 	// Subscribe to conversation events
-	events := conv.Stream()
+	eventStream := conv.Stream()
 
 	// Start turn in background
 	errChan := make(chan error, 1)
@@ -266,7 +265,7 @@ func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, 
 			select {
 			case <-ctx.Done():
 				return
-			case event, ok := <-events:
+			case event, ok := <-eventStream:
 				if !ok {
 					return
 				}
@@ -275,7 +274,7 @@ func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, 
 				}
 
 				// Update token count from conversation history after each event
-				if event.Type == core.EventTurnComplete || event.Type == core.EventContentComplete {
+				if event.Type == events.EventTurnComplete || event.Type == events.EventContentComplete {
 					tokenCount := int64(conv.GetTokenCount())
 					ui.SetTokenCount(tokenCount)
 				}

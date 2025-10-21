@@ -343,7 +343,7 @@ func (m *mockExecutor) Execute(ctx context.Context, cmd interface{}, opts interf
 	return nil, nil
 }
 
-// Mock result that matches core.Result structure
+// Mock result that matches agent.Result structure
 type mockResult struct {
 	Stdout   string
 	Stderr   string

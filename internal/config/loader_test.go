@@ -174,25 +174,6 @@ func TestLoader_Set(t *testing.T) {
 	}
 }
 
-func TestLoader_SetDefault(t *testing.T) {
-	loader := NewLoader()
-
-	// Set a default value
-	loader.SetDefault("default_key", "default_value")
-
-	// Get the default value
-	value := loader.Get("default_key")
-	if value != "default_value" {
-		t.Errorf("Get(\"default_key\") = %v, want %v", value, "default_value")
-	}
-
-	// Set a new value - should override default
-	loader.Set("default_key", "new_value")
-	value = loader.Get("default_key")
-	if value != "new_value" {
-		t.Errorf("Get(\"default_key\") = %v, want %v", value, "new_value")
-	}
-}
 
 func TestLoader_Unmarshal(t *testing.T) {
 	loader := NewLoader()

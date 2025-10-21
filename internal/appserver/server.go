@@ -4,9 +4,10 @@ import (
 	"context"
 	"io"
 
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/protocol/jsonrpc"
+	"github.com/dmytrogajewski/spin/internal/security"
 )
 
 // Server is the app-server implementation
@@ -20,10 +21,10 @@ type Server struct {
 type Config struct {
 	WorkspacePath string
 	Version       string
-	Provider      llm.Provider      // LLM provider
-	Executor      *core.Executor    // Command executor (optional)
-	Validator     *core.Validator   // Command validator (optional)
-	Environment   *core.Environment // Environment context (optional)
+	Provider      llm.Provider        // LLM provider
+	Executor      *agent.Executor     // Command executor (optional)
+	Validator     *security.Validator // Command validator (optional)
+	Environment   *agent.Environment  // Environment context (optional)
 }
 
 // New creates a new app-server

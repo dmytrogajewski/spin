@@ -7,18 +7,25 @@ import (
 	"io"
 	"sync"
 
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/cycle"
+	"github.com/dmytrogajewski/spin/internal/detection"
+	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/protocol"
 	"github.com/dmytrogajewski/spin/internal/protocol/jsonrpc"
+	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/task"
+	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/google/uuid"
 )
 
 // Processor handles app-server business logic
 type Processor struct {
 	mu            sync.RWMutex
-	agent         *core.Agent
-	emitter       *core.EventEmitter
+	agent         *agent.Agent
+	emitter       *events.EventEmitter
 	workspacePath string
 	version       string
 	conversations map[string]*Conversation
@@ -29,10 +36,10 @@ type Processor struct {
 type Conversation struct {
 	ID       protocol.ConversationID
 	TurnID   string
-	History  []core.Message
+	History  []agent.Message
 	cancel   context.CancelFunc
-	taskMode string         // current task mode name
-	mu       sync.RWMutex   // protects taskMode access
+	taskMode string       // current task mode name
+	mu       sync.RWMutex // protects taskMode access
 }
 
 // ProcessorConfig contains processor configuration
@@ -40,9 +47,9 @@ type ProcessorConfig struct {
 	WorkspacePath string
 	Version       string
 	Provider      llm.Provider
-	Executor      *core.Executor
-	Validator     *core.Validator
-	Environment   *core.Environment
+	Executor      *agent.Executor
+	Validator     *security.Validator
+	Environment   *agent.Environment
 }
 
 // NewProcessor creates a new processor
@@ -51,7 +58,7 @@ func NewProcessor(config ProcessorConfig) (*Processor, error) {
 	executor := config.Executor
 	if executor == nil {
 		var err error
-		executor, err = core.NewExecutor(config.WorkspacePath)
+		executor, err = agent.NewExecutor(config.WorkspacePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create executor: %w", err)
 		}
@@ -59,29 +66,67 @@ func NewProcessor(config ProcessorConfig) (*Processor, error) {
 
 	validator := config.Validator
 	if validator == nil {
-		validator = core.NewValidator()
+		validator = security.NewValidator()
 	}
 
 	environment := config.Environment
 	if environment == nil {
 		var err error
-		environment, err = core.GatherEnvironment(config.WorkspacePath)
+		environment, err = agent.GatherEnvironment(config.WorkspacePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to gather environment: %w", err)
 		}
 	}
 
 	// Create event emitter
-	emitter := core.NewEventEmitter(core.DefaultEventBufferSize)
+	emitter := events.NewEventEmitter(100) // Default buffer size
 
 	// Create agent if provider is provided
-	var agent *core.Agent
+	var agentInstance *agent.Agent
 	if config.Provider != nil {
+		// Build services for agent
+		approvalService := security.NewApprovalService(nil, emitter, validator) // No approval handler in server mode
+		securityService := security.NewSecurityService(validator, approvalService)
+
+		// Build detection service (simplified - no cycle detection in server mode)
+		cycleConfig := cycle.Config{Enabled: false}
+		cycleDetector := cycle.NewDetector(cycleConfig)
+		detectionService := detection.NewDetectionService(cycleDetector, nil)
+
+		// Build tool registry with built-in tools
+		toolRegistry := tools.NewRegistry()
+		_ = toolRegistry.Register(tools.NewReadFileTool())
+		_ = toolRegistry.Register(tools.NewWriteFileTool())
+		_ = toolRegistry.Register(tools.NewListDirectoryTool())
+		_ = toolRegistry.Register(tools.NewExecuteCommandTool(executor, validator))
+		_ = toolRegistry.Register(tools.NewGetContextTool(environment))
+		_ = toolRegistry.Register(tools.NewApplyPatchTool(environment.WorkDir))
+		_ = toolRegistry.Register(tools.NewFileSearchTool(environment.WorkDir))
+		_ = toolRegistry.Register(tools.NewGitContextTool(environment.WorkDir))
+
+		// Build task registry with built-in modes (using orchestration.Registry, not task.Registry)
+		taskRegistry := orchestration.NewRegistry()
+		_ = taskRegistry.Register("regular", task.NewRegular())
+		_ = taskRegistry.Register("review", task.NewReview())
+		_ = taskRegistry.Register("compact", task.NewCompact())
+		_ = taskRegistry.Register("planning", task.NewPlanning())
+		_ = taskRegistry.SetDefault("regular")
+
+		toolExecutor := orchestration.NewToolExecutor(orchestration.ToolExecutorConfig{
+			Registry:        toolRegistry,
+			Validator:       validator,
+			ApprovalService: approvalService,
+			Emitter:         emitter,
+			WorkDir:         environment.WorkDir,
+		})
+		orchestrationService := orchestration.NewOrchestrationService(toolExecutor, toolRegistry, taskRegistry)
+
 		var err error
-		agent, err = core.NewAgent(
+		agentInstance, err = agent.NewAgent(
 			config.Provider,
-			executor,
-			validator,
+			securityService,
+			detectionService,
+			orchestrationService,
 			environment,
 			emitter,
 		)
@@ -91,7 +136,7 @@ func NewProcessor(config ProcessorConfig) (*Processor, error) {
 	}
 
 	return &Processor{
-		agent:         agent,
+		agent:         agentInstance,
 		emitter:       emitter,
 		workspacePath: config.WorkspacePath,
 		version:       config.Version,
@@ -132,7 +177,7 @@ func (p *Processor) HandleSendMessage(ctx context.Context, params jsonrpc.SendMe
 
 		conv = &Conversation{
 			ID:       convID,
-			History:  []core.Message{},
+			History:  []agent.Message{},
 			taskMode: "regular", // default mode
 		}
 		p.conversations[convID.String()] = conv
@@ -221,9 +266,8 @@ func (p *Processor) runTurn(ctx context.Context, conv *Conversation, message str
 	conv.mu.RUnlock()
 
 	// Create agent request with task mode
-	req := &core.AgentRequest{
+	req := &agent.AgentRequest{
 		Input:    message,
-		History:  conv.History,
 		TaskName: taskMode,
 	}
 

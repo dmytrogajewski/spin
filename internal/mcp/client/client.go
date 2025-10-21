@@ -46,3 +46,17 @@ type Config struct {
 	// Timeout is the maximum duration for operations (default: 30s)
 	Timeout time.Duration
 }
+
+// Validate validates the configuration and sets defaults.
+func (c *Config) Validate() error {
+	if c.Command == "" {
+		return &Error{Op: "validate", Err: ErrSpawnFailed}
+	}
+
+	// Set default timeout if not specified
+	if c.Timeout == 0 {
+		c.Timeout = 30 * time.Second
+	}
+
+	return nil
+}

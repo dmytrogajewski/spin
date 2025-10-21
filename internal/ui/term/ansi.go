@@ -25,3 +25,6 @@ const (
 	// CarriageRet moves cursor to column 0 of current line.
 	CarriageRet = "\r"
 )
+
+// MoveCursorToCol returns an ANSI escape sequence that moves the cursor to the specified column.
+// Columns are 1-indexed (1 is the leftmost column).

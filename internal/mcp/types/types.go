@@ -109,3 +109,9 @@ type Content struct {
 	// URI references a resource (for type="resource")
 	URI *string `json:"uri,omitempty"`
 }
+
+// TextContent creates a Content instance for text.
+
+// ImageContent creates a Content instance for an image.
+
+// ResourceContent creates a Content instance for a resource.

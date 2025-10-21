@@ -21,38 +21,7 @@ func TestNewConversationID(t *testing.T) {
 	}
 }
 
-func TestConversationID_String(t *testing.T) {
-	id := NewConversationID()
-	str := id.String()
 
-	if str == "" {
-		t.Error("String() should not return empty string")
-	}
-
-	// Should be parseable back
-	_, err := ParseConversationID(str)
-	if err != nil {
-		t.Errorf("String() output should be parseable: %v", err)
-	}
-}
-
-func TestParseConversationID(t *testing.T) {
-	// Valid UUID
-	validUUID := uuid.New().String()
-	id, err := ParseConversationID(validUUID)
-	if err != nil {
-		t.Errorf("ParseConversationID failed for valid UUID: %v", err)
-	}
-	if id.String() != validUUID {
-		t.Errorf("Expected %s, got %s", validUUID, id.String())
-	}
-
-	// Invalid UUID
-	_, err = ParseConversationID("invalid-uuid")
-	if err == nil {
-		t.Error("ParseConversationID should fail for invalid UUID")
-	}
-}
 
 func TestRole_Constants(t *testing.T) {
 	roles := []Role{
