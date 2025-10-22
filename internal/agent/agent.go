@@ -1042,34 +1042,73 @@ Then provide your response after the thinking block.`
 		FinishReason: "",
 	}
 
+	chunkCount := 0
+	lastContentTime := time.Now()
+	
 	for chunk := range chunks {
+		chunkCount++
+		slog.Debug("received chunk", "type", chunk.Type, "count", chunkCount, "content_len", len(chunk.Content))
+		
+		// Check context cancellation
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("context cancelled: %w", err)
+		}
+
 		if chunk.Error != nil {
 			return nil, fmt.Errorf("stream error: %w", chunk.Error)
 		}
 
-		// Accumulate content
-		response.Content += chunk.Content
+		// Handle different chunk types
+		switch chunk.Type {
+		case llm.ChunkTypeDone:
+			// Stream is complete, break out of loop
+			slog.Debug("received done chunk", "finish_reason", chunk.FinishReason)
+			if chunk.FinishReason != "" {
+				response.FinishReason = chunk.FinishReason
+			}
+			goto streamComplete
+			
+		case llm.ChunkTypeContentDelta:
+			// Accumulate content
+			response.Content += chunk.Content
+			lastContentTime = time.Now()
 
-		// Emit content delta immediately for real-time streaming
-		if chunk.Content != "" {
-			a.emitter.Emit(events.Event{
-				Type:      events.EventContentDelta,
-				Timestamp: time.Now(),
-				Data: events.ContentDeltaData{
-					Content: chunk.Content,
-					Role:    "assistant",
-				},
-			})
+			// Emit content delta immediately for real-time streaming
+			if chunk.Content != "" {
+				a.emitter.Emit(events.Event{
+					Type:      events.EventContentDelta,
+					Timestamp: time.Now(),
+					Data: events.ContentDeltaData{
+						Content: chunk.Content,
+						Role:    "assistant",
+					},
+				})
+			}
+			
+		case llm.ChunkTypeToolCallStart, llm.ChunkTypeToolCallDelta, llm.ChunkTypeToolCallComplete:
+			// Accumulate tool calls
+			if chunk.ToolCall != nil {
+				response.ToolCalls = append(response.ToolCalls, *chunk.ToolCall)
+			}
 		}
-
-		// Accumulate tool calls
-		if chunk.ToolCall != nil {
-			response.ToolCalls = append(response.ToolCalls, *chunk.ToolCall)
+		
+		// Timeout fallback: if no content for 5 seconds, assume stream is done
+		if time.Since(lastContentTime) > 5*time.Second && response.Content != "" {
+			slog.Debug("stream timeout - no content for 5 seconds, assuming complete")
+			goto streamComplete
 		}
+	}
+	
+	slog.Debug("stream ended naturally", "total_chunks", chunkCount)
 
-		// Update finish reason
-		if chunk.FinishReason != "" {
-			response.FinishReason = chunk.FinishReason
+streamComplete:
+
+	// Fallback: if no finish reason was provided, set a default one
+	if response.FinishReason == "" {
+		if len(response.ToolCalls) > 0 {
+			response.FinishReason = "tool_calls"
+		} else {
+			response.FinishReason = "stop"
 		}
 	}
 
