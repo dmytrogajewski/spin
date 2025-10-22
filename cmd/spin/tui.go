@@ -72,6 +72,10 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("create TUI: %w", err)
 	}
 
+	// Set max tokens for context percentage display
+	// Use the provider's context window size
+	ui.SetMaxTokens(128000) // Default for modern models, will be updated if provider reports different
+
 	mgr, err := createManagerForTUI(provider, maxTurns, configLoader, ui)
 	if err != nil {
 		return fmt.Errorf("create manager: %w", err)
@@ -95,6 +99,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 	defer mgr.Close()
 
+	// Initialize UI with conversation metadata
 	initializeUI(ui, conv, provider)
 
 	// Create event mapper

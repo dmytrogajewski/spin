@@ -19,8 +19,7 @@ func TestApprovalService_RequestApproval_Success(t *testing.T) {
 				Reason:    "approved by test",
 			}
 		},
-		Emitter:         emitter,
-		ApprovalTimeout: 5 * time.Second,
+		Emitter: emitter,
 	})
 
 	cmd := &Command{Program: "ls", Args: []string{"-la"}, WorkDir: "/tmp"}
@@ -51,7 +50,6 @@ func TestApprovalService_RequestApproval_Denial(t *testing.T) {
 				Reason:    "denied by test",
 			}
 		},
-		ApprovalTimeout: 5 * time.Second,
 	})
 
 	cmd := &Command{Program: "rm", Args: []string{"-rf", "/"}, WorkDir: "/"}
@@ -88,34 +86,6 @@ func TestApprovalService_RequestApproval_NoHandler(t *testing.T) {
 	}
 }
 
-// TestApprovalService_RequestApproval_Timeout tests approval timeout.
-func TestApprovalService_RequestApproval_Timeout(t *testing.T) {
-	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
-			time.Sleep(200 * time.Millisecond) // Simulate slow handler
-			return ApprovalResponse{
-				RequestID: req.ID,
-				Approved:  true,
-			}
-		},
-		ApprovalTimeout: 50 * time.Millisecond, // Short timeout
-	})
-
-	cmd := &Command{Program: "ls", WorkDir: "/tmp"}
-	_, approved, err := service.RequestApproval(context.Background(), Operation{
-		Command: cmd,
-		Reason:  "test",
-		WorkDir: "/tmp",
-	})
-
-	if err == nil {
-		t.Error("Expected timeout error")
-	}
-	if approved {
-		t.Error("Expected denial due to timeout")
-	}
-}
-
 // TestApprovalService_RequestApproval_InvalidRequestID tests request ID validation.
 func TestApprovalService_RequestApproval_InvalidRequestID(t *testing.T) {
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
@@ -125,7 +95,6 @@ func TestApprovalService_RequestApproval_InvalidRequestID(t *testing.T) {
 				Approved:  true,
 			}
 		},
-		ApprovalTimeout: 5 * time.Second,
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp"}
@@ -155,8 +124,7 @@ func TestApprovalService_ModifiedCommand_Success(t *testing.T) {
 				Reason:          "modified for safety",
 			}
 		},
-		Validator:       validator,
-		ApprovalTimeout: 5 * time.Second,
+		Validator: validator,
 	})
 
 	cmd := &Command{Program: "ls", Args: []string{"-l", "/etc"}, WorkDir: "/tmp", Raw: "ls -l /etc"}
@@ -189,7 +157,6 @@ func TestApprovalService_ModifiedCommand_ParseError(t *testing.T) {
 				Reason:          "modified",
 			}
 		},
-		ApprovalTimeout: 5 * time.Second,
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
@@ -216,8 +183,7 @@ func TestApprovalService_ModifiedCommand_ValidationFailure(t *testing.T) {
 				Reason:          "modified",
 			}
 		},
-		Validator:       validator,
-		ApprovalTimeout: 5 * time.Second,
+		Validator: validator,
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
@@ -248,8 +214,7 @@ func TestApprovalService_WithEmitter(t *testing.T) {
 				Reason:    "test",
 			}
 		},
-		Emitter:         emitter,
-		ApprovalTimeout: 5 * time.Second,
+		Emitter: emitter,
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
@@ -297,8 +262,8 @@ func TestApprovalService_WithoutEmitter(t *testing.T) {
 				Approved:  true,
 			}
 		},
-		Emitter:         nil, // No emitter
-		ApprovalTimeout: 5 * time.Second,
+		Emitter: nil, // No emitter
+
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
@@ -317,38 +282,6 @@ func TestApprovalService_WithoutEmitter(t *testing.T) {
 	}
 }
 
-// TestApprovalService_DefaultTimeout tests default timeout behavior.
-func TestApprovalService_DefaultTimeout(t *testing.T) {
-	callCount := 0
-	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
-			callCount++
-			return ApprovalResponse{
-				RequestID: req.ID,
-				Approved:  true,
-			}
-		},
-		ApprovalTimeout: 0, // Zero timeout, should use default
-	})
-
-	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
-	_, approved, err := service.RequestApproval(context.Background(), Operation{
-		Command: cmd,
-		Reason:  "test",
-		WorkDir: "/tmp",
-	})
-
-	if err != nil {
-		t.Errorf("Expected no error with default timeout, got %v", err)
-	}
-	if !approved {
-		t.Error("Expected approval with default timeout")
-	}
-	if callCount != 1 {
-		t.Errorf("Expected handler called once, got %d", callCount)
-	}
-}
-
 // TestApprovalService_ContextCancellation tests context cancellation during approval.
 func TestApprovalService_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -361,7 +294,6 @@ func TestApprovalService_ContextCancellation(t *testing.T) {
 				Approved:  true,
 			}
 		},
-		ApprovalTimeout: 5 * time.Second,
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
@@ -388,8 +320,7 @@ func TestApprovalService_RequestApprovalWithValidator_NoApprovalNeeded(t *testin
 			t.Error("Handler should not be called for safe commands")
 			return ApprovalResponse{}
 		},
-		Validator:       validator,
-		ApprovalTimeout: 5 * time.Second,
+		Validator: validator,
 	})
 
 	// ls is typically classified as safe (read-only)
@@ -411,7 +342,6 @@ func TestApprovalService_RequestApprovalWithValidator_NilValidator(t *testing.T)
 			t.Error("Handler should not be called when validator is nil")
 			return ApprovalResponse{}
 		},
-		ApprovalTimeout: 5 * time.Second,
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}

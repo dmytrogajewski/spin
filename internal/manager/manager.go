@@ -291,10 +291,9 @@ func (m *Manager) buildAgent(executor *agent.Executor, ctxEnv *agent.Environment
 	var approvalService *security.ApprovalService
 	if m.approvalHandler != nil {
 		approvalService = security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
-			Handler:         m.approvalHandler,
-			Emitter:         m.emitter,
-			Validator:       validator,
-			ApprovalTimeout: m.cfg.ApprovalTimeout,
+			Handler:   m.approvalHandler,
+			Emitter:   m.emitter,
+			Validator: validator,
 		})
 	} else {
 		approvalService = security.NewApprovalService(nil, m.emitter, validator)

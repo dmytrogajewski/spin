@@ -21,7 +21,6 @@ type Config struct {
 	WorkDir         string        `yaml:"work_dir" mapstructure:"work_dir"`
 	MaxTokens       int           `yaml:"max_tokens" mapstructure:"max_tokens"`
 	RequireApproval bool          `yaml:"require_approval" mapstructure:"require_approval"`
-	ApprovalTimeout time.Duration `yaml:"approval_timeout" mapstructure:"approval_timeout"`
 
 	// Security Configuration
 	SandboxMode     string   `yaml:"sandbox_mode" mapstructure:"sandbox_mode"`
@@ -89,11 +88,10 @@ func DefaultConfig() *Config {
 		Temperature: 0.7,
 
 		// Agent defaults
-		MaxTurns:        50,
-		Timeout:         5 * time.Minute,
+		MaxTurns:        500,              // Increased from 50 to allow complex multi-step tasks
+		Timeout:         60 * time.Minute, // Increased from 5min to 1h for long-running tasks
 		MaxTokens:       8192,
 		RequireApproval: false,
-		ApprovalTimeout: 60 * time.Second,
 
 		// Security defaults
 		SandboxMode: "workspace-only",
@@ -153,10 +151,6 @@ func (c *Config) Validate() error {
 
 	if c.Temperature < 0 || c.Temperature > 2 {
 		errs = append(errs, fmt.Errorf("temperature must be between 0 and 2, got %f", c.Temperature))
-	}
-
-	if c.ApprovalTimeout <= 0 {
-		errs = append(errs, fmt.Errorf("approval_timeout must be > 0, got %v", c.ApprovalTimeout))
 	}
 
 	// Validate sandbox mode
@@ -266,7 +260,6 @@ func (c *Config) copyConfig() *Config {
 		WorkDir:         c.WorkDir,
 		MaxTokens:       c.MaxTokens,
 		RequireApproval: c.RequireApproval,
-		ApprovalTimeout: c.ApprovalTimeout,
 
 		// Security fields
 		SandboxMode:     c.SandboxMode,
@@ -355,9 +348,6 @@ func (c *Config) mergeIntFields(other *Config) {
 	}
 	if other.HistoryLimit != 0 {
 		c.HistoryLimit = other.HistoryLimit
-	}
-	if other.ApprovalTimeout != 0 {
-		c.ApprovalTimeout = other.ApprovalTimeout
 	}
 }
 

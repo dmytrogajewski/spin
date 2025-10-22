@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/security"
@@ -228,21 +227,27 @@ func (u *PureTTY) Run(ctx context.Context) error {
 	}()
 
 	// Start keyboard reader (or use injected events for testing)
-	var keys <-chan term.KeyEvent
+	var rawKeys <-chan term.KeyEvent
 	if u.keyboardEvents != nil {
 		// Use injected keyboard events (for testing)
-		keys = u.keyboardEvents
+		rawKeys = u.keyboardEvents
 	} else {
 		// Use real keyboard reader
 		var err error
-		keys, err = term.ReadKeys(ctx, os.Stdin, nil)
+		rawKeys, err = term.ReadKeys(ctx, os.Stdin, nil)
 		if err != nil {
 			return fmt.Errorf("start keyboard reader: %w", err)
 		}
 	}
 
-	// Start prompt loop
-	inputs := u.startPromptLoop(ctx, keys)
+	// Create routed keys channel for prompt loop
+	routedKeys := make(chan term.KeyEvent)
+
+	// Start keyboard router that checks mode and routes keys appropriately
+	go u.routeKeyboardEvents(ctx, rawKeys, routedKeys)
+
+	// Start prompt loop with routed keys
+	inputs := u.startPromptLoop(ctx, routedKeys)
 	u.mu.Lock()
 	u.promptInputs = inputs
 	u.mu.Unlock()
@@ -433,6 +438,67 @@ func (u *PureTTY) RequestInput() <-chan string {
 	return u.externalInputs
 }
 
+// routeKeyboardEvents routes keyboard events to the appropriate handler based on current mode.
+// When in ModeApproval, routes keys to the approval dialog.
+// Otherwise, forwards keys to the prompt loop.
+func (u *PureTTY) routeKeyboardEvents(ctx context.Context, rawKeys <-chan term.KeyEvent, promptKeys chan<- term.KeyEvent) {
+	defer close(promptKeys)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case event, ok := <-rawKeys:
+			if !ok {
+				return
+			}
+
+			// Check current mode
+			u.mu.Lock()
+			mode := u.mode
+			dialog := u.approvalDialog
+			u.mu.Unlock()
+
+			// Route based on mode
+			if mode == ModeApproval && dialog != nil {
+				// Route to approval dialog
+				u.handleApprovalKey(event, dialog)
+			} else {
+				// Route to prompt loop
+				select {
+				case promptKeys <- event:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}
+}
+
+// handleApprovalKey handles keyboard input for the approval dialog.
+func (u *PureTTY) handleApprovalKey(event term.KeyEvent, dialog *overlay.ApprovalDialog) {
+	// Convert KeyEvent to string for HandleKey
+	var keyStr string
+	switch event.Kind {
+	case term.KeyRune:
+		keyStr = string(event.Rune)
+	case term.KeyEscape:
+		keyStr = "\x1b"
+	case term.KeyEnter:
+		keyStr = "\r"
+	case term.KeyLeft, term.KeyRight, term.KeyUp, term.KeyDown:
+		// Arrow keys - for now, ignore them (dialog doesn't support navigation yet)
+		// TODO: Implement arrow key navigation in approval dialog
+		return
+	default:
+		return
+	}
+
+	// Pass key to dialog
+	dialog.HandleKey(keyStr)
+}
+
 // startPromptLoop starts the prompt input loop in a background goroutine.
 func (u *PureTTY) startPromptLoop(ctx context.Context, keys <-chan term.KeyEvent) <-chan string {
 	loop := prompt.NewLoop(u.model, u.renderer, keys)
@@ -558,7 +624,7 @@ func (u *PureTTY) renderFilterUI() {
 // ShowApprovalDialog displays an approval dialog for the given request.
 func (u *PureTTY) ShowApprovalDialog(req security.ApprovalRequest) security.ApprovalResponse {
 	// Create approval dialog
-	u.approvalDialog = overlay.NewApprovalDialog(req, 60*time.Second)
+	u.approvalDialog = overlay.NewApprovalDialog(req)
 	u.mode = ModeApproval
 
 	// Render the dialog
@@ -571,6 +637,10 @@ func (u *PureTTY) ShowApprovalDialog(req security.ApprovalRequest) security.Appr
 	// Clean up
 	u.approvalDialog = nil
 	u.mode = ModeInput
+
+	// Clear the screen and show result
+	u.clearApprovalOverlay()
+	u.displayApprovalResult(req, response)
 
 	return response
 }
@@ -589,6 +659,36 @@ func (u *PureTTY) renderApprovalOverlay() {
 	if output != "" {
 		fmt.Fprint(u.out, output)
 	}
+}
+
+// clearApprovalOverlay clears the approval dialog from the screen.
+func (u *PureTTY) clearApprovalOverlay() {
+	// Clear screen and move cursor to top
+	fmt.Fprint(u.out, "\033[2J\033[H")
+}
+
+// displayApprovalResult displays a message showing the approval decision.
+func (u *PureTTY) displayApprovalResult(req security.ApprovalRequest, resp security.ApprovalResponse) {
+	var message string
+	var statusSymbol string
+
+	if resp.Approved {
+		// Green checkmark for approved
+		statusSymbol = "\033[32m✓\033[0m"
+		message = fmt.Sprintf("%s Command approved: %s", statusSymbol, req.Command.Raw)
+	} else {
+		// Red X for denied/cancelled
+		statusSymbol = "\033[31m✗\033[0m"
+		reason := resp.Reason
+		if reason == "" {
+			reason = "denied"
+		}
+		message = fmt.Sprintf("%s Command %s: %s", statusSymbol, reason, req.Command.Raw)
+	}
+
+	// Print the result message
+	u.PrintLine(message)
+	u.PrintLine("") // Empty line for spacing
 }
 
 // AppendBlock appends a new block to timeline and prints it.

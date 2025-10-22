@@ -317,45 +317,6 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 	}
 }
 
-func TestSecurityService_RequestApproval_WithTimeout(t *testing.T) {
-	validator := NewValidator()
-
-	// Handler that takes longer than timeout
-	slowHandler := func(req ApprovalRequest) ApprovalResponse {
-		time.Sleep(2 * time.Second)
-		return ApprovalResponse{
-			RequestID: req.ID,
-			Approved:  true,
-			Timestamp: time.Now(),
-		}
-	}
-
-	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler:         slowHandler,
-		Validator:       validator,
-		ApprovalTimeout: 100 * time.Millisecond,
-	})
-
-	svc := NewSecurityService(validator, approvalService)
-
-	operation := Operation{
-		Command: &Command{
-			Raw:     "rm -rf /tmp/test",
-			Program: "rm",
-			Args:    []string{"-rf", "/tmp/test"},
-		},
-		Reason:  "test timeout",
-		WorkDir: "/tmp",
-	}
-
-	ctx := context.Background()
-	approved, err := svc.RequestApproval(ctx, operation)
-
-	assert.False(t, approved)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "timeout")
-}
-
 func TestSecurityService_RequestApproval_NilApprovalService(t *testing.T) {
 	validator := NewValidator()
 	svc := NewSecurityService(validator, nil)

@@ -56,6 +56,11 @@ type UI interface {
 	// Thread-safe. Returns error if redraw fails.
 	SetStatus(text string) error
 
+	// SetMaxTokens sets the maximum token limit for context window percentage calculation.
+	// This is used to display context usage (e.g., "45%") in the status bar.
+	// Thread-safe.
+	SetMaxTokens(maxTokens int64)
+
 	// RequestInput returns a channel that emits user-submitted lines.
 	// Channel emits on Enter key, closes on shutdown.
 	// Returns the same channel on repeated calls.

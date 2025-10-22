@@ -51,11 +51,15 @@ func (a *eventEmitterAdapter) Emit(event cycle.Event) {
 	a.emitter.Emit(coreEvent)
 }
 
-// extractToolNames extracts tool names from LLM tool calls for cycle detection
+// extractToolNames extracts tool calls with parameters from LLM tool calls for cycle detection
+// Returns strings in format "tool_name(arguments_json)" to enable parameter-aware cycle detection
 func extractToolNames(toolCalls []llm.ToolCall) []string {
-	names := make([]string, len(toolCalls))
+	calls := make([]string, len(toolCalls))
 	for i, tc := range toolCalls {
-		names[i] = tc.Function.Name
+		// Include both name and arguments for accurate cycle detection
+		// This prevents false positives when same tool is called with different params
+		// e.g., "list_directory(.)" vs "list_directory(advanced-features-20251012)"
+		calls[i] = tc.Function.Name + "(" + tc.Function.Arguments + ")"
 	}
-	return names
+	return calls
 }

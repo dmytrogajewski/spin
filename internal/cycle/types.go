@@ -62,7 +62,8 @@ type Snapshot struct {
 	// Response is the LLM response content (if any)
 	Response string
 
-	// ToolCalls are the names of tools called in this turn
+	// ToolCalls are the tool calls made in this turn (name + arguments)
+	// Format: "tool_name(arguments_json)" for parameter-aware comparison
 	ToolCalls []string
 
 	// Error is any error that occurred in this turn (if any)

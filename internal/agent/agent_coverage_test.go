@@ -657,7 +657,7 @@ func TestExtractToolNames(t *testing.T) {
 					},
 				},
 			},
-			wantNames: []string{"read_file"},
+			wantNames: []string{`read_file({"path": "test.txt"})`},
 		},
 		{
 			name: "multiple tool calls",
@@ -687,7 +687,11 @@ func TestExtractToolNames(t *testing.T) {
 					},
 				},
 			},
-			wantNames: []string{"read_file", "write_file", "execute_command"},
+			wantNames: []string{
+				`read_file({"path": "test.txt"})`,
+				`write_file({"path": "output.txt", "content": "hello"})`,
+				`execute_command({"command": "ls"})`,
+			},
 		},
 	}
 

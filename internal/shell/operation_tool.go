@@ -91,7 +91,7 @@ func (t *ShellOperationTool) Execute(ctx context.Context, params map[string]inte
 		if err != nil {
 			return tools.ToolResult{
 				Success: false,
-				Error:   fmt.Sprintf("Failed to execute command: %v", err),
+				Error:   fmt.Sprintf("Failed to execute command '%s': %v", command, err),
 			}, nil
 		}
 

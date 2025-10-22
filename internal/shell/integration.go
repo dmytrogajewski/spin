@@ -154,8 +154,19 @@ func (s *ShellIntegration) ExecuteShellCommand(ctx context.Context, command stri
 	// Set environment variables
 	cmd.Env = s.buildEnvironment()
 
-	output, err := cmd.Output()
+	// Use CombinedOutput to capture both stdout and stderr
+	output, err := cmd.CombinedOutput()
 	if err != nil {
+		// Check if it's an ExitError to get exit code and stderr
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode := exitErr.ExitCode()
+			// Output already contains stderr since we used CombinedOutput
+			outputStr := strings.TrimSpace(string(output))
+			if outputStr != "" {
+				return "", fmt.Errorf("shell command failed (exit %d): %s", exitCode, outputStr)
+			}
+			return "", fmt.Errorf("shell command failed (exit %d)", exitCode)
+		}
 		return "", fmt.Errorf("shell command failed: %w", err)
 	}
 

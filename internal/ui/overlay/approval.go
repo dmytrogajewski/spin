@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/dmytrogajewski/spin/internal/security"
 )
@@ -15,20 +14,16 @@ type ApprovalDialog struct {
 	response   *security.ApprovalResponse
 	width      int
 	height     int
-	selected   int // 0=Approve, 1=Deny, 2=Cancel
-	timeout    time.Duration
-	startTime  time.Time
+	selected   int  // 0=Approve, 1=Deny, 2=Cancel
 	shown      bool // tracks if Show() has been called
 	responseCh chan security.ApprovalResponse
 }
 
 // NewApprovalDialog creates a new approval dialog.
-func NewApprovalDialog(request security.ApprovalRequest, timeout time.Duration) *ApprovalDialog {
+func NewApprovalDialog(request security.ApprovalRequest) *ApprovalDialog {
 	return &ApprovalDialog{
 		request:    &request,
-		timeout:    timeout,
 		selected:   0, // Default to Approve
-		startTime:  time.Now(),
 		responseCh: make(chan security.ApprovalResponse, 1),
 	}
 }
@@ -51,10 +46,10 @@ func truncateString(s string, maxLen int) string {
 }
 
 // Render renders the approval dialog.
-// Returns empty string if the dialog has been responded to or expired.
+// Returns empty string if the dialog has been responded to.
 func (d *ApprovalDialog) Render(width, height int) string {
-	// Don't render if already responded to or expired
-	if d.response != nil || d.IsExpired() {
+	// Don't render if already responded to
+	if d.response != nil {
 		return ""
 	}
 
@@ -117,14 +112,6 @@ func (d *ApprovalDialog) Render(width, height int) string {
 		workDirText := truncateString(d.request.WorkDir, maxContentWidth)
 		sb.WriteString(fmt.Sprintf("\033[%d;%dH", contentY, startX+2))
 		sb.WriteString(fmt.Sprintf("Working Directory: %s", workDirText))
-	}
-
-	// Timeout information
-	contentY += 2
-	remaining := d.timeout - time.Since(d.startTime)
-	if remaining > 0 {
-		sb.WriteString(fmt.Sprintf("\033[%d;%dH", contentY, startX+2))
-		sb.WriteString(fmt.Sprintf("Timeout: %s", remaining.Round(time.Second)))
 	}
 
 	// Action buttons
@@ -211,38 +198,14 @@ func (d *ApprovalDialog) GetResponse() *security.ApprovalResponse {
 	return d.response
 }
 
-// IsExpired checks if the dialog has expired due to timeout.
-func (d *ApprovalDialog) IsExpired() bool {
-	return time.Since(d.startTime) > d.timeout
-}
-
-// GetTimeoutResponse returns a timeout response.
-func (d *ApprovalDialog) GetTimeoutResponse() *security.ApprovalResponse {
-	return &security.ApprovalResponse{
-		Approved: false,
-		Reason:   "Approval dialog timed out",
-	}
-}
-
 // Show displays the approval dialog and waits for user input.
 func (d *ApprovalDialog) Show(ctx context.Context) security.ApprovalResponse {
 	// Mark as shown
 	d.shown = true
-	d.startTime = time.Now() // Reset start time when actually shown
 
-	// Wait for response from Approve/Deny or timeout
-	deadline := time.After(d.timeout)
+	// Wait for response from Approve/Deny or context cancellation
 	select {
 	case resp := <-d.responseCh:
-		d.response = &resp
-		return resp
-	case <-deadline:
-		// Timeout - deny
-		resp := security.ApprovalResponse{
-			RequestID: d.request.ID,
-			Approved:  false,
-			Reason:    "timeout",
-		}
 		d.response = &resp
 		return resp
 	case <-ctx.Done():
@@ -259,8 +222,8 @@ func (d *ApprovalDialog) Show(ctx context.Context) security.ApprovalResponse {
 
 // IsVisible returns whether the dialog is currently visible.
 func (d *ApprovalDialog) IsVisible() bool {
-	// Dialog is visible if Show() has been called, not yet responded to, and not expired
-	return d.shown && d.response == nil && !d.IsExpired()
+	// Dialog is visible if Show() has been called and not yet responded to
+	return d.shown && d.response == nil
 }
 
 // Approve approves the request and closes the dialog.
@@ -293,18 +256,4 @@ func (d *ApprovalDialog) Deny() {
 	default:
 		// Channel already has a response or not being read
 	}
-}
-
-// GetRemainingTime returns the remaining time before timeout.
-// Returns 0 if the dialog hasn't been shown yet.
-func (d *ApprovalDialog) GetRemainingTime() time.Duration {
-	// Timer doesn't start until Show() is called
-	if !d.shown {
-		return 0
-	}
-	remaining := d.timeout - time.Since(d.startTime)
-	if remaining < 0 {
-		return 0
-	}
-	return remaining
 }

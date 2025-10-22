@@ -18,7 +18,7 @@ func TestNewApprovalDialog(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	dialog := NewApprovalDialog(req, 60*time.Second)
+	dialog := NewApprovalDialog(req)
 
 	if dialog == nil {
 		t.Fatal("NewApprovalDialog returned nil")
@@ -26,10 +26,6 @@ func TestNewApprovalDialog(t *testing.T) {
 
 	if dialog.request.ID != req.ID {
 		t.Errorf("Expected request ID %s, got %s", req.ID, dialog.request.ID)
-	}
-
-	if dialog.timeout != 60*time.Second {
-		t.Errorf("Expected timeout %v, got %v", 60*time.Second, dialog.timeout)
 	}
 
 	if dialog.IsVisible() {
@@ -46,7 +42,7 @@ func TestApprovalDialog_Show_Approve(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	dialog := NewApprovalDialog(req, 5*time.Second)
+	dialog := NewApprovalDialog(req)
 
 	// Start dialog in background
 	ctx := context.Background()
@@ -92,7 +88,7 @@ func TestApprovalDialog_Show_Deny(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	dialog := NewApprovalDialog(req, 5*time.Second)
+	dialog := NewApprovalDialog(req)
 
 	// Start dialog in background
 	ctx := context.Background()
@@ -124,32 +120,6 @@ func TestApprovalDialog_Show_Deny(t *testing.T) {
 	}
 }
 
-func TestApprovalDialog_Show_Timeout(t *testing.T) {
-	req := security.ApprovalRequest{
-		ID:        "test-id",
-		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
-		Reason:    "Destructive file operation",
-		WorkDir:   "/home/user",
-		Timestamp: time.Now(),
-	}
-
-	dialog := NewApprovalDialog(req, 100*time.Millisecond)
-
-	// Start dialog and wait for timeout
-	ctx := context.Background()
-	result := dialog.Show(ctx)
-
-	if result.Approved {
-		t.Error("Expected denial on timeout, got approval")
-	}
-	if result.RequestID != req.ID {
-		t.Errorf("Expected request ID %s, got %s", req.ID, result.RequestID)
-	}
-	if result.Reason != "timeout" {
-		t.Errorf("Expected reason 'timeout', got %s", result.Reason)
-	}
-}
-
 func TestApprovalDialog_HandleKey(t *testing.T) {
 	req := security.ApprovalRequest{
 		ID:        "test-id",
@@ -159,7 +129,7 @@ func TestApprovalDialog_HandleKey(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	dialog := NewApprovalDialog(req, 5*time.Second)
+	dialog := NewApprovalDialog(req)
 
 	tests := []struct {
 		name        string
@@ -185,40 +155,6 @@ func TestApprovalDialog_HandleKey(t *testing.T) {
 	}
 }
 
-func TestApprovalDialog_GetRemainingTime(t *testing.T) {
-	req := security.ApprovalRequest{
-		ID:        "test-id",
-		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
-		Reason:    "Destructive file operation",
-		WorkDir:   "/home/user",
-		Timestamp: time.Now(),
-	}
-
-	dialog := NewApprovalDialog(req, 1*time.Second)
-
-	// Initially not visible
-	if dialog.GetRemainingTime() != 0 {
-		t.Error("Expected 0 remaining time when not visible")
-	}
-
-	// Start dialog
-	ctx := context.Background()
-	go dialog.Show(ctx)
-	time.Sleep(10 * time.Millisecond)
-
-	// Should have remaining time
-	remaining := dialog.GetRemainingTime()
-	if remaining <= 0 || remaining > 1*time.Second {
-		t.Errorf("Expected remaining time between 0 and 1s, got %v", remaining)
-	}
-
-	// Wait for timeout
-	time.Sleep(1100 * time.Millisecond)
-	if dialog.GetRemainingTime() != 0 {
-		t.Error("Expected 0 remaining time after timeout")
-	}
-}
-
 func TestApprovalDialog_Render(t *testing.T) {
 	req := security.ApprovalRequest{
 		ID:        "test-id",
@@ -228,7 +164,7 @@ func TestApprovalDialog_Render(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	dialog := NewApprovalDialog(req, 60*time.Second)
+	dialog := NewApprovalDialog(req)
 
 	// Not visible - should return empty string
 	if dialog.Render(80, 24) != "" {
@@ -274,7 +210,7 @@ func TestApprovalDialog_Render_LongContent(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	dialog := NewApprovalDialog(req, 60*time.Second)
+	dialog := NewApprovalDialog(req)
 
 	// Dialog is visible by default after creation
 	// (removed private field access)
@@ -300,7 +236,7 @@ func TestApprovalDialog_ConcurrentAccess(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	dialog := NewApprovalDialog(req, 5*time.Second)
+	dialog := NewApprovalDialog(req)
 
 	// Test concurrent access
 	done := make(chan bool, 10)
@@ -310,9 +246,6 @@ func TestApprovalDialog_ConcurrentAccess(t *testing.T) {
 
 			// Test IsVisible
 			_ = dialog.IsVisible()
-
-			// Test GetRemainingTime
-			_ = dialog.GetRemainingTime()
 
 			// Test HandleKey
 			_ = dialog.HandleKey("x")
@@ -338,7 +271,7 @@ func TestApprovalDialog_MultipleResponses(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	dialog := NewApprovalDialog(req, 5*time.Second)
+	dialog := NewApprovalDialog(req)
 
 	// Start dialog
 	ctx := context.Background()

@@ -17,8 +17,8 @@ import (
 
 // Default agent configuration values
 const (
-	DefaultMaxTurns        = 50
-	DefaultAgentTimeout    = 5 * time.Minute
+	DefaultMaxTurns        = 500
+	DefaultAgentTimeout    = 60 * time.Minute
 	DefaultTemperature     = 0.7
 	DefaultMaxTokens       = 4096
 	DefaultEventBufferSize = 100

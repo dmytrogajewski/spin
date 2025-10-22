@@ -13,45 +13,37 @@ import (
 // It can be used by executors, agents, tools, and other components that need
 // user approval for potentially dangerous operations.
 type ApprovalService struct {
-	handler         ApprovalHandler
-	emitter         *events.EventEmitter
-	validator       *Validator
-	approvalTimeout time.Duration
+	handler   ApprovalHandler
+	emitter   *events.EventEmitter
+	validator *Validator
 }
 
 // ApprovalServiceConfig configures the approval service.
 type ApprovalServiceConfig struct {
-	Handler         ApprovalHandler
-	Emitter         *events.EventEmitter
-	Validator       *Validator
-	ApprovalTimeout time.Duration
+	Handler   ApprovalHandler
+	Emitter   *events.EventEmitter
+	Validator *Validator
 }
 
 // NewApprovalService creates a new approval service with the given handler.
 func NewApprovalService(handler ApprovalHandler, emitter *events.EventEmitter, validator *Validator) *ApprovalService {
 	return &ApprovalService{
-		handler:         handler,
-		emitter:         emitter,
-		validator:       validator,
-		approvalTimeout: 60 * time.Second,
+		handler:   handler,
+		emitter:   emitter,
+		validator: validator,
 	}
 }
 
 // NewApprovalServiceWithConfig creates a new approval service with full configuration.
 func NewApprovalServiceWithConfig(cfg ApprovalServiceConfig) *ApprovalService {
-	timeout := cfg.ApprovalTimeout
-	if timeout == 0 {
-		timeout = 60 * time.Second
-	}
 	return &ApprovalService{
-		handler:         cfg.Handler,
-		emitter:         cfg.Emitter,
-		validator:       cfg.Validator,
-		approvalTimeout: timeout,
+		handler:   cfg.Handler,
+		emitter:   cfg.Emitter,
+		validator: cfg.Validator,
 	}
 }
 
-// RequestApproval requests approval for an operation with full event emission and timeout support.
+// RequestApproval requests approval for an operation with full event emission.
 // Returns the request ID, whether approved, and any error.
 func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operation) (reqID string, approved bool, err error) {
 	// Generate unique request ID
@@ -79,13 +71,13 @@ func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operati
 		return reqID, false, fmt.Errorf("no approval handler configured")
 	}
 
-	// Invoke approval handler with timeout
-	resp, timedOut := s.invokeHandlerWithTimeout(ctx, req)
-	if timedOut {
+	// Invoke approval handler
+	resp, cancelled := s.invokeHandler(ctx, req)
+	if cancelled {
 		if s.emitter != nil {
-			s.emitApprovalDenied(reqID, operation.Command, "approval timeout or context cancelled")
+			s.emitApprovalDenied(reqID, operation.Command, "context cancelled")
 		}
-		return reqID, false, fmt.Errorf("approval timeout")
+		return reqID, false, fmt.Errorf("context cancelled")
 	}
 
 	// Validate response
@@ -115,30 +107,20 @@ func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operati
 	return reqID, false, nil
 }
 
-// invokeHandlerWithTimeout invokes the approval handler with timeout.
-func (s *ApprovalService) invokeHandlerWithTimeout(ctx context.Context, req ApprovalRequest) (ApprovalResponse, bool) {
-	// Determine timeout (default to 60s if not set)
-	timeout := s.approvalTimeout
-	if timeout == 0 {
-		timeout = 60 * time.Second
-	}
-
-	// Create timeout context
-	approvalCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	// Invoke handler in goroutine with timeout
+// invokeHandler invokes the approval handler.
+func (s *ApprovalService) invokeHandler(ctx context.Context, req ApprovalRequest) (ApprovalResponse, bool) {
+	// Invoke handler in goroutine
 	respChan := make(chan ApprovalResponse, 1)
 	go func() {
 		resp := s.handler(req)
 		respChan <- resp
 	}()
 
-	// Wait for response or timeout
+	// Wait for response or context cancellation
 	select {
 	case resp := <-respChan:
 		return resp, false
-	case <-approvalCtx.Done():
+	case <-ctx.Done():
 		return ApprovalResponse{}, true
 	}
 }

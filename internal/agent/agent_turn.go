@@ -34,9 +34,13 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 
 		// Handle cycle detection via detection service
 		if a.config.CycleDetection.Enabled {
-			if shouldStop, err := a.handleCycleDetection(ctx, messages, llmResp, turn+1, resp); err != nil {
+			var shouldStop bool
+			var err error
+			messages, shouldStop, err = a.handleCycleDetection(ctx, messages, llmResp, turn+1, resp)
+			if err != nil {
 				return messages, resp, err
-			} else if shouldStop {
+			}
+			if shouldStop {
 				return messages, resp, nil
 			}
 		}
@@ -60,7 +64,8 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 }
 
 // handleCycleDetection processes cycle detection and interventions via detection service.
-func (a *Agent) handleCycleDetection(ctx context.Context, messages []Message, llmResp *llm.CompletionResponse, turn int, resp *AgentResponse) (bool, error) {
+// Returns the modified messages (with intervention added if applicable), whether to stop, and any error.
+func (a *Agent) handleCycleDetection(ctx context.Context, messages []Message, llmResp *llm.CompletionResponse, turn int, resp *AgentResponse) ([]Message, bool, error) {
 	snapshot := cycle.Snapshot{
 		Turn:      turn,
 		Response:  llmResp.Content,
@@ -72,12 +77,12 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []Message, ll
 
 	cycleResult, err := a.detection.CheckCycle()
 	if err != nil || cycleResult.Type == cycle.CycleNone {
-		return false, nil
+		return messages, false, nil
 	}
 
 	intervention := a.selectIntervention(cycleResult.Type, turn)
 	if intervention == nil {
-		return false, nil
+		return messages, false, nil
 	}
 
 	// Convert messages to cycle.Message interface
@@ -89,7 +94,7 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []Message, ll
 	modifiedCycleMessages, err := intervention.Apply(ctx, cycleMessages)
 	if err != nil {
 		slog.Warn("cycle intervention failed", "error", err, "cycle_type", cycleResult.Type)
-		return false, nil
+		return messages, false, nil
 	}
 
 	// Convert back to Message slice
@@ -116,10 +121,10 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []Message, ll
 	// If this was an escalation intervention, pause the agent
 	if intervention.Severity() >= 3 {
 		resp.FinishReason = "cycle_intervention"
-		return true, nil
+		return messages, true, nil
 	}
 
-	return false, nil
+	return messages, false, nil
 }
 
 // emitTurnStart emits a turn start event.
