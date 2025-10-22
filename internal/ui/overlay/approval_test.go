@@ -2,7 +2,6 @@ package overlay
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -166,38 +165,10 @@ func TestApprovalDialog_Render(t *testing.T) {
 
 	dialog := NewApprovalDialog(req)
 
-	// Not visible - should return empty string
-	if dialog.Render(80, 24) != "" {
-		t.Error("Expected empty string when dialog not visible")
-	}
-
-	// Dialog is visible by default after creation
-	// (removed private field access)
-
-	// Render dialog
+	// Render dialog - should return empty string since we now use status bar
 	output := dialog.Render(80, 24)
-	if output == "" {
-		t.Error("Expected non-empty output when dialog visible")
-	}
-
-	// Check for key elements
-	if !strings.Contains(output, "Approval Required") {
-		t.Error("Expected 'Approval Required' in output")
-	}
-	if !strings.Contains(output, "rm -rf /tmp/test") {
-		t.Error("Expected command in output")
-	}
-	if !strings.Contains(output, "Destructive file operation") {
-		t.Error("Expected reason in output")
-	}
-	if !strings.Contains(output, "/home/user/project") {
-		t.Error("Expected workdir in output")
-	}
-	if !strings.Contains(output, "[A]pprove") {
-		t.Error("Expected approve shortcut in output")
-	}
-	if !strings.Contains(output, "[D]eny") {
-		t.Error("Expected deny shortcut in output")
+	if output != "" {
+		t.Error("Expected empty string since we now use status bar for approval display")
 	}
 }
 
@@ -212,18 +183,10 @@ func TestApprovalDialog_Render_LongContent(t *testing.T) {
 
 	dialog := NewApprovalDialog(req)
 
-	// Dialog is visible by default after creation
-	// (removed private field access)
-
-	// Render with small width
+	// Render with small width - should return empty string since we now use status bar
 	output := dialog.Render(40, 24)
-	if output == "" {
-		t.Error("Expected non-empty output")
-	}
-
-	// Should contain truncated content
-	if !strings.Contains(output, "...") {
-		t.Error("Expected truncated content with '...'")
+	if output != "" {
+		t.Error("Expected empty string since we now use status bar for approval display")
 	}
 }
 

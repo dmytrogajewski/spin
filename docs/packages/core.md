@@ -301,6 +301,12 @@ type Config struct {
     RequireApproval bool     // Require approval for commands
     SafeCommands    []string // List of safe commands
 
+    // Integration Settings
+    EnableShell     bool          // Enable shell integration (default: true)
+    ShellTimeout    time.Duration // Shell command timeout (default: 30s)
+    EnableGit       bool          // Enable git integration (default: true)
+    EnableMCP       bool          // Enable MCP integration (default: false)
+
     // Logging Settings
     Debug     bool   // Enable debug logging
     LogLevel  string // Log level: debug, info, warn, error
@@ -328,6 +334,74 @@ core.WithEventEmitter(emitter EventEmitter)
 
 // WithApprovalHandler sets the command approval handler
 core.WithManagerApprovalHandler(handler ApprovalHandler)
+```
+
+### Shell Timeout Configuration
+
+The Manager supports configurable timeouts for shell operations to prevent long-running commands from blocking the agent indefinitely.
+
+**Configuration Options:**
+
+```go
+type Config struct {
+    // Shell integration settings
+    EnableShell  bool          // Enable shell integration (default: true)
+    ShellTimeout time.Duration // Default timeout for shell commands (default: 30s)
+}
+```
+
+**Usage Examples:**
+
+```go
+// Default configuration (30 second timeout)
+cfg := &manager.Config{
+    EnableShell:  true,
+    ShellTimeout: 30 * time.Second,
+}
+
+// Custom timeout for long-running operations
+cfg := &manager.Config{
+    EnableShell:  true,
+    ShellTimeout: 2 * time.Minute, // 2 minutes for build operations
+}
+
+// Disable shell integration
+cfg := &manager.Config{
+    EnableShell: false,
+}
+```
+
+**Agent-Level Timeout Override:**
+
+The agent can override the global timeout on a per-command basis using the `timeout` parameter in shell operations:
+
+```go
+// Agent can specify custom timeout for specific commands
+result, err := shellTool.Execute(ctx, map[string]interface{}{
+    "operation": "execute_command",
+    "command":   "npm install",
+    "timeout":   120.0, // 2 minutes for npm install
+})
+```
+
+**Timeout Behavior:**
+
+1. **Global Default**: All shell commands use `ShellTimeout` unless overridden
+2. **Per-Command Override**: Agent can specify custom timeout via `timeout` parameter
+3. **Context Precedence**: If the calling context has a shorter timeout, that takes precedence
+4. **Error Handling**: Timeout errors include the actual timeout duration used
+
+**Error Examples:**
+
+```
+// Global timeout exceeded
+shell command timed out after 30s: npm install
+
+// Per-command timeout exceeded  
+shell command timed out after 2m: docker build
+
+// Context timeout exceeded
+shell command timed out after 10s: git clone
 ```
 
 ### Creating Conversations with Task Modes

@@ -28,10 +28,11 @@ type Config struct {
 	AllowedCommands []string `yaml:"allowed_commands" mapstructure:"allowed_commands"`
 
 	// Feature Flags
-	EnableMCP   bool              `yaml:"enable_mcp" mapstructure:"enable_mcp"`
-	MCPServers  []MCPServerConfig `yaml:"mcp_servers" mapstructure:"mcp_servers"`
-	EnableGit   bool              `yaml:"enable_git" mapstructure:"enable_git"`
-	EnableShell bool              `yaml:"enable_shell" mapstructure:"enable_shell"`
+	EnableMCP    bool              `yaml:"enable_mcp" mapstructure:"enable_mcp"`
+	MCPServers   []MCPServerConfig `yaml:"mcp_servers" mapstructure:"mcp_servers"`
+	EnableGit    bool              `yaml:"enable_git" mapstructure:"enable_git"`
+	EnableShell  bool              `yaml:"enable_shell" mapstructure:"enable_shell"`
+	ShellTimeout time.Duration     `yaml:"shell_timeout" mapstructure:"shell_timeout"`
 
 	// Performance Configuration
 	StreamBuffer  int  `yaml:"stream_buffer" mapstructure:"stream_buffer"`
@@ -96,9 +97,10 @@ func DefaultConfig() *Config {
 		SandboxMode: "workspace-only",
 
 		// Feature flags
-		EnableGit:   true,
-		EnableShell: true,
-		EnableMCP:   false,
+		EnableGit:    true,
+		EnableShell:  true,
+		EnableMCP:    false,
+		ShellTimeout: 30 * time.Second,
 
 		// Performance defaults
 		StreamBuffer:  100,
@@ -150,6 +152,10 @@ func (c *Config) Validate() error {
 
 	if c.Temperature < 0 || c.Temperature > 2 {
 		errs = append(errs, fmt.Errorf("temperature must be between 0 and 2, got %f", c.Temperature))
+	}
+
+	if c.ShellTimeout <= 0 {
+		errs = append(errs, fmt.Errorf("shell_timeout must be > 0, got %v", c.ShellTimeout))
 	}
 
 	// Validate sandbox mode

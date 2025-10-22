@@ -137,14 +137,17 @@ func buildProvider(ctx context.Context, configLoader *config.Loader, authMgr *au
 	// Create builder
 	b := builder.NewBuilder(configLoader, authMgr)
 
-	// Build provider with flags as overrides
-	cfg := builder.Config{
-		Provider: flagProvider,
-		Model:    flagModel,
-		// Additional flags can be added here in the future
-		// BaseURL:  flagBaseURL,
-		// KeyName:  flagKeyName,
+	// Build provider with flags as overrides (only if flags are set)
+	cfg := builder.Config{}
+	if flagProvider != "" {
+		cfg.Provider = flagProvider
 	}
+	if flagModel != "" {
+		cfg.Model = flagModel
+	}
+	// Additional flags can be added here in the future
+	// BaseURL:  flagBaseURL,
+	// KeyName:  flagKeyName,
 
 	return b.Build(ctx, cfg)
 }

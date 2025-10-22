@@ -114,15 +114,153 @@ result, err := tool.Execute(ctx, map[string]interface{}{
 **Description:** Execute a shell command
 **Parameters:**
 - `command` (string, required): The command to execute
-- `workdir` (string, optional): The working directory for the command
+- `working_directory` (string, optional): The working directory for the command
+- `timeout` (number, optional): Timeout in seconds for command execution (default: 30s)
 
 ```go
 tool := NewExecuteCommandTool(executor, validator)
 result, err := tool.Execute(ctx, map[string]interface{}{
     "command": "git status",
-    "workdir": "/path/to/repo",
+    "working_directory": "/path/to/repo",
+    "timeout": 60.0, // 60 seconds for long-running command
 })
 ```
+
+**Timeout Behavior:**
+- **Default Timeout**: 30 seconds
+- **Per-Command Override**: Agent can specify custom timeout via `timeout` parameter
+- **Context Precedence**: If the calling context has a shorter timeout, that takes precedence
+- **Error Handling**: Timeout errors include context deadline information
+
+**Example Usage:**
+
+```go
+// Execute command with custom timeout
+result, err := tool.Execute(ctx, map[string]interface{}{
+    "command": "npm install",
+    "timeout": 120.0, // 2 minutes for npm install
+})
+
+// Execute command with working directory
+result, err := tool.Execute(ctx, map[string]interface{}{
+    "command": "git status",
+    "working_directory": "/path/to/project",
+})
+```
+
+**Output Examples:**
+
+**Successful Command Execution:**
+```
+git status output here
+```
+
+**Timeout Error:**
+```
+context deadline exceeded
+```
+
+**Features:**
+- **Configurable Timeouts**: Per-command timeout control
+- **Working Directory Support**: Execute commands in specific directories
+- **Context Integration**: Respects calling context timeouts
+- **Error Handling**: Detailed error messages with context information
+
+### shell_operation
+**Description:** Perform shell operations like command execution, environment management, and shell information retrieval
+**Integration:** Uses `internal/shell` package
+**Parameters:**
+- `operation` (string, required): Shell operation type
+  - `execute_command`: Execute a shell command
+  - `get_environment`: Get shell environment variables
+  - `get_shell_info`: Get shell information and context
+  - `is_shell_command`: Check if a command should be executed through shell
+- `command` (string, optional): Command to execute (required for `execute_command` and `is_shell_command`)
+- `args` (array, optional): Command arguments (optional)
+- `working_directory` (string, optional): Working directory for command execution
+- `timeout` (number, optional): Timeout in seconds for command execution (default: 30s)
+
+**Configuration:**
+Shell operations respect the global `shell_timeout` configuration setting (default: 30 seconds). The agent can override this per-command using the `timeout` parameter.
+
+```go
+tool := NewShellOperationTool(shellIntegration)
+result, err := tool.Execute(ctx, map[string]interface{}{
+    "operation": "execute_command",
+    "command":   "npm install",
+    "timeout":   60.0, // 60 seconds for long-running command
+})
+```
+
+**Timeout Behavior:**
+- **Default Timeout**: 30 seconds (configurable via `shell_timeout` in config)
+- **Per-Command Override**: Agent can specify custom timeout via `timeout` parameter
+- **Context Precedence**: If the calling context has a shorter timeout, that takes precedence
+- **Error Handling**: Timeout errors include the actual timeout duration used
+
+**Example Operations:**
+
+```go
+// Execute command with custom timeout
+result, err := tool.Execute(ctx, map[string]interface{}{
+    "operation": "execute_command",
+    "command":   "sleep 5",
+    "timeout":   2.0, // Will timeout after 2 seconds
+})
+
+// Get environment variables
+result, err := tool.Execute(ctx, map[string]interface{}{
+    "operation": "get_environment",
+})
+
+// Get shell information
+result, err := tool.Execute(ctx, map[string]interface{}{
+    "operation": "get_shell_info",
+})
+
+// Check if command needs shell interpretation
+result, err := tool.Execute(ctx, map[string]interface{}{
+    "operation": "is_shell_command",
+    "command":   "ls | grep test", // Returns true (contains pipe)
+})
+```
+
+**Output Examples:**
+
+**Successful Command Execution:**
+```
+Command executed successfully: Hello, World!
+```
+
+**Timeout Error:**
+```
+Failed to execute command 'sleep 5': shell command timed out after 2s: sleep 5
+```
+
+**Environment Variables:**
+```
+Environment Variables:
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+HOME=/home/user
+USER=user
+```
+
+**Shell Information:**
+```
+Shell Information:
+shell_enabled: true
+shell: bash
+shell_path: /bin/bash
+shell_env: map[SHELL:/bin/bash PATH:/usr/local/bin:/usr/bin:/bin]
+```
+
+**Features:**
+- **Configurable Timeouts**: Global and per-command timeout control
+- **Shell Detection**: Automatic detection of bash, zsh, fish, cmd, powershell
+- **Environment Preservation**: Maintains shell environment variables
+- **Error Context**: Detailed error messages with command and timeout information
+- **Cross-Platform**: Works on Linux, macOS, and Windows
 
 ### get_context
 **Description:** Get environment context information

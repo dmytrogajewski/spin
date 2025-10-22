@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/filesearch"
 	"github.com/dmytrogajewski/spin/internal/git"
@@ -252,9 +253,13 @@ func (t *ExecuteCommandTool) Schema() ToolSchema {
 						Type:        "string",
 						Description: "The command to execute",
 					},
-					"workdir": {
+					"working_directory": {
 						Type:        "string",
 						Description: "The working directory for the command (optional)",
+					},
+					"timeout": {
+						Type:        "number",
+						Description: "Timeout in seconds for command execution (optional, defaults to 30s)",
 					},
 				},
 				Required: []string{"command"},
@@ -278,6 +283,18 @@ func (t *ExecuteCommandTool) Execute(ctx context.Context, params map[string]inte
 		return ToolResult{Success: false, Error: "command cannot be empty"}, nil
 	}
 
+	// Parse timeout parameter (optional, defaults to 30s)
+	timeout := 30 * time.Second
+	if timeoutParam, exists := params["timeout"]; exists {
+		if timeoutFloat, ok := timeoutParam.(float64); ok {
+			timeout = time.Duration(timeoutFloat) * time.Second
+		}
+	}
+
+	// Create a context with the specified timeout
+	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	executeMethod, err := t.getExecuteMethod()
 	if err != nil {
 		return ToolResult{Success: false, Error: err.Error()}, nil
@@ -288,7 +305,7 @@ func (t *ExecuteCommandTool) Execute(ctx context.Context, params map[string]inte
 		return ToolResult{Success: false, Error: err.Error()}, nil
 	}
 
-	return t.executeCommand(ctx, executeMethod, cmdValue)
+	return t.executeCommand(cmdCtx, executeMethod, cmdValue)
 }
 
 // validateExecutor validates that the executor is configured.
@@ -358,7 +375,7 @@ func (t *ExecuteCommandTool) createDynamicCommand(parts []string, params map[str
 		Raw:     strings.Join(parts, " "),
 	}
 
-	if workDir, ok := params["workdir"].(string); ok && workDir != "" {
+	if workDir, ok := params["working_directory"].(string); ok && workDir != "" {
 		cmd.WorkDir = workDir
 	}
 
@@ -382,7 +399,7 @@ func (t *ExecuteCommandTool) setCommandFields(cmdElem reflect.Value, parts []str
 	t.setStringSliceField(cmdElem, "Args", parts[1:])
 	t.setStringField(cmdElem, "Raw", strings.Join(parts, " "))
 
-	if workDir, ok := params["workdir"].(string); ok && workDir != "" {
+	if workDir, ok := params["working_directory"].(string); ok && workDir != "" {
 		t.setStringField(cmdElem, "WorkDir", workDir)
 	}
 }

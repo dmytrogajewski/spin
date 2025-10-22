@@ -586,9 +586,10 @@ func (u *PureTTY) formatImpactChip(impact string) []string {
 // render redraws UI elements (filter, prompt).
 // Note: Blocks are printed via AppendBlock in append-only mode.
 func (u *PureTTY) render() {
-	// Render approval dialog if active
+	// Render approval status if active
 	if u.mode == ModeApproval && u.approvalDialog != nil {
-		u.renderApprovalOverlay()
+		// Approval status is already shown in status bar, just update it
+		u.updateStatusBar()
 		return
 	}
 
@@ -623,12 +624,14 @@ func (u *PureTTY) renderFilterUI() {
 
 // ShowApprovalDialog displays an approval dialog for the given request.
 func (u *PureTTY) ShowApprovalDialog(req security.ApprovalRequest) security.ApprovalResponse {
-	// Create approval dialog
-	u.approvalDialog = overlay.NewApprovalDialog(req)
+	// Set approval mode
 	u.mode = ModeApproval
 
-	// Render the dialog
-	u.renderApprovalOverlay()
+	// Create approval dialog for key handling
+	u.approvalDialog = overlay.NewApprovalDialog(req)
+
+	// Show approval prompt in status bar
+	u.showApprovalStatus(req)
 
 	// Wait for user response
 	ctx := context.Background()
@@ -638,33 +641,39 @@ func (u *PureTTY) ShowApprovalDialog(req security.ApprovalRequest) security.Appr
 	u.approvalDialog = nil
 	u.mode = ModeInput
 
-	// Clear the screen and show result
-	u.clearApprovalOverlay()
+	// Clear approval status and show result
+	u.clearApprovalStatus()
 	u.displayApprovalResult(req, response)
 
 	return response
 }
 
-// renderApprovalOverlay renders the approval dialog overlay.
-func (u *PureTTY) renderApprovalOverlay() {
-	if u.approvalDialog == nil {
+// showApprovalStatus displays the approval prompt in the status bar.
+func (u *PureTTY) showApprovalStatus(req security.ApprovalRequest) {
+	if u.statusRenderer == nil {
 		return
 	}
 
-	// Get terminal dimensions
-	w, h := u.tty.Size()
-
-	// Render the dialog
-	output := u.approvalDialog.Render(w, h)
-	if output != "" {
-		fmt.Fprint(u.out, output)
+	// Create approval prompt text
+	command := req.Command.Raw
+	if len(command) > 50 {
+		command = command[:47] + "..."
 	}
+
+	approvalText := fmt.Sprintf("Executing: \"%s\" [A]pprove [D]eny", command)
+
+	// Render in status bar
+	u.statusRenderer.Render(approvalText)
 }
 
-// clearApprovalOverlay clears the approval dialog from the screen.
-func (u *PureTTY) clearApprovalOverlay() {
-	// Clear screen and move cursor to top
-	fmt.Fprint(u.out, "\033[2J\033[H")
+// clearApprovalStatus clears the approval status from the status bar.
+func (u *PureTTY) clearApprovalStatus() {
+	if u.statusRenderer == nil {
+		return
+	}
+
+	// Clear the status bar
+	u.statusRenderer.Clear()
 }
 
 // displayApprovalResult displays a message showing the approval decision.

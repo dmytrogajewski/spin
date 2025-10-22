@@ -512,7 +512,7 @@ func NewManager(cfg *Config, opts ...ManagerOption) (*Manager, error) {
 	if cfg.EnableShell {
 		ctx := context.Background()
 		logger := m.getLogger(ctx)
-		shellIntegration := shell.NewShellIntegration(true, cfg.WorkDir, logger)
+		shellIntegration := shell.NewShellIntegration(true, cfg.WorkDir, logger, cfg.ShellTimeout)
 		if err := shellIntegration.Initialize(context.Background()); err != nil {
 			// Log error but don't fail manager creation
 			logger.Error("Failed to initialize Shell integration", "error", err)

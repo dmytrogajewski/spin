@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
@@ -54,6 +55,10 @@ func (t *ShellOperationTool) Schema() tools.ToolSchema {
 						Type:        "string",
 						Description: "Working directory for execute_command operation (optional)",
 					},
+					"timeout": {
+						Type:        "number",
+						Description: "Timeout in seconds for execute_command operation (optional, defaults to 30s)",
+					},
 				},
 				Required: []string{"operation"},
 			},
@@ -87,7 +92,19 @@ func (t *ShellOperationTool) Execute(ctx context.Context, params map[string]inte
 			}, nil
 		}
 
-		result, err := t.shellIntegration.ExecuteShellCommand(ctx, command)
+		// Parse timeout parameter (optional, defaults to 30s)
+		timeout := 30 * time.Second
+		if timeoutParam, exists := params["timeout"]; exists {
+			if timeoutFloat, ok := timeoutParam.(float64); ok {
+				timeout = time.Duration(timeoutFloat) * time.Second
+			}
+		}
+
+		// Create a context with the specified timeout
+		cmdCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+
+		result, err := t.shellIntegration.ExecuteShellCommand(cmdCtx, command)
 		if err != nil {
 			return tools.ToolResult{
 				Success: false,

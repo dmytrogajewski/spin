@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 // ShellIntegration provides shell-aware functionality for the agent.
@@ -21,15 +22,17 @@ type ShellIntegration struct {
 	shell     string
 	shellPath string
 	envVars   map[string]string
+	timeout   time.Duration
 }
 
 // NewShellIntegration creates a new Shell integration.
-func NewShellIntegration(enabled bool, workDir string, logger *slog.Logger) *ShellIntegration {
+func NewShellIntegration(enabled bool, workDir string, logger *slog.Logger, timeout time.Duration) *ShellIntegration {
 	return &ShellIntegration{
 		enabled: enabled,
 		workDir: workDir,
 		logger:  logger,
 		envVars: make(map[string]string),
+		timeout: timeout,
 	}
 }
 
@@ -129,6 +132,25 @@ func (s *ShellIntegration) ExecuteShellCommand(ctx context.Context, command stri
 		return "", fmt.Errorf("no shell available")
 	}
 
+	// Create a context with timeout for the shell command
+	// Use the shorter of the two timeouts (integration timeout vs context timeout)
+	var cmdCtx context.Context
+	var cancel context.CancelFunc
+
+	if deadline, ok := ctx.Deadline(); ok {
+		// Context already has a deadline, use the shorter timeout
+		integrationDeadline := time.Now().Add(s.timeout)
+		if deadline.Before(integrationDeadline) {
+			cmdCtx, cancel = context.WithTimeout(ctx, time.Until(deadline))
+		} else {
+			cmdCtx, cancel = context.WithTimeout(ctx, s.timeout)
+		}
+	} else {
+		// No existing deadline, use integration timeout
+		cmdCtx, cancel = context.WithTimeout(ctx, s.timeout)
+	}
+	defer cancel()
+
 	// Determine shell arguments based on shell type
 	var args []string
 	switch s.GetShell() {
@@ -148,7 +170,7 @@ func (s *ShellIntegration) ExecuteShellCommand(ctx context.Context, command stri
 		args = []string{"-c", command}
 	}
 
-	cmd := exec.CommandContext(ctx, shellPath, args...)
+	cmd := exec.CommandContext(cmdCtx, shellPath, args...)
 	cmd.Dir = s.workDir
 
 	// Set environment variables
@@ -157,6 +179,22 @@ func (s *ShellIntegration) ExecuteShellCommand(ctx context.Context, command stri
 	// Use CombinedOutput to capture both stdout and stderr
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		// Check if it's a timeout error
+		if cmdCtx.Err() == context.DeadlineExceeded {
+			// Determine which timeout was actually used
+			var timeoutUsed time.Duration
+			if deadline, ok := ctx.Deadline(); ok {
+				integrationDeadline := time.Now().Add(s.timeout)
+				if deadline.Before(integrationDeadline) {
+					timeoutUsed = time.Until(deadline)
+				} else {
+					timeoutUsed = s.timeout
+				}
+			} else {
+				timeoutUsed = s.timeout
+			}
+			return "", fmt.Errorf("shell command timed out after %v: %s", timeoutUsed, command)
+		}
 		// Check if it's an ExitError to get exit code and stderr
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode := exitErr.ExitCode()

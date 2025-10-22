@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestReadFileTool(t *testing.T) {
@@ -519,8 +520,8 @@ func TestExecuteCommandTool_WithWorkdir(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"command": "ls",
-		"workdir": tmpDir,
+		"command":           "ls",
+		"working_directory": tmpDir,
 	})
 
 	if err != nil {
@@ -531,7 +532,7 @@ func TestExecuteCommandTool_WithWorkdir(t *testing.T) {
 		t.Errorf("expected success, got error: %s", result.Error)
 	}
 
-	// Verify workdir was set
+	// Verify working_directory was set
 	if capturedCmd == nil {
 		t.Fatal("command was not captured")
 	}
@@ -1444,8 +1445,8 @@ func TestExecuteCommandTool_TypedExecutor(t *testing.T) {
 	tool := NewExecuteCommandTool(executor, nil)
 
 	result, err := tool.Execute(context.Background(), map[string]interface{}{
-		"command": "git status --short",
-		"workdir": "/tmp/test",
+		"command":           "git status --short",
+		"working_directory": "/tmp/test",
 	})
 
 	if err != nil {
@@ -1748,4 +1749,144 @@ func TestGitContextTool_ErrorCases(t *testing.T) {
 	}
 	// Git context tool might succeed or fail depending on git availability,
 	// so we just check it doesn't panic
+}
+
+// TestExecuteCommandTool_Timeout tests execute command tool timeout functionality.
+func TestExecuteCommandTool_Timeout(t *testing.T) {
+	// Create a mock executor that simulates a long-running command
+	mockExecutor := &mockExecutor{
+		executeFunc: func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+			// Simulate a command that takes longer than the timeout
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(2 * time.Second):
+				return &mockResult{Stdout: "completed", Stderr: "", ExitCode: 0}, nil
+			}
+		},
+	}
+
+	tool := NewExecuteCommandTool(mockExecutor, nil)
+
+	// Test with custom timeout parameter
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "sleep 2",
+		"timeout": 1.0, // 1 second timeout
+	})
+
+	if err != nil {
+		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
+	}
+
+	if result.Success {
+		t.Error("Expected failure for command that exceeds timeout")
+	}
+
+	// Verify the error indicates timeout
+	if !strings.Contains(result.Error, "context deadline exceeded") &&
+		!strings.Contains(result.Error, "deadline exceeded") &&
+		!strings.Contains(result.Error, "timed out") {
+		t.Errorf("Expected timeout error message, got: %s", result.Error)
+	}
+}
+
+// TestExecuteCommandTool_CustomTimeout tests execute command tool with custom timeout.
+func TestExecuteCommandTool_CustomTimeout(t *testing.T) {
+	// Create a mock executor that completes quickly
+	mockExecutor := &mockExecutor{
+		executeFunc: func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+			return &mockResult{Stdout: "quick command", Stderr: "", ExitCode: 0}, nil
+		},
+	}
+
+	tool := NewExecuteCommandTool(mockExecutor, nil)
+
+	// Test with longer timeout that should succeed
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "echo 'custom timeout test'",
+		"timeout": 5.0, // 5 second timeout
+	})
+
+	if err != nil {
+		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
+	}
+
+	if !result.Success {
+		t.Errorf("Expected success for command within timeout, got failure: %s", result.Error)
+	}
+
+	if !strings.Contains(result.Output, "quick command") {
+		t.Errorf("Expected output to contain 'quick command', got: %s", result.Output)
+	}
+}
+
+// TestExecuteCommandTool_InvalidTimeout tests execute command tool with invalid timeout.
+func TestExecuteCommandTool_InvalidTimeout(t *testing.T) {
+	// Create a mock executor
+	mockExecutor := &mockExecutor{
+		executeFunc: func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+			return &mockResult{Stdout: "invalid timeout test", Stderr: "", ExitCode: 0}, nil
+		},
+	}
+
+	tool := NewExecuteCommandTool(mockExecutor, nil)
+
+	// Test with invalid timeout parameter (string instead of number)
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "echo 'invalid timeout test'",
+		"timeout": "invalid", // Invalid timeout type
+	})
+
+	if err != nil {
+		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
+	}
+
+	// Should still succeed because invalid timeout falls back to default
+	if !result.Success {
+		t.Errorf("Expected success for command with invalid timeout (should fallback to default), got failure: %s", result.Error)
+	}
+
+	if !strings.Contains(result.Output, "invalid timeout test") {
+		t.Errorf("Expected output to contain 'invalid timeout test', got: %s", result.Output)
+	}
+}
+
+// TestExecuteCommandTool_ZeroTimeout tests execute command tool with zero timeout.
+func TestExecuteCommandTool_ZeroTimeout(t *testing.T) {
+	// Create a mock executor
+	mockExecutor := &mockExecutor{
+		executeFunc: func(ctx context.Context, cmd interface{}, opts interface{}) (interface{}, error) {
+			// Zero timeout should cause immediate context cancellation
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(100 * time.Millisecond):
+				return &mockResult{Stdout: "zero timeout test", Stderr: "", ExitCode: 0}, nil
+			}
+		},
+	}
+
+	tool := NewExecuteCommandTool(mockExecutor, nil)
+
+	// Test with zero timeout
+	result, err := tool.Execute(context.Background(), map[string]interface{}{
+		"command": "echo 'zero timeout test'",
+		"timeout": 0.0, // Zero timeout
+	})
+
+	if err != nil {
+		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
+	}
+
+	// Zero timeout should cause immediate timeout
+	if result.Success {
+		t.Error("Expected failure for command with zero timeout (should timeout immediately)")
+	}
+
+	// Should be a timeout error
+	if !strings.Contains(result.Error, "context deadline exceeded") &&
+		!strings.Contains(result.Error, "deadline exceeded") &&
+		!strings.Contains(result.Error, "timed out") {
+		t.Errorf("Expected timeout error for zero timeout, got: %s", result.Error)
+	}
 }
