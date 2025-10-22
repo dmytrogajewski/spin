@@ -193,12 +193,20 @@ func createManagerForExec(provider llm.Provider, configLoader *config.Loader, au
 	var approvalHandler func(security.ApprovalRequest) security.ApprovalResponse
 	if autoApprove {
 		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
-			return security.ApprovalResponse{Approved: true, Reason: "auto-approved"}
+			return security.ApprovalResponse{
+				RequestID: req.ID,
+				Approved:  true,
+				Reason:    "auto-approved",
+			}
 		}
 	} else {
 		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
 			// In exec mode without auto-approve, deny dangerous commands
-			return security.ApprovalResponse{Approved: false, Reason: "exec mode requires --auto-approve for dangerous operations"}
+			return security.ApprovalResponse{
+				RequestID: req.ID,
+				Approved:  false,
+				Reason:    "exec mode requires --auto-approve for dangerous operations",
+			}
 		}
 	}
 
