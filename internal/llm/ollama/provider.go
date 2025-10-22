@@ -673,6 +673,8 @@ func (p *Provider) streamChatResponse(ctx context.Context, r io.Reader, out chan
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				slog.Debug("Ollama stream processing ended", "total_lines", lineCount)
+				// Send done chunk if we haven't already
+				out <- llm.StreamChunk{Type: llm.ChunkTypeDone}
 				return nil
 			}
 			slog.Debug("Ollama stream error", "error", err)

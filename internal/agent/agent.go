@@ -1043,8 +1043,6 @@ Then provide your response after the thinking block.`
 	}
 
 	chunkCount := 0
-	lastContentTime := time.Now()
-	
 	for chunk := range chunks {
 		chunkCount++
 		slog.Debug("received chunk", "type", chunk.Type, "count", chunkCount, "content_len", len(chunk.Content))
@@ -1071,7 +1069,6 @@ Then provide your response after the thinking block.`
 		case llm.ChunkTypeContentDelta:
 			// Accumulate content
 			response.Content += chunk.Content
-			lastContentTime = time.Now()
 
 			// Emit content delta immediately for real-time streaming
 			if chunk.Content != "" {
@@ -1090,12 +1087,6 @@ Then provide your response after the thinking block.`
 			if chunk.ToolCall != nil {
 				response.ToolCalls = append(response.ToolCalls, *chunk.ToolCall)
 			}
-		}
-		
-		// Timeout fallback: if no content for 5 seconds, assume stream is done
-		if time.Since(lastContentTime) > 5*time.Second && response.Content != "" {
-			slog.Debug("stream timeout - no content for 5 seconds, assuming complete")
-			goto streamComplete
 		}
 	}
 	
