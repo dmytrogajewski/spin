@@ -111,6 +111,8 @@ func TestThinkFilter_PartialTagsAcrossChunks(t *testing.T) {
 	for _, chunk := range chunks {
 		output.WriteString(f.Process(chunk))
 	}
+	// Flush any remaining buffered content
+	output.WriteString(f.Flush())
 
 	result := output.String()
 

@@ -1,6 +1,7 @@
 package filesearch
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 )
@@ -29,11 +30,26 @@ func NewScanner(baseDir string, ignoreGit bool) *Scanner {
 // Returns relative paths from baseDir.
 // Files matching .gitignore or .spinignore patterns are excluded.
 func (s *Scanner) Scan() ([]string, error) {
+	return s.ScanWithContext(context.Background())
+}
+
+// ScanWithContext returns all files in the directory recursively with context cancellation support.
+// Returns relative paths from baseDir.
+// Files matching .gitignore or .spinignore patterns are excluded.
+// If the context is cancelled, scanning stops and returns an error.
+func (s *Scanner) ScanWithContext(ctx context.Context) ([]string, error) {
 	var files []string
 
 	s.ensureIgnoreHandler()
 
 	err := filepath.WalkDir(s.baseDir, func(path string, d os.DirEntry, err error) error {
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		if err != nil {
 			return nil // Skip errors (permission denied, etc.)
 		}

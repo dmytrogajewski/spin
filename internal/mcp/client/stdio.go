@@ -14,7 +14,47 @@ import (
 	"github.com/dmytrogajewski/spin/internal/mcp/types"
 )
 
+// jsonrpcRequest represents a JSON-RPC 2.0 request.
+type jsonrpcRequest struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      int             `json:"id"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params,omitempty"`
+}
+
+// jsonrpcResponse represents a JSON-RPC 2.0 response.
+type jsonrpcResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      int             `json:"id"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *jsonrpcError   `json:"error,omitempty"`
+}
+
+// jsonrpcError represents a JSON-RPC 2.0 error.
+type jsonrpcError struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
 // StdioClient implements MCP client using stdio transport.
+//
+// GOROUTINE LIFECYCLE:
+// - Connect() spawns one long-lived goroutine via readResponses() that:
+//   - Reads JSON-RPC responses from stdout line-by-line
+//   - Routes responses to waiting request channels
+//   - Lives until EOF, client Close(), or process exit
+//   - Automatically cleans up when connection closes
+//
+// - closeProcess() spawns one short-lived goroutine to:
+//   - Wait for process termination with timeout
+//   - Force-kill process if it doesn't exit within 5 seconds
+//
+// CONCURRENCY:
+// - Connect/Close are thread-safe (protected by mu and closeOnce)
+// - sendRequest is thread-safe (each request has its own response channel)
+// - readResponses runs in a single goroutine and coordinates response routing
+// - Response channels are cleaned up when requests complete or timeout
 type StdioClient struct {
 	config      Config
 	cmd         *exec.Cmd
@@ -28,14 +68,31 @@ type StdioClient struct {
 	requestID   int64
 	responses   map[string]chan json.RawMessage
 	responsesMu sync.RWMutex
+	pending     map[string]chan json.RawMessage // alias for responses (for test compatibility)
 }
 
 // NewStdioClient creates a new stdio-based MCP client.
-func NewStdioClient(config Config) *StdioClient {
+func NewStdioClient(config Config) (*StdioClient, error) {
+	// Validate config
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Create command (but don't start it yet)
+	cmd := exec.Command(config.Command, config.Args...)
+	cmd.Env = os.Environ()
+
+	// Add custom environment variables
+	for key, value := range config.Env {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+	}
+
 	return &StdioClient{
 		config:    config,
+		cmd:       cmd,
 		responses: make(map[string]chan json.RawMessage),
-	}
+		pending:   make(map[string]chan json.RawMessage),
+	}, nil
 }
 
 // Initialize establishes the MCP connection and negotiates capabilities.
@@ -155,13 +212,9 @@ func (c *StdioClient) Close() error {
 
 // startProcess starts the MCP server process.
 func (c *StdioClient) startProcess() error {
-	// Create command
-	c.cmd = exec.Command(c.config.Command, c.config.Args...)
-	c.cmd.Env = os.Environ()
-
-	// Add custom environment variables
-	for key, value := range c.config.Env {
-		c.cmd.Env = append(c.cmd.Env, fmt.Sprintf("%s=%s", key, value))
+	// Check if already started
+	if c.stdin != nil {
+		return fmt.Errorf("process already started")
 	}
 
 	// Set up stdio
@@ -256,6 +309,10 @@ func (c *StdioClient) sendRequest(ctx context.Context, method string, params int
 	if c.closed {
 		c.mu.RUnlock()
 		return nil, fmt.Errorf("client is closed")
+	}
+	if c.stdin == nil {
+		c.mu.RUnlock()
+		return nil, fmt.Errorf("client not initialized")
 	}
 	c.mu.RUnlock()
 

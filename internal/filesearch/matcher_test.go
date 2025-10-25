@@ -319,7 +319,7 @@ func TestMatcher_Score_PathSegmentMatch(t *testing.T) {
 		want  int
 	}{
 		{"exact segment", "src", "src/main.go", 60},
-		{"segment prefix", "int", "internal/core.go", 50},
+		{"segment prefix", "int", "internal/agent.go", 50},
 		{"nested segment", "app", "src/app/handler.go", 60},
 	}
 
@@ -377,11 +377,11 @@ func TestMatcher_Score_Ranking(t *testing.T) {
 	m := NewMatcher(false)
 
 	paths := []string{
-		"test",                      // Exact filename match - 100
-		"test.go",                   // Filename prefix - 90
-		"my_test.go",                // Filename contains - 70-80
-		"src/test/handler.go",       // Path segment - 60
-		"internal/testing/util.go",  // Fuzzy match - <60
+		"test",                     // Exact filename match - 100
+		"test.go",                  // Filename prefix - 90
+		"my_test.go",               // Filename contains - 70-80
+		"src/test/handler.go",      // Path segment - 60
+		"internal/testing/util.go", // Fuzzy match - <60
 	}
 
 	scores := make(map[string]int)

@@ -108,3 +108,14 @@ type CommitInfo struct {
 	Message   string // commit message
 	Timestamp string // commit timestamp (ISO 8601 format)
 }
+
+// ApplyPatchOptions specifies options for applying patches
+type ApplyPatchOptions struct {
+	DryRun bool // if true, check if patch would apply without actually applying it
+}
+
+// ApplyPatchResult represents the result of applying a patch
+type ApplyPatchResult struct {
+	Success bool   // whether the patch was applied successfully
+	Message string // status message
+}

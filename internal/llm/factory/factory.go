@@ -150,6 +150,22 @@ func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Prov
 //	    Timeout: 30 * time.Second,
 //	}
 //	provider, err := factory.NewProvider(cfg)
+func NewProvider(cfg ProviderConfig) (llm.Provider, error) {
+	// Validate configuration
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	factoryMu.RLock()
+	factory, exists := factories[cfg.Type]
+	factoryMu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
+	}
+
+	return factory(cfg)
+}
 
 // RegisterProvider registers a custom provider factory.
 //
@@ -169,6 +185,11 @@ func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Prov
 //	    Type: "custom",
 //	    // ...
 //	})
+func RegisterProvider(providerType string, factory ProviderFactory) {
+	factoryMu.Lock()
+	defer factoryMu.Unlock()
+	factories[providerType] = factory
+}
 
 // resolveCredential resolves a credential from configuration.
 //

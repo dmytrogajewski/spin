@@ -19,7 +19,7 @@ func TestState_String(t *testing.T) {
 		{"StateFailed", StateFailed, "failed"},
 		{"StateCancelled", StateCancelled, "cancelled"},
 		{"StateArchived", StateArchived, "archived"},
-		{"Unknown", State(999), "unknown"},
+		{"Unknown", "invalid-state", "unknown"},
 	}
 
 	for _, tt := range tests {
@@ -76,8 +76,8 @@ func TestState_UnmarshalText(t *testing.T) {
 		{"failed", "failed", StateFailed, false},
 		{"cancelled", "cancelled", StateCancelled, false},
 		{"archived", "archived", StateArchived, false},
-		{"invalid", "invalid", State(0), true},
-		{"empty", "", State(0), true},
+		{"invalid", "invalid", "", true},
+		{"empty", "", "", true},
 	}
 
 	for _, tt := range tests {
@@ -108,7 +108,7 @@ func TestState_IsTerminal(t *testing.T) {
 		{"StateFailed", StateFailed, true},
 		{"StateCancelled", StateCancelled, true},
 		{"StateArchived", StateArchived, true},
-		{"Unknown", State(999), false},
+		{"Unknown", "invalid-state", false},
 	}
 
 	for _, tt := range tests {
@@ -135,7 +135,7 @@ func TestState_IsActive(t *testing.T) {
 		{"StateFailed", StateFailed, false},
 		{"StateCancelled", StateCancelled, false},
 		{"StateArchived", StateArchived, false},
-		{"Unknown", State(999), false},
+		{"Unknown", "invalid-state", false},
 	}
 
 	for _, tt := range tests {
@@ -202,7 +202,7 @@ func TestState_CanTransitionTo(t *testing.T) {
 		{"cancelled to failed", StateCancelled, StateFailed, false},
 
 		// Unknown state
-		{"unknown to running", State(999), StateRunning, false},
+		{"unknown to running", "invalid-state", StateRunning, false},
 	}
 
 	for _, tt := range tests {

@@ -4,5 +4,38 @@
 
 # PatchApply interface methods - required by FileOperation interface for type assertions
 internal/patchapply/types.go:23:19: AddFile.isFileOperation
-internal/patchapply/types.go:31:22: DeleteFile.isFileOperation  
+internal/patchapply/types.go:31:22: DeleteFile.isFileOperation
 internal/patchapply/types.go:42:21: UpdateFile.isFileOperation
+
+# Test-only constructors and helpers
+internal/session/session.go:50:6: NewSession
+internal/patchapply/matcher.go:105:19: Matcher.SetThreshold
+
+# Stringer interface implementations
+internal/ui/blocks/tokens.go:28:16: Color.String
+internal/auth/auth.go:66:25: CredentialType.String
+
+# Error interface implementations
+internal/git/errors.go:35:22: PatchError.Error
+
+# Test helpers and mock utilities
+internal/agent/test_helpers.go:19:6: createTestAgentWithServices
+internal/agent/test_helpers.go:88:6: newAgentForTest
+internal/conversation/test_helpers.go:19:6: setupTestConv
+internal/llm/mock.go:242:6: WithResponse
+internal/llm/mock.go:249:6: WithError
+internal/llm/mock.go:256:6: WithToolCalls
+internal/llm/mock.go:263:6: WithStreaming
+internal/llm/mock.go:276:6: WithCapabilities
+internal/llm/mock.go:283:6: WithModels
+internal/llm/mock.go:290:6: WithDelay
+
+# Auth package - public API (used internally by auth manager)
+internal/auth/auth.go:47:21: Credential.Validate
+
+# LLM factory - legacy standalone functions (deprecated, kept for backward compatibility)
+internal/llm/factory/factory.go:153:6: NewProvider
+internal/llm/factory/factory.go:188:6: RegisterProvider
+
+# Orchestration - NewPlan is public API (orchestration/plan.go, not the one in agent/types.go)
+internal/orchestration/plan.go:114:6: NewPlan

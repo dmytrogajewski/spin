@@ -85,28 +85,8 @@ func (s *Searcher) performIndexing(ctx context.Context) error {
 
 // scanWithContext performs file scanning with context cancellation support.
 func (s *Searcher) scanWithContext(ctx context.Context) ([]string, error) {
-	// Check if context is already canceled
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
-	// For now, we use the synchronous scanner
-	// TODO: Enhance Scanner.Scan() to support context cancellation
-	files, err := s.scanner.Scan()
-	if err != nil {
-		return nil, err
-	}
-
-	// Check context again after scanning
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
-	return files, nil
+	// Use the context-aware scanning method
+	return s.scanner.ScanWithContext(ctx)
 }
 
 // Search performs ranked search on the indexed files.

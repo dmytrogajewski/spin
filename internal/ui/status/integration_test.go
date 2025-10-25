@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/events"
 )
 
 // TestIntegration_StatusDisplayWithEvents tests the complete flow:
@@ -14,9 +14,9 @@ func TestIntegration_StatusDisplayWithEvents(t *testing.T) {
 	aggregator := NewAggregator(manager)
 
 	// Simulate content generation event
-	event := &core.Event{
-		Type: core.EventContentDelta,
-		Data: core.ContentDeltaData{
+	event := &events.Event{
+		Type: events.EventContentDelta,
+		Data: events.ContentDeltaData{
 			Content: "Hello",
 		},
 	}

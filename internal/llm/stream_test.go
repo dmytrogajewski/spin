@@ -4,11 +4,80 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+// Test helper functions for streaming tests
+
+// streamResponse is a test helper that processes SSE events and converts them to StreamChunks
+func streamResponse(ctx context.Context, r io.Reader, chunks chan<- StreamChunk) error {
+	parser := func(data []byte) (*StreamChunk, error) {
+		var chunk chatCompletionChunk
+		if err := json.Unmarshal(data, &chunk); err != nil {
+			return nil, err
+		}
+		return convertDelta(&chunk), nil
+	}
+	return StreamSSE(ctx, r, chunks, parser)
+}
+
+// convertDelta converts a chatCompletionChunk to a StreamChunk
+func convertDelta(chunk *chatCompletionChunk) *StreamChunk {
+	if len(chunk.Choices) == 0 {
+		return nil
+	}
+
+	choice := chunk.Choices[0]
+
+	// Handle finish reason
+	if choice.FinishReason != nil && *choice.FinishReason != "" {
+		return &StreamChunk{
+			Type:         ChunkTypeDone,
+			FinishReason: *choice.FinishReason,
+		}
+	}
+
+	delta := choice.Delta
+
+	// Handle content delta
+	if delta.Content != "" {
+		return &StreamChunk{
+			Type:    ChunkTypeContentDelta,
+			Content: delta.Content,
+		}
+	}
+
+	// Handle tool calls
+	if len(delta.ToolCalls) > 0 {
+		tc := delta.ToolCalls[0]
+
+		// Determine if this is a start or delta chunk
+		// Start: has ID but no arguments (or empty arguments)
+		// Delta: has arguments (with or without ID)
+		chunkType := ChunkTypeToolCallStart
+		if tc.Function.Arguments != "" {
+			chunkType = ChunkTypeToolCallDelta
+		}
+
+		return &StreamChunk{
+			Type: chunkType,
+			ToolCall: &ToolCall{
+				ID:   tc.ID,
+				Type: tc.Type,
+				Function: FunctionCall{
+					Name:      tc.Function.Name,
+					Arguments: tc.Function.Arguments,
+				},
+			},
+		}
+	}
+
+	return nil
+}
 
 func TestNewSSEScanner(t *testing.T) {
 	input := "data: test\n\n"

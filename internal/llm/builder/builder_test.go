@@ -378,7 +378,7 @@ func TestMergeConfig(t *testing.T) {
 				Provider: "ollama",
 				Model:    "llama3.1",
 				BaseURL:  "http://localhost:11434", // Default for ollama
-				Timeout:  30 * time.Second,
+				Timeout:  5 * time.Minute,          // Default timeout from builder
 			},
 		},
 		{
@@ -407,7 +407,7 @@ func TestMergeConfig(t *testing.T) {
 				Provider: "ollama", // Default
 				Model:    "llama3.1",
 				BaseURL:  "http://localhost:11434", // Default
-				Timeout:  30 * time.Second,         // Default
+				Timeout:  5 * time.Minute,          // Default timeout from builder
 			},
 		},
 	}

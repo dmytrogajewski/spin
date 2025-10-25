@@ -9,12 +9,17 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/conversation"
+	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
+	"github.com/dmytrogajewski/spin/internal/manager"
+	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	"github.com/spf13/cobra"
+	termx "golang.org/x/term"
 )
 
 // newExecCmd creates the exec command for non-interactive execution.
@@ -38,6 +43,7 @@ Examples:
 	cmd.Flags().String("format", "text", "Output format (text, json)")
 	cmd.Flags().Bool("no-stream", false, "Disable streaming output")
 	cmd.Flags().Bool("exit-on-error", true, "Exit immediately on first error")
+	cmd.Flags().Bool("debug", false, "Enable debug mode with detailed logging")
 
 	return cmd
 }
@@ -77,6 +83,7 @@ func runExec(cmd *cobra.Command, args []string) error {
 	format, _ := cmd.Flags().GetString("format")
 	noStream, _ := cmd.Flags().GetBool("no-stream")
 	exitOnError, _ := cmd.Flags().GetBool("exit-on-error")
+	debugFlag, _ := cmd.Flags().GetBool("debug")
 
 	// Apply timeout if specified
 	if timeout != "" {
@@ -89,7 +96,7 @@ func runExec(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create manager using same logic as TUI
-	mgr, err := createManagerForExec(provider, configLoader, autoApprove)
+	mgr, err := createManagerForExec(provider, configLoader, autoApprove, debugFlag)
 	if err != nil {
 		return fmt.Errorf("create manager: %w", err)
 	}
@@ -102,7 +109,13 @@ func runExec(cmd *cobra.Command, args []string) error {
 	defer mgr.Close()
 
 	// Execute the prompt non-interactively with TUI display
-	return executePromptWithTUI(ctx, conv, prompt, format, noStream, exitOnError)
+	err = executePromptWithTUI(ctx, conv, prompt, format, noStream, exitOnError)
+
+	// Explicitly exit after execution completes
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // loadConfig loads configuration from file or defaults.
@@ -133,14 +146,17 @@ func buildProvider(ctx context.Context, configLoader *config.Loader, authMgr *au
 	// Create builder
 	b := builder.NewBuilder(configLoader, authMgr)
 
-	// Build provider with flags as overrides
-	cfg := builder.Config{
-		Provider: flagProvider,
-		Model:    flagModel,
-		// Additional flags can be added here in the future
-		// BaseURL:  flagBaseURL,
-		// KeyName:  flagKeyName,
+	// Build provider with flags as overrides (only if flags are set)
+	cfg := builder.Config{}
+	if flagProvider != "" {
+		cfg.Provider = flagProvider
 	}
+	if flagModel != "" {
+		cfg.Model = flagModel
+	}
+	// Additional flags can be added here in the future
+	// BaseURL:  flagBaseURL,
+	// KeyName:  flagKeyName,
 
 	return b.Build(ctx, cfg)
 }
@@ -172,9 +188,12 @@ func parseDuration(s string) (time.Duration, error) {
 }
 
 // createManagerForExec creates a core.Manager configured for exec mode.
-func createManagerForExec(provider llm.Provider, configLoader *config.Loader, autoApprove bool) (*core.Manager, error) {
+func createManagerForExec(provider llm.Provider, configLoader *config.Loader, autoApprove bool, debug bool) (*manager.Manager, error) {
 	workDir := getWorkingDirectory()
 	cfg := buildConfig(configLoader, 0, workDir) // No max turns limit for exec
+
+	// Apply debug flag to configuration
+	applyDebugFlag(cfg, debug)
 
 	// Create tool registry with same tools as TUI
 	registry := tools.NewRegistry()
@@ -183,25 +202,33 @@ func createManagerForExec(provider llm.Provider, configLoader *config.Loader, au
 	registry.Register(tools.NewListDirectoryTool())
 
 	// Create approval handler for exec mode
-	var approvalHandler func(core.ApprovalRequest) core.ApprovalResponse
+	var approvalHandler func(security.ApprovalRequest) security.ApprovalResponse
 	if autoApprove {
-		approvalHandler = func(req core.ApprovalRequest) core.ApprovalResponse {
-			return core.ApprovalResponse{Approved: true, Reason: "auto-approved"}
+		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
+			return security.ApprovalResponse{
+				RequestID: req.ID,
+				Approved:  true,
+				Reason:    "auto-approved",
+			}
 		}
 	} else {
-		approvalHandler = func(req core.ApprovalRequest) core.ApprovalResponse {
+		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
 			// In exec mode without auto-approve, deny dangerous commands
-			return core.ApprovalResponse{Approved: false, Reason: "exec mode requires --auto-approve for dangerous operations"}
+			return security.ApprovalResponse{
+				RequestID: req.ID,
+				Approved:  false,
+				Reason:    "exec mode requires --auto-approve for dangerous operations",
+			}
 		}
 	}
 
 	// Create manager with options
-	var opts []core.ManagerOption
-	opts = append(opts, core.WithLLM(provider))
-	opts = append(opts, core.WithManagerToolRegistry(registry))
-	opts = append(opts, core.WithManagerApprovalHandler(approvalHandler))
+	var opts []manager.ManagerOption
+	opts = append(opts, manager.WithLLM(provider))
+	opts = append(opts, manager.WithManagerToolRegistry(registry))
+	opts = append(opts, manager.WithManagerApprovalHandler(approvalHandler))
 
-	mgr, err := core.NewManager(cfg, opts...)
+	mgr, err := manager.NewManager(cfg, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create manager: %w", err)
 	}
@@ -220,25 +247,24 @@ func (m *mockTTY) Size() (int, int)           { return m.width, m.height }
 func (m *mockTTY) OnResize(cb func(w, h int)) {}
 
 // executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
-func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, format string, noStream, exitOnError bool) error {
-	// Create TUI adapter with mock TTY for non-terminal environments
-	mockTty := &mockTTY{width: 120, height: 30} // Default terminal size
-	ui, err := adapters.NewPureTTY(os.Stdout, adapters.WithTTY(mockTty))
+func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, format string, noStream, exitOnError bool) error {
+	// Create TUI adapter. Use real TTY when available; otherwise, mock one.
+	opts := []adapters.PureTTYOption{adapters.WithExecMode()}
+	if !(termx.IsTerminal(int(os.Stdout.Fd())) && termx.IsTerminal(int(os.Stdin.Fd()))) {
+		mockTty := &mockTTY{width: 120, height: 30}
+		opts = append(opts, adapters.WithTTY(mockTty))
+	}
+	ui, err := adapters.NewPureTTY(os.Stdout, opts...)
 	if err != nil {
 		return fmt.Errorf("create TUI: %w", err)
 	}
 	defer ui.Stop()
 
 	// Initialize UI with conversation metadata
-	// Note: We need to get the provider from the conversation's manager
-	// For now, we'll skip the provider-specific initialization
 	ui.SetTaskMode(conv.GetTaskMode())
-	ui.SetMaxTokens(int64(conv.GetMaxTokens()))
-	ui.SetConversationID(conv.GetSessionID())
-	ui.SetTokenCount(int64(conv.GetTokenCount()))
 
 	// Create event mapper
-	mapper := core.NewTUIMapper(ui)
+	mapper := tui.NewTUIMapper(ui)
 	defer mapper.Close()
 
 	// Start streaming channel
@@ -250,7 +276,7 @@ func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, 
 	}()
 
 	// Subscribe to conversation events
-	events := conv.Stream()
+	eventStream := conv.Stream()
 
 	// Start turn in background
 	errChan := make(chan error, 1)
@@ -259,14 +285,14 @@ func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, 
 	}()
 
 	// Process events and map them to TUI
-	eventDone := make(chan struct{})
+	// NOTE: In exec mode, we process events but don't wait for the stream to close
+	// because the conversation's event stream stays open for potential future turns
 	go func() {
-		defer close(eventDone)
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case event, ok := <-events:
+			case event, ok := <-eventStream:
 				if !ok {
 					return
 				}
@@ -275,7 +301,7 @@ func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, 
 				}
 
 				// Update token count from conversation history after each event
-				if event.Type == core.EventTurnComplete || event.Type == core.EventContentComplete {
+				if event.Type == events.EventTurnComplete || event.Type == events.EventContentComplete {
 					tokenCount := int64(conv.GetTokenCount())
 					ui.SetTokenCount(tokenCount)
 				}
@@ -286,7 +312,6 @@ func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, 
 	// Wait for completion
 	select {
 	case <-ctx.Done():
-		<-eventDone
 		return ctx.Err()
 
 	case err := <-errChan:
@@ -296,8 +321,9 @@ func executePromptWithTUI(ctx context.Context, conv *core.Conversation, prompt, 
 		// Wait for streaming to complete
 		<-streamDone
 
-		// Wait for event processing to finish
-		<-eventDone
+		// Don't wait for event processing - it never closes
+		// The event stream stays open for potential future events
+		// In exec mode, we exit immediately after turn completion
 
 		if err != nil {
 			if exitOnError {

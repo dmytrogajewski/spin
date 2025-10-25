@@ -115,6 +115,23 @@ const (
 // ReadKeys reads keyboard events from r and sends them to the returned channel.
 // It stops when ctx is canceled or r returns EOF.
 // The channel is closed when the function exits.
+//
+// GOROUTINE LIFECYCLE:
+// - ReadKeys() spawns one long-lived goroutine that:
+//   - Reads bytes from stdin in a blocking loop
+//   - Parses escape sequences and UTF-8 characters
+//   - Sends KeyEvents to the returned channel
+//   - Lives until context cancellation or EOF
+//   - Automatically closes the channel on exit
+//
+// - parseEscapeSequence() spawns short-lived goroutines to:
+//   - Read next byte with timeout for escape sequence detection
+//   - Lives only during escape sequence parsing (~50ms)
+//
+// CONCURRENCY:
+// - Safe to call ReadKeys() multiple times with different readers
+// - Each call has its own independent goroutine and channel
+// - Context cancellation ensures clean shutdown
 func ReadKeys(ctx context.Context, r io.Reader, cfg *KeyReaderConfig) (<-chan KeyEvent, error) {
 	if cfg == nil {
 		cfg = &KeyReaderConfig{EscTimeout: defaultEscTimeout}

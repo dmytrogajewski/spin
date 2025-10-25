@@ -28,12 +28,12 @@ When a tool is called, the user should see a **compact, pretty-formatted summary
 **Example format:**
 ```
  EXECUTE  (notify-send me smilet, impact: medium)
- ↳ Exit code: 0. Output: 2 lines.
+ ⤷ Exit code: 0. Output: 2 lines.
 ```
 
 ```
  READ  (package.json, offset: 0, limit: 400)
- ↳ Read 62 lines.
+ ⤷ Read 62 lines.
 ```
 
 This provides **at-a-glance status** without needing to open blocks, similar to how modern IDEs show test results inline.
@@ -65,7 +65,7 @@ This provides **at-a-glance status** without needing to open blocks, similar to 
 
 **FR-2: Tool Complete Notification**
 - MUST display formatted result line when `EventToolCallComplete` occurs
-- MUST use arrow symbol (↳) to indicate continuation
+- MUST use arrow symbol (⤷) to indicate continuation
 - MUST show success indicator (exit code, output size, etc.)
 - MUST be compact (1-2 lines total per tool call)
 
@@ -161,7 +161,7 @@ func (f *ToolFormatter) FormatStart(data core.ToolCallStartData) string
 
 // FormatComplete formats a tool call completion event.
 // Returns a formatted string like:
-//   " ↳ Exit code: 0. Output: 42 lines. Duration: 1.2s"
+//   " ⤷ Exit code: 0. Output: 42 lines. Duration: 1.2s"
 func (f *ToolFormatter) FormatComplete(data core.ToolCallCompleteData) string
 ```
 
@@ -178,11 +178,11 @@ Where:
 
 **Complete Line Format:**
 ```
-<space>↳<space><result>
+<space>⤷<space><result>
 ```
 
 Where:
-- `↳` = Unicode arrow (U+21B3)
+- `⤷` = Unicode arrow (U+21B3)
 - `<result>` = Tool-specific summary (exit code, lines, duration, etc.)
 
 **Examples:**
@@ -190,15 +190,15 @@ Where:
 ```go
 // execute_command
 FormatStart(...)  → " EXECUTE  (go test ./..., cwd: ., impact: medium)"
-FormatComplete(...) → " ↳ Exit code: 0. Output: 15 lines. Duration: 1.2s"
+FormatComplete(...) → " ⤷ Exit code: 0. Output: 15 lines. Duration: 1.2s"
 
 // read_file
 FormatStart(...)  → " READ  (package.json, offset: 0, limit: 400)"
-FormatComplete(...) → " ↳ Read 62 lines."
+FormatComplete(...) → " ⤷ Read 62 lines."
 
 // write_file
 FormatStart(...)  → " WRITE  (main.go, 1250 bytes)"
-FormatComplete(...) → " ↳ File written successfully."
+FormatComplete(...) → " ⤷ File written successfully."
 ```
 
 ### 3.5 Color Mapping
@@ -396,7 +396,7 @@ func BenchmarkFormatStart(b *testing.B) {
 
 ### 6.2 Risk: Unicode Rendering Issues
 
-**Problem:** Unicode arrow (↳) may not render in some terminals or fonts.
+**Problem:** Unicode arrow (⤷) may not render in some terminals or fonts.
 
 **Mitigation:**
 - Use widely supported Unicode (U+21B3 is in most fonts)

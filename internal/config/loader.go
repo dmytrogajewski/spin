@@ -6,13 +6,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/spf13/viper"
 )
 
 // Loader handles configuration loading using Viper.
 type Loader struct {
-	v *viper.Viper
+	v  *viper.Viper
+	mu sync.RWMutex // Protects concurrent access to Set/Get operations
 }
 
 // NewLoader creates a new configuration loader with Viper.
@@ -48,6 +50,9 @@ func (l *Loader) Load(path string) error {
 	if err := l.v.ReadInConfig(); err != nil {
 		return l.handleConfigReadError(err)
 	}
+
+	// Set defaults if not provided
+	l.setDefaults()
 
 	return nil
 }
@@ -98,6 +103,9 @@ func (l *Loader) reinitializeViper() {
 
 // LoadFromFile loads configuration from a specific file.
 func (l *Loader) LoadFromFile(path string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	// Check file exists
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("config file not found: %w", err)
@@ -117,7 +125,14 @@ func (l *Loader) LoadFromFile(path string) error {
 	}
 
 	l.v.SetConfigFile(path)
-	return l.v.ReadInConfig()
+	if err := l.v.ReadInConfig(); err != nil {
+		return err
+	}
+
+	// Set defaults if not provided
+	l.setDefaults()
+
+	return nil
 }
 
 // Get retrieves a value by key.
@@ -142,6 +157,8 @@ func (l *Loader) GetBool(key string) bool {
 
 // Set sets a configuration value.
 func (l *Loader) Set(key string, value interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.v.Set(key, value)
 }
 
@@ -168,4 +185,47 @@ func (l *Loader) AllSettings() map[string]interface{} {
 // IsSet checks if a key is set.
 func (l *Loader) IsSet(key string) bool {
 	return l.v.IsSet(key)
+}
+
+// setDefaults sets default configuration values if not already set.
+func (l *Loader) setDefaults() {
+	// Set default values for common configuration keys only if not already set
+	if !l.v.IsSet("provider") {
+		l.v.SetDefault("provider", "ollama")
+	}
+	if !l.v.IsSet("model") {
+		l.v.SetDefault("model", "qwen3-coder:30b")
+	}
+	if !l.v.IsSet("base_url") {
+		l.v.SetDefault("base_url", "http://localhost:11434")
+	}
+	if !l.v.IsSet("timeout") {
+		l.v.SetDefault("timeout", "30s")
+	}
+	if !l.v.IsSet("max_tokens") {
+		l.v.SetDefault("max_tokens", 32000)
+	}
+	if !l.v.IsSet("temperature") {
+		l.v.SetDefault("temperature", 0.7)
+	}
+
+	// Set defaults for nested llm configuration only if not already set
+	if !l.v.IsSet("llm.provider") {
+		l.v.SetDefault("llm.provider", "ollama")
+	}
+	if !l.v.IsSet("llm.model") {
+		l.v.SetDefault("llm.model", "qwen3-coder:30b")
+	}
+	if !l.v.IsSet("llm.base_url") {
+		l.v.SetDefault("llm.base_url", "http://localhost:11434")
+	}
+	if !l.v.IsSet("llm.timeout") {
+		l.v.SetDefault("llm.timeout", "30s")
+	}
+	if !l.v.IsSet("llm.max_tokens") {
+		l.v.SetDefault("llm.max_tokens", 32000)
+	}
+	if !l.v.IsSet("llm.temperature") {
+		l.v.SetDefault("llm.temperature", 0.7)
+	}
 }

@@ -3,41 +3,41 @@ package protocol
 import (
 	"encoding/json"
 
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/events"
 )
 
 // Adapters convert between protocol types and core types
 
-// FromCoreEvent converts a core.Event to a protocol.Message
-func FromCoreEvent(event core.Event) (Message, bool) {
+// FromCoreEvent converts an events.Event to a protocol.Message
+func FromCoreEvent(event events.Event) (Message, bool) {
 	switch event.Type {
-	case core.EventContentDelta:
-		if data, ok := event.Data.(core.ContentDeltaData); ok {
+	case events.EventContentDelta:
+		if data, ok := event.Data.(events.ContentDeltaData); ok {
 			return NewAssistantDeltaMessage(AssistantDelta{
 				Delta: data.Content,
 			}), true
 		}
 
-	case core.EventToolCallStart:
-		if data, ok := event.Data.(core.ToolCallStartData); ok {
+	case events.EventToolCallStart:
+		if data, ok := event.Data.(events.ToolCallStartData); ok {
 			argsJSON, _ := json.Marshal(data.Parameters.ToMap())
 			return NewToolCallProposedMessage(ToolCallProposed{
 				ToolCallID:       data.ToolID,
 				ToolName:         data.ToolName,
 				Arguments:        json.RawMessage(argsJSON),
-				RequiresApproval: false, // TODO: Add to core.ToolCallData
+				RequiresApproval: data.RequiresApproval,
 			}), true
 		}
 
-	case core.EventToolCallProgress:
-		if data, ok := event.Data.(core.ToolProgressData); ok {
+	case events.EventToolCallProgress:
+		if data, ok := event.Data.(events.ToolProgressData); ok {
 			return NewToolCallExecutingMessage(ToolCallExecuting{
 				ToolCallID: data.ToolID,
 			}), true
 		}
 
-	case core.EventToolCallComplete:
-		if data, ok := event.Data.(core.ToolCallCompleteData); ok {
+	case events.EventToolCallComplete:
+		if data, ok := event.Data.(events.ToolCallCompleteData); ok {
 			var result ToolResult
 			if !data.Success && data.Error != "" {
 				result = NewErrorResult(data.Error)
@@ -50,7 +50,7 @@ func FromCoreEvent(event core.Event) (Message, bool) {
 			}), true
 		}
 
-	case core.EventError:
+	case events.EventError:
 		// Try both string and ErrorData
 		if str, ok := event.Data.(string); ok {
 			return NewStatusUpdateMessage(StatusUpdate{
@@ -58,14 +58,14 @@ func FromCoreEvent(event core.Event) (Message, bool) {
 				Level:   StatusLevelError,
 			}), true
 		}
-		if data, ok := event.Data.(core.ErrorData); ok {
+		if data, ok := event.Data.(events.ErrorData); ok {
 			return NewStatusUpdateMessage(StatusUpdate{
 				Message: data.Message + " " + data.Details,
 				Level:   StatusLevelError,
 			}), true
 		}
 
-	case core.EventWarning:
+	case events.EventWarning:
 		if data, ok := event.Data.(string); ok {
 			return NewStatusUpdateMessage(StatusUpdate{
 				Message: data,
@@ -73,7 +73,7 @@ func FromCoreEvent(event core.Event) (Message, bool) {
 			}), true
 		}
 
-	case core.EventInfo:
+	case events.EventInfo:
 		if data, ok := event.Data.(string); ok {
 			return NewStatusUpdateMessage(StatusUpdate{
 				Message: data,

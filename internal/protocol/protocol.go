@@ -114,6 +114,8 @@ type Message struct {
 	Data json.RawMessage `json:"data"`
 }
 
+// NewTurnStartMessage creates a turn_start message
+
 // NewAssistantDeltaMessage creates an assistant_delta message
 func NewAssistantDeltaMessage(ad AssistantDelta) Message {
 	data, _ := json.Marshal(ad)
@@ -137,6 +139,8 @@ func NewToolCallResultMessage(tcr ToolCallResult) Message {
 	data, _ := json.Marshal(tcr)
 	return Message{Type: "tool_call_result", Data: data}
 }
+
+// NewTurnCompleteMessage creates a turn_complete message
 
 // NewStatusUpdateMessage creates a status_update message
 func NewStatusUpdateMessage(su StatusUpdate) Message {

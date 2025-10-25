@@ -460,11 +460,28 @@ func TestProcessor_Integration_DefaultTaskModeWithAgent(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	var capturedToolCount int
+	var completeCalled, streamCalled bool
 	var mu sync.Mutex
 
 	provider := &mockProvider{
+		completeFunc: func(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
+			mu.Lock()
+			completeCalled = true
+			capturedToolCount = len(req.Tools)
+			mu.Unlock()
+
+			return &llm.CompletionResponse{
+				Content: "Mock response",
+				Usage: llm.Usage{
+					PromptTokens:     10,
+					CompletionTokens: 20,
+					TotalTokens:      30,
+				},
+			}, nil
+		},
 		streamFunc: func(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
 			mu.Lock()
+			streamCalled = true
 			capturedToolCount = len(req.Tools)
 			mu.Unlock()
 
@@ -509,16 +526,34 @@ func TestProcessor_Integration_DefaultTaskModeWithAgent(t *testing.T) {
 		t.Errorf("Expected default task mode 'regular', got %q", result.TaskMode)
 	}
 
-	// Wait for agent to process
-	time.Sleep(100 * time.Millisecond)
+	// Wait for agent to process with retry logic
+	maxWait := 1 * time.Second
+	checkInterval := 50 * time.Millisecond
+	deadline := time.Now().Add(maxWait)
 
-	// Regular mode should have more tools than restricted modes
+	var toolCount int
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		toolCount = capturedToolCount
+		mu.Unlock()
+
+		if toolCount >= 5 {
+			break
+		}
+		time.Sleep(checkInterval)
+	}
+
 	mu.Lock()
-	toolCount := capturedToolCount
+	wasCalled := completeCalled || streamCalled
 	mu.Unlock()
 
+	if !wasCalled {
+		t.Errorf("Provider was never called (neither Complete nor Stream)")
+	}
+
 	if toolCount < 5 {
-		t.Errorf("Expected regular mode to have many tools, got %d", toolCount)
+		t.Errorf("Expected regular mode to have many tools, got %d (completeCalled=%v, streamCalled=%v)",
+			toolCount, completeCalled, streamCalled)
 	}
 }
 

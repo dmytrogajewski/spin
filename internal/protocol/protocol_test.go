@@ -34,57 +34,6 @@ func TestToolResult_Error(t *testing.T) {
 	}
 }
 
-func TestMessage_MarshalUnmarshal(t *testing.T) {
-	tests := []struct {
-		name    string
-		message Message
-	}{
-		{
-			name: "TurnStart",
-			message: NewTurnStartMessage(TurnStart{
-				TurnID:      "turn-123",
-				UserMessage: "Hello",
-			}),
-		},
-		{
-			name: "AssistantDelta",
-			message: NewAssistantDeltaMessage(AssistantDelta{
-				Delta: "Response text",
-			}),
-		},
-		{
-			name: "ToolCallProposed",
-			message: NewToolCallProposedMessage(ToolCallProposed{
-				ToolCallID:       "call-123",
-				ToolName:         "read_file",
-				Arguments:        json.RawMessage(`{"path":"test.go"}`),
-				RequiresApproval: true,
-			}),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Marshal
-			data, err := json.Marshal(tt.message)
-			if err != nil {
-				t.Fatalf("Failed to marshal: %v", err)
-			}
-
-			// Unmarshal
-			var msg Message
-			if err := json.Unmarshal(data, &msg); err != nil {
-				t.Fatalf("Failed to unmarshal: %v", err)
-			}
-
-			// Parse
-			_, err = ParseMessage(msg)
-			if err != nil {
-				t.Fatalf("Failed to parse: %v", err)
-			}
-		})
-	}
-}
 
 func TestParseMessage_UnknownType(t *testing.T) {
 	msg := Message{
@@ -159,11 +108,3 @@ func TestToolApproval_JSON(t *testing.T) {
 	}
 }
 
-func TestNewTurnCompleteMessage(t *testing.T) {
-	params := TurnComplete{
-		TurnID: "turn-123",
-	}
-
-	// Just verify the function can be called
-	_ = NewTurnCompleteMessage(params)
-}

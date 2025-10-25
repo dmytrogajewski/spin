@@ -294,7 +294,7 @@ func TestExecMode(t *testing.T) {
 
 	config := `llm:
   provider: ollama
-  model: qwen3:0.6b
+  model: qwen3:1.7b
   base_url: http://127.0.0.1:11434
   temperature: 0.7
   max_tokens: 4096
@@ -308,7 +308,7 @@ sandbox:
 	}
 
 	t.Run("exec basic prompt", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
 		cmd := exec.CommandContext(ctx, binPath, "--config-file", configPath, "exec", "what is 2+2? answer with just the number")
@@ -347,7 +347,7 @@ sandbox:
 	})
 
 	t.Run("exec from stdin", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
 		cmd := exec.CommandContext(ctx, binPath, "--config-file", configPath, "exec")

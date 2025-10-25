@@ -185,8 +185,9 @@ func runDebugSandbox(ctx context.Context, command string, args []string, mode, w
 	fmt.Fprintf(os.Stderr, "⚠️  Workspace: %s\n", workspace)
 	fmt.Fprintf(os.Stderr, "⚠️  Command: %s %s\n\n", command, strings.Join(args, " "))
 
-	// TODO: Implement actual sandbox execution via internal/security/sandbox
-	// For now, just return unimplemented
+	// Placeholder: Sandbox execution requires proper sandbox implementation
+	// via internal/security/sandbox with appropriate isolation (namespaces, chroot, etc.)
+	// This is a complex feature that requires OS-specific implementations
 	return fmt.Errorf("sandbox testing not yet implemented")
 }
 
@@ -196,7 +197,8 @@ func runDebugLandlock(ctx context.Context, command string, args []string, mode, 
 	fmt.Fprintf(os.Stderr, "⚠️  Workspace: %s\n", workspace)
 	fmt.Fprintf(os.Stderr, "⚠️  Command: %s %s\n\n", command, strings.Join(args, " "))
 
-	// TODO: Implement actual Landlock execution via internal/security/sandbox
-	// For now, just return unimplemented
+	// Placeholder: Landlock execution requires Linux-specific implementation
+	// via internal/security/sandbox using Landlock ABI
+	// This is a kernel feature that requires appropriate system calls
 	return fmt.Errorf("landlock testing not yet implemented")
 }

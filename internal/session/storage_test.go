@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/dmytrogajewski/spin/internal/orchestration"
 )
 
 // Test FileStorage Creation
@@ -622,6 +624,10 @@ func TestLoad_Standalone(t *testing.T) {
 		WorkDir:   "/tmp",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
+		State:     StateActive,
+		Turns:     make([]*orchestration.Turn, 0),
+		Metadata:  Metadata{},
+		Version:   CurrentSchemaVersion,
 	}
 	storage, err := NewFileStorage(tmpDir)
 	if err != nil {
@@ -633,12 +639,12 @@ func TestLoad_Standalone(t *testing.T) {
 	}
 
 	// Test the Load function
-	loaded, err := Load(storage, sessionID)
+	loaded, err := storage.Load(sessionID)
 	if err != nil {
-		t.Errorf("Load() error = %v", err)
+		t.Errorf("storage.Load() error = %v", err)
 	}
 	if loaded.ID != sessionID {
-		t.Errorf("Load() ID = %v, want %v", loaded.ID, sessionID)
+		t.Errorf("storage.Load() ID = %v, want %v", loaded.ID, sessionID)
 	}
 }
 
@@ -653,6 +659,10 @@ func TestDelete_Standalone(t *testing.T) {
 		WorkDir:   "/tmp",
 		CreatedAt: now,
 		UpdatedAt: now,
+		State:     StateActive,
+		Turns:     make([]*orchestration.Turn, 0),
+		Metadata:  Metadata{},
+		Version:   CurrentSchemaVersion,
 	}
 	storage, err := NewFileStorage(tmpDir)
 	if err != nil {
@@ -664,9 +674,9 @@ func TestDelete_Standalone(t *testing.T) {
 	}
 
 	// Test the Delete function
-	err = Delete(storage, sessionID)
+	err = storage.Delete(sessionID)
 	if err != nil {
-		t.Errorf("Delete() error = %v", err)
+		t.Errorf("storage.Delete() error = %v", err)
 	}
 
 	// Verify session is deleted
@@ -686,12 +696,12 @@ func TestExists_Standalone(t *testing.T) {
 	}
 
 	// Initially should not exist
-	exists, err := Exists(storage, sessionID)
+	exists, err := storage.Exists(sessionID)
 	if err != nil {
-		t.Errorf("Exists() error = %v", err)
+		t.Errorf("storage.Exists() error = %v", err)
 	}
 	if exists {
-		t.Error("Exists() = true, want false")
+		t.Error("storage.Exists() = true, want false")
 	}
 
 	// Create a session
@@ -701,6 +711,10 @@ func TestExists_Standalone(t *testing.T) {
 		WorkDir:   "/tmp",
 		CreatedAt: now,
 		UpdatedAt: now,
+		State:     StateActive,
+		Turns:     make([]*orchestration.Turn, 0),
+		Metadata:  Metadata{},
+		Version:   CurrentSchemaVersion,
 	}
 	err = storage.Save(session)
 	if err != nil {
@@ -708,11 +722,11 @@ func TestExists_Standalone(t *testing.T) {
 	}
 
 	// Now should exist
-	exists, err = Exists(storage, sessionID)
+	exists, err = storage.Exists(sessionID)
 	if err != nil {
-		t.Errorf("Exists() error = %v", err)
+		t.Errorf("storage.Exists() error = %v", err)
 	}
 	if !exists {
-		t.Error("Exists() = false, want true")
+		t.Error("storage.Exists() = false, want true")
 	}
 }

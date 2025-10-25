@@ -232,6 +232,11 @@ func isTerminal(fd int) bool {
 	return term.IsTerminal(fd)
 }
 
-// ============================================================================
-// Phase 8.2: Defensive Error Handling
-// ============================================================================
+
+// ValidateTerminalType validates that the TERM environment variable is set
+// to a supported terminal type. Returns true if the terminal type warrants a warning.
+
+// ValidateWindowSize validates that the terminal window size meets requirements.
+// Returns the validated (potentially clamped) dimensions and an error if size is invalid.
+// Clamps dimensions that exceed maximum to MaxTerminalWidth/MaxTerminalHeight.
+// Returns error if dimensions are below minimum.

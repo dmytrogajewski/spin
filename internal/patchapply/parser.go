@@ -130,8 +130,11 @@ func (p *Parser) parseOperation(line string) (FileOperation, error) {
 // parseAddFile parses an add file operation.
 func (p *Parser) parseAddFile(path string) (*AddFile, error) {
 	// Validate path
-	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
-		return nil, fmt.Errorf("invalid path %q: path outside workspace", path)
+	if strings.HasPrefix(path, "/") {
+		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed", path)
+	}
+	if strings.Contains(path, "..") {
+		return nil, fmt.Errorf("invalid path %q: path traversal not allowed", path)
 	}
 
 	lines := make([]string, 0)
@@ -165,8 +168,11 @@ func (p *Parser) parseAddFile(path string) (*AddFile, error) {
 // parseDeleteFile parses a delete file operation.
 func (p *Parser) parseDeleteFile(path string) (*DeleteFile, error) {
 	// Validate path
-	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
-		return nil, fmt.Errorf("invalid path %q: path outside workspace", path)
+	if strings.HasPrefix(path, "/") {
+		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed", path)
+	}
+	if strings.Contains(path, "..") {
+		return nil, fmt.Errorf("invalid path %q: path traversal not allowed", path)
 	}
 
 	return &DeleteFile{
@@ -177,8 +183,11 @@ func (p *Parser) parseDeleteFile(path string) (*DeleteFile, error) {
 // parseUpdateFile parses an update file operation.
 func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
 	// Validate path
-	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
-		return nil, fmt.Errorf("invalid path %q: path outside workspace", path)
+	if strings.HasPrefix(path, "/") {
+		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed", path)
+	}
+	if strings.Contains(path, "..") {
+		return nil, fmt.Errorf("invalid path %q: path traversal not allowed", path)
 	}
 
 	update := &UpdateFile{
@@ -198,8 +207,11 @@ func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
 	if strings.HasPrefix(line, "*** Move to: ") {
 		p.nextLine() // consume the peeked line
 		newPath := strings.TrimSpace(strings.TrimPrefix(line, "*** Move to: "))
-		if strings.Contains(newPath, "..") || strings.HasPrefix(newPath, "/") {
-			return nil, fmt.Errorf("invalid new path %q: path outside workspace", newPath)
+		if strings.HasPrefix(newPath, "/") {
+			return nil, fmt.Errorf("invalid new path %q: absolute paths not allowed", newPath)
+		}
+		if strings.Contains(newPath, "..") {
+			return nil, fmt.Errorf("invalid new path %q: path traversal not allowed", newPath)
 		}
 		update.NewPath = newPath
 

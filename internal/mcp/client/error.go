@@ -36,3 +36,13 @@ type Error struct {
 	// Err is the underlying error
 	Err error
 }
+
+// Error returns the error message.
+func (e *Error) Error() string {
+	return "mcp client: " + e.Op + ": " + e.Err.Error()
+}
+
+// Unwrap returns the underlying error.
+func (e *Error) Unwrap() error {
+	return e.Err
+}

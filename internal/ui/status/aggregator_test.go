@@ -3,7 +3,7 @@ package status
 import (
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/events"
 )
 
 func TestAggregator_ProcessEvent(t *testing.T) {
@@ -11,7 +11,7 @@ func TestAggregator_ProcessEvent(t *testing.T) {
 	aggregator := NewAggregator(manager)
 
 	// Test turn start
-	event := &core.Event{Type: core.EventTurnStart}
+	event := &events.Event{Type: events.EventTurnStart}
 	aggregator.ProcessEvent(event)
 
 	metrics := manager.GetMetrics()
@@ -23,7 +23,7 @@ func TestAggregator_ProcessEvent(t *testing.T) {
 	}
 
 	// Test content generation
-	event = &core.Event{Type: core.EventContentDelta}
+	event = &events.Event{Type: events.EventContentDelta}
 	aggregator.ProcessEvent(event)
 
 	metrics = manager.GetMetrics()
@@ -32,7 +32,7 @@ func TestAggregator_ProcessEvent(t *testing.T) {
 	}
 
 	// Test tool execution
-	event = &core.Event{Type: core.EventToolCallStart}
+	event = &events.Event{Type: events.EventToolCallStart}
 	aggregator.ProcessEvent(event)
 
 	metrics = manager.GetMetrics()
@@ -41,7 +41,7 @@ func TestAggregator_ProcessEvent(t *testing.T) {
 	}
 
 	// Test content complete
-	event = &core.Event{Type: core.EventContentComplete}
+	event = &events.Event{Type: events.EventContentComplete}
 	aggregator.ProcessEvent(event)
 
 	metrics = manager.GetMetrics()
@@ -56,7 +56,7 @@ func TestAggregator_ProcessEvent_Disabled(t *testing.T) {
 	aggregator := NewAggregator(manager)
 
 	// Process an event
-	event := &core.Event{Type: core.EventToolCallStart}
+	event := &events.Event{Type: events.EventToolCallStart}
 	aggregator.ProcessEvent(event)
 
 	// Agent state should not change because manager is disabled
@@ -91,7 +91,7 @@ func TestAggregator_UnknownEvent(t *testing.T) {
 	aggregator := NewAggregator(manager)
 
 	// Process unknown event type (use a high number that doesn't exist)
-	event := &core.Event{Type: core.EventType(999)}
+	event := &events.Event{Type: events.EventType(999)}
 	aggregator.ProcessEvent(event)
 
 	// Unknown events should NOT change the state (new behavior)
@@ -104,52 +104,52 @@ func TestAggregator_UnknownEvent(t *testing.T) {
 func TestAggregator_ProcessEvent_AllTypes(t *testing.T) {
 	tests := []struct {
 		name          string
-		event         *core.Event
+		event         *events.Event
 		expectedState string
 	}{
 		{
 			name:          "ToolCallStart with data",
-			event:         &core.Event{Type: core.EventToolCallStart, Data: core.ToolCallStartData{ToolName: "bash"}},
+			event:         &events.Event{Type: events.EventToolCallStart, Data: events.ToolCallStartData{ToolName: "bash"}},
 			expectedState: "Calling: bash",
 		},
 		{
 			name:          "ToolCallStart without data",
-			event:         &core.Event{Type: core.EventToolCallStart, Data: nil},
+			event:         &events.Event{Type: events.EventToolCallStart, Data: nil},
 			expectedState: "Calling tools",
 		},
 		{
 			name:          "ToolCallProgress",
-			event:         &core.Event{Type: core.EventToolCallProgress},
+			event:         &events.Event{Type: events.EventToolCallProgress},
 			expectedState: "Executing",
 		},
 		{
 			name:          "ToolCallComplete",
-			event:         &core.Event{Type: core.EventToolCallComplete},
+			event:         &events.Event{Type: events.EventToolCallComplete},
 			expectedState: "Complete",
 		},
 		{
 			name:          "CommandApproval",
-			event:         &core.Event{Type: core.EventCommandApproval},
+			event:         &events.Event{Type: events.EventCommandApproval},
 			expectedState: "Waiting approval",
 		},
 		{
 			name:          "CommandApproved",
-			event:         &core.Event{Type: core.EventCommandApproved},
+			event:         &events.Event{Type: events.EventCommandApproved},
 			expectedState: "Approved",
 		},
 		{
 			name:          "CommandDenied",
-			event:         &core.Event{Type: core.EventCommandDenied},
+			event:         &events.Event{Type: events.EventCommandDenied},
 			expectedState: "Denied",
 		},
 		{
 			name:          "Error",
-			event:         &core.Event{Type: core.EventError},
+			event:         &events.Event{Type: events.EventError},
 			expectedState: "Error",
 		},
 		{
 			name:          "Warning",
-			event:         &core.Event{Type: core.EventWarning},
+			event:         &events.Event{Type: events.EventWarning},
 			expectedState: "Warning",
 		},
 	}
@@ -174,9 +174,9 @@ func TestAggregator_ProcessEvent_ContentDelta_WithData(t *testing.T) {
 	aggregator := NewAggregator(manager)
 
 	// Process content delta with data
-	event := &core.Event{
-		Type: core.EventContentDelta,
-		Data: core.ContentDeltaData{Content: "This is some test content with enough characters to count tokens"},
+	event := &events.Event{
+		Type: events.EventContentDelta,
+		Data: events.ContentDeltaData{Content: "This is some test content with enough characters to count tokens"},
 	}
 	aggregator.ProcessEvent(event)
 
@@ -195,9 +195,9 @@ func TestAggregator_ProcessEvent_ContentDelta_ShortContent(t *testing.T) {
 	aggregator := NewAggregator(manager)
 
 	// Process content delta with very short content (less than 4 chars)
-	event := &core.Event{
-		Type: core.EventContentDelta,
-		Data: core.ContentDeltaData{Content: "Hi"},
+	event := &events.Event{
+		Type: events.EventContentDelta,
+		Data: events.ContentDeltaData{Content: "Hi"},
 	}
 	aggregator.ProcessEvent(event)
 
@@ -212,15 +212,15 @@ func TestAggregator_ProcessEvent_TurnComplete_WithTokens(t *testing.T) {
 	aggregator := NewAggregator(manager)
 
 	// Process turn complete with token data
-	event := &core.Event{
-		Type: core.EventTurnComplete,
-		Data: core.TurnEventData{TokensUsed: 500},
+	event := &events.Event{
+		Type: events.EventTurnComplete,
+		Data: events.TurnEventData{TokensUsed: 500},
 	}
 	aggregator.ProcessEvent(event)
 
 	metrics := manager.GetMetrics()
-	if metrics.AgentState != "Ready" {
-		t.Errorf("Expected agent state 'Ready', got %q", metrics.AgentState)
+	if metrics.AgentState != "Idle" {
+		t.Errorf("Expected agent state 'Idle', got %q", metrics.AgentState)
 	}
 	if metrics.TokenCount != 500 {
 		t.Errorf("Expected token count 500, got %d", metrics.TokenCount)
@@ -232,9 +232,9 @@ func TestAggregator_ProcessEvent_ContentComplete_ResetsStreaming(t *testing.T) {
 	aggregator := NewAggregator(manager)
 
 	// First, start streaming with content delta
-	event := &core.Event{
-		Type: core.EventContentDelta,
-		Data: core.ContentDeltaData{Content: "Some streaming content"},
+	event := &events.Event{
+		Type: events.EventContentDelta,
+		Data: events.ContentDeltaData{Content: "Some streaming content"},
 	}
 	aggregator.ProcessEvent(event)
 
@@ -243,7 +243,7 @@ func TestAggregator_ProcessEvent_ContentComplete_ResetsStreaming(t *testing.T) {
 	// TPS might be 0 or positive, just verify it's set
 
 	// Now complete the content
-	event = &core.Event{Type: core.EventContentComplete}
+	event = &events.Event{Type: events.EventContentComplete}
 	aggregator.ProcessEvent(event)
 
 	metrics = manager.GetMetrics()

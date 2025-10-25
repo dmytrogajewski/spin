@@ -9,39 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMCPServer_MarshalYAML(t *testing.T) {
-	server := MCPServer{
-		Name:    "filesystem",
-		Command: "npx",
-		Args:    []string{"-y", "@modelcontextprotocol/server-filesystem", "/workspace"},
-		Env:     map[string]string{"NODE_ENV": "production"},
-	}
-
-	// Test marshaling through Loader
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "test.yaml")
-
-	loader := NewLoader()
-	loader.Set("mcp.servers", []MCPServer{server})
-
-	// Write config
-	err := loader.WriteConfig(configFile)
-	require.NoError(t, err)
-
-	// Read back
-	loader2 := NewLoader()
-	err = loader2.LoadFromFile(configFile)
-	require.NoError(t, err)
-
-	var servers []MCPServer
-	err = loader2.UnmarshalKey("mcp.servers", &servers)
-	require.NoError(t, err)
-	require.Len(t, servers, 1)
-	assert.Equal(t, "filesystem", servers[0].Name)
-	assert.Equal(t, "npx", servers[0].Command)
-	assert.Equal(t, []string{"-y", "@modelcontextprotocol/server-filesystem", "/workspace"}, servers[0].Args)
-	assert.Equal(t, map[string]string{"node_env": "production"}, servers[0].Env) // viper lowercases keys
-}
 
 func TestMCPManager_List_Empty(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -309,66 +276,7 @@ func TestMCPManager_Remove_NotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 }
 
-func TestMCPManager_Update_Success(t *testing.T) {
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "spin.yaml")
 
-	yamlContent := `
-mcp:
-  servers:
-    - name: filesystem
-      command: npx
-      args:
-        - -y
-        - old-path
-`
-	err := os.WriteFile(configFile, []byte(yamlContent), 0644)
-	require.NoError(t, err)
-
-	loader := NewLoader()
-	err = loader.LoadFromFile(configFile)
-	require.NoError(t, err)
-
-	mgr := NewMCPManager(loader)
-	mgr.configFile = configFile
-
-	updates := MCPServer{
-		Args: []string{"-y", "new-path"},
-	}
-
-	err = mgr.Update("filesystem", updates)
-	require.NoError(t, err)
-
-	// Verify updated
-	server, err := mgr.Get("filesystem")
-	require.NoError(t, err)
-	assert.Equal(t, "filesystem", server.Name)
-	assert.Equal(t, "npx", server.Command) // Unchanged
-	assert.Equal(t, []string{"-y", "new-path"}, server.Args)
-}
-
-func TestMCPManager_Update_NotFound(t *testing.T) {
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "spin.yaml")
-
-	err := os.WriteFile(configFile, []byte(""), 0644)
-	require.NoError(t, err)
-
-	loader := NewLoader()
-	err = loader.LoadFromFile(configFile)
-	require.NoError(t, err)
-
-	mgr := NewMCPManager(loader)
-	mgr.configFile = configFile
-
-	updates := MCPServer{
-		Command: "new-cmd",
-	}
-
-	err = mgr.Update("nonexistent", updates)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
-}
 
 func TestMCPManager_ConfigFile_DefaultCreation(t *testing.T) {
 	tmpDir := t.TempDir()

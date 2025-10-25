@@ -48,3 +48,5 @@ func NewConversationID() ConversationID {
 func (c ConversationID) String() string {
 	return c.ID.String()
 }
+
+// ParseConversationID parses a string into a ConversationID

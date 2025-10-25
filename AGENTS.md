@@ -403,6 +403,26 @@ approved, err := approvalService.RequestApproval(ctx, core.Operation{
 **Low coverage:** Add edge cases and error paths  
 **Dead code:** `make deadcode` - review and remove unreachable functions
 
+### Agent Configuration Issues
+
+**Configuration Loading:** If agent fails with "invalid configuration: model is required" error:
+- Ensure configuration file is properly formatted (YAML/TOML/JSON)
+- Check that model parameter is specified in config file
+- Verify environment variable overrides are working correctly
+- Use `config.NewLoader()` to test configuration loading
+
+**Agent Thinking State:** If agent gets stuck in thinking state:
+- Check for timeout issues in LLM calls
+- Verify proper error handling in agent execution loop
+- Ensure context cancellation is working correctly
+- Add timeout protection to prevent infinite loops
+
+**LLM Factory Issues:** If provider creation fails:
+- Verify provider configuration is valid
+- Check that required parameters (model, base_url) are provided
+- Ensure authentication credentials are properly configured
+- Use `factory.NewFactory()` with proper auth manager
+
 ---
 
 ## Resources

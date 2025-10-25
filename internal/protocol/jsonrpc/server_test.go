@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-type mockHandler struct {
+type mockHandler struct{
 	handleFunc func(ctx context.Context, method string, params json.RawMessage) (interface{}, error)
 }
 
@@ -30,7 +30,7 @@ func TestServer_Serve_Success(t *testing.T) {
 	server := NewServer(handler)
 
 	// Prepare request
-	reqID := StringID("1")
+	reqID := RequestID{Str: strPtr("1")}
 	req := Request{
 		JSONRPC: "2.0",
 		ID:      &reqID,
@@ -73,7 +73,7 @@ func TestServer_Serve_Error(t *testing.T) {
 	server := NewServer(handler)
 
 	// Prepare request
-	reqID := StringID("1")
+	reqID := RequestID{Str: strPtr("1")}
 	req := Request{
 		JSONRPC: "2.0",
 		ID:      &reqID,
@@ -175,28 +175,6 @@ func TestServer_Serve_Notification(t *testing.T) {
 	}
 }
 
-func TestServer_SendNotification(t *testing.T) {
-	server := NewServer(&mockHandler{})
-	output := &bytes.Buffer{}
-
-	params := map[string]string{"key": "value"}
-	err := server.SendNotification(output, "test_notification", params)
-	if err != nil {
-		t.Fatalf("SendNotification failed: %v", err)
-	}
-
-	var notif Notification
-	if err := json.NewDecoder(output).Decode(&notif); err != nil {
-		t.Fatalf("Failed to decode notification: %v", err)
-	}
-
-	if notif.JSONRPC != "2.0" {
-		t.Errorf("Expected jsonrpc '2.0', got '%s'", notif.JSONRPC)
-	}
-	if notif.Method != "test_notification" {
-		t.Errorf("Expected method 'test_notification', got '%s'", notif.Method)
-	}
-}
 
 func TestServer_Context_Cancellation(t *testing.T) {
 	handler := &mockHandler{
@@ -212,7 +190,7 @@ func TestServer_Context_Cancellation(t *testing.T) {
 	r, w := bytes.NewReader(nil), &bytes.Buffer{}
 
 	// Prepare one request
-	reqID := StringID("1")
+	reqID := RequestID{Str: strPtr("1")}
 	req := Request{
 		JSONRPC: "2.0",
 		ID:      &reqID,

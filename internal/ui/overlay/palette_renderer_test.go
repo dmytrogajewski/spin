@@ -2,7 +2,6 @@ package overlay
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -173,24 +172,6 @@ func TestMin(t *testing.T) {
 }
 
 // stripANSI removes ANSI escape codes for testing purposes.
-func stripANSI(s string) string {
-	var result strings.Builder
-	inEscape := false
-	for _, r := range s {
-		if r == '\x1b' {
-			inEscape = true
-			continue
-		}
-		if inEscape {
-			if r == 'm' || r == 'G' || r == 'K' || r == 's' || r == 'u' {
-				inEscape = false
-			}
-			continue
-		}
-		result.WriteRune(r)
-	}
-	return result.String()
-}
 
 func TestPaletteRenderer_Integration(t *testing.T) {
 	// Full integration test: registry → palette → renderer

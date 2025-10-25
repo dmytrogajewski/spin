@@ -101,6 +101,14 @@ func (m *Matcher) FindContext(contextLines []string, header string) int {
 // Example:
 //
 //	m := NewMatcher(fileLines)
+//	err := m.SetThreshold(0.9) // Require 90% similarity
+func (m *Matcher) SetThreshold(threshold float64) error {
+	if threshold < 0.0 || threshold > 1.0 {
+		return ErrInvalidThreshold
+	}
+	m.threshold = threshold
+	return nil
+}
 
 // findInRange searches for context within a specific range of file lines.
 // Returns the starting line index or -1 if not found.

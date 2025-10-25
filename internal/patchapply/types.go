@@ -1,5 +1,13 @@
 package patchapply
 
+import "errors"
+
+// Errors
+var (
+	// ErrInvalidThreshold indicates an invalid threshold value
+	ErrInvalidThreshold = errors.New("threshold must be between 0.0 and 1.0")
+)
+
 // Patch represents a complete patch with one or more file operations.
 type Patch struct {
 	Operations []FileOperation

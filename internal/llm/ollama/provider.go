@@ -48,6 +48,23 @@ type Config struct {
 }
 
 // Provider implements the Ollama LLM provider.
+//
+// GOROUTINE LIFECYCLE:
+// - Stream() spawns one goroutine per streaming request that:
+//   - Reads from HTTP response body line-by-line
+//   - Parses JSON chunks and sends to the returned channel
+//   - Lives until EOF, context cancellation, or error
+//   - Automatically cleans up (closes channel and response body)
+//
+// - PullModel() spawns one goroutine to track pull progress that:
+//   - Polls /api/ps endpoint to check if model is available
+//   - Lives until model is available or context timeout
+//   - Terminates when pull completes or context is cancelled
+//
+// CONCURRENCY:
+// - Stream() and PullModel() are safe to call concurrently
+// - Each operation has its own independent goroutine and channel
+// - No shared state between concurrent operations
 type Provider struct {
 	// client is for non-streaming calls with retries/timeouts.
 	client *llm.HTTPClient
@@ -435,18 +452,18 @@ func (p *Provider) handleError(resp *http.Response) error {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("HTTP %d: failed to read error response", resp.StatusCode)
+		return fmt.Errorf("http %d: failed to read error response", resp.StatusCode)
 	}
 
 	if err := json.Unmarshal(body, &errResp); err != nil || errResp.Error == "" {
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return fmt.Errorf("http %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	switch resp.StatusCode {
 	case http.StatusNotFound:
 		return fmt.Errorf("%w: %s", llm.ErrModelNotFound, errResp.Error)
 	default:
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, errResp.Error)
+		return fmt.Errorf("http %d: %s", resp.StatusCode, errResp.Error)
 	}
 }
 
@@ -673,6 +690,8 @@ func (p *Provider) streamChatResponse(ctx context.Context, r io.Reader, out chan
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				slog.Debug("Ollama stream processing ended", "total_lines", lineCount)
+				// Send done chunk if we haven't already
+				out <- llm.StreamChunk{Type: llm.ChunkTypeDone}
 				return nil
 			}
 			slog.Debug("Ollama stream error", "error", err)

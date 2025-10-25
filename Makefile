@@ -11,7 +11,7 @@ GOLINT=golangci-lint
 DEADCODE=deadcode
 
 # Package paths
-CORE_PKG=./internal/core/...
+INTERNAL_PKGS=./internal/...
 ALL_PKGS=./...
 
 # Build targets
@@ -56,30 +56,56 @@ uninstall-user:
 	@rm -f ~/.local/bin/spin
 	@echo "✓ Uninstalled successfully"
 
-## build-core: Build the core module (compile check)
-build-core:
-	@echo "Building core module..."
-	@$(GOBUILD) $(CORE_PKG)
-	@echo "✓ Core build successful"
+## build-internal: Build internal packages (compile check)
+build-internal:
+	@echo "Building internal packages..."
+	@$(GOBUILD) $(INTERNAL_PKGS)
+	@echo "✓ Internal packages build successful"
 
-## test: Run all tests with deadcode analysis
+## test: Run all tests with coverage and deadcode analysis (skips slow stress tests)
 test:
-	@echo "Running tests..."
-	@$(GOTEST) -v -timeout 30s $(CORE_PKG)
+	@echo "Running tests with coverage..."
+	@$(GOTEST) -short -cover -timeout 30s $(INTERNAL_PKGS)
+	@echo ""
 	@echo "Running deadcode analysis..."
-	@./scripts/deadcode-filter.sh ./cmd/... ./internal/...
+	@./scripts/deadcode-filter.sh github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/...
 
-## test-coverage: Run tests with coverage report
+## test-coverage: Run tests with coverage report (HTML)
 test-coverage:
 	@echo "Running tests with coverage..."
-	@$(GOTEST) -cover -coverprofile=coverage.out -timeout 30s $(CORE_PKG)
+	@$(GOTEST) -short -cover -coverprofile=coverage.out -timeout 30s $(INTERNAL_PKGS)
 	@$(GOCMD) tool cover -html=coverage.out -o coverage.html
 	@echo "✓ Coverage report generated: coverage.html"
+
+## coverage: Show overall coverage percentage and per-package breakdown
+coverage:
+	@echo "Calculating coverage..."
+	@echo ""
+	@$(GOTEST) -short -cover -coverprofile=coverage.out -timeout 30s $(INTERNAL_PKGS) 2>&1 | \
+		grep "coverage:" | \
+		sed 's/ok  *//' | \
+		sed 's/github.com\/dmytrogajewski\/spin\///' | \
+		sed 's/(cached)//' | \
+		sed -E 's/[[:space:]]+[0-9]+\.[0-9]+s[[:space:]]+/ /' | \
+		awk '{for(i=1;i<=NF;i++) if($$i~/^[0-9.]+%$$/) {printf "%-45s %s\n", $$1, $$i; break}}' | \
+		sort
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@$(GOCMD) tool cover -func=coverage.out | tail -1 | awk '{printf "TOTAL COVERAGE: %s\n", $$3}'
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "For detailed HTML report: make test-coverage"
 
 ## test-race: Run tests with race detector
 test-race:
 	@echo "Running tests with race detector..."
-	@$(GOTEST) -race -timeout 30s $(CORE_PKG)
+	@$(GOTEST) -short -race -timeout 30s $(INTERNAL_PKGS)
+
+## test-stress: Run stress tests (slow, may take several minutes)
+test-stress:
+	@echo "Running stress tests..."
+	@$(GOTEST) -v -timeout 5m -run "Stress" $(INTERNAL_PKGS)
+	@echo "✓ Stress tests complete"
 
 ## test-e2e: Run end-to-end TUI tests (requires Ollama running)
 test-e2e: build
@@ -100,16 +126,16 @@ test-all: test test-e2e
 ## lint: Run linters and deadcode analysis
 lint:
 	@echo "Running linters..."
-	@$(GOLINT) run $(CORE_PKG)
+	@$(GOLINT) run $(INTERNAL_PKGS)
 	@echo "Running deadcode analysis..."
-	@./scripts/deadcode-filter.sh -test ./cmd/... ./internal/...
+	@./scripts/deadcode-filter.sh -test github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/...
 	@echo "✓ Linting complete"
 
 ## deadcode: Run deadcode analysis with detailed output (requires: go install golang.org/x/tools/cmd/deadcode@latest)
 deadcode:
 	@echo "Running deadcode analysis..."
 	@echo "Analyzing cmd/ and internal/ packages..."
-	@$(DEADCODE) -test ./cmd/... ./internal/... || echo "Note: Review any unreachable functions listed above"
+	@$(DEADCODE) -test github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/... || echo "Note: Review any unreachable functions listed above"
 	@echo ""
 	@echo "Tip: Use 'deadcode -whylive <function>' to understand why a function is considered reachable"
 
@@ -117,15 +143,15 @@ deadcode:
 deadcode-prod:
 	@echo "Running deadcode analysis (production only)..."
 	@echo "Analyzing cmd/ and internal/ packages..."
-	@./scripts/deadcode-filter.sh ./cmd/... ./internal/...
+	@./scripts/deadcode-filter.sh github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/...
 
 ## deadcode-test-only: Find functions used only by tests (requires jq)
 deadcode-test-only:
 	@echo "Finding functions used only by tests..."
 	@echo "This compares deadcode results with and without tests..."
 	@mkdir -p .deadcode-tmp
-	@$(DEADCODE) -json ./cmd/... ./internal/... | jq -r '.[] | .Funcs[].Name' | sort > .deadcode-tmp/dead_prod.txt
-	@$(DEADCODE) -test -json ./cmd/... ./internal/... | jq -r '.[] | .Funcs[].Name' | sort > .deadcode-tmp/dead_with_tests.txt
+	@$(DEADCODE) -json github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/... | jq -r '.[] | .Funcs[].Name' | sort > .deadcode-tmp/dead_prod.txt
+	@$(DEADCODE) -test -json github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/... | jq -r '.[] | .Funcs[].Name' | sort > .deadcode-tmp/dead_with_tests.txt
 	@echo "Functions used only by tests:"
 	@comm -23 .deadcode-tmp/dead_prod.txt .deadcode-tmp/dead_with_tests.txt || echo "No test-only functions found"
 	@rm -rf .deadcode-tmp
@@ -133,7 +159,7 @@ deadcode-test-only:
 ## deadcode-json: Run deadcode analysis with JSON output
 deadcode-json:
 	@echo "Running deadcode analysis (JSON output)..."
-	@$(DEADCODE) -json ./cmd/... ./internal/...
+	@$(DEADCODE) -json github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/...
 
 ## deadcode-why: Show why a function is not dead (usage: make deadcode-why FUNC=functionName)
 deadcode-why:
@@ -143,7 +169,7 @@ deadcode-why:
 		exit 1; \
 	fi
 	@echo "Showing why function '$(FUNC)' is not dead..."
-	@$(DEADCODE) -whylive="$(FUNC)" ./cmd/... ./internal/...
+	@$(DEADCODE) -whylive="$(FUNC)" github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/...
 
 ## fmt: Format code
 fmt:

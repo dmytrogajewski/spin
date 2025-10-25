@@ -145,14 +145,11 @@ ok      github.com/user/project    0.051s`
 • Write documentation (pending)
 • Deploy to staging (pending)`
 
-	planMeta := &blocks.PlanMeta{
-		Total:       6,
-		Pending:     3,
-		InProgress:  1,
-		Completed:   2,
-	}
-	if err := blocks.SetPlanMeta(planBlock, planMeta); err != nil {
-		fmt.Fprintf(os.Stderr, "Error setting plan meta: %v\n", err)
+	planBlock.Meta = map[string]interface{}{
+		"total":       6,
+		"pending":     3,
+		"in_progress": 1,
+		"completed":   2,
 	}
 	ui.AppendBlock(planBlock)
 

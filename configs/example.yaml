@@ -9,7 +9,10 @@
 provider: ollama
 
 # Model name (provider-specific)
-model: codellama:13b
+model: qwen3-coder:30b
+
+# Base URL for the provider (optional, defaults to provider-specific URL)
+base_url: http://localhost:11434
 
 # Provider-specific configuration
 provider_config:
@@ -17,8 +20,24 @@ provider_config:
   top_p: 0.9
   # Additional provider-specific options can be added here
 
-# Optional auto-tuning (VRAM-based) for local providers
+# LLM configuration (for LLM builder)
 llm:
+  # Provider type: ollama, openai, lmstudio, etc.
+  provider: ollama
+
+  # Model name (provider-specific)
+  model: qwen3-coder:30b
+
+  # Base URL for the provider (optional, defaults to provider-specific URL)
+  base_url: http://localhost:11434
+
+  # Provider-specific configuration
+  provider_config:
+    temperature: 0.7
+    top_p: 0.9
+  # Additional provider-specific options can be added here
+
+  # Optional auto-tuning (VRAM-based) for local providers
   auto_tune: true
   vram:
     headroom_mib: 1024  # reserve 1GiB for system

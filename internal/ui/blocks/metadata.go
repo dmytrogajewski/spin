@@ -108,6 +108,8 @@ func (m *GrepMeta) Validate() error {
 type ToolMeta struct {
 	// ToolName is the name of the tool.
 	ToolName string `json:"tool_name"`
+	// Params holds the arguments passed to the tool (optional, for display).
+	Params map[string]any `json:"params,omitempty"`
 }
 
 // Validate validates the tool metadata.
@@ -229,6 +231,19 @@ func ParseGrepMeta(b *Block) (*GrepMeta, error) {
 	return &meta, nil
 }
 
+// ParseToolMeta extracts ToolMeta from a block's metadata.
+func ParseToolMeta(b *Block) (*ToolMeta, error) {
+	data, err := json.Marshal(b.Meta)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+	var meta ToolMeta
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal ToolMeta: %w", err)
+	}
+	return &meta, nil
+}
+
 // ParsePatchMeta extracts PatchMeta from a block's metadata.
 func ParsePatchMeta(b *Block) (*PatchMeta, error) {
 	data, err := json.Marshal(b.Meta)
@@ -339,3 +354,5 @@ func SetPatchMeta(b *Block, m *PatchMeta) error {
 	b.Meta = meta
 	return nil
 }
+
+// SetPlanMeta sets PlanMeta on a block.

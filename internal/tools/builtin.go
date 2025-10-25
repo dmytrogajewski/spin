@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/filesearch"
 	"github.com/dmytrogajewski/spin/internal/git"
@@ -219,8 +220,8 @@ func (t *ListDirectoryTool) Execute(ctx context.Context, params map[string]inter
 // ExecuteCommandTool implements command execution functionality.
 // It requires an Executor and Validator from the core package.
 type ExecuteCommandTool struct {
-	executor  interface{} // core.Executor - using interface{} to avoid circular import
-	validator interface{} // core.Validator - using interface{} to avoid circular import
+	executor  interface{} // agent.Executor - using interface{} to avoid circular import
+	validator interface{} // security.Validator - using interface{} to avoid circular import
 }
 
 // NewExecuteCommandTool creates a new execute command tool.
@@ -252,9 +253,13 @@ func (t *ExecuteCommandTool) Schema() ToolSchema {
 						Type:        "string",
 						Description: "The command to execute",
 					},
-					"workdir": {
+					"working_directory": {
 						Type:        "string",
 						Description: "The working directory for the command (optional)",
+					},
+					"timeout": {
+						Type:        "number",
+						Description: "Timeout in seconds for command execution (optional, defaults to 30s)",
 					},
 				},
 				Required: []string{"command"},
@@ -278,6 +283,18 @@ func (t *ExecuteCommandTool) Execute(ctx context.Context, params map[string]inte
 		return ToolResult{Success: false, Error: "command cannot be empty"}, nil
 	}
 
+	// Parse timeout parameter (optional, defaults to 30s)
+	timeout := 30 * time.Second
+	if timeoutParam, exists := params["timeout"]; exists {
+		if timeoutFloat, ok := timeoutParam.(float64); ok {
+			timeout = time.Duration(timeoutFloat) * time.Second
+		}
+	}
+
+	// Create a context with the specified timeout
+	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	executeMethod, err := t.getExecuteMethod()
 	if err != nil {
 		return ToolResult{Success: false, Error: err.Error()}, nil
@@ -288,7 +305,7 @@ func (t *ExecuteCommandTool) Execute(ctx context.Context, params map[string]inte
 		return ToolResult{Success: false, Error: err.Error()}, nil
 	}
 
-	return t.executeCommand(ctx, executeMethod, cmdValue)
+	return t.executeCommand(cmdCtx, executeMethod, cmdValue)
 }
 
 // validateExecutor validates that the executor is configured.
@@ -358,7 +375,7 @@ func (t *ExecuteCommandTool) createDynamicCommand(parts []string, params map[str
 		Raw:     strings.Join(parts, " "),
 	}
 
-	if workDir, ok := params["workdir"].(string); ok && workDir != "" {
+	if workDir, ok := params["working_directory"].(string); ok && workDir != "" {
 		cmd.WorkDir = workDir
 	}
 
@@ -382,7 +399,7 @@ func (t *ExecuteCommandTool) setCommandFields(cmdElem reflect.Value, parts []str
 	t.setStringSliceField(cmdElem, "Args", parts[1:])
 	t.setStringField(cmdElem, "Raw", strings.Join(parts, " "))
 
-	if workDir, ok := params["workdir"].(string); ok && workDir != "" {
+	if workDir, ok := params["working_directory"].(string); ok && workDir != "" {
 		t.setStringField(cmdElem, "WorkDir", workDir)
 	}
 }
@@ -508,7 +525,7 @@ func (t *ExecuteCommandTool) combineOutput(stdout, stderr string) string {
 
 // GetContextTool implements environment context retrieval.
 type GetContextTool struct {
-	context interface{} // core.Context - using interface{} to avoid circular import
+	context interface{} // agent.Environment - using interface{} to avoid circular import
 }
 
 // NewGetContextTool creates a new get context tool.
@@ -550,7 +567,7 @@ func (t *GetContextTool) Execute(ctx context.Context, params map[string]interfac
 	}
 
 	// Use reflection to call String() method to avoid circular import
-	// The context is core.Environment which implements String() string
+	// The context is agent.Environment which implements String() string
 	val := reflect.ValueOf(t.context)
 
 	// Check if the context has a String() method
@@ -603,7 +620,17 @@ func (t *ApplyPatchTool) Name() string {
 }
 
 func (t *ApplyPatchTool) Description() string {
-	return "Apply a structured patch to modify files in the workspace"
+	return "Apply a patch to modify files in the workspace using standard diff format.\n" +
+		"Format: *** filename\n--- filename\n@@ -start,count +start,count @@\n+new line\n-old line\n" +
+		"Example:\n" +
+		"*** a/file.go\n" +
+		"--- b/file.go\n" +
+		"@@ -1,3 +1,4 @@\n" +
+		" package main\n" +
+		" \n" +
+		" import \"fmt\"\n" +
+		"+// Added comment\n" +
+		" func main() {\n"
 }
 
 func (t *ApplyPatchTool) Schema() ToolSchema {
@@ -617,7 +644,7 @@ func (t *ApplyPatchTool) Schema() ToolSchema {
 				Properties: map[string]PropertyDefinition{
 					"patch_text": {
 						Type:        "string",
-						Description: "The patch text in Spin's patch format (*** Begin Patch...*** End Patch)",
+						Description: "The patch text in standard diff format. Must start with '*** filename' or '--- filename' and contain '@@ -start,count +start,count @@' hunks with '+', '-', or ' ' prefixed lines.",
 					},
 					"workspace_root": {
 						Type:        "string",
@@ -666,9 +693,8 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params map[string]interfac
 		force = forceVal
 	}
 
-	// Parse the patch
-	parser := patchapply.NewParser(patchText)
-	patch, err := parser.Parse()
+	// Detect patch format and parse accordingly
+	patch, err := t.parsePatch(patchText)
 	if err != nil {
 		return ToolResult{
 			Success: false,
@@ -741,6 +767,123 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params map[string]interfac
 		Output:  output.String(),
 	}, nil
 }
+
+// parsePatch parses a patch in standard diff format.
+func (t *ApplyPatchTool) parsePatch(patchText string) (*patchapply.Patch, error) {
+	lines := strings.Split(patchText, "\n")
+	if len(lines) == 0 {
+		return nil, fmt.Errorf("empty patch")
+	}
+
+	// Check if it's a proper patchapply format (starts with "*** Begin Patch")
+	firstLine := strings.TrimSpace(lines[0])
+	if firstLine == "*** Begin Patch" {
+		// Use the proper patchapply parser
+		parser := patchapply.NewParser(patchText)
+		return parser.Parse()
+	}
+
+	// Check if it's a diff format (starts with "*** filename" or "--- filename")
+	if !strings.HasPrefix(firstLine, "*** ") && !strings.HasPrefix(firstLine, "--- ") {
+		return nil, fmt.Errorf("patch must be in standard diff format. Expected to start with '*** filename' or '--- filename', got: %q", firstLine)
+	}
+
+	// Parse diff format directly
+	return t.parseDiffFormat(patchText)
+}
+
+// parseDiffFormat parses a patch in standard diff format directly.
+func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, error) {
+	lines := strings.Split(diffText, "\n")
+	if len(lines) < 3 {
+		return nil, fmt.Errorf("diff format too short")
+	}
+
+	// Extract filename from the first line
+	firstLine := strings.TrimSpace(lines[0])
+	var filename string
+	if strings.HasPrefix(firstLine, "*** ") {
+		filename = strings.TrimSpace(strings.TrimPrefix(firstLine, "*** "))
+	} else if strings.HasPrefix(firstLine, "--- ") {
+		filename = strings.TrimSpace(strings.TrimPrefix(firstLine, "--- "))
+	} else {
+		return nil, fmt.Errorf("could not extract filename from first line: %q", firstLine)
+	}
+
+	// Create patch with update file operation
+	patch := &patchapply.Patch{
+		Operations: []patchapply.FileOperation{
+			&patchapply.UpdateFile{
+				FilePath: filename,
+				Hunks:    []patchapply.Hunk{},
+			},
+		},
+	}
+
+	// Parse hunks
+	var currentHunk *patchapply.Hunk
+	for i := 2; i < len(lines); i++ {
+		line := lines[i]
+
+		if strings.HasPrefix(line, "@@") {
+			// Start of a new hunk
+			if currentHunk != nil {
+				patch.Operations[0].(*patchapply.UpdateFile).Hunks = append(
+					patch.Operations[0].(*patchapply.UpdateFile).Hunks,
+					*currentHunk,
+				)
+			}
+			currentHunk = &patchapply.Hunk{
+				Header:  strings.TrimSpace(strings.TrimPrefix(line, "@@")),
+				Changes: []patchapply.LineChange{},
+			}
+		} else if currentHunk != nil {
+			// Parse line change
+			if len(line) == 0 {
+				currentHunk.Changes = append(currentHunk.Changes, patchapply.LineChange{
+					Type: patchapply.LineContext,
+					Text: "",
+				})
+			} else {
+				prefix := line[0]
+				text := ""
+				if len(line) > 1 {
+					text = line[1:]
+				}
+
+				var changeType patchapply.LineChangeType
+				switch prefix {
+				case ' ':
+					changeType = patchapply.LineContext
+				case '-':
+					changeType = patchapply.LineDelete
+				case '+':
+					changeType = patchapply.LineInsert
+				default:
+					// Skip lines without proper prefixes
+					continue
+				}
+
+				currentHunk.Changes = append(currentHunk.Changes, patchapply.LineChange{
+					Type: changeType,
+					Text: text,
+				})
+			}
+		}
+	}
+
+	// Add the last hunk
+	if currentHunk != nil {
+		patch.Operations[0].(*patchapply.UpdateFile).Hunks = append(
+			patch.Operations[0].(*patchapply.UpdateFile).Hunks,
+			*currentHunk,
+		)
+	}
+
+	return patch, nil
+}
+
+// convertDiffToSpin converts diff format to Spin format.
 
 // FileSearchTool implements file search functionality with fuzzy matching.
 type FileSearchTool struct {
@@ -923,96 +1066,70 @@ func (t *GitContextTool) Schema() ToolSchema {
 }
 
 func (t *GitContextTool) Execute(ctx context.Context, params map[string]interface{}) (ToolResult, error) {
-	// Extract workspace_root parameter (optional)
+	// Get workspace root
 	workspaceRoot := t.workspaceRoot
-	if customRoot, ok := params["workspace_root"].(string); ok && customRoot != "" {
-		workspaceRoot = customRoot
+	if root, ok := params["workspace_root"].(string); ok && root != "" {
+		workspaceRoot = root
 	}
 
-	// Extract include_diff parameter (optional)
-	includeDiff := false
-	if diffVal, ok := params["include_diff"].(bool); ok {
-		includeDiff = diffVal
-	}
-
-	// Discover repository
+	// Discover git repository
 	repo, err := git.Discover(ctx, workspaceRoot)
 	if err != nil {
-		// Not a git repository - return graceful error
+		// Gracefully handle non-git directories
 		return ToolResult{
 			Success: true,
-			Output:  "Not a Git repository. Initialize with 'git init' to enable version control.\n",
+			Output:  fmt.Sprintf("Not a Git repository: %v\n", err),
 		}, nil
 	}
 
-	// Get status
+	var output strings.Builder
+	output.WriteString("Git Repository Context:\n")
+	output.WriteString("======================\n\n")
+
+	// Get status (includes branch info)
 	status, err := repo.Status(ctx)
 	if err != nil {
 		return ToolResult{
 			Success: false,
-			Error:   fmt.Sprintf("failed to get git status: %v", err),
+			Output:  fmt.Sprintf("Failed to get git status: %v\n", err),
 		}, nil
 	}
 
-	// Format output
-	var output strings.Builder
-	output.WriteString("Git Repository Context:\n\n")
-	output.WriteString(fmt.Sprintf("Repository Root: %s\n", repo.Root()))
-
-	if status.Detached {
-		output.WriteString(fmt.Sprintf("Branch: (detached HEAD at %s)\n", status.Hash[:7]))
-	} else {
-		output.WriteString(fmt.Sprintf("Branch: %s\n", status.Branch))
-	}
-
+	// Branch info
+	output.WriteString(fmt.Sprintf("Branch: %s\n", status.Branch))
 	if status.RemoteBranch != "" {
-		output.WriteString(fmt.Sprintf("Tracking: %s", status.RemoteBranch))
-		if status.Ahead > 0 || status.Behind > 0 {
-			output.WriteString(fmt.Sprintf(" [ahead %d, behind %d]", status.Ahead, status.Behind))
-		}
-		output.WriteString("\n")
+		output.WriteString(fmt.Sprintf("Remote: %s\n", status.RemoteBranch))
+		output.WriteString(fmt.Sprintf("Ahead: %d, Behind: %d\n", status.Ahead, status.Behind))
+	}
+	if status.Detached {
+		output.WriteString("(detached HEAD)\n")
 	}
 
-	output.WriteString(fmt.Sprintf("Commit: %s\n\n", status.Hash[:7]))
-
-	// Status summary
-	totalModified := len(status.ModifiedFiles)
-	totalUntracked := len(status.UntrackedFiles)
-
-	if totalModified == 0 && totalUntracked == 0 {
-		output.WriteString("Working tree clean.\n")
-	} else {
-		if totalModified > 0 {
-			output.WriteString(fmt.Sprintf("Modified/Staged: %d file(s)\n", totalModified))
-			// Show first 10 modified files
-			for i, file := range status.ModifiedFiles {
-				if i >= 10 {
-					output.WriteString(fmt.Sprintf("  ... and %d more\n", totalModified-10))
-					break
-				}
-				// Format status: show staging/worktree status codes
-				statusStr := file.Staging.String() + file.Worktree.String()
-				output.WriteString(fmt.Sprintf("  %s %s\n", statusStr, file.Path))
-			}
+	// Commit hash
+	if status.Hash != "" {
+		hashLen := len(status.Hash)
+		if hashLen > 8 {
+			hashLen = 8
 		}
+		output.WriteString(fmt.Sprintf("Commit: %s\n", status.Hash[:hashLen]))
+	}
 
-		if totalUntracked > 0 {
-			output.WriteString(fmt.Sprintf("\nUntracked: %d file(s)\n", totalUntracked))
-			// Show first 10 untracked files
-			for i, file := range status.UntrackedFiles {
-				if i >= 10 {
-					output.WriteString(fmt.Sprintf("  ... and %d more\n", totalUntracked-10))
-					break
-				}
-				output.WriteString(fmt.Sprintf("  %s\n", file))
-			}
+	// File status
+	output.WriteString(fmt.Sprintf("\nModified files: %d\n", len(status.ModifiedFiles)))
+	output.WriteString(fmt.Sprintf("Untracked files: %d\n", len(status.UntrackedFiles)))
+
+	if len(status.ModifiedFiles) > 0 {
+		output.WriteString("\nModified:\n")
+		for _, file := range status.ModifiedFiles {
+			output.WriteString(fmt.Sprintf("  - %s (%s)\n", file.Path, file.Worktree))
 		}
 	}
 
-	// Optionally include diff summary
-	if includeDiff && totalModified > 0 {
-		output.WriteString("\nNote: include_diff=true requested but full diff not yet implemented.\n")
-		output.WriteString("Use git diff commands for detailed changes.\n")
+	if len(status.UntrackedFiles) > 0 && len(status.UntrackedFiles) < 20 {
+		output.WriteString("\nUntracked:\n")
+		for _, file := range status.UntrackedFiles {
+			output.WriteString(fmt.Sprintf("  - %s\n", file))
+		}
 	}
 
 	return ToolResult{

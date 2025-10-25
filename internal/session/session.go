@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/core/turn"
+	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/state"
 	"github.com/google/uuid"
 )
@@ -30,23 +30,39 @@ const (
 	StateArchived  = state.StateArchived  // Session archived
 )
 
-// Session-specific state methods are now handled by core.UnifiedState.
+// Session-specific state methods are now handled by state.UnifiedState.
 
 // Session represents a persistent conversation session.
 type Session struct {
-	ID        string       // Unique session identifier (UUID)
-	WorkDir   string       // Working directory for this session
-	CreatedAt time.Time    // Session creation timestamp
-	UpdatedAt time.Time    // Last update timestamp
-	Turns     []*turn.Turn // Conversation turns
-	Metadata  Metadata     // Session metadata
-	State     State        // Current session state
-	Version   int          // Schema version for migrations
-	mu        sync.RWMutex // Protects all fields
+	ID        string                // Unique session identifier (UUID)
+	WorkDir   string                // Working directory for this session
+	CreatedAt time.Time             // Session creation timestamp
+	UpdatedAt time.Time             // Last update timestamp
+	Turns     []*orchestration.Turn // Conversation turns
+	Metadata  Metadata              // Session metadata
+	State     State                 // Current session state
+	Version   int                   // Schema version for migrations
+	mu        sync.RWMutex          // Protects all fields
+}
+
+// NewSession creates a new session with the given working directory.
+// A unique session ID (UUID) is automatically generated.
+func NewSession(workDir string) *Session {
+	now := time.Now()
+	return &Session{
+		ID:        uuid.New().String(),
+		WorkDir:   workDir,
+		CreatedAt: now,
+		UpdatedAt: now,
+		Turns:     make([]*orchestration.Turn, 0),
+		Metadata:  Metadata{},
+		State:     StateActive,
+		Version:   CurrentSchemaVersion,
+	}
 }
 
 // AddTurn appends a turn to the session.
-func (s *Session) AddTurn(t *turn.Turn) error {
+func (s *Session) AddTurn(t *orchestration.Turn) error {
 	if t == nil {
 		return errors.New("turn cannot be nil")
 	}
@@ -63,7 +79,7 @@ func (s *Session) AddTurn(t *turn.Turn) error {
 }
 
 // GetTurn retrieves a turn by ID.
-func (s *Session) GetTurn(turnID string) (*turn.Turn, error) {
+func (s *Session) GetTurn(turnID string) (*orchestration.Turn, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -77,7 +93,7 @@ func (s *Session) GetTurn(turnID string) (*turn.Turn, error) {
 }
 
 // LastTurn returns the most recent turn.
-func (s *Session) LastTurn() *turn.Turn {
+func (s *Session) LastTurn() *orchestration.Turn {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -220,7 +236,7 @@ func (s *Session) validateBasicFields() []error {
 
 	// Validate timestamps
 	if s.UpdatedAt.Before(s.CreatedAt) {
-		errs = append(errs, errors.New("UpdatedAt is before CreatedAt"))
+		errs = append(errs, errors.New("updated_at is before created_at"))
 	}
 
 	// Validate state

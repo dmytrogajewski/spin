@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dmytrogajewski/spin/internal/core"
+	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 )
 
@@ -59,7 +59,7 @@ func parseCommand(input string) commandResult {
 // Returns:
 //   - handled: true if command was recognized and processed
 //   - error: non-nil if command execution failed or exit was requested
-func handleCommand(ui *adapters.PureTTY, conv *core.Conversation, cmd commandResult) (handled bool, err error) {
+func handleCommand(ui *adapters.PureTTY, conv *conversation.Conversation, cmd commandResult) (handled bool, err error) {
 	switch cmd.command {
 	case "/mode":
 		return handleModeCommand(ui, conv, cmd.args)
@@ -79,7 +79,7 @@ func handleCommand(ui *adapters.PureTTY, conv *core.Conversation, cmd commandRes
 // handleModeCommand handles /mode command.
 // With no arguments: shows current mode.
 // With one argument: switches to the specified mode.
-func handleModeCommand(ui *adapters.PureTTY, conv *core.Conversation, args []string) (bool, error) {
+func handleModeCommand(ui *adapters.PureTTY, conv *conversation.Conversation, args []string) (bool, error) {
 	// No arguments: show current mode
 	if len(args) == 0 {
 		currentMode := conv.GetTaskMode()
@@ -115,7 +115,7 @@ func handleModeCommand(ui *adapters.PureTTY, conv *core.Conversation, args []str
 
 // handleHelpCommand handles /help command.
 // Displays available commands and mode descriptions.
-func handleHelpCommand(ui *adapters.PureTTY, conv *core.Conversation, args []string) (bool, error) {
+func handleHelpCommand(ui *adapters.PureTTY, conv *conversation.Conversation, args []string) (bool, error) {
 	help := `Available commands:
 
   /mode [name]  - Show current mode or switch to a different mode
