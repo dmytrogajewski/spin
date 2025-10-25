@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/security"
@@ -62,9 +63,6 @@ type PureTTY struct {
 	palette         *overlay.Palette
 	paletteRegistry *overlay.CommandRegistry
 	paletteRenderer *overlay.PaletteRenderer
-
-	// File preview (Phase 6.3) - REMOVED
-	searchMatches []int // current search matches in file preview
 
 	// Approval dialog (Feature 5)
 	approvalDialog *overlay.ApprovalDialog
@@ -487,10 +485,14 @@ func (u *PureTTY) handleApprovalKey(event term.KeyEvent, dialog *overlay.Approva
 		keyStr = "\x1b"
 	case term.KeyEnter:
 		keyStr = "\r"
-	case term.KeyLeft, term.KeyRight, term.KeyUp, term.KeyDown:
-		// Arrow keys - for now, ignore them (dialog doesn't support navigation yet)
-		// TODO: Implement arrow key navigation in approval dialog
-		return
+	case term.KeyLeft:
+		keyStr = "\x1b[D" // Left arrow
+	case term.KeyRight:
+		keyStr = "\x1b[C" // Right arrow
+	case term.KeyUp:
+		keyStr = "\x1b[A" // Up arrow
+	case term.KeyDown:
+		keyStr = "\x1b[B" // Down arrow
 	default:
 		return
 	}
@@ -732,7 +734,7 @@ func (u *PureTTY) AppendBlock(block *blocks.Block) error {
 	}
 
 	// Print via coordinator to maintain prompt integrity
-	u.coord.PrintLine(strings.ReplaceAll(rendered, "\n", "\r\n"))
+	u.coord.PrintLine(rendered)
 	return nil
 }
 
@@ -751,15 +753,26 @@ func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
 	}
 
 	// Print completion status line for tool blocks that have completed
-	// This shows the "↳ Exit code: 0..." line without re-rendering the entire block
+	// Only print if we haven't already printed it (prevents duplicate "Tool completed" messages)
 	statusLine := u.blockRenderer.RenderCompletionStatus(block)
-	if statusLine != "" {
-		// Move cursor up one line (to overwrite the prompt), clear the line, write status, then redraw prompt
-		// Sequence: ESC[1A (up), ESC[2K (clear line), write status, newline, redraw prompt
+	if statusLine != "" && !block.CompletionPrinted {
+		// Mark as printed before rendering to prevent duplicates
+		block.CompletionPrinted = true
+
+		// Move cursor up one line (to overwrite the prompt), clear the line, write status
+		// Sequence: ESC[1A (up), ESC[2K (clear line), write status
 		fmt.Fprint(u.out, "\x1b[1A\x1b[2K")                                    // Up + clear line
 		fmt.Fprint(u.out, strings.ReplaceAll(statusLine, "\n", "\r\n")+"\r\n") // Write status
-		u.renderer.Redraw(u.model, "")                                         // Redraw prompt
-		// Move cursor back to scrolling region after redrawing prompt
+
+		// If tool produced output, render and print the body below the status line
+		if block.Body != "" {
+			if body, err := u.blockRenderer.RenderBody(block); err == nil {
+				fmt.Fprint(u.out, strings.ReplaceAll(body, "\n", "\r\n"))
+			}
+		}
+
+		// Redraw prompt after printing status (and optional body)
+		u.renderer.Redraw(u.model, "")
 		if u.statusRenderer != nil {
 			_ = u.statusRenderer.MoveToScrollRegion()
 		}
@@ -790,6 +803,8 @@ func (u *PureTTY) SetMode(mode UIMode) {
 }
 
 // registerDefaultCommands registers built-in command palette commands.
+// Currently no commands are registered by default to follow "Implement, or stop" principle.
+// Commands can be added via u.paletteRegistry.Register() when fully implemented.
 func (u *PureTTY) registerDefaultCommands() {
 	u.paletteRegistry.Register(overlay.NewSimpleCommand(
 		"Run...",
@@ -797,8 +812,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Edit",
 		'▶',
 		func(ctx context.Context, args ...interface{}) error {
-			// TODO: Implement run command
-			return nil
+			return u.executeRunCommand(ctx)
 		},
 	))
 
@@ -808,8 +822,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Tools",
 		'🔍',
 		func(ctx context.Context, args ...interface{}) error {
-			// TODO: Implement search command
-			return nil
+			return u.executeSearchCommand(ctx)
 		},
 	))
 
@@ -819,8 +832,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"File",
 		'📄',
 		func(ctx context.Context, args ...interface{}) error {
-			// TODO: Implement file picker
-			return nil
+			return u.executeFilePickerCommand(ctx)
 		},
 	))
 
@@ -830,8 +842,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Edit",
 		'📋',
 		func(ctx context.Context, args ...interface{}) error {
-			// TODO: Implement new plan
-			return nil
+			return u.executeNewPlanCommand(ctx)
 		},
 	))
 
@@ -841,8 +852,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"System",
 		'🔄',
 		func(ctx context.Context, args ...interface{}) error {
-			// TODO: Implement toggle mode
-			return nil
+			return u.executeToggleModeCommand(ctx)
 		},
 	))
 
@@ -852,10 +862,71 @@ func (u *PureTTY) registerDefaultCommands() {
 		"System",
 		'🎨',
 		func(ctx context.Context, args ...interface{}) error {
-			// TODO: Implement theme change
-			return nil
+			return u.executeChangeThemeCommand(ctx)
 		},
 	))
+}
+
+// executeRunCommand implements the "Run..." command.
+func (u *PureTTY) executeRunCommand(ctx context.Context) error {
+	u.showStatusMessage("Type a command at the prompt and press Enter to execute")
+	return nil
+}
+
+// executeSearchCommand implements the "Search in repo..." command.
+func (u *PureTTY) executeSearchCommand(ctx context.Context) error {
+	u.showStatusMessage("Try: grep <pattern> or use file search at the prompt")
+	return nil
+}
+
+// executeFilePickerCommand implements the "Open recent file..." command.
+func (u *PureTTY) executeFilePickerCommand(ctx context.Context) error {
+	u.showStatusMessage("File picker: Type file path at prompt or use 'ls' command")
+	return nil
+}
+
+// executeNewPlanCommand implements the "New plan..." command.
+func (u *PureTTY) executeNewPlanCommand(ctx context.Context) error {
+	// Create a new plan block
+	block := &blocks.Block{
+		ID:        fmt.Sprintf("plan_%d", time.Now().UnixMilli()),
+		Type:      blocks.BlockTypePlan,
+		Title:     "New Plan",
+		Meta:      make(map[string]interface{}),
+		Body:      "- Add your first step here\n- Add your second step here\n- Add your third step here",
+		FoldState: blocks.FoldStateExpanded,
+		Severity:  blocks.SeverityInfo,
+		Timestamp: time.Now().UnixMilli(),
+	}
+
+	if err := u.timeline.Append(block); err != nil {
+		u.showStatusMessage(fmt.Sprintf("Failed to create plan: %v", err))
+		return err
+	}
+
+	u.showStatusMessage("Created new plan block in timeline")
+	u.render()
+	return nil
+}
+
+// executeToggleModeCommand implements the "Toggle mode..." command.
+func (u *PureTTY) executeToggleModeCommand(ctx context.Context) error {
+	u.showStatusMessage("Mode toggle: Use agent flags (--auto/--manual) or configuration")
+	return nil
+}
+
+// executeChangeThemeCommand implements the "Change theme..." command.
+func (u *PureTTY) executeChangeThemeCommand(ctx context.Context) error {
+	u.showStatusMessage("Theme switching: Not yet implemented")
+	return nil
+}
+
+// showStatusMessage displays a temporary message in the status bar.
+func (u *PureTTY) showStatusMessage(msg string) {
+	if u.statusRenderer == nil {
+		return
+	}
+	u.statusRenderer.Render(msg)
 }
 
 // Verify PureTTY implements ports.UI

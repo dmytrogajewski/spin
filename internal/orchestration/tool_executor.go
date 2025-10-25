@@ -2,7 +2,6 @@ package orchestration
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -13,6 +12,21 @@ import (
 
 // ToolExecutor handles execution of tool calls with validation and approval.
 // It centralizes all tool execution logic that was previously scattered in Agent.
+//
+// GOROUTINE LIFECYCLE:
+// - ExecuteBatch() spawns one goroutine per tool call that:
+//   - Executes the tool via Execute()
+//   - Stores the result at the appropriate index
+//   - Lives until tool execution completes or context is cancelled
+//   - Automatically cleaned up when all tools complete (via WaitGroup)
+//
+// - All goroutines terminate when WaitGroup completes
+//
+// CONCURRENCY:
+// - Execute() is safe to call concurrently (each call is independent)
+// - ExecuteBatch() creates isolated goroutines with no shared state
+// - Results are stored at predetermined indices (no race conditions)
+// - WaitGroup ensures all goroutines complete before returning
 type ToolExecutor struct {
 	registry        *tools.Registry
 	validator       *security.Validator
@@ -121,17 +135,8 @@ func (t *ToolExecutor) validateToolCall(call *ToolCall) error {
 
 // parseToolArguments parses tool call arguments from JSON.
 func (t *ToolExecutor) parseToolArguments(call *ToolCall) (map[string]interface{}, error) {
-	args := make(map[string]interface{})
-
-	if call.Function.Arguments == "" {
-		return args, nil
-	}
-
-	if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
-		return nil, fmt.Errorf("failed to parse arguments: %w", err)
-	}
-
-	return args, nil
+	parser := tools.NewArgumentParser()
+	return parser.Parse(call.Function.Arguments)
 }
 
 // ExecuteBatch executes multiple tool calls concurrently.

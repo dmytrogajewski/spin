@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/orchestration"
-	"github.com/dmytrogajewski/spin/internal/types"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // AgentRequest represents a request to the agent.
@@ -159,7 +159,7 @@ type ToolCallCompleteData struct {
 type ToolCallStartData struct {
 	ToolID     string
 	ToolName   string
-	Parameters types.ToolCallArguments
+	Parameters tools.Arguments
 }
 
 // Role constants

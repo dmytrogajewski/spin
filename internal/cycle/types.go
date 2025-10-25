@@ -15,63 +15,25 @@ package cycle
 
 import (
 	"time"
+
+	"github.com/dmytrogajewski/spin/internal/detection"
 )
 
-// CycleType represents the type of cycle detected
-type CycleType int
+// Type aliases to detection package - cycle uses detection types directly
+type (
+	CycleType   = detection.CycleType
+	Snapshot    = detection.Snapshot
+	CycleResult = detection.CycleResult
+)
 
+// Re-export detection constants for backward compatibility
 const (
-	// CycleNone indicates no cycle detected
-	CycleNone CycleType = iota
-
-	// CycleSimilarResponses indicates repeated similar responses
-	CycleSimilarResponses
-
-	// CycleRepeatedTool indicates same tool called repeatedly
-	CycleRepeatedTool
-
-	// CycleOscillation indicates A→B→A→B oscillation pattern
-	CycleOscillation
-
-	// CycleSameError indicates repeated identical errors
-	CycleSameError
+	CycleNone             = detection.CycleNone
+	CycleSimilarResponses = detection.CycleSimilarResponses
+	CycleRepeatedTool     = detection.CycleRepeatedTool
+	CycleOscillation      = detection.CycleOscillation
+	CycleSameError        = detection.CycleSameError
 )
-
-// String returns the string representation of the cycle type
-func (ct CycleType) String() string {
-	switch ct {
-	case CycleSimilarResponses:
-		return "similar_responses"
-	case CycleRepeatedTool:
-		return "repeated_tool"
-	case CycleOscillation:
-		return "oscillation"
-	case CycleSameError:
-		return "same_error"
-	default:
-		return "none"
-	}
-}
-
-// Snapshot represents a point-in-time capture of agent state
-// for cycle detection analysis
-type Snapshot struct {
-	// Turn is the agent turn number when this snapshot was taken
-	Turn int
-
-	// Response is the LLM response content (if any)
-	Response string
-
-	// ToolCalls are the tool calls made in this turn (name + arguments)
-	// Format: "tool_name(arguments_json)" for parameter-aware comparison
-	ToolCalls []string
-
-	// Error is any error that occurred in this turn (if any)
-	Error string
-
-	// Timestamp when this snapshot was created
-	Timestamp time.Time
-}
 
 // Config contains configuration for cycle detection
 type Config struct {
@@ -89,21 +51,6 @@ type Config struct {
 
 	// Enabled controls whether cycle detection is active (default: true)
 	Enabled bool
-}
-
-// CycleResult contains the result of cycle detection
-type CycleResult struct {
-	// Type is the type of cycle detected (or CycleNone)
-	Type CycleType
-
-	// Confidence is a value 0.0-1.0 indicating detection confidence
-	Confidence float64
-
-	// Details provides additional information about the cycle
-	Details string
-
-	// Timestamp when the cycle was detected
-	Timestamp time.Time
 }
 
 // InterventionType represents the type of intervention applied

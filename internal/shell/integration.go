@@ -133,22 +133,16 @@ func (s *ShellIntegration) ExecuteShellCommand(ctx context.Context, command stri
 	}
 
 	// Create a context with timeout for the shell command
-	// Use the shorter of the two timeouts (integration timeout vs context timeout)
-	var cmdCtx context.Context
-	var cancel context.CancelFunc
-
-	if deadline, ok := ctx.Deadline(); ok {
-		// Context already has a deadline, use the shorter timeout
-		integrationDeadline := time.Now().Add(s.timeout)
-		if deadline.Before(integrationDeadline) {
-			cmdCtx, cancel = context.WithTimeout(ctx, time.Until(deadline))
-		} else {
-			cmdCtx, cancel = context.WithTimeout(ctx, s.timeout)
+	// Use the shell timeout, but respect parent context deadline if shorter
+	effectiveTimeout := s.timeout
+	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
+		remaining := time.Until(deadline)
+		if remaining < effectiveTimeout && remaining > 0 {
+			effectiveTimeout = remaining
 		}
-	} else {
-		// No existing deadline, use integration timeout
-		cmdCtx, cancel = context.WithTimeout(ctx, s.timeout)
 	}
+
+	cmdCtx, cancel := context.WithTimeout(ctx, effectiveTimeout)
 	defer cancel()
 
 	// Determine shell arguments based on shell type
@@ -181,19 +175,8 @@ func (s *ShellIntegration) ExecuteShellCommand(ctx context.Context, command stri
 	if err != nil {
 		// Check if it's a timeout error
 		if cmdCtx.Err() == context.DeadlineExceeded {
-			// Determine which timeout was actually used
-			var timeoutUsed time.Duration
-			if deadline, ok := ctx.Deadline(); ok {
-				integrationDeadline := time.Now().Add(s.timeout)
-				if deadline.Before(integrationDeadline) {
-					timeoutUsed = time.Until(deadline)
-				} else {
-					timeoutUsed = s.timeout
-				}
-			} else {
-				timeoutUsed = s.timeout
-			}
-			return "", fmt.Errorf("shell command timed out after %v: %s", timeoutUsed, command)
+			// Report the timeout that was configured (not remaining time which is negative)
+			return "", fmt.Errorf("shell command timed out after %v: %s", s.timeout, command)
 		}
 		// Check if it's an ExitError to get exit code and stderr
 		if exitErr, ok := err.(*exec.ExitError); ok {

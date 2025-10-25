@@ -2,9 +2,11 @@ package manager
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
@@ -46,7 +48,8 @@ type Manager struct {
 // Functional options
 type ManagerOption func(*Manager) error
 
-// WithLLM sets the LLM provider for the manager
+// WithLLM sets the LLM provider for the manager.
+// This option works with both NewManager and Builder.
 func WithLLM(provider llm.Provider) ManagerOption {
 	return func(m *Manager) error {
 		m.llm = provider
@@ -54,7 +57,8 @@ func WithLLM(provider llm.Provider) ManagerOption {
 	}
 }
 
-// WithManagerToolRegistry sets a custom tool registry for all conversations created by this manager
+// WithManagerToolRegistry sets a custom tool registry for all conversations created by this manager.
+// This option works with both NewManager and Builder.
 func WithManagerToolRegistry(registry *tools.Registry) ManagerOption {
 	return func(m *Manager) error {
 		m.toolRegistry = registry
@@ -62,7 +66,8 @@ func WithManagerToolRegistry(registry *tools.Registry) ManagerOption {
 	}
 }
 
-// WithManagerApprovalHandler sets the approval handler for all agents created by this manager
+// WithManagerApprovalHandler sets the approval handler for all agents created by this manager.
+// This option works with both NewManager and Builder.
 func WithManagerApprovalHandler(handler security.ApprovalHandler) ManagerOption {
 	return func(m *Manager) error {
 		m.approvalHandler = handler
@@ -301,8 +306,8 @@ func (m *Manager) buildAgent(executor *agent.Executor, ctxEnv *agent.Environment
 	securityService := security.NewSecurityService(validator, approvalService)
 
 	// Build DetectionService
-	var cycleDetector *cycle.Detector
-	var patternDetector *cycle.PatternDetector
+	var cycleDetector detection.CycleDetector
+	var patternDetector detection.PatternDetector
 	if m.cfg != nil && m.cfg.CycleDetection.Enabled {
 		cycleConfig := cycle.Config{
 			WindowSize:       m.cfg.CycleDetection.WindowSize,
@@ -440,92 +445,55 @@ func (m *Manager) createHistory() *history.History {
 	return hist
 }
 
-// NewManager creates a new Manager
+// NewManager creates a new Manager using the Builder pattern.
+// This is a convenience function that wraps the Builder for backward compatibility.
+//
+// For more control over initialization, use NewBuilder() directly:
+//
+//	mgr, err := manager.NewBuilder(cfg).
+//	    WithLLM(provider).
+//	    WithApprovalHandler(handler).
+//	    Build(ctx)
 func NewManager(cfg *Config, opts ...ManagerOption) (*Manager, error) {
-	if cfg == nil {
-		return nil, errors.New("config cannot be nil")
-	}
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
-	}
+	// Create builder with config
+	builder := NewBuilder(cfg)
 
-	m := &Manager{cfg: cfg}
+	// Apply functional options via temporary manager
+	// This preserves backward compatibility with existing code
+	tempMgr := &Manager{cfg: cfg}
 	for _, opt := range opts {
-		if err := opt(m); err != nil {
+		if err := opt(tempMgr); err != nil {
 			return nil, err
 		}
 	}
-	if m.llm == nil {
-		m.llm = llm.NewMockProvider("default")
+
+	// Transfer values from temp manager to builder
+	if tempMgr.llm != nil {
+		builder.WithLLM(tempMgr.llm)
 	}
-	if m.emitter == nil {
-		m.emitter = events.NewEventEmitter(100) // Default buffer size
+	if tempMgr.toolRegistry != nil {
+		builder.WithToolRegistry(tempMgr.toolRegistry)
 	}
-	if m.storage == nil {
-		fs, err := session.NewFileStorage(cfg.SessionDir)
-		if err != nil {
-			return nil, fmt.Errorf("initialize storage: %w", err)
-		}
-		m.storage = fs
+	if tempMgr.approvalHandler != nil {
+		builder.WithApprovalHandler(tempMgr.approvalHandler)
+	}
+	if tempMgr.emitter != nil {
+		builder.WithEventEmitter(tempMgr.emitter)
+	}
+	if tempMgr.storage != nil {
+		builder.WithStorage(tempMgr.storage)
+	}
+	if tempMgr.taskRegistry != nil {
+		builder.WithTaskRegistry(tempMgr.taskRegistry)
+	}
+	if tempMgr.logger != nil {
+		builder.WithLogger(tempMgr.logger)
 	}
 
-	// Initialize MCP manager if MCP is enabled
-	if cfg.EnableMCP {
-		ctx := context.Background()
-		logger := m.getLogger(ctx)
-		// Convert manager.Config to mcp.Config
-		mcpConfig := &mcp.Config{
-			EnableMCP:  cfg.EnableMCP,
-			MCPServers: make([]mcp.MCPServerConfig, len(cfg.MCPServers)),
-		}
-		for i, srv := range cfg.MCPServers {
-			mcpConfig.MCPServers[i] = mcp.MCPServerConfig{
-				Name:    srv.Name,
-				Command: srv.Command,
-				Args:    srv.Args,
-				Env:     srv.Env,
-			}
-		}
-		mcpManager := mcp.NewMCPManager(mcpConfig, logger)
-		if err := mcpManager.Initialize(context.Background()); err != nil {
-			// Log error but don't fail manager creation
-			logger.Error("Failed to initialize MCP manager", "error", err)
-		} else {
-			m.mcpManager = mcpManager
-		}
-	}
-
-	// Initialize Git integration if enabled
-	if cfg.EnableGit {
-		ctx := context.Background()
-		logger := m.getLogger(ctx)
-		gitIntegration := git.NewGitIntegration(true, cfg.WorkDir, logger)
-		if err := gitIntegration.Initialize(context.Background()); err != nil {
-			// Log error but don't fail manager creation
-			logger.Error("Failed to initialize Git integration", "error", err)
-		} else {
-			m.gitIntegration = gitIntegration
-		}
-	}
-
-	// Initialize Shell integration if enabled
-	if cfg.EnableShell {
-		ctx := context.Background()
-		logger := m.getLogger(ctx)
-		shellIntegration := shell.NewShellIntegration(true, cfg.WorkDir, logger, cfg.ShellTimeout)
-		if err := shellIntegration.Initialize(context.Background()); err != nil {
-			// Log error but don't fail manager creation
-			logger.Error("Failed to initialize Shell integration", "error", err)
-		} else {
-			m.shellIntegration = shellIntegration
-		}
-	}
-
-	// Initialize auth manager with platform-specific keystore
-	keystore := auth.NewKeystore()
-	m.authManager = auth.NewManager(keystore)
-
-	return m, nil
+	// Build and return manager
+	// Note: Manager initialization doesn't need context propagation since it's immediate setup
+	// The context from NewConversation is used for actual operations
+	return builder.Build(context.Background())
 }
 
 // NewConversation starts a new conversation for the given workDir
@@ -565,6 +533,60 @@ func (m *Manager) NewConversation(ctx context.Context, workDir string) (*convers
 	// Step 6: Create conversation with session ID
 	conv := conversation.NewConversation(agentInstance, hist, m.emitter, sess.ID)
 	loggerInstance.Info("conversation created successfully", "session_id", sess.ID)
+
+	// Optional: attach per-session JSONL event logger when debug enabled
+	if m.cfg != nil && m.cfg.Debug {
+		// Determine session directory
+		sessBase := m.cfg.SessionDir
+		if sessBase == "" {
+			// Fallback default
+			home, _ := os.UserHomeDir()
+			sessBase = filepath.Join(home, ".spin", "sessions")
+		} else if sessBase[:1] == "~" {
+			if home, err := os.UserHomeDir(); err == nil {
+				sessBase = filepath.Join(home, sessBase[1:])
+			}
+		}
+		sessDir := filepath.Join(sessBase, sess.ID)
+		_ = os.MkdirAll(sessDir, 0o755)
+		logPath := filepath.Join(sessDir, "events.jsonl")
+
+		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err == nil {
+			// Subscribe to events and write JSON lines with session_id
+			subID, ch, subErr := m.emitter.Subscribe()
+			if subErr == nil {
+				go func() {
+					defer func() {
+						m.emitter.Unsubscribe(subID)
+						_ = f.Close()
+					}()
+					enc := json.NewEncoder(f)
+					for {
+						select {
+						case ev, ok := <-ch:
+							if !ok {
+								return
+							}
+							// Wrap event with session metadata
+							record := map[string]any{
+								"session_id": sess.ID,
+								"timestamp":  ev.Timestamp.Format(time.RFC3339Nano),
+								"type":       ev.Type.String(),
+								"data":       ev.Data,
+							}
+							// Best-effort write; ignore individual write errors
+							_ = enc.Encode(record)
+						case <-ctx.Done():
+							return
+						}
+					}
+				}()
+			} else {
+				_ = f.Close()
+			}
+		}
+	}
 	return conv, nil
 }
 

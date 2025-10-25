@@ -17,7 +17,8 @@ type Config struct {
 
 	// Agent Configuration
 	MaxTurns        int           `yaml:"max_turns" mapstructure:"max_turns"`
-	Timeout         time.Duration `yaml:"timeout" mapstructure:"timeout"`
+	Timeout         time.Duration `yaml:"timeout" mapstructure:"timeout"`         // Agent execution timeout (default: 60 minutes)
+	LLMTimeout      time.Duration `yaml:"llm_timeout" mapstructure:"llm_timeout"` // LLM HTTP request timeout (default: 5 minutes)
 	WorkDir         string        `yaml:"work_dir" mapstructure:"work_dir"`
 	MaxTokens       int           `yaml:"max_tokens" mapstructure:"max_tokens"`
 	RequireApproval bool          `yaml:"require_approval" mapstructure:"require_approval"`
@@ -90,7 +91,8 @@ func DefaultConfig() *Config {
 
 		// Agent defaults
 		MaxTurns:        50,
-		Timeout:         5 * time.Minute,
+		Timeout:         60 * time.Minute, // Agent execution timeout - allows long-running tasks
+		LLMTimeout:      5 * time.Minute,  // LLM HTTP request timeout - prevents hanging on slow LLM responses
 		MaxTokens:       8192,
 		RequireApproval: false,
 		// Security defaults
@@ -100,7 +102,7 @@ func DefaultConfig() *Config {
 		EnableGit:    true,
 		EnableShell:  true,
 		EnableMCP:    false,
-		ShellTimeout: 30 * time.Second,
+		ShellTimeout: 5 * time.Minute, // Allow longer operations like network requests
 
 		// Performance defaults
 		StreamBuffer:  100,

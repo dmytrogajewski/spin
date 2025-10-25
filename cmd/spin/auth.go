@@ -126,7 +126,7 @@ func runAuthLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	if apiKey == "" {
-		return fmt.Errorf("API key cannot be empty")
+		return fmt.Errorf("api key cannot be empty")
 	}
 
 	// Create auth manager

@@ -196,9 +196,9 @@ func (b *Builder) mergeConfig(explicit Config) Config {
 		merged.Options["vram_headroom_mib"] = 1024
 	}
 
-	// Timeout default
+	// Timeout default - use 5 minutes for non-streaming, streaming has its own timeout
 	if merged.Timeout == 0 {
-		merged.Timeout = 30 * time.Second
+		merged.Timeout = 5 * time.Minute
 	}
 
 	return merged

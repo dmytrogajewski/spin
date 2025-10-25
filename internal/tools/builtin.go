@@ -775,8 +775,15 @@ func (t *ApplyPatchTool) parsePatch(patchText string) (*patchapply.Patch, error)
 		return nil, fmt.Errorf("empty patch")
 	}
 
-	// Check if it's a diff format (starts with "*** filename" or "--- filename")
+	// Check if it's a proper patchapply format (starts with "*** Begin Patch")
 	firstLine := strings.TrimSpace(lines[0])
+	if firstLine == "*** Begin Patch" {
+		// Use the proper patchapply parser
+		parser := patchapply.NewParser(patchText)
+		return parser.Parse()
+	}
+
+	// Check if it's a diff format (starts with "*** filename" or "--- filename")
 	if !strings.HasPrefix(firstLine, "*** ") && !strings.HasPrefix(firstLine, "--- ") {
 		return nil, fmt.Errorf("patch must be in standard diff format. Expected to start with '*** filename' or '--- filename', got: %q", firstLine)
 	}
@@ -817,12 +824,12 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 	var currentHunk *patchapply.Hunk
 	for i := 2; i < len(lines); i++ {
 		line := lines[i]
-		
+
 		if strings.HasPrefix(line, "@@") {
 			// Start of a new hunk
 			if currentHunk != nil {
 				patch.Operations[0].(*patchapply.UpdateFile).Hunks = append(
-					patch.Operations[0].(*patchapply.UpdateFile).Hunks, 
+					patch.Operations[0].(*patchapply.UpdateFile).Hunks,
 					*currentHunk,
 				)
 			}
@@ -868,7 +875,7 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 	// Add the last hunk
 	if currentHunk != nil {
 		patch.Operations[0].(*patchapply.UpdateFile).Hunks = append(
-			patch.Operations[0].(*patchapply.UpdateFile).Hunks, 
+			patch.Operations[0].(*patchapply.UpdateFile).Hunks,
 			*currentHunk,
 		)
 	}

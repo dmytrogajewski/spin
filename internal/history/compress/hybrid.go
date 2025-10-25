@@ -101,6 +101,13 @@ func (c *HybridCompressor) Compress(
 	tokensUsed := 0
 
 	for _, cm := range classified {
+		// Check context cancellation periodically during selection
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		// For critical messages with PreserveCritical, try to include but respect budget
 		if cm.importance == ImportanceCritical {
 			if c.config.PreserveCritical {

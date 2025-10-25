@@ -6,7 +6,15 @@ set -e
 WHITELIST_FILE=".deadcode-whitelist"
 
 # Run deadcode analysis and capture output
-DEADCODE_OUTPUT=$(deadcode "$@" 2>&1 || true)
+# Try to find deadcode in common locations
+DEADCODE_CMD="deadcode"
+if ! command -v deadcode &> /dev/null; then
+	if [ -f ~/go/bin/deadcode ]; then
+		DEADCODE_CMD=~/go/bin/deadcode
+	fi
+fi
+
+DEADCODE_OUTPUT=$($DEADCODE_CMD "$@" 2>&1 || true)
 
 # If whitelist doesn't exist, just show all results
 if [ ! -f "$WHITELIST_FILE" ]; then

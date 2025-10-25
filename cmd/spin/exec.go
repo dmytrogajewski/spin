@@ -42,6 +42,7 @@ Examples:
 	cmd.Flags().String("format", "text", "Output format (text, json)")
 	cmd.Flags().Bool("no-stream", false, "Disable streaming output")
 	cmd.Flags().Bool("exit-on-error", true, "Exit immediately on first error")
+	cmd.Flags().Bool("debug", false, "Enable debug mode with detailed logging")
 
 	return cmd
 }
@@ -81,6 +82,7 @@ func runExec(cmd *cobra.Command, args []string) error {
 	format, _ := cmd.Flags().GetString("format")
 	noStream, _ := cmd.Flags().GetBool("no-stream")
 	exitOnError, _ := cmd.Flags().GetBool("exit-on-error")
+	debugFlag, _ := cmd.Flags().GetBool("debug")
 
 	// Apply timeout if specified
 	if timeout != "" {
@@ -93,7 +95,7 @@ func runExec(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create manager using same logic as TUI
-	mgr, err := createManagerForExec(provider, configLoader, autoApprove)
+	mgr, err := createManagerForExec(provider, configLoader, autoApprove, debugFlag)
 	if err != nil {
 		return fmt.Errorf("create manager: %w", err)
 	}
@@ -106,7 +108,13 @@ func runExec(cmd *cobra.Command, args []string) error {
 	defer mgr.Close()
 
 	// Execute the prompt non-interactively with TUI display
-	return executePromptWithTUI(ctx, conv, prompt, format, noStream, exitOnError)
+	err = executePromptWithTUI(ctx, conv, prompt, format, noStream, exitOnError)
+
+	// Explicitly exit after execution completes
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // loadConfig loads configuration from file or defaults.
@@ -179,9 +187,12 @@ func parseDuration(s string) (time.Duration, error) {
 }
 
 // createManagerForExec creates a core.Manager configured for exec mode.
-func createManagerForExec(provider llm.Provider, configLoader *config.Loader, autoApprove bool) (*manager.Manager, error) {
+func createManagerForExec(provider llm.Provider, configLoader *config.Loader, autoApprove bool, debug bool) (*manager.Manager, error) {
 	workDir := getWorkingDirectory()
 	cfg := buildConfig(configLoader, 0, workDir) // No max turns limit for exec
+
+	// Apply debug flag to configuration
+	applyDebugFlag(cfg, debug)
 
 	// Create tool registry with same tools as TUI
 	registry := tools.NewRegistry()
@@ -269,9 +280,9 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 	}()
 
 	// Process events and map them to TUI
-	eventDone := make(chan struct{})
+	// NOTE: In exec mode, we process events but don't wait for the stream to close
+	// because the conversation's event stream stays open for potential future turns
 	go func() {
-		defer close(eventDone)
 		for {
 			select {
 			case <-ctx.Done():
@@ -296,7 +307,6 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 	// Wait for completion
 	select {
 	case <-ctx.Done():
-		<-eventDone
 		return ctx.Err()
 
 	case err := <-errChan:
@@ -306,8 +316,9 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 		// Wait for streaming to complete
 		<-streamDone
 
-		// Wait for event processing to finish
-		<-eventDone
+		// Don't wait for event processing - it never closes
+		// The event stream stays open for potential future events
+		// In exec mode, we exit immediately after turn completion
 
 		if err != nil {
 			if exitOnError {

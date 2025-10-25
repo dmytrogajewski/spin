@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/types"
+	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/output"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
@@ -590,7 +590,7 @@ func (m *TUIMapper) Close() error {
 // Helper functions
 
 // extractString safely extracts a string parameter from ToolCallArguments.
-func extractString(params types.ToolCallArguments, key string) string {
+func extractString(params tools.Arguments, key string) string {
 	var s string
 	if err := params.Get(key, &s); err == nil {
 		return s
@@ -599,7 +599,7 @@ func extractString(params types.ToolCallArguments, key string) string {
 }
 
 // extractIntValue safely extracts an int parameter from ToolCallArguments.
-func extractIntValue(params types.ToolCallArguments, key string) int {
+func extractIntValue(params tools.Arguments, key string) int {
 	var i int
 	if err := params.Get(key, &i); err == nil {
 		return i

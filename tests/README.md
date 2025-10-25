@@ -1,254 +1,422 @@
 # Spin Test Suite
 
-Comprehensive test coverage for the Spin AI coding assistant.
+This directory contains the end-to-end (e2e) and integration tests for the Spin project.
 
 ## Directory Structure
 
 ```
 tests/
-├── e2e/                    # End-to-end tests (hermetic, fast)
-│   ├── e2e_test.go        # Core functionality (config, exec, MCP)
-│   ├── tui_e2e_test.go    # TUI mode tests
-│   ├── statusbar_interactive_test.go  # Status bar user flows
-│   ├── statusbar_regression_test.go   # Bug regression tests
-│   ├── statusbar_diagnostic_test.go   # Rendering diagnostics
-│   └── README.md          # E2E test documentation
-│
-├── emulator/              # Real terminal emulator tests (slow, requires Ollama)
-│   ├── statusbar_pty_test.go  # PTY-based status bar tests
-│   ├── test_config.yaml       # Test configuration
-│   └── README.md              # Emulator test documentation
-│
-└── README.md              # This file
+├── e2e/                    # End-to-end tests
+│   ├── e2e_test.go                # Core e2e test framework
+│   ├── tool_execution_e2e_test.go # Tool execution scenarios
+│   └── tui_e2e_test.go            # TUI interaction tests
+└── README.md               # This file
 ```
 
-## Test Types
+## Test Organization
 
-### 1. Unit Tests
+### Unit Tests
 
-Located in package directories (e.g., `internal/ui/sticky/*_test.go`):
-- Test individual components in isolation
-- Fast, deterministic, hermetic
-- **Run**: `go test ./internal/...`
+Unit tests are located alongside the code they test in the `internal/` directory:
 
-### 2. Integration Tests
+```
+internal/
+├── agent/
+│   ├── agent.go
+│   └── agent_test.go      # Unit tests for agent
+├── llm/
+│   ├── provider.go
+│   └── provider_test.go   # Unit tests for LLM providers
+└── ...
+```
 
-Located in package directories with `_integration_test.go` suffix:
-- Test component interactions
-- May use test fixtures or mocks
-- **Run**: `go test ./internal/... -run Integration`
+**Naming Convention:** `*_test.go` files in the same package
 
-### 3. End-to-End Tests (`tests/e2e/`)
+**Run unit tests:**
+```bash
+# Run all unit tests
+go test ./internal/... -v
 
-Complete user workflows with simulated terminals:
-- Uses **fake TTY** for speed and determinism
-- Tests real user interactions
-- Hermetic (no external services)
-- **Run**: `go test ./tests/e2e/... -v`
+# Run tests for specific package
+go test ./internal/agent/... -v
 
-### 4. Emulator Tests (`tests/emulator/`)
+# Run with race detection
+go test ./internal/... -race
 
-Real pseudo-terminal tests using go-expect:
-- Uses **real PTY** for terminal validation
-- Catches ANSI rendering bugs
-- **Requires Ollama running**
-- **Run**: `go test ./tests/emulator/... -v`
+# Run with coverage
+go test ./internal/... -coverprofile=coverage.out
+go tool cover -html=coverage.out
+```
 
-## Quick Start
+### Integration Tests
+
+Integration tests verify interactions between components and are named `*_integration_test.go`:
+
+```
+internal/appserver/processor_integration_test.go
+```
+
+**Run integration tests:**
+```bash
+# Run all tests including integration
+go test ./internal/... -v
+
+# Run only integration tests
+go test ./internal/... -v -run Integration
+```
+
+### End-to-End Tests
+
+E2E tests in `tests/e2e/` verify complete workflows and user scenarios.
+
+**Run e2e tests:**
+```bash
+# Run all e2e tests
+go test ./tests/e2e/... -v
+
+# Run specific e2e test
+go test ./tests/e2e/... -v -run TestToolExecution
+
+# Run with timeout
+go test ./tests/e2e/... -v -timeout 30m
+```
+
+## Test Helpers
+
+Use the `internal/testutil` package for common test utilities:
+
+```go
+import "github.com/dmytrogajewski/spin/internal/testutil"
+
+func TestMyFeature(t *testing.T) {
+    // Build test fixtures with sensible defaults
+    agent := testutil.NewAgentBuilder(t).
+        WithMaxTurns(5).
+        WithTimeout(10 * time.Second).
+        Build()
+
+    // Use test context with timeout
+    ctx, cancel := testutil.ContextWithTimeout(t)
+    defer cancel()
+
+    // Execute and assert
+    result, err := agent.Execute(ctx, req)
+    testutil.RequireNoError(t, err)
+    testutil.AssertNotNil(t, result)
+}
+```
+
+## Writing Tests
+
+### Table-Driven Tests
+
+Prefer table-driven tests for testing multiple scenarios:
+
+```go
+func TestAgentExecute(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   *AgentRequest
+        want    *AgentResponse
+        wantErr bool
+    }{
+        {
+            name: "successful execution",
+            input: &AgentRequest{
+                Input: "test input",
+            },
+            want: &AgentResponse{
+                Output: "test output",
+            },
+            wantErr: false,
+        },
+        {
+            name: "error case",
+            input: &AgentRequest{
+                Input: "",
+            },
+            want:    nil,
+            wantErr: true,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            agent := testutil.NewAgentBuilder(t).Build()
+            
+            got, err := agent.Execute(context.Background(), tt.input)
+            
+            if (err != nil) != tt.wantErr {
+                t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
+                return
+            }
+            
+            if !reflect.DeepEqual(got, tt.want) {
+                t.Errorf("Execute() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+### Using Subtests
+
+Use `t.Run()` for subtests to organize related test cases:
+
+```go
+func TestAgent(t *testing.T) {
+    t.Run("Creation", func(t *testing.T) {
+        t.Run("ValidConfig", func(t *testing.T) {
+            // Test valid configuration
+        })
+        
+        t.Run("InvalidConfig", func(t *testing.T) {
+            // Test invalid configuration
+        })
+    })
+    
+    t.Run("Execution", func(t *testing.T) {
+        t.Run("Success", func(t *testing.T) {
+            // Test successful execution
+        })
+        
+        t.Run("Timeout", func(t *testing.T) {
+            // Test timeout handling
+        })
+    })
+}
+```
+
+### Mock Providers
+
+Use mock providers for testing without external dependencies:
+
+```go
+func TestWithMockLLM(t *testing.T) {
+    mockLLM := testutil.NewMockLLMProvider("test")
+    
+    agent := testutil.NewAgentBuilder(t).
+        WithProvider(mockLLM).
+        Build()
+    
+    // Test agent behavior with mock LLM
+}
+```
+
+### Test Context and Timeouts
+
+Always use context with timeout to prevent hanging tests:
+
+```go
+func TestOperation(t *testing.T) {
+    ctx, cancel := testutil.ContextWithTimeout(t)
+    defer cancel()
+    
+    result, err := operation(ctx)
+    testutil.RequireNoError(t, err)
+}
+```
+
+## Test Best Practices
+
+### 1. Use t.Helper()
+
+Mark helper functions with `t.Helper()` for better error messages:
+
+```go
+func setupAgent(t *testing.T) *Agent {
+    t.Helper()
+    return testutil.NewAgentBuilder(t).Build()
+}
+```
+
+### 2. Clean Up Resources
+
+Always clean up resources using `defer`:
+
+```go
+func TestWithFile(t *testing.T) {
+    f, err := os.CreateTemp("", "test")
+    testutil.RequireNoError(t, err)
+    defer os.Remove(f.Name())
+    
+    // Test code
+}
+```
+
+### 3. Use Parallel Tests
+
+Mark independent tests as parallel:
+
+```go
+func TestParallel(t *testing.T) {
+    t.Parallel()
+    
+    // Test code that doesn't depend on global state
+}
+```
+
+### 4. Test Error Cases
+
+Always test both success and error paths:
+
+```go
+func TestErrorHandling(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        wantErr bool
+        errMsg  string
+    }{
+        {
+            name:    "success",
+            input:   "valid",
+            wantErr: false,
+        },
+        {
+            name:    "empty input",
+            input:   "",
+            wantErr: true,
+            errMsg:  "input cannot be empty",
+        },
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            err := validate(tt.input)
+            
+            if tt.wantErr {
+                testutil.RequireError(t, err)
+                testutil.AssertContains(t, err.Error(), tt.errMsg)
+            } else {
+                testutil.RequireNoError(t, err)
+            }
+        })
+    }
+}
+```
+
+### 5. Use Descriptive Test Names
+
+Test names should describe what is being tested:
+
+```go
+// Good
+func TestAgent_Execute_WithTimeout_ReturnsError(t *testing.T) {}
+func TestLLM_Complete_WithInvalidModel_ReturnsNotFoundError(t *testing.T) {}
+
+// Avoid
+func TestAgent1(t *testing.T) {}
+func TestError(t *testing.T) {}
+```
+
+## Running Tests
+
+### All Tests
 
 ```bash
 # Run all tests
 make test
 
-# Run with race detection
+# With coverage
+make test-coverage
+
+# With race detection
 make test-race
-
-# Run only fast tests (skip emulator)
-go test ./... -short
-
-# Run specific test suite
-go test ./tests/e2e/... -v
-go test ./tests/emulator/... -v
-
-# Run specific test
-go test ./tests/e2e/... -v -run TestInteractiveFlow_UserTypesAndSeesPrompt
-
-# Coverage report
-make coverage
 ```
 
-## Test Categories by Feature
+### Specific Packages
 
-### Status Bar Feature
-
-| Test File | Type | What It Tests |
-|-----------|------|---------------|
-| `internal/ui/sticky/statusbar_test.go` | Unit | StatusBar data model |
-| `internal/ui/sticky/coordinator_test.go` | Unit | Sticky bottom coordinator |
-| `internal/ui/sticky/renderer_test.go` | Unit | Adaptive rendering |
-| `internal/ui/sticky/statusbar_integration_test.go` | Integration | Status bar + aggregator |
-| `tests/e2e/statusbar_interactive_test.go` | E2E | User typing & interaction |
-| `tests/e2e/statusbar_regression_test.go` | E2E | Bug regressions |
-| `tests/e2e/statusbar_diagnostic_test.go` | E2E | Rendering diagnostics |
-| `tests/emulator/statusbar_pty_test.go` | Emulator | Real PTY validation |
-
-### Core Functionality
-
-| Test File | Type | What It Tests |
-|-----------|------|---------------|
-| `tests/e2e/e2e_test.go` | E2E | Config, exec mode, MCP |
-| `tests/e2e/tui_e2e_test.go` | E2E | TUI modes, navigation |
-| `internal/core/*_test.go` | Unit | Core logic |
-| `internal/llm/*_test.go` | Unit | LLM providers |
-
-## Coverage Targets
-
-- **Unit tests**: ≥90% coverage
-- **Integration tests**: ≥85% coverage
-- **Critical paths**: ≥90% coverage
-- **New features**: ≥90% coverage
-
-Check coverage:
 ```bash
-make coverage
-# Opens HTML report in browser
+# Test specific package
+go test ./internal/agent/... -v
+
+# Test with filter
+go test ./internal/... -v -run TestAgent
+
+# Test with short mode (skip long-running tests)
+go test ./... -short
 ```
 
-## Test Infrastructure
+### Coverage
 
-### Test Utilities (`internal/ui/testkit/`)
+```bash
+# Generate coverage report
+go test ./... -coverprofile=coverage.out
 
-- `fake_tty.go` - Simulated terminal
-- `safe_buffer.go` - Thread-safe output capture
-- `interactive_tui_test.go` - TUI interaction helpers
-- `fake_keyboard.go` - Keyboard event simulation
+# View in browser
+go tool cover -html=coverage.out
 
-### Mock Providers (`internal/llm/mock/`)
+# Coverage by package
+go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out
+```
 
-- `provider.go` - Mock LLM for hermetic tests
-- No external API calls
-- Configurable responses
-- Call history tracking
+### Benchmarks
 
-## Prerequisites
+```bash
+# Run benchmarks
+go test ./... -bench=. -benchmem
 
-### For E2E Tests
+# Run specific benchmark
+go test ./internal/agent/... -bench=BenchmarkExecute
 
-None! E2E tests are fully hermetic.
-
-### For Emulator Tests
-
-1. **Ollama running**: `ollama serve`
-2. **Model available**: `ollama pull qwen3:1.7b`
-3. **Network access**: http://localhost:11434
+# With memory allocations
+go test ./... -bench=. -benchmem -benchtime=10s
+```
 
 ## Continuous Integration
 
-```bash
-# CI pipeline should run:
-make lint          # Linter checks
-make test          # All unit + integration + e2e tests
-make test-race     # Race detector
+Tests run automatically on GitHub Actions (see `.github/workflows/test.yml`):
 
-# Emulator tests should run separately (require Ollama):
-go test ./tests/emulator/... -v
-```
+- **On Push:** All tests run on Linux, macOS, and Windows
+- **On PR:** Full test suite with coverage reporting
+- **Nightly:** Extended test suite with race detection
 
-## Writing New Tests
+## Test Coverage Goals
 
-### 1. Unit Test (Component Package)
-
-```go
-// internal/ui/sticky/newfeature_test.go
-package sticky
-
-func TestNewFeature(t *testing.T) {
-    // Test isolated component
-}
-```
-
-### 2. Integration Test (Component Package)
-
-```go
-// internal/ui/sticky/integration_test.go
-package sticky
-
-func TestFeatureIntegration(t *testing.T) {
-    // Test multiple components together
-}
-```
-
-### 3. E2E Test (tests/e2e/)
-
-```go
-// tests/e2e/feature_test.go
-package e2e
-
-func TestFeature_UserFlow(t *testing.T) {
-    // Simulate complete user workflow
-}
-```
-
-### 4. Emulator Test (tests/emulator/)
-
-```go
-// tests/emulator/feature_pty_test.go
-package emulator
-
-func TestPTY_Feature(t *testing.T) {
-    if testing.Short() {
-        t.Skip("Skipping PTY test in short mode")
-    }
-    // Test with real PTY
-}
-```
-
-## Debugging Test Failures
-
-### Race Conditions
-
-```bash
-go test ./tests/e2e/... -race -v
-```
-
-Look for concurrent access to shared state.
-
-### Flaky Tests
-
-```bash
-# Run test 100 times
-go test ./tests/e2e/... -run TestFlaky -count 100
-```
-
-### PTY Issues
-
-```bash
-# See raw ANSI output
-go test ./tests/emulator/... -v -run TestPTY 2>&1 | cat -v
-```
-
-## Best Practices
-
-1. **Test pyramid**: More unit tests, fewer e2e tests, minimal emulator tests
-2. **Hermetic first**: Use fake TTY for most tests, real PTY only when necessary
-3. **Fast feedback**: Keep tests fast (<100ms for unit, <1s for e2e)
-4. **Clear names**: Test names should describe what they verify
-5. **Deterministic**: No sleeps, use synchronization primitives
-6. **Isolated**: Each test should be independent
+| Package | Target Coverage | Current |
+|---------|----------------|---------|
+| `internal/agent` | 85% | Check CI |
+| `internal/llm` | 80% | Check CI |
+| `internal/tools` | 80% | Check CI |
+| `internal/security` | 90% | Check CI |
+| Overall | 80% | Check CI |
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| "No such file or directory: bin/spin" | Run `make build` first |
-| "Ollama connection refused" | Start Ollama: `ollama serve` |
-| "Model not found" | Pull model: `ollama pull qwen3:1.7b` |
-| Race detector failures | Fix concurrent access, use `SafeBuffer` |
-| Test timeouts | Increase timeout or check for deadlocks |
+### Tests Hang
 
----
+- Check for missing context cancellation
+- Verify timeouts are set appropriately
+- Look for deadlocks in concurrent code
 
-**For more details, see:**
-- `tests/e2e/README.md` - E2E test documentation
-- `tests/emulator/README.md` - Emulator test documentation
-- `docs/testing.md` - Testing philosophy and guidelines
+### Flaky Tests
+
+- Identify race conditions with `-race` flag
+- Check for timing dependencies
+- Verify proper cleanup in `defer` statements
+
+### Slow Tests
+
+- Use `-short` flag to skip slow tests during development
+- Profile tests with `-cpuprofile` and `-memprofile`
+- Consider mocking expensive operations
+
+## Contributing
+
+When adding new features:
+
+1. Write tests first (TDD)
+2. Aim for >80% coverage
+3. Include both success and error cases
+4. Use table-driven tests for multiple scenarios
+5. Add integration/e2e tests for user-facing features
+6. Update this README if adding new test categories
+
+## Further Reading
+
+- [Go Testing Documentation](https://golang.org/pkg/testing/)
+- [Table-Driven Tests in Go](https://dave.cheney.net/2019/05/07/prefer-table-driven-tests)
+- [Advanced Testing with Go](https://www.youtube.com/watch?v=8hQG7QlcLBk)
+- [Testing Best Practices](https://github.com/golang/go/wiki/TestComments)

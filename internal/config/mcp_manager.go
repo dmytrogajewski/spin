@@ -56,7 +56,7 @@ func (m *MCPManager) Get(name string) (*MCPServer, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("MCP server '%s' not found", name)
+	return nil, fmt.Errorf("mcp server '%s' not found", name)
 }
 
 // Add adds a new MCP server configuration.
@@ -69,7 +69,7 @@ func (m *MCPManager) Add(server MCPServer) error {
 	// Check for duplicates
 	existing, _ := m.Get(server.Name)
 	if existing != nil {
-		return fmt.Errorf("MCP server '%s' already exists", server.Name)
+		return fmt.Errorf("mcp server '%s' already exists", server.Name)
 	}
 
 	// Get current servers
@@ -108,7 +108,7 @@ func (m *MCPManager) Remove(name string) error {
 	}
 
 	if !found {
-		return fmt.Errorf("MCP server '%s' not found", name)
+		return fmt.Errorf("mcp server '%s' not found", name)
 	}
 
 	// Update config

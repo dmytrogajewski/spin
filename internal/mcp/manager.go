@@ -198,7 +198,7 @@ func (m *MCPManager) CallTool(ctx context.Context, toolName string, arguments ma
 	m.mu.RUnlock()
 
 	if !exists {
-		return tools.ToolResult{}, fmt.Errorf("MCP tool not found: %s", toolName)
+		return tools.ToolResult{}, fmt.Errorf("mcp tool not found: %s", toolName)
 	}
 
 	// Convert arguments to JSON

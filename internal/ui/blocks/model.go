@@ -33,6 +33,10 @@ type Block struct {
 
 	// Timestamp is the Unix timestamp in milliseconds.
 	Timestamp int64 `json:"timestamp"`
+
+	// CompletionPrinted tracks whether the completion status line was already printed (UI state only).
+	// This prevents duplicate "Tool completed" messages when UpdateBlock is called multiple times.
+	CompletionPrinted bool `json:"-"`
 }
 
 // NewBlock creates a new block with default values.

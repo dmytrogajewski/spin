@@ -32,12 +32,29 @@ type jsonrpcResponse struct {
 
 // jsonrpcError represents a JSON-RPC 2.0 error.
 type jsonrpcError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 }
 
 // StdioClient implements MCP client using stdio transport.
+//
+// GOROUTINE LIFECYCLE:
+// - Connect() spawns one long-lived goroutine via readResponses() that:
+//   - Reads JSON-RPC responses from stdout line-by-line
+//   - Routes responses to waiting request channels
+//   - Lives until EOF, client Close(), or process exit
+//   - Automatically cleans up when connection closes
+//
+// - closeProcess() spawns one short-lived goroutine to:
+//   - Wait for process termination with timeout
+//   - Force-kill process if it doesn't exit within 5 seconds
+//
+// CONCURRENCY:
+// - Connect/Close are thread-safe (protected by mu and closeOnce)
+// - sendRequest is thread-safe (each request has its own response channel)
+// - readResponses runs in a single goroutine and coordinates response routing
+// - Response channels are cleaned up when requests complete or timeout
 type StdioClient struct {
 	config      Config
 	cmd         *exec.Cmd

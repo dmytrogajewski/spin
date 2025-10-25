@@ -319,8 +319,8 @@ func TestResult_Output(t *testing.T) {
 func TestDefaultExecuteOptions(t *testing.T) {
 	opts := DefaultExecuteOptions()
 	assert.NotNil(t, opts)
-	assert.Equal(t, DefaultExecutionTimeout, opts.Timeout)
-	assert.Equal(t, DefaultMaxOutputSize, opts.MaxOutputSize)
+	assert.Equal(t, time.Duration(0), opts.Timeout) // 0 means use executor's default
+	assert.Equal(t, int64(0), opts.MaxOutputSize)   // 0 means use executor's default
 	assert.True(t, opts.InheritEnv)
 }
 

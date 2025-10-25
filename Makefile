@@ -68,7 +68,7 @@ test:
 	@$(GOTEST) -short -cover -timeout 30s $(INTERNAL_PKGS)
 	@echo ""
 	@echo "Running deadcode analysis..."
-	@./scripts/deadcode-filter.sh ./cmd/... ./internal/...
+	@./scripts/deadcode-filter.sh github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/...
 
 ## test-coverage: Run tests with coverage report (HTML)
 test-coverage:
@@ -128,14 +128,14 @@ lint:
 	@echo "Running linters..."
 	@$(GOLINT) run $(INTERNAL_PKGS)
 	@echo "Running deadcode analysis..."
-	@./scripts/deadcode-filter.sh -test ./cmd/... ./internal/...
+	@./scripts/deadcode-filter.sh -test github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/...
 	@echo "✓ Linting complete"
 
 ## deadcode: Run deadcode analysis with detailed output (requires: go install golang.org/x/tools/cmd/deadcode@latest)
 deadcode:
 	@echo "Running deadcode analysis..."
 	@echo "Analyzing cmd/ and internal/ packages..."
-	@$(DEADCODE) -test ./cmd/... ./internal/... || echo "Note: Review any unreachable functions listed above"
+	@$(DEADCODE) -test github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/... || echo "Note: Review any unreachable functions listed above"
 	@echo ""
 	@echo "Tip: Use 'deadcode -whylive <function>' to understand why a function is considered reachable"
 
@@ -143,15 +143,15 @@ deadcode:
 deadcode-prod:
 	@echo "Running deadcode analysis (production only)..."
 	@echo "Analyzing cmd/ and internal/ packages..."
-	@./scripts/deadcode-filter.sh ./cmd/... ./internal/...
+	@./scripts/deadcode-filter.sh github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/...
 
 ## deadcode-test-only: Find functions used only by tests (requires jq)
 deadcode-test-only:
 	@echo "Finding functions used only by tests..."
 	@echo "This compares deadcode results with and without tests..."
 	@mkdir -p .deadcode-tmp
-	@$(DEADCODE) -json ./cmd/... ./internal/... | jq -r '.[] | .Funcs[].Name' | sort > .deadcode-tmp/dead_prod.txt
-	@$(DEADCODE) -test -json ./cmd/... ./internal/... | jq -r '.[] | .Funcs[].Name' | sort > .deadcode-tmp/dead_with_tests.txt
+	@$(DEADCODE) -json github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/... | jq -r '.[] | .Funcs[].Name' | sort > .deadcode-tmp/dead_prod.txt
+	@$(DEADCODE) -test -json github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/... | jq -r '.[] | .Funcs[].Name' | sort > .deadcode-tmp/dead_with_tests.txt
 	@echo "Functions used only by tests:"
 	@comm -23 .deadcode-tmp/dead_prod.txt .deadcode-tmp/dead_with_tests.txt || echo "No test-only functions found"
 	@rm -rf .deadcode-tmp
@@ -159,7 +159,7 @@ deadcode-test-only:
 ## deadcode-json: Run deadcode analysis with JSON output
 deadcode-json:
 	@echo "Running deadcode analysis (JSON output)..."
-	@$(DEADCODE) -json ./cmd/... ./internal/...
+	@$(DEADCODE) -json github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/...
 
 ## deadcode-why: Show why a function is not dead (usage: make deadcode-why FUNC=functionName)
 deadcode-why:
@@ -169,7 +169,7 @@ deadcode-why:
 		exit 1; \
 	fi
 	@echo "Showing why function '$(FUNC)' is not dead..."
-	@$(DEADCODE) -whylive="$(FUNC)" ./cmd/... ./internal/...
+	@$(DEADCODE) -whylive="$(FUNC)" github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/...
 
 ## fmt: Format code
 fmt:

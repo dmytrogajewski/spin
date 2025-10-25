@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -20,9 +21,23 @@ type HTTPClient struct {
 // NewHTTPClient creates an HTTP client with retry logic.
 // Defaults: Timeout=5m, MaxRetries=3, RetryDelay=1s
 func NewHTTPClient(opts ...ClientOption) *HTTPClient {
+	// Create custom transport with no response header timeout for streaming
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		// No ResponseHeaderTimeout - this is critical for streaming with slow models
+	}
+
 	c := &HTTPClient{
 		client: &http.Client{
-			Timeout: 5 * time.Minute,
+			Timeout:   5 * time.Minute,
+			Transport: transport,
 		},
 		maxRetries: 3,
 		retryDelay: time.Second,
@@ -71,7 +86,7 @@ func (c *HTTPClient) executeWithRetries(req *http.Request, bodyBytes []byte) (*h
 		}
 
 		resp.Body.Close()
-		lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
+		lastErr = fmt.Errorf("http %d", resp.StatusCode)
 	}
 
 	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)

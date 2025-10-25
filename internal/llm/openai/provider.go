@@ -39,6 +39,20 @@ func (c *Config) Validate() error {
 }
 
 // Provider implements the OpenAI-compatible LLM provider.
+//
+// GOROUTINE LIFECYCLE:
+// - Stream() spawns one goroutine per streaming request that:
+//   - Reads from HTTP response body
+//   - Sends chunks to the returned channel
+//   - Lives until EOF, context cancellation, or error
+//   - Automatically cleans up (closes channel and response body)
+//
+// - The goroutine terminates when the caller stops reading from the channel
+//
+// CONCURRENCY:
+// - Stream() is safe to call concurrently
+// - Each stream has its own independent goroutine and channel
+// - No shared state between concurrent streams
 type Provider struct {
 	client      *llm.HTTPClient
 	errorMapper *llm.ErrorMapper
@@ -451,12 +465,12 @@ func (p *Provider) handleError(resp *http.Response) error {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("HTTP %d: failed to read error response", resp.StatusCode)
+		return fmt.Errorf("http %d: failed to read error response", resp.StatusCode)
 	}
 
 	// Try to parse error response
 	if err := json.Unmarshal(body, &errResp); err != nil {
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("http %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Map to common error types
@@ -468,7 +482,7 @@ func (p *Provider) handleError(resp *http.Response) error {
 	case http.StatusInternalServerError, http.StatusServiceUnavailable:
 		return fmt.Errorf("server error: %s", errResp.Error.Message)
 	default:
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, errResp.Error.Message)
+		return fmt.Errorf("http %d: %s", resp.StatusCode, errResp.Error.Message)
 	}
 }
 

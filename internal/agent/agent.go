@@ -8,14 +8,13 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/cycle"
 	"github.com/dmytrogajewski/spin/internal/detection"
+	spinerrors "github.com/dmytrogajewski/spin/internal/errors"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
-	"github.com/dmytrogajewski/spin/internal/types"
 )
 
 // Default agent configuration values
@@ -91,7 +90,7 @@ type AgentOption func(*Agent) error
 func WithMaxTurns(maxTurns int) AgentOption {
 	return func(a *Agent) error {
 		if maxTurns <= 0 {
-			return fmt.Errorf("max turns must be positive, got %d", maxTurns)
+			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithMaxTurns", nil, "max turns must be positive, got %d", maxTurns)
 		}
 		a.config.MaxTurns = maxTurns
 		return nil
@@ -102,7 +101,7 @@ func WithMaxTurns(maxTurns int) AgentOption {
 func WithAgentTimeout(timeout time.Duration) AgentOption {
 	return func(a *Agent) error {
 		if timeout <= 0 {
-			return fmt.Errorf("timeout must be positive, got %v", timeout)
+			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithAgentTimeout", nil, "timeout must be positive, got %v", timeout)
 		}
 		a.config.Timeout = timeout
 		return nil
@@ -113,7 +112,7 @@ func WithAgentTimeout(timeout time.Duration) AgentOption {
 func WithTemperature(temperature float64) AgentOption {
 	return func(a *Agent) error {
 		if temperature < 0 || temperature > 2 {
-			return fmt.Errorf("temperature must be between 0 and 2, got %f", temperature)
+			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithTemperature", nil, "temperature must be between 0 and 2, got %f", temperature)
 		}
 		a.config.Temperature = temperature
 		return nil
@@ -124,7 +123,7 @@ func WithTemperature(temperature float64) AgentOption {
 func WithMaxTokens(maxTokens int) AgentOption {
 	return func(a *Agent) error {
 		if maxTokens <= 0 {
-			return fmt.Errorf("max tokens must be positive, got %d", maxTokens)
+			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithMaxTokens", nil, "max tokens must be positive, got %d", maxTokens)
 		}
 		a.config.MaxTokens = maxTokens
 		return nil
@@ -193,7 +192,7 @@ func NewAgent(
 	// Apply options
 	for _, opt := range opts {
 		if err := opt(agent); err != nil {
-			return nil, fmt.Errorf("applying option: %w", err)
+			return nil, spinerrors.New(spinerrors.CodeValidation, "Agent.NewAgent", "applying option failed", err)
 		}
 	}
 
@@ -221,7 +220,7 @@ func (a *Agent) resolveTask(req *AgentRequest) (Task, error) {
 	if req.TaskName != "" {
 		task, err := a.orchestration.GetTask(req.TaskName)
 		if err != nil {
-			return nil, fmt.Errorf("task resolution failed: %w", err)
+			return nil, spinerrors.New(spinerrors.CodeNotFound, "Agent.resolveTask", "task resolution failed", err)
 		}
 		slog.Debug("task resolution: resolved by name", "name", req.TaskName)
 		return task, nil
@@ -230,7 +229,7 @@ func (a *Agent) resolveTask(req *AgentRequest) (Task, error) {
 	// Priority 3: Use default task from orchestration
 	task, err := a.orchestration.GetDefaultTask()
 	if err != nil {
-		return nil, fmt.Errorf("task resolution failed: %w", err)
+		return nil, spinerrors.New(spinerrors.CodeNotFound, "Agent.resolveTask", "task resolution failed", err)
 	}
 	slog.Debug("task resolution: using default task", "name", task.Name())
 	return task, nil
@@ -246,17 +245,21 @@ func (a *Agent) resolveTask(req *AgentRequest) (Task, error) {
 //
 // The agent respects the context timeout and max turns limit.
 func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse, error) {
+	slog.Info("agent execution started", "input_len", len(req.Input), "task_mode", req.TaskName)
 	// Validate request and setup
 	ctx, resp, err := a.executeSetup(ctx, req)
 	if err != nil {
+		slog.Error("agent setup failed", "error", err)
 		return resp, err
 	}
 
 	// Resolve task mode
 	task, err := a.resolveTask(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve task mode: %w", err)
+		slog.Error("task resolution failed", "task_name", req.TaskName, "error", err)
+		return nil, spinerrors.New(spinerrors.CodeNotFound, "Agent.Execute", "failed to resolve task mode", err)
 	}
+	slog.Debug("task resolved", "task_name", task.Name(), "max_tokens", task.MaxTokens())
 
 	// Apply timeout if needed
 	ctx, cancel := a.applyTimeout(ctx)
@@ -268,6 +271,7 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 
 	messages, resp, err = a.executeAgentLoop(ctx, messages, task, resp)
 	if err != nil {
+		slog.Error("agent loop failed", "error", err, "finish_reason", resp.FinishReason)
 		// Emit turn failed event
 		a.emitter.Emit(events.Event{
 			Type:      events.EventTurnFailed,
@@ -279,16 +283,17 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 
 	// Finalize response
 	a.finalizeResponse(resp, messages, historyLen)
+	slog.Info("agent execution completed", "finish_reason", resp.FinishReason, "success", resp.Success)
 	return resp, nil
 }
 
 // executeSetup validates the request and sets up the execution context.
 func (a *Agent) executeSetup(ctx context.Context, req *AgentRequest) (context.Context, *AgentResponse, error) {
 	if req == nil {
-		return ctx, nil, fmt.Errorf("request cannot be nil")
+		return ctx, nil, spinerrors.New(spinerrors.CodeValidation, "Agent.Execute", "request cannot be nil", nil)
 	}
 	if req.Input == "" {
-		return ctx, nil, fmt.Errorf("request input cannot be empty")
+		return ctx, nil, spinerrors.New(spinerrors.CodeValidation, "Agent.Execute", "request input cannot be empty", nil)
 	}
 
 	// Create response
@@ -301,11 +306,12 @@ func (a *Agent) executeSetup(ctx context.Context, req *AgentRequest) (context.Co
 
 // applyTimeout applies timeout to the context if needed.
 func (a *Agent) applyTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	timeout := a.config.Timeout
-	if timeout == 0 {
-		timeout = DefaultAgentTimeout
+	// If context already has a deadline, respect it
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		return ctx, func() {} // Return no-op cancel function
 	}
-	return context.WithTimeout(ctx, timeout)
+	// Use config timeout (initialized from DefaultConfig: 60 minutes)
+	return context.WithTimeout(ctx, a.config.Timeout)
 }
 
 // buildPrompt builds the initial prompt for the agent.
@@ -478,7 +484,7 @@ Guidelines:
 
 	resp, err := a.llm.Complete(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("LLM completion failed: %w", err)
+		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.CreatePlan", "llm completion failed", err)
 	}
 
 	// Parse the response and create steps
@@ -493,7 +499,7 @@ Guidelines:
 	}
 
 	if err := json.Unmarshal([]byte(resp.Content), &decomposition); err != nil {
-		return nil, fmt.Errorf("failed to parse LLM response: %w", err)
+		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.CreatePlan", "failed to parse LLM response", err)
 	}
 
 	// Create steps
@@ -512,7 +518,7 @@ Guidelines:
 
 	// Validate the plan structure
 	if err := plan.ValidateStructure(); err != nil {
-		return nil, fmt.Errorf("plan validation failed: %w", err)
+		return nil, spinerrors.New(spinerrors.CodeValidation, "Agent.CreatePlan", "plan validation failed", err)
 	}
 
 	// Calculate total estimated duration
@@ -560,6 +566,32 @@ func (a *Agent) ShouldApprove(cmd *security.Command) (bool, string) {
 	default:
 		return true, "Unknown command classification, approval required"
 	}
+}
+
+// determineRequiresApproval determines if a tool call requires approval based on tool name and arguments.
+// This is used to populate the RequiresApproval field in ToolCallStartData.
+func (a *Agent) determineRequiresApproval(toolName string, args map[string]interface{}) bool {
+	// Tools that always require approval
+	requiresApprovalTools := map[string]bool{
+		"execute_command": true,
+		"write_file":      true,
+		"apply_patch":     true,
+	}
+
+	if requiresApprovalTools[toolName] {
+		return true
+	}
+
+	// For execute_command, also check if the command itself requires approval
+	if toolName == "execute_command" {
+		if cmd, ok := args["command"].(string); ok && cmd != "" {
+			cmdStruct := &security.Command{Program: cmd}
+			needsApproval, _ := a.ShouldApprove(cmdStruct)
+			return needsApproval
+		}
+	}
+
+	return false
 }
 
 // processToolCalls handles all tool calls from an LLM response.
@@ -654,15 +686,19 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *orchestration.ToolCal
 
 	// 3. Emit tool start event
 	// Convert args to ToolCallArguments
-	toolArgs, _ := types.FromMap(args)
+	toolArgs, _ := tools.FromMap(args)
+
+	// Determine if this tool requires approval
+	requiresApproval := a.determineRequiresApproval(call.Function.Name, args)
 
 	a.emitter.Emit(events.Event{
 		Type:      events.EventToolCallStart,
 		Timestamp: time.Now(),
 		Data: events.ToolCallStartData{
-			ToolID:     call.ID,
-			ToolName:   call.Function.Name,
-			Parameters: toolArgs,
+			ToolID:           call.ID,
+			ToolName:         call.Function.Name,
+			Parameters:       toolArgs,
+			RequiresApproval: requiresApproval,
 		},
 	})
 
@@ -716,16 +752,8 @@ func (a *Agent) validateToolCall(call *orchestration.ToolCall) error {
 
 // parseToolArguments extracts and parses JSON arguments from tool call.
 func (a *Agent) parseToolArguments(call *orchestration.ToolCall) (map[string]interface{}, error) {
-	if call.Function.Arguments == "" {
-		return nil, errors.New("tool arguments cannot be empty")
-	}
-
-	var args map[string]interface{}
-	if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
-		return nil, fmt.Errorf("failed to parse tool arguments: %w", err)
-	}
-
-	return args, nil
+	parser := tools.NewStrictArgumentParser()
+	return parser.Parse(call.Function.Arguments)
 }
 
 // convertParameterSchemaToMap converts a ParameterSchema struct to map[string]interface{}.
@@ -763,191 +791,6 @@ func getToolResultContent(toolCall *orchestration.ToolCall, result *orchestratio
 
 	// Edge case: not successful but no error message
 	return fmt.Sprintf("Tool %s failed with no error message", toolCall.Function.Name)
-}
-
-// selectIntervention chooses the appropriate intervention based on cycle type and turn count
-func (a *Agent) selectIntervention(cycleType cycle.CycleType, turnCount int) cycle.Intervention {
-	// Escalation ladder based on turn count
-	switch {
-	case turnCount < 10:
-		// Early cycles: Use soft intervention (reflection)
-		return &cycle.ReflectionIntervention{}
-
-	case turnCount < 30:
-		// Mid-stage cycles: Use medium intervention (context summarization)
-		// For now, use reflection as fallback since summarization needs compressor integration
-		return &cycle.ReflectionIntervention{}
-
-	default:
-		// Late-stage/persistent cycles: Escalate to user
-		return &cycle.EscalateIntervention{
-			Emitter: &eventEmitterAdapter{emitter: a.emitter},
-		}
-	}
-}
-
-// eventEmitterAdapter adapts events.EventEmitter to cycle.EventEmitter interface
-type eventEmitterAdapter struct {
-	emitter *events.EventEmitter
-}
-
-func (a *eventEmitterAdapter) Emit(event cycle.Event) {
-	// Convert cycle.Event to events.Event
-	// Map event type based on string value
-	var eventType events.EventType
-	switch event.GetType() {
-	case "turn_paused":
-		eventType = events.EventTurnPaused
-	default:
-		eventType = events.EventWarning // fallback
-	}
-
-	coreEvent := events.Event{
-		Type:      eventType,
-		Timestamp: event.GetTimestamp(),
-		Data:      event.GetData(),
-	}
-	a.emitter.Emit(coreEvent)
-}
-
-// extractToolNames extracts tool calls with parameters from LLM tool calls for cycle detection
-// Returns strings in format "tool_name(arguments_json)" to enable parameter-aware cycle detection
-func extractToolNames(toolCalls []llm.ToolCall) []string {
-	calls := make([]string, len(toolCalls))
-	for i, tc := range toolCalls {
-		// Include both name and arguments for accurate cycle detection
-		// This prevents false positives when same tool is called with different params
-		// e.g., "list_directory(.)" vs "list_directory(advanced-features-20251012)"
-		calls[i] = tc.Function.Name + "(" + tc.Function.Arguments + ")"
-	}
-	return calls
-}
-
-// executeAgentLoop runs the main agent execution loop.
-func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task Task, resp *AgentResponse) ([]Message, *AgentResponse, error) {
-	maxTurns := a.config.MaxTurns
-
-	for turn := 0; turn < maxTurns; turn++ {
-		// Check context cancellation
-		if err := ctx.Err(); err != nil {
-			resp.FinishReason = "timeout"
-			return messages, resp, err
-		}
-
-		a.emitTurnStart(turn + 1)
-
-		// Call LLM
-		llmResp, err := a.callLLM(ctx, messages, task)
-		if err != nil {
-			resp.Error = fmt.Errorf("LLM call failed: %w", err)
-			resp.FinishReason = "error"
-			return messages, resp, err
-		}
-
-		// Handle cycle detection via detection service
-		if a.config.CycleDetection.Enabled {
-			var shouldStop bool
-			var err error
-			messages, shouldStop, err = a.handleCycleDetection(ctx, messages, llmResp, turn+1, resp)
-			if err != nil {
-				return messages, resp, err
-			}
-			if shouldStop {
-				return messages, resp, nil
-			}
-		}
-
-		// Process tool calls or finish
-		if len(llmResp.ToolCalls) > 0 {
-			slog.Debug("processing tool calls", "count", len(llmResp.ToolCalls), "turn", turn+1)
-			messages = a.processToolCalls(ctx, messages, llmResp, resp)
-			continue
-		}
-
-		messages = a.addFinalMessage(messages, llmResp.Content)
-		resp.FinishReason = llmResp.FinishReason
-		if resp.FinishReason == "" {
-			resp.FinishReason = "stop"
-		}
-		break
-	}
-
-	return messages, resp, nil
-}
-
-// handleCycleDetection processes cycle detection and interventions via detection service.
-// Returns the modified messages (with intervention added if applicable), whether to stop, and any error.
-func (a *Agent) handleCycleDetection(ctx context.Context, messages []Message, llmResp *llm.CompletionResponse, turn int, resp *AgentResponse) ([]Message, bool, error) {
-	snapshot := cycle.Snapshot{
-		Turn:      turn,
-		Response:  llmResp.Content,
-		ToolCalls: extractToolNames(llmResp.ToolCalls),
-		Error:     "",
-		Timestamp: time.Now(),
-	}
-	a.detection.RecordSnapshot(snapshot)
-
-	cycleResult, err := a.detection.CheckCycle()
-	if err != nil || cycleResult.Type == cycle.CycleNone {
-		return messages, false, nil
-	}
-
-	intervention := a.selectIntervention(cycleResult.Type, turn)
-	if intervention == nil {
-		return messages, false, nil
-	}
-
-	// Convert messages to cycle.Message interface
-	cycleMessages := make([]cycle.Message, len(messages))
-	for i, msg := range messages {
-		cycleMessages[i] = &messageAdapter{msg: msg}
-	}
-
-	modifiedCycleMessages, err := intervention.Apply(ctx, cycleMessages)
-	if err != nil {
-		slog.Warn("cycle intervention failed", "error", err, "cycle_type", cycleResult.Type)
-		return messages, false, nil
-	}
-
-	// Convert back to Message slice
-	messages = make([]Message, len(modifiedCycleMessages))
-	for i, msg := range modifiedCycleMessages {
-		messages[i] = Message{
-			Role:      msg.GetRole(),
-			Content:   msg.GetContent(),
-			Timestamp: msg.GetTimestamp(),
-		}
-	}
-
-	// Emit cycle detection event
-	a.emitter.Emit(events.Event{
-		Type:      events.EventWarning,
-		Timestamp: time.Now(),
-		Data: events.SystemEventData{
-			Level:   "warning",
-			Message: fmt.Sprintf("Cycle detected: %s. Applied intervention: %s", cycleResult.Type, intervention.Name()),
-			Details: cycleResult.Details,
-		},
-	})
-
-	// If this was an escalation intervention, pause the agent
-	if intervention.Severity() >= 3 {
-		resp.FinishReason = "cycle_intervention"
-		return messages, true, nil
-	}
-
-	return messages, false, nil
-}
-
-// emitTurnStart emits a turn start event.
-func (a *Agent) emitTurnStart(turn int) {
-	a.emitter.Emit(events.Event{
-		Type:      events.EventTurnStart,
-		Timestamp: time.Now(),
-		Data: events.TurnEventData{
-			Turn: turn,
-		},
-	})
 }
 
 // callLLM calls the LLM provider with the given messages and filtered tools based on task mode.
@@ -1007,7 +850,7 @@ Then provide your response after the thinking block.`
 	// Build filtered tool list for this task mode
 	tools, err := a.BuildToolsForTask(task)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build tools: %w", err)
+		return nil, spinerrors.New(spinerrors.CodeInternal, "Agent.callLLM", "failed to build tools", err)
 	}
 
 	// Determine token budget: task overrides agent config
@@ -1031,7 +874,7 @@ Then provide your response after the thinking block.`
 	// Call LLM with streaming
 	chunks, err := a.llm.Stream(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to start LLM stream: %w", err)
+		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "failed to start LLM stream", err)
 	}
 
 	// Accumulate response from streaming chunks
@@ -1046,14 +889,14 @@ Then provide your response after the thinking block.`
 	for chunk := range chunks {
 		chunkCount++
 		slog.Debug("received chunk", "type", chunk.Type, "count", chunkCount, "content_len", len(chunk.Content))
-		
+
 		// Check context cancellation
 		if err := ctx.Err(); err != nil {
-			return nil, fmt.Errorf("context cancelled: %w", err)
+			return nil, spinerrors.New(spinerrors.CodeTimeout, "Agent.callLLM", "context cancelled", err)
 		}
 
 		if chunk.Error != nil {
-			return nil, fmt.Errorf("stream error: %w", chunk.Error)
+			return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "stream error", chunk.Error)
 		}
 
 		// Handle different chunk types
@@ -1065,7 +908,7 @@ Then provide your response after the thinking block.`
 				response.FinishReason = chunk.FinishReason
 			}
 			goto streamComplete
-			
+
 		case llm.ChunkTypeContentDelta:
 			// Accumulate content
 			response.Content += chunk.Content
@@ -1081,7 +924,7 @@ Then provide your response after the thinking block.`
 					},
 				})
 			}
-			
+
 		case llm.ChunkTypeToolCallStart, llm.ChunkTypeToolCallDelta, llm.ChunkTypeToolCallComplete:
 			// Accumulate tool calls
 			if chunk.ToolCall != nil {
@@ -1089,10 +932,15 @@ Then provide your response after the thinking block.`
 			}
 		}
 	}
-	
+
 	slog.Debug("stream ended naturally", "total_chunks", chunkCount)
 
 streamComplete:
+
+	// Check if context was cancelled after stream ended
+	if err := ctx.Err(); err != nil {
+		return nil, spinerrors.New(spinerrors.CodeTimeout, "Agent.callLLM", "context cancelled", err)
+	}
 
 	// Fallback: if no finish reason was provided, set a default one
 	if response.FinishReason == "" {
@@ -1106,20 +954,7 @@ streamComplete:
 	return response, nil
 }
 
-// addFinalMessage adds the final assistant message to the messages array.
-// This is called when the agent is done (no more tool calls).
-func (a *Agent) addFinalMessage(messages []Message, content string) []Message {
-	if content != "" {
-		messages = append(messages, Message{
-			Role:      RoleAssistant,
-			Content:   content,
-			Timestamp: time.Now(),
-		})
-	}
-	return messages
-}
-
-// messageAdapter adapts agent.Message to cycle.Message interface
+// messageAdapter adapts agent.Message to detection.Message interface
 type messageAdapter struct {
 	msg Message
 }

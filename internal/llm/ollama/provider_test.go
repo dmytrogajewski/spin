@@ -676,13 +676,13 @@ func TestHandleError(t *testing.T) {
 			name:       "bad request",
 			statusCode: http.StatusBadRequest,
 			body:       `{"error":"bad request"}`,
-			wantErr:    "HTTP 400",
+			wantErr:    "http 400",
 		},
 		{
 			name:       "malformed error json",
 			statusCode: http.StatusBadRequest,
 			body:       `{invalid}`,
-			wantErr:    "HTTP 400",
+			wantErr:    "http 400",
 		},
 	}
 

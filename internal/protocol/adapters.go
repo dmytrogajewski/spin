@@ -25,7 +25,7 @@ func FromCoreEvent(event events.Event) (Message, bool) {
 				ToolCallID:       data.ToolID,
 				ToolName:         data.ToolName,
 				Arguments:        json.RawMessage(argsJSON),
-				RequiresApproval: false, // TODO: Add to events.ToolCallData
+				RequiresApproval: data.RequiresApproval,
 			}), true
 		}
 

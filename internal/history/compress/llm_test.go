@@ -208,8 +208,8 @@ func TestLLMSummarizer_SummarizeChunk_Error(t *testing.T) {
 	if err == nil {
 		t.Error("summarizeChunk() expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "LLM summarization failed") {
-		t.Errorf("summarizeChunk() error should contain 'LLM summarization failed', got: %v", err)
+	if !strings.Contains(err.Error(), "llm summarization failed") {
+		t.Errorf("summarizeChunk() error should contain 'llm summarization failed', got: %v", err)
 	}
 }
 

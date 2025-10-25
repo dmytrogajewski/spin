@@ -600,14 +600,14 @@ func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *security.Command, 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		e.streamOutput(stdout, "stdout", chunks)
+		e.streamOutput(execCtx, stdout, "stdout", chunks)
 	}()
 
 	// Stream stderr
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		e.streamOutput(stderr, "stderr", chunks)
+		e.streamOutput(execCtx, stderr, "stderr", chunks)
 	}()
 
 	// Wait for command and close channel
@@ -746,9 +746,17 @@ func (e *Executor) captureOutput(stdout, stderr io.Reader, maxSize int64) (strin
 }
 
 // streamOutput streams data from a reader to the output channel.
-func (e *Executor) streamOutput(r io.Reader, stream string, chunks chan<- OutputChunk) {
+// It checks context cancellation periodically to allow graceful shutdown.
+func (e *Executor) streamOutput(ctx context.Context, r io.Reader, stream string, chunks chan<- OutputChunk) {
 	buf := make([]byte, 4096)
 	for {
+		// Check context cancellation before reading
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		n, err := r.Read(buf)
 		if n > 0 {
 			data := make([]byte, n)

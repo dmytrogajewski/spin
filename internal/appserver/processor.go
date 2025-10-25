@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/cycle"
@@ -21,7 +22,21 @@ import (
 	"github.com/google/uuid"
 )
 
-// Processor handles app-server business logic
+// Processor handles app-server business logic.
+//
+// GOROUTINE LIFECYCLE:
+// - SendMessage() spawns a goroutine per turn via runTurn() that lives until:
+//   - The agent execution completes normally
+//   - The context is cancelled
+//   - CancelTurn() is called
+//
+// - runTurn() internally spawns one additional goroutine for agent execution
+// - All goroutines are cleaned up when the turn completes or is cancelled
+//
+// CONCURRENCY:
+// - SendMessage/CancelTurn are thread-safe (protected by mu)
+// - Each conversation has its own cancel function for cleanup
+// - Event subscriptions are automatically cleaned up via defer
 type Processor struct {
 	mu            sync.RWMutex
 	agent         *agent.Agent
@@ -30,6 +45,7 @@ type Processor struct {
 	version       string
 	conversations map[string]*Conversation
 	output        io.Writer
+	config        map[string]interface{} // Runtime config overrides
 }
 
 // Conversation tracks a single conversation state
@@ -153,10 +169,12 @@ func (p *Processor) SetOutput(w io.Writer) {
 
 // HandleInitialize sets up workspace and config
 func (p *Processor) HandleInitialize(ctx context.Context, params jsonrpc.InitializeParams) (jsonrpc.InitializeResult, error) {
-	// Apply config overrides if needed
+	// Store config overrides for potential future use
+	p.mu.Lock()
 	if params.Config != nil {
-		// TODO: Apply config overrides
+		p.config = params.Config
 	}
+	p.mu.Unlock()
 
 	return jsonrpc.InitializeResult{
 		Status:  "ok",
@@ -352,7 +370,33 @@ func (p *Processor) sendProtocolMessage(msg protocol.Message) {
 
 // HandleApproveTool approves/rejects tool calls
 func (p *Processor) HandleApproveTool(ctx context.Context, params jsonrpc.ApproveToolParams) (jsonrpc.ApproveToolResult, error) {
-	// TODO: Forward approval to appropriate conversation/agent
+	// Emit approval event for the tool call
+	p.mu.RLock()
+	emitter := p.emitter
+	p.mu.RUnlock()
+
+	if emitter != nil {
+		if params.Approved {
+			emitter.Emit(events.Event{
+				Type:      events.EventCommandApproved,
+				Timestamp: time.Now(),
+				Data: events.ApprovalEventData{
+					RequestID: params.ToolCallID,
+					Status:    "approved",
+				},
+			})
+		} else {
+			emitter.Emit(events.Event{
+				Type:      events.EventCommandDenied,
+				Timestamp: time.Now(),
+				Data: events.ApprovalEventData{
+					RequestID: params.ToolCallID,
+					Status:    "denied",
+				},
+			})
+		}
+	}
+
 	return jsonrpc.ApproveToolResult{Status: "ok"}, nil
 }
 

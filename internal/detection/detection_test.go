@@ -3,44 +3,77 @@ package detection
 import (
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/cycle"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// testConfig returns a test configuration for cycle detection
-func testConfig() cycle.Config {
-	return cycle.Config{
-		WindowSize:       3,
-		SimilarityThresh: 0.8,
-		ToolRepeatLimit:  3,
-		ErrorRepeatLimit: 2,
-		Enabled:          true,
+// Mock implementations for testing
+
+type mockCycleDetector struct {
+	snapshots []Snapshot
+	result    CycleResult
+	err       error
+}
+
+func newMockCycleDetector() *mockCycleDetector {
+	return &mockCycleDetector{
+		snapshots: []Snapshot{},
+		result:    CycleResult{Type: CycleNone},
 	}
+}
+
+func (m *mockCycleDetector) Record(snapshot Snapshot) {
+	m.snapshots = append(m.snapshots, snapshot)
+}
+
+func (m *mockCycleDetector) Check() (CycleResult, error) {
+	return m.result, m.err
+}
+
+func (m *mockCycleDetector) GetHistory() []Snapshot {
+	return m.snapshots
+}
+
+func (m *mockCycleDetector) Reset() {
+	m.snapshots = []Snapshot{}
+}
+
+type mockPatternDetector struct {
+	results []PatternResult
+}
+
+func newMockPatternDetector() *mockPatternDetector {
+	return &mockPatternDetector{
+		results: []PatternResult{},
+	}
+}
+
+func (m *mockPatternDetector) AnalyzePatterns(history []Snapshot) []PatternResult {
+	return m.results
 }
 
 func TestNewDetectionService(t *testing.T) {
 	tests := []struct {
 		name            string
-		cycleDetector   *cycle.Detector
-		patternDetector *cycle.PatternDetector
+		cycleDetector   CycleDetector
+		patternDetector PatternDetector
 		wantNil         bool
 	}{
 		{
 			name:            "with both detectors",
-			cycleDetector:   cycle.NewDetector(testConfig()),
-			patternDetector: cycle.NewPatternDetector(testConfig()),
+			cycleDetector:   newMockCycleDetector(),
+			patternDetector: newMockPatternDetector(),
 			wantNil:         false,
 		},
 		{
 			name:            "with nil cycle detector",
 			cycleDetector:   nil,
-			patternDetector: cycle.NewPatternDetector(testConfig()),
+			patternDetector: newMockPatternDetector(),
 			wantNil:         false, // Service allows nil
 		},
 		{
 			name:            "with nil pattern detector",
-			cycleDetector:   cycle.NewDetector(testConfig()),
+			cycleDetector:   newMockCycleDetector(),
 			patternDetector: nil,
 			wantNil:         false, // Service allows nil
 		},
@@ -66,10 +99,10 @@ func TestNewDetectionService(t *testing.T) {
 }
 
 func TestDetectionService_RecordSnapshot(t *testing.T) {
-	detector := cycle.NewDetector(testConfig())
+	detector := newMockCycleDetector()
 	svc := NewDetectionService(detector, nil)
 
-	snapshot := cycle.Snapshot{
+	snapshot := Snapshot{
 		Turn:      1,
 		Response:  "Hello world",
 		ToolCalls: []string{"read_file"},
@@ -88,7 +121,7 @@ func TestDetectionService_RecordSnapshot(t *testing.T) {
 func TestDetectionService_RecordSnapshot_NilDetector(t *testing.T) {
 	svc := NewDetectionService(nil, nil)
 
-	snapshot := cycle.Snapshot{
+	snapshot := Snapshot{
 		Turn:     1,
 		Response: "Hello",
 	}
@@ -100,57 +133,56 @@ func TestDetectionService_RecordSnapshot_NilDetector(t *testing.T) {
 func TestDetectionService_CheckCycle(t *testing.T) {
 	tests := []struct {
 		name       string
-		snapshots  []cycle.Snapshot
-		wantCycle  cycle.CycleType
+		snapshots  []Snapshot
+		wantCycle  CycleType
 		wantDetect bool
 	}{
 		{
 			name:       "no snapshots - no cycle",
-			snapshots:  []cycle.Snapshot{},
-			wantCycle:  cycle.CycleNone,
+			snapshots:  []Snapshot{},
+			wantCycle:  CycleNone,
 			wantDetect: false,
 		},
 		{
 			name: "similar responses - cycle detected",
-			snapshots: []cycle.Snapshot{
+			snapshots: []Snapshot{
 				{Turn: 1, Response: "I tried to read the file", ToolCalls: []string{"list_files"}},
 				{Turn: 2, Response: "I tried to read the file", ToolCalls: []string{"read_file"}},
 				{Turn: 3, Response: "I tried to read the file", ToolCalls: []string{"write_file"}},
 			},
-			wantCycle:  cycle.CycleSimilarResponses,
+			wantCycle:  CycleSimilarResponses,
 			wantDetect: true,
 		},
 		{
 			name: "repeated tool - cycle detected",
-			snapshots: []cycle.Snapshot{
+			snapshots: []Snapshot{
 				{Turn: 1, Response: "Reading...", ToolCalls: []string{"read_file"}},
 				{Turn: 2, Response: "Reading again...", ToolCalls: []string{"read_file"}},
 				{Turn: 3, Response: "Still reading...", ToolCalls: []string{"read_file"}},
 			},
-			wantCycle:  cycle.CycleRepeatedTool,
+			wantCycle:  CycleRepeatedTool,
 			wantDetect: true,
 		},
 		{
 			name: "same error - cycle detected",
-			snapshots: []cycle.Snapshot{
+			snapshots: []Snapshot{
 				{Turn: 1, Response: "Error", Error: "file not found"},
 				{Turn: 2, Response: "Error", Error: "file not found"},
 			},
-			wantCycle:  cycle.CycleSameError,
+			wantCycle:  CycleSameError,
 			wantDetect: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := cycle.Config{
-				WindowSize:       3,
-				SimilarityThresh: 0.8,
-				ToolRepeatLimit:  3,
-				ErrorRepeatLimit: 2,
-				Enabled:          true,
+			detector := newMockCycleDetector()
+			if tt.wantDetect {
+				detector.result = CycleResult{
+					Type:       tt.wantCycle,
+					Confidence: 0.9,
+				}
 			}
-			detector := cycle.NewDetector(config)
 			svc := NewDetectionService(detector, nil)
 
 			// Record snapshots
@@ -166,7 +198,7 @@ func TestDetectionService_CheckCycle(t *testing.T) {
 				assert.Equal(t, tt.wantCycle, result.Type)
 				assert.Greater(t, result.Confidence, 0.0)
 			} else {
-				assert.Equal(t, cycle.CycleNone, result.Type)
+				assert.Equal(t, CycleNone, result.Type)
 			}
 		})
 	}
@@ -179,23 +211,19 @@ func TestDetectionService_CheckCycle_NilDetector(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cycle detector not configured")
-	assert.Equal(t, cycle.CycleNone, result.Type)
+	assert.Equal(t, CycleNone, result.Type)
 }
 
 func TestDetectionService_DetectPattern(t *testing.T) {
-	config := cycle.Config{
-		WindowSize:       5,
-		SimilarityThresh: 0.75,
-		ToolRepeatLimit:  3,
-		ErrorRepeatLimit: 2,
-		Enabled:          true,
+	detector := newMockCycleDetector()
+	patternDetector := newMockPatternDetector()
+	patternDetector.results = []PatternResult{
+		{Type: "oscillation", Confidence: 0.8, Details: "A-B pattern detected"},
 	}
-	detector := cycle.NewDetector(config)
-	patternDetector := cycle.NewPatternDetector(config)
 	svc := NewDetectionService(detector, patternDetector)
 
 	// Add some snapshots
-	snapshots := []cycle.Snapshot{
+	snapshots := []Snapshot{
 		{Turn: 1, Response: "Reading file A", ToolCalls: []string{"read_file"}},
 		{Turn: 2, Response: "Writing to file B", ToolCalls: []string{"write_file"}},
 		{Turn: 3, Response: "Reading file A", ToolCalls: []string{"read_file"}},
@@ -223,12 +251,12 @@ func TestDetectionService_DetectPattern_NilDetector(t *testing.T) {
 }
 
 func TestDetectionService_Reset(t *testing.T) {
-	detector := cycle.NewDetector(testConfig())
+	detector := newMockCycleDetector()
 	svc := NewDetectionService(detector, nil)
 
 	// Add some snapshots
-	svc.RecordSnapshot(cycle.Snapshot{Turn: 1, Response: "Test"})
-	svc.RecordSnapshot(cycle.Snapshot{Turn: 2, Response: "Test"})
+	svc.RecordSnapshot(Snapshot{Turn: 1, Response: "Test"})
+	svc.RecordSnapshot(Snapshot{Turn: 2, Response: "Test"})
 
 	history := svc.GetHistory()
 	require.Len(t, history, 2)
@@ -249,7 +277,7 @@ func TestDetectionService_Reset_NilDetector(t *testing.T) {
 }
 
 func TestDetectionService_GetHistory(t *testing.T) {
-	detector := cycle.NewDetector(testConfig())
+	detector := newMockCycleDetector()
 	svc := NewDetectionService(detector, nil)
 
 	// Empty history
@@ -257,8 +285,8 @@ func TestDetectionService_GetHistory(t *testing.T) {
 	assert.Len(t, history, 0)
 
 	// Add snapshots
-	svc.RecordSnapshot(cycle.Snapshot{Turn: 1, Response: "First"})
-	svc.RecordSnapshot(cycle.Snapshot{Turn: 2, Response: "Second"})
+	svc.RecordSnapshot(Snapshot{Turn: 1, Response: "First"})
+	svc.RecordSnapshot(Snapshot{Turn: 2, Response: "Second"})
 
 	// Get history
 	history = svc.GetHistory()
@@ -276,10 +304,10 @@ func TestDetectionService_GetHistory_NilDetector(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkDetectionService_RecordSnapshot(b *testing.B) {
-	detector := cycle.NewDetector(testConfig())
+	detector := newMockCycleDetector()
 	svc := NewDetectionService(detector, nil)
 
-	snapshot := cycle.Snapshot{
+	snapshot := Snapshot{
 		Turn:      1,
 		Response:  "Test response",
 		ToolCalls: []string{"read_file"},
@@ -292,12 +320,12 @@ func BenchmarkDetectionService_RecordSnapshot(b *testing.B) {
 }
 
 func BenchmarkDetectionService_CheckCycle(b *testing.B) {
-	detector := cycle.NewDetector(testConfig())
+	detector := newMockCycleDetector()
 	svc := NewDetectionService(detector, nil)
 
 	// Pre-populate with some snapshots
 	for i := 0; i < 10; i++ {
-		svc.RecordSnapshot(cycle.Snapshot{
+		svc.RecordSnapshot(Snapshot{
 			Turn:      i,
 			Response:  "Test response",
 			ToolCalls: []string{"read_file"},

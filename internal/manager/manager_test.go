@@ -36,8 +36,8 @@ func TestManager_NewConversation_Integration(t *testing.T) {
 	require.NoError(t, err, "NewConversation should succeed")
 	require.NotNil(t, conv, "Conversation should not be nil")
 
-	// TODO: Conversation components are now private
-	// Need to add public methods for testing if needed
+	// Note: Conversation components are now private
+	// Additional testing would require adding public methods to the conversation
 	// assert.NotNil(t, conv.agent, "Agent should be initialized")
 	// assert.NotNil(t, conv.history, "History should be initialized")
 	// assert.NotNil(t, conv.emitter, "Emitter should be initialized")

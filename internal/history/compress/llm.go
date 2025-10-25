@@ -125,6 +125,13 @@ func (s *LLMSummarizer) Compress(
 	summaries := make([]CompressibleMessage, 0)
 
 	for i := 0; i < len(summarizableMsgs); i += s.chunkSize {
+		// Check context cancellation during summarization loop
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		end := i + s.chunkSize
 		if end > len(summarizableMsgs) {
 			end = len(summarizableMsgs)
@@ -170,7 +177,7 @@ func (s *LLMSummarizer) summarizeChunk(ctx context.Context, chunk []Compressible
 	// Call LLM (using minimal interface to avoid import cycles)
 	content, err := s.llm.Complete(ctx, prompt)
 	if err != nil {
-		return CompressibleMessage{}, fmt.Errorf("LLM summarization failed: %w", err)
+		return CompressibleMessage{}, fmt.Errorf("llm summarization failed: %w", err)
 	}
 
 	// Calculate tokens for summary

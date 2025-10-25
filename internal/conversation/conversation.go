@@ -49,27 +49,49 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 		History:  agentHistory,
 	}
 
-	// Execute agent
-	resp, err := c.agent.Execute(ctx, req)
-	if err != nil {
-		return fmt.Errorf("agent execution failed: %w", err)
-	}
-
-	// Add user message to history
-	err = c.history.AddUserMessage(input)
+	// Add user message to history BEFORE execution so it's preserved even on error
+	err := c.history.AddUserMessage(input)
 	if err != nil {
 		return fmt.Errorf("failed to add user message: %w", err)
 	}
 
-	// Add assistant response to history
-	if resp.Output != "" {
-		err = c.history.AddMessage(message.Message{
+	// Execute agent
+	resp, err := c.agent.Execute(ctx, req)
+	if err != nil {
+		// Add error message to history so it's preserved
+		errorMsg := message.Message{
 			Role:    message.RoleAssistant,
-			Content: resp.Output,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to add assistant message: %w", err)
+			Content: fmt.Sprintf("Error: %v", err),
 		}
+		_ = c.history.AddMessage(errorMsg)
+		return fmt.Errorf("agent execution failed: %w", err)
+	}
+
+	// Add assistant response to history with tool calls
+	assistantMsg := message.Message{
+		Role:    message.RoleAssistant,
+		Content: resp.Output,
+	}
+
+	// Add tool calls if present
+	if len(resp.ToolCalls) > 0 {
+		toolCalls := make([]any, len(resp.ToolCalls))
+		for i, tc := range resp.ToolCalls {
+			toolCalls[i] = map[string]any{
+				"id":   tc.ID,
+				"type": tc.Type,
+				"function": map[string]any{
+					"name":      tc.Function.Name,
+					"arguments": tc.Function.Arguments,
+				},
+			}
+		}
+		assistantMsg.ToolCalls = toolCalls
+	}
+
+	err = c.history.AddMessage(assistantMsg)
+	if err != nil {
+		return fmt.Errorf("failed to add assistant message: %w", err)
 	}
 
 	return nil

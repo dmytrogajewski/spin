@@ -226,7 +226,7 @@ func TestTUIToolApproval(t *testing.T) {
 	defer console.Close()
 
 	binPath := getBinPath(t)
-	cmd := exec.Command(binPath, "--model", "qwen2.5-coder:1.5b", "--provider", "ollama", "--sandbox", "workspace-write")
+	cmd := exec.Command(binPath, "--model", "qwen3:1.7b", "--provider", "ollama", "--sandbox", "workspace-write")
 	cmd.Stdin = console.Tty()
 	cmd.Stdout = console.Tty()
 	cmd.Stderr = console.Tty()

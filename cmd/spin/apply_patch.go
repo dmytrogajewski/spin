@@ -221,7 +221,7 @@ Hint: %s`,
 			getHintForError(applyErr))
 	}
 
-	return fmt.Errorf("Error: %v", err)
+	return fmt.Errorf("error: %v", err)
 }
 
 // getHintForError provides helpful hints for common errors

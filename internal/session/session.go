@@ -236,7 +236,7 @@ func (s *Session) validateBasicFields() []error {
 
 	// Validate timestamps
 	if s.UpdatedAt.Before(s.CreatedAt) {
-		errs = append(errs, errors.New("UpdatedAt is before CreatedAt"))
+		errs = append(errs, errors.New("updated_at is before created_at"))
 	}
 
 	// Validate state

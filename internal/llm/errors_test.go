@@ -14,27 +14,27 @@ func TestErrors(t *testing.T) {
 		{
 			name: "ErrProviderNotFound",
 			err:  ErrProviderNotFound,
-			want: "provider not found",
+			want: "LLM: provider not found",
 		},
 		{
 			name: "ErrInvalidRequest",
 			err:  ErrInvalidRequest,
-			want: "invalid request",
+			want: "LLM: invalid request",
 		},
 		{
 			name: "ErrRateLimited",
 			err:  ErrRateLimited,
-			want: "rate limited",
+			want: "LLM: rate limited",
 		},
 		{
 			name: "ErrContextLengthExceeded",
 			err:  ErrContextLengthExceeded,
-			want: "context length exceeded",
+			want: "LLM: context length exceeded",
 		},
 		{
 			name: "ErrModelNotFound",
 			err:  ErrModelNotFound,
-			want: "model not found",
+			want: "LLM: model not found",
 		},
 	}
 

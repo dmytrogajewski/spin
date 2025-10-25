@@ -3,6 +3,8 @@ package cycle
 import (
 	"fmt"
 	"strings"
+
+	"github.com/dmytrogajewski/spin/internal/detection"
 )
 
 // PatternDetector provides additional pattern detection methods
@@ -17,9 +19,25 @@ func NewPatternDetector(config Config) *PatternDetector {
 }
 
 // AnalyzePatterns performs comprehensive pattern analysis on snapshots.
-// This is an alternative interface that can detect more complex patterns
-// than the basic detector.
-func (pd *PatternDetector) AnalyzePatterns(snapshots []Snapshot) []PatternResult {
+// This implements the detection.PatternDetector interface.
+func (pd *PatternDetector) AnalyzePatterns(snapshots []Snapshot) []detection.PatternResult {
+	internalResults := pd.analyzeInternal(snapshots)
+
+	// Convert internal results to detection.PatternResult
+	results := make([]detection.PatternResult, 0, len(internalResults))
+	for _, r := range internalResults {
+		results = append(results, detection.PatternResult{
+			Type:       r.Type.String(),
+			Confidence: r.Confidence,
+			Details:    r.Details,
+		})
+	}
+	return results
+}
+
+// analyzeInternal performs the actual analysis returning full internal PatternResult.
+// This is used by tests and internal code that needs the full result.
+func (pd *PatternDetector) analyzeInternal(snapshots []Snapshot) []PatternResult {
 	var results []PatternResult
 
 	// Analyze response patterns

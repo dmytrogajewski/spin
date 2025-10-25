@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/types"
+	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/google/uuid"
 )
 
@@ -99,9 +99,10 @@ type ContentDeltaData struct {
 
 // ToolCallStartData contains tool execution start information.
 type ToolCallStartData struct {
-	ToolName   string                  `json:"tool_name"`
-	ToolID     string                  `json:"tool_id"`
-	Parameters types.ToolCallArguments `json:"parameters"`
+	ToolName         string          `json:"tool_name"`
+	ToolID           string          `json:"tool_id"`
+	Parameters       tools.Arguments `json:"parameters"`
+	RequiresApproval bool            `json:"requires_approval"`
 }
 
 // ToolProgressData contains tool progress updates.
@@ -402,9 +403,10 @@ func (e *EventEmitter) tryFlushBuffer(id string, ch chan Event) {
 		case ch <- event:
 			sent = i + 1
 		default:
-			break
+			goto done
 		}
 	}
+done:
 
 	// Remove sent events from buffer
 	if sent > 0 {

@@ -41,6 +41,10 @@ func (r *Renderer) Render(b *Block) (string, error) {
 
 	var out strings.Builder
 
+	// Always start with a newline to ensure block appears on its own line
+	// This prevents overlap when tool blocks are appended while streaming is still active
+	out.WriteString("\n")
+
 	// Render header
 	header := r.RenderHeader(b)
 	out.WriteString(header)

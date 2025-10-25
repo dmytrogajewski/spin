@@ -36,7 +36,7 @@ func TestPatternDetector_AnalyzePatterns(t *testing.T) {
 	detector := NewPatternDetector(config)
 
 	// Test with empty snapshots
-	results := detector.AnalyzePatterns([]Snapshot{})
+	results := detector.analyzeInternal([]Snapshot{})
 	if len(results) != 0 {
 		t.Errorf("PatternDetector.AnalyzePatterns() with empty snapshots, got %d results, want 0", len(results))
 	}
@@ -45,7 +45,7 @@ func TestPatternDetector_AnalyzePatterns(t *testing.T) {
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""},
 	}
-	results = detector.AnalyzePatterns(snapshots)
+	results = detector.analyzeInternal(snapshots)
 	if len(results) != 0 {
 		t.Errorf("PatternDetector.AnalyzePatterns() with insufficient snapshots, got %d results, want 0", len(results))
 	}
@@ -69,7 +69,7 @@ func TestPatternDetector_AnalyzePatterns_RepeatedPhrase(t *testing.T) {
 		{Turn: 3, Response: "Third response with repeated phrase", ToolCalls: []string{}, Error: ""},
 	}
 
-	results := detector.AnalyzePatterns(snapshots)
+	results := detector.analyzeInternal(snapshots)
 
 	// Should detect repeated phrase pattern
 	found := false
@@ -112,7 +112,7 @@ func TestPatternDetector_AnalyzePatterns_CircularReasoning(t *testing.T) {
 		{Turn: 3, Response: "As we saw earlier, this pattern continues", ToolCalls: []string{}, Error: ""},
 	}
 
-	results := detector.AnalyzePatterns(snapshots)
+	results := detector.analyzeInternal(snapshots)
 
 	// Should detect circular reasoning pattern
 	found := false
@@ -155,7 +155,7 @@ func TestPatternDetector_AnalyzePatterns_ToolStuck(t *testing.T) {
 		{Turn: 3, Response: "Third response", ToolCalls: []string{"tool1"}, Error: ""},
 	}
 
-	results := detector.AnalyzePatterns(snapshots)
+	results := detector.analyzeInternal(snapshots)
 
 	// Should detect tool stuck pattern
 	found := false
@@ -197,7 +197,7 @@ func TestPatternDetector_AnalyzePatterns_ErrorLoop(t *testing.T) {
 		{Turn: 2, Response: "Second response", ToolCalls: []string{}, Error: "test error"},
 	}
 
-	results := detector.AnalyzePatterns(snapshots)
+	results := detector.analyzeInternal(snapshots)
 
 	// Should detect error loop pattern
 	found := false
@@ -244,7 +244,7 @@ func TestPatternDetector_AnalyzePatterns_OscillatingTools(t *testing.T) {
 		{Turn: 4, Response: "Fourth response", ToolCalls: []string{"tool2"}, Error: ""},
 	}
 
-	results := detector.AnalyzePatterns(snapshots)
+	results := detector.analyzeInternal(snapshots)
 
 	// Should detect oscillating tools pattern
 	found := false
