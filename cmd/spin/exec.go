@@ -19,6 +19,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	"github.com/spf13/cobra"
+	termx "golang.org/x/term"
 )
 
 // newExecCmd creates the exec command for non-interactive execution.
@@ -247,9 +248,13 @@ func (m *mockTTY) OnResize(cb func(w, h int)) {}
 
 // executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
 func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, format string, noStream, exitOnError bool) error {
-	// Create TUI adapter with mock TTY for non-terminal environments
-	mockTty := &mockTTY{width: 120, height: 30} // Default terminal size
-	ui, err := adapters.NewPureTTY(os.Stdout, adapters.WithTTY(mockTty))
+	// Create TUI adapter. Use real TTY when available; otherwise, mock one.
+	opts := []adapters.PureTTYOption{adapters.WithExecMode()}
+	if !(termx.IsTerminal(int(os.Stdout.Fd())) && termx.IsTerminal(int(os.Stdin.Fd()))) {
+		mockTty := &mockTTY{width: 120, height: 30}
+		opts = append(opts, adapters.WithTTY(mockTty))
+	}
+	ui, err := adapters.NewPureTTY(os.Stdout, opts...)
 	if err != nil {
 		return fmt.Errorf("create TUI: %w", err)
 	}

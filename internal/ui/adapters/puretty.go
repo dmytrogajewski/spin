@@ -76,6 +76,10 @@ type PureTTY struct {
 	// Testing support
 	keyboardEvents <-chan term.KeyEvent // If set, use this instead of ReadKeys
 
+	// Exec mode disables prompt/status rendering and scrolling regions.
+	// Used by non-interactive `spin exec` to avoid cursor positioning issues.
+	execMode bool
+
 	mu      sync.Mutex
 	running bool
 	stopped bool
@@ -89,6 +93,17 @@ type PureTTYOption func(*PureTTY) error
 func WithTTY(tty term.TerminalController) PureTTYOption {
 	return func(p *PureTTY) error {
 		p.tty = tty
+		return nil
+	}
+}
+
+// WithExecMode puts the adapter into non-interactive exec mode:
+// - Disables prompt redraws
+// - Disables sticky status bar and scrolling regions
+// - Prints output as plain lines (append-only)
+func WithExecMode() PureTTYOption {
+	return func(p *PureTTY) error {
+		p.execMode = true
 		return nil
 	}
 }
@@ -139,7 +154,7 @@ func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 		printer := output.NewPrinter(out)
 
 		// Create adapter that wraps renderer to match output.PromptRenderer interface
-		rendererAdapter := &rendererAdapter{renderer: p.renderer}
+		rendererAdapter := &rendererAdapter{renderer: p.renderer, noPrompt: p.execMode}
 
 		// Create coordinator
 		p.coord = output.NewCoordinatedWriter(printer, rendererAdapter, p.model)
@@ -176,12 +191,14 @@ func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 	if p.statusAggregator == nil {
 		p.statusAggregator = status.NewAggregator(p.statusManager)
 	}
-	if p.statusRenderer == nil {
-		w, h := p.tty.Size()
-		p.statusRenderer = status.NewRenderer(p.out, w, h)
+	if !p.execMode {
+		if p.statusRenderer == nil {
+			w, h := p.tty.Size()
+			p.statusRenderer = status.NewRenderer(p.out, w, h)
+		}
 	}
 
-	// Connect scroll manager to coordinator
+	// Connect scroll manager to coordinator (skip in exec mode)
 	if p.coord != nil && p.statusRenderer != nil {
 		p.coord.SetScrollManager(p.statusRenderer)
 	}
@@ -255,8 +272,10 @@ func (u *PureTTY) Run(ctx context.Context) error {
 		u.handleResize(w, h)
 	})
 
-	// Initial prompt draw
-	u.coord.RedrawPrompt()
+	// Initial prompt draw (skip in exec mode)
+	if !u.execMode {
+		u.coord.RedrawPrompt()
+	}
 
 	// Initialize status bar with "Ready" message
 	if u.statusManager != nil {
@@ -510,7 +529,9 @@ func (u *PureTTY) startPromptLoop(ctx context.Context, keys <-chan term.KeyEvent
 // handleResize updates renderer dimensions and redraws prompt on SIGWINCH.
 func (u *PureTTY) handleResize(w, h int) {
 	// Update prompt renderer dimensions
-	u.renderer.SetSize(w, h)
+	if u.renderer != nil {
+		u.renderer.SetSize(w, h)
+	}
 
 	// Update status renderer dimensions
 	if u.statusRenderer != nil {
@@ -519,8 +540,10 @@ func (u *PureTTY) handleResize(w, h int) {
 		u.updateStatusBar()
 	}
 
-	// Redraw prompt
-	u.coord.RedrawPrompt()
+	// Redraw prompt unless in exec mode
+	if !u.execMode {
+		u.coord.RedrawPrompt()
+	}
 }
 
 // handleSubmittedLine echoes user input to transcript.
@@ -532,11 +555,15 @@ func (u *PureTTY) handleSubmittedLine(line string) {
 // rendererAdapter adapts prompt.Renderer to output.PromptRenderer interface.
 type rendererAdapter struct {
 	renderer *prompt.Renderer
+	noPrompt bool
 }
 
 func (a *rendererAdapter) Redraw(model output.PromptModel, status string) error {
 	// Cast model back to *prompt.Model (safe because we control the type)
 	promptModel := model.(*prompt.Model)
+	if a == nil || a.noPrompt || a.renderer == nil {
+		return nil
+	}
 	return a.renderer.Redraw(promptModel, status)
 }
 
@@ -600,8 +627,10 @@ func (u *PureTTY) render() {
 		u.renderFilterUI()
 	}
 
-	// Render prompt (via coordinator)
-	u.coord.RedrawPrompt()
+	// Render prompt (via coordinator) unless in exec mode
+	if !u.execMode {
+		u.coord.RedrawPrompt()
+	}
 }
 
 // renderFilterUI renders filter input or active filter chips.
@@ -769,22 +798,31 @@ func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
 		// Update the timeline with the flag set so future updates preserve it
 		u.timeline.Update(blockID, block)
 
-		// Move cursor up one line (to overwrite the prompt), clear the line, write status
-		// Sequence: ESC[1A (up), ESC[2K (clear line), write status
-		fmt.Fprint(u.out, "\x1b[1A\x1b[2K")                                    // Up + clear line
-		fmt.Fprint(u.out, strings.ReplaceAll(statusLine, "\n", "\r\n")+"\r\n") // Write status
-
-		// If tool produced output, render and print the body below the status line
-		if block.Body != "" {
-			if body, err := u.blockRenderer.RenderBody(block); err == nil {
-				fmt.Fprint(u.out, strings.ReplaceAll(body, "\n", "\r\n"))
+		if u.execMode {
+			// Exec mode: just append lines without cursor gymnastics
+			u.coord.PrintLine(strings.ReplaceAll(statusLine, "\n", "\r\n"))
+			if block.Body != "" {
+				if body, err := u.blockRenderer.RenderBody(block); err == nil {
+					fmt.Fprint(u.out, strings.ReplaceAll(body, "\n", "\r\n"))
+				}
 			}
-		}
+		} else {
+			// Interactive: overwrite prompt line for status, then redraw prompt
+			fmt.Fprint(u.out, "\x1b[1A\x1b[2K")                                    // Up + clear line
+			fmt.Fprint(u.out, strings.ReplaceAll(statusLine, "\n", "\r\n")+"\r\n") // Write status
 
-		// Redraw prompt after printing status (and optional body)
-		u.renderer.Redraw(u.model, "")
-		if u.statusRenderer != nil {
-			_ = u.statusRenderer.MoveToScrollRegion()
+			// If tool produced output, render and print the body below the status line
+			if block.Body != "" {
+				if body, err := u.blockRenderer.RenderBody(block); err == nil {
+					fmt.Fprint(u.out, strings.ReplaceAll(body, "\n", "\r\n"))
+				}
+			}
+
+			// Redraw prompt after printing status (and optional body)
+			u.renderer.Redraw(u.model, "")
+			if u.statusRenderer != nil {
+				_ = u.statusRenderer.MoveToScrollRegion()
+			}
 		}
 	}
 
@@ -821,7 +859,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Execute shell command",
 		"Edit",
 		'▶',
-		func(ctx context.Context, args ...interface{}) error {
+		func(ctx context.Context, args ...any) error {
 			return u.executeRunCommand(ctx)
 		},
 	))
@@ -831,7 +869,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Grep/search files",
 		"Tools",
 		'🔍',
-		func(ctx context.Context, args ...interface{}) error {
+		func(ctx context.Context, args ...any) error {
 			return u.executeSearchCommand(ctx)
 		},
 	))
@@ -841,7 +879,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"File picker",
 		"File",
 		'📄',
-		func(ctx context.Context, args ...interface{}) error {
+		func(ctx context.Context, args ...any) error {
 			return u.executeFilePickerCommand(ctx)
 		},
 	))
@@ -851,7 +889,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Create plan block",
 		"Edit",
 		'📋',
-		func(ctx context.Context, args ...interface{}) error {
+		func(ctx context.Context, args ...any) error {
 			return u.executeNewPlanCommand(ctx)
 		},
 	))
@@ -861,7 +899,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Switch Auto/Manual",
 		"System",
 		'🔄',
-		func(ctx context.Context, args ...interface{}) error {
+		func(ctx context.Context, args ...any) error {
 			return u.executeToggleModeCommand(ctx)
 		},
 	))
@@ -871,32 +909,32 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Switch Dark/Light",
 		"System",
 		'🎨',
-		func(ctx context.Context, args ...interface{}) error {
+		func(ctx context.Context, args ...any) error {
 			return u.executeChangeThemeCommand(ctx)
 		},
 	))
 }
 
 // executeRunCommand implements the "Run..." command.
-func (u *PureTTY) executeRunCommand(ctx context.Context) error {
+func (u *PureTTY) executeRunCommand(_ context.Context) error {
 	u.showStatusMessage("Type a command at the prompt and press Enter to execute")
 	return nil
 }
 
 // executeSearchCommand implements the "Search in repo..." command.
-func (u *PureTTY) executeSearchCommand(ctx context.Context) error {
+func (u *PureTTY) executeSearchCommand(_ context.Context) error {
 	u.showStatusMessage("Try: grep <pattern> or use file search at the prompt")
 	return nil
 }
 
 // executeFilePickerCommand implements the "Open recent file..." command.
-func (u *PureTTY) executeFilePickerCommand(ctx context.Context) error {
+func (u *PureTTY) executeFilePickerCommand(_ context.Context) error {
 	u.showStatusMessage("File picker: Type file path at prompt or use 'ls' command")
 	return nil
 }
 
 // executeNewPlanCommand implements the "New plan..." command.
-func (u *PureTTY) executeNewPlanCommand(ctx context.Context) error {
+func (u *PureTTY) executeNewPlanCommand(_ context.Context) error {
 	// Create a new plan block
 	block := &blocks.Block{
 		ID:        fmt.Sprintf("plan_%d", time.Now().UnixMilli()),
@@ -920,13 +958,13 @@ func (u *PureTTY) executeNewPlanCommand(ctx context.Context) error {
 }
 
 // executeToggleModeCommand implements the "Toggle mode..." command.
-func (u *PureTTY) executeToggleModeCommand(ctx context.Context) error {
+func (u *PureTTY) executeToggleModeCommand(_ context.Context) error {
 	u.showStatusMessage("Mode toggle: Use agent flags (--auto/--manual) or configuration")
 	return nil
 }
 
 // executeChangeThemeCommand implements the "Change theme..." command.
-func (u *PureTTY) executeChangeThemeCommand(ctx context.Context) error {
+func (u *PureTTY) executeChangeThemeCommand(_ context.Context) error {
 	u.showStatusMessage("Theme switching: Not yet implemented")
 	return nil
 }

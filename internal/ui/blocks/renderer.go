@@ -97,6 +97,10 @@ func (r *Renderer) RenderHeader(b *Block) string {
 	out.WriteString(string(ColorReset))
 
 	// Spacing after accent bar
+
+	// Newline before new tag
+	out.WriteString("\n")
+
 	// out.WriteString(strings.Repeat(" ", S2))
 
 	// Tag badge with colored background
