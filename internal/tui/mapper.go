@@ -226,16 +226,22 @@ func (m *TUIMapper) createToolBlock(data events.ToolCallStartData) *blocks.Block
 	block := blocks.NewBlock(blocks.BlockTypeTool)
 	block.ID = data.ToolID
 
-	// Extract command from parameters (or path for list_directory)
-	command := extractString(data.Parameters, "tool_name")
+	// Prefer the actual tool name from the event; fall back to param
+	toolName := data.ToolName
+	if toolName == "" {
+		toolName = extractString(data.Parameters, "tool_name")
+	}
 
+	// Convert parameters to a simple map for display (best-effort)
+	params := data.Parameters.ToMap()
 	meta := &blocks.ToolMeta{
-		ToolName: command,
+		ToolName: toolName,
+		Params:   params,
 	}
 	if err := blocks.SetToolMeta(block, meta); err != nil {
 		// Validation failed, set as raw map to preserve data
 		block.Meta = map[string]any{
-			"tool_name": command,
+			"tool_name": toolName,
 		}
 	}
 	return block

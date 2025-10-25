@@ -108,6 +108,8 @@ func (m *GrepMeta) Validate() error {
 type ToolMeta struct {
 	// ToolName is the name of the tool.
 	ToolName string `json:"tool_name"`
+	// Params holds the arguments passed to the tool (optional, for display).
+	Params map[string]any `json:"params,omitempty"`
 }
 
 // Validate validates the tool metadata.

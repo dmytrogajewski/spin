@@ -155,6 +155,38 @@ func (f *DefaultParamsFormatter) FormatTitle(block *Block) string {
 		return block.Title
 	}
 
+	// Try to render tool name and a compact params preview if available
+	if meta, err := ParseToolMeta(block); err == nil && meta != nil {
+		name := meta.ToolName
+		if name == "" {
+			return ""
+		}
+		// Build compact params list: key=value for a few keys
+		var parts []string
+		max := 3
+		count := 0
+		for k, v := range meta.Params {
+			// Render primitive types compactly
+			switch vv := v.(type) {
+			case string:
+				parts = append(parts, fmt.Sprintf("%s: %s", k, vv))
+			case float64, bool, int, int64:
+				parts = append(parts, fmt.Sprintf("%s: %v", k, vv))
+			default:
+				// skip complex values in the title
+				continue
+			}
+			count++
+			if count >= max {
+				break
+			}
+		}
+		if len(parts) > 0 {
+			return fmt.Sprintf("%s %s(%s)%s", name, string(ColorMuted), strings.Join(parts, ", "), string(ColorReset))
+		}
+		return name
+	}
+
 	// No title available
 	return ""
 }
