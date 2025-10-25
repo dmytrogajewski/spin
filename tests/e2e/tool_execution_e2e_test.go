@@ -144,8 +144,8 @@ func TestTUIToolVisualization(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	// Should see tool completion indicator (↳)
-	_, err = console.ExpectString("↳")
+	// Should see tool completion indicator (⤷)
+	_, err = console.ExpectString("⤷")
 	require.NoError(t, err, "Should see completion indicator")
 }
 

@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -170,8 +171,12 @@ func (s *ShellIntegration) ExecuteShellCommand(ctx context.Context, command stri
 	// Set environment variables
 	cmd.Env = s.buildEnvironment()
 
-	// Use CombinedOutput to capture both stdout and stderr
-	output, err := cmd.CombinedOutput()
+	// Capture stdout and stderr separately to detect duplicates
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
 	if err != nil {
 		// Check if it's a timeout error
 		if cmdCtx.Err() == context.DeadlineExceeded {
@@ -181,17 +186,43 @@ func (s *ShellIntegration) ExecuteShellCommand(ctx context.Context, command stri
 		// Check if it's an ExitError to get exit code and stderr
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode := exitErr.ExitCode()
-			// Output already contains stderr since we used CombinedOutput
-			outputStr := strings.TrimSpace(string(output))
-			if outputStr != "" {
-				return "", fmt.Errorf("shell command failed (exit %d): %s", exitCode, outputStr)
+
+			// Get stdout and stderr as strings
+			stdoutStr := strings.TrimSpace(stdout.String())
+			stderrStr := strings.TrimSpace(stderr.String())
+
+			// If stdout and stderr are identical, only show it once
+			if stdoutStr == stderrStr && stderrStr != "" {
+				return "", fmt.Errorf("execution failed: exit status %d\n%s", exitCode, stderrStr)
 			}
-			return "", fmt.Errorf("shell command failed (exit %d)", exitCode)
+
+			// If they're different, show both
+			var output string
+			if stderrStr != "" && stdoutStr != "" {
+				// Both have content and are different
+				output = fmt.Sprintf("Error: %s\nOutput: %s", stderrStr, stdoutStr)
+			} else if stderrStr != "" {
+				// Only stderr has content
+				output = stderrStr
+			} else if stdoutStr != "" {
+				// Only stdout has content
+				output = stdoutStr
+			}
+
+			if output != "" {
+				return "", fmt.Errorf("execution failed: exit status %d\n%s", exitCode, output)
+			}
+			return "", fmt.Errorf("execution failed: exit status %d", exitCode)
 		}
 		return "", fmt.Errorf("shell command failed: %w", err)
 	}
 
-	return string(output), nil
+	// For successful commands, combine stdout and stderr
+	output := stdout.String()
+	if stderr.String() != "" {
+		output += stderr.String()
+	}
+	return output, nil
 }
 
 // IsShellCommand checks if a command should be executed through the shell.

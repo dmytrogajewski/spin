@@ -85,8 +85,8 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 	output := buf.String()
 
 	// CRITICAL: Verify completion status line was printed
-	if !strings.Contains(output, "↳") {
-		t.Errorf("UpdateBlock MUST print completion status line (↳)\nGot:\n%s", output)
+	if !strings.Contains(output, "⤷") {
+		t.Errorf("UpdateBlock MUST print completion status line (⤷)\nGot:\n%s", output)
 	}
 	if !strings.Contains(output, "Exit code: 0") {
 		t.Errorf("Completion status should contain 'Exit code: 0'\nGot:\n%s", output)
@@ -131,7 +131,7 @@ func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
 	output := captureOutput(p)
 
 	// Should NOT print completion status since ExitCode is not set
-	if strings.Contains(output, "↳") && strings.Contains(output, "Exit code") {
+	if strings.Contains(output, "⤷") && strings.Contains(output, "Exit code") {
 		t.Error("UpdateBlock should NOT print completion status for incomplete blocks")
 		t.Logf("Unexpected output:\n%s", output)
 	}
@@ -169,7 +169,7 @@ func TestUpdateBlock_HandlesReadBlocks(t *testing.T) {
 
 	// READ blocks don't have completion status lines (per FRD)
 	output := captureOutput(p)
-	if strings.Contains(output, "↳") {
+	if strings.Contains(output, "⤷") {
 		t.Error("READ blocks should NOT print completion status lines")
 	}
 }
@@ -409,5 +409,226 @@ func withKeyboardEvents(keyCh <-chan term.KeyEvent) PureTTYOption {
 	return func(p *PureTTY) error {
 		p.keyboardEvents = keyCh
 		return nil
+	}
+}
+
+// TestUpdateBlock_NoDuplicateToolCompleted reproduces and tests the fix for duplicate "Tool completed" messages.
+// This test simulates the exact scenario where a TOOL block is updated multiple times,
+// which was causing "Tool completed" to print twice.
+func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
+	// Setup with actual output capture
+	var buf bytes.Buffer
+	renderer := prompt.NewRenderer(&buf, 80, "> ")
+	model := prompt.NewModel(100)
+	blockRenderer := blocks.NewRenderer(80)
+
+	// Create coordinator
+	printer := output.NewPrinter(&buf)
+	rendererAdapter := &rendererAdapter{renderer: renderer}
+	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
+
+	// Create status management
+	statusManager := status.NewManager()
+	statusAggregator := status.NewAggregator(statusManager)
+
+	p := &PureTTY{
+		out:              &buf,
+		model:            model,
+		renderer:         renderer,
+		coord:            coord,
+		statusManager:    statusManager,
+		statusAggregator: statusAggregator,
+		blockRenderer:    blockRenderer,
+		timeline:         blocks.NewTimeline(),
+		mode:             ModeInput,
+	}
+
+	// Create an initial TOOL block (like execute_command)
+	block := blocks.NewBlock(blocks.BlockTypeTool)
+	block.ID = "tool_exec_123"
+	block.Title = "execute_command"
+
+	// Set initial metadata (tool starts)
+	meta := &blocks.ToolMeta{
+		ToolName: "execute_command",
+	}
+	if err := blocks.SetToolMeta(block, meta); err != nil {
+		t.Fatalf("SetToolMeta failed: %v", err)
+	}
+
+	// Append the initial block
+	if err := p.AppendBlock(block); err != nil {
+		t.Fatalf("AppendBlock failed: %v", err)
+	}
+
+	// Clear buffer after append
+	buf.Reset()
+
+	// First update: tool completes with success
+	completedBlock := blocks.NewBlock(blocks.BlockTypeTool)
+	completedBlock.ID = "tool_exec_123"
+	completedBlock.Title = "execute_command"
+	completedBlock.Body = "Command executed successfully: итого 4\ndrwxr-xr-x. 1 dmitriy dmitriy 14 окт 25 16:17 .\ndrwxr-xr-x. 1 dmitriy dmitriy 54 окт 25 16:17 ..\n-rw-r--r--. 1 dmitriy dmitriy 45 окт 25 16:17 main.rs"
+
+	completedMeta := &blocks.ToolMeta{
+		ToolName: "execute_command",
+	}
+	if err := blocks.SetToolMeta(completedBlock, completedMeta); err != nil {
+		t.Fatalf("SetToolMeta (first update) failed: %v", err)
+	}
+
+	// First UpdateBlock call - should print "Tool completed" once
+	if err := p.UpdateBlock("tool_exec_123", completedBlock); err != nil {
+		t.Fatalf("First UpdateBlock failed: %v", err)
+	}
+
+	// Second update: same tool, might be called again due to event processing
+	secondUpdateBlock := blocks.NewBlock(blocks.BlockTypeTool)
+	secondUpdateBlock.ID = "tool_exec_123"
+	secondUpdateBlock.Title = "execute_command"
+	secondUpdateBlock.Body = "Command executed successfully: итого 4\ndrwxr-xr-x. 1 dmitriy dmitriy 14 окт 25 16:17 .\ndrwxr-xr-x. 1 dmitriy dmitriy 54 окт 25 16:17 ..\n-rw-r--r--. 1 dmitriy dmitriy 45 окт 25 16:17 main.rs"
+
+	secondMeta := &blocks.ToolMeta{
+		ToolName: "execute_command",
+	}
+	if err := blocks.SetToolMeta(secondUpdateBlock, secondMeta); err != nil {
+		t.Fatalf("SetToolMeta (second update) failed: %v", err)
+	}
+
+	// Second UpdateBlock call - should NOT print "Tool completed" again
+	if err := p.UpdateBlock("tool_exec_123", secondUpdateBlock); err != nil {
+		t.Fatalf("Second UpdateBlock failed: %v", err)
+	}
+
+	// Capture output after both updates
+	output := buf.String()
+
+	// Count occurrences of "Tool completed"
+	toolCompletedCount := strings.Count(output, "Tool completed")
+	if toolCompletedCount > 1 {
+		t.Errorf("'Tool completed' should appear exactly once, but appeared %d times\nOutput:\n%s",
+			toolCompletedCount, output)
+	}
+
+	// Also count the arrow symbol
+	arrowCount := strings.Count(output, "⤷")
+	if arrowCount > 2 { // One for the initial status, one for completion
+		t.Errorf("Arrow '⤷' appearing too many times (%d), suggesting duplicate completion lines\nOutput:\n%s",
+			arrowCount, output)
+	}
+
+	// Ensure it printed at least once
+	if toolCompletedCount == 0 {
+		t.Errorf("'Tool completed' should appear at least once\nOutput:\n%s", output)
+	}
+}
+
+// TestExecuteBlock_NoDuplicateExitStatus tests that EXECUTE blocks also don't duplicate status.
+func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
+	// Setup with actual output capture
+	var buf bytes.Buffer
+	renderer := prompt.NewRenderer(&buf, 80, "> ")
+	model := prompt.NewModel(100)
+	blockRenderer := blocks.NewRenderer(80)
+
+	// Create coordinator
+	printer := output.NewPrinter(&buf)
+	rendererAdapter := &rendererAdapter{renderer: renderer}
+	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
+
+	// Create status management
+	statusManager := status.NewManager()
+	statusAggregator := status.NewAggregator(statusManager)
+
+	p := &PureTTY{
+		out:              &buf,
+		model:            model,
+		renderer:         renderer,
+		coord:            coord,
+		statusManager:    statusManager,
+		statusAggregator: statusAggregator,
+		blockRenderer:    blockRenderer,
+		timeline:         blocks.NewTimeline(),
+		mode:             ModeInput,
+	}
+
+	// Create an initial EXECUTE block
+	block := blocks.NewBlock(blocks.BlockTypeExecute)
+	block.ID = "exec_123"
+
+	meta := &blocks.ExecuteMeta{
+		Command: "ls",
+		CWD:     ".",
+		Impact:  "low",
+	}
+	if err := blocks.SetExecuteMeta(block, meta); err != nil {
+		t.Fatalf("SetExecuteMeta failed: %v", err)
+	}
+
+	// Append the initial block
+	if err := p.AppendBlock(block); err != nil {
+		t.Fatalf("AppendBlock failed: %v", err)
+	}
+
+	// Clear buffer after append
+	buf.Reset()
+
+	// First update with completion
+	exitCode := 0
+	lines := 3
+	firstUpdate := blocks.NewBlock(blocks.BlockTypeExecute)
+	firstUpdate.ID = "exec_123"
+	firstUpdate.Body = "file1\nfile2\nfile3"
+
+	firstMeta := &blocks.ExecuteMeta{
+		Command:  "ls",
+		CWD:      ".",
+		Impact:   "low",
+		ExitCode: &exitCode,
+		LinesOut: &lines,
+	}
+	if err := blocks.SetExecuteMeta(firstUpdate, firstMeta); err != nil {
+		t.Fatalf("SetExecuteMeta (first update) failed: %v", err)
+	}
+
+	// First UpdateBlock call
+	if err := p.UpdateBlock("exec_123", firstUpdate); err != nil {
+		t.Fatalf("First UpdateBlock failed: %v", err)
+	}
+
+	// Second update with same completion status
+	secondUpdate := blocks.NewBlock(blocks.BlockTypeExecute)
+	secondUpdate.ID = "exec_123"
+	secondUpdate.Body = "file1\nfile2\nfile3"
+
+	secondMeta := &blocks.ExecuteMeta{
+		Command:  "ls",
+		CWD:      ".",
+		Impact:   "low",
+		ExitCode: &exitCode,
+		LinesOut: &lines,
+	}
+	if err := blocks.SetExecuteMeta(secondUpdate, secondMeta); err != nil {
+		t.Fatalf("SetExecuteMeta (second update) failed: %v", err)
+	}
+
+	// Second UpdateBlock call
+	if err := p.UpdateBlock("exec_123", secondUpdate); err != nil {
+		t.Fatalf("Second UpdateBlock failed: %v", err)
+	}
+
+	// Capture output
+	output := buf.String()
+
+	// Count occurrences of "Exit code"
+	exitCodeCount := strings.Count(output, "Exit code: 0")
+	if exitCodeCount > 1 {
+		t.Errorf("'Exit code: 0' should appear exactly once, but appeared %d times\nOutput:\n%s",
+			exitCodeCount, output)
+	}
+
+	// Ensure it printed at least once
+	if exitCodeCount == 0 {
+		t.Errorf("'Exit code: 0' should appear at least once\nOutput:\n%s", output)
 	}
 }

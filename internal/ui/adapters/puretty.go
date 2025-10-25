@@ -748,6 +748,13 @@ func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
+	// Get the existing block to preserve CompletionPrinted flag
+	existingBlock, _ := u.timeline.Get(blockID)
+	if existingBlock != nil {
+		// Preserve the CompletionPrinted flag from the existing block
+		block.CompletionPrinted = existingBlock.CompletionPrinted
+	}
+
 	if err := u.timeline.Update(blockID, block); err != nil {
 		return err
 	}
@@ -758,6 +765,9 @@ func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
 	if statusLine != "" && !block.CompletionPrinted {
 		// Mark as printed before rendering to prevent duplicates
 		block.CompletionPrinted = true
+
+		// Update the timeline with the flag set so future updates preserve it
+		u.timeline.Update(blockID, block)
 
 		// Move cursor up one line (to overwrite the prompt), clear the line, write status
 		// Sequence: ESC[1A (up), ESC[2K (clear line), write status

@@ -410,7 +410,13 @@ func (m *TUIMapper) updateBlockSeverity(block *blocks.Block, data events.ToolCal
 	if !data.Success {
 		block.Severity = blocks.SeverityError
 		if data.Error != "" {
-			block.Body += "\n\nError: " + data.Error
+			// Avoid duplicating the error message in the body.
+			// updateBlockContent may have already set block.Body to "Error: <msg>".
+			if block.Body == "" {
+				block.Body = "Error: " + data.Error
+			} else if !strings.Contains(block.Body, data.Error) {
+				block.Body += "\n\nError: " + data.Error
+			}
 		}
 	} else {
 		block.Severity = blocks.SeverityInfo

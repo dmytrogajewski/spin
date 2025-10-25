@@ -1,8 +1,8 @@
 # BUG-20251014030000: Tool Response Messages Missing from Conversation History
 
-**Status:** ✅ Fixed  
-**Severity:** P0 - Critical  
-**Reported:** 2025-10-14 03:00:00  
+**Status:** ✅ Fixed
+**Severity:** P0 - Critical
+**Reported:** 2025-10-14 03:00:00
 **Fixed:** 2025-10-14 03:50:00
 
 ## Summary
@@ -44,10 +44,10 @@ But these messages are never persisted to `c.history`.
 Example user report:
 ```
 │   WRITE   tetris_game.txt
- ↳ Failed to write file.
+ ⤷ Failed to write file.
   [[0 for _ in range(10)] for _ in range(10)], [1, 1, 1, 1]...
   ● Failed
- ↳ Failed to write file.
+ ⤷ Failed to write file.
 ```
 
 File was actually written successfully, but agent never received confirmation.
@@ -97,7 +97,7 @@ respMu.Lock()
 if resp != nil {
     // Add user message
     _ = c.history.AddUserMessage(req.Input)
-    
+
     // Add all turn messages (assistant + tool + assistant final)
     for _, msg := range resp.Messages {
         if msg.Role != RoleUser { // Skip user message (already added)
@@ -191,4 +191,3 @@ make lint
 
 **Fixed:** 2025-10-14 03:50:00
 **Commit:** (to be added)
-

@@ -106,9 +106,11 @@ func (t *ShellOperationTool) Execute(ctx context.Context, params map[string]inte
 
 		result, err := t.shellIntegration.ExecuteShellCommand(cmdCtx, command)
 		if err != nil {
+			// The error from ExecuteShellCommand already contains detailed information
+			// including exit code and output, so just return it as-is
 			return tools.ToolResult{
 				Success: false,
-				Error:   fmt.Sprintf("Failed to execute command '%s': %v", command, err),
+				Error:   err.Error(),
 			}, nil
 		}
 

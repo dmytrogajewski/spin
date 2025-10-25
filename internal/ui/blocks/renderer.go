@@ -94,11 +94,10 @@ func (r *Renderer) RenderHeader(b *Block) string {
 	// Accent bar (1ch)
 	tagColor := GetTagColor(b.Type)
 	out.WriteString(string(tagColor))
-	out.WriteString("│")
 	out.WriteString(string(ColorReset))
 
 	// Spacing after accent bar
-	out.WriteString(strings.Repeat(" ", S2))
+	// out.WriteString(strings.Repeat(" ", S2))
 
 	// Tag badge with colored background
 	// Get background color and label for block type
@@ -307,7 +306,7 @@ func (r *Renderer) renderCode(b *Block) (string, error) {
 		// Gutter
 		out.WriteString(strings.Repeat(" ", S2))
 		out.WriteString(string(ColorMuted))
-		out.WriteString(fmt.Sprintf("│%*d ", gutterWidth-1, lineNum))
+		out.WriteString(fmt.Sprintf("%*d ", gutterWidth-1, lineNum))
 		out.WriteString(string(ColorReset))
 
 		// Line content
@@ -557,7 +556,7 @@ func (r *Renderer) getBlockTypeLabel(blockType BlockType) string {
 	}
 }
 
-// renderCompletionStatus renders the completion status line (↳ ...) for completed tools.
+// renderCompletionStatus renders the completion status line (⤷ ...) for completed tools.
 // Returns empty string if tool hasn't completed or has no status to show.
 func (r *Renderer) RenderCompletionStatus(b *Block) string {
 	if b == nil {
@@ -612,7 +611,7 @@ func (r *Renderer) renderExecuteCompletionStatus(b *Block) string {
 	}
 
 	result := strings.Join(parts, ". ") + "."
-	return fmt.Sprintf(" %s %s", string(ColorMuted)+"↳"+string(ColorReset), result)
+	return fmt.Sprintf("%s %s", string(ColorMuted)+"⤷"+string(ColorReset), result)
 }
 
 // renderReadCompletionStatus renders completion status for READ blocks.
@@ -635,9 +634,9 @@ func (r *Renderer) renderWriteCompletionStatus(b *Block) string {
 	}
 
 	if meta.Succeeded {
-		return fmt.Sprintf(" %s File written successfully.", string(ColorMuted)+"↳"+string(ColorReset))
+		return fmt.Sprintf("%s File written successfully.", string(ColorMuted)+"⤷"+string(ColorReset))
 	}
-	return fmt.Sprintf(" %s Failed to write file.", string(ColorMuted)+"↳"+string(ColorReset))
+	return fmt.Sprintf("%s Failed to write file.", string(ColorMuted)+"⤷"+string(ColorReset))
 }
 
 // renderGrepCompletionStatus renders completion status for GREP blocks.
@@ -660,6 +659,13 @@ func (r *Renderer) renderToolCompletionStatus(b *Block) string {
 		return ""
 	}
 
+	// Only show completion message if the tool has actually completed
+	// Check if the block title indicates completion (contains "completed" case-insensitive)
+	// or if the body is not empty (tool has produced output)
+	if b.Body == "" {
+		return "" // Tool hasn't completed yet (no output)
+	}
+
 	// Show simple completion message
-	return fmt.Sprintf(" %s Tool completed: %s", string(ColorMuted)+"↳"+string(ColorReset), meta.ToolName)
+	return fmt.Sprintf("%s Tool completed: %s", string(ColorMuted)+"⤷"+string(ColorReset), meta.ToolName)
 }
