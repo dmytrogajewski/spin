@@ -17,7 +17,6 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/history"
-	"github.com/dmytrogajewski/spin/internal/history/compress"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
@@ -426,18 +425,11 @@ func (m *Manager) buildAgentOptions(logger *slog.Logger) []agent.AgentOption {
 	return opts
 }
 
-// createHistory creates a conversation history with compression support.
+// createHistory creates a conversation history.
 func (m *Manager) createHistory() *history.History {
 	hist := history.NewHistoryWithDefaults()
 
-	if m.llm != nil {
-		// Use composite compressor: LLM summarization (primary) + hybrid (fallback)
-		adapter := history.NewLLMProviderAdapter(m.llm)
-		compressor := compress.NewDefaultLLMWithHybridFallback(adapter)
-		hist.SetCompressor(compressor)
-	}
-
-	// Set event emitter for compression notifications
+	// Set event emitter for notifications
 	hist.SetEventEmitter(m.emitter)
 
 	_ = hist.AddSystemMessage("You are a helpful AI coding assistant.")

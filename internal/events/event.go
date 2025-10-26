@@ -99,10 +99,10 @@ type ContentDeltaData struct {
 
 // ToolCallStartData contains tool execution start information.
 type ToolCallStartData struct {
-	ToolName         string          `json:"tool_name"`
-	ToolID           string          `json:"tool_id"`
-	Parameters       tools.Arguments `json:"parameters"`
-	RequiresApproval bool            `json:"requires_approval"`
+	ToolName         string               `json:"tool_name"`
+	ToolID           string               `json:"tool_id"`
+	Parameters       tools.ToolParameters `json:"parameters"`
+	RequiresApproval bool                 `json:"requires_approval"`
 }
 
 // ToolProgressData contains tool progress updates.

@@ -366,6 +366,8 @@ func (w *MCPToolWrapper) Schema() tools.ToolSchema {
 	}
 }
 
-func (w *MCPToolWrapper) Execute(ctx context.Context, params map[string]interface{}) (tools.ToolResult, error) {
-	return w.manager.CallTool(ctx, w.name, params)
+func (w *MCPToolWrapper) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
+	// Convert ToolParameters back to map for MCP call
+	paramsMap := params.ToMap()
+	return w.manager.CallTool(ctx, w.name, paramsMap)
 }

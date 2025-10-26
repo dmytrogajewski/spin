@@ -134,9 +134,13 @@ func (t *ToolExecutor) validateToolCall(call *ToolCall) error {
 }
 
 // parseToolArguments parses tool call arguments from JSON.
-func (t *ToolExecutor) parseToolArguments(call *ToolCall) (map[string]interface{}, error) {
+func (t *ToolExecutor) parseToolArguments(call *ToolCall) (tools.ToolParameters, error) {
 	parser := tools.NewArgumentParser()
-	return parser.Parse(call.Function.Arguments)
+	rawParams, err := parser.Parse(call.Function.Arguments)
+	if err != nil {
+		return tools.ToolParameters{}, err
+	}
+	return tools.FromMap(rawParams)
 }
 
 // ExecuteBatch executes multiple tool calls concurrently.
