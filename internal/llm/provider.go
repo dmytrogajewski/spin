@@ -1,32 +1,41 @@
 package llm
 
-import "context"
+import (
+	"context"
+
+	"github.com/openai/openai-go"
+)
 
 // Provider represents an LLM backend.
 //
 // Implementations must be safe for concurrent use by multiple goroutines.
+//
+// All providers use OpenAI SDK types directly to eliminate unnecessary abstraction layers.
+// This applies even to non-OpenAI providers (Ollama, LMStudio) since they implement
+// OpenAI-compatible APIs.
 type Provider interface {
 	// Complete performs a non-streaming completion request.
 	//
 	// The context can be used for cancellation and timeout control.
 	// Returns an error if the request fails or times out.
-	Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error)
+	Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
 
 	// Stream performs a streaming completion request.
 	//
 	// Returns a channel that will receive chunks as they arrive.
 	// The channel will be closed when the stream completes or an error occurs.
-	// The final chunk will have Type ChunkTypeDone or ChunkTypeError.
 	//
 	// Callers must consume all chunks from the channel to avoid goroutine leaks.
 	// Context cancellation will stop the stream and close the channel.
-	Stream(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error)
+	//
+	// Note: Errors are sent as the last chunk before closing. Check chunk for errors.
+	Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error)
 
 	// Models returns the list of available models.
 	//
 	// Returns an empty slice if model listing is not supported.
 	// Some providers may return an error if not authenticated.
-	Models(ctx context.Context) ([]Model, error)
+	Models(ctx context.Context) ([]openai.Model, error)
 
 	// Capabilities returns the capabilities of this provider.
 	//

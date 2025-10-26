@@ -83,26 +83,21 @@ go test ./tests/e2e/... -v -timeout 30m
 
 ## Test Helpers
 
-Use the `internal/testutil` package for common test utilities:
+Use standard Go testing practices and libraries like `github.com/stretchr/testify`:
 
 ```go
-import "github.com/dmytrogajewski/spin/internal/testutil"
+import (
+    "testing"
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+)
 
 func TestMyFeature(t *testing.T) {
-    // Build test fixtures with sensible defaults
-    agent := testutil.NewAgentBuilder(t).
-        WithMaxTurns(5).
-        WithTimeout(10 * time.Second).
-        Build()
-
-    // Use test context with timeout
-    ctx, cancel := testutil.ContextWithTimeout(t)
-    defer cancel()
-
-    // Execute and assert
-    result, err := agent.Execute(ctx, req)
-    testutil.RequireNoError(t, err)
-    testutil.AssertNotNil(t, result)
+    // Use testify for assertions
+    result, err := SomeFunction()
+    require.NoError(t, err)
+    assert.NotNil(t, result)
+    assert.Equal(t, expected, result)
 }
 ```
 
@@ -142,7 +137,9 @@ func TestAgentExecute(t *testing.T) {
 
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
-            agent := testutil.NewAgentBuilder(t).Build()
+            // Create agent with required dependencies
+            agent, err := createTestAgent(t)
+            require.NoError(t, err)
             
             got, err := agent.Execute(context.Background(), tt.input)
             
@@ -193,11 +190,12 @@ Use mock providers for testing without external dependencies:
 
 ```go
 func TestWithMockLLM(t *testing.T) {
-    mockLLM := testutil.NewMockLLMProvider("test")
+    // Use the built-in mock provider
+    mockLLM := llm.NewMockProvider("test")
     
-    agent := testutil.NewAgentBuilder(t).
-        WithProvider(mockLLM).
-        Build()
+    // Create agent with mock provider
+    agent, err := agent.NewAgent(mockLLM, /* other deps */)
+    require.NoError(t, err)
     
     // Test agent behavior with mock LLM
 }
@@ -209,11 +207,12 @@ Always use context with timeout to prevent hanging tests:
 
 ```go
 func TestOperation(t *testing.T) {
-    ctx, cancel := testutil.ContextWithTimeout(t)
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
     defer cancel()
     
     result, err := operation(ctx)
-    testutil.RequireNoError(t, err)
+    require.NoError(t, err)
+    assert.NotNil(t, result)
 }
 ```
 
@@ -226,7 +225,9 @@ Mark helper functions with `t.Helper()` for better error messages:
 ```go
 func setupAgent(t *testing.T) *Agent {
     t.Helper()
-    return testutil.NewAgentBuilder(t).Build()
+    agent, err := createTestAgent(t)
+    require.NoError(t, err)
+    return agent
 }
 ```
 
@@ -237,7 +238,7 @@ Always clean up resources using `defer`:
 ```go
 func TestWithFile(t *testing.T) {
     f, err := os.CreateTemp("", "test")
-    testutil.RequireNoError(t, err)
+    require.NoError(t, err)
     defer os.Remove(f.Name())
     
     // Test code
@@ -286,10 +287,10 @@ func TestErrorHandling(t *testing.T) {
             err := validate(tt.input)
             
             if tt.wantErr {
-                testutil.RequireError(t, err)
-                testutil.AssertContains(t, err.Error(), tt.errMsg)
+                require.Error(t, err)
+                assert.Contains(t, err.Error(), tt.errMsg)
             } else {
-                testutil.RequireNoError(t, err)
+                require.NoError(t, err)
             }
         })
     }

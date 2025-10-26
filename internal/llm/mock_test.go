@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/openai/openai-go"
 )
 
 func TestNewMockProvider(t *testing.T) {
@@ -27,22 +29,31 @@ func TestNewMockProvider(t *testing.T) {
 	t.Run("with custom response", func(t *testing.T) {
 		p := NewMockProvider("test", WithResponse("custom response"))
 
-		resp, err := p.Complete(context.Background(), CompletionRequest{})
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("test"),
+			}),
+		}
+		resp, err := p.Complete(context.Background(), params)
 		if err != nil {
 			t.Fatalf("Complete() error = %v", err)
 		}
 
-		if resp.Content != "custom response" {
-			t.Errorf("Content = %s, want 'custom response'", resp.Content)
+		if len(resp.Choices) == 0 || resp.Choices[0].Message.Content != "custom response" {
+			content := ""
+			if len(resp.Choices) > 0 {
+				content = resp.Choices[0].Message.Content
+			}
+			t.Errorf("Content = %s, want 'custom response'", content)
 		}
 	})
 
 	t.Run("with tool calls", func(t *testing.T) {
-		toolCalls := []ToolCall{
+		toolCalls := []openai.ChatCompletionMessageToolCall{
 			{
 				ID:   "call_1",
-				Type: "function",
-				Function: FunctionCall{
+				Type: openai.ChatCompletionMessageToolCallTypeFunction,
+				Function: openai.ChatCompletionMessageToolCallFunction{
 					Name:      "test_func",
 					Arguments: `{"arg":"value"}`,
 				},
@@ -51,21 +62,26 @@ func TestNewMockProvider(t *testing.T) {
 
 		p := NewMockProvider("test", WithToolCalls(toolCalls))
 
-		resp, err := p.Complete(context.Background(), CompletionRequest{})
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("test"),
+			}),
+		}
+		resp, err := p.Complete(context.Background(), params)
 		if err != nil {
 			t.Fatalf("Complete() error = %v", err)
 		}
 
-		if len(resp.ToolCalls) != 1 {
-			t.Fatalf("ToolCalls length = %d, want 1", len(resp.ToolCalls))
+		if len(resp.Choices) == 0 || len(resp.Choices[0].Message.ToolCalls) != 1 {
+			t.Fatalf("ToolCalls length = %d, want 1", len(resp.Choices[0].Message.ToolCalls))
 		}
 
-		if resp.ToolCalls[0].ID != "call_1" {
-			t.Errorf("ToolCall ID = %s, want call_1", resp.ToolCalls[0].ID)
+		if resp.Choices[0].Message.ToolCalls[0].ID != "call_1" {
+			t.Errorf("ToolCall ID = %s, want call_1", resp.Choices[0].Message.ToolCalls[0].ID)
 		}
 
-		if resp.FinishReason != "tool_calls" {
-			t.Errorf("FinishReason = %s, want tool_calls", resp.FinishReason)
+		if resp.Choices[0].FinishReason != openai.ChatCompletionChoicesFinishReasonToolCalls {
+			t.Errorf("FinishReason = %s, want tool_calls", resp.Choices[0].FinishReason)
 		}
 	})
 
@@ -73,7 +89,12 @@ func TestNewMockProvider(t *testing.T) {
 		expectedErr := errors.New("mock error")
 		p := NewMockProvider("test", WithError(expectedErr))
 
-		_, err := p.Complete(context.Background(), CompletionRequest{})
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("test"),
+			}),
+		}
+		_, err := p.Complete(context.Background(), params)
 		if !errors.Is(err, expectedErr) {
 			t.Errorf("Complete() error = %v, want %v", err, expectedErr)
 		}
@@ -84,13 +105,22 @@ func TestNewMockProvider(t *testing.T) {
 		p := NewMockProvider("test", WithStreaming(chunks))
 
 		// Complete should return concatenated chunks
-		resp, err := p.Complete(context.Background(), CompletionRequest{})
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("test"),
+			}),
+		}
+		resp, err := p.Complete(context.Background(), params)
 		if err != nil {
 			t.Fatalf("Complete() error = %v", err)
 		}
 
-		if resp.Content != "Hello World" {
-			t.Errorf("Content = %s, want 'Hello World'", resp.Content)
+		if len(resp.Choices) == 0 || resp.Choices[0].Message.Content != "Hello World" {
+			content := ""
+			if len(resp.Choices) > 0 {
+				content = resp.Choices[0].Message.Content
+			}
+			t.Errorf("Content = %s, want 'Hello World'", content)
 		}
 	})
 
@@ -116,9 +146,9 @@ func TestNewMockProvider(t *testing.T) {
 	})
 
 	t.Run("with models", func(t *testing.T) {
-		models := []Model{
-			{ID: "model-1", Name: "Model 1", ContextSize: 4096},
-			{ID: "model-2", Name: "Model 2", ContextSize: 8192},
+		models := []openai.Model{
+			{ID: "model-1"},
+			{ID: "model-2"},
 		}
 
 		p := NewMockProvider("test", WithModels(models))
@@ -142,29 +172,32 @@ func TestMockProvider_Complete(t *testing.T) {
 	t.Run("basic completion", func(t *testing.T) {
 		p := NewMockProvider("test", WithResponse("Hello, World!"))
 
-		req := CompletionRequest{
-			Messages: []Message{
-				{Role: "user", Content: "Hi"},
-			},
-			Model:     "mock-model",
-			MaxTokens: 100,
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("Hi"),
+			}),
+			Model: openai.F("mock-model"),
 		}
 
-		resp, err := p.Complete(context.Background(), req)
+		resp, err := p.Complete(context.Background(), params)
 		if err != nil {
 			t.Fatalf("Complete() error = %v", err)
 		}
 
-		if resp.Content != "Hello, World!" {
-			t.Errorf("Content = %s, want 'Hello, World!'", resp.Content)
+		if len(resp.Choices) == 0 || resp.Choices[0].Message.Content != "Hello, World!" {
+			content := ""
+			if len(resp.Choices) > 0 {
+				content = resp.Choices[0].Message.Content
+			}
+			t.Errorf("Content = %s, want 'Hello, World!'", content)
 		}
 
 		if resp.Model != "mock-model" {
 			t.Errorf("Model = %s, want mock-model", resp.Model)
 		}
 
-		if resp.FinishReason != "stop" {
-			t.Errorf("FinishReason = %s, want stop", resp.FinishReason)
+		if len(resp.Choices) > 0 && resp.Choices[0].FinishReason != openai.ChatCompletionChoicesFinishReasonStop {
+			t.Errorf("FinishReason = %s, want stop", resp.Choices[0].FinishReason)
 		}
 
 		if resp.Usage.TotalTokens == 0 {
@@ -178,7 +211,12 @@ func TestMockProvider_Complete(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
-		_, err := p.Complete(ctx, CompletionRequest{})
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("test"),
+			}),
+		}
+		_, err := p.Complete(ctx, params)
 		if err == nil {
 			t.Error("Expected context cancellation error")
 		}
@@ -194,7 +232,12 @@ func TestMockProvider_Complete(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
 
-		_, err := p.Complete(ctx, CompletionRequest{})
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("test"),
+			}),
+		}
+		_, err := p.Complete(ctx, params)
 		if err == nil {
 			t.Error("Expected timeout error")
 		}
@@ -204,7 +247,12 @@ func TestMockProvider_Complete(t *testing.T) {
 		expectedErr := errors.New("test error")
 		p := NewMockProvider("test", WithError(expectedErr))
 
-		_, err := p.Complete(context.Background(), CompletionRequest{})
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("test"),
+			}),
+		}
+		_, err := p.Complete(context.Background(), params)
 		if !errors.Is(err, expectedErr) {
 			t.Errorf("Error = %v, want %v", err, expectedErr)
 		}
@@ -216,7 +264,12 @@ func TestMockProvider_Stream(t *testing.T) {
 		chunks := []string{"Hello", " ", "World", "!"}
 		p := NewMockProvider("test", WithStreaming(chunks))
 
-		stream, err := p.Stream(context.Background(), CompletionRequest{})
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("test"),
+			}),
+		}
+		stream, err := p.Stream(context.Background(), params)
 		if err != nil {
 			t.Fatalf("Stream() error = %v", err)
 		}
@@ -225,15 +278,14 @@ func TestMockProvider_Stream(t *testing.T) {
 		var doneReceived bool
 
 		for chunk := range stream {
-			if chunk.Error != nil {
-				t.Errorf("Chunk error: %v", chunk.Error)
-				continue
-			}
-
-			if chunk.Type == ChunkTypeContentDelta {
-				received = append(received, chunk.Content)
-			} else if chunk.Type == ChunkTypeDone {
-				doneReceived = true
+			if len(chunk.Choices) > 0 {
+				delta := chunk.Choices[0].Delta
+				if delta.Content != "" {
+					received = append(received, delta.Content)
+				}
+				if chunk.Choices[0].FinishReason != "" {
+					doneReceived = true
+				}
 			}
 		}
 
@@ -253,38 +305,42 @@ func TestMockProvider_Stream(t *testing.T) {
 	})
 
 	t.Run("stream tool calls", func(t *testing.T) {
-		toolCalls := []ToolCall{
-			{ID: "call_1", Type: "function"},
-			{ID: "call_2", Type: "function"},
+		toolCalls := []openai.ChatCompletionMessageToolCall{
+			{ID: "call_1", Type: openai.ChatCompletionMessageToolCallTypeFunction},
+			{ID: "call_2", Type: openai.ChatCompletionMessageToolCallTypeFunction},
 		}
 		p := NewMockProvider("test", WithToolCalls(toolCalls))
 
-		stream, err := p.Stream(context.Background(), CompletionRequest{})
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("test"),
+			}),
+		}
+		stream, err := p.Stream(context.Background(), params)
 		if err != nil {
 			t.Fatalf("Stream() error = %v", err)
 		}
 
-		var received []ToolCall
-		var finishReason string
+		var receivedToolCalls []openai.ChatCompletionChunkChoicesDeltaToolCall
+		var finishReason openai.ChatCompletionChunkChoicesFinishReason
 
 		for chunk := range stream {
-			if chunk.Error != nil {
-				t.Errorf("Chunk error: %v", chunk.Error)
-				continue
-			}
-
-			if chunk.Type == ChunkTypeToolCallStart && chunk.ToolCall != nil {
-				received = append(received, *chunk.ToolCall)
-			} else if chunk.Type == ChunkTypeDone {
-				finishReason = chunk.FinishReason
+			if len(chunk.Choices) > 0 {
+				delta := chunk.Choices[0].Delta
+				if len(delta.ToolCalls) > 0 {
+					receivedToolCalls = append(receivedToolCalls, delta.ToolCalls...)
+				}
+				if chunk.Choices[0].FinishReason != "" {
+					finishReason = chunk.Choices[0].FinishReason
+				}
 			}
 		}
 
-		if len(received) != 2 {
-			t.Fatalf("Received %d tool calls, want 2", len(received))
+		if len(receivedToolCalls) != 2 {
+			t.Fatalf("Received %d tool calls, want 2", len(receivedToolCalls))
 		}
 
-		if finishReason != "tool_calls" {
+		if finishReason != openai.ChatCompletionChunkChoicesFinishReasonToolCalls {
 			t.Errorf("FinishReason = %s, want tool_calls", finishReason)
 		}
 	})
@@ -294,7 +350,12 @@ func TestMockProvider_Stream(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 
-		stream, err := p.Stream(ctx, CompletionRequest{})
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("test"),
+			}),
+		}
+		stream, err := p.Stream(ctx, params)
 		if err != nil {
 			t.Fatalf("Stream() error = %v", err)
 		}
@@ -302,18 +363,14 @@ func TestMockProvider_Stream(t *testing.T) {
 		// Cancel after first chunk
 		time.AfterFunc(60*time.Millisecond, cancel)
 
-		errorReceived := false
-		for chunk := range stream {
-			if chunk.Error != nil {
-				errorReceived = true
-				if !errors.Is(chunk.Error, context.Canceled) {
-					t.Errorf("Chunk error = %v, want context.Canceled", chunk.Error)
-				}
-			}
+		chunkCount := 0
+		for range stream {
+			chunkCount++
 		}
 
-		if !errorReceived {
-			t.Error("Expected error chunk from cancellation")
+		// Should receive at least one chunk before cancellation
+		if chunkCount == 0 {
+			t.Error("Expected to receive at least one chunk")
 		}
 	})
 
@@ -321,7 +378,12 @@ func TestMockProvider_Stream(t *testing.T) {
 		expectedErr := errors.New("test error")
 		p := NewMockProvider("test", WithError(expectedErr))
 
-		_, err := p.Stream(context.Background(), CompletionRequest{})
+		params := openai.ChatCompletionNewParams{
+			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage("test"),
+			}),
+		}
+		_, err := p.Stream(context.Background(), params)
 		if !errors.Is(err, expectedErr) {
 			t.Errorf("Stream() error = %v, want %v", err, expectedErr)
 		}
@@ -343,8 +405,8 @@ func TestMockProvider_Models(t *testing.T) {
 	})
 
 	t.Run("custom models", func(t *testing.T) {
-		customModels := []Model{
-			{ID: "custom-1", Name: "Custom 1"},
+		customModels := []openai.Model{
+			{ID: "custom-1"},
 		}
 
 		p := NewMockProvider("test", WithModels(customModels))
@@ -381,10 +443,15 @@ func TestMockProvider_ThreadSafety(t *testing.T) {
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {
 		go func() {
+			params := openai.ChatCompletionNewParams{
+				Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+					openai.UserMessage("test"),
+				}),
+			}
 			for j := 0; j < 100; j++ {
 				_ = p.Name()
 				_ = p.Capabilities()
-				_, _ = p.Complete(context.Background(), CompletionRequest{})
+				_, _ = p.Complete(context.Background(), params)
 			}
 			done <- true
 		}()
@@ -420,29 +487,5 @@ func TestMockProvider_Close(t *testing.T) {
 	err = p.Close()
 	if err != nil {
 		t.Errorf("Close() second call error = %v, want nil", err)
-	}
-}
-
-func TestChunkType_String(t *testing.T) {
-	tests := []struct {
-		typ  ChunkType
-		want string
-	}{
-		{ChunkTypeContentDelta, "content_delta"},
-		{ChunkTypeToolCallStart, "tool_call_start"},
-		{ChunkTypeToolCallDelta, "tool_call_delta"},
-		{ChunkTypeToolCallComplete, "tool_call_complete"},
-		{ChunkTypeDone, "done"},
-		{ChunkTypeError, "error"},
-		{ChunkType(999), "unknown"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
-			got := tt.typ.String()
-			if got != tt.want {
-				t.Errorf("String() = %s, want %s", got, tt.want)
-			}
-		})
 	}
 }

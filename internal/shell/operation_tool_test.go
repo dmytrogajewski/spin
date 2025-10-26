@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // TestShellOperationTool_ExecuteCommand_Success tests successful command execution.
@@ -29,7 +31,9 @@ func TestShellOperationTool_ExecuteCommand_Success(t *testing.T) {
 		"command":   "echo hello",
 	}
 
-	result, err := tool.Execute(context.Background(), params)
+	toolParams, _ := tools.FromMap(params)
+
+	result, err := tool.Execute(context.Background(), toolParams)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
@@ -67,7 +71,9 @@ func TestShellOperationTool_ExecuteCommand_Failure(t *testing.T) {
 		"command":   "nonexistentcommand12345",
 	}
 
-	result, err := tool.Execute(context.Background(), params)
+	toolParams, _ := tools.FromMap(params)
+
+	result, err := tool.Execute(context.Background(), toolParams)
 	if err != nil {
 		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
 	}
@@ -124,7 +130,9 @@ func TestShellOperationTool_MissingToolScenario(t *testing.T) {
 		"command":   "dpkg --version",
 	}
 
-	result, err := tool.Execute(context.Background(), params)
+	toolParams, _ := tools.FromMap(params)
+
+	result, err := tool.Execute(context.Background(), toolParams)
 	if err != nil {
 		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
 	}
@@ -178,7 +186,9 @@ func TestShellOperationTool_GetEnvironment(t *testing.T) {
 		"operation": "get_environment",
 	}
 
-	result, err := tool.Execute(context.Background(), params)
+	toolParams, _ := tools.FromMap(params)
+
+	result, err := tool.Execute(context.Background(), toolParams)
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
@@ -200,7 +210,9 @@ func TestShellOperationTool_MissingOperation(t *testing.T) {
 
 	params := map[string]interface{}{}
 
-	result, err := tool.Execute(context.Background(), params)
+	toolParams, _ := tools.FromMap(params)
+
+	result, err := tool.Execute(context.Background(), toolParams)
 	if err != nil {
 		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
 	}
@@ -224,7 +236,9 @@ func TestShellOperationTool_MissingCommand(t *testing.T) {
 		"operation": "execute_command",
 	}
 
-	result, err := tool.Execute(context.Background(), params)
+	toolParams, _ := tools.FromMap(params)
+
+	result, err := tool.Execute(context.Background(), toolParams)
 	if err != nil {
 		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
 	}
@@ -260,7 +274,9 @@ func TestShellOperationTool_ExecuteCommand_Timeout(t *testing.T) {
 		"timeout":   1.0, // 1 second timeout
 	}
 
-	result, err := tool.Execute(context.Background(), params)
+	toolParams, _ := tools.FromMap(params)
+
+	result, err := tool.Execute(context.Background(), toolParams)
 	if err != nil {
 		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
 	}
@@ -299,7 +315,9 @@ func TestShellOperationTool_ExecuteCommand_CustomTimeout(t *testing.T) {
 		"timeout":   5.0, // 5 second timeout
 	}
 
-	result, err := tool.Execute(context.Background(), params)
+	toolParams, _ := tools.FromMap(params)
+
+	result, err := tool.Execute(context.Background(), toolParams)
 	if err != nil {
 		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
 	}
@@ -335,7 +353,9 @@ func TestShellOperationTool_ExecuteCommand_InvalidTimeout(t *testing.T) {
 		"timeout":   "invalid", // Invalid timeout type
 	}
 
-	result, err := tool.Execute(context.Background(), params)
+	toolParams, _ := tools.FromMap(params)
+
+	result, err := tool.Execute(context.Background(), toolParams)
 	if err != nil {
 		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
 	}
@@ -372,7 +392,9 @@ func TestShellOperationTool_ExecuteCommand_ZeroTimeout(t *testing.T) {
 		"timeout":   0.0, // Zero timeout
 	}
 
-	result, err := tool.Execute(context.Background(), params)
+	toolParams, _ := tools.FromMap(params)
+
+	result, err := tool.Execute(context.Background(), toolParams)
 	if err != nil {
 		t.Fatalf("Execute returned error instead of ToolResult: %v", err)
 	}

@@ -3,6 +3,7 @@ package orchestration
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/dmytrogajewski/spin/internal/tools"
@@ -351,7 +352,15 @@ func TestOrchestrationService_GetPlanner(t *testing.T) {
 func TestOrchestrationService_SetPlanner(t *testing.T) {
 	svc := NewOrchestrationService(nil, nil, nil)
 
-	plan := NewPlan("test task")
+	plan := &Plan{
+		ID:           "test-plan-1",
+		Task:         "test task",
+		Steps:        []Step{},
+		Dependencies: make(map[string][]string),
+		CreatedAt:    time.Now(),
+		Status:       PlanStatusPending,
+		Metadata:     make(map[string]interface{}),
+	}
 	svc.SetPlanner(plan)
 
 	retrieved := svc.GetPlanner()

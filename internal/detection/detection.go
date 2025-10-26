@@ -78,6 +78,10 @@ type Event interface {
 	GetData() interface{}
 }
 
+// DetectionEventData represents the data payload for detection events.
+// This is a strongly-typed alternative to interface{} for detection-specific events.
+type DetectionEventData map[string]interface{}
+
 // Intervention defines the interface for cycle-breaking strategies
 type Intervention interface {
 	Apply(ctx context.Context, messages []Message) ([]Message, error)
@@ -114,7 +118,7 @@ func (i *EscalateIntervention) Apply(ctx context.Context, messages []Message) ([
 		i.Emitter.Emit(&event{
 			eventType: "turn_paused",
 			timestamp: time.Now(),
-			data: map[string]interface{}{
+			data: DetectionEventData{
 				"status":  "paused",
 				"message": "Agent appears stuck in a reasoning cycle. Please provide guidance or restart the conversation.",
 			},
@@ -144,7 +148,7 @@ func (m *message) GetTimestamp() time.Time { return m.timestamp }
 type event struct {
 	eventType string
 	timestamp time.Time
-	data      interface{}
+	data      DetectionEventData
 }
 
 func (e *event) GetType() string         { return e.eventType }

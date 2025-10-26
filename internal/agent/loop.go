@@ -8,7 +8,8 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/orchestration"
+	"github.com/openai/openai-go"
 )
 
 // executeAgentLoop runs the main agent execution loop.
@@ -42,15 +43,20 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 			return messages, resp, err
 		}
 
+		// Extract response data using helper functions
+		content := getContent(llmResp)
+		toolCalls := getToolCalls(llmResp)
+		finishReason := getFinishReason(llmResp)
+
 		// Check for empty response to prevent getting stuck
-		if llmResp == nil || (llmResp.Content == "" && len(llmResp.ToolCalls) == 0) {
+		if llmResp == nil || (content == "" && len(toolCalls) == 0) {
 			slog.Warn("Received empty response from LLM, breaking loop to prevent stuck state",
-				"turn", turn+1, "llm_resp_nil", llmResp == nil, "content_len", len(llmResp.Content), "tool_calls", len(llmResp.ToolCalls))
+				"turn", turn+1, "llm_resp_nil", llmResp == nil, "content_len", len(content), "tool_calls", len(toolCalls))
 			resp.FinishReason = "empty_response"
 			break
 		}
 
-		slog.Debug("LLM response received", "turn", turn+1, "content_len", len(llmResp.Content), "tool_calls", len(llmResp.ToolCalls), "finish_reason", llmResp.FinishReason)
+		slog.Debug("LLM response received", "turn", turn+1, "content_len", len(content), "tool_calls", len(toolCalls), "finish_reason", finishReason)
 
 		// Handle cycle detection via detection service
 		if a.config.CycleDetection.Enabled {
@@ -68,14 +74,14 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 		}
 
 		// Process tool calls or finish
-		if len(llmResp.ToolCalls) > 0 {
-			slog.Debug("processing tool calls", "count", len(llmResp.ToolCalls), "turn", turn+1)
-			messages = a.processToolCalls(ctx, messages, llmResp, resp)
+		if len(toolCalls) > 0 {
+			slog.Debug("processing tool calls", "count", len(toolCalls), "turn", turn+1)
+			messages = a.processToolCallsFromCompletion(ctx, messages, llmResp, resp)
 			continue
 		}
 
-		messages = a.addFinalMessage(messages, llmResp.Content)
-		resp.FinishReason = llmResp.FinishReason
+		messages = a.addFinalMessage(messages, content)
+		resp.FinishReason = finishReason
 		if resp.FinishReason == "" {
 			resp.FinishReason = "stop"
 		}
@@ -95,11 +101,14 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 //
 // Returns the modified messages (with intervention added if applicable),
 // whether to stop the agent loop, and any error.
-func (a *Agent) handleCycleDetection(ctx context.Context, messages []Message, llmResp *llm.CompletionResponse, turn int, resp *AgentResponse) ([]Message, bool, error) {
+func (a *Agent) handleCycleDetection(ctx context.Context, messages []Message, llmResp *openai.ChatCompletion, turn int, resp *AgentResponse) ([]Message, bool, error) {
+	content := getContent(llmResp)
+	toolCalls := getToolCalls(llmResp)
+
 	snapshot := detection.Snapshot{
 		Turn:      turn,
-		Response:  llmResp.Content,
-		ToolCalls: extractToolNames(llmResp.ToolCalls),
+		Response:  content,
+		ToolCalls: extractToolNamesFromOrchestration(toolCalls),
 		Error:     "",
 		Timestamp: time.Now(),
 	}
@@ -169,7 +178,7 @@ func (a *Agent) emitTurnStart(turn int) {
 }
 
 // callLLMWithTimeout calls the LLM provider with timeout protection to prevent getting stuck.
-func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []Message, task Task) (*llm.CompletionResponse, error) {
+func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []Message, task Task) (*openai.ChatCompletion, error) {
 	// Use a reasonable timeout for LLM calls (5 minutes)
 	// Don't use agent timeout which may be very long for multi-step tasks
 	llmTimeout := 5 * time.Minute
@@ -245,7 +254,8 @@ func (a *Agent) selectIntervention(cycleType detection.CycleType, turnCount int)
 // Returns strings in format "tool_name(arguments_json)" to enable parameter-aware cycle detection.
 // This prevents false positives when same tool is called with different params.
 // e.g., "list_directory(.)" vs "list_directory(advanced-features-20251012)"
-func extractToolNames(toolCalls []llm.ToolCall) []string {
+// extractToolNamesFromOrchestration extracts tool names from orchestration.ToolCall slice.
+func extractToolNamesFromOrchestration(toolCalls []orchestration.ToolCall) []string {
 	calls := make([]string, len(toolCalls))
 	for i, tc := range toolCalls {
 		// Include both name and arguments for accurate cycle detection

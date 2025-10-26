@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/openai/openai-go"
 )
 
 // TestNewProvider tests provider construction
@@ -123,6 +123,7 @@ func TestProvider_Complete(t *testing.T) {
 			t.Errorf("Request path = %s, want /chat/completions", r.URL.Path)
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{
 			"id": "chatcmpl-123",
@@ -156,13 +157,13 @@ func TestProvider_Complete(t *testing.T) {
 	}
 
 	// Call Complete
-	req := llm.CompletionRequest{
-		Messages: []llm.Message{
-			{Role: "user", Content: "Hello"},
-		},
+	params := openai.ChatCompletionNewParams{
+		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Hello"),
+		}),
 	}
 
-	resp, err := p.Complete(context.Background(), req)
+	resp, err := p.Complete(context.Background(), params)
 	if err != nil {
 		t.Errorf("Complete() unexpected error = %v", err)
 		return
@@ -172,8 +173,12 @@ func TestProvider_Complete(t *testing.T) {
 		t.Fatal("Complete() returned nil response")
 	}
 
-	if resp.Content != "Hello! How can I help you?" {
-		t.Errorf("Response content = %q, want %q", resp.Content, "Hello! How can I help you?")
+	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content != "Hello! How can I help you?" {
+		content := ""
+		if len(resp.Choices) > 0 {
+			content = resp.Choices[0].Message.Content
+		}
+		t.Errorf("Response content = %q, want %q", content, "Hello! How can I help you?")
 	}
 }
 
@@ -200,9 +205,12 @@ func TestProvider_Stream(t *testing.T) {
 		Model:   "llama2",
 	})
 
-	chunks, err := p.Stream(context.Background(), llm.CompletionRequest{
-		Messages: []llm.Message{{Role: "user", Content: "Hello"}},
-	})
+	params := openai.ChatCompletionNewParams{
+		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Hello"),
+		}),
+	}
+	chunks, err := p.Stream(context.Background(), params)
 
 	if err != nil {
 		t.Errorf("Stream() unexpected error = %v", err)
@@ -210,11 +218,8 @@ func TestProvider_Stream(t *testing.T) {
 	}
 
 	// Collect chunks
-	var collected []llm.StreamChunk
+	var collected []openai.ChatCompletionChunk
 	for chunk := range chunks {
-		if chunk.Type == llm.ChunkTypeError {
-			t.Errorf("Received error chunk: %v", chunk.Error)
-		}
 		collected = append(collected, chunk)
 	}
 
@@ -230,6 +235,7 @@ func TestProvider_Models(t *testing.T) {
 			t.Errorf("Request path = %s, want /models", r.URL.Path)
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{
 			"data": [
@@ -293,15 +299,18 @@ func TestProvider_ErrorHandling(t *testing.T) {
 		BaseURL: server.URL,
 	})
 
-	_, err := p.Complete(context.Background(), llm.CompletionRequest{
-		Messages: []llm.Message{{Role: "user", Content: "test"}},
-	})
+	params := openai.ChatCompletionNewParams{
+		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("test"),
+		}),
+	}
+	_, err := p.Complete(context.Background(), params)
 
 	if err == nil {
 		t.Error("Complete() with 401 response should return error")
 	}
 
-	if !strings.Contains(err.Error(), "unauthorized") {
+	if !strings.Contains(strings.ToLower(err.Error()), "unauthorized") {
 		t.Errorf("Error should contain 'unauthorized', got: %v", err)
 	}
 }
@@ -322,9 +331,12 @@ func TestProvider_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	_, err := p.Complete(ctx, llm.CompletionRequest{
-		Messages: []llm.Message{{Role: "user", Content: "test"}},
-	})
+	params := openai.ChatCompletionNewParams{
+		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("test"),
+		}),
+	}
+	_, err := p.Complete(ctx, params)
 
 	if err == nil {
 		t.Error("Complete() with cancelled context should return error")

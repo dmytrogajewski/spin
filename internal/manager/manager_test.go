@@ -44,47 +44,6 @@ func TestManager_NewConversation_Integration(t *testing.T) {
 	// assert.NotNil(t, conv.events, "Event channel should be initialized")
 }
 
-// TestManager_getLogger tests logger retrieval from manager
-func TestManager_getLogger(t *testing.T) {
-	tests := []struct {
-		name       string
-		manager    *Manager
-		wantNil    bool
-		wantCustom bool
-	}{
-		{
-			name:       "with_custom_logger",
-			manager:    &Manager{logger: testLogger()},
-			wantNil:    false,
-			wantCustom: true,
-		},
-		{
-			name:       "without_logger_fallback_to_default",
-			manager:    &Manager{},
-			wantNil:    false,
-			wantCustom: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			got := tt.manager.getLogger(ctx)
-
-			if tt.wantNil {
-				assert.Nil(t, got)
-			} else {
-				assert.NotNil(t, got)
-			}
-
-			if tt.wantCustom {
-				// Verify it's the custom logger (not default)
-				assert.Equal(t, tt.manager.logger, got)
-			}
-		})
-	}
-}
-
 // testLogger creates a test logger for verification
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stdout, nil))

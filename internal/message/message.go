@@ -2,6 +2,22 @@ package message
 
 import "time"
 
+// ToolCall represents a tool invocation from an assistant message.
+type ToolCall struct {
+	ID       string       `json:"id"`
+	Type     string       `json:"type"`
+	Function FunctionCall `json:"function"`
+}
+
+// FunctionCall contains function invocation details.
+type FunctionCall struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+// Metadata stores string key-value metadata for messages.
+type Metadata map[string]string
+
 // Role represents a message role in the conversation.
 type Role string
 
@@ -29,7 +45,7 @@ type Message struct {
 	Content string `json:"content"`
 
 	// ToolCalls contains tool invocations from assistant messages
-	ToolCalls []interface{} `json:"tool_calls,omitempty"`
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 
 	// ToolCallID links a tool role message to the corresponding tool call
 	ToolCallID string `json:"tool_call_id,omitempty"`
@@ -43,12 +59,6 @@ type Message struct {
 	// Name is an optional name field for the message author
 	Name string `json:"name,omitempty"`
 
-	// Metadata stores additional extensible data
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	// Metadata stores additional string key-value data
+	Metadata Metadata `json:"metadata,omitempty"`
 }
-
-// GetRole returns the message role (implements cycle.Message interface)
-
-// GetContent returns the message content (implements cycle.Message interface)
-
-// GetTimestamp returns the message timestamp (implements cycle.Message interface)

@@ -495,6 +495,42 @@ The event stream delivers concrete structs instead of loosely typed maps. Key pa
 
 `ToolCallStartData` exposes parameters via `types.ToolCallArguments`, allowing consumers to safely decode tool arguments in the UI and protocol layers.
 
+### Type-Safe Event Access
+
+The `Event` struct provides type-safe helper methods to access event data without manual type assertions:
+
+```go
+// Process events with type-safe helpers
+for event := range events {
+    switch event.Type {
+    case events.EventToolCallStart:
+        if data, ok := event.ToolCallStartData(); ok {
+            fmt.Printf("Tool: %s (ID: %s)\n", data.ToolName, data.ToolID)
+        }
+    case events.EventContentDelta:
+        if data, ok := event.ContentDeltaData(); ok {
+            fmt.Print(data.Content)
+        }
+    case events.EventError:
+        if data, ok := event.ErrorData(); ok {
+            fmt.Printf("Error: %s (%s)\n", data.Message, data.Code)
+        }
+    }
+}
+```
+
+**Available Helper Methods:**
+- `event.ToolCallStartData() (ToolCallStartData, bool)`
+- `event.ToolCallCompleteData() (ToolCallCompleteData, bool)`
+- `event.ToolProgressData() (ToolProgressData, bool)`
+- `event.ContentDeltaData() (ContentDeltaData, bool)`
+- `event.TurnEventData() (TurnEventData, bool)`
+- `event.ApprovalEventData() (ApprovalEventData, bool)`
+- `event.SystemEventData() (SystemEventData, bool)`
+- `event.ErrorData() (ErrorData, bool)`
+
+These helpers eliminate manual type assertions, provide IDE autocomplete support, and prevent runtime panics from type mismatches.
+
 ## State Management
 
 ### Conversation State

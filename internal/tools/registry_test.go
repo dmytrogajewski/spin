@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
 )
 
 // contains checks if s contains substr.
@@ -19,13 +20,13 @@ type mockTool struct {
 	name        string
 	description string
 	schema      ToolSchema
-	executeFunc func(context.Context, map[string]interface{}) (ToolResult, error)
+	executeFunc func(context.Context, ToolParameters) (ToolResult, error)
 }
 
 func (m *mockTool) Name() string        { return m.name }
 func (m *mockTool) Description() string { return m.description }
 func (m *mockTool) Schema() ToolSchema  { return m.schema }
-func (m *mockTool) Execute(ctx context.Context, params map[string]interface{}) (ToolResult, error) {
+func (m *mockTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	if m.executeFunc != nil {
 		return m.executeFunc(ctx, params)
 	}
@@ -314,7 +315,7 @@ func TestRegistryExecute(t *testing.T) {
 	// Tool that returns success
 	successTool := &mockTool{
 		name: "success_tool",
-		executeFunc: func(_ context.Context, params map[string]interface{}) (ToolResult, error) {
+		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
 			return ToolResult{
 				Success: true,
 				Output:  "success output",
@@ -325,7 +326,7 @@ func TestRegistryExecute(t *testing.T) {
 	// Tool that returns error
 	errorTool := &mockTool{
 		name: "error_tool",
-		executeFunc: func(_ context.Context, params map[string]interface{}) (ToolResult, error) {
+		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
 			return ToolResult{}, errors.New("execution failed")
 		},
 	}
@@ -347,8 +348,9 @@ func TestRegistryExecute(t *testing.T) {
 				},
 			},
 		},
-		executeFunc: func(_ context.Context, params map[string]interface{}) (ToolResult, error) {
-			if val, ok := params["required_param"].(string); ok {
+		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
+			val, err := params.GetString("required_param")
+			if err == nil {
 				return ToolResult{Success: true, Output: "received: " + val}, nil
 			}
 			return ToolResult{Success: false, Error: "missing parameter"}, nil
@@ -458,7 +460,7 @@ func TestRegistryExecuteContextCancellation(t *testing.T) {
 	// Tool that checks context
 	ctxTool := &mockTool{
 		name: "ctx_tool",
-		executeFunc: func(ctx context.Context, params map[string]interface{}) (ToolResult, error) {
+		executeFunc: func(ctx context.Context, params ToolParameters) (ToolResult, error) {
 			select {
 			case <-ctx.Done():
 				return ToolResult{}, ctx.Err()
@@ -556,7 +558,7 @@ func TestRegistryTypeValidation(t *testing.T) {
 				},
 			},
 		},
-		executeFunc: func(_ context.Context, params map[string]interface{}) (ToolResult, error) {
+		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
 			return ToolResult{Success: true, Output: "ok"}, nil
 		},
 	}
@@ -673,7 +675,7 @@ func TestRegistryEnumValidation(t *testing.T) {
 				},
 			},
 		},
-		executeFunc: func(_ context.Context, params map[string]interface{}) (ToolResult, error) {
+		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
 			return ToolResult{Success: true, Output: "ok"}, nil
 		},
 	}
@@ -752,7 +754,7 @@ func TestRegistryExecute_UnknownParameter(t *testing.T) {
 				},
 			},
 		},
-		executeFunc: func(_ context.Context, params map[string]interface{}) (ToolResult, error) {
+		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
 			return ToolResult{Success: true, Output: "ok"}, nil
 		},
 	}
@@ -859,7 +861,7 @@ func TestRegistryExecute_UnknownParameter_ErrorMessage(t *testing.T) {
 				},
 			},
 		},
-		executeFunc: func(_ context.Context, params map[string]interface{}) (ToolResult, error) {
+		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
 			return ToolResult{Success: true, Output: "ok"}, nil
 		},
 	}

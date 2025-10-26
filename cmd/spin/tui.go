@@ -99,11 +99,11 @@ func runTUI(cmd *cobra.Command, args []string) error {
 			currentModel = configLoader.GetString("model")
 		}
 		for _, m := range models {
-			if m.ID == currentModel || m.Name == currentModel {
-				if m.ContextSize > 0 {
-					maxTokens = int64(m.ContextSize)
-					break
-				}
+			if m.ID == currentModel {
+				// openai.Model doesn't have ContextSize field
+				// Use a default or fetch from model details if needed
+				// For now, keep the default maxTokens
+				break
 			}
 		}
 	}

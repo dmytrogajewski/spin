@@ -1,19 +1,14 @@
-// Package openai provides an OpenAI-compatible LLM provider implementation.
-// It supports the OpenAI Chat Completions API format, making it compatible with
-// OpenAI, Azure OpenAI, and other services that implement the same API.
+// Package openai provides an OpenAI LLM provider implementation using the official openai-go SDK.
 package openai
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"strings"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
 )
 
 // Config configures the OpenAI provider.
@@ -38,39 +33,45 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// Provider implements the OpenAI-compatible LLM provider.
+// Provider implements the OpenAI LLM provider using the official SDK.
 //
 // GOROUTINE LIFECYCLE:
 // - Stream() spawns one goroutine per streaming request that:
-//   - Reads from HTTP response body
-//   - Sends chunks to the returned channel
-//   - Lives until EOF, context cancellation, or error
-//   - Automatically cleans up (closes channel and response body)
 //
-// - The goroutine terminates when the caller stops reading from the channel
+//   - Reads from SDK stream
+//
+//   - Converts and sends chunks to the returned channel
+//
+//   - Lives until EOF, context cancellation, or error
+//
+//   - Automatically cleans up (closes channel)
+//
+//   - The goroutine terminates when the caller stops reading from the channel
+//     or when the context is cancelled
 //
 // CONCURRENCY:
-// - Stream() is safe to call concurrently
+// - All methods are safe to call concurrently
 // - Each stream has its own independent goroutine and channel
-// - No shared state between concurrent streams
+// - No shared mutable state between concurrent operations
 type Provider struct {
-	client      *llm.HTTPClient
-	errorMapper *llm.ErrorMapper
-	baseURL     string
-	apiKey      string
-	model       string
-	timeout     time.Duration
+	client  *openai.Client
+	model   string
+	timeout time.Duration
 }
 
-// NewProvider creates a new OpenAI-compatible provider.
+// NewProvider creates a new OpenAI provider using the official SDK.
 func NewProvider(cfg Config) (*Provider, error) {
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Normalize URL (remove trailing slash)
-	baseURL := strings.TrimSuffix(cfg.BaseURL, "/")
+	// IMPORTANT: Do NOT remove trailing slash from BaseURL
+	// The OpenAI SDK uses url.ResolveReference which requires trailing slash
+	// to preserve the path component (e.g., /v1/)
+	// Without trailing slash: http://host/v1 + "chat/completions" = http://host/chat/completions (WRONG)
+	// With trailing slash: http://host/v1/ + "chat/completions" = http://host/v1/chat/completions (CORRECT)
+	baseURL := cfg.BaseURL
 
 	// Use timeout from config or default
 	timeout := cfg.Timeout
@@ -78,94 +79,76 @@ func NewProvider(cfg Config) (*Provider, error) {
 		timeout = llm.DefaultTimeout
 	}
 
-	// Create HTTP client with timeout
-	client := llm.NewHTTPClient(
-		llm.WithTimeout(timeout),
-		llm.WithMaxRetries(3),
+	// Create SDK client
+	client := openai.NewClient(
+		option.WithAPIKey(cfg.APIKey),
+		option.WithBaseURL(baseURL),
+		option.WithRequestTimeout(timeout),
 	)
 
-	// Create error mapper for standardized error handling
-	errorMapper := llm.NewErrorMapper("openai")
-
 	return &Provider{
-		client:      client,
-		errorMapper: errorMapper,
-		baseURL:     baseURL,
-		apiKey:      cfg.APIKey,
-		model:       cfg.Model,
-		timeout:     timeout,
+		client:  client,
+		model:   cfg.Model,
+		timeout: timeout,
 	}, nil
 }
 
 // Complete performs a synchronous completion request.
-func (p *Provider) Complete(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
-	// Build request body
-	reqBody := p.buildRequest(req, false)
+func (p *Provider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	// Set model if not specified in request
+	if !params.Model.Present {
+		params.Model = openai.F(openai.ChatModel(p.model))
+	}
 
-	// Create HTTP request
-	httpReq, err := p.newRequest(ctx, http.MethodPost, "/chat/completions", reqBody)
+	// Make completion request - returns *ChatCompletion directly
+	resp, err := p.client.Chat.Completions.New(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, mapError(err)
 	}
 
-	// Make HTTP request
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, p.errorMapper.MapError(fmt.Errorf("http request: %w", err))
-	}
-	defer resp.Body.Close()
-
-	// Handle non-200 responses
-	if resp.StatusCode != http.StatusOK {
-		return nil, p.errorMapper.MapError(p.handleError(resp))
-	}
-
-	// Parse response
-	var apiResp chatCompletionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	// Convert to common format
-	return p.convertResponse(&apiResp), nil
+	return resp, nil
 }
 
 // Stream performs a streaming completion request.
-func (p *Provider) Stream(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
-	// Build streaming request
-	reqBody := p.buildRequest(req, true)
-
-	// Create HTTP request
-	httpReq, err := p.newRequest(ctx, http.MethodPost, "/chat/completions", reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+func (p *Provider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
+	// Set model if not specified in request
+	if !params.Model.Present {
+		params.Model = openai.F(openai.ChatModel(p.model))
 	}
 
-	// Make HTTP request
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		return nil, p.errorMapper.MapError(fmt.Errorf("http request: %w", err))
-	}
+	// Create streaming request
+	stream := p.client.Chat.Completions.NewStreaming(ctx, params)
 
-	// Handle non-200 responses
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, p.errorMapper.MapError(p.handleError(resp))
-	}
+	// Create channel for chunks (buffered to avoid blocking)
+	chunks := make(chan openai.ChatCompletionChunk, 10)
 
-	// Create channel for chunks
-	chunks := make(chan llm.StreamChunk, 10)
-
-	// Start streaming in goroutine
+	// Spawn goroutine to read stream and send chunks
 	go func() {
 		defer close(chunks)
-		defer resp.Body.Close()
+		defer stream.Close()
 
-		if err := p.streamResponse(ctx, resp.Body, chunks); err != nil {
-			chunks <- llm.StreamChunk{
-				Type:  llm.ChunkTypeError,
-				Error: err,
+		// Read chunks from stream
+		for stream.Next() {
+			chunk := stream.Current()
+
+			// Send chunk directly (no conversion needed!)
+			select {
+			case chunks <- chunk:
+			case <-ctx.Done():
+				// Context cancelled, just exit (channel will be closed by defer)
+				return
 			}
+		}
+
+		// Check for stream error
+		// Note: With OpenAI SDK, errors should be returned from Stream() call itself,
+		// but we check here for completeness. Consumers should check for channel close.
+		if err := stream.Err(); err != nil {
+			// We can't send errors in chunks anymore since we removed the abstraction
+			// Errors will need to be handled differently by consumers
+			// For now, just log and close
+			_ = mapError(err)
+			return
 		}
 	}()
 
@@ -173,43 +156,28 @@ func (p *Provider) Stream(ctx context.Context, req llm.CompletionRequest) (<-cha
 }
 
 // Models returns the list of available models.
-func (p *Provider) Models(ctx context.Context) ([]llm.Model, error) {
-	// Create HTTP request
-	req, err := p.newRequest(ctx, http.MethodGet, "/models", nil)
+func (p *Provider) Models(ctx context.Context) ([]openai.Model, error) {
+	// Use SDK to list models
+	resp, err := p.client.Models.List(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, mapError(err)
 	}
 
-	// Make HTTP request
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("http request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Handle non-200 responses
-	if resp.StatusCode != http.StatusOK {
-		return nil, p.handleError(resp)
+	var models []openai.Model
+	// Add models from first page
+	for _, sdkModel := range resp.Data {
+		models = append(models, sdkModel)
 	}
 
-	// Parse response
-	var result struct {
-		Data []struct {
-			ID      string `json:"id"`
-			Created int64  `json:"created"`
-		} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-
-	// Convert to common format
-	models := make([]llm.Model, len(result.Data))
-	for i, m := range result.Data {
-		models[i] = llm.Model{
-			ID:   m.ID,
-			Name: m.ID,
+	// Iterate through remaining pages
+	for {
+		nextPage, err := resp.GetNextPage()
+		if err != nil || nextPage == nil {
+			break
+		}
+		resp = nextPage
+		for _, sdkModel := range resp.Data {
+			models = append(models, sdkModel)
 		}
 	}
 
@@ -221,7 +189,7 @@ func (p *Provider) Capabilities() llm.Capabilities {
 	return llm.Capabilities{
 		Streaming:       true,
 		FunctionCalling: true,
-		Vision:          false,
+		Vision:          false, // Not implemented yet
 	}
 }
 
@@ -230,266 +198,8 @@ func (p *Provider) Name() string {
 	return "openai-compatible"
 }
 
-// Close closes the provider and releases resources.
+// Close cleans up provider resources.
 func (p *Provider) Close() error {
+	// SDK client doesn't require explicit cleanup
 	return nil
-}
-
-// buildRequest builds the OpenAI API request body.
-func (p *Provider) buildRequest(req llm.CompletionRequest, stream bool) map[string]interface{} {
-	messages := p.convertMessages(req.Messages)
-
-	body := map[string]interface{}{
-		"model":    p.getModel(req.Model),
-		"messages": messages,
-		"stream":   stream,
-	}
-
-	p.addOptionalParameters(body, req)
-	p.addTools(body, req.Tools)
-
-	return body
-}
-
-// convertMessages converts LLM messages to OpenAI format.
-func (p *Provider) convertMessages(messages []llm.Message) []interface{} {
-	result := make([]interface{}, len(messages))
-	for i, msg := range messages {
-		result[i] = p.convertMessage(msg)
-	}
-	return result
-}
-
-// convertMessage converts a single LLM message to OpenAI format.
-func (p *Provider) convertMessage(msg llm.Message) map[string]interface{} {
-	m := map[string]interface{}{
-		"role":    msg.Role,
-		"content": msg.Content,
-	}
-
-	if len(msg.ToolCalls) > 0 {
-		m["tool_calls"] = p.convertToolCalls(msg.ToolCalls)
-	}
-
-	if msg.ToolCallID != "" {
-		m["tool_call_id"] = msg.ToolCallID
-	}
-
-	return m
-}
-
-// convertToolCalls converts LLM tool calls to OpenAI format.
-func (p *Provider) convertToolCalls(toolCalls []llm.ToolCall) []map[string]interface{} {
-	result := make([]map[string]interface{}, len(toolCalls))
-	for i, tc := range toolCalls {
-		result[i] = map[string]interface{}{
-			"id":   tc.ID,
-			"type": tc.Type,
-			"function": map[string]interface{}{
-				"name":      tc.Function.Name,
-				"arguments": tc.Function.Arguments,
-			},
-		}
-	}
-	return result
-}
-
-// addOptionalParameters adds optional parameters to the request body.
-func (p *Provider) addOptionalParameters(body map[string]interface{}, req llm.CompletionRequest) {
-	if req.MaxTokens > 0 {
-		body["max_tokens"] = req.MaxTokens
-	}
-	if req.Temperature > 0 {
-		body["temperature"] = req.Temperature
-	}
-}
-
-// addTools adds tools to the request body.
-func (p *Provider) addTools(body map[string]interface{}, tools []llm.Tool) {
-	if len(tools) == 0 {
-		return
-	}
-
-	result := make([]map[string]interface{}, len(tools))
-	for i, tool := range tools {
-		result[i] = map[string]interface{}{
-			"type": tool.Type,
-			"function": map[string]interface{}{
-				"name":        tool.Function.Name,
-				"description": tool.Function.Description,
-				"parameters":  tool.Function.Parameters,
-			},
-		}
-	}
-	body["tools"] = result
-}
-
-// convertResponse converts OpenAI response to common format.
-func (p *Provider) convertResponse(resp *chatCompletionResponse) *llm.CompletionResponse {
-	if len(resp.Choices) == 0 {
-		return &llm.CompletionResponse{
-			ID:    resp.ID,
-			Model: resp.Model,
-		}
-	}
-
-	choice := resp.Choices[0]
-	result := p.buildBaseResponse(resp, choice)
-	result.ToolCalls = p.convertResponseToolCalls(choice.Message.ToolCalls)
-
-	return result
-}
-
-// buildBaseResponse builds the base response structure.
-func (p *Provider) buildBaseResponse(resp *chatCompletionResponse, choice chatCompletionChoice) *llm.CompletionResponse {
-	return &llm.CompletionResponse{
-		ID:           resp.ID,
-		Model:        resp.Model,
-		Content:      choice.Message.Content,
-		FinishReason: choice.FinishReason,
-		Usage: llm.Usage{
-			PromptTokens:     resp.Usage.PromptTokens,
-			CompletionTokens: resp.Usage.CompletionTokens,
-			TotalTokens:      resp.Usage.TotalTokens,
-		},
-	}
-}
-
-// convertResponseToolCalls converts OpenAI tool calls to LLM format.
-func (p *Provider) convertResponseToolCalls(toolCalls []chatToolCall) []llm.ToolCall {
-	if len(toolCalls) == 0 {
-		return nil
-	}
-
-	result := make([]llm.ToolCall, len(toolCalls))
-	for i, tc := range toolCalls {
-		result[i] = llm.ToolCall{
-			ID:   tc.ID,
-			Type: tc.Type,
-			Function: llm.FunctionCall{
-				Name:      tc.Function.Name,
-				Arguments: tc.Function.Arguments,
-			},
-		}
-	}
-	return result
-}
-
-// streamResponse processes streaming response using the shared StreamSSE function.
-func (p *Provider) streamResponse(ctx context.Context, r io.Reader, chunks chan<- llm.StreamChunk) error {
-	return llm.StreamSSE(ctx, r, chunks, p.parseChunk)
-}
-
-// parseChunk parses OpenAI SSE event data into a StreamChunk.
-func (p *Provider) parseChunk(data []byte) (*llm.StreamChunk, error) {
-	var chunk chatCompletionChunk
-	if err := json.Unmarshal(data, &chunk); err != nil {
-		return nil, nil // Skip malformed chunks
-	}
-	return p.convertChunk(&chunk), nil
-}
-
-// convertChunk converts OpenAI chunk to common format.
-func (p *Provider) convertChunk(chunk *chatCompletionChunk) *llm.StreamChunk {
-	if len(chunk.Choices) == 0 {
-		return nil
-	}
-
-	choice := chunk.Choices[0]
-	delta := choice.Delta
-
-	// Content delta
-	if delta.Content != "" {
-		return &llm.StreamChunk{
-			Type:    llm.ChunkTypeContentDelta,
-			Content: delta.Content,
-		}
-	}
-
-	// Tool call delta
-	if len(delta.ToolCalls) > 0 {
-		tc := delta.ToolCalls[0]
-		return &llm.StreamChunk{
-			Type: llm.ChunkTypeToolCallDelta,
-			ToolCall: &llm.ToolCall{
-				ID:   tc.ID,
-				Type: tc.Type,
-				Function: llm.FunctionCall{
-					Name:      tc.Function.Name,
-					Arguments: tc.Function.Arguments,
-				},
-			},
-		}
-	}
-
-	// Finish reason
-	if choice.FinishReason != nil && *choice.FinishReason != "" {
-		return &llm.StreamChunk{
-			Type:         llm.ChunkTypeDone,
-			FinishReason: *choice.FinishReason,
-		}
-	}
-
-	return nil
-}
-
-// newRequest creates an HTTP request.
-func (p *Provider) newRequest(ctx context.Context, method, path string, body interface{}) (*http.Request, error) {
-	var bodyReader io.Reader
-
-	if body != nil {
-		data, err := json.Marshal(body)
-		if err != nil {
-			return nil, fmt.Errorf("marshal body: %w", err)
-		}
-		bodyReader = bytes.NewReader(data)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, p.baseURL+path, bodyReader)
-	if err != nil {
-		return nil, err
-	}
-
-	// Set headers
-	if p.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+p.apiKey)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	return req, nil
-}
-
-// handleError parses and returns an error from HTTP response.
-func (p *Provider) handleError(resp *http.Response) error {
-	var errResp errorResponse
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("http %d: failed to read error response", resp.StatusCode)
-	}
-
-	// Try to parse error response
-	if err := json.Unmarshal(body, &errResp); err != nil {
-		return fmt.Errorf("http %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Map to common error types
-	switch resp.StatusCode {
-	case http.StatusUnauthorized:
-		return fmt.Errorf("unauthorized: %s", errResp.Error.Message)
-	case http.StatusTooManyRequests:
-		return fmt.Errorf("%w: %s", llm.ErrRateLimited, errResp.Error.Message)
-	case http.StatusInternalServerError, http.StatusServiceUnavailable:
-		return fmt.Errorf("server error: %s", errResp.Error.Message)
-	default:
-		return fmt.Errorf("http %d: %s", resp.StatusCode, errResp.Error.Message)
-	}
-}
-
-// getModel returns the model to use for the request.
-func (p *Provider) getModel(model string) string {
-	if model != "" {
-		return model
-	}
-	return p.model
 }

@@ -602,21 +602,13 @@ func (m *TUIMapper) Close() error {
 // Helper functions
 
 // extractString safely extracts a string parameter from ToolCallArguments.
-func extractString(params tools.Arguments, key string) string {
-	var s string
-	if err := params.Get(key, &s); err == nil {
-		return s
-	}
-	return ""
+func extractString(params tools.ToolParameters, key string) string {
+	return params.GetStringOr(key, "")
 }
 
 // extractIntValue safely extracts an int parameter from ToolCallArguments.
-func extractIntValue(params tools.Arguments, key string) int {
-	var i int
-	if err := params.Get(key, &i); err == nil {
-		return i
-	}
-	return 0
+func extractIntValue(params tools.ToolParameters, key string) int {
+	return params.GetIntOr(key, 0)
 }
 
 // intPtr returns a pointer to an int.

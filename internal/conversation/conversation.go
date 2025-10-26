@@ -75,14 +75,14 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 
 	// Add tool calls if present
 	if len(resp.ToolCalls) > 0 {
-		toolCalls := make([]any, len(resp.ToolCalls))
+		toolCalls := make([]message.ToolCall, len(resp.ToolCalls))
 		for i, tc := range resp.ToolCalls {
-			toolCalls[i] = map[string]any{
-				"id":   tc.ID,
-				"type": tc.Type,
-				"function": map[string]any{
-					"name":      tc.Function.Name,
-					"arguments": tc.Function.Arguments,
+			toolCalls[i] = message.ToolCall{
+				ID:   tc.ID,
+				Type: tc.Type,
+				Function: message.FunctionCall{
+					Name:      tc.Function.Name,
+					Arguments: tc.Function.Arguments,
 				},
 			}
 		}

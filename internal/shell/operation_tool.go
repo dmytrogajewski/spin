@@ -66,7 +66,7 @@ func (t *ShellOperationTool) Schema() tools.ToolSchema {
 	}
 }
 
-func (t *ShellOperationTool) Execute(ctx context.Context, params map[string]interface{}) (tools.ToolResult, error) {
+func (t *ShellOperationTool) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
 	if t.shellIntegration == nil || !t.shellIntegration.IsEnabled() {
 		return tools.ToolResult{
 			Success: false,
@@ -74,8 +74,8 @@ func (t *ShellOperationTool) Execute(ctx context.Context, params map[string]inte
 		}, nil
 	}
 
-	operation, ok := params["operation"].(string)
-	if !ok {
+	operation, err := params.GetString("operation")
+	if err != nil {
 		return tools.ToolResult{
 			Success: false,
 			Error:   "operation parameter is required",
@@ -84,7 +84,7 @@ func (t *ShellOperationTool) Execute(ctx context.Context, params map[string]inte
 
 	switch operation {
 	case "execute_command":
-		command, _ := params["command"].(string)
+		command, _ := params.GetString("command")
 		if command == "" {
 			return tools.ToolResult{
 				Success: false,
@@ -93,12 +93,7 @@ func (t *ShellOperationTool) Execute(ctx context.Context, params map[string]inte
 		}
 
 		// Parse timeout parameter (optional, defaults to 30s)
-		timeout := 30 * time.Second
-		if timeoutParam, exists := params["timeout"]; exists {
-			if timeoutFloat, ok := timeoutParam.(float64); ok {
-				timeout = time.Duration(timeoutFloat) * time.Second
-			}
-		}
+		timeout := time.Duration(params.GetFloat64Or("timeout", 30.0)) * time.Second
 
 		// Create a context with the specified timeout
 		cmdCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -144,7 +139,7 @@ func (t *ShellOperationTool) Execute(ctx context.Context, params map[string]inte
 		}, nil
 
 	case "is_shell_command":
-		command, _ := params["command"].(string)
+		command, _ := params.GetString("command")
 		if command == "" {
 			return tools.ToolResult{
 				Success: false,

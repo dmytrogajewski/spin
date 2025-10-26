@@ -52,6 +52,36 @@ func (m *mockPatternDetector) AnalyzePatterns(history []Snapshot) []PatternResul
 	return m.results
 }
 
+// TestDetectionEventData tests the DetectionEventData type
+func TestDetectionEventData(t *testing.T) {
+	t.Run("create and access detection event data", func(t *testing.T) {
+		data := DetectionEventData{
+			"status":  "paused",
+			"message": "Agent stuck in cycle",
+		}
+
+		assert.Equal(t, "paused", data["status"])
+		assert.Equal(t, "Agent stuck in cycle", data["message"])
+	})
+
+	t.Run("event uses DetectionEventData", func(t *testing.T) {
+		evt := &event{
+			eventType: "turn_paused",
+			data: DetectionEventData{
+				"status":  "paused",
+				"message": "Test message",
+			},
+		}
+
+		// Verify data is strongly typed
+		data := evt.GetData()
+		detectionData, ok := data.(DetectionEventData)
+		require.True(t, ok, "GetData() should return DetectionEventData")
+		assert.Equal(t, "paused", detectionData["status"])
+		assert.Equal(t, "Test message", detectionData["message"])
+	})
+}
+
 func TestNewDetectionService(t *testing.T) {
 	tests := []struct {
 		name            string

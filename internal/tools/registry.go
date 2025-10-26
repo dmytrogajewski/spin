@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
 )
 
 // Registry manages tool registration, lookup, and execution.
@@ -100,8 +101,14 @@ func (r *Registry) Execute(ctx context.Context, name string, params map[string]i
 		return ToolResult{}, err
 	}
 
+	// Convert params to ToolParameters
+	toolParams, err := FromMap(params)
+	if err != nil {
+		return ToolResult{}, fmt.Errorf("failed to convert parameters: %w", err)
+	}
+
 	// Execute the tool
-	result, err := tool.Execute(ctx, params)
+	result, err := tool.Execute(ctx, toolParams)
 	if err != nil {
 		return ToolResult{}, fmt.Errorf("tool execution failed: %w", err)
 	}

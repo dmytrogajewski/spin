@@ -1,11 +1,11 @@
-// Package openai implements an OpenAI-compatible LLM provider.
+// Package openai implements an OpenAI-compatible LLM provider using the official openai-go SDK.
 //
-// This provider supports the OpenAI Chat Completions API format, making it
-// compatible with:
+// This provider uses the official OpenAI Go SDK (github.com/openai/openai-go) to
+// communicate with OpenAI-compatible APIs. It supports:
 //   - OpenAI (https://api.openai.com)
 //   - Azure OpenAI
 //   - Local providers (Ollama, LMStudio) when configured with compatible endpoints
-//   - Any other service implementing the OpenAI API
+//   - Any other service implementing the OpenAI Chat Completions API
 //
 // # Basic Usage
 //

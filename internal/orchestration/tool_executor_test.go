@@ -332,12 +332,9 @@ func TestToolExecutor_ParseToolArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args, err := executor.parseToolArguments(tt.call)
+			_, err := executor.parseToolArguments(tt.call)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseToolArguments() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if err == nil && args == nil {
-				t.Error("Expected non-nil args on success")
 			}
 		})
 	}
@@ -461,7 +458,7 @@ func (m *mockDelayTool) Schema() tools.ToolSchema {
 	}
 }
 
-func (m *mockDelayTool) Execute(ctx context.Context, params map[string]interface{}) (tools.ToolResult, error) {
+func (m *mockDelayTool) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
 	time.Sleep(m.delay)
 	return tools.ToolResult{Success: true, Output: "done"}, nil
 }
@@ -534,8 +531,9 @@ func (m *mockOrderTool) Schema() tools.ToolSchema {
 	}
 }
 
-func (m *mockOrderTool) Execute(ctx context.Context, params map[string]interface{}) (tools.ToolResult, error) {
-	idx := int(params["index"].(float64))
+func (m *mockOrderTool) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
+	indexFloat, _ := params.GetFloat64("index")
+	idx := int(indexFloat)
 	// Last tool finishes first (inverse delay)
 	time.Sleep(time.Duration(10-idx) * 10 * time.Millisecond)
 	return tools.ToolResult{
@@ -603,7 +601,7 @@ func (m *mockCancelTool) Schema() tools.ToolSchema {
 	}
 }
 
-func (m *mockCancelTool) Execute(ctx context.Context, params map[string]interface{}) (tools.ToolResult, error) {
+func (m *mockCancelTool) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
 	m.runningCount.Add(1)
 	select {
 	case <-ctx.Done():

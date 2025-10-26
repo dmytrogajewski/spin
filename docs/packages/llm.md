@@ -67,22 +67,35 @@ provider, err := openai.NewProvider(openai.Config{
 
 ### 2. Ollama Provider
 
-Local LLM execution via Ollama.
+Local LLM execution via Ollama. The provider is implemented as a thin wrapper around the OpenAI provider, leveraging Ollama's OpenAI-compatible API at `/v1` endpoint while using the official Ollama SDK for Ollama-specific features.
+
+**Architecture:**
+- Embeds OpenAI provider for standard chat/completion operations
+- Uses official `github.com/ollama/ollama/api` SDK for Ollama-specific features:
+  - Model listing and metadata
+  - VRAM auto-tuning
+- Minimal code footprint (~200 lines)
+
+**Important URL Handling**: 
+- The Ollama provider passes `baseURL + "/v1/"` to the OpenAI provider (e.g., `http://localhost:11434/v1/`)
+- The trailing slash is **critical** because the OpenAI SDK uses `url.ResolveReference` for path construction
+- With trailing slash: `http://host/v1/` + `chat/completions` = `http://host/v1/chat/completions` ✅
+- Without trailing slash: `http://host/v1` + `chat/completions` = `http://host/chat/completions` ❌ (path gets stripped)
 
 ```go
 import "github.com/dmytrogajewski/spin/internal/llm/ollama"
 
 provider, err := ollama.NewProvider(ollama.Config{
     BaseURL: "http://localhost:11434",
-    Model:   "llama2",
+    Model:   "llama3.1",
 })
 ```
 
 #### VRAM Auto-Tuning (Ollama)
 
-Spin can auto-tune local model settings based on available VRAM. When enabled, it detects VRAM and selects best-fit context length (num_ctx) and GPU layers to avoid OOM while preserving quality.
+Ollama provider can auto-tune model settings based on available VRAM. When enabled, it detects GPU VRAM and selects optimal context length (num_ctx) and GPU layers to avoid out-of-memory errors while preserving quality.
 
-Configuration (YAML):
+**Configuration (YAML):**
 
 ```yaml
 llm:
@@ -95,9 +108,13 @@ llm:
     headroom_mib: 1024  # reserve 1GiB for system
 ```
 
-Notes:
-- Quantization choice is inferred from model tag (e.g., q4_0); auto-tune primarily sets num_ctx and GPU layers.
-- Auto-tune is best-effort and will not block if VRAM detection is unavailable.
+**Implementation Notes:**
+- Auto-tuning uses Ollama SDK's `api.Client.Show()` for model info
+- VRAM detection via platform-specific tools (nvidia-smi, rocm-smi)
+- Quantization is inferred from model tag (e.g., q4_0, q8_0)
+- Auto-tune primarily sets `num_ctx` and GPU layers based on available VRAM
+- Best-effort operation - falls back gracefully if VRAM detection unavailable
+- No API key required (Ollama is local)
 
 ### 3. LMStudio Provider
 
@@ -290,11 +307,15 @@ type Config struct {
 
 ---
 
-**Last Updated:** 2025-10-05  
-**Test Coverage:** 94.8% (verified 2025-10-05)
-- internal/llm: 94.8%
+**Last Updated:** 2025-10-26  
+**Test Coverage:** (verified 2025-10-26)
+- internal/llm: ~90%+
 - factory: 94.4%
 - lmstudio: 90.9%
-- ollama: 91.7%
+- ollama: 38.2% (wrapper code - actual logic in embedded OpenAI provider)
 - openai: 89.5%  
 **Status:** ✅ Production Ready
+
+**Recent Changes:**
+- 2025-10-26: Migrated Ollama provider to thin wrapper architecture using official `github.com/ollama/ollama/api` SDK
+- 2025-10-05: Initial production release

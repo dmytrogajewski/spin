@@ -1,0 +1,71 @@
+package tools
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestReadFileTool(t *testing.T) {
+	// Create temp file
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+	testContent := "Hello, World!"
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	tool := NewReadFileTool()
+
+	tests := []struct {
+		name       string
+		params     map[string]interface{}
+		wantErr    bool
+		wantOutput string
+	}{
+		{
+			name:       "read existing file",
+			params:     map[string]interface{}{"path": testFile},
+			wantOutput: testContent,
+		},
+		{
+			name:    "missing path parameter",
+			params:  map[string]interface{}{},
+			wantErr: true,
+		},
+		{
+			name:    "non-existent file",
+			params:  map[string]interface{}{"path": filepath.Join(tmpDir, "nonexistent.txt")},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params, _ := FromMap(tt.params)
+			result, err := tool.Execute(context.Background(), params)
+
+			if tt.wantErr {
+				if err == nil && result.Success {
+					t.Error("expected error but got success")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if !result.Success {
+				t.Errorf("expected success, got error: %s", result.Error)
+				return
+			}
+
+			if result.Output != tt.wantOutput {
+				t.Errorf("expected output %q, got %q", tt.wantOutput, result.Output)
+			}
+		})
+	}
+}

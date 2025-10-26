@@ -48,59 +48,6 @@ func TestNewMatcher(t *testing.T) {
 	}
 }
 
-func TestMatcher_SetThreshold(t *testing.T) {
-	tests := []struct {
-		name      string
-		threshold float64
-		wantErr   bool
-	}{
-		{
-			name:      "valid threshold - 0.0",
-			threshold: 0.0,
-			wantErr:   false,
-		},
-		{
-			name:      "valid threshold - 0.5",
-			threshold: 0.5,
-			wantErr:   false,
-		},
-		{
-			name:      "valid threshold - 0.85",
-			threshold: 0.85,
-			wantErr:   false,
-		},
-		{
-			name:      "valid threshold - 1.0",
-			threshold: 1.0,
-			wantErr:   false,
-		},
-		{
-			name:      "invalid threshold - negative",
-			threshold: -0.1,
-			wantErr:   true,
-		},
-		{
-			name:      "invalid threshold - too high",
-			threshold: 1.5,
-			wantErr:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := NewMatcher([]string{})
-			err := m.SetThreshold(tt.threshold)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("SetThreshold() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && m.threshold != tt.threshold {
-				t.Errorf("SetThreshold() threshold = %.2f, want %.2f", m.threshold, tt.threshold)
-			}
-		})
-	}
-}
-
 func TestMatcher_FindContext_ExactMatch(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -295,7 +242,8 @@ func TestMatcher_FindContext_FuzzyMatch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := NewMatcher(tt.fileLines)
 			if tt.threshold != 0 {
-				m.SetThreshold(tt.threshold)
+				// Note: threshold customization removed - using default 0.85
+				m.threshold = tt.threshold
 			}
 			got := m.FindContext(tt.contextLines, tt.header)
 			if got != tt.want {
@@ -380,7 +328,7 @@ func TestMatcher_FindContext_HeaderMatching(t *testing.T) {
 			},
 			contextLines: []string{"    return x + 1"},
 			header:       "func ProcessB", // Header present but context doesn't match nearby
-			want:         1,                // Should fallback and find in ProcessA
+			want:         1,               // Should fallback and find in ProcessA
 		},
 		{
 			name: "multiple header occurrences - use first",
@@ -398,7 +346,7 @@ func TestMatcher_FindContext_HeaderMatching(t *testing.T) {
 			},
 			contextLines: []string{"    return x + 1"},
 			header:       "Process", // Matches multiple lines
-			want:         2,          // Should find near first occurrence
+			want:         2,         // Should find near first occurrence
 		},
 	}
 
@@ -626,16 +574,16 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 			name: "multiple similar functions - use header",
 			fileLines: []string{
 				"func (s *Service) Create(data Data) error {", // Line 0
-				"    return s.repo.Insert(data)",               // Line 1
-				"}",                                            // Line 2
-				"",                                             // Line 3
+				"    return s.repo.Insert(data)",              // Line 1
+				"}",                                           // Line 2
+				"",                                            // Line 3
 				"func (s *Service) Update(data Data) error {", // Line 4
-				"    return s.repo.Update(data)",               // Line 5
-				"}",                                            // Line 6
-				"",                                             // Line 7
-				"func (s *Service) Delete(id ID) error {",     // Line 8 - Header matches here
-				"    return s.repo.Delete(id)",                 // Line 9 - Context matches here
-				"}",                                            // Line 10
+				"    return s.repo.Update(data)",              // Line 5
+				"}",                                           // Line 6
+				"",                                            // Line 7
+				"func (s *Service) Delete(id ID) error {", // Line 8 - Header matches here
+				"    return s.repo.Delete(id)",            // Line 9 - Context matches here
+				"}",                                       // Line 10
 			},
 			contextLines: []string{
 				"    return s.repo.Delete(id)",
@@ -650,7 +598,8 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := NewMatcher(tt.fileLines)
 			if tt.threshold != 0 {
-				m.SetThreshold(tt.threshold)
+				// Note: threshold customization removed - using default 0.85
+				m.threshold = tt.threshold
 			}
 			got := m.FindContext(tt.contextLines, tt.header)
 			if got != tt.want {
