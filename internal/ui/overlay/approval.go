@@ -32,17 +32,6 @@ func (d *ApprovalDialog) SetDimensions(width, height int) {
 	d.height = height
 }
 
-// truncateString truncates a string to maxLen, adding "..." if truncated.
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	if maxLen <= 3 {
-		return "..."
-	}
-	return s[:maxLen-3] + "..."
-}
-
 // Render renders the approval dialog.
 // Returns empty string since we now use status bar instead of modal dialog.
 func (d *ApprovalDialog) Render(width, height int) string {

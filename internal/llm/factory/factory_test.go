@@ -3,12 +3,17 @@ package factory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/llm/lmstudio"
+	"github.com/dmytrogajewski/spin/internal/llm/ollama"
+	"github.com/dmytrogajewski/spin/internal/llm/openai"
+	openaisdk "github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -463,19 +468,41 @@ func (m *mockProvider) Name() string {
 	return m.name
 }
 
-func (m *mockProvider) Complete(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
-	return &llm.CompletionResponse{Content: "mock"}, nil
+func (m *mockProvider) Complete(ctx context.Context, params openaisdk.ChatCompletionNewParams) (*openaisdk.ChatCompletion, error) {
+	return &openaisdk.ChatCompletion{
+		ID:      fmt.Sprintf("mock-%d", time.Now().UnixNano()),
+		Created: time.Now().Unix(),
+		Model:   "mock-model",
+		Object:  "chat.completion",
+		Choices: []openaisdk.ChatCompletionChoice{{
+			Index: 0,
+			Message: openaisdk.ChatCompletionMessage{
+				Role:    openaisdk.ChatCompletionMessageRoleAssistant,
+				Content: "mock",
+			},
+			FinishReason: openaisdk.ChatCompletionChoicesFinishReasonStop,
+		}},
+	}, nil
 }
 
-func (m *mockProvider) Stream(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
-	ch := make(chan llm.StreamChunk, 1)
-	ch <- llm.StreamChunk{Type: llm.ChunkTypeDone}
+func (m *mockProvider) Stream(ctx context.Context, params openaisdk.ChatCompletionNewParams) (<-chan openaisdk.ChatCompletionChunk, error) {
+	ch := make(chan openaisdk.ChatCompletionChunk, 1)
+	ch <- openaisdk.ChatCompletionChunk{
+		ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
+		Created: time.Now().Unix(),
+		Model:   "mock-model",
+		Object:  "chat.completion.chunk",
+		Choices: []openaisdk.ChatCompletionChunkChoice{{
+			Index:        0,
+			FinishReason: openaisdk.ChatCompletionChunkChoicesFinishReasonStop,
+		}},
+	}
 	close(ch)
 	return ch, nil
 }
 
-func (m *mockProvider) Models(ctx context.Context) ([]llm.Model, error) {
-	return []llm.Model{{ID: "mock"}}, nil
+func (m *mockProvider) Models(ctx context.Context) ([]openaisdk.Model, error) {
+	return []openaisdk.Model{{ID: "mock"}}, nil
 }
 
 func (m *mockProvider) Capabilities() llm.Capabilities {
@@ -817,26 +844,56 @@ type mockProviderBugFix struct {
 	name string
 }
 
-func (m *mockProviderBugFix) Complete(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
-	return &llm.CompletionResponse{
-		Content:      "Mock response",
-		FinishReason: "stop",
+func (m *mockProviderBugFix) Complete(ctx context.Context, params openaisdk.ChatCompletionNewParams) (*openaisdk.ChatCompletion, error) {
+	return &openaisdk.ChatCompletion{
+		ID:      fmt.Sprintf("mock-%d", time.Now().UnixNano()),
+		Created: time.Now().Unix(),
+		Model:   "mock-model",
+		Object:  "chat.completion",
+		Choices: []openaisdk.ChatCompletionChoice{{
+			Index: 0,
+			Message: openaisdk.ChatCompletionMessage{
+				Role:    openaisdk.ChatCompletionMessageRoleAssistant,
+				Content: "Mock response",
+			},
+			FinishReason: openaisdk.ChatCompletionChoicesFinishReasonStop,
+		}},
 	}, nil
 }
 
-func (m *mockProviderBugFix) Stream(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
-	ch := make(chan llm.StreamChunk, 1)
+func (m *mockProviderBugFix) Stream(ctx context.Context, params openaisdk.ChatCompletionNewParams) (<-chan openaisdk.ChatCompletionChunk, error) {
+	ch := make(chan openaisdk.ChatCompletionChunk, 2)
 	go func() {
 		defer close(ch)
-		ch <- llm.StreamChunk{Content: "Mock response"}
-		ch <- llm.StreamChunk{FinishReason: "stop"}
+		ch <- openaisdk.ChatCompletionChunk{
+			ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
+			Created: time.Now().Unix(),
+			Model:   "mock-model",
+			Object:  "chat.completion.chunk",
+			Choices: []openaisdk.ChatCompletionChunkChoice{{
+				Index: 0,
+				Delta: openaisdk.ChatCompletionChunkChoicesDelta{
+					Content: "Mock response",
+				},
+			}},
+		}
+		ch <- openaisdk.ChatCompletionChunk{
+			ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
+			Created: time.Now().Unix(),
+			Model:   "mock-model",
+			Object:  "chat.completion.chunk",
+			Choices: []openaisdk.ChatCompletionChunkChoice{{
+				Index:        0,
+				FinishReason: openaisdk.ChatCompletionChunkChoicesFinishReasonStop,
+			}},
+		}
 	}()
 	return ch, nil
 }
 
-func (m *mockProviderBugFix) Models(ctx context.Context) ([]llm.Model, error) {
-	return []llm.Model{
-		{ID: "mock-model", Name: "Mock Model"},
+func (m *mockProviderBugFix) Models(ctx context.Context) ([]openaisdk.Model, error) {
+	return []openaisdk.Model{
+		{ID: "mock-model"},
 	}, nil
 }
 
@@ -1309,4 +1366,98 @@ func TestFactory_resolveCredential(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Test helper functions below - these provide backward compatibility for legacy tests
+
+var (
+	// factoryMu protects the factories map
+	factoryMu sync.RWMutex
+
+	// factories maps provider types to factory functions
+	factories = map[string]ProviderFactory{
+		"openai":            legacyNewOpenAIProvider,
+		"ollama":            legacyNewOllamaProvider,
+		"lmstudio":          legacyNewLMStudioProvider,
+		"openai-compatible": legacyNewOpenAIProvider,
+	}
+)
+
+// NewProvider creates a provider from configuration (test helper for legacy tests).
+func NewProvider(cfg ProviderConfig) (llm.Provider, error) {
+	// Validate configuration
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+
+	factoryMu.RLock()
+	factory, exists := factories[cfg.Type]
+	factoryMu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
+	}
+
+	return factory(cfg)
+}
+
+// RegisterProvider registers a custom provider factory (test helper for legacy tests).
+func RegisterProvider(providerType string, factory ProviderFactory) {
+	factoryMu.Lock()
+	defer factoryMu.Unlock()
+	factories[providerType] = factory
+}
+
+// legacyNewOpenAIProvider creates an OpenAI provider from config (test helper).
+func legacyNewOpenAIProvider(cfg ProviderConfig) (llm.Provider, error) {
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = llm.DefaultTimeout
+	}
+
+	openaiCfg := openai.Config{
+		BaseURL: cfg.BaseURL,
+		APIKey:  cfg.APIKey,
+		Model:   cfg.Model,
+		Timeout: timeout,
+	}
+
+	return openai.NewProvider(openaiCfg)
+}
+
+// legacyNewOllamaProvider creates an Ollama provider from config (test helper).
+func legacyNewOllamaProvider(cfg ProviderConfig) (llm.Provider, error) {
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = llm.DefaultTimeout
+	}
+
+	ollamaCfg := ollama.Config{
+		BaseURL: cfg.BaseURL,
+		Model:   cfg.Model,
+		Timeout: timeout,
+	}
+
+	return ollama.NewProvider(ollamaCfg)
+}
+
+// legacyNewLMStudioProvider creates an LMStudio provider from config (test helper).
+func legacyNewLMStudioProvider(cfg ProviderConfig) (llm.Provider, error) {
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = llm.DefaultTimeout
+	}
+
+	baseURL := cfg.BaseURL
+	if baseURL == "" {
+		baseURL = lmstudio.DefaultBaseURL
+	}
+
+	lmstudioCfg := lmstudio.Config{
+		BaseURL: baseURL,
+		Model:   cfg.Model,
+		Timeout: timeout,
+	}
+
+	return lmstudio.NewProvider(lmstudioCfg)
 }

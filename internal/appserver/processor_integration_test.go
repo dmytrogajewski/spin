@@ -4,30 +4,43 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/protocol/jsonrpc"
+	"github.com/openai/openai-go"
 )
 
 // mockProvider implements llm.Provider for testing
 type mockProvider struct {
 	mu           sync.Mutex
-	completeFunc func(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error)
-	streamFunc   func(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error)
+	completeFunc func(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error)
+	streamFunc   func(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error)
 }
 
-func (m *mockProvider) Complete(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (m *mockProvider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.completeFunc != nil {
-		return m.completeFunc(ctx, req)
+		return m.completeFunc(ctx, params)
 	}
-	return &llm.CompletionResponse{
-		Content: "Mock response",
-		Usage: llm.Usage{
+	return &openai.ChatCompletion{
+		ID:      fmt.Sprintf("mock-%d", time.Now().UnixNano()),
+		Created: time.Now().Unix(),
+		Model:   "mock-model",
+		Object:  "chat.completion",
+		Choices: []openai.ChatCompletionChoice{{
+			Index: 0,
+			Message: openai.ChatCompletionMessage{
+				Role:    openai.ChatCompletionMessageRoleAssistant,
+				Content: "Mock response",
+			},
+			FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
+		}},
+		Usage: openai.CompletionUsage{
 			PromptTokens:     10,
 			CompletionTokens: 20,
 			TotalTokens:      30,
@@ -35,27 +48,36 @@ func (m *mockProvider) Complete(ctx context.Context, req llm.CompletionRequest) 
 	}, nil
 }
 
-func (m *mockProvider) Stream(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
+func (m *mockProvider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.streamFunc != nil {
-		return m.streamFunc(ctx, req)
+		return m.streamFunc(ctx, params)
 	}
 
 	// Default: return simple stream
-	ch := make(chan llm.StreamChunk, 1)
+	ch := make(chan openai.ChatCompletionChunk, 1)
 	go func() {
 		defer close(ch)
-		ch <- llm.StreamChunk{
-			Type:    llm.ChunkTypeContentDelta,
-			Content: "Mock response",
+		ch <- openai.ChatCompletionChunk{
+			ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
+			Created: time.Now().Unix(),
+			Model:   "mock-model",
+			Object:  "chat.completion.chunk",
+			Choices: []openai.ChatCompletionChunkChoice{{
+				Index: 0,
+				Delta: openai.ChatCompletionChunkChoicesDelta{
+					Role:    openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
+					Content: "Mock response",
+				},
+			}},
 		}
 	}()
 	return ch, nil
 }
 
-func (m *mockProvider) Models(ctx context.Context) ([]llm.Model, error) {
-	return []llm.Model{{Name: "mock-model"}}, nil
+func (m *mockProvider) Models(ctx context.Context) ([]openai.Model, error) {
+	return []openai.Model{{ID: "mock-model"}}, nil
 }
 
 func (m *mockProvider) Capabilities() llm.Capabilities {
@@ -82,17 +104,27 @@ func TestProcessor_Integration_TaskModeEndToEnd(t *testing.T) {
 	var mu sync.Mutex
 
 	provider := &mockProvider{
-		streamFunc: func(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
+		streamFunc: func(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 			mu.Lock()
-			capturedToolCount = len(req.Tools)
+			if params.Tools.Present {
+				capturedToolCount = len(params.Tools.Value)
+			}
 			mu.Unlock()
 
-			ch := make(chan llm.StreamChunk, 2)
+			ch := make(chan openai.ChatCompletionChunk, 2)
 			go func() {
 				defer close(ch)
-				ch <- llm.StreamChunk{
-					Type:    llm.ChunkTypeContentDelta,
-					Content: "Test response",
+				ch <- openai.ChatCompletionChunk{
+					ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
+					Created: time.Now().Unix(),
+					Model:   "mock-model",
+					Object:  "chat.completion.chunk",
+					Choices: []openai.ChatCompletionChunkChoice{{
+						Index: 0,
+						Delta: openai.ChatCompletionChunkChoicesDelta{
+							Content: "Test response",
+						},
+					}},
 				}
 			}()
 			return ch, nil
@@ -114,11 +146,11 @@ func TestProcessor_Integration_TaskModeEndToEnd(t *testing.T) {
 	processor.SetOutput(output)
 
 	tests := []struct {
-		name              string
-		taskMode          string
-		expectToolCount   int  // We can't check exact tools, but we can verify filtering happened
-		expectMinTools    int  // Minimum tools expected
-		expectMaxTools    int  // Maximum tools expected
+		name            string
+		taskMode        string
+		expectToolCount int // We can't check exact tools, but we can verify filtering happened
+		expectMinTools  int // Minimum tools expected
+		expectMaxTools  int // Maximum tools expected
 	}{
 		{
 			name:           "review mode has fewer tools than regular",
@@ -189,17 +221,25 @@ func TestProcessor_Integration_TaskModeSwitching(t *testing.T) {
 	var mu sync.Mutex
 
 	provider := &mockProvider{
-		streamFunc: func(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
+		streamFunc: func(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 			mu.Lock()
 			requestCount++
 			mu.Unlock()
 
-			ch := make(chan llm.StreamChunk, 1)
+			ch := make(chan openai.ChatCompletionChunk, 1)
 			go func() {
 				defer close(ch)
-				ch <- llm.StreamChunk{
-					Type:    llm.ChunkTypeContentDelta,
-					Content: "Response",
+				ch <- openai.ChatCompletionChunk{
+					ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
+					Created: time.Now().Unix(),
+					Model:   "mock-model",
+					Object:  "chat.completion.chunk",
+					Choices: []openai.ChatCompletionChunkChoice{{
+						Index: 0,
+						Delta: openai.ChatCompletionChunkChoicesDelta{
+							Content: "Response",
+						},
+					}},
 				}
 			}()
 			return ch, nil
@@ -294,17 +334,33 @@ func TestProcessor_Integration_NotificationFlow(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	provider := &mockProvider{
-		streamFunc: func(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
-			ch := make(chan llm.StreamChunk, 3)
+		streamFunc: func(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
+			ch := make(chan openai.ChatCompletionChunk, 3)
 			go func() {
 				defer close(ch)
-				ch <- llm.StreamChunk{
-					Type:    llm.ChunkTypeContentDelta,
-					Content: "Hello",
+				ch <- openai.ChatCompletionChunk{
+					ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
+					Created: time.Now().Unix(),
+					Model:   "mock-model",
+					Object:  "chat.completion.chunk",
+					Choices: []openai.ChatCompletionChunkChoice{{
+						Index: 0,
+						Delta: openai.ChatCompletionChunkChoicesDelta{
+							Content: "Hello",
+						},
+					}},
 				}
-				ch <- llm.StreamChunk{
-					Type:    llm.ChunkTypeContentDelta,
-					Content: " world",
+				ch <- openai.ChatCompletionChunk{
+					ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
+					Created: time.Now().Unix(),
+					Model:   "mock-model",
+					Object:  "chat.completion.chunk",
+					Choices: []openai.ChatCompletionChunkChoice{{
+						Index: 0,
+						Delta: openai.ChatCompletionChunkChoicesDelta{
+							Content: " world",
+						},
+					}},
 				}
 			}()
 			return ch, nil
@@ -386,15 +442,23 @@ func TestProcessor_Integration_CancelTurnWithTaskMode(t *testing.T) {
 	// Provider that blocks to simulate long-running operation
 	blockCh := make(chan struct{})
 	provider := &mockProvider{
-		streamFunc: func(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
-			ch := make(chan llm.StreamChunk)
+		streamFunc: func(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
+			ch := make(chan openai.ChatCompletionChunk)
 			go func() {
 				defer close(ch)
 				select {
 				case <-blockCh:
-					ch <- llm.StreamChunk{
-						Type:    llm.ChunkTypeContentDelta,
-						Content: "Response",
+					ch <- openai.ChatCompletionChunk{
+						ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
+						Created: time.Now().Unix(),
+						Model:   "mock-model",
+						Object:  "chat.completion.chunk",
+						Choices: []openai.ChatCompletionChunkChoice{{
+							Index: 0,
+							Delta: openai.ChatCompletionChunkChoicesDelta{
+								Content: "Response",
+							},
+						}},
 					}
 				case <-ctx.Done():
 					// Context cancelled
@@ -464,33 +528,56 @@ func TestProcessor_Integration_DefaultTaskModeWithAgent(t *testing.T) {
 	var mu sync.Mutex
 
 	provider := &mockProvider{
-		completeFunc: func(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
+		completeFunc: func(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 			mu.Lock()
 			completeCalled = true
-			capturedToolCount = len(req.Tools)
+			if params.Tools.Present {
+				capturedToolCount = len(params.Tools.Value)
+			}
 			mu.Unlock()
 
-			return &llm.CompletionResponse{
-				Content: "Mock response",
-				Usage: llm.Usage{
+			return &openai.ChatCompletion{
+				ID:      fmt.Sprintf("mock-%d", time.Now().UnixNano()),
+				Created: time.Now().Unix(),
+				Model:   "mock-model",
+				Object:  "chat.completion",
+				Choices: []openai.ChatCompletionChoice{{
+					Index: 0,
+					Message: openai.ChatCompletionMessage{
+						Role:    openai.ChatCompletionMessageRoleAssistant,
+						Content: "Mock response",
+					},
+					FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
+				}},
+				Usage: openai.CompletionUsage{
 					PromptTokens:     10,
 					CompletionTokens: 20,
 					TotalTokens:      30,
 				},
 			}, nil
 		},
-		streamFunc: func(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
+		streamFunc: func(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 			mu.Lock()
 			streamCalled = true
-			capturedToolCount = len(req.Tools)
+			if params.Tools.Present {
+				capturedToolCount = len(params.Tools.Value)
+			}
 			mu.Unlock()
 
-			ch := make(chan llm.StreamChunk, 1)
+			ch := make(chan openai.ChatCompletionChunk, 1)
 			go func() {
 				defer close(ch)
-				ch <- llm.StreamChunk{
-					Type:    llm.ChunkTypeContentDelta,
-					Content: "Response",
+				ch <- openai.ChatCompletionChunk{
+					ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
+					Created: time.Now().Unix(),
+					Model:   "mock-model",
+					Object:  "chat.completion.chunk",
+					Choices: []openai.ChatCompletionChunkChoice{{
+						Index: 0,
+						Delta: openai.ChatCompletionChunkChoicesDelta{
+							Content: "Response",
+						},
+					}},
 				}
 			}()
 			return ch, nil
@@ -601,13 +688,21 @@ func TestProcessor_Integration_AgentReceivesCorrectTaskName(t *testing.T) {
 
 	// This test verifies the runTurn method passes TaskName to agent correctly
 	provider := &mockProvider{
-		streamFunc: func(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
-			ch := make(chan llm.StreamChunk, 1)
+		streamFunc: func(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
+			ch := make(chan openai.ChatCompletionChunk, 1)
 			go func() {
 				defer close(ch)
-				ch <- llm.StreamChunk{
-					Type:    llm.ChunkTypeContentDelta,
-					Content: "Response",
+				ch <- openai.ChatCompletionChunk{
+					ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
+					Created: time.Now().Unix(),
+					Model:   "mock-model",
+					Object:  "chat.completion.chunk",
+					Choices: []openai.ChatCompletionChunkChoice{{
+						Index: 0,
+						Delta: openai.ChatCompletionChunkChoicesDelta{
+							Content: "Response",
+						},
+					}},
 				}
 			}()
 			return ch, nil

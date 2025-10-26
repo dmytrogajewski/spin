@@ -91,25 +91,6 @@ func (m *Matcher) FindContext(contextLines []string, header string) int {
 	return m.findInRange(0, len(m.fileLines), contextLines)
 }
 
-// SetThreshold sets the similarity threshold for fuzzy matching.
-//
-// The threshold must be between 0.0 (match anything) and 1.0 (exact match only).
-// The default threshold is 0.85 (85% similarity).
-//
-// Returns an error if the threshold is out of range.
-//
-// Example:
-//
-//	m := NewMatcher(fileLines)
-//	err := m.SetThreshold(0.9) // Require 90% similarity
-func (m *Matcher) SetThreshold(threshold float64) error {
-	if threshold < 0.0 || threshold > 1.0 {
-		return ErrInvalidThreshold
-	}
-	m.threshold = threshold
-	return nil
-}
-
 // findInRange searches for context within a specific range of file lines.
 // Returns the starting line index or -1 if not found.
 func (m *Matcher) findInRange(start, end int, contextLines []string) int {

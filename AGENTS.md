@@ -227,14 +227,22 @@ provider, _ := f.NewProvider(ctx, factory.ProviderConfig{
 
 ### Event Pattern
 ```go
-// internal/core/event.go
+// internal/events/event.go - Type-safe event access
 for event := range events {
     switch event.Type {
-    case EventTypeStreamContent:
-        // Handle
+    case EventContentDelta:
+        if data, ok := event.ContentDeltaData(); ok {
+            // Handle typed data with IDE autocomplete
+        }
+    case EventToolCallStart:
+        if data, ok := event.ToolCallStartData(); ok {
+            // Access tool name, ID, parameters without type assertions
+        }
     }
 }
 ```
+
+**Note**: Event.Data keeps `interface{}` (idiomatic for heterogeneous streams). Type safety via helper methods.
 
 ### State Machine
 ```go

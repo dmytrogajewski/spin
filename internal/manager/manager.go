@@ -74,14 +74,6 @@ func WithManagerApprovalHandler(handler security.ApprovalHandler) ManagerOption 
 	}
 }
 
-// getLogger returns a logger from manager or falls back to default.
-func (m *Manager) getLogger(ctx context.Context) *slog.Logger {
-	if m.logger != nil {
-		return m.logger
-	}
-	return slog.Default()
-}
-
 // withContext creates a logger with context fields extracted from ctx.
 // This is a local helper function since logger.withContext is not exported.
 func withContext(ctx context.Context) *slog.Logger {

@@ -93,13 +93,13 @@ func TestIs(t *testing.T) {
 	sentinel := errors.New("sentinel error")
 	wrapped := New(CodeInternal, "Test.Op", "wrapped error", sentinel)
 
-	if !Is(wrapped, sentinel) {
-		t.Error("Is() should find sentinel error in chain")
+	if !errors.Is(wrapped, sentinel) {
+		t.Error("errors.Is() should find sentinel error in chain")
 	}
 
 	other := errors.New("other error")
-	if Is(wrapped, other) {
-		t.Error("Is() should not match different error")
+	if errors.Is(wrapped, other) {
+		t.Error("errors.Is() should not match different error")
 	}
 }
 
@@ -108,12 +108,12 @@ func TestAs(t *testing.T) {
 	outer := New(CodeInternal, "Outer.Op", "outer error", inner)
 
 	var e *Error
-	if !As(outer, &e) {
-		t.Fatal("As() should find *Error in chain")
+	if !errors.As(outer, &e) {
+		t.Fatal("errors.As() should find *Error in chain")
 	}
 
 	if e.Code != CodeInternal {
-		t.Errorf("As() found error with Code = %v, want %v", e.Code, CodeInternal)
+		t.Errorf("errors.As() found error with Code = %v, want %v", e.Code, CodeInternal)
 	}
 }
 
@@ -151,19 +151,19 @@ func TestErrorChaining(t *testing.T) {
 	top := New(CodeInternal, "Top.Op", "operation failed", middle)
 
 	// Test that we can find the root error
-	if !Is(top, root) {
-		t.Error("Is() should find root error through chain")
+	if !errors.Is(top, root) {
+		t.Error("errors.Is() should find root error through chain")
 	}
 
 	// Test that we can extract structured error info
 	var structErr *Error
-	if !As(top, &structErr) {
-		t.Fatal("As() should find *Error in chain")
+	if !errors.As(top, &structErr) {
+		t.Fatal("errors.As() should find *Error in chain")
 	}
 
 	// Should get the top-level error
 	if structErr.Code != CodeInternal {
-		t.Errorf("As() extracted Code = %v, want %v", structErr.Code, CodeInternal)
+		t.Errorf("errors.As() extracted Code = %v, want %v", structErr.Code, CodeInternal)
 	}
 
 	// Unwrap to get middle error
@@ -173,7 +173,7 @@ func TestErrorChaining(t *testing.T) {
 	}
 
 	var middleErr *Error
-	if !As(unwrapped, &middleErr) {
+	if !errors.As(unwrapped, &middleErr) {
 		t.Fatal("Middle error should be *Error")
 	}
 
@@ -206,7 +206,7 @@ func ExampleAs() {
 
 	// Extract structured error information
 	var structErr *Error
-	if As(err, &structErr) {
+	if errors.As(err, &structErr) {
 		fmt.Printf("Code: %s, Op: %s\n", structErr.Code, structErr.Op)
 	}
 	// Output: Code: io, Op: File.Write

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/openai/openai-go"
 )
 
 // MockProvider implements Provider for testing.
@@ -16,11 +18,11 @@ type MockProvider struct {
 
 	name         string
 	response     string
-	toolCalls    []ToolCall
+	toolCalls    []openai.ChatCompletionMessageToolCall
 	streamChunks []string
 	err          error
 	capabilities Capabilities
-	models       []Model
+	models       []openai.Model
 	delay        time.Duration
 }
 
@@ -42,12 +44,11 @@ func NewMockProvider(name string, opts ...MockOption) *MockProvider {
 			FunctionCalling: true,
 			Vision:          false,
 		},
-		models: []Model{
+		models: []openai.Model{
 			{
-				ID:          "mock-model",
-				Name:        "Mock Model",
-				Description: "A mock model for testing",
-				ContextSize: 4096,
+				ID:      "mock-model",
+				Created: time.Now().Unix(),
+				Object:  "model",
 			},
 		},
 	}
@@ -60,7 +61,7 @@ func NewMockProvider(name string, opts ...MockOption) *MockProvider {
 }
 
 // Complete implements Provider.Complete.
-func (p *MockProvider) Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error) {
+func (p *MockProvider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -78,29 +79,47 @@ func (p *MockProvider) Complete(ctx context.Context, req CompletionRequest) (*Co
 		return nil, p.err
 	}
 
-	// Build response
-	resp := &CompletionResponse{
-		ID:        fmt.Sprintf("mock-%d", time.Now().UnixNano()),
-		Model:     req.Model,
-		Content:   p.response,
-		ToolCalls: p.toolCalls,
-		Usage: Usage{
-			PromptTokens:     len(req.Messages) * 10,
-			CompletionTokens: len(p.response) / 4,
-			TotalTokens:      len(req.Messages)*10 + len(p.response)/4,
-		},
-		FinishReason: "stop",
+	// Determine finish reason
+	finishReason := openai.ChatCompletionChoicesFinishReasonStop
+	if len(p.toolCalls) > 0 {
+		finishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
 	}
 
-	if len(p.toolCalls) > 0 {
-		resp.FinishReason = "tool_calls"
+	// Count messages for usage calculation
+	messageCount := 0
+	if params.Messages.Present {
+		messageCount = len(params.Messages.Value)
+	}
+
+	// Build response
+	resp := &openai.ChatCompletion{
+		ID:      fmt.Sprintf("mock-%d", time.Now().UnixNano()),
+		Created: time.Now().Unix(),
+		Model:   "mock-model",
+		Object:  "chat.completion",
+		Choices: []openai.ChatCompletionChoice{
+			{
+				Index: 0,
+				Message: openai.ChatCompletionMessage{
+					Role:      openai.ChatCompletionMessageRoleAssistant,
+					Content:   p.response,
+					ToolCalls: p.toolCalls,
+				},
+				FinishReason: finishReason,
+			},
+		},
+		Usage: openai.CompletionUsage{
+			PromptTokens:     int64(messageCount * 10),
+			CompletionTokens: int64(len(p.response) / 4),
+			TotalTokens:      int64(messageCount*10 + len(p.response)/4),
+		},
 	}
 
 	return resp, nil
 }
 
 // Stream implements Provider.Stream.
-func (p *MockProvider) Stream(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error) {
+func (p *MockProvider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -109,7 +128,8 @@ func (p *MockProvider) Stream(ctx context.Context, req CompletionRequest) (<-cha
 		return nil, p.err
 	}
 
-	chunks := make(chan StreamChunk, 10)
+	chunks := make(chan openai.ChatCompletionChunk, 10)
+	chunkID := fmt.Sprintf("mock-chunk-%d", time.Now().UnixNano())
 
 	go func() {
 		defer close(chunks)
@@ -120,9 +140,22 @@ func (p *MockProvider) Stream(ctx context.Context, req CompletionRequest) (<-cha
 			for _, content := range p.streamChunks {
 				select {
 				case <-ctx.Done():
-					chunks <- StreamChunk{Type: ChunkTypeError, Error: ctx.Err()}
 					return
-				case chunks <- StreamChunk{Type: ChunkTypeContentDelta, Content: content}:
+				case chunks <- openai.ChatCompletionChunk{
+					ID:      chunkID,
+					Created: time.Now().Unix(),
+					Model:   "mock-model",
+					Object:  "chat.completion.chunk",
+					Choices: []openai.ChatCompletionChunkChoice{
+						{
+							Index: 0,
+							Delta: openai.ChatCompletionChunkChoicesDelta{
+								Content: content,
+								Role:    openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
+							},
+						},
+					},
+				}:
 				}
 
 				// Simulate delay between chunks
@@ -130,20 +163,43 @@ func (p *MockProvider) Stream(ctx context.Context, req CompletionRequest) (<-cha
 					select {
 					case <-time.After(p.delay):
 					case <-ctx.Done():
-						chunks <- StreamChunk{Type: ChunkTypeError, Error: ctx.Err()}
 						return
 					}
 				}
 			}
 		} else if len(p.toolCalls) > 0 {
 			// Stream tool calls
-			for _, tc := range p.toolCalls {
-				select {
-				case <-ctx.Done():
-					chunks <- StreamChunk{Type: ChunkTypeError, Error: ctx.Err()}
-					return
-				case chunks <- StreamChunk{Type: ChunkTypeToolCallStart, ToolCall: &tc}:
+			toolCallChunks := make([]openai.ChatCompletionChunkChoicesDeltaToolCall, len(p.toolCalls))
+			for i, tc := range p.toolCalls {
+				toolCallChunks[i] = openai.ChatCompletionChunkChoicesDeltaToolCall{
+					Index: int64(i),
+					ID:    tc.ID,
+					Type:  openai.ChatCompletionChunkChoicesDeltaToolCallsType(tc.Type),
+					Function: openai.ChatCompletionChunkChoicesDeltaToolCallsFunction{
+						Name:      tc.Function.Name,
+						Arguments: tc.Function.Arguments,
+					},
 				}
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case chunks <- openai.ChatCompletionChunk{
+				ID:      chunkID,
+				Created: time.Now().Unix(),
+				Model:   "mock-model",
+				Object:  "chat.completion.chunk",
+				Choices: []openai.ChatCompletionChunkChoice{
+					{
+						Index: 0,
+						Delta: openai.ChatCompletionChunkChoicesDelta{
+							Role:      openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
+							ToolCalls: toolCallChunks,
+						},
+					},
+				},
+			}:
 			}
 		} else {
 			// Stream response as single chunk
@@ -152,29 +208,52 @@ func (p *MockProvider) Stream(ctx context.Context, req CompletionRequest) (<-cha
 				select {
 				case <-time.After(p.delay):
 				case <-ctx.Done():
-					chunks <- StreamChunk{Type: ChunkTypeError, Error: ctx.Err()}
 					return
 				}
 			}
 
 			select {
 			case <-ctx.Done():
-				chunks <- StreamChunk{Type: ChunkTypeError, Error: ctx.Err()}
 				return
-			case chunks <- StreamChunk{Type: ChunkTypeContentDelta, Content: p.response}:
+			case chunks <- openai.ChatCompletionChunk{
+				ID:      chunkID,
+				Created: time.Now().Unix(),
+				Model:   "mock-model",
+				Object:  "chat.completion.chunk",
+				Choices: []openai.ChatCompletionChunkChoice{
+					{
+						Index: 0,
+						Delta: openai.ChatCompletionChunkChoicesDelta{
+							Content: p.response,
+							Role:    openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
+						},
+					},
+				},
+			}:
 			}
 		}
 
-		// Send done chunk
-		finishReason := "stop"
+		// Send done chunk with finish reason
+		finishReason := openai.ChatCompletionChunkChoicesFinishReasonStop
 		if len(p.toolCalls) > 0 {
-			finishReason = "tool_calls"
+			finishReason = openai.ChatCompletionChunkChoicesFinishReasonToolCalls
 		}
 
 		select {
 		case <-ctx.Done():
-			chunks <- StreamChunk{Type: ChunkTypeError, Error: ctx.Err()}
-		case chunks <- StreamChunk{Type: ChunkTypeDone, FinishReason: finishReason}:
+			return
+		case chunks <- openai.ChatCompletionChunk{
+			ID:      chunkID,
+			Created: time.Now().Unix(),
+			Model:   "mock-model",
+			Object:  "chat.completion.chunk",
+			Choices: []openai.ChatCompletionChunkChoice{
+				{
+					Index:        0,
+					FinishReason: finishReason,
+				},
+			},
+		}:
 		}
 	}()
 
@@ -182,7 +261,7 @@ func (p *MockProvider) Stream(ctx context.Context, req CompletionRequest) (<-cha
 }
 
 // Models implements Provider.Models.
-func (p *MockProvider) Models(ctx context.Context) ([]Model, error) {
+func (p *MockProvider) Models(ctx context.Context) ([]openai.Model, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -229,7 +308,7 @@ func (p *MockProvider) SetError(err error) {
 
 // SetToolCalls updates the mock tool calls.
 // Thread-safe and can be called during provider usage.
-func (p *MockProvider) SetToolCalls(calls []ToolCall) {
+func (p *MockProvider) SetToolCalls(calls []openai.ChatCompletionMessageToolCall) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.toolCalls = calls
@@ -253,7 +332,7 @@ func WithError(err error) MockOption {
 }
 
 // WithToolCalls sets tool calls to be returned by the mock provider.
-func WithToolCalls(calls []ToolCall) MockOption {
+func WithToolCalls(calls []openai.ChatCompletionMessageToolCall) MockOption {
 	return func(p *MockProvider) {
 		p.toolCalls = calls
 	}
@@ -280,7 +359,7 @@ func WithCapabilities(caps Capabilities) MockOption {
 }
 
 // WithModels sets the models available from the mock provider.
-func WithModels(models []Model) MockOption {
+func WithModels(models []openai.Model) MockOption {
 	return func(p *MockProvider) {
 		p.models = models
 	}

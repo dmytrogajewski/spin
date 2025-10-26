@@ -7,11 +7,10 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/dmytrogajewski/spin/internal/mcp/client"
-	"github.com/dmytrogajewski/spin/internal/mcp/types"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/mark3labs/mcp-go/client"
+	mcpSDK "github.com/mark3labs/mcp-go/mcp"
 )
 
 // Config holds MCP manager configuration.
@@ -39,7 +38,7 @@ type MCPServerConfig struct {
 type MCPManager struct {
 	config    *Config
 	logger    *slog.Logger
-	clients   map[string]client.Client
+	clients   map[string]*client.Client
 	tools     map[string]*MCPTool
 	mu        sync.RWMutex
 	closed    bool
@@ -49,8 +48,8 @@ type MCPManager struct {
 // MCPTool wraps an MCP tool for integration with the tool registry.
 type MCPTool struct {
 	ServerName string
-	Tool       types.Tool
-	Client     client.Client
+	Tool       mcpSDK.Tool
+	Client     *client.Client
 }
 
 // NewMCPManager creates a new MCP manager.
@@ -58,7 +57,7 @@ func NewMCPManager(config *Config, logger *slog.Logger) *MCPManager {
 	return &MCPManager{
 		config:  config,
 		logger:  logger,
-		clients: make(map[string]client.Client),
+		clients: make(map[string]*client.Client),
 		tools:   make(map[string]*MCPTool),
 	}
 }
@@ -98,31 +97,21 @@ func (m *MCPManager) Initialize(ctx context.Context) error {
 func (m *MCPManager) connectServer(ctx context.Context, serverConfig MCPServerConfig) error {
 	m.logger.Debug("Connecting to MCP server", "server", serverConfig.Name)
 
-	// Create client config
-	clientConfig := client.Config{
-		Command: serverConfig.Command,
-		Args:    serverConfig.Args,
-		Env:     serverConfig.Env,
-		Timeout: 30 * time.Second,
-	}
-
-	// Create MCP client using stdio transport
-	mcpClient, err := m.createClient(clientConfig)
+	// Create MCP client using SDK (SDK auto-starts the connection)
+	mcpClient, err := m.createSDKClient(serverConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create MCP client: %w", err)
 	}
 
 	// Initialize connection
-	initReq := types.InitializeRequest{
-		ProtocolVersion: "2024-11-05",
-		Capabilities: types.ClientCapabilities{
-			Tools: &types.ToolsCapability{
-				ListChanged: true,
+	initReq := mcpSDK.InitializeRequest{
+		Params: mcpSDK.InitializeParams{
+			ProtocolVersion: "2024-11-05",
+			Capabilities:    mcpSDK.ClientCapabilities{},
+			ClientInfo: mcpSDK.Implementation{
+				Name:    "spin",
+				Version: "0.1.0",
 			},
-		},
-		ClientInfo: types.Implementation{
-			Name:    "spin",
-			Version: "0.1.0",
 		},
 	}
 
@@ -138,7 +127,8 @@ func (m *MCPManager) connectServer(ctx context.Context, serverConfig MCPServerCo
 		"capabilities", initResp.Capabilities)
 
 	// List available tools
-	toolsResp, err := mcpClient.ListTools(ctx)
+	listReq := mcpSDK.ListToolsRequest{}
+	toolsResp, err := mcpClient.ListTools(ctx, listReq)
 	if err != nil {
 		mcpClient.Close()
 		return fmt.Errorf("failed to list MCP tools: %w", err)
@@ -165,10 +155,20 @@ func (m *MCPManager) connectServer(ctx context.Context, serverConfig MCPServerCo
 	return nil
 }
 
-// createClient creates an MCP client.
-func (m *MCPManager) createClient(config client.Config) (client.Client, error) {
-	// Use real stdio client
-	return client.NewStdioClient(config)
+// createSDKClient creates an MCP client using the mark3labs/mcp-go SDK.
+func (m *MCPManager) createSDKClient(config MCPServerConfig) (*client.Client, error) {
+	// Convert env map to slice of KEY=VALUE strings
+	env := make([]string, 0, len(config.Env))
+	for k, v := range config.Env {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Create SDK stdio client
+	return client.NewStdioMCPClient(
+		config.Command,
+		env,
+		config.Args...,
+	)
 }
 
 // GetTools returns all registered MCP tools as tool registry entries.
@@ -192,7 +192,7 @@ func (m *MCPManager) GetTools() []tools.Tool {
 }
 
 // CallTool invokes an MCP tool.
-func (m *MCPManager) CallTool(ctx context.Context, toolName string, arguments map[string]interface{}) (tools.ToolResult, error) {
+func (m *MCPManager) CallTool(ctx context.Context, toolName string, arguments json.RawMessage) (tools.ToolResult, error) {
 	m.mu.RLock()
 	mcpTool, exists := m.tools[toolName]
 	m.mu.RUnlock()
@@ -201,14 +201,27 @@ func (m *MCPManager) CallTool(ctx context.Context, toolName string, arguments ma
 		return tools.ToolResult{}, fmt.Errorf("mcp tool not found: %s", toolName)
 	}
 
-	// Convert arguments to JSON
-	argsJSON, err := json.Marshal(arguments)
-	if err != nil {
-		return tools.ToolResult{}, fmt.Errorf("failed to marshal arguments: %w", err)
+	// Parse arguments into map for SDK
+	var argsMap map[string]any
+	if len(arguments) > 0 {
+		if err := json.Unmarshal(arguments, &argsMap); err != nil {
+			return tools.ToolResult{
+				Success: false,
+				Error:   fmt.Sprintf("invalid arguments: %v", err),
+			}, nil
+		}
+	}
+
+	// Build SDK request
+	callReq := mcpSDK.CallToolRequest{
+		Params: mcpSDK.CallToolParams{
+			Name:      mcpTool.Tool.Name,
+			Arguments: argsMap,
+		},
 	}
 
 	// Call the MCP tool
-	resp, err := mcpTool.Client.CallTool(ctx, mcpTool.Tool.Name, argsJSON)
+	resp, err := mcpTool.Client.CallTool(ctx, callReq)
 	if err != nil {
 		return tools.ToolResult{
 			Success: false,
@@ -216,11 +229,20 @@ func (m *MCPManager) CallTool(ctx context.Context, toolName string, arguments ma
 		}, nil
 	}
 
+	// Check if tool call resulted in error
+	if resp.IsError {
+		return tools.ToolResult{
+			Success: false,
+			Error:   "tool execution failed",
+		}, nil
+	}
+
 	// Convert MCP response to tool result
 	var output strings.Builder
 	for _, content := range resp.Content {
-		if content.Text != nil {
-			output.WriteString(*content.Text)
+		// Try to cast to TextContent
+		if textContent, ok := mcpSDK.AsTextContent(content); ok {
+			output.WriteString(textContent.Text)
 		}
 	}
 
@@ -248,7 +270,7 @@ func (m *MCPManager) Close() error {
 			}
 		}
 
-		m.clients = make(map[string]client.Client)
+		m.clients = make(map[string]*client.Client)
 		m.tools = make(map[string]*MCPTool)
 		m.mu.Unlock()
 
@@ -279,9 +301,9 @@ func (m *MCPManager) GetConnectedServers() []string {
 
 // Helper functions
 
-func getToolDescription(tool types.Tool) string {
-	if tool.Description != nil {
-		return *tool.Description
+func getToolDescription(tool mcpSDK.Tool) string {
+	if tool.Description != "" {
+		return tool.Description
 	}
 	return fmt.Sprintf("MCP tool: %s", tool.Name)
 }
@@ -302,53 +324,38 @@ func (w *MCPToolWrapper) Description() string {
 	return w.description
 }
 
+// JSONSchemaProperty represents a property in a JSON Schema.
+type JSONSchemaProperty struct {
+	Type        string `json:"type,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// JSONSchema represents a simplified JSON Schema for tool parameters.
+type JSONSchema struct {
+	Type       string                        `json:"type,omitempty"`
+	Properties map[string]JSONSchemaProperty `json:"properties,omitempty"`
+	Required   []string                      `json:"required,omitempty"`
+}
+
 func (w *MCPToolWrapper) Schema() tools.ToolSchema {
-	// Convert MCP tool schema to OpenAI-compatible schema
-	var mcpSchema map[string]interface{}
-	if err := json.Unmarshal(w.mcpTool.Tool.InputSchema, &mcpSchema); err != nil {
-		// Fallback to basic schema
-		return tools.ToolSchema{
-			Type: "function",
-			Function: tools.FunctionSchema{
-				Name:        w.name,
-				Description: w.description,
-				Parameters: tools.ParameterSchema{
-					Type:       "object",
-					Properties: make(map[string]tools.PropertyDefinition),
-					Required:   []string{},
-				},
-			},
-		}
+	// Marshal tool's InputSchema to JSON for parsing
+	schemaBytes, err := json.Marshal(w.mcpTool.Tool.InputSchema)
+	if err != nil {
+		return w.fallbackSchema()
 	}
 
-	// Convert properties
+	// Parse as structured JSON Schema
+	var mcpSchema JSONSchema
+	if err := json.Unmarshal(schemaBytes, &mcpSchema); err != nil {
+		return w.fallbackSchema()
+	}
+
+	// Convert properties to tool schema format
 	properties := make(map[string]tools.PropertyDefinition)
-	if props, ok := mcpSchema["properties"].(map[string]interface{}); ok {
-		for name, prop := range props {
-			if propMap, ok := prop.(map[string]interface{}); ok {
-				desc := ""
-				if descVal, ok := propMap["description"].(string); ok {
-					desc = descVal
-				}
-				propType := "string"
-				if typeVal, ok := propMap["type"].(string); ok {
-					propType = typeVal
-				}
-				properties[name] = tools.PropertyDefinition{
-					Type:        propType,
-					Description: desc,
-				}
-			}
-		}
-	}
-
-	// Convert required fields
-	var required []string
-	if req, ok := mcpSchema["required"].([]interface{}); ok {
-		for _, reqItem := range req {
-			if reqStr, ok := reqItem.(string); ok {
-				required = append(required, reqStr)
-			}
+	for name, prop := range mcpSchema.Properties {
+		properties[name] = tools.PropertyDefinition{
+			Type:        prop.Type,
+			Description: prop.Description,
 		}
 	}
 
@@ -360,14 +367,36 @@ func (w *MCPToolWrapper) Schema() tools.ToolSchema {
 			Parameters: tools.ParameterSchema{
 				Type:       "object",
 				Properties: properties,
-				Required:   required,
+				Required:   mcpSchema.Required,
+			},
+		},
+	}
+}
+
+// fallbackSchema returns a basic schema when parsing fails.
+func (w *MCPToolWrapper) fallbackSchema() tools.ToolSchema {
+	return tools.ToolSchema{
+		Type: "function",
+		Function: tools.FunctionSchema{
+			Name:        w.name,
+			Description: w.description,
+			Parameters: tools.ParameterSchema{
+				Type:       "object",
+				Properties: make(map[string]tools.PropertyDefinition),
+				Required:   []string{},
 			},
 		},
 	}
 }
 
 func (w *MCPToolWrapper) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
-	// Convert ToolParameters back to map for MCP call
-	paramsMap := params.ToMap()
-	return w.manager.CallTool(ctx, w.name, paramsMap)
+	// Convert ToolParameters to json.RawMessage
+	argsJSON, err := json.Marshal(params.ToMap())
+	if err != nil {
+		return tools.ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("marshal arguments: %v", err),
+		}, nil
+	}
+	return w.manager.CallTool(ctx, w.name, argsJSON)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/openai/openai-go"
 )
 
 // Default agent configuration values
@@ -355,7 +356,7 @@ func (a *Agent) finalizeResponse(resp *AgentResponse, messages []Message, histor
 // based on the task mode's allowed tools.
 //
 // This method delegates to the orchestration service's tool registry.
-func (a *Agent) BuildToolsForTask(task Task) ([]llm.Tool, error) {
+func (a *Agent) BuildToolsForTask(task Task) ([]tools.Tool, error) {
 	if a.orchestration == nil {
 		return nil, nil
 	}
@@ -365,9 +366,9 @@ func (a *Agent) BuildToolsForTask(task Task) ([]llm.Tool, error) {
 		return nil, nil
 	}
 
-	// Get all available tools
-	allSchemas := toolRegistry.ListSchemas()
-	if len(allSchemas) == 0 {
+	// Get all available tools from registry
+	allTools := toolRegistry.List()
+	if len(allTools) == 0 {
 		return nil, nil
 	}
 
@@ -387,29 +388,19 @@ func (a *Agent) BuildToolsForTask(task Task) ([]llm.Tool, error) {
 	}
 
 	// Filter tools
-	filtered := make([]llm.Tool, 0, len(allSchemas))
-	for _, schema := range allSchemas {
+	filtered := make([]tools.Tool, 0, len(allTools))
+	for _, tool := range allTools {
 		// Check if tool is allowed in this mode
-		if !allowAllTools && !allowedSet[schema.Function.Name] {
+		if !allowAllTools && !allowedSet[tool.Name()] {
 			continue
 		}
 
-		// Convert ParameterSchema to map (defined below)
-		params := convertParameterSchemaToMap(schema.Function.Parameters)
-
-		filtered = append(filtered, llm.Tool{
-			Type: schema.Type,
-			Function: llm.Function{
-				Name:        schema.Function.Name,
-				Description: schema.Function.Description,
-				Parameters:  params,
-			},
-		})
+		filtered = append(filtered, tool)
 	}
 
 	slog.Debug("filtered tools for task",
 		"task", task.Name(),
-		"total", len(allSchemas),
+		"total", len(allTools),
 		"allowed", len(filtered))
 
 	return filtered, nil
@@ -471,18 +462,15 @@ Guidelines:
 `, taskName)
 
 	// Call LLM for task decomposition
-	req := llm.CompletionRequest{
-		Messages: []llm.Message{
-			{
-				Role:    "user",
-				Content: decompositionPrompt,
-			},
-		},
-		MaxTokens:   1000,
-		Temperature: 0.3, // Lower temperature for more consistent planning
+	params := openai.ChatCompletionNewParams{
+		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage(decompositionPrompt),
+		}),
+		MaxTokens:   openai.F(int64(1000)),
+		Temperature: openai.F(0.3), // Lower temperature for more consistent planning
 	}
 
-	resp, err := a.llm.Complete(ctx, req)
+	resp, err := a.llm.Complete(ctx, params)
 	if err != nil {
 		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.CreatePlan", "llm completion failed", err)
 	}
@@ -498,7 +486,8 @@ Guidelines:
 		} `json:"steps"`
 	}
 
-	if err := json.Unmarshal([]byte(resp.Content), &decomposition); err != nil {
+	responseContent := getContent(resp)
+	if err := json.Unmarshal([]byte(responseContent), &decomposition); err != nil {
 		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.CreatePlan", "failed to parse LLM response", err)
 	}
 
@@ -597,11 +586,20 @@ func (a *Agent) determineRequiresApproval(toolName string, args map[string]inter
 // processToolCalls handles all tool calls from an LLM response.
 // It adds the assistant message with tool calls, executes each tool,
 // and adds tool result messages to the conversation.
-func (a *Agent) processToolCalls(ctx context.Context, messages []Message, llmResp *llm.CompletionResponse, resp *AgentResponse) []Message {
+// processToolCallsFromCompletion is a wrapper that extracts data from openai.ChatCompletion
+// and delegates to processToolCalls.
+func (a *Agent) processToolCallsFromCompletion(ctx context.Context, messages []Message, completion *openai.ChatCompletion, resp *AgentResponse) []Message {
+	content := getContent(completion)
+	toolCalls := getToolCalls(completion)
+	return a.processToolCallsInternal(ctx, messages, content, toolCalls, resp)
+}
+
+// processToolCallsInternal contains the actual logic for processing tool calls.
+func (a *Agent) processToolCallsInternal(ctx context.Context, messages []Message, content string, toolCalls []orchestration.ToolCall, resp *AgentResponse) []Message {
 	// Create assistant message with tool calls
 	assistantMsg := Message{
 		Role:      RoleAssistant,
-		Content:   llmResp.Content,
+		Content:   content,
 		Timestamp: time.Now(),
 	}
 
@@ -609,18 +607,8 @@ func (a *Agent) processToolCalls(ctx context.Context, messages []Message, llmRes
 	messages = append(messages, assistantMsg)
 
 	// Convert and process each tool call
-	for i := range llmResp.ToolCalls {
-		toolCall := &llmResp.ToolCalls[i]
-
-		// Convert llm.ToolCall to orchestration.ToolCall
-		coreToolCall := &orchestration.ToolCall{
-			ID:   toolCall.ID,
-			Type: toolCall.Type,
-			Function: orchestration.ToolCallFunction{
-				Name:      toolCall.Function.Name,
-				Arguments: toolCall.Function.Arguments,
-			},
-		}
+	for i := range toolCalls {
+		coreToolCall := &toolCalls[i]
 
 		// Add to assistant message (note: message already appended above)
 		messages[len(messages)-1].ToolCalls = append(messages[len(messages)-1].ToolCalls, *coreToolCall)
@@ -756,25 +744,6 @@ func (a *Agent) parseToolArguments(call *orchestration.ToolCall) (map[string]int
 	return parser.Parse(call.Function.Arguments)
 }
 
-// convertParameterSchemaToMap converts a ParameterSchema struct to map[string]interface{}.
-// This is needed because LLM providers expect parameters as a JSON-compatible map.
-func convertParameterSchemaToMap(params tools.ParameterSchema) map[string]interface{} {
-	// Convert struct to map via JSON marshaling
-	data, err := json.Marshal(params)
-	if err != nil {
-		// Fallback to empty object if marshaling fails
-		return map[string]interface{}{"type": "object"}
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(data, &result); err != nil {
-		// Fallback to empty object if unmarshaling fails
-		return map[string]interface{}{"type": "object"}
-	}
-
-	return result
-}
-
 // getToolResultContent returns the appropriate content to send to LLM based on tool result.
 // If tool succeeded, returns output. If failed, returns error message.
 func getToolResultContent(toolCall *orchestration.ToolCall, result *orchestration.ToolResult) string {
@@ -797,9 +766,9 @@ func getToolResultContent(toolCall *orchestration.ToolCall, result *orchestratio
 // The task parameter controls both tool filtering and token budget:
 //   - Tools: Only tools in task.AllowedTools() are included
 //   - Tokens: Uses task.MaxTokens() if > 0, otherwise agent.config.MaxTokens
-func (a *Agent) callLLM(ctx context.Context, messages []Message, task Task) (*llm.CompletionResponse, error) {
+func (a *Agent) callLLM(ctx context.Context, messages []Message, task Task) (*openai.ChatCompletion, error) {
 	// Start with system message from task
-	llmMessages := make([]llm.Message, 0, len(messages)+1)
+	openaiMessages := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages)+1)
 
 	// Add system prompt with thinking instructions
 	systemPrompt := task.SystemPrompt()
@@ -815,40 +784,16 @@ I need to analyze this code to understand what it does. Let me break down the fu
 
 Then provide your response after the thinking block.`
 
-		llmMessages = append(llmMessages, llm.Message{
-			Role:    "system",
-			Content: enhancedSystemPrompt,
-		})
+		openaiMessages = append(openaiMessages, openai.SystemMessage(enhancedSystemPrompt))
 	}
 
-	// Convert conversation messages to LLM format
+	// Convert conversation messages to OpenAI format
 	for _, msg := range messages {
-		llmMsg := llm.Message{
-			Role:       string(msg.Role),
-			Content:    msg.Content,
-			ToolCallID: msg.ToolCallID,
-		}
-
-		// Convert tool calls if present
-		if len(msg.ToolCalls) > 0 {
-			llmMsg.ToolCalls = make([]llm.ToolCall, len(msg.ToolCalls))
-			for j, tc := range msg.ToolCalls {
-				llmMsg.ToolCalls[j] = llm.ToolCall{
-					ID:   tc.ID,
-					Type: tc.Type,
-					Function: llm.FunctionCall{
-						Name:      tc.Function.Name,
-						Arguments: tc.Function.Arguments,
-					},
-				}
-			}
-		}
-
-		llmMessages = append(llmMessages, llmMsg)
+		openaiMessages = append(openaiMessages, convertMessageToOpenAI(msg))
 	}
 
 	// Build filtered tool list for this task mode
-	tools, err := a.BuildToolsForTask(task)
+	toolList, err := a.BuildToolsForTask(task)
 	if err != nil {
 		return nil, spinerrors.New(spinerrors.CodeInternal, "Agent.callLLM", "failed to build tools", err)
 	}
@@ -862,80 +807,113 @@ Then provide your response after the thinking block.`
 		}
 	}
 
-	// Build LLM request with filtered tools
-	req := llm.CompletionRequest{
-		Messages:    llmMessages,
-		Temperature: a.config.Temperature,
-		MaxTokens:   maxTokens,
-		Tools:       tools,
+	// Build OpenAI request params
+	params := openai.ChatCompletionNewParams{
+		Messages:    openai.F(openaiMessages),
+		Temperature: openai.F(a.config.Temperature),
+		MaxTokens:   openai.F(int64(maxTokens)),
 	}
-	slog.Debug("calling LLM", "tool_count", len(tools), "message_count", len(llmMessages))
+
+	// Add tools if present
+	if len(toolList) > 0 {
+		params.Tools = openai.F(convertToolsToOpenAI(toolList))
+	}
+
+	slog.Debug("calling LLM", "tool_count", len(toolList), "message_count", len(openaiMessages))
 
 	// Call LLM with streaming
-	chunks, err := a.llm.Stream(ctx, req)
+	chunks, err := a.llm.Stream(ctx, params)
 	if err != nil {
 		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "failed to start LLM stream", err)
 	}
 
 	// Accumulate response from streaming chunks
-	response := &llm.CompletionResponse{
-		Content:      "",
-		ToolCalls:    []llm.ToolCall{},
-		Usage:        llm.Usage{},
-		FinishReason: "",
+	response := &openai.ChatCompletion{
+		Choices: []openai.ChatCompletionChoice{
+			{
+				Message: openai.ChatCompletionMessage{
+					Content:   "",
+					ToolCalls: []openai.ChatCompletionMessageToolCall{},
+				},
+			},
+		},
 	}
 
 	chunkCount := 0
 	for chunk := range chunks {
 		chunkCount++
-		slog.Debug("received chunk", "type", chunk.Type, "count", chunkCount, "content_len", len(chunk.Content))
 
 		// Check context cancellation
 		if err := ctx.Err(); err != nil {
 			return nil, spinerrors.New(spinerrors.CodeTimeout, "Agent.callLLM", "context cancelled", err)
 		}
 
-		if chunk.Error != nil {
-			return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "stream error", chunk.Error)
+		// Set response metadata from first chunk
+		if chunkCount == 1 {
+			response.ID = chunk.ID
+			response.Model = chunk.Model
+			response.Created = chunk.Created
 		}
 
-		// Handle different chunk types
-		switch chunk.Type {
-		case llm.ChunkTypeDone:
-			// Stream is complete, break out of loop
-			slog.Debug("received done chunk", "finish_reason", chunk.FinishReason)
-			if chunk.FinishReason != "" {
-				response.FinishReason = chunk.FinishReason
-			}
-			goto streamComplete
+		// Handle empty chunk (shouldn't happen but be safe)
+		if len(chunk.Choices) == 0 {
+			continue
+		}
 
-		case llm.ChunkTypeContentDelta:
-			// Accumulate content
-			response.Content += chunk.Content
+		choice := chunk.Choices[0]
+		delta := choice.Delta
+
+		// Check for finish reason (stream complete)
+		if choice.FinishReason != "" {
+			slog.Debug("received finish chunk", "finish_reason", choice.FinishReason, "total_chunks", chunkCount)
+			// Convert chunk finish reason to completion finish reason
+			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReason(choice.FinishReason)
+
+			// Set usage info if present (usually in last chunk)
+			if chunk.Usage.PromptTokens > 0 {
+				response.Usage = chunk.Usage
+			}
+			continue
+		}
+
+		// Accumulate content delta
+		if delta.Content != "" {
+			response.Choices[0].Message.Content += delta.Content
 
 			// Emit content delta immediately for real-time streaming
-			if chunk.Content != "" {
-				a.emitter.Emit(events.Event{
-					Type:      events.EventContentDelta,
-					Timestamp: time.Now(),
-					Data: events.ContentDeltaData{
-						Content: chunk.Content,
-						Role:    "assistant",
-					},
-				})
-			}
+			a.emitter.Emit(events.Event{
+				Type:      events.EventContentDelta,
+				Timestamp: time.Now(),
+				Data: events.ContentDeltaData{
+					Content: delta.Content,
+					Role:    "assistant",
+				},
+			})
+			slog.Debug("received content chunk", "count", chunkCount, "content_len", len(delta.Content))
+		}
 
-		case llm.ChunkTypeToolCallStart, llm.ChunkTypeToolCallDelta, llm.ChunkTypeToolCallComplete:
-			// Accumulate tool calls
-			if chunk.ToolCall != nil {
-				response.ToolCalls = append(response.ToolCalls, *chunk.ToolCall)
+		// Accumulate tool calls from delta
+		// Note: delta.ToolCalls are ChatCompletionChunkChoicesDeltaToolCall, need to convert
+		if len(delta.ToolCalls) > 0 {
+			for _, deltaToolCall := range delta.ToolCalls {
+				// Convert chunk tool call to message tool call
+				response.Choices[0].Message.ToolCalls = append(
+					response.Choices[0].Message.ToolCalls,
+					openai.ChatCompletionMessageToolCall{
+						ID:   deltaToolCall.ID,
+						Type: openai.ChatCompletionMessageToolCallType(deltaToolCall.Type),
+						Function: openai.ChatCompletionMessageToolCallFunction{
+							Name:      deltaToolCall.Function.Name,
+							Arguments: deltaToolCall.Function.Arguments,
+						},
+					},
+				)
 			}
+			slog.Debug("received tool call chunk", "count", chunkCount, "tool_calls", len(delta.ToolCalls))
 		}
 	}
 
-	slog.Debug("stream ended naturally", "total_chunks", chunkCount)
-
-streamComplete:
+	slog.Debug("stream ended", "total_chunks", chunkCount, "content_len", len(response.Choices[0].Message.Content))
 
 	// Check if context was cancelled after stream ended
 	if err := ctx.Err(); err != nil {
@@ -943,11 +921,11 @@ streamComplete:
 	}
 
 	// Fallback: if no finish reason was provided, set a default one
-	if response.FinishReason == "" {
-		if len(response.ToolCalls) > 0 {
-			response.FinishReason = "tool_calls"
+	if response.Choices[0].FinishReason == "" {
+		if len(response.Choices[0].Message.ToolCalls) > 0 {
+			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
 		} else {
-			response.FinishReason = "stop"
+			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonStop
 		}
 	}
 

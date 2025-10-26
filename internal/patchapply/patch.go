@@ -16,8 +16,6 @@ type Patch struct {
 // FileOperation is a union type for all file operations.
 // All file operations must implement this interface.
 type FileOperation interface {
-	// isFileOperation is a marker method to ensure type safety.
-	isFileOperation()
 	// Path returns the file path for this operation.
 	Path() string
 }
@@ -28,16 +26,14 @@ type AddFile struct {
 	Lines    []string
 }
 
-func (a *AddFile) isFileOperation() {}
-func (a *AddFile) Path() string     { return a.FilePath }
+func (a *AddFile) Path() string { return a.FilePath }
 
 // DeleteFile represents an operation to delete an existing file.
 type DeleteFile struct {
 	FilePath string
 }
 
-func (d *DeleteFile) isFileOperation() {}
-func (d *DeleteFile) Path() string     { return d.FilePath }
+func (d *DeleteFile) Path() string { return d.FilePath }
 
 // UpdateFile represents an operation to modify an existing file.
 // It may optionally include a new path for rename/move operations.
@@ -47,8 +43,7 @@ type UpdateFile struct {
 	Hunks    []Hunk
 }
 
-func (u UpdateFile) isFileOperation() {}
-func (u UpdateFile) Path() string     { return u.FilePath }
+func (u UpdateFile) Path() string { return u.FilePath }
 
 // Hunk represents a change section within a file update.
 // Each hunk has an optional context header (e.g., "func MyFunc") and a list of changes.

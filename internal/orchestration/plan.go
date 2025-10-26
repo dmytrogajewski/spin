@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // Plan-related errors
@@ -108,19 +106,6 @@ type Plan struct {
 	EstimatedDuration time.Duration          // Total estimated time
 	Status            PlanStatus             // Overall plan status
 	Metadata          map[string]interface{} // Additional context
-}
-
-// NewPlan creates a new plan for the given task
-func NewPlan(task string) *Plan {
-	return &Plan{
-		ID:           uuid.New().String(),
-		Task:         task,
-		Steps:        []Step{},
-		Dependencies: make(map[string][]string),
-		CreatedAt:    time.Now(),
-		Status:       PlanStatusPending,
-		Metadata:     make(map[string]interface{}),
-	}
 }
 
 // GetStep retrieves a step by ID

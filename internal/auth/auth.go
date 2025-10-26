@@ -43,11 +43,6 @@ type Credential struct {
 	Value string
 }
 
-// Validate validates the credential.
-func (c Credential) Validate() error {
-	return validateCredential(c)
-}
-
 // CredentialType represents the type of credential.
 type CredentialType int
 

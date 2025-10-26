@@ -33,6 +33,62 @@ func (e Event) GetData() interface{} {
 	return e.Data
 }
 
+// ToolCallStartData returns the event data as ToolCallStartData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ToolCallStartData() (ToolCallStartData, bool) {
+	data, ok := e.Data.(ToolCallStartData)
+	return data, ok
+}
+
+// ToolCallCompleteData returns the event data as ToolCallCompleteData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ToolCallCompleteData() (ToolCallCompleteData, bool) {
+	data, ok := e.Data.(ToolCallCompleteData)
+	return data, ok
+}
+
+// ToolProgressData returns the event data as ToolProgressData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ToolProgressData() (ToolProgressData, bool) {
+	data, ok := e.Data.(ToolProgressData)
+	return data, ok
+}
+
+// ContentDeltaData returns the event data as ContentDeltaData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ContentDeltaData() (ContentDeltaData, bool) {
+	data, ok := e.Data.(ContentDeltaData)
+	return data, ok
+}
+
+// TurnEventData returns the event data as TurnEventData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) TurnEventData() (TurnEventData, bool) {
+	data, ok := e.Data.(TurnEventData)
+	return data, ok
+}
+
+// ApprovalEventData returns the event data as ApprovalEventData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ApprovalEventData() (ApprovalEventData, bool) {
+	data, ok := e.Data.(ApprovalEventData)
+	return data, ok
+}
+
+// SystemEventData returns the event data as SystemEventData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) SystemEventData() (SystemEventData, bool) {
+	data, ok := e.Data.(SystemEventData)
+	return data, ok
+}
+
+// ErrorData returns the event data as ErrorData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ErrorData() (ErrorData, bool) {
+	data, ok := e.Data.(ErrorData)
+	return data, ok
+}
+
 // EventType represents the category of event.
 type EventType int
 

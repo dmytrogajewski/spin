@@ -5,16 +5,6 @@ import (
 	"testing"
 )
 
-func TestNewToolParameters(t *testing.T) {
-	params := NewToolParameters()
-	if params.raw == nil {
-		t.Error("expected non-nil raw map")
-	}
-	if len(params.raw) != 0 {
-		t.Errorf("expected empty map, got %d items", len(params.raw))
-	}
-}
-
 func TestFromMap(t *testing.T) {
 	tests := []struct {
 		name    string

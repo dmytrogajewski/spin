@@ -16,13 +16,6 @@ type ToolParameters struct {
 	raw map[string]json.RawMessage
 }
 
-// NewToolParameters creates a new empty ToolParameters.
-func NewToolParameters() ToolParameters {
-	return ToolParameters{
-		raw: make(map[string]json.RawMessage),
-	}
-}
-
 // Has checks if a parameter key exists.
 func (p ToolParameters) Has(key string) bool {
 	_, exists := p.raw[key]

@@ -485,3 +485,159 @@ func BenchmarkEventEmitter_Subscribe(b *testing.B) {
 		emitter.Subscribe()
 	}
 }
+
+// TestEvent_ToolCallStartData tests type-safe helper for ToolCallStartData
+func TestEvent_ToolCallStartData(t *testing.T) {
+	t.Run("valid data", func(t *testing.T) {
+		// Create event with ToolCallStartData
+		event := Event{
+			Type: EventToolCallStart,
+			Data: ToolCallStartData{
+				ToolName: "read_file",
+				ToolID:   "call_1",
+			},
+		}
+
+		// Should successfully extract data
+		data, ok := event.ToolCallStartData()
+		if !ok {
+			t.Fatal("ToolCallStartData() returned false for valid data")
+		}
+		if data.ToolName != "read_file" {
+			t.Errorf("ToolName = %q, want %q", data.ToolName, "read_file")
+		}
+		if data.ToolID != "call_1" {
+			t.Errorf("ToolID = %q, want %q", data.ToolID, "call_1")
+		}
+	})
+
+	t.Run("wrong data type", func(t *testing.T) {
+		// Create event with wrong data type
+		event := Event{
+			Type: EventContentDelta,
+			Data: ContentDeltaData{Content: "test"},
+		}
+
+		// Should return false
+		_, ok := event.ToolCallStartData()
+		if ok {
+			t.Error("ToolCallStartData() returned true for wrong data type")
+		}
+	})
+}
+
+// TestEvent_TypeSafeHelpers tests all type-safe helper methods
+func TestEvent_TypeSafeHelpers(t *testing.T) {
+	tests := []struct {
+		name      string
+		eventType EventType
+		data      interface{}
+		checkFunc func(Event) bool
+	}{
+		{
+			name:      "ToolCallCompleteData",
+			eventType: EventToolCallComplete,
+			data:      ToolCallCompleteData{ToolID: "call_1", Success: true},
+			checkFunc: func(e Event) bool {
+				data, ok := e.ToolCallCompleteData()
+				return ok && data.ToolID == "call_1" && data.Success
+			},
+		},
+		{
+			name:      "ToolProgressData",
+			eventType: EventToolCallProgress,
+			data:      ToolProgressData{ToolID: "call_1", Status: "running"},
+			checkFunc: func(e Event) bool {
+				data, ok := e.ToolProgressData()
+				return ok && data.ToolID == "call_1" && data.Status == "running"
+			},
+		},
+		{
+			name:      "ContentDeltaData",
+			eventType: EventContentDelta,
+			data:      ContentDeltaData{Content: "test", Role: "assistant"},
+			checkFunc: func(e Event) bool {
+				data, ok := e.ContentDeltaData()
+				return ok && data.Content == "test" && data.Role == "assistant"
+			},
+		},
+		{
+			name:      "TurnEventData",
+			eventType: EventTurnStart,
+			data:      TurnEventData{Turn: 5, TurnID: "turn_5"},
+			checkFunc: func(e Event) bool {
+				data, ok := e.TurnEventData()
+				return ok && data.Turn == 5 && data.TurnID == "turn_5"
+			},
+		},
+		{
+			name:      "ApprovalEventData",
+			eventType: EventCommandApproval,
+			data:      ApprovalEventData{RequestID: "req_1", Command: "rm -rf /"},
+			checkFunc: func(e Event) bool {
+				data, ok := e.ApprovalEventData()
+				return ok && data.RequestID == "req_1" && data.Command == "rm -rf /"
+			},
+		},
+		{
+			name:      "SystemEventData",
+			eventType: EventWarning,
+			data:      SystemEventData{Level: "warning", Message: "test warning"},
+			checkFunc: func(e Event) bool {
+				data, ok := e.SystemEventData()
+				return ok && data.Level == "warning" && data.Message == "test warning"
+			},
+		},
+		{
+			name:      "ErrorData",
+			eventType: EventError,
+			data:      ErrorData{Message: "test error", Code: "ERR_TEST"},
+			checkFunc: func(e Event) bool {
+				data, ok := e.ErrorData()
+				return ok && data.Message == "test error" && data.Code == "ERR_TEST"
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := Event{
+				Type: tt.eventType,
+				Data: tt.data,
+			}
+
+			if !tt.checkFunc(event) {
+				t.Errorf("%s helper failed validation", tt.name)
+			}
+		})
+	}
+}
+
+// TestEvent_TypeSafeHelpers_WrongType tests helpers return false for wrong types
+func TestEvent_TypeSafeHelpers_WrongType(t *testing.T) {
+	// Create event with ContentDeltaData
+	event := Event{
+		Type: EventContentDelta,
+		Data: ContentDeltaData{Content: "test"},
+	}
+
+	// All other helpers should return false
+	if _, ok := event.ToolCallCompleteData(); ok {
+		t.Error("ToolCallCompleteData() should return false")
+	}
+	if _, ok := event.ToolProgressData(); ok {
+		t.Error("ToolProgressData() should return false")
+	}
+	if _, ok := event.TurnEventData(); ok {
+		t.Error("TurnEventData() should return false")
+	}
+	if _, ok := event.ApprovalEventData(); ok {
+		t.Error("ApprovalEventData() should return false")
+	}
+	if _, ok := event.SystemEventData(); ok {
+		t.Error("SystemEventData() should return false")
+	}
+	if _, ok := event.ErrorData(); ok {
+		t.Error("ErrorData() should return false")
+	}
+}

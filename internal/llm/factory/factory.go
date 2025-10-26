@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/auth"
@@ -68,20 +67,6 @@ func NewFactory(authMgr *auth.Manager) *Factory {
 	}
 }
 
-var (
-	// factoryMu protects the factories map
-	factoryMu sync.RWMutex
-
-	// factories maps provider types to factory functions
-	// Used for backward compatibility with standalone NewProvider function
-	factories = map[string]ProviderFactory{
-		"openai":            legacyNewOpenAIProvider,
-		"ollama":            legacyNewOllamaProvider,
-		"lmstudio":          legacyNewLMStudioProvider,
-		"openai-compatible": legacyNewOpenAIProvider,
-	}
-)
-
 // NewProvider creates a provider from configuration using the factory's auth manager.
 //
 // This is the recommended method for creating providers with secure credential storage.
@@ -128,67 +113,6 @@ func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Prov
 		return provider(ctx, cfg)
 	}
 	return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
-}
-
-// NewProvider creates a provider from configuration (legacy, backward compatible).
-//
-// DEPRECATED: Use NewFactory and Factory.NewProvider instead for auth support.
-//
-// This function only supports direct APIKey credentials and will be removed in v2.0.
-// For secure credential storage, use:
-//
-//	factory := factory.NewFactory(authMgr)
-//	provider, err := factory.NewProvider(ctx, cfg)
-//
-// Example:
-//
-//	cfg := factory.ProviderConfig{
-//	    Type:    "openai",
-//	    BaseURL: "https://api.openai.com/v1",
-//	    APIKey:  "sk-...",  // Deprecated
-//	    Model:   "gpt-4",
-//	    Timeout: 30 * time.Second,
-//	}
-//	provider, err := factory.NewProvider(cfg)
-func NewProvider(cfg ProviderConfig) (llm.Provider, error) {
-	// Validate configuration
-	if err := validateConfig(cfg); err != nil {
-		return nil, err
-	}
-
-	factoryMu.RLock()
-	factory, exists := factories[cfg.Type]
-	factoryMu.RUnlock()
-
-	if !exists {
-		return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
-	}
-
-	return factory(cfg)
-}
-
-// RegisterProvider registers a custom provider factory.
-//
-// This allows applications to add support for custom LLM providers or override
-// built-in providers. The factory function will be called by NewProvider when
-// the specified type is requested.
-//
-// Registration is thread-safe and can be called concurrently.
-//
-// Example:
-//
-//	factory.RegisterProvider("custom", func(cfg factory.ProviderConfig) (llm.Provider, error) {
-//	    return &CustomProvider{config: cfg}, nil
-//	})
-//
-//	provider, _ := factory.NewProvider(factory.ProviderConfig{
-//	    Type: "custom",
-//	    // ...
-//	})
-func RegisterProvider(providerType string, factory ProviderFactory) {
-	factoryMu.Lock()
-	defer factoryMu.Unlock()
-	factories[providerType] = factory
 }
 
 // resolveCredential resolves a credential from configuration.
@@ -393,62 +317,6 @@ func (f *Factory) newLMStudioProvider(ctx context.Context, cfg ProviderConfig) (
 
 	lmstudioCfg := lmstudio.Config{
 		BaseURL: cfg.BaseURL,
-		Model:   cfg.Model,
-		Timeout: timeout,
-	}
-
-	return lmstudio.NewProvider(lmstudioCfg)
-}
-
-// Legacy factory functions for backward compatibility (without auth support)
-
-// legacyNewOpenAIProvider creates an OpenAI provider from config (legacy).
-func legacyNewOpenAIProvider(cfg ProviderConfig) (llm.Provider, error) {
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
-	openaiCfg := openai.Config{
-		BaseURL: cfg.BaseURL,
-		APIKey:  cfg.APIKey,
-		Model:   cfg.Model,
-		Timeout: timeout,
-	}
-
-	return openai.NewProvider(openaiCfg)
-}
-
-// legacyNewOllamaProvider creates an Ollama provider from config (legacy).
-func legacyNewOllamaProvider(cfg ProviderConfig) (llm.Provider, error) {
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
-	ollamaCfg := ollama.Config{
-		BaseURL: cfg.BaseURL,
-		Model:   cfg.Model,
-		Timeout: timeout,
-	}
-
-	return ollama.NewProvider(ollamaCfg)
-}
-
-// legacyNewLMStudioProvider creates an LMStudio provider from config (legacy).
-func legacyNewLMStudioProvider(cfg ProviderConfig) (llm.Provider, error) {
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
-	baseURL := cfg.BaseURL
-	if baseURL == "" {
-		baseURL = lmstudio.DefaultBaseURL
-	}
-
-	lmstudioCfg := lmstudio.Config{
-		BaseURL: baseURL,
 		Model:   cfg.Model,
 		Timeout: timeout,
 	}

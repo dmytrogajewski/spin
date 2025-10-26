@@ -1,5 +1,7 @@
 package llm
 
+import "encoding/json"
+
 // CompletionRequest represents a request for LLM completion.
 type CompletionRequest struct {
 	// Messages is the conversation history
@@ -41,67 +43,6 @@ type CompletionResponse struct {
 	// FinishReason indicates why the generation stopped
 	// Values: "stop", "length", "tool_calls", "content_filter"
 	FinishReason string
-}
-
-// StreamChunk represents a chunk in a streaming response.
-type StreamChunk struct {
-	// Type indicates the type of chunk
-	Type ChunkType
-
-	// Content is the incremental content (for ContentDelta)
-	Content string
-
-	// ToolCall is the tool call data (for ToolCall chunks)
-	ToolCall *ToolCall
-
-	// FinishReason indicates completion reason (for Done chunk)
-	FinishReason string
-
-	// Error contains any error that occurred
-	Error error
-}
-
-// ChunkType defines the types of streaming chunks.
-type ChunkType int
-
-const (
-	// ChunkTypeContentDelta indicates incremental content
-	ChunkTypeContentDelta ChunkType = iota
-
-	// ChunkTypeToolCallStart indicates start of a tool call
-	ChunkTypeToolCallStart
-
-	// ChunkTypeToolCallDelta indicates incremental tool call data
-	ChunkTypeToolCallDelta
-
-	// ChunkTypeToolCallComplete indicates tool call completion
-	ChunkTypeToolCallComplete
-
-	// ChunkTypeDone indicates stream completion
-	ChunkTypeDone
-
-	// ChunkTypeError indicates an error occurred
-	ChunkTypeError
-)
-
-// String returns the string representation of ChunkType.
-func (t ChunkType) String() string {
-	switch t {
-	case ChunkTypeContentDelta:
-		return "content_delta"
-	case ChunkTypeToolCallStart:
-		return "tool_call_start"
-	case ChunkTypeToolCallDelta:
-		return "tool_call_delta"
-	case ChunkTypeToolCallComplete:
-		return "tool_call_complete"
-	case ChunkTypeDone:
-		return "done"
-	case ChunkTypeError:
-		return "error"
-	default:
-		return "unknown"
-	}
 }
 
 // Message represents a conversation message.
@@ -159,7 +100,7 @@ type Function struct {
 	Description string
 
 	// Parameters is the JSON schema for function parameters
-	Parameters interface{}
+	Parameters json.RawMessage
 }
 
 // Model represents an available LLM model.

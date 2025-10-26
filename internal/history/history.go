@@ -120,19 +120,11 @@ func (h *History) AddMessage(msg message.Message) error {
 		// Count tokens for tool calls if present
 		if len(msg.ToolCalls) > 0 {
 			for _, tc := range msg.ToolCalls {
-				if tcMap, ok := tc.(map[string]interface{}); ok {
-					// Count function name and arguments
-					if function, ok := tcMap["function"].(map[string]interface{}); ok {
-						if name, ok := function["name"].(string); ok {
-							msg.Tokens += h.tokenizer.Count(name)
-						}
-						if args, ok := function["arguments"].(string); ok {
-							msg.Tokens += h.tokenizer.Count(args)
-						}
-					}
-					// Add tool call overhead (formatting, IDs, etc.)
-					msg.Tokens += 8
-				}
+				// Count function name and arguments
+				msg.Tokens += h.tokenizer.Count(tc.Function.Name)
+				msg.Tokens += h.tokenizer.Count(tc.Function.Arguments)
+				// Add tool call overhead (formatting, IDs, etc.)
+				msg.Tokens += 8
 			}
 		}
 

@@ -18,6 +18,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,8 +27,8 @@ import (
 type requestCapturingMockProvider struct {
 	*llm.MockProvider
 	mu           sync.Mutex
-	lastRequest  *llm.CompletionRequest
-	allRequests  []llm.CompletionRequest
+	lastRequest  *openai.ChatCompletionNewParams
+	allRequests  []openai.ChatCompletionNewParams
 	requestCount int
 }
 
@@ -36,38 +37,38 @@ func newRequestCapturingMock(response string) *requestCapturingMockProvider {
 	mock.SetResponse(response)
 	return &requestCapturingMockProvider{
 		MockProvider: mock,
-		allRequests:  make([]llm.CompletionRequest, 0),
+		allRequests:  make([]openai.ChatCompletionNewParams, 0),
 	}
 }
 
-func (m *requestCapturingMockProvider) Complete(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
-	m.captureRequest(req)
-	return m.MockProvider.Complete(ctx, req)
+func (m *requestCapturingMockProvider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+	m.captureRequest(params)
+	return m.MockProvider.Complete(ctx, params)
 }
 
-func (m *requestCapturingMockProvider) Stream(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamChunk, error) {
-	m.captureRequest(req)
-	return m.MockProvider.Stream(ctx, req)
+func (m *requestCapturingMockProvider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
+	m.captureRequest(params)
+	return m.MockProvider.Stream(ctx, params)
 }
 
-func (m *requestCapturingMockProvider) captureRequest(req llm.CompletionRequest) {
+func (m *requestCapturingMockProvider) captureRequest(params openai.ChatCompletionNewParams) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.lastRequest = &req
-	m.allRequests = append(m.allRequests, req)
+	m.lastRequest = &params
+	m.allRequests = append(m.allRequests, params)
 	m.requestCount++
 }
 
-func (m *requestCapturingMockProvider) getLastRequest() *llm.CompletionRequest {
+func (m *requestCapturingMockProvider) getLastRequest() *openai.ChatCompletionNewParams {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.lastRequest
 }
 
-func (m *requestCapturingMockProvider) getAllRequests() []llm.CompletionRequest {
+func (m *requestCapturingMockProvider) getAllRequests() []openai.ChatCompletionNewParams {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return append([]llm.CompletionRequest(nil), m.allRequests...)
+	return append([]openai.ChatCompletionNewParams(nil), m.allRequests...)
 }
 
 func (m *requestCapturingMockProvider) getRequestCount() int {
@@ -78,10 +79,13 @@ func (m *requestCapturingMockProvider) getRequestCount() int {
 
 // Test helpers
 
-func extractToolNamesFromTools(tools []llm.Tool) []string {
-	names := make([]string, len(tools))
-	for i, tool := range tools {
-		names[i] = tool.Function.Name
+func extractToolNamesFromTools(tools []openai.ChatCompletionToolParam) []string {
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		// Access the function name directly from the param Field
+		if tool.Function.Present {
+			names = append(names, tool.Function.Value.Name.Value)
+		}
 	}
 	return names
 }
@@ -170,7 +174,7 @@ func TestConversation_Integration_ModeSwitchAffectsTools(t *testing.T) {
 	// Verify regular mode had all tools
 	req1 := mockLLM.getLastRequest()
 	require.NotNil(t, req1, "request should be captured")
-	toolNames1 := extractToolNamesFromTools(req1.Tools)
+	toolNames1 := extractToolNamesFromTools(req1.Tools.Value)
 	assert.Contains(t, toolNames1, "read_file", "regular mode should have read_file")
 	assert.Contains(t, toolNames1, "write_file", "regular mode should have write_file")
 	assert.Contains(t, toolNames1, "execute_command", "regular mode should have execute_command")
@@ -186,7 +190,7 @@ func TestConversation_Integration_ModeSwitchAffectsTools(t *testing.T) {
 	// Verify review mode has only read tools
 	req2 := mockLLM.getLastRequest()
 	require.NotNil(t, req2, "request should be captured")
-	toolNames2 := extractToolNamesFromTools(req2.Tools)
+	toolNames2 := extractToolNamesFromTools(req2.Tools.Value)
 	assert.Contains(t, toolNames2, "read_file", "review mode should have read_file")
 	assert.NotContains(t, toolNames2, "write_file", "review mode should NOT have write_file")
 	assert.NotContains(t, toolNames2, "execute_command", "review mode should NOT have execute_command")
@@ -215,7 +219,7 @@ func TestConversation_Integration_ModeSwitchAffectsTokenBudget(t *testing.T) {
 	require.NoError(t, err)
 	req1 := mockLLM.getLastRequest()
 	require.NotNil(t, req1)
-	assert.Equal(t, 16384, req1.MaxTokens, "regular mode should use 16K tokens")
+	assert.Equal(t, int64(16384), req1.MaxTokens.Value, "regular mode should use 16K tokens")
 
 	// Switch to compact mode (4K tokens)
 	err = conv.SetTaskMode("compact")
@@ -226,7 +230,7 @@ func TestConversation_Integration_ModeSwitchAffectsTokenBudget(t *testing.T) {
 	require.NoError(t, err)
 	req2 := mockLLM.getLastRequest()
 	require.NotNil(t, req2)
-	assert.Equal(t, 4096, req2.MaxTokens, "compact mode should use 4K tokens")
+	assert.Equal(t, int64(4096), req2.MaxTokens.Value, "compact mode should use 4K tokens")
 
 	// Switch to planning mode (4K tokens)
 	err = conv.SetTaskMode("planning")
@@ -237,7 +241,7 @@ func TestConversation_Integration_ModeSwitchAffectsTokenBudget(t *testing.T) {
 	require.NoError(t, err)
 	req3 := mockLLM.getLastRequest()
 	require.NotNil(t, req3)
-	assert.Equal(t, 4096, req3.MaxTokens, "planning mode should use 4K tokens")
+	assert.Equal(t, int64(4096), req3.MaxTokens.Value, "planning mode should use 4K tokens")
 }
 
 // Test 3: Mode Persists Across Multiple Turns
@@ -260,7 +264,7 @@ func TestConversation_Integration_ModePersistsAcrossTurns(t *testing.T) {
 	assert.Equal(t, "review", conv.GetTaskMode())
 	req1 := mockLLM.getLastRequest()
 	require.NotNil(t, req1)
-	toolNames1 := extractToolNamesFromTools(req1.Tools)
+	toolNames1 := extractToolNamesFromTools(req1.Tools.Value)
 	assert.NotContains(t, toolNames1, "write_file", "turn 1: review mode should not have write_file")
 
 	// Turn 2 (no mode change)
@@ -270,7 +274,7 @@ func TestConversation_Integration_ModePersistsAcrossTurns(t *testing.T) {
 	assert.Equal(t, "review", conv.GetTaskMode())
 	req2 := mockLLM.getLastRequest()
 	require.NotNil(t, req2)
-	toolNames2 := extractToolNamesFromTools(req2.Tools)
+	toolNames2 := extractToolNamesFromTools(req2.Tools.Value)
 	assert.NotContains(t, toolNames2, "write_file", "turn 2: review mode should not have write_file")
 
 	// Turn 3 (no mode change)
@@ -280,7 +284,7 @@ func TestConversation_Integration_ModePersistsAcrossTurns(t *testing.T) {
 	assert.Equal(t, "review", conv.GetTaskMode())
 	req3 := mockLLM.getLastRequest()
 	require.NotNil(t, req3)
-	toolNames3 := extractToolNamesFromTools(req3.Tools)
+	toolNames3 := extractToolNamesFromTools(req3.Tools.Value)
 	assert.NotContains(t, toolNames3, "write_file", "turn 3: review mode should not have write_file")
 
 	// Verify all 3 requests were in review mode
@@ -370,7 +374,7 @@ func TestConversation_Integration_InvalidModeHandling(t *testing.T) {
 	// Should use regular mode
 	req := mockLLM.getLastRequest()
 	require.NotNil(t, req)
-	toolNames := extractToolNamesFromTools(req.Tools)
+	toolNames := extractToolNamesFromTools(req.Tools.Value)
 	assert.Contains(t, toolNames, "write_file", "should still have all tools in regular mode")
 }
 
@@ -386,31 +390,31 @@ func TestConversation_Integration_AllTaskModes(t *testing.T) {
 		mode              string
 		expectedTools     []string
 		forbiddenTools    []string
-		expectedMaxTokens int
+		expectedMaxTokens int64
 	}{
 		{
 			mode:              "regular",
 			expectedTools:     []string{"read_file", "write_file", "execute_command"},
 			forbiddenTools:    []string{},
-			expectedMaxTokens: 16384,
+			expectedMaxTokens: int64(16384),
 		},
 		{
 			mode:              "review",
 			expectedTools:     []string{"read_file", "list_directory", "get_context"},
 			forbiddenTools:    []string{"write_file", "execute_command"},
-			expectedMaxTokens: 12288,
+			expectedMaxTokens: int64(12288),
 		},
 		{
 			mode:              "compact",
 			expectedTools:     []string{"read_file", "get_context", "file_search"},
 			forbiddenTools:    []string{"write_file", "execute_command"},
-			expectedMaxTokens: 4096,
+			expectedMaxTokens: int64(4096),
 		},
 		{
 			mode:              "planning",
 			expectedTools:     []string{"get_context", "file_search", "git_context"},
 			forbiddenTools:    []string{"read_file", "write_file", "execute_command"},
-			expectedMaxTokens: 4096,
+			expectedMaxTokens: int64(4096),
 		},
 	}
 
@@ -427,7 +431,7 @@ func TestConversation_Integration_AllTaskModes(t *testing.T) {
 			// Verify tools
 			req := mockLLM.getLastRequest()
 			require.NotNil(t, req, "request should be captured for mode %s", tc.mode)
-			toolNames := extractToolNamesFromTools(req.Tools)
+			toolNames := extractToolNamesFromTools(req.Tools.Value)
 
 			for _, expectedTool := range tc.expectedTools {
 				assert.Contains(t, toolNames, expectedTool,
@@ -440,7 +444,7 @@ func TestConversation_Integration_AllTaskModes(t *testing.T) {
 			}
 
 			// Verify token budget
-			assert.Equal(t, tc.expectedMaxTokens, req.MaxTokens,
+			assert.Equal(t, tc.expectedMaxTokens, req.MaxTokens.Value,
 				"mode %s should have %d tokens", tc.mode, tc.expectedMaxTokens)
 		})
 	}
