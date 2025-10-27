@@ -232,7 +232,6 @@ func isTerminal(fd int) bool {
 	return term.IsTerminal(fd)
 }
 
-
 // ValidateTerminalType validates that the TERM environment variable is set
 // to a supported terminal type. Returns true if the terminal type warrants a warning.
 

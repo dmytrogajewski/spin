@@ -37,11 +37,11 @@ type Manager struct {
 	toolRegistry     *tools.Registry
 	taskRegistry     *orchestration.Registry // Task registry for all conversations
 	approvalHandler  security.ApprovalHandler
-	authManager      *auth.Manager           // Credential management
-	mcpManager       *mcp.MCPManager         // MCP server manager
-	gitIntegration   *git.GitIntegration     // Git integration
-	shellIntegration *shell.ShellIntegration // Shell integration
-	logger           *slog.Logger            // Logger for manager operations
+	authManager      *auth.Manager       // Credential management
+	mcpManager       *mcp.MCPManager     // MCP server manager
+	gitIntegration   *git.GitIntegration // Git integration
+	shellIntegration *shell.Context      // Shell context
+	logger           *slog.Logger        // Logger for manager operations
 }
 
 // Functional options
@@ -192,10 +192,16 @@ func (m *Manager) addGitContext(env *agent.Environment, logger *slog.Logger) {
 // addShellContext merges shell information into environment.
 func (m *Manager) addShellContext(env *agent.Environment, logger *slog.Logger) {
 	shellInfo := m.shellIntegration.GetContextInfo()
-	for key, value := range shellInfo {
-		if strValue, ok := value.(string); ok {
-			env.Environment[key] = strValue
+	if shellInfo.ShellEnabled {
+		env.Environment["shell_enabled"] = "true"
+		if shellInfo.Shell != "" {
+			env.Environment["shell"] = shellInfo.Shell
 		}
+		if shellInfo.ShellPath != "" {
+			env.Environment["shell_path"] = shellInfo.ShellPath
+		}
+	} else {
+		env.Environment["shell_enabled"] = "false"
 	}
 	logger.Debug("added Shell context", "shell_info", shellInfo)
 }
@@ -215,11 +221,6 @@ func (m *Manager) registerIntegrationTools(logger *slog.Logger) error {
 	// Register Git tools
 	if err := m.registerGitTools(logger); err != nil {
 		return fmt.Errorf("register Git tools: %w", err)
-	}
-
-	// Register Shell tools
-	if err := m.registerShellTools(logger); err != nil {
-		return fmt.Errorf("register Shell tools: %w", err)
 	}
 
 	return nil
@@ -261,22 +262,6 @@ func (m *Manager) registerGitTools(logger *slog.Logger) error {
 	}
 
 	logger.Debug("registered Git operation tool")
-	return nil
-}
-
-// registerShellTools registers Shell operation tool if Shell integration is active.
-func (m *Manager) registerShellTools(logger *slog.Logger) error {
-	if m.shellIntegration == nil || !m.shellIntegration.IsEnabled() {
-		return nil
-	}
-
-	shellTool := shell.NewShellOperationTool(m.shellIntegration)
-	if err := m.toolRegistry.Register(shellTool); err != nil {
-		logger.Warn("failed to register Shell operation tool", "error", err)
-		return err
-	}
-
-	logger.Debug("registered Shell operation tool")
 	return nil
 }
 
@@ -350,6 +335,59 @@ func (m *Manager) buildAgent(executor *agent.Executor, ctxEnv *agent.Environment
 	return agentInstance, nil
 }
 
+// validatorAdapter adapts security.Validator to tools.CommandValidator.
+type validatorAdapter struct {
+	validator *security.Validator
+}
+
+func (a *validatorAdapter) Classify(cmd tools.CommandInfo) (tools.ValidationResult, error) {
+	// Convert CommandInfo to *security.Command
+	secCmd := &security.Command{
+		Program: cmd.GetProgram(),
+		Args:    cmd.GetArgs(),
+		Raw:     cmd.GetRaw(),
+		WorkDir: cmd.GetWorkDir(),
+	}
+	return a.validator.Classify(secCmd)
+}
+
+// shellContextAdapter adapts shell.Context to tools.ShellContext.
+type shellContextAdapter struct {
+	shellCtx *shell.Context
+}
+
+func (a *shellContextAdapter) GetWorkingDirectory() string {
+	return a.shellCtx.GetWorkingDirectory()
+}
+
+func (a *shellContextAdapter) GetEnvironmentVars() map[string]string {
+	return a.shellCtx.GetEnvironmentVars()
+}
+
+func (a *shellContextAdapter) GetContextInfo() tools.ShellContextInfo {
+	return a.shellCtx.GetContextInfo()
+}
+
+func (a *shellContextAdapter) IsShellCommand(command string) bool {
+	return a.shellCtx.IsShellCommand(command)
+}
+
+// executorAdapter adapts agent.Executor to tools.CommandExecutor.
+type executorAdapter struct {
+	executor *agent.Executor
+}
+
+func (a *executorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, opts interface{}) (tools.ExecutionResult, error) {
+	// Convert CommandInfo to *security.Command
+	secCmd := &security.Command{
+		Program: cmd.GetProgram(),
+		Args:    cmd.GetArgs(),
+		Raw:     cmd.GetRaw(),
+		WorkDir: cmd.GetWorkDir(),
+	}
+	return a.executor.Execute(ctx, secCmd, nil)
+}
+
 // buildToolRegistry creates a tool registry with built-in and integration tools.
 func (m *Manager) buildToolRegistry(executor *agent.Executor, validator *security.Validator, ctxEnv *agent.Environment, logger *slog.Logger) *tools.Registry {
 	// Start with manager's tool registry if provided
@@ -361,17 +399,33 @@ func (m *Manager) buildToolRegistry(executor *agent.Executor, validator *securit
 		registry = tools.NewRegistry()
 	}
 
+	// Create adapters for shell command tool
+	var validatorAdapt tools.CommandValidator
+	if validator != nil {
+		validatorAdapt = &validatorAdapter{validator: validator}
+	}
+
+	var shellCtxAdapt tools.ShellContext
+	if m.shellIntegration != nil {
+		shellCtxAdapt = &shellContextAdapter{shellCtx: m.shellIntegration}
+	}
+
+	var executorAdapt tools.CommandExecutor
+	if executor != nil {
+		executorAdapt = &executorAdapter{executor: executor}
+	}
+
 	// Register built-in tools
 	_ = registry.Register(tools.NewReadFileTool())
 	_ = registry.Register(tools.NewWriteFileTool())
 	_ = registry.Register(tools.NewListDirectoryTool())
-	_ = registry.Register(tools.NewExecuteCommandTool(executor, validator))
+	_ = registry.Register(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, executorAdapt))
 	_ = registry.Register(tools.NewGetContextTool(ctxEnv))
 	_ = registry.Register(tools.NewApplyPatchTool(ctxEnv.WorkDir))
 	_ = registry.Register(tools.NewFileSearchTool(ctxEnv.WorkDir))
 	_ = registry.Register(tools.NewGitContextTool(ctxEnv.WorkDir))
 
-	// Register integration tools
+	// Register integration tools (MCP, Git)
 	if err := m.registerIntegrationTools(logger); err != nil {
 		logger.Warn("failed to register integration tools", "error", err)
 	}

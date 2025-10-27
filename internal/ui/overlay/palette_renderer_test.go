@@ -182,7 +182,7 @@ func TestPaletteRenderer_Integration(t *testing.T) {
 		"Test description",
 		"Test",
 		'T',
-		func(ctx context.Context, args ...interface{}) error {
+		func(ctx context.Context) error {
 			executed = true
 			return nil
 		},

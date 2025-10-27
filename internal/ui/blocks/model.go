@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -19,8 +20,8 @@ type Block struct {
 	// Title is an optional concise title for the block.
 	Title string `json:"title,omitempty"`
 
-	// Meta holds type-specific metadata as key-value pairs.
-	Meta map[string]interface{} `json:"meta"`
+	// Meta holds type-specific metadata as JSON.
+	Meta json.RawMessage `json:"meta,omitempty"`
 
 	// Body contains the renderable content (logs, code, diff, etc.).
 	Body string `json:"body"`
@@ -52,7 +53,7 @@ func NewBlock(blockType BlockType) *Block {
 	return &Block{
 		ID:        GenerateBlockID(0), // sequence will be set by caller if needed
 		Type:      blockType,
-		Meta:      make(map[string]interface{}),
+		Meta:      nil,
 		Body:      "",
 		FoldState: FoldStateExpanded,
 		Severity:  SeverityInfo,
@@ -87,22 +88,66 @@ func (b *Block) Validate() error {
 	return nil
 }
 
-// GetMeta retrieves a metadata value by key.
-//
-// Returns the value and true if the key exists, or nil and false otherwise.
-func (b *Block) GetMeta(key string) (interface{}, bool) {
-	val, ok := b.Meta[key]
-	return val, ok
+// Type-safe metadata accessors
+
+// GetExecuteMeta retrieves ExecuteMeta from the block.
+func (b *Block) GetExecuteMeta() (*ExecuteMeta, error) {
+	return ParseExecuteMeta(b)
 }
 
-// SetMeta sets a metadata value.
-//
-// If the key already exists, its value is replaced.
-func (b *Block) SetMeta(key string, value interface{}) {
-	if b.Meta == nil {
-		b.Meta = make(map[string]interface{})
-	}
-	b.Meta[key] = value
+// SetExecuteMeta sets ExecuteMeta on the block.
+func (b *Block) SetExecuteMeta(m *ExecuteMeta) error {
+	return SetExecuteMeta(b, m)
+}
+
+// GetReadMeta retrieves ReadMeta from the block.
+func (b *Block) GetReadMeta() (*ReadMeta, error) {
+	return ParseReadMeta(b)
+}
+
+// SetReadMeta sets ReadMeta on the block.
+func (b *Block) SetReadMeta(m *ReadMeta) error {
+	return SetReadMeta(b, m)
+}
+
+// GetGrepMeta retrieves GrepMeta from the block.
+func (b *Block) GetGrepMeta() (*GrepMeta, error) {
+	return ParseGrepMeta(b)
+}
+
+// SetGrepMeta sets GrepMeta on the block.
+func (b *Block) SetGrepMeta(m *GrepMeta) error {
+	return SetGrepMeta(b, m)
+}
+
+// GetToolMeta retrieves ToolMeta from the block.
+func (b *Block) GetToolMeta() (*ToolMeta, error) {
+	return ParseToolMeta(b)
+}
+
+// SetToolMeta sets ToolMeta on the block.
+func (b *Block) SetToolMeta(m *ToolMeta) error {
+	return SetToolMeta(b, m)
+}
+
+// GetPatchMeta retrieves PatchMeta from the block.
+func (b *Block) GetPatchMeta() (*PatchMeta, error) {
+	return ParsePatchMeta(b)
+}
+
+// SetPatchMeta sets PatchMeta on the block.
+func (b *Block) SetPatchMeta(m *PatchMeta) error {
+	return SetPatchMeta(b, m)
+}
+
+// GetPlanMeta retrieves PlanMeta from the block.
+func (b *Block) GetPlanMeta() (*PlanMeta, error) {
+	return ParsePlanMeta(b)
+}
+
+// SetPlanMeta sets PlanMeta on the block.
+func (b *Block) SetPlanMeta(m *PlanMeta) error {
+	return SetPlanMeta(b, m)
 }
 
 // GenerateBlockID creates a unique block ID.

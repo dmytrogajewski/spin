@@ -3,7 +3,6 @@ package security
 import (
 	"context"
 	"testing"
-
 	// Note: Cannot import agent here due to import cycle
 	// CommandCache tests have been moved to internal/agent/cache_test.go
 )

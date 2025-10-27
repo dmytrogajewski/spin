@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-
 )
 
 // Registry manages tool registration, lookup, and execution.

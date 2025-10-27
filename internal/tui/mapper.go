@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -188,10 +189,13 @@ func (m *TUIMapper) createExecuteBlock(data events.ToolCallStartData) *blocks.Bl
 		Impact:  "medium", // Default impact level
 	}
 	if err := blocks.SetExecuteMeta(block, meta); err != nil {
-		// Validation failed, set as raw map to preserve data
-		block.Meta = map[string]any{
+		// Validation failed, marshal map to JSON to preserve data
+		fallback := map[string]any{
 			"command": command,
 			"cwd":     cwd,
+		}
+		if data, marshalErr := json.Marshal(fallback); marshalErr == nil {
+			block.Meta = data
 		}
 	}
 
@@ -212,9 +216,12 @@ func (m *TUIMapper) createReadBlock(data events.ToolCallStartData) *blocks.Block
 		Limit:  extractIntValue(data.Parameters, "limit"),
 	}
 	if err := blocks.SetReadMeta(block, meta); err != nil {
-		// Validation failed, set as raw map
-		block.Meta = map[string]any{
+		// Validation failed, marshal map to JSON
+		fallback := map[string]any{
 			"file": path,
+		}
+		if data, marshalErr := json.Marshal(fallback); marshalErr == nil {
+			block.Meta = data
 		}
 	}
 
@@ -239,9 +246,12 @@ func (m *TUIMapper) createToolBlock(data events.ToolCallStartData) *blocks.Block
 		Params:   params,
 	}
 	if err := blocks.SetToolMeta(block, meta); err != nil {
-		// Validation failed, set as raw map to preserve data
-		block.Meta = map[string]any{
+		// Validation failed, marshal map to JSON to preserve data
+		fallback := map[string]any{
 			"tool_name": toolName,
+		}
+		if data, marshalErr := json.Marshal(fallback); marshalErr == nil {
+			block.Meta = data
 		}
 	}
 	return block
@@ -284,7 +294,9 @@ func (m *TUIMapper) createOrReuseApplyPatchBlock(data events.ToolCallStartData) 
 
 	meta := &blocks.PatchMeta{File: path}
 	if err := blocks.SetPatchMeta(block, meta); err != nil {
-		block.Meta = map[string]any{"file": path}
+		if data, marshalErr := json.Marshal(map[string]any{"file": path}); marshalErr == nil {
+			block.Meta = data
+		}
 	}
 
 	m.applyPatchByFile[path] = block
@@ -315,9 +327,12 @@ func (m *TUIMapper) createApplyPatchFromPatchTool(data events.ToolCallStartData)
 		Completed: false,
 	}
 	if err := blocks.SetPatchMeta(block, meta); err != nil {
-		// Fallback to raw map if validation fails for any reason
-		block.Meta = map[string]any{
+		// Fallback to JSON if validation fails for any reason
+		fallback := map[string]any{
 			"file": workspaceRoot,
+		}
+		if data, marshalErr := json.Marshal(fallback); marshalErr == nil {
+			block.Meta = data
 		}
 	}
 
@@ -336,9 +351,12 @@ func (m *TUIMapper) createGrepBlockFromSearch(data events.ToolCallStartData) *bl
 		Mode:    "files_with_matches",
 	}
 	if err := blocks.SetGrepMeta(block, meta); err != nil {
-		block.Meta = map[string]any{
+		fallback := map[string]any{
 			"pattern": query,
 			"mode":    "files_with_matches",
+		}
+		if data, marshalErr := json.Marshal(fallback); marshalErr == nil {
+			block.Meta = data
 		}
 	}
 

@@ -45,7 +45,7 @@ type Processor struct {
 	version       string
 	conversations map[string]*Conversation
 	output        io.Writer
-	config        map[string]interface{} // Runtime config overrides
+	config        json.RawMessage // Runtime config overrides
 }
 
 // Conversation tracks a single conversation state
@@ -68,43 +68,49 @@ type ProcessorConfig struct {
 	Environment   *agent.Environment
 }
 
+// DefaultBufferSize is the default buffer size for the event emitter
+const DefaultBufferSize = 100
+
 // NewProcessor creates a new processor
 func NewProcessor(config ProcessorConfig) (*Processor, error) {
-	// Create default dependencies if not provided
 	executor := config.Executor
+
 	if executor == nil {
 		var err error
+
 		executor, err = agent.NewExecutor(config.WorkspacePath)
+
 		if err != nil {
 			return nil, fmt.Errorf("failed to create executor: %w", err)
 		}
 	}
 
 	validator := config.Validator
+
 	if validator == nil {
 		validator = security.NewValidator()
 	}
 
 	environment := config.Environment
+
 	if environment == nil {
 		var err error
+
 		environment, err = agent.GatherEnvironment(config.WorkspacePath)
+
 		if err != nil {
 			return nil, fmt.Errorf("failed to gather environment: %w", err)
 		}
 	}
 
-	// Create event emitter
-	emitter := events.NewEventEmitter(100) // Default buffer size
+	emitter := events.NewEventEmitter(DefaultBufferSize)
 
 	// Create agent if provider is provided
 	var agentInstance *agent.Agent
 	if config.Provider != nil {
-		// Build services for agent
-		approvalService := security.NewApprovalService(nil, emitter, validator) // No approval handler in server mode
+		approvalService := security.NewApprovalService(nil, emitter, validator)
 		securityService := security.NewSecurityService(validator, approvalService)
 
-		// Build detection service (simplified - no cycle detection in server mode)
 		cycleConfig := cycle.Config{Enabled: false}
 		cycleDetector := cycle.NewDetector(cycleConfig)
 		detectionService := detection.NewDetectionService(cycleDetector, nil)
@@ -114,7 +120,7 @@ func NewProcessor(config ProcessorConfig) (*Processor, error) {
 		_ = toolRegistry.Register(tools.NewReadFileTool())
 		_ = toolRegistry.Register(tools.NewWriteFileTool())
 		_ = toolRegistry.Register(tools.NewListDirectoryTool())
-		_ = toolRegistry.Register(tools.NewExecuteCommandTool(executor, validator))
+		_ = toolRegistry.Register(tools.NewShellCommandTool(nil, nil, nil))
 		_ = toolRegistry.Register(tools.NewGetContextTool(environment))
 		_ = toolRegistry.Register(tools.NewApplyPatchTool(environment.WorkDir))
 		_ = toolRegistry.Register(tools.NewFileSearchTool(environment.WorkDir))
@@ -169,9 +175,8 @@ func (p *Processor) SetOutput(w io.Writer) {
 
 // HandleInitialize sets up workspace and config
 func (p *Processor) HandleInitialize(ctx context.Context, params jsonrpc.InitializeParams) (jsonrpc.InitializeResult, error) {
-	// Store config overrides for potential future use
 	p.mu.Lock()
-	if params.Config != nil {
+	if len(params.Config) > 0 {
 		p.config = params.Config
 	}
 	p.mu.Unlock()
@@ -188,11 +193,8 @@ func (p *Processor) HandleSendMessage(ctx context.Context, params jsonrpc.SendMe
 
 	var conv *Conversation
 
-	// Get or create conversation
 	if params.ConversationID == nil {
-		// New conversation
 		convID := protocol.NewConversationID()
-
 		conv = &Conversation{
 			ID:       convID,
 			History:  []agent.Message{},
@@ -200,7 +202,6 @@ func (p *Processor) HandleSendMessage(ctx context.Context, params jsonrpc.SendMe
 		}
 		p.conversations[convID.String()] = conv
 	} else {
-		// Existing conversation
 		var ok bool
 		conv, ok = p.conversations[*params.ConversationID]
 		if !ok {
@@ -257,42 +258,41 @@ func (p *Processor) HandleSendMessage(ctx context.Context, params jsonrpc.SendMe
 
 // runTurn executes a conversation turn
 func (p *Processor) runTurn(ctx context.Context, conv *Conversation, message string, turnID string) {
-	// Send turn_start notification
-	p.sendNotification("turn_start", protocol.TurnStart{
+	p.sendNotification(protocol.TurnStart{
 		TurnID:      turnID,
 		UserMessage: message,
 	})
 
-	// If no agent is configured, just echo back
 	if p.agent == nil {
-		p.sendNotification("assistant_delta", protocol.AssistantDelta{
+		p.sendNotification(protocol.AssistantDelta{
 			Delta: "Agent not configured. Message received: " + message,
 		})
-		p.sendNotification("turn_complete", protocol.TurnComplete{
+
+		p.sendNotification(protocol.TurnComplete{
 			TurnID:       turnID,
 			FinalMessage: "Turn completed (no agent)",
 		})
 		return
 	}
 
-	// Get current task mode
 	conv.mu.RLock()
 	taskMode := conv.taskMode
+
 	if taskMode == "" {
 		taskMode = "regular"
 	}
+
 	conv.mu.RUnlock()
 
-	// Create agent request with task mode
 	req := &agent.AgentRequest{
 		Input:    message,
 		TaskName: taskMode,
 	}
 
-	// Subscribe to agent events
 	subscriptionID, eventChan, err := p.emitter.Subscribe()
+
 	if err != nil {
-		p.sendNotification("status_update", protocol.StatusUpdate{
+		p.sendNotification(protocol.StatusUpdate{
 			Message: fmt.Sprintf("Failed to subscribe to events: %v", err),
 			Level:   protocol.StatusLevelError,
 		})
@@ -300,14 +300,12 @@ func (p *Processor) runTurn(ctx context.Context, conv *Conversation, message str
 	}
 	defer p.emitter.Unsubscribe(subscriptionID)
 
-	// Execute agent in background
 	resultChan := make(chan error, 1)
 	go func() {
 		_, err := p.agent.Execute(ctx, req)
 		resultChan <- err
 	}()
 
-	// Stream events back as protocol messages
 	for {
 		select {
 		case event := <-eventChan:
@@ -316,30 +314,38 @@ func (p *Processor) runTurn(ctx context.Context, conv *Conversation, message str
 			}
 
 		case err := <-resultChan:
-			// Agent execution completed
 			if err != nil {
-				p.sendNotification("status_update", protocol.StatusUpdate{
+				status := protocol.StatusUpdate{
 					Message: fmt.Sprintf("Turn failed: %v", err),
 					Level:   protocol.StatusLevelError,
-				})
+				}
+				p.sendNotification(status)
 			}
 
-			// Send turn_complete notification
-			p.sendNotification("turn_complete", protocol.TurnComplete{
+			p.sendNotification(protocol.TurnComplete{
 				TurnID:       turnID,
 				FinalMessage: "Turn completed",
 			})
 			return
 
 		case <-ctx.Done():
-			// Context cancelled
 			return
 		}
 	}
 }
 
+// sendProtocolMessage sends a protocol message
+func (p *Processor) sendProtocolMessage(msg protocol.Message) {
+	data, err := protocol.ParseMessage(msg)
+	if err != nil {
+		return
+	}
+
+	p.sendNotification(data)
+}
+
 // sendNotification sends a notification to the client
-func (p *Processor) sendNotification(method string, params interface{}) {
+func (p *Processor) sendNotification(message protocol.ParsedMessage) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -347,30 +353,17 @@ func (p *Processor) sendNotification(method string, params interface{}) {
 		return
 	}
 
-	paramsJSON, _ := json.Marshal(params)
+	paramsJSON, _ := json.Marshal(message)
 	notif := jsonrpc.Notification{
 		JSONRPC: "2.0",
-		Method:  method,
+		Method:  message.Type(),
 		Params:  paramsJSON,
 	}
 	json.NewEncoder(p.output).Encode(notif)
 }
 
-// sendProtocolMessage sends a protocol message
-func (p *Processor) sendProtocolMessage(msg protocol.Message) {
-	// Parse message to get the specific type
-	data, err := protocol.ParseMessage(msg)
-	if err != nil {
-		return
-	}
-
-	// Send as notification using message type as method
-	p.sendNotification(msg.Type, data)
-}
-
 // HandleApproveTool approves/rejects tool calls
 func (p *Processor) HandleApproveTool(ctx context.Context, params jsonrpc.ApproveToolParams) (jsonrpc.ApproveToolResult, error) {
-	// Emit approval event for the tool call
 	p.mu.RLock()
 	emitter := p.emitter
 	p.mu.RUnlock()
@@ -382,7 +375,7 @@ func (p *Processor) HandleApproveTool(ctx context.Context, params jsonrpc.Approv
 				Timestamp: time.Now(),
 				Data: events.ApprovalEventData{
 					RequestID: params.ToolCallID,
-					Status:    "approved",
+					Status:    events.ApprovalStatusApproved,
 				},
 			})
 		} else {
@@ -391,7 +384,7 @@ func (p *Processor) HandleApproveTool(ctx context.Context, params jsonrpc.Approv
 				Timestamp: time.Now(),
 				Data: events.ApprovalEventData{
 					RequestID: params.ToolCallID,
-					Status:    "denied",
+					Status:    events.ApprovalStatusDenied,
 				},
 			})
 		}
@@ -405,7 +398,6 @@ func (p *Processor) HandleCancelTurn(ctx context.Context, params jsonrpc.CancelT
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Find conversation with this turn
 	for _, conv := range p.conversations {
 		if conv.TurnID == params.TurnID && conv.cancel != nil {
 			conv.cancel()
@@ -419,11 +411,12 @@ func (p *Processor) HandleCancelTurn(ctx context.Context, params jsonrpc.CancelT
 
 // HandleSearchFiles searches for files in workspace
 func (p *Processor) HandleSearchFiles(ctx context.Context, params jsonrpc.SearchFilesParams) (jsonrpc.SearchFilesResult, error) {
-	// Perform file search
 	files, err := SearchFiles(p.workspacePath, params.Query, params.Limit)
+
 	if err != nil {
 		return jsonrpc.SearchFilesResult{}, err
 	}
+
 	return jsonrpc.SearchFilesResult{Files: files}, nil
 }
 

@@ -472,7 +472,7 @@ func setupTestConv(t *testing.T) *Conversation {
 	_ = toolRegistry.Register(tools.NewReadFileTool())
 	_ = toolRegistry.Register(tools.NewWriteFileTool())
 	_ = toolRegistry.Register(tools.NewListDirectoryTool())
-	_ = toolRegistry.Register(tools.NewExecuteCommandTool(executor, validator))
+	_ = toolRegistry.Register(tools.NewShellCommandTool(validator, nil, nil))
 	_ = toolRegistry.Register(tools.NewGetContextTool(env))
 	_ = toolRegistry.Register(tools.NewApplyPatchTool(workDir))
 	_ = toolRegistry.Register(tools.NewFileSearchTool(workDir))

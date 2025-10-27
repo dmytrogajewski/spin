@@ -14,7 +14,7 @@ The `protocol` package defines the communication protocol between Spin's core en
 - **Bidirectional Communication**: UI ↔ Core message passing
 - **Event Streaming**: Real-time assistant deltas and tool calls
 - **JSON-RPC 2.0**: Standard RPC protocol with batch support
-- **Type Safety**: Strongly typed message structures
+- **Type Safety**: Strongly typed message structures with `ParsedMessage` interface
 - **Tool Approval Flow**: Interactive approval for dangerous operations
 - **Conversation Management**: Turn-based conversation lifecycle
 
@@ -173,6 +173,136 @@ type ErrorMessage struct {
     Data    any    `json:"data,omitempty"`
 }
 ```
+
+---
+
+## Type-Safe Message Parsing
+
+All protocol messages implement the `ParsedMessage` interface, providing compile-time type safety for message handling:
+
+```go
+// ParsedMessage is implemented by all protocol message types.
+// The messageType() method is a marker that prevents external types
+// from implementing this interface.
+type ParsedMessage interface {
+    messageType()
+}
+```
+
+### Usage Pattern
+
+The `ParseMessage` function returns `ParsedMessage`, enabling type-safe message handling with exhaustive type switches:
+
+```go
+parsed, err := protocol.ParseMessage(msg)
+if err != nil {
+    return err
+}
+
+switch v := parsed.(type) {
+case protocol.TurnStart:
+    // Type-safe access to TurnStart fields
+    handleTurnStart(v.TurnID, v.UserMessage)
+case protocol.AssistantDelta:
+    // Type-safe access to AssistantDelta fields
+    handleDelta(v.Delta, v.Reasoning)
+case protocol.ToolCallProposed:
+    handleToolCall(v.ToolCallID, v.ToolName, v.Arguments)
+case protocol.ToolCallExecuting:
+    handleExecuting(v.ToolCallID)
+case protocol.ToolCallResult:
+    handleResult(v.ToolCallID, v.Result)
+case protocol.TurnComplete:
+    handleComplete(v.TurnID, v.FinalMessage)
+case protocol.StatusUpdate:
+    handleStatus(v.Message, v.Level)
+default:
+    return fmt.Errorf("unhandled message type: %T", v)
+}
+```
+
+### Benefits
+
+- **Compile-Time Safety**: Type mismatches caught at compile time
+- **IDE Support**: Full autocomplete for message-specific fields
+- **Sealed Interface**: The unexported `messageType()` marker method prevents external types from implementing `ParsedMessage`
+- **Exhaustive Handling**: Compiler helps ensure all message types are handled
+
+---
+
+## JSON-RPC Type Safety
+
+### Configuration Parameters
+
+The `InitializeParams.Config` field uses `json.RawMessage` for type-safe, flexible configuration:
+
+```go
+type InitializeParams struct {
+    WorkspacePath string          `json:"workspace_path"`
+    Config        json.RawMessage `json:"config,omitempty"`
+}
+
+// ParseConfig unmarshals config into a target struct
+func (p *InitializeParams) ParseConfig(target interface{}) error {
+    if len(p.Config) == 0 {
+        return nil // Empty config is valid
+    }
+    return json.Unmarshal(p.Config, target)
+}
+```
+
+**Usage:**
+```go
+params := InitializeParams{
+    WorkspacePath: "/workspace",
+    Config:        json.RawMessage(`{"key":"value"}`),
+}
+
+// Parse into specific struct
+type AppConfig struct {
+    Key string `json:"key"`
+}
+
+var config AppConfig
+if err := params.ParseConfig(&config); err != nil {
+    return err
+}
+```
+
+### Handler Return Types
+
+The `Handler` interface returns `json.RawMessage` instead of `interface{}`, eliminating runtime type assertions:
+
+```go
+type Handler interface {
+    HandleRequest(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)
+}
+```
+
+**Implementation Pattern:**
+```go
+func (h *Handler) HandleRequest(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+    switch method {
+    case "initialize":
+        var p InitializeParams
+        if err := json.Unmarshal(params, &p); err != nil {
+            return nil, NewError(InvalidParams, "invalid parameters")
+        }
+        result, err := h.processor.HandleInitialize(ctx, p)
+        if err != nil {
+            return nil, err
+        }
+        // Marshal result to json.RawMessage
+        return json.Marshal(result)
+    }
+}
+```
+
+**Benefits:**
+- **Type Safety**: No `interface{}` casting in handler implementations
+- **Performance**: One less marshal/unmarshal cycle in server
+- **Clarity**: Explicit JSON marshaling at handler level
+- **Flexibility**: Handlers can return different result types per method
 
 ---
 

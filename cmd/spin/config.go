@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -321,14 +322,14 @@ func redactSensitiveValues(m map[string]interface{}) {
 }
 
 // printJSON prints data as JSON.
-func printJSON(out interface{ Write([]byte) (int, error) }, data interface{}) error {
+func printJSON[T any](out io.Writer, data T) error {
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(data)
 }
 
 // printYAML prints data as YAML.
-func printYAML(out interface{ Write([]byte) (int, error) }, data interface{}) error {
+func printYAML[T any](out io.Writer, data T) error {
 	encoder := yaml.NewEncoder(out)
 	encoder.SetIndent(2)
 	defer encoder.Close()

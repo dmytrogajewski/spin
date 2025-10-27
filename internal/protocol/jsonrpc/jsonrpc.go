@@ -118,8 +118,17 @@ type Notification struct {
 
 // InitializeParams contains initialization parameters
 type InitializeParams struct {
-	WorkspacePath string                 `json:"workspace_path"`
-	Config        map[string]interface{} `json:"config,omitempty"`
+	WorkspacePath string          `json:"workspace_path"`
+	Config        json.RawMessage `json:"config,omitempty"`
+}
+
+// ParseConfig unmarshals the config into a target struct.
+// Returns nil if config is empty or nil (which is valid).
+func (p *InitializeParams) ParseConfig(target interface{}) error {
+	if len(p.Config) == 0 {
+		return nil
+	}
+	return json.Unmarshal(p.Config, target)
 }
 
 // InitializeResult is the response to initialize

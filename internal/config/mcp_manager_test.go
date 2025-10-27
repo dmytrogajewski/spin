@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 func TestMCPManager_List_Empty(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "spin.yaml")
@@ -275,8 +274,6 @@ func TestMCPManager_Remove_NotFound(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
-
-
 
 func TestMCPManager_ConfigFile_DefaultCreation(t *testing.T) {
 	tmpDir := t.TempDir()

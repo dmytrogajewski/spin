@@ -191,14 +191,22 @@ type TurnEventData struct {
 
 // ApprovalEventData contains approval request and status information.
 type ApprovalEventData struct {
-	RequestID       string    `json:"request_id"`
-	Command         string    `json:"command"`
-	WorkDir         string    `json:"work_dir,omitempty"`
-	Reason          string    `json:"reason,omitempty"`
-	Status          string    `json:"status,omitempty"`
-	ModifiedCommand string    `json:"modified_command,omitempty"`
-	Timestamp       time.Time `json:"timestamp"`
+	RequestID       string         `json:"request_id"`
+	Command         string         `json:"command"`
+	WorkDir         string         `json:"work_dir,omitempty"`
+	Reason          string         `json:"reason,omitempty"`
+	Status          ApprovalStatus `json:"status,omitempty"`
+	ModifiedCommand string         `json:"modified_command,omitempty"`
+	Timestamp       time.Time      `json:"timestamp"`
 }
+
+type ApprovalStatus string
+
+const (
+	ApprovalStatusPending  ApprovalStatus = "pending"
+	ApprovalStatusApproved ApprovalStatus = "approved"
+	ApprovalStatusDenied   ApprovalStatus = "denied"
+)
 
 // SystemEventData contains informational or warning messages.
 type SystemEventData struct {

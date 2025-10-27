@@ -18,7 +18,7 @@ type Command interface {
 	Icon() rune
 
 	// Execute runs the command and returns error if failed.
-	Execute(ctx context.Context, args ...interface{}) error
+	Execute(ctx context.Context) error
 }
 
 // CommandRegistry holds available commands.
@@ -49,11 +49,11 @@ type simpleCommand struct {
 	description string
 	category    string
 	icon        rune
-	exec        func(context.Context, ...interface{}) error
+	exec        func(context.Context) error
 }
 
 // NewSimpleCommand creates a command from basic fields.
-func NewSimpleCommand(name, description, category string, icon rune, exec func(context.Context, ...interface{}) error) Command {
+func NewSimpleCommand(name, description, category string, icon rune, exec func(context.Context) error) Command {
 	return &simpleCommand{
 		name:        name,
 		description: description,
@@ -67,9 +67,9 @@ func (c *simpleCommand) Name() string        { return c.name }
 func (c *simpleCommand) Description() string { return c.description }
 func (c *simpleCommand) Category() string    { return c.category }
 func (c *simpleCommand) Icon() rune          { return c.icon }
-func (c *simpleCommand) Execute(ctx context.Context, args ...interface{}) error {
+func (c *simpleCommand) Execute(ctx context.Context) error {
 	if c.exec == nil {
 		return nil
 	}
-	return c.exec(ctx, args...)
+	return c.exec(ctx)
 }

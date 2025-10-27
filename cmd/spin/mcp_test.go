@@ -214,4 +214,3 @@ func TestMCPGetCmdDefaultValues(t *testing.T) {
 }
 
 // Helper function to check if a string contains a substring
-

@@ -366,12 +366,12 @@ func TestReadKeys_UTF8(t *testing.T) {
 		input string
 		want  rune
 	}{
-		{"Euro", "€", '€'},           // U+20AC, 3 bytes: E2 82 AC
-		{"Chinese", "你", '你'},         // U+4F60, 3 bytes: E4 BD A0
-		{"Emoji rocket", "🚀", '🚀'},   // U+1F680, 4 bytes: F0 9F 9A 80
-		{"Emoji smile", "😀", '😀'},    // U+1F600, 4 bytes: F0 9F 98 80
-		{"Greek alpha", "α", 'α'},     // U+03B1, 2 bytes: CE B1
-		{"Cyrillic", "Д", 'Д'},        // U+0414, 2 bytes: D0 94
+		{"Euro", "€", '€'},         // U+20AC, 3 bytes: E2 82 AC
+		{"Chinese", "你", '你'},      // U+4F60, 3 bytes: E4 BD A0
+		{"Emoji rocket", "🚀", '🚀'}, // U+1F680, 4 bytes: F0 9F 9A 80
+		{"Emoji smile", "😀", '😀'},  // U+1F600, 4 bytes: F0 9F 98 80
+		{"Greek alpha", "α", 'α'},  // U+03B1, 2 bytes: CE B1
+		{"Cyrillic", "Д", 'Д'},     // U+0414, 2 bytes: D0 94
 	}
 
 	for _, tt := range tests {

@@ -9,6 +9,17 @@ import (
 func TestRenderToolCompletionStatus(t *testing.T) {
 	renderer := NewRenderer(80)
 
+	// Helper to create a block with metadata
+	createToolBlock := func(toolName, body string) *Block {
+		b := NewBlock(BlockTypeTool)
+		meta := &ToolMeta{ToolName: toolName}
+		if err := SetToolMeta(b, meta); err != nil {
+			t.Fatalf("SetToolMeta failed: %v", err)
+		}
+		b.Body = body
+		return b
+	}
+
 	tests := []struct {
 		name           string
 		block          *Block
@@ -16,44 +27,20 @@ func TestRenderToolCompletionStatus(t *testing.T) {
 		description    string
 	}{
 		{
-			name: "tool_without_output",
-			block: &Block{
-				Type: BlockTypeTool,
-				Meta: map[string]interface{}{
-					"tool": ToolMeta{
-						ToolName: "test_tool",
-					},
-				},
-				Body: "", // No output yet
-			},
+			name:           "tool_without_output",
+			block:          createToolBlock("test_tool", ""),
 			expectComplete: false,
 			description:    "Tool without output should not show completion status",
 		},
 		{
-			name: "tool_with_output",
-			block: &Block{
-				Type: BlockTypeTool,
-				Meta: map[string]interface{}{
-					"tool": ToolMeta{
-						ToolName: "test_tool",
-					},
-				},
-				Body: "Tool execution result", // Has output
-			},
+			name:           "tool_with_output",
+			block:          createToolBlock("test_tool", "Tool execution result"),
 			expectComplete: true,
 			description:    "Tool with output should show completion status",
 		},
 		{
-			name: "tool_with_empty_string_body",
-			block: &Block{
-				Type: BlockTypeTool,
-				Meta: map[string]interface{}{
-					"tool": ToolMeta{
-						ToolName: "test_tool",
-					},
-				},
-				Body: "",
-			},
+			name:           "tool_with_empty_string_body",
+			block:          createToolBlock("test_tool", ""),
 			expectComplete: false,
 			description:    "Tool with empty body should not show completion status",
 		},

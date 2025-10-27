@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -359,7 +360,7 @@ func TestOrchestrationService_SetPlanner(t *testing.T) {
 		Dependencies: make(map[string][]string),
 		CreatedAt:    time.Now(),
 		Status:       PlanStatusPending,
-		Metadata:     make(map[string]interface{}),
+		Metadata:     nil, // json.RawMessage - nil is valid
 	}
 	svc.SetPlanner(plan)
 
@@ -404,5 +405,129 @@ func BenchmarkOrchestrationService_GetTask(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = svc.GetTask("test-task")
+	}
+}
+
+// Metadata JSON marshaling tests
+
+func TestTurn_Metadata_JSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		turn     *Turn
+		wantJSON string
+	}{
+		{
+			name: "nil metadata",
+			turn: &Turn{
+				ID:       "turn-1",
+				State:    StatePending,
+				Metadata: nil,
+			},
+			wantJSON: `{"id":"turn-1","session_id":"","user_input":"","ai_response":"","tool_calls":null,"tool_results":null,"state":"pending","started_at":"0001-01-01T00:00:00Z","completed_at":"0001-01-01T00:00:00Z","tokens":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}`,
+		},
+		{
+			name: "empty metadata",
+			turn: &Turn{
+				ID:       "turn-2",
+				State:    StateRunning,
+				Metadata: json.RawMessage(`{}`),
+			},
+			wantJSON: `{"id":"turn-2","session_id":"","user_input":"","ai_response":"","tool_calls":null,"tool_results":null,"state":"running","started_at":"0001-01-01T00:00:00Z","completed_at":"0001-01-01T00:00:00Z","tokens":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0},"metadata":{}}`,
+		},
+		{
+			name: "metadata with content",
+			turn: &Turn{
+				ID:       "turn-3",
+				State:    StateCompleted,
+				Metadata: json.RawMessage(`{"task_mode":"review","tags":["important"]}`),
+			},
+			wantJSON: `{"id":"turn-3","session_id":"","user_input":"","ai_response":"","tool_calls":null,"tool_results":null,"state":"completed","started_at":"0001-01-01T00:00:00Z","completed_at":"0001-01-01T00:00:00Z","tokens":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0},"metadata":{"task_mode":"review","tags":["important"]}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Marshal
+			data, err := json.Marshal(tt.turn)
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.wantJSON, string(data))
+
+			// Unmarshal round-trip
+			var decoded Turn
+			err = json.Unmarshal(data, &decoded)
+			require.NoError(t, err)
+			assert.Equal(t, tt.turn.ID, decoded.ID)
+			assert.Equal(t, tt.turn.State, decoded.State)
+
+			// Compare metadata
+			if tt.turn.Metadata == nil {
+				assert.Nil(t, decoded.Metadata)
+			} else {
+				assert.JSONEq(t, string(tt.turn.Metadata), string(decoded.Metadata))
+			}
+		})
+	}
+}
+
+func TestPlan_Metadata_JSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		plan     *Plan
+		wantJSON string
+	}{
+		{
+			name: "nil metadata",
+			plan: &Plan{
+				ID:       "plan-1",
+				Task:     "test task",
+				Status:   PlanStatusPending,
+				Metadata: nil,
+			},
+			wantJSON: `{"ID":"plan-1","Task":"test task","Steps":null,"Dependencies":null,"CreatedAt":"0001-01-01T00:00:00Z","EstimatedDuration":0,"Status":0}`,
+		},
+		{
+			name: "empty metadata",
+			plan: &Plan{
+				ID:       "plan-2",
+				Task:     "test task",
+				Status:   PlanStatusInProgress,
+				Metadata: json.RawMessage(`{}`),
+			},
+			wantJSON: `{"ID":"plan-2","Task":"test task","Steps":null,"Dependencies":null,"CreatedAt":"0001-01-01T00:00:00Z","EstimatedDuration":0,"Status":1,"metadata":{}}`,
+		},
+		{
+			name: "metadata with content",
+			plan: &Plan{
+				ID:       "plan-3",
+				Task:     "complex task",
+				Status:   PlanStatusCompleted,
+				Metadata: json.RawMessage(`{"priority":"high","estimated_cost":42}`),
+			},
+			wantJSON: `{"ID":"plan-3","Task":"complex task","Steps":null,"Dependencies":null,"CreatedAt":"0001-01-01T00:00:00Z","EstimatedDuration":0,"Status":2,"metadata":{"priority":"high","estimated_cost":42}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Marshal
+			data, err := json.Marshal(tt.plan)
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.wantJSON, string(data))
+
+			// Unmarshal round-trip
+			var decoded Plan
+			err = json.Unmarshal(data, &decoded)
+			require.NoError(t, err)
+			assert.Equal(t, tt.plan.ID, decoded.ID)
+			assert.Equal(t, tt.plan.Task, decoded.Task)
+			assert.Equal(t, tt.plan.Status, decoded.Status)
+
+			// Compare metadata
+			if tt.plan.Metadata == nil {
+				assert.Nil(t, decoded.Metadata)
+			} else {
+				assert.JSONEq(t, string(tt.plan.Metadata), string(decoded.Metadata))
+			}
+		})
 	}
 }

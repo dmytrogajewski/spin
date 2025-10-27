@@ -52,7 +52,7 @@ func (f *FakeRenderer) ClearScreen() error {
 	return nil
 }
 
-func (f *FakeRenderer) SetWidth(width int)   {}
+func (f *FakeRenderer) SetWidth(width int)      {}
 func (f *FakeRenderer) SetPrefix(prefix string) {}
 
 func (f *FakeRenderer) GetRedrawCount() int {

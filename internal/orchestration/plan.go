@@ -1,6 +1,7 @@
 package orchestration
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -98,14 +99,14 @@ type Step struct {
 
 // Plan represents a task execution plan with steps and dependencies
 type Plan struct {
-	ID                string                 // Unique plan ID
-	Task              string                 // Original task description
-	Steps             []Step                 // All steps in the plan
-	Dependencies      map[string][]string    // Explicit dependency map (optional)
-	CreatedAt         time.Time              // When plan was created
-	EstimatedDuration time.Duration          // Total estimated time
-	Status            PlanStatus             // Overall plan status
-	Metadata          map[string]interface{} // Additional context
+	ID                string              // Unique plan ID
+	Task              string              // Original task description
+	Steps             []Step              // All steps in the plan
+	Dependencies      map[string][]string // Explicit dependency map (optional)
+	CreatedAt         time.Time           // When plan was created
+	EstimatedDuration time.Duration       // Total estimated time
+	Status            PlanStatus          // Overall plan status
+	Metadata          json.RawMessage     `json:"metadata,omitempty"` // Additional context
 }
 
 // GetStep retrieves a step by ID

@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+// ParsedMessage is implemented by all protocol message types.
+// The Type() method returns the message type literal and also serves
+// to seal this interface (preventing external types from implementing it).
+type ParsedMessage interface {
+	Type() string
+}
+
 // Inbound Messages (UI → Core)
 
 // UserMessage represents user's textual input
@@ -34,11 +41,17 @@ type TurnStart struct {
 	UserMessage string `json:"user_message"`
 }
 
+// Type implements ParsedMessage interface
+func (TurnStart) Type() string { return "turn_start" }
+
 // AssistantDelta contains incremental text from the AI model (streaming)
 type AssistantDelta struct {
 	Delta     string  `json:"delta"`
 	Reasoning *string `json:"reasoning,omitempty"`
 }
+
+// Type implements ParsedMessage interface
+func (AssistantDelta) Type() string { return "assistant_delta" }
 
 // ToolCallProposed indicates AI proposes a tool invocation
 type ToolCallProposed struct {
@@ -48,16 +61,25 @@ type ToolCallProposed struct {
 	RequiresApproval bool            `json:"requires_approval"`
 }
 
+// Type implements ParsedMessage interface
+func (ToolCallProposed) Type() string { return "tool_call_proposed" }
+
 // ToolCallExecuting indicates tool execution has started
 type ToolCallExecuting struct {
 	ToolCallID string `json:"tool_call_id"`
 }
+
+// Type implements ParsedMessage interface
+func (ToolCallExecuting) Type() string { return "tool_call_executing" }
 
 // ToolCallResult contains tool execution completion status
 type ToolCallResult struct {
 	ToolCallID string     `json:"tool_call_id"`
 	Result     ToolResult `json:"result"`
 }
+
+// Type implements ParsedMessage interface
+func (ToolCallResult) Type() string { return "tool_call_result" }
 
 // ToolResult represents success or failure of tool execution
 type ToolResult struct {
@@ -91,11 +113,17 @@ type TurnComplete struct {
 	FinalMessage string `json:"final_message"`
 }
 
+// Type implements ParsedMessage interface
+func (TurnComplete) Type() string { return "turn_complete" }
+
 // StatusUpdate is a status message for display to user
 type StatusUpdate struct {
 	Message string      `json:"message"`
 	Level   StatusLevel `json:"level"`
 }
+
+// Type implements ParsedMessage interface
+func (StatusUpdate) Type() string { return "status_update" }
 
 // StatusLevel indicates severity of status message
 type StatusLevel string
@@ -119,25 +147,25 @@ type Message struct {
 // NewAssistantDeltaMessage creates an assistant_delta message
 func NewAssistantDeltaMessage(ad AssistantDelta) Message {
 	data, _ := json.Marshal(ad)
-	return Message{Type: "assistant_delta", Data: data}
+	return Message{Type: ad.Type(), Data: data}
 }
 
 // NewToolCallProposedMessage creates a tool_call_proposed message
 func NewToolCallProposedMessage(tcp ToolCallProposed) Message {
 	data, _ := json.Marshal(tcp)
-	return Message{Type: "tool_call_proposed", Data: data}
+	return Message{Type: tcp.Type(), Data: data}
 }
 
 // NewToolCallExecutingMessage creates a tool_call_executing message
 func NewToolCallExecutingMessage(tce ToolCallExecuting) Message {
 	data, _ := json.Marshal(tce)
-	return Message{Type: "tool_call_executing", Data: data}
+	return Message{Type: tce.Type(), Data: data}
 }
 
 // NewToolCallResultMessage creates a tool_call_result message
 func NewToolCallResultMessage(tcr ToolCallResult) Message {
 	data, _ := json.Marshal(tcr)
-	return Message{Type: "tool_call_result", Data: data}
+	return Message{Type: tcr.Type(), Data: data}
 }
 
 // NewTurnCompleteMessage creates a turn_complete message
@@ -145,11 +173,11 @@ func NewToolCallResultMessage(tcr ToolCallResult) Message {
 // NewStatusUpdateMessage creates a status_update message
 func NewStatusUpdateMessage(su StatusUpdate) Message {
 	data, _ := json.Marshal(su)
-	return Message{Type: "status_update", Data: data}
+	return Message{Type: su.Type(), Data: data}
 }
 
 // ParseMessage parses a message by type
-func ParseMessage(msg Message) (interface{}, error) {
+func ParseMessage(msg Message) (ParsedMessage, error) {
 	parser := getMessageParser(msg.Type)
 	if parser == nil {
 		return nil, fmt.Errorf("unknown message type: %s", msg.Type)
@@ -158,7 +186,7 @@ func ParseMessage(msg Message) (interface{}, error) {
 }
 
 // messageParser is a function that parses message data into a specific type.
-type messageParser func([]byte) (interface{}, error)
+type messageParser func([]byte) (ParsedMessage, error)
 
 // getMessageParser returns the appropriate parser for a message type.
 func getMessageParser(msgType string) messageParser {
@@ -183,7 +211,7 @@ func getMessageParser(msgType string) messageParser {
 }
 
 // parseTurnStart parses a TurnStart message.
-func parseTurnStart(data []byte) (interface{}, error) {
+func parseTurnStart(data []byte) (ParsedMessage, error) {
 	var ts TurnStart
 	if err := json.Unmarshal(data, &ts); err != nil {
 		return nil, err
@@ -192,7 +220,7 @@ func parseTurnStart(data []byte) (interface{}, error) {
 }
 
 // parseAssistantDelta parses an AssistantDelta message.
-func parseAssistantDelta(data []byte) (interface{}, error) {
+func parseAssistantDelta(data []byte) (ParsedMessage, error) {
 	var ad AssistantDelta
 	if err := json.Unmarshal(data, &ad); err != nil {
 		return nil, err
@@ -201,7 +229,7 @@ func parseAssistantDelta(data []byte) (interface{}, error) {
 }
 
 // parseToolCallProposed parses a ToolCallProposed message.
-func parseToolCallProposed(data []byte) (interface{}, error) {
+func parseToolCallProposed(data []byte) (ParsedMessage, error) {
 	var tcp ToolCallProposed
 	if err := json.Unmarshal(data, &tcp); err != nil {
 		return nil, err
@@ -210,7 +238,7 @@ func parseToolCallProposed(data []byte) (interface{}, error) {
 }
 
 // parseToolCallExecuting parses a ToolCallExecuting message.
-func parseToolCallExecuting(data []byte) (interface{}, error) {
+func parseToolCallExecuting(data []byte) (ParsedMessage, error) {
 	var tce ToolCallExecuting
 	if err := json.Unmarshal(data, &tce); err != nil {
 		return nil, err
@@ -219,7 +247,7 @@ func parseToolCallExecuting(data []byte) (interface{}, error) {
 }
 
 // parseToolCallResult parses a ToolCallResult message.
-func parseToolCallResult(data []byte) (interface{}, error) {
+func parseToolCallResult(data []byte) (ParsedMessage, error) {
 	var tcr ToolCallResult
 	if err := json.Unmarshal(data, &tcr); err != nil {
 		return nil, err
@@ -228,7 +256,7 @@ func parseToolCallResult(data []byte) (interface{}, error) {
 }
 
 // parseTurnComplete parses a TurnComplete message.
-func parseTurnComplete(data []byte) (interface{}, error) {
+func parseTurnComplete(data []byte) (ParsedMessage, error) {
 	var tc TurnComplete
 	if err := json.Unmarshal(data, &tc); err != nil {
 		return nil, err
@@ -237,7 +265,7 @@ func parseTurnComplete(data []byte) (interface{}, error) {
 }
 
 // parseStatusUpdate parses a StatusUpdate message.
-func parseStatusUpdate(data []byte) (interface{}, error) {
+func parseStatusUpdate(data []byte) (ParsedMessage, error) {
 	var su StatusUpdate
 	if err := json.Unmarshal(data, &su); err != nil {
 		return nil, err

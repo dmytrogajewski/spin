@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dmytrogajewski/spin/internal/protocol"
 	"github.com/dmytrogajewski/spin/internal/protocol/jsonrpc"
 )
 
@@ -23,7 +24,7 @@ func TestProcessor_HandleInitialize(t *testing.T) {
 
 	params := jsonrpc.InitializeParams{
 		WorkspacePath: "/tmp/workspace",
-		Config:        map[string]interface{}{"key": "value"},
+		Config:        json.RawMessage(`{"key":"value"}`),
 	}
 
 	result, err := processor.HandleInitialize(context.Background(), params)
@@ -226,8 +227,11 @@ func TestProcessor_SendNotification(t *testing.T) {
 	output := &bytes.Buffer{}
 	processor.SetOutput(output)
 
-	params := map[string]string{"key": "value"}
-	processor.sendNotification("test_method", params)
+	statusMsg := protocol.StatusUpdate{
+		Message: "test message",
+		Level:   protocol.StatusLevelInfo,
+	}
+	processor.sendNotification(statusMsg)
 
 	var notif jsonrpc.Notification
 	if err := json.NewDecoder(output).Decode(&notif); err != nil {
@@ -237,8 +241,8 @@ func TestProcessor_SendNotification(t *testing.T) {
 	if notif.JSONRPC != "2.0" {
 		t.Errorf("Expected jsonrpc '2.0', got '%s'", notif.JSONRPC)
 	}
-	if notif.Method != "test_method" {
-		t.Errorf("Expected method 'test_method', got '%s'", notif.Method)
+	if notif.Method != "status_update" {
+		t.Errorf("Expected method 'status_update', got '%s'", notif.Method)
 	}
 }
 
@@ -251,7 +255,11 @@ func TestProcessor_SendNotification_NoOutput(t *testing.T) {
 	// Don't set output
 
 	// Should not panic
-	processor.sendNotification("test_method", map[string]string{"key": "value"})
+	statusMsg := protocol.StatusUpdate{
+		Message: "test message",
+		Level:   protocol.StatusLevelInfo,
+	}
+	processor.sendNotification(statusMsg)
 }
 
 func TestGenerateTurnID(t *testing.T) {
