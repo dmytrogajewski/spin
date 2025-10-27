@@ -9,21 +9,21 @@ import (
 	"time"
 )
 
-type mockHandler struct{
-	handleFunc func(ctx context.Context, method string, params json.RawMessage) (interface{}, error)
+type mockHandler struct {
+	handleFunc func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)
 }
 
-func (m *mockHandler) HandleRequest(ctx context.Context, method string, params json.RawMessage) (interface{}, error) {
+func (m *mockHandler) HandleRequest(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 	if m.handleFunc != nil {
 		return m.handleFunc(ctx, method, params)
 	}
-	return map[string]string{"status": "ok"}, nil
+	return json.Marshal(map[string]string{"status": "ok"})
 }
 
 func TestServer_Serve_Success(t *testing.T) {
 	handler := &mockHandler{
-		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (interface{}, error) {
-			return map[string]string{"result": "success"}, nil
+		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+			return json.Marshal(map[string]string{"result": "success"})
 		},
 	}
 
@@ -65,7 +65,7 @@ func TestServer_Serve_Success(t *testing.T) {
 
 func TestServer_Serve_Error(t *testing.T) {
 	handler := &mockHandler{
-		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (interface{}, error) {
+		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 			return nil, NewError(MethodNotFound, "method not found")
 		},
 	}
@@ -138,7 +138,7 @@ func TestServer_Serve_ParseError(t *testing.T) {
 func TestServer_Serve_Notification(t *testing.T) {
 	called := false
 	handler := &mockHandler{
-		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (interface{}, error) {
+		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 			called = true
 			return nil, nil
 		},
@@ -175,10 +175,9 @@ func TestServer_Serve_Notification(t *testing.T) {
 	}
 }
 
-
 func TestServer_Context_Cancellation(t *testing.T) {
 	handler := &mockHandler{
-		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (interface{}, error) {
+		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 			// Simulate slow operation
 			time.Sleep(100 * time.Millisecond)
 			return nil, nil
@@ -220,5 +219,68 @@ func TestServer_Context_Cancellation(t *testing.T) {
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("Server did not stop after context cancellation")
+	}
+}
+
+// TestServer_JSONRawMessageResult verifies that the server uses
+// json.RawMessage results directly without re-marshaling
+func TestServer_JSONRawMessageResult(t *testing.T) {
+	expectedResult := json.RawMessage(`{"custom":"data","number":42}`)
+
+	handler := &mockHandler{
+		handleFunc: func(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+			// Return pre-marshaled JSON
+			return expectedResult, nil
+		},
+	}
+
+	server := NewServer(handler)
+
+	// Prepare request
+	reqID := RequestID{Str: strPtr("1")}
+	req := Request{
+		JSONRPC: "2.0",
+		ID:      &reqID,
+		Method:  "test_method",
+		Params:  json.RawMessage(`{}`),
+	}
+
+	reqData, _ := json.Marshal(req)
+	input := bytes.NewReader(append(reqData, '\n'))
+	output := &bytes.Buffer{}
+
+	// Serve
+	ctx := context.Background()
+	err := server.Serve(ctx, input, output)
+	if err != nil {
+		t.Fatalf("Serve failed: %v", err)
+	}
+
+	// Check response
+	var resp Response
+	if err := json.NewDecoder(output).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if resp.Error != nil {
+		t.Errorf("Expected no error, got %v", resp.Error)
+	}
+
+	// Verify result is exactly what handler returned (not re-marshaled)
+	if string(resp.Result) != string(expectedResult) {
+		t.Errorf("Expected result %s, got %s", string(expectedResult), string(resp.Result))
+	}
+
+	// Verify it's valid JSON that can be decoded
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(resp.Result, &decoded); err != nil {
+		t.Errorf("Result is not valid JSON: %v", err)
+	}
+
+	if decoded["custom"] != "data" {
+		t.Errorf("Expected custom=data, got %v", decoded["custom"])
+	}
+	if decoded["number"] != float64(42) {
+		t.Errorf("Expected number=42, got %v", decoded["number"])
 	}
 }

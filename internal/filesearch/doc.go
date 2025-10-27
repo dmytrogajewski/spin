@@ -14,13 +14,13 @@
 //	results := searcher.Search("test", 10)  // Top 10 matches with intelligent ranking
 //
 // Advanced 7-Tier Scoring:
-//   1. Exact filename match: 100 points
-//   2. Filename prefix: 90 points
-//   3. Filename contains (position-weighted): 80-70 points
-//   4. Path segment exact: 60 points
-//   5. Path segment prefix: 50 points
-//   6. Fuzzy consecutive: 40+ points
-//   7. Fuzzy scattered: 20+ points
+//  1. Exact filename match: 100 points
+//  2. Filename prefix: 90 points
+//  3. Filename contains (position-weighted): 80-70 points
+//  4. Path segment exact: 60 points
+//  5. Path segment prefix: 50 points
+//  6. Fuzzy consecutive: 40+ points
+//  7. Fuzzy scattered: 20+ points
 //
 // Lower-Level API (Scanner + Matcher):
 //

@@ -119,13 +119,13 @@ func TestApplier_ValidatePath(t *testing.T) {
 
 func TestApplier_AddFile(t *testing.T) {
 	tests := []struct {
-		name          string
-		filePath      string
-		lines         []string
-		existingFile  string
+		name           string
+		filePath       string
+		lines          []string
+		existingFile   string
 		forceOverwrite bool
-		wantErr       bool
-		errIs         error
+		wantErr        bool
+		errIs          error
 	}{
 		{
 			name:     "add new file",

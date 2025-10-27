@@ -5,6 +5,7 @@
 package orchestration
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -63,7 +64,7 @@ type Turn struct {
 	Tokens TokenUsage `json:"tokens"` // Token consumption tracking
 
 	// Metadata
-	Metadata map[string]interface{} `json:"metadata,omitempty"` // Extensible metadata
+	Metadata json.RawMessage `json:"metadata,omitempty"` // Extensible metadata
 
 	// Thread safety
 	mu sync.RWMutex

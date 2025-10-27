@@ -39,8 +39,9 @@ func TestNewBlock(t *testing.T) {
 			if b.Severity != SeverityInfo {
 				t.Errorf("NewBlock() Severity = %v, want %v", b.Severity, SeverityInfo)
 			}
-			if b.Meta == nil {
-				t.Error("NewBlock() Meta is nil")
+			// Meta is now nil by default (json.RawMessage)
+			if b.Meta != nil {
+				t.Error("NewBlock() Meta should be nil by default")
 			}
 			if b.Timestamp <= 0 {
 				t.Error("NewBlock() Timestamp <= 0")
@@ -81,49 +82,8 @@ func TestBlock_Validate(t *testing.T) {
 	}
 }
 
-func TestBlock_GetMeta(t *testing.T) {
-	b := NewBlock(BlockTypeExecute)
-	b.SetMeta("command", "ls -la")
-	b.SetMeta("exit_code", 0)
-
-	val, ok := b.GetMeta("command")
-	if !ok {
-		t.Error("GetMeta('command') returned ok=false")
-	}
-	if val != "ls -la" {
-		t.Errorf("GetMeta('command') = %v, want 'ls -la'", val)
-	}
-
-	val, ok = b.GetMeta("exit_code")
-	if !ok {
-		t.Error("GetMeta('exit_code') returned ok=false")
-	}
-	if val != 0 {
-		t.Errorf("GetMeta('exit_code') = %v, want 0", val)
-	}
-
-	_, ok = b.GetMeta("nonexistent")
-	if ok {
-		t.Error("GetMeta('nonexistent') returned ok=true")
-	}
-}
-
-func TestBlock_SetMeta(t *testing.T) {
-	b := NewBlock(BlockTypeExecute)
-	b.SetMeta("key1", "value1")
-	b.SetMeta("key2", 123)
-
-	if len(b.Meta) != 2 {
-		t.Errorf("Meta length = %d, want 2", len(b.Meta))
-	}
-
-	if b.Meta["key1"] != "value1" {
-		t.Errorf("Meta['key1'] = %v, want 'value1'", b.Meta["key1"])
-	}
-	if b.Meta["key2"] != 123 {
-		t.Errorf("Meta['key2'] = %v, want 123", b.Meta["key2"])
-	}
-}
+// TestBlock_GetMeta and TestBlock_SetMeta removed - replaced by type-safe accessors
+// See TestBlock_TypeSafeMetadata for the new approach
 
 func TestGenerateBlockID(t *testing.T) {
 	// Test uniqueness
@@ -150,8 +110,19 @@ func TestBlock_JSON_Roundtrip(t *testing.T) {
 	original := NewBlock(BlockTypeExecute)
 	original.Title = "Test Command"
 	original.Body = "command output here"
-	original.SetMeta("command", "go test")
-	original.SetMeta("exit_code", 0)
+
+	// Use type-safe metadata
+	exitCode := 0
+	meta := &ExecuteMeta{
+		Command:  "go test",
+		CWD:      "/tmp",
+		Impact:   "low",
+		ExitCode: &exitCode,
+	}
+	if err := original.SetExecuteMeta(meta); err != nil {
+		t.Fatalf("SetExecuteMeta() error = %v", err)
+	}
+
 	original.FoldState = FoldStateCollapsed
 	original.Severity = SeverityWarn
 
@@ -190,10 +161,13 @@ func TestBlock_JSON_Roundtrip(t *testing.T) {
 		t.Errorf("Restored Timestamp = %v, want %v", restored.Timestamp, original.Timestamp)
 	}
 
-	// Check metadata
-	cmd, ok := restored.GetMeta("command")
-	if !ok || cmd != "go test" {
-		t.Errorf("Restored Meta['command'] = %v, want 'go test'", cmd)
+	// Check metadata using type-safe accessor
+	restoredMeta, err := restored.GetExecuteMeta()
+	if err != nil {
+		t.Fatalf("GetExecuteMeta() error = %v", err)
+	}
+	if restoredMeta.Command != "go test" {
+		t.Errorf("Restored Meta.Command = %v, want 'go test'", restoredMeta.Command)
 	}
 }
 
@@ -202,8 +176,19 @@ func TestBlock_JSON_Format(t *testing.T) {
 	b.ID = "blk_1738950123_07"
 	b.Title = "Run tests"
 	b.Body = "test output"
-	b.SetMeta("command", "go test")
-	b.SetMeta("exit_code", 0)
+
+	// Use type-safe metadata
+	exitCode := 0
+	meta := &ExecuteMeta{
+		Command:  "go test",
+		CWD:      "/tmp",
+		Impact:   "low",
+		ExitCode: &exitCode,
+	}
+	if err := b.SetExecuteMeta(meta); err != nil {
+		t.Fatalf("SetExecuteMeta() error = %v", err)
+	}
+
 	b.Timestamp = 1738950123456
 
 	data, err := json.Marshal(b)
@@ -217,11 +202,153 @@ func TestBlock_JSON_Format(t *testing.T) {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
 
-	// Check required fields exist
-	requiredFields := []string{"id", "type", "meta", "body", "fold_state", "severity", "timestamp"}
+	// Check required fields exist (meta is now optional with omitempty)
+	requiredFields := []string{"id", "type", "body", "fold_state", "severity", "timestamp"}
 	for _, field := range requiredFields {
 		if _, ok := raw[field]; !ok {
 			t.Errorf("JSON missing required field: %s", field)
 		}
+	}
+
+	// Check meta exists when set
+	if _, ok := raw["meta"]; !ok {
+		t.Error("JSON missing 'meta' field when metadata is set")
+	}
+}
+
+// TestBlock_TypeSafeMetadata tests the new type-safe metadata accessors
+func TestBlock_TypeSafeMetadata(t *testing.T) {
+	t.Run("ExecuteMeta", func(t *testing.T) {
+		b := NewBlock(BlockTypeExecute)
+
+		// Set metadata
+		meta := &ExecuteMeta{
+			Command:    "go test",
+			CWD:        "/tmp",
+			TimeoutSec: 30,
+			Impact:     "low",
+		}
+		err := b.SetExecuteMeta(meta)
+		if err != nil {
+			t.Fatalf("SetExecuteMeta() error = %v", err)
+		}
+
+		// Get metadata
+		retrieved, err := b.GetExecuteMeta()
+		if err != nil {
+			t.Fatalf("GetExecuteMeta() error = %v", err)
+		}
+		if retrieved.Command != "go test" {
+			t.Errorf("Command = %v, want 'go test'", retrieved.Command)
+		}
+		if retrieved.CWD != "/tmp" {
+			t.Errorf("CWD = %v, want '/tmp'", retrieved.CWD)
+		}
+	})
+
+	t.Run("ReadMeta", func(t *testing.T) {
+		b := NewBlock(BlockTypeRead)
+
+		meta := &ReadMeta{
+			File:   "main.go",
+			Offset: 10,
+			Limit:  50,
+		}
+		err := b.SetReadMeta(meta)
+		if err != nil {
+			t.Fatalf("SetReadMeta() error = %v", err)
+		}
+
+		retrieved, err := b.GetReadMeta()
+		if err != nil {
+			t.Fatalf("GetReadMeta() error = %v", err)
+		}
+		if retrieved.File != "main.go" {
+			t.Errorf("File = %v, want 'main.go'", retrieved.File)
+		}
+	})
+
+	t.Run("ToolMeta", func(t *testing.T) {
+		b := NewBlock(BlockTypeTool)
+
+		meta := &ToolMeta{
+			ToolName: "execute_command",
+			Params: map[string]any{
+				"command": "ls -la",
+			},
+		}
+		err := b.SetToolMeta(meta)
+		if err != nil {
+			t.Fatalf("SetToolMeta() error = %v", err)
+		}
+
+		retrieved, err := b.GetToolMeta()
+		if err != nil {
+			t.Fatalf("GetToolMeta() error = %v", err)
+		}
+		if retrieved.ToolName != "execute_command" {
+			t.Errorf("ToolName = %v, want 'execute_command'", retrieved.ToolName)
+		}
+	})
+}
+
+// TestBlock_MetadataValidation tests that invalid metadata is rejected
+func TestBlock_MetadataValidation(t *testing.T) {
+	b := NewBlock(BlockTypeExecute)
+
+	// Invalid ExecuteMeta (empty command)
+	meta := &ExecuteMeta{
+		CWD:    "/tmp",
+		Impact: "low",
+	}
+	err := b.SetExecuteMeta(meta)
+	if err == nil {
+		t.Error("SetExecuteMeta() should reject empty command")
+	}
+}
+
+// TestBlock_MetadataJSONRoundtrip tests JSON serialization with json.RawMessage
+func TestBlock_MetadataJSONRoundtrip(t *testing.T) {
+	original := NewBlock(BlockTypeExecute)
+	original.Title = "Test Command"
+	original.Body = "output"
+
+	exitCode := 0
+	meta := &ExecuteMeta{
+		Command:  "go test",
+		CWD:      "/tmp",
+		Impact:   "low",
+		ExitCode: &exitCode,
+	}
+	if err := original.SetExecuteMeta(meta); err != nil {
+		t.Fatalf("SetExecuteMeta() error = %v", err)
+	}
+
+	// Marshal to JSON
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	// Unmarshal from JSON
+	var restored Block
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	// Get metadata from restored block
+	restoredMeta, err := restored.GetExecuteMeta()
+	if err != nil {
+		t.Fatalf("GetExecuteMeta() error = %v", err)
+	}
+
+	if restoredMeta.Command != "go test" {
+		t.Errorf("Command = %v, want 'go test'", restoredMeta.Command)
+	}
+	if restoredMeta.CWD != "/tmp" {
+		t.Errorf("CWD = %v, want '/tmp'", restoredMeta.CWD)
+	}
+	if restoredMeta.ExitCode == nil || *restoredMeta.ExitCode != 0 {
+		t.Errorf("ExitCode = %v, want 0", restoredMeta.ExitCode)
 	}
 }

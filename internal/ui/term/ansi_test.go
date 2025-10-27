@@ -28,7 +28,6 @@ func TestANSIConstants(t *testing.T) {
 	}
 }
 
-
 // BenchmarkANSIConstants ensures constants don't allocate.
 func BenchmarkANSIConstants(b *testing.B) {
 	b.ReportAllocs()

@@ -427,9 +427,9 @@ func TestRedactSensitiveValues(t *testing.T) {
 
 func TestGetEditor(t *testing.T) {
 	tests := []struct {
-		name        string
-		editorEnv   string
-		visualEnv   string
+		name         string
+		editorEnv    string
+		visualEnv    string
 		wantNonEmpty bool
 	}{
 		{

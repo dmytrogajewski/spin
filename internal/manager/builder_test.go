@@ -224,8 +224,8 @@ func TestBuilder_Build_WithGitIntegration(t *testing.T) {
 	// Git integration may fail if not a git repo, but manager should still be created
 }
 
-// TestBuilder_Build_WithShellIntegration tests Shell integration initialization
-func TestBuilder_Build_WithShellIntegration(t *testing.T) {
+// TestBuilder_Build_WithShellContext tests Shell context initialization
+func TestBuilder_Build_WithShellContext(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -247,7 +247,7 @@ func TestBuilder_Build_WithShellIntegration(t *testing.T) {
 
 	require.NoError(t, err, "Build should succeed")
 	assert.NotNil(t, mgr, "Manager should be created")
-	assert.NotNil(t, mgr.shellIntegration, "Shell integration should be initialized")
+	assert.NotNil(t, mgr.shellIntegration, "Shell context should be initialized")
 }
 
 // TestBuilder_Build_WithEventEmitter tests custom event emitter

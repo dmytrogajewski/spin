@@ -859,7 +859,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Execute shell command",
 		"Edit",
 		'▶',
-		func(ctx context.Context, args ...any) error {
+		func(ctx context.Context) error {
 			return u.executeRunCommand(ctx)
 		},
 	))
@@ -869,7 +869,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Grep/search files",
 		"Tools",
 		'🔍',
-		func(ctx context.Context, args ...any) error {
+		func(ctx context.Context) error {
 			return u.executeSearchCommand(ctx)
 		},
 	))
@@ -879,7 +879,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"File picker",
 		"File",
 		'📄',
-		func(ctx context.Context, args ...any) error {
+		func(ctx context.Context) error {
 			return u.executeFilePickerCommand(ctx)
 		},
 	))
@@ -889,7 +889,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Create plan block",
 		"Edit",
 		'📋',
-		func(ctx context.Context, args ...any) error {
+		func(ctx context.Context) error {
 			return u.executeNewPlanCommand(ctx)
 		},
 	))
@@ -899,7 +899,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Switch Auto/Manual",
 		"System",
 		'🔄',
-		func(ctx context.Context, args ...any) error {
+		func(ctx context.Context) error {
 			return u.executeToggleModeCommand(ctx)
 		},
 	))
@@ -909,7 +909,7 @@ func (u *PureTTY) registerDefaultCommands() {
 		"Switch Dark/Light",
 		"System",
 		'🎨',
-		func(ctx context.Context, args ...any) error {
+		func(ctx context.Context) error {
 			return u.executeChangeThemeCommand(ctx)
 		},
 	))
@@ -940,7 +940,7 @@ func (u *PureTTY) executeNewPlanCommand(_ context.Context) error {
 		ID:        fmt.Sprintf("plan_%d", time.Now().UnixMilli()),
 		Type:      blocks.BlockTypePlan,
 		Title:     "New Plan",
-		Meta:      make(map[string]interface{}),
+		Meta:      nil, // Will be set when plan data is available
 		Body:      "- Add your first step here\n- Add your second step here\n- Add your third step here",
 		FoldState: blocks.FoldStateExpanded,
 		Severity:  blocks.SeverityInfo,

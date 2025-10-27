@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
 )
 
 // contains checks if s contains substr.

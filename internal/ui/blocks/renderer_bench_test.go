@@ -90,11 +90,16 @@ func BenchmarkRendererRender_Plan(b *testing.B) {
 	block := blocks.NewBlock(blocks.BlockTypePlan)
 	block.Title = "Implementation plan"
 	block.Body = generatePlanList(50)
-	block.Meta = map[string]interface{}{
-		"total":       50,
-		"pending":     10,
-		"in_progress": 5,
-		"completed":   35,
+
+	// Use type-safe metadata
+	meta := &blocks.PlanMeta{
+		Total:      50,
+		Pending:    10,
+		InProgress: 5,
+		Completed:  35,
+	}
+	if err := blocks.SetPlanMeta(block, meta); err != nil {
+		b.Fatalf("SetPlanMeta failed: %v", err)
 	}
 
 	b.ResetTimer()
@@ -322,4 +327,3 @@ func generateErrorWithStackTrace(depth int) string {
 
 	return sb.String()
 }
-

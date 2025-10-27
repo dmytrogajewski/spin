@@ -65,7 +65,7 @@ func TestSimpleCommand_ExecuteNil(t *testing.T) {
 
 func TestSimpleCommand_Execute(t *testing.T) {
 	executed := false
-	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context, args ...interface{}) error {
+	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context) error {
 		executed = true
 		return nil
 	})
@@ -76,25 +76,9 @@ func TestSimpleCommand_Execute(t *testing.T) {
 	assert.True(t, executed)
 }
 
-func TestSimpleCommand_ExecuteWithArgs(t *testing.T) {
-	var receivedArgs []interface{}
-	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context, args ...interface{}) error {
-		receivedArgs = args
-		return nil
-	})
-
-	err := cmd.Execute(context.Background(), "arg1", 42, true)
-
-	assert.NoError(t, err)
-	assert.Len(t, receivedArgs, 3)
-	assert.Equal(t, "arg1", receivedArgs[0])
-	assert.Equal(t, 42, receivedArgs[1])
-	assert.Equal(t, true, receivedArgs[2])
-}
-
 func TestSimpleCommand_ExecuteError(t *testing.T) {
 	expectedErr := errors.New("execution failed")
-	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context, args ...interface{}) error {
+	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context) error {
 		return expectedErr
 	})
 
@@ -109,7 +93,7 @@ func TestSimpleCommand_ExecuteWithContext(t *testing.T) {
 	cancel() // Cancel immediately
 
 	var receivedCtx context.Context
-	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context, args ...interface{}) error {
+	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context) error {
 		receivedCtx = ctx
 		return ctx.Err()
 	})

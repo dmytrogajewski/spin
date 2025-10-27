@@ -72,13 +72,13 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 	cmd.PersistentFlags().StringVarP(&flagTaskMode, "mode", "m", "regular", "Task mode: regular (full-featured, 16K tokens), review (read-only, 12K tokens), compact (minimal, 4K tokens), planning (context-only, 4K tokens)")
 
 	// Add commands
-	cmd.AddCommand(newTUICmd())       // TUI mode (Phase 7.4 complete!)
+	cmd.AddCommand(newTUICmd()) // TUI mode (Phase 7.4 complete!)
 	cmd.AddCommand(newVersionCmd())
 	cmd.AddCommand(newCompletionCmd())
 	cmd.AddCommand(newExecCmd())
 	cmd.AddCommand(newServeCmd())
 	cmd.AddCommand(newConfigCmd())
-	cmd.AddCommand(newAuthCmd())      // Auth management
+	cmd.AddCommand(newAuthCmd()) // Auth management
 	cmd.AddCommand(newMCPCmd())
 	cmd.AddCommand(newDebugCmd())
 	cmd.AddCommand(newApplyPatchCmd()) // Apply patch CLI (Feature 2.4)

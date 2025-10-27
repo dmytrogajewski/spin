@@ -180,7 +180,6 @@ func TestNewError(t *testing.T) {
 	}
 }
 
-
 func TestNotification_Marshal(t *testing.T) {
 	notif := Notification{
 		JSONRPC: "2.0",
@@ -222,7 +221,7 @@ func TestErrorCodes(t *testing.T) {
 func TestInitializeParams(t *testing.T) {
 	params := InitializeParams{
 		WorkspacePath: "/path/to/workspace",
-		Config:        map[string]interface{}{"key": "value"},
+		Config:        json.RawMessage(`{"key":"value"}`),
 	}
 
 	data, err := json.Marshal(params)
@@ -237,6 +236,117 @@ func TestInitializeParams(t *testing.T) {
 
 	if decoded.WorkspacePath != params.WorkspacePath {
 		t.Errorf("WorkspacePath mismatch")
+	}
+
+	if string(decoded.Config) != `{"key":"value"}` {
+		t.Errorf("Config mismatch: got %s", string(decoded.Config))
+	}
+}
+
+func TestInitializeParams_ParseConfig(t *testing.T) {
+	tests := []struct {
+		name      string
+		config    json.RawMessage
+		expectErr bool
+		validate  func(t *testing.T, target map[string]string)
+	}{
+		{
+			name:      "Valid config",
+			config:    json.RawMessage(`{"key":"value","foo":"bar"}`),
+			expectErr: false,
+			validate: func(t *testing.T, target map[string]string) {
+				if target["key"] != "value" {
+					t.Errorf("Expected key=value, got %s", target["key"])
+				}
+				if target["foo"] != "bar" {
+					t.Errorf("Expected foo=bar, got %s", target["foo"])
+				}
+			},
+		},
+		{
+			name:      "Empty config",
+			config:    json.RawMessage{},
+			expectErr: false,
+			validate: func(t *testing.T, target map[string]string) {
+				if len(target) != 0 {
+					t.Errorf("Expected empty target, got %v", target)
+				}
+			},
+		},
+		{
+			name:      "Nil config",
+			config:    nil,
+			expectErr: false,
+			validate: func(t *testing.T, target map[string]string) {
+				if len(target) != 0 {
+					t.Errorf("Expected empty target, got %v", target)
+				}
+			},
+		},
+		{
+			name:      "Invalid JSON",
+			config:    json.RawMessage(`{invalid}`),
+			expectErr: true,
+			validate:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := InitializeParams{
+				WorkspacePath: "/workspace",
+				Config:        tt.config,
+			}
+
+			var target map[string]string
+			err := params.ParseConfig(&target)
+
+			if tt.expectErr {
+				if err == nil {
+					t.Error("Expected error but got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				if tt.validate != nil {
+					tt.validate(t, target)
+				}
+			}
+		})
+	}
+}
+
+func TestInitializeParams_ParseConfig_ComplexStruct(t *testing.T) {
+	type ComplexConfig struct {
+		Name    string            `json:"name"`
+		Enabled bool              `json:"enabled"`
+		Count   int               `json:"count"`
+		Meta    map[string]string `json:"meta"`
+	}
+
+	params := InitializeParams{
+		WorkspacePath: "/workspace",
+		Config:        json.RawMessage(`{"name":"test","enabled":true,"count":42,"meta":{"a":"1"}}`),
+	}
+
+	var target ComplexConfig
+	err := params.ParseConfig(&target)
+	if err != nil {
+		t.Fatalf("ParseConfig failed: %v", err)
+	}
+
+	if target.Name != "test" {
+		t.Errorf("Expected name=test, got %s", target.Name)
+	}
+	if !target.Enabled {
+		t.Error("Expected enabled=true")
+	}
+	if target.Count != 42 {
+		t.Errorf("Expected count=42, got %d", target.Count)
+	}
+	if target.Meta["a"] != "1" {
+		t.Errorf("Expected meta.a=1, got %s", target.Meta["a"])
 	}
 }
 
@@ -430,4 +540,3 @@ func TestSendMessageParams_UnmarshalJSON(t *testing.T) {
 		})
 	}
 }
-

@@ -6,9 +6,9 @@ import (
 
 func TestGetTagColor(t *testing.T) {
 	tests := []struct {
-		name     string
+		name      string
 		blockType BlockType
-		want     Color
+		want      Color
 	}{
 		{"Execute", BlockTypeExecute, ColorBlue},
 		{"Plan", BlockTypePlan, ColorMagenta},

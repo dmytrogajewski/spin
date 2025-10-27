@@ -21,8 +21,6 @@ func TestNewConversationID(t *testing.T) {
 	}
 }
 
-
-
 func TestRole_Constants(t *testing.T) {
 	roles := []Role{
 		RoleUser,

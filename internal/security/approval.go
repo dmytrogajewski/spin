@@ -126,7 +126,7 @@ func (s *ApprovalService) invokeHandler(ctx context.Context, req ApprovalRequest
 }
 
 // handleModifiedCommand handles approval with a modified command.
-func (s *ApprovalService) handleModifiedCommand(ctx context.Context, reqID string, originalCmd *Command, resp ApprovalResponse) (string, bool, error) {
+func (s *ApprovalService) handleModifiedCommand(_ context.Context, reqID string, originalCmd *Command, resp ApprovalResponse) (string, bool, error) {
 	// Parse modified command
 	modCmd, err := ParseCommand(resp.ModifiedCommand)
 	if err != nil {
@@ -168,7 +168,7 @@ func (s *ApprovalService) handleModifiedCommand(ctx context.Context, reqID strin
 				Command:         modCmd.Program,
 				WorkDir:         modCmd.WorkDir,
 				Reason:          resp.Reason,
-				Status:          "approved",
+				Status:          events.ApprovalStatusApproved,
 				ModifiedCommand: resp.ModifiedCommand,
 				Timestamp:       time.Now(),
 			},
@@ -188,7 +188,7 @@ func (s *ApprovalService) emitApprovalRequest(req ApprovalRequest) {
 			Command:   req.Command.Program,
 			WorkDir:   req.WorkDir,
 			Reason:    req.Reason,
-			Status:    "pending",
+			Status:    events.ApprovalStatusPending,
 			Timestamp: req.Timestamp,
 		},
 	})
@@ -204,7 +204,7 @@ func (s *ApprovalService) emitApprovalDenied(reqID string, cmd *Command, reason 
 			Command:   cmd.Program,
 			WorkDir:   cmd.WorkDir,
 			Reason:    reason,
-			Status:    "denied",
+			Status:    events.ApprovalStatusDenied,
 			Timestamp: time.Now(),
 		},
 	})
@@ -220,7 +220,7 @@ func (s *ApprovalService) emitApprovalApproved(reqID string, cmd *Command, reaso
 			Command:   cmd.Program,
 			WorkDir:   cmd.WorkDir,
 			Reason:    reason,
-			Status:    "approved",
+			Status:    events.ApprovalStatusApproved,
 			Timestamp: time.Now(),
 		},
 	})
@@ -271,9 +271,6 @@ type Operation struct {
 
 	// WorkDir is the working directory for the operation
 	WorkDir string
-
-	// Additional context can be added here as needed
-	Context map[string]interface{}
 }
 
 // ApprovalServiceOption is a functional option for ApprovalService.

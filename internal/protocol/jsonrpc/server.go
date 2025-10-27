@@ -9,7 +9,7 @@ import (
 
 // Handler processes JSON-RPC requests
 type Handler interface {
-	HandleRequest(ctx context.Context, method string, params json.RawMessage) (interface{}, error)
+	HandleRequest(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error)
 }
 
 // Server is a JSON-RPC 2.0 server
@@ -70,9 +70,8 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 					resp.Error = NewError(InternalError, err.Error())
 				}
 			} else {
-				// Success response
-				resultJSON, _ := json.Marshal(result)
-				resp.Result = resultJSON
+				// Success response - result is already JSON
+				resp.Result = result
 			}
 
 			if err := encoder.Encode(resp); err != nil {

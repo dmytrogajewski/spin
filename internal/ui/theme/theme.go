@@ -30,7 +30,6 @@ type Theme interface {
 	Cyan() string    // Info/highlight
 }
 
-
 // NewDarkTheme creates a dark theme using 256 colors.
 
 // NewLightTheme creates a light theme using 256 colors.

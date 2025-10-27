@@ -85,6 +85,18 @@ type Command struct {
 	Raw string
 }
 
+// GetProgram returns the command program name.
+func (c *Command) GetProgram() string { return c.Program }
+
+// GetArgs returns the command arguments.
+func (c *Command) GetArgs() []string { return c.Args }
+
+// GetRaw returns the raw command string.
+func (c *Command) GetRaw() string { return c.Raw }
+
+// GetWorkDir returns the working directory.
+func (c *Command) GetWorkDir() string { return c.WorkDir }
+
 // ValidationResult contains the result of command validation.
 type ValidationResult struct {
 	// Classification is the determined safety level
@@ -102,6 +114,12 @@ type ValidationResult struct {
 	// Suggestions for safer alternatives (optional)
 	Suggestions []string
 }
+
+// GetClassification returns the classification as an int.
+func (r *ValidationResult) GetClassification() int { return int(r.Classification) }
+
+// GetReason returns the validation reason.
+func (r *ValidationResult) GetReason() string { return r.Reason }
 
 // Pattern represents a command pattern for matching.
 type Pattern struct {

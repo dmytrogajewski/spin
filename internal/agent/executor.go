@@ -62,6 +62,15 @@ type Result struct {
 	Truncated bool
 }
 
+// GetStdout returns the standard output.
+func (r *Result) GetStdout() string { return r.Stdout }
+
+// GetStderr returns the standard error.
+func (r *Result) GetStderr() string { return r.Stderr }
+
+// GetExitCode returns the exit code.
+func (r *Result) GetExitCode() int { return r.ExitCode }
+
 // Success returns true if the command executed successfully.
 func (r *Result) Success() bool {
 	return r.ExitCode == 0 && r.Error == nil

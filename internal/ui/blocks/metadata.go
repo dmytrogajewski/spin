@@ -194,12 +194,11 @@ func (m *PlanMeta) Validate() error {
 
 // ParseExecuteMeta extracts ExecuteMeta from a block's metadata.
 func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) {
-	data, err := json.Marshal(b.Meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	if len(b.Meta) == 0 {
+		return nil, fmt.Errorf("metadata is empty")
 	}
 	var meta ExecuteMeta
-	if err := json.Unmarshal(data, &meta); err != nil {
+	if err := json.Unmarshal(b.Meta, &meta); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ExecuteMeta: %w", err)
 	}
 	return &meta, nil
@@ -207,12 +206,11 @@ func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) {
 
 // ParseReadMeta extracts ReadMeta from a block's metadata.
 func ParseReadMeta(b *Block) (*ReadMeta, error) {
-	data, err := json.Marshal(b.Meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	if len(b.Meta) == 0 {
+		return nil, fmt.Errorf("metadata is empty")
 	}
 	var meta ReadMeta
-	if err := json.Unmarshal(data, &meta); err != nil {
+	if err := json.Unmarshal(b.Meta, &meta); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ReadMeta: %w", err)
 	}
 	return &meta, nil
@@ -220,12 +218,11 @@ func ParseReadMeta(b *Block) (*ReadMeta, error) {
 
 // ParseGrepMeta extracts GrepMeta from a block's metadata.
 func ParseGrepMeta(b *Block) (*GrepMeta, error) {
-	data, err := json.Marshal(b.Meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	if len(b.Meta) == 0 {
+		return nil, fmt.Errorf("metadata is empty")
 	}
 	var meta GrepMeta
-	if err := json.Unmarshal(data, &meta); err != nil {
+	if err := json.Unmarshal(b.Meta, &meta); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal GrepMeta: %w", err)
 	}
 	return &meta, nil
@@ -233,12 +230,11 @@ func ParseGrepMeta(b *Block) (*GrepMeta, error) {
 
 // ParseToolMeta extracts ToolMeta from a block's metadata.
 func ParseToolMeta(b *Block) (*ToolMeta, error) {
-	data, err := json.Marshal(b.Meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	if len(b.Meta) == 0 {
+		return nil, fmt.Errorf("metadata is empty")
 	}
 	var meta ToolMeta
-	if err := json.Unmarshal(data, &meta); err != nil {
+	if err := json.Unmarshal(b.Meta, &meta); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ToolMeta: %w", err)
 	}
 	return &meta, nil
@@ -246,12 +242,11 @@ func ParseToolMeta(b *Block) (*ToolMeta, error) {
 
 // ParsePatchMeta extracts PatchMeta from a block's metadata.
 func ParsePatchMeta(b *Block) (*PatchMeta, error) {
-	data, err := json.Marshal(b.Meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	if len(b.Meta) == 0 {
+		return nil, fmt.Errorf("metadata is empty")
 	}
 	var meta PatchMeta
-	if err := json.Unmarshal(data, &meta); err != nil {
+	if err := json.Unmarshal(b.Meta, &meta); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal PatchMeta: %w", err)
 	}
 	return &meta, nil
@@ -259,12 +254,11 @@ func ParsePatchMeta(b *Block) (*PatchMeta, error) {
 
 // ParsePlanMeta extracts PlanMeta from a block's metadata.
 func ParsePlanMeta(b *Block) (*PlanMeta, error) {
-	data, err := json.Marshal(b.Meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+	if len(b.Meta) == 0 {
+		return nil, fmt.Errorf("metadata is empty")
 	}
 	var meta PlanMeta
-	if err := json.Unmarshal(data, &meta); err != nil {
+	if err := json.Unmarshal(b.Meta, &meta); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal PlanMeta: %w", err)
 	}
 	return &meta, nil
@@ -279,11 +273,7 @@ func SetExecuteMeta(b *Block, m *ExecuteMeta) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal ExecuteMeta: %w", err)
 	}
-	var meta map[string]interface{}
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return fmt.Errorf("failed to unmarshal to map: %w", err)
-	}
-	b.Meta = meta
+	b.Meta = data
 	return nil
 }
 
@@ -296,11 +286,7 @@ func SetReadMeta(b *Block, m *ReadMeta) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal ReadMeta: %w", err)
 	}
-	var meta map[string]interface{}
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return fmt.Errorf("failed to unmarshal to map: %w", err)
-	}
-	b.Meta = meta
+	b.Meta = data
 	return nil
 }
 
@@ -313,11 +299,7 @@ func SetGrepMeta(b *Block, m *GrepMeta) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal GrepMeta: %w", err)
 	}
-	var meta map[string]interface{}
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return fmt.Errorf("failed to unmarshal to map: %w", err)
-	}
-	b.Meta = meta
+	b.Meta = data
 	return nil
 }
 
@@ -330,11 +312,7 @@ func SetToolMeta(b *Block, m *ToolMeta) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal ToolMeta: %w", err)
 	}
-	var meta map[string]interface{}
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return fmt.Errorf("failed to unmarshal to map: %w", err)
-	}
-	b.Meta = meta
+	b.Meta = data
 	return nil
 }
 
@@ -347,12 +325,19 @@ func SetPatchMeta(b *Block, m *PatchMeta) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal PatchMeta: %w", err)
 	}
-	var meta map[string]interface{}
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return fmt.Errorf("failed to unmarshal to map: %w", err)
-	}
-	b.Meta = meta
+	b.Meta = data
 	return nil
 }
 
 // SetPlanMeta sets PlanMeta on a block.
+func SetPlanMeta(b *Block, m *PlanMeta) error {
+	if err := m.Validate(); err != nil {
+		return fmt.Errorf("invalid PlanMeta: %w", err)
+	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("failed to marshal PlanMeta: %w", err)
+	}
+	b.Meta = data
+	return nil
+}

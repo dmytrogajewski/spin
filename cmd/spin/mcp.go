@@ -320,7 +320,7 @@ func formatCommand(server config.MCPServer) string {
 }
 
 // outputJSON outputs data as JSON
-func outputJSON(data interface{}) error {
+func outputJSON[T any](data T) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(data)

@@ -38,7 +38,7 @@ type Builder struct {
 	authManager      *auth.Manager
 	mcpManager       *mcp.MCPManager
 	gitIntegration   *git.GitIntegration
-	shellIntegration *shell.ShellIntegration
+	shellIntegration *shell.Context
 }
 
 // NewBuilder creates a new Manager builder with the given configuration.
@@ -251,7 +251,7 @@ func (b *Builder) initializeGit(ctx context.Context, logger *slog.Logger) error 
 
 // initializeShell sets up the Shell integration.
 func (b *Builder) initializeShell(ctx context.Context, logger *slog.Logger) error {
-	shellIntegration := shell.NewShellIntegration(
+	shellIntegration := shell.NewContext(
 		true,
 		b.cfg.WorkDir,
 		logger,

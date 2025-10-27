@@ -114,7 +114,7 @@ func setupTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *agent.Agent 
 	_ = toolRegistry.Register(tools.NewReadFileTool())
 	_ = toolRegistry.Register(tools.NewWriteFileTool())
 	_ = toolRegistry.Register(tools.NewListDirectoryTool())
-	_ = toolRegistry.Register(tools.NewExecuteCommandTool(executor, validator))
+	_ = toolRegistry.Register(tools.NewShellCommandTool(validator, nil, nil))
 	_ = toolRegistry.Register(tools.NewGetContextTool(env))
 	_ = toolRegistry.Register(tools.NewApplyPatchTool(workDir))
 	_ = toolRegistry.Register(tools.NewFileSearchTool(workDir))
@@ -177,7 +177,7 @@ func TestConversation_Integration_ModeSwitchAffectsTools(t *testing.T) {
 	toolNames1 := extractToolNamesFromTools(req1.Tools.Value)
 	assert.Contains(t, toolNames1, "read_file", "regular mode should have read_file")
 	assert.Contains(t, toolNames1, "write_file", "regular mode should have write_file")
-	assert.Contains(t, toolNames1, "execute_command", "regular mode should have execute_command")
+	assert.Contains(t, toolNames1, "shell_command", "regular mode should have shell_command")
 
 	// Switch to review mode
 	err = conv.SetTaskMode("review")
@@ -193,7 +193,7 @@ func TestConversation_Integration_ModeSwitchAffectsTools(t *testing.T) {
 	toolNames2 := extractToolNamesFromTools(req2.Tools.Value)
 	assert.Contains(t, toolNames2, "read_file", "review mode should have read_file")
 	assert.NotContains(t, toolNames2, "write_file", "review mode should NOT have write_file")
-	assert.NotContains(t, toolNames2, "execute_command", "review mode should NOT have execute_command")
+	assert.NotContains(t, toolNames2, "shell_command", "review mode should NOT have shell_command")
 
 	// Review mode should have list_directory and get_context
 	assert.Contains(t, toolNames2, "list_directory", "review mode should have list_directory")
@@ -394,26 +394,26 @@ func TestConversation_Integration_AllTaskModes(t *testing.T) {
 	}{
 		{
 			mode:              "regular",
-			expectedTools:     []string{"read_file", "write_file", "execute_command"},
+			expectedTools:     []string{"read_file", "write_file", "shell_command"},
 			forbiddenTools:    []string{},
 			expectedMaxTokens: int64(16384),
 		},
 		{
 			mode:              "review",
 			expectedTools:     []string{"read_file", "list_directory", "get_context"},
-			forbiddenTools:    []string{"write_file", "execute_command"},
+			forbiddenTools:    []string{"write_file", "shell_command"},
 			expectedMaxTokens: int64(12288),
 		},
 		{
 			mode:              "compact",
 			expectedTools:     []string{"read_file", "get_context", "file_search"},
-			forbiddenTools:    []string{"write_file", "execute_command"},
+			forbiddenTools:    []string{"write_file", "shell_command"},
 			expectedMaxTokens: int64(4096),
 		},
 		{
 			mode:              "planning",
 			expectedTools:     []string{"get_context", "file_search", "git_context"},
-			forbiddenTools:    []string{"read_file", "write_file", "execute_command"},
+			forbiddenTools:    []string{"read_file", "write_file", "shell_command"},
 			expectedMaxTokens: int64(4096),
 		},
 	}
