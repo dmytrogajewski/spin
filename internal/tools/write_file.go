@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // WriteFileTool implements file writing functionality.
@@ -74,4 +75,46 @@ func (t *WriteFileTool) Execute(ctx context.Context, params ToolParameters) (Too
 		Success: true,
 		Output:  fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path),
 	}, nil
+}
+
+// CheckApproval assesses whether the write operation requires approval.
+func (t *WriteFileTool) CheckApproval(params ToolParameters) ApprovalNeeds {
+	path, err := params.GetString("path")
+	if err != nil || path == "" {
+		return ApprovalNeeds{
+			Required: true,
+			Risk:     RiskMedium,
+			Reason:   fmt.Sprintf("Writing file: %s", path),
+		}
+	}
+
+	// System paths require critical approval
+	systemPaths := []string{"/etc/", "/sys/", "/usr/"}
+	for _, sysPath := range systemPaths {
+		if strings.HasPrefix(path, sysPath) {
+			return ApprovalNeeds{
+				Required: true,
+				Risk:     RiskCritical,
+				Reason:   fmt.Sprintf("Writing to system path: %s", path),
+			}
+		}
+	}
+
+	// Executable file extensions require high approval
+	executableExts := []string{".sh", ".go", ".py", ".rb", ".pl", ".js", ".ts"}
+	for _, ext := range executableExts {
+		if strings.HasSuffix(path, ext) {
+			return ApprovalNeeds{
+				Required: true,
+				Risk:     RiskHigh,
+				Reason:   fmt.Sprintf("Writing executable/source code file: %s", path),
+			}
+		}
+	}
+
+	return ApprovalNeeds{
+		Required: true,
+		Risk:     RiskMedium,
+		Reason:   fmt.Sprintf("Writing file: %s", path),
+	}
 }

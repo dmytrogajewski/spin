@@ -135,11 +135,6 @@ func (l *Loader) LoadFromFile(path string) error {
 	return nil
 }
 
-// Get retrieves a value by key.
-func (l *Loader) Get(key string) interface{} {
-	return l.v.Get(key)
-}
-
 // GetString retrieves a string value.
 func (l *Loader) GetString(key string) string {
 	return l.v.GetString(key)

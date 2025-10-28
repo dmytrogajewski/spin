@@ -24,7 +24,7 @@ func TestArgumentParser_Parse(t *testing.T) {
 		name       string
 		parser     *ArgumentParser
 		input      string
-		want       map[string]interface{}
+		want       map[string]interface{} // Keep for comparison via ToMap()
 		wantErr    bool
 		errContain string
 	}{
@@ -120,10 +120,11 @@ func TestArgumentParser_Parse(t *testing.T) {
 				if tt.errContain != "" {
 					assert.Contains(t, err.Error(), tt.errContain)
 				}
-				assert.Nil(t, got)
+				assert.Equal(t, ToolParameters{}, got)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.want, got)
+				// Compare via ToMap() for easier assertion
+				assert.Equal(t, tt.want, got.ToMap())
 			}
 		})
 	}
@@ -141,7 +142,7 @@ func TestArgumentParser_CustomConfiguration(t *testing.T) {
 		parser.AllowEmpty = true
 		result, err := parser.Parse("")
 		assert.NoError(t, err)
-		assert.Empty(t, result)
+		assert.Equal(t, ToolParameters{}, result)
 	})
 }
 

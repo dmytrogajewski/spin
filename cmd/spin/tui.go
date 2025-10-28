@@ -14,7 +14,6 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/manager"
 	"github.com/dmytrogajewski/spin/internal/security"
-	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	"github.com/spf13/cobra"
@@ -254,21 +253,8 @@ func createManagerForTUI(provider llm.Provider, maxTurns int, configLoader *conf
 	workDir := getWorkingDirectory()
 	cfg := buildConfig(configLoader, maxTurns, workDir)
 
-	// Apply debug flag to configuration
 	applyDebugFlag(cfg, debug)
 
-	// Create tool registry with simple tools (no dependencies)
-	registry := tools.NewRegistry()
-
-	// Register simple built-in tools (file I/O)
-	registry.Register(tools.NewReadFileTool())
-	registry.Register(tools.NewWriteFileTool())
-	registry.Register(tools.NewListDirectoryTool())
-
-	// Note: ExecuteCommandTool and GetContextTool are registered by Agent
-	// as they require executor, validator, and context dependencies
-
-	// Create approval handler based on auto-approve flag
 	var approvalHandler security.ApprovalHandler
 	if autoApprove {
 		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
@@ -284,10 +270,9 @@ func createManagerForTUI(provider llm.Provider, maxTurns int, configLoader *conf
 		}
 	}
 
-	// Create manager with options
 	var opts []manager.ManagerOption
+
 	opts = append(opts, manager.WithLLM(provider))
-	opts = append(opts, manager.WithManagerToolRegistry(registry))
 	opts = append(opts, manager.WithManagerApprovalHandler(approvalHandler))
 
 	mgr, err := manager.NewManager(cfg, opts...)

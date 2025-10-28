@@ -427,6 +427,16 @@ func (u *PureTTY) updateStatusBar() {
 		return
 	}
 
+	// Skip status updates when in approval mode
+	// The approval dialog manages its own status bar display
+	u.mu.Lock()
+	mode := u.mode
+	u.mu.Unlock()
+
+	if mode == ModeApproval {
+		return
+	}
+
 	// Get terminal width for adaptive formatting
 	w, _ := u.tty.Size()
 

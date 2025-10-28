@@ -281,3 +281,17 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 
 	return patch, nil
 }
+
+// CheckApproval assesses whether the patch operation requires approval.
+func (t *ApplyPatchTool) CheckApproval(params ToolParameters) ApprovalNeeds {
+	patchText, err := params.GetString("patch_text")
+	if err != nil || patchText == "" {
+		return ApprovalNeeds{Required: false, Risk: RiskSafe}
+	}
+
+	return ApprovalNeeds{
+		Required: true,
+		Risk:     RiskHigh,
+		Reason:   "Applying patch can modify multiple files",
+	}
+}

@@ -233,14 +233,10 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 
 	// Build tool registry with built-in tools
 	toolRegistry := tools.NewRegistry()
-	executor, err := NewExecutor(workDir)
-	if err != nil {
-		t.Fatalf("failed to create executor: %v", err)
-	}
 	_ = toolRegistry.Register(tools.NewReadFileTool())
 	_ = toolRegistry.Register(tools.NewWriteFileTool())
 	_ = toolRegistry.Register(tools.NewListDirectoryTool())
-	_ = toolRegistry.Register(tools.NewShellCommandTool(validator, nil, nil))
+	_ = toolRegistry.Register(tools.NewShellCommandTool(nil, nil, nil))
 	_ = toolRegistry.Register(tools.NewGetContextTool(env))
 	_ = toolRegistry.Register(tools.NewApplyPatchTool(workDir))
 	_ = toolRegistry.Register(tools.NewFileSearchTool(workDir))
@@ -297,7 +293,7 @@ func newAgentForTest(
 	_ = toolRegistry.Register(tools.NewReadFileTool())
 	_ = toolRegistry.Register(tools.NewWriteFileTool())
 	_ = toolRegistry.Register(tools.NewListDirectoryTool())
-	_ = toolRegistry.Register(tools.NewShellCommandTool(validator, nil, nil))
+	_ = toolRegistry.Register(tools.NewShellCommandTool(nil, nil, nil))
 	_ = toolRegistry.Register(tools.NewGetContextTool(environment))
 	_ = toolRegistry.Register(tools.NewApplyPatchTool(environment.WorkDir))
 	_ = toolRegistry.Register(tools.NewFileSearchTool(environment.WorkDir))
@@ -1125,11 +1121,10 @@ func newBenchAgent(b *testing.B) *Agent {
 
 	// Create tool registry with all built-in tools
 	toolRegistry := tools.NewRegistry()
-	executor, _ := NewExecutor("/tmp")
 	_ = toolRegistry.Register(tools.NewReadFileTool())
 	_ = toolRegistry.Register(tools.NewWriteFileTool())
 	_ = toolRegistry.Register(tools.NewListDirectoryTool())
-	_ = toolRegistry.Register(tools.NewShellCommandTool(validator, nil, nil))
+	_ = toolRegistry.Register(tools.NewShellCommandTool(nil, nil, nil))
 	_ = toolRegistry.Register(tools.NewGetContextTool(&Environment{WorkDir: "/tmp"}))
 	_ = toolRegistry.Register(tools.NewApplyPatchTool("/tmp"))
 	_ = toolRegistry.Register(tools.NewFileSearchTool("/tmp"))
@@ -1872,8 +1867,8 @@ func TestAgent_parseToolArguments(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Agent.parseToolArguments() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr && args == nil {
-				t.Error("Agent.parseToolArguments() returned nil args for valid input")
+			if !tt.wantErr && len(args.Keys()) == 0 {
+				t.Error("Agent.parseToolArguments() returned empty args for valid input")
 			}
 		})
 	}

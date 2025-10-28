@@ -83,9 +83,10 @@ func TestEventLogger_LogEvent_Text(t *testing.T) {
 
 	event := events.Event{
 		Type: events.EventToolCallStart,
-		Data: map[string]interface{}{
-			"tool": "bash",
-			"args": map[string]string{"command": "ls"},
+		Data: events.ToolCallStartData{
+			ToolName:         "bash",
+			ToolID:           "tool-123",
+			RequiresApproval: false,
 		},
 	}
 
@@ -109,23 +110,26 @@ func TestEventLogger_LogEvent_JSON(t *testing.T) {
 
 	event := events.Event{
 		Type: events.EventContentDelta,
-		Data: map[string]interface{}{
-			"delta": "Hello",
+		Data: events.ContentDeltaData{
+			Content: "Hello",
+			Role:    "assistant",
 		},
 	}
 
 	logger.logEvent(event)
 
 	// Verify valid JSON
-	var parsed map[string]interface{}
+	var parsed EventLogOutput
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
 
-	// Type is int, so it won't be a string in JSON
-	// Instead, check that the type field exists and is a number
-	if _, ok := parsed["type"]; !ok {
-		t.Error("expected type field in JSON output")
+	// Verify the output structure
+	if parsed.Type != events.EventContentDelta {
+		t.Errorf("expected type %v, got %v", events.EventContentDelta, parsed.Type)
+	}
+	if parsed.Timestamp == "" {
+		t.Error("expected non-empty timestamp")
 	}
 }
 
@@ -255,8 +259,9 @@ func TestEventLogger_LogEventJSON(t *testing.T) {
 
 	event := events.Event{
 		Type: events.EventContentDelta,
-		Data: map[string]interface{}{
-			"delta": "Hello",
+		Data: events.ContentDeltaData{
+			Content: "Hello",
+			Role:    "assistant",
 		},
 	}
 
@@ -367,7 +372,7 @@ func TestEventLogger_LogEventJSON_MarshalError(t *testing.T) {
 
 	output := buf.String()
 	// Should still produce valid JSON with empty object for data
-	var parsed map[string]interface{}
+	var parsed EventLogOutput
 	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
 		t.Fatalf("output should be valid JSON: %v, got: %s", err, output)
 	}

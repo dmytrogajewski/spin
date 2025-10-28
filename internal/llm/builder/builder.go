@@ -27,7 +27,7 @@ type Config struct {
 	APIKey  string // Deprecated: direct key
 
 	// Provider-specific options
-	Options map[string]interface{}
+	Options factory.ProviderOptions
 }
 
 // Builder builds LLM providers from multiple configuration sources.
@@ -171,29 +171,17 @@ func (b *Builder) mergeConfig(explicit Config) Config {
 	}
 
 	// Provider options from config file
-	if merged.Options == nil {
-		merged.Options = make(map[string]interface{})
-	}
-	// Merge llm.options map if present
-	if raw := b.configLoader.Get("llm.options"); raw != nil {
-		if m, ok := raw.(map[string]interface{}); ok {
-			for k, v := range m {
-				if _, exists := merged.Options[k]; !exists {
-					merged.Options[k] = v
-				}
-			}
-		}
-	}
-	// Convenience keys with defaults: auto_tune=true, headroom=1024
+	// Set auto_tune default to true if not explicitly configured
 	if b.configLoader.IsSet("llm.auto_tune") {
-		merged.Options["auto_tune"] = b.configLoader.GetBool("llm.auto_tune")
-	} else if _, exists := merged.Options["auto_tune"]; !exists {
-		merged.Options["auto_tune"] = true
+		merged.Options.AutoTune = b.configLoader.GetBool("llm.auto_tune")
+	} else if merged.Options.AutoTune == false && explicit.Options.AutoTune == false {
+		// Default to true unless explicitly set to false
+		merged.Options.AutoTune = true
 	}
+
+	// VRAM headroom - config file overrides, otherwise keeps explicit value or zero (factory handles default)
 	if b.configLoader.IsSet("llm.vram.headroom_mib") {
-		merged.Options["vram_headroom_mib"] = b.configLoader.GetInt("llm.vram.headroom_mib")
-	} else if _, exists := merged.Options["vram_headroom_mib"]; !exists {
-		merged.Options["vram_headroom_mib"] = 1024
+		merged.Options.VRAMHeadroomMiB = b.configLoader.GetInt("llm.vram.headroom_mib")
 	}
 
 	// Timeout default - use 5 minutes for non-streaming, streaming has its own timeout

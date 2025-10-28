@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 )
@@ -88,7 +89,7 @@ func (r *Registry) ListSchemas() []ToolSchema {
 
 // Execute runs a tool by name with the given parameters.
 // It validates parameters against the tool's schema before execution.
-func (r *Registry) Execute(ctx context.Context, name string, params map[string]interface{}) (ToolResult, error) {
+func (r *Registry) Execute(ctx context.Context, name string, params ToolParameters) (ToolResult, error) {
 	// Get the tool
 	tool, err := r.Get(name)
 	if err != nil {
@@ -100,14 +101,8 @@ func (r *Registry) Execute(ctx context.Context, name string, params map[string]i
 		return ToolResult{}, err
 	}
 
-	// Convert params to ToolParameters
-	toolParams, err := FromMap(params)
-	if err != nil {
-		return ToolResult{}, fmt.Errorf("failed to convert parameters: %w", err)
-	}
-
 	// Execute the tool
-	result, err := tool.Execute(ctx, toolParams)
+	result, err := tool.Execute(ctx, params)
 	if err != nil {
 		return ToolResult{}, fmt.Errorf("tool execution failed: %w", err)
 	}
@@ -116,7 +111,7 @@ func (r *Registry) Execute(ctx context.Context, name string, params map[string]i
 }
 
 // validateParams validates tool parameters against the schema.
-func (r *Registry) validateParams(schema ToolSchema, params map[string]interface{}) error {
+func (r *Registry) validateParams(schema ToolSchema, params ToolParameters) error {
 	paramSchema := schema.Function.Parameters
 
 	if err := r.validateRequiredParams(paramSchema, params); err != nil {
@@ -127,9 +122,9 @@ func (r *Registry) validateParams(schema ToolSchema, params map[string]interface
 }
 
 // validateRequiredParams checks that all required parameters are present.
-func (r *Registry) validateRequiredParams(paramSchema ParameterSchema, params map[string]interface{}) error {
+func (r *Registry) validateRequiredParams(paramSchema ParameterSchema, params ToolParameters) error {
 	for _, required := range paramSchema.Required {
-		if _, exists := params[required]; !exists {
+		if !params.Has(required) {
 			return fmt.Errorf("%w: missing required parameter %s", ErrInvalidParameters, required)
 		}
 	}
@@ -137,9 +132,9 @@ func (r *Registry) validateRequiredParams(paramSchema ParameterSchema, params ma
 }
 
 // validateParameterTypes validates the types and values of all parameters.
-func (r *Registry) validateParameterTypes(paramSchema ParameterSchema, params map[string]interface{}) error {
-	for name, value := range params {
-		if err := r.validateParameter(paramSchema, name, value); err != nil {
+func (r *Registry) validateParameterTypes(paramSchema ParameterSchema, params ToolParameters) error {
+	for _, name := range params.Keys() {
+		if err := r.validateParameter(paramSchema, name, params); err != nil {
 			return err
 		}
 	}
@@ -147,19 +142,25 @@ func (r *Registry) validateParameterTypes(paramSchema ParameterSchema, params ma
 }
 
 // validateParameter validates a single parameter.
-func (r *Registry) validateParameter(paramSchema ParameterSchema, name string, value interface{}) error {
+func (r *Registry) validateParameter(paramSchema ParameterSchema, name string, params ToolParameters) error {
 	propDef, exists := paramSchema.Properties[name]
 	if !exists {
 		return r.createUnknownParameterError(name, paramSchema.Properties)
 	}
 
-	if !r.validateType(value, propDef.Type) {
+	// Get the raw JSON value for this parameter
+	rawValue, exists := params.raw[name]
+	if !exists {
+		return fmt.Errorf("%w: parameter %s not found", ErrInvalidParameters, name)
+	}
+
+	if !r.validateTypeFromJSON(rawValue, propDef.Type) {
 		return fmt.Errorf("%w: parameter %s has wrong type (expected %s)",
 			ErrInvalidParameters, name, propDef.Type)
 	}
 
 	if len(propDef.Enum) > 0 {
-		if err := r.validateEnum(value, propDef.Enum); err != nil {
+		if err := r.validateEnumFromJSON(rawValue, propDef.Enum); err != nil {
 			return fmt.Errorf("%w: parameter %s %v", ErrInvalidParameters, name, err)
 		}
 	}
@@ -177,53 +178,40 @@ func (r *Registry) createUnknownParameterError(name string, properties map[strin
 		ErrInvalidParameters, name, validParams)
 }
 
-// validateType checks if a value matches the expected JSON schema type.
-func (r *Registry) validateType(value interface{}, expectedType string) bool {
+// validateTypeFromJSON checks if a JSON value matches the expected JSON schema type.
+func (r *Registry) validateTypeFromJSON(rawValue json.RawMessage, expectedType string) bool {
 	switch expectedType {
 	case "string":
-		_, ok := value.(string)
-		return ok
+		var s string
+		return json.Unmarshal(rawValue, &s) == nil && string(rawValue[0]) == `"`
 	case "number":
-		switch value.(type) {
-		case int, int8, int16, int32, int64,
-			uint, uint8, uint16, uint32, uint64,
-			float32, float64:
-			return true
-		default:
-			return false
-		}
+		var f float64
+		return json.Unmarshal(rawValue, &f) == nil
 	case "integer":
-		switch value.(type) {
-		case int, int8, int16, int32, int64,
-			uint, uint8, uint16, uint32, uint64:
-			return true
-		default:
+		// Check if it's a valid number
+		var f float64
+		if err := json.Unmarshal(rawValue, &f); err != nil {
 			return false
 		}
+		// Check if it's an integer (no decimal point in JSON)
+		return f == float64(int64(f))
 	case "boolean":
-		_, ok := value.(bool)
-		return ok
+		var b bool
+		return json.Unmarshal(rawValue, &b) == nil && (string(rawValue) == "true" || string(rawValue) == "false")
 	case "array":
-		// Check if it's a slice or array
-		switch value.(type) {
-		case []interface{}, []string, []int, []float64:
-			return true
-		default:
-			return false
-		}
+		return len(rawValue) > 0 && rawValue[0] == '['
 	case "object":
-		_, ok := value.(map[string]interface{})
-		return ok
+		return len(rawValue) > 0 && rawValue[0] == '{'
 	default:
 		// Unknown type - accept for now
 		return true
 	}
 }
 
-// validateEnum checks if a value is in the allowed enum values.
-func (r *Registry) validateEnum(value interface{}, enum []string) error {
-	strValue, ok := value.(string)
-	if !ok {
+// validateEnumFromJSON checks if a JSON value is in the allowed enum values.
+func (r *Registry) validateEnumFromJSON(rawValue json.RawMessage, enum []string) error {
+	var strValue string
+	if err := json.Unmarshal(rawValue, &strValue); err != nil {
 		return fmt.Errorf("enum value must be string")
 	}
 

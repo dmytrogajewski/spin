@@ -192,39 +192,54 @@ func (g *GitIntegration) IsClean() bool {
 	return len(status.ModifiedFiles) == 0 && len(status.UntrackedFiles) == 0
 }
 
+// GitContextInfo holds git context information for the agent.
+type GitContextInfo struct {
+	GitEnabled     bool   `json:"git_enabled"`
+	IsRepo         bool   `json:"is_repo"`
+	Branch         string `json:"branch,omitempty"`
+	Remote         string `json:"remote,omitempty"`
+	Commit         string `json:"commit,omitempty"`
+	IsClean        bool   `json:"is_clean,omitempty"`
+	ModifiedFiles  int    `json:"modified_files,omitempty"`
+	UntrackedFiles int    `json:"untracked_files,omitempty"`
+	Ahead          int    `json:"ahead,omitempty"`
+	Behind         int    `json:"behind,omitempty"`
+	Detached       bool   `json:"detached,omitempty"`
+}
+
 // GetContextInfo returns Git context information for the agent.
-func (g *GitIntegration) GetContextInfo() map[string]interface{} {
+func (g *GitIntegration) GetContextInfo() GitContextInfo {
 	if !g.IsRepository() {
-		return map[string]interface{}{
-			"git_enabled": false,
-			"is_repo":     false,
+		return GitContextInfo{
+			GitEnabled: false,
+			IsRepo:     false,
 		}
 	}
 
-	info := map[string]interface{}{
-		"git_enabled": true,
-		"is_repo":     true,
+	info := GitContextInfo{
+		GitEnabled: true,
+		IsRepo:     true,
 	}
 
 	if branch, err := g.GetBranch(); err == nil {
-		info["branch"] = branch
+		info.Branch = branch
 	}
 
 	if remote, err := g.GetRemoteURL(); err == nil {
-		info["remote"] = remote
+		info.Remote = remote
 	}
 
 	if commit, err := g.GetCommitHash(); err == nil {
-		info["commit"] = commit
+		info.Commit = commit
 	}
 
 	if status := g.GetStatus(); status != nil {
-		info["is_clean"] = g.IsClean()
-		info["modified_files"] = len(status.ModifiedFiles)
-		info["untracked_files"] = len(status.UntrackedFiles)
-		info["ahead"] = status.Ahead
-		info["behind"] = status.Behind
-		info["detached"] = status.Detached
+		info.IsClean = g.IsClean()
+		info.ModifiedFiles = len(status.ModifiedFiles)
+		info.UntrackedFiles = len(status.UntrackedFiles)
+		info.Ahead = status.Ahead
+		info.Behind = status.Behind
+		info.Detached = status.Detached
 	}
 
 	return info

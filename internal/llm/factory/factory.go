@@ -14,6 +14,20 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm/openai"
 )
 
+// ProviderOptions contains provider-specific configuration options.
+//
+// Zero value defaults:
+//   - AutoTune: false (must be explicitly enabled)
+//   - VRAMHeadroomMiB: 0 (will use default 1024 if zero)
+type ProviderOptions struct {
+	// AutoTune enables automatic VRAM-based optimization (Ollama only).
+	AutoTune bool
+
+	// VRAMHeadroomMiB specifies VRAM headroom in MiB for auto-tuning (Ollama only).
+	// If zero, defaults to 1024 (1GB).
+	VRAMHeadroomMiB int
+}
+
 // ProviderConfig contains configuration for provider creation.
 type ProviderConfig struct {
 	// Type is the provider type (e.g., "openai", "ollama", "lmstudio", "openai-compatible")
@@ -40,7 +54,7 @@ type ProviderConfig struct {
 	Timeout time.Duration
 
 	// Options contains provider-specific options
-	Options map[string]interface{}
+	Options ProviderOptions
 }
 
 // ProviderFactory creates a provider from configuration.
@@ -276,30 +290,16 @@ func (f *Factory) newOllamaProvider(ctx context.Context, cfg ProviderConfig) (ll
 }
 
 // shouldAutoTune determines if auto-tuning should be enabled.
-func (f *Factory) shouldAutoTune(options map[string]interface{}) bool {
-	if options == nil {
-		return true // Auto-tune by default
-	}
-	if at, ok := options["auto_tune"].(bool); ok {
-		return at
-	}
-	return true
+func (f *Factory) shouldAutoTune(options ProviderOptions) bool {
+	return options.AutoTune
 }
 
 // extractVRAMHeadroom extracts VRAM headroom from options.
-func (f *Factory) extractVRAMHeadroom(options map[string]interface{}) int64 {
-	if options == nil {
+func (f *Factory) extractVRAMHeadroom(options ProviderOptions) int64 {
+	if options.VRAMHeadroomMiB == 0 {
 		return 1024 * 1024 * 1024 // Default 1GB
 	}
-
-	if v, ok := options["vram_headroom_mib"].(int); ok {
-		return int64(v) * 1024 * 1024
-	}
-	if v, ok := options["vram_headroom_mib"].(float64); ok {
-		return int64(v) * 1024 * 1024
-	}
-
-	return 1024 * 1024 * 1024 // Default 1GB
+	return int64(options.VRAMHeadroomMiB) * 1024 * 1024
 }
 
 // newLMStudioProvider creates an LMStudio provider from config (with auth support).

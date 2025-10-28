@@ -662,3 +662,36 @@ func TestToolExecutor_ExecuteBatch_ContextCancellation(t *testing.T) {
 		assert.GreaterOrEqual(t, runningCount.Load(), int32(1), "At least some tools should have started")
 	}
 }
+
+// TestToolExecutor_Execute_ChecksApproval tests that ToolExecutor checks approval for tools with ToolWithApproval.
+func TestToolExecutor_Execute_ChecksApproval(t *testing.T) {
+	registry := tools.NewRegistry()
+	_ = registry.Register(tools.NewWriteFileTool())
+
+	executor := NewToolExecutor(ToolExecutorConfig{
+		Registry: registry,
+		WorkDir:  "/tmp",
+	})
+
+	call := &ToolCall{
+		ID:   "call-123",
+		Type: "function",
+		Function: ToolCallFunction{
+			Name:      "write_file",
+			Arguments: `{"path": "/tmp/test.txt", "content": "hello"}`,
+		},
+	}
+
+	result, err := executor.Execute(context.Background(), call)
+
+	// Should detect that approval is required and not execute
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if result.Success {
+		t.Error("Expected failure when approval required but not provided")
+	}
+	if result.Error == nil {
+		t.Error("Expected error about approval required")
+	}
+}

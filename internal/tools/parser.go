@@ -30,25 +30,25 @@ func NewStrictArgumentParser() *ArgumentParser {
 	}
 }
 
-// Parse parses JSON-encoded arguments from a string into a map.
+// Parse parses JSON-encoded arguments from a string into ToolParameters.
 //
 // Behavior:
-// - If raw is empty and AllowEmpty is true: returns empty map, no error
-// - If raw is empty and AllowEmpty is false: returns nil, error
-// - If raw is invalid JSON: returns nil, error
-// - Otherwise: returns parsed map, no error
-func (p *ArgumentParser) Parse(raw string) (map[string]interface{}, error) {
+// - If raw is empty and AllowEmpty is true: returns empty ToolParameters, no error
+// - If raw is empty and AllowEmpty is false: returns zero ToolParameters, error
+// - If raw is invalid JSON: returns zero ToolParameters, error
+// - Otherwise: returns parsed ToolParameters, no error
+func (p *ArgumentParser) Parse(raw string) (ToolParameters, error) {
 	if raw == "" {
 		if p.AllowEmpty {
-			return make(map[string]interface{}), nil
+			return ToolParameters{}, nil
 		}
-		return nil, fmt.Errorf("tool arguments cannot be empty")
+		return ToolParameters{}, fmt.Errorf("tool arguments cannot be empty")
 	}
 
 	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(raw), &args); err != nil {
-		return nil, fmt.Errorf("failed to parse tool arguments: %w", err)
+		return ToolParameters{}, fmt.Errorf("failed to parse tool arguments: %w", err)
 	}
 
-	return args, nil
+	return FromMap(args)
 }
