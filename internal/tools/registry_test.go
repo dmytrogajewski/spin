@@ -420,7 +420,8 @@ func TestRegistryExecute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			result, err := reg.Execute(ctx, tt.toolName, tt.params)
+			params, _ := FromMap(tt.params)
+			result, err := reg.Execute(ctx, tt.toolName, params)
 
 			if tt.wantErr != nil {
 				if err == nil {
@@ -475,7 +476,8 @@ func TestRegistryExecuteContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	_, err := reg.Execute(ctx, "ctx_tool", map[string]interface{}{})
+	params, _ := FromMap(map[string]interface{}{})
+	_, err := reg.Execute(ctx, "ctx_tool", params)
 	if err == nil {
 		t.Error("expected context cancellation error")
 	}
@@ -511,7 +513,8 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, _ = reg.Execute(context.Background(), "tool1", map[string]interface{}{"param1": "test"})
+			params, _ := FromMap(map[string]interface{}{"param1": "test"})
+			_, _ = reg.Execute(context.Background(), "tool1", params)
 		}()
 	}
 
@@ -636,7 +639,8 @@ func TestRegistryTypeValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := reg.Execute(context.Background(), "type_tool", tt.params)
+			params, _ := FromMap(tt.params)
+			_, err := reg.Execute(context.Background(), "type_tool", params)
 
 			if tt.wantErr {
 				if err == nil {
@@ -716,7 +720,8 @@ func TestRegistryEnumValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := reg.Execute(context.Background(), "enum_tool", tt.params)
+			params, _ := FromMap(tt.params)
+			_, err := reg.Execute(context.Background(), "enum_tool", params)
 
 			if tt.wantErr {
 				if err == nil {
@@ -815,7 +820,8 @@ func TestRegistryExecute_UnknownParameter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := reg.Execute(context.Background(), "test_tool", tt.params)
+			params, _ := FromMap(tt.params)
+			_, err := reg.Execute(context.Background(), "test_tool", params)
 
 			if tt.wantErr {
 				if err == nil {
@@ -868,10 +874,11 @@ func TestRegistryExecute_UnknownParameter_ErrorMessage(t *testing.T) {
 	_ = reg.Register(tool)
 
 	// Execute with typo in parameter name
-	_, err := reg.Execute(context.Background(), "file_tool", map[string]interface{}{
+	params, _ := FromMap(map[string]interface{}{
 		"filename": "test.txt",
 		"fliename": "typo.txt", // typo
 	})
+	_, err := reg.Execute(context.Background(), "file_tool", params)
 
 	if err == nil {
 		t.Fatal("expected error but got none")

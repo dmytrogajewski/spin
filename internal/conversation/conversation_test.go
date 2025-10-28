@@ -451,11 +451,6 @@ func setupTestConv(t *testing.T) *Conversation {
 	validator := security.NewValidator()
 	workDir := t.TempDir()
 
-	executor, err := agent.NewExecutor(workDir)
-	if err != nil {
-		t.Fatalf("failed to create executor: %v", err)
-	}
-
 	env := &agent.Environment{WorkDir: workDir}
 	emitter := events.NewEventEmitter(100)
 
@@ -472,7 +467,7 @@ func setupTestConv(t *testing.T) *Conversation {
 	_ = toolRegistry.Register(tools.NewReadFileTool())
 	_ = toolRegistry.Register(tools.NewWriteFileTool())
 	_ = toolRegistry.Register(tools.NewListDirectoryTool())
-	_ = toolRegistry.Register(tools.NewShellCommandTool(validator, nil, nil))
+	_ = toolRegistry.Register(tools.NewShellCommandTool(nil, nil, nil))
 	_ = toolRegistry.Register(tools.NewGetContextTool(env))
 	_ = toolRegistry.Register(tools.NewApplyPatchTool(workDir))
 	_ = toolRegistry.Register(tools.NewFileSearchTool(workDir))

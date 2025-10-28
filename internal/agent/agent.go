@@ -673,11 +673,8 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *orchestration.ToolCal
 	}
 
 	// 3. Emit tool start event
-	// Convert args to ToolCallArguments
-	toolArgs, _ := tools.FromMap(args)
-
 	// Determine if this tool requires approval
-	requiresApproval := a.determineRequiresApproval(call.Function.Name, args)
+	requiresApproval := a.determineRequiresApproval(call.Function.Name, args.ToMap())
 
 	a.emitter.Emit(events.Event{
 		Type:      events.EventToolCallStart,
@@ -685,7 +682,7 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *orchestration.ToolCal
 		Data: events.ToolCallStartData{
 			ToolID:           call.ID,
 			ToolName:         call.Function.Name,
-			Parameters:       toolArgs,
+			Parameters:       args,
 			RequiresApproval: requiresApproval,
 		},
 	})
@@ -739,7 +736,7 @@ func (a *Agent) validateToolCall(call *orchestration.ToolCall) error {
 }
 
 // parseToolArguments extracts and parses JSON arguments from tool call.
-func (a *Agent) parseToolArguments(call *orchestration.ToolCall) (map[string]interface{}, error) {
+func (a *Agent) parseToolArguments(call *orchestration.ToolCall) (tools.ToolParameters, error) {
 	parser := tools.NewStrictArgumentParser()
 	return parser.Parse(call.Function.Arguments)
 }

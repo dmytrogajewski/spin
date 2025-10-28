@@ -94,8 +94,6 @@ func setupTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *agent.Agent 
 	t.Helper()
 
 	workDir := t.TempDir()
-	executor, err := agent.NewExecutor(workDir)
-	require.NoError(t, err)
 
 	validator := security.NewValidator()
 	env := &agent.Environment{WorkDir: workDir}
@@ -114,7 +112,7 @@ func setupTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *agent.Agent 
 	_ = toolRegistry.Register(tools.NewReadFileTool())
 	_ = toolRegistry.Register(tools.NewWriteFileTool())
 	_ = toolRegistry.Register(tools.NewListDirectoryTool())
-	_ = toolRegistry.Register(tools.NewShellCommandTool(validator, nil, nil))
+	_ = toolRegistry.Register(tools.NewShellCommandTool(nil, nil, nil))
 	_ = toolRegistry.Register(tools.NewGetContextTool(env))
 	_ = toolRegistry.Register(tools.NewApplyPatchTool(workDir))
 	_ = toolRegistry.Register(tools.NewFileSearchTool(workDir))

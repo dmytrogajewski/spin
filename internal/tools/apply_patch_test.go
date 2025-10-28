@@ -418,3 +418,40 @@ func TestApplyPatchTool_ErrorCases(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyPatchTool_CheckApproval(t *testing.T) {
+	tool := NewApplyPatchTool("/tmp")
+
+	params, _ := FromMap(map[string]interface{}{
+		"patch_text": "*** a/file.go\n--- b/file.go\n@@ -1,1 +1,2 @@\n package main\n+// comment\n",
+	})
+
+	needs := tool.CheckApproval(params)
+
+	if !needs.Required {
+		t.Error("CheckApproval should require approval for patch operations")
+	}
+	if needs.Risk != RiskHigh {
+		t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, RiskHigh)
+	}
+	if needs.Reason == "" {
+		t.Error("CheckApproval should provide a reason")
+	}
+}
+
+func TestApplyPatchTool_CheckApproval_EmptyPatch(t *testing.T) {
+	tool := NewApplyPatchTool("/tmp")
+
+	params, _ := FromMap(map[string]interface{}{
+		"patch_text": "",
+	})
+
+	needs := tool.CheckApproval(params)
+
+	if needs.Required {
+		t.Error("CheckApproval should not require approval for empty patch")
+	}
+	if needs.Risk != RiskSafe {
+		t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, RiskSafe)
+	}
+}

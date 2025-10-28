@@ -417,9 +417,9 @@ func TestNewProvider_OptionsPassthrough(t *testing.T) {
 		Type:    "capture",
 		BaseURL: "http://localhost",
 		Model:   "test",
-		Options: map[string]interface{}{
-			"custom_option": "value",
-			"retry_count":   5,
+		Options: ProviderOptions{
+			AutoTune:        false,
+			VRAMHeadroomMiB: 512,
 		},
 	}
 
@@ -428,12 +428,12 @@ func TestNewProvider_OptionsPassthrough(t *testing.T) {
 		t.Fatalf("NewProvider() error = %v", err)
 	}
 
-	if capturedCfg.Options == nil {
-		t.Fatal("Options not passed to factory")
+	// Verify options were passed to factory
+	if capturedCfg.Options.VRAMHeadroomMiB != 512 {
+		t.Errorf("Options not preserved correctly, expected VRAMHeadroomMiB=512, got %d", capturedCfg.Options.VRAMHeadroomMiB)
 	}
-
-	if capturedCfg.Options["custom_option"] != "value" {
-		t.Error("Options not preserved correctly")
+	if capturedCfg.Options.AutoTune != false {
+		t.Error("Options not preserved correctly, expected AutoTune=false")
 	}
 }
 

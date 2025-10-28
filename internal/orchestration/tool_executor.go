@@ -95,6 +95,18 @@ func (t *ToolExecutor) Execute(ctx context.Context, call *ToolCall) (*ToolResult
 		}, nil
 	}
 
+	// Check if tool requires approval
+	if toolWithApproval, ok := tool.(tools.ToolWithApproval); ok {
+		needs := toolWithApproval.CheckApproval(args)
+		if needs.Required {
+			return &ToolResult{
+				ID:      call.ID,
+				Success: false,
+				Error:   fmt.Errorf("approval required: %s (risk: %s)", needs.Reason, needs.Risk),
+			}, nil
+		}
+	}
+
 	// Execute the tool
 	toolResult, err := tool.Execute(ctx, args)
 	if err != nil {
@@ -136,11 +148,7 @@ func (t *ToolExecutor) validateToolCall(call *ToolCall) error {
 // parseToolArguments parses tool call arguments from JSON.
 func (t *ToolExecutor) parseToolArguments(call *ToolCall) (tools.ToolParameters, error) {
 	parser := tools.NewArgumentParser()
-	rawParams, err := parser.Parse(call.Function.Arguments)
-	if err != nil {
-		return tools.ToolParameters{}, err
-	}
-	return tools.FromMap(rawParams)
+	return parser.Parse(call.Function.Arguments)
 }
 
 // ExecuteBatch executes multiple tool calls concurrently.

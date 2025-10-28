@@ -129,3 +129,108 @@ func TestWriteFileTool_ErrorCases(t *testing.T) {
 		})
 	}
 }
+
+func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
+	tool := NewWriteFileTool()
+
+	tests := []struct {
+		name string
+		path string
+		want RiskLevel
+	}{
+		{"etc directory", "/etc/config.conf", RiskCritical},
+		{"sys directory", "/sys/kernel/param", RiskCritical},
+		{"usr directory", "/usr/bin/script", RiskCritical},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params, _ := FromMap(map[string]interface{}{
+				"path":    tt.path,
+				"content": "test",
+			})
+
+			needs := tool.CheckApproval(params)
+
+			if !needs.Required {
+				t.Error("CheckApproval should require approval for system paths")
+			}
+			if needs.Risk != tt.want {
+				t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, tt.want)
+			}
+			if needs.Reason == "" {
+				t.Error("CheckApproval should provide a reason")
+			}
+		})
+	}
+}
+
+func TestWriteFileTool_CheckApproval_RegularFiles(t *testing.T) {
+	tool := NewWriteFileTool()
+
+	tests := []struct {
+		name string
+		path string
+		want RiskLevel
+	}{
+		{"text file", "/tmp/notes.txt", RiskMedium},
+		{"markdown", "/tmp/README.md", RiskMedium},
+		{"json file", "/tmp/config.json", RiskMedium},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params, _ := FromMap(map[string]interface{}{
+				"path":    tt.path,
+				"content": "test",
+			})
+
+			needs := tool.CheckApproval(params)
+
+			if !needs.Required {
+				t.Error("CheckApproval should require approval for file writes")
+			}
+			if needs.Risk != tt.want {
+				t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, tt.want)
+			}
+			if needs.Reason == "" {
+				t.Error("CheckApproval should provide a reason")
+			}
+		})
+	}
+}
+
+func TestWriteFileTool_CheckApproval_ExecutableFiles(t *testing.T) {
+	tool := NewWriteFileTool()
+
+	tests := []struct {
+		name string
+		path string
+		want RiskLevel
+	}{
+		{"shell script", "/tmp/script.sh", RiskHigh},
+		{"go source", "/tmp/main.go", RiskHigh},
+		{"python script", "/tmp/script.py", RiskHigh},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params, _ := FromMap(map[string]interface{}{
+				"path":    tt.path,
+				"content": "test",
+			})
+
+			needs := tool.CheckApproval(params)
+
+			if !needs.Required {
+				t.Error("CheckApproval should require approval for executable files")
+			}
+			if needs.Risk != tt.want {
+				t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, tt.want)
+			}
+			if needs.Reason == "" {
+				t.Error("CheckApproval should provide a reason")
+			}
+		})
+	}
+}

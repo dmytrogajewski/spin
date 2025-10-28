@@ -113,6 +113,13 @@ func (el *EventLogger) logEvent(event events.Event) {
 	}
 }
 
+// EventLogOutput represents a structured event log entry.
+type EventLogOutput struct {
+	Timestamp string           `json:"timestamp"`
+	Type      events.EventType `json:"type"`
+	Data      json.RawMessage  `json:"data"`
+}
+
 // logEventJSON logs event in JSON format.
 func (el *EventLogger) logEventJSON(timestamp string, event events.Event) {
 	data, err := json.Marshal(event.Data)
@@ -120,10 +127,10 @@ func (el *EventLogger) logEventJSON(timestamp string, event events.Event) {
 		data = []byte("{}")
 	}
 
-	output := map[string]interface{}{
-		"timestamp": timestamp,
-		"type":      event.Type,
-		"data":      json.RawMessage(data),
+	output := EventLogOutput{
+		Timestamp: timestamp,
+		Type:      event.Type,
+		Data:      json.RawMessage(data),
 	}
 
 	encoded, err := json.Marshal(output)

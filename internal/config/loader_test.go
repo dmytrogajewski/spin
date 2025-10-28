@@ -37,24 +37,24 @@ debug: true
 	}
 
 	// Test that values were loaded
-	apiKey := loader.Get("api_key")
+	apiKey := loader.GetString("api_key")
 	if apiKey != "test-key" {
-		t.Errorf("Get(\"api_key\") = %v, want %v", apiKey, "test-key")
+		t.Errorf("GetString(\"api_key\") = %v, want %v", apiKey, "test-key")
 	}
 
-	baseURL := loader.Get("base_url")
+	baseURL := loader.GetString("base_url")
 	if baseURL != "https://api.example.com" {
-		t.Errorf("Get(\"base_url\") = %v, want %v", baseURL, "https://api.example.com")
+		t.Errorf("GetString(\"base_url\") = %v, want %v", baseURL, "https://api.example.com")
 	}
 
-	timeout := loader.Get("timeout")
+	timeout := loader.GetInt("timeout")
 	if timeout != 30 {
-		t.Errorf("Get(\"timeout\") = %v, want %v", timeout, 30)
+		t.Errorf("GetInt(\"timeout\") = %v, want %v", timeout, 30)
 	}
 
-	debug := loader.Get("debug")
+	debug := loader.GetBool("debug")
 	if debug != true {
-		t.Errorf("Get(\"debug\") = %v, want %v", debug, true)
+		t.Errorf("GetBool(\"debug\") = %v, want %v", debug, true)
 	}
 }
 
@@ -115,9 +115,9 @@ func TestLoader_LoadFromFile_JSON(t *testing.T) {
 	}
 
 	// Test that values were loaded
-	apiKey := loader.Get("api_key")
+	apiKey := loader.GetString("api_key")
 	if apiKey != "test-key" {
-		t.Errorf("Get(\"api_key\") = %v, want %v", apiKey, "test-key")
+		t.Errorf("GetString(\"api_key\") = %v, want %v", apiKey, "test-key")
 	}
 }
 
@@ -145,19 +145,9 @@ debug = true
 	}
 
 	// Test that values were loaded
-	apiKey := loader.Get("api_key")
+	apiKey := loader.GetString("api_key")
 	if apiKey != "test-key" {
-		t.Errorf("Get(\"api_key\") = %v, want %v", apiKey, "test-key")
-	}
-}
-
-func TestLoader_Get(t *testing.T) {
-	loader := NewLoader()
-
-	// Test getting a non-existent key
-	value := loader.Get("nonexistent")
-	if value != nil {
-		t.Errorf("Get(\"nonexistent\") = %v, want %v", value, nil)
+		t.Errorf("GetString(\"api_key\") = %v, want %v", apiKey, "test-key")
 	}
 }
 
@@ -168,9 +158,9 @@ func TestLoader_Set(t *testing.T) {
 	loader.Set("test_key", "test_value")
 
 	// Get the value back
-	value := loader.Get("test_key")
+	value := loader.GetString("test_key")
 	if value != "test_value" {
-		t.Errorf("Get(\"test_key\") = %v, want %v", value, "test_value")
+		t.Errorf("GetString(\"test_key\") = %v, want %v", value, "test_value")
 	}
 }
 
@@ -318,21 +308,21 @@ debug: true
 	}
 
 	// Check that override values are present
-	apiKey := loader.Get("api_key")
+	apiKey := loader.GetString("api_key")
 	if apiKey != "override-key" {
-		t.Errorf("Get(\"api_key\") = %v, want %v", apiKey, "override-key")
+		t.Errorf("GetString(\"api_key\") = %v, want %v", apiKey, "override-key")
 	}
 
 	// Note: Viper merges configs rather than replacing them completely
 	// LoadFromFile adds override values to existing config
 	// The base_url from base.yaml might still be present as a default value
 	// This is expected behavior for Viper - it merges configurations
-	_ = loader.Get("base_url") // Check that base_url is accessible (even if default)
+	_ = loader.GetString("base_url") // Check that base_url is accessible (even if default)
 
 	// Check that new values are added
-	debug := loader.Get("debug")
+	debug := loader.GetBool("debug")
 	if debug != true {
-		t.Errorf("Get(\"debug\") = %v, want %v", debug, true)
+		t.Errorf("GetBool(\"debug\") = %v, want %v", debug, true)
 	}
 }
 
@@ -348,10 +338,10 @@ func TestLoader_Concurrency(t *testing.T) {
 			value := "value" + string(rune('0'+i))
 
 			loader.Set(key, value)
-			result := loader.Get(key)
+			result := loader.GetString(key)
 
 			if result != value {
-				t.Errorf("Concurrent Get(%s) = %v, want %v", key, result, value)
+				t.Errorf("Concurrent GetString(%s) = %v, want %v", key, result, value)
 			}
 
 			done <- true

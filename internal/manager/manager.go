@@ -181,11 +181,60 @@ func (m *Manager) enrichEnvironmentWithIntegrations(env *agent.Environment, logg
 // addGitContext merges git information into environment.
 func (m *Manager) addGitContext(env *agent.Environment, logger *slog.Logger) {
 	gitInfo := m.gitIntegration.GetContextInfo()
-	for key, value := range gitInfo {
-		if strValue, ok := value.(string); ok {
-			env.Environment[key] = strValue
-		}
+
+	// Add git enabled status
+	if gitInfo.GitEnabled {
+		env.Environment["git_enabled"] = "true"
+	} else {
+		env.Environment["git_enabled"] = "false"
 	}
+
+	// Add repository status
+	if gitInfo.IsRepo {
+		env.Environment["is_repo"] = "true"
+
+		// Add repository details
+		if gitInfo.Branch != "" {
+			env.Environment["branch"] = gitInfo.Branch
+		}
+		if gitInfo.Remote != "" {
+			env.Environment["remote"] = gitInfo.Remote
+		}
+		if gitInfo.Commit != "" {
+			env.Environment["commit"] = gitInfo.Commit
+		}
+
+		// Add working directory status
+		if gitInfo.IsClean {
+			env.Environment["is_clean"] = "true"
+		} else {
+			env.Environment["is_clean"] = "false"
+		}
+
+		// Add file counts (only if non-zero for cleaner output)
+		if gitInfo.ModifiedFiles > 0 {
+			env.Environment["modified_files"] = fmt.Sprintf("%d", gitInfo.ModifiedFiles)
+		}
+		if gitInfo.UntrackedFiles > 0 {
+			env.Environment["untracked_files"] = fmt.Sprintf("%d", gitInfo.UntrackedFiles)
+		}
+
+		// Add remote sync status (only if non-zero)
+		if gitInfo.Ahead > 0 {
+			env.Environment["ahead"] = fmt.Sprintf("%d", gitInfo.Ahead)
+		}
+		if gitInfo.Behind > 0 {
+			env.Environment["behind"] = fmt.Sprintf("%d", gitInfo.Behind)
+		}
+
+		// Add detached status
+		if gitInfo.Detached {
+			env.Environment["detached"] = "true"
+		}
+	} else {
+		env.Environment["is_repo"] = "false"
+	}
+
 	logger.Debug("added Git context", "git_info", gitInfo)
 }
 

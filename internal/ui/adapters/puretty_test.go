@@ -632,3 +632,115 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 		t.Errorf("'Exit code: 0' should appear at least once\nOutput:\n%s", output)
 	}
 }
+
+// TestApprovalDialog_StatusBarNotOverwritten verifies that the approval prompt in the status bar
+// is not overwritten by event-driven status updates.
+// This is a regression test for BUG-20251029001449.
+func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
+	// Create a buffer for output
+	var buf bytes.Buffer
+
+	// Create mock TTY
+	mockTTY := &mockTerminalController{
+		width:  80,
+		height: 24,
+	}
+
+	// Create status renderer to capture status bar updates
+	statusRenderer := status.NewRenderer(&buf, 80, 24)
+	statusManager := status.NewManager()
+
+	// Create PureTTY with test options
+	ui := &PureTTY{
+		out:            &buf,
+		tty:            mockTTY,
+		model:          prompt.NewModel(100),
+		mode:           ModeInput,
+		statusRenderer: statusRenderer,
+		statusManager:  statusManager,
+	}
+
+	// Set initial status (simulating normal operation)
+	statusManager.SetAgentState("Ready")
+	ui.updateStatusBar()
+
+	// Verify initial status was rendered
+	output := buf.String()
+	if !strings.Contains(output, "Ready") {
+		t.Errorf("Expected initial status 'Ready' to be rendered, got: %s", output)
+	}
+
+	// Clear buffer
+	buf.Reset()
+
+	// Switch to approval mode
+	ui.mu.Lock()
+	ui.mode = ModeApproval
+	ui.mu.Unlock()
+
+	// Simulate approval status being shown
+	cmd := &security.Command{
+		Program: "rm",
+		Args:    []string{"-rf", "/tmp/build"},
+		Raw:     "rm -rf /tmp/build",
+	}
+	req := security.ApprovalRequest{
+		ID:      "test-approval-123",
+		Command: cmd,
+		Reason:  "Testing status bar not overwritten",
+		WorkDir: "/tmp",
+	}
+
+	ui.showApprovalStatus(req)
+
+	// Capture approval prompt output
+	approvalOutput := buf.String()
+	if !strings.Contains(approvalOutput, "Executing:") {
+		t.Errorf("Expected approval prompt to contain 'Executing:', got: %s", approvalOutput)
+	}
+	if !strings.Contains(approvalOutput, "[A]pprove") {
+		t.Errorf("Expected approval prompt to contain '[A]pprove', got: %s", approvalOutput)
+	}
+	if !strings.Contains(approvalOutput, "[D]eny") {
+		t.Errorf("Expected approval prompt to contain '[D]eny', got: %s", approvalOutput)
+	}
+
+	// Clear buffer
+	buf.Reset()
+
+	// Simulate event-driven status update (this would normally overwrite the approval prompt)
+	statusManager.SetAgentState("Processing")
+	ui.updateStatusBar()
+
+	// Verify that updateStatusBar did NOT render anything (because we're in ModeApproval)
+	eventOutput := buf.String()
+	if strings.Contains(eventOutput, "Processing") {
+		t.Errorf("updateStatusBar should not render in ModeApproval, but rendered: %s", eventOutput)
+	}
+	if eventOutput != "" {
+		t.Errorf("updateStatusBar should not render anything in ModeApproval, but rendered: %s", eventOutput)
+	}
+
+	// Switch back to input mode
+	ui.mu.Lock()
+	ui.mode = ModeInput
+	ui.mu.Unlock()
+
+	// Clear buffer
+	buf.Reset()
+
+	// Verify that updateStatusBar works again after leaving approval mode
+	statusManager.SetAgentState("Approved")
+
+	// Need to reset lastStatusText to force a re-render since status changed
+	ui.mu.Lock()
+	ui.lastStatusText = ""
+	ui.mu.Unlock()
+
+	ui.updateStatusBar()
+
+	finalOutput := buf.String()
+	if !strings.Contains(finalOutput, "Approved") {
+		t.Errorf("Expected status 'Approved' after leaving approval mode, got: %s", finalOutput)
+	}
+}
