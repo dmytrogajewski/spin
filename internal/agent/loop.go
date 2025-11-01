@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
@@ -25,6 +26,9 @@ import (
 func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task Task, resp *AgentResponse) ([]Message, *AgentResponse, error) {
 	maxTurns := a.config.MaxTurns
 
+	// Initialize retrieved bullets slice to accumulate across turns
+	allRetrievedBullets := make([]*bullet.Bullet, 0)
+
 	for turn := 0; turn < maxTurns; turn++ {
 		// Check context cancellation
 		if err := ctx.Err(); err != nil {
@@ -33,6 +37,32 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 		}
 
 		a.emitTurnStart(turn + 1)
+
+		// ACE: Retrieve bullets for this turn before LLM call
+		if a.aceService != nil {
+			query := extractQueryFromMessages(messages)
+			if query != "" {
+				retrievedBullets, err := a.aceService.Retrieve(ctx, query)
+				if err != nil {
+					slog.Warn("ACE retrieval failed", "error", err, "turn", turn+1)
+				} else {
+					// Accumulate bullets from all turns (deduplicate by ID)
+					for _, newBullet := range retrievedBullets {
+						alreadyRetrieved := false
+						for _, existing := range allRetrievedBullets {
+							if existing.ID == newBullet.ID {
+								alreadyRetrieved = true
+								break
+							}
+						}
+						if !alreadyRetrieved {
+							allRetrievedBullets = append(allRetrievedBullets, newBullet)
+						}
+					}
+					slog.Debug("ACE retrieved bullets", "count", len(retrievedBullets), "total", len(allRetrievedBullets), "turn", turn+1)
+				}
+			}
+		}
 
 		// Call LLM with timeout protection
 		llmResp, err := a.callLLMWithTimeout(ctx, messages, task)
@@ -87,6 +117,9 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 		}
 		break
 	}
+
+	// Store accumulated retrieved bullets in response for trajectory building
+	resp.RetrievedBullets = allRetrievedBullets
 
 	return messages, resp, nil
 }

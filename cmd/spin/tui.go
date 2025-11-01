@@ -88,15 +88,17 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("create TUI: %w", err)
 	}
 
+	// Determine the actual model being used (flag takes precedence over config)
+	currentModel := flagModel
+	if currentModel == "" {
+		currentModel = configLoader.GetString("model")
+	}
+
 	// Set max tokens for context percentage display
 	// Try to get actual context window from provider's models
 	maxTokens := int64(128000) // Default fallback for modern models
 	if models, err := provider.Models(ctx); err == nil && len(models) > 0 {
 		// Find the current model
-		currentModel := flagModel
-		if currentModel == "" {
-			currentModel = configLoader.GetString("model")
-		}
 		for _, m := range models {
 			if m.ID == currentModel {
 				// openai.Model doesn't have ContextSize field
@@ -132,7 +134,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	defer mgr.Close()
 
 	// Initialize UI with conversation metadata
-	initializeUI(ui, conv, provider)
+	initializeUI(ui, conv, provider, currentModel)
 
 	// Create event mapper
 	mapper := tui.NewTUIMapper(ui)
@@ -314,13 +316,12 @@ func getWorkingDirectory() string {
 }
 
 // initializeUI initializes the UI with conversation metadata.
-func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provider llm.Provider) {
+func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provider llm.Provider, model string) {
 	taskMode := conv.GetTaskMode()
 	ui.SetTaskMode(taskMode)
 
 	providerName := provider.Name()
-	modelName := flagModel
-	ui.SetProviderInfo(providerName, modelName)
+	ui.SetProviderInfo(providerName, model)
 
 	tokenCount := int64(conv.GetTokenCount())
 	ui.SetTokenCount(tokenCount)

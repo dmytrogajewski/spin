@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
@@ -48,6 +49,9 @@ type AgentResponse struct {
 
 	// Duration of the request
 	Duration time.Duration
+
+	// RetrievedBullets contains ACE bullets retrieved during execution (for trajectory building)
+	RetrievedBullets []*bullet.Bullet
 }
 
 // Message represents a conversation message.

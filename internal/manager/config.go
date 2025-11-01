@@ -55,6 +55,13 @@ type Config struct {
 
 	// Cycle Detection Configuration
 	CycleDetection CycleDetectionConfig `yaml:"cycle_detection" mapstructure:"cycle_detection"`
+
+	// ACE Configuration (imported from agent package for convenience)
+	ACEEnabled        bool    `yaml:"ace_enabled" mapstructure:"ace_enabled"`
+	ACEPlaybookPath   string  `yaml:"ace_playbook_path" mapstructure:"ace_playbook_path"`
+	ACETrajectoryPath string  `yaml:"ace_trajectory_path" mapstructure:"ace_trajectory_path"`
+	ACETopK           int     `yaml:"ace_top_k" mapstructure:"ace_top_k"`
+	ACEMinScore       float64 `yaml:"ace_min_score" mapstructure:"ace_min_score"`
 }
 
 // CycleDetectionConfig configures automatic cycle detection and intervention.
@@ -125,6 +132,13 @@ func DefaultConfig() *Config {
 			ToolRepeatLimit:  3,
 			ErrorRepeatLimit: 3,
 		},
+
+		// ACE defaults
+		ACEEnabled:        true,
+		ACEPlaybookPath:   "~/.spin/ace/playbooks/default.json",
+		ACETrajectoryPath: "~/.spin/ace/trajectories/",
+		ACETopK:           5,
+		ACEMinScore:       0.3,
 	}
 }
 

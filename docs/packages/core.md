@@ -571,106 +571,32 @@ history := conv.GetHistory()
 
 ### Context Compression
 
-**Automatic history compression** prevents context overflow in long conversations.
+**STATUS: NOT IMPLEMENTED**
 
-**How It Works:**
-- Triggers automatically at 80% token capacity
-- Two compression strategies available:
-  - **Hybrid** (default): Importance-weighted message selection
-  - **LLM Summary**: Uses LLM to summarize old messages (optional)
-- Critical messages (user requests, tool results, errors) always preserved
-- Compression ratio: 40-60% reduction
+History currently does NOT implement compression. Messages are stored in full until the token budget is exceeded.
 
-**Configuration:**
+**Future: ACE Integration**
+- ACE (Agentic Context Engineering) will provide compression/refinement
+- Planned features: bullet-based context, grow-and-refine mechanism
+- See: `specs/ace-agentic-context-engineering/ROADMAP.md`
+
+**Current Usage:**
 ```go
-// Create history with custom compression config
-config := &core.HistoryConfig{
-    CompressionEnabled:   true,   // Enable compression (default)
-    CompressionThreshold: 0.8,    // Compress at 80% capacity
-    PreserveCritical:     true,   // Always keep critical messages
-    MinRetention:         0.3,    // Keep at least 30% of messages
+// Create history with token budget
+history := history.NewHistory(16384, tokenizer)
+
+// Add messages
+history.AddUserMessage("Question")
+history.AddAssistantMessage("Response")
+
+// Check token usage
+tokenCount := history.TokenCount()
+
+// Manual management required when exceeding budget
+if tokenCount > history.MaxTokens() {
+    // Currently no automatic compression
+    // Must manually clear or manage history
 }
-
-history := core.NewHistoryWithConfig(16384, tokenizer, config)
-```
-
-**Compression Strategies:**
-
-**1. Composite Strategy (Recommended):**
-- LLM summarization (primary) + Hybrid compression (fallback)
-- Best semantic preservation with reliability guarantee
-- Automatically falls back if LLM unavailable
-- Recommended for production
-
-```go
-// Recommended: Composite strategy with LLM + hybrid fallback
-history := core.NewHistoryWithLLMSummarization(16384, tokenizer, llmProvider, nil)
-```
-
-**2. Hybrid Strategy (Default/Fast):**
-- Importance-weighted selection only
-- Fast (<2ms for 1000 messages)
-- No LLM calls required
-- Good for offline/fast scenarios
-
-```go
-// Fast compression without LLM
-history := core.NewHistory(16384, tokenizer) // Uses hybrid by default
-```
-
-**3. LLM Summary Only (Advanced):**
-- Uses only LLM summarization (no hybrid fallback)
-- Maximum semantic preservation
-- May fail if LLM unavailable
-
-```go
-// Advanced: LLM-only (no fallback)
-import (
-    "github.com/dmytrogajewski/spin/internal/core/history"
-    "github.com/dmytrogajewski/spin/internal/core/history/compress"
-)
-
-adapter := history.NewLLMProviderAdapter(llmProvider)
-summarizer := compress.NewDefaultLLMSummarizer(adapter)
-hist.SetCompressor(summarizer)
-```
-
-**Importance Levels:**
-- **Critical** (100% retention): User messages, tool results, errors
-- **High** (prioritized): Code blocks, diffs, decisions
-- **Medium** (included if space): Regular assistant responses
-- **Low** (compressed first): Verbose reasoning, "thinking" content
-
-**Performance:**
-- Hybrid compression: <2ms for 1000 messages (74x faster than target!)
-- LLM summarization: ~100-500ms (depends on LLM latency)
-- Composite (recommended): LLM latency + hybrid fallback guarantee
-- Zero blocking: runs asynchronously in background
-- Thread-safe: all operations use mutex protection
-
-**Observability:**
-- Compression events emitted via EventEmitter
-- Metrics: before/after message count, token count, compression ratio
-- Events show in TUI as INFO messages
-
-**Example:**
-```go
-history := core.NewHistory(16384, tokenizer)
-
-// Optional: Set event emitter for compression notifications
-history.SetEventEmitter(emitter)
-
-// Add 200 turns of conversation
-for i := 0; i < 200; i++ {
-    history.AddUserMessage("Question " + i)
-    history.AddAssistantMessage("Response " + i)
-    history.AddToolMessage("tool_1", "Tool result")
-}
-
-// History automatically compressed when exceeding 80% capacity
-// Final token count stays under budget
-// All user messages preserved
-// Compression events emitted to UI
 ```
 
 ## Security

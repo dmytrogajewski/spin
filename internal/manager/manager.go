@@ -374,6 +374,42 @@ func (m *Manager) buildAgent(executor *agent.Executor, ctxEnv *agent.Environment
 	// Build agent options (only config options, no more registry/handler options)
 	opts := m.buildAgentOptions(logger)
 
+	// Create ACE service if enabled
+	if m.cfg != nil && m.cfg.ACEEnabled {
+		// Build ACE config from manager config, using defaults from agent.DefaultConfig()
+		defaultAgentCfg := agent.DefaultConfig()
+
+		aceConfig := &agent.ACEConfig{
+			Enabled:        true,
+			PlaybookPath:   m.cfg.ACEPlaybookPath,
+			TrajectoryPath: m.cfg.ACETrajectoryPath,
+			Retrieval: agent.ACERetrievalConfig{
+				TopK:     m.cfg.ACETopK,
+				MinScore: m.cfg.ACEMinScore,
+			},
+			ItemizedLearning: agent.ACEItemizedLearningConfig{
+				Enabled:       true,
+				ParseFeedback: true,
+				UpdateAsync:   false,
+			},
+			Generation: agent.ACEGenerationConfig{
+				Enabled:     true, // Enable bullet generation
+				AutoReflect: true, // Use Reflector+Curator pipeline by default
+			},
+			// Use defaults for new fields (Adapter and Refine)
+			Adapter: defaultAgentCfg.ACE.Adapter,
+			Refine:  defaultAgentCfg.ACE.Refine,
+		}
+
+		aceService, err := agent.NewACEService(aceConfig, ctxEnv.WorkDir, m.llm, m.cfg.Model)
+		if err != nil {
+			logger.Warn("failed to create ACE service, continuing without ACE", "error", err)
+		} else {
+			opts = append(opts, agent.WithACEService(aceService))
+			logger.Info("ACE (Agentic Context Engineering) enabled", "playbook", m.cfg.ACEPlaybookPath, "model", m.cfg.Model)
+		}
+	}
+
 	// Create agent with services
 	agentInstance, err := agent.NewAgent(m.llm, securityService, detectionService, orchestrationService, ctxEnv, m.emitter, opts...)
 	if err != nil {

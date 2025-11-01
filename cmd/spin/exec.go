@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"time"
 
@@ -84,6 +85,11 @@ func runExec(cmd *cobra.Command, args []string) error {
 	noStream, _ := cmd.Flags().GetBool("no-stream")
 	exitOnError, _ := cmd.Flags().GetBool("exit-on-error")
 	debugFlag, _ := cmd.Flags().GetBool("debug")
+
+	// Enable debug logging if requested
+	if debugFlag {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	}
 
 	// Apply timeout if specified
 	if timeout != "" {
@@ -321,9 +327,8 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 		// Wait for streaming to complete
 		<-streamDone
 
-		// Don't wait for event processing - it never closes
-		// The event stream stays open for potential future events
-		// In exec mode, we exit immediately after turn completion
+		// EventTurnComplete is now emitted after all post-execution processing
+		// (including ACE bullet generation), so we don't need to wait here
 
 		if err != nil {
 			if exitOnError {

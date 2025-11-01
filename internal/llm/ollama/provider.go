@@ -5,8 +5,10 @@ package ollama
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/llm"
@@ -221,13 +223,36 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 	}
 
 	// Call Ollama API
+	// Note: Ollama sends multiple callbacks even for non-streaming requests
+	// We need to accumulate the content from all callbacks
 	var resp api.ChatResponse
+	var fullContent strings.Builder
+	callbackCount := 0
+
 	err := p.client.Chat(ctx, req, func(r api.ChatResponse) error {
-		resp = r
+		callbackCount++
+		resp = r // Keep the last response for metadata
+		// Accumulate content from all callbacks
+		if r.Message.Content != "" {
+			fullContent.WriteString(r.Message.Content)
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ollama chat: %w", err)
+	}
+
+	// Use accumulated content
+	resp.Message.Content = fullContent.String()
+
+	// Debug: Log the Ollama response
+	slog.Debug("Ollama Complete", "callbacks", callbackCount, "content_length", len(resp.Message.Content))
+	if len(resp.Message.Content) > 0 {
+		preview := resp.Message.Content
+		if len(preview) > 100 {
+			preview = preview[:100]
+		}
+		slog.Debug("Ollama Complete response preview", "preview", preview)
 	}
 
 	// Convert response to OpenAI format

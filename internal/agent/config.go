@@ -53,6 +53,9 @@ type Config struct {
 
 	// Cycle Detection Configuration
 	CycleDetection CycleDetectionConfig `yaml:"cycle_detection" mapstructure:"cycle_detection"`
+
+	// ACE Configuration
+	ACE ACEConfig `yaml:"ace" mapstructure:"ace"`
 }
 
 // CycleDetectionConfig configures automatic cycle detection and intervention.
@@ -79,6 +82,89 @@ type MCPServerConfig struct {
 	Command string            `yaml:"command" mapstructure:"command"`
 	Args    []string          `yaml:"args" mapstructure:"args"`
 	Env     map[string]string `yaml:"env" mapstructure:"env"`
+}
+
+// ACEConfig configures the Agentic Context Engineering system.
+type ACEConfig struct {
+	Enabled          bool                      `yaml:"enabled" mapstructure:"enabled"`
+	PlaybookPath     string                    `yaml:"playbook_path" mapstructure:"playbook_path"`
+	TrajectoryPath   string                    `yaml:"trajectory_path" mapstructure:"trajectory_path"`
+	Retrieval        ACERetrievalConfig        `yaml:"retrieval" mapstructure:"retrieval"`
+	ItemizedLearning ACEItemizedLearningConfig `yaml:"itemized_learning" mapstructure:"itemized_learning"`
+	Generation       ACEGenerationConfig       `yaml:"generation" mapstructure:"generation"`
+	Adapter          ACEAdapterConfig          `yaml:"adapter" mapstructure:"adapter"`
+	Refine           ACERefineConfig           `yaml:"refine" mapstructure:"refine"`
+}
+
+// ACERetrievalConfig configures bullet retrieval behavior.
+type ACERetrievalConfig struct {
+	TopK     int     `yaml:"top_k" mapstructure:"top_k"`
+	MinScore float64 `yaml:"min_score" mapstructure:"min_score"`
+}
+
+// ACEItemizedLearningConfig configures the ItemizedLearning workflow.
+type ACEItemizedLearningConfig struct {
+	Enabled       bool `yaml:"enabled" mapstructure:"enabled"`
+	ParseFeedback bool `yaml:"parse_feedback" mapstructure:"parse_feedback"`
+	UpdateAsync   bool `yaml:"update_async" mapstructure:"update_async"`
+}
+
+// ACEGenerationConfig configures bullet generation (Phase 3+).
+type ACEGenerationConfig struct {
+	Enabled     bool `yaml:"enabled" mapstructure:"enabled"`
+	AutoReflect bool `yaml:"auto_reflect" mapstructure:"auto_reflect"`
+}
+
+// ACEAdapterConfig configures the online learning adapter.
+type ACEAdapterConfig struct {
+	Enabled          bool    `yaml:"enabled" mapstructure:"enabled"`
+	UtilityThreshold float64 `yaml:"utility_threshold" mapstructure:"utility_threshold"`
+	MaxMemorySize    int     `yaml:"max_memory_size" mapstructure:"max_memory_size"`
+}
+
+// ACERefineConfig configures playbook refinement and growth management.
+type ACERefineConfig struct {
+	Enabled         bool    `yaml:"enabled" mapstructure:"enabled"`
+	Mode            string  `yaml:"mode" mapstructure:"mode"` // "none", "lazy", "proactive"
+	MaxBullets      int     `yaml:"max_bullets" mapstructure:"max_bullets"`
+	MaxTokens       int     `yaml:"max_tokens" mapstructure:"max_tokens"`
+	MinUtilityScore float64 `yaml:"min_utility_score" mapstructure:"min_utility_score"`
+	CheckInterval   int     `yaml:"check_interval" mapstructure:"check_interval"`
+}
+
+// Validate validates the ACE configuration.
+func (c *ACEConfig) Validate() error {
+	var errs []error
+
+	// Validate retrieval config
+	if err := c.Retrieval.Validate(); err != nil {
+		errs = append(errs, fmt.Errorf("retrieval: %w", err))
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	return nil
+}
+
+// Validate validates the ACE retrieval configuration.
+func (c *ACERetrievalConfig) Validate() error {
+	var errs []error
+
+	if c.TopK <= 0 {
+		errs = append(errs, fmt.Errorf("top_k must be > 0, got %d", c.TopK))
+	}
+
+	if c.MinScore < 0 || c.MinScore > 1 {
+		errs = append(errs, fmt.Errorf("min_score must be between 0 and 1, got %f", c.MinScore))
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	return nil
 }
 
 // DefaultConfig returns a new Config with sensible defaults.
@@ -121,6 +207,39 @@ func DefaultConfig() *Config {
 			SimilarityThresh: 0.8,
 			ToolRepeatLimit:  3,
 			ErrorRepeatLimit: 3,
+		},
+
+		// ACE defaults
+		ACE: ACEConfig{
+			Enabled:        true,
+			PlaybookPath:   "~/.spin/ace/playbooks/default.json",
+			TrajectoryPath: "~/.spin/ace/trajectories/",
+			Retrieval: ACERetrievalConfig{
+				TopK:     100, // High limit - let MinScore filter relevance
+				MinScore: 0.3,
+			},
+			ItemizedLearning: ACEItemizedLearningConfig{
+				Enabled:       true,
+				ParseFeedback: true,
+				UpdateAsync:   true,
+			},
+			Generation: ACEGenerationConfig{
+				Enabled:     true, // Enable bullet generation by default
+				AutoReflect: true, // Use reflector+curator pipeline
+			},
+			Adapter: ACEAdapterConfig{
+				Enabled:          true,
+				UtilityThreshold: 0.1,  // Minimum utility score to keep bullets
+				MaxMemorySize:    1000, // Max bullets in memory before refinement
+			},
+			Refine: ACERefineConfig{
+				Enabled:         true,
+				Mode:            "proactive", // Auto-trigger refinement
+				MaxBullets:      1000,        // Trigger at 1000 bullets
+				MaxTokens:       500000,      // Trigger at 500K tokens
+				MinUtilityScore: 0.1,         // Prune bullets below this score
+				CheckInterval:   100,         // Check every 100 bullets added
+			},
 		},
 	}
 }
@@ -169,6 +288,11 @@ func (c *Config) Validate() error {
 	// Validate cycle detection config
 	if err := c.CycleDetection.Validate(); err != nil {
 		errs = append(errs, fmt.Errorf("cycle_detection: %w", err))
+	}
+
+	// Validate ACE config
+	if err := c.ACE.Validate(); err != nil {
+		errs = append(errs, fmt.Errorf("ace: %w", err))
 	}
 
 	if len(errs) > 0 {
