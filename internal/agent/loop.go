@@ -39,6 +39,7 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 		a.emitTurnStart(turn + 1)
 
 		// ACE: Retrieve bullets for this turn before LLM call
+		var currentTurnBullets []*bullet.Bullet
 		if a.aceService != nil {
 			query := extractQueryFromMessages(messages)
 			if query != "" {
@@ -46,6 +47,7 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 				if err != nil {
 					slog.Warn("ACE retrieval failed", "error", err, "turn", turn+1)
 				} else {
+					currentTurnBullets = retrievedBullets
 					// Accumulate bullets from all turns (deduplicate by ID)
 					for _, newBullet := range retrievedBullets {
 						alreadyRetrieved := false
@@ -64,8 +66,8 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 			}
 		}
 
-		// Call LLM with timeout protection
-		llmResp, err := a.callLLMWithTimeout(ctx, messages, task)
+		// Call LLM with timeout protection, passing retrieved bullets
+		llmResp, err := a.callLLMWithTimeout(ctx, messages, task, currentTurnBullets)
 		if err != nil {
 			slog.Error("LLM call failed", "turn", turn+1, "error", err)
 			resp.Error = fmt.Errorf("llm call failed: %w", err)
@@ -211,7 +213,7 @@ func (a *Agent) emitTurnStart(turn int) {
 }
 
 // callLLMWithTimeout calls the LLM provider with timeout protection to prevent getting stuck.
-func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []Message, task Task) (*openai.ChatCompletion, error) {
+func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []Message, task Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
 	// Use a reasonable timeout for LLM calls (5 minutes)
 	// Don't use agent timeout which may be very long for multi-step tasks
 	llmTimeout := 5 * time.Minute
@@ -229,14 +231,14 @@ func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []Message, task
 		}
 	}
 
-	slog.Debug("calling LLM with timeout", "timeout", llmTimeout, "message_count", len(messages))
+	slog.Debug("calling LLM with timeout", "timeout", llmTimeout, "message_count", len(messages), "bullets_count", len(bullets))
 
 	// Create fresh context with LLM timeout
 	llmCtx, cancel := context.WithTimeout(context.Background(), llmTimeout)
 	defer cancel()
 
 	// Call the actual LLM method
-	resp, err := a.callLLM(llmCtx, messages, task)
+	resp, err := a.callLLM(llmCtx, messages, task, bullets)
 	if err != nil {
 		slog.Error("LLM call error", "error", err, "timeout", llmTimeout)
 	}

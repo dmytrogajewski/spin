@@ -5,11 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/manager"
+	gitpkg "github.com/dmytrogajewski/spin/internal/git"
+	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
+	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 )
 
 // EventLogger captures and logs all core events for debugging.
@@ -42,17 +47,76 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 		return fmt.Errorf("prompt cannot be empty")
 	}
 
-	// Create core manager with default config
-	cfg := manager.DefaultConfig()
-	mgr, err := manager.NewManager(cfg)
+	// Create conversation with default config using builder pattern
+	cfg := config.DefaultConfig()
+	// Set required fields for validation
+	cfg.Provider = "mock"
+	cfg.Model = "test-model"
+
+	workDir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("failed to create manager: %w", err)
+		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 
-	// Start conversation (empty workDir uses default from config)
-	conv, err := mgr.NewConversation(ctx, "")
+	logger := slog.Default()
+
+	// Create services based on configuration
+	var gitSvc *gitpkg.Service
+	var shellSvc *shellpkg.Service
+	var mcpSvc *mcppkg.Service
+
+	if cfg.EnableGit {
+		gitSvc, err = gitpkg.NewService(true, workDir, logger)
+		if err != nil {
+			return fmt.Errorf("create git service: %w", err)
+		}
+		defer gitSvc.Close()
+	}
+
+	if cfg.EnableShell {
+		shellSvc, err = shellpkg.NewService(true, workDir, logger, cfg.ShellTimeout)
+		if err != nil {
+			return fmt.Errorf("create shell service: %w", err)
+		}
+		defer shellSvc.Close()
+	}
+
+	if cfg.EnableMCP && len(cfg.MCPServers) > 0 {
+		mcpCfg := &mcppkg.Config{
+			EnableMCP:  true,
+			MCPServers: make([]mcppkg.MCPServerConfig, len(cfg.MCPServers)),
+		}
+		for i, srv := range cfg.MCPServers {
+			mcpCfg.MCPServers[i] = mcppkg.MCPServerConfig{
+				Name:    srv.Name,
+				Command: srv.Command,
+				Args:    srv.Args,
+				Env:     srv.Env,
+			}
+		}
+		mcpSvc, err = mcppkg.NewService(mcpCfg, logger)
+		if err != nil {
+			return fmt.Errorf("create mcp service: %w", err)
+		}
+		defer mcpSvc.Close()
+	}
+
+	// Build conversation with services
+	builder := conversation.NewBuilder(cfg, workDir)
+
+	if gitSvc != nil {
+		builder = builder.WithGit(gitSvc)
+	}
+	if shellSvc != nil {
+		builder = builder.WithShell(shellSvc)
+	}
+	if mcpSvc != nil {
+		builder = builder.WithMCP(mcpSvc)
+	}
+
+	conv, err := builder.Build(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create conversation: %w", err)
+		return fmt.Errorf("failed to build conversation: %w", err)
 	}
 	defer conv.Close()
 

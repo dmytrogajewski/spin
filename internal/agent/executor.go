@@ -170,7 +170,7 @@ type OutputChunk struct {
 type Executor struct {
 	validator       *security.Validator
 	approvalService *security.ApprovalService
-	sandbox         interface{} // sandbox.Sandbox interface (avoiding import cycle)
+	sandbox         any // sandbox.Sandbox interface (avoiding import cycle)
 	cache           *CommandCache
 	workDir         string
 	timeout         time.Duration

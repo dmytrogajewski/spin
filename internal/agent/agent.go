@@ -1011,40 +1011,27 @@ func extractQueryFromMessages(messages []Message) string {
 // The task parameter controls both tool filtering and token budget:
 //   - Tools: Only tools in task.AllowedTools() are included
 //   - Tokens: Uses task.MaxTokens() if > 0, otherwise agent.config.MaxTokens
-func (a *Agent) callLLM(ctx context.Context, messages []Message, task Task) (*openai.ChatCompletion, error) {
-	// ACE: Retrieve relevant bullets before building prompt
-	var bullets []*bullet.Bullet
-	if a.aceService != nil {
-		query := extractQueryFromMessages(messages)
-		if query != "" {
-			retrievedBullets, err := a.aceService.Retrieve(ctx, query)
-			if err != nil {
-				slog.Warn("ACE retrieval failed", "error", err)
-			} else {
-				bullets = retrievedBullets
-				slog.Debug("ACE retrieved bullets", "count", len(bullets), "query_len", len(query))
-
-				// Emit content complete event to show ACE activity as a chat block
-				if len(bullets) > 0 {
-					// Build bullet list for display
-					bulletList := ""
-					for i, b := range bullets {
-						bulletList += fmt.Sprintf("  %d. %s\n", i+1, b.Content)
-					}
-
-					message := fmt.Sprintf("ACE: Retrieved %d relevant bullet%s from playbook:\n%s", len(bullets), pluralize(len(bullets)), bulletList)
-
-					a.emitter.Emit(events.Event{
-						Type:      events.EventContentComplete,
-						Timestamp: time.Now(),
-						Data: events.ContentDeltaData{
-							Content: message,
-							Role:    "assistant",
-						},
-					})
-				}
-			}
+//
+// The bullets parameter contains ACE bullets already retrieved for this turn.
+func (a *Agent) callLLM(ctx context.Context, messages []Message, task Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
+	// ACE: Emit event to show ACE activity if bullets were provided
+	if a.aceService != nil && len(bullets) > 0 {
+		// Build bullet list for display
+		bulletList := ""
+		for i, b := range bullets {
+			bulletList += fmt.Sprintf("  %d. %s\n", i+1, b.Content)
 		}
+
+		message := fmt.Sprintf("ACE: Retrieved %d relevant bullet%s from playbook:\n%s", len(bullets), pluralize(len(bullets)), bulletList)
+
+		a.emitter.Emit(events.Event{
+			Type:      events.EventContentComplete,
+			Timestamp: time.Now(),
+			Data: events.ContentDeltaData{
+				Content: message,
+				Role:    "assistant",
+			},
+		})
 	}
 
 	// Start with system message from task
