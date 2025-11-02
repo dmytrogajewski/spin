@@ -1,6 +1,6 @@
 # spin(1)
 
-![Spin TUI](docs/images/spin-tui.png)
+![Spin TUI](assets/screenshot.png)
 
 ## NAME
 
