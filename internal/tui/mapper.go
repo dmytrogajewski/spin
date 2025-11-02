@@ -63,6 +63,8 @@ func (m *TUIMapper) MapEvent(event events.Event) error {
 		return m.handleToolComplete(event)
 	case events.EventContentDelta:
 		return m.handleContentDelta(event)
+	case events.EventContentComplete:
+		return m.handleContentComplete(event)
 	case events.EventError:
 		return m.handleError(event)
 	case events.EventInfo, events.EventWarning:
@@ -517,6 +519,23 @@ func (m *TUIMapper) handleContentDelta(event events.Event) error {
 	}
 
 	return nil
+}
+
+// handleContentComplete creates a NOTICE block for complete content messages.
+// This is used for multi-line informational messages like ACE bullet lists.
+func (m *TUIMapper) handleContentComplete(event events.Event) error {
+	data, ok := event.Data.(events.ContentDeltaData)
+	if !ok {
+		return nil
+	}
+
+	// Create a NOTICE block to display the complete message
+	block := blocks.NewBlock(blocks.BlockTypeNotice)
+	block.ID = generateBlockID()
+	block.Body = data.Content
+	block.Severity = blocks.SeverityInfo
+
+	return m.ui.AppendBlock(block)
 }
 
 // handleError creates an ERROR block for error events.

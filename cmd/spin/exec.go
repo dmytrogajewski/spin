@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"time"
 
@@ -11,10 +12,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
+	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
-	"github.com/dmytrogajewski/spin/internal/manager"
+	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/security"
+	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
@@ -85,6 +88,11 @@ func runExec(cmd *cobra.Command, args []string) error {
 	exitOnError, _ := cmd.Flags().GetBool("exit-on-error")
 	debugFlag, _ := cmd.Flags().GetBool("debug")
 
+	// Enable debug logging if requested
+	if debugFlag {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	}
+
 	// Apply timeout if specified
 	if timeout != "" {
 		duration, err := parseDuration(timeout)
@@ -95,18 +103,12 @@ func runExec(cmd *cobra.Command, args []string) error {
 		defer cancel()
 	}
 
-	// Create manager using same logic as TUI
-	mgr, err := createManagerForExec(provider, configLoader, autoApprove, debugFlag)
-	if err != nil {
-		return fmt.Errorf("create manager: %w", err)
-	}
-
-	workDir := getWorkingDirectory()
-	conv, err := mgr.NewConversation(ctx, workDir)
+	// Create conversation using builder pattern
+	conv, err := createConversationForExec(ctx, provider, configLoader, autoApprove, debugFlag)
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
-	defer mgr.Close()
+	defer conv.Close()
 
 	// Execute the prompt non-interactively with TUI display
 	err = executePromptWithTUI(ctx, conv, prompt, format, noStream, exitOnError)
@@ -187,8 +189,8 @@ func parseDuration(s string) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
 
-// createManagerForExec creates a core.Manager configured for exec mode.
-func createManagerForExec(provider llm.Provider, configLoader *config.Loader, autoApprove bool, debug bool) (*manager.Manager, error) {
+// createConversationForExec creates a conversation configured for exec mode.
+func createConversationForExec(ctx context.Context, provider llm.Provider, configLoader *config.Loader, autoApprove bool, debug bool) (*conversation.Conversation, error) {
 	workDir := getWorkingDirectory()
 	cfg := buildConfig(configLoader, 0, workDir) // No max turns limit for exec
 
@@ -222,18 +224,80 @@ func createManagerForExec(provider llm.Provider, configLoader *config.Loader, au
 		}
 	}
 
-	// Create manager with options
-	var opts []manager.ManagerOption
-	opts = append(opts, manager.WithLLM(provider))
-	opts = append(opts, manager.WithManagerToolRegistry(registry))
-	opts = append(opts, manager.WithManagerApprovalHandler(approvalHandler))
+	// Create services based on configuration
+	logger := slog.Default()
 
-	mgr, err := manager.NewManager(cfg, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("create manager: %w", err)
+	var gitSvc *gitpkg.Service
+	var shellSvc *shellpkg.Service
+	var mcpSvc *mcppkg.Service
+	var err error
+
+	if cfg.EnableGit {
+		gitSvc, err = gitpkg.NewService(true, workDir, logger)
+		if err != nil {
+			return nil, fmt.Errorf("create git service: %w", err)
+		}
 	}
 
-	return mgr, nil
+	if cfg.EnableShell {
+		shellSvc, err = shellpkg.NewService(true, workDir, logger, cfg.ShellTimeout)
+		if err != nil {
+			if gitSvc != nil {
+				gitSvc.Close()
+			}
+			return nil, fmt.Errorf("create shell service: %w", err)
+		}
+	}
+
+	if cfg.EnableMCP && len(cfg.MCPServers) > 0 {
+		mcpCfg := &mcppkg.Config{
+			EnableMCP:  true,
+			MCPServers: make([]mcppkg.MCPServerConfig, len(cfg.MCPServers)),
+		}
+		for i, srv := range cfg.MCPServers {
+			mcpCfg.MCPServers[i] = mcppkg.MCPServerConfig{
+				Name:    srv.Name,
+				Command: srv.Command,
+				Args:    srv.Args,
+				Env:     srv.Env,
+			}
+		}
+		var err error
+		mcpSvc, err = mcppkg.NewService(mcpCfg, logger)
+		if err != nil {
+			if gitSvc != nil {
+				gitSvc.Close()
+			}
+			if shellSvc != nil {
+				shellSvc.Close()
+			}
+			return nil, fmt.Errorf("create mcp service: %w", err)
+		}
+	}
+
+	// Build conversation with services
+	builder := conversation.NewBuilder(cfg, workDir).
+		WithLLM(provider).
+		WithToolRegistry(registry).
+		WithApprovalHandler(approvalHandler)
+
+	if gitSvc != nil {
+		builder = builder.WithGit(gitSvc)
+	}
+	if shellSvc != nil {
+		builder = builder.WithShell(shellSvc)
+	}
+	if mcpSvc != nil {
+		builder = builder.WithMCP(mcpSvc)
+	}
+
+	conv, err := builder.Build(ctx)
+	if err != nil {
+		// Builder.Build() already cleans up services on error
+		return nil, fmt.Errorf("build conversation: %w", err)
+	}
+
+	return conv, nil
 }
 
 // mockTTY implements term.TerminalController for non-terminal environments.
@@ -321,9 +385,8 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 		// Wait for streaming to complete
 		<-streamDone
 
-		// Don't wait for event processing - it never closes
-		// The event stream stays open for potential future events
-		// In exec mode, we exit immediately after turn completion
+		// EventTurnComplete is now emitted after all post-execution processing
+		// (including ACE bullet generation), so we don't need to wait here
 
 		if err != nil {
 			if exitOnError {

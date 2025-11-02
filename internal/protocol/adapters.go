@@ -80,6 +80,12 @@ func FromCoreEvent(event events.Event) (Message, bool) {
 				Level:   StatusLevelInfo,
 			}), true
 		}
+		if data, ok := event.Data.(events.SystemEventData); ok {
+			return NewStatusUpdateMessage(StatusUpdate{
+				Message: data.Message,
+				Level:   StatusLevelInfo,
+			}), true
+		}
 	}
 
 	// Event type not mapped or data type incorrect

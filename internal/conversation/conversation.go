@@ -6,28 +6,27 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
+	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/history"
+	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/message"
+	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 )
 
 // Conversation represents an active conversation instance.
 type Conversation struct {
+	// Services (optional, can be nil)
+	gitService   *gitpkg.Service
+	shellService *shellpkg.Service
+	mcpService   *mcppkg.Service
+
+	// Core components
 	agent     *agent.Agent
 	history   *history.History
 	emitter   *events.EventEmitter
 	taskMode  string // Current task mode (regular, review, compact, planning)
 	sessionID string // Session identifier for tracking and persistence
-}
-
-// NewConversation creates a new conversation instance.
-func NewConversation(agent *agent.Agent, history *history.History, emitter *events.EventEmitter, sessionID string) *Conversation {
-	return &Conversation{
-		agent:     agent,
-		history:   history,
-		emitter:   emitter,
-		taskMode:  "regular", // Default task mode
-		sessionID: sessionID,
-	}
+	workDir   string // Working directory for this conversation
 }
 
 // RunTurn executes a single turn in the conversation.
@@ -159,7 +158,10 @@ func (c *Conversation) Stream() <-chan events.Event {
 }
 
 // Close closes the conversation and cleans up resources.
+// Note: Services (git, shell, mcp) are owned by the application layer
+// and are NOT closed here - they can be shared across conversations.
 func (c *Conversation) Close() error {
-	// Cleanup logic would go here
+	// Close conversation-specific resources only
+	// Services are managed by the application layer
 	return nil
 }

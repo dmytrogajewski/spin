@@ -11,9 +11,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/manager"
+	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	"github.com/spf13/cobra"
@@ -88,15 +90,17 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("create TUI: %w", err)
 	}
 
+	// Determine the actual model being used (flag takes precedence over config)
+	currentModel := flagModel
+	if currentModel == "" {
+		currentModel = configLoader.GetString("model")
+	}
+
 	// Set max tokens for context percentage display
 	// Try to get actual context window from provider's models
 	maxTokens := int64(128000) // Default fallback for modern models
 	if models, err := provider.Models(ctx); err == nil && len(models) > 0 {
 		// Find the current model
-		currentModel := flagModel
-		if currentModel == "" {
-			currentModel = configLoader.GetString("model")
-		}
 		for _, m := range models {
 			if m.ID == currentModel {
 				// openai.Model doesn't have ContextSize field
@@ -107,11 +111,6 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		}
 	}
 	ui.SetMaxTokens(maxTokens)
-
-	mgr, err := createManagerForTUI(provider, maxTurns, configLoader, ui, debugFlag, autoApprove)
-	if err != nil {
-		return fmt.Errorf("create manager: %w", err)
-	}
 
 	// Start UI in background
 	uiCtx, uiCancel := context.WithCancel(ctx)
@@ -124,15 +123,14 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}()
 	defer ui.Stop()
 
-	workDir := getWorkingDirectory()
-	conv, err := mgr.NewConversation(ctx, workDir)
+	conv, err := createConversationForTUI(ctx, provider, maxTurns, configLoader, ui, debugFlag, autoApprove)
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
-	defer mgr.Close()
+	defer conv.Close()
 
 	// Initialize UI with conversation metadata
-	initializeUI(ui, conv, provider)
+	initializeUI(ui, conv, provider, currentModel)
 
 	// Create event mapper
 	mapper := tui.NewTUIMapper(ui)
@@ -248,8 +246,8 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 }
 
-// createManagerForTUI creates a core.Manager configured for TUI mode.
-func createManagerForTUI(provider llm.Provider, maxTurns int, configLoader *config.Loader, ui *adapters.PureTTY, debug bool, autoApprove bool) (*manager.Manager, error) {
+// createConversationForTUI creates a conversation configured for TUI mode using the new builder pattern.
+func createConversationForTUI(ctx context.Context, provider llm.Provider, maxTurns int, configLoader *config.Loader, ui *adapters.PureTTY, debug bool, autoApprove bool) (*conversation.Conversation, error) {
 	workDir := getWorkingDirectory()
 	cfg := buildConfig(configLoader, maxTurns, workDir)
 
@@ -270,17 +268,89 @@ func createManagerForTUI(provider llm.Provider, maxTurns int, configLoader *conf
 		}
 	}
 
-	var opts []manager.ManagerOption
+	// Create services based on configuration
+	logger := slog.Default()
 
-	opts = append(opts, manager.WithLLM(provider))
-	opts = append(opts, manager.WithManagerApprovalHandler(approvalHandler))
+	var gitSvc *git.Service
+	var shellSvc *shell.Service
+	var mcpSvc *mcp.Service
 
-	mgr, err := manager.NewManager(cfg, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("create manager: %w", err)
+	if cfg.EnableGit {
+		var err error
+		gitSvc, err = git.NewService(true, workDir, logger)
+		if err != nil {
+			return nil, fmt.Errorf("create git service: %w", err)
+		}
 	}
 
-	return mgr, nil
+	if cfg.EnableShell {
+		var err error
+		shellSvc, err = shell.NewService(true, workDir, logger, cfg.ShellTimeout)
+		if err != nil {
+			if gitSvc != nil {
+				gitSvc.Close()
+			}
+			return nil, fmt.Errorf("create shell service: %w", err)
+		}
+	}
+
+	if cfg.EnableMCP && len(cfg.MCPServers) > 0 {
+		mcpCfg := &mcp.Config{
+			EnableMCP:  true,
+			MCPServers: make([]mcp.MCPServerConfig, len(cfg.MCPServers)),
+		}
+		for i, srv := range cfg.MCPServers {
+			mcpCfg.MCPServers[i] = mcp.MCPServerConfig{
+				Name:    srv.Name,
+				Command: srv.Command,
+				Args:    srv.Args,
+				Env:     srv.Env,
+			}
+		}
+		var err error
+		mcpSvc, err = mcp.NewService(mcpCfg, logger)
+		if err != nil {
+			if gitSvc != nil {
+				gitSvc.Close()
+			}
+			if shellSvc != nil {
+				shellSvc.Close()
+			}
+			return nil, fmt.Errorf("create mcp service: %w", err)
+		}
+	}
+
+	// Build conversation with services
+	builder := conversation.NewBuilder(cfg, workDir).
+		WithLLM(provider).
+		WithApprovalHandler(approvalHandler)
+
+	if gitSvc != nil {
+		builder = builder.WithGit(gitSvc)
+	}
+	if shellSvc != nil {
+		builder = builder.WithShell(shellSvc)
+	}
+	if mcpSvc != nil {
+		builder = builder.WithMCP(mcpSvc)
+	}
+
+	conv, err := builder.Build(ctx)
+	if err != nil {
+		// Clean up services on error
+		if gitSvc != nil {
+			gitSvc.Close()
+		}
+		if shellSvc != nil {
+			shellSvc.Close()
+		}
+		if mcpSvc != nil {
+			mcpSvc.Close()
+		}
+		return nil, fmt.Errorf("build conversation: %w", err)
+	}
+
+	return conv, nil
 }
 
 // setupSignalHandling sets up signal handling for graceful shutdown.
@@ -314,13 +384,12 @@ func getWorkingDirectory() string {
 }
 
 // initializeUI initializes the UI with conversation metadata.
-func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provider llm.Provider) {
+func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provider llm.Provider, model string) {
 	taskMode := conv.GetTaskMode()
 	ui.SetTaskMode(taskMode)
 
 	providerName := provider.Name()
-	modelName := flagModel
-	ui.SetProviderInfo(providerName, modelName)
+	ui.SetProviderInfo(providerName, model)
 
 	tokenCount := int64(conv.GetTokenCount())
 	ui.SetTokenCount(tokenCount)
@@ -330,12 +399,12 @@ func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provide
 }
 
 // buildConfig builds the configuration from multiple sources.
-func buildConfig(configLoader *config.Loader, maxTurns int, workDir string) *manager.Config {
-	cfg := manager.DefaultConfig()
+func buildConfig(configLoader *config.Loader, maxTurns int, workDir string) *config.Config {
+	cfg := config.DefaultConfig()
 	cfg.WorkDir = workDir
 
 	// Layer 1: Load from config file
-	var fileCfg manager.Config
+	var fileCfg config.Config
 	if err := configLoader.Unmarshal(&fileCfg); err == nil {
 		applyFileConfig(cfg, &fileCfg)
 	}
@@ -347,7 +416,7 @@ func buildConfig(configLoader *config.Loader, maxTurns int, workDir string) *man
 }
 
 // applyFileConfig applies configuration from file to the main config.
-func applyFileConfig(cfg *manager.Config, fileCfg *manager.Config) {
+func applyFileConfig(cfg *config.Config, fileCfg *config.Config) {
 	if fileCfg.Provider != "" {
 		cfg.Provider = fileCfg.Provider
 	}
@@ -366,7 +435,7 @@ func applyFileConfig(cfg *manager.Config, fileCfg *manager.Config) {
 }
 
 // applyCLIFlags applies CLI flags to the configuration.
-func applyCLIFlags(cfg *manager.Config, maxTurns int) {
+func applyCLIFlags(cfg *config.Config, maxTurns int) {
 	if maxTurns > 0 {
 		cfg.MaxTurns = maxTurns
 	}
@@ -379,7 +448,7 @@ func applyCLIFlags(cfg *manager.Config, maxTurns int) {
 }
 
 // applyDebugFlag applies the debug flag to configuration.
-func applyDebugFlag(cfg *manager.Config, debug bool) {
+func applyDebugFlag(cfg *config.Config, debug bool) {
 	if debug {
 		cfg.Debug = true
 		cfg.LogLevel = "debug"

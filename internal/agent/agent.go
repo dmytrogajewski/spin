@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/ace/bullet"
+	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/dmytrogajewski/spin/internal/detection"
 	spinerrors "github.com/dmytrogajewski/spin/internal/errors"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -58,6 +61,7 @@ type Agent struct {
 	security      *security.SecurityService
 	detection     *detection.DetectionService
 	orchestration *orchestration.OrchestrationService
+	aceService    *ACEService // ACE (Agentic Context Engineering) - optional
 
 	// Infrastructure
 	context *Environment
@@ -86,6 +90,15 @@ type Task interface {
 
 // AgentOption is a functional option for configuring an Agent.
 type AgentOption func(*Agent) error
+
+// WithACEService sets the ACE service for the agent.
+// If not provided, agent will operate without ACE (no persistent learning).
+func WithACEService(aceService *ACEService) AgentOption {
+	return func(a *Agent) error {
+		a.aceService = aceService
+		return nil
+	}
+}
 
 // WithMaxTurns sets the maximum number of agent turns.
 func WithMaxTurns(maxTurns int) AgentOption {
@@ -284,6 +297,74 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 
 	// Finalize response
 	a.finalizeResponse(resp, messages, historyLen)
+
+	// ACE: Generate bullets from execution (both success AND failure) if enabled
+	// Run synchronously to ensure bullets are learned before returning
+	if a.aceService != nil {
+		slog.Info("Starting bullet generation from execution", "success", resp.Success)
+
+		// Build detailed trajectory from execution trace
+		trajectory := buildExecutionTrajectory(req.Input, messages[historyLen:], resp, resp.RetrievedBullets)
+		slog.Debug("Execution trajectory built", "steps", len(trajectory.Steps), "success", trajectory.Success)
+
+		// Use Reflector+Curator pipeline if AutoReflect is enabled, otherwise use simple generator
+		var learnedBullets []*bullet.Bullet
+		var err error
+		if a.aceService.config.Generation.AutoReflect {
+			learnedBullets, err = a.aceService.GenerateBulletsWithReflectionFromTrajectory(ctx, trajectory)
+		} else {
+			// For simple generation, fall back to summary-based approach
+			executionSummary := buildExecutionSummary(req.Input, messages[historyLen:], resp)
+			learnedBullets, err = a.aceService.GenerateBullets(ctx, executionSummary, "trajectory")
+		}
+
+		if err != nil {
+			slog.Warn("ACE bullet generation failed", "error", err)
+			// Don't fail the entire execution if bullet generation fails
+		} else {
+			slog.Info("Successfully generated bullets from execution", "count", len(learnedBullets))
+
+			if len(learnedBullets) == 0 {
+				slog.Debug("No bullets to display (empty result)")
+			}
+
+			if len(learnedBullets) > 0 {
+				// Build bullet list for display
+				bulletList := ""
+				for i, b := range learnedBullets {
+					bulletList += fmt.Sprintf("  %d. %s\n", i+1, b.Content)
+				}
+
+				successStr := "successful"
+				if !resp.Success {
+					successStr = "failed"
+				}
+				message := fmt.Sprintf("Learned %d new insight%s from this %s execution:\n%s",
+					len(learnedBullets), pluralize(len(learnedBullets)), successStr, bulletList)
+
+				// Emit content complete event to show ACE learning activity as a chat block
+				a.emitter.Emit(events.Event{
+					Type:      events.EventContentComplete,
+					Timestamp: time.Now(),
+					Data: events.ContentDeltaData{
+						Content: message,
+						Role:    "assistant",
+					},
+				})
+			}
+		}
+	} else {
+		slog.Debug("Bullet generation skipped", "ace_service_nil", a.aceService == nil)
+	}
+
+	// Emit turn complete event after all processing (including ACE) is done
+	// This ensures clients waiting for completion get all events before the signal
+	a.emitter.Emit(events.Event{
+		Type:      events.EventTurnComplete,
+		Timestamp: time.Now(),
+		Data:      events.TurnEventData{},
+	})
+
 	slog.Info("agent execution completed", "finish_reason", resp.FinishReason, "success", resp.Success)
 	return resp, nil
 }
@@ -344,12 +425,167 @@ func (a *Agent) finalizeResponse(resp *AgentResponse, messages []Message, histor
 		}
 	}
 
-	// Emit turn complete event to signal agent is done
-	a.emitter.Emit(events.Event{
-		Type:      events.EventTurnComplete,
-		Timestamp: time.Now(),
-		Data:      events.TurnEventData{},
-	})
+	// Note: EventTurnComplete is NOT emitted here - it's emitted after ACE bullet
+	// generation to ensure all post-execution events are emitted before signaling completion
+}
+
+// buildExecutionTrajectory creates a detailed trajectory from execution trace.
+// This captures the full conversation flow including reasoning, tool calls, and results
+// for high-quality reflection and learning.
+func buildExecutionTrajectory(task string, executionMessages []Message, resp *AgentResponse, retrievedBullets []*bullet.Bullet) *generator.Trajectory {
+	steps := make([]generator.TrajectoryStep, 0, len(executionMessages))
+	stepNumber := 0
+
+	// Process all execution messages to build detailed steps
+	for _, msg := range executionMessages {
+		timestamp := msg.Timestamp
+		if timestamp.IsZero() {
+			timestamp = time.Now()
+		}
+
+		switch msg.Role {
+		case RoleAssistant:
+			// Assistant reasoning (if there's content)
+			if msg.Content != "" {
+				steps = append(steps, generator.TrajectoryStep{
+					StepNumber: stepNumber,
+					Type:       "reasoning",
+					Content:    msg.Content,
+					Timestamp:  timestamp,
+				})
+				stepNumber++
+			}
+
+			// Assistant tool calls
+			for _, toolCall := range msg.ToolCalls {
+				toolCallContent := fmt.Sprintf("Tool: %s\nArguments: %s",
+					toolCall.Function.Name,
+					toolCall.Function.Arguments)
+				steps = append(steps, generator.TrajectoryStep{
+					StepNumber: stepNumber,
+					Type:       "tool_call",
+					Content:    toolCallContent,
+					Timestamp:  timestamp,
+				})
+				stepNumber++
+			}
+
+		case RoleTool:
+			// Tool results
+			// Truncate very long tool outputs to keep trajectory manageable
+			content := msg.Content
+			const maxToolOutputLen = 2000
+			if len(content) > maxToolOutputLen {
+				content = content[:maxToolOutputLen] + "\n... (truncated)"
+			}
+
+			toolResultContent := fmt.Sprintf("Tool Result (ID: %s):\n%s",
+				msg.ToolCallID,
+				content)
+			steps = append(steps, generator.TrajectoryStep{
+				StepNumber: stepNumber,
+				Type:       "tool_result",
+				Content:    toolResultContent,
+				Timestamp:  timestamp,
+			})
+			stepNumber++
+
+		case RoleUser:
+			// User messages during execution (if any)
+			steps = append(steps, generator.TrajectoryStep{
+				StepNumber: stepNumber,
+				Type:       "user_input",
+				Content:    msg.Content,
+				Timestamp:  timestamp,
+			})
+			stepNumber++
+		}
+	}
+
+	// Build output summary
+	var outputBuilder strings.Builder
+	if resp.Success {
+		outputBuilder.WriteString("Status: Success\n\n")
+		if resp.Output != "" {
+			outputBuilder.WriteString("Output:\n")
+			outputBuilder.WriteString(resp.Output)
+		}
+	} else {
+		outputBuilder.WriteString("Status: Failed\n\n")
+		if resp.Error != nil {
+			outputBuilder.WriteString("Error:\n")
+			outputBuilder.WriteString(resp.Error.Error())
+		}
+		if resp.Output != "" {
+			outputBuilder.WriteString("\n\nPartial Output:\n")
+			outputBuilder.WriteString(resp.Output)
+		}
+	}
+
+	// Calculate total turns (assistant messages)
+	turns := 0
+	for _, msg := range executionMessages {
+		if msg.Role == RoleAssistant {
+			turns++
+		}
+	}
+
+	trajectory := &generator.Trajectory{
+		ID:               fmt.Sprintf("traj-%d", time.Now().UnixNano()),
+		Query:            task,
+		RetrievedBullets: retrievedBullets,
+		Steps:            steps,
+		Output:           outputBuilder.String(),
+		Success:          resp.Success,
+		BulletFeedback:   nil, // Will be populated by parseBulletFeedback
+		Metadata: generator.TrajectoryMetadata{
+			Turns:    turns,
+			Duration: time.Duration(0), // Could be calculated if we track start time
+		},
+		CreatedAt: time.Now(),
+	}
+
+	return trajectory
+}
+
+// buildExecutionSummary creates a summary of the execution for bullet generation.
+// DEPRECATED: Use buildExecutionTrajectory instead for full trace capture.
+// Kept for backward compatibility.
+func buildExecutionSummary(task string, executionMessages []Message, resp *AgentResponse) string {
+	var summary strings.Builder
+
+	// Include the original task
+	summary.WriteString("Task: ")
+	summary.WriteString(task)
+	summary.WriteString("\n\n")
+
+	// Include tool calls and their results
+	summary.WriteString("Actions taken:\n")
+	for _, msg := range executionMessages {
+		if msg.Role == RoleAssistant && len(msg.ToolCalls) > 0 {
+			for _, toolCall := range msg.ToolCalls {
+				summary.WriteString("- ")
+				summary.WriteString(toolCall.Function.Name)
+				summary.WriteString(": ")
+				summary.WriteString(toolCall.Function.Arguments)
+				summary.WriteString("\n")
+			}
+		}
+	}
+
+	// Include final output if successful
+	if resp.Success && resp.Output != "" {
+		summary.WriteString("\nResult: ")
+		// Limit output length to avoid overly long summaries
+		output := resp.Output
+		if len(output) > 500 {
+			output = output[:500] + "..."
+		}
+		summary.WriteString(output)
+		summary.WriteString("\n")
+	}
+
+	return summary.String()
 }
 
 // BuildToolsForTask constructs the filtered tool list for the LLM request,
@@ -759,11 +995,45 @@ func getToolResultContent(toolCall *orchestration.ToolCall, result *orchestratio
 	return fmt.Sprintf("Tool %s failed with no error message", toolCall.Function.Name)
 }
 
+// extractQueryFromMessages extracts a query string from messages for ACE retrieval.
+// Uses the most recent user message as the retrieval query.
+func extractQueryFromMessages(messages []Message) string {
+	// Search backwards for the most recent user message
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			return messages[i].Content
+		}
+	}
+	return ""
+}
+
 // callLLM calls the LLM provider with the given messages and filtered tools based on task mode.
 // The task parameter controls both tool filtering and token budget:
 //   - Tools: Only tools in task.AllowedTools() are included
 //   - Tokens: Uses task.MaxTokens() if > 0, otherwise agent.config.MaxTokens
-func (a *Agent) callLLM(ctx context.Context, messages []Message, task Task) (*openai.ChatCompletion, error) {
+//
+// The bullets parameter contains ACE bullets already retrieved for this turn.
+func (a *Agent) callLLM(ctx context.Context, messages []Message, task Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
+	// ACE: Emit event to show ACE activity if bullets were provided
+	if a.aceService != nil && len(bullets) > 0 {
+		// Build bullet list for display
+		bulletList := ""
+		for i, b := range bullets {
+			bulletList += fmt.Sprintf("  %d. %s\n", i+1, b.Content)
+		}
+
+		message := fmt.Sprintf("ACE: Retrieved %d relevant bullet%s from playbook:\n%s", len(bullets), pluralize(len(bullets)), bulletList)
+
+		a.emitter.Emit(events.Event{
+			Type:      events.EventContentComplete,
+			Timestamp: time.Now(),
+			Data: events.ContentDeltaData{
+				Content: message,
+				Role:    "assistant",
+			},
+		})
+	}
+
 	// Start with system message from task
 	openaiMessages := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages)+1)
 
@@ -780,6 +1050,18 @@ I need to analyze this code to understand what it does. Let me break down the fu
 </think>
 
 Then provide your response after the thinking block.`
+
+		// ACE: Enhance system prompt with retrieved bullets
+		if a.aceService != nil {
+			acePrompt, err := a.aceService.BuildPrompt(ctx, enhancedSystemPrompt, bullets)
+			if err != nil {
+				slog.Warn("ACE prompt building failed", "error", err)
+				// Fall back to non-ACE prompt
+			} else {
+				enhancedSystemPrompt = acePrompt
+				slog.Debug("ACE enhanced system prompt", "bullets_count", len(bullets))
+			}
+		}
 
 		openaiMessages = append(openaiMessages, openai.SystemMessage(enhancedSystemPrompt))
 	}
@@ -824,17 +1106,9 @@ Then provide your response after the thinking block.`
 		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "failed to start LLM stream", err)
 	}
 
-	// Accumulate response from streaming chunks
-	response := &openai.ChatCompletion{
-		Choices: []openai.ChatCompletionChoice{
-			{
-				Message: openai.ChatCompletionMessage{
-					Content:   "",
-					ToolCalls: []openai.ChatCompletionMessageToolCall{},
-				},
-			},
-		},
-	}
+	// Use ChatCompletionAccumulator to properly handle streaming chunks
+	// This handles tool call accumulation by index correctly
+	acc := openai.ChatCompletionAccumulator{}
 
 	chunkCount := 0
 	for chunk := range chunks {
@@ -845,12 +1119,8 @@ Then provide your response after the thinking block.`
 			return nil, spinerrors.New(spinerrors.CodeTimeout, "Agent.callLLM", "context cancelled", err)
 		}
 
-		// Set response metadata from first chunk
-		if chunkCount == 1 {
-			response.ID = chunk.ID
-			response.Model = chunk.Model
-			response.Created = chunk.Created
-		}
+		// Add chunk to accumulator - this handles proper merging of deltas
+		acc.AddChunk(chunk)
 
 		// Handle empty chunk (shouldn't happen but be safe)
 		if len(chunk.Choices) == 0 {
@@ -860,24 +1130,8 @@ Then provide your response after the thinking block.`
 		choice := chunk.Choices[0]
 		delta := choice.Delta
 
-		// Check for finish reason (stream complete)
-		if choice.FinishReason != "" {
-			slog.Debug("received finish chunk", "finish_reason", choice.FinishReason, "total_chunks", chunkCount)
-			// Convert chunk finish reason to completion finish reason
-			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReason(choice.FinishReason)
-
-			// Set usage info if present (usually in last chunk)
-			if chunk.Usage.PromptTokens > 0 {
-				response.Usage = chunk.Usage
-			}
-			continue
-		}
-
-		// Accumulate content delta
+		// Emit content delta immediately for real-time streaming
 		if delta.Content != "" {
-			response.Choices[0].Message.Content += delta.Content
-
-			// Emit content delta immediately for real-time streaming
 			a.emitter.Emit(events.Event{
 				Type:      events.EventContentDelta,
 				Timestamp: time.Now(),
@@ -889,28 +1143,30 @@ Then provide your response after the thinking block.`
 			slog.Debug("received content chunk", "count", chunkCount, "content_len", len(delta.Content))
 		}
 
-		// Accumulate tool calls from delta
-		// Note: delta.ToolCalls are ChatCompletionChunkChoicesDeltaToolCall, need to convert
-		if len(delta.ToolCalls) > 0 {
-			for _, deltaToolCall := range delta.ToolCalls {
-				// Convert chunk tool call to message tool call
-				response.Choices[0].Message.ToolCalls = append(
-					response.Choices[0].Message.ToolCalls,
-					openai.ChatCompletionMessageToolCall{
-						ID:   deltaToolCall.ID,
-						Type: openai.ChatCompletionMessageToolCallType(deltaToolCall.Type),
-						Function: openai.ChatCompletionMessageToolCallFunction{
-							Name:      deltaToolCall.Function.Name,
-							Arguments: deltaToolCall.Function.Arguments,
-						},
-					},
-				)
-			}
-			slog.Debug("received tool call chunk", "count", chunkCount, "tool_calls", len(delta.ToolCalls))
+		// Check if a tool call just finished being accumulated
+		if toolCall, ok := acc.JustFinishedToolCall(); ok {
+			slog.Debug("tool call finished", "index", toolCall.Index, "name", toolCall.Name, "args_len", len(toolCall.Arguments))
+		}
+
+		// Log finish reason when received
+		if choice.FinishReason != "" {
+			slog.Debug("received finish chunk", "finish_reason", choice.FinishReason, "total_chunks", chunkCount)
 		}
 	}
 
-	slog.Debug("stream ended", "total_chunks", chunkCount, "content_len", len(response.Choices[0].Message.Content))
+	// Get the accumulated response
+	response := &acc.ChatCompletion
+
+	// Check if we have any choices (may be empty on timeout/error)
+	if len(response.Choices) == 0 {
+		slog.Warn("stream ended with no choices", "total_chunks", chunkCount)
+		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "no choices in response", nil)
+	}
+
+	slog.Debug("stream ended",
+		"total_chunks", chunkCount,
+		"content_len", len(response.Choices[0].Message.Content),
+		"tool_calls", len(response.Choices[0].Message.ToolCalls))
 
 	// Check if context was cancelled after stream ended
 	if err := ctx.Err(); err != nil {
@@ -923,6 +1179,22 @@ Then provide your response after the thinking block.`
 			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
 		} else {
 			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonStop
+		}
+	}
+
+	// ACE: Parse feedback and update bullets if retrieved any
+	if a.aceService != nil && len(bullets) > 0 {
+		responseContent := response.Choices[0].Message.Content
+		feedback, err := a.aceService.ParseFeedback(responseContent)
+		if err != nil {
+			slog.Warn("ACE feedback parsing failed", "error", err)
+		} else if feedback != nil {
+			// Update bullets asynchronously (based on config)
+			if err := a.aceService.UpdateBullets(ctx, bullets, feedback); err != nil {
+				slog.Warn("ACE bullet update failed", "error", err)
+			} else {
+				slog.Debug("ACE updated bullets", "helpful_count", len(feedback.HelpfulBullets), "harmful_count", len(feedback.HarmfulBullets))
+			}
 		}
 	}
 
@@ -944,4 +1216,12 @@ func (m *messageAdapter) GetContent() string {
 
 func (m *messageAdapter) GetTimestamp() time.Time {
 	return m.msg.Timestamp
+}
+
+// pluralize returns "s" if count is not 1, otherwise returns empty string
+func pluralize(count int) string {
+	if count == 1 {
+		return ""
+	}
+	return "s"
 }

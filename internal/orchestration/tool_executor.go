@@ -99,11 +99,47 @@ func (t *ToolExecutor) Execute(ctx context.Context, call *ToolCall) (*ToolResult
 	if toolWithApproval, ok := tool.(tools.ToolWithApproval); ok {
 		needs := toolWithApproval.CheckApproval(args)
 		if needs.Required {
-			return &ToolResult{
-				ID:      call.ID,
-				Success: false,
-				Error:   fmt.Errorf("approval required: %s (risk: %s)", needs.Reason, needs.Risk),
-			}, nil
+			// Request approval through approval service if available
+			if t.approvalService != nil {
+				// Create a command representing the tool operation
+				cmd := &security.Command{
+					Program: call.Function.Name,
+					Args:    []string{needs.Reason},
+					Raw:     fmt.Sprintf("%s: %s", call.Function.Name, needs.Reason),
+					WorkDir: t.workDir,
+				}
+
+				operation := security.Operation{
+					Command: cmd,
+					Reason:  needs.Reason,
+					WorkDir: t.workDir,
+				}
+
+				_, approved, err := t.approvalService.RequestApproval(ctx, operation)
+				if err != nil {
+					return &ToolResult{
+						ID:      call.ID,
+						Success: false,
+						Error:   fmt.Errorf("approval request failed: %w", err),
+					}, nil
+				}
+
+				if !approved {
+					return &ToolResult{
+						ID:      call.ID,
+						Success: false,
+						Error:   fmt.Errorf("operation denied: %s (risk: %s)", needs.Reason, needs.Risk),
+					}, nil
+				}
+				// Approved - continue with execution
+			} else {
+				// No approval service configured - deny by default
+				return &ToolResult{
+					ID:      call.ID,
+					Success: false,
+					Error:   fmt.Errorf("approval required but no approval handler configured: %s (risk: %s)", needs.Reason, needs.Risk),
+				}, nil
+			}
 		}
 	}
 

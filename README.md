@@ -1,327 +1,357 @@
-# Spin AI Agent
+# spin(1)
 
-Spin is a powerful AI coding agent designed to help developers with autonomous task execution, code generation, and intelligent assistance. Built with a focus on security, type safety, and extensibility.
+![Spin TUI](assets/screenshot.png)
 
-## Features
+## NAME
 
-- **🤖 Autonomous AI Agent**: Powered by state-of-the-art language models with tool-calling capabilities
-- **🎯 Task Modes**: Four specialized modes (regular, review, compact, planning) with optimized token budgets and tool access
-- **🛡️ Security-First Design**: Multi-layered security with command validation, sandboxing, and process hardening
-- **🔧 Extensible Tool System**: Built-in tools with support for custom tool registration
-- **📝 Type-Safe Architecture**: Fully typed with Go generics, eliminating runtime type errors
-- **🎨 Interactive TUI**: Beautiful terminal interface with real-time event streaming
-- **🔌 MCP Support**: Model Context Protocol integration for enhanced capabilities
-- **📊 Observability**: Structured logging and OpenTelemetry tracing
+spin - AI-powered coding agent with tool execution and security sandboxing
 
-## Quick Start
+## SYNOPSIS
 
-### Installation
+```
+spin [--provider PROVIDER] [--model MODEL] [--mode MODE]
+spin exec [--auto-approve] PROMPT
+spin config [show|set KEY VALUE]
+spin mcp list|add|remove
+```
+
+## DESCRIPTION
+
+Spin is an autonomous AI agent that executes code operations through LLM tool calling. Built in Go, it provides multi-provider LLM support, filesystem sandboxing, and a terminal UI with native scrollback.
+
+Key characteristics:
+- Service-oriented architecture with dependency injection
+- Builder pattern for conversation construction
+- Security-first design with command validation and process isolation
+- Type-safe tool system using Go generics
+
+## INSTALLATION
+
+Build from source:
 
 ```bash
-# Clone the repository
 git clone https://github.com/dmytrogajewski/spin.git
 cd spin
-
-# Build the project
 make build
-
-# Run tests
-make test
-```
-
-### Basic Usage
-
-```bash
-# Start interactive session
 ./bin/spin
-
-# Execute a single command
-./bin/spin exec "list all Go files in the current directory"
-
-# Use with specific provider
-./bin/spin exec --provider openai --model gpt-4 "explain this code"
 ```
 
-### Task Modes
+Requirements: Go 1.23+, Linux kernel 5.13+ (for Landlock) or macOS 10.15+
 
-Spin supports four specialized task modes, each optimized for specific workflows:
+## USAGE
 
-```bash
-# Regular mode (default) - Full-featured interactive coding
-./bin/spin --mode regular
-# or just: ./bin/spin
-
-# Review mode - Read-only code analysis
-./bin/spin --mode review
-
-# Compact mode - Quick queries (75% cost savings)
-./bin/spin --mode compact
-
-# Planning mode - Architectural planning
-./bin/spin --mode planning
-```
-
-**Mode Comparison:**
-
-| Mode | Token Budget | Tools | Best For |
-|------|--------------|-------|----------|
-| **regular** | 16K | All tools | Feature implementation, debugging |
-| **review** | 12K | Read-only | Code review, security audits |
-| **compact** | 4K | Minimal | Quick questions, fast lookups |
-| **planning** | 4K | Context | Architecture, task breakdown |
-
-**Interactive Mode Switching:**
+Interactive mode:
 
 ```bash
-$ ./bin/spin
+spin
+> implement user authentication with JWT
 > /mode review
-Switched to review mode
-
-> /mode
-Current mode: review
-
-> /help
-Commands:
-  /mode [name]  - Show or switch task mode
-  /help         - Show this help
-  /exit         - Exit the session
+> analyze security of auth.go
 ```
 
-**Examples:**
+Non-interactive execution:
 
 ```bash
-# Review code safely (read-only, cannot modify files)
-./bin/spin --mode review
-> Review auth.go for security vulnerabilities
-
-# Quick query (fast, cost-effective)
-./bin/spin --mode compact
-> What does the validateUser function do?
-
-# Plan a feature
-./bin/spin --mode planning
-> Design a rate limiting system for our API
+spin exec "run tests and fix failures"
+spin exec --auto-approve --provider openai "refactor main.go"
 ```
 
-See [Task Modes Guide](./docs/modes.md) for detailed documentation.
-
-## Architecture
-
-Spin follows clean architecture principles with clear separation of concerns:
+## ARCHITECTURE
 
 ```
-┌─────────────────────────────────────────┐
-│           Terminal UI (TUI)             │
-├─────────────────────────────────────────┤
-│         Core Orchestration              │
-│  • Manager • Agent • Conversation       │
-├─────────────────────────────────────────┤
-│      Security & Validation Layer        │
-│  • Policy • Sandbox • Hardening         │
-├─────────────────────────────────────────┤
-│         Provider Interfaces             │
-│  • LLM • Tools • MCP • Session          │
-└─────────────────────────────────────────┘
+Application Layer (cmd/spin)
+    ├─ Creates services (git, shell, mcp)
+    ├─ Builds conversation via Builder
+    └─ Manages service lifecycle
+
+Conversation Layer (internal/conversation)
+    ├─ Builder: fluent API for construction
+    ├─ Agent: LLM interaction and tool orchestration  
+    ├─ History: message management
+    └─ Events: async event streaming
+
+Service Layer
+    ├─ git.Service:   Git operations wrapper
+    ├─ shell.Service: Shell command execution
+    └─ mcp.Service:   Model Context Protocol tools
+
+Tool System (internal/tools)
+    ├─ Registry: tool registration and lookup
+    ├─ Approval: security validation
+    └─ Built-in: read_file, write_file, shell_command, etc.
+
+Security (internal/security)
+    ├─ Validator: command classification (safe/dangerous/forbidden)
+    ├─ Sandbox: Landlock LSM on Linux, Seatbelt on macOS
+    └─ Hardening: disable core dumps, ptrace, sanitize env
 ```
 
-## Key Components
+Service lifecycle:
+1. Application creates services (git, shell, mcp)
+2. Services passed to Builder via WithGit(), WithShell(), WithMCP()
+3. Builder.Build() constructs Conversation with injected services
+4. Application owns services, handles cleanup on exit
 
-### Core Package (`internal/core`)
-The heart of Spin, providing:
-- Conversation management
-- Agent orchestration
-- Event streaming
-- State management
-- Type-safe event system with generics
+## TASK MODES
 
-### Security Modules (`internal/security`)
-Multi-layered defense system:
-- **Policy Engine**: Command classification and validation
-- **Sandbox**: Platform-specific filesystem isolation (Landlock on Linux, Seatbelt on macOS)
-- **Hardening**: Process-level security measures
+Four execution modes with different token budgets and tool access:
 
-### LLM Providers (`internal/llm`)
-Support for multiple providers:
-- OpenAI / Azure OpenAI
-- Anthropic Claude
-- Google Gemini
-- Ollama (local models)
-- LM Studio
-
-### Tool System (`internal/tools`)
-Extensible tool framework:
-- Built-in tools for common operations
-- Type-safe tool arguments
-- Custom tool registration
-- MCP tool integration
-
-### Terminal UI (TUI) (`internal/ui`)
-Native-scrollback terminal interface with block-based timeline rendering:
-- **Factory Droid principle**: Append-only transcript, preserves native scrollback
-- **Block timeline**: Visual blocks for all agent actions (EXECUTE, PLAN, diffs, summaries)
-- **Streaming output**: Real-time LLM response with coalescing (8.7M chunks/sec)
-- **Keyboard navigation**: PgUp/PgDn, filtering, collapse/expand, copy/save
-- **Performance**: 100k+ blocks without lag (0.52ms viewport render)
-- **Command palette**: Fuzzy search with Ctrl-P
-- **Works in**: SSH, tmux, screen (no alt-screen buffer)
-
-**Documentation:**
-- [Full TUI docs](docs/tui.md) - Complete guide with keymap, block types, troubleshooting
-- [Performance](docs/performance.md) - Benchmarks and scalability
-
-**Examples:**
-- [Minimal TUI](examples/tui-demo/) - Simplest possible usage (~50 lines)
-- [Streaming demo](examples/tui-streaming/) - LLM token streaming simulation
-- [Block types demo](examples/tui-blocks/) - All 9 block types with navigation
-
-## Type Safety
-
-Recent refactoring introduced comprehensive type safety using Go generics:
-
-### Type-Safe Events
-```go
-// Before: runtime type assertions
-event.Data.(map[string]interface{})["content"]
-
-// After: compile-time type safety
-typedEvent := core.FromGenericEvent[core.ContentEventData](event)
-content := typedEvent.Data.Content
+```
+MODE      TOKENS  TOOLS      USE CASE
+regular   16K     all        Feature implementation, debugging
+review    12K     read-only  Code review, security audit
+compact   4K      minimal    Quick queries, documentation lookup
+planning  4K      context    Architecture planning, task breakdown
 ```
 
-### Type-Safe Tool Arguments
-```go
-// Type-safe argument handling
-args := types.ToolCallArguments{}
-command, err := args.GetString("command")
+Mode switching:
+
+```bash
+# At startup
+spin --mode review
+
+# Interactive
+> /mode compact
+> /mode
+Current mode: compact
 ```
 
-## Security Features
+## CONFIGURATION
 
-### Command Validation
-Commands are classified into safety levels:
-- **Safe**: Auto-approved read-only operations
-- **Interactive**: Requires approval for write operations
-- **Dangerous**: Requires explicit approval
-- **Forbidden**: Never executed
-
-### Sandboxing
-Platform-specific isolation:
-- **Linux**: Landlock LSM (kernel 5.13+)
-- **macOS**: Seatbelt/sandbox-exec
-- **Windows**: Coming soon
-
-### Process Hardening
-- Disabled core dumps
-- Disabled ptrace attachment
-- Sanitized environment variables
-- Memory protection
-
-## Configuration
-
-Create a configuration file at `~/.spin/config.yaml`:
+Configuration file: `~/.spin/config.yaml`
 
 ```yaml
-# LLM Settings
+provider: anthropic
 model: claude-3-5-sonnet-20241022
 temperature: 0.7
-max_tokens: 4096
+max_turns: 50
 
-# Security Settings
-require_approval: true
-sandbox_mode: workspace_write
+enable_git: true
+enable_shell: true
+enable_mcp: false
 
-# Provider Settings
-providers:
-  openai:
-    api_key: ${OPENAI_API_KEY}
-  anthropic:
-    api_key: ${ANTHROPIC_API_KEY}
+shell_timeout: 30s
+
+cycle_detection:
+  enabled: true
+  max_turns: 10
 ```
 
-## Development
+Provider authentication via environment variables:
 
-### Project Structure
-```
-spin/
-├── cmd/               # Command-line applications
-├── internal/          # Private application code
-│   ├── core/         # Core business logic
-│   ├── llm/          # LLM provider implementations
-│   ├── security/     # Security modules
-│   ├── tools/        # Tool implementations
-│   ├── tui/          # Terminal UI
-│   └── types/        # Shared type definitions
-├── configs/          # Configuration files
-├── docs/             # Documentation
-├── examples/         # Example code
-└── specs/           # Technical specifications
-```
-
-### Testing
 ```bash
-# Run all tests
-make test
-
-# Run with coverage
-make coverage
-
-# Run benchmarks
-make bench
-
-# Run linters
-make lint
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+export GOOGLE_API_KEY=...
 ```
 
-### Building
+## SECURITY
+
+Command validation enforces safety levels:
+
+- Safe: read operations auto-approved (ls, cat, grep)
+- Interactive: write operations require approval (write_file, git commit)
+- Dangerous: destructive operations require explicit approval (rm -rf, git push --force)
+- Forbidden: never executed (dd, mkfs, :(){ :|:& };:)
+
+Filesystem sandboxing:
+
+Linux (Landlock LSM):
+```
+Allows: workspace read/write
+Denies:  /etc, /sys, /proc, /dev (except /dev/null, /dev/urandom)
+```
+
+macOS (Seatbelt):
+```
+Allows: workspace, /tmp, user home (read)
+Denies:  system directories, network access
+```
+
+Process hardening:
+- RLIMIT_CORE = 0 (disable core dumps)
+- PR_SET_DUMPABLE = 0 (disable ptrace attach)
+- Sanitized PATH and env vars
+- Dropped capabilities on Linux
+
+## TERMINAL UI
+
+Native scrollback terminal interface without alternate screen buffer.
+
+Features:
+- Append-only transcript (factory droid principle)
+- Block-based timeline for agent actions
+- Real-time streaming (8.7M chunks/sec coalescing)
+- Native PgUp/PgDn navigation
+- Works in SSH, tmux, screen
+
+Block types:
+- EXECUTE: tool execution with results
+- PLAN: agent reasoning
+- DIFF: file modifications
+- SUMMARY: turn completion
+
+Performance: 100k+ blocks, 0.52ms viewport render
+
+## LLM PROVIDERS
+
+Supported providers:
+
 ```bash
-# Build for current platform
-make build
+# OpenAI
+spin --provider openai --model gpt-4-turbo
 
-# Build for all platforms
-make build-all
+# Anthropic
+spin --provider anthropic --model claude-3-5-sonnet-20241022
 
-# Build with debug symbols
-make debug
+# Ollama (local)
+spin --provider ollama --model llama3.1:70b
+
+# LM Studio (local)
+spin --provider lmstudio --model local-model
 ```
 
-## Documentation
+Provider requirements:
+- Streaming support
+- Tool/function calling
+- JSON mode for structured output
 
-- [Core Package](docs/packages/core.md) - Core orchestration and management
-- [Security Modules](specs/security-modules.md) - Detailed security architecture
-- [Protocol Modules](specs/protocol-modules.md) - Communication protocols
-- [Tools Modules](specs/tools-modules.md) - Tool system architecture
-- [UI Modules](specs/ui-modules/spec.md) - Terminal UI design
-- [Refactoring Summary](REFACTORING_SUMMARY.md) - Recent type safety improvements
+## TOOL SYSTEM
 
-## Contributing
+Built-in tools:
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+```
+read_file(path)              - Read file contents
+write_file(path, content)    - Write/overwrite file
+list_directory(path)         - List directory contents
+shell_command(command)       - Execute shell command (sandboxed)
+apply_patch(patch)           - Apply unified diff
+file_search(pattern)         - Search files by pattern
+git_operation(operation)     - Git operations (status, diff, commit)
+get_context()                - Get workspace context
+```
 
-### Development Guidelines
-1. Maintain test coverage above 85%
-2. Follow Go idioms and Google Go Style Guide
-3. Document all exported APIs
-4. Run linters before submitting PRs
-5. Add benchmarks for performance-critical code
+Tool execution flow:
+1. LLM returns tool call
+2. Validator classifies command
+3. Approval handler checks policy
+4. Tool executor runs in sandbox
+5. Result returned to LLM
 
-## License
+Custom tools via MCP (Model Context Protocol):
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+```bash
+spin mcp add sqlite ~/mcp-servers/sqlite
+spin mcp list
+```
 
-## Acknowledgments
+## DEVELOPMENT
 
-- Built with Go 1.23+
-- Uses advanced Go features including generics
-- Implements Google Go Style Guide best practices
-- Inspired by clean architecture principles
+Project structure:
 
-## Support
+```
+cmd/spin/          - CLI application, service creation
+internal/
+  agent/           - LLM interaction and tool orchestration
+  conversation/    - Conversation builder and management
+  config/          - Configuration types
+  git/             - Git service wrapper
+  shell/           - Shell service wrapper
+  mcp/             - MCP service wrapper
+  tools/           - Tool registry and implementations
+  security/        - Validation, sandboxing, hardening
+  llm/             - Provider implementations
+  ui/              - Terminal UI components
+```
 
-For issues, questions, or suggestions:
-- Open an issue on GitHub
-- Check the [documentation](docs/)
-- Review the [examples](examples/)
+Testing:
 
----
+```bash
+make test              # Run all tests
+make test-coverage     # Generate coverage report
+make lint              # Run linters and deadcode analysis
+```
 
-**Note**: Spin is under active development. APIs may change as we continue to improve the system.
+Code coverage target: 85%+
+No dead code allowed (enforced by make test)
+
+Builder pattern example:
+
+```go
+cfg := config.DefaultConfig()
+cfg.Provider = "anthropic"
+cfg.Model = "claude-3-5-sonnet-20241022"
+
+workDir := "/path/to/workspace"
+llmProvider := llm.NewAnthropicProvider(apiKey)
+
+conv, err := conversation.NewBuilder(cfg, workDir).
+    WithLLM(llmProvider).
+    WithGit(gitService).
+    WithShell(shellService).
+    Build(ctx)
+```
+
+## FILES
+
+```
+~/.spin/config.yaml       - Configuration file
+~/.spin/sessions/         - Session storage
+~/.spin/ace/              - ACE learning bullets
+/tmp/spin-sandbox-*       - Temporary sandbox directories
+```
+
+## ENVIRONMENT
+
+```
+OPENAI_API_KEY            - OpenAI API authentication
+ANTHROPIC_API_KEY         - Anthropic API authentication
+GOOGLE_API_KEY            - Google AI authentication
+SPIN_CONFIG               - Override config file path
+SPIN_DEBUG                - Enable debug logging
+```
+
+## EXIT STATUS
+
+```
+0    Success
+1    General error
+2    Configuration error
+130  Interrupted (SIGINT)
+```
+
+## EXAMPLES
+
+Fix all test failures:
+
+```bash
+spin exec "run go test ./... and fix all failures"
+```
+
+Review code for security issues:
+
+```bash
+spin --mode review
+> Audit auth/ directory for security vulnerabilities
+```
+
+Refactor with git commit:
+
+```bash
+spin exec "refactor parseConfig to use functional options pattern and commit with descriptive message"
+```
+
+## BUGS
+
+Report issues at: https://github.com/dmytrogajewski/spin/issues
+
+Documentation: docs/
+Examples: examples/
+
+## AUTHORS
+
+Built with Go 1.23+ following clean architecture principles.
+
+## LICENSE
+
+MIT License
