@@ -1,9 +1,10 @@
 # FRD-20251103-012: Message Type Unification (Phase 2)
 
 **Date**: 2025-11-03  
-**Status**: Draft  
+**Status**: Completed  
 **Owner**: Rob Pike  
-**Phase**: 2 of 7 (Refactoring Roadmap)
+**Phase**: 2 of 7 (Refactoring Roadmap)  
+**Completion Date**: 2025-11-03
 
 ## Problem Statement
 
@@ -212,3 +213,77 @@ NOT REQUIRED (as per instructions - no backward compat needed)
 - ROADMAP.md: Phase 2 - Message Type Unification
 - Issue #2: Message Type Fragmentation (HIGH PRIORITY)
 - internal/message/message.go - Canonical Message type
+
+## Implementation Summary
+
+### Completed Work
+
+**Phase B: Replace agent.Message with message.Message**
+- Removed agent.Message type definition from internal/agent/request.go
+- Removed agent Role constants (RoleUser, RoleAssistant, RoleTool, RoleSystem)
+- Updated all agent package files to use message.Message:
+  - agent.go, loop.go, trajectory_helpers.go, request.go, llm_convert.go
+  - agent_test.go, trajectory_helpers_test.go, request_test.go
+- Fixed variable shadowing (message → learnMsg, aceMsg)
+- Added type conversions for Role and ToolCall where needed
+- All agent tests passing
+
+**Phase C: Remove unused llm types**
+- Removed llm.Message (never actually used)
+- Removed llm.CompletionRequest (never actually used)
+- Removed llm.CompletionResponse (never actually used)
+- Removed llm.ToolCall (never actually used)
+- Removed llm.FunctionCall (never actually used)
+- Removed llm.Tool (never actually used)
+- Removed llm.Function (never actually used)
+- Removed llm.Model (never actually used)
+- Removed llm.Usage (never actually used)
+- Kept llm.Capabilities (actively used by all providers)
+- Deleted internal/llm/completion_test.go (tested deadcode)
+- Updated internal/appserver/processor.go to use message.Message
+- Updated internal/conversation/conversation.go to use message.Message directly
+- Removed convertHistoryToAgentMessages conversion function
+
+### Files Modified
+- internal/agent/request.go (type removed, imports added)
+- internal/agent/agent.go (imports, type conversions)
+- internal/agent/loop.go (imports, type conversions)
+- internal/agent/trajectory_helpers.go (imports, type usage)
+- internal/agent/llm_convert.go (conversion helpers)
+- internal/agent/agent_test.go (test updates)
+- internal/agent/trajectory_helpers_test.go (test updates)
+- internal/agent/request_test.go (new test file)
+- internal/llm/completion.go (types removed, only Capabilities remains)
+- internal/appserver/processor.go (message.Message usage)
+- internal/conversation/conversation.go (conversion removed)
+
+### Files Deleted
+- internal/llm/completion_test.go (deadcode test)
+
+### Test Results
+- All agent tests: PASS ✅
+- All llm tests: PASS ✅
+- All appserver tests: PASS ✅
+- All conversation tests: PASS ✅
+- No lint errors ✅
+- No deadcode remaining ✅
+- Zero agent.Message references ✅
+- Zero llm.Message references ✅
+
+### Metrics
+- Lines removed: ~300+
+- Lines added: ~100
+- Net reduction: ~200 lines
+- Files modified: 11
+- Files deleted: 1
+- Test coverage: Maintained at existing levels
+- Conversion functions removed: 1 (convertHistoryToAgentMessages)
+- Unused types removed: 9 (from llm package)
+
+### Commits
+1. `feat(agent): replace agent.Message with message.Message` (06ecf5b)
+2. `refactor: complete message type unification (Phase C)` (8134e17)
+
+## Conclusion
+
+Phase 2 Message Type Unification is **complete**. The codebase now uses a single canonical `message.Message` type throughout, eliminating type fragmentation and unnecessary conversions. All tests pass, no deadcode remains, and the code is simpler and more maintainable.
