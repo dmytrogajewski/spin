@@ -57,6 +57,12 @@ func (b *Builder) WithApprovalHandler(handler security.ApprovalHandler) *Builder
 	return b
 }
 
+// BuildExecutor creates an Executor with appropriate options based on configuration.
+// This is a public helper for use by conversation package.
+func (b *Builder) BuildExecutor() *Executor {
+	return b.buildExecutor()
+}
+
 // buildExecutor creates an Executor with appropriate options based on configuration.
 func (b *Builder) buildExecutor() *Executor {
 	validator := security.NewValidator()
@@ -87,6 +93,12 @@ func (b *Builder) buildExecutor() *Executor {
 		panic("failed to create executor: " + err.Error())
 	}
 	return exec
+}
+
+// BuildEnvironment gathers environment information for the working directory.
+// This is a public helper for use by conversation package.
+func (b *Builder) BuildEnvironment() *Environment {
+	return b.buildEnvironment()
 }
 
 // buildEnvironment gathers environment information for the working directory.
