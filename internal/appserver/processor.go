@@ -13,6 +13,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/protocol"
 	"github.com/dmytrogajewski/spin/internal/protocol/jsonrpc"
@@ -52,7 +53,7 @@ type Processor struct {
 type Conversation struct {
 	ID       protocol.ConversationID
 	TurnID   string
-	History  []agent.Message
+	History  []message.Message
 	cancel   context.CancelFunc
 	taskMode string       // current task mode name
 	mu       sync.RWMutex // protects taskMode access
@@ -197,7 +198,7 @@ func (p *Processor) HandleSendMessage(ctx context.Context, params jsonrpc.SendMe
 		convID := protocol.NewConversationID()
 		conv = &Conversation{
 			ID:       convID,
-			History:  []agent.Message{},
+			History:  []message.Message{},
 			taskMode: "regular", // default mode
 		}
 		p.conversations[convID.String()] = conv

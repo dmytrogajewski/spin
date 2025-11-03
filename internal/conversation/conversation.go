@@ -39,13 +39,12 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 
 	// Get conversation history for context
 	historyMessages := c.history.MessagesForLLM()
-	agentHistory := c.convertHistoryToAgentMessages(historyMessages)
 
 	// Create agent request with task mode and history
 	req := &agent.AgentRequest{
 		Input:    input,
 		TaskName: taskMode,
-		History:  agentHistory,
+		History:  historyMessages,
 	}
 
 	// Add user message to history BEFORE execution so it's preserved even on error
@@ -94,19 +93,6 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 	}
 
 	return nil
-}
-
-// convertHistoryToAgentMessages converts history messages to agent messages.
-func (c *Conversation) convertHistoryToAgentMessages(historyMsgs []message.Message) []agent.Message {
-	agentMsgs := make([]agent.Message, 0, len(historyMsgs))
-	for _, msg := range historyMsgs {
-		agentMsgs = append(agentMsgs, agent.Message{
-			Role:      string(msg.Role),
-			Content:   msg.Content,
-			Timestamp: msg.Timestamp,
-		})
-	}
-	return agentMsgs
 }
 
 // validTaskModes defines the valid task modes
