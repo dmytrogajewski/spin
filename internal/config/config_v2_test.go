@@ -495,3 +495,92 @@ func TestDefaultConfigV2(t *testing.T) {
 	assert.Equal(t, 10, cfg.Agent.MaxTurns, "default max_turns should be 10")
 	assert.True(t, cfg.ACE.Enabled, "ACE should be enabled by default")
 }
+
+// TestConfigV2_CrossSectionValidation_ACEPlaybookRequired tests that ACE playbook is required when enabled.
+// Kills mutant: removing cross-section validation would make this test fail.
+func TestConfigV2_CrossSectionValidation_ACEPlaybookRequired(t *testing.T) {
+	cfg := &ConfigV2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   validAgentConfig(),
+		ACE: ACEConfigV2{
+			Enabled:      true,
+			PlaybookPath: "", // Invalid - required when enabled
+		},
+		Security: validSecurityConfig(),
+		Protocol: validProtocolConfig(),
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "validation should fail when ACE enabled but playbook_path empty")
+	assert.Contains(t, err.Error(), "playbook_path", "error should mention playbook_path")
+}
+
+// TestConfigV2_CrossSectionValidation_ACETrajectoryRequired tests that ACE trajectory is required when enabled.
+// Kills mutant: removing cross-section validation would make this test fail.
+func TestConfigV2_CrossSectionValidation_ACETrajectoryRequired(t *testing.T) {
+	cfg := &ConfigV2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   validAgentConfig(),
+		ACE: ACEConfigV2{
+			Enabled:        true,
+			PlaybookPath:   "/path/to/playbook.json",
+			TrajectoryPath: "", // Invalid - required when enabled
+		},
+		Security: validSecurityConfig(),
+		Protocol: validProtocolConfig(),
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "validation should fail when ACE enabled but trajectory_path empty")
+	assert.Contains(t, err.Error(), "trajectory_path", "error should mention trajectory_path")
+}
+
+// TestConfigV2_CrossSectionValidation_ShellTimeoutRequired tests that shell timeout is required when shell enabled.
+// Kills mutant: removing cross-section validation would make this test fail.
+func TestConfigV2_CrossSectionValidation_ShellTimeoutRequired(t *testing.T) {
+	cfg := &ConfigV2{
+		Version:  "2.0",
+		LLM:      validLLMConfig(),
+		Agent:    validAgentConfig(),
+		ACE:      validACEConfig(),
+		Security: validSecurityConfig(),
+		Protocol: ProtocolConfigV2{
+			EnableShell:  true,
+			ShellTimeout: 0, // Invalid - required when enabled
+		},
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "validation should fail when shell enabled but timeout is zero")
+	assert.Contains(t, err.Error(), "shell_timeout", "error should mention shell_timeout")
+}
+
+// TestConfigV2_Validation_AllErrors tests that validation returns ALL errors, not just the first.
+// Kills mutant: fail-fast validation would make this test fail.
+func TestConfigV2_Validation_AllErrors(t *testing.T) {
+	cfg := &ConfigV2{
+		Version: "2.0",
+		LLM: LLMConfigV2{
+			Provider:    "",  // Error 1
+			Model:       "",  // Error 2
+			Temperature: 3.0, // Error 3
+			MaxTokens:   -10, // Error 4
+			Timeout:     0,   // Error 5
+		},
+		Agent:    validAgentConfig(),
+		ACE:      validACEConfig(),
+		Security: validSecurityConfig(),
+		Protocol: validProtocolConfig(),
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "validation should fail with multiple errors")
+
+	// Check that error message contains multiple issues
+	errMsg := err.Error()
+	assert.Contains(t, errMsg, "provider", "should mention provider error")
+	assert.Contains(t, errMsg, "model", "should mention model error")
+	// Note: Current implementation is fail-fast, this test documents desired behavior
+}

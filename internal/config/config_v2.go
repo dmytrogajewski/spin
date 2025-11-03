@@ -2,8 +2,51 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
+
+// ValidationErrors collects multiple validation errors.
+type ValidationErrors struct {
+	errors []error
+}
+
+// Error implements the error interface.
+func (v *ValidationErrors) Error() string {
+	if len(v.errors) == 0 {
+		return ""
+	}
+	if len(v.errors) == 1 {
+		return v.errors[0].Error()
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("validation failed: %d errors found:\n", len(v.errors)))
+	for i, err := range v.errors {
+		sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, err.Error()))
+	}
+	return strings.TrimSuffix(sb.String(), "\n")
+}
+
+// Add adds an error to the collection.
+func (v *ValidationErrors) Add(err error) {
+	if err != nil {
+		v.errors = append(v.errors, err)
+	}
+}
+
+// HasErrors returns true if there are any errors.
+func (v *ValidationErrors) HasErrors() bool {
+	return len(v.errors) > 0
+}
+
+// ToError returns nil if no errors, otherwise returns the ValidationErrors itself.
+func (v *ValidationErrors) ToError() error {
+	if !v.HasErrors() {
+		return nil
+	}
+	return v
+}
 
 // ConfigV2 is the unified configuration for Spin v2.0.
 // This replaces the flat Config structure with organized sections.
@@ -70,64 +113,70 @@ type MCPServerConfigV2 struct {
 
 // Validate performs validation on the config.
 func (c *ConfigV2) Validate() error {
-	// Validate each section
+	errs := &ValidationErrors{}
+
+	// Validate each section (collect all errors, don't fail fast)
 	if err := c.LLM.Validate(); err != nil {
-		return err
+		errs.Add(err)
 	}
 	if err := c.Agent.Validate(); err != nil {
-		return err
+		errs.Add(err)
 	}
 	if err := c.ACE.Validate(); err != nil {
-		return err
+		errs.Add(err)
 	}
 	if err := c.Security.Validate(); err != nil {
-		return err
+		errs.Add(err)
 	}
 	if err := c.Protocol.Validate(); err != nil {
-		return err
+		errs.Add(err)
 	}
 
-	return nil
+	return errs.ToError()
 }
 
 // Validate performs validation on the LLM configuration.
 func (l *LLMConfigV2) Validate() error {
+	errs := &ValidationErrors{}
+
 	// Required fields
 	if l.Provider == "" {
-		return fmt.Errorf("llm: provider is required")
+		errs.Add(fmt.Errorf("llm: provider is required"))
 	}
 	if l.Model == "" {
-		return fmt.Errorf("llm: model is required")
+		errs.Add(fmt.Errorf("llm: model is required"))
 	}
 
 	// Numeric field ranges
 	if l.Temperature < 0 || l.Temperature > 2 {
-		return fmt.Errorf("llm: temperature must be between 0 and 2, got %.2f", l.Temperature)
+		errs.Add(fmt.Errorf("llm: temperature must be between 0 and 2, got %.2f", l.Temperature))
 	}
 	if l.MaxTokens <= 0 {
-		return fmt.Errorf("llm: max_tokens must be positive, got %d", l.MaxTokens)
+		errs.Add(fmt.Errorf("llm: max_tokens must be positive, got %d", l.MaxTokens))
 	}
 	if l.Timeout <= 0 {
-		return fmt.Errorf("llm: timeout must be positive, got %v", l.Timeout)
+		errs.Add(fmt.Errorf("llm: timeout must be positive, got %v", l.Timeout))
 	}
 
-	return nil
+	return errs.ToError()
 }
 
 // Validate performs validation on the Agent configuration.
 func (a *AgentConfigV2) Validate() error {
+	errs := &ValidationErrors{}
+
 	// Required fields
 	if a.MaxTurns <= 0 {
-		return fmt.Errorf("agent: max_turns must be positive, got %d", a.MaxTurns)
+		errs.Add(fmt.Errorf("agent: max_turns must be positive, got %d", a.MaxTurns))
 	}
 	if a.Timeout <= 0 {
-		return fmt.Errorf("agent: timeout must be positive, got %v", a.Timeout)
+		errs.Add(fmt.Errorf("agent: timeout must be positive, got %v", a.Timeout))
 	}
 	if a.WorkDir == "" {
-		return fmt.Errorf("agent: work_dir is required")
+		errs.Add(fmt.Errorf("agent: work_dir is required"))
 	}
 
-	return nil
+	return errs.ToError()
 }
 
 // Validate performs validation on the ACE configuration.
@@ -137,23 +186,25 @@ func (ace *ACEConfigV2) Validate() error {
 		return nil
 	}
 
+	errs := &ValidationErrors{}
+
 	// Required fields when enabled
 	if ace.PlaybookPath == "" {
-		return fmt.Errorf("ace: playbook_path is required when ACE is enabled")
+		errs.Add(fmt.Errorf("ace: playbook_path is required when ACE is enabled"))
 	}
 	if ace.TrajectoryPath == "" {
-		return fmt.Errorf("ace: trajectory_path is required when ACE is enabled")
+		errs.Add(fmt.Errorf("ace: trajectory_path is required when ACE is enabled"))
 	}
 
 	// Numeric field ranges
 	if ace.TopK <= 0 {
-		return fmt.Errorf("ace: top_k must be positive, got %d", ace.TopK)
+		errs.Add(fmt.Errorf("ace: top_k must be positive, got %d", ace.TopK))
 	}
 	if ace.MinScore < 0 || ace.MinScore > 1 {
-		return fmt.Errorf("ace: min_score must be between 0 and 1, got %.2f", ace.MinScore)
+		errs.Add(fmt.Errorf("ace: min_score must be between 0 and 1, got %.2f", ace.MinScore))
 	}
 
-	return nil
+	return errs.ToError()
 }
 
 // Validate performs validation on the Security configuration.
@@ -175,33 +226,37 @@ func (s *SecurityConfigV2) Validate() error {
 
 // Validate performs validation on the Protocol configuration.
 func (p *ProtocolConfigV2) Validate() error {
+	errs := &ValidationErrors{}
+
 	// Validate shell timeout if shell is enabled
 	if p.EnableShell && p.ShellTimeout <= 0 {
-		return fmt.Errorf("protocol: shell_timeout must be positive when shell is enabled, got %v", p.ShellTimeout)
+		errs.Add(fmt.Errorf("protocol: shell_timeout must be positive when shell is enabled, got %v", p.ShellTimeout))
 	}
 
 	// Validate MCP servers if MCP is enabled
 	if p.EnableMCP {
 		for i, server := range p.MCPServers {
 			if err := server.Validate(); err != nil {
-				return fmt.Errorf("protocol: mcp_servers[%d]: %w", i, err)
+				errs.Add(fmt.Errorf("protocol: mcp_servers[%d]: %w", i, err))
 			}
 		}
 	}
 
-	return nil
+	return errs.ToError()
 }
 
 // Validate performs validation on the MCP server configuration.
 func (m *MCPServerConfigV2) Validate() error {
+	errs := &ValidationErrors{}
+
 	if m.Name == "" {
-		return fmt.Errorf("name is required")
+		errs.Add(fmt.Errorf("name is required"))
 	}
 	if m.Command == "" {
-		return fmt.Errorf("command is required")
+		errs.Add(fmt.Errorf("command is required"))
 	}
 
-	return nil
+	return errs.ToError()
 }
 
 // DefaultConfigV2 returns a ConfigV2 with sensible defaults.
