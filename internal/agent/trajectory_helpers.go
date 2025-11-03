@@ -6,13 +6,14 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
+	"github.com/dmytrogajewski/spin/internal/message"
 )
 
 // extractInitialQuery extracts the user's initial query from messages.
 // Returns first user message content, or empty string if none.
-func extractInitialQuery(messages []Message) string {
+func extractInitialQuery(messages []message.Message) string {
 	for _, msg := range messages {
-		if msg.Role == RoleUser {
+		if msg.Role == message.RoleUser {
 			return msg.Content
 		}
 	}
@@ -21,7 +22,7 @@ func extractInitialQuery(messages []Message) string {
 
 // extractNewSteps extracts TrajectorySteps from messages starting from lastStepNumber.
 // Returns steps in chronological order with proper step numbering.
-func extractNewSteps(messages []Message, lastStepNumber int) []generator.TrajectoryStep {
+func extractNewSteps(messages []message.Message, lastStepNumber int) []generator.TrajectoryStep {
 	steps := make([]generator.TrajectoryStep, 0)
 	stepNum := lastStepNumber
 
@@ -32,7 +33,7 @@ func extractNewSteps(messages []Message, lastStepNumber int) []generator.Traject
 		}
 
 		switch msg.Role {
-		case RoleAssistant:
+		case message.RoleAssistant:
 			// Reasoning
 			if msg.Content != "" {
 				steps = append(steps, generator.TrajectoryStep{
@@ -57,7 +58,7 @@ func extractNewSteps(messages []Message, lastStepNumber int) []generator.Traject
 				stepNum++
 			}
 
-		case RoleTool:
+		case message.RoleTool:
 			// Tool results
 			content := fmt.Sprintf("Tool Result (ID: %s):\n%s",
 				msg.ToolCallID, msg.Content)

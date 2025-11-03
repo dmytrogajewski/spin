@@ -6,13 +6,13 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
-	"github.com/dmytrogajewski/spin/internal/orchestration"
+	"github.com/dmytrogajewski/spin/internal/message"
 )
 
 func TestExtractInitialQuery(t *testing.T) {
 	t.Run("returns first user message content", func(t *testing.T) {
-		messages := []Message{
-			{Role: RoleUser, Content: "install nodejs", Timestamp: time.Now()},
+		messages := []message.Message{
+			{Role: message.RoleUser, Content: "install nodejs", Timestamp: time.Now()},
 		}
 
 		got := extractInitialQuery(messages)
@@ -24,9 +24,9 @@ func TestExtractInitialQuery(t *testing.T) {
 	})
 
 	t.Run("returns empty string when no user messages", func(t *testing.T) {
-		messages := []Message{
-			{Role: RoleAssistant, Content: "I can help", Timestamp: time.Now()},
-			{Role: RoleSystem, Content: "System prompt", Timestamp: time.Now()},
+		messages := []message.Message{
+			{Role: message.RoleAssistant, Content: "I can help", Timestamp: time.Now()},
+			{Role: message.RoleSystem, Content: "System prompt", Timestamp: time.Now()},
 		}
 
 		got := extractInitialQuery(messages)
@@ -38,9 +38,9 @@ func TestExtractInitialQuery(t *testing.T) {
 	})
 
 	t.Run("returns user message after system message", func(t *testing.T) {
-		messages := []Message{
-			{Role: RoleSystem, Content: "System prompt", Timestamp: time.Now()},
-			{Role: RoleUser, Content: "debug the app", Timestamp: time.Now()},
+		messages := []message.Message{
+			{Role: message.RoleSystem, Content: "System prompt", Timestamp: time.Now()},
+			{Role: message.RoleUser, Content: "debug the app", Timestamp: time.Now()},
 		}
 
 		got := extractInitialQuery(messages)
@@ -55,8 +55,8 @@ func TestExtractInitialQuery(t *testing.T) {
 func TestExtractNewSteps(t *testing.T) {
 	t.Run("extracts single assistant reasoning message", func(t *testing.T) {
 		ts := time.Now()
-		messages := []Message{
-			{Role: RoleAssistant, Content: "I'll check the file", Timestamp: ts},
+		messages := []message.Message{
+			{Role: message.RoleAssistant, Content: "I'll check the file", Timestamp: ts},
 		}
 
 		steps := extractNewSteps(messages, 0)
@@ -89,15 +89,15 @@ func TestExtractNewSteps(t *testing.T) {
 
 	t.Run("extracts tool call from assistant message", func(t *testing.T) {
 		ts := time.Now()
-		messages := []Message{
+		messages := []message.Message{
 			{
-				Role:      RoleAssistant,
+				Role:      message.RoleAssistant,
 				Timestamp: ts,
-				ToolCalls: []orchestration.ToolCall{
+				ToolCalls: []message.ToolCall{
 					{
 						ID:   "call_1",
 						Type: "function",
-						Function: orchestration.ToolCallFunction{
+						Function: message.FunctionCall{
 							Name:      "read_file",
 							Arguments: `{"path": "main.go"}`,
 						},
@@ -127,9 +127,9 @@ func TestExtractNewSteps(t *testing.T) {
 
 	t.Run("extracts tool result message", func(t *testing.T) {
 		ts := time.Now()
-		messages := []Message{
+		messages := []message.Message{
 			{
-				Role:       RoleTool,
+				Role:       message.RoleTool,
 				ToolCallID: "call_1",
 				Content:    "package main\n\nfunc main() {}",
 				Timestamp:  ts,

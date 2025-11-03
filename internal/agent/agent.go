@@ -15,6 +15,7 @@ import (
 	spinerrors "github.com/dmytrogajewski/spin/internal/errors"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
@@ -356,7 +357,7 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 				if !resp.Success {
 					successStr = "failed"
 				}
-				message := fmt.Sprintf("Learned %d new insight%s from this %s execution:\n%s",
+				learnMsg := fmt.Sprintf("Learned %d new insight%s from this %s execution:\n%s",
 					len(learnedBullets), pluralize(len(learnedBullets)), successStr, bulletList)
 
 				// Emit content complete event to show ACE learning activity as a chat block
@@ -364,8 +365,8 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 					Type:      events.EventContentComplete,
 					Timestamp: time.Now(),
 					Data: events.ContentDeltaData{
-						Content: message,
-						Role:    "assistant",
+						Content: learnMsg,
+						Role:    string(message.RoleAssistant),
 					},
 				})
 			}
@@ -414,16 +415,16 @@ func (a *Agent) applyTimeout(ctx context.Context) (context.Context, context.Canc
 }
 
 // buildPrompt builds the initial prompt for the agent.
-func (a *Agent) buildPrompt(req *AgentRequest) []Message {
+func (a *Agent) buildPrompt(req *AgentRequest) []message.Message {
 	// Start with history messages if provided
-	messages := make([]Message, 0, len(req.History)+1)
+	messages := make([]message.Message, 0, len(req.History)+1)
 	if len(req.History) > 0 {
 		messages = append(messages, req.History...)
 	}
 
 	// Add current user input
-	messages = append(messages, Message{
-		Role:    "user",
+	messages = append(messages, message.Message{
+		Role:    message.RoleUser,
 		Content: req.Input,
 	})
 
@@ -431,7 +432,7 @@ func (a *Agent) buildPrompt(req *AgentRequest) []Message {
 }
 
 // finalizeResponse finalizes the agent response.
-func (a *Agent) finalizeResponse(resp *AgentResponse, messages []Message, historyLen int) {
+func (a *Agent) finalizeResponse(resp *AgentResponse, messages []message.Message, historyLen int) {
 	if len(messages) > historyLen {
 		// Get the last assistant message
 		for i := len(messages) - 1; i >= historyLen; i-- {
@@ -682,17 +683,17 @@ func (a *Agent) determineRequiresApproval(toolName string, args map[string]inter
 // and adds tool result messages to the conversation.
 // processToolCallsFromCompletion is a wrapper that extracts data from openai.ChatCompletion
 // and delegates to processToolCalls.
-func (a *Agent) processToolCallsFromCompletion(ctx context.Context, messages []Message, completion *openai.ChatCompletion, resp *AgentResponse) []Message {
+func (a *Agent) processToolCallsFromCompletion(ctx context.Context, messages []message.Message, completion *openai.ChatCompletion, resp *AgentResponse) []message.Message {
 	content := getContent(completion)
 	toolCalls := getToolCalls(completion)
 	return a.processToolCallsInternal(ctx, messages, content, toolCalls, resp)
 }
 
 // processToolCallsInternal contains the actual logic for processing tool calls.
-func (a *Agent) processToolCallsInternal(ctx context.Context, messages []Message, content string, toolCalls []orchestration.ToolCall, resp *AgentResponse) []Message {
+func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message.Message, content string, toolCalls []orchestration.ToolCall, resp *AgentResponse) []message.Message {
 	// Create assistant message with tool calls
-	assistantMsg := Message{
-		Role:      RoleAssistant,
+	assistantMsg := message.Message{
+		Role:      message.RoleAssistant,
 		Content:   content,
 		Timestamp: time.Now(),
 	}
@@ -705,15 +706,23 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []Message
 		coreToolCall := &toolCalls[i]
 
 		// Add to assistant message (note: message already appended above)
-		messages[len(messages)-1].ToolCalls = append(messages[len(messages)-1].ToolCalls, *coreToolCall)
+		msgToolCall := message.ToolCall{
+			ID:   coreToolCall.ID,
+			Type: coreToolCall.Type,
+			Function: message.FunctionCall{
+				Name:      coreToolCall.Function.Name,
+				Arguments: coreToolCall.Function.Arguments,
+			},
+		}
+		messages[len(messages)-1].ToolCalls = append(messages[len(messages)-1].ToolCalls, msgToolCall)
 
 		// Process the tool call (ProcessToolCall will emit EventToolCallStart)
 		toolResult, err := a.ProcessToolCall(ctx, coreToolCall)
 		if err != nil {
 
 			// Add error message to conversation (after assistant message)
-			messages = append(messages, Message{
-				Role: RoleTool,
+			messages = append(messages, message.Message{
+				Role: message.RoleTool,
 				Content: fmt.Sprintf("Tool %s failed: %v",
 					coreToolCall.Function.Name, err),
 				ToolCallID: coreToolCall.ID,
@@ -723,8 +732,8 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []Message
 
 			// Add tool result to conversation (after assistant message)
 			slog.Debug("Agent tool result", "tool", coreToolCall.Function.Name, "output_len", len(toolResult.Output), "success", toolResult.Success)
-			messages = append(messages, Message{
-				Role:       RoleTool,
+			messages = append(messages, message.Message{
+				Role:       message.RoleTool,
 				Content:    getToolResultContent(coreToolCall, toolResult),
 				ToolCallID: coreToolCall.ID,
 				Timestamp:  time.Now(),
@@ -855,7 +864,7 @@ func getToolResultContent(toolCall *orchestration.ToolCall, result *orchestratio
 
 // extractQueryFromMessages extracts a query string from messages for ACE retrieval.
 // Uses the most recent user message as the retrieval query.
-func extractQueryFromMessages(messages []Message) string {
+func extractQueryFromMessages(messages []message.Message) string {
 	// Search backwards for the most recent user message
 	for i := len(messages) - 1; i >= 0; i-- {
 		if messages[i].Role == "user" {
@@ -871,7 +880,7 @@ func extractQueryFromMessages(messages []Message) string {
 //   - Tokens: Uses task.MaxTokens() if > 0, otherwise agent.config.MaxTokens
 //
 // The bullets parameter contains ACE bullets already retrieved for this turn.
-func (a *Agent) callLLM(ctx context.Context, messages []Message, task Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
+func (a *Agent) callLLM(ctx context.Context, messages []message.Message, task Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
 	// ACE: Emit event to show ACE activity if bullets were provided
 	if a.aceService != nil && len(bullets) > 0 {
 		// Build bullet list for display
@@ -880,14 +889,14 @@ func (a *Agent) callLLM(ctx context.Context, messages []Message, task Task, bull
 			bulletList += fmt.Sprintf("  %d. %s\n", i+1, b.Content)
 		}
 
-		message := fmt.Sprintf("ACE: Retrieved %d relevant bullet%s from playbook:\n%s", len(bullets), pluralize(len(bullets)), bulletList)
+		aceMsg := fmt.Sprintf("ACE: Retrieved %d relevant bullet%s from playbook:\n%s", len(bullets), pluralize(len(bullets)), bulletList)
 
 		a.emitter.Emit(events.Event{
 			Type:      events.EventContentComplete,
 			Timestamp: time.Now(),
 			Data: events.ContentDeltaData{
-				Content: message,
-				Role:    "assistant",
+				Content: aceMsg,
+				Role:    string(message.RoleAssistant),
 			},
 		})
 	}
@@ -995,7 +1004,7 @@ Then provide your response after the thinking block.`
 				Timestamp: time.Now(),
 				Data: events.ContentDeltaData{
 					Content: delta.Content,
-					Role:    "assistant",
+					Role:    string(message.RoleAssistant),
 				},
 			})
 			slog.Debug("received content chunk", "count", chunkCount, "content_len", len(delta.Content))
@@ -1059,9 +1068,9 @@ Then provide your response after the thinking block.`
 	return response, nil
 }
 
-// messageAdapter adapts agent.Message to detection.Message interface
+// messageAdapter adapts message.Message to detection.Message interface
 type messageAdapter struct {
-	msg Message
+	msg message.Message
 }
 
 func (m *messageAdapter) GetRole() string {

@@ -10,6 +10,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/openai/openai-go"
 )
@@ -27,7 +28,7 @@ import (
 //
 // If trajCtx is provided and progressive context is enabled, uses progressive
 // retrieval with caching. Otherwise falls back to simple retrieval.
-func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task Task, resp *AgentResponse, trajCtx *trajectory.TrajectoryContext) ([]Message, *AgentResponse, error) {
+func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message, task Task, resp *AgentResponse, trajCtx *trajectory.TrajectoryContext) ([]message.Message, *AgentResponse, error) {
 	maxTurns := a.config.MaxTurns
 
 	// Initialize retrieved bullets slice to accumulate across turns
@@ -194,7 +195,7 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 //
 // Returns the modified messages (with intervention added if applicable),
 // whether to stop the agent loop, and any error.
-func (a *Agent) handleCycleDetection(ctx context.Context, messages []Message, llmResp *openai.ChatCompletion, turn int, resp *AgentResponse) ([]Message, bool, error) {
+func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Message, llmResp *openai.ChatCompletion, turn int, resp *AgentResponse) ([]message.Message, bool, error) {
 	content := getContent(llmResp)
 	toolCalls := getToolCalls(llmResp)
 
@@ -230,10 +231,10 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []Message, ll
 	}
 
 	// Convert back to Message slice
-	messages = make([]Message, len(modifiedDetectionMessages))
+	messages = make([]message.Message, len(modifiedDetectionMessages))
 	for i, msg := range modifiedDetectionMessages {
-		messages[i] = Message{
-			Role:      msg.GetRole(),
+		messages[i] = message.Message{
+			Role:      message.Role(msg.GetRole()),
 			Content:   msg.GetContent(),
 			Timestamp: msg.GetTimestamp(),
 		}
@@ -271,7 +272,7 @@ func (a *Agent) emitTurnStart(turn int) {
 }
 
 // callLLMWithTimeout calls the LLM provider with timeout protection to prevent getting stuck.
-func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []Message, task Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
+func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []message.Message, task Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
 	// Use a reasonable timeout for LLM calls (5 minutes)
 	// Don't use agent timeout which may be very long for multi-step tasks
 	llmTimeout := 5 * time.Minute
@@ -305,10 +306,10 @@ func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []Message, task
 
 // addFinalMessage adds the final assistant message to the messages array.
 // This is called when the agent is done (no more tool calls).
-func (a *Agent) addFinalMessage(messages []Message, content string) []Message {
+func (a *Agent) addFinalMessage(messages []message.Message, content string) []message.Message {
 	if content != "" {
-		messages = append(messages, Message{
-			Role:      RoleAssistant,
+		messages = append(messages, message.Message{
+			Role:      message.RoleAssistant,
 			Content:   content,
 			Timestamp: time.Now(),
 		})

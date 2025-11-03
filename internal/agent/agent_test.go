@@ -16,6 +16,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/factory"
+	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/task"
@@ -1424,14 +1425,14 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 	agent.config.CycleDetection.Enabled = true
 
 	// Create initial conversation with some messages
-	initialMessages := []Message{
+	initialMessages := []message.Message{
 		{
-			Role:      RoleUser,
+			Role:      message.RoleUser,
 			Content:   "List files",
 			Timestamp: time.Now(),
 		},
 		{
-			Role:      RoleAssistant,
+			Role:      message.RoleAssistant,
 			Content:   "I'll list the files",
 			Timestamp: time.Now(),
 		},
@@ -1528,7 +1529,7 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 	// Verify the last message is from the intervention (user role with reflection prompt)
 	if len(modifiedMessages) >= expectedMinLen {
 		lastMsg := modifiedMessages[len(modifiedMessages)-1]
-		if lastMsg.Role != RoleUser {
+		if lastMsg.Role != message.RoleUser {
 			t.Errorf("Expected intervention message to have role 'user', got '%s'", lastMsg.Role)
 		}
 		if lastMsg.Content == "" {
@@ -1552,14 +1553,14 @@ func TestExecuteAgentLoop_CycleInterventionPropagated(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 	agent.llm = mockLLM
 
-	initialMessages := []Message{
+	initialMessages := []message.Message{
 		{
-			Role:      RoleSystem,
+			Role:      message.RoleSystem,
 			Content:   "You are a helpful assistant",
 			Timestamp: time.Now(),
 		},
 		{
-			Role:      RoleUser,
+			Role:      message.RoleUser,
 			Content:   "List files",
 			Timestamp: time.Now(),
 		},
@@ -2073,26 +2074,26 @@ func TestAgent_addFinalMessage(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		messages []Message
+		messages []message.Message
 		content  string
 		wantLen  int
 	}{
 		{
 			name:     "add message with content",
-			messages: []Message{},
+			messages: []message.Message{},
 			content:  "Hello, world!",
 			wantLen:  1,
 		},
 		{
 			name:     "add message with empty content",
-			messages: []Message{},
+			messages: []message.Message{},
 			content:  "",
 			wantLen:  0, // Should not add empty content
 		},
 		{
 			name: "add message to existing messages",
-			messages: []Message{
-				{Role: RoleUser, Content: "Hello"},
+			messages: []message.Message{
+				{Role: message.RoleUser, Content: "Hello"},
 			},
 			content: "Hi there!",
 			wantLen: 2,
@@ -2192,16 +2193,16 @@ func TestAgent_finalizeResponse(t *testing.T) {
 	tests := []struct {
 		name       string
 		resp       *AgentResponse
-		messages   []Message
+		messages   []message.Message
 		historyLen int
 		wantOutput string
 	}{
 		{
 			name: "response with assistant message",
 			resp: &AgentResponse{},
-			messages: []Message{
-				{Role: RoleUser, Content: "Hello"},
-				{Role: RoleAssistant, Content: "Hi there!"},
+			messages: []message.Message{
+				{Role: message.RoleUser, Content: "Hello"},
+				{Role: message.RoleAssistant, Content: "Hi there!"},
 			},
 			historyLen: 1,
 			wantOutput: "Hi there!",
@@ -2209,8 +2210,8 @@ func TestAgent_finalizeResponse(t *testing.T) {
 		{
 			name: "response without assistant message",
 			resp: &AgentResponse{},
-			messages: []Message{
-				{Role: RoleUser, Content: "Hello"},
+			messages: []message.Message{
+				{Role: message.RoleUser, Content: "Hello"},
 			},
 			historyLen: 1,
 			wantOutput: "",

@@ -86,7 +86,7 @@ func NewTrajectoryContext(query string) *TrajectoryContext {
 // AppendSteps adds new execution steps to context.
 // Steps are appended in order (FIFO).
 func (tc *TrajectoryContext) AppendSteps(steps []generator.TrajectoryStep) {
-	if steps == nil || len(steps) == 0 {
+	if len(steps) == 0 {
 		return
 	}
 	tc.Steps = append(tc.Steps, steps...)

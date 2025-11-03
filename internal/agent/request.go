@@ -6,6 +6,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
+	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
@@ -28,7 +29,7 @@ type AgentRequest struct {
 	Timeout time.Duration
 
 	// History contains previous conversation messages for context
-	History []Message
+	History []message.Message
 }
 
 // AgentResponse represents the agent's response.
@@ -57,24 +58,6 @@ type AgentResponse struct {
 
 	// TrajectoryContext contains progressive execution context (for Reflector)
 	TrajectoryContext *trajectory.TrajectoryContext
-}
-
-// Message represents a conversation message.
-type Message struct {
-	// Role is the message role (user, assistant, system)
-	Role string
-
-	// Content is the message content
-	Content string
-
-	// ToolCalls are tool calls in this message
-	ToolCalls []orchestration.ToolCall
-
-	// ToolCallID is the ID of the tool call this message responds to
-	ToolCallID string
-
-	// Timestamp when the message was created
-	Timestamp time.Time
 }
 
 // Plan represents an execution plan.
@@ -172,9 +155,3 @@ type ToolCallStartData struct {
 }
 
 // Role constants
-const (
-	RoleUser      = "user"
-	RoleAssistant = "assistant"
-	RoleTool      = "tool"
-	RoleSystem    = "system"
-)
