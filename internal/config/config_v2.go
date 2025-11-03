@@ -8,64 +8,64 @@ import (
 // ConfigV2 is the unified configuration for Spin v2.0.
 // This replaces the flat Config structure with organized sections.
 type ConfigV2 struct {
-	Version  string           `yaml:"version"`
-	LLM      LLMConfigV2      `yaml:"llm"`
-	Agent    AgentConfigV2    `yaml:"agent"`
-	ACE      ACEConfigV2      `yaml:"ace"`
-	Security SecurityConfigV2 `yaml:"security"`
-	Protocol ProtocolConfigV2 `yaml:"protocol"`
+	Version  string           `yaml:"version" mapstructure:"version"`
+	LLM      LLMConfigV2      `yaml:"llm" mapstructure:"llm"`
+	Agent    AgentConfigV2    `yaml:"agent" mapstructure:"agent"`
+	ACE      ACEConfigV2      `yaml:"ace" mapstructure:"ace"`
+	Security SecurityConfigV2 `yaml:"security" mapstructure:"security"`
+	Protocol ProtocolConfigV2 `yaml:"protocol" mapstructure:"protocol"`
 }
 
 // LLMConfigV2 configures the LLM provider.
 type LLMConfigV2 struct {
-	Provider    string        `yaml:"provider"`
-	Model       string        `yaml:"model"`
-	Temperature float64       `yaml:"temperature"`
-	MaxTokens   int           `yaml:"max_tokens"`
-	Timeout     time.Duration `yaml:"timeout"`
-	BaseURL     string        `yaml:"base_url"`
-	APIKey      string        `yaml:"api_key"`
+	Provider    string        `yaml:"provider" mapstructure:"provider"`
+	Model       string        `yaml:"model" mapstructure:"model"`
+	Temperature float64       `yaml:"temperature" mapstructure:"temperature"`
+	MaxTokens   int           `yaml:"max_tokens" mapstructure:"max_tokens"`
+	Timeout     time.Duration `yaml:"timeout" mapstructure:"timeout"`
+	BaseURL     string        `yaml:"base_url" mapstructure:"base_url"`
+	APIKey      string        `yaml:"api_key" mapstructure:"api_key"`
 }
 
 // AgentConfigV2 configures the agent behavior.
 type AgentConfigV2 struct {
-	MaxTurns        int           `yaml:"max_turns"`
-	Timeout         time.Duration `yaml:"timeout"`
-	WorkDir         string        `yaml:"work_dir"`
-	RequireApproval bool          `yaml:"require_approval"`
+	MaxTurns        int           `yaml:"max_turns" mapstructure:"max_turns"`
+	Timeout         time.Duration `yaml:"timeout" mapstructure:"timeout"`
+	WorkDir         string        `yaml:"work_dir" mapstructure:"work_dir"`
+	RequireApproval bool          `yaml:"require_approval" mapstructure:"require_approval"`
 }
 
 // ACEConfigV2 configures Agentic Context Engineering.
 type ACEConfigV2 struct {
-	Enabled        bool    `yaml:"enabled"`
-	PlaybookPath   string  `yaml:"playbook_path"`
-	TrajectoryPath string  `yaml:"trajectory_path"`
-	TopK           int     `yaml:"top_k"`
-	MinScore       float64 `yaml:"min_score"`
+	Enabled        bool    `yaml:"enabled" mapstructure:"enabled"`
+	PlaybookPath   string  `yaml:"playbook_path" mapstructure:"playbook_path"`
+	TrajectoryPath string  `yaml:"trajectory_path" mapstructure:"trajectory_path"`
+	TopK           int     `yaml:"top_k" mapstructure:"top_k"`
+	MinScore       float64 `yaml:"min_score" mapstructure:"min_score"`
 }
 
 // SecurityConfigV2 configures security and sandboxing.
 type SecurityConfigV2 struct {
-	SandboxMode     string   `yaml:"sandbox_mode"`
-	PolicyFile      string   `yaml:"policy_file"`
-	AllowedCommands []string `yaml:"allowed_commands"`
+	SandboxMode     string   `yaml:"sandbox_mode" mapstructure:"sandbox_mode"`
+	PolicyFile      string   `yaml:"policy_file" mapstructure:"policy_file"`
+	AllowedCommands []string `yaml:"allowed_commands" mapstructure:"allowed_commands"`
 }
 
 // ProtocolConfigV2 configures protocol features (MCP, Git, Shell).
 type ProtocolConfigV2 struct {
-	EnableMCP    bool                `yaml:"enable_mcp"`
-	MCPServers   []MCPServerConfigV2 `yaml:"mcp_servers"`
-	EnableGit    bool                `yaml:"enable_git"`
-	EnableShell  bool                `yaml:"enable_shell"`
-	ShellTimeout time.Duration       `yaml:"shell_timeout"`
+	EnableMCP    bool                `yaml:"enable_mcp" mapstructure:"enable_mcp"`
+	MCPServers   []MCPServerConfigV2 `yaml:"mcp_servers" mapstructure:"mcp_servers"`
+	EnableGit    bool                `yaml:"enable_git" mapstructure:"enable_git"`
+	EnableShell  bool                `yaml:"enable_shell" mapstructure:"enable_shell"`
+	ShellTimeout time.Duration       `yaml:"shell_timeout" mapstructure:"shell_timeout"`
 }
 
 // MCPServerConfigV2 configures an MCP server.
 type MCPServerConfigV2 struct {
-	Name    string            `yaml:"name"`
-	Command string            `yaml:"command"`
-	Args    []string          `yaml:"args"`
-	Env     map[string]string `yaml:"env"`
+	Name    string            `yaml:"name" mapstructure:"name"`
+	Command string            `yaml:"command" mapstructure:"command"`
+	Args    []string          `yaml:"args" mapstructure:"args"`
+	Env     map[string]string `yaml:"env" mapstructure:"env"`
 }
 
 // Validate performs validation on the config.
