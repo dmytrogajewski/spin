@@ -478,3 +478,20 @@ func TestConfigV2_Validate_ProtocolMCPServersValid(t *testing.T) {
 	require.Error(t, err, "MCP server with empty name should fail validation")
 	assert.Contains(t, err.Error(), "mcp", "error should mention mcp")
 }
+
+// TestDefaultConfigV2 tests that the default configuration is valid.
+// Kills mutant: changing defaults to invalid values would make this test fail.
+func TestDefaultConfigV2(t *testing.T) {
+	cfg := DefaultConfigV2()
+
+	// Should be valid by default
+	err := cfg.Validate()
+	require.NoError(t, err, "default config should pass validation")
+
+	// Check some expected defaults
+	assert.Equal(t, "2.0", cfg.Version, "version should be 2.0")
+	assert.Equal(t, "ollama", cfg.LLM.Provider, "default provider should be ollama")
+	assert.Equal(t, 0.7, cfg.LLM.Temperature, "default temperature should be 0.7")
+	assert.Equal(t, 10, cfg.Agent.MaxTurns, "default max_turns should be 10")
+	assert.True(t, cfg.ACE.Enabled, "ACE should be enabled by default")
+}

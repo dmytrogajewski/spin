@@ -203,3 +203,44 @@ func (m *MCPServerConfigV2) Validate() error {
 
 	return nil
 }
+
+// DefaultConfigV2 returns a ConfigV2 with sensible defaults.
+func DefaultConfigV2() *ConfigV2 {
+	return &ConfigV2{
+		Version: "2.0",
+		LLM: LLMConfigV2{
+			Provider:    "ollama",
+			Model:       "qwen2.5-coder:7b",
+			Temperature: 0.7,
+			MaxTokens:   4096,
+			Timeout:     5 * time.Minute,
+			BaseURL:     "",
+			APIKey:      "",
+		},
+		Agent: AgentConfigV2{
+			MaxTurns:        10,
+			Timeout:         60 * time.Minute,
+			WorkDir:         ".",
+			RequireApproval: false,
+		},
+		ACE: ACEConfigV2{
+			Enabled:        true,
+			PlaybookPath:   "~/.spin/ace/playbooks/default.json",
+			TrajectoryPath: "~/.spin/ace/trajectories/",
+			TopK:           5,
+			MinScore:       0.3,
+		},
+		Security: SecurityConfigV2{
+			SandboxMode:     "none",
+			PolicyFile:      "",
+			AllowedCommands: []string{},
+		},
+		Protocol: ProtocolConfigV2{
+			EnableMCP:    false,
+			MCPServers:   []MCPServerConfigV2{},
+			EnableGit:    true,
+			EnableShell:  true,
+			ShellTimeout: 30 * time.Second,
+		},
+	}
+}
