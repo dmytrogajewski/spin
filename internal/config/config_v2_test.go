@@ -272,6 +272,26 @@ func validACEConfig() ACEConfigV2 {
 	}
 }
 
+// validSecurityConfig returns a valid Security configuration for testing other sections.
+func validSecurityConfig() SecurityConfigV2 {
+	return SecurityConfigV2{
+		SandboxMode:     "none",
+		PolicyFile:      "",
+		AllowedCommands: []string{},
+	}
+}
+
+// validProtocolConfig returns a valid Protocol configuration for testing other sections.
+func validProtocolConfig() ProtocolConfigV2 {
+	return ProtocolConfigV2{
+		EnableMCP:    false,
+		MCPServers:   []MCPServerConfigV2{},
+		EnableGit:    true,
+		EnableShell:  false,
+		ShellTimeout: 0,
+	}
+}
+
 // TestConfigV2_Validate_ACEPlaybookPathRequired tests that PlaybookPath is required when ACE is enabled.
 // Kills mutant: removing the PlaybookPath check would make this test fail.
 func TestConfigV2_Validate_ACEPlaybookPathRequired(t *testing.T) {
@@ -375,4 +395,86 @@ func TestConfigV2_Validate_ACEDisabled(t *testing.T) {
 
 	err := cfg.Validate()
 	require.NoError(t, err, "ACE disabled config should pass validation")
+}
+
+// TestConfigV2_Validate_SecuritySandboxModeValid tests that only valid sandbox modes are accepted.
+// Kills mutant: removing the SandboxMode validation would make this test fail.
+func TestConfigV2_Validate_SecuritySandboxModeValid(t *testing.T) {
+	validModes := []string{"", "none", "docker", "firejail"}
+	for _, mode := range validModes {
+		t.Run(mode, func(t *testing.T) {
+			cfg := &ConfigV2{
+				Version:  "2.0",
+				LLM:      validLLMConfig(),
+				Agent:    validAgentConfig(),
+				ACE:      validACEConfig(),
+				Security: SecurityConfigV2{SandboxMode: mode},
+				Protocol: validProtocolConfig(),
+			}
+
+			err := cfg.Validate()
+			require.NoError(t, err, "sandbox mode %q should be valid", mode)
+		})
+	}
+}
+
+// TestConfigV2_Validate_SecuritySandboxModeInvalid tests that invalid sandbox modes are rejected.
+// Kills mutant: removing the SandboxMode validation would make this test fail.
+func TestConfigV2_Validate_SecuritySandboxModeInvalid(t *testing.T) {
+	cfg := &ConfigV2{
+		Version:  "2.0",
+		LLM:      validLLMConfig(),
+		Agent:    validAgentConfig(),
+		ACE:      validACEConfig(),
+		Security: SecurityConfigV2{SandboxMode: "invalid"},
+		Protocol: validProtocolConfig(),
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "invalid sandbox mode should fail validation")
+	assert.Contains(t, err.Error(), "sandbox_mode", "error should mention sandbox_mode field")
+}
+
+// TestConfigV2_Validate_ProtocolShellTimeoutPositive tests that ShellTimeout must be positive when shell is enabled.
+// Kills mutant: removing the ShellTimeout check would make this test fail.
+func TestConfigV2_Validate_ProtocolShellTimeoutPositive(t *testing.T) {
+	protocol := validProtocolConfig()
+	protocol.EnableShell = true
+	protocol.ShellTimeout = 0 // Invalid
+
+	cfg := &ConfigV2{
+		Version:  "2.0",
+		LLM:      validLLMConfig(),
+		Agent:    validAgentConfig(),
+		ACE:      validACEConfig(),
+		Security: validSecurityConfig(),
+		Protocol: protocol,
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "zero ShellTimeout should fail validation when shell enabled")
+	assert.Contains(t, err.Error(), "shell_timeout", "error should mention shell_timeout field")
+}
+
+// TestConfigV2_Validate_ProtocolMCPServersValid tests that MCP server configs are validated when MCP is enabled.
+// Kills mutant: removing the MCP server validation would make this test fail.
+func TestConfigV2_Validate_ProtocolMCPServersValid(t *testing.T) {
+	protocol := validProtocolConfig()
+	protocol.EnableMCP = true
+	protocol.MCPServers = []MCPServerConfigV2{
+		{Name: "", Command: "/usr/bin/mcp"}, // Invalid: empty name
+	}
+
+	cfg := &ConfigV2{
+		Version:  "2.0",
+		LLM:      validLLMConfig(),
+		Agent:    validAgentConfig(),
+		ACE:      validACEConfig(),
+		Security: validSecurityConfig(),
+		Protocol: protocol,
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "MCP server with empty name should fail validation")
+	assert.Contains(t, err.Error(), "mcp", "error should mention mcp")
 }
