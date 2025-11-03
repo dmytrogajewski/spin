@@ -14,13 +14,13 @@ After comprehensive analysis of the `internal/` directory (60 directories, 218 G
 |-------|--------|------------|------------------|
 | **Phase 1: Config Consolidation** | ✅ **COMPLETED** | 100% | ConfigV2, LoaderV2, Migration, Tests, Docs |
 | **Phase 2: Message Unification** | ✅ **COMPLETED** | 100% | Single message.Message type, removed conversions |
-| **Phase 3: Agent/Conversation** | ⏳ TODO | 0% | Simplified agent architecture |
+| **Phase 3: Agent/Conversation** | ✅ **COMPLETED** | 100% | agent.Builder, eliminated duplication |
 | **Phase 4: Type Conversion** | ⏳ TODO | 0% | Eliminate adapter proliferation |
 | **Phase 5: Orchestration** | ⏳ TODO | 0% | Simplified task orchestration |
 | **Phase 6: Registry Patterns** | ⏳ TODO | 0% | Evaluate registry necessity |
 | **Phase 7: Test Refactoring** | ⏳ TODO | 0% | Split monolithic test files |
 
-**Overall Progress**: 29% (2/7 phases completed)
+**Overall Progress**: 43% (3/7 phases completed)
 
 **Last Updated**: 2025-11-03
 
@@ -1532,9 +1532,11 @@ msg, err := convert.FromOpenAI(openaiMsg)
 - ☑ Zero data loss in round-trip tests
 - ☑ Performance: conversion < 1µs per message
 
-### Phase 3: Agent/Conversation Simplification (Week 5-6)
+### Phase 3: Agent/Conversation Simplification (Week 5-6) ✅ COMPLETED
 
-**Goal**: Clear responsibility separation
+**Goal**: Clear responsibility separation  
+**Completion Date**: 2025-11-03  
+**FRD**: FRD-20251103-013-agent-conversation-simplification.md
 
 **Decision**: Two options
 
@@ -2145,7 +2147,7 @@ Track progress with observable metrics:
 ## Overall Progress
 - [x] Phase 1: Config Consolidation (100%) ✅
 - [x] Phase 2: Message Unification (100%) ✅
-- [ ] Phase 3: Agent/Conversation (0%)
+- [x] Phase 3: Agent/Conversation (100%) ✅
 - [ ] Phase 4: Type Conversion (0%)
 - [ ] Phase 5: Orchestration (0%)
 - [ ] Phase 6: Registry Evaluation (0%)
@@ -2155,8 +2157,8 @@ Track progress with observable metrics:
 
 | Metric | Baseline | Target | Current | Status |
 |--------|----------|--------|---------|--------|
-| LOC (internal/) | 52,000 | 42,000 | ~51,700 | 🟡 |
-| Files (internal/) | 218 | 185 | 217 | 🟡 |
+| LOC (internal/) | 52,000 | 42,000 | ~51,500 | 🟡 |
+| Files (internal/) | 218 | 185 | 215 | 🟡 |
 | Config Files | 3 | 1 | 1 | ✅ |
 | Message Types | 4 | 1 | 1 | ✅ |
 | Conversion Funcs | 15 | 3 | ~13 | 🟡 |

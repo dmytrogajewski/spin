@@ -1,9 +1,10 @@
 # FRD-20251103-013: Agent/Conversation Simplification (Phase 3)
 
 **Date**: 2025-11-03  
-**Status**: Draft  
+**Status**: Completed  
 **Owner**: Rob Pike  
-**Phase**: 3 of 7 (Refactoring Roadmap)
+**Phase**: 3 of 7 (Refactoring Roadmap)  
+**Completion Date**: 2025-11-03
 
 ## Problem Statement
 
@@ -467,3 +468,99 @@ func (c *Conversation) SetTaskMode(mode string) error {
 - Builder logic: single file `agent/builder.go`
 
 **Net reduction**: ~368 LOC (removed duplication)
+
+## Implementation Summary
+
+### Completed Work
+
+**Created agent.Builder**
+- New `internal/agent/builder.go` with fluent interface
+- `NewBuilder()` - creates builder instance
+- `WithConfig()`, `WithProvider()`, `WithWorkingDir()`, `WithEmitter()`, `WithApprovalHandler()` - fluent setters
+- `Build()` - complete agent construction with all services
+- `BuildExecutor()` - public helper for executor creation
+- `BuildEnvironment()` - public helper for environment gathering
+- Helper methods: `buildSecurityService()`, `buildDetectionService()`, `buildOrchestrationService()`, `buildAgentOptions()`, `buildACEService()`
+
+**Updated conversation.Builder**
+- Uses `agent.Builder.BuildExecutor()` for executor creation
+- Uses `agent.Builder.BuildEnvironment()` for environment gathering  
+- Keeps application-level concerns (Git, Shell, MCP integration)
+- Keeps `enrichEnvironmentWithIntegrations()` for app-level services
+- Simplified from 346 LOC to ~320 LOC
+
+**Deleted Duplicate Files**
+- Removed `internal/conversation/executor.go` (39 lines) - now uses agent.Builder
+- Removed `internal/conversation/environment.go` (92 lines) - now uses agent.Builder
+- Kept enrichment methods in conversation.Builder (application concern)
+
+### Architecture Achieved
+
+**Clear Separation of Concerns**:
+```
+internal/agent/
+  - builder.go (NEW)      # Agent construction with all dependencies
+  - agent.go              # Core agent execution logic
+  - executor.go           # Command execution
+  - environment.go        # Environment context gathering
+  
+internal/conversation/
+  - builder.go            # Application orchestration (uses agent.Builder)
+  - conversation.go       # Conversation management
+  - (deleted executor.go) # Moved to agent.Builder
+  - (deleted environment.go) # Moved to agent.Builder
+```
+
+**Responsibility Distribution**:
+- **agent.Builder**: Core agent construction (executor, environment, security, detection, orchestration, ACE)
+- **conversation.Builder**: Application-level orchestration (Git, Shell, MCP, tool/task registries)
+
+### Files Modified
+
+- `internal/agent/builder.go` (NEW) - 257 lines
+- `internal/agent/builder_test.go` (NEW) - 162 lines  
+- `internal/conversation/builder.go` - Updated to use agent.Builder helpers
+- `internal/conversation/executor.go` - DELETED (39 lines)
+- `internal/conversation/environment.go` - DELETED (92 lines)
+
+### Test Results
+
+- All agent tests: PASS ✅ (12.6s runtime)
+- All conversation tests: PASS ✅ (0.3s runtime)
+- All appserver tests: PASS ✅
+- Test coverage maintained at existing levels
+
+### Metrics
+
+**LOC Changes**:
+- Lines added: +419 (builder.go + tests)
+- Lines removed: -131 (executor.go + environment.go)
+- Net change: +288 lines (but eliminated duplication)
+
+**Files**:
+- Files added: 2 (builder.go, builder_test.go)
+- Files deleted: 2 (executor.go, environment.go)
+- Net files: 0
+
+**Code Quality**:
+- Zero lint errors ✅
+- Zero deadcode ✅
+- All tests passing ✅
+- Clear separation of concerns ✅
+
+### Commits
+
+1. `4c289a5` - feat(agent): add builder pattern with fluent interface
+2. `c052d35` - feat(agent): add buildExecutor to builder
+3. `654d979` - feat(agent): add complete Build() method with service builders
+4. `fb02dad` - refactor(phase3): use agent.Builder helpers in conversation
+
+## Conclusion
+
+Phase 3 Agent/Conversation Simplification is **complete**. The codebase now has:
+- Clear separation: agent handles core construction, conversation handles application orchestration
+- Eliminated duplication: removed 131 lines of duplicate builder code
+- Improved maintainability: single source of truth for executor and environment building
+- All tests passing with no regressions
+
+The builder pattern provides a clean, fluent API for agent construction while keeping application-level concerns (Git, Shell, MCP) in the conversation layer where they belong.
