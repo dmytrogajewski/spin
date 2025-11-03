@@ -260,3 +260,119 @@ func validAgentConfig() AgentConfigV2 {
 		WorkDir:  "/tmp",
 	}
 }
+
+// validACEConfig returns a valid ACE configuration for testing other sections.
+func validACEConfig() ACEConfigV2 {
+	return ACEConfigV2{
+		Enabled:        true,
+		PlaybookPath:   "~/.spin/ace/playbooks/default.json",
+		TrajectoryPath: "~/.spin/ace/trajectories/",
+		TopK:           5,
+		MinScore:       0.3,
+	}
+}
+
+// TestConfigV2_Validate_ACEPlaybookPathRequired tests that PlaybookPath is required when ACE is enabled.
+// Kills mutant: removing the PlaybookPath check would make this test fail.
+func TestConfigV2_Validate_ACEPlaybookPathRequired(t *testing.T) {
+	ace := validACEConfig()
+	ace.PlaybookPath = "" // Invalid
+
+	cfg := &ConfigV2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   validAgentConfig(),
+		ACE:     ace,
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "empty PlaybookPath should fail validation when ACE enabled")
+	assert.Contains(t, err.Error(), "playbook_path", "error should mention playbook_path field")
+}
+
+// TestConfigV2_Validate_ACETrajectoryPathRequired tests that TrajectoryPath is required when ACE is enabled.
+// Kills mutant: removing the TrajectoryPath check would make this test fail.
+func TestConfigV2_Validate_ACETrajectoryPathRequired(t *testing.T) {
+	ace := validACEConfig()
+	ace.TrajectoryPath = "" // Invalid
+
+	cfg := &ConfigV2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   validAgentConfig(),
+		ACE:     ace,
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "empty TrajectoryPath should fail validation when ACE enabled")
+	assert.Contains(t, err.Error(), "trajectory_path", "error should mention trajectory_path field")
+}
+
+// TestConfigV2_Validate_ACETopKPositive tests that TopK must be positive when ACE is enabled.
+// Kills mutant: removing the TopK check would make this test fail.
+func TestConfigV2_Validate_ACETopKPositive(t *testing.T) {
+	ace := validACEConfig()
+	ace.TopK = 0 // Invalid
+
+	cfg := &ConfigV2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   validAgentConfig(),
+		ACE:     ace,
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "zero TopK should fail validation when ACE enabled")
+	assert.Contains(t, err.Error(), "top_k", "error should mention top_k field")
+}
+
+// TestConfigV2_Validate_ACEMinScoreRange tests that MinScore must be between 0 and 1.
+// Kills mutant: removing the MinScore check would make this test fail.
+func TestConfigV2_Validate_ACEMinScoreRange(t *testing.T) {
+	tests := []struct {
+		name     string
+		minScore float64
+	}{
+		{"negative", -0.1},
+		{"too high", 1.1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ace := validACEConfig()
+			ace.MinScore = tt.minScore
+
+			cfg := &ConfigV2{
+				Version: "2.0",
+				LLM:     validLLMConfig(),
+				Agent:   validAgentConfig(),
+				ACE:     ace,
+			}
+
+			err := cfg.Validate()
+			require.Error(t, err, "MinScore %s should fail validation", tt.name)
+			assert.Contains(t, err.Error(), "min_score", "error should mention min_score field")
+		})
+	}
+}
+
+// TestConfigV2_Validate_ACEDisabled tests that validation passes when ACE is disabled.
+// Kills mutant: removing the ACE.Enabled check would make this test fail.
+func TestConfigV2_Validate_ACEDisabled(t *testing.T) {
+	cfg := &ConfigV2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   validAgentConfig(),
+		ACE: ACEConfigV2{
+			Enabled: false,
+			// Empty paths should be OK when disabled
+			PlaybookPath:   "",
+			TrajectoryPath: "",
+			TopK:           0,
+			MinScore:       0,
+		},
+	}
+
+	err := cfg.Validate()
+	require.NoError(t, err, "ACE disabled config should pass validation")
+}
