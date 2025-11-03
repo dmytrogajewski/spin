@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"time"
+
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/security"
@@ -48,4 +50,36 @@ func (b *Builder) WithEmitter(emitter *events.EventEmitter) *Builder {
 func (b *Builder) WithApprovalHandler(handler security.ApprovalHandler) *Builder {
 	b.approvalHandler = handler
 	return b
+}
+
+// buildExecutor creates an Executor with appropriate options based on configuration.
+func (b *Builder) buildExecutor() *Executor {
+	validator := security.NewValidator()
+	opts := []ExecutorOption{
+		WithValidator(validator),
+	}
+
+	if b.approvalHandler != nil {
+		opts = append(opts,
+			WithApprovalService(security.NewApprovalService(b.approvalHandler, b.emitter, validator)),
+		)
+	}
+
+	if cfg := b.config; cfg != nil {
+		if cfg.Timeout > 0 {
+			opts = append(opts, WithTimeout(cfg.Timeout))
+		}
+		if cfg.CacheCommands {
+			cache := NewCommandCache(5*time.Minute, 10*1024*1024) // 5m TTL, 10MB cap
+			opts = append(opts, WithCache(cache))
+		}
+	}
+
+	exec, err := NewExecutor(b.workingDir, opts...)
+	if err != nil {
+		// In builder pattern, we panic on invalid configuration
+		// This should never happen with valid builder state
+		panic("failed to create executor: " + err.Error())
+	}
+	return exec
 }

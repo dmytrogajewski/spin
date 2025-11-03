@@ -43,3 +43,20 @@ func TestBuilder_FluentInterface(t *testing.T) {
 		t.Error("WorkingDir not set")
 	}
 }
+
+func TestBuilder_BuildExecutor(t *testing.T) {
+	cfg := &Config{
+		Timeout:       30,
+		CacheCommands: false,
+	}
+
+	builder := NewBuilder().
+		WithConfig(cfg).
+		WithWorkingDir("/tmp/test")
+
+	exec := builder.buildExecutor()
+
+	if exec == nil {
+		t.Fatal("buildExecutor() returned nil")
+	}
+}
