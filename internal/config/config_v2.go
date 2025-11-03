@@ -8,8 +8,9 @@ import (
 // ConfigV2 is the unified configuration for Spin v2.0.
 // This replaces the flat Config structure with organized sections.
 type ConfigV2 struct {
-	Version string      `yaml:"version"`
-	LLM     LLMConfigV2 `yaml:"llm"`
+	Version string        `yaml:"version"`
+	LLM     LLMConfigV2   `yaml:"llm"`
+	Agent   AgentConfigV2 `yaml:"agent"`
 }
 
 // LLMConfigV2 configures the LLM provider.
@@ -23,10 +24,21 @@ type LLMConfigV2 struct {
 	APIKey      string        `yaml:"api_key"`
 }
 
+// AgentConfigV2 configures the agent behavior.
+type AgentConfigV2 struct {
+	MaxTurns        int           `yaml:"max_turns"`
+	Timeout         time.Duration `yaml:"timeout"`
+	WorkDir         string        `yaml:"work_dir"`
+	RequireApproval bool          `yaml:"require_approval"`
+}
+
 // Validate performs validation on the config.
 func (c *ConfigV2) Validate() error {
 	// Validate each section
 	if err := c.LLM.Validate(); err != nil {
+		return err
+	}
+	if err := c.Agent.Validate(); err != nil {
 		return err
 	}
 
@@ -52,6 +64,22 @@ func (l *LLMConfigV2) Validate() error {
 	}
 	if l.Timeout <= 0 {
 		return fmt.Errorf("llm: timeout must be positive, got %v", l.Timeout)
+	}
+
+	return nil
+}
+
+// Validate performs validation on the Agent configuration.
+func (a *AgentConfigV2) Validate() error {
+	// Required fields
+	if a.MaxTurns <= 0 {
+		return fmt.Errorf("agent: max_turns must be positive, got %d", a.MaxTurns)
+	}
+	if a.Timeout <= 0 {
+		return fmt.Errorf("agent: timeout must be positive, got %v", a.Timeout)
+	}
+	if a.WorkDir == "" {
+		return fmt.Errorf("agent: work_dir is required")
 	}
 
 	return nil

@@ -20,6 +20,11 @@ func TestConfigV2_Validate_MinimalValid(t *testing.T) {
 			MaxTokens:   4096,
 			Timeout:     30 * time.Second,
 		},
+		Agent: AgentConfigV2{
+			MaxTurns: 10,
+			Timeout:  60 * time.Second,
+			WorkDir:  "/tmp",
+		},
 	}
 
 	err := cfg.Validate()
@@ -174,8 +179,84 @@ func TestConfigV2_Validate_LLMValidRanges(t *testing.T) {
 			MaxTokens:   4096,
 			Timeout:     5 * time.Minute,
 		},
+		Agent: AgentConfigV2{
+			MaxTurns: 10,
+			Timeout:  60 * time.Second,
+			WorkDir:  "/tmp",
+		},
 	}
 
 	err := cfg.Validate()
 	require.NoError(t, err, "valid config should pass validation")
+}
+
+// TestConfigV2_Validate_AgentMaxTurnsRequired tests that MaxTurns must be positive.
+// Kills mutant: removing the MaxTurns check would make this test fail.
+func TestConfigV2_Validate_AgentMaxTurnsRequired(t *testing.T) {
+	agent := validAgentConfig()
+	agent.MaxTurns = 0 // Invalid
+
+	cfg := &ConfigV2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   agent,
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "zero MaxTurns should fail validation")
+	assert.Contains(t, err.Error(), "max_turns", "error should mention max_turns field")
+}
+
+// TestConfigV2_Validate_AgentTimeoutRequired tests that Timeout must be positive.
+// Kills mutant: removing the Timeout check would make this test fail.
+func TestConfigV2_Validate_AgentTimeoutRequired(t *testing.T) {
+	agent := validAgentConfig()
+	agent.Timeout = 0 // Invalid
+
+	cfg := &ConfigV2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   agent,
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "zero Timeout should fail validation")
+	assert.Contains(t, err.Error(), "timeout", "error should mention timeout field")
+}
+
+// TestConfigV2_Validate_AgentWorkDirRequired tests that WorkDir is required.
+// Kills mutant: removing the WorkDir check would make this test fail.
+func TestConfigV2_Validate_AgentWorkDirRequired(t *testing.T) {
+	agent := validAgentConfig()
+	agent.WorkDir = "" // Invalid
+
+	cfg := &ConfigV2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   agent,
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "empty WorkDir should fail validation")
+	assert.Contains(t, err.Error(), "work_dir", "error should mention work_dir field")
+}
+
+// validLLMConfig returns a valid LLM configuration for testing other sections.
+func validLLMConfig() LLMConfigV2 {
+	return LLMConfigV2{
+		Provider:    "ollama",
+		Model:       "qwen",
+		Temperature: 0.7,
+		MaxTokens:   4096,
+		Timeout:     5 * time.Minute,
+	}
+}
+
+// validAgentConfig returns a valid Agent configuration for testing other sections.
+func validAgentConfig() AgentConfigV2 {
+	return AgentConfigV2{
+		MaxTurns: 10,
+		Timeout:  60 * time.Second,
+		WorkDir:  "/tmp",
+	}
 }
