@@ -89,6 +89,13 @@ func (e Event) ErrorData() (ErrorData, bool) {
 	return data, ok
 }
 
+// ACERetrievalData returns the event data as ACERetrievalData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ACERetrievalData() (ACERetrievalData, bool) {
+	data, ok := e.Data.(ACERetrievalData)
+	return data, ok
+}
+
 // EventType represents the category of event.
 type EventType int
 
@@ -111,6 +118,7 @@ const (
 
 	// Approval events - user approval required
 	EventCommandApproval
+	EventACERetrieval
 	EventCommandApproved
 	EventCommandDenied
 
@@ -134,6 +142,7 @@ func (e EventType) String() string {
 		"turn_paused",
 		"turn_resumed",
 		"command_approval",
+		"ace_retrieval",
 		"command_approved",
 		"command_denied",
 		"error",
@@ -207,6 +216,17 @@ const (
 	ApprovalStatusApproved ApprovalStatus = "approved"
 	ApprovalStatusDenied   ApprovalStatus = "denied"
 )
+
+// ACERetrievalData contains ACE progressive retrieval information.
+type ACERetrievalData struct {
+	Turn             int     `json:"turn"`
+	Trigger          string  `json:"trigger"`
+	Query            string  `json:"query"`
+	BulletsRetrieved int     `json:"bullets_retrieved"`
+	BulletsNew       int     `json:"bullets_new"`
+	CacheSize        int     `json:"cache_size"`
+	CacheHitRate     float64 `json:"cache_hit_rate"`
+}
 
 // SystemEventData contains informational or warning messages.
 type SystemEventData struct {

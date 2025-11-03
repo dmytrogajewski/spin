@@ -76,4 +76,5 @@ require (
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
+	pgregory.net/rapid v1.2.0 // indirect
 )

@@ -48,6 +48,23 @@ type TrajectoryMetadata struct {
 	TotalTokens int
 	Duration    time.Duration
 	Turns       int
+
+	// RetrievalEvents contains retrieval provenance for Reflector analysis.
+	// Runtime type: []trajectory.RetrievalEvent (using interface{} to avoid import cycle).
+	//
+	// Each event records when, why, and what bullets were retrieved during execution.
+	// This enables Reflector to analyze retrieval patterns and their impact on outcomes.
+	//
+	// Type assert to access events:
+	//
+	//	if events, ok := metadata.RetrievalEvents.([]trajectory.RetrievalEvent); ok {
+	//	    for _, event := range events {
+	//	        fmt.Printf("Turn %d: %s retrieval\n", event.Turn, event.Trigger)
+	//	    }
+	//	}
+	//
+	// The field may be nil or an empty slice when no retrievals occurred.
+	RetrievalEvents interface{}
 }
 
 // TrajectoryStep is a single reasoning or execution step.

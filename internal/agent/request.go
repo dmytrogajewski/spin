@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
+	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
@@ -50,8 +51,12 @@ type AgentResponse struct {
 	// Duration of the request
 	Duration time.Duration
 
-	// RetrievedBullets contains ACE bullets retrieved during execution (for trajectory building)
+	// RetrievedBullets contains ACE bullets retrieved during execution
+	// Populated from TrajectoryContext or simple retrieval mode
 	RetrievedBullets []*bullet.Bullet
+
+	// TrajectoryContext contains progressive execution context (for Reflector)
+	TrajectoryContext *trajectory.TrajectoryContext
 }
 
 // Message represents a conversation message.

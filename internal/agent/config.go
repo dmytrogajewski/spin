@@ -98,8 +98,114 @@ type ACEConfig struct {
 
 // ACERetrievalConfig configures bullet retrieval behavior.
 type ACERetrievalConfig struct {
-	TopK     int     `yaml:"top_k" mapstructure:"top_k"`
-	MinScore float64 `yaml:"min_score" mapstructure:"min_score"`
+	TopK               int                      `yaml:"top_k" mapstructure:"top_k"`
+	MinScore           float64                  `yaml:"min_score" mapstructure:"min_score"`
+	ProgressiveContext ProgressiveContextConfig `yaml:"progressive_context" mapstructure:"progressive_context"`
+}
+
+// ProgressiveContextConfig configures progressive retrieval behavior.
+type ProgressiveContextConfig struct {
+	// Core Settings
+
+	// Enabled controls whether progressive context is active (default: true)
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
+
+	// Cache Management
+
+	// CacheTTL is the number of turns before cache expires (default: 10)
+	CacheTTL int `yaml:"cache_ttl" mapstructure:"cache_ttl"`
+
+	// MaxBullets is the maximum number of bullets to keep in cache (default: 50)
+	MaxBullets int `yaml:"max_bullets" mapstructure:"max_bullets"`
+
+	// EvictionStrategy determines how bullets are evicted when cache is full
+	// Valid values: "lru" (Least Recently Used), "lfu" (Least Frequently Used), "fifo" (First In First Out)
+	// Default: "lru"
+	EvictionStrategy string `yaml:"eviction_strategy" mapstructure:"eviction_strategy"`
+
+	// Trigger Configuration
+
+	// ErrorLookback is the number of recent steps to check for errors (default: 5)
+	ErrorLookback int `yaml:"error_lookback" mapstructure:"error_lookback"`
+
+	// ToolChangeLookback is the number of recent steps to check for tool changes (default: 3)
+	ToolChangeLookback int `yaml:"tool_change_lookback" mapstructure:"tool_change_lookback"`
+
+	// EnabledTriggers lists which triggers are active (default: all)
+	// Valid values: "initial", "error", "tool_change", "interval"
+	EnabledTriggers []string `yaml:"enabled_triggers" mapstructure:"enabled_triggers"`
+
+	// Query Composition
+
+	// QueryWeights controls how different context components are weighted in query building
+	QueryWeights QueryWeights `yaml:"query_weights" mapstructure:"query_weights"`
+
+	// Performance Limits
+
+	// MaxRetrievalLatencyMs is the maximum time to wait for retrieval (milliseconds)
+	// If exceeded, uses cached bullets only (default: 500)
+	MaxRetrievalLatencyMs int `yaml:"max_retrieval_latency_ms" mapstructure:"max_retrieval_latency_ms"`
+
+	// MaxTrajectorySteps is the maximum number of steps to track (default: 1000)
+	// Prevents unbounded memory growth in very long conversations
+	MaxTrajectorySteps int `yaml:"max_trajectory_steps" mapstructure:"max_trajectory_steps"`
+
+	// Observability
+
+	// LogRetrievalDecisions enables logging of why retrieval was triggered (default: true)
+	LogRetrievalDecisions bool `yaml:"log_retrieval_decisions" mapstructure:"log_retrieval_decisions"`
+
+	// LogCacheStats enables logging of cache hit/miss statistics (default: true)
+	LogCacheStats bool `yaml:"log_cache_stats" mapstructure:"log_cache_stats"`
+
+	// EmitACEEvents enables event emission for TUI integration (default: true)
+	EmitACEEvents bool `yaml:"emit_ace_events" mapstructure:"emit_ace_events"`
+}
+
+// QueryWeights controls how different context components are weighted in query building.
+type QueryWeights struct {
+	// InitialQuery is the weight for the base user query (0.0-1.0, default: 0.5)
+	InitialQuery float64 `yaml:"initial_query" mapstructure:"initial_query"`
+
+	// ErrorContext is the weight for error-derived context (0.0-1.0, default: 0.3)
+	ErrorContext float64 `yaml:"error_context" mapstructure:"error_context"`
+
+	// ToolContext is the weight for tool-derived context (0.0-1.0, default: 0.2)
+	ToolContext float64 `yaml:"tool_context" mapstructure:"tool_context"`
+}
+
+// DefaultProgressiveContextConfig returns default configuration for progressive context.
+func DefaultProgressiveContextConfig() ProgressiveContextConfig {
+	return ProgressiveContextConfig{
+		// Core
+		Enabled: true, // Enabled by default
+
+		// Cache Management
+		CacheTTL:         10,    // 10 turns is reasonable for most tasks
+		MaxBullets:       50,    // Limits memory while allowing good coverage
+		EvictionStrategy: "lru", // Most recently used bullets are most relevant
+
+		// Trigger Configuration
+		ErrorLookback:      5,                                                       // Last 5 steps covers most error contexts
+		ToolChangeLookback: 3,                                                       // Tool changes are usually immediate
+		EnabledTriggers:    []string{"initial", "error", "tool_change", "interval"}, // All triggers enabled
+
+		// Query Composition
+		QueryWeights: QueryWeights{
+			InitialQuery: 0.5, // Base query is most important
+			ErrorContext: 0.3, // Error context is valuable
+			ToolContext:  0.2, // Tool context provides useful hints
+		},
+
+		// Performance Limits
+		MaxRetrievalLatencyMs: 500,  // 500ms keeps UX responsive
+		MaxTrajectorySteps:    1000, // Prevents unbounded growth in long sessions
+
+		// Observability
+		LogRetrievalDecisions: true, // Helpful for debugging
+		LogCacheStats:         true, // Useful for optimization
+		EmitACEEvents:         true, // Enables TUI integration
+	}
 }
 
 // ACEItemizedLearningConfig configures the ItemizedLearning workflow.
@@ -160,11 +266,109 @@ func (c *ACERetrievalConfig) Validate() error {
 		errs = append(errs, fmt.Errorf("min_score must be between 0 and 1, got %f", c.MinScore))
 	}
 
+	// Validate progressive context config
+	if err := c.ProgressiveContext.Validate(); err != nil {
+		errs = append(errs, fmt.Errorf("progressive_context: %w", err))
+	}
+
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}
 
 	return nil
+}
+
+// Validate validates the progressive context configuration.
+func (c *ProgressiveContextConfig) Validate() error {
+	var errs []error
+
+	// Validate cache settings
+	if c.CacheTTL <= 0 {
+		errs = append(errs, fmt.Errorf("cache_ttl must be > 0, got %d", c.CacheTTL))
+	}
+
+	if c.MaxBullets <= 0 {
+		errs = append(errs, fmt.Errorf("max_bullets must be > 0, got %d", c.MaxBullets))
+	}
+
+	validStrategies := []string{"lru", "lfu", "fifo"}
+	if !stringSliceContains(validStrategies, c.EvictionStrategy) {
+		errs = append(errs, fmt.Errorf("eviction_strategy must be one of %v, got %q", validStrategies, c.EvictionStrategy))
+	}
+
+	// Validate lookback windows
+	if c.ErrorLookback <= 0 {
+		errs = append(errs, fmt.Errorf("error_lookback must be > 0, got %d", c.ErrorLookback))
+	}
+
+	if c.ToolChangeLookback <= 0 {
+		errs = append(errs, fmt.Errorf("tool_change_lookback must be > 0, got %d", c.ToolChangeLookback))
+	}
+
+	// Validate triggers
+	validTriggers := []string{"initial", "error", "tool_change", "interval"}
+	for _, trigger := range c.EnabledTriggers {
+		if !stringSliceContains(validTriggers, trigger) {
+			errs = append(errs, fmt.Errorf("invalid trigger %q, must be one of %v", trigger, validTriggers))
+		}
+	}
+
+	if len(c.EnabledTriggers) == 0 {
+		errs = append(errs, fmt.Errorf("enabled_triggers cannot be empty"))
+	}
+
+	// Validate query weights
+	if err := c.QueryWeights.Validate(); err != nil {
+		errs = append(errs, fmt.Errorf("query_weights: %w", err))
+	}
+
+	// Validate performance limits
+	if c.MaxRetrievalLatencyMs <= 0 {
+		errs = append(errs, fmt.Errorf("max_retrieval_latency_ms must be > 0, got %d", c.MaxRetrievalLatencyMs))
+	}
+
+	if c.MaxTrajectorySteps <= 0 {
+		errs = append(errs, fmt.Errorf("max_trajectory_steps must be > 0, got %d", c.MaxTrajectorySteps))
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	return nil
+}
+
+// Validate validates query weights configuration.
+func (qw *QueryWeights) Validate() error {
+	var errs []error
+
+	if qw.InitialQuery < 0 || qw.InitialQuery > 1 {
+		errs = append(errs, fmt.Errorf("initial_query must be between 0 and 1, got %f", qw.InitialQuery))
+	}
+
+	if qw.ErrorContext < 0 || qw.ErrorContext > 1 {
+		errs = append(errs, fmt.Errorf("error_context must be between 0 and 1, got %f", qw.ErrorContext))
+	}
+
+	if qw.ToolContext < 0 || qw.ToolContext > 1 {
+		errs = append(errs, fmt.Errorf("tool_context must be between 0 and 1, got %f", qw.ToolContext))
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	return nil
+}
+
+// stringSliceContains checks if a string slice contains a value.
+func stringSliceContains(slice []string, value string) bool {
+	for _, item := range slice {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 // DefaultConfig returns a new Config with sensible defaults.
@@ -215,8 +419,9 @@ func DefaultConfig() *Config {
 			PlaybookPath:   "~/.spin/ace/playbooks/default.json",
 			TrajectoryPath: "~/.spin/ace/trajectories/",
 			Retrieval: ACERetrievalConfig{
-				TopK:     100, // High limit - let MinScore filter relevance
-				MinScore: 0.3,
+				TopK:               100, // High limit - let MinScore filter relevance
+				MinScore:           0.3,
+				ProgressiveContext: DefaultProgressiveContextConfig(),
 			},
 			ItemizedLearning: ACEItemizedLearningConfig{
 				Enabled:       true,

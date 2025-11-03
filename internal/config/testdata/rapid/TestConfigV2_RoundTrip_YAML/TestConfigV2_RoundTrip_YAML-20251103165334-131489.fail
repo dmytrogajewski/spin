@@ -1,0 +1,76 @@
+# 2025/11/03 16:53:34.874134 [TestConfigV2_RoundTrip_YAML] [rapid] draw llm_timeout_sec: 1
+# 2025/11/03 16:53:34.874140 [TestConfigV2_RoundTrip_YAML] [rapid] draw llm_provider: "ollama"
+# 2025/11/03 16:53:34.874142 [TestConfigV2_RoundTrip_YAML] [rapid] draw llm_model: "-"
+# 2025/11/03 16:53:34.874143 [TestConfigV2_RoundTrip_YAML] [rapid] draw llm_temperature: 1
+# 2025/11/03 16:53:34.874145 [TestConfigV2_RoundTrip_YAML] [rapid] draw llm_max_tokens: 1
+# 2025/11/03 16:53:34.874146 [TestConfigV2_RoundTrip_YAML] [rapid] draw llm_base_url: ""
+# 2025/11/03 16:53:34.874146 [TestConfigV2_RoundTrip_YAML] [rapid] draw llm_api_key: ""
+# 2025/11/03 16:53:34.874147 [TestConfigV2_RoundTrip_YAML] [rapid] draw agent_timeout_sec: 1
+# 2025/11/03 16:53:34.874148 [TestConfigV2_RoundTrip_YAML] [rapid] draw agent_max_turns: 1
+# 2025/11/03 16:53:34.874149 [TestConfigV2_RoundTrip_YAML] [rapid] draw agent_work_dir: "."
+# 2025/11/03 16:53:34.874149 [TestConfigV2_RoundTrip_YAML] [rapid] draw agent_require_approval: false
+# 2025/11/03 16:53:34.874150 [TestConfigV2_RoundTrip_YAML] [rapid] draw ace_enabled: false
+# 2025/11/03 16:53:34.874151 [TestConfigV2_RoundTrip_YAML] [rapid] draw sandbox_mode: "none"
+# 2025/11/03 16:53:34.874151 [TestConfigV2_RoundTrip_YAML] [rapid] draw policy_file: ""
+# 2025/11/03 16:53:34.874152 [TestConfigV2_RoundTrip_YAML] [rapid] draw allowed_commands: []string{"\nA"}
+# 2025/11/03 16:53:34.874160 [TestConfigV2_RoundTrip_YAML] [rapid] draw protocol_enable_shell: false
+# 2025/11/03 16:53:34.874161 [TestConfigV2_RoundTrip_YAML] [rapid] draw protocol_enable_mcp: false
+# 2025/11/03 16:53:34.874161 [TestConfigV2_RoundTrip_YAML] [rapid] draw protocol_enable_git: false
+# 2025/11/03 16:53:34.874221 [TestConfigV2_RoundTrip_YAML] failed to unmarshal config: yaml: line 24: did not find expected '-' indicator
+# 
+v0.4.8#11167405315677786058
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x5555555555555
+0x5555555555555
+0x0
+0xc05c654ab866b
+0x17
+0x5555555555555
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

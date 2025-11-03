@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
-	"github.com/dmytrogajewski/spin/internal/ace/generator"
+	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 	"github.com/dmytrogajewski/spin/internal/detection"
 	spinerrors "github.com/dmytrogajewski/spin/internal/errors"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -283,7 +283,11 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 	messages := a.buildPrompt(req)
 	historyLen := len(messages)
 
-	messages, resp, err = a.executeAgentLoop(ctx, messages, task, resp)
+	// Initialize trajectory context for progressive retrieval
+	initialQuery := extractInitialQuery(messages)
+	trajCtx := trajectory.NewTrajectoryContext(initialQuery)
+
+	messages, resp, err = a.executeAgentLoop(ctx, messages, task, resp, trajCtx)
 	if err != nil {
 		slog.Error("agent loop failed", "error", err, "finish_reason", resp.FinishReason)
 		// Emit turn failed event
@@ -295,6 +299,9 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 		return resp, err
 	}
 
+	// Store trajectory context in response
+	resp.TrajectoryContext = trajCtx
+
 	// Finalize response
 	a.finalizeResponse(resp, messages, historyLen)
 
@@ -303,8 +310,9 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 	if a.aceService != nil {
 		slog.Info("Starting bullet generation from execution", "success", resp.Success)
 
-		// Build detailed trajectory from execution trace
-		trajectory := buildExecutionTrajectory(req.Input, messages[historyLen:], resp, resp.RetrievedBullets)
+		// Use TrajectoryContext.ToTrajectory() instead of buildExecutionTrajectory()
+		trajectory := trajCtx.ToTrajectory()
+		trajectory.Success = resp.Success // Update success status from response
 		slog.Debug("Execution trajectory built", "steps", len(trajectory.Steps), "success", trajectory.Success)
 
 		// Use Reflector+Curator pipeline if AutoReflect is enabled, otherwise use simple generator
@@ -313,9 +321,18 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 		if a.aceService.config.Generation.AutoReflect {
 			learnedBullets, err = a.aceService.GenerateBulletsWithReflectionFromTrajectory(ctx, trajectory)
 		} else {
-			// For simple generation, fall back to summary-based approach
-			executionSummary := buildExecutionSummary(req.Input, messages[historyLen:], resp)
-			learnedBullets, err = a.aceService.GenerateBullets(ctx, executionSummary, "trajectory")
+			// For simple generation without reflection, convert trajectory to string
+			var summaryBuilder strings.Builder
+			summaryBuilder.WriteString("Task: ")
+			summaryBuilder.WriteString(trajectory.Query)
+			summaryBuilder.WriteString("\n\nExecution Steps:\n")
+			for _, step := range trajectory.Steps {
+				summaryBuilder.WriteString(fmt.Sprintf("- [%s] %s\n", step.Type, step.Content))
+			}
+			summaryBuilder.WriteString("\nResult: ")
+			summaryBuilder.WriteString(trajectory.Output)
+
+			learnedBullets, err = a.aceService.GenerateBullets(ctx, summaryBuilder.String(), "trajectory")
 		}
 
 		if err != nil {
@@ -427,165 +444,6 @@ func (a *Agent) finalizeResponse(resp *AgentResponse, messages []Message, histor
 
 	// Note: EventTurnComplete is NOT emitted here - it's emitted after ACE bullet
 	// generation to ensure all post-execution events are emitted before signaling completion
-}
-
-// buildExecutionTrajectory creates a detailed trajectory from execution trace.
-// This captures the full conversation flow including reasoning, tool calls, and results
-// for high-quality reflection and learning.
-func buildExecutionTrajectory(task string, executionMessages []Message, resp *AgentResponse, retrievedBullets []*bullet.Bullet) *generator.Trajectory {
-	steps := make([]generator.TrajectoryStep, 0, len(executionMessages))
-	stepNumber := 0
-
-	// Process all execution messages to build detailed steps
-	for _, msg := range executionMessages {
-		timestamp := msg.Timestamp
-		if timestamp.IsZero() {
-			timestamp = time.Now()
-		}
-
-		switch msg.Role {
-		case RoleAssistant:
-			// Assistant reasoning (if there's content)
-			if msg.Content != "" {
-				steps = append(steps, generator.TrajectoryStep{
-					StepNumber: stepNumber,
-					Type:       "reasoning",
-					Content:    msg.Content,
-					Timestamp:  timestamp,
-				})
-				stepNumber++
-			}
-
-			// Assistant tool calls
-			for _, toolCall := range msg.ToolCalls {
-				toolCallContent := fmt.Sprintf("Tool: %s\nArguments: %s",
-					toolCall.Function.Name,
-					toolCall.Function.Arguments)
-				steps = append(steps, generator.TrajectoryStep{
-					StepNumber: stepNumber,
-					Type:       "tool_call",
-					Content:    toolCallContent,
-					Timestamp:  timestamp,
-				})
-				stepNumber++
-			}
-
-		case RoleTool:
-			// Tool results
-			// Truncate very long tool outputs to keep trajectory manageable
-			content := msg.Content
-			const maxToolOutputLen = 2000
-			if len(content) > maxToolOutputLen {
-				content = content[:maxToolOutputLen] + "\n... (truncated)"
-			}
-
-			toolResultContent := fmt.Sprintf("Tool Result (ID: %s):\n%s",
-				msg.ToolCallID,
-				content)
-			steps = append(steps, generator.TrajectoryStep{
-				StepNumber: stepNumber,
-				Type:       "tool_result",
-				Content:    toolResultContent,
-				Timestamp:  timestamp,
-			})
-			stepNumber++
-
-		case RoleUser:
-			// User messages during execution (if any)
-			steps = append(steps, generator.TrajectoryStep{
-				StepNumber: stepNumber,
-				Type:       "user_input",
-				Content:    msg.Content,
-				Timestamp:  timestamp,
-			})
-			stepNumber++
-		}
-	}
-
-	// Build output summary
-	var outputBuilder strings.Builder
-	if resp.Success {
-		outputBuilder.WriteString("Status: Success\n\n")
-		if resp.Output != "" {
-			outputBuilder.WriteString("Output:\n")
-			outputBuilder.WriteString(resp.Output)
-		}
-	} else {
-		outputBuilder.WriteString("Status: Failed\n\n")
-		if resp.Error != nil {
-			outputBuilder.WriteString("Error:\n")
-			outputBuilder.WriteString(resp.Error.Error())
-		}
-		if resp.Output != "" {
-			outputBuilder.WriteString("\n\nPartial Output:\n")
-			outputBuilder.WriteString(resp.Output)
-		}
-	}
-
-	// Calculate total turns (assistant messages)
-	turns := 0
-	for _, msg := range executionMessages {
-		if msg.Role == RoleAssistant {
-			turns++
-		}
-	}
-
-	trajectory := &generator.Trajectory{
-		ID:               fmt.Sprintf("traj-%d", time.Now().UnixNano()),
-		Query:            task,
-		RetrievedBullets: retrievedBullets,
-		Steps:            steps,
-		Output:           outputBuilder.String(),
-		Success:          resp.Success,
-		BulletFeedback:   nil, // Will be populated by parseBulletFeedback
-		Metadata: generator.TrajectoryMetadata{
-			Turns:    turns,
-			Duration: time.Duration(0), // Could be calculated if we track start time
-		},
-		CreatedAt: time.Now(),
-	}
-
-	return trajectory
-}
-
-// buildExecutionSummary creates a summary of the execution for bullet generation.
-// DEPRECATED: Use buildExecutionTrajectory instead for full trace capture.
-// Kept for backward compatibility.
-func buildExecutionSummary(task string, executionMessages []Message, resp *AgentResponse) string {
-	var summary strings.Builder
-
-	// Include the original task
-	summary.WriteString("Task: ")
-	summary.WriteString(task)
-	summary.WriteString("\n\n")
-
-	// Include tool calls and their results
-	summary.WriteString("Actions taken:\n")
-	for _, msg := range executionMessages {
-		if msg.Role == RoleAssistant && len(msg.ToolCalls) > 0 {
-			for _, toolCall := range msg.ToolCalls {
-				summary.WriteString("- ")
-				summary.WriteString(toolCall.Function.Name)
-				summary.WriteString(": ")
-				summary.WriteString(toolCall.Function.Arguments)
-				summary.WriteString("\n")
-			}
-		}
-	}
-
-	// Include final output if successful
-	if resp.Success && resp.Output != "" {
-		summary.WriteString("\nResult: ")
-		// Limit output length to avoid overly long summaries
-		output := resp.Output
-		if len(output) > 500 {
-			output = output[:500] + "..."
-		}
-		summary.WriteString(output)
-		summary.WriteString("\n")
-	}
-
-	return summary.String()
 }
 
 // BuildToolsForTask constructs the filtered tool list for the LLM request,
@@ -1224,4 +1082,36 @@ func pluralize(count int) string {
 		return ""
 	}
 	return "s"
+}
+
+// emitACERetrievalEvent emits an ACE retrieval event with calculated metrics
+func (a *Agent) emitACERetrievalEvent(
+	trajCtx *trajectory.TrajectoryContext,
+	trigger trajectory.TriggerType,
+	query string,
+	bulletsRetrieved int,
+	turn int,
+) {
+	// Calculate cache hit rate
+	total := trajCtx.CacheHits + trajCtx.CacheMisses
+	hitRate := 0.0
+	if total > 0 {
+		hitRate = float64(trajCtx.CacheHits) / float64(total)
+	}
+
+	// BulletsNew is approximated by cache misses
+	bulletsNew := trajCtx.CacheMisses
+
+	a.emitter.Emit(events.Event{
+		Type: events.EventACERetrieval,
+		Data: events.ACERetrievalData{
+			Turn:             turn,
+			Trigger:          string(trigger),
+			Query:            query,
+			BulletsRetrieved: bulletsRetrieved,
+			BulletsNew:       bulletsNew,
+			CacheSize:        len(trajCtx.BulletCache),
+			CacheHitRate:     hitRate,
+		},
+	})
 }

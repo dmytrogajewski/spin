@@ -48,6 +48,7 @@ func TestEventType_String(t *testing.T) {
 		{EventTurnComplete, "turn_complete"},
 		{EventTurnFailed, "turn_failed"},
 		{EventCommandApproval, "command_approval"},
+		{EventACERetrieval, "ace_retrieval"},
 		{EventCommandApproved, "command_approved"},
 		{EventCommandDenied, "command_denied"},
 		{EventError, "error"},
@@ -639,5 +640,59 @@ func TestEvent_TypeSafeHelpers_WrongType(t *testing.T) {
 	}
 	if _, ok := event.ErrorData(); ok {
 		t.Error("ErrorData() should return false")
+	}
+}
+
+// TestEvent_ACERetrievalData tests ACERetrievalData type assertion
+func TestEvent_ACERetrievalData(t *testing.T) {
+	aceData := ACERetrievalData{
+		Turn:             5,
+		Trigger:          "error",
+		Query:            "install nodejs Error: command not found",
+		BulletsRetrieved: 3,
+		BulletsNew:       1,
+		CacheSize:        10,
+		CacheHitRate:     0.67,
+	}
+
+	event := Event{
+		Type: EventACERetrieval,
+		Data: aceData,
+	}
+
+	// Should successfully extract ACERetrievalData
+	data, ok := event.ACERetrievalData()
+	if !ok {
+		t.Fatal("ACERetrievalData() should return true")
+	}
+
+	if data.Turn != 5 {
+		t.Errorf("Turn = %d, want 5", data.Turn)
+	}
+	if data.Trigger != "error" {
+		t.Errorf("Trigger = %q, want \"error\"", data.Trigger)
+	}
+	if data.Query != "install nodejs Error: command not found" {
+		t.Errorf("Query = %q, want \"install nodejs Error: command not found\"", data.Query)
+	}
+	if data.BulletsRetrieved != 3 {
+		t.Errorf("BulletsRetrieved = %d, want 3", data.BulletsRetrieved)
+	}
+	if data.BulletsNew != 1 {
+		t.Errorf("BulletsNew = %d, want 1", data.BulletsNew)
+	}
+	if data.CacheSize != 10 {
+		t.Errorf("CacheSize = %d, want 10", data.CacheSize)
+	}
+	if data.CacheHitRate != 0.67 {
+		t.Errorf("CacheHitRate = %f, want 0.67", data.CacheHitRate)
+	}
+
+	// Other type assertions should return false
+	if _, ok := event.ToolCallStartData(); ok {
+		t.Error("ToolCallStartData() should return false for ACE event")
+	}
+	if _, ok := event.ErrorData(); ok {
+		t.Error("ErrorData() should return false for ACE event")
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
+	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
@@ -23,7 +24,10 @@ import (
 //
 // The loop respects context cancellation and enforces the MaxTurns limit
 // from the agent configuration.
-func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task Task, resp *AgentResponse) ([]Message, *AgentResponse, error) {
+//
+// If trajCtx is provided and progressive context is enabled, uses progressive
+// retrieval with caching. Otherwise falls back to simple retrieval.
+func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task Task, resp *AgentResponse, trajCtx *trajectory.TrajectoryContext) ([]Message, *AgentResponse, error) {
 	maxTurns := a.config.MaxTurns
 
 	// Initialize retrieved bullets slice to accumulate across turns
@@ -38,9 +42,63 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []Message, task T
 
 		a.emitTurnStart(turn + 1)
 
-		// ACE: Retrieve bullets for this turn before LLM call
+		// Update trajectory context
+		if trajCtx != nil {
+			trajCtx.CurrentTurn = turn
+
+			// Extract new steps from messages since last extraction
+			newSteps := extractNewSteps(messages, len(trajCtx.Steps))
+			trajCtx.AppendSteps(newSteps)
+		}
+
+		// ACE: Progressive retrieval with caching
 		var currentTurnBullets []*bullet.Bullet
-		if a.aceService != nil {
+		if a.aceService != nil && trajCtx != nil && a.config.ACE.Retrieval.ProgressiveContext.Enabled {
+			// Progressive retrieval path
+			shouldRetrieve, trigger := a.shouldRetrieveProgressive(trajCtx)
+
+			if shouldRetrieve {
+				// Build dynamic query based on context and trigger
+				query := a.buildQueryFromContext(trajCtx, trigger)
+				slog.Debug("Progressive retrieval triggered",
+					"trigger", trigger,
+					"query", query,
+					"turn", turn+1)
+
+				// Retrieve bullets
+				retrievedBullets, err := a.aceService.Retrieve(ctx, query)
+				if err != nil {
+					slog.Warn("ACE retrieval failed", "error", err, "turn", turn+1)
+				} else {
+					// Record retrieval event
+					event := trajectory.RetrievalEvent{
+						Turn:         turn,
+						Trigger:      trigger,
+						Query:        query,
+						BulletsAdded: extractBulletIDs(retrievedBullets),
+						Timestamp:    time.Now(),
+					}
+					trajCtx.RecordRetrieval(event, retrievedBullets)
+
+					slog.Info("Retrieved bullets",
+						"count", len(retrievedBullets),
+						"trigger", trigger,
+						"cached", len(trajCtx.BulletCache),
+						"hits", trajCtx.CacheHits,
+						"misses", trajCtx.CacheMisses)
+
+					// Emit ACE retrieval event for TUI
+					if a.config.ACE.Retrieval.ProgressiveContext.EmitACEEvents {
+						a.emitACERetrievalEvent(trajCtx, trigger, query, len(retrievedBullets), turn)
+					}
+				}
+			}
+
+			// Get active bullets for this turn (TTL-filtered, from cache)
+			currentTurnBullets = trajCtx.GetActiveBullets()
+
+		} else if a.aceService != nil {
+			// Simple retrieval mode (when progressive context is disabled)
 			query := extractQueryFromMessages(messages)
 			if query != "" {
 				retrievedBullets, err := a.aceService.Retrieve(ctx, query)

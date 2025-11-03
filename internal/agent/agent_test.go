@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
+	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/cycle"
 	"github.com/dmytrogajewski/spin/internal/detection"
@@ -1567,12 +1568,16 @@ func TestExecuteAgentLoop_CycleInterventionPropagated(t *testing.T) {
 	task := task.NewRegular()
 	resp := &AgentResponse{}
 
+	// Initialize trajectory context for the test
+	trajCtx := trajectory.NewTrajectoryContext("List files")
+
 	// Execute the loop - it should detect the cycle and add intervention
 	resultMessages, resultResp, err := agent.executeAgentLoop(
 		context.Background(),
 		initialMessages,
 		task,
 		resp,
+		trajCtx,
 	)
 
 	// The loop should complete (may hit max turns or other stop condition)
@@ -2740,4 +2745,80 @@ func (m *mockTask) MaxTokens() int {
 
 func (m *mockTask) Validate() error {
 	return nil
+}
+
+// TestAgent_emitACERetrievalEvent tests ACE retrieval event emission
+func TestAgent_emitACERetrievalEvent(t *testing.T) {
+	emitter := events.NewEventEmitter(10)
+	_, eventCh, _ := emitter.Subscribe()
+
+	agent := &Agent{
+		emitter: emitter,
+	}
+
+	// Create trajectory context with known metrics
+	ctx := trajectory.NewTrajectoryContext("install nodejs")
+	ctx.CurrentTurn = 5
+
+	// Add some bullets to cache via RecordRetrieval (which updates stats)
+	testBullets := []*bullet.Bullet{
+		{ID: "b1", Content: "test bullet 1"},
+		{ID: "b2", Content: "test bullet 2"},
+	}
+	event := trajectory.RetrievalEvent{
+		Turn:         5,
+		Trigger:      trajectory.TriggerError,
+		Query:        "install nodejs error",
+		BulletsAdded: []string{"b1", "b2"},
+	}
+	ctx.RecordRetrieval(event, testBullets)
+
+	// After RecordRetrieval, cache stats reflect the operation
+	// For this test, we just need to verify the emitted data matches current stats
+
+	// Call emitACERetrievalEvent
+	agent.emitACERetrievalEvent(ctx, trajectory.TriggerError, "install nodejs error", 2, 5)
+
+	// Verify event was emitted
+	select {
+	case emittedEvent := <-eventCh:
+		if emittedEvent.Type != events.EventACERetrieval {
+			t.Errorf("Type = %v, want EventACERetrieval", emittedEvent.Type)
+		}
+
+		data, ok := emittedEvent.ACERetrievalData()
+		if !ok {
+			t.Fatal("Expected ACERetrievalData")
+		}
+
+		if data.Turn != 5 {
+			t.Errorf("Turn = %d, want 5", data.Turn)
+		}
+		if data.Trigger != "error" {
+			t.Errorf("Trigger = %q, want \"error\"", data.Trigger)
+		}
+		if data.Query != "install nodejs error" {
+			t.Errorf("Query = %q, want \"install nodejs error\"", data.Query)
+		}
+		if data.BulletsRetrieved != 2 {
+			t.Errorf("BulletsRetrieved = %d, want 2", data.BulletsRetrieved)
+		}
+		if data.CacheSize != 2 {
+			t.Errorf("CacheSize = %d, want 2", data.CacheSize)
+		}
+
+		// Verify cache hit rate calculation matches trajectory context
+		total := ctx.CacheHits + ctx.CacheMisses
+		expectedHitRate := 0.0
+		if total > 0 {
+			expectedHitRate = float64(ctx.CacheHits) / float64(total)
+		}
+		if data.CacheHitRate != expectedHitRate {
+			t.Errorf("CacheHitRate = %f, want %f (from ctx: hits=%d, misses=%d)",
+				data.CacheHitRate, expectedHitRate, ctx.CacheHits, ctx.CacheMisses)
+		}
+
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Timeout waiting for ACE retrieval event")
+	}
 }

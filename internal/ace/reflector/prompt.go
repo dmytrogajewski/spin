@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
+	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 )
 
 // PromptBuilder constructs reflection prompts for trajectories.
@@ -44,6 +45,19 @@ func (pb *PromptBuilder) BuildSingleTrajectory(traj *generator.Trajectory) strin
 			sb.WriteString(fmt.Sprintf("%d. [%s] %s\n", step.StepNumber+1, step.Type, step.Content))
 		}
 		sb.WriteString("\n")
+	}
+
+	// Include retrieval events if available (progressive context)
+	if traj.Metadata.RetrievalEvents != nil {
+		if events, ok := traj.Metadata.RetrievalEvents.([]trajectory.RetrievalEvent); ok && len(events) > 0 {
+			sb.WriteString("**Retrieval Events:**\n")
+			sb.WriteString("(Shows when and why bullets were retrieved during execution)\n")
+			for _, event := range events {
+				sb.WriteString(fmt.Sprintf("Turn %d [%s]: Query=\"%s\" → Retrieved %d bullets\n",
+					event.Turn, event.Trigger, event.Query, len(event.BulletsAdded)))
+			}
+			sb.WriteString("\n")
+		}
 	}
 
 	// Include retrieved bullets if available
