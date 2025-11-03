@@ -1,0 +1,26 @@
+version: "2.0"
+
+llm:
+  provider: "" # Empty string not allowed
+  model: "gpt-4"
+  timeout: -10s # Negative timeout not allowed
+  max_tokens: -100 # Negative max_tokens not allowed
+  temperature: 3.5 # Out of range [0.0, 2.0]
+
+agent:
+  max_turns: 0 # Must be > 0
+  timeout: -5s # Negative timeout not allowed
+  work_dir: "" # Empty work_dir might be invalid
+
+ace:
+  enabled: true
+  # Missing required playbook_path when enabled
+  top_k: -5 # Negative not allowed
+  min_score: 1.5 # Out of range [0.0, 1.0]
+
+security:
+  sandbox_mode: "invalid-mode" # Invalid enum value
+
+protocol:
+  enable_shell: true
+  shell_timeout: -10s # Negative not allowed

@@ -1,0 +1,27 @@
+version: "2.0"
+
+llm:
+  provider: "ollama"
+  model: "qwen2.5-coder:32b"
+  base_url: "http://localhost:11434"
+  timeout: 60s
+  temperature: 0.7
+  max_tokens: 4096
+
+agent:
+  max_turns: 10
+  timeout: 300s
+  work_dir: "/tmp/spin-agent"
+  require_approval: false
+
+ace:
+  enabled: false
+
+security:
+  sandbox_mode: "docker"
+
+protocol:
+  enable_mcp: false
+  enable_git: true
+  enable_shell: true
+  shell_timeout: 30s

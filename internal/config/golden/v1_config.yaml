@@ -1,0 +1,24 @@
+# V1 configuration format for migration testing
+provider: "ollama"
+model: "llama3.2:3b"
+provider_config:
+  base_url: "http://localhost:11434"
+temperature: 0.8
+
+max_turns: 20
+timeout: 3600s
+llm_timeout: 300s
+work_dir: "/tmp/spin-agent"
+max_tokens: 4096
+require_approval: false
+
+sandbox_mode: "docker"
+policy_file: ""
+allowed_commands:
+  - "ls"
+  - "cat"
+
+enable_mcp: false
+ace_enabled: false
+ace_playbook_path: ""
+ace_trajectory_path: ""

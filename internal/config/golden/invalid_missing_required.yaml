@@ -1,0 +1,18 @@
+version: "2.0"
+
+llm:
+  # Missing required provider field
+  model: "gpt-4"
+  timeout: 60s
+
+agent:
+  # Missing required max_turns field
+  timeout: 300s
+
+security:
+  # Missing required sandbox_mode field
+  policy_file: "/etc/policy.yaml"
+
+protocol:
+  # Missing required fields
+  enable_mcp: true
