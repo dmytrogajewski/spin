@@ -456,8 +456,8 @@ invalid_yaml: [unclosed
 
 			// Test llm.model extraction
 			llmModel := loader.GetString("llm.model")
-			expectedLLMModel := tt.expectedModel
 			// If the config has an llm section, use the expected model, otherwise use default
+			var expectedLLMModel string
 			if tt.name == "valid_yaml_config_with_llm_section" {
 				expectedLLMModel = tt.expectedModel
 			} else {

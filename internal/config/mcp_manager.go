@@ -160,7 +160,7 @@ func (m *MCPManager) writeConfig() error {
 
 	// Write to file (atomic)
 	tmpFile := configFile + ".tmp"
-	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

@@ -58,12 +58,7 @@ func MigrateV1ToV2(v1 *Config) *ConfigV2 {
 func migrateMCPServers(v1Servers []MCPServerConfig) []MCPServerConfigV2 {
 	v2Servers := make([]MCPServerConfigV2, len(v1Servers))
 	for i, v1Server := range v1Servers {
-		v2Servers[i] = MCPServerConfigV2{
-			Name:    v1Server.Name,
-			Command: v1Server.Command,
-			Args:    v1Server.Args,
-			Env:     v1Server.Env,
-		}
+		v2Servers[i] = MCPServerConfigV2(v1Server)
 	}
 	return v2Servers
 }

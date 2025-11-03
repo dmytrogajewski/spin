@@ -40,37 +40,37 @@ func NewLoaderV2() *LoaderV2 {
 // This is required because Viper's AutomaticEnv only works with Get(), not Unmarshal.
 func bindEnvVars(v *viper.Viper) {
 	// LLM fields
-	v.BindEnv("llm.provider")
-	v.BindEnv("llm.model")
-	v.BindEnv("llm.temperature")
-	v.BindEnv("llm.max_tokens")
-	v.BindEnv("llm.timeout")
-	v.BindEnv("llm.base_url")
-	v.BindEnv("llm.api_key")
+	_ = v.BindEnv("llm.provider")
+	_ = v.BindEnv("llm.model")
+	_ = v.BindEnv("llm.temperature")
+	_ = v.BindEnv("llm.max_tokens")
+	_ = v.BindEnv("llm.timeout")
+	_ = v.BindEnv("llm.base_url")
+	_ = v.BindEnv("llm.api_key")
 
 	// Agent fields
-	v.BindEnv("agent.max_turns")
-	v.BindEnv("agent.timeout")
-	v.BindEnv("agent.work_dir")
-	v.BindEnv("agent.require_approval")
+	_ = v.BindEnv("agent.max_turns")
+	_ = v.BindEnv("agent.timeout")
+	_ = v.BindEnv("agent.work_dir")
+	_ = v.BindEnv("agent.require_approval")
 
 	// ACE fields
-	v.BindEnv("ace.enabled")
-	v.BindEnv("ace.playbook_path")
-	v.BindEnv("ace.trajectory_path")
-	v.BindEnv("ace.top_k")
-	v.BindEnv("ace.min_score")
+	_ = v.BindEnv("ace.enabled")
+	_ = v.BindEnv("ace.playbook_path")
+	_ = v.BindEnv("ace.trajectory_path")
+	_ = v.BindEnv("ace.top_k")
+	_ = v.BindEnv("ace.min_score")
 
 	// Security fields
-	v.BindEnv("security.sandbox_mode")
-	v.BindEnv("security.policy_file")
-	v.BindEnv("security.allowed_commands")
+	_ = v.BindEnv("security.sandbox_mode")
+	_ = v.BindEnv("security.policy_file")
+	_ = v.BindEnv("security.allowed_commands")
 
 	// Protocol fields
-	v.BindEnv("protocol.enable_mcp")
-	v.BindEnv("protocol.enable_git")
-	v.BindEnv("protocol.enable_shell")
-	v.BindEnv("protocol.shell_timeout")
+	_ = v.BindEnv("protocol.enable_mcp")
+	_ = v.BindEnv("protocol.enable_git")
+	_ = v.BindEnv("protocol.enable_shell")
+	_ = v.BindEnv("protocol.shell_timeout")
 }
 
 // LoadFromFile loads configuration from a specific YAML file.
