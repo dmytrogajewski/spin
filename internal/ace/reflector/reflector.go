@@ -26,15 +26,33 @@ type reflector struct {
 	llm           llm.Provider
 	promptBuilder *PromptBuilder
 	validator     *InsightValidator
+	maxTokens     int
+}
+
+// Option configures a Reflector.
+type Option func(*reflector)
+
+// WithMaxTokens sets the maximum tokens for LLM calls.
+func WithMaxTokens(maxTokens int) Option {
+	return func(r *reflector) {
+		r.maxTokens = maxTokens
+	}
 }
 
 // NewReflector creates a new reflector.
-func NewReflector(llmProvider llm.Provider) Reflector {
-	return &reflector{
+func NewReflector(llmProvider llm.Provider, opts ...Option) Reflector {
+	r := &reflector{
 		llm:           llmProvider,
 		promptBuilder: NewPromptBuilder(),
 		validator:     NewInsightValidator(),
+		maxTokens:     4096, // Default max tokens for LLM calls
 	}
+
+	for _, opt := range opts {
+		opt(r)
+	}
+
+	return r
 }
 
 // Reflect analyzes trajectories and extracts insights.
@@ -86,7 +104,12 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		Temperature: openai.F(0.3),
 	}
 
-	slog.Debug("Calling LLM for reflection", "temperature", 0.3)
+	// Set MaxTokens if configured
+	if r.maxTokens > 0 {
+		params.MaxTokens = openai.F(int64(r.maxTokens))
+	}
+
+	slog.Debug("Calling LLM for reflection", "temperature", 0.3, "max_tokens", r.maxTokens)
 
 	completion, err := r.llm.Complete(ctx, params)
 	if err != nil {
@@ -220,6 +243,11 @@ func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iterati
 			openai.UserMessage(prompt),
 		}),
 		Temperature: openai.F(0.3),
+	}
+
+	// Set MaxTokens if configured
+	if r.maxTokens > 0 {
+		params.MaxTokens = openai.F(int64(r.maxTokens))
 	}
 
 	completion, err := r.llm.Complete(ctx, params)

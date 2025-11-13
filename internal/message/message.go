@@ -1,19 +1,18 @@
 package message
 
-import "time"
+import (
+	"time"
 
-// ToolCall represents a tool invocation from an assistant message.
-type ToolCall struct {
-	ID       string       `json:"id"`
-	Type     string       `json:"type"`
-	Function FunctionCall `json:"function"`
-}
+	"github.com/dmytrogajewski/spin/internal/orchestration"
+)
 
-// FunctionCall contains function invocation details.
-type FunctionCall struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
-}
+// ToolCall is an alias for orchestration.ToolCall to eliminate duplication.
+// Use orchestration.ToolCall directly in new code.
+type ToolCall = orchestration.ToolCall
+
+// FunctionCall is an alias for orchestration.ToolCallFunction to eliminate duplication.
+// Use orchestration.ToolCallFunction directly in new code.
+type FunctionCall = orchestration.ToolCallFunction
 
 // Metadata stores string key-value metadata for messages.
 type Metadata map[string]string

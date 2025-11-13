@@ -7,15 +7,16 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
-// OrchestrationService handles tool execution, task management, and planning.
+// OrchestrationService handles tool execution and planning.
 //
 // This service centralizes orchestration logic that was previously embedded in Agent.
-// It provides a clean interface for executing tools, managing task modes, and
-// coordinating execution plans.
+// It provides a clean interface for executing tools and coordinating execution plans.
+//
+// Note: Task management has been removed in favor of compile-time task creation
+// via task.NewTask(). This eliminates the runtime registry pattern.
 type OrchestrationService struct {
 	toolExecutor *ToolExecutor
 	toolRegistry *tools.Registry
-	taskRegistry *Registry
 	planner      *Plan
 }
 
@@ -26,12 +27,10 @@ type OrchestrationService struct {
 func NewOrchestrationService(
 	toolExecutor *ToolExecutor,
 	toolRegistry *tools.Registry,
-	taskRegistry *Registry,
 ) *OrchestrationService {
 	return &OrchestrationService{
 		toolExecutor: toolExecutor,
 		toolRegistry: toolRegistry,
-		taskRegistry: taskRegistry,
 		planner:      nil,
 	}
 }
@@ -60,51 +59,6 @@ func (s *OrchestrationService) ExecuteBatch(ctx context.Context, calls []*ToolCa
 	return s.toolExecutor.ExecuteBatch(ctx, calls)
 }
 
-// GetTask retrieves a task by name from the registry.
-//
-// Returns an error if the task registry is not configured or if the task
-// is not found.
-func (s *OrchestrationService) GetTask(name string) (Task, error) {
-	if s.taskRegistry == nil {
-		return nil, fmt.Errorf("task registry not configured")
-	}
-
-	task, err := s.taskRegistry.Get(name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get task '%s': %w", name, err)
-	}
-
-	return task, nil
-}
-
-// GetDefaultTask returns the default task mode.
-//
-// Returns an error if the task registry is not configured or if no default
-// task is set.
-func (s *OrchestrationService) GetDefaultTask() (Task, error) {
-	if s.taskRegistry == nil {
-		return nil, fmt.Errorf("task registry not configured")
-	}
-
-	task, err := s.taskRegistry.GetDefault()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get default task: %w", err)
-	}
-
-	return task, nil
-}
-
-// ListTasks returns all registered task names in sorted order.
-//
-// Returns an empty slice if the task registry is not configured.
-func (s *OrchestrationService) ListTasks() []string {
-	if s.taskRegistry == nil {
-		return []string{}
-	}
-
-	return s.taskRegistry.List()
-}
-
 // SetPlanner sets the execution planner.
 //
 // The planner is used for task decomposition and execution planning.
@@ -117,14 +71,6 @@ func (s *OrchestrationService) SetPlanner(planner *Plan) {
 // Returns nil if no planner has been set.
 func (s *OrchestrationService) GetPlanner() *Plan {
 	return s.planner
-}
-
-// GetTaskRegistry returns the task registry.
-//
-// This allows callers to access the task registry for advanced operations.
-// Returns nil if no task registry is configured.
-func (s *OrchestrationService) GetTaskRegistry() *Registry {
-	return s.taskRegistry
 }
 
 // GetToolRegistry returns the tool registry.

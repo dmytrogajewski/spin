@@ -61,13 +61,12 @@ func runTUI(cmd *cobra.Command, args []string) error {
 
 	// Configure logging for TUI mode based on debug flag
 	debugFlag, _ := cmd.Flags().GetBool("debug")
-	if !debugFlag {
-		// Suppress INFO level logs to prevent stderr interference (only when not in debug mode)
-		setupTUILogging()
+	if debugFlag {
+		// In debug mode, enable DEBUG level logs
+		slog.SetLogLoggerLevel(slog.LevelDebug)
 	} else {
-		// In debug mode, suppress slog to stdout but keep structured logging via events
-		// This prevents duplicate logs while maintaining detailed logging to JSONL file
-		slog.SetLogLoggerLevel(slog.LevelError)
+		// In normal mode, suppress INFO/DEBUG logs to prevent stderr interference
+		setupTUILogging()
 	}
 
 	configLoader, err := loadConfig()
@@ -177,6 +176,17 @@ func runTUI(cmd *cobra.Command, args []string) error {
 					tokenCount := int64(conv.GetTokenCount())
 					ui.SetTokenCount(tokenCount)
 				}
+
+				// Handle real-time token count updates during turn execution
+				// This shows estimated tokens as the turn progresses (before history is updated)
+				if event.Type == events.EventTurnProgress {
+					if data, ok := event.Data.(events.TurnEventData); ok {
+						if data.TokensUsed > 0 {
+							// Use the estimated token count from the event
+							ui.SetTokenCount(int64(data.TokensUsed))
+						}
+					}
+				}
 			}
 		}
 	}()
@@ -247,7 +257,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 }
 
 // createConversationForTUI creates a conversation configured for TUI mode using the new builder pattern.
-func createConversationForTUI(ctx context.Context, provider llm.Provider, maxTurns int, configLoader *config.Loader, ui *adapters.PureTTY, debug bool, autoApprove bool) (*conversation.Conversation, error) {
+func createConversationForTUI(ctx context.Context, provider llm.Provider, maxTurns int, configLoader *config.LoaderV2, ui *adapters.PureTTY, debug bool, autoApprove bool) (*conversation.Conversation, error) {
 	workDir := getWorkingDirectory()
 	cfg := buildConfig(configLoader, maxTurns, workDir)
 
@@ -275,7 +285,7 @@ func createConversationForTUI(ctx context.Context, provider llm.Provider, maxTur
 	var shellSvc *shell.Service
 	var mcpSvc *mcp.Service
 
-	if cfg.EnableGit {
+	if cfg.Protocol.EnableGit {
 		var err error
 		gitSvc, err = git.NewService(true, workDir, logger)
 		if err != nil {
@@ -283,9 +293,9 @@ func createConversationForTUI(ctx context.Context, provider llm.Provider, maxTur
 		}
 	}
 
-	if cfg.EnableShell {
+	if cfg.Protocol.EnableShell {
 		var err error
-		shellSvc, err = shell.NewService(true, workDir, logger, cfg.ShellTimeout)
+		shellSvc, err = shell.NewService(true, workDir, logger, cfg.Protocol.ShellTimeout)
 		if err != nil {
 			if gitSvc != nil {
 				gitSvc.Close()
@@ -294,12 +304,12 @@ func createConversationForTUI(ctx context.Context, provider llm.Provider, maxTur
 		}
 	}
 
-	if cfg.EnableMCP && len(cfg.MCPServers) > 0 {
+	if cfg.Protocol.EnableMCP && len(cfg.Protocol.MCPServers) > 0 {
 		mcpCfg := &mcp.Config{
 			EnableMCP:  true,
-			MCPServers: make([]mcp.MCPServerConfig, len(cfg.MCPServers)),
+			MCPServers: make([]mcp.MCPServerConfig, len(cfg.Protocol.MCPServers)),
 		}
-		for i, srv := range cfg.MCPServers {
+		for i, srv := range cfg.Protocol.MCPServers {
 			mcpCfg.MCPServers[i] = mcp.MCPServerConfig{
 				Name:    srv.Name,
 				Command: srv.Command,
@@ -399,12 +409,12 @@ func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provide
 }
 
 // buildConfig builds the configuration from multiple sources.
-func buildConfig(configLoader *config.Loader, maxTurns int, workDir string) *config.Config {
-	cfg := config.DefaultConfig()
-	cfg.WorkDir = workDir
+func buildConfig(configLoader *config.LoaderV2, maxTurns int, workDir string) *config.ConfigV2 {
+	cfg := config.DefaultConfigV2()
+	cfg.Agent.WorkDir = workDir
 
 	// Layer 1: Load from config file
-	var fileCfg config.Config
+	var fileCfg config.ConfigV2
 	if err := configLoader.Unmarshal(&fileCfg); err == nil {
 		applyFileConfig(cfg, &fileCfg)
 	}
@@ -416,42 +426,42 @@ func buildConfig(configLoader *config.Loader, maxTurns int, workDir string) *con
 }
 
 // applyFileConfig applies configuration from file to the main config.
-func applyFileConfig(cfg *config.Config, fileCfg *config.Config) {
-	if fileCfg.Provider != "" {
-		cfg.Provider = fileCfg.Provider
+func applyFileConfig(cfg *config.ConfigV2, fileCfg *config.ConfigV2) {
+	if fileCfg.LLM.Provider != "" {
+		cfg.LLM.Provider = fileCfg.LLM.Provider
 	}
-	if fileCfg.Model != "" {
-		cfg.Model = fileCfg.Model
+	if fileCfg.LLM.Model != "" {
+		cfg.LLM.Model = fileCfg.LLM.Model
 	}
-	if fileCfg.MaxTurns > 0 {
-		cfg.MaxTurns = fileCfg.MaxTurns
+	if fileCfg.Agent.MaxTurns > 0 {
+		cfg.Agent.MaxTurns = fileCfg.Agent.MaxTurns
 	}
-	if fileCfg.Timeout > 0 {
-		cfg.Timeout = fileCfg.Timeout
+	if fileCfg.Agent.Timeout > 0 {
+		cfg.Agent.Timeout = fileCfg.Agent.Timeout
 	}
-	if fileCfg.MaxTokens > 0 {
-		cfg.MaxTokens = fileCfg.MaxTokens
+	if fileCfg.LLM.MaxTokens > 0 {
+		cfg.LLM.MaxTokens = fileCfg.LLM.MaxTokens
 	}
 }
 
 // applyCLIFlags applies CLI flags to the configuration.
-func applyCLIFlags(cfg *config.Config, maxTurns int) {
+func applyCLIFlags(cfg *config.ConfigV2, maxTurns int) {
 	if maxTurns > 0 {
-		cfg.MaxTurns = maxTurns
+		cfg.Agent.MaxTurns = maxTurns
 	}
 	if flagProvider != "" {
-		cfg.Provider = flagProvider
+		cfg.LLM.Provider = flagProvider
 	}
 	if flagModel != "" {
-		cfg.Model = flagModel
+		cfg.LLM.Model = flagModel
 	}
 }
 
 // applyDebugFlag applies the debug flag to configuration.
-func applyDebugFlag(cfg *config.Config, debug bool) {
+func applyDebugFlag(cfg *config.ConfigV2, debug bool) {
 	if debug {
-		cfg.Debug = true
-		cfg.LogLevel = "debug"
+		cfg.Agent.Debug = true
+		cfg.Agent.LogLevel = "debug"
 		// Don't suppress INFO logs when debug is enabled
 		// This allows debug logging to work properly
 	}

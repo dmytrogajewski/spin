@@ -139,8 +139,8 @@ func runMCPAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load config
-	loader := config.NewLoader()
-	if err := loader.Load(flagConfigFile); err != nil {
+	loader := config.NewLoaderV2()
+	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
@@ -174,8 +174,8 @@ func runMCPList(cmd *cobra.Command, args []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
 	// Load config
-	loader := config.NewLoader()
-	if err := loader.Load(flagConfigFile); err != nil {
+	loader := config.NewLoaderV2()
+	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
@@ -215,8 +215,8 @@ func runMCPGet(cmd *cobra.Command, args []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
 	// Load config
-	loader := config.NewLoader()
-	if err := loader.Load(flagConfigFile); err != nil {
+	loader := config.NewLoaderV2()
+	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
@@ -266,8 +266,8 @@ func runMCPRemove(cmd *cobra.Command, args []string) error {
 	yes, _ := cmd.Flags().GetBool("yes")
 
 	// Load config
-	loader := config.NewLoader()
-	if err := loader.Load(flagConfigFile); err != nil {
+	loader := config.NewLoaderV2()
+	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 

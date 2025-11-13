@@ -25,6 +25,11 @@ func (a *Agent) buildQueryFromContext(
 	// Start with base query
 	parts := []string{ctx.Query}
 
+	// Safety check for aceConfig
+	if a.aceConfig == nil {
+		return ctx.Query
+	}
+
 	// Add context based on trigger type
 	switch trigger {
 	case trajectory.TriggerInitial:
@@ -33,12 +38,12 @@ func (a *Agent) buildQueryFromContext(
 
 	case trajectory.TriggerError:
 		// Add error patterns from recent steps
-		errorPatterns := trajectory.ExtractErrorPatterns(ctx.Steps, a.config.ACE.Retrieval.ProgressiveContext.ErrorLookback)
+		errorPatterns := trajectory.ExtractErrorPatterns(ctx.Steps, a.aceConfig.Retrieval.ProgressiveContext.ErrorLookback)
 		parts = append(parts, errorPatterns...)
 
 	case trajectory.TriggerToolChange:
 		// Add tool names from recent steps
-		tools := ctx.GetRecentTools(a.config.ACE.Retrieval.ProgressiveContext.ToolChangeLookback)
+		tools := ctx.GetRecentTools(a.aceConfig.Retrieval.ProgressiveContext.ToolChangeLookback)
 		parts = append(parts, tools...)
 
 	case trajectory.TriggerInterval:

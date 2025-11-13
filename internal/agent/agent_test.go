@@ -61,7 +61,7 @@ func TestNewAgent(t *testing.T) {
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:     detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry(), orchestration.NewRegistry()),
+			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry()),
 			environment:   &Environment{WorkDir: "/tmp"},
 			emitter:       events.NewEventEmitter(100),
 			wantErr:       false,
@@ -76,7 +76,7 @@ func TestNewAgent(t *testing.T) {
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:     detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry(), orchestration.NewRegistry()),
+			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry()),
 			environment:   &Environment{WorkDir: "/tmp"},
 			emitter:       events.NewEventEmitter(100),
 			wantErr:       true,
@@ -87,7 +87,7 @@ func TestNewAgent(t *testing.T) {
 			provider:      llm.NewMockProvider("test"),
 			security:      nil,
 			detection:     detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry(), orchestration.NewRegistry()),
+			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry()),
 			environment:   &Environment{WorkDir: "/tmp"},
 			emitter:       events.NewEventEmitter(100),
 			wantErr:       true,
@@ -103,7 +103,7 @@ func TestNewAgent(t *testing.T) {
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:     nil,
-			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry(), orchestration.NewRegistry()),
+			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry()),
 			environment:   &Environment{WorkDir: "/tmp"},
 			emitter:       events.NewEventEmitter(100),
 			wantErr:       true,
@@ -135,7 +135,7 @@ func TestNewAgent(t *testing.T) {
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:     detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry(), orchestration.NewRegistry()),
+			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry()),
 			environment:   nil,
 			emitter:       events.NewEventEmitter(100),
 			wantErr:       true,
@@ -151,7 +151,7 @@ func TestNewAgent(t *testing.T) {
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:     detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry(), orchestration.NewRegistry()),
+			orchestration: orchestration.NewOrchestrationService(nil, tools.NewRegistry()),
 			environment:   &Environment{WorkDir: "/tmp"},
 			emitter:       nil,
 			wantErr:       true,
@@ -196,7 +196,7 @@ func TestAgent_WithACEService(t *testing.T) {
 	}
 
 	mockLLM := llm.NewMockProvider("test")
-	aceService, err := NewACEService(cfg, tmpDir, mockLLM, "test-model")
+	aceService, err := NewACEService(cfg, tmpDir, mockLLM, "test-model", 0)
 	require.NoError(t, err)
 
 	// Create agent with ACE
@@ -209,7 +209,7 @@ func TestAgent_WithACEService(t *testing.T) {
 			return security.NewSecurityService(validator, approvalService)
 		}(),
 		detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-		orchestration.NewOrchestrationService(nil, tools.NewRegistry(), orchestration.NewRegistry()),
+		orchestration.NewOrchestrationService(nil, tools.NewRegistry()),
 		&Environment{WorkDir: "/tmp"},
 		events.NewEventEmitter(100),
 		WithACEService(aceService),
@@ -239,7 +239,7 @@ func TestAgent_ACEIntegration_EndToEnd(t *testing.T) {
 		},
 	}
 
-	aceService, err := NewACEService(cfg, tmpDir, nil, "")
+	aceService, err := NewACEService(cfg, tmpDir, nil, "", 0)
 	require.NoError(t, err)
 
 	// Add test bullets to playbook
@@ -276,11 +276,8 @@ Here's my solution...`)
 	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 
 	// Create task registry and register tasks
-	taskRegistry := orchestration.NewRegistry()
-	_ = taskRegistry.Register("regular", task.NewRegular())
-	_ = taskRegistry.SetDefault("regular")
 
-	orchestrationService := orchestration.NewOrchestrationService(nil, tools.NewRegistry(), taskRegistry)
+	orchestrationService := orchestration.NewOrchestrationService(nil, tools.NewRegistry())
 
 	// Create agent with ACE
 	agent, err := NewAgent(
@@ -291,13 +288,15 @@ Here's my solution...`)
 		&Environment{WorkDir: tmpDir},
 		emitter,
 		WithACEService(aceService),
+		WithMaxTurns(10),
+		WithAgentTimeout(30*time.Second),
 	)
 	require.NoError(t, err)
 
 	// Execute agent with input that should trigger bullet retrieval
 	request := &AgentRequest{
-		Input:    "Write a function to process user input",
-		TaskName: "regular",
+		Input: "Write a function to process user input",
+		Task:  task.NewRegular(),
 	}
 
 	response, err := agent.Execute(ctx, request)
@@ -320,7 +319,7 @@ func TestAgent_ACEDisabled(t *testing.T) {
 		Enabled: false,
 	}
 
-	aceService, err := NewACEService(cfg, tmpDir, nil, "")
+	aceService, err := NewACEService(cfg, tmpDir, nil, "", 0)
 	require.NoError(t, err)
 
 	mockProvider := llm.NewMockProvider("test-response")
@@ -334,11 +333,8 @@ func TestAgent_ACEDisabled(t *testing.T) {
 	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 
 	// Create task registry and register tasks
-	taskRegistry := orchestration.NewRegistry()
-	_ = taskRegistry.Register("regular", task.NewRegular())
-	_ = taskRegistry.SetDefault("regular")
 
-	orchestrationService := orchestration.NewOrchestrationService(nil, tools.NewRegistry(), taskRegistry)
+	orchestrationService := orchestration.NewOrchestrationService(nil, tools.NewRegistry())
 
 	// Create agent with disabled ACE
 	agent, err := NewAgent(
@@ -355,27 +351,13 @@ func TestAgent_ACEDisabled(t *testing.T) {
 	// Execute should work normally without ACE
 	ctx := context.Background()
 	request := &AgentRequest{
-		Input:    "Simple test request",
-		TaskName: "regular",
+		Input: "Simple test request",
+		Task:  task.NewRegular(),
 	}
 
 	response, err := agent.Execute(ctx, request)
 	require.NoError(t, err)
 	assert.True(t, response.Success)
-}
-
-// TestAgent_ListTaskModes tests the ListTaskModes method
-func TestAgent_ListTaskModes(t *testing.T) {
-	agent := createTestAgentWithServices(t)
-
-	modes := agent.ListTaskModes()
-
-	assert.NotNil(t, modes)
-	assert.GreaterOrEqual(t, len(modes), 4) // At least 4 built-in modes
-	assert.Contains(t, modes, "regular")
-	assert.Contains(t, modes, "review")
-	assert.Contains(t, modes, "compact")
-	assert.Contains(t, modes, "planning")
 }
 
 // TestAgent_Execute_Integration is a minimal integration test
@@ -385,8 +367,8 @@ func TestAgent_Execute_Integration(t *testing.T) {
 	agent := createTestAgentWithServices(t)
 
 	req := &AgentRequest{
-		Input:    "Hello, how are you?",
-		TaskName: "regular",
+		Input: "Hello, how are you?",
+		Task:  task.NewRegular(),
 	}
 
 	ctx := context.Background()
@@ -434,12 +416,6 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 	_ = toolRegistry.Register(tools.NewGitContextTool(workDir))
 
 	// Build task registry (using orchestration.Registry, not task.Registry)
-	taskRegistry := orchestration.NewRegistry()
-	_ = taskRegistry.Register("regular", task.NewRegular())
-	_ = taskRegistry.Register("review", task.NewReview())
-	_ = taskRegistry.Register("compact", task.NewCompact())
-	_ = taskRegistry.Register("planning", task.NewPlanning())
-	_ = taskRegistry.SetDefault("regular")
 
 	// Build OrchestrationService
 	toolExecutor := orchestration.NewToolExecutor(orchestration.ToolExecutorConfig{
@@ -449,7 +425,7 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 		Emitter:         emitter,
 		WorkDir:         workDir,
 	})
-	orchestrationService := orchestration.NewOrchestrationService(toolExecutor, toolRegistry, taskRegistry)
+	orchestrationService := orchestration.NewOrchestrationService(toolExecutor, toolRegistry)
 
 	// Create agent
 	agent, err := NewAgent(llmProvider, securityService, detectionService, orchestrationService, env, emitter)
@@ -491,12 +467,6 @@ func newAgentForTest(
 	_ = toolRegistry.Register(tools.NewGitContextTool(environment.WorkDir))
 
 	// Build task registry (using orchestration.Registry, not task.Registry)
-	taskRegistry := orchestration.NewRegistry()
-	_ = taskRegistry.Register("regular", task.NewRegular())
-	_ = taskRegistry.Register("review", task.NewReview())
-	_ = taskRegistry.Register("compact", task.NewCompact())
-	_ = taskRegistry.Register("planning", task.NewPlanning())
-	_ = taskRegistry.SetDefault("regular")
 
 	// Build OrchestrationService
 	toolExecutor := orchestration.NewToolExecutor(orchestration.ToolExecutorConfig{
@@ -506,7 +476,7 @@ func newAgentForTest(
 		Emitter:         emitter,
 		WorkDir:         environment.WorkDir,
 	})
-	orchestrationService := orchestration.NewOrchestrationService(toolExecutor, toolRegistry, taskRegistry)
+	orchestrationService := orchestration.NewOrchestrationService(toolExecutor, toolRegistry)
 
 	// Create agent with services using the real NewAgent function
 	agent := &Agent{
@@ -516,7 +486,8 @@ func newAgentForTest(
 		orchestration: orchestrationService,
 		context:       environment,
 		emitter:       emitter,
-		config:        DefaultConfig(),
+		maxTurns:      10,               // Default for tests
+		timeout:       30 * time.Second, // Default for tests
 	}
 
 	// Apply options
@@ -569,7 +540,6 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 	orchestrationService := orchestration.NewOrchestrationService(
 		toolExecutor,
 		toolRegistry,
-		nil, // taskRegistry
 	)
 
 	env := &Environment{
@@ -610,6 +580,8 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 		orchestrationService,
 		env,
 		emitter,
+		WithMaxTurns(10),
+		WithAgentTimeout(30*time.Second),
 	)
 	require.NoError(t, err)
 
@@ -679,7 +651,6 @@ func TestToolExecutionWithRealToolCall(t *testing.T) {
 	orchestrationService := orchestration.NewOrchestrationService(
 		toolExecutor,
 		toolRegistry,
-		nil,
 	)
 
 	env := &Environment{
@@ -871,7 +842,6 @@ func TestToolExecutionWithRealOllama(t *testing.T) {
 	orchestrationService := orchestration.NewOrchestrationService(
 		toolExecutor,
 		toolRegistry,
-		nil,
 	)
 
 	env := &Environment{
@@ -1003,7 +973,6 @@ func TestDirectToolCallWithOllama(t *testing.T) {
 	orchestrationService := orchestration.NewOrchestrationService(
 		toolExecutor,
 		toolRegistry,
-		nil,
 	)
 
 	env := &Environment{
@@ -1147,7 +1116,7 @@ func BenchmarkAgent_ResolveTaskExplicit(b *testing.B) {
 // Expected: ~100-150 ns/op (map lookup + RLock)
 func BenchmarkAgent_ResolveTaskByName(b *testing.B) {
 	agent := newBenchAgent(b)
-	req := &AgentRequest{TaskName: "review"}
+	req := &AgentRequest{Task: task.NewReview()}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1322,12 +1291,6 @@ func newBenchAgent(b *testing.B) *Agent {
 	_ = toolRegistry.Register(tools.NewGitContextTool("/tmp"))
 
 	// Create task registry with all modes
-	taskRegistry := orchestration.NewRegistry()
-	_ = taskRegistry.Register("regular", task.NewRegular())
-	_ = taskRegistry.Register("review", task.NewReview())
-	_ = taskRegistry.Register("compact", task.NewCompact())
-	_ = taskRegistry.Register("planning", task.NewPlanning())
-	_ = taskRegistry.SetDefault("regular")
 
 	toolExecutor := orchestration.NewToolExecutor(orchestration.ToolExecutorConfig{
 		Registry:        toolRegistry,
@@ -1336,7 +1299,7 @@ func newBenchAgent(b *testing.B) *Agent {
 		Emitter:         emitter,
 		WorkDir:         "/tmp",
 	})
-	orchestrationService := orchestration.NewOrchestrationService(toolExecutor, toolRegistry, taskRegistry)
+	orchestrationService := orchestration.NewOrchestrationService(toolExecutor, toolRegistry)
 
 	agent, err := NewAgent(
 		&mockLLMProvider{},
@@ -1422,7 +1385,7 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 	agent := createTestAgentWithServices(t)
 
 	// Enable cycle detection
-	agent.config.CycleDetection.Enabled = true
+	agent.cycleDetection = true
 
 	// Create initial conversation with some messages
 	initialMessages := []message.Message{
@@ -1546,8 +1509,8 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 // properly uses intervention messages.
 func TestExecuteAgentLoop_CycleInterventionPropagated(t *testing.T) {
 	agent := createTestAgentWithServices(t)
-	agent.config.CycleDetection.Enabled = true
-	agent.config.MaxTurns = 10
+	agent.cycleDetection = true
+	agent.maxTurns = 10
 
 	// Create a mock LLM that returns same tool call repeatedly
 	mockLLM := llm.NewMockProvider("test")
@@ -1652,7 +1615,7 @@ func TestAgent_TaskBudgetOverridesConfig(t *testing.T) {
 	}
 
 	// Override config to 4K tokens
-	agent.config.MaxTokens = 4096
+	agent.maxTokens = 4096
 
 	// Regular mode has 16K tokens
 	regularTask := task.NewRegular()
@@ -1699,7 +1662,7 @@ func TestAgent_ConfigBudgetUsedWhenTaskZero(t *testing.T) {
 	}
 
 	// Set config to 8K tokens
-	agent.config.MaxTokens = 8192
+	agent.maxTokens = 8192
 
 	// Create a custom task that returns 0 for MaxTokens
 	zeroBudgetTask := &zeroBudgetTask{}
@@ -1743,7 +1706,7 @@ func TestAgent_ConcurrentTokenBudget(t *testing.T) {
 	}
 
 	// Set config to 4K tokens
-	agent.config.MaxTokens = 4096
+	agent.maxTokens = 4096
 
 	// Create different tasks with different budgets
 	tasks := []Task{
@@ -1908,7 +1871,7 @@ func (c *capturingLLMProvider) Close() error {
 // ============================================================================
 
 // newTestAgentMinimal creates a minimal agent for testing with services
-func newTestAgentMinimal(toolRegistry *tools.Registry, taskRegistry *orchestration.Registry) *Agent {
+func newTestAgentMinimal(toolRegistry *tools.Registry) *Agent {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalService(nil, emitter, validator)
@@ -1920,9 +1883,6 @@ func newTestAgentMinimal(toolRegistry *tools.Registry, taskRegistry *orchestrati
 	if toolRegistry == nil {
 		toolRegistry = tools.NewRegistry()
 	}
-	if taskRegistry == nil {
-		taskRegistry = orchestration.NewRegistry()
-	}
 
 	toolExecutor := orchestration.NewToolExecutor(orchestration.ToolExecutorConfig{
 		Registry:        toolRegistry,
@@ -1931,7 +1891,7 @@ func newTestAgentMinimal(toolRegistry *tools.Registry, taskRegistry *orchestrati
 		Emitter:         emitter,
 		WorkDir:         "/tmp",
 	})
-	orchestrationService := orchestration.NewOrchestrationService(toolExecutor, toolRegistry, taskRegistry)
+	orchestrationService := orchestration.NewOrchestrationService(toolExecutor, toolRegistry)
 
 	agent, _ := NewAgent(
 		&mockLLMProvider{},
@@ -1950,7 +1910,7 @@ func newTestAgentMinimal(toolRegistry *tools.Registry, taskRegistry *orchestrati
 // has changed significantly and these tests are no longer applicable.
 
 func TestAgent_validateToolCall(t *testing.T) {
-	agent := newTestAgentMinimal(nil, nil)
+	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
 		name    string
@@ -2011,7 +1971,7 @@ func TestAgent_validateToolCall(t *testing.T) {
 }
 
 func TestAgent_parseToolArguments(t *testing.T) {
-	agent := newTestAgentMinimal(nil, nil)
+	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
 		name    string
@@ -2070,7 +2030,7 @@ func TestAgent_parseToolArguments(t *testing.T) {
 }
 
 func TestAgent_addFinalMessage(t *testing.T) {
-	agent := newTestAgentMinimal(nil, nil)
+	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
 		name     string
@@ -2111,7 +2071,7 @@ func TestAgent_addFinalMessage(t *testing.T) {
 }
 
 func TestAgent_emitTurnStart(t *testing.T) {
-	agent := newTestAgentMinimal(nil, nil)
+	agent := newTestAgentMinimal(nil)
 
 	// This test mainly ensures the method doesn't panic
 	// In a real test, you'd want to verify the event was emitted
@@ -2121,12 +2081,12 @@ func TestAgent_emitTurnStart(t *testing.T) {
 }
 
 func TestAgent_applyTimeout(t *testing.T) {
-	agent := newTestAgentMinimal(nil, nil)
+	agent := newTestAgentMinimal(nil)
 
 	ctx := context.Background()
 
 	// Test with default timeout
-	agent.config.Timeout = 0
+	agent.timeout = 0
 	ctxWithTimeout, cancel := agent.applyTimeout(ctx)
 	if ctxWithTimeout == ctx {
 		t.Error("Expected context to be modified with timeout")
@@ -2134,7 +2094,7 @@ func TestAgent_applyTimeout(t *testing.T) {
 	cancel()
 
 	// Test with custom timeout
-	agent.config.Timeout = 5 * time.Second
+	agent.timeout = 5 * time.Second
 	ctxWithTimeout, cancel = agent.applyTimeout(ctx)
 	if ctxWithTimeout == ctx {
 		t.Error("Expected context to be modified with timeout")
@@ -2143,7 +2103,7 @@ func TestAgent_applyTimeout(t *testing.T) {
 }
 
 func TestAgent_executeSetup(t *testing.T) {
-	agent := newTestAgentMinimal(nil, nil)
+	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
 		name    string
@@ -2188,7 +2148,7 @@ func TestAgent_executeSetup(t *testing.T) {
 }
 
 func TestAgent_finalizeResponse(t *testing.T) {
-	agent := newTestAgentMinimal(nil, nil)
+	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
 		name       string
@@ -2373,8 +2333,8 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 
 			// Create request
 			req := &AgentRequest{
-				Input:    "Create a terminal Tetris game in Rust",
-				TaskName: "regular",
+				Input: "Create a terminal Tetris game in Rust",
+				Task:  task.NewRegular(),
 			}
 
 			// Track execution time to detect if agent gets stuck
@@ -2439,8 +2399,8 @@ func TestAgentTimeoutHandling(t *testing.T) {
 
 	// Create request
 	req := &AgentRequest{
-		Input:    "Create a terminal Tetris game in Rust",
-		TaskName: "regular",
+		Input: "Create a terminal Tetris game in Rust",
+		Task:  task.NewRegular(),
 	}
 
 	// Execute agent
@@ -2510,15 +2470,15 @@ func TestAgentCycleDetection(t *testing.T) {
 
 	// Create agent with cycle detection enabled
 	agent := createTestAgentWithMockLLM(t, mockLLM)
-	agent.config.CycleDetection.Enabled = true
+	agent.cycleDetection = true
 
 	// Create context
 	ctx := context.Background()
 
 	// Create request
 	req := &AgentRequest{
-		Input:    "Create a terminal Tetris game in Rust",
-		TaskName: "regular",
+		Input: "Create a terminal Tetris game in Rust",
+		Task:  task.NewRegular(),
 	}
 
 	// Execute agent
@@ -2693,16 +2653,11 @@ func createTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *Agent {
 		nil,
 	)
 
-	// Create registry and register a mock task
-	registry := orchestration.NewRegistry()
-	mockTask := &mockTask{name: "regular"}
-	err := registry.Register("regular", mockTask)
-	require.NoError(t, err, "Failed to register mock task")
-
+	// Create orchestration service
+	toolRegistry := tools.NewRegistry()
 	orchestrationService := orchestration.NewOrchestrationService(
-		nil,
-		tools.NewRegistry(),
-		registry,
+		nil, // toolExecutor
+		toolRegistry,
 	)
 
 	environment := &Environment{WorkDir: "/tmp"}
@@ -2777,8 +2732,8 @@ func TestAgent_emitACERetrievalEvent(t *testing.T) {
 	// After RecordRetrieval, cache stats reflect the operation
 	// For this test, we just need to verify the emitted data matches current stats
 
-	// Call emitACERetrievalEvent
-	agent.emitACERetrievalEvent(ctx, trajectory.TriggerError, "install nodejs error", 2, 5)
+	// Call emitACERetrievalEvent with bullets
+	agent.emitACERetrievalEvent(ctx, trajectory.TriggerError, "install nodejs error", testBullets, 5)
 
 	// Verify event was emitted
 	select {

@@ -14,6 +14,34 @@ func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
 
+// TestNewRegistryWithBuiltins_ContainsAllBuiltins verifies that the constructor
+// pre-populates the registry with all builtin tools.
+func TestNewRegistryWithBuiltins_ContainsAllBuiltins(t *testing.T) {
+	registry := NewRegistryWithBuiltins()
+
+	for _, tool := range BuiltinTools {
+		name := tool.Name()
+		retrieved, err := registry.Get(name)
+		if err != nil {
+			t.Errorf("NewRegistryWithBuiltins() missing builtin tool %q: %v", name, err)
+			continue
+		}
+		if retrieved.Name() != name {
+			t.Errorf("retrieved tool name = %q, want %q", retrieved.Name(), name)
+		}
+	}
+}
+
+// TestNewRegistryWithBuiltins_CountMatches verifies the count matches BuiltinTools.
+func TestNewRegistryWithBuiltins_CountMatches(t *testing.T) {
+	registry := NewRegistryWithBuiltins()
+
+	tools := registry.List()
+	if len(tools) != len(BuiltinTools) {
+		t.Errorf("NewRegistryWithBuiltins() tool count = %d, want %d", len(tools), len(BuiltinTools))
+	}
+}
+
 // mockTool is a simple mock implementation for testing.
 type mockTool struct {
 	name        string

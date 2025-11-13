@@ -3,11 +3,17 @@ package agent
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/feedback"
 )
+
+// Helper function for substring checking in tests
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
 
 // Test ACEService creation with valid config
 func TestNewACEService_Enabled(t *testing.T) {
@@ -20,7 +26,7 @@ func TestNewACEService_Enabled(t *testing.T) {
 		},
 	}
 
-	svc, err := NewACEService(cfg, "/tmp/workdir", nil, "")
+	svc, err := NewACEService(cfg, "/tmp/workdir", nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -36,7 +42,7 @@ func TestNewACEService_Disabled(t *testing.T) {
 		Enabled: false,
 	}
 
-	svc, err := NewACEService(cfg, "/tmp/workdir", nil, "")
+	svc, err := NewACEService(cfg, "/tmp/workdir", nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -70,7 +76,7 @@ func TestACEService_SavePlaybook(t *testing.T) {
 		},
 	}
 
-	svc, err := NewACEService(cfg, tmpDir, nil, "")
+	svc, err := NewACEService(cfg, tmpDir, nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -104,7 +110,7 @@ func TestACEService_BuildPrompt(t *testing.T) {
 		},
 	}
 
-	svc, err := NewACEService(cfg, tmpDir, nil, "")
+	svc, err := NewACEService(cfg, tmpDir, nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -148,7 +154,7 @@ func TestACEService_BuildPrompt_Disabled(t *testing.T) {
 		Enabled: false,
 	}
 
-	svc, err := NewACEService(cfg, "/tmp", nil, "")
+	svc, err := NewACEService(cfg, "/tmp", nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -180,7 +186,7 @@ func TestACEService_ParseFeedback(t *testing.T) {
 		},
 	}
 
-	svc, err := NewACEService(cfg, tmpDir, nil, "")
+	svc, err := NewACEService(cfg, tmpDir, nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -223,7 +229,7 @@ func TestACEService_ParseFeedback_Disabled(t *testing.T) {
 		Enabled: false,
 	}
 
-	svc, err := NewACEService(cfg, "/tmp", nil, "")
+	svc, err := NewACEService(cfg, "/tmp", nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -252,7 +258,7 @@ func TestACEService_UpdateBullets(t *testing.T) {
 		},
 	}
 
-	svc, err := NewACEService(cfg, tmpDir, nil, "")
+	svc, err := NewACEService(cfg, tmpDir, nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}

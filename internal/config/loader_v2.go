@@ -230,3 +230,43 @@ func (l *LoaderV2) Set(key string, value interface{}) {
 func (l *LoaderV2) Get(key string) interface{} {
 	return l.viper.Get(key)
 }
+
+// ConfigFileUsed returns the path to the config file being used.
+func (l *LoaderV2) ConfigFileUsed() string {
+	return l.viper.ConfigFileUsed()
+}
+
+// UnmarshalKey unmarshals a specific key into a provided struct.
+func (l *LoaderV2) UnmarshalKey(key string, rawVal interface{}) error {
+	return l.viper.UnmarshalKey(key, rawVal)
+}
+
+// AllSettings returns all settings as a map.
+func (l *LoaderV2) AllSettings() map[string]interface{} {
+	return l.viper.AllSettings()
+}
+
+// Unmarshal unmarshals the entire config into a provided struct.
+func (l *LoaderV2) Unmarshal(rawVal interface{}) error {
+	return l.viper.Unmarshal(rawVal)
+}
+
+// GetString retrieves a string value.
+func (l *LoaderV2) GetString(key string) string {
+	return l.viper.GetString(key)
+}
+
+// GetBool retrieves a boolean value.
+func (l *LoaderV2) GetBool(key string) bool {
+	return l.viper.GetBool(key)
+}
+
+// GetInt retrieves an integer value.
+func (l *LoaderV2) GetInt(key string) int {
+	return l.viper.GetInt(key)
+}
+
+// IsSet checks if a key is set in the config.
+func (l *LoaderV2) IsSet(key string) bool {
+	return l.viper.IsSet(key)
+}

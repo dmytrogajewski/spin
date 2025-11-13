@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/spf13/cobra"
@@ -39,6 +38,8 @@ Examples:
 	cmd.AddCommand(newConfigValidateCmd())
 	cmd.AddCommand(newConfigEditCmd())
 	cmd.AddCommand(newConfigPathCmd())
+	cmd.AddCommand(newConfigGetCmd())
+	cmd.AddCommand(newConfigSetCmd())
 
 	return cmd
 }
@@ -134,34 +135,31 @@ Examples:
 func runConfigShow(cmd *cobra.Command, args []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
-	// Load config
-	loader := config.NewLoader()
-	if err := loader.Load(flagConfigFile); err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+	// Use V2 loader with env override support
+	loaderV2 := config.NewLoaderV2()
+	var cfgV2 *config.ConfigV2
+	var errV2 error
+
+	if flagConfigFile != "" {
+		cfgV2, errV2 = loaderV2.LoadFromFileWithEnv(flagConfigFile)
+	} else {
+		cfgV2, errV2 = loaderV2.LoadWithEnv()
 	}
 
-	// Get all settings
-	settings := loader.AllSettings()
+	if errV2 != nil {
+		return fmt.Errorf("failed to load config: %w", errV2)
+	}
 
-	// Redact sensitive values
-	redactSensitiveValues(settings)
-
-	// Show config file source if using text format
+	// Successfully loaded V2 config, show it
 	if format == "text" || format == "yaml" {
-		configPath := loader.ConfigFileUsed()
-		if configPath != "" {
-			fmt.Fprintf(cmd.OutOrStdout(), "# Configuration: %s\n\n", configPath)
-		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "# No configuration file (using defaults)\n\n")
-		}
+		fmt.Fprintf(cmd.OutOrStdout(), "# Configuration V2\n\n")
 	}
 
-	// Display based on format
 	switch format {
 	case "json":
-		return printJSON(cmd.OutOrStdout(), settings)
+		return printJSON(cmd.OutOrStdout(), cfgV2)
 	case "yaml", "text":
-		return printYAML(cmd.OutOrStdout(), settings)
+		return printYAML(cmd.OutOrStdout(), cfgV2)
 	default:
 		return fmt.Errorf("unsupported format: %s (use: text, json, yaml)", format)
 	}
@@ -177,29 +175,34 @@ func runConfigValidate(cmd *cobra.Command, args []string) error {
 		configPath = file
 	}
 
-	// Load config
-	loader := config.NewLoader()
-	var err error
+	// Use V2 loader
+	loaderV2 := config.NewLoaderV2()
+	var cfgV2 *config.ConfigV2
+	var errV2 error
 	if configPath != "" {
-		err = loader.LoadFromFile(configPath)
+		cfgV2, errV2 = loaderV2.LoadFromFile(configPath)
 	} else {
-		err = loader.Load("")
+		// Try loading with LoadWithEnv which uses default search paths
+		cfgV2, errV2 = loaderV2.LoadWithEnv()
+		if errV2 != nil {
+			// Try plain Load() without env
+			cfgV2, errV2 = loaderV2.Load()
+		}
 	}
 
-	if err != nil {
+	if errV2 != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "✗ Configuration is invalid\n\n")
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", errV2)
 		return fmt.Errorf("validation failed")
 	}
 
-	// Get the actual config file used
-	actualPath := loader.ConfigFileUsed()
-	if actualPath == "" {
-		fmt.Fprintf(cmd.ErrOrStderr(), "✗ No configuration file found\n")
-		return fmt.Errorf("no config file")
+	// V2 config loaded successfully (possibly migrated from V1), validate it
+	if err := cfgV2.Validate(); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "✗ Configuration V2 is invalid\n\n")
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
+		return fmt.Errorf("validation failed")
 	}
-
-	fmt.Fprintf(cmd.OutOrStdout(), "✓ Configuration is valid: %s\n", actualPath)
+	fmt.Fprintf(cmd.OutOrStdout(), "✓ Configuration V2 is valid (version: %s)\n", cfgV2.Version)
 	return nil
 }
 
@@ -207,8 +210,16 @@ func runConfigValidate(cmd *cobra.Command, args []string) error {
 func runConfigPath(cmd *cobra.Command, args []string) error {
 	showAll, _ := cmd.Flags().GetBool("all")
 
-	loader := config.NewLoader()
-	if err := loader.Load(flagConfigFile); err != nil {
+	loaderV2 := config.NewLoaderV2()
+	var errV2 error
+
+	if flagConfigFile != "" {
+		_, errV2 = loaderV2.LoadFromFile(flagConfigFile)
+	} else {
+		_, errV2 = loaderV2.Load()
+	}
+
+	if errV2 != nil {
 		// Config not found - show search paths
 		if showAll {
 			fmt.Fprintf(cmd.OutOrStdout(), "No configuration file found. Search paths:\n")
@@ -222,7 +233,7 @@ func runConfigPath(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no config file")
 	}
 
-	configPath := loader.ConfigFileUsed()
+	configPath := loaderV2.ConfigFileUsed()
 	if configPath == "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "No configuration file found. Using defaults.\n")
 		return fmt.Errorf("no config file")
@@ -237,10 +248,10 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 	noValidate, _ := cmd.Flags().GetBool("no-validate")
 
 	// Load or determine config path
-	loader := config.NewLoader()
-	_ = loader.Load(flagConfigFile)
+	loaderV2 := config.NewLoaderV2()
+	_, _ = loaderV2.Load()
 
-	configPath := loader.ConfigFileUsed()
+	configPath := loaderV2.ConfigFileUsed()
 	if configPath == "" {
 		// Create default config in home directory
 		homeDir, err := os.UserHomeDir()
@@ -282,9 +293,12 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 
 	// Validate after editing
 	if !noValidate {
-		newLoader := config.NewLoader()
-		if err := newLoader.LoadFromFile(configPath); err != nil {
+		newLoaderV2 := config.NewLoaderV2()
+		if cfgV2, err := newLoaderV2.LoadFromFile(configPath); err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "⚠ Warning: configuration has errors:\n%v\n", err)
+			fmt.Fprintf(cmd.ErrOrStderr(), "\nRun 'spin config validate' for details.\n")
+		} else if err := cfgV2.Validate(); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "⚠ Warning: configuration validation failed:\n%v\n", err)
 			fmt.Fprintf(cmd.ErrOrStderr(), "\nRun 'spin config validate' for details.\n")
 		}
 	}
@@ -293,33 +307,6 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 }
 
 // Helper functions
-
-// redactSensitiveValues redacts sensitive values in the config map.
-func redactSensitiveValues(m map[string]interface{}) {
-	sensitiveKeys := []string{
-		"api_key", "apikey", "api-key",
-		"secret", "password", "token",
-		"credentials", "credential",
-		"key", "private_key", "private-key",
-	}
-
-	for k, v := range m {
-		lowerKey := strings.ToLower(k)
-
-		// Check if key is sensitive
-		for _, sensitive := range sensitiveKeys {
-			if strings.Contains(lowerKey, sensitive) {
-				m[k] = "<redacted>"
-				continue
-			}
-		}
-
-		// Recursively redact nested maps
-		if nested, ok := v.(map[string]interface{}); ok {
-			redactSensitiveValues(nested)
-		}
-	}
-}
 
 // printJSON prints data as JSON.
 func printJSON[T any](out io.Writer, data T) error {
@@ -366,10 +353,76 @@ func getConfigSearchPaths() []string {
 	}
 }
 
+func newConfigGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <key>",
+		Short: "Get a configuration value",
+		Long: `Get a specific configuration value by key.
+
+Examples:
+  spin config get llm.model
+  spin config get ace.enabled`,
+		Args: cobra.ExactArgs(1),
+		RunE: runConfigGet,
+	}
+}
+
+func newConfigSetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "set <key> <value>",
+		Short: "Set a configuration value",
+		Long: `Set a specific configuration value by key.
+
+Examples:
+  spin config set llm.model gpt-4
+  spin config set ace.enabled true`,
+		Args: cobra.ExactArgs(2),
+		RunE: runConfigSet,
+	}
+}
+
+// runConfigGet implements the 'config get' command.
+func runConfigGet(cmd *cobra.Command, args []string) error {
+	key := args[0]
+
+	loaderV2 := config.NewLoaderV2()
+	if _, err := loaderV2.LoadWithEnv(); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	value := loaderV2.Get(key)
+	if value == nil {
+		return fmt.Errorf("key not found: %s", key)
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "%v\n", value)
+	return nil
+}
+
+// runConfigSet implements the 'config set' command.
+func runConfigSet(cmd *cobra.Command, args []string) error {
+	key := args[0]
+	value := args[1]
+
+	loaderV2 := config.NewLoaderV2()
+	if _, err := loaderV2.LoadWithEnv(); err != nil {
+		// If config doesn't exist, that's okay - we'll create it
+		_ = err
+	}
+
+	loaderV2.Set(key, value)
+
+	fmt.Fprintf(cmd.OutOrStdout(), "Set %s = %s\n", key, value)
+	fmt.Fprintf(cmd.OutOrStdout(), "Note: Changes are in-memory only. Use 'spin config edit' to persist.\n")
+	return nil
+}
+
 // createDefaultConfig creates a default configuration file.
 func createDefaultConfig(path string) error {
-	defaultConfig := `# Spin Configuration File
+	defaultConfig := `# Spin Configuration File V2
 # See: https://docs.spin.dev/configuration
+
+version: "2.0"
 
 llm:
   # Provider: openai, anthropic, ollama, lmstudio, openai-compatible
@@ -378,42 +431,90 @@ llm:
   # Model name
   model: gpt-4o
 
+  # Temperature (0.0-2.0)
+  temperature: 0.7
+
+  # Max tokens per request
+  max_tokens: 8192
+
+  # Request timeout
+  timeout: 5m
+
   # API endpoint (optional, uses provider default)
   # base_url: https://api.openai.com/v1
 
-  # Request timeout
-  timeout: 60s
+  # Authentication (recommended: use keystore or environment variable)
+  # api_key: ""
 
-  # Authentication (recommended: use keystore)
-  # Store key: spin config set-key my-key sk-...
-  # Then reference: key_name: my-key
-  #
-  # Or use environment variable:
-  # export OPENAI_API_KEY=sk-...
+agent:
+  # Maximum conversation turns
+  max_turns: 50
 
-# Sandbox settings
-sandbox:
-  # Mode: read-only, workspace-only, full-access
-  mode: workspace-only
+  # Agent execution timeout
+  timeout: 60m
 
-# Appearance (TUI only)
-appearance:
-  theme: auto  # auto, dark, light, plain
-  no_color: false
+  # Working directory
+  work_dir: "."
 
-# Logging
-logging:
-  level: info  # debug, info, warn, error
-  format: text  # text, json
+  # Require approval for dangerous operations
+  require_approval: false
 
-# MCP Servers (Model Context Protocol)
-# mcp_servers:
-#   - name: filesystem
-#     command: npx
-#     args:
-#       - -y
-#       - @modelcontextprotocol/server-filesystem
-#       - /workspace
+  # Logging
+  log_level: info  # debug, info, warn, error
+  log_format: text  # text, json
+  debug: false
+
+  # Cycle detection
+  cycle_detection:
+    enabled: true
+    window_size: 3
+    similarity_thresh: 0.8
+    tool_repeat_limit: 3
+    error_repeat_limit: 3
+
+ace:
+  # Enable Agentic Context Engineering
+  enabled: true
+
+  # Paths
+  playbook_path: "~/.spin/ace/playbooks/default.json"
+  trajectory_path: "~/.spin/ace/trajectories/"
+
+  # Retrieval settings
+  top_k: 5
+  min_score: 0.3
+
+security:
+  # Sandbox mode: none, workspace-only
+  sandbox_mode: workspace-only
+
+  # Policy file path
+  # policy_file: ""
+
+  # Allowed commands
+  # allowed_commands: []
+
+protocol:
+  # Enable MCP (Model Context Protocol)
+  enable_mcp: false
+
+  # MCP Servers
+  # mcp_servers:
+  #   - name: filesystem
+  #     command: npx
+  #     args:
+  #       - -y
+  #       - @modelcontextprotocol/server-filesystem
+  #       - /workspace
+
+  # Enable Git integration
+  enable_git: true
+
+  # Enable Shell integration
+  enable_shell: true
+
+  # Shell timeout
+  shell_timeout: 5m
 `
 
 	return os.WriteFile(path, []byte(defaultConfig), 0644)

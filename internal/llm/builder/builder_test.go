@@ -76,7 +76,7 @@ func TestBuild_AllProviders(t *testing.T) {
 			ctx := context.Background()
 
 			// Setup
-			configLoader := config.NewLoader()
+			configLoader := config.NewLoaderV2()
 			keystore := newTestKeystore()
 			authMgr := auth.NewManager(keystore)
 			builder := NewBuilder(configLoader, authMgr)
@@ -165,7 +165,7 @@ func TestConfigPrecedence(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup config loader with file values
-			configLoader := config.NewLoader()
+			configLoader := config.NewLoaderV2()
 			for k, v := range tt.fileCfg {
 				configLoader.Set(k, v)
 			}
@@ -277,7 +277,7 @@ func TestAuthMethods(t *testing.T) {
 			}
 
 			// Create builder
-			configLoader := config.NewLoader()
+			configLoader := config.NewLoaderV2()
 			builder := NewBuilder(configLoader, authMgr)
 
 			// Execute
@@ -415,7 +415,7 @@ func TestMergeConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup config loader
-			configLoader := config.NewLoader()
+			configLoader := config.NewLoaderV2()
 			for k, v := range tt.fileVals {
 				configLoader.Set(k, v)
 			}
@@ -543,7 +543,7 @@ func TestBuild_Integration(t *testing.T) {
 	// Test full integration: config + auth + env vars
 	t.Run("full integration with all sources", func(t *testing.T) {
 		// Setup config file
-		configLoader := config.NewLoader()
+		configLoader := config.NewLoaderV2()
 		configLoader.Set("llm.provider", "ollama")
 		configLoader.Set("llm.model", "llama3.1")
 		configLoader.Set("llm.base_url", "http://localhost:11434")

@@ -492,7 +492,7 @@ func TestDefaultConfigV2(t *testing.T) {
 	assert.Equal(t, "2.0", cfg.Version, "version should be 2.0")
 	assert.Equal(t, "ollama", cfg.LLM.Provider, "default provider should be ollama")
 	assert.Equal(t, 0.7, cfg.LLM.Temperature, "default temperature should be 0.7")
-	assert.Equal(t, 10, cfg.Agent.MaxTurns, "default max_turns should be 10")
+	assert.Equal(t, 50, cfg.Agent.MaxTurns, "default max_turns should be 50")
 	assert.True(t, cfg.ACE.Enabled, "ACE should be enabled by default")
 }
 

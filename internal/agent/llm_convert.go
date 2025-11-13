@@ -1,5 +1,19 @@
 package agent
 
+// LLM Conversion Boundary
+//
+// This file contains conversion functions between internal types and OpenAI API types.
+// These conversions are NECESSARY because they interface with an external LLM API.
+//
+// Boundary conversions kept:
+// - convertMessageToOpenAI: internal message.Message → OpenAI ChatCompletionMessageParamUnion
+// - convertToolCallsToOpenAI: internal ToolCall → OpenAI tool call params
+// - convertToolsToOpenAI: internal tools.Tool → OpenAI tool params
+// - convertOpenAIToolCallsToOrchestration: OpenAI tool calls → internal orchestration.ToolCall
+//
+// Do NOT add internal-to-internal conversion functions here.
+// Use unified types (e.g., orchestration.ToolCall) throughout the codebase instead.
+
 import (
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/orchestration"
@@ -97,27 +111,8 @@ func convertToolsToOpenAI(toolList []tools.Tool) []openai.ChatCompletionToolPara
 	return result
 }
 
-// convertOpenAIToolCallsToMessage converts OpenAI tool calls to message.ToolCall.
-func convertOpenAIToolCallsToMessage(toolCalls []openai.ChatCompletionMessageToolCall) []message.ToolCall {
-	if len(toolCalls) == 0 {
-		return nil
-	}
-
-	result := make([]message.ToolCall, len(toolCalls))
-	for i, tc := range toolCalls {
-		result[i] = message.ToolCall{
-			ID:   tc.ID,
-			Type: string(tc.Type),
-			Function: message.FunctionCall{
-				Name:      tc.Function.Name,
-				Arguments: tc.Function.Arguments,
-			},
-		}
-	}
-	return result
-}
-
 // convertOpenAIToolCallsToOrchestration converts OpenAI tool calls to orchestration.ToolCall.
+// Note: message.ToolCall is now an alias for orchestration.ToolCall, eliminating duplication.
 func convertOpenAIToolCallsToOrchestration(toolCalls []openai.ChatCompletionMessageToolCall) []orchestration.ToolCall {
 	if len(toolCalls) == 0 {
 		return nil
@@ -129,44 +124,6 @@ func convertOpenAIToolCallsToOrchestration(toolCalls []openai.ChatCompletionMess
 			ID:   tc.ID,
 			Type: string(tc.Type),
 			Function: orchestration.ToolCallFunction{
-				Name:      tc.Function.Name,
-				Arguments: tc.Function.Arguments,
-			},
-		}
-	}
-	return result
-}
-
-// messageToolCallsToOrchestration converts message.ToolCall to orchestration.ToolCall.
-func messageToolCallsToOrchestration(toolCalls []message.ToolCall) []orchestration.ToolCall {
-	if len(toolCalls) == 0 {
-		return nil
-	}
-	result := make([]orchestration.ToolCall, len(toolCalls))
-	for i, tc := range toolCalls {
-		result[i] = orchestration.ToolCall{
-			ID:   tc.ID,
-			Type: tc.Type,
-			Function: orchestration.ToolCallFunction{
-				Name:      tc.Function.Name,
-				Arguments: tc.Function.Arguments,
-			},
-		}
-	}
-	return result
-}
-
-// orchestrationToolCallsToMessage converts orchestration.ToolCall to message.ToolCall.
-func orchestrationToolCallsToMessage(toolCalls []orchestration.ToolCall) []message.ToolCall {
-	if len(toolCalls) == 0 {
-		return nil
-	}
-	result := make([]message.ToolCall, len(toolCalls))
-	for i, tc := range toolCalls {
-		result[i] = message.ToolCall{
-			ID:   tc.ID,
-			Type: tc.Type,
-			Function: message.FunctionCall{
 				Name:      tc.Function.Name,
 				Arguments: tc.Function.Arguments,
 			},

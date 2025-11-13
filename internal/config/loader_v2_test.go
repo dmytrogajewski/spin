@@ -129,7 +129,7 @@ agent:
 	assert.Equal(t, 5, cfg.ACE.TopK)
 
 	// Security defaults
-	assert.Equal(t, "none", cfg.Security.SandboxMode)
+	assert.Equal(t, "workspace-only", cfg.Security.SandboxMode)
 
 	// Protocol defaults
 	assert.True(t, cfg.Protocol.EnableGit)

@@ -15,6 +15,27 @@ import (
 	"github.com/openai/openai-go"
 )
 
+// estimateTokenCount provides a rough token count estimate for messages.
+// Uses simple heuristic: ~4 characters per token, plus overhead for structure.
+func estimateTokenCount(messages []message.Message) int {
+	total := 0
+	for _, msg := range messages {
+		// Content tokens (roughly 1 token per 4 characters)
+		total += len(msg.Content) / 4
+
+		// Tool call tokens
+		for _, tc := range msg.ToolCalls {
+			total += len(tc.Function.Name) / 4
+			total += len(tc.Function.Arguments) / 4
+			total += 8 // overhead per tool call
+		}
+
+		// Message overhead
+		total += 4
+	}
+	return total
+}
+
 // executeAgentLoop runs the main agent execution loop.
 //
 // This method orchestrates the agent's turn-based interaction with the LLM:
@@ -29,7 +50,7 @@ import (
 // If trajCtx is provided and progressive context is enabled, uses progressive
 // retrieval with caching. Otherwise falls back to simple retrieval.
 func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message, task Task, resp *AgentResponse, trajCtx *trajectory.TrajectoryContext) ([]message.Message, *AgentResponse, error) {
-	maxTurns := a.config.MaxTurns
+	maxTurns := a.maxTurns
 
 	// Initialize retrieved bullets slice to accumulate across turns
 	allRetrievedBullets := make([]*bullet.Bullet, 0)
@@ -54,7 +75,7 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 
 		// ACE: Progressive retrieval with caching
 		var currentTurnBullets []*bullet.Bullet
-		if a.aceService != nil && trajCtx != nil && a.config.ACE.Retrieval.ProgressiveContext.Enabled {
+		if a.aceService != nil && trajCtx != nil && a.aceConfig != nil && a.aceConfig.Retrieval.ProgressiveContext.Enabled {
 			// Progressive retrieval path
 			shouldRetrieve, trigger := a.shouldRetrieveProgressive(trajCtx)
 
@@ -89,40 +110,14 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 						"misses", trajCtx.CacheMisses)
 
 					// Emit ACE retrieval event for TUI
-					if a.config.ACE.Retrieval.ProgressiveContext.EmitACEEvents {
-						a.emitACERetrievalEvent(trajCtx, trigger, query, len(retrievedBullets), turn)
+					if a.aceConfig.Retrieval.ProgressiveContext.EmitACEEvents {
+						a.emitACERetrievalEvent(trajCtx, trigger, query, retrievedBullets, turn)
 					}
 				}
 			}
 
 			// Get active bullets for this turn (TTL-filtered, from cache)
 			currentTurnBullets = trajCtx.GetActiveBullets()
-
-		} else if a.aceService != nil {
-			// Simple retrieval mode (when progressive context is disabled)
-			query := extractQueryFromMessages(messages)
-			if query != "" {
-				retrievedBullets, err := a.aceService.Retrieve(ctx, query)
-				if err != nil {
-					slog.Warn("ACE retrieval failed", "error", err, "turn", turn+1)
-				} else {
-					currentTurnBullets = retrievedBullets
-					// Accumulate bullets from all turns (deduplicate by ID)
-					for _, newBullet := range retrievedBullets {
-						alreadyRetrieved := false
-						for _, existing := range allRetrievedBullets {
-							if existing.ID == newBullet.ID {
-								alreadyRetrieved = true
-								break
-							}
-						}
-						if !alreadyRetrieved {
-							allRetrievedBullets = append(allRetrievedBullets, newBullet)
-						}
-					}
-					slog.Debug("ACE retrieved bullets", "count", len(retrievedBullets), "total", len(allRetrievedBullets), "turn", turn+1)
-				}
-			}
 		}
 
 		// Call LLM with timeout protection, passing retrieved bullets
@@ -150,7 +145,7 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 		slog.Debug("LLM response received", "turn", turn+1, "content_len", len(content), "tool_calls", len(toolCalls), "finish_reason", finishReason)
 
 		// Handle cycle detection via detection service
-		if a.config.CycleDetection.Enabled {
+		if a.cycleDetection {
 			var shouldStop bool
 			var err error
 			messages, shouldStop, err = a.handleCycleDetection(ctx, messages, llmResp, turn+1, resp)
@@ -168,6 +163,20 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 		if len(toolCalls) > 0 {
 			slog.Debug("processing tool calls", "count", len(toolCalls), "turn", turn+1)
 			messages = a.processToolCallsFromCompletion(ctx, messages, llmResp, resp)
+
+			// Emit estimated token count for the UI to show progress
+			// This helps display accurate context percentage during execution
+			estimatedTokens := estimateTokenCount(messages)
+			a.emitter.Emit(events.Event{
+				Type:      events.EventTurnProgress,
+				Timestamp: time.Now(),
+				Data: events.TurnEventData{
+					Turn:       turn + 1,
+					TokensUsed: estimatedTokens,
+				},
+			})
+			slog.Debug("emitted token progress", "turn", turn+1, "estimated_tokens", estimatedTokens)
+
 			continue
 		}
 

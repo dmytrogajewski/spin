@@ -59,6 +59,7 @@ type curator struct {
 	refinementStrategy RefinementStrategy
 	useLLMCuration     bool
 	useMergeEngine     bool
+	maxTokens          int
 }
 
 // Option configures a Curator.
@@ -115,6 +116,13 @@ func WithRefinementMode(mode RefinementMode, config interface{}) Option {
 	}
 }
 
+// WithMaxTokens sets the maximum tokens for LLM calls.
+func WithMaxTokens(maxTokens int) Option {
+	return func(c *curator) {
+		c.maxTokens = maxTokens
+	}
+}
+
 // NewCurator creates a new curator.
 func NewCurator(pb *playbook.Playbook, emb embedding.Embedder, opts ...Option) Curator {
 	c := &curator{
@@ -123,6 +131,7 @@ func NewCurator(pb *playbook.Playbook, emb embedding.Embedder, opts ...Option) C
 		deltaApplier:       delta.NewDeltaApplier(pb),
 		threshold:          0.85,
 		refinementStrategy: &noRefinementStrategy{}, // Default: no refinement
+		maxTokens:          4096,                    // Default max tokens for LLM calls
 	}
 
 	for _, opt := range opts {
@@ -222,7 +231,12 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 		Temperature: openai.F(0.3),
 	}
 
-	slog.Debug("Calling LLM for curation", "temperature", 0.3)
+	// Set MaxTokens if configured
+	if c.maxTokens > 0 {
+		params.MaxTokens = openai.F(int64(c.maxTokens))
+	}
+
+	slog.Debug("Calling LLM for curation", "temperature", 0.3, "max_tokens", c.maxTokens)
 
 	completion, err := c.llmProvider.Complete(ctx, params)
 	if err != nil {

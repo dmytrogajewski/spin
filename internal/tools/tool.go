@@ -92,3 +92,16 @@ type PropertyDefinition struct {
 	// Enum lists allowed values for string parameters (optional).
 	Enum []string `json:"enum,omitempty"`
 }
+
+// BuiltinTools is a compile-time slice of all builtin tools.
+// These tools are always available and don't require runtime registration.
+var BuiltinTools = []Tool{
+	NewReadFileTool(),
+	NewWriteFileTool(),
+	NewListDirectoryTool(),
+	NewShellCommandTool(nil, nil, nil),
+	NewGetContextTool(nil),
+	NewApplyPatchTool(""),
+	NewFileSearchTool(""),
+	NewGitContextTool(""),
+}

@@ -1,5 +1,19 @@
 package ollama
 
+// Ollama LLM Conversion Boundary
+//
+// This file contains conversion functions between OpenAI API types and Ollama API types.
+// These conversions are NECESSARY because Ollama uses a different API format than OpenAI.
+//
+// Boundary conversions kept:
+// - convertMessageToOllama: OpenAI ChatCompletionMessageParamUnion → Ollama api.Message
+// - convertToolToOllama: OpenAI ChatCompletionToolParam → Ollama api.Tool
+// - convertOllamaResponseToOpenAI: Ollama api.ChatResponse → OpenAI ChatCompletion
+// - convertOllamaChunkToOpenAI: Ollama streaming chunk → OpenAI ChatCompletionChunk
+//
+// These conversions enable Ollama to work with the OpenAI-compatible interface
+// used throughout the rest of the codebase.
+
 import (
 	"encoding/json"
 	"fmt"

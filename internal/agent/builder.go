@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/cycle"
 	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -15,7 +16,7 @@ import (
 
 // Builder constructs Agent instances with all dependencies.
 type Builder struct {
-	config          *Config
+	unifiedConfig   *config.ConfigV2 // Unified config from config package (V2)
 	provider        llm.Provider
 	workingDir      string
 	emitter         *events.EventEmitter
@@ -27,10 +28,146 @@ func NewBuilder() *Builder {
 	return &Builder{}
 }
 
-// WithConfig sets the agent configuration.
-func (b *Builder) WithConfig(cfg *Config) *Builder {
-	b.config = cfg
+// WithUnifiedConfig sets the unified configuration from config package (V2).
+// This eliminates the need for config type conversions.
+func (b *Builder) WithUnifiedConfig(cfg *config.ConfigV2) *Builder {
+	b.unifiedConfig = cfg
 	return b
+}
+
+// getTimeout returns timeout from unified config.
+func (b *Builder) getTimeout() time.Duration {
+	if b.unifiedConfig != nil {
+		return b.unifiedConfig.Agent.Timeout
+	}
+	return 0
+}
+
+// getCacheCommands returns cache setting from unified config.
+func (b *Builder) getCacheCommands() bool {
+	if b.unifiedConfig != nil {
+		return b.unifiedConfig.Agent.CacheCommands
+	}
+	return false
+}
+
+// getMaxFiles returns max files from unified config.
+func (b *Builder) getMaxFiles() int {
+	if b.unifiedConfig != nil {
+		return b.unifiedConfig.Agent.MaxFiles
+	}
+	return 0
+}
+
+// getMaxDepth returns max depth from unified config.
+func (b *Builder) getMaxDepth() int {
+	if b.unifiedConfig != nil {
+		return b.unifiedConfig.Agent.MaxDepth
+	}
+	return 0
+}
+
+// getSkipGit returns skip git from unified config.
+func (b *Builder) getSkipGit() bool {
+	if b.unifiedConfig != nil {
+		return b.unifiedConfig.Agent.SkipGit
+	}
+	return false
+}
+
+// getMaxTurns returns max turns from unified config.
+func (b *Builder) getMaxTurns() int {
+	if b.unifiedConfig != nil {
+		return b.unifiedConfig.Agent.MaxTurns
+	}
+	return 0
+}
+
+// getTemperature returns temperature from unified config.
+func (b *Builder) getTemperature() float64 {
+	if b.unifiedConfig != nil {
+		return b.unifiedConfig.LLM.Temperature
+	}
+	return 0
+}
+
+// getMaxTokens returns max tokens from unified config.
+func (b *Builder) getMaxTokens() int {
+	if b.unifiedConfig != nil {
+		return b.unifiedConfig.LLM.MaxTokens
+	}
+	return 0
+}
+
+// getModel returns model from unified config.
+func (b *Builder) getModel() string {
+	if b.unifiedConfig != nil {
+		return b.unifiedConfig.LLM.Model
+	}
+	return ""
+}
+
+// isCycleDetectionEnabled returns whether cycle detection is enabled.
+func (b *Builder) isCycleDetectionEnabled() bool {
+	if b.unifiedConfig != nil {
+		return b.unifiedConfig.Agent.CycleDetection.Enabled
+	}
+	return false
+}
+
+// getCycleDetectionConfig returns cycle detection config from unified config.
+func (b *Builder) getCycleDetectionConfig() cycle.Config {
+	if b.unifiedConfig != nil {
+		return cycle.Config{
+			WindowSize:       b.unifiedConfig.Agent.CycleDetection.WindowSize,
+			SimilarityThresh: b.unifiedConfig.Agent.CycleDetection.SimilarityThresh,
+			ToolRepeatLimit:  b.unifiedConfig.Agent.CycleDetection.ToolRepeatLimit,
+			ErrorRepeatLimit: b.unifiedConfig.Agent.CycleDetection.ErrorRepeatLimit,
+			Enabled:          true,
+		}
+	}
+	return cycle.Config{Enabled: false}
+}
+
+// getACEConfig returns ACE config from unified config.
+// Converts ConfigV2 ACE config to nested ACEConfig.
+func (b *Builder) getACEConfig() *ACEConfig {
+	if b.unifiedConfig != nil {
+		// Convert V2 config to nested ACEConfig
+		return &ACEConfig{
+			Enabled:        b.unifiedConfig.ACE.Enabled,
+			PlaybookPath:   b.unifiedConfig.ACE.PlaybookPath,
+			TrajectoryPath: b.unifiedConfig.ACE.TrajectoryPath,
+			Retrieval: ACERetrievalConfig{
+				TopK:               b.unifiedConfig.ACE.TopK,
+				MinScore:           b.unifiedConfig.ACE.MinScore,
+				ProgressiveContext: DefaultProgressiveContextConfig(),
+			},
+			ItemizedLearning: ACEItemizedLearningConfig{
+				Enabled:       true,
+				ParseFeedback: true,
+				UpdateAsync:   true,
+			},
+			Generation: ACEGenerationConfig{
+				Enabled:     true,
+				AutoReflect: true,
+			},
+			Adapter: ACEAdapterConfig{
+				Enabled:          true,
+				UtilityThreshold: 0.1,
+				MaxMemorySize:    1000,
+			},
+			Refine: ACERefineConfig{
+				Enabled:         true,
+				Mode:            "proactive",
+				MaxBullets:      1000,
+				MaxTokens:       500000,
+				MinUtilityScore: 0.1,
+				CheckInterval:   100,
+			},
+		}
+	}
+	return nil
 }
 
 // WithProvider sets the LLM provider.
@@ -76,14 +213,13 @@ func (b *Builder) buildExecutor() *Executor {
 		)
 	}
 
-	if cfg := b.config; cfg != nil {
-		if cfg.Timeout > 0 {
-			opts = append(opts, WithTimeout(cfg.Timeout))
-		}
-		if cfg.CacheCommands {
-			cache := NewCommandCache(5*time.Minute, 10*1024*1024) // 5m TTL, 10MB cap
-			opts = append(opts, WithCache(cache))
-		}
+	// Use unified config helpers
+	if timeout := b.getTimeout(); timeout > 0 {
+		opts = append(opts, WithTimeout(timeout))
+	}
+	if b.getCacheCommands() {
+		cache := NewCommandCache(5*time.Minute, 10*1024*1024) // 5m TTL, 10MB cap
+		opts = append(opts, WithCache(cache))
 	}
 
 	exec, err := NewExecutor(b.workingDir, opts...)
@@ -114,64 +250,22 @@ func (b *Builder) buildEnvironment() *Environment {
 
 // buildEnvironmentOptions constructs environment options from configuration.
 func (b *Builder) buildEnvironmentOptions() []EnvironmentOption {
-	if b.config == nil {
-		return nil
-	}
 	var opts []EnvironmentOption
-	if b.config.MaxFiles > 0 {
-		opts = append(opts, WithMaxFiles(b.config.MaxFiles))
+	if maxFiles := b.getMaxFiles(); maxFiles > 0 {
+		opts = append(opts, WithMaxFiles(maxFiles))
 	}
-	if b.config.MaxDepth > 0 {
-		opts = append(opts, WithMaxDepth(b.config.MaxDepth))
+	if maxDepth := b.getMaxDepth(); maxDepth > 0 {
+		opts = append(opts, WithMaxDepth(maxDepth))
 	}
-	if b.config.SkipGit {
+	if b.getSkipGit() {
 		opts = append(opts, WithSkipGit(true))
 	}
 	return opts
 }
 
-// Build constructs a fully configured Agent with all dependencies.
-func (b *Builder) Build() (*Agent, error) {
-	// Validate required fields
-	if b.config == nil {
-		return nil, fmt.Errorf("config is required")
-	}
-	if b.provider == nil {
-		return nil, fmt.Errorf("provider is required")
-	}
-	if b.workingDir == "" {
-		return nil, fmt.Errorf("workingDir is required")
-	}
-	if b.emitter == nil {
-		return nil, fmt.Errorf("emitter is required")
-	}
-
-	// Build core components
-	executor := b.buildExecutor()
-	env := b.buildEnvironment()
-
-	// Build services
-	securitySvc := b.buildSecurityService()
-	detectionSvc := b.buildDetectionService()
-	orchestrationSvc := b.buildOrchestrationService(executor, env)
-
-	// Build agent options
-	opts := b.buildAgentOptions()
-
-	// Build ACE service if enabled
-	if b.config != nil && b.config.ACE.Enabled {
-		aceSvc, err := b.buildACEService()
-		if err == nil {
-			opts = append(opts, WithACEService(aceSvc))
-		}
-	}
-
-	// Create agent
-	return NewAgent(b.provider, securitySvc, detectionSvc, orchestrationSvc, env, b.emitter, opts...)
-}
-
-// buildSecurityService creates security service with approval handling.
-func (b *Builder) buildSecurityService() *security.SecurityService {
+// BuildSecurityService creates security service with approval handling.
+// This is a public helper for use by conversation package.
+func (b *Builder) BuildSecurityService() *security.SecurityService {
 	validator := security.NewValidator()
 
 	var approvalSvc *security.ApprovalService
@@ -188,21 +282,16 @@ func (b *Builder) buildSecurityService() *security.SecurityService {
 	return security.NewSecurityService(validator, approvalSvc)
 }
 
-// buildDetectionService creates detection service with cycle detection.
-func (b *Builder) buildDetectionService() *detection.DetectionService {
+// BuildDetectionService creates detection service with cycle detection.
+// This is a public helper for use by conversation package.
+func (b *Builder) BuildDetectionService() *detection.DetectionService {
 	var (
 		cycleDetector   detection.CycleDetector
 		patternDetector detection.PatternDetector
 	)
 
-	if b.config != nil && b.config.CycleDetection.Enabled {
-		c := cycle.Config{
-			WindowSize:       b.config.CycleDetection.WindowSize,
-			SimilarityThresh: b.config.CycleDetection.SimilarityThresh,
-			ToolRepeatLimit:  b.config.CycleDetection.ToolRepeatLimit,
-			ErrorRepeatLimit: b.config.CycleDetection.ErrorRepeatLimit,
-			Enabled:          true,
-		}
+	if b.isCycleDetectionEnabled() {
+		c := b.getCycleDetectionConfig()
 		cycleDetector = cycle.NewDetector(c)
 		patternDetector = cycle.NewPatternDetector(c)
 	} else {
@@ -212,16 +301,95 @@ func (b *Builder) buildDetectionService() *detection.DetectionService {
 	return detection.NewDetectionService(cycleDetector, patternDetector)
 }
 
+// BuildAgentOptions constructs agent options from configuration.
+// This is a public helper for use by conversation package.
+func (b *Builder) BuildAgentOptions() []AgentOption {
+	opts := []AgentOption{
+		WithRequireApproval(true),
+	}
+
+	if maxTurns := b.getMaxTurns(); maxTurns > 0 {
+		opts = append(opts, WithMaxTurns(maxTurns))
+	}
+	if timeout := b.getTimeout(); timeout > 0 {
+		opts = append(opts, WithAgentTimeout(timeout))
+	}
+	if temp := b.getTemperature(); temp > 0 {
+		opts = append(opts, WithTemperature(temp))
+	}
+	if maxTokens := b.getMaxTokens(); maxTokens > 0 {
+		opts = append(opts, WithMaxTokens(maxTokens))
+	}
+
+	return opts
+}
+
+// BuildACEService creates ACE service if enabled.
+// This is a public helper for use by conversation package.
+func (b *Builder) BuildACEService() (*ACEService, error) {
+	aceConfig := b.getACEConfig()
+	if aceConfig == nil || !aceConfig.Enabled {
+		return nil, fmt.Errorf("ACE not enabled")
+	}
+
+	return NewACEService(aceConfig, b.workingDir, b.provider, b.getModel(), b.getMaxTokens())
+}
+
+// Build constructs a fully configured Agent with all dependencies.
+// This method wires together all the builder components to create a complete agent.
+func (b *Builder) Build() (*Agent, error) {
+	// Validate required fields
+	if b.unifiedConfig == nil {
+		return nil, fmt.Errorf("config is required (use WithUnifiedConfig)")
+	}
+	if b.provider == nil {
+		return nil, fmt.Errorf("provider is required")
+	}
+	if b.workingDir == "" {
+		return nil, fmt.Errorf("workingDir is required")
+	}
+	if b.emitter == nil {
+		return nil, fmt.Errorf("emitter is required")
+	}
+
+	// Build core components
+	executor := b.buildExecutor()
+	env := b.buildEnvironment()
+
+	// Build services
+	securitySvc := b.BuildSecurityService()
+	detectionSvc := b.BuildDetectionService()
+	orchestrationSvc := b.buildOrchestrationService(executor, env)
+
+	// Build agent options
+	opts := b.BuildAgentOptions()
+
+	// Build ACE service if enabled
+	if b.unifiedConfig != nil && b.unifiedConfig.ACE.Enabled {
+		aceSvc, err := b.BuildACEService()
+		if err == nil {
+			opts = append(opts, WithACEService(aceSvc))
+			// Also set the ACE config so the agent can access it
+			aceConfig := b.getACEConfig()
+			if aceConfig != nil {
+				opts = append(opts, WithACEConfig(aceConfig))
+			}
+		}
+	}
+
+	// Create agent
+	return NewAgent(b.provider, securitySvc, detectionSvc, orchestrationSvc, env, b.emitter, opts...)
+}
+
 // buildOrchestrationService creates orchestration service.
-// Note: This is a simplified version. Full tool registry setup should be done by caller.
+// Note: This creates a basic orchestration service. The conversation layer
+// can build a more complete tool registry with integration-specific tools.
 func (b *Builder) buildOrchestrationService(exec *Executor, env *Environment) *orchestration.OrchestrationService {
-	// For now, return a basic orchestration service
-	// The conversation layer will handle full tool/task registry setup
 	validator := security.NewValidator()
 	approvalSvc := security.NewApprovalService(b.approvalHandler, b.emitter, validator)
 
-	toolReg := tools.NewRegistry()
-	taskReg := orchestration.NewRegistry()
+	// Create registry with builtins
+	toolReg := tools.NewRegistryWithBuiltins()
 
 	toolExec := orchestration.NewToolExecutor(orchestration.ToolExecutorConfig{
 		Registry:        toolReg,
@@ -231,40 +399,5 @@ func (b *Builder) buildOrchestrationService(exec *Executor, env *Environment) *o
 		WorkDir:         env.WorkDir,
 	})
 
-	return orchestration.NewOrchestrationService(toolExec, toolReg, taskReg)
-}
-
-// buildAgentOptions constructs agent options from configuration.
-func (b *Builder) buildAgentOptions() []AgentOption {
-	opts := []AgentOption{
-		WithRequireApproval(true),
-	}
-
-	if b.config == nil {
-		return opts
-	}
-
-	if b.config.MaxTurns > 0 {
-		opts = append(opts, WithMaxTurns(b.config.MaxTurns))
-	}
-	if b.config.Timeout > 0 {
-		opts = append(opts, WithAgentTimeout(b.config.Timeout))
-	}
-	if b.config.Temperature > 0 {
-		opts = append(opts, WithTemperature(b.config.Temperature))
-	}
-	if b.config.MaxTokens > 0 {
-		opts = append(opts, WithMaxTokens(b.config.MaxTokens))
-	}
-
-	return opts
-}
-
-// buildACEService creates ACE service if enabled.
-func (b *Builder) buildACEService() (*ACEService, error) {
-	if b.config == nil || !b.config.ACE.Enabled {
-		return nil, fmt.Errorf("ACE not enabled")
-	}
-
-	return NewACEService(&b.config.ACE, b.workingDir, b.provider, b.config.Model)
+	return orchestration.NewOrchestrationService(toolExec, toolReg)
 }

@@ -61,13 +61,14 @@ type ConfigV2 struct {
 
 // LLMConfigV2 configures the LLM provider.
 type LLMConfigV2 struct {
-	Provider    string        `yaml:"provider" mapstructure:"provider"`
-	Model       string        `yaml:"model" mapstructure:"model"`
-	Temperature float64       `yaml:"temperature" mapstructure:"temperature"`
-	MaxTokens   int           `yaml:"max_tokens" mapstructure:"max_tokens"`
-	Timeout     time.Duration `yaml:"timeout" mapstructure:"timeout"`
-	BaseURL     string        `yaml:"base_url" mapstructure:"base_url"`
-	APIKey      string        `yaml:"api_key" mapstructure:"api_key"`
+	Provider       string                 `yaml:"provider" mapstructure:"provider"`
+	Model          string                 `yaml:"model" mapstructure:"model"`
+	Temperature    float64                `yaml:"temperature" mapstructure:"temperature"`
+	MaxTokens      int                    `yaml:"max_tokens" mapstructure:"max_tokens"`
+	Timeout        time.Duration          `yaml:"timeout" mapstructure:"timeout"`
+	BaseURL        string                 `yaml:"base_url" mapstructure:"base_url"`
+	APIKey         string                 `yaml:"api_key" mapstructure:"api_key"`
+	ProviderConfig map[string]interface{} `yaml:"provider_config" mapstructure:"provider_config"`
 }
 
 // AgentConfigV2 configures the agent behavior.
@@ -76,6 +77,27 @@ type AgentConfigV2 struct {
 	Timeout         time.Duration `yaml:"timeout" mapstructure:"timeout"`
 	WorkDir         string        `yaml:"work_dir" mapstructure:"work_dir"`
 	RequireApproval bool          `yaml:"require_approval" mapstructure:"require_approval"`
+
+	// Performance Configuration
+	StreamBuffer  int  `yaml:"stream_buffer" mapstructure:"stream_buffer"`
+	CacheCommands bool `yaml:"cache_commands" mapstructure:"cache_commands"`
+
+	// Environment Configuration
+	MaxFiles int  `yaml:"max_files" mapstructure:"max_files"`
+	MaxDepth int  `yaml:"max_depth" mapstructure:"max_depth"`
+	SkipGit  bool `yaml:"skip_git" mapstructure:"skip_git"`
+
+	// Storage Configuration
+	SessionDir   string `yaml:"session_dir" mapstructure:"session_dir"`
+	HistoryLimit int    `yaml:"history_limit" mapstructure:"history_limit"`
+
+	// Logging Configuration
+	LogLevel  string `yaml:"log_level" mapstructure:"log_level"`   // debug, info, warn, error
+	LogFormat string `yaml:"log_format" mapstructure:"log_format"` // text, json
+	Debug     bool   `yaml:"debug" mapstructure:"debug"`           // Enable debug mode
+
+	// Cycle Detection Configuration
+	CycleDetection CycleDetectionConfigV2 `yaml:"cycle_detection" mapstructure:"cycle_detection"`
 }
 
 // ACEConfigV2 configures Agentic Context Engineering.
@@ -109,6 +131,24 @@ type MCPServerConfigV2 struct {
 	Command string            `yaml:"command" mapstructure:"command"`
 	Args    []string          `yaml:"args" mapstructure:"args"`
 	Env     map[string]string `yaml:"env" mapstructure:"env"`
+}
+
+// CycleDetectionConfigV2 configures automatic cycle detection and intervention.
+type CycleDetectionConfigV2 struct {
+	// Enabled controls whether cycle detection is active (default: true)
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
+
+	// WindowSize is the number of snapshots to compare for pattern detection (default: 3)
+	WindowSize int `yaml:"window_size" mapstructure:"window_size"`
+
+	// SimilarityThresh is the threshold for response similarity detection (default: 0.8)
+	SimilarityThresh float64 `yaml:"similarity_thresh" mapstructure:"similarity_thresh"`
+
+	// ToolRepeatLimit is the max identical tool calls before triggering cycle (default: 3)
+	ToolRepeatLimit int `yaml:"tool_repeat_limit" mapstructure:"tool_repeat_limit"`
+
+	// ErrorRepeatLimit is the max identical errors before triggering cycle (default: 3)
+	ErrorRepeatLimit int `yaml:"error_repeat_limit" mapstructure:"error_repeat_limit"`
 }
 
 // Validate performs validation on the config.
@@ -212,12 +252,13 @@ func (s *SecurityConfigV2) Validate() error {
 	// Validate sandbox mode if set
 	if s.SandboxMode != "" {
 		validModes := map[string]bool{
-			"none":     true,
-			"docker":   true,
-			"firejail": true,
+			"none":           true,
+			"workspace-only": true,
+			"docker":         true,
+			"firejail":       true,
 		}
 		if !validModes[s.SandboxMode] {
-			return fmt.Errorf("security: sandbox_mode must be one of [none, docker, firejail], got %q", s.SandboxMode)
+			return fmt.Errorf("security: sandbox_mode must be one of [none, workspace-only, docker, firejail], got %q", s.SandboxMode)
 		}
 	}
 
@@ -264,19 +305,37 @@ func DefaultConfigV2() *ConfigV2 {
 	return &ConfigV2{
 		Version: "2.0",
 		LLM: LLMConfigV2{
-			Provider:    "ollama",
-			Model:       "qwen2.5-coder:7b",
-			Temperature: 0.7,
-			MaxTokens:   4096,
-			Timeout:     5 * time.Minute,
-			BaseURL:     "",
-			APIKey:      "",
+			Provider:       "ollama",
+			Model:          "qwen2.5-coder:7b",
+			Temperature:    0.7,
+			MaxTokens:      8192,
+			Timeout:        5 * time.Minute,
+			BaseURL:        "",
+			APIKey:         "",
+			ProviderConfig: make(map[string]interface{}),
 		},
 		Agent: AgentConfigV2{
-			MaxTurns:        10,
+			MaxTurns:        50,
 			Timeout:         60 * time.Minute,
 			WorkDir:         ".",
 			RequireApproval: false,
+			StreamBuffer:    100,
+			CacheCommands:   false,
+			MaxFiles:        0,
+			MaxDepth:        0,
+			SkipGit:         false,
+			SessionDir:      "~/.spin/sessions",
+			HistoryLimit:    1000,
+			LogLevel:        "info",
+			LogFormat:       "text",
+			Debug:           false,
+			CycleDetection: CycleDetectionConfigV2{
+				Enabled:          true,
+				WindowSize:       3,
+				SimilarityThresh: 0.8,
+				ToolRepeatLimit:  3,
+				ErrorRepeatLimit: 3,
+			},
 		},
 		ACE: ACEConfigV2{
 			Enabled:        true,
@@ -286,7 +345,7 @@ func DefaultConfigV2() *ConfigV2 {
 			MinScore:       0.3,
 		},
 		Security: SecurityConfigV2{
-			SandboxMode:     "none",
+			SandboxMode:     "workspace-only",
 			PolicyFile:      "",
 			AllowedCommands: []string{},
 		},
@@ -295,7 +354,7 @@ func DefaultConfigV2() *ConfigV2 {
 			MCPServers:   []MCPServerConfigV2{},
 			EnableGit:    true,
 			EnableShell:  true,
-			ShellTimeout: 30 * time.Second,
+			ShellTimeout: 5 * time.Minute,
 		},
 	}
 }

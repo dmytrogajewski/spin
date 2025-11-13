@@ -207,11 +207,11 @@ func TestAggregator_ProcessEvent_ContentDelta_ShortContent(t *testing.T) {
 	}
 }
 
-func TestAggregator_ProcessEvent_TurnComplete_WithTokens(t *testing.T) {
+func TestAggregator_ProcessEvent_TurnComplete(t *testing.T) {
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
-	// Process turn complete with token data
+	// Process turn complete
 	event := &events.Event{
 		Type: events.EventTurnComplete,
 		Data: events.TurnEventData{TokensUsed: 500},
@@ -222,8 +222,11 @@ func TestAggregator_ProcessEvent_TurnComplete_WithTokens(t *testing.T) {
 	if metrics.AgentState != "Idle" {
 		t.Errorf("Expected agent state 'Idle', got %q", metrics.AgentState)
 	}
-	if metrics.TokenCount != 500 {
-		t.Errorf("Expected token count 500, got %d", metrics.TokenCount)
+	// Note: TokenCount is NOT updated from EventTurnComplete.TokensUsed
+	// Token counting is handled by SetTokenCount() in the main event loop
+	// which pulls the authoritative count from conversation history
+	if metrics.TokenCount != 0 {
+		t.Errorf("Expected token count 0 (not updated from event), got %d", metrics.TokenCount)
 	}
 }
 

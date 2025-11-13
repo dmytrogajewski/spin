@@ -19,15 +19,18 @@ import (
 // It translates the event stream from the core agent into visual blocks
 // that are displayed in the terminal UI timeline.
 type TUIMapper struct {
-	ui               ports.UI
-	blockRegistry    map[string][]*blocks.Block // toolID → blocks (supports duplicates)
-	applyPatchByFile map[string]*blocks.Block   // file path → latest APPLY_PATCH block (write_file)
-	streamCh         chan string                // Content streaming channel
-	streamMu         sync.Mutex                 // Protects streamCh
-	streamCtx        context.Context
-	streamCancel     context.CancelFunc
-	thinkFilter      *output.ThinkFilter // Filter for <think> tags
-	mu               sync.RWMutex        // Protects blockRegistry
+	ui                 ports.UI
+	blockRegistry      map[string][]*blocks.Block // toolID → blocks (supports duplicates)
+	applyPatchByFile   map[string]*blocks.Block   // file path → latest APPLY_PATCH block (write_file)
+	streamCh           chan string                // Content streaming channel
+	streamMu           sync.Mutex                 // Protects streamCh
+	streamCtx          context.Context
+	streamCancel       context.CancelFunc
+	thinkFilter        *output.ThinkFilter // Filter for <think> tags
+	mu                 sync.RWMutex        // Protects blockRegistry
+	lastBulletSet      map[string]bool     // Track last retrieved bullet content (for deduplication)
+	lastLearnedBullets map[string]bool     // Track last learned bullet content (for deduplication)
+	bulletMu           sync.Mutex          // Protects lastBulletSet and lastLearnedBullets
 }
 
 // NewTUIMapper creates a new TUI event mapper.
@@ -35,10 +38,12 @@ type TUIMapper struct {
 // that are appended to or updated in the UI timeline.
 func NewTUIMapper(ui ports.UI) *TUIMapper {
 	return &TUIMapper{
-		ui:               ui,
-		blockRegistry:    make(map[string][]*blocks.Block),
-		applyPatchByFile: make(map[string]*blocks.Block),
-		thinkFilter:      output.NewThinkFilter(),
+		ui:                 ui,
+		blockRegistry:      make(map[string][]*blocks.Block),
+		applyPatchByFile:   make(map[string]*blocks.Block),
+		thinkFilter:        output.NewThinkFilter(),
+		lastBulletSet:      make(map[string]bool),
+		lastLearnedBullets: make(map[string]bool),
 	}
 }
 
@@ -65,6 +70,10 @@ func (m *TUIMapper) MapEvent(event events.Event) error {
 		return m.handleContentDelta(event)
 	case events.EventContentComplete:
 		return m.handleContentComplete(event)
+	case events.EventACERetrieval:
+		return m.handleACERetrieval(event)
+	case events.EventACELearned:
+		return m.handleACELearned(event)
 	case events.EventError:
 		return m.handleError(event)
 	case events.EventInfo, events.EventWarning:
@@ -577,6 +586,188 @@ func (m *TUIMapper) handleSystemEvent(event events.Event) error {
 	}
 
 	return m.ui.AppendBlock(block)
+}
+
+// handleACERetrieval formats and displays ACE bullets with special symbols and colors.
+func (m *TUIMapper) handleACERetrieval(event events.Event) error {
+	data, ok := event.ACERetrievalData()
+	if !ok {
+		return nil
+	}
+
+	// Build set of current bullet content and track new bullets
+	currentSet := make(map[string]bool)
+	var newBullets []events.BulletData
+
+	// Compare with last retrieved set to find truly new bullets
+	m.bulletMu.Lock()
+	for _, bullet := range data.Bullets {
+		currentSet[bullet.Content] = true
+		if !m.lastBulletSet[bullet.Content] {
+			newBullets = append(newBullets, bullet)
+		}
+	}
+
+	// Update last bullet set for next comparison
+	m.lastBulletSet = currentSet
+	m.bulletMu.Unlock()
+
+	// Only show hint if there are truly new unique bullets
+	if len(newBullets) == 0 {
+		return nil
+	}
+
+	// Build hint with actual bullet content
+	var hintText strings.Builder
+
+	// Header
+	pluralS := "ies"
+	if len(newBullets) == 1 {
+		pluralS = "y"
+	}
+	hintText.WriteString(fmt.Sprintf("\x1b[32m⟐\x1b[0m \x1b[90mRetrieved %d new strateg%s:\x1b[0m\n", len(newBullets), pluralS))
+
+	// Show each new bullet
+	for _, bullet := range newBullets {
+		// Truncate long bullets to first line for compact display
+		content := bullet.Content
+		if idx := strings.Index(content, "\n"); idx != -1 {
+			content = content[:idx] + "..."
+		}
+		// Limit to 120 chars per line
+		if len(content) > 120 {
+			content = content[:117] + "..."
+		}
+		hintText.WriteString(fmt.Sprintf("  \x1b[32m•\x1b[0m \x1b[90m%s\x1b[0m\n", content))
+	}
+
+	// Use PrintLine to show as a simple status message (not a block)
+	m.ui.PrintLine(hintText.String())
+	return nil
+}
+
+// handleACELearned displays a compact hint when ACE learns new insights after execution.
+// Only shows truly new learned bullets that haven't been displayed before.
+func (m *TUIMapper) handleACELearned(event events.Event) error {
+	data, ok := event.ACELearningData()
+	if !ok {
+		return nil
+	}
+
+	// Track new learned bullets separately from retrieved bullets
+	var newBullets []events.BulletData
+
+	// Compare with last learned set to find truly new bullets
+	m.bulletMu.Lock()
+	for _, bullet := range data.Bullets {
+		if !m.lastLearnedBullets[bullet.Content] {
+			newBullets = append(newBullets, bullet)
+			m.lastLearnedBullets[bullet.Content] = true
+		}
+	}
+	m.bulletMu.Unlock()
+
+	// Only show hint if there are truly new unique learned bullets
+	if len(newBullets) == 0 {
+		return nil
+	}
+
+	// Build hint with actual bullet content
+	var hintText strings.Builder
+
+	// Header with success/failure indicator
+	pluralS := "s"
+	if len(newBullets) == 1 {
+		pluralS = ""
+	}
+
+	statusColor := "\x1b[32m" // green for success
+	statusText := "successful"
+	if !data.Success {
+		statusColor = "\x1b[33m" // yellow for failure
+		statusText = "failed"
+	}
+
+	hintText.WriteString(fmt.Sprintf("\x1b[34m◆\x1b[0m \x1b[90mLearned %d new insight%s from %s%s\x1b[0m\x1b[90m execution:\x1b[0m\n",
+		len(newBullets), pluralS, statusColor, statusText))
+
+	// Show each new learned bullet
+	for _, bullet := range newBullets {
+		// Truncate long bullets to first line for compact display
+		content := bullet.Content
+		if idx := strings.Index(content, "\n"); idx != -1 {
+			content = content[:idx] + "..."
+		}
+		// Limit to 120 chars per line
+		if len(content) > 120 {
+			content = content[:117] + "..."
+		}
+		hintText.WriteString(fmt.Sprintf("  \x1b[34m•\x1b[0m \x1b[90m%s\x1b[0m\n", content))
+	}
+
+	m.ui.PrintLine(hintText.String())
+
+	return nil
+}
+
+// extractCategoryNames extracts unique category display names from bullets
+func (m *TUIMapper) extractCategoryNames(bullets []events.BulletData) []string {
+	seen := make(map[string]bool)
+	var names []string
+
+	for _, bullet := range bullets {
+		cat := bullet.Category
+		if cat == "" {
+			cat = "general"
+		}
+
+		displayName := strings.ToLower(formatCategoryName(cat))
+		if !seen[displayName] {
+			seen[displayName] = true
+			names = append(names, displayName)
+		}
+	}
+
+	// Limit to first 3 categories to keep hint compact
+	if len(names) > 3 {
+		names = names[:3]
+	}
+
+	return names
+}
+
+// formatCategoryName converts category identifiers to readable display names.
+func formatCategoryName(category string) string {
+	switch category {
+	case "success_pattern":
+		return "Success Patterns"
+	case "error_mode":
+		return "Error Modes"
+	case "optimization":
+		return "Optimizations"
+	case "anti_pattern":
+		return "Anti-Patterns"
+	case "general":
+		return "General"
+	default:
+		// Capitalize first letter and replace underscores with spaces
+		if category == "" {
+			return "General"
+		}
+		// Simple title case conversion
+		parts := make([]string, 0)
+		for _, part := range splitOnUnderscore(category) {
+			if len(part) > 0 {
+				parts = append(parts, strings.ToUpper(part[:1])+part[1:])
+			}
+		}
+		return strings.Join(parts, " ")
+	}
+}
+
+// splitOnUnderscore splits a string on underscores.
+func splitOnUnderscore(s string) []string {
+	return strings.Split(s, "_")
 }
 
 // StartStreaming initializes content streaming and returns the channel

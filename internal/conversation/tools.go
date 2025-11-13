@@ -60,9 +60,9 @@ func (b *Builder) registerGitTools(registry *tools.Registry) error {
 func (b *Builder) buildToolRegistry(exec *agent.Executor, validator *security.Validator, env *agent.Environment) *tools.Registry {
 	registry := b.toolRegistry
 	if registry == nil {
-		registry = tools.NewRegistry()
+		registry = tools.NewRegistryWithBuiltins()
 		if b.logger != nil {
-			b.logger.Debug("created fresh tool registry")
+			b.logger.Debug("created tool registry with builtins")
 		}
 	}
 
@@ -82,14 +82,12 @@ func (b *Builder) buildToolRegistry(exec *agent.Executor, validator *security.Va
 		execAdapt = &executorAdapter{executor: exec}
 	}
 
-	_ = registry.Register(tools.NewReadFileTool())
-	_ = registry.Register(tools.NewWriteFileTool())
-	_ = registry.Register(tools.NewListDirectoryTool())
-	_ = registry.Register(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
-	_ = registry.Register(tools.NewGetContextTool(env))
-	_ = registry.Register(tools.NewApplyPatchTool(env.WorkDir))
-	_ = registry.Register(tools.NewFileSearchTool(env.WorkDir))
-	_ = registry.Register(tools.NewGitContextTool(env.WorkDir))
+	// Replace builtin tools with configured versions
+	_ = registry.RegisterOrReplace(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
+	_ = registry.RegisterOrReplace(tools.NewGetContextTool(env))
+	_ = registry.RegisterOrReplace(tools.NewApplyPatchTool(env.WorkDir))
+	_ = registry.RegisterOrReplace(tools.NewFileSearchTool(env.WorkDir))
+	_ = registry.RegisterOrReplace(tools.NewGitContextTool(env.WorkDir))
 
 	if err := b.registerIntegrationTools(registry); err != nil {
 		if b.logger != nil {

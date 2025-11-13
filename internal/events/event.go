@@ -96,6 +96,13 @@ func (e Event) ACERetrievalData() (ACERetrievalData, bool) {
 	return data, ok
 }
 
+// ACELearningData returns the event data as ACELearningData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ACELearningData() (ACELearningData, bool) {
+	data, ok := e.Data.(ACELearningData)
+	return data, ok
+}
+
 // EventType represents the category of event.
 type EventType int
 
@@ -111,6 +118,7 @@ const (
 
 	// Turn events - turn lifecycle
 	EventTurnStart
+	EventTurnProgress
 	EventTurnComplete
 	EventTurnFailed
 	EventTurnPaused
@@ -119,6 +127,7 @@ const (
 	// Approval events - user approval required
 	EventCommandApproval
 	EventACERetrieval
+	EventACELearned
 	EventCommandApproved
 	EventCommandDenied
 
@@ -137,12 +146,14 @@ func (e EventType) String() string {
 		"tool_call_progress",
 		"tool_call_complete",
 		"turn_start",
+		"turn_progress",
 		"turn_complete",
 		"turn_failed",
 		"turn_paused",
 		"turn_resumed",
 		"command_approval",
 		"ace_retrieval",
+		"ace_learned",
 		"command_approved",
 		"command_denied",
 		"error",
@@ -217,15 +228,28 @@ const (
 	ApprovalStatusDenied   ApprovalStatus = "denied"
 )
 
+// BulletData represents a single ACE bullet for display.
+type BulletData struct {
+	Content  string `json:"content"`
+	Category string `json:"category,omitempty"` // Optional category for grouping (success_pattern, error_mode, etc.)
+}
+
 // ACERetrievalData contains ACE progressive retrieval information.
 type ACERetrievalData struct {
-	Turn             int     `json:"turn"`
-	Trigger          string  `json:"trigger"`
-	Query            string  `json:"query"`
-	BulletsRetrieved int     `json:"bullets_retrieved"`
-	BulletsNew       int     `json:"bullets_new"`
-	CacheSize        int     `json:"cache_size"`
-	CacheHitRate     float64 `json:"cache_hit_rate"`
+	Turn             int          `json:"turn"`
+	Trigger          string       `json:"trigger"`
+	Query            string       `json:"query"`
+	BulletsRetrieved int          `json:"bullets_retrieved"`
+	BulletsNew       int          `json:"bullets_new"`
+	CacheSize        int          `json:"cache_size"`
+	CacheHitRate     float64      `json:"cache_hit_rate"`
+	Bullets          []BulletData `json:"bullets"` // Actual bullet content for rendering
+}
+
+// ACELearningData contains ACE learning information after trajectory execution.
+type ACELearningData struct {
+	Success bool         `json:"success"` // Whether the execution was successful
+	Bullets []BulletData `json:"bullets"` // Learned bullets to display
 }
 
 // SystemEventData contains informational or warning messages.

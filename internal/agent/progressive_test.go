@@ -29,12 +29,10 @@ func TestProgressiveContextConfig_Defaults(t *testing.T) {
 
 func TestShouldRetrieveProgressive_Disabled(t *testing.T) {
 	agent := &Agent{
-		config: &Config{
-			ACE: ACEConfig{
-				Retrieval: ACERetrievalConfig{
-					ProgressiveContext: ProgressiveContextConfig{
-						Enabled: false, // Disabled
-					},
+		aceConfig: &ACEConfig{
+			Retrieval: ACERetrievalConfig{
+				ProgressiveContext: ProgressiveContextConfig{
+					Enabled: false, // Disabled
 				},
 			},
 		},
@@ -55,14 +53,12 @@ func TestShouldRetrieveProgressive_Disabled(t *testing.T) {
 
 func TestShouldRetrieveProgressive_TriggerPriority(t *testing.T) {
 	agent := &Agent{
-		config: &Config{
-			ACE: ACEConfig{
-				Retrieval: ACERetrievalConfig{
-					ProgressiveContext: ProgressiveContextConfig{
-						Enabled:       true,
-						CacheTTL:      10,
-						ErrorLookback: 5,
-					},
+		aceConfig: &ACEConfig{
+			Retrieval: ACERetrievalConfig{
+				ProgressiveContext: ProgressiveContextConfig{
+					Enabled:       true,
+					CacheTTL:      10,
+					ErrorLookback: 5,
 				},
 			},
 		},
@@ -104,12 +100,10 @@ func TestShouldRetrieveProgressive_TriggerPriority(t *testing.T) {
 
 func TestShouldRetrieveProgressive_TurnZero(t *testing.T) {
 	agent := &Agent{
-		config: &Config{
-			ACE: ACEConfig{
-				Retrieval: ACERetrievalConfig{
-					ProgressiveContext: ProgressiveContextConfig{
-						Enabled: true,
-					},
+		aceConfig: &ACEConfig{
+			Retrieval: ACERetrievalConfig{
+				ProgressiveContext: ProgressiveContextConfig{
+					Enabled: true,
 				},
 			},
 		},
@@ -130,13 +124,11 @@ func TestShouldRetrieveProgressive_TurnZero(t *testing.T) {
 
 func TestShouldRetrieveProgressive_RecentError(t *testing.T) {
 	agent := &Agent{
-		config: &Config{
-			ACE: ACEConfig{
-				Retrieval: ACERetrievalConfig{
-					ProgressiveContext: ProgressiveContextConfig{
-						Enabled:       true,
-						ErrorLookback: 5,
-					},
+		aceConfig: &ACEConfig{
+			Retrieval: ACERetrievalConfig{
+				ProgressiveContext: ProgressiveContextConfig{
+					Enabled:       true,
+					ErrorLookback: 5,
 				},
 			},
 		},
@@ -164,13 +156,11 @@ func TestShouldRetrieveProgressive_RecentError(t *testing.T) {
 
 func TestShouldRetrieveProgressive_ToolChange(t *testing.T) {
 	agent := &Agent{
-		config: &Config{
-			ACE: ACEConfig{
-				Retrieval: ACERetrievalConfig{
-					ProgressiveContext: ProgressiveContextConfig{
-						Enabled:            true,
-						ToolChangeLookback: 3,
-					},
+		aceConfig: &ACEConfig{
+			Retrieval: ACERetrievalConfig{
+				ProgressiveContext: ProgressiveContextConfig{
+					Enabled:            true,
+					ToolChangeLookback: 3,
 				},
 			},
 		},
@@ -198,13 +188,11 @@ func TestShouldRetrieveProgressive_ToolChange(t *testing.T) {
 
 func TestShouldRetrieveProgressive_Interval(t *testing.T) {
 	agent := &Agent{
-		config: &Config{
-			ACE: ACEConfig{
-				Retrieval: ACERetrievalConfig{
-					ProgressiveContext: ProgressiveContextConfig{
-						Enabled:  true,
-						CacheTTL: 10,
-					},
+		aceConfig: &ACEConfig{
+			Retrieval: ACERetrievalConfig{
+				ProgressiveContext: ProgressiveContextConfig{
+					Enabled:  true,
+					CacheTTL: 10,
 				},
 			},
 		},
@@ -226,13 +214,11 @@ func TestShouldRetrieveProgressive_Interval(t *testing.T) {
 
 func TestShouldRetrieveProgressive_NoTrigger(t *testing.T) {
 	agent := &Agent{
-		config: &Config{
-			ACE: ACEConfig{
-				Retrieval: ACERetrievalConfig{
-					ProgressiveContext: ProgressiveContextConfig{
-						Enabled:  true,
-						CacheTTL: 10,
-					},
+		aceConfig: &ACEConfig{
+			Retrieval: ACERetrievalConfig{
+				ProgressiveContext: ProgressiveContextConfig{
+					Enabled:  true,
+					CacheTTL: 10,
 				},
 			},
 		},

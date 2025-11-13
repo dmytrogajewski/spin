@@ -391,6 +391,13 @@ func (u *PureTTY) SetTokenCount(tokenCount int64) {
 	}
 }
 
+// IsExecMode returns true if the UI is in exec mode (non-interactive).
+func (u *PureTTY) IsExecMode() bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.execMode
+}
+
 // ProcessEvent processes an events.Event and updates the status manager.
 // This method is called by the event mapper to update status information.
 func (u *PureTTY) ProcessEvent(event *events.Event) {

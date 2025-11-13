@@ -49,7 +49,8 @@ type ACEService struct {
 // If ACE is disabled in config, returns a no-op service that returns empty results.
 // The llm parameter is optional - if nil, bullet generation will be disabled.
 // The modelName parameter specifies which LLM model to use for generation.
-func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName string) (*ACEService, error) {
+// The maxTokens parameter sets the max tokens for LLM calls (0 = use default).
+func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName string, maxTokens int) (*ACEService, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
 	}
@@ -139,8 +140,12 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 	// Create reflector for deep analysis (if LLM available)
 	var refl reflector.Reflector
 	if llm != nil {
-		refl = reflector.NewReflector(llm)
-		slog.Debug("Created reflector for deep insight analysis")
+		reflectorOpts := []reflector.Option{}
+		if maxTokens > 0 {
+			reflectorOpts = append(reflectorOpts, reflector.WithMaxTokens(maxTokens))
+		}
+		refl = reflector.NewReflector(llm, reflectorOpts...)
+		slog.Debug("Created reflector for deep insight analysis", "max_tokens", maxTokens)
 	}
 
 	// Create curator for quality control and deduplication
@@ -149,6 +154,11 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 		// Configure curator based on config
 		curatorOpts := []curator.Option{
 			curator.WithSimilarityThreshold(0.85), // High threshold for deduplication
+		}
+
+		// Set max tokens for LLM calls
+		if maxTokens > 0 {
+			curatorOpts = append(curatorOpts, curator.WithMaxTokens(maxTokens))
 		}
 
 		// Enable LLM-based curation if LLM is available and AutoReflect is enabled

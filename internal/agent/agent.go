@@ -67,7 +67,15 @@ type Agent struct {
 	// Infrastructure
 	context *Environment
 	emitter *events.EventEmitter
-	config  *Config
+
+	// Configuration (options-based)
+	maxTurns        int
+	timeout         time.Duration
+	temperature     float64
+	maxTokens       int
+	requireApproval bool
+	aceConfig       *ACEConfig
+	cycleDetection  bool
 }
 
 // Task defines the interface for different execution modes.
@@ -101,13 +109,21 @@ func WithACEService(aceService *ACEService) AgentOption {
 	}
 }
 
+// WithACEConfig sets the ACE configuration on the agent.
+func WithACEConfig(aceConfig *ACEConfig) AgentOption {
+	return func(a *Agent) error {
+		a.aceConfig = aceConfig
+		return nil
+	}
+}
+
 // WithMaxTurns sets the maximum number of agent turns.
 func WithMaxTurns(maxTurns int) AgentOption {
 	return func(a *Agent) error {
 		if maxTurns <= 0 {
 			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithMaxTurns", nil, "max turns must be positive, got %d", maxTurns)
 		}
-		a.config.MaxTurns = maxTurns
+		a.maxTurns = maxTurns
 		return nil
 	}
 }
@@ -118,7 +134,7 @@ func WithAgentTimeout(timeout time.Duration) AgentOption {
 		if timeout <= 0 {
 			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithAgentTimeout", nil, "timeout must be positive, got %v", timeout)
 		}
-		a.config.Timeout = timeout
+		a.timeout = timeout
 		return nil
 	}
 }
@@ -129,7 +145,7 @@ func WithTemperature(temperature float64) AgentOption {
 		if temperature < 0 || temperature > 2 {
 			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithTemperature", nil, "temperature must be between 0 and 2, got %f", temperature)
 		}
-		a.config.Temperature = temperature
+		a.temperature = temperature
 		return nil
 	}
 }
@@ -140,7 +156,7 @@ func WithMaxTokens(maxTokens int) AgentOption {
 		if maxTokens <= 0 {
 			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithMaxTokens", nil, "max tokens must be positive, got %d", maxTokens)
 		}
-		a.config.MaxTokens = maxTokens
+		a.maxTokens = maxTokens
 		return nil
 	}
 }
@@ -148,7 +164,7 @@ func WithMaxTokens(maxTokens int) AgentOption {
 // WithRequireApproval sets whether dangerous commands require approval.
 func WithRequireApproval(require bool) AgentOption {
 	return func(a *Agent) error {
-		a.config.RequireApproval = require
+		a.requireApproval = require
 		return nil
 	}
 }
@@ -193,7 +209,7 @@ func NewAgent(
 		return nil, ErrNilEmitter
 	}
 
-	// Create agent with services
+	// Create agent with services and reasonable defaults
 	agent := &Agent{
 		llm:           provider,
 		security:      security,
@@ -201,7 +217,10 @@ func NewAgent(
 		orchestration: orchestration,
 		context:       context,
 		emitter:       emitter,
-		config:        DefaultConfig(),
+		maxTurns:      50,               // Default: 50 turns
+		timeout:       60 * time.Minute, // Default: 60 minutes
+		temperature:   0.7,              // Default: 0.7
+		maxTokens:     8192,             // Default: 8K tokens
 	}
 
 	// Apply options
@@ -216,38 +235,16 @@ func NewAgent(
 
 // resolveTask determines which task to use for this request.
 //
-// Precedence order:
-//  1. Explicit req.Task object (if non-nil)
-//  2. Task by name req.TaskName (if non-empty, looked up in orchestration service)
-//  3. Default task from orchestration service
-//
-// Returns an error if:
-//   - TaskName is provided but not found
-//   - No default task is configured
+// The task must be provided in req.Task. If nil, returns an error.
+// This simplification removes the runtime registry pattern in favor of
+// compile-time task creation via task.NewTask().
 func (a *Agent) resolveTask(req *AgentRequest) (Task, error) {
-	// Priority 1: Explicit task object provided
-	if req.Task != nil {
-		slog.Debug("task resolution: using explicit task", "name", req.Task.Name())
-		return req.Task, nil
+	if req.Task == nil {
+		return nil, spinerrors.New(spinerrors.CodeValidation, "Agent.resolveTask", "task is required", nil)
 	}
 
-	// Priority 2: Task name provided - look up via orchestration
-	if req.TaskName != "" {
-		task, err := a.orchestration.GetTask(req.TaskName)
-		if err != nil {
-			return nil, spinerrors.New(spinerrors.CodeNotFound, "Agent.resolveTask", "task resolution failed", err)
-		}
-		slog.Debug("task resolution: resolved by name", "name", req.TaskName)
-		return task, nil
-	}
-
-	// Priority 3: Use default task from orchestration
-	task, err := a.orchestration.GetDefaultTask()
-	if err != nil {
-		return nil, spinerrors.New(spinerrors.CodeNotFound, "Agent.resolveTask", "task resolution failed", err)
-	}
-	slog.Debug("task resolution: using default task", "name", task.Name())
-	return task, nil
+	slog.Debug("task resolution: using task", "name", req.Task.Name())
+	return req.Task, nil
 }
 
 // Execute runs the agent loop for a request.
@@ -260,7 +257,11 @@ func (a *Agent) resolveTask(req *AgentRequest) (Task, error) {
 //
 // The agent respects the context timeout and max turns limit.
 func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse, error) {
-	slog.Info("agent execution started", "input_len", len(req.Input), "task_mode", req.TaskName)
+	taskName := ""
+	if req.Task != nil {
+		taskName = req.Task.Name()
+	}
+	slog.Info("agent execution started", "input_len", len(req.Input), "task_mode", taskName)
 	// Validate request and setup
 	ctx, resp, err := a.executeSetup(ctx, req)
 	if err != nil {
@@ -271,7 +272,7 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 	// Resolve task mode
 	task, err := a.resolveTask(req)
 	if err != nil {
-		slog.Error("task resolution failed", "task_name", req.TaskName, "error", err)
+		slog.Error("task resolution failed", "task_name", taskName, "error", err)
 		return nil, spinerrors.New(spinerrors.CodeNotFound, "Agent.Execute", "failed to resolve task mode", err)
 	}
 	slog.Debug("task resolved", "task_name", task.Name(), "max_tokens", task.MaxTokens())
@@ -346,27 +347,25 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 				slog.Debug("No bullets to display (empty result)")
 			}
 
-			if len(learnedBullets) > 0 {
-				// Build bullet list for display
-				bulletList := ""
+			// Only show learning messages if ACE events are enabled
+			// This prevents noise for users who don't want to see ACE internals
+			if len(learnedBullets) > 0 && a.aceConfig != nil && a.aceConfig.Retrieval.ProgressiveContext.EmitACEEvents {
+				// Convert bullets to BulletData for event
+				bulletData := make([]events.BulletData, len(learnedBullets))
 				for i, b := range learnedBullets {
-					bulletList += fmt.Sprintf("  %d. %s\n", i+1, b.Content)
+					bulletData[i] = events.BulletData{
+						Content: b.Content,
+						// Category is optional and not present in bullet.Bullet
+					}
 				}
 
-				successStr := "successful"
-				if !resp.Success {
-					successStr = "failed"
-				}
-				learnMsg := fmt.Sprintf("Learned %d new insight%s from this %s execution:\n%s",
-					len(learnedBullets), pluralize(len(learnedBullets)), successStr, bulletList)
-
-				// Emit content complete event to show ACE learning activity as a chat block
+				// Emit ACE learning event to show learned insights as compact hint
 				a.emitter.Emit(events.Event{
-					Type:      events.EventContentComplete,
+					Type:      events.EventACELearned,
 					Timestamp: time.Now(),
-					Data: events.ContentDeltaData{
-						Content: learnMsg,
-						Role:    string(message.RoleAssistant),
+					Data: events.ACELearningData{
+						Success: resp.Success,
+						Bullets: bulletData,
 					},
 				})
 			}
@@ -411,7 +410,7 @@ func (a *Agent) applyTimeout(ctx context.Context) (context.Context, context.Canc
 		return ctx, func() {} // Return no-op cancel function
 	}
 	// Use config timeout (initialized from DefaultConfig: 60 minutes)
-	return context.WithTimeout(ctx, a.config.Timeout)
+	return context.WithTimeout(ctx, a.timeout)
 }
 
 // buildPrompt builds the initial prompt for the agent.
@@ -441,6 +440,10 @@ func (a *Agent) finalizeResponse(resp *AgentResponse, messages []message.Message
 				break
 			}
 		}
+
+		// Extract new messages from this turn (excluding history)
+		// This includes: user input, assistant messages with tool calls, tool results, final assistant
+		resp.Messages = messages[historyLen:]
 	}
 
 	// Note: EventTurnComplete is NOT emitted here - it's emitted after ACE bullet
@@ -499,25 +502,6 @@ func (a *Agent) BuildToolsForTask(task Task) ([]tools.Tool, error) {
 		"allowed", len(filtered))
 
 	return filtered, nil
-}
-
-// GetTaskRegistry returns the agent's task registry via orchestration service.
-// This is useful for testing and introspection of registered task modes.
-//
-// This method delegates to the orchestration service to access the task registry.
-// Returns nil if the orchestration service doesn't have a task registry configured.
-func (a *Agent) GetTaskRegistry() *orchestration.Registry {
-	if a.orchestration == nil {
-		return nil
-	}
-
-	return a.orchestration.GetTaskRegistry()
-}
-
-// ListTaskModes returns all registered task mode names in sorted order.
-// This delegates to the orchestration service.
-func (a *Agent) ListTaskModes() []string {
-	return a.orchestration.ListTasks()
 }
 
 // CreatePlan creates a new execution plan for the given task.
@@ -618,7 +602,7 @@ Guidelines:
 //   - reason: explanation of why approval is needed
 func (a *Agent) ShouldApprove(cmd *security.Command) (bool, string) {
 	// If approval is disabled, never require approval
-	if !a.config.RequireApproval {
+	if !a.requireApproval {
 		return false, ""
 	}
 
@@ -880,27 +864,8 @@ func extractQueryFromMessages(messages []message.Message) string {
 //   - Tokens: Uses task.MaxTokens() if > 0, otherwise agent.config.MaxTokens
 //
 // The bullets parameter contains ACE bullets already retrieved for this turn.
+// Note: ACE bullet display is now handled by EventACERetrieval emission in loop.go
 func (a *Agent) callLLM(ctx context.Context, messages []message.Message, task Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
-	// ACE: Emit event to show ACE activity if bullets were provided
-	if a.aceService != nil && len(bullets) > 0 {
-		// Build bullet list for display
-		bulletList := ""
-		for i, b := range bullets {
-			bulletList += fmt.Sprintf("  %d. %s\n", i+1, b.Content)
-		}
-
-		aceMsg := fmt.Sprintf("ACE: Retrieved %d relevant bullet%s from playbook:\n%s", len(bullets), pluralize(len(bullets)), bulletList)
-
-		a.emitter.Emit(events.Event{
-			Type:      events.EventContentComplete,
-			Timestamp: time.Now(),
-			Data: events.ContentDeltaData{
-				Content: aceMsg,
-				Role:    string(message.RoleAssistant),
-			},
-		})
-	}
-
 	// Start with system message from task
 	openaiMessages := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages)+1)
 
@@ -945,7 +910,7 @@ Then provide your response after the thinking block.`
 	}
 
 	// Determine token budget: task overrides agent config
-	maxTokens := a.config.MaxTokens
+	maxTokens := a.maxTokens
 	if task != nil {
 		taskMaxTokens := task.MaxTokens()
 		if taskMaxTokens > 0 {
@@ -956,7 +921,7 @@ Then provide your response after the thinking block.`
 	// Build OpenAI request params
 	params := openai.ChatCompletionNewParams{
 		Messages:    openai.F(openaiMessages),
-		Temperature: openai.F(a.config.Temperature),
+		Temperature: openai.F(a.temperature),
 		MaxTokens:   openai.F(int64(maxTokens)),
 	}
 
@@ -1098,7 +1063,7 @@ func (a *Agent) emitACERetrievalEvent(
 	trajCtx *trajectory.TrajectoryContext,
 	trigger trajectory.TriggerType,
 	query string,
-	bulletsRetrieved int,
+	bullets []*bullet.Bullet,
 	turn int,
 ) {
 	// Calculate cache hit rate
@@ -1111,16 +1076,30 @@ func (a *Agent) emitACERetrievalEvent(
 	// BulletsNew is approximated by cache misses
 	bulletsNew := trajCtx.CacheMisses
 
+	// Convert bullets to BulletData for event
+	bulletData := make([]events.BulletData, len(bullets))
+	for i, b := range bullets {
+		category := ""
+		if b.Tags != nil {
+			category = b.Tags["category"]
+		}
+		bulletData[i] = events.BulletData{
+			Content:  b.Content,
+			Category: category,
+		}
+	}
+
 	a.emitter.Emit(events.Event{
 		Type: events.EventACERetrieval,
 		Data: events.ACERetrievalData{
 			Turn:             turn,
 			Trigger:          string(trigger),
 			Query:            query,
-			BulletsRetrieved: bulletsRetrieved,
+			BulletsRetrieved: len(bullets),
 			BulletsNew:       bulletsNew,
 			CacheSize:        len(trajCtx.BulletCache),
 			CacheHitRate:     hitRate,
+			Bullets:          bulletData,
 		},
 	})
 }

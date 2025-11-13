@@ -17,12 +17,12 @@ type MCPServer struct {
 
 // MCPManager manages MCP server configurations.
 type MCPManager struct {
-	loader     *Loader
+	loader     *LoaderV2
 	configFile string
 }
 
 // NewMCPManager creates a new MCP manager.
-func NewMCPManager(loader *Loader) *MCPManager {
+func NewMCPManager(loader *LoaderV2) *MCPManager {
 	return &MCPManager{
 		loader:     loader,
 		configFile: loader.ConfigFileUsed(),

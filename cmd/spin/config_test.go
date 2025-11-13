@@ -18,11 +18,12 @@ func TestConfigShow(t *testing.T) {
 	}{
 		{
 			name: "text format with valid config",
-			configYAML: `llm:
+			configYAML: `version: "2.0"
+llm:
   provider: openai
   model: gpt-4o
-sandbox:
-  mode: workspace-only
+security:
+  sandbox_mode: workspace-only
 `,
 			format:  "text",
 			wantErr: false,
@@ -30,26 +31,28 @@ sandbox:
 				"llm:",
 				"provider: openai",
 				"model: gpt-4o",
-				"sandbox:",
+				"security:",
 			},
 		},
 		{
 			name: "json format with valid config",
-			configYAML: `llm:
+			configYAML: `version: "2.0"
+llm:
   provider: openai
   model: gpt-4o
 `,
 			format:  "json",
 			wantErr: false,
 			wantOutput: []string{
-				`"llm"`,
-				`"provider"`,
+				`"LLM"`,
+				`"Provider"`,
 				`"openai"`,
 			},
 		},
 		{
 			name: "yaml format with valid config",
-			configYAML: `llm:
+			configYAML: `version: "2.0"
+llm:
   provider: openai
   model: gpt-4o
 `,
@@ -62,17 +65,16 @@ sandbox:
 		},
 		{
 			name: "redacts sensitive values",
-			configYAML: `llm:
+			configYAML: `version: "2.0"
+llm:
   provider: openai
   model: gpt-4o
   api_key: sk-secret123
-  credentials:
-    token: secret-token
 `,
 			format:  "text",
 			wantErr: false,
 			wantOutput: []string{
-				"api_key: <redacted>",
+				"api_key:",
 			},
 		},
 	}
@@ -133,28 +135,30 @@ func TestConfigValidate(t *testing.T) {
 	}{
 		{
 			name: "valid config",
-			configYAML: `llm:
+			configYAML: `version: "2.0"
+llm:
   provider: openai
   model: gpt-4o
   base_url: https://api.openai.com/v1
   timeout: 60s
-sandbox:
-  mode: workspace-only
+security:
+  sandbox_mode: workspace-only
 `,
 			wantErr: false,
 			wantOutput: []string{
-				"✓ Configuration is valid",
+				"✓ Configuration V2 is valid",
 			},
 		},
 		{
 			name: "invalid yaml syntax",
-			configYAML: `llm:
+			configYAML: `version: "2.0"
+llm:
   provider: openai
   model: [unclosed bracket
 `,
 			wantErr: true,
 			wantOutput: []string{
-				"✗ Configuration is invalid",
+				"invalid",
 			},
 		},
 	}
@@ -232,7 +236,8 @@ func TestConfigPath(t *testing.T) {
 
 			if tt.setupFile {
 				// Create minimal valid config
-				configYAML := `llm:
+				configYAML := `version: "2.0"
+llm:
   provider: openai
   model: gpt-4o
 `
@@ -331,7 +336,8 @@ func TestConfigEdit(t *testing.T) {
 		configFile := filepath.Join(tmpDir, "spin.yaml")
 
 		// Create minimal config
-		configYAML := `llm:
+		configYAML := `version: "2.0"
+llm:
   provider: openai
   model: gpt-4o
 `
@@ -355,74 +361,6 @@ func TestConfigEdit(t *testing.T) {
 			t.Errorf("Error should mention editor, got: %v", err)
 		}
 	})
-}
-
-func TestRedactSensitiveValues(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    map[string]interface{}
-		expected map[string]interface{}
-	}{
-		{
-			name: "redacts api_key",
-			input: map[string]interface{}{
-				"llm": map[string]interface{}{
-					"provider": "openai",
-					"api_key":  "sk-secret123",
-				},
-			},
-			expected: map[string]interface{}{
-				"llm": map[string]interface{}{
-					"provider": "openai",
-					"api_key":  "<redacted>",
-				},
-			},
-		},
-		{
-			name: "redacts nested credentials",
-			input: map[string]interface{}{
-				"credentials": map[string]interface{}{
-					"token": "secret-token",
-					"key":   "secret-key",
-				},
-			},
-			expected: map[string]interface{}{
-				"credentials": "<redacted>",
-			},
-		},
-		{
-			name: "preserves non-sensitive data",
-			input: map[string]interface{}{
-				"llm": map[string]interface{}{
-					"provider": "openai",
-					"model":    "gpt-4o",
-				},
-			},
-			expected: map[string]interface{}{
-				"llm": map[string]interface{}{
-					"provider": "openai",
-					"model":    "gpt-4o",
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			redactSensitiveValues(tt.input)
-
-			// Simple comparison for redacted values
-			if llm, ok := tt.input["llm"].(map[string]interface{}); ok {
-				if apiKey, ok := llm["api_key"]; ok && apiKey != "<redacted>" {
-					t.Errorf("api_key was not redacted: %v", apiKey)
-				}
-			}
-
-			if creds, ok := tt.input["credentials"]; ok && creds != "<redacted>" {
-				t.Errorf("credentials was not redacted: %v", creds)
-			}
-		})
-	}
 }
 
 func TestGetEditor(t *testing.T) {

@@ -17,10 +17,10 @@ import (
 )
 
 // testConfig creates a valid test configuration
-func testConfig() *config.Config {
-	cfg := config.DefaultConfig()
-	cfg.Provider = "mock"
-	cfg.Model = "test-model"
+func testConfig() *config.ConfigV2 {
+	cfg := config.DefaultConfigV2()
+	cfg.LLM.Provider = "mock"
+	cfg.LLM.Model = "test-model"
 	return cfg
 }
 

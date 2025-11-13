@@ -127,14 +127,6 @@ func NewProcessor(config ProcessorConfig) (*Processor, error) {
 		_ = toolRegistry.Register(tools.NewFileSearchTool(environment.WorkDir))
 		_ = toolRegistry.Register(tools.NewGitContextTool(environment.WorkDir))
 
-		// Build task registry with built-in modes (using orchestration.Registry, not task.Registry)
-		taskRegistry := orchestration.NewRegistry()
-		_ = taskRegistry.Register("regular", task.NewRegular())
-		_ = taskRegistry.Register("review", task.NewReview())
-		_ = taskRegistry.Register("compact", task.NewCompact())
-		_ = taskRegistry.Register("planning", task.NewPlanning())
-		_ = taskRegistry.SetDefault("regular")
-
 		toolExecutor := orchestration.NewToolExecutor(orchestration.ToolExecutorConfig{
 			Registry:        toolRegistry,
 			Validator:       validator,
@@ -142,7 +134,7 @@ func NewProcessor(config ProcessorConfig) (*Processor, error) {
 			Emitter:         emitter,
 			WorkDir:         environment.WorkDir,
 		})
-		orchestrationService := orchestration.NewOrchestrationService(toolExecutor, toolRegistry, taskRegistry)
+		orchestrationService := orchestration.NewOrchestrationService(toolExecutor, toolRegistry)
 
 		var err error
 		agentInstance, err = agent.NewAgent(
@@ -285,9 +277,19 @@ func (p *Processor) runTurn(ctx context.Context, conv *Conversation, message str
 
 	conv.mu.RUnlock()
 
+	// Create task from task mode
+	taskInstance, err := task.NewTask(taskMode)
+	if err != nil {
+		p.sendNotification(protocol.StatusUpdate{
+			Message: fmt.Sprintf("Invalid task mode %q: %v", taskMode, err),
+			Level:   protocol.StatusLevelError,
+		})
+		return
+	}
+
 	req := &agent.AgentRequest{
-		Input:    message,
-		TaskName: taskMode,
+		Input: message,
+		Task:  taskInstance,
 	}
 
 	subscriptionID, eventChan, err := p.emitter.Subscribe()

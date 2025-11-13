@@ -82,12 +82,8 @@ func (a *Aggregator) ProcessEvent(event *events.Event) {
 
 	case events.EventTurnComplete:
 		a.manager.SetAgentState("Idle")
-		// Extract token usage from turn event
-		if data, ok := event.Data.(events.TurnEventData); ok {
-			if data.TokensUsed > 0 {
-				a.manager.AddTokens(int64(data.TokensUsed), 0)
-			}
-		}
+		// Note: Token counting is handled by SetTokenCount() in the main event loop
+		// which pulls the authoritative count from conversation history
 
 	case events.EventTurnFailed:
 		a.manager.SetAgentState("Error")

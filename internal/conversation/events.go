@@ -12,7 +12,7 @@ import (
 // attachJSONLEventLogger sets up a JSONL event logger for the given session.
 // Events are written to {sessionDir}/{sessionID}/events.jsonl in append mode.
 func (b *Builder) attachJSONLEventLogger(ctx context.Context, sessionID string) {
-	base := b.cfg.SessionDir
+	base := b.cfg.Agent.SessionDir
 	if base == "" {
 		if home, err := os.UserHomeDir(); err == nil {
 			base = filepath.Join(home, ".spin", "sessions")

@@ -48,10 +48,10 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	}
 
 	// Create conversation with default config using builder pattern
-	cfg := config.DefaultConfig()
+	cfg := config.DefaultConfigV2()
 	// Set required fields for validation
-	cfg.Provider = "mock"
-	cfg.Model = "test-model"
+	cfg.LLM.Provider = "mock"
+	cfg.LLM.Model = "test-model"
 
 	workDir, err := os.Getwd()
 	if err != nil {
@@ -65,7 +65,7 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	var shellSvc *shellpkg.Service
 	var mcpSvc *mcppkg.Service
 
-	if cfg.EnableGit {
+	if cfg.Protocol.EnableGit {
 		gitSvc, err = gitpkg.NewService(true, workDir, logger)
 		if err != nil {
 			return fmt.Errorf("create git service: %w", err)
@@ -73,20 +73,20 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 		defer gitSvc.Close()
 	}
 
-	if cfg.EnableShell {
-		shellSvc, err = shellpkg.NewService(true, workDir, logger, cfg.ShellTimeout)
+	if cfg.Protocol.EnableShell {
+		shellSvc, err = shellpkg.NewService(true, workDir, logger, cfg.Protocol.ShellTimeout)
 		if err != nil {
 			return fmt.Errorf("create shell service: %w", err)
 		}
 		defer shellSvc.Close()
 	}
 
-	if cfg.EnableMCP && len(cfg.MCPServers) > 0 {
+	if cfg.Protocol.EnableMCP && len(cfg.Protocol.MCPServers) > 0 {
 		mcpCfg := &mcppkg.Config{
 			EnableMCP:  true,
-			MCPServers: make([]mcppkg.MCPServerConfig, len(cfg.MCPServers)),
+			MCPServers: make([]mcppkg.MCPServerConfig, len(cfg.Protocol.MCPServers)),
 		}
-		for i, srv := range cfg.MCPServers {
+		for i, srv := range cfg.Protocol.MCPServers {
 			mcpCfg.MCPServers[i] = mcppkg.MCPServerConfig{
 				Name:    srv.Name,
 				Command: srv.Command,

@@ -19,11 +19,9 @@ type AgentRequest struct {
 	// Context is the environment context
 	Context *Environment
 
-	// Task is the task mode
+	// Task is the task mode (required)
+	// Use task.NewTask(name) to create task instances
 	Task orchestration.Task
-
-	// TaskName is the task name
-	TaskName string
 
 	// Timeout for this request
 	Timeout time.Duration
@@ -51,6 +49,11 @@ type AgentResponse struct {
 
 	// Duration of the request
 	Duration time.Duration
+
+	// Messages contains all messages from this turn (excluding input history)
+	// This includes: user input, assistant messages with tool calls, tool results, final assistant message
+	// The conversation layer should persist these to maintain proper OpenAI message format
+	Messages []message.Message
 
 	// RetrievedBullets contains ACE bullets retrieved during execution
 	// Populated from TrajectoryContext or simple retrieval mode

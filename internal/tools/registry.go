@@ -21,6 +21,16 @@ func NewRegistry() *Registry {
 	}
 }
 
+// NewRegistryWithBuiltins creates a new registry pre-populated with all builtin tools.
+// This is the recommended constructor for most use cases.
+func NewRegistryWithBuiltins() *Registry {
+	registry := NewRegistry()
+	for _, tool := range BuiltinTools {
+		_ = registry.Register(tool)
+	}
+	return registry
+}
+
 // Register adds a tool to the registry.
 // Returns ErrDuplicateTool if a tool with the same name already exists.
 func (r *Registry) Register(tool Tool) error {

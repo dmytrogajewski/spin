@@ -38,7 +38,7 @@ type Config struct {
 //  3. Config file
 //  4. Built-in defaults
 type Builder struct {
-	configLoader *config.Loader
+	configLoader *config.LoaderV2
 	authMgr      *auth.Manager
 	factory      *factory.Factory
 }
@@ -53,7 +53,7 @@ type Builder struct {
 //
 // Example:
 //
-//	configLoader := config.NewLoader()
+//	configLoader := config.NewLoaderV2()
 //	authMgr := auth.NewManager(auth.NewKeystore())
 //	builder := builder.NewBuilder(configLoader, authMgr)
 //
@@ -62,7 +62,7 @@ type Builder struct {
 //	    Model:    "gpt-4o",
 //	    KeyName:  "my-openai-key",
 //	})
-func NewBuilder(cfg *config.Loader, authMgr *auth.Manager) *Builder {
+func NewBuilder(cfg *config.LoaderV2, authMgr *auth.Manager) *Builder {
 	return &Builder{
 		configLoader: cfg,
 		authMgr:      authMgr,

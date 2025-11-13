@@ -26,12 +26,10 @@ func TestBuildQueryFromContext_Initial(t *testing.T) {
 func TestBuildQueryFromContext_Error(t *testing.T) {
 	// Setup
 	agent := &Agent{
-		config: &Config{
-			ACE: ACEConfig{
-				Retrieval: ACERetrievalConfig{
-					ProgressiveContext: ProgressiveContextConfig{
-						ErrorLookback: 5,
-					},
+		aceConfig: &ACEConfig{
+			Retrieval: ACERetrievalConfig{
+				ProgressiveContext: ProgressiveContextConfig{
+					ErrorLookback: 5,
 				},
 			},
 		},
@@ -55,12 +53,10 @@ func TestBuildQueryFromContext_Error(t *testing.T) {
 func TestBuildQueryFromContext_ToolChange(t *testing.T) {
 	// Setup
 	agent := &Agent{
-		config: &Config{
-			ACE: ACEConfig{
-				Retrieval: ACERetrievalConfig{
-					ProgressiveContext: ProgressiveContextConfig{
-						ToolChangeLookback: 3,
-					},
+		aceConfig: &ACEConfig{
+			Retrieval: ACERetrievalConfig{
+				ProgressiveContext: ProgressiveContextConfig{
+					ToolChangeLookback: 3,
 				},
 			},
 		},
@@ -84,7 +80,7 @@ func TestBuildQueryFromContext_ToolChange(t *testing.T) {
 func TestBuildQueryFromContext_Interval(t *testing.T) {
 	// Setup
 	agent := &Agent{
-		config: &Config{},
+		aceConfig: &ACEConfig{},
 	}
 	ctx := trajectory.NewTrajectoryContext("fix build")
 	ctx.AppendSteps([]generator.TrajectoryStep{
@@ -105,12 +101,10 @@ func TestBuildQueryFromContext_Interval(t *testing.T) {
 func TestBuildQueryFromContext_EmptySteps(t *testing.T) {
 	// Setup
 	agent := &Agent{
-		config: &Config{
-			ACE: ACEConfig{
-				Retrieval: ACERetrievalConfig{
-					ProgressiveContext: ProgressiveContextConfig{
-						ErrorLookback: 5,
-					},
+		aceConfig: &ACEConfig{
+			Retrieval: ACERetrievalConfig{
+				ProgressiveContext: ProgressiveContextConfig{
+					ErrorLookback: 5,
 				},
 			},
 		},
@@ -129,13 +123,11 @@ func TestBuildQueryFromContext_EmptySteps(t *testing.T) {
 func TestBuildQueryFromContext_AllTriggers(t *testing.T) {
 	// Setup
 	agent := &Agent{
-		config: &Config{
-			ACE: ACEConfig{
-				Retrieval: ACERetrievalConfig{
-					ProgressiveContext: ProgressiveContextConfig{
-						ErrorLookback:      5,
-						ToolChangeLookback: 3,
-					},
+		aceConfig: &ACEConfig{
+			Retrieval: ACERetrievalConfig{
+				ProgressiveContext: ProgressiveContextConfig{
+					ErrorLookback:      5,
+					ToolChangeLookback: 3,
 				},
 			},
 		},

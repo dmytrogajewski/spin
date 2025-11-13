@@ -13,7 +13,6 @@ import (
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
@@ -24,7 +23,7 @@ import (
 // This pattern follows the service injection approach used in the tools package.
 type Builder struct {
 	// Core configuration
-	cfg     *config.Config
+	cfg     *config.ConfigV2
 	workDir string
 
 	// Services (injected from application layer)
@@ -37,7 +36,6 @@ type Builder struct {
 	emitter         *events.EventEmitter
 	storage         session.Storage
 	toolRegistry    *tools.Registry
-	taskRegistry    *orchestration.Registry
 	approvalHandler security.ApprovalHandler
 	logger          *slog.Logger
 
@@ -46,7 +44,7 @@ type Builder struct {
 }
 
 // NewBuilder creates a new Conversation builder with the given configuration and working directory.
-func NewBuilder(cfg *config.Config, workDir string) *Builder {
+func NewBuilder(cfg *config.ConfigV2, workDir string) *Builder {
 	return &Builder{
 		cfg:     cfg,
 		workDir: workDir,
@@ -104,17 +102,17 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 		return nil, fmt.Errorf("initialize core dependencies: %w", err)
 	}
 
-	// Build executor using agent package helper
+	// Build executor using agent package helper with unified config
 	exec := agent.NewBuilder().
-		WithConfig(b.convertToAgentConfig()).
+		WithUnifiedConfig(b.cfg).
 		WithWorkingDir(b.workDir).
 		WithEmitter(b.emitter).
 		WithApprovalHandler(b.approvalHandler).
 		BuildExecutor()
 
-	// Gather environment using agent package helper
+	// Gather environment using agent package helper with unified config
 	env := agent.NewBuilder().
-		WithConfig(b.convertToAgentConfig()).
+		WithUnifiedConfig(b.cfg).
 		WithWorkingDir(b.workDir).
 		BuildEnvironment()
 
@@ -148,7 +146,7 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	}
 
 	// Attach JSONL event logger if debug mode
-	if b.cfg != nil && b.cfg.Debug {
+	if b.cfg != nil && b.cfg.Agent.Debug {
 		b.attachJSONLEventLogger(ctx, sess.ID)
 	}
 
@@ -188,15 +186,15 @@ func (b *Builder) initializeCoreDependencies() error {
 	// Event emitter
 	if b.emitter == nil {
 		bufferSize := 100
-		if b.cfg.StreamBuffer > 0 {
-			bufferSize = b.cfg.StreamBuffer
+		if b.cfg.Agent.StreamBuffer > 0 {
+			bufferSize = b.cfg.Agent.StreamBuffer
 		}
 		b.emitter = events.NewEventEmitter(bufferSize)
 	}
 
 	// Session storage
 	if b.storage == nil {
-		fs, err := session.NewFileStorage(b.cfg.SessionDir)
+		fs, err := session.NewFileStorage(b.cfg.Agent.SessionDir)
 		if err != nil {
 			return fmt.Errorf("initialize storage: %w", err)
 		}
@@ -208,97 +206,6 @@ func (b *Builder) initializeCoreDependencies() error {
 	b.authManager = auth.NewManager(keystore)
 
 	return nil
-}
-
-// convertToAgentConfig converts config.Config to agent.Config
-func (b *Builder) convertToAgentConfig() *agent.Config {
-	if b.cfg == nil {
-		return agent.DefaultConfig()
-	}
-
-	return &agent.Config{
-		Provider:        b.cfg.Provider,
-		Model:           b.cfg.Model,
-		ProviderConfig:  b.cfg.ProviderConfig,
-		Temperature:     b.cfg.Temperature,
-		MaxTurns:        b.cfg.MaxTurns,
-		Timeout:         b.cfg.Timeout,
-		WorkDir:         b.cfg.WorkDir,
-		MaxTokens:       b.cfg.MaxTokens,
-		RequireApproval: b.cfg.RequireApproval,
-		SandboxMode:     b.cfg.SandboxMode,
-		PolicyFile:      b.cfg.PolicyFile,
-		AllowedCommands: b.cfg.AllowedCommands,
-		EnableMCP:       b.cfg.EnableMCP,
-		MCPServers:      convertMCPServers(b.cfg.MCPServers),
-		EnableGit:       b.cfg.EnableGit,
-		EnableShell:     b.cfg.EnableShell,
-		StreamBuffer:    b.cfg.StreamBuffer,
-		CacheCommands:   b.cfg.CacheCommands,
-		MaxFiles:        b.cfg.MaxFiles,
-		MaxDepth:        b.cfg.MaxDepth,
-		SkipGit:         b.cfg.SkipGit,
-		SessionDir:      b.cfg.SessionDir,
-		HistoryLimit:    b.cfg.HistoryLimit,
-		LogLevel:        b.cfg.LogLevel,
-		LogFormat:       b.cfg.LogFormat,
-		Debug:           b.cfg.Debug,
-		CycleDetection:  convertCycleDetection(b.cfg.CycleDetection),
-		ACE:             convertACEConfigFromFlat(b.cfg),
-	}
-}
-
-func convertMCPServers(servers []config.MCPServerConfig) []agent.MCPServerConfig {
-	result := make([]agent.MCPServerConfig, len(servers))
-	for i, s := range servers {
-		result[i] = agent.MCPServerConfig{
-			Command: s.Command,
-			Args:    s.Args,
-			Env:     s.Env,
-		}
-	}
-	return result
-}
-
-func convertCycleDetection(cfg config.CycleDetectionConfig) agent.CycleDetectionConfig {
-	return agent.CycleDetectionConfig{
-		Enabled:          cfg.Enabled,
-		WindowSize:       cfg.WindowSize,
-		SimilarityThresh: cfg.SimilarityThresh,
-		ToolRepeatLimit:  cfg.ToolRepeatLimit,
-		ErrorRepeatLimit: cfg.ErrorRepeatLimit,
-	}
-}
-
-func convertACEConfigFromFlat(cfg *config.Config) agent.ACEConfig {
-	// config.Config has flat ACE fields, convert to nested agent.ACEConfig
-	defaultACE := agent.DefaultConfig().ACE
-
-	return agent.ACEConfig{
-		Enabled:        cfg.ACEEnabled,
-		PlaybookPath:   cfg.ACEPlaybookPath,
-		TrajectoryPath: cfg.ACETrajectoryPath,
-		Retrieval: agent.ACERetrievalConfig{
-			TopK:     cfg.ACETopK,
-			MinScore: cfg.ACEMinScore,
-			ProgressiveContext: agent.ProgressiveContextConfig{
-				Enabled:    true,
-				CacheTTL:   10,
-				MaxBullets: 50,
-			},
-		},
-		ItemizedLearning: agent.ACEItemizedLearningConfig{
-			Enabled:       true,
-			ParseFeedback: true,
-			UpdateAsync:   false,
-		},
-		Generation: agent.ACEGenerationConfig{
-			Enabled:     true,
-			AutoReflect: true,
-		},
-		Adapter: defaultACE.Adapter,
-		Refine:  defaultACE.Refine,
-	}
 }
 
 // enrichEnvironmentWithIntegrations adds context from Git and Shell integrations.

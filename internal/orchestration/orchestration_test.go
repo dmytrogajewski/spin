@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,7 +13,6 @@ import (
 
 func TestNewOrchestrationService(t *testing.T) {
 	toolRegistry := tools.NewRegistry()
-	taskRegistry := NewRegistry()
 	toolExecutor := NewToolExecutor(ToolExecutorConfig{
 		Registry: toolRegistry,
 	})
@@ -23,49 +21,37 @@ func TestNewOrchestrationService(t *testing.T) {
 		name         string
 		toolExecutor *ToolExecutor
 		toolRegistry *tools.Registry
-		taskRegistry *Registry
 		wantNil      bool
 	}{
 		{
 			name:         "with all dependencies",
 			toolExecutor: toolExecutor,
 			toolRegistry: toolRegistry,
-			taskRegistry: taskRegistry,
 			wantNil:      false,
 		},
 		{
 			name:         "with nil tool executor",
 			toolExecutor: nil,
 			toolRegistry: toolRegistry,
-			taskRegistry: taskRegistry,
 			wantNil:      false, // Service allows nil
 		},
 		{
 			name:         "with nil tool registry",
 			toolExecutor: toolExecutor,
 			toolRegistry: nil,
-			taskRegistry: taskRegistry,
-			wantNil:      false, // Service allows nil
-		},
-		{
-			name:         "with nil task registry",
-			toolExecutor: toolExecutor,
-			toolRegistry: toolRegistry,
-			taskRegistry: nil,
 			wantNil:      false, // Service allows nil
 		},
 		{
 			name:         "with all nil",
 			toolExecutor: nil,
 			toolRegistry: nil,
-			taskRegistry: nil,
 			wantNil:      false, // Service allows nil
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := NewOrchestrationService(tt.toolExecutor, tt.toolRegistry, tt.taskRegistry)
+			svc := NewOrchestrationService(tt.toolExecutor, tt.toolRegistry)
 
 			if tt.wantNil {
 				assert.Nil(t, svc)
@@ -77,14 +63,13 @@ func TestNewOrchestrationService(t *testing.T) {
 }
 
 func TestOrchestrationService_ExecuteTool(t *testing.T) {
-	registry := tools.NewRegistry()
-	_ = registry.Register(tools.NewReadFileTool())
+	registry := tools.NewRegistryWithBuiltins()
 
 	toolExecutor := NewToolExecutor(ToolExecutorConfig{
 		Registry: registry,
 	})
 
-	svc := NewOrchestrationService(toolExecutor, registry, nil)
+	svc := NewOrchestrationService(toolExecutor, registry)
 
 	tests := []struct {
 		name    string
@@ -137,7 +122,7 @@ func TestOrchestrationService_ExecuteTool(t *testing.T) {
 }
 
 func TestOrchestrationService_ExecuteTool_NilExecutor(t *testing.T) {
-	svc := NewOrchestrationService(nil, nil, nil)
+	svc := NewOrchestrationService(nil, nil)
 
 	call := &ToolCall{
 		ID: "call-1",
@@ -156,14 +141,13 @@ func TestOrchestrationService_ExecuteTool_NilExecutor(t *testing.T) {
 }
 
 func TestOrchestrationService_ExecuteBatch(t *testing.T) {
-	registry := tools.NewRegistry()
-	_ = registry.Register(tools.NewReadFileTool())
+	registry := tools.NewRegistryWithBuiltins()
 
 	toolExecutor := NewToolExecutor(ToolExecutorConfig{
 		Registry: registry,
 	})
 
-	svc := NewOrchestrationService(toolExecutor, registry, nil)
+	svc := NewOrchestrationService(toolExecutor, registry)
 
 	tests := []struct {
 		name      string
@@ -231,7 +215,7 @@ func TestOrchestrationService_ExecuteBatch(t *testing.T) {
 }
 
 func TestOrchestrationService_ExecuteBatch_NilExecutor(t *testing.T) {
-	svc := NewOrchestrationService(nil, nil, nil)
+	svc := NewOrchestrationService(nil, nil)
 
 	calls := []*ToolCall{
 		{
@@ -250,108 +234,15 @@ func TestOrchestrationService_ExecuteBatch_NilExecutor(t *testing.T) {
 	assert.Nil(t, results)
 }
 
-func TestOrchestrationService_GetTask(t *testing.T) {
-	taskRegistry := NewRegistry()
-	_ = taskRegistry.Register("test-task", task.NewRegular())
-
-	svc := NewOrchestrationService(nil, nil, taskRegistry)
-
-	tests := []struct {
-		name     string
-		taskName string
-		wantErr  bool
-	}{
-		{
-			name:     "existing task",
-			taskName: "test-task",
-			wantErr:  false,
-		},
-		{
-			name:     "nonexistent task",
-			taskName: "nonexistent",
-			wantErr:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := svc.GetTask(tt.taskName)
-
-			if tt.wantErr {
-				require.Error(t, err)
-				assert.Nil(t, result)
-			} else {
-				require.NoError(t, err)
-				assert.NotNil(t, result)
-			}
-		})
-	}
-}
-
-func TestOrchestrationService_GetTask_NilRegistry(t *testing.T) {
-	svc := NewOrchestrationService(nil, nil, nil)
-
-	task, err := svc.GetTask("regular")
-
-	assert.Error(t, err)
-	assert.Nil(t, task)
-	assert.Contains(t, err.Error(), "task registry not configured")
-}
-
-func TestOrchestrationService_GetDefaultTask(t *testing.T) {
-	taskRegistry := NewRegistry()
-	_ = taskRegistry.Register("default-task", task.NewRegular())
-	_ = taskRegistry.SetDefault("default-task")
-
-	svc := NewOrchestrationService(nil, nil, taskRegistry)
-
-	result, err := svc.GetDefaultTask()
-
-	require.NoError(t, err)
-	assert.NotNil(t, result)
-}
-
-func TestOrchestrationService_GetDefaultTask_NilRegistry(t *testing.T) {
-	svc := NewOrchestrationService(nil, nil, nil)
-
-	task, err := svc.GetDefaultTask()
-
-	assert.Error(t, err)
-	assert.Nil(t, task)
-	assert.Contains(t, err.Error(), "task registry not configured")
-}
-
-func TestOrchestrationService_ListTasks(t *testing.T) {
-	taskRegistry := NewRegistry()
-	_ = taskRegistry.Register("task1", task.NewRegular())
-	_ = taskRegistry.Register("task2", task.NewCompact())
-
-	svc := NewOrchestrationService(nil, nil, taskRegistry)
-
-	tasks := svc.ListTasks()
-
-	assert.Len(t, tasks, 2)
-	assert.Contains(t, tasks, "task1")
-	assert.Contains(t, tasks, "task2")
-}
-
-func TestOrchestrationService_ListTasks_NilRegistry(t *testing.T) {
-	svc := NewOrchestrationService(nil, nil, nil)
-
-	tasks := svc.ListTasks()
-
-	assert.Len(t, tasks, 0)
-}
-
 func TestOrchestrationService_GetPlanner(t *testing.T) {
-	svc := NewOrchestrationService(nil, nil, nil)
+	svc := NewOrchestrationService(nil, nil)
 
 	planner := svc.GetPlanner()
 	assert.Nil(t, planner)
 }
 
 func TestOrchestrationService_SetPlanner(t *testing.T) {
-	svc := NewOrchestrationService(nil, nil, nil)
+	svc := NewOrchestrationService(nil, nil)
 
 	plan := &Plan{
 		ID:           "test-plan-1",
@@ -371,14 +262,13 @@ func TestOrchestrationService_SetPlanner(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkOrchestrationService_ExecuteTool(b *testing.B) {
-	registry := tools.NewRegistry()
-	_ = registry.Register(tools.NewReadFileTool())
+	registry := tools.NewRegistryWithBuiltins()
 
 	toolExecutor := NewToolExecutor(ToolExecutorConfig{
 		Registry: registry,
 	})
 
-	svc := NewOrchestrationService(toolExecutor, registry, nil)
+	svc := NewOrchestrationService(toolExecutor, registry)
 
 	call := &ToolCall{
 		ID: "call-1",
@@ -393,18 +283,6 @@ func BenchmarkOrchestrationService_ExecuteTool(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = svc.ExecuteTool(ctx, call)
-	}
-}
-
-func BenchmarkOrchestrationService_GetTask(b *testing.B) {
-	taskRegistry := NewRegistry()
-	_ = taskRegistry.Register("test-task", task.NewRegular())
-
-	svc := NewOrchestrationService(nil, nil, taskRegistry)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = svc.GetTask("test-task")
 	}
 }
 

@@ -240,44 +240,6 @@ func TestGolden_InvalidCrossSection(t *testing.T) {
 	}
 }
 
-// TestGolden_V1Migration tests migration from V1 to V2 format
-func TestGolden_V1Migration(t *testing.T) {
-	path := filepath.Join("golden", "v1_config.yaml")
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("Failed to read golden file: %v", err)
-	}
-
-	var v1 Config
-	if err := yaml.Unmarshal(data, &v1); err != nil {
-		t.Fatalf("Failed to unmarshal V1 config: %v", err)
-	}
-
-	v2 := MigrateV1ToV2(&v1)
-
-	if err := v2.Validate(); err != nil {
-		t.Fatalf("Migrated V2 config validation failed: %v", err)
-	}
-
-	// Verify migration preserved values
-	if v2.LLM.Provider != v1.Provider {
-		t.Errorf("Expected provider %s, got %s", v1.Provider, v2.LLM.Provider)
-	}
-	if v2.LLM.Model != v1.Model {
-		t.Errorf("Expected model %s, got %s", v1.Model, v2.LLM.Model)
-	}
-	if v2.Agent.MaxTurns != v1.MaxTurns {
-		t.Errorf("Expected max_turns %d, got %d", v1.MaxTurns, v2.Agent.MaxTurns)
-	}
-	if v2.ACE.Enabled != v1.ACEEnabled {
-		t.Errorf("Expected ACE.enabled %v, got %v", v1.ACEEnabled, v2.ACE.Enabled)
-	}
-	if v2.Security.SandboxMode != v1.SandboxMode {
-		t.Errorf("Expected sandbox_mode %s, got %s", v1.SandboxMode, v2.Security.SandboxMode)
-	}
-}
-
 // TestGolden_LoaderV2 tests LoaderV2 with golden files
 func TestGolden_LoaderV2_ValidMinimal(t *testing.T) {
 	loader := NewLoaderV2()

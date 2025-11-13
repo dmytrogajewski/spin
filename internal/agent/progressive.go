@@ -17,7 +17,7 @@ import (
 // Ensures: if shouldRetrieve, then triggerType is valid (not empty)
 func (a *Agent) shouldRetrieveProgressive(ctx *trajectory.TrajectoryContext) (bool, trajectory.TriggerType) {
 	// Check if progressive context is enabled
-	if !a.config.ACE.Retrieval.ProgressiveContext.Enabled {
+	if a.aceConfig == nil || !a.aceConfig.Retrieval.ProgressiveContext.Enabled {
 		return false, ""
 	}
 
@@ -26,7 +26,7 @@ func (a *Agent) shouldRetrieveProgressive(ctx *trajectory.TrajectoryContext) (bo
 		return true, trajectory.TriggerInitial
 	}
 
-	cfg := a.config.ACE.Retrieval.ProgressiveContext
+	cfg := a.aceConfig.Retrieval.ProgressiveContext
 
 	// Trigger 2: Error - recent error detected
 	if ctx.HasRecentError(cfg.ErrorLookback) {
