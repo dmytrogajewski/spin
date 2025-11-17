@@ -112,11 +112,7 @@ func (s *SecurityService) ValidateAndApprove(ctx context.Context, cmd *Command, 
 	}
 
 	// Dangerous/interactive/unverified command that needs approval
-	operation := Operation{
-		Command: cmd,
-		Reason:  fmt.Sprintf("Command classified as %s: %s", result.Classification, result.Reason),
-		WorkDir: workDir,
-	}
+	operation := NewOperation(cmd, fmt.Sprintf("Command classified as %s: %s", result.Classification, result.Reason), workDir)
 
 	approved, err := s.RequestApproval(ctx, operation)
 	if err != nil {
@@ -124,4 +120,25 @@ func (s *SecurityService) ValidateAndApprove(ctx context.Context, cmd *Command, 
 	}
 
 	return approved, nil
+}
+
+// ApprovalService returns the approval service instance.
+// This method allows access to the ApprovalService for components that need it directly,
+// such as ToolRuntime.
+func (s *SecurityService) ApprovalService() *ApprovalService {
+	return s.approvalService
+}
+
+// Validator returns the validator instance.
+// This method allows access to the Validator for components that need it directly,
+// such as ToolRuntime.
+func (s *SecurityService) Validator() *Validator {
+	return s.validator
+}
+
+// SetApprovalService updates the approval service instance.
+// This allows updating the approval service after creation, which is useful
+// when the approval handler is configured later (e.g., in ACP mode).
+func (s *SecurityService) SetApprovalService(service *ApprovalService) {
+	s.approvalService = service
 }

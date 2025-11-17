@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -62,6 +63,17 @@ func (t *WriteFileTool) Execute(ctx context.Context, params ToolParameters) (Too
 			Success: false,
 			Error:   "content parameter must be a string",
 		}, nil
+	}
+
+	// Create parent directories if they don't exist
+	dir := filepath.Dir(path)
+	if dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return ToolResult{
+				Success: false,
+				Error:   fmt.Sprintf("failed to create parent directories: %v", err),
+			}, nil
+		}
 	}
 
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {

@@ -24,11 +24,13 @@ func TestNewExecutor(t *testing.T) {
 func TestNewExecutor_WithOptions(t *testing.T) {
 	workDir := t.TempDir()
 	validator := security.NewValidator()
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
+	securityService := security.NewSecurityService(validator, approvalService)
 
-	executor, err := NewExecutor(workDir, WithValidator(validator))
+	executor, err := NewExecutor(workDir, WithSecurityService(securityService))
 	require.NoError(t, err)
 	assert.NotNil(t, executor)
-	assert.NotNil(t, executor.validator)
+	assert.NotNil(t, executor.securityService)
 }
 
 func TestNewExecutor_EmptyWorkDir(t *testing.T) {
@@ -149,7 +151,9 @@ func TestExecutor_Execute_NonExistentCommand(t *testing.T) {
 func TestExecutor_Validate(t *testing.T) {
 	workDir := t.TempDir()
 	validator := security.NewValidator()
-	executor, err := NewExecutor(workDir, WithValidator(validator))
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
+	securityService := security.NewSecurityService(validator, approvalService)
+	executor, err := NewExecutor(workDir, WithSecurityService(securityService))
 	require.NoError(t, err)
 
 	// Test valid command
@@ -324,14 +328,25 @@ func TestDefaultExecuteOptions(t *testing.T) {
 	assert.True(t, opts.InheritEnv)
 }
 
-func TestExecutorOption_WithValidator(t *testing.T) {
+func TestExecutorOption_WithSecurityService(t *testing.T) {
 	validator := security.NewValidator()
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
+	securityService := security.NewSecurityService(validator, approvalService)
 	executor := &Executor{}
 
-	opt := WithValidator(validator)
+	opt := WithSecurityService(securityService)
 	err := opt(executor)
 	require.NoError(t, err)
-	assert.Equal(t, validator, executor.validator)
+	assert.Equal(t, securityService, executor.securityService)
+}
+
+func TestExecutorOption_WithSecurityService_Nil(t *testing.T) {
+	executor := &Executor{}
+
+	opt := WithSecurityService(nil)
+	err := opt(executor)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "security service cannot be nil")
 }
 
 func TestExecutorOption_WithApprovalService(t *testing.T) {

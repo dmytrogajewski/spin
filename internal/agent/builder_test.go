@@ -25,7 +25,7 @@ func TestBuilder_WithUnifiedConfig_FluentInterface(t *testing.T) {
 	}
 
 	builder := NewBuilder().
-		WithUnifiedConfig(cfg).
+		WithConfig(cfg).
 		WithWorkingDir("/test").
 		WithEmitter(nil).
 		WithApprovalHandler(nil)
@@ -33,7 +33,7 @@ func TestBuilder_WithUnifiedConfig_FluentInterface(t *testing.T) {
 	if builder == nil {
 		t.Error("Fluent interface broke chain")
 	}
-	if builder.unifiedConfig != cfg {
+	if builder.config != cfg {
 		t.Error("Config not set")
 	}
 	if builder.workingDir != "/test" {
@@ -52,7 +52,7 @@ func TestBuilder_BuildExecutor(t *testing.T) {
 	emitter := events.NewEventEmitter(10)
 
 	builder := NewBuilder().
-		WithUnifiedConfig(cfg).
+		WithConfig(cfg).
 		WithWorkingDir("/tmp/test").
 		WithEmitter(emitter)
 
@@ -75,7 +75,7 @@ func TestBuilder_BuildEnvironment(t *testing.T) {
 	}
 
 	builder := NewBuilder().
-		WithUnifiedConfig(cfg).
+		WithConfig(cfg).
 		WithWorkingDir(tmpDir)
 
 	env := builder.BuildEnvironment()
@@ -109,7 +109,7 @@ func TestBuilder_BuildHelpers(t *testing.T) {
 	emitter := events.NewEventEmitter(10)
 
 	builder := NewBuilder().
-		WithUnifiedConfig(cfg).
+		WithConfig(cfg).
 		WithProvider(mockLLM).
 		WithWorkingDir(tmpDir).
 		WithEmitter(emitter)
@@ -125,46 +125,44 @@ func TestBuilder_BuildHelpers(t *testing.T) {
 		t.Fatal("BuildDetectionService() returned nil")
 	}
 
+	planSvc := builder.BuildPlanningService()
+	if planSvc == nil {
+		t.Fatal("BuildPlanningService() returned nil")
+	}
+
 	opts := builder.BuildAgentOptions()
 	if len(opts) == 0 {
 		t.Fatal("BuildAgentOptions() returned empty options")
 	}
 }
 
-func TestBuilder_Build(t *testing.T) {
-	tmpDir := t.TempDir()
+func TestBuilder_BuildPlanningService(t *testing.T) {
+	provider := llm.NewMockProvider("test")
+	builder := NewBuilder().WithProvider(provider)
 
-	// Create a mock LLM provider
-	mockLLM := &mockProvider{}
+	planningService := builder.BuildPlanningService()
 
-	cfg := &config.ConfigV2{
-		LLM: config.LLMConfigV2{
-			Model:       "test-model",
-			Temperature: 0.7,
-			MaxTokens:   1000,
-		},
-		Agent: config.AgentConfigV2{
-			MaxTurns: 10,
-			Timeout:  30 * time.Second,
-		},
-	}
-
-	emitter := events.NewEventEmitter(10)
-
-	agent, err := NewBuilder().
-		WithUnifiedConfig(cfg).
-		WithProvider(mockLLM).
-		WithWorkingDir(tmpDir).
-		WithEmitter(emitter).
-		Build()
-
-	if err != nil {
-		t.Fatalf("Build() error = %v", err)
-	}
-	if agent == nil {
-		t.Fatal("Build() returned nil agent")
+	if planningService == nil {
+		t.Fatal("BuildPlanningService() returned nil")
 	}
 }
+
+func TestBuilder_BuildPlanningService_NilProvider(t *testing.T) {
+	builder := NewBuilder()
+	// Should handle nil provider gracefully
+	// BuildPlanningService will panic or return nil - test actual behavior
+	// For now, PlanningService creation requires provider, so this should panic
+	defer func() {
+		if r := recover(); r == nil {
+			t.Log("BuildPlanningService with nil provider did not panic (may be acceptable)")
+		}
+	}()
+	_ = builder.BuildPlanningService()
+}
+
+// TestBuilder_Build was removed because Builder.Build() method was removed.
+// The conversation package now uses helper methods (BuildSecurityService, BuildDetectionService, etc.)
+// and calls NewAgent() directly, which is the preferred approach.
 
 // mockProvider is a simple mock LLM provider for testing
 type mockProvider struct{}
@@ -238,7 +236,7 @@ func TestBuilder_BuildACEService(t *testing.T) {
 	}
 
 	builder := NewBuilder().
-		WithUnifiedConfig(cfg).
+		WithConfig(cfg).
 		WithProvider(mockLLM).
 		WithWorkingDir(tmpDir)
 

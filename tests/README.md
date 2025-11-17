@@ -8,8 +8,7 @@ This directory contains the end-to-end (e2e) and integration tests for the Spin 
 tests/
 ├── e2e/                    # End-to-end tests
 │   ├── e2e_test.go                # Core e2e test framework
-│   ├── tool_execution_e2e_test.go # Tool execution scenarios
-│   └── tui_e2e_test.go            # TUI interaction tests
+│   └── acp/                       # ACP protocol e2e tests
 └── README.md               # This file
 ```
 

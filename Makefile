@@ -10,6 +10,10 @@ GOFMT=gofmt
 GOLINT=golangci-lint
 DEADCODE=deadcode
 
+# Use workspace .gotmp directory to avoid /tmp quota issues
+GOTMPDIR?=$(shell pwd)/.gotmp
+export GOTMPDIR
+
 # Package paths
 INTERNAL_PKGS=./internal/...
 ALL_PKGS=./...
@@ -62,13 +66,23 @@ build-internal:
 	@$(GOBUILD) $(INTERNAL_PKGS)
 	@echo "✓ Internal packages build successful"
 
-## test: Run all tests with coverage and deadcode analysis (skips slow stress tests)
-test:
-	@echo "Running tests with coverage..."
+## test: Run all tests (unit + e2e) with coverage and deadcode analysis
+test: build
+	@mkdir -p $(GOTMPDIR)
+	@echo "Running unit and integration tests with coverage..."
 	@$(GOTEST) -short -cover -timeout 30s $(INTERNAL_PKGS)
 	@echo ""
 	@echo "Running deadcode analysis..."
 	@./scripts/deadcode-filter.sh github.com/dmytrogajewski/spin/cmd/spin github.com/dmytrogajewski/spin/internal/...
+	@echo ""
+	@echo "Running all E2E tests (using test-llm provider, no external LLM required)..."
+	@$(GOBUILD) -tags e2e_llm_test -o bin/spin ./cmd/spin
+	@SPIN_E2E_SKIP_BUILD=1 $(GOTEST) -tags e2e_llm_test -v -timeout 5m ./tests/e2e/...
+	@echo ""
+	@echo "Running ACP approval persistence E2E (test provider, no external LLM required)..."
+	@SPIN_E2E_SKIP_BUILD=1 $(GOTEST) -tags e2e_llm_test -timeout 60s ./tests/e2e/acp -run TestACP_ApprovalPersistence_PromptToToolCall
+	@echo ""
+	@echo "✓ All tests complete"
 
 ## test-coverage: Run tests with coverage report (HTML)
 test-coverage:
@@ -107,20 +121,15 @@ test-stress:
 	@$(GOTEST) -v -timeout 5m -run "Stress" $(INTERNAL_PKGS)
 	@echo "✓ Stress tests complete"
 
-## test-e2e: Run end-to-end TUI tests (requires Ollama running)
+## test-e2e: Run end-to-end tests (using test-llm provider, no external LLM required)
 test-e2e: build
-	@echo "Running E2E TUI tests (requires: Ollama, models qwen3:0.6b, qwen3:1.7b, qwen2.5-coder:1.5b)..."
-	@$(GOTEST) -v -timeout 5m ./tests
+	@echo "Running E2E tests (using test-llm provider, no external LLM required)..."
+	@$(GOBUILD) -tags e2e_llm_test -o bin/spin ./cmd/spin
+	@$(GOTEST) -tags e2e_llm_test -v -timeout 30s ./tests/e2e/...
 	@echo "✓ E2E tests complete"
 
-## test-e2e-quick: Run quick E2E tests only
-test-e2e-quick: build
-	@echo "Running quick E2E tests..."
-	@$(GOTEST) -v -timeout 30s -run "TestTUILaunch|TestTUIExit" ./tests
-	@echo "✓ Quick E2E tests complete"
-
-## test-all: Run all tests (unit + e2e)
-test-all: test test-e2e
+## test-all: Run all tests (unit + e2e) - alias for 'test'
+test-all: test
 	@echo "✓ All tests passed"
 
 ## lint: Run linters and deadcode analysis

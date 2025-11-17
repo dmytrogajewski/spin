@@ -12,7 +12,7 @@ import (
 func TestApprovalService_RequestApproval_Success(t *testing.T) {
 	emitter := events.NewEventEmitter(100)
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
+		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: req.ID,
 				Approved:  true,
@@ -23,11 +23,7 @@ func TestApprovalService_RequestApproval_Success(t *testing.T) {
 	})
 
 	cmd := &Command{Program: "ls", Args: []string{"-la"}, WorkDir: "/tmp"}
-	reqID, approved, err := service.RequestApproval(context.Background(), Operation{
-		Command: cmd,
-		Reason:  "test operation",
-		WorkDir: "/tmp",
-	})
+	reqID, approved, err := service.RequestApproval(context.Background(), NewOperation(cmd, "test operation", "/tmp"))
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -43,7 +39,7 @@ func TestApprovalService_RequestApproval_Success(t *testing.T) {
 // TestApprovalService_RequestApproval_Denial tests denial flow.
 func TestApprovalService_RequestApproval_Denial(t *testing.T) {
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
+		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: req.ID,
 				Approved:  false,
@@ -53,11 +49,7 @@ func TestApprovalService_RequestApproval_Denial(t *testing.T) {
 	})
 
 	cmd := &Command{Program: "rm", Args: []string{"-rf", "/"}, WorkDir: "/"}
-	_, approved, err := service.RequestApproval(context.Background(), Operation{
-		Command: cmd,
-		Reason:  "dangerous operation",
-		WorkDir: "/",
-	})
+	_, approved, err := service.RequestApproval(context.Background(), NewOperation(cmd, "dangerous operation", "/"))
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -69,14 +61,10 @@ func TestApprovalService_RequestApproval_Denial(t *testing.T) {
 
 // TestApprovalService_RequestApproval_NoHandler tests denial when no handler configured.
 func TestApprovalService_RequestApproval_NoHandler(t *testing.T) {
-	service := NewApprovalService(nil, nil, nil)
+	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: nil})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp"}
-	_, approved, err := service.RequestApproval(context.Background(), Operation{
-		Command: cmd,
-		Reason:  "test",
-		WorkDir: "/tmp",
-	})
+	_, approved, err := service.RequestApproval(context.Background(), NewOperation(cmd, "test", "/tmp"))
 
 	if err == nil {
 		t.Error("Expected error when no handler configured")
@@ -89,7 +77,7 @@ func TestApprovalService_RequestApproval_NoHandler(t *testing.T) {
 // TestApprovalService_RequestApproval_InvalidRequestID tests request ID validation.
 func TestApprovalService_RequestApproval_InvalidRequestID(t *testing.T) {
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
+		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: "wrong-id", // Mismatched ID
 				Approved:  true,
@@ -98,11 +86,7 @@ func TestApprovalService_RequestApproval_InvalidRequestID(t *testing.T) {
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp"}
-	_, approved, err := service.RequestApproval(context.Background(), Operation{
-		Command: cmd,
-		Reason:  "test",
-		WorkDir: "/tmp",
-	})
+	_, approved, err := service.RequestApproval(context.Background(), NewOperation(cmd, "test", "/tmp"))
 
 	if err == nil {
 		t.Error("Expected error for mismatched request ID")
@@ -116,7 +100,7 @@ func TestApprovalService_RequestApproval_InvalidRequestID(t *testing.T) {
 func TestApprovalService_ModifiedCommand_Success(t *testing.T) {
 	validator := NewValidator()
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
+		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID:       req.ID,
 				Approved:        true,
@@ -128,11 +112,7 @@ func TestApprovalService_ModifiedCommand_Success(t *testing.T) {
 	})
 
 	cmd := &Command{Program: "ls", Args: []string{"-l", "/etc"}, WorkDir: "/tmp", Raw: "ls -l /etc"}
-	_, approved, err := service.RequestApproval(context.Background(), Operation{
-		Command: cmd,
-		Reason:  "test",
-		WorkDir: "/tmp",
-	})
+	_, approved, err := service.RequestApproval(context.Background(), NewOperation(cmd, "test", "/tmp"))
 
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -149,7 +129,7 @@ func TestApprovalService_ModifiedCommand_Success(t *testing.T) {
 // TestApprovalService_ModifiedCommand_ParseError tests parse error on modified command.
 func TestApprovalService_ModifiedCommand_ParseError(t *testing.T) {
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
+		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID:       req.ID,
 				Approved:        true,
@@ -160,11 +140,7 @@ func TestApprovalService_ModifiedCommand_ParseError(t *testing.T) {
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
-	_, approved, _ := service.RequestApproval(context.Background(), Operation{
-		Command: cmd,
-		Reason:  "test",
-		WorkDir: "/tmp",
-	})
+	_, approved, _ := service.RequestApproval(context.Background(), NewOperation(cmd, "test", "/tmp"))
 
 	// Empty/whitespace commands parse successfully but result in empty command
 	// This test verifies the flow handles modified commands without errors
@@ -175,7 +151,7 @@ func TestApprovalService_ModifiedCommand_ParseError(t *testing.T) {
 func TestApprovalService_ModifiedCommand_ValidationFailure(t *testing.T) {
 	validator := NewValidator()
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
+		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID:       req.ID,
 				Approved:        true,
@@ -187,11 +163,7 @@ func TestApprovalService_ModifiedCommand_ValidationFailure(t *testing.T) {
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
-	_, approved, err := service.RequestApproval(context.Background(), Operation{
-		Command: cmd,
-		Reason:  "test",
-		WorkDir: "/tmp",
-	})
+	_, approved, err := service.RequestApproval(context.Background(), NewOperation(cmd, "test", "/tmp"))
 
 	if err == nil {
 		t.Error("Expected validation error")
@@ -207,7 +179,7 @@ func TestApprovalService_WithEmitter(t *testing.T) {
 	_, eventChan, _ := emitter.Subscribe()
 
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
+		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: req.ID,
 				Approved:  true,
@@ -218,11 +190,7 @@ func TestApprovalService_WithEmitter(t *testing.T) {
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
-	_, _, _ = service.RequestApproval(context.Background(), Operation{
-		Command: cmd,
-		Reason:  "test",
-		WorkDir: "/tmp",
-	})
+	_, _, _ = service.RequestApproval(context.Background(), NewOperation(cmd, "test", "/tmp"))
 
 	// Collect events
 	evtList := []events.Event{}
@@ -256,7 +224,7 @@ func TestApprovalService_WithEmitter(t *testing.T) {
 // TestApprovalService_WithoutEmitter tests operation without emitter.
 func TestApprovalService_WithoutEmitter(t *testing.T) {
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
+		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: req.ID,
 				Approved:  true,
@@ -267,11 +235,7 @@ func TestApprovalService_WithoutEmitter(t *testing.T) {
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
-	_, approved, err := service.RequestApproval(context.Background(), Operation{
-		Command: cmd,
-		Reason:  "test",
-		WorkDir: "/tmp",
-	})
+	_, approved, err := service.RequestApproval(context.Background(), NewOperation(cmd, "test", "/tmp"))
 
 	// Should work without emitter
 	if err != nil {
@@ -288,7 +252,7 @@ func TestApprovalService_ContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately
 
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
+		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: req.ID,
 				Approved:  true,
@@ -297,11 +261,7 @@ func TestApprovalService_ContextCancellation(t *testing.T) {
 	})
 
 	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
-	_, approved, err := service.RequestApproval(ctx, Operation{
-		Command: cmd,
-		Reason:  "test",
-		WorkDir: "/tmp",
-	})
+	_, approved, err := service.RequestApproval(ctx, NewOperation(cmd, "test", "/tmp"))
 
 	// Should handle cancelled context gracefully
 	if err == nil {
@@ -312,45 +272,68 @@ func TestApprovalService_ContextCancellation(t *testing.T) {
 	}
 }
 
-// TestApprovalService_RequestApprovalWithValidator_NoApprovalNeeded tests skip approval for safe commands.
-func TestApprovalService_RequestApprovalWithValidator_NoApprovalNeeded(t *testing.T) {
-	validator := NewValidator()
-	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
-			t.Error("Handler should not be called for safe commands")
-			return ApprovalResponse{}
-		},
-		Validator: validator,
-	})
+// TestNewOperation tests the NewOperation helper function.
+func TestNewOperation(t *testing.T) {
+	cmd := &Command{Program: "rm", Args: []string{"-rf", "/tmp"}, WorkDir: "/tmp"}
+	reason := "Dangerous operation"
+	workDir := "/tmp"
 
-	// ls is typically classified as safe (read-only)
-	cmd := &Command{Program: "ls", Args: []string{"-l"}, WorkDir: "/tmp", Raw: "ls -l"}
-	approved, err := service.RequestApprovalWithValidator(context.Background(), cmd, validator, "/tmp")
+	op := NewOperation(cmd, reason, workDir)
 
-	if err != nil {
-		t.Errorf("Expected no error for safe command, got %v", err)
+	if op.Command != cmd {
+		t.Errorf("NewOperation() Command = %v, want %v", op.Command, cmd)
 	}
-	if !approved {
-		t.Error("Expected auto-approval for safe command")
+	if op.Reason != reason {
+		t.Errorf("NewOperation() Reason = %q, want %q", op.Reason, reason)
+	}
+	if op.WorkDir != workDir {
+		t.Errorf("NewOperation() WorkDir = %q, want %q", op.WorkDir, workDir)
 	}
 }
 
-// TestApprovalService_RequestApprovalWithValidator_NilValidator tests behavior with nil validator.
-func TestApprovalService_RequestApprovalWithValidator_NilValidator(t *testing.T) {
-	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(req ApprovalRequest) ApprovalResponse {
-			t.Error("Handler should not be called when validator is nil")
-			return ApprovalResponse{}
-		},
-	})
+// TestNewOperation_NilCommand tests NewOperation with nil command.
+func TestNewOperation_NilCommand(t *testing.T) {
+	op := NewOperation(nil, "test", "/tmp")
 
-	cmd := &Command{Program: "ls", WorkDir: "/tmp", Raw: "ls"}
-	approved, err := service.RequestApprovalWithValidator(context.Background(), cmd, nil, "/tmp")
-
-	if err != nil {
-		t.Errorf("Expected no error with nil validator, got %v", err)
+	if op.Command != nil {
+		t.Errorf("NewOperation(nil, ...) Command = %v, want nil", op.Command)
 	}
-	if !approved {
-		t.Error("Expected auto-approval with nil validator")
+	if op.Reason != "test" {
+		t.Errorf("NewOperation(nil, ...) Reason = %q, want %q", op.Reason, "test")
+	}
+	if op.WorkDir != "/tmp" {
+		t.Errorf("NewOperation(nil, ...) WorkDir = %q, want %q", op.WorkDir, "/tmp")
+	}
+}
+
+// TestNewOperation_EmptyReason tests NewOperation with empty reason.
+func TestNewOperation_EmptyReason(t *testing.T) {
+	cmd := &Command{Program: "ls"}
+	op := NewOperation(cmd, "", "/tmp")
+
+	if op.Command != cmd {
+		t.Errorf("NewOperation(..., \"\", ...) Command = %v, want %v", op.Command, cmd)
+	}
+	if op.Reason != "" {
+		t.Errorf("NewOperation(..., \"\", ...) Reason = %q, want %q", op.Reason, "")
+	}
+	if op.WorkDir != "/tmp" {
+		t.Errorf("NewOperation(..., \"\", ...) WorkDir = %q, want %q", op.WorkDir, "/tmp")
+	}
+}
+
+// TestNewOperation_EmptyWorkDir tests NewOperation with empty work directory.
+func TestNewOperation_EmptyWorkDir(t *testing.T) {
+	cmd := &Command{Program: "ls"}
+	op := NewOperation(cmd, "test", "")
+
+	if op.Command != cmd {
+		t.Errorf("NewOperation(..., ..., \"\") Command = %v, want %v", op.Command, cmd)
+	}
+	if op.Reason != "test" {
+		t.Errorf("NewOperation(..., ..., \"\") Reason = %q, want %q", op.Reason, "test")
+	}
+	if op.WorkDir != "" {
+		t.Errorf("NewOperation(..., ..., \"\") WorkDir = %q, want %q", op.WorkDir, "")
 	}
 }

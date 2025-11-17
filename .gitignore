@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-
+.gotmp/
 # Test binary, built with `go test -c`
 *.test
 
@@ -46,3 +46,5 @@ tmp/
 temp/
 *.tmp
 *.test
+
+vendordocs/

@@ -934,3 +934,212 @@ func TestRegistryExecute_UnknownParameter_ErrorMessage(t *testing.T) {
 		t.Errorf("error message should list valid parameters, got: %s", errMsg)
 	}
 }
+
+func TestNewDefaultRegistry(t *testing.T) {
+	workDir := "/tmp"
+	// Use a simple struct that implements the interface GetContextTool expects
+	type testEnv struct {
+		WorkDir string
+	}
+	env := &testEnv{WorkDir: workDir}
+	registry := NewDefaultRegistry(workDir, env)
+
+	// Verify all tools are registered
+	expectedTools := []string{
+		"read_file", "write_file", "list_directory",
+		"shell_command", "get_context", "apply_patch",
+		"file_search", "git_context",
+	}
+
+	for _, toolName := range expectedTools {
+		tool, err := registry.Get(toolName)
+		if err != nil {
+			t.Errorf("tool %s should be registered: %v", toolName, err)
+			continue
+		}
+		if tool == nil {
+			t.Errorf("tool %s should not be nil", toolName)
+		}
+	}
+}
+
+func TestNewDefaultRegistry_ToolsConfigured(t *testing.T) {
+	workDir := "/tmp/workdir"
+	type testEnv struct {
+		WorkDir string
+	}
+	env := &testEnv{WorkDir: workDir}
+	registry := NewDefaultRegistry(workDir, env)
+
+	// Verify tools that need WorkDir are configured correctly
+	// Note: We can't directly access internal fields, so we verify
+	// by ensuring tools can be retrieved and are not nil
+	patchTool, err := registry.Get("apply_patch")
+	if err != nil {
+		t.Fatalf("apply_patch tool should be registered: %v", err)
+	}
+	if patchTool == nil {
+		t.Error("apply_patch tool should not be nil")
+	}
+
+	searchTool, err := registry.Get("file_search")
+	if err != nil {
+		t.Fatalf("file_search tool should be registered: %v", err)
+	}
+	if searchTool == nil {
+		t.Error("file_search tool should not be nil")
+	}
+
+	gitTool, err := registry.Get("git_context")
+	if err != nil {
+		t.Fatalf("git_context tool should be registered: %v", err)
+	}
+	if gitTool == nil {
+		t.Error("git_context tool should not be nil")
+	}
+
+	// Verify get_context is registered with environment
+	contextTool, err := registry.Get("get_context")
+	if err != nil {
+		t.Fatalf("get_context tool should be registered: %v", err)
+	}
+	if contextTool == nil {
+		t.Error("get_context tool should not be nil")
+	}
+}
+
+func TestNewDefaultRegistry_NilEnvironment(t *testing.T) {
+	// Should handle nil gracefully - create tools with empty WorkDir
+	registry := NewDefaultRegistry("", nil)
+	if registry == nil {
+		t.Fatal("NewDefaultRegistry should not return nil")
+	}
+
+	// Verify all tools are still registered
+	expectedTools := []string{
+		"read_file", "write_file", "list_directory",
+		"shell_command", "get_context", "apply_patch",
+		"file_search", "git_context",
+	}
+
+	for _, toolName := range expectedTools {
+		tool, err := registry.Get(toolName)
+		if err != nil {
+			t.Errorf("tool %s should be registered even with nil env: %v", toolName, err)
+			continue
+		}
+		if tool == nil {
+			t.Errorf("tool %s should not be nil", toolName)
+		}
+	}
+}
+
+func TestNewDefaultRegistry_EquivalentToManual(t *testing.T) {
+	workDir := "/tmp/test"
+	type testEnv struct {
+		WorkDir string
+	}
+	env := &testEnv{WorkDir: workDir}
+
+	// Manual construction (old way)
+	manual := NewRegistry()
+	_ = manual.Register(NewReadFileTool())
+	_ = manual.Register(NewWriteFileTool())
+	_ = manual.Register(NewListDirectoryTool())
+	_ = manual.Register(NewShellCommandTool(nil, nil, nil))
+	_ = manual.Register(NewGetContextTool(env))
+	_ = manual.Register(NewApplyPatchTool(workDir))
+	_ = manual.Register(NewFileSearchTool(workDir))
+	_ = manual.Register(NewGitContextTool(workDir))
+
+	// Factory construction (new way)
+	factory := NewDefaultRegistry(workDir, env)
+
+	// Verify both registries have same tools
+	manualTools := manual.List()
+	factoryTools := factory.List()
+
+	if len(manualTools) != len(factoryTools) {
+		t.Errorf("tool counts should match: manual=%d, factory=%d", len(manualTools), len(factoryTools))
+	}
+
+	// Verify each tool exists in both
+	manualToolMap := make(map[string]Tool)
+	for _, tool := range manualTools {
+		manualToolMap[tool.Name()] = tool
+	}
+
+	factoryToolMap := make(map[string]Tool)
+	for _, tool := range factoryTools {
+		factoryToolMap[tool.Name()] = tool
+	}
+
+	// Verify all tools are present in both
+	for toolName := range manualToolMap {
+		if _, exists := factoryToolMap[toolName]; !exists {
+			t.Errorf("factory should contain tool %s", toolName)
+		}
+	}
+
+	for toolName := range factoryToolMap {
+		if _, exists := manualToolMap[toolName]; !exists {
+			t.Errorf("manual should contain tool %s", toolName)
+		}
+	}
+}
+
+func TestNewDefaultRegistry_AllToolsRegistered(t *testing.T) {
+	workDir := "/tmp"
+	type testEnv struct {
+		WorkDir string
+	}
+	env := &testEnv{WorkDir: workDir}
+	registry := NewDefaultRegistry(workDir, env)
+
+	// Verify we have exactly 8 tools (matching BuiltinTools count)
+	tools := registry.List()
+	if len(tools) != 8 {
+		t.Errorf("should have exactly 8 builtin tools, got %d", len(tools))
+	}
+
+	// Verify each tool has valid name, description, and schema
+	for _, tool := range tools {
+		if tool.Name() == "" {
+			t.Error("tool should have non-empty name")
+		}
+		if tool.Description() == "" {
+			t.Errorf("tool %s should have description", tool.Name())
+		}
+
+		schema := tool.Schema()
+		if schema.Type != "function" {
+			t.Errorf("tool %s should have type 'function', got %s", tool.Name(), schema.Type)
+		}
+		if schema.Function.Name == "" {
+			t.Errorf("tool %s should have function name", tool.Name())
+		}
+		if schema.Function.Description == "" {
+			t.Errorf("tool %s should have function description", tool.Name())
+		}
+	}
+}
+
+func TestNewDefaultRegistry_UniqueToolNames(t *testing.T) {
+	workDir := "/tmp"
+	type testEnv struct {
+		WorkDir string
+	}
+	env := &testEnv{WorkDir: workDir}
+	registry := NewDefaultRegistry(workDir, env)
+
+	// Verify all tool names are unique
+	tools := registry.List()
+	toolNames := make(map[string]bool)
+	for _, tool := range tools {
+		name := tool.Name()
+		if toolNames[name] {
+			t.Errorf("duplicate tool name: %s", name)
+		}
+		toolNames[name] = true
+	}
+}

@@ -1,0 +1,241 @@
+//go:build !e2e_llm_test
+
+package acp
+
+import (
+	"context"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	// testTimeout is the default timeout for ACP E2E tests
+	testTimeout = 120 * time.Second
+
+	// binPath is the path to the spin binary (relative to test file)
+	binPath = "../../../bin/spin"
+)
+
+// getBinPath returns the absolute path to the spin binary.
+func getBinPath(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	// From tests/e2e/acp/ -> tests/e2e/ -> tests/ -> root
+	root := filepath.Dir(filepath.Dir(filepath.Dir(wd)))
+	return filepath.Join(root, "bin", "spin")
+}
+
+// startACPAgent starts the spin acp command as a subprocess and returns the command,
+// stdin pipe (for writing to agent), and stdout pipe (for reading from agent).
+func startACPAgent(t *testing.T, args ...string) (*exec.Cmd, io.WriteCloser, io.ReadCloser) {
+	t.Helper()
+
+	binPath := getBinPath(t)
+
+	// Build args: "acp" + additional args
+	cmdArgs := append([]string{"acp"}, args...)
+
+	cmd := exec.Command(binPath, cmdArgs...)
+
+	// Get stdin/stdout pipes
+	stdin, err := cmd.StdinPipe()
+	require.NoError(t, err)
+
+	stdout, err := cmd.StdoutPipe()
+	require.NoError(t, err)
+
+	// Stderr goes to os.Stderr for debugging
+	cmd.Stderr = os.Stderr
+
+	// Start the process
+	err = cmd.Start()
+	require.NoError(t, err, "Failed to start ACP agent")
+
+	// Give agent a moment to initialize
+	time.Sleep(500 * time.Millisecond)
+
+	return cmd, stdin, stdout
+}
+
+// cleanupAgent stops and cleans up the agent process.
+func cleanupAgent(t *testing.T, cmd *exec.Cmd, stdin io.WriteCloser) {
+	t.Helper()
+
+	if stdin != nil {
+		stdin.Close()
+	}
+
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+
+	// Try graceful shutdown first
+	cmd.Process.Signal(os.Interrupt)
+
+	// Wait with timeout
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case <-done:
+		// Process exited
+	case <-time.After(2 * time.Second):
+		// Force kill after timeout
+		cmd.Process.Kill()
+		<-done
+	}
+}
+
+// createACPClient creates an ACP client-side connection.
+// The client implementation is a simple wrapper that handles requests.
+func createACPClient(t *testing.T, stdin io.Writer, stdout io.Reader) *acp.ClientSideConnection {
+	t.Helper()
+	return createACPClientWithClient(t, stdin, stdout, &testClient{})
+}
+
+// createACPClientWithClient creates an ACP client-side connection with a custom client.
+func createACPClientWithClient(t *testing.T, stdin io.Writer, stdout io.Reader, client *testClient) *acp.ClientSideConnection {
+	t.Helper()
+
+	// Create client-side connection
+	conn := acp.NewClientSideConnection(client, stdin, stdout)
+
+	return conn
+}
+
+// testClient is a minimal ACP client implementation for testing.
+// It implements the acp.Client interface with stub methods.
+// It tracks notifications for verification in tests.
+type testClient struct {
+	notifications []acp.SessionNotification
+	mu            sync.Mutex
+}
+
+// getNotifications returns all received notifications.
+func (c *testClient) getNotifications() []acp.SessionNotification {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// Return a copy
+	result := make([]acp.SessionNotification, len(c.notifications))
+	copy(result, c.notifications)
+	return result
+}
+
+// clearNotifications clears all stored notifications.
+func (c *testClient) clearNotifications() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.notifications = nil
+}
+
+// ReadTextFile implements acp.Client interface (not used in basic tests).
+func (c *testClient) ReadTextFile(ctx context.Context, params acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
+	return acp.ReadTextFileResponse{}, nil
+}
+
+// WriteTextFile implements acp.Client interface (not used in basic tests).
+func (c *testClient) WriteTextFile(ctx context.Context, params acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
+	return acp.WriteTextFileResponse{}, nil
+}
+
+// RequestPermission implements acp.Client interface.
+func (c *testClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	// For testing, we can auto-approve by selecting the first allow option
+	// Find an allow_once or allow_always option
+	var selectedOptionID acp.PermissionOptionId
+	for _, option := range params.Options {
+		if option.Kind == acp.PermissionOptionKindAllowOnce || option.Kind == acp.PermissionOptionKindAllowAlways {
+			selectedOptionID = option.OptionId
+			break
+		}
+	}
+
+	// If no allow option found, use first option (for testing)
+	if selectedOptionID == "" && len(params.Options) > 0 {
+		selectedOptionID = params.Options[0].OptionId
+	}
+
+	return acp.RequestPermissionResponse{
+		Outcome: acp.NewRequestPermissionOutcomeSelected(selectedOptionID),
+	}, nil
+}
+
+// SessionUpdate implements acp.Client interface.
+// This is called by the agent to send notifications.
+func (c *testClient) SessionUpdate(ctx context.Context, params acp.SessionNotification) error {
+	// Store notifications for verification in tests
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.notifications = append(c.notifications, params)
+	return nil
+}
+
+// CreateTerminal implements acp.Client interface (not used in basic tests).
+func (c *testClient) CreateTerminal(ctx context.Context, params acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
+	return acp.CreateTerminalResponse{}, nil
+}
+
+// KillTerminalCommand implements acp.Client interface (not used in basic tests).
+func (c *testClient) KillTerminalCommand(ctx context.Context, params acp.KillTerminalCommandRequest) (acp.KillTerminalCommandResponse, error) {
+	return acp.KillTerminalCommandResponse{}, nil
+}
+
+// TerminalOutput implements acp.Client interface (not used in basic tests).
+func (c *testClient) TerminalOutput(ctx context.Context, params acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
+	return acp.TerminalOutputResponse{}, nil
+}
+
+// ReleaseTerminal implements acp.Client interface (not used in basic tests).
+func (c *testClient) ReleaseTerminal(ctx context.Context, params acp.ReleaseTerminalRequest) (acp.ReleaseTerminalResponse, error) {
+	return acp.ReleaseTerminalResponse{}, nil
+}
+
+// WaitForTerminalExit implements acp.Client interface (not used in basic tests).
+func (c *testClient) WaitForTerminalExit(ctx context.Context, params acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
+	return acp.WaitForTerminalExitResponse{}, nil
+}
+
+// waitForInitialization waits for the agent to be ready by attempting initialization.
+func waitForInitialization(t *testing.T, conn *acp.ClientSideConnection) error {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Try to initialize - this verifies the connection is working
+	_, err := conn.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion:    acp.ProtocolVersionNumber,
+		ClientCapabilities: acp.ClientCapabilities{},
+		ClientInfo: &acp.Implementation{
+			Name:    "test-client",
+			Version: "1.0.0",
+		},
+	})
+
+	return err
+}
+
+// createTestWorkspace creates a temporary directory for testing.
+func createTestWorkspace(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.MkdirTemp("", "spin-acp-e2e-*")
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		os.RemoveAll(dir)
+	})
+
+	return dir
+}

@@ -104,7 +104,7 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 
 	// Build executor using agent package helper with unified config
 	exec := agent.NewBuilder().
-		WithUnifiedConfig(b.cfg).
+		WithConfig(b.cfg).
 		WithWorkingDir(b.workDir).
 		WithEmitter(b.emitter).
 		WithApprovalHandler(b.approvalHandler).
@@ -112,7 +112,7 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 
 	// Gather environment using agent package helper with unified config
 	env := agent.NewBuilder().
-		WithUnifiedConfig(b.cfg).
+		WithConfig(b.cfg).
 		WithWorkingDir(b.workDir).
 		BuildEnvironment()
 
@@ -125,14 +125,18 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 		return nil, fmt.Errorf("build agent: %w", err)
 	}
 
-	// Create session
+	// Create session (ID is string - standardized UUID generation)
 	sess := session.NewSession(b.workDir)
 	logger.Info("session created", "session_id", sess.ID)
 
 	// Create history
 	hist := b.createHistory()
 
-	// Build the Conversation
+	// Use session ID as conversation ID (both are UUID strings)
+	// This maintains clean dependency direction: conversation doesn't depend on protocol
+	convID := sess.ID
+
+	// Build the Conversation with unified ID
 	conv := &Conversation{
 		gitService:   b.gitService,
 		shellService: b.shellService,
@@ -141,16 +145,16 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 		history:      hist,
 		emitter:      b.emitter,
 		taskMode:     "regular",
-		sessionID:    sess.ID,
+		id:           convID,
 		workDir:      b.workDir,
 	}
 
 	// Attach JSONL event logger if debug mode
 	if b.cfg != nil && b.cfg.Agent.Debug {
-		b.attachJSONLEventLogger(ctx, sess.ID)
+		b.attachJSONLEventLogger(ctx, convID)
 	}
 
-	logger.Info("conversation built successfully", "session_id", sess.ID)
+	logger.Info("conversation built successfully", "session_id", convID)
 	return conv, nil
 }
 

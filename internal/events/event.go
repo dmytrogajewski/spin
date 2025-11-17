@@ -130,6 +130,9 @@ const (
 	EventACELearned
 	EventCommandApproved
 	EventCommandDenied
+	// Policy events - approval policy application and persistence
+	EventPolicyApplied
+	EventPolicySaved
 
 	// System events - system-level messages
 	EventError
@@ -156,6 +159,8 @@ func (e EventType) String() string {
 		"ace_learned",
 		"command_approved",
 		"command_denied",
+		"policy_applied",
+		"policy_saved",
 		"error",
 		"warning",
 		"info",

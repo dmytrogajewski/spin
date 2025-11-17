@@ -95,7 +95,9 @@ func (m *MCPManager) Initialize(ctx context.Context) error {
 
 // connectServer connects to a single MCP server and registers its tools.
 func (m *MCPManager) connectServer(ctx context.Context, serverConfig MCPServerConfig) error {
-	m.logger.Debug("Connecting to MCP server", "server", serverConfig.Name)
+	if m.logger != nil {
+		m.logger.Debug("Connecting to MCP server", "server", serverConfig.Name)
+	}
 
 	// Create MCP client using SDK (SDK auto-starts the connection)
 	mcpClient, err := m.createSDKClient(serverConfig)
@@ -121,10 +123,12 @@ func (m *MCPManager) connectServer(ctx context.Context, serverConfig MCPServerCo
 		return fmt.Errorf("failed to initialize MCP connection: %w", err)
 	}
 
-	m.logger.Debug("MCP server initialized",
-		"server", serverConfig.Name,
-		"protocol", initResp.ProtocolVersion,
-		"capabilities", initResp.Capabilities)
+	if m.logger != nil {
+		m.logger.Debug("MCP server initialized",
+			"server", serverConfig.Name,
+			"protocol", initResp.ProtocolVersion,
+			"capabilities", initResp.Capabilities)
+	}
 
 	// List available tools
 	listReq := mcpSDK.ListToolsRequest{}
@@ -148,9 +152,11 @@ func (m *MCPManager) connectServer(ctx context.Context, serverConfig MCPServerCo
 	}
 	m.mu.Unlock()
 
-	m.logger.Info("MCP server connected",
-		"server", serverConfig.Name,
-		"tools", len(toolsResp.Tools))
+	if m.logger != nil {
+		m.logger.Info("MCP server connected",
+			"server", serverConfig.Name,
+			"tools", len(toolsResp.Tools))
+	}
 
 	return nil
 }
@@ -297,6 +303,22 @@ func (m *MCPManager) GetConnectedServers() []string {
 		servers = append(servers, name)
 	}
 	return servers
+}
+
+// ConnectServer connects to a single MCP server dynamically.
+// This allows connecting servers after initialization, for example when creating new sessions.
+func (m *MCPManager) ConnectServer(ctx context.Context, config MCPServerConfig) error {
+	// Check if server is already connected
+	m.mu.RLock()
+	if _, exists := m.clients[config.Name]; exists {
+		m.mu.RUnlock()
+		// Server already connected, skip
+		return nil
+	}
+	m.mu.RUnlock()
+
+	// Connect server using internal method
+	return m.connectServer(ctx, config)
 }
 
 // Helper functions

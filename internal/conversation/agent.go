@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/security"
 )
 
@@ -12,40 +11,36 @@ import (
 func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*agent.Agent, error) {
 	// Use agent.Builder helper methods for service construction
 	agentBuilder := agent.NewBuilder().
-		WithUnifiedConfig(b.cfg).
+		WithConfig(b.cfg).
 		WithProvider(b.llm).
 		WithWorkingDir(b.workDir).
 		WithEmitter(b.emitter).
 		WithApprovalHandler(b.approvalHandler)
 
-	// Build services using agent.Builder helpers
-	securitySvc := agentBuilder.BuildSecurityService()
+	// Build detection using builder helper
 	detectionSvc := agentBuilder.BuildDetectionService()
 
+	// Shared validator + approval service for security + runtime
+	// Use agent.Builder helper to build security service
+	securitySvc := agentBuilder.BuildSecurityService()
+
+	// Extract ApprovalService and Validator from SecurityService for ToolRuntime
+	var approvalSvc *security.ApprovalService = securitySvc.ApprovalService()
+	var runtimeValidator *security.Validator = securitySvc.Validator()
+
 	// Build tool registry at conversation level (with integrations)
-	validator := security.NewValidator()
-	toolReg := b.buildToolRegistry(exec, validator, env)
+	toolReg := b.buildToolRegistry(exec, securitySvc, env)
 
-	// Build orchestration with conversation's tool registry
-	var approvalSvc *security.ApprovalService
-	if b.approvalHandler != nil {
-		approvalSvc = security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
-			Handler:   b.approvalHandler,
-			Emitter:   b.emitter,
-			Validator: validator,
-		})
-	} else {
-		approvalSvc = security.NewApprovalService(nil, b.emitter, validator)
-	}
-
-	toolExec := orchestration.NewToolExecutor(orchestration.ToolExecutorConfig{
+	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
 		Registry:        toolReg,
-		Validator:       validator,
-		ApprovalService: approvalSvc,
+		Validator:       runtimeValidator, // *security.Validator
+		ApprovalService: approvalSvc,      // *security.ApprovalService
 		Emitter:         b.emitter,
 		WorkDir:         env.WorkDir,
 	})
-	orchestrationSvc := orchestration.NewOrchestrationService(toolExec, toolReg)
+
+	// Build PlanningService using builder helper
+	planningSvc := agentBuilder.BuildPlanningService()
 
 	// Agent options using builder helper
 	opts := agentBuilder.BuildAgentOptions()
@@ -70,7 +65,7 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 	}
 
 	// Create agent
-	ag, err := agent.NewAgent(b.llm, securitySvc, detectionSvc, orchestrationSvc, env, b.emitter, opts...)
+	ag, err := agent.NewAgent(b.llm, securitySvc, detectionSvc, toolRuntime, planningSvc, env, b.emitter, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("agent: %w", err)
 	}

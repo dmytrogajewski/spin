@@ -97,7 +97,7 @@ func TestExtractNewSteps(t *testing.T) {
 					{
 						ID:   "call_1",
 						Type: "function",
-						Function: message.FunctionCall{
+						Function: message.ToolCallFunction{
 							Name:      "read_file",
 							Arguments: `{"path": "main.go"}`,
 						},

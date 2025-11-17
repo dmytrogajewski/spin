@@ -275,9 +275,10 @@ func validACEConfig() ACEConfigV2 {
 // validSecurityConfig returns a valid Security configuration for testing other sections.
 func validSecurityConfig() SecurityConfigV2 {
 	return SecurityConfigV2{
-		SandboxMode:     "none",
-		PolicyFile:      "",
-		AllowedCommands: []string{},
+		SandboxMode:                "none",
+		PolicyFile:                 "",
+		AllowedCommands:            []string{},
+		ApprovalPersistenceEnabled: true,
 	}
 }
 

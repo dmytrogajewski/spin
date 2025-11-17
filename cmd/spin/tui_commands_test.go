@@ -149,43 +149,5 @@ func TestParseCommand(t *testing.T) {
 	}
 }
 
-func TestGetModeDescription(t *testing.T) {
-	tests := []struct {
-		mode string
-		want string
-	}{
-		{
-			mode: "regular",
-			want: "Full-featured mode with all tools (16K tokens)",
-		},
-		{
-			mode: "review",
-			want: "Read-only mode for code analysis (12K tokens)",
-		},
-		{
-			mode: "compact",
-			want: "Quick queries with minimal tools (4K tokens)",
-		},
-		{
-			mode: "planning",
-			want: "Task planning and decomposition (4K tokens)",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.mode, func(t *testing.T) {
-			got := getModeDescription(tt.mode)
-			if got != tt.want {
-				t.Errorf("getModeDescription(%s) = %q, want %q", tt.mode, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestGetModeDescription_Unknown(t *testing.T) {
-	// Test that unknown modes return empty string (graceful degradation)
-	got := getModeDescription("unknown")
-	if got != "" {
-		t.Errorf("getModeDescription(unknown) = %q, want empty string", got)
-	}
-}
+// Note: getModeDescription tests removed - function is now in internal/commands package
+// and tested there. TUI-specific tests are no longer needed.

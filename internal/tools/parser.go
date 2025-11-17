@@ -14,14 +14,6 @@ type ArgumentParser struct {
 	AllowEmpty bool
 }
 
-// NewArgumentParser creates a new ArgumentParser with default settings.
-// By default, empty arguments are allowed and return an empty map.
-func NewArgumentParser() *ArgumentParser {
-	return &ArgumentParser{
-		AllowEmpty: true,
-	}
-}
-
 // NewStrictArgumentParser creates a parser that requires non-empty arguments.
 // This is useful when arguments are mandatory for a tool call.
 func NewStrictArgumentParser() *ArgumentParser {

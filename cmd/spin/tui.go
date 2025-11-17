@@ -11,11 +11,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/security"
-	"github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	"github.com/spf13/cobra"
@@ -81,13 +78,24 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 	defer provider.Close()
 
-	maxTurns, _ := cmd.Flags().GetInt("max-turns")
 	autoApprove, _ := cmd.Flags().GetBool("auto-approve")
+
+	// Build unified config (V2) for both conversation and UI (including approval TTLs).
+	workDir := getWorkingDirectory()
+	maxTurns, _ := cmd.Flags().GetInt("max-turns")
+	cfg, err := loadConfigForMode("", maxTurns, workDir)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	applyDebugFlag(cfg, debugFlag)
 
 	ui, err := adapters.NewPureTTY(os.Stdout)
 	if err != nil {
 		return fmt.Errorf("create TUI: %w", err)
 	}
+
+	// Provide approval TTLs to UI for key preview/TTL hints.
+	ui.SetApprovalPolicyTTLs(cfg.Security.SessionPolicyTTL, cfg.Security.GlobalPolicyTTL)
 
 	// Determine the actual model being used (flag takes precedence over config)
 	currentModel := flagModel
@@ -122,7 +130,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}()
 	defer ui.Stop()
 
-	conv, err := createConversationForTUI(ctx, provider, maxTurns, configLoader, ui, debugFlag, autoApprove)
+	conv, err := createConversationForTUI(ctx, provider, cfg, ui, autoApprove)
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
@@ -216,7 +224,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 
 			if cmdResult.isCommand {
 				// Handle command
-				_, err := handleCommand(ui, conv, cmdResult)
+				_, err := handleCommand(ui, conv, cmdResult.command, cmdResult.args)
 				if err != nil {
 					if err.Error() == "exit requested" {
 						<-eventDone
@@ -257,77 +265,22 @@ func runTUI(cmd *cobra.Command, args []string) error {
 }
 
 // createConversationForTUI creates a conversation configured for TUI mode using the new builder pattern.
-func createConversationForTUI(ctx context.Context, provider llm.Provider, maxTurns int, configLoader *config.LoaderV2, ui *adapters.PureTTY, debug bool, autoApprove bool) (*conversation.Conversation, error) {
-	workDir := getWorkingDirectory()
-	cfg := buildConfig(configLoader, maxTurns, workDir)
-
-	applyDebugFlag(cfg, debug)
+func createConversationForTUI(ctx context.Context, provider llm.Provider, cfg *config.ConfigV2, ui *adapters.PureTTY, autoApprove bool) (*conversation.Conversation, error) {
+	workDir := cfg.Agent.WorkDir
 
 	var approvalHandler security.ApprovalHandler
 	if autoApprove {
-		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
-			return security.ApprovalResponse{
-				RequestID: req.ID,
-				Approved:  true,
-				Reason:    "auto-approved",
-			}
-		}
+		approvalHandler = createAutoApproveHandler()
 	} else {
-		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
-			return ui.ShowApprovalDialog(req)
-		}
+		approvalHandler = createTUIApprovalHandler(ui)
 	}
 
 	// Create services based on configuration
 	logger := slog.Default()
 
-	var gitSvc *git.Service
-	var shellSvc *shell.Service
-	var mcpSvc *mcp.Service
-
-	if cfg.Protocol.EnableGit {
-		var err error
-		gitSvc, err = git.NewService(true, workDir, logger)
-		if err != nil {
-			return nil, fmt.Errorf("create git service: %w", err)
-		}
-	}
-
-	if cfg.Protocol.EnableShell {
-		var err error
-		shellSvc, err = shell.NewService(true, workDir, logger, cfg.Protocol.ShellTimeout)
-		if err != nil {
-			if gitSvc != nil {
-				gitSvc.Close()
-			}
-			return nil, fmt.Errorf("create shell service: %w", err)
-		}
-	}
-
-	if cfg.Protocol.EnableMCP && len(cfg.Protocol.MCPServers) > 0 {
-		mcpCfg := &mcp.Config{
-			EnableMCP:  true,
-			MCPServers: make([]mcp.MCPServerConfig, len(cfg.Protocol.MCPServers)),
-		}
-		for i, srv := range cfg.Protocol.MCPServers {
-			mcpCfg.MCPServers[i] = mcp.MCPServerConfig{
-				Name:    srv.Name,
-				Command: srv.Command,
-				Args:    srv.Args,
-				Env:     srv.Env,
-			}
-		}
-		var err error
-		mcpSvc, err = mcp.NewService(mcpCfg, logger)
-		if err != nil {
-			if gitSvc != nil {
-				gitSvc.Close()
-			}
-			if shellSvc != nil {
-				shellSvc.Close()
-			}
-			return nil, fmt.Errorf("create mcp service: %w", err)
-		}
+	protocolServices, cleanup, err := createProtocolServices(cfg, workDir, logger)
+	if err != nil {
+		return nil, err
 	}
 
 	// Build conversation with services
@@ -335,28 +288,19 @@ func createConversationForTUI(ctx context.Context, provider llm.Provider, maxTur
 		WithLLM(provider).
 		WithApprovalHandler(approvalHandler)
 
-	if gitSvc != nil {
-		builder = builder.WithGit(gitSvc)
+	if protocolServices.Git != nil {
+		builder = builder.WithGit(protocolServices.Git)
 	}
-	if shellSvc != nil {
-		builder = builder.WithShell(shellSvc)
+	if protocolServices.Shell != nil {
+		builder = builder.WithShell(protocolServices.Shell)
 	}
-	if mcpSvc != nil {
-		builder = builder.WithMCP(mcpSvc)
+	if protocolServices.MCP != nil {
+		builder = builder.WithMCP(protocolServices.MCP)
 	}
 
 	conv, err := builder.Build(ctx)
 	if err != nil {
-		// Clean up services on error
-		if gitSvc != nil {
-			gitSvc.Close()
-		}
-		if shellSvc != nil {
-			shellSvc.Close()
-		}
-		if mcpSvc != nil {
-			mcpSvc.Close()
-		}
+		cleanup()
 		return nil, fmt.Errorf("build conversation: %w", err)
 	}
 
@@ -408,61 +352,3 @@ func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provide
 	ui.SetConversationID(sessionID)
 }
 
-// buildConfig builds the configuration from multiple sources.
-func buildConfig(configLoader *config.LoaderV2, maxTurns int, workDir string) *config.ConfigV2 {
-	cfg := config.DefaultConfigV2()
-	cfg.Agent.WorkDir = workDir
-
-	// Layer 1: Load from config file
-	var fileCfg config.ConfigV2
-	if err := configLoader.Unmarshal(&fileCfg); err == nil {
-		applyFileConfig(cfg, &fileCfg)
-	}
-
-	// Layer 2: Override with CLI flags
-	applyCLIFlags(cfg, maxTurns)
-
-	return cfg
-}
-
-// applyFileConfig applies configuration from file to the main config.
-func applyFileConfig(cfg *config.ConfigV2, fileCfg *config.ConfigV2) {
-	if fileCfg.LLM.Provider != "" {
-		cfg.LLM.Provider = fileCfg.LLM.Provider
-	}
-	if fileCfg.LLM.Model != "" {
-		cfg.LLM.Model = fileCfg.LLM.Model
-	}
-	if fileCfg.Agent.MaxTurns > 0 {
-		cfg.Agent.MaxTurns = fileCfg.Agent.MaxTurns
-	}
-	if fileCfg.Agent.Timeout > 0 {
-		cfg.Agent.Timeout = fileCfg.Agent.Timeout
-	}
-	if fileCfg.LLM.MaxTokens > 0 {
-		cfg.LLM.MaxTokens = fileCfg.LLM.MaxTokens
-	}
-}
-
-// applyCLIFlags applies CLI flags to the configuration.
-func applyCLIFlags(cfg *config.ConfigV2, maxTurns int) {
-	if maxTurns > 0 {
-		cfg.Agent.MaxTurns = maxTurns
-	}
-	if flagProvider != "" {
-		cfg.LLM.Provider = flagProvider
-	}
-	if flagModel != "" {
-		cfg.LLM.Model = flagModel
-	}
-}
-
-// applyDebugFlag applies the debug flag to configuration.
-func applyDebugFlag(cfg *config.ConfigV2, debug bool) {
-	if debug {
-		cfg.Agent.Debug = true
-		cfg.Agent.LogLevel = "debug"
-		// Don't suppress INFO logs when debug is enabled
-		// This allows debug logging to work properly
-	}
-}

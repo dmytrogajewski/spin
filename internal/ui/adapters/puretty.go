@@ -80,6 +80,10 @@ type PureTTY struct {
 	// Used by non-interactive `spin exec` to avoid cursor positioning issues.
 	execMode bool
 
+	// Approval TTL hints (from config) used for key preview in approval status.
+	sessionPolicyTTL time.Duration
+	globalPolicyTTL  time.Duration
+
 	mu      sync.Mutex
 	running bool
 	stopped bool
@@ -111,6 +115,12 @@ func WithExecMode() PureTTYOption {
 // WithModel sets a custom prompt model (for testing).
 
 // WithKeyboardEvents sets a custom keyboard event channel (for testing).
+func WithKeyboardEvents(events <-chan term.KeyEvent) PureTTYOption {
+	return func(p *PureTTY) error {
+		p.keyboardEvents = events
+		return nil
+	}
+}
 
 // NewPureTTY creates a new PureTTY adapter.
 // Defaults: stdin/stdout TTY, 100-entry history, "> " prefix.
@@ -671,7 +681,7 @@ func (u *PureTTY) renderFilterUI() {
 }
 
 // ShowApprovalDialog displays an approval dialog for the given request.
-func (u *PureTTY) ShowApprovalDialog(req security.ApprovalRequest) security.ApprovalResponse {
+func (u *PureTTY) ShowApprovalDialog(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 	// Set approval mode
 	u.mode = ModeApproval
 
@@ -681,8 +691,7 @@ func (u *PureTTY) ShowApprovalDialog(req security.ApprovalRequest) security.Appr
 	// Show approval prompt in status bar
 	u.showApprovalStatus(req)
 
-	// Wait for user response
-	ctx := context.Background()
+	// Wait for user response (respect context cancellation)
 	response := u.approvalDialog.Show(ctx)
 
 	// Clean up
@@ -708,10 +717,59 @@ func (u *PureTTY) showApprovalStatus(req security.ApprovalRequest) {
 		command = command[:47] + "..."
 	}
 
-	approvalText := fmt.Sprintf("Executing: \"%s\" [A]pprove [D]eny", command)
+	// Compute normalized key preview (matches PolicyStore semantics).
+	keyPreview := ""
+	if req.Command != nil {
+		key := security.NewPolicyKey(req.Command.Program, req.Command.Args, req.WorkDir)
+		args := strings.Join(key.Args, " ")
+		if args != "" {
+			keyPreview = fmt.Sprintf("%s %s (wd=%s)", key.Program, args, key.WorkDir)
+		} else {
+			keyPreview = fmt.Sprintf("%s (wd=%s)", key.Program, key.WorkDir)
+		}
+	}
+
+	ttlPreview := u.formatApprovalTTLPreview()
+
+	// Show scope-aware options: A=once, S=session, G=global, D=deny
+	if keyPreview != "" {
+		approvalText := fmt.Sprintf("Executing: \"%s\" | Key: %s | %s | [A] once  [S] session  [G] global  [D] deny", command, keyPreview, ttlPreview)
+		u.statusRenderer.Render(approvalText)
+		return
+	}
+
+	approvalText := fmt.Sprintf("Executing: \"%s\" | %s | [A] once  [S] session  [G] global  [D] deny", command, ttlPreview)
 
 	// Render in status bar
 	u.statusRenderer.Render(approvalText)
+}
+
+// SetApprovalPolicyTTLs configures TTL hints for approval persistence scopes.
+func (u *PureTTY) SetApprovalPolicyTTLs(sessionTTL, globalTTL time.Duration) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.sessionPolicyTTL = sessionTTL
+	u.globalPolicyTTL = globalTTL
+}
+
+// formatApprovalTTLPreview returns a compact human-readable TTL hint string.
+func (u *PureTTY) formatApprovalTTLPreview() string {
+	u.mu.Lock()
+	sessionTTL := u.sessionPolicyTTL
+	globalTTL := u.globalPolicyTTL
+	u.mu.Unlock()
+
+	var parts []string
+	if sessionTTL > 0 {
+		parts = append(parts, fmt.Sprintf("session=%s", sessionTTL))
+	}
+	if globalTTL > 0 {
+		parts = append(parts, fmt.Sprintf("global=%s", globalTTL))
+	}
+	if len(parts) == 0 {
+		return "TTLs: disabled"
+	}
+	return "TTLs: " + strings.Join(parts, ", ")
 }
 
 // clearApprovalStatus clears the approval status from the status bar.

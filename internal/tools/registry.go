@@ -31,6 +31,35 @@ func NewRegistryWithBuiltins() *Registry {
 	return registry
 }
 
+// NewDefaultRegistry creates a new registry with all builtin tools properly configured.
+// This factory function accepts workDir string and environment interface for tools that need them.
+//
+// Tools registered:
+//   - read_file, write_file, list_directory (no parameters needed)
+//   - shell_command (accepts nil parameters, can be configured separately)
+//   - get_context (requires env interface{}, can be *agent.Environment or nil)
+//   - apply_patch (requires workDir string)
+//   - file_search (requires workDir string)
+//   - git_context (requires workDir string)
+//
+// This is the recommended factory for most use cases where tools need proper configuration.
+// If workDir is empty, tools that require WorkDir will be created with empty string.
+// If env is nil, get_context will be created with nil.
+func NewDefaultRegistry(workDir string, env interface{}) *Registry {
+	// Create registry with builtin tools as base
+	registry := NewRegistryWithBuiltins()
+
+	// Replace tools that need configuration with properly configured versions
+	// Note: shell_command is left as-is (nil parameters) since it can be configured
+	// separately via RegisterOrReplace if needed
+	_ = registry.RegisterOrReplace(NewGetContextTool(env))
+	_ = registry.RegisterOrReplace(NewApplyPatchTool(workDir))
+	_ = registry.RegisterOrReplace(NewFileSearchTool(workDir))
+	_ = registry.RegisterOrReplace(NewGitContextTool(workDir))
+
+	return registry
+}
+
 // Register adds a tool to the registry.
 // Returns ErrDuplicateTool if a tool with the same name already exists.
 func (r *Registry) Register(tool Tool) error {

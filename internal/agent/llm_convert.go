@@ -9,14 +9,13 @@ package agent
 // - convertMessageToOpenAI: internal message.Message → OpenAI ChatCompletionMessageParamUnion
 // - convertToolCallsToOpenAI: internal ToolCall → OpenAI tool call params
 // - convertToolsToOpenAI: internal tools.Tool → OpenAI tool params
-// - convertOpenAIToolCallsToOrchestration: OpenAI tool calls → internal orchestration.ToolCall
+// - convertOpenAIToolCalls: OpenAI tool calls → internal agent.ToolCall
 //
 // Do NOT add internal-to-internal conversion functions here.
-// Use unified types (e.g., orchestration.ToolCall) throughout the codebase instead.
+// Use unified types (e.g., agent.ToolCall) throughout the codebase instead.
 
 import (
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/orchestration"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/shared"
@@ -111,19 +110,19 @@ func convertToolsToOpenAI(toolList []tools.Tool) []openai.ChatCompletionToolPara
 	return result
 }
 
-// convertOpenAIToolCallsToOrchestration converts OpenAI tool calls to orchestration.ToolCall.
-// Note: message.ToolCall is now an alias for orchestration.ToolCall, eliminating duplication.
-func convertOpenAIToolCallsToOrchestration(toolCalls []openai.ChatCompletionMessageToolCall) []orchestration.ToolCall {
+// convertOpenAIToolCalls converts OpenAI tool calls to internal ToolCall.
+// Note: message.ToolCall is now an alias for agent.ToolCall, eliminating duplication.
+func convertOpenAIToolCalls(toolCalls []openai.ChatCompletionMessageToolCall) []ToolCall {
 	if len(toolCalls) == 0 {
 		return nil
 	}
 
-	result := make([]orchestration.ToolCall, len(toolCalls))
+	result := make([]ToolCall, len(toolCalls))
 	for i, tc := range toolCalls {
-		result[i] = orchestration.ToolCall{
+		result[i] = ToolCall{
 			ID:   tc.ID,
 			Type: string(tc.Type),
-			Function: orchestration.ToolCallFunction{
+			Function: ToolCallFunction{
 				Name:      tc.Function.Name,
 				Arguments: tc.Function.Arguments,
 			},
@@ -143,11 +142,11 @@ func getContent(completion *openai.ChatCompletion) string {
 }
 
 // getToolCalls extracts tool calls from the first choice in a ChatCompletion.
-func getToolCalls(completion *openai.ChatCompletion) []orchestration.ToolCall {
+func getToolCalls(completion *openai.ChatCompletion) []ToolCall {
 	if completion == nil || len(completion.Choices) == 0 {
 		return nil
 	}
-	return convertOpenAIToolCallsToOrchestration(completion.Choices[0].Message.ToolCalls)
+	return convertOpenAIToolCalls(completion.Choices[0].Message.ToolCalls)
 }
 
 // getFinishReason extracts the finish reason from the first choice in a ChatCompletion.

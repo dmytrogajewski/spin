@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -114,6 +116,11 @@ type SecurityConfigV2 struct {
 	SandboxMode     string   `yaml:"sandbox_mode" mapstructure:"sandbox_mode"`
 	PolicyFile      string   `yaml:"policy_file" mapstructure:"policy_file"`
 	AllowedCommands []string `yaml:"allowed_commands" mapstructure:"allowed_commands"`
+	// Approval persistence feature flag and TTLs
+	ApprovalPersistenceEnabled bool `yaml:"approval_persistence_enabled" mapstructure:"approval_persistence_enabled"`
+	// Approval persistence TTLs
+	SessionPolicyTTL time.Duration `yaml:"session_policy_ttl" mapstructure:"session_policy_ttl"`
+	GlobalPolicyTTL  time.Duration `yaml:"global_policy_ttl" mapstructure:"global_policy_ttl"`
 }
 
 // ProtocolConfigV2 configures protocol features (MCP, Git, Shell).
@@ -302,6 +309,11 @@ func (m *MCPServerConfigV2) Validate() error {
 
 // DefaultConfigV2 returns a ConfigV2 with sensible defaults.
 func DefaultConfigV2() *ConfigV2 {
+	// Derive default policy file path under user config directory
+	policyFile := ""
+	if cfgDir, err := os.UserConfigDir(); err == nil && cfgDir != "" {
+		policyFile = filepath.Join(cfgDir, "spin", "policies.json")
+	}
 	return &ConfigV2{
 		Version: "2.0",
 		LLM: LLMConfigV2{
@@ -345,9 +357,12 @@ func DefaultConfigV2() *ConfigV2 {
 			MinScore:       0.3,
 		},
 		Security: SecurityConfigV2{
-			SandboxMode:     "workspace-only",
-			PolicyFile:      "",
-			AllowedCommands: []string{},
+			SandboxMode:                "workspace-only",
+			PolicyFile:                 policyFile,
+			AllowedCommands:            []string{},
+			ApprovalPersistenceEnabled: true,
+			SessionPolicyTTL:           8 * time.Hour,
+			GlobalPolicyTTL:            30 * 24 * time.Hour,
 		},
 		Protocol: ProtocolConfigV2{
 			EnableMCP:    false,

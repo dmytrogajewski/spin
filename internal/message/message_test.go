@@ -10,7 +10,7 @@ func TestToolCall_Creation(t *testing.T) {
 	tc := ToolCall{
 		ID:   "call_abc123",
 		Type: "function",
-		Function: FunctionCall{
+		Function: ToolCallFunction{
 			Name:      "read_file",
 			Arguments: `{"path": "test.go"}`,
 		},
@@ -35,7 +35,7 @@ func TestToolCall_JSONMarshaling(t *testing.T) {
 	original := ToolCall{
 		ID:   "call_123",
 		Type: "function",
-		Function: FunctionCall{
+		Function: ToolCallFunction{
 			Name:      "execute_command",
 			Arguments: `{"command": "ls -la"}`,
 		},
@@ -98,7 +98,7 @@ func TestMessage_WithToolCalls(t *testing.T) {
 			{
 				ID:   "call_1",
 				Type: "function",
-				Function: FunctionCall{
+				Function: ToolCallFunction{
 					Name:      "read_file",
 					Arguments: `{"path": "test.go"}`,
 				},
@@ -106,7 +106,7 @@ func TestMessage_WithToolCalls(t *testing.T) {
 			{
 				ID:   "call_2",
 				Type: "function",
-				Function: FunctionCall{
+				Function: ToolCallFunction{
 					Name:      "execute_command",
 					Arguments: `{"command": "ls"}`,
 				},
@@ -164,7 +164,7 @@ func TestMessage_JSONSerialization(t *testing.T) {
 			{
 				ID:   "call_1",
 				Type: "function",
-				Function: FunctionCall{
+				Function: ToolCallFunction{
 					Name:      "read_file",
 					Arguments: `{"path": "main.go"}`,
 				},

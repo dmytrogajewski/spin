@@ -710,66 +710,6 @@ func (m *TUIMapper) handleACELearned(event events.Event) error {
 	return nil
 }
 
-// extractCategoryNames extracts unique category display names from bullets
-func (m *TUIMapper) extractCategoryNames(bullets []events.BulletData) []string {
-	seen := make(map[string]bool)
-	var names []string
-
-	for _, bullet := range bullets {
-		cat := bullet.Category
-		if cat == "" {
-			cat = "general"
-		}
-
-		displayName := strings.ToLower(formatCategoryName(cat))
-		if !seen[displayName] {
-			seen[displayName] = true
-			names = append(names, displayName)
-		}
-	}
-
-	// Limit to first 3 categories to keep hint compact
-	if len(names) > 3 {
-		names = names[:3]
-	}
-
-	return names
-}
-
-// formatCategoryName converts category identifiers to readable display names.
-func formatCategoryName(category string) string {
-	switch category {
-	case "success_pattern":
-		return "Success Patterns"
-	case "error_mode":
-		return "Error Modes"
-	case "optimization":
-		return "Optimizations"
-	case "anti_pattern":
-		return "Anti-Patterns"
-	case "general":
-		return "General"
-	default:
-		// Capitalize first letter and replace underscores with spaces
-		if category == "" {
-			return "General"
-		}
-		// Simple title case conversion
-		parts := make([]string, 0)
-		for _, part := range splitOnUnderscore(category) {
-			if len(part) > 0 {
-				parts = append(parts, strings.ToUpper(part[:1])+part[1:])
-			}
-		}
-		return strings.Join(parts, " ")
-	}
-}
-
-// splitOnUnderscore splits a string on underscores.
-func splitOnUnderscore(s string) []string {
-	return strings.Split(s, "_")
-}
-
 // StartStreaming initializes content streaming and returns the channel
 // that will receive LLM content deltas. The caller should wire this to UI.PrintChunks.
 func (m *TUIMapper) StartStreaming() <-chan string {

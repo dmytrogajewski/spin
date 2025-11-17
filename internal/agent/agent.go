@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -16,8 +15,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/orchestration"
+	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/openai/openai-go"
 )
@@ -33,15 +33,16 @@ const (
 
 // Common agent errors
 var (
-	ErrNilLLM           = errors.New("LLM provider cannot be nil")
-	ErrNilSecurity      = errors.New("security service cannot be nil")
-	ErrNilDetection     = errors.New("detection service cannot be nil")
-	ErrNilOrchestration = errors.New("orchestration service cannot be nil")
-	ErrNilContext       = errors.New("context cannot be nil")
-	ErrNilEmitter       = errors.New("event emitter cannot be nil")
-	ErrNilRequest       = errors.New("agent request cannot be nil")
-	ErrEmptyInput       = errors.New("agent request input cannot be empty")
-	ErrMaxTurns         = errors.New("maximum turns reached")
+	ErrNilLLM         = errors.New("LLM provider cannot be nil")
+	ErrNilSecurity    = errors.New("security service cannot be nil")
+	ErrNilDetection   = errors.New("detection service cannot be nil")
+	ErrNilToolRuntime = errors.New("tool runtime cannot be nil")
+	ErrNilPlanning    = errors.New("planning service cannot be nil")
+	ErrNilContext     = errors.New("context cannot be nil")
+	ErrNilEmitter     = errors.New("event emitter cannot be nil")
+	ErrNilRequest     = errors.New("agent request cannot be nil")
+	ErrEmptyInput     = errors.New("agent request input cannot be empty")
+	ErrMaxTurns       = errors.New("maximum turns reached")
 )
 
 // Agent implements the core agent logic and decision-making loop.
@@ -59,14 +60,16 @@ type Agent struct {
 	llm llm.Provider
 
 	// Service layers
-	security      *security.SecurityService
-	detection     *detection.DetectionService
-	orchestration *orchestration.OrchestrationService
-	aceService    *ACEService // ACE (Agentic Context Engineering) - optional
+	security        *security.SecurityService
+	detection       *detection.DetectionService
+	toolRuntime     *ToolRuntime
+	planningService *planning.PlanningService
+	aceService      *ACEService // ACE (Agentic Context Engineering) - optional
 
 	// Infrastructure
 	context *Environment
 	emitter *events.EventEmitter
+	planner *planning.Plan
 
 	// Configuration (options-based)
 	maxTurns        int
@@ -76,25 +79,6 @@ type Agent struct {
 	requireApproval bool
 	aceConfig       *ACEConfig
 	cycleDetection  bool
-}
-
-// Task defines the interface for different execution modes.
-// This interface is implemented by types in the task subpackage.
-type Task interface {
-	// Name returns the unique identifier for this task mode
-	Name() string
-
-	// SystemPrompt returns the mode-specific system prompt
-	SystemPrompt() string
-
-	// AllowedTools returns the list of tool names permitted in this mode
-	AllowedTools() []string
-
-	// MaxTokens returns the token budget for this mode
-	MaxTokens() int
-
-	// Validate validates the task configuration
-	Validate() error
 }
 
 // AgentOption is a functional option for configuring an Agent.
@@ -184,7 +168,8 @@ func NewAgent(
 	provider llm.Provider,
 	security *security.SecurityService,
 	detection *detection.DetectionService,
-	orchestration *orchestration.OrchestrationService,
+	runtime *ToolRuntime,
+	planning *planning.PlanningService,
 	context *Environment,
 	emitter *events.EventEmitter,
 	opts ...AgentOption,
@@ -199,8 +184,11 @@ func NewAgent(
 	if detection == nil {
 		return nil, ErrNilDetection
 	}
-	if orchestration == nil {
-		return nil, ErrNilOrchestration
+	if runtime == nil {
+		return nil, ErrNilToolRuntime
+	}
+	if planning == nil {
+		return nil, ErrNilPlanning
 	}
 	if context == nil {
 		return nil, ErrNilContext
@@ -211,16 +199,17 @@ func NewAgent(
 
 	// Create agent with services and reasonable defaults
 	agent := &Agent{
-		llm:           provider,
-		security:      security,
-		detection:     detection,
-		orchestration: orchestration,
-		context:       context,
-		emitter:       emitter,
-		maxTurns:      50,               // Default: 50 turns
-		timeout:       60 * time.Minute, // Default: 60 minutes
-		temperature:   0.7,              // Default: 0.7
-		maxTokens:     8192,             // Default: 8K tokens
+		llm:             provider,
+		security:        security,
+		detection:       detection,
+		toolRuntime:     runtime,
+		planningService: planning,
+		context:         context,
+		emitter:         emitter,
+		maxTurns:        50,               // Default: 50 turns
+		timeout:         60 * time.Minute, // Default: 60 minutes
+		temperature:     0.7,              // Default: 0.7
+		maxTokens:       8192,             // Default: 8K tokens
 	}
 
 	// Apply options
@@ -233,12 +222,20 @@ func NewAgent(
 	return agent, nil
 }
 
+// SetApprovalService updates the approval service on the underlying orchestration service.
+// This is useful when the approval service needs to be configured after agent creation.
+func (a *Agent) SetApprovalService(service *security.ApprovalService) {
+	if a.toolRuntime != nil {
+		a.toolRuntime.SetApprovalService(service)
+	}
+}
+
 // resolveTask determines which task to use for this request.
 //
 // The task must be provided in req.Task. If nil, returns an error.
 // This simplification removes the runtime registry pattern in favor of
 // compile-time task creation via task.NewTask().
-func (a *Agent) resolveTask(req *AgentRequest) (Task, error) {
+func (a *Agent) resolveTask(req *AgentRequest) (task.Task, error) {
 	if req.Task == nil {
 		return nil, spinerrors.New(spinerrors.CodeValidation, "Agent.resolveTask", "task is required", nil)
 	}
@@ -450,16 +447,27 @@ func (a *Agent) finalizeResponse(resp *AgentResponse, messages []message.Message
 	// generation to ensure all post-execution events are emitted before signaling completion
 }
 
+// GetPlanner returns the current execution planner.
+// Returns nil if no planner has been set.
+func (a *Agent) GetPlanner() *planning.Plan {
+	return a.planner
+}
+
+// SetPlanner sets the execution planner.
+func (a *Agent) SetPlanner(planner *planning.Plan) {
+	a.planner = planner
+}
+
 // BuildToolsForTask constructs the filtered tool list for the LLM request,
 // based on the task mode's allowed tools.
 //
 // This method delegates to the orchestration service's tool registry.
-func (a *Agent) BuildToolsForTask(task Task) ([]tools.Tool, error) {
-	if a.orchestration == nil {
+func (a *Agent) BuildToolsForTask(task task.Task) ([]tools.Tool, error) {
+	if a.toolRuntime == nil {
 		return nil, nil
 	}
 
-	toolRegistry := a.orchestration.GetToolRegistry()
+	toolRegistry := a.toolRuntime.Registry()
 	if toolRegistry == nil {
 		return nil, nil
 	}
@@ -504,138 +512,6 @@ func (a *Agent) BuildToolsForTask(task Task) ([]tools.Tool, error) {
 	return filtered, nil
 }
 
-// CreatePlan creates a new execution plan for the given task.
-// This method uses the LLM to decompose complex tasks into manageable steps.
-func (a *Agent) CreatePlan(ctx context.Context, taskName string) (*Plan, error) {
-	if taskName == "" {
-		return nil, ErrEmptyInput
-	}
-
-	// Create a new plan
-	plan := NewPlan(nil)
-
-	// Use LLM to decompose the task into steps
-	decompositionPrompt := fmt.Sprintf(`
-Decompose the following task into specific, actionable steps:
-
-Task: %s
-
-Please provide a JSON response with the following structure:
-{
-  "steps": [
-    {
-      "id": "step_1",
-      "description": "Clear description of what to do",
-      "action": "Specific action to perform",
-      "depends_on": [],
-      "estimated_duration": "5m"
-    }
-  ]
-}
-
-Guidelines:
-- Each step should be atomic and testable
-- Include dependencies between steps
-- Provide realistic time estimates
-- Focus on concrete actions, not abstract concepts
-`, taskName)
-
-	// Call LLM for task decomposition
-	params := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage(decompositionPrompt),
-		}),
-		MaxTokens:   openai.F(int64(1000)),
-		Temperature: openai.F(0.3), // Lower temperature for more consistent planning
-	}
-
-	resp, err := a.llm.Complete(ctx, params)
-	if err != nil {
-		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.CreatePlan", "llm completion failed", err)
-	}
-
-	// Parse the response and create steps
-	var decomposition struct {
-		Steps []struct {
-			ID                string   `json:"id"`
-			Description       string   `json:"description"`
-			Action            string   `json:"action"`
-			DependsOn         []string `json:"depends_on"`
-			EstimatedDuration string   `json:"estimated_duration"`
-		} `json:"steps"`
-	}
-
-	responseContent := getContent(resp)
-	if err := json.Unmarshal([]byte(responseContent), &decomposition); err != nil {
-		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.CreatePlan", "failed to parse LLM response", err)
-	}
-
-	// Create steps
-	for _, stepData := range decomposition.Steps {
-		duration, _ := time.ParseDuration(stepData.EstimatedDuration)
-		step := Step{
-			ID:                stepData.ID,
-			Description:       stepData.Description,
-			Action:            stepData.Action,
-			DependsOn:         stepData.DependsOn,
-			Status:            StepStatusPending,
-			EstimatedDuration: duration,
-		}
-		plan.Steps = append(plan.Steps, step)
-	}
-
-	// Validate the plan structure
-	if err := plan.ValidateStructure(); err != nil {
-		return nil, spinerrors.New(spinerrors.CodeValidation, "Agent.CreatePlan", "plan validation failed", err)
-	}
-
-	// Calculate total estimated duration
-	// plan.EstimatedDuration is calculated by the method
-
-	return plan, nil
-}
-
-// ShouldApprove determines if a command needs user approval.
-//
-// Returns:
-//   - needsApproval: true if the command requires approval
-//   - reason: explanation of why approval is needed
-func (a *Agent) ShouldApprove(cmd *security.Command) (bool, string) {
-	// If approval is disabled, never require approval
-	if !a.requireApproval {
-		return false, ""
-	}
-
-	// Classify the command via security service
-	result, err := a.security.ValidateCommand(cmd)
-	if err != nil {
-		// On error, require approval for safety
-		return true, fmt.Sprintf("Classification error: %v", err)
-	}
-
-	switch result.Classification {
-	case security.CommandSafe:
-		return false, ""
-
-	case security.CommandInteractive:
-		return true, "This command may modify files or system state"
-
-	case security.CommandDangerous:
-		return true, fmt.Sprintf("WARNING: Dangerous operation - %s", result.Reason)
-
-	case security.CommandForbidden:
-		// Forbidden commands should never be executed, even with approval
-		// This will be handled by the executor
-		return false, fmt.Sprintf("BLOCKED: %s", result.Reason)
-
-	case security.CommandUnverified:
-		return true, "Unknown command, approval required for safety"
-
-	default:
-		return true, "Unknown command classification, approval required"
-	}
-}
-
 // determineRequiresApproval determines if a tool call requires approval based on tool name and arguments.
 // This is used to populate the RequiresApproval field in ToolCallStartData.
 func (a *Agent) determineRequiresApproval(toolName string, args map[string]interface{}) bool {
@@ -654,8 +530,26 @@ func (a *Agent) determineRequiresApproval(toolName string, args map[string]inter
 	if toolName == "execute_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			cmdStruct := &security.Command{Program: cmd}
-			needsApproval, _ := a.ShouldApprove(cmdStruct)
-			return needsApproval
+
+			// Check Agent-level approval flag first
+			if !a.requireApproval {
+				return false
+			}
+
+			// Validate command to check if forbidden (forbidden commands are blocked, not approved)
+			result, err := a.security.ValidateCommand(cmdStruct)
+			if err != nil {
+				// On validation error, require approval for safety (fail-safe behavior)
+				return true
+			}
+
+			// Forbidden commands are blocked, not approved
+			if result.Classification == security.CommandForbidden {
+				return false
+			}
+
+			// Use SecurityService to check if approval is needed
+			return a.security.NeedsApproval(cmdStruct)
 		}
 	}
 
@@ -674,7 +568,7 @@ func (a *Agent) processToolCallsFromCompletion(ctx context.Context, messages []m
 }
 
 // processToolCallsInternal contains the actual logic for processing tool calls.
-func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message.Message, content string, toolCalls []orchestration.ToolCall, resp *AgentResponse) []message.Message {
+func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message.Message, content string, toolCalls []ToolCall, resp *AgentResponse) []message.Message {
 	// Create assistant message with tool calls
 	assistantMsg := message.Message{
 		Role:      message.RoleAssistant,
@@ -693,7 +587,7 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 		msgToolCall := message.ToolCall{
 			ID:   coreToolCall.ID,
 			Type: coreToolCall.Type,
-			Function: message.FunctionCall{
+			Function: message.ToolCallFunction{
 				Name:      coreToolCall.Function.Name,
 				Arguments: coreToolCall.Function.Arguments,
 			},
@@ -739,10 +633,10 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 // - File operations (read, write, list)
 // - Event emission for tool lifecycle
 // - Error handling and recovery
-func (a *Agent) ProcessToolCall(ctx context.Context, call *orchestration.ToolCall) (*orchestration.ToolResult, error) {
+func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResult, error) {
 	// 1. Validate tool call
 	if err := a.validateToolCall(call); err != nil {
-		return &orchestration.ToolResult{
+		return &ToolResult{
 			ID:      call.ID,
 			Success: false,
 			Error:   err,
@@ -752,7 +646,7 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *orchestration.ToolCal
 	// 2. Parse arguments
 	args, err := a.parseToolArguments(call)
 	if err != nil {
-		return &orchestration.ToolResult{
+		return &ToolResult{
 			ID:      call.ID,
 			Success: false,
 			Error:   err,
@@ -774,12 +668,11 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *orchestration.ToolCal
 		},
 	})
 
-	// 4. Execute tool via orchestration service
-	result, err := a.orchestration.ExecuteTool(ctx, call)
+	// 4. Execute tool via runtime
+	result, err := a.toolRuntime.Execute(ctx, call)
 	if err != nil {
-		slog.Error("tool execution failed via orchestration", "tool", call.Function.Name, "error", err)
-		// If orchestration returns an error, create error result
-		result = &orchestration.ToolResult{
+		slog.Error("tool execution failed", "tool", call.Function.Name, "error", err)
+		result = &ToolResult{
 			ID:      call.ID,
 			Success: false,
 			Error:   err,
@@ -809,28 +702,19 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *orchestration.ToolCal
 }
 
 // validateToolCall validates the tool call structure.
-func (a *Agent) validateToolCall(call *orchestration.ToolCall) error {
-	if call == nil {
-		return errors.New("tool call cannot be nil")
-	}
-	if call.ID == "" {
-		return errors.New("tool call ID cannot be empty")
-	}
-	if call.Function.Name == "" {
-		return errors.New("tool function name cannot be empty")
-	}
-	return nil
+func (a *Agent) validateToolCall(call *ToolCall) error {
+	return tools.ValidateToolCall(call)
 }
 
 // parseToolArguments extracts and parses JSON arguments from tool call.
-func (a *Agent) parseToolArguments(call *orchestration.ToolCall) (tools.ToolParameters, error) {
+func (a *Agent) parseToolArguments(call *ToolCall) (tools.ToolParameters, error) {
 	parser := tools.NewStrictArgumentParser()
 	return parser.Parse(call.Function.Arguments)
 }
 
 // getToolResultContent returns the appropriate content to send to LLM based on tool result.
 // If tool succeeded, returns output. If failed, returns error message.
-func getToolResultContent(toolCall *orchestration.ToolCall, result *orchestration.ToolResult) string {
+func getToolResultContent(toolCall *ToolCall, result *ToolResult) string {
 	if result.Success {
 		return result.Output
 	}
@@ -846,18 +730,6 @@ func getToolResultContent(toolCall *orchestration.ToolCall, result *orchestratio
 	return fmt.Sprintf("Tool %s failed with no error message", toolCall.Function.Name)
 }
 
-// extractQueryFromMessages extracts a query string from messages for ACE retrieval.
-// Uses the most recent user message as the retrieval query.
-func extractQueryFromMessages(messages []message.Message) string {
-	// Search backwards for the most recent user message
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == "user" {
-			return messages[i].Content
-		}
-	}
-	return ""
-}
-
 // callLLM calls the LLM provider with the given messages and filtered tools based on task mode.
 // The task parameter controls both tool filtering and token budget:
 //   - Tools: Only tools in task.AllowedTools() are included
@@ -865,12 +737,12 @@ func extractQueryFromMessages(messages []message.Message) string {
 //
 // The bullets parameter contains ACE bullets already retrieved for this turn.
 // Note: ACE bullet display is now handled by EventACERetrieval emission in loop.go
-func (a *Agent) callLLM(ctx context.Context, messages []message.Message, task Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
+func (a *Agent) callLLM(ctx context.Context, messages []message.Message, t task.Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
 	// Start with system message from task
 	openaiMessages := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages)+1)
 
 	// Add system prompt with thinking instructions
-	systemPrompt := task.SystemPrompt()
+	systemPrompt := t.SystemPrompt()
 	if systemPrompt != "" {
 		// Add thinking instructions to the system prompt
 		enhancedSystemPrompt := systemPrompt + `
@@ -904,15 +776,15 @@ Then provide your response after the thinking block.`
 	}
 
 	// Build filtered tool list for this task mode
-	toolList, err := a.BuildToolsForTask(task)
+	toolList, err := a.BuildToolsForTask(t)
 	if err != nil {
 		return nil, spinerrors.New(spinerrors.CodeInternal, "Agent.callLLM", "failed to build tools", err)
 	}
 
 	// Determine token budget: task overrides agent config
 	maxTokens := a.maxTokens
-	if task != nil {
-		taskMaxTokens := task.MaxTokens()
+	if t != nil {
+		taskMaxTokens := t.MaxTokens()
 		if taskMaxTokens > 0 {
 			maxTokens = taskMaxTokens
 		}
@@ -1048,14 +920,6 @@ func (m *messageAdapter) GetContent() string {
 
 func (m *messageAdapter) GetTimestamp() time.Time {
 	return m.msg.Timestamp
-}
-
-// pluralize returns "s" if count is not 1, otherwise returns empty string
-func pluralize(count int) string {
-	if count == 1 {
-		return ""
-	}
-	return "s"
 }
 
 // emitACERetrievalEvent emits an ACE retrieval event with calculated metrics

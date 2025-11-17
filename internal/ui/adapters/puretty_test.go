@@ -273,7 +273,7 @@ func TestApprovalDialog_KeyboardInput(t *testing.T) {
 	// Start ShowApprovalDialog in background (it blocks)
 	responseCh := make(chan security.ApprovalResponse, 1)
 	go func() {
-		resp := ui.ShowApprovalDialog(req)
+		resp := ui.ShowApprovalDialog(context.Background(), req)
 		responseCh <- resp
 	}()
 
@@ -340,7 +340,7 @@ func TestApprovalDialog_DenyKey(t *testing.T) {
 
 	responseCh := make(chan security.ApprovalResponse, 1)
 	go func() {
-		resp := ui.ShowApprovalDialog(req)
+		resp := ui.ShowApprovalDialog(context.Background(), req)
 		responseCh <- resp
 	}()
 	time.Sleep(50 * time.Millisecond)
@@ -698,11 +698,11 @@ func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
 	if !strings.Contains(approvalOutput, "Executing:") {
 		t.Errorf("Expected approval prompt to contain 'Executing:', got: %s", approvalOutput)
 	}
-	if !strings.Contains(approvalOutput, "[A]pprove") {
-		t.Errorf("Expected approval prompt to contain '[A]pprove', got: %s", approvalOutput)
+	if !strings.Contains(approvalOutput, "Key:") {
+		t.Errorf("Expected approval prompt to contain normalized key preview, got: %s", approvalOutput)
 	}
-	if !strings.Contains(approvalOutput, "[D]eny") {
-		t.Errorf("Expected approval prompt to contain '[D]eny', got: %s", approvalOutput)
+	if !strings.Contains(approvalOutput, "TTLs:") {
+		t.Errorf("Expected approval prompt to contain TTL preview, got: %s", approvalOutput)
 	}
 
 	// Clear buffer

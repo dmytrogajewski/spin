@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewArgumentParser(t *testing.T) {
-	parser := NewArgumentParser()
+	parser := &ArgumentParser{AllowEmpty: true}
 	assert.NotNil(t, parser)
 	assert.True(t, parser.AllowEmpty, "default parser should allow empty arguments")
 }
@@ -30,7 +30,7 @@ func TestArgumentParser_Parse(t *testing.T) {
 	}{
 		{
 			name:   "valid_json_arguments",
-			parser: NewArgumentParser(),
+			parser: &ArgumentParser{AllowEmpty: true},
 			input:  `{"path": "/tmp", "recursive": true}`,
 			want: map[string]interface{}{
 				"path":      "/tmp",
@@ -40,14 +40,14 @@ func TestArgumentParser_Parse(t *testing.T) {
 		},
 		{
 			name:    "empty_json_object",
-			parser:  NewArgumentParser(),
+			parser:  &ArgumentParser{AllowEmpty: true},
 			input:   `{}`,
 			want:    map[string]interface{}{},
 			wantErr: false,
 		},
 		{
 			name:    "empty_string_with_allow_empty",
-			parser:  NewArgumentParser(),
+			parser:  &ArgumentParser{AllowEmpty: true},
 			input:   "",
 			want:    map[string]interface{}{},
 			wantErr: false,
@@ -62,7 +62,7 @@ func TestArgumentParser_Parse(t *testing.T) {
 		},
 		{
 			name:       "invalid_json",
-			parser:     NewArgumentParser(),
+			parser:     &ArgumentParser{AllowEmpty: true},
 			input:      `{"path": "/tmp"`,
 			want:       nil,
 			wantErr:    true,
@@ -70,7 +70,7 @@ func TestArgumentParser_Parse(t *testing.T) {
 		},
 		{
 			name:       "not_json_object",
-			parser:     NewArgumentParser(),
+			parser:     &ArgumentParser{AllowEmpty: true},
 			input:      `["not", "an", "object"]`,
 			want:       nil,
 			wantErr:    true,
@@ -78,7 +78,7 @@ func TestArgumentParser_Parse(t *testing.T) {
 		},
 		{
 			name:   "complex_nested_json",
-			parser: NewArgumentParser(),
+			parser: &ArgumentParser{AllowEmpty: true},
 			input:  `{"config": {"host": "localhost", "port": 8080}, "enabled": true}`,
 			want: map[string]interface{}{
 				"config": map[string]interface{}{
@@ -91,7 +91,7 @@ func TestArgumentParser_Parse(t *testing.T) {
 		},
 		{
 			name:   "json_with_null_values",
-			parser: NewArgumentParser(),
+			parser: &ArgumentParser{AllowEmpty: true},
 			input:  `{"path": null, "count": 0}`,
 			want: map[string]interface{}{
 				"path":  nil,
@@ -101,7 +101,7 @@ func TestArgumentParser_Parse(t *testing.T) {
 		},
 		{
 			name:   "json_with_array_value",
-			parser: NewArgumentParser(),
+			parser: &ArgumentParser{AllowEmpty: true},
 			input:  `{"files": ["a.txt", "b.txt"], "verbose": true}`,
 			want: map[string]interface{}{
 				"files":   []interface{}{"a.txt", "b.txt"},
@@ -148,7 +148,7 @@ func TestArgumentParser_CustomConfiguration(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkArgumentParser_Parse(b *testing.B) {
-	parser := NewArgumentParser()
+	parser := &ArgumentParser{AllowEmpty: true}
 	input := `{"path": "/tmp/file.txt", "mode": 0644, "recursive": true}`
 
 	b.ResetTimer()
@@ -158,7 +158,7 @@ func BenchmarkArgumentParser_Parse(b *testing.B) {
 }
 
 func BenchmarkArgumentParser_ParseEmpty(b *testing.B) {
-	parser := NewArgumentParser()
+	parser := &ArgumentParser{AllowEmpty: true}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

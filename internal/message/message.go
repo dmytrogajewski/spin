@@ -2,17 +2,20 @@ package message
 
 import (
 	"time"
-
-	"github.com/dmytrogajewski/spin/internal/orchestration"
 )
 
-// ToolCall is an alias for orchestration.ToolCall to eliminate duplication.
-// Use orchestration.ToolCall directly in new code.
-type ToolCall = orchestration.ToolCall
+// ToolCall represents a tool invocation requested by the LLM.
+type ToolCall struct {
+	ID       string           `json:"id"`
+	Type     string           `json:"type"`
+	Function ToolCallFunction `json:"function"`
+}
 
-// FunctionCall is an alias for orchestration.ToolCallFunction to eliminate duplication.
-// Use orchestration.ToolCallFunction directly in new code.
-type FunctionCall = orchestration.ToolCallFunction
+// ToolCallFunction contains the function call details for a tool invocation.
+type ToolCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
 
 // Metadata stores string key-value metadata for messages.
 type Metadata map[string]string

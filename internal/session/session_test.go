@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"testing"
 	"time"
-
-	"github.com/dmytrogajewski/spin/internal/orchestration"
 )
 
 // Test Session Creation
@@ -86,11 +84,11 @@ func TestSession_AddTurn(t *testing.T) {
 	// Wait a bit to ensure timestamp difference
 	time.Sleep(10 * time.Millisecond)
 
-	turn := &orchestration.Turn{
+	turn := &Turn{
 		ID:        "turn-1",
 		SessionID: session.ID,
 		UserInput: "Test input",
-		Tokens:    orchestration.TokenUsage{TotalTokens: 100},
+		Tokens:    TokenUsage{TotalTokens: 100},
 	}
 
 	err := session.AddTurn(turn)
@@ -136,10 +134,10 @@ func TestSession_AddTurn_Multiple(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	for i := 1; i <= 5; i++ {
-		turn := &orchestration.Turn{
+		turn := &Turn{
 			ID:        fmt.Sprintf("turn-%d", i),
 			SessionID: session.ID,
-			Tokens:    orchestration.TokenUsage{TotalTokens: i * 100},
+			Tokens:    TokenUsage{TotalTokens: i * 100},
 		}
 
 		err := session.AddTurn(turn)
@@ -165,8 +163,8 @@ func TestSession_AddTurn_Multiple(t *testing.T) {
 func TestSession_GetTurn(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	turn1 := &orchestration.Turn{ID: "turn-1", SessionID: session.ID}
-	turn2 := &orchestration.Turn{ID: "turn-2", SessionID: session.ID}
+	turn1 := &Turn{ID: "turn-1", SessionID: session.ID}
+	turn2 := &Turn{ID: "turn-2", SessionID: session.ID}
 
 	_ = session.AddTurn(turn1)
 	_ = session.AddTurn(turn2)
@@ -193,8 +191,8 @@ func TestSession_GetTurn_NotFound(t *testing.T) {
 func TestSession_LastTurn(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	turn1 := &orchestration.Turn{ID: "turn-1", SessionID: session.ID}
-	turn2 := &orchestration.Turn{ID: "turn-2", SessionID: session.ID}
+	turn1 := &Turn{ID: "turn-1", SessionID: session.ID}
+	turn2 := &Turn{ID: "turn-2", SessionID: session.ID}
 
 	_ = session.AddTurn(turn1)
 	_ = session.AddTurn(turn2)
@@ -221,8 +219,8 @@ func TestSession_TurnCount(t *testing.T) {
 		t.Errorf("TurnCount() = %d, want 0", session.TurnCount())
 	}
 
-	session.AddTurn(&orchestration.Turn{ID: "turn-1", SessionID: session.ID})
-	session.AddTurn(&orchestration.Turn{ID: "turn-2", SessionID: session.ID})
+	session.AddTurn(&Turn{ID: "turn-1", SessionID: session.ID})
+	session.AddTurn(&Turn{ID: "turn-2", SessionID: session.ID})
 
 	if session.TurnCount() != 2 {
 		t.Errorf("TurnCount() = %d, want 2", session.TurnCount())
@@ -396,8 +394,8 @@ func TestSession_Validate_InvalidState(t *testing.T) {
 func TestSession_Validate_DuplicateTurnIDs(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	turn1 := &orchestration.Turn{ID: "turn-1", SessionID: session.ID}
-	turn2 := &orchestration.Turn{ID: "turn-1", SessionID: session.ID} // Duplicate ID
+	turn1 := &Turn{ID: "turn-1", SessionID: session.ID}
+	turn2 := &Turn{ID: "turn-1", SessionID: session.ID} // Duplicate ID
 
 	_ = session.AddTurn(turn1)
 	_ = session.AddTurn(turn2)
@@ -411,8 +409,8 @@ func TestSession_Validate_DuplicateTurnIDs(t *testing.T) {
 func TestSession_Validate_InconsistentMetadata(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	session.AddTurn(&orchestration.Turn{ID: "turn-1", SessionID: session.ID, Tokens: orchestration.TokenUsage{TotalTokens: 100}})
-	session.AddTurn(&orchestration.Turn{ID: "turn-2", SessionID: session.ID, Tokens: orchestration.TokenUsage{TotalTokens: 200}})
+	session.AddTurn(&Turn{ID: "turn-1", SessionID: session.ID, Tokens: TokenUsage{TotalTokens: 100}})
+	session.AddTurn(&Turn{ID: "turn-2", SessionID: session.ID, Tokens: TokenUsage{TotalTokens: 200}})
 
 	// Manually corrupt metadata
 	session.Metadata.TotalTurns = 5 // Wrong count
@@ -429,7 +427,7 @@ func TestSession_ConcurrentReads(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	for i := 0; i < 10; i++ {
-		session.AddTurn(&orchestration.Turn{
+		session.AddTurn(&Turn{
 			ID:        fmt.Sprintf("turn-%d", i),
 			SessionID: session.ID,
 		})
@@ -460,7 +458,7 @@ func TestSession_ConcurrentWrites(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(n int) {
 			for j := 0; j < 10; j++ {
-				session.AddTurn(&orchestration.Turn{
+				session.AddTurn(&Turn{
 					ID:        fmt.Sprintf("turn-%d-%d", n, j),
 					SessionID: session.ID,
 				})
@@ -489,7 +487,7 @@ func TestSession_ConcurrentReadWrite(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		go func(n int) {
 			for j := 0; j < 20; j++ {
-				session.AddTurn(&orchestration.Turn{
+				session.AddTurn(&Turn{
 					ID:        fmt.Sprintf("turn-%d-%d", n, j),
 					SessionID: session.ID,
 				})

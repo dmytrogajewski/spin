@@ -126,6 +126,7 @@ func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Prov
 	if provider, exists := providers[cfg.Type]; exists {
 		return provider(ctx, cfg)
 	}
+
 	return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
 }
 

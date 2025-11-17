@@ -9,13 +9,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
-// validatorAdapter adapts security.Validator to tools.CommandValidator interface.
+// validatorAdapter adapts security.SecurityService to tools.CommandValidator interface.
 type validatorAdapter struct {
-	validator *security.Validator
+	securityService *security.SecurityService
 }
 
 func (a *validatorAdapter) Classify(cmd tools.CommandInfo) (tools.ValidationResult, error) {
-	return a.validator.Classify(&security.Command{
+	return a.securityService.ValidateCommand(&security.Command{
 		Program: cmd.GetProgram(),
 		Args:    cmd.GetArgs(),
 		Raw:     cmd.GetRaw(),

@@ -89,6 +89,7 @@ Rules:
 * No snapshots or golden files unless you first pin one invariant with a precise assertion.
 * Property-based tests are allowed only after at least one example test exists.
 * Print diffs and test outputs in Markdown code blocks.
+* String/numeric literals without constants are prohibited
 
 Quality gates:
 

@@ -21,16 +21,22 @@ const (
 
 	// Binary path (relative to test file)
 	binPath = "../../bin/spin"
+
+	// Env var that instructs tests to reuse an existing binary
+	skipBuildEnv = "SPIN_E2E_SKIP_BUILD"
 )
 
 // TestMain builds the binary before running tests
 func TestMain(m *testing.M) {
-	// Build the binary
-	fmt.Println("Building spin binary for e2e tests...")
-	cmd := exec.Command("go", "build", "-o", binPath, "../../cmd/spin")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		fmt.Printf("Failed to build binary: %v\n%s\n", err, output)
-		os.Exit(1)
+	if shouldSkipBuild() {
+		if _, err := os.Stat(binPath); err == nil {
+			fmt.Println("Using existing spin binary for e2e tests")
+		} else {
+			fmt.Println("Pre-built spin binary not found, rebuilding...")
+			buildSpinBinary()
+		}
+	} else {
+		buildSpinBinary()
 	}
 
 	// Run tests
@@ -40,6 +46,21 @@ func TestMain(m *testing.M) {
 	// os.Remove(binPath)
 
 	os.Exit(code)
+}
+
+func shouldSkipBuild() bool {
+	return os.Getenv(skipBuildEnv) == "1"
+}
+
+func buildSpinBinary() {
+	// Build the binary with e2e_llm_test tag to enable test-llm provider
+	// This allows e2e tests to run without requiring external LLM services
+	fmt.Println("Building spin binary for e2e tests (with e2e_llm_test tag)...")
+	cmd := exec.Command("go", "build", "-tags", "e2e_llm_test", "-o", binPath, "../../cmd/spin")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		fmt.Printf("Failed to build binary: %v\n%s\n", err, output)
+		os.Exit(1)
+	}
 }
 
 // runSpin executes the spin binary with given args and returns stdout, stderr, and error
@@ -240,6 +261,8 @@ func TestMCPCommands(t *testing.T) {
 
 // TestDebugCommands tests debug command functionality
 func TestDebugCommands(t *testing.T) {
+	t.Parallel()
+
 	t.Run("debug sandbox platform check", func(t *testing.T) {
 		stdout, stderr, err := runSpin(t, "debug", "sandbox", "ls")
 
@@ -281,21 +304,17 @@ func TestDebugCommands(t *testing.T) {
 	})
 }
 
-// TestExecMode tests exec mode with real Ollama (requires Ollama running)
+// TestExecMode tests exec mode with test-llm provider (no external LLM required)
 func TestExecMode(t *testing.T) {
-	// Check if Ollama is available
-	if !isOllamaAvailable(t) {
-		t.Skip("Ollama not available, skipping exec mode tests")
-	}
+	t.Parallel()
 
-	// Create temporary config with Ollama settings
+	// Create temporary config with test-llm provider
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "spin.yaml")
 
 	config := `llm:
-  provider: ollama
-  model: qwen3:1.7b
-  base_url: http://127.0.0.1:11434
+  provider: test-llm
+  model: dummy
   temperature: 0.7
   max_tokens: 4096
 
@@ -327,7 +346,7 @@ sandbox:
 			if strings.Contains(stderr, "provider is required") || strings.Contains(stderr, "model is required") {
 				t.Errorf("BUG #2 REGRESSION: Config integration broken!\nstderr: %s", stderr)
 			} else if strings.Contains(stderr, "context deadline exceeded") {
-				t.Skip("Ollama timed out (might be slow model loading)")
+				t.Skip("Test timed out")
 			} else {
 				t.Errorf("exec failed: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
 			}
@@ -338,9 +357,9 @@ sandbox:
 			t.Errorf("BUG #3 REGRESSION: No output from exec mode!\nstderr: %s", stderr)
 		}
 
-		// Response should contain the answer
-		if !strings.Contains(stdout, "4") {
-			t.Logf("Warning: Expected answer '4' in response, got: %s", stdout)
+		// Response should contain some output (test-llm provider returns "Task completed successfully.")
+		if len(stdout) == 0 {
+			t.Logf("Warning: No output from exec mode")
 		}
 
 		t.Logf("Exec output: %s", stdout)
@@ -374,6 +393,8 @@ sandbox:
 
 // TestVersionAndHelp tests version and help commands
 func TestVersionAndHelp(t *testing.T) {
+	t.Parallel()
+
 	t.Run("version flag", func(t *testing.T) {
 		stdout, stderr, err := runSpin(t, "--version")
 

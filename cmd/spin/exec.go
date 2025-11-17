@@ -8,17 +8,13 @@ import (
 	"os"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
-	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
-	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/security"
-	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
@@ -48,7 +44,6 @@ Examples:
 	cmd.Flags().Bool("no-stream", false, "Disable streaming output")
 	cmd.Flags().Bool("exit-on-error", true, "Exit immediately on first error")
 	cmd.Flags().Bool("debug", false, "Enable debug mode with detailed logging")
-	cmd.Flags().Bool("simple", false, "Use simple agent mode (no Git/Shell/MCP integrations)")
 
 	return cmd
 }
@@ -89,7 +84,6 @@ func runExec(cmd *cobra.Command, args []string) error {
 	noStream, _ := cmd.Flags().GetBool("no-stream")
 	exitOnError, _ := cmd.Flags().GetBool("exit-on-error")
 	debugFlag, _ := cmd.Flags().GetBool("debug")
-	simpleMode, _ := cmd.Flags().GetBool("simple")
 
 	// Configure logging based on debug flag
 	if debugFlag {
@@ -108,21 +102,6 @@ func runExec(cmd *cobra.Command, args []string) error {
 		}
 		ctx, cancel = context.WithTimeout(ctx, duration)
 		defer cancel()
-	}
-
-	// Check if using simple mode
-	if simpleMode {
-		// Simple mode: use agent.Builder.Build() directly (no integrations)
-		workDir := getWorkingDirectory()
-		cfg := buildConfig(configLoader, 0, workDir)
-
-		_, err := createSimpleAgent(ctx, provider, cfg)
-		if err != nil {
-			return fmt.Errorf("create simple agent: %w", err)
-		}
-
-		// TODO: Implement full simple execution flow
-		return fmt.Errorf("simple mode execution not yet fully implemented - agent created successfully but execution flow pending")
 	}
 
 	// Create conversation using builder pattern
@@ -167,6 +146,22 @@ func createAuthManager() *auth.Manager {
 
 // buildProvider creates an LLM provider from configuration.
 func buildProvider(ctx context.Context, configLoader *config.LoaderV2, authMgr *auth.Manager) (llm.Provider, error) {
+	// Check for test provider first (only available with e2e_llm_test build tag)
+	providerType := flagProvider
+	if providerType == "" {
+		// Try to get from config
+		cfg, err := configLoader.Load()
+		if err == nil && cfg.LLM.Provider != "" {
+			providerType = cfg.LLM.Provider
+		}
+	}
+
+	if extra, ok, err := createProviderForExecExtra(providerType); err != nil {
+		return nil, err
+	} else if ok {
+		return extra, nil
+	}
+
 	// Create builder
 	b := builder.NewBuilder(configLoader, authMgr)
 
@@ -211,25 +206,13 @@ func parseDuration(s string) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
 
-// createSimpleAgent creates a simple agent without conversation overhead using agent.Builder.Build().
-// This is useful for simple scripting scenarios where Git/Shell/MCP integrations aren't needed.
-func createSimpleAgent(ctx context.Context, provider llm.Provider, cfg *config.ConfigV2) (*agent.Agent, error) {
-	emitter := events.NewEventEmitter(100)
-	workDir := getWorkingDirectory()
-
-	// Use agent.Builder.Build() for simple agent creation
-	return agent.NewBuilder().
-		WithUnifiedConfig(cfg).
-		WithProvider(provider).
-		WithWorkingDir(workDir).
-		WithEmitter(emitter).
-		Build()
-}
-
 // createConversationForExec creates a conversation configured for exec mode.
 func createConversationForExec(ctx context.Context, provider llm.Provider, configLoader *config.LoaderV2, autoApprove bool, debug bool) (*conversation.Conversation, error) {
 	workDir := getWorkingDirectory()
-	cfg := buildConfig(configLoader, 0, workDir) // No max turns limit for exec
+	cfg, err := loadConfigForMode("", 0, workDir) // No max turns limit for exec
+	if err != nil {
+		return nil, fmt.Errorf("load config: %w", err)
+	}
 
 	// Apply debug flag to configuration
 	applyDebugFlag(cfg, debug)
@@ -241,75 +224,19 @@ func createConversationForExec(ctx context.Context, provider llm.Provider, confi
 	registry.Register(tools.NewListDirectoryTool())
 
 	// Create approval handler for exec mode
-	var approvalHandler func(security.ApprovalRequest) security.ApprovalResponse
+	var approvalHandler security.ApprovalHandler
 	if autoApprove {
-		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
-			return security.ApprovalResponse{
-				RequestID: req.ID,
-				Approved:  true,
-				Reason:    "auto-approved",
-			}
-		}
+		approvalHandler = createAutoApproveHandler()
 	} else {
-		approvalHandler = func(req security.ApprovalRequest) security.ApprovalResponse {
-			// In exec mode without auto-approve, deny dangerous commands
-			return security.ApprovalResponse{
-				RequestID: req.ID,
-				Approved:  false,
-				Reason:    "exec mode requires --auto-approve for dangerous operations",
-			}
-		}
+		approvalHandler = createDenyHandler("exec mode requires --auto-approve for dangerous operations")
 	}
 
 	// Create services based on configuration
 	logger := slog.Default()
 
-	var gitSvc *gitpkg.Service
-	var shellSvc *shellpkg.Service
-	var mcpSvc *mcppkg.Service
-	var err error
-
-	if cfg.Protocol.EnableGit {
-		gitSvc, err = gitpkg.NewService(true, workDir, logger)
-		if err != nil {
-			return nil, fmt.Errorf("create git service: %w", err)
-		}
-	}
-
-	if cfg.Protocol.EnableShell {
-		shellSvc, err = shellpkg.NewService(true, workDir, logger, cfg.Protocol.ShellTimeout)
-		if err != nil {
-			if gitSvc != nil {
-				gitSvc.Close()
-			}
-			return nil, fmt.Errorf("create shell service: %w", err)
-		}
-	}
-
-	if cfg.Protocol.EnableMCP && len(cfg.Protocol.MCPServers) > 0 {
-		mcpCfg := &mcppkg.Config{
-			EnableMCP:  true,
-			MCPServers: make([]mcppkg.MCPServerConfig, len(cfg.Protocol.MCPServers)),
-		}
-		for i, srv := range cfg.Protocol.MCPServers {
-			mcpCfg.MCPServers[i] = mcppkg.MCPServerConfig{
-				Name:    srv.Name,
-				Command: srv.Command,
-				Args:    srv.Args,
-				Env:     srv.Env,
-			}
-		}
-		var err error
-		mcpSvc, err = mcppkg.NewService(mcpCfg, logger)
-		if err != nil {
-			if gitSvc != nil {
-				gitSvc.Close()
-			}
-			if shellSvc != nil {
-				shellSvc.Close()
-			}
-			return nil, fmt.Errorf("create mcp service: %w", err)
-		}
+	protocolServices, cleanup, err := createProtocolServices(cfg, workDir, logger)
+	if err != nil {
+		return nil, err
 	}
 
 	// Build conversation with services
@@ -318,19 +245,19 @@ func createConversationForExec(ctx context.Context, provider llm.Provider, confi
 		WithToolRegistry(registry).
 		WithApprovalHandler(approvalHandler)
 
-	if gitSvc != nil {
-		builder = builder.WithGit(gitSvc)
+	if protocolServices.Git != nil {
+		builder = builder.WithGit(protocolServices.Git)
 	}
-	if shellSvc != nil {
-		builder = builder.WithShell(shellSvc)
+	if protocolServices.Shell != nil {
+		builder = builder.WithShell(protocolServices.Shell)
 	}
-	if mcpSvc != nil {
-		builder = builder.WithMCP(mcpSvc)
+	if protocolServices.MCP != nil {
+		builder = builder.WithMCP(protocolServices.MCP)
 	}
 
 	conv, err := builder.Build(ctx)
 	if err != nil {
-		// Builder.Build() already cleans up services on error
+		cleanup()
 		return nil, fmt.Errorf("build conversation: %w", err)
 	}
 

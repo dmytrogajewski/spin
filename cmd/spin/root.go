@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/dmytrogajewski/spin/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -17,28 +15,6 @@ var (
 	flagConfig     []string
 	flagTaskMode   string
 )
-
-// validTaskModes lists all valid task mode names.
-var validTaskModes = map[string]bool{
-	"regular":  true,
-	"review":   true,
-	"compact":  true,
-	"planning": true,
-}
-
-// validateTaskMode validates the task mode flag value.
-// Returns error if the mode is invalid.
-func validateTaskMode(mode string) error {
-	if mode == "" {
-		return fmt.Errorf("task mode cannot be empty")
-	}
-
-	if !validTaskModes[mode] {
-		return fmt.Errorf("invalid task mode: %s (valid modes: regular, review, compact, planning)", mode)
-	}
-
-	return nil
-}
 
 // newRootCmd creates the root command for spin CLI.
 func newRootCmd() *cobra.Command {
@@ -76,13 +52,14 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 	cmd.AddCommand(newVersionCmd())
 	cmd.AddCommand(newCompletionCmd())
 	cmd.AddCommand(newExecCmd())
-	cmd.AddCommand(newServeCmd())
+	cmd.AddCommand(newACPCmd()) // ACP server mode
 	cmd.AddCommand(newConfigCmd())
 	cmd.AddCommand(newAuthCmd()) // Auth management
 	cmd.AddCommand(newMCPCmd())
 	cmd.AddCommand(newDebugCmd())
 	cmd.AddCommand(newApplyPatchCmd()) // Apply patch CLI (Feature 2.4)
 	cmd.AddCommand(newModeCmd())       // Mode management (P3.3)
+	cmd.AddCommand(newApprovalCmd())   // Approval policy management (CLI, ACP-compliant)
 
 	return cmd
 }

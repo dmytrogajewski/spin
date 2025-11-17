@@ -57,10 +57,11 @@ func (b *Builder) registerGitTools(registry *tools.Registry) error {
 }
 
 // buildToolRegistry constructs a complete tool registry with all standard and integration tools.
-func (b *Builder) buildToolRegistry(exec *agent.Executor, validator *security.Validator, env *agent.Environment) *tools.Registry {
+func (b *Builder) buildToolRegistry(exec *agent.Executor, securityService *security.SecurityService, env *agent.Environment) *tools.Registry {
 	registry := b.toolRegistry
 	if registry == nil {
-		registry = tools.NewRegistryWithBuiltins()
+		// Use shared factory to create base registry with configured tools
+		registry = tools.NewDefaultRegistry(env.WorkDir, env)
 		if b.logger != nil {
 			b.logger.Debug("created tool registry with builtins")
 		}
@@ -72,8 +73,8 @@ func (b *Builder) buildToolRegistry(exec *agent.Executor, validator *security.Va
 		execAdapt      tools.CommandExecutor
 	)
 
-	if validator != nil {
-		validatorAdapt = &validatorAdapter{validator: validator}
+	if securityService != nil {
+		validatorAdapt = &validatorAdapter{securityService: securityService}
 	}
 	if b.shellService != nil {
 		shellCtxAdapt = &shellContextAdapter{shellCtx: b.shellService.GetContext()}
@@ -82,12 +83,12 @@ func (b *Builder) buildToolRegistry(exec *agent.Executor, validator *security.Va
 		execAdapt = &executorAdapter{executor: exec}
 	}
 
-	// Replace builtin tools with configured versions
+	// Replace shell_command tool with configured version (factory creates it with nil params)
+	// Other tools (get_context, apply_patch, file_search, git_context) are already configured
+	// by the factory, but we replace them again if they need different configuration
+	if validatorAdapt != nil || shellCtxAdapt != nil || execAdapt != nil {
 	_ = registry.RegisterOrReplace(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
-	_ = registry.RegisterOrReplace(tools.NewGetContextTool(env))
-	_ = registry.RegisterOrReplace(tools.NewApplyPatchTool(env.WorkDir))
-	_ = registry.RegisterOrReplace(tools.NewFileSearchTool(env.WorkDir))
-	_ = registry.RegisterOrReplace(tools.NewGitContextTool(env.WorkDir))
+	}
 
 	if err := b.registerIntegrationTools(registry); err != nil {
 		if b.logger != nil {

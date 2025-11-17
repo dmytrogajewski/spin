@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -205,10 +206,15 @@ func TestConversation_SetTaskMode_UnknownMode(t *testing.T) {
 func TestConversation_SetTaskMode_EmptyMode(t *testing.T) {
 	conv := setupTestConv(t)
 
-	// Empty mode should return error
+	// Empty mode is valid (means use default)
 	err := conv.SetTaskMode("")
-	if err == nil {
-		t.Error("Expected error for empty mode")
+	if err != nil {
+		t.Errorf("SetTaskMode(\"\") error = %v, want nil (empty mode is valid)", err)
+	}
+	
+	// Empty mode should set taskMode to empty string
+	if conv.GetTaskMode() != "" {
+		t.Errorf("GetTaskMode() = %q, want empty string", conv.GetTaskMode())
 	}
 }
 
@@ -451,4 +457,145 @@ func setupTestConv(t *testing.T) *Conversation {
 	}
 
 	return conv
+}
+
+// Protocol Fields Tests
+
+// TestConversation_ID tests unified ID getter and setter.
+func TestConversation_ID(t *testing.T) {
+	conv := setupTestConv(t)
+
+	// Use UUID string (standardized format)
+	id := "550e8400-e29b-41d4-a716-446655440000"
+	conv.SetID(id)
+
+	got := conv.ID()
+	if got != id {
+		t.Errorf("ID() = %q, want %q", got, id)
+	}
+
+	// Test GetSessionID returns same ID
+	sessionID := conv.GetSessionID()
+	if sessionID != id {
+		t.Errorf("GetSessionID() = %q, want %q", sessionID, id)
+	}
+}
+
+// TestConversation_UnifiedID tests that sessionID and protocolID are unified.
+func TestConversation_UnifiedID(t *testing.T) {
+	conv := setupTestConv(t)
+
+	// Use UUID string (standardized format)
+	id := "550e8400-e29b-41d4-a716-446655440000"
+	conv.SetID(id)
+
+	// Verify all ID accessors return same value
+	if conv.ID() != id {
+		t.Error("ID() should return set ID")
+	}
+	if conv.GetSessionID() != id {
+		t.Error("GetSessionID() should return same ID")
+	}
+}
+
+// TestConversation_TurnID tests turn ID getter and setter (thread-safe).
+func TestConversation_TurnID(t *testing.T) {
+	conv := setupTestConv(t)
+
+	turnID := "turn-123"
+	conv.SetTurnID(turnID)
+
+	got := conv.GetTurnID()
+	if got != turnID {
+		t.Errorf("GetTurnID() = %q, want %q", got, turnID)
+	}
+}
+
+// TestConversation_TurnID_Empty tests empty turn ID.
+func TestConversation_TurnID_Empty(t *testing.T) {
+	conv := setupTestConv(t)
+
+	got := conv.GetTurnID()
+	if got != "" {
+		t.Errorf("GetTurnID() = %q, want empty string", got)
+	}
+}
+
+// TestConversation_Cancel tests cancel getter, setter, and execution (thread-safe).
+func TestConversation_Cancel(t *testing.T) {
+	conv := setupTestConv(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	conv.SetCancel(cancel)
+
+	got := conv.GetCancel()
+	if got == nil {
+		t.Error("GetCancel() returned nil, want non-nil")
+	}
+
+	// Test cancel execution
+	conv.Cancel()
+	if ctx.Err() == nil {
+		t.Error("Cancel() did not cancel context, want context cancelled")
+	}
+}
+
+// TestConversation_Cancel_Nil tests cancel with nil function.
+func TestConversation_Cancel_Nil(t *testing.T) {
+	conv := setupTestConv(t)
+
+	// Cancel should not panic with nil cancel function
+	conv.Cancel()
+
+	got := conv.GetCancel()
+	if got != nil {
+		t.Errorf("GetCancel() = %v, want nil", got)
+	}
+}
+
+// TestConversation_ProtocolFields_ThreadSafety tests concurrent access to protocol fields.
+func TestConversation_ProtocolFields_ThreadSafety(t *testing.T) {
+	conv := setupTestConv(t)
+
+	var wg sync.WaitGroup
+	iterations := 100
+
+	// Concurrent writes to turnID
+	for i := 0; i < iterations; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			turnID := fmt.Sprintf("turn-%d", i)
+			conv.SetTurnID(turnID)
+			// Read back (may be different due to concurrent writes, but should not panic)
+			_ = conv.GetTurnID()
+		}(i)
+	}
+
+	// Concurrent reads to turnID
+	for i := 0; i < iterations; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = conv.GetTurnID()
+		}()
+	}
+
+	// Concurrent cancel operations
+	for i := 0; i < iterations; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithCancel(context.Background())
+			conv.SetCancel(cancel)
+			conv.Cancel()
+			_ = ctx.Err()
+		}()
+	}
+
+	wg.Wait()
+
+	// Verify final state is valid (should have some turnID set or empty)
+	finalTurnID := conv.GetTurnID()
+	_ = finalTurnID // Just verify we can read it without panic
 }

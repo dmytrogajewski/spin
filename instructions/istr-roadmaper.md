@@ -9,4 +9,10 @@ when you are creating roadmap:
 2. move given spec there
 3. write roadmap and put there also
 
+Rules of writing roadmap:
+
+1. Analyze if codebase aleready implements of some features, if so - you should focus on integrating
+2. You should create progressive decomposition, meaning that every step in roadmap should be valuable itself
+3. It should be possible to test every step
+
 You should put roadmaps to specs/

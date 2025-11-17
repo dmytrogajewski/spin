@@ -34,6 +34,14 @@ func TestWriteFileTool(t *testing.T) {
 			verifyWrite: true,
 		},
 		{
+			name: "create parent directories",
+			params: map[string]interface{}{
+				"path":    filepath.Join(tmpDir, "subdir", "nested", "file.txt"),
+				"content": "content in nested directory",
+			},
+			verifyWrite: true,
+		},
+		{
 			name:    "missing path parameter",
 			params:  map[string]interface{}{"content": "test"},
 			wantErr: true,

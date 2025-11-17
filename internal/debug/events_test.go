@@ -75,7 +75,7 @@ func TestEventLogger_ShouldLog(t *testing.T) {
 }
 
 func TestEventLogger_LogEvent_Text(t *testing.T) {
-	logger := NewEventLogger("text", nil)
+	logger := NewEventLogger("text", []string{})
 
 	// Capture stderr
 	var buf bytes.Buffer
@@ -102,7 +102,7 @@ func TestEventLogger_LogEvent_Text(t *testing.T) {
 }
 
 func TestEventLogger_LogEvent_JSON(t *testing.T) {
-	logger := NewEventLogger("json", nil)
+	logger := NewEventLogger("json", []string{})
 
 	// Capture stderr
 	var buf bytes.Buffer
@@ -137,7 +137,7 @@ func TestEventLogger_Run(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	logger := NewEventLogger("text", nil)
+	logger := NewEventLogger("text", []string{})
 
 	// Test with invalid prompt should return error
 	err := logger.Run(ctx, "")
@@ -153,7 +153,7 @@ func TestEventLogger_Run_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	logger := NewEventLogger("text", nil)
+	logger := NewEventLogger("text", []string{})
 
 	// Test with valid prompt - this will create a real conversation
 	// Note: This test may fail if no LLM provider is configured
@@ -196,7 +196,7 @@ func TestEventLogger_Run_JSONFormat(t *testing.T) {
 	defer cancel()
 
 	// Test with JSON format
-	logger := NewEventLogger("json", nil)
+	logger := NewEventLogger("json", []string{})
 
 	// Test with valid prompt
 	err := logger.Run(ctx, "Test prompt")
@@ -213,7 +213,7 @@ func TestEventLogger_Run_JSONFormat(t *testing.T) {
 }
 
 func TestEventLogger_Run_EmptyPrompt(t *testing.T) {
-	logger := NewEventLogger("text", nil)
+	logger := NewEventLogger("text", []string{})
 	var buf bytes.Buffer
 	logger.writer = &buf
 
@@ -253,7 +253,7 @@ func TestEventLogger_Filter_Multiple(t *testing.T) {
 }
 
 func TestEventLogger_LogEventJSON(t *testing.T) {
-	logger := NewEventLogger("json", nil)
+	logger := NewEventLogger("json", []string{})
 	var buf bytes.Buffer
 	logger.writer = &buf
 
@@ -280,7 +280,7 @@ func TestEventLogger_LogEventJSON(t *testing.T) {
 }
 
 func TestEventLogger_LogEventText(t *testing.T) {
-	logger := NewEventLogger("text", nil)
+	logger := NewEventLogger("text", []string{})
 	var buf bytes.Buffer
 	logger.writer = &buf
 
@@ -304,7 +304,7 @@ func TestEventLogger_LogEventText(t *testing.T) {
 }
 
 func TestEventLogger_LogEventJSON_InvalidData(t *testing.T) {
-	logger := NewEventLogger("json", nil)
+	logger := NewEventLogger("json", []string{})
 	var buf bytes.Buffer
 	logger.writer = &buf
 
@@ -330,7 +330,7 @@ func TestEventLogger_LogEventJSON_InvalidData(t *testing.T) {
 }
 
 func TestEventLogger_LogEventJSON_EncodeError(t *testing.T) {
-	logger := NewEventLogger("json", nil)
+	logger := NewEventLogger("json", []string{})
 
 	// Create event with unmarshalable output structure
 	// This will trigger the error path at line 129-131
@@ -353,7 +353,7 @@ func TestEventLogger_LogEventJSON_EncodeError(t *testing.T) {
 }
 
 func TestEventLogger_LogEventJSON_MarshalError(t *testing.T) {
-	logger := NewEventLogger("json", nil)
+	logger := NewEventLogger("json", []string{})
 	var buf bytes.Buffer
 	logger.writer = &buf
 
@@ -386,7 +386,7 @@ func (fw *failingWriter) Write(p []byte) (n int, err error) {
 }
 
 func TestEventLogger_Concurrency(t *testing.T) {
-	logger := NewEventLogger("text", nil)
+	logger := NewEventLogger("text", []string{})
 	var buf bytes.Buffer
 	logger.writer = &buf
 

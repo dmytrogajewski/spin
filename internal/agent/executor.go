@@ -168,7 +168,7 @@ type OutputChunk struct {
 //
 //	Executor is thread-safe and can execute commands concurrently.
 type Executor struct {
-	validator       *security.Validator
+	securityService *security.SecurityService
 	approvalService *security.ApprovalService
 	sandbox         any // sandbox.Sandbox interface (avoiding import cycle)
 	cache           *CommandCache
@@ -182,13 +182,13 @@ type Executor struct {
 // ExecutorOption is a functional option for Executor.
 type ExecutorOption func(*Executor) error
 
-// WithValidator sets the command validator.
-func WithValidator(v *security.Validator) ExecutorOption {
+// WithSecurityService sets the security service.
+func WithSecurityService(s *security.SecurityService) ExecutorOption {
 	return func(e *Executor) error {
-		if v == nil {
-			return fmt.Errorf("validator cannot be nil")
+		if s == nil {
+			return fmt.Errorf("security service cannot be nil")
 		}
-		e.validator = v
+		e.securityService = s
 		return nil
 	}
 }
@@ -310,12 +310,12 @@ func (e *Executor) validateCommand(cmd *security.Command, opts *ExecuteOptions) 
 // requestApprovalIfNeeded requests approval if command needs it.
 func (e *Executor) requestApprovalIfNeeded(ctx context.Context, cmd *security.Command, opts *ExecuteOptions) error {
 	e.mu.RLock()
-	validator := e.validator
-	approvalService := e.approvalService
+	securityService := e.securityService
 	e.mu.RUnlock()
 
-	if approvalService == nil {
-		return nil
+	// Use SecurityService's high-level approval method (handles validation + approval)
+	if securityService == nil {
+		return nil // No security service, skip approval
 	}
 
 	workDir := opts.WorkDir
@@ -323,7 +323,8 @@ func (e *Executor) requestApprovalIfNeeded(ctx context.Context, cmd *security.Co
 		workDir = e.workDir
 	}
 
-	approved, err := approvalService.RequestApprovalWithValidator(ctx, cmd, validator, workDir)
+	// Use SecurityService's canonical approval method (handles safe/forbidden/dangerous correctly)
+	approved, err := securityService.ValidateAndApprove(ctx, cmd, workDir)
 	if err != nil {
 		return fmt.Errorf("approval request failed: %w", err)
 	}
@@ -353,13 +354,13 @@ func (e *Executor) Validate(cmd *security.Command) error {
 		return ErrEmptyProgram
 	}
 
-	// If validator is present, use it
+	// If security service is present, use it
 	e.mu.RLock()
-	validator := e.validator
+	securityService := e.securityService
 	e.mu.RUnlock()
 
-	if validator != nil {
-		result, err := validator.Classify(cmd)
+	if securityService != nil {
+		result, err := securityService.ValidateCommand(cmd)
 		if err != nil {
 			return fmt.Errorf("%w: %v", ErrValidationFailed, err)
 		}

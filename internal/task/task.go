@@ -1,6 +1,9 @@
 package task
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Task represents a task mode implementation.
 type Task interface {
@@ -43,4 +46,32 @@ func NewTask(name string) (Task, error) {
 // DefaultTask returns the default task (regular).
 func DefaultTask() Task {
 	return NewRegular()
+}
+
+// ValidModes lists all valid task mode names.
+var ValidModes = []string{
+	"regular",
+	"review",
+	"compact",
+	"planning",
+}
+
+// validModesMap is a lookup map for O(1) validation.
+var validModesMap = map[string]bool{
+	"regular":  true,
+	"review":   true,
+	"compact":  true,
+	"planning": true,
+}
+
+// ValidateMode checks if a task mode name is valid.
+// Empty string is valid (means use default).
+func ValidateMode(mode string) error {
+	if mode == "" {
+		return nil
+	}
+	if !validModesMap[mode] {
+		return fmt.Errorf("invalid task mode: %s (must be one of: %s)", mode, strings.Join(ValidModes, ", "))
+	}
+	return nil
 }

@@ -7,9 +7,13 @@ toolchain go1.24.7
 require (
 	github.com/Netflix/go-expect v0.0.0-20220104043353-73e0943537d2
 	github.com/bmatcuk/doublestar/v4 v4.9.1
+	github.com/coder/acp-go-sdk v0.6.3
+	github.com/coder/hnsw v0.6.1
 	github.com/creack/pty v1.1.24
 	github.com/go-git/go-git/v5 v5.16.3
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.6.0
+	github.com/mark3labs/mcp-go v0.42.0
 	github.com/ollama/ollama v0.12.6
 	github.com/openai/openai-go v0.1.0-alpha.37
 	github.com/rivo/uniseg v0.4.7
@@ -21,6 +25,7 @@ require (
 	golang.org/x/sys v0.37.0
 	golang.org/x/term v0.31.0
 	gopkg.in/yaml.v3 v3.0.1
+	pgregory.net/rapid v1.2.0
 )
 
 require (
@@ -32,7 +37,6 @@ require (
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/chewxy/math32 v1.11.0 // indirect
 	github.com/cloudflare/circl v1.6.1 // indirect
-	github.com/coder/hnsw v0.6.1 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/danieljoos/wincred v1.2.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -49,7 +53,6 @@ require (
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mark3labs/mcp-go v0.42.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pjbgf/sha1cd v0.3.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -76,5 +79,4 @@ require (
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-	pgregory.net/rapid v1.2.0 // indirect
 )

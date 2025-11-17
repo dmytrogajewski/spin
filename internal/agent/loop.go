@@ -11,7 +11,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/orchestration"
+	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/openai/openai-go"
 )
 
@@ -49,7 +49,7 @@ func estimateTokenCount(messages []message.Message) int {
 //
 // If trajCtx is provided and progressive context is enabled, uses progressive
 // retrieval with caching. Otherwise falls back to simple retrieval.
-func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message, task Task, resp *AgentResponse, trajCtx *trajectory.TrajectoryContext) ([]message.Message, *AgentResponse, error) {
+func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message, t task.Task, resp *AgentResponse, trajCtx *trajectory.TrajectoryContext) ([]message.Message, *AgentResponse, error) {
 	maxTurns := a.maxTurns
 
 	// Initialize retrieved bullets slice to accumulate across turns
@@ -121,7 +121,7 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 		}
 
 		// Call LLM with timeout protection, passing retrieved bullets
-		llmResp, err := a.callLLMWithTimeout(ctx, messages, task, currentTurnBullets)
+		llmResp, err := a.callLLMWithTimeout(ctx, messages, t, currentTurnBullets)
 		if err != nil {
 			slog.Error("LLM call failed", "turn", turn+1, "error", err)
 			resp.Error = fmt.Errorf("llm call failed: %w", err)
@@ -281,7 +281,7 @@ func (a *Agent) emitTurnStart(turn int) {
 }
 
 // callLLMWithTimeout calls the LLM provider with timeout protection to prevent getting stuck.
-func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []message.Message, task Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
+func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []message.Message, t task.Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
 	// Use a reasonable timeout for LLM calls (5 minutes)
 	// Don't use agent timeout which may be very long for multi-step tasks
 	llmTimeout := 5 * time.Minute
@@ -301,12 +301,13 @@ func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []message.Messa
 
 	slog.Debug("calling LLM with timeout", "timeout", llmTimeout, "message_count", len(messages), "bullets_count", len(bullets))
 
-	// Create fresh context with LLM timeout
-	llmCtx, cancel := context.WithTimeout(context.Background(), llmTimeout)
+	// Create context with LLM timeout, derived from parent context
+	// This ensures cancellation propagates from parent context
+	llmCtx, cancel := context.WithTimeout(ctx, llmTimeout)
 	defer cancel()
 
 	// Call the actual LLM method
-	resp, err := a.callLLM(llmCtx, messages, task, bullets)
+	resp, err := a.callLLM(llmCtx, messages, t, bullets)
 	if err != nil {
 		slog.Error("LLM call error", "error", err, "timeout", llmTimeout)
 	}
@@ -357,8 +358,8 @@ func (a *Agent) selectIntervention(cycleType detection.CycleType, turnCount int)
 // Returns strings in format "tool_name(arguments_json)" to enable parameter-aware cycle detection.
 // This prevents false positives when same tool is called with different params.
 // e.g., "list_directory(.)" vs "list_directory(advanced-features-20251012)"
-// extractToolNamesFromOrchestration extracts tool names from orchestration.ToolCall slice.
-func extractToolNamesFromOrchestration(toolCalls []orchestration.ToolCall) []string {
+// extractToolNamesFromOrchestration extracts tool names from ToolCall slice.
+func extractToolNamesFromOrchestration(toolCalls []ToolCall) []string {
 	calls := make([]string, len(toolCalls))
 	for i, tc := range toolCalls {
 		// Include both name and arguments for accurate cycle detection

@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/dmytrogajewski/spin/internal/orchestration"
 )
 
 // Test FileStorage Creation
@@ -625,7 +623,7 @@ func TestLoad_Standalone(t *testing.T) {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		State:     StateActive,
-		Turns:     make([]*orchestration.Turn, 0),
+		Turns:     make([]*Turn, 0),
 		Metadata:  Metadata{},
 		Version:   CurrentSchemaVersion,
 	}
@@ -660,7 +658,7 @@ func TestDelete_Standalone(t *testing.T) {
 		CreatedAt: now,
 		UpdatedAt: now,
 		State:     StateActive,
-		Turns:     make([]*orchestration.Turn, 0),
+		Turns:     make([]*Turn, 0),
 		Metadata:  Metadata{},
 		Version:   CurrentSchemaVersion,
 	}
@@ -712,7 +710,7 @@ func TestExists_Standalone(t *testing.T) {
 		CreatedAt: now,
 		UpdatedAt: now,
 		State:     StateActive,
-		Turns:     make([]*orchestration.Turn, 0),
+		Turns:     make([]*Turn, 0),
 		Metadata:  Metadata{},
 		Version:   CurrentSchemaVersion,
 	}

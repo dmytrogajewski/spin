@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/google/shlex"
 )
 
 // CommandValidator validates commands for security (to avoid import cycle with security package).
@@ -105,12 +107,12 @@ func (t *ShellCommandTool) Schema() ToolSchema {
 				Properties: map[string]PropertyDefinition{
 					"operation": {
 						Type:        "string",
-						Description: "Operation: execute, get_environment, get_shell_info, detect_shell, validate",
+						Description: "Operation type. REQUIRED. Options: 'execute' (run a command, requires 'command'), 'get_environment' (list env vars, no 'command' needed), 'get_shell_info' (shell info, no 'command' needed), 'detect_shell' (check if command needs shell, REQUIRES 'command'), 'validate' (validate command, REQUIRES 'command')",
 						Enum:        []string{"execute", "get_environment", "get_shell_info", "detect_shell", "validate"},
 					},
 					"command": {
 						Type:        "string",
-						Description: "Shell command (required for execute, detect_shell, validate)",
+						Description: "Shell command string. REQUIRED when operation is 'execute', 'detect_shell', or 'validate'. NOT needed for 'get_environment' or 'get_shell_info'.",
 					},
 					"working_directory": {
 						Type:        "string",
@@ -173,14 +175,6 @@ func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParame
 		}, nil
 	}
 
-	parts := strings.Fields(cmdStr)
-	if len(parts) == 0 {
-		return ToolResult{
-			Success: false,
-			Error:   "command cannot be empty",
-		}, nil
-	}
-
 	// Parse working directory
 	workDir, _ := params.GetString("working_directory")
 	if workDir == "" {
@@ -191,24 +185,78 @@ func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParame
 		}
 	}
 
-	// Create command
-	cmd := &simpleCommand{
-		program: parts[0],
-		args:    parts[1:],
-		raw:     cmdStr,
-		workDir: workDir,
+	// Check if this is a shell command before parsing
+	isShellCommand := false
+	if t.shellCtx != nil {
+		isShellCommand = t.shellCtx.IsShellCommand(cmdStr)
+	} else {
+		// Fallback detection
+		isShellCommand = strings.Contains(cmdStr, "|") ||
+			strings.Contains(cmdStr, ">") ||
+			strings.Contains(cmdStr, "<") ||
+			strings.Contains(cmdStr, "$") ||
+			strings.Contains(cmdStr, "&&") ||
+			strings.Contains(cmdStr, "||") ||
+			strings.HasPrefix(cmdStr, "cd ") ||
+			strings.HasPrefix(cmdStr, "export ") ||
+			strings.HasPrefix(cmdStr, "source ")
+	}
+
+	var cmd *simpleCommand
+	if isShellCommand {
+		// For shell commands, use raw command string
+		// Pass it via shell execution (sh -c "command")
+		cmd = &simpleCommand{
+			program: "/bin/sh",
+			args:    []string{"-c", cmdStr},
+			raw:     cmdStr,
+			workDir: workDir,
+		}
+	} else {
+		// Parse command with proper quote handling using shlex
+		parts, err := shlex.Split(cmdStr)
+		if err != nil {
+			return ToolResult{
+				Success: false,
+				Error:   fmt.Sprintf("failed to parse command: %v", err),
+			}, nil
+		}
+		if len(parts) == 0 {
+			return ToolResult{
+				Success: false,
+				Error:   "command cannot be empty",
+			}, nil
+		}
+
+		cmd = &simpleCommand{
+			program: parts[0],
+			args:    parts[1:],
+			raw:     cmdStr,
+			workDir: workDir,
+		}
 	}
 
 	// Execute through executor (which handles validation and approval)
 	result, err := t.executor.Execute(ctx, cmd, nil)
 	if err != nil {
+		// Include both stdout and stderr when executor returns error
+		stdout := ""
 		stderr := ""
 		if result != nil {
+			stdout = result.GetStdout()
 			stderr = result.GetStderr()
+		}
+		// Combine stdout and stderr
+		output := stdout
+		if stderr != "" {
+			if output != "" {
+				output += "\n"
+			}
+			output += stderr
 		}
 		return ToolResult{
 			Success: false,
-			Output:  stderr,
+			Output:  output,
 			Error:   err.Error(),
 		}, nil
 	}
@@ -234,9 +282,16 @@ func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParame
 		output += stderr
 	}
 
+	// Set error message if command failed
+	var errorMsg string
+	if exitCode != 0 {
+		errorMsg = fmt.Sprintf("command failed with exit code %d", exitCode)
+	}
+
 	return ToolResult{
 		Success: exitCode == 0,
 		Output:  output,
+		Error:   errorMsg,
 	}, nil
 }
 
@@ -338,6 +393,8 @@ func (t *ShellCommandTool) detectShell(params ToolParameters) (ToolResult, error
 		strings.Contains(command, ">") ||
 		strings.Contains(command, "<") ||
 		strings.Contains(command, "$") ||
+		strings.Contains(command, "&&") ||
+		strings.Contains(command, "||") ||
 		strings.HasPrefix(command, "cd ") ||
 		strings.HasPrefix(command, "export ") ||
 		strings.HasPrefix(command, "source ")
@@ -405,9 +462,27 @@ func (t *ShellCommandTool) validateCommand(params ToolParameters) (ToolResult, e
 	classification := result.GetClassification()
 	reason := result.GetReason()
 
-	// Convert classification to string
-	classStr := classificationToString(classification)
-	needsApproval := classificationNeedsApproval(classification)
+	// Convert classification to string (matches security.CommandClass.String())
+	// CommandClass constants: 0=safe, 1=interactive, 2=dangerous, 3=forbidden, 4=unverified
+	var classStr string
+	switch classification {
+	case 0:
+		classStr = "safe"
+	case 1:
+		classStr = "interactive"
+	case 2:
+		classStr = "dangerous"
+	case 3:
+		classStr = "forbidden"
+	case 4:
+		classStr = "unverified"
+	default:
+		classStr = "unknown"
+	}
+
+	// Check if approval needed (matches security.CommandClass.NeedsApproval())
+	// Interactive, Dangerous, Forbidden, Unverified all need approval
+	needsApproval := classification >= 1 && classification <= 4
 
 	var output strings.Builder
 	output.WriteString("Command Validation Result:\n")
@@ -422,28 +497,4 @@ func (t *ShellCommandTool) validateCommand(params ToolParameters) (ToolResult, e
 		Success: true,
 		Output:  output.String(),
 	}, nil
-}
-
-// classificationToString converts classification int to string (matches security.CommandClass).
-func classificationToString(class int) string {
-	switch class {
-	case 0:
-		return "safe"
-	case 1:
-		return "interactive"
-	case 2:
-		return "dangerous"
-	case 3:
-		return "forbidden"
-	case 4:
-		return "unverified"
-	default:
-		return "unknown"
-	}
-}
-
-// classificationNeedsApproval returns true if classification needs approval.
-func classificationNeedsApproval(class int) bool {
-	// Interactive, Dangerous, Forbidden, Unverified all need approval
-	return class >= 1 && class <= 4
 }

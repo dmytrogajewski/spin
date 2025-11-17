@@ -19,13 +19,13 @@ func TestNewSecurityService(t *testing.T) {
 		{
 			name:            "with both dependencies",
 			validator:       NewValidator(),
-			approvalService: NewApprovalService(nil, nil, nil),
+			approvalService: NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: nil}),
 			wantNil:         false,
 		},
 		{
 			name:            "with nil validator",
 			validator:       nil,
-			approvalService: NewApprovalService(nil, nil, nil),
+			approvalService: NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: nil}),
 			wantNil:         false, // Service allows nil validator
 		},
 		{
@@ -228,17 +228,13 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 	}{
 		{
 			name: "approval granted",
-			operation: Operation{
-				Command: &Command{
+			operation: NewOperation(&Command{
 					Raw:     "rm -rf /tmp/test",
 					Program: "rm",
 					Args:    []string{"-rf", "/tmp/test"},
-				},
-				Reason:  "dangerous operation",
-				WorkDir: "/tmp",
-			},
+			}, "dangerous operation", "/tmp"),
 			setupHandler: func() ApprovalHandler {
-				return func(req ApprovalRequest) ApprovalResponse {
+				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  true,
@@ -252,17 +248,13 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 		},
 		{
 			name: "approval denied",
-			operation: Operation{
-				Command: &Command{
+			operation: NewOperation(&Command{
 					Raw:     "rm -rf /",
 					Program: "rm",
 					Args:    []string{"-rf", "/"},
-				},
-				Reason:  "extremely dangerous",
-				WorkDir: "/",
-			},
+			}, "extremely dangerous", "/"),
 			setupHandler: func() ApprovalHandler {
-				return func(req ApprovalRequest) ApprovalResponse {
+				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  false,
@@ -276,15 +268,11 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 		},
 		{
 			name: "no approval handler",
-			operation: Operation{
-				Command: &Command{
+			operation: NewOperation(&Command{
 					Raw:     "rm test.txt",
 					Program: "rm",
 					Args:    []string{"test.txt"},
-				},
-				Reason:  "needs approval",
-				WorkDir: "/tmp",
-			},
+			}, "needs approval", "/tmp"),
 			setupHandler: func() ApprovalHandler {
 				return nil
 			},
@@ -297,7 +285,7 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := tt.setupHandler()
-			approvalService := NewApprovalService(handler, nil, validator)
+			approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: handler, Emitter: nil, Validator: validator})
 			svc := NewSecurityService(validator, approvalService)
 
 			ctx := context.Background()
@@ -321,15 +309,11 @@ func TestSecurityService_RequestApproval_NilApprovalService(t *testing.T) {
 	validator := NewValidator()
 	svc := NewSecurityService(validator, nil)
 
-	operation := Operation{
-		Command: &Command{
+	operation := NewOperation(&Command{
 			Raw:     "rm test",
 			Program: "rm",
 			Args:    []string{"test"},
-		},
-		Reason:  "needs approval",
-		WorkDir: "/tmp",
-	}
+	}, "needs approval", "/tmp")
 
 	ctx := context.Background()
 	approved, err := svc.RequestApproval(ctx, operation)
@@ -358,7 +342,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 				Args:    []string{"-la"},
 			},
 			setupHandler: func() ApprovalHandler {
-				return func(req ApprovalRequest) ApprovalResponse {
+				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 					panic("should not be called for safe commands")
 				}
 			},
@@ -374,7 +358,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 				Args:    []string{"-rf", "/"},
 			},
 			setupHandler: func() ApprovalHandler {
-				return func(req ApprovalRequest) ApprovalResponse {
+				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 					panic("should not be called for forbidden commands")
 				}
 			},
@@ -390,7 +374,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 				Args:    []string{"testdir"},
 			},
 			setupHandler: func() ApprovalHandler {
-				return func(req ApprovalRequest) ApprovalResponse {
+				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  true,
@@ -410,7 +394,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 				Args:    []string{"sensitive_dir"},
 			},
 			setupHandler: func() ApprovalHandler {
-				return func(req ApprovalRequest) ApprovalResponse {
+				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  false,
@@ -431,7 +415,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 				Args:    []string{"arg"},
 			},
 			setupHandler: func() ApprovalHandler {
-				return func(req ApprovalRequest) ApprovalResponse {
+				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  true,
@@ -448,7 +432,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := tt.setupHandler()
-			approvalService := NewApprovalService(handler, nil, validator)
+			approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: handler, Emitter: nil, Validator: validator})
 			svc := NewSecurityService(validator, approvalService)
 
 			ctx := context.Background()
@@ -545,4 +529,38 @@ func BenchmarkSecurityService_NeedsApproval(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = svc.NeedsApproval(cmd)
 	}
+}
+
+func TestSecurityService_ApprovalService(t *testing.T) {
+	validator := NewValidator()
+	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
+	svc := NewSecurityService(validator, approvalService)
+
+	retrieved := svc.ApprovalService()
+	assert.Equal(t, approvalService, retrieved)
+}
+
+func TestSecurityService_ApprovalService_Nil(t *testing.T) {
+	validator := NewValidator()
+	svc := NewSecurityService(validator, nil)
+
+	retrieved := svc.ApprovalService()
+	assert.Nil(t, retrieved)
+}
+
+func TestSecurityService_Validator(t *testing.T) {
+	validator := NewValidator()
+	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
+	svc := NewSecurityService(validator, approvalService)
+
+	retrieved := svc.Validator()
+	assert.Equal(t, validator, retrieved)
+}
+
+func TestSecurityService_Validator_Nil(t *testing.T) {
+	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: nil})
+	svc := NewSecurityService(nil, approvalService)
+
+	retrieved := svc.Validator()
+	assert.Nil(t, retrieved)
 }

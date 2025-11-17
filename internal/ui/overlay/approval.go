@@ -49,7 +49,16 @@ func (d *ApprovalDialog) HandleKey(key string) bool {
 	// Check first character of key
 	switch key[0] {
 	case 'A', 'a':
-		d.Approve()
+		// Approve once
+		d.approveWithScope(security.ScopeOnce)
+		return true
+	case 'S', 's':
+		// Approve for session
+		d.approveWithScope(security.ScopeSession)
+		return true
+	case 'G', 'g':
+		// Approve always (global)
+		d.approveWithScope(security.ScopeGlobal)
 		return true
 	case 'D', 'd':
 		d.Deny()
@@ -115,6 +124,23 @@ func (d *ApprovalDialog) Approve() {
 		RequestID: d.request.ID,
 		Approved:  true,
 		Reason:    "user approved",
+	}
+	d.response = &resp
+	// Send to channel if Show() is waiting
+	select {
+	case d.responseCh <- resp:
+	default:
+		// Channel already has a response or not being read
+	}
+}
+
+// approveWithScope approves the request with a specific persistence scope and closes the dialog.
+func (d *ApprovalDialog) approveWithScope(scope string) {
+	resp := security.ApprovalResponse{
+		RequestID: d.request.ID,
+		Approved:  true,
+		Reason:    "user approved",
+		Scope:     scope,
 	}
 	d.response = &resp
 	// Send to channel if Show() is waiting
