@@ -5,31 +5,44 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // buildAgent constructs a fully configured agent with all services and integrations.
 func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*agent.Agent, error) {
 	// Use agent.Builder helper methods for service construction
+	// Runtime provides: approval handler, tool registration, notifications
+	// Emitter is passed from cmd layer and shared with runtime
 	agentBuilder := agent.NewBuilder().
 		WithConfig(b.cfg).
 		WithProvider(b.llm).
 		WithWorkingDir(b.workDir).
 		WithEmitter(b.emitter).
-		WithApprovalHandler(b.approvalHandler)
+		WithRuntime(b.runtime) // Runtime ALWAYS provides approval handler
 
 	// Build detection using builder helper
 	detectionSvc := agentBuilder.BuildDetectionService()
 
 	// Shared validator + approval service for security + runtime
-	// Use agent.Builder helper to build security service
+	// Use agent.Builder helper to build security service (uses runtime's approval handler if set)
 	securitySvc := agentBuilder.BuildSecurityService()
 
 	// Extract ApprovalService and Validator from SecurityService for ToolRuntime
 	var approvalSvc *security.ApprovalService = securitySvc.ApprovalService()
 	var runtimeValidator *security.Validator = securitySvc.Validator()
 
-	// Build tool registry at conversation level (with integrations)
-	toolReg := b.buildToolRegistry(exec, securitySvc, env)
+	// Build tool registry - use runtime's tool registration if available, otherwise build from integrations
+	var toolReg *tools.Registry
+	if b.runtime != nil {
+		// Use runtime's tool registration
+		toolReg = tools.NewRegistry()
+		b.runtime.RegisterTools(toolReg)
+		// Also register integration tools (MCP, Git)
+		_ = b.registerIntegrationTools(toolReg)
+	} else {
+		// Fall back to conversation-level tool registry building
+		toolReg = b.buildToolRegistry(exec, securitySvc, env)
+	}
 
 	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
 		Registry:        toolReg,

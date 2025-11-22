@@ -107,7 +107,7 @@ func (e *Error) Is(target error) bool {
 // NewApplier creates a new patch applier for the given workspace.
 //
 // The workspace root must be an absolute path. All file operations
-// will be confined to this workspace.
+// are confined to this workspace.
 //
 // Returns an error if the workspace root is empty or invalid.
 func NewApplier(workspaceRoot string) (*Applier, error) {

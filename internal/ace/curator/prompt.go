@@ -27,8 +27,8 @@ func (pb *PromptBuilder) BuildCurationPrompt(req CurationRequest) string {
 	sb.WriteString("added to an existing playbook based on a reflection from a previous execution.\n\n")
 
 	sb.WriteString("**Context:**\n")
-	sb.WriteString("- The playbook you create will be used to help solve similar coding tasks\n")
-	sb.WriteString("- The reflection is generated from execution traces that will NOT be available when the playbook is being used\n")
+	sb.WriteString("- The playbook you create helps solve similar coding tasks\n")
+	sb.WriteString("- The reflection is generated from execution traces that are NOT available when the playbook is used\n")
 	sb.WriteString("- You need to come up with content that can aid future executions to achieve better outcomes\n\n")
 
 	sb.WriteString("**CRITICAL: You MUST respond with valid JSON only. Do not use markdown formatting or code blocks.**\n\n")
@@ -112,7 +112,7 @@ func (pb *PromptBuilder) BuildCurationPrompt(req CurationRequest) string {
 	sb.WriteString("  - type: The type of operation (\"ADD\" or \"UPDATE\")\n")
 	sb.WriteString("  - section: The section to add/update the bullet in (e.g., \"error_handling\", \"api_patterns\", ")
 	sb.WriteString("\"optimization\", \"anti_patterns\")\n")
-	sb.WriteString("  - content: The new content of the bullet. Note: no need to include bullet_id, it will be added by the system\n\n")
+	sb.WriteString("  - content: The new content of the bullet. Note: no need to include bullet_id, the system adds it automatically\n\n")
 
 	sb.WriteString("**Available Operations:**\n")
 	sb.WriteString("1. ADD: Create new bullet points with fresh IDs\n")

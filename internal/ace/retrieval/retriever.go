@@ -45,18 +45,17 @@ func (r *SemanticRetriever) Retrieve(ctx context.Context, query string, topK int
 
 // RetrieveWithScores returns bullets with scores.
 func (r *SemanticRetriever) RetrieveWithScores(ctx context.Context, query string, topK int) ([]ScoredBullet, error) {
-	// For now, retrieve bullets and assign placeholder scores
-	// TODO: Expose actual similarity scores from playbook.Search
-	bullets, err := r.Retrieve(ctx, query, topK)
+	// Use playbook's SearchWithScores to get actual similarity scores
+	results, err := r.playbook.SearchWithScores(ctx, query, topK)
 	if err != nil {
 		return nil, err
 	}
 
-	scored := make([]ScoredBullet, len(bullets))
-	for i, b := range bullets {
+	scored := make([]ScoredBullet, len(results))
+	for i, result := range results {
 		scored[i] = ScoredBullet{
-			Bullet: b,
-			Score:  1.0, // Placeholder - will be real similarity score
+			Bullet: result.Bullet,
+			Score:  result.Similarity,
 		}
 	}
 

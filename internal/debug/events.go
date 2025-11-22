@@ -9,11 +9,16 @@ import (
 	"os"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/runtime"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
+	"github.com/dmytrogajewski/spin/internal/llm"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
+	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 )
 
@@ -101,8 +106,48 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 		defer mcpSvc.Close()
 	}
 
-	// Build conversation with services
-	builder := conversation.NewBuilder(cfg, workDir)
+	// Create required dependencies for conversation
+	emitter := events.NewEventEmitter(100)
+	provider := llm.NewMockProvider("debug")
+
+	// Create builtin runtime for debug mode
+	var storage session.Storage
+	if cfg.Agent.SessionDir != "" {
+		storage, _ = session.NewFileStorage(cfg.Agent.SessionDir)
+	}
+
+	// Create auto-approve handler for debug (no approval needed for event logging)
+	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+		return security.ApprovalResponse{
+			RequestID: req.ID,
+			Approved:  true,
+			Reason:    "debug mode auto-approve",
+		}
+	}
+
+	// Build a minimal executor for debug
+	executor, _ := agent.NewExecutor(workDir)
+	validator := security.NewValidator()
+
+	builtinRuntime, err := runtime.NewBuiltinRuntime(runtime.BuiltinRuntimeConfig{
+		WorkDir:         workDir,
+		Emitter:         emitter,
+		Storage:         storage,
+		SessionID:       fmt.Sprintf("debug-%d", time.Now().UnixNano()),
+		Executor:        agent.NewExecutorRuntimeAdapter(executor),
+		Validator:       validator,
+		ShellService:    shellSvc,
+		GitService:      gitSvc,
+		UI:              nil, // No UI needed for debug event logging
+		ApprovalHandler: approvalHandler,
+		Logger:          logger,
+	})
+	if err != nil {
+		return fmt.Errorf("create builtin runtime: %w", err)
+	}
+
+	// Build conversation with required dependencies
+	builder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
 
 	if gitSvc != nil {
 		builder = builder.WithGit(gitSvc)

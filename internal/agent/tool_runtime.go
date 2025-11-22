@@ -24,6 +24,7 @@ type ToolResult struct {
 	Output   string
 	Error    error
 	ExitCode int
+	Metadata map[string]interface{}
 }
 
 // ToolRuntimeConfig configures the tool runtime.
@@ -140,9 +141,10 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 	}
 
 	result := &ToolResult{
-		ID:      call.ID,
-		Success: toolResult.Success,
-		Output:  toolResult.Output,
+		ID:       call.ID,
+		Success:  toolResult.Success,
+		Output:   toolResult.Output,
+		Metadata: toolResult.Metadata,
 	}
 	if toolResult.Error != "" {
 		result.Error = fmt.Errorf("%s", toolResult.Error)

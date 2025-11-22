@@ -11,8 +11,8 @@ import (
 
 // MergePair represents two bullets to merge.
 type MergePair struct {
-	SourceID   string  // Bullet to merge from (will be removed)
-	TargetID   string  // Bullet to merge into (will be kept)
+	SourceID   string  // Bullet to merge from (removed during merge)
+	TargetID   string  // Bullet to merge into (kept after merge)
 	Similarity float64 // Similarity score
 }
 
@@ -178,7 +178,7 @@ func (m *MergeEngine) simpleSimilarity(content1, content2 string) float64 {
 }
 
 // chooseMergeDirection determines which bullet should be kept.
-// Returns (sourceID, targetID) where source will be merged into target.
+// Returns (sourceID, targetID) where source is merged into target.
 func (m *MergeEngine) chooseMergeDirection(b1, b2 *bullet.Bullet) (sourceID, targetID string) {
 	// Keep the bullet with higher utility score
 	score1 := b1.Score()

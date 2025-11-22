@@ -43,8 +43,8 @@ func NewRegistryWithBuiltins() *Registry {
 //   - git_context (requires workDir string)
 //
 // This is the recommended factory for most use cases where tools need proper configuration.
-// If workDir is empty, tools that require WorkDir will be created with empty string.
-// If env is nil, get_context will be created with nil.
+// If workDir is empty, tools that require WorkDir are created with empty string.
+// If env is nil, get_context is created with nil.
 func NewDefaultRegistry(workDir string, env interface{}) *Registry {
 	// Create registry with builtin tools as base
 	registry := NewRegistryWithBuiltins()
@@ -242,7 +242,7 @@ func (r *Registry) validateTypeFromJSON(rawValue json.RawMessage, expectedType s
 	case "object":
 		return len(rawValue) > 0 && rawValue[0] == '{'
 	default:
-		// Unknown type - accept for now
+		// Unknown type - accept
 		return true
 	}
 }

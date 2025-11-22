@@ -22,7 +22,7 @@ func NewScanner(baseDir string, ignoreGit bool) *Scanner {
 		baseDir:   baseDir,
 		ignoreGit: ignoreGit,
 		maxDepth:  20, // Reasonable default to prevent deep recursion
-		// ignoreHandler will be lazily created in Scan()
+		// ignoreHandler is lazily created in Scan()
 	}
 }
 

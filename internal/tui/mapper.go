@@ -7,11 +7,11 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
-	"github.com/dmytrogajewski/spin/internal/ui/output"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 )
 
@@ -26,7 +26,10 @@ type TUIMapper struct {
 	streamMu           sync.Mutex                 // Protects streamCh
 	streamCtx          context.Context
 	streamCancel       context.CancelFunc
-	thinkFilter        *output.ThinkFilter // Filter for <think> tags
+	// State for thinking blocks
+	thinking           bool
+	thinkStart         time.Time
+	thinkTokens        int
 	mu                 sync.RWMutex        // Protects blockRegistry
 	lastBulletSet      map[string]bool     // Track last retrieved bullet content (for deduplication)
 	lastLearnedBullets map[string]bool     // Track last learned bullet content (for deduplication)
@@ -41,7 +44,6 @@ func NewTUIMapper(ui ports.UI) *TUIMapper {
 		ui:                 ui,
 		blockRegistry:      make(map[string][]*blocks.Block),
 		applyPatchByFile:   make(map[string]*blocks.Block),
-		thinkFilter:        output.NewThinkFilter(),
 		lastBulletSet:      make(map[string]bool),
 		lastLearnedBullets: make(map[string]bool),
 	}
@@ -68,6 +70,8 @@ func (m *TUIMapper) MapEvent(event events.Event) error {
 		return m.handleToolComplete(event)
 	case events.EventContentDelta:
 		return m.handleContentDelta(event)
+	case events.EventThinkingDelta:
+		return m.handleThinkingDelta(event)
 	case events.EventContentComplete:
 		return m.handleContentComplete(event)
 	case events.EventACERetrieval:
@@ -124,7 +128,7 @@ func (m *TUIMapper) handleToolStart(event events.Event) error {
 			"original_tool_id", data.ToolID,
 			"new_block_id", block.ID)
 
-		// Register duplicate block under the same tool ID for later updates
+		// Register duplicate block under the same tool ID for updates
 		m.blockRegistry[data.ToolID] = append(m.blockRegistry[data.ToolID], block)
 	} else {
 		// First time seeing this tool ID - register it normally
@@ -163,7 +167,7 @@ func (m *TUIMapper) createBlockForTool(data events.ToolCallStartData) *blocks.Bl
 		// Map file_search to GREP block type (files_with_matches style)
 		return m.createGrepBlockFromSearch(data)
 	case "git_context":
-		// Map to NOTICE block; details will be filled on completion
+		// Map to NOTICE block; details are filled on completion
 		return m.createNoticeBlock(data, "Git Context")
 	case "get_context":
 		// Map to NOTICE block for environment context
@@ -316,7 +320,7 @@ func (m *TUIMapper) createOrReuseApplyPatchBlock(data events.ToolCallStartData) 
 
 // createApplyPatchFromPatchTool creates an APPLY_PATCH block for apply_patch tool.
 // It renders the provided patch text as a diff and sets minimal metadata so that
-// completion status can be displayed later.
+// completion status can be displayed.
 func (m *TUIMapper) createApplyPatchFromPatchTool(data events.ToolCallStartData) *blocks.Block {
 	block := blocks.NewBlock(blocks.BlockTypeApplyPatch)
 	block.ID = data.ToolID
@@ -328,7 +332,7 @@ func (m *TUIMapper) createApplyPatchFromPatchTool(data events.ToolCallStartData)
 	}
 	block.Title = workspaceRoot
 
-	// Body: show the raw patch text so the user sees exactly what will be applied
+	// Body: show the raw patch text so the user sees exactly what is applied
 	patchText := extractString(data.Parameters, "patch_text")
 	block.Body = patchText
 
@@ -510,16 +514,16 @@ func (m *TUIMapper) handleContentDelta(event events.Event) error {
 		return nil
 	}
 
-	// Filter <think> tags and apply formatting
-	filtered := m.thinkFilter.Process(data.Content)
+	// Check if we need to close a previous thinking block
+	m.checkCloseThinking()
 
-	// If streaming is active, send filtered chunk
+	// If streaming is active, send chunk
 	m.streamMu.Lock()
 	defer m.streamMu.Unlock()
 
-	if m.streamCh != nil && filtered != "" {
+	if m.streamCh != nil && data.Content != "" {
 		select {
-		case m.streamCh <- filtered:
+		case m.streamCh <- data.Content:
 		case <-m.streamCtx.Done():
 			// Stream closed, drop
 		default:
@@ -528,6 +532,80 @@ func (m *TUIMapper) handleContentDelta(event events.Event) error {
 	}
 
 	return nil
+}
+
+// handleThinkingDelta streams thinking content to the UI with dim formatting.
+func (m *TUIMapper) handleThinkingDelta(event events.Event) error {
+	data, ok := event.ThinkingDeltaData()
+	if !ok {
+		return nil
+	}
+
+	m.streamMu.Lock()
+	defer m.streamMu.Unlock()
+
+	// Start thinking block if not active
+	if !m.thinking {
+		m.thinking = true
+		m.thinkStart = time.Now()
+		m.thinkTokens = 0
+		// Send dim gray start code
+		if m.streamCh != nil {
+			select {
+			case m.streamCh <- "\x1b[2m\x1b[38;5;244m":
+			default:
+			}
+		}
+	}
+
+	// Update metrics
+	// Rough token estimation: whitespace-delimited words
+	for _, char := range data.Content {
+		if char == ' ' || char == '\n' || char == '\t' {
+			m.thinkTokens++
+		}
+	}
+
+	// Send content
+	if m.streamCh != nil && data.Content != "" {
+		select {
+		case m.streamCh <- data.Content:
+		default:
+		}
+	}
+
+	return nil
+}
+
+// checkCloseThinking checks if we are currently in a thinking block and closes it if so.
+// This prints the summary line and resets formatting.
+func (m *TUIMapper) checkCloseThinking() {
+	m.streamMu.Lock()
+	defer m.streamMu.Unlock()
+
+	if !m.thinking {
+		return
+	}
+
+	duration := time.Since(m.thinkStart)
+	m.thinking = false
+
+	if m.streamCh != nil {
+		// Reset dim gray formatting
+		var out strings.Builder
+		out.WriteString("\x1b[0m") // Reset
+
+		// Summary
+		out.WriteString("\x1b[2m\x1b[38;5;242m")
+		out.WriteString(fmt.Sprintf(" [thought for %.2fs, ~%d tokens]",
+			duration.Seconds(), m.thinkTokens))
+		out.WriteString("\x1b[0m\n")
+
+		select {
+		case m.streamCh <- out.String():
+		default:
+		}
+	}
 }
 
 // handleContentComplete creates a NOTICE block for complete content messages.
@@ -728,19 +806,11 @@ func (m *TUIMapper) StartStreaming() <-chan string {
 
 // StopStreaming closes the content streaming channel.
 func (m *TUIMapper) StopStreaming() {
+	// Flush any open thinking block
+	m.checkCloseThinking()
+
 	m.streamMu.Lock()
 	defer m.streamMu.Unlock()
-
-	// Flush any buffered think content
-	if m.streamCh != nil {
-		if flushed := m.thinkFilter.Flush(); flushed != "" {
-			select {
-			case m.streamCh <- flushed:
-			default:
-				// Channel full or closed, drop
-			}
-		}
-	}
 
 	if m.streamCancel != nil {
 		m.streamCancel()
@@ -750,9 +820,6 @@ func (m *TUIMapper) StopStreaming() {
 		close(m.streamCh)
 		m.streamCh = nil
 	}
-
-	// Reset filter for next turn
-	m.thinkFilter.Reset()
 }
 
 // Close cleans up mapper resources (closes stream channels).
@@ -798,8 +865,8 @@ func countLinesPtr(s string) *int {
 
 // generateBlockID generates a unique block ID for blocks without tool IDs.
 func generateBlockID() string {
-	// Simple counter-based ID (could use UUID for production)
-	// For now, use timestamp-based
+	// Simple counter-based ID
+	// Use timestamp-based ID
 	return fmt.Sprintf("block-%d", eventIDCounter.Add(1))
 }
 

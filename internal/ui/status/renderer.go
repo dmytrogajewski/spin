@@ -117,7 +117,7 @@ func (r *Renderer) MoveToPrompt() error {
 }
 
 // MoveToScrollRegion moves cursor to the bottom of the scrolling region.
-// This ensures new content will be printed in the scrollable area, not
+// This ensures new content is printed in the scrollable area, not
 // at the fixed status/prompt lines.
 func (r *Renderer) MoveToScrollRegion() error {
 	if r.height < 3 {

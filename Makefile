@@ -132,6 +132,41 @@ test-e2e: build
 test-all: test
 	@echo "✓ All tests passed"
 
+## test-strict: Run all tests plus static analysis with uast/herr on all non-test Go files
+test-strict: test
+	@echo ""
+	@echo "Running static analysis with uast/herr on all non-test Go files..."
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@files=$$(find . -name "*.go" -not -name "*_test.go" -not -name "doc.go" -not -path "./vendor/*" -not -path "./.git/*" -not -path "./examples/*" -not -path "./.gotmp/*"); \
+	total=$$(echo "$$files" | wc -l); \
+	current=0; \
+	failed=0; \
+	echo "Analyzing $$total files..."; \
+	echo ""; \
+	for file in $$files; do \
+		current=$$((current + 1)); \
+		printf "[%3d/%3d] Analyzing %s\n" $$current $$total "$$file"; \
+		lines=$$(wc -l < "$$file"); \
+		if [ $$lines -lt 50 ]; then continue; fi; \
+		output=$$(uast parse "$$file" 2>/dev/null | herr analyze 2>&1); \
+		if echo "$$output" | grep -q "total_functions: 0"; then continue; fi; \
+		issues=$$(echo "$$output" | grep -E "^(High complexity|Poor.*cohesion|Poor comment quality)" | wc -l); \
+		if [ $$issues -ge 3 ]; then \
+			echo "  ⚠️  Multiple issues in $$file"; \
+			echo "$$output" | grep -E "^(High complexity|Poor.*cohesion|Poor comment quality|High Halstead)" | head -3; \
+			failed=$$((failed + 1)); \
+		fi; \
+	done; \
+	echo ""; \
+	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
+	if [ $$failed -eq 0 ]; then \
+		echo "✓ Static analysis complete: All files passed ($$total files analyzed)"; \
+	else \
+		echo "⚠️  Static analysis complete: $$failed file(s) with issues out of $$total analyzed"; \
+		echo "   (Run 'uast parse <file> | herr analyze' on specific files for details)"; \
+	fi; \
+	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
 ## lint: Run linters and deadcode analysis
 lint:
 	@echo "Running linters..."

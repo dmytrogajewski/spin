@@ -2,13 +2,18 @@ package e2e
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/runtime"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
+	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tui"
@@ -52,18 +57,41 @@ func setupTUITest(t *testing.T) (*testkit.TUITestHelper, *conversation.Conversat
 	cfg.Protocol.EnableGit = false
 	cfg.Protocol.EnableMCP = false
 
-	// Create conversation
+	// Create conversation with runtime
 	ctx := context.Background()
-	conv, err := conversation.NewBuilder(cfg, cfg.Agent.WorkDir).
-		WithLLM(mockLLM).
-		WithApprovalHandler(func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-			// Auto-approve for tests
-			return security.ApprovalResponse{
-				RequestID: req.ID,
-				Approved:  true,
-				Reason:    "auto-approved",
-			}
-		}).
+
+	// Create emitter
+	emitter := events.NewEventEmitter(100)
+
+	// Auto-approve handler for tests
+	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+		return security.ApprovalResponse{
+			RequestID: req.ID,
+			Approved:  true,
+			Reason:    "auto-approved",
+		}
+	}
+
+	// Create builtin runtime for e2e test
+	executor, err := agent.NewExecutor(cfg.Agent.WorkDir)
+	require.NoError(t, err)
+
+	validator := security.NewValidator()
+
+	builtinRuntime, err := runtime.NewBuiltinRuntime(runtime.BuiltinRuntimeConfig{
+		WorkDir:         cfg.Agent.WorkDir,
+		Emitter:         emitter,
+		Storage:         nil,
+		SessionID:       fmt.Sprintf("e2e-test-%d", time.Now().UnixNano()),
+		Executor:        agent.NewExecutorRuntimeAdapter(executor),
+		Validator:       validator,
+		UI:              nil, // No UI in e2e tests
+		ApprovalHandler: approvalHandler,
+		Logger:          slog.Default(),
+	})
+	require.NoError(t, err)
+
+	conv, err := conversation.NewBuilder(cfg, cfg.Agent.WorkDir, builtinRuntime, emitter, mockLLM).
 		Build(ctx)
 	require.NoError(t, err)
 
@@ -77,9 +105,7 @@ func setupTUITest(t *testing.T) (*testkit.TUITestHelper, *conversation.Conversat
 
 // TestTUILaunch tests that TUI launches successfully
 func TestTUILaunch(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)
 	defer helper.Stop()
@@ -92,9 +118,7 @@ func TestTUILaunch(t *testing.T) {
 
 // TestTUIBasicChat tests sending a message and receiving response
 func TestTUIBasicChat(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	skipTUITests(t)
 
 	helper, conv, mockLLM := setupTUITest(t)
 	defer helper.Stop()
@@ -154,9 +178,7 @@ func TestTUIBasicChat(t *testing.T) {
 
 // TestTUIFilePickerTrigger tests @ key triggers file picker
 func TestTUIFilePickerTrigger(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)
 	defer helper.Stop()
@@ -176,9 +198,7 @@ func TestTUIFilePickerTrigger(t *testing.T) {
 
 // TestTUIHelpModal tests Ctrl+H triggers help
 func TestTUIHelpModal(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)
 	defer helper.Stop()
@@ -192,9 +212,7 @@ func TestTUIHelpModal(t *testing.T) {
 
 // TestTUIExitWithCtrlD tests Ctrl+D exits cleanly
 func TestTUIExitWithCtrlD(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)
 	defer helper.Stop()
@@ -212,9 +230,7 @@ func TestTUIExitWithCtrlD(t *testing.T) {
 
 // TestTUIToolApproval tests approval workflow
 func TestTUIToolApproval(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)
 	defer helper.Stop()
@@ -228,9 +244,7 @@ func TestTUIToolApproval(t *testing.T) {
 
 // TestTUIMultiTurn tests conversation context is maintained
 func TestTUIMultiTurn(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	skipTUITests(t)
 
 	helper, conv, mockLLM := setupTUITest(t)
 	defer helper.Stop()
@@ -300,9 +314,7 @@ func TestTUIMultiTurn(t *testing.T) {
 
 // TestTUIStopStreaming tests Ctrl+C stops streaming
 func TestTUIStopStreaming(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)
 	defer helper.Stop()

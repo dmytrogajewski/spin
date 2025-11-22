@@ -20,7 +20,7 @@ type PromptRenderer interface {
 }
 
 // ScrollRegionManager is an optional interface for managing scrolling regions.
-// If the status renderer implements this, it will be used to move the cursor
+// If the status renderer implements this, it is used to move the cursor
 // back to the scrolling region after rendering the prompt.
 type ScrollRegionManager interface {
 	MoveToScrollRegion() error

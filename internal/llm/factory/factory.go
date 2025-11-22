@@ -43,7 +43,7 @@ type ProviderConfig struct {
 
 	// APIKey is the authentication key (optional for local providers).
 	// DEPRECATED: Use KeyName with secure keystore instead.
-	// This field will be removed in v2.0.
+	// This field is deprecated and should not be used for new code.
 	// Only use for backward compatibility or testing.
 	APIKey string
 
@@ -67,7 +67,7 @@ type Factory struct {
 
 // NewFactory creates a new provider factory with optional auth support.
 //
-// If authMgr is nil, only direct APIKey credentials will be supported (deprecated).
+// If authMgr is nil, only direct APIKey credentials are supported (deprecated).
 // For secure credential storage, provide an auth.Manager initialized with a keystore.
 //
 // Example:
@@ -122,6 +122,9 @@ func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Prov
 		"ollama":            f.newOllamaProvider,
 		"lmstudio":          f.newLMStudioProvider,
 	}
+
+	// Add test provider if enabled via build tags
+	f.addTestProvider(providers)
 
 	if provider, exists := providers[cfg.Type]; exists {
 		return provider(ctx, cfg)

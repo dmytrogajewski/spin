@@ -44,6 +44,12 @@ func NewApprovalServiceWithConfig(cfg ApprovalServiceConfig) *ApprovalService {
 	}
 }
 
+// SetHandler updates the approval handler.
+// This allows runtime-specific handlers (ACP, TUI, etc.) to be swapped after service creation.
+func (s *ApprovalService) SetHandler(handler ApprovalHandler) {
+	s.handler = handler
+}
+
 // RequestApproval requests approval for an operation with full event emission.
 // Returns the request ID, whether approved, and any error.
 func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operation) (reqID string, approved bool, err error) {

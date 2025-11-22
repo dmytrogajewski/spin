@@ -4,15 +4,58 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/runtime"
 	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/ollama"
+	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// createACPAgentComponents is a test helper that creates ACP agent components using the new refactored flow.
+func createACPAgentComponents(t *testing.T, workDir string, provider llm.Provider, cfg *config.ConfigV2) (*agent.Agent, *events.EventEmitter, *runtime.ACPRuntime) {
+	logger := slog.Default()
+
+	// 1. Create shared infrastructure
+	emitter := events.NewEventEmitter(100)
+
+	storageDir := cfg.Agent.SessionDir
+	if storageDir == "" {
+		storageDir = t.TempDir()
+	}
+	storage, err := session.NewFileStorage(storageDir)
+	require.NoError(t, err)
+
+	// 2. Create protocol services
+	protocolServices, cleanup, err := createServices(cfg, workDir, logger)
+	require.NoError(t, err)
+	t.Cleanup(cleanup)
+
+	// 3. Create ACP runtime (complete, self-contained)
+	acpRuntime, err := runtime.NewACP(runtime.ACPConfig{
+		WorkDir:      workDir,
+		Emitter:      emitter,
+		Storage:      storage,
+		ShellService: protocolServices.Shell,
+		GitService:   protocolServices.Git,
+		Logger:       logger,
+	})
+	require.NoError(t, err)
+
+	// 4. Build core agent using runtime
+	coreAgent, err := buildCoreAgent(cfg, provider, workDir, emitter, acpRuntime)
+	require.NoError(t, err)
+
+	return coreAgent, emitter, acpRuntime
+}
 
 // TestNewACPCmd tests ACP command creation.
 func TestNewACPCmd(t *testing.T) {
@@ -54,9 +97,16 @@ func TestNewACPCmd_FlagDefaults(t *testing.T) {
 	assert.Equal(t, "codellama:13b", model, "model should default to codellama:13b")
 }
 
-// TestCreateProviderForACP_Ollama tests Ollama provider creation.
-func TestCreateProviderForACP_Ollama(t *testing.T) {
-	provider, err := createProviderForACP("ollama", "http://localhost:11434", "test-model", "")
+// TestBuildProviderForACP_Ollama tests Ollama provider creation using unified builder.
+func TestBuildProviderForACP_Ollama(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.DefaultConfigV2()
+	cfg.LLM.Provider = "ollama"
+	cfg.LLM.BaseURL = "http://localhost:11434"
+	cfg.LLM.Model = "test-model"
+	authMgr := createAuthManager()
+
+	provider, err := buildProviderForACP(ctx, cfg, authMgr, "ollama", "http://localhost:11434", "test-model", "")
 
 	require.NoError(t, err)
 	require.NotNil(t, provider)
@@ -67,22 +117,37 @@ func TestCreateProviderForACP_Ollama(t *testing.T) {
 	assert.True(t, ok, "should create Ollama provider")
 }
 
-// TestCreateProviderForACP_OpenAI tests OpenAI provider creation.
-func TestCreateProviderForACP_OpenAI(t *testing.T) {
-	provider, err := createProviderForACP("openai", "https://api.openai.com", "gpt-4", "test-key")
+// TestBuildProviderForACP_OpenAI tests OpenAI provider creation using unified builder.
+func TestBuildProviderForACP_OpenAI(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.DefaultConfigV2()
+	cfg.LLM.Provider = "openai"
+	cfg.LLM.BaseURL = "https://api.openai.com"
+	cfg.LLM.Model = "gpt-4"
+	cfg.LLM.APIKey = "test-key"
+	authMgr := createAuthManager()
+
+	provider, err := buildProviderForACP(ctx, cfg, authMgr, "openai", "https://api.openai.com", "gpt-4", "test-key")
 
 	require.NoError(t, err)
 	require.NotNil(t, provider)
 	defer provider.Close()
 }
 
-// TestCreateProviderForACP_UnknownProvider tests error handling for unknown provider.
-func TestCreateProviderForACP_UnknownProvider(t *testing.T) {
-	provider, err := createProviderForACP("unknown", "", "", "")
+// TestBuildProviderForACP_UnknownProvider tests error handling for unknown provider.
+func TestBuildProviderForACP_UnknownProvider(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.DefaultConfigV2()
+	cfg.LLM.Provider = "unknown"
+	cfg.LLM.Model = "test-model"
+	authMgr := createAuthManager()
+
+	provider, err := buildProviderForACP(ctx, cfg, authMgr, "unknown", "", "test-model", "")
 
 	require.Error(t, err)
 	require.Nil(t, provider)
-	assert.Contains(t, err.Error(), "unknown provider type")
+	// The unified builder validates configuration before provider creation
+	assert.Contains(t, err.Error(), "unknown provider")
 }
 
 // TestCreateACPConversation tests ACP conversation creation.
@@ -100,13 +165,14 @@ func TestCreateACPConversation(t *testing.T) {
 	defer provider.Close()
 
 	cfg := config.DefaultConfigV2()
-	ctx := context.Background()
-	conv, err := createACPConversation(ctx, tmpDir, provider, cfg)
+	cfg.Agent.WorkDir = tmpDir
 
-	require.NoError(t, err)
-	require.NotNil(t, conv)
-	require.NotNil(t, conv.GetAgent())
-	require.NotNil(t, conv.GetEmitter())
+	// Test the new refactored flow
+	agentInstance, emitter, runtime := createACPAgentComponents(t, tmpDir, provider, cfg)
+
+	require.NotNil(t, agentInstance)
+	require.NotNil(t, emitter)
+	require.NotNil(t, runtime)
 }
 
 // TestCreateACPConversation_InvalidWorkDir tests error handling for invalid work directory.
@@ -123,15 +189,12 @@ func TestCreateACPConversation_InvalidWorkDir(t *testing.T) {
 	invalidDir := filepath.Join(t.TempDir(), "nonexistent", "path")
 
 	cfg := config.DefaultConfigV2()
-	ctx := context.Background()
-	conv, err := createACPConversation(ctx, invalidDir, provider, cfg)
+	cfg.Agent.WorkDir = invalidDir
 
-	// This should still work as conversation.Builder handles directory creation
-	// But if it fails, we check the error
-	if err != nil {
-		require.Error(t, err)
-		require.Nil(t, conv)
-	}
+	// The new flow should handle invalid directories gracefully or panic
+	require.Panics(t, func() {
+		createACPAgentComponents(t, invalidDir, provider, cfg)
+	})
 }
 
 // TestACPCmd_Help tests help output.
@@ -235,12 +298,12 @@ func TestCreateAgentComponents_RegistersTools(t *testing.T) {
 	defer provider.Close()
 
 	cfg := config.DefaultConfigV2()
-	ctx := context.Background()
-	conv, err := createACPConversation(ctx, tmpDir, provider, cfg)
-	require.NoError(t, err)
-	require.NotNil(t, conv)
-	agentInstance := conv.GetAgent()
+	cfg.Agent.WorkDir = tmpDir
+
+	agentInstance, emitter, runtime := createACPAgentComponents(t, tmpDir, provider, cfg)
 	require.NotNil(t, agentInstance)
+	require.NotNil(t, emitter)
+	require.NotNil(t, runtime)
 
 	// The agent should be created successfully with all tools registered
 	// We can't easily test tool registration directly, but if agent creation
@@ -260,12 +323,11 @@ func TestCreateACPComponents_ReturnsApprovalService(t *testing.T) {
 	defer provider.Close()
 
 	cfg := config.DefaultConfigV2()
-	ctx := context.Background()
-	conv, err := createACPConversation(ctx, tmpDir, provider, cfg)
+	cfg.Agent.WorkDir = tmpDir
 
-	require.NoError(t, err)
-	require.NotNil(t, conv, "Conversation should be created")
-	agentInstance := conv.GetAgent()
+	agentInstance, emitter, _ := createACPAgentComponents(t, tmpDir, provider, cfg)
+
 	require.NotNil(t, agentInstance, "Agent should be created")
+	require.NotNil(t, emitter, "Emitter should be created")
 	// Agent is created successfully, which means SecurityService is configured
 }

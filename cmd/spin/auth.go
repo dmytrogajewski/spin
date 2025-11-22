@@ -43,6 +43,7 @@ Examples:
 	return cmd
 }
 
+// newAuthLoginCmd creates the command for logging in to an LLM provider.
 func newAuthLoginCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login <provider>",
@@ -68,6 +69,7 @@ Examples:
 	return cmd
 }
 
+// newAuthLogoutCmd creates the command for logging out from an LLM provider.
 func newAuthLogoutCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logout <provider>",
@@ -88,6 +90,7 @@ Examples:
 	return cmd
 }
 
+// newAuthListCmd creates the command for listing authenticated providers.
 func newAuthListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",

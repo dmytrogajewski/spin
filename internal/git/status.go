@@ -3,6 +3,9 @@ package git
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"strconv"
+	"strings"
 
 	gogit "github.com/go-git/go-git/v5"
 )
@@ -107,9 +110,33 @@ func mapGoGitStatus(status gogit.StatusCode) StatusCode {
 // getTrackingInfo returns tracking branch name and ahead/behind counts
 // Returns empty string and 0, 0 if no tracking branch
 func (r *Repository) getTrackingInfo(branchName string) (remoteBranch string, ahead, behind int) {
-	// This is a simplified implementation
-	// Full implementation would query git config for branch.{branchName}.remote
-	// and branch.{branchName}.merge, then calculate ahead/behind using log
-	// For now, return empty tracking info
-	return "", 0, 0
+	// Get upstream branch
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", branchName+"@{upstream}")
+	cmd.Dir = r.root
+	output, err := cmd.Output()
+	if err != nil {
+		return "", 0, 0 // No tracking branch
+	}
+
+	remoteBranch = strings.TrimSpace(string(output))
+	if remoteBranch == "" {
+		return "", 0, 0
+	}
+
+	// Get ahead/behind counts
+	cmd = exec.Command("git", "rev-list", "--left-right", "--count", branchName+"..."+remoteBranch)
+	cmd.Dir = r.root
+	output, err = cmd.Output()
+	if err != nil {
+		return remoteBranch, 0, 0
+	}
+
+	// Parse output: "ahead\tbehind"
+	parts := strings.Fields(strings.TrimSpace(string(output)))
+	if len(parts) == 2 {
+		ahead, _ = strconv.Atoi(parts[0])
+		behind, _ = strconv.Atoi(parts[1])
+	}
+
+	return remoteBranch, ahead, behind
 }

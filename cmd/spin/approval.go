@@ -27,6 +27,7 @@ func newApprovalCmd() *cobra.Command {
 	return cmd
 }
 
+// newApprovalListCmd creates the command for listing stored approvals.
 func newApprovalListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -63,6 +64,7 @@ func newApprovalListCmd() *cobra.Command {
 	return cmd
 }
 
+// newApprovalRevokeCmd creates the command for revoking a specific approval.
 func newApprovalRevokeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "revoke",
@@ -103,6 +105,7 @@ func newApprovalRevokeCmd() *cobra.Command {
 	return cmd
 }
 
+// newApprovalClearCmd creates the command for clearing all stored approvals.
 func newApprovalClearCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clear",

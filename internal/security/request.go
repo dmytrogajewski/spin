@@ -40,7 +40,7 @@ type ApprovalResponse struct {
 	Reason string
 
 	// ModifiedCommand is an optional modified version of the command.
-	// If provided, the original command will be replaced and re-validated.
+	// If provided, the original command is replaced and re-validated.
 	// If empty, the original command is used as-is.
 	ModifiedCommand string
 

@@ -60,8 +60,8 @@ func execute() error {
 // runApplyPatchMode is now implemented in apply_patch.go
 
 // runSandboxMode runs the sandbox test mode.
-// This will be implemented when sandbox functionality is added.
+// This is implemented when sandbox functionality is added.
 func runSandboxMode() int {
-	fmt.Fprintln(os.Stderr, "Sandbox mode not yet implemented")
+	fmt.Fprintln(os.Stderr, "Sandbox mode not implemented")
 	return 1
 }

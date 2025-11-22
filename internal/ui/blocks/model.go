@@ -51,7 +51,7 @@ type Block struct {
 //   - Current timestamp
 func NewBlock(blockType BlockType) *Block {
 	return &Block{
-		ID:        GenerateBlockID(0), // sequence will be set by caller if needed
+		ID:        GenerateBlockID(0), // sequence is set by caller if needed
 		Type:      blockType,
 		Meta:      nil,
 		Body:      "",

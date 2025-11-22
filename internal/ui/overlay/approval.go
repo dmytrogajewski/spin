@@ -114,7 +114,7 @@ func (d *ApprovalDialog) Show(ctx context.Context) security.ApprovalResponse {
 
 // IsVisible returns whether the dialog is currently visible.
 func (d *ApprovalDialog) IsVisible() bool {
-	// Dialog is visible if Show() has been called and not yet responded to
+	// Dialog is visible if Show() has been called and not responded to
 	return d.shown && d.response == nil
 }
 

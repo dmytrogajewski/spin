@@ -60,7 +60,7 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 		History: historyMessages,
 	}
 
-	// Execute agent (user message will be in resp.Messages)
+	// Execute agent (user message is in resp.Messages)
 	resp, err := c.agent.Execute(ctx, req)
 	if err != nil {
 		// Add user message first (since it wasn't added before execution)

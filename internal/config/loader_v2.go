@@ -2,10 +2,34 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/viper"
 )
+
+// Source specifies where to load configuration from.
+type Source struct {
+	// File path (empty = try default locations)
+	File string
+
+	// CLI flag overrides
+	Flags FlagOverrides
+
+	// Runtime parameters
+	WorkDir string
+}
+
+// FlagOverrides contains CLI flag values.
+type FlagOverrides struct {
+	Provider string
+	Model    string
+	BaseURL  string
+	APIKey   string
+	MaxTurns int
+	Debug    bool
+	Sandbox  string
+}
 
 // LoaderV2 handles loading ConfigV2 from multiple sources with proper precedence.
 // Precedence order: flags > environment > config file > defaults
@@ -246,27 +270,84 @@ func (l *LoaderV2) AllSettings() map[string]interface{} {
 	return l.viper.AllSettings()
 }
 
-// Unmarshal unmarshals the entire config into a provided struct.
-func (l *LoaderV2) Unmarshal(rawVal interface{}) error {
-	return l.viper.Unmarshal(rawVal)
+// Load loads and merges configuration from all sources.
+// Precedence: flags > env > file > defaults
+func Load(src Source) (*ConfigV2, error) {
+	// Start with defaults
+	cfg := DefaultConfigV2()
+
+	// Load from file if specified
+	if src.File != "" {
+		loader := NewLoaderV2()
+		fileCfg, err := loader.LoadFromFile(src.File)
+		if err != nil {
+			return nil, fmt.Errorf("load config file: %w", err)
+		}
+		// Merge file config (overwrites defaults)
+		cfg = fileCfg
+	}
+
+	// Apply flag overrides (before env so env knows the provider)
+	if src.Flags.Provider != "" {
+		cfg.LLM.Provider = src.Flags.Provider
+	}
+	if src.Flags.Model != "" {
+		cfg.LLM.Model = src.Flags.Model
+	}
+	if src.Flags.BaseURL != "" {
+		cfg.LLM.BaseURL = src.Flags.BaseURL
+	}
+	if src.Flags.MaxTurns > 0 {
+		cfg.Agent.MaxTurns = src.Flags.MaxTurns
+	}
+	if src.Flags.Debug {
+		cfg.Agent.Debug = true
+		cfg.Agent.LogLevel = "debug"
+	}
+	if src.Flags.Sandbox != "" {
+		cfg.Security.SandboxMode = src.Flags.Sandbox
+	}
+
+	// Apply environment variables (after flags so we know the provider)
+	// Env vars fill in missing values but don't override explicit flags
+	applyEnvVars(cfg)
+
+	// Override WorkDir if provided
+	if src.WorkDir != "" {
+		cfg.Agent.WorkDir = src.WorkDir
+	}
+
+	return cfg, nil
 }
 
-// GetString retrieves a string value.
-func (l *LoaderV2) GetString(key string) string {
-	return l.viper.GetString(key)
+// applyEnvVars applies environment variables to config.
+func applyEnvVars(cfg *ConfigV2) {
+	// Apply API key from environment based on provider
+	if cfg.LLM.APIKey == "" {
+		apiKey := getAPIKeyFromEnv(cfg.LLM.Provider)
+		if apiKey != "" {
+			cfg.LLM.APIKey = apiKey
+		}
+	}
 }
 
-// GetBool retrieves a boolean value.
-func (l *LoaderV2) GetBool(key string) bool {
-	return l.viper.GetBool(key)
+// getAPIKeyFromEnv returns the API key from environment for the given provider.
+func getAPIKeyFromEnv(provider string) string {
+	envKey := getEnvKeyForProvider(provider)
+	if envKey == "" {
+		return ""
+	}
+	return os.Getenv(envKey)
 }
 
-// GetInt retrieves an integer value.
-func (l *LoaderV2) GetInt(key string) int {
-	return l.viper.GetInt(key)
-}
-
-// IsSet checks if a key is set in the config.
-func (l *LoaderV2) IsSet(key string) bool {
-	return l.viper.IsSet(key)
+// getEnvKeyForProvider returns the env var name for a provider's API key.
+func getEnvKeyForProvider(provider string) string {
+	switch provider {
+	case "openai", "openai-compatible":
+		return "OPENAI_API_KEY"
+	case "anthropic":
+		return "ANTHROPIC_API_KEY"
+	default:
+		return ""
+	}
 }

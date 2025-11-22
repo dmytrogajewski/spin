@@ -123,7 +123,7 @@ func (m *Manager) FormatFull(width int) string {
 	}
 
 	// Hotkeys (only on very wide terminals, and only if explicitly enabled)
-	// Disabled for now as it adds clutter
+	// Disabled as it adds clutter
 	// if width >= 140 {
 	// 	parts = append(parts, "?:help ^C:quit")
 	// }
@@ -136,9 +136,9 @@ func (m *Manager) FormatFull(width int) string {
 // activityIndicator returns the activity indicator based on connection status.
 func activityIndicator(connected bool) string {
 	if connected {
-		return "[●]" // Active (will be colored green in render phase)
+		return "[●]" // Active (colored green in render phase)
 	}
-	return "[○]" // Idle (will be colored gray in render phase)
+	return "[○]" // Idle (colored gray in render phase)
 }
 
 // formatPercentage formats a percentage value.

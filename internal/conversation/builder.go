@@ -2,18 +2,17 @@ package conversation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/runtime"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tools"
@@ -21,6 +20,7 @@ import (
 
 // Builder constructs a Conversation instance with all its dependencies.
 // This pattern follows the service injection approach used in the tools package.
+// Runtime is REQUIRED - it provides approval handler, tool registration, and other runtime-specific behavior.
 type Builder struct {
 	// Core configuration
 	cfg     *config.ConfigV2
@@ -31,23 +31,46 @@ type Builder struct {
 	shellService *shellpkg.Service
 	mcpService   *mcppkg.Service
 
+	// Required
+	runtime runtime.Runtime      // Runtime provides approval handler, tools, notifications
+	emitter *events.EventEmitter // Emitter MUST match runtime's emitter
+
 	// Optional overrides
-	llm             llm.Provider
-	emitter         *events.EventEmitter
-	storage         session.Storage
-	toolRegistry    *tools.Registry
-	approvalHandler security.ApprovalHandler
-	logger          *slog.Logger
+	llm          llm.Provider
+	storage      session.Storage
+	toolRegistry *tools.Registry // Optional pre-built tool registry
+	logger       *slog.Logger
 
 	// Managed resources
 	authManager *auth.Manager
 }
 
-// NewBuilder creates a new Conversation builder with the given configuration and working directory.
-func NewBuilder(cfg *config.ConfigV2, workDir string) *Builder {
+// NewBuilder creates a new Conversation builder with required dependencies.
+// Runtime and emitter are REQUIRED - they must be created by the caller (cmd layer).
+// The same emitter instance must be passed to both the runtime and the builder.
+func NewBuilder(cfg *config.ConfigV2, workDir string, runtime runtime.Runtime, emitter *events.EventEmitter, provider llm.Provider) *Builder {
+	if cfg == nil {
+		panic("config cannot be nil")
+	}
+	if workDir == "" {
+		panic("workDir cannot be empty")
+	}
+	if runtime == nil {
+		panic("runtime cannot be nil")
+	}
+	if emitter == nil {
+		panic("emitter cannot be nil")
+	}
+	if provider == nil {
+		panic("provider cannot be nil")
+	}
+
 	return &Builder{
 		cfg:     cfg,
 		workDir: workDir,
+		runtime: runtime,
+		emitter: emitter,
+		llm:     provider,
 	}
 }
 
@@ -69,24 +92,6 @@ func (b *Builder) WithMCP(service *mcppkg.Service) *Builder {
 	return b
 }
 
-// WithLLM sets a custom LLM provider.
-func (b *Builder) WithLLM(provider llm.Provider) *Builder {
-	b.llm = provider
-	return b
-}
-
-// WithToolRegistry sets a custom tool registry.
-func (b *Builder) WithToolRegistry(registry *tools.Registry) *Builder {
-	b.toolRegistry = registry
-	return b
-}
-
-// WithApprovalHandler sets a custom approval handler.
-func (b *Builder) WithApprovalHandler(handler security.ApprovalHandler) *Builder {
-	b.approvalHandler = handler
-	return b
-}
-
 // Build constructs and returns a fully initialized Conversation.
 func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	// Validate configuration
@@ -103,11 +108,12 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	}
 
 	// Build executor using agent package helper with unified config
+	// Runtime provides approval handler via runtime.ApprovalHandler()
 	exec := agent.NewBuilder().
 		WithConfig(b.cfg).
 		WithWorkingDir(b.workDir).
 		WithEmitter(b.emitter).
-		WithApprovalHandler(b.approvalHandler).
+		WithRuntime(b.runtime).
 		BuildExecutor()
 
 	// Gather environment using agent package helper with unified config
@@ -158,16 +164,11 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	return conv, nil
 }
 
-// validate ensures the configuration is valid and required fields are set.
+// validate ensures the configuration is valid.
+// Required fields are already validated in NewBuilder constructor.
 func (b *Builder) validate() error {
-	if b.cfg == nil {
-		return errors.New("config cannot be nil")
-	}
 	if err := b.cfg.Validate(); err != nil {
 		return fmt.Errorf("invalid config: %w", err)
-	}
-	if b.workDir == "" {
-		return errors.New("workDir cannot be empty")
 	}
 	return nil
 }
@@ -180,32 +181,25 @@ func (b *Builder) getLogger() *slog.Logger {
 	return slog.Default()
 }
 
-// initializeCoreDependencies sets up LLM, event emitter, storage, and auth.
+// initializeCoreDependencies sets up optional dependencies (storage, auth).
+// Required dependencies (runtime, emitter, provider) are passed to constructor.
 func (b *Builder) initializeCoreDependencies() error {
-	// LLM provider
-	if b.llm == nil {
-		b.llm = llm.NewMockProvider("default")
-	}
-
-	// Event emitter
-	if b.emitter == nil {
-		bufferSize := 100
-		if b.cfg.Agent.StreamBuffer > 0 {
-			bufferSize = b.cfg.Agent.StreamBuffer
-		}
-		b.emitter = events.NewEventEmitter(bufferSize)
-	}
-
-	// Session storage
+	// Session storage (optional - can use default)
 	if b.storage == nil {
-		fs, err := session.NewFileStorage(b.cfg.Agent.SessionDir)
+		// Use default session directory if not configured
+		sessionDir := b.cfg.Agent.SessionDir
+		if sessionDir == "" {
+			sessionDir = "~/.spin/sessions"
+		}
+
+		fs, err := session.NewFileStorage(sessionDir)
 		if err != nil {
 			return fmt.Errorf("initialize storage: %w", err)
 		}
 		b.storage = fs
 	}
 
-	// Auth manager
+	// Auth manager (internal resource)
 	keystore := auth.NewKeystore()
 	b.authManager = auth.NewManager(keystore)
 

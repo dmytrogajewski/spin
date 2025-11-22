@@ -135,7 +135,7 @@ func (p *Provider) Stream(ctx context.Context, params openai.ChatCompletionNewPa
 			select {
 			case chunks <- chunk:
 			case <-ctx.Done():
-				// Context cancelled, just exit (channel will be closed by defer)
+				// Context cancelled, just exit (channel is closed by defer)
 				return
 			}
 		}
@@ -145,8 +145,8 @@ func (p *Provider) Stream(ctx context.Context, params openai.ChatCompletionNewPa
 		// but we check here for completeness. Consumers should check for channel close.
 		if err := stream.Err(); err != nil {
 			// We can't send errors in chunks anymore since we removed the abstraction
-			// Errors will need to be handled differently by consumers
-			// For now, just log and close
+			// Errors must be handled differently by consumers
+			// Just log and close the channel
 			_ = mapError(err)
 			return
 		}

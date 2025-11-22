@@ -54,6 +54,7 @@ type ExecutionResult interface {
 	GetStdout() string
 	GetStderr() string
 	GetExitCode() int
+	GetMetadata() map[string]interface{}
 }
 
 // ShellCommandTool provides unified shell command execution and introspection.
@@ -272,6 +273,7 @@ func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParame
 	stdout := result.GetStdout()
 	stderr := result.GetStderr()
 	exitCode := result.GetExitCode()
+	metadata := result.GetMetadata()
 
 	// Combine stdout and stderr
 	output := stdout
@@ -289,9 +291,10 @@ func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParame
 	}
 
 	return ToolResult{
-		Success: exitCode == 0,
-		Output:  output,
-		Error:   errorMsg,
+		Success:  exitCode == 0,
+		Output:   output,
+		Error:    errorMsg,
+		Metadata: metadata,
 	}, nil
 }
 

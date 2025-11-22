@@ -7,12 +7,14 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	"github.com/spf13/cobra"
@@ -66,29 +68,33 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		setupTUILogging()
 	}
 
-	configLoader, err := loadConfig()
+	// Get TUI-specific flags
+	autoApprove, _ := cmd.Flags().GetBool("auto-approve")
+	maxTurns, _ := cmd.Flags().GetInt("max-turns")
+
+	// Load configuration using new unified API
+	cfg, err := config.Load(config.Source{
+		File: flagConfigFile,
+		Flags: config.FlagOverrides{
+			Provider: flagProvider,
+			Model:    flagModel,
+			MaxTurns: maxTurns,
+			Debug:    debugFlag,
+		},
+		WorkDir: flagWorkDir,
+	})
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
 
 	authMgr := createAuthManager()
-	provider, err := buildProvider(ctx, configLoader, authMgr)
+	provider, err := buildProvider(ctx, cfg, authMgr)
 	if err != nil {
 		return fmt.Errorf("create provider: %w", err)
 	}
 	defer provider.Close()
 
-	autoApprove, _ := cmd.Flags().GetBool("auto-approve")
-
-	// Build unified config (V2) for both conversation and UI (including approval TTLs).
-	workDir := getWorkingDirectory()
-	maxTurns, _ := cmd.Flags().GetInt("max-turns")
-	cfg, err := loadConfigForMode("", maxTurns, workDir)
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-	applyDebugFlag(cfg, debugFlag)
-
+	// Debug flag already applied via config.Load()
 	ui, err := adapters.NewPureTTY(os.Stdout)
 	if err != nil {
 		return fmt.Errorf("create TUI: %w", err)
@@ -97,11 +103,8 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	// Provide approval TTLs to UI for key preview/TTL hints.
 	ui.SetApprovalPolicyTTLs(cfg.Security.SessionPolicyTTL, cfg.Security.GlobalPolicyTTL)
 
-	// Determine the actual model being used (flag takes precedence over config)
-	currentModel := flagModel
-	if currentModel == "" {
-		currentModel = configLoader.GetString("model")
-	}
+	// Determine the actual model being used (already merged in cfg)
+	currentModel := cfg.LLM.Model
 
 	// Set max tokens for context percentage display
 	// Try to get actual context window from provider's models
@@ -111,8 +114,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		for _, m := range models {
 			if m.ID == currentModel {
 				// openai.Model doesn't have ContextSize field
-				// Use a default or fetch from model details if needed
-				// For now, keep the default maxTokens
+				// Use default maxTokens value
 				break
 			}
 		}
@@ -139,7 +141,9 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	// Initialize UI with conversation metadata
 	initializeUI(ui, conv, provider, currentModel)
 
-	// Create event mapper
+	// Create event mapper for TUI
+	// The runtime has its own internal mapper for notifications, but we need a separate one
+	// for processing the conversation event stream and updating the UI
 	mapper := tui.NewTUIMapper(ui)
 	defer mapper.Close()
 
@@ -264,10 +268,38 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 }
 
-// createConversationForTUI creates a conversation configured for TUI mode using the new builder pattern.
+// createConversationForTUI creates a conversation configured for TUI mode using the runtime pattern.
 func createConversationForTUI(ctx context.Context, provider llm.Provider, cfg *config.ConfigV2, ui *adapters.PureTTY, autoApprove bool) (*conversation.Conversation, error) {
 	workDir := cfg.Agent.WorkDir
+	logger := slog.Default()
 
+	// 1. Create shared infrastructure
+	emitter := events.NewEventEmitter(100)
+
+	var storage session.Storage
+	if cfg.Agent.SessionDir != "" {
+		var err error
+		storage, err = session.NewFileStorage(cfg.Agent.SessionDir)
+		if err != nil {
+			return nil, fmt.Errorf("create session storage: %w", err)
+		}
+	}
+
+	sessionID := ""
+	if storage != nil {
+		sess := session.NewSession(workDir)
+		sessionID = sess.ID
+	} else {
+		sessionID = fmt.Sprintf("tui-%d", time.Now().UnixNano())
+	}
+
+	// 2. Create protocol services
+	protocolServices, cleanup, err := createServices(cfg, workDir, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. Create approval handler (TUI-specific)
 	var approvalHandler security.ApprovalHandler
 	if autoApprove {
 		approvalHandler = createAutoApproveHandler()
@@ -275,19 +307,27 @@ func createConversationForTUI(ctx context.Context, provider llm.Provider, cfg *c
 		approvalHandler = createTUIApprovalHandler(ui)
 	}
 
-	// Create services based on configuration
-	logger := slog.Default()
-
-	protocolServices, cleanup, err := createProtocolServices(cfg, workDir, logger)
+	// 4. Create builtin runtime (complete, self-contained)
+	builtinRuntime, err := createBuiltinRuntime(
+		workDir,
+		emitter,
+		storage,
+		sessionID,
+		approvalHandler,
+		protocolServices,
+		ui,
+		logger,
+		cfg,
+	)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, fmt.Errorf("create builtin runtime: %w", err)
 	}
 
-	// Build conversation with services
-	builder := conversation.NewBuilder(cfg, workDir).
-		WithLLM(provider).
-		WithApprovalHandler(approvalHandler)
+	// 5. Build conversation with runtime
+	builder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
 
+	// Add optional services
 	if protocolServices.Git != nil {
 		builder = builder.WithGit(protocolServices.Git)
 	}
@@ -325,18 +365,6 @@ func setupTUILogging() {
 	slog.SetLogLoggerLevel(slog.LevelWarn)
 }
 
-// getWorkingDirectory returns the working directory for the conversation.
-func getWorkingDirectory() string {
-	workDir, err := os.Getwd()
-	if err != nil {
-		workDir = "."
-	}
-	if flagWorkDir != "" {
-		workDir = flagWorkDir
-	}
-	return workDir
-}
-
 // initializeUI initializes the UI with conversation metadata.
 func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provider llm.Provider, model string) {
 	taskMode := conv.GetTaskMode()
@@ -351,4 +379,3 @@ func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provide
 	sessionID := conv.GetSessionID()
 	ui.SetConversationID(sessionID)
 }
-

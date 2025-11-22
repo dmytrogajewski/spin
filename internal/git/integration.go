@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 )
 
 // GitIntegration provides Git-aware functionality for the agent.
@@ -274,8 +277,22 @@ func (g *GitIntegration) GetLog(limit int) ([]CommitInfo, error) {
 		return nil, fmt.Errorf("not a Git repository")
 	}
 
-	// For now, return empty list - would need to implement log functionality
-	return []CommitInfo{}, nil
+	if limit <= 0 {
+		limit = 10 // Default limit
+	}
+
+	// Use git log with format to get commit info
+	cmd := exec.Command("git", "log",
+		fmt.Sprintf("-%d", limit),
+		"--format=%H%n%an%n%ae%n%at%n%s%n%b%n---END---")
+	cmd.Dir = g.workDir
+
+	output, err := cmd.Output()
+	if err != nil {
+		return []CommitInfo{}, nil // Empty repo or no commits
+	}
+
+	return parseGitLog(string(output)), nil
 }
 
 // StageFile stages a file for commit.
@@ -361,8 +378,24 @@ func (g *GitIntegration) ListBranches() ([]string, error) {
 		return nil, fmt.Errorf("not a Git repository")
 	}
 
-	// For now, return empty list - would need to implement branch listing
-	return []string{}, nil
+	cmd := exec.Command("git", "branch", "--format=%(refname:short)")
+	cmd.Dir = g.workDir
+
+	output, err := cmd.Output()
+	if err != nil {
+		return []string{}, nil // No branches or error
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	branches := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			branches = append(branches, line)
+		}
+	}
+
+	return branches, nil
 }
 
 // ListRemotes returns the list of remote repositories.
@@ -371,8 +404,24 @@ func (g *GitIntegration) ListRemotes() ([]string, error) {
 		return nil, fmt.Errorf("not a Git repository")
 	}
 
-	// For now, return empty list - would need to implement remote listing
-	return []string{}, nil
+	cmd := exec.Command("git", "remote")
+	cmd.Dir = g.workDir
+
+	output, err := cmd.Output()
+	if err != nil {
+		return []string{}, nil // No remotes or error
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	remotes := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			remotes = append(remotes, line)
+		}
+	}
+
+	return remotes, nil
 }
 
 // GetWorkingDirectory returns the working directory.
@@ -391,4 +440,57 @@ func (g *GitIntegration) SetWorkingDirectory(workDir string) {
 func (g *GitIntegration) Close() error {
 	// No resources to clean up
 	return nil
+}
+
+// parseGitLog parses git log output into CommitInfo structs.
+func parseGitLog(output string) []CommitInfo {
+	commits := make([]CommitInfo, 0)
+
+	// Split by commit delimiter
+	commitBlocks := strings.Split(output, "---END---")
+
+	for _, block := range commitBlocks {
+		block = strings.TrimSpace(block)
+		if block == "" {
+			continue
+		}
+
+		lines := strings.Split(block, "\n")
+		if len(lines) < 5 {
+			continue // Invalid commit block
+		}
+
+		commit := CommitInfo{
+			Hash:   strings.TrimSpace(lines[0]),
+			Author: strings.TrimSpace(lines[1]),
+			Email:  strings.TrimSpace(lines[2]),
+		}
+
+		// Parse timestamp
+		timestamp := strings.TrimSpace(lines[3])
+		if ts, err := strconv.ParseInt(timestamp, 10, 64); err == nil {
+			commit.Timestamp = time.Unix(ts, 0).Format(time.RFC3339)
+		} else {
+			commit.Timestamp = timestamp
+		}
+
+		// Subject and body
+		subject := strings.TrimSpace(lines[4])
+		var body string
+		if len(lines) > 5 {
+			bodyLines := lines[5:]
+			body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
+		}
+
+		// Combine subject and body into Message
+		if body != "" {
+			commit.Message = subject + "\n\n" + body
+		} else {
+			commit.Message = subject
+		}
+
+		commits = append(commits, commit)
+	}
+
+	return commits
 }

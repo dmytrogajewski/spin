@@ -10,6 +10,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
+	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
 	"github.com/dmytrogajewski/spin/internal/detection"
 	spinerrors "github.com/dmytrogajewski/spin/internal/errors"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -50,11 +51,7 @@ var (
 // The Agent orchestrates the interaction between the LLM, tools, and execution
 // environment. It processes user requests through multiple turns of LLM calls
 // and tool executions until the task is complete or limits are reached.
-//
-// REFACTORED: Agent now uses service-based architecture (2025-10-19)
-// - SecurityService handles validation and approval
-// - DetectionService handles cycle and pattern detection
-// - OrchestrationService handles tool execution and task management
+
 type Agent struct {
 	// Core LLM interaction
 	llm llm.Provider
@@ -67,9 +64,10 @@ type Agent struct {
 	aceService      *ACEService // ACE (Agentic Context Engineering) - optional
 
 	// Infrastructure
-	context *Environment
-	emitter *events.EventEmitter
-	planner *planning.Plan
+	context     *Environment
+	emitter     *events.EventEmitter
+	planner     *planning.Plan
+	planTracker *PlanTracker
 
 	// Configuration (options-based)
 	maxTurns        int
@@ -220,6 +218,12 @@ func NewAgent(
 	}
 
 	return agent, nil
+}
+
+// GetSecurityService returns the agent's security service.
+// This allows access to the security service for updating approval handlers.
+func (a *Agent) GetSecurityService() *security.SecurityService {
+	return a.security
 }
 
 // SetApprovalService updates the approval service on the underlying orchestration service.
@@ -456,6 +460,11 @@ func (a *Agent) GetPlanner() *planning.Plan {
 // SetPlanner sets the execution planner.
 func (a *Agent) SetPlanner(planner *planning.Plan) {
 	a.planner = planner
+
+	// Initialize plan tracker to monitor execution
+	if planner != nil && a.emitter != nil {
+		a.planTracker = NewPlanTracker(planner, a.emitter)
+	}
 }
 
 // BuildToolsForTask constructs the filtered tool list for the LLM request,
@@ -684,6 +693,7 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 		ToolID:   call.ID,
 		ToolName: call.Function.Name,
 		Success:  result.Success,
+		Metadata: result.Metadata,
 	}
 	if result.Success {
 		completion.Output = result.Output
@@ -697,6 +707,16 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 		Timestamp: time.Now(),
 		Data:      completion,
 	})
+
+	// 6. Update plan status if tracker is active
+	if a.planTracker != nil {
+		event := events.Event{
+			Type:      events.EventToolCallComplete,
+			Timestamp: time.Now(),
+			Data:      completion,
+		}
+		a.planTracker.OnToolCallComplete(event)
+	}
 
 	return result, nil // Always return nil error so agent continues
 }
@@ -814,6 +834,9 @@ Then provide your response after the thinking block.`
 	// This handles tool call accumulation by index correctly
 	acc := openai.ChatCompletionAccumulator{}
 
+	// Initialize sanitizer for content stream
+	streamSanitizer := sanitizer.New()
+
 	chunkCount := 0
 	for chunk := range chunks {
 		chunkCount++
@@ -835,20 +858,67 @@ Then provide your response after the thinking block.`
 		delta := choice.Delta
 
 		// Emit content delta immediately for real-time streaming
+		// Use sanitizer to filter out protocol artifacts and separate thoughts
 		if delta.Content != "" {
-			a.emitter.Emit(events.Event{
-				Type:      events.EventContentDelta,
-				Timestamp: time.Now(),
-				Data: events.ContentDeltaData{
-					Content: delta.Content,
-					Role:    string(message.RoleAssistant),
-				},
-			})
-			slog.Debug("received content chunk", "count", chunkCount, "content_len", len(delta.Content))
+			content, thought := streamSanitizer.Process(delta.Content)
+
+			if content != "" {
+				a.emitter.Emit(events.Event{
+					Type:      events.EventContentDelta,
+					Timestamp: time.Now(),
+					Data: events.ContentDeltaData{
+						Content: content,
+						Role:    string(message.RoleAssistant),
+					},
+				})
+				slog.Debug("received content chunk", "count", chunkCount, "content_len", len(content))
+			}
+
+			if thought != "" {
+				a.emitter.Emit(events.Event{
+					Type:      events.EventThinkingDelta,
+					Timestamp: time.Now(),
+					Data: events.ThinkingDeltaData{
+						Content: thought,
+					},
+				})
+				slog.Debug("received thinking chunk", "count", chunkCount, "content_len", len(thought))
+			}
 		}
 
 		// Check if a tool call just finished being accumulated
-		if toolCall, ok := acc.JustFinishedToolCall(); ok {
+		toolCall, finished := acc.JustFinishedToolCall()
+		if !finished && choice.FinishReason == openai.ChatCompletionChunkChoicesFinishReasonToolCalls {
+			finished = true
+		}
+
+		if finished {
+			if toolCall.Name != "" {
+				slog.Debug("tool call finished", "index", toolCall.Index, "name", toolCall.Name, "args_len", len(toolCall.Arguments))
+			}
+			// Plan detection logic
+			// If we haven't set a planner yet, check the accumulated content for a plan.
+			// This handles the "Thinking/Planning -> ToolCall" pattern synchronously.
+			if a.planner == nil {
+				if len(acc.Choices) > 0 {
+					content := acc.Choices[0].Message.Content
+					if content != "" {
+						plan := planning.DetectPlanFromText(content)
+						if plan != nil {
+							a.SetPlanner(plan)
+							// Manually emit EventPlanUpdate so ACP agent sees it
+							a.emitter.Emit(events.Event{
+								Type:      events.EventPlanUpdate,
+								Timestamp: time.Now(),
+								Data: events.PlanUpdateData{
+									Plan: plan,
+								},
+							})
+						}
+					}
+				}
+			}
+
 			slog.Debug("tool call finished", "index", toolCall.Index, "name", toolCall.Name, "args_len", len(toolCall.Arguments))
 		}
 
@@ -883,6 +953,34 @@ Then provide your response after the thinking block.`
 			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
 		} else {
 			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonStop
+		}
+	}
+
+	// XML Tool Call Recovery:
+	// If no structured tool calls were detected, check if the LLM output tool calls as XML in content.
+	// This handles models like Qwen that may fallback to XML output.
+	if len(response.Choices[0].Message.ToolCalls) == 0 {
+		content := response.Choices[0].Message.Content
+		xmlToolCalls := parseToolCallsFromXML(content)
+		if len(xmlToolCalls) > 0 {
+			slog.Info("detected XML tool calls in content", "count", len(xmlToolCalls))
+			response.Choices[0].Message.ToolCalls = xmlToolCalls
+			// Force finish reason to tool_calls so the loop processes them
+			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
+
+			// Clean up content to remove XML tags (avoid duplication in history)
+			// We reconstruct content preserving thoughts but removing function tags
+			s := sanitizer.New()
+			cleanContent, cleanThought := s.Process(content)
+
+			var sb strings.Builder
+			if cleanThought != "" {
+				sb.WriteString("<think>")
+				sb.WriteString(cleanThought)
+				sb.WriteString("</think>\n")
+			}
+			sb.WriteString(cleanContent)
+			response.Choices[0].Message.Content = sb.String()
 		}
 	}
 

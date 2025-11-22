@@ -61,7 +61,7 @@ func startACPAgent(t *testing.T, args ...string) (*exec.Cmd, io.WriteCloser, io.
 	require.NoError(t, err, "Failed to start ACP agent")
 
 	// Give agent a moment to initialize
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	return cmd, stdin, stdout
 }

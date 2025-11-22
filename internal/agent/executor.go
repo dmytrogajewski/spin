@@ -60,6 +60,14 @@ type Result struct {
 
 	// Truncated indicates if output was truncated
 	Truncated bool
+
+	// Metadata contains additional execution metadata
+	Metadata map[string]interface{}
+}
+
+// GetMetadata returns execution metadata.
+func (r *Result) GetMetadata() map[string]interface{} {
+	return r.Metadata
 }
 
 // GetStdout returns the standard output.
@@ -528,8 +536,8 @@ func (e *Executor) executeCommand(ctx context.Context, cmd *security.Command, op
 // ExecuteStreaming runs a command and streams output in real-time.
 //
 // This method is useful for long-running commands where you want to display
-// output progressively. The returned channel will receive output chunks as
-// they arrive and will be closed when execution completes.
+// output progressively. The returned channel receives output chunks as
+// they arrive and is closed when execution completes.
 //
 // Example:
 //

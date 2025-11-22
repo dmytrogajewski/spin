@@ -45,6 +45,9 @@ type ToolResult struct {
 
 	// Error contains an error message if the tool failed.
 	Error string `json:"error,omitempty"`
+
+	// Metadata contains additional tool-specific data.
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ToolSchema defines the OpenAI-compatible tool schema.

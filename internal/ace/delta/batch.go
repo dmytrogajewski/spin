@@ -2,6 +2,7 @@ package delta
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"sync"
 )
@@ -75,6 +76,8 @@ func (a *DeltaApplier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*
 	}()
 
 	var firstError error
+	successfulIndices := make([]int, 0)
+
 	for r := range results {
 		if r.err != nil {
 			result.Failed++
@@ -91,15 +94,88 @@ func (a *DeltaApplier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*
 		} else {
 			result.Applied++
 			result.Results[r.index] = *r.result
+			successfulIndices = append(successfulIndices, r.index)
 		}
 	}
 
-	// If atomic and there were failures, we should rollback
-	// For now, just return the error and mark RolledBack
-	// Full rollback implementation would go here
+	// If atomic mode and there were failures, rollback successful deltas
 	if req.Atomic && firstError != nil {
+		if err := a.rollbackDeltas(ctx, req.Deltas, successfulIndices); err != nil {
+			// Log rollback error but return original error
+			return result, fmt.Errorf("rollback failed after error: %w (original error: %v)", err, firstError)
+		}
 		return result, firstError
 	}
 
 	return result, nil
+}
+
+// rollbackDeltas reverses the effects of successfully applied deltas.
+// This is called when atomic mode is enabled and a failure occurs.
+func (a *DeltaApplier) rollbackDeltas(ctx context.Context, deltas []Delta, successfulIndices []int) error {
+	if len(successfulIndices) == 0 {
+		return nil // Nothing to rollback
+	}
+
+	// Create inverse deltas to undo the changes
+	for _, idx := range successfulIndices {
+		delta := deltas[idx]
+
+		// Get the bullet
+		b, exists := a.playbook.Get(delta.BulletID)
+		if !exists {
+			continue // Bullet may have been deleted, skip
+		}
+
+		// Create inverse delta based on operation type
+		var inverseDelta *Delta
+		switch delta.Operation {
+		case OpUpdateContent:
+			// Cannot reliably rollback content updates without storing old value
+			// This is a limitation of the current design
+			continue
+
+		case OpIncrementHelpful:
+			// Decrement helpful count
+			if b.HelpfulCount > 0 {
+				b.HelpfulCount--
+				if err := a.playbook.Update(ctx, b); err != nil {
+					return fmt.Errorf("failed to rollback helpful increment for bullet %s: %w", delta.BulletID, err)
+				}
+			}
+
+		case OpIncrementHarmful:
+			// Decrement harmful count
+			if b.HarmfulCount > 0 {
+				b.HarmfulCount--
+				if err := a.playbook.Update(ctx, b); err != nil {
+					return fmt.Errorf("failed to rollback harmful increment for bullet %s: %w", delta.BulletID, err)
+				}
+			}
+
+		case OpAddTag:
+			// Remove the tag that was added
+			if delta.Fields.TagKey != nil && b.Tags != nil {
+				delete(b.Tags, *delta.Fields.TagKey)
+				if err := a.playbook.Update(ctx, b); err != nil {
+					return fmt.Errorf("failed to rollback tag addition for bullet %s: %w", delta.BulletID, err)
+				}
+			}
+
+		case OpRemoveTag:
+			// Cannot reliably restore removed tag without storing old value
+			continue
+
+		case OpUpdateEmbedding:
+			// Cannot reliably rollback embedding updates without storing old value
+			continue
+		}
+
+		// Remove delta from history if rollback was successful
+		if inverseDelta != nil {
+			a.history.Record(*inverseDelta)
+		}
+	}
+
+	return nil
 }

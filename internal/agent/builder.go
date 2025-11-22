@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/agent/runtime"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/cycle"
 	"github.com/dmytrogajewski/spin/internal/detection"
@@ -20,6 +21,7 @@ type Builder struct {
 	workingDir      string
 	emitter         *events.EventEmitter
 	approvalHandler security.ApprovalHandler
+	runtime         runtime.Runtime // Optional runtime for tool registration and approval
 }
 
 // NewBuilder creates a new agent builder.
@@ -158,6 +160,13 @@ func (b *Builder) WithApprovalHandler(handler security.ApprovalHandler) *Builder
 	return b
 }
 
+// WithRuntime sets the runtime for tool registration and approval handling.
+// If set, the runtime's approval handler and tool registry are used.
+func (b *Builder) WithRuntime(rt runtime.Runtime) *Builder {
+	b.runtime = rt
+	return b
+}
+
 // BuildExecutor creates an Executor with appropriate options based on configuration.
 // This is a public helper for use by conversation package.
 func (b *Builder) BuildExecutor() *Executor {
@@ -230,8 +239,15 @@ func (b *Builder) buildEnvironmentOptions() []EnvironmentOption {
 
 // BuildSecurityService creates security service with approval handling.
 // This is a public helper for use by conversation package.
+// If a runtime is set, uses the runtime's approval handler; otherwise uses the builder's approval handler.
 func (b *Builder) BuildSecurityService() *security.SecurityService {
 	validator := security.NewValidator()
+
+	// Use runtime's approval handler if available, otherwise use builder's
+	handler := b.approvalHandler
+	if b.runtime != nil {
+		handler = b.runtime.ApprovalHandler()
+	}
 
 	var approvalSvc *security.ApprovalService
 	// Configure policy store: prefer configured path; else default to user config dir
@@ -251,7 +267,7 @@ func (b *Builder) BuildSecurityService() *security.SecurityService {
 	sessionTTL := b.config.Security.SessionPolicyTTL
 	globalTTL := b.config.Security.GlobalPolicyTTL
 	cfg := security.ApprovalServiceConfig{
-		Handler:           b.approvalHandler,
+		Handler:           handler,
 		Emitter:           b.emitter,
 		Validator:         validator,
 		Store:             store,

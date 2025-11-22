@@ -22,8 +22,8 @@ type Provider interface {
 
 	// Stream performs a streaming completion request.
 	//
-	// Returns a channel that will receive chunks as they arrive.
-	// The channel will be closed when the stream completes or an error occurs.
+	// Returns a channel that receives chunks as they arrive.
+	// The channel is closed when the stream completes or an error occurs.
 	//
 	// Callers must consume all chunks from the channel to avoid goroutine leaks.
 	// Context cancellation will stop the stream and close the channel.

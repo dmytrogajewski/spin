@@ -280,10 +280,53 @@ func (g *generator) buildTrajectory(
 }
 
 // checkSuccess checks if output matches ground truth.
+// Uses multiple strategies: exact match, normalized match, and substring matching.
 func (g *generator) checkSuccess(output, groundTruth string) bool {
-	// Simple string contains check for now
-	// TODO: Add more sophisticated matching (fuzzy, semantic, etc.)
-	return len(output) > 0 && len(groundTruth) > 0
+	if len(output) == 0 || len(groundTruth) == 0 {
+		return false
+	}
+
+	// Strategy 1: Exact match
+	if output == groundTruth {
+		return true
+	}
+
+	// Strategy 2: Normalized match (lowercase, trimmed)
+	normalizedOutput := strings.ToLower(strings.TrimSpace(output))
+	normalizedTruth := strings.ToLower(strings.TrimSpace(groundTruth))
+
+	if normalizedOutput == normalizedTruth {
+		return true
+	}
+
+	// Strategy 3: Contains match (for flexible matching)
+	if strings.Contains(normalizedOutput, normalizedTruth) ||
+		strings.Contains(normalizedTruth, normalizedOutput) {
+		return true
+	}
+
+	// Strategy 4: Word-based similarity (check if key words match)
+	outputWords := strings.Fields(normalizedOutput)
+	truthWords := strings.Fields(normalizedTruth)
+
+	if len(outputWords) == 0 || len(truthWords) == 0 {
+		return false
+	}
+
+	// Count matching words
+	matchCount := 0
+	for _, word := range truthWords {
+		for _, outWord := range outputWords {
+			if word == outWord {
+				matchCount++
+				break
+			}
+		}
+	}
+
+	// Require at least 70% word overlap
+	similarity := float64(matchCount) / float64(len(truthWords))
+	return similarity >= 0.7
 }
 
 // GenerateBullets implements Generator interface.

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
 // TestConversation_RunTurn_EmptyPrompt tests RunTurn with empty prompt
@@ -447,10 +446,9 @@ func setupTestConv(t *testing.T) *Conversation {
 
 	cfg := testConfig()
 	workDir := t.TempDir()
-	llmProvider := llm.NewMockProvider("ok")
+	rt, emitter, provider := createTestRuntime(t, workDir)
 
-	conv, err := NewBuilder(cfg, workDir).
-		WithLLM(llmProvider).
+	conv, err := NewBuilder(cfg, workDir, rt, emitter, provider).
 		Build(context.Background())
 	if err != nil {
 		t.Fatalf("failed to build conversation: %v", err)

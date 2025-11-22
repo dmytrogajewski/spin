@@ -39,7 +39,7 @@ func (d *AMDDetector) GPUName() (string, error) {
 		return "", err
 	}
 	// Very loose parse; return first product name occurrence if present.
-	re := regexp.MustCompile(`GPU\[\d+\]\s*:\s*(.+)`) // e.g., GPU[0]: Radeon XXX
+	re := regexp.MustCompile(`GPU\[\d+\]\s*:\s*(.+)`) // e.g., GPU[0]: Radeon RX 7900 XT
 	m := re.FindSubmatch(out)
 	if len(m) >= 2 {
 		return string(m[1]), nil

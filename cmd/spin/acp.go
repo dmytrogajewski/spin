@@ -12,14 +12,16 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
-	"github.com/dmytrogajewski/spin/internal/conversation"
+	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/llm/ollama"
-	"github.com/dmytrogajewski/spin/internal/llm/openai"
+	"github.com/dmytrogajewski/spin/internal/llm/builder"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	acppkg "github.com/dmytrogajewski/spin/internal/protocol/acp"
 	"github.com/dmytrogajewski/spin/internal/session"
+	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -63,87 +65,110 @@ Examples:
 
 // runACPServer starts the ACP server.
 func runACPServer(workDir, providerType, baseURL, model, apiKey string) error {
-	provider, err := createProviderForACP(providerType, baseURL, model, apiKey)
-	if err != nil {
-		return fmt.Errorf("failed to create provider: %w", err)
-	}
-	defer provider.Close()
+	authMgr := createAuthManager()
 
-	// Load config for ACP mode
-	cfg, err := loadConfigForMode("", 0, workDir)
+	cfg, err := config.Load(config.Source{
+		File: flagConfigFile,
+		Flags: config.FlagOverrides{
+			Provider: providerType,
+			Model:    model,
+			BaseURL:  baseURL,
+		},
+		WorkDir: workDir,
+	})
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	// Create conversation using unified builder with temporary auto-approve handler
-	// We'll update the approval handler after creating the ACP agent
 	ctx := context.Background()
-	conv, err := createACPConversation(ctx, workDir, provider, cfg)
+	provider, err := buildProviderForACP(
+		ctx,
+		cfg,
+		authMgr,
+		cfg.LLM.Provider,
+		cfg.LLM.BaseURL,
+		cfg.LLM.Model,
+		apiKey,
+	)
+
 	if err != nil {
-		return fmt.Errorf("failed to create ACP conversation: %w", err)
+		return fmt.Errorf("failed to create provider: %w", err)
 	}
 
-	// Extract agent and emitter from conversation
-	agentInstance := conv.GetAgent()
-	emitter := conv.GetEmitter()
+	defer provider.Close()
 
-	// Create session storage for persistence
+	logger := slog.Default()
+	protocolServices, cleanup, err := createServices(cfg, workDir, logger)
+
+	if err != nil {
+		return fmt.Errorf("failed to create services: %w", err)
+	}
+
+	defer cleanup()
+
+	bufferSize := 100
+
+	if cfg.Agent.StreamBuffer > 0 {
+		bufferSize = cfg.Agent.StreamBuffer
+	}
+
+	emitter := events.NewEventEmitter(bufferSize)
 	storageDir := cfg.Agent.SessionDir
+
 	if storageDir == "" {
-		// Default to ~/.spin/sessions if not configured
 		storageDir = "~/.spin/sessions"
 	}
+
 	storage, err := session.NewFileStorage(storageDir)
+
 	if err != nil {
-		return fmt.Errorf("failed to create session storage: %w", err)
+		return fmt.Errorf("create session storage: %w", err)
 	}
 
-	// Create MCP manager (separate from conversation's MCP service)
-	// The conversation's MCP service is for tool integration, this is for ACP protocol
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	acpRuntime, err := runtime.NewACP(runtime.ACPConfig{
+		WorkDir:      workDir,
+		Emitter:      emitter,
+		Storage:      storage,
+		ShellService: protocolServices.Shell,
+		GitService:   protocolServices.Git,
+		Logger:       logger,
+	})
 
-	// Create ACP agent with storage
-	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	if err != nil {
-		return fmt.Errorf("failed to create ACP agent: %w", err)
+		return fmt.Errorf("create ACP runtime: %w", err)
 	}
 
-	// Create ACP approval handler
-	approvalHandler := acppkg.NewACPApprovalHandler(acpAgent, 60*time.Second)
+	coreAgent, err := buildCoreAgent(cfg, provider, workDir, emitter, acpRuntime)
 
-	// Update approval service with ACP handler using unified builder logic
-	// This ensures ACP mode uses the same policy store logic as other modes (TUI/Exec)
-	agentBuilder := agent.NewBuilder().
-		WithConfig(cfg).
-		WithWorkingDir(workDir).
-		WithEmitter(emitter).
-		WithApprovalHandler(approvalHandler.HandleApprovalRequest)
+	if err != nil {
+		return fmt.Errorf("build core agent: %w", err)
+	}
 
-	// Build a new security service using unified builder (handles policy store config properly)
-	newSecurityService := agentBuilder.BuildSecurityService()
-	newApprovalService := newSecurityService.ApprovalService()
+	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, logger)
+	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreAgent, mcpManager, emitter, storage)
 
-	// Update the agent's approval service
-	// The agent was created by conversation.Builder, so we update it with the ACP handler
-	agentInstance.SetApprovalService(newApprovalService)
+	if err != nil {
+		return fmt.Errorf("create ACP protocol adapter: %w", err)
+	}
 
-	// Wire the approval service + handler into the ACP adapter
-	acpAgent.SetApprovalHandler(approvalHandler)
-	acpAgent.SetApprovalService(newApprovalService)
-
-	// Create ACP connection (starts automatically)
+	acpRuntime.SetACPAgent(acpAgent)
+	acpApprovalHandler := acppkg.NewACPApprovalHandler(acpAgent, 60*time.Second)
+	acpRuntime.SetApprovalHandler(acpApprovalHandler.HandleApprovalRequest)
+	acpAgent.SetApprovalHandler(acpApprovalHandler)
+	acpAgent.SetApprovalService(coreAgent.GetSecurityService().ApprovalService())
 	conn := acp.NewAgentSideConnection(acpAgent, os.Stdout, os.Stdin)
-
-	// Set connection on agent for sending notifications
 	acpAgent.SetConnection(conn)
+	terminalClient := acppkg.NewACPTerminalClient(conn)
+	acpRuntime.SetTerminalClient(terminalClient)
+	filesystemClient := acppkg.NewACPFilesystemClient(conn)
+	acpRuntime.SetFilesystemClient(filesystemClient)
+	ctx, cancel := context.WithCancel(ctx)
 
-	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	setupACPServerSignalHandling(cancel)
 	logACPServerStart(providerType, model, workDir)
 
-	// Wait for connection to finish (blocks until peer disconnects or context cancelled)
 	select {
 	case <-conn.Done():
 		log.Println("ACP client disconnected")
@@ -154,71 +179,79 @@ func runACPServer(workDir, providerType, baseURL, model, apiKey string) error {
 	return nil
 }
 
-// createProviderForACP creates an LLM provider for ACP server.
-func createProviderForACP(providerType, baseURL, model, apiKey string) (llm.Provider, error) {
-	switch providerType {
-	case "ollama":
-		return ollama.NewProvider(ollama.Config{
-			BaseURL: baseURL,
-			Model:   model,
-			Timeout: llm.DefaultTimeout,
-		})
-	case "openai":
-		return openai.NewProvider(openai.Config{
-			BaseURL: baseURL,
-			APIKey:  apiKey,
-			Model:   model,
-			Timeout: llm.DefaultTimeout,
-		})
-	default:
-		if extra, ok, err := createProviderForACPExtra(providerType, baseURL, model, apiKey); err != nil {
-			return nil, err
-		} else if ok {
-			return extra, nil
-		}
-		return nil, fmt.Errorf("unknown provider type: %s", providerType)
-	}
-}
-
-// createACPConversation creates a conversation for ACP mode using conversation.Builder.
-// Uses a temporary auto-approve handler initially, which will be updated after ACP agent creation.
-// Uses unified protocol services setup like TUI/EXEC modes.
-func createACPConversation(ctx context.Context, workDir string, provider llm.Provider, cfg *config.ConfigV2) (*conversation.Conversation, error) {
-	// Use temporary auto-approve handler - will be updated after ACP agent is created
-	approvalHandler := createAutoApproveHandler()
-
-	// Create services based on configuration (unified with TUI/EXEC)
-	logger := slog.Default()
-	protocolServices, cleanup, err := createProtocolServices(cfg, workDir, logger)
-	if err != nil {
+// buildProviderForACP creates and configures an LLM provider for the ACP server.
+func buildProviderForACP(ctx context.Context, cfg *config.ConfigV2, authMgr *auth.Manager, providerType, baseURL, model, apiKey string) (llm.Provider, error) {
+	if extra, ok, err := createProviderForACPExtra(providerType, baseURL, model, apiKey); err != nil {
 		return nil, err
+	} else if ok {
+		return extra, nil
 	}
 
-	// Build conversation with services (unified with TUI/EXEC)
-	builder := conversation.NewBuilder(cfg, workDir).
-		WithLLM(provider).
-		WithApprovalHandler(approvalHandler)
+	b := builder.NewBuilder(cfg, authMgr)
 
-	if protocolServices.Git != nil {
-		builder = builder.WithGit(protocolServices.Git)
-	}
-	if protocolServices.Shell != nil {
-		builder = builder.WithShell(protocolServices.Shell)
-	}
-	if protocolServices.MCP != nil {
-		builder = builder.WithMCP(protocolServices.MCP)
-	}
-
-	conv, err := builder.Build(ctx)
-	if err != nil {
-		cleanup()
-		return nil, fmt.Errorf("build conversation: %w", err)
-	}
-
-	return conv, nil
+	return b.Build(ctx)
 }
 
-// setupACPServerSignalHandling sets up signal handling for graceful shutdown.
+// buildCoreAgent constructs the core agent with all required services and dependencies.
+func buildCoreAgent(
+	cfg *config.ConfigV2,
+	provider llm.Provider,
+	workDir string,
+	emitter *events.EventEmitter,
+	rt runtime.Runtime,
+) (*agent.Agent, error) {
+	agentBuilder := agent.NewBuilder().
+		WithConfig(cfg).
+		WithProvider(provider).
+		WithWorkingDir(workDir).
+		WithEmitter(emitter).
+		WithRuntime(rt)
+
+	environment := agentBuilder.BuildEnvironment()
+	securityService := agentBuilder.BuildSecurityService()
+	detectionService := agentBuilder.BuildDetectionService()
+	planningService := agentBuilder.BuildPlanningService()
+	executor := agentBuilder.BuildExecutor()
+	toolExecutor := agent.NewToolExecutorAdapter(executor)
+
+	if acpRT, ok := rt.(*runtime.ACPRuntime); ok {
+		acpRT.SetExecutor(toolExecutor)
+		acpRT.SetValidator(runtime.NewValidatorAdapter(securityService.Validator()))
+	}
+
+	toolRegistry := tools.NewRegistry()
+	rt.RegisterTools(toolRegistry)
+
+	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
+		Registry:        toolRegistry,
+		Validator:       securityService.Validator(),
+		ApprovalService: securityService.ApprovalService(),
+		Emitter:         emitter,
+		WorkDir:         workDir,
+	})
+
+	opts := agentBuilder.BuildAgentOptions()
+
+	if cfg != nil && cfg.ACE.Enabled {
+		aceSvc, err := agentBuilder.BuildACEService()
+
+		if err == nil {
+			opts = append(opts, agent.WithACEService(aceSvc))
+			aceConfig := agent.ConvertACEConfig(&cfg.ACE)
+			opts = append(opts, agent.WithACEConfig(aceConfig))
+		}
+	}
+
+	agentInstance, err := agent.NewAgent(provider, securityService, detectionService, toolRuntime, planningService, environment, emitter, opts...)
+
+	if err != nil {
+		return nil, fmt.Errorf("build agent: %w", err)
+	}
+
+	return agentInstance, nil
+}
+
+// setupACPServerSignalHandling configures signal handlers for graceful shutdown.
 func setupACPServerSignalHandling(cancel context.CancelFunc) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -229,7 +262,7 @@ func setupACPServerSignalHandling(cancel context.CancelFunc) {
 	}()
 }
 
-// logACPServerStart logs server startup information.
+// logACPServerStart logs the ACP server startup information.
 func logACPServerStart(providerType, model, workDir string) {
 	log.Println("Starting ACP server on stdin/stdout...")
 	log.Printf("Provider: %s, Model: %s", providerType, model)

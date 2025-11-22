@@ -43,13 +43,14 @@ Examples:
 	return cmd
 }
 
+// newMCPAddCmd creates the command for adding a new MCP server.
 func newMCPAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <name> <command> [args...]",
 		Short: "Add a new MCP server",
 		Long: `Add a new MCP server configuration.
 
-The server will be added to your configuration file (usually ~/.spin/spin.yaml).
+The server is added to your configuration file (usually ~/.spin/spin.yaml).
 
 Examples:
   # Add a filesystem server
@@ -66,6 +67,7 @@ Examples:
 	return cmd
 }
 
+// newMCPListCmd creates the command for listing configured MCP servers.
 func newMCPListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -86,6 +88,7 @@ Examples:
 	return cmd
 }
 
+// newMCPGetCmd creates the command for getting details of a specific MCP server.
 func newMCPGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <name>",
@@ -108,14 +111,15 @@ Examples:
 	return cmd
 }
 
+// newMCPRemoveCmd creates the command for removing an MCP server.
 func newMCPRemoveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove <name>",
 		Short: "Remove an MCP server",
 		Long: `Remove an MCP server configuration.
 
-The server will be removed from your configuration file.
-By default, you will be prompted for confirmation.
+The server is removed from your configuration file.
+By default, you are prompted for confirmation.
 
 Examples:
   # Remove a server (with confirmation)
@@ -130,6 +134,7 @@ Examples:
 	return cmd
 }
 
+// runMCPAdd handles the execution of the MCP add command.
 func runMCPAdd(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	command := args[1]
@@ -170,6 +175,7 @@ func runMCPAdd(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// runMCPList handles the execution of the MCP list command.
 func runMCPList(cmd *cobra.Command, args []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
@@ -210,6 +216,7 @@ func runMCPList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// runMCPGet handles the execution of the MCP get command.
 func runMCPGet(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	format, _ := cmd.Flags().GetString("format")
@@ -261,6 +268,7 @@ func runMCPGet(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// runMCPRemove handles the execution of the MCP remove command.
 func runMCPRemove(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	yes, _ := cmd.Flags().GetBool("yes")

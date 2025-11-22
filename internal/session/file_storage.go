@@ -58,7 +58,7 @@ func (fs *FileStorage) Save(s *Session) error {
 		return fmt.Errorf("serialize session: %w", err)
 	}
 
-	// Write to temporary file first (atomic write pattern)
+	// Write to temp file first (atomic write pattern)
 	tmpPath := fs.sessionPath(s.ID) + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return fmt.Errorf("write temp file: %w", err)

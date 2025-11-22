@@ -1015,7 +1015,7 @@ func (u *PureTTY) executeNewPlanCommand(_ context.Context) error {
 		ID:        fmt.Sprintf("plan_%d", time.Now().UnixMilli()),
 		Type:      blocks.BlockTypePlan,
 		Title:     "New Plan",
-		Meta:      nil, // Will be set when plan data is available
+		Meta:      nil, // Set when plan data is available
 		Body:      "- Add your first step here\n- Add your second step here\n- Add your third step here",
 		FoldState: blocks.FoldStateExpanded,
 		Severity:  blocks.SeverityInfo,
@@ -1040,11 +1040,11 @@ func (u *PureTTY) executeToggleModeCommand(_ context.Context) error {
 
 // executeChangeThemeCommand implements the "Change theme..." command.
 func (u *PureTTY) executeChangeThemeCommand(_ context.Context) error {
-	u.showStatusMessage("Theme switching: Not yet implemented")
+	u.showStatusMessage("Theme switching: Not implemented")
 	return nil
 }
 
-// showStatusMessage displays a temporary message in the status bar.
+// showStatusMessage displays a status message in the status bar.
 func (u *PureTTY) showStatusMessage(msg string) {
 	if u.statusRenderer == nil {
 		return

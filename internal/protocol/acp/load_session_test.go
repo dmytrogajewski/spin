@@ -176,6 +176,5 @@ func TestSpinACPAgent_LoadSession_InvalidMcpServer(t *testing.T) {
 	_, err = acpAgent.LoadSession(context.Background(), req)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "HTTP transport not yet supported")
+	assert.Contains(t, err.Error(), "HTTP transport is not supported")
 }
-

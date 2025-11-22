@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/google/uuid"
 )
@@ -47,6 +48,13 @@ func (e Event) ToolCallCompleteData() (ToolCallCompleteData, bool) {
 	return data, ok
 }
 
+// PlanUpdateData returns the event data as PlanUpdateData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) PlanUpdateData() (PlanUpdateData, bool) {
+	data, ok := e.Data.(PlanUpdateData)
+	return data, ok
+}
+
 // ToolProgressData returns the event data as ToolProgressData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ToolProgressData() (ToolProgressData, bool) {
@@ -58,6 +66,13 @@ func (e Event) ToolProgressData() (ToolProgressData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ContentDeltaData() (ContentDeltaData, bool) {
 	data, ok := e.Data.(ContentDeltaData)
+	return data, ok
+}
+
+// ThinkingDeltaData returns the event data as ThinkingDeltaData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ThinkingDeltaData() (ThinkingDeltaData, bool) {
+	data, ok := e.Data.(ThinkingDeltaData)
 	return data, ok
 }
 
@@ -109,12 +124,14 @@ type EventType int
 const (
 	// Content events - text generation from LLM
 	EventContentDelta EventType = iota
+	EventThinkingDelta
 	EventContentComplete
 
 	// Tool events - tool execution lifecycle
 	EventToolCallStart
 	EventToolCallProgress
 	EventToolCallComplete
+	EventPlanUpdate
 
 	// Turn events - turn lifecycle
 	EventTurnStart
@@ -144,10 +161,12 @@ const (
 func (e EventType) String() string {
 	names := []string{
 		"content_delta",
+		"thinking_delta",
 		"content_complete",
 		"tool_call_start",
 		"tool_call_progress",
 		"tool_call_complete",
+		"plan_update",
 		"turn_start",
 		"turn_progress",
 		"turn_complete",
@@ -178,6 +197,11 @@ type ContentDeltaData struct {
 	Role    string `json:"role"`
 }
 
+// ThinkingDeltaData contains incremental thinking content from LLM.
+type ThinkingDeltaData struct {
+	Content string `json:"content"`
+}
+
 // ToolCallStartData contains tool execution start information.
 type ToolCallStartData struct {
 	ToolName         string               `json:"tool_name"`
@@ -195,11 +219,17 @@ type ToolProgressData struct {
 
 // ToolCallCompleteData contains tool execution results.
 type ToolCallCompleteData struct {
-	ToolID   string `json:"tool_id"`
-	ToolName string `json:"tool_name"`
-	Success  bool   `json:"success"`
-	Output   string `json:"output"`
-	Error    string `json:"error,omitempty"`
+	ToolID   string                 `json:"tool_id"`
+	ToolName string                 `json:"tool_name"`
+	Success  bool                   `json:"success"`
+	Output   string                 `json:"output"`
+	Error    string                 `json:"error,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// PlanUpdateData contains the updated plan with current step statuses
+type PlanUpdateData struct {
+	Plan *planning.Plan `json:"plan"`
 }
 
 // TurnEventData contains turn lifecycle information.
@@ -284,7 +314,7 @@ const (
 	BackpressureBlock
 
 	// BackpressureBuffer uses dynamic buffer growth up to limit
-	// Best for: Bursty workloads where temporary slowdowns are acceptable
+	// Best for: Bursty workloads where brief slowdowns are acceptable
 	BackpressureBuffer
 )
 
@@ -559,7 +589,7 @@ func (e *EventEmitter) Close() {
 // Events returns a channel for receiving events (convenience method for testing).
 // This is a simple wrapper around Subscribe() that returns only the channel.
 // The subscription ID is not returned, so Unsubscribe cannot be called.
-// Use Subscribe() directly if you need to unsubscribe later.
+// Use Subscribe() directly if you need to unsubscribe.
 func (e *EventEmitter) Events() <-chan Event {
 	_, ch, err := e.Subscribe()
 	if err != nil {

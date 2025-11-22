@@ -1,21 +1,12 @@
 package acp
 
 import (
-	"fmt"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/coder/acp-go-sdk"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/tools"
-)
-
-// Thinking block tags used by the agent
-// The agent uses <think> tags in the system prompt
-const (
-	thinkBlockStartTag = "<think>"
-	thinkBlockEndTag   = "</think>"
 )
 
 // fileContentTracker tracks old file content for write_file operations.
@@ -112,117 +103,7 @@ func convertEventToSessionUpdate(event events.Event, tracker *fileContentTracker
 	}
 }
 
-// thinkingBlockTracker tracks thinking blocks across multiple content deltas.
-type thinkingBlockTracker struct {
-	buffer          strings.Builder
-	inThink         bool
-	thinkBuffer     strings.Builder
-	sentMessageLen  int // Track how much message content we've already sent
-	sentThinkingLen int // Track how much thinking content we've already sent
-}
-
-// newThinkingBlockTracker creates a new thinking block tracker.
-func newThinkingBlockTracker() *thinkingBlockTracker {
-	return &thinkingBlockTracker{}
-}
-
-// processContent processes a content delta and returns updates for thinking blocks and message chunks.
-// Returns thinking update (if any), message update (if any), and whether any update was generated.
-func (t *thinkingBlockTracker) processContent(content string) (thinkUpdate acp.SessionUpdate, messageUpdate acp.SessionUpdate, hasUpdate bool) {
-	// Append to buffer to handle partial tags across chunks
-	t.buffer.WriteString(content)
-	bufferedContent := t.buffer.String()
-
-	var messageParts []string
-	var thinkingParts []string
-	i := 0
-
-	for i < len(bufferedContent) {
-		if !t.inThink {
-			// Look for opening tag <think>
-			thinkStartIdx := strings.Index(bufferedContent[i:], thinkBlockStartTag)
-			thinkStartLen := len(thinkBlockStartTag)
-
-			if thinkStartIdx >= 0 {
-				// Found opening tag - add everything before it as message content
-				if thinkStartIdx > 0 {
-					messageParts = append(messageParts, bufferedContent[i:i+thinkStartIdx])
-				}
-				t.inThink = true
-				i += thinkStartIdx + thinkStartLen
-				continue
-			}
-
-			// No opening tag found - all remaining content is message content
-			if i < len(bufferedContent) {
-				messageParts = append(messageParts, bufferedContent[i:])
-			}
-			break
-		} else {
-			// Inside thinking block - look for closing tag
-			thinkEndIdx := strings.Index(bufferedContent[i:], thinkBlockEndTag)
-			thinkEndLen := len(thinkBlockEndTag)
-
-			if thinkEndIdx >= 0 {
-				// Found closing tag - add everything before it as thinking content
-				t.thinkBuffer.WriteString(bufferedContent[i : i+thinkEndIdx])
-				thinkingParts = append(thinkingParts, t.thinkBuffer.String())
-				t.thinkBuffer.Reset()
-				t.inThink = false
-				i += thinkEndIdx + thinkEndLen
-				continue
-			}
-
-			// No closing tag found - buffer the content for next chunk
-			t.thinkBuffer.WriteString(bufferedContent[i:])
-			break
-		}
-	}
-
-	// Reset buffer if we processed everything
-	if i >= len(bufferedContent) {
-		t.buffer.Reset()
-	} else if !t.inThink {
-		// Keep unprocessed content in buffer if we're not in a thinking block
-		remaining := bufferedContent[i:]
-		t.buffer.Reset()
-		t.buffer.WriteString(remaining)
-	} else {
-		// In thinking block - clear buffer as content is in thinkBuffer
-		t.buffer.Reset()
-	}
-
-	// Create thinking update if we have new thinking content
-	if len(thinkingParts) > 0 {
-		thinkingContent := strings.Join(thinkingParts, "\n\n")
-		// Only send the new portion (delta) of thinking content
-		if len(thinkingContent) > t.sentThinkingLen {
-			newThinkingContent := thinkingContent[t.sentThinkingLen:]
-			thinkUpdate = acp.UpdateAgentThoughtText(newThinkingContent)
-			t.sentThinkingLen = len(thinkingContent)
-			hasUpdate = true
-		}
-	}
-
-	// Create message update if we have new message content
-	if len(messageParts) > 0 {
-		messageContent := strings.Join(messageParts, "")
-		// Only send the new portion (delta) of message content
-		if len(messageContent) > t.sentMessageLen {
-			newMessageContent := messageContent[t.sentMessageLen:]
-			if newMessageContent != "" {
-				messageUpdate = acp.UpdateAgentMessageText(newMessageContent)
-				t.sentMessageLen = len(messageContent)
-				hasUpdate = true
-			}
-		}
-	}
-
-	return thinkUpdate, messageUpdate, hasUpdate
-}
-
-// convertContentDelta converts EventContentDelta to agent_message_chunk and agent_thought_chunk.
-// Uses a tracker to handle thinking blocks that span multiple content deltas.
+// convertContentDelta converts EventContentDelta to agent_message_chunk.
 func convertContentDelta(event events.Event) (acp.SessionUpdate, bool) {
 	data, ok := event.ContentDeltaData()
 	if !ok {
@@ -234,8 +115,6 @@ func convertContentDelta(event events.Event) (acp.SessionUpdate, bool) {
 		return acp.SessionUpdate{}, false
 	}
 
-	// For now, return message chunk - thinking block extraction will be handled
-	// in processEvents with stateful tracker
 	// Use SDK helper to create agent message chunk
 	update := acp.UpdateAgentMessageText(data.Content)
 	return update, true
@@ -331,6 +210,12 @@ func convertToolCallStart(event events.Event, tracker *fileContentTracker) (acp.
 
 	// Use SDK helper to create tool call start
 	update := acp.StartToolCall(toolCallID, title, opts...)
+
+	// Ensure status is set to pending (StartToolCall might not set it by default)
+	if update.ToolCall != nil && update.ToolCall.Status == "" {
+		update.ToolCall.Status = acp.ToolCallStatusPending
+	}
+
 	return update, true
 }
 
@@ -399,9 +284,11 @@ func convertToolCallComplete(event events.Event, tracker *fileContentTracker) (a
 		tracker.cleanup(data.ToolID)
 	}
 
-	// Add text output if available (alongside or instead of diff)
-	if data.Output != "" {
-		// Wrap text output as a content block
+	// Check for terminal execution
+	if terminalID, ok := data.Metadata["terminal_id"].(string); ok && terminalID != "" {
+		content = append(content, acp.ToolTerminalRef(terminalID))
+	} else if data.Output != "" {
+		// Wrap text output as a content block (only if not using terminal content)
 		textBlock := acp.TextBlock(data.Output)
 		content = append(content, acp.ToolContent(textBlock))
 	}
@@ -424,127 +311,4 @@ func convertToolCallComplete(event events.Event, tracker *fileContentTracker) (a
 	// Use SDK helper with all options
 	update := acp.UpdateToolCall(toolCallID, opts...)
 	return update, true
-}
-
-// detectPlanFromOutput detects plan-like structures in agent output text.
-// This is a basic implementation that looks for common plan patterns:
-// - Numbered lists (1., 2., 3., etc.)
-// - Bullet lists with plan-like content
-// - "Plan:" or "Steps:" headers followed by list items
-// - Task-like descriptions
-//
-// Returns ACP PlanEntry objects for detected plan items.
-// Full plan system integration is deferred to Feature 9.2.
-func detectPlanFromOutput(output string) []acp.PlanEntry {
-	if output == "" {
-		return nil
-	}
-
-	var entries []acp.PlanEntry
-	lines := strings.Split(output, "\n")
-
-	// Look for plan patterns
-	var inPlanSection bool
-	var currentPlanPrefix string
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		// Check if this line starts a plan section
-		lowerLine := strings.ToLower(line)
-		if strings.HasPrefix(lowerLine, "plan:") || strings.HasPrefix(lowerLine, "steps:") ||
-			strings.HasPrefix(lowerLine, "task:") || strings.HasPrefix(lowerLine, "tasks:") {
-			inPlanSection = true
-			currentPlanPrefix = ""
-			continue
-		}
-
-		// Skip if not in a plan section and no plan-like patterns detected
-		if !inPlanSection {
-			// Check for numbered list pattern (1., 2., 3., etc.) or bullet points
-			if matchesPlanPattern(line) {
-				inPlanSection = true
-			} else {
-				continue
-			}
-		}
-
-		// Extract plan entry from line
-		entry := extractPlanEntry(line, currentPlanPrefix)
-		if entry != nil {
-			entries = append(entries, *entry)
-		}
-	}
-
-	return entries
-}
-
-// matchesPlanPattern checks if a line matches common plan patterns.
-func matchesPlanPattern(line string) bool {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return false
-	}
-	// Check for numbered list (1., 2., 3., etc.)
-	if len(line) >= 2 && line[0] >= '1' && line[0] <= '9' && (line[1] == '.' || line[1] == ')') {
-		return true
-	}
-	// Check for bullet points
-	if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
-		return true
-	}
-	return false
-}
-
-// extractPlanEntry extracts a plan entry from a line of text.
-func extractPlanEntry(line, prefix string) *acp.PlanEntry {
-	// Remove common list prefixes
-	content := line
-	content = strings.TrimPrefix(content, "- ")
-	content = strings.TrimPrefix(content, "* ")
-	// Remove numbered prefixes (1., 2., etc.)
-	for i := 1; i <= 9; i++ {
-		numberedPrefix := fmt.Sprintf("%d.", i)
-		if strings.HasPrefix(content, numberedPrefix) {
-			content = strings.TrimPrefix(content, numberedPrefix)
-			break
-		}
-		parenPrefix := fmt.Sprintf("%d)", i)
-		if strings.HasPrefix(content, parenPrefix) {
-			content = strings.TrimPrefix(content, parenPrefix)
-			break
-		}
-	}
-	content = strings.TrimSpace(content)
-
-	if content == "" {
-		return nil
-	}
-
-	// Add prefix if provided
-	if prefix != "" {
-		content = prefix + " " + content
-	}
-
-	// Determine priority (basic heuristics)
-	priority := acp.PlanEntryPriorityMedium
-	lowerContent := strings.ToLower(content)
-	if strings.Contains(lowerContent, "critical") || strings.Contains(lowerContent, "urgent") ||
-		strings.Contains(lowerContent, "important") || strings.Contains(lowerContent, "priority") {
-		priority = acp.PlanEntryPriorityHigh
-	} else if strings.Contains(lowerContent, "optional") || strings.Contains(lowerContent, "nice to have") {
-		priority = acp.PlanEntryPriorityLow
-	}
-
-	// Create plan entry
-	entry := acp.PlanEntry{
-		Content:  content,
-		Priority: priority,
-		Status:   acp.PlanEntryStatusPending,
-	}
-
-	return &entry
 }

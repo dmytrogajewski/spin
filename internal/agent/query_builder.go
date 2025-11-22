@@ -47,7 +47,7 @@ func (a *Agent) buildQueryFromContext(
 		parts = append(parts, tools...)
 
 	case trajectory.TriggerInterval:
-		// Add concepts from recent steps (fixed lookback of 5 for now)
+		// Add concepts from recent steps (using lookback of 5 steps)
 		concepts := trajectory.ExtractConcepts(ctx.Steps, 5)
 		parts = append(parts, concepts...)
 	}

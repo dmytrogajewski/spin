@@ -10,6 +10,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
+	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,7 +87,7 @@ func TestDetectPlanFromOutput_NumberedList(t *testing.T) {
 	assert.Equal(t, "First step", entries[0].Content)
 	assert.Equal(t, "Second step", entries[1].Content)
 	assert.Equal(t, "Third step", entries[2].Content)
-	assert.Equal(t, acp.PlanEntryPriorityMedium, entries[0].Priority)
+	assert.Equal(t, acp.PlanEntryPriorityHigh, entries[0].Priority)
 	assert.Equal(t, acp.PlanEntryStatusPending, entries[0].Status)
 }
 
@@ -117,7 +118,8 @@ func TestDetectPlanFromOutput_StepsHeader(t *testing.T) {
 }
 
 func TestDetectPlanFromOutput_BulletPoints(t *testing.T) {
-	output := `- Task 1
+	output := `Plan:
+- Task 1
 - Task 2
 - Task 3`
 
@@ -129,7 +131,8 @@ func TestDetectPlanFromOutput_BulletPoints(t *testing.T) {
 }
 
 func TestDetectPlanFromOutput_PriorityHigh(t *testing.T) {
-	output := `1. Critical task - urgent
+	output := `Plan:
+1. Critical task - urgent
 2. Important task - high priority
 3. Regular task`
 
@@ -141,13 +144,14 @@ func TestDetectPlanFromOutput_PriorityHigh(t *testing.T) {
 }
 
 func TestDetectPlanFromOutput_PriorityLow(t *testing.T) {
-	output := `1. Required task
+	output := `Plan:
+1. Required task
 2. Optional task
 3. Nice to have task`
 
 	entries := detectPlanFromOutput(output)
 	require.Len(t, entries, 3)
-	assert.Equal(t, acp.PlanEntryPriorityMedium, entries[0].Priority)
+	assert.Equal(t, acp.PlanEntryPriorityHigh, entries[0].Priority)
 	assert.Equal(t, acp.PlanEntryPriorityLow, entries[1].Priority)
 	assert.Equal(t, acp.PlanEntryPriorityLow, entries[2].Priority)
 }
@@ -164,96 +168,10 @@ func TestDetectPlanFromOutput_EmptyOutput(t *testing.T) {
 	assert.Empty(t, entries)
 }
 
-func TestMatchesPlanPattern_NumberedList(t *testing.T) {
-	tests := []struct {
-		name     string
-		line     string
-		expected bool
-	}{
-		{"numbered with dot", "1. Task", true},
-		{"numbered with paren", "1) Task", true},
-		{"bullet dash", "- Task", true},
-		{"bullet star", "* Task", true},
-		{"regular text", "Regular text", false},
-		{"empty", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := matchesPlanPattern(tt.line)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestExtractPlanEntry(t *testing.T) {
-	tests := []struct {
-		name     string
-		line     string
-		prefix   string
-		expected *acp.PlanEntry
-	}{
-		{
-			name:   "numbered with dot",
-			line:   "1. Task description",
-			prefix: "",
-			expected: &acp.PlanEntry{
-				Content:  "Task description",
-				Priority: acp.PlanEntryPriorityMedium,
-				Status:   acp.PlanEntryStatusPending,
-			},
-		},
-		{
-			name:   "bullet dash",
-			line:   "- Task description",
-			prefix: "",
-			expected: &acp.PlanEntry{
-				Content:  "Task description",
-				Priority: acp.PlanEntryPriorityMedium,
-				Status:   acp.PlanEntryStatusPending,
-			},
-		},
-		{
-			name:   "with prefix",
-			line:   "1. Task",
-			prefix: "Step",
-			expected: &acp.PlanEntry{
-				Content:  "Step Task",
-				Priority: acp.PlanEntryPriorityMedium,
-				Status:   acp.PlanEntryStatusPending,
-			},
-		},
-		{
-			name:     "empty line",
-			line:     "",
-			prefix:   "",
-			expected: nil,
-		},
-		{
-			name:   "critical priority",
-			line:   "1. Critical task",
-			prefix: "",
-			expected: &acp.PlanEntry{
-				Content:  "Critical task",
-				Priority: acp.PlanEntryPriorityHigh,
-				Status:   acp.PlanEntryStatusPending,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := extractPlanEntry(tt.line, tt.prefix)
-			if tt.expected == nil {
-				assert.Nil(t, result)
-			} else {
-				require.NotNil(t, result)
-				assert.Equal(t, tt.expected.Content, result.Content)
-				assert.Equal(t, tt.expected.Priority, result.Priority)
-				assert.Equal(t, tt.expected.Status, result.Status)
-			}
-		})
-	}
+// Helper for tests to wrap planning.DetectPlanFromText
+func detectPlanFromOutput(output string) []acp.PlanEntry {
+	plan := planning.DetectPlanFromText(output)
+	return convertOrchestrationPlanToACP(plan)
 }
 
 func TestSendPlanNotifications_NoConnection(t *testing.T) {

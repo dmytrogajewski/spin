@@ -35,12 +35,12 @@ func TestSpinACPAgent_NewSession_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.SessionId)
-	
+
 	// Verify session was stored
 	acpAgent.mu.RLock()
 	session, exists := acpAgent.sessions[resp.SessionId]
 	acpAgent.mu.RUnlock()
-	
+
 	assert.True(t, exists, "session should be stored")
 	assert.NotNil(t, session)
 	assert.Equal(t, "/tmp/test", session.WorkDir)
@@ -81,12 +81,12 @@ func TestSpinACPAgent_NewSession_WithMcpServers(t *testing.T) {
 	// Session creation should succeed even if MCP connection fails
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.SessionId)
-	
+
 	// Verify session was stored
 	acpAgent.mu.RLock()
 	session, exists := acpAgent.sessions[resp.SessionId]
 	acpAgent.mu.RUnlock()
-	
+
 	assert.True(t, exists, "session should be stored")
 	assert.NotNil(t, session)
 	assert.Equal(t, "/tmp/test", session.WorkDir)
@@ -142,9 +142,9 @@ func TestSpinACPAgent_NewSession_UnsupportedTransport(t *testing.T) {
 
 	_, err = acpAgent.NewSession(context.Background(), req)
 
-	// HTTP transport is not yet supported
+	// HTTP transport is not supported
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "HTTP transport not yet supported")
+	assert.Contains(t, err.Error(), "HTTP transport is not supported")
 }
 
 // TestSpinACPAgent_NewSession_NoTransport tests session creation with MCP server without transport.
@@ -171,4 +171,3 @@ func TestSpinACPAgent_NewSession_NoTransport(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no transport specified")
 }
-

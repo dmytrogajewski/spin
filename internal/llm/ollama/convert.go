@@ -26,68 +26,94 @@ import (
 // convertMessageToOllama converts an OpenAI message to Ollama format.
 // This uses a simplified approach by marshaling and unmarshaling JSON.
 func convertMessageToOllama(msg openai.ChatCompletionMessageParamUnion) api.Message {
-	// Serialize the OpenAI message to JSON
-	jsonData, err := json.Marshal(msg)
+	genericMsg, err := parseGenericMessage(msg)
 	if err != nil {
 		return api.Message{}
 	}
 
-	// Parse into a generic structure to extract fields
-	var genericMsg struct {
-		Role       string          `json:"role"`
-		Content    json.RawMessage `json:"content"`
-		ToolCalls  json.RawMessage `json:"tool_calls,omitempty"`
-		ToolCallID string          `json:"tool_call_id,omitempty"`
-	}
-	if err := json.Unmarshal(jsonData, &genericMsg); err != nil {
-		return api.Message{}
-	}
-
 	result := api.Message{
-		Role: genericMsg.Role,
+		Role:    genericMsg.Role,
+		Content: extractContent(genericMsg.Content),
 	}
 
-	// Handle content (can be string or array)
-	var contentStr string
-	if err := json.Unmarshal(genericMsg.Content, &contentStr); err == nil {
-		result.Content = contentStr
-	} else {
-		// Try as array of content parts
-		var contentParts []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		}
-		if err := json.Unmarshal(genericMsg.Content, &contentParts); err == nil {
-			for _, part := range contentParts {
-				if part.Type == "text" {
-					result.Content += part.Text
-				}
-			}
-		}
-	}
-
-	// Handle tool calls if present
 	if len(genericMsg.ToolCalls) > 0 {
-		var toolCalls []struct {
-			ID       string `json:"id"`
-			Type     string `json:"type"`
-			Function struct {
-				Name      string `json:"name"`
-				Arguments string `json:"arguments"`
-			} `json:"function"`
-		}
-		if err := json.Unmarshal(genericMsg.ToolCalls, &toolCalls); err == nil {
-			result.ToolCalls = make([]api.ToolCall, len(toolCalls))
-			for i, tc := range toolCalls {
-				var args map[string]interface{}
-				json.Unmarshal([]byte(tc.Function.Arguments), &args)
-				result.ToolCalls[i] = api.ToolCall{
-					Function: api.ToolCallFunction{
-						Name:      tc.Function.Name,
-						Arguments: args,
-					},
-				}
+		result.ToolCalls = extractToolCalls(genericMsg.ToolCalls)
+	}
+
+	return result
+}
+
+type genericMessage struct {
+	Role       string          `json:"role"`
+	Content    json.RawMessage `json:"content"`
+	ToolCalls  json.RawMessage `json:"tool_calls,omitempty"`
+	ToolCallID string          `json:"tool_call_id,omitempty"`
+}
+
+// parseGenericMessage converts an OpenAI message to a generic structure.
+func parseGenericMessage(msg openai.ChatCompletionMessageParamUnion) (*genericMessage, error) {
+	jsonData, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	var genericMsg genericMessage
+	if err := json.Unmarshal(jsonData, &genericMsg); err != nil {
+		return nil, err
+	}
+
+	return &genericMsg, nil
+}
+
+// extractContent extracts content from raw JSON, handling both string and array formats.
+func extractContent(content json.RawMessage) string {
+	var contentStr string
+	if err := json.Unmarshal(content, &contentStr); err == nil {
+		return contentStr
+	}
+
+	// Try as array of content parts
+	var contentParts []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(content, &contentParts); err == nil {
+		var result string
+		for _, part := range contentParts {
+			if part.Type == "text" {
+				result += part.Text
 			}
+		}
+		return result
+	}
+
+	return ""
+}
+
+// extractToolCalls converts tool calls from JSON to Ollama format.
+func extractToolCalls(toolCallsJSON json.RawMessage) []api.ToolCall {
+	var toolCalls []struct {
+		ID       string `json:"id"`
+		Type     string `json:"type"`
+		Function struct {
+			Name      string `json:"name"`
+			Arguments string `json:"arguments"`
+		} `json:"function"`
+	}
+
+	if err := json.Unmarshal(toolCallsJSON, &toolCalls); err != nil {
+		return nil
+	}
+
+	result := make([]api.ToolCall, len(toolCalls))
+	for i, tc := range toolCalls {
+		var args map[string]interface{}
+		json.Unmarshal([]byte(tc.Function.Arguments), &args)
+		result[i] = api.ToolCall{
+			Function: api.ToolCallFunction{
+				Name:      tc.Function.Name,
+				Arguments: args,
+			},
 		}
 	}
 
@@ -181,7 +207,7 @@ func convertOllamaResponseToOpenAI(resp api.ChatResponse, model string) *openai.
 		for i, tc := range resp.Message.ToolCalls {
 			argsJSON, _ := json.Marshal(tc.Function.Arguments)
 			result.Choices[0].Message.ToolCalls[i] = openai.ChatCompletionMessageToolCall{
-				ID:   fmt.Sprintf("call-%d", i),
+				ID:   fmt.Sprintf("%s-%d", result.ID, i),
 				Type: openai.ChatCompletionMessageToolCallTypeFunction,
 				Function: openai.ChatCompletionMessageToolCallFunction{
 					Name:      tc.Function.Name,
@@ -238,7 +264,7 @@ func convertOllamaChunkToOpenAI(resp api.ChatResponse, chunkID, model string) op
 			argsJSON, _ := json.Marshal(tc.Function.Arguments)
 			chunk.Choices[0].Delta.ToolCalls[i] = openai.ChatCompletionChunkChoicesDeltaToolCall{
 				Index: int64(i),
-				ID:    fmt.Sprintf("call-%d", i),
+				ID:    fmt.Sprintf("%s-%d", chunkID, i),
 				Type:  openai.ChatCompletionChunkChoicesDeltaToolCallsTypeFunction,
 				Function: openai.ChatCompletionChunkChoicesDeltaToolCallsFunction{
 					Name:      tc.Function.Name,

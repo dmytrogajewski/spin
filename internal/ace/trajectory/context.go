@@ -64,6 +64,9 @@ type TrajectoryContext struct {
 	BulletCache       map[string]*CachedBullet
 	LastRetrievalTurn int
 
+	// Configuration
+	BulletTTL int // TTL for bullets in cache (default: 10 turns)
+
 	// Metrics
 	TotalRetrievals int
 	CacheHits       int
@@ -80,6 +83,14 @@ func NewTrajectoryContext(query string) *TrajectoryContext {
 		Steps:           make([]generator.TrajectoryStep, 0),
 		RetrievalEvents: make([]RetrievalEvent, 0),
 		BulletCache:     make(map[string]*CachedBullet),
+		BulletTTL:       10, // Default TTL of 10 turns
+	}
+}
+
+// SetBulletTTL sets the bullet cache TTL (time-to-live in turns).
+func (tc *TrajectoryContext) SetBulletTTL(ttl int) {
+	if ttl > 0 {
+		tc.BulletTTL = ttl
 	}
 }
 
@@ -121,16 +132,14 @@ func (tc *TrajectoryContext) RecordRetrieval(event RetrievalEvent, bullets []*bu
 
 // GetActiveBullets returns bullets for LLM prompt (cache + TTL filtering).
 // Updates last accessed time for returned bullets.
-// TTL is hardcoded to 10 turns (will be configurable later).
+// Uses the configured BulletTTL to determine which bullets are still active.
 func (tc *TrajectoryContext) GetActiveBullets() []*bullet.Bullet {
-	const ttl = 10
-
 	bullets := make([]*bullet.Bullet, 0, len(tc.BulletCache))
 	ids := make([]string, 0, len(tc.BulletCache))
 
 	// Collect active bullets within TTL
 	for id, cached := range tc.BulletCache {
-		if tc.CurrentTurn-cached.RetrievedAt <= ttl {
+		if tc.CurrentTurn-cached.RetrievedAt <= tc.BulletTTL {
 			bullets = append(bullets, cached.Bullet)
 			ids = append(ids, id)
 			cached.LastAccessed = tc.CurrentTurn

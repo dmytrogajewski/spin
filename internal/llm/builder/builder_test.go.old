@@ -15,36 +15,45 @@ import (
 func TestBuild_AllProviders(t *testing.T) {
 	tests := []struct {
 		name     string
-		cfg      Config
+		cfg      *config.ConfigV2
 		wantType string
 		wantErr  bool
 		errMsg   string
 	}{
 		{
 			name: "ollama provider",
-			cfg: Config{
-				Provider: "ollama",
-				Model:    "llama3.1",
-				BaseURL:  "http://localhost:11434",
+			cfg: &config.ConfigV2{
+				LLM: config.LLMConfigV2{
+					Provider: "ollama",
+					Model:    "llama3.1",
+					BaseURL:  "http://localhost:11434",
+					Timeout:  5 * time.Minute,
+				},
 			},
 			wantType: "ollama",
 		},
 		{
 			name: "lmstudio provider",
-			cfg: Config{
-				Provider: "lmstudio",
-				Model:    "codellama",
-				BaseURL:  "http://localhost:1234/v1",
+			cfg: &config.ConfigV2{
+				LLM: config.LLMConfigV2{
+					Provider: "lmstudio",
+					Model:    "codellama",
+					BaseURL:  "http://localhost:1234/v1",
+					Timeout:  5 * time.Minute,
+				},
 			},
 			wantType: "lmstudio",
 		},
 		{
 			name: "openai provider with api key",
-			cfg: Config{
-				Provider: "openai",
-				Model:    "gpt-4o",
-				BaseURL:  "https://api.openai.com/v1",
-				APIKey:   "sk-test123",
+			cfg: &config.ConfigV2{
+				LLM: config.LLMConfigV2{
+					Provider: "openai",
+					Model:    "gpt-4o",
+					BaseURL:  "https://api.openai.com/v1",
+					APIKey:   "sk-test123",
+					Timeout:  5 * time.Minute,
+				},
 			},
 			wantType: "openai",
 		},

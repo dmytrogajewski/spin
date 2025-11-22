@@ -216,7 +216,7 @@ func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
 		update.NewPath = newPath
 
 		// After move, check for hunks
-		// (will be checked in the parse hunks loop below)
+		// (checked in the parse hunks loop below)
 	}
 
 	// Parse hunks

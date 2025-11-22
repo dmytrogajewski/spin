@@ -50,7 +50,7 @@ func (k *linuxKeystore) Get(key string) (string, error) {
 
 // Set stores a value in the keyring.
 //
-// If the key already exists, it will be overwritten.
+// If the key already exists, it is overwritten.
 func (k *linuxKeystore) Set(key, value string) error {
 	if err := keyring.Set(serviceName, key, value); err != nil {
 		return fmt.Errorf("keyring set: %w", err)

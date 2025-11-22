@@ -47,7 +47,7 @@ type ACEService struct {
 
 // NewACEService creates a new ACE service with the given configuration.
 // If ACE is disabled in config, returns a no-op service that returns empty results.
-// The llm parameter is optional - if nil, bullet generation will be disabled.
+// The llm parameter is optional - if nil, bullet generation is disabled.
 // The modelName parameter specifies which LLM model to use for generation.
 // The maxTokens parameter sets the max tokens for LLM calls (0 = use default).
 func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName string, maxTokens int) (*ACEService, error) {

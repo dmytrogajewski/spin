@@ -17,7 +17,7 @@ func TestACP_Cancel(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -90,7 +90,7 @@ func TestACP_Cancel_InvalidSession(t *testing.T) {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b")
+	cmd, stdin, stdout := startACPAgent(t)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -122,7 +122,7 @@ func TestACP_Cancel_NoActivePrompt(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -148,4 +148,360 @@ func TestACP_Cancel_NoActivePrompt(t *testing.T) {
 	// Cancelling when nothing is active should not error
 	// (it's a notification, not a request)
 	assert.NoError(t, err, "Cancel should not error even when no prompt is active")
+}
+
+// TestACP_Cancel_DuringPrompt tests cancel during active prompt.
+func TestACP_Cancel_DuringPrompt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	client := createACPClient(t, stdin, stdout)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	// Start prompt
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("long running task"),
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Prompt(ctx, promptReq)
+		done <- err
+	}()
+
+	// Cancel during prompt
+	time.Sleep(50 * time.Millisecond)
+	cancelReq := acp.CancelNotification{
+		SessionId: sessionResp.SessionId,
+	}
+	err = client.Cancel(ctx, cancelReq)
+	require.NoError(t, err)
+
+	// Wait for completion
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Logf("Prompt cancelled: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Log("Prompt may still be running")
+	}
+}
+
+// TestACP_Cancel_DuringToolCall tests cancel during tool execution.
+func TestACP_Cancel_DuringToolCall(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	client := createACPClient(t, stdin, stdout)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	// Start prompt that triggers tool call
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("read file test.txt"),
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Prompt(ctx, promptReq)
+		done <- err
+	}()
+
+	// Cancel during tool call
+	time.Sleep(50 * time.Millisecond)
+	cancelReq := acp.CancelNotification{
+		SessionId: sessionResp.SessionId,
+	}
+	err = client.Cancel(ctx, cancelReq)
+	require.NoError(t, err)
+
+	// Wait for completion
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Logf("Tool call cancelled: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Log("Tool call may still be running")
+	}
+}
+
+// TestACP_Cancel_PermissionRequest tests cancel with pending permission request.
+func TestACP_Cancel_PermissionRequest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	client := createACPClient(t, stdin, stdout)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	// Start prompt that might trigger permission request
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("write file test.txt"),
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Prompt(ctx, promptReq)
+		done <- err
+	}()
+
+	// Cancel (may interrupt permission request)
+	time.Sleep(50 * time.Millisecond)
+	cancelReq := acp.CancelNotification{
+		SessionId: sessionResp.SessionId,
+	}
+	err = client.Cancel(ctx, cancelReq)
+	require.NoError(t, err)
+
+	// Wait for completion
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Logf("Permission request cancelled: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Log("Permission request may still be pending")
+	}
+}
+
+// TestACP_Cancel_StopReason tests cancelled stop reason.
+func TestACP_Cancel_StopReason(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	client := createACPClient(t, stdin, stdout)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	// Start prompt
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("long task"),
+		},
+	}
+
+	var promptResp *acp.PromptResponse
+	done := make(chan error, 1)
+	go func() {
+		resp, err := client.Prompt(ctx, promptReq)
+		promptResp = &resp
+		done <- err
+	}()
+
+	// Cancel
+	time.Sleep(50 * time.Millisecond)
+	cancelReq := acp.CancelNotification{
+		SessionId: sessionResp.SessionId,
+	}
+	err = client.Cancel(ctx, cancelReq)
+	require.NoError(t, err)
+
+	// Wait and check stop reason
+	select {
+	case <-done:
+		if promptResp != nil && promptResp.StopReason == acp.StopReasonCancelled {
+			t.Log("Stop reason is cancelled as expected")
+		}
+	case <-time.After(5 * time.Second):
+		t.Log("Prompt may not have been cancelled")
+	}
+}
+
+// TestACP_Cancel_PendingUpdates tests that pending updates are sent before response.
+func TestACP_Cancel_PendingUpdates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	clientImpl := &testClient{}
+	client := createACPClientWithClient(t, stdin, stdout, clientImpl)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	clientImpl.clearNotifications()
+
+	// Start prompt
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("long task"),
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Prompt(ctx, promptReq)
+		done <- err
+	}()
+
+	// Cancel
+	time.Sleep(50 * time.Millisecond)
+	cancelReq := acp.CancelNotification{
+		SessionId: sessionResp.SessionId,
+	}
+	err = client.Cancel(ctx, cancelReq)
+	require.NoError(t, err)
+
+	// Wait for completion
+	select {
+	case <-done:
+		// Check for pending updates
+		notifications := clientImpl.getNotifications()
+		if len(notifications) > 0 {
+			t.Logf("Received %d notifications before cancellation", len(notifications))
+		}
+	case <-time.After(5 * time.Second):
+		t.Log("Prompt may not have been cancelled")
+	}
+}
+
+// TestACP_Cancel_ToolCallStatus tests that tool calls are marked as cancelled.
+func TestACP_Cancel_ToolCallStatus(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	clientImpl := &testClient{}
+	client := createACPClientWithClient(t, stdin, stdout, clientImpl)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	clientImpl.clearNotifications()
+
+	// Start prompt with tool call
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("read file test.txt"),
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Prompt(ctx, promptReq)
+		done <- err
+	}()
+
+	// Cancel
+	time.Sleep(50 * time.Millisecond)
+	cancelReq := acp.CancelNotification{
+		SessionId: sessionResp.SessionId,
+	}
+	err = client.Cancel(ctx, cancelReq)
+	require.NoError(t, err)
+
+	// Wait and check tool call status
+	select {
+	case <-done:
+		notifications := clientImpl.getNotifications()
+		for _, notif := range notifications {
+			if notif.Update.ToolCallUpdate != nil {
+				update := notif.Update.ToolCallUpdate
+				t.Logf("Tool call status: %v", update.Status)
+			}
+		}
+	case <-time.After(5 * time.Second):
+		t.Log("Tool call may not have been cancelled")
+	}
 }

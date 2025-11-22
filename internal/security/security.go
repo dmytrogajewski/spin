@@ -138,7 +138,7 @@ func (s *SecurityService) Validator() *Validator {
 
 // SetApprovalService updates the approval service instance.
 // This allows updating the approval service after creation, which is useful
-// when the approval handler is configured later (e.g., in ACP mode).
+// when the approval handler is configured (e.g., in ACP mode).
 func (s *SecurityService) SetApprovalService(service *ApprovalService) {
 	s.approvalService = service
 }

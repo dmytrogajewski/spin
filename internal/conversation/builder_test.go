@@ -2,15 +2,20 @@ package conversation
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/runtime"
 	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
+	"github.com/dmytrogajewski/spin/internal/security"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,19 +29,62 @@ func testConfig() *config.ConfigV2 {
 	return cfg
 }
 
+// createTestRuntime creates a builtin runtime for testing with auto-approve handler
+func createTestRuntime(t *testing.T, workDir string) (runtime.Runtime, *events.EventEmitter, llm.Provider) {
+	t.Helper()
+
+	emitter := events.NewEventEmitter(100)
+	provider := llm.NewMockProvider("test")
+
+	// Auto-approve handler for tests
+	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+		return security.ApprovalResponse{
+			RequestID: req.ID,
+			Approved:  true,
+			Reason:    "test auto-approve",
+		}
+	}
+
+	executor, err := agent.NewExecutor(workDir)
+	require.NoError(t, err)
+
+	validator := security.NewValidator()
+
+	builtinRuntime, err := runtime.NewBuiltinRuntime(runtime.BuiltinRuntimeConfig{
+		WorkDir:         workDir,
+		Emitter:         emitter,
+		Storage:         nil, // No persistence in tests
+		SessionID:       fmt.Sprintf("test-%d", time.Now().UnixNano()),
+		Executor:        agent.NewExecutorRuntimeAdapter(executor),
+		Validator:       validator,
+		UI:              nil, // No UI in tests
+		ApprovalHandler: approvalHandler,
+		Logger:          slog.Default(),
+	})
+	require.NoError(t, err)
+
+	return builtinRuntime, emitter, provider
+}
+
 func TestNewBuilder(t *testing.T) {
 	cfg := testConfig()
-	workDir := "/tmp"
+	workDir := t.TempDir()
+	rt, emitter, provider := createTestRuntime(t, workDir)
 
-	b := NewBuilder(cfg, workDir)
+	b := NewBuilder(cfg, workDir, rt, emitter, provider)
 	require.NotNil(t, b)
 	assert.Equal(t, cfg, b.cfg)
 	assert.Equal(t, workDir, b.workDir)
+	assert.Equal(t, rt, b.runtime)
+	assert.Equal(t, emitter, b.emitter)
+	assert.Equal(t, provider, b.llm)
 }
 
 func TestBuilder_WithGit(t *testing.T) {
 	cfg := testConfig()
-	b := NewBuilder(cfg, "/tmp")
+	workDir := t.TempDir()
+	rt, emitter, provider := createTestRuntime(t, workDir)
+	b := NewBuilder(cfg, workDir, rt, emitter, provider)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	gitSvc, err := gitpkg.NewService(false, "/tmp", logger)
@@ -50,10 +98,12 @@ func TestBuilder_WithGit(t *testing.T) {
 
 func TestBuilder_WithShell(t *testing.T) {
 	cfg := testConfig()
-	b := NewBuilder(cfg, "/tmp")
+	workDir := t.TempDir()
+	rt, emitter, provider := createTestRuntime(t, workDir)
+	b := NewBuilder(cfg, workDir, rt, emitter, provider)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	shellSvc, err := shellpkg.NewService(false, "/tmp", logger, 30*time.Second)
+	shellSvc, err := shellpkg.NewService(false, workDir, logger, 30*time.Second)
 	require.NoError(t, err)
 	defer shellSvc.Close()
 
@@ -64,7 +114,9 @@ func TestBuilder_WithShell(t *testing.T) {
 
 func TestBuilder_WithMCP(t *testing.T) {
 	cfg := testConfig()
-	b := NewBuilder(cfg, "/tmp")
+	workDir := t.TempDir()
+	rt, emitter, provider := createTestRuntime(t, workDir)
+	b := NewBuilder(cfg, workDir, rt, emitter, provider)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	mcpCfg := &mcppkg.Config{
@@ -80,22 +132,12 @@ func TestBuilder_WithMCP(t *testing.T) {
 	assert.Equal(t, mcpSvc, b.mcpService)
 }
 
-func TestBuilder_WithLLM(t *testing.T) {
-	cfg := testConfig()
-	b := NewBuilder(cfg, "/tmp")
-
-	provider := llm.NewMockProvider("test")
-
-	result := b.WithLLM(provider)
-	assert.Equal(t, b, result) // Fluent API
-	assert.Equal(t, provider, b.llm)
-}
-
 func TestBuilder_Build_Minimal(t *testing.T) {
 	cfg := testConfig()
 	tempDir := t.TempDir()
+	rt, emitter, provider := createTestRuntime(t, tempDir)
 
-	b := NewBuilder(cfg, tempDir)
+	b := NewBuilder(cfg, tempDir, rt, emitter, provider)
 
 	conv, err := b.Build(context.Background())
 	require.NoError(t, err)
@@ -139,7 +181,8 @@ func TestBuilder_Build_WithServices(t *testing.T) {
 	defer mcpSvc.Close()
 
 	// Build conversation with all services
-	conv, err := NewBuilder(cfg, tempDir).
+	rt, emitter, provider := createTestRuntime(t, tempDir)
+	conv, err := NewBuilder(cfg, tempDir, rt, emitter, provider).
 		WithGit(gitSvc).
 		WithShell(shellSvc).
 		WithMCP(mcpSvc).
@@ -159,20 +202,17 @@ func TestBuilder_Build_WithServices(t *testing.T) {
 }
 
 func TestBuilder_Build_NilConfig(t *testing.T) {
-	b := NewBuilder(nil, "/tmp")
-
-	_, err := b.Build(context.Background())
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "config cannot be nil")
+	// Panics are caught by require.Panics
+	require.Panics(t, func() {
+		NewBuilder(nil, "/tmp", nil, nil, nil)
+	})
 }
 
 func TestBuilder_Build_EmptyWorkDir(t *testing.T) {
-	cfg := testConfig()
-	b := NewBuilder(cfg, "")
-
-	_, err := b.Build(context.Background())
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "workDir cannot be empty")
+	// Panics are caught by require.Panics
+	require.Panics(t, func() {
+		NewBuilder(testConfig(), "", nil, nil, nil)
+	})
 }
 
 func TestBuilder_FluentAPI(t *testing.T) {
@@ -187,12 +227,11 @@ func TestBuilder_FluentAPI(t *testing.T) {
 	shellSvc, _ := shellpkg.NewService(false, tempDir, logger, 30*time.Second)
 	defer shellSvc.Close()
 
-	customLLM := llm.NewMockProvider("test")
+	rt, emitter, provider := createTestRuntime(t, tempDir)
 
-	conv, err := NewBuilder(cfg, tempDir).
+	conv, err := NewBuilder(cfg, tempDir, rt, emitter, provider).
 		WithGit(gitSvc).
 		WithShell(shellSvc).
-		WithLLM(customLLM).
 		Build(context.Background())
 
 	require.NoError(t, err)
@@ -214,13 +253,15 @@ func TestBuilder_ServiceReuse(t *testing.T) {
 	defer gitSvc.Close()
 
 	// Create two conversations sharing the same service
-	conv1, err := NewBuilder(cfg, tempDir).
+	rt1, emitter1, provider1 := createTestRuntime(t, tempDir)
+	conv1, err := NewBuilder(cfg, tempDir, rt1, emitter1, provider1).
 		WithGit(gitSvc).
 		Build(context.Background())
 	require.NoError(t, err)
 	defer conv1.Close()
 
-	conv2, err := NewBuilder(cfg, tempDir).
+	rt2, emitter2, provider2 := createTestRuntime(t, tempDir)
+	conv2, err := NewBuilder(cfg, tempDir, rt2, emitter2, provider2).
 		WithGit(gitSvc).
 		Build(context.Background())
 	require.NoError(t, err)

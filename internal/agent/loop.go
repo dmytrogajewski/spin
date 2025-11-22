@@ -342,7 +342,7 @@ func (a *Agent) selectIntervention(cycleType detection.CycleType, turnCount int)
 
 	case turnCount < 30:
 		// Mid-stage cycles: Use medium intervention (context summarization)
-		// For now, use reflection as fallback since summarization needs compressor integration
+		// Using reflection intervention (context summarization requires compressor integration)
 		return &detection.ReflectionIntervention{}
 
 	default:

@@ -38,6 +38,10 @@ func (m *mockResult) GetExitCode() int {
 	return m.ExitCode
 }
 
+func (m *mockResult) GetMetadata() map[string]interface{} {
+	return map[string]interface{}{}
+}
+
 // TestNewShellCommandTool_NilExecutor tests that creating tool with nil executor fails gracefully.
 func TestNewShellCommandTool_NilExecutor(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)

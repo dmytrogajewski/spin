@@ -28,7 +28,7 @@ func (c *tuiCommandContext) SetMode(mode string) error {
 // GetWorkDir returns the working directory for the session.
 func (c *tuiCommandContext) GetWorkDir() string {
 	// Conversation doesn't expose workDir directly, but we can get it from session if needed
-	// For now, return empty string as it's not used in TUI commands
+	// Return empty string as it's not currently used in TUI commands
 	return ""
 }
 
@@ -66,4 +66,3 @@ func handleCommand(ui *adapters.PureTTY, conv *conversation.Conversation, cmdNam
 
 	return true, nil
 }
-

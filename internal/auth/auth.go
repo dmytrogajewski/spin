@@ -19,7 +19,7 @@ type Auth interface {
 
 	// SetCredential stores a credential for a provider.
 	//
-	// If a credential already exists, it will be overwritten.
+	// If a credential already exists, it is overwritten.
 	// Returns ErrInvalidCredential if the credential fails validation.
 	SetCredential(ctx context.Context, provider string, cred Credential) error
 

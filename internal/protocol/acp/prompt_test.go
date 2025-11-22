@@ -3,8 +3,12 @@ package acp
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/coder/acp-go-sdk"
 	"github.com/dmytrogajewski/spin/internal/agent"
@@ -17,6 +21,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/session"
+	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -103,8 +108,79 @@ func TestSpinACPAgent_Prompt_Success(t *testing.T) {
 	assert.Equal(t, acp.StopReasonEndTurn, resp.StopReason)
 }
 
+// TestAgentEmitterStreams ensures the underlying agent emits content delta events.
+func TestAgentEmitterStreams(t *testing.T) {
+	agentInstance, emitter := createTestAgentWithEmitter(t)
+
+	subID, ch, err := emitter.Subscribe()
+	require.NoError(t, err)
+	defer emitter.Unsubscribe(subID)
+
+	req := &agent.AgentRequest{
+		Input:   "hello emitter",
+		Task:    task.DefaultTask(),
+		History: []message.Message{},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		_, _ = agentInstance.Execute(ctx, req)
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case event := <-ch:
+			if event.Type == events.EventContentDelta {
+				return true
+			}
+		default:
+		}
+		return false
+	}, time.Second, 10*time.Millisecond, "expected EventContentDelta from agent emitter")
+	<-done
+}
+
+// TestEmitterManualSubscribe ensures subscribing before execution captures events.
+func TestEmitterManualSubscribe(t *testing.T) {
+	agentInstance, emitter := createTestAgentWithEmitter(t)
+
+	subID, ch, err := emitter.Subscribe()
+	require.NoError(t, err)
+	defer emitter.Unsubscribe(subID)
+
+	req := &agent.AgentRequest{
+		Input:   "manual subscribe",
+		Task:    task.DefaultTask(),
+		History: []message.Message{},
+	}
+
+	go func() {
+		_, _ = agentInstance.Execute(context.Background(), req)
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case event := <-ch:
+			return event.Type == events.EventContentDelta
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond, "expected EventContentDelta event")
+}
+
 // createTestAgent creates a test agent with mock LLM provider.
 func createTestAgent(t *testing.T) *agent.Agent {
+	t.Helper()
+	agentInstance, _ := createTestAgentWithEmitter(t)
+	return agentInstance
+}
+
+// createTestAgentWithEmitter returns a test agent along with its emitter.
+func createTestAgentWithEmitter(t *testing.T) (*agent.Agent, *events.EventEmitter) {
 	t.Helper()
 
 	mockProvider := llm.NewMockProvider("test response")
@@ -132,7 +208,160 @@ func createTestAgent(t *testing.T) *agent.Agent {
 		emitter,
 	)
 	require.NoError(t, err)
-	return agentInstance
+	return agentInstance, emitter
+}
+
+// TestSpinACPAgent_Prompt_SendsNotifications ensures prompt execution emits agent message chunks.
+func TestSpinACPAgent_Prompt_SendsNotifications(t *testing.T) {
+	agentInstance, emitter := createTestAgentWithEmitter(t)
+	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+
+	storage, err := session.NewFileStorage(t.TempDir())
+	require.NoError(t, err)
+
+	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
+	require.NoError(t, err)
+
+	mockConn := &mockConnection{}
+	acpAgent.SetNotificationSender(mockConn)
+
+	// Create a session to obtain session ID
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{
+		Cwd: t.TempDir(),
+	})
+	require.NoError(t, err)
+
+	// Execute prompt
+	_, err = acpAgent.Prompt(context.Background(), acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt:    []acp.ContentBlock{acp.TextBlock("hello")},
+	})
+	require.NoError(t, err)
+
+	// Ensure at least one agent_message_chunk notification is sent
+	require.Eventually(t, func() bool {
+		for _, n := range mockConn.GetNotifications() {
+			if chunk := n.Update.AgentMessageChunk; chunk != nil {
+				if chunk.Content.Text != nil && strings.TrimSpace(chunk.Content.Text.Text) != "" {
+					return true
+				}
+			}
+		}
+		return false
+	}, time.Second, 10*time.Millisecond, "expected agent message chunk notification")
+}
+
+// TestSpinACPAgent_EndToEndNotifications verifies notifications over JSON-RPC connection.
+func TestSpinACPAgent_EndToEndNotifications(t *testing.T) {
+	agentInstance, emitter := createTestAgentWithEmitter(t)
+	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+
+	storage, err := session.NewFileStorage(t.TempDir())
+	require.NoError(t, err)
+
+	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
+	require.NoError(t, err)
+
+	agentReader, clientWriter := io.Pipe()
+	clientReader, agentWriter := io.Pipe()
+
+	agentConn := acp.NewAgentSideConnection(acpAgent, agentWriter, agentReader)
+	acpAgent.SetConnection(agentConn)
+
+	testClient := &stubClient{}
+	clientConn := acp.NewClientSideConnection(testClient, clientWriter, clientReader)
+
+	ctx := context.Background()
+	_, err = clientConn.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersion(1),
+		ClientInfo: &acp.Implementation{
+			Name:    "test-client",
+			Version: "0.1.0",
+		},
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := clientConn.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        t.TempDir(),
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	_, err = clientConn.Prompt(ctx, acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt:    []acp.ContentBlock{acp.TextBlock("hello over rpc")},
+	})
+	require.NoError(t, err)
+
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		for _, n := range testClient.Notifications() {
+			if chunk := n.Update.AgentMessageChunk; chunk != nil {
+				if chunk.Content.Text != nil && strings.TrimSpace(chunk.Content.Text.Text) != "" {
+					return
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	notifs := testClient.Notifications()
+	t.Fatalf("expected agent message chunk notification via connection, got %d notifications: %+v", len(notifs), notifs)
+}
+
+// stubClient captures session notifications for assertions.
+type stubClient struct {
+	mu            sync.Mutex
+	notifications []acp.SessionNotification
+}
+
+func (c *stubClient) Notifications() []acp.SessionNotification {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	result := make([]acp.SessionNotification, len(c.notifications))
+	copy(result, c.notifications)
+	return result
+}
+
+func (c *stubClient) ReadTextFile(ctx context.Context, params acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
+	return acp.ReadTextFileResponse{}, fmt.Errorf("fs.readTextFile not supported in stub client")
+}
+
+func (c *stubClient) WriteTextFile(ctx context.Context, params acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
+	return acp.WriteTextFileResponse{}, fmt.Errorf("fs.writeTextFile not supported in stub client")
+}
+
+func (c *stubClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	// Always cancel to keep tests deterministic.
+	return acp.RequestPermissionResponse{
+		Outcome: acp.NewRequestPermissionOutcomeCancelled(),
+	}, nil
+}
+
+func (c *stubClient) SessionUpdate(ctx context.Context, params acp.SessionNotification) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.notifications = append(c.notifications, params)
+	return nil
+}
+
+func (c *stubClient) CreateTerminal(ctx context.Context, params acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
+	return acp.CreateTerminalResponse{}, fmt.Errorf("terminal capability not enabled in stub client")
+}
+
+func (c *stubClient) KillTerminalCommand(ctx context.Context, params acp.KillTerminalCommandRequest) (acp.KillTerminalCommandResponse, error) {
+	return acp.KillTerminalCommandResponse{}, fmt.Errorf("terminal capability not enabled in stub client")
+}
+
+func (c *stubClient) TerminalOutput(ctx context.Context, params acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
+	return acp.TerminalOutputResponse{}, fmt.Errorf("terminal capability not enabled in stub client")
+}
+
+func (c *stubClient) ReleaseTerminal(ctx context.Context, params acp.ReleaseTerminalRequest) (acp.ReleaseTerminalResponse, error) {
+	return acp.ReleaseTerminalResponse{}, fmt.Errorf("terminal capability not enabled in stub client")
+}
+
+func (c *stubClient) WaitForTerminalExit(ctx context.Context, params acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
+	return acp.WaitForTerminalExitResponse{}, fmt.Errorf("terminal capability not enabled in stub client")
 }
 
 // TestSpinACPAgent_Prompt_ContentBlockConversion tests content block conversion.

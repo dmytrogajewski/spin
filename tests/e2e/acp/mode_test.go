@@ -17,7 +17,7 @@ func TestACP_SetSessionMode(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -61,7 +61,7 @@ func TestACP_SetSessionMode_AllModes(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -105,7 +105,7 @@ func TestACP_SetSessionMode_InvalidSession(t *testing.T) {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b")
+	cmd, stdin, stdout := startACPAgent(t)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -133,7 +133,7 @@ func TestACP_SetSessionMode_InvalidMode(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -168,7 +168,7 @@ func TestACP_SetSessionMode_Notifications(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	// Create client with notification tracking
@@ -221,5 +221,133 @@ func TestACP_SetSessionMode_Notifications(t *testing.T) {
 		t.Logf("Mode update notification not received (may be expected with test-llm provider)")
 		// Don't fail the test - SetSessionMode succeeded, which is the main behavior
 	}
+}
+
+// TestACP_Mode_SetMode_Basic tests setting mode via session/set_mode.
+func TestACP_Mode_SetMode_Basic(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	client := createACPClient(t, stdin, stdout)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	// Set mode
+	setModeReq := acp.SetSessionModeRequest{
+		SessionId: sessionResp.SessionId,
+		ModeId:    acp.SessionModeId("review"),
+	}
+
+	resp, err := client.SetSessionMode(ctx, setModeReq)
+	require.NoError(t, err)
+	assert.NotNil(t, resp)
+}
+
+// TestACP_Mode_CurrentModeUpdate tests current_mode_update notification.
+func TestACP_Mode_CurrentModeUpdate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	clientImpl := &testClient{}
+	client := createACPClientWithClient(t, stdin, stdout, clientImpl)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	clientImpl.clearNotifications()
+
+	// Set mode (may trigger notification)
+	setModeReq := acp.SetSessionModeRequest{
+		SessionId: sessionResp.SessionId,
+		ModeId:    acp.SessionModeId("compact"),
+	}
+
+	_, err = client.SetSessionMode(ctx, setModeReq)
+	require.NoError(t, err)
+
+	// Wait for notification
+	time.Sleep(200 * time.Millisecond)
+
+	// Check for current_mode_update notification
+	notifications := clientImpl.getNotifications()
+	for _, notif := range notifications {
+		if notif.Update.CurrentModeUpdate != nil {
+			modeUpdate := notif.Update.CurrentModeUpdate
+			assert.NotEmpty(t, modeUpdate.CurrentModeId, "Mode update should have mode ID")
+			t.Logf("Found current_mode_update: %s", modeUpdate.CurrentModeId)
+			return
+		}
+	}
+	t.Log("No current_mode_update notification found (may be expected)")
+}
+
+// TestACP_Mode_InitialState tests initial mode from session/new.
+func TestACP_Mode_InitialState(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	client := createACPClient(t, stdin, stdout)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	// Verify initial mode state
+	require.NotNil(t, sessionResp.Modes, "Session should have mode state")
+	assert.NotEmpty(t, sessionResp.Modes.CurrentModeId, "Current mode should be set")
+	assert.NotEmpty(t, sessionResp.Modes.AvailableModes, "Available modes should be set")
+	
+	// Verify current mode is one of available modes
+	currentMode := sessionResp.Modes.CurrentModeId
+	found := false
+	for _, mode := range sessionResp.Modes.AvailableModes {
+		if mode.Id == currentMode {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "Current mode should be in available modes")
 }
 

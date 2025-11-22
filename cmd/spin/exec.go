@@ -15,9 +15,10 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
 	"github.com/dmytrogajewski/spin/internal/security"
-	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
+	"github.com/dmytrogajewski/spin/internal/ui/ports"
 	"github.com/spf13/cobra"
 	termx "golang.org/x/term"
 )
@@ -61,29 +62,35 @@ func runExec(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Load configuration
-	configLoader, err := loadConfig()
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-
-	// Create auth manager
-	authMgr := createAuthManager()
-
-	// Build LLM provider
-	provider, err := buildProvider(ctx, configLoader, authMgr)
-	if err != nil {
-		return fmt.Errorf("create provider: %w", err)
-	}
-	defer provider.Close()
-
 	// Get exec-specific flags
+	debugFlag, _ := cmd.Flags().GetBool("debug")
 	autoApprove, _ := cmd.Flags().GetBool("auto-approve")
 	timeout, _ := cmd.Flags().GetString("timeout")
 	format, _ := cmd.Flags().GetString("format")
 	noStream, _ := cmd.Flags().GetBool("no-stream")
 	exitOnError, _ := cmd.Flags().GetBool("exit-on-error")
-	debugFlag, _ := cmd.Flags().GetBool("debug")
+
+	// Load configuration using new unified API
+	cfg, err := config.Load(config.Source{
+		File: flagConfigFile,
+		Flags: config.FlagOverrides{
+			Provider: flagProvider,
+			Model:    flagModel,
+			Debug:    debugFlag,
+		},
+		WorkDir: flagWorkDir,
+	})
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	authMgr := createAuthManager()
+	provider, err := buildProvider(ctx, cfg, authMgr)
+
+	if err != nil {
+		return fmt.Errorf("create provider: %w", err)
+	}
+	defer provider.Close()
 
 	// Configure logging based on debug flag
 	if debugFlag {
@@ -105,7 +112,7 @@ func runExec(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create conversation using builder pattern
-	conv, err := createConversationForExec(ctx, provider, configLoader, autoApprove, debugFlag)
+	conv, err := createConversationForExec(ctx, provider, cfg, autoApprove, debugFlag)
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
@@ -121,23 +128,6 @@ func runExec(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// loadConfig loads configuration from file or defaults.
-func loadConfig() (*config.LoaderV2, error) {
-	configLoader := config.NewLoaderV2()
-
-	// Load from explicit config file if provided
-	if flagConfigFile != "" {
-		if _, err := configLoader.LoadFromFile(flagConfigFile); err != nil {
-			return nil, err
-		}
-	} else {
-		// Try to load from default locations (ignore error if not found)
-		_, _ = configLoader.Load()
-	}
-
-	return configLoader, nil
-}
-
 // createAuthManager creates an auth manager with platform-specific keystore.
 func createAuthManager() *auth.Manager {
 	keystore := auth.NewKeystore()
@@ -145,39 +135,15 @@ func createAuthManager() *auth.Manager {
 }
 
 // buildProvider creates an LLM provider from configuration.
-func buildProvider(ctx context.Context, configLoader *config.LoaderV2, authMgr *auth.Manager) (llm.Provider, error) {
-	// Check for test provider first (only available with e2e_llm_test build tag)
-	providerType := flagProvider
-	if providerType == "" {
-		// Try to get from config
-		cfg, err := configLoader.Load()
-		if err == nil && cfg.LLM.Provider != "" {
-			providerType = cfg.LLM.Provider
-		}
-	}
-
-	if extra, ok, err := createProviderForExecExtra(providerType); err != nil {
+func buildProvider(ctx context.Context, cfg *config.ConfigV2, authMgr *auth.Manager) (llm.Provider, error) {
+	if extra, ok, err := createProviderForExecExtra(cfg.LLM.Provider); err != nil {
 		return nil, err
 	} else if ok {
 		return extra, nil
 	}
 
-	// Create builder
-	b := builder.NewBuilder(configLoader, authMgr)
-
-	// Build provider with flags as overrides (only if flags are set)
-	cfg := builder.Config{}
-	if flagProvider != "" {
-		cfg.Provider = flagProvider
-	}
-	if flagModel != "" {
-		cfg.Model = flagModel
-	}
-	// Additional flags can be added here in the future
-	// BaseURL:  flagBaseURL,
-	// KeyName:  flagKeyName,
-
-	return b.Build(ctx, cfg)
+	b := builder.NewBuilder(cfg, authMgr)
+	return b.Build(ctx)
 }
 
 // parsePrompt parses the prompt from command line args or stdin.
@@ -206,56 +172,103 @@ func parseDuration(s string) (time.Duration, error) {
 	return time.ParseDuration(s)
 }
 
-// createConversationForExec creates a conversation configured for exec mode.
-func createConversationForExec(ctx context.Context, provider llm.Provider, configLoader *config.LoaderV2, autoApprove bool, debug bool) (*conversation.Conversation, error) {
-	workDir := getWorkingDirectory()
-	cfg, err := loadConfigForMode("", 0, workDir) // No max turns limit for exec
-	if err != nil {
-		return nil, fmt.Errorf("load config: %w", err)
+// createConversationForExec creates a conversation configured for exec mode using the runtime pattern.
+func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *config.ConfigV2, autoApprove bool, debug bool) (*conversation.Conversation, error) {
+	workDir := cfg.Agent.WorkDir
+	logger := slog.Default()
+	emitter := events.NewEventEmitter(100)
+
+	var storage session.Storage
+
+	if cfg.Agent.SessionDir != "" {
+		var err error
+
+		storage, err = session.NewFileStorage(cfg.Agent.SessionDir)
+
+		if err != nil {
+			return nil, fmt.Errorf("create session storage: %w", err)
+		}
 	}
 
-	// Apply debug flag to configuration
-	applyDebugFlag(cfg, debug)
+	sessionID := ""
 
-	// Create tool registry with same tools as TUI
-	registry := tools.NewRegistry()
-	registry.Register(tools.NewReadFileTool())
-	registry.Register(tools.NewWriteFileTool())
-	registry.Register(tools.NewListDirectoryTool())
+	if storage != nil {
+		sess := session.NewSession(workDir)
+		sessionID = sess.ID
+	} else {
+		sessionID = fmt.Sprintf("exec-%d", time.Now().UnixNano())
+	}
 
-	// Create approval handler for exec mode
+	services, cleanup, err := createServices(cfg, workDir, logger)
+
+	if err != nil {
+		return nil, err
+	}
+
 	var approvalHandler security.ApprovalHandler
+
 	if autoApprove {
 		approvalHandler = createAutoApproveHandler()
 	} else {
 		approvalHandler = createDenyHandler("exec mode requires --auto-approve for dangerous operations")
 	}
 
-	// Create services based on configuration
-	logger := slog.Default()
+	var ui ports.UI
 
-	protocolServices, cleanup, err := createProtocolServices(cfg, workDir, logger)
+	if termx.IsTerminal(int(os.Stdout.Fd())) && termx.IsTerminal(int(os.Stdin.Fd())) {
+		var err error
+
+		ui, err = adapters.NewPureTTY(os.Stdout, adapters.WithExecMode())
+
+		if err != nil {
+			cleanup()
+			return nil, fmt.Errorf("create TUI: %w", err)
+		}
+	} else {
+		mockTty := &mockTTY{width: 120, height: 30}
+
+		var err error
+
+		ui, err = adapters.NewPureTTY(os.Stdout, adapters.WithExecMode(), adapters.WithTTY(mockTty))
+
+		if err != nil {
+			cleanup()
+			return nil, fmt.Errorf("create TUI: %w", err)
+		}
+	}
+
+	builtinRuntime, err := createBuiltinRuntime(
+		workDir,
+		emitter,
+		storage,
+		sessionID,
+		approvalHandler,
+		services,
+		ui,
+		logger,
+		cfg,
+	)
 	if err != nil {
-		return nil, err
+		cleanup()
+		return nil, fmt.Errorf("create builtin runtime: %w", err)
 	}
 
-	// Build conversation with services
-	builder := conversation.NewBuilder(cfg, workDir).
-		WithLLM(provider).
-		WithToolRegistry(registry).
-		WithApprovalHandler(approvalHandler)
+	builder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
 
-	if protocolServices.Git != nil {
-		builder = builder.WithGit(protocolServices.Git)
+	if services.Git != nil {
+		builder = builder.WithGit(services.Git)
 	}
-	if protocolServices.Shell != nil {
-		builder = builder.WithShell(protocolServices.Shell)
+
+	if services.Shell != nil {
+		builder = builder.WithShell(services.Shell)
 	}
-	if protocolServices.MCP != nil {
-		builder = builder.WithMCP(protocolServices.MCP)
+
+	if services.MCP != nil {
+		builder = builder.WithMCP(services.MCP)
 	}
 
 	conv, err := builder.Build(ctx)
+
 	if err != nil {
 		cleanup()
 		return nil, fmt.Errorf("build conversation: %w", err)
@@ -352,14 +365,9 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 		return ctx.Err()
 
 	case err := <-errChan:
-		// Stop streaming to close the channel
 		mapper.StopStreaming()
 
-		// Wait for streaming to complete
 		<-streamDone
-
-		// EventTurnComplete is now emitted after all post-execution processing
-		// (including ACE bullet generation), so we don't need to wait here
 
 		if err != nil {
 			if exitOnError {

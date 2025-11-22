@@ -6,8 +6,6 @@ import "github.com/dmytrogajewski/spin/internal/llm"
 
 // createProviderForACPExtra allows build-tagged extensions to provide additional
 // providers for the ACP server. The default implementation returns no match.
-func createProviderForACPExtra(providerType, baseURL, model, apiKey string) (llm.Provider, bool, error) {
+func createProviderForACPExtra(_, _, _, _ string) (llm.Provider, bool, error) {
 	return nil, false, nil
 }
-
-

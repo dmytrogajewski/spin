@@ -13,7 +13,7 @@ type NvidiaDetector struct {
 
 func (d *NvidiaDetector) TotalVRAM() (int64, error) {
 	// Query total memory in MiB
-	// Some systems have multiple GPUs; take the first line for now (v1 scope).
+	// Some systems have multiple GPUs; take the first line (v1 scope: single GPU).
 	out, err := d.runner.Run("nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits")
 	if err != nil {
 		return 0, err

@@ -10,10 +10,13 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
 	"github.com/dmytrogajewski/spin/internal/commands"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/message"
+	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/task"
@@ -27,7 +30,7 @@ var (
 	ErrNilMCPManager = errors.New("mcp manager cannot be nil")
 	// ErrNilEmitter is returned when emitter is nil.
 	ErrNilEmitter = errors.New("emitter cannot be nil")
-	// ErrNotImplemented is returned for methods not yet implemented.
+	// ErrNotImplemented is returned for methods that are not implemented.
 	ErrNotImplemented = errors.New("not implemented")
 )
 
@@ -290,13 +293,13 @@ func convertACPMcpServerToSpin(acpServer acp.McpServer) (mcp.MCPServerConfig, er
 		}, nil
 	}
 
-	// HTTP and SSE transports not yet supported
+	// HTTP and SSE transports are not supported
 	if acpServer.Http != nil {
-		return mcp.MCPServerConfig{}, fmt.Errorf("HTTP transport not yet supported")
+		return mcp.MCPServerConfig{}, fmt.Errorf("HTTP transport is not supported")
 	}
 
 	if acpServer.Sse != nil {
-		return mcp.MCPServerConfig{}, fmt.Errorf("SSE transport not yet supported")
+		return mcp.MCPServerConfig{}, fmt.Errorf("SSE transport is not supported")
 	}
 
 	return mcp.MCPServerConfig{}, fmt.Errorf("no transport specified")
@@ -320,7 +323,9 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 	// Create cancellable context for this prompt execution
 	// This allows the Cancel method to cancel in-progress executions
 	promptCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+
+	// Add session ID to context so it's available for tools (e.g. TerminalExecutor)
+	promptCtx = runtime.ContextWithSessionID(promptCtx, string(req.SessionId))
 
 	// Store cancel function so Cancel method can cancel this execution
 	a.mu.Lock()
@@ -404,9 +409,12 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 	}
 
 	// Subscribe to events for real-time notifications
-	var subID string
-	var eventCh <-chan events.Event
-	var unsubscribe func()
+	var (
+		subID       string
+		eventCh     <-chan events.Event
+		unsubscribe func()
+		eventsDone  chan struct{}
+	)
 
 	if conn != nil {
 		var err error
@@ -418,12 +426,23 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 			unsubscribe = func() {
 				a.emitter.Unsubscribe(subID)
 			}
-			defer unsubscribe()
-
-			// Start event processing goroutine
-			go a.processEvents(promptCtx, req.SessionId, eventCh)
+			eventsDone = make(chan struct{})
+			go func() {
+				defer close(eventsDone)
+				a.processEvents(promptCtx, req.SessionId, eventCh)
+			}()
 		}
 	}
+
+	defer func() {
+		if unsubscribe != nil {
+			unsubscribe()
+		}
+		if eventsDone != nil {
+			<-eventsDone
+		}
+		cancel()
+	}()
 
 	// Execute agent with cancellable context
 	agentResp, err := a.agent.Execute(promptCtx, agentReq)
@@ -648,10 +667,11 @@ func mapStopReasonFromError(err error, resp *agent.AgentResponse) acp.StopReason
 // This runs in a goroutine and continues until the context is cancelled or the channel is closed.
 // Tracks thinking blocks across multiple content deltas and file content for diff generation.
 func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionId, eventCh <-chan events.Event) {
-	// Track thinking blocks across content deltas
-	thinkTracker := newThinkingBlockTracker()
 	// Track file content for diff generation
 	fileTracker := newFileContentTracker()
+
+	// Track accumulated content for plan detection
+	var accumulatedContent string
 
 	// Get connection once
 	a.mu.RLock()
@@ -673,38 +693,92 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 				return
 			}
 
-			// Handle content delta specially to extract thinking blocks
+			// Reset content on turn start
+			if event.Type == events.EventTurnStart {
+				accumulatedContent = ""
+			}
+
+			// Check for plan detection before tool call starts
+			if event.Type == events.EventToolCallStart {
+				// If we have content, try to detect plan
+				if accumulatedContent != "" && a.agent != nil && a.agent.GetPlanner() == nil {
+					plan := planning.DetectPlanFromText(accumulatedContent)
+					if plan != nil {
+						a.agent.SetPlanner(plan)
+						// Send plan notification immediately
+						planEntries := convertOrchestrationPlanToACP(plan)
+						planUpdate := acp.UpdatePlan(planEntries...)
+						notification := acp.SessionNotification{
+							SessionId: sessionID,
+							Update:    planUpdate,
+						}
+						if err := conn.SessionUpdate(ctx, notification); err != nil {
+							_ = err
+						}
+					}
+				}
+			}
+
+			// Handle content delta
 			if event.Type == events.EventContentDelta {
 				data, ok := event.ContentDeltaData()
 				if !ok || data.Role != "assistant" {
 					continue
 				}
 
-				// Process content with thinking block tracker
-				thinkUpdate, messageUpdate, hasUpdate := thinkTracker.processContent(data.Content)
+				accumulatedContent += data.Content
 
-				if hasUpdate {
-					// Send thinking update if available
-					if thinkUpdate.AgentThoughtChunk != nil {
-						notification := acp.SessionNotification{
-							SessionId: sessionID,
-							Update:    thinkUpdate,
-						}
-						if err := conn.SessionUpdate(ctx, notification); err != nil {
-							_ = err // Log error but continue
-						}
-					}
+				update := acp.UpdateAgentMessageText(data.Content)
+				notification := acp.SessionNotification{
+					SessionId: sessionID,
+					Update:    update,
+				}
+				if err := conn.SessionUpdate(ctx, notification); err != nil {
+					_ = err
+				}
+				continue
+			}
 
-					// Send message update if available
-					if messageUpdate.AgentMessageChunk != nil {
-						notification := acp.SessionNotification{
-							SessionId: sessionID,
-							Update:    messageUpdate,
-						}
-						if err := conn.SessionUpdate(ctx, notification); err != nil {
-							_ = err // Log error but continue
-						}
-					}
+			// Handle thinking delta
+			if event.Type == events.EventThinkingDelta {
+				data, ok := event.ThinkingDeltaData()
+				if !ok {
+					continue
+				}
+
+				update := acp.UpdateAgentThoughtText(data.Content)
+				notification := acp.SessionNotification{
+					SessionId: sessionID,
+					Update:    update,
+				}
+				if err := conn.SessionUpdate(ctx, notification); err != nil {
+					_ = err
+				}
+				continue
+			}
+
+			// Handle plan updates
+			if event.Type == events.EventPlanUpdate {
+				data, ok := event.PlanUpdateData()
+				if !ok {
+					continue
+				}
+
+				// Convert plan to ACP entries
+				planEntries := convertOrchestrationPlanToACP(data.Plan)
+				if len(planEntries) == 0 {
+					continue
+				}
+
+				// Send plan update notification
+				planUpdate := acp.UpdatePlan(planEntries...)
+				notification := acp.SessionNotification{
+					SessionId: sessionID,
+					Update:    planUpdate,
+				}
+
+				if err := conn.SessionUpdate(ctx, notification); err != nil {
+					_ = err // Log but continue
 				}
 				continue
 			}
@@ -716,6 +790,17 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 				continue
 			}
 
+			// Extract terminal ID from event metadata if this is a tool call complete event
+			// We need to release the terminal AFTER sending the notification (per ACP spec)
+			var terminalIDToRelease string
+			if event.Type == events.EventToolCallComplete {
+				if data, ok := event.ToolCallCompleteData(); ok {
+					if terminalID, ok := data.Metadata["terminal_id"].(string); ok && terminalID != "" {
+						terminalIDToRelease = terminalID
+					}
+				}
+			}
+
 			// Send notification via connection
 			notification := acp.SessionNotification{
 				SessionId: sessionID,
@@ -725,6 +810,15 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 			if err := conn.SessionUpdate(ctx, notification); err != nil {
 				// Log error but continue processing
 				_ = err
+			}
+
+			// Release terminal AFTER notification is sent (per ACP spec requirement)
+			if terminalIDToRelease != "" {
+				// Type assert to get concrete connection type for terminal client
+				if acpConn, ok := conn.(*acp.AgentSideConnection); ok {
+					terminalClient := NewACPTerminalClient(acpConn)
+					_ = terminalClient.Release(ctx, terminalIDToRelease)
+				}
 			}
 		}
 	}
@@ -816,35 +910,25 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 
 			// Send AI response
 			if aiResponse != "" {
-				// Parse thinking blocks from AI response
-				thinkTracker := newThinkingBlockTracker()
-				thinkUpdate, messageUpdate, hasUpdate := thinkTracker.processContent(aiResponse)
+				// Parse thinking blocks and filter protocol artifacts from AI response
+				s := sanitizer.New()
+				content, thought := s.Process(aiResponse)
 
-				if hasUpdate {
-					// Send thinking update if available
-					if thinkUpdate.AgentThoughtChunk != nil {
-						notification := acp.SessionNotification{
-							SessionId: sessionID,
-							Update:    thinkUpdate,
-						}
-						if err := conn.SessionUpdate(ctx, notification); err != nil {
-							_ = err
-						}
+				// Send thinking content if available
+				if thought != "" {
+					thinkUpdate := acp.UpdateAgentThoughtText(thought)
+					notification := acp.SessionNotification{
+						SessionId: sessionID,
+						Update:    thinkUpdate,
 					}
+					if err := conn.SessionUpdate(ctx, notification); err != nil {
+						_ = err
+					}
+				}
 
-					// Send message update if available
-					if messageUpdate.AgentMessageChunk != nil {
-						notification := acp.SessionNotification{
-							SessionId: sessionID,
-							Update:    messageUpdate,
-						}
-						if err := conn.SessionUpdate(ctx, notification); err != nil {
-							_ = err
-						}
-					}
-				} else {
-					// No thinking blocks, send as regular message
-					messageUpdate := acp.UpdateAgentMessageText(aiResponse)
+				// Send message content if available
+				if content != "" {
+					messageUpdate := acp.UpdateAgentMessageText(content)
 					notification := acp.SessionNotification{
 						SessionId: sessionID,
 						Update:    messageUpdate,
@@ -853,13 +937,15 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 						_ = err
 					}
 				}
+			} else {
+				// No AI response content (e.g. tool call only)
 			}
 		}
 	}
 
 	// Build response
 	resp := acp.LoadSessionResponse{
-		// Models and Modes are optional and not yet implemented
+		// Models and Modes are optional and are not implemented
 		Models: nil,
 		Modes:  nil,
 	}
@@ -896,7 +982,10 @@ func (a *SpinACPAgent) sendPlanNotifications(ctx context.Context, sessionID acp.
 
 	// Fallback to text-based detection if no structured plan found
 	if len(planEntries) == 0 && agentResp.Output != "" {
-		planEntries = detectPlanFromOutput(agentResp.Output)
+		plan := planning.DetectPlanFromText(agentResp.Output)
+		if plan != nil {
+			planEntries = convertOrchestrationPlanToACP(plan)
+		}
 	}
 
 	if len(planEntries) == 0 {
@@ -940,7 +1029,7 @@ func (a *SpinACPAgent) Cancel(ctx context.Context, notif acp.CancelNotification)
 	if cancel, exists := a.cancels[notif.SessionId]; exists {
 		// Cancel the context for this session's prompt execution
 		cancel()
-		// Remove cancel function (it will be cleaned up by defer in Prompt, but remove it here too)
+		// Remove cancel function (it is cleaned up by defer in Prompt, but remove it here too)
 		delete(a.cancels, notif.SessionId)
 	}
 
@@ -1082,7 +1171,7 @@ func (a *SpinACPAgent) SetSessionMode(ctx context.Context, req acp.SetSessionMod
 }
 
 // Authenticate handles authentication requests.
-// Not yet implemented.
+// This method is not implemented.
 func (a *SpinACPAgent) Authenticate(ctx context.Context, req acp.AuthenticateRequest) (acp.AuthenticateResponse, error) {
 	return acp.AuthenticateResponse{}, fmt.Errorf("Authenticate: %w", ErrNotImplemented)
 }
@@ -1186,8 +1275,8 @@ func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.RequestPermission
 	reason := fmt.Sprintf("Tool call: %s", toolName)
 
 	// Create command from tool call
-	// For now, create a basic command structure
-	// In the future, we might extract more details from RawInput
+	// Create a basic command structure
+	// Additional details may be extracted from RawInput if needed
 	cmd := &security.Command{
 		Program: toolName,
 		Args:    []string{},
@@ -1210,4 +1299,11 @@ func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.RequestPermission
 	}
 
 	return security.NewOperation(cmd, reason, workDir), nil
+}
+
+// GetClientCapabilities returns the client capabilities stored after Initialize.
+func (a *SpinACPAgent) GetClientCapabilities() *acp.ClientCapabilities {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.clientCaps
 }

@@ -80,9 +80,20 @@ func (p *Provider) Complete(_ context.Context, params openai.ChatCompletionNewPa
 	// Choose tool based on prompt content
 	var toolCall openai.ChatCompletionMessageToolCall
 	content := ""
-	
+
 	lowerPrompt := strings.ToLower(promptText)
-	if strings.Contains(lowerPrompt, "read") || strings.Contains(lowerPrompt, "file") && !strings.Contains(lowerPrompt, "write") && !strings.Contains(lowerPrompt, "create") {
+	if strings.Contains(lowerPrompt, "execute plan test") {
+		// Plan execution test scenario - use shell_command which is always available in ACP mode
+		toolCall = openai.ChatCompletionMessageToolCall{
+			ID:   "test-plan-tool",
+			Type: openai.ChatCompletionMessageToolCallTypeFunction,
+			Function: openai.ChatCompletionMessageToolCallFunction{
+				Name:      "shell_command",
+				Arguments: `{"command":"echo hello","cwd":"","operation":"execute"}`,
+			},
+		}
+		content = "Plan:\n1. Run echo command"
+	} else if strings.Contains(lowerPrompt, "read") || strings.Contains(lowerPrompt, "file") && !strings.Contains(lowerPrompt, "write") && !strings.Contains(lowerPrompt, "create") {
 		// Read operation
 		toolCall = openai.ChatCompletionMessageToolCall{
 			ID:   "test-read-file",
@@ -123,7 +134,7 @@ func (p *Provider) Complete(_ context.Context, params openai.ChatCompletionNewPa
 				Type: openai.ChatCompletionMessageToolCallTypeFunction,
 				Function: openai.ChatCompletionMessageToolCallFunction{
 					Name:      "shell_command",
-					Arguments: `{"command":"echo approval persistence test","cwd":""}`,
+					Arguments: `{"command":"echo approval persistence test","cwd":"","operation":"execute"}`,
 				},
 			}
 			content = "Running shell command: echo approval persistence test"
@@ -208,9 +219,20 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 		// Choose tool based on prompt content
 		var toolCall openai.ChatCompletionMessageToolCall
 		content := ""
-		
+
 		lowerPrompt := strings.ToLower(promptText)
-		if strings.Contains(lowerPrompt, "read") || (strings.Contains(lowerPrompt, "file") && !strings.Contains(lowerPrompt, "write") && !strings.Contains(lowerPrompt, "create")) {
+		if strings.Contains(lowerPrompt, "execute plan test") {
+			// Plan execution test scenario - use shell_command which is always available in ACP mode
+			toolCall = openai.ChatCompletionMessageToolCall{
+				ID:   "test-plan-tool",
+				Type: openai.ChatCompletionMessageToolCallTypeFunction,
+				Function: openai.ChatCompletionMessageToolCallFunction{
+					Name:      "shell_command",
+					Arguments: `{"command":"echo hello","cwd":"","operation":"execute"}`,
+				},
+			}
+			content = "Plan:\n1. Run echo command"
+		} else if strings.Contains(lowerPrompt, "read") || strings.Contains(lowerPrompt, "file") && !strings.Contains(lowerPrompt, "write") && !strings.Contains(lowerPrompt, "create") {
 			// Read operation
 			toolCall = openai.ChatCompletionMessageToolCall{
 				ID:   "test-read-file",
@@ -251,7 +273,7 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 					Type: openai.ChatCompletionMessageToolCallTypeFunction,
 					Function: openai.ChatCompletionMessageToolCallFunction{
 						Name:      "shell_command",
-						Arguments: `{"command":"echo approval persistence test","cwd":""}`,
+						Arguments: `{"command":"echo approval persistence test","cwd":"","operation":"execute"}`,
 					},
 				}
 				content = "Running shell command: echo approval persistence test"
@@ -259,24 +281,7 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 		}
 		p.mu.Unlock()
 
-		// Send content chunk
-		if content != "" {
-			ch <- openai.ChatCompletionChunk{
-				ID:    "test-chunk-content",
-				Model: "test-llm",
-				Choices: []openai.ChatCompletionChunkChoice{
-					{
-						Index: 0,
-						Delta: openai.ChatCompletionChunkChoicesDelta{
-							Role:    openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
-							Content: content,
-						},
-					},
-				},
-			}
-		}
-
-		// Send tool call chunk
+		// Prepare tool call chunks
 		toolCallChunks := []openai.ChatCompletionChunkChoicesDeltaToolCall{
 			{
 				Index: 0,
@@ -288,14 +293,17 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 				},
 			},
 		}
+
+		// Send combined chunk with content and tool call
 		ch <- openai.ChatCompletionChunk{
-			ID:    "test-chunk-tool",
+			ID:    "test-chunk-combined",
 			Model: "test-llm",
 			Choices: []openai.ChatCompletionChunkChoice{
 				{
 					Index: 0,
 					Delta: openai.ChatCompletionChunkChoicesDelta{
 						Role:      openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
+						Content:   content,
 						ToolCalls: toolCallChunks,
 					},
 					FinishReason: openai.ChatCompletionChunkChoicesFinishReasonToolCalls,
@@ -330,5 +338,3 @@ func (p *Provider) Name() string {
 func (p *Provider) Close() error {
 	return nil
 }
-
-

@@ -2,6 +2,7 @@ package acp
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/coder/acp-go-sdk"
 	"github.com/dmytrogajewski/spin/internal/planning"
@@ -58,6 +59,17 @@ func mapStepStatus(status planning.StepStatus) acp.PlanEntryStatus {
 // Steps with no dependencies are high priority (can start immediately).
 // Steps with dependencies are medium priority.
 func mapStepPriority(step planning.Step, plan *planning.Plan) acp.PlanEntryPriority {
+	lowerDesc := strings.ToLower(step.Description)
+
+	// Heuristics: check for explicit priority keywords
+	if strings.Contains(lowerDesc, "critical") || strings.Contains(lowerDesc, "urgent") ||
+		strings.Contains(lowerDesc, "important") || strings.Contains(lowerDesc, "priority") {
+		return acp.PlanEntryPriorityHigh
+	}
+	if strings.Contains(lowerDesc, "optional") || strings.Contains(lowerDesc, "nice to have") {
+		return acp.PlanEntryPriorityLow
+	}
+
 	// Steps with no dependencies are high priority (critical path start)
 	if len(step.DependsOn) == 0 {
 		return acp.PlanEntryPriorityHigh
@@ -66,3 +78,4 @@ func mapStepPriority(step planning.Step, plan *planning.Plan) acp.PlanEntryPrior
 	// Steps with dependencies are medium priority
 	return acp.PlanEntryPriorityMedium
 }
+

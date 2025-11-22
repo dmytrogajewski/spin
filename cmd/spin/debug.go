@@ -188,7 +188,7 @@ func runDebugSandbox(ctx context.Context, command string, args []string, mode, w
 	// Placeholder: Sandbox execution requires proper sandbox implementation
 	// via internal/security/sandbox with appropriate isolation (namespaces, chroot, etc.)
 	// This is a complex feature that requires OS-specific implementations
-	return fmt.Errorf("sandbox testing not yet implemented")
+	return fmt.Errorf("sandbox testing not implemented")
 }
 
 // runDebugLandlock executes the Landlock testing command.
@@ -200,5 +200,5 @@ func runDebugLandlock(ctx context.Context, command string, args []string, mode, 
 	// Placeholder: Landlock execution requires Linux-specific implementation
 	// via internal/security/sandbox using Landlock ABI
 	// This is a kernel feature that requires appropriate system calls
-	return fmt.Errorf("landlock testing not yet implemented")
+	return fmt.Errorf("landlock testing not implemented")
 }

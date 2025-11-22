@@ -66,7 +66,7 @@ func startACPAgent(t *testing.T, args ...string) (*exec.Cmd, io.WriteCloser, io.
 	require.NoError(t, err, "Failed to start ACP agent")
 
 	// Give agent a moment to initialize
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	return cmd, stdin, stdout
 }
@@ -190,7 +190,9 @@ func (c *testClient) SessionUpdate(ctx context.Context, params acp.SessionNotifi
 
 // CreateTerminal implements acp.Client interface (not used in basic tests).
 func (c *testClient) CreateTerminal(ctx context.Context, params acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
-	return acp.CreateTerminalResponse{}, nil
+	return acp.CreateTerminalResponse{
+		TerminalId: "test-terminal-1",
+	}, nil
 }
 
 // KillTerminalCommand implements acp.Client interface (not used in basic tests).
@@ -210,7 +212,11 @@ func (c *testClient) ReleaseTerminal(ctx context.Context, params acp.ReleaseTerm
 
 // WaitForTerminalExit implements acp.Client interface (not used in basic tests).
 func (c *testClient) WaitForTerminalExit(ctx context.Context, params acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
-	return acp.WaitForTerminalExitResponse{}, nil
+	// Return successful exit for test commands
+	exitCode := 0
+	return acp.WaitForTerminalExitResponse{
+		ExitCode: &exitCode,
+	}, nil
 }
 
 // waitForInitialization waits for the agent to be ready by attempting initialization.
@@ -222,7 +228,7 @@ func waitForInitialization(t *testing.T, conn *acp.ClientSideConnection) error {
 
 	// Try to initialize - this verifies the connection is working
 	_, err := conn.Initialize(ctx, acp.InitializeRequest{
-		ProtocolVersion: acp.ProtocolVersionNumber,
+		ProtocolVersion:    acp.ProtocolVersionNumber,
 		ClientCapabilities: acp.ClientCapabilities{},
 		ClientInfo: &acp.Implementation{
 			Name:    "test-client",
@@ -247,4 +253,97 @@ func createTestWorkspace(t *testing.T) string {
 	return dir
 }
 
+// waitForNotification waits for a specific notification type to arrive.
+func waitForNotification(t *testing.T, client *testClient, timeout time.Duration, check func(acp.SessionNotification) bool) bool {
+	t.Helper()
 
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		notifications := client.getNotifications()
+		for _, notif := range notifications {
+			if check(notif) {
+				return true
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return false
+}
+
+// verifySessionUpdate verifies that a session/update notification was received.
+func verifySessionUpdate(t *testing.T, client *testClient, check func(acp.SessionUpdate) bool) bool {
+	t.Helper()
+
+	notifications := client.getNotifications()
+	for _, notif := range notifications {
+		if check(notif.Update) {
+			return true
+		}
+	}
+	return false
+}
+
+// createTestFile creates a test file with the given content.
+func createTestFile(t *testing.T, dir, filename, content string) string {
+	t.Helper()
+
+	filePath := filepath.Join(dir, filename)
+	err := os.WriteFile(filePath, []byte(content), 0644)
+	require.NoError(t, err)
+	return filePath
+}
+
+// verifyFileContents verifies that a file has the expected content.
+func verifyFileContents(t *testing.T, filePath, expectedContent string) {
+	t.Helper()
+
+	content, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	require.Equal(t, expectedContent, string(content))
+}
+
+// createMockMCPServer creates a simple mock MCP server process for testing.
+// Returns the command path and args that can be used in McpServer config.
+func createMockMCPServer(t *testing.T) (string, []string) {
+	t.Helper()
+
+	// Use echo as a simple mock server
+	// In real tests, you might want a more sophisticated mock
+	return "/bin/echo", []string{"mcp-server-response"}
+}
+
+// waitForToolCall waits for a tool call notification.
+func waitForToolCall(t *testing.T, client *testClient, timeout time.Duration) bool {
+	t.Helper()
+
+	return waitForNotification(t, client, timeout, func(notif acp.SessionNotification) bool {
+		return notif.Update.ToolCall != nil
+	})
+}
+
+// waitForPlanUpdate waits for a plan update notification.
+func waitForPlanUpdate(t *testing.T, client *testClient, timeout time.Duration) bool {
+	t.Helper()
+
+	return waitForNotification(t, client, timeout, func(notif acp.SessionNotification) bool {
+		return notif.Update.Plan != nil
+	})
+}
+
+// waitForModeUpdate waits for a current_mode_update notification.
+func waitForModeUpdate(t *testing.T, client *testClient, timeout time.Duration) bool {
+	t.Helper()
+
+	return waitForNotification(t, client, timeout, func(notif acp.SessionNotification) bool {
+		return notif.Update.CurrentModeUpdate != nil
+	})
+}
+
+// waitForCommandsUpdate waits for an available_commands_update notification.
+func waitForCommandsUpdate(t *testing.T, client *testClient, timeout time.Duration) bool {
+	t.Helper()
+
+	return waitForNotification(t, client, timeout, func(notif acp.SessionNotification) bool {
+		return notif.Update.AvailableCommandsUpdate != nil
+	})
+}

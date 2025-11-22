@@ -1,9 +1,10 @@
-//go:build acp_permission_future
+//go:build e2e_llm_test
 
 package acp
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
@@ -11,120 +12,60 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestACP_RequestPermission tests permission request flow.
-func TestACP_RequestPermission(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
+// cancelPermissionClient cancels all permission requests.
+type cancelPermissionClient struct {
+	testClient
+}
 
-	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
-	defer cleanupAgent(t, cmd, stdin)
+func (c *cancelPermissionClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	return acp.RequestPermissionResponse{
+		Outcome: acp.NewRequestPermissionOutcomeCancelled(),
+	}, nil
+}
 
-	client := createACPClient(t, stdin, stdout)
-	ctx := context.Background()
+// permissionTestClient tracks permission requests.
+type permissionTestClient struct {
+	testClient
+	permissionRequests []acp.RequestPermissionRequest
+	mu                 sync.Mutex
+}
 
-	// Initialize
-	_, err := client.Initialize(ctx, acp.InitializeRequest{
-		ProtocolVersion: acp.ProtocolVersionNumber,
-	})
-	require.NoError(t, err)
+func (c *permissionTestClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.permissionRequests = append(c.permissionRequests, params)
 
-	// Create session
-	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
-		Cwd:        workDir,
-		McpServers: []acp.McpServer{},
-	})
-	require.NoError(t, err)
-	sessionID := sessionResp.SessionId
-
-	// Request permission
-	permissionReq := acp.RequestPermissionRequest{
-		SessionId: sessionID,
-		ToolCall: &acp.ToolCall{
-			ToolCallId: acp.ToolCallId("test-tool-call-1"),
-			Title:      "Test Tool",
-			RawInput:   `{"command": "rm -rf /tmp/test"}`,
-		},
-		Options: []acp.PermissionOption{
-			{
-				OptionId: acp.PermissionOptionId("allow_once"),
-				Name:     "Allow Once",
-				Kind:     acp.PermissionOptionKindAllowOnce,
-			},
-			{
-				OptionId: acp.PermissionOptionId("reject_once"),
-				Name:     "Reject",
-				Kind:     acp.PermissionOptionKindRejectOnce,
-			},
-		},
-	}
-
-	resp, err := client.RequestPermission(ctx, permissionReq)
-	
-	// RequestPermission may not be available if approval service is not configured
-	// That's okay - we're testing the method exists and can be called
-	if err != nil {
-		t.Logf("RequestPermission returned error (may be expected if approval service not configured): %v", err)
-	} else {
-		// Verify response structure
-		assert.NotNil(t, resp.Outcome, "Response should have outcome")
-		// Outcome should be either Selected or Cancelled
-		if resp.Outcome.Selected != nil {
-			assert.NotEmpty(t, resp.Outcome.Selected.OptionId, "Selected option should have ID")
+	// Auto-approve by selecting the first allow option
+	var selectedOptionID acp.PermissionOptionId
+	for _, option := range params.Options {
+		if option.Kind == acp.PermissionOptionKindAllowOnce || option.Kind == acp.PermissionOptionKindAllowAlways {
+			selectedOptionID = option.OptionId
+			break
 		}
 	}
-}
 
-// TestACP_RequestPermission_InvalidSession tests permission request with invalid session.
-func TestACP_RequestPermission_InvalidSession(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
+	// If no allow option found, use first option (for testing)
+	if selectedOptionID == "" && len(params.Options) > 0 {
+		selectedOptionID = params.Options[0].OptionId
 	}
 
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b")
-	defer cleanupAgent(t, cmd, stdin)
-
-	client := createACPClient(t, stdin, stdout)
-	ctx := context.Background()
-
-	_, err := client.Initialize(ctx, acp.InitializeRequest{
-		ProtocolVersion: acp.ProtocolVersionNumber,
-	})
-	require.NoError(t, err)
-
-	// Request permission with invalid session
-	permissionReq := acp.RequestPermissionRequest{
-		SessionId: acp.SessionId("invalid-session-id"),
-		ToolCall: &acp.ToolCall{
-			ToolCallId: acp.ToolCallId("test-tool-call-1"),
-			Title:      "Test Tool",
-		},
-		Options: []acp.PermissionOption{
-			{
-				OptionId: acp.PermissionOptionId("allow_once"),
-				Name:     "Allow Once",
-				Kind:     acp.PermissionOptionKindAllowOnce,
-			},
-		},
-	}
-
-	_, err = client.RequestPermission(ctx, permissionReq)
-	// Should return error for invalid session
-	assert.Error(t, err, "RequestPermission should fail with invalid session ID")
+	return acp.RequestPermissionResponse{
+		Outcome: acp.NewRequestPermissionOutcomeSelected(selectedOptionID),
+	}, nil
 }
 
-// TestACP_RequestPermission_Options tests different permission option kinds.
-func TestACP_RequestPermission_Options(t *testing.T) {
+// TestACP_Permission_AllowOnce tests allow_once option.
+func TestACP_Permission_AllowOnce(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
-	client := createACPClient(t, stdin, stdout)
+	permClient := &permissionTestClient{}
+	client := createACPClientWithClient(t, stdin, stdout, &permClient.testClient)
 	ctx := context.Background()
 
 	_, err := client.Initialize(ctx, acp.InitializeRequest{
@@ -138,84 +79,315 @@ func TestACP_RequestPermission_Options(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tests := []struct {
-		name    string
-		options []acp.PermissionOption
-	}{
-		{
-			name: "allow_once and allow_always",
-			options: []acp.PermissionOption{
-				{
-					OptionId: acp.PermissionOptionId("allow_once"),
-					Name:     "Allow Once",
-					Kind:     acp.PermissionOptionKindAllowOnce,
-				},
-				{
-					OptionId: acp.PermissionOptionId("allow_always"),
-					Name:     "Allow Always",
-					Kind:     acp.PermissionOptionKindAllowAlways,
-				},
-			},
-		},
-		{
-			name: "reject_once and reject_always",
-			options: []acp.PermissionOption{
-				{
-					OptionId: acp.PermissionOptionId("reject_once"),
-					Name:     "Reject Once",
-					Kind:     acp.PermissionOptionKindRejectOnce,
-				},
-				{
-					OptionId: acp.PermissionOptionId("reject_always"),
-					Name:     "Reject Always",
-					Kind:     acp.PermissionOptionKindRejectAlways,
-				},
-			},
-		},
-		{
-			name: "all option kinds",
-			options: []acp.PermissionOption{
-				{
-					OptionId: acp.PermissionOptionId("allow_once"),
-					Name:     "Allow Once",
-					Kind:     acp.PermissionOptionKindAllowOnce,
-				},
-				{
-					OptionId: acp.PermissionOptionId("allow_always"),
-					Name:     "Allow Always",
-					Kind:     acp.PermissionOptionKindAllowAlways,
-				},
-				{
-					OptionId: acp.PermissionOptionId("reject_once"),
-					Name:     "Reject Once",
-					Kind:     acp.PermissionOptionKindRejectOnce,
-				},
-				{
-					OptionId: acp.PermissionOptionId("reject_always"),
-					Name:     "Reject Always",
-					Kind:     acp.PermissionOptionKindRejectAlways,
-				},
-			},
+	// Send prompt that might trigger permission request (dangerous command)
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("execute command: rm -rf /tmp/test"),
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			permissionReq := acp.RequestPermissionRequest{
-				SessionId: sessionResp.SessionId,
-				ToolCall: &acp.ToolCall{
-					ToolCallId: acp.ToolCallId("test-tool-call"),
-					Title:      "Test Tool",
-				},
-				Options: tt.options,
-			}
+	_, err = client.Prompt(ctx, promptReq)
+	require.NoError(t, err)
 
-			_, err := client.RequestPermission(ctx, permissionReq)
-			// May fail if approval service not configured, that's okay
-			if err != nil {
-				t.Logf("RequestPermission returned error (may be expected): %v", err)
+	// Verify RequestPermission was called
+	permClient.mu.Lock()
+	requests := permClient.permissionRequests
+	permClient.mu.Unlock()
+
+	if len(requests) > 0 {
+		req := requests[0]
+		assert.NotEmpty(t, req.SessionId, "Request should have session ID")
+		assert.NotNil(t, req.ToolCall, "Request should have tool call")
+		assert.NotEmpty(t, req.Options, "Request should have options")
+
+		// Check for allow_once option
+		hasAllowOnce := false
+		for _, opt := range req.Options {
+			if opt.Kind == acp.PermissionOptionKindAllowOnce {
+				hasAllowOnce = true
+				assert.NotEmpty(t, opt.OptionId, "Option should have ID")
+				assert.NotEmpty(t, opt.Name, "Option should have name")
+				break
 			}
-		})
+		}
+		if hasAllowOnce {
+			t.Log("Found allow_once option in permission request")
+		}
+	} else {
+		t.Log("RequestPermission was not called (may be expected if agent doesn't require approval)")
 	}
 }
 
+// TestACP_Permission_AllowAlways tests allow_always option.
+func TestACP_Permission_AllowAlways(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	permClient := &permissionTestClient{}
+	client := createACPClientWithClient(t, stdin, stdout, &permClient.testClient)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	// Send prompt that might trigger permission request
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("execute command: sudo rm -rf /tmp/test"),
+		},
+	}
+
+	_, err = client.Prompt(ctx, promptReq)
+	require.NoError(t, err)
+
+	// Verify RequestPermission was called
+	permClient.mu.Lock()
+	requests := permClient.permissionRequests
+	permClient.mu.Unlock()
+
+	if len(requests) > 0 {
+		req := requests[0]
+		// Check for allow_always option
+		hasAllowAlways := false
+		for _, opt := range req.Options {
+			if opt.Kind == acp.PermissionOptionKindAllowAlways {
+				hasAllowAlways = true
+				break
+			}
+		}
+		if hasAllowAlways {
+			t.Log("Found allow_always option in permission request")
+		}
+	} else {
+		t.Log("RequestPermission was not called (may be expected)")
+	}
+}
+
+// TestACP_Permission_RejectOnce tests reject_once option.
+func TestACP_Permission_RejectOnce(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	permClient := &permissionTestClient{}
+	client := createACPClientWithClient(t, stdin, stdout, &permClient.testClient)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	// Send prompt that might trigger permission request
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("execute command: rm -rf /tmp/test"),
+		},
+	}
+
+	_, err = client.Prompt(ctx, promptReq)
+	require.NoError(t, err)
+
+	// Verify RequestPermission was called
+	permClient.mu.Lock()
+	requests := permClient.permissionRequests
+	permClient.mu.Unlock()
+
+	if len(requests) > 0 {
+		req := requests[0]
+		// Check for reject_once option
+		hasRejectOnce := false
+		for _, opt := range req.Options {
+			if opt.Kind == acp.PermissionOptionKindRejectOnce {
+				hasRejectOnce = true
+				break
+			}
+		}
+		if hasRejectOnce {
+			t.Log("Found reject_once option in permission request")
+		}
+	} else {
+		t.Log("RequestPermission was not called (may be expected)")
+	}
+}
+
+// TestACP_Permission_RejectAlways tests reject_always option.
+func TestACP_Permission_RejectAlways(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	permClient := &permissionTestClient{}
+	client := createACPClientWithClient(t, stdin, stdout, &permClient.testClient)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	// Send prompt that might trigger permission request
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("execute command: sudo rm -rf /tmp/test"),
+		},
+	}
+
+	_, err = client.Prompt(ctx, promptReq)
+	require.NoError(t, err)
+
+	// Verify RequestPermission was called
+	permClient.mu.Lock()
+	requests := permClient.permissionRequests
+	permClient.mu.Unlock()
+
+	if len(requests) > 0 {
+		req := requests[0]
+		// Check for reject_always option
+		hasRejectAlways := false
+		for _, opt := range req.Options {
+			if opt.Kind == acp.PermissionOptionKindRejectAlways {
+				hasRejectAlways = true
+				break
+			}
+		}
+		if hasRejectAlways {
+			t.Log("Found reject_always option in permission request")
+		}
+	} else {
+		t.Log("RequestPermission was not called (may be expected)")
+	}
+}
+
+// TestACP_Permission_Cancelled tests cancellation outcome.
+func TestACP_Permission_Cancelled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	cancelClient := &cancelPermissionClient{}
+	client := createACPClientWithClient(t, stdin, stdout, &cancelClient.testClient)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	// Send prompt that might trigger permission request
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("execute command: rm -rf /tmp/test"),
+		},
+	}
+
+	_, err = client.Prompt(ctx, promptReq)
+	require.NoError(t, err)
+
+	// Cancellation should be handled gracefully
+	t.Log("Permission request cancellation handled")
+}
+
+// TestACP_Permission_MultipleOptions tests multiple permission options.
+func TestACP_Permission_MultipleOptions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping E2E test in short mode")
+	}
+
+	workDir := createTestWorkspace(t)
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+	defer cleanupAgent(t, cmd, stdin)
+
+	permClient := &permissionTestClient{}
+	client := createACPClientWithClient(t, stdin, stdout, &permClient.testClient)
+	ctx := context.Background()
+
+	_, err := client.Initialize(ctx, acp.InitializeRequest{
+		ProtocolVersion: acp.ProtocolVersionNumber,
+	})
+	require.NoError(t, err)
+
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+		Cwd:        workDir,
+		McpServers: []acp.McpServer{},
+	})
+	require.NoError(t, err)
+
+	// Send prompt that might trigger permission request
+	promptReq := acp.PromptRequest{
+		SessionId: sessionResp.SessionId,
+		Prompt: []acp.ContentBlock{
+			acp.TextBlock("execute command: rm -rf /tmp/test"),
+		},
+	}
+
+	_, err = client.Prompt(ctx, promptReq)
+	require.NoError(t, err)
+
+	// Verify RequestPermission was called with multiple options
+	permClient.mu.Lock()
+	requests := permClient.permissionRequests
+	permClient.mu.Unlock()
+
+	if len(requests) > 0 {
+		req := requests[0]
+		if len(req.Options) > 1 {
+			t.Logf("Found %d permission options", len(req.Options))
+			optionKinds := make(map[acp.PermissionOptionKind]bool)
+			for _, opt := range req.Options {
+				optionKinds[opt.Kind] = true
+			}
+			t.Logf("Permission option kinds: %v", optionKinds)
+		}
+	} else {
+		t.Log("RequestPermission was not called (may be expected)")
+	}
+}

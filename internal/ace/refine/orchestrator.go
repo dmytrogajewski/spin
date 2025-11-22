@@ -2,8 +2,10 @@ package refine
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 )
 
@@ -128,6 +130,17 @@ func (o *RefinementOrchestrator) Refine(ctx context.Context, req RefinementReque
 
 	// Step 2: Prune low-utility bullets (if enabled)
 	if req.PruneEnabled && o.pruneFunc != nil {
+		// Get bullets that would be pruned before actual pruning (for archival)
+		var bulletsToArchive []*bullet.Bullet
+		if req.ArchiveEnabled && o.archive != nil {
+			allBullets := o.playbook.List(nil)
+			for _, b := range allBullets {
+				if b.Score() < req.MinUtility {
+					bulletsToArchive = append(bulletsToArchive, b.Clone())
+				}
+			}
+		}
+
 		// Use prune function to remove low-utility bullets
 		pruned, prunedIDs, err := o.pruneFunc(ctx)
 		if err != nil {
@@ -138,11 +151,15 @@ func (o *RefinementOrchestrator) Refine(ctx context.Context, req RefinementReque
 		result.PrunedIDs = prunedIDs
 
 		// Archive pruned bullets (if archival enabled)
-		if req.ArchiveEnabled && o.archive != nil {
-			// Note: Bullets are already removed from playbook by prune function
-			// We would need to save them beforehand for archival
-			// For now, we skip archival of pruned bullets
-			_ = prunedIDs // Acknowledge we're not using it
+		if req.ArchiveEnabled && o.archive != nil && len(bulletsToArchive) > 0 {
+			for _, b := range bulletsToArchive {
+				metadata := map[string]string{
+					"utility_score": formatFloat(b.Score()),
+					"min_threshold": formatFloat(req.MinUtility),
+				}
+				o.archive.Archive(b, ReasonLowUtility, metadata)
+				result.Archived++
+			}
 		}
 	}
 
@@ -155,5 +172,5 @@ func (o *RefinementOrchestrator) Refine(ctx context.Context, req RefinementReque
 
 // formatFloat converts float64 to string for metadata.
 func formatFloat(f float64) string {
-	return string(rune(int(f * 100)))
+	return fmt.Sprintf("%.4f", f)
 }
