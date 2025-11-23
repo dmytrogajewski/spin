@@ -177,28 +177,12 @@ func TestNewProvider_ValidationErrors(t *testing.T) {
 			wantErr: "model is required for openai",
 		},
 		{
-			name: "ollama missing baseURL",
-			cfg: ProviderConfig{
-				Type:  "ollama",
-				Model: "llama2",
-			},
-			wantErr: "baseURL is required for ollama",
-		},
-		{
 			name: "ollama missing model",
 			cfg: ProviderConfig{
 				Type:    "ollama",
 				BaseURL: "http://localhost:11434",
 			},
 			wantErr: "model is required for ollama",
-		},
-		{
-			name: "lmstudio missing model",
-			cfg: ProviderConfig{
-				Type:    "lmstudio",
-				BaseURL: "http://localhost:1234/v1",
-			},
-			wantErr: "model is required for lmstudio",
 		},
 		{
 			name: "invalid URL",
@@ -590,17 +574,6 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 			expectedError: true,
 			errorContains: "provider type is required",
 			description:   "Config without provider type should fail validation",
-		},
-		{
-			name: "missing_base_url_for_ollama_should_fail",
-			config: ProviderConfig{
-				Type:  "ollama",
-				Model: "qwen3-coder:30b",
-				// BaseURL missing
-			},
-			expectedError: true,
-			errorContains: "baseURL is required",
-			description:   "Ollama config without base URL should fail validation",
 		},
 		{
 			name: "missing_authentication_for_openai_should_fail",

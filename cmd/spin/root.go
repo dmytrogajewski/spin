@@ -32,7 +32,8 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 			// Default behavior: launch TUI when no subcommand is provided
 			return runTUI(cmd, args)
 		},
-		SilenceUsage: true,
+		SilenceUsage:  true,
+		SilenceErrors: true, // Errors are handled in main()
 	}
 
 	// Set custom version template

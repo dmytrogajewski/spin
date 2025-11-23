@@ -322,7 +322,7 @@ func DefaultConfigV2() *ConfigV2 {
 			Temperature:    0.7,
 			MaxTokens:      8192,
 			Timeout:        5 * time.Minute,
-			BaseURL:        "",
+			BaseURL:        "", // Empty - provider will use its own default
 			APIKey:         "",
 			ProviderConfig: make(map[string]interface{}),
 		},
