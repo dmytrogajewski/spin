@@ -11,6 +11,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestInterfaceSatisfaction verifies that the curator struct implements
+// all the segregated interfaces at compile time.
+func TestInterfaceSatisfaction(t *testing.T) {
+	// These assignments verify interface satisfaction at compile time.
+	// If curator does not implement an interface, this test will not compile.
+	var _ BulletMerger = (*curator)(nil)
+	var _ BulletRefiner = (*curator)(nil)
+	var _ BulletUpdater = (*curator)(nil)
+	var _ Curator = (*curator)(nil)
+}
+
 // TestNewCurator tests creating a new curator
 func TestNewCurator(t *testing.T) {
 	embedder := embedding.NewMockEmbedder(384)

@@ -16,20 +16,29 @@ import (
 	"github.com/openai/openai-go"
 )
 
-// Curator transforms insights into bullets and merges into playbook.
-type Curator interface {
+// BulletMerger handles insight-to-bullet conversion and playbook merging.
+// Use this interface when only curation/deduplication functionality is needed.
+type BulletMerger interface {
 	// Curate converts insights to bullets and merges into playbook
 	Curate(ctx context.Context, req MergeRequest) (*MergeResult, error)
 
 	// CurateBatch processes multiple merge requests in parallel
 	CurateBatch(ctx context.Context, req BatchMergeRequest) (*BatchMergeResult, error)
 
-	// Refine explicitly prunes low-utility bullets (for lazy mode)
-	Refine(ctx context.Context) (*RefinementResult, error)
-
 	// FindDuplicates detects semantic duplicates using cosine similarity
 	FindDuplicates(ctx context.Context, newBullets []*bullet.Bullet) (map[string]string, error)
+}
 
+// BulletRefiner handles playbook quality maintenance through pruning.
+// Use this interface when only refinement/pruning functionality is needed.
+type BulletRefiner interface {
+	// Refine explicitly prunes low-utility bullets (for lazy mode)
+	Refine(ctx context.Context) (*RefinementResult, error)
+}
+
+// BulletUpdater handles individual bullet modifications via delta operations.
+// Use this interface when only bullet update functionality is needed.
+type BulletUpdater interface {
 	// ApplyBulletFeedback applies helpful/harmful feedback using batch delta operations
 	ApplyBulletFeedback(ctx context.Context, feedback map[string]string) error
 
@@ -44,6 +53,16 @@ type Curator interface {
 
 	// UpdateBulletEmbedding updates bullet embedding using delta operation
 	UpdateBulletEmbedding(ctx context.Context, bulletID string, embedding []float32) error
+}
+
+// Curator is the composite interface combining all bullet management capabilities.
+// Use the specific interfaces (BulletMerger, BulletRefiner, BulletUpdater) when
+// only a subset of functionality is needed. This interface maintains backward
+// compatibility with existing code that depends on the full Curator interface.
+type Curator interface {
+	BulletMerger
+	BulletRefiner
+	BulletUpdater
 }
 
 // curator implements Curator interface.
