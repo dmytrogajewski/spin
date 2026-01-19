@@ -150,7 +150,7 @@ func runMCPAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create MCP manager
-	mgr := config.NewMCPManager(loader)
+	mgr := config.NewMCPConfigStore(loader)
 
 	// Create server
 	server := config.MCPServer{
@@ -186,7 +186,7 @@ func runMCPList(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create MCP manager
-	mgr := config.NewMCPManager(loader)
+	mgr := config.NewMCPConfigStore(loader)
 
 	// List servers
 	servers, err := mgr.List()
@@ -228,7 +228,7 @@ func runMCPGet(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create MCP manager
-	mgr := config.NewMCPManager(loader)
+	mgr := config.NewMCPConfigStore(loader)
 
 	// Get server
 	server, err := mgr.Get(name)
@@ -280,7 +280,7 @@ func runMCPRemove(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create MCP manager
-	mgr := config.NewMCPManager(loader)
+	mgr := config.NewMCPConfigStore(loader)
 
 	// Check if server exists
 	_, err := mgr.Get(name)

@@ -178,7 +178,7 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		agentInstance,
-		mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 		emitter,
 		nil,
 	)
@@ -218,7 +218,7 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 func TestSendPlanNotifications_FallbackToTextDetection(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
-		mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 		events.NewEventEmitter(100),
 		nil,
 	)

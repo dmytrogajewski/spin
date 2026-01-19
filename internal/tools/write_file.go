@@ -51,42 +51,27 @@ func (t *WriteFileTool) Schema() ToolSchema {
 func (t *WriteFileTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	path, err := params.GetString("path")
 	if err != nil || path == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "path parameter must be a non-empty string",
-		}, nil
+		return NewToolError(fmt.Errorf("path parameter must be a non-empty string")), nil
 	}
 
 	content, err := params.GetString("content")
 	if err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   "content parameter must be a string",
-		}, nil
+		return NewToolError(fmt.Errorf("content parameter must be a string")), nil
 	}
 
 	// Create parent directories if they don't exist
 	dir := filepath.Dir(path)
 	if dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return ToolResult{
-				Success: false,
-				Error:   fmt.Sprintf("failed to create parent directories: %v", err),
-			}, nil
+			return NewToolError(fmt.Errorf("failed to create parent directories: %w", err)), nil
 		}
 	}
 
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to write file: %v", err),
-		}, nil
+		return NewToolError(fmt.Errorf("failed to write file: %w", err)), nil
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path),
-	}, nil
+	return NewToolResult(fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path)), nil
 }
 
 // CheckApproval assesses whether the write operation requires approval.

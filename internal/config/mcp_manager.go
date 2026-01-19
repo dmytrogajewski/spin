@@ -15,22 +15,22 @@ type MCPServer struct {
 	Env     map[string]string `yaml:"env,omitempty" toml:"env,omitempty" json:"env,omitempty" mapstructure:"env"`
 }
 
-// MCPManager manages MCP server configurations.
-type MCPManager struct {
+// MCPConfigStore manages MCP server configurations.
+type MCPConfigStore struct {
 	loader     *LoaderV2
 	configFile string
 }
 
-// NewMCPManager creates a new MCP manager.
-func NewMCPManager(loader *LoaderV2) *MCPManager {
-	return &MCPManager{
+// NewMCPConfigStore creates a new MCP config store.
+func NewMCPConfigStore(loader *LoaderV2) *MCPConfigStore {
+	return &MCPConfigStore{
 		loader:     loader,
 		configFile: loader.ConfigFileUsed(),
 	}
 }
 
 // List returns all configured MCP servers.
-func (m *MCPManager) List() ([]MCPServer, error) {
+func (m *MCPConfigStore) List() ([]MCPServer, error) {
 	var servers []MCPServer
 	err := m.loader.UnmarshalKey("mcp.servers", &servers)
 	if err != nil {
@@ -44,7 +44,7 @@ func (m *MCPManager) List() ([]MCPServer, error) {
 }
 
 // Get returns a specific MCP server by name.
-func (m *MCPManager) Get(name string) (*MCPServer, error) {
+func (m *MCPConfigStore) Get(name string) (*MCPServer, error) {
 	servers, err := m.List()
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func (m *MCPManager) Get(name string) (*MCPServer, error) {
 }
 
 // Add adds a new MCP server configuration.
-func (m *MCPManager) Add(server MCPServer) error {
+func (m *MCPConfigStore) Add(server MCPServer) error {
 	// Validate
 	if err := m.validate(server); err != nil {
 		return err
@@ -89,7 +89,7 @@ func (m *MCPManager) Add(server MCPServer) error {
 }
 
 // Remove removes an MCP server by name.
-func (m *MCPManager) Remove(name string) error {
+func (m *MCPConfigStore) Remove(name string) error {
 	// Get current servers
 	servers, err := m.List()
 	if err != nil {
@@ -119,7 +119,7 @@ func (m *MCPManager) Remove(name string) error {
 }
 
 // validate validates an MCP server configuration.
-func (m *MCPManager) validate(server MCPServer) error {
+func (m *MCPConfigStore) validate(server MCPServer) error {
 	if server.Name == "" {
 		return fmt.Errorf("server name is required")
 	}
@@ -130,7 +130,7 @@ func (m *MCPManager) validate(server MCPServer) error {
 }
 
 // writeConfig writes the configuration to file.
-func (m *MCPManager) writeConfig() error {
+func (m *MCPConfigStore) writeConfig() error {
 	// Determine config file path
 	configFile := m.configFile
 	if configFile == "" {

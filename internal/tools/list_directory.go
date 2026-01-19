@@ -46,18 +46,12 @@ func (t *ListDirectoryTool) Schema() ToolSchema {
 func (t *ListDirectoryTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	path, err := params.GetString("path")
 	if err != nil || path == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "path parameter must be a non-empty string",
-		}, nil
+		return NewToolError(fmt.Errorf("path parameter must be a non-empty string")), nil
 	}
 
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to read directory: %v", err),
-		}, nil
+		return NewToolError(fmt.Errorf("failed to read directory: %w", err)), nil
 	}
 
 	var output strings.Builder
@@ -75,8 +69,5 @@ func (t *ListDirectoryTool) Execute(ctx context.Context, params ToolParameters) 
 		fmt.Fprintf(&output, "%s\t%s\t%d bytes\n", entry.Name(), typeStr, info.Size())
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return NewToolResult(output.String()), nil
 }

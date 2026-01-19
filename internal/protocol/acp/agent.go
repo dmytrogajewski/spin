@@ -28,8 +28,8 @@ import (
 var (
 	// ErrNilAgent is returned when agent is nil.
 	ErrNilAgent = errors.New("agent cannot be nil")
-	// ErrNilMCPManager is returned when MCP manager is nil.
-	ErrNilMCPManager = errors.New("mcp manager cannot be nil")
+	// ErrNilMCPServerManager is returned when MCP server manager is nil.
+	ErrNilMCPServerManager = errors.New("mcp server manager cannot be nil")
 	// ErrNilEmitter is returned when emitter is nil.
 	ErrNilEmitter = errors.New("emitter cannot be nil")
 	// ErrNotImplemented is returned for methods that are not implemented.
@@ -46,7 +46,7 @@ var (
 // conversation lifecycle and history management to the conversation package.
 type SpinACPAgent struct {
 	agent           *agent.Agent
-	mcpManager      *mcp.MCPManager
+	mcpManager      *mcp.MCPServerManager
 	emitter         *events.EventEmitter
 	approvalService *security.ApprovalService // Optional approval service for permission requests
 	approvalHandler *ACPApprovalHandler       // ACP-specific approval handler
@@ -76,7 +76,7 @@ type SpinACPAgent struct {
 // If storage is nil, session persistence features (LoadSession) will not be available.
 func NewSpinACPAgentWithStorage(
 	agent *agent.Agent,
-	mcpManager *mcp.MCPManager,
+	mcpManager *mcp.MCPServerManager,
 	emitter *events.EventEmitter,
 	storage session.Storage,
 ) (*SpinACPAgent, error) {
@@ -84,7 +84,7 @@ func NewSpinACPAgentWithStorage(
 		return nil, fmt.Errorf("%w", ErrNilAgent)
 	}
 	if mcpManager == nil {
-		return nil, fmt.Errorf("%w", ErrNilMCPManager)
+		return nil, fmt.Errorf("%w", ErrNilMCPServerManager)
 	}
 	if emitter == nil {
 		return nil, fmt.Errorf("%w", ErrNilEmitter)

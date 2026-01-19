@@ -133,6 +133,10 @@ func TestErrorCodes(t *testing.T) {
 		{CodeInternal, "internal"},
 		{CodeNetwork, "network"},
 		{CodeIO, "io"},
+		// New error codes for patch/git operations
+		{CodePatch, "patch"},
+		{CodeGit, "git"},
+		{CodeContextMismatch, "context_mismatch"},
 	}
 
 	for _, tt := range tests {
@@ -210,4 +214,47 @@ func ExampleAs() {
 		fmt.Printf("Code: %s, Op: %s\n", structErr.Code, structErr.Op)
 	}
 	// Output: Code: io, Op: File.Write
+}
+
+// TestSpinErrorInterface verifies that Error implements SpinError interface.
+func TestSpinErrorInterface(t *testing.T) {
+	err := New(CodeLLM, "Agent.Execute", "llm failed", nil)
+
+	// Verify Error implements SpinError
+	var spinErr SpinError = err
+	_ = spinErr // Compile-time check
+
+	// Test GetCode() method
+	if got := err.GetCode(); got != CodeLLM {
+		t.Errorf("GetCode() = %v, want %v", got, CodeLLM)
+	}
+}
+
+// TestSpinError_Operation verifies Operation() returns correct operation.
+func TestSpinError_Operation(t *testing.T) {
+	const expectedOp = "Tool.ReadFile"
+	err := New(CodeIO, expectedOp, "read failed", nil)
+
+	if got := err.Operation(); got != expectedOp {
+		t.Errorf("Operation() = %v, want %v", got, expectedOp)
+	}
+}
+
+// TestSpinError_UnwrapMethod verifies Unwrap() returns underlying error.
+func TestSpinError_UnwrapMethod(t *testing.T) {
+	underlying := errors.New("underlying cause")
+	err := New(CodeInternal, "Test.Op", "test error", underlying)
+
+	if got := err.Unwrap(); got != underlying {
+		t.Errorf("Unwrap() = %v, want %v", got, underlying)
+	}
+}
+
+// TestSpinError_NilUnderlying verifies Unwrap() returns nil when no underlying error.
+func TestSpinError_NilUnderlying(t *testing.T) {
+	err := New(CodeValidation, "Test.Op", "validation failed", nil)
+
+	if got := err.Unwrap(); got != nil {
+		t.Errorf("Unwrap() = %v, want nil", got)
+	}
 }

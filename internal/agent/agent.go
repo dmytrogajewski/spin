@@ -645,21 +645,15 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResult, error) {
 	// 1. Validate tool call
 	if err := a.validateToolCall(call); err != nil {
-		return &ToolResult{
-			ID:      call.ID,
-			Success: false,
-			Error:   err,
-		}, nil // Return nil error so agent continues
+		result := tools.NewToolErrorWithID(call.ID, err)
+		return &result, nil // Return nil error so agent continues
 	}
 
 	// 2. Parse arguments
 	args, err := a.parseToolArguments(call)
 	if err != nil {
-		return &ToolResult{
-			ID:      call.ID,
-			Success: false,
-			Error:   err,
-		}, nil
+		result := tools.NewToolErrorWithID(call.ID, err)
+		return &result, nil
 	}
 
 	// 3. Emit tool start event
@@ -681,11 +675,8 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 	result, err := a.toolRuntime.Execute(ctx, call)
 	if err != nil {
 		slog.Error("tool execution failed", "tool", call.Function.Name, "error", err)
-		result = &ToolResult{
-			ID:      call.ID,
-			Success: false,
-			Error:   err,
-		}
+		errResult := tools.NewToolErrorWithID(call.ID, err)
+		result = &errResult
 	}
 
 	// 5. Emit completion event
@@ -698,9 +689,12 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 	if result.Success {
 		completion.Output = result.Output
 		slog.Debug("tool execution succeeded", "tool", call.Function.Name, "output_len", len(result.Output))
-	} else if result.Error != nil {
-		completion.Error = result.Error.Error()
-		slog.Warn("tool execution failed", "tool", call.Function.Name, "error", result.Error.Error())
+	} else if result.Err != nil {
+		completion.Error = result.Err.Error()
+		slog.Warn("tool execution failed", "tool", call.Function.Name, "error", result.Err.Error())
+	} else if result.Error != "" {
+		completion.Error = result.Error
+		slog.Warn("tool execution failed", "tool", call.Function.Name, "error", result.Error)
 	}
 	a.emitter.Emit(events.Event{
 		Type:      events.EventToolCallComplete,
@@ -740,8 +734,14 @@ func getToolResultContent(toolCall *ToolCall, result *ToolResult) string {
 	}
 
 	// Tool failed - send error message to LLM so it knows what went wrong
-	if result.Error != nil {
-		errorMsg := fmt.Sprintf("Tool %s failed: %v", toolCall.Function.Name, result.Error)
+	// Check Err first (error type), then Error (string type) for backward compatibility
+	if result.Err != nil {
+		errorMsg := fmt.Sprintf("Tool %s failed: %v", toolCall.Function.Name, result.Err)
+		slog.Debug("Tool failed, sending error to LLM", "tool", toolCall.Function.Name, "error", result.Err)
+		return errorMsg
+	}
+	if result.Error != "" {
+		errorMsg := fmt.Sprintf("Tool %s failed: %s", toolCall.Function.Name, result.Error)
 		slog.Debug("Tool failed, sending error to LLM", "tool", toolCall.Function.Name, "error", result.Error)
 		return errorMsg
 	}

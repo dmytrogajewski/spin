@@ -350,32 +350,59 @@ python dangerous_script.py
 ### Architecture
 
 **Core Components:**
-- `internal/core/approval.go` - ApprovalService (centralized approval handling)
-- `internal/core/agent.go` - ApprovalRequest/ApprovalResponse types
-- `internal/core/validator.go` - Command classification and approval logic
+- `internal/security/security.go` - SecurityService (central facade for validation + approval)
+- `internal/security/approval.go` - ApprovalService (approval workflow with events and policy)
+- `internal/security/validator.go` - Command classification (safe, dangerous, forbidden)
+- `internal/security/policy.go` - PolicyStore (TTL-based approval persistence)
+- `internal/tools/approval.go` - ToolWithApproval interface for tool self-assessment
 
 **UI Components:**
 - `internal/ui/overlay/approval.go` - ApprovalDialog component
 - `internal/ui/adapters/puretty.go` - TUI integration with ModeApproval
-- `cmd/spin/tui.go` - Approval handler wiring
+- `cmd/spin/approval_handlers.go` - Approval handler factory functions
 
-**Usage Examples:**
-- `internal/core/approval_examples.go` - Examples for tools, agents, and file operations
+**Integration Points:**
+- `internal/agent/tool_runtime.go` - Tool execution with approval via ApprovalService
+- `internal/protocol/acp/approval_handler.go` - ACP protocol approval handling
 
 ### Extending Approval System
 
 Any component can use the approval service:
 
 ```go
-// Create approval service
-approvalService := core.NewApprovalService(approvalHandler)
+// Create security service with validator and approval service
+validator := security.NewValidator()
+approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+    Handler: approvalHandler,
+    Store:   policyStore,
+})
+securityService := security.NewSecurityService(validator, approvalService)
 
-// Request approval for any operation
-approved, err := approvalService.RequestApproval(ctx, core.Operation{
+// Option 1: Combined validation + approval
+approved, err := securityService.ValidateAndApprove(ctx, cmd, workDir)
+
+// Option 2: Request approval directly for an operation
+approved, err := securityService.RequestApproval(ctx, security.Operation{
     Command: cmd,
     Reason:  "Dangerous operation",
     WorkDir: "/path/to/workdir",
 })
+```
+
+**Tool Approval:**
+
+Tools can implement `ToolWithApproval` interface for self-assessment:
+
+```go
+type WriteFileTool struct{}
+
+func (t *WriteFileTool) CheckApproval(params ToolParameters) ApprovalNeeds {
+    path, _ := params.GetString("path")
+    if strings.HasPrefix(path, "/etc/") {
+        return ApprovalNeeds{Required: true, Risk: RiskCritical, Reason: "System path"}
+    }
+    return ApprovalNeeds{Required: true, Risk: RiskMedium, Reason: "File write"}
+}
 ```
 
 ---

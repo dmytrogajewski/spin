@@ -7,16 +7,16 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
-// Service wraps MCPManager to provide a clean service interface
+// Service wraps MCPServerManager to provide a clean service interface
 // following the dependency injection pattern used in the tools package.
 type Service struct {
-	manager *MCPManager
+	manager *MCPServerManager
 }
 
 // NewService creates a new MCP service and initializes it.
 // If config.EnableMCP is false, the service is created but not initialized.
 func NewService(config *Config, logger *slog.Logger) (*Service, error) {
-	manager := NewMCPManager(config, logger)
+	manager := NewMCPServerManager(config, logger)
 
 	if config.EnableMCP {
 		if err := manager.Initialize(context.Background()); err != nil {

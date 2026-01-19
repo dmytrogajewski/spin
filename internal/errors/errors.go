@@ -5,24 +5,44 @@
 // the codebase.
 package errors
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // ErrorCode represents different error categories for type-safe error handling.
 type ErrorCode string
 
+// SpinError is the interface that all structured Spin errors implement.
+// It extends the standard error interface with methods for error inspection.
+type SpinError interface {
+	error
+
+	// GetCode returns the error category code.
+	GetCode() ErrorCode
+
+	// Operation returns the operation that failed (e.g., "Agent.Execute", "Tool.ReadFile").
+	Operation() string
+
+	// Unwrap returns the underlying error for error chain traversal.
+	Unwrap() error
+}
+
 // Error codes for different failure categories.
 const (
-	CodeValidation     ErrorCode = "validation"      // Invalid input or configuration
-	CodeTimeout        ErrorCode = "timeout"         // Operation exceeded time limit
-	CodeNotFound       ErrorCode = "not_found"       // Resource not found
-	CodePermission     ErrorCode = "permission"      // Permission denied or unauthorized
-	CodeLLM            ErrorCode = "llm"             // LLM provider error
-	CodeToolExecution  ErrorCode = "tool_execution"  // Tool execution failed
-	CodeApprovalDenied ErrorCode = "approval_denied" // User denied approval
-	CodeCycle          ErrorCode = "cycle"           // Cycle or infinite loop detected
-	CodeInternal       ErrorCode = "internal"        // Internal error
-	CodeNetwork        ErrorCode = "network"         // Network or connection error
-	CodeIO             ErrorCode = "io"              // File or I/O error
+	CodeValidation      ErrorCode = "validation"       // Invalid input or configuration
+	CodeTimeout         ErrorCode = "timeout"          // Operation exceeded time limit
+	CodeNotFound        ErrorCode = "not_found"        // Resource not found
+	CodePermission      ErrorCode = "permission"       // Permission denied or unauthorized
+	CodeLLM             ErrorCode = "llm"              // LLM provider error
+	CodeToolExecution   ErrorCode = "tool_execution"   // Tool execution failed
+	CodeApprovalDenied  ErrorCode = "approval_denied"  // User denied approval
+	CodeCycle           ErrorCode = "cycle"            // Cycle or infinite loop detected
+	CodeInternal        ErrorCode = "internal"         // Internal error
+	CodeNetwork         ErrorCode = "network"          // Network or connection error
+	CodeIO              ErrorCode = "io"               // File or I/O error
+	CodePatch           ErrorCode = "patch"            // Patch application error
+	CodeGit             ErrorCode = "git"              // Git operation error
+	CodeContextMismatch ErrorCode = "context_mismatch" // Patch context not found
 )
 
 // Error represents a structured error with context and error code.
@@ -49,6 +69,18 @@ func (e *Error) Error() string {
 // Unwrap returns the underlying error for error chain traversal.
 func (e *Error) Unwrap() error {
 	return e.Err
+}
+
+// GetCode returns the error category code.
+// This method implements the SpinError interface.
+func (e *Error) GetCode() ErrorCode {
+	return e.Code
+}
+
+// Operation returns the operation that failed.
+// This method implements the SpinError interface.
+func (e *Error) Operation() string {
+	return e.Op
 }
 
 // New creates a new structured error.

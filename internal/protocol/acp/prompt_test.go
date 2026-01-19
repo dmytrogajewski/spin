@@ -30,7 +30,7 @@ import (
 // TestSpinACPAgent_Prompt_InvalidSession tests Prompt with invalid session ID.
 func TestSpinACPAgent_Prompt_InvalidSession(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -52,7 +52,7 @@ func TestSpinACPAgent_Prompt_InvalidSession(t *testing.T) {
 // TestSpinACPAgent_Prompt_EmptyPrompt tests Prompt with empty prompt blocks.
 func TestSpinACPAgent_Prompt_EmptyPrompt(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -81,7 +81,7 @@ func TestSpinACPAgent_Prompt_EmptyPrompt(t *testing.T) {
 // TestSpinACPAgent_Prompt_Success tests successful prompt execution.
 func TestSpinACPAgent_Prompt_Success(t *testing.T) {
 	agentInstance := createTestAgent(t)
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -214,7 +214,7 @@ func createTestAgentWithEmitter(t *testing.T) (*agent.Agent, *events.EventEmitte
 // TestSpinACPAgent_Prompt_SendsNotifications ensures prompt execution emits agent message chunks.
 func TestSpinACPAgent_Prompt_SendsNotifications(t *testing.T) {
 	agentInstance, emitter := createTestAgentWithEmitter(t)
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
@@ -254,7 +254,7 @@ func TestSpinACPAgent_Prompt_SendsNotifications(t *testing.T) {
 // TestSpinACPAgent_EndToEndNotifications verifies notifications over JSON-RPC connection.
 func TestSpinACPAgent_EndToEndNotifications(t *testing.T) {
 	agentInstance, emitter := createTestAgentWithEmitter(t)
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
@@ -367,7 +367,7 @@ func (c *stubClient) WaitForTerminalExit(ctx context.Context, params acp.WaitFor
 // TestSpinACPAgent_Prompt_ContentBlockConversion tests content block conversion.
 func TestSpinACPAgent_Prompt_ContentBlockConversion(t *testing.T) {
 	agentInstance := createTestAgent(t)
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())

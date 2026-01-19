@@ -17,7 +17,7 @@ import (
 func TestACPCommandContext(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
-		mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 		events.NewEventEmitter(100),
 		nil,
 	)
@@ -44,7 +44,7 @@ func TestACPCommandContext(t *testing.T) {
 func TestExecuteCommand(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
-		mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 		events.NewEventEmitter(100),
 		nil,
 	)

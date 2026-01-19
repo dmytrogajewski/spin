@@ -24,60 +24,60 @@
 ## High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          Application Layer                               │
+┌────────────────────────────────────────────────────────────────────────┐
+│                          Application Layer                             │
 │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────────┐   │
 │  │   TUI   │  │  Exec   │  │   ACP   │  │  Debug  │  │   Config    │   │
 │  │  Mode   │  │  Mode   │  │  Server │  │  Utils  │  │  Commands   │   │
 │  └────┬────┘  └────┬────┘  └────┬────┘  └─────────┘  └─────────────┘   │
 └───────┼────────────┼────────────┼──────────────────────────────────────┘
         │            │            │
-        ▼            ▼            ▼
+        ▼            ▼           ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        Conversation Layer                                │
-│  ┌────────────────────────────────────────────────────────────────┐    │
-│  │                    Conversation Manager                          │    │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │    │
-│  │  │ Conversation │  │   History    │  │  Event Transformer   │  │    │
-│  │  └──────┬───────┘  └──────────────┘  └──────────────────────┘  │    │
-│  └─────────┼────────────────────────────────────────────────────────┘    │
+│                        Conversation Layer                               │
+│  ┌────────────────────────────────────────────────────────────────┐     │
+│  │                    Conversation Manager                        │     │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │     │
+│  │  │ Conversation │  │   History    │  │  Event Transformer   │  │     │
+│  │  └──────┬───────┘  └──────────────┘  └──────────────────────┘  │     │
+│  └─────────┼──────────────────────────────────────────────────────┘     │
 └────────────┼────────────────────────────────────────────────────────────┘
              │
              ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                           Agent Layer                                    │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                          Agent                                    │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │   │
-│  │  │ ToolRuntime  │  │ ACEService   │  │   PlanTracker        │  │   │
-│  │  └──────────────┘  └──────────────┘  └──────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
+│                           Agent Layer                                   │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                          Agent                                  │    │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐   │    │
+│  │  │ ToolRuntime  │  │ ACEService   │  │   PlanTracker        │   │    │
+│  │  └──────────────┘  └──────────────┘  └──────────────────────┘   │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
              │
              ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         Service Layer                                    │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────────┐  │
-│  │   Security   │  │  Detection   │  │   Planning   │  │    Task    │  │
-│  │   Service    │  │   Service    │  │   Service    │  │   Modes    │  │
-│  └──────────────┘  └──────────────┘  └──────────────┘  └────────────┘  │
+│                         Service Layer                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────────┐   │
+│  │   Security   │  │  Detection   │  │   Planning   │  │    Task    │   │
+│  │   Service    │  │   Service    │  │   Service    │  │   Modes    │   │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
              │
              ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        Infrastructure Layer                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
-│  │   LLM    │  │   Git    │  │  Shell   │  │   MCP    │  │ Session  │ │
-│  │ Provider │  │ Service  │  │ Service  │  │ Service  │  │ Storage  │ │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │
+│                        Infrastructure Layer                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │   LLM    │  │   Git    │  │  Shell   │  │   MCP    │  │ Session  │   │
+│  │ Provider │  │ Service  │  │ Service  │  │ Service  │  │ Storage  │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
              │
              ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         External Systems                                 │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
-│  │  OpenAI  │  │ Anthropic│  │  Ollama  │  │ LMStudio │  │Filesystem│ │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │
+│                         External Systems                                │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│  │  OpenAI  │  │ Anthropic│  │  Ollama  │  │ LMStudio │  │Filesystem│   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -111,7 +111,7 @@ spin/
 │   ├── config/                  # Configuration system
 │   │   ├── config_v2.go         # Unified V2 configuration structures
 │   │   ├── loader_v2.go         # Config loading (files, env, flags)
-│   │   └── mcp_manager.go       # MCP server configuration
+│   │   └── mcp_manager.go       # MCP server configuration (MCPConfigStore)
 │   │
 │   ├── conversation/            # High-level conversation management
 │   │   ├── conversation.go      # Conversation handler wrapping Agent
@@ -437,6 +437,60 @@ Command Submitted
 
 **Design Decision**: The security system uses a policy persistence layer with configurable TTLs to reduce approval fatigue while maintaining security. Policies are scoped to session (8h default) or global (30 days default).
 
+#### Centralized Approval Architecture
+
+The approval system follows a layered architecture with clear separation of concerns:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Consumer Code                                 │
+│  (Agent, ToolRuntime, ACP Protocol)                             │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   SecurityService                                │
+│  - ValidateCommand()    → classify commands                     │
+│  - NeedsApproval()      → check if approval required            │
+│  - ValidateAndApprove() → combined validation + approval        │
+│  - RequestApproval()    → delegate to ApprovalService           │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              │              │              │
+              ▼              ▼              ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│    Validator    │ │ ApprovalService │ │  PolicyStore    │
+│  - Classify()   │ │ - RequestApproval│ │  - Get()        │
+│  - NeedsApproval│ │ - Event emission│ │  - Save()       │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+```
+
+**Key Components:**
+
+1. **SecurityService** (`internal/security/security.go`): Central facade coordinating validation and approval
+2. **ApprovalService** (`internal/security/approval.go`): Handles complete approval workflow with events and policy persistence
+3. **Validator** (`internal/security/validator.go`): Pattern-based command classification
+4. **PolicyStore** (`internal/security/policy.go`): TTL-based policy caching (session/global scope)
+5. **ToolWithApproval** (`internal/tools/approval.go`): Interface for tools to specify approval needs
+
+**Tool-Level Approval:**
+
+Tools can implement `ToolWithApproval` interface for self-assessment:
+
+```go
+type ToolWithApproval interface {
+    Tool
+    CheckApproval(params ToolParameters) ApprovalNeeds
+}
+
+type ApprovalNeeds struct {
+    Required bool      // Whether approval is needed
+    Risk     RiskLevel // safe, low, medium, high, critical
+    Reason   string    // Human-readable explanation
+}
+```
+
 ### ACE Package (`internal/ace/`)
 
 ACE (Agentic Context Engineering) provides persistent learning capabilities.
@@ -568,19 +622,72 @@ type Task interface {
 
 ### Runtime Interface
 
+The Runtime interface is split into five focused interfaces following Interface Segregation Principle:
+
 ```go
-type Runtime interface {
+// ToolRegistrar provides tool registration capability.
+type ToolRegistrar interface {
     RegisterTools(registry *tools.Registry)
+}
+
+// NotificationProvider provides notification sending capability.
+type NotificationProvider interface {
     NotificationSender() NotificationSender
+}
+
+// ApprovalProvider provides approval handling capability.
+type ApprovalProvider interface {
     ApprovalHandler() security.ApprovalHandler
+}
+
+// SessionProvider provides session management capability.
+type SessionProvider interface {
     SessionStorage() session.Storage
     SessionID() string
+}
+
+// TerminalProvider provides terminal capability.
+type TerminalProvider interface {
     SupportsTerminals() bool
     TerminalClient() TerminalClient
 }
+
+// Runtime combines all runtime capabilities.
+type Runtime interface {
+    ToolRegistrar
+    NotificationProvider
+    ApprovalProvider
+    SessionProvider
+    TerminalProvider
+}
 ```
 
-**Design Decision**: The Runtime interface abstracts environment-specific capabilities, enabling the same Agent code to run in different contexts (local builtin vs ACP protocol-based).
+**Design Decision**: The Runtime interface is split into focused sub-interfaces to:
+- Follow Interface Segregation Principle (ISP)
+- Allow consumers to depend only on the capabilities they need
+- Simplify testing with smaller mock interfaces
+- Maintain backward compatibility via the composite `Runtime` interface
+
+The Runtime interface abstracts environment-specific capabilities, enabling the same Agent code to run in different contexts (local builtin vs ACP protocol-based).
+
+### SpinError Interface
+
+```go
+type SpinError interface {
+    error
+    GetCode() ErrorCode    // Error category code
+    Operation() string     // Operation that failed
+    Unwrap() error         // Underlying error for chain traversal
+}
+```
+
+The `SpinError` interface provides unified error handling across the codebase. All structured errors implement this interface, enabling:
+
+- **Type-safe error inspection**: Extract error codes and operations via interface methods
+- **Error chain traversal**: Standard `errors.Is` and `errors.As` work correctly
+- **Consistent categorization**: Predefined error codes (`CodeLLM`, `CodeIO`, `CodePatch`, etc.)
+
+**Design Decision**: The interface uses `GetCode()` instead of `Code()` to avoid name collision with the `Error` struct's `Code` field, maintaining backward compatibility with existing code.
 
 ---
 
@@ -612,14 +719,14 @@ type Runtime interface {
 └────────┬────────┘
          │
     ┌────┴────────────────────────────────┐
-    │                                      │
-    ▼                                      │
+    │                                     │
+    ▼                                    │
 ┌─────────────────┐                       │
 │  Build Prompt   │                       │
 │  (+ ACE bullets)│                       │
 └────────┬────────┘                       │
-         │                                 │
-         ▼                                 │
+         │                                │
+         ▼                                │
 ┌─────────────────┐                       │
 │   Call LLM      │ ◄──────────────────┐  │
 │  (Streaming)    │                    │  │
@@ -751,12 +858,16 @@ Components are organized as injectable services:
 Services:
 ├── git.Service       // Git operations
 ├── shell.Service     // Command execution  
-├── mcp.Service       // MCP servers
+├── mcp.Service       // MCP servers (wraps MCPServerManager)
 ├── security.SecurityService
 ├── detection.DetectionService
 ├── planning.PlanningService
 └── agent.ACEService
 ```
+
+Note: MCP has two manager types with distinct responsibilities:
+- `mcp.MCPServerManager` - Runtime server connections and tool execution
+- `config.MCPConfigStore` - Configuration persistence (CRUD operations)
 
 **Rationale**: Enables independent testing, runtime swapping, and clear boundaries between concerns.
 

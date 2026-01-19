@@ -785,7 +785,7 @@ func TestGetToolResultContent(t *testing.T) {
 			result: &ToolResult{
 				ID:      "call_2",
 				Success: false,
-				Error:   errors.New("file not found: nonexistent.txt"),
+				Err:     errors.New("file not found: nonexistent.txt"),
 			},
 			want: "Tool read_file failed: file not found: nonexistent.txt",
 		},
@@ -1249,7 +1249,6 @@ func BenchmarkAgent_ProcessToolCall(b *testing.B) {
 		}
 	}
 }
-
 
 // BenchmarkAgent_ExtractToolNames was removed because extractToolNames function
 // no longer exists after the OpenAI SDK migration. Tool name extraction is now

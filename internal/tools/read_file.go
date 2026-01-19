@@ -45,29 +45,17 @@ func (t *ReadFileTool) Schema() ToolSchema {
 func (t *ReadFileTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	path, err := params.GetString("path")
 	if err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   "path parameter must be a non-empty string",
-		}, nil
+		return NewToolError(fmt.Errorf("path parameter must be a non-empty string")), nil
 	}
 
 	if path == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "path parameter must be a non-empty string",
-		}, nil
+		return NewToolError(fmt.Errorf("path parameter must be a non-empty string")), nil
 	}
 
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to read file: %v", err),
-		}, nil
+		return NewToolError(fmt.Errorf("failed to read file: %w", err)), nil
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  string(content),
-	}, nil
+	return NewToolResult(string(content)), nil
 }

@@ -18,7 +18,7 @@ import (
 func TestNewSpinACPAgentWithStorage(t *testing.T) {
 	// Create minimal mocks for required components
 	agentInstance := &agent.Agent{} // Will need proper setup in real tests
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -38,7 +38,7 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 	tests := []struct {
 		name        string
 		agent       *agent.Agent
-		mcpManager  *mcp.MCPManager
+		mcpManager  *mcp.MCPServerManager
 		emitter     *events.EventEmitter
 		wantErr     bool
 		errContains string
@@ -46,7 +46,7 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 		{
 			name:        "nil agent",
 			agent:       nil,
-			mcpManager:  mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+			mcpManager:  mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 			emitter:     events.NewEventEmitter(100),
 			wantErr:     true,
 			errContains: "agent cannot be nil",
@@ -57,12 +57,12 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 			mcpManager:  nil,
 			emitter:     events.NewEventEmitter(100),
 			wantErr:     true,
-			errContains: "mcp manager cannot be nil",
+			errContains: "mcp server manager cannot be nil",
 		},
 		{
 			name:        "nil emitter",
 			agent:       &agent.Agent{},
-			mcpManager:  mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+			mcpManager:  mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 			emitter:     nil,
 			wantErr:     true,
 			errContains: "emitter cannot be nil",
@@ -70,7 +70,7 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 		{
 			name:       "all valid",
 			agent:      &agent.Agent{},
-			mcpManager: mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+			mcpManager: mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 			emitter:    events.NewEventEmitter(100),
 			wantErr:    false,
 		},
@@ -97,7 +97,7 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 // TestSpinACPAgent_ImplementsInterface verifies that SpinACPAgent implements acp.Agent.
 func TestSpinACPAgent_ImplementsInterface(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -113,7 +113,7 @@ func TestSpinACPAgent_ImplementsInterface(t *testing.T) {
 // TestSpinACPAgent_MethodStubs tests that all methods exist and return errors (stubs).
 func TestSpinACPAgent_MethodStubs(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())

@@ -20,7 +20,7 @@ func createTestACPAgent(t *testing.T) *acppkg.SpinACPAgent {
 	t.Helper()
 
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	// Create proper storage for tests
@@ -276,4 +276,3 @@ func TestCompliance_Prompt_ResponseFormat(t *testing.T) {
 
 	verifyPromptResponse(t, resp)
 }
-

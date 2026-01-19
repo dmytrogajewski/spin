@@ -18,7 +18,7 @@ import (
 // TestSpinACPAgent_LoadSession_NoStorage tests LoadSession when storage is not available.
 func TestSpinACPAgent_LoadSession_NoStorage(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	// This test specifically tests the case where storage is nil
@@ -39,7 +39,7 @@ func TestSpinACPAgent_LoadSession_NoStorage(t *testing.T) {
 // TestSpinACPAgent_LoadSession_NotFound tests LoadSession when session doesn't exist in storage.
 func TestSpinACPAgent_LoadSession_NotFound(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
@@ -61,7 +61,7 @@ func TestSpinACPAgent_LoadSession_NotFound(t *testing.T) {
 // TestSpinACPAgent_LoadSession_Success tests successful session loading.
 func TestSpinACPAgent_LoadSession_Success(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
@@ -99,7 +99,7 @@ func TestSpinACPAgent_LoadSession_Success(t *testing.T) {
 // TestSpinACPAgent_LoadSession_WithMcpServers tests session loading with MCP servers.
 func TestSpinACPAgent_LoadSession_WithMcpServers(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: true}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: true}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestSpinACPAgent_LoadSession_WithMcpServers(t *testing.T) {
 // TestSpinACPAgent_LoadSession_InvalidMcpServer tests LoadSession with invalid MCP server config.
 func TestSpinACPAgent_LoadSession_InvalidMcpServer(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)

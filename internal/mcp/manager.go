@@ -34,8 +34,8 @@ type MCPServerConfig struct {
 	Env     map[string]string
 }
 
-// MCPManager manages MCP server connections and tool registration.
-type MCPManager struct {
+// MCPServerManager manages MCP server connections and tool registration.
+type MCPServerManager struct {
 	config    *Config
 	logger    *slog.Logger
 	clients   map[string]*client.Client
@@ -52,9 +52,9 @@ type MCPTool struct {
 	Client     *client.Client
 }
 
-// NewMCPManager creates a new MCP manager.
-func NewMCPManager(config *Config, logger *slog.Logger) *MCPManager {
-	return &MCPManager{
+// NewMCPServerManager creates a new MCP server manager.
+func NewMCPServerManager(config *Config, logger *slog.Logger) *MCPServerManager {
+	return &MCPServerManager{
 		config:  config,
 		logger:  logger,
 		clients: make(map[string]*client.Client),
@@ -63,7 +63,7 @@ func NewMCPManager(config *Config, logger *slog.Logger) *MCPManager {
 }
 
 // Initialize connects to all configured MCP servers and registers their tools.
-func (m *MCPManager) Initialize(ctx context.Context) error {
+func (m *MCPServerManager) Initialize(ctx context.Context) error {
 	if !m.config.EnableMCP {
 		m.logger.Debug("MCP disabled, skipping initialization")
 		return nil
@@ -94,7 +94,7 @@ func (m *MCPManager) Initialize(ctx context.Context) error {
 }
 
 // connectServer connects to a single MCP server and registers its tools.
-func (m *MCPManager) connectServer(ctx context.Context, serverConfig MCPServerConfig) error {
+func (m *MCPServerManager) connectServer(ctx context.Context, serverConfig MCPServerConfig) error {
 	if m.logger != nil {
 		m.logger.Debug("Connecting to MCP server", "server", serverConfig.Name)
 	}
@@ -162,7 +162,7 @@ func (m *MCPManager) connectServer(ctx context.Context, serverConfig MCPServerCo
 }
 
 // createSDKClient creates an MCP client using the mark3labs/mcp-go SDK.
-func (m *MCPManager) createSDKClient(config MCPServerConfig) (*client.Client, error) {
+func (m *MCPServerManager) createSDKClient(config MCPServerConfig) (*client.Client, error) {
 	// Convert env map to slice of KEY=VALUE strings
 	env := make([]string, 0, len(config.Env))
 	for k, v := range config.Env {
@@ -178,7 +178,7 @@ func (m *MCPManager) createSDKClient(config MCPServerConfig) (*client.Client, er
 }
 
 // GetTools returns all registered MCP tools as tool registry entries.
-func (m *MCPManager) GetTools() []tools.Tool {
+func (m *MCPServerManager) GetTools() []tools.Tool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -198,7 +198,7 @@ func (m *MCPManager) GetTools() []tools.Tool {
 }
 
 // CallTool invokes an MCP tool.
-func (m *MCPManager) CallTool(ctx context.Context, toolName string, arguments json.RawMessage) (tools.ToolResult, error) {
+func (m *MCPServerManager) CallTool(ctx context.Context, toolName string, arguments json.RawMessage) (tools.ToolResult, error) {
 	m.mu.RLock()
 	mcpTool, exists := m.tools[toolName]
 	m.mu.RUnlock()
@@ -259,7 +259,7 @@ func (m *MCPManager) CallTool(ctx context.Context, toolName string, arguments js
 }
 
 // Close closes all MCP connections.
-func (m *MCPManager) Close() error {
+func (m *MCPServerManager) Close() error {
 	var err error
 	m.closeOnce.Do(func() {
 		m.mu.Lock()
@@ -287,14 +287,14 @@ func (m *MCPManager) Close() error {
 }
 
 // IsConnected returns true if any MCP servers are connected.
-func (m *MCPManager) IsConnected() bool {
+func (m *MCPServerManager) IsConnected() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.clients) > 0
 }
 
 // GetConnectedServers returns a list of connected server names.
-func (m *MCPManager) GetConnectedServers() []string {
+func (m *MCPServerManager) GetConnectedServers() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -307,7 +307,7 @@ func (m *MCPManager) GetConnectedServers() []string {
 
 // ConnectServer connects to a single MCP server dynamically.
 // This allows connecting servers after initialization, for example when creating new sessions.
-func (m *MCPManager) ConnectServer(ctx context.Context, config MCPServerConfig) error {
+func (m *MCPServerManager) ConnectServer(ctx context.Context, config MCPServerConfig) error {
 	// Check if server is already connected
 	m.mu.RLock()
 	if _, exists := m.clients[config.Name]; exists {
@@ -335,7 +335,7 @@ type MCPToolWrapper struct {
 	name        string
 	description string
 	mcpTool     *MCPTool
-	manager     *MCPManager
+	manager     *MCPServerManager
 }
 
 func (w *MCPToolWrapper) Name() string {

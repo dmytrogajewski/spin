@@ -146,7 +146,7 @@ func runACPServer(workDir, providerType, baseURL, model, apiKey string) error {
 		return fmt.Errorf("build core agent: %w", err)
 	}
 
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, logger)
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, logger)
 	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreAgent, mcpManager, emitter, storage)
 
 	if err != nil {

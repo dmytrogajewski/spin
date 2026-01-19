@@ -18,7 +18,7 @@ import (
 // TestRequestPermission_SessionNotFound tests that RequestPermission returns error for non-existent session.
 func TestRequestPermission_SessionNotFound(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -52,7 +52,7 @@ func TestRequestPermission_SessionNotFound(t *testing.T) {
 // TestRequestPermission_NoApprovalService tests that RequestPermission returns error when approval service is not configured.
 func TestRequestPermission_NoApprovalService(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -90,7 +90,7 @@ func TestRequestPermission_NoApprovalService(t *testing.T) {
 // TestRequestPermission_Approved tests successful approval flow.
 func TestRequestPermission_Approved(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -146,7 +146,7 @@ func TestRequestPermission_Approved(t *testing.T) {
 // TestRequestPermission_Denied tests denial flow.
 func TestRequestPermission_Denied(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -202,7 +202,7 @@ func TestRequestPermission_Denied(t *testing.T) {
 // TestRequestPermission_Cancelled tests context cancellation.
 func TestRequestPermission_Cancelled(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -258,7 +258,7 @@ func TestRequestPermission_Cancelled(t *testing.T) {
 // TestRequestPermission_WithRawInput tests tool call conversion with raw input parameters.
 func TestRequestPermission_WithRawInput(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -318,7 +318,7 @@ func TestRequestPermission_WithRawInput(t *testing.T) {
 // TestRequestPermission_AllowAlwaysOption tests that allow_always option is selected when approved.
 func TestRequestPermission_AllowAlwaysOption(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -373,7 +373,7 @@ func TestRequestPermission_AllowAlwaysOption(t *testing.T) {
 // TestRequestPermission_Integration tests end-to-end integration with ApprovalService.
 func TestRequestPermission_Integration(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())

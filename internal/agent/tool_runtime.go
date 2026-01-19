@@ -17,15 +17,9 @@ type ToolCall = message.ToolCall
 // ToolCallFunction is an alias for message.ToolCallFunction to avoid duplication.
 type ToolCallFunction = message.ToolCallFunction
 
-// ToolResult captures the outcome of executing a tool.
-type ToolResult struct {
-	ID       string
-	Success  bool
-	Output   string
-	Error    error
-	ExitCode int
-	Metadata map[string]interface{}
-}
+// ToolResult is an alias for tools.ToolResult to provide a unified type.
+// This consolidates the previously duplicate ToolResult definitions.
+type ToolResult = tools.ToolResult
 
 // ToolRuntimeConfig configures the tool runtime.
 type ToolRuntimeConfig struct {
@@ -73,36 +67,28 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 		if call != nil {
 			callID = call.ID
 		}
-		return &ToolResult{ID: callID, Error: err}, nil
+		result := tools.NewToolErrorWithID(callID, err)
+		return &result, nil
 	}
 
 	args, err := t.parseToolArguments(call)
 	if err != nil {
-		return &ToolResult{
-			ID:      call.ID,
-			Success: false,
-			Error:   fmt.Errorf("invalid arguments: %w", err),
-		}, nil
+		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("invalid arguments: %w", err))
+		return &result, nil
 	}
 
 	tool, err := t.registry.Get(call.Function.Name)
 	if err != nil {
-		return &ToolResult{
-			ID:      call.ID,
-			Success: false,
-			Error:   fmt.Errorf("tool not found: %s: %w", call.Function.Name, err),
-		}, nil
+		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("tool not found: %s: %w", call.Function.Name, err))
+		return &result, nil
 	}
 
 	if toolWithApproval, ok := tool.(tools.ToolWithApproval); ok {
 		needs := toolWithApproval.CheckApproval(args)
 		if needs.Required {
 			if t.approvalService == nil {
-				return &ToolResult{
-					ID:      call.ID,
-					Success: false,
-					Error:   fmt.Errorf("approval required but no approval handler configured: %s (risk: %s)", needs.Reason, needs.Risk),
-				}, nil
+				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval required but no approval handler configured: %s (risk: %s)", needs.Reason, needs.Risk))
+				return &result, nil
 			}
 
 			cmd := &security.Command{
@@ -118,39 +104,26 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 
 			_, approved, err := t.approvalService.RequestApproval(ctx, operation)
 			if err != nil {
-				return &ToolResult{
-					ID:      call.ID,
-					Success: false,
-					Error:   fmt.Errorf("approval request failed: %w", err),
-				}, nil
+				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval request failed: %w", err))
+				return &result, nil
 			}
 
 			if !approved {
-				return &ToolResult{
-					ID:      call.ID,
-					Success: false,
-					Error:   fmt.Errorf("operation denied: %s (risk: %s)", needs.Reason, needs.Risk),
-				}, nil
+				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("operation denied: %s (risk: %s)", needs.Reason, needs.Risk))
+				return &result, nil
 			}
 		}
 	}
 
 	toolResult, err := tool.Execute(ctx, args)
 	if err != nil {
-		return &ToolResult{ID: call.ID, Error: err}, nil
+		result := tools.NewToolErrorWithID(call.ID, err)
+		return &result, nil
 	}
 
-	result := &ToolResult{
-		ID:       call.ID,
-		Success:  toolResult.Success,
-		Output:   toolResult.Output,
-		Metadata: toolResult.Metadata,
-	}
-	if toolResult.Error != "" {
-		result.Error = fmt.Errorf("%s", toolResult.Error)
-	}
-
-	return result, nil
+	// The tool already returned a tools.ToolResult, just add the ID
+	result := toolResult.WithID(call.ID)
+	return &result, nil
 }
 
 // ExecuteBatch runs multiple tool calls concurrently.

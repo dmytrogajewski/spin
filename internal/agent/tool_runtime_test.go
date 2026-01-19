@@ -128,8 +128,8 @@ func TestToolRuntime_Execute_EmptyArguments(t *testing.T) {
 	require.NoError(t, err) // Execute returns nil error, error is in result
 	require.NotNil(t, result)
 	assert.False(t, result.Success)
-	assert.NotNil(t, result.Error)
-	assert.Contains(t, result.Error.Error(), "cannot be empty")
+	assert.NotNil(t, result.Err)
+	assert.Contains(t, result.Err.Error(), "cannot be empty")
 }
 
 func TestToolRuntime_Execute_ValidArguments(t *testing.T) {
@@ -137,7 +137,7 @@ func TestToolRuntime_Execute_ValidArguments(t *testing.T) {
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 	toolRegistry := tools.NewRegistry()
-	
+
 	// Register a simple test tool
 	testTool := tools.NewReadFileTool()
 	_ = toolRegistry.Register(testTool)
@@ -167,4 +167,3 @@ func TestToolRuntime_Execute_ValidArguments(t *testing.T) {
 	// Note: Tool may fail (file doesn't exist), but parsing should succeed
 	// We're just verifying that strict parsing doesn't reject valid JSON
 }
-

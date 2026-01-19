@@ -37,17 +37,90 @@ type Tool interface {
 
 // ToolResult represents the result of executing a tool.
 type ToolResult struct {
+	// ID is the unique identifier for this tool call.
+	// This links the result back to the original ToolCall.
+	ID string `json:"id,omitempty"`
+
 	// Success indicates whether the tool execution succeeded.
 	Success bool `json:"success"`
 
 	// Output contains the tool's output message for the LLM.
 	Output string `json:"output"`
 
-	// Error contains an error message if the tool failed.
+	// Error contains an error message if the tool failed (for JSON serialization).
 	Error string `json:"error,omitempty"`
+
+	// Err contains the actual error if the tool failed.
+	// This field is not serialized to JSON.
+	Err error `json:"-"`
+
+	// ExitCode contains the exit code for command-based tools.
+	// Zero indicates success, non-zero indicates failure.
+	ExitCode int `json:"exit_code,omitempty"`
 
 	// Metadata contains additional tool-specific data.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// NewToolResult creates a successful tool result with the given output.
+func NewToolResult(output string) ToolResult {
+	return ToolResult{
+		Success: true,
+		Output:  output,
+	}
+}
+
+// NewToolError creates a failed tool result from an error.
+func NewToolError(err error) ToolResult {
+	return ToolResult{
+		Success: false,
+		Err:     err,
+		Error:   err.Error(),
+	}
+}
+
+// NewToolErrorWithID creates a failed tool result with ID from an error.
+func NewToolErrorWithID(id string, err error) ToolResult {
+	return ToolResult{
+		ID:      id,
+		Success: false,
+		Err:     err,
+		Error:   err.Error(),
+	}
+}
+
+// WithID returns a copy of the result with the given ID.
+func (r ToolResult) WithID(id string) ToolResult {
+	r.ID = id
+	return r
+}
+
+// WithExitCode returns a copy of the result with the given exit code.
+func (r ToolResult) WithExitCode(code int) ToolResult {
+	r.ExitCode = code
+	return r
+}
+
+// WithMetadata returns a copy of the result with the given metadata.
+func (r ToolResult) WithMetadata(metadata map[string]interface{}) ToolResult {
+	r.Metadata = metadata
+	return r
+}
+
+// GetErr returns the error if present, or nil.
+func (r ToolResult) GetErr() error {
+	return r.Err
+}
+
+// String returns a string representation of the result.
+func (r ToolResult) String() string {
+	if r.Success {
+		return r.Output
+	}
+	if r.Err != nil {
+		return r.Err.Error()
+	}
+	return r.Error
 }
 
 // ToolSchema defines the OpenAI-compatible tool schema.

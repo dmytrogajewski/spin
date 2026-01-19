@@ -16,7 +16,7 @@ func Test_CallTool_AcceptsJSONRawMessage(t *testing.T) {
 	// This test verifies the interface{} elimination requirement from Phase 2.4
 	t.Run("accepts json.RawMessage arguments", func(t *testing.T) {
 		// Create minimal manager for signature test
-		mgr := NewMCPManager(&Config{
+		mgr := NewMCPServerManager(&Config{
 			EnableMCP:  false, // Don't actually start servers
 			MCPServers: []MCPServerConfig{},
 		}, nil)
@@ -42,7 +42,7 @@ func Test_ConnectServer_UsesSDKClient(t *testing.T) {
 			Level: slog.LevelError,
 		}))
 
-		mgr := NewMCPManager(&Config{
+		mgr := NewMCPServerManager(&Config{
 			EnableMCP:  true,
 			MCPServers: []MCPServerConfig{},
 		}, logger)

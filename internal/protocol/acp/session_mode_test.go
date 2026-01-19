@@ -60,7 +60,7 @@ func TestGetDefaultMode(t *testing.T) {
 func TestNewSession_IncludesModeState(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		createTestAgent(t),
-		mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 		events.NewEventEmitter(100),
 		nil,
 	)
@@ -85,7 +85,7 @@ func TestNewSession_IncludesModeState(t *testing.T) {
 func TestSetSessionMode_SessionNotFound(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		createTestAgent(t),
-		mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 		events.NewEventEmitter(100),
 		nil,
 	)
@@ -105,7 +105,7 @@ func TestSetSessionMode_SessionNotFound(t *testing.T) {
 func TestSetSessionMode_InvalidMode(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		createTestAgent(t),
-		mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 		events.NewEventEmitter(100),
 		nil,
 	)
@@ -133,7 +133,7 @@ func TestSetSessionMode_InvalidMode(t *testing.T) {
 func TestSetSessionMode_Success(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		createTestAgent(t),
-		mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 		events.NewEventEmitter(100),
 		nil,
 	)
@@ -169,7 +169,7 @@ func TestSetSessionMode_Success(t *testing.T) {
 func TestSetSessionMode_AllModes(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		createTestAgent(t),
-		mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 		events.NewEventEmitter(100),
 		nil,
 	)
@@ -209,7 +209,7 @@ func TestSetSessionMode_AllModes(t *testing.T) {
 func TestSetSessionMode_SendsNotification(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
-		mcp.NewMCPManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
 		events.NewEventEmitter(100),
 		nil,
 	)

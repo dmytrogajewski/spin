@@ -7,7 +7,6 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/task"
-	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // AgentRequest represents a request to the agent.
@@ -61,38 +60,3 @@ type AgentResponse struct {
 	// TrajectoryContext contains progressive execution context (for Reflector)
 	TrajectoryContext *trajectory.TrajectoryContext
 }
-
-// EventType represents the category of event.
-type EventType int
-
-const (
-	EventWarning EventType = iota
-	EventTurnPaused
-	EventToolCallStart
-	EventToolCallComplete
-)
-
-// Event represents an event.
-type Event struct {
-	Type      EventType
-	Timestamp time.Time
-	Data      interface{}
-}
-
-// ToolCallCompleteData represents tool call completion data.
-type ToolCallCompleteData struct {
-	ToolID   string
-	ToolName string
-	Success  bool
-	Error    string
-	Output   string
-}
-
-// ToolCallStartData represents tool call start data.
-type ToolCallStartData struct {
-	ToolID     string
-	ToolName   string
-	Parameters tools.ToolParameters
-}
-
-// Role constants
