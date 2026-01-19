@@ -14,6 +14,7 @@ func TestFilePolicyStore_SaveGetListDeleteClear_GlobalScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFilePolicyStore error: %v", err)
 	}
+	t.Cleanup(func() { store.Close() })
 
 	ctx := context.Background()
 	key := NewPolicyKey("/bin/echo", []string{"hello", "world"}, "/tmp")
@@ -83,6 +84,7 @@ func TestFilePolicyStore_ExpiryEviction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFilePolicyStore error: %v", err)
 	}
+	t.Cleanup(func() { store.Close() })
 	ctx := context.Background()
 
 	ttl := 20 * time.Millisecond
@@ -126,6 +128,7 @@ func TestFilePolicyStore_FileIsCreatedAndLocked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFilePolicyStore error: %v", err)
 	}
+	t.Cleanup(func() { store.Close() })
 	// Save one to ensure file gets content
 	key := NewPolicyKey("prog", nil, "/w")
 	if err := store.Save(context.Background(), Policy{

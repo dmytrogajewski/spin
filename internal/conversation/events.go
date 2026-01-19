@@ -7,7 +7,31 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dmytrogajewski/spin/internal/events"
 )
+
+// EventTransformer transforms internal events to protocol-specific formats.
+// This allows protocols like ACP to intercept and transform events without
+// modifying the core Conversation implementation.
+//
+// Usage:
+//
+//	transformer := &ACPEventTransformer{conn: acpConn, sessionID: sid}
+//	conversation.SetEventTransformer(transformer)
+//
+// The transformer receives all events emitted during conversation execution
+// and can transform them to protocol-specific notifications.
+type EventTransformer interface {
+	// Transform processes an event and returns whether it was handled.
+	// If handled is true, the transformer took responsibility for the event
+	// (e.g., sent a protocol-specific notification).
+	// If handled is false, the event should still be available via Stream().
+	Transform(ctx context.Context, event events.Event) (handled bool)
+
+	// Close releases any resources held by the transformer.
+	Close() error
+}
 
 // attachJSONLEventLogger sets up a JSONL event logger for the given session.
 // Events are written to {sessionDir}/{sessionID}/events.jsonl in append mode.

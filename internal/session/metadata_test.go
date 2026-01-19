@@ -1,7 +1,6 @@
 package session
 
 import (
-	"fmt"
 	"testing"
 	"time"
 )
@@ -41,24 +40,10 @@ func TestMetadata_DefaultValues(t *testing.T) {
 func TestMetadata_TokenTracking(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	// Add turns with different token counts
-	_ = session.AddTurn(&Turn{
-		ID:        "turn-1",
-		SessionID: session.ID,
-		Tokens:    TokenUsage{TotalTokens: 100},
-	})
-
-	_ = session.AddTurn(&Turn{
-		ID:        "turn-2",
-		SessionID: session.ID,
-		Tokens:    TokenUsage{TotalTokens: 250},
-	})
-
-	_ = session.AddTurn(&Turn{
-		ID:        "turn-3",
-		SessionID: session.ID,
-		Tokens:    TokenUsage{TotalTokens: 150},
-	})
+	// Add turns with different token counts using IncrementTurnCount
+	session.IncrementTurnCount(100)
+	session.IncrementTurnCount(250)
+	session.IncrementTurnCount(150)
 
 	expectedTokens := 100 + 250 + 150
 	if session.Metadata.TokensUsed != expectedTokens {
@@ -73,21 +58,12 @@ func TestMetadata_TurnCountConsistency(t *testing.T) {
 
 	// Add multiple turns
 	for i := 0; i < 10; i++ {
-		_ = session.AddTurn(&Turn{
-			ID:        fmt.Sprintf("turn-%d", i),
-			SessionID: session.ID,
-		})
+		session.IncrementTurnCount(100)
 	}
 
-	// Metadata should match actual turn count
-	if session.Metadata.TotalTurns != len(session.Turns) {
-		t.Errorf("Metadata.TotalTurns = %d, actual turns = %d",
-			session.Metadata.TotalTurns, len(session.Turns))
-	}
-
-	if session.TurnCount() != session.Metadata.TotalTurns {
-		t.Errorf("TurnCount() = %d, Metadata.TotalTurns = %d",
-			session.TurnCount(), session.Metadata.TotalTurns)
+	// Metadata should have correct turn count
+	if session.Metadata.TotalTurns != 10 {
+		t.Errorf("Metadata.TotalTurns = %d, want 10", session.Metadata.TotalTurns)
 	}
 }
 

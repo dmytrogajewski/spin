@@ -32,12 +32,13 @@ const (
 // Session-specific state methods are now handled by state.UnifiedState.
 
 // Session represents a persistent conversation session.
+// Note: Conversation content (messages) is stored separately in history.History.
+// Session only tracks metadata, state, and configuration.
 type Session struct {
 	ID        string       // Unique session identifier (UUID string, for storage)
 	WorkDir   string       // Working directory for this session
 	CreatedAt time.Time    // Session creation timestamp
 	UpdatedAt time.Time    // Last update timestamp
-	Turns     []*Turn      // Conversation turns
 	Metadata  Metadata     // Session metadata
 	State     State        // Current session state
 	Version   int          // Schema version for migrations
@@ -55,62 +56,21 @@ func NewSession(workDir string) *Session {
 		WorkDir:   workDir,
 		CreatedAt: now,
 		UpdatedAt: now,
-		Turns:     make([]*Turn, 0),
 		Metadata:  Metadata{},
 		State:     StateActive,
 		Version:   CurrentSchemaVersion,
 	}
 }
 
-// AddTurn appends a turn to the session.
-func (s *Session) AddTurn(t *Turn) error {
-	if t == nil {
-		return errors.New("turn cannot be nil")
-	}
-
+// IncrementTurnCount increments the turn counter and updates tokens used.
+// This is called when a turn completes. The actual messages are stored in history.History.
+func (s *Session) IncrementTurnCount(tokensUsed int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.Turns = append(s.Turns, t)
-	s.UpdatedAt = time.Now()
 	s.Metadata.TotalTurns++
-	s.Metadata.TokensUsed += t.Tokens.TotalTokens
-
-	return nil
-}
-
-// GetTurn retrieves a turn by ID.
-func (s *Session) GetTurn(turnID string) (*Turn, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	for _, t := range s.Turns {
-		if t.ID == turnID {
-			return t, nil
-		}
-	}
-
-	return nil, fmt.Errorf("turn not found: %s", turnID)
-}
-
-// LastTurn returns the most recent turn.
-func (s *Session) LastTurn() *Turn {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if len(s.Turns) == 0 {
-		return nil
-	}
-
-	return s.Turns[len(s.Turns)-1]
-}
-
-// TurnCount returns the number of turns.
-func (s *Session) TurnCount() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return len(s.Turns)
+	s.Metadata.TokensUsed += tokensUsed
+	s.UpdatedAt = time.Now()
 }
 
 // UpdateMetadata updates session metadata using a callback function.
@@ -206,11 +166,7 @@ func (s *Session) Validate() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var errs []error
-
-	errs = append(errs, s.validateBasicFields()...)
-	errs = append(errs, s.validateTurns()...)
-	errs = append(errs, s.validateMetadata()...)
+	errs := s.validateBasicFields()
 
 	if len(errs) > 0 {
 		return errors.Join(errs...)
@@ -246,51 +202,6 @@ func (s *Session) validateBasicFields() []error {
 	}
 
 	return errs
-}
-
-// validateTurns validates turn-related fields.
-func (s *Session) validateTurns() []error {
-	var errs []error
-
-	// Check for duplicate turn IDs
-	turnIDs := make(map[string]bool)
-	for _, t := range s.Turns {
-		if turnIDs[t.ID] {
-			errs = append(errs, fmt.Errorf("duplicate turn ID: %s", t.ID))
-		}
-		turnIDs[t.ID] = true
-	}
-
-	return errs
-}
-
-// validateMetadata validates metadata consistency.
-func (s *Session) validateMetadata() []error {
-	var errs []error
-
-	// Validate turn count consistency
-	if s.Metadata.TotalTurns != len(s.Turns) {
-		errs = append(errs, fmt.Errorf("metadata turn count (%d) does not match actual turns (%d)",
-			s.Metadata.TotalTurns, len(s.Turns)))
-	}
-
-	// Validate token count consistency
-	actualTokens := s.calculateActualTokens()
-	if s.Metadata.TokensUsed != actualTokens {
-		errs = append(errs, fmt.Errorf("metadata tokens used (%d) does not match actual (%d)",
-			s.Metadata.TokensUsed, actualTokens))
-	}
-
-	return errs
-}
-
-// calculateActualTokens calculates the total tokens from all turns.
-func (s *Session) calculateActualTokens() int {
-	actualTokens := 0
-	for _, t := range s.Turns {
-		actualTokens += t.Tokens.TotalTokens
-	}
-	return actualTokens
 }
 
 // isValidState checks if a state value is valid.

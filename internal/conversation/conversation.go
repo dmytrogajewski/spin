@@ -13,6 +13,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/message"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/task"
+	"github.com/google/uuid"
 )
 
 // Conversation represents an active conversation instance.
@@ -31,9 +32,10 @@ type Conversation struct {
 	workDir  string // Working directory for this conversation
 
 	// Protocol-specific fields (optional, for protocol use)
-	turnID     string             // Current turn ID
-	cancel     context.CancelFunc // Cancellation context
-	protocolMu sync.RWMutex       // Protects protocol fields (turnID, cancel)
+	turnID      string             // Current turn ID
+	cancel      context.CancelFunc // Cancellation context
+	transformer EventTransformer   // Optional event transformer for protocol adapters
+	protocolMu  sync.RWMutex       // Protects protocol fields (turnID, cancel, transformer)
 }
 
 // RunTurn executes a single turn in the conversation.
@@ -206,4 +208,87 @@ func (c *Conversation) Cancel() {
 	if cancel != nil {
 		cancel()
 	}
+}
+
+// SetEventTransformer sets an event transformer for protocol-specific event handling.
+// The transformer receives all events and can transform them to protocol-specific formats.
+// Pass nil to remove the transformer.
+func (c *Conversation) SetEventTransformer(transformer EventTransformer) {
+	c.protocolMu.Lock()
+	defer c.protocolMu.Unlock()
+	c.transformer = transformer
+}
+
+// GetEventTransformer returns the current event transformer, if any.
+func (c *Conversation) GetEventTransformer() EventTransformer {
+	c.protocolMu.RLock()
+	defer c.protocolMu.RUnlock()
+	return c.transformer
+}
+
+// GetHistory returns the conversation's history instance.
+// This is useful for persistence operations.
+func (c *Conversation) GetHistory() *history.History {
+	return c.history
+}
+
+// GetWorkDir returns the working directory for this conversation.
+func (c *Conversation) GetWorkDir() string {
+	return c.workDir
+}
+
+// NewFromAgentConfig holds configuration for NewFromAgent.
+type NewFromAgentConfig struct {
+	// Agent is the pre-built agent instance (required)
+	Agent *agent.Agent
+
+	// Emitter is the event emitter (required)
+	Emitter *events.EventEmitter
+
+	// WorkDir is the working directory (required)
+	WorkDir string
+
+	// ID is an optional conversation ID (generated if empty)
+	ID string
+
+	// History is an optional pre-existing history (new one created if nil)
+	History *history.History
+}
+
+// generateConversationID creates a new unique conversation ID.
+func generateConversationID() string {
+	return uuid.New().String()
+}
+
+// NewFromAgent creates a Conversation from an existing agent.
+// This is useful for modes like ACP where the agent is pre-built.
+func NewFromAgent(cfg NewFromAgentConfig) (*Conversation, error) {
+	if cfg.Agent == nil {
+		return nil, fmt.Errorf("agent is required")
+	}
+	if cfg.Emitter == nil {
+		return nil, fmt.Errorf("emitter is required")
+	}
+	if cfg.WorkDir == "" {
+		return nil, fmt.Errorf("workDir is required")
+	}
+
+	hist := cfg.History
+	if hist == nil {
+		hist = history.NewHistoryWithDefaults()
+	}
+
+	id := cfg.ID
+	if id == "" {
+		id = generateConversationID()
+	}
+
+	return &Conversation{
+		agent:    cfg.Agent,
+		history:  hist,
+		emitter:  cfg.Emitter,
+		taskMode: "regular",
+		id:       id,
+		workDir:  cfg.WorkDir,
+	}, nil
 }

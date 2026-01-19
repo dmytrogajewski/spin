@@ -62,6 +62,12 @@ func (s *filePolicyStore) janitor() {
 	}
 }
 
+// Close stops the janitor goroutine and releases resources.
+func (s *filePolicyStore) Close() error {
+	close(s.stopCh)
+	return nil
+}
+
 func (s *filePolicyStore) removeExpired() {
 	now := time.Now()
 	s.mu.Lock()

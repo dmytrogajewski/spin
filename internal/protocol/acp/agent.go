@@ -13,7 +13,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent/runtime"
 	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
 	"github.com/dmytrogajewski/spin/internal/commands"
+	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/history"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/planning"
@@ -39,19 +41,25 @@ var (
 //
 // SpinACPAgent acts as an adapter between ACP protocol requests and Spin's
 // internal agent execution, session management, and tool orchestration.
+//
+// The agent uses ConversationManager for multi-session support, delegating
+// conversation lifecycle and history management to the conversation package.
 type SpinACPAgent struct {
 	agent           *agent.Agent
 	mcpManager      *mcp.MCPManager
 	emitter         *events.EventEmitter
 	approvalService *security.ApprovalService // Optional approval service for permission requests
 	approvalHandler *ACPApprovalHandler       // ACP-specific approval handler
-	clientCaps      *acp.ClientCapabilities   // Stored after Initialize
+	clientCaps      *acp.ClientCapabilities   // Stored a  fter Initialize
 	sessions        map[acp.SessionId]*session.Session
-	sessionModes    map[acp.SessionId]acp.SessionModeId  // Current mode per session
-	storage         session.Storage                      // Optional session storage for persistence
-	connection      notificationSender                   // Optional connection for sending notifications
-	cancels         map[acp.SessionId]context.CancelFunc // Cancel functions for in-progress prompt executions
-	mu              sync.RWMutex                         // Protects sessions map, sessionModes, connection, and cancels
+	sessionModes    map[acp.SessionId]acp.SessionModeId    // Current mode per session
+	storage         session.Storage                        // Optional session storage for persistence
+	histStorage     history.Storage                        // Optional history storage for persistence
+	connection      notificationSender                     // Optional connection for sending notifications
+	cancels         map[acp.SessionId]context.CancelFunc   // Cancel functions for in-progress prompt executions
+	convManager     *conversation.Manager                  // Manages conversations per session
+	transformers    map[acp.SessionId]*ACPEventTransformer // Event transformers per session
+	mu              sync.RWMutex                           // Protects sessions map, sessionModes, connection, cancels, and transformers
 }
 
 // NewSpinACPAgentWithStorage creates a new ACP agent adapter with optional session storage.
@@ -88,11 +96,29 @@ func NewSpinACPAgentWithStorage(
 		emitter:         emitter,
 		approvalService: nil, // Optional - set via SetApprovalService() if needed
 		storage:         storage,
+		histStorage:     nil, // Set via SetHistoryStorage() if needed
 		connection:      nil, // Set via SetConnection() after connection is created
 		sessions:        make(map[acp.SessionId]*session.Session),
 		sessionModes:    make(map[acp.SessionId]acp.SessionModeId),
 		cancels:         make(map[acp.SessionId]context.CancelFunc),
+		convManager:     nil, // Set via SetConversationManager() if needed
+		transformers:    make(map[acp.SessionId]*ACPEventTransformer),
 	}, nil
+}
+
+// SetConversationManager sets the conversation manager for multi-session support.
+// When set, the agent will use Conversation.RunTurn() instead of direct agent execution.
+func (a *SpinACPAgent) SetConversationManager(mgr *conversation.Manager) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.convManager = mgr
+}
+
+// SetHistoryStorage sets the history storage for conversation persistence.
+func (a *SpinACPAgent) SetHistoryStorage(storage history.Storage) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.histStorage = storage
 }
 
 // notificationSender is an interface for sending ACP session notifications and requesting permissions.
@@ -389,10 +415,11 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 	// 2. Sending it back would cause duplication (client shows both request and notification)
 	// 3. user_message_chunk is only needed when replaying history in LoadSession
 
-	// Get connection for event processing
+	// Get connection and manager for event processing
 	a.mu.RLock()
-	conn := a.connection
 	approvalHandler := a.approvalHandler
+	convManager := a.convManager
+	sess := a.sessions[req.SessionId]
 	a.mu.RUnlock()
 
 	// Set active session in approval handler for this prompt execution
@@ -400,6 +427,121 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 		approvalHandler.SetActiveSession(req.SessionId)
 		defer approvalHandler.ClearActiveSession()
 	}
+
+	// Use ConversationManager if available (new path)
+	if convManager != nil && sess != nil {
+		return a.promptWithConversation(promptCtx, req, input, sess.WorkDir, cancel)
+	}
+
+	// Fallback to direct agent execution (legacy path)
+	return a.promptWithAgent(promptCtx, req, input, cancel)
+}
+
+// promptWithConversation executes a prompt using ConversationManager.
+// This is the new path that uses Conversation.RunTurn() for proper history management.
+func (a *SpinACPAgent) promptWithConversation(ctx context.Context, req acp.PromptRequest, input string, workDir string, cancel context.CancelFunc) (acp.PromptResponse, error) {
+	a.mu.RLock()
+	convManager := a.convManager
+	conn := a.connection
+	a.mu.RUnlock()
+
+	if convManager == nil {
+		return acp.PromptResponse{}, fmt.Errorf("conversation manager not configured")
+	}
+
+	// Get or create conversation for this session
+	conv, err := convManager.GetOrCreate(ctx, string(req.SessionId), workDir)
+	if err != nil {
+		return acp.PromptResponse{}, fmt.Errorf("failed to get conversation: %w", err)
+	}
+
+	// Set up event transformer for this session
+	a.mu.Lock()
+	transformer, exists := a.transformers[req.SessionId]
+	if !exists && conn != nil {
+		transformer = NewACPEventTransformer(req.SessionId, conn, a.agent)
+		a.transformers[req.SessionId] = transformer
+		conv.SetEventTransformer(transformer)
+	}
+	a.mu.Unlock()
+
+	// Set cancellation on conversation
+	conv.SetCancel(cancel)
+	defer conv.SetCancel(nil)
+
+	// Subscribe to events for real-time notifications (via transformer)
+	var (
+		subID       string
+		eventCh     <-chan events.Event
+		unsubscribe func()
+		eventsDone  chan struct{}
+	)
+
+	if conn != nil && transformer != nil {
+		var subErr error
+		subID, eventCh, subErr = a.emitter.Subscribe()
+		if subErr == nil {
+			unsubscribe = func() {
+				a.emitter.Unsubscribe(subID)
+			}
+			eventsDone = make(chan struct{})
+			go func() {
+				defer close(eventsDone)
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case event, ok := <-eventCh:
+						if !ok {
+							return
+						}
+						// Use transformer to convert and send events
+						transformer.Transform(ctx, event)
+					}
+				}
+			}()
+		}
+	}
+
+	defer func() {
+		if unsubscribe != nil {
+			unsubscribe()
+		}
+		if eventsDone != nil {
+			<-eventsDone
+		}
+		cancel()
+	}()
+
+	// Execute turn via conversation (manages history automatically)
+	err = conv.RunTurn(ctx, input)
+	if err != nil {
+		// Map error to stop reason
+		stopReason := mapStopReasonFromError(err, nil)
+		return acp.PromptResponse{
+			StopReason: stopReason,
+		}, nil
+	}
+
+	// Save history after successful turn (if storage configured)
+	a.mu.RLock()
+	histStorage := a.histStorage
+	a.mu.RUnlock()
+	if histStorage != nil {
+		_ = conv.GetHistory().Save(histStorage, string(req.SessionId))
+	}
+
+	return acp.PromptResponse{
+		StopReason: acp.StopReasonEndTurn,
+	}, nil
+}
+
+// promptWithAgent executes a prompt using direct agent execution (legacy path).
+// This is the fallback path when ConversationManager is not configured.
+func (a *SpinACPAgent) promptWithAgent(ctx context.Context, req acp.PromptRequest, input string, cancel context.CancelFunc) (acp.PromptResponse, error) {
+	a.mu.RLock()
+	conn := a.connection
+	a.mu.RUnlock()
 
 	// Create agent request
 	agentReq := &agent.AgentRequest{
@@ -429,7 +571,7 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 			eventsDone = make(chan struct{})
 			go func() {
 				defer close(eventsDone)
-				a.processEvents(promptCtx, req.SessionId, eventCh)
+				a.processEvents(ctx, req.SessionId, eventCh)
 			}()
 		}
 	}
@@ -445,7 +587,7 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 	}()
 
 	// Execute agent with cancellable context
-	agentResp, err := a.agent.Execute(promptCtx, agentReq)
+	agentResp, err := a.agent.Execute(ctx, agentReq)
 	if err != nil {
 		// Map error to stop reason
 		stopReason := mapStopReasonFromError(err, agentResp)
@@ -455,10 +597,8 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 	}
 
 	// Send plan notifications if a plan is available
-	// Basic plan detection - checks orchestration service for plan (if accessible)
-	// Full plan system integration deferred to Feature 9.2
 	if conn != nil && agentResp != nil {
-		if err := a.sendPlanNotifications(promptCtx, req.SessionId, agentResp); err != nil {
+		if err := a.sendPlanNotifications(ctx, req.SessionId, agentResp); err != nil {
 			// Log error but continue - plan notifications are non-critical
 			_ = err
 		}
@@ -832,10 +972,11 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 	}
 
 	// Load session from storage
-	sess, err := a.storage.Load(string(req.SessionId))
+	sessData, err := a.storage.Load(string(req.SessionId))
 	if err != nil {
 		return acp.LoadSessionResponse{}, fmt.Errorf("failed to load session: %w", err)
 	}
+	sess := &sessData
 
 	// Validate session
 	if err := sess.Validate(); err != nil {
@@ -877,68 +1018,64 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 		a.mu.Unlock()
 	}
 
-	// Replay conversation history if connection is available
+	// Replay conversation history if connection and history storage are available
 	a.mu.RLock()
 	conn := a.connection
+	histStorage := a.histStorage
 	a.mu.RUnlock()
 
-	if conn != nil {
-		// Send conversation history as notifications
-		// This allows clients to see the full conversation when loading a session
-		// Access exported fields - Session.Turns is exported but may need external synchronization
-		// Since we're in LoadSession which has already loaded the session, we can safely access fields
-		for _, turn := range sess.Turns {
-			if turn == nil {
-				continue
-			}
-			// Access exported fields directly - Turn fields are exported
-			userInput := turn.UserInput
-			aiResponse := turn.AIResponse
-
-			// Send user message
-			if userInput != "" {
-				userUpdate := acp.UpdateUserMessageText(userInput)
-				notification := acp.SessionNotification{
-					SessionId: sessionID,
-					Update:    userUpdate,
-				}
-				if err := conn.SessionUpdate(ctx, notification); err != nil {
-					// Log error but continue replaying
-					_ = err
-				}
-			}
-
-			// Send AI response
-			if aiResponse != "" {
-				// Parse thinking blocks and filter protocol artifacts from AI response
-				s := sanitizer.New()
-				content, thought := s.Process(aiResponse)
-
-				// Send thinking content if available
-				if thought != "" {
-					thinkUpdate := acp.UpdateAgentThoughtText(thought)
-					notification := acp.SessionNotification{
-						SessionId: sessionID,
-						Update:    thinkUpdate,
+	if conn != nil && histStorage != nil {
+		// Load history from storage
+		histData, err := histStorage.Load(string(sessionID))
+		if err == nil {
+			// Send conversation history as notifications
+			// This allows clients to see the full conversation when loading a session
+			for _, msg := range histData.Messages {
+				switch msg.Role {
+				case message.RoleUser:
+					// Send user message
+					if msg.Content != "" {
+						userUpdate := acp.UpdateUserMessageText(msg.Content)
+						notification := acp.SessionNotification{
+							SessionId: sessionID,
+							Update:    userUpdate,
+						}
+						if err := conn.SessionUpdate(ctx, notification); err != nil {
+							_ = err // Log error but continue replaying
+						}
 					}
-					if err := conn.SessionUpdate(ctx, notification); err != nil {
-						_ = err
-					}
-				}
+				case message.RoleAssistant:
+					// Send AI response
+					if msg.Content != "" {
+						// Parse thinking blocks and filter protocol artifacts from AI response
+						s := sanitizer.New()
+						cleanContent, thought := s.Process(msg.Content)
 
-				// Send message content if available
-				if content != "" {
-					messageUpdate := acp.UpdateAgentMessageText(content)
-					notification := acp.SessionNotification{
-						SessionId: sessionID,
-						Update:    messageUpdate,
-					}
-					if err := conn.SessionUpdate(ctx, notification); err != nil {
-						_ = err
+						// Send thinking content if available
+						if thought != "" {
+							thinkUpdate := acp.UpdateAgentThoughtText(thought)
+							notification := acp.SessionNotification{
+								SessionId: sessionID,
+								Update:    thinkUpdate,
+							}
+							if err := conn.SessionUpdate(ctx, notification); err != nil {
+								_ = err
+							}
+						}
+
+						// Send message content if available
+						if cleanContent != "" {
+							messageUpdate := acp.UpdateAgentMessageText(cleanContent)
+							notification := acp.SessionNotification{
+								SessionId: sessionID,
+								Update:    messageUpdate,
+							}
+							if err := conn.SessionUpdate(ctx, notification); err != nil {
+								_ = err
+							}
+						}
 					}
 				}
-			} else {
-				// No AI response content (e.g. tool call only)
 			}
 		}
 	}

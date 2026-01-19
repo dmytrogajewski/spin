@@ -11,6 +11,7 @@ import (
 func TestApprovalService_PolicyShortCircuit(t *testing.T) {
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
+	t.Cleanup(func() { store.Close() })
 	svc := NewApprovalServiceWithConfig(ApprovalServiceConfig{
 		Handler:           nil, // should not be called on policy hit
 		Emitter:           emitter,
@@ -50,6 +51,7 @@ func TestApprovalService_PolicyShortCircuit(t *testing.T) {
 func TestApprovalService_PersistOnApprove(t *testing.T) {
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
+	t.Cleanup(func() { store.Close() })
 	// Handler that approves with session scope and 50ms TTL
 	ttl := 50 * time.Millisecond
 	handler := func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
@@ -105,6 +107,7 @@ func TestApprovalService_PersistOnApprove(t *testing.T) {
 func TestApprovalService_ApproveOnceDoesNotPersist(t *testing.T) {
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
+	t.Cleanup(func() { store.Close() })
 
 	// Handler approves with scope=once (no persistence expected).
 	handler := func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
@@ -142,6 +145,7 @@ func TestApprovalService_ApproveOnceDoesNotPersist(t *testing.T) {
 func TestApprovalService_OnceScopeReasks(t *testing.T) {
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
+	t.Cleanup(func() { store.Close() })
 
 	var calls int
 	handler := func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
@@ -185,6 +189,7 @@ func TestApprovalService_OnceScopeReasks(t *testing.T) {
 func TestApprovalService_GlobalScopePersistsAndShortCircuits(t *testing.T) {
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
+	t.Cleanup(func() { store.Close() })
 
 	// Track handler invocations to prove short-circuit on second call.
 	var calls int
@@ -234,6 +239,7 @@ func TestApprovalService_GlobalScopePersistsAndShortCircuits(t *testing.T) {
 func TestApprovalService_RevocationReasks(t *testing.T) {
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
+	t.Cleanup(func() { store.Close() })
 
 	var calls int
 	handler := func(ctx context.Context, req ApprovalRequest) ApprovalResponse {

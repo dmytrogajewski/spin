@@ -31,7 +31,7 @@ func TestPrompt_NoUserMessageChunk(t *testing.T) {
 
 	// Create a session
 	sess := session.NewSession("/tmp/test")
-	err = storage.Save(sess)
+	err = storage.Save(sess.ID, *sess)
 	require.NoError(t, err)
 
 	sessionID := acp.SessionId(sess.ID)
@@ -113,4 +113,3 @@ func (m *mockNotificationSender) Clear() {
 	defer m.mu.Unlock()
 	m.notifications = nil
 }
-

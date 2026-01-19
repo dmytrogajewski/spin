@@ -209,7 +209,7 @@ func validateOpenAIConfig(cfg ProviderConfig) error {
 
 // validateOllamaConfig validates Ollama provider configuration.
 func validateOllamaConfig(cfg ProviderConfig) error {
-	// BaseURL is optional - Ollama provider has a default (http://localhost:11434)
+
 	if cfg.Model == "" {
 		return fmt.Errorf("model is required for ollama")
 	}
@@ -218,8 +218,6 @@ func validateOllamaConfig(cfg ProviderConfig) error {
 
 // validateLMStudioConfig validates LMStudio provider configuration.
 func validateLMStudioConfig(cfg ProviderConfig) error {
-	// BaseURL is optional - LMStudio provider has a default (http://localhost:1234/v1)
-	// Model is also optional - LMStudio uses "local-model" as a placeholder
 	return nil
 }
 

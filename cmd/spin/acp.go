@@ -15,7 +15,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent/runtime"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/history"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
 	"github.com/dmytrogajewski/spin/internal/mcp"
@@ -150,6 +152,42 @@ func runACPServer(workDir, providerType, baseURL, model, apiKey string) error {
 	if err != nil {
 		return fmt.Errorf("create ACP protocol adapter: %w", err)
 	}
+
+	// Create history storage for conversation persistence
+	historyDir := cfg.Agent.SessionDir
+	if historyDir == "" {
+		historyDir = "~/.spin/sessions"
+	}
+	histStorage, err := history.NewFileStorage(historyDir)
+	if err != nil {
+		return fmt.Errorf("create history storage: %w", err)
+	}
+
+	// Create conversation factory that builds properly configured conversations
+	convFactory := func(ctx context.Context, sessionID string, sessWorkDir string) (*conversation.Conversation, error) {
+		// Create a new conversation with the core agent's provider and tools
+		return conversation.NewFromAgent(conversation.NewFromAgentConfig{
+			Agent:   coreAgent,
+			Emitter: emitter,
+			WorkDir: sessWorkDir,
+			ID:      sessionID,
+		})
+	}
+
+	// Create conversation manager for multi-session support
+	convManager, err := conversation.NewManager(conversation.ManagerConfig{
+		Factory:        convFactory,
+		Storage:        storage,
+		HistoryStorage: histStorage,
+		Logger:         logger,
+	})
+	if err != nil {
+		return fmt.Errorf("create conversation manager: %w", err)
+	}
+
+	// Wire conversation manager to ACP agent for new prompt path
+	acpAgent.SetConversationManager(convManager)
+	acpAgent.SetHistoryStorage(histStorage)
 
 	acpRuntime.SetACPAgent(acpAgent)
 	acpApprovalHandler := acppkg.NewACPApprovalHandler(acpAgent, 60*time.Second)

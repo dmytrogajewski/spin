@@ -27,6 +27,7 @@ func TestNewPolicyKey_Normalization(t *testing.T) {
 
 func TestMemoryPolicyStore_SaveGetListDelete(t *testing.T) {
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
+	t.Cleanup(func() { store.Close() })
 	ctx := context.Background()
 
 	key := NewPolicyKey("/bin/echo", []string{"hello"}, "/tmp")
@@ -67,6 +68,7 @@ func TestMemoryPolicyStore_SaveGetListDelete(t *testing.T) {
 
 func TestMemoryPolicyStore_TTLExpiry(t *testing.T) {
 	store := NewMemoryPolicyStore(5 * time.Millisecond)
+	t.Cleanup(func() { store.Close() })
 	ctx := context.Background()
 	key := NewPolicyKey("/bin/echo", []string{"x"}, "/tmp")
 	exp := time.Now().Add(10 * time.Millisecond)
@@ -94,6 +96,7 @@ func TestMemoryPolicyStore_TTLExpiry(t *testing.T) {
 
 func TestMemoryPolicyStore_ConcurrentAccess(t *testing.T) {
 	store := NewMemoryPolicyStore(5 * time.Millisecond)
+	t.Cleanup(func() { store.Close() })
 	ctx := context.Background()
 
 	key := NewPolicyKey("/bin/echo", []string{"hello"}, "/tmp")
@@ -134,5 +137,3 @@ func TestMemoryPolicyStore_ConcurrentAccess(t *testing.T) {
 		}
 	}
 }
-
-

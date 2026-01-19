@@ -47,6 +47,7 @@ type PolicyStore interface {
 	List(ctx context.Context, scope string) ([]Policy, error)
 	Delete(ctx context.Context, key PolicyKey, scope string) (bool, error)
 	Clear(ctx context.Context, scope string) (int, error)
+	Close() error
 }
 
 // NewPolicyKey normalizes inputs into a PolicyKey (exact-match semantics).
@@ -231,6 +232,12 @@ func (s *memoryPolicyStore) Clear(_ context.Context, scope string) (int, error) 
 	n := len(m)
 	delete(s.byScope, scope)
 	return n, nil
+}
+
+// Close stops the janitor goroutine and releases resources.
+func (s *memoryPolicyStore) Close() error {
+	close(s.stopCh)
+	return nil
 }
 
 func keyString(k PolicyKey) string {

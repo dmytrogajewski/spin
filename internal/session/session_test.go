@@ -1,7 +1,6 @@
 package session
 
 import (
-	"fmt"
 	"testing"
 	"time"
 )
@@ -37,14 +36,6 @@ func TestNewSession(t *testing.T) {
 		t.Error("UpdatedAt is zero")
 	}
 
-	if session.Turns == nil {
-		t.Error("Turns slice is nil")
-	}
-
-	if len(session.Turns) != 0 {
-		t.Errorf("Turns length = %d, want 0", len(session.Turns))
-	}
-
 	if session.Version != CurrentSchemaVersion {
 		t.Errorf("Version = %d, want %d", session.Version, CurrentSchemaVersion)
 	}
@@ -75,34 +66,16 @@ func TestNewSession_InitializesMetadata(t *testing.T) {
 	}
 }
 
-// Test Turn Management
+// Test IncrementTurnCount
 
-func TestSession_AddTurn(t *testing.T) {
+func TestSession_IncrementTurnCount(t *testing.T) {
 	session := NewSession("/test/workdir")
 	originalUpdatedAt := session.UpdatedAt
 
 	// Wait a bit to ensure timestamp difference
 	time.Sleep(10 * time.Millisecond)
 
-	turn := &Turn{
-		ID:        "turn-1",
-		SessionID: session.ID,
-		UserInput: "Test input",
-		Tokens:    TokenUsage{TotalTokens: 100},
-	}
-
-	err := session.AddTurn(turn)
-	if err != nil {
-		t.Fatalf("AddTurn() error = %v", err)
-	}
-
-	if len(session.Turns) != 1 {
-		t.Errorf("Turns length = %d, want 1", len(session.Turns))
-	}
-
-	if session.Turns[0] != turn {
-		t.Error("Added turn does not match")
-	}
+	session.IncrementTurnCount(100)
 
 	if session.UpdatedAt.Equal(originalUpdatedAt) {
 		t.Error("UpdatedAt was not updated")
@@ -117,37 +90,11 @@ func TestSession_AddTurn(t *testing.T) {
 	}
 }
 
-func TestSession_AddTurn_NilTurn(t *testing.T) {
-	session := NewSession("/test/workdir")
-
-	err := session.AddTurn(nil)
-	if err == nil {
-		t.Error("AddTurn(nil) should return error")
-	}
-
-	if len(session.Turns) != 0 {
-		t.Errorf("Turns length = %d, want 0", len(session.Turns))
-	}
-}
-
-func TestSession_AddTurn_Multiple(t *testing.T) {
+func TestSession_IncrementTurnCount_Multiple(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	for i := 1; i <= 5; i++ {
-		turn := &Turn{
-			ID:        fmt.Sprintf("turn-%d", i),
-			SessionID: session.ID,
-			Tokens:    TokenUsage{TotalTokens: i * 100},
-		}
-
-		err := session.AddTurn(turn)
-		if err != nil {
-			t.Fatalf("AddTurn() error = %v", err)
-		}
-	}
-
-	if len(session.Turns) != 5 {
-		t.Errorf("Turns length = %d, want 5", len(session.Turns))
+		session.IncrementTurnCount(i * 100)
 	}
 
 	if session.Metadata.TotalTurns != 5 {
@@ -157,73 +104,6 @@ func TestSession_AddTurn_Multiple(t *testing.T) {
 	expectedTokens := 100 + 200 + 300 + 400 + 500
 	if session.Metadata.TokensUsed != expectedTokens {
 		t.Errorf("Metadata.TokensUsed = %d, want %d", session.Metadata.TokensUsed, expectedTokens)
-	}
-}
-
-func TestSession_GetTurn(t *testing.T) {
-	session := NewSession("/test/workdir")
-
-	turn1 := &Turn{ID: "turn-1", SessionID: session.ID}
-	turn2 := &Turn{ID: "turn-2", SessionID: session.ID}
-
-	_ = session.AddTurn(turn1)
-	_ = session.AddTurn(turn2)
-
-	got, err := session.GetTurn("turn-1")
-	if err != nil {
-		t.Fatalf("GetTurn() error = %v", err)
-	}
-
-	if got != turn1 {
-		t.Error("GetTurn() returned wrong turn")
-	}
-}
-
-func TestSession_GetTurn_NotFound(t *testing.T) {
-	session := NewSession("/test/workdir")
-
-	_, err := session.GetTurn("nonexistent")
-	if err == nil {
-		t.Error("GetTurn() should return error for nonexistent turn")
-	}
-}
-
-func TestSession_LastTurn(t *testing.T) {
-	session := NewSession("/test/workdir")
-
-	turn1 := &Turn{ID: "turn-1", SessionID: session.ID}
-	turn2 := &Turn{ID: "turn-2", SessionID: session.ID}
-
-	_ = session.AddTurn(turn1)
-	_ = session.AddTurn(turn2)
-
-	last := session.LastTurn()
-	if last != turn2 {
-		t.Error("LastTurn() returned wrong turn")
-	}
-}
-
-func TestSession_LastTurn_EmptySession(t *testing.T) {
-	session := NewSession("/test/workdir")
-
-	last := session.LastTurn()
-	if last != nil {
-		t.Error("LastTurn() should return nil for empty session")
-	}
-}
-
-func TestSession_TurnCount(t *testing.T) {
-	session := NewSession("/test/workdir")
-
-	if session.TurnCount() != 0 {
-		t.Errorf("TurnCount() = %d, want 0", session.TurnCount())
-	}
-
-	session.AddTurn(&Turn{ID: "turn-1", SessionID: session.ID})
-	session.AddTurn(&Turn{ID: "turn-2", SessionID: session.ID})
-
-	if session.TurnCount() != 2 {
-		t.Errorf("TurnCount() = %d, want 2", session.TurnCount())
 	}
 }
 
@@ -391,77 +271,16 @@ func TestSession_Validate_InvalidState(t *testing.T) {
 	}
 }
 
-func TestSession_Validate_DuplicateTurnIDs(t *testing.T) {
-	session := NewSession("/test/workdir")
-
-	turn1 := &Turn{ID: "turn-1", SessionID: session.ID}
-	turn2 := &Turn{ID: "turn-1", SessionID: session.ID} // Duplicate ID
-
-	_ = session.AddTurn(turn1)
-	_ = session.AddTurn(turn2)
-
-	err := session.Validate()
-	if err == nil {
-		t.Error("Validate() should return error for duplicate turn IDs")
-	}
-}
-
-func TestSession_Validate_InconsistentMetadata(t *testing.T) {
-	session := NewSession("/test/workdir")
-
-	session.AddTurn(&Turn{ID: "turn-1", SessionID: session.ID, Tokens: TokenUsage{TotalTokens: 100}})
-	session.AddTurn(&Turn{ID: "turn-2", SessionID: session.ID, Tokens: TokenUsage{TotalTokens: 200}})
-
-	// Manually corrupt metadata
-	session.Metadata.TotalTurns = 5 // Wrong count
-
-	err := session.Validate()
-	if err == nil {
-		t.Error("Validate() should return error for inconsistent metadata")
-	}
-}
-
 // Test Concurrent Access
 
-func TestSession_ConcurrentReads(t *testing.T) {
-	session := NewSession("/test/workdir")
-
-	for i := 0; i < 10; i++ {
-		session.AddTurn(&Turn{
-			ID:        fmt.Sprintf("turn-%d", i),
-			SessionID: session.ID,
-		})
-	}
-
-	// Start multiple concurrent readers
-	done := make(chan bool)
-	for i := 0; i < 10; i++ {
-		go func() {
-			for j := 0; j < 100; j++ {
-				_ = session.TurnCount()
-				_ = session.LastTurn()
-			}
-			done <- true
-		}()
-	}
-
-	// Wait for all readers to complete
-	for i := 0; i < 10; i++ {
-		<-done
-	}
-}
-
-func TestSession_ConcurrentWrites(t *testing.T) {
+func TestSession_ConcurrentMetadataUpdates(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {
 		go func(n int) {
 			for j := 0; j < 10; j++ {
-				session.AddTurn(&Turn{
-					ID:        fmt.Sprintf("turn-%d-%d", n, j),
-					SessionID: session.ID,
-				})
+				session.IncrementTurnCount(100)
 			}
 			done <- true
 		}(i)
@@ -472,48 +291,38 @@ func TestSession_ConcurrentWrites(t *testing.T) {
 		<-done
 	}
 
-	// Should have exactly 100 turns
-	if session.TurnCount() != 100 {
-		t.Errorf("TurnCount() = %d, want 100", session.TurnCount())
+	// Should have exactly 100 turn increments
+	if session.Metadata.TotalTurns != 100 {
+		t.Errorf("TotalTurns = %d, want 100", session.Metadata.TotalTurns)
+	}
+
+	if session.Metadata.TokensUsed != 10000 {
+		t.Errorf("TokensUsed = %d, want 10000", session.Metadata.TokensUsed)
 	}
 }
 
-func TestSession_ConcurrentReadWrite(t *testing.T) {
+func TestSession_ConcurrentTagOperations(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	done := make(chan bool)
 
-	// Writers
+	// Add tags concurrently
 	for i := 0; i < 5; i++ {
 		go func(n int) {
-			for j := 0; j < 20; j++ {
-				session.AddTurn(&Turn{
-					ID:        fmt.Sprintf("turn-%d-%d", n, j),
-					SessionID: session.ID,
-				})
+			for j := 0; j < 10; j++ {
+				session.AddTag("tag")
 			}
 			done <- true
 		}(i)
 	}
 
-	// Readers
-	for i := 0; i < 5; i++ {
-		go func() {
-			for j := 0; j < 100; j++ {
-				_ = session.TurnCount()
-				_ = session.LastTurn()
-			}
-			done <- true
-		}()
-	}
-
 	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 5; i++ {
 		<-done
 	}
 
-	// Should have exactly 100 turns
-	if session.TurnCount() != 100 {
-		t.Errorf("TurnCount() = %d, want 100", session.TurnCount())
+	// Should have exactly 1 tag (duplicates ignored)
+	if len(session.Metadata.Tags) != 1 {
+		t.Errorf("Tags length = %d, want 1", len(session.Metadata.Tags))
 	}
 }
