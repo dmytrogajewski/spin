@@ -14,6 +14,7 @@ var (
 	flagConfigFile string
 	flagConfig     []string
 	flagTaskMode   string
+	flagAgentsMD   string
 )
 
 // newRootCmd creates the root command for spin CLI.
@@ -47,6 +48,7 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 	cmd.PersistentFlags().StringVar(&flagConfigFile, "config-file", "", "Path to configuration file")
 	cmd.PersistentFlags().StringSliceVarP(&flagConfig, "config", "c", nil, "Config overrides (key=value)")
 	cmd.PersistentFlags().StringVarP(&flagTaskMode, "mode", "m", "regular", "Task mode: regular (full-featured, 16K tokens), review (read-only, 12K tokens), compact (minimal, 4K tokens), planning (context-only, 4K tokens)")
+	cmd.PersistentFlags().StringVar(&flagAgentsMD, "agents-md", "", "Path to AGENTS.md file (overrides auto-discovery)")
 
 	// Add commands
 	cmd.AddCommand(newTUICmd()) // TUI mode (Phase 7.4 complete!)

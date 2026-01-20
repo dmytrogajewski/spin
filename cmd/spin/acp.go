@@ -100,6 +100,11 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 		return fmt.Errorf("load config: %w", err)
 	}
 
+	// Apply --agents-md flag override
+	if flagAgentsMD != "" {
+		cfg.AgentsMD.Path = flagAgentsMD
+	}
+
 	ctx := context.Background()
 	provider, err := buildProviderForACP(
 		ctx,

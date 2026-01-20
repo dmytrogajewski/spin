@@ -95,6 +95,11 @@ func bindEnvVars(v *viper.Viper) {
 	_ = v.BindEnv("protocol.enable_git")
 	_ = v.BindEnv("protocol.enable_shell")
 	_ = v.BindEnv("protocol.shell_timeout")
+
+	// AgentsMD fields
+	_ = v.BindEnv("agents_md.enabled")
+	_ = v.BindEnv("agents_md.path")
+	_ = v.BindEnv("agents_md.max_size")
 }
 
 // LoadFromFile loads configuration from a specific YAML file.
@@ -242,6 +247,19 @@ func (l *LoaderV2) applyDefaults(cfg *ConfigV2) {
 		if !l.viper.IsSet("protocol.shell_timeout") {
 			cfg.Protocol.ShellTimeout = defaults.Protocol.ShellTimeout
 		}
+	}
+
+	// Apply AgentsMD defaults
+	if !l.viper.IsSet("agents_md") {
+		cfg.AgentsMD = defaults.AgentsMD
+	} else {
+		if !l.viper.IsSet("agents_md.enabled") {
+			cfg.AgentsMD.Enabled = defaults.AgentsMD.Enabled
+		}
+		if !l.viper.IsSet("agents_md.max_size") {
+			cfg.AgentsMD.MaxSize = defaults.AgentsMD.MaxSize
+		}
+		// Path default is empty string (auto-discover), no need to apply
 	}
 }
 

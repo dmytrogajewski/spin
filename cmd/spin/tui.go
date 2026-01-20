@@ -87,6 +87,11 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
+	// Apply --agents-md flag override
+	if flagAgentsMD != "" {
+		cfg.AgentsMD.Path = flagAgentsMD
+	}
+
 	authMgr := createAuthManager()
 	provider, err := buildProvider(ctx, cfg, authMgr)
 	if err != nil {

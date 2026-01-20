@@ -59,6 +59,21 @@ type ConfigV2 struct {
 	ACE      ACEConfigV2      `yaml:"ace" mapstructure:"ace"`
 	Security SecurityConfigV2 `yaml:"security" mapstructure:"security"`
 	Protocol ProtocolConfigV2 `yaml:"protocol" mapstructure:"protocol"`
+	AgentsMD AgentsMDConfigV2 `yaml:"agents_md" mapstructure:"agents_md"`
+}
+
+// AgentsMDConfigV2 configures AGENTS.md project instructions support.
+type AgentsMDConfigV2 struct {
+	// Enabled controls whether AGENTS.md is loaded (default: true)
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
+
+	// Path specifies a custom path to AGENTS.md.
+	// If empty, auto-discovery is used.
+	Path string `yaml:"path" mapstructure:"path"`
+
+	// MaxSize is the maximum file size in bytes (default: 100KB)
+	// Files larger than this are truncated with a warning.
+	MaxSize int64 `yaml:"max_size" mapstructure:"max_size"`
 }
 
 // LLMConfigV2 configures the LLM provider.
@@ -178,8 +193,20 @@ func (c *ConfigV2) Validate() error {
 	if err := c.Protocol.Validate(); err != nil {
 		errs.Add(err)
 	}
+	if err := c.AgentsMD.Validate(); err != nil {
+		errs.Add(err)
+	}
 
 	return errs.ToError()
+}
+
+// Validate performs validation on the AgentsMD configuration.
+func (a *AgentsMDConfigV2) Validate() error {
+	// MaxSize validation: if negative, treat as no limit
+	if a.MaxSize < 0 {
+		a.MaxSize = 0
+	}
+	return nil
 }
 
 // Validate performs validation on the LLM configuration.
@@ -370,6 +397,11 @@ func DefaultConfigV2() *ConfigV2 {
 			EnableGit:    true,
 			EnableShell:  true,
 			ShellTimeout: 5 * time.Minute,
+		},
+		AgentsMD: AgentsMDConfigV2{
+			Enabled: true,
+			Path:    "",         // Auto-discover
+			MaxSize: 100 * 1024, // 100KB
 		},
 	}
 }

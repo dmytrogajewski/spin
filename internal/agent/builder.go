@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	"github.com/dmytrogajewski/spin/internal/agentsmd"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/cycle"
 	"github.com/dmytrogajewski/spin/internal/detection"
@@ -336,4 +337,21 @@ func (b *Builder) BuildACEService() (*ACEService, error) {
 	}
 
 	return NewACEService(aceConfig, b.workingDir, b.provider, b.getModel(), b.getMaxTokens())
+}
+
+// BuildAgentsMDService creates AGENTS.md service if enabled.
+// This is a public helper for use by conversation package.
+// gitRoot is optional; pass empty string if not in a git repository.
+func (b *Builder) BuildAgentsMDService(gitRoot string) *agentsmd.Service {
+	if !b.config.AgentsMD.Enabled {
+		return nil
+	}
+
+	cfg := &agentsmd.Config{
+		Enabled: b.config.AgentsMD.Enabled,
+		Path:    b.config.AgentsMD.Path,
+		MaxSize: b.config.AgentsMD.MaxSize,
+	}
+
+	return agentsmd.NewService(cfg, b.workingDir, gitRoot)
 }

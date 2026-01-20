@@ -1,6 +1,7 @@
 package conversation
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
@@ -73,6 +74,31 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 			opts = append(opts, agent.WithACEConfig(aceConfig))
 			if b.logger != nil {
 				b.logger.Info("ACE enabled", "playbook", b.cfg.ACE.PlaybookPath, "model", b.cfg.LLM.Model)
+			}
+		}
+	}
+
+	// AGENTS.md service using builder helper
+	if b.cfg != nil && b.cfg.AgentsMD.Enabled {
+		// Get git root for discovery
+		gitRoot := ""
+		if b.gitService != nil && b.gitService.IsRepository() {
+			if repo := b.gitService.GetIntegration().GetRepository(); repo != nil {
+				gitRoot = repo.Root()
+			}
+		}
+		agentsMDSvc := agentBuilder.BuildAgentsMDService(gitRoot)
+		if agentsMDSvc != nil {
+			// Load AGENTS.md content (errors are logged but don't fail startup)
+			if err := agentsMDSvc.Load(context.Background()); err != nil {
+				if b.logger != nil {
+					b.logger.Warn("failed to load AGENTS.md", "error", err)
+				}
+			} else if agentsMDSvc.IsLoaded() {
+				opts = append(opts, agent.WithAgentsMDService(agentsMDSvc))
+				if b.logger != nil {
+					b.logger.Info("AGENTS.md loaded", "path", agentsMDSvc.Path())
+				}
 			}
 		}
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
+	"github.com/dmytrogajewski/spin/internal/agentsmd"
 	"github.com/dmytrogajewski/spin/internal/detection"
 	spinerrors "github.com/dmytrogajewski/spin/internal/errors"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -61,7 +62,8 @@ type Agent struct {
 	detection       *detection.DetectionService
 	toolRuntime     *ToolRuntime
 	planningService *planning.PlanningService
-	aceService      *ACEService // ACE (Agentic Context Engineering) - optional
+	aceService      *ACEService       // ACE (Agentic Context Engineering) - optional
+	agentsMD        *agentsmd.Service // AGENTS.md project instructions - optional
 
 	// Infrastructure
 	context     *Environment
@@ -95,6 +97,15 @@ func WithACEService(aceService *ACEService) AgentOption {
 func WithACEConfig(aceConfig *ACEConfig) AgentOption {
 	return func(a *Agent) error {
 		a.aceConfig = aceConfig
+		return nil
+	}
+}
+
+// WithAgentsMDService sets the AGENTS.md service for the agent.
+// If not provided, agent will operate without project-specific instructions.
+func WithAgentsMDService(svc *agentsmd.Service) AgentOption {
+	return func(a *Agent) error {
+		a.agentsMD = svc
 		return nil
 	}
 }
@@ -767,11 +778,30 @@ func (a *Agent) callLLM(ctx context.Context, messages []message.Message, t task.
 	// Start with system message from task
 	openaiMessages := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages)+1)
 
-	// Add system prompt with thinking instructions
+	// Build system prompt with proper layering:
+	// 1. AGENTS.md project instructions (if available)
+	// 2. Task system prompt
+	// 3. Thinking instructions
+	// 4. ACE bullets (if enabled)
+	var promptBuilder strings.Builder
+
+	// 1. AGENTS.md project instructions (placed first for context)
+	if a.agentsMD != nil && a.agentsMD.IsLoaded() {
+		promptBuilder.WriteString("# Project Instructions\n\n")
+		promptBuilder.WriteString(a.agentsMD.Content())
+		promptBuilder.WriteString("\n\n---\n\n")
+		slog.Debug("injected AGENTS.md into system prompt", "path", a.agentsMD.Path(), "size", len(a.agentsMD.Content()))
+	}
+
+	// 2. Task system prompt
 	systemPrompt := t.SystemPrompt()
 	if systemPrompt != "" {
-		// Add thinking instructions to the system prompt
-		enhancedSystemPrompt := systemPrompt + `
+		promptBuilder.WriteString(systemPrompt)
+	}
+
+	// 3. Thinking instructions
+	if promptBuilder.Len() > 0 {
+		promptBuilder.WriteString(`
 
 IMPORTANT: When you need to think through a problem or reason about your approach, wrap your thinking process in <think> and </think> tags. This helps users understand your reasoning process. For example:
 
@@ -779,9 +809,13 @@ IMPORTANT: When you need to think through a problem or reason about your approac
 I need to analyze this code to understand what it does. Let me break down the function step by step...
 </think>
 
-Then provide your response after the thinking block.`
+Then provide your response after the thinking block.`)
+	}
 
-		// ACE: Enhance system prompt with retrieved bullets
+	enhancedSystemPrompt := promptBuilder.String()
+
+	// 4. ACE: Enhance system prompt with retrieved bullets
+	if enhancedSystemPrompt != "" {
 		if a.aceService != nil {
 			acePrompt, err := a.aceService.BuildPrompt(ctx, enhancedSystemPrompt, bullets)
 			if err != nil {
