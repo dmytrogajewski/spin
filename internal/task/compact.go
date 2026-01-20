@@ -29,11 +29,28 @@ type Compact struct {
 	maxTokens    int
 }
 
+// CompactSystemPrompt is the system prompt for compact mode.
+// Optimized for quick, focused tasks with minimal token usage.
+const CompactSystemPrompt = `You are a fast, efficient coding assistant optimized for quick tasks.
+
+# Constraints
+
+- Limited tool access: read_file, list_directory, file_search, get_context
+- No file modification or command execution in this mode
+- Keep responses brief and focused
+
+# Guidelines
+
+1. Answer questions directly without lengthy explanations
+2. When searching, use precise patterns to minimize results
+3. Provide code references (file:line) rather than full code blocks
+4. If a task requires file modification, inform the user to switch to regular mode`
+
 // NewCompact creates a new Compact task instance.
 func NewCompact() *Compact {
 	return &Compact{
 		name:         "compact",
-		systemPrompt: "You are a fast, efficient coding assistant. Provide concise responses and focus on essential information only.",
+		systemPrompt: CompactSystemPrompt,
 		maxTokens:    DefaultCompactMaxTokens,
 	}
 }

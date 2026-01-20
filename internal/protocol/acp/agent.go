@@ -50,7 +50,7 @@ type SpinACPAgent struct {
 	emitter         *events.EventEmitter
 	approvalService *security.ApprovalService // Optional approval service for permission requests
 	approvalHandler *ACPApprovalHandler       // ACP-specific approval handler
-	clientCaps      *acp.ClientCapabilities   // Stored a  fter Initialize
+	clientCaps      *acp.ClientCapabilities   // Stored after Initialize
 	sessions        map[acp.SessionId]*session.Session
 	sessionModes    map[acp.SessionId]acp.SessionModeId    // Current mode per session
 	storage         session.Storage                        // Optional session storage for persistence
@@ -59,6 +59,7 @@ type SpinACPAgent struct {
 	cancels         map[acp.SessionId]context.CancelFunc   // Cancel functions for in-progress prompt executions
 	convManager     *conversation.Manager                  // Manages conversations per session
 	transformers    map[acp.SessionId]*ACPEventTransformer // Event transformers per session
+	acpRuntime      *runtime.ACPRuntime                    // ACP runtime for tool registration
 	mu              sync.RWMutex                           // Protects sessions map, sessionModes, connection, cancels, and transformers
 }
 
@@ -163,6 +164,15 @@ func (a *SpinACPAgent) SetApprovalHandler(handler *ACPApprovalHandler) {
 	a.approvalHandler = handler
 }
 
+// SetACPRuntime sets the ACP runtime for dynamic tool registration.
+// This allows Initialize to update the runtime with client capabilities
+// and re-register tools based on client support.
+func (a *SpinACPAgent) SetACPRuntime(rt *runtime.ACPRuntime) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.acpRuntime = rt
+}
+
 // Initialize establishes connection and negotiates capabilities.
 //
 // Negotiates protocol version, advertises agent capabilities based on Spin's
@@ -176,6 +186,20 @@ func (a *SpinACPAgent) Initialize(ctx context.Context, req acp.InitializeRequest
 
 	// Store client capabilities
 	a.clientCaps = &req.ClientCapabilities
+
+	// Update runtime with client capabilities and re-register tools
+	// This is necessary because tools are registered before Initialize is called,
+	// so filesystem tools are not registered if client capabilities were unknown.
+	a.mu.RLock()
+	rt := a.acpRuntime
+	a.mu.RUnlock()
+	if rt != nil {
+		rt.SetClientCapabilities(&req.ClientCapabilities)
+		// Re-register tools now that we know client capabilities
+		if toolRuntime := a.agent.GetToolRuntime(); toolRuntime != nil {
+			rt.RegisterTools(toolRuntime.Registry())
+		}
+	}
 
 	// Build agent info
 	agentInfo := &acp.Implementation{
@@ -333,9 +357,9 @@ func convertACPMcpServerToSpin(acpServer acp.McpServer) (mcp.MCPServerConfig, er
 
 // Prompt processes a user prompt and executes the agent loop.
 func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.PromptResponse, error) {
-	// Validate session exists
+	// Validate session exists and get session data
 	a.mu.RLock()
-	_, exists := a.sessions[req.SessionId]
+	sess, exists := a.sessions[req.SessionId]
 	a.mu.RUnlock()
 	if !exists {
 		return acp.PromptResponse{}, fmt.Errorf("session not found: %s", req.SessionId)
@@ -350,8 +374,11 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 	// This allows the Cancel method to cancel in-progress executions
 	promptCtx, cancel := context.WithCancel(ctx)
 
-	// Add session ID to context so it's available for tools (e.g. TerminalExecutor)
+	// Add session ID and workDir to context so they're available for tools (e.g. TerminalExecutor, filesystem tools)
 	promptCtx = runtime.ContextWithSessionID(promptCtx, string(req.SessionId))
+	if sess != nil && sess.WorkDir != "" {
+		promptCtx = runtime.ContextWithWorkDir(promptCtx, sess.WorkDir)
+	}
 
 	// Store cancel function so Cancel method can cancel this execution
 	a.mu.Lock()
@@ -419,7 +446,7 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 	a.mu.RLock()
 	approvalHandler := a.approvalHandler
 	convManager := a.convManager
-	sess := a.sessions[req.SessionId]
+	sess = a.sessions[req.SessionId]
 	a.mu.RUnlock()
 
 	// Set active session in approval handler for this prompt execution

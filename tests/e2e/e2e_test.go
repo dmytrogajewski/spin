@@ -187,7 +187,8 @@ func TestConfigCommands(t *testing.T) {
 func TestMCPCommands(t *testing.T) {
 	// Setup: ensure clean MCP state
 	homeDir, _ := os.UserHomeDir()
-	configPath := filepath.Join(homeDir, ".spin", "spin.yaml")
+	spinDir := filepath.Join(homeDir, ".spin")
+	configPath := filepath.Join(spinDir, "spin.yaml")
 	tempBackup := configPath + ".e2e-mcp-backup"
 
 	// Backup existing config
@@ -197,6 +198,18 @@ func TestMCPCommands(t *testing.T) {
 		}
 		defer os.Rename(tempBackup, configPath)
 	}
+
+	// Create .spin directory if it doesn't exist
+	if err := os.MkdirAll(spinDir, 0755); err != nil {
+		t.Fatalf("Failed to create .spin directory: %v", err)
+	}
+
+	// Create empty config file for MCP commands to work with
+	emptyConfig := []byte("# Spin configuration\n")
+	if err := os.WriteFile(configPath, emptyConfig, 0644); err != nil {
+		t.Fatalf("Failed to create empty config: %v", err)
+	}
+	defer os.Remove(configPath)
 
 	t.Run("mcp list empty", func(t *testing.T) {
 		stdout, stderr, err := runSpin(t, "mcp", "list")

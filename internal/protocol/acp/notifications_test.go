@@ -298,7 +298,7 @@ func TestConvertToolCallComplete_EmptyOutput(t *testing.T) {
 			ToolID:   "tool-123",
 			ToolName: "read_file",
 			Success:  true,
-			Output:    "", // Empty output
+			Output:   "", // Empty output
 		},
 	}
 
@@ -536,3 +536,82 @@ func TestConvertToolCallComplete_NonWriteFile_NoDiff(t *testing.T) {
 	// Verify no diff was generated (tracker should not have been used)
 }
 
+// TestConvertSystemEvent_Info tests that EventInfo is converted to agent thought.
+func TestConvertSystemEvent_Info(t *testing.T) {
+	event := events.Event{
+		Type:      events.EventInfo,
+		Timestamp: time.Now(),
+		Data: events.SystemEventData{
+			Level:   "info",
+			Message: "Context history compressed",
+			Details: "Messages: 150→100, Tokens: 8000→5600, Ratio: 30%",
+		},
+	}
+
+	update, ok := convertSystemEvent(event)
+
+	assert.True(t, ok, "should convert EventInfo")
+	assert.NotNil(t, update)
+	assert.NotNil(t, update.AgentThoughtChunk, "should be agent thought chunk")
+	assert.NotNil(t, update.AgentThoughtChunk.Content.Text, "should have text content")
+	assert.Contains(t, update.AgentThoughtChunk.Content.Text.Text, "[info]")
+	assert.Contains(t, update.AgentThoughtChunk.Content.Text.Text, "Context history compressed")
+	assert.Contains(t, update.AgentThoughtChunk.Content.Text.Text, "Messages: 150→100")
+}
+
+// TestConvertSystemEvent_Warning tests that EventWarning is converted to agent thought.
+func TestConvertSystemEvent_Warning(t *testing.T) {
+	event := events.Event{
+		Type:      events.EventWarning,
+		Timestamp: time.Now(),
+		Data: events.SystemEventData{
+			Level:   "warning",
+			Message: "Cycle detected: repeated tool calls",
+			Details: "Tool 'read_file' called 5 times in a row",
+		},
+	}
+
+	update, ok := convertSystemEvent(event)
+
+	assert.True(t, ok, "should convert EventWarning")
+	assert.NotNil(t, update)
+	assert.NotNil(t, update.AgentThoughtChunk, "should be agent thought chunk")
+	assert.NotNil(t, update.AgentThoughtChunk.Content.Text, "should have text content")
+	assert.Contains(t, update.AgentThoughtChunk.Content.Text.Text, "[warning]")
+	assert.Contains(t, update.AgentThoughtChunk.Content.Text.Text, "Cycle detected")
+}
+
+// TestConvertSystemEvent_NoDetails tests system event without details.
+func TestConvertSystemEvent_NoDetails(t *testing.T) {
+	event := events.Event{
+		Type:      events.EventInfo,
+		Timestamp: time.Now(),
+		Data: events.SystemEventData{
+			Level:   "info",
+			Message: "Simple message",
+		},
+	}
+
+	update, ok := convertSystemEvent(event)
+
+	assert.True(t, ok, "should convert EventInfo without details")
+	assert.NotNil(t, update)
+	assert.NotNil(t, update.AgentThoughtChunk, "should be agent thought chunk")
+	assert.NotNil(t, update.AgentThoughtChunk.Content.Text, "should have text content")
+	assert.Contains(t, update.AgentThoughtChunk.Content.Text.Text, "[info] Simple message")
+	assert.NotContains(t, update.AgentThoughtChunk.Content.Text.Text, "—")
+}
+
+// TestConvertSystemEvent_InvalidData tests system event with invalid data type.
+func TestConvertSystemEvent_InvalidData(t *testing.T) {
+	event := events.Event{
+		Type:      events.EventInfo,
+		Timestamp: time.Now(),
+		Data:      "not a SystemEventData",
+	}
+
+	update, ok := convertSystemEvent(event)
+
+	assert.False(t, ok, "should not convert event with invalid data type")
+	assert.Equal(t, acp.SessionUpdate{}, update)
+}

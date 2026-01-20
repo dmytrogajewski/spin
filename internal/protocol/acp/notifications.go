@@ -103,6 +103,35 @@ func convertEventToSessionUpdate(event events.Event, tracker *fileContentTracker
 	}
 }
 
+// convertSystemEvent converts EventInfo/EventWarning to an ACP SessionUpdate.
+// System events (like context compression notifications) are sent as agent messages
+// with a special format that clients can recognize and display appropriately.
+func convertSystemEvent(event events.Event) (acp.SessionUpdate, bool) {
+	data, ok := event.SystemEventData()
+	if !ok {
+		return acp.SessionUpdate{}, false
+	}
+
+	// Format the system message with level prefix and details
+	var message string
+	switch data.Level {
+	case "warning", "warn":
+		message = "[warning] " + data.Message
+	case "error":
+		message = "[error] " + data.Message
+	default:
+		message = "[info] " + data.Message
+	}
+
+	if data.Details != "" {
+		message += " — " + data.Details
+	}
+
+	// Send as agent thought (dimmed/secondary display) to distinguish from main content
+	update := acp.UpdateAgentThoughtText(message + "\n")
+	return update, true
+}
+
 // convertContentDelta converts EventContentDelta to agent_message_chunk.
 func convertContentDelta(event events.Event) (acp.SessionUpdate, bool) {
 	data, ok := event.ContentDeltaData()

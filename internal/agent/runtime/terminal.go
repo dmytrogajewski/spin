@@ -39,6 +39,7 @@ type ExitStatus struct {
 type contextKey string
 
 const sessionIDKey contextKey = "acp_session_id"
+const workDirKey contextKey = "acp_work_dir"
 
 // ContextWithSessionID returns a context with the session ID.
 func ContextWithSessionID(ctx context.Context, sessionID string) context.Context {
@@ -48,6 +49,19 @@ func ContextWithSessionID(ctx context.Context, sessionID string) context.Context
 // GetSessionIDFromContext returns the session ID from the context.
 func GetSessionIDFromContext(ctx context.Context) string {
 	if val, ok := ctx.Value(sessionIDKey).(string); ok {
+		return val
+	}
+	return ""
+}
+
+// ContextWithWorkDir returns a context with the working directory.
+func ContextWithWorkDir(ctx context.Context, workDir string) context.Context {
+	return context.WithValue(ctx, workDirKey, workDir)
+}
+
+// GetWorkDirFromContext returns the working directory from the context.
+func GetWorkDirFromContext(ctx context.Context) string {
+	if val, ok := ctx.Value(workDirKey).(string); ok {
 		return val
 	}
 	return ""

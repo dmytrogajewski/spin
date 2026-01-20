@@ -124,7 +124,7 @@ agent:
 
 	// Verify defaults for unset fields
 	// ACE should have defaults since not specified
-	assert.True(t, cfg.ACE.Enabled, "ACE should be enabled by default")
+	assert.False(t, cfg.ACE.Enabled, "ACE should be disabled by default")
 	assert.Equal(t, "~/.spin/ace/playbooks/default.json", cfg.ACE.PlaybookPath)
 	assert.Equal(t, 5, cfg.ACE.TopK)
 
@@ -202,6 +202,15 @@ agent:
 // TestLoad_EmptySource tests that Load() with empty Source uses defaults.
 // Kills mutant: removing default application would make this test fail.
 func TestLoad_EmptySource(t *testing.T) {
+	// Change to temp dir to avoid picking up real config files
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	require.NoError(t, os.Chdir(tmpDir))
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	// Also set HOME to temp dir to avoid ~/.spin/spin.yaml
+	t.Setenv("HOME", tmpDir)
+
 	cfg, err := Load(Source{})
 	require.NoError(t, err, "Load with empty source should succeed")
 

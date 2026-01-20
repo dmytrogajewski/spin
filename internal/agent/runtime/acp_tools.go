@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/tools"
@@ -193,7 +194,7 @@ func (t *ACPReadFileTool) Name() string {
 }
 
 func (t *ACPReadFileTool) Description() string {
-	return "Read the contents of a file using ACP fs/read_text_file protocol"
+	return "Read the contents of a file. Use paths relative to the session working directory, or absolute paths within the workspace."
 }
 
 func (t *ACPReadFileTool) Schema() tools.ToolSchema {
@@ -207,7 +208,7 @@ func (t *ACPReadFileTool) Schema() tools.ToolSchema {
 				Properties: map[string]tools.PropertyDefinition{
 					"path": {
 						Type:        "string",
-						Description: "The absolute path to the file to read",
+						Description: "Path to the file. Use relative paths (e.g., 'src/main.py') or absolute paths within the session workspace. Paths outside the workspace are rejected.",
 					},
 				},
 				Required: []string{"path"},
@@ -232,8 +233,29 @@ func (t *ACPReadFileTool) Execute(ctx context.Context, params tools.ToolParamete
 		}, nil
 	}
 
-	content, err := t.runtime.filesystemClient.ReadTextFile(ctx, path, nil, nil)
+	// Resolve and validate the path
+	resolvedPath, err := t.resolvePathWithContext(ctx, path)
 	if err != nil {
+		return tools.ToolResult{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
+	}
+
+	content, err := t.runtime.filesystemClient.ReadTextFile(ctx, resolvedPath, nil, nil)
+	if err != nil {
+		// Provide helpful error message for path-related errors
+		errMsg := err.Error()
+		workDir := GetWorkDirFromContext(ctx)
+		if workDir == "" {
+			workDir = t.runtime.workDir
+		}
+		if strings.Contains(errMsg, "invalid path") {
+			return tools.ToolResult{
+				Success: false,
+				Error:   fmt.Sprintf("failed to read file: path '%s' is outside the allowed workspace. Use a path within the session directory: %s", path, workDir),
+			}, nil
+		}
 		return tools.ToolResult{
 			Success: false,
 			Error:   fmt.Sprintf("failed to read file: %v", err),
@@ -244,6 +266,34 @@ func (t *ACPReadFileTool) Execute(ctx context.Context, params tools.ToolParamete
 		Success: true,
 		Output:  content,
 	}, nil
+}
+
+// resolvePath resolves a path relative to the session working directory.
+// It handles both relative and absolute paths, ensuring the result is within the workspace.
+func (t *ACPReadFileTool) resolvePathWithContext(ctx context.Context, path string) (string, error) {
+	// Get workDir from context first (session-specific), fall back to runtime
+	workDir := GetWorkDirFromContext(ctx)
+	if workDir == "" {
+		workDir = t.runtime.workDir
+	}
+	if workDir == "" {
+		return "", fmt.Errorf("session working directory not set")
+	}
+
+	// If path is relative, resolve it against workDir
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(workDir, path)
+	}
+
+	// Clean the path to resolve any ".." components
+	cleanPath := filepath.Clean(path)
+
+	// Ensure the path is within the workspace
+	if !isPathWithinWorkspace(cleanPath, workDir) {
+		return "", fmt.Errorf("path '%s' is outside the allowed workspace (%s). Use relative paths or absolute paths within the workspace", path, workDir)
+	}
+
+	return cleanPath, nil
 }
 
 // ACPWriteFileTool exposes fs/write_text_file as a tool to the LLM.
@@ -263,7 +313,7 @@ func (t *ACPWriteFileTool) Name() string {
 }
 
 func (t *ACPWriteFileTool) Description() string {
-	return "Write content to a file using ACP fs/write_text_file protocol"
+	return "Write content to a file. Use paths relative to the session working directory, or absolute paths within the workspace."
 }
 
 func (t *ACPWriteFileTool) Schema() tools.ToolSchema {
@@ -277,7 +327,7 @@ func (t *ACPWriteFileTool) Schema() tools.ToolSchema {
 				Properties: map[string]tools.PropertyDefinition{
 					"path": {
 						Type:        "string",
-						Description: "The absolute path to the file to write",
+						Description: "Path to the file. Use relative paths (e.g., 'src/main.py') or absolute paths within the session workspace. Paths outside the workspace (like /tmp) are rejected.",
 					},
 					"content": {
 						Type:        "string",
@@ -314,8 +364,29 @@ func (t *ACPWriteFileTool) Execute(ctx context.Context, params tools.ToolParamet
 		}, nil
 	}
 
-	err = t.runtime.filesystemClient.WriteTextFile(ctx, path, content)
+	// Resolve and validate the path
+	resolvedPath, err := t.resolvePathWithContext(ctx, path)
 	if err != nil {
+		return tools.ToolResult{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
+	}
+
+	err = t.runtime.filesystemClient.WriteTextFile(ctx, resolvedPath, content)
+	if err != nil {
+		// Provide helpful error message for path-related errors
+		errMsg := err.Error()
+		workDir := GetWorkDirFromContext(ctx)
+		if workDir == "" {
+			workDir = t.runtime.workDir
+		}
+		if strings.Contains(errMsg, "invalid path") {
+			return tools.ToolResult{
+				Success: false,
+				Error:   fmt.Sprintf("failed to write file: path '%s' is outside the allowed workspace. Use a path within the session directory: %s", path, workDir),
+			}, nil
+		}
 		return tools.ToolResult{
 			Success: false,
 			Error:   fmt.Sprintf("failed to write file: %v", err),
@@ -324,6 +395,60 @@ func (t *ACPWriteFileTool) Execute(ctx context.Context, params tools.ToolParamet
 
 	return tools.ToolResult{
 		Success: true,
-		Output:  fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path),
+		Output:  fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), resolvedPath),
 	}, nil
+}
+
+// resolvePathWithContext resolves a path relative to the session working directory.
+// It handles both relative and absolute paths, ensuring the result is within the workspace.
+func (t *ACPWriteFileTool) resolvePathWithContext(ctx context.Context, path string) (string, error) {
+	// Get workDir from context first (session-specific), fall back to runtime
+	workDir := GetWorkDirFromContext(ctx)
+	if workDir == "" {
+		workDir = t.runtime.workDir
+	}
+	if workDir == "" {
+		return "", fmt.Errorf("session working directory not set")
+	}
+
+	// If path is relative, resolve it against workDir
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(workDir, path)
+	}
+
+	// Clean the path to resolve any ".." components
+	cleanPath := filepath.Clean(path)
+
+	// Ensure the path is within the workspace
+	if !isPathWithinWorkspace(cleanPath, workDir) {
+		return "", fmt.Errorf("path '%s' is outside the allowed workspace (%s). Use relative paths or absolute paths within the workspace", path, workDir)
+	}
+
+	return cleanPath, nil
+}
+
+// isPathWithinWorkspace checks if a path is within the workspace directory.
+// It handles symlinks and ".." path components.
+func isPathWithinWorkspace(path, workDir string) bool {
+	// Clean both paths
+	cleanPath := filepath.Clean(path)
+	cleanWorkDir := filepath.Clean(workDir)
+
+	// Check if path starts with workDir
+	// We need to ensure it's a proper prefix (not just string prefix)
+	// e.g., /home/user/workspace should match /home/user/workspace/file
+	// but not /home/user/workspace2/file
+	if !strings.HasPrefix(cleanPath, cleanWorkDir) {
+		return false
+	}
+
+	// Ensure it's a proper directory boundary
+	// Path must be exactly workDir or have a separator after workDir
+	if len(cleanPath) > len(cleanWorkDir) {
+		// Check that the next character is a path separator
+		return cleanPath[len(cleanWorkDir)] == filepath.Separator
+	}
+
+	// Path is exactly workDir
+	return true
 }

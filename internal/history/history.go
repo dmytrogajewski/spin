@@ -1,12 +1,14 @@
 package history
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/history/compress"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 	"github.com/google/uuid"
@@ -47,11 +49,36 @@ var (
 //	    history.Truncate(3000)
 //	}
 type History struct {
-	messages  []message.Message
-	maxTokens int
-	tokenizer tokenizer.Tokenizer
-	emitter   *events.EventEmitter
-	mu        sync.RWMutex
+	messages   []message.Message
+	maxTokens  int
+	tokenizer  tokenizer.Tokenizer
+	emitter    *events.EventEmitter
+	compressor compress.Compressor
+	config     CompressionConfig
+	mu         sync.RWMutex
+}
+
+// CompressionConfig configures automatic compression behavior.
+type CompressionConfig struct {
+	// Enabled enables automatic compression when threshold is reached.
+	Enabled bool
+
+	// Threshold is the fraction of maxTokens at which compression triggers (0.0-1.0).
+	// For example, 0.8 means compression triggers at 80% capacity.
+	Threshold float64
+
+	// TargetRatio is the target capacity after compression (0.0-1.0).
+	// For example, 0.7 means compress to 70% of maxTokens.
+	TargetRatio float64
+}
+
+// DefaultCompressionConfig returns sensible default compression settings.
+func DefaultCompressionConfig() CompressionConfig {
+	return CompressionConfig{
+		Enabled:     true,
+		Threshold:   0.8,
+		TargetRatio: 0.7,
+	}
 }
 
 // NewHistory creates a new history manager with the specified token budget.
@@ -80,6 +107,20 @@ func (h *History) SetEventEmitter(emitter *events.EventEmitter) {
 	h.emitter = emitter
 }
 
+// SetCompressor sets the compressor for automatic compression.
+func (h *History) SetCompressor(c compress.Compressor) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.compressor = c
+}
+
+// SetCompressionConfig sets the compression configuration.
+func (h *History) SetCompressionConfig(cfg CompressionConfig) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.config = cfg
+}
+
 // NewHistoryWithDefaults creates a history with sensible default values.
 //
 // Default settings:
@@ -93,6 +134,9 @@ func NewHistoryWithDefaults() *History {
 //
 // The message is validated before adding. Token count is automatically
 // calculated if not already set. This method is thread-safe.
+//
+// If compression is enabled and the token threshold is exceeded, automatic
+// compression is triggered after adding the message.
 //
 // Returns an error if the message is invalid (e.g., empty role).
 func (h *History) AddMessage(msg message.Message) error {
@@ -134,7 +178,84 @@ func (h *History) AddMessage(msg message.Message) error {
 
 	h.messages = append(h.messages, msg)
 
+	// Check if compression needed
+	if h.shouldCompressLocked() {
+		// Compression is best-effort; errors are logged but don't fail AddMessage
+		_ = h.compressLocked(context.Background())
+	}
+
 	return nil
+}
+
+// shouldCompressLocked checks if compression threshold is exceeded.
+// Must be called with lock held.
+func (h *History) shouldCompressLocked() bool {
+	if !h.config.Enabled || h.compressor == nil {
+		return false
+	}
+
+	totalTokens := h.tokenCountLocked()
+	threshold := int(float64(h.maxTokens) * h.config.Threshold)
+
+	return totalTokens > threshold
+}
+
+// compressLocked performs compression. Must be called with lock held.
+func (h *History) compressLocked(ctx context.Context) error {
+	if h.compressor == nil {
+		return nil
+	}
+
+	beforeCount := len(h.messages)
+	beforeTokens := h.tokenCountLocked()
+
+	// Calculate target tokens
+	targetTokens := int(float64(h.maxTokens) * h.config.TargetRatio)
+
+	// Perform compression
+	compressed, err := h.compressor.Compress(ctx, h.messages, targetTokens, h.tokenizer)
+	if err != nil {
+		return err
+	}
+
+	// Update messages
+	h.messages = compressed
+
+	afterCount := len(h.messages)
+	afterTokens := h.tokenCountLocked()
+
+	// Emit compression event
+	h.emitCompressionEventLocked(beforeCount, beforeTokens, afterCount, afterTokens)
+
+	return nil
+}
+
+// emitCompressionEventLocked sends compression statistics via event emitter.
+// Must be called with lock held.
+func (h *History) emitCompressionEventLocked(beforeCount, beforeTokens, afterCount, afterTokens int) {
+	if h.emitter == nil {
+		return
+	}
+
+	ratio := 0.0
+	if beforeCount > 0 {
+		ratio = float64(beforeCount-afterCount) / float64(beforeCount)
+	}
+
+	h.emitter.Emit(events.Event{
+		Type:      events.EventInfo,
+		Timestamp: time.Now(),
+		Data: events.SystemEventData{
+			Level:   "info",
+			Message: "Context history compressed",
+			Details: fmt.Sprintf(
+				"Messages: %d->%d, Tokens: %d->%d, Ratio: %.1f%%",
+				beforeCount, afterCount,
+				beforeTokens, afterTokens,
+				ratio*100,
+			),
+		},
+	})
 }
 
 // AddSystemMessage adds a system message to the history.

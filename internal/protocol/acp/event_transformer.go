@@ -123,6 +123,20 @@ func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event)
 		return true
 	}
 
+	// Handle system events (info, warning)
+	if event.Type == events.EventInfo || event.Type == events.EventWarning {
+		update, ok := convertSystemEvent(event)
+		if !ok {
+			return false
+		}
+		notification := acp.SessionNotification{
+			SessionId: t.sessionID,
+			Update:    update,
+		}
+		_ = t.connection.SessionUpdate(ctx, notification)
+		return true
+	}
+
 	// Convert other events to ACP notification
 	update, ok := convertEventToSessionUpdate(event, t.fileTracker)
 	if !ok {

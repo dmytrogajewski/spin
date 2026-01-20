@@ -143,7 +143,7 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	if flagConfigFile != "" {
 		cfgV2, errV2 = loaderV2.LoadFromFileWithEnv(flagConfigFile)
 	} else {
-		cfgV2, errV2 = loaderV2.LoadWithEnv()
+		cfgV2, errV2 = loaderV2.Load()
 	}
 
 	if errV2 != nil {
@@ -386,7 +386,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 	key := args[0]
 
 	loaderV2 := config.NewLoaderV2()
-	if _, err := loaderV2.LoadWithEnv(); err != nil {
+	if _, err := loaderV2.Load(); err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
@@ -405,7 +405,7 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 	value := args[1]
 
 	loaderV2 := config.NewLoaderV2()
-	if _, err := loaderV2.LoadWithEnv(); err != nil {
+	if _, err := loaderV2.Load(); err != nil {
 		// If config doesn't exist, that's okay - we'll create it
 		_ = err
 	}
@@ -426,10 +426,10 @@ version: "2.0"
 
 llm:
   # Provider: openai, anthropic, ollama, lmstudio, openai-compatible
-  provider: openai
+  provider: ollama
 
   # Model name
-  model: gpt-4o
+  model: qwen2.5-coder:7b
 
   # Temperature (0.0-2.0)
   temperature: 0.7
@@ -441,7 +441,7 @@ llm:
   timeout: 5m
 
   # API endpoint (optional, uses provider default)
-  # base_url: https://api.openai.com/v1
+  # base_url: http://localhost:11434/v1
 
   # Authentication (recommended: use keystore or environment variable)
   # api_key: ""
@@ -474,7 +474,7 @@ agent:
 
 ace:
   # Enable Agentic Context Engineering
-  enabled: true
+  enabled: false
 
   # Paths
   playbook_path: "~/.spin/ace/playbooks/default.json"

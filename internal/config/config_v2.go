@@ -350,7 +350,7 @@ func DefaultConfigV2() *ConfigV2 {
 			},
 		},
 		ACE: ACEConfigV2{
-			Enabled:        true,
+			Enabled:        false,
 			PlaybookPath:   "~/.spin/ace/playbooks/default.json",
 			TrajectoryPath: "~/.spin/ace/trajectories/",
 			TopK:           5,

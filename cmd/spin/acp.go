@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -30,11 +31,8 @@ import (
 // newACPCmd creates the ACP server command.
 func newACPCmd() *cobra.Command {
 	var (
-		workDir      string
-		providerType string
-		baseURL      string
-		model        string
-		apiKey       string
+		workDir string
+		apiKey  string
 	)
 
 	cmd := &cobra.Command{
@@ -51,31 +49,51 @@ Examples:
   spin acp --provider openai --model gpt-4
   spin acp --workspace /path/to/project`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runACPServer(workDir, providerType, baseURL, model, apiKey)
+			// Only pass flag values if they were explicitly set
+			providerType, _ := cmd.Flags().GetString("provider")
+			baseURL, _ := cmd.Flags().GetString("base-url")
+			model, _ := cmd.Flags().GetString("model")
+
+			// Check if flags were explicitly set by user
+			flagOverrides := config.FlagOverrides{}
+			if cmd.Flags().Changed("provider") {
+				flagOverrides.Provider = providerType
+			}
+			if cmd.Flags().Changed("model") {
+				flagOverrides.Model = model
+			}
+			if cmd.Flags().Changed("base-url") {
+				flagOverrides.BaseURL = baseURL
+			}
+
+			return runACPServer(workDir, flagOverrides, apiKey)
 		},
 	}
 
-	// Server-specific flags
+	// Server-specific flags (empty defaults - config file values take precedence)
 	cmd.Flags().StringVar(&workDir, "workspace", ".", "Workspace directory path")
-	cmd.Flags().StringVar(&providerType, "provider", "ollama", "LLM provider type (ollama, openai)")
-	cmd.Flags().StringVar(&baseURL, "base-url", "http://localhost:11434", "Provider base URL")
-	cmd.Flags().StringVar(&model, "model", "codellama:13b", "Model name")
+	cmd.Flags().String("provider", "", "LLM provider type (ollama, openai)")
+	cmd.Flags().String("base-url", "", "Provider base URL")
+	cmd.Flags().String("model", "", "Model name")
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key (for cloud providers)")
 
 	return cmd
 }
 
 // runACPServer starts the ACP server.
-func runACPServer(workDir, providerType, baseURL, model, apiKey string) error {
+func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey string) error {
+	// Ensure workDir is an absolute path
+	var err error
+	workDir, err = filepath.Abs(workDir)
+	if err != nil {
+		return fmt.Errorf("resolve workspace path: %w", err)
+	}
+
 	authMgr := createAuthManager()
 
 	cfg, err := config.Load(config.Source{
-		File: flagConfigFile,
-		Flags: config.FlagOverrides{
-			Provider: providerType,
-			Model:    model,
-			BaseURL:  baseURL,
-		},
+		File:    flagConfigFile,
+		Flags:   flagOverrides,
 		WorkDir: workDir,
 	})
 	if err != nil {
@@ -190,6 +208,7 @@ func runACPServer(workDir, providerType, baseURL, model, apiKey string) error {
 	acpAgent.SetHistoryStorage(histStorage)
 
 	acpRuntime.SetACPAgent(acpAgent)
+	acpAgent.SetACPRuntime(acpRuntime)
 	acpApprovalHandler := acppkg.NewACPApprovalHandler(acpAgent, 60*time.Second)
 	acpRuntime.SetApprovalHandler(acpApprovalHandler.HandleApprovalRequest)
 	acpAgent.SetApprovalHandler(acpApprovalHandler)
@@ -205,7 +224,7 @@ func runACPServer(workDir, providerType, baseURL, model, apiKey string) error {
 	defer cancel()
 
 	setupACPServerSignalHandling(cancel)
-	logACPServerStart(providerType, model, workDir)
+	logACPServerStart(cfg.LLM.Provider, cfg.LLM.Model, workDir)
 
 	select {
 	case <-conn.Done():

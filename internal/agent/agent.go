@@ -226,6 +226,12 @@ func (a *Agent) GetSecurityService() *security.SecurityService {
 	return a.security
 }
 
+// GetToolRuntime returns the agent's tool runtime.
+// This allows access to the tool registry for dynamic tool registration.
+func (a *Agent) GetToolRuntime() *ToolRuntime {
+	return a.toolRuntime
+}
+
 // SetApprovalService updates the approval service on the underlying orchestration service.
 // This is useful when the approval service needs to be configured after agent creation.
 func (a *Agent) SetApprovalService(service *security.ApprovalService) {

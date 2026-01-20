@@ -42,7 +42,7 @@ func NewLoaderV2() *LoaderV2 {
 	v := viper.New()
 
 	// Set config file properties
-	v.SetConfigName("config")
+	v.SetConfigName("spin")
 	v.SetConfigType("yaml")
 	v.AddConfigPath(".")
 	v.AddConfigPath("$HOME/.spin")
@@ -273,18 +273,22 @@ func (l *LoaderV2) AllSettings() map[string]interface{} {
 // Load loads and merges configuration from all sources.
 // Precedence: flags > env > file > defaults
 func Load(src Source) (*ConfigV2, error) {
-	// Start with defaults
-	cfg := DefaultConfigV2()
+	loader := NewLoaderV2()
+	var cfg *ConfigV2
+	var err error
 
-	// Load from file if specified
+	// Load from file if specified, otherwise search default paths
 	if src.File != "" {
-		loader := NewLoaderV2()
-		fileCfg, err := loader.LoadFromFile(src.File)
+		cfg, err = loader.LoadFromFile(src.File)
 		if err != nil {
 			return nil, fmt.Errorf("load config file: %w", err)
 		}
-		// Merge file config (overwrites defaults)
-		cfg = fileCfg
+	} else {
+		// Search default paths: ., ~/.spin, /etc/spin
+		cfg, err = loader.Load()
+		if err != nil {
+			return nil, fmt.Errorf("load config: %w", err)
+		}
 	}
 
 	// Apply flag overrides (before env so env knows the provider)
