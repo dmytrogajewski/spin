@@ -974,7 +974,10 @@ Then provide your response after the thinking block.`)
 	// Check if we have any choices (may be empty on timeout/error)
 	if len(response.Choices) == 0 {
 		slog.Warn("stream ended with no choices", "total_chunks", chunkCount)
-		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "no choices in response", nil)
+		if chunkCount == 0 {
+			return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "stream returned no chunks - possible connection error or empty response from LLM", nil)
+		}
+		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "no choices in response after processing chunks", nil)
 	}
 
 	slog.Debug("stream ended",

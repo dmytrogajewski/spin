@@ -120,25 +120,75 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 			currentTurnBullets = trajCtx.GetActiveBullets()
 		}
 
-		// Call LLM with timeout protection, passing retrieved bullets
-		llmResp, err := a.callLLMWithTimeout(ctx, messages, t, currentTurnBullets)
-		if err != nil {
-			slog.Error("LLM call failed", "turn", turn+1, "error", err)
-			resp.Error = fmt.Errorf("llm call failed: %w", err)
-			resp.FinishReason = "error"
-			return messages, resp, err
+		// Call LLM with timeout protection and retry on empty response
+		const maxEmptyRetries = 2
+		var llmResp *openai.ChatCompletion
+		var content string
+		var toolCalls []ToolCall
+		var finishReason string
+
+		for retry := 0; retry <= maxEmptyRetries; retry++ {
+			var err error
+			llmResp, err = a.callLLMWithTimeout(ctx, messages, t, currentTurnBullets)
+			if err != nil {
+				slog.Error("LLM call failed", "turn", turn+1, "retry", retry, "error", err)
+				resp.Error = fmt.Errorf("llm call failed: %w", err)
+				resp.FinishReason = "error"
+				return messages, resp, err
+			}
+
+			// Extract response data using helper functions
+			content = getContent(llmResp)
+			toolCalls = getToolCalls(llmResp)
+			finishReason = getFinishReason(llmResp)
+
+			// Check for empty response
+			if llmResp != nil && (content != "" || len(toolCalls) > 0) {
+				// Got a valid response, break out of retry loop
+				if retry > 0 {
+					slog.Info("LLM retry succeeded", "turn", turn+1, "retry", retry)
+				}
+				break
+			}
+
+			// Empty response - retry if we have attempts left
+			if retry < maxEmptyRetries {
+				slog.Warn("Received empty response from LLM, retrying",
+					"turn", turn+1, "retry", retry+1, "max_retries", maxEmptyRetries,
+					"llm_resp_nil", llmResp == nil, "content_len", len(content), "tool_calls", len(toolCalls))
+
+				// Brief pause before retry to avoid hammering the API
+				select {
+				case <-ctx.Done():
+					resp.FinishReason = "timeout"
+					return messages, resp, ctx.Err()
+				case <-time.After(500 * time.Millisecond):
+					// Continue to next retry
+				}
+				continue
+			}
+
+			// All retries exhausted - break the agent loop
+			slog.Warn("Received empty response from LLM after retries, breaking loop",
+				"turn", turn+1, "retries_exhausted", maxEmptyRetries,
+				"llm_resp_nil", llmResp == nil, "content_len", len(content), "tool_calls", len(toolCalls))
+			resp.FinishReason = "empty_response"
+
+			// Emit warning event so UI can show the error state
+			a.emitter.Emit(events.Event{
+				Type:      events.EventWarning,
+				Timestamp: time.Now(),
+				Data: events.SystemEventData{
+					Level:   "warning",
+					Message: "LLM returned empty response after retries",
+					Details: fmt.Sprintf("turn=%d, retries=%d", turn+1, maxEmptyRetries),
+				},
+			})
+			break
 		}
 
-		// Extract response data using helper functions
-		content := getContent(llmResp)
-		toolCalls := getToolCalls(llmResp)
-		finishReason := getFinishReason(llmResp)
-
-		// Check for empty response to prevent getting stuck
+		// If we exhausted retries and still have empty response, break outer loop
 		if llmResp == nil || (content == "" && len(toolCalls) == 0) {
-			slog.Warn("Received empty response from LLM, breaking loop to prevent stuck state",
-				"turn", turn+1, "llm_resp_nil", llmResp == nil, "content_len", len(content), "tool_calls", len(toolCalls))
-			resp.FinishReason = "empty_response"
 			break
 		}
 

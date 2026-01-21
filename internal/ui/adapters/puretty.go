@@ -213,6 +213,13 @@ func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 		p.coord.SetScrollManager(p.statusRenderer)
 	}
 
+	// Set up spinner callback to trigger status bar refresh on animation frames
+	if p.statusManager != nil && !p.execMode {
+		p.statusManager.SetSpinnerCallback(func() {
+			p.updateStatusBar()
+		})
+	}
+
 	return p, nil
 }
 
@@ -329,6 +336,11 @@ func (u *PureTTY) Stop() error {
 
 	if u.stopped {
 		return nil // Already stopped
+	}
+
+	// Stop spinner animation
+	if u.statusManager != nil {
+		u.statusManager.StopSpinner()
 	}
 
 	// Cancel context to stop goroutines

@@ -42,7 +42,8 @@ type Builder struct {
 	logger       *slog.Logger
 
 	// Managed resources
-	authManager *auth.Manager
+	authManager   *auth.Manager
+	memoryService *MemoryService
 }
 
 // NewBuilder creates a new Conversation builder with required dependencies.
@@ -125,15 +126,20 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	// Enrich environment with Git/Shell context (conversation-level concern)
 	b.enrichEnvironmentWithIntegrations(env)
 
+	// Create session early (ID is needed for memory initialization)
+	sess := session.NewSession(b.workDir)
+	logger.Info("session created", "session_id", sess.ID)
+
+	// Initialize memory services if configured
+	if err := b.initializeMemory(sess.ID); err != nil {
+		return nil, fmt.Errorf("initialize memory: %w", err)
+	}
+
 	// Build agent (orchestration handled by conversation)
 	agentInstance, err := b.buildAgent(exec, env)
 	if err != nil {
 		return nil, fmt.Errorf("build agent: %w", err)
 	}
-
-	// Create session (ID is string - standardized UUID generation)
-	sess := session.NewSession(b.workDir)
-	logger.Info("session created", "session_id", sess.ID)
 
 	// Create history
 	hist := b.createHistory()
@@ -144,15 +150,16 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 
 	// Build the Conversation with unified ID
 	conv := &Conversation{
-		gitService:   b.gitService,
-		shellService: b.shellService,
-		mcpService:   b.mcpService,
-		agent:        agentInstance,
-		history:      hist,
-		emitter:      b.emitter,
-		taskMode:     "regular",
-		id:           convID,
-		workDir:      b.workDir,
+		gitService:    b.gitService,
+		shellService:  b.shellService,
+		mcpService:    b.mcpService,
+		memoryService: b.memoryService,
+		agent:         agentInstance,
+		history:       hist,
+		emitter:       b.emitter,
+		taskMode:      "regular",
+		id:            convID,
+		workDir:       b.workDir,
 	}
 
 	// Attach JSONL event logger if debug mode

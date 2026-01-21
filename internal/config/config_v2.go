@@ -60,6 +60,7 @@ type ConfigV2 struct {
 	Security SecurityConfigV2 `yaml:"security" mapstructure:"security"`
 	Protocol ProtocolConfigV2 `yaml:"protocol" mapstructure:"protocol"`
 	AgentsMD AgentsMDConfigV2 `yaml:"agents_md" mapstructure:"agents_md"`
+	Memory   MemoryConfigV2   `yaml:"memory" mapstructure:"memory"`
 }
 
 // AgentsMDConfigV2 configures AGENTS.md project instructions support.
@@ -173,6 +174,36 @@ type CycleDetectionConfigV2 struct {
 	ErrorRepeatLimit int `yaml:"error_repeat_limit" mapstructure:"error_repeat_limit"`
 }
 
+// MemoryConfigV2 configures context offloading memory storage.
+type MemoryConfigV2 struct {
+	// Scratchpad configures session-scoped ephemeral memory
+	Scratchpad ScratchpadConfigV2 `yaml:"scratchpad" mapstructure:"scratchpad"`
+
+	// Persistent configures cross-session persistent memory
+	Persistent PersistentMemoryConfigV2 `yaml:"persistent" mapstructure:"persistent"`
+}
+
+// ScratchpadConfigV2 configures the session-scoped scratchpad.
+type ScratchpadConfigV2 struct {
+	// Enabled controls whether scratchpad is available (default: true)
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
+
+	// MaxEntries is the maximum number of entries (default: 50)
+	MaxEntries int `yaml:"max_entries" mapstructure:"max_entries"`
+
+	// AutoEvict enables automatic LRU eviction (default: true)
+	AutoEvict bool `yaml:"auto_evict" mapstructure:"auto_evict"`
+}
+
+// PersistentMemoryConfigV2 configures cross-session persistent memory.
+type PersistentMemoryConfigV2 struct {
+	// Enabled controls whether persistent memory is available (default: false)
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
+
+	// BasePath is the directory for persistent memory storage (default: ~/.spin/memory)
+	BasePath string `yaml:"base_path" mapstructure:"base_path"`
+}
+
 // Validate performs validation on the config.
 func (c *ConfigV2) Validate() error {
 	errs := &ValidationErrors{}
@@ -194,6 +225,9 @@ func (c *ConfigV2) Validate() error {
 		errs.Add(err)
 	}
 	if err := c.AgentsMD.Validate(); err != nil {
+		errs.Add(err)
+	}
+	if err := c.Memory.Validate(); err != nil {
 		errs.Add(err)
 	}
 
@@ -334,6 +368,55 @@ func (m *MCPServerConfigV2) Validate() error {
 	return errs.ToError()
 }
 
+// Validate performs validation on the Memory configuration.
+func (m *MemoryConfigV2) Validate() error {
+	errs := &ValidationErrors{}
+
+	// Validate scratchpad config
+	if err := m.Scratchpad.Validate(); err != nil {
+		errs.Add(err)
+	}
+
+	// Validate persistent config
+	if err := m.Persistent.Validate(); err != nil {
+		errs.Add(err)
+	}
+
+	return errs.ToError()
+}
+
+// Validate performs validation on the Scratchpad configuration.
+func (s *ScratchpadConfigV2) Validate() error {
+	// Only validate if scratchpad is enabled
+	if !s.Enabled {
+		return nil
+	}
+
+	errs := &ValidationErrors{}
+
+	if s.MaxEntries <= 0 {
+		errs.Add(fmt.Errorf("memory.scratchpad: max_entries must be positive, got %d", s.MaxEntries))
+	}
+
+	return errs.ToError()
+}
+
+// Validate performs validation on the PersistentMemory configuration.
+func (p *PersistentMemoryConfigV2) Validate() error {
+	// Only validate if persistent memory is enabled
+	if !p.Enabled {
+		return nil
+	}
+
+	errs := &ValidationErrors{}
+
+	if p.BasePath == "" {
+		errs.Add(fmt.Errorf("memory.persistent: base_path is required when persistent memory is enabled"))
+	}
+
+	return errs.ToError()
+}
+
 // DefaultConfigV2 returns a ConfigV2 with sensible defaults.
 func DefaultConfigV2() *ConfigV2 {
 	// Derive default policy file path under user config directory
@@ -402,6 +485,17 @@ func DefaultConfigV2() *ConfigV2 {
 			Enabled: true,
 			Path:    "",         // Auto-discover
 			MaxSize: 100 * 1024, // 100KB
+		},
+		Memory: MemoryConfigV2{
+			Scratchpad: ScratchpadConfigV2{
+				Enabled:    true,
+				MaxEntries: 50,
+				AutoEvict:  true,
+			},
+			Persistent: PersistentMemoryConfigV2{
+				Enabled:  false,
+				BasePath: "~/.spin/memory",
+			},
 		},
 	}
 }

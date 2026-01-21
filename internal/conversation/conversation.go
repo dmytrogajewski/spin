@@ -19,9 +19,10 @@ import (
 // Conversation represents an active conversation instance.
 type Conversation struct {
 	// Services (optional, can be nil)
-	gitService   *gitpkg.Service
-	shellService *shellpkg.Service
-	mcpService   *mcppkg.Service
+	gitService    *gitpkg.Service
+	shellService  *shellpkg.Service
+	mcpService    *mcppkg.Service
+	memoryService *MemoryService
 
 	// Core components
 	agent    *agent.Agent
@@ -235,6 +236,12 @@ func (c *Conversation) GetHistory() *history.History {
 // GetWorkDir returns the working directory for this conversation.
 func (c *Conversation) GetWorkDir() string {
 	return c.workDir
+}
+
+// GetMemoryService returns the memory service for this conversation.
+// Returns nil if memory is not enabled.
+func (c *Conversation) GetMemoryService() *MemoryService {
+	return c.memoryService
 }
 
 // NewFromAgentConfig holds configuration for NewFromAgent.

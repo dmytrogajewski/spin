@@ -307,11 +307,25 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 
 		chunkID := fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
 		chunkIndex := 0
+		var lastDoneReason string
 
 		err := p.client.Chat(ctx, req, func(resp api.ChatResponse) error {
 			// Check context cancellation
 			if ctx.Err() != nil {
 				return ctx.Err()
+			}
+
+			// Debug: Log raw Ollama response for diagnostics
+			slog.Debug("ollama stream chunk",
+				"index", chunkIndex,
+				"content_len", len(resp.Message.Content),
+				"tool_calls", len(resp.Message.ToolCalls),
+				"done", resp.Done,
+				"done_reason", resp.DoneReason)
+
+			// Track done reason for final chunk handling
+			if resp.Done && resp.DoneReason != "" {
+				lastDoneReason = resp.DoneReason
 			}
 
 			// Convert to OpenAI chunk and send
@@ -327,11 +341,38 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 			return nil
 		})
 
-		// Handle error (but don't send it in chunk since we removed error handling)
+		// Handle error - send an error indicator chunk if possible
 		if err != nil && ctx.Err() == nil {
-			// Log error but can't send it in chunk anymore
-			_ = err
+			slog.Error("ollama stream error", "error", err, "chunks_sent", chunkIndex, "done_reason", lastDoneReason)
+
+			// If we got zero chunks, this is a connection/API error
+			// Send an error chunk so the caller knows something went wrong
+			if chunkIndex == 0 {
+				errorChunk := openaisdk.ChatCompletionChunk{
+					ID:      chunkID,
+					Created: time.Now().Unix(),
+					Model:   p.model,
+					Object:  "chat.completion.chunk",
+					Choices: []openaisdk.ChatCompletionChunkChoice{
+						{
+							Index: 0,
+							Delta: openaisdk.ChatCompletionChunkChoicesDelta{
+								Role:    openaisdk.ChatCompletionChunkChoicesDeltaRoleAssistant,
+								Content: fmt.Sprintf("[Error: %v]", err),
+							},
+							FinishReason: openaisdk.ChatCompletionChunkChoicesFinishReasonStop,
+						},
+					},
+				}
+				select {
+				case chunks <- errorChunk:
+				default:
+					// Channel full or closed, can't send error
+				}
+			}
 		}
+
+		slog.Debug("ollama stream finished", "total_chunks", chunkIndex, "done_reason", lastDoneReason)
 	}()
 
 	return chunks, nil

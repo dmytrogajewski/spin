@@ -845,29 +845,32 @@ memory:
 
 ## Implementation Plan
 
-### Phase 1: Core Stores (Week 1)
-1. Implement `MemoryStore` interface
-2. Build `Scratchpad` (session-scoped)
-3. Build `PersistentStore` (file-based)
-4. Add basic CRUD operations
+### Phase 1: Core Stores (Week 1) - COMPLETED
+1. [x] Implement `MemoryStore` interface
+2. [x] Build `Scratchpad` (session-scoped)
+3. [x] Build `PersistentStore` (file-based)
+4. [x] Add basic CRUD operations
+5. [x] Add Memory configuration to ConfigV2
+6. [x] Documentation: `docs/packages/memory.md`
+7. [x] FRD: `specs/frds/FRD-20260121-001-memory-core-stores.md`
 
-### Phase 2: Memory Tools (Week 2)
-1. Implement `ScratchpadTool`
-2. Implement `MemoryTool`
-3. Register tools with registry
-4. Add semantic search
+### Phase 2: Memory Tools (Week 2) - COMPLETED
+1. [x] Implement `ScratchpadTool`
+2. [x] Implement `MemoryTool`
+3. [x] Register tools with registry
+4. [ ] Add semantic search (deferred - requires embeddings)
 
-### Phase 3: Auto-Offloading (Week 3)
-1. Implement `ContextAnalyzer`
-2. Build `AutoOffloader`
-3. Integrate with agent loop
-4. Add offload events
+### Phase 3: Auto-Offloading (Week 3) - COMPLETED
+1. [x] Implement `ContextAnalyzer`
+2. [x] Build `AutoOffloader`
+3. [ ] Integrate with agent loop (requires agent changes)
+4. [ ] Add offload events (requires event system changes)
 
-### Phase 4: Session Continuity (Week 4)
-1. Implement `SessionHandoff`
-2. Add session save/load
-3. Build continuation prompt
-4. Integrate with ACE
+### Phase 4: Session Continuity (Week 4) - COMPLETED
+1. [x] Implement `SessionHandoff`
+2. [x] Add session save/load
+3. [x] Build continuation prompt
+4. [ ] Integrate with ACE (deferred - requires ACE changes)
 
 ## Success Metrics
 

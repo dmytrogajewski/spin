@@ -27,8 +27,12 @@ func (m *Manager) FormatMedium(width int) string {
 
 	parts := []string{}
 
-	// Activity indicator
-	activity := activityIndicator(m.status.Metrics.Connected)
+	// Activity indicator with spinner
+	spinnerFrame := ""
+	if m.spinner != nil && m.spinner.IsRunning() {
+		spinnerFrame = m.spinner.Frame()
+	}
+	activity := activityIndicatorWithSpinner(m.status.Metrics.Connected, spinnerFrame)
 	parts = append(parts, activity)
 
 	// Context percentage
@@ -73,8 +77,12 @@ func (m *Manager) FormatFull(width int) string {
 
 	parts := []string{}
 
-	// Activity indicator
-	activity := activityIndicator(m.status.Metrics.Connected)
+	// Activity indicator with spinner
+	spinnerFrame := ""
+	if m.spinner != nil && m.spinner.IsRunning() {
+		spinnerFrame = m.spinner.Frame()
+	}
+	activity := activityIndicatorWithSpinner(m.status.Metrics.Connected, spinnerFrame)
 	parts = append(parts, activity)
 
 	// Context usage (percentage and absolute)
@@ -139,6 +147,15 @@ func activityIndicator(connected bool) string {
 		return "[●]" // Active (colored green in render phase)
 	}
 	return "[○]" // Idle (colored gray in render phase)
+}
+
+// activityIndicatorWithSpinner returns the activity indicator with optional spinner.
+// When spinner is active, shows the spinning animation instead of static indicator.
+func activityIndicatorWithSpinner(connected bool, spinnerFrame string) string {
+	if spinnerFrame != "" {
+		return "[" + spinnerFrame + "]"
+	}
+	return activityIndicator(connected)
 }
 
 // formatPercentage formats a percentage value.

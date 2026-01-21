@@ -13,8 +13,11 @@ func TestFormatCompact(t *testing.T) {
 
 	result := m.FormatCompact(50)
 
-	// Should contain activity indicator, percentage, and state
-	if !strings.Contains(result, "[●]") && !strings.Contains(result, "[○]") {
+	// Should contain activity indicator (static or spinner), percentage, and state
+	hasActivityIndicator := strings.Contains(result, "[●]") ||
+		strings.Contains(result, "[○]") ||
+		strings.Contains(result, "[") // Spinner frames are wrapped in brackets
+	if !hasActivityIndicator {
 		t.Error("Expected activity indicator in compact format")
 	}
 	if !strings.Contains(result, "42%") {

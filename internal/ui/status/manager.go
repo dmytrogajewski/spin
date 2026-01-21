@@ -1,6 +1,7 @@
 package status
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -46,6 +47,7 @@ type Manager struct {
 	mu      sync.RWMutex
 	status  Status
 	enabled bool
+	spinner *ActivitySpinner
 }
 
 // NewManager creates a new status manager.
@@ -58,6 +60,7 @@ func NewManager() *Manager {
 			},
 		},
 		enabled: true,
+		spinner: NewActivitySpinner(SpinnerDots),
 	}
 }
 
@@ -145,11 +148,32 @@ func (m *Manager) SetConnected(connected bool) {
 }
 
 // SetAgentState sets the current agent activity state.
+// Also updates the spinner animation based on the state.
 func (m *Manager) SetAgentState(state string) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.status.Metrics.AgentState = state
 	m.status.Metrics.LastUpdate = time.Now()
+	spinner := m.spinner
+	m.mu.Unlock()
+
+	// Update spinner state outside the lock to avoid deadlock
+	if spinner != nil {
+		spinner.UpdateState(context.Background(), state)
+	}
+}
+
+// SetAgentStateWithContext sets the agent state with a context for spinner control.
+func (m *Manager) SetAgentStateWithContext(ctx context.Context, state string) {
+	m.mu.Lock()
+	m.status.Metrics.AgentState = state
+	m.status.Metrics.LastUpdate = time.Now()
+	spinner := m.spinner
+	m.mu.Unlock()
+
+	// Update spinner state outside the lock to avoid deadlock
+	if spinner != nil {
+		spinner.UpdateState(ctx, state)
+	}
 }
 
 // SetTaskMode sets the current task mode.
@@ -194,6 +218,49 @@ func (m *Manager) IsEnabled() bool {
 	return m.enabled
 }
 
+// GetSpinner returns the activity spinner.
+func (m *Manager) GetSpinner() *ActivitySpinner {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.spinner
+}
+
+// SpinnerFrame returns the current spinner animation frame.
+// Returns empty string if spinner is not running.
+func (m *Manager) SpinnerFrame() string {
+	m.mu.RLock()
+	spinner := m.spinner
+	m.mu.RUnlock()
+
+	if spinner == nil {
+		return ""
+	}
+	return spinner.Frame()
+}
+
+// SetSpinnerCallback sets the callback function for spinner updates.
+// This is called on each animation frame to trigger UI refresh.
+func (m *Manager) SetSpinnerCallback(callback func()) {
+	m.mu.Lock()
+	spinner := m.spinner
+	m.mu.Unlock()
+
+	if spinner != nil {
+		spinner.SetUpdateCallback(callback)
+	}
+}
+
+// StopSpinner stops the spinner animation.
+func (m *Manager) StopSpinner() {
+	m.mu.Lock()
+	spinner := m.spinner
+	m.mu.Unlock()
+
+	if spinner != nil {
+		spinner.Stop()
+	}
+}
+
 // Reset resets all metrics to initial state.
 func (m *Manager) Reset() {
 	m.mu.Lock()
@@ -224,8 +291,14 @@ func (m *Manager) FormatCompact(width int) string {
 
 	parts := []string{}
 
-	// Activity indicator
-	if m.status.Metrics.Connected {
+	// Activity indicator with spinner
+	spinnerFrame := ""
+	if m.spinner != nil && m.spinner.IsRunning() {
+		spinnerFrame = m.spinner.Frame()
+	}
+	if spinnerFrame != "" {
+		parts = append(parts, "["+spinnerFrame+"]")
+	} else if m.status.Metrics.Connected {
 		parts = append(parts, "[●]")
 	} else {
 		parts = append(parts, "[○]")

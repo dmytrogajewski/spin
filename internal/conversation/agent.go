@@ -45,6 +45,13 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 		toolReg = b.buildToolRegistry(exec, securitySvc, env)
 	}
 
+	// Register memory tools if memory service is available
+	if err := b.registerMemoryTools(toolReg); err != nil {
+		if b.logger != nil {
+			b.logger.Warn("memory tools registration failed", "err", err)
+		}
+	}
+
 	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
 		Registry:        toolReg,
 		Validator:       runtimeValidator, // *security.Validator

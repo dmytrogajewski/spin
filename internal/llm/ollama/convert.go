@@ -17,6 +17,7 @@ package ollama
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ollama/ollama/api"
@@ -182,6 +183,26 @@ func extractRequired(params map[string]interface{}) []string {
 	return nil
 }
 
+// mapOllamaDoneReasonToOpenAICompletion maps Ollama's done_reason to OpenAI's finish_reason for non-streaming.
+// This is separate from the chunk version because OpenAI uses different types for streaming vs non-streaming.
+func mapOllamaDoneReasonToOpenAICompletion(doneReason string, hasToolCalls bool) openai.ChatCompletionChoicesFinishReason {
+	// Tool calls take precedence
+	if hasToolCalls {
+		return openai.ChatCompletionChoicesFinishReasonToolCalls
+	}
+
+	switch doneReason {
+	case "length":
+		return openai.ChatCompletionChoicesFinishReasonLength
+	case "stop", "load", "unload", "":
+		return openai.ChatCompletionChoicesFinishReasonStop
+	default:
+		// Unknown reason, default to stop
+		slog.Debug("unknown ollama done_reason, defaulting to stop", "done_reason", doneReason)
+		return openai.ChatCompletionChoicesFinishReasonStop
+	}
+}
+
 // convertOllamaResponseToOpenAI converts an Ollama ChatResponse to OpenAI ChatCompletion.
 func convertOllamaResponseToOpenAI(resp api.ChatResponse, model string) *openai.ChatCompletion {
 	result := &openai.ChatCompletion{
@@ -196,7 +217,7 @@ func convertOllamaResponseToOpenAI(resp api.ChatResponse, model string) *openai.
 					Role:    openai.ChatCompletionMessageRoleAssistant,
 					Content: resp.Message.Content,
 				},
-				FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
+				FinishReason: mapOllamaDoneReasonToOpenAICompletion(resp.DoneReason, len(resp.Message.ToolCalls) > 0),
 			},
 		},
 	}
@@ -205,7 +226,15 @@ func convertOllamaResponseToOpenAI(resp api.ChatResponse, model string) *openai.
 	if len(resp.Message.ToolCalls) > 0 {
 		result.Choices[0].Message.ToolCalls = make([]openai.ChatCompletionMessageToolCall, len(resp.Message.ToolCalls))
 		for i, tc := range resp.Message.ToolCalls {
-			argsJSON, _ := json.Marshal(tc.Function.Arguments)
+			argsJSON, err := json.Marshal(tc.Function.Arguments)
+			if err != nil {
+				// Log the error and use empty object as fallback
+				slog.Warn("failed to marshal tool call arguments",
+					"tool", tc.Function.Name,
+					"error", err,
+					"arguments", fmt.Sprintf("%v", tc.Function.Arguments))
+				argsJSON = []byte("{}")
+			}
 			result.Choices[0].Message.ToolCalls[i] = openai.ChatCompletionMessageToolCall{
 				ID:   fmt.Sprintf("%s-%d", result.ID, i),
 				Type: openai.ChatCompletionMessageToolCallTypeFunction,
@@ -215,7 +244,7 @@ func convertOllamaResponseToOpenAI(resp api.ChatResponse, model string) *openai.
 				},
 			}
 		}
-		result.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
+		// FinishReason already set by mapOllamaDoneReasonToOpenAICompletion above
 	}
 
 	// Add usage information if available
@@ -228,6 +257,27 @@ func convertOllamaResponseToOpenAI(resp api.ChatResponse, model string) *openai.
 	}
 
 	return result
+}
+
+// mapOllamaDoneReasonToOpenAI maps Ollama's done_reason to OpenAI's finish_reason.
+// Ollama uses: "stop", "load", "unload", "length" (when hitting token limit)
+// OpenAI uses: "stop", "length", "tool_calls", "content_filter", "function_call"
+func mapOllamaDoneReasonToOpenAI(doneReason string, hasToolCalls bool) openai.ChatCompletionChunkChoicesFinishReason {
+	// Tool calls take precedence
+	if hasToolCalls {
+		return openai.ChatCompletionChunkChoicesFinishReasonToolCalls
+	}
+
+	switch doneReason {
+	case "length":
+		return openai.ChatCompletionChunkChoicesFinishReasonLength
+	case "stop", "load", "unload", "":
+		return openai.ChatCompletionChunkChoicesFinishReasonStop
+	default:
+		// Unknown reason, default to stop
+		slog.Debug("unknown ollama done_reason, defaulting to stop", "done_reason", doneReason)
+		return openai.ChatCompletionChunkChoicesFinishReasonStop
+	}
 }
 
 // convertOllamaChunkToOpenAI converts an Ollama ChatResponse (streaming) to OpenAI ChatCompletionChunk.
@@ -248,20 +298,24 @@ func convertOllamaChunkToOpenAI(resp api.ChatResponse, chunkID, model string) op
 		},
 	}
 
-	// Handle finish reason
+	// Handle finish reason - map Ollama's done_reason to OpenAI format
 	if resp.Done {
-		if len(resp.Message.ToolCalls) > 0 {
-			chunk.Choices[0].FinishReason = openai.ChatCompletionChunkChoicesFinishReasonToolCalls
-		} else {
-			chunk.Choices[0].FinishReason = openai.ChatCompletionChunkChoicesFinishReasonStop
-		}
+		chunk.Choices[0].FinishReason = mapOllamaDoneReasonToOpenAI(resp.DoneReason, len(resp.Message.ToolCalls) > 0)
 	}
 
 	// Convert tool calls if present
 	if len(resp.Message.ToolCalls) > 0 {
 		chunk.Choices[0].Delta.ToolCalls = make([]openai.ChatCompletionChunkChoicesDeltaToolCall, len(resp.Message.ToolCalls))
 		for i, tc := range resp.Message.ToolCalls {
-			argsJSON, _ := json.Marshal(tc.Function.Arguments)
+			argsJSON, err := json.Marshal(tc.Function.Arguments)
+			if err != nil {
+				// Log the error and use empty object as fallback
+				slog.Warn("failed to marshal tool call arguments",
+					"tool", tc.Function.Name,
+					"error", err,
+					"arguments", fmt.Sprintf("%v", tc.Function.Arguments))
+				argsJSON = []byte("{}")
+			}
 			chunk.Choices[0].Delta.ToolCalls[i] = openai.ChatCompletionChunkChoicesDeltaToolCall{
 				Index: int64(i),
 				ID:    fmt.Sprintf("%s-%d", chunkID, i),
