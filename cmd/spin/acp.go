@@ -123,7 +123,7 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 	defer provider.Close()
 
 	logger := slog.Default()
-	protocolServices, cleanup, err := createServices(cfg, workDir, logger)
+	protocolServices, cleanup, err := createServices(ctx, cfg, workDir, logger)
 
 	if err != nil {
 		return fmt.Errorf("failed to create services: %w", err)
@@ -169,8 +169,8 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 		return fmt.Errorf("build core agent: %w", err)
 	}
 
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, logger)
-	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreAgent, mcpManager, emitter, storage)
+	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(logger))
+	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreAgent, mcpService, emitter, storage)
 
 	if err != nil {
 		return fmt.Errorf("create ACP protocol adapter: %w", err)
@@ -186,14 +186,18 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 		return fmt.Errorf("create history storage: %w", err)
 	}
 
+	// Determine appropriate max tokens for history based on LLM context window
+	maxTokens := getHistoryMaxTokens(cfg, provider)
+
 	// Create conversation factory that builds properly configured conversations
 	convFactory := func(ctx context.Context, sessionID string, sessWorkDir string) (*conversation.Conversation, error) {
 		// Create a new conversation with the core agent's provider and tools
 		return conversation.NewFromAgent(conversation.NewFromAgentConfig{
-			Agent:   coreAgent,
-			Emitter: emitter,
-			WorkDir: sessWorkDir,
-			ID:      sessionID,
+			Agent:     coreAgent,
+			Emitter:   emitter,
+			WorkDir:   sessWorkDir,
+			ID:        sessionID,
+			MaxTokens: maxTokens,
 		})
 	}
 
@@ -239,6 +243,55 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 	}
 
 	return nil
+}
+
+// getHistoryMaxTokens determines appropriate max tokens for history based on LLM context window.
+// Priority order:
+//  1. Config context_window override (if set - for custom/fine-tuned models)
+//  2. Provider's auto-detected context window (from Capabilities)
+//  3. Default of 8192 tokens
+//
+// Note: LLM.MaxTokens is intentionally NOT used here - it's for generation limit,
+// not context window. Providers should report context window via Capabilities().
+func getHistoryMaxTokens(cfg *config.ConfigV2, provider llm.Provider) int {
+	const (
+		defaultTokens = 8192
+		minTokens     = 2048
+		maxTokens     = 128000 // Cap to prevent excessive memory usage
+	)
+
+	var contextWindow int
+
+	// Priority 1: Config override for custom/fine-tuned models
+	if cfg != nil && cfg.LLM.ContextWindow > 0 {
+		contextWindow = cfg.LLM.ContextWindow
+	}
+
+	// Priority 2: Provider's auto-detected context window (primary mechanism)
+	if contextWindow == 0 && provider != nil {
+		caps := provider.Capabilities()
+		if caps.ContextWindow > 0 {
+			contextWindow = caps.ContextWindow
+		}
+	}
+
+	// Priority 3: Default
+	if contextWindow == 0 {
+		return defaultTokens
+	}
+
+	// Use 75% of context window for history (leave room for responses)
+	historyTokens := int(float64(contextWindow) * 0.75)
+
+	// Apply constraints
+	if historyTokens > maxTokens {
+		historyTokens = maxTokens
+	}
+	if historyTokens < minTokens {
+		historyTokens = defaultTokens
+	}
+
+	return historyTokens
 }
 
 // buildProviderForACP creates and configures an LLM provider for the ACP server.

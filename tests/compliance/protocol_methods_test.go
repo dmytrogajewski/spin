@@ -20,14 +20,14 @@ func createTestACPAgent(t *testing.T) *acppkg.SpinACPAgent {
 	t.Helper()
 
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	// Create proper storage for tests
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
 
-	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
+	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(agentInstance, mcpService, emitter, storage)
 	require.NoError(t, err)
 
 	return acpAgent

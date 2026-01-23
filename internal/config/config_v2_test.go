@@ -585,3 +585,207 @@ func TestConfigV2_Validation_AllErrors(t *testing.T) {
 	assert.Contains(t, errMsg, "model", "should mention model error")
 	// Note: Current implementation is fail-fast, this test documents desired behavior
 }
+
+// TestMCPServerConfigV2_Validate_SSE tests SSE transport validation.
+func TestMCPServerConfigV2_Validate_SSE(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  MCPServerConfigV2
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid sse config",
+			config: MCPServerConfigV2{
+				Name:      "smithery-server",
+				Transport: MCPTransportSSE,
+				URL:       "https://server.smithery.ai/sse",
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid sse config with headers",
+			config: MCPServerConfigV2{
+				Name:      "smithery-server",
+				Transport: MCPTransportSSE,
+				URL:       "https://server.smithery.ai/sse",
+				Headers: map[string]string{
+					"Authorization": "Bearer token",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid sse missing url",
+			config: MCPServerConfigV2{
+				Name:      "smithery-server",
+				Transport: MCPTransportSSE,
+			},
+			wantErr: true,
+			errMsg:  "url is required",
+		},
+		{
+			name: "invalid sse with command",
+			config: MCPServerConfigV2{
+				Name:      "smithery-server",
+				Transport: MCPTransportSSE,
+				URL:       "https://server.smithery.ai/sse",
+				Command:   "echo",
+			},
+			wantErr: true,
+			errMsg:  "command is not allowed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestMCPServerConfigV2_Validate_StreamableHTTP tests streamable-http transport validation.
+func TestMCPServerConfigV2_Validate_StreamableHTTP(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  MCPServerConfigV2
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid streamable-http config",
+			config: MCPServerConfigV2{
+				Name:      "remote-server",
+				Transport: MCPTransportStreamableHTTP,
+				URL:       "https://mcp.example.com/v1",
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid streamable-http missing url",
+			config: MCPServerConfigV2{
+				Name:      "remote-server",
+				Transport: MCPTransportStreamableHTTP,
+			},
+			wantErr: true,
+			errMsg:  "url is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestMCPServerConfigV2_Validate_OAuth tests OAuth configuration validation.
+func TestMCPServerConfigV2_Validate_OAuth(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  MCPServerConfigV2
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid sse with oauth",
+			config: MCPServerConfigV2{
+				Name:      "protected-server",
+				Transport: MCPTransportSSE,
+				URL:       "https://protected.example.com/mcp",
+				OAuth: &MCPOAuthConfigV2{
+					ClientID: "my-client-id",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid oauth with stdio",
+			config: MCPServerConfigV2{
+				Name:      "local-server",
+				Transport: MCPTransportStdio,
+				Command:   "echo",
+				OAuth: &MCPOAuthConfigV2{
+					ClientID: "my-client-id",
+				},
+			},
+			wantErr: true,
+			errMsg:  "oauth is not allowed for stdio",
+		},
+		{
+			name: "invalid oauth missing client_id",
+			config: MCPServerConfigV2{
+				Name:      "protected-server",
+				Transport: MCPTransportSSE,
+				URL:       "https://protected.example.com/mcp",
+				OAuth:     &MCPOAuthConfigV2{},
+			},
+			wantErr: true,
+			errMsg:  "oauth client_id is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestMCPTransportType_IsValid tests transport type validation.
+func TestMCPTransportType_IsValid(t *testing.T) {
+	tests := []struct {
+		transport MCPTransportType
+		want      bool
+	}{
+		{"", true},
+		{MCPTransportStdio, true},
+		{MCPTransportSSE, true},
+		{MCPTransportStreamableHTTP, true},
+		{"websocket", false},
+		{"invalid", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.transport), func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.transport.IsValid())
+		})
+	}
+}
+
+// TestMCPTransportType_IsRemote tests transport type remote detection.
+func TestMCPTransportType_IsRemote(t *testing.T) {
+	tests := []struct {
+		transport MCPTransportType
+		want      bool
+	}{
+		{"", false},
+		{MCPTransportStdio, false},
+		{MCPTransportSSE, true},
+		{MCPTransportStreamableHTTP, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.transport), func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.transport.IsRemote())
+		})
+	}
+}

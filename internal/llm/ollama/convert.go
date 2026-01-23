@@ -26,7 +26,8 @@ import (
 
 // convertMessageToOllama converts an OpenAI message to Ollama format.
 // This uses a simplified approach by marshaling and unmarshaling JSON.
-func convertMessageToOllama(msg openai.ChatCompletionMessageParamUnion) api.Message {
+// The toolCallIDToName map is used to resolve tool_call_id to tool_name for tool result messages.
+func convertMessageToOllama(msg openai.ChatCompletionMessageParamUnion, toolCallIDToName map[string]string) api.Message {
 	genericMsg, err := parseGenericMessage(msg)
 	if err != nil {
 		return api.Message{}
@@ -41,6 +42,25 @@ func convertMessageToOllama(msg openai.ChatCompletionMessageParamUnion) api.Mess
 		result.ToolCalls = extractToolCalls(genericMsg.ToolCalls)
 	}
 
+	// For tool result messages, set ToolName from the mapping
+	// This is required for Gemini and other models that need tool_name instead of tool_call_id
+	if genericMsg.Role == "tool" && genericMsg.ToolCallID != "" && toolCallIDToName != nil {
+		if toolName, ok := toolCallIDToName[genericMsg.ToolCallID]; ok {
+			result.ToolName = toolName
+			slog.Debug("set tool_name for tool result message",
+				"tool_call_id", genericMsg.ToolCallID,
+				"tool_name", toolName)
+		} else {
+			slog.Warn("tool_call_id not found in mapping, tool result may fail",
+				"tool_call_id", genericMsg.ToolCallID,
+				"mapping_size", len(toolCallIDToName))
+		}
+	} else if genericMsg.Role == "tool" {
+		slog.Warn("tool message without tool_call_id or mapping",
+			"has_tool_call_id", genericMsg.ToolCallID != "",
+			"has_mapping", toolCallIDToName != nil)
+	}
+
 	return result
 }
 
@@ -49,6 +69,44 @@ type genericMessage struct {
 	Content    json.RawMessage `json:"content"`
 	ToolCalls  json.RawMessage `json:"tool_calls,omitempty"`
 	ToolCallID string          `json:"tool_call_id,omitempty"`
+}
+
+// buildToolCallIDToNameMap scans messages to build a mapping from tool_call_id to tool_name.
+// This is needed because Ollama/Gemini requires tool_name in tool result messages,
+// but OpenAI format uses tool_call_id to reference the original call.
+func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion) map[string]string {
+	result := make(map[string]string)
+
+	for _, msg := range messages {
+		genericMsg, err := parseGenericMessage(msg)
+		if err != nil {
+			continue
+		}
+
+		// Only assistant messages can have tool_calls
+		if genericMsg.Role != "assistant" || len(genericMsg.ToolCalls) == 0 {
+			continue
+		}
+
+		// Parse tool calls to extract id -> name mapping
+		var toolCalls []struct {
+			ID       string `json:"id"`
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		}
+		if err := json.Unmarshal(genericMsg.ToolCalls, &toolCalls); err != nil {
+			continue
+		}
+
+		for _, tc := range toolCalls {
+			if tc.ID != "" && tc.Function.Name != "" {
+				result[tc.ID] = tc.Function.Name
+			}
+		}
+	}
+
+	return result
 }
 
 // parseGenericMessage converts an OpenAI message to a generic structure.

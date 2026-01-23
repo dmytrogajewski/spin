@@ -299,7 +299,7 @@ func createConversationForTUI(ctx context.Context, provider llm.Provider, cfg *c
 	}
 
 	// 2. Create protocol services
-	protocolServices, cleanup, err := createServices(cfg, workDir, logger)
+	protocolServices, cleanup, err := createServices(ctx, cfg, workDir, logger)
 	if err != nil {
 		return nil, err
 	}

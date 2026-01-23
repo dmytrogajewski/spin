@@ -77,7 +77,8 @@ test: build
 	@echo ""
 	@echo "Running all E2E tests (using test-llm provider, no external LLM required)..."
 	@$(GOBUILD) -tags e2e_llm_test -o bin/spin ./cmd/spin
-	@SPIN_E2E_SKIP_BUILD=1 $(GOTEST) -tags e2e_llm_test -v -timeout 5m ./tests/e2e/...
+	@SPIN_E2E_SKIP_BUILD=1 $(GOTEST) -tags e2e_llm_test -v -timeout 60s ./tests/e2e/
+	@SPIN_E2E_SKIP_BUILD=1 $(GOTEST) -tags e2e_llm_test -v -timeout 5m ./tests/e2e/acp/...
 	@echo ""
 	@echo "Running ACP approval persistence E2E (test provider, no external LLM required)..."
 	@SPIN_E2E_SKIP_BUILD=1 $(GOTEST) -tags e2e_llm_test -timeout 60s ./tests/e2e/acp -run TestACP_ApprovalPersistence_PromptToToolCall

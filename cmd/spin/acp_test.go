@@ -35,7 +35,7 @@ func createACPAgentComponents(t *testing.T, workDir string, provider llm.Provide
 	require.NoError(t, err)
 
 	// 2. Create protocol services
-	protocolServices, cleanup, err := createServices(cfg, workDir, logger)
+	protocolServices, cleanup, err := createServices(context.Background(), cfg, workDir, logger)
 	require.NoError(t, err)
 	t.Cleanup(cleanup)
 

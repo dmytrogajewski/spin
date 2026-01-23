@@ -84,12 +84,12 @@ func (c *Classifier) Classify(msg message.Message) Importance {
 		return ImportanceCritical
 	}
 
-	// Critical: Tool results (command output, file contents)
+	// Critical: Tool results (must pair with tool calls)
 	if msg.Role == message.RoleTool {
 		return ImportanceCritical
 	}
 
-	// Critical: Messages with tool calls (function invocations)
+	// Critical: Tool calls (must pair with tool results)
 	if len(msg.ToolCalls) > 0 {
 		return ImportanceCritical
 	}

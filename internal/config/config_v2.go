@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -87,6 +88,13 @@ type LLMConfigV2 struct {
 	BaseURL        string                 `yaml:"base_url" mapstructure:"base_url"`
 	APIKey         string                 `yaml:"api_key" mapstructure:"api_key"`
 	ProviderConfig map[string]interface{} `yaml:"provider_config" mapstructure:"provider_config"`
+
+	// ContextWindow is the model's context window size in tokens.
+	// If set, this overrides the provider's auto-detected context window.
+	// This is useful when using custom or fine-tuned models, or when the
+	// provider doesn't know the context window for a particular model.
+	// If not set (0), the system will try to auto-detect from the provider.
+	ContextWindow int `yaml:"context_window" mapstructure:"context_window"`
 }
 
 // AgentConfigV2 configures the agent behavior.
@@ -148,12 +156,53 @@ type ProtocolConfigV2 struct {
 	ShellTimeout time.Duration       `yaml:"shell_timeout" mapstructure:"shell_timeout"`
 }
 
+// MCPTransportType defines the MCP server connection transport.
+type MCPTransportType string
+
+// MCP transport type constants.
+const (
+	// MCPTransportStdio uses stdio for local process communication.
+	MCPTransportStdio MCPTransportType = "stdio"
+
+	// MCPTransportSSE uses Server-Sent Events for remote communication.
+	MCPTransportSSE MCPTransportType = "sse"
+
+	// MCPTransportStreamableHTTP uses HTTP streaming for remote communication.
+	MCPTransportStreamableHTTP MCPTransportType = "streamable-http"
+
+	// MCPTransportSmithery uses Smithery's connection-based API.
+	MCPTransportSmithery MCPTransportType = "smithery"
+)
+
+// MCPOAuthConfigV2 holds OAuth configuration for protected MCP servers.
+type MCPOAuthConfigV2 struct {
+	ClientID     string   `yaml:"client_id" mapstructure:"client_id"`
+	ClientSecret string   `yaml:"client_secret,omitempty" mapstructure:"client_secret"`
+	RedirectURL  string   `yaml:"redirect_url,omitempty" mapstructure:"redirect_url"`
+	Scopes       []string `yaml:"scopes,omitempty" mapstructure:"scopes"`
+}
+
 // MCPServerConfigV2 configures an MCP server.
 type MCPServerConfigV2 struct {
-	Name    string            `yaml:"name" mapstructure:"name"`
-	Command string            `yaml:"command" mapstructure:"command"`
-	Args    []string          `yaml:"args" mapstructure:"args"`
-	Env     map[string]string `yaml:"env" mapstructure:"env"`
+	// Common fields
+	Name      string           `yaml:"name" mapstructure:"name"`
+	Transport MCPTransportType `yaml:"transport,omitempty" mapstructure:"transport"`
+
+	// Stdio transport fields (mutually exclusive with URL)
+	Command string            `yaml:"command,omitempty" mapstructure:"command"`
+	Args    []string          `yaml:"args,omitempty" mapstructure:"args"`
+	Env     map[string]string `yaml:"env,omitempty" mapstructure:"env"`
+
+	// Remote transport fields (mutually exclusive with Command)
+	URL     string            `yaml:"url,omitempty" mapstructure:"url"`
+	Headers map[string]string `yaml:"headers,omitempty" mapstructure:"headers"`
+
+	// OAuth configuration (optional, for protected servers)
+	OAuth *MCPOAuthConfigV2 `yaml:"oauth,omitempty" mapstructure:"oauth"`
+
+	// Smithery-specific fields
+	SmitheryAPIKey    string `yaml:"smithery_api_key,omitempty" mapstructure:"smithery_api_key"`
+	SmitheryNamespace string `yaml:"smithery_namespace,omitempty" mapstructure:"smithery_namespace"`
 }
 
 // CycleDetectionConfigV2 configures automatic cycle detection and intervention.
@@ -358,14 +407,95 @@ func (p *ProtocolConfigV2) Validate() error {
 func (m *MCPServerConfigV2) Validate() error {
 	errs := &ValidationErrors{}
 
+	// Name is always required
 	if m.Name == "" {
 		errs.Add(fmt.Errorf("name is required"))
 	}
-	if m.Command == "" {
-		errs.Add(fmt.Errorf("command is required"))
+
+	// Validate transport type
+	if !m.Transport.IsValid() {
+		errs.Add(fmt.Errorf("invalid transport: %s", m.Transport))
+		return errs.ToError()
+	}
+
+	// Determine effective transport (empty defaults to stdio)
+	transport := m.Transport
+	if transport == "" {
+		transport = MCPTransportStdio
+	}
+
+	// Validate based on transport type
+	if transport.IsRemote() {
+		m.validateRemote(transport, errs)
+	} else {
+		m.validateStdio(errs)
 	}
 
 	return errs.ToError()
+}
+
+// IsValid returns true if the transport type is valid.
+func (t MCPTransportType) IsValid() bool {
+	switch t {
+	case "", MCPTransportStdio, MCPTransportSSE, MCPTransportStreamableHTTP, MCPTransportSmithery:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsRemote returns true if the transport requires a remote URL.
+func (t MCPTransportType) IsRemote() bool {
+	switch t {
+	case MCPTransportSSE, MCPTransportStreamableHTTP, MCPTransportSmithery:
+		return true
+	default:
+		return false
+	}
+}
+
+// validateStdio validates stdio transport configuration.
+func (m *MCPServerConfigV2) validateStdio(errs *ValidationErrors) {
+	// Command is required for stdio
+	if m.Command == "" {
+		errs.Add(fmt.Errorf("command is required for stdio transport"))
+	}
+
+	// URL is not allowed for stdio
+	if m.URL != "" {
+		errs.Add(fmt.Errorf("url is not allowed for stdio transport"))
+	}
+
+	// OAuth is not allowed for stdio
+	if m.OAuth != nil {
+		errs.Add(fmt.Errorf("oauth is not allowed for stdio transport"))
+	}
+}
+
+// validateRemote validates remote transport configuration.
+func (m *MCPServerConfigV2) validateRemote(transport MCPTransportType, errs *ValidationErrors) {
+	// URL is required for remote transports
+	if m.URL == "" {
+		errs.Add(fmt.Errorf("url is required for %s transport", transport))
+	} else {
+		// Validate URL format
+		parsedURL, err := url.Parse(m.URL)
+		if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+			errs.Add(fmt.Errorf("invalid url: %s", m.URL))
+		}
+	}
+
+	// Command is not allowed for remote transports
+	if m.Command != "" {
+		errs.Add(fmt.Errorf("command is not allowed for remote transport"))
+	}
+
+	// Validate OAuth if provided
+	if m.OAuth != nil {
+		if m.OAuth.ClientID == "" {
+			errs.Add(fmt.Errorf("oauth client_id is required"))
+		}
+	}
 }
 
 // Validate performs validation on the Memory configuration.

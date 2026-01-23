@@ -9,7 +9,10 @@ import (
 
 // createHistory creates a new history instance with event emitter, compression, and summarization configured.
 func (b *Builder) createHistory() *history.History {
-	h := history.NewHistoryWithDefaults()
+	// Use a reasonable default based on the LLM's max tokens
+	maxTokens := b.getHistoryMaxTokens()
+
+	h := history.NewHistory(maxTokens, &tokenizer.SimpleTokenizer{})
 	h.SetEventEmitter(b.emitter)
 
 	// Set up compression with classifier and compressor
@@ -39,4 +42,48 @@ func (b *Builder) createHistory() *history.History {
 
 	_ = h.AddSystemMessage("You are a helpful AI coding assistant.")
 	return h
+}
+
+// getHistoryMaxTokens determines appropriate max tokens for history based on LLM context window.
+// Priority order:
+//  1. Config context_window override (if set - for custom/fine-tuned models)
+//  2. Provider's auto-detected context window (from Capabilities)
+//  3. Default of 8192 tokens
+//
+// Note: LLM.MaxTokens is intentionally NOT used here - it's for generation limit,
+// not context window. Providers should report context window via Capabilities().
+func (b *Builder) getHistoryMaxTokens() int {
+	const (
+		defaultTokens = 8192
+		minTokens     = 2048
+	)
+
+	var contextWindow int
+
+	// Priority 1: Config override for custom/fine-tuned models
+	if b.cfg != nil && b.cfg.LLM.ContextWindow > 0 {
+		contextWindow = b.cfg.LLM.ContextWindow
+	}
+
+	// Priority 2: Provider's auto-detected context window (primary mechanism)
+	if contextWindow == 0 && b.llm != nil {
+		caps := b.llm.Capabilities()
+		if caps.ContextWindow > 0 {
+			contextWindow = caps.ContextWindow
+		}
+	}
+
+	// Priority 3: Default
+	if contextWindow == 0 {
+		return defaultTokens
+	}
+
+	// Use 75% of context window for history (leave room for responses)
+	historyTokens := int(float64(contextWindow) * 0.75)
+
+	if historyTokens < minTokens {
+		historyTokens = defaultTokens
+	}
+
+	return historyTokens
 }

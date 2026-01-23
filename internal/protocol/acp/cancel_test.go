@@ -26,7 +26,7 @@ import (
 func TestCancel_ValidSession_CancelsInProgressExecution(t *testing.T) {
 	// Create test agent with blocking mock provider and mock connection
 	agentInstance := createBlockingTestAgent(t)
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -96,7 +96,7 @@ func TestCancel_ValidSession_CancelsInProgressExecution(t *testing.T) {
 func TestCancel_ValidSession_NoInProgressExecution(t *testing.T) {
 	// Create test agent
 	agentInstance := createTestAgent(t)
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -123,7 +123,7 @@ func TestCancel_ValidSession_NoInProgressExecution(t *testing.T) {
 func TestCancel_InvalidSession_ReturnsError(t *testing.T) {
 	// Create test agent
 	agentInstance := createTestAgent(t)
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -143,7 +143,7 @@ func TestCancel_InvalidSession_ReturnsError(t *testing.T) {
 func TestCancel_CancelsPromptExecution_ReturnsCancelledStopReason(t *testing.T) {
 	// Create test agent with blocking mock provider and mock connection
 	agentInstance := createBlockingTestAgent(t)
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())

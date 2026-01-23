@@ -119,12 +119,7 @@ func TestBuilder_WithMCP(t *testing.T) {
 	b := NewBuilder(cfg, workDir, rt, emitter, provider)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	mcpCfg := &mcppkg.Config{
-		EnableMCP:  false,
-		MCPServers: []mcppkg.MCPServerConfig{},
-	}
-	mcpSvc, err := mcppkg.NewService(mcpCfg, logger)
-	require.NoError(t, err)
+	mcpSvc := mcppkg.NewService(mcppkg.NewDefaultRegistryManager(logger))
 	defer mcpSvc.Close()
 
 	result := b.WithMCP(mcpSvc)
@@ -172,12 +167,7 @@ func TestBuilder_Build_WithServices(t *testing.T) {
 	require.NoError(t, err)
 	defer shellSvc.Close()
 
-	mcpCfg := &mcppkg.Config{
-		EnableMCP:  false,
-		MCPServers: []mcppkg.MCPServerConfig{},
-	}
-	mcpSvc, err := mcppkg.NewService(mcpCfg, logger)
-	require.NoError(t, err)
+	mcpSvc := mcppkg.NewService(mcppkg.NewDefaultRegistryManager(logger))
 	defer mcpSvc.Close()
 
 	// Build conversation with all services

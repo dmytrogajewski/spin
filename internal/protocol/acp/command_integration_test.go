@@ -50,7 +50,7 @@ func TestPrompt_CommandExecution(t *testing.T) {
 
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		agentInstance,
-		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
 		emitter,
 		nil,
 	)
@@ -136,7 +136,7 @@ func TestPrompt_CommandExecution(t *testing.T) {
 func TestNewSession_SendsAvailableCommandsUpdate(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
-		mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
 		events.NewEventEmitter(100),
 		nil,
 	)

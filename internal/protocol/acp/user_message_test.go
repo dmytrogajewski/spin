@@ -21,7 +21,7 @@ import (
 func TestPrompt_NoUserMessageChunk(t *testing.T) {
 	agentInstance := createTestAgent(t)
 
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)

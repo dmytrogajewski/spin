@@ -28,8 +28,8 @@ import (
 var (
 	// ErrNilAgent is returned when agent is nil.
 	ErrNilAgent = errors.New("agent cannot be nil")
-	// ErrNilMCPServerManager is returned when MCP server manager is nil.
-	ErrNilMCPServerManager = errors.New("mcp server manager cannot be nil")
+	// ErrNilMCPService is returned when MCP service is nil.
+	ErrNilMCPService = errors.New("mcp service cannot be nil")
 	// ErrNilEmitter is returned when emitter is nil.
 	ErrNilEmitter = errors.New("emitter cannot be nil")
 	// ErrNotImplemented is returned for methods that are not implemented.
@@ -46,7 +46,7 @@ var (
 // conversation lifecycle and history management to the conversation package.
 type SpinACPAgent struct {
 	agent           *agent.Agent
-	mcpManager      *mcp.MCPServerManager
+	mcpService      *mcp.Service
 	emitter         *events.EventEmitter
 	approvalService *security.ApprovalService // Optional approval service for permission requests
 	approvalHandler *ACPApprovalHandler       // ACP-specific approval handler
@@ -67,7 +67,7 @@ type SpinACPAgent struct {
 //
 // The adapter requires:
 //   - agent: Core agent for execution
-//   - mcpManager: MCP server management
+//   - mcpService: MCP service for tool management
 //   - emitter: Event emission for notifications
 //
 // Optional:
@@ -77,15 +77,15 @@ type SpinACPAgent struct {
 // If storage is nil, session persistence features (LoadSession) will not be available.
 func NewSpinACPAgentWithStorage(
 	agent *agent.Agent,
-	mcpManager *mcp.MCPServerManager,
+	mcpService *mcp.Service,
 	emitter *events.EventEmitter,
 	storage session.Storage,
 ) (*SpinACPAgent, error) {
 	if agent == nil {
 		return nil, fmt.Errorf("%w", ErrNilAgent)
 	}
-	if mcpManager == nil {
-		return nil, fmt.Errorf("%w", ErrNilMCPServerManager)
+	if mcpService == nil {
+		return nil, fmt.Errorf("%w", ErrNilMCPService)
 	}
 	if emitter == nil {
 		return nil, fmt.Errorf("%w", ErrNilEmitter)
@@ -93,7 +93,7 @@ func NewSpinACPAgentWithStorage(
 
 	return &SpinACPAgent{
 		agent:           agent,
-		mcpManager:      mcpManager,
+		mcpService:      mcpService,
 		emitter:         emitter,
 		approvalService: nil, // Optional - set via SetApprovalService() if needed
 		storage:         storage,
@@ -288,7 +288,7 @@ func (a *SpinACPAgent) NewSession(ctx context.Context, req acp.NewSessionRequest
 		// Connect servers in background (non-blocking - connection failures don't prevent session creation)
 		go func() {
 			for _, config := range configs {
-				if err := a.mcpManager.ConnectServer(ctx, config); err != nil {
+				if err := a.mcpService.ConnectServer(ctx, config); err != nil {
 					// Log error but don't fail session creation
 					// In a real implementation, we'd use a logger here
 					_ = err // Error logged but session still created
@@ -1032,7 +1032,7 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 		// Connect servers in background (non-blocking - connection failures don't prevent session loading)
 		go func() {
 			for _, config := range configs {
-				if err := a.mcpManager.ConnectServer(ctx, config); err != nil {
+				if err := a.mcpService.ConnectServer(ctx, config); err != nil {
 					// Log error but don't fail session loading
 					_ = err // Error logged but session still loaded
 				}

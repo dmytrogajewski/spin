@@ -2,39 +2,120 @@ package mcp
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
-// Service wraps MCPServerManager to provide a clean service interface
-// following the dependency injection pattern used in the tools package.
+// Service provides MCP tool management through a RegistryManager.
 type Service struct {
-	manager *MCPServerManager
+	registryManager RegistryManager
 }
 
-// NewService creates a new MCP service and initializes it.
-// If config.EnableMCP is false, the service is created but not initialized.
-func NewService(config *Config, logger *slog.Logger) (*Service, error) {
-	manager := NewMCPServerManager(config, logger)
-
-	if config.EnableMCP {
-		if err := manager.Initialize(context.Background()); err != nil {
-			return nil, err
-		}
-	}
-
+// NewService creates a new MCP service with the given RegistryManager.
+func NewService(registryManager RegistryManager) *Service {
 	return &Service{
-		manager: manager,
-	}, nil
+		registryManager: registryManager,
+	}
 }
 
 // GetTools returns all registered MCP tools as tool registry entries.
 func (s *Service) GetTools() []tools.Tool {
-	return s.manager.GetTools()
+	if s.registryManager == nil {
+		return nil
+	}
+	return s.registryManager.AllTools()
+}
+
+// Search searches for tools matching the query across all registries.
+func (s *Service) Search(query string, max int) []tools.Tool {
+	if s.registryManager == nil {
+		return nil
+	}
+	return s.registryManager.Search(query, max)
+}
+
+// Tool returns a specific tool by name.
+// Supports qualified names (registry:tool) for explicit registry targeting.
+func (s *Service) Tool(name string) tools.Tool {
+	if s.registryManager == nil {
+		return nil
+	}
+	return s.registryManager.Tool(name)
+}
+
+// GetRegistryManager returns the underlying RegistryManager.
+func (s *Service) GetRegistryManager() RegistryManager {
+	return s.registryManager
+}
+
+// ConnectServer connects a new MCP server dynamically.
+// This creates a registry for the server and registers it with the manager.
+func (s *Service) ConnectServer(ctx context.Context, config MCPServerConfig) error {
+	if s.registryManager == nil {
+		return nil
+	}
+
+	// Check if already registered
+	if _, exists := s.registryManager.Get(config.Name); exists {
+		return nil
+	}
+
+	// Create appropriate registry based on transport
+	registry, err := createRegistryFromConfig(config, nil)
+	if err != nil {
+		return err
+	}
+
+	// Register and initialize
+	if err := s.registryManager.Register(registry); err != nil {
+		return err
+	}
+
+	return registry.Initialize(ctx)
 }
 
 // Close closes all MCP connections.
 func (s *Service) Close() error {
-	return s.manager.Close()
+	if s.registryManager == nil {
+		return nil
+	}
+	return s.registryManager.Close()
+}
+
+// createRegistryFromConfig creates an MCPRegistry from MCPServerConfig.
+func createRegistryFromConfig(config MCPServerConfig, logger interface{}) (MCPRegistry, error) {
+	transport := config.Transport
+	if transport == "" {
+		transport = TransportStdio
+	}
+
+	switch transport {
+	case TransportStdio:
+		return NewLocalRegistry(LocalRegistryConfig{
+			Name:    config.Name,
+			Command: config.Command,
+			Args:    config.Args,
+			Env:     config.Env,
+		})
+
+	case TransportSSE, TransportStreamableHTTP:
+		return NewRemoteRegistry(RemoteRegistryConfig{
+			Name:      config.Name,
+			Transport: transport,
+			URL:       config.URL,
+			Headers:   config.Headers,
+			OAuth:     config.OAuth,
+		})
+
+	case TransportSmithery:
+		return NewSmitheryRegistry(SmitheryRegistryConfig{
+			Name:      config.Name,
+			APIKey:    config.SmitheryAPIKey,
+			MCPURL:    config.URL,
+			Namespace: config.SmitheryNamespace,
+		})
+
+	default:
+		return nil, ErrUnsupportedTransport
+	}
 }

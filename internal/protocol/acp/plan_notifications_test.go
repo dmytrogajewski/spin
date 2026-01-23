@@ -62,7 +62,7 @@ func (m *mockConnectionForPlan) Clear() {
 func createTestACPAgentWithMock(t *testing.T) (*SpinACPAgent, *mockConnectionForPlan) {
 	t.Helper()
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())

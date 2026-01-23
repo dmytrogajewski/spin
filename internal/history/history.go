@@ -130,6 +130,13 @@ func NewHistoryWithDefaults() *History {
 	return NewHistory(4096, &tokenizer.SimpleTokenizer{})
 }
 
+// MaxTokens returns the maximum token limit for this history.
+func (h *History) MaxTokens() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.maxTokens
+}
+
 // AddMessage appends a message to the history with automatic token counting.
 //
 // The message is validated before adding. Token count is automatically

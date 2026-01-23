@@ -2,348 +2,82 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"log/slog"
-	"strings"
-	"sync"
 
-	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/mark3labs/mcp-go/client"
 	mcpSDK "github.com/mark3labs/mcp-go/mcp"
 )
 
-// Config holds MCP manager configuration.
+// Config holds MCP configuration.
 type Config struct {
 	EnableMCP  bool
 	MCPServers []MCPServerConfig
 }
 
-// ServerConfig holds configuration for a single MCP server.
-type ServerConfig struct {
-	Command string
-	Args    []string
-	Env     map[string]string
+// OAuthConfig holds OAuth configuration for protected MCP servers.
+type OAuthConfig struct {
+	ClientID     string   `yaml:"client_id" mapstructure:"client_id"`
+	ClientSecret string   `yaml:"client_secret,omitempty" mapstructure:"client_secret"`
+	RedirectURL  string   `yaml:"redirect_url,omitempty" mapstructure:"redirect_url"`
+	Scopes       []string `yaml:"scopes,omitempty" mapstructure:"scopes"`
 }
 
 // MCPServerConfig holds configuration for a single MCP server.
 type MCPServerConfig struct {
-	Name    string
-	Command string
-	Args    []string
-	Env     map[string]string
+	// Common fields
+	Name      string        `yaml:"name" mapstructure:"name"`
+	Transport TransportType `yaml:"transport,omitempty" mapstructure:"transport"`
+
+	// Stdio transport fields (mutually exclusive with URL)
+	Command string            `yaml:"command,omitempty" mapstructure:"command"`
+	Args    []string          `yaml:"args,omitempty" mapstructure:"args"`
+	Env     map[string]string `yaml:"env,omitempty" mapstructure:"env"`
+
+	// Remote transport fields (mutually exclusive with Command)
+	URL     string            `yaml:"url,omitempty" mapstructure:"url"`
+	Headers map[string]string `yaml:"headers,omitempty" mapstructure:"headers"`
+
+	// OAuth configuration (optional, for protected servers)
+	OAuth *OAuthConfig `yaml:"oauth,omitempty" mapstructure:"oauth"`
+
+	// Smithery-specific fields
+	SmitheryAPIKey    string `yaml:"smithery_api_key,omitempty" mapstructure:"smithery_api_key"`
+	SmitheryNamespace string `yaml:"smithery_namespace,omitempty" mapstructure:"smithery_namespace"`
 }
 
-// MCPServerManager manages MCP server connections and tool registration.
-type MCPServerManager struct {
-	config    *Config
-	logger    *slog.Logger
-	clients   map[string]*client.Client
-	tools     map[string]*MCPTool
-	mu        sync.RWMutex
-	closed    bool
-	closeOnce sync.Once
+// MCPClient is the interface for MCP clients (SDK client or Smithery client).
+type MCPClient interface {
+	Initialize(ctx context.Context, request mcpSDK.InitializeRequest) (*mcpSDK.InitializeResult, error)
+	ListTools(ctx context.Context, request mcpSDK.ListToolsRequest) (*mcpSDK.ListToolsResult, error)
+	CallTool(ctx context.Context, request mcpSDK.CallToolRequest) (*mcpSDK.CallToolResult, error)
+	Close() error
 }
 
-// MCPTool wraps an MCP tool for integration with the tool registry.
+// sdkClientWrapper wraps the SDK client to implement MCPClient interface.
+type sdkClientWrapper struct {
+	client *client.Client
+}
+
+func (w *sdkClientWrapper) Initialize(ctx context.Context, request mcpSDK.InitializeRequest) (*mcpSDK.InitializeResult, error) {
+	return w.client.Initialize(ctx, request)
+}
+
+func (w *sdkClientWrapper) ListTools(ctx context.Context, request mcpSDK.ListToolsRequest) (*mcpSDK.ListToolsResult, error) {
+	return w.client.ListTools(ctx, request)
+}
+
+func (w *sdkClientWrapper) CallTool(ctx context.Context, request mcpSDK.CallToolRequest) (*mcpSDK.CallToolResult, error) {
+	return w.client.CallTool(ctx, request)
+}
+
+func (w *sdkClientWrapper) Close() error {
+	return w.client.Close()
+}
+
+// MCPTool wraps an MCP tool for integration with registries.
 type MCPTool struct {
 	ServerName string
 	Tool       mcpSDK.Tool
-	Client     *client.Client
-}
-
-// NewMCPServerManager creates a new MCP server manager.
-func NewMCPServerManager(config *Config, logger *slog.Logger) *MCPServerManager {
-	return &MCPServerManager{
-		config:  config,
-		logger:  logger,
-		clients: make(map[string]*client.Client),
-		tools:   make(map[string]*MCPTool),
-	}
-}
-
-// Initialize connects to all configured MCP servers and registers their tools.
-func (m *MCPServerManager) Initialize(ctx context.Context) error {
-	if !m.config.EnableMCP {
-		m.logger.Debug("MCP disabled, skipping initialization")
-		return nil
-	}
-
-	if len(m.config.MCPServers) == 0 {
-		m.logger.Debug("No MCP servers configured")
-		return nil
-	}
-
-	m.logger.Info("Initializing MCP servers", "count", len(m.config.MCPServers))
-
-	for _, serverConfig := range m.config.MCPServers {
-		if err := m.connectServer(ctx, serverConfig); err != nil {
-			m.logger.Error("Failed to connect to MCP server",
-				"server", serverConfig.Name,
-				"error", err)
-			// Continue with other servers
-			continue
-		}
-	}
-
-	m.logger.Info("MCP initialization complete",
-		"servers", len(m.clients),
-		"tools", len(m.tools))
-
-	return nil
-}
-
-// connectServer connects to a single MCP server and registers its tools.
-func (m *MCPServerManager) connectServer(ctx context.Context, serverConfig MCPServerConfig) error {
-	if m.logger != nil {
-		m.logger.Debug("Connecting to MCP server", "server", serverConfig.Name)
-	}
-
-	// Create MCP client using SDK (SDK auto-starts the connection)
-	mcpClient, err := m.createSDKClient(serverConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create MCP client: %w", err)
-	}
-
-	// Initialize connection
-	initReq := mcpSDK.InitializeRequest{
-		Params: mcpSDK.InitializeParams{
-			ProtocolVersion: "2024-11-05",
-			Capabilities:    mcpSDK.ClientCapabilities{},
-			ClientInfo: mcpSDK.Implementation{
-				Name:    "spin",
-				Version: "0.1.0",
-			},
-		},
-	}
-
-	initResp, err := mcpClient.Initialize(ctx, initReq)
-	if err != nil {
-		mcpClient.Close()
-		return fmt.Errorf("failed to initialize MCP connection: %w", err)
-	}
-
-	if m.logger != nil {
-		m.logger.Debug("MCP server initialized",
-			"server", serverConfig.Name,
-			"protocol", initResp.ProtocolVersion,
-			"capabilities", initResp.Capabilities)
-	}
-
-	// List available tools
-	listReq := mcpSDK.ListToolsRequest{}
-	toolsResp, err := mcpClient.ListTools(ctx, listReq)
-	if err != nil {
-		mcpClient.Close()
-		return fmt.Errorf("failed to list MCP tools: %w", err)
-	}
-
-	// Register tools
-	m.mu.Lock()
-	m.clients[serverConfig.Name] = mcpClient
-
-	for _, tool := range toolsResp.Tools {
-		toolKey := fmt.Sprintf("mcp_%s_%s", serverConfig.Name, tool.Name)
-		m.tools[toolKey] = &MCPTool{
-			ServerName: serverConfig.Name,
-			Tool:       tool,
-			Client:     mcpClient,
-		}
-	}
-	m.mu.Unlock()
-
-	if m.logger != nil {
-		m.logger.Info("MCP server connected",
-			"server", serverConfig.Name,
-			"tools", len(toolsResp.Tools))
-	}
-
-	return nil
-}
-
-// createSDKClient creates an MCP client using the mark3labs/mcp-go SDK.
-func (m *MCPServerManager) createSDKClient(config MCPServerConfig) (*client.Client, error) {
-	// Convert env map to slice of KEY=VALUE strings
-	env := make([]string, 0, len(config.Env))
-	for k, v := range config.Env {
-		env = append(env, fmt.Sprintf("%s=%s", k, v))
-	}
-
-	// Create SDK stdio client
-	return client.NewStdioMCPClient(
-		config.Command,
-		env,
-		config.Args...,
-	)
-}
-
-// GetTools returns all registered MCP tools as tool registry entries.
-func (m *MCPServerManager) GetTools() []tools.Tool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	result := make([]tools.Tool, 0, len(m.tools))
-	for key, mcpTool := range m.tools {
-		tool := &MCPToolWrapper{
-			name:        key,
-			description: getToolDescription(mcpTool.Tool),
-			mcpTool:     mcpTool,
-			manager:     m,
-		}
-
-		result = append(result, tool)
-	}
-
-	return result
-}
-
-// CallTool invokes an MCP tool.
-func (m *MCPServerManager) CallTool(ctx context.Context, toolName string, arguments json.RawMessage) (tools.ToolResult, error) {
-	m.mu.RLock()
-	mcpTool, exists := m.tools[toolName]
-	m.mu.RUnlock()
-
-	if !exists {
-		return tools.ToolResult{}, fmt.Errorf("mcp tool not found: %s", toolName)
-	}
-
-	// Parse arguments into map for SDK
-	var argsMap map[string]any
-	if len(arguments) > 0 {
-		if err := json.Unmarshal(arguments, &argsMap); err != nil {
-			return tools.ToolResult{
-				Success: false,
-				Error:   fmt.Sprintf("invalid arguments: %v", err),
-			}, nil
-		}
-	}
-
-	// Build SDK request
-	callReq := mcpSDK.CallToolRequest{
-		Params: mcpSDK.CallToolParams{
-			Name:      mcpTool.Tool.Name,
-			Arguments: argsMap,
-		},
-	}
-
-	// Call the MCP tool
-	resp, err := mcpTool.Client.CallTool(ctx, callReq)
-	if err != nil {
-		return tools.ToolResult{
-			Success: false,
-			Error:   err.Error(),
-		}, nil
-	}
-
-	// Check if tool call resulted in error
-	if resp.IsError {
-		return tools.ToolResult{
-			Success: false,
-			Error:   "tool execution failed",
-		}, nil
-	}
-
-	// Convert MCP response to tool result
-	var output strings.Builder
-	for _, content := range resp.Content {
-		// Try to cast to TextContent
-		if textContent, ok := mcpSDK.AsTextContent(content); ok {
-			output.WriteString(textContent.Text)
-		}
-	}
-
-	return tools.ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
-}
-
-// Close closes all MCP connections.
-func (m *MCPServerManager) Close() error {
-	var err error
-	m.closeOnce.Do(func() {
-		m.mu.Lock()
-		m.closed = true
-
-		for name, client := range m.clients {
-			if closeErr := client.Close(); closeErr != nil {
-				m.logger.Error("Failed to close MCP client",
-					"server", name,
-					"error", closeErr)
-				if err == nil {
-					err = closeErr
-				}
-			}
-		}
-
-		m.clients = make(map[string]*client.Client)
-		m.tools = make(map[string]*MCPTool)
-		m.mu.Unlock()
-
-		m.logger.Info("MCP manager closed")
-	})
-
-	return err
-}
-
-// IsConnected returns true if any MCP servers are connected.
-func (m *MCPServerManager) IsConnected() bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return len(m.clients) > 0
-}
-
-// GetConnectedServers returns a list of connected server names.
-func (m *MCPServerManager) GetConnectedServers() []string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	servers := make([]string, 0, len(m.clients))
-	for name := range m.clients {
-		servers = append(servers, name)
-	}
-	return servers
-}
-
-// ConnectServer connects to a single MCP server dynamically.
-// This allows connecting servers after initialization, for example when creating new sessions.
-func (m *MCPServerManager) ConnectServer(ctx context.Context, config MCPServerConfig) error {
-	// Check if server is already connected
-	m.mu.RLock()
-	if _, exists := m.clients[config.Name]; exists {
-		m.mu.RUnlock()
-		// Server already connected, skip
-		return nil
-	}
-	m.mu.RUnlock()
-
-	// Connect server using internal method
-	return m.connectServer(ctx, config)
-}
-
-// Helper functions
-
-func getToolDescription(tool mcpSDK.Tool) string {
-	if tool.Description != "" {
-		return tool.Description
-	}
-	return fmt.Sprintf("MCP tool: %s", tool.Name)
-}
-
-// MCPToolWrapper wraps an MCP tool to implement the tools.Tool interface.
-type MCPToolWrapper struct {
-	name        string
-	description string
-	mcpTool     *MCPTool
-	manager     *MCPServerManager
-}
-
-func (w *MCPToolWrapper) Name() string {
-	return w.name
-}
-
-func (w *MCPToolWrapper) Description() string {
-	return w.description
+	Client     MCPClient
 }
 
 // JSONSchemaProperty represents a property in a JSON Schema.
@@ -357,68 +91,4 @@ type JSONSchema struct {
 	Type       string                        `json:"type,omitempty"`
 	Properties map[string]JSONSchemaProperty `json:"properties,omitempty"`
 	Required   []string                      `json:"required,omitempty"`
-}
-
-func (w *MCPToolWrapper) Schema() tools.ToolSchema {
-	// Marshal tool's InputSchema to JSON for parsing
-	schemaBytes, err := json.Marshal(w.mcpTool.Tool.InputSchema)
-	if err != nil {
-		return w.fallbackSchema()
-	}
-
-	// Parse as structured JSON Schema
-	var mcpSchema JSONSchema
-	if err := json.Unmarshal(schemaBytes, &mcpSchema); err != nil {
-		return w.fallbackSchema()
-	}
-
-	// Convert properties to tool schema format
-	properties := make(map[string]tools.PropertyDefinition)
-	for name, prop := range mcpSchema.Properties {
-		properties[name] = tools.PropertyDefinition{
-			Type:        prop.Type,
-			Description: prop.Description,
-		}
-	}
-
-	return tools.ToolSchema{
-		Type: "function",
-		Function: tools.FunctionSchema{
-			Name:        w.name,
-			Description: w.description,
-			Parameters: tools.ParameterSchema{
-				Type:       "object",
-				Properties: properties,
-				Required:   mcpSchema.Required,
-			},
-		},
-	}
-}
-
-// fallbackSchema returns a basic schema when parsing fails.
-func (w *MCPToolWrapper) fallbackSchema() tools.ToolSchema {
-	return tools.ToolSchema{
-		Type: "function",
-		Function: tools.FunctionSchema{
-			Name:        w.name,
-			Description: w.description,
-			Parameters: tools.ParameterSchema{
-				Type:       "object",
-				Properties: make(map[string]tools.PropertyDefinition),
-				Required:   []string{},
-			},
-		},
-	}
-}
-
-func (w *MCPToolWrapper) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
-	// Convert ToolParameters to json.RawMessage
-	argsJSON, err := json.Marshal(params.ToMap())
-	if err != nil {
-		return tools.ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("marshal arguments: %v", err),
-		}, nil
-	}
-	return w.manager.CallTool(ctx, w.name, argsJSON)
 }

@@ -9,11 +9,12 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/history"
 	"github.com/dmytrogajewski/spin/internal/message"
+	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
 
 // mockConversation creates a minimal conversation for testing
 func mockConversation(id string) *Conversation {
-	hist := history.NewHistoryWithDefaults()
+	hist := history.NewHistory(8192, &tokenizer.SimpleTokenizer{})
 	return &Conversation{
 		id:       id,
 		history:  hist,

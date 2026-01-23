@@ -9,10 +9,25 @@ import (
 
 // MCPServer represents an MCP server configuration.
 type MCPServer struct {
-	Name    string            `yaml:"name" toml:"name" json:"name" mapstructure:"name"`
-	Command string            `yaml:"command" toml:"command" json:"command" mapstructure:"command"`
+	// Common fields
+	Name      string           `yaml:"name" toml:"name" json:"name" mapstructure:"name"`
+	Transport MCPTransportType `yaml:"transport,omitempty" toml:"transport,omitempty" json:"transport,omitempty" mapstructure:"transport"`
+
+	// Stdio transport fields
+	Command string            `yaml:"command,omitempty" toml:"command,omitempty" json:"command,omitempty" mapstructure:"command"`
 	Args    []string          `yaml:"args,omitempty" toml:"args,omitempty" json:"args,omitempty" mapstructure:"args"`
 	Env     map[string]string `yaml:"env,omitempty" toml:"env,omitempty" json:"env,omitempty" mapstructure:"env"`
+
+	// Remote transport fields
+	URL     string            `yaml:"url,omitempty" toml:"url,omitempty" json:"url,omitempty" mapstructure:"url"`
+	Headers map[string]string `yaml:"headers,omitempty" toml:"headers,omitempty" json:"headers,omitempty" mapstructure:"headers"`
+
+	// OAuth configuration
+	OAuth *MCPOAuthConfigV2 `yaml:"oauth,omitempty" toml:"oauth,omitempty" json:"oauth,omitempty" mapstructure:"oauth"`
+
+	// Smithery-specific fields
+	SmitheryAPIKey    string `yaml:"smithery_api_key,omitempty" toml:"smithery_api_key,omitempty" json:"smithery_api_key,omitempty" mapstructure:"smithery_api_key"`
+	SmitheryNamespace string `yaml:"smithery_namespace,omitempty" toml:"smithery_namespace,omitempty" json:"smithery_namespace,omitempty" mapstructure:"smithery_namespace"`
 }
 
 // MCPConfigStore manages MCP server configurations.
@@ -123,8 +138,49 @@ func (m *MCPConfigStore) validate(server MCPServer) error {
 	if server.Name == "" {
 		return fmt.Errorf("server name is required")
 	}
+
+	// Validate transport type
+	if !server.Transport.IsValid() {
+		return fmt.Errorf("invalid transport: %s", server.Transport)
+	}
+
+	// Determine effective transport (empty defaults to stdio)
+	transport := server.Transport
+	if transport == "" {
+		transport = MCPTransportStdio
+	}
+
+	// Validate based on transport type
+	if transport.IsRemote() {
+		return m.validateRemote(server, transport)
+	}
+	return m.validateStdio(server)
+}
+
+// validateStdio validates stdio transport configuration.
+func (m *MCPConfigStore) validateStdio(server MCPServer) error {
 	if server.Command == "" {
-		return fmt.Errorf("server command is required")
+		return fmt.Errorf("server command is required for stdio transport")
+	}
+	if server.URL != "" {
+		return fmt.Errorf("url is not allowed for stdio transport")
+	}
+	if server.OAuth != nil {
+		return fmt.Errorf("oauth is not allowed for stdio transport")
+	}
+	return nil
+}
+
+// validateRemote validates remote transport configuration.
+func (m *MCPConfigStore) validateRemote(server MCPServer, transport MCPTransportType) error {
+	if server.URL == "" {
+		return fmt.Errorf("url is required for %s transport", transport)
+	}
+	if server.Command != "" {
+		return fmt.Errorf("command is not allowed for remote transport")
+	}
+	if server.OAuth != nil && server.OAuth.ClientID == "" {
+		return fmt.Errorf("oauth client_id is required")
 	}
 	return nil
 }

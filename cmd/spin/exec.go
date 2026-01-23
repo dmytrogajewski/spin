@@ -204,7 +204,7 @@ func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *
 		sessionID = fmt.Sprintf("exec-%d", time.Now().UnixNano())
 	}
 
-	services, cleanup, err := createServices(cfg, workDir, logger)
+	services, cleanup, err := createServices(ctx, cfg, workDir, logger)
 
 	if err != nil {
 		return nil, err

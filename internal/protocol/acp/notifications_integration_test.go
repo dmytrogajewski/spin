@@ -63,7 +63,7 @@ func (m *mockConnection) Clear() {
 // TestProcessEvents_ContentDelta tests event processing for content delta.
 func TestProcessEvents_ContentDelta(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -109,7 +109,7 @@ func TestProcessEvents_ContentDelta(t *testing.T) {
 // TestProcessEvents_ToolCallStart tests event processing for tool call start.
 func TestProcessEvents_ToolCallStart(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -155,7 +155,7 @@ func TestProcessEvents_ToolCallStart(t *testing.T) {
 // TestProcessEvents_NoConnection tests that events are not sent when connection is nil.
 func TestProcessEvents_NoConnection(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -198,7 +198,7 @@ func TestProcessEvents_NoConnection(t *testing.T) {
 // TestProcessEvents_ContextCancellation tests that event processing stops on context cancellation.
 func TestProcessEvents_ContextCancellation(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
@@ -240,7 +240,7 @@ func TestProcessEvents_ContextCancellation(t *testing.T) {
 // TestProcessEvents_WriteFile_GeneratesDiff tests that write_file operations generate diff notifications.
 func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())

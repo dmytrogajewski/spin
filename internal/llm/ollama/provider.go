@@ -104,6 +104,7 @@ func (p *Provider) Capabilities() llm.Capabilities {
 		Streaming:       true,
 		FunctionCalling: true,  // Ollama supports function calling
 		Vision:          false, // Vision not supported yet
+		ContextWindow:   p.autoTuneCtxLen,
 	}
 }
 
@@ -192,11 +193,21 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 		Model: p.model,
 	}
 
-	// Convert messages
+	// Convert messages, building tool_call_id -> tool_name mapping for tool result messages
 	if params.Messages.Present {
+		toolCallIDToName := buildToolCallIDToNameMap(params.Messages.Value)
 		req.Messages = make([]api.Message, len(params.Messages.Value))
 		for i, msg := range params.Messages.Value {
-			req.Messages[i] = convertMessageToOllama(msg)
+			req.Messages[i] = convertMessageToOllama(msg, toolCallIDToName)
+		}
+		// Debug: log the messages being sent
+		for i, m := range req.Messages {
+			slog.Debug("ollama stream message",
+				"index", i,
+				"role", m.Role,
+				"content_len", len(m.Content),
+				"tool_calls", len(m.ToolCalls),
+				"tool_name", m.ToolName)
 		}
 	}
 
@@ -206,6 +217,7 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 		for i, tool := range params.Tools.Value {
 			req.Tools[i] = convertToolToOllama(tool)
 		}
+		slog.Debug("ollama request with tools", "tool_count", len(req.Tools), "model", p.model)
 	}
 
 	// Set options
@@ -268,11 +280,25 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 	}
 	*req.Stream = true
 
-	// Convert messages
+	// Convert messages, building tool_call_id -> tool_name mapping for tool result messages
 	if params.Messages.Present {
+		toolCallIDToName := buildToolCallIDToNameMap(params.Messages.Value)
 		req.Messages = make([]api.Message, len(params.Messages.Value))
 		for i, msg := range params.Messages.Value {
-			req.Messages[i] = convertMessageToOllama(msg)
+			req.Messages[i] = convertMessageToOllama(msg, toolCallIDToName)
+		}
+		// Debug: log the messages being sent to Ollama
+		for i, m := range req.Messages {
+			tcIDs := make([]string, len(m.ToolCalls))
+			for j, tc := range m.ToolCalls {
+				tcIDs[j] = tc.Function.Name
+			}
+			slog.Debug("ollama stream msg",
+				"idx", i,
+				"role", m.Role,
+				"content_len", len(m.Content),
+				"tool_calls", tcIDs,
+				"tool_name", m.ToolName)
 		}
 	}
 
@@ -282,6 +308,7 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 		for i, tool := range params.Tools.Value {
 			req.Tools[i] = convertToolToOllama(tool)
 		}
+		slog.Debug("ollama stream request with tools", "tool_count", len(req.Tools), "model", p.model)
 	}
 
 	// Set options

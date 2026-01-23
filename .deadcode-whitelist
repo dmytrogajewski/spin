@@ -10,6 +10,7 @@ internal/auth/auth.go:66:25: CredentialType.String
 internal/git/errors.go:35:22: PatchError.Error
 
 # Test helpers and mock utilities
+internal/history/history.go:129:6: NewHistoryWithDefaults
 internal/agent/test_helpers.go:19:6: createTestAgentWithServices
 internal/agent/test_helpers.go:88:6: newAgentForTest
 internal/agent/agent_test.go:2693:20: mockTask.Name

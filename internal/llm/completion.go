@@ -10,4 +10,8 @@ type Capabilities struct {
 
 	// Vision indicates if the provider supports vision/image inputs
 	Vision bool
+
+	// ContextWindow is the maximum context window size in tokens.
+	// Zero means unknown/not specified, and callers should use a default.
+	ContextWindow int
 }

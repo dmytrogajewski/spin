@@ -13,6 +13,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/message"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/task"
+	"github.com/dmytrogajewski/spin/internal/tokenizer"
 	"github.com/google/uuid"
 )
 
@@ -260,6 +261,9 @@ type NewFromAgentConfig struct {
 
 	// History is an optional pre-existing history (new one created if nil)
 	History *history.History
+
+	// MaxTokens is the maximum tokens for history (optional, uses default if 0)
+	MaxTokens int
 }
 
 // generateConversationID creates a new unique conversation ID.
@@ -282,7 +286,11 @@ func NewFromAgent(cfg NewFromAgentConfig) (*Conversation, error) {
 
 	hist := cfg.History
 	if hist == nil {
-		hist = history.NewHistoryWithDefaults()
+		if cfg.MaxTokens > 0 {
+			hist = history.NewHistory(cfg.MaxTokens, &tokenizer.SimpleTokenizer{})
+		} else {
+			hist = history.NewHistoryWithDefaults()
+		}
 	}
 
 	id := cfg.ID

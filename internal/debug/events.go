@@ -87,22 +87,30 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	}
 
 	if cfg.Protocol.EnableMCP && len(cfg.Protocol.MCPServers) > 0 {
-		mcpCfg := &mcppkg.Config{
-			EnableMCP:  true,
-			MCPServers: make([]mcppkg.MCPServerConfig, len(cfg.Protocol.MCPServers)),
-		}
-		for i, srv := range cfg.Protocol.MCPServers {
-			mcpCfg.MCPServers[i] = mcppkg.MCPServerConfig{
+		registryManager := mcppkg.NewDefaultRegistryManager(logger)
+		for _, srv := range cfg.Protocol.MCPServers {
+			registry, err := mcppkg.NewLocalRegistry(mcppkg.LocalRegistryConfig{
 				Name:    srv.Name,
 				Command: srv.Command,
 				Args:    srv.Args,
 				Env:     srv.Env,
+				Logger:  logger,
+			})
+			if err != nil {
+				logger.Warn("failed to create MCP registry", "name", srv.Name, "err", err)
+				continue
+			}
+			if err := registryManager.Register(registry); err != nil {
+				logger.Warn("failed to register MCP registry", "name", srv.Name, "err", err)
+				continue
 			}
 		}
-		mcpSvc, err = mcppkg.NewService(mcpCfg, logger)
-		if err != nil {
-			return fmt.Errorf("create mcp service: %w", err)
+		for _, reg := range registryManager.All() {
+			if err := reg.Initialize(ctx); err != nil {
+				logger.Warn("failed to initialize MCP registry", "name", reg.Name(), "err", err)
+			}
 		}
+		mcpSvc = mcppkg.NewService(registryManager)
 		defer mcpSvc.Close()
 	}
 

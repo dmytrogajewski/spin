@@ -31,6 +31,25 @@ func getBinPath(t *testing.T) string {
 	return filepath.Join(root, "bin", "spin")
 }
 
+// createTestConfig creates a minimal test config file without MCP servers.
+// Returns the path to the config file.
+func createTestConfig(t *testing.T) string {
+	t.Helper()
+	configContent := `version: "2.0"
+llm:
+  provider: test-llm
+  model: dummy
+protocol:
+  enable_mcp: false
+  enable_git: true
+  enable_shell: true
+`
+	configPath := filepath.Join(t.TempDir(), "test-config.yaml")
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+	return configPath
+}
+
 // startACPAgent starts the spin acp command as a subprocess and returns the command,
 // stdin pipe (for writing to agent), and stdout pipe (for reading from agent).
 // When built with e2e_llm_test, we force the provider to "test-llm" so no
@@ -40,10 +59,13 @@ func startACPAgent(t *testing.T, args ...string) (*exec.Cmd, io.WriteCloser, io.
 
 	binPath := getBinPath(t)
 
+	// Create a minimal test config to avoid loading user's global config with MCP servers
+	configPath := createTestConfig(t)
+
 	// Ensure we always end up with test-llm provider and a dummy model.
 	// If callers already passed --provider/--model, these flags will be
 	// overridden by the ones we append here (Cobra uses last occurrence).
-	override := []string{"--provider", "test-llm", "--model", "dummy"}
+	override := []string{"--config-file", configPath, "--provider", "test-llm", "--model", "dummy"}
 
 	// Build args: "acp" + test-specific overrides + additional args
 	cmdArgs := append([]string{"acp"}, args...)
@@ -84,6 +106,9 @@ func cleanupAgent(t *testing.T, cmd *exec.Cmd, stdin io.WriteCloser) {
 	if cmd == nil || cmd.Process == nil {
 		return
 	}
+
+	// Close stdin to signal EOF to the process
+	_ = stdin.Close()
 
 	// Try graceful shutdown first
 	_ = cmd.Process.Signal(os.Interrupt)

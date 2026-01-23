@@ -18,18 +18,18 @@ import (
 func TestNewSpinACPAgentWithStorage(t *testing.T) {
 	// Create minimal mocks for required components
 	agentInstance := &agent.Agent{} // Will need proper setup in real tests
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
 
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
+	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpService, emitter, storage)
 
 	require.NoError(t, err)
 	require.NotNil(t, acpAgent)
 	assert.Equal(t, agentInstance, acpAgent.agent)
-	assert.Equal(t, mcpManager, acpAgent.mcpManager)
+	assert.Equal(t, mcpService, acpAgent.mcpService)
 	assert.Equal(t, emitter, acpAgent.emitter)
 }
 
@@ -38,7 +38,7 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 	tests := []struct {
 		name        string
 		agent       *agent.Agent
-		mcpManager  *mcp.MCPServerManager
+		mcpService  *mcp.Service
 		emitter     *events.EventEmitter
 		wantErr     bool
 		errContains string
@@ -46,23 +46,23 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 		{
 			name:        "nil agent",
 			agent:       nil,
-			mcpManager:  mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+			mcpService:  mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
 			emitter:     events.NewEventEmitter(100),
 			wantErr:     true,
 			errContains: "agent cannot be nil",
 		},
 		{
-			name:        "nil mcp manager",
+			name:        "nil mcp service",
 			agent:       &agent.Agent{},
-			mcpManager:  nil,
+			mcpService:  nil,
 			emitter:     events.NewEventEmitter(100),
 			wantErr:     true,
-			errContains: "mcp server manager cannot be nil",
+			errContains: "mcp service cannot be nil",
 		},
 		{
 			name:        "nil emitter",
 			agent:       &agent.Agent{},
-			mcpManager:  mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+			mcpService:  mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
 			emitter:     nil,
 			wantErr:     true,
 			errContains: "emitter cannot be nil",
@@ -70,7 +70,7 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 		{
 			name:       "all valid",
 			agent:      &agent.Agent{},
-			mcpManager: mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default()),
+			mcpService: mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
 			emitter:    events.NewEventEmitter(100),
 			wantErr:    false,
 		},
@@ -80,7 +80,7 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			storage, err := session.NewFileStorage(t.TempDir())
 			require.NoError(t, err)
-			acpAgent, err := NewSpinACPAgentWithStorage(tt.agent, tt.mcpManager, tt.emitter, storage)
+			acpAgent, err := NewSpinACPAgentWithStorage(tt.agent, tt.mcpService, tt.emitter, storage)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -97,13 +97,13 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 // TestSpinACPAgent_ImplementsInterface verifies that SpinACPAgent implements acp.Agent.
 func TestSpinACPAgent_ImplementsInterface(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
 
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
+	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpService, emitter, storage)
 	require.NoError(t, err)
 
 	// Verify it implements the interface by assignment
@@ -113,13 +113,13 @@ func TestSpinACPAgent_ImplementsInterface(t *testing.T) {
 // TestSpinACPAgent_MethodStubs tests that all methods exist and return errors (stubs).
 func TestSpinACPAgent_MethodStubs(t *testing.T) {
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewMCPServerManager(&mcp.Config{EnableMCP: false}, slog.Default())
+	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
 
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
+	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpService, emitter, storage)
 	require.NoError(t, err)
 
 	ctx := context.Background()

@@ -334,6 +334,10 @@ func Load(src Source) (*ConfigV2, error) {
 	// Env vars fill in missing values but don't override explicit flags
 	applyEnvVars(cfg)
 
+	// Merge MCP servers from mcp.servers into protocol.mcp_servers
+	// The CLI stores servers at mcp.servers, so we need to merge them
+	mergeMCPServers(loader, cfg)
+
 	// Override WorkDir if provided
 	if src.WorkDir != "" {
 		cfg.Agent.WorkDir = src.WorkDir
@@ -349,6 +353,34 @@ func applyEnvVars(cfg *ConfigV2) {
 		apiKey := getAPIKeyFromEnv(cfg.LLM.Provider)
 		if apiKey != "" {
 			cfg.LLM.APIKey = apiKey
+		}
+	}
+}
+
+// mergeMCPServers merges MCP servers from mcp.servers into protocol.mcp_servers.
+// The CLI (spin mcp add) stores servers at mcp.servers, while the runtime reads
+// from protocol.mcp_servers. This function ensures both sources are unified.
+func mergeMCPServers(loader *LoaderV2, cfg *ConfigV2) {
+	// Try to load servers from mcp.servers path
+	var mcpServers []MCPServerConfigV2
+	if err := loader.UnmarshalKey("mcp.servers", &mcpServers); err != nil {
+		return // No servers at mcp.servers, nothing to merge
+	}
+
+	if len(mcpServers) == 0 {
+		return
+	}
+
+	// Build a set of existing server names for deduplication
+	existing := make(map[string]bool)
+	for _, srv := range cfg.Protocol.MCPServers {
+		existing[srv.Name] = true
+	}
+
+	// Append servers from mcp.servers that don't already exist
+	for _, srv := range mcpServers {
+		if !existing[srv.Name] {
+			cfg.Protocol.MCPServers = append(cfg.Protocol.MCPServers, srv)
 		}
 	}
 }
