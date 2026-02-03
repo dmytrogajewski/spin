@@ -270,6 +270,11 @@ func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *
 
 	if services.MCP != nil {
 		builder = builder.WithMCP(services.MCP)
+
+		// Create dynamic tool selector if any registry has dynamic_loadout
+		if toolSelector := createToolSelector(services.MCP, nil, emitter, cfg, slog.Default()); toolSelector != nil {
+			builder = builder.WithToolSelector(toolSelector)
+		}
 	}
 
 	conv, err := builder.Build(ctx)

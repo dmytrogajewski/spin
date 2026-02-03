@@ -28,6 +28,9 @@ type MCPServer struct {
 	// Smithery-specific fields
 	SmitheryAPIKey    string `yaml:"smithery_api_key,omitempty" toml:"smithery_api_key,omitempty" json:"smithery_api_key,omitempty" mapstructure:"smithery_api_key"`
 	SmitheryNamespace string `yaml:"smithery_namespace,omitempty" toml:"smithery_namespace,omitempty" json:"smithery_namespace,omitempty" mapstructure:"smithery_namespace"`
+
+	// DynamicLoadout enables dynamic tool discovery via search
+	DynamicLoadout bool `yaml:"dynamic_loadout,omitempty" toml:"dynamic_loadout,omitempty" json:"dynamic_loadout,omitempty" mapstructure:"dynamic_loadout"`
 }
 
 // MCPConfigStore manages MCP server configurations.
@@ -47,7 +50,7 @@ func NewMCPConfigStore(loader *LoaderV2) *MCPConfigStore {
 // List returns all configured MCP servers.
 func (m *MCPConfigStore) List() ([]MCPServer, error) {
 	var servers []MCPServer
-	err := m.loader.UnmarshalKey("mcp.servers", &servers)
+	err := m.loader.UnmarshalKey("protocol.mcp_servers", &servers)
 	if err != nil {
 		// If key doesn't exist, return empty list
 		return []MCPServer{}, nil
@@ -97,7 +100,7 @@ func (m *MCPConfigStore) Add(server MCPServer) error {
 	servers = append(servers, server)
 
 	// Update config
-	m.loader.Set("mcp.servers", servers)
+	m.loader.Set("protocol.mcp_servers", servers)
 
 	// Write config
 	return m.writeConfig()
@@ -127,7 +130,7 @@ func (m *MCPConfigStore) Remove(name string) error {
 	}
 
 	// Update config
-	m.loader.Set("mcp.servers", newServers)
+	m.loader.Set("protocol.mcp_servers", newServers)
 
 	// Write config
 	return m.writeConfig()
@@ -151,7 +154,9 @@ func (m *MCPConfigStore) validate(server MCPServer) error {
 	}
 
 	// Validate based on transport type
-	if transport.IsRemote() {
+	if transport == MCPTransportSmithery {
+		return m.validateSmithery(server)
+	} else if transport.IsRemote() {
 		return m.validateRemote(server, transport)
 	}
 	return m.validateStdio(server)
@@ -181,6 +186,23 @@ func (m *MCPConfigStore) validateRemote(server MCPServer, transport MCPTransport
 	}
 	if server.OAuth != nil && server.OAuth.ClientID == "" {
 		return fmt.Errorf("oauth client_id is required")
+	}
+	return nil
+}
+
+// validateSmithery validates Smithery transport configuration.
+func (m *MCPConfigStore) validateSmithery(server MCPServer) error {
+	// API key is always required
+	if server.SmitheryAPIKey == "" {
+		return fmt.Errorf("smithery_api_key is required for smithery transport")
+	}
+	// For static mode (URL provided), namespace is also required
+	if server.URL != "" && server.SmitheryNamespace == "" {
+		return fmt.Errorf("smithery_namespace is required when url is specified")
+	}
+	// Command is not allowed
+	if server.Command != "" {
+		return fmt.Errorf("command is not allowed for smithery transport")
 	}
 	return nil
 }
@@ -227,4 +249,29 @@ func (m *MCPConfigStore) writeConfig() error {
 	}
 
 	return nil
+}
+
+// GetRegistryTypeName returns a human-readable type name for a registry.
+func GetRegistryTypeName(server MCPServer) string {
+	switch server.Transport {
+	case MCPTransportStdio, "":
+		return "local"
+	case MCPTransportSmithery:
+		return "smithery"
+	default:
+		return "remote"
+	}
+}
+
+// GetLoadoutType returns "dynamic" or "static" based on DynamicLoadout setting.
+func GetLoadoutType(server MCPServer) string {
+	if server.DynamicLoadout {
+		return "dynamic"
+	}
+	return "static"
+}
+
+// FormatSource returns the SOURCE column value: registry_name@loadout_type
+func FormatSource(server MCPServer) string {
+	return server.Name + "@" + GetLoadoutType(server)
 }

@@ -38,7 +38,8 @@ type Builder struct {
 	// Optional overrides
 	llm          llm.Provider
 	storage      session.Storage
-	toolRegistry *tools.Registry // Optional pre-built tool registry
+	toolRegistry *tools.Registry     // Optional pre-built tool registry
+	toolSelector *agent.ToolSelector // Dynamic tool selection - optional
 	logger       *slog.Logger
 
 	// Managed resources
@@ -90,6 +91,12 @@ func (b *Builder) WithShell(service *shellpkg.Service) *Builder {
 // WithMCP sets the MCP service.
 func (b *Builder) WithMCP(service *mcppkg.Service) *Builder {
 	b.mcpService = service
+	return b
+}
+
+// WithToolSelector sets the dynamic tool selector.
+func (b *Builder) WithToolSelector(selector *agent.ToolSelector) *Builder {
+	b.toolSelector = selector
 	return b
 }
 

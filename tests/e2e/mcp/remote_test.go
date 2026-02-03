@@ -391,7 +391,7 @@ func TestService_Search(t *testing.T) {
 	defer service.Close()
 
 	// Search on empty registry should return empty
-	results := service.Search("test", 10)
+	results := service.Search(nil, "test", 10)
 	assert.Empty(t, results)
 }
 

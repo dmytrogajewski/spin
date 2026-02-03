@@ -177,7 +177,7 @@ func (r *LocalRegistry) Count() int {
 }
 
 // Search finds tools matching the query.
-func (r *LocalRegistry) Search(query string, max int) []tools.Tool {
+func (r *LocalRegistry) Search(ctx *SearchContext, query string, max int) []tools.Tool {
 	return SearchTools(r.List(), query, max, DefaultSearchOptions())
 }
 

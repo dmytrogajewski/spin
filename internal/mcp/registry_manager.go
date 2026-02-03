@@ -103,9 +103,25 @@ func (m *DefaultRegistryManager) AllTools() []tools.Tool {
 }
 
 // Search searches across all registries.
-func (m *DefaultRegistryManager) Search(query string, max int) []tools.Tool {
-	allTools := m.AllTools()
-	return SearchTools(allTools, query, max, DefaultSearchOptions())
+// ctx can be nil for simple searches; required for dynamic registries that call APIs.
+func (m *DefaultRegistryManager) Search(ctx *SearchContext, query string, max int) []tools.Tool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var allResults []tools.Tool
+
+	// Search each registry
+	for _, registry := range m.registries {
+		results := registry.Search(ctx, query, max)
+		allResults = append(allResults, results...)
+	}
+
+	// Apply max limit if specified
+	if max > 0 && len(allResults) > max {
+		allResults = allResults[:max]
+	}
+
+	return allResults
 }
 
 // Tool finds a tool by name.

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/curator"
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
@@ -14,22 +15,22 @@ import (
 	"github.com/google/uuid"
 )
 
-// Adapter handles online context adaptation
+// Adapter handles online context adaptation.
 type Adapter interface {
-	// StartSession begins a new online learning session
+	// StartSession begins a new online learning session.
 	StartSession(ctx context.Context) (string, error)
 
-	// AdaptOnline processes a signal and updates context in real-time
+	// AdaptOnline processes a signal and updates context in real-time.
 	AdaptOnline(ctx context.Context, signal ExecutionSignal) (*AdaptationResult, error)
 
-	// EndSession finalizes session and persists state
+	// EndSession finalizes session and persists state.
 	EndSession(ctx context.Context, sessionID string) error
 
-	// GetSession retrieves current session state
+	// GetSession retrieves current session state.
 	GetSession(sessionID string) (*Session, error)
 }
 
-// adapter implements Adapter interface
+// adapter implements Adapter interface.
 type adapter struct {
 	playbook  *playbook.Playbook
 	reflector reflector.Reflector
@@ -37,12 +38,11 @@ type adapter struct {
 	generator generator.Generator
 	memory    *MemoryManager
 
-	// Session management
 	sessions map[string]*Session
 	mu       sync.RWMutex
 }
 
-// Config configures an adapter
+// Config configures an adapter.
 type Config struct {
 	Playbook     *playbook.Playbook
 	Reflector    reflector.Reflector
@@ -51,7 +51,7 @@ type Config struct {
 	MemoryConfig MemoryConfig
 }
 
-// NewAdapter creates a new adapter
+// NewAdapter creates a new adapter with default configuration.
 func NewAdapter(pb *playbook.Playbook, refl reflector.Reflector, cur curator.Curator) Adapter {
 	return NewAdapterWithConfig(Config{
 		Playbook:     pb,
@@ -61,7 +61,7 @@ func NewAdapter(pb *playbook.Playbook, refl reflector.Reflector, cur curator.Cur
 	})
 }
 
-// NewAdapterWithConfig creates a new adapter with custom configuration
+// NewAdapterWithConfig creates a new adapter with custom configuration.
 func NewAdapterWithConfig(cfg Config) Adapter {
 	return &adapter{
 		playbook:  cfg.Playbook,
@@ -73,30 +73,28 @@ func NewAdapterWithConfig(cfg Config) Adapter {
 	}
 }
 
-// StartSession begins a new online learning session
+// StartSession begins a new online learning session.
 func (a *adapter) StartSession(ctx context.Context) (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	// Generate session ID
 	sessionID := uuid.New().String()
+	a.sessions[sessionID] = newSession(sessionID)
+	return sessionID, nil
+}
 
-	// Create session
-	session := &Session{
-		ID:            sessionID,
+// newSession creates a new session with the given ID.
+func newSession(id string) *Session {
+	return &Session{
+		ID:            id,
 		StartTime:     time.Now(),
 		SignalCount:   0,
 		UpdateCount:   0,
 		RecentSignals: []*ExecutionSignal{},
 	}
-
-	// Store session
-	a.sessions[sessionID] = session
-
-	return sessionID, nil
 }
 
-// AdaptOnline processes a signal and updates context in real-time
+// AdaptOnline processes a signal and updates context in real-time.
 func (a *adapter) AdaptOnline(ctx context.Context, signal ExecutionSignal) (*AdaptationResult, error) {
 	startTime := time.Now()
 
@@ -105,7 +103,33 @@ func (a *adapter) AdaptOnline(ctx context.Context, signal ExecutionSignal) (*Ada
 		"signal_type", signal.SignalType,
 		"outcome", signal.Outcome)
 
-	// Get session
+	session, err := a.getAndUpdateSession(signal)
+	if err != nil {
+		return nil, err
+	}
+
+	action, reason := decideAction(signal)
+	slog.Debug("Adapter decided action", "action", action, "reason", reason)
+
+	bulletsAdded, err := a.executeAction(ctx, action, signal, session)
+	if err != nil {
+		return nil, err
+	}
+
+	refinementTriggered, reason := a.maybeRefine(ctx, reason)
+
+	return &AdaptationResult{
+		Action:              action,
+		BulletsAdded:        bulletsAdded,
+		BulletsUpdated:      0,
+		LatencyMs:           time.Since(startTime).Milliseconds(),
+		Reason:              reason,
+		RefinementTriggered: refinementTriggered,
+	}, nil
+}
+
+// getAndUpdateSession retrieves session and adds signal to it.
+func (a *adapter) getAndUpdateSession(signal ExecutionSignal) (*Session, error) {
 	a.mu.RLock()
 	session, exists := a.sessions[signal.SessionID]
 	a.mu.RUnlock()
@@ -115,75 +139,92 @@ func (a *adapter) AdaptOnline(ctx context.Context, signal ExecutionSignal) (*Ada
 		return nil, fmt.Errorf("session not found: %s", signal.SessionID)
 	}
 
-	// Add signal to session
 	session.AddSignal(&signal)
 	slog.Debug("Signal added to session",
 		"session_id", signal.SessionID,
 		"total_signals", session.SignalCount)
 
-	// Decide action based on signal
-	action, reason := decideAction(signal)
-
-	slog.Debug("Adapter decided action",
-		"action", action,
-		"reason", reason,
-		"signal_type", signal.SignalType)
-
-	bulletsAdded := 0
-	bulletsUpdated := 0
-	refinementTriggered := false
-
-	// Execute action
-	switch action {
-	case ActionReflect:
-		// Full reflection: Signal → Trajectory → Reflector → Insights → Curator → Bullets
-		added, err := a.executeReflect(ctx, signal)
-		if err != nil {
-			return nil, fmt.Errorf("reflect action failed: %w", err)
-		}
-		bulletsAdded = added
-		session.UpdateCount += added
-
-	case ActionQuickAdd:
-		// Quick generation: Signal → Generator → Bullets
-		added, err := a.executeQuickAdd(ctx, signal)
-		if err != nil {
-			return nil, fmt.Errorf("quick add action failed: %w", err)
-		}
-		bulletsAdded = added
-		session.UpdateCount += added
-
-	case ActionSkip:
-		// No action needed
-	}
-
-	// Check if memory management should trigger
-	if a.memory.ShouldRefine(a.playbook.Stats().TotalBullets) {
-		pruned, err := a.memory.Prune(ctx, a.playbook)
-		if err != nil {
-			return nil, fmt.Errorf("memory refinement failed: %w", err)
-		}
-		refinementTriggered = true
-		reason = fmt.Sprintf("%s (pruned %d bullets)", reason, pruned)
-	}
-
-	// Calculate latency
-	latency := time.Since(startTime).Milliseconds()
-
-	return &AdaptationResult{
-		Action:              action,
-		BulletsAdded:        bulletsAdded,
-		BulletsUpdated:      bulletsUpdated,
-		LatencyMs:           latency,
-		Reason:              reason,
-		RefinementTriggered: refinementTriggered,
-	}, nil
+	return session, nil
 }
 
-// executeReflect performs full reflection cycle
+// executeAction dispatches to the appropriate action handler.
+func (a *adapter) executeAction(ctx context.Context, action AdaptationAction, signal ExecutionSignal, session *Session) (int, error) {
+	added, err := a.dispatchAction(ctx, action, signal)
+	if err != nil {
+		return 0, err
+	}
+	session.UpdateCount += added
+	return added, nil
+}
+
+// dispatchAction routes to the correct handler based on action type.
+func (a *adapter) dispatchAction(ctx context.Context, action AdaptationAction, signal ExecutionSignal) (int, error) {
+	switch action {
+	case ActionReflect:
+		return a.executeReflect(ctx, signal)
+	case ActionQuickAdd:
+		return a.executeQuickAdd(ctx, signal)
+	default:
+		return 0, nil
+	}
+}
+
+// maybeRefine checks if memory management should trigger and performs it.
+func (a *adapter) maybeRefine(ctx context.Context, reason string) (bool, string) {
+	if !a.memory.ShouldRefine(a.playbook.Stats().TotalBullets) {
+		return false, reason
+	}
+
+	pruned, err := a.memory.Prune(ctx, a.playbook)
+	if err != nil {
+		slog.Error("Memory refinement failed", "error", err)
+		return false, reason
+	}
+
+	return true, fmt.Sprintf("%s (pruned %d bullets)", reason, pruned)
+}
+
+// executeReflect performs full reflection cycle.
 func (a *adapter) executeReflect(ctx context.Context, signal ExecutionSignal) (int, error) {
-	// Create a simple trajectory from the signal
-	traj := &generator.Trajectory{
+	traj := buildTrajectory(signal)
+	insights, err := a.extractInsights(ctx, traj)
+	if err != nil {
+		return 0, err
+	}
+	if len(insights) == 0 {
+		return 0, nil
+	}
+	return a.curateInsights(ctx, insights)
+}
+
+// extractInsights calls the reflector to get insights from a trajectory.
+func (a *adapter) extractInsights(ctx context.Context, traj *generator.Trajectory) ([]*reflector.Insight, error) {
+	resp, err := a.reflector.Reflect(ctx, reflector.ReflectionRequest{
+		Trajectories:  []*generator.Trajectory{traj},
+		MaxIterations: 1,
+		MinConfidence: 0.5,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("reflection failed: %w", err)
+	}
+	return resp.Insights, nil
+}
+
+// curateInsights processes insights through the curator.
+func (a *adapter) curateInsights(ctx context.Context, insights []*reflector.Insight) (int, error) {
+	resp, err := a.curator.Curate(ctx, curator.MergeRequest{
+		Insights:            insights,
+		SimilarityThreshold: 0.85,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("curation failed: %w", err)
+	}
+	return resp.Added, nil
+}
+
+// buildTrajectory creates a trajectory from an execution signal.
+func buildTrajectory(signal ExecutionSignal) *generator.Trajectory {
+	return &generator.Trajectory{
 		ID:    uuid.New().String(),
 		Query: signal.Context,
 		Steps: []generator.TrajectoryStep{
@@ -202,102 +243,64 @@ func (a *adapter) executeReflect(ctx context.Context, signal ExecutionSignal) (i
 			Turns:    1,
 		},
 	}
+}
 
-	// Call reflector to extract insights
-	reflReq := reflector.ReflectionRequest{
-		Trajectories:  []*generator.Trajectory{traj},
-		MaxIterations: 1,
-		MinConfidence: 0.5,
-	}
-
-	reflResp, err := a.reflector.Reflect(ctx, reflReq)
-	if err != nil {
-		return 0, fmt.Errorf("reflection failed: %w", err)
-	}
-
-	// No insights extracted
-	if len(reflResp.Insights) == 0 {
+// executeQuickAdd performs quick bullet generation.
+func (a *adapter) executeQuickAdd(ctx context.Context, signal ExecutionSignal) (int, error) {
+	if a.generator == nil {
 		return 0, nil
 	}
 
-	// Curate insights into bullets
-	curReq := curator.MergeRequest{
-		Insights:            reflResp.Insights,
-		SimilarityThreshold: 0.85,
-	}
-
-	curResp, err := a.curator.Curate(ctx, curReq)
+	bullets, err := a.generator.GenerateBullets(ctx, generator.BulletGenerationRequest{
+		Input:      signal.Context,
+		SourceType: mapSignalTypeToSource(signal.SignalType),
+		MaxBullets: 3,
+		Tags: map[string]string{
+			"signal_type": string(signal.SignalType),
+			"outcome":     string(signal.Outcome),
+		},
+	})
 	if err != nil {
-		return 0, fmt.Errorf("curation failed: %w", err)
+		return 0, fmt.Errorf("bullet generation failed: %w", err)
 	}
 
-	return curResp.Added, nil
+	return a.addBulletsToPlaybook(ctx, bullets)
 }
 
-// executeQuickAdd performs quick bullet generation
-func (a *adapter) executeQuickAdd(ctx context.Context, signal ExecutionSignal) (int, error) {
-	// Use generator if available, otherwise create bullet directly
-	if a.generator != nil {
-		// Determine source type from signal type
-		sourceType := "error"
-		switch signal.SignalType {
-		case SignalTypeBuild:
-			sourceType = "error"
-		case SignalTypeLint:
-			sourceType = "error"
-		case SignalTypeError:
-			sourceType = "error"
-		}
-
-		// Generate bullets
-		genReq := generator.BulletGenerationRequest{
-			Input:      signal.Context,
-			SourceType: sourceType,
-			MaxBullets: 3,
-			Tags: map[string]string{
-				"signal_type": string(signal.SignalType),
-				"outcome":     string(signal.Outcome),
-			},
-		}
-
-		bullets, err := a.generator.GenerateBullets(ctx, genReq)
-		if err != nil {
-			return 0, fmt.Errorf("bullet generation failed: %w", err)
-		}
-
-		// Add bullets to playbook
-		for _, b := range bullets {
-			if err := a.playbook.Add(ctx, b); err != nil {
-				return 0, fmt.Errorf("failed to add bullet: %w", err)
-			}
-		}
-
-		return len(bullets), nil
+// mapSignalTypeToSource maps signal type to generator source type.
+func mapSignalTypeToSource(st SignalType) string {
+	switch st {
+	case SignalTypeBuild, SignalTypeLint, SignalTypeError:
+		return "error"
+	default:
+		return "error"
 	}
-
-	// Fallback: Create single bullet from signal context
-	// This is a simple implementation for when generator is not available
-	// In practice, you'd want to extract a better bullet content
-	return 0, nil
 }
 
-// EndSession finalizes session and persists state
+// addBulletsToPlaybook adds bullets to the playbook and returns count added.
+func (a *adapter) addBulletsToPlaybook(ctx context.Context, bullets []*bullet.Bullet) (int, error) {
+	for _, b := range bullets {
+		if err := a.playbook.Add(ctx, b); err != nil {
+			return 0, fmt.Errorf("failed to add bullet: %w", err)
+		}
+	}
+	return len(bullets), nil
+}
+
+// EndSession finalizes session and persists state.
 func (a *adapter) EndSession(ctx context.Context, sessionID string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	// Check session exists
 	if _, exists := a.sessions[sessionID]; !exists {
 		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
-	// Remove session
 	delete(a.sessions, sessionID)
-
 	return nil
 }
 
-// GetSession retrieves current session state
+// GetSession retrieves current session state.
 func (a *adapter) GetSession(sessionID string) (*Session, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()

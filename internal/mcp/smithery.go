@@ -73,6 +73,7 @@ type smitheryError struct {
 }
 
 // NewSmitheryClient creates a new Smithery MCP client.
+// APIKey is always required. MCPURL and Namespace are required for connection-based operations.
 func NewSmitheryClient(config SmitheryConfig) (*SmitheryClient, error) {
 	if config.APIKey == "" {
 		return nil, fmt.Errorf("smithery API key is required")

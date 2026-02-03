@@ -110,6 +110,16 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 		}
 	}
 
+	// Dynamic tool selector (for MCP registries with dynamic_loadout)
+	if b.toolSelector != nil {
+		// Set the runtime registry so dynamically loaded tools can be registered
+		b.toolSelector.SetRuntimeRegistry(toolReg)
+		opts = append(opts, agent.WithToolSelector(b.toolSelector))
+		if b.logger != nil {
+			b.logger.Info("dynamic tool selection enabled")
+		}
+	}
+
 	// Create agent
 	ag, err := agent.NewAgent(b.llm, securitySvc, detectionSvc, toolRuntime, planningSvc, env, b.emitter, opts...)
 	if err != nil {

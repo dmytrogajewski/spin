@@ -211,62 +211,62 @@ func TestMCPCommands(t *testing.T) {
 	}
 	defer os.Remove(configPath)
 
-	t.Run("mcp list empty", func(t *testing.T) {
-		stdout, stderr, err := runSpin(t, "mcp", "list")
+	t.Run("mcp registry list empty", func(t *testing.T) {
+		stdout, stderr, err := runSpin(t, "mcp", "registry", "list")
 
 		if err != nil {
-			t.Fatalf("mcp list failed: %v\nstderr: %s", err, stderr)
+			t.Fatalf("mcp registry list failed: %v\nstderr: %s", err, stderr)
 		}
 
-		if !strings.Contains(stdout, "No MCP servers") {
-			t.Errorf("Expected 'No MCP servers', got: %s", stdout)
+		if !strings.Contains(stdout, "No registries configured") {
+			t.Errorf("Expected 'No registries configured', got: %s", stdout)
 		}
 	})
 
-	t.Run("mcp add and remove", func(t *testing.T) {
-		// Add MCP server
-		stdout, stderr, err := runSpin(t, "mcp", "add", "test-server", "echo", "test")
+	t.Run("mcp registry add and remove", func(t *testing.T) {
+		// Add MCP registry (local type)
+		stdout, stderr, err := runSpin(t, "mcp", "registry", "local", "add", "test-server", "echo", "test")
 		if err != nil {
-			t.Fatalf("mcp add failed: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
+			t.Fatalf("mcp registry local add failed: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
 		}
 
-		if !strings.Contains(stdout+stderr, "Added MCP server 'test-server'") {
+		if !strings.Contains(stdout+stderr, "Added local registry 'test-server'") {
 			t.Errorf("Expected add confirmation, got stdout: %s, stderr: %s", stdout, stderr)
 		}
 
-		// List should show the server
-		stdout, stderr, err = runSpin(t, "mcp", "list")
+		// List should show the registry
+		stdout, stderr, err = runSpin(t, "mcp", "registry", "list")
 		if err != nil {
-			t.Fatalf("mcp list failed: %v\nstderr: %s", err, stderr)
+			t.Fatalf("mcp registry list failed: %v\nstderr: %s", err, stderr)
 		}
 
 		if !strings.Contains(stdout, "test-server") {
-			t.Errorf("Expected server 'test-server' in list, got: %s", stdout)
+			t.Errorf("Expected registry 'test-server' in list, got: %s", stdout)
 		}
 
-		// Get server details
-		stdout, stderr, err = runSpin(t, "mcp", "get", "test-server")
+		// Get registry details
+		stdout, stderr, err = runSpin(t, "mcp", "registry", "get", "test-server")
 		if err != nil {
-			t.Fatalf("mcp get failed: %v\nstderr: %s", err, stderr)
+			t.Fatalf("mcp registry get failed: %v\nstderr: %s", err, stderr)
 		}
 
 		if !strings.Contains(stdout, "test-server") || !strings.Contains(stdout, "echo") {
-			t.Errorf("Expected server details, got: %s", stdout)
+			t.Errorf("Expected registry details, got: %s", stdout)
 		}
 
-		// Remove server
-		stdout, stderr, err = runSpin(t, "mcp", "remove", "test-server", "--yes")
+		// Remove registry
+		stdout, stderr, err = runSpin(t, "mcp", "registry", "remove", "test-server", "--yes")
 		if err != nil {
-			t.Fatalf("mcp remove failed: %v\nstderr: %s", err, stderr)
+			t.Fatalf("mcp registry remove failed: %v\nstderr: %s", err, stderr)
 		}
 
 		// List should be empty again
-		stdout, stderr, err = runSpin(t, "mcp", "list")
+		stdout, stderr, err = runSpin(t, "mcp", "registry", "list")
 		if err != nil {
-			t.Fatalf("mcp list failed: %v\nstderr: %s", err, stderr)
+			t.Fatalf("mcp registry list failed: %v\nstderr: %s", err, stderr)
 		}
 
-		if !strings.Contains(stdout, "No MCP servers") {
+		if !strings.Contains(stdout, "No registries configured") {
 			t.Errorf("Expected empty list after removal, got: %s", stdout)
 		}
 	})
@@ -465,15 +465,15 @@ func TestJSONOutput(t *testing.T) {
 		}
 	})
 
-	t.Run("mcp get json", func(t *testing.T) {
-		// First add a server
-		runSpin(t, "mcp", "add", "json-test", "echo", "test")
-		defer runSpin(t, "mcp", "remove", "json-test", "--yes")
+	t.Run("mcp registry get json", func(t *testing.T) {
+		// First add a registry
+		runSpin(t, "mcp", "registry", "local", "add", "json-test", "echo", "test")
+		defer runSpin(t, "mcp", "registry", "remove", "json-test", "--yes")
 
-		stdout, stderr, err := runSpin(t, "mcp", "get", "json-test", "--format", "json")
+		stdout, stderr, err := runSpin(t, "mcp", "registry", "get", "json-test", "--format", "json")
 
 		if err != nil {
-			t.Fatalf("mcp get json failed: %v\nstderr: %s", err, stderr)
+			t.Fatalf("mcp registry get json failed: %v\nstderr: %s", err, stderr)
 		}
 
 		// Should be valid JSON

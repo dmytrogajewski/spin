@@ -64,6 +64,14 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 
 		a.emitTurnStart(turn + 1)
 
+		// Dynamic tool selection on each turn based on current context
+		if a.toolSelector != nil && trajCtx != nil {
+			query := trajCtx.Query // Use trajectory context's query
+			if _, err := a.toolSelector.SelectToolsForTurn(ctx, query, turn); err != nil {
+				slog.Warn("dynamic tool selection failed", "turn", turn, "error", err)
+			}
+		}
+
 		// Update trajectory context
 		if trajCtx != nil {
 			trajCtx.CurrentTurn = turn

@@ -2,40 +2,19 @@ package adapter
 
 import "time"
 
-// ExecutionSignal represents a feedback event from agent execution
-type ExecutionSignal struct {
-	// SignalType indicates the kind of signal
-	SignalType SignalType
-
-	// Context provides the execution context
-	Context string
-
-	// Outcome indicates success or failure
-	Outcome SignalOutcome
-
-	// Details contains signal-specific information
-	Details map[string]string
-
-	// Timestamp of signal generation
-	Timestamp time.Time
-
-	// SessionID links signal to session
-	SessionID string
-}
-
-// SignalType categorizes execution signals
+// SignalType categorizes execution signals.
 type SignalType string
 
 const (
-	SignalTypeTest    SignalType = "test"     // Test execution result
-	SignalTypeBuild   SignalType = "build"    // Build/compile result
-	SignalTypeLint    SignalType = "lint"     // Lint/static analysis
-	SignalTypeError   SignalType = "error"    // Runtime error
-	SignalTypeToolUse SignalType = "tool_use" // Tool execution pattern
-	SignalTypeUser    SignalType = "user"     // User correction/approval
+	SignalTypeTest    SignalType = "test"
+	SignalTypeBuild   SignalType = "build"
+	SignalTypeLint    SignalType = "lint"
+	SignalTypeError   SignalType = "error"
+	SignalTypeToolUse SignalType = "tool_use"
+	SignalTypeUser    SignalType = "user"
 )
 
-// SignalOutcome indicates signal polarity
+// SignalOutcome indicates signal polarity.
 type SignalOutcome string
 
 const (
@@ -44,68 +23,58 @@ const (
 	OutcomeNeutral SignalOutcome = "neutral"
 )
 
-// Session tracks online learning state
+// ExecutionSignal represents a feedback event from agent execution.
+type ExecutionSignal struct {
+	SignalType SignalType
+	Context    string
+	Outcome    SignalOutcome
+	Details    map[string]string
+	Timestamp  time.Time
+	SessionID  string
+}
+
+// Session tracks online learning state.
 type Session struct {
-	// ID uniquely identifies the session
-	ID string
-
-	// StartTime marks session creation
-	StartTime time.Time
-
-	// SignalCount tracks total signals processed
-	SignalCount int
-
-	// UpdateCount tracks playbook updates made
-	UpdateCount int
-
-	// LastSignal stores most recent signal
-	LastSignal *ExecutionSignal
-
-	// RecentSignals maintains sliding window (last 10)
+	ID            string
+	StartTime     time.Time
+	SignalCount   int
+	UpdateCount   int
+	LastSignal    *ExecutionSignal
 	RecentSignals []*ExecutionSignal
 }
 
-// AddSignal adds a signal to the session
+// AddSignal adds a signal to the session.
 func (s *Session) AddSignal(signal *ExecutionSignal) {
 	s.SignalCount++
 	s.LastSignal = signal
-
-	// Add to recent signals
 	s.RecentSignals = append(s.RecentSignals, signal)
+	s.RecentSignals = trimToLastN(s.RecentSignals, 10)
+}
 
-	// Keep only last 10 signals
-	if len(s.RecentSignals) > 10 {
-		s.RecentSignals = s.RecentSignals[len(s.RecentSignals)-10:]
+// trimToLastN keeps only the last n elements of a slice.
+func trimToLastN(signals []*ExecutionSignal, n int) []*ExecutionSignal {
+	if len(signals) <= n {
+		return signals
 	}
+	return signals[len(signals)-n:]
 }
 
-// AdaptationResult describes the outcome of online adaptation
-type AdaptationResult struct {
-	// Action taken (skipped, reflected, quick-added)
-	Action AdaptationAction
-
-	// BulletsAdded is count of new bullets
-	BulletsAdded int
-
-	// BulletsUpdated is count of modified bullets
-	BulletsUpdated int
-
-	// LatencyMs is processing time
-	LatencyMs int64
-
-	// Reason explains the adaptation decision
-	Reason string
-
-	// RefinementTriggered indicates if memory management ran
-	RefinementTriggered bool
-}
-
-// AdaptationAction describes what the adapter did
+// AdaptationAction describes what the adapter did.
 type AdaptationAction string
 
 const (
-	ActionSkip     AdaptationAction = "skip"      // Signal ignored
-	ActionReflect  AdaptationAction = "reflect"   // Full reflection cycle
-	ActionQuickAdd AdaptationAction = "quick_add" // Direct bullet generation
-	ActionUpdate   AdaptationAction = "update"    // Update existing bullets
+	ActionSkip     AdaptationAction = "skip"
+	ActionReflect  AdaptationAction = "reflect"
+	ActionQuickAdd AdaptationAction = "quick_add"
+	ActionUpdate   AdaptationAction = "update"
 )
+
+// AdaptationResult describes the outcome of online adaptation.
+type AdaptationResult struct {
+	Action              AdaptationAction
+	BulletsAdded        int
+	BulletsUpdated      int
+	LatencyMs           int64
+	Reason              string
+	RefinementTriggered bool
+}

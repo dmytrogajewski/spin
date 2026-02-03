@@ -151,6 +151,9 @@ const (
 	EventPolicyApplied
 	EventPolicySaved
 
+	// Tool selection events - dynamic tool discovery
+	EventTypeToolSelection
+
 	// System events - system-level messages
 	EventError
 	EventWarning
@@ -180,6 +183,7 @@ func (e EventType) String() string {
 		"command_denied",
 		"policy_applied",
 		"policy_saved",
+		"tool_selection",
 		"error",
 		"warning",
 		"info",

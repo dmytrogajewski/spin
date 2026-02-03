@@ -341,6 +341,11 @@ func createConversationForTUI(ctx context.Context, provider llm.Provider, cfg *c
 	}
 	if protocolServices.MCP != nil {
 		builder = builder.WithMCP(protocolServices.MCP)
+
+		// Create dynamic tool selector if any registry has dynamic_loadout
+		if toolSelector := createToolSelector(protocolServices.MCP, nil, emitter, cfg, slog.Default()); toolSelector != nil {
+			builder = builder.WithToolSelector(toolSelector)
+		}
 	}
 
 	conv, err := builder.Build(ctx)

@@ -203,6 +203,10 @@ type MCPServerConfigV2 struct {
 	// Smithery-specific fields
 	SmitheryAPIKey    string `yaml:"smithery_api_key,omitempty" mapstructure:"smithery_api_key"`
 	SmitheryNamespace string `yaml:"smithery_namespace,omitempty" mapstructure:"smithery_namespace"`
+
+	// DynamicLoadout enables dynamic tool discovery via search.
+	// When true, tools are discovered at runtime rather than statically configured.
+	DynamicLoadout bool `yaml:"dynamic_loadout,omitempty" mapstructure:"dynamic_loadout"`
 }
 
 // CycleDetectionConfigV2 configures automatic cycle detection and intervention.
@@ -425,13 +429,34 @@ func (m *MCPServerConfigV2) Validate() error {
 	}
 
 	// Validate based on transport type
-	if transport.IsRemote() {
+	if transport == MCPTransportSmithery {
+		m.validateSmithery(errs)
+	} else if transport.IsRemote() {
 		m.validateRemote(transport, errs)
 	} else {
 		m.validateStdio(errs)
 	}
 
 	return errs.ToError()
+}
+
+// validateSmithery validates Smithery transport configuration.
+func (m *MCPServerConfigV2) validateSmithery(errs *ValidationErrors) {
+	// API key is always required for Smithery
+	if m.SmitheryAPIKey == "" {
+		errs.Add(fmt.Errorf("smithery_api_key is required for smithery transport"))
+	}
+
+	// For dynamic loadout, URL and namespace are optional
+	// For static mode (URL provided), namespace is also required
+	if m.URL != "" && m.SmitheryNamespace == "" {
+		errs.Add(fmt.Errorf("smithery_namespace is required when url is specified"))
+	}
+
+	// Command is not allowed for smithery transport
+	if m.Command != "" {
+		errs.Add(fmt.Errorf("command is not allowed for smithery transport"))
+	}
 }
 
 // IsValid returns true if the transport type is valid.

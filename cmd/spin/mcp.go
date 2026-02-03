@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -11,192 +15,186 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ============================================================================
+// Smithery API Types
+// ============================================================================
+
+// smitheryToolsResponse represents the response from the Smithery tools API.
+type smitheryToolsResponse struct {
+	Tools      []smitheryToolWithServer `json:"tools"`
+	Pagination smitheryPagination       `json:"pagination"`
+}
+
+// smitheryToolWithServer represents a tool with its server information.
+type smitheryToolWithServer struct {
+	ID     string             `json:"id"`
+	Tool   smitheryTool       `json:"tool"`
+	Server smitheryToolServer `json:"server"`
+}
+
+// smitheryTool represents an MCP tool from Smithery.
+type smitheryTool struct {
+	Name        string `json:"name"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// smitheryToolServer represents a server that provides a tool.
+type smitheryToolServer struct {
+	ID            string `json:"id"`
+	QualifiedName string `json:"qualifiedName"`
+	DisplayName   string `json:"displayName"`
+	IconURL       string `json:"iconUrl,omitempty"`
+	Verified      bool   `json:"verified"`
+	IsDeployed    bool   `json:"isDeployed"`
+}
+
+// smitheryPagination represents pagination info from the API.
+type smitheryPagination struct {
+	CurrentPage int `json:"currentPage"`
+	PageSize    int `json:"pageSize"`
+	TotalPages  int `json:"totalPages"`
+	TotalCount  int `json:"totalCount"`
+}
+
+// ============================================================================
+// Main MCP Command
+// ============================================================================
+
 // newMCPCmd creates the MCP management command.
 func newMCPCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
-		Short: "Manage MCP (Model Context Protocol) servers",
-		Long: `Manage MCP (Model Context Protocol) servers.
+		Short: "Manage MCP (Model Context Protocol) registries and tools",
+		Long: `Manage MCP (Model Context Protocol) registries and tools.
 
-MCP servers extend Spin with additional capabilities like filesystem
+MCP registries extend Spin with additional capabilities like filesystem
 access, database queries, and API integrations.
 
-Supported transports:
-  - stdio: Local process communication (default)
-  - sse: Server-Sent Events for remote servers
-  - streamable-http: HTTP streaming for remote servers
-  - smithery: Smithery's connection-based API
+Registry types:
+  - local: Local process communication via stdio
+  - remote: Remote servers via SSE or HTTP streaming
+  - smithery: Smithery's hosted MCP servers
 
 Examples:
-  # Add a local stdio server
-  spin mcp add filesystem npx -y @modelcontextprotocol/server-filesystem /workspace
+  # Add a local registry
+  spin mcp registry local add filesystem npx -y @modelcontextprotocol/server-filesystem /workspace
 
-  # Add a remote SSE server (e.g., Smithery)
-  spin mcp add smithery-memory --transport sse --url https://server.smithery.ai/sse
+  # Add a Smithery registry
+  spin mcp registry smithery add paper-search @adamamer20/paper-search-mcp
 
-  # Add a remote server with authentication
-  spin mcp add remote-api --transport sse --url https://api.example.com/mcp \
-    --header "Authorization=Bearer token"
+  # List all registries
+  spin mcp registry list
 
-  # List all configured servers
-  spin mcp list
+  # Search for tools across registries
+  spin mcp search github
 
-  # Show details of a server
-  spin mcp get filesystem
-
-  # Remove a server
-  spin mcp remove filesystem`,
+  # List all tools
+  spin mcp list`,
 	}
 
-	cmd.AddCommand(newMCPAddCmd())
-	cmd.AddCommand(newMCPListCmd())
-	cmd.AddCommand(newMCPGetCmd())
-	cmd.AddCommand(newMCPRemoveCmd())
+	// Registry management
+	cmd.AddCommand(newMCPRegistryCmd())
+
+	// Tool operations
+	cmd.AddCommand(newMCPSearchCmd())
+	cmd.AddCommand(newMCPListToolsCmd())
 
 	return cmd
 }
 
-// newMCPAddCmd creates the command for adding a new MCP server.
-func newMCPAddCmd() *cobra.Command {
+// ============================================================================
+// Registry Command Group
+// ============================================================================
+
+// newMCPRegistryCmd creates the registry management command group.
+func newMCPRegistryCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "add <name> [command] [args...]",
-		Short: "Add a new MCP server",
-		Long: `Add a new MCP server configuration.
+		Use:   "registry",
+		Short: "Manage MCP registries",
+		Long: `Manage MCP registries.
 
-The server is added to your configuration file (usually ~/.spin/spin.yaml).
+Registries are sources of MCP tools. Each registry can provide multiple tools
+that extend Spin's capabilities.
 
-For stdio transport (default), provide the command and arguments.
-For remote transports (sse, streamable-http), use --url flag.
+Registry types:
+  - local: Local process (stdio) - runs a command locally
+  - remote: Remote server (SSE/HTTP) - connects to a remote endpoint
+  - smithery: Smithery platform - uses Smithery's hosted servers
 
 Examples:
-  # Add a local stdio server
-  spin mcp add filesystem npx -y @modelcontextprotocol/server-filesystem /workspace
+  # Add a local registry
+  spin mcp registry local add filesystem npx -y @modelcontextprotocol/server-filesystem /workspace
 
-  # Add a remote SSE server
-  spin mcp add smithery --transport sse --url https://server.smithery.ai/sse
+  # Add a remote registry
+  spin mcp registry remote add api-server --url https://api.example.com/mcp
 
-  # Add a remote server with headers
-  spin mcp add remote-api --transport sse --url https://api.example.com/mcp \
-    --header "Authorization=Bearer token" --header "X-Custom=value"
+  # Add a Smithery registry
+  spin mcp registry smithery add paper-search @adamamer20/paper-search-mcp
 
-  # Add a streamable HTTP server
-  spin mcp add http-server --transport streamable-http --url https://mcp.example.com/v1
+  # List all registries
+  spin mcp registry list
 
-  # Add a server with OAuth
-  spin mcp add protected --transport sse --url https://protected.example.com/mcp \
-    --oauth-client-id "my-client" --oauth-client-secret "secret"
-
-  # Add a Smithery server
-  spin mcp add papersearch --transport smithery \
-    --url https://server.smithery.ai/@adamamer20/paper-search-mcp-openai \
-    --smithery-api-key "your-smithery-api-key" --smithery-namespace "your-namespace"`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: runMCPAdd,
+  # Remove a registry
+  spin mcp registry remove filesystem`,
 	}
 
-	// Transport flags
-	cmd.Flags().String("transport", "stdio", "Transport type: stdio, sse, streamable-http, smithery")
-	cmd.Flags().String("url", "", "URL for remote MCP server (required for sse/streamable-http/smithery)")
-	cmd.Flags().StringArray("header", nil, "HTTP headers for remote servers (format: Key=Value)")
+	// Type-specific add commands
+	cmd.AddCommand(newMCPRegistryLocalCmd())
+	cmd.AddCommand(newMCPRegistryRemoteCmd())
+	cmd.AddCommand(newMCPRegistrySmitheryCmd())
 
-	// OAuth flags
-	cmd.Flags().String("oauth-client-id", "", "OAuth client ID")
-	cmd.Flags().String("oauth-client-secret", "", "OAuth client secret")
-	cmd.Flags().String("oauth-redirect-url", "", "OAuth redirect URL")
-	cmd.Flags().StringArray("oauth-scope", nil, "OAuth scopes")
-
-	// Smithery flags
-	cmd.Flags().String("smithery-api-key", "", "Smithery API key (required for smithery transport)")
-	cmd.Flags().String("smithery-namespace", "", "Smithery namespace (required for smithery transport)")
+	// General registry operations
+	cmd.AddCommand(newMCPRegistryListCmd())
+	cmd.AddCommand(newMCPRegistryGetCmd())
+	cmd.AddCommand(newMCPRegistryRemoveCmd())
 
 	return cmd
 }
 
-// newMCPListCmd creates the command for listing configured MCP servers.
-func newMCPListCmd() *cobra.Command {
+// ============================================================================
+// Local Registry Commands
+// ============================================================================
+
+// newMCPRegistryLocalCmd creates the local registry command group.
+func newMCPRegistryLocalCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List all configured MCP servers",
-		Long: `List all configured MCP servers.
-
-Displays the name, command, and configuration status of each server.
-
-Examples:
-  # List all servers
-  spin mcp list
-
-  # List with JSON output
-  spin mcp list --format json`,
-		RunE: runMCPList,
+		Use:   "local",
+		Short: "Manage local (stdio) registries",
 	}
-	cmd.Flags().String("format", "table", "Output format (table, json)")
+	cmd.AddCommand(newMCPRegistryLocalAddCmd())
 	return cmd
 }
 
-// newMCPGetCmd creates the command for getting details of a specific MCP server.
-func newMCPGetCmd() *cobra.Command {
+// newMCPRegistryLocalAddCmd creates the command for adding a local registry.
+func newMCPRegistryLocalAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get <name>",
-		Short: "Show details of an MCP server",
-		Long: `Show detailed configuration of a specific MCP server.
+		Use:   "add <name> <command> [args...]",
+		Short: "Add a local stdio registry",
+		Long: `Add a local MCP registry that communicates via stdio.
 
-Displays the full configuration including command, args, environment variables,
-and the source configuration file.
+The command is executed as a subprocess, and Spin communicates
+with it using the MCP protocol over stdin/stdout.
 
 Examples:
-  # Show server details
-  spin mcp get filesystem
+  # Add a filesystem server
+  spin mcp registry local add filesystem npx -y @modelcontextprotocol/server-filesystem /workspace
 
-  # Show details with JSON output
-  spin mcp get filesystem --format json`,
-		Args: cobra.ExactArgs(1),
-		RunE: runMCPGet,
+  # Add with environment variables
+  spin mcp registry local add my-server ./my-mcp-server --env DEBUG=true --env PORT=8080`,
+		Args: cobra.MinimumNArgs(2),
+		RunE: runMCPRegistryLocalAdd,
 	}
-	cmd.Flags().String("format", "text", "Output format (text, json)")
+	cmd.Flags().StringToString("env", nil, "Environment variables (KEY=VALUE)")
 	return cmd
 }
 
-// newMCPRemoveCmd creates the command for removing an MCP server.
-func newMCPRemoveCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "remove <name>",
-		Short: "Remove an MCP server",
-		Long: `Remove an MCP server configuration.
-
-The server is removed from your configuration file.
-By default, you are prompted for confirmation.
-
-Examples:
-  # Remove a server (with confirmation)
-  spin mcp remove filesystem
-
-  # Remove without confirmation
-  spin mcp remove filesystem --yes`,
-		Args: cobra.ExactArgs(1),
-		RunE: runMCPRemove,
-	}
-	cmd.Flags().Bool("yes", false, "Skip confirmation prompt")
-	return cmd
-}
-
-// runMCPAdd handles the execution of the MCP add command.
-func runMCPAdd(cmd *cobra.Command, args []string) error {
+func runMCPRegistryLocalAdd(cmd *cobra.Command, args []string) error {
 	name := args[0]
+	command := args[1]
+	cmdArgs := args[2:]
 
-	// Get transport flags
-	transport, _ := cmd.Flags().GetString("transport")
-	url, _ := cmd.Flags().GetString("url")
-	headerFlags, _ := cmd.Flags().GetStringArray("header")
-
-	// Get OAuth flags
-	oauthClientID, _ := cmd.Flags().GetString("oauth-client-id")
-	oauthClientSecret, _ := cmd.Flags().GetString("oauth-client-secret")
-	oauthRedirectURL, _ := cmd.Flags().GetString("oauth-redirect-url")
-	oauthScopes, _ := cmd.Flags().GetStringArray("oauth-scope")
-
-	// Get Smithery flags
-	smitheryAPIKey, _ := cmd.Flags().GetString("smithery-api-key")
-	smitheryNamespace, _ := cmd.Flags().GetString("smithery-namespace")
+	env, _ := cmd.Flags().GetStringToString("env")
 
 	// Load config
 	loader := config.NewLoaderV2()
@@ -204,47 +202,117 @@ func runMCPAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Create MCP manager
 	mgr := config.NewMCPConfigStore(loader)
 
-	// Create server based on transport type
 	server := config.MCPServer{
 		Name:      name,
-		Transport: config.MCPTransportType(transport),
+		Transport: config.MCPTransportStdio,
+		Command:   command,
+		Args:      cmdArgs,
+		Env:       env,
 	}
 
-	// Set transport-specific fields
-	transportType := config.MCPTransportType(transport)
-	if transportType == config.MCPTransportSmithery {
-		// Smithery transport: use URL, smithery_api_key, and smithery_namespace
-		if url == "" {
-			return fmt.Errorf("--url is required for smithery transport")
-		}
-		if smitheryAPIKey == "" {
-			return fmt.Errorf("--smithery-api-key is required for smithery transport")
-		}
-		if smitheryNamespace == "" {
-			return fmt.Errorf("--smithery-namespace is required for smithery transport")
-		}
-		server.URL = url
-		server.SmitheryAPIKey = smitheryAPIKey
-		server.SmitheryNamespace = smitheryNamespace
-	} else if transportType.IsRemote() {
-		// Remote transport: use URL and headers
-		if url == "" {
-			return fmt.Errorf("--url is required for %s transport", transport)
-		}
-		server.URL = url
-		server.Headers = parseHeaders(headerFlags)
-	} else {
-		// Stdio transport: use command and args
-		if len(args) < 2 {
-			return fmt.Errorf("command is required for stdio transport")
-		}
-		server.Command = args[1]
-		if len(args) > 2 {
-			server.Args = args[2:]
-		}
+	if err := mgr.Add(server); err != nil {
+		return err
+	}
+
+	configFile := loader.ConfigFileUsed()
+	if configFile == "" {
+		homeDir, _ := os.UserHomeDir()
+		configFile = homeDir + "/.spin/spin.yaml"
+	}
+
+	fmt.Printf("Added local registry '%s' to %s\n", name, configFile)
+	return nil
+}
+
+// ============================================================================
+// Remote Registry Commands
+// ============================================================================
+
+// newMCPRegistryRemoteCmd creates the remote registry command group.
+func newMCPRegistryRemoteCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "remote",
+		Short: "Manage remote (SSE/HTTP) registries",
+	}
+	cmd.AddCommand(newMCPRegistryRemoteAddCmd())
+	return cmd
+}
+
+// newMCPRegistryRemoteAddCmd creates the command for adding a remote registry.
+func newMCPRegistryRemoteAddCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "add <name>",
+		Short: "Add a remote SSE/HTTP registry",
+		Long: `Add a remote MCP registry that communicates via SSE or HTTP streaming.
+
+Examples:
+  # Add a remote SSE server
+  spin mcp registry remote add api-server --url https://api.example.com/mcp
+
+  # Add with custom headers
+  spin mcp registry remote add protected --url https://api.example.com/mcp \
+    --header "Authorization=Bearer token"
+
+  # Add with HTTP streaming transport
+  spin mcp registry remote add http-api --url https://api.example.com/mcp \
+    --transport streamable-http
+
+  # Enable dynamic tool discovery
+  spin mcp registry remote add dynamic-api --url https://api.example.com/mcp --dynamic`,
+		Args: cobra.ExactArgs(1),
+		RunE: runMCPRegistryRemoteAdd,
+	}
+	cmd.Flags().String("url", "", "Server URL (required)")
+	cmd.Flags().String("transport", "sse", "Transport type: sse, streamable-http")
+	cmd.Flags().StringArray("header", nil, "HTTP headers (Key=Value)")
+	cmd.Flags().Bool("dynamic", false, "Enable dynamic tool discovery")
+	cmd.Flags().String("oauth-client-id", "", "OAuth client ID")
+	cmd.Flags().String("oauth-client-secret", "", "OAuth client secret")
+	cmd.Flags().String("oauth-redirect-url", "", "OAuth redirect URL")
+	cmd.Flags().StringArray("oauth-scope", nil, "OAuth scopes")
+	cmd.MarkFlagRequired("url")
+	return cmd
+}
+
+func runMCPRegistryRemoteAdd(cmd *cobra.Command, args []string) error {
+	name := args[0]
+
+	urlStr, _ := cmd.Flags().GetString("url")
+	transport, _ := cmd.Flags().GetString("transport")
+	headerFlags, _ := cmd.Flags().GetStringArray("header")
+	dynamic, _ := cmd.Flags().GetBool("dynamic")
+	oauthClientID, _ := cmd.Flags().GetString("oauth-client-id")
+	oauthClientSecret, _ := cmd.Flags().GetString("oauth-client-secret")
+	oauthRedirectURL, _ := cmd.Flags().GetString("oauth-redirect-url")
+	oauthScopes, _ := cmd.Flags().GetStringArray("oauth-scope")
+
+	// Validate transport
+	var transportType config.MCPTransportType
+	switch transport {
+	case "sse":
+		transportType = config.MCPTransportSSE
+	case "streamable-http":
+		transportType = config.MCPTransportStreamableHTTP
+	default:
+		return fmt.Errorf("invalid transport: %s (use 'sse' or 'streamable-http')", transport)
+	}
+
+	// Load config
+	loader := config.NewLoaderV2()
+	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	mgr := config.NewMCPConfigStore(loader)
+
+	server := config.MCPServer{
+		Name:           name,
+		Transport:      transportType,
+		URL:            urlStr,
+		Headers:        parseHeaders(headerFlags),
+		DynamicLoadout: dynamic,
 	}
 
 	// Set OAuth if provided
@@ -257,21 +325,647 @@ func runMCPAdd(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Add server
 	if err := mgr.Add(server); err != nil {
 		return err
 	}
 
-	// Determine config file location
 	configFile := loader.ConfigFileUsed()
 	if configFile == "" {
 		homeDir, _ := os.UserHomeDir()
 		configFile = homeDir + "/.spin/spin.yaml"
 	}
 
-	fmt.Printf("Added MCP server '%s' to %s\n", name, configFile)
+	fmt.Printf("Added remote registry '%s' to %s\n", name, configFile)
 	return nil
 }
+
+// ============================================================================
+// Smithery Registry Commands
+// ============================================================================
+
+// newMCPRegistrySmitheryCmd creates the Smithery registry command group.
+func newMCPRegistrySmitheryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "smithery",
+		Short: "Manage Smithery registries",
+	}
+	cmd.AddCommand(newMCPRegistrySmitheryAddCmd())
+	return cmd
+}
+
+// newMCPRegistrySmitheryAddCmd creates the command for adding a Smithery registry.
+func newMCPRegistrySmitheryAddCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "add <name> <server-path>",
+		Short: "Add a Smithery registry",
+		Long: `Add a Smithery MCP registry.
+
+Server path formats:
+  - @namespace/server-name (short form)
+  - namespace/server-name (without @)
+  - https://server.smithery.ai/@namespace/server-name (full URL)
+
+The API key can be provided via:
+  - --api-key flag
+  - SMITHERY_API_KEY environment variable
+  - Interactive prompt (if neither is set)
+
+Examples:
+  # Add using short path
+  spin mcp registry smithery add paper-search @adamamer20/paper-search-mcp
+
+  # Add with explicit API key
+  spin mcp registry smithery add paper-search @adamamer20/paper-search-mcp --api-key sk_...
+
+  # Enable dynamic tool discovery
+  spin mcp registry smithery add paper-search @adamamer20/paper-search-mcp --dynamic`,
+		Args: cobra.ExactArgs(2),
+		RunE: runMCPRegistrySmitheryAdd,
+	}
+	cmd.Flags().String("api-key", "", "Smithery API key (or use SMITHERY_API_KEY env var)")
+	cmd.Flags().String("namespace", "", "Smithery namespace (auto-detected from path)")
+	cmd.Flags().Bool("dynamic", false, "Enable dynamic tool discovery")
+	return cmd
+}
+
+func runMCPRegistrySmitheryAdd(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	serverPath := args[1]
+
+	apiKey, _ := cmd.Flags().GetString("api-key")
+	namespace, _ := cmd.Flags().GetString("namespace")
+	dynamic, _ := cmd.Flags().GetBool("dynamic")
+
+	// Parse server path
+	serverURL, extractedNamespace, err := parseSmitheryPath(serverPath)
+	if err != nil {
+		return err
+	}
+
+	if namespace == "" {
+		namespace = extractedNamespace
+	}
+
+	// Get API key from env if not provided
+	if apiKey == "" {
+		apiKey = os.Getenv("SMITHERY_API_KEY")
+	}
+
+	// Prompt for API key if still not set
+	if apiKey == "" {
+		fmt.Print("Enter Smithery API key: ")
+		reader := bufio.NewReader(os.Stdin)
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read API key: %w", err)
+		}
+		apiKey = strings.TrimSpace(input)
+		if apiKey == "" {
+			return fmt.Errorf("API key is required")
+		}
+	}
+
+	// Load config
+	loader := config.NewLoaderV2()
+	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	mgr := config.NewMCPConfigStore(loader)
+
+	server := config.MCPServer{
+		Name:              name,
+		Transport:         config.MCPTransportSmithery,
+		URL:               serverURL,
+		SmitheryAPIKey:    apiKey,
+		SmitheryNamespace: namespace,
+		DynamicLoadout:    dynamic,
+	}
+
+	if err := mgr.Add(server); err != nil {
+		return err
+	}
+
+	configFile := loader.ConfigFileUsed()
+	if configFile == "" {
+		homeDir, _ := os.UserHomeDir()
+		configFile = homeDir + "/.spin/spin.yaml"
+	}
+
+	fmt.Printf("Added Smithery registry '%s' to %s\n", name, configFile)
+	fmt.Printf("  URL: %s\n", serverURL)
+	fmt.Printf("  Namespace: %s\n", namespace)
+
+	return nil
+}
+
+// ============================================================================
+// Registry List/Get/Remove Commands
+// ============================================================================
+
+// newMCPRegistryListCmd creates the command for listing registries.
+func newMCPRegistryListCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all configured registries",
+		Long: `List all configured MCP registries.
+
+Examples:
+  # List all registries
+  spin mcp registry list
+
+  # List with JSON output
+  spin mcp registry list --format json`,
+		RunE: runMCPRegistryList,
+	}
+	cmd.Flags().String("format", "table", "Output format (table, json)")
+	return cmd
+}
+
+func runMCPRegistryList(cmd *cobra.Command, args []string) error {
+	format, _ := cmd.Flags().GetString("format")
+
+	loader := config.NewLoaderV2()
+	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	mgr := config.NewMCPConfigStore(loader)
+	servers, err := mgr.List()
+	if err != nil {
+		return err
+	}
+
+	if len(servers) == 0 {
+		fmt.Println("No registries configured.")
+		fmt.Println("\nTo add a registry:")
+		fmt.Println("  spin mcp registry local add <name> <command> [args...]")
+		fmt.Println("  spin mcp registry remote add <name> --url <url>")
+		fmt.Println("  spin mcp registry smithery add <name> @namespace/server")
+		return nil
+	}
+
+	if format == "json" {
+		return outputJSON(servers)
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "NAME\tTYPE\tDYNAMIC\tENDPOINT")
+	for _, server := range servers {
+		regType := config.GetRegistryTypeName(server)
+		dynamic := ""
+		if server.DynamicLoadout {
+			dynamic = "yes"
+		}
+		endpoint := formatEndpoint(server)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", server.Name, regType, dynamic, endpoint)
+	}
+	w.Flush()
+
+	return nil
+}
+
+// newMCPRegistryGetCmd creates the command for getting registry details.
+func newMCPRegistryGetCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get <name>",
+		Short: "Show details of a registry",
+		Long: `Show detailed configuration of a specific registry.
+
+Examples:
+  # Show registry details
+  spin mcp registry get filesystem
+
+  # Show with JSON output
+  spin mcp registry get filesystem --format json`,
+		Args: cobra.ExactArgs(1),
+		RunE: runMCPRegistryGet,
+	}
+	cmd.Flags().String("format", "text", "Output format (text, json)")
+	return cmd
+}
+
+func runMCPRegistryGet(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	format, _ := cmd.Flags().GetString("format")
+
+	loader := config.NewLoaderV2()
+	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	mgr := config.NewMCPConfigStore(loader)
+	server, err := mgr.Get(name)
+	if err != nil {
+		return err
+	}
+
+	if format == "json" {
+		return outputJSON(server)
+	}
+
+	// Text format
+	fmt.Printf("Name: %s\n", server.Name)
+	fmt.Printf("Type: %s\n", config.GetRegistryTypeName(*server))
+	fmt.Printf("Dynamic Loadout: %v\n", server.DynamicLoadout)
+
+	transport := string(server.Transport)
+	if transport == "" {
+		transport = "stdio"
+	}
+	fmt.Printf("Transport: %s\n", transport)
+
+	if server.Transport.IsRemote() {
+		fmt.Printf("URL: %s\n", server.URL)
+		if len(server.Headers) > 0 {
+			fmt.Println("Headers:")
+			for key, value := range server.Headers {
+				displayValue := value
+				if strings.EqualFold(key, "authorization") || strings.Contains(strings.ToLower(key), "secret") {
+					displayValue = "***"
+				}
+				fmt.Printf("  %s: %s\n", key, displayValue)
+			}
+		}
+		if server.Transport == config.MCPTransportSmithery {
+			fmt.Printf("Smithery Namespace: %s\n", server.SmitheryNamespace)
+			fmt.Printf("Smithery API Key: %s\n", maskAPIKey(server.SmitheryAPIKey))
+		}
+	} else {
+		fmt.Printf("Command: %s\n", server.Command)
+		if len(server.Args) > 0 {
+			fmt.Printf("Args: %s\n", strings.Join(server.Args, " "))
+		}
+		if len(server.Env) > 0 {
+			fmt.Println("Environment:")
+			for key, value := range server.Env {
+				fmt.Printf("  %s=%s\n", key, value)
+			}
+		}
+	}
+
+	if server.OAuth != nil {
+		fmt.Println("OAuth:")
+		fmt.Printf("  Client ID: %s\n", server.OAuth.ClientID)
+		if server.OAuth.ClientSecret != "" {
+			fmt.Println("  Client Secret: ***")
+		}
+	}
+
+	configFile := loader.ConfigFileUsed()
+	if configFile != "" {
+		fmt.Printf("Source: %s\n", configFile)
+	}
+
+	return nil
+}
+
+// newMCPRegistryRemoveCmd creates the command for removing a registry.
+func newMCPRegistryRemoveCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "remove <name>",
+		Short: "Remove a registry",
+		Long: `Remove an MCP registry from your configuration.
+
+Examples:
+  # Remove with confirmation
+  spin mcp registry remove filesystem
+
+  # Remove without confirmation
+  spin mcp registry remove filesystem --yes`,
+		Args: cobra.ExactArgs(1),
+		RunE: runMCPRegistryRemove,
+	}
+	cmd.Flags().Bool("yes", false, "Skip confirmation prompt")
+	return cmd
+}
+
+func runMCPRegistryRemove(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	yes, _ := cmd.Flags().GetBool("yes")
+
+	loader := config.NewLoaderV2()
+	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	mgr := config.NewMCPConfigStore(loader)
+
+	_, err := mgr.Get(name)
+	if err != nil {
+		return err
+	}
+
+	if !yes {
+		fmt.Printf("Remove registry '%s'? (y/N): ", name)
+		var response string
+		fmt.Scanln(&response)
+		response = strings.ToLower(strings.TrimSpace(response))
+		if response != "y" && response != "yes" {
+			fmt.Println("Cancelled.")
+			return nil
+		}
+	}
+
+	if err := mgr.Remove(name); err != nil {
+		return err
+	}
+
+	configFile := loader.ConfigFileUsed()
+	if configFile == "" {
+		homeDir, _ := os.UserHomeDir()
+		configFile = homeDir + "/.spin/spin.yaml"
+	}
+
+	fmt.Printf("Removed registry '%s' from %s\n", name, configFile)
+	return nil
+}
+
+// ============================================================================
+// Search Command
+// ============================================================================
+
+// newMCPSearchCmd creates the command for searching tools.
+func newMCPSearchCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "search <query>",
+		Short: "Search for tools across registries",
+		Long: `Search for MCP tools across all configured registries.
+
+For Smithery registries, this searches the Smithery API for available tools.
+For other registries, it searches the locally configured tools.
+
+Examples:
+  # Search all registries
+  spin mcp search github
+
+  # Search specific registry
+  spin mcp search filesystem --registry=local-fs
+
+  # Search with more results
+  spin mcp search database --limit 20
+
+  # Search only verified Smithery servers
+  spin mcp search api --verified`,
+		Args: cobra.ExactArgs(1),
+		RunE: runMCPSearch,
+	}
+	cmd.Flags().String("registry", "", "Filter by registry name")
+	cmd.Flags().Int("limit", 10, "Maximum results")
+	cmd.Flags().Bool("verified", false, "Only show tools from verified servers (Smithery)")
+	cmd.Flags().String("format", "table", "Output format (table, json)")
+	cmd.Flags().String("api-key", "", "Smithery API key (or use SMITHERY_API_KEY env var)")
+	return cmd
+}
+
+func runMCPSearch(cmd *cobra.Command, args []string) error {
+	query := args[0]
+	registryFilter, _ := cmd.Flags().GetString("registry")
+	limit, _ := cmd.Flags().GetInt("limit")
+	verified, _ := cmd.Flags().GetBool("verified")
+	format, _ := cmd.Flags().GetString("format")
+	apiKey, _ := cmd.Flags().GetString("api-key")
+
+	// Get API key from env if not provided
+	if apiKey == "" {
+		apiKey = os.Getenv("SMITHERY_API_KEY")
+	}
+
+	loader := config.NewLoaderV2()
+	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	mgr := config.NewMCPConfigStore(loader)
+	servers, err := mgr.List()
+	if err != nil {
+		return err
+	}
+
+	// Filter by registry if specified
+	if registryFilter != "" {
+		var filtered []config.MCPServer
+		for _, s := range servers {
+			if s.Name == registryFilter {
+				filtered = append(filtered, s)
+			}
+		}
+		if len(filtered) == 0 {
+			return fmt.Errorf("registry '%s' not found", registryFilter)
+		}
+		servers = filtered
+	}
+
+	// Collect search results
+	type searchResult struct {
+		ToolName    string `json:"tool_name"`
+		Registry    string `json:"registry"`
+		Type        string `json:"type"`
+		Verified    bool   `json:"verified,omitempty"`
+		Description string `json:"description,omitempty"`
+	}
+
+	var results []searchResult
+
+	for _, server := range servers {
+		if server.Transport == config.MCPTransportSmithery {
+			// Search Smithery API
+			key := apiKey
+			if key == "" {
+				key = server.SmitheryAPIKey
+			}
+			if key == "" {
+				fmt.Fprintf(os.Stderr, "Warning: No API key for Smithery registry '%s', skipping\n", server.Name)
+				continue
+			}
+
+			smitheryResults, err := searchSmitheryAPI(query, key, limit, verified)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to search Smithery registry '%s': %v\n", server.Name, err)
+				continue
+			}
+
+			for _, r := range smitheryResults.Tools {
+				results = append(results, searchResult{
+					ToolName:    r.Tool.Name,
+					Registry:    server.Name,
+					Type:        "smithery",
+					Verified:    r.Server.Verified,
+					Description: r.Tool.Description,
+				})
+			}
+		}
+		// Local/remote registries require initialization to list tools.
+		// Currently only Smithery API search is implemented.
+	}
+
+	if len(results) == 0 {
+		fmt.Printf("No tools found for query: %s\n", query)
+		return nil
+	}
+
+	if format == "json" {
+		return outputJSON(results)
+	}
+
+	// Table format
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "TOOL\tREGISTRY\tTYPE\tVERIFIED\tDESCRIPTION")
+
+	for _, r := range results {
+		verifiedStr := ""
+		if r.Verified {
+			verifiedStr = "yes"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.ToolName, r.Registry, r.Type, verifiedStr, r.Description)
+	}
+	w.Flush()
+
+	fmt.Printf("\nFound %d tools.\n", len(results))
+
+	return nil
+}
+
+func searchSmitheryAPI(query, apiKey string, limit int, verified bool) (*smitheryToolsResponse, error) {
+	apiURL := fmt.Sprintf("https://api.smithery.ai/tools?q=%s&pageSize=%d",
+		url.QueryEscape(query), limit)
+
+	if verified {
+		apiURL += "&serverVerified=true"
+	}
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var result smitheryToolsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// ============================================================================
+// List Tools Command
+// ============================================================================
+
+// newMCPListToolsCmd creates the command for listing all tools.
+func newMCPListToolsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "list",
+		Aliases: []string{"tools"},
+		Short:   "List all tools from configured registries",
+		Long: `List all tools from configured MCP registries.
+
+Shows tools with their source registry and loadout type (static or dynamic).
+
+Examples:
+  # List all tools
+  spin mcp list
+
+  # Filter by registry
+  spin mcp list --registry=smithery
+
+  # JSON output
+  spin mcp list --format json`,
+		RunE: runMCPListTools,
+	}
+	cmd.Flags().String("registry", "", "Filter by registry name")
+	cmd.Flags().String("format", "table", "Output format (table, json)")
+	return cmd
+}
+
+func runMCPListTools(cmd *cobra.Command, args []string) error {
+	registryFilter, _ := cmd.Flags().GetString("registry")
+	format, _ := cmd.Flags().GetString("format")
+
+	loader := config.NewLoaderV2()
+	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	mgr := config.NewMCPConfigStore(loader)
+	servers, err := mgr.List()
+	if err != nil {
+		return err
+	}
+
+	// Filter by registry if specified
+	if registryFilter != "" {
+		var filtered []config.MCPServer
+		for _, s := range servers {
+			if s.Name == registryFilter {
+				filtered = append(filtered, s)
+			}
+		}
+		servers = filtered
+	}
+
+	if len(servers) == 0 {
+		if registryFilter != "" {
+			fmt.Printf("No registry found with name '%s'.\n", registryFilter)
+		} else {
+			fmt.Println("No registries configured.")
+		}
+		return nil
+	}
+
+	// Show registries as tool sources (tools are discovered at runtime when registry is initialized)
+	type toolInfo struct {
+		Tool   string `json:"tool"`
+		Source string `json:"source"`
+		Type   string `json:"type"`
+		Status string `json:"status"`
+	}
+
+	var tools []toolInfo
+	for _, server := range servers {
+		// Placeholder: show registry as a tool source
+		tools = append(tools, toolInfo{
+			Tool:   fmt.Sprintf("(tools from %s)", server.Name),
+			Source: config.FormatSource(server),
+			Type:   config.GetRegistryTypeName(server),
+			Status: "configured",
+		})
+	}
+
+	if format == "json" {
+		return outputJSON(tools)
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "TOOL\tSOURCE\tTYPE\tSTATUS")
+	for _, t := range tools {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", t.Tool, t.Source, t.Type, t.Status)
+	}
+	w.Flush()
+
+	fmt.Printf("\n%d registries configured.\n", len(servers))
+	fmt.Println("Note: Use 'spin mcp search <query>' to discover available tools.")
+
+	return nil
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
 // parseHeaders parses header flags in format "Key=Value" into a map.
 func parseHeaders(headers []string) map[string]string {
@@ -288,206 +982,59 @@ func parseHeaders(headers []string) map[string]string {
 	return result
 }
 
-// runMCPList handles the execution of the MCP list command.
-func runMCPList(cmd *cobra.Command, args []string) error {
-	format, _ := cmd.Flags().GetString("format")
-
-	// Load config
-	loader := config.NewLoaderV2()
-	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Create MCP manager
-	mgr := config.NewMCPConfigStore(loader)
-
-	// List servers
-	servers, err := mgr.List()
-	if err != nil {
-		return err
-	}
-
-	if len(servers) == 0 {
-		fmt.Println("No MCP servers configured.")
-		return nil
-	}
-
-	// Output based on format
-	if format == "json" {
-		return outputJSON(servers)
-	}
-
-	// Table format
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tTRANSPORT\tURL/COMMAND\tSTATUS")
-	for _, server := range servers {
-		transport := string(server.Transport)
-		if transport == "" {
-			transport = "stdio"
-		}
-		endpoint := formatEndpoint(server)
-		fmt.Fprintf(w, "%s\t%s\t%s\tconfigured\n", server.Name, transport, endpoint)
-	}
-	w.Flush()
-
-	return nil
-}
-
-// runMCPGet handles the execution of the MCP get command.
-func runMCPGet(cmd *cobra.Command, args []string) error {
-	name := args[0]
-	format, _ := cmd.Flags().GetString("format")
-
-	// Load config
-	loader := config.NewLoaderV2()
-	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Create MCP manager
-	mgr := config.NewMCPConfigStore(loader)
-
-	// Get server
-	server, err := mgr.Get(name)
-	if err != nil {
-		return err
-	}
-
-	// Output based on format
-	if format == "json" {
-		return outputJSON(server)
-	}
-
-	// Text format
-	fmt.Printf("Name: %s\n", server.Name)
-
-	// Transport
-	transport := string(server.Transport)
-	if transport == "" {
-		transport = "stdio"
-	}
-	fmt.Printf("Transport: %s\n", transport)
-
-	// Transport-specific fields
-	if server.Transport.IsRemote() {
-		fmt.Printf("URL: %s\n", server.URL)
-		if len(server.Headers) > 0 {
-			fmt.Println("Headers:")
-			for key, value := range server.Headers {
-				// Mask sensitive headers
-				displayValue := value
-				if strings.EqualFold(key, "authorization") || strings.Contains(strings.ToLower(key), "secret") {
-					displayValue = "***"
-				}
-				fmt.Printf("  %s: %s\n", key, displayValue)
-			}
-		}
-	} else {
-		fmt.Printf("Command: %s\n", server.Command)
-		if len(server.Args) > 0 {
-			fmt.Println("Args:")
-			for _, arg := range server.Args {
-				fmt.Printf("  - %s\n", arg)
-			}
-		}
-		if len(server.Env) > 0 {
-			fmt.Println("Environment:")
-			for key, value := range server.Env {
-				fmt.Printf("  %s=%s\n", key, value)
-			}
-		}
-	}
-
-	// OAuth
-	if server.OAuth != nil {
-		fmt.Println("OAuth:")
-		fmt.Printf("  Client ID: %s\n", server.OAuth.ClientID)
-		if server.OAuth.ClientSecret != "" {
-			fmt.Printf("  Client Secret: ***\n")
-		}
-		if server.OAuth.RedirectURL != "" {
-			fmt.Printf("  Redirect URL: %s\n", server.OAuth.RedirectURL)
-		}
-		if len(server.OAuth.Scopes) > 0 {
-			fmt.Printf("  Scopes: %s\n", strings.Join(server.OAuth.Scopes, ", "))
-		}
-	}
-
-	// Show source config file
-	configFile := loader.ConfigFileUsed()
-	if configFile != "" {
-		fmt.Printf("Source: %s\n", configFile)
-	}
-
-	return nil
-}
-
-// runMCPRemove handles the execution of the MCP remove command.
-func runMCPRemove(cmd *cobra.Command, args []string) error {
-	name := args[0]
-	yes, _ := cmd.Flags().GetBool("yes")
-
-	// Load config
-	loader := config.NewLoaderV2()
-	if _, err := loader.LoadFromFile(flagConfigFile); err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Create MCP manager
-	mgr := config.NewMCPConfigStore(loader)
-
-	// Check if server exists
-	_, err := mgr.Get(name)
-	if err != nil {
-		return err
-	}
-
-	// Confirm unless --yes flag
-	if !yes {
-		fmt.Printf("Remove MCP server '%s'? (y/N): ", name)
-		var response string
-		fmt.Scanln(&response)
-		response = strings.ToLower(strings.TrimSpace(response))
-		if response != "y" && response != "yes" {
-			fmt.Println("Cancelled.")
-			return nil
-		}
-	}
-
-	// Remove server
-	if err := mgr.Remove(name); err != nil {
-		return err
-	}
-
-	// Determine config file location
-	configFile := loader.ConfigFileUsed()
-	if configFile == "" {
-		homeDir, _ := os.UserHomeDir()
-		configFile = homeDir + "/.spin/spin.yaml"
-	}
-
-	fmt.Printf("Removed MCP server '%s' from %s\n", name, configFile)
-	return nil
-}
-
 // formatEndpoint formats the server endpoint for display (URL or command).
 func formatEndpoint(server config.MCPServer) string {
 	if server.Transport.IsRemote() {
-		// Remote: show URL
-		url := server.URL
-		if len(url) > 50 {
-			url = url[:47] + "..."
-		}
-		return url
+		return server.URL
 	}
-	// Stdio: show command
 	parts := []string{server.Command}
 	parts = append(parts, server.Args...)
-	cmdStr := strings.Join(parts, " ")
-	if len(cmdStr) > 50 {
-		cmdStr = cmdStr[:47] + "..."
+	return strings.Join(parts, " ")
+}
+
+// parseSmitheryPath parses Smithery server path formats.
+func parseSmitheryPath(path string) (serverURL string, namespace string, err error) {
+	const baseURL = "https://server.smithery.ai"
+
+	if strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "http://") {
+		parsedURL, err := url.Parse(path)
+		if err != nil {
+			return "", "", fmt.Errorf("invalid URL: %w", err)
+		}
+		pathParts := strings.Split(strings.TrimPrefix(parsedURL.Path, "/"), "/")
+		if len(pathParts) >= 1 {
+			ns := pathParts[0]
+			if strings.HasPrefix(ns, "@") {
+				ns = strings.TrimPrefix(ns, "@")
+			}
+			namespace = ns
+		}
+		return path, namespace, nil
 	}
-	return cmdStr
+
+	cleanPath := path
+	if strings.HasPrefix(path, "@") {
+		cleanPath = strings.TrimPrefix(path, "@")
+	}
+
+	parts := strings.SplitN(cleanPath, "/", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid server path format: %s (expected @namespace/server-name)", path)
+	}
+
+	namespace = parts[0]
+	serverName := parts[1]
+	serverURL = fmt.Sprintf("%s/@%s/%s", baseURL, namespace, serverName)
+
+	return serverURL, namespace, nil
+}
+
+// maskAPIKey masks an API key for display.
+func maskAPIKey(key string) string {
+	if len(key) <= 8 {
+		return "***"
+	}
+	return key[:4] + "..." + key[len(key)-4:]
 }
 
 // outputJSON outputs data as JSON
