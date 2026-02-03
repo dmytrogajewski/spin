@@ -99,12 +99,16 @@ func TestShellCommandTool_Schema(t *testing.T) {
 		t.Errorf("operation.Enum has %d values, want 5", len(opProp.Enum))
 	}
 
-	// Check required fields
-	if len(schema.Function.Parameters.Required) != 1 {
-		t.Errorf("Required has %d fields, want 1", len(schema.Function.Parameters.Required))
+	// Check required fields - both operation and command are required
+	// (command is required to ensure LLMs always provide it for execute operations)
+	if len(schema.Function.Parameters.Required) != 2 {
+		t.Errorf("Required has %d fields, want 2", len(schema.Function.Parameters.Required))
 	}
 	if schema.Function.Parameters.Required[0] != "operation" {
 		t.Errorf("Required[0] = %q, want %q", schema.Function.Parameters.Required[0], "operation")
+	}
+	if schema.Function.Parameters.Required[1] != "command" {
+		t.Errorf("Required[1] = %q, want %q", schema.Function.Parameters.Required[1], "command")
 	}
 }
 

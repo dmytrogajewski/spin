@@ -108,23 +108,23 @@ func (t *ShellCommandTool) Schema() ToolSchema {
 				Properties: map[string]PropertyDefinition{
 					"operation": {
 						Type:        "string",
-						Description: "Operation type. REQUIRED. Options: 'execute' (run a command, requires 'command'), 'get_environment' (list env vars, no 'command' needed), 'get_shell_info' (shell info, no 'command' needed), 'detect_shell' (check if command needs shell, REQUIRES 'command'), 'validate' (validate command, REQUIRES 'command')",
+						Description: "Operation type: 'execute' to run a shell command (most common), 'get_environment' to list env vars, 'get_shell_info' for shell info, 'detect_shell' to check if command needs shell, 'validate' to validate a command",
 						Enum:        []string{"execute", "get_environment", "get_shell_info", "detect_shell", "validate"},
 					},
 					"command": {
 						Type:        "string",
-						Description: "Shell command string. REQUIRED when operation is 'execute', 'detect_shell', or 'validate'. NOT needed for 'get_environment' or 'get_shell_info'.",
+						Description: "The shell command to execute (e.g., 'ls -la', 'uname -a', 'df -h'). REQUIRED for 'execute', 'detect_shell', and 'validate' operations. This is the actual command string you want to run.",
 					},
 					"working_directory": {
 						Type:        "string",
-						Description: "Working directory (optional, for execute operation)",
+						Description: "Working directory for command execution (optional)",
 					},
 					"timeout": {
 						Type:        "number",
-						Description: "Timeout in seconds (optional, for execute operation, defaults to 30s)",
+						Description: "Timeout in seconds (optional, defaults to 30s)",
 					},
 				},
-				Required: []string{"operation"},
+				Required: []string{"operation", "command"},
 			},
 		},
 	}

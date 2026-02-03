@@ -223,6 +223,10 @@ func TestLoad_EmptySource(t *testing.T) {
 // TestLoad_FlagOverrides tests that flags override defaults.
 // Kills mutant: removing flag application would make this test fail.
 func TestLoad_FlagOverrides(t *testing.T) {
+	// Use temp dir as HOME to avoid loading user's config file
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
 	cfg, err := Load(Source{
 		Flags: FlagOverrides{
 			Provider: "openai",

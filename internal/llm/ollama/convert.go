@@ -74,21 +74,33 @@ type genericMessage struct {
 // buildToolCallIDToNameMap scans messages to build a mapping from tool_call_id to tool_name.
 // This is needed because Ollama/Gemini requires tool_name in tool result messages,
 // but OpenAI format uses tool_call_id to reference the original call.
+//
+// It uses two strategies:
+//  1. Primary: Extract id->name from assistant messages' tool_calls.
+//  2. Positional fallback: For tool messages whose tool_call_id is not in the mapping
+//     (e.g. due to assistant message parsing issues or serialization differences),
+//     infer tool_name from the preceding assistant message by tool message order.
 func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion) map[string]string {
 	result := make(map[string]string)
 
-	for _, msg := range messages {
+	// Pass 1: Extract from assistant messages
+	for msgIdx, msg := range messages {
 		genericMsg, err := parseGenericMessage(msg)
 		if err != nil {
+			slog.Debug("buildToolCallIDToNameMap: failed to parse message",
+				"index", msgIdx,
+				"error", err)
 			continue
 		}
 
-		// Only assistant messages can have tool_calls
 		if genericMsg.Role != "assistant" || len(genericMsg.ToolCalls) == 0 {
 			continue
 		}
 
-		// Parse tool calls to extract id -> name mapping
+		slog.Debug("buildToolCallIDToNameMap: found assistant message with tool_calls",
+			"index", msgIdx,
+			"tool_calls_raw_len", len(genericMsg.ToolCalls))
+
 		var toolCalls []struct {
 			ID       string `json:"id"`
 			Function struct {
@@ -96,17 +108,103 @@ func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion)
 			} `json:"function"`
 		}
 		if err := json.Unmarshal(genericMsg.ToolCalls, &toolCalls); err != nil {
+			slog.Debug("buildToolCallIDToNameMap: failed to unmarshal tool_calls",
+				"index", msgIdx,
+				"error", err,
+				"raw", string(genericMsg.ToolCalls))
 			continue
 		}
+
+		slog.Debug("buildToolCallIDToNameMap: parsed tool_calls",
+			"index", msgIdx,
+			"count", len(toolCalls))
 
 		for _, tc := range toolCalls {
 			if tc.ID != "" && tc.Function.Name != "" {
 				result[tc.ID] = tc.Function.Name
+				slog.Debug("buildToolCallIDToNameMap: added mapping",
+					"id", tc.ID,
+					"name", tc.Function.Name)
 			}
 		}
 	}
 
+	// Pass 2: Positional fallback for tool messages with missing mapping
+	for i, msg := range messages {
+		genericMsg, err := parseGenericMessage(msg)
+		if err != nil || genericMsg.Role != "tool" || genericMsg.ToolCallID == "" {
+			continue
+		}
+		if _, ok := result[genericMsg.ToolCallID]; ok {
+			continue // Already in mapping
+		}
+
+		// Find preceding assistant with tool_calls and our position among following tool messages
+		toolName := resolveToolNameByPosition(messages, i)
+		if toolName != "" {
+			result[genericMsg.ToolCallID] = toolName
+			slog.Debug("buildToolCallIDToNameMap: positional fallback added mapping",
+				"index", i,
+				"tool_call_id", genericMsg.ToolCallID,
+				"tool_name", toolName)
+		} else {
+			slog.Debug("buildToolCallIDToNameMap: positional fallback failed",
+				"index", i,
+				"tool_call_id", genericMsg.ToolCallID)
+		}
+	}
+
+	slog.Debug("buildToolCallIDToNameMap: final mapping",
+		"size", len(result))
+
 	return result
+}
+
+// resolveToolNameByPosition finds the tool name for a tool message at index i
+// by locating the preceding assistant message and using tool message order.
+func resolveToolNameByPosition(messages []openai.ChatCompletionMessageParamUnion, toolMsgIndex int) string {
+	// Walk backwards to find assistant with tool_calls
+	var assistantToolNames []string
+	var toolCountBeforeMe int
+
+	for j := toolMsgIndex - 1; j >= 0; j-- {
+		genericMsg, err := parseGenericMessage(messages[j])
+		if err != nil {
+			continue
+		}
+
+		if genericMsg.Role == "tool" {
+			toolCountBeforeMe++
+			continue
+		}
+
+		if genericMsg.Role == "assistant" && len(genericMsg.ToolCalls) > 0 {
+			var toolCalls []struct {
+				Function struct {
+					Name string `json:"name"`
+				} `json:"function"`
+			}
+			if json.Unmarshal(genericMsg.ToolCalls, &toolCalls) != nil {
+				return ""
+			}
+			for _, tc := range toolCalls {
+				assistantToolNames = append(assistantToolNames, tc.Function.Name)
+			}
+			// Reverse: we walked backwards so names are in reverse order
+			for left, right := 0, len(assistantToolNames)-1; left < right; left, right = left+1, right-1 {
+				assistantToolNames[left], assistantToolNames[right] = assistantToolNames[right], assistantToolNames[left]
+			}
+			break
+		}
+
+		// Other role (user, system) - no preceding assistant with tool_calls
+		return ""
+	}
+
+	if toolCountBeforeMe >= len(assistantToolNames) {
+		return ""
+	}
+	return assistantToolNames[toolCountBeforeMe]
 }
 
 // parseGenericMessage converts an OpenAI message to a generic structure.
@@ -293,6 +391,11 @@ func convertOllamaResponseToOpenAI(resp api.ChatResponse, model string) *openai.
 					"arguments", fmt.Sprintf("%v", tc.Function.Arguments))
 				argsJSON = []byte("{}")
 			}
+			// Debug: Log tool call arguments from Ollama
+			slog.Debug("ollama tool call received",
+				"tool", tc.Function.Name,
+				"arguments", string(argsJSON),
+				"raw_arguments", fmt.Sprintf("%+v", tc.Function.Arguments))
 			result.Choices[0].Message.ToolCalls[i] = openai.ChatCompletionMessageToolCall{
 				ID:   fmt.Sprintf("%s-%d", result.ID, i),
 				Type: openai.ChatCompletionMessageToolCallTypeFunction,
@@ -374,6 +477,11 @@ func convertOllamaChunkToOpenAI(resp api.ChatResponse, chunkID, model string) op
 					"arguments", fmt.Sprintf("%v", tc.Function.Arguments))
 				argsJSON = []byte("{}")
 			}
+			// Debug: Log tool call arguments from Ollama streaming
+			slog.Debug("ollama stream tool call received",
+				"tool", tc.Function.Name,
+				"arguments", string(argsJSON),
+				"raw_arguments", fmt.Sprintf("%+v", tc.Function.Arguments))
 			chunk.Choices[0].Delta.ToolCalls[i] = openai.ChatCompletionChunkChoicesDeltaToolCall{
 				Index: int64(i),
 				ID:    fmt.Sprintf("%s-%d", chunkID, i),

@@ -64,6 +64,7 @@ type Agent struct {
 	planningService *planning.PlanningService
 	aceService      *ACEService       // ACE (Agentic Context Engineering) - optional
 	agentsMD        *agentsmd.Service // AGENTS.md project instructions - optional
+	toolSelector    *ToolSelector     // Dynamic tool selection - optional
 
 	// Infrastructure
 	context     *Environment
@@ -106,6 +107,15 @@ func WithACEConfig(aceConfig *ACEConfig) AgentOption {
 func WithAgentsMDService(svc *agentsmd.Service) AgentOption {
 	return func(a *Agent) error {
 		a.agentsMD = svc
+		return nil
+	}
+}
+
+// WithToolSelector sets the dynamic tool selector for the agent.
+// If not provided, agent will only use statically configured tools.
+func WithToolSelector(selector *ToolSelector) AgentOption {
+	return func(a *Agent) error {
+		a.toolSelector = selector
 		return nil
 	}
 }
@@ -604,12 +614,13 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 
 	// Add assistant message FIRST (before tool results)
 	messages = append(messages, assistantMsg)
+	assistantMsgIdx := len(messages) - 1 // Capture index before adding tool results
 
 	// Convert and process each tool call
 	for i := range toolCalls {
 		coreToolCall := &toolCalls[i]
 
-		// Add to assistant message (note: message already appended above)
+		// Add to assistant message (use captured index, not len-1 which changes as we add tool results)
 		msgToolCall := message.ToolCall{
 			ID:   coreToolCall.ID,
 			Type: coreToolCall.Type,
@@ -618,7 +629,7 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 				Arguments: coreToolCall.Function.Arguments,
 			},
 		}
-		messages[len(messages)-1].ToolCalls = append(messages[len(messages)-1].ToolCalls, msgToolCall)
+		messages[assistantMsgIdx].ToolCalls = append(messages[assistantMsgIdx].ToolCalls, msgToolCall)
 
 		// Process the tool call (ProcessToolCall will emit EventToolCallStart)
 		toolResult, err := a.ProcessToolCall(ctx, coreToolCall)
