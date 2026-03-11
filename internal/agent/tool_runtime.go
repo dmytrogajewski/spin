@@ -79,7 +79,13 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 
 	tool, err := t.registry.Get(call.Function.Name)
 	if err != nil {
-		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("tool not found: %s: %w", call.Function.Name, err))
+		// Include available tool names to help the model self-correct
+		available := t.registry.List()
+		names := make([]string, len(available))
+		for i, at := range available {
+			names[i] = at.Name()
+		}
+		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("tool not found: %q is not a valid tool. Available tools: %v", call.Function.Name, names))
 		return &result, nil
 	}
 

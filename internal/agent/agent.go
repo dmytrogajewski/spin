@@ -659,6 +659,25 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 		}
 	}
 
+	// Verify tool calls were stored correctly on the assistant message
+	storedTC := messages[assistantMsgIdx].ToolCalls
+	if len(storedTC) != len(toolCalls) {
+		slog.Warn("tool call count mismatch after processing",
+			"expected", len(toolCalls),
+			"stored", len(storedTC),
+			"assistant_msg_idx", assistantMsgIdx,
+			"messages_len", len(messages))
+	} else {
+		ids := make([]string, len(storedTC))
+		for i, tc := range storedTC {
+			ids[i] = tc.ID
+		}
+		slog.Debug("tool calls stored on assistant message",
+			"count", len(storedTC),
+			"ids", ids,
+			"assistant_msg_idx", assistantMsgIdx)
+	}
+
 	return messages
 }
 
@@ -844,6 +863,20 @@ Then provide your response after the thinking block.`)
 	// Convert conversation messages to OpenAI format
 	for _, msg := range messages {
 		openaiMessages = append(openaiMessages, convertMessageToOpenAI(msg))
+	}
+
+	// Debug: log assistant messages with tool calls being sent to LLM
+	for i, msg := range messages {
+		if msg.Role == message.RoleAssistant && len(msg.ToolCalls) > 0 {
+			ids := make([]string, len(msg.ToolCalls))
+			for j, tc := range msg.ToolCalls {
+				ids[j] = tc.ID
+			}
+			slog.Debug("callLLM: assistant message with tool_calls",
+				"msg_index", i,
+				"tool_call_count", len(msg.ToolCalls),
+				"tool_call_ids", ids)
+		}
 	}
 
 	// Build filtered tool list for this task mode

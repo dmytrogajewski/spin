@@ -1374,7 +1374,7 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 	// Enable cycle detection
 	agent.cycleDetection = true
 
-	// Create initial conversation with some messages
+	// Create initial conversation with tool calls and tool results to verify preservation
 	initialMessages := []message.Message{
 		{
 			Role:      message.RoleUser,
@@ -1382,9 +1382,39 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 			Timestamp: time.Now(),
 		},
 		{
-			Role:      message.RoleAssistant,
-			Content:   "I'll list the files",
+			Role:    message.RoleAssistant,
+			Content: "I'll list the files",
+			ToolCalls: []message.ToolCall{
+				{
+					ID:   "call-abc-0",
+					Type: "function",
+					Function: message.ToolCallFunction{
+						Name:      "list_directory",
+						Arguments: `{"path":"/"}`,
+					},
+				},
+				{
+					ID:   "call-abc-1",
+					Type: "function",
+					Function: message.ToolCallFunction{
+						Name:      "shell_command",
+						Arguments: `{"command":"ls"}`,
+					},
+				},
+			},
 			Timestamp: time.Now(),
+		},
+		{
+			Role:       message.RoleTool,
+			Content:    "file1.txt\nfile2.txt",
+			ToolCallID: "call-abc-0",
+			Timestamp:  time.Now(),
+		},
+		{
+			Role:       message.RoleTool,
+			Content:    "file1.txt  file2.txt",
+			ToolCallID: "call-abc-1",
+			Timestamp:  time.Now(),
 		},
 	}
 
@@ -1470,8 +1500,26 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 		t.Error("This indicates the intervention's message modifications were discarded")
 	}
 
+	// Verify original messages are preserved with their ToolCalls and ToolCallID intact.
+	// This is a regression test for the bug where handleCycleDetection reconstructed
+	// messages through the detection.Message interface, losing ToolCalls/ToolCallID fields.
+	for i := 0; i < len(initialMessages) && i < len(modifiedMessages); i++ {
+		if initialMessages[i].Role != modifiedMessages[i].Role {
+			t.Errorf("message[%d] role changed: %s -> %s", i, initialMessages[i].Role, modifiedMessages[i].Role)
+		}
+		if initialMessages[i].Content != modifiedMessages[i].Content {
+			t.Errorf("message[%d] content changed", i)
+		}
+		if initialMessages[i].ToolCallID != modifiedMessages[i].ToolCallID {
+			t.Errorf("message[%d] ToolCallID lost: %q -> %q", i, initialMessages[i].ToolCallID, modifiedMessages[i].ToolCallID)
+		}
+		if len(initialMessages[i].ToolCalls) != len(modifiedMessages[i].ToolCalls) {
+			t.Errorf("message[%d] ToolCalls lost: had %d, now %d", i, len(initialMessages[i].ToolCalls), len(modifiedMessages[i].ToolCalls))
+		}
+	}
+
 	// After the fix, this should pass
-	expectedMinLen := 3 // original 2 + 1 reflection message
+	expectedMinLen := 5 // original 4 + 1 reflection message
 	if len(modifiedMessages) < expectedMinLen {
 		t.Errorf("Expected at least %d messages after intervention, got %d", expectedMinLen, len(modifiedMessages))
 	}
@@ -2245,8 +2293,8 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 				},
 			},
 			llmErrors:     []error{context.DeadlineExceeded},
-			timeout:       5 * time.Second,
-			expectedError: true,
+			timeout:       30 * time.Second,
+			expectedError: false, // Transient errors are retried; mock succeeds on retry
 			expectedStuck: false,
 			description:   "LLM timeout should not cause agent to get stuck",
 		},
@@ -2269,7 +2317,7 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 			},
 			llmErrors:     []error{errors.New("LLM provider error")},
 			timeout:       30 * time.Second,
-			expectedError: true,
+			expectedError: false, // Transient errors are retried; mock succeeds on retry
 			expectedStuck: false,
 			description:   "LLM error should not cause agent to get stuck",
 		},

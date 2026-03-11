@@ -51,9 +51,15 @@ func convertMessageToOllama(msg openai.ChatCompletionMessageParamUnion, toolCall
 				"tool_call_id", genericMsg.ToolCallID,
 				"tool_name", toolName)
 		} else {
+			// Log the mapping keys to help diagnose why this ID isn't found
+			mapKeys := make([]string, 0, len(toolCallIDToName))
+			for k := range toolCallIDToName {
+				mapKeys = append(mapKeys, k)
+			}
 			slog.Warn("tool_call_id not found in mapping, tool result may fail",
 				"tool_call_id", genericMsg.ToolCallID,
-				"mapping_size", len(toolCallIDToName))
+				"mapping_size", len(toolCallIDToName),
+				"mapping_keys", mapKeys)
 		}
 	} else if genericMsg.Role == "tool" {
 		slog.Warn("tool message without tool_call_id or mapping",
@@ -154,8 +160,9 @@ func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion)
 		}
 	}
 
-	slog.Debug("buildToolCallIDToNameMap: final mapping",
-		"size", len(result))
+	slog.Debug("buildToolCallIDToNameMap: complete",
+		"mapping_size", len(result),
+		"total_messages", len(messages))
 
 	return result
 }
@@ -275,6 +282,60 @@ func extractToolCalls(toolCallsJSON json.RawMessage) []api.ToolCall {
 	}
 
 	return result
+}
+
+// inferToolName attempts to match a nameless tool call to a tool from the schema
+// by comparing argument keys against each tool's parameter properties.
+// Returns the inferred name, or "" if no unique match is found.
+func inferToolName(args map[string]interface{}, tools []api.Tool) string {
+	if len(args) == 0 || len(tools) == 0 {
+		return ""
+	}
+
+	// Build set of argument keys
+	argKeys := make(map[string]bool, len(args))
+	for k := range args {
+		argKeys[k] = true
+	}
+
+	var bestMatch string
+	var bestScore int
+	var ambiguous bool
+
+	for _, tool := range tools {
+		props := tool.Function.Parameters.Properties
+		if len(props) == 0 {
+			continue
+		}
+
+		// Count how many argument keys match this tool's parameter names
+		score := 0
+		for k := range argKeys {
+			if _, ok := props[k]; ok {
+				score++
+			}
+		}
+
+		// All arg keys must match (no extra unknown keys)
+		if score == len(argKeys) && score > 0 {
+			if score > bestScore {
+				bestMatch = tool.Function.Name
+				bestScore = score
+				ambiguous = false
+			} else if score == bestScore {
+				ambiguous = true
+			}
+		}
+	}
+
+	if ambiguous {
+		// Return best match even if ambiguous — a wrong tool call is recoverable
+		// (the model gets an error and retries), but a dropped tool call causes
+		// the agent to exit prematurely thinking there's nothing left to do.
+		slog.Debug("ollama: ambiguous tool name inference, using first match",
+			"name", bestMatch, "args_keys", argKeys)
+	}
+	return bestMatch
 }
 
 // convertToolToOllama converts an OpenAI tool to Ollama format.

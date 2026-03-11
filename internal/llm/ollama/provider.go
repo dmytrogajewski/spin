@@ -186,6 +186,51 @@ func (p *Provider) GetAutoTuneWarning() string {
 	return p.autoTuneWarning
 }
 
+// FallbackContextLength is used when the model's actual context length cannot be detected.
+const FallbackContextLength = 32768
+
+// detectContextLength queries Ollama for the model's maximum context length.
+// Falls back to FallbackContextLength if the query fails.
+func (p *Provider) detectContextLength(ctx context.Context) int {
+	resp, err := p.client.Show(ctx, &api.ShowRequest{Model: p.model})
+	if err != nil {
+		slog.Debug("ollama: failed to query model info for context length", "model", p.model, "error", err)
+		return FallbackContextLength
+	}
+
+	// Look for context_length in model_info (key format: "<arch>.context_length")
+	for k, v := range resp.ModelInfo {
+		if strings.HasSuffix(k, ".context_length") || k == "context_length" {
+			switch val := v.(type) {
+			case float64:
+				if int(val) > 0 {
+					slog.Info("ollama: detected model context length", "model", p.model, "context_length", int(val))
+					return int(val)
+				}
+			}
+		}
+	}
+
+	slog.Debug("ollama: no context_length found in model info, using fallback", "model", p.model)
+	return FallbackContextLength
+}
+
+// setContextOptions applies num_ctx to the request options.
+// Uses autoTuneCtxLen if set, otherwise detects from the model.
+func (p *Provider) setContextOptions(ctx context.Context, opts map[string]interface{}) map[string]interface{} {
+	if opts == nil {
+		opts = make(map[string]interface{})
+	}
+
+	// Detect context length on first call
+	if p.autoTuneCtxLen == 0 {
+		p.autoTuneCtxLen = p.detectContextLength(ctx)
+	}
+
+	opts["num_ctx"] = p.autoTuneCtxLen
+	return opts
+}
+
 // Complete performs a non-streaming completion request using Ollama's native API.
 func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletionNewParams) (*openaisdk.ChatCompletion, error) {
 	// Convert OpenAI params to Ollama ChatRequest
@@ -234,19 +279,26 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 		req.Options["num_predict"] = params.MaxTokens.Value
 	}
 
+	// Set context window size
+	req.Options = p.setContextOptions(ctx, req.Options)
+
 	// Call Ollama API
 	// Note: Ollama sends multiple callbacks even for non-streaming requests
 	// We need to accumulate the content from all callbacks
 	var resp api.ChatResponse
 	var fullContent strings.Builder
+	var fullThinking strings.Builder
 	callbackCount := 0
 
 	err := p.client.Chat(ctx, req, func(r api.ChatResponse) error {
 		callbackCount++
 		resp = r // Keep the last response for metadata
-		// Accumulate content from all callbacks
+		// Accumulate content and thinking from all callbacks
 		if r.Message.Content != "" {
 			fullContent.WriteString(r.Message.Content)
+		}
+		if r.Message.Thinking != "" {
+			fullThinking.WriteString(r.Message.Thinking)
 		}
 		return nil
 	})
@@ -254,8 +306,34 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 		return nil, fmt.Errorf("ollama chat: %w", err)
 	}
 
-	// Use accumulated content
-	resp.Message.Content = fullContent.String()
+	// Use accumulated content, merging thinking into <think> tags
+	if fullThinking.Len() > 0 {
+		resp.Message.Content = "<think>" + fullThinking.String() + "</think>" + fullContent.String()
+	} else {
+		resp.Message.Content = fullContent.String()
+	}
+	resp.Message.Thinking = ""
+
+	// Fix tool calls with empty function names by inferring from arguments (same as streaming path).
+	if len(resp.Message.ToolCalls) > 0 {
+		filtered := resp.Message.ToolCalls[:0]
+		for _, tc := range resp.Message.ToolCalls {
+			if tc.Function.Name != "" {
+				filtered = append(filtered, tc)
+			} else if inferred := inferToolName(tc.Function.Arguments, req.Tools); inferred != "" {
+				tc.Function.Name = inferred
+				slog.Info("ollama: inferred tool name for nameless tool call",
+					"name", inferred, "args", tc.Function.Arguments)
+				filtered = append(filtered, tc)
+			} else if len(tc.Function.Arguments) > 0 {
+				slog.Warn("ollama: dropping tool call with empty name (could not infer)",
+					"args", tc.Function.Arguments)
+			} else {
+				slog.Debug("ollama: filtering phantom tool call (empty name and args)")
+			}
+		}
+		resp.Message.ToolCalls = filtered
+	}
 
 	// Debug: Log the Ollama response
 	slog.Debug("Ollama Complete", "callbacks", callbackCount, "content_length", len(resp.Message.Content))
@@ -325,6 +403,9 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 		req.Options["num_predict"] = params.MaxTokens.Value
 	}
 
+	// Set context window size
+	req.Options = p.setContextOptions(ctx, req.Options)
+
 	// Create channel for chunks
 	chunks := make(chan openaisdk.ChatCompletionChunk, 10)
 
@@ -342,13 +423,39 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 				return ctx.Err()
 			}
 
-			// Debug: Log raw Ollama response for diagnostics
-			slog.Debug("ollama stream chunk",
-				"index", chunkIndex,
-				"content_len", len(resp.Message.Content),
-				"tool_calls", len(resp.Message.ToolCalls),
-				"done", resp.Done,
-				"done_reason", resp.DoneReason)
+			// Merge Ollama's separate Thinking field into Content as <think> tags.
+			// Thinking models (qwen3, kimi2.5, etc.) put reasoning in Message.Thinking
+			// and only the final answer in Message.Content. Our sanitizer already handles
+			// <think> tags, so wrapping and prepending unifies the pipeline.
+			if resp.Message.Thinking != "" {
+				resp.Message.Content = "<think>" + resp.Message.Thinking + "</think>" + resp.Message.Content
+				resp.Message.Thinking = ""
+			}
+
+			// Fix tool calls with empty function names by inferring from arguments.
+			// Some models emit tool calls with valid arguments but no function name.
+			// Only filter truly phantom calls (empty name AND empty arguments).
+			if len(resp.Message.ToolCalls) > 0 {
+				filtered := resp.Message.ToolCalls[:0]
+				for _, tc := range resp.Message.ToolCalls {
+					if tc.Function.Name != "" {
+						filtered = append(filtered, tc)
+					} else if inferred := inferToolName(tc.Function.Arguments, req.Tools); inferred != "" {
+						tc.Function.Name = inferred
+						slog.Info("ollama: inferred tool name for nameless tool call",
+							"name", inferred, "args", tc.Function.Arguments)
+						filtered = append(filtered, tc)
+					} else if len(tc.Function.Arguments) > 0 {
+						slog.Warn("ollama: dropping tool call with empty name (could not infer)",
+							"chunk_index", chunkIndex,
+							"args", tc.Function.Arguments)
+					} else {
+						slog.Debug("ollama: filtering phantom tool call (empty name and args)",
+							"chunk_index", chunkIndex)
+					}
+				}
+				resp.Message.ToolCalls = filtered
+			}
 
 			// Track done reason for final chunk handling
 			if resp.Done && resp.DoneReason != "" {
@@ -368,38 +475,16 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 			return nil
 		})
 
-		// Handle error - send an error indicator chunk if possible
+		// Handle error - log it and let the channel close with zero chunks.
+		// The caller (callLLM) detects 0-chunk streams and returns an error,
+		// which allows the retry loop to handle transient failures (e.g. HTTP 500).
 		if err != nil && ctx.Err() == nil {
 			slog.Error("ollama stream error", "error", err, "chunks_sent", chunkIndex, "done_reason", lastDoneReason)
-
-			// If we got zero chunks, this is a connection/API error
-			// Send an error chunk so the caller knows something went wrong
-			if chunkIndex == 0 {
-				errorChunk := openaisdk.ChatCompletionChunk{
-					ID:      chunkID,
-					Created: time.Now().Unix(),
-					Model:   p.model,
-					Object:  "chat.completion.chunk",
-					Choices: []openaisdk.ChatCompletionChunkChoice{
-						{
-							Index: 0,
-							Delta: openaisdk.ChatCompletionChunkChoicesDelta{
-								Role:    openaisdk.ChatCompletionChunkChoicesDeltaRoleAssistant,
-								Content: fmt.Sprintf("[Error: %v]", err),
-							},
-							FinishReason: openaisdk.ChatCompletionChunkChoicesFinishReasonStop,
-						},
-					},
-				}
-				select {
-				case chunks <- errorChunk:
-				default:
-					// Channel full or closed, can't send error
-				}
-			}
 		}
 
-		slog.Debug("ollama stream finished", "total_chunks", chunkIndex, "done_reason", lastDoneReason)
+		slog.Debug("ollama stream finished",
+			"total_chunks", chunkIndex,
+			"done_reason", lastDoneReason)
 	}()
 
 	return chunks, nil

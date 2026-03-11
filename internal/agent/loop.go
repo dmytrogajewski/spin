@@ -128,22 +128,46 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 			currentTurnBullets = trajCtx.GetActiveBullets()
 		}
 
-		// Call LLM with timeout protection and retry on empty response
-		const maxEmptyRetries = 2
+		// Call LLM with timeout protection and retry on transient errors or empty responses
+		const maxRetries = 3
 		var llmResp *openai.ChatCompletion
 		var content string
 		var toolCalls []ToolCall
 		var finishReason string
+		var lastErr error
 
-		for retry := 0; retry <= maxEmptyRetries; retry++ {
+		for retry := 0; retry <= maxRetries; retry++ {
 			var err error
 			llmResp, err = a.callLLMWithTimeout(ctx, messages, t, currentTurnBullets)
 			if err != nil {
-				slog.Error("LLM call failed", "turn", turn+1, "retry", retry, "error", err)
+				lastErr = err
+				// Check if context was cancelled (non-retryable)
+				if ctx.Err() != nil {
+					slog.Error("LLM call failed (context cancelled)", "turn", turn+1, "error", err)
+					resp.Error = fmt.Errorf("llm call failed: %w", err)
+					resp.FinishReason = "error"
+					return messages, resp, err
+				}
+				// Transient error (e.g. HTTP 500, connection error) - retry
+				if retry < maxRetries {
+					backoff := time.Duration(1<<uint(retry)) * time.Second // 1s, 2s, 4s
+					slog.Warn("LLM call failed, retrying",
+						"turn", turn+1, "retry", retry+1, "max_retries", maxRetries,
+						"backoff", backoff, "error", err)
+					select {
+					case <-ctx.Done():
+						resp.FinishReason = "timeout"
+						return messages, resp, ctx.Err()
+					case <-time.After(backoff):
+					}
+					continue
+				}
+				slog.Error("LLM call failed after retries", "turn", turn+1, "retries", maxRetries, "error", err)
 				resp.Error = fmt.Errorf("llm call failed: %w", err)
 				resp.FinishReason = "error"
 				return messages, resp, err
 			}
+			lastErr = nil
 
 			// Extract response data using helper functions
 			content = getContent(llmResp)
@@ -160,25 +184,25 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 			}
 
 			// Empty response - retry if we have attempts left
-			if retry < maxEmptyRetries {
+			if retry < maxRetries {
+				backoff := time.Duration(1<<uint(retry)) * time.Second // 1s, 2s, 4s
 				slog.Warn("Received empty response from LLM, retrying",
-					"turn", turn+1, "retry", retry+1, "max_retries", maxEmptyRetries,
+					"turn", turn+1, "retry", retry+1, "max_retries", maxRetries,
+					"backoff", backoff,
 					"llm_resp_nil", llmResp == nil, "content_len", len(content), "tool_calls", len(toolCalls))
 
-				// Brief pause before retry to avoid hammering the API
 				select {
 				case <-ctx.Done():
 					resp.FinishReason = "timeout"
 					return messages, resp, ctx.Err()
-				case <-time.After(500 * time.Millisecond):
-					// Continue to next retry
+				case <-time.After(backoff):
 				}
 				continue
 			}
 
 			// All retries exhausted - break the agent loop
 			slog.Warn("Received empty response from LLM after retries, breaking loop",
-				"turn", turn+1, "retries_exhausted", maxEmptyRetries,
+				"turn", turn+1, "retries_exhausted", maxRetries,
 				"llm_resp_nil", llmResp == nil, "content_len", len(content), "tool_calls", len(toolCalls))
 			resp.FinishReason = "empty_response"
 
@@ -189,14 +213,14 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 				Data: events.SystemEventData{
 					Level:   "warning",
 					Message: "LLM returned empty response after retries",
-					Details: fmt.Sprintf("turn=%d, retries=%d", turn+1, maxEmptyRetries),
+					Details: fmt.Sprintf("turn=%d, retries=%d", turn+1, maxRetries),
 				},
 			})
 			break
 		}
 
-		// If we exhausted retries and still have empty response, break outer loop
-		if llmResp == nil || (content == "" && len(toolCalls) == 0) {
+		// If we exhausted retries and still have empty/error response, break outer loop
+		if lastErr != nil || llmResp == nil || (content == "" && len(toolCalls) == 0) {
 			break
 		}
 
@@ -235,6 +259,28 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 			})
 			slog.Debug("emitted token progress", "turn", turn+1, "estimated_tokens", estimatedTokens)
 
+			continue
+		}
+
+		// Handle truncated response: if finish_reason=length, the model was cut off
+		// by token/context limits. Add partial content as assistant message and continue
+		// so the model can finish its response on the next turn.
+		if finishReason == string(openai.ChatCompletionChoicesFinishReasonLength) {
+			slog.Warn("LLM response truncated (finish_reason=length), continuing",
+				"turn", turn+1, "content_len", len(content))
+			if content != "" {
+				messages = append(messages, message.Message{
+					Role:      message.RoleAssistant,
+					Content:   content,
+					Timestamp: time.Now(),
+				})
+			}
+			// Add a user message to prompt continuation
+			messages = append(messages, message.Message{
+				Role:      message.RoleUser,
+				Content:   "Your previous response was truncated. Please continue where you left off.",
+				Timestamp: time.Now(),
+			})
 			continue
 		}
 
@@ -285,7 +331,7 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 		return messages, false, nil
 	}
 
-	// Convert messages to detection.Message interface
+	// Convert messages to detection.Message interface for the intervention
 	detectionMessages := make([]detection.Message, len(messages))
 	for i, msg := range messages {
 		detectionMessages[i] = &messageAdapter{msg: msg}
@@ -297,14 +343,38 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 		return messages, false, nil
 	}
 
-	// Convert back to Message slice
-	messages = make([]message.Message, len(modifiedDetectionMessages))
-	for i, msg := range modifiedDetectionMessages {
-		messages[i] = message.Message{
-			Role:      message.Role(msg.GetRole()),
-			Content:   msg.GetContent(),
-			Timestamp: msg.GetTimestamp(),
+	// Reconstruct messages preserving original data (ToolCalls, ToolCallID, Metadata).
+	// Interventions typically only append new messages, so we keep originals intact
+	// and only convert genuinely new messages added by the intervention.
+	if len(modifiedDetectionMessages) >= len(messages) {
+		// Intervention appended message(s) — keep originals, convert only new ones
+		newMessages := make([]message.Message, len(messages), len(modifiedDetectionMessages))
+		copy(newMessages, messages)
+		for i := len(messages); i < len(modifiedDetectionMessages); i++ {
+			dm := modifiedDetectionMessages[i]
+			newMessages = append(newMessages, message.Message{
+				Role:      message.Role(dm.GetRole()),
+				Content:   dm.GetContent(),
+				Timestamp: dm.GetTimestamp(),
+			})
 		}
+		messages = newMessages
+	} else {
+		// Intervention removed messages — fall back to full conversion but
+		// attempt to match originals by index to preserve ToolCalls/ToolCallID.
+		newMessages := make([]message.Message, len(modifiedDetectionMessages))
+		for i, dm := range modifiedDetectionMessages {
+			if i < len(messages) && messages[i].Role == message.Role(dm.GetRole()) && messages[i].Content == dm.GetContent() {
+				newMessages[i] = messages[i] // Preserve original with full data
+			} else {
+				newMessages[i] = message.Message{
+					Role:      message.Role(dm.GetRole()),
+					Content:   dm.GetContent(),
+					Timestamp: dm.GetTimestamp(),
+				}
+			}
+		}
+		messages = newMessages
 	}
 
 	// Emit cycle detection event

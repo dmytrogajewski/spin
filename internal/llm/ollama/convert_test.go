@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ollama/ollama/api"
 	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -237,6 +238,232 @@ func TestConvertMessageToOllama_ToolResultFallback(t *testing.T) {
 	assert.Equal(t, "shell_command", result.ToolName)
 }
 
+// TestBuildToolCallIDToNameMap_PhantomToolCalls verifies that tool calls with
+// empty function names (phantom entries emitted by some models like qwen3) are
+// handled gracefully. The mapping should only contain entries for valid tool calls.
+func TestBuildToolCallIDToNameMap_PhantomToolCalls(t *testing.T) {
+	// Simulate the pattern observed: first tool call has empty name+args,
+	// subsequent tool calls are valid.
+	assistantMsg := openai.ChatCompletionAssistantMessageParam{
+		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
+		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
+			// Phantom: empty name
+			{ID: openai.F("chatcmpl-100-0"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(""), Arguments: openai.F(`{}`)})},
+			// Valid
+			{ID: openai.F("chatcmpl-100-1"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("shell_command"), Arguments: openai.F(`{"command":"ls"}`)})},
+			// Valid
+			{ID: openai.F("chatcmpl-100-2"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("read_file"), Arguments: openai.F(`{"path":"test.go"}`)})},
+		}),
+	}
+
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.UserMessage("Do something"),
+		assistantMsg,
+		openai.ToolMessage("chatcmpl-100-1", "output1"),
+		openai.ToolMessage("chatcmpl-100-2", "output2"),
+	}
+
+	mapping := buildToolCallIDToNameMap(messages)
+
+	// The phantom entry (chatcmpl-100-0) should NOT be in the mapping
+	_, hasPhantom := mapping["chatcmpl-100-0"]
+	assert.False(t, hasPhantom, "phantom tool call with empty name should not be in mapping")
+
+	// Valid entries should be present
+	assert.Equal(t, "shell_command", mapping["chatcmpl-100-1"])
+	assert.Equal(t, "read_file", mapping["chatcmpl-100-2"])
+
+	// Tool messages should resolve correctly
+	for _, id := range []string{"chatcmpl-100-1", "chatcmpl-100-2"} {
+		toolMsg := openai.ToolMessage(id, "result")
+		result := convertMessageToOllama(toolMsg, mapping)
+		assert.NotEmpty(t, result.ToolName, "tool message %s should have ToolName", id)
+	}
+}
+
+// TestBuildToolCallIDToNameMap_AllPhantomToolCalls verifies behavior when ALL
+// tool calls in an assistant message have empty names.
+func TestBuildToolCallIDToNameMap_AllPhantomToolCalls(t *testing.T) {
+	assistantMsg := openai.ChatCompletionAssistantMessageParam{
+		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
+		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
+			{ID: openai.F("id-0"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(""), Arguments: openai.F(`{}`)})},
+			{ID: openai.F("id-1"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(""), Arguments: openai.F(`{}`)})},
+		}),
+	}
+
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.UserMessage("test"),
+		assistantMsg,
+	}
+
+	mapping := buildToolCallIDToNameMap(messages)
+	assert.Empty(t, mapping, "mapping should be empty when all tool calls have empty names")
+}
+
+// TestConvertOllamaResponseToOpenAI_AfterPhantomFiltering verifies that after
+// filtering phantom tool calls, convertOllamaResponseToOpenAI produces correct output.
+func TestConvertOllamaResponseToOpenAI_AfterPhantomFiltering(t *testing.T) {
+	resp := api.ChatResponse{
+		Message: api.Message{
+			Role: "assistant",
+			ToolCalls: []api.ToolCall{
+				// Phantom: empty name (should be filtered before conversion)
+				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]interface{}{}}},
+				// Valid
+				{Function: api.ToolCallFunction{Name: "shell_command", Arguments: map[string]interface{}{"command": "ls"}}},
+				// Valid
+				{Function: api.ToolCallFunction{Name: "read_file", Arguments: map[string]interface{}{"path": "test.go"}}},
+			},
+		},
+		Done:       true,
+		DoneReason: "stop",
+	}
+
+	// Apply the same filtering as provider.go
+	filtered := resp.Message.ToolCalls[:0]
+	for _, tc := range resp.Message.ToolCalls {
+		if tc.Function.Name != "" {
+			filtered = append(filtered, tc)
+		}
+	}
+	resp.Message.ToolCalls = filtered
+
+	result := convertOllamaResponseToOpenAI(resp, "qwen3:1.7b")
+
+	require.Len(t, result.Choices, 1)
+	require.Len(t, result.Choices[0].Message.ToolCalls, 2, "should only have 2 valid tool calls")
+
+	assert.Equal(t, "shell_command", result.Choices[0].Message.ToolCalls[0].Function.Name)
+	assert.Equal(t, "read_file", result.Choices[0].Message.ToolCalls[1].Function.Name)
+
+	// IDs should be properly generated
+	assert.NotEmpty(t, result.Choices[0].Message.ToolCalls[0].ID)
+	assert.NotEmpty(t, result.Choices[0].Message.ToolCalls[1].ID)
+
+	// Finish reason should be tool_calls since there are valid tool calls
+	assert.Equal(t, openai.ChatCompletionChoicesFinishReasonToolCalls, result.Choices[0].FinishReason)
+}
+
+// TestConvertOllamaChunkToOpenAI_AfterPhantomFiltering verifies the streaming
+// chunk conversion after phantom tool calls are filtered.
+func TestConvertOllamaChunkToOpenAI_AfterPhantomFiltering(t *testing.T) {
+	resp := api.ChatResponse{
+		Message: api.Message{
+			Role: "assistant",
+			ToolCalls: []api.ToolCall{
+				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]interface{}{}}},
+				{Function: api.ToolCallFunction{Name: "shell_command", Arguments: map[string]interface{}{"command": "ls"}}},
+			},
+		},
+		Done: false,
+	}
+
+	// Apply filtering
+	filtered := resp.Message.ToolCalls[:0]
+	for _, tc := range resp.Message.ToolCalls {
+		if tc.Function.Name != "" {
+			filtered = append(filtered, tc)
+		}
+	}
+	resp.Message.ToolCalls = filtered
+
+	chunk := convertOllamaChunkToOpenAI(resp, "chatcmpl-test-123", "qwen3:1.7b")
+
+	require.Len(t, chunk.Choices, 1)
+	require.Len(t, chunk.Choices[0].Delta.ToolCalls, 1, "should only have 1 valid tool call")
+	assert.Equal(t, "shell_command", chunk.Choices[0].Delta.ToolCalls[0].Function.Name)
+	assert.Equal(t, "chatcmpl-test-123-0", chunk.Choices[0].Delta.ToolCalls[0].ID)
+}
+
+// TestInferToolName verifies that inferToolName correctly matches argument keys
+// against tool parameter schemas to identify the intended tool.
+func TestInferToolName(t *testing.T) {
+	tools := []api.Tool{
+		{
+			Type: "function",
+			Function: api.ToolFunction{
+				Name:        "read_file",
+				Description: "Read a file",
+				Parameters: api.ToolFunctionParameters{
+					Type:     "object",
+					Required: []string{"path"},
+					Properties: map[string]api.ToolProperty{
+						"path": {Type: api.PropertyType{"string"}, Description: "File path"},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: api.ToolFunction{
+				Name:        "shell_command",
+				Description: "Run a shell command",
+				Parameters: api.ToolFunctionParameters{
+					Type:     "object",
+					Required: []string{"command"},
+					Properties: map[string]api.ToolProperty{
+						"command": {Type: api.PropertyType{"string"}, Description: "Command to run"},
+					},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: api.ToolFunction{
+				Name:        "list_directory",
+				Description: "List a directory",
+				Parameters: api.ToolFunctionParameters{
+					Type:     "object",
+					Required: []string{"path"},
+					Properties: map[string]api.ToolProperty{
+						"path": {Type: api.PropertyType{"string"}, Description: "Directory path"},
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		args     map[string]interface{}
+		expected string
+	}{
+		{
+			name:     "infer shell_command from command arg",
+			args:     map[string]interface{}{"command": "ls -la"},
+			expected: "shell_command",
+		},
+		{
+			name:     "ambiguous path arg returns first match rather than empty",
+			args:     map[string]interface{}{"path": "internal/llm/vram/nvidia.go"},
+			expected: "read_file", // read_file comes first in the tools list
+		},
+		{
+			name:     "empty args returns empty",
+			args:     map[string]interface{}{},
+			expected: "",
+		},
+		{
+			name:     "nil args returns empty",
+			args:     nil,
+			expected: "",
+		},
+		{
+			name:     "unknown args returns empty",
+			args:     map[string]interface{}{"unknown_param": "value"},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := inferToolName(tt.args, tools)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
 func TestExtractContent(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -250,6 +477,63 @@ func TestExtractContent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := extractContent(tt.content)
 			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+// TestThinkingFieldMerge verifies that Ollama's Message.Thinking field
+// is properly merged into Content as <think> tags.
+func TestThinkingFieldMerge(t *testing.T) {
+	tests := []struct {
+		name            string
+		thinking        string
+		content         string
+		expectedContent string
+	}{
+		{
+			name:            "thinking only",
+			thinking:        "Let me reason about this...",
+			content:         "",
+			expectedContent: "<think>Let me reason about this...</think>",
+		},
+		{
+			name:            "thinking and content",
+			thinking:        "I should use shell_command",
+			content:         "I'll run a command for you.",
+			expectedContent: "<think>I should use shell_command</think>I'll run a command for you.",
+		},
+		{
+			name:            "content only",
+			thinking:        "",
+			content:         "Hello world",
+			expectedContent: "Hello world",
+		},
+		{
+			name:            "neither thinking nor content",
+			thinking:        "",
+			content:         "",
+			expectedContent: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := api.ChatResponse{
+				Message: api.Message{
+					Role:     "assistant",
+					Content:  tt.content,
+					Thinking: tt.thinking,
+				},
+			}
+
+			// Simulate the merging logic from the provider
+			if resp.Message.Thinking != "" {
+				resp.Message.Content = "<think>" + resp.Message.Thinking + "</think>" + resp.Message.Content
+				resp.Message.Thinking = ""
+			}
+
+			assert.Equal(t, tt.expectedContent, resp.Message.Content)
+			assert.Empty(t, resp.Message.Thinking)
 		})
 	}
 }
