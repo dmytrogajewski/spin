@@ -9,11 +9,18 @@ import (
 )
 
 // WriteFileTool implements file writing functionality.
-type WriteFileTool struct{}
+type WriteFileTool struct {
+	workDir string
+}
 
 // NewWriteFileTool creates a new write file tool.
-func NewWriteFileTool() *WriteFileTool {
-	return &WriteFileTool{}
+func NewWriteFileTool(workDir ...string) *WriteFileTool {
+	var wd string
+	if len(workDir) > 0 {
+		wd = workDir[0]
+	}
+
+	return &WriteFileTool{workDir: wd}
 }
 
 // Name implements the Name operation.
@@ -56,6 +63,10 @@ func (t *WriteFileTool) Execute(_ context.Context, params ToolParameters) (ToolR
 	path, _ := params.GetString("path")
 	if path == "" {
 		return NewToolError(ErrPathParameterRequired), nil
+	}
+
+	if !filepath.IsAbs(path) && t.workDir != "" {
+		path = filepath.Join(t.workDir, path)
 	}
 
 	content, contentErr := params.GetString("content")

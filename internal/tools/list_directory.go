@@ -4,15 +4,23 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 // ListDirectoryTool implements directory listing functionality.
-type ListDirectoryTool struct{}
+type ListDirectoryTool struct {
+	workDir string
+}
 
 // NewListDirectoryTool creates a new list directory tool.
-func NewListDirectoryTool() *ListDirectoryTool {
-	return &ListDirectoryTool{}
+func NewListDirectoryTool(workDir ...string) *ListDirectoryTool {
+	var wd string
+	if len(workDir) > 0 {
+		wd = workDir[0]
+	}
+
+	return &ListDirectoryTool{workDir: wd}
 }
 
 // Name implements the Name operation.
@@ -51,6 +59,10 @@ func (t *ListDirectoryTool) Execute(_ context.Context, params ToolParameters) (T
 	path, _ := params.GetString("path")
 	if path == "" {
 		return NewToolError(ErrPathParameterRequired), nil
+	}
+
+	if !filepath.IsAbs(path) && t.workDir != "" {
+		path = filepath.Join(t.workDir, path)
 	}
 
 	entries, err := os.ReadDir(path)

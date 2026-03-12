@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -54,7 +55,35 @@ func shouldSkipBuild() bool {
 }
 
 func buildSpinBinary() {
-	// Build the binary with e2e_llm_test tag to enable test-llm provider
+	// Use file lock to prevent concurrent builds from parallel test packages.
+	lockPath := binPath + ".lock"
+
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create lock file: %v\n", err)
+		os.Exit(1)
+	}
+	defer lockFile.Close()
+
+	// Acquire exclusive lock (blocks until available).
+	fd := int(lockFile.Fd()) //nolint:gosec // fd is always a small positive int
+	if err := syscall.Flock(fd, syscall.LOCK_EX); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to acquire build lock: %v\n", err)
+		os.Exit(1)
+	}
+
+	defer func() { _ = syscall.Flock(fd, syscall.LOCK_UN) }()
+
+	// Check if binary was already built by another package while we waited.
+	if info, statErr := os.Stat(binPath); statErr == nil {
+		if time.Since(info.ModTime()) < 30*time.Second {
+			fmt.Fprintln(os.Stdout, "Using recently built spin binary for e2e tests")
+
+			return
+		}
+	}
+
+	// Build the binary with e2e_llm_test tag to enable test-llm provider.
 	// This allows e2e tests to run without requiring external LLM services.
 	fmt.Fprintln(os.Stdout, "Building spin binary for e2e tests (with e2e_llm_test tag)...")
 

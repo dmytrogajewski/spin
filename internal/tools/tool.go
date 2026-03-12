@@ -78,26 +78,6 @@ func NewToolError(err error) ToolResult {
 	}
 }
 
-// NewToolErrorMsg creates a failed tool result from an error message string.
-// Unlike NewToolError, this does not retain the original error as an Err field.
-func NewToolErrorMsg(msg string) ToolResult {
-	return ToolResult{
-		Success: false,
-		Error:   msg,
-	}
-}
-
-// ErrToResult converts an error into a failed ToolResult with nil function error.
-// This is used to communicate operational errors through ToolResult
-// rather than the function's error return value, avoiding the nilerr pattern.
-func ErrToResult(err error) (ToolResult, error) {
-	return ToolResult{
-		Success: false,
-		Err:     err,
-		Error:   err.Error(),
-	}, nil
-}
-
 // ErrToResultf converts an error into a failed ToolResult with a formatted message
 // and nil function error. This wraps the error message in a format string.
 func ErrToResultf(format string, err error) (ToolResult, error) {

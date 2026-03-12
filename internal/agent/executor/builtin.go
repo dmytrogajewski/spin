@@ -81,10 +81,10 @@ func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 
 // RegisterTools registers builtin-specific tools.
 func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
-	// Read-only tools (shared, no runtime dependency).
-	_ = registry.Register(tools.NewReadFileTool())
-	_ = registry.Register(tools.NewWriteFileTool())
-	_ = registry.Register(tools.NewListDirectoryTool())
+	// File tools resolve relative paths against workDir.
+	_ = registry.Register(tools.NewReadFileTool(r.workDir))
+	_ = registry.Register(tools.NewWriteFileTool(r.workDir))
+	_ = registry.Register(tools.NewListDirectoryTool(r.workDir))
 
 	// Builtin-specific shell command tool (uses local executor).
 	var (

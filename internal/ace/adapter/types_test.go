@@ -101,17 +101,17 @@ func TestSession_SlidingWindow(t *testing.T) {
 	// Should have all 15 signals counted.
 	assert.Equal(t, 15, session.SignalCount)
 
-	// But only last 10 in recent signals.
-	assert.Len(t, session.RecentSignals, 10)
+	// 15 is under maxRecentSignals (50), so all are kept.
+	assert.Len(t, session.RecentSignals, 15)
 
 	// Last signal should be the 15th.
-	assert.Equal(t, signals[14], session.LastSignal)
+	assert.Same(t, signals[14], session.LastSignal)
 
-	// First signal in recent should be the 6th (index 5).
-	assert.Equal(t, signals[5], session.RecentSignals[0])
+	// First signal in recent should be the 1st (index 0).
+	assert.Same(t, signals[0], session.RecentSignals[0])
 
 	// Last signal in recent should be the 15th (index 14).
-	assert.Equal(t, signals[14], session.RecentSignals[9])
+	assert.Same(t, signals[14], session.RecentSignals[14])
 }
 
 func TestAdaptationResult_Creation(t *testing.T) {

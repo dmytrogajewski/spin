@@ -3,14 +3,22 @@ package tools
 import (
 	"context"
 	"os"
+	"path/filepath"
 )
 
 // ReadFileTool implements file reading functionality.
-type ReadFileTool struct{}
+type ReadFileTool struct {
+	workDir string
+}
 
 // NewReadFileTool creates a new read file tool.
-func NewReadFileTool() *ReadFileTool {
-	return &ReadFileTool{}
+func NewReadFileTool(workDir ...string) *ReadFileTool {
+	var wd string
+	if len(workDir) > 0 {
+		wd = workDir[0]
+	}
+
+	return &ReadFileTool{workDir: wd}
 }
 
 // Name implements the Name operation.
@@ -49,6 +57,10 @@ func (t *ReadFileTool) Execute(_ context.Context, params ToolParameters) (ToolRe
 	path, _ := params.GetString("path")
 	if path == "" {
 		return NewToolError(ErrPathParameterRequired), nil
+	}
+
+	if !filepath.IsAbs(path) && t.workDir != "" {
+		path = filepath.Join(t.workDir, path)
 	}
 
 	content, readErr := os.ReadFile(path)

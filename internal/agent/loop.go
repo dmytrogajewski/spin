@@ -102,7 +102,9 @@ func (a *Agent) executeAgentLoop(
 			"turn", turn+1, "content_len", len(content),
 			"tool_calls", len(toolCalls), "finish_reason", finishReason)
 
-		messages, shouldStop, err := a.runCycleDetectionIfEnabled(ctx, messages, llmResp, turn+1, resp)
+		var shouldStop bool
+
+		messages, shouldStop, err = a.runCycleDetectionIfEnabled(ctx, messages, llmResp, turn+1, resp)
 		if err != nil {
 			return messages, resp, err
 		}
@@ -111,8 +113,9 @@ func (a *Agent) executeAgentLoop(
 			return messages, resp, nil
 		}
 
-		shouldContinue, msgs := a.processLLMResponse(ctx, messages, llmResp, content, toolCalls, finishReason, turn, resp)
-		messages = msgs
+		var shouldContinue bool
+
+		shouldContinue, messages = a.processLLMResponse(ctx, messages, llmResp, content, toolCalls, finishReason, turn, resp)
 
 		if !shouldContinue {
 			break
