@@ -13,7 +13,9 @@ import (
 const defaultEmbeddingDimensions = 768
 
 var (
+	// ErrOllamaReturnedNoEmbeddings is a sentinel error.
 	ErrOllamaReturnedNoEmbeddings = errors.New("ollama returned no embeddings")
+	// ErrExpectedEmbeddingDimension is a sentinel error.
 	ErrExpectedEmbeddingDimension = errors.New("expected embedding dimension")
 )
 
@@ -104,7 +106,7 @@ func (e *OllamaEmbedder) Embed(ctx context.Context, text string) ([]float32, err
 
 	// Validate dimension.
 	if len(embedding) != e.dimension {
-return nil, fmt.Errorf("expected embedding dimension %d, got %d: %w", e.dimension, len(embedding), ErrExpectedEmbeddingDimension)
+		return nil, fmt.Errorf("expected embedding dimension %d, got %d: %w", e.dimension, len(embedding), ErrExpectedEmbeddingDimension)
 	}
 
 	return embedding, nil

@@ -11,6 +11,7 @@ import (
 
 func TestValidateToolCall_Valid(t *testing.T) {
 	t.Parallel()
+
 	call := &message.ToolCall{
 		ID:   "test-id",
 		Type: "function",
@@ -26,6 +27,7 @@ func TestValidateToolCall_Valid(t *testing.T) {
 
 func TestValidateToolCall_Nil(t *testing.T) {
 	t.Parallel()
+
 	err := ValidateToolCall(nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot be nil")
@@ -33,6 +35,7 @@ func TestValidateToolCall_Nil(t *testing.T) {
 
 func TestValidateToolCall_EmptyID(t *testing.T) {
 	t.Parallel()
+
 	call := &message.ToolCall{
 		ID:   "",
 		Type: "function",
@@ -49,6 +52,7 @@ func TestValidateToolCall_EmptyID(t *testing.T) {
 
 func TestValidateToolCall_EmptyFunctionName(t *testing.T) {
 	t.Parallel()
+
 	call := &message.ToolCall{
 		ID:   "test-id",
 		Type: "function",

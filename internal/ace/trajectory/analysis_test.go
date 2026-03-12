@@ -52,7 +52,7 @@ func hasRecentErrorCases() []hasRecentErrorCase {
 			lookback: 2, want: true,
 		},
 		{
-			name:     "returns false when error outside lookback window",
+			name: "returns false when error outside lookback window",
 			steps: []generator.TrajectoryStep{
 				{StepNumber: 0, Content: "error at start"},
 				{StepNumber: 1, Content: "step 2"},

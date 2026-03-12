@@ -79,7 +79,6 @@ func toolDescription(mcpTool *Tool) string {
 	return fmt.Sprintf("MCP tool: %s", mcpTool.Tool.Name)
 }
 
-
 // RegistryMetadata contains information about a registry.
 // Implementations can extend this with custom fields via the Extra map.
 type RegistryMetadata struct {

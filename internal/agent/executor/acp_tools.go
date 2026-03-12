@@ -13,12 +13,16 @@ import (
 )
 
 var (
+	// ErrSessionWorkingDirectoryNotSet is a sentinel error.
 	ErrSessionWorkingDirectoryNotSet = errors.New("session working directory not set")
+	// ErrPathIsOutsideTheAllowedWorkspace is a sentinel error.
 	ErrPathIsOutsideTheAllowedWorkspace = errors.New(
 		"path '' is outside the allowed workspace (). " +
 			"Use relative paths or absolute paths within the workspace",
 	)
+	// ErrSessionWorkingDirectoryNotSet2 is a sentinel error.
 	ErrSessionWorkingDirectoryNotSet2 = errors.New("session working directory not set")
+	// ErrPathIsOutsideTheAllowedWorkspace2 is a sentinel error.
 	ErrPathIsOutsideTheAllowedWorkspace2 = errors.New(
 		"path '' is outside the allowed workspace (). " +
 			"Use relative paths or absolute paths within the workspace",
@@ -201,10 +205,13 @@ type simpleCommand struct {
 
 // GetProgram implements the GetProgram operation.
 func (c *simpleCommand) GetProgram() string { return c.program }
+
 // GetArgs implements the GetArgs operation.
-func (c *simpleCommand) GetArgs() []string  { return c.args }
+func (c *simpleCommand) GetArgs() []string { return c.args }
+
 // GetRaw implements the GetRaw operation.
-func (c *simpleCommand) GetRaw() string     { return c.raw }
+func (c *simpleCommand) GetRaw() string { return c.raw }
+
 // GetWorkDir implements the GetWorkDir operation.
 func (c *simpleCommand) GetWorkDir() string { return c.workDir }
 
@@ -241,7 +248,7 @@ func (t *ACPReadFileTool) Schema() tools.ToolSchema {
 				Type: "object",
 				Properties: map[string]tools.PropertyDefinition{
 					"path": {
-						Type:        "string",
+						Type: "string",
 						Description: "Path to the file. Use relative paths (e.g., 'src/main.py') or absolute paths " +
 							"within the session workspace. Paths outside the workspace are rejected.",
 					},
@@ -376,7 +383,7 @@ func (t *ACPWriteFileTool) Schema() tools.ToolSchema {
 				Type: "object",
 				Properties: map[string]tools.PropertyDefinition{
 					"path": {
-						Type:        "string",
+						Type: "string",
 						Description: "Path to the file. Use relative paths (e.g., 'src/main.py') or absolute paths " +
 							"within the session workspace. Paths outside the workspace (like /tmp) are rejected.",
 					},

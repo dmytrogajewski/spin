@@ -7,8 +7,11 @@ import (
 )
 
 var (
+	// ErrCommandCannotBeNil is a sentinel error.
 	ErrCommandCannotBeNil = errors.New("command cannot be nil")
+	// ErrValidatorNotConfigured is a sentinel error.
 	ErrValidatorNotConfigured = errors.New("validator not configured")
+	// ErrApprovalServiceNotConfigured is a sentinel error.
 	ErrApprovalServiceNotConfigured = errors.New("approval service not configured")
 )
 

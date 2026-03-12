@@ -18,6 +18,7 @@ import (
 // Uses 100k blocks for CI (reduced from 1M for speed).
 func TestTimeline_StressOOM_1MBlocks(t *testing.T) {
 	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping stress test in short mode")
 	}
@@ -98,12 +99,15 @@ func verifyScrollToBottom(t *testing.T, timeline *Timeline, totalBlocks int) {
 	t.Helper()
 
 	start := time.Now()
+
 	timeline.ScrollToBottom()
+
 	dur := time.Since(start)
 
 	visibleAfterScroll := timeline.GetVisibleBlocks()
 	if len(visibleAfterScroll) > 0 {
 		lastVisible := visibleAfterScroll[len(visibleAfterScroll)-1]
+
 		expected := fmt.Sprintf("Block %d", totalBlocks-1)
 		if lastVisible.Title != expected {
 			t.Errorf("ScrollToBottom() last visible block = %q, want %s", lastVisible.Title, expected)
@@ -122,6 +126,7 @@ func verifyFilter(t *testing.T, timeline *Timeline, totalBlocks int) {
 	t.Helper()
 
 	start := time.Now()
+
 	timeline.SetFilter(&Filter{Types: []BlockType{BlockTypeExecute}})
 	filtered := timeline.GetVisibleBlocks()
 	dur := time.Since(start)
@@ -155,8 +160,10 @@ func verifyNoGoroutineLeak(t *testing.T) {
 	t.Helper()
 
 	goroutinesBefore := runtime.NumGoroutine()
+
 	runtime.GC()
 	time.Sleep(100 * time.Millisecond)
+
 	goroutinesAfter := runtime.NumGoroutine()
 
 	if goroutinesAfter > goroutinesBefore+5 {
@@ -168,6 +175,7 @@ func verifyNoGoroutineLeak(t *testing.T) {
 // 100 writers + 10 scrollers + 10 filters running concurrently for 10 seconds.
 func TestTimeline_StressConcurrent(t *testing.T) {
 	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping stress test in short mode")
 	}
@@ -212,6 +220,7 @@ func startWriters(ctx context.Context, wg *sync.WaitGroup, timeline *Timeline, e
 
 		go func(id int) {
 			defer wg.Done()
+
 			writeBlocks(ctx, timeline, errors, id, blocksPerWriter)
 		}(i)
 	}
@@ -233,6 +242,7 @@ func writeBlocks(ctx context.Context, timeline *Timeline, errors chan<- error, w
 
 		if err := timeline.Append(block); err != nil {
 			errors <- fmt.Errorf("Append error from writer %d: %w", writerID, err)
+
 			return
 		}
 
@@ -303,6 +313,7 @@ func startFilterers(ctx context.Context, wg *sync.WaitGroup, timeline *Timeline,
 // TestTimeline_StressScrolling verifies scroll performance on large timelines.
 func TestTimeline_StressScrolling(t *testing.T) {
 	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping stress test in short mode")
 	}

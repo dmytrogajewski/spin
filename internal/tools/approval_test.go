@@ -9,9 +9,9 @@ const (
 	testMockToolDesc = "Mock tool for testing"
 )
 
-
 func TestRiskLevel_String(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		level    RiskLevel
 		expected string
@@ -26,6 +26,7 @@ func TestRiskLevel_String(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
 			t.Parallel()
+
 			got := tt.level.String()
 			if got != tt.expected {
 				t.Errorf("RiskLevel.String() = %v, want %v", got, tt.expected)
@@ -36,6 +37,7 @@ func TestRiskLevel_String(t *testing.T) {
 
 func TestApprovalNeeds_NoApprovalRequired(t *testing.T) {
 	t.Parallel()
+
 	needs := ApprovalNeeds{
 		Required: false,
 		Risk:     RiskSafe,
@@ -76,6 +78,7 @@ func (m *mockToolWithApproval) CheckApproval(params ToolParameters) ApprovalNeed
 
 func TestToolWithApproval_Interface(t *testing.T) {
 	t.Parallel()
+
 	tool := &mockToolWithApproval{
 		checkApprovalFunc: func(_ ToolParameters) ApprovalNeeds {
 			return ApprovalNeeds{

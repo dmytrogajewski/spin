@@ -78,6 +78,7 @@ func runProcessEventTests(t *testing.T, cases []processEventCase) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			agentInstance := &agent.Agent{}
 			mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 			emitter := events.NewEventEmitter(100)
@@ -145,6 +146,7 @@ func TestProcessEvents_ToolCallStart(t *testing.T) {
 // TestProcessEvents_NoConnection tests that events are not sent when connection is nil.
 func TestProcessEvents_NoConnection(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -189,6 +191,7 @@ func TestProcessEvents_NoConnection(t *testing.T) {
 // TestProcessEvents_ContextCancellation tests that event processing stops on context cancellation.
 func TestProcessEvents_ContextCancellation(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -258,6 +261,7 @@ func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 	ctx := t.Context()
 	subID, eventCh, err := emitter.Subscribe()
 	require.NoError(t, err)
+
 	defer emitter.Unsubscribe(subID)
 
 	go acpAgent.processEvents(ctx, sessionID, eventCh)

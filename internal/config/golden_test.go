@@ -22,6 +22,7 @@ func TestGolden_ValidMinimal(t *testing.T) {
 	}
 
 	var cfg V2
+
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
@@ -79,6 +80,7 @@ func loadGoldenConfig(t *testing.T, filename string) V2 {
 	t.Helper()
 
 	path := filepath.Join("golden", filename)
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("Failed to read golden file: %v", err)
@@ -186,10 +188,10 @@ func verifyFullProtocolSection(t *testing.T, cfg *V2) {
 
 // goldenValidationCase defines a test case for golden file validation.
 type goldenValidationCase struct {
-	name         string
-	file         string
-	failMessage  string
-	wantSubstrs  []string
+	name        string
+	file        string
+	failMessage string
+	wantSubstrs []string
 }
 
 func runGoldenValidationTests(t *testing.T, cases []goldenValidationCase) {
@@ -207,6 +209,7 @@ func runGoldenValidationTests(t *testing.T, cases []goldenValidationCase) {
 			}
 
 			var cfg V2
+
 			err = yaml.Unmarshal(data, &cfg)
 			if err != nil {
 				t.Fatalf("Failed to unmarshal: %v", err)
@@ -268,6 +271,7 @@ func TestGolden_InvalidCrossSection(t *testing.T) {
 	}
 
 	var cfg V2
+
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)

@@ -13,6 +13,7 @@ func TestDetectPlanFromOutput_ExitsPlanSection(t *testing.T) {
 
 	t.Run("Plan followed by regular text", func(t *testing.T) {
 		t.Parallel()
+
 		entries := detectPlanFromOutput(
 			"Plan:\n1. First step\n2. Second step\n3. Third step\n\n" +
 				"This is regular text that explains something.\nMore explanation here.")
@@ -21,6 +22,7 @@ func TestDetectPlanFromOutput_ExitsPlanSection(t *testing.T) {
 
 	t.Run("Plan followed by code example", func(t *testing.T) {
 		t.Parallel()
+
 		entries := detectPlanFromOutput(
 			"Steps:\n1. Create file\n2. Write code\n3. Test code\n\n" +
 				"The code looks like this:\n1. func main() {\n2.     fmt.Println(\"hello\")\n3. }")
@@ -29,26 +31,30 @@ func TestDetectPlanFromOutput_ExitsPlanSection(t *testing.T) {
 
 	t.Run("Multiple disconnected lists", func(t *testing.T) {
 		t.Parallel()
+
 		entries := detectPlanFromOutput("Plan:\n1. Item A\n2. Item B\n\nSome text in between.\n\nSteps:\n1. Item C\n2. Item D")
 		assert.Len(t, entries, 4, "Should detect both lists with explicit headers")
 	})
 
 	t.Run("Plan with one non-plan line intermixed", func(t *testing.T) {
 		t.Parallel()
+
 		entries := detectPlanFromOutput("Steps:\n1. First step\n(this is a note)\n2. Second step\n3. Third step")
 		assert.Len(t, entries, 3, "Should tolerate one non-plan line within plan")
 	})
 
 	t.Run("Plan with two non-plan lines exits", func(t *testing.T) {
 		t.Parallel()
+
 		entries := detectPlanFromOutput("Steps:\n1. First step\nSome text\nMore text\n2. This should not be detected")
 		assert.Len(t, entries, 1, "Should exit after 2 consecutive non-plan lines")
 	})
 
 	t.Run("No plan pattern", func(t *testing.T) {
 		t.Parallel()
+
 		entries := detectPlanFromOutput("This is just regular text.\nIt has no numbered lists.\nOr bullet points.")
-		assert.Len(t, entries, 0, "Should detect no plan entries")
+		assert.Empty(t, entries, "Should detect no plan entries")
 	})
 }
 
@@ -56,6 +62,7 @@ func TestDetectPlanFromOutput_ExitsPlanSection(t *testing.T) {
 // where an LLM describes a project with multiple sections.
 func TestDetectPlanFromOutput_RealWorldScenario(t *testing.T) {
 	t.Parallel()
+
 	output := `I'll help you review this project. Here's my analysis:
 
 ## Project Structure

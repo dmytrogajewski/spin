@@ -8,13 +8,13 @@ import (
 )
 
 const (
-	defaultSearchMinScore       = 0.3
-	descriptionScoreWeight      = 0.6
-	exactMatchScore             = 0.9
-	prefixMatchScore            = 0.7
-	containsMatchScore          = 0.75
-	fuzzyMatchThreshold         = 0.5
-	fuzzyMatchWeight            = 0.6
+	defaultSearchMinScore  = 0.3
+	descriptionScoreWeight = 0.6
+	exactMatchScore        = 0.9
+	prefixMatchScore       = 0.7
+	containsMatchScore     = 0.75
+	fuzzyMatchThreshold    = 0.5
+	fuzzyMatchWeight       = 0.6
 )
 
 // SearchOptions configures search behavior.

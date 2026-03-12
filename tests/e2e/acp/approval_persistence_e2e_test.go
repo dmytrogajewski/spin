@@ -102,6 +102,7 @@ func (e *approvalPersistenceEnv) runPrompt(t *testing.T) {
 
 	ctx := context.Background()
 	done := make(chan error, 1)
+
 	go func() {
 		_, promptErr := e.client.Prompt(ctx, req)
 		done <- promptErr

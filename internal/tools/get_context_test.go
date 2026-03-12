@@ -59,6 +59,7 @@ func TestGetContextTool_Success(t *testing.T) {
 
 func TestGetContextTool_NilContext(t *testing.T) {
 	t.Parallel()
+
 	tool := NewGetContextTool(nil)
 	params, _ := FromMap(map[string]any{})
 
@@ -203,6 +204,7 @@ Project Structure: 2 files
 
 func TestGetContextTool_Schema(t *testing.T) {
 	t.Parallel()
+
 	tool := NewGetContextTool(nil)
 	schema := tool.Schema()
 
@@ -222,6 +224,7 @@ func TestGetContextTool_Schema(t *testing.T) {
 
 func TestGetContextTool_ErrorCases(t *testing.T) {
 	t.Parallel()
+
 	tool := NewGetContextTool(nil)
 
 	// GetContextTool has only optional parameters, so it doesn't fail on invalid params

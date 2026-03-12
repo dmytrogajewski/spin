@@ -19,6 +19,7 @@ func contains(s, substr string) bool {
 // Test ACEService creation with valid config.
 func TestNewACEService_Enabled(t *testing.T) {
 	t.Parallel()
+
 	cfg := &ACEConfig{
 		Enabled:      true,
 		PlaybookPath: "/tmp/test-playbook.json",
@@ -41,6 +42,7 @@ func TestNewACEService_Enabled(t *testing.T) {
 // Test ACEService creation with disabled config returns no-op.
 func TestNewACEService_Disabled(t *testing.T) {
 	t.Parallel()
+
 	cfg := &ACEConfig{
 		Enabled: false,
 	}
@@ -131,6 +133,7 @@ func TestACEService_BuildPrompt(t *testing.T) {
 		ID:      "test-1",
 		Content: "Use sync.RWMutex for concurrent maps",
 	}
+
 	err = svc.playbook.Add(ctx, testBullet)
 	if err != nil {
 		t.Fatalf("Failed to add bullet: %v", err)
@@ -162,6 +165,7 @@ func TestACEService_BuildPrompt(t *testing.T) {
 // Test BuildPrompt when disabled returns base prompt.
 func TestACEService_BuildPrompt_Disabled(t *testing.T) {
 	t.Parallel()
+
 	cfg := &ACEConfig{
 		Enabled: false,
 	}
@@ -239,6 +243,7 @@ EXPLANATION: B0 and B2 were directly applicable, B1 suggested the wrong approach
 // Test ParseFeedback when disabled returns nil.
 func TestACEService_ParseFeedback_Disabled(t *testing.T) {
 	t.Parallel()
+
 	cfg := &ACEConfig{
 		Enabled: false,
 	}

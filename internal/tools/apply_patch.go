@@ -12,11 +12,15 @@ import (
 const minPatchLines = 3
 
 var (
+	// ErrEmptyPatch is a sentinel error.
 	ErrEmptyPatch = errors.New("empty patch")
+	// ErrPatchMustBeInStandardDiff is a sentinel error.
 	ErrPatchMustBeInStandardDiff = errors.New(
 		"patch must be in standard diff format. Expected to start with '*** filename' or '--- filename'",
 	)
+	// ErrDiffFormatTooShort is a sentinel error.
 	ErrDiffFormatTooShort = errors.New("diff format too short")
+	// ErrCouldNotExtractFilenameFromFirst is a sentinel error.
 	ErrCouldNotExtractFilenameFromFirst = errors.New("could not extract filename from first line")
 )
 
@@ -63,7 +67,7 @@ func (t *ApplyPatchTool) Schema() ToolSchema {
 				Type: "object",
 				Properties: map[string]PropertyDefinition{
 					"patch_text": {
-						Type:        "string",
+						Type: "string",
 						Description: "The patch text in standard diff format. Must start with " +
 							"'*** filename' or '--- filename' and contain " +
 							"'@@ -start,count +start,count @@' hunks with '+', '-', or ' ' prefixed lines.",
@@ -100,6 +104,7 @@ func (t *ApplyPatchTool) Execute(_ context.Context, params ToolParameters) (Tool
 
 	// Extract workspace_root parameter (optional).
 	workspaceRoot := t.workspaceRoot
+
 	customRoot, err := params.GetString("workspace_root")
 	if err == nil && customRoot != "" {
 		workspaceRoot = customRoot
@@ -138,7 +143,7 @@ func (t *ApplyPatchTool) Execute(_ context.Context, params ToolParameters) (Tool
 func (t *ApplyPatchTool) applyPatch(workspaceRoot string, patch *patchapply.Patch, dryRun, force bool) (*patchapply.ApplyResult, error) {
 	applier, err := patchapply.NewApplier(workspaceRoot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create applier: %v", err)
+		return nil, fmt.Errorf("failed to create applier: %w", err)
 	}
 
 	applier.SetDryRun(dryRun)
@@ -234,7 +239,7 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 	} else if afterDash, hasDash := strings.CutPrefix(firstLine, "--- "); hasDash {
 		filename = strings.TrimSpace(afterDash)
 	} else {
-return nil, fmt.Errorf("could not extract filename from first line: %q: %w", firstLine, ErrCouldNotExtractFilenameFromFirst)
+		return nil, fmt.Errorf("could not extract filename from first line: %q: %w", firstLine, ErrCouldNotExtractFilenameFromFirst)
 	}
 
 	// Create patch with update file operation.
@@ -249,6 +254,7 @@ return nil, fmt.Errorf("could not extract filename from first line: %q: %w", fir
 
 	// Parse hunks.
 	updateOp := patch.Operations[0].(*patchapply.UpdateFile)
+
 	var currentHunk *patchapply.Hunk
 
 	for i := 2; i < len(lines); i++ {

@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -9,6 +10,13 @@ import (
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/dmytrogajewski/spin/internal/security"
+)
+
+var (
+	// ErrNoActiveSession is returned when no active session exists.
+	ErrNoActiveSession = errors.New("no active session")
+	// ErrNoConnectionToClient is returned when there is no client connection.
+	ErrNoConnectionToClient = errors.New("no connection to client")
 )
 
 // ApprovalHandler coordinates approval requests between Spin's approval service
@@ -68,7 +76,7 @@ func (h *ApprovalHandler) HandleApprovalRequest(ctx context.Context, req securit
 
 	acpResp, err := h.requestPermission(ctx, conn, sessionID, toolCall, options)
 	if err != nil {
-		return h.handlePermissionError(req.ID, err, ctx)
+		return h.handlePermissionError(ctx, req.ID, err)
 	}
 
 	return h.buildApprovalResponse(req.ID, acpResp, options)
@@ -81,7 +89,7 @@ func (h *ApprovalHandler) getSessionAndConnection() (acp.SessionId, notification
 	h.mu.RUnlock()
 
 	if sessionID == "" {
-		return "", nil, fmt.Errorf("no active session")
+		return "", nil, ErrNoActiveSession
 	}
 
 	h.agent.mu.RLock()
@@ -89,7 +97,7 @@ func (h *ApprovalHandler) getSessionAndConnection() (acp.SessionId, notification
 	h.agent.mu.RUnlock()
 
 	if conn == nil {
-		return "", nil, fmt.Errorf("no connection to client")
+		return "", nil, ErrNoConnectionToClient
 	}
 
 	return sessionID, conn, nil
@@ -100,6 +108,7 @@ func extractToolName(req security.ApprovalRequest) string {
 	if req.Command != nil {
 		return req.Command.Program
 	}
+
 	return unknownValue
 }
 
@@ -184,10 +193,11 @@ func (h *ApprovalHandler) requestPermission(
 }
 
 // handlePermissionError handles errors from the permission request.
-func (h *ApprovalHandler) handlePermissionError(reqID string, err error, ctx context.Context) security.ApprovalResponse {
+func (h *ApprovalHandler) handlePermissionError(ctx context.Context, reqID string, err error) security.ApprovalResponse {
 	if ctx.Err() != nil {
 		return h.denyResponse(reqID, "approval request canceled")
 	}
+
 	return h.denyResponse(reqID, fmt.Sprintf("client permission request failed: %v", err))
 }
 
@@ -196,6 +206,7 @@ func (h *ApprovalHandler) buildApprovalResponse(
 	reqID string, acpResp acp.RequestPermissionResponse, options []acp.PermissionOption,
 ) security.ApprovalResponse {
 	approved, scope := resolvePermissionOutcome(acpResp, options)
+
 	return security.ApprovalResponse{
 		RequestID: reqID,
 		Approved:  approved,
@@ -215,6 +226,7 @@ func resolvePermissionOutcome(acpResp acp.RequestPermissionResponse, options []a
 		if opt.OptionId != selectedID {
 			continue
 		}
+
 		switch opt.Kind {
 		case acp.PermissionOptionKindAllowOnce:
 			return true, security.ScopeOnce

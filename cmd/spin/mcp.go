@@ -19,11 +19,18 @@ import (
 )
 
 var (
+	// ErrInvalidTransport is a sentinel error.
 	ErrInvalidTransport = errors.New("invalid transport")
+	// ErrAPIKeyIsRequired is a sentinel error.
 	ErrAPIKeyIsRequired = errors.New("API key is required")
+	// ErrRegistryNotFound is a sentinel error.
 	ErrRegistryNotFound = errors.New("registry '' not found")
+	// ErrAPIErrorStatus is a sentinel error.
 	ErrAPIErrorStatus = errors.New("API error (status )")
+	// ErrInvalidServerPathFormat is a sentinel error.
 	ErrInvalidServerPathFormat = errors.New("invalid server path format")
+	// ErrInvalidSmitheryAPIURL is a sentinel error.
+	ErrInvalidSmitheryAPIURL = errors.New("invalid Smithery API URL")
 )
 
 // ============================================================================
@@ -211,6 +218,7 @@ func runMCPRegistryLocalAdd(cmd *cobra.Command, args []string) error {
 
 	// Load config.
 	loader := config.NewLoaderV2()
+
 	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -315,11 +323,12 @@ func runMCPRegistryRemoteAdd(cmd *cobra.Command, args []string) error {
 	case "streamable-http":
 		transportType = config.MCPTransportStreamableHTTP
 	default:
-return fmt.Errorf("invalid transport: %s (use 'sse' or 'streamable-http'): %w", transport, ErrInvalidTransport)
+		return fmt.Errorf("invalid transport: %s (use 'sse' or 'streamable-http'): %w", transport, ErrInvalidTransport)
 	}
 
 	// Load config.
 	loader := config.NewLoaderV2()
+
 	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -442,6 +451,7 @@ func runMCPRegistrySmitheryAdd(cmd *cobra.Command, args []string) error {
 		reader := bufio.NewReader(os.Stdin)
 
 		var input string
+
 		input, err = reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read API key: %w", err)
@@ -455,6 +465,7 @@ func runMCPRegistrySmitheryAdd(cmd *cobra.Command, args []string) error {
 
 	// Load config.
 	loader := config.NewLoaderV2()
+
 	_, err = loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -517,6 +528,7 @@ func runMCPRegistryList(cmd *cobra.Command, _ []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
 	loader := config.NewLoaderV2()
+
 	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -589,6 +601,7 @@ func runMCPRegistryGet(cmd *cobra.Command, args []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
 	loader := config.NewLoaderV2()
+
 	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -718,6 +731,7 @@ func runMCPRegistryRemove(cmd *cobra.Command, args []string) error {
 	yes, _ := cmd.Flags().GetBool("yes")
 
 	loader := config.NewLoaderV2()
+
 	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -734,6 +748,7 @@ func runMCPRegistryRemove(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "Remove registry '%s'? (y/N): ", name)
 
 		var response string
+
 		_, _ = fmt.Fscanln(os.Stdin, &response)
 
 		response = strings.ToLower(strings.TrimSpace(response))
@@ -848,6 +863,7 @@ func filterServersByRegistry(servers []config.MCPServer, registryFilter string) 
 	}
 
 	var filtered []config.MCPServer
+
 	for _, s := range servers {
 		if s.Name == registryFilter {
 			filtered = append(filtered, s)
@@ -870,12 +886,14 @@ func searchSmitheryServer(ctx context.Context, server config.MCPServer, flags mc
 
 	if key == "" {
 		fmt.Fprintf(os.Stderr, "Warning: No API key for Smithery registry '%s', skipping\n", server.Name)
+
 		return nil
 	}
 
 	smitheryResults, searchErr := searchSmitheryAPI(ctx, flags.query, key, flags.limit, flags.verified)
 	if searchErr != nil {
 		fmt.Fprintf(os.Stderr, "Warning: Failed to search Smithery registry '%s': %v\n", server.Name, searchErr)
+
 		return nil
 	}
 
@@ -916,6 +934,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 	flags := parseMCPSearchFlags(cmd, args)
 
 	loader := config.NewLoaderV2()
+
 	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -934,6 +953,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	var results []mcpSearchResult
+
 	for _, server := range servers {
 		if server.Transport == config.MCPTransportSmithery {
 			results = append(results, searchSmitheryServer(cmd.Context(), server, flags)...)
@@ -942,6 +962,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 
 	if len(results) == 0 {
 		fmt.Fprintf(cmd.OutOrStdout(), "No tools found for query: %s\n", flags.query)
+
 		return nil
 	}
 
@@ -950,6 +971,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	printSearchResultsTable(cmd, results)
+
 	return nil
 }
 
@@ -967,10 +989,10 @@ func searchSmitheryAPI(ctx context.Context, query, apiKey string, limit int, ver
 	}
 
 	if parsedURL.Scheme != "https" || parsedURL.Host != "api.smithery.ai" {
-		return nil, fmt.Errorf("invalid Smithery API URL: %s", apiURL)
+		return nil, fmt.Errorf("%w: %s", ErrInvalidSmitheryAPIURL, apiURL)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", parsedURL.String(), http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -989,10 +1011,11 @@ func searchSmitheryAPI(ctx context.Context, query, apiKey string, limit int, ver
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 
-return nil, fmt.Errorf("API error (status %d): %s: %w", resp.StatusCode, string(body), ErrAPIErrorStatus)
+		return nil, fmt.Errorf("API error (status %d): %s: %w", resp.StatusCode, string(body), ErrAPIErrorStatus)
 	}
 
 	var result smitheryToolsResponse
+
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
@@ -1037,6 +1060,7 @@ func runMCPListTools(cmd *cobra.Command, _ []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
 	loader := config.NewLoaderV2()
+
 	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -1131,7 +1155,7 @@ func parseHeaders(headers []string) map[string]string {
 
 	for _, h := range headers {
 		parts := strings.SplitN(h, "=", 2)
-			if len(parts) == keyValueParts {
+		if len(parts) == keyValueParts {
 			result[parts[0]] = parts[1]
 		}
 	}

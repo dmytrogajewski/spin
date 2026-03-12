@@ -15,7 +15,6 @@ const (
 	testValue2 = "value2"
 )
 
-
 func TestNewPersistentStore(t *testing.T) {
 	t.Parallel()
 
@@ -66,6 +65,7 @@ func TestPersistentStorePutAndGet(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -101,6 +101,7 @@ func TestPersistentStorePutWithNamespace(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -122,6 +123,7 @@ func TestPersistentStorePutWithNamespace(t *testing.T) {
 
 	// Verify file was created in namespace subdirectory.
 	expectedPath := filepath.Join(tmpDir, "custom", "key1.json")
+
 	_, err = os.Stat(expectedPath)
 	if os.IsNotExist(err) {
 		t.Errorf("File should exist at %s", expectedPath)
@@ -133,6 +135,7 @@ func TestPersistentStorePutWithTags(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -160,6 +163,7 @@ func TestPersistentStorePutUpdateExisting(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -196,6 +200,7 @@ func TestPersistentStorePutWithoutOverwrite(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -219,6 +224,7 @@ func TestPersistentStoreGetNotFound(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -235,6 +241,7 @@ func TestPersistentStorePutEmptyKey(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -251,6 +258,7 @@ func TestPersistentStoreGetEmptyKey(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -267,6 +275,7 @@ func TestPersistentStoreDelete(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -300,6 +309,7 @@ func TestPersistentStoreDeleteNonexistent(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -317,6 +327,7 @@ func TestPersistentStoreDeleteEmptyKey(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -333,6 +344,7 @@ func TestPersistentStoreCount(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -372,6 +384,7 @@ func TestPersistentStoreList(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -380,9 +393,11 @@ func TestPersistentStoreList(t *testing.T) {
 	if err = store.Put(ctx, "prefix_a", testValue1, PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err = store.Put(ctx, "prefix_b", testValue2, PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err = store.Put(ctx, "other", "value3", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -413,6 +428,7 @@ func TestPersistentStoreSearch(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -421,9 +437,11 @@ func TestPersistentStoreSearch(t *testing.T) {
 	if err = store.Put(ctx, "api_response", "status ok", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err = store.Put(ctx, "error_log", "status error", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err = store.Put(ctx, "config", "database url", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -464,6 +482,7 @@ func TestPersistentStoreSearchNoMatches(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -494,12 +513,15 @@ func TestPersistentStorePersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
 	}
+
 	if err = store1.Put(ctx, "key1", testValue1, PutOptions{Namespace: "ns1"}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err = store1.Put(ctx, "key2", testValue2, PutOptions{Namespace: "ns2"}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err = store1.Close(); err != nil {
 		t.Fatalf("Close failed: %v", err)
 	}
@@ -533,6 +555,7 @@ func TestPersistentStoreConcurrentAccess(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -584,6 +607,7 @@ func TestPersistentStoreClose(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -600,6 +624,7 @@ func TestPersistentStoreWithTTL(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -627,6 +652,7 @@ func TestPersistentStoreGetByNamespaceKey(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -636,6 +662,7 @@ func TestPersistentStoreGetByNamespaceKey(t *testing.T) {
 	if err = store.Put(ctx, "key1", testValue1, PutOptions{Namespace: "ns1"}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err = store.Put(ctx, "key1", testValue2, PutOptions{Namespace: "ns2"}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -656,6 +683,7 @@ func TestPersistentStoreDeleteByNamespaceKey(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -681,6 +709,7 @@ func TestPersistentStoreSearchCaseInsensitive(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -715,6 +744,7 @@ func TestPersistentStoreExactPatternMatch(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
+
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
@@ -723,6 +753,7 @@ func TestPersistentStoreExactPatternMatch(t *testing.T) {
 	if err = store.Put(ctx, "exact_key", testValue1, PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err = store.Put(ctx, "another_key", testValue2, PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -748,6 +779,7 @@ func TestPersistentStoreRebuildIndexWithInvalidFiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(invalidPath), 0o700); err != nil {
 		t.Fatalf("MkdirAll failed: %v", err)
 	}
+
 	if err := os.WriteFile(invalidPath, []byte("not valid json"), 0o600); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}

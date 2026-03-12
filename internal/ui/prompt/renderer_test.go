@@ -53,11 +53,13 @@ func goldenRedrawCases() []redrawCase {
 // TestRenderer_Redraw_Golden verifies exact ANSI output for various scenarios.
 func TestRenderer_Redraw_Golden(t *testing.T) {
 	t.Parallel()
+
 	tests := goldenRedrawCases()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			var buf bytes.Buffer
 
 			r := NewTermRenderer(&buf, tt.width, tt.prefix)
@@ -85,6 +87,7 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 // TestRenderer_Redraw_CursorPositioning focuses on cursor column accuracy.
 func TestRenderer_Redraw_CursorPositioning(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name       string
 		bufferText string
@@ -109,6 +112,7 @@ func TestRenderer_Redraw_CursorPositioning(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			var buf bytes.Buffer
 
 			r := NewTermRenderer(&buf, 80, "> ")
@@ -137,6 +141,7 @@ func TestRenderer_Redraw_CursorPositioning(t *testing.T) {
 // TestRenderer_Redraw_StatusRendering tests right-aligned status behavior.
 func TestRenderer_Redraw_StatusRendering(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		bufferText     string
@@ -231,6 +236,7 @@ func verifyStatusOutput(t *testing.T, got string, tt struct {
 // TestRenderer_Redraw_HorizontalScrolling tests scrolling for long lines.
 func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name         string
 		bufferText   string
@@ -243,23 +249,24 @@ func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
 		{
 			name: "scroll long line cursor at start", wantEllipsis: true,
 			bufferText: "this is a very long line that exceeds terminal width by a lot",
-			cursor: 0, width: 20,
+			cursor:     0, width: 20,
 		},
 		{
 			name: "scroll long line cursor in middle", wantEllipsis: true,
 			bufferText: "this is a very long line that exceeds terminal width by a lot",
-			cursor: 30, width: 20,
+			cursor:     30, width: 20,
 		},
 		{
 			name: "scroll long line cursor at end", wantEllipsis: true,
 			bufferText: "this is a very long line that exceeds terminal width by a lot",
-			cursor: 61, width: 20,
+			cursor:     61, width: 20,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			var buf bytes.Buffer
 
 			r := NewTermRenderer(&buf, tt.width, "> ")
@@ -285,6 +292,7 @@ func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
 // TestRenderer_SetWidth tests dynamic width updates.
 func TestRenderer_SetWidth(t *testing.T) {
 	t.Parallel()
+
 	var buf bytes.Buffer
 
 	r := NewTermRenderer(&buf, 80, "> ")
@@ -299,6 +307,7 @@ func TestRenderer_SetWidth(t *testing.T) {
 // TestRenderer_SetPrefix tests dynamic prefix updates.
 func TestRenderer_SetPrefix(t *testing.T) {
 	t.Parallel()
+
 	var buf bytes.Buffer
 
 	r := NewTermRenderer(&buf, 80, "> ")

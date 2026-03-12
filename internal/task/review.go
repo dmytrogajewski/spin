@@ -98,7 +98,7 @@ func (r *Review) Validate() error {
 	}
 
 	if r.maxTokens > MaxAllowedTokens {
-return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", r.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
+		return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", r.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
 	}
 
 	return nil

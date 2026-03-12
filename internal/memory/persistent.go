@@ -123,6 +123,7 @@ func (s *PersistentStore) Put(_ context.Context, key, value string, opts PutOpti
 
 	// Create namespace directory.
 	namespaceDir := filepath.Join(s.basePath, namespace)
+
 	err := os.MkdirAll(namespaceDir, 0o700)
 	if err != nil {
 		return fmt.Errorf("create namespace directory: %w", err)
@@ -203,6 +204,7 @@ func (s *PersistentStore) Get(_ context.Context, key string) (*Entry, error) {
 
 	// Deserialize.
 	var entry persistedEntry
+
 	err = json.Unmarshal(data, &entry)
 	if err != nil {
 		return nil, fmt.Errorf("deserialize entry: %w", err)
@@ -348,6 +350,7 @@ func (s *PersistentStore) rebuildIndex() error {
 		}
 
 		var entry persistedEntry
+
 		_ = json.Unmarshal(data, &entry)
 
 		// Skip entries with empty keys (unmarshal failed or invalid data).
@@ -384,6 +387,7 @@ func (s *PersistentStore) readEntryUnsafe(filePath string) (*Entry, error) {
 	}
 
 	var entry persistedEntry
+
 	err = json.Unmarshal(data, &entry)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal entry: %w", err)

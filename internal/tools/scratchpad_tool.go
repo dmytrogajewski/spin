@@ -1,8 +1,8 @@
 package tools
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -143,6 +143,7 @@ func (t *ScratchpadTool) executePut(ctx context.Context, params ToolParameters) 
 	// Handle tags - they come as an array.
 	if params.Has("tags") {
 		var tags []string
+
 		tagsErr := params.GetObject("tags", &tags)
 		if tagsErr == nil {
 			opts.Tags = tags

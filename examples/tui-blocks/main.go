@@ -14,15 +14,15 @@ import (
 )
 
 const (
-	exampleTimeout     = 600
-	exampleDurationMS  = 51
-	exampleLinesOut    = 6
-	exampleTotalSteps  = 6
-	examplePending     = 3
-	exampleCompleted   = 2
-	exampleLimit       = 50
-	exampleContext     = 2
-	exampleLinesAdded  = 3
+	exampleTimeout    = 600
+	exampleDurationMS = 51
+	exampleLinesOut   = 6
+	exampleTotalSteps = 6
+	examplePending    = 3
+	exampleCompleted  = 2
+	exampleLimit      = 50
+	exampleContext    = 2
+	exampleLinesAdded = 3
 )
 
 func main() {
@@ -115,7 +115,7 @@ func printLines(ui *adapters.PureTTY, lines []string) {
 	}
 }
 
-// runInputLoop handles user input until the context is cancelled.
+// runInputLoop handles user input until the context is canceled.
 func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.CancelFunc) {
 	for {
 		select {

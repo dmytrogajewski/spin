@@ -12,7 +12,9 @@ import (
 )
 
 var (
+	// ErrRegistryAlreadyRegistered is a sentinel error.
 	ErrRegistryAlreadyRegistered = errors.New("registry already registered")
+	// ErrRegistryNotFound is a sentinel error.
 	ErrRegistryNotFound = errors.New("registry not found")
 )
 
@@ -38,7 +40,7 @@ func (m *DefaultRegistryManager) Register(registry Registry) error {
 
 	name := registry.Name()
 	if _, exists := m.registries[name]; exists {
-return fmt.Errorf("registry already registered: %s: %w", name, ErrRegistryAlreadyRegistered)
+		return fmt.Errorf("registry already registered: %s: %w", name, ErrRegistryAlreadyRegistered)
 	}
 
 	m.registries[name] = registry
@@ -57,7 +59,7 @@ func (m *DefaultRegistryManager) Unregister(name string) error {
 
 	registry, exists := m.registries[name]
 	if !exists {
-return fmt.Errorf("registry not found: %s: %w", name, ErrRegistryNotFound)
+		return fmt.Errorf("registry not found: %s: %w", name, ErrRegistryNotFound)
 	}
 
 	// Close the registry.

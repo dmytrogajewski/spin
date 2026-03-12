@@ -10,7 +10,9 @@ import (
 )
 
 var (
+	// ErrEnumValueMustBeString is a sentinel error.
 	ErrEnumValueMustBeString = errors.New("enum value must be string")
+	// ErrValueNotInAllowedValues is a sentinel error.
 	ErrValueNotInAllowedValues = errors.New("value  not in allowed values")
 )
 
@@ -248,6 +250,7 @@ func (r *Registry) validateTypeFromJSON(rawValue json.RawMessage, expectedType s
 	case "integer":
 		// Check if it's a valid number.
 		var f float64
+
 		err := json.Unmarshal(rawValue, &f)
 		if err != nil {
 			return false
@@ -271,6 +274,7 @@ func (r *Registry) validateTypeFromJSON(rawValue json.RawMessage, expectedType s
 // validateEnumFromJSON checks if a JSON value is in the allowed enum values.
 func (r *Registry) validateEnumFromJSON(rawValue json.RawMessage, enum []string) error {
 	var strValue string
+
 	err := json.Unmarshal(rawValue, &strValue)
 	if err != nil {
 		return ErrEnumValueMustBeString
@@ -280,5 +284,5 @@ func (r *Registry) validateEnumFromJSON(rawValue json.RawMessage, enum []string)
 		return nil
 	}
 
-return fmt.Errorf("value %q not in allowed values %v: %w", strValue, enum, ErrValueNotInAllowedValues)
+	return fmt.Errorf("value %q not in allowed values %v: %w", strValue, enum, ErrValueNotInAllowedValues)
 }

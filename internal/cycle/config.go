@@ -1,16 +1,3 @@
-// Package cycle provides automatic detection of agent reasoning loops
-// and intelligent intervention strategies to break cycles and maintain productivity.
-//
-// The package implements multiple detection methods:
-//   - Response similarity (Jaccard similarity of text)
-//   - Repeated tool calls
-//   - State oscillation patterns (A→B→A→B)
-//   - Error repetition
-//
-// Interventions are applied based on cycle severity:
-//   - Soft: Reflection prompts for early cycles
-//   - Medium: Context summarization for mid-stage cycles
-//   - Hard: User escalation for persistent cycles
 package cycle
 
 import (
@@ -30,11 +17,16 @@ type Result = detection.CycleResult
 
 // Re-export detection constants for backward compatibility.
 const (
-	CycleNone             = detection.CycleNone
+	// CycleNone is exported.
+	CycleNone = detection.CycleNone
+	// CycleSimilarResponses is exported.
 	CycleSimilarResponses = detection.CycleSimilarResponses
-	CycleRepeatedTool     = detection.CycleRepeatedTool
-	CycleOscillation      = detection.CycleOscillation
-	CycleSameError        = detection.CycleSameError
+	// CycleRepeatedTool is exported.
+	CycleRepeatedTool = detection.CycleRepeatedTool
+	// CycleOscillation is exported.
+	CycleOscillation = detection.CycleOscillation
+	// CycleSameError is exported.
+	CycleSameError = detection.CycleSameError
 )
 
 // Config contains configuration for cycle detection.

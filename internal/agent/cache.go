@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	cacheKeyExtraPadding      = 2
-	percentMultiplierCache    = 100
+	cacheKeyExtraPadding   = 2
+	percentMultiplierCache = 100
 )
 
 // CommandCache provides thread-safe caching of command execution results
@@ -22,7 +22,7 @@ const (
 // of identical read-only commands like `git status`, `ls`, etc.
 //
 // Features:
-//   - Thread-safe using sync.Map
+//   - Thread-safe using [sync.Map]
 //   - TTL-based expiration
 //   - Size-based eviction (LRU-like)
 //   - Atomic size tracking

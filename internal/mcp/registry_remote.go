@@ -85,6 +85,7 @@ func (r *RemoteRegistry) Initialize(ctx context.Context) error {
 	// Initialize the MCP protocol and discover tools.
 	if err := r.initializeProtocol(ctx); err != nil {
 		r.mcpClient.Close()
+
 		return err
 	}
 
@@ -124,6 +125,7 @@ func (r *RemoteRegistry) connectTransport(ctx context.Context) error {
 
 	if err = sdkClient.Start(ctx); err != nil {
 		sdkClient.Close()
+
 		return fmt.Errorf("start transport: %w", err)
 	}
 
@@ -224,6 +226,7 @@ func sseClientFactories(headers map[string]string) (
 // createSSEClient creates an SSE MCP client.
 func (r *RemoteRegistry) createSSEClient() (*client.Client, error) {
 	plain, oauth := sseClientFactories(r.config.Headers)
+
 	return r.createMCPClient(plain, oauth, "SSE")
 }
 

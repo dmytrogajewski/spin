@@ -257,9 +257,11 @@ func TestScratchpadClear(t *testing.T) {
 	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err := pad.Put(ctx, "key2", "value2", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err := pad.Put(ctx, "key3", "value3", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -318,9 +320,11 @@ func TestScratchpadLRUEviction(t *testing.T) {
 	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err := pad.Put(ctx, "key2", "value2", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err := pad.Put(ctx, "key3", "value3", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -329,6 +333,7 @@ func TestScratchpadLRUEviction(t *testing.T) {
 	if _, err := pad.Get(ctx, "key2"); err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
+
 	if _, err := pad.Get(ctx, "key3"); err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -375,9 +380,11 @@ func TestScratchpadPinnedEntryNotEvicted(t *testing.T) {
 	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err := pad.Put(ctx, "key2", "value2", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err := pad.Put(ctx, "key3", "value3", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -393,6 +400,7 @@ func TestScratchpadPinnedEntryNotEvicted(t *testing.T) {
 	if _, err = pad.Get(ctx, "key3"); err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
+
 	if _, err = pad.Get(ctx, "key3"); err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -474,6 +482,7 @@ func TestScratchpadUnpin(t *testing.T) {
 	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err := pad.Pin("key1"); err != nil {
 		t.Fatalf("Pin failed: %v", err)
 	}
@@ -504,9 +513,11 @@ func TestScratchpadList(t *testing.T) {
 	if err := pad.Put(ctx, "prefix_a", "value1", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err := pad.Put(ctx, "prefix_b", "value2", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err := pad.Put(ctx, "other", "value3", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -541,9 +552,11 @@ func TestScratchpadSearch(t *testing.T) {
 	if err := pad.Put(ctx, "api_response", "status ok", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err := pad.Put(ctx, "error_log", "status error", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
+
 	if err := pad.Put(ctx, "config", "database url", PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}

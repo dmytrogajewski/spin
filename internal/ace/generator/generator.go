@@ -28,10 +28,15 @@ const (
 )
 
 var (
+	// ErrLlmProviderIsRequired is a sentinel error.
 	ErrLlmProviderIsRequired = errors.New("LLM provider is required")
+	// ErrPlaybookIsRequired is a sentinel error.
 	ErrPlaybookIsRequired = errors.New("playbook is required")
+	// ErrRetrieverIsRequired is a sentinel error.
 	ErrRetrieverIsRequired = errors.New("retriever is required")
+	// ErrInputIsRequired is a sentinel error.
 	ErrInputIsRequired = errors.New("input is required")
+	// ErrUnknownSourceType is a sentinel error.
 	ErrUnknownSourceType = errors.New("unknown source type")
 )
 
@@ -415,6 +420,7 @@ func (g *generator) callLLMForBullets(ctx context.Context, userPrompt, model str
 
 	if len(resp.Choices) == 0 {
 		g.logger.WarnContext(ctx, "ACE Generator: No choices in LLM response!")
+
 		return "", nil
 	}
 
@@ -441,6 +447,7 @@ func (g *generator) parseBulletsFromOutput(ctx context.Context, output string, t
 		if err != nil {
 			continue
 		}
+
 		bullets = append(bullets, b)
 	}
 

@@ -103,7 +103,7 @@ func (p *Planning) Validate() error {
 	}
 
 	if p.maxTokens > MaxAllowedTokens {
-return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", p.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
+		return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", p.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
 	}
 
 	return nil

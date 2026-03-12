@@ -59,6 +59,7 @@ func (t *GitContextTool) Schema() ToolSchema {
 func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	// Get workspace root.
 	workspaceRoot := t.workspaceRoot
+
 	root, err := params.GetString("workspace_root")
 	if err == nil && root != "" {
 		workspaceRoot = root

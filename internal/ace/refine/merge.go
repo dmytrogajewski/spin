@@ -9,6 +9,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 )
 
+// ErrSourceAndTargetBulletsCannotBe is a sentinel error.
 var ErrSourceAndTargetBulletsCannotBe = errors.New("source and target bullets cannot be nil")
 
 // MergePair represents two bullets to merge.

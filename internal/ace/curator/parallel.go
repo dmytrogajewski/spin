@@ -24,6 +24,7 @@ func (c *curator) curateBatchParallel(ctx context.Context, requests []MergeReque
 	var wg sync.WaitGroup
 
 	c.startWorkers(ctx, &wg, numWorkers, requests, jobs, resultsChan)
+
 	go sendJobs(ctx, jobs, len(requests))
 	go closeOnDone(&wg, resultsChan)
 
@@ -54,6 +55,7 @@ func (c *curator) startWorkers(
 
 		go func() {
 			defer wg.Done()
+
 			c.processJobs(ctx, requests, jobs, results)
 		}()
 	}

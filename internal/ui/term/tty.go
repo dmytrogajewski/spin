@@ -13,17 +13,25 @@ import (
 
 // Terminal size constraints (Phase 8.2: Defensive error handling).
 const (
-	MinTerminalWidth  = 40
+	// MinTerminalWidth is exported.
+	MinTerminalWidth = 40
+	// MinTerminalHeight is exported.
 	MinTerminalHeight = 10
-	MaxTerminalWidth  = 1000
+	// MaxTerminalWidth is exported.
+	MaxTerminalWidth = 1000
+	// MaxTerminalHeight is exported.
 	MaxTerminalHeight = 1000
 )
 
 // Errors (Phase 8.2).
 var (
-	ErrNotATTY          = errors.New("not a terminal")
+	// ErrNotATTY is a sentinel error.
+	ErrNotATTY = errors.New("not a terminal")
+	// ErrTerminalTooSmall is a sentinel error.
 	ErrTerminalTooSmall = errors.New("terminal too small (minimum 40x10)")
+	// ErrInfdIsNotATerminal is a sentinel error.
 	ErrInfdIsNotATerminal = errors.New("inFD  is not a terminal")
+	// ErrAlreadyInRawMode is a sentinel error.
 	ErrAlreadyInRawMode = errors.New("already in raw mode")
 )
 
@@ -47,7 +55,7 @@ type TTY struct {
 // Returns error if the input FD is not a terminal.
 func New(inFD, outFD int) (*TTY, error) {
 	if !isTerminal(inFD) {
-return nil, fmt.Errorf("inFD %d is not a terminal: %w", inFD, ErrInfdIsNotATerminal)
+		return nil, fmt.Errorf("inFD %d is not a terminal: %w", inFD, ErrInfdIsNotATerminal)
 	}
 
 	tty := &TTY{

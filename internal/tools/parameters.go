@@ -1,17 +1,22 @@
 package tools
 
 import (
-	"errors"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 )
 
 var (
+	// ErrParameterNotFound is a sentinel error.
 	ErrParameterNotFound = errors.New("parameter  not found")
+	// ErrParameterNotFound2 is a sentinel error.
 	ErrParameterNotFound2 = errors.New("parameter  not found")
+	// ErrParameterNotFound3 is a sentinel error.
 	ErrParameterNotFound3 = errors.New("parameter  not found")
+	// ErrParameterNotFound4 is a sentinel error.
 	ErrParameterNotFound4 = errors.New("parameter  not found")
+	// ErrParameterNotFound5 is a sentinel error.
 	ErrParameterNotFound5 = errors.New("parameter  not found")
 )
 
@@ -19,7 +24,7 @@ var (
 // It wraps a map of JSON-encoded values and provides typed accessors
 // with proper error handling.
 //
-// The internal representation uses json.RawMessage to preserve the original
+// The internal representation uses [json.RawMessage] to preserve the original
 // JSON encoding, allowing for efficient re-marshaling and complex object handling.
 type ToolParameters struct {
 	raw map[string]json.RawMessage
@@ -54,6 +59,7 @@ func (p ToolParameters) ToMap() map[string]any {
 	result := make(map[string]any, len(p.raw))
 	for key, rawValue := range p.raw {
 		var value any
+
 		err := json.Unmarshal(rawValue, &value)
 		if err != nil {
 			// If unmarshal fails, store the raw JSON string.
@@ -83,10 +89,11 @@ func (p ToolParameters) Keys() []string {
 func (p ToolParameters) GetString(key string) (string, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
-return "", fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
+		return "", fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
 	}
 
 	var value string
+
 	err := json.Unmarshal(rawValue, &value)
 	if err != nil {
 		return "", fmt.Errorf("parameter %q is not a string: %w", key, err)
@@ -100,10 +107,11 @@ return "", fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
 func (p ToolParameters) GetInt(key string) (int, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
-return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound2)
+		return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound2)
 	}
 
 	var value int
+
 	err := json.Unmarshal(rawValue, &value)
 	if err != nil {
 		return 0, fmt.Errorf("parameter %q is not an integer: %w", key, err)
@@ -117,10 +125,11 @@ return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound2)
 func (p ToolParameters) GetBool(key string) (bool, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
-return false, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound3)
+		return false, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound3)
 	}
 
 	var value bool
+
 	err := json.Unmarshal(rawValue, &value)
 	if err != nil {
 		return false, fmt.Errorf("parameter %q is not a boolean: %w", key, err)
@@ -134,10 +143,11 @@ return false, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound
 func (p ToolParameters) GetFloat64(key string) (float64, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
-return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound4)
+		return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound4)
 	}
 
 	var value float64
+
 	err := json.Unmarshal(rawValue, &value)
 	if err != nil {
 		return 0, fmt.Errorf("parameter %q is not a number: %w", key, err)
@@ -151,7 +161,7 @@ return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound4)
 func (p ToolParameters) GetObject(key string, dest any) error {
 	rawValue, exists := p.raw[key]
 	if !exists {
-return fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound5)
+		return fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound5)
 	}
 
 	err := json.Unmarshal(rawValue, dest)
@@ -206,7 +216,7 @@ func (p ToolParameters) GetFloat64Or(key string, defaultValue float64) float64 {
 	return value
 }
 
-// MarshalJSON implements json.Marshaler.
+// MarshalJSON implements [json.Marshaler].
 func (p ToolParameters) MarshalJSON() ([]byte, error) {
 	data, err := json.Marshal(p.raw)
 	if err != nil {
@@ -216,7 +226,7 @@ func (p ToolParameters) MarshalJSON() ([]byte, error) {
 	return data, nil
 }
 
-// UnmarshalJSON implements json.Unmarshaler.
+// UnmarshalJSON implements [json.Unmarshaler].
 func (p *ToolParameters) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &p.raw); err != nil {
 		return fmt.Errorf("unmarshal tool parameters: %w", err)

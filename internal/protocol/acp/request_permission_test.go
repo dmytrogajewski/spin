@@ -19,6 +19,7 @@ import (
 // TestRequestPermission_SessionNotFound tests that RequestPermission returns error for non-existent session.
 func TestRequestPermission_SessionNotFound(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -56,6 +57,7 @@ func TestRequestPermission_SessionNotFound(t *testing.T) {
 // TestRequestPermission_NoApprovalService tests that RequestPermission returns error when approval service is not configured.
 func TestRequestPermission_NoApprovalService(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -95,10 +97,10 @@ func TestRequestPermission_NoApprovalService(t *testing.T) {
 
 // permissionDecisionCase describes a test case for request permission with a specific decision.
 type permissionDecisionCase struct {
-	name           string
-	approved       bool
-	reason         string
-	wantOptionId   acp.PermissionOptionId
+	name         string
+	approved     bool
+	reason       string
+	wantOptionID acp.PermissionOptionId
 }
 
 func runPermissionDecisionTests(t *testing.T, cases []permissionDecisionCase) {
@@ -107,6 +109,7 @@ func runPermissionDecisionTests(t *testing.T, cases []permissionDecisionCase) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			agentInstance := &agent.Agent{}
 			mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 			emitter := events.NewEventEmitter(100)
@@ -159,7 +162,7 @@ func runPermissionDecisionTests(t *testing.T, cases []permissionDecisionCase) {
 			resp, err := acpAgent.RequestPermission(context.Background(), req)
 			require.NoError(t, err)
 			require.NotNil(t, resp.Outcome.Selected)
-			assert.Equal(t, tt.wantOptionId, resp.Outcome.Selected.OptionId)
+			assert.Equal(t, tt.wantOptionID, resp.Outcome.Selected.OptionId)
 		})
 	}
 }
@@ -183,6 +186,7 @@ func TestRequestPermission_Denied(t *testing.T) {
 // TestRequestPermission_Canceled tests context cancellation.
 func TestRequestPermission_Canceled(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -244,6 +248,7 @@ func TestRequestPermission_Canceled(t *testing.T) {
 // TestRequestPermission_WithRawInput tests tool call conversion with raw input parameters.
 func TestRequestPermission_WithRawInput(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -310,6 +315,7 @@ func TestRequestPermission_WithRawInput(t *testing.T) {
 // TestRequestPermission_AllowAlwaysOption tests that allow_always option is selected when approved.
 func TestRequestPermission_AllowAlwaysOption(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -374,16 +380,19 @@ func setupPermissionIntegrationAgent(t *testing.T) (*SpinACPAgent, acp.SessionId
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
+
 	mcpSvc := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpSvc, emitter, storage)
 	require.NoError(t, err)
 
 	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		approved := req.Command.Program != "dangerous_command"
+
 		reason := "approved"
 		if !approved {
 			reason = "denied - dangerous command"
 		}
+
 		return security.ApprovalResponse{RequestID: req.ID, Approved: approved, Reason: reason}
 	}
 
@@ -393,6 +402,7 @@ func setupPermissionIntegrationAgent(t *testing.T) (*SpinACPAgent, acp.SessionId
 
 	sess := session.NewSession("/tmp/test")
 	sessionID := acp.SessionId(sess.ID)
+
 	acpAgent.mu.Lock()
 	acpAgent.sessions[sessionID] = sess
 	acpAgent.mu.Unlock()
@@ -418,6 +428,7 @@ func TestRequestPermission_Integration(t *testing.T) {
 
 	t.Run("approved", func(t *testing.T) {
 		t.Parallel()
+
 		resp, err := acpAgent.RequestPermission(context.Background(), newPermissionRequest(sessionID, "tool-1", "write_file"))
 		require.NoError(t, err)
 		require.NotNil(t, resp.Outcome.Selected)
@@ -426,6 +437,7 @@ func TestRequestPermission_Integration(t *testing.T) {
 
 	t.Run("denied", func(t *testing.T) {
 		t.Parallel()
+
 		resp, err := acpAgent.RequestPermission(context.Background(), newPermissionRequest(sessionID, "tool-2", "dangerous_command"))
 		require.NoError(t, err)
 		require.NotNil(t, resp.Outcome.Selected)

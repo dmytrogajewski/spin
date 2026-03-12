@@ -9,17 +9,17 @@ type SignalType string
 
 const (
 	// SignalTypeTest defines a SignalTypeTest constant.
-	SignalTypeTest    SignalType = "test"
+	SignalTypeTest SignalType = "test"
 	// SignalTypeBuild defines a SignalTypeBuild constant.
-	SignalTypeBuild   SignalType = "build"
+	SignalTypeBuild SignalType = "build"
 	// SignalTypeLint represents a lint signal.
-	SignalTypeLint    SignalType = "lint"
+	SignalTypeLint SignalType = "lint"
 	// SignalTypeError represents an error signal.
-	SignalTypeError   SignalType = "error"
+	SignalTypeError SignalType = "error"
 	// SignalTypeToolUse represents a tool use signal.
 	SignalTypeToolUse SignalType = "tool_use"
 	// SignalTypeUser represents a user signal.
-	SignalTypeUser    SignalType = "user"
+	SignalTypeUser SignalType = "user"
 )
 
 // SignalOutcome indicates signal polarity.
@@ -76,13 +76,13 @@ type AdaptationAction string
 
 const (
 	// ActionSkip defines a ActionSkip constant.
-	ActionSkip     AdaptationAction = "skip"
+	ActionSkip AdaptationAction = "skip"
 	// ActionReflect defines a ActionReflect constant.
-	ActionReflect  AdaptationAction = "reflect"
+	ActionReflect AdaptationAction = "reflect"
 	// ActionQuickAdd represents a quick add action.
 	ActionQuickAdd AdaptationAction = "quick_add"
 	// ActionUpdate represents an update action.
-	ActionUpdate   AdaptationAction = "update"
+	ActionUpdate AdaptationAction = "update"
 )
 
 // AdaptationResult describes the outcome of online adaptation.

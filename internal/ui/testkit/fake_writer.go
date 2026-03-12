@@ -23,7 +23,7 @@ func NewFakeWriter() *FakeWriter {
 	return &FakeWriter{}
 }
 
-// Write implements io.Writer.
+// Write implements [io.Writer].
 func (f *FakeWriter) Write(p []byte) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

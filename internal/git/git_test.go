@@ -30,6 +30,7 @@ func setupTestRepo(t *testing.T) string {
 
 	// Create initial file.
 	filename := filepath.Join(tmpDir, "README.md")
+
 	err = os.WriteFile(filename, []byte("# Test\n"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to write file: %v", err)
@@ -70,6 +71,7 @@ func setupTestRepoWithModifications(t *testing.T) string {
 
 	// Modify existing file.
 	filename := filepath.Join(tmpDir, "README.md")
+
 	err := os.WriteFile(filename, []byte("# Test\nModified\n"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to modify file: %v", err)
@@ -77,6 +79,7 @@ func setupTestRepoWithModifications(t *testing.T) string {
 
 	// Create untracked file.
 	newFile := filepath.Join(tmpDir, "untracked.txt")
+
 	err = os.WriteFile(newFile, []byte("untracked\n"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create untracked file: %v", err)
@@ -128,6 +131,7 @@ func TestDiscover(t *testing.T) {
 
 			if tt.wantErr != nil {
 				assertDiscoverError(t, err, tt.wantErr)
+
 				return
 			}
 
@@ -142,6 +146,7 @@ func setupNestedRepo(t *testing.T) string {
 	tmpDir := setupTestRepo(t)
 
 	nestedDir := filepath.Join(tmpDir, "subdir", "deep")
+
 	err := os.MkdirAll(nestedDir, 0o750)
 	if err != nil {
 		t.Fatalf("failed to create nested dir: %v", err)
@@ -155,6 +160,7 @@ func assertDiscoverError(t *testing.T, err, wantErr error) {
 
 	if err == nil {
 		t.Errorf("expected error %v, got nil", wantErr)
+
 		return
 	}
 
@@ -207,6 +213,7 @@ func TestRepositoryRoot(t *testing.T) {
 	tmpDir := setupTestRepo(t)
 
 	nestedDir := filepath.Join(tmpDir, "subdir")
+
 	err := os.MkdirAll(nestedDir, 0o750)
 	if err != nil {
 		t.Fatalf("failed to create nested dir: %v", err)
@@ -322,6 +329,7 @@ func TestGetContextInfo_Repository(t *testing.T) {
 	gi := NewIntegration(true, tmpDir, logger)
 
 	ctx := context.Background()
+
 	err := gi.Initialize(ctx)
 	if err != nil {
 		t.Fatalf("Initialize failed: %v", err)
@@ -370,6 +378,7 @@ func TestGetContextInfo_WithModifications(t *testing.T) {
 	gi := NewIntegration(true, tmpDir, logger)
 
 	ctx := context.Background()
+
 	err := gi.Initialize(ctx)
 	if err != nil {
 		t.Fatalf("Initialize failed: %v", err)
@@ -410,6 +419,7 @@ func TestGetContextInfo_AllFields(t *testing.T) {
 	gi := NewIntegration(true, tmpDir, logger)
 
 	ctx := context.Background()
+
 	err := gi.Initialize(ctx)
 	if err != nil {
 		t.Fatalf("Initialize failed: %v", err)
@@ -491,6 +501,7 @@ func TestContextInfo_JSON(t *testing.T) {
 			}
 
 			var decoded ContextInfo
+
 			err = json.Unmarshal(data, &decoded)
 			if err != nil {
 				t.Fatalf("Unmarshal failed: %v", err)

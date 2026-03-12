@@ -149,6 +149,7 @@ func TestTUIBasicChat(t *testing.T) {
 
 	go func() {
 		_ = helper.UI.PrintChunks(ctx, streamCh)
+
 		close(streamDone)
 	}()
 
@@ -290,6 +291,7 @@ func TestTUIMultiTurn(t *testing.T) {
 
 	go func() {
 		_ = helper.UI.PrintChunks(ctx, streamCh)
+
 		close(streamDone)
 	}()
 
@@ -326,6 +328,7 @@ func TestTUIMultiTurn(t *testing.T) {
 
 	go func() {
 		_ = helper.UI.PrintChunks(ctx, streamCh)
+
 		close(streamDone)
 	}()
 
@@ -368,6 +371,7 @@ func TestTUIStopStreaming(t *testing.T) {
 
 	go func() {
 		_ = helper.UI.PrintChunks(ctx, chunks)
+
 		close(done)
 	}()
 

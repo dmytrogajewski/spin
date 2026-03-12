@@ -153,9 +153,9 @@ func TestNewIgnoreHandler_OnlyComments(t *testing.T) {
 
 // ignorePatternCase describes a test case for ignore pattern matching.
 type ignorePatternCase struct {
-	name       string
-	gitignore  string
-	checks     []ignoreCheck
+	name      string
+	gitignore string
+	checks    []ignoreCheck
 }
 
 type ignoreCheck struct {
@@ -513,10 +513,12 @@ func BenchmarkIgnoreHandler_IsIgnored_10Patterns(b *testing.B) {
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
 
 	content := ""
+
 	var contentSb476 strings.Builder
 	for i := range 10 {
 		contentSb476.WriteString("*.pattern" + string(rune(i)) + "\n")
 	}
+
 	content += contentSb476.String()
 
 	_ = os.WriteFile(gitignorePath, []byte(content), 0o600)
@@ -536,10 +538,12 @@ func BenchmarkIgnoreHandler_IsIgnored_100Patterns(b *testing.B) {
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
 
 	content := ""
+
 	var contentSb497 strings.Builder
 	for i := range 100 {
 		contentSb497.WriteString("*.pattern" + string(rune(i)) + "\n")
 	}
+
 	content += contentSb497.String()
 
 	_ = os.WriteFile(gitignorePath, []byte(content), 0o600)
@@ -559,10 +563,12 @@ func BenchmarkIgnoreHandler_IsIgnored_1000Patterns(b *testing.B) {
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
 
 	content := ""
+
 	var contentSb518 strings.Builder
 	for i := range 1000 {
 		contentSb518.WriteString("*.pattern" + string(rune(i)) + "\n")
 	}
+
 	content += contentSb518.String()
 
 	_ = os.WriteFile(gitignorePath, []byte(content), 0o600)

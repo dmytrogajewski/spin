@@ -95,6 +95,7 @@ func (o *RefinementOrchestrator) executeMergeStep(ctx context.Context, req Refin
 	}
 
 	bullets := o.playbook.List(nil)
+
 	pairs, err := o.mergeEngine.FindMergeCandidates(ctx, bullets)
 	if err != nil {
 		return err
@@ -110,6 +111,7 @@ func (o *RefinementOrchestrator) executeMergeStep(ctx context.Context, req Refin
 // processMergePair handles merging a single pair of similar bullets.
 func (o *RefinementOrchestrator) processMergePair(ctx context.Context, req RefinementRequest, pair MergePair, result *RefinementResult) {
 	source, sourceExists := o.playbook.Get(pair.SourceID)
+
 	target, targetExists := o.playbook.Get(pair.TargetID)
 	if !sourceExists || !targetExists {
 		return
@@ -125,6 +127,7 @@ func (o *RefinementOrchestrator) processMergePair(ctx context.Context, req Refin
 			"merged_into": mergeResult.KeptID,
 			"similarity":  formatFloat(pair.Similarity),
 		})
+
 		result.Archived++
 	}
 
@@ -144,6 +147,7 @@ func (o *RefinementOrchestrator) updateKeptBullet(ctx context.Context, keptID st
 	if kept.Tags == nil {
 		kept.Tags = make(map[string]string)
 	}
+
 	for k, v := range source.Tags {
 		if _, exists := kept.Tags[k]; !exists {
 			kept.Tags[k] = v
@@ -175,6 +179,7 @@ func (o *RefinementOrchestrator) executePruneStep(ctx context.Context, req Refin
 			"utility_score": formatFloat(b.Score()),
 			"min_threshold": formatFloat(req.MinUtility),
 		})
+
 		result.Archived++
 	}
 
@@ -188,11 +193,13 @@ func (o *RefinementOrchestrator) collectBulletsForArchival(req RefinementRequest
 	}
 
 	var bulletsToArchive []*bullet.Bullet
+
 	for _, b := range o.playbook.List(nil) {
 		if b.Score() < req.MinUtility {
 			bulletsToArchive = append(bulletsToArchive, b.Clone())
 		}
 	}
+
 	return bulletsToArchive
 }
 

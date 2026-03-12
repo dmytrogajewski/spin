@@ -14,11 +14,17 @@ import (
 )
 
 var (
+	// ErrPathExistsButIsNotA is a sentinel error.
 	ErrPathExistsButIsNotA = errors.New("path exists but is not a directory")
+	// ErrKeyCannotBeEmpty is a sentinel error.
 	ErrKeyCannotBeEmpty = errors.New("key cannot be empty")
+	// ErrKeyCannotBeEmpty2 is a sentinel error.
 	ErrKeyCannotBeEmpty2 = errors.New("key cannot be empty")
+	// ErrNotFound is a sentinel error.
 	ErrNotFound = errors.New("not found")
+	// ErrKeyCannotBeEmpty3 is a sentinel error.
 	ErrKeyCannotBeEmpty3 = errors.New("key cannot be empty")
+	// ErrKeyCannotBeEmpty4 is a sentinel error.
 	ErrKeyCannotBeEmpty4 = errors.New("key cannot be empty")
 )
 
@@ -75,7 +81,7 @@ func NewFileStore[T any](cfg FileStoreConfig) (*FileStore[T], error) {
 	// Check if path exists and is a file (not directory).
 	info, err := os.Stat(baseDir)
 	if err == nil && !info.IsDir() {
-return nil, fmt.Errorf("path exists but is not a directory: %s: %w", baseDir, ErrPathExistsButIsNotA)
+		return nil, fmt.Errorf("path exists but is not a directory: %s: %w", baseDir, ErrPathExistsButIsNotA)
 	}
 
 	// Create directory if it doesn't exist.
@@ -145,13 +151,14 @@ func (fs *FileStore[T]) Load(key string) (T, error) {
 	jsonData, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-return zero, fmt.Errorf("not found: %s: %w", key, ErrNotFound)
+			return zero, fmt.Errorf("not found: %s: %w", key, ErrNotFound)
 		}
 
 		return zero, fmt.Errorf("read file: %w", err)
 	}
 
 	var data T
+
 	err = json.Unmarshal(jsonData, &data)
 	if err != nil {
 		return zero, fmt.Errorf("deserialize data: %w", err)
@@ -170,6 +177,7 @@ func (fs *FileStore[T]) Delete(key string) error {
 	defer fs.mu.Unlock()
 
 	path := fs.filePath(key)
+
 	err := os.Remove(path)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("delete file: %w", err)

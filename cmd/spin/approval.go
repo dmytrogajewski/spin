@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	approvalTimeout = 5 * time.Second
+	approvalTimeout   = 5 * time.Second
 	approvalPolicyTTL = 30 * time.Second
 )
 
+// ErrProgramIsRequired is a sentinel error.
 var ErrProgramIsRequired = errors.New("--program is required")
 
 // newApprovalCmd creates the 'approval' command group.
@@ -188,6 +189,7 @@ func buildPolicyStore(cmd *cobra.Command) (security.PolicyStore, error) {
 	// Prefer file-backed store when path present; otherwise memory store.
 	if path != "" {
 		var store security.PolicyStore
+
 		store, err = security.NewFilePolicyStore(path, approvalPolicyTTL)
 		if err == nil {
 			return store, nil

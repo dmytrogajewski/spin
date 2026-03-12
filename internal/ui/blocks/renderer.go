@@ -8,6 +8,7 @@ import (
 	"github.com/rivo/uniseg"
 )
 
+// ErrBlockIsNil is a sentinel error.
 var ErrBlockIsNil = errors.New("block is nil")
 
 // Rendering constants.
@@ -143,7 +144,7 @@ func (r *Renderer) RenderHeader(b *Block) string {
 	label := r.getBlockTypeLabel(b.Type)
 
 	fmt.Fprintf(&out, "\x1b[48;5;%dm", bgColor) // Background color.
-	out.WriteString("\x1b[38;5;232m")                      // Black text for contrast.
+	out.WriteString("\x1b[38;5;232m")           // Black text for contrast.
 	out.WriteString(string(ColorBold))
 	fmt.Fprintf(&out, " %s ", label)
 	out.WriteString(string(ColorReset))

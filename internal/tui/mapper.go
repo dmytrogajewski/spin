@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	maxContentLineLen    = 120
-	truncatedContentLen  = 117
+	maxContentLineLen   = 120
+	truncatedContentLen = 117
 )
 
 // Mapper maps core agent events to TUI blocks.
@@ -31,7 +31,7 @@ type Mapper struct {
 	applyPatchByFile map[string]*blocks.Block   // file path → latest APPLY_PATCH block (write_file).
 	streamCh         chan string                // Content streaming channel.
 	streamMu         sync.Mutex                 // Protects streamCh.
-	streamDone       chan struct{}               // Closed when streaming is stopped.
+	streamDone       chan struct{}              // Closed when streaming is stopped.
 	// State for thinking blocks.
 	thinking           bool
 	thinkStart         time.Time
@@ -214,6 +214,7 @@ func (m *Mapper) createExecuteBlock(data events.ToolCallStartData) *blocks.Block
 		CWD:     cwd,
 		Impact:  "medium", // Default impact level.
 	}
+
 	err := blocks.SetExecuteMeta(block, meta)
 	if err != nil {
 		// Validation failed, marshal map to JSON to preserve data.
@@ -221,6 +222,7 @@ func (m *Mapper) createExecuteBlock(data events.ToolCallStartData) *blocks.Block
 			"command": command,
 			"cwd":     cwd,
 		}
+
 		data, marshalErr := json.Marshal(fallback)
 		if marshalErr == nil {
 			block.Meta = data
@@ -243,12 +245,14 @@ func (m *Mapper) createReadBlock(data events.ToolCallStartData) *blocks.Block {
 		Offset: extractIntValue(data.Parameters, "offset"),
 		Limit:  extractIntValue(data.Parameters, "limit"),
 	}
+
 	err := blocks.SetReadMeta(block, meta)
 	if err != nil {
 		// Validation failed, marshal map to JSON.
 		fallback := map[string]any{
 			"file": path,
 		}
+
 		data, marshalErr := json.Marshal(fallback)
 		if marshalErr == nil {
 			block.Meta = data
@@ -276,12 +280,14 @@ func (m *Mapper) createToolBlock(data events.ToolCallStartData) *blocks.Block {
 		ToolName: toolName,
 		Params:   params,
 	}
+
 	err := blocks.SetToolMeta(block, meta)
 	if err != nil {
 		// Validation failed, marshal map to JSON to preserve data.
 		fallback := map[string]any{
 			"tool_name": toolName,
 		}
+
 		data, marshalErr := json.Marshal(fallback)
 		if marshalErr == nil {
 			block.Meta = data
@@ -328,6 +334,7 @@ func (m *Mapper) createOrReuseApplyPatchBlock(data events.ToolCallStartData) *bl
 	block.Body = content
 
 	meta := &blocks.PatchMeta{File: path}
+
 	err := blocks.SetPatchMeta(block, meta)
 	if err != nil {
 		data, marshalErr := json.Marshal(map[string]any{"file": path})
@@ -365,12 +372,14 @@ func (m *Mapper) createApplyPatchFromPatchTool(data events.ToolCallStartData) *b
 		File:      workspaceRoot,
 		Completed: false,
 	}
+
 	err := blocks.SetPatchMeta(block, meta)
 	if err != nil {
 		// Fallback to JSON if validation fails for any reason.
 		fallback := map[string]any{
 			"file": workspaceRoot,
 		}
+
 		data, marshalErr := json.Marshal(fallback)
 		if marshalErr == nil {
 			block.Meta = data
@@ -391,12 +400,14 @@ func (m *Mapper) createGrepBlockFromSearch(data events.ToolCallStartData) *block
 		Pattern: query,
 		Mode:    "files_with_matches",
 	}
+
 	err := blocks.SetGrepMeta(block, meta)
 	if err != nil {
 		fallback := map[string]any{
 			"pattern": query,
 			"mode":    "files_with_matches",
 		}
+
 		data, marshalErr := json.Marshal(fallback)
 		if marshalErr == nil {
 			block.Meta = data

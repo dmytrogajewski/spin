@@ -16,6 +16,7 @@ import (
 // TestConvertEventToSessionUpdate_ContentDelta tests EventContentDelta conversion.
 func TestConvertEventToSessionUpdate_ContentDelta(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventContentDelta,
 		Timestamp: time.Now(),
@@ -35,6 +36,7 @@ func TestConvertEventToSessionUpdate_ContentDelta(t *testing.T) {
 // TestConvertEventToSessionUpdate_ToolCallStart tests EventToolCallStart conversion.
 func TestConvertEventToSessionUpdate_ToolCallStart(t *testing.T) {
 	t.Parallel()
+
 	params, err := tools.FromMap(map[string]any{"path": "/tmp/test.txt"})
 	require.NoError(t, err)
 
@@ -57,6 +59,7 @@ func TestConvertEventToSessionUpdate_ToolCallStart(t *testing.T) {
 // TestConvertToolCallStart_IncludesKind tests that tool call start includes tool kind.
 func TestConvertToolCallStart_IncludesKind(t *testing.T) {
 	t.Parallel()
+
 	params, err := tools.FromMap(map[string]any{"path": "/tmp/test.txt"})
 	require.NoError(t, err)
 
@@ -81,6 +84,7 @@ func TestConvertToolCallStart_IncludesKind(t *testing.T) {
 // TestConvertEventToSessionUpdate_UnknownEvent tests unknown event handling.
 func TestConvertEventToSessionUpdate_UnknownEvent(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventInfo,
 		Timestamp: time.Now(),
@@ -97,6 +101,7 @@ func TestConvertEventToSessionUpdate_UnknownEvent(t *testing.T) {
 // TestConvertEventToSessionUpdate_ToolCallProgress tests EventToolCallProgress conversion.
 func TestConvertEventToSessionUpdate_ToolCallProgress(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventToolCallProgress,
 		Timestamp: time.Now(),
@@ -116,6 +121,7 @@ func TestConvertEventToSessionUpdate_ToolCallProgress(t *testing.T) {
 // TestConvertEventToSessionUpdate_ToolCallComplete_Success tests EventToolCallComplete conversion (success).
 func TestConvertEventToSessionUpdate_ToolCallComplete_Success(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventToolCallComplete,
 		Timestamp: time.Now(),
@@ -136,6 +142,7 @@ func TestConvertEventToSessionUpdate_ToolCallComplete_Success(t *testing.T) {
 // TestConvertToolCallComplete_IncludesContent tests that tool call complete includes content and raw output.
 func TestConvertToolCallComplete_IncludesContent(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventToolCallComplete,
 		Timestamp: time.Now(),
@@ -157,6 +164,7 @@ func TestConvertToolCallComplete_IncludesContent(t *testing.T) {
 // TestConvertEventToSessionUpdate_ToolCallComplete_Failed tests EventToolCallComplete conversion (failed).
 func TestConvertEventToSessionUpdate_ToolCallComplete_Failed(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventToolCallComplete,
 		Timestamp: time.Now(),
@@ -177,6 +185,7 @@ func TestConvertEventToSessionUpdate_ToolCallComplete_Failed(t *testing.T) {
 // TestConvertEventToSessionUpdate_ContentDelta_UserRole tests that user role content is not converted.
 func TestConvertEventToSessionUpdate_ContentDelta_UserRole(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventContentDelta,
 		Timestamp: time.Now(),
@@ -195,6 +204,7 @@ func TestConvertEventToSessionUpdate_ContentDelta_UserRole(t *testing.T) {
 // TestMapToolNameToKind tests tool name to ACP tool kind mapping.
 func TestMapToolNameToKind(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		toolName string
@@ -211,6 +221,7 @@ func TestMapToolNameToKind(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := mapToolNameToKind(tt.toolName)
 			if tt.want == nil {
 				assert.Nil(t, got)
@@ -225,6 +236,7 @@ func TestMapToolNameToKind(t *testing.T) {
 // TestExtractFileLocations tests file location extraction from tool parameters.
 func TestExtractFileLocations(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		toolName string
@@ -272,6 +284,7 @@ func TestExtractFileLocations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			params, err := tools.FromMap(tt.params)
 			require.NoError(t, err)
 
@@ -284,6 +297,7 @@ func TestExtractFileLocations(t *testing.T) {
 // TestConvertToolCallStart_IncludesLocations tests that tool call start includes file locations.
 func TestConvertToolCallStart_IncludesLocations(t *testing.T) {
 	t.Parallel()
+
 	params, err := tools.FromMap(map[string]any{"path": "/tmp/test.txt"})
 	require.NoError(t, err)
 
@@ -307,6 +321,7 @@ func TestConvertToolCallStart_IncludesLocations(t *testing.T) {
 // TestConvertToolCallComplete_EmptyOutput tests that empty output doesn't include content.
 func TestConvertToolCallComplete_EmptyOutput(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventToolCallComplete,
 		Timestamp: time.Now(),
@@ -328,6 +343,7 @@ func TestConvertToolCallComplete_EmptyOutput(t *testing.T) {
 // TestConvertToolCallComplete_WithError tests that error is included in raw output.
 func TestConvertToolCallComplete_WithError(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventToolCallComplete,
 		Timestamp: time.Now(),
@@ -350,6 +366,7 @@ func TestConvertToolCallComplete_WithError(t *testing.T) {
 // TestFileContentTracker_StoreAndRetrieve tests file content tracking.
 func TestFileContentTracker_StoreAndRetrieve(t *testing.T) {
 	t.Parallel()
+
 	tracker := newFileContentTracker()
 
 	// Store old content.
@@ -372,12 +389,14 @@ func TestFileContentTracker_StoreAndRetrieve(t *testing.T) {
 	tracker.cleanup(toolID)
 	oldAfterCleanup, _, _, ok2 := tracker.getContentForDiff(toolID)
 	_ = oldAfterCleanup
+
 	assert.False(t, ok2, "should not retrieve after cleanup")
 }
 
 // TestFileContentTracker_NewFile tests new file handling (empty old content).
 func TestFileContentTracker_NewFile(t *testing.T) {
 	t.Parallel()
+
 	tracker := newFileContentTracker()
 
 	// Store new file (no old content).
@@ -491,6 +510,7 @@ func runWriteFileDiffTests(t *testing.T, cases []writeFileDiffCase) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			tracker := newFileContentTracker()
 
 			tracker.oldContent[tt.toolID] = tt.oldContent
@@ -515,6 +535,7 @@ func runWriteFileDiffTests(t *testing.T, cases []writeFileDiffCase) {
 
 			oldC, _, _, hasContent := tracker.getContentForDiff(tt.toolID)
 			_ = oldC
+
 			assert.False(t, hasContent, "tracker should be cleaned up after completion")
 		})
 	}
@@ -551,6 +572,7 @@ func TestConvertToolCallComplete_WriteFile_NewFile(t *testing.T) {
 // TestConvertToolCallComplete_NonWriteFile_NoDiff tests that non-write_file tools don't generate diffs.
 func TestConvertToolCallComplete_NonWriteFile_NoDiff(t *testing.T) {
 	t.Parallel()
+
 	tracker := newFileContentTracker()
 
 	event := events.Event{
@@ -574,6 +596,7 @@ func TestConvertToolCallComplete_NonWriteFile_NoDiff(t *testing.T) {
 // TestConvertSystemEvent_Info tests that EventInfo is converted to agent thought.
 func TestConvertSystemEvent_Info(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventInfo,
 		Timestamp: time.Now(),
@@ -598,6 +621,7 @@ func TestConvertSystemEvent_Info(t *testing.T) {
 // TestConvertSystemEvent_Warning tests that EventWarning is converted to agent thought.
 func TestConvertSystemEvent_Warning(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventWarning,
 		Timestamp: time.Now(),
@@ -621,6 +645,7 @@ func TestConvertSystemEvent_Warning(t *testing.T) {
 // TestConvertSystemEvent_NoDetails tests system event without details.
 func TestConvertSystemEvent_NoDetails(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventInfo,
 		Timestamp: time.Now(),
@@ -643,6 +668,7 @@ func TestConvertSystemEvent_NoDetails(t *testing.T) {
 // TestConvertSystemEvent_InvalidData tests system event with invalid data type.
 func TestConvertSystemEvent_InvalidData(t *testing.T) {
 	t.Parallel()
+
 	event := events.Event{
 		Type:      events.EventInfo,
 		Timestamp: time.Now(),

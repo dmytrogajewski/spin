@@ -167,6 +167,7 @@ func TestManager_GetCredential_CredentialTypes(t *testing.T) {
 			cred, err := getCredentialFromStored(t, tt.stored)
 			if tt.wantErr {
 				requireError(t, err, "GetCredential()")
+
 				return
 			}
 
@@ -493,6 +494,7 @@ func TestManager_ThreadSafety(t *testing.T) {
 				Type:  CredentialTypeAPIKey,
 				Value: "test",
 			}
+
 			err := m.SetCredential(ctx, "test", cred)
 			if err != nil {
 				errChan <- err

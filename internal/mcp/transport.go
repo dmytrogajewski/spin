@@ -7,14 +7,23 @@ import (
 )
 
 var (
+	// ErrNameIsRequired is a sentinel error.
 	ErrNameIsRequired = errors.New("name is required")
+	// ErrInvalidTransport is a sentinel error.
 	ErrInvalidTransport = errors.New("invalid transport")
+	// ErrCommandIsRequiredForStdioTransport is a sentinel error.
 	ErrCommandIsRequiredForStdioTransport = errors.New("command is required for stdio transport")
+	// ErrURLIsNotAllowedForStdio is a sentinel error.
 	ErrURLIsNotAllowedForStdio = errors.New("url is not allowed for stdio transport")
+	// ErrOauthIsNotAllowedForStdio is a sentinel error.
 	ErrOauthIsNotAllowedForStdio = errors.New("oauth is not allowed for stdio transport")
+	// ErrURLIsRequiredForTransport is a sentinel error.
 	ErrURLIsRequiredForTransport = errors.New("url is required for  transport")
+	// ErrInvalidURL is a sentinel error.
 	ErrInvalidURL = errors.New("invalid url")
+	// ErrCommandIsNotAllowedForRemote is a sentinel error.
 	ErrCommandIsNotAllowedForRemote = errors.New("command is not allowed for remote transport")
+	// ErrOauthClientIDIsRequired is a sentinel error.
 	ErrOauthClientIDIsRequired = errors.New("oauth client_id is required")
 )
 
@@ -66,7 +75,7 @@ func (c *ServerConfig) Validate() error {
 
 	// Validate transport type.
 	if !c.Transport.IsValid() {
-return fmt.Errorf("invalid transport: %s: %w", c.Transport, ErrInvalidTransport)
+		return fmt.Errorf("invalid transport: %s: %w", c.Transport, ErrInvalidTransport)
 	}
 
 	// Determine effective transport (empty defaults to stdio).
@@ -107,13 +116,13 @@ func (c *ServerConfig) validateStdio() error {
 func (c *ServerConfig) validateRemote(transport TransportType) error {
 	// URL is required for remote transports.
 	if c.URL == "" {
-return fmt.Errorf("url is required for %s transport: %w", transport, ErrURLIsRequiredForTransport)
+		return fmt.Errorf("url is required for %s transport: %w", transport, ErrURLIsRequiredForTransport)
 	}
 
 	// Validate URL format.
 	parsedURL, err := url.Parse(c.URL)
 	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-return fmt.Errorf("invalid url: %s: %w", c.URL, ErrInvalidURL)
+		return fmt.Errorf("invalid url: %s: %w", c.URL, ErrInvalidURL)
 	}
 
 	// Command is not allowed for remote transports.

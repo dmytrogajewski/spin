@@ -14,6 +14,7 @@ import (
 
 func TestNewBuilder_CreatesBuilder(t *testing.T) {
 	t.Parallel()
+
 	builder := NewBuilder()
 
 	if builder == nil {
@@ -23,6 +24,7 @@ func TestNewBuilder_CreatesBuilder(t *testing.T) {
 
 func TestBuilder_WithUnifiedConfig_FluentInterface(t *testing.T) {
 	t.Parallel()
+
 	cfg := &config.V2{
 		LLM: config.LLMV2{Model: "test"},
 	}
@@ -48,6 +50,7 @@ func TestBuilder_WithUnifiedConfig_FluentInterface(t *testing.T) {
 
 func TestBuilder_BuildExecutor(t *testing.T) {
 	t.Parallel()
+
 	cfg := &config.V2{
 		Agent: config.AgentV2{
 			Timeout:       30 * time.Second,
@@ -147,6 +150,7 @@ func TestBuilder_BuildHelpers(t *testing.T) {
 
 func TestBuilder_BuildPlanningService(t *testing.T) {
 	t.Parallel()
+
 	provider := llm.NewMockProvider("test")
 	builder := NewBuilder().WithProvider(provider)
 
@@ -159,6 +163,7 @@ func TestBuilder_BuildPlanningService(t *testing.T) {
 
 func TestBuilder_BuildPlanningService_NilProvider(t *testing.T) {
 	t.Parallel()
+
 	builder := NewBuilder()
 	// Should handle nil provider gracefully
 	// BuildPlanningService will panic or return nil - test actual behavior

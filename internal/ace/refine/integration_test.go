@@ -24,10 +24,10 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 	pruneFunc := makePruneFunc(pb, 0.1)
 	orchestrator := NewRefinementOrchestrator(pb, mergeEngine, archive, pruneFunc)
 
-	addEmbeddedBullet(t, ctx, pb, embedder, "Always validate user input", 3, 0)  // b1: high utility
-	addEmbeddedBullet(t, ctx, pb, embedder, "Always validate user input", 1, 0)  // b2: duplicate of b1
-	addEmbeddedBullet(t, ctx, pb, embedder, "Low utility content", 0, 3)         // b3: low utility
-	addEmbeddedBullet(t, ctx, pb, embedder, "Use errors.Is for error checking", 2, 0) // b4: unique
+	addEmbeddedBullet(ctx, t, pb, embedder, "Always validate user input", 3, 0)       // b1: high utility
+	addEmbeddedBullet(ctx, t, pb, embedder, "Always validate user input", 1, 0)       // b2: duplicate of b1
+	addEmbeddedBullet(ctx, t, pb, embedder, "Low utility content", 0, 3)              // b3: low utility
+	addEmbeddedBullet(ctx, t, pb, embedder, "Use errors.Is for error checking", 2, 0) // b4: unique
 
 	initialCount := pb.Stats().TotalBullets
 	require.Equal(t, 4, initialCount, "expected 4 initial bullets")
@@ -62,7 +62,7 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 
 // addEmbeddedBullet creates a bullet with content, helpful/harmful counts, embedding, and adds it to the playbook.
 func addEmbeddedBullet(
-	t *testing.T, ctx context.Context, pb *playbook.Playbook,
+	ctx context.Context, t *testing.T, pb *playbook.Playbook,
 	embedder *embedding.MockEmbedder, content string, helpful, harmful int,
 ) {
 	t.Helper()

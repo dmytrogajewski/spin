@@ -12,7 +12,6 @@ const (
 	testEvent2 = "event2"
 )
 
-
 // Test BackpressureDrop mode - events dropped when channel full.
 func TestEventEmitter_BackpressureDrop(t *testing.T) {
 	t.Parallel()
@@ -514,7 +513,7 @@ func TestEventEmitter_CloseDuringEmit(t *testing.T) {
 
 	// Drain channel.
 	for range events {
-		_ = 0 // discard remaining events
+		continue // discard remaining events.
 	}
 
 	wg.Wait()

@@ -12,12 +12,11 @@ import (
 )
 
 var (
-	errInvalidOperation  = errors.New("invalid operation")
-	errContentMismatch   = errors.New("content mismatch")
+	errInvalidOperation    = errors.New("invalid operation")
+	errContentMismatch     = errors.New("content mismatch")
 	errFileShouldBeDeleted = errors.New("file should be deleted")
-	errContentMismatch2  = errors.New("content mismatch")
+	errContentMismatch2    = errors.New("content mismatch")
 )
-
 
 // TestReadPatchInput_Stdin tests reading patch from stdin.
 func TestReadPatchInput_Stdin(t *testing.T) {
@@ -238,6 +237,7 @@ func TestApplyPatch_Success(t *testing.T) {
 
 	// Create test file.
 	testFile := filepath.Join(tmpDir, "test.txt")
+
 	err := os.WriteFile(testFile, []byte("line 1\nline 2\nline 3\n"), 0o600)
 	if err != nil {
 		t.Fatal(err)
@@ -254,6 +254,7 @@ func TestApplyPatch_Success(t *testing.T) {
 *** End Patch`
 
 	patchFile := filepath.Join(tmpDir, "test.patch")
+
 	err = os.WriteFile(patchFile, []byte(patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)
@@ -290,6 +291,7 @@ func TestApplyPatch_DryRun(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "test.txt")
 
 	originalContent := "original content\n"
+
 	err := os.WriteFile(testFile, []byte(originalContent), 0o600)
 	if err != nil {
 		t.Fatal(err)
@@ -302,6 +304,7 @@ func TestApplyPatch_DryRun(t *testing.T) {
 *** End Patch`
 
 	patchFile := filepath.Join(tmpDir, "test.patch")
+
 	err = os.WriteFile(patchFile, []byte(patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)
@@ -318,6 +321,7 @@ func TestApplyPatch_DryRun(t *testing.T) {
 
 	// Verify new file was NOT created.
 	newFile := filepath.Join(tmpDir, "new.txt")
+
 	_, err = os.Stat(newFile)
 	if !os.IsNotExist(err) {
 		t.Error("dry-run should not create files")
@@ -342,6 +346,7 @@ func runApplyPatchErrorCase(t *testing.T, patchText, patchFileName, wantErrSubst
 	tmpDir := t.TempDir()
 
 	patchFile := filepath.Join(tmpDir, patchFileName)
+
 	err := os.WriteFile(patchFile, []byte(patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)
@@ -388,6 +393,7 @@ func TestApplyPatch_ForceOverwrite(t *testing.T) {
 
 	// Create existing file.
 	testFile := filepath.Join(tmpDir, "existing.txt")
+
 	err := os.WriteFile(testFile, []byte("existing content"), 0o600)
 	if err != nil {
 		t.Fatal(err)
@@ -400,6 +406,7 @@ func TestApplyPatch_ForceOverwrite(t *testing.T) {
 *** End Patch`
 
 	patchFile := filepath.Join(tmpDir, "test.patch")
+
 	err = os.WriteFile(patchFile, []byte(patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)
@@ -426,12 +433,14 @@ func TestApplyPatch_ForceOverwrite(t *testing.T) {
 		// Use a separate tmpDir to avoid sharing filesystem state with "without force".
 		forceDir := t.TempDir()
 		forceFile := filepath.Join(forceDir, "existing.txt")
+
 		forceErr := os.WriteFile(forceFile, []byte("existing content"), 0o600)
 		if forceErr != nil {
 			t.Fatal(forceErr)
 		}
 
 		forcePatchFile := filepath.Join(forceDir, "test.patch")
+
 		forceErr = os.WriteFile(forcePatchFile, []byte(patchText), 0o600)
 		if forceErr != nil {
 			t.Fatal(forceErr)
@@ -634,6 +643,7 @@ func runIntegrationTestCase(t *testing.T, tt integrationTestCase) {
 	}
 
 	patchFile := filepath.Join(tmpDir, "test.patch")
+
 	err := os.WriteFile(patchFile, []byte(tt.patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)

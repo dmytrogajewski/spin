@@ -15,22 +15,39 @@ import (
 const minDiffContextLines = 5
 
 var (
+	// ErrNoGitStatusAvailable is a sentinel error.
 	ErrNoGitStatusAvailable = errors.New("no Git status available")
+	// ErrNoGitStatusAvailable2 is a sentinel error.
 	ErrNoGitStatusAvailable2 = errors.New("no Git status available")
+	// ErrNoGitStatusAvailable3 is a sentinel error.
 	ErrNoGitStatusAvailable3 = errors.New("no Git status available")
+	// ErrNoGitStatusAvailable4 is a sentinel error.
 	ErrNoGitStatusAvailable4 = errors.New("no Git status available")
+	// ErrNoGitStatusAvailable5 is a sentinel error.
 	ErrNoGitStatusAvailable5 = errors.New("no Git status available")
+	// ErrNoGitStatusAvailable6 is a sentinel error.
 	ErrNoGitStatusAvailable6 = errors.New("no Git status available")
+	// ErrNotAGitRepository is a sentinel error.
 	ErrNotAGitRepository = errors.New("not a Git repository")
+	// ErrNotAGitRepository2 is a sentinel error.
 	ErrNotAGitRepository2 = errors.New("not a Git repository")
+	// ErrNotAGitRepository3 is a sentinel error.
 	ErrNotAGitRepository3 = errors.New("not a Git repository")
+	// ErrNotAGitRepository4 is a sentinel error.
 	ErrNotAGitRepository4 = errors.New("not a Git repository")
+	// ErrNotAGitRepository5 is a sentinel error.
 	ErrNotAGitRepository5 = errors.New("not a Git repository")
+	// ErrNotAGitRepository6 is a sentinel error.
 	ErrNotAGitRepository6 = errors.New("not a Git repository")
+	// ErrNotAGitRepository7 is a sentinel error.
 	ErrNotAGitRepository7 = errors.New("not a Git repository")
+	// ErrNotAGitRepository8 is a sentinel error.
 	ErrNotAGitRepository8 = errors.New("not a Git repository")
+	// ErrNotAGitRepository9 is a sentinel error.
 	ErrNotAGitRepository9 = errors.New("not a Git repository")
+	// ErrNotAGitRepository10 is a sentinel error.
 	ErrNotAGitRepository10 = errors.New("not a Git repository")
+	// ErrNotAGitRepository11 is a sentinel error.
 	ErrNotAGitRepository11 = errors.New("not a Git repository")
 )
 
@@ -543,6 +560,7 @@ func parseGitLog(output string) []CommitInfo {
 
 		// Parse timestamp.
 		timestamp := strings.TrimSpace(lines[3])
+
 		ts, err := strconv.ParseInt(timestamp, 10, 64)
 		if err == nil {
 			commit.Timestamp = time.Unix(ts, 0).Format(time.RFC3339)

@@ -64,13 +64,17 @@ func NewSimpleCommand(name, description, category string, icon rune, exec func(c
 }
 
 // Name implements the Name operation.
-func (c *simpleCommand) Name() string        { return c.name }
+func (c *simpleCommand) Name() string { return c.name }
+
 // Description implements the Description operation.
 func (c *simpleCommand) Description() string { return c.description }
+
 // Category implements the Category operation.
-func (c *simpleCommand) Category() string    { return c.category }
+func (c *simpleCommand) Category() string { return c.category }
+
 // Icon implements the Icon operation.
-func (c *simpleCommand) Icon() rune          { return c.icon }
+func (c *simpleCommand) Icon() rune { return c.icon }
+
 // Execute implements the Execute operation.
 func (c *simpleCommand) Execute(ctx context.Context) error {
 	if c.exec == nil {

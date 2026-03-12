@@ -3,6 +3,7 @@ package internal_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -31,13 +32,7 @@ var prohibitedFileNames = []string{
 
 // isProhibited checks whether a name appears in a prohibited list.
 func isProhibited(name string, prohibited []string) bool {
-	for _, p := range prohibited {
-		if name == p {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(prohibited, name)
 }
 
 // isSkippableDir returns true for hidden directories and vendor.

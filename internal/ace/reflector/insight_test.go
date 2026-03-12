@@ -28,9 +28,9 @@ var insightValidateCases = []struct {
 	errMsg  string
 }{
 	{
-		name:    "valid insight",
+		name: "valid insight",
 		insight: &Insight{
-			Content: "Always validate input parameters before processing them",
+			Content:    "Always validate input parameters before processing them",
 			Confidence: 0.8, Category: CategorySuccessPattern,
 		},
 	},
@@ -49,21 +49,21 @@ var insightValidateCases = []struct {
 	{
 		name: "confidence negative", wantErr: true, errMsg: "confidence",
 		insight: &Insight{
-			Content: "Always validate input parameters before processing them",
+			Content:    "Always validate input parameters before processing them",
 			Confidence: -0.1, Category: CategorySuccessPattern,
 		},
 	},
 	{
 		name: "confidence too high", wantErr: true, errMsg: "confidence",
 		insight: &Insight{
-			Content: "Always validate input parameters before processing them",
+			Content:    "Always validate input parameters before processing them",
 			Confidence: 1.5, Category: CategorySuccessPattern,
 		},
 	},
 	{
 		name: "invalid category", wantErr: true, errMsg: "category",
 		insight: &Insight{
-			Content: "Always validate input parameters before processing them",
+			Content:    "Always validate input parameters before processing them",
 			Confidence: 0.8, Category: "invalid_category",
 		},
 	},

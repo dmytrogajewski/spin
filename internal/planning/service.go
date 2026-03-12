@@ -14,12 +14,14 @@ import (
 )
 
 const (
-	planningMaxTokens    = 1000
-	planningTemperature  = 0.3
+	planningMaxTokens   = 1000
+	planningTemperature = 0.3
 )
 
 var (
+	// ErrPlanIDCannotBeEmpty is a sentinel error.
 	ErrPlanIDCannotBeEmpty = errors.New("plan ID cannot be empty")
+	// ErrPlanMustHaveAtLeastOne is a sentinel error.
 	ErrPlanMustHaveAtLeastOne = errors.New("plan must have at least one step")
 )
 
@@ -133,6 +135,7 @@ type stepData struct {
 // parseDecompositionResponse parses the JSON response from the LLM.
 func (s *Service) parseDecompositionResponse(content string) (*decompositionData, error) {
 	var decomposition decompositionData
+
 	err := json.Unmarshal([]byte(content), &decomposition)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
@@ -182,7 +185,7 @@ const (
 	PlanStatusCompleted
 	// PlanStatusFailed indicates the plan failed.
 	PlanStatusFailed
-	// PlanStatusCancelled indicates the plan was cancelled.
+	// PlanStatusCancelled indicates the plan was canceled.
 	PlanStatusCancelled
 )
 

@@ -50,6 +50,7 @@ func TestTUIToolExecution(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			// Force kill after 2 seconds.
 			_ = cmd.Process.Kill()
+
 			<-done
 		}
 	}()
@@ -122,7 +123,8 @@ func TestTUIToolVisualization(t *testing.T) {
 			// Command exited normally.
 		case <-time.After(2 * time.Second):
 			// Force kill after 2 seconds.
-		_ = cmd.Process.Kill()
+			_ = cmd.Process.Kill()
+
 			<-done
 		}
 	}()
@@ -200,6 +202,7 @@ func runTUIToolTests(t *testing.T, cases []tuiToolCase) {
 				case <-done:
 				case <-time.After(2 * time.Second):
 					_ = cmd.Process.Kill()
+
 					<-done
 				}
 			}()
@@ -291,6 +294,7 @@ func TestTUIReadFileTool(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			// Force kill after 2 seconds.
 			_ = cmd.Process.Kill()
+
 			<-done
 		}
 	}()
@@ -358,6 +362,7 @@ func TestTUIToolWithoutCycleDetection(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			// Force kill after 2 seconds.
 			_ = cmd.Process.Kill()
+
 			<-done
 		}
 	}()

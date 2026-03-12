@@ -19,6 +19,7 @@ import (
 // TestSpinACPAgent_NewSession_Success tests successful session creation.
 func TestSpinACPAgent_NewSession_Success(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -51,6 +52,7 @@ func TestSpinACPAgent_NewSession_Success(t *testing.T) {
 // TestSpinACPAgent_NewSession_WithMcpServers tests session creation with MCP servers.
 func TestSpinACPAgent_NewSession_WithMcpServers(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -98,6 +100,7 @@ func TestSpinACPAgent_NewSession_WithMcpServers(t *testing.T) {
 // TestSpinACPAgent_NewSession_InvalidCwd tests session creation with invalid working directory.
 func TestSpinACPAgent_NewSession_InvalidCwd(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -124,6 +127,7 @@ func TestSpinACPAgent_NewSession_InvalidCwd(t *testing.T) {
 // TestSpinACPAgent_NewSession_UnsupportedTransport tests session creation with unsupported transport.
 func TestSpinACPAgent_NewSession_UnsupportedTransport(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -155,6 +159,7 @@ func TestSpinACPAgent_NewSession_UnsupportedTransport(t *testing.T) {
 // TestSpinACPAgent_NewSession_NoTransport tests session creation with MCP server without transport.
 func TestSpinACPAgent_NewSession_NoTransport(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)

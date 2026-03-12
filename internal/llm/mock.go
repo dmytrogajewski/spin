@@ -163,7 +163,7 @@ func (p *MockProvider) Stream(ctx context.Context, _ openai.ChatCompletionNewPar
 	return chunks, nil
 }
 
-// streamContentChunks streams configured content chunks. Returns false if context cancelled.
+// streamContentChunks streams configured content chunks. Returns false if context canceled.
 func (p *MockProvider) streamContentChunks(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
 	for _, content := range p.streamChunks {
 		chunk := newMockChunk(chunkID, content, openai.ChatCompletionChunkChoicesDeltaRoleAssistant, nil)
@@ -180,7 +180,7 @@ func (p *MockProvider) streamContentChunks(ctx context.Context, chunks chan<- op
 	return true
 }
 
-// streamToolCallChunks streams tool call chunks. Returns false if context cancelled.
+// streamToolCallChunks streams tool call chunks. Returns false if context canceled.
 func (p *MockProvider) streamToolCallChunks(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
 	toolCallChunks := make([]openai.ChatCompletionChunkChoicesDeltaToolCall, len(p.toolCalls))
 	for i, tc := range p.toolCalls {
@@ -200,7 +200,7 @@ func (p *MockProvider) streamToolCallChunks(ctx context.Context, chunks chan<- o
 	return sendChunk(ctx, chunks, chunk)
 }
 
-// streamSingleChunk streams a single response chunk. Returns false if context cancelled.
+// streamSingleChunk streams a single response chunk. Returns false if context canceled.
 func (p *MockProvider) streamSingleChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
 	if p.delay > 0 && !waitDelay(ctx, p.delay) {
 		return false
@@ -260,7 +260,7 @@ func newMockChunk(
 	}
 }
 
-// sendChunk sends a chunk to the channel, returning false if context is cancelled.
+// sendChunk sends a chunk to the channel, returning false if context is canceled.
 func sendChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunk openai.ChatCompletionChunk) bool {
 	select {
 	case <-ctx.Done():
@@ -270,7 +270,7 @@ func sendChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, ch
 	}
 }
 
-// waitDelay waits for the specified delay, returning false if context is cancelled.
+// waitDelay waits for the specified delay, returning false if context is canceled.
 func waitDelay(ctx context.Context, delay time.Duration) bool {
 	select {
 	case <-time.After(delay):
@@ -367,11 +367,15 @@ func WithStreaming(chunks []string) MockOption {
 	return func(p *MockProvider) {
 		p.streamChunks = chunks
 		// Build response from chunks.
-		var combined string
-		var combinedSb351 strings.Builder
+		var (
+			combined      string
+			combinedSb351 strings.Builder
+		)
+
 		for _, chunk := range chunks {
 			combinedSb351.WriteString(chunk)
 		}
+
 		combined += combinedSb351.String()
 
 		p.response = combined

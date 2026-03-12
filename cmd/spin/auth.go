@@ -16,6 +16,7 @@ import (
 	termx "github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
+// ErrAPIKeyCannotBeEmpty is a sentinel error.
 var ErrAPIKeyCannotBeEmpty = errors.New("api key cannot be empty")
 
 // newAuthCmd creates the auth management command.
@@ -151,6 +152,7 @@ func runAuthLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	ctx := context.Background()
+
 	err := authMgr.SetCredential(ctx, provider, cred)
 	if err != nil {
 		return fmt.Errorf("failed to store credential: %w", err)
@@ -170,6 +172,7 @@ func runAuthLogout(cmd *cobra.Command, args []string) error {
 
 	// Delete credential.
 	ctx := context.Background()
+
 	err := authMgr.DeleteCredential(ctx, provider)
 	if err != nil {
 		return fmt.Errorf("failed to delete credential: %w", err)

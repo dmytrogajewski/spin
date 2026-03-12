@@ -9,6 +9,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 )
 
+// ErrSnapshotCannotBeNil is a sentinel error.
 var ErrSnapshotCannotBeNil = errors.New("snapshot cannot be nil")
 
 // Snapshot is an immutable point-in-time capture of a playbook.

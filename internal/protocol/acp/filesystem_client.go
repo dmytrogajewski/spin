@@ -11,7 +11,9 @@ import (
 )
 
 var (
+	// ErrAcpConnectionNotAvailable is a sentinel error.
 	ErrAcpConnectionNotAvailable = errors.New("ACP connection not available")
+	// ErrSessionIDNotFoundInContext is a sentinel error.
 	ErrSessionIDNotFoundInContext = errors.New("session ID not found in context")
 )
 

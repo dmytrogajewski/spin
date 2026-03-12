@@ -38,7 +38,7 @@ type PrinterOption func(*Printer)
 // Setting to 0 disables coalescing and writes chunks immediately.
 
 // NewPrinter creates a new Printer with optional configuration.
-// The printer writes to the provided io.Writer.
+// The printer writes to the provided [io.Writer].
 //
 // Example:
 //
@@ -67,6 +67,7 @@ func (p *Printer) PrintLine(s string) error {
 
 	// Convert \n to \r\n for raw terminal mode.
 	output := strings.ReplaceAll(s+"\n", "\n", "\r\n")
+
 	_, err := io.WriteString(p.out, output)
 	if err != nil {
 		return fmt.Errorf("print line: %w", err)
@@ -82,7 +83,7 @@ func (p *Printer) PrintLine(s string) error {
 // Blocks until the channel closes or context is canceled.
 // Thread-safe. Can be called concurrently.
 //
-// Returns context.Canceled if context is canceled, or any write error.
+// Returns [context.Canceled] if context is canceled, or any write error.
 func (p *Printer) PrintChunks(ctx context.Context, chunks <-chan string) error {
 	if p.coalesceDelay == 0 {
 		return p.printChunksImmediate(ctx, chunks)
@@ -246,6 +247,7 @@ func (p *Printer) printChunksImmediate(ctx context.Context, chunks <-chan string
 		case <-ctx.Done():
 			if buf.Len() > 0 {
 				p.flushBuffer(&buf)
+
 				wroteContent = true
 			}
 

@@ -88,6 +88,7 @@ func TestGatherEnvironment_EmptyDirectory(t *testing.T) {
 
 func TestGatherEnvironment_NonExistentDirectory(t *testing.T) {
 	t.Parallel()
+
 	env, err := GatherEnvironment(context.Background(), "/non/existent/directory")
 	require.Error(t, err)
 	assert.Nil(t, env)
@@ -95,6 +96,7 @@ func TestGatherEnvironment_NonExistentDirectory(t *testing.T) {
 
 func TestEnvironmentOption_WithMaxFiles(t *testing.T) {
 	t.Parallel()
+
 	cfg := &environmentConfig{}
 	opt := WithMaxFiles(100)
 	opt(cfg)
@@ -103,6 +105,7 @@ func TestEnvironmentOption_WithMaxFiles(t *testing.T) {
 
 func TestEnvironmentOption_WithMaxDepth(t *testing.T) {
 	t.Parallel()
+
 	cfg := &environmentConfig{}
 	opt := WithMaxDepth(5)
 	opt(cfg)
@@ -111,6 +114,7 @@ func TestEnvironmentOption_WithMaxDepth(t *testing.T) {
 
 func TestEnvironmentOption_WithSkipGit(t *testing.T) {
 	t.Parallel()
+
 	cfg := &environmentConfig{}
 	opt := WithSkipGit(true)
 	opt(cfg)
@@ -119,6 +123,7 @@ func TestEnvironmentOption_WithSkipGit(t *testing.T) {
 
 func TestGatherOSInfo(t *testing.T) {
 	t.Parallel()
+
 	osInfo := gatherOSInfo(context.Background())
 	assert.NotEmpty(t, osInfo.OS)
 	assert.NotEmpty(t, osInfo.Arch)
@@ -126,6 +131,7 @@ func TestGatherOSInfo(t *testing.T) {
 
 func TestDetectLanguageFromExt(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		ext      string
@@ -169,12 +175,14 @@ func TestCountLines(t *testing.T) {
 
 func TestCountLines_NonExistentFile(t *testing.T) {
 	t.Parallel()
+
 	lines := countLines("/non/existent/file.txt")
 	assert.Equal(t, 0, lines)
 }
 
 func TestDetectProjectType(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		files    []FileInfo
@@ -225,6 +233,7 @@ func TestDetectProjectType(t *testing.T) {
 
 func TestDetectLanguages(t *testing.T) {
 	t.Parallel()
+
 	files := []FileInfo{
 		{Path: "main.go", Language: "go"},
 		{Path: "test.py", Language: "python"},
@@ -242,12 +251,14 @@ func TestDetectLanguages(t *testing.T) {
 
 func TestDetectLanguages_EmptyFiles(t *testing.T) {
 	t.Parallel()
+
 	languages := detectLanguages([]FileInfo{})
 	assert.Empty(t, languages)
 }
 
 func TestFilterEnvironment(t *testing.T) {
 	t.Parallel()
+
 	env := []string{
 		"PATH=/usr/bin:/bin",
 		"HOME=/home/user",
@@ -274,6 +285,7 @@ func TestFilterEnvironment(t *testing.T) {
 
 func TestEnvironment_String(t *testing.T) {
 	t.Parallel()
+
 	env := &Environment{
 		WorkDir:     "/test/dir",
 		ProjectType: "go",
@@ -293,6 +305,7 @@ func TestEnvironment_String(t *testing.T) {
 
 func TestEnvironment_Structure(t *testing.T) {
 	t.Parallel()
+
 	env := &Environment{
 		WorkDir:     "/test/dir",
 		ProjectType: "go",
@@ -330,6 +343,7 @@ func TestEnvironment_Structure(t *testing.T) {
 
 func TestOSInfo_Structure(t *testing.T) {
 	t.Parallel()
+
 	osInfo := OSInfo{
 		OS:     "linux",
 		Arch:   "amd64",
@@ -345,6 +359,7 @@ func TestOSInfo_Structure(t *testing.T) {
 
 func TestGitInfo_Structure(t *testing.T) {
 	t.Parallel()
+
 	gitInfo := GitInfo{
 		Root:           "/path/to/repo",
 		Branch:         "main",
@@ -366,6 +381,7 @@ func TestGitInfo_Structure(t *testing.T) {
 
 func TestFileInfo_Structure(t *testing.T) {
 	t.Parallel()
+
 	fileInfo := FileInfo{
 		Path:     "test.go",
 		Size:     1024,
@@ -381,6 +397,7 @@ func TestFileInfo_Structure(t *testing.T) {
 
 func TestRemote_Structure(t *testing.T) {
 	t.Parallel()
+
 	remote := Remote{
 		Name: "origin",
 		URL:  "https://github.com/user/repo.git",

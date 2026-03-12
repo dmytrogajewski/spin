@@ -7,10 +7,10 @@ import (
 )
 
 const (
-	minHistoryForDetection  = 2
-	exactMatchConfidence    = 0.9
-	groupSimilarityDivisor  = 2.0
-	exactErrorConfidence    = 0.95
+	minHistoryForDetection = 2
+	exactMatchConfidence   = 0.9
+	groupSimilarityDivisor = 2.0
+	exactErrorConfidence   = 0.95
 )
 
 // Detector implements cycle detection for agent reasoning loops.

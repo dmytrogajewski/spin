@@ -1,4 +1,3 @@
-// Package prompt provides pure state management for prompt editing.
 package prompt
 
 import (

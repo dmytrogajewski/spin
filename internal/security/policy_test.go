@@ -8,6 +8,7 @@ import (
 
 func TestNewPolicyKey_Normalization(t *testing.T) {
 	t.Parallel()
+
 	key := NewPolicyKey("  /bin/echo  ", []string{"  hello", "world  ", "foo   bar", ""}, " /tmp ")
 	if key.Program != "/bin/echo" {
 		t.Fatalf("Program normalization failed: %q", key.Program)
@@ -31,6 +32,7 @@ func TestNewPolicyKey_Normalization(t *testing.T) {
 
 func TestMemoryPolicyStore_SaveGetListDelete(t *testing.T) {
 	t.Parallel()
+
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
 	t.Cleanup(func() { store.Close() })
@@ -47,6 +49,7 @@ func TestMemoryPolicyStore_SaveGetListDelete(t *testing.T) {
 		Decision:  DecisionAllow,
 		CreatedAt: now,
 	}
+
 	err := store.Save(ctx, p)
 	if err != nil {
 		t.Fatalf("Save error: %v", err)
@@ -83,6 +86,7 @@ func TestMemoryPolicyStore_SaveGetListDelete(t *testing.T) {
 
 func TestMemoryPolicyStore_TTLExpiry(t *testing.T) {
 	t.Parallel()
+
 	store := NewMemoryPolicyStore(5 * time.Millisecond)
 
 	t.Cleanup(func() { store.Close() })
@@ -99,6 +103,7 @@ func TestMemoryPolicyStore_TTLExpiry(t *testing.T) {
 		CreatedAt: time.Now(),
 		ExpiresAt: &exp,
 	}
+
 	err := store.Save(ctx, p)
 	if err != nil {
 		t.Fatalf("Save error: %v", err)
@@ -117,6 +122,7 @@ func TestMemoryPolicyStore_TTLExpiry(t *testing.T) {
 
 func TestMemoryPolicyStore_ConcurrentAccess(t *testing.T) {
 	t.Parallel()
+
 	store := NewMemoryPolicyStore(5 * time.Millisecond)
 
 	t.Cleanup(func() { store.Close() })
@@ -141,20 +147,22 @@ func TestMemoryPolicyStore_ConcurrentAccess(t *testing.T) {
 	done := make(chan struct{}, workers)
 
 	for range workers {
-		go concurrentPolicyWorker(t, store, ctx, key, done)
+		go concurrentPolicyWorker(ctx, t, store, key, done)
 	}
 
 	waitForWorkers(t, done, workers)
 }
 
-func concurrentPolicyWorker(t *testing.T, store PolicyStore, ctx context.Context, key PolicyKey, done chan<- struct{}) {
+func concurrentPolicyWorker(ctx context.Context, t *testing.T, store PolicyStore, key PolicyKey, done chan<- struct{}) {
 	t.Helper()
+
 	defer func() { done <- struct{}{} }()
 
 	for range 100 {
 		if _, _, err := store.Get(ctx, key, ScopeSession); err != nil {
 			t.Errorf("Get error: %v", err)
 		}
+
 		if _, err := store.List(ctx, ScopeSession); err != nil {
 			t.Errorf("List error: %v", err)
 		}
@@ -163,6 +171,7 @@ func concurrentPolicyWorker(t *testing.T, store PolicyStore, ctx context.Context
 
 func waitForWorkers(t *testing.T, done <-chan struct{}, count int) {
 	t.Helper()
+
 	for range count {
 		select {
 		case <-done:

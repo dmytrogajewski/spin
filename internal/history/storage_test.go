@@ -122,6 +122,7 @@ func TestFileStorage_Delete(t *testing.T) {
 		SessionID: sessionID,
 		Messages:  []message.Message{},
 	}
+
 	err = storage.Save(sessionID, data)
 	if err != nil {
 		t.Fatalf("save history: %v", err)
@@ -220,6 +221,7 @@ func TestFileStorage_HomeExpansion(t *testing.T) {
 
 	// Verify storage works by saving and loading.
 	testData := Data{SessionID: "test", MaxTokens: 1000}
+
 	err = storage.Save("test", testData)
 	if err != nil {
 		t.Fatalf("save failed: %v", err)
@@ -270,6 +272,7 @@ func TestHistory_SaveAndLoad(t *testing.T) {
 
 	// Create new history and load.
 	history2 := NewHistory(4096, &tokenizer.SimpleTokenizer{})
+
 	err = history2.Load(storage, sessionID)
 	if err != nil {
 		t.Fatalf("load history: %v", err)
@@ -334,6 +337,7 @@ func TestHistory_ToFromData(t *testing.T) {
 
 	// Import into new history.
 	history2 := NewHistory(4096, &tokenizer.SimpleTokenizer{})
+
 	err := history2.FromData(data)
 	if err != nil {
 		t.Fatalf("import history data: %v", err)
@@ -380,6 +384,7 @@ func TestFileStorage_AtomicWrite(t *testing.T) {
 			{Role: message.RoleUser, Content: "First"},
 		},
 	}
+
 	err = storage.Save(sessionID, data1)
 	if err != nil {
 		t.Fatalf("save first: %v", err)
@@ -393,6 +398,7 @@ func TestFileStorage_AtomicWrite(t *testing.T) {
 			{Role: message.RoleUser, Content: "Second"},
 		},
 	}
+
 	err = storage.Save(sessionID, data2)
 	if err != nil {
 		t.Fatalf("save second: %v", err)

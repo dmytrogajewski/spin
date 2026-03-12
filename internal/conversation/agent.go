@@ -55,8 +55,10 @@ func (b *Builder) buildOrRegisterTools(exec *agent.Executor, securitySvc *securi
 		toolReg := tools.NewRegistry()
 		b.runtime.RegisterTools(toolReg)
 		_ = b.registerIntegrationTools(toolReg)
+
 		return toolReg
 	}
+
 	return b.buildToolRegistry(exec, securitySvc, env)
 }
 
@@ -69,12 +71,14 @@ func (b *Builder) appendACEOptions(ctx context.Context, agentBuilder *agent.Buil
 	aceSvc, err := agentBuilder.BuildACEService(ctx)
 	if err != nil {
 		b.logWarn("ACE init failed, continuing", "err", err)
+
 		return opts
 	}
 
 	opts = append(opts, agent.WithACEService(aceSvc))
 	aceConfig := agent.ConvertACEConfig(&b.cfg.ACE)
 	opts = append(opts, agent.WithACEConfig(aceConfig))
+
 	b.logInfo("ACE enabled", "playbook", b.cfg.ACE.PlaybookPath, "model", b.cfg.LLM.Model)
 
 	return opts
@@ -87,6 +91,7 @@ func (b *Builder) appendAgentsMDOptions(ctx context.Context, agentBuilder *agent
 	}
 
 	gitRoot := b.resolveGitRoot()
+
 	agentsMDSvc := agentBuilder.BuildAgentsMDService(gitRoot)
 	if agentsMDSvc == nil {
 		return opts
@@ -94,6 +99,7 @@ func (b *Builder) appendAgentsMDOptions(ctx context.Context, agentBuilder *agent
 
 	if err := agentsMDSvc.Load(ctx); err != nil {
 		b.logWarn("failed to load AGENTS.md", "error", err)
+
 		return opts
 	}
 
@@ -110,9 +116,11 @@ func (b *Builder) resolveGitRoot() string {
 	if b.gitService == nil || !b.gitService.IsRepository() {
 		return ""
 	}
+
 	if repo := b.gitService.GetIntegration().GetRepository(); repo != nil {
 		return repo.Root()
 	}
+
 	return ""
 }
 

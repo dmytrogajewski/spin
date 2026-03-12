@@ -102,6 +102,7 @@ func TestACP_SetSessionMode_AllModes(t *testing.T) {
 			}
 
 			var resp acp.SetSessionModeResponse
+
 			resp, err = client.SetSessionMode(ctx, setModeReq)
 			require.NoError(t, err, "Should set mode %s", mode)
 			assert.NotNil(t, resp)

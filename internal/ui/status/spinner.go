@@ -185,6 +185,7 @@ func (s *Spinner) animate(ctx context.Context, interval time.Duration) {
 // It automatically starts/stops based on agent state.
 type ActivitySpinner struct {
 	*Spinner
+
 	activeStates map[string]bool // States that trigger animation.
 }
 

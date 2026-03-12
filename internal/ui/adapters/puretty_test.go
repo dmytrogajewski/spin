@@ -58,6 +58,7 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 		CWD:     ".",
 		Impact:  "low",
 	}
+
 	err := blocks.SetExecuteMeta(block, meta)
 	if err != nil {
 		t.Fatalf("SetExecuteMeta failed: %v", err)
@@ -79,6 +80,7 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 	meta.LinesOut = &lines
 
 	block.Body = "file1\nfile2\n..."
+
 	err = blocks.SetExecuteMeta(block, meta)
 	if err != nil {
 		t.Fatalf("SetExecuteMeta (update) failed: %v", err)
@@ -114,6 +116,7 @@ func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
 	)
 
 	p := setupPureTTY(t)
+
 	defer func() { _ = p.Stop() }()
 
 	// Create a block without completion metadata.
@@ -126,6 +129,7 @@ func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
 		Impact:  "medium",
 		// No ExitCode set - tool hasn't completed.
 	}
+
 	err := blocks.SetExecuteMeta(block, meta)
 	if err != nil {
 		t.Fatalf("SetExecuteMeta failed: %v", err)
@@ -139,6 +143,7 @@ func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
 
 	// Update with partial data (e.g., just body).
 	block.Body = "=== RUN TestFoo\n"
+
 	err = p.UpdateBlock("tool_456", block)
 	if err != nil {
 		t.Fatalf("UpdateBlock failed: %v", err)
@@ -161,6 +166,7 @@ func TestUpdateBlock_HandlesReadBlocks(t *testing.T) {
 	)
 
 	p := setupPureTTY(t)
+
 	defer func() { _ = p.Stop() }()
 
 	// Create a READ block.
@@ -174,6 +180,7 @@ func TestUpdateBlock_HandlesReadBlocks(t *testing.T) {
 		Offset: 0,
 		Limit:  100,
 	}
+
 	err := blocks.SetReadMeta(block, meta)
 	if err != nil {
 		t.Fatalf("SetReadMeta failed: %v", err)
@@ -343,6 +350,7 @@ func TestApprovalDialog_KeyboardInput(t *testing.T) {
 // TestApprovalDialog_DenyKey tests that 'D' key denies the request.
 func TestApprovalDialog_DenyKey(t *testing.T) {
 	t.Parallel()
+
 	var buf bytes.Buffer
 
 	keyCh := make(chan term.KeyEvent, 10)
@@ -494,6 +502,7 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 	meta := &blocks.ToolMeta{
 		ToolName: "execute_command",
 	}
+
 	err := blocks.SetToolMeta(block, meta)
 	if err != nil {
 		t.Fatalf("SetToolMeta failed: %v", err)
@@ -514,6 +523,7 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 
 	// First update: tool completes with success.
 	completedBlock := createToolBlock(t, "tool_exec_123", "execute_command", toolBody)
+
 	err = p.UpdateBlock("tool_exec_123", completedBlock)
 	if err != nil {
 		t.Fatalf("First UpdateBlock failed: %v", err)
@@ -521,6 +531,7 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 
 	// Second update: same tool, might be called again due to event processing.
 	secondUpdateBlock := createToolBlock(t, "tool_exec_123", "execute_command", toolBody)
+
 	err = p.UpdateBlock("tool_exec_123", secondUpdateBlock)
 	if err != nil {
 		t.Fatalf("Second UpdateBlock failed: %v", err)
@@ -528,6 +539,7 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 
 	// Count occurrences of "Tool completed".
 	got := s.buf.String()
+
 	toolCompletedCount := strings.Count(got, "Tool completed")
 	if toolCompletedCount > 1 {
 		t.Errorf("'Tool completed' should appear exactly once, but appeared %d times\nOutput:\n%s",
@@ -563,6 +575,7 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 		CWD:     ".",
 		Impact:  "low",
 	}
+
 	err := blocks.SetExecuteMeta(block, meta)
 	if err != nil {
 		t.Fatalf("SetExecuteMeta failed: %v", err)
@@ -581,6 +594,7 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 
 	// First update with completion.
 	firstUpdate := createExecuteBlock(t, "exec_123", "ls", ".", "low", &exitCode, &lines, "file1\nfile2\nfile3")
+
 	err = p.UpdateBlock("exec_123", firstUpdate)
 	if err != nil {
 		t.Fatalf("First UpdateBlock failed: %v", err)
@@ -588,6 +602,7 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 
 	// Second update with same completion status.
 	secondUpdate := createExecuteBlock(t, "exec_123", "ls", ".", "low", &exitCode, &lines, "file1\nfile2\nfile3")
+
 	err = p.UpdateBlock("exec_123", secondUpdate)
 	if err != nil {
 		t.Fatalf("Second UpdateBlock failed: %v", err)

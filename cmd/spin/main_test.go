@@ -104,6 +104,7 @@ func TestMain(m *testing.M) {
 
 	// Drain pipe.
 	var buf bytes.Buffer
+
 	_, _ = buf.ReadFrom(r)
 
 	os.Exit(code)

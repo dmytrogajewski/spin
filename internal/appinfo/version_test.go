@@ -32,7 +32,7 @@ func TestVersionString(t *testing.T) {
 	t.Parallel()
 
 	// Test the format of String() without modifying globals.
-	// String() returns "spin version {Version} (commit: {Commit}, built: {BuildDate}, {GoVersion})"
+	// String() returns "spin version {Version} (commit: {Commit}, built: {BuildDate}, {GoVersion})".
 	str := appinfo.String()
 
 	// Must contain current version value.
@@ -116,7 +116,6 @@ func TestInfo_Format(t *testing.T) {
 				Version:   tt.version,
 				Commit:    tt.commit,
 				BuildDate: tt.buildDate,
-				GoVersion: runtime.Version(),
 			}
 
 			if info.Version != tt.version {

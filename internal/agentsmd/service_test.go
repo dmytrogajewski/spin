@@ -48,6 +48,7 @@ func TestService_Load_Success(t *testing.T) {
 	agentsPath := filepath.Join(tempDir, FileName)
 
 	content := "# Test Project Instructions\n\nThis is a test."
+
 	err := os.WriteFile(agentsPath, []byte(content), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
@@ -60,6 +61,7 @@ func TestService_Load_Success(t *testing.T) {
 	svc := NewService(cfg, tempDir, "")
 
 	ctx := context.Background()
+
 	err = svc.Load(ctx)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -84,6 +86,7 @@ func TestService_Load_Disabled(t *testing.T) {
 	tempDir := t.TempDir()
 
 	agentsPath := filepath.Join(tempDir, FileName)
+
 	err := os.WriteFile(agentsPath, []byte("content"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
@@ -95,6 +98,7 @@ func TestService_Load_Disabled(t *testing.T) {
 	svc := NewService(cfg, tempDir, "")
 
 	ctx := context.Background()
+
 	err = svc.Load(ctx)
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil when disabled", err)
@@ -116,6 +120,7 @@ func TestService_Load_CustomPath(t *testing.T) {
 	customPath := filepath.Join(tempDir, "custom-agents.md")
 
 	content := "# Custom Instructions"
+
 	err := os.WriteFile(customPath, []byte(content), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
@@ -129,6 +134,7 @@ func TestService_Load_CustomPath(t *testing.T) {
 	svc := NewService(cfg, "/nonexistent", "") // workDir doesn't matter with custom path.
 
 	ctx := context.Background()
+
 	err = svc.Load(ctx)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -168,6 +174,7 @@ func TestService_Load_NotFound(t *testing.T) {
 	tempDir := t.TempDir()
 
 	isolatedDir := filepath.Join(tempDir, "isolated", "deep", "path")
+
 	err := os.MkdirAll(isolatedDir, 0o750)
 	if err != nil {
 		t.Fatalf("failed to create isolated dir: %v", err)
@@ -181,6 +188,7 @@ func TestService_Load_NotFound(t *testing.T) {
 	svc := NewService(cfg, isolatedDir, tempDir)
 
 	ctx := context.Background()
+
 	err = svc.Load(ctx)
 	if err != nil {
 		t.Fatalf("Load() error = %v, want nil when file not found", err)
@@ -199,6 +207,7 @@ func TestService_Load_SizeLimit(t *testing.T) {
 
 	// Create content larger than limit.
 	largeContent := strings.Repeat("A", 1000)
+
 	err := os.WriteFile(agentsPath, []byte(largeContent), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
@@ -211,6 +220,7 @@ func TestService_Load_SizeLimit(t *testing.T) {
 	svc := NewService(cfg, tempDir, "")
 
 	ctx := context.Background()
+
 	err = svc.Load(ctx)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -250,6 +260,7 @@ func TestService_Refresh(t *testing.T) {
 	svc := NewService(cfg, tempDir, "")
 
 	ctx := context.Background()
+
 	err = svc.Load(ctx)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -282,6 +293,7 @@ func TestService_ThreadSafety(t *testing.T) {
 	tempDir := t.TempDir()
 
 	agentsPath := filepath.Join(tempDir, FileName)
+
 	err := os.WriteFile(agentsPath, []byte("# Concurrent Test"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
@@ -294,6 +306,7 @@ func TestService_ThreadSafety(t *testing.T) {
 	svc := NewService(cfg, tempDir, "")
 
 	ctx := context.Background()
+
 	err = svc.Load(ctx)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)

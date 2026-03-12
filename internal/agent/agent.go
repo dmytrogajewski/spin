@@ -15,8 +15,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
 	"github.com/dmytrogajewski/spin/internal/agentsmd"
-	"github.com/dmytrogajewski/spin/internal/detection"
 	spinerrors "github.com/dmytrogajewski/spin/internal/apperr"
+	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/message"
@@ -35,25 +35,40 @@ const (
 
 // Default agent configuration values.
 const (
-	DefaultMaxTurns        = 500
-	DefaultAgentTimeout    = 60 * time.Minute
-	DefaultTemperature     = 0.7
-	DefaultMaxTokens       = 4096
+	// DefaultMaxTurns is exported.
+	DefaultMaxTurns = 500
+	// DefaultAgentTimeout is exported.
+	DefaultAgentTimeout = 60 * time.Minute
+	// DefaultTemperature is exported.
+	DefaultTemperature = 0.7
+	// DefaultMaxTokens is exported.
+	DefaultMaxTokens = 4096
+	// DefaultEventBufferSize is exported.
 	DefaultEventBufferSize = 100
 )
 
 // Common agent errors.
 var (
-	ErrNilLLM         = errors.New("LLM provider cannot be nil")
-	ErrNilSecurity    = errors.New("security service cannot be nil")
-	ErrNilDetection   = errors.New("detection service cannot be nil")
+	// ErrNilLLM is a sentinel error.
+	ErrNilLLM = errors.New("LLM provider cannot be nil")
+	// ErrNilSecurity is a sentinel error.
+	ErrNilSecurity = errors.New("security service cannot be nil")
+	// ErrNilDetection is a sentinel error.
+	ErrNilDetection = errors.New("detection service cannot be nil")
+	// ErrNilToolRuntime is a sentinel error.
 	ErrNilToolRuntime = errors.New("tool runtime cannot be nil")
-	ErrNilPlanning    = errors.New("planning service cannot be nil")
-	ErrNilContext     = errors.New("context cannot be nil")
-	ErrNilEmitter     = errors.New("event emitter cannot be nil")
-	ErrNilRequest     = errors.New("agent request cannot be nil")
-	ErrEmptyInput     = errors.New("agent request input cannot be empty")
-	ErrMaxTurns       = errors.New("maximum turns reached")
+	// ErrNilPlanning is a sentinel error.
+	ErrNilPlanning = errors.New("planning service cannot be nil")
+	// ErrNilContext is a sentinel error.
+	ErrNilContext = errors.New("context cannot be nil")
+	// ErrNilEmitter is a sentinel error.
+	ErrNilEmitter = errors.New("event emitter cannot be nil")
+	// ErrNilRequest is a sentinel error.
+	ErrNilRequest = errors.New("agent request cannot be nil")
+	// ErrEmptyInput is a sentinel error.
+	ErrEmptyInput = errors.New("agent request input cannot be empty")
+	// ErrMaxTurns is a sentinel error.
+	ErrMaxTurns = errors.New("maximum turns reached")
 )
 
 // Agent implements the core agent logic and decision-making loop.
@@ -257,10 +272,10 @@ func NewAgent(
 		context:         env,
 		emitter:         emitter,
 		logger:          slog.Default(),
-		maxTurns:        defaultAgentMaxTurnsAgent,                             // Default: 50 turns.
+		maxTurns:        defaultAgentMaxTurnsAgent,                                // Default: 50 turns.
 		timeout:         time.Duration(defaultAgentTimeoutMinAgent) * time.Minute, // Default: 60 minutes.
-		temperature:     defaultAgentTemperature,                              // Default: 0.7.
-		maxTokens:       defaultAgentContextWindow,                            // Default: 8K tokens.
+		temperature:     defaultAgentTemperature,                                  // Default: 0.7.
+		maxTokens:       defaultAgentContextWindow,                                // Default: 8K tokens.
 	}
 
 	// Apply options.
@@ -939,6 +954,7 @@ func (a *Agent) buildLLMParams(
 	}
 
 	maxTokens := a.maxTokens
+
 	if t != nil {
 		if taskMaxTokens := t.MaxTokens(); taskMaxTokens > 0 {
 			maxTokens = taskMaxTokens
@@ -1049,7 +1065,7 @@ func (a *Agent) handleToolCallFinished(
 	a.detectPlanFromAccumulator(ctx, acc)
 	a.logger.DebugContext(ctx, "tool call finished", "index", toolCall.Index, "name", toolCall.Name, "args_len", len(toolCall.Arguments))
 
-	_ = chunkCount // used for logging context
+	_ = chunkCount // used for logging context.
 }
 
 // detectPlanFromAccumulator checks accumulated content for a plan and sets the planner.
@@ -1077,7 +1093,7 @@ func (a *Agent) detectPlanFromAccumulator(ctx context.Context, acc *openai.ChatC
 		},
 	})
 
-	_ = ctx // used for context propagation
+	_ = ctx // used for context propagation.
 }
 
 // finalizeStreamResponse validates and returns the accumulated stream response.
@@ -1189,6 +1205,7 @@ func (a *Agent) processACEFeedback(ctx context.Context, response *openai.ChatCom
 func (a *Agent) generateACEBullets(ctx context.Context, trajCtx *trajectory.Context, resp *Response) {
 	if a.aceService == nil {
 		a.logger.DebugContext(ctx, "Bullet generation skipped", "ace_service_nil", true)
+
 		return
 	}
 
@@ -1201,10 +1218,12 @@ func (a *Agent) generateACEBullets(ctx context.Context, trajCtx *trajectory.Cont
 	learnedBullets, err := a.generateBulletsFromTrajectory(ctx, traj)
 	if err != nil {
 		a.logger.WarnContext(ctx, "ACE bullet generation failed", "error", err)
+
 		return
 	}
 
 	a.logger.InfoContext(ctx, "Successfully generated bullets from execution", "count", len(learnedBullets))
+
 	if len(learnedBullets) == 0 {
 		a.logger.DebugContext(ctx, "No bullets to display (empty result)")
 	}

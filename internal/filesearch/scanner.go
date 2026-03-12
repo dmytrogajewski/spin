@@ -67,7 +67,6 @@ func (s *Scanner) ScanWithContext(ctx context.Context) ([]string, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("walking directory: %w", err)
 	}

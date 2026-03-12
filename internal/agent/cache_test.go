@@ -13,9 +13,9 @@ const (
 	testCacheKey = "test-key"
 )
 
-
 func TestNewCommandCache(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 	assert.NotNil(t, cache)
 	assert.Equal(t, 5*time.Second, cache.ttl)
@@ -25,6 +25,7 @@ func TestNewCommandCache(t *testing.T) {
 
 func TestCommandCache_SetAndGet(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Test setting and getting a value.
@@ -46,6 +47,7 @@ func TestCommandCache_SetAndGet(t *testing.T) {
 
 func TestCommandCache_GetNonExistent(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Test getting a non-existent key.
@@ -56,6 +58,7 @@ func TestCommandCache_GetNonExistent(t *testing.T) {
 
 func TestCommandCache_Expiration(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(100*time.Millisecond, 1024*1024)
 
 	key := testCacheKey
@@ -85,20 +88,21 @@ func TestCommandCache_Expiration(t *testing.T) {
 
 func TestCommandCache_Clear(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Set multiple values.
 	result1 := &Result{
 		Command: &security.Command{Program: "echo", Args: []string{"1"}},
-		Stdout: "output1", ExitCode: 0, Duration: 100 * time.Millisecond,
+		Stdout:  "output1", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 	result2 := &Result{
 		Command: &security.Command{Program: "echo", Args: []string{"2"}},
-		Stdout: "output2", ExitCode: 0, Duration: 100 * time.Millisecond,
+		Stdout:  "output2", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 	result3 := &Result{
 		Command: &security.Command{Program: "echo", Args: []string{"3"}},
-		Stdout: "output3", ExitCode: 0, Duration: 100 * time.Millisecond,
+		Stdout:  "output3", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 
 	cache.Set("key1", result1)
@@ -129,6 +133,7 @@ func TestCommandCache_Clear(t *testing.T) {
 
 func TestCommandCache_Size(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Initially empty.
@@ -137,11 +142,11 @@ func TestCommandCache_Size(t *testing.T) {
 	// Add items.
 	result1 := &Result{
 		Command: &security.Command{Program: "echo", Args: []string{"1"}},
-		Stdout: "output1", ExitCode: 0, Duration: 100 * time.Millisecond,
+		Stdout:  "output1", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 	result2 := &Result{
 		Command: &security.Command{Program: "echo", Args: []string{"2"}},
-		Stdout: "output2", ExitCode: 0, Duration: 100 * time.Millisecond,
+		Stdout:  "output2", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 
 	cache.Set("key1", result1)
@@ -157,6 +162,7 @@ func TestCommandCache_Size(t *testing.T) {
 
 func TestCommandCache_Key(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	cmd1 := &security.Command{
@@ -191,6 +197,7 @@ func TestCommandCache_Key(t *testing.T) {
 
 func TestCommandCache_IsCacheable(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	tests := []struct {
@@ -256,6 +263,7 @@ func TestCommandCache_IsCacheable(t *testing.T) {
 
 func TestCommandCache_Stats(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Initially empty.
@@ -267,11 +275,11 @@ func TestCommandCache_Stats(t *testing.T) {
 	// Add some items.
 	result1 := &Result{
 		Command: &security.Command{Program: "echo", Args: []string{"1"}},
-		Stdout: "output1", ExitCode: 0, Duration: 100 * time.Millisecond,
+		Stdout:  "output1", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 	result2 := &Result{
 		Command: &security.Command{Program: "echo", Args: []string{"2"}},
-		Stdout: "output2", ExitCode: 0, Duration: 100 * time.Millisecond,
+		Stdout:  "output2", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 
 	cache.Set("key1", result1)
@@ -290,6 +298,7 @@ func TestCommandCache_Stats(t *testing.T) {
 
 func TestCommandCache_ConcurrentAccess(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Test concurrent reads and writes.
@@ -348,16 +357,17 @@ func TestCommandCache_SizeLimit(t *testing.T) {
 
 func TestCommandCache_UpdateExisting(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	key := testCacheKey
 	originalResult := &Result{
 		Command: &security.Command{Program: "echo", Args: []string{"original"}},
-		Stdout: "original", ExitCode: 0, Duration: 100 * time.Millisecond,
+		Stdout:  "original", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 	updatedResult := &Result{
 		Command: &security.Command{Program: "echo", Args: []string{"updated"}},
-		Stdout: "updated", ExitCode: 0, Duration: 100 * time.Millisecond,
+		Stdout:  "updated", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 
 	// Set original result.
@@ -399,6 +409,7 @@ func TestCommandCache_Eviction(t *testing.T) {
 
 func TestCacheStats_String(t *testing.T) {
 	t.Parallel()
+
 	stats := CacheStats{
 		Size:     1024,
 		MaxSize:  2048,
@@ -416,6 +427,7 @@ func TestCacheStats_String(t *testing.T) {
 
 func TestCommandCache_KeyConsistency(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	cmd := &security.Command{
@@ -437,6 +449,7 @@ func TestCommandCache_KeyConsistency(t *testing.T) {
 
 func TestCommandCache_KeyUniqueness(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	cmd1 := &security.Command{

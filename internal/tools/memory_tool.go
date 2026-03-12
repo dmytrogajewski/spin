@@ -1,10 +1,11 @@
 package tools
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/memory"
 )
@@ -137,6 +138,7 @@ func (t *MemoryTool) executePut(ctx context.Context, params ToolParameters) (Too
 	// Handle tags - they come as an array.
 	if params.Has("tags") {
 		var tags []string
+
 		tagsErr := params.GetObject("tags", &tags)
 		if tagsErr == nil {
 			opts.Tags = tags
@@ -175,8 +177,8 @@ func (t *MemoryTool) executeGet(ctx context.Context, params ToolParameters) (Too
 		fmt.Fprintf(&sb, "Tags: %s\n", strings.Join(entry.Tags, ", "))
 	}
 
-	fmt.Fprintf(&sb, "Created: %s\n", entry.CreatedAt.Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(&sb, "Updated: %s\n", entry.UpdatedAt.Format("2006-01-02 15:04:05"))
+	fmt.Fprintf(&sb, "Created: %s\n", entry.CreatedAt.Format(time.DateTime))
+	fmt.Fprintf(&sb, "Updated: %s\n", entry.UpdatedAt.Format(time.DateTime))
 	fmt.Fprintf(&sb, "Value:\n%s", entry.Value)
 
 	return NewToolResult(sb.String()), nil

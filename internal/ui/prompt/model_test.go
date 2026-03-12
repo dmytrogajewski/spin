@@ -8,12 +8,12 @@ import (
 
 const (
 	testSecondEntry = "second"
-	testFirstEntry = "first"
+	testFirstEntry  = "first"
 )
-
 
 func TestModel_BasicEditing(t *testing.T) {
 	t.Parallel()
+
 	m := prompt.NewModel(10)
 
 	// Type "hello".
@@ -34,6 +34,7 @@ func TestModel_BasicEditing(t *testing.T) {
 
 func TestModel_Submit(t *testing.T) {
 	t.Parallel()
+
 	m := prompt.NewModel(10)
 
 	// Type and submit.
@@ -63,6 +64,7 @@ func TestModel_Submit(t *testing.T) {
 
 func TestModel_HistoryNavigation(t *testing.T) {
 	t.Parallel()
+
 	m := prompt.NewModel(10)
 
 	// Submit a few commands.
@@ -128,6 +130,7 @@ func TestModel_HistoryNavigation(t *testing.T) {
 
 func TestModel_EditHistoryEntry(t *testing.T) {
 	t.Parallel()
+
 	m := prompt.NewModel(10)
 
 	// Submit a command.
@@ -169,6 +172,7 @@ func TestModel_EditHistoryEntry(t *testing.T) {
 
 func TestModel_AllBufferOperations(t *testing.T) {
 	t.Parallel()
+
 	m := prompt.NewModel(10)
 
 	// Test all buffer operations delegate correctly.
@@ -218,6 +222,7 @@ func TestModel_AllBufferOperations(t *testing.T) {
 
 func TestModel_HistoryLimit(t *testing.T) {
 	t.Parallel()
+
 	m := prompt.NewModel(3)
 
 	// Submit 4 entries (exceeds limit).
@@ -246,6 +251,7 @@ func TestModel_HistoryLimit(t *testing.T) {
 
 func TestModel_UncoveredOperations(t *testing.T) {
 	t.Parallel()
+
 	m := prompt.NewModel(10)
 
 	// Test MoveRight.

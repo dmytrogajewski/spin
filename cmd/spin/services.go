@@ -1,8 +1,8 @@
 package main
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -19,6 +19,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 )
 
+// ErrUnsupportedTransport is a sentinel error.
 var ErrUnsupportedTransport = errors.New("unsupported transport")
 
 // createSessionStorage creates a session storage if a directory is configured.
@@ -72,6 +73,7 @@ func createServices(ctx context.Context, cfg *config.V2, workDir string, logger 
 		gitSvc, err = git.NewService(ctx, true, workDir, logger)
 		if err != nil {
 			cleanup()
+
 			return nil, nil, fmt.Errorf("create git service: %w", err)
 		}
 	}
@@ -82,6 +84,7 @@ func createServices(ctx context.Context, cfg *config.V2, workDir string, logger 
 		shellSvc, err = shell.NewService(ctx, true, workDir, logger, cfg.Protocol.ShellTimeout)
 		if err != nil {
 			cleanup()
+
 			return nil, nil, fmt.Errorf("create shell service: %w", err)
 		}
 	}
@@ -128,12 +131,14 @@ func registerMCPServer(
 	registry, err := createMCPRegistry(srv, logger)
 	if err != nil {
 		logger.WarnContext(ctx, "failed to create MCP registry", "name", srv.Name, "err", err)
+
 		return
 	}
 
 	err = registryManager.Register(registry)
 	if err != nil {
 		logger.WarnContext(ctx, "failed to register MCP registry", "name", srv.Name, "err", err)
+
 		return
 	}
 
@@ -240,7 +245,7 @@ func createMCPRegistry(srv config.MCPServerConfigV2, logger *slog.Logger) (mcp.R
 		})
 
 	default:
-return nil, fmt.Errorf("unsupported transport: %s: %w", transport, ErrUnsupportedTransport)
+		return nil, fmt.Errorf("unsupported transport: %s: %w", transport, ErrUnsupportedTransport)
 	}
 }
 

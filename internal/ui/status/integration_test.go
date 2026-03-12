@@ -11,6 +11,7 @@ import (
 // Event → Aggregator → Manager → FormatCompact.
 func TestIntegration_StatusDisplayWithEvents(t *testing.T) {
 	t.Parallel()
+
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
@@ -34,6 +35,7 @@ func TestIntegration_StatusDisplayWithEvents(t *testing.T) {
 // TestIntegration_StatusFormatting tests that the formatted status is compact and useful.
 func TestIntegration_StatusFormatting(t *testing.T) {
 	t.Parallel()
+
 	manager := NewManager()
 
 	// Set some realistic data.
@@ -69,6 +71,7 @@ func TestIntegration_StatusFormatting(t *testing.T) {
 // TestIntegration_StatusDisabled tests that disabled manager returns empty string.
 func TestIntegration_StatusDisabled(t *testing.T) {
 	t.Parallel()
+
 	manager := NewManager()
 	manager.SetProvider("ollama", "llama3.1")
 	manager.IncrementTurn()
@@ -86,6 +89,7 @@ func TestIntegration_StatusDisabled(t *testing.T) {
 // TestIntegration_StatusPriority tests that explicit status text takes priority over metrics.
 func TestIntegration_StatusPriority(t *testing.T) {
 	t.Parallel()
+
 	manager := NewManager()
 	manager.SetProvider("ollama", "llama3.1")
 	manager.SetStatus("Waiting for user input...")
@@ -100,6 +104,7 @@ func TestIntegration_StatusPriority(t *testing.T) {
 // TestIntegration_EmptyStatus tests that empty manager returns empty string.
 func TestIntegration_EmptyStatus(t *testing.T) {
 	t.Parallel()
+
 	manager := NewManager()
 
 	// No data set, should show default "[○] Ready".

@@ -33,7 +33,7 @@ type Builder struct {
 	mcpService   *mcppkg.Service
 
 	// Required.
-	runtime executor.Runtime      // Runtime provides approval handler, tools, notifications.
+	runtime executor.Runtime     // Runtime provides approval handler, tools, notifications.
 	emitter *events.EventEmitter // Emitter MUST match runtime's emitter.
 
 	// Optional overrides.

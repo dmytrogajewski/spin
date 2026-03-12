@@ -14,6 +14,7 @@ func TestContentBlockHelpers(t *testing.T) {
 	t.Parallel()
 	t.Run("TextBlock", func(t *testing.T) {
 		t.Parallel()
+
 		block := acp.TextBlock("Hello, world!")
 		assert.NotNil(t, block)
 		// ContentBlock is a union type with optional fields.
@@ -25,6 +26,7 @@ func TestContentBlockHelpers(t *testing.T) {
 
 	t.Run("ImageBlock", func(t *testing.T) {
 		t.Parallel()
+
 		base64Data := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 		block := acp.ImageBlock(base64Data, "image/png")
 		assert.NotNil(t, block)
@@ -36,6 +38,7 @@ func TestContentBlockHelpers(t *testing.T) {
 
 	t.Run("ResourceLinkBlock", func(t *testing.T) {
 		t.Parallel()
+
 		block := acp.ResourceLinkBlock("file.txt", "file:///path/to/file.txt")
 		assert.NotNil(t, block)
 		require.NotNil(t, block.ResourceLink, "ResourceLinkBlock should set ResourceLink field")
@@ -71,6 +74,7 @@ func TestRequestResponseTypes(t *testing.T) {
 	t.Parallel()
 	t.Run("InitializeRequest", func(t *testing.T) {
 		t.Parallel()
+
 		req := acp.InitializeRequest{
 			ProtocolVersion:    acp.ProtocolVersionNumber,
 			ClientCapabilities: acp.ClientCapabilities{
@@ -88,6 +92,7 @@ func TestRequestResponseTypes(t *testing.T) {
 
 	t.Run("InitializeResponse", func(t *testing.T) {
 		t.Parallel()
+
 		resp := acp.InitializeResponse{
 			ProtocolVersion:   acp.ProtocolVersionNumber,
 			AgentCapabilities: acp.AgentCapabilities{
@@ -105,6 +110,7 @@ func TestRequestResponseTypes(t *testing.T) {
 
 	t.Run("NewSessionRequest", func(t *testing.T) {
 		t.Parallel()
+
 		req := acp.NewSessionRequest{
 			Cwd: "/tmp/test",
 			McpServers: []acp.McpServer{
@@ -123,6 +129,7 @@ func TestRequestResponseTypes(t *testing.T) {
 
 	t.Run("PromptRequest", func(t *testing.T) {
 		t.Parallel()
+
 		req := acp.PromptRequest{
 			SessionId: acp.SessionId("test-session"),
 			Prompt: []acp.ContentBlock{
@@ -139,6 +146,7 @@ func TestCapabilityTypes(t *testing.T) {
 	t.Parallel()
 	t.Run("AgentCapabilities", func(t *testing.T) {
 		t.Parallel()
+
 		caps := acp.AgentCapabilities{
 			PromptCapabilities: acp.PromptCapabilities{
 				Image:           true,
@@ -159,6 +167,7 @@ func TestCapabilityTypes(t *testing.T) {
 
 	t.Run("ClientCapabilities", func(t *testing.T) {
 		t.Parallel()
+
 		caps := acp.ClientCapabilities{
 			// Client capabilities structure.
 		}
@@ -182,6 +191,7 @@ func TestSessionTypes(t *testing.T) {
 
 	t.Run("AgentMessageChunk", func(t *testing.T) {
 		t.Parallel()
+
 		update := acp.UpdateAgentMessage(acp.TextBlock("Response text"))
 		require.NotNil(t, update.AgentMessageChunk)
 		assert.NotNil(t, update.AgentMessageChunk.Content)
@@ -204,6 +214,7 @@ func TestMcpTypes(t *testing.T) {
 	t.Parallel()
 	t.Run("McpServerStdio", func(t *testing.T) {
 		t.Parallel()
+
 		server := acp.McpServer{
 			Stdio: &acp.McpServerStdio{
 				Command: "mcp-server",
@@ -219,6 +230,7 @@ func TestMcpTypes(t *testing.T) {
 
 	t.Run("McpServerHttp", func(t *testing.T) {
 		t.Parallel()
+
 		server := acp.McpServer{
 			Http: &acp.McpServerHttp{
 				Url: "https://example.com/mcp",
@@ -270,6 +282,7 @@ func TestTypeConversions(t *testing.T) {
 
 	t.Run("SessionIdToString", func(t *testing.T) {
 		t.Parallel()
+
 		sessionID := acp.SessionId("test-session-123")
 		sessionIDStr := string(sessionID)
 		assert.Equal(t, "test-session-123", sessionIDStr)
@@ -318,6 +331,7 @@ func TestErrorHandling(t *testing.T) {
 	t.Parallel()
 	t.Run("RequestError", func(t *testing.T) {
 		t.Parallel()
+
 		err := &acp.RequestError{
 			Code:    -32603, // Internal error.
 			Message: "Test error",

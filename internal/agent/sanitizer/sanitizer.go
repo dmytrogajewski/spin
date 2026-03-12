@@ -55,6 +55,7 @@ func (s *Sanitizer) Process(chunk string) (content, thought string) {
 
 			if advance > 0 {
 				i += advance
+
 				continue
 			}
 		}
@@ -94,18 +95,21 @@ func (s *Sanitizer) processTag(remaining string, contentBuilder, thoughtBuilder 
 func (s *Sanitizer) processTagNormal(remaining string, contentBuilder, thoughtBuilder *strings.Builder) (int, bool) {
 	if strings.HasPrefix(remaining, "<think>") {
 		s.state = StateInThink
+
 		return len("<think>"), false
 	}
 
 	if strings.HasPrefix(remaining, "<function=") {
 		s.state = StateInDrop
 		s.dropUntil = "</function>"
+
 		return len("<function="), false
 	}
 
 	if strings.HasPrefix(remaining, "<parameter=") {
 		s.state = StateInDrop
 		s.dropUntil = "</parameter>"
+
 		return len("<parameter="), false
 	}
 
@@ -115,6 +119,7 @@ func (s *Sanitizer) processTagNormal(remaining string, contentBuilder, thoughtBu
 
 	if isPartialMatch(remaining, []string{"<think>", "<function=", "<parameter=", "</tool_call>"}) {
 		s.buffer.WriteString(remaining)
+
 		return 0, true
 	}
 
@@ -128,11 +133,13 @@ func (s *Sanitizer) processTagNormal(remaining string, contentBuilder, thoughtBu
 func (s *Sanitizer) processTagThink(remaining string, contentBuilder, thoughtBuilder *strings.Builder) (int, bool) {
 	if strings.HasPrefix(remaining, "</think>") {
 		s.state = StateNormal
+
 		return len("</think>"), false
 	}
 
 	if isPartialMatch(remaining, []string{"</think>"}) {
 		s.buffer.WriteString(remaining)
+
 		return 0, true
 	}
 
@@ -148,11 +155,13 @@ func (s *Sanitizer) processTagDrop(remaining string, contentBuilder, thoughtBuil
 		matchLen := len(s.dropUntil)
 		s.state = StateNormal
 		s.dropUntil = ""
+
 		return matchLen, false
 	}
 
 	if isPartialMatch(remaining, []string{s.dropUntil}) {
 		s.buffer.WriteString(remaining)
+
 		return 0, true
 	}
 

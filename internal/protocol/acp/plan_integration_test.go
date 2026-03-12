@@ -24,6 +24,7 @@ import (
 // TestConvertOrchestrationPlanToACP tests conversion of planning.Plan to ACP PlanEntry[].
 func TestConvertOrchestrationPlanToACP(t *testing.T) {
 	t.Parallel()
+
 	plan := &planning.Plan{
 		ID:   "test-plan",
 		Task: "Test task",
@@ -66,6 +67,7 @@ func TestConvertOrchestrationPlanToACP(t *testing.T) {
 // TestConvertOrchestrationPlanToACP_StatusMapping tests status mapping.
 func TestConvertOrchestrationPlanToACP_StatusMapping(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		stepStatus     planning.StepStatus
@@ -82,6 +84,7 @@ func TestConvertOrchestrationPlanToACP_StatusMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			plan := &planning.Plan{
 				ID:   "test-plan",
 				Task: "Test task",
@@ -105,6 +108,7 @@ func TestConvertOrchestrationPlanToACP_StatusMapping(t *testing.T) {
 // TestConvertOrchestrationPlanToACP_PriorityMapping tests priority mapping based on dependencies.
 func TestConvertOrchestrationPlanToACP_PriorityMapping(t *testing.T) {
 	t.Parallel()
+
 	plan := &planning.Plan{
 		ID:   "test-plan",
 		Task: "Test task",
@@ -231,6 +235,7 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 // TestSendPlanNotifications_FallbackToTextDetection tests fallback to text-based detection.
 func TestSendPlanNotifications_FallbackToTextDetection(t *testing.T) {
 	t.Parallel()
+
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),

@@ -55,6 +55,7 @@ func TestMemoryTool_Schema(t *testing.T) {
 
 func TestMemoryTool_Put(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := memory.NewPersistentStore(tmpDir)
@@ -87,6 +88,7 @@ func TestMemoryTool_Put(t *testing.T) {
 
 func TestMemoryTool_Get(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := memory.NewPersistentStore(tmpDir)
@@ -112,6 +114,7 @@ func TestMemoryTool_Get(t *testing.T) {
 
 func TestMemoryTool_Get_NotFound(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := memory.NewPersistentStore(tmpDir)
@@ -133,6 +136,7 @@ func TestMemoryTool_Get_NotFound(t *testing.T) {
 
 func TestMemoryTool_Delete(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := memory.NewPersistentStore(tmpDir)
@@ -162,6 +166,7 @@ func TestMemoryTool_Delete(t *testing.T) {
 
 func TestMemoryTool_List(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := memory.NewPersistentStore(tmpDir)
@@ -190,6 +195,7 @@ func TestMemoryTool_List(t *testing.T) {
 
 func TestMemoryTool_Search(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := memory.NewPersistentStore(tmpDir)
@@ -236,6 +242,7 @@ func TestMemoryTool_BadOperation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ctx := context.Background()
 			tmpDir := t.TempDir()
 			store, err := memory.NewPersistentStore(tmpDir)
@@ -256,6 +263,7 @@ func TestMemoryTool_BadOperation(t *testing.T) {
 
 func TestMemoryTool_Put_WithNamespace(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := memory.NewPersistentStore(tmpDir)
@@ -283,6 +291,7 @@ func TestMemoryTool_Put_WithNamespace(t *testing.T) {
 
 func TestMemoryTool_NilStore(t *testing.T) {
 	t.Parallel()
+
 	tool := NewMemoryTool(nil)
 	assert.Nil(t, tool)
 }

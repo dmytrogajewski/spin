@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	bytesPerMB                  = 1024 * 1024
-	targetRefinementQuality     = 0.90
+	bytesPerMB              = 1024 * 1024
+	targetRefinementQuality = 0.90
 )
 
 // RefinementStrategy defines how and when playbook refinement occurs.
@@ -36,9 +36,9 @@ type RefinementMode string
 
 const (
 	// RefinementModeNone defines a RefinementModeNone constant.
-	RefinementModeNone      RefinementMode = "none"      // No refinement.
+	RefinementModeNone RefinementMode = "none" // No refinement.
 	// RefinementModeLazy defines a RefinementModeLazy constant.
-	RefinementModeLazy      RefinementMode = "lazy"      // Manual only.
+	RefinementModeLazy RefinementMode = "lazy" // Manual only.
 	// RefinementModeProactive refines after each Curate call.
 	RefinementModeProactive RefinementMode = "proactive"
 )

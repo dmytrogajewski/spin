@@ -61,7 +61,7 @@ type patternDetectionCase struct {
 	name           string
 	snapshots      []Snapshot
 	wantType       PatternType
-	wantConfidence float64 // -1 means "any positive"
+	wantConfidence float64 // -1 means "any positive".
 }
 
 func runPatternDetectionTests(t *testing.T, cases []patternDetectionCase) {
@@ -83,6 +83,7 @@ func runPatternDetectionTests(t *testing.T, cases []patternDetectionCase) {
 			results := detector.analyzeInternal(tt.snapshots)
 
 			found := false
+
 			for _, result := range results {
 				if result.Type != tt.wantType {
 					continue

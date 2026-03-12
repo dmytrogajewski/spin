@@ -14,6 +14,7 @@ import (
 
 const fileStoreEvictionInterval = 30 * time.Second
 
+// ErrPathIsRequired is a sentinel error.
 var ErrPathIsRequired = errors.New("path is required")
 
 // FilePolicyStore persists global-scope policies to a single JSON file with
@@ -228,6 +229,7 @@ func (s *FilePolicyStore) persistGlobalLocked() error {
 	if err != nil {
 		return fmt.Errorf("lock policy file: %w", err)
 	}
+
 	defer func() { _ = syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_UN) }()
 
 	// Write temp, then rename over target for atomicity.
@@ -261,6 +263,7 @@ func (s *FilePolicyStore) loadFromDisk() error {
 	if err != nil {
 		return fmt.Errorf("shared lock policy file: %w", err)
 	}
+
 	defer func() { _ = syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_UN) }()
 
 	var payload struct {
@@ -268,6 +271,7 @@ func (s *FilePolicyStore) loadFromDisk() error {
 	}
 
 	dec := json.NewDecoder(f)
+
 	err = dec.Decode(&payload)
 	if err != nil {
 		return fmt.Errorf("decode policy file: %w", err)
@@ -287,7 +291,7 @@ func (s *FilePolicyStore) loadFromDisk() error {
 	return nil
 }
 
-// safeFlockFd converts a file descriptor from uintptr to int for syscall.Flock.
+// safeFlockFd converts a file descriptor from uintptr to int for [syscall.Flock].
 // File descriptors are always small non-negative values on supported platforms.
 func safeFlockFd(fd uintptr) int {
 	const maxFd = int(^uint(0) >> 1)

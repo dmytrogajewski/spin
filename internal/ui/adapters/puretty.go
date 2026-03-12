@@ -23,11 +23,12 @@ import (
 )
 
 const (
-	promptModelCapacity    = 100
-	percentMulPuretty      = 100
-	maxCommandDisplayLen   = 50
+	promptModelCapacity  = 100
+	percentMulPuretty    = 100
+	maxCommandDisplayLen = 50
 )
 
+// ErrAlreadyRunning is a sentinel error.
 var ErrAlreadyRunning = errors.New("already running")
 
 // UIMode represents the current UI mode.
@@ -168,6 +169,7 @@ func (p *PureTTY) initCoreDeps(out io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("create TTY: %w", err)
 		}
+
 		p.tty = tty
 	}
 
@@ -191,7 +193,7 @@ func (p *PureTTY) initCoreDeps(out io.Writer) error {
 }
 
 // initRendering initializes timeline, block renderer, and palette.
-func (p *PureTTY) initRendering(out io.Writer) {
+func (p *PureTTY) initRendering(_ io.Writer) {
 	if p.timeline == nil {
 		p.timeline = blocks.NewTimeline()
 	}
@@ -246,114 +248,114 @@ func (p *PureTTY) initStatus(out io.Writer) {
 }
 
 // Run starts the UI event loop and blocks until context cancel or quit.
-func (u *PureTTY) Run(ctx context.Context) error {
-	u.mu.Lock()
-	if u.running {
-		u.mu.Unlock()
+func (p *PureTTY) Run(ctx context.Context) error {
+	p.mu.Lock()
+	if p.running {
+		p.mu.Unlock()
 
 		return ErrAlreadyRunning
 	}
 
-	u.running = true
-	u.mu.Unlock()
+	p.running = true
+	p.mu.Unlock()
 
 	// Create cancelable context for internal goroutines.
 	ctx, cancel := context.WithCancel(ctx)
 
-	u.mu.Lock()
-	u.cancel = cancel
-	u.mu.Unlock()
+	p.mu.Lock()
+	p.cancel = cancel
+	p.mu.Unlock()
 
 	// Ensure cleanup on exit.
 	defer func() {
-		u.mu.Lock()
-		u.running = false
-		u.stopped = true
-		u.mu.Unlock()
+		p.mu.Lock()
+		p.running = false
+		p.stopped = true
+		p.mu.Unlock()
 		cancel()
 	}()
 
 	// Enter raw mode.
-	err := u.tty.Enter()
+	err := p.tty.Enter()
 	if err != nil {
 		return fmt.Errorf("enter raw mode: %w", err)
 	}
 
 	defer func() {
 		// Reset scrolling region before exiting.
-		fmt.Fprint(u.out, "\x1b[r") // Reset scroll region to full screen.
-		_ = u.tty.Exit()
+		fmt.Fprint(p.out, "\x1b[r") // Reset scroll region to full screen.
+		_ = p.tty.Exit()
 	}()
 
 	// Start keyboard and prompt loop.
-	inputs, err2 := u.startEventLoop(ctx)
+	inputs, err2 := p.startEventLoop(ctx)
 	if err2 != nil {
 		return err2
 	}
 
 	// Ensure external inputs channel is closed on exit.
-	defer close(u.externalInputs)
+	defer close(p.externalInputs)
 
-	return u.runMainLoop(ctx, inputs)
+	return p.runMainLoop(ctx, inputs)
 }
 
 // Stop gracefully shuts down the UI.
-func (u *PureTTY) Stop() error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
+func (p *PureTTY) Stop() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	if u.stopped {
+	if p.stopped {
 		return nil // Already stopped.
 	}
 
 	// Stop spinner animation.
-	if u.statusManager != nil {
-		u.statusManager.StopSpinner()
+	if p.statusManager != nil {
+		p.statusManager.StopSpinner()
 	}
 
 	// Cancel context to stop goroutines.
-	if u.cancel != nil {
-		u.cancel()
+	if p.cancel != nil {
+		p.cancel()
 	}
 
 	return nil
 }
 
 // startEventLoop initializes keyboard routing, prompt loop, resize handler, and initial draw.
-func (u *PureTTY) startEventLoop(ctx context.Context) (<-chan string, error) {
-	rawKeys, err := u.resolveKeyboardSource(ctx)
+func (p *PureTTY) startEventLoop(ctx context.Context) (<-chan string, error) {
+	rawKeys, err := p.resolveKeyboardSource(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	routedKeys := make(chan term.KeyEvent)
-	go u.routeKeyboardEvents(ctx, rawKeys, routedKeys)
+	go p.routeKeyboardEvents(ctx, rawKeys, routedKeys)
 
-	inputs := u.startPromptLoop(ctx, routedKeys)
-	u.mu.Lock()
-	u.promptInputs = inputs
-	u.mu.Unlock()
+	inputs := p.startPromptLoop(ctx, routedKeys)
+	p.mu.Lock()
+	p.promptInputs = inputs
+	p.mu.Unlock()
 
-	u.tty.OnResize(func(w, h int) {
-		u.handleResize(w, h)
+	p.tty.OnResize(func(w, h int) {
+		p.handleResize(w, h)
 	})
 
-	if !u.execMode {
-		_ = u.coord.RedrawPrompt()
+	if !p.execMode {
+		_ = p.coord.RedrawPrompt()
 	}
 
-	if u.statusManager != nil {
-		u.statusManager.SetStatus("Ready")
-		u.updateStatusBar()
+	if p.statusManager != nil {
+		p.statusManager.SetStatus("Ready")
+		p.updateStatusBar()
 	}
 
 	return inputs, nil
 }
 
 // resolveKeyboardSource returns injected or real keyboard events.
-func (u *PureTTY) resolveKeyboardSource(ctx context.Context) (<-chan term.KeyEvent, error) {
-	if u.keyboardEvents != nil {
-		return u.keyboardEvents, nil
+func (p *PureTTY) resolveKeyboardSource(ctx context.Context) (<-chan term.KeyEvent, error) {
+	if p.keyboardEvents != nil {
+		return p.keyboardEvents, nil
 	}
 
 	rawKeys, err := term.ReadKeys(ctx, os.Stdin, nil)
@@ -365,7 +367,7 @@ func (u *PureTTY) resolveKeyboardSource(ctx context.Context) (<-chan term.KeyEve
 }
 
 // runMainLoop processes input lines and context cancellation.
-func (u *PureTTY) runMainLoop(ctx context.Context, inputs <-chan string) error {
+func (p *PureTTY) runMainLoop(ctx context.Context, inputs <-chan string) error {
 	for {
 		select {
 		case line, ok := <-inputs:
@@ -378,8 +380,9 @@ func (u *PureTTY) runMainLoop(ctx context.Context, inputs <-chan string) error {
 				}
 			}
 
-			u.handleSubmittedLine(line)
-			u.externalInputs <- line
+			p.handleSubmittedLine(line)
+
+			p.externalInputs <- line
 
 		case <-ctx.Done():
 			return fmt.Errorf("prompt loop context: %w", ctx.Err())
@@ -388,91 +391,91 @@ func (u *PureTTY) runMainLoop(ctx context.Context, inputs <-chan string) error {
 }
 
 // PrintLine prints a line to the transcript with newline.
-func (u *PureTTY) PrintLine(line string) error {
-	return u.coord.PrintLine(line)
+func (p *PureTTY) PrintLine(line string) error {
+	return p.coord.PrintLine(line)
 }
 
 // PrintChunks streams chunks to the transcript.
-func (u *PureTTY) PrintChunks(ctx context.Context, chunks <-chan string) error {
-	return u.coord.PrintChunks(ctx, chunks)
+func (p *PureTTY) PrintChunks(ctx context.Context, chunks <-chan string) error {
+	return p.coord.PrintChunks(ctx, chunks)
 }
 
 // SetStatus sets transient right-aligned status text in prompt.
-func (u *PureTTY) SetStatus(text string) error {
-	return u.coord.SetStatus(text)
+func (p *PureTTY) SetStatus(text string) error {
+	return p.coord.SetStatus(text)
 }
 
 // SetTaskMode sets the task mode for display in status bar.
-func (u *PureTTY) SetTaskMode(mode string) {
-	if u.statusManager != nil {
-		u.statusManager.SetTaskMode(mode)
-		u.updateStatusBar()
+func (p *PureTTY) SetTaskMode(mode string) {
+	if p.statusManager != nil {
+		p.statusManager.SetTaskMode(mode)
+		p.updateStatusBar()
 	}
 }
 
 // SetConversationID sets the conversation/session ID for display in status bar.
-func (u *PureTTY) SetConversationID(id string) {
-	if u.statusManager != nil {
-		u.statusManager.SetConversationID(id)
-		u.updateStatusBar()
+func (p *PureTTY) SetConversationID(id string) {
+	if p.statusManager != nil {
+		p.statusManager.SetConversationID(id)
+		p.updateStatusBar()
 	}
 }
 
 // SetProviderInfo sets the LLM provider and model information for display in status bar.
-func (u *PureTTY) SetProviderInfo(provider, model string) {
-	if u.statusManager != nil {
-		u.statusManager.SetProvider(provider, model)
-		u.statusManager.SetConnected(true)
-		u.updateStatusBar()
+func (p *PureTTY) SetProviderInfo(provider, model string) {
+	if p.statusManager != nil {
+		p.statusManager.SetProvider(provider, model)
+		p.statusManager.SetConnected(true)
+		p.updateStatusBar()
 	}
 }
 
 // SetMaxTokens sets the maximum token limit for context percentage calculation.
-func (u *PureTTY) SetMaxTokens(maxTokens int64) {
-	if u.statusManager != nil {
-		u.statusManager.SetMaxTokens(maxTokens)
-		u.updateStatusBar()
+func (p *PureTTY) SetMaxTokens(maxTokens int64) {
+	if p.statusManager != nil {
+		p.statusManager.SetMaxTokens(maxTokens)
+		p.updateStatusBar()
 	}
 }
 
 // SetTokenCount sets the current token count for context percentage calculation.
-func (u *PureTTY) SetTokenCount(tokenCount int64) {
-	if u.statusManager != nil {
+func (p *PureTTY) SetTokenCount(tokenCount int64) {
+	if p.statusManager != nil {
 		// Set token count directly (this is the cumulative total).
-		u.statusManager.UpdateMetrics(func(m *status.Metrics) {
+		p.statusManager.UpdateMetrics(func(m *status.Metrics) {
 			m.TokenCount = tokenCount
 			if m.MaxTokens > 0 {
 				m.TokenUsage = float64(tokenCount) / float64(m.MaxTokens) * percentMulPuretty
 			}
 		})
-		u.updateStatusBar()
+		p.updateStatusBar()
 	}
 }
 
 // IsExecMode returns true if the UI is in exec mode (non-interactive).
-func (u *PureTTY) IsExecMode() bool {
-	u.mu.Lock()
-	defer u.mu.Unlock()
+func (p *PureTTY) IsExecMode() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	return u.execMode
+	return p.execMode
 }
 
 // ProcessEvent processes an events.Event and updates the status manager.
 // This method is called by the event mapper to update status information.
-func (u *PureTTY) ProcessEvent(event *events.Event) {
-	if u.statusAggregator == nil {
+func (p *PureTTY) ProcessEvent(event *events.Event) {
+	if p.statusAggregator == nil {
 		return
 	}
 
-	u.statusAggregator.ProcessEvent(event)
+	p.statusAggregator.ProcessEvent(event)
 
-	if u.shouldUpdateStatusBar(event.Type) {
-		u.updateStatusBar()
+	if p.shouldUpdateStatusBar(event.Type) {
+		p.updateStatusBar()
 	}
 }
 
 // shouldUpdateStatusBar determines if the status bar should be updated for the given event type.
-func (u *PureTTY) shouldUpdateStatusBar(eventType events.EventType) bool {
+func (p *PureTTY) shouldUpdateStatusBar(eventType events.EventType) bool {
 	switch eventType {
 	case events.EventTurnStart,
 		events.EventToolCallStart,
@@ -488,53 +491,53 @@ func (u *PureTTY) shouldUpdateStatusBar(eventType events.EventType) bool {
 
 // updateStatusBar updates the sticky status bar with the current status from StatusManager.
 // Only updates if the status text has actually changed to avoid unnecessary redraws.
-func (u *PureTTY) updateStatusBar() {
-	if u.statusManager == nil || u.statusRenderer == nil {
+func (p *PureTTY) updateStatusBar() {
+	if p.statusManager == nil || p.statusRenderer == nil {
 		return
 	}
 
 	// Skip status updates when in approval mode
 	// The approval dialog manages its own status bar display.
-	u.mu.Lock()
-	mode := u.mode
-	u.mu.Unlock()
+	p.mu.Lock()
+	mode := p.mode
+	p.mu.Unlock()
 
 	if mode == ModeApproval {
 		return
 	}
 
 	// Get terminal width for adaptive formatting.
-	w, _ := u.tty.Size()
+	w, _ := p.tty.Size()
 
 	// Get formatted status from manager (adaptive based on width).
-	newStatusText := u.statusManager.FormatAdaptive(w)
+	newStatusText := p.statusManager.FormatAdaptive(w)
 
 	// Only update if status actually changed.
-	u.mu.Lock()
-	lastStatusText := u.lastStatusText
-	u.mu.Unlock()
+	p.mu.Lock()
+	lastStatusText := p.lastStatusText
+	p.mu.Unlock()
 
 	if newStatusText != lastStatusText {
 		// Update sticky status bar.
-		_ = u.statusRenderer.Render(newStatusText)
+		_ = p.statusRenderer.Render(newStatusText)
 
 		// Remember the last status text.
-		u.mu.Lock()
-		u.lastStatusText = newStatusText
-		u.mu.Unlock()
+		p.mu.Lock()
+		p.lastStatusText = newStatusText
+		p.mu.Unlock()
 	}
 }
 
 // RequestInput returns a channel that emits user-submitted lines.
-func (u *PureTTY) RequestInput() <-chan string {
+func (p *PureTTY) RequestInput() <-chan string {
 	// Return external inputs channel that receives forwarded messages from Run().
-	return u.externalInputs
+	return p.externalInputs
 }
 
 // routeKeyboardEvents routes keyboard events to the appropriate handler based on current mode.
 // When in ModeApproval, routes keys to the approval dialog.
 // Otherwise, forwards keys to the prompt loop.
-func (u *PureTTY) routeKeyboardEvents(ctx context.Context, rawKeys <-chan term.KeyEvent, promptKeys chan<- term.KeyEvent) {
+func (p *PureTTY) routeKeyboardEvents(ctx context.Context, rawKeys <-chan term.KeyEvent, promptKeys chan<- term.KeyEvent) {
 	defer close(promptKeys)
 
 	for {
@@ -548,15 +551,15 @@ func (u *PureTTY) routeKeyboardEvents(ctx context.Context, rawKeys <-chan term.K
 			}
 
 			// Check current mode.
-			u.mu.Lock()
-			mode := u.mode
-			dialog := u.approvalDialog
-			u.mu.Unlock()
+			p.mu.Lock()
+			mode := p.mode
+			dialog := p.approvalDialog
+			p.mu.Unlock()
 
 			// Route based on mode.
 			if mode == ModeApproval && dialog != nil {
 				// Route to approval dialog.
-				u.handleApprovalKey(event, dialog)
+				p.handleApprovalKey(event, dialog)
 			} else {
 				// Route to prompt loop.
 				select {
@@ -570,7 +573,7 @@ func (u *PureTTY) routeKeyboardEvents(ctx context.Context, rawKeys <-chan term.K
 }
 
 // handleApprovalKey handles keyboard input for the approval dialog.
-func (u *PureTTY) handleApprovalKey(event term.KeyEvent, dialog *overlay.ApprovalDialog) {
+func (p *PureTTY) handleApprovalKey(event term.KeyEvent, dialog *overlay.ApprovalDialog) {
 	// Convert KeyEvent to string for HandleKey.
 	var keyStr string
 
@@ -598,36 +601,36 @@ func (u *PureTTY) handleApprovalKey(event term.KeyEvent, dialog *overlay.Approva
 }
 
 // startPromptLoop starts the prompt input loop in a background goroutine.
-func (u *PureTTY) startPromptLoop(ctx context.Context, keys <-chan term.KeyEvent) <-chan string {
-	loop := prompt.NewLoop(u.model, u.renderer, keys)
+func (p *PureTTY) startPromptLoop(ctx context.Context, keys <-chan term.KeyEvent) <-chan string {
+	loop := prompt.NewLoop(p.model, p.renderer, keys)
 
 	return loop.Run(ctx)
 }
 
 // handleResize updates renderer dimensions and redraws prompt on SIGWINCH.
-func (u *PureTTY) handleResize(w, h int) {
+func (p *PureTTY) handleResize(w, h int) {
 	// Update prompt renderer dimensions.
-	if u.renderer != nil {
-		u.renderer.SetSize(w, h)
+	if p.renderer != nil {
+		p.renderer.SetSize(w, h)
 	}
 
 	// Update status renderer dimensions.
-	if u.statusRenderer != nil {
-		u.statusRenderer.SetSize(w, h)
+	if p.statusRenderer != nil {
+		p.statusRenderer.SetSize(w, h)
 		// Redraw status bar with new dimensions.
-		u.updateStatusBar()
+		p.updateStatusBar()
 	}
 
 	// Redraw prompt unless in exec mode.
-	if !u.execMode {
-		_ = u.coord.RedrawPrompt()
+	if !p.execMode {
+		_ = p.coord.RedrawPrompt()
 	}
 }
 
 // handleSubmittedLine echoes user input to transcript.
-func (u *PureTTY) handleSubmittedLine(line string) {
+func (p *PureTTY) handleSubmittedLine(line string) {
 	// Echo user input with prompt prefix.
-	_ = u.coord.PrintLine("> " + line)
+	_ = p.coord.PrintLine("> " + line)
 }
 
 // rendererAdapter adapts prompt.TermRenderer to output.PromptRenderer interface.
@@ -652,19 +655,19 @@ func (a *rendererAdapter) Redraw(model output.PromptModel, statusText string) er
 }
 
 // formatFilterChips formats active filter as colored chips.
-func (u *PureTTY) formatFilterChips(f *blocks.Filter) string {
+func (p *PureTTY) formatFilterChips(f *blocks.Filter) string {
 	var chips []string
 
-	chips = append(chips, u.formatTypeChips(f.Types)...)
-	chips = append(chips, u.formatFileChip(f.File)...)
-	chips = append(chips, u.formatExitCodeChip(f.ExitCode)...)
-	chips = append(chips, u.formatImpactChip(f.Impact)...)
+	chips = append(chips, p.formatTypeChips(f.Types)...)
+	chips = append(chips, p.formatFileChip(f.File)...)
+	chips = append(chips, p.formatExitCodeChip(f.ExitCode)...)
+	chips = append(chips, p.formatImpactChip(f.Impact)...)
 
 	return strings.Join(chips, " ")
 }
 
 // formatTypeChips formats type filter chips.
-func (u *PureTTY) formatTypeChips(types []blocks.BlockType) []string {
+func (p *PureTTY) formatTypeChips(types []blocks.BlockType) []string {
 	var chips []string
 	for _, typ := range types {
 		chips = append(chips, fmt.Sprintf("[type:%s]", typ))
@@ -674,7 +677,7 @@ func (u *PureTTY) formatTypeChips(types []blocks.BlockType) []string {
 }
 
 // formatFileChip formats file filter chip.
-func (u *PureTTY) formatFileChip(file string) []string {
+func (p *PureTTY) formatFileChip(file string) []string {
 	if file == "" {
 		return nil
 	}
@@ -683,7 +686,7 @@ func (u *PureTTY) formatFileChip(file string) []string {
 }
 
 // formatExitCodeChip formats exit code filter chip.
-func (u *PureTTY) formatExitCodeChip(exitCode *int) []string {
+func (p *PureTTY) formatExitCodeChip(exitCode *int) []string {
 	if exitCode == nil {
 		return nil
 	}
@@ -692,7 +695,7 @@ func (u *PureTTY) formatExitCodeChip(exitCode *int) []string {
 }
 
 // formatImpactChip formats impact filter chip.
-func (u *PureTTY) formatImpactChip(impact string) []string {
+func (p *PureTTY) formatImpactChip(impact string) []string {
 	if impact == "" {
 		return nil
 	}
@@ -702,39 +705,39 @@ func (u *PureTTY) formatImpactChip(impact string) []string {
 
 // render redraws UI elements (filter, prompt).
 // Note: Blocks are printed via AppendBlock in append-only mode.
-func (u *PureTTY) render() {
+func (p *PureTTY) render() {
 	// Render approval status if active.
-	if u.mode == ModeApproval && u.approvalDialog != nil {
+	if p.mode == ModeApproval && p.approvalDialog != nil {
 		// Approval status is already shown in status bar, just update it.
-		u.updateStatusBar()
+		p.updateStatusBar()
 
 		return
 	}
 
 	// Render filter UI if active.
-	if u.mode == ModeFilter || u.timeline.GetFilter() != nil {
-		u.renderFilterUI()
+	if p.mode == ModeFilter || p.timeline.GetFilter() != nil {
+		p.renderFilterUI()
 	}
 
 	// Render prompt (via coordinator) unless in exec mode.
-	if !u.execMode {
-		_ = u.coord.RedrawPrompt()
+	if !p.execMode {
+		_ = p.coord.RedrawPrompt()
 	}
 }
 
 // renderFilterUI renders filter input or active filter chips.
-func (u *PureTTY) renderFilterUI() {
-	if u.mode == ModeFilter {
+func (p *PureTTY) renderFilterUI() {
+	if p.mode == ModeFilter {
 		// Show filter input line.
-		fmt.Fprintf(u.out, "\r%s/ %s%s\r\n",
+		fmt.Fprintf(p.out, "\r%s/ %s%s\r\n",
 			term.ClearLine,
-			u.filterInput,
+			p.filterInput,
 			term.ShowCursor,
 		)
-	} else if f := u.timeline.GetFilter(); f != nil {
+	} else if f := p.timeline.GetFilter(); f != nil {
 		// Show active filter chips.
-		chips := u.formatFilterChips(f)
-		fmt.Fprintf(u.out, "\r%sFilter: %s%s\r\n",
+		chips := p.formatFilterChips(f)
+		fmt.Fprintf(p.out, "\r%sFilter: %s%s\r\n",
 			term.ClearLine,
 			chips,
 			term.HideCursor,
@@ -743,33 +746,33 @@ func (u *PureTTY) renderFilterUI() {
 }
 
 // ShowApprovalDialog displays an approval dialog for the given request.
-func (u *PureTTY) ShowApprovalDialog(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+func (p *PureTTY) ShowApprovalDialog(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 	// Set approval mode.
-	u.mode = ModeApproval
+	p.mode = ModeApproval
 
 	// Create approval dialog for key handling.
-	u.approvalDialog = overlay.NewApprovalDialog(req)
+	p.approvalDialog = overlay.NewApprovalDialog(req)
 
 	// Show approval prompt in status bar.
-	u.showApprovalStatus(req)
+	p.showApprovalStatus(req)
 
 	// Wait for user response (respect context cancellation).
-	response := u.approvalDialog.Show(ctx)
+	response := p.approvalDialog.Show(ctx)
 
 	// Clean up.
-	u.approvalDialog = nil
-	u.mode = ModeInput
+	p.approvalDialog = nil
+	p.mode = ModeInput
 
 	// Clear approval status and show result.
-	u.clearApprovalStatus()
-	u.displayApprovalResult(req, response)
+	p.clearApprovalStatus()
+	p.displayApprovalResult(req, response)
 
 	return response
 }
 
 // showApprovalStatus displays the approval prompt in the status bar.
-func (u *PureTTY) showApprovalStatus(req security.ApprovalRequest) {
-	if u.statusRenderer == nil {
+func (p *PureTTY) showApprovalStatus(req security.ApprovalRequest) {
+	if p.statusRenderer == nil {
 		return
 	}
 
@@ -793,14 +796,14 @@ func (u *PureTTY) showApprovalStatus(req security.ApprovalRequest) {
 		}
 	}
 
-	ttlPreview := u.formatApprovalTTLPreview()
+	ttlPreview := p.formatApprovalTTLPreview()
 
 	// Show scope-aware options: A=once, S=session, G=global, D=deny.
 	if keyPreview != "" {
 		approvalText := fmt.Sprintf(
 			"Executing: %q | Key: %s | %s | [A] once  [S] session  [G] global  [D] deny",
 			command, keyPreview, ttlPreview)
-		_ = u.statusRenderer.Render(approvalText)
+		_ = p.statusRenderer.Render(approvalText)
 
 		return
 	}
@@ -808,24 +811,24 @@ func (u *PureTTY) showApprovalStatus(req security.ApprovalRequest) {
 	approvalText := fmt.Sprintf("Executing: %q | %s | [A] once  [S] session  [G] global  [D] deny", command, ttlPreview)
 
 	// Render in status bar.
-	_ = u.statusRenderer.Render(approvalText)
+	_ = p.statusRenderer.Render(approvalText)
 }
 
 // SetApprovalPolicyTTLs configures TTL hints for approval persistence scopes.
-func (u *PureTTY) SetApprovalPolicyTTLs(sessionTTL, globalTTL time.Duration) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
+func (p *PureTTY) SetApprovalPolicyTTLs(sessionTTL, globalTTL time.Duration) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	u.sessionPolicyTTL = sessionTTL
-	u.globalPolicyTTL = globalTTL
+	p.sessionPolicyTTL = sessionTTL
+	p.globalPolicyTTL = globalTTL
 }
 
 // formatApprovalTTLPreview returns a compact human-readable TTL hint string.
-func (u *PureTTY) formatApprovalTTLPreview() string {
-	u.mu.Lock()
-	sessionTTL := u.sessionPolicyTTL
-	globalTTL := u.globalPolicyTTL
-	u.mu.Unlock()
+func (p *PureTTY) formatApprovalTTLPreview() string {
+	p.mu.Lock()
+	sessionTTL := p.sessionPolicyTTL
+	globalTTL := p.globalPolicyTTL
+	p.mu.Unlock()
 
 	var parts []string
 	if sessionTTL > 0 {
@@ -844,17 +847,17 @@ func (u *PureTTY) formatApprovalTTLPreview() string {
 }
 
 // clearApprovalStatus clears the approval status from the status bar.
-func (u *PureTTY) clearApprovalStatus() {
-	if u.statusRenderer == nil {
+func (p *PureTTY) clearApprovalStatus() {
+	if p.statusRenderer == nil {
 		return
 	}
 
 	// Clear the status bar.
-	_ = u.statusRenderer.Clear()
+	_ = p.statusRenderer.Clear()
 }
 
 // displayApprovalResult displays a message showing the approval decision.
-func (u *PureTTY) displayApprovalResult(req security.ApprovalRequest, resp security.ApprovalResponse) {
+func (p *PureTTY) displayApprovalResult(req security.ApprovalRequest, resp security.ApprovalResponse) {
 	var (
 		message      string
 		statusSymbol string
@@ -877,14 +880,14 @@ func (u *PureTTY) displayApprovalResult(req security.ApprovalRequest, resp secur
 	}
 
 	// Print the result message.
-	_ = u.PrintLine(message)
-	_ = u.PrintLine("") // Empty line for spacing.
+	_ = p.PrintLine(message)
+	_ = p.PrintLine("") // Empty line for spacing.
 }
 
 // AppendBlock appends a new block to timeline and prints it.
-func (u *PureTTY) AppendBlock(block *blocks.Block) error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
+func (p *PureTTY) AppendBlock(block *blocks.Block) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	// Handle duplicate block IDs by appending a suffix
 	// This handles the case where LLM reuses tool IDs for different tool calls.
@@ -892,7 +895,7 @@ func (u *PureTTY) AppendBlock(block *blocks.Block) error {
 	suffix := 1
 
 	for {
-		err := u.timeline.Append(block)
+		err := p.timeline.Append(block)
 		if err != nil {
 			// Check if error is due to duplicate ID.
 			if errors.Is(err, blocks.ErrDuplicateID) {
@@ -910,13 +913,13 @@ func (u *PureTTY) AppendBlock(block *blocks.Block) error {
 	}
 
 	// Render only the new block (append-only UI).
-	rendered, err := u.blockRenderer.Render(block)
+	rendered, err := p.blockRenderer.Render(block)
 	if err != nil {
 		return err
 	}
 
 	// Print via coordinator to maintain prompt integrity.
-	_ = u.coord.PrintLine(rendered)
+	_ = p.coord.PrintLine(rendered)
 
 	return nil
 }
@@ -927,185 +930,185 @@ func (u *PureTTY) AppendBlock(block *blocks.Block) error {
 // IMPORTANT: This method MUST print the completion status line when tools complete.
 // Simply updating the timeline internal state is not enough - the user needs to SEE
 // the completion status. This is tested in TestToolCallFormatting_ListDirectory.
-func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
+func (p *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	// Get the existing block to preserve CompletionPrinted flag.
-	existingBlock, _ := u.timeline.Get(blockID)
+	existingBlock, _ := p.timeline.Get(blockID)
 	if existingBlock != nil {
 		// Preserve the CompletionPrinted flag from the existing block.
 		block.CompletionPrinted = existingBlock.CompletionPrinted
 	}
 
-	err := u.timeline.Update(blockID, block)
+	err := p.timeline.Update(blockID, block)
 	if err != nil {
 		return err
 	}
 
 	// Print completion status line for tool blocks that have completed.
 	// Only print if we haven't already printed it (prevents duplicate "Tool completed" messages).
-	statusLine := u.blockRenderer.RenderCompletionStatus(block)
+	statusLine := p.blockRenderer.RenderCompletionStatus(block)
 	if statusLine != "" && !block.CompletionPrinted {
 		block.CompletionPrinted = true
-		_ = u.timeline.Update(blockID, block)
-		u.printCompletionStatus(block, statusLine)
+		_ = p.timeline.Update(blockID, block)
+		p.printCompletionStatus(block, statusLine)
 	}
 
 	return nil
 }
 
 // printCompletionStatus prints a block's completion status line and optional body.
-func (u *PureTTY) printCompletionStatus(block *blocks.Block, statusLine string) {
-	if u.execMode {
-		u.printCompletionExecMode(block, statusLine)
+func (p *PureTTY) printCompletionStatus(block *blocks.Block, statusLine string) {
+	if p.execMode {
+		p.printCompletionExecMode(block, statusLine)
 	} else {
-		u.printCompletionInteractive(block, statusLine)
+		p.printCompletionInteractive(block, statusLine)
 	}
 }
 
 // printCompletionExecMode prints completion status in exec (non-interactive) mode.
-func (u *PureTTY) printCompletionExecMode(block *blocks.Block, statusLine string) {
-	_ = u.coord.PrintLine(strings.ReplaceAll(statusLine, "\n", "\r\n"))
-	u.printBlockBody(block)
+func (p *PureTTY) printCompletionExecMode(block *blocks.Block, statusLine string) {
+	_ = p.coord.PrintLine(strings.ReplaceAll(statusLine, "\n", "\r\n"))
+	p.printBlockBody(block)
 }
 
 // printCompletionInteractive prints completion status in interactive mode.
-func (u *PureTTY) printCompletionInteractive(block *blocks.Block, statusLine string) {
-	fmt.Fprint(u.out, "\x1b[1A\x1b[2K")
-	fmt.Fprint(u.out, strings.ReplaceAll(statusLine, "\n", "\r\n")+"\r\n")
-	u.printBlockBody(block)
-	_ = u.renderer.Redraw(u.model, "")
+func (p *PureTTY) printCompletionInteractive(block *blocks.Block, statusLine string) {
+	fmt.Fprint(p.out, "\x1b[1A\x1b[2K")
+	fmt.Fprint(p.out, strings.ReplaceAll(statusLine, "\n", "\r\n")+"\r\n")
+	p.printBlockBody(block)
+	_ = p.renderer.Redraw(p.model, "")
 
-	if u.statusRenderer != nil {
-		_ = u.statusRenderer.MoveToScrollRegion()
+	if p.statusRenderer != nil {
+		_ = p.statusRenderer.MoveToScrollRegion()
 	}
 }
 
 // printBlockBody renders and prints a block's body if it has content.
-func (u *PureTTY) printBlockBody(block *blocks.Block) {
+func (p *PureTTY) printBlockBody(block *blocks.Block) {
 	if block.Body == "" {
 		return
 	}
 
-	body, renderErr := u.blockRenderer.RenderBody(block)
+	body, renderErr := p.blockRenderer.RenderBody(block)
 	if renderErr == nil {
-		fmt.Fprint(u.out, strings.ReplaceAll(body, "\n", "\r\n"))
+		fmt.Fprint(p.out, strings.ReplaceAll(body, "\n", "\r\n"))
 	}
 }
 
 // DeleteBlock deletes a block and re-renders.
-func (u *PureTTY) DeleteBlock(blockID string) error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
+func (p *PureTTY) DeleteBlock(blockID string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	err := u.timeline.Delete(blockID)
+	err := p.timeline.Delete(blockID)
 	if err != nil {
 		return err
 	}
 
-	u.render()
+	p.render()
 
 	return nil
 }
 
 // SetMode switches UI mode (for testing or external control).
-func (u *PureTTY) SetMode(mode UIMode) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
+func (p *PureTTY) SetMode(mode UIMode) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
-	u.mode = mode
-	u.render()
+	p.mode = mode
+	p.render()
 }
 
 // registerDefaultCommands registers built-in command palette commands.
 // Currently no commands are registered by default to follow "Implement, or stop" principle.
-// Commands can be added via u.paletteRegistry.Register() when fully implemented.
-func (u *PureTTY) registerDefaultCommands() {
-	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+// Commands can be added via p.paletteRegistry.Register() when fully implemented.
+func (p *PureTTY) registerDefaultCommands() {
+	p.paletteRegistry.Register(overlay.NewSimpleCommand(
 		"Run...",
 		"Execute shell command",
 		"Edit",
 		'▶',
 		func(ctx context.Context) error {
-			return u.executeRunCommand(ctx)
+			return p.executeRunCommand(ctx)
 		},
 	))
 
-	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+	p.paletteRegistry.Register(overlay.NewSimpleCommand(
 		"Search in repo...",
 		"Grep/search files",
 		"Tools",
 		'🔍',
 		func(ctx context.Context) error {
-			return u.executeSearchCommand(ctx)
+			return p.executeSearchCommand(ctx)
 		},
 	))
 
-	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+	p.paletteRegistry.Register(overlay.NewSimpleCommand(
 		"Open recent file...",
 		"File picker",
 		"File",
 		'📄',
 		func(ctx context.Context) error {
-			return u.executeFilePickerCommand(ctx)
+			return p.executeFilePickerCommand(ctx)
 		},
 	))
 
-	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+	p.paletteRegistry.Register(overlay.NewSimpleCommand(
 		"New plan...",
 		"Create plan block",
 		"Edit",
 		'📋',
 		func(ctx context.Context) error {
-			return u.executeNewPlanCommand(ctx)
+			return p.executeNewPlanCommand(ctx)
 		},
 	))
 
-	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+	p.paletteRegistry.Register(overlay.NewSimpleCommand(
 		"Toggle mode...",
 		"Switch Auto/Manual",
 		"System",
 		'🔄',
 		func(ctx context.Context) error {
-			return u.executeToggleModeCommand(ctx)
+			return p.executeToggleModeCommand(ctx)
 		},
 	))
 
-	u.paletteRegistry.Register(overlay.NewSimpleCommand(
+	p.paletteRegistry.Register(overlay.NewSimpleCommand(
 		"Change theme...",
 		"Switch Dark/Light",
 		"System",
 		'🎨',
 		func(ctx context.Context) error {
-			return u.executeChangeThemeCommand(ctx)
+			return p.executeChangeThemeCommand(ctx)
 		},
 	))
 }
 
 // executeRunCommand implements the "Run..." command.
-func (u *PureTTY) executeRunCommand(_ context.Context) error {
-	u.showStatusMessage("Type a command at the prompt and press Enter to execute")
+func (p *PureTTY) executeRunCommand(_ context.Context) error {
+	p.showStatusMessage("Type a command at the prompt and press Enter to execute")
 
 	return nil
 }
 
 // executeSearchCommand implements the "Search in repo..." command.
-func (u *PureTTY) executeSearchCommand(_ context.Context) error {
-	u.showStatusMessage("Try: grep <pattern> or use file search at the prompt")
+func (p *PureTTY) executeSearchCommand(_ context.Context) error {
+	p.showStatusMessage("Try: grep <pattern> or use file search at the prompt")
 
 	return nil
 }
 
 // executeFilePickerCommand implements the "Open recent file..." command.
-func (u *PureTTY) executeFilePickerCommand(_ context.Context) error {
-	u.showStatusMessage("File picker: Type file path at prompt or use 'ls' command")
+func (p *PureTTY) executeFilePickerCommand(_ context.Context) error {
+	p.showStatusMessage("File picker: Type file path at prompt or use 'ls' command")
 
 	return nil
 }
 
 // executeNewPlanCommand implements the "New plan..." command.
-func (u *PureTTY) executeNewPlanCommand(_ context.Context) error {
+func (p *PureTTY) executeNewPlanCommand(_ context.Context) error {
 	// Create a new plan block.
 	block := &blocks.Block{
 		ID:        fmt.Sprintf("plan_%d", time.Now().UnixMilli()),
@@ -1118,40 +1121,40 @@ func (u *PureTTY) executeNewPlanCommand(_ context.Context) error {
 		Timestamp: time.Now().UnixMilli(),
 	}
 
-	err := u.timeline.Append(block)
+	err := p.timeline.Append(block)
 	if err != nil {
-		u.showStatusMessage(fmt.Sprintf("Failed to create plan: %v", err))
+		p.showStatusMessage(fmt.Sprintf("Failed to create plan: %v", err))
 
 		return err
 	}
 
-	u.showStatusMessage("Created new plan block in timeline")
-	u.render()
+	p.showStatusMessage("Created new plan block in timeline")
+	p.render()
 
 	return nil
 }
 
 // executeToggleModeCommand implements the "Toggle mode..." command.
-func (u *PureTTY) executeToggleModeCommand(_ context.Context) error {
-	u.showStatusMessage("Mode toggle: Use agent flags (--auto/--manual) or configuration")
+func (p *PureTTY) executeToggleModeCommand(_ context.Context) error {
+	p.showStatusMessage("Mode toggle: Use agent flags (--auto/--manual) or configuration")
 
 	return nil
 }
 
 // executeChangeThemeCommand implements the "Change theme..." command.
-func (u *PureTTY) executeChangeThemeCommand(_ context.Context) error {
-	u.showStatusMessage("Theme switching: Not implemented")
+func (p *PureTTY) executeChangeThemeCommand(_ context.Context) error {
+	p.showStatusMessage("Theme switching: Not implemented")
 
 	return nil
 }
 
 // showStatusMessage displays a status message in the status bar.
-func (u *PureTTY) showStatusMessage(msg string) {
-	if u.statusRenderer == nil {
+func (p *PureTTY) showStatusMessage(msg string) {
+	if p.statusRenderer == nil {
 		return
 	}
 
-	_ = u.statusRenderer.Render(msg)
+	_ = p.statusRenderer.Render(msg)
 }
 
 // Verify PureTTY implements ports.UI.

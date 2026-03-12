@@ -25,10 +25,11 @@ import (
 
 const debugEventBufferSize = 100
 
-
 var (
+	// ErrPromptCannotBeEmpty is a sentinel error.
 	ErrPromptCannotBeEmpty = errors.New("prompt cannot be empty")
-	ErrTaskFailed          = errors.New("task failed")
+	// ErrTaskFailed is a sentinel error.
+	ErrTaskFailed = errors.New("task failed")
 )
 
 // EventLogger captures and logs all core events for debugging.
@@ -328,7 +329,7 @@ func (el *EventLogger) shouldLog(event events.Event) bool {
 
 // logEvent prints an event to the configured writer.
 func (el *EventLogger) logEvent(event events.Event) {
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	timestamp := time.Now().Format(time.DateTime)
 
 	if el.format == "json" {
 		el.logEventJSON(timestamp, event)

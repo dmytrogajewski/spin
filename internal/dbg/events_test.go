@@ -140,6 +140,7 @@ func TestEventLogger_LogEvent_JSON(t *testing.T) {
 
 	// Verify valid JSON.
 	var parsed EventLogOutput
+
 	err := json.Unmarshal(buf.Bytes(), &parsed)
 	if err != nil {
 		t.Fatalf("invalid JSON: %v", err)
@@ -438,6 +439,7 @@ func TestEventLogger_LogEventJSON_MarshalError(t *testing.T) {
 	output := buf.String()
 	// Should still produce valid JSON with empty object for data.
 	var parsed EventLogOutput
+
 	err := json.Unmarshal([]byte(output), &parsed)
 	if err != nil {
 		t.Fatalf("output should be valid JSON: %v, got: %s", err, output)

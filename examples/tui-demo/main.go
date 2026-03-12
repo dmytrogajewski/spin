@@ -88,7 +88,7 @@ func printHelp(ui *adapters.PureTTY) {
 	}
 }
 
-// runInputLoop handles user input until context is cancelled.
+// runInputLoop handles user input until context is canceled.
 func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.CancelFunc) {
 	for {
 		select {
@@ -115,6 +115,7 @@ func handleCommand(ui *adapters.PureTTY, line string, cancel context.CancelFunc)
 	switch line {
 	case "quit", "exit", "q":
 		_ = ui.PrintLine("Exiting demo...")
+
 		cancel()
 
 	case "help", "h", "?":

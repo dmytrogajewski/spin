@@ -1,8 +1,8 @@
 package agent
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -13,9 +13,12 @@ import (
 )
 
 var (
-	ErrToolNotFound                        = errors.New("tool not found")
+	// ErrToolNotFound is a sentinel error.
+	ErrToolNotFound = errors.New("tool not found")
+	// ErrApprovalRequiredButNoApprovalHandler is a sentinel error.
 	ErrApprovalRequiredButNoApprovalHandler = errors.New("approval required but no approval handler configured")
-	ErrOperationDenied                     = errors.New("operation denied")
+	// ErrOperationDenied is a sentinel error.
+	ErrOperationDenied = errors.New("operation denied")
 )
 
 // ToolCall is an alias for message.ToolCall to avoid duplication.
@@ -117,6 +120,7 @@ func (t *ToolRuntime) resolveTool(call *ToolCall) (tools.Tool, error) {
 	tool, err := t.registry.Get(call.Function.Name)
 	if err != nil {
 		available := t.registry.List()
+
 		names := make([]string, len(available))
 		for i, at := range available {
 			names[i] = at.Name()

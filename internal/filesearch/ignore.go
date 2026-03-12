@@ -34,6 +34,7 @@ func NewIgnoreHandler(rootDir string) (*IgnoreHandler, error) {
 
 	// Try to load .gitignore.
 	gitignorePath := filepath.Join(rootDir, ".gitignore")
+
 	err := h.loadIgnoreFile(gitignorePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -41,6 +42,7 @@ func NewIgnoreHandler(rootDir string) (*IgnoreHandler, error) {
 
 	// Try to load .spinignore.
 	spinignorePath := filepath.Join(rootDir, ".spinignore")
+
 	err = h.loadIgnoreFile(spinignorePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -82,7 +84,7 @@ func (h *IgnoreHandler) IsIgnored(relPath string, isDir bool) bool {
 
 // loadIgnoreFile loads patterns from an ignore file (.gitignore or .spinignore).
 // Returns an error if the file exists but cannot be read.
-// Missing files return os.ErrNotExist which should be handled by the caller.
+// Missing files return [os.ErrNotExist] which should be handled by the caller.
 func (h *IgnoreHandler) loadIgnoreFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {

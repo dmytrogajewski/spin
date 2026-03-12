@@ -131,10 +131,10 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 	}
 
 	if parsedURL.Scheme != schemeHTTPS {
-		return fmt.Errorf("invalid URL scheme %q, expected https", parsedURL.Scheme)
+		return fmt.Errorf("%w: got %q", ErrInvalidURLScheme, parsedURL.Scheme)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", parsedURL.String(), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, parsedURL.String(), bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create connect request: %w", err)
 	}
@@ -155,10 +155,11 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 
-return fmt.Errorf("connect failed with status %d: %s: %w", resp.StatusCode, string(bodyBytes), ErrConnectFailedWithStatus)
+		return fmt.Errorf("connect failed with status %d: %s: %w", resp.StatusCode, string(bodyBytes), ErrConnectFailedWithStatus)
 	}
 
 	var connectResp smitheryConnectResponse
+
 	err = json.NewDecoder(resp.Body).Decode(&connectResp)
 	if err != nil {
 		return fmt.Errorf("decode connect response: %w", err)
@@ -187,6 +188,7 @@ func (c *SmitheryClient) Initialize(ctx context.Context, request mcpSDK.Initiali
 	}
 
 	var initResult mcpSDK.InitializeResult
+
 	err = json.Unmarshal(result, &initResult)
 	if err != nil {
 		return nil, fmt.Errorf("decode initialize result: %w", err)
@@ -209,6 +211,7 @@ func (c *SmitheryClient) ListTools(ctx context.Context, request mcpSDK.ListTools
 	}
 
 	var toolsResult mcpSDK.ListToolsResult
+
 	err = json.Unmarshal(result, &toolsResult)
 	if err != nil {
 		return nil, fmt.Errorf("decode tools/list result: %w", err)
@@ -225,6 +228,7 @@ func (c *SmitheryClient) CallTool(ctx context.Context, request mcpSDK.CallToolRe
 	}
 
 	var callResult mcpSDK.CallToolResult
+
 	err = json.Unmarshal(result, &callResult)
 	if err != nil {
 		return nil, fmt.Errorf("decode tools/call result: %w", err)
@@ -281,10 +285,10 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 	}
 
 	if parsedURL.Scheme != schemeHTTPS {
-		return nil, fmt.Errorf("invalid URL scheme %q, expected https", parsedURL.Scheme)
+		return nil, fmt.Errorf("%w: got %q", ErrInvalidURLScheme, parsedURL.Scheme)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", parsedURL.String(), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, parsedURL.String(), bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create rpc request: %w", err)
 	}
@@ -305,17 +309,18 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 
-return nil, fmt.Errorf("rpc failed with status %d: %s: %w", resp.StatusCode, string(bodyBytes), ErrRPCFailedWithStatus)
+		return nil, fmt.Errorf("rpc failed with status %d: %s: %w", resp.StatusCode, string(bodyBytes), ErrRPCFailedWithStatus)
 	}
 
 	var rpcResp smitheryRPCResponse
+
 	err = json.NewDecoder(resp.Body).Decode(&rpcResp)
 	if err != nil {
 		return nil, fmt.Errorf("decode rpc response: %w", err)
 	}
 
 	if rpcResp.Error != nil {
-return nil, fmt.Errorf("rpc error %d: %s: %w", rpcResp.Error.Code, rpcResp.Error.Message, ErrRPCError)
+		return nil, fmt.Errorf("rpc error %d: %s: %w", rpcResp.Error.Code, rpcResp.Error.Message, ErrRPCError)
 	}
 
 	return rpcResp.Result, nil

@@ -8,7 +8,6 @@ const (
 	testSimilarityInput = "hello world test"
 )
 
-
 func TestCalculateSimilarity_Identical(t *testing.T) {
 	t.Parallel()
 

@@ -41,6 +41,7 @@ func runQueryFromContextTests(t *testing.T, cases []queryFromContextCase) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			agent := &Agent{
 				aceConfig: &ACEConfig{
 					Retrieval: ACERetrievalConfig{
@@ -54,14 +55,18 @@ func runQueryFromContextTests(t *testing.T, cases []queryFromContextCase) {
 			query := agent.buildQueryFromContext(ctx, tt.trigger)
 
 			assert.Contains(t, query, tt.wantContain)
+
 			if len(tt.wantAnyOf) > 0 {
 				found := false
+
 				for _, s := range tt.wantAnyOf {
 					if strings.Contains(query, s) {
 						found = true
+
 						break
 					}
 				}
+
 				assert.True(t, found, "Query should include one of %v", tt.wantAnyOf)
 			}
 		})

@@ -11,6 +11,7 @@ import (
 
 func TestPlanTracker_OnToolCallComplete_MatchesAndUpdates(t *testing.T) {
 	t.Parallel()
+
 	emitter := events.NewEventEmitter(10)
 	plan := &planning.Plan{
 		Steps: []planning.Step{
@@ -41,6 +42,7 @@ func TestPlanTracker_OnToolCallComplete_MatchesAndUpdates(t *testing.T) {
 
 func TestPlanTracker_UpdatePlanStatus(t *testing.T) {
 	t.Parallel()
+
 	emitter := events.NewEventEmitter(10)
 	plan := &planning.Plan{
 		Status: planning.PlanStatusPending,
@@ -58,6 +60,7 @@ func TestPlanTracker_UpdatePlanStatus(t *testing.T) {
 
 func TestPlanTracker_FuzzyMatching(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name        string
 		stepDesc    string

@@ -174,7 +174,6 @@ func TestLoaderV2_LoadFromEnv(t *testing.T) {
 // Kills mutant: changing precedence order would make this test fail.
 func TestLoaderV2_Precedence(t *testing.T) {
 	// Not parallel: uses t.Setenv which modifies process-wide env.
-
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
 
@@ -355,7 +354,6 @@ func TestLoad_AllFlagFields(t *testing.T) {
 // Kills mutant: removing env API key resolution would make this test fail.
 func TestLoad_APIKeyFromEnv(t *testing.T) {
 	// Not parallel: uses t.Setenv which modifies process-wide env.
-
 	t.Setenv("OPENAI_API_KEY", "test-key-123")
 
 	cfg, err := Load(Source{

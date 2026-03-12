@@ -1,5 +1,3 @@
-// Package tools provides a centralized tool registry for managing
-// and executing tools available to the AI agent.
 package tools
 
 import (

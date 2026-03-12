@@ -133,6 +133,7 @@ func TestFileSearchTool_CustomWorkspace(t *testing.T) {
 
 func TestFileSearchTool_Schema(t *testing.T) {
 	t.Parallel()
+
 	tool := NewFileSearchTool("/tmp")
 	schema := tool.Schema()
 
@@ -149,6 +150,7 @@ func TestFileSearchTool_Schema(t *testing.T) {
 
 func TestFileSearchTool_ErrorCases(t *testing.T) {
 	t.Parallel()
+
 	tool := NewFileSearchTool("/tmp/test")
 
 	runToolErrorTests(t, tool, []toolErrorCase{

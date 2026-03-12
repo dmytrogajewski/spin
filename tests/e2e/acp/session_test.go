@@ -258,7 +258,9 @@ func TestACP_NewSession_Concurrent(t *testing.T) {
 			Cwd:        workDir,
 			McpServers: []acp.McpServer{},
 		}
+
 		var resp acp.NewSessionResponse
+
 		resp, err = client.NewSession(ctx, req)
 		sessionIDs[i] = resp.SessionId
 		errs[i] = err

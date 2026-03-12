@@ -3,6 +3,7 @@ package reflector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -12,6 +13,9 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
+
+// ErrNotDetailedFormat is returned when the reflector response cannot be parsed.
+var ErrNotDetailedFormat = errors.New("not detailed format")
 
 const (
 	defaultReflectorMaxTokens = 4096
@@ -176,7 +180,7 @@ func (r *reflector) parseDetailedFormat(ctx context.Context, responseText, sourc
 	}
 
 	if err := json.Unmarshal([]byte(responseText), &resp); err != nil || resp.KeyInsight == "" {
-		return nil, fmt.Errorf("not detailed format")
+		return nil, ErrNotDetailedFormat
 	}
 
 	insight := NewInsight(resp.KeyInsight, InsightCategory(resp.Category))
@@ -188,6 +192,7 @@ func (r *reflector) parseDetailedFormat(ctx context.Context, responseText, sourc
 
 	if err := r.validator.Validate(insight); err != nil {
 		r.logger.DebugContext(ctx, "Insight validation failed", "error", err, "content", insight.Content)
+
 		return []*Insight{}, nil
 	}
 
@@ -200,12 +205,15 @@ func buildEvidence(errorID, rootCause, correctApproach string) []string {
 	if errorID != "" && errorID != "N/A" {
 		evidence = append(evidence, errorID)
 	}
+
 	if rootCause != "" {
 		evidence = append(evidence, rootCause)
 	}
+
 	if correctApproach != "" {
 		evidence = append(evidence, correctApproach)
 	}
+
 	return evidence
 }
 
@@ -221,6 +229,7 @@ func (r *reflector) parseSimplifiedFormat(ctx context.Context, responseText, sou
 	var simpleInsights []simplifiedInsight
 	if err := json.Unmarshal([]byte(responseText), &simpleInsights); err != nil {
 		r.logger.WarnContext(ctx, "Failed to parse reflection response in both formats", "error", err, "response", responseText)
+
 		return nil, fmt.Errorf("failed to parse reflection response: %w", err)
 	}
 
@@ -235,8 +244,10 @@ func (r *reflector) parseSimplifiedFormat(ctx context.Context, responseText, sou
 
 		if err := r.validator.Validate(insight); err != nil {
 			r.logger.DebugContext(ctx, "Insight validation failed", "error", err, "content", insight.Content)
+
 			continue
 		}
+
 		insights = append(insights, insight)
 	}
 
@@ -305,6 +316,7 @@ func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iterati
 	}
 
 	var rawInsights []refinedInsightResponse
+
 	err = json.Unmarshal([]byte(responseText), &rawInsights)
 	if err != nil {
 		r.logger.WarnContext(ctx, "Failed to parse refinement response", "error", err)

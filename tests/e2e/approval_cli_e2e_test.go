@@ -16,6 +16,7 @@ func TestApprovalCLI_ListAndClear_Empty(t *testing.T) {
 	policyPath := filepath.Join(tmpDir, "policies.json")
 
 	cfg := "version: \"2.0\"\nsecurity:\n  policy_file: " + policyPath + "\n"
+
 	err := writeFile(configPath, cfg)
 	if err != nil {
 		t.Fatalf("write config: %v", err)
@@ -50,6 +51,7 @@ func TestApprovalCLI_Revoke_NonExistent(t *testing.T) {
 	policyPath := filepath.Join(tmpDir, "policies.json")
 
 	cfg := "version: \"2.0\"\nsecurity:\n  policy_file: " + policyPath + "\n"
+
 	err := writeFile(configPath, cfg)
 	if err != nil {
 		t.Fatalf("write config: %v", err)

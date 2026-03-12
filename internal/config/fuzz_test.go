@@ -91,6 +91,7 @@ protocol:
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// Create a temp file.
 		tmpFile := t.TempDir() + "/config.yaml"
+
 		err := writeFile(tmpFile, data)
 		if err != nil {
 			return // Skip if we can't write the file.

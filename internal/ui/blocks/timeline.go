@@ -193,11 +193,7 @@ func (t *Timeline) GetVisibleBlocks() []*Block {
 	}
 
 	// Calculate viewport bounds.
-	start := max(t.scrollPos, 0)
-
-	if start > len(blocks) {
-		start = len(blocks)
-	}
+	start := min(max(t.scrollPos, 0), len(blocks))
 
 	end := min(start+t.viewport.Height, len(blocks))
 
@@ -462,11 +458,7 @@ func (t *Timeline) GetFilter() *Filter {
 func (t *Timeline) updateViewport() {
 	blocks := t.getFilteredBlocks()
 
-	start := max(t.scrollPos, 0)
-
-	if start > len(blocks) {
-		start = len(blocks)
-	}
+	start := min(max(t.scrollPos, 0), len(blocks))
 
 	end := min(start+t.viewport.Height, len(blocks))
 

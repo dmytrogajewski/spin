@@ -35,6 +35,7 @@ func verifyParseResult(t *testing.T, input string, want *Patch, wantErr string) 
 	if wantErr != "" {
 		if err == nil {
 			t.Errorf("Parse() error = nil, wantErr %q", wantErr)
+
 			return
 		}
 
@@ -47,6 +48,7 @@ func verifyParseResult(t *testing.T, input string, want *Patch, wantErr string) 
 
 	if err != nil {
 		t.Errorf("Parse() unexpected error = %v", err)
+
 		return
 	}
 
@@ -65,28 +67,28 @@ func TestParser_Parse_ValidPatches(t *testing.T) {
 			want:  &Patch{Operations: []FileOperation{}},
 		},
 		{
-			name: "add file - simple",
+			name:  "add file - simple",
 			input: "*** Begin Patch\n*** Add File: test.txt\n+hello\n+world\n*** End Patch",
 			want: &Patch{Operations: []FileOperation{
 				&AddFile{FilePath: "test.txt", Lines: []string{"hello", "world"}},
 			}},
 		},
 		{
-			name: "add file - empty file",
+			name:  "add file - empty file",
 			input: "*** Begin Patch\n*** Add File: empty.txt\n*** End Patch",
 			want: &Patch{Operations: []FileOperation{
 				&AddFile{FilePath: "empty.txt", Lines: []string{}},
 			}},
 		},
 		{
-			name: "add file - with empty lines",
+			name:  "add file - with empty lines",
 			input: "*** Begin Patch\n*** Add File: test.go\n+package main\n+\n+func main() {}\n*** End Patch",
 			want: &Patch{Operations: []FileOperation{
 				&AddFile{FilePath: "test.go", Lines: []string{"package main", "", "func main() {}"}},
 			}},
 		},
 		{
-			name: "delete file",
+			name:  "delete file",
 			input: "*** Begin Patch\n*** Delete File: old.txt\n*** End Patch",
 			want: &Patch{Operations: []FileOperation{
 				&DeleteFile{FilePath: "old.txt"},
@@ -276,14 +278,14 @@ func TestParser_Parse_EdgeCases(t *testing.T) {
 
 	runParserTests(t, []parserTestCase{
 		{
-			name: "add file - nested path",
+			name:  "add file - nested path",
 			input: "*** Begin Patch\n*** Add File: src/internal/handler/new.go\n+package handler\n*** End Patch",
 			want: &Patch{Operations: []FileOperation{
 				&AddFile{FilePath: "src/internal/handler/new.go", Lines: []string{"package handler"}},
 			}},
 		},
 		{
-			name: "add file - unicode content",
+			name:  "add file - unicode content",
 			input: "*** Begin Patch\n*** Add File: unicode.txt\n+Hello \u4e16\u754c\n+\U0001f680 Emoji\n*** End Patch",
 			want: &Patch{Operations: []FileOperation{
 				&AddFile{FilePath: "unicode.txt", Lines: []string{"Hello \u4e16\u754c", "\U0001f680 Emoji"}},

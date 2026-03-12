@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ErrUnsupportedShell is a sentinel error.
 var ErrUnsupportedShell = errors.New("unsupported shell")
 
 // newCompletionCmd creates the completion command.
@@ -64,7 +65,7 @@ PowerShell:
 			case "powershell":
 				return cmd.Root().GenPowerShellCompletionWithDesc(cmd.OutOrStdout())
 			default:
-return fmt.Errorf("unsupported shell: %s: %w", args[0], ErrUnsupportedShell)
+				return fmt.Errorf("unsupported shell: %s: %w", args[0], ErrUnsupportedShell)
 			}
 		},
 	}

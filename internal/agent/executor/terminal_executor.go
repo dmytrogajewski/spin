@@ -193,7 +193,7 @@ func extractEnvFromStruct(opts any) []EnvVar {
 	}
 }
 
-// extractEnvFromReflectMap extracts env vars from a reflect.Value of kind Map.
+// extractEnvFromReflectMap extracts env vars from a [reflect.Value] of kind Map.
 func extractEnvFromReflectMap(envField reflect.Value) []EnvVar {
 	env := make([]EnvVar, 0, envField.Len())
 
@@ -207,7 +207,7 @@ func extractEnvFromReflectMap(envField reflect.Value) []EnvVar {
 	return env
 }
 
-// extractEnvFromReflectSlice extracts env vars from a reflect.Value of kind Slice.
+// extractEnvFromReflectSlice extracts env vars from a [reflect.Value] of kind Slice.
 func extractEnvFromReflectSlice(envField reflect.Value) []EnvVar {
 	env := make([]EnvVar, 0, envField.Len())
 

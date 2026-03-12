@@ -12,10 +12,15 @@ import (
 const charsPerToken = 4
 
 var (
+	// ErrNoPersistentStoreConfigured is a sentinel error.
 	ErrNoPersistentStoreConfigured = errors.New("no persistent store configured")
+	// ErrSessionIDIsRequired is a sentinel error.
 	ErrSessionIDIsRequired = errors.New("session ID is required")
+	// ErrNoPersistentStoreConfigured2 is a sentinel error.
 	ErrNoPersistentStoreConfigured2 = errors.New("no persistent store configured")
+	// ErrNoPersistentStoreConfigured3 is a sentinel error.
 	ErrNoPersistentStoreConfigured3 = errors.New("no persistent store configured")
+	// ErrNoPersistentStoreConfigured4 is a sentinel error.
 	ErrNoPersistentStoreConfigured4 = errors.New("no persistent store configured")
 )
 
@@ -110,6 +115,7 @@ func (h *SessionHandoff) LoadSession(ctx context.Context, sessionID string) (*Ha
 	}
 
 	var data HandoffData
+
 	err = json.Unmarshal([]byte(entry.Value), &data)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal handoff data: %w", err)
@@ -210,7 +216,7 @@ func (h *SessionHandoff) BuildContinuationPrompt(data *HandoffData) string {
 	}
 
 	if !data.LastActivity.IsZero() {
-		fmt.Fprintf(&sb, "Last activity: %s\n", data.LastActivity.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(&sb, "Last activity: %s\n", data.LastActivity.Format(time.DateTime))
 	}
 
 	return sb.String()

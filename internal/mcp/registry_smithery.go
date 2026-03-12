@@ -156,6 +156,7 @@ func (r *SmitheryRegistry) initializeStatic(ctx context.Context) error {
 	initResp, err := r.client.Initialize(ctx, initReq)
 	if err != nil {
 		r.client.Close()
+
 		return fmt.Errorf("initialize connection: %w", err)
 	}
 
@@ -165,6 +166,7 @@ func (r *SmitheryRegistry) initializeStatic(ctx context.Context) error {
 	toolsResp, err := r.client.ListTools(ctx, mcpSDK.ListToolsRequest{})
 	if err != nil {
 		r.client.Close()
+
 		return fmt.Errorf("list tools: %w", err)
 	}
 

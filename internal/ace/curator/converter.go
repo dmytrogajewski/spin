@@ -49,6 +49,7 @@ func joinEvidence(evidence []string) string {
 	result := ""
 
 	var resultSb46 strings.Builder
+
 	for i, e := range evidence {
 		if i > 0 {
 			resultSb46.WriteString("; ")
@@ -56,6 +57,7 @@ func joinEvidence(evidence []string) string {
 
 		resultSb46.WriteString(e)
 	}
+
 	result += resultSb46.String()
 
 	return result

@@ -83,7 +83,7 @@ func (c *Compact) Validate() error {
 	}
 
 	if c.maxTokens > MaxAllowedTokens {
-return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", c.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
+		return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", c.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
 	}
 
 	return nil

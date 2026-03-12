@@ -59,6 +59,7 @@ func buildSpinBinary() {
 	fmt.Fprintln(os.Stdout, "Building spin binary for e2e tests (with e2e_llm_test tag)...")
 
 	cmd := exec.CommandContext(context.Background(), "go", "build", "-tags", "e2e_llm_test", "-o", binPath, "../../cmd/spin")
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to build binary: %v\n%s\n", err, output)
@@ -74,26 +75,6 @@ func runSpin(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, binPath, args...)
-
-	var outBuf, errBuf bytes.Buffer
-
-	cmd.Stdout = &outBuf
-	cmd.Stderr = &errBuf
-
-	err = cmd.Run()
-
-	return outBuf.String(), errBuf.String(), err
-}
-
-// runSpinWithInput executes spin with stdin input.
-func runSpinWithInput(t *testing.T, input string, args ...string) (stdout, stderr string, err error) {
-	t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, binPath, args...)
-	cmd.Stdin = strings.NewReader(input)
 
 	var outBuf, errBuf bytes.Buffer
 
@@ -135,6 +116,7 @@ func TestConfigCommands_ShowWithBinaryInCwd(t *testing.T) {
 	cmd.Dir = tmpDir
 
 	var outBuf, errBuf bytes.Buffer
+
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 
@@ -226,8 +208,8 @@ func assertSpinSuccess(t *testing.T, configPath string, args ...string) {
 	t.Helper()
 
 	fullArgs := append([]string{"--config-file", configPath}, args...)
-	_, stderr, err := runSpin(t, fullArgs...)
 
+	_, stderr, err := runSpin(t, fullArgs...)
 	if err != nil {
 		t.Fatalf("spin %v failed: %v\nstderr: %s", args, err, stderr)
 	}
@@ -238,8 +220,8 @@ func assertSpinContains(t *testing.T, configPath, expected string, args ...strin
 	t.Helper()
 
 	fullArgs := append([]string{"--config-file", configPath}, args...)
-	stdout, stderr, err := runSpin(t, fullArgs...)
 
+	stdout, stderr, err := runSpin(t, fullArgs...)
 	if err != nil {
 		t.Fatalf("spin %v failed: %v\nstderr: %s", args, err, stderr)
 	}
@@ -351,6 +333,7 @@ func TestExecMode_FromStdin(t *testing.T) {
 	cmd.Stdin = strings.NewReader("what is 5+3? answer with just the number")
 
 	var outBuf, errBuf bytes.Buffer
+
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 
@@ -376,6 +359,7 @@ func runExecCommand(t *testing.T, configPath, prompt string) (stdout, stderr str
 	cmd := exec.CommandContext(ctx, binPath, "--config-file", configPath, "exec", prompt)
 
 	var outBuf, errBuf bytes.Buffer
+
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 
@@ -473,6 +457,7 @@ func TestJSONOutput(t *testing.T) {
 
 		// Should be valid JSON.
 		var result map[string]any
+
 		err = json.Unmarshal([]byte(stdout), &result)
 		if err != nil {
 			t.Errorf("Invalid JSON output: %v\nOutput: %s", err, stdout)
@@ -484,6 +469,7 @@ func TestJSONOutput(t *testing.T) {
 
 		// Use a temp config file to avoid races with other tests.
 		tmpConfigPath := filepath.Join(t.TempDir(), "spin.yaml")
+
 		err := os.WriteFile(tmpConfigPath, []byte("# Spin configuration\n"), 0o600)
 		if err != nil {
 			t.Fatalf("Failed to create test config: %v", err)
@@ -491,7 +477,9 @@ func TestJSONOutput(t *testing.T) {
 
 		// First add a registry.
 		_, _, _ = runSpin(t, "--config-file", tmpConfigPath, "mcp", "registry", "local", "add", "json-test", "echo", "test")
-		t.Cleanup(func() { _, _, _ = runSpin(t, "--config-file", tmpConfigPath, "mcp", "registry", "remove", "json-test", "--yes") })
+		t.Cleanup(func() {
+			_, _, _ = runSpin(t, "--config-file", tmpConfigPath, "mcp", "registry", "remove", "json-test", "--yes")
+		})
 
 		stdout, stderr, err := runSpin(t, "--config-file", tmpConfigPath, "mcp", "registry", "get", "json-test", "--format", "json")
 		if err != nil {
@@ -500,6 +488,7 @@ func TestJSONOutput(t *testing.T) {
 
 		// Should be valid JSON.
 		var result map[string]any
+
 		err = json.Unmarshal([]byte(stdout), &result)
 		if err != nil {
 			t.Errorf("Invalid JSON output: %v\nOutput: %s", err, stdout)
@@ -510,17 +499,4 @@ func TestJSONOutput(t *testing.T) {
 			t.Errorf("Expected name 'json-test', got: %v", result["name"])
 		}
 	})
-}
-
-// Helper function to check if Ollama is available.
-func isOllamaAvailable(t *testing.T) bool {
-	t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "curl", "-s", "http://127.0.0.1:11434/api/tags")
-	err := cmd.Run()
-
-	return err == nil
 }

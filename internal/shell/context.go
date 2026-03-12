@@ -19,10 +19,15 @@ import (
 )
 
 var (
+	// ErrShellIntegrationDisabled is a sentinel error.
 	ErrShellIntegrationDisabled = errors.New("shell integration disabled")
+	// ErrNoShellAvailable is a sentinel error.
 	ErrNoShellAvailable = errors.New("no shell available")
+	// ErrShellCommandTimedOutAfter is a sentinel error.
 	ErrShellCommandTimedOutAfter = errors.New("shell command timed out after")
+	// ErrExecutionFailed is a sentinel error.
 	ErrExecutionFailed = errors.New("execution failed")
+	// ErrExecutionFailed2 is a sentinel error.
 	ErrExecutionFailed2 = errors.New("execution failed")
 )
 
@@ -177,7 +182,7 @@ func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (stri
 
 	err := cmd.Run()
 	if err != nil {
-		return s.handleRunError(err, cmdCtx, command, &stdout, &stderr)
+		return s.handleRunError(cmdCtx, err, command, &stdout, &stderr)
 	}
 
 	output := stdout.String()
@@ -219,7 +224,7 @@ func (s *Context) shellArgs(command string) []string {
 
 // handleRunError processes errors from cmd.Run and returns an appropriate error.
 func (s *Context) handleRunError(
-	err error, cmdCtx context.Context, command string,
+	cmdCtx context.Context, err error, command string,
 	stdout, stderr *bytes.Buffer,
 ) (string, error) {
 	if errors.Is(cmdCtx.Err(), context.DeadlineExceeded) {

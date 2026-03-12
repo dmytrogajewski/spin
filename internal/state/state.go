@@ -7,7 +7,9 @@ import (
 )
 
 var (
+	// ErrStateCannotBeEmpty is a sentinel error.
 	ErrStateCannotBeEmpty = errors.New("state cannot be empty")
+	// ErrInvalidState is a sentinel error.
 	ErrInvalidState = errors.New("invalid state")
 )
 
@@ -72,12 +74,12 @@ func (s State) String() string {
 	return "unknown"
 }
 
-// MarshalText implements encoding.TextMarshaler.
+// MarshalText implements [encoding.TextMarshaler].
 func (s State) MarshalText() ([]byte, error) {
 	return []byte(s), nil
 }
 
-// UnmarshalText implements encoding.TextUnmarshaler.
+// UnmarshalText implements [encoding.TextUnmarshaler].
 // Returns an error for invalid or empty states.
 func (s *State) UnmarshalText(text []byte) error {
 	state := State(text)
@@ -86,7 +88,7 @@ func (s *State) UnmarshalText(text []byte) error {
 	}
 
 	if !validStates[state] {
-return fmt.Errorf("invalid state: %s: %w", text, ErrInvalidState)
+		return fmt.Errorf("invalid state: %s: %w", text, ErrInvalidState)
 	}
 
 	*s = state

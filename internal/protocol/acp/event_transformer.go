@@ -47,6 +47,7 @@ func (t *EventTransformer) Transform(ctx context.Context, event events.Event) bo
 
 	if event.Type == events.EventTurnStart {
 		t.accumulatedContent = ""
+
 		return false
 	}
 
@@ -93,6 +94,7 @@ func (t *EventTransformer) transformContentDelta(ctx context.Context, event even
 
 	t.accumulatedContent += data.Content
 	t.sendUpdate(ctx, acp.UpdateAgentMessageText(data.Content))
+
 	return true
 }
 
@@ -104,6 +106,7 @@ func (t *EventTransformer) transformThinkingDelta(ctx context.Context, event eve
 	}
 
 	t.sendUpdate(ctx, acp.UpdateAgentThoughtText(data.Content))
+
 	return true
 }
 
@@ -120,6 +123,7 @@ func (t *EventTransformer) transformPlanUpdate(ctx context.Context, event events
 	}
 
 	t.sendUpdate(ctx, acp.UpdatePlan(planEntries...))
+
 	return true
 }
 
@@ -131,6 +135,7 @@ func (t *EventTransformer) transformSystemEvent(ctx context.Context, event event
 	}
 
 	t.sendUpdate(ctx, update)
+
 	return true
 }
 

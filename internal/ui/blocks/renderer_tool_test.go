@@ -8,6 +8,7 @@ import (
 // TestRenderToolCompletionStatus tests that Tool completed message only appears when tool has output.
 func TestRenderToolCompletionStatus(t *testing.T) {
 	t.Parallel()
+
 	renderer := NewRenderer(80)
 
 	// Helper to create a block with metadata.
@@ -15,6 +16,7 @@ func TestRenderToolCompletionStatus(t *testing.T) {
 		b := NewBlock(BlockTypeTool)
 
 		meta := &ToolMeta{ToolName: toolName}
+
 		err := SetToolMeta(b, meta)
 		if err != nil {
 			t.Fatalf("SetToolMeta failed: %v", err)
@@ -54,6 +56,7 @@ func TestRenderToolCompletionStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			status := renderer.RenderCompletionStatus(tt.block)
 			hasComplete := strings.Contains(status, "Tool completed")
 
@@ -71,6 +74,7 @@ func TestRenderToolCompletionStatus(t *testing.T) {
 // TestRenderToolBlock_NoDuplicateOnInitialCreate tests that Tool blocks don't show completion on initial creation.
 func TestRenderToolBlock_NoDuplicateOnInitialCreate(t *testing.T) {
 	t.Parallel()
+
 	renderer := NewRenderer(80)
 
 	// Create a new TOOL block (simulating initial creation).
@@ -80,6 +84,7 @@ func TestRenderToolBlock_NoDuplicateOnInitialCreate(t *testing.T) {
 	meta := &ToolMeta{
 		ToolName: "execute_command",
 	}
+
 	err := SetToolMeta(block, meta)
 	if err != nil {
 		t.Fatalf("SetToolMeta failed: %v", err)

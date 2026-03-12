@@ -12,11 +12,11 @@ const (
 	mediumWidthThreshold  = 100
 
 	// Truncation limits for status bar fields.
-	mediumStateTruncate   = 15
-	mediumModelTruncate   = 12
-	fullStateTruncate     = 20
-	fullModelTruncate     = 20
-	convIDShortLength     = 6
+	mediumStateTruncate = 15
+	mediumModelTruncate = 12
+	fullStateTruncate   = 20
+	fullModelTruncate   = 20
+	convIDShortLength   = 6
 
 	// Number formatting thresholds.
 	kiloThreshold = 1000

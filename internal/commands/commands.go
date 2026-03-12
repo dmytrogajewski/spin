@@ -10,10 +10,15 @@ import (
 )
 
 var (
+	// ErrUnknownCommand is a sentinel error.
 	ErrUnknownCommand = errors.New("unknown command")
+	// ErrExitCommandIsNotAvailableVia is a sentinel error.
 	ErrExitCommandIsNotAvailableVia = errors.New("exit command is not available via ACP protocol")
+	// ErrQuitCommandIsNotAvailableVia is a sentinel error.
 	ErrQuitCommandIsNotAvailableVia = errors.New("quit command is not available via ACP protocol")
+	// ErrModeCannotBeEmpty is a sentinel error.
 	ErrModeCannotBeEmpty = errors.New("mode cannot be empty")
+	// ErrInvalidMode is a sentinel error.
 	ErrInvalidMode = errors.New("invalid mode")
 )
 
@@ -111,7 +116,7 @@ func ParseCommand(input string) (command string, args []string, isCommand bool) 
 func ExecuteCommand(ctx context.Context, commandName string, args []string, cmdCtx CommandContext) (string, error) {
 	cmd, exists := GetCommand(commandName)
 	if !exists {
-return "", fmt.Errorf("unknown command: %s (type /help for available commands): %w", commandName, ErrUnknownCommand)
+		return "", fmt.Errorf("unknown command: %s (type /help for available commands): %w", commandName, ErrUnknownCommand)
 	}
 
 	return cmd.Execute(ctx, args, cmdCtx)
@@ -266,7 +271,7 @@ func validateTaskMode(mode string) error {
 	}
 
 	if !validTaskModes[mode] {
-return fmt.Errorf("invalid mode: %s (valid modes: regular, review, compact, planning): %w", mode, ErrInvalidMode)
+		return fmt.Errorf("invalid mode: %s (valid modes: regular, review, compact, planning): %w", mode, ErrInvalidMode)
 	}
 
 	return nil

@@ -233,7 +233,7 @@ func TestHistory_CompressionTrigger(t *testing.T) {
 
 	// Add messages that will exceed threshold.
 	for range 5 {
-			_ = h.AddUserMessage(context.Background(), "User message content here")
+		_ = h.AddUserMessage(context.Background(), "User message content here")
 	}
 
 	// Should have compressed.

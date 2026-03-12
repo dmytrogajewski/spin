@@ -25,12 +25,13 @@ import (
 )
 
 const (
-	defaultEmbeddingDim       = 768
-	highSimilarityThreshold   = 0.85
-	veryHighSimilarityThresh  = 0.90
-	aceConfidenceThreshold    = 0.9
+	defaultEmbeddingDim      = 768
+	highSimilarityThreshold  = 0.85
+	veryHighSimilarityThresh = 0.90
+	aceConfidenceThreshold   = 0.9
 )
 
+// ErrConfigIsRequired is a sentinel error.
 var ErrConfigIsRequired = errors.New("config is required")
 
 // ErrACEDisabled is returned when an ACE operation is called but ACE is disabled.
@@ -48,7 +49,7 @@ type ACEService struct {
 	reflector      reflector.Reflector   // Deep analysis.
 	curator        curator.Curator       // Quality control & deduplication.
 	adapter        adapter.Adapter       // Online learning orchestration.
-	deltaHistory   *delta.History   // Change tracking.
+	deltaHistory   *delta.History        // Change tracking.
 	growthMonitor  *refine.GrowthMonitor // Playbook growth management.
 	feedbackParser *feedback.RegexParser
 	embedder       embedding.Embedder
@@ -131,6 +132,7 @@ func createEmbedder(logger *slog.Logger) embedding.Embedder {
 	ollamaEmbedder, err := embedding.NewOllamaEmbedder(ollamaConfig)
 	if err != nil {
 		logger.Warn("Failed to create Ollama embedder, using mock embedder", "error", err)
+
 		return embedding.NewMockEmbedder(defaultEmbeddingDim)
 	}
 
@@ -237,6 +239,7 @@ func createCurator(
 
 	if llmProvider != nil && cfg.Generation.AutoReflect {
 		curatorOpts = append(curatorOpts, curator.WithLLMProvider(llmProvider))
+
 		logger.Debug("Enabled LLM-based intelligent curation")
 	}
 
@@ -254,6 +257,7 @@ func appendRefinementOpts(opts []curator.Option, cfg *ACEConfig, logger *slog.Lo
 	}
 
 	opts = append(opts, curator.WithMergeEngine(veryHighSimilarityThresh))
+
 	logger.Debug("Enabled merge engine for advanced bullet deduplication")
 
 	switch cfg.Refine.Mode {
@@ -291,6 +295,7 @@ func createAdapter(
 	needsCustomConfig := cfg.Adapter.MaxMemorySize > 0 || cfg.Adapter.UtilityThreshold > 0 || gen != nil
 	if !needsCustomConfig {
 		logger.Info("Created adapter for online learning orchestration")
+
 		return adapter.NewAdapter(pb, refl, cur)
 	}
 
@@ -486,6 +491,7 @@ func (s *ACEService) RestoreBullet(ctx context.Context, id, content string) (*bu
 	// Get embedding if embedder available.
 	if s.embedder != nil {
 		var emb []float32
+
 		emb, err = s.embedder.Embed(ctx, content)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate embedding: %w", err)
@@ -543,6 +549,7 @@ func (s *ACEService) GenerateBullets(ctx context.Context, input, sourceType stri
 		// Generate embedding for the bullet if embedder is available.
 		if s.embedder != nil {
 			var embVec []float32
+
 			embVec, err = s.embedder.Embed(ctx, b.Content)
 			if err != nil {
 				s.logger.WarnContext(ctx, "Failed to generate embedding for bullet", "error", err, "content", b.Content)
@@ -788,6 +795,7 @@ func (s *ACEService) checkGrowthAndRefine(ctx context.Context) {
 
 		// Trigger refinement asynchronously with a detached context.
 		bgCtx := context.WithoutCancel(ctx)
+
 		go func() {
 			result, err := s.curator.Refine(bgCtx)
 			if err != nil {
@@ -883,7 +891,6 @@ func expandPath(path string) string {
 // seedInitialBullets seeds the playbook with initial Go/coding best practices.
 // This provides a starting point for ACE to learn from.
 func seedInitialBullets(ctx context.Context, pb *playbook.Playbook, embedder embedding.Embedder) error {
-
 	// Seed bullets covering common Go patterns and best practices.
 	seeds := []struct {
 		content  string

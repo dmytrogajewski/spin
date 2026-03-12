@@ -24,7 +24,7 @@ func DetectPlanFromText(output string) *Plan {
 
 	scanner := &planScanner{}
 
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		scanner.processLine(strings.TrimSpace(line))
 	}
 

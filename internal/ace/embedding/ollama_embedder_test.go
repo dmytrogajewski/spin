@@ -86,6 +86,7 @@ func newMockOllamaServer(t *testing.T, handler func(model string, input string) 
 			Model string `json:"model"`
 			Input string `json:"input"`
 		}
+
 		err := json.NewDecoder(r.Body).Decode(&reqBody)
 		if err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)

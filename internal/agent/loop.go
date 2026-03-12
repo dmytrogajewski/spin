@@ -17,13 +17,14 @@ import (
 )
 
 const (
-	tokensPerChar            = 4 // approximate chars per token.
+	tokensPerChar             = 4 // approximate chars per token.
 	escalateSeverityThreshold = 3
-	llmDefaultTimeout        = 5 * time.Minute
-	shortConversationTurns   = 10
-	mediumConversationTurns  = 30
+	llmDefaultTimeout         = 5 * time.Minute
+	shortConversationTurns    = 10
+	mediumConversationTurns   = 30
 )
 
+// ErrAgentCallllmContextCanceledContextDeadline is a sentinel error.
 var ErrAgentCallllmContextCanceledContextDeadline = errors.New("Agent.callLLM: context canceled: context deadline exceeded")
 
 // estimateTokenCount provides a rough token count estimate for messages.
@@ -73,6 +74,7 @@ func (a *Agent) executeAgentLoop(
 	for turn := range maxTurns {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			resp.FinishReason = "timeout"
+
 			return messages, resp, fmt.Errorf("agent loop context canceled: %w", ctxErr)
 		}
 
@@ -85,6 +87,7 @@ func (a *Agent) executeAgentLoop(
 		llmResp, content, toolCalls, finishReason, err := a.callLLMWithRetries(ctx, messages, t, currentTurnBullets, turn, resp)
 		if err != nil {
 			lastErr = err
+
 			return messages, resp, err
 		}
 
@@ -94,6 +97,7 @@ func (a *Agent) executeAgentLoop(
 		}
 
 		lastErr = nil
+
 		a.logger.DebugContext(ctx, "LLM response received",
 			"turn", turn+1, "content_len", len(content),
 			"tool_calls", len(toolCalls), "finish_reason", finishReason)
@@ -170,6 +174,7 @@ func (a *Agent) retrieveAndRecordBullets(ctx context.Context, trajCtx *trajector
 	retrievedBullets, err := a.aceService.Retrieve(ctx, query)
 	if err != nil {
 		a.logger.WarnContext(ctx, "ACE retrieval failed", "error", err, "turn", turn+1)
+
 		return
 	}
 
@@ -189,14 +194,6 @@ func (a *Agent) retrieveAndRecordBullets(ctx context.Context, trajCtx *trajector
 	if a.aceConfig.Retrieval.ProgressiveContext.EmitACEEvents {
 		a.emitACERetrievalEvent(trajCtx, trigger, query, retrievedBullets, turn)
 	}
-}
-
-// llmRetryResult holds the result of an LLM call with retries.
-type llmRetryResult struct {
-	resp         *openai.ChatCompletion
-	content      string
-	toolCalls    []ToolCall
-	finishReason string
 }
 
 // callLLMWithRetries calls the LLM with retry logic for transient errors.
@@ -258,6 +255,7 @@ func (a *Agent) handleEmptyResponse(
 	}
 
 	a.emitEmptyResponseWarning(ctx, turn, maxRetries, llmResp, content, toolCalls)
+
 	resp.FinishReason = "empty_response"
 
 	return true, nil
@@ -304,6 +302,7 @@ func (a *Agent) waitWithBackoff(ctx context.Context, retry, turn int, resp *Resp
 	select {
 	case <-ctx.Done():
 		resp.FinishReason = "timeout"
+
 		return fmt.Errorf("retry context canceled: %w", ctx.Err())
 	case <-time.After(backoff):
 		return nil
@@ -361,6 +360,7 @@ func (a *Agent) processLLMResponse(
 	}
 
 	messages = a.addFinalMessage(messages, content)
+
 	resp.FinishReason = finishReason
 	if resp.FinishReason == "" {
 		resp.FinishReason = "stop"
@@ -450,6 +450,7 @@ func (a *Agent) handleCycleDetection(
 
 		return messages, false, nil
 	}
+
 	if cycleResult.Type == detection.CycleNone {
 		return messages, false, nil
 	}

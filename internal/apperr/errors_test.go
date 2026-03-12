@@ -8,15 +8,15 @@ import (
 
 var (
 	errConnectionTimeout = errors.New("connection timeout")
-	errUnderlyingError = errors.New("underlying error")
-	errUnderlying = errors.New("underlying")
-	errUnderlying2 = errors.New("underlying")
-	errSentinelError = errors.New("sentinel error")
-	errOtherError = errors.New("other error")
-	errRootCause = errors.New("root cause")
+	errUnderlyingError   = errors.New("underlying error")
+	errUnderlying        = errors.New("underlying")
+	errUnderlying2       = errors.New("underlying")
+	errSentinelError     = errors.New("sentinel error")
+	errOtherError        = errors.New("other error")
+	errRootCause         = errors.New("root cause")
 	errConnectionRefused = errors.New("connection refused")
-	errDiskFull = errors.New("disk full")
-	errUnderlyingCause = errors.New("underlying cause")
+	errDiskFull          = errors.New("disk full")
+	errUnderlyingCause   = errors.New("underlying cause")
 )
 
 func TestError_Error(t *testing.T) {

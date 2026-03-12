@@ -28,18 +28,31 @@ const (
 )
 
 var (
+	// ErrTopKMustBe0 is a sentinel error.
 	ErrTopKMustBe0 = errors.New("top_k must be > 0")
+	// ErrMinScoreMustBeBetween0 is a sentinel error.
 	ErrMinScoreMustBeBetween0 = errors.New("min_score must be between 0 and 1")
+	// ErrCacheTTLMustBe0 is a sentinel error.
 	ErrCacheTTLMustBe0 = errors.New("cache_ttl must be > 0")
+	// ErrMaxBulletsMustBe0 is a sentinel error.
 	ErrMaxBulletsMustBe0 = errors.New("max_bullets must be > 0")
+	// ErrErrorLookbackMustBe0 is a sentinel error.
 	ErrErrorLookbackMustBe0 = errors.New("error_lookback must be > 0")
+	// ErrToolChangeLookbackMustBe0 is a sentinel error.
 	ErrToolChangeLookbackMustBe0 = errors.New("tool_change_lookback must be > 0")
+	// ErrMaxRetrievalLatencyMsMustBe is a sentinel error.
 	ErrMaxRetrievalLatencyMsMustBe = errors.New("max_retrieval_latency_ms must be > 0")
+	// ErrMaxTrajectoryStepsMustBe0 is a sentinel error.
 	ErrMaxTrajectoryStepsMustBe0 = errors.New("max_trajectory_steps must be > 0")
+	// ErrInitialQueryMustBeBetween0 is a sentinel error.
 	ErrInitialQueryMustBeBetween0 = errors.New("initial_query must be between 0 and 1")
+	// ErrErrorContextMustBeBetween0 is a sentinel error.
 	ErrErrorContextMustBeBetween0 = errors.New("error_context must be between 0 and 1")
+	// ErrToolContextMustBeBetween0 is a sentinel error.
 	ErrToolContextMustBeBetween0 = errors.New("tool_context must be between 0 and 1")
+	// ErrQueryWeightsShouldSumToApproximately is a sentinel error.
 	ErrQueryWeightsShouldSumToApproximately = errors.New("query weights should sum to approximately 1.0")
+	// ErrInvalidEvictionStrategy is a sentinel error.
 	ErrInvalidEvictionStrategy = errors.New("invalid eviction strategy")
 )
 
@@ -182,25 +195,25 @@ func DefaultProgressiveContextConfig() ProgressiveContextConfig {
 		Enabled: true, // Enabled by default.
 
 		// Cache Management.
-		CacheTTL:         defaultCacheTTL,    // 10 turns is reasonable for most tasks.
-		MaxBullets:       defaultProgMaxBullets,    // Limits memory while allowing good coverage.
-		EvictionStrategy: "lru", // Most recently used bullets are most relevant.
+		CacheTTL:         defaultCacheTTL,       // 10 turns is reasonable for most tasks.
+		MaxBullets:       defaultProgMaxBullets, // Limits memory while allowing good coverage.
+		EvictionStrategy: "lru",                 // Most recently used bullets are most relevant.
 
 		// Trigger Configuration.
-		ErrorLookback:      defaultErrorLookback,      // Last 5 steps covers most error contexts.
-		ToolChangeLookback: defaultToolChangeLookback, // Tool changes are usually immediate.
+		ErrorLookback:      defaultErrorLookback,                                    // Last 5 steps covers most error contexts.
+		ToolChangeLookback: defaultToolChangeLookback,                               // Tool changes are usually immediate.
 		EnabledTriggers:    []string{"initial", "error", "tool_change", "interval"}, // All triggers enabled.
 
 		// Query Composition.
 		QueryWeights: QueryWeights{
 			InitialQuery: defaultQueryWeightInitial, // Base query is most important.
-			ErrorContext: defaultQueryWeightError, // Error context is valuable.
-			ToolContext:  defaultQueryWeightTool, // Tool context provides useful hints.
+			ErrorContext: defaultQueryWeightError,   // Error context is valuable.
+			ToolContext:  defaultQueryWeightTool,    // Tool context provides useful hints.
 		},
 
 		// Performance Limits.
-		MaxRetrievalLatencyMs: defaultMaxRetrievalLatency,  // 500ms keeps UX responsive.
-		MaxTrajectorySteps:    defaultMaxTrajectorySteps, // Prevents unbounded growth in long sessions.
+		MaxRetrievalLatencyMs: defaultMaxRetrievalLatency, // 500ms keeps UX responsive.
+		MaxTrajectorySteps:    defaultMaxTrajectorySteps,  // Prevents unbounded growth in long sessions.
 
 		// Observability.
 		LogRetrievalDecisions: true, // Helpful for debugging.
@@ -261,11 +274,11 @@ func (c *ACERetrievalConfig) Validate() error {
 	var errs []error
 
 	if c.TopK <= 0 {
-errs = append(errs, fmt.Errorf("top_k must be > 0, got %d: %w", c.TopK, ErrTopKMustBe0))
+		errs = append(errs, fmt.Errorf("top_k must be > 0, got %d: %w", c.TopK, ErrTopKMustBe0))
 	}
 
 	if c.MinScore < 0 || c.MinScore > 1 {
-errs = append(errs, fmt.Errorf("min_score must be between 0 and 1, got %f: %w", c.MinScore, ErrMinScoreMustBeBetween0))
+		errs = append(errs, fmt.Errorf("min_score must be between 0 and 1, got %f: %w", c.MinScore, ErrMinScoreMustBeBetween0))
 	}
 
 	// Validate progressive context config.
@@ -287,11 +300,11 @@ func (c *ProgressiveContextConfig) Validate() error {
 
 	// Validate cache settings.
 	if c.CacheTTL <= 0 {
-errs = append(errs, fmt.Errorf("cache_ttl must be > 0, got %d: %w", c.CacheTTL, ErrCacheTTLMustBe0))
+		errs = append(errs, fmt.Errorf("cache_ttl must be > 0, got %d: %w", c.CacheTTL, ErrCacheTTLMustBe0))
 	}
 
 	if c.MaxBullets <= 0 {
-errs = append(errs, fmt.Errorf("max_bullets must be > 0, got %d: %w", c.MaxBullets, ErrMaxBulletsMustBe0))
+		errs = append(errs, fmt.Errorf("max_bullets must be > 0, got %d: %w", c.MaxBullets, ErrMaxBulletsMustBe0))
 	}
 
 	validStrategies := []string{"lru", "lfu", "fifo"}
@@ -304,11 +317,11 @@ errs = append(errs, fmt.Errorf("max_bullets must be > 0, got %d: %w", c.MaxBulle
 
 	// Validate lookback windows.
 	if c.ErrorLookback <= 0 {
-errs = append(errs, fmt.Errorf("error_lookback must be > 0, got %d: %w", c.ErrorLookback, ErrErrorLookbackMustBe0))
+		errs = append(errs, fmt.Errorf("error_lookback must be > 0, got %d: %w", c.ErrorLookback, ErrErrorLookbackMustBe0))
 	}
 
 	if c.ToolChangeLookback <= 0 {
-errs = append(errs, fmt.Errorf("tool_change_lookback must be > 0, got %d: %w", c.ToolChangeLookback, ErrToolChangeLookbackMustBe0))
+		errs = append(errs, fmt.Errorf("tool_change_lookback must be > 0, got %d: %w", c.ToolChangeLookback, ErrToolChangeLookbackMustBe0))
 	}
 
 	// Validate query weights.
@@ -319,11 +332,11 @@ errs = append(errs, fmt.Errorf("tool_change_lookback must be > 0, got %d: %w", c
 
 	// Validate performance limits.
 	if c.MaxRetrievalLatencyMs <= 0 {
-errs = append(errs, fmt.Errorf("max_retrieval_latency_ms must be > 0, got %d: %w", c.MaxRetrievalLatencyMs, ErrMaxRetrievalLatencyMsMustBe))
+		errs = append(errs, fmt.Errorf("max_retrieval_latency_ms must be > 0, got %d: %w", c.MaxRetrievalLatencyMs, ErrMaxRetrievalLatencyMsMustBe))
 	}
 
 	if c.MaxTrajectorySteps <= 0 {
-errs = append(errs, fmt.Errorf("max_trajectory_steps must be > 0, got %d: %w", c.MaxTrajectorySteps, ErrMaxTrajectoryStepsMustBe0))
+		errs = append(errs, fmt.Errorf("max_trajectory_steps must be > 0, got %d: %w", c.MaxTrajectorySteps, ErrMaxTrajectoryStepsMustBe0))
 	}
 
 	if len(errs) > 0 {
@@ -338,21 +351,21 @@ func (q *QueryWeights) Validate() error {
 	var errs []error
 
 	if q.InitialQuery < 0 || q.InitialQuery > 1 {
-errs = append(errs, fmt.Errorf("initial_query must be between 0 and 1, got %f: %w", q.InitialQuery, ErrInitialQueryMustBeBetween0))
+		errs = append(errs, fmt.Errorf("initial_query must be between 0 and 1, got %f: %w", q.InitialQuery, ErrInitialQueryMustBeBetween0))
 	}
 
 	if q.ErrorContext < 0 || q.ErrorContext > 1 {
-errs = append(errs, fmt.Errorf("error_context must be between 0 and 1, got %f: %w", q.ErrorContext, ErrErrorContextMustBeBetween0))
+		errs = append(errs, fmt.Errorf("error_context must be between 0 and 1, got %f: %w", q.ErrorContext, ErrErrorContextMustBeBetween0))
 	}
 
 	if q.ToolContext < 0 || q.ToolContext > 1 {
-errs = append(errs, fmt.Errorf("tool_context must be between 0 and 1, got %f: %w", q.ToolContext, ErrToolContextMustBeBetween0))
+		errs = append(errs, fmt.Errorf("tool_context must be between 0 and 1, got %f: %w", q.ToolContext, ErrToolContextMustBeBetween0))
 	}
 
 	// Weights should sum to ~1.0 (allow some tolerance).
 	sum := q.InitialQuery + q.ErrorContext + q.ToolContext
 	if sum < 0.9 || sum > 1.1 {
-errs = append(errs, fmt.Errorf("query weights should sum to approximately 1.0, got %f: %w", sum, ErrQueryWeightsShouldSumToApproximately))
+		errs = append(errs, fmt.Errorf("query weights should sum to approximately 1.0, got %f: %w", sum, ErrQueryWeightsShouldSumToApproximately))
 	}
 
 	if len(errs) > 0 {

@@ -12,15 +12,25 @@ import (
 )
 
 var (
+	// ErrConversationFactoryIsRequired is a sentinel error.
 	ErrConversationFactoryIsRequired = errors.New("conversation factory is required")
+	// ErrSessionIDCannotBeEmpty is a sentinel error.
 	ErrSessionIDCannotBeEmpty = errors.New("session ID cannot be empty")
+	// ErrConversationNotFound is a sentinel error.
 	ErrConversationNotFound = errors.New("conversation not found")
+	// ErrHistoryStorageNotConfigured is a sentinel error.
 	ErrHistoryStorageNotConfigured = errors.New("history storage not configured")
+	// ErrSessionNotFound is a sentinel error.
 	ErrSessionNotFound = errors.New("session not found")
+	// ErrHistoryStorageNotConfigured2 is a sentinel error.
 	ErrHistoryStorageNotConfigured2 = errors.New("history storage not configured")
+	// ErrConversationNotFound2 is a sentinel error.
 	ErrConversationNotFound2 = errors.New("conversation not found")
+	// ErrErrorsClosingConversations is a sentinel error.
 	ErrErrorsClosingConversations = errors.New("errors closing conversations")
+	// ErrConversationNotFound3 is a sentinel error.
 	ErrConversationNotFound3 = errors.New("conversation not found")
+	// ErrConversationNotFound4 is a sentinel error.
 	ErrConversationNotFound4 = errors.New("conversation not found")
 )
 
@@ -137,7 +147,7 @@ func (m *Manager) Remove(ctx context.Context, sessionID string) error {
 
 	conv, ok := m.conversations[sessionID]
 	if !ok {
-return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound)
+		return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound)
 	}
 
 	// Close the conversation.
@@ -178,7 +188,7 @@ func (m *Manager) Load(ctx context.Context, sessionID, workDir string) (*Convers
 	}
 
 	if !exists {
-return nil, fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound)
+		return nil, fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound)
 	}
 
 	// Create conversation via factory.
@@ -189,6 +199,7 @@ return nil, fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFoun
 
 	// Load history into the conversation.
 	hist := conv.history
+
 	err = hist.Load(m.histStorage, sessionID)
 	if err != nil {
 		// Remove the conversation if loading fails.
@@ -213,7 +224,7 @@ func (m *Manager) Save(ctx context.Context, sessionID string) error {
 	m.mu.RUnlock()
 
 	if !ok {
-return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound2)
+		return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound2)
 	}
 
 	err := conv.history.Save(m.histStorage, sessionID)
@@ -264,7 +275,7 @@ func (m *Manager) Close() error {
 	m.conversations = make(map[string]*Conversation)
 
 	if len(errs) > 0 {
-return fmt.Errorf("errors closing conversations: %v: %w", errs, ErrErrorsClosingConversations)
+		return fmt.Errorf("errors closing conversations: %v: %w", errs, ErrErrorsClosingConversations)
 	}
 
 	return nil
@@ -288,7 +299,7 @@ func (m *Manager) SetTaskMode(sessionID, mode string) error {
 	m.mu.RUnlock()
 
 	if !ok {
-return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound3)
+		return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound3)
 	}
 
 	return conv.SetTaskMode(mode)
@@ -301,7 +312,7 @@ func (m *Manager) GetTaskMode(sessionID string) (string, error) {
 	m.mu.RUnlock()
 
 	if !ok {
-return "", fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound4)
+		return "", fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound4)
 	}
 
 	return conv.GetTaskMode(), nil

@@ -69,6 +69,7 @@ func TestAgent_GetPlanner(t *testing.T) {
 // TestAgent_GetPlanner_NoPlanner tests GetPlanner when no planner is set.
 func TestAgent_GetPlanner_NoPlanner(t *testing.T) {
 	t.Parallel()
+
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{

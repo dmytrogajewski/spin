@@ -88,6 +88,7 @@ func Load(path string, emitter *events.EventEmitter, embedder embedding.Embedder
 
 	// Unmarshal JSON.
 	var playbookData playbookJSON
+
 	err = json.Unmarshal(data, &playbookData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)

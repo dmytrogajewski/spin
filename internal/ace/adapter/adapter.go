@@ -2,8 +2,8 @@
 package adapter
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -19,15 +19,17 @@ import (
 )
 
 const (
-	defaultDecayRate      = 0.5
+	defaultDecayRate       = 0.5
 	highRelevanceThreshold = 0.85
 	defaultMaxRetainCount  = 3
 )
 
-
 var (
+	// ErrSessionNotFound is a sentinel error.
 	ErrSessionNotFound = errors.New("session not found")
+	// ErrSessionNotFound2 is a sentinel error.
 	ErrSessionNotFound2 = errors.New("session not found")
+	// ErrSessionNotFound3 is a sentinel error.
 	ErrSessionNotFound3 = errors.New("session not found")
 )
 
@@ -156,7 +158,7 @@ func (a *adapter) getAndUpdateSession(signal ExecutionSignal) (*Session, error) 
 	if !exists {
 		a.logger.Warn("Adapter: session not found", "session_id", signal.SessionID)
 
-return nil, fmt.Errorf("session not found: %s: %w", signal.SessionID, ErrSessionNotFound)
+		return nil, fmt.Errorf("session not found: %s: %w", signal.SessionID, ErrSessionNotFound)
 	}
 
 	session.AddSignal(&signal)
@@ -323,7 +325,7 @@ func (a *adapter) EndSession(_ context.Context, sessionID string) error {
 	defer a.mu.Unlock()
 
 	if _, exists := a.sessions[sessionID]; !exists {
-return fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound2)
+		return fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound2)
 	}
 
 	delete(a.sessions, sessionID)
@@ -338,7 +340,7 @@ func (a *adapter) GetSession(sessionID string) (*Session, error) {
 
 	session, exists := a.sessions[sessionID]
 	if !exists {
-return nil, fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound3)
+		return nil, fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound3)
 	}
 
 	return session, nil

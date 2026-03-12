@@ -182,18 +182,18 @@ func checkFile(_ *testing.T, filePath string, patterns []struct {
 
 // patternGuidance maps pattern names to (action, doNot) guidance strings.
 var patternGuidance = map[string][2]string{
-	"TODO":      {"Implement the incomplete work described in the TODO comment.", "Remove the TODO or change it to a different comment."},
-	"FIXME":     {"Fix the known issue described in the FIXME comment.", "Remove the FIXME or ignore the issue."},
-	"XXX":       {"Resolve the problematic code marked with XXX.", "Leave problematic code in place."},
-	"HACK":      {"Replace the workaround with a proper implementation.", "Keep temporary workarounds."},
+	"TODO":  {"Implement the incomplete work described in the TODO comment.", "Remove the TODO or change it to a different comment."},
+	"FIXME": {"Fix the known issue described in the FIXME comment.", "Remove the FIXME or ignore the issue."},
+	"XXX":   {"Resolve the problematic code marked with XXX.", "Leave problematic code in place."},
+	"HACK":  {"Replace the workaround with a proper implementation.", "Keep temporary workarounds."},
 	"for now": {
 		"Replace the temporary implementation with a permanent solution.",
 		"Change 'for now' to different wording - implement properly.",
 	},
-	"not yet":   {"Implement the deferred functionality.", "Change 'not yet' to 'not implemented' - actually implement it."},
-	"will be":   {"Implement the future work described.", "Change 'will be' to present tense - make it happen now."},
-	"later":     {"Implement the deferred work now.", "Change 'later' to different wording - do it now."},
-	"temporary": {"Replace the temporary solution with a permanent one.", "Keep temporary solutions."},
+	"not yet":    {"Implement the deferred functionality.", "Change 'not yet' to 'not implemented' - actually implement it."},
+	"will be":    {"Implement the future work described.", "Change 'will be' to present tense - make it happen now."},
+	"later":      {"Implement the deferred work now.", "Change 'later' to different wording - do it now."},
+	"temporary":  {"Replace the temporary solution with a permanent one.", "Keep temporary solutions."},
 	"eventually": {"Implement the deferred functionality now.", "Change wording - implement the feature."},
 }
 

@@ -66,6 +66,7 @@ func hasAgentMessageChunk(notifications []acp.SessionNotification) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -77,6 +78,7 @@ func TestPrompt_CommandExecution(t *testing.T) {
 
 	t.Run("execute_mode_command", func(t *testing.T) {
 		t.Parallel()
+
 		resp, err := acpAgent.Prompt(context.Background(), acp.PromptRequest{
 			SessionId: sessionID,
 			Prompt:    []acp.ContentBlock{acp.TextBlock("/mode review")},
@@ -88,6 +90,7 @@ func TestPrompt_CommandExecution(t *testing.T) {
 
 	t.Run("execute_help_command", func(t *testing.T) {
 		t.Parallel()
+
 		resp, err := acpAgent.Prompt(context.Background(), acp.PromptRequest{
 			SessionId: sessionID,
 			Prompt:    []acp.ContentBlock{acp.TextBlock("/help")},
@@ -99,6 +102,7 @@ func TestPrompt_CommandExecution(t *testing.T) {
 
 	t.Run("execute_exit_command_error", func(t *testing.T) {
 		t.Parallel()
+
 		resp, err := acpAgent.Prompt(context.Background(), acp.PromptRequest{
 			SessionId: sessionID,
 			Prompt:    []acp.ContentBlock{acp.TextBlock("/exit")},
@@ -112,6 +116,7 @@ func TestPrompt_CommandExecution(t *testing.T) {
 // TestNewSession_SendsAvailableCommandsUpdate tests that NewSession sends available commands notification.
 func TestNewSession_SendsAvailableCommandsUpdate(t *testing.T) {
 	t.Parallel()
+
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),

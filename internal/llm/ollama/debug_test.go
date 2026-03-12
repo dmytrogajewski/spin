@@ -16,7 +16,7 @@ import (
 )
 
 // newMockOllamaServer creates a mock Ollama server that responds to /api/show and /api/chat.
-func newMockOllamaServer(t *testing.T, model string, chatResponses []api.ChatResponse) *httptest.Server {
+func newMockOllamaServer(t *testing.T, _ string, chatResponses []api.ChatResponse) *httptest.Server {
 	t.Helper()
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -55,6 +55,7 @@ func handleChatRequest(t *testing.T, w http.ResponseWriter, responses []api.Chat
 		data, err := json.Marshal(resp)
 		if err != nil {
 			t.Errorf("failed to marshal chat response: %v", err)
+
 			return
 		}
 

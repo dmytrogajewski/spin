@@ -13,7 +13,6 @@ const (
 	defaultMemGrowthRate = 0.2
 )
 
-
 // MemoryConfig configures memory management.
 type MemoryConfig struct {
 	MaxBullets     int

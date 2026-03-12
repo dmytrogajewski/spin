@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	testModeRegular  = "regular"
-	testModeCompact  = "compact"
+	testModeRegular = "regular"
+	testModeCompact = "compact"
 )
 
 // TestConversation_RunTurn_EmptyPrompt tests RunTurn with empty prompt.

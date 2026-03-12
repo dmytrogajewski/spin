@@ -7,12 +7,12 @@ import (
 )
 
 const (
-	codeBlockThreshold       = 500
-	toolOutputThreshold      = 1000
-	priorityCritical         = 100
-	priorityHigh             = 80
-	priorityMedium           = 50
-	charsPerTokenEstimate    = 4
+	codeBlockThreshold    = 500
+	toolOutputThreshold   = 1000
+	priorityCritical      = 100
+	priorityHigh          = 80
+	priorityMedium        = 50
+	charsPerTokenEstimate = 4
 )
 
 // OffloadCandidate represents content that can be offloaded from context.

@@ -18,6 +18,7 @@ func runToolErrorTests(t *testing.T, tool Tool, cases []toolErrorCase) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			params, _ := FromMap(tt.params)
 
 			result, err := tool.Execute(context.Background(), params)

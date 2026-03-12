@@ -16,6 +16,7 @@ func TestReadFileTool(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "test.txt")
 
 	testContent := "Hello, World!"
+
 	err := os.WriteFile(testFile, []byte(testContent), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
@@ -64,16 +65,19 @@ func runReadFileSubtest(t *testing.T, tool Tool, params map[string]any, wantErr 
 		if err == nil && result.Success {
 			t.Error("expected error but got success")
 		}
+
 		return
 	}
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+
 		return
 	}
 
 	if !result.Success {
 		t.Errorf("expected success, got error: %s", result.Error)
+
 		return
 	}
 

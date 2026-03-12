@@ -1,4 +1,3 @@
-// Package openai provides an OpenAI LLM provider implementation using the official openai-go SDK.
 package openai
 
 import (
@@ -14,8 +13,11 @@ import (
 )
 
 var (
+	// ErrBaseURLIsRequired is a sentinel error.
 	ErrBaseURLIsRequired = errors.New("base URL is required")
+	// ErrModelIsRequired is a sentinel error.
 	ErrModelIsRequired = errors.New("model is required")
+	// ErrTimeoutMustBe0 is a sentinel error.
 	ErrTimeoutMustBe0 = errors.New("timeout must be > 0")
 )
 
@@ -38,7 +40,7 @@ func (c *Config) Validate() error {
 	}
 
 	if c.Timeout <= 0 {
-return fmt.Errorf("timeout must be > 0, got %v: %w", c.Timeout, ErrTimeoutMustBe0)
+		return fmt.Errorf("timeout must be > 0, got %v: %w", c.Timeout, ErrTimeoutMustBe0)
 	}
 
 	return nil
@@ -133,6 +135,7 @@ func (p *Provider) Stream(ctx context.Context, params openai.ChatCompletionNewPa
 
 	// Create channel for chunks (buffered to avoid blocking).
 	const streamChunkBuffer = 10
+
 	chunks := make(chan openai.ChatCompletionChunk, streamChunkBuffer)
 
 	// Spawn goroutine to read stream and send chunks.

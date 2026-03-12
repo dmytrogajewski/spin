@@ -9,11 +9,11 @@ const (
 	testWorkDir = "/test/workdir"
 )
 
-
 // Test Session Creation.
 
 func TestNewSession(t *testing.T) {
 	t.Parallel()
+
 	workDir := testWorkDir
 
 	session := NewSession(workDir)
@@ -49,6 +49,7 @@ func TestNewSession(t *testing.T) {
 
 func TestNewSession_GeneratesUniqueIDs(t *testing.T) {
 	t.Parallel()
+
 	workDir := testWorkDir
 
 	s1 := NewSession(workDir)
@@ -61,6 +62,7 @@ func TestNewSession_GeneratesUniqueIDs(t *testing.T) {
 
 func TestNewSession_InitializesMetadata(t *testing.T) {
 	t.Parallel()
+
 	workDir := testWorkDir
 
 	session := NewSession(workDir)
@@ -78,6 +80,7 @@ func TestNewSession_InitializesMetadata(t *testing.T) {
 
 func TestSession_IncrementTurnCount(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 	originalUpdatedAt := session.UpdatedAt
 
@@ -101,6 +104,7 @@ func TestSession_IncrementTurnCount(t *testing.T) {
 
 func TestSession_IncrementTurnCount_Multiple(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 
 	for i := 1; i <= 5; i++ {
@@ -121,6 +125,7 @@ func TestSession_IncrementTurnCount_Multiple(t *testing.T) {
 
 func TestSession_UpdateMetadata(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 
 	err := session.UpdateMetadata(func(m *Metadata) {
@@ -142,6 +147,7 @@ func TestSession_UpdateMetadata(t *testing.T) {
 
 func TestSession_SetState(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 
 	err := session.SetState(StateCompleted)
@@ -156,6 +162,7 @@ func TestSession_SetState(t *testing.T) {
 
 func TestSession_SetState_InvalidTransition(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 
 	// Archive the session.
@@ -173,6 +180,7 @@ func TestSession_SetState_InvalidTransition(t *testing.T) {
 
 func TestSession_AddTag(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 
 	err := session.AddTag("test-tag")
@@ -191,6 +199,7 @@ func TestSession_AddTag(t *testing.T) {
 
 func TestSession_AddTag_Duplicate(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 
 	_ = session.AddTag("test-tag")
@@ -203,6 +212,7 @@ func TestSession_AddTag_Duplicate(t *testing.T) {
 
 func TestSession_RemoveTag(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 
 	_ = session.AddTag("tag1")
@@ -224,6 +234,7 @@ func TestSession_RemoveTag(t *testing.T) {
 
 func TestSession_SetTitle(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 
 	err := session.SetTitle("My Session")
@@ -240,6 +251,7 @@ func TestSession_SetTitle(t *testing.T) {
 
 func TestSession_Validate_Valid(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 
 	err := session.Validate()
@@ -250,6 +262,7 @@ func TestSession_Validate_Valid(t *testing.T) {
 
 func TestSession_Validate_EmptyID(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 	session.ID = ""
 
@@ -261,6 +274,7 @@ func TestSession_Validate_EmptyID(t *testing.T) {
 
 func TestSession_Validate_EmptyWorkDir(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 	session.WorkDir = ""
 
@@ -272,6 +286,7 @@ func TestSession_Validate_EmptyWorkDir(t *testing.T) {
 
 func TestSession_Validate_InvalidTimestamps(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 	session.UpdatedAt = session.CreatedAt.Add(-1 * time.Hour) // UpdatedAt before CreatedAt.
 
@@ -283,6 +298,7 @@ func TestSession_Validate_InvalidTimestamps(t *testing.T) {
 
 func TestSession_Validate_InvalidState(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 	session.State = "invalid-state" // Invalid state value.
 
@@ -296,6 +312,7 @@ func TestSession_Validate_InvalidState(t *testing.T) {
 
 func TestSession_ConcurrentMetadataUpdates(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 
 	done := make(chan bool)
@@ -327,6 +344,7 @@ func TestSession_ConcurrentMetadataUpdates(t *testing.T) {
 
 func TestSession_ConcurrentTagOperations(t *testing.T) {
 	t.Parallel()
+
 	session := NewSession(testWorkDir)
 
 	done := make(chan bool)

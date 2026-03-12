@@ -93,6 +93,7 @@ func TestApplyPatchTool_UpdateFile(t *testing.T) {
 
 	// Create file to update.
 	original := "line1\nline2\nline3\n"
+
 	err := os.WriteFile(testFile, []byte(original), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
@@ -262,6 +263,7 @@ func TestApplyPatchTool_MissingParameters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			params, _ := FromMap(tt.params)
 
 			result, err := tool.Execute(context.Background(), params)
@@ -286,6 +288,7 @@ func TestApplyPatchTool_MultipleOperations(t *testing.T) {
 
 	// Create file to delete.
 	deleteFile := filepath.Join(tmpDir, "old.txt")
+
 	err := os.WriteFile(deleteFile, []byte("old content"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
@@ -375,6 +378,7 @@ func TestApplyPatchTool_CustomWorkspace(t *testing.T) {
 
 func TestApplyPatchTool_Schema(t *testing.T) {
 	t.Parallel()
+
 	tool := NewApplyPatchTool("/tmp")
 	schema := tool.Schema()
 
@@ -405,6 +409,7 @@ func TestApplyPatchTool_Schema(t *testing.T) {
 
 func TestApplyPatchTool_ErrorCases(t *testing.T) {
 	t.Parallel()
+
 	tool := NewApplyPatchTool("/tmp/test")
 
 	runToolErrorTests(t, tool, []toolErrorCase{
@@ -415,6 +420,7 @@ func TestApplyPatchTool_ErrorCases(t *testing.T) {
 
 func TestApplyPatchTool_CheckApproval(t *testing.T) {
 	t.Parallel()
+
 	tool := NewApplyPatchTool("/tmp")
 
 	params, _ := FromMap(map[string]any{
@@ -438,6 +444,7 @@ func TestApplyPatchTool_CheckApproval(t *testing.T) {
 
 func TestApplyPatchTool_CheckApproval_EmptyPatch(t *testing.T) {
 	t.Parallel()
+
 	tool := NewApplyPatchTool("/tmp")
 
 	params, _ := FromMap(map[string]any{

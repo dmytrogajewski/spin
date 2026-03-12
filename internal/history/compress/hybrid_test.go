@@ -13,7 +13,6 @@ const (
 	testHybridName = "hybrid"
 )
 
-
 // mockSummarizer is a test summarizer.
 type mockSummarizer struct {
 	summarizeMessagesCalled bool
@@ -379,6 +378,7 @@ func runStatsRatioTests(t *testing.T, cases []statsRatioCase, opName string, mak
 			t.Parallel()
 
 			s := makeStats(tt.original, tt.compressed)
+
 			got := op(s)
 			if got != tt.expected {
 				t.Errorf("%s() = %f, want %f", opName, got, tt.expected)

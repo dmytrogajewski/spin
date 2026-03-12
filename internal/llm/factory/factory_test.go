@@ -24,10 +24,9 @@ const (
 	testProviderOpenAICompat = "openai-compatible"
 )
 
-
 var (
 	errFactoryCreationFailed = errors.New("factory creation failed")
-	errUnknownProviderType = errors.New("unknown provider type")
+	errUnknownProviderType   = errors.New("unknown provider type")
 )
 
 const testOllamaURL = "http://localhost:11434"
@@ -1349,6 +1348,7 @@ func TestFactory_resolveCredential(t *testing.T) {
 			value, err := tt.factory.resolveCredential(context.Background(), tt.cfg, tt.requiresAuth)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("resolveCredential() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
 
@@ -1367,9 +1367,9 @@ var (
 
 	// factories maps provider types to factory functions.
 	factories = map[string]ProviderFactory{
-		"openai":            legacyNewOpenAIProvider,
-		"ollama":            legacyNewOllamaProvider,
-		"lmstudio":          legacyNewLMStudioProvider,
+		"openai":                 legacyNewOpenAIProvider,
+		"ollama":                 legacyNewOllamaProvider,
+		"lmstudio":               legacyNewLMStudioProvider,
 		testProviderOpenAICompat: legacyNewOpenAIProvider,
 	}
 )
@@ -1389,7 +1389,7 @@ func NewProvider(cfg ProviderConfig) (llm.Provider, error) {
 	factoryMu.RUnlock()
 
 	if !exists {
-return nil, fmt.Errorf("unknown provider type: %s: %w", cfg.Type, errUnknownProviderType)
+		return nil, fmt.Errorf("unknown provider type: %s: %w", cfg.Type, errUnknownProviderType)
 	}
 
 	return factory(cfg)

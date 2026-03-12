@@ -7,8 +7,11 @@ import (
 )
 
 var (
+	// ErrToolCallCannotBeNil is a sentinel error.
 	ErrToolCallCannotBeNil = errors.New("tool call cannot be nil")
+	// ErrToolCallIDCannotBeEmpty is a sentinel error.
 	ErrToolCallIDCannotBeEmpty = errors.New("tool call ID cannot be empty")
+	// ErrToolFunctionNameCannotBeEmpty is a sentinel error.
 	ErrToolFunctionNameCannotBeEmpty = errors.New("tool function name cannot be empty")
 )
 

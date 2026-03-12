@@ -13,9 +13,13 @@ import (
 )
 
 var (
+	// ErrNoApprovalHandlerConfigured is a sentinel error.
 	ErrNoApprovalHandlerConfigured = errors.New("no approval handler configured")
+	// ErrContextCanceled is a sentinel error.
 	ErrContextCanceled = errors.New("context canceled")
+	// ErrRequestIDMismatch is a sentinel error.
 	ErrRequestIDMismatch = errors.New("request ID mismatch")
+	// ErrModifiedCommandNotSafe is a sentinel error.
 	ErrModifiedCommandNotSafe = errors.New("modified command not safe")
 )
 
@@ -83,17 +87,20 @@ func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operati
 
 	if s.handler == nil {
 		s.emitIfPresent(func() { s.emitApprovalDenied(reqID, operation.Command, "no approval handler configured") })
+
 		return reqID, false, ErrNoApprovalHandlerConfigured
 	}
 
 	resp, canceled := s.invokeHandler(ctx, req)
 	if canceled {
 		s.emitIfPresent(func() { s.emitApprovalDenied(reqID, operation.Command, "context canceled") })
+
 		return reqID, false, ErrContextCanceled
 	}
 
 	if resp.RequestID != reqID {
 		s.emitIfPresent(func() { s.emitApprovalDenied(reqID, operation.Command, "response request ID mismatch") })
+
 		return reqID, false, ErrRequestIDMismatch
 	}
 
@@ -104,10 +111,12 @@ func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operati
 	if resp.Approved {
 		s.persistApprovalPolicy(ctx, operation, resp)
 		s.emitIfPresent(func() { s.emitApprovalApproved(reqID, operation.Command, resp.Reason) })
+
 		return reqID, true, nil
 	}
 
 	s.emitIfPresent(func() { s.emitApprovalDenied(reqID, operation.Command, resp.Reason) })
+
 	return reqID, false, nil
 }
 
@@ -130,12 +139,14 @@ func (s *ApprovalService) checkPolicyShortCircuit(ctx context.Context, reqID str
 	if p, ok, _ := s.store.Get(ctx, key, ScopeSession); ok {
 		s.emitPolicyApplied("approval short-circuited by session policy")
 		s.emitIfPresent(func() { s.emitApprovalApproved(reqID, operation.Command, "approved via policy (session)") })
+
 		return true, p.Decision == DecisionAllow
 	}
 
 	if p, ok, _ := s.store.Get(ctx, key, ScopeGlobal); ok {
 		s.emitPolicyApplied("approval short-circuited by global policy")
 		s.emitIfPresent(func() { s.emitApprovalApproved(reqID, operation.Command, "approved via policy (global)") })
+
 		return true, p.Decision == DecisionAllow
 	}
 
@@ -147,6 +158,7 @@ func (s *ApprovalService) emitPolicyApplied(message string) {
 	if s.emitter == nil {
 		return
 	}
+
 	s.emitter.Emit(events.Event{
 		Type:      events.EventPolicyApplied,
 		Timestamp: time.Now(),
@@ -196,6 +208,7 @@ func (s *ApprovalService) persistApprovalPolicy(ctx context.Context, operation O
 func (s *ApprovalService) resolveExpiry(resp ApprovalResponse) *time.Time {
 	if resp.TTL != nil {
 		t := time.Now().Add(*resp.TTL)
+
 		return &t
 	}
 
@@ -203,12 +216,14 @@ func (s *ApprovalService) resolveExpiry(resp ApprovalResponse) *time.Time {
 	if resp.Scope == ScopeSession && s.sessionDefaultTTL > 0 {
 		ttl = s.sessionDefaultTTL
 	}
+
 	if resp.Scope == ScopeGlobal && s.globalDefaultTTL > 0 {
 		ttl = s.globalDefaultTTL
 	}
 
 	if ttl > 0 {
 		t := time.Now().Add(ttl)
+
 		return &t
 	}
 
@@ -283,6 +298,7 @@ func (s *ApprovalService) validateModifiedCommand(reqID string, originalCmd, mod
 	classifyResult, err := s.validator.Classify(modCmd)
 	if err != nil {
 		s.emitIfPresent(func() { s.emitApprovalDenied(reqID, originalCmd, "modified command validation error: "+err.Error()) })
+
 		return reqID, false, fmt.Errorf("validation error: %w", err)
 	}
 
@@ -290,6 +306,7 @@ func (s *ApprovalService) validateModifiedCommand(reqID string, originalCmd, mod
 		s.emitIfPresent(func() {
 			s.emitApprovalDenied(reqID, originalCmd, "modified command failed validation: "+classifyResult.Classification.String())
 		})
+
 		return reqID, false, fmt.Errorf("modified command not safe: %s: %w", classifyResult.Classification, ErrModifiedCommandNotSafe)
 	}
 

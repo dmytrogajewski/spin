@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	errMockError = errors.New("mock error")
-	errTestError = errors.New("test error")
-	errTestError2 = errors.New("test error")
+	errMockError   = errors.New("mock error")
+	errTestError   = errors.New("test error")
+	errTestError2  = errors.New("test error")
 	errModelsError = errors.New("models error")
 )
 
@@ -96,6 +96,7 @@ func testNewMockProviderResponse(t *testing.T) {
 	t.Helper()
 
 	p := NewMockProvider("test", WithResponse("custom response"))
+
 	resp, err := p.Complete(context.Background(), testParams())
 	if err != nil {
 		t.Fatalf("Complete() error = %v", err)
@@ -121,6 +122,7 @@ func testNewMockProviderToolCalls(t *testing.T) {
 	}
 
 	p := NewMockProvider("test", WithToolCalls(toolCalls))
+
 	resp, err := p.Complete(context.Background(), testParams())
 	if err != nil {
 		t.Fatalf("Complete() error = %v", err)
@@ -143,6 +145,7 @@ func testNewMockProviderError(t *testing.T) {
 	t.Helper()
 
 	p := NewMockProvider("test", WithError(errMockError))
+
 	_, err := p.Complete(context.Background(), testParams())
 	if !errors.Is(err, errMockError) {
 		t.Errorf("Complete() error = %v, want %v", err, errMockError)
@@ -175,9 +178,11 @@ func testNewMockProviderCapabilities(t *testing.T) {
 	if got.Streaming {
 		t.Error("Expected Streaming = false")
 	}
+
 	if !got.FunctionCalling {
 		t.Error("Expected FunctionCalling = true")
 	}
+
 	if !got.Vision {
 		t.Error("Expected Vision = true")
 	}
@@ -193,9 +198,11 @@ func testNewMockProviderModels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Models() error = %v", err)
 	}
+
 	if len(got) != 2 {
 		t.Fatalf("Models length = %d, want 2", len(got))
 	}
+
 	if got[0].ID != "model-1" {
 		t.Errorf("Model[0].ID = %s, want model-1", got[0].ID)
 	}
@@ -211,6 +218,7 @@ func TestMockProvider_Complete(t *testing.T) {
 
 	testContextErrorCases(t, "Complete", func(p *MockProvider, ctx context.Context) error {
 		_, err := p.Complete(ctx, testParams())
+
 		return err
 	})
 
@@ -218,6 +226,7 @@ func TestMockProvider_Complete(t *testing.T) {
 		t.Parallel()
 
 		p := NewMockProvider("test", WithError(errTestError))
+
 		_, err := p.Complete(context.Background(), testParams())
 		if !errors.Is(err, errTestError) {
 			t.Errorf("Error = %v, want %v", err, errTestError)
@@ -281,6 +290,7 @@ func testContextErrorCases(t *testing.T, opName string, op func(p *MockProvider,
 		t.Parallel()
 
 		p := NewMockProvider("test", WithDelay(100*time.Millisecond))
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		defer cancel()
 
@@ -313,6 +323,7 @@ func TestMockProvider_Stream(t *testing.T) {
 		t.Parallel()
 
 		p := NewMockProvider("test", WithError(errTestError2))
+
 		_, err := p.Stream(context.Background(), testParams())
 		if !errors.Is(err, errTestError2) {
 			t.Errorf("Stream() error = %v, want %v", err, errTestError2)

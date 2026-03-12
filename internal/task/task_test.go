@@ -8,6 +8,7 @@ import (
 
 func TestNewTask_Regular(t *testing.T) {
 	t.Parallel()
+
 	task, err := NewTask(TaskNameRegular)
 	if err != nil {
 		t.Fatalf("NewTask(regular) error = %v", err)
@@ -20,6 +21,7 @@ func TestNewTask_Regular(t *testing.T) {
 
 func TestNewTask_EmptyDefaultsToRegular(t *testing.T) {
 	t.Parallel()
+
 	task, err := NewTask("")
 	if err != nil {
 		t.Fatalf("NewTask() error = %v", err)
@@ -32,6 +34,7 @@ func TestNewTask_EmptyDefaultsToRegular(t *testing.T) {
 
 func TestNewTask_Review(t *testing.T) {
 	t.Parallel()
+
 	task, err := NewTask(TaskNameReview)
 	if err != nil {
 		t.Fatalf("NewTask(review) error = %v", err)
@@ -44,6 +47,7 @@ func TestNewTask_Review(t *testing.T) {
 
 func TestNewTask_Compact(t *testing.T) {
 	t.Parallel()
+
 	task, err := NewTask(TaskNameCompact)
 	if err != nil {
 		t.Fatalf("NewTask(compact) error = %v", err)
@@ -56,6 +60,7 @@ func TestNewTask_Compact(t *testing.T) {
 
 func TestNewTask_Planning(t *testing.T) {
 	t.Parallel()
+
 	task, err := NewTask(TaskNamePlanning)
 	if err != nil {
 		t.Fatalf("NewTask(planning) error = %v", err)
@@ -68,6 +73,7 @@ func TestNewTask_Planning(t *testing.T) {
 
 func TestNewTask_Unknown(t *testing.T) {
 	t.Parallel()
+
 	_, err := NewTask("unknown")
 	if err == nil {
 		t.Fatal("NewTask(unknown) expected error, got nil")
@@ -76,6 +82,7 @@ func TestNewTask_Unknown(t *testing.T) {
 
 func TestDefaultTask(t *testing.T) {
 	t.Parallel()
+
 	task := DefaultTask()
 	if task == nil {
 		t.Fatal("DefaultTask() returned nil")
@@ -89,6 +96,7 @@ func TestDefaultTask(t *testing.T) {
 // TestValidateMode tests task mode validation.
 func TestValidateMode(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name    string
 		mode    string
@@ -108,6 +116,7 @@ func TestValidateMode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			err := ValidateMode(tt.mode)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateMode(%q) error = %v, wantErr %v", tt.mode, err, tt.wantErr)
@@ -119,6 +128,7 @@ func TestValidateMode(t *testing.T) {
 // TestValidModes tests that ValidModes contains all expected modes.
 func TestValidModes(t *testing.T) {
 	t.Parallel()
+
 	expected := []string{TaskNameRegular, TaskNameReview, TaskNameCompact, TaskNamePlanning}
 	if !reflect.DeepEqual(ValidModes, expected) {
 		t.Errorf("ValidModes = %v, want %v", ValidModes, expected)

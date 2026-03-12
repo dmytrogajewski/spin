@@ -98,6 +98,7 @@ func BenchmarkRendererRender_Plan(b *testing.B) {
 		InProgress: 5,
 		Completed:  35,
 	}
+
 	err := blocks.SetPlanMeta(block, meta)
 	if err != nil {
 		b.Fatalf("SetPlanMeta failed: %v", err)

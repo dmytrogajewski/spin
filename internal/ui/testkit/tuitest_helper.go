@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	testTermWidth     = 80
-	testTermHeight    = 24
-	testSettleDelay   = 50 * time.Millisecond
+	testTermWidth   = 80
+	testTermHeight  = 24
+	testSettleDelay = 50 * time.Millisecond
 )
 
 // TUITestHelper provides utilities for testing TUI components.
@@ -55,7 +55,9 @@ func NewTUITest(t interface {
 		if helper.cancel != nil {
 			helper.cancel()
 		}
+
 		_ = ui.Stop()
+
 		fakeKB.Close()
 	})
 

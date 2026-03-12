@@ -61,6 +61,7 @@ func (pb *PromptBuilder) writeCurationContext(sb *strings.Builder, req CurationR
 	fmt.Fprintf(sb, "%s\n\n", req.TaskContext)
 
 	sb.WriteString("**Current Playbook:**\n")
+
 	if req.CurrentPlaybook != "" {
 		fmt.Fprintf(sb, "%s\n\n", req.CurrentPlaybook)
 	} else {

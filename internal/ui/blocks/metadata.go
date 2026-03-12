@@ -7,32 +7,59 @@ import (
 )
 
 var (
+	// ErrCommandIsRequired is a sentinel error.
 	ErrCommandIsRequired = errors.New("command is required")
+	// ErrCwdIsRequired is a sentinel error.
 	ErrCwdIsRequired = errors.New("cwd is required")
+	// ErrImpactMustBeLowMediumOr is a sentinel error.
 	ErrImpactMustBeLowMediumOr = errors.New("impact must be low, medium, or high")
+	// ErrExitCodeMustBe0 is a sentinel error.
 	ErrExitCodeMustBe0 = errors.New("exit_code must be >= 0")
+	// ErrDurationMsMustBe0 is a sentinel error.
 	ErrDurationMsMustBe0 = errors.New("duration_ms must be >= 0")
+	// ErrLinesOutMustBe0 is a sentinel error.
 	ErrLinesOutMustBe0 = errors.New("lines_out must be >= 0")
+	// ErrFileIsRequired is a sentinel error.
 	ErrFileIsRequired = errors.New("file is required")
+	// ErrOffsetMustBe0 is a sentinel error.
 	ErrOffsetMustBe0 = errors.New("offset must be >= 0")
+	// ErrLimitMustBe0 is a sentinel error.
 	ErrLimitMustBe0 = errors.New("limit must be >= 0")
+	// ErrPatternIsRequired is a sentinel error.
 	ErrPatternIsRequired = errors.New("pattern is required")
+	// ErrModeMustBeContentFilesWith is a sentinel error.
 	ErrModeMustBeContentFilesWith = errors.New("mode must be content, files_with_matches, or count")
+	// ErrContextMustBe0 is a sentinel error.
 	ErrContextMustBe0 = errors.New("context must be >= 0")
+	// ErrToolNameIsRequired is a sentinel error.
 	ErrToolNameIsRequired = errors.New("tool_name is required")
+	// ErrFileIsRequired2 is a sentinel error.
 	ErrFileIsRequired2 = errors.New("file is required")
+	// ErrLinesAddedMustBe0 is a sentinel error.
 	ErrLinesAddedMustBe0 = errors.New("lines_added must be >= 0")
+	// ErrLinesRemovedMustBe0 is a sentinel error.
 	ErrLinesRemovedMustBe0 = errors.New("lines_removed must be >= 0")
+	// ErrTotalMustBe0 is a sentinel error.
 	ErrTotalMustBe0 = errors.New("total must be >= 0")
+	// ErrPendingMustBe0 is a sentinel error.
 	ErrPendingMustBe0 = errors.New("pending must be >= 0")
+	// ErrInProgressMustBe0 is a sentinel error.
 	ErrInProgressMustBe0 = errors.New("in_progress must be >= 0")
+	// ErrCompletedMustBe0 is a sentinel error.
 	ErrCompletedMustBe0 = errors.New("completed must be >= 0")
+	// ErrPendingInProgressCompletedMustEqual is a sentinel error.
 	ErrPendingInProgressCompletedMustEqual = errors.New("pending + in_progress + completed () must equal total ()")
+	// ErrMetadataIsEmpty is a sentinel error.
 	ErrMetadataIsEmpty = errors.New("metadata is empty")
+	// ErrMetadataIsEmpty2 is a sentinel error.
 	ErrMetadataIsEmpty2 = errors.New("metadata is empty")
+	// ErrMetadataIsEmpty3 is a sentinel error.
 	ErrMetadataIsEmpty3 = errors.New("metadata is empty")
+	// ErrMetadataIsEmpty4 is a sentinel error.
 	ErrMetadataIsEmpty4 = errors.New("metadata is empty")
+	// ErrMetadataIsEmpty5 is a sentinel error.
 	ErrMetadataIsEmpty5 = errors.New("metadata is empty")
+	// ErrMetadataIsEmpty6 is a sentinel error.
 	ErrMetadataIsEmpty6 = errors.New("metadata is empty")
 )
 
@@ -238,7 +265,7 @@ func (m *PlanMeta) Validate() error {
 
 	sum := m.Pending + m.InProgress + m.Completed
 	if sum != m.Total {
-return fmt.Errorf("pending + in_progress + completed (%d) must equal total (%d): %w", sum, m.Total, ErrPendingInProgressCompletedMustEqual)
+		return fmt.Errorf("pending + in_progress + completed (%d) must equal total (%d): %w", sum, m.Total, ErrPendingInProgressCompletedMustEqual)
 	}
 
 	return nil
@@ -251,6 +278,7 @@ func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) {
 	}
 
 	var meta ExecuteMeta
+
 	err := json.Unmarshal(b.Meta, &meta)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ExecuteMeta: %w", err)
@@ -266,6 +294,7 @@ func ParseReadMeta(b *Block) (*ReadMeta, error) {
 	}
 
 	var meta ReadMeta
+
 	err := json.Unmarshal(b.Meta, &meta)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ReadMeta: %w", err)
@@ -281,6 +310,7 @@ func ParseGrepMeta(b *Block) (*GrepMeta, error) {
 	}
 
 	var meta GrepMeta
+
 	err := json.Unmarshal(b.Meta, &meta)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal GrepMeta: %w", err)
@@ -296,6 +326,7 @@ func ParseToolMeta(b *Block) (*ToolMeta, error) {
 	}
 
 	var meta ToolMeta
+
 	err := json.Unmarshal(b.Meta, &meta)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ToolMeta: %w", err)
@@ -311,6 +342,7 @@ func ParsePatchMeta(b *Block) (*PatchMeta, error) {
 	}
 
 	var meta PatchMeta
+
 	err := json.Unmarshal(b.Meta, &meta)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal PatchMeta: %w", err)
@@ -326,6 +358,7 @@ func ParsePlanMeta(b *Block) (*PlanMeta, error) {
 	}
 
 	var meta PlanMeta
+
 	err := json.Unmarshal(b.Meta, &meta)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal PlanMeta: %w", err)

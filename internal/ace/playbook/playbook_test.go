@@ -384,8 +384,10 @@ func TestConcurrentOperations(t *testing.T) {
 			b, err := bullet.New(fmt.Sprintf("bullet %d", n))
 			if err != nil {
 				done <- true
+
 				return
 			}
+
 			_ = pb.Add(ctx, b)
 
 			done <- true

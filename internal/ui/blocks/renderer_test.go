@@ -9,16 +9,17 @@ const (
 	testFileName = "file.txt"
 )
 
-
 // Test that WRITE block does not render failure/success before completion.
 func TestWriteRender_BeforeCompletion_NoStatusOrFooter(t *testing.T) {
 	t.Parallel()
+
 	r := NewRenderer(80)
 
 	b := NewBlock(BlockTypeApplyPatch)
 	b.Title = testFileName
 
 	meta := &PatchMeta{File: testFileName, Succeeded: false, Completed: false}
+
 	err := SetPatchMeta(b, meta)
 	if err != nil {
 		t.Fatalf("set meta: %v", err)
@@ -49,12 +50,14 @@ func TestWriteRender_BeforeCompletion_NoStatusOrFooter(t *testing.T) {
 // Test that after successful completion, WRITE block shows success.
 func TestWriteRender_AfterSuccess_ShowsSuccess(t *testing.T) {
 	t.Parallel()
+
 	r := NewRenderer(80)
 
 	b := NewBlock(BlockTypeApplyPatch)
 	b.Title = testFileName
 
 	meta := &PatchMeta{File: testFileName, Succeeded: true, Completed: true}
+
 	err := SetPatchMeta(b, meta)
 	if err != nil {
 		t.Fatalf("set meta: %v", err)
@@ -83,12 +86,14 @@ func TestWriteRender_AfterSuccess_ShowsSuccess(t *testing.T) {
 // Test that after failed completion, WRITE block shows failure.
 func TestWriteRender_AfterFailure_ShowsFailure(t *testing.T) {
 	t.Parallel()
+
 	r := NewRenderer(80)
 
 	b := NewBlock(BlockTypeApplyPatch)
 	b.Title = testFileName
 
 	meta := &PatchMeta{File: testFileName, Succeeded: false, Completed: true, ErrorMsg: "boom"}
+
 	err := SetPatchMeta(b, meta)
 	if err != nil {
 		t.Fatalf("set meta: %v", err)
@@ -117,6 +122,7 @@ func stripANSI(s string) string {
 	inEscape := false
 
 	var resultSb108 strings.Builder
+
 	for i := 0; i < len(s); i++ {
 		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
 			inEscape = true
@@ -135,6 +141,7 @@ func stripANSI(s string) string {
 
 		resultSb108.WriteString(string(s[i]))
 	}
+
 	result += resultSb108.String()
 
 	return result

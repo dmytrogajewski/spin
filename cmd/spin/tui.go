@@ -1,8 +1,8 @@
 package main
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -24,7 +24,7 @@ import (
 
 // newTUICmd creates the TUI command for interactive terminal mode.
 const (
-	defaultMaxTurns = 50
+	defaultMaxTurns  = 50
 	defaultMaxTokens = 128000
 )
 
@@ -117,6 +117,7 @@ func setupTUIProvider(ctx context.Context, cmd *cobra.Command, flags tuiFlags) (
 	ui, err := adapters.NewPureTTY(os.Stdout)
 	if err != nil {
 		provider.Close()
+
 		return nil, nil, nil, fmt.Errorf("create TUI: %w", err)
 	}
 
@@ -188,6 +189,7 @@ func startEventLoop(
 
 	go func() {
 		defer close(eventDone)
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -196,6 +198,7 @@ func startEventLoop(
 				if !ok {
 					return
 				}
+
 				processEvent(ctx, event, mapper, ui, conv)
 			}
 		}
@@ -230,6 +233,7 @@ func handleTUICommand(ctx context.Context, ui *adapters.PureTTY, conv *conversat
 	}
 
 	_ = ui.PrintLine(fmt.Sprintf("Command error: %v\n", cmdErr))
+
 	return false, nil
 }
 
@@ -241,6 +245,7 @@ func executeTurn(
 ) error {
 	turnCtx, turnCancel := context.WithCancel(ctx)
 	turnErr := conv.RunTurn(turnCtx, line)
+
 	turnCancel()
 
 	mapper.StopStreaming()
@@ -251,6 +256,7 @@ func executeTurn(
 
 	go func() {
 		_ = ui.PrintChunks(ctx, streamCh)
+
 		close(*streamDone)
 	}()
 
@@ -299,6 +305,7 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 
 	go func() {
 		_ = ui.PrintChunks(ctx, streamCh)
+
 		close(streamDone)
 	}()
 
@@ -314,11 +321,13 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 		select {
 		case <-ctx.Done():
 			<-eventDone
+
 			return fmt.Errorf("TUI loop canceled: %w", ctx.Err())
 
 		case line, ok := <-inputCh:
 			if !ok {
 				<-eventDone
+
 				return nil
 			}
 
@@ -329,6 +338,7 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 			shouldExit, _ := handleTUIInput(ctx, line, ui, conv, mapper, &streamDone)
 			if shouldExit {
 				<-eventDone
+
 				return nil
 			}
 		}

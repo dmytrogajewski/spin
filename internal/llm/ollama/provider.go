@@ -1,5 +1,3 @@
-// Package ollama provides an Ollama LLM provider implementation.
-// Ollama is a tool for running large language models locally with OpenAI-compatible API.
 package ollama
 
 import (
@@ -20,6 +18,7 @@ import (
 
 const maxPreviewLen = 100
 
+// ErrModelIsRequired is a sentinel error.
 var ErrModelIsRequired = errors.New("model is required")
 
 const (
@@ -190,6 +189,7 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 
 	err := p.client.Chat(ctx, req, func(r api.ChatResponse) error {
 		callbackCount++
+
 		resp = r // Keep the last response for metadata.
 		if r.Message.Content != "" {
 			fullContent.WriteString(r.Message.Content)
@@ -210,13 +210,13 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 	resp.Message.Thinking = ""
 
 	// Fix tool calls with empty function names.
-	resp.Message.ToolCalls = filterToolCalls(resp.Message.ToolCalls, req.Tools, p.logger, ctx)
+	resp.Message.ToolCalls = filterToolCalls(ctx, resp.Message.ToolCalls, req.Tools, p.logger)
 
 	// Debug: Log the Ollama response.
 	p.logger.DebugContext(ctx, "Ollama Complete", "callbacks", callbackCount, "content_length", len(resp.Message.Content))
-	logResponsePreview(p.logger, ctx, resp.Message.Content)
+	logResponsePreview(ctx, p.logger, resp.Message.Content)
 
-	return convertOllamaResponseToOpenAI(resp, p.model, p.logger, ctx), nil
+	return convertOllamaResponseToOpenAI(ctx, resp, p.model, p.logger), nil
 }
 
 // buildChatRequest converts OpenAI params into an Ollama ChatRequest.
@@ -243,11 +243,11 @@ func (p *Provider) convertMessages(ctx context.Context, params openaisdk.ChatCom
 		return
 	}
 
-	toolCallIDToName := buildToolCallIDToNameMap(params.Messages.Value, p.logger, ctx)
+	toolCallIDToName := buildToolCallIDToNameMap(ctx, params.Messages.Value, p.logger)
 
 	req.Messages = make([]api.Message, len(params.Messages.Value))
 	for i, msg := range params.Messages.Value {
-		req.Messages[i] = convertMessageToOllama(msg, toolCallIDToName, p.logger, ctx)
+		req.Messages[i] = convertMessageToOllama(ctx, msg, toolCallIDToName, p.logger)
 	}
 
 	for i, m := range req.Messages {
@@ -308,7 +308,7 @@ func mergeThinkingContent(thinking, content string) string {
 }
 
 // filterToolCalls filters tool calls, inferring names for nameless calls and removing phantom ones.
-func filterToolCalls(toolCalls []api.ToolCall, tools []api.Tool, logger *slog.Logger, ctx context.Context) []api.ToolCall {
+func filterToolCalls(ctx context.Context, toolCalls []api.ToolCall, tools []api.Tool, logger *slog.Logger) []api.ToolCall {
 	if len(toolCalls) == 0 {
 		return toolCalls
 	}
@@ -318,10 +318,11 @@ func filterToolCalls(toolCalls []api.ToolCall, tools []api.Tool, logger *slog.Lo
 	for _, tc := range toolCalls {
 		if tc.Function.Name != "" {
 			filtered = append(filtered, tc)
+
 			continue
 		}
 
-		if inferred := inferToolName(tc.Function.Arguments, tools, logger, ctx); inferred != "" {
+		if inferred := inferToolName(ctx, tc.Function.Arguments, tools, logger); inferred != "" {
 			tc.Function.Name = inferred
 			logger.InfoContext(ctx, "ollama: inferred tool name for nameless tool call",
 				"name", inferred, "args", tc.Function.Arguments)
@@ -338,7 +339,7 @@ func filterToolCalls(toolCalls []api.ToolCall, tools []api.Tool, logger *slog.Lo
 }
 
 // logResponsePreview logs a preview of the response content for debugging.
-func logResponsePreview(logger *slog.Logger, ctx context.Context, content string) {
+func logResponsePreview(ctx context.Context, logger *slog.Logger, content string) {
 	if content == "" {
 		return
 	}
@@ -375,13 +376,13 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 			resp.Message.Thinking = ""
 
 			// Fix tool calls with empty function names.
-			resp.Message.ToolCalls = filterToolCalls(resp.Message.ToolCalls, req.Tools, p.logger, ctx)
+			resp.Message.ToolCalls = filterToolCalls(ctx, resp.Message.ToolCalls, req.Tools, p.logger)
 
 			if resp.Done && resp.DoneReason != "" {
 				lastDoneReason = resp.DoneReason
 			}
 
-			chunk := convertOllamaChunkToOpenAI(resp, chunkID, p.model, p.logger, ctx)
+			chunk := convertOllamaChunkToOpenAI(ctx, resp, chunkID, p.model, p.logger)
 
 			select {
 			case chunks <- chunk:

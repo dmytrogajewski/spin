@@ -2,6 +2,7 @@ package security
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 
 func TestNewService(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name            string
 		validator       *Validator
@@ -46,6 +48,7 @@ func TestNewService(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			svc := NewService(tt.validator, tt.approvalService)
 
 			if tt.wantNil {
@@ -59,6 +62,7 @@ func TestNewService(t *testing.T) {
 
 func TestService_ValidateCommand(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 	svc := NewService(validator, nil)
 
@@ -120,6 +124,7 @@ func TestService_ValidateCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			if tt.setupValidator != nil {
 				tt.setupValidator(validator)
 			}
@@ -140,6 +145,7 @@ func TestService_ValidateCommand(t *testing.T) {
 
 func TestService_ValidateCommand_NilValidator(t *testing.T) {
 	t.Parallel()
+
 	svc := NewService(nil, nil)
 
 	cmd := &Command{
@@ -155,6 +161,7 @@ func TestService_ValidateCommand_NilValidator(t *testing.T) {
 
 func TestService_NeedsApproval(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 	svc := NewService(validator, nil)
 
@@ -204,6 +211,7 @@ func TestService_NeedsApproval(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			needs := svc.NeedsApproval(tt.cmd)
 			assert.Equal(t, tt.wantApproval, needs)
 		})
@@ -212,6 +220,7 @@ func TestService_NeedsApproval(t *testing.T) {
 
 func TestService_NeedsApproval_NilValidator(t *testing.T) {
 	t.Parallel()
+
 	svc := NewService(nil, nil)
 
 	cmd := &Command{
@@ -226,10 +235,12 @@ func TestService_NeedsApproval_NilValidator(t *testing.T) {
 
 func TestService_RequestApproval(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 
 	t.Run("approval granted", func(t *testing.T) {
 		t.Parallel()
+
 		handler := approvalHandlerFunc(true, "user approved")
 		svc := newServiceWithHandler(validator, handler)
 		approved, err := svc.RequestApproval(context.Background(), newTestOperation("rm", []string{"-rf", "/tmp/test"}, "/tmp"))
@@ -239,6 +250,7 @@ func TestService_RequestApproval(t *testing.T) {
 
 	t.Run("approval denied", func(t *testing.T) {
 		t.Parallel()
+
 		handler := approvalHandlerFunc(false, "too dangerous")
 		svc := newServiceWithHandler(validator, handler)
 		approved, err := svc.RequestApproval(context.Background(), newTestOperation("rm", []string{"-rf", "/"}, "/"))
@@ -248,6 +260,7 @@ func TestService_RequestApproval(t *testing.T) {
 
 	t.Run("no approval handler", func(t *testing.T) {
 		t.Parallel()
+
 		svc := newServiceWithHandler(validator, nil)
 		_, err := svc.RequestApproval(context.Background(), newTestOperation("rm", []string{"test.txt"}, "/tmp"))
 		require.Error(t, err)
@@ -268,6 +281,7 @@ func approvalHandlerFunc(approve bool, reason string) ApprovalHandler {
 
 func newServiceWithHandler(validator *Validator, handler ApprovalHandler) *Service {
 	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: handler, Emitter: nil, Validator: validator})
+
 	return NewService(validator, approvalService)
 }
 
@@ -281,17 +295,25 @@ func newTestOperation(program string, args []string, workDir string) Operation {
 
 func joinArgs(args []string) string {
 	result := ""
+
+	var resultSb298 strings.Builder
+
 	for i, arg := range args {
 		if i > 0 {
-			result += " "
+			resultSb298.WriteString(" ")
 		}
-		result += arg
+
+		resultSb298.WriteString(arg)
 	}
+
+	result += resultSb298.String()
+
 	return result
 }
 
 func TestService_RequestApproval_NilApprovalService(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 	svc := NewService(validator, nil)
 
@@ -311,10 +333,12 @@ func TestService_RequestApproval_NilApprovalService(t *testing.T) {
 
 func TestService_ValidateAndApprove(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 
 	t.Run("safe command - no approval needed", func(t *testing.T) {
 		t.Parallel()
+
 		svc := newServiceWithHandler(validator, panicHandler("should not be called for safe commands"))
 		approved, err := svc.ValidateAndApprove(context.Background(), &Command{Raw: "ls -la", Program: "ls", Args: []string{"-la"}}, "/tmp")
 		require.NoError(t, err)
@@ -323,6 +347,7 @@ func TestService_ValidateAndApprove(t *testing.T) {
 
 	t.Run("forbidden command - blocked without approval", func(t *testing.T) {
 		t.Parallel()
+
 		svc := newServiceWithHandler(validator, panicHandler("should not be called for forbidden commands"))
 		cmd := &Command{Raw: "rm -rf /", Program: "rm", Args: []string{"-rf", "/"}}
 		approved, err := svc.ValidateAndApprove(context.Background(), cmd, "/tmp")
@@ -332,6 +357,7 @@ func TestService_ValidateAndApprove(t *testing.T) {
 
 	t.Run("interactive command - approval granted", func(t *testing.T) {
 		t.Parallel()
+
 		svc := newServiceWithHandler(validator, approvalHandlerFunc(true, ""))
 		cmd := &Command{Raw: "mkdir testdir", Program: "mkdir", Args: []string{"testdir"}}
 		approved, err := svc.ValidateAndApprove(context.Background(), cmd, "/tmp")
@@ -341,6 +367,7 @@ func TestService_ValidateAndApprove(t *testing.T) {
 
 	t.Run("interactive command - approval denied", func(t *testing.T) {
 		t.Parallel()
+
 		svc := newServiceWithHandler(validator, approvalHandlerFunc(false, "user denied"))
 		cmd := &Command{Raw: "mkdir sensitive_dir", Program: "mkdir", Args: []string{"sensitive_dir"}}
 		approved, err := svc.ValidateAndApprove(context.Background(), cmd, "/tmp")
@@ -350,6 +377,7 @@ func TestService_ValidateAndApprove(t *testing.T) {
 
 	t.Run("unverified command - approval granted", func(t *testing.T) {
 		t.Parallel()
+
 		svc := newServiceWithHandler(validator, approvalHandlerFunc(true, ""))
 		cmd := &Command{Raw: "somecommand arg", Program: "somecommand", Args: []string{"arg"}}
 		approved, err := svc.ValidateAndApprove(context.Background(), cmd, "/tmp")
@@ -367,6 +395,7 @@ func panicHandler(msg string) ApprovalHandler {
 // Benchmark tests.
 func TestService_ValidateAndApprove_ApprovalError(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 	// No approval service configured - will cause error.
 	svc := NewService(validator, nil)
@@ -388,6 +417,7 @@ func TestService_ValidateAndApprove_ApprovalError(t *testing.T) {
 
 func TestService_ValidateAndApprove_NilValidator(t *testing.T) {
 	t.Parallel()
+
 	svc := NewService(nil, nil)
 
 	cmd := &Command{
@@ -406,6 +436,7 @@ func TestService_ValidateAndApprove_NilValidator(t *testing.T) {
 
 func TestService_ValidateAndApprove_NilCommand(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 	svc := NewService(validator, nil)
 
@@ -453,6 +484,7 @@ func BenchmarkService_NeedsApproval(b *testing.B) {
 
 func TestService_ApprovalService(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
 	svc := NewService(validator, approvalService)
@@ -463,6 +495,7 @@ func TestService_ApprovalService(t *testing.T) {
 
 func TestService_ApprovalService_Nil(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 	svc := NewService(validator, nil)
 
@@ -472,6 +505,7 @@ func TestService_ApprovalService_Nil(t *testing.T) {
 
 func TestService_Validator(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
 	svc := NewService(validator, approvalService)
@@ -482,6 +516,7 @@ func TestService_Validator(t *testing.T) {
 
 func TestService_Validator_Nil(t *testing.T) {
 	t.Parallel()
+
 	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: nil})
 	svc := NewService(nil, approvalService)
 

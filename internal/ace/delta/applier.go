@@ -13,11 +13,17 @@ import (
 )
 
 var (
+	// ErrBulletNotFound is a sentinel error.
 	ErrBulletNotFound = errors.New("bullet  not found")
+	// ErrContentFieldIsRequiredForOpupdatecontent is a sentinel error.
 	ErrContentFieldIsRequiredForOpupdatecontent = errors.New("content field is required for OpUpdateContent")
+	// ErrTagKeyAndTagValueFields is a sentinel error.
 	ErrTagKeyAndTagValueFields = errors.New("tag_key and tag_value fields are required for OpAddTag")
+	// ErrTagKeyFieldIsRequiredFor is a sentinel error.
 	ErrTagKeyFieldIsRequiredFor = errors.New("tag_key field is required for OpRemoveTag")
+	// ErrEmbeddingFieldIsRequiredForOpupdateembedding is a sentinel error.
 	ErrEmbeddingFieldIsRequiredForOpupdateembedding = errors.New("embedding field is required for OpUpdateEmbedding")
+	// ErrUnknownOperation is a sentinel error.
 	ErrUnknownOperation = errors.New("unknown operation")
 )
 
@@ -60,7 +66,7 @@ func (a *Applier) Apply(ctx context.Context, delta Delta) (*ApplyResult, error) 
 	// Get bullet from playbook.
 	b, exists := a.playbook.Get(delta.BulletID)
 	if !exists {
-err := fmt.Errorf("bullet %s not found: %w", delta.BulletID, ErrBulletNotFound)
+		err := fmt.Errorf("bullet %s not found: %w", delta.BulletID, ErrBulletNotFound)
 		a.logger.WarnContext(ctx, "Delta apply failed: bullet not found",
 			"delta_id", delta.ID,
 			"bullet_id", delta.BulletID)
@@ -198,7 +204,7 @@ func applyOperation(b *bullet.Bullet, delta Delta) (oldValue, newValue any, err 
 		newValue = b.Embedding
 
 	default:
-return nil, nil, fmt.Errorf("unknown operation: %s: %w", delta.Operation, ErrUnknownOperation)
+		return nil, nil, fmt.Errorf("unknown operation: %s: %w", delta.Operation, ErrUnknownOperation)
 	}
 
 	// Update timestamp.

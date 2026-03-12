@@ -28,6 +28,7 @@ func TestNewWithNonTerminal(t *testing.T) {
 // TestNew creates TTY with valid file descriptors.
 func TestNew(t *testing.T) {
 	t.Parallel()
+
 	if !isTerminal(SafeFd(os.Stdin.Fd())) {
 		t.Skip("stdin is not a terminal, skipping New test")
 	}
@@ -46,6 +47,7 @@ func TestNew(t *testing.T) {
 // TestSize verifies cached dimensions are returned.
 func TestSize(t *testing.T) {
 	t.Parallel()
+
 	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Skipf("New() error = %v, skipping (not a terminal?)", err)
@@ -60,6 +62,7 @@ func TestSize(t *testing.T) {
 // TestOnResize registers callback and verifies it can be called.
 func TestOnResize(t *testing.T) {
 	t.Parallel()
+
 	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Skipf("New() error = %v, skipping (not a terminal?)", err)
@@ -111,6 +114,7 @@ func TestOnResize(t *testing.T) {
 // TestExitWithoutEnter ensures Exit is idempotent and safe.
 func TestExitWithoutEnter(t *testing.T) {
 	t.Parallel()
+
 	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Skipf("New() error = %v, skipping (not a terminal?)", err)
@@ -126,6 +130,7 @@ func TestExitWithoutEnter(t *testing.T) {
 // TestEnterExit verifies state transitions.
 func TestEnterExit(t *testing.T) {
 	t.Parallel()
+
 	if !isTerminal(SafeFd(os.Stdin.Fd())) {
 		t.Skip("stdin is not a terminal, skipping Enter/Exit test")
 	}
@@ -153,6 +158,7 @@ func TestEnterExit(t *testing.T) {
 // TestEnterTwice ensures calling Enter twice returns error or is idempotent.
 func TestEnterTwice(t *testing.T) {
 	t.Parallel()
+
 	if !isTerminal(SafeFd(os.Stdin.Fd())) {
 		t.Skip("stdin is not a terminal, skipping Enter test")
 	}
@@ -166,6 +172,7 @@ func TestEnterTwice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enter() error = %v", err)
 	}
+
 	defer func() { _ = tty.Exit() }()
 
 	// Second Enter should error or no-op.
@@ -178,6 +185,7 @@ func TestEnterTwice(t *testing.T) {
 // TestPanicCleanup verifies defer Exit works in panic scenario.
 func TestPanicCleanup(t *testing.T) {
 	t.Parallel()
+
 	if !isTerminal(SafeFd(os.Stdin.Fd())) {
 		t.Skip("stdin is not a terminal, skipping panic test")
 	}
@@ -209,6 +217,7 @@ func TestPanicCleanup(t *testing.T) {
 // TestConcurrentResize ensures no race between resize and Size().
 func TestConcurrentResize(t *testing.T) {
 	t.Parallel()
+
 	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Skipf("New() error = %v, skipping (not a terminal?)", err)
@@ -253,6 +262,7 @@ func TestConcurrentResize(t *testing.T) {
 // TestErrNotATTY verifies error type for non-TTY.
 func TestErrNotATTY(t *testing.T) {
 	t.Parallel()
+
 	tmpFile, err := os.CreateTemp(t.TempDir(), "tty_test")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)

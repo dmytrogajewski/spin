@@ -8,23 +8,36 @@ import (
 )
 
 var (
+	// ErrLine is a sentinel error.
 	ErrLine = errors.New("line")
+	// ErrUnexpectedEOFMissingEndPatch is a sentinel error.
 	ErrUnexpectedEOFMissingEndPatch = errors.New("unexpected EOF: missing '*** End Patch'")
+	// ErrUnknownOperation is a sentinel error.
 	ErrUnknownOperation = errors.New("unknown operation")
+	// ErrInvalidPath is a sentinel error.
 	ErrInvalidPath = errors.New("invalid path")
+	// ErrInvalidPath2 is a sentinel error.
 	ErrInvalidPath2 = errors.New("invalid path")
+	// ErrInvalidLineFormat is a sentinel error.
 	ErrInvalidLineFormat = errors.New("invalid line format")
+	// ErrInvalidPath3 is a sentinel error.
 	ErrInvalidPath3 = errors.New("invalid path")
+	// ErrInvalidPath4 is a sentinel error.
 	ErrInvalidPath4 = errors.New("invalid path")
+	// ErrInvalidPath5 is a sentinel error.
 	ErrInvalidPath5 = errors.New("invalid path")
+	// ErrInvalidPath6 is a sentinel error.
 	ErrInvalidPath6 = errors.New("invalid path")
+	// ErrInvalidNewPath is a sentinel error.
 	ErrInvalidNewPath = errors.New("invalid new path")
+	// ErrInvalidNewPath2 is a sentinel error.
 	ErrInvalidNewPath2 = errors.New("invalid new path")
+	// ErrInvalidLinePrefix is a sentinel error.
 	ErrInvalidLinePrefix = errors.New("invalid line prefix")
 )
 
 // Parser parses patch text into structured Patch AST.
-// It uses a streaming approach with bufio.Scanner for memory efficiency.
+// It uses a streaming approach with [bufio.Scanner] for memory efficiency.
 type Parser struct {
 	scanner  *bufio.Scanner
 	lineNum  int
@@ -34,7 +47,7 @@ type Parser struct {
 
 // NewParser creates a new patch parser for the given text.
 //
-// The parser uses a streaming approach with bufio.Scanner for memory efficiency.
+// The parser uses a streaming approach with [bufio.Scanner] for memory efficiency.
 // It can handle large patches (>10k lines) without loading everything into memory.
 func NewParser(text string) *Parser {
 	return &Parser{
@@ -55,7 +68,7 @@ func NewParser(text string) *Parser {
 // Errors include line numbers for precise debugging.
 func (p *Parser) Parse() (*Patch, error) {
 	if !p.expectLine("*** Begin Patch") {
-return nil, fmt.Errorf("line %d: expected '*** Begin Patch': %w", p.lineNum, ErrLine)
+		return nil, fmt.Errorf("line %d: expected '*** Begin Patch': %w", p.lineNum, ErrLine)
 	}
 
 	var ops []FileOperation
@@ -151,7 +164,7 @@ func (p *Parser) parseOperation(line string) (FileOperation, error) {
 
 		return p.parseUpdateFile(path)
 	default:
-return nil, fmt.Errorf("unknown operation: %q: %w", line, ErrUnknownOperation)
+		return nil, fmt.Errorf("unknown operation: %q: %w", line, ErrUnknownOperation)
 	}
 }
 
@@ -159,11 +172,11 @@ return nil, fmt.Errorf("unknown operation: %q: %w", line, ErrUnknownOperation)
 func (p *Parser) parseAddFile(path string) (*AddFile, error) {
 	// Validate path.
 	if strings.HasPrefix(path, "/") {
-return nil, fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, ErrInvalidPath)
+		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, ErrInvalidPath)
 	}
 
 	if strings.Contains(path, "..") {
-return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, ErrInvalidPath2)
+		return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, ErrInvalidPath2)
 	}
 
 	lines := make([]string, 0)
@@ -183,7 +196,7 @@ return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, 
 		line, _ = p.nextLine()
 
 		if !strings.HasPrefix(line, "+") {
-return nil, fmt.Errorf("invalid line format: expected '+' prefix, got: %q: %w", line, ErrInvalidLineFormat)
+			return nil, fmt.Errorf("invalid line format: expected '+' prefix, got: %q: %w", line, ErrInvalidLineFormat)
 		}
 
 		lines = append(lines, strings.TrimPrefix(line, "+"))
@@ -199,11 +212,11 @@ return nil, fmt.Errorf("invalid line format: expected '+' prefix, got: %q: %w", 
 func (p *Parser) parseDeleteFile(path string) (*DeleteFile, error) {
 	// Validate path.
 	if strings.HasPrefix(path, "/") {
-return nil, fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, ErrInvalidPath3)
+		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, ErrInvalidPath3)
 	}
 
 	if strings.Contains(path, "..") {
-return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, ErrInvalidPath4)
+		return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, ErrInvalidPath4)
 	}
 
 	return &DeleteFile{
@@ -319,6 +332,7 @@ func (p *Parser) parseHunk(firstLine string) (*Hunk, error) {
 		}
 
 		line, _ = p.nextLine()
+
 		err := p.parseHunkLine(hunk, line)
 		if err != nil {
 			return nil, err
@@ -383,7 +397,7 @@ func (p *Parser) addLineChange(hunk *Hunk, prefix byte, text string) error {
 			Text: text,
 		})
 	default:
-return fmt.Errorf("invalid line prefix: expected ' ', '-', or '+', got %q: %w", prefix, ErrInvalidLinePrefix)
+		return fmt.Errorf("invalid line prefix: expected ' ', '-', or '+', got %q: %w", prefix, ErrInvalidLinePrefix)
 	}
 
 	return nil

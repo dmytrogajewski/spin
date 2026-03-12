@@ -25,10 +25,14 @@ const (
 
 // Common errors for history operations.
 var (
-	ErrEmptyHistory    = errors.New("history is empty")
+	// ErrEmptyHistory is a sentinel error.
+	ErrEmptyHistory = errors.New("history is empty")
+	// ErrMessageNotFound is a sentinel error.
 	ErrMessageNotFound = errors.New("message not found")
-	ErrInvalidMessage  = errors.New("invalid message")
-	ErrInvalidRole     = errors.New("invalid message role")
+	// ErrInvalidMessage is a sentinel error.
+	ErrInvalidMessage = errors.New("invalid message")
+	// ErrInvalidRole is a sentinel error.
+	ErrInvalidRole = errors.New("invalid message role")
 )
 
 // History manages conversation message history with token-aware truncation.

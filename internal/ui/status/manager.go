@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	percentMulManager   = 100
-	maxStateDisplayLen  = 15
+	percentMulManager  = 100
+	maxStateDisplayLen = 15
 )
 
 // Metrics represents the current status metrics.

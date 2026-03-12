@@ -15,6 +15,7 @@ import (
 
 const sqrtDivisor = 2
 
+// ErrBulletHasNoEmbedding is a sentinel error.
 var ErrBulletHasNoEmbedding = errors.New("bullet has no embedding")
 
 // HNSWRetriever uses HNSW (Hierarchical Navigable Small World) graph for fast vector search.

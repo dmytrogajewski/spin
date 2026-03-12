@@ -87,6 +87,7 @@ func createTestACPAgentWithMock(t *testing.T) (*SpinACPAgent, *mockConnectionFor
 
 func TestDetectPlanFromOutput_NumberedList(t *testing.T) {
 	t.Parallel()
+
 	output := `Here's my plan:
 1. First step
 2. Second step
@@ -103,6 +104,7 @@ func TestDetectPlanFromOutput_NumberedList(t *testing.T) {
 
 func TestDetectPlanFromOutput_PlanHeader(t *testing.T) {
 	t.Parallel()
+
 	output := `Plan:
 1. Do this
 2. Do that
@@ -117,6 +119,7 @@ func TestDetectPlanFromOutput_PlanHeader(t *testing.T) {
 
 func TestDetectPlanFromOutput_StepsHeader(t *testing.T) {
 	t.Parallel()
+
 	output := `Steps:
 - Step one
 - Step two
@@ -131,6 +134,7 @@ func TestDetectPlanFromOutput_StepsHeader(t *testing.T) {
 
 func TestDetectPlanFromOutput_BulletPoints(t *testing.T) {
 	t.Parallel()
+
 	output := `Plan:
 - Task 1
 - Task 2
@@ -145,6 +149,7 @@ func TestDetectPlanFromOutput_BulletPoints(t *testing.T) {
 
 func TestDetectPlanFromOutput_PriorityHigh(t *testing.T) {
 	t.Parallel()
+
 	output := `Plan:
 1. Critical task - urgent
 2. Important task - high priority
@@ -159,6 +164,7 @@ func TestDetectPlanFromOutput_PriorityHigh(t *testing.T) {
 
 func TestDetectPlanFromOutput_PriorityLow(t *testing.T) {
 	t.Parallel()
+
 	output := `Plan:
 1. Required task
 2. Optional task
@@ -173,6 +179,7 @@ func TestDetectPlanFromOutput_PriorityLow(t *testing.T) {
 
 func TestDetectPlanFromOutput_NoPlan(t *testing.T) {
 	t.Parallel()
+
 	output := `This is just regular text without any plan structure.`
 
 	entries := detectPlanFromOutput(output)
@@ -181,6 +188,7 @@ func TestDetectPlanFromOutput_NoPlan(t *testing.T) {
 
 func TestDetectPlanFromOutput_EmptyOutput(t *testing.T) {
 	t.Parallel()
+
 	entries := detectPlanFromOutput("")
 	assert.Empty(t, entries)
 }

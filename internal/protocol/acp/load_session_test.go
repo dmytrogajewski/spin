@@ -19,6 +19,7 @@ import (
 // TestSpinACPAgent_LoadSession_NoStorage tests LoadSession when storage is not available.
 func TestSpinACPAgent_LoadSession_NoStorage(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -41,6 +42,7 @@ func TestSpinACPAgent_LoadSession_NoStorage(t *testing.T) {
 // TestSpinACPAgent_LoadSession_NotFound tests LoadSession when session doesn't exist in storage.
 func TestSpinACPAgent_LoadSession_NotFound(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -64,6 +66,7 @@ func TestSpinACPAgent_LoadSession_NotFound(t *testing.T) {
 // TestSpinACPAgent_LoadSession_Success tests successful session loading.
 func TestSpinACPAgent_LoadSession_Success(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -103,6 +106,7 @@ func TestSpinACPAgent_LoadSession_Success(t *testing.T) {
 // TestSpinACPAgent_LoadSession_WithMcpServers tests session loading with MCP servers.
 func TestSpinACPAgent_LoadSession_WithMcpServers(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -153,6 +157,7 @@ func TestSpinACPAgent_LoadSession_WithMcpServers(t *testing.T) {
 // TestSpinACPAgent_LoadSession_InvalidMcpServer tests LoadSession with invalid MCP server config.
 func TestSpinACPAgent_LoadSession_InvalidMcpServer(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)

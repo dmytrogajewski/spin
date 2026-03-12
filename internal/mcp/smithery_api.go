@@ -91,10 +91,10 @@ func (c *SmitheryAPIClient) SearchTools(ctx context.Context, query string, limit
 	}
 
 	if parsedURL.Scheme != schemeHTTPS {
-		return nil, fmt.Errorf("invalid URL scheme %q, expected https", parsedURL.Scheme)
+		return nil, fmt.Errorf("%w: got %q", ErrInvalidURLScheme, parsedURL.Scheme)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", parsedURL.String(), http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -115,10 +115,11 @@ func (c *SmitheryAPIClient) SearchTools(ctx context.Context, query string, limit
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 
-return nil, fmt.Errorf("API error (status %d): %s: %w", resp.StatusCode, string(body), ErrAPIErrorStatus)
+		return nil, fmt.Errorf("API error (status %d): %s: %w", resp.StatusCode, string(body), ErrAPIErrorStatus)
 	}
 
 	var result SmitherySearchResponse
+
 	err = json.NewDecoder(resp.Body).Decode(&result)
 	if err != nil {
 		return nil, fmt.Errorf("parse response: %w", err)

@@ -14,11 +14,17 @@ import (
 )
 
 var (
+	// ErrCannotTransitionFromArchivedState is a sentinel error.
 	ErrCannotTransitionFromArchivedState = errors.New("cannot transition from archived state")
+	// ErrCannotTransitionFromToActive is a sentinel error.
 	ErrCannotTransitionFromToActive = errors.New("cannot transition from  to active")
+	// ErrSessionIDIsEmpty is a sentinel error.
 	ErrSessionIDIsEmpty = errors.New("session ID is empty")
+	// ErrWorkDirectoryIsEmpty is a sentinel error.
 	ErrWorkDirectoryIsEmpty = errors.New("work directory is empty")
+	// ErrUpdatedAtIsBeforeCreatedAt is a sentinel error.
 	ErrUpdatedAtIsBeforeCreatedAt = errors.New("updated_at is before created_at")
+	// ErrInvalidState is a sentinel error.
 	ErrInvalidState = errors.New("invalid state")
 )
 
@@ -31,13 +37,20 @@ type State = state.State
 
 // Session states - now using unified state constants.
 const (
-	StateActive    = state.StateIdle      // Session is active (idle, not running).
-	StateRunning   = state.StateRunning   // Session has active execution.
-	StatePaused    = state.StatePaused    // Session is paused.
+	// StateActive is exported.
+	StateActive = state.StateIdle // Session is active (idle, not running).
+	// StateRunning is exported.
+	StateRunning = state.StateRunning // Session has active execution.
+	// StatePaused is exported.
+	StatePaused = state.StatePaused // Session is paused.
+	// StateCompleted is exported.
 	StateCompleted = state.StateCompleted // Session completed successfully.
-	StateFailed    = state.StateFailed    // Session failed.
+	// StateFailed is exported.
+	StateFailed = state.StateFailed // Session failed.
+	// StateCancelled is exported.
 	StateCancelled = state.StateCancelled // Session canceled by user.
-	StateArchived  = state.StateArchived  // Session archived.
+	// StateArchived is exported.
+	StateArchived = state.StateArchived // Session archived.
 )
 
 // Session-specific state methods are now handled by state.UnifiedState.
@@ -46,13 +59,13 @@ const (
 // Note: Conversation content (messages) is stored separately in history.History.
 // Session only tracks metadata, state, and configuration.
 type Session struct {
-	ID        string       // Unique session identifier (UUID string, for storage).
-	WorkDir   string       // Working directory for this session.
-	CreatedAt time.Time    // Session creation timestamp.
-	UpdatedAt time.Time    // Last update timestamp.
-	Metadata  Metadata     // Session metadata.
-	State     State        // Current session state.
-	Version   int          // Schema version for migrations.
+	ID        string        // Unique session identifier (UUID string, for storage).
+	WorkDir   string        // Working directory for this session.
+	CreatedAt time.Time     // Session creation timestamp.
+	UpdatedAt time.Time     // Last update timestamp.
+	Metadata  Metadata      // Session metadata.
+	State     State         // Current session state.
+	Version   int           // Schema version for migrations.
 	mu        *sync.RWMutex // Protects all fields.
 }
 
@@ -133,7 +146,7 @@ func (s *Session) validateStateTransition(from, to State) error {
 
 	// Cannot transition back to active from terminal states.
 	if to == StateActive && (from == StateCompleted || from == StateFailed || from == StateCancelled) {
-return fmt.Errorf("cannot transition from %s to active: %w", from, ErrCannotTransitionFromToActive)
+		return fmt.Errorf("cannot transition from %s to active: %w", from, ErrCannotTransitionFromToActive)
 	}
 
 	return nil
@@ -190,6 +203,7 @@ func (s *Session) SetTitle(title string) error {
 // Validate checks session integrity.
 func (s *Session) Validate() error {
 	s.ensureMu()
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -228,7 +242,7 @@ func (s *Session) validateBasicFields() []error {
 
 	// Validate state.
 	if !isValidState(s.State) {
-errs = append(errs, fmt.Errorf("invalid state: %s: %w", s.State, ErrInvalidState))
+		errs = append(errs, fmt.Errorf("invalid state: %s: %w", s.State, ErrInvalidState))
 	}
 
 	return errs

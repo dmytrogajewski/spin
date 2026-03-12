@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	defaultSummarizerTimeout    = 10 * time.Second
-	defaultSummarizerMaxTokens  = 500
+	defaultSummarizerTimeout     = 10 * time.Second
+	defaultSummarizerMaxTokens   = 500
 	defaultSummarizerTargetRatio = 0.3
-	percentConversion           = 100
+	percentConversion            = 100
 )
 
 // LLMSummarizerConfig configures the LLM summarizer.

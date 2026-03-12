@@ -13,6 +13,7 @@ type TestData struct {
 
 func TestFileStore_SaveLoad(t *testing.T) {
 	t.Parallel()
+
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})
@@ -41,6 +42,7 @@ func TestFileStore_SaveLoad(t *testing.T) {
 
 func TestFileStore_Delete(t *testing.T) {
 	t.Parallel()
+
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})
@@ -66,6 +68,7 @@ func TestFileStore_Delete(t *testing.T) {
 
 func TestFileStore_Exists(t *testing.T) {
 	t.Parallel()
+
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})
@@ -98,6 +101,7 @@ func TestFileStore_Exists(t *testing.T) {
 
 func TestFileStore_List(t *testing.T) {
 	t.Parallel()
+
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})
@@ -122,6 +126,7 @@ func TestFileStore_List(t *testing.T) {
 
 func TestFileStore_CustomSuffix(t *testing.T) {
 	t.Parallel()
+
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 		Suffix:  ".history.json",
@@ -146,6 +151,7 @@ func TestFileStore_CustomSuffix(t *testing.T) {
 
 func TestFileStore_EmptyKey(t *testing.T) {
 	t.Parallel()
+
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})
@@ -177,6 +183,7 @@ func TestFileStore_EmptyKey(t *testing.T) {
 
 func TestFileStore_NotFound(t *testing.T) {
 	t.Parallel()
+
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})

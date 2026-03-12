@@ -374,6 +374,7 @@ func ptr[T any](v T) *T {
 // Helper: Generate mock transcript.
 func generateMockTranscript(lines int) string {
 	result := ""
+
 	var resultSb316 strings.Builder
 
 	for i := range lines {

@@ -7,6 +7,7 @@ import (
 
 func TestFakeTTY_EnterExit(t *testing.T) {
 	t.Parallel()
+
 	tty := NewFakeTTY(80, 24)
 
 	if tty.InRawMode() {
@@ -34,6 +35,7 @@ func TestFakeTTY_EnterExit(t *testing.T) {
 
 func TestFakeTTY_Size(t *testing.T) {
 	t.Parallel()
+
 	tty := NewFakeTTY(120, 40)
 
 	w, h := tty.Size()
@@ -48,6 +50,7 @@ func TestFakeTTY_Size(t *testing.T) {
 
 func TestFakeTTY_OnResize(t *testing.T) {
 	t.Parallel()
+
 	tty := NewFakeTTY(80, 24)
 
 	var (
@@ -80,6 +83,7 @@ func TestFakeTTY_OnResize(t *testing.T) {
 
 func TestFakeTTY_ConcurrentResize(t *testing.T) {
 	t.Parallel()
+
 	tty := NewFakeTTY(80, 24)
 
 	var wg sync.WaitGroup

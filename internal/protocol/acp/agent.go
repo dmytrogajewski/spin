@@ -14,6 +14,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
+	"github.com/dmytrogajewski/spin/internal/appinfo"
 	"github.com/dmytrogajewski/spin/internal/commands"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -24,7 +25,6 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/task"
-	"github.com/dmytrogajewski/spin/internal/appinfo"
 )
 
 const (
@@ -43,19 +43,33 @@ var (
 	ErrNilEmitter = errors.New("emitter cannot be nil")
 	// ErrNotImplemented is returned for methods that are not implemented.
 	ErrNotImplemented = errors.New("not implemented")
+	// ErrWorkingDirectoryIsRequired is a sentinel error.
 	ErrWorkingDirectoryIsRequired = errors.New("working directory is required")
+	// ErrHTTPTransportIsNotSupported is a sentinel error.
 	ErrHTTPTransportIsNotSupported = errors.New("HTTP transport is not supported")
+	// ErrSseTransportIsNotSupported is a sentinel error.
 	ErrSseTransportIsNotSupported = errors.New("SSE transport is not supported")
+	// ErrNoTransportSpecified is a sentinel error.
 	ErrNoTransportSpecified = errors.New("no transport specified")
+	// ErrSessionNotFound is a sentinel error.
 	ErrSessionNotFound = errors.New("session not found")
+	// ErrPromptCannotBeEmpty is a sentinel error.
 	ErrPromptCannotBeEmpty = errors.New("prompt cannot be empty")
+	// ErrConversationManagerNotConfigured is a sentinel error.
 	ErrConversationManagerNotConfigured = errors.New("conversation manager not configured")
+	// ErrNoValidContentBlocksFound is a sentinel error.
 	ErrNoValidContentBlocksFound = errors.New("no valid content blocks found")
+	// ErrSessionPersistenceNotAvailable is a sentinel error.
 	ErrSessionPersistenceNotAvailable = errors.New("session persistence not available")
+	// ErrSessionNotFound2 is a sentinel error.
 	ErrSessionNotFound2 = errors.New("session not found")
+	// ErrSessionNotFound3 is a sentinel error.
 	ErrSessionNotFound3 = errors.New("session not found")
+	// ErrInvalidMode is a sentinel error.
 	ErrInvalidMode = errors.New("invalid mode")
+	// ErrSessionNotFound4 is a sentinel error.
 	ErrSessionNotFound4 = errors.New("session not found")
+	// ErrApprovalServiceNotConfigured is a sentinel error.
 	ErrApprovalServiceNotConfigured = errors.New("approval service not configured")
 )
 
@@ -72,18 +86,18 @@ type SpinACPAgent struct {
 	mcpService      *mcp.Service
 	emitter         *events.EventEmitter
 	approvalService *security.ApprovalService // Optional approval service for permission requests.
-	approvalHandler *ApprovalHandler       // ACP-specific approval handler.
+	approvalHandler *ApprovalHandler          // ACP-specific approval handler.
 	clientCaps      *acp.ClientCapabilities   // Stored after Initialize.
 	sessions        map[acp.SessionId]*session.Session
-	sessionModes    map[acp.SessionId]acp.SessionModeId    // Current mode per session.
-	storage         session.Storage                        // Optional session storage for persistence.
-	histStorage     history.Storage                        // Optional history storage for persistence.
-	connection      notificationSender                     // Optional connection for sending notifications.
-	cancels         map[acp.SessionId]context.CancelFunc   // Cancel functions for in-progress prompt executions.
-	convManager     *conversation.Manager                  // Manages conversations per session.
-	transformers    map[acp.SessionId]*EventTransformer // Event transformers per session.
-	acpRuntime      *executor.ACPRuntime                    // ACP runtime for tool registration.
-	mu              sync.RWMutex                           // Protects sessions map, sessionModes, connection, cancels, and transformers.
+	sessionModes    map[acp.SessionId]acp.SessionModeId  // Current mode per session.
+	storage         session.Storage                      // Optional session storage for persistence.
+	histStorage     history.Storage                      // Optional history storage for persistence.
+	connection      notificationSender                   // Optional connection for sending notifications.
+	cancels         map[acp.SessionId]context.CancelFunc // Cancel functions for in-progress prompt executions.
+	convManager     *conversation.Manager                // Manages conversations per session.
+	transformers    map[acp.SessionId]*EventTransformer  // Event transformers per session.
+	acpRuntime      *executor.ACPRuntime                 // ACP runtime for tool registration.
+	mu              sync.RWMutex                         // Protects sessions map, sessionModes, connection, cancels, and transformers.
 }
 
 // NewSpinACPAgentWithStorage creates a new ACP agent adapter with optional session storage.
@@ -299,6 +313,7 @@ func (a *SpinACPAgent) NewSession(ctx context.Context, req acp.NewSessionRequest
 	}
 
 	defaultMode := getDefaultMode()
+
 	a.mu.Lock()
 	a.sessionModes[sessionID] = defaultMode
 	a.mu.Unlock()
@@ -405,6 +420,7 @@ func (a *SpinACPAgent) setupPromptContext(
 	ctx context.Context, sessionID acp.SessionId, sess *session.Session,
 ) (context.Context, context.CancelFunc) {
 	promptCtx, cancel := context.WithCancel(ctx)
+
 	promptCtx = executor.ContextWithSessionID(promptCtx, string(sessionID))
 	if sess != nil && sess.WorkDir != "" {
 		promptCtx = executor.ContextWithWorkDir(promptCtx, sess.WorkDir)
@@ -414,6 +430,7 @@ func (a *SpinACPAgent) setupPromptContext(
 	if existingCancel, cancelExists := a.cancels[sessionID]; cancelExists {
 		existingCancel()
 	}
+
 	a.cancels[sessionID] = cancel
 	a.mu.Unlock()
 
@@ -424,6 +441,7 @@ func (a *SpinACPAgent) setupPromptContext(
 func (a *SpinACPAgent) cleanupPromptCancel(sessionID acp.SessionId) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
 	delete(a.cancels, sessionID)
 }
 
@@ -433,6 +451,7 @@ func (a *SpinACPAgent) extractPromptInput(blocks []acp.ContentBlock) (string, er
 	if err != nil {
 		return "", fmt.Errorf("failed to convert content blocks: %w", err)
 	}
+
 	return extractTextFromMessages(messages), nil
 }
 
@@ -459,7 +478,6 @@ func (a *SpinACPAgent) tryExecuteCommand(ctx context.Context, sessionID acp.Sess
 
 	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, true, nil
 }
-
 
 // promptWithConversation executes a prompt using ConversationManager.
 // This is the new path that uses Conversation.RunTurn() for proper history management.
@@ -559,6 +577,7 @@ func (a *SpinACPAgent) subscribeTransformerEvents(
 
 	go func() {
 		defer close(eventsDone)
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -567,12 +586,14 @@ func (a *SpinACPAgent) subscribeTransformerEvents(
 				if !ok {
 					return
 				}
+
 				transformer.Transform(ctx, event)
 			}
 		}
 	}()
 
 	unsubscribe := func() { a.emitter.Unsubscribe(subID) }
+
 	return unsubscribe, eventsDone
 }
 
@@ -686,6 +707,7 @@ func convertContentBlock(block acp.ContentBlock) (message.Message, bool) {
 		return newUserMessage(block.Text.Text), true
 	case block.ResourceLink != nil:
 		path := extractPathFromURI(block.ResourceLink.Uri)
+
 		return newUserMessage(fmt.Sprintf("File: %s", path)), true
 	case block.Resource != nil:
 		return convertResourceBlock(block.Resource)
@@ -712,10 +734,12 @@ func convertResourceBlock(res *acp.ContentBlockResource) (message.Message, bool)
 	if res.Resource.TextResourceContents != nil {
 		uri := res.Resource.TextResourceContents.Uri
 		resourceName := extractResourceNameFromURI(uri)
+
 		content := res.Resource.TextResourceContents.Text
 		if resourceName != "" {
 			content = fmt.Sprintf("[Resource: %s]\n%s", resourceName, content)
 		}
+
 		return newUserMessage(content), true
 	}
 
@@ -724,12 +748,15 @@ func convertResourceBlock(res *acp.ContentBlockResource) (message.Message, bool)
 		if res.Resource.BlobResourceContents.MimeType != nil {
 			mimeType = *res.Resource.BlobResourceContents.MimeType
 		}
+
 		uri := res.Resource.BlobResourceContents.Uri
 		resourceName := extractResourceNameFromURI(uri)
+
 		content := fmt.Sprintf("Resource (blob, %s)", mimeType)
 		if resourceName != "" {
 			content = fmt.Sprintf("[Resource: %s] %s", resourceName, content)
 		}
+
 		return newUserMessage(content), true
 	}
 
@@ -742,6 +769,7 @@ func convertImageBlock(img *acp.ContentBlockImage) message.Message {
 	if mimeType == "" {
 		mimeType = mimeImagePNG
 	}
+
 	return newUserMessage(fmt.Sprintf("[Image: %s, %d bytes]", mimeType, len(img.Data)))
 }
 
@@ -751,6 +779,7 @@ func convertAudioBlock(audio *acp.ContentBlockAudio) message.Message {
 	if mimeType == "" {
 		mimeType = "audio/mpeg"
 	}
+
 	return newUserMessage(fmt.Sprintf("[Audio: %s, %d bytes]", mimeType, len(audio.Data)))
 }
 
@@ -861,6 +890,7 @@ func mapStopReasonFromError(err error, resp *agent.Response) acp.StopReason {
 // This runs in a goroutine and continues until the context is canceled or the channel is closed.
 func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionId, eventCh <-chan events.Event) {
 	fileTracker := newFileContentTracker()
+
 	var accumulatedContent string
 
 	a.mu.RLock()
@@ -886,6 +916,7 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 			if !ok {
 				return
 			}
+
 			accumulatedContent = proc.handleEvent(ctx, event, accumulatedContent)
 		}
 	}
@@ -947,6 +978,7 @@ func (p *eventProcessor) handleContentDelta(ctx context.Context, event events.Ev
 	}
 
 	p.sendNotification(ctx, acp.UpdateAgentMessageText(data.Content))
+
 	return accumulatedContent + data.Content
 }
 
@@ -956,6 +988,7 @@ func (p *eventProcessor) handleThinkingDelta(ctx context.Context, event events.E
 	if !hasThinking {
 		return
 	}
+
 	p.sendNotification(ctx, acp.UpdateAgentThoughtText(data.Content))
 }
 
@@ -1007,14 +1040,17 @@ func extractTerminalID(event events.Event) string {
 	if event.Type != events.EventToolCallComplete {
 		return ""
 	}
+
 	data, hasComplete := event.ToolCallCompleteData()
 	if !hasComplete {
 		return ""
 	}
+
 	terminalID, isStr := data.Metadata["terminal_id"].(string)
 	if !isStr {
 		return ""
 	}
+
 	return terminalID
 }
 
@@ -1077,8 +1113,10 @@ func convertMCPServers(servers []acp.McpServer) ([]mcp.ServerConfig, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid MCP server config: %w", err)
 		}
+
 		configs = append(configs, config)
 	}
+
 	return configs, nil
 }
 
@@ -1132,6 +1170,7 @@ func (a *SpinACPAgent) replayAssistantMessage(ctx context.Context, sessionID acp
 	if thought != "" {
 		a.sendSessionUpdate(ctx, sessionID, conn, acp.UpdateAgentThoughtText(thought))
 	}
+
 	if cleanContent != "" {
 		a.sendSessionUpdate(ctx, sessionID, conn, acp.UpdateAgentMessageText(cleanContent))
 	}
@@ -1214,7 +1253,7 @@ func (a *SpinACPAgent) Cancel(_ context.Context, notif acp.CancelNotification) e
 	a.mu.RUnlock()
 
 	if !exists {
-return fmt.Errorf("session not found: %s: %w", notif.SessionId, ErrSessionNotFound2)
+		return fmt.Errorf("session not found: %s: %w", notif.SessionId, ErrSessionNotFound2)
 	}
 
 	// Cancel in-progress execution for this session.
@@ -1326,7 +1365,7 @@ func (a *SpinACPAgent) SetSessionMode(ctx context.Context, req acp.SetSessionMod
 	a.mu.RUnlock()
 
 	if !exists {
-return acp.SetSessionModeResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound3)
+		return acp.SetSessionModeResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound3)
 	}
 
 	// Validate mode ID is in available modes.
@@ -1364,6 +1403,7 @@ return acp.SetSessionModeResponse{}, fmt.Errorf("session not found: %s: %w", req
 			SessionId: req.SessionId,
 			Update:    update,
 		}
+
 		err := a.connection.SessionUpdate(ctx, notif)
 		if err != nil {
 			// Log error but don't fail the mode change.
@@ -1406,6 +1446,7 @@ func (a *SpinACPAgent) RequestPermission(ctx context.Context, req acp.RequestPer
 		if ctx.Err() != nil {
 			return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
 		}
+
 		return acp.RequestPermissionResponse{}, fmt.Errorf("approval request failed: %w", approvalErr)
 	}
 
@@ -1418,10 +1459,12 @@ func selectPermissionOption(approved bool, options []acp.PermissionOption) acp.R
 		if approved && (opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways) {
 			return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeSelected(opt.OptionId)}
 		}
+
 		if !approved && (opt.Kind == acp.PermissionOptionKindRejectOnce || opt.Kind == acp.PermissionOptionKindRejectAlways) {
 			return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeSelected(opt.OptionId)}
 		}
 	}
+
 	return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}
 }
 

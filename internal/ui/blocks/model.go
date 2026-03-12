@@ -8,10 +8,15 @@ import (
 )
 
 var (
+	// ErrBlockIDIsEmpty is returned when a block has an empty ID.
 	ErrBlockIDIsEmpty = errors.New("block ID is empty")
+	// ErrInvalidBlockType is returned when a block type is not recognized.
 	ErrInvalidBlockType = errors.New("invalid block type")
+	// ErrInvalidFoldState is a sentinel error.
 	ErrInvalidFoldState = errors.New("invalid fold state")
+	// ErrInvalidSeverity is a sentinel error.
 	ErrInvalidSeverity = errors.New("invalid severity")
+	// ErrInvalidTimestamp is a sentinel error.
 	ErrInvalidTimestamp = errors.New("invalid timestamp")
 )
 
@@ -84,19 +89,19 @@ func (b *Block) Validate() error {
 	}
 
 	if !b.Type.Valid() {
-return fmt.Errorf("invalid block type: %s: %w", b.Type, ErrInvalidBlockType)
+		return fmt.Errorf("invalid block type: %s: %w", b.Type, ErrInvalidBlockType)
 	}
 
 	if !b.FoldState.Valid() {
-return fmt.Errorf("invalid fold state: %s: %w", b.FoldState, ErrInvalidFoldState)
+		return fmt.Errorf("invalid fold state: %s: %w", b.FoldState, ErrInvalidFoldState)
 	}
 
 	if !b.Severity.Valid() {
-return fmt.Errorf("invalid severity: %s: %w", b.Severity, ErrInvalidSeverity)
+		return fmt.Errorf("invalid severity: %s: %w", b.Severity, ErrInvalidSeverity)
 	}
 
 	if b.Timestamp <= 0 {
-return fmt.Errorf("invalid timestamp: %d: %w", b.Timestamp, ErrInvalidTimestamp)
+		return fmt.Errorf("invalid timestamp: %d: %w", b.Timestamp, ErrInvalidTimestamp)
 	}
 
 	return nil

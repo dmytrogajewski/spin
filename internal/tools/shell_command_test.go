@@ -12,7 +12,6 @@ const (
 	testFunctionType = "function"
 )
 
-
 // Mock executor for shell_command tests.
 type mockExecutor struct {
 	executeFunc func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error)
@@ -53,6 +52,7 @@ func (m *mockResult) GetMetadata() map[string]any {
 // TestNewShellCommandTool_NilExecutor tests that creating tool with nil executor fails gracefully.
 func TestNewShellCommandTool_NilExecutor(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	if tool == nil {
@@ -67,6 +67,7 @@ func TestNewShellCommandTool_NilExecutor(t *testing.T) {
 // TestShellCommandTool_Name tests that Name returns correct tool name.
 func TestShellCommandTool_Name(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	expected := "shell_command"
@@ -78,6 +79,7 @@ func TestShellCommandTool_Name(t *testing.T) {
 // TestShellCommandTool_Description tests that Description returns correct description.
 func TestShellCommandTool_Description(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	desc := tool.Description()
@@ -93,6 +95,7 @@ func TestShellCommandTool_Description(t *testing.T) {
 // TestShellCommandTool_Schema tests that Schema returns valid schema.
 func TestShellCommandTool_Schema(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	schema := tool.Schema()
@@ -132,6 +135,7 @@ func TestShellCommandTool_Schema(t *testing.T) {
 // TestShellCommandTool_Execute_MissingOperation tests missing operation parameter.
 func TestShellCommandTool_Execute_MissingOperation(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	params, err := FromMap(map[string]any{})
@@ -154,6 +158,7 @@ func TestShellCommandTool_Execute_MissingOperation(t *testing.T) {
 // TestShellCommandTool_Execute_UnknownOperation tests unknown operation.
 func TestShellCommandTool_Execute_UnknownOperation(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	params, err := FromMap(map[string]any{
@@ -178,6 +183,7 @@ func TestShellCommandTool_Execute_UnknownOperation(t *testing.T) {
 // TestShellCommandTool_Execute_NilExecutor tests execute operation with nil executor.
 func TestShellCommandTool_Execute_NilExecutor(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	params, err := FromMap(map[string]any{
@@ -203,6 +209,7 @@ func TestShellCommandTool_Execute_NilExecutor(t *testing.T) {
 // TestShellCommandTool_Execute_MissingCommand tests execute without command.
 func TestShellCommandTool_Execute_MissingCommand(t *testing.T) {
 	t.Parallel()
+
 	executor := &mockExecutor{
 		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 			return &mockResult{Stdout: "", Stderr: "", ExitCode: 0}, nil
@@ -232,6 +239,7 @@ func TestShellCommandTool_Execute_MissingCommand(t *testing.T) {
 // TestShellCommandTool_Execute_EmptyCommand tests execute with empty command.
 func TestShellCommandTool_Execute_EmptyCommand(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	params, err := FromMap(map[string]any{
@@ -253,6 +261,7 @@ func TestShellCommandTool_Execute_EmptyCommand(t *testing.T) {
 // TestShellCommandTool_Execute_Success tests successful command execution.
 func TestShellCommandTool_Execute_Success(t *testing.T) {
 	t.Parallel()
+
 	executor := &mockExecutor{
 		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 			return &mockResult{
@@ -287,6 +296,7 @@ func TestShellCommandTool_Execute_Success(t *testing.T) {
 // TestShellCommandTool_Execute_Failure tests failed command execution.
 func TestShellCommandTool_Execute_Failure(t *testing.T) {
 	t.Parallel()
+
 	executor := &mockExecutor{
 		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 			return &mockResult{
@@ -331,6 +341,7 @@ func runShellExecuteSuccessTests(t *testing.T, cases []shellExecuteSuccessCase) 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			executor := &mockExecutor{
 				executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 					return &mockResult{
@@ -392,6 +403,7 @@ func TestShellCommandTool_Execute_WithTimeout(t *testing.T) {
 // TestShellCommandTool_Execute_Timeout tests execute timeout.
 func TestShellCommandTool_Execute_Timeout(t *testing.T) {
 	t.Parallel()
+
 	executor := &mockExecutor{
 		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 			return nil, context.DeadlineExceeded
@@ -461,6 +473,7 @@ func TestShellCommandTool_GetEnvironment_WithShellInfo(t *testing.T) {
 // TestShellCommandTool_GetEnvironment_Fallback tests get_environment without shell integration.
 func TestShellCommandTool_GetEnvironment_Fallback(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	params, err := FromMap(map[string]any{
@@ -485,6 +498,7 @@ func TestShellCommandTool_GetEnvironment_Fallback(t *testing.T) {
 // TestShellCommandTool_GetShellInfo_Fallback tests get_shell_info without shell integration.
 func TestShellCommandTool_GetShellInfo_Fallback(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	params, err := FromMap(map[string]any{
@@ -509,6 +523,7 @@ func TestShellCommandTool_GetShellInfo_Fallback(t *testing.T) {
 // TestShellCommandTool_DetectShell_MissingCommand tests detect_shell without command.
 func TestShellCommandTool_DetectShell_MissingCommand(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	params, err := FromMap(map[string]any{
@@ -546,6 +561,7 @@ func TestShellCommandTool_DetectShell(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			tool := NewShellCommandTool(nil, nil, nil)
 
 			params, err := FromMap(map[string]any{
@@ -573,6 +589,7 @@ func TestShellCommandTool_DetectShell(t *testing.T) {
 // TestShellCommandTool_DetectShell_Redirect tests detect_shell with redirect.
 func TestShellCommandTool_DetectShell_Redirect(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	tests := []struct {
@@ -593,6 +610,7 @@ func TestShellCommandTool_DetectShell_Redirect(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			params, err := FromMap(map[string]any{
 				"operation": "detect_shell",
 				"command":   tt.command,
@@ -657,6 +675,7 @@ func (m *mockValidatorShell) Classify(cmd CommandInfo) (ValidationResult, error)
 // TestShellCommandTool_Validate_NilValidator tests validate with nil validator.
 func TestShellCommandTool_Validate_NilValidator(t *testing.T) {
 	t.Parallel()
+
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	params, err := FromMap(map[string]any{
@@ -682,6 +701,7 @@ func TestShellCommandTool_Validate_NilValidator(t *testing.T) {
 // TestShellCommandTool_Validate_MissingCommand tests validate without command.
 func TestShellCommandTool_Validate_MissingCommand(t *testing.T) {
 	t.Parallel()
+
 	validator := &mockValidatorShell{}
 	tool := NewShellCommandTool(validator, nil, nil)
 
@@ -722,6 +742,7 @@ func TestShellCommandTool_Validate_Classifications(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			validator := &mockValidatorShell{
 				classifyFunc: func(_ CommandInfo) (ValidationResult, error) {
 					return &mockClassificationResult{
@@ -757,6 +778,7 @@ func TestShellCommandTool_Validate_Classifications(t *testing.T) {
 // TestShellCommandTool_Validate_EmptyCommand tests validate with empty command.
 func TestShellCommandTool_Validate_EmptyCommand(t *testing.T) {
 	t.Parallel()
+
 	validator := &mockValidatorShell{}
 	tool := NewShellCommandTool(validator, nil, nil)
 

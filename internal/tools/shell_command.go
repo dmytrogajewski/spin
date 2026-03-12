@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	classificationLow      = 2
-	classificationMedium   = 3
-	classificationHigh     = 4
-	shellCommandName       = "shell_command"
+	classificationLow    = 2
+	classificationMedium = 3
+	classificationHigh   = 4
+	shellCommandName     = "shell_command"
 )
 
 // CommandValidator validates commands for security (to avoid import cycle with security package).
@@ -81,10 +81,13 @@ type simpleCommand struct {
 
 // GetProgram implements the GetProgram operation.
 func (c *simpleCommand) GetProgram() string { return c.program }
+
 // GetArgs implements the GetArgs operation.
-func (c *simpleCommand) GetArgs() []string  { return c.args }
+func (c *simpleCommand) GetArgs() []string { return c.args }
+
 // GetRaw implements the GetRaw operation.
-func (c *simpleCommand) GetRaw() string     { return c.raw }
+func (c *simpleCommand) GetRaw() string { return c.raw }
+
 // GetWorkDir implements the GetWorkDir operation.
 func (c *simpleCommand) GetWorkDir() string { return c.workDir }
 
@@ -118,14 +121,14 @@ func (t *ShellCommandTool) Schema() ToolSchema {
 				Type: "object",
 				Properties: map[string]PropertyDefinition{
 					"operation": {
-						Type:        "string",
+						Type: "string",
 						Description: "Operation type: 'execute' to run a shell command (most common), " +
 							"'get_environment' to list env vars, 'get_shell_info' for shell info, " +
 							"'detect_shell' to check if command needs shell, 'validate' to validate a command",
-						Enum:        []string{"execute", "get_environment", "get_shell_info", "detect_shell", "validate"},
+						Enum: []string{"execute", "get_environment", "get_shell_info", "detect_shell", "validate"},
 					},
 					"command": {
-						Type:        "string",
+						Type: "string",
 						Description: "The shell command to execute (e.g., 'ls -la', 'uname -a', 'df -h'). " +
 							"REQUIRED for 'execute', 'detect_shell', and 'validate' operations. " +
 							"This is the actual command string you want to run.",
@@ -247,11 +250,11 @@ func (t *ShellCommandTool) buildCommand(cmdStr, workDir string) (*simpleCommand,
 
 	parts, err := shlex.Split(cmdStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse command: %v", err)
+		return nil, fmt.Errorf("failed to parse command: %w", err)
 	}
 
 	if len(parts) == 0 {
-		return nil, fmt.Errorf("command cannot be empty")
+		return nil, ErrCommandCannotBeEmpty
 	}
 
 	return &simpleCommand{

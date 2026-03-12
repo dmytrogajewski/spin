@@ -20,8 +20,11 @@ import (
 )
 
 var (
+	// ErrAgentIsRequired is a sentinel error.
 	ErrAgentIsRequired = errors.New("agent is required")
+	// ErrEmitterIsRequired is a sentinel error.
 	ErrEmitterIsRequired = errors.New("emitter is required")
+	// ErrWorkdirIsRequired is a sentinel error.
 	ErrWorkdirIsRequired = errors.New("workDir is required")
 )
 

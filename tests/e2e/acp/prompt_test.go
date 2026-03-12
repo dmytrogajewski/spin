@@ -94,7 +94,9 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 				acp.TextBlock("What is 2+2?"),
 			},
 		}
+
 		var resp acp.PromptResponse
+
 		resp, err = client.Prompt(ctx, req)
 		require.NoError(t, err)
 		assert.NotNil(t, resp.StopReason)
@@ -110,7 +112,9 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 				acp.ImageBlock("base64imagedata", "image/png"),
 			},
 		}
+
 		var resp acp.PromptResponse
+
 		resp, err = client.Prompt(ctx, req)
 		require.NoError(t, err)
 		assert.NotNil(t, resp.StopReason)
@@ -127,7 +131,9 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 				acp.ImageBlock("base64imagedata", "image/jpeg"),
 			},
 		}
+
 		var resp acp.PromptResponse
+
 		resp, err = client.Prompt(ctx, req)
 		require.NoError(t, err)
 		assert.NotNil(t, resp.StopReason)
@@ -333,8 +339,8 @@ func TestACP_Prompt_ResourceBlock(t *testing.T) {
 
 // stopReasonCase describes a test case for verifying stop reason behavior.
 type stopReasonCase struct {
-	name      string
-	stopKind  string
+	name     string
+	stopKind string
 }
 
 func runStopReasonTests(t *testing.T, cases []stopReasonCase) {

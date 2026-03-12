@@ -357,10 +357,7 @@ func calculateSimilarity(s1, s2 string) float64 {
 	// Simple similarity based on common characters.
 	common := 0
 
-	maxLen := len(s1)
-	if len(s2) > maxLen {
-		maxLen = len(s2)
-	}
+	maxLen := max(len(s2), len(s1))
 
 	for i := 0; i < len(s1) && i < len(s2); i++ {
 		if s1[i] == s2[i] {

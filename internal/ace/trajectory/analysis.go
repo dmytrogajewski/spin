@@ -134,11 +134,13 @@ func extractConcept(word string, seen map[string]bool) (string, bool) {
 
 	if isCapitalized && !stopwords[strings.ToLower(word)] {
 		seen[word] = true
+
 		return word, true
 	}
 
 	if isTechnical {
 		seen[word] = true
+
 		return word, true
 	}
 

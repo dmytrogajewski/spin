@@ -11,8 +11,11 @@ import (
 const escalateSeverity = 3
 
 var (
+	// ErrCycleDetectorNotConfigured is a sentinel error.
 	ErrCycleDetectorNotConfigured = errors.New("cycle detector not configured")
+	// ErrPatternDetectorNotConfigured is a sentinel error.
 	ErrPatternDetectorNotConfigured = errors.New("pattern detector not configured")
+	// ErrCycleDetectorRequiredForPatternDetection is a sentinel error.
 	ErrCycleDetectorRequiredForPatternDetection = errors.New("cycle detector required for pattern detection")
 )
 
@@ -106,7 +109,7 @@ type ReflectionIntervention struct{}
 // Apply implements the Apply operation.
 func (i *ReflectionIntervention) Apply(_ context.Context, messages []Message) ([]Message, error) {
 	reflectionMsg := &message{
-		role:      "user",
+		role: "user",
 		content: "I notice you may be repeating similar responses or approaches. " +
 			"Let's take a step back and try a different perspective. " +
 			"What other angles or methods could we explore for this task?",

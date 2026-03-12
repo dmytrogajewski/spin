@@ -17,7 +17,9 @@ import (
 )
 
 var (
+	// ErrWorkdirIsRequired is a sentinel error.
 	ErrWorkdirIsRequired = errors.New("workDir is required")
+	// ErrEmitterIsRequired is a sentinel error.
 	ErrEmitterIsRequired = errors.New("emitter is required")
 )
 

@@ -9,6 +9,7 @@ import (
 
 func TestFakeKeyboard_InjectKey(t *testing.T) {
 	t.Parallel()
+
 	kb := NewFakeKeyboard()
 	defer kb.Close()
 
@@ -30,6 +31,7 @@ func TestFakeKeyboard_InjectKey(t *testing.T) {
 
 func TestFakeKeyboard_InjectString(t *testing.T) {
 	t.Parallel()
+
 	kb := NewFakeKeyboard()
 	defer kb.Close()
 
@@ -54,6 +56,7 @@ func TestFakeKeyboard_InjectString(t *testing.T) {
 
 func TestFakeKeyboard_InjectEnter(t *testing.T) {
 	t.Parallel()
+
 	kb := NewFakeKeyboard()
 	defer kb.Close()
 
@@ -71,6 +74,7 @@ func TestFakeKeyboard_InjectEnter(t *testing.T) {
 
 func TestFakeKeyboard_InjectCtrlC(t *testing.T) {
 	t.Parallel()
+
 	kb := NewFakeKeyboard()
 	defer kb.Close()
 
@@ -88,6 +92,7 @@ func TestFakeKeyboard_InjectCtrlC(t *testing.T) {
 
 func TestFakeKeyboard_InjectCtrlD(t *testing.T) {
 	t.Parallel()
+
 	kb := NewFakeKeyboard()
 	defer kb.Close()
 
@@ -105,6 +110,7 @@ func TestFakeKeyboard_InjectCtrlD(t *testing.T) {
 
 func TestFakeKeyboard_InjectPaste(t *testing.T) {
 	t.Parallel()
+
 	kb := NewFakeKeyboard()
 	defer kb.Close()
 
@@ -127,6 +133,7 @@ func TestFakeKeyboard_InjectPaste(t *testing.T) {
 
 func TestFakeKeyboard_Close(t *testing.T) {
 	t.Parallel()
+
 	kb := NewFakeKeyboard()
 
 	kb.InjectKey(term.KeyRune, 'a')

@@ -165,9 +165,9 @@ func TestACP_Cancel_NoActivePrompt(t *testing.T) {
 
 // cancelDuringCase describes a test case for canceling during an active operation.
 type cancelDuringCase struct {
-	name       string
-	promptText string
-	logPrefix  string
+	name        string
+	promptText  string
+	logPrefix   string
 	logFallback string
 }
 

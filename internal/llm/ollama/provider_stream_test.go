@@ -26,7 +26,7 @@ func simulateStreamFilter(toolCalls []api.ToolCall, tools []api.Tool) []api.Tool
 	for _, tc := range toolCalls {
 		if tc.Function.Name != "" {
 			filtered = append(filtered, tc)
-		} else if inferred := inferToolName(tc.Function.Arguments, tools, streamTestLogger, streamTestCtx); inferred != "" {
+		} else if inferred := inferToolName(streamTestCtx, tc.Function.Arguments, tools, streamTestLogger); inferred != "" {
 			tc.Function.Name = inferred
 			filtered = append(filtered, tc)
 		} else {
@@ -283,7 +283,7 @@ func TestConvertOllamaChunkToOpenAI_ToolCallsPreserved(t *testing.T) {
 	}
 
 	// Convert to OpenAI format.
-	chunk := convertOllamaChunkToOpenAI(resp, "chatcmpl-test-42", "kimi-k2.5", streamTestLogger, streamTestCtx)
+	chunk := convertOllamaChunkToOpenAI(streamTestCtx, resp, "chatcmpl-test-42", "kimi-k2.5", streamTestLogger)
 
 	require.Len(t, chunk.Choices, 1)
 	require.Len(t, chunk.Choices[0].Delta.ToolCalls, 2, "both tool calls should appear in OpenAI chunk")
@@ -318,7 +318,7 @@ func TestConvertOllamaResponseToOpenAI_ToolCallsPreserved(t *testing.T) {
 		DoneReason: "stop",
 	}
 
-	result := convertOllamaResponseToOpenAI(resp, "kimi-k2.5", streamTestLogger, streamTestCtx)
+	result := convertOllamaResponseToOpenAI(streamTestCtx, resp, "kimi-k2.5", streamTestLogger)
 
 	require.Len(t, result.Choices, 1)
 	require.Len(t, result.Choices[0].Message.ToolCalls, 2)
@@ -434,7 +434,7 @@ func TestFinishReasonMapping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := mapOllamaDoneReasonToOpenAICompletion(tt.doneReason, tt.hasToolCalls, streamTestLogger, streamTestCtx)
+			result := mapOllamaDoneReasonToOpenAICompletion(streamTestCtx, tt.doneReason, tt.hasToolCalls, streamTestLogger)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -498,7 +498,7 @@ func TestInferToolName_Comprehensive(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := inferToolName(tt.args, tools, streamTestLogger, streamTestCtx)
+			result := inferToolName(streamTestCtx, tt.args, tools, streamTestLogger)
 			if tt.expectEmpty {
 				assert.Empty(t, result)
 			} else {
@@ -609,10 +609,10 @@ func TestConvertToolToOllama_RoundTrip(t *testing.T) {
 	}
 
 	// Verify inferToolName works with converted tools.
-	name := inferToolName(map[string]any{"command": "ls"}, ollamaTools, streamTestLogger, streamTestCtx)
+	name := inferToolName(streamTestCtx, map[string]any{"command": "ls"}, ollamaTools, streamTestLogger)
 	assert.Equal(t, "shell_command", name, "inferToolName must work with round-tripped tools")
 
-	name = inferToolName(map[string]any{"path": "foo.go"}, ollamaTools, streamTestLogger, streamTestCtx)
+	name = inferToolName(streamTestCtx, map[string]any{"path": "foo.go"}, ollamaTools, streamTestLogger)
 	assert.Equal(t, "read_file", name, "inferToolName must work with round-tripped tools (only read_file has path)")
 }
 
@@ -726,7 +726,7 @@ func TestConvertToolToOllama_RoundTripWithAllSpinTools(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := inferToolName(tt.args, ollamaTools, streamTestLogger, streamTestCtx)
+			result := inferToolName(streamTestCtx, tt.args, ollamaTools, streamTestLogger)
 			if tt.mustInfer {
 				assert.NotEmpty(t, result, "inferToolName must return non-empty for args: %v", tt.args)
 			}
@@ -782,7 +782,7 @@ func TestEndToEnd_NamelessToolCallSurvivesFullPipeline(t *testing.T) {
 	ollamaResp.Message.ToolCalls = simulateStreamFilter(ollamaResp.Message.ToolCalls, reqTools)
 
 	// Step 5: Convert to OpenAI format.
-	openaiResp := convertOllamaResponseToOpenAI(ollamaResp, "kimi-k2.5", streamTestLogger, streamTestCtx)
+	openaiResp := convertOllamaResponseToOpenAI(streamTestCtx, ollamaResp, "kimi-k2.5", streamTestLogger)
 
 	// ASSERTIONS: This is the final state the agent loop sees.
 	require.Len(t, openaiResp.Choices, 1)

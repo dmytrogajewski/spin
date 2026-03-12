@@ -61,16 +61,19 @@ func runToolTest(t *testing.T, tool Tool, params map[string]any, wantErr bool, w
 		if err == nil && result.Success {
 			t.Error("expected error but got success")
 		}
+
 		return
 	}
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+
 		return
 	}
 
 	if !result.Success {
 		t.Errorf("expected success, got error: %s", result.Error)
+
 		return
 	}
 
@@ -83,6 +86,7 @@ func runToolTest(t *testing.T, tool Tool, params map[string]any, wantErr bool, w
 
 func TestListDirectoryTool_ErrorCases(t *testing.T) {
 	t.Parallel()
+
 	tool := NewListDirectoryTool()
 
 	tests := []struct {
@@ -102,6 +106,7 @@ func TestListDirectoryTool_ErrorCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			params, _ := FromMap(tt.params)
 
 			result, err := tool.Execute(context.Background(), params)

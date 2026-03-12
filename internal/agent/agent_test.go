@@ -28,7 +28,7 @@ import (
 
 var (
 	errFileNotFoundNonexistentTxt = errors.New("file not found: nonexistent.txt")
-	errLlmProviderError = errors.New("LLM provider error")
+	errLlmProviderError           = errors.New("LLM provider error")
 )
 
 // newTestSecurityService creates a security service for testing.
@@ -469,6 +469,7 @@ func newAgentForTest(
 // The LLM calls list_directory but it's not executed, causing cycle detection.
 func TestToolExecutionBugReproduction(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 
 	// Setup: Create mock LLM that returns list_directory tool call.
@@ -593,6 +594,7 @@ func (c *toolEventCollector) assertToolExecuted(t *testing.T, expectedTool strin
 // TestToolExecutionWithRealToolCall tests that processToolCall actually executes the tool.
 func TestToolExecutionWithRealToolCall(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 
 	// Setup tool registry.
@@ -652,6 +654,7 @@ func TestToolExecutionWithRealToolCall(t *testing.T) {
 // TestStreamProcessingWithToolCalls tests that tool calls are extracted from stream.
 func TestStreamProcessingWithToolCalls(t *testing.T) {
 	t.Parallel()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -697,6 +700,7 @@ func TestStreamProcessingWithToolCalls(t *testing.T) {
 // TestGetToolResultContent tests that error messages are properly sent to LLM on tool failure.
 func TestGetToolResultContent(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		toolCall *ToolCall
@@ -765,6 +769,7 @@ func TestGetToolResultContent(t *testing.T) {
 // TestToolExecutionWithMockLLM tests tool execution with a mock LLM that returns tool calls.
 func TestToolExecutionWithMockLLM(t *testing.T) {
 	t.Parallel()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -829,6 +834,7 @@ func TestToolExecutionWithMockLLM(t *testing.T) {
 // TestDirectToolCallWithMockLLM tests ProcessToolCall directly with a mock provider.
 func TestDirectToolCallWithMockLLM(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 
 	toolRegistry := tools.NewRegistry()
@@ -1314,6 +1320,7 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 	agent.cycleDetection = true
 
 	initialMessages := cycleDetectionMessages()
+
 	recordRepeatedListDirSnapshots(agent.detection)
 
 	resp := &Response{}
@@ -1342,7 +1349,7 @@ func assertOriginalMessagesPreserved(t *testing.T, initial, modified []message.M
 		assert.Equal(t, initial[i].Role, modified[i].Role, "message[%d] role changed", i)
 		assert.Equal(t, initial[i].Content, modified[i].Content, "message[%d] content changed", i)
 		assert.Equal(t, initial[i].ToolCallID, modified[i].ToolCallID, "message[%d] ToolCallID lost", i)
-		assert.Equal(t, len(initial[i].ToolCalls), len(modified[i].ToolCalls), "message[%d] ToolCalls count changed", i)
+		assert.Len(t, modified[i].ToolCalls, len(initial[i].ToolCalls), "message[%d] ToolCalls count changed", i)
 	}
 }
 
@@ -1621,6 +1628,7 @@ func assertTokenBudgetDistribution(t *testing.T, capture *capturingLLMProvider, 
 	}
 
 	budgetCounts := make(map[int]int)
+
 	for _, req := range capture.requests {
 		maxTokens := int(req.MaxTokens.Value)
 		assert.True(t, expectedBudgets[maxTokens], "unexpected MaxTokens %d", maxTokens)
@@ -1789,6 +1797,7 @@ func newTestToolRuntime(_ any, registry *tools.Registry) *ToolRuntime {
 
 func TestAgent_validateToolCall(t *testing.T) {
 	t.Parallel()
+
 	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
@@ -1853,6 +1862,7 @@ func TestAgent_validateToolCall(t *testing.T) {
 
 func TestAgent_parseToolArguments(t *testing.T) {
 	t.Parallel()
+
 	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
@@ -1916,6 +1926,7 @@ func TestAgent_parseToolArguments(t *testing.T) {
 
 func TestAgent_addFinalMessage(t *testing.T) {
 	t.Parallel()
+
 	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
@@ -1960,6 +1971,7 @@ func TestAgent_addFinalMessage(t *testing.T) {
 
 func TestAgent_emitTurnStart(t *testing.T) {
 	t.Parallel()
+
 	agent := newTestAgentMinimal(nil)
 
 	// This test mainly ensures the method doesn't panic
@@ -1971,6 +1983,7 @@ func TestAgent_emitTurnStart(t *testing.T) {
 
 func TestAgent_applyTimeout(t *testing.T) {
 	t.Parallel()
+
 	agent := newTestAgentMinimal(nil)
 
 	ctx := context.Background()
@@ -1998,6 +2011,7 @@ func TestAgent_applyTimeout(t *testing.T) {
 
 func TestAgent_executeSetup(t *testing.T) {
 	t.Parallel()
+
 	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
@@ -2048,6 +2062,7 @@ func TestAgent_executeSetup(t *testing.T) {
 
 func TestAgent_finalizeResponse(t *testing.T) {
 	t.Parallel()
+
 	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
@@ -2094,6 +2109,7 @@ func TestAgent_finalizeResponse(t *testing.T) {
 // TestAgentThinkingStateBugFix tests the fix for the agent getting stuck in thinking state.
 func TestAgentThinkingStateBugFix(t *testing.T) {
 	t.Parallel()
+
 	tests := thinkingStateBugFixTestCases()
 
 	for _, tt := range tests {
@@ -2159,22 +2175,22 @@ func thinkingStateBugFixTestCases() []thinkingStateTestCase {
 
 	return []thinkingStateTestCase{
 		{
-			name:          "normal_execution_without_thinking_stuck",
-			llmResponses:  []openai.ChatCompletion{makeSimpleCompletion("thinking-test-1", helpMsg)},
-			llmErrors:     []error{nil},
-			timeout:       30 * time.Second,
+			name:         "normal_execution_without_thinking_stuck",
+			llmResponses: []openai.ChatCompletion{makeSimpleCompletion("thinking-test-1", helpMsg)},
+			llmErrors:    []error{nil},
+			timeout:      30 * time.Second,
 		},
 		{
-			name:          "llm_timeout_should_not_stuck_agent",
-			llmResponses:  []openai.ChatCompletion{makeSimpleCompletion("thinking-test-2", helpMsg)},
-			llmErrors:     []error{context.DeadlineExceeded},
-			timeout:       30 * time.Second,
+			name:         "llm_timeout_should_not_stuck_agent",
+			llmResponses: []openai.ChatCompletion{makeSimpleCompletion("thinking-test-2", helpMsg)},
+			llmErrors:    []error{context.DeadlineExceeded},
+			timeout:      30 * time.Second,
 		},
 		{
-			name:          "llm_error_should_not_stuck_agent",
-			llmResponses:  []openai.ChatCompletion{makeSimpleCompletion("thinking-test-3", helpMsg)},
-			llmErrors:     []error{errLlmProviderError},
-			timeout:       30 * time.Second,
+			name:         "llm_error_should_not_stuck_agent",
+			llmResponses: []openai.ChatCompletion{makeSimpleCompletion("thinking-test-3", helpMsg)},
+			llmErrors:    []error{errLlmProviderError},
+			timeout:      30 * time.Second,
 		},
 		{
 			name: "multiple_responses_should_not_stuck",
@@ -2532,34 +2548,10 @@ func createTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *Agent {
 	return agent
 }
 
-// mockTask is a simple mock task for testing.
-type mockTask struct {
-	name string
-}
-
-func (m *mockTask) Name() string {
-	return m.name
-}
-
-func (m *mockTask) SystemPrompt() string {
-	return "You are a helpful AI assistant."
-}
-
-func (m *mockTask) AllowedTools() []string {
-	return []string{"write_file", "read_file"}
-}
-
-func (m *mockTask) MaxTokens() int {
-	return 4096
-}
-
-func (m *mockTask) Validate() error {
-	return nil
-}
-
 // TestAgent_emitACERetrievalEvent tests ACE retrieval event emission.
 func TestAgent_emitACERetrievalEvent(t *testing.T) {
 	t.Parallel()
+
 	emitter := events.NewEventEmitter(10)
 	_, eventCh, _ := emitter.Subscribe()
 

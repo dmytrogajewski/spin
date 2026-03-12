@@ -20,18 +20,23 @@ import (
 
 const (
 	defaultMinUtility       = 0.1
-	defaultMaxBullets        = 1000
-	defaultMinUtilityScore   = 0.1
-	defaultSimilarityThresh  = 0.85
-	defaultMaxTokens         = 4096
-	minQualityThreshold      = 0.3
+	defaultMaxBullets       = 1000
+	defaultMinUtilityScore  = 0.1
+	defaultSimilarityThresh = 0.85
+	defaultMaxTokens        = 4096
+	minQualityThreshold     = 0.3
 )
 
 var (
+	// ErrDeltaApplierNotInitialized is a sentinel error.
 	ErrDeltaApplierNotInitialized = errors.New("delta applier not initialized")
+	// ErrDeltaApplierNotInitialized2 is a sentinel error.
 	ErrDeltaApplierNotInitialized2 = errors.New("delta applier not initialized")
+	// ErrDeltaApplierNotInitialized3 is a sentinel error.
 	ErrDeltaApplierNotInitialized3 = errors.New("delta applier not initialized")
+	// ErrDeltaApplierNotInitialized4 is a sentinel error.
 	ErrDeltaApplierNotInitialized4 = errors.New("delta applier not initialized")
+	// ErrDeltaApplierNotInitialized5 is a sentinel error.
 	ErrDeltaApplierNotInitialized5 = errors.New("delta applier not initialized")
 )
 
@@ -173,7 +178,7 @@ func NewCurator(pb *playbook.Playbook, emb embedding.Embedder, opts ...Option) C
 		logger:             slog.Default(),
 		threshold:          defaultSimilarityThresh,
 		refinementStrategy: &noRefinementStrategy{}, // Default: no refinement.
-		maxTokens:          defaultMaxTokens,         // Default max tokens for LLM calls.
+		maxTokens:          defaultMaxTokens,        // Default max tokens for LLM calls.
 	}
 
 	for _, opt := range opts {
@@ -258,6 +263,7 @@ func (c *curator) buildCurationPrompt(ctx context.Context, req MergeRequest) str
 	}
 
 	var reflectionBuilder strings.Builder
+
 	for i, insight := range req.Insights {
 		c.logger.DebugContext(ctx, "Formatting insight for curation",
 			"index", i, "content", insight.Content, "category", insight.Category)
@@ -292,6 +298,7 @@ func (c *curator) callLLMForCuration(ctx context.Context, prompt string) (*Curat
 	completion, err := c.llmProvider.Complete(ctx, params)
 	if err != nil {
 		c.logger.WarnContext(ctx, "LLM call failed during curation", "error", err)
+
 		return nil, err
 	}
 
@@ -302,6 +309,7 @@ func (c *curator) callLLMForCuration(ctx context.Context, prompt string) (*Curat
 	var curationResp CurationResponse
 	if err = json.Unmarshal([]byte(responseText), &curationResp); err != nil {
 		c.logger.WarnContext(ctx, "Failed to parse curation response", "error", err, "response", responseText)
+
 		return nil, fmt.Errorf("unmarshaling curation response: %w", err)
 	}
 
@@ -335,12 +343,14 @@ func (c *curator) createAndAddBullet(ctx context.Context, content string) (*bull
 	newBullet, err := bullet.New(content)
 	if err != nil {
 		c.logger.WarnContext(ctx, "Failed to create bullet", "error", err, "content", content)
+
 		return nil, err
 	}
 
 	emb, err := c.embedder.Embed(ctx, newBullet.Content)
 	if err != nil {
 		c.logger.WarnContext(ctx, "Failed to generate embedding", "error", err)
+
 		return nil, err
 	}
 
@@ -348,10 +358,12 @@ func (c *curator) createAndAddBullet(ctx context.Context, content string) (*bull
 
 	if err = c.playbook.Add(ctx, newBullet); err != nil {
 		c.logger.WarnContext(ctx, "Failed to add bullet to playbook", "error", err)
+
 		return nil, err
 	}
 
 	c.logger.DebugContext(ctx, "Added bullet via LLM curation", "id", newBullet.ID, "content", newBullet.Content)
+
 	return newBullet, nil
 }
 
@@ -367,6 +379,7 @@ func (c *curator) curateDeduplicationBased(ctx context.Context, req MergeRequest
 	duplicates, err := c.FindDuplicates(ctx, bullets)
 	if err != nil {
 		c.logger.WarnContext(ctx, "Failed to find duplicates", "error", err)
+
 		return nil, err
 	}
 
@@ -382,6 +395,7 @@ func (c *curator) convertAndEmbedInsights(ctx context.Context, req MergeRequest)
 	bullets, err := ConvertInsights(req.Insights)
 	if err != nil {
 		c.logger.WarnContext(ctx, "Failed to convert insights to bullets", "error", err)
+
 		return nil, err
 	}
 
@@ -389,8 +403,10 @@ func (c *curator) convertAndEmbedInsights(ctx context.Context, req MergeRequest)
 		emb, embErr := c.embedder.Embed(ctx, b.Content)
 		if embErr != nil {
 			c.logger.WarnContext(ctx, "Failed to generate embedding", "error", embErr, "bullet", b.Content)
+
 			return nil, embErr
 		}
+
 		b.Embedding = emb
 	}
 
@@ -408,9 +424,12 @@ func (c *curator) processBulletsWithDuplicates(ctx context.Context, bullets []*b
 		if !isDuplicate {
 			if err := c.playbook.Add(ctx, b); err != nil {
 				c.logger.WarnContext(ctx, "Failed to add bullet", "error", err, "bullet", b.Content)
+
 				continue
 			}
+
 			addedBullets = append(addedBullets, b)
+
 			continue
 		}
 
@@ -420,6 +439,7 @@ func (c *curator) processBulletsWithDuplicates(ctx context.Context, bullets []*b
 		if _, err := c.deltaApplier.Apply(ctx, *deltaOp); err == nil {
 			updated++
 		}
+
 		duplicateIDs = append(duplicateIDs, existingID)
 		skipped++
 	}
@@ -448,6 +468,7 @@ func (c *curator) maybeRefine(ctx context.Context, result *MergeResult) (*MergeR
 
 	result.Refined = true
 	result.Refinement = refinement
+
 	return result, nil
 }
 

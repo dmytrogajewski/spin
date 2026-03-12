@@ -9,10 +9,14 @@ import (
 )
 
 var (
-	ErrMcpServerNotFound               = errors.New("mcp server not found")
-	ErrMcpServerAlreadyExists          = errors.New("mcp server already exists")
-	ErrServerNameIsRequired            = errors.New("server name is required")
-	ErrServerCommandRequiredForStdio   = errors.New("server command is required for stdio transport")
+	// ErrMcpServerNotFound is a sentinel error.
+	ErrMcpServerNotFound = errors.New("mcp server not found")
+	// ErrMcpServerAlreadyExists is a sentinel error.
+	ErrMcpServerAlreadyExists = errors.New("mcp server already exists")
+	// ErrServerNameIsRequired is a sentinel error.
+	ErrServerNameIsRequired = errors.New("server name is required")
+	// ErrServerCommandRequiredForStdio is a sentinel error.
+	ErrServerCommandRequiredForStdio = errors.New("server command is required for stdio transport")
 )
 
 // MCPServer represents an MCP server configuration.
@@ -261,6 +265,7 @@ func (m *MCPConfigStore) writeConfig() error {
 
 	// Write to file (atomic).
 	tmpFile := configFile + ".tmp"
+
 	err = os.WriteFile(tmpFile, data, 0o600)
 	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)

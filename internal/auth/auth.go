@@ -84,10 +84,15 @@ var (
 
 	// ErrInvalidCredential indicates credential validation failed.
 	ErrInvalidCredential = errors.New("invalid credential")
+	// ErrInvalidCredentialFormat is a sentinel error.
 	ErrInvalidCredentialFormat = errors.New("invalid credential format")
+	// ErrUnknownCredentialType is a sentinel error.
 	ErrUnknownCredentialType = errors.New("unknown credential type")
+	// ErrNoneCredentialMustHaveEmptyValue is a sentinel error.
 	ErrNoneCredentialMustHaveEmptyValue = errors.New("none credential must have empty value")
+	// ErrCredentialValueCannotBeEmpty is a sentinel error.
 	ErrCredentialValueCannotBeEmpty = errors.New("credential value cannot be empty")
+	// ErrUnknownCredentialType2 is a sentinel error.
 	ErrUnknownCredentialType2 = errors.New("unknown credential type")
 )
 
@@ -245,7 +250,7 @@ func parseCredential(s string) (Credential, error) {
 func splitCredentialString(s string) (key, value string, err error) {
 	parts := strings.SplitN(s, ":", 2)
 	if len(parts) != authTokenParts {
-return "", "", fmt.Errorf("invalid credential format: %q: %w", s, ErrInvalidCredentialFormat)
+		return "", "", fmt.Errorf("invalid credential format: %q: %w", s, ErrInvalidCredentialFormat)
 	}
 
 	return parts[0], parts[1], nil
@@ -261,7 +266,7 @@ func parseCredentialType(typeName string) (CredentialType, error) {
 	case credToken:
 		return CredentialTypeToken, nil
 	default:
-return CredentialTypeNone, fmt.Errorf("unknown credential type: %q: %w", typeName, ErrUnknownCredentialType)
+		return CredentialTypeNone, fmt.Errorf("unknown credential type: %q: %w", typeName, ErrUnknownCredentialType)
 	}
 }
 
@@ -280,7 +285,7 @@ func validateCredential(cred Credential) error {
 			return ErrCredentialValueCannotBeEmpty
 		}
 	default:
-return fmt.Errorf("unknown credential type: %d: %w", cred.Type, ErrUnknownCredentialType2)
+		return fmt.Errorf("unknown credential type: %d: %w", cred.Type, ErrUnknownCredentialType2)
 	}
 
 	return nil

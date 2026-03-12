@@ -216,10 +216,12 @@ func TestClassifier_VerboseAssistant(t *testing.T) {
 
 	// Create a long message without code.
 	longContent := "This is a very long explanation. "
+
 	var longContentSb192 strings.Builder
 	for range 10 {
 		longContentSb192.WriteString("Let me explain in more detail how this works and why it's important. ")
 	}
+
 	longContent += longContentSb192.String()
 
 	msg := message.Message{
@@ -240,10 +242,12 @@ func TestClassifier_VerboseWithCode(t *testing.T) {
 
 	// Create a long message WITH code.
 	longContent := "This is a very long explanation. "
+
 	var longContentSb212 strings.Builder
 	for range 10 {
 		longContentSb212.WriteString("Let me explain in more detail how this works and why it's important. ")
 	}
+
 	longContent += longContentSb212.String()
 
 	longContent += "\n```go\nfunc main() {}\n```"

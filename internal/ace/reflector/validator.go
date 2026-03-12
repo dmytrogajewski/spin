@@ -5,6 +5,7 @@ import (
 	"fmt"
 )
 
+// ErrInsightCannotBeNil is a sentinel error.
 var ErrInsightCannotBeNil = errors.New("insight cannot be nil")
 
 // InsightValidator validates insight quality.

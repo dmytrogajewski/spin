@@ -1,5 +1,3 @@
-// Package lmstudio provides an LMStudio LLM provider implementation.
-// LMStudio is a desktop application for running LLMs locally with an OpenAI-compatible API.
 package lmstudio
 
 import (

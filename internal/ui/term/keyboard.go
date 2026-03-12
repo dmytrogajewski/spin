@@ -166,9 +166,9 @@ const (
 	byteCtrlW     = 0x17 // Ctrl-W.
 
 	// UTF-8 byte classification masks.
-	utf8SingleByteMax = 0x80 // below this is single-byte ASCII.
-	utf8TwoBytesMask  = 0xe0 // mask for 2-byte prefix check.
-	utf8TwoBytesVal   = 0xc0 // value for 2-byte prefix.
+	utf8SingleByteMax  = 0x80 // below this is single-byte ASCII.
+	utf8TwoBytesMask   = 0xe0 // mask for 2-byte prefix check.
+	utf8TwoBytesVal    = 0xc0 // value for 2-byte prefix.
 	utf8ThreeBytesMask = 0xf0 // mask for 3-byte prefix check.
 	utf8ThreeBytesVal  = 0xe0 // value for 3-byte prefix.
 	utf8FourBytesMask  = 0xf8 // mask for 4-byte prefix check.

@@ -10,6 +10,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+// ErrToolRegistryIsNil is a sentinel error.
 var ErrToolRegistryIsNil = errors.New("tool registry is nil")
 
 // registerIntegrationTools registers tools from MCP and Git integrations.

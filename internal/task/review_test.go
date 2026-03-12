@@ -6,6 +6,7 @@ import (
 
 func TestNewReview(t *testing.T) {
 	t.Parallel()
+
 	review := NewReview()
 
 	if review == nil {
@@ -22,6 +23,7 @@ func TestNewReview(t *testing.T) {
 
 func TestReview_Name(t *testing.T) {
 	t.Parallel()
+
 	review := NewReview()
 
 	if review.Name() != TaskNameReview {
@@ -31,6 +33,7 @@ func TestReview_Name(t *testing.T) {
 
 func TestReview_SystemPrompt(t *testing.T) {
 	t.Parallel()
+
 	review := NewReview()
 	result := review.SystemPrompt()
 
@@ -46,6 +49,7 @@ func TestReview_SystemPrompt(t *testing.T) {
 
 func TestReview_AllowedTools(t *testing.T) {
 	t.Parallel()
+
 	review := NewReview()
 	tools := review.AllowedTools()
 
@@ -72,6 +76,7 @@ func TestReview_AllowedTools(t *testing.T) {
 
 func TestReview_MaxTokens(t *testing.T) {
 	t.Parallel()
+
 	review := NewReview()
 	result := review.MaxTokens()
 
@@ -86,6 +91,7 @@ func TestReview_MaxTokens(t *testing.T) {
 
 func TestReview_Validate(t *testing.T) {
 	t.Parallel()
+
 	review := NewReview()
 
 	err := review.Validate()
@@ -96,6 +102,7 @@ func TestReview_Validate(t *testing.T) {
 
 func TestReview_Concurrency(t *testing.T) {
 	t.Parallel()
+
 	review := NewReview()
 
 	// Test concurrent access.
@@ -121,6 +128,7 @@ func TestReview_Concurrency(t *testing.T) {
 
 func TestReview_TaskInterface(t *testing.T) {
 	t.Parallel()
+
 	review := NewReview()
 
 	// Verify all interface methods work.
@@ -162,6 +170,7 @@ func TestReview_Constants(t *testing.T) {
 
 func TestReview_MaxTokensInRange(t *testing.T) {
 	t.Parallel()
+
 	review := NewReview()
 	maxTokens := review.MaxTokens()
 

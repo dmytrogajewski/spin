@@ -23,6 +23,7 @@ func TestLinuxKeystore_Get(t *testing.T) {
 	if err != nil {
 		t.Skipf("Secret Service not available: %v", err)
 	}
+
 	defer func() { _ = keyring.Delete(serviceName, "test-key") }()
 
 	// Get the value.
@@ -63,6 +64,7 @@ func TestLinuxKeystore_Set(t *testing.T) {
 
 	// Clean up before test.
 	_ = keyring.Delete(serviceName, "test-set")
+
 	defer func() { _ = keyring.Delete(serviceName, "test-set") }()
 
 	// Set a value.
@@ -90,6 +92,7 @@ func TestLinuxKeystore_Set_Overwrite(t *testing.T) {
 
 	// Clean up before test.
 	_ = keyring.Delete(serviceName, "test-overwrite")
+
 	defer func() { _ = keyring.Delete(serviceName, "test-overwrite") }()
 
 	// Set initial value.
@@ -187,6 +190,7 @@ func TestLinuxKeystore_Integration(t *testing.T) {
 
 	// Clean up before and after.
 	_ = keyring.Delete(serviceName, testKey)
+
 	defer func() { _ = keyring.Delete(serviceName, testKey) }()
 
 	// Store.
@@ -287,6 +291,7 @@ func TestLinuxKeystore_EmptyValue(t *testing.T) {
 
 	// Clean up.
 	_ = keyring.Delete(serviceName, testKey)
+
 	defer func() { _ = keyring.Delete(serviceName, testKey) }()
 
 	// Set empty value.
@@ -329,6 +334,7 @@ func TestLinuxKeystore_SpecialCharacters(t *testing.T) {
 
 			// Clean up.
 			_ = keyring.Delete(serviceName, tt.key)
+
 			defer func() { _ = keyring.Delete(serviceName, tt.key) }()
 
 			// Set.

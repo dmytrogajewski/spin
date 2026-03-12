@@ -8,10 +8,9 @@ import (
 )
 
 const (
-	testCallID1 = "call_1"
+	testCallID1     = "call_1"
 	testUnknownType = "unknown"
 )
-
 
 // TestEvent_Structure tests Event struct serialization.
 func TestEvent_Structure(t *testing.T) {
@@ -611,6 +610,7 @@ func TestEvent_TypeSafeHelpers(t *testing.T) {
 
 	t.Run("ToolCallCompleteData", func(t *testing.T) {
 		t.Parallel()
+
 		e := Event{Type: EventToolCallComplete, Data: ToolCallCompleteData{ToolID: testCallID1, Success: true}}
 		data, ok := e.ToolCallCompleteData()
 		assertTypeSafeHelper(t, ok, data.ToolID == testCallID1 && data.Success)
@@ -618,6 +618,7 @@ func TestEvent_TypeSafeHelpers(t *testing.T) {
 
 	t.Run("ToolProgressData", func(t *testing.T) {
 		t.Parallel()
+
 		e := Event{Type: EventToolCallProgress, Data: ToolProgressData{ToolID: testCallID1, Status: "running"}}
 		data, ok := e.ToolProgressData()
 		assertTypeSafeHelper(t, ok, data.ToolID == testCallID1 && data.Status == "running")
@@ -625,6 +626,7 @@ func TestEvent_TypeSafeHelpers(t *testing.T) {
 
 	t.Run("ContentDeltaData", func(t *testing.T) {
 		t.Parallel()
+
 		e := Event{Type: EventContentDelta, Data: ContentDeltaData{Content: "test", Role: "assistant"}}
 		data, ok := e.ContentDeltaData()
 		assertTypeSafeHelper(t, ok, data.Content == "test" && data.Role == "assistant")
@@ -632,6 +634,7 @@ func TestEvent_TypeSafeHelpers(t *testing.T) {
 
 	t.Run("TurnEventData", func(t *testing.T) {
 		t.Parallel()
+
 		e := Event{Type: EventTurnStart, Data: TurnEventData{Turn: 5, TurnID: "turn_5"}}
 		data, ok := e.TurnEventData()
 		assertTypeSafeHelper(t, ok, data.Turn == 5 && data.TurnID == "turn_5")
@@ -639,6 +642,7 @@ func TestEvent_TypeSafeHelpers(t *testing.T) {
 
 	t.Run("ApprovalEventData", func(t *testing.T) {
 		t.Parallel()
+
 		e := Event{Type: EventCommandApproval, Data: ApprovalEventData{RequestID: "req_1", Command: "rm -rf /"}}
 		data, ok := e.ApprovalEventData()
 		assertTypeSafeHelper(t, ok, data.RequestID == "req_1" && data.Command == "rm -rf /")
@@ -646,6 +650,7 @@ func TestEvent_TypeSafeHelpers(t *testing.T) {
 
 	t.Run("SystemEventData", func(t *testing.T) {
 		t.Parallel()
+
 		e := Event{Type: EventWarning, Data: SystemEventData{Level: "warning", Message: "test warning"}}
 		data, ok := e.SystemEventData()
 		assertTypeSafeHelper(t, ok, data.Level == "warning" && data.Message == "test warning")
@@ -653,6 +658,7 @@ func TestEvent_TypeSafeHelpers(t *testing.T) {
 
 	t.Run("ErrorData", func(t *testing.T) {
 		t.Parallel()
+
 		e := Event{Type: EventError, Data: ErrorData{Message: "test error", Code: "ERR_TEST"}}
 		data, ok := e.ErrorData()
 		assertTypeSafeHelper(t, ok, data.Message == "test error" && data.Code == "ERR_TEST")

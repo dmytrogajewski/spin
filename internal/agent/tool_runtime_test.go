@@ -14,6 +14,7 @@ import (
 
 func TestToolRuntime_parseToolArguments(t *testing.T) {
 	t.Parallel()
+
 	toolRuntime := newTestToolRuntime(nil, tools.NewRegistry())
 
 	tests := []struct {
@@ -97,6 +98,7 @@ func TestToolRuntime_parseToolArguments(t *testing.T) {
 
 func TestToolRuntime_Execute_EmptyArguments(t *testing.T) {
 	t.Parallel()
+
 	toolRuntime := newTestToolRuntime(nil, tools.NewRegistry())
 
 	// Test that Execute returns error for empty arguments (strict parser).
@@ -120,6 +122,7 @@ func TestToolRuntime_Execute_EmptyArguments(t *testing.T) {
 
 func TestToolRuntime_Execute_ValidArguments(t *testing.T) {
 	t.Parallel()
+
 	toolRegistry := tools.NewRegistry()
 	testTool := tools.NewReadFileTool()
 	_ = toolRegistry.Register(testTool)

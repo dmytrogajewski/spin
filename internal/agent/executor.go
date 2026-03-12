@@ -20,23 +20,36 @@ const executorConcurrency = 2
 
 // Executor-specific errors.
 var (
-	ErrNilCommand       = errors.New("command is nil")
-	ErrEmptyProgram     = errors.New("program is empty")
-	ErrCommandNotFound  = errors.New("command not found")
-	ErrOutputTooLarge   = errors.New("output too large")
+	// ErrNilCommand is a sentinel error.
+	ErrNilCommand = errors.New("command is nil")
+	// ErrEmptyProgram is a sentinel error.
+	ErrEmptyProgram = errors.New("program is empty")
+	// ErrCommandNotFound is a sentinel error.
+	ErrCommandNotFound = errors.New("command not found")
+	// ErrOutputTooLarge is a sentinel error.
+	ErrOutputTooLarge = errors.New("output too large")
+	// ErrValidationFailed is a sentinel error.
 	ErrValidationFailed = errors.New("validation failed")
-	ErrTimeout          = errors.New("execution timeout")
-	ErrExecutionFailed  = errors.New("execution failed")
+	// ErrTimeout is a sentinel error.
+	ErrTimeout = errors.New("execution timeout")
+	// ErrExecutionFailed is a sentinel error.
+	ErrExecutionFailed = errors.New("execution failed")
+	// ErrSecurityServiceCannotBeNil is a sentinel error.
 	ErrSecurityServiceCannotBeNil = errors.New("security service cannot be nil")
+	// ErrTimeoutMustBePositive is a sentinel error.
 	ErrTimeoutMustBePositive = errors.New("timeout must be positive")
+	// ErrWorkdirCannotBeEmpty is a sentinel error.
 	ErrWorkdirCannotBeEmpty = errors.New("workDir cannot be empty")
+	// ErrCommandExecutionDeniedByUser is a sentinel error.
 	ErrCommandExecutionDeniedByUser = errors.New("command execution denied by user")
 )
 
 // Default values for execution.
 const (
+	// DefaultExecutionTimeout is exported.
 	DefaultExecutionTimeout = 5 * time.Minute
-	DefaultMaxOutputSize    = 10 * 1024 * 1024 // 10MB.
+	// DefaultMaxOutputSize is exported.
+	DefaultMaxOutputSize = 10 * 1024 * 1024 // 10MB.
 )
 
 // Result contains the outcome of command execution.
@@ -188,7 +201,6 @@ type OutputChunk struct {
 type Executor struct {
 	securityService *security.Service
 	approvalService *security.ApprovalService
-	sandbox         any // sandbox.Sandbox interface (avoiding import cycle).
 	cache           *CommandCache
 	workDir         string
 	timeout         time.Duration
@@ -471,6 +483,7 @@ func (e *Executor) executeAndCapture(execCtx context.Context, cmd *security.Comm
 	execCmd := e.prepareExecCmd(execCtx, cmd, opts)
 
 	var stdoutBuf, stderrBuf bytes.Buffer
+
 	execCmd.Stdout = &stdoutBuf
 	execCmd.Stderr = &stderrBuf
 
@@ -480,6 +493,7 @@ func (e *Executor) executeAndCapture(execCtx context.Context, cmd *security.Comm
 		result.ExitCode = -1
 		result.CompletedAt = time.Now()
 		result.Duration = result.CompletedAt.Sub(result.StartedAt)
+
 		return result
 	}
 
@@ -492,14 +506,16 @@ func (e *Executor) executeAndCapture(execCtx context.Context, cmd *security.Comm
 
 	if err != nil {
 		e.handleExecError(execCtx, err, result)
+
 		return result
 	}
 
 	result.ExitCode = 0
+
 	return result
 }
 
-// prepareExecCmd creates and configures an exec.Cmd.
+// prepareExecCmd creates and configures an [exec.Cmd].
 func (e *Executor) prepareExecCmd(execCtx context.Context, cmd *security.Command, opts *ExecuteOptions) *exec.Cmd {
 	execCmd := exec.CommandContext(execCtx, cmd.Program, cmd.Args...)
 
@@ -507,20 +523,23 @@ func (e *Executor) prepareExecCmd(execCtx context.Context, cmd *security.Command
 	if workDir == "" {
 		workDir = e.workDir
 	}
+
 	execCmd.Dir = workDir
 	execCmd.Env = e.buildEnvironment(opts)
 
 	ensurePATH(execCmd)
+
 	return execCmd
 }
 
-// ensurePATH ensures the exec.Cmd has a PATH environment variable.
+// ensurePATH ensures the [exec.Cmd] has a PATH environment variable.
 func ensurePATH(execCmd *exec.Cmd) {
 	for _, env := range execCmd.Env {
 		if strings.HasPrefix(env, "PATH=") {
 			return
 		}
 	}
+
 	execCmd.Env = append(execCmd.Env, "PATH=/usr/bin:/bin")
 }
 
@@ -529,9 +548,11 @@ func (e *Executor) getMaxOutputSize(opts *ExecuteOptions) int64 {
 	if opts.MaxOutputSize > 0 {
 		return opts.MaxOutputSize
 	}
+
 	e.mu.RLock()
 	maxSize := e.maxOutput
 	e.mu.RUnlock()
+
 	return maxSize
 }
 
@@ -540,12 +561,14 @@ func (e *Executor) handleExecError(execCtx context.Context, err error, result *R
 	if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
 		result.Error = ErrTimeout
 		result.ExitCode = -1
+
 		return
 	}
 
 	if errors.Is(execCtx.Err(), context.Canceled) {
 		result.Error = context.Canceled
 		result.ExitCode = -1
+
 		return
 	}
 
@@ -635,7 +658,7 @@ func (e *Executor) validateStreamingCommand(cmd *security.Command, opts *Execute
 	return nil
 }
 
-// prepareStreamingCmd creates an exec.Cmd with stdout/stderr pipes for streaming.
+// prepareStreamingCmd creates an [exec.Cmd] with stdout/stderr pipes for streaming.
 func (e *Executor) prepareStreamingCmd(
 	execCtx context.Context, cmd *security.Command, opts *ExecuteOptions,
 ) (execCmd *exec.Cmd, stdout, stderr io.Reader, err error) {
@@ -666,11 +689,13 @@ func (e *Executor) runStreamingGoroutines(
 
 	go func() {
 		defer wg.Done()
+
 		e.streamOutput(execCtx, stdout, "stdout", chunks)
 	}()
 
 	go func() {
 		defer wg.Done()
+
 		e.streamOutput(execCtx, stderr, "stderr", chunks)
 	}()
 

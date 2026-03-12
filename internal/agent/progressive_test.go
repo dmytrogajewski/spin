@@ -9,6 +9,7 @@ import (
 
 func TestProgressiveContextConfig_Defaults(t *testing.T) {
 	t.Parallel()
+
 	cfg := DefaultProgressiveContextConfig()
 
 	if !cfg.Enabled {
@@ -34,6 +35,7 @@ func TestProgressiveContextConfig_Defaults(t *testing.T) {
 
 func TestShouldRetrieveProgressive_Disabled(t *testing.T) {
 	t.Parallel()
+
 	agent := &Agent{
 		aceConfig: &ACEConfig{
 			Retrieval: ACERetrievalConfig{
@@ -60,6 +62,7 @@ func TestShouldRetrieveProgressive_Disabled(t *testing.T) {
 
 func TestShouldRetrieveProgressive_TriggerPriority(t *testing.T) {
 	t.Parallel()
+
 	agent := &Agent{
 		aceConfig: &ACEConfig{
 			Retrieval: ACERetrievalConfig{
@@ -110,6 +113,7 @@ func TestShouldRetrieveProgressive_TriggerPriority(t *testing.T) {
 
 func TestShouldRetrieveProgressive_TurnZero(t *testing.T) {
 	t.Parallel()
+
 	agent := &Agent{
 		aceConfig: &ACEConfig{
 			Retrieval: ACERetrievalConfig{
@@ -136,12 +140,11 @@ func TestShouldRetrieveProgressive_TurnZero(t *testing.T) {
 
 // progressiveTriggerCase is a test case for shouldRetrieveProgressive trigger detection.
 type progressiveTriggerCase struct {
-	name          string
-	config        ProgressiveContextConfig
-	steps         []generator.TrajectoryStep
-	wantRetrieve  bool
-	wantTrigger   trajectory.TriggerType
-	wantErrPrefix string
+	name         string
+	config       ProgressiveContextConfig
+	steps        []generator.TrajectoryStep
+	wantRetrieve bool
+	wantTrigger  trajectory.TriggerType
 }
 
 func runProgressiveTriggerTests(t *testing.T, cases []progressiveTriggerCase) {
@@ -150,6 +153,7 @@ func runProgressiveTriggerTests(t *testing.T, cases []progressiveTriggerCase) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			agent := &Agent{
 				aceConfig: &ACEConfig{
 					Retrieval: ACERetrievalConfig{
@@ -218,6 +222,7 @@ func TestShouldRetrieveProgressive_ToolChange(t *testing.T) {
 
 func TestShouldRetrieveProgressive_Interval(t *testing.T) {
 	t.Parallel()
+
 	agent := &Agent{
 		aceConfig: &ACEConfig{
 			Retrieval: ACERetrievalConfig{
@@ -246,6 +251,7 @@ func TestShouldRetrieveProgressive_Interval(t *testing.T) {
 
 func TestShouldRetrieveProgressive_NoTrigger(t *testing.T) {
 	t.Parallel()
+
 	agent := &Agent{
 		aceConfig: &ACEConfig{
 			Retrieval: ACERetrievalConfig{

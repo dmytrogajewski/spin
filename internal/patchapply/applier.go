@@ -10,15 +10,25 @@ import (
 
 // Error types for patch application.
 var (
+	// ErrPathOutsideWorkspace is a sentinel error.
 	ErrPathOutsideWorkspace = errors.New("path outside workspace")
-	ErrFileNotFound         = errors.New("file not found")
-	ErrFileExists           = errors.New("file already exists")
-	ErrContextNotFound      = errors.New("context not found")
-	ErrPermissionDenied     = errors.New("permission denied")
-	ErrEmptyWorkspace       = errors.New("empty workspace root")
+	// ErrFileNotFound is a sentinel error.
+	ErrFileNotFound = errors.New("file not found")
+	// ErrFileExists is a sentinel error.
+	ErrFileExists = errors.New("file already exists")
+	// ErrContextNotFound is a sentinel error.
+	ErrContextNotFound = errors.New("context not found")
+	// ErrPermissionDenied is a sentinel error.
+	ErrPermissionDenied = errors.New("permission denied")
+	// ErrEmptyWorkspace is a sentinel error.
+	ErrEmptyWorkspace = errors.New("empty workspace root")
+	// ErrUnknownOperationType is a sentinel error.
 	ErrUnknownOperationType = errors.New("unknown operation type")
+	// ErrNoContextLinesInHunk is a sentinel error.
 	ErrNoContextLinesInHunk = errors.New("no context lines in hunk")
+	// ErrContextMismatch is a sentinel error.
 	ErrContextMismatch = errors.New("context mismatch")
+	// ErrDeleteBeyondEndOfFile is a sentinel error.
 	ErrDeleteBeyondEndOfFile = errors.New("delete beyond end of file")
 )
 
@@ -100,12 +110,12 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s %q: %v", e.Op, e.Path, e.Err)
 }
 
-// Unwrap returns the underlying error for errors.Is and errors.As.
+// Unwrap returns the underlying error for [errors.Is] and [errors.As].
 func (e *Error) Unwrap() error {
 	return e.Err
 }
 
-// Is implements error matching for errors.Is.
+// Is implements error matching for [errors.Is].
 func (e *Error) Is(target error) bool {
 	return errors.Is(e.Err, target)
 }
@@ -175,6 +185,7 @@ func (a *Applier) Apply(patch *Patch) (*ApplyResult, error) {
 	}
 
 	result := a.createApplyResult()
+
 	err = a.applyOperations(patch.Operations, result)
 	if err != nil {
 		a.rollback()
@@ -222,7 +233,7 @@ func (a *Applier) applyOperation(op FileOperation, result *ApplyResult) error {
 	case *UpdateFile:
 		return a.applyUpdateFile(op, result)
 	default:
-return fmt.Errorf("unknown operation type: %T: %w", op, ErrUnknownOperationType)
+		return fmt.Errorf("unknown operation type: %T: %w", op, ErrUnknownOperationType)
 	}
 }
 
@@ -374,6 +385,7 @@ func (a *Applier) applyAddFile(op *AddFile, result *ApplyResult) error {
 
 	// Write file content.
 	content := strings.Join(op.Lines, "\n")
+
 	err = os.WriteFile(fullPath, []byte(content), 0o600)
 	if err != nil {
 		return a.wrapError("Add", op.FilePath, err, "failed to write file")

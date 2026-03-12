@@ -63,6 +63,7 @@ func TestGitContextTool_ValidRepository(t *testing.T) {
 
 func TestGitContextTool_Schema(t *testing.T) {
 	t.Parallel()
+
 	tool := NewGitContextTool("/tmp")
 	schema := tool.Schema()
 
@@ -88,6 +89,7 @@ func TestGitContextTool_Schema(t *testing.T) {
 
 func TestGitContextTool_ErrorCases(t *testing.T) {
 	t.Parallel()
+
 	tool := NewGitContextTool("/tmp/test")
 
 	// GitContextTool has only optional parameters, so it doesn't fail on invalid params

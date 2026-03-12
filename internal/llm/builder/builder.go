@@ -1,4 +1,3 @@
-// Package builder provides a simple interface for creating LLM providers from config.
 package builder
 
 import (

@@ -115,6 +115,7 @@ func TestFilePolicyStore_ExpiryEviction(t *testing.T) {
 		CreatedAt: time.Now(),
 		ExpiresAt: &exp,
 	}
+
 	err = store.Save(ctx, p)
 	if err != nil {
 		t.Fatalf("save: %v", err)
@@ -151,6 +152,7 @@ func TestFilePolicyStore_FileIsCreatedAndLocked(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 	// Save one to ensure file gets content.
 	key := NewPolicyKey("prog", nil, "/w")
+
 	err = store.Save(context.Background(), Policy{
 		Version:   "1",
 		Scope:     ScopeGlobal,

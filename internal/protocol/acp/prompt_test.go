@@ -43,6 +43,7 @@ var (
 // TestSpinACPAgent_Prompt_InvalidSession tests Prompt with invalid session ID.
 func TestSpinACPAgent_Prompt_InvalidSession(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -66,6 +67,7 @@ func TestSpinACPAgent_Prompt_InvalidSession(t *testing.T) {
 // TestSpinACPAgent_Prompt_EmptyPrompt tests Prompt with empty prompt blocks.
 func TestSpinACPAgent_Prompt_EmptyPrompt(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -453,12 +455,14 @@ func TestSpinACPAgent_Prompt_ContentBlockConversion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			req := acp.PromptRequest{
 				SessionId: sessionResp.SessionId,
 				Prompt:    tt.blocks,
 			}
 
 			var resp acp.PromptResponse
+
 			resp, err = acpAgent.Prompt(context.Background(), req)
 
 			if tt.wantErr {
@@ -488,9 +492,11 @@ func TestConvertACPContentBlocksToMessages(t *testing.T) {
 
 func testConvertBlocks(t *testing.T, tests []contentBlockCase) {
 	t.Helper()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			messages, err := convertACPContentBlocksToMessages(tt.blocks)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -498,6 +504,7 @@ func testConvertBlocks(t *testing.T, tests []contentBlockCase) {
 			} else {
 				require.NoError(t, err)
 				assert.NotEmpty(t, messages)
+
 				for _, msg := range messages {
 					assert.Equal(t, message.RoleUser, msg.Role)
 					assert.NotEmpty(t, msg.Content)
@@ -515,6 +522,7 @@ type contentBlockCase struct {
 
 func contentBlockBasicCases() []contentBlockCase {
 	pngMime := "image/png"
+
 	return []contentBlockCase{
 		{name: "text block", blocks: []acp.ContentBlock{acp.TextBlock("test")}},
 		{name: "empty blocks", blocks: []acp.ContentBlock{}, wantErr: true},
@@ -573,6 +581,7 @@ func contentBlockMediaCases() []contentBlockCase {
 // TestConvertACPContentBlocksToMessages_ImageAudio tests image and audio block conversion with content verification.
 func TestConvertACPContentBlocksToMessages_ImageAudio(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		block          acp.ContentBlock
@@ -611,6 +620,7 @@ func TestConvertACPContentBlocksToMessages_ImageAudio(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			messages, err := convertACPContentBlocksToMessages([]acp.ContentBlock{tt.block})
 			require.NoError(t, err)
 			require.Len(t, messages, 1)
@@ -627,6 +637,7 @@ func TestConvertACPContentBlocksToMessages_ImageAudio(t *testing.T) {
 // TestConvertACPContentBlocksToMessages_EnhancedResources tests enhanced resource block handling with names.
 func TestConvertACPContentBlocksToMessages_EnhancedResources(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name           string
 		block          acp.ContentBlock
@@ -670,6 +681,7 @@ func TestConvertACPContentBlocksToMessages_EnhancedResources(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			messages, err := convertACPContentBlocksToMessages([]acp.ContentBlock{tt.block})
 			require.NoError(t, err)
 			require.Len(t, messages, 1)
@@ -684,6 +696,7 @@ func TestConvertACPContentBlocksToMessages_EnhancedResources(t *testing.T) {
 // TestMapStopReason tests stop reason mapping.
 func TestMapStopReason(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name         string
 		finishReason string
@@ -711,6 +724,7 @@ func TestMapStopReason(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := mapStopReason(tt.finishReason)
 			assert.Equal(t, tt.want, got, "finishReason: %s", tt.finishReason)
 		})
@@ -720,6 +734,7 @@ func TestMapStopReason(t *testing.T) {
 // TestExtractPathFromURI tests URI path extraction.
 func TestExtractPathFromURI(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name string
 		uri  string
@@ -733,6 +748,7 @@ func TestExtractPathFromURI(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := extractPathFromURI(tt.uri)
 			assert.Equal(t, tt.want, got)
 		})
@@ -742,6 +758,7 @@ func TestExtractPathFromURI(t *testing.T) {
 // TestMapStopReasonFromError tests error to stop reason mapping.
 func TestMapStopReasonFromError(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name string
 		err  error
@@ -779,6 +796,7 @@ func TestMapStopReasonFromError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := mapStopReasonFromError(tt.err, tt.resp)
 			assert.Equal(t, tt.want, got)
 		})

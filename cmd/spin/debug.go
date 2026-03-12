@@ -15,9 +15,13 @@ import (
 )
 
 var (
+	// ErrSandboxCommandIsOnlyAvailableOn is a sentinel error.
 	ErrSandboxCommandIsOnlyAvailableOn = errors.New("sandbox command is only available on macOS (current")
+	// ErrLandlockCommandIsOnlyAvailableOn is a sentinel error.
 	ErrLandlockCommandIsOnlyAvailableOn = errors.New("landlock command is only available on Linux (current")
+	// ErrSandboxTestingNotImplemented is a sentinel error.
 	ErrSandboxTestingNotImplemented = errors.New("sandbox testing not implemented")
+	// ErrLandlockTestingNotImplemented is a sentinel error.
 	ErrLandlockTestingNotImplemented = errors.New("landlock testing not implemented")
 )
 
@@ -111,14 +115,14 @@ func runDebugEvents(ctx context.Context, prompt, format, filterStr string) error
 
 // debugIsolationConfig holds configuration for platform-specific isolation commands.
 type debugIsolationConfig struct {
-	use          string
-	short        string
-	long         string
-	example      string
-	requiredOS   string
-	platformErr  error
-	runFunc      func(ctx context.Context, command string, args []string, mode, workspace string) error
-	extraFlags   func(cmd *cobra.Command)
+	use         string
+	short       string
+	long        string
+	example     string
+	requiredOS  string
+	platformErr error
+	runFunc     func(ctx context.Context, command string, args []string, mode, workspace string) error
+	extraFlags  func(cmd *cobra.Command)
 }
 
 // newDebugIsolationCmd creates a platform-specific isolation debugging command.
@@ -211,7 +215,6 @@ filesystem restrictions before deploying in production.`,
 
 // runDebugSandbox executes the sandbox testing command.
 
-
 func runDebugSandbox(_ context.Context, command string, args []string, mode, workspace string) error {
 	fmt.Fprintf(os.Stderr, "⚠️  Sandbox mode: %s\n", mode)
 	fmt.Fprintf(os.Stderr, "⚠️  Workspace: %s\n", workspace)
@@ -224,7 +227,6 @@ func runDebugSandbox(_ context.Context, command string, args []string, mode, wor
 }
 
 // runDebugLandlock executes the Landlock testing command.
-
 
 func runDebugLandlock(_ context.Context, command string, args []string, mode, workspace string) error {
 	fmt.Fprintf(os.Stderr, "⚠️  Landlock mode: %s\n", mode)

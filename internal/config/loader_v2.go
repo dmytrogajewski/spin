@@ -146,6 +146,7 @@ func (l *LoaderV2) Load() (*V2, error) {
 func (l *LoaderV2) unmarshalWithDefaults() (*V2, error) {
 	// Unmarshal into a new config struct.
 	cfg := &V2{}
+
 	err := l.viper.Unmarshal(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
@@ -231,6 +232,7 @@ func (l *LoaderV2) applyACEDefaults(cfg, defaults *V2) {
 
 	if !aceFieldsSet {
 		cfg.ACE = defaults.ACE
+
 		return
 	}
 
@@ -265,6 +267,7 @@ func (l *LoaderV2) applyACEDefaults(cfg, defaults *V2) {
 func (l *LoaderV2) applyProtocolDefaults(cfg, defaults *V2) {
 	if !l.viper.IsSet("protocol") {
 		cfg.Protocol = defaults.Protocol
+
 		return
 	}
 
@@ -289,6 +292,7 @@ func (l *LoaderV2) applyProtocolDefaults(cfg, defaults *V2) {
 func (l *LoaderV2) applyAgentsMDDefaults(cfg, defaults *V2) {
 	if !l.viper.IsSet("agents_md") {
 		cfg.AgentsMD = defaults.AgentsMD
+
 		return
 	}
 
@@ -416,6 +420,7 @@ func applyEnvVars(cfg *V2) {
 func mergeMCPServers(loader *LoaderV2, cfg *V2) {
 	// Try to load servers from mcp.servers path.
 	var mcpServers []MCPServerConfigV2
+
 	err := loader.UnmarshalKey("mcp.servers", &mcpServers)
 	if err != nil {
 		return // No servers at mcp.servers, nothing to merge.

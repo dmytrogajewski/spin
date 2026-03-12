@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// ErrUnknownMode is a sentinel error.
 var ErrUnknownMode = errors.New("unknown mode")
 
 // modeInfo contains detailed information about a task mode.
@@ -194,7 +195,7 @@ func runModeDescribe(_ *cobra.Command, args []string) error {
 	// Validate mode name.
 	info, exists := allModes[modeName]
 	if !exists {
-return fmt.Errorf("unknown mode: %s (valid modes: regular, review, compact, planning): %w", modeName, ErrUnknownMode)
+		return fmt.Errorf("unknown mode: %s (valid modes: regular, review, compact, planning): %w", modeName, ErrUnknownMode)
 	}
 
 	// Print detailed mode information.

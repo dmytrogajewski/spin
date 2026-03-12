@@ -16,12 +16,19 @@ import (
 )
 
 var (
+	// ErrUnsupportedFormat is a sentinel error.
 	ErrUnsupportedFormat = errors.New("unsupported format")
+	// ErrValidationFailed is a sentinel error.
 	ErrValidationFailed = errors.New("validation failed")
+	// ErrValidationFailed2 is a sentinel error.
 	ErrValidationFailed2 = errors.New("validation failed")
+	// ErrNoConfigFile is a sentinel error.
 	ErrNoConfigFile = errors.New("no config file")
+	// ErrNoConfigFile2 is a sentinel error.
 	ErrNoConfigFile2 = errors.New("no config file")
+	// ErrNoEditorFoundSetEditorOr is a sentinel error.
 	ErrNoEditorFoundSetEditorOr = errors.New("no editor found. Set $EDITOR or $VISUAL environment variable")
+	// ErrKeyNotFound is a sentinel error.
 	ErrKeyNotFound = errors.New("key not found")
 )
 
@@ -187,7 +194,7 @@ func runConfigShow(cmd *cobra.Command, _ []string) error {
 	case "yaml", formatText:
 		return printYAML(cmd.OutOrStdout(), cfgV2)
 	default:
-return fmt.Errorf("unsupported format: %s (use: text, json, yaml): %w", format, ErrUnsupportedFormat)
+		return fmt.Errorf("unsupported format: %s (use: text, json, yaml): %w", format, ErrUnsupportedFormat)
 	}
 }
 
@@ -337,7 +344,9 @@ func runConfigEdit(cmd *cobra.Command, _ []string) error {
 	// Validate after editing.
 	if !noValidate {
 		newLoaderV2 := config.NewLoaderV2()
+
 		var cfgV2 *config.V2
+
 		cfgV2, err = newLoaderV2.LoadFromFile(configPath)
 		if err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "⚠ Warning: configuration has errors:\n%v\n", err)
@@ -449,6 +458,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 	key := args[0]
 
 	loaderV2 := config.NewLoaderV2()
+
 	_, err := loaderV2.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -456,7 +466,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 
 	value := loaderV2.Get(key)
 	if value == nil {
-return fmt.Errorf("key not found: %s: %w", key, ErrKeyNotFound)
+		return fmt.Errorf("key not found: %s: %w", key, ErrKeyNotFound)
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "%v\n", value)
@@ -470,6 +480,7 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 	value := args[1]
 
 	loaderV2 := config.NewLoaderV2()
+
 	_, err := loaderV2.Load()
 	if err != nil {
 		// If config doesn't exist, that's okay - we'll create it.

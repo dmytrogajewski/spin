@@ -1,8 +1,8 @@
 package git
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 

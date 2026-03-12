@@ -13,6 +13,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+// ErrEmitterIsClosed is a sentinel error.
 var ErrEmitterIsClosed = errors.New("emitter is closed")
 
 // Event represents a conversation event that can be streamed to UI.

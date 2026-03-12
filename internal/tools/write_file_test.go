@@ -72,16 +72,19 @@ func runWriteFileSubtest(t *testing.T, tool Tool, params map[string]any, wantErr
 		if err == nil && result.Success {
 			t.Error("expected error but got success")
 		}
+
 		return
 	}
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+
 		return
 	}
 
 	if !result.Success {
 		t.Errorf("expected success, got error: %s", result.Error)
+
 		return
 	}
 
@@ -99,6 +102,7 @@ func verifyWrittenFile(t *testing.T, params map[string]any) {
 	content, readErr := os.ReadFile(path)
 	if readErr != nil {
 		t.Errorf("failed to read written file: %v", readErr)
+
 		return
 	}
 
@@ -109,6 +113,7 @@ func verifyWrittenFile(t *testing.T, params map[string]any) {
 
 func TestWriteFileTool_ErrorCases(t *testing.T) {
 	t.Parallel()
+
 	tool := NewWriteFileTool()
 
 	tests := []struct {
@@ -136,6 +141,7 @@ func TestWriteFileTool_ErrorCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			params, _ := FromMap(tt.params)
 
 			result, err := tool.Execute(context.Background(), params)
@@ -163,6 +169,7 @@ func runWriteFileApprovalTests(t *testing.T, tool *WriteFileTool, cases []writeF
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			params, _ := FromMap(map[string]any{
 				"path":    tt.path,
 				"content": "test",
@@ -187,6 +194,7 @@ func runWriteFileApprovalTests(t *testing.T, tool *WriteFileTool, cases []writeF
 
 func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
 	t.Parallel()
+
 	tool := NewWriteFileTool()
 	runWriteFileApprovalTests(t, tool, []writeFileApprovalCase{
 		{"etc directory", "/etc/config.conf", RiskCritical},
@@ -197,6 +205,7 @@ func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
 
 func TestWriteFileTool_CheckApproval_RegularFiles(t *testing.T) {
 	t.Parallel()
+
 	tool := NewWriteFileTool()
 	runWriteFileApprovalTests(t, tool, []writeFileApprovalCase{
 		{"text file", "/tmp/notes.txt", RiskMedium},
@@ -207,6 +216,7 @@ func TestWriteFileTool_CheckApproval_RegularFiles(t *testing.T) {
 
 func TestWriteFileTool_CheckApproval_ExecutableFiles(t *testing.T) {
 	t.Parallel()
+
 	tool := NewWriteFileTool()
 	runWriteFileApprovalTests(t, tool, []writeFileApprovalCase{
 		{"shell script", "/tmp/script.sh", RiskHigh},

@@ -1,4 +1,3 @@
-// Package e2e contains end-to-end tests for the Spin binary.
 package e2e
 
 import (

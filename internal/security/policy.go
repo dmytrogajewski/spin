@@ -31,15 +31,20 @@ type Policy struct {
 
 // Approval scope constants (kept in policy module as they define policy semantics).
 const (
-	ScopeOnce    = "once"
+	// ScopeOnce is exported.
+	ScopeOnce = "once"
+	// ScopeSession is exported.
 	ScopeSession = "session"
-	ScopeGlobal  = "global"
+	// ScopeGlobal is exported.
+	ScopeGlobal = "global"
 )
 
 // Policy decision constants.
 const (
+	// DecisionAllow is exported.
 	DecisionAllow = "allow"
-	DecisionDeny  = "deny"
+	// DecisionDeny is exported.
+	DecisionDeny = "deny"
 )
 
 // PolicyStore stores and retrieves policies with TTL and concurrency safety.

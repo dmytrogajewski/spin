@@ -1,8 +1,8 @@
 package agentsmd
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,6 +10,7 @@ import (
 	"sync"
 )
 
+// ErrAgentsMdNotFoundAtCustom is a sentinel error.
 var ErrAgentsMdNotFoundAtCustom = errors.New("AGENTS.md not found at custom path")
 
 // Service provides AGENTS.md content for system prompt injection.
@@ -64,7 +65,7 @@ func (s *Service) Load(ctx context.Context) error {
 	if s.config.Path != "" {
 		path = s.config.Path
 		if !fileExists(path) {
-return fmt.Errorf("AGENTS.md not found at custom path: %s: %w", path, ErrAgentsMdNotFoundAtCustom)
+			return fmt.Errorf("AGENTS.md not found at custom path: %s: %w", path, ErrAgentsMdNotFoundAtCustom)
 		}
 	} else {
 		// Auto-discover.

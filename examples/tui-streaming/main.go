@@ -15,12 +15,12 @@ import (
 )
 
 const (
-	tokenArrivalDelay   = 100 * time.Millisecond
-	fastTokenDelay      = 20 * time.Millisecond
-	lineBreakPause      = 200 * time.Millisecond
-	spacePause          = 30 * time.Millisecond
-	normalTokenDelay    = 60 * time.Millisecond
-	msPerSecondFloat    = 1000.0
+	tokenArrivalDelay = 100 * time.Millisecond
+	fastTokenDelay    = 20 * time.Millisecond
+	lineBreakPause    = 200 * time.Millisecond
+	spacePause        = 30 * time.Millisecond
+	normalTokenDelay  = 60 * time.Millisecond
+	msPerSecondFloat  = 1000.0
 )
 
 func main() {
@@ -120,7 +120,7 @@ func printFooter(ui *adapters.PureTTY) {
 	}
 }
 
-// runInputLoop handles user input until the context is cancelled.
+// runInputLoop handles user input until the context is canceled.
 func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.CancelFunc) {
 	for {
 		select {

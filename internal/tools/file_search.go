@@ -77,6 +77,7 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 
 	// Extract workspace_root parameter (optional).
 	workspaceRoot := t.workspaceRoot
+
 	customRoot, err := params.GetString("workspace_root")
 	if err == nil && customRoot != "" {
 		workspaceRoot = customRoot

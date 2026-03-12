@@ -16,13 +16,21 @@ import (
 )
 
 var (
+	// ErrUnknownProviderType is a sentinel error.
 	ErrUnknownProviderType = errors.New("unknown provider type")
+	// ErrKeynameProvidedButNoAuthManager is a sentinel error.
 	ErrKeynameProvidedButNoAuthManager = errors.New("keyName  provided but no auth manager configured")
+	// ErrAuthenticationRequiredFor is a sentinel error.
 	ErrAuthenticationRequiredFor = errors.New("authentication required for")
+	// ErrProviderTypeIsRequired is a sentinel error.
 	ErrProviderTypeIsRequired = errors.New("provider type is required")
+	// ErrBaseurlIsRequiredFor is a sentinel error.
 	ErrBaseurlIsRequiredFor = errors.New("baseURL is required for")
+	// ErrAuthenticationRequiredFor2 is a sentinel error.
 	ErrAuthenticationRequiredFor2 = errors.New("authentication required for")
+	// ErrModelIsRequiredFor is a sentinel error.
 	ErrModelIsRequiredFor = errors.New("model is required for")
+	// ErrModelIsRequiredForOllama is a sentinel error.
 	ErrModelIsRequiredForOllama = errors.New("model is required for ollama")
 )
 
@@ -135,7 +143,7 @@ func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Prov
 		return provider(ctx, cfg)
 	}
 
-return nil, fmt.Errorf("unknown provider type: %s: %w", cfg.Type, ErrUnknownProviderType)
+	return nil, fmt.Errorf("unknown provider type: %s: %w", cfg.Type, ErrUnknownProviderType)
 }
 
 // resolveCredential resolves a credential from configuration.
@@ -150,7 +158,7 @@ func (f *Factory) resolveCredential(ctx context.Context, cfg ProviderConfig, req
 	// Priority 1: KeyName (secure keystore).
 	if cfg.KeyName != "" {
 		if f.authMgr == nil {
-return "", fmt.Errorf("keyName %q provided but no auth manager configured: %w", cfg.KeyName, ErrKeynameProvidedButNoAuthManager)
+			return "", fmt.Errorf("keyName %q provided but no auth manager configured: %w", cfg.KeyName, ErrKeynameProvidedButNoAuthManager)
 		}
 
 		cred, err := f.authMgr.GetCredential(ctx, cfg.KeyName)
@@ -207,7 +215,7 @@ func validateConfig(cfg ProviderConfig) error {
 // validateOpenAIConfig validates OpenAI provider configuration.
 func validateOpenAIConfig(cfg ProviderConfig) error {
 	if cfg.BaseURL == "" {
-return fmt.Errorf("baseURL is required for %s: %w", cfg.Type, ErrBaseurlIsRequiredFor)
+		return fmt.Errorf("baseURL is required for %s: %w", cfg.Type, ErrBaseurlIsRequiredFor)
 	}
 
 	if cfg.KeyName == "" && cfg.APIKey == "" {
@@ -217,7 +225,7 @@ return fmt.Errorf("baseURL is required for %s: %w", cfg.Type, ErrBaseurlIsRequir
 	}
 
 	if cfg.Model == "" {
-return fmt.Errorf("model is required for %s: %w", cfg.Type, ErrModelIsRequiredFor)
+		return fmt.Errorf("model is required for %s: %w", cfg.Type, ErrModelIsRequiredFor)
 	}
 
 	return nil

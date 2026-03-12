@@ -14,7 +14,6 @@ const (
 	testUpdatedContent = "Updated content"
 )
 
-
 func TestDeltaApplier_ApplyContentUpdate(t *testing.T) {
 	t.Parallel()
 
@@ -389,6 +388,7 @@ func TestDeltaApplier_MultipleDeltas(t *testing.T) {
 
 	for _, delta := range deltas {
 		var result *ApplyResult
+
 		result, err = applier.Apply(ctx, delta)
 		if err != nil {
 			t.Fatalf("unexpected error applying delta: %v", err)

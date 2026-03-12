@@ -6,6 +6,7 @@ import (
 
 func TestNewRegular(t *testing.T) {
 	t.Parallel()
+
 	regular := NewRegular()
 
 	if regular == nil {
@@ -22,6 +23,7 @@ func TestNewRegular(t *testing.T) {
 
 func TestRegular_Name(t *testing.T) {
 	t.Parallel()
+
 	regular := NewRegular()
 
 	if regular.Name() != TaskNameRegular {
@@ -31,6 +33,7 @@ func TestRegular_Name(t *testing.T) {
 
 func TestRegular_SystemPrompt(t *testing.T) {
 	t.Parallel()
+
 	regular := NewRegular()
 	result := regular.SystemPrompt()
 
@@ -46,6 +49,7 @@ func TestRegular_SystemPrompt(t *testing.T) {
 
 func TestRegular_AllowedTools(t *testing.T) {
 	t.Parallel()
+
 	regular := NewRegular()
 	tools := regular.AllowedTools()
 
@@ -62,6 +66,7 @@ func TestRegular_AllowedTools(t *testing.T) {
 
 func TestRegular_MaxTokens(t *testing.T) {
 	t.Parallel()
+
 	regular := NewRegular()
 	result := regular.MaxTokens()
 
@@ -76,6 +81,7 @@ func TestRegular_MaxTokens(t *testing.T) {
 
 func TestRegular_Validate(t *testing.T) {
 	t.Parallel()
+
 	regular := NewRegular()
 
 	err := regular.Validate()
@@ -86,6 +92,7 @@ func TestRegular_Validate(t *testing.T) {
 
 func TestRegular_Concurrency(t *testing.T) {
 	t.Parallel()
+
 	regular := NewRegular()
 
 	// Test concurrent access.
@@ -111,6 +118,7 @@ func TestRegular_Concurrency(t *testing.T) {
 
 func TestRegular_TaskInterface(t *testing.T) {
 	t.Parallel()
+
 	regular := NewRegular()
 
 	// Verify all interface methods work.
@@ -138,6 +146,7 @@ func TestRegular_TaskInterface(t *testing.T) {
 
 func TestRegular_Constants(t *testing.T) {
 	t.Parallel()
+
 	if DefaultMaxTokens != 16384 {
 		t.Errorf("DefaultMaxTokens = %v, want 16384", DefaultMaxTokens)
 	}
@@ -149,6 +158,7 @@ func TestRegular_Constants(t *testing.T) {
 
 func TestRegular_MaxTokensInRange(t *testing.T) {
 	t.Parallel()
+
 	regular := NewRegular()
 	maxTokens := regular.MaxTokens()
 

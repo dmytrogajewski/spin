@@ -9,6 +9,7 @@ import (
 
 func TestSanitizer_Process(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name        string
 		chunks      []string

@@ -213,7 +213,7 @@ func (t *GitOperationTool) Schema() ToolSchema {
 				Type: "object",
 				Properties: map[string]PropertyDefinition{
 					"operation": {
-						Type:        "string",
+						Type: "string",
 						Description: "Git operation: stage, commit, push, pull, create_branch, " +
 							"switch_branch, list_branches, list_remotes, get_status, get_diff, get_log",
 						Enum: []string{

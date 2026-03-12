@@ -30,42 +30,70 @@ const (
 	defaultACETopK     = 5
 	defaultACEMinScore = 0.3
 
-	defaultSessionPolicyHours        = 8
-	defaultGlobalPolicyDays          = 30
-	defaultProtocolShellTimeout      = 5 * time.Minute
-	defaultAgentsMDMaxSize           = 100 * 1024 // 100KB.
-	defaultScratchpadMaxEntries      = 50
+	defaultSessionPolicyHours   = 8
+	defaultGlobalPolicyDays     = 30
+	defaultProtocolShellTimeout = 5 * time.Minute
+	defaultAgentsMDMaxSize      = 100 * 1024 // 100KB.
+	defaultScratchpadMaxEntries = 50
 )
 
 var (
-	ErrLlmProviderIsRequired               = errors.New("llm: provider is required")
-	ErrLlmModelIsRequired                  = errors.New("llm: model is required")
-	ErrLlmTemperatureRange                 = errors.New("llm: temperature must be between 0 and 2")
-	ErrLlmMaxTokensPositive                = errors.New("llm: max_tokens must be positive")
-	ErrLlmTimeoutPositive                  = errors.New("llm: timeout must be positive")
-	ErrAgentMaxTurnsPositive               = errors.New("agent: max_turns must be positive")
-	ErrAgentTimeoutPositive                = errors.New("agent: timeout must be positive")
-	ErrAgentWorkDirIsRequired              = errors.New("agent: work_dir is required")
-	ErrAcePlaybookPathRequired             = errors.New("ace: playbook_path is required when ACE is enabled")
-	ErrAceTrajectoryPathRequired           = errors.New("ace: trajectory_path is required when ACE is enabled")
-	ErrAceTopKPositive                     = errors.New("ace: top_k must be positive")
-	ErrAceMinScoreRange                    = errors.New("ace: min_score must be between 0 and 1")
-	ErrSecurityInvalidSandboxMode          = errors.New("security: invalid sandbox_mode")
-	ErrProtocolShellTimeoutPositive        = errors.New("protocol: shell_timeout must be positive when shell is enabled")
-	ErrNameIsRequired                      = errors.New("name is required")
-	ErrInvalidTransport                    = errors.New("invalid transport")
-	ErrSmitheryAPIKeyRequired              = errors.New("smithery_api_key is required for smithery transport")
-	ErrSmitheryNamespaceRequired           = errors.New("smithery_namespace is required when url is specified")
-	ErrCommandNotAllowedForSmithery        = errors.New("command is not allowed for smithery transport")
-	ErrCommandRequiredForStdio             = errors.New("command is required for stdio transport")
-	ErrURLNotAllowedForStdio               = errors.New("url is not allowed for stdio transport")
-	ErrOauthNotAllowedForStdio             = errors.New("oauth is not allowed for stdio transport")
-	ErrURLRequiredForTransport             = errors.New("url is required for transport")
-	ErrInvalidURL                          = errors.New("invalid url")
-	ErrCommandNotAllowedForRemote          = errors.New("command is not allowed for remote transport")
-	ErrOauthClientIDRequired               = errors.New("oauth client_id is required")
-	ErrScratchpadMaxEntriesPositive        = errors.New("memory.scratchpad: max_entries must be positive")
-	ErrPersistentBasePathRequired          = errors.New("memory.persistent: base_path is required when persistent memory is enabled")
+	// ErrLlmProviderIsRequired is a sentinel error.
+	ErrLlmProviderIsRequired = errors.New("llm: provider is required")
+	// ErrLlmModelIsRequired is a sentinel error.
+	ErrLlmModelIsRequired = errors.New("llm: model is required")
+	// ErrLlmTemperatureRange is a sentinel error.
+	ErrLlmTemperatureRange = errors.New("llm: temperature must be between 0 and 2")
+	// ErrLlmMaxTokensPositive is a sentinel error.
+	ErrLlmMaxTokensPositive = errors.New("llm: max_tokens must be positive")
+	// ErrLlmTimeoutPositive is a sentinel error.
+	ErrLlmTimeoutPositive = errors.New("llm: timeout must be positive")
+	// ErrAgentMaxTurnsPositive is a sentinel error.
+	ErrAgentMaxTurnsPositive = errors.New("agent: max_turns must be positive")
+	// ErrAgentTimeoutPositive is a sentinel error.
+	ErrAgentTimeoutPositive = errors.New("agent: timeout must be positive")
+	// ErrAgentWorkDirIsRequired is a sentinel error.
+	ErrAgentWorkDirIsRequired = errors.New("agent: work_dir is required")
+	// ErrAcePlaybookPathRequired is a sentinel error.
+	ErrAcePlaybookPathRequired = errors.New("ace: playbook_path is required when ACE is enabled")
+	// ErrAceTrajectoryPathRequired is a sentinel error.
+	ErrAceTrajectoryPathRequired = errors.New("ace: trajectory_path is required when ACE is enabled")
+	// ErrAceTopKPositive is a sentinel error.
+	ErrAceTopKPositive = errors.New("ace: top_k must be positive")
+	// ErrAceMinScoreRange is a sentinel error.
+	ErrAceMinScoreRange = errors.New("ace: min_score must be between 0 and 1")
+	// ErrSecurityInvalidSandboxMode is a sentinel error.
+	ErrSecurityInvalidSandboxMode = errors.New("security: invalid sandbox_mode")
+	// ErrProtocolShellTimeoutPositive is a sentinel error.
+	ErrProtocolShellTimeoutPositive = errors.New("protocol: shell_timeout must be positive when shell is enabled")
+	// ErrNameIsRequired is a sentinel error.
+	ErrNameIsRequired = errors.New("name is required")
+	// ErrInvalidTransport is a sentinel error.
+	ErrInvalidTransport = errors.New("invalid transport")
+	// ErrSmitheryAPIKeyRequired is a sentinel error.
+	ErrSmitheryAPIKeyRequired = errors.New("smithery_api_key is required for smithery transport")
+	// ErrSmitheryNamespaceRequired is a sentinel error.
+	ErrSmitheryNamespaceRequired = errors.New("smithery_namespace is required when url is specified")
+	// ErrCommandNotAllowedForSmithery is a sentinel error.
+	ErrCommandNotAllowedForSmithery = errors.New("command is not allowed for smithery transport")
+	// ErrCommandRequiredForStdio is a sentinel error.
+	ErrCommandRequiredForStdio = errors.New("command is required for stdio transport")
+	// ErrURLNotAllowedForStdio is a sentinel error.
+	ErrURLNotAllowedForStdio = errors.New("url is not allowed for stdio transport")
+	// ErrOauthNotAllowedForStdio is a sentinel error.
+	ErrOauthNotAllowedForStdio = errors.New("oauth is not allowed for stdio transport")
+	// ErrURLRequiredForTransport is a sentinel error.
+	ErrURLRequiredForTransport = errors.New("url is required for transport")
+	// ErrInvalidURL is a sentinel error.
+	ErrInvalidURL = errors.New("invalid url")
+	// ErrCommandNotAllowedForRemote is a sentinel error.
+	ErrCommandNotAllowedForRemote = errors.New("command is not allowed for remote transport")
+	// ErrOauthClientIDRequired is a sentinel error.
+	ErrOauthClientIDRequired = errors.New("oauth client_id is required")
+	// ErrScratchpadMaxEntriesPositive is a sentinel error.
+	ErrScratchpadMaxEntriesPositive = errors.New("memory.scratchpad: max_entries must be positive")
+	// ErrPersistentBasePathRequired is a sentinel error.
+	ErrPersistentBasePathRequired = errors.New("memory.persistent: base_path is required when persistent memory is enabled")
 )
 
 // ValidationErrors collects multiple validation errors.
@@ -117,7 +145,7 @@ func (v *ValidationErrors) ToError() error {
 // V2 is the unified configuration for Spin v2.0.
 // This replaces the flat Config structure with organized sections.
 type V2 struct {
-	Version  string           `mapstructure:"version"   yaml:"version"`
+	Version  string     `mapstructure:"version"   yaml:"version"`
 	LLM      LLMV2      `mapstructure:"llm"       yaml:"llm"`
 	Agent    AgentV2    `mapstructure:"agent"     yaml:"agent"`
 	ACE      ACEV2      `mapstructure:"ace"       yaml:"ace"`
@@ -464,9 +492,9 @@ func (s *SecurityV2) Validate() error {
 		}
 		if !validModes[s.SandboxMode] {
 			return fmt.Errorf(
-			"security: sandbox_mode must be one of [none, workspace-only, docker, firejail], got %q: %w",
-			s.SandboxMode, ErrSecurityInvalidSandboxMode,
-		)
+				"security: sandbox_mode must be one of [none, workspace-only, docker, firejail], got %q: %w",
+				s.SandboxMode, ErrSecurityInvalidSandboxMode,
+			)
 		}
 	}
 
@@ -671,6 +699,7 @@ func (p *PersistentMemoryV2) Validate() error {
 func DefaultV2() *V2 {
 	// Derive default policy file path under user config directory.
 	policyFile := ""
+
 	cfgDir, err := os.UserConfigDir()
 	if err == nil && cfgDir != "" {
 		policyFile = filepath.Join(cfgDir, "spin", "policies.json")
@@ -735,7 +764,7 @@ func DefaultV2() *V2 {
 		},
 		AgentsMD: AgentsMDV2{
 			Enabled: true,
-			Path:    "",                   // Auto-discover.
+			Path:    "", // Auto-discover.
 			MaxSize: defaultAgentsMDMaxSize,
 		},
 		Memory: MemoryV2{

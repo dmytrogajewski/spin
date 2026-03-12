@@ -9,48 +9,35 @@ import (
 // flagModel returns the --model flag value from a cobra command.
 func flagModel(cmd *cobra.Command) string {
 	v, _ := cmd.Root().PersistentFlags().GetString("model")
+
 	return v
 }
 
 // flagProvider returns the --provider flag value from a cobra command.
 func flagProvider(cmd *cobra.Command) string {
 	v, _ := cmd.Root().PersistentFlags().GetString("provider")
-	return v
-}
 
-// flagSandbox returns the --sandbox flag value from a cobra command.
-func flagSandbox(cmd *cobra.Command) string {
-	v, _ := cmd.Root().PersistentFlags().GetString("sandbox")
 	return v
 }
 
 // flagWorkDir returns the --cd flag value from a cobra command.
 func flagWorkDir(cmd *cobra.Command) string {
 	v, _ := cmd.Root().PersistentFlags().GetString("cd")
+
 	return v
 }
 
 // flagConfigFile returns the --config-file flag value from a cobra command.
 func flagConfigFile(cmd *cobra.Command) string {
 	v, _ := cmd.Root().PersistentFlags().GetString("config-file")
-	return v
-}
 
-// flagConfig returns the --config flag values from a cobra command.
-func flagConfig(cmd *cobra.Command) []string {
-	v, _ := cmd.Root().PersistentFlags().GetStringSlice("config")
-	return v
-}
-
-// flagTaskMode returns the --mode flag value from a cobra command.
-func flagTaskMode(cmd *cobra.Command) string {
-	v, _ := cmd.Root().PersistentFlags().GetString("mode")
 	return v
 }
 
 // flagAgentsMD returns the --agents-md flag value from a cobra command.
 func flagAgentsMD(cmd *cobra.Command) string {
 	v, _ := cmd.Root().PersistentFlags().GetString("agents-md")
+
 	return v
 }
 
@@ -65,7 +52,7 @@ It provides an interactive terminal UI, non-interactive execution mode,
 and integrates with IDEs via JSON-RPC.
 
 Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible API.`,
-		Version: appinfo.ShortVersion(),
+		Version:       appinfo.ShortVersion(),
 		RunE:          runTUI,
 		SilenceUsage:  true,
 		SilenceErrors: true, // Errors are handled in main().
@@ -81,6 +68,7 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 	cmd.PersistentFlags().String("cd", "", "Working directory")
 	cmd.PersistentFlags().String("config-file", "", "Path to configuration file")
 	cmd.PersistentFlags().StringSliceP("config", "c", nil, "Config overrides (key=value)")
+
 	modeHelp := "Task mode: regular (full-featured, 16K tokens), " +
 		"review (read-only, 12K tokens), compact (minimal, 4K tokens), " +
 		"planning (context-only, 4K tokens)"

@@ -40,6 +40,7 @@ func TestNewSpinACPAgentWithStorage(t *testing.T) {
 // TestNewSpinACPAgent_Validation tests constructor validation.
 func TestNewSpinACPAgent_Validation(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name        string
 		agent       *agent.Agent
@@ -103,6 +104,7 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 // TestSpinACPAgent_ImplementsInterface verifies that SpinACPAgent implements acp.Agent.
 func TestSpinACPAgent_ImplementsInterface(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -120,6 +122,7 @@ func TestSpinACPAgent_ImplementsInterface(t *testing.T) {
 // TestSpinACPAgent_MethodStubs tests that all methods exist and return errors (stubs).
 func TestSpinACPAgent_MethodStubs(t *testing.T) {
 	t.Parallel()
+
 	agentInstance := &agent.Agent{}
 	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -134,10 +137,13 @@ func TestSpinACPAgent_MethodStubs(t *testing.T) {
 
 	t.Run("Initialize", func(t *testing.T) {
 		t.Parallel()
+
 		req := acp.InitializeRequest{
 			ProtocolVersion: acp.ProtocolVersionNumber,
 		}
+
 		var resp acp.InitializeResponse
+
 		resp, err = acpAgent.Initialize(ctx, req)
 		require.NoError(t, err)
 		assert.Equal(t, acp.ProtocolVersion(acp.ProtocolVersionNumber), resp.ProtocolVersion)
@@ -146,10 +152,13 @@ func TestSpinACPAgent_MethodStubs(t *testing.T) {
 
 	t.Run("NewSession", func(t *testing.T) {
 		t.Parallel()
+
 		req := acp.NewSessionRequest{
 			Cwd: "/tmp/test",
 		}
+
 		var resp acp.NewSessionResponse
+
 		resp, err = acpAgent.NewSession(ctx, req)
 		require.NoError(t, err)
 		assert.NotEmpty(t, resp.SessionId)
@@ -190,6 +199,7 @@ func TestSpinACPAgent_MethodStubs(t *testing.T) {
 
 	t.Run("Authenticate", func(t *testing.T) {
 		t.Parallel()
+
 		req := acp.AuthenticateRequest{
 			MethodId: acp.AuthMethodId("test"),
 		}

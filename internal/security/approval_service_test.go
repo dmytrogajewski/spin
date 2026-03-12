@@ -13,10 +13,10 @@ const (
 	testReason = "test"
 )
 
-
 // TestApprovalService_RequestApproval_Success tests successful approval flow.
 func TestApprovalService_RequestApproval_Success(t *testing.T) {
 	t.Parallel()
+
 	emitter := events.NewEventEmitter(100)
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
 		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
@@ -48,6 +48,7 @@ func TestApprovalService_RequestApproval_Success(t *testing.T) {
 // TestApprovalService_RequestApproval_Denial tests denial flow.
 func TestApprovalService_RequestApproval_Denial(t *testing.T) {
 	t.Parallel()
+
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
 		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
@@ -73,6 +74,7 @@ func TestApprovalService_RequestApproval_Denial(t *testing.T) {
 // TestApprovalService_RequestApproval_NoHandler tests denial when no handler configured.
 func TestApprovalService_RequestApproval_NoHandler(t *testing.T) {
 	t.Parallel()
+
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: nil})
 
 	cmd := &Command{Program: "ls", WorkDir: testTmpDir}
@@ -90,6 +92,7 @@ func TestApprovalService_RequestApproval_NoHandler(t *testing.T) {
 // TestApprovalService_RequestApproval_InvalidRequestID tests request ID validation.
 func TestApprovalService_RequestApproval_InvalidRequestID(t *testing.T) {
 	t.Parallel()
+
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
 		Handler: func(_ context.Context, _ ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
@@ -114,6 +117,7 @@ func TestApprovalService_RequestApproval_InvalidRequestID(t *testing.T) {
 // TestApprovalService_ModifiedCommand_Success tests successful modified command flow.
 func TestApprovalService_ModifiedCommand_Success(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
 		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
@@ -146,6 +150,7 @@ func TestApprovalService_ModifiedCommand_Success(t *testing.T) {
 // TestApprovalService_ModifiedCommand_ParseError tests parse error on modified command.
 func TestApprovalService_ModifiedCommand_ParseError(t *testing.T) {
 	t.Parallel()
+
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
 		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
@@ -168,6 +173,7 @@ func TestApprovalService_ModifiedCommand_ParseError(t *testing.T) {
 // TestApprovalService_ModifiedCommand_ValidationFailure tests validation failure on modified command.
 func TestApprovalService_ModifiedCommand_ValidationFailure(t *testing.T) {
 	t.Parallel()
+
 	validator := NewValidator()
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
 		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
@@ -196,6 +202,7 @@ func TestApprovalService_ModifiedCommand_ValidationFailure(t *testing.T) {
 // TestApprovalService_WithEmitter tests event emission.
 func TestApprovalService_WithEmitter(t *testing.T) {
 	t.Parallel()
+
 	emitter := events.NewEventEmitter(100)
 	_, eventChan, _ := emitter.Subscribe()
 
@@ -247,6 +254,7 @@ func TestApprovalService_WithEmitter(t *testing.T) {
 // TestApprovalService_WithoutEmitter tests operation without emitter.
 func TestApprovalService_WithoutEmitter(t *testing.T) {
 	t.Parallel()
+
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
 		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
@@ -274,6 +282,7 @@ func TestApprovalService_WithoutEmitter(t *testing.T) {
 // TestApprovalService_ContextCancellation tests context cancellation during approval.
 func TestApprovalService_ContextCancellation(t *testing.T) {
 	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately.
 
@@ -302,6 +311,7 @@ func TestApprovalService_ContextCancellation(t *testing.T) {
 // TestNewOperation tests the NewOperation helper function.
 func TestNewOperation(t *testing.T) {
 	t.Parallel()
+
 	cmd := &Command{Program: "rm", Args: []string{"-rf", testTmpDir}, WorkDir: testTmpDir}
 	reason := "Dangerous operation"
 	workDir := testTmpDir
@@ -324,6 +334,7 @@ func TestNewOperation(t *testing.T) {
 // TestNewOperation_NilCommand tests NewOperation with nil command.
 func TestNewOperation_NilCommand(t *testing.T) {
 	t.Parallel()
+
 	op := NewOperation(nil, testReason, testTmpDir)
 
 	if op.Command != nil {
@@ -342,6 +353,7 @@ func TestNewOperation_NilCommand(t *testing.T) {
 // TestNewOperation_EmptyReason tests NewOperation with empty reason.
 func TestNewOperation_EmptyReason(t *testing.T) {
 	t.Parallel()
+
 	cmd := &Command{Program: "ls"}
 	op := NewOperation(cmd, "", testTmpDir)
 
@@ -361,6 +373,7 @@ func TestNewOperation_EmptyReason(t *testing.T) {
 // TestNewOperation_EmptyWorkDir tests NewOperation with empty work directory.
 func TestNewOperation_EmptyWorkDir(t *testing.T) {
 	t.Parallel()
+
 	cmd := &Command{Program: "ls"}
 	op := NewOperation(cmd, testReason, "")
 

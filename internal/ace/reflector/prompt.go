@@ -52,9 +52,11 @@ func (pb *PromptBuilder) writeTrajectoryDetails(sb *strings.Builder, traj *gener
 
 	if len(traj.Steps) > 0 {
 		sb.WriteString("**Execution Steps:**\n")
+
 		for _, step := range traj.Steps {
 			fmt.Fprintf(sb, "%d. [%s] %s\n", step.StepNumber+1, step.Type, step.Content)
 		}
+
 		sb.WriteString("\n")
 	}
 
@@ -62,19 +64,23 @@ func (pb *PromptBuilder) writeTrajectoryDetails(sb *strings.Builder, traj *gener
 		if events, ok := traj.Metadata.RetrievalEvents.([]trajectory.RetrievalEvent); ok && len(events) > 0 {
 			sb.WriteString("**Retrieval Events:**\n")
 			sb.WriteString("(Shows when and why bullets were retrieved during execution)\n")
+
 			for _, event := range events {
 				fmt.Fprintf(sb, "Turn %d [%s]: Query=\"%s\" → Retrieved %d bullets\n",
 					event.Turn, event.Trigger, event.Query, len(event.BulletsAdded))
 			}
+
 			sb.WriteString("\n")
 		}
 	}
 
 	if len(traj.RetrievedBullets) > 0 {
 		sb.WriteString("**Retrieved Playbook Bullets:**\n")
+
 		for _, bullet := range traj.RetrievedBullets {
 			fmt.Fprintf(sb, "- [%s] %s\n", bullet.ID, bullet.Content)
 		}
+
 		sb.WriteString("\n")
 	}
 
@@ -152,9 +158,11 @@ func (pb *PromptBuilder) writeGroundTruthContext(
 
 	if len(usedBullets) > 0 {
 		sb.WriteString("**Playbook Bullets Used:**\n")
+
 		for _, bulletID := range usedBullets {
 			fmt.Fprintf(sb, "- %s\n", bulletID)
 		}
+
 		sb.WriteString("\n")
 	}
 }

@@ -31,8 +31,8 @@ import (
 )
 
 const (
-	acpApprovalTimeout    = 60 * time.Second
-	historyContextRatio   = 0.75 // use 75% of context window for history.
+	acpApprovalTimeout  = 60 * time.Second
+	historyContextRatio = 0.75 // use 75% of context window for history.
 )
 
 // newACPCmd creates the ACP server command.
@@ -129,6 +129,7 @@ func createACPInfra(
 	services, cleanup, err := createServices(ctx, cfg, workDir, logger)
 	if err != nil {
 		provider.Close()
+
 		return nil, nil, fmt.Errorf("failed to create services: %w", err)
 	}
 
@@ -146,6 +147,7 @@ func createACPInfra(
 	if err != nil {
 		cleanup()
 		provider.Close()
+
 		return nil, nil, fmt.Errorf("create session storage: %w", err)
 	}
 

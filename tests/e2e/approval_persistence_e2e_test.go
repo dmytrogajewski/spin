@@ -26,6 +26,7 @@ security:
   policy_file: ` + policyPath + `
   approval_persistence_enabled: true
 `
+
 	err := writeFile(configPath, cfg)
 	if err != nil {
 		t.Fatalf("write config: %v", err)

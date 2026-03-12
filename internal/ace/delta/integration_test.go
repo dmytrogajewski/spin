@@ -31,7 +31,7 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 	_ = pb.Add(ctx, b3)
 
 	deltas := buildTestDeltas(b1.ID, b2.ID, b3.ID)
-	applyAllDeltas(t, ctx, applier, deltas)
+	applyAllDeltas(ctx, t, applier, deltas)
 
 	verifyBullet1(t, pb, b1.ID)
 	verifyBullet2(t, pb, b2.ID)
@@ -50,7 +50,7 @@ func buildTestDeltas(b1ID, b2ID, b3ID string) []Delta {
 	}
 }
 
-func applyAllDeltas(t *testing.T, ctx context.Context, applier *Applier, deltas []Delta) {
+func applyAllDeltas(ctx context.Context, t *testing.T, applier *Applier, deltas []Delta) {
 	t.Helper()
 
 	for _, delta := range deltas {

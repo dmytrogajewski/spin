@@ -28,6 +28,7 @@ func (f *fakeUI) Run(_ context.Context) error { return nil }
 func (f *fakeUI) Stop() error                 { return nil }
 func (f *fakeUI) PrintLine(line string) error {
 	f.lines = append(f.lines, line)
+
 	return nil
 }
 func (f *fakeUI) PrintChunks(_ context.Context, _ <-chan string) error { return nil }
@@ -36,10 +37,12 @@ func (f *fakeUI) SetMaxTokens(_ int64)                                 {}
 func (f *fakeUI) RequestInput() <-chan string {
 	ch := make(chan string)
 	close(ch)
+
 	return ch
 }
 func (f *fakeUI) AppendBlock(block *blocks.Block) error {
 	f.blocks[block.ID] = block
+
 	return nil
 }
 func (f *fakeUI) UpdateBlock(blockID string, block *blocks.Block) error {
@@ -49,12 +52,14 @@ func (f *fakeUI) UpdateBlock(blockID string, block *blocks.Block) error {
 }
 func (f *fakeUI) DeleteBlock(blockID string) error {
 	delete(f.blocks, blockID)
+
 	return nil
 }
 
 // Test that an execute_command error is not duplicated in the block body.
 func TestMapper_ExecuteError_NoDuplication(t *testing.T) {
 	t.Parallel()
+
 	ui := newFakeUI()
 	mapper := NewMapper(ui)
 
@@ -73,6 +78,7 @@ func TestMapper_ExecuteError_NoDuplication(t *testing.T) {
 			RequiresApproval: false,
 		},
 	}
+
 	err := mapper.MapEvent(context.Background(), start)
 	if err != nil {
 		t.Fatalf("handle start failed: %v", err)
@@ -89,6 +95,7 @@ func TestMapper_ExecuteError_NoDuplication(t *testing.T) {
 			Error:    "execution failed: exit status 1",
 		},
 	}
+
 	err = mapper.MapEvent(context.Background(), complete)
 	if err != nil {
 		t.Fatalf("handle complete failed: %v", err)

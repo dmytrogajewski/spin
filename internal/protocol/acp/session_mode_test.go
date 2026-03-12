@@ -17,6 +17,7 @@ import (
 // TestGetAvailableModes tests that all Spin task modes are mapped to ACP session modes.
 func TestGetAvailableModes(t *testing.T) {
 	t.Parallel()
+
 	modes := getAvailableModes()
 
 	require.Len(t, modes, 4, "should have 4 modes")
@@ -55,6 +56,7 @@ func TestGetAvailableModes(t *testing.T) {
 // TestGetDefaultMode tests that default mode is "regular".
 func TestGetDefaultMode(t *testing.T) {
 	t.Parallel()
+
 	defaultMode := getDefaultMode()
 	assert.Equal(t, acp.SessionModeId("regular"), defaultMode)
 }
@@ -200,6 +202,7 @@ func TestSetSessionMode_AllModes(t *testing.T) {
 		}
 
 		var resp acp.SetSessionModeResponse
+
 		resp, err = acpAgent.SetSessionMode(context.Background(), req)
 		require.NoError(t, err, "should set mode %s", mode)
 		require.NotNil(t, resp)
@@ -217,6 +220,7 @@ func TestSetSessionMode_AllModes(t *testing.T) {
 // TestSetSessionMode_SendsNotification tests that mode change sends notification.
 func TestSetSessionMode_SendsNotification(t *testing.T) {
 	t.Parallel()
+
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),

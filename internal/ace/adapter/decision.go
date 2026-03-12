@@ -1,11 +1,5 @@
 package adapter
 
-// decisionKey uniquely identifies a decision lookup.
-type decisionKey struct {
-	outcome    SignalOutcome
-	signalType SignalType
-}
-
 // decisionValue holds the action and reason for a decision.
 type decisionValue struct {
 	action AdaptationAction

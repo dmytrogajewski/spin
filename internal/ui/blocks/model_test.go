@@ -10,9 +10,9 @@ const (
 	testGoTestCmd = "go test"
 )
 
-
 func TestNewBlock(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name      string
 		blockType BlockType
@@ -30,10 +30,12 @@ func TestNewBlock(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			b := NewBlock(tt.blockType)
 			if b == nil {
 				t.Fatal("NewBlock() returned nil")
 			}
+
 			verifyNewBlockDefaults(t, b, tt.blockType)
 		})
 	}
@@ -70,6 +72,7 @@ func verifyNewBlockDefaults(t *testing.T, b *Block, expectedType BlockType) {
 
 func TestBlock_Validate(t *testing.T) {
 	t.Parallel()
+
 	validBlock := func() *Block {
 		b := NewBlock(BlockTypeExecute)
 		b.Body = "test output"
@@ -93,6 +96,7 @@ func TestBlock_Validate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			b := validBlock()
 			tt.modify(b)
 
@@ -135,6 +139,7 @@ func TestGenerateBlockID(t *testing.T) {
 
 func TestBlock_JSON_Roundtrip(t *testing.T) {
 	t.Parallel()
+
 	original := NewBlock(BlockTypeExecute)
 	original.Title = "Test Command"
 	original.Body = "command output here"
@@ -148,6 +153,7 @@ func TestBlock_JSON_Roundtrip(t *testing.T) {
 		Impact:   "low",
 		ExitCode: &exitCode,
 	}
+
 	err := original.SetExecuteMeta(meta)
 	if err != nil {
 		t.Fatalf("SetExecuteMeta() error = %v", err)
@@ -164,6 +170,7 @@ func TestBlock_JSON_Roundtrip(t *testing.T) {
 
 	// Unmarshal.
 	var restored Block
+
 	err = json.Unmarshal(data, &restored)
 	if err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
@@ -211,6 +218,7 @@ func TestBlock_JSON_Roundtrip(t *testing.T) {
 
 func TestBlock_JSON_Format(t *testing.T) {
 	t.Parallel()
+
 	b := NewBlock(BlockTypeExecute)
 	b.ID = "blk_1738950123_07"
 	b.Title = "Run tests"
@@ -225,6 +233,7 @@ func TestBlock_JSON_Format(t *testing.T) {
 		Impact:   "low",
 		ExitCode: &exitCode,
 	}
+
 	err := b.SetExecuteMeta(meta)
 	if err != nil {
 		t.Fatalf("SetExecuteMeta() error = %v", err)
@@ -239,6 +248,7 @@ func TestBlock_JSON_Format(t *testing.T) {
 
 	// Unmarshal to check structure.
 	var raw map[string]any
+
 	err = json.Unmarshal(data, &raw)
 	if err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
@@ -328,6 +338,7 @@ func TestBlock_TypeSafeMetadata_Tool(t *testing.T) {
 // TestBlock_MetadataValidation tests that invalid metadata is rejected.
 func TestBlock_MetadataValidation(t *testing.T) {
 	t.Parallel()
+
 	b := NewBlock(BlockTypeExecute)
 
 	// Invalid ExecuteMeta (empty command).
@@ -342,9 +353,10 @@ func TestBlock_MetadataValidation(t *testing.T) {
 	}
 }
 
-// TestBlock_MetadataJSONRoundtrip tests JSON serialization with json.RawMessage.
+// TestBlock_MetadataJSONRoundtrip tests JSON serialization with [json.RawMessage].
 func TestBlock_MetadataJSONRoundtrip(t *testing.T) {
 	t.Parallel()
+
 	original := NewBlock(BlockTypeExecute)
 	original.Title = "Test Command"
 	original.Body = "output"
@@ -357,6 +369,7 @@ func TestBlock_MetadataJSONRoundtrip(t *testing.T) {
 		Impact:   "low",
 		ExitCode: &exitCode,
 	}
+
 	err := original.SetExecuteMeta(meta)
 	if err != nil {
 		t.Fatalf("SetExecuteMeta() error = %v", err)
@@ -370,6 +383,7 @@ func TestBlock_MetadataJSONRoundtrip(t *testing.T) {
 
 	// Unmarshal from JSON.
 	var restored Block
+
 	err = json.Unmarshal(data, &restored)
 	if err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)

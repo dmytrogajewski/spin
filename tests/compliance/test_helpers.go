@@ -2,7 +2,6 @@
 package compliance
 
 import (
-	"encoding/json"
 	"slices"
 	"testing"
 
@@ -10,91 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// verifyJSONRPCRequest verifies that a request matches JSON-RPC 2.0 format.
-func verifyJSONRPCRequest(t *testing.T, data []byte) {
-	t.Helper()
-
-	var req struct {
-		JSONRPC string          `json:"jsonrpc"`
-		Method  string          `json:"method"`
-		Params  json.RawMessage `json:"params"`
-		ID      any             `json:"id"`
-	}
-
-	err := json.Unmarshal(data, &req)
-	require.NoError(t, err, "Request should be valid JSON")
-
-	assert.Equal(t, "2.0", req.JSONRPC, "jsonrpc field should be '2.0'")
-	assert.NotEmpty(t, req.Method, "method field should be present")
-	assert.NotNil(t, req.ID, "id field should be present")
-}
-
-// verifyJSONRPCResponse verifies that a response matches JSON-RPC 2.0 format.
-func verifyJSONRPCResponse(t *testing.T, data []byte) {
-	t.Helper()
-
-	var resp struct {
-		JSONRPC string          `json:"jsonrpc"`
-		Result  json.RawMessage `json:"result,omitempty"`
-		Error   json.RawMessage `json:"error,omitempty"`
-		ID      any             `json:"id"`
-	}
-
-	err := json.Unmarshal(data, &resp)
-	require.NoError(t, err, "Response should be valid JSON")
-
-	assert.Equal(t, "2.0", resp.JSONRPC, "jsonrpc field should be '2.0'")
-	assert.NotNil(t, resp.ID, "id field should be present")
-	// Either result or error should be present, but not both.
-	if resp.Result != nil {
-		assert.Nil(t, resp.Error, "Response should not have both result and error")
-	} else {
-		assert.NotNil(t, resp.Error, "Response should have either result or error")
-	}
-}
-
-// verifyJSONRPCNotification verifies that a notification matches JSON-RPC 2.0 format.
-func verifyJSONRPCNotification(t *testing.T, data []byte) {
-	t.Helper()
-
-	var notif struct {
-		JSONRPC string          `json:"jsonrpc"`
-		Method  string          `json:"method"`
-		Params  json.RawMessage `json:"params"`
-		ID      any             `json:"id,omitempty"`
-	}
-
-	err := json.Unmarshal(data, &notif)
-	require.NoError(t, err, "Notification should be valid JSON")
-
-	assert.Equal(t, "2.0", notif.JSONRPC, "jsonrpc field should be '2.0'")
-	assert.NotEmpty(t, notif.Method, "method field should be present")
-	assert.Nil(t, notif.ID, "Notification should not have id field")
-}
-
-// verifyJSONRPCError verifies that an error response matches JSON-RPC 2.0 format.
-func verifyJSONRPCError(t *testing.T, data []byte, expectedCode int) {
-	t.Helper()
-
-	var resp struct {
-		JSONRPC string `json:"jsonrpc"`
-		Error   struct {
-			Code    int    `json:"code"`
-			Message string `json:"message"`
-			Data    any    `json:"data,omitempty"`
-		} `json:"error"`
-		ID any `json:"id"`
-	}
-
-	err := json.Unmarshal(data, &resp)
-	require.NoError(t, err, "Error response should be valid JSON")
-
-	assert.Equal(t, "2.0", resp.JSONRPC, "jsonrpc field should be '2.0'")
-	assert.Equal(t, expectedCode, resp.Error.Code, "Error code should match")
-	assert.NotEmpty(t, resp.Error.Message, "Error message should be present")
-	assert.NotNil(t, resp.ID, "Error response should have id field")
-}
 
 // verifyInitializeResponse verifies Initialize response format compliance.
 func verifyInitializeResponse(t *testing.T, resp acp.InitializeResponse) {

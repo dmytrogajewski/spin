@@ -9,12 +9,12 @@ import (
 )
 
 const (
-	defaultRefineMaxBullets  = 1000
-	defaultRefineMaxTokens   = 100000
-	defaultRefineMinUtility  = 0.1
-	metricHistoryCapacity    = 100
-	tokensPerBulletEstimate  = 50
-	minHistoryForGrowthRate  = 2
+	defaultRefineMaxBullets = 1000
+	defaultRefineMaxTokens  = 100000
+	defaultRefineMinUtility = 0.1
+	metricHistoryCapacity   = 100
+	tokensPerBulletEstimate = 50
+	minHistoryForGrowthRate = 2
 )
 
 // GrowthMetrics tracks playbook growth statistics.

@@ -56,6 +56,7 @@ func createFile(t *testing.T, workspace, path, content string) {
 	t.Helper()
 
 	fullPath := filepath.Join(workspace, path)
+
 	err := os.MkdirAll(filepath.Dir(fullPath), 0o750)
 	if err != nil {
 		t.Fatalf("failed to create parent dirs: %v", err)
@@ -251,6 +252,7 @@ func runAddFileTest(t *testing.T, tt struct {
 
 	if tt.wantErr {
 		verifyApplyError(t, applier, patch, tt.errIs)
+
 		return
 	}
 
@@ -258,6 +260,7 @@ func runAddFileTest(t *testing.T, tt struct {
 
 	if !fileExists(workspace, tt.filePath) {
 		t.Errorf("file %q not created", tt.filePath)
+
 		return
 	}
 
@@ -332,6 +335,7 @@ func runDeleteFileTest(t *testing.T, tt struct {
 
 	if tt.wantErr {
 		verifyApplyError(t, applier, patch, tt.errIs)
+
 		return
 	}
 
@@ -457,6 +461,7 @@ func runUpdateFileTest(t *testing.T, tt updateFileTestCase) {
 
 	if tt.wantErr {
 		verifyApplyError(t, applier, patch, tt.errIs)
+
 		return
 	}
 
@@ -534,6 +539,7 @@ func runMoveFileTest(t *testing.T, tt struct {
 
 	if tt.wantErr {
 		verifyApplyError(t, applier, patch, nil)
+
 		return
 	}
 

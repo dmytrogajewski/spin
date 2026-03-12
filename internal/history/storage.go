@@ -8,6 +8,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/storage"
 )
 
+// ErrHistoryDataCannotBeNil is a sentinel error.
 var ErrHistoryDataCannotBeNil = errors.New("history data cannot be nil")
 
 // Data is the serializable format for history persistence.

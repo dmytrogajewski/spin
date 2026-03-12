@@ -28,6 +28,7 @@ const (
 	policyStoreTTL              = 30 * time.Second
 )
 
+// ErrAceNotEnabled is a sentinel error.
 var ErrAceNotEnabled = errors.New("ACE not enabled")
 
 // Builder constructs Agent instances with all dependencies.

@@ -6,6 +6,7 @@ import (
 
 func TestBlockType_String(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name      string
 		blockType BlockType
@@ -26,6 +27,7 @@ func TestBlockType_String(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := tt.blockType.String()
 			if result != tt.expected {
 				t.Errorf("BlockType.String() = %v, want %v", result, tt.expected)
@@ -36,6 +38,7 @@ func TestBlockType_String(t *testing.T) {
 
 func TestBlockType_Valid(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name      string
 		blockType BlockType
@@ -58,6 +61,7 @@ func TestBlockType_Valid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := tt.blockType.Valid()
 			if result != tt.expected {
 				t.Errorf("BlockType.Valid() = %v, want %v", result, tt.expected)
@@ -68,6 +72,7 @@ func TestBlockType_Valid(t *testing.T) {
 
 func TestFoldState_String(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name      string
 		foldState FoldState
@@ -80,6 +85,7 @@ func TestFoldState_String(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := tt.foldState.String()
 			if result != tt.expected {
 				t.Errorf("FoldState.String() = %v, want %v", result, tt.expected)
@@ -90,6 +96,7 @@ func TestFoldState_String(t *testing.T) {
 
 func TestFoldState_Valid(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name      string
 		foldState FoldState
@@ -104,6 +111,7 @@ func TestFoldState_Valid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := tt.foldState.Valid()
 			if result != tt.expected {
 				t.Errorf("FoldState.Valid() = %v, want %v", result, tt.expected)
@@ -114,6 +122,7 @@ func TestFoldState_Valid(t *testing.T) {
 
 func TestSeverity_String(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		severity Severity
@@ -127,6 +136,7 @@ func TestSeverity_String(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := tt.severity.String()
 			if result != tt.expected {
 				t.Errorf("Severity.String() = %v, want %v", result, tt.expected)
@@ -137,6 +147,7 @@ func TestSeverity_String(t *testing.T) {
 
 func TestSeverity_Valid(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		severity Severity
@@ -152,6 +163,7 @@ func TestSeverity_Valid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := tt.severity.Valid()
 			if result != tt.expected {
 				t.Errorf("Severity.Valid() = %v, want %v", result, tt.expected)

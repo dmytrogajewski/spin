@@ -8,12 +8,12 @@ import (
 
 // Status bar rendering constants.
 const (
-	minTermHeight         = 3  // minimum terminal height to render status bar.
-	minTermWidth          = 10 // minimum terminal width to render status bar.
-	statusBarLines        = 2  // lines reserved for status bar and prompt.
-	percentMultiplier     = 100
-	highUsageThreshold    = 80 // context usage percentage for warning color.
-	convIDMaxLen          = 8  // max characters for shortened conversation ID.
+	minTermHeight      = 3  // minimum terminal height to render status bar.
+	minTermWidth       = 10 // minimum terminal width to render status bar.
+	statusBarLines     = 2  // lines reserved for status bar and prompt.
+	percentMultiplier  = 100
+	highUsageThreshold = 80 // context usage percentage for warning color.
+	convIDMaxLen       = 8  // max characters for shortened conversation ID.
 )
 
 // Renderer handles rendering the status bar to the terminal.

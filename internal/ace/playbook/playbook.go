@@ -15,9 +15,13 @@ import (
 const bytesPerFloat32 = 4
 
 var (
+	// ErrBulletCannotBeNil is a sentinel error.
 	ErrBulletCannotBeNil = errors.New("bullet cannot be nil")
+	// ErrBulletWithIDAlreadyExists is a sentinel error.
 	ErrBulletWithIDAlreadyExists = errors.New("bullet with ID  already exists")
+	// ErrBulletCannotBeNil2 is a sentinel error.
 	ErrBulletCannotBeNil2 = errors.New("bullet cannot be nil")
+	// ErrBulletWithIDNotFound is a sentinel error.
 	ErrBulletWithIDNotFound = errors.New("bullet with ID  not found")
 )
 
@@ -98,7 +102,7 @@ func (p *Playbook) Add(_ context.Context, b *bullet.Bullet) error {
 
 	// Check for duplicate ID.
 	if _, exists := p.bullets[b.ID]; exists {
-return fmt.Errorf("bullet with ID %s already exists: %w", b.ID, ErrBulletWithIDAlreadyExists)
+		return fmt.Errorf("bullet with ID %s already exists: %w", b.ID, ErrBulletWithIDAlreadyExists)
 	}
 
 	p.bullets[b.ID] = b
@@ -128,7 +132,7 @@ func (p *Playbook) Update(_ context.Context, b *bullet.Bullet) error {
 	defer p.mu.Unlock()
 
 	if _, exists := p.bullets[b.ID]; !exists {
-return fmt.Errorf("bullet with ID %s not found: %w", b.ID, ErrBulletWithIDNotFound)
+		return fmt.Errorf("bullet with ID %s not found: %w", b.ID, ErrBulletWithIDNotFound)
 	}
 
 	p.bullets[b.ID] = b

@@ -10,6 +10,7 @@ import (
 
 func TestApprovalService_PolicyShortCircuit(t *testing.T) {
 	t.Parallel()
+
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
@@ -34,6 +35,7 @@ func TestApprovalService_PolicyShortCircuit(t *testing.T) {
 		Decision:  DecisionAllow,
 		CreatedAt: time.Now(),
 	}
+
 	err := store.Save(context.Background(), p)
 	if err != nil {
 		t.Fatalf("save policy: %v", err)
@@ -56,6 +58,7 @@ func TestApprovalService_PolicyShortCircuit(t *testing.T) {
 
 func TestApprovalService_PersistOnApprove(t *testing.T) {
 	t.Parallel()
+
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
@@ -117,6 +120,7 @@ func TestApprovalService_PersistOnApprove(t *testing.T) {
 
 func TestApprovalService_ApproveOnceDoesNotPersist(t *testing.T) {
 	t.Parallel()
+
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
@@ -141,6 +145,7 @@ func TestApprovalService_ApproveOnceDoesNotPersist(t *testing.T) {
 	})
 
 	cmd := &Command{Program: "/bin/rm", Args: []string{"-rf", "/tmp/x"}, WorkDir: "/tmp"}
+
 	_, approved, err := svc.RequestApproval(context.Background(), NewOperation(cmd, "test once", "/tmp"))
 	if err != nil || !approved {
 		t.Fatalf("approval failed: err=%v approved=%v", err, approved)
@@ -159,6 +164,7 @@ func TestApprovalService_ApproveOnceDoesNotPersist(t *testing.T) {
 
 func TestApprovalService_OnceScopeReasks(t *testing.T) {
 	t.Parallel()
+
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
@@ -211,6 +217,7 @@ func TestApprovalService_OnceScopeReasks(t *testing.T) {
 
 func TestApprovalService_GlobalScopePersistsAndShortCircuits(t *testing.T) {
 	t.Parallel()
+
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
@@ -269,6 +276,7 @@ func TestApprovalService_GlobalScopePersistsAndShortCircuits(t *testing.T) {
 
 func TestApprovalService_RevocationReasks(t *testing.T) {
 	t.Parallel()
+
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 

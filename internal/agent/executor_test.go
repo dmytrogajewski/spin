@@ -42,6 +42,7 @@ func TestNewExecutor_WithOptions(t *testing.T) {
 
 func TestNewExecutor_EmptyWorkDir(t *testing.T) {
 	t.Parallel()
+
 	executor, err := NewExecutor("")
 	require.Error(t, err)
 	assert.Nil(t, executor)
@@ -49,6 +50,7 @@ func TestNewExecutor_EmptyWorkDir(t *testing.T) {
 
 func TestNewExecutor_NonExistentWorkDir(t *testing.T) {
 	t.Parallel()
+
 	executor, err := NewExecutor("/non/existent/directory")
 	require.NoError(t, err) // NewExecutor doesn't validate directory existence.
 	assert.NotNil(t, executor)
@@ -224,6 +226,7 @@ func TestExecutor_Validate_EmptyProgram(t *testing.T) {
 
 func TestResult_Success(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		result   *Result
@@ -266,6 +269,7 @@ func TestResult_Success(t *testing.T) {
 
 func TestResult_Failed(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		result   *Result
@@ -300,6 +304,7 @@ func TestResult_Failed(t *testing.T) {
 
 func TestResult_Output(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		result   *Result
@@ -350,6 +355,7 @@ func TestResult_Output(t *testing.T) {
 
 func TestDefaultExecuteOptions(t *testing.T) {
 	t.Parallel()
+
 	opts := DefaultExecuteOptions()
 	assert.NotNil(t, opts)
 	assert.Equal(t, time.Duration(0), opts.Timeout) // 0 means use executor's default.
@@ -359,6 +365,7 @@ func TestDefaultExecuteOptions(t *testing.T) {
 
 func TestExecutorOption_WithSecurityService(t *testing.T) {
 	t.Parallel()
+
 	validator := security.NewValidator()
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
 		Handler: nil, Emitter: nil, Validator: validator,
@@ -374,6 +381,7 @@ func TestExecutorOption_WithSecurityService(t *testing.T) {
 
 func TestExecutorOption_WithSecurityService_Nil(t *testing.T) {
 	t.Parallel()
+
 	executor := &Executor{}
 
 	opt := WithSecurityService(nil)
@@ -384,6 +392,7 @@ func TestExecutorOption_WithSecurityService_Nil(t *testing.T) {
 
 func TestExecutorOption_WithApprovalService(t *testing.T) {
 	t.Parallel()
+
 	approvalService := &security.ApprovalService{}
 	executor := &Executor{}
 
@@ -395,6 +404,7 @@ func TestExecutorOption_WithApprovalService(t *testing.T) {
 
 func TestExecutorOption_WithTimeout(t *testing.T) {
 	t.Parallel()
+
 	timeout := 30 * time.Second
 	executor := &Executor{}
 
@@ -406,6 +416,7 @@ func TestExecutorOption_WithTimeout(t *testing.T) {
 
 func TestExecutorOption_WithCache(t *testing.T) {
 	t.Parallel()
+
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 	executor := &Executor{}
 
@@ -466,11 +477,15 @@ func TestExecutor_ExecuteStreaming(t *testing.T) {
 	assert.NotNil(t, chunks)
 
 	// Collect chunks.
-	var output string
-	var outputSb433 strings.Builder
+	var (
+		output      string
+		outputSb433 strings.Builder
+	)
+
 	for chunk := range chunks {
-		outputSb433.WriteString(string(chunk.Data))
+		outputSb433.Write(chunk.Data)
 	}
+
 	output += outputSb433.String()
 
 	assert.Contains(t, output, "hello world")

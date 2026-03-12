@@ -6,6 +6,7 @@ import (
 	"fmt"
 )
 
+// ErrToolArgumentsCannotBeEmpty is a sentinel error.
 var ErrToolArgumentsCannotBeEmpty = errors.New("tool arguments cannot be empty")
 
 // ArgumentParser parses tool call arguments from JSON.
@@ -42,6 +43,7 @@ func (p *ArgumentParser) Parse(raw string) (ToolParameters, error) {
 	}
 
 	var args map[string]any
+
 	err := json.Unmarshal([]byte(raw), &args)
 	if err != nil {
 		return ToolParameters{}, fmt.Errorf("failed to parse tool arguments: %w", err)

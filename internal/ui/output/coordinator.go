@@ -115,7 +115,7 @@ func (c *CoordinatedWriter) PrintLine(s string) error {
 // The printer handles internal coalescing and flicker reduction.
 // This coordinator redraws the prompt once after the stream completes.
 //
-// Returns context.Canceled if context is canceled, or any write/redraw error.
+// Returns [context.Canceled] if context is canceled, or any write/redraw error.
 func (c *CoordinatedWriter) PrintChunks(ctx context.Context, chunks <-chan string) error {
 	// Move to scrolling region BEFORE streaming content.
 	c.mu.Lock()
@@ -167,6 +167,7 @@ func (c *CoordinatedWriter) SetStatus(status string) error {
 	defer c.mu.Unlock()
 
 	c.status = status
+
 	err := c.renderer.Redraw(c.model, c.status)
 	if err != nil {
 		return fmt.Errorf("redraw prompt: %w", err)

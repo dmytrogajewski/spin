@@ -49,7 +49,7 @@ func (a *Applier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*Batch
 	}
 
 	resultsChan := a.runBatchWorkers(ctx, req.Deltas, workers)
-	firstError, successfulIndices := collectBatchResults(result, resultsChan, req.Atomic)
+	successfulIndices, firstError := collectBatchResults(result, resultsChan, req.Atomic)
 
 	return a.finalizeBatch(ctx, result, req, firstError, successfulIndices)
 }
@@ -89,7 +89,7 @@ func (a *Applier) runBatchWorkers(ctx context.Context, deltas []Delta, workers i
 }
 
 // collectBatchResults processes results from workers, tracking successes and failures.
-func collectBatchResults(result *BatchApplyResult, resultsChan <-chan batchJobResult, atomic bool) (err error, failed []int) {
+func collectBatchResults(result *BatchApplyResult, resultsChan <-chan batchJobResult, atomic bool) (failed []int, err error) {
 	var firstError error
 
 	successfulIndices := make([]int, 0)
@@ -113,7 +113,7 @@ func collectBatchResults(result *BatchApplyResult, resultsChan <-chan batchJobRe
 		}
 	}
 
-	return firstError, successfulIndices
+	return successfulIndices, firstError
 }
 
 // finalizeBatch handles atomic rollback if needed.

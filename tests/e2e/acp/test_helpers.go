@@ -5,7 +5,6 @@ package acp
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -19,9 +18,9 @@ import (
 )
 
 const (
-	testSettleTime       = 50 * time.Millisecond
-	testTimeoutShort     = 2 * time.Second
-	testTimeoutLong      = 10 * time.Second
+	testSettleTime   = 50 * time.Millisecond
+	testTimeoutShort = 2 * time.Second
+	testTimeoutLong  = 10 * time.Second
 )
 
 const (
@@ -135,6 +134,7 @@ func cleanupAgent(t *testing.T, cmd *exec.Cmd, stdin io.WriteCloser) {
 	case <-time.After(testTimeoutShort):
 		// Force kill after timeout.
 		_ = cmd.Process.Kill()
+
 		<-done
 	}
 }
@@ -253,29 +253,6 @@ func (c *testClient) ReleaseTerminal(_ context.Context, _ acp.ReleaseTerminalReq
 // WaitForTerminalExit implements acp.Client interface (not used in basic tests).
 func (c *testClient) WaitForTerminalExit(_ context.Context, _ acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
 	return acp.WaitForTerminalExitResponse{}, nil
-}
-
-// waitForInitialization waits for the agent to be ready by attempting initialization.
-func waitForInitialization(t *testing.T, conn *acp.ClientSideConnection) error {
-	t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeoutLong)
-	defer cancel()
-
-	// Try to initialize - this verifies the connection is working.
-	_, err := conn.Initialize(ctx, acp.InitializeRequest{
-		ProtocolVersion:    acp.ProtocolVersionNumber,
-		ClientCapabilities: acp.ClientCapabilities{},
-		ClientInfo: &acp.Implementation{
-			Name:    "test-client",
-			Version: "1.0.0",
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("acp initialize: %w", err)
-	}
-
-	return nil
 }
 
 // createTestWorkspace creates a temporary directory for testing.

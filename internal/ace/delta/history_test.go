@@ -231,6 +231,7 @@ func TestDeltaHistory_ConcurrentWrites(t *testing.T) {
 				delta := NewContentUpdate("bullet-1", "content", Metadata{Source: "test"})
 				h.Record(*delta)
 			}
+
 			done <- true
 		}(g)
 	}
@@ -294,6 +295,7 @@ func startConcurrentWriters(h *History, count int, done chan error) {
 				delta := NewContentUpdate("bullet-1", "content", Metadata{Source: "test"})
 				h.Record(*delta)
 			}
+
 			done <- nil
 		}()
 	}

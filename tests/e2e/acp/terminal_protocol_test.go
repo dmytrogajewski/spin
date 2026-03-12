@@ -13,6 +13,7 @@ import (
 // interceptingClient allows capturing requests from the server.
 type interceptingClient struct {
 	*testClient
+
 	createTerminalFunc func(context.Context, acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error)
 }
 

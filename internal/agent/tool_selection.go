@@ -602,6 +602,7 @@ func (s *ToolSelector) addNonLoadableTools(
 		}
 
 		seen[name] = true
+
 		result = append(result, st.Tool)
 	}
 
@@ -624,6 +625,7 @@ func (s *ToolSelector) addAndRegisterNewTools(
 		}
 
 		seen[name] = true
+
 		result = append(result, t)
 		s.registerToRuntime(ctx, t)
 	}

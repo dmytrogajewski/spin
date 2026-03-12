@@ -16,11 +16,11 @@ import (
 )
 
 const (
-	defaultEnvMaxFiles       = 1000
-	defaultEnvMaxDepth       = 10
-	envDiscoveryTimeout      = 5 * time.Second
-	minSplitParts            = 2
-	languageUnknown          = "Unknown"
+	defaultEnvMaxFiles  = 1000
+	defaultEnvMaxDepth  = 10
+	envDiscoveryTimeout = 5 * time.Second
+	minSplitParts       = 2
+	languageUnknown     = "Unknown"
 )
 
 var (
@@ -246,6 +246,7 @@ func gatherGitRemotes(ctx context.Context, workDir string, info *GitInfo) {
 	}
 
 	remoteMap := make(map[string]string)
+
 	for line := range strings.SplitSeq(output, "\n") {
 		parts := strings.Fields(line)
 		if len(parts) >= minSplitParts {
@@ -640,6 +641,7 @@ func (c *Environment) writeFilesSummary(sb *strings.Builder) {
 	for i, file := range c.Files {
 		if i >= maxShow {
 			fmt.Fprintf(sb, "... and %d more files\n", len(c.Files)-maxShow)
+
 			break
 		}
 

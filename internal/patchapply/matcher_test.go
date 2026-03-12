@@ -91,7 +91,7 @@ func TestMatcher_FindContext_ExactMatch(t *testing.T) {
 
 	runMatcherTests(t, []matcherTestCase{
 		{
-			name: "empty context matches at start",
+			name:      "empty context matches at start",
 			fileLines: []string{"line1", "line2"}, contextLines: []string{}, want: 0,
 		},
 		{
@@ -226,11 +226,11 @@ func TestMatcher_FindContext_EdgeCases(t *testing.T) {
 
 	runMatcherTests(t, []matcherTestCase{
 		{
-			name: "empty file - empty context",
+			name:      "empty file - empty context",
 			fileLines: []string{}, contextLines: []string{}, want: 0,
 		},
 		{
-			name: "empty file - non-empty context",
+			name:      "empty file - non-empty context",
 			fileLines: []string{}, contextLines: []string{"something"}, want: -1,
 		},
 		{
@@ -299,16 +299,16 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 			name:         "formatted code - indentation changed",
 			fileLines:    []string{"type Config struct {", "  Host string", "  Port int", "  Timeout int64", "}"},
 			contextLines: []string{"type Config struct {", "    Host string", "    Port int", "    Timeout int64"},
-			header: "type Config", threshold: 0.85, want: 0,
+			header:       "type Config", threshold: 0.85, want: 0,
 		},
 		{
 			name:         "comment added between code",
 			fileLines:    []string{"func Calculate(x, y int) int {", "    // TODO: add validation", "    return x + y", "}"},
 			contextLines: []string{"func Calculate(x, y int) int {", "    return x + y"},
-			header: "func Calculate", threshold: 0.70, want: -1,
+			header:       "func Calculate", threshold: 0.70, want: -1,
 		},
 		{
-			name:         "multiple similar functions - use header",
+			name: "multiple similar functions - use header",
 			fileLines: []string{
 				"func (s *Service) Create(data Data) error {",
 				"    return s.repo.Insert(data)", "}", "",
@@ -318,7 +318,7 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 				"    return s.repo.Delete(id)", "}",
 			},
 			contextLines: []string{"    return s.repo.Delete(id)"},
-			header: "Delete", threshold: 0.85, want: 9,
+			header:       "Delete", threshold: 0.85, want: 9,
 		},
 	})
 }

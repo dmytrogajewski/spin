@@ -425,9 +425,9 @@ func TestACP_ToolCall_Content_Text(t *testing.T) {
 
 // toolCallNotificationCase describes a test that sends a prompt and checks notifications.
 type toolCallNotificationCase struct {
-	name       string
-	promptText string
-	checkFunc  func(t *testing.T, notifications []acp.SessionNotification) bool
+	name        string
+	promptText  string
+	checkFunc   func(t *testing.T, notifications []acp.SessionNotification) bool
 	notFoundMsg string
 }
 
@@ -556,11 +556,13 @@ func findLocationInNotifications(t *testing.T, notifications []acp.SessionNotifi
 	for _, notif := range notifications {
 		if tc := notif.Update.ToolCall; tc != nil && len(tc.Locations) > 0 {
 			logFirstLocation(t, tc.Locations, "tool call")
+
 			return true
 		}
 
 		if upd := notif.Update.ToolCallUpdate; upd != nil && len(upd.Locations) > 0 {
 			logFirstLocation(t, upd.Locations, "tool call update")
+
 			return true
 		}
 	}
@@ -716,6 +718,7 @@ func runRawFieldTests(t *testing.T, cases []rawFieldCase) {
 			for _, notif := range clientImpl.getNotifications() {
 				if val, found := tt.checkFunc(notif); found {
 					t.Logf("Found %s: %v", tt.fieldName, val)
+
 					return
 				}
 			}
@@ -737,9 +740,11 @@ func TestACP_ToolCall_RawInput(t *testing.T) {
 				if tc := notif.Update.ToolCall; tc != nil && tc.RawInput != nil {
 					return tc.RawInput, true
 				}
+
 				if upd := notif.Update.ToolCallUpdate; upd != nil && upd.RawInput != nil {
 					return upd.RawInput, true
 				}
+
 				return nil, false
 			},
 		},
@@ -758,9 +763,11 @@ func TestACP_ToolCall_RawOutput(t *testing.T) {
 				if tc := notif.Update.ToolCall; tc != nil && tc.RawOutput != nil {
 					return tc.RawOutput, true
 				}
+
 				if upd := notif.Update.ToolCallUpdate; upd != nil && upd.RawOutput != nil {
 					return upd.RawOutput, true
 				}
+
 				return nil, false
 			},
 		},

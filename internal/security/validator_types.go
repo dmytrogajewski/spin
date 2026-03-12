@@ -16,9 +16,12 @@ import (
 
 // Common validator errors.
 var (
+	// ErrInvalidCommand is a sentinel error.
 	ErrInvalidCommand = errors.New("invalid command")
-	ErrParseError     = errors.New("command parse error")
-	ErrEmptyCommand   = errors.New("empty command")
+	// ErrParseError is a sentinel error.
+	ErrParseError = errors.New("command parse error")
+	// ErrEmptyCommand is a sentinel error.
+	ErrEmptyCommand = errors.New("empty command")
 )
 
 // CommandClass represents the safety classification of a command.

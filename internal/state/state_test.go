@@ -7,6 +7,7 @@ import (
 
 func TestState_String(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		state    State
@@ -26,6 +27,7 @@ func TestState_String(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := tt.state.String()
 			if result != tt.expected {
 				t.Errorf("State.String() = %v, want %v", result, tt.expected)
@@ -36,6 +38,7 @@ func TestState_String(t *testing.T) {
 
 func TestState_MarshalText(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		state    State
@@ -54,6 +57,7 @@ func TestState_MarshalText(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result, err := tt.state.MarshalText()
 			if err != nil {
 				t.Errorf("State.MarshalText() unexpected error: %v", err)
@@ -68,6 +72,7 @@ func TestState_MarshalText(t *testing.T) {
 
 func TestState_UnmarshalText(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name      string
 		input     string
@@ -89,6 +94,7 @@ func TestState_UnmarshalText(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			var state State
 
 			err := state.UnmarshalText([]byte(tt.input))
@@ -116,6 +122,7 @@ func runStatePredicateTests(t *testing.T, cases []statePredicateCase, opName str
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := op(tt.state)
 			if result != tt.expected {
 				t.Errorf("State.%s() = %v, want %v", opName, result, tt.expected)
@@ -156,6 +163,7 @@ func TestState_IsActive(t *testing.T) {
 
 func TestState_CanTransitionTo(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		from     State
@@ -215,6 +223,7 @@ func TestState_CanTransitionTo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			result := tt.from.CanTransitionTo(tt.to)
 			if result != tt.expected {
 				t.Errorf("State.CanTransitionTo(%v, %v) = %v, want %v", tt.from, tt.to, result, tt.expected)
@@ -225,6 +234,7 @@ func TestState_CanTransitionTo(t *testing.T) {
 
 func TestState_JSONRoundTrip(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name  string
 		state State

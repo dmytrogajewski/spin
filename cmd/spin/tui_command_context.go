@@ -11,6 +11,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 )
 
+// ErrExitRequested is a sentinel error.
 var ErrExitRequested = errors.New("exit requested")
 
 // tuiCommandContext implements commands.CommandContext for TUI.

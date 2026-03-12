@@ -138,6 +138,7 @@ func (r *PaletteRenderer) renderResultsList(sb *strings.Builder, p *Palette, pal
 
 	if len(filtered) == 0 {
 		r.renderEmptyState(sb, p, paletteWidth, leftPad)
+
 		return
 	}
 
@@ -193,7 +194,7 @@ func (r *PaletteRenderer) renderItem(cmd Command, selected bool, paletteWidth, l
 	}
 
 	sb.WriteString(" ") // s2 padding start.
-	sb.WriteString(string(cmd.Icon()))
+	sb.WriteRune(cmd.Icon())
 	sb.WriteString("  ")
 	sb.WriteString(colorFg)
 	sb.WriteString(cmd.Name())

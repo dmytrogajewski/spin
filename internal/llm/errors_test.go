@@ -6,11 +6,11 @@ import (
 )
 
 var (
-	errContext = errors.New("context")
-	errContext2 = errors.New("context")
-	errContext3 = errors.New("context")
-	errContext4 = errors.New("context")
-	errContext5 = errors.New("context")
+	errContext   = errors.New("context")
+	errContext2  = errors.New("context")
+	errContext3  = errors.New("context")
+	errContext4  = errors.New("context")
+	errContext5  = errors.New("context")
 	errDifferent = errors.New("different")
 )
 

@@ -41,6 +41,7 @@ func (b *Builder) attachJSONLEventLogger(ctx context.Context, sessionID string) 
 	dir := filepath.Join(base, sessionID)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		b.logWarnCtx(ctx, "event logger mkdir failed", "dir", dir, "err", err)
+
 		return
 	}
 
@@ -49,13 +50,16 @@ func (b *Builder) attachJSONLEventLogger(ctx context.Context, sessionID string) 
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		b.logWarnCtx(ctx, "event logger open failed", "path", logPath, "err", err)
+
 		return
 	}
 
 	subID, ch, subErr := b.emitter.Subscribe()
 	if subErr != nil {
 		_ = f.Close()
+
 		b.logWarnCtx(ctx, "event subscribe failed", "err", subErr)
+
 		return
 	}
 
@@ -70,6 +74,7 @@ func (b *Builder) resolveSessionDir() string {
 		if err == nil {
 			return filepath.Join(home, ".spin", "sessions")
 		}
+
 		return base
 	}
 
@@ -87,6 +92,7 @@ func (b *Builder) resolveSessionDir() string {
 func (b *Builder) runEventLogger(ctx context.Context, sessionID, subID string, ch <-chan events.Event, f *os.File) {
 	defer func() {
 		b.emitter.Unsubscribe(subID)
+
 		_ = f.Close()
 	}()
 
@@ -98,6 +104,7 @@ func (b *Builder) runEventLogger(ctx context.Context, sessionID, subID string, c
 			if !ok {
 				return
 			}
+
 			record := map[string]any{
 				"session_id": sessionID,
 				"timestamp":  ev.Timestamp.Format(time.RFC3339Nano),

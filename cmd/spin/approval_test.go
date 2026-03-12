@@ -69,6 +69,7 @@ func TestApproval_List_WithData(t *testing.T) {
 	policyPath := filepath.Join(tmpDir, "policies.json")
 	configContent := "version: \"2.0\"\nsecurity:\n  policy_file: " +
 		policyPath + "\n  approval_persistence_enabled: true\n"
+
 	err := os.WriteFile(configPath, []byte(configContent), 0o600)
 	if err != nil {
 		t.Fatalf("write config: %v", err)
@@ -89,6 +90,7 @@ func TestApproval_List_WithData(t *testing.T) {
 		Decision:  security.DecisionAllow,
 		CreatedAt: time.Now(),
 	}
+
 	err = store.Save(ctx, p)
 	if err != nil {
 		t.Fatalf("save policy: %v", err)
@@ -119,6 +121,7 @@ func TestApproval_Revoke_NonExistent(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "spin.yaml")
 
 	policyPath := filepath.Join(tmpDir, "policies.json")
+
 	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0o600)
 	if err != nil {
 		t.Fatalf("write config: %v", err)

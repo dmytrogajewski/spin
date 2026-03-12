@@ -13,7 +13,6 @@ import (
 	termx "golang.org/x/term"
 
 	"github.com/dmytrogajewski/spin/internal/agent/executor"
-	spinterm "github.com/dmytrogajewski/spin/internal/ui/term"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
@@ -25,8 +24,10 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
+	spinterm "github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
+// ErrNoPromptProvidedUseCommandLine is a sentinel error.
 var ErrNoPromptProvidedUseCommandLine = errors.New("no prompt provided (use command line args or stdin)")
 
 // newExecCmd creates the exec command for non-interactive execution.
@@ -116,6 +117,7 @@ func runExec(cmd *cobra.Command, args []string) error {
 	// Apply timeout if specified.
 	if timeout != "" {
 		var duration time.Duration
+
 		duration, err = parseDuration(timeout)
 		if err != nil {
 			return fmt.Errorf("invalid timeout: %w", err)
@@ -199,6 +201,7 @@ func parseDuration(s string) (time.Duration, error) {
 func resolveSessionID(storage session.Storage, workDir, prefix string) string {
 	if storage != nil {
 		sess := session.NewSession(workDir)
+
 		return sess.ID
 	}
 
@@ -214,6 +217,7 @@ func createExecUI() (ports.UI, error) {
 			mockTermWidth  = 120
 			mockTermHeight = 30
 		)
+
 		mockTty := &mockTTY{width: mockTermWidth, height: mockTermHeight}
 		opts = append(opts, adapters.WithTTY(mockTty))
 	}
@@ -248,6 +252,7 @@ func buildConversation(
 	conv, err := convBuilder.Build(ctx)
 	if err != nil {
 		cleanup()
+
 		return nil, fmt.Errorf("build conversation: %w", err)
 	}
 
@@ -261,7 +266,9 @@ func createConversationForExec(
 ) (*conversation.Conversation, error) {
 	workDir := cfg.Agent.WorkDir
 	logger := slog.Default()
+
 	const eventBufferSize = 100
+
 	emitter := events.NewEventEmitter(eventBufferSize)
 
 	storage, err := createSessionStorage(cfg.Agent.SessionDir)
@@ -286,12 +293,14 @@ func createConversationForExec(
 	ui, err := createExecUI()
 	if err != nil {
 		cleanup()
+
 		return nil, fmt.Errorf("create TUI: %w", err)
 	}
 
 	builtinRuntime, err := createBuiltinRuntime(workDir, emitter, storage, sessionID, approvalHandler, services, ui, logger, cfg)
 	if err != nil {
 		cleanup()
+
 		return nil, fmt.Errorf("create builtin runtime: %w", err)
 	}
 
@@ -303,9 +312,9 @@ type mockTTY struct {
 	width, height int
 }
 
-func (m *mockTTY) Enter() error               { return nil }
-func (m *mockTTY) Exit() error                { return nil }
-func (m *mockTTY) Size() (width, height int)   { return m.width, m.height }
+func (m *mockTTY) Enter() error              { return nil }
+func (m *mockTTY) Exit() error               { return nil }
+func (m *mockTTY) Size() (width, height int) { return m.width, m.height }
 func (m *mockTTY) OnResize(_ func(w, h int)) {}
 
 // processExecEvent handles a single event in exec mode.
@@ -340,6 +349,7 @@ func startExecEventLoop(
 				if !ok {
 					return
 				}
+
 				processExecEvent(ctx, event, mapper, ui, conv)
 			}
 		}
@@ -354,6 +364,7 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 	}
 
 	pureTTY := ui.(*adapters.PureTTY)
+
 	defer func() { _ = pureTTY.Stop() }()
 
 	pureTTY.SetTaskMode(conv.GetTaskMode())
@@ -366,12 +377,14 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 
 	go func() {
 		_ = pureTTY.PrintChunks(ctx, streamCh)
+
 		close(streamDone)
 	}()
 
 	startExecEventLoop(ctx, conv.Stream(), mapper, pureTTY, conv)
 
 	errChan := make(chan error, 1)
+
 	go func() {
 		errChan <- conv.RunTurn(ctx, prompt)
 	}()

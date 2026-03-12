@@ -314,6 +314,7 @@ func TestToTrajectory_Metadata(t *testing.T) {
 		t.Parallel()
 
 		ctx := NewContext("test")
+
 		ctx.Success = true
 		if !ctx.ToTrajectory().Success {
 			t.Error("expected Success true, got false")
@@ -332,7 +333,9 @@ func TestToTrajectory_Metadata(t *testing.T) {
 		t.Parallel()
 
 		ctx := NewContext("test")
+
 		time.Sleep(10 * time.Millisecond)
+
 		if ctx.ToTrajectory().Metadata.Duration < 10*time.Millisecond {
 			t.Errorf("expected duration >= 10ms, got %v", ctx.ToTrajectory().Metadata.Duration)
 		}

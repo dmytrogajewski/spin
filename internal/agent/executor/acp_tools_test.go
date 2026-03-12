@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	errInvalidPath = errors.New("invalid path")
+	errInvalidPath  = errors.New("invalid path")
 	errInvalidPath2 = errors.New("invalid path")
 )
 
@@ -65,7 +65,7 @@ func pathResolutionTestCases() []pathResolutionCase {
 			inputPath: "../../../etc/passwd", expectError: true, errorContains: "outside the allowed workspace",
 		},
 		{
-			name: "absolute path with similar prefix but different dir is rejected",
+			name:    "absolute path with similar prefix but different dir is rejected",
 			workDir: "/home/user/workspace", inputPath: "/home/user/workspace2/file.py",
 			expectError: true, errorContains: "outside the allowed workspace",
 		},
@@ -112,6 +112,7 @@ func TestACPWriteFileTool_PathResolution(t *testing.T) {
 
 func TestACPReadFileTool_PathResolution(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name          string
 		workDir       string
@@ -285,6 +286,7 @@ func TestACPReadFileTool_InvalidPathErrorMessage(t *testing.T) {
 
 func TestIsPathWithinWorkspace(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		path     string
@@ -360,6 +362,7 @@ func containsString(s, substr string) bool {
 // TestACPWriteFileTool_ContextWorkDir tests that workDir from context takes precedence over runtime.workDir.
 func TestACPWriteFileTool_ContextWorkDir(t *testing.T) {
 	t.Parallel()
+
 	mockFS := &mockFilesystemClient{}
 	runtime := &ACPRuntime{
 		workDir:          "/runtime/workspace", // This should be overridden by context.
@@ -397,6 +400,7 @@ func TestACPWriteFileTool_ContextWorkDir(t *testing.T) {
 // TestACPReadFileTool_ContextWorkDir tests that workDir from context takes precedence over runtime.workDir.
 func TestACPReadFileTool_ContextWorkDir(t *testing.T) {
 	t.Parallel()
+
 	mockFS := &mockFilesystemClient{
 		readContent: "test content",
 	}
@@ -435,6 +439,7 @@ func TestACPReadFileTool_ContextWorkDir(t *testing.T) {
 // TestACPWriteFileTool_FallbackToRuntimeWorkDir tests that runtime.workDir is used when context has no workDir.
 func TestACPWriteFileTool_FallbackToRuntimeWorkDir(t *testing.T) {
 	t.Parallel()
+
 	mockFS := &mockFilesystemClient{}
 	runtime := &ACPRuntime{
 		workDir:          "/runtime/workspace",
