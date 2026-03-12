@@ -40,12 +40,12 @@ func TestSpinACPAgent_NewSession_Success(t *testing.T) {
 
 	// Verify session was stored.
 	acpAgent.mu.RLock()
-	session, exists := acpAgent.sessions[resp.SessionId]
+	sess, exists := acpAgent.sessions[resp.SessionId]
 	acpAgent.mu.RUnlock()
 
 	assert.True(t, exists, "session should be stored")
-	assert.NotNil(t, session)
-	assert.Equal(t, "/tmp/test", session.WorkDir)
+	assert.NotNil(t, sess)
+	assert.Equal(t, "/tmp/test", sess.WorkDir)
 }
 
 // TestSpinACPAgent_NewSession_WithMcpServers tests session creation with MCP servers.
@@ -87,12 +87,12 @@ func TestSpinACPAgent_NewSession_WithMcpServers(t *testing.T) {
 
 	// Verify session was stored.
 	acpAgent.mu.RLock()
-	session, exists := acpAgent.sessions[resp.SessionId]
+	sess, exists := acpAgent.sessions[resp.SessionId]
 	acpAgent.mu.RUnlock()
 
 	assert.True(t, exists, "session should be stored")
-	assert.NotNil(t, session)
-	assert.Equal(t, "/tmp/test", session.WorkDir)
+	assert.NotNil(t, sess)
+	assert.Equal(t, "/tmp/test", sess.WorkDir)
 }
 
 // TestSpinACPAgent_NewSession_InvalidCwd tests session creation with invalid working directory.

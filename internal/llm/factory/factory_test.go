@@ -20,6 +20,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm/openai"
 )
 
+const (
+	testProviderOpenAICompat = "openai-compatible"
+)
+
+
 var (
 	errFactoryCreationFailed = errors.New("factory creation failed")
 	errUnknownProviderType = errors.New("unknown provider type")
@@ -48,7 +53,7 @@ func TestNewProvider_OpenAI(t *testing.T) {
 		t.Fatal("NewProvider() returned nil provider")
 	}
 
-	if provider.Name() != "openai-compatible" {
+	if provider.Name() != testProviderOpenAICompat {
 		t.Errorf("Provider.Name() = %s, want openai-compatible", provider.Name())
 	}
 }
@@ -108,7 +113,7 @@ func TestNewProvider_OpenAICompatible(t *testing.T) {
 	t.Parallel()
 
 	cfg := ProviderConfig{
-		Type:    "openai-compatible",
+		Type:    testProviderOpenAICompat,
 		BaseURL: "https://custom-api.example.com/v1",
 		APIKey:  "custom-key",
 		Model:   "custom-model",
@@ -124,7 +129,7 @@ func TestNewProvider_OpenAICompatible(t *testing.T) {
 	}
 
 	// openai-compatible uses openai provider.
-	if provider.Name() != "openai-compatible" {
+	if provider.Name() != testProviderOpenAICompat {
 		t.Errorf("Provider.Name() = %s, want openai-compatible", provider.Name())
 	}
 }
@@ -540,8 +545,8 @@ func (m *mockProvider) Close() error {
 
 // contains checks if a string contains a substring.
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && stringContains(s, substr)))
+	return len(s) >= len(substr) && (s == substr || substr == "" ||
+		(s != "" && substr != "" && stringContains(s, substr)))
 }
 
 func stringContains(s, substr string) bool {
@@ -564,14 +569,43 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 		expectedError bool
 		errorContains string
 	}{
-		{name: "valid_ollama_config", config: ProviderConfig{Type: "ollama", BaseURL: testOllamaURL, Model: "qwen3-coder:30b"}},
-		{name: "valid_openai_config_with_api_key", config: ProviderConfig{Type: "openai", BaseURL: "https://api.openai.com/v1", Model: "gpt-4", APIKey: "sk-test-key"}},
-		{name: "valid_openai_config_with_key_name", config: ProviderConfig{Type: "openai", BaseURL: "https://api.openai.com/v1", Model: "gpt-4", KeyName: "openai-api-key"}, expectedError: true},
-		{name: "missing_model_should_fail", config: ProviderConfig{Type: "ollama", BaseURL: testOllamaURL}, expectedError: true, errorContains: "model is required"},
-		{name: "missing_provider_type_should_fail", config: ProviderConfig{BaseURL: testOllamaURL, Model: "qwen3-coder:30b"}, expectedError: true, errorContains: "provider type is required"},
-		{name: "missing_authentication_for_openai", config: ProviderConfig{Type: "openai", BaseURL: "https://api.openai.com/v1", Model: "gpt-4"}, expectedError: true, errorContains: "authentication required"},
-		{name: "invalid_base_url_accepted", config: ProviderConfig{Type: "ollama", BaseURL: "not-a-valid-url", Model: "qwen3-coder:30b"}},
-		{name: "unknown_provider_type_should_fail", config: ProviderConfig{Type: "unknown-provider", BaseURL: testOllamaURL, Model: "test-model"}, expectedError: true, errorContains: "unknown provider type"},
+		{
+			name:   "valid_ollama_config",
+			config: ProviderConfig{Type: "ollama", BaseURL: testOllamaURL, Model: "qwen3-coder:30b"},
+		},
+		{
+			name:   "valid_openai_config_with_api_key",
+			config: ProviderConfig{Type: "openai", BaseURL: "https://api.openai.com/v1", Model: "gpt-4", APIKey: "sk-test-key"},
+		},
+		{
+			name:          "valid_openai_config_with_key_name",
+			config:        ProviderConfig{Type: "openai", BaseURL: "https://api.openai.com/v1", Model: "gpt-4", KeyName: "openai-api-key"},
+			expectedError: true,
+		},
+		{
+			name:          "missing_model_should_fail",
+			config:        ProviderConfig{Type: "ollama", BaseURL: testOllamaURL},
+			expectedError: true, errorContains: "model is required",
+		},
+		{
+			name:          "missing_provider_type_should_fail",
+			config:        ProviderConfig{BaseURL: testOllamaURL, Model: "qwen3-coder:30b"},
+			expectedError: true, errorContains: "provider type is required",
+		},
+		{
+			name:          "missing_authentication_for_openai",
+			config:        ProviderConfig{Type: "openai", BaseURL: "https://api.openai.com/v1", Model: "gpt-4"},
+			expectedError: true, errorContains: "authentication required",
+		},
+		{
+			name:   "invalid_base_url_accepted",
+			config: ProviderConfig{Type: "ollama", BaseURL: "not-a-valid-url", Model: "qwen3-coder:30b"},
+		},
+		{
+			name:          "unknown_provider_type_should_fail",
+			config:        ProviderConfig{Type: "unknown-provider", BaseURL: testOllamaURL, Model: "test-model"},
+			expectedError: true, errorContains: "unknown provider type",
+		},
 	}
 
 	for _, tt := range tests {
@@ -949,8 +983,8 @@ func TestFactory_NewProvider_WithKeyName(t *testing.T) {
 	}
 
 	// Verify provider was created successfully.
-	if provider.Name() != "openai-compatible" {
-		t.Errorf("Provider.Name() = %q, want %q", provider.Name(), "openai-compatible")
+	if provider.Name() != testProviderOpenAICompat {
+		t.Errorf("Provider.Name() = %q, want %q", provider.Name(), testProviderOpenAICompat)
 	}
 }
 
@@ -1145,17 +1179,17 @@ func TestFactory_NewProvider_AllProviderTypes(t *testing.T) {
 				KeyName: "openai-key",
 				Model:   "gpt-4",
 			},
-			expectedName: "openai-compatible",
+			expectedName: testProviderOpenAICompat,
 		},
 		{
 			name: "openai-compatible with KeyName",
 			cfg: ProviderConfig{
-				Type:    "openai-compatible",
+				Type:    testProviderOpenAICompat,
 				BaseURL: "https://custom.api/v1",
 				KeyName: "openai-key",
 				Model:   "custom-model",
 			},
-			expectedName: "openai-compatible",
+			expectedName: testProviderOpenAICompat,
 		},
 		{
 			name: "ollama without auth",
@@ -1252,8 +1286,8 @@ func TestFactory_NewProvider_BackwardCompatibility(t *testing.T) {
 		t.Fatal("NewProvider() returned nil provider")
 	}
 
-	if provider.Name() != "openai-compatible" {
-		t.Errorf("Provider.Name() = %q, want %q", provider.Name(), "openai-compatible")
+	if provider.Name() != testProviderOpenAICompat {
+		t.Errorf("Provider.Name() = %q, want %q", provider.Name(), testProviderOpenAICompat)
 	}
 }
 
@@ -1298,7 +1332,10 @@ func TestFactory_resolveCredential(t *testing.T) {
 	}{
 		{"keyName success", NewFactory(authMgr), ProviderConfig{Type: "openai", KeyName: "test-key"}, true, "sk-from-keystore", false},
 		{"apiKey fallback", NewFactory(nil), ProviderConfig{Type: "openai", APIKey: "sk-direct"}, true, "sk-direct", false},
-		{"keyName precedence", NewFactory(authMgr), ProviderConfig{Type: "openai", KeyName: "test-key", APIKey: "sk-ignored"}, true, "sk-from-keystore", false},
+		{
+			"keyName precedence", NewFactory(authMgr),
+			ProviderConfig{Type: "openai", KeyName: "test-key", APIKey: "sk-ignored"}, true, "sk-from-keystore", false,
+		},
 		{"no auth required", NewFactory(authMgr), ProviderConfig{Type: "ollama"}, false, "", false},
 		{"auth required but missing", NewFactory(authMgr), ProviderConfig{Type: "openai"}, true, "", true},
 		{"keyName but no auth manager", NewFactory(nil), ProviderConfig{Type: "openai", KeyName: "test-key"}, true, "", true},
@@ -1333,7 +1370,7 @@ var (
 		"openai":            legacyNewOpenAIProvider,
 		"ollama":            legacyNewOllamaProvider,
 		"lmstudio":          legacyNewLMStudioProvider,
-		"openai-compatible": legacyNewOpenAIProvider,
+		testProviderOpenAICompat: legacyNewOpenAIProvider,
 	}
 )
 

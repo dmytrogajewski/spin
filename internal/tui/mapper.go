@@ -16,6 +16,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 )
 
+const (
+	maxContentLineLen    = 120
+	truncatedContentLen  = 117
+)
+
 // Mapper maps core agent events to TUI blocks.
 // It translates the event stream from the core agent into visual blocks
 // that are displayed in the terminal UI timeline.
@@ -751,8 +756,8 @@ func (m *Mapper) handleACERetrieval(event events.Event) error {
 			content = content[:idx] + "..."
 		}
 		// Limit to 120 chars per line.
-		if len(content) > 120 {
-			content = content[:117] + "..."
+		if len(content) > maxContentLineLen {
+			content = content[:truncatedContentLen] + "..."
 		}
 
 		fmt.Fprintf(&hintText, "  \x1b[32m•\x1b[0m \x1b[90m%s\x1b[0m\n", content)
@@ -818,8 +823,8 @@ func (m *Mapper) handleACELearned(event events.Event) error {
 			content = content[:idx] + "..."
 		}
 		// Limit to 120 chars per line.
-		if len(content) > 120 {
-			content = content[:117] + "..."
+		if len(content) > maxContentLineLen {
+			content = content[:truncatedContentLen] + "..."
 		}
 
 		fmt.Fprintf(&hintText, "  \x1b[34m•\x1b[0m \x1b[90m%s\x1b[0m\n", content)

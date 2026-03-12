@@ -10,6 +10,11 @@ import (
 	"github.com/openai/openai-go"
 )
 
+const (
+	mockTokensPerMessage = 10
+	mockCharsPerToken    = 4
+)
+
 // MockProvider implements Provider for testing.
 //
 // MockProvider allows configuring responses, tool calls, errors, and streaming
@@ -110,8 +115,8 @@ func (p *MockProvider) Complete(ctx context.Context, params openai.ChatCompletio
 			},
 		},
 		Usage: openai.CompletionUsage{
-			PromptTokens:     int64(messageCount * 10),
-			CompletionTokens: int64(len(p.response) / 4),
+			PromptTokens:     int64(messageCount * mockTokensPerMessage),
+			CompletionTokens: int64(len(p.response) / mockCharsPerToken),
 			TotalTokens:      int64(messageCount*10 + len(p.response)/4),
 		},
 	}
@@ -232,7 +237,11 @@ func (p *MockProvider) sendDoneChunk(ctx context.Context, chunks chan<- openai.C
 }
 
 // newMockChunk creates a new mock ChatCompletionChunk.
-func newMockChunk(chunkID, content string, role openai.ChatCompletionChunkChoicesDeltaRole, toolCalls []openai.ChatCompletionChunkChoicesDeltaToolCall) openai.ChatCompletionChunk {
+func newMockChunk(
+	chunkID, content string,
+	role openai.ChatCompletionChunkChoicesDeltaRole,
+	toolCalls []openai.ChatCompletionChunkChoicesDeltaToolCall,
+) openai.ChatCompletionChunk {
 	return openai.ChatCompletionChunk{
 		ID:      chunkID,
 		Created: time.Now().Unix(),

@@ -20,6 +20,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
+const (
+	generationSimilarityThreshold = 0.7
+	generationTemperature         = 0.7
+	generationMaxTokens           = 2000
+	minBulletLineLength           = 2
+)
+
 var (
 	ErrLlmProviderIsRequired = errors.New("LLM provider is required")
 	ErrPlaybookIsRequired = errors.New("playbook is required")
@@ -304,7 +311,7 @@ func (g *generator) buildTrajectory(
 // checkSuccess checks if output matches ground truth.
 // Uses multiple strategies: exact match, normalized match, and substring matching.
 func (g *generator) checkSuccess(output, groundTruth string) bool {
-	if len(output) == 0 || len(groundTruth) == 0 {
+	if output == "" || groundTruth == "" {
 		return false
 	}
 
@@ -347,7 +354,7 @@ func (g *generator) checkSuccess(output, groundTruth string) bool {
 	// Require at least 70% word overlap.
 	similarity := float64(matchCount) / float64(len(truthWords))
 
-	return similarity >= 0.7
+	return similarity >= generationSimilarityThreshold
 }
 
 // GenerateBullets implements Generator interface.
@@ -397,8 +404,8 @@ func (g *generator) callLLMForBullets(ctx context.Context, userPrompt, model str
 			openai.UserMessage(userPrompt),
 		}),
 		Model:       openai.F(openai.ChatModel(model)),
-		Temperature: openai.Float(0.7),
-		MaxTokens:   openai.Int(2000),
+		Temperature: openai.Float(generationTemperature),
+		MaxTokens:   openai.Int(generationMaxTokens),
 	}
 
 	resp, err := g.llm.Complete(ctx, params)
@@ -421,7 +428,7 @@ func (g *generator) parseBulletsFromOutput(ctx context.Context, output string, t
 
 	bullets := make([]*bullet.Bullet, 0, len(candidates))
 	for _, content := range candidates {
-		if len(content) == 0 || len(content) > bullet.MaxContentLength {
+		if content == "" || len(content) > bullet.MaxContentLength {
 			continue
 		}
 
@@ -502,7 +509,7 @@ func parseBulletCandidates(output string) []string {
 
 // extractBulletContent strips list prefixes (1., 2., -, *) from a line.
 func extractBulletContent(line string) string {
-	if len(line) <= 2 {
+	if len(line) <= minBulletLineLength {
 		return line
 	}
 

@@ -18,6 +18,15 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
+const (
+	defaultMinUtility       = 0.1
+	defaultMaxBullets        = 1000
+	defaultMinUtilityScore   = 0.1
+	defaultSimilarityThresh  = 0.85
+	defaultMaxTokens         = 4096
+	minQualityThreshold      = 0.3
+)
+
 var (
 	ErrDeltaApplierNotInitialized = errors.New("delta applier not initialized")
 	ErrDeltaApplierNotInitialized2 = errors.New("delta applier not initialized")
@@ -128,7 +137,7 @@ func WithRefinementMode(mode RefinementMode, config any) Option {
 		case RefinementModeLazy:
 			cfg, ok := config.(LazyRefinementConfig)
 			if !ok {
-				cfg = LazyRefinementConfig{MinUtilityScore: 0.1}
+				cfg = LazyRefinementConfig{MinUtilityScore: defaultMinUtilityScore}
 			}
 
 			c.refinementStrategy = newLazyRefinementStrategy(cfg)
@@ -136,8 +145,8 @@ func WithRefinementMode(mode RefinementMode, config any) Option {
 			cfg, ok := config.(ProactiveRefinementConfig)
 			if !ok {
 				cfg = ProactiveRefinementConfig{
-					MaxBullets:      1000,
-					MinUtilityScore: 0.1,
+					MaxBullets:      defaultMaxBullets,
+					MinUtilityScore: defaultMinUtilityScore,
 				}
 			}
 
@@ -162,9 +171,9 @@ func NewCurator(pb *playbook.Playbook, emb embedding.Embedder, opts ...Option) C
 		embedder:           emb,
 		deltaApplier:       delta.NewApplier(pb),
 		logger:             slog.Default(),
-		threshold:          0.85,
+		threshold:          defaultSimilarityThresh,
 		refinementStrategy: &noRefinementStrategy{}, // Default: no refinement.
-		maxTokens:          4096,                    // Default max tokens for LLM calls.
+		maxTokens:          defaultMaxTokens,         // Default max tokens for LLM calls.
 	}
 
 	for _, opt := range opts {
@@ -273,7 +282,7 @@ func (c *curator) callLLMForCuration(ctx context.Context, prompt string) (*Curat
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
 		}),
-		Temperature: openai.F(0.3),
+		Temperature: openai.F(minQualityThreshold),
 	}
 
 	if c.maxTokens > 0 {
@@ -450,13 +459,13 @@ func (c *curator) Refine(ctx context.Context) (*RefinementResult, error) {
 // CurateBatch processes multiple merge requests in parallel.
 func (c *curator) CurateBatch(ctx context.Context, req BatchMergeRequest) (*BatchMergeResult, error) {
 	results := make([]MergeResult, len(req.Requests))
-	errors := make([]error, len(req.Requests))
+	errs := make([]error, len(req.Requests))
 
 	// For empty requests, return empty results.
 	if len(req.Requests) == 0 {
 		return &BatchMergeResult{
 			Results: results,
-			Errors:  errors,
+			Errors:  errs,
 		}, nil
 	}
 
@@ -464,14 +473,14 @@ func (c *curator) CurateBatch(ctx context.Context, req BatchMergeRequest) (*Batc
 	if len(req.Requests) == 1 {
 		result, err := c.Curate(ctx, req.Requests[0])
 		if err != nil {
-			errors[0] = err
+			errs[0] = err
 		} else {
 			results[0] = *result
 		}
 
 		return &BatchMergeResult{
 			Results: results,
-			Errors:  errors,
+			Errors:  errs,
 		}, nil
 	}
 
@@ -598,12 +607,12 @@ func (c *curator) RemoveBulletTag(ctx context.Context, bulletID, key string) err
 }
 
 // UpdateBulletEmbedding updates bullet embedding using delta operation.
-func (c *curator) UpdateBulletEmbedding(ctx context.Context, bulletID string, embedding []float32) error {
+func (c *curator) UpdateBulletEmbedding(ctx context.Context, bulletID string, vec []float32) error {
 	if c.deltaApplier == nil {
 		return ErrDeltaApplierNotInitialized5
 	}
 
-	deltaOp := delta.NewUpdateEmbedding(bulletID, embedding, delta.Metadata{
+	deltaOp := delta.NewUpdateEmbedding(bulletID, vec, delta.Metadata{
 		Source: "curator",
 		Reason: "embedding updated",
 	})

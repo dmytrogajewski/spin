@@ -90,7 +90,7 @@ func TestSanitizer_Process(t *testing.T) {
 }
 
 // processAllChunks runs all chunks through a fresh Sanitizer and returns accumulated content and thought.
-func processAllChunks(chunks []string) (string, string) {
+func processAllChunks(chunks []string) (content, thought string) {
 	s := New()
 
 	var contentSb, thoughtSb strings.Builder

@@ -8,12 +8,12 @@ import (
 
 func TestNewTask_Regular(t *testing.T) {
 	t.Parallel()
-	task, err := NewTask("regular")
+	task, err := NewTask(TaskNameRegular)
 	if err != nil {
 		t.Fatalf("NewTask(regular) error = %v", err)
 	}
 
-	if task.Name() != "regular" {
+	if task.Name() != TaskNameRegular {
 		t.Errorf("task.Name() = %s, want regular", task.Name())
 	}
 }
@@ -25,43 +25,43 @@ func TestNewTask_EmptyDefaultsToRegular(t *testing.T) {
 		t.Fatalf("NewTask() error = %v", err)
 	}
 
-	if task.Name() != "regular" {
+	if task.Name() != TaskNameRegular {
 		t.Errorf("task.Name() = %s, want regular", task.Name())
 	}
 }
 
 func TestNewTask_Review(t *testing.T) {
 	t.Parallel()
-	task, err := NewTask("review")
+	task, err := NewTask(TaskNameReview)
 	if err != nil {
 		t.Fatalf("NewTask(review) error = %v", err)
 	}
 
-	if task.Name() != "review" {
+	if task.Name() != TaskNameReview {
 		t.Errorf("task.Name() = %s, want review", task.Name())
 	}
 }
 
 func TestNewTask_Compact(t *testing.T) {
 	t.Parallel()
-	task, err := NewTask("compact")
+	task, err := NewTask(TaskNameCompact)
 	if err != nil {
 		t.Fatalf("NewTask(compact) error = %v", err)
 	}
 
-	if task.Name() != "compact" {
+	if task.Name() != TaskNameCompact {
 		t.Errorf("task.Name() = %s, want compact", task.Name())
 	}
 }
 
 func TestNewTask_Planning(t *testing.T) {
 	t.Parallel()
-	task, err := NewTask("planning")
+	task, err := NewTask(TaskNamePlanning)
 	if err != nil {
 		t.Fatalf("NewTask(planning) error = %v", err)
 	}
 
-	if task.Name() != "planning" {
+	if task.Name() != TaskNamePlanning {
 		t.Errorf("task.Name() = %s, want planning", task.Name())
 	}
 }
@@ -81,7 +81,7 @@ func TestDefaultTask(t *testing.T) {
 		t.Fatal("DefaultTask() returned nil")
 	}
 
-	if task.Name() != "regular" {
+	if task.Name() != TaskNameRegular {
 		t.Errorf("DefaultTask().Name() = %s, want regular", task.Name())
 	}
 }
@@ -94,10 +94,10 @@ func TestValidateMode(t *testing.T) {
 		mode    string
 		wantErr bool
 	}{
-		{"valid regular", "regular", false},
-		{"valid review", "review", false},
-		{"valid compact", "compact", false},
-		{"valid planning", "planning", false},
+		{"valid regular", TaskNameRegular, false},
+		{"valid review", TaskNameReview, false},
+		{"valid compact", TaskNameCompact, false},
+		{"valid planning", TaskNamePlanning, false},
 		{"empty string", "", false}, // empty is valid (default).
 		{"invalid mode", "invalid", true},
 		{"unknown mode", "unknown", true},
@@ -119,7 +119,7 @@ func TestValidateMode(t *testing.T) {
 // TestValidModes tests that ValidModes contains all expected modes.
 func TestValidModes(t *testing.T) {
 	t.Parallel()
-	expected := []string{"regular", "review", "compact", "planning"}
+	expected := []string{TaskNameRegular, TaskNameReview, TaskNameCompact, TaskNamePlanning}
 	if !reflect.DeepEqual(ValidModes, expected) {
 		t.Errorf("ValidModes = %v, want %v", ValidModes, expected)
 	}
@@ -139,7 +139,7 @@ func TestValidModes_ConsistentWithNewTask(t *testing.T) {
 	}
 
 	// Test that all modes from NewTask are in ValidModes.
-	testModes := []string{"regular", "review", "compact", "planning", ""}
+	testModes := []string{TaskNameRegular, TaskNameReview, TaskNameCompact, TaskNamePlanning, ""}
 	for _, mode := range testModes {
 		_, err := NewTask(mode)
 		if err != nil {

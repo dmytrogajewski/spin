@@ -272,11 +272,12 @@ func generateUnifiedDiff(lines int) string {
 	sb.WriteString("@@ -42,6 +42,8 @@ func authenticate(token string) error {\n")
 
 	for i := range lines {
-		if i%5 == 0 {
+		switch {
+		case i%5 == 0:
 			fmt.Fprintf(&sb, "+    log.Info(\"Processing line %d\")\n", i)
-		} else if i%7 == 0 {
+		case i%7 == 0:
 			fmt.Fprintf(&sb, "-    // Old comment line %d\n", i)
-		} else {
+		default:
 			fmt.Fprintf(&sb, "     // Context line %d\n", i)
 		}
 	}

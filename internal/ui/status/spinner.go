@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const defaultSpinnerInterval = 100 * time.Millisecond
+
 // SpinnerStyle defines the animation frames for the spinner.
 type SpinnerStyle int
 
@@ -52,7 +54,7 @@ func NewSpinner(style SpinnerStyle) *Spinner {
 	return &Spinner{
 		style:    style,
 		frames:   frames,
-		interval: 80 * time.Millisecond, // Default animation speed.
+		interval: defaultSpinnerInterval, // Default animation speed.
 	}
 }
 

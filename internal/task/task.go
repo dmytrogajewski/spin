@@ -6,6 +6,13 @@ import (
 	"strings"
 )
 
+const (
+	TaskNameRegular  = "regular"
+	TaskNameReview   = "review"
+	TaskNameCompact  = "compact"
+	TaskNamePlanning = "planning"
+)
+
 var (
 	ErrUnknownTask                 = errors.New("unknown task")
 	ErrInvalidTaskMode             = errors.New("invalid task mode")
@@ -38,13 +45,13 @@ type Task interface {
 // Default task: "regular".
 func NewTask(name string) (Task, error) {
 	switch name {
-	case "regular", "":
+	case TaskNameRegular, "":
 		return NewRegular(), nil
-	case "review":
+	case TaskNameReview:
 		return NewReview(), nil
-	case "compact":
+	case TaskNameCompact:
 		return NewCompact(), nil
-	case "planning":
+	case TaskNamePlanning:
 		return NewPlanning(), nil
 	default:
 return nil, fmt.Errorf("unknown task: %s: %w", name, ErrUnknownTask)
@@ -58,18 +65,18 @@ func DefaultTask() Task {
 
 // ValidModes lists all valid task mode names.
 var ValidModes = []string{
-	"regular",
-	"review",
-	"compact",
-	"planning",
+	TaskNameRegular,
+	TaskNameReview,
+	TaskNameCompact,
+	TaskNamePlanning,
 }
 
 // validModesMap is a lookup map for O(1) validation.
 var validModesMap = map[string]bool{
-	"regular":  true,
-	"review":   true,
-	"compact":  true,
-	"planning": true,
+	TaskNameRegular:  true,
+	TaskNameReview:   true,
+	TaskNameCompact:  true,
+	TaskNamePlanning: true,
 }
 
 // ValidateMode checks if a task mode name is valid.

@@ -345,7 +345,7 @@ func (p *Parser) isHunkEnd(line string) bool {
 
 // parseHunkLine parses a single line within a hunk.
 func (p *Parser) parseHunkLine(hunk *Hunk, line string) error {
-	if len(line) == 0 {
+	if line == "" {
 		hunk.Changes = append(hunk.Changes, LineChange{
 			Type: LineContext,
 			Text: "",

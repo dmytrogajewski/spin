@@ -148,7 +148,7 @@ func convertContentDelta(event events.Event) (acp.SessionUpdate, bool) {
 	}
 
 	// Only convert assistant content (agent messages).
-	if data.Role != "assistant" {
+	if data.Role != roleAssistant {
 		return acp.SessionUpdate{}, false
 	}
 
@@ -164,7 +164,7 @@ func extractFileLocations(toolName string, params tools.ToolParameters) []acp.To
 	var locations []acp.ToolCallLocation
 
 	switch toolName {
-	case "read_file", "write_file", "list_directory":
+	case "read_file", toolWriteFile, "list_directory":
 		path, err := params.GetString("path")
 		if err == nil && path != "" {
 			locations = append(locations, acp.ToolCallLocation{
@@ -207,7 +207,7 @@ func convertToolCallStart(event events.Event, tracker *fileContentTracker) (acp.
 	rawInput := data.Parameters.ToMap()
 
 	// For write_file operations, track old file content for diff generation.
-	if tracker != nil && data.ToolName == "write_file" {
+	if tracker != nil && data.ToolName == toolWriteFile {
 		path, pathErr := data.Parameters.GetString("path")
 		if pathErr == nil && path != "" {
 			tracker.storeOldContent(data.ToolID, path)
@@ -300,7 +300,7 @@ func convertToolCallComplete(event events.Event, tracker *fileContentTracker) (a
 	var content []acp.ToolCallContent
 
 	// For write_file operations, generate diff if tracker is available.
-	if tracker != nil && data.ToolName == "write_file" {
+	if tracker != nil && data.ToolName == toolWriteFile {
 		oldContent, newContent, filePath, hasContent := tracker.getContentForDiff(data.ToolID)
 		if hasContent {
 			// Generate diff content.

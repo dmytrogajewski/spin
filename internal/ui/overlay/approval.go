@@ -42,7 +42,7 @@ func (d *ApprovalDialog) Render(_, _ int) string {
 // HandleKey handles keyboard input for the dialog.
 // Returns true if the dialog should close, false otherwise.
 func (d *ApprovalDialog) HandleKey(key string) bool {
-	if len(key) == 0 {
+	if key == "" {
 		return false
 	}
 

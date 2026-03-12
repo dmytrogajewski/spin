@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const charsPerToken = 4
+
 var (
 	ErrNoPersistentStoreConfigured = errors.New("no persistent store configured")
 	ErrSessionIDIsRequired = errors.New("session ID is required")
@@ -235,7 +237,7 @@ func (s *SimpleSummarizer) Summarize(_ context.Context, content string, maxToken
 	limit := s.maxLength
 	if maxTokens > 0 {
 		// Rough conversion: 1 token ≈ 4 characters.
-		limit = maxTokens * 4
+		limit = maxTokens * charsPerToken
 	}
 
 	if len(content) <= limit {

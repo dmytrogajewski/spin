@@ -337,12 +337,9 @@ func TestService_CreatePlan_MalformedJSON(t *testing.T) {
 					// If plan is created, validation should fail.
 					_ = plan.ValidateStructure()
 				}
-			} else {
-				// Some cases might parse but fail later.
-				if err == nil {
-					// If parsing succeeded, validation might fail.
-					_ = plan.ValidateStructure()
-				}
+			} else if err == nil {
+				// If parsing succeeded, validation might fail.
+				_ = plan.ValidateStructure()
 			}
 		})
 	}

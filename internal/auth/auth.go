@@ -7,6 +7,13 @@ import (
 	"strings"
 )
 
+const (
+	authTokenParts = 2
+	credNone       = "none"
+	credAPIKey     = "apikey"
+	credToken      = "token"
+)
+
 // Auth manages authentication credentials for LLM providers.
 //
 // Implementations must be safe for concurrent use by multiple goroutines.
@@ -61,11 +68,11 @@ const (
 func (t CredentialType) String() string {
 	switch t {
 	case CredentialTypeNone:
-		return "none"
+		return credNone
 	case CredentialTypeAPIKey:
-		return "apikey"
+		return credAPIKey
 	case CredentialTypeToken:
-		return "token"
+		return credToken
 	default:
 		return fmt.Sprintf("unknown(%d)", t)
 	}
@@ -235,9 +242,9 @@ func parseCredential(s string) (Credential, error) {
 }
 
 // splitCredentialString splits a credential string into type and value.
-func splitCredentialString(s string) (string, string, error) {
+func splitCredentialString(s string) (key, value string, err error) {
 	parts := strings.SplitN(s, ":", 2)
-	if len(parts) != 2 {
+	if len(parts) != authTokenParts {
 return "", "", fmt.Errorf("invalid credential format: %q: %w", s, ErrInvalidCredentialFormat)
 	}
 
@@ -247,11 +254,11 @@ return "", "", fmt.Errorf("invalid credential format: %q: %w", s, ErrInvalidCred
 // parseCredentialType parses a credential type from string.
 func parseCredentialType(typeName string) (CredentialType, error) {
 	switch typeName {
-	case "none":
+	case credNone:
 		return CredentialTypeNone, nil
-	case "apikey":
+	case credAPIKey:
 		return CredentialTypeAPIKey, nil
-	case "token":
+	case credToken:
 		return CredentialTypeToken, nil
 	default:
 return CredentialTypeNone, fmt.Errorf("unknown credential type: %q: %w", typeName, ErrUnknownCredentialType)
@@ -285,13 +292,13 @@ func formatCredential(cred Credential) string {
 
 	switch cred.Type {
 	case CredentialTypeNone:
-		typeName = "none"
+		typeName = credNone
 	case CredentialTypeAPIKey:
-		typeName = "apikey"
+		typeName = credAPIKey
 	case CredentialTypeToken:
-		typeName = "token"
+		typeName = credToken
 	default:
-		typeName = "none"
+		typeName = credNone
 	}
 
 	return typeName + ":" + cred.Value

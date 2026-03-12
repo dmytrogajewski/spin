@@ -15,6 +15,14 @@ import (
 	"time"
 )
 
+const (
+	defaultEnvMaxFiles       = 1000
+	defaultEnvMaxDepth       = 10
+	envDiscoveryTimeout      = 5 * time.Second
+	minSplitParts            = 2
+	languageUnknown          = "Unknown"
+)
+
 var (
 	// ErrGitNotAvailable is returned when git is not found in PATH.
 	ErrGitNotAvailable = errors.New("git not available")
@@ -103,8 +111,8 @@ func WithSkipGit(skip bool) EnvironmentOption {
 func GatherEnvironment(ctx context.Context, workDir string, opts ...EnvironmentOption) (*Environment, error) {
 	// Apply options.
 	cfg := &environmentConfig{
-		maxFiles: 1000,
-		maxDepth: 10,
+		maxFiles: defaultEnvMaxFiles,
+		maxDepth: defaultEnvMaxDepth,
 		skipGit:  false,
 	}
 	for _, opt := range opts {
@@ -180,7 +188,7 @@ func gatherGitInfo(parentCtx context.Context, workDir string) (*GitInfo, error) 
 		return nil, ErrGitNotAvailable
 	}
 
-	ctx, cancel := context.WithTimeout(parentCtx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(parentCtx, envDiscoveryTimeout)
 	defer cancel()
 
 	root, err := gitCommand(ctx, workDir, "rev-parse", "--show-toplevel")
@@ -221,7 +229,7 @@ func gatherGitStatus(ctx context.Context, workDir string, info *GitInfo) {
 		return
 	}
 
-	info.HasChanges = len(strings.TrimSpace(output)) > 0
+	info.HasChanges = strings.TrimSpace(output) != ""
 
 	for line := range strings.SplitSeq(output, "\n") {
 		if strings.HasPrefix(line, "??") {
@@ -240,7 +248,7 @@ func gatherGitRemotes(ctx context.Context, workDir string, info *GitInfo) {
 	remoteMap := make(map[string]string)
 	for line := range strings.SplitSeq(output, "\n") {
 		parts := strings.Fields(line)
-		if len(parts) >= 2 {
+		if len(parts) >= minSplitParts {
 			if _, exists := remoteMap[parts[0]]; !exists {
 				remoteMap[parts[0]] = parts[1]
 			}
@@ -403,7 +411,7 @@ func detectLanguageFromExt(ext string) string {
 		return lang
 	}
 
-	return "Unknown"
+	return languageUnknown
 }
 
 // countLines counts the number of lines in a file.
@@ -479,7 +487,7 @@ func detectLanguages(files []FileInfo) []string {
 	languageSet := make(map[string]bool)
 
 	for _, file := range files {
-		if file.Language != "Unknown" && file.Language != "Text" &&
+		if file.Language != languageUnknown && file.Language != "Text" &&
 			file.Language != "JSON" && file.Language != "YAML" &&
 			file.Language != "TOML" && file.Language != "Markdown" {
 			languageSet[file.Language] = true
@@ -544,7 +552,7 @@ func filterEnvironment(env []string) map[string]string {
 
 	for _, e := range env {
 		parts := strings.SplitN(e, "=", 2)
-		if len(parts) != 2 {
+		if len(parts) != minSplitParts {
 			continue
 		}
 
@@ -635,7 +643,7 @@ func (c *Environment) writeFilesSummary(sb *strings.Builder) {
 			break
 		}
 
-		if file.Language != "Unknown" {
+		if file.Language != languageUnknown {
 			fmt.Fprintf(sb, "- %s (%s, %d lines)\n", file.Path, file.Language, file.Lines)
 		} else {
 			fmt.Fprintf(sb, "- %s\n", file.Path)

@@ -539,7 +539,7 @@ func runMCPRegistryList(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	if format == "json" {
+	if format == formatJSON {
 		return outputJSON(servers)
 	}
 
@@ -551,7 +551,7 @@ func runMCPRegistryList(cmd *cobra.Command, _ []string) error {
 
 		dynamic := ""
 		if server.DynamicLoadout {
-			dynamic = "yes"
+			dynamic = answerYes
 		}
 
 		endpoint := formatEndpoint(server)
@@ -579,7 +579,7 @@ Examples:
 		Args: cobra.ExactArgs(1),
 		RunE: runMCPRegistryGet,
 	}
-	cmd.Flags().String("format", "text", "Output format (text, json)")
+	cmd.Flags().String("format", formatText, "Output format (text, json)")
 
 	return cmd
 }
@@ -601,7 +601,7 @@ func runMCPRegistryGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if format == "json" {
+	if format == formatJSON {
 		return outputJSON(server)
 	}
 
@@ -737,7 +737,7 @@ func runMCPRegistryRemove(cmd *cobra.Command, args []string) error {
 		_, _ = fmt.Fscanln(os.Stdin, &response)
 
 		response = strings.ToLower(strings.TrimSpace(response))
-		if response != "y" && response != "yes" {
+		if response != "y" && response != answerYes {
 			fmt.Fprintln(cmd.OutOrStdout(), "Canceled.")
 
 			return nil
@@ -765,6 +765,8 @@ func runMCPRegistryRemove(cmd *cobra.Command, args []string) error {
 // ============================================================================.
 
 // newMCPSearchCmd creates the command for searching tools.
+const defaultSearchLimit = 10
+
 func newMCPSearchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "search <query>",
@@ -790,7 +792,7 @@ Examples:
 		RunE: runMCPSearch,
 	}
 	cmd.Flags().String("registry", "", "Filter by registry name")
-	cmd.Flags().Int("limit", 10, "Maximum results")
+	cmd.Flags().Int("limit", defaultSearchLimit, "Maximum results")
 	cmd.Flags().Bool("verified", false, "Only show tools from verified servers (Smithery)")
 	cmd.Flags().String("format", "table", "Output format (table, json)")
 	cmd.Flags().String("api-key", "", "Smithery API key (or use SMITHERY_API_KEY env var)")
@@ -899,7 +901,7 @@ func printSearchResultsTable(cmd *cobra.Command, results []mcpSearchResult) {
 	for _, r := range results {
 		verifiedStr := ""
 		if r.Verified {
-			verifiedStr = "yes"
+			verifiedStr = answerYes
 		}
 
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.ToolName, r.Registry, r.Type, verifiedStr, r.Description)
@@ -943,7 +945,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if flags.format == "json" {
+	if flags.format == formatJSON {
 		return outputJSON(results)
 	}
 
@@ -968,7 +970,7 @@ func searchSmitheryAPI(ctx context.Context, query, apiKey string, limit int, ver
 		return nil, fmt.Errorf("invalid Smithery API URL: %s", apiURL)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", parsedURL.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", parsedURL.String(), http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -1089,7 +1091,7 @@ func runMCPListTools(cmd *cobra.Command, _ []string) error {
 		})
 	}
 
-	if format == "json" {
+	if format == formatJSON {
 		return outputJSON(tools)
 	}
 
@@ -1113,6 +1115,13 @@ func runMCPListTools(cmd *cobra.Command, _ []string) error {
 // ============================================================================.
 
 // parseHeaders parses header flags in format "Key=Value" into a map.
+
+const (
+	keyValueParts    = 2
+	namespaceParts   = 2
+	minKeyDisplayLen = 8
+)
+
 func parseHeaders(headers []string) map[string]string {
 	if len(headers) == 0 {
 		return nil
@@ -1122,7 +1131,7 @@ func parseHeaders(headers []string) map[string]string {
 
 	for _, h := range headers {
 		parts := strings.SplitN(h, "=", 2)
-		if len(parts) == 2 {
+			if len(parts) == keyValueParts {
 			result[parts[0]] = parts[1]
 		}
 	}
@@ -1143,7 +1152,7 @@ func formatEndpoint(server config.MCPServer) string {
 }
 
 // parseSmitheryPath parses Smithery server path formats.
-func parseSmitheryPath(path string) (serverURL string, namespace string, err error) {
+func parseSmitheryPath(path string) (serverURL, namespace string, err error) {
 	if strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "http://") {
 		return parseSmitheryURL(path)
 	}
@@ -1152,13 +1161,13 @@ func parseSmitheryPath(path string) (serverURL string, namespace string, err err
 }
 
 // parseSmitheryURL parses a full Smithery URL and extracts the namespace.
-func parseSmitheryURL(path string) (string, string, error) {
+func parseSmitheryURL(path string) (serverURL, namespace string, err error) {
 	parsedURL, err := url.Parse(path)
 	if err != nil {
 		return "", "", fmt.Errorf("invalid URL: %w", err)
 	}
 
-	namespace := extractNamespaceFromPath(parsedURL.Path)
+	namespace = extractNamespaceFromPath(parsedURL.Path)
 
 	return path, namespace, nil
 }
@@ -1179,7 +1188,7 @@ func extractNamespaceFromPath(urlPath string) string {
 }
 
 // parseSmitheryShortPath parses a short-form Smithery path like @namespace/server-name.
-func parseSmitheryShortPath(path string) (string, string, error) {
+func parseSmitheryShortPath(path string) (serverURL, namespace string, err error) {
 	const baseURL = "https://server.smithery.ai"
 
 	cleanPath := path
@@ -1188,20 +1197,20 @@ func parseSmitheryShortPath(path string) (string, string, error) {
 	}
 
 	parts := strings.SplitN(cleanPath, "/", 2)
-	if len(parts) != 2 {
+	if len(parts) != namespaceParts {
 		return "", "", fmt.Errorf("invalid server path format: %s (expected @namespace/server-name): %w", path, ErrInvalidServerPathFormat)
 	}
 
-	namespace := parts[0]
-	serverName := parts[1]
-	serverURL := fmt.Sprintf("%s/@%s/%s", baseURL, namespace, serverName)
+	namespace = parts[0]
+	srvName := parts[1]
+	serverURL = fmt.Sprintf("%s/@%s/%s", baseURL, namespace, srvName)
 
 	return serverURL, namespace, nil
 }
 
 // maskAPIKey masks an API key for display.
 func maskAPIKey(key string) string {
-	if len(key) <= 8 {
+	if len(key) <= minKeyDisplayLen {
 		return "***"
 	}
 

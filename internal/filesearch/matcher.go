@@ -18,6 +18,22 @@ type Matcher struct {
 	caseSensitive bool
 }
 
+// Scoring constants for fuzzy file matching.
+const (
+	scoreExactFilename   = 100
+	scorePrefixFilename  = 90
+	scoreExactSegment    = 60
+	scorePrefixSegment   = 50
+	scoreMinPosition     = 70
+	scoreMaxPosition     = 80
+	scoreSeparatorBonus  = 10
+	scoreShortPathBonus  = 50
+	scoreMediumPathBonus = 25
+	scoreLongPathBonus   = 10
+	shortPathThreshold   = 20
+	mediumPathThreshold  = 40
+)
+
 // NewMatcher creates a new fuzzy matcher.
 func NewMatcher(caseSensitive bool) *Matcher {
 	return &Matcher{
@@ -36,7 +52,7 @@ func NewMatcher(caseSensitive bool) *Matcher {
 //  5. Path segment prefix: 50
 //  6. Fuzzy match (consecutive): 40+
 //  7. Fuzzy match (scattered): 20+
-func (m *Matcher) Score(query, path string) (int, []int) {
+func (m *Matcher) Score(query, path string) (score int, indices []int) {
 	if query == "" {
 		return 0, nil
 	}
@@ -60,17 +76,17 @@ func (m *Matcher) Score(query, path string) (int, []int) {
 }
 
 // scoreFilenameMatch scores filename-based matches.
-func (m *Matcher) scoreFilenameMatch(queryLower, filename, path string) (int, []int) {
+func (m *Matcher) scoreFilenameMatch(queryLower, filename, path string) (score int, indices []int) {
 	// 1. Exact filename match - highest priority.
 	if filename == queryLower {
-		return 100, m.allIndicesInPath(path, len(path)-len(filename), len(filename))
+		return scoreExactFilename, m.allIndicesInPath(path, len(path)-len(filename), len(filename))
 	}
 
 	// 2. Filename starts with query.
 	if strings.HasPrefix(filename, queryLower) {
 		startIdx := len(path) - len(filename)
 
-		return 90, m.prefixIndices(startIdx, len(queryLower))
+		return scorePrefixFilename, m.prefixIndices(startIdx, len(queryLower))
 	}
 
 	// 3. Filename contains query (position-weighted).
@@ -86,13 +102,13 @@ func (m *Matcher) scoreFilenameMatch(queryLower, filename, path string) (int, []
 
 // calculatePositionScore calculates score based on position in filename.
 func (m *Matcher) calculatePositionScore(idx, filenameLen int) int {
-	score := max(80-(idx*10/filenameLen), 70)
+	score := max(scoreMaxPosition-(idx*scoreSeparatorBonus/filenameLen), scoreMinPosition)
 
 	return score
 }
 
 // scorePathSegmentMatch scores path segment-based matches.
-func (m *Matcher) scorePathSegmentMatch(queryLower, pathLower, path string) (int, []int) {
+func (m *Matcher) scorePathSegmentMatch(queryLower, pathLower, path string) (score int, indices []int) {
 	dir := filepath.Dir(pathLower)
 	if dir == "." || dir == "/" {
 		return 0, nil
@@ -102,11 +118,11 @@ func (m *Matcher) scorePathSegmentMatch(queryLower, pathLower, path string) (int
 	for seg := range segments {
 		// Exact segment match.
 		if seg == queryLower {
-			return 60, m.findSegmentIndices(path, seg)
+			return scoreExactSegment, m.findSegmentIndices(path, seg)
 		}
 		// Segment prefix match.
 		if strings.HasPrefix(seg, queryLower) {
-			return 50, m.findSegmentIndices(path, seg[:len(queryLower)])
+			return scorePrefixSegment, m.findSegmentIndices(path, seg[:len(queryLower)])
 		}
 	}
 
@@ -114,8 +130,8 @@ func (m *Matcher) scorePathSegmentMatch(queryLower, pathLower, path string) (int
 }
 
 // scoreFuzzyMatch scores fuzzy matches with bonuses.
-func (m *Matcher) scoreFuzzyMatch(queryLower, pathLower, path string) (int, []int) {
-	score, indices := m.matchCharacters(queryLower, pathLower)
+func (m *Matcher) scoreFuzzyMatch(queryLower, pathLower, path string) (score int, indices []int) {
+	score, indices = m.matchCharacters(queryLower, pathLower)
 	if score == -1 {
 		return -1, nil
 	}
@@ -196,9 +212,9 @@ func (m *Matcher) isMatchInFilename(path string, indices []int) bool {
 }
 
 // matchCharacters finds matching characters and calculates base score.
-func (m *Matcher) matchCharacters(query, path string) (int, []int) {
-	score := 0
-	indices := []int{}
+func (m *Matcher) matchCharacters(query, path string) (score int, indices []int) {
+	score = 0
+	indices = []int{}
 	queryIdx := 0
 
 	for pathIdx := range len(path) {
@@ -237,7 +253,7 @@ func (m *Matcher) separatorBonus(path string, idx int) int {
 	if idx > 0 {
 		prevChar := path[idx-1]
 		if prevChar == '/' || prevChar == '_' || prevChar == '-' || prevChar == '.' {
-			return 10
+			return scoreSeparatorBonus
 		}
 	}
 
@@ -247,13 +263,13 @@ func (m *Matcher) separatorBonus(path string, idx int) int {
 // pathLengthBonus returns bonus points for shorter paths.
 func (m *Matcher) pathLengthBonus(path string) int {
 	pathLen := len(path)
-	if pathLen < 20 {
-		return 50
-	} else if pathLen < 40 {
-		return 25
+	if pathLen < shortPathThreshold {
+		return scoreShortPathBonus
+	} else if pathLen < mediumPathThreshold {
+		return scoreMediumPathBonus
 	}
 
-	return 10
+	return scoreLongPathBonus
 }
 
 // Match finds all fuzzy matches for the query in the given paths.

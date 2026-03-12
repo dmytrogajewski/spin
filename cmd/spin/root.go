@@ -66,10 +66,7 @@ and integrates with IDEs via JSON-RPC.
 
 Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible API.`,
 		Version: appinfo.ShortVersion(),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Default behavior: launch TUI when no subcommand is provided.
-			return runTUI(cmd, args)
-		},
+		RunE:          runTUI,
 		SilenceUsage:  true,
 		SilenceErrors: true, // Errors are handled in main().
 	}
@@ -84,7 +81,10 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 	cmd.PersistentFlags().String("cd", "", "Working directory")
 	cmd.PersistentFlags().String("config-file", "", "Path to configuration file")
 	cmd.PersistentFlags().StringSliceP("config", "c", nil, "Config overrides (key=value)")
-	cmd.PersistentFlags().StringP("mode", "m", "regular", "Task mode: regular (full-featured, 16K tokens), review (read-only, 12K tokens), compact (minimal, 4K tokens), planning (context-only, 4K tokens)")
+	modeHelp := "Task mode: regular (full-featured, 16K tokens), " +
+		"review (read-only, 12K tokens), compact (minimal, 4K tokens), " +
+		"planning (context-only, 4K tokens)"
+	cmd.PersistentFlags().StringP("mode", "m", "regular", modeHelp)
 	cmd.PersistentFlags().String("agents-md", "", "Path to AGENTS.md file (overrides auto-discovery)")
 
 	// Add commands.

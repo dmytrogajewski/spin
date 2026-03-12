@@ -132,7 +132,10 @@ func (pb *PromptBuilder) writeGroundTruthInstructions(sb *strings.Builder) {
 }
 
 // writeGroundTruthContext writes the task, trace, outcome, and bullet sections.
-func (pb *PromptBuilder) writeGroundTruthContext(sb *strings.Builder, traj *generator.Trajectory, groundTruth string, usedBullets []string) {
+func (pb *PromptBuilder) writeGroundTruthContext(
+	sb *strings.Builder, traj *generator.Trajectory,
+	groundTruth string, usedBullets []string,
+) {
 	sb.WriteString("**Task:**\n")
 	fmt.Fprintf(sb, "%s\n\n", traj.Query)
 

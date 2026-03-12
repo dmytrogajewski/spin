@@ -26,6 +26,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+const (
+	defaultAgentMaxTurnsAgent   = 50
+	defaultAgentTimeoutMinAgent = 60
+	defaultAgentTemperature     = 0.7
+	defaultAgentContextWindow   = 8192
+)
+
 // Default agent configuration values.
 const (
 	DefaultMaxTurns        = 500
@@ -156,7 +163,10 @@ func WithAgentTimeout(timeout time.Duration) Option {
 func WithTemperature(temperature float64) Option {
 	return func(a *Agent) error {
 		if temperature < 0 || temperature > 2 {
-			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithTemperature", nil, "temperature must be between 0 and 2, got %f", temperature)
+			return spinerrors.Newf(
+				spinerrors.CodeValidation, "Agent.WithTemperature", nil,
+				"temperature must be between 0 and 2, got %f", temperature,
+			)
 		}
 
 		a.temperature = temperature
@@ -200,11 +210,11 @@ func WithRequireApproval(require bool) Option {
 // The old constructor signature is no longer supported - callers must build services first.
 func NewAgent(
 	provider llm.Provider,
-	security *security.Service,
-	detection *detection.Service,
+	securitySvc *security.Service,
+	detectionSvc *detection.Service,
 	runtime *ToolRuntime,
-	planning *planning.Service,
-	context *Environment,
+	planningSvc *planning.Service,
+	env *Environment,
 	emitter *events.EventEmitter,
 	opts ...Option,
 ) (*Agent, error) {
@@ -213,11 +223,11 @@ func NewAgent(
 		return nil, ErrNilLLM
 	}
 
-	if security == nil {
+	if securitySvc == nil {
 		return nil, ErrNilSecurity
 	}
 
-	if detection == nil {
+	if detectionSvc == nil {
 		return nil, ErrNilDetection
 	}
 
@@ -225,11 +235,11 @@ func NewAgent(
 		return nil, ErrNilToolRuntime
 	}
 
-	if planning == nil {
+	if planningSvc == nil {
 		return nil, ErrNilPlanning
 	}
 
-	if context == nil {
+	if env == nil {
 		return nil, ErrNilContext
 	}
 
@@ -240,17 +250,17 @@ func NewAgent(
 	// Create agent with services and reasonable defaults.
 	agent := &Agent{
 		llm:             provider,
-		security:        security,
-		detection:       detection,
+		security:        securitySvc,
+		detection:       detectionSvc,
 		toolRuntime:     runtime,
-		planningService: planning,
-		context:         context,
+		planningService: planningSvc,
+		context:         env,
 		emitter:         emitter,
 		logger:          slog.Default(),
-		maxTurns:        50,               // Default: 50 turns.
-		timeout:         60 * time.Minute, // Default: 60 minutes.
-		temperature:     0.7,              // Default: 0.7.
-		maxTokens:       8192,             // Default: 8K tokens.
+		maxTurns:        defaultAgentMaxTurnsAgent,                             // Default: 50 turns.
+		timeout:         time.Duration(defaultAgentTimeoutMinAgent) * time.Minute, // Default: 60 minutes.
+		temperature:     defaultAgentTemperature,                              // Default: 0.7.
+		maxTokens:       defaultAgentContextWindow,                            // Default: 8K tokens.
 	}
 
 	// Apply options.
@@ -324,14 +334,14 @@ func (a *Agent) Execute(ctx context.Context, req *Request) (*Response, error) {
 	}
 
 	// Resolve task mode.
-	task, err := a.resolveTask(req)
+	resolvedTask, err := a.resolveTask(req)
 	if err != nil {
 		a.logger.ErrorContext(ctx, "task resolution failed", "task_name", taskName, "error", err)
 
 		return nil, spinerrors.New(spinerrors.CodeNotFound, "Agent.Execute", "failed to resolve task mode", err)
 	}
 
-	a.logger.DebugContext(ctx, "task resolved", "task_name", task.Name(), "max_tokens", task.MaxTokens())
+	a.logger.DebugContext(ctx, "task resolved", "task_name", resolvedTask.Name(), "max_tokens", resolvedTask.MaxTokens())
 
 	// Apply timeout if needed.
 	ctx, cancel := a.applyTimeout(ctx)
@@ -345,7 +355,7 @@ func (a *Agent) Execute(ctx context.Context, req *Request) (*Response, error) {
 	initialQuery := extractInitialQuery(messages)
 	trajCtx := trajectory.NewContext(initialQuery)
 
-	messages, resp, err = a.executeAgentLoop(ctx, messages, task, resp, trajCtx)
+	messages, resp, err = a.executeAgentLoop(ctx, messages, resolvedTask, resp, trajCtx)
 	if err != nil {
 		a.logger.ErrorContext(ctx, "agent loop failed", "error", err, "finish_reason", resp.FinishReason)
 		// Emit turn failed event.
@@ -467,7 +477,7 @@ func (a *Agent) SetPlanner(planner *planning.Plan) {
 // based on the task mode's allowed tools.
 //
 // This method delegates to the orchestration service's tool registry.
-func (a *Agent) BuildToolsForTask(task task.Task) ([]tools.Tool, error) {
+func (a *Agent) BuildToolsForTask(currentTask task.Task) ([]tools.Tool, error) {
 	if a.toolRuntime == nil {
 		return nil, nil
 	}
@@ -484,7 +494,7 @@ func (a *Agent) BuildToolsForTask(task task.Task) ([]tools.Tool, error) {
 	}
 
 	// Get allowed tools for this mode.
-	allowedTools := task.AllowedTools()
+	allowedTools := currentTask.AllowedTools()
 
 	// Empty list means all tools are allowed (no filtering).
 	allowAllTools := len(allowedTools) == 0
@@ -510,7 +520,7 @@ func (a *Agent) BuildToolsForTask(task task.Task) ([]tools.Tool, error) {
 	}
 
 	a.logger.Debug("filtered tools for task",
-		"task", task.Name(),
+		"task", currentTask.Name(),
 		"total", len(allTools),
 		"allowed", len(filtered))
 
@@ -570,7 +580,10 @@ func (a *Agent) checkExecuteCommandApproval(args map[string]any) bool {
 // and adds tool result messages to the conversation.
 // processToolCallsFromCompletion is a wrapper that extracts data from openai.ChatCompletion
 // and delegates to processToolCalls.
-func (a *Agent) processToolCallsFromCompletion(ctx context.Context, messages []message.Message, completion *openai.ChatCompletion, resp *Response) []message.Message {
+func (a *Agent) processToolCallsFromCompletion(
+	ctx context.Context, messages []message.Message,
+	completion *openai.ChatCompletion, resp *Response,
+) []message.Message {
 	content := getContent(completion)
 	toolCalls := getToolCalls(completion)
 
@@ -578,7 +591,10 @@ func (a *Agent) processToolCallsFromCompletion(ctx context.Context, messages []m
 }
 
 // processToolCallsInternal contains the actual logic for processing tool calls.
-func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message.Message, content string, toolCalls []ToolCall, resp *Response) []message.Message {
+func (a *Agent) processToolCallsInternal(
+	ctx context.Context, messages []message.Message,
+	content string, toolCalls []ToolCall, resp *Response,
+) []message.Message {
 	// Create assistant message with tool calls.
 	assistantMsg := message.Message{
 		Role:      message.RoleAssistant,
@@ -618,7 +634,10 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 			})
 		} else {
 			// Add tool result to conversation (after assistant message).
-			a.logger.DebugContext(ctx, "Agent tool result", "tool", coreToolCall.Function.Name, "output_len", len(toolResult.Output), "success", toolResult.Success)
+			a.logger.DebugContext(ctx, "Agent tool result",
+				"tool", coreToolCall.Function.Name,
+				"output_len", len(toolResult.Output),
+				"success", toolResult.Success)
 			messages = append(messages, message.Message{
 				Role:       message.RoleTool,
 				Content:    getToolResultContent(coreToolCall, toolResult, a.logger),
@@ -709,13 +728,14 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 		Success:  result.Success,
 		Metadata: result.Metadata,
 	}
-	if result.Success {
+	switch {
+	case result.Success:
 		completion.Output = result.Output
 		a.logger.DebugContext(ctx, "tool execution succeeded", "tool", call.Function.Name, "output_len", len(result.Output))
-	} else if result.Err != nil {
+	case result.Err != nil:
 		completion.Error = result.Err.Error()
 		a.logger.WarnContext(ctx, "tool execution failed", "tool", call.Function.Name, "error", result.Err.Error())
-	} else if result.Error != "" {
+	case result.Error != "":
 		completion.Error = result.Error
 		a.logger.WarnContext(ctx, "tool execution failed", "tool", call.Function.Name, "error", result.Error)
 	}
@@ -785,7 +805,10 @@ func getToolResultContent(toolCall *ToolCall, result *ToolResult, logger *slog.L
 //
 // The bullets parameter contains ACE bullets already retrieved for this turn.
 // Note: ACE bullet display is now handled by EventACERetrieval emission in loop.go.
-func (a *Agent) callLLM(ctx context.Context, messages []message.Message, t task.Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
+func (a *Agent) callLLM(
+	ctx context.Context, messages []message.Message,
+	t task.Task, bullets []*bullet.Bullet,
+) (*openai.ChatCompletion, error) {
 	openaiMessages := a.buildOpenAIMessages(ctx, messages, t, bullets)
 
 	// Debug: log assistant messages with tool calls being sent to LLM.
@@ -815,7 +838,10 @@ func (a *Agent) callLLM(ctx context.Context, messages []message.Message, t task.
 }
 
 // buildOpenAIMessages constructs the full OpenAI message list with system prompt.
-func (a *Agent) buildOpenAIMessages(ctx context.Context, messages []message.Message, t task.Task, bullets []*bullet.Bullet) []openai.ChatCompletionMessageParamUnion {
+func (a *Agent) buildOpenAIMessages(
+	ctx context.Context, messages []message.Message,
+	t task.Task, bullets []*bullet.Bullet,
+) []openai.ChatCompletionMessageParamUnion {
 	openaiMessages := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages)+1)
 
 	enhancedSystemPrompt := a.buildSystemPrompt(ctx, t)
@@ -869,7 +895,8 @@ func (a *Agent) buildSystemPrompt(ctx context.Context, t task.Task) string {
 	if promptBuilder.Len() > 0 {
 		promptBuilder.WriteString(`
 
-IMPORTANT: When you need to think through a problem or reason about your approach, wrap your thinking process in <think> and </think> tags. This helps users understand your reasoning process. For example:
+IMPORTANT: When you need to think through a problem or reason about your approach, wrap your thinking
+process in <think> and </think> tags. This helps users understand your reasoning process. For example:
 
 <think>
 I need to analyze this code to understand what it does. Let me break down the function step by step...
@@ -901,7 +928,11 @@ func (a *Agent) logToolCallMessages(ctx context.Context, messages []message.Mess
 }
 
 // buildLLMParams builds the OpenAI request parameters.
-func (a *Agent) buildLLMParams(ctx context.Context, openaiMessages []openai.ChatCompletionMessageParamUnion, t task.Task) (openai.ChatCompletionNewParams, error) {
+func (a *Agent) buildLLMParams(
+	ctx context.Context,
+	openaiMessages []openai.ChatCompletionMessageParamUnion,
+	t task.Task,
+) (openai.ChatCompletionNewParams, error) {
 	toolList, err := a.BuildToolsForTask(t)
 	if err != nil {
 		return openai.ChatCompletionNewParams{}, spinerrors.New(spinerrors.CodeInternal, "Agent.callLLM", "failed to build tools", err)
@@ -961,7 +992,10 @@ func (a *Agent) processStream(ctx context.Context, chunks <-chan openai.ChatComp
 }
 
 // emitStreamDeltas emits content and thinking delta events from a stream chunk.
-func (a *Agent) emitStreamDeltas(ctx context.Context, delta openai.ChatCompletionChunkChoicesDelta, streamSanitizer *sanitizer.Sanitizer, chunkCount int) {
+func (a *Agent) emitStreamDeltas(
+	ctx context.Context, delta openai.ChatCompletionChunkChoicesDelta,
+	streamSanitizer *sanitizer.Sanitizer, chunkCount int,
+) {
 	if delta.Content == "" {
 		return
 	}
@@ -993,7 +1027,10 @@ func (a *Agent) emitStreamDeltas(ctx context.Context, delta openai.ChatCompletio
 }
 
 // handleToolCallFinished handles a completed tool call in the stream, including plan detection.
-func (a *Agent) handleToolCallFinished(ctx context.Context, acc *openai.ChatCompletionAccumulator, choice openai.ChatCompletionChunkChoice, chunkCount int) {
+func (a *Agent) handleToolCallFinished(
+	ctx context.Context, acc *openai.ChatCompletionAccumulator,
+	choice openai.ChatCompletionChunkChoice, chunkCount int,
+) {
 	toolCall, finished := acc.JustFinishedToolCall()
 	if !finished && choice.FinishReason == openai.ChatCompletionChunkChoicesFinishReasonToolCalls {
 		finished = true
@@ -1004,7 +1041,9 @@ func (a *Agent) handleToolCallFinished(ctx context.Context, acc *openai.ChatComp
 	}
 
 	if toolCall.Name != "" {
-		a.logger.DebugContext(ctx, "tool call finished", "index", toolCall.Index, "name", toolCall.Name, "args_len", len(toolCall.Arguments))
+		a.logger.DebugContext(ctx, "tool call finished",
+			"index", toolCall.Index, "name", toolCall.Name,
+			"args_len", len(toolCall.Arguments))
 	}
 
 	a.detectPlanFromAccumulator(ctx, acc)
@@ -1042,14 +1081,20 @@ func (a *Agent) detectPlanFromAccumulator(ctx context.Context, acc *openai.ChatC
 }
 
 // finalizeStreamResponse validates and returns the accumulated stream response.
-func (a *Agent) finalizeStreamResponse(ctx context.Context, acc *openai.ChatCompletionAccumulator, chunkCount int) (*openai.ChatCompletion, error) {
+func (a *Agent) finalizeStreamResponse(
+	ctx context.Context, acc *openai.ChatCompletionAccumulator, chunkCount int,
+) (*openai.ChatCompletion, error) {
 	response := &acc.ChatCompletion
 
 	if len(response.Choices) == 0 {
 		a.logger.WarnContext(ctx, "stream ended with no choices", "total_chunks", chunkCount)
 
 		if chunkCount == 0 {
-			return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "stream returned no chunks - possible connection error or empty response from LLM", nil)
+			return nil, spinerrors.New(
+				spinerrors.CodeLLM, "Agent.callLLM",
+				"stream returned no chunks - possible connection error or empty response from LLM",
+				nil,
+			)
 		}
 
 		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "no choices in response after processing chunks", nil)

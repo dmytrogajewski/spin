@@ -71,7 +71,8 @@ func TestPrompt_NoUserMessageChunk(t *testing.T) {
 	// Verify NO user_message_chunk was sent (client already knows what they sent)
 	// This is the key fix: we should NOT echo back the user's prompt.
 	for _, notif := range notifications {
-		assert.Nil(t, notif.Update.UserMessageChunk, "should not send user_message_chunk in response to Prompt request - client already knows what they sent")
+		assert.Nil(t, notif.Update.UserMessageChunk,
+			"should not send user_message_chunk in response to Prompt request - client already knows what they sent")
 	}
 }
 
@@ -90,7 +91,9 @@ func (m *mockNotificationSender) SessionUpdate(_ context.Context, notification a
 	return nil
 }
 
-func (m *mockNotificationSender) RequestPermission(_ context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (m *mockNotificationSender) RequestPermission(
+	_ context.Context, params acp.RequestPermissionRequest,
+) (acp.RequestPermissionResponse, error) {
 	// Auto-approve for testing by selecting the first allow option.
 	for _, opt := range params.Options {
 		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {

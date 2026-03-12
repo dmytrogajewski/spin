@@ -28,7 +28,7 @@ func NewFilesystemClient(conn *acp.AgentSideConnection) *FilesystemClient {
 }
 
 // ReadTextFile reads a text file using ACP fs/read_text_file protocol.
-func (c *FilesystemClient) ReadTextFile(ctx context.Context, path string, line *int, limit *int) (string, error) {
+func (c *FilesystemClient) ReadTextFile(ctx context.Context, path string, line, limit *int) (string, error) {
 	if c.connection == nil {
 		return "", ErrAcpConnectionNotAvailable
 	}

@@ -45,7 +45,10 @@ func effectiveWorkers(maxWorkers, numRequests int) int {
 }
 
 // startWorkers launches worker goroutines that process jobs.
-func (c *curator) startWorkers(ctx context.Context, wg *sync.WaitGroup, numWorkers int, requests []MergeRequest, jobs <-chan int, results chan<- jobResult) {
+func (c *curator) startWorkers(
+	ctx context.Context, wg *sync.WaitGroup, numWorkers int,
+	requests []MergeRequest, jobs <-chan int, results chan<- jobResult,
+) {
 	for range numWorkers {
 		wg.Add(1)
 

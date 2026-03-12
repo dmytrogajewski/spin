@@ -12,8 +12,8 @@ func TestNewReview(t *testing.T) {
 		t.Fatal("NewReview() returned nil")
 	}
 
-	if review.Name() != "review" {
-		t.Errorf("NewReview().Name() = %v, want %v", review.Name(), "review")
+	if review.Name() != TaskNameReview {
+		t.Errorf("NewReview().Name() = %v, want %v", review.Name(), TaskNameReview)
 	}
 
 	// Test that it implements the Task interface.
@@ -24,8 +24,8 @@ func TestReview_Name(t *testing.T) {
 	t.Parallel()
 	review := NewReview()
 
-	if review.Name() != "review" {
-		t.Errorf("Review.Name() = %v, want %v", review.Name(), "review")
+	if review.Name() != TaskNameReview {
+		t.Errorf("Review.Name() = %v, want %v", review.Name(), TaskNameReview)
 	}
 }
 
@@ -34,7 +34,7 @@ func TestReview_SystemPrompt(t *testing.T) {
 	review := NewReview()
 	result := review.SystemPrompt()
 
-	if len(result) == 0 {
+	if result == "" {
 		t.Error("Review.SystemPrompt() returned empty string")
 	}
 

@@ -180,7 +180,7 @@ func (p *Printer) handleChunk(chunk string, buf *strings.Builder, wroteContent *
 		return p.handleLargeChunk(chunk, wroteContent, flush)
 	}
 
-	if len(chunk) > 0 {
+	if chunk != "" {
 		*wroteContent = true
 	}
 
@@ -205,7 +205,7 @@ func (p *Printer) handleLargeChunk(chunk string, wroteContent *bool, flush func(
 		return err
 	}
 
-	if len(chunk) > 0 {
+	if chunk != "" {
 		*wroteContent = true
 	}
 

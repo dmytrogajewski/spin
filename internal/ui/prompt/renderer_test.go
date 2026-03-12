@@ -22,11 +22,27 @@ type redrawCase struct {
 func goldenRedrawCases() []redrawCase {
 	return []redrawCase{
 		{name: "empty buffer", prefix: "> ", width: 80, want: "\x1b[24;1H\x1b[2K> \x1b[3G"},
-		{name: "simple text cursor at start", prefix: "> ", bufferText: "hello", cursor: 0, width: 80, want: "\x1b[24;1H\x1b[2K> hello\x1b[3G"},
-		{name: "simple text cursor in middle", prefix: "> ", bufferText: "hello", cursor: 2, width: 80, want: "\x1b[24;1H\x1b[2K> hello\x1b[5G"},
-		{name: "simple text cursor at end", prefix: "> ", bufferText: "hello", cursor: 5, width: 80, want: "\x1b[24;1H\x1b[2K> hello\x1b[8G"},
-		{name: "right-aligned status with space", prefix: "> ", bufferText: "test", cursor: 4, status: "typing", width: 80, want: "\x1b[24;1H\x1b[2K> test" + repeatSpace(68) + "typing\x1b[7G"},
-		{name: "status omitted when no space", prefix: "> ", bufferText: "verylongtextthattakesupalmostallthespace", cursor: 10, status: "typing", width: 20},
+		{
+			name: "simple text cursor at start", prefix: "> ", bufferText: "hello",
+			cursor: 0, width: 80, want: "\x1b[24;1H\x1b[2K> hello\x1b[3G",
+		},
+		{
+			name: "simple text cursor in middle", prefix: "> ", bufferText: "hello",
+			cursor: 2, width: 80, want: "\x1b[24;1H\x1b[2K> hello\x1b[5G",
+		},
+		{
+			name: "simple text cursor at end", prefix: "> ", bufferText: "hello",
+			cursor: 5, width: 80, want: "\x1b[24;1H\x1b[2K> hello\x1b[8G",
+		},
+		{
+			name: "right-aligned status with space", prefix: "> ", bufferText: "test",
+			cursor: 4, status: "typing", width: 80,
+			want: "\x1b[24;1H\x1b[2K> test" + repeatSpace(68) + "typing\x1b[7G",
+		},
+		{
+			name: "status omitted when no space", prefix: "> ", status: "typing",
+			bufferText: "verylongtextthattakesupalmostallthespace", cursor: 10, width: 20,
+		},
 		{name: "wide character emoji", prefix: "> ", bufferText: "Hi 👋", cursor: 3, width: 80, want: "\x1b[24;1H\x1b[2K> Hi 👋\x1b[6G"},
 		{name: "wide character CJK", prefix: "> ", bufferText: "你好", cursor: 1, width: 80, want: "\x1b[24;1H\x1b[2K> 你好\x1b[5G"},
 		{name: "combining mark", prefix: "> ", bufferText: "e\u0301", cursor: 1, width: 80, want: "\x1b[24;1H\x1b[2K> e\u0301\x1b[4G"},
@@ -141,7 +157,7 @@ func TestRenderer_Redraw_StatusRendering(t *testing.T) {
 			name:           "status fits exactly",
 			bufferText:     "test",
 			status:         "ok",
-			width:          15, // "> test" (7) + " " (3) + "ok" (2) = 12.
+			width:          15, // prefix(7) + gap(3) + status(2) = 12 total.
 			wantStatusFull: true,
 		},
 		{
@@ -224,9 +240,21 @@ func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
 		wantNone     bool // true if no ellipsis expected.
 	}{
 		{name: "no scroll short line", bufferText: "hello", cursor: 2, width: 80, wantNone: true},
-		{name: "scroll long line cursor at start", bufferText: "this is a very long line that exceeds terminal width by a lot", cursor: 0, width: 20, wantEllipsis: true},
-		{name: "scroll long line cursor in middle", bufferText: "this is a very long line that exceeds terminal width by a lot", cursor: 30, width: 20, wantEllipsis: true},
-		{name: "scroll long line cursor at end", bufferText: "this is a very long line that exceeds terminal width by a lot", cursor: 61, width: 20, wantEllipsis: true},
+		{
+			name: "scroll long line cursor at start", wantEllipsis: true,
+			bufferText: "this is a very long line that exceeds terminal width by a lot",
+			cursor: 0, width: 20,
+		},
+		{
+			name: "scroll long line cursor in middle", wantEllipsis: true,
+			bufferText: "this is a very long line that exceeds terminal width by a lot",
+			cursor: 30, width: 20,
+		},
+		{
+			name: "scroll long line cursor at end", wantEllipsis: true,
+			bufferText: "this is a very long line that exceeds terminal width by a lot",
+			cursor: 61, width: 20,
+		},
 	}
 
 	for _, tt := range tests {

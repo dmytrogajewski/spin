@@ -19,6 +19,12 @@ import (
 )
 
 const (
+	testSettleTime       = 50 * time.Millisecond
+	testTimeoutShort     = 2 * time.Second
+	testTimeoutLong      = 10 * time.Second
+)
+
+const (
 	// testTimeout is the default timeout for ACP E2E tests.
 	testTimeout = 120 * time.Second
 
@@ -96,7 +102,7 @@ func startACPAgent(t *testing.T, args ...string) (*exec.Cmd, io.WriteCloser, io.
 	require.NoError(t, err, "Failed to start ACP agent")
 
 	// Give agent a moment to initialize.
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(testSettleTime)
 
 	return cmd, stdin, stdout
 }
@@ -126,7 +132,7 @@ func cleanupAgent(t *testing.T, cmd *exec.Cmd, stdin io.WriteCloser) {
 	select {
 	case <-done:
 		// Process exited.
-	case <-time.After(2 * time.Second):
+	case <-time.After(testTimeoutShort):
 		// Force kill after timeout.
 		_ = cmd.Process.Kill()
 		<-done
@@ -253,7 +259,7 @@ func (c *testClient) WaitForTerminalExit(_ context.Context, _ acp.WaitForTermina
 func waitForInitialization(t *testing.T, conn *acp.ClientSideConnection) error {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeoutLong)
 	defer cancel()
 
 	// Try to initialize - this verifies the connection is working.

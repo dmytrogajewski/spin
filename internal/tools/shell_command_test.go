@@ -8,6 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	testFunctionType = "function"
+)
+
+
 // Mock executor for shell_command tests.
 type mockExecutor struct {
 	executeFunc func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error)
@@ -91,8 +96,8 @@ func TestShellCommandTool_Schema(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
 	schema := tool.Schema()
-	if schema.Type != "function" {
-		t.Errorf("Schema.Type = %q, want %q", schema.Type, "function")
+	if schema.Type != testFunctionType {
+		t.Errorf("Schema.Type = %q, want %q", schema.Type, testFunctionType)
 	}
 
 	if schema.Function.Name != "shell_command" {

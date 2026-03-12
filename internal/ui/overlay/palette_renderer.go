@@ -6,6 +6,12 @@ import (
 	"github.com/rivo/uniseg"
 )
 
+const (
+	paletteHeightRatio   = 0.6
+	paletteBorderWidth   = 2
+	paletteBorderPadding = 4
+)
+
 // Design tokens (matching blocks package).
 const (
 	s0  = 0
@@ -58,8 +64,8 @@ func (r *PaletteRenderer) SetSize(width, height int) {
 // Returns a multi-line string with embedded newlines.
 func (r *PaletteRenderer) Render(p *Palette) string {
 	paletteWidth := min(80, r.width-2*s4)
-	maxHeight := max(int(float64(r.height)*0.6), 8)
-	leftPad := (r.width - paletteWidth) / 2
+	maxHeight := max(int(float64(r.height)*paletteHeightRatio), 8)
+	leftPad := (r.width - paletteWidth) / paletteBorderWidth
 
 	var sb strings.Builder
 
@@ -82,7 +88,7 @@ func (r *PaletteRenderer) renderTopBorder(sb *strings.Builder, paletteWidth, lef
 	sb.WriteString(colorBold + colorFg)
 	sb.WriteString(" Command Palette ")
 	sb.WriteString(colorReset + colorBorder)
-	sb.WriteString(strings.Repeat("─", paletteWidth-len(" Command Palette ")-len("[Esc]")-4))
+	sb.WriteString(strings.Repeat("─", paletteWidth-len(" Command Palette ")-len("[Esc]")-paletteBorderPadding))
 	sb.WriteString(colorMuted)
 	sb.WriteString("[Esc]")
 	sb.WriteString(colorBorder)
@@ -96,7 +102,7 @@ func (r *PaletteRenderer) renderEmptyRow(sb *strings.Builder, paletteWidth, left
 	sb.WriteString(strings.Repeat(" ", leftPad))
 	sb.WriteString(colorBorder)
 	sb.WriteString("│")
-	sb.WriteString(strings.Repeat(" ", paletteWidth-2))
+	sb.WriteString(strings.Repeat(" ", paletteWidth-paletteBorderWidth))
 	sb.WriteString(colorBorder)
 	sb.WriteString("│")
 	sb.WriteString(colorReset)
@@ -117,8 +123,8 @@ func (r *PaletteRenderer) renderInputLine(sb *strings.Builder, p *Palette, palet
 	sb.WriteString(query)
 	sb.WriteString("_")
 
-	usedWidth := 2 + 2 + uniseg.StringWidth(query) + 1 + 2
-	sb.WriteString(strings.Repeat(" ", paletteWidth-2-usedWidth))
+	usedWidth := paletteBorderWidth + paletteBorderWidth + uniseg.StringWidth(query) + 1 + paletteBorderWidth
+	sb.WriteString(strings.Repeat(" ", paletteWidth-paletteBorderWidth-usedWidth))
 	sb.WriteString(colorBorder)
 	sb.WriteString("│")
 	sb.WriteString(colorReset)
@@ -155,7 +161,7 @@ func (r *PaletteRenderer) renderEmptyState(sb *strings.Builder, p *Palette, pale
 	sb.WriteString("  ")
 	sb.WriteString(colorMuted)
 	sb.WriteString(emptyMsg)
-	sb.WriteString(strings.Repeat(" ", paletteWidth-2-2-uniseg.StringWidth(emptyMsg)-2))
+	sb.WriteString(strings.Repeat(" ", paletteWidth-paletteBorderWidth-paletteBorderWidth-uniseg.StringWidth(emptyMsg)-paletteBorderWidth))
 	sb.WriteString(colorBorder)
 	sb.WriteString("│")
 	sb.WriteString(colorReset)
@@ -167,14 +173,14 @@ func (r *PaletteRenderer) renderBottomBorder(sb *strings.Builder, paletteWidth, 
 	sb.WriteString(strings.Repeat(" ", leftPad))
 	sb.WriteString(colorBorder)
 	sb.WriteString("╰")
-	sb.WriteString(strings.Repeat("─", paletteWidth-2))
+	sb.WriteString(strings.Repeat("─", paletteWidth-paletteBorderWidth))
 	sb.WriteString("╯")
 	sb.WriteString(colorReset)
 	sb.WriteString("\n")
 }
 
 // renderItem renders a single command item.
-func (r *PaletteRenderer) renderItem(cmd Command, selected bool, paletteWidth int, leftPad int) string {
+func (r *PaletteRenderer) renderItem(cmd Command, selected bool, paletteWidth, leftPad int) string {
 	var sb strings.Builder
 
 	sb.WriteString(strings.Repeat(" ", leftPad))
@@ -197,7 +203,9 @@ func (r *PaletteRenderer) renderItem(cmd Command, selected bool, paletteWidth in
 	nameWidth := uniseg.StringWidth(cmd.Name())
 	iconWidth := 1
 
-	availableWidth := paletteWidth - 2 - 1 - iconWidth - 2 - nameWidth - 2 - uniseg.StringWidth(category) - 2
+	availableWidth := paletteWidth - paletteBorderWidth - 1 - iconWidth -
+		paletteBorderWidth - nameWidth - paletteBorderWidth -
+		uniseg.StringWidth(category) - paletteBorderWidth
 	if availableWidth > 0 {
 		sb.WriteString(strings.Repeat(" ", availableWidth))
 		sb.WriteString(colorMuted)
@@ -211,7 +219,7 @@ func (r *PaletteRenderer) renderItem(cmd Command, selected bool, paletteWidth in
 		sb.WriteString(" ") // s2 padding end.
 	} else {
 		// Not enough space, just pad to end.
-		sb.WriteString(strings.Repeat(" ", paletteWidth-2-1-iconWidth-2-nameWidth-2))
+		sb.WriteString(strings.Repeat(" ", paletteWidth-paletteBorderWidth-1-iconWidth-paletteBorderWidth-nameWidth-paletteBorderWidth))
 	}
 
 	if selected {

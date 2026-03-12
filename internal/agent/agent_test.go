@@ -35,7 +35,9 @@ var (
 func newTestSecurityService() *security.Service {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 
 	return security.NewService(validator, approvalService)
 }
@@ -74,13 +76,34 @@ func TestNewAgent(t *testing.T) {
 		errContains string
 	}{
 		{name: "valid agent"},
-		{name: "nil provider", modify: func(d *newAgentTestDeps) { d.provider = nil }, wantErr: true, errContains: "LLM provider cannot be nil"},
-		{name: "nil security", modify: func(d *newAgentTestDeps) { d.security = nil }, wantErr: true, errContains: "security service cannot be nil"},
-		{name: "nil detection", modify: func(d *newAgentTestDeps) { d.detection = nil }, wantErr: true, errContains: "detection service cannot be nil"},
-		{name: "nil tool runtime", modify: func(d *newAgentTestDeps) { d.toolRuntime = nil }, wantErr: true, errContains: "tool runtime cannot be nil"},
-		{name: "nil planning", modify: func(d *newAgentTestDeps) { d.planning = nil }, wantErr: true, errContains: "planning service cannot be nil"},
-		{name: "nil environment", modify: func(d *newAgentTestDeps) { d.environment = nil }, wantErr: true, errContains: "context cannot be nil"},
-		{name: "nil emitter", modify: func(d *newAgentTestDeps) { d.emitter = nil }, wantErr: true, errContains: "event emitter cannot be nil"},
+		{
+			name: "nil provider", wantErr: true, errContains: "LLM provider cannot be nil",
+			modify: func(d *newAgentTestDeps) { d.provider = nil },
+		},
+		{
+			name: "nil security", wantErr: true, errContains: "security service cannot be nil",
+			modify: func(d *newAgentTestDeps) { d.security = nil },
+		},
+		{
+			name: "nil detection", wantErr: true, errContains: "detection service cannot be nil",
+			modify: func(d *newAgentTestDeps) { d.detection = nil },
+		},
+		{
+			name: "nil tool runtime", wantErr: true, errContains: "tool runtime cannot be nil",
+			modify: func(d *newAgentTestDeps) { d.toolRuntime = nil },
+		},
+		{
+			name: "nil planning", wantErr: true, errContains: "planning service cannot be nil",
+			modify: func(d *newAgentTestDeps) { d.planning = nil },
+		},
+		{
+			name: "nil environment", wantErr: true, errContains: "context cannot be nil",
+			modify: func(d *newAgentTestDeps) { d.environment = nil },
+		},
+		{
+			name: "nil emitter", wantErr: true, errContains: "event emitter cannot be nil",
+			modify: func(d *newAgentTestDeps) { d.emitter = nil },
+		},
 	}
 
 	for _, tt := range tests {
@@ -92,7 +115,10 @@ func TestNewAgent(t *testing.T) {
 				tt.modify(&deps)
 			}
 
-			agent, err := NewAgent(deps.provider, deps.security, deps.detection, deps.toolRuntime, deps.planning, deps.environment, deps.emitter)
+			agent, err := NewAgent(
+				deps.provider, deps.security, deps.detection,
+				deps.toolRuntime, deps.planning, deps.environment, deps.emitter,
+			)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -192,7 +218,9 @@ Here's my solution...`)
 	// Setup services with task registry.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 
 	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
@@ -251,7 +279,9 @@ func TestAgent_ACEDisabled(t *testing.T) {
 	// Setup services with task registry.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 
 	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
@@ -316,7 +346,9 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 	emitter := events.NewEventEmitter(100)
 
 	// Build SecurityService.
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 
 	// Build Service.
@@ -372,7 +404,9 @@ func newAgentForTest(
 	opts ...Option,
 ) (*Agent, error) {
 	// Build SecurityService.
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 
 	// Build Service.
@@ -994,12 +1028,12 @@ func BenchmarkAgent_BuildToolsForTask_Regular(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		tools, err := agent.BuildToolsForTask(taskObj)
+		agentTools, err := agent.BuildToolsForTask(taskObj)
 		if err != nil {
 			b.Fatal(err)
 		}
 
-		if len(tools) == 0 {
+		if len(agentTools) == 0 {
 			b.Fatal("expected tools")
 		}
 	}
@@ -1014,12 +1048,12 @@ func BenchmarkAgent_BuildToolsForTask_Compact(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		tools, err := agent.BuildToolsForTask(taskObj)
+		agentTools, err := agent.BuildToolsForTask(taskObj)
 		if err != nil {
 			b.Fatal(err)
 		}
 
-		if len(tools) == 0 {
+		if len(agentTools) == 0 {
 			b.Fatal("expected tools")
 		}
 	}
@@ -1034,12 +1068,12 @@ func BenchmarkAgent_BuildToolsForTask_Review(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		tools, err := agent.BuildToolsForTask(taskObj)
+		agentTools, err := agent.BuildToolsForTask(taskObj)
 		if err != nil {
 			b.Fatal(err)
 		}
 
-		if len(tools) == 0 {
+		if len(agentTools) == 0 {
 			b.Fatal("expected tools")
 		}
 	}
@@ -1054,12 +1088,12 @@ func BenchmarkAgent_BuildToolsForTask_Planning(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		tools, err := agent.BuildToolsForTask(taskObj)
+		agentTools, err := agent.BuildToolsForTask(taskObj)
 		if err != nil {
 			b.Fatal(err)
 		}
 
-		if len(tools) == 0 {
+		if len(agentTools) == 0 {
 			b.Fatal("expected tools")
 		}
 	}
@@ -1103,7 +1137,9 @@ func newBenchAgent(b *testing.B) *Agent {
 	// Create minimal services for benchmarking.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 
 	cycleDetector := cycle.NewDetector(cycle.Config{Enabled: false})
@@ -1231,7 +1267,10 @@ func cycleDetectionMessages() []message.Message {
 			Role: message.RoleAssistant, Content: "I'll list the files",
 			ToolCalls: []message.ToolCall{
 				{ID: "call-abc-0", Type: "function", Function: message.ToolCallFunction{Name: "list_directory", Arguments: `{"path":"/"}`}},
-				{ID: "call-abc-1", Type: "function", Function: message.ToolCallFunction{Name: "shell_command", Arguments: `{"command":"ls"}`}},
+				{
+					ID: "call-abc-1", Type: "function",
+					Function: message.ToolCallFunction{Name: "shell_command", Arguments: `{"command":"ls"}`},
+				},
 			},
 			Timestamp: time.Now(),
 		},
@@ -1345,7 +1384,7 @@ func TestExecuteAgentLoop_CycleInterventionPropagated(t *testing.T) {
 		},
 	}
 
-	task := task.NewRegular()
+	regularTask := task.NewRegular()
 	resp := &Response{}
 
 	// Initialize trajectory context for the test.
@@ -1355,7 +1394,7 @@ func TestExecuteAgentLoop_CycleInterventionPropagated(t *testing.T) {
 	resultMessages, resultResp, err := agent.executeAgentLoop(
 		context.Background(),
 		initialMessages,
-		task,
+		regularTask,
 		resp,
 		trajCtx,
 	)
@@ -1394,7 +1433,7 @@ func containsAnySubstring(s string, substrings []string) bool {
 }
 
 func containsSubstring(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 &&
+	return s != "" && substr != "" &&
 		(s == substr || len(s) > len(substr) &&
 			(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
 				indexOfSubstring(s, substr) >= 0))
@@ -1556,10 +1595,10 @@ func TestAgent_ConcurrentTokenBudget(t *testing.T) {
 		go func(taskIndex int) {
 			defer wg.Done()
 
-			task := tasks[taskIndex%len(tasks)]
+			currentTask := tasks[taskIndex%len(tasks)]
 			req := &Request{
 				Input: "test input",
-				Task:  task,
+				Task:  currentTask,
 			}
 			_, _ = agent.Execute(context.Background(), req)
 		}(i)
@@ -1689,7 +1728,9 @@ func (c *capturingLLMProvider) Close() error {
 func newTestAgentMinimal(toolRegistry *tools.Registry) *Agent {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 
 	cycleDetector := cycle.NewDetector(cycle.Config{Enabled: false})
@@ -1724,7 +1765,9 @@ func newTestAgentMinimal(toolRegistry *tools.Registry) *Agent {
 func newTestToolRuntime(_ any, registry *tools.Registry) *ToolRuntime {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 
 	if registry == nil {
 		registry = tools.NewRegistry()
@@ -2453,7 +2496,9 @@ func createTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *Agent {
 	// Create required services.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 
 	detectionService := detection.NewService(

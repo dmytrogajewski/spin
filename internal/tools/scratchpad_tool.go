@@ -9,6 +9,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/memory"
 )
 
+const (
+	defaultScratchpadSearchLimit = 10
+	maxScratchpadPreviewLen      = 100
+)
+
 // ScratchpadTool provides LLM access to session-scoped ephemeral memory.
 //
 // The scratchpad allows the agent to store information outside the immediate
@@ -223,7 +228,7 @@ func (t *ScratchpadTool) executeSearch(ctx context.Context, params ToolParameter
 		return NewToolError(ErrQueryParameterRequiredForSearch), nil
 	}
 
-	entries, searchErr := t.scratchpad.Search(ctx, query, 10)
+	entries, searchErr := t.scratchpad.Search(ctx, query, defaultScratchpadSearchLimit)
 	if searchErr != nil {
 		return ErrToResultf("failed to search entries: %v", searchErr)
 	}
@@ -238,7 +243,7 @@ func (t *ScratchpadTool) executeSearch(ctx context.Context, params ToolParameter
 	for _, entry := range entries {
 		// Show preview of value (first 100 chars).
 		preview := entry.Value
-		if len(preview) > 100 {
+		if len(preview) > maxScratchpadPreviewLen {
 			preview = preview[:100] + "..."
 		}
 

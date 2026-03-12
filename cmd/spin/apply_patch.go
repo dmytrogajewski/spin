@@ -247,7 +247,7 @@ func getHintForError(err *patchapply.Error) string {
 // runApplyPatchMode is called from main.go for special execution modes.
 func runApplyPatchMode() int {
 	cmd := newApplyPatchCmd()
-	cmd.Use = "spin-apply-patch"
+	cmd.Use = binaryApplyPatch
 	cmd.Short = "Apply a Spin patch (standalone mode)"
 	cmd.Long = `Apply a Spin patch from stdin or file.
 

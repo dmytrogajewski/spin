@@ -335,7 +335,7 @@ func (s *Context) Close() error {
 }
 
 // detectShell detects the current shell.
-func (s *Context) detectShell() (string, string) {
+func (s *Context) detectShell() (shellName, shellPath string) {
 	// Check SHELL environment variable first.
 	if shell := os.Getenv("SHELL"); shell != "" {
 		_, err := exec.LookPath(shell)

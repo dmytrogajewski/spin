@@ -16,6 +16,18 @@ import (
 var testLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 var testCtx = context.Background()
 
+// mkTC creates an openai.ChatCompletionMessageToolCallParam for tests.
+func mkTC(id, name, args string) openai.ChatCompletionMessageToolCallParam {
+	return openai.ChatCompletionMessageToolCallParam{
+		ID:   openai.F(id),
+		Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction),
+		Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{
+			Name:      openai.F(name),
+			Arguments: openai.F(args),
+		}),
+	}
+}
+
 func init() {
 	// Suppress warn logs during tests.
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
@@ -38,11 +50,11 @@ func TestBuildToolCallIDToNameMap_ReproducesMissingMapping(t *testing.T) {
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
-			{ID: openai.F(toolCallIDs[0]), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(toolNames[0]), Arguments: openai.F(`{"path":"/tmp/a"}`)})},
-			{ID: openai.F(toolCallIDs[1]), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(toolNames[1]), Arguments: openai.F(`{}`)})},
-			{ID: openai.F(toolCallIDs[2]), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(toolNames[2]), Arguments: openai.F(`{"command":"ls"}`)})},
-			{ID: openai.F(toolCallIDs[3]), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(toolNames[3]), Arguments: openai.F(`{}`)})},
-			{ID: openai.F(toolCallIDs[4]), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(toolNames[4]), Arguments: openai.F(`{"path":"/tmp/b"}`)})},
+			mkTC(toolCallIDs[0], toolNames[0], `{"path":"/tmp/a"}`),
+			mkTC(toolCallIDs[1], toolNames[1], `{}`),
+			mkTC(toolCallIDs[2], toolNames[2], `{"command":"ls"}`),
+			mkTC(toolCallIDs[3], toolNames[3], `{}`),
+			mkTC(toolCallIDs[4], toolNames[4], `{"path":"/tmp/b"}`),
 		}),
 	}
 
@@ -76,7 +88,7 @@ func TestBuildToolCallIDToNameMap_FromJSON(t *testing.T) {
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
-			{ID: openai.F("chatcmpl-1769975533529433976-1"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("shell_command"), Arguments: openai.F(`{"command":"ls"}`)})},
+			mkTC("chatcmpl-1769975533529433976-1", "shell_command", `{"command":"ls"}`),
 		}),
 	}
 
@@ -115,9 +127,9 @@ func TestConvertMessageToOllama_ToolResultWithPositionalFallback(t *testing.T) {
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
-			{ID: openai.F("call-0"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("read_file"), Arguments: openai.F(`{}`)})},
-			{ID: openai.F("call-1"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("shell_command"), Arguments: openai.F(`{}`)})},
-			{ID: openai.F("call-2"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("list_directory"), Arguments: openai.F(`{}`)})},
+			mkTC("call-0", "read_file", `{}`),
+			mkTC("call-1", "shell_command", `{}`),
+			mkTC("call-2", "list_directory", `{}`),
 		}),
 	}
 
@@ -153,11 +165,11 @@ func TestBuildToolCallIDToNameMap_PositionalFallbackWhenPrimaryFails(t *testing.
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
-			{ID: openai.F("chatcmpl-1769975533529433976-1"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("read_file"), Arguments: openai.F(`{}`)})},
-			{ID: openai.F("chatcmpl-1769975533529433976-2"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("list_directory"), Arguments: openai.F(`{}`)})},
-			{ID: openai.F("chatcmpl-1769975533529433976-3"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("shell_command"), Arguments: openai.F(`{}`)})},
-			{ID: openai.F("chatcmpl-1769975533529433976-4"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("write_file"), Arguments: openai.F(`{}`)})},
-			{ID: openai.F("chatcmpl-1769975533529433976-5"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("read_file"), Arguments: openai.F(`{}`)})},
+			mkTC("chatcmpl-1769975533529433976-1", "read_file", `{}`),
+			mkTC("chatcmpl-1769975533529433976-2", "list_directory", `{}`),
+			mkTC("chatcmpl-1769975533529433976-3", "shell_command", `{}`),
+			mkTC("chatcmpl-1769975533529433976-4", "write_file", `{}`),
+			mkTC("chatcmpl-1769975533529433976-5", "read_file", `{}`),
 		}),
 	}
 
@@ -206,8 +218,8 @@ func TestBuildToolCallIDToNameMap_MultipleAssistantTurns(t *testing.T) {
 		openai.ChatCompletionAssistantMessageParam{
 			Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 			ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
-				{ID: openai.F("turn1-0"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("read_file"), Arguments: openai.F(`{}`)})},
-				{ID: openai.F("turn1-1"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("shell_command"), Arguments: openai.F(`{}`)})},
+				mkTC("turn1-0", "read_file", `{}`),
+				mkTC("turn1-1", "shell_command", `{}`),
 			}),
 		},
 		openai.ToolMessage("turn1-0", "c1"),
@@ -215,7 +227,7 @@ func TestBuildToolCallIDToNameMap_MultipleAssistantTurns(t *testing.T) {
 		openai.ChatCompletionAssistantMessageParam{
 			Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 			ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
-				{ID: openai.F("turn2-0"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("list_directory"), Arguments: openai.F(`{}`)})},
+				mkTC("turn2-0", "list_directory", `{}`),
 			}),
 		},
 		openai.ToolMessage("turn2-0", "c3"),
@@ -238,12 +250,17 @@ func TestConvertMessageToOllama_ToolResultFallback(t *testing.T) {
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
-			{ID: openai.F("call-0"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("shell_command"), Arguments: openai.F(`{"command":"ls"}`)})},
+			mkTC("call-0", "shell_command", `{"command":"ls"}`),
 		}),
 	}
 	toolMsg := openai.ChatCompletionToolMessageParam{
-		Role:       openai.F(openai.ChatCompletionToolMessageParamRoleTool),
-		Content:    openai.F([]openai.ChatCompletionContentPartTextParam{{Type: openai.F(openai.ChatCompletionContentPartTextTypeText), Text: openai.F("output")}}),
+		Role: openai.F(openai.ChatCompletionToolMessageParamRoleTool),
+		Content: openai.F([]openai.ChatCompletionContentPartTextParam{
+			{
+				Type: openai.F(openai.ChatCompletionContentPartTextTypeText),
+				Text: openai.F("output"),
+			},
+		}),
 		ToolCallID: openai.F("call-0"),
 	}
 
@@ -269,11 +286,11 @@ func TestBuildToolCallIDToNameMap_PhantomToolCalls(t *testing.T) {
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
 			// Phantom: empty name.
-			{ID: openai.F("chatcmpl-100-0"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(""), Arguments: openai.F(`{}`)})},
+			mkTC("chatcmpl-100-0", "", `{}`),
 			// Valid.
-			{ID: openai.F("chatcmpl-100-1"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("shell_command"), Arguments: openai.F(`{"command":"ls"}`)})},
+			mkTC("chatcmpl-100-1", "shell_command", `{"command":"ls"}`),
 			// Valid.
-			{ID: openai.F("chatcmpl-100-2"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("read_file"), Arguments: openai.F(`{"path":"test.go"}`)})},
+			mkTC("chatcmpl-100-2", "read_file", `{"path":"test.go"}`),
 		}),
 	}
 
@@ -310,8 +327,8 @@ func TestBuildToolCallIDToNameMap_AllPhantomToolCalls(t *testing.T) {
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
-			{ID: openai.F("id-0"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(""), Arguments: openai.F(`{}`)})},
-			{ID: openai.F("id-1"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(""), Arguments: openai.F(`{}`)})},
+			mkTC("id-0", "", `{}`),
+			mkTC("id-1", "", `{}`),
 		}),
 	}
 

@@ -47,7 +47,7 @@ Examples:
 	// Exec-specific flags.
 	cmd.Flags().Bool("auto-approve", false, "Automatically approve all operations (DANGEROUS)")
 	cmd.Flags().String("timeout", "", "Maximum execution time (e.g., 5m, 1h)")
-	cmd.Flags().String("format", "text", "Output format (text, json)")
+	cmd.Flags().String("format", formatText, "Output format (text, json)")
 	cmd.Flags().Bool("no-stream", false, "Disable streaming output")
 	cmd.Flags().Bool("exit-on-error", true, "Exit immediately on first error")
 	cmd.Flags().Bool("debug", false, "Enable debug mode with detailed logging")
@@ -178,7 +178,7 @@ func parsePrompt(args []string) (string, error) {
 	}
 
 	prompt := string(data)
-	if len(prompt) == 0 {
+	if prompt == "" {
 		return "", ErrNoPromptProvidedUseCommandLine
 	}
 
@@ -210,7 +210,11 @@ func createExecUI() (ports.UI, error) {
 	opts := []adapters.PureTTYOption{adapters.WithExecMode()}
 
 	if !termx.IsTerminal(spinterm.SafeFd(os.Stdout.Fd())) || !termx.IsTerminal(spinterm.SafeFd(os.Stdin.Fd())) {
-		mockTty := &mockTTY{width: 120, height: 30}
+		const (
+			mockTermWidth  = 120
+			mockTermHeight = 30
+		)
+		mockTty := &mockTTY{width: mockTermWidth, height: mockTermHeight}
 		opts = append(opts, adapters.WithTTY(mockTty))
 	}
 
@@ -218,26 +222,30 @@ func createExecUI() (ports.UI, error) {
 }
 
 // buildConversation wires services into a conversation builder and builds the conversation.
-func buildConversation(ctx context.Context, cfg *config.V2, workDir string, builtinRuntime *executor.BuiltinRuntime, emitter *events.EventEmitter, provider llm.Provider, services *ProtocolServices, cleanup func()) (*conversation.Conversation, error) {
-	builder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
+func buildConversation(
+	ctx context.Context, cfg *config.V2, workDir string,
+	builtinRuntime *executor.BuiltinRuntime, emitter *events.EventEmitter,
+	provider llm.Provider, services *ProtocolServices, cleanup func(),
+) (*conversation.Conversation, error) {
+	convBuilder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
 
 	if services.Git != nil {
-		builder = builder.WithGit(services.Git)
+		convBuilder = convBuilder.WithGit(services.Git)
 	}
 
 	if services.Shell != nil {
-		builder = builder.WithShell(services.Shell)
+		convBuilder = convBuilder.WithShell(services.Shell)
 	}
 
 	if services.MCP != nil {
-		builder = builder.WithMCP(services.MCP)
+		convBuilder = convBuilder.WithMCP(services.MCP)
 
 		if toolSelector := createToolSelector(ctx, services.MCP, nil, emitter, cfg, slog.Default()); toolSelector != nil {
-			builder = builder.WithToolSelector(toolSelector)
+			convBuilder = convBuilder.WithToolSelector(toolSelector)
 		}
 	}
 
-	conv, err := builder.Build(ctx)
+	conv, err := convBuilder.Build(ctx)
 	if err != nil {
 		cleanup()
 		return nil, fmt.Errorf("build conversation: %w", err)
@@ -247,10 +255,14 @@ func buildConversation(ctx context.Context, cfg *config.V2, workDir string, buil
 }
 
 // createConversationForExec creates a conversation configured for exec mode using the runtime pattern.
-func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *config.V2, autoApprove bool, _ bool) (*conversation.Conversation, error) {
+func createConversationForExec(
+	ctx context.Context, provider llm.Provider,
+	cfg *config.V2, autoApprove, _ bool,
+) (*conversation.Conversation, error) {
 	workDir := cfg.Agent.WorkDir
 	logger := slog.Default()
-	emitter := events.NewEventEmitter(100)
+	const eventBufferSize = 100
+	emitter := events.NewEventEmitter(eventBufferSize)
 
 	storage, err := createSessionStorage(cfg.Agent.SessionDir)
 	if err != nil {
@@ -293,7 +305,7 @@ type mockTTY struct {
 
 func (m *mockTTY) Enter() error               { return nil }
 func (m *mockTTY) Exit() error                { return nil }
-func (m *mockTTY) Size() (int, int)           { return m.width, m.height }
+func (m *mockTTY) Size() (width, height int)   { return m.width, m.height }
 func (m *mockTTY) OnResize(_ func(w, h int)) {}
 
 // processExecEvent handles a single event in exec mode.
@@ -314,7 +326,11 @@ func processExecEvent(ctx context.Context, event events.Event, mapper *tui.Mappe
 }
 
 // startExecEventLoop starts the event processing goroutine for exec mode.
-func startExecEventLoop(ctx context.Context, eventStream <-chan events.Event, mapper *tui.Mapper, ui *adapters.PureTTY, conv *conversation.Conversation) {
+func startExecEventLoop(
+	ctx context.Context, eventStream <-chan events.Event,
+	mapper *tui.Mapper, ui *adapters.PureTTY,
+	conv *conversation.Conversation,
+) {
 	go func() {
 		for {
 			select {

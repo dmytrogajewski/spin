@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const escalateSeverity = 3
+
 var (
 	ErrCycleDetectorNotConfigured = errors.New("cycle detector not configured")
 	ErrPatternDetectorNotConfigured = errors.New("pattern detector not configured")
@@ -105,7 +107,9 @@ type ReflectionIntervention struct{}
 func (i *ReflectionIntervention) Apply(_ context.Context, messages []Message) ([]Message, error) {
 	reflectionMsg := &message{
 		role:      "user",
-		content:   "I notice you may be repeating similar responses or approaches. Let's take a step back and try a different perspective. What other angles or methods could we explore for this task?",
+		content: "I notice you may be repeating similar responses or approaches. " +
+			"Let's take a step back and try a different perspective. " +
+			"What other angles or methods could we explore for this task?",
 		timestamp: time.Now(),
 	}
 
@@ -153,7 +157,7 @@ func (i *EscalateIntervention) Description() string {
 }
 
 // Severity returns the intervention severity level.
-func (i *EscalateIntervention) Severity() int { return 3 }
+func (i *EscalateIntervention) Severity() int { return escalateSeverity }
 
 // message implements the Message interface.
 type message struct {

@@ -11,9 +11,9 @@ type GetContextTool struct {
 }
 
 // NewGetContextTool creates a new get context tool.
-func NewGetContextTool(context any) *GetContextTool {
+func NewGetContextTool(env any) *GetContextTool {
 	return &GetContextTool{
-		context: context,
+		context: env,
 	}
 }
 

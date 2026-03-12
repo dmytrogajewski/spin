@@ -28,7 +28,7 @@ var failureDecisions = map[SignalType]decisionValue{
 var defaultDecision = decisionValue{ActionSkip, "Unknown signal type"}
 
 // decideAction determines what action to take for a given signal.
-func decideAction(signal ExecutionSignal) (AdaptationAction, string) {
+func decideAction(signal ExecutionSignal) (action AdaptationAction, reason string) {
 	decision := lookupDecision(signal.Outcome, signal.SignalType)
 
 	return decision.action, decision.reason

@@ -13,6 +13,18 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 )
 
+const (
+	exampleTimeout     = 600
+	exampleDurationMS  = 51
+	exampleLinesOut    = 6
+	exampleTotalSteps  = 6
+	examplePending     = 3
+	exampleCompleted   = 2
+	exampleLimit       = 50
+	exampleContext     = 2
+	exampleLinesAdded  = 3
+)
+
 func main() {
 	ui, err := adapters.NewPureTTY(os.Stdout)
 	if err != nil {
@@ -177,11 +189,11 @@ ok      github.com/user/project    0.051s`
 	execMeta := &blocks.ExecuteMeta{
 		Command:    "go test -race ./...",
 		CWD:        "./",
-		TimeoutSec: 600,
+		TimeoutSec: exampleTimeout,
 		Impact:     "medium",
 		ExitCode:   intPtr(0),
-		DurationMS: int64Ptr(51),
-		LinesOut:   intPtr(6),
+		DurationMS: int64Ptr(exampleDurationMS),
+		LinesOut:   intPtr(exampleLinesOut),
 	}
 
 	if err := blocks.SetExecuteMeta(execBlock, execMeta); err != nil {
@@ -203,10 +215,10 @@ func createPlanBlock(ui *adapters.PureTTY) {
 • Deploy to staging (pending)`
 
 	planMeta := &blocks.PlanMeta{
-		Total:      6,
-		Pending:    3,
+		Total:      exampleTotalSteps,
+		Pending:    examplePending,
 		InProgress: 1,
-		Completed:  2,
+		Completed:  exampleCompleted,
 	}
 
 	if err := blocks.SetPlanMeta(planBlock, planMeta); err != nil {
@@ -245,7 +257,7 @@ func NewInput() *Input {
 	readMeta := &blocks.ReadMeta{
 		File:   "internal/tui/input.go",
 		Offset: 0,
-		Limit:  50,
+		Limit:  exampleLimit,
 	}
 
 	if err := blocks.SetReadMeta(readBlock, readMeta); err != nil {
@@ -274,7 +286,7 @@ utils.go:18:
 	grepMeta := &blocks.GrepMeta{
 		Pattern: "TODO",
 		Mode:    "content",
-		Context: 2,
+		Context: exampleContext,
 	}
 
 	if err := blocks.SetGrepMeta(grepBlock, grepMeta); err != nil {
@@ -301,7 +313,7 @@ func createPatchBlock(ui *adapters.PureTTY) {
 	patchMeta := &blocks.PatchMeta{
 		File:         "main.go",
 		Succeeded:    true,
-		LinesAdded:   intPtr(3),
+		LinesAdded:   intPtr(exampleLinesAdded),
 		LinesRemoved: intPtr(0),
 	}
 

@@ -14,6 +14,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 )
 
+const builtinToolCount = 4
+
 // BuiltinRuntime implements Runtime for builtin/TUI/EXEC modes.
 // Uses local execution, TUI notifications, and TUI approval dialogs.
 type BuiltinRuntime struct {
@@ -105,7 +107,7 @@ func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
 
 	_ = registry.Register(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
 
-	r.logger.Debug("registered builtin tools", "count", 4)
+	r.logger.Debug("registered builtin tools", "count", builtinToolCount)
 }
 
 // NotificationSender returns the TUI notification sender (TUIMapper).
@@ -157,7 +159,7 @@ func (s *builtinNotificationSender) SendToolCallStart(_ context.Context, _, _ st
 }
 
 // SendToolCallUpdate implements the SendToolCallUpdate operation.
-func (s *builtinNotificationSender) SendToolCallUpdate(_ context.Context, _ string, _ string, _ any) error {
+func (s *builtinNotificationSender) SendToolCallUpdate(_ context.Context, _, _ string, _ any) error {
 	// TUIMapper handles EventToolCallProgress events.
 	return nil
 }

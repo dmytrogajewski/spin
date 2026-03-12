@@ -91,19 +91,19 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 	}
 
 	// Capture output after update.
-	output := buf.String()
+	got := buf.String()
 
 	// CRITICAL: Verify completion status line was printed.
-	if !strings.Contains(output, "⤷") {
-		t.Errorf("UpdateBlock MUST print completion status line (⤷)\nGot:\n%s", output)
+	if !strings.Contains(got, "⤷") {
+		t.Errorf("UpdateBlock MUST print completion status line (⤷)\nGot:\n%s", got)
 	}
 
-	if !strings.Contains(output, "Exit code: 0") {
-		t.Errorf("Completion status should contain 'Exit code: 0'\nGot:\n%s", output)
+	if !strings.Contains(got, "Exit code: 0") {
+		t.Errorf("Completion status should contain 'Exit code: 0'\nGot:\n%s", got)
 	}
 
-	if !strings.Contains(output, "42 lines") {
-		t.Errorf("Completion status should contain '42 lines'\nGot:\n%s", output)
+	if !strings.Contains(got, "42 lines") {
+		t.Errorf("Completion status should contain '42 lines'\nGot:\n%s", got)
 	}
 }
 
@@ -145,12 +145,12 @@ func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
 	}
 
 	// Capture output.
-	output := captureOutput(p)
+	got := captureOutput(p)
 
 	// Should NOT print completion status since ExitCode is not set.
-	if strings.Contains(output, "⤷") && strings.Contains(output, "Exit code") {
+	if strings.Contains(got, "⤷") && strings.Contains(got, "Exit code") {
 		t.Error("UpdateBlock should NOT print completion status for incomplete blocks")
-		t.Logf("Unexpected output:\n%s", output)
+		t.Logf("Unexpected output:\n%s", got)
 	}
 }
 
@@ -191,8 +191,8 @@ func TestUpdateBlock_HandlesReadBlocks(t *testing.T) {
 	}
 
 	// READ blocks don't have completion status lines (per FRD).
-	output := captureOutput(p)
-	if strings.Contains(output, "⤷") {
+	got := captureOutput(p)
+	if strings.Contains(got, "⤷") {
 		t.Error("READ blocks should NOT print completion status lines")
 	}
 }
@@ -433,7 +433,7 @@ func (m *mockTerminalController) Exit() error {
 	return nil
 }
 
-func (m *mockTerminalController) Size() (int, int) {
+func (m *mockTerminalController) Size() (width, height int) {
 	return m.width, m.height
 }
 
@@ -507,7 +507,10 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 
 	s.buf.Reset()
 
-	toolBody := "Command executed successfully: итого 4\ndrwxr-xr-x. 1 dmitriy 14 окт 25 16:17 .\ndrwxr-xr-x. 1 dmitriy 54 окт 25 16:17 ..\n-rw-r--r--. 1 dmitriy 45 окт 25 16:17 main.rs"
+	toolBody := "Command executed successfully: итого 4\n" +
+		"drwxr-xr-x. 1 dmitriy 14 окт 25 16:17 .\n" +
+		"drwxr-xr-x. 1 dmitriy 54 окт 25 16:17 ..\n" +
+		"-rw-r--r--. 1 dmitriy 45 окт 25 16:17 main.rs"
 
 	// First update: tool completes with success.
 	completedBlock := createToolBlock(t, "tool_exec_123", "execute_command", toolBody)
@@ -524,23 +527,23 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 	}
 
 	// Count occurrences of "Tool completed".
-	output := s.buf.String()
-	toolCompletedCount := strings.Count(output, "Tool completed")
+	got := s.buf.String()
+	toolCompletedCount := strings.Count(got, "Tool completed")
 	if toolCompletedCount > 1 {
 		t.Errorf("'Tool completed' should appear exactly once, but appeared %d times\nOutput:\n%s",
-			toolCompletedCount, output)
+			toolCompletedCount, got)
 	}
 
 	// Also count the arrow symbol.
-	arrowCount := strings.Count(output, "⤷")
+	arrowCount := strings.Count(got, "⤷")
 	if arrowCount > 2 { // One for the initial status, one for completion.
 		t.Errorf("Arrow '⤷' appearing too many times (%d), suggesting duplicate completion lines\nOutput:\n%s",
-			arrowCount, output)
+			arrowCount, got)
 	}
 
 	// Ensure it printed at least once.
 	if toolCompletedCount == 0 {
-		t.Errorf("'Tool completed' should appear at least once\nOutput:\n%s", output)
+		t.Errorf("'Tool completed' should appear at least once\nOutput:\n%s", got)
 	}
 }
 
@@ -590,8 +593,8 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 		t.Fatalf("Second UpdateBlock failed: %v", err)
 	}
 
-	output := s.buf.String()
-	assertCountInRange(t, output, "Exit code: 0", 1, 1)
+	got := s.buf.String()
+	assertCountInRange(t, got, "Exit code: 0", 1, 1)
 }
 
 // TestApprovalDialog_StatusBarNotOverwritten verifies that the approval prompt in the status bar
@@ -712,11 +715,11 @@ func createExecuteBlock(t *testing.T, id, cmd, cwd, impact string, exitCode, lin
 }
 
 // assertContains checks that s contains substr, or fails with a descriptive message.
-func assertContains(t *testing.T, s, substr, context string) {
+func assertContains(t *testing.T, s, substr, msg string) {
 	t.Helper()
 
 	if !strings.Contains(s, substr) {
-		t.Errorf("Expected %s to contain '%s', got: %s", context, substr, s)
+		t.Errorf("Expected %s to contain '%s', got: %s", msg, substr, s)
 	}
 }
 

@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const defaultCacheMaxSize = 100
+
 // CacheConfig configures the summary cache.
 type CacheConfig struct {
 	// MaxSize is the maximum number of cached summaries.
@@ -19,7 +21,7 @@ type CacheConfig struct {
 // DefaultCacheConfig returns sensible default configuration.
 func DefaultCacheConfig() CacheConfig {
 	return CacheConfig{
-		MaxSize: 100,
+		MaxSize: defaultCacheMaxSize,
 		TTL:     time.Hour,
 	}
 }

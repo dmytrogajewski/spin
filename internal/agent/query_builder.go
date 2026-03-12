@@ -6,6 +6,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 )
 
+const maxConceptExtract = 5
+
 // buildQueryFromContext constructs a retrieval query based on trajectory state and trigger.
 //
 // Query composition strategy:
@@ -48,7 +50,7 @@ func (a *Agent) buildQueryFromContext(
 
 	case trajectory.TriggerInterval:
 		// Add concepts from recent steps (using lookback of 5 steps).
-		concepts := trajectory.ExtractConcepts(ctx.Steps, 5)
+		concepts := trajectory.ExtractConcepts(ctx.Steps, maxConceptExtract)
 		parts = append(parts, concepts...)
 	}
 

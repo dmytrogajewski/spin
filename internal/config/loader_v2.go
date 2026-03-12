@@ -186,7 +186,7 @@ func (l *LoaderV2) applyDefaults(cfg *V2) {
 }
 
 // applyLLMDefaults applies default values for LLM fields.
-func (l *LoaderV2) applyLLMDefaults(cfg *V2, defaults *V2) {
+func (l *LoaderV2) applyLLMDefaults(cfg, defaults *V2) {
 	if !l.viper.IsSet("llm.provider") {
 		cfg.LLM.Provider = defaults.LLM.Provider
 	}
@@ -209,7 +209,7 @@ func (l *LoaderV2) applyLLMDefaults(cfg *V2, defaults *V2) {
 }
 
 // applyAgentDefaults applies default values for Agent fields.
-func (l *LoaderV2) applyAgentDefaults(cfg *V2, defaults *V2) {
+func (l *LoaderV2) applyAgentDefaults(cfg, defaults *V2) {
 	if !l.viper.IsSet("agent.max_turns") {
 		cfg.Agent.MaxTurns = defaults.Agent.MaxTurns
 	}
@@ -224,7 +224,7 @@ func (l *LoaderV2) applyAgentDefaults(cfg *V2, defaults *V2) {
 }
 
 // applyACEDefaults applies default values for ACE fields.
-func (l *LoaderV2) applyACEDefaults(cfg *V2, defaults *V2) {
+func (l *LoaderV2) applyACEDefaults(cfg, defaults *V2) {
 	// Check if any ACE field was explicitly set.
 	aceFieldsSet := l.viper.IsSet("ace.enabled") || l.viper.IsSet("ace.playbook_path") ||
 		l.viper.IsSet("ace.trajectory_path") || l.viper.IsSet("ace.top_k") || l.viper.IsSet("ace.min_score")
@@ -262,7 +262,7 @@ func (l *LoaderV2) applyACEDefaults(cfg *V2, defaults *V2) {
 }
 
 // applyProtocolDefaults applies default values for Protocol fields.
-func (l *LoaderV2) applyProtocolDefaults(cfg *V2, defaults *V2) {
+func (l *LoaderV2) applyProtocolDefaults(cfg, defaults *V2) {
 	if !l.viper.IsSet("protocol") {
 		cfg.Protocol = defaults.Protocol
 		return
@@ -286,7 +286,7 @@ func (l *LoaderV2) applyProtocolDefaults(cfg *V2, defaults *V2) {
 }
 
 // applyAgentsMDDefaults applies default values for AgentsMD fields.
-func (l *LoaderV2) applyAgentsMDDefaults(cfg *V2, defaults *V2) {
+func (l *LoaderV2) applyAgentsMDDefaults(cfg, defaults *V2) {
 	if !l.viper.IsSet("agents_md") {
 		cfg.AgentsMD = defaults.AgentsMD
 		return

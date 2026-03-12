@@ -13,6 +13,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 )
 
+const (
+	approvalTimeout = 5 * time.Second
+	approvalPolicyTTL = 30 * time.Second
+)
+
 var ErrProgramIsRequired = errors.New("--program is required")
 
 // newApprovalCmd creates the 'approval' command group.
@@ -43,7 +48,7 @@ func newApprovalListCmd() *cobra.Command {
 				return err
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), approvalTimeout)
 			defer cancel()
 
 			items, err := store.List(ctx, scope)
@@ -99,7 +104,7 @@ func newApprovalRevokeCmd() *cobra.Command {
 
 			key := security.NewPolicyKey(prog, argList, workDir)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), approvalTimeout)
 			defer cancel()
 
 			deleted, err := store.Delete(ctx, key, scope)
@@ -139,7 +144,7 @@ func newApprovalClearCmd() *cobra.Command {
 				return err
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), approvalTimeout)
 			defer cancel()
 
 			n, err := store.Clear(ctx, scope)
@@ -175,7 +180,7 @@ func buildPolicyStore(cmd *cobra.Command) (security.PolicyStore, error) {
 
 	// If approval persistence is disabled, operate purely in-memory.
 	if !cfg.Security.ApprovalPersistenceEnabled {
-		return security.NewMemoryPolicyStore(30 * time.Second), nil
+		return security.NewMemoryPolicyStore(approvalPolicyTTL), nil
 	}
 
 	// If policy file path not set, default under user config dir matching DefaultV2.
@@ -183,11 +188,11 @@ func buildPolicyStore(cmd *cobra.Command) (security.PolicyStore, error) {
 	// Prefer file-backed store when path present; otherwise memory store.
 	if path != "" {
 		var store security.PolicyStore
-		store, err = security.NewFilePolicyStore(path, 30*time.Second)
+		store, err = security.NewFilePolicyStore(path, approvalPolicyTTL)
 		if err == nil {
 			return store, nil
 		}
 	}
 
-	return security.NewMemoryPolicyStore(30 * time.Second), nil
+	return security.NewMemoryPolicyStore(approvalPolicyTTL), nil
 }

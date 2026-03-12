@@ -12,8 +12,8 @@ func TestNewRegular(t *testing.T) {
 		t.Fatal("NewRegular() returned nil")
 	}
 
-	if regular.Name() != "regular" {
-		t.Errorf("NewRegular().Name() = %v, want %v", regular.Name(), "regular")
+	if regular.Name() != TaskNameRegular {
+		t.Errorf("NewRegular().Name() = %v, want %v", regular.Name(), TaskNameRegular)
 	}
 
 	// Test that it implements the Task interface.
@@ -24,8 +24,8 @@ func TestRegular_Name(t *testing.T) {
 	t.Parallel()
 	regular := NewRegular()
 
-	if regular.Name() != "regular" {
-		t.Errorf("Regular.Name() = %v, want %v", regular.Name(), "regular")
+	if regular.Name() != TaskNameRegular {
+		t.Errorf("Regular.Name() = %v, want %v", regular.Name(), TaskNameRegular)
 	}
 }
 
@@ -34,7 +34,7 @@ func TestRegular_SystemPrompt(t *testing.T) {
 	regular := NewRegular()
 	result := regular.SystemPrompt()
 
-	if len(result) == 0 {
+	if result == "" {
 		t.Error("Regular.SystemPrompt() returned empty string")
 	}
 

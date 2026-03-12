@@ -13,7 +13,7 @@ func TestNewPlanning(t *testing.T) {
 		t.Fatal("NewPlanning() returned nil")
 	}
 
-	if planning.Name() != "planning" {
+	if planning.Name() != TaskNamePlanning {
 		t.Errorf("NewPlanning().Name() = %v, want 'planning'", planning.Name())
 	}
 
@@ -27,7 +27,7 @@ func TestPlanning_Name(t *testing.T) {
 
 	name := planning.Name()
 
-	if name != "planning" {
+	if name != TaskNamePlanning {
 		t.Errorf("Planning.Name() = %s, want 'planning'", name)
 	}
 }
@@ -37,13 +37,13 @@ func TestPlanning_SystemPrompt(t *testing.T) {
 	planning := NewPlanning()
 	prompt := planning.SystemPrompt()
 
-	if len(prompt) == 0 {
+	if prompt == "" {
 		t.Error("Planning.SystemPrompt() returned empty string")
 	}
 
 	// Check that prompt contains key planning elements.
 	expectedElements := []string{
-		"planning",
+		TaskNamePlanning,
 		"step",
 	}
 

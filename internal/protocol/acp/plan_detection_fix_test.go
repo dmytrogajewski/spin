@@ -13,13 +13,17 @@ func TestDetectPlanFromOutput_ExitsPlanSection(t *testing.T) {
 
 	t.Run("Plan followed by regular text", func(t *testing.T) {
 		t.Parallel()
-		entries := detectPlanFromOutput("Plan:\n1. First step\n2. Second step\n3. Third step\n\nThis is regular text that explains something.\nMore explanation here.")
+		entries := detectPlanFromOutput(
+			"Plan:\n1. First step\n2. Second step\n3. Third step\n\n" +
+				"This is regular text that explains something.\nMore explanation here.")
 		assert.Len(t, entries, 3, "Should only detect 3 plan entries, not the explanation text")
 	})
 
 	t.Run("Plan followed by code example", func(t *testing.T) {
 		t.Parallel()
-		entries := detectPlanFromOutput("Steps:\n1. Create file\n2. Write code\n3. Test code\n\nThe code looks like this:\n1. func main() {\n2.     fmt.Println(\"hello\")\n3. }")
+		entries := detectPlanFromOutput(
+			"Steps:\n1. Create file\n2. Write code\n3. Test code\n\n" +
+				"The code looks like this:\n1. func main() {\n2.     fmt.Println(\"hello\")\n3. }")
 		assert.Len(t, entries, 3, "Should not treat code line numbers as plan entries")
 	})
 

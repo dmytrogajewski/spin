@@ -6,6 +6,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/prompt"
 )
 
+const (
+	testSecondEntry = "second"
+	testFirstEntry = "first"
+)
+
+
 func TestModel_BasicEditing(t *testing.T) {
 	t.Parallel()
 	m := prompt.NewModel(10)
@@ -85,7 +91,7 @@ func TestModel_HistoryNavigation(t *testing.T) {
 		t.Errorf("PrevHistory() = false, want true")
 	}
 
-	if got := m.Text(); got != "second" {
+	if got := m.Text(); got != testSecondEntry {
 		t.Errorf("After PrevHistory(), Text() = %q, want 'second'", got)
 	}
 
@@ -95,7 +101,7 @@ func TestModel_HistoryNavigation(t *testing.T) {
 		t.Errorf("Second PrevHistory() = false, want true")
 	}
 
-	if got := m.Text(); got != "first" {
+	if got := m.Text(); got != testFirstEntry {
 		t.Errorf("After second PrevHistory(), Text() = %q, want 'first'", got)
 	}
 
@@ -105,7 +111,7 @@ func TestModel_HistoryNavigation(t *testing.T) {
 		t.Errorf("NextHistory() = false, want true")
 	}
 
-	if got := m.Text(); got != "second" {
+	if got := m.Text(); got != testSecondEntry {
 		t.Errorf("After NextHistory(), Text() = %q, want 'second'", got)
 	}
 

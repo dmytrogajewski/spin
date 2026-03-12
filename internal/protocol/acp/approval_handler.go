@@ -100,7 +100,7 @@ func extractToolName(req security.ApprovalRequest) string {
 	if req.Command != nil {
 		return req.Command.Program
 	}
-	return "unknown"
+	return unknownValue
 }
 
 // denyResponse creates a denied approval response.
@@ -123,7 +123,10 @@ func buildPermissionOptions() []acp.PermissionOption {
 }
 
 // sendPendingNotification sends a pending tool call notification.
-func (h *ApprovalHandler) sendPendingNotification(ctx context.Context, sessionID acp.SessionId, conn notificationSender, toolCallID acp.ToolCallId, toolName string) {
+func (h *ApprovalHandler) sendPendingNotification(
+	ctx context.Context, sessionID acp.SessionId, conn notificationSender,
+	toolCallID acp.ToolCallId, toolName string,
+) {
 	kind := mapToolNameToKind(toolName)
 
 	update := acp.UpdateToolCall(
@@ -152,7 +155,7 @@ func mapToolNameToKind(toolName string) *acp.ToolKind {
 	switch toolName {
 	case "read_file", "list_directory":
 		return acp.Ptr(acp.ToolKindRead)
-	case "write_file":
+	case toolWriteFile:
 		return acp.Ptr(acp.ToolKindEdit)
 	case "shell_command":
 		return acp.Ptr(acp.ToolKindExecute)
@@ -164,7 +167,10 @@ func mapToolNameToKind(toolName string) *acp.ToolKind {
 }
 
 // requestPermission sends the permission request to the client.
-func (h *ApprovalHandler) requestPermission(ctx context.Context, conn notificationSender, sessionID acp.SessionId, toolCall acp.RequestPermissionToolCall, options []acp.PermissionOption) (acp.RequestPermissionResponse, error) {
+func (h *ApprovalHandler) requestPermission(
+	ctx context.Context, conn notificationSender, sessionID acp.SessionId,
+	toolCall acp.RequestPermissionToolCall, options []acp.PermissionOption,
+) (acp.RequestPermissionResponse, error) {
 	acpReq := acp.RequestPermissionRequest{
 		SessionId: sessionID,
 		ToolCall:  toolCall,
@@ -186,7 +192,9 @@ func (h *ApprovalHandler) handlePermissionError(reqID string, err error, ctx con
 }
 
 // buildApprovalResponse converts the ACP permission response to a security approval response.
-func (h *ApprovalHandler) buildApprovalResponse(reqID string, acpResp acp.RequestPermissionResponse, options []acp.PermissionOption) security.ApprovalResponse {
+func (h *ApprovalHandler) buildApprovalResponse(
+	reqID string, acpResp acp.RequestPermissionResponse, options []acp.PermissionOption,
+) security.ApprovalResponse {
 	approved, scope := resolvePermissionOutcome(acpResp, options)
 	return security.ApprovalResponse{
 		RequestID: reqID,
@@ -197,7 +205,7 @@ func (h *ApprovalHandler) buildApprovalResponse(reqID string, acpResp acp.Reques
 }
 
 // resolvePermissionOutcome determines the approval decision from the ACP response.
-func resolvePermissionOutcome(acpResp acp.RequestPermissionResponse, options []acp.PermissionOption) (bool, string) {
+func resolvePermissionOutcome(acpResp acp.RequestPermissionResponse, options []acp.PermissionOption) (approved bool, reason string) {
 	if acpResp.Outcome.Selected == nil {
 		return false, ""
 	}
@@ -225,7 +233,7 @@ func resolvePermissionOutcome(acpResp acp.RequestPermissionResponse, options []a
 // convertApprovalRequestToToolCall converts a security approval request to an ACP tool call.
 func (h *ApprovalHandler) convertApprovalRequestToToolCall(req security.ApprovalRequest) (acp.RequestPermissionToolCall, error) {
 	// Extract tool name from command.
-	toolName := "unknown"
+	toolName := unknownValue
 	if req.Command != nil {
 		toolName = req.Command.Program
 	}

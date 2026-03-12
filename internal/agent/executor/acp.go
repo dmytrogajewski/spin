@@ -233,7 +233,7 @@ func (s *acpNotificationSender) SendToolCallStart(_ context.Context, _, _ string
 }
 
 // SendToolCallUpdate implements the SendToolCallUpdate operation.
-func (s *acpNotificationSender) SendToolCallUpdate(_ context.Context, _ string, _ string, _ any) error {
+func (s *acpNotificationSender) SendToolCallUpdate(_ context.Context, _, _ string, _ any) error {
 	// ACP notifications are sent via event emission.
 	return nil
 }

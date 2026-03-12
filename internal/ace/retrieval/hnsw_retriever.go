@@ -13,6 +13,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 )
 
+const sqrtDivisor = 2
+
 var ErrBulletHasNoEmbedding = errors.New("bullet has no embedding")
 
 // HNSWRetriever uses HNSW (Hierarchical Navigable Small World) graph for fast vector search.
@@ -185,7 +187,7 @@ func sqrt(x float64) float64 {
 	// Use Newton's method for square root.
 	z := x
 	for range 10 {
-		z = (z + x/z) / 2
+		z = (z + x/z) / sqrtDivisor
 	}
 
 	return z

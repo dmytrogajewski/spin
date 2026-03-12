@@ -9,6 +9,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
 
+const (
+	tokenOverhead       = 4 // token overhead per message.
+	compressTargetRatio = 0.2
+)
+
 // HybridCompressor uses importance-weighted greedy selection
 // with optional LLM summarization for removed content.
 type HybridCompressor struct {
@@ -77,7 +82,7 @@ func (c *HybridCompressor) Compress(
 		summaryMsg, err := c.summarizeRemoved(ctx, removed)
 		if err == nil && summaryMsg != nil {
 			// Count summary tokens.
-			summaryMsg.Tokens = tok.Count(summaryMsg.Content) + 4
+			summaryMsg.Tokens = tok.Count(summaryMsg.Content) + tokenOverhead
 			selected = append(selected, ClassifiedMessage{
 				Message:    *summaryMsg,
 				Importance: ImportanceMedium,
@@ -120,7 +125,7 @@ func (c *HybridCompressor) classifyMessages(messages []message.Message, tok toke
 	for i, msg := range messages {
 		tokens := msg.Tokens
 		if tokens == 0 {
-			tokens = tok.Count(msg.Content) + 4
+			tokens = tok.Count(msg.Content) + tokenOverhead
 		}
 
 		classified[i] = ClassifiedMessage{
@@ -191,7 +196,7 @@ func (c *HybridCompressor) summarizeRemoved(
 	// Use summarizer.
 	result, err := c.summarizer.SummarizeMessages(ctx, msgs, summarizer.Options{
 		MaxTokens:   targetTokens,
-		TargetRatio: 0.2,
+		TargetRatio: compressTargetRatio,
 		Style:       summarizer.StyleNarrative,
 		ContentType: summarizer.ContentTypeConversation,
 	})
@@ -257,7 +262,7 @@ func (c *HybridCompressor) CompressWithStats(
 	for _, msg := range messages {
 		tokens := msg.Tokens
 		if tokens == 0 {
-			tokens = tok.Count(msg.Content) + 4
+			tokens = tok.Count(msg.Content) + tokenOverhead
 		}
 
 		originalTokens += tokens
@@ -275,7 +280,7 @@ func (c *HybridCompressor) CompressWithStats(
 	for _, msg := range result {
 		tokens := msg.Tokens
 		if tokens == 0 {
-			tokens = tok.Count(msg.Content) + 4
+			tokens = tok.Count(msg.Content) + tokenOverhead
 		}
 
 		compressedTokens += tokens

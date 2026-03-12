@@ -20,11 +20,18 @@ type modeInfo struct {
 }
 
 // allModes contains detailed information for all available modes.
+const (
+	regularModeMaxTokens  = 16384
+	reviewModeMaxTokens   = 12288
+	compactModeMaxTokens  = 4096
+	planningModeMaxTokens = 4096
+)
+
 var allModes = map[string]modeInfo{
 	"regular": {
 		name:        "regular",
 		description: "Full-featured interactive coding mode with access to all tools",
-		maxTokens:   16384,
+		maxTokens:   regularModeMaxTokens,
 		tools: []string{
 			"read_file",
 			"write_file",
@@ -45,7 +52,7 @@ var allModes = map[string]modeInfo{
 	"review": {
 		name:        "review",
 		description: "Read-only code analysis and review mode",
-		maxTokens:   12288,
+		maxTokens:   reviewModeMaxTokens,
 		tools: []string{
 			"read_file",
 			"list_directory",
@@ -63,7 +70,7 @@ var allModes = map[string]modeInfo{
 	"compact": {
 		name:        "compact",
 		description: "Quick queries with minimal context and tool access",
-		maxTokens:   4096,
+		maxTokens:   compactModeMaxTokens,
 		tools: []string{
 			"read_file",
 			"get_context",
@@ -79,7 +86,7 @@ var allModes = map[string]modeInfo{
 	"planning": {
 		name:        "planning",
 		description: "Task decomposition and planning mode with context-only tools",
-		maxTokens:   4096,
+		maxTokens:   planningModeMaxTokens,
 		tools: []string{
 			"get_context",
 			"file_search",

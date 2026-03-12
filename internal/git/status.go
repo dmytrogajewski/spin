@@ -10,6 +10,8 @@ import (
 	gogit "github.com/go-git/go-git/v5"
 )
 
+const statusFieldParts = 2
+
 // Status returns the current repository status including branch name,
 // modified/staged/untracked files, and tracking information.
 //
@@ -133,7 +135,7 @@ func (r *Repository) getTrackingInfo(ctx context.Context, branchName string) (re
 
 	// Parse output: "ahead\tbehind".
 	parts := strings.Fields(strings.TrimSpace(string(output)))
-	if len(parts) == 2 {
+	if len(parts) == statusFieldParts {
 		ahead, _ = strconv.Atoi(parts[0])
 		behind, _ = strconv.Atoi(parts[1])
 	}

@@ -5,6 +5,8 @@ import (
 	"unicode"
 )
 
+const minWordLengthForSimilarity = 2
+
 // calculateSimilarity computes the Jaccard similarity between two strings.
 // Jaccard similarity is defined as |A ∩ B| / |A ∪ B| where A and B are sets of words.
 //
@@ -92,7 +94,7 @@ func extractWords(text string) []string {
 		word := strings.ToLower(field)
 
 		// Skip empty words and very short words (likely not meaningful).
-		if len(word) > 2 {
+		if len(word) > minWordLengthForSimilarity {
 			words = append(words, word)
 		}
 	}

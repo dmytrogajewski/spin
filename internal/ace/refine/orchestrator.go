@@ -82,7 +82,7 @@ func (o *RefinementOrchestrator) Refine(ctx context.Context, req RefinementReque
 	}
 
 	// Calculate tokens saved (rough estimate).
-	result.TokensSaved = (result.Pruned + result.Merged) * 50 // ~50 tokens per bullet.
+	result.TokensSaved = (result.Pruned + result.Merged) * tokensPerBulletEstimate // ~50 tokens per bullet.
 	result.Duration = time.Since(start)
 
 	return result, nil

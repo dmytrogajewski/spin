@@ -4,6 +4,8 @@ import (
 	"fmt"
 )
 
+const maxAllowedTokens = 100000
+
 // Constants for Regular mode configuration.
 const (
 	// DefaultMaxTokens is the default token budget for Regular mode.
@@ -32,11 +34,13 @@ type Regular struct {
 
 // RegularSystemPrompt is the comprehensive system prompt for regular mode.
 // It follows Claude best practices for tool usage and agentic behavior.
-const RegularSystemPrompt = `You are an expert software engineer assistant with access to tools for reading, writing, and editing files, executing commands, and searching code.
+const RegularSystemPrompt = `You are an expert software engineer assistant with access to tools ` +
+	`for reading, writing, and editing files, executing commands, and searching code.
 
 # Core Principle: Always Use Tools
 
-When you need to write or modify code, you MUST use the appropriate tools (write_file, apply_patch, etc.). NEVER output code blocks in chat as a substitute for actually writing the code.
+When you need to write or modify code, you MUST use the appropriate tools ` +
+	`(write_file, apply_patch, etc.). NEVER output code blocks in chat as a substitute for actually writing the code.
 
 Bad behavior (DO NOT DO THIS):
 - Showing code in a markdown code block and saying "here's the code you can use"
@@ -67,7 +71,7 @@ Good behavior:
 // NewRegular creates a new Regular task instance.
 func NewRegular() *Regular {
 	return &Regular{
-		name:         "regular",
+		name:         TaskNameRegular,
 		systemPrompt: RegularSystemPrompt,
 		maxTokens:    DefaultMaxTokens,
 	}
@@ -100,8 +104,8 @@ func (r *Regular) Validate() error {
 		return ErrMaxTokensMustBePositive
 	}
 
-	if r.maxTokens > 100000 { // MaxAllowedTokens.
-return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", r.maxTokens, 100000, ErrMaxTokensExceedsMaximumAllowed)
+	if r.maxTokens > maxAllowedTokens { // MaxAllowedTokens.
+return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", r.maxTokens, maxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
 	}
 
 	return nil

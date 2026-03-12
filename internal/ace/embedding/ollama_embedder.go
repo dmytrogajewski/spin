@@ -10,6 +10,8 @@ import (
 	"github.com/ollama/ollama/api"
 )
 
+const defaultEmbeddingDimensions = 768
+
 var (
 	ErrOllamaReturnedNoEmbeddings = errors.New("ollama returned no embeddings")
 	ErrExpectedEmbeddingDimension = errors.New("expected embedding dimension")
@@ -44,7 +46,7 @@ func DefaultOllamaEmbedderConfig() OllamaEmbedderConfig {
 	return OllamaEmbedderConfig{
 		BaseURL:   "http://localhost:11434",
 		Model:     "nomic-embed-text",
-		Dimension: 768, // nomic-embed-text produces 768-dimensional embeddings.
+		Dimension: defaultEmbeddingDimensions, // nomic-embed-text produces 768-dimensional embeddings.
 	}
 }
 

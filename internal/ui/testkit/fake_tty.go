@@ -45,7 +45,7 @@ func (f *FakeTTY) Exit() error {
 }
 
 // Size returns the current terminal dimensions.
-func (f *FakeTTY) Size() (int, int) {
+func (f *FakeTTY) Size() (width, height int) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 

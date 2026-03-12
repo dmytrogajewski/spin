@@ -21,7 +21,9 @@ func TestAgent_GetPlanner(t *testing.T) {
 	// Create agent.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := NewToolRuntime(ToolRuntimeConfig{
@@ -69,7 +71,9 @@ func TestAgent_GetPlanner_NoPlanner(t *testing.T) {
 	t.Parallel()
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := NewToolRuntime(ToolRuntimeConfig{

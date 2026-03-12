@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 )
 
+const defaultMaxScanDepth = 20
+
 // Scanner scans directories for files with gitignore support.
 type Scanner struct {
 	baseDir       string
@@ -22,7 +24,7 @@ func NewScanner(baseDir string, ignoreGit bool) *Scanner {
 	return &Scanner{
 		baseDir:   baseDir,
 		ignoreGit: ignoreGit,
-		maxDepth:  20, // Reasonable default to prevent deep recursion.
+		maxDepth:  defaultMaxScanDepth, // Reasonable default to prevent deep recursion.
 		// ignoreHandler is lazily created in Scan().
 	}
 }

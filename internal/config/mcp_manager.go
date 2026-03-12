@@ -34,11 +34,12 @@ type MCPServer struct {
 	OAuth *MCPOAuthConfigV2 `json:"oauth,omitempty" mapstructure:"oauth" toml:"oauth,omitempty" yaml:"oauth,omitempty"`
 
 	// Smithery-specific fields.
-	SmitheryAPIKey    string `json:"smithery_api_key,omitempty"   mapstructure:"smithery_api_key"   toml:"smithery_api_key,omitempty"   yaml:"smithery_api_key,omitempty"`
-	SmitheryNamespace string `json:"smithery_namespace,omitempty" mapstructure:"smithery_namespace" toml:"smithery_namespace,omitempty" yaml:"smithery_namespace,omitempty"`
+	SmitheryAPIKey string `json:"smithery_api_key,omitempty" mapstructure:"smithery_api_key" yaml:"smithery_api_key,omitempty"`
+
+	SmitheryNamespace string `json:"smithery_namespace,omitempty" mapstructure:"smithery_namespace" yaml:"smithery_namespace,omitempty"`
 
 	// DynamicLoadout enables dynamic tool discovery via search.
-	DynamicLoadout bool `json:"dynamic_loadout,omitempty" mapstructure:"dynamic_loadout" toml:"dynamic_loadout,omitempty" yaml:"dynamic_loadout,omitempty"`
+	DynamicLoadout bool `json:"dynamic_loadout,omitempty" mapstructure:"dynamic_loadout" yaml:"dynamic_loadout,omitempty"`
 }
 
 // MCPConfigStore manages MCP server configurations.
@@ -260,7 +261,7 @@ func (m *MCPConfigStore) writeConfig() error {
 
 	// Write to file (atomic).
 	tmpFile := configFile + ".tmp"
-	err = os.WriteFile(tmpFile, data, 0600)
+	err = os.WriteFile(tmpFile, data, 0o600)
 	if err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}

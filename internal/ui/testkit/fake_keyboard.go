@@ -7,6 +7,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
+const fakeKeyEventBuffer = 100
+
 // FakeKeyboard provides scripted key events for testing.
 // It implements a channel-based keyboard input simulator.
 type FakeKeyboard struct {
@@ -18,7 +20,7 @@ type FakeKeyboard struct {
 // NewFakeKeyboard creates a new fake keyboard.
 func NewFakeKeyboard() *FakeKeyboard {
 	return &FakeKeyboard{
-		events: make(chan term.KeyEvent, 100), // Buffered for burst input.
+		events: make(chan term.KeyEvent, fakeKeyEventBuffer), // Buffered for burst input.
 	}
 }
 

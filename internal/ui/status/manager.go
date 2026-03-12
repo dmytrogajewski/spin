@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+const (
+	percentMulManager   = 100
+	maxStateDisplayLen  = 15
+)
+
 // Metrics represents the current status metrics.
 type Metrics struct {
 	// Conversation metrics.
@@ -119,7 +124,7 @@ func (m *Manager) AddTokens(prompt, completion int64) {
 	m.UpdateMetrics(func(m *Metrics) {
 		m.TokenCount += prompt + completion
 		if m.MaxTokens > 0 {
-			m.TokenUsage = float64(m.TokenCount) / float64(m.MaxTokens) * 100
+			m.TokenUsage = float64(m.TokenCount) / float64(m.MaxTokens) * percentMulManager
 		}
 	})
 }
@@ -139,7 +144,7 @@ func (m *Manager) SetMaxTokens(maxTokens int64) {
 	m.UpdateMetrics(func(m *Metrics) {
 		m.MaxTokens = maxTokens
 		if m.MaxTokens > 0 {
-			m.TokenUsage = float64(m.TokenCount) / float64(m.MaxTokens) * 100
+			m.TokenUsage = float64(m.TokenCount) / float64(m.MaxTokens) * percentMulManager
 		}
 	})
 }
@@ -309,11 +314,12 @@ func (m *Manager) FormatCompact(_ int) string {
 		spinnerFrame = m.spinner.Frame()
 	}
 
-	if spinnerFrame != "" {
+	switch {
+	case spinnerFrame != "":
 		parts = append(parts, "["+spinnerFrame+"]")
-	} else if m.status.Metrics.Connected {
+	case m.status.Metrics.Connected:
 		parts = append(parts, "[●]")
-	} else {
+	default:
 		parts = append(parts, "[○]")
 	}
 
@@ -326,10 +332,10 @@ func (m *Manager) FormatCompact(_ int) string {
 	// Agent state.
 	state := m.status.Metrics.AgentState
 	if state == "" {
-		state = "Ready"
+		state = StateReady
 	}
 	// Truncate state to fit narrow terminal.
-	if len(state) > 15 {
+	if len(state) > maxStateDisplayLen {
 		state = state[:12] + "..."
 	}
 

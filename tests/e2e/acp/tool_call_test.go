@@ -207,21 +207,23 @@ func TestACP_ToolCall_Create(t *testing.T) {
 	// Check for tool_call notification.
 	notifications := clientImpl.getNotifications()
 	for _, notif := range notifications {
-		if notif.Update.ToolCall != nil {
-			toolCall := notif.Update.ToolCall
-			assert.NotEmpty(t, toolCall.ToolCallId, "Tool call should have ID")
-			assert.NotEmpty(t, toolCall.Title, "Tool call should have title")
-			// Status is a value type, verify it's valid.
-			validStatuses := []acp.ToolCallStatus{
-				acp.ToolCallStatusPending,
-				acp.ToolCallStatusInProgress,
-				acp.ToolCallStatusCompleted,
-				acp.ToolCallStatusFailed,
-			}
-			assert.Contains(t, validStatuses, toolCall.Status, "Status should be valid")
-
-			return
+		if notif.Update.ToolCall == nil {
+			continue
 		}
+
+		toolCall := notif.Update.ToolCall
+		assert.NotEmpty(t, toolCall.ToolCallId, "Tool call should have ID")
+		assert.NotEmpty(t, toolCall.Title, "Tool call should have title")
+		// Status is a value type, verify it's valid.
+		validStatuses := []acp.ToolCallStatus{
+			acp.ToolCallStatusPending,
+			acp.ToolCallStatusInProgress,
+			acp.ToolCallStatusCompleted,
+			acp.ToolCallStatusFailed,
+		}
+		assert.Contains(t, validStatuses, toolCall.Status, "Status should be valid")
+
+		return
 	}
 
 	t.Log("No tool_call notification found (may be expected)")

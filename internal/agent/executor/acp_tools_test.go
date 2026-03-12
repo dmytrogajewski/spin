@@ -22,7 +22,7 @@ type mockFilesystemClient struct {
 	readErr     error
 }
 
-func (m *mockFilesystemClient) ReadTextFile(_ context.Context, path string, _ *int, _ *int) (string, error) {
+func (m *mockFilesystemClient) ReadTextFile(_ context.Context, path string, _, _ *int) (string, error) {
 	m.readPath = path
 	if m.readErr != nil {
 		return "", m.readErr
@@ -48,14 +48,39 @@ type pathResolutionCase struct {
 
 func pathResolutionTestCases() []pathResolutionCase {
 	return []pathResolutionCase{
-		{name: "relative path is resolved to workDir", workDir: "/home/user/workspace", inputPath: "src/main.py", expectedPath: "/home/user/workspace/src/main.py"},
-		{name: "absolute path within workDir is allowed", workDir: "/home/user/workspace", inputPath: "/home/user/workspace/src/main.py", expectedPath: "/home/user/workspace/src/main.py"},
-		{name: "absolute path outside workDir is rejected", workDir: "/home/user/workspace", inputPath: "/tmp/file.py", expectError: true, errorContains: "outside the allowed workspace"},
-		{name: "path traversal with .. is rejected", workDir: "/home/user/workspace", inputPath: "../../../etc/passwd", expectError: true, errorContains: "outside the allowed workspace"},
-		{name: "absolute path with similar prefix but different dir is rejected", workDir: "/home/user/workspace", inputPath: "/home/user/workspace2/file.py", expectError: true, errorContains: "outside the allowed workspace"},
-		{name: "path with . components is cleaned", workDir: "/home/user/workspace", inputPath: "./src/../src/main.py", expectedPath: "/home/user/workspace/src/main.py"},
-		{name: "simple filename is resolved to workDir", workDir: "/home/user/workspace", inputPath: "file.txt", expectedPath: "/home/user/workspace/file.txt"},
-		{name: "nested relative path is resolved", workDir: "/home/user/workspace", inputPath: "src/components/Button.tsx", expectedPath: "/home/user/workspace/src/components/Button.tsx"},
+		{
+			name: "relative path is resolved to workDir", workDir: "/home/user/workspace",
+			inputPath: "src/main.py", expectedPath: "/home/user/workspace/src/main.py",
+		},
+		{
+			name: "absolute path within workDir is allowed", workDir: "/home/user/workspace",
+			inputPath: "/home/user/workspace/src/main.py", expectedPath: "/home/user/workspace/src/main.py",
+		},
+		{
+			name: "absolute path outside workDir is rejected", workDir: "/home/user/workspace",
+			inputPath: "/tmp/file.py", expectError: true, errorContains: "outside the allowed workspace",
+		},
+		{
+			name: "path traversal with .. is rejected", workDir: "/home/user/workspace",
+			inputPath: "../../../etc/passwd", expectError: true, errorContains: "outside the allowed workspace",
+		},
+		{
+			name: "absolute path with similar prefix but different dir is rejected",
+			workDir: "/home/user/workspace", inputPath: "/home/user/workspace2/file.py",
+			expectError: true, errorContains: "outside the allowed workspace",
+		},
+		{
+			name: "path with . components is cleaned", workDir: "/home/user/workspace",
+			inputPath: "./src/../src/main.py", expectedPath: "/home/user/workspace/src/main.py",
+		},
+		{
+			name: "simple filename is resolved to workDir", workDir: "/home/user/workspace",
+			inputPath: "file.txt", expectedPath: "/home/user/workspace/file.txt",
+		},
+		{
+			name: "nested relative path is resolved", workDir: "/home/user/workspace",
+			inputPath: "src/components/Button.tsx", expectedPath: "/home/user/workspace/src/components/Button.tsx",
+		},
 	}
 }
 

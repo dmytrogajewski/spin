@@ -6,6 +6,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 )
 
+const (
+	testStateThinking = "Thinking"
+)
+
+
 func TestAggregator_ProcessEvent(t *testing.T) {
 	t.Parallel()
 	manager := NewManager()
@@ -29,7 +34,7 @@ func TestAggregator_ProcessEvent(t *testing.T) {
 	aggregator.ProcessEvent(event)
 
 	metrics = manager.GetMetrics()
-	if metrics.AgentState != "Thinking" {
+	if metrics.AgentState != testStateThinking {
 		t.Errorf("Expected agent state 'Thinking', got %q", metrics.AgentState)
 	}
 
@@ -190,7 +195,7 @@ func TestAggregator_ProcessEvent_ContentDelta_WithData(t *testing.T) {
 	aggregator.ProcessEvent(event)
 
 	metrics := manager.GetMetrics()
-	if metrics.AgentState != "Thinking" {
+	if metrics.AgentState != testStateThinking {
 		t.Errorf("Expected agent state 'Thinking', got %q", metrics.AgentState)
 	}
 	// TPS should be calculated.
@@ -212,7 +217,7 @@ func TestAggregator_ProcessEvent_ContentDelta_ShortContent(t *testing.T) {
 	aggregator.ProcessEvent(event)
 
 	metrics := manager.GetMetrics()
-	if metrics.AgentState != "Thinking" {
+	if metrics.AgentState != testStateThinking {
 		t.Errorf("Expected agent state 'Thinking', got %q", metrics.AgentState)
 	}
 }

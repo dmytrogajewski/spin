@@ -49,7 +49,7 @@ func TestNewFileStorage_InvalidPath(t *testing.T) {
 	)
 
 	tmpFile := filepath.Join(t.TempDir(), "file.txt")
-	_ = os.WriteFile(tmpFile, []byte("test"), 0600)
+	_ = os.WriteFile(tmpFile, []byte("test"), 0o600)
 
 	_, err := NewFileStorage(tmpFile)
 	if err == nil {

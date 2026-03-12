@@ -7,6 +7,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 )
 
+const (
+	defaultMemMaxSize    = 1000
+	defaultMemWarnSize   = 900
+	defaultMemGrowthRate = 0.2
+)
+
+
 // MemoryConfig configures memory management.
 type MemoryConfig struct {
 	MaxBullets     int
@@ -17,9 +24,9 @@ type MemoryConfig struct {
 // DefaultMemoryConfig returns default memory configuration.
 func DefaultMemoryConfig() MemoryConfig {
 	return MemoryConfig{
-		MaxBullets:     1000,
-		RefinementAt:   900,
-		PruneThreshold: 0.2,
+		MaxBullets:     defaultMemMaxSize,
+		RefinementAt:   defaultMemWarnSize,
+		PruneThreshold: defaultMemGrowthRate,
 	}
 }
 

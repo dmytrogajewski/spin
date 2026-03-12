@@ -9,6 +9,24 @@ import (
 	"github.com/dmytrogajewski/spin/internal/config"
 )
 
+const (
+	defaultAdapterUtilityThresh = 0.1
+	defaultAdapterMaxMemSize    = 1000
+	defaultRefineMaxBulletsConf = 1000
+	defaultRefineMaxTokensConf  = 500000
+	defaultRefineMinUtilConf    = 0.1
+	defaultRefineCheckInterval  = 100
+	defaultCacheTTL             = 10
+	defaultProgMaxBullets       = 50
+	defaultErrorLookback        = 5
+	defaultToolChangeLookback   = 3
+	defaultQueryWeightInitial   = 0.5
+	defaultQueryWeightError     = 0.3
+	defaultQueryWeightTool      = 0.2
+	defaultMaxRetrievalLatency  = 500
+	defaultMaxTrajectorySteps   = 1000
+)
+
 var (
 	ErrTopKMustBe0 = errors.New("top_k must be > 0")
 	ErrMinScoreMustBeBetween0 = errors.New("min_score must be between 0 and 1")
@@ -65,16 +83,16 @@ func ConvertACEConfig(v2cfg *config.ACEV2) *ACEConfig {
 		},
 		Adapter: ACEAdapterConfig{
 			Enabled:          true,
-			UtilityThreshold: 0.1,
-			MaxMemorySize:    1000,
+			UtilityThreshold: defaultAdapterUtilityThresh,
+			MaxMemorySize:    defaultAdapterMaxMemSize,
 		},
 		Refine: ACERefineConfig{
 			Enabled:         true,
 			Mode:            "proactive",
-			MaxBullets:      1000,
-			MaxTokens:       500000,
-			MinUtilityScore: 0.1,
-			CheckInterval:   100,
+			MaxBullets:      defaultRefineMaxBulletsConf,
+			MaxTokens:       defaultRefineMaxTokensConf,
+			MinUtilityScore: defaultRefineMinUtilConf,
+			CheckInterval:   defaultRefineCheckInterval,
 		},
 	}
 }
@@ -164,25 +182,25 @@ func DefaultProgressiveContextConfig() ProgressiveContextConfig {
 		Enabled: true, // Enabled by default.
 
 		// Cache Management.
-		CacheTTL:         10,    // 10 turns is reasonable for most tasks.
-		MaxBullets:       50,    // Limits memory while allowing good coverage.
+		CacheTTL:         defaultCacheTTL,    // 10 turns is reasonable for most tasks.
+		MaxBullets:       defaultProgMaxBullets,    // Limits memory while allowing good coverage.
 		EvictionStrategy: "lru", // Most recently used bullets are most relevant.
 
 		// Trigger Configuration.
-		ErrorLookback:      5,                                                       // Last 5 steps covers most error contexts.
-		ToolChangeLookback: 3,                                                       // Tool changes are usually immediate.
+		ErrorLookback:      defaultErrorLookback,      // Last 5 steps covers most error contexts.
+		ToolChangeLookback: defaultToolChangeLookback, // Tool changes are usually immediate.
 		EnabledTriggers:    []string{"initial", "error", "tool_change", "interval"}, // All triggers enabled.
 
 		// Query Composition.
 		QueryWeights: QueryWeights{
-			InitialQuery: 0.5, // Base query is most important.
-			ErrorContext: 0.3, // Error context is valuable.
-			ToolContext:  0.2, // Tool context provides useful hints.
+			InitialQuery: defaultQueryWeightInitial, // Base query is most important.
+			ErrorContext: defaultQueryWeightError, // Error context is valuable.
+			ToolContext:  defaultQueryWeightTool, // Tool context provides useful hints.
 		},
 
 		// Performance Limits.
-		MaxRetrievalLatencyMs: 500,  // 500ms keeps UX responsive.
-		MaxTrajectorySteps:    1000, // Prevents unbounded growth in long sessions.
+		MaxRetrievalLatencyMs: defaultMaxRetrievalLatency,  // 500ms keeps UX responsive.
+		MaxTrajectorySteps:    defaultMaxTrajectorySteps, // Prevents unbounded growth in long sessions.
 
 		// Observability.
 		LogRetrievalDecisions: true, // Helpful for debugging.
@@ -278,7 +296,10 @@ errs = append(errs, fmt.Errorf("max_bullets must be > 0, got %d: %w", c.MaxBulle
 
 	validStrategies := []string{"lru", "lfu", "fifo"}
 	if !stringSliceContains(validStrategies, c.EvictionStrategy) {
-		errs = append(errs, fmt.Errorf("eviction_strategy must be one of %v, got %q: %w", validStrategies, c.EvictionStrategy, ErrInvalidEvictionStrategy))
+		errs = append(errs, fmt.Errorf(
+			"eviction_strategy must be one of %v, got %q: %w",
+			validStrategies, c.EvictionStrategy, ErrInvalidEvictionStrategy,
+		))
 	}
 
 	// Validate lookback windows.

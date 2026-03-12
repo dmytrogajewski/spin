@@ -28,7 +28,7 @@ type Service struct {
 // NewService creates a new AGENTS.md service.
 // workDir is the working directory for discovery.
 // gitRoot is optional; pass empty string if not in a git repository.
-func NewService(cfg *Config, workDir string, gitRoot string) *Service {
+func NewService(cfg *Config, workDir, gitRoot string) *Service {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}

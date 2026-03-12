@@ -14,6 +14,14 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+const (
+	defaultMaxToolsPerTurn   = 30
+	defaultMaxToolsPerSearch = 10
+	defaultMaxServersToLoad  = 3
+	defaultSearchTimeout     = 10
+	stickyToolScore          = 0.5
+)
+
 // ToolPriority defines priority levels for tool selection.
 type ToolPriority int
 
@@ -51,10 +59,10 @@ type ToolSelectionConfig struct {
 func DefaultToolSelectionConfig() ToolSelectionConfig {
 	return ToolSelectionConfig{
 		Enabled:           true,
-		MaxToolsPerTurn:   30,
-		MaxToolsPerSearch: 10,
-		MaxServersToLoad:  3,
-		SearchTimeout:     10 * time.Second,
+		MaxToolsPerTurn:   defaultMaxToolsPerTurn,
+		MaxToolsPerSearch: defaultMaxToolsPerSearch,
+		MaxServersToLoad:  defaultMaxServersToLoad,
+		SearchTimeout:     defaultSearchTimeout * time.Second,
 		CoreToolNames:     defaultCoreTools(),
 	}
 }
@@ -388,7 +396,7 @@ func (s *ToolSelector) addStickyTools(candidates []ScoredTool) []ScoredTool {
 		if !existing[name] {
 			candidates = append(candidates, ScoredTool{
 				Tool:       t,
-				Score:      0.5, // Medium score for sticky tools.
+				Score:      stickyToolScore, // Medium score for sticky tools.
 				Priority:   PriorityStaticMCP,
 				Source:     "sticky",
 				IsLoadable: false, // Already loaded.
@@ -473,7 +481,10 @@ func (s *ToolSelector) groupByServerPath(selected []ScoredTool) map[string][]Sco
 }
 
 // handleServerLoadError logs the error and records OAuth failures.
-func (s *ToolSelector) handleServerLoadError(ctx context.Context, err error, serverPath string, scoredTools []ScoredTool, result *loadDynamicToolsResult) {
+func (s *ToolSelector) handleServerLoadError(
+	ctx context.Context, err error, serverPath string,
+	scoredTools []ScoredTool, result *loadDynamicToolsResult,
+) {
 	if isOAuthError(err) {
 		toolNames := make([]string, len(scoredTools))
 		for i, t := range scoredTools {
@@ -572,7 +583,10 @@ func (s *ToolSelector) buildFinalToolList(ctx context.Context, selected []Scored
 }
 
 // addNonLoadableTools adds non-loadable tools from selected candidates, skipping stubs and duplicates.
-func (s *ToolSelector) addNonLoadableTools(ctx context.Context, selected []ScoredTool, seen map[string]bool, result []tools.Tool) []tools.Tool {
+func (s *ToolSelector) addNonLoadableTools(
+	ctx context.Context, selected []ScoredTool,
+	seen map[string]bool, result []tools.Tool,
+) []tools.Tool {
 	for _, st := range selected {
 		if st.IsLoadable {
 			if s.logger != nil {
@@ -595,7 +609,10 @@ func (s *ToolSelector) addNonLoadableTools(ctx context.Context, selected []Score
 }
 
 // addAndRegisterNewTools adds newly loaded tools and registers them to the runtime registry.
-func (s *ToolSelector) addAndRegisterNewTools(ctx context.Context, newlyLoaded []tools.Tool, seen map[string]bool, result []tools.Tool) []tools.Tool {
+func (s *ToolSelector) addAndRegisterNewTools(
+	ctx context.Context, newlyLoaded []tools.Tool,
+	seen map[string]bool, result []tools.Tool,
+) []tools.Tool {
 	for _, t := range newlyLoaded {
 		name := t.Name()
 		if s.logger != nil {

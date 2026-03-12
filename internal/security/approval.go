@@ -120,7 +120,7 @@ func (s *ApprovalService) emitIfPresent(fn func()) {
 
 // checkPolicyShortCircuit checks persisted policies for a short-circuit decision.
 // Returns (true, decision) if a policy was found, (false, false) otherwise.
-func (s *ApprovalService) checkPolicyShortCircuit(ctx context.Context, reqID string, operation Operation) (found bool, approved bool) {
+func (s *ApprovalService) checkPolicyShortCircuit(ctx context.Context, reqID string, operation Operation) (found, approved bool) {
 	if s.store == nil || operation.Command == nil {
 		return false, false
 	}
@@ -235,7 +235,9 @@ func (s *ApprovalService) invokeHandler(ctx context.Context, req ApprovalRequest
 }
 
 // handleModifiedCommand handles approval with a modified command.
-func (s *ApprovalService) handleModifiedCommand(_ context.Context, reqID string, originalCmd *Command, resp ApprovalResponse) (string, bool, error) {
+func (s *ApprovalService) handleModifiedCommand(
+	_ context.Context, reqID string, originalCmd *Command, resp ApprovalResponse,
+) (modifiedCmd string, approved bool, err error) {
 	// Parse modified command.
 	modCmd, err := ParseCommand(resp.ModifiedCommand)
 	if err != nil {
@@ -277,18 +279,18 @@ func (s *ApprovalService) handleModifiedCommand(_ context.Context, reqID string,
 }
 
 // validateModifiedCommand validates a modified command and returns an error if it's not safe.
-func (s *ApprovalService) validateModifiedCommand(reqID string, originalCmd, modCmd *Command) (string, bool, error) {
-	result, err := s.validator.Classify(modCmd)
+func (s *ApprovalService) validateModifiedCommand(reqID string, originalCmd, modCmd *Command) (id string, approved bool, err error) {
+	classifyResult, err := s.validator.Classify(modCmd)
 	if err != nil {
 		s.emitIfPresent(func() { s.emitApprovalDenied(reqID, originalCmd, "modified command validation error: "+err.Error()) })
 		return reqID, false, fmt.Errorf("validation error: %w", err)
 	}
 
-	if result.Classification != CommandSafe {
+	if classifyResult.Classification != CommandSafe {
 		s.emitIfPresent(func() {
-			s.emitApprovalDenied(reqID, originalCmd, "modified command failed validation: "+result.Classification.String())
+			s.emitApprovalDenied(reqID, originalCmd, "modified command failed validation: "+classifyResult.Classification.String())
 		})
-		return reqID, false, fmt.Errorf("modified command not safe: %s: %w", result.Classification, ErrModifiedCommandNotSafe)
+		return reqID, false, fmt.Errorf("modified command not safe: %s: %w", classifyResult.Classification, ErrModifiedCommandNotSafe)
 	}
 
 	return reqID, false, nil
@@ -363,7 +365,7 @@ type Operation struct {
 //
 // This helper function standardizes Operation construction across the codebase,
 // ensuring consistent behavior and simplifying future changes.
-func NewOperation(cmd *Command, reason string, workDir string) Operation {
+func NewOperation(cmd *Command, reason, workDir string) Operation {
 	return Operation{
 		Command: cmd,
 		Reason:  reason,
@@ -374,7 +376,7 @@ func NewOperation(cmd *Command, reason string, workDir string) Operation {
 // NewOperationWithToolCallID creates a new Operation with the given command, reason,
 // work directory, and tool call ID. This is used when the operation is associated
 // with a specific LLM tool call.
-func NewOperationWithToolCallID(cmd *Command, reason string, workDir string, toolCallID string) Operation {
+func NewOperationWithToolCallID(cmd *Command, reason, workDir, toolCallID string) Operation {
 	return Operation{
 		Command:    cmd,
 		Reason:     reason,

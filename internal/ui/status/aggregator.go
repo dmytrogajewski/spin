@@ -7,6 +7,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 )
 
+const charsPerTokenAgg = 4
+
 // Aggregator processes core events and updates the status manager.
 // This is a simple event processor with no rendering responsibilities.
 type Aggregator struct {
@@ -79,7 +81,7 @@ func (a *Aggregator) handleContentDelta(event *events.Event) {
 		return
 	}
 
-	estimatedTokens := max(int64(len(data.Content)/4), 1)
+	estimatedTokens := max(int64(len(data.Content)/charsPerTokenAgg), 1)
 	a.streamTokens += estimatedTokens
 
 	duration := time.Since(a.streamStart)
@@ -89,7 +91,7 @@ func (a *Aggregator) handleContentDelta(event *events.Event) {
 }
 
 func (a *Aggregator) handleContentComplete() {
-	a.manager.SetAgentState("Ready")
+	a.manager.SetAgentState(StateReady)
 	a.streamStart = time.Time{}
 	a.streamTokens = 0
 	a.manager.CalculateTPS(0, 1)

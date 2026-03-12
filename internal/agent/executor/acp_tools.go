@@ -14,9 +14,15 @@ import (
 
 var (
 	ErrSessionWorkingDirectoryNotSet = errors.New("session working directory not set")
-	ErrPathIsOutsideTheAllowedWorkspace = errors.New("path '' is outside the allowed workspace (). Use relative paths or absolute paths within the workspace")
+	ErrPathIsOutsideTheAllowedWorkspace = errors.New(
+		"path '' is outside the allowed workspace (). " +
+			"Use relative paths or absolute paths within the workspace",
+	)
 	ErrSessionWorkingDirectoryNotSet2 = errors.New("session working directory not set")
-	ErrPathIsOutsideTheAllowedWorkspace2 = errors.New("path '' is outside the allowed workspace (). Use relative paths or absolute paths within the workspace")
+	ErrPathIsOutsideTheAllowedWorkspace2 = errors.New(
+		"path '' is outside the allowed workspace (). " +
+			"Use relative paths or absolute paths within the workspace",
+	)
 )
 
 // ACPTerminalTool exposes terminal/create as a tool to the LLM.
@@ -120,7 +126,7 @@ func (t *ACPTerminalTool) validateParams(params tools.ToolParameters) string {
 }
 
 // parseCommand parses a command string into a CommandInfo.
-func (t *ACPTerminalTool) parseCommand(cmdStr, workDir string) (tools.CommandInfo, string) {
+func (t *ACPTerminalTool) parseCommand(cmdStr, workDir string) (cmdInfo tools.CommandInfo, parsedCmd string) {
 	if isShellCommand(cmdStr) {
 		return &simpleCommand{
 			program: "/bin/sh",
@@ -236,7 +242,8 @@ func (t *ACPReadFileTool) Schema() tools.ToolSchema {
 				Properties: map[string]tools.PropertyDefinition{
 					"path": {
 						Type:        "string",
-						Description: "Path to the file. Use relative paths (e.g., 'src/main.py') or absolute paths within the session workspace. Paths outside the workspace are rejected.",
+						Description: "Path to the file. Use relative paths (e.g., 'src/main.py') or absolute paths " +
+							"within the session workspace. Paths outside the workspace are rejected.",
 					},
 				},
 				Required: []string{"path"},
@@ -284,7 +291,10 @@ func (t *ACPReadFileTool) Execute(ctx context.Context, params tools.ToolParamete
 		if strings.Contains(errMsg, "invalid path") {
 			return tools.ToolResult{
 				Success: false,
-				Error:   fmt.Sprintf("failed to read file: path '%s' is outside the allowed workspace. Use a path within the session directory: %s", path, workDir),
+				Error: fmt.Sprintf(
+					"failed to read file: path '%s' is outside the allowed workspace. "+
+						"Use a path within the session directory: %s", path, workDir,
+				),
 			}, nil
 		}
 
@@ -323,7 +333,11 @@ func (t *ACPReadFileTool) resolvePathWithContext(ctx context.Context, path strin
 
 	// Ensure the path is within the workspace.
 	if !isPathWithinWorkspace(cleanPath, workDir) {
-return "", fmt.Errorf("path '%s' is outside the allowed workspace (%s). Use relative paths or absolute paths within the workspace: %w", path, workDir, ErrPathIsOutsideTheAllowedWorkspace)
+		return "", fmt.Errorf(
+			"path '%s' is outside the allowed workspace (%s). "+
+				"Use relative paths or absolute paths within the workspace: %w",
+			path, workDir, ErrPathIsOutsideTheAllowedWorkspace,
+		)
 	}
 
 	return cleanPath, nil
@@ -363,7 +377,8 @@ func (t *ACPWriteFileTool) Schema() tools.ToolSchema {
 				Properties: map[string]tools.PropertyDefinition{
 					"path": {
 						Type:        "string",
-						Description: "Path to the file. Use relative paths (e.g., 'src/main.py') or absolute paths within the session workspace. Paths outside the workspace (like /tmp) are rejected.",
+						Description: "Path to the file. Use relative paths (e.g., 'src/main.py') or absolute paths " +
+							"within the session workspace. Paths outside the workspace (like /tmp) are rejected.",
 					},
 					"content": {
 						Type:        "string",
@@ -423,7 +438,10 @@ func (t *ACPWriteFileTool) Execute(ctx context.Context, params tools.ToolParamet
 		if strings.Contains(errMsg, "invalid path") {
 			return tools.ToolResult{
 				Success: false,
-				Error:   fmt.Sprintf("failed to write file: path '%s' is outside the allowed workspace. Use a path within the session directory: %s", path, workDir),
+				Error: fmt.Sprintf(
+					"failed to write file: path '%s' is outside the allowed workspace. "+
+						"Use a path within the session directory: %s", path, workDir,
+				),
 			}, nil
 		}
 
@@ -462,7 +480,11 @@ func (t *ACPWriteFileTool) resolvePathWithContext(ctx context.Context, path stri
 
 	// Ensure the path is within the workspace.
 	if !isPathWithinWorkspace(cleanPath, workDir) {
-return "", fmt.Errorf("path '%s' is outside the allowed workspace (%s). Use relative paths or absolute paths within the workspace: %w", path, workDir, ErrPathIsOutsideTheAllowedWorkspace2)
+		return "", fmt.Errorf(
+			"path '%s' is outside the allowed workspace (%s). "+
+				"Use relative paths or absolute paths within the workspace: %w",
+			path, workDir, ErrPathIsOutsideTheAllowedWorkspace2,
+		)
 	}
 
 	return cleanPath, nil

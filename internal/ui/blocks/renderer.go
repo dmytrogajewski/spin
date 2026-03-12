@@ -10,6 +10,35 @@ import (
 
 var ErrBlockIsNil = errors.New("block is nil")
 
+// Rendering constants.
+const (
+	msPerSecond       = 1000.0 // milliseconds per second for duration formatting.
+	ellipsisSplitLeft = 0.6    // left portion ratio for mid-ellipsis splitting.
+
+	// Gutter width thresholds for line numbers.
+	gutterThreshold10   = 10
+	gutterThreshold100  = 100
+	gutterThreshold1000 = 1000
+	gutterWidth3        = 3
+	gutterWidth4        = 4
+	gutterWidth5        = 5
+	gutterWidth6        = 6
+
+	// ANSI 256-color codes for block type badges.
+	colorBlue256    = 63
+	colorOrange256  = 208
+	colorYellow256  = 220
+	colorMagenta256 = 205
+	colorPurple256  = 141
+	colorCyan256    = 45
+	colorGreen256   = 34
+	colorGray256    = 244
+	colorRed256     = 196
+
+	// Block ID generation.
+	blockIDSeqMod = 100
+)
+
 // Renderer renders blocks to ANSI terminal output.
 type Renderer struct {
 	width           int                      // Terminal width in columns.
@@ -251,7 +280,7 @@ func (r *Renderer) getExecuteFooterChips(b *Block) []string {
 	}
 
 	if meta.DurationMS != nil {
-		dur := float64(*meta.DurationMS) / 1000.0
+		dur := float64(*meta.DurationMS) / msPerSecond
 		chips = append(chips, fmt.Sprintf("[dur: %.1fs]", dur))
 	}
 
@@ -350,22 +379,23 @@ func (r *Renderer) renderDiff(b *Block) (string, error) {
 	for _, line := range lines {
 		out.WriteString(strings.Repeat(" ", S2))
 
-		if strings.HasPrefix(line, "@@") {
+		switch {
+		case strings.HasPrefix(line, "@@"):
 			// Hunk header.
 			out.WriteString(string(ColorBorder))
 			out.WriteString(line)
 			out.WriteString(string(ColorReset))
-		} else if strings.HasPrefix(line, "+") {
+		case strings.HasPrefix(line, "+"):
 			// Added line.
 			out.WriteString(string(ColorGreen))
 			out.WriteString(line)
 			out.WriteString(string(ColorReset))
-		} else if strings.HasPrefix(line, "-") {
+		case strings.HasPrefix(line, "-"):
 			// Removed line.
 			out.WriteString(string(ColorRed))
 			out.WriteString(line)
 			out.WriteString(string(ColorReset))
-		} else {
+		default:
 			// Context line.
 			out.WriteString(string(ColorMuted))
 			out.WriteString(line)
@@ -395,7 +425,8 @@ func (r *Renderer) renderList(b *Block) (string, error) {
 		out.WriteString(strings.Repeat(" ", S2))
 
 		// Detect bullet type.
-		if strings.HasPrefix(line, "✓ ") || strings.HasPrefix(line, "- [x] ") {
+		switch {
+		case strings.HasPrefix(line, "✓ ") || strings.HasPrefix(line, "- [x] "):
 			// Done item.
 			out.WriteString(string(ColorGreen))
 			out.WriteString("✓")
@@ -408,7 +439,7 @@ func (r *Renderer) renderList(b *Block) (string, error) {
 			out.WriteString(string(ColorDim))
 			out.WriteString(text)
 			out.WriteString(string(ColorReset))
-		} else if strings.HasPrefix(line, "◦ ") {
+		case strings.HasPrefix(line, "◦ "):
 			// Skipped item.
 			out.WriteString(string(ColorMuted))
 			out.WriteString("◦")
@@ -420,7 +451,7 @@ func (r *Renderer) renderList(b *Block) (string, error) {
 			out.WriteString(string(ColorMuted))
 			out.WriteString(text)
 			out.WriteString(string(ColorReset))
-		} else if strings.HasPrefix(line, "• ") || strings.HasPrefix(line, "- [ ] ") {
+		case strings.HasPrefix(line, "• ") || strings.HasPrefix(line, "- [ ] "):
 			// Pending item.
 			out.WriteString("•")
 			out.WriteString(" ")
@@ -428,7 +459,7 @@ func (r *Renderer) renderList(b *Block) (string, error) {
 			text := strings.TrimPrefix(line, "• ")
 			text = strings.TrimPrefix(text, "- [ ] ")
 			out.WriteString(text)
-		} else {
+		default:
 			// Plain text (paragraph).
 			out.WriteString(line)
 		}
@@ -507,9 +538,9 @@ func calculateTotalWidth(graphemes []string) int {
 }
 
 // calculateSplitWidths calculates left and right widths for splitting.
-func calculateSplitWidths(maxWidth int) (int, int) {
-	leftWidth := int(float64(maxWidth-1) * 0.6) // -1 for ellipsis.
-	rightWidth := maxWidth - leftWidth - 1
+func calculateSplitWidths(maxWidth int) (leftWidth, rightWidth int) {
+	leftWidth = int(float64(maxWidth-1) * ellipsisSplitLeft) // -1 for ellipsis.
+	rightWidth = maxWidth - leftWidth - 1
 
 	return leftWidth, rightWidth
 }
@@ -557,36 +588,37 @@ func buildRightPart(graphemes []string, rightWidth int) []string {
 // calcGutterWidth calculates the gutter width for line numbers.
 // Returns 3-6 characters based on line count.
 func calcGutterWidth(lineCount int) int {
-	if lineCount < 10 {
-		return 3
-	} else if lineCount < 100 {
-		return 4
-	} else if lineCount < 1000 {
-		return 5
+	switch {
+	case lineCount < gutterThreshold10:
+		return gutterWidth3
+	case lineCount < gutterThreshold100:
+		return gutterWidth4
+	case lineCount < gutterThreshold1000:
+		return gutterWidth5
+	default:
+		return gutterWidth6
 	}
-
-	return 6
 }
 
 // getBlockTypeColor returns the 256-color background color for a block type badge.
 func (r *Renderer) getBlockTypeColor(blockType BlockType) int {
 	colorMap := map[BlockType]int{
-		BlockTypeExecute:    063, // Blue.
-		BlockTypeRead:       208, // Orange.
-		BlockTypeGrep:       220, // Yellow.
-		BlockTypeApplyPatch: 205, // Magenta.
-		BlockTypePlan:       141, // Purple.
-		BlockTypeSummary:    045, // Cyan.
-		BlockTypeTesting:    034, // Green.
-		BlockTypeNotice:     244, // Gray.
-		BlockTypeError:      196, // Red.
+		BlockTypeExecute:    colorBlue256,
+		BlockTypeRead:       colorOrange256,
+		BlockTypeGrep:       colorYellow256,
+		BlockTypeApplyPatch: colorMagenta256,
+		BlockTypePlan:       colorPurple256,
+		BlockTypeSummary:    colorCyan256,
+		BlockTypeTesting:    colorGreen256,
+		BlockTypeNotice:     colorGray256,
+		BlockTypeError:      colorRed256,
 	}
 
 	if color, exists := colorMap[blockType]; exists {
 		return color
 	}
 
-	return 244 // Gray (fallback).
+	return colorGray256 // fallback.
 }
 
 // getBlockTypeLabel returns the display label for a block type.
@@ -656,7 +688,7 @@ func (r *Renderer) renderExecuteCompletionStatus(b *Block) string {
 
 	// Duration.
 	if meta.DurationMS != nil && *meta.DurationMS > 0 {
-		dur := float64(*meta.DurationMS) / 1000.0
+		dur := float64(*meta.DurationMS) / msPerSecond
 		parts = append(parts, fmt.Sprintf("Duration: %.1fs", dur))
 	}
 

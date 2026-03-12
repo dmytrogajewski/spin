@@ -3,6 +3,8 @@ package tokenizer
 
 import "strings"
 
+const tokensPerWordRatio = 1.3
+
 // Tokenizer provides token counting for text.
 //
 // Different LLM providers may use different tokenization schemes.
@@ -35,7 +37,7 @@ func (t *SimpleTokenizer) Count(text string) int {
 	wordCount := len(words)
 
 	// Approximate: 1.3 tokens per word.
-	tokens := int(float64(wordCount) * 1.3)
+	tokens := int(float64(wordCount) * tokensPerWordRatio)
 
 	// Minimum 1 token for non-empty text.
 	if tokens == 0 && text != "" {

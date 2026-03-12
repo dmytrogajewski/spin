@@ -10,6 +10,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 )
 
+const (
+	cacheKeyExtraPadding      = 2
+	percentMultiplierCache    = 100
+)
+
 // CommandCache provides thread-safe caching of command execution results
 // with TTL (time-to-live) and size-based eviction.
 //
@@ -185,7 +190,7 @@ func (c *CommandCache) Key(cmd *security.Command) string {
 	}
 
 	var sb strings.Builder
-	sb.Grow(len(cmd.Program) + len(strings.Join(cmd.Args, " ")) + len(cmd.WorkDir) + 2)
+	sb.Grow(len(cmd.Program) + len(strings.Join(cmd.Args, " ")) + len(cmd.WorkDir) + cacheKeyExtraPadding)
 	sb.WriteString(cmd.Program)
 	sb.WriteRune(':')
 	sb.WriteString(strings.Join(cmd.Args, " "))
@@ -299,7 +304,7 @@ func (c *CommandCache) Stats() CacheStats {
 
 // String returns a string representation of cache stats.
 func (s CacheStats) String() string {
-	utilization := float64(s.Size) / float64(s.MaxSize) * 100
+	utilization := float64(s.Size) / float64(s.MaxSize) * percentMultiplierCache
 
 	return fmt.Sprintf("Cache: %d entries, %.2f%% utilized (%d/%d bytes)",
 		s.Entries, utilization, s.Size, s.MaxSize)

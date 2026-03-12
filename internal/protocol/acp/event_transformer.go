@@ -87,7 +87,7 @@ func (t *EventTransformer) detectAndSendPlan(ctx context.Context) {
 // transformContentDelta handles content delta events.
 func (t *EventTransformer) transformContentDelta(ctx context.Context, event events.Event) bool {
 	data, ok := event.ContentDeltaData()
-	if !ok || data.Role != "assistant" {
+	if !ok || data.Role != roleAssistant {
 		return false
 	}
 

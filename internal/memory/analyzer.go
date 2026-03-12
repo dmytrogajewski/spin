@@ -6,6 +6,15 @@ import (
 	"strings"
 )
 
+const (
+	codeBlockThreshold       = 500
+	toolOutputThreshold      = 1000
+	priorityCritical         = 100
+	priorityHigh             = 80
+	priorityMedium           = 50
+	charsPerTokenEstimate    = 4
+)
+
 // OffloadCandidate represents content that can be offloaded from context.
 type OffloadCandidate struct {
 	// MessageIndex is the index of the message in the conversation.
@@ -51,8 +60,8 @@ type DefaultContextAnalyzer struct {
 // NewDefaultContextAnalyzer creates an analyzer with sensible defaults.
 func NewDefaultContextAnalyzer() *DefaultContextAnalyzer {
 	return &DefaultContextAnalyzer{
-		CodeBlockThreshold:  500,
-		ToolOutputThreshold: 1000,
+		CodeBlockThreshold:  codeBlockThreshold,
+		ToolOutputThreshold: toolOutputThreshold,
 	}
 }
 
@@ -72,7 +81,7 @@ func (a *DefaultContextAnalyzer) Analyze(messages []AnalyzableMessage) []Offload
 					Reason:       "Large code block",
 					Destination:  ScopeSession,
 					Key:          generateKey("code", i, j),
-					Priority:     100,
+					Priority:     priorityCritical,
 				})
 			}
 		}
@@ -87,7 +96,7 @@ func (a *DefaultContextAnalyzer) Analyze(messages []AnalyzableMessage) []Offload
 					Reason:       "Large tool output",
 					Destination:  ScopeSession,
 					Key:          generateKey("tool_output", i, 0),
-					Priority:     80,
+					Priority:     priorityHigh,
 				})
 			}
 		}
@@ -100,7 +109,7 @@ func (a *DefaultContextAnalyzer) Analyze(messages []AnalyzableMessage) []Offload
 				Reason:       "Important decision",
 				Destination:  ScopePersistent,
 				Key:          generateKey("decision", i, 0),
-				Priority:     50,
+				Priority:     priorityMedium,
 			})
 		}
 	}
@@ -139,25 +148,28 @@ func extractDecision(content string) string {
 	}
 
 	for _, indicator := range indicators {
-		if idx := strings.Index(lower, indicator); idx != -1 {
-			// Extract sentence containing the decision.
-			start := idx
-			// Find start of sentence.
-			for start > 0 && content[start-1] != '.' && content[start-1] != '\n' {
-				start--
-			}
-			// Find end of sentence.
-			end := idx + len(indicator)
-			for end < len(content) && content[end] != '.' && content[end] != '\n' {
-				end++
-			}
-
-			if end < len(content) {
-				end++ // Include the period.
-			}
-
-			return strings.TrimSpace(content[start:end])
+		idx := strings.Index(lower, indicator)
+		if idx == -1 {
+			continue
 		}
+
+		// Extract sentence containing the decision.
+		start := idx
+		// Find start of sentence.
+		for start > 0 && content[start-1] != '.' && content[start-1] != '\n' {
+			start--
+		}
+		// Find end of sentence.
+		end := idx + len(indicator)
+		for end < len(content) && content[end] != '.' && content[end] != '\n' {
+			end++
+		}
+
+		if end < len(content) {
+			end++ // Include the period.
+		}
+
+		return strings.TrimSpace(content[start:end])
 	}
 
 	return ""
@@ -166,7 +178,7 @@ func extractDecision(content string) string {
 // estimateTokens provides a rough estimate of token count.
 // This is a simple heuristic: ~4 characters per token on average.
 func estimateTokens(content string) int {
-	return len(content) / 4
+	return len(content) / charsPerTokenEstimate
 }
 
 // generateKey creates a unique key for offloaded content.

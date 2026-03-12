@@ -151,10 +151,26 @@ func TestValidator_Classify(t *testing.T) {
 	}{
 		{"safe command - ls", &Command{Program: "ls", Args: []string{"-la"}, Raw: "ls -la"}, CommandSafe, false},
 		{"safe command - cat", &Command{Program: "cat", Args: []string{"file.txt"}, Raw: "cat file.txt"}, CommandSafe, false},
-		{"interactive command - mkdir", &Command{Program: "mkdir", Args: []string{"newdir"}, Raw: "mkdir newdir"}, CommandInteractive, false},
-		{"dangerous command - rm -rf", &Command{Program: "rm", Args: []string{"-rf", "test"}, Raw: "rm -rf test"}, CommandDangerous, false},
-		{"forbidden command - rm -rf /", &Command{Program: "rm", Args: []string{"-rf", "/"}, Raw: "rm -rf /"}, CommandForbidden, false},
-		{"unknown command", &Command{Program: "unknowncommand", Args: []string{"arg1"}, Raw: "unknowncommand arg1"}, CommandUnverified, false},
+		{
+			"interactive command - mkdir",
+			&Command{Program: "mkdir", Args: []string{"newdir"}, Raw: "mkdir newdir"},
+			CommandInteractive, false,
+		},
+		{
+			"dangerous command - rm -rf",
+			&Command{Program: "rm", Args: []string{"-rf", "test"}, Raw: "rm -rf test"},
+			CommandDangerous, false,
+		},
+		{
+			"forbidden command - rm -rf /",
+			&Command{Program: "rm", Args: []string{"-rf", "/"}, Raw: "rm -rf /"},
+			CommandForbidden, false,
+		},
+		{
+			"unknown command",
+			&Command{Program: "unknowncommand", Args: []string{"arg1"}, Raw: "unknowncommand arg1"},
+			CommandUnverified, false,
+		},
 		{"nil command", nil, CommandUnverified, true},
 	}
 

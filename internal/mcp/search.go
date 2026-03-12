@@ -7,6 +7,16 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+const (
+	defaultSearchMinScore       = 0.3
+	descriptionScoreWeight      = 0.6
+	exactMatchScore             = 0.9
+	prefixMatchScore            = 0.7
+	containsMatchScore          = 0.75
+	fuzzyMatchThreshold         = 0.5
+	fuzzyMatchWeight            = 0.6
+)
+
 // SearchOptions configures search behavior.
 type SearchOptions struct {
 	// FuzzyMatch enables fuzzy string matching (default: true).
@@ -24,7 +34,7 @@ func DefaultSearchOptions() SearchOptions {
 	return SearchOptions{
 		FuzzyMatch:       true,
 		MatchDescription: true,
-		MinScore:         0.3,
+		MinScore:         defaultSearchMinScore,
 	}
 }
 
@@ -89,7 +99,7 @@ func scoreTool(t tools.Tool, query string, opts SearchOptions) float64 {
 
 	// Score against description (with penalty).
 	if opts.MatchDescription && desc != "" {
-		descScore := scoreString(desc, query, opts.FuzzyMatch) * 0.6 // Description matches worth less.
+		descScore := scoreString(desc, query, opts.FuzzyMatch) * descriptionScoreWeight // Description matches worth less.
 		if descScore > maxScore {
 			maxScore = descScore
 		}
@@ -107,12 +117,12 @@ func scoreString(s, query string, fuzzy bool) float64 {
 
 	// Prefix match.
 	if strings.HasPrefix(s, query) {
-		return 0.9
+		return exactMatchScore
 	}
 
 	// Contains match.
 	if strings.Contains(s, query) {
-		return 0.7
+		return prefixMatchScore
 	}
 
 	// Word boundary match (query matches start of a word).
@@ -121,7 +131,7 @@ func scoreString(s, query string, fuzzy bool) float64 {
 	})
 	for _, word := range words {
 		if strings.HasPrefix(word, query) {
-			return 0.75
+			return containsMatchScore
 		}
 	}
 
@@ -132,8 +142,8 @@ func scoreString(s, query string, fuzzy bool) float64 {
 		maxLen := max(len(s), len(query))
 		if maxLen > 0 {
 			similarity := 1.0 - float64(distance)/float64(maxLen)
-			if similarity >= 0.5 {
-				return similarity * 0.6 // Fuzzy matches worth less.
+			if similarity >= fuzzyMatchThreshold {
+				return similarity * fuzzyMatchWeight // Fuzzy matches worth less.
 			}
 		}
 	}
@@ -143,11 +153,11 @@ func scoreString(s, query string, fuzzy bool) float64 {
 
 // levenshteinDistance calculates the edit distance between two strings.
 func levenshteinDistance(s1, s2 string) int {
-	if len(s1) == 0 {
+	if s1 == "" {
 		return len(s2)
 	}
 
-	if len(s2) == 0 {
+	if s2 == "" {
 		return len(s1)
 	}
 

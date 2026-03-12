@@ -380,11 +380,9 @@ func TestGolden_LoaderV2_MissingFieldsWithDefaults(t *testing.T) {
 		// It's OK if it still fails due to some truly required fields
 		// The point is that defaults are applied.
 		t.Logf("Config with missing fields failed as expected: %v", err)
-	} else {
+	} else if cfg.LLM.Provider != "" {
 		// If it passes, verify defaults were applied.
-		if cfg.LLM.Provider != "" {
-			t.Logf("Defaults applied: provider=%s", cfg.LLM.Provider)
-		}
+		t.Logf("Defaults applied: provider=%s", cfg.LLM.Provider)
 	}
 }
 

@@ -7,6 +7,16 @@ import (
 	"github.com/dmytrogajewski/spin/internal/detection"
 )
 
+const (
+	minSnapshotsForAnalysis = 3
+	minPatternsForTool      = 3
+	toolCycleConfidence     = 0.7
+	minPatternsForError     = 3
+	errorCycleConfidence    = 0.8
+	minPatternsForOscill    = 2
+	minPatternsForABBA      = 4
+)
+
 // PatternDetector provides additional pattern detection methods
 // that can be used in conjunction with the main detector.
 type PatternDetector struct {
@@ -106,7 +116,7 @@ func (pt PatternType) String() string {
 
 // analyzeResponsePatterns detects more sophisticated response patterns.
 func (pd *PatternDetector) analyzeResponsePatterns(snapshots []Snapshot) PatternResult {
-	if len(snapshots) < 3 {
+	if len(snapshots) < minSnapshotsForAnalysis {
 		return PatternResult{Type: PatternNone}
 	}
 
@@ -158,7 +168,7 @@ func (pd *PatternDetector) analyzeResponsePatterns(snapshots []Snapshot) Pattern
 	if pd.detectCircularReasoning(snapshots) {
 		return PatternResult{
 			Type:       PatternCircularReasoning,
-			Confidence: 0.7,
+			Confidence: toolCycleConfidence,
 			Details:    "detected circular reasoning patterns in responses",
 			Suggestion: "The agent appears to be going in circles. Try providing a concrete example or breaking down the problem.",
 		}
@@ -169,7 +179,7 @@ func (pd *PatternDetector) analyzeResponsePatterns(snapshots []Snapshot) Pattern
 
 // analyzeToolPatterns detects problematic tool usage patterns.
 func (pd *PatternDetector) analyzeToolPatterns(snapshots []Snapshot) PatternResult {
-	if len(snapshots) < 3 {
+	if len(snapshots) < minSnapshotsForAnalysis {
 		return PatternResult{Type: PatternNone}
 	}
 
@@ -209,7 +219,7 @@ func (pd *PatternDetector) analyzeToolPatterns(snapshots []Snapshot) PatternResu
 	if pd.detectOscillatingTools(snapshots) {
 		return PatternResult{
 			Type:       PatternOscillatingTools,
-			Confidence: 0.8,
+			Confidence: errorCycleConfidence,
 			Details:    "detected oscillating tool usage patterns",
 			Suggestion: "Agent is alternating between tools without clear progress. Try providing more specific direction.",
 		}
@@ -220,7 +230,7 @@ func (pd *PatternDetector) analyzeToolPatterns(snapshots []Snapshot) PatternResu
 
 // analyzeErrorPatterns detects problematic error patterns.
 func (pd *PatternDetector) analyzeErrorPatterns(snapshots []Snapshot) PatternResult {
-	if len(snapshots) < 2 {
+	if len(snapshots) < minPatternsForOscill {
 		return PatternResult{Type: PatternNone}
 	}
 
@@ -289,7 +299,7 @@ func (pd *PatternDetector) detectCircularReasoning(snapshots []Snapshot) bool {
 
 // detectOscillatingTools checks if tools are being used in an oscillating pattern.
 func (pd *PatternDetector) detectOscillatingTools(snapshots []Snapshot) bool {
-	if len(snapshots) < 4 {
+	if len(snapshots) < minPatternsForABBA {
 		return false
 	}
 
@@ -306,7 +316,7 @@ func (pd *PatternDetector) detectOscillatingTools(snapshots []Snapshot) bool {
 	}
 
 	// Check for alternating pattern: toolA, toolB, toolA, toolB.
-	if len(snapshots) >= 4 {
+	if len(snapshots) >= minPatternsForABBA {
 		pattern := []string{toolPattern[0], toolPattern[1], toolPattern[2], toolPattern[3]}
 		if pattern[0] != "" && pattern[1] != "" && pattern[0] != pattern[1] &&
 			pattern[2] != "" && pattern[3] != "" && pattern[2] == pattern[0] && pattern[3] == pattern[1] {

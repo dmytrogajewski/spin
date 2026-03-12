@@ -16,6 +16,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
 
+const (
+	defaultHistThreshold   = 0.8
+	defaultHistTargetRatio = 0.7
+	defaultHistBufSize     = 4096
+	percentMul             = 100
+)
+
 // Common errors for history operations.
 var (
 	ErrEmptyHistory    = errors.New("history is empty")
@@ -43,7 +50,7 @@ var (
 //
 // Example:
 //
-//	history := NewHistory(4096, tokenizer)
+//	history := NewHistory(defaultHistBufSize, tokenizer)
 //	history.AddSystemMessage("You are helpful")
 //	history.AddUserMessage("Hello")
 //
@@ -78,8 +85,8 @@ type CompressionConfig struct {
 func DefaultCompressionConfig() CompressionConfig {
 	return CompressionConfig{
 		Enabled:     true,
-		Threshold:   0.8,
-		TargetRatio: 0.7,
+		Threshold:   defaultHistThreshold,
+		TargetRatio: defaultHistTargetRatio,
 	}
 }
 
@@ -132,7 +139,7 @@ func (h *History) SetCompressionConfig(cfg CompressionConfig) {
 //   - maxTokens: 4096
 //   - tokenizer: SimpleTokenizer
 func NewHistoryWithDefaults() *History {
-	return NewHistory(4096, &tokenizer.SimpleTokenizer{})
+	return NewHistory(defaultHistBufSize, &tokenizer.SimpleTokenizer{})
 }
 
 // MaxTokens returns the maximum token limit for this history.
@@ -265,7 +272,7 @@ func (h *History) emitCompressionEventLocked(beforeCount, beforeTokens, afterCou
 				"Messages: %d->%d, Tokens: %d->%d, Ratio: %.1f%%",
 				beforeCount, afterCount,
 				beforeTokens, afterTokens,
-				ratio*100,
+				ratio*percentMul,
 			),
 		},
 	})

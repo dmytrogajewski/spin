@@ -15,6 +15,10 @@ import (
 	mcpSDK "github.com/mark3labs/mcp-go/mcp"
 )
 
+const (
+	smitheryClientTimeout = 30 * time.Second
+	schemeHTTPS           = "https"
+)
 
 // SmitheryClient implements an MCP client for Smithery's connection-based API.
 // Smithery uses a different protocol than standard MCP transports:
@@ -94,7 +98,7 @@ func NewSmitheryClient(config SmitheryConfig) (*SmitheryClient, error) {
 		mcpURL:    config.MCPURL,
 		namespace: config.Namespace,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: smitheryClientTimeout,
 		},
 		logger: config.Logger,
 	}, nil
@@ -126,7 +130,7 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 		return fmt.Errorf("parse connect URL: %w", err)
 	}
 
-	if parsedURL.Scheme != "https" {
+	if parsedURL.Scheme != schemeHTTPS {
 		return fmt.Errorf("invalid URL scheme %q, expected https", parsedURL.Scheme)
 	}
 
@@ -276,7 +280,7 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 		return nil, fmt.Errorf("parse rpc URL: %w", err)
 	}
 
-	if parsedURL.Scheme != "https" {
+	if parsedURL.Scheme != schemeHTTPS {
 		return nil, fmt.Errorf("invalid URL scheme %q, expected https", parsedURL.Scheme)
 	}
 

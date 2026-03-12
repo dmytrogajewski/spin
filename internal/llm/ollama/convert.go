@@ -26,10 +26,15 @@ import (
 	"github.com/openai/openai-go"
 )
 
+const roleToolResult = "tool"
+
 // convertMessageToOllama converts an OpenAI message to Ollama format.
 // This uses a simplified approach by marshaling and unmarshaling JSON.
 // The toolCallIDToName map is used to resolve tool_call_id to tool_name for tool result messages.
-func convertMessageToOllama(msg openai.ChatCompletionMessageParamUnion, toolCallIDToName map[string]string, logger *slog.Logger, ctx context.Context) api.Message {
+func convertMessageToOllama(
+	msg openai.ChatCompletionMessageParamUnion, toolCallIDToName map[string]string,
+	logger *slog.Logger, ctx context.Context,
+) api.Message {
 	genericMsg, err := parseGenericMessage(msg)
 	if err != nil {
 		return api.Message{}
@@ -46,7 +51,7 @@ func convertMessageToOllama(msg openai.ChatCompletionMessageParamUnion, toolCall
 
 	// For tool result messages, set ToolName from the mapping
 	// This is required for Gemini and other models that need tool_name instead of tool_call_id.
-	if genericMsg.Role == "tool" && genericMsg.ToolCallID != "" && toolCallIDToName != nil {
+	if genericMsg.Role == roleToolResult && genericMsg.ToolCallID != "" && toolCallIDToName != nil {
 		if toolName, ok := toolCallIDToName[genericMsg.ToolCallID]; ok {
 			result.ToolName = toolName
 			logger.DebugContext(ctx, "set tool_name for tool result message",
@@ -64,7 +69,7 @@ func convertMessageToOllama(msg openai.ChatCompletionMessageParamUnion, toolCall
 				"mapping_size", len(toolCallIDToName),
 				"mapping_keys", mapKeys)
 		}
-	} else if genericMsg.Role == "tool" {
+	} else if genericMsg.Role == roleToolResult {
 		logger.WarnContext(ctx, "tool message without tool_call_id or mapping",
 			"has_tool_call_id", genericMsg.ToolCallID != "",
 			"has_mapping", toolCallIDToName != nil)
@@ -89,7 +94,9 @@ type genericMessage struct {
 //  2. Positional fallback: For tool messages whose tool_call_id is not in the mapping
 //     (e.g. due to assistant message parsing issues or serialization differences),
 //     infer tool_name from the preceding assistant message by tool message order.
-func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion, logger *slog.Logger, ctx context.Context) map[string]string {
+func buildToolCallIDToNameMap(
+	messages []openai.ChatCompletionMessageParamUnion, logger *slog.Logger, ctx context.Context,
+) map[string]string {
 	result := make(map[string]string)
 
 	// Pass 1: Extract from assistant messages.
@@ -106,7 +113,10 @@ func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion,
 }
 
 // extractToolCallMappings extracts tool_call_id -> tool_name from assistant messages.
-func extractToolCallMappings(messages []openai.ChatCompletionMessageParamUnion, result map[string]string, logger *slog.Logger, ctx context.Context) {
+func extractToolCallMappings(
+	messages []openai.ChatCompletionMessageParamUnion, result map[string]string,
+	logger *slog.Logger, ctx context.Context,
+) {
 	for msgIdx, msg := range messages {
 		genericMsg, err := parseGenericMessage(msg)
 		if err != nil {
@@ -127,7 +137,10 @@ func extractToolCallMappings(messages []openai.ChatCompletionMessageParamUnion, 
 }
 
 // extractMappingsFromToolCalls unmarshals and extracts id->name mappings from raw tool calls JSON.
-func extractMappingsFromToolCalls(toolCallsJSON json.RawMessage, msgIdx int, result map[string]string, logger *slog.Logger, ctx context.Context) {
+func extractMappingsFromToolCalls(
+	toolCallsJSON json.RawMessage, msgIdx int, result map[string]string,
+	logger *slog.Logger, ctx context.Context,
+) {
 	var toolCalls []struct {
 		ID       string `json:"id"`
 		Function struct {
@@ -155,7 +168,10 @@ func extractMappingsFromToolCalls(toolCallsJSON json.RawMessage, msgIdx int, res
 }
 
 // resolveUnmappedToolMessages applies positional fallback for tool messages without a mapping.
-func resolveUnmappedToolMessages(messages []openai.ChatCompletionMessageParamUnion, result map[string]string, logger *slog.Logger, ctx context.Context) {
+func resolveUnmappedToolMessages(
+	messages []openai.ChatCompletionMessageParamUnion, result map[string]string,
+	logger *slog.Logger, ctx context.Context,
+) {
 	for i, msg := range messages {
 		genericMsg, err := parseGenericMessage(msg)
 		if err != nil || genericMsg.Role != "tool" || genericMsg.ToolCallID == "" {
@@ -199,7 +215,7 @@ func scanPrecedingMessages(messages []openai.ChatCompletionMessageParamUnion, to
 			continue
 		}
 
-		if genericMsg.Role == "tool" {
+		if genericMsg.Role == roleToolResult {
 			toolCount++
 			continue
 		}
@@ -473,7 +489,9 @@ func extractRequired(params map[string]any) []string {
 
 // mapOllamaDoneReasonToOpenAICompletion maps Ollama's done_reason to OpenAI's finish_reason for non-streaming.
 // This is separate from the chunk version because OpenAI uses different types for streaming vs non-streaming.
-func mapOllamaDoneReasonToOpenAICompletion(doneReason string, hasToolCalls bool, logger *slog.Logger, ctx context.Context) openai.ChatCompletionChoicesFinishReason {
+func mapOllamaDoneReasonToOpenAICompletion(
+	doneReason string, hasToolCalls bool, logger *slog.Logger, ctx context.Context,
+) openai.ChatCompletionChoicesFinishReason {
 	// Tool calls take precedence.
 	if hasToolCalls {
 		return openai.ChatCompletionChoicesFinishReasonToolCalls
@@ -557,7 +575,9 @@ func convertOllamaResponseToOpenAI(resp api.ChatResponse, model string, logger *
 // mapOllamaDoneReasonToOpenAI maps Ollama's done_reason to OpenAI's finish_reason.
 // Ollama uses: "stop", "load", "unload", "length" (when hitting token limit)
 // OpenAI uses: "stop", "length", "tool_calls", "content_filter", "function_call".
-func mapOllamaDoneReasonToOpenAI(doneReason string, hasToolCalls bool, logger *slog.Logger, ctx context.Context) openai.ChatCompletionChunkChoicesFinishReason {
+func mapOllamaDoneReasonToOpenAI(
+	doneReason string, hasToolCalls bool, logger *slog.Logger, ctx context.Context,
+) openai.ChatCompletionChunkChoicesFinishReason {
 	// Tool calls take precedence.
 	if hasToolCalls {
 		return openai.ChatCompletionChunkChoicesFinishReasonToolCalls
@@ -577,7 +597,9 @@ func mapOllamaDoneReasonToOpenAI(doneReason string, hasToolCalls bool, logger *s
 }
 
 // convertOllamaChunkToOpenAI converts an Ollama ChatResponse (streaming) to OpenAI ChatCompletionChunk.
-func convertOllamaChunkToOpenAI(resp api.ChatResponse, chunkID, model string, logger *slog.Logger, ctx context.Context) openai.ChatCompletionChunk {
+func convertOllamaChunkToOpenAI(
+	resp api.ChatResponse, chunkID, model string, logger *slog.Logger, ctx context.Context,
+) openai.ChatCompletionChunk {
 	chunk := openai.ChatCompletionChunk{
 		ID:      chunkID,
 		Created: time.Now().Unix(),

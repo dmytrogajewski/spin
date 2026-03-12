@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const maxConsecutiveNonPlanLines = 2
+
 // planScanner tracks state while scanning text for plan sections.
 type planScanner struct {
 	inPlanSection           bool
@@ -72,7 +74,7 @@ func (ps *planScanner) handleEmptyLine() {
 	}
 
 	ps.consecutiveNonPlanLines++
-	if ps.consecutiveNonPlanLines >= 2 {
+	if ps.consecutiveNonPlanLines >= maxConsecutiveNonPlanLines {
 		ps.inPlanSection = false
 		ps.consecutiveNonPlanLines = 0
 	}
@@ -81,7 +83,7 @@ func (ps *planScanner) handleEmptyLine() {
 // handleNonPlanLine processes a non-plan-pattern line within a plan section.
 func (ps *planScanner) handleNonPlanLine() {
 	ps.consecutiveNonPlanLines++
-	if ps.consecutiveNonPlanLines >= 2 {
+	if ps.consecutiveNonPlanLines >= maxConsecutiveNonPlanLines {
 		ps.inPlanSection = false
 		ps.consecutiveNonPlanLines = 0
 	}

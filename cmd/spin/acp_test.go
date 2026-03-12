@@ -24,7 +24,9 @@ import (
 )
 
 // createACPAgentComponents is a test helper that creates ACP agent components using the new refactored flow.
-func createACPAgentComponents(t *testing.T, workDir string, provider llm.Provider, cfg *config.V2) (*agent.Agent, *events.EventEmitter, *executor.ACPRuntime) {
+func createACPAgentComponents(
+	t *testing.T, workDir string, provider llm.Provider, cfg *config.V2,
+) (*agent.Agent, *events.EventEmitter, *executor.ACPRuntime) {
 	t.Helper()
 
 	logger := slog.Default()
@@ -155,7 +157,7 @@ func TestBuildProviderForACP_OpenAI(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, provider)
-	defer provider.Close()
+	provider.Close()
 }
 
 // TestBuildProviderForACP_UnknownProvider tests error handling for unknown provider.

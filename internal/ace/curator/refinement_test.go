@@ -204,7 +204,7 @@ func TestRefinement_DefaultConfig(t *testing.T) {
 
 	// Test lazy with defaults.
 	curLazy := NewCurator(pb, embedder,
-		WithRefinementMode(RefinementModeLazy, nil), WithRefinementMode(RefinementModeLazy, nil), // nil config should use defaults.
+		WithRefinementMode(RefinementModeLazy, nil), // nil config should use defaults.
 	)
 
 	refinement, err := curLazy.Refine(ctx)
@@ -213,7 +213,7 @@ func TestRefinement_DefaultConfig(t *testing.T) {
 
 	// Test proactive with defaults.
 	curProactive := NewCurator(pb, embedder,
-		WithRefinementMode(RefinementModeProactive, nil), WithRefinementMode(RefinementModeProactive, nil), // nil config should use defaults.
+		WithRefinementMode(RefinementModeProactive, nil), // nil config should use defaults.
 	)
 
 	insights := []*reflector.Insight{

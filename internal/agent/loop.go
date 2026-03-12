@@ -16,6 +16,14 @@ import (
 	"github.com/dmytrogajewski/spin/internal/task"
 )
 
+const (
+	tokensPerChar            = 4 // approximate chars per token.
+	escalateSeverityThreshold = 3
+	llmDefaultTimeout        = 5 * time.Minute
+	shortConversationTurns   = 10
+	mediumConversationTurns  = 30
+)
+
 var ErrAgentCallllmContextCanceledContextDeadline = errors.New("Agent.callLLM: context canceled: context deadline exceeded")
 
 // estimateTokenCount provides a rough token count estimate for messages.
@@ -24,12 +32,12 @@ func estimateTokenCount(messages []message.Message) int {
 	total := 0
 	for _, msg := range messages {
 		// Content tokens (roughly 1 token per 4 characters).
-		total += len(msg.Content) / 4
+		total += len(msg.Content) / tokensPerChar
 
 		// Tool call tokens.
 		for _, tc := range msg.ToolCalls {
-			total += len(tc.Function.Name) / 4
-			total += len(tc.Function.Arguments) / 4
+			total += len(tc.Function.Name) / tokensPerChar
+			total += len(tc.Function.Arguments) / tokensPerChar
 			total += 8 // overhead per tool call.
 		}
 
@@ -53,7 +61,10 @@ func estimateTokenCount(messages []message.Message) int {
 //
 // If trajCtx is provided and progressive context is enabled, uses progressive
 // retrieval with caching. Otherwise falls back to simple retrieval.
-func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message, t task.Task, resp *Response, trajCtx *trajectory.Context) ([]message.Message, *Response, error) {
+func (a *Agent) executeAgentLoop(
+	ctx context.Context, messages []message.Message,
+	t task.Task, resp *Response, trajCtx *trajectory.Context,
+) ([]message.Message, *Response, error) {
 	maxTurns := a.maxTurns
 	allRetrievedBullets := make([]*bullet.Bullet, 0)
 
@@ -83,7 +94,9 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 		}
 
 		lastErr = nil
-		a.logger.DebugContext(ctx, "LLM response received", "turn", turn+1, "content_len", len(content), "tool_calls", len(toolCalls), "finish_reason", finishReason)
+		a.logger.DebugContext(ctx, "LLM response received",
+			"turn", turn+1, "content_len", len(content),
+			"tool_calls", len(toolCalls), "finish_reason", finishReason)
 
 		messages, shouldStop, err := a.runCycleDetectionIfEnabled(ctx, messages, llmResp, turn+1, resp)
 		if err != nil {
@@ -187,7 +200,10 @@ type llmRetryResult struct {
 }
 
 // callLLMWithRetries calls the LLM with retry logic for transient errors.
-func (a *Agent) callLLMWithRetries(ctx context.Context, messages []message.Message, t task.Task, bullets []*bullet.Bullet, turn int, resp *Response) (*openai.ChatCompletion, string, []ToolCall, string, error) {
+func (a *Agent) callLLMWithRetries(
+	ctx context.Context, messages []message.Message,
+	t task.Task, bullets []*bullet.Bullet, turn int, resp *Response,
+) (completion *openai.ChatCompletion, content string, toolCalls []ToolCall, finishReason string, err error) {
 	const maxRetries = 3
 
 	for retry := 0; retry <= maxRetries; retry++ {
@@ -228,7 +244,11 @@ func (a *Agent) logRetrySuccess(ctx context.Context, retry, turn int) {
 
 // handleEmptyResponse handles an empty LLM response during retries.
 // Returns (true, err) if retries are done, (false, nil) to continue retrying.
-func (a *Agent) handleEmptyResponse(ctx context.Context, retry, maxRetries, turn int, resp *Response, llmResp *openai.ChatCompletion, content string, toolCalls []ToolCall) (bool, error) {
+func (a *Agent) handleEmptyResponse(
+	ctx context.Context, retry, maxRetries, turn int,
+	resp *Response, llmResp *openai.ChatCompletion,
+	content string, toolCalls []ToolCall,
+) (bool, error) {
 	if retry < maxRetries {
 		if err := a.waitWithBackoff(ctx, retry, turn, resp, "Received empty response from LLM, retrying"); err != nil {
 			return true, err
@@ -244,7 +264,10 @@ func (a *Agent) handleEmptyResponse(ctx context.Context, retry, maxRetries, turn
 }
 
 // handleLLMError handles an error from the LLM call, deciding whether to retry.
-func (a *Agent) handleLLMError(ctx context.Context, err error, retry, maxRetries, turn int, resp *Response) (shouldReturn bool, retErr error) {
+func (a *Agent) handleLLMError(
+	ctx context.Context, err error, retry, maxRetries, turn int,
+	resp *Response,
+) (shouldReturn bool, retErr error) {
 	if ctx.Err() != nil {
 		a.logger.ErrorContext(ctx, "LLM call failed (context canceled)", "turn", turn+1, "error", err)
 		resp.Error = fmt.Errorf("llm call failed: %w", err)
@@ -288,7 +311,10 @@ func (a *Agent) waitWithBackoff(ctx context.Context, retry, turn int, resp *Resp
 }
 
 // emitEmptyResponseWarning emits a warning event for empty LLM responses after retries.
-func (a *Agent) emitEmptyResponseWarning(ctx context.Context, turn, maxRetries int, llmResp *openai.ChatCompletion, content string, toolCalls []ToolCall) {
+func (a *Agent) emitEmptyResponseWarning(
+	ctx context.Context, turn, maxRetries int,
+	llmResp *openai.ChatCompletion, content string, toolCalls []ToolCall,
+) {
 	a.logger.WarnContext(ctx, "Received empty response from LLM after retries, breaking loop",
 		"turn", turn+1, "retries_exhausted", maxRetries,
 		"llm_resp_nil", llmResp == nil, "content_len", len(content), "tool_calls", len(toolCalls))
@@ -306,7 +332,12 @@ func (a *Agent) emitEmptyResponseWarning(ctx context.Context, turn, maxRetries i
 
 // processLLMResponse processes a valid LLM response, handling tool calls, truncation, and final messages.
 // Returns whether the loop should continue and the updated messages.
-func (a *Agent) processLLMResponse(ctx context.Context, messages []message.Message, llmResp *openai.ChatCompletion, content string, toolCalls []ToolCall, finishReason string, turn int, resp *Response) (bool, []message.Message) {
+func (a *Agent) processLLMResponse(
+	ctx context.Context, messages []message.Message,
+	llmResp *openai.ChatCompletion, content string,
+	toolCalls []ToolCall, finishReason string,
+	turn int, resp *Response,
+) (bool, []message.Message) {
 	if len(toolCalls) > 0 {
 		a.logger.DebugContext(ctx, "processing tool calls", "count", len(toolCalls), "turn", turn+1)
 		messages = a.processToolCallsFromCompletion(ctx, messages, llmResp, resp)
@@ -339,7 +370,10 @@ func (a *Agent) processLLMResponse(ctx context.Context, messages []message.Messa
 }
 
 // handleTruncatedResponse handles a truncated LLM response by adding continuation messages.
-func (a *Agent) handleTruncatedResponse(ctx context.Context, messages []message.Message, content string, turn int) (bool, []message.Message) {
+func (a *Agent) handleTruncatedResponse(
+	ctx context.Context, messages []message.Message,
+	content string, turn int,
+) (bool, []message.Message) {
 	a.logger.WarnContext(ctx, "LLM response truncated (finish_reason=length), continuing",
 		"turn", turn+1, "content_len", len(content))
 
@@ -361,7 +395,10 @@ func (a *Agent) handleTruncatedResponse(ctx context.Context, messages []message.
 }
 
 // runCycleDetectionIfEnabled runs cycle detection if enabled, returning whether to stop.
-func (a *Agent) runCycleDetectionIfEnabled(ctx context.Context, messages []message.Message, llmResp *openai.ChatCompletion, turn int, resp *Response) ([]message.Message, bool, error) {
+func (a *Agent) runCycleDetectionIfEnabled(
+	ctx context.Context, messages []message.Message,
+	llmResp *openai.ChatCompletion, turn int, resp *Response,
+) ([]message.Message, bool, error) {
 	if !a.cycleDetection {
 		return messages, false, nil
 	}
@@ -390,7 +427,10 @@ func (a *Agent) runCycleDetectionIfEnabled(ctx context.Context, messages []messa
 //
 // Returns the modified messages (with intervention added if applicable),
 // whether to stop the agent loop, and any error.
-func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Message, llmResp *openai.ChatCompletion, turn int, resp *Response) ([]message.Message, bool, error) {
+func (a *Agent) handleCycleDetection(
+	ctx context.Context, messages []message.Message,
+	llmResp *openai.ChatCompletion, turn int, resp *Response,
+) ([]message.Message, bool, error) {
 	content := getContent(llmResp)
 	toolCalls := getToolCalls(llmResp)
 
@@ -446,7 +486,7 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 	})
 
 	// If this was an escalation intervention, pause the agent.
-	if intervention.Severity() >= 3 {
+	if intervention.Severity() >= escalateSeverityThreshold {
 		resp.FinishReason = "cycle_intervention"
 
 		return messages, true, nil
@@ -513,10 +553,13 @@ func (a *Agent) emitTurnStart(turn int) {
 }
 
 // callLLMWithTimeout calls the LLM provider with timeout protection to prevent getting stuck.
-func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []message.Message, t task.Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
+func (a *Agent) callLLMWithTimeout(
+	ctx context.Context, messages []message.Message,
+	t task.Task, bullets []*bullet.Bullet,
+) (*openai.ChatCompletion, error) {
 	// Use a reasonable timeout for LLM calls (5 minutes)
 	// Don't use agent timeout which may be very long for multi-step tasks.
-	llmTimeout := 5 * time.Minute
+	llmTimeout := llmDefaultTimeout
 
 	// Check if parent context has a deadline that's already expired.
 	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
@@ -531,7 +574,9 @@ func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []message.Messa
 		}
 	}
 
-	a.logger.DebugContext(ctx, "calling LLM with timeout", "timeout", llmTimeout, "message_count", len(messages), "bullets_count", len(bullets))
+	a.logger.DebugContext(ctx, "calling LLM with timeout",
+		"timeout", llmTimeout, "message_count", len(messages),
+		"bullets_count", len(bullets))
 
 	// Create context with LLM timeout, derived from parent context
 	// This ensures cancellation propagates from parent context.
@@ -570,11 +615,11 @@ func (a *Agent) addFinalMessage(messages []message.Message, content string) []me
 func (a *Agent) selectIntervention(_ detection.CycleType, turnCount int) detection.Intervention {
 	// Escalation ladder based on turn count.
 	switch {
-	case turnCount < 10:
+	case turnCount < shortConversationTurns:
 		// Early cycles: Use soft intervention (reflection).
 		return &detection.ReflectionIntervention{}
 
-	case turnCount < 30:
+	case turnCount < mediumConversationTurns:
 		// Mid-stage cycles: Use medium intervention (context summarization)
 		// Using reflection intervention (context summarization requires compressor integration).
 		return &detection.ReflectionIntervention{}

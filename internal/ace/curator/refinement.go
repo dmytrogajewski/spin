@@ -7,6 +7,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/refine"
 )
 
+const (
+	bytesPerMB                  = 1024 * 1024
+	targetRefinementQuality     = 0.90
+)
+
 // RefinementStrategy defines how and when playbook refinement occurs.
 type RefinementStrategy interface {
 	// ShouldRefine returns true if playbook should be refined now.
@@ -122,7 +127,7 @@ func newProactiveRefinementStrategy(cfg ProactiveRefinementConfig) RefinementStr
 
 	maxSizeBytes := cfg.MaxSizeBytes
 	if maxSizeBytes == 0 {
-		maxSizeBytes = 1024 * 1024 // 1MB.
+		maxSizeBytes = bytesPerMB // 1MB.
 	}
 
 	minScore := cfg.MinUtilityScore
@@ -184,13 +189,16 @@ func refinePlaybook(ctx context.Context, pb *playbook.Playbook, minUtilityScore 
 }
 
 // refineWithOrchestrator is shared logic for strategies using the orchestrator.
-func refineWithOrchestrator(ctx context.Context, orchestrator *refine.RefinementOrchestrator, minUtilityScore float64, reason string) (*RefinementResult, error) {
+func refineWithOrchestrator(
+	ctx context.Context, orchestrator *refine.RefinementOrchestrator,
+	minUtilityScore float64, reason string,
+) (*RefinementResult, error) {
 	req := refine.RefinementRequest{
 		PruneEnabled:    true,
 		MergeEnabled:    true,
 		ArchiveEnabled:  false,
 		MinUtility:      minUtilityScore,
-		MergeSimilarity: 0.90,
+		MergeSimilarity: targetRefinementQuality,
 	}
 
 	result, err := orchestrator.Refine(ctx, req)
@@ -205,10 +213,16 @@ func refineWithOrchestrator(ctx context.Context, orchestrator *refine.Refinement
 	}, nil
 }
 
-func (l *lazyRefinementStrategy) refineWithOrchestrator(ctx context.Context, _ *playbook.Playbook, minUtilityScore float64, reason string) (*RefinementResult, error) {
+func (l *lazyRefinementStrategy) refineWithOrchestrator(
+	ctx context.Context, _ *playbook.Playbook,
+	minUtilityScore float64, reason string,
+) (*RefinementResult, error) {
 	return refineWithOrchestrator(ctx, l.orchestrator, minUtilityScore, reason)
 }
 
-func (p *proactiveRefinementStrategy) refineWithOrchestrator(ctx context.Context, _ *playbook.Playbook, minUtilityScore float64, reason string) (*RefinementResult, error) {
+func (p *proactiveRefinementStrategy) refineWithOrchestrator(
+	ctx context.Context, _ *playbook.Playbook,
+	minUtilityScore float64, reason string,
+) (*RefinementResult, error) {
 	return refineWithOrchestrator(ctx, p.orchestrator, minUtilityScore, reason)
 }

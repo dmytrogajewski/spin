@@ -16,6 +16,18 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 )
 
+const (
+	builderAdapterUtilityThresh = 0.1
+	builderAdapterMaxMemSize    = 1000
+	builderRefineMaxBullets     = 1000
+	builderRefineMaxTokens      = 500000
+	builderRefineMinUtil        = 0.1
+	builderRefineCheckInterval  = 100
+	cacheTTLMinutes             = 5
+	cacheMaxBytes               = 10 * 1024 * 1024
+	policyStoreTTL              = 30 * time.Second
+)
+
 var ErrAceNotEnabled = errors.New("ACE not enabled")
 
 // Builder constructs Agent instances with all dependencies.
@@ -127,16 +139,16 @@ func (b *Builder) getACEConfig() *ACEConfig {
 		},
 		Adapter: ACEAdapterConfig{
 			Enabled:          true,
-			UtilityThreshold: 0.1,
-			MaxMemorySize:    1000,
+			UtilityThreshold: builderAdapterUtilityThresh,
+			MaxMemorySize:    builderAdapterMaxMemSize,
 		},
 		Refine: ACERefineConfig{
 			Enabled:         true,
 			Mode:            "proactive",
-			MaxBullets:      1000,
-			MaxTokens:       500000,
-			MinUtilityScore: 0.1,
-			CheckInterval:   100,
+			MaxBullets:      builderRefineMaxBullets,
+			MaxTokens:       builderRefineMaxTokens,
+			MinUtilityScore: builderRefineMinUtil,
+			CheckInterval:   builderRefineCheckInterval,
 		},
 	}
 }
@@ -203,7 +215,7 @@ func (b *Builder) newExecutor() *Executor {
 	}
 
 	if b.getCacheCommands() {
-		cache := NewCommandCache(5*time.Minute, 10*1024*1024) // 5m TTL, 10MB cap.
+		cache := NewCommandCache(cacheTTLMinutes*time.Minute, cacheMaxBytes) // 5m TTL, 10MB cap.
 		opts = append(opts, WithCache(cache))
 	}
 
@@ -288,13 +300,13 @@ func (b *Builder) buildPolicyStore() security.PolicyStore {
 	}
 
 	if policyPath := b.config.Security.PolicyFile; policyPath != "" {
-		fs, err := security.NewFilePolicyStore(policyPath, 30*time.Second)
+		fs, err := security.NewFilePolicyStore(policyPath, policyStoreTTL)
 		if err == nil {
 			return fs
 		}
 	}
 
-	return security.NewMemoryPolicyStore(30 * time.Second)
+	return security.NewMemoryPolicyStore(policyStoreTTL)
 }
 
 // BuildDetectionService creates detection service with cycle detection.

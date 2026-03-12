@@ -209,7 +209,9 @@ func createTestAgentWithEmitter(t *testing.T) (*agent.Agent, *events.EventEmitte
 	mockProvider := llm.NewMockProvider("test response")
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
@@ -516,10 +518,38 @@ func contentBlockBasicCases() []contentBlockCase {
 	return []contentBlockCase{
 		{name: "text block", blocks: []acp.ContentBlock{acp.TextBlock("test")}},
 		{name: "empty blocks", blocks: []acp.ContentBlock{}, wantErr: true},
-		{name: "resource link", blocks: []acp.ContentBlock{{ResourceLink: &acp.ContentBlockResourceLink{Name: "file.txt", Uri: "file:///tmp/file.txt"}}}},
-		{name: "embedded resource with text", blocks: []acp.ContentBlock{{Resource: &acp.ContentBlockResource{Resource: acp.EmbeddedResourceResource{TextResourceContents: &acp.TextResourceContents{Text: "embedded text", Uri: "file:///tmp/test.txt"}}}}}},
-		{name: "embedded resource with blob", blocks: []acp.ContentBlock{{Resource: &acp.ContentBlockResource{Resource: acp.EmbeddedResourceResource{BlobResourceContents: &acp.BlobResourceContents{Blob: "base64data", MimeType: &pngMime, Uri: "file:///tmp/image.png"}}}}}},
-		{name: "mixed blocks", blocks: []acp.ContentBlock{acp.TextBlock("first"), {ResourceLink: &acp.ContentBlockResourceLink{Name: "file.txt", Uri: "file:///tmp/file.txt"}}, acp.TextBlock("second")}},
+		{
+			name: "resource link",
+			blocks: []acp.ContentBlock{
+				{ResourceLink: &acp.ContentBlockResourceLink{Name: "file.txt", Uri: "file:///tmp/file.txt"}},
+			},
+		},
+		{
+			name: "embedded resource with text",
+			blocks: []acp.ContentBlock{{Resource: &acp.ContentBlockResource{
+				Resource: acp.EmbeddedResourceResource{
+					TextResourceContents: &acp.TextResourceContents{Text: "embedded text", Uri: "file:///tmp/test.txt"},
+				},
+			}}},
+		},
+		{
+			name: "embedded resource with blob",
+			blocks: []acp.ContentBlock{{Resource: &acp.ContentBlockResource{
+				Resource: acp.EmbeddedResourceResource{
+					BlobResourceContents: &acp.BlobResourceContents{
+						Blob: "base64data", MimeType: &pngMime, Uri: "file:///tmp/image.png",
+					},
+				},
+			}}},
+		},
+		{
+			name: "mixed blocks",
+			blocks: []acp.ContentBlock{
+				acp.TextBlock("first"),
+				{ResourceLink: &acp.ContentBlockResourceLink{Name: "file.txt", Uri: "file:///tmp/file.txt"}},
+				acp.TextBlock("second"),
+			},
+		},
 	}
 }
 
@@ -529,7 +559,14 @@ func contentBlockMediaCases() []contentBlockCase {
 		{name: "image block with default mime type", blocks: []acp.ContentBlock{{Image: &acp.ContentBlockImage{Data: "base64imagedata"}}}},
 		{name: "audio block", blocks: []acp.ContentBlock{acp.AudioBlock("UklGRiQA", "audio/wav")}},
 		{name: "audio block with default mime type", blocks: []acp.ContentBlock{{Audio: &acp.ContentBlockAudio{Data: "base64audiodata"}}}},
-		{name: "mixed content types", blocks: []acp.ContentBlock{acp.TextBlock("text"), acp.ImageBlock("img", "image/jpeg"), acp.AudioBlock("aud", "audio/mpeg"), {ResourceLink: &acp.ContentBlockResourceLink{Name: "file.txt", Uri: "file:///tmp/file.txt"}}}},
+		{
+			name: "mixed content types",
+			blocks: []acp.ContentBlock{
+				acp.TextBlock("text"), acp.ImageBlock("img", "image/jpeg"),
+				acp.AudioBlock("aud", "audio/mpeg"),
+				{ResourceLink: &acp.ContentBlockResourceLink{Name: "file.txt", Uri: "file:///tmp/file.txt"}},
+			},
+		},
 	}
 }
 

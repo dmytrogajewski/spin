@@ -86,7 +86,7 @@ func (l *Loop) dispatchKeyEvent(ctx context.Context, event term.KeyEvent) bool {
 }
 
 // dispatchNavigation handles cursor movement and history navigation keys.
-func (l *Loop) dispatchNavigation(event term.KeyEvent) (done bool, handled bool) {
+func (l *Loop) dispatchNavigation(event term.KeyEvent) (done, handled bool) {
 	switch event.Kind {
 	case term.KeyLeft:
 		return l.handleLeft(), true
@@ -106,7 +106,7 @@ func (l *Loop) dispatchNavigation(event term.KeyEvent) (done bool, handled bool)
 }
 
 // dispatchEditing handles text insertion and deletion keys.
-func (l *Loop) dispatchEditing(event term.KeyEvent) (done bool, handled bool) {
+func (l *Loop) dispatchEditing(event term.KeyEvent) (done, handled bool) {
 	switch event.Kind {
 	case term.KeyRune:
 		return l.handleRune(event), true

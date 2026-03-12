@@ -66,13 +66,15 @@ machine-readable output, or --filter to show specific event types only.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&format, "format", "text", "Output format (text|json)")
+	cmd.Flags().StringVar(&format, "format", formatText, "Output format (text|json)")
 	cmd.Flags().StringVar(&filterStr, "filter", "", "Event type filter (comma-separated, e.g. 'tool,stream')")
 
 	return cmd
 }
 
 // runDebugEvents executes the events debugging command.
+const debugTimeout = 5 * time.Minute
+
 func runDebugEvents(ctx context.Context, prompt, format, filterStr string) error {
 	// Parse filter.
 	var filter []string
@@ -101,7 +103,7 @@ func runDebugEvents(ctx context.Context, prompt, format, filterStr string) error
 	logger := dbg.NewEventLogger(format, filter)
 
 	// Run with timeout.
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, debugTimeout)
 	defer cancel()
 
 	return logger.Run(ctx, prompt)
@@ -198,6 +200,8 @@ return fmt.Errorf("landlock command is only available on Linux (current: %s): %w
 }
 
 // runDebugSandbox executes the sandbox testing command.
+
+
 func runDebugSandbox(_ context.Context, command string, args []string, mode, workspace string) error {
 	fmt.Fprintf(os.Stderr, "⚠️  Sandbox mode: %s\n", mode)
 	fmt.Fprintf(os.Stderr, "⚠️  Workspace: %s\n", workspace)
@@ -210,6 +214,8 @@ func runDebugSandbox(_ context.Context, command string, args []string, mode, wor
 }
 
 // runDebugLandlock executes the Landlock testing command.
+
+
 func runDebugLandlock(_ context.Context, command string, args []string, mode, workspace string) error {
 	fmt.Fprintf(os.Stderr, "⚠️  Landlock mode: %s\n", mode)
 	fmt.Fprintf(os.Stderr, "⚠️  Workspace: %s\n", workspace)

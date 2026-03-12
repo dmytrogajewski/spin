@@ -29,7 +29,9 @@ func TestNewExecutor_WithOptions(t *testing.T) {
 	t.Parallel()
 	workDir := t.TempDir()
 	validator := security.NewValidator()
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: nil, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 
 	executor, err := NewExecutor(workDir, WithSecurityService(securityService))
@@ -164,7 +166,9 @@ func TestExecutor_Validate(t *testing.T) {
 	t.Parallel()
 	workDir := t.TempDir()
 	validator := security.NewValidator()
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: nil, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 	executor, err := NewExecutor(workDir, WithSecurityService(securityService))
 	require.NoError(t, err)
@@ -356,7 +360,9 @@ func TestDefaultExecuteOptions(t *testing.T) {
 func TestExecutorOption_WithSecurityService(t *testing.T) {
 	t.Parallel()
 	validator := security.NewValidator()
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: nil, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 	executor := &Executor{}
 

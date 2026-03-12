@@ -10,6 +10,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 )
 
+const (
+	testUpdatedContent = "Updated content"
+)
+
+
 func TestDeltaApplier_ApplyContentUpdate(t *testing.T) {
 	t.Parallel()
 
@@ -24,7 +29,7 @@ func TestDeltaApplier_ApplyContentUpdate(t *testing.T) {
 	require.NoError(t, pb.Add(ctx, b))
 
 	// Apply content update delta.
-	delta := NewContentUpdate(b.ID, "Updated content", Metadata{Source: "test"})
+	delta := NewContentUpdate(b.ID, testUpdatedContent, Metadata{Source: "test"})
 
 	result, err := applier.Apply(ctx, *delta)
 	if err != nil {
@@ -39,7 +44,7 @@ func TestDeltaApplier_ApplyContentUpdate(t *testing.T) {
 		t.Errorf("expected old value 'Original content', got '%v'", result.OldValue)
 	}
 
-	if result.NewValue != "Updated content" {
+	if result.NewValue != testUpdatedContent {
 		t.Errorf("expected new value 'Updated content', got '%v'", result.NewValue)
 	}
 
@@ -47,7 +52,7 @@ func TestDeltaApplier_ApplyContentUpdate(t *testing.T) {
 	updated, ok := pb.Get(b.ID)
 	require.True(t, ok, "bullet not found")
 
-	if updated.Content != "Updated content" {
+	if updated.Content != testUpdatedContent {
 		t.Errorf("expected bullet content 'Updated content', got '%s'", updated.Content)
 	}
 
@@ -376,7 +381,7 @@ func TestDeltaApplier_MultipleDeltas(t *testing.T) {
 
 	// Apply multiple deltas.
 	deltas := []Delta{
-		*NewContentUpdate(b.ID, "Updated content", Metadata{Source: "test"}),
+		*NewContentUpdate(b.ID, testUpdatedContent, Metadata{Source: "test"}),
 		*NewIncrementHelpful(b.ID, Metadata{Source: "test"}),
 		*NewIncrementHelpful(b.ID, Metadata{Source: "test"}),
 		*NewAddTag(b.ID, "category", "testing", Metadata{Source: "test"}),
@@ -398,7 +403,7 @@ func TestDeltaApplier_MultipleDeltas(t *testing.T) {
 	updated, ok := pb.Get(b.ID)
 	require.True(t, ok, "bullet not found")
 
-	if updated.Content != "Updated content" {
+	if updated.Content != testUpdatedContent {
 		t.Errorf("expected content 'Updated content', got '%s'", updated.Content)
 	}
 

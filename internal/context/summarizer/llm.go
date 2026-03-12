@@ -13,6 +13,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
 
+const (
+	defaultSummarizerTimeout    = 10 * time.Second
+	defaultSummarizerMaxTokens  = 500
+	defaultSummarizerTargetRatio = 0.3
+	percentConversion           = 100
+)
+
 // LLMSummarizerConfig configures the LLM summarizer.
 type LLMSummarizerConfig struct {
 	// Model is the LLM model to use for summarization.
@@ -35,9 +42,9 @@ type LLMSummarizerConfig struct {
 func DefaultLLMSummarizerConfig() LLMSummarizerConfig {
 	return LLMSummarizerConfig{
 		Model:              "gpt-4o-mini",
-		Timeout:            10 * time.Second,
-		DefaultMaxTokens:   500,
-		DefaultTargetRatio: 0.3,
+		Timeout:            defaultSummarizerTimeout,
+		DefaultMaxTokens:   defaultSummarizerMaxTokens,
+		DefaultTargetRatio: defaultSummarizerTargetRatio,
 		DefaultStyle:       StyleNarrative,
 	}
 }
@@ -159,7 +166,7 @@ Content:
 
 Summary:`,
 		opts.MaxTokens,
-		int(opts.TargetRatio*100),
+		int(opts.TargetRatio*percentConversion),
 		opts.Style,
 		styleGuide,
 		preserveGuide,

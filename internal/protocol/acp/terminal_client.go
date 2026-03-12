@@ -22,7 +22,9 @@ func NewTerminalClient(conn *acp.AgentSideConnection) *TerminalClient {
 }
 
 // Create creates a new terminal and executes a command.
-func (c *TerminalClient) Create(ctx context.Context, cmd string, args []string, env []executor.EnvVar, cwd string, limit int) (string, error) {
+func (c *TerminalClient) Create(
+	ctx context.Context, cmd string, args []string, env []executor.EnvVar, cwd string, limit int,
+) (string, error) {
 	if c.connection == nil {
 		return "", ErrAcpConnectionNotAvailable
 	}
@@ -62,7 +64,7 @@ func (c *TerminalClient) Create(ctx context.Context, cmd string, args []string, 
 }
 
 // WaitForExit waits for the terminal command to complete.
-func (c *TerminalClient) WaitForExit(ctx context.Context, terminalID string) (int, *string, error) {
+func (c *TerminalClient) WaitForExit(ctx context.Context, terminalID string) (exitCode int, signal *string, err error) {
 	if c.connection == nil {
 		return -1, nil, ErrAcpConnectionNotAvailable
 	}
@@ -82,7 +84,6 @@ func (c *TerminalClient) WaitForExit(ctx context.Context, terminalID string) (in
 		return -1, nil, fmt.Errorf("acp wait for terminal exit: %w", err)
 	}
 
-	var exitCode int
 	if resp.ExitCode != nil {
 		exitCode = int(*resp.ExitCode)
 	}
@@ -91,7 +92,9 @@ func (c *TerminalClient) WaitForExit(ctx context.Context, terminalID string) (in
 }
 
 // GetOutput retrieves the current terminal output.
-func (c *TerminalClient) GetOutput(ctx context.Context, terminalID string) (string, bool, *executor.ExitStatus, error) {
+func (c *TerminalClient) GetOutput(
+	ctx context.Context, terminalID string,
+) (output string, truncated bool, exitStatus *executor.ExitStatus, err error) {
 	if c.connection == nil {
 		return "", false, nil, ErrAcpConnectionNotAvailable
 	}
@@ -111,14 +114,12 @@ func (c *TerminalClient) GetOutput(ctx context.Context, terminalID string) (stri
 		return "", false, nil, fmt.Errorf("acp terminal output: %w", err)
 	}
 
-	var exitStatus *executor.ExitStatus
-
 	if resp.ExitStatus != nil {
 		var code *int
 
 		if resp.ExitStatus.ExitCode != nil {
-			c := int(*resp.ExitStatus.ExitCode)
-			code = &c
+			ec := int(*resp.ExitStatus.ExitCode)
+			code = &ec
 		}
 
 		exitStatus = &executor.ExitStatus{

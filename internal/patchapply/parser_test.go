@@ -101,7 +101,8 @@ func TestParser_Parse_UpdateFile_Simple(t *testing.T) {
 	runParserTests(t, []parserTestCase{
 		{
 			name: "update file - simple",
-			input: "*** Begin Patch\n*** Update File: main.go\n@@\n func main() {\n-    fmt.Println(\"old\")\n+    fmt.Println(\"new\")\n }\n*** End Patch",
+			input: "*** Begin Patch\n*** Update File: main.go\n@@\n func main() {\n" +
+				"-    fmt.Println(\"old\")\n+    fmt.Println(\"new\")\n }\n*** End Patch",
 			want: &Patch{Operations: []FileOperation{
 				&UpdateFile{FilePath: "main.go", Hunks: []Hunk{{
 					Changes: []LineChange{
@@ -115,7 +116,9 @@ func TestParser_Parse_UpdateFile_Simple(t *testing.T) {
 		},
 		{
 			name: "update file - with context header",
-			input: "*** Begin Patch\n*** Update File: handler.go\n@@ func (h *Handler) Process\n func (h *Handler) Process(data string) error {\n-    return oldValue\n+    return newValue\n }\n*** End Patch",
+			input: "*** Begin Patch\n*** Update File: handler.go\n" +
+				"@@ func (h *Handler) Process\n func (h *Handler) Process(data string) error {\n" +
+				"-    return oldValue\n+    return newValue\n }\n*** End Patch",
 			want: &Patch{Operations: []FileOperation{
 				&UpdateFile{FilePath: "handler.go", Hunks: []Hunk{{
 					Header: "func (h *Handler) Process",
@@ -144,10 +147,48 @@ func TestParser_Parse_UpdateFile_Variants(t *testing.T) {
 	t.Parallel()
 
 	runParserTests(t, []parserTestCase{
-		{name: "update file - multiple hunks", input: "*** Begin Patch\n*** Update File: multi.go\n@@\n-old1\n+new1\n@@\n-old2\n+new2\n*** End Patch", want: &Patch{Operations: []FileOperation{&UpdateFile{FilePath: "multi.go", Hunks: []Hunk{{Changes: []LineChange{{Type: LineDelete, Text: "old1"}, {Type: LineInsert, Text: "new1"}}}, {Changes: []LineChange{{Type: LineDelete, Text: "old2"}, {Type: LineInsert, Text: "new2"}}}}}}}},
-		{name: "update file - empty line in hunk", input: "*** Begin Patch\n*** Update File: test.go\n@@\n line1\n\n-old\n+new\n*** End Patch", want: &Patch{Operations: []FileOperation{&UpdateFile{FilePath: "test.go", Hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "line1"}, {Type: LineContext, Text: ""}, {Type: LineDelete, Text: "old"}, {Type: LineInsert, Text: "new"}}}}}}}},
-		{name: "update file - only inserts", input: "*** Begin Patch\n*** Update File: test.txt\n@@\n+new line 1\n+new line 2\n*** End Patch", want: &Patch{Operations: []FileOperation{&UpdateFile{FilePath: "test.txt", Hunks: []Hunk{{Changes: []LineChange{{Type: LineInsert, Text: "new line 1"}, {Type: LineInsert, Text: "new line 2"}}}}}}}},
-		{name: "update file - only deletes", input: "*** Begin Patch\n*** Update File: test.txt\n@@\n-old line 1\n-old line 2\n*** End Patch", want: &Patch{Operations: []FileOperation{&UpdateFile{FilePath: "test.txt", Hunks: []Hunk{{Changes: []LineChange{{Type: LineDelete, Text: "old line 1"}, {Type: LineDelete, Text: "old line 2"}}}}}}}},
+		{
+			name:  "update file - multiple hunks",
+			input: "*** Begin Patch\n*** Update File: multi.go\n@@\n-old1\n+new1\n@@\n-old2\n+new2\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{&UpdateFile{
+				FilePath: "multi.go",
+				Hunks: []Hunk{
+					{Changes: []LineChange{{Type: LineDelete, Text: "old1"}, {Type: LineInsert, Text: "new1"}}},
+					{Changes: []LineChange{{Type: LineDelete, Text: "old2"}, {Type: LineInsert, Text: "new2"}}},
+				},
+			}}},
+		},
+		{
+			name:  "update file - empty line in hunk",
+			input: "*** Begin Patch\n*** Update File: test.go\n@@\n line1\n\n-old\n+new\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{&UpdateFile{
+				FilePath: "test.go",
+				Hunks: []Hunk{{Changes: []LineChange{
+					{Type: LineContext, Text: "line1"}, {Type: LineContext, Text: ""},
+					{Type: LineDelete, Text: "old"}, {Type: LineInsert, Text: "new"},
+				}}},
+			}}},
+		},
+		{
+			name:  "update file - only inserts",
+			input: "*** Begin Patch\n*** Update File: test.txt\n@@\n+new line 1\n+new line 2\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{&UpdateFile{
+				FilePath: "test.txt",
+				Hunks: []Hunk{{Changes: []LineChange{
+					{Type: LineInsert, Text: "new line 1"}, {Type: LineInsert, Text: "new line 2"},
+				}}},
+			}}},
+		},
+		{
+			name:  "update file - only deletes",
+			input: "*** Begin Patch\n*** Update File: test.txt\n@@\n-old line 1\n-old line 2\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{&UpdateFile{
+				FilePath: "test.txt",
+				Hunks: []Hunk{{Changes: []LineChange{
+					{Type: LineDelete, Text: "old line 1"}, {Type: LineDelete, Text: "old line 2"},
+				}}},
+			}}},
+		},
 	})
 }
 
@@ -157,7 +198,8 @@ func TestParser_Parse_MultipleOperations(t *testing.T) {
 	runParserTests(t, []parserTestCase{
 		{
 			name: "multiple operations",
-			input: "*** Begin Patch\n*** Add File: new.txt\n+content\n*** Delete File: old.txt\n*** Update File: existing.txt\n@@\n-old\n+new\n*** End Patch",
+			input: "*** Begin Patch\n*** Add File: new.txt\n+content\n" +
+				"*** Delete File: old.txt\n*** Update File: existing.txt\n@@\n-old\n+new\n*** End Patch",
 			want: &Patch{Operations: []FileOperation{
 				&AddFile{FilePath: "new.txt", Lines: []string{"content"}},
 				&DeleteFile{FilePath: "old.txt"},
@@ -177,8 +219,16 @@ func TestParser_Parse_SyntaxErrors(t *testing.T) {
 		{name: "invalid begin marker", input: "*** Begin Patchh\n*** End Patch\n", wantErr: "expected '*** Begin Patch'"},
 		{name: "missing end marker", input: "*** Begin Patch\n", wantErr: "missing '*** End Patch'"},
 		{name: "unknown operation", input: "*** Begin Patch\n*** Unknown Operation: test.txt\n*** End Patch", wantErr: "unknown operation"},
-		{name: "add file - invalid line prefix", input: "*** Begin Patch\n*** Add File: test.txt\n+line1\ninvalid line without prefix\n+line2\n*** End Patch", wantErr: "invalid line format"},
-		{name: "update file - invalid hunk line prefix", input: "*** Begin Patch\n*** Update File: test.txt\n@@\n context\ninvalid prefix\n*** End Patch", wantErr: "invalid line prefix"},
+		{
+			name:    "add file - invalid line prefix",
+			input:   "*** Begin Patch\n*** Add File: test.txt\n+line1\ninvalid line without prefix\n+line2\n*** End Patch",
+			wantErr: "invalid line format",
+		},
+		{
+			name:    "update file - invalid hunk line prefix",
+			input:   "*** Begin Patch\n*** Update File: test.txt\n@@\n context\ninvalid prefix\n*** End Patch",
+			wantErr: "invalid line prefix",
+		},
 	})
 }
 
@@ -186,14 +236,38 @@ func TestParser_Parse_PathValidation(t *testing.T) {
 	t.Parallel()
 
 	runParserTests(t, []parserTestCase{
-		{name: "add file - absolute path", input: "*** Begin Patch\n*** Add File: /etc/passwd\n+malicious\n*** End Patch", wantErr: "absolute paths not allowed"},
-		{name: "add file - path traversal", input: "*** Begin Patch\n*** Add File: ../../../etc/passwd\n+malicious\n*** End Patch", wantErr: "path traversal"},
-		{name: "delete file - absolute path", input: "*** Begin Patch\n*** Delete File: /etc/passwd\n*** End Patch", wantErr: "absolute paths not allowed"},
-		{name: "delete file - path traversal", input: "*** Begin Patch\n*** Delete File: ../../etc/passwd\n*** End Patch", wantErr: "path traversal"},
-		{name: "update file - absolute path", input: "*** Begin Patch\n*** Update File: /etc/passwd\n@@\n-old\n+new\n*** End Patch", wantErr: "absolute paths not allowed"},
-		{name: "update file - path traversal", input: "*** Begin Patch\n*** Update File: ../../etc/passwd\n@@\n-old\n+new\n*** End Patch", wantErr: "path traversal"},
-		{name: "move to absolute path", input: "*** Begin Patch\n*** Update File: test.txt\n*** Move to: /etc/passwd\n@@\n content\n*** End Patch", wantErr: "absolute paths not allowed"},
-		{name: "move to path traversal", input: "*** Begin Patch\n*** Update File: test.txt\n*** Move to: ../../etc/passwd\n@@\n content\n*** End Patch", wantErr: "path traversal"},
+		{
+			name: "add file - absolute path", wantErr: "absolute paths not allowed",
+			input: "*** Begin Patch\n*** Add File: /etc/passwd\n+malicious\n*** End Patch",
+		},
+		{
+			name: "add file - path traversal", wantErr: "path traversal",
+			input: "*** Begin Patch\n*** Add File: ../../../etc/passwd\n+malicious\n*** End Patch",
+		},
+		{
+			name: "delete file - absolute path", wantErr: "absolute paths not allowed",
+			input: "*** Begin Patch\n*** Delete File: /etc/passwd\n*** End Patch",
+		},
+		{
+			name: "delete file - path traversal", wantErr: "path traversal",
+			input: "*** Begin Patch\n*** Delete File: ../../etc/passwd\n*** End Patch",
+		},
+		{
+			name: "update file - absolute path", wantErr: "absolute paths not allowed",
+			input: "*** Begin Patch\n*** Update File: /etc/passwd\n@@\n-old\n+new\n*** End Patch",
+		},
+		{
+			name: "update file - path traversal", wantErr: "path traversal",
+			input: "*** Begin Patch\n*** Update File: ../../etc/passwd\n@@\n-old\n+new\n*** End Patch",
+		},
+		{
+			name: "move to absolute path", wantErr: "absolute paths not allowed",
+			input: "*** Begin Patch\n*** Update File: test.txt\n*** Move to: /etc/passwd\n@@\n content\n*** End Patch",
+		},
+		{
+			name: "move to path traversal", wantErr: "path traversal",
+			input: "*** Begin Patch\n*** Update File: test.txt\n*** Move to: ../../etc/passwd\n@@\n content\n*** End Patch",
+		},
 	})
 }
 

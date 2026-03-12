@@ -211,27 +211,27 @@ HELPFUL: [B0, B2]
 HARMFUL: [B1]
 EXPLANATION: B0 and B2 were directly applicable, B1 suggested the wrong approach.`
 
-	feedback, err := svc.ParseFeedback(response)
+	parsedFB, err := svc.ParseFeedback(response)
 	if err != nil {
 		t.Errorf("ParseFeedback() error = %v", err)
 	}
 
-	if feedback == nil {
+	if parsedFB == nil {
 		t.Fatal("ParseFeedback() returned nil feedback")
 	}
 
 	// Verify helpful markers.
-	if len(feedback.HelpfulBullets) != 2 {
-		t.Errorf("ParseFeedback() helpful bullets = %d, want 2", len(feedback.HelpfulBullets))
+	if len(parsedFB.HelpfulBullets) != 2 {
+		t.Errorf("ParseFeedback() helpful bullets = %d, want 2", len(parsedFB.HelpfulBullets))
 	}
 
 	// Verify harmful markers.
-	if len(feedback.HarmfulBullets) != 1 {
-		t.Errorf("ParseFeedback() harmful bullets = %d, want 1", len(feedback.HarmfulBullets))
+	if len(parsedFB.HarmfulBullets) != 1 {
+		t.Errorf("ParseFeedback() harmful bullets = %d, want 1", len(parsedFB.HarmfulBullets))
 	}
 
 	// Verify explanation.
-	if !contains(feedback.Explanation, "directly applicable") {
+	if !contains(parsedFB.Explanation, "directly applicable") {
 		t.Errorf("ParseFeedback() missing explanation")
 	}
 }
@@ -248,13 +248,13 @@ func TestACEService_ParseFeedback_Disabled(t *testing.T) {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
 
-	feedback, err := svc.ParseFeedback("HELPFUL: [B0]")
+	parsedFB, err := svc.ParseFeedback("HELPFUL: [B0]")
 	if !errors.Is(err, ErrACEDisabled) {
 		t.Errorf("ParseFeedback() on disabled service should return ErrACEDisabled, got %v", err)
 	}
 
 	// When disabled, should return nil feedback.
-	if feedback != nil {
+	if parsedFB != nil {
 		t.Errorf("ParseFeedback() on disabled service should return nil feedback")
 	}
 }

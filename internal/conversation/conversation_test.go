@@ -11,6 +11,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 )
 
+const (
+	testModeRegular  = "regular"
+	testModeCompact  = "compact"
+)
+
 // TestConversation_RunTurn_EmptyPrompt tests RunTurn with empty prompt.
 func TestConversation_RunTurn_EmptyPrompt(t *testing.T) {
 	t.Parallel()
@@ -117,7 +122,7 @@ func TestConversation_SetTaskMode_ValidModes(t *testing.T) {
 
 	conv := setupTestConv(t)
 
-	modes := []string{"regular", "review", "compact", "planning"}
+	modes := []string{testModeRegular, "review", testModeCompact, "planning"}
 	for _, mode := range modes {
 		t.Run("mode_"+mode, func(t *testing.T) {
 			t.Parallel()
@@ -206,7 +211,7 @@ func TestConversation_SetTaskMode_AllModes(t *testing.T) {
 
 	conv := setupTestConv(t)
 
-	modes := []string{"regular", "review", "compact", "planning"}
+	modes := []string{testModeRegular, "review", testModeCompact, "planning"}
 	for _, mode := range modes {
 		t.Run("mode_"+mode, func(t *testing.T) {
 			t.Parallel()
@@ -256,8 +261,8 @@ func TestConversation_SetTaskMode(t *testing.T) {
 
 	conv := setupTestConv(t)
 
-	// Should default to "regular".
-	if got := conv.GetTaskMode(); got != "regular" {
+	// Should default to testModeRegular.
+	if got := conv.GetTaskMode(); got != testModeRegular {
 		t.Errorf("expected default mode 'regular', got %q", got)
 	}
 
@@ -272,12 +277,12 @@ func TestConversation_SetTaskMode(t *testing.T) {
 	}
 
 	// Switch to compact mode.
-	err = conv.SetTaskMode("compact")
+	err = conv.SetTaskMode(testModeCompact)
 	if err != nil {
 		t.Fatalf("SetTaskMode('compact') failed: %v", err)
 	}
 
-	if got := conv.GetTaskMode(); got != "compact" {
+	if got := conv.GetTaskMode(); got != testModeCompact {
 		t.Errorf("expected mode 'compact', got %q", got)
 	}
 
@@ -292,12 +297,12 @@ func TestConversation_SetTaskMode(t *testing.T) {
 	}
 
 	// Switch back to regular.
-	err = conv.SetTaskMode("regular")
+	err = conv.SetTaskMode(testModeRegular)
 	if err != nil {
 		t.Fatalf("SetTaskMode('regular') failed: %v", err)
 	}
 
-	if got := conv.GetTaskMode(); got != "regular" {
+	if got := conv.GetTaskMode(); got != testModeRegular {
 		t.Errorf("expected mode 'regular', got %q", got)
 	}
 }
@@ -318,19 +323,19 @@ func TestConversation_SetTaskMode_Invalid(t *testing.T) {
 	}
 
 	// Should remain in default mode.
-	if got := conv.GetTaskMode(); got != "regular" {
+	if got := conv.GetTaskMode(); got != testModeRegular {
 		t.Errorf("expected mode to remain 'regular', got %q", got)
 	}
 }
 
-// TestConversation_GetTaskMode_Default verifies that GetTaskMode returns "regular" by default.
+// TestConversation_GetTaskMode_Default verifies that GetTaskMode returns testModeRegular by default.
 func TestConversation_GetTaskMode_Default(t *testing.T) {
 	t.Parallel()
 
 	conv := setupTestConv(t)
 
-	// Should default to "regular" without explicit SetTaskMode.
-	if got := conv.GetTaskMode(); got != "regular" {
+	// Should default to testModeRegular without explicit SetTaskMode.
+	if got := conv.GetTaskMode(); got != testModeRegular {
 		t.Errorf("expected default mode 'regular', got %q", got)
 	}
 }
@@ -355,7 +360,7 @@ func TestConversation_TaskMode_Concurrent(t *testing.T) {
 	}
 
 	// 10 concurrent writers.
-	modes := []string{"regular", "review", "compact", "planning"}
+	modes := []string{testModeRegular, "review", testModeCompact, "planning"}
 
 	for i := range 10 {
 		wg.Add(1)
@@ -388,13 +393,13 @@ func TestConversation_TaskMode_PersistsAcrossTurns(t *testing.T) {
 	conv := setupTestConv(t)
 
 	// Set mode to compact.
-	err := conv.SetTaskMode("compact")
+	err := conv.SetTaskMode(testModeCompact)
 	if err != nil {
 		t.Fatalf("SetTaskMode failed: %v", err)
 	}
 
 	// Mode should be compact.
-	if got := conv.GetTaskMode(); got != "compact" {
+	if got := conv.GetTaskMode(); got != testModeCompact {
 		t.Errorf("expected mode 'compact' before turn 1, got %q", got)
 	}
 
@@ -407,7 +412,7 @@ func TestConversation_TaskMode_PersistsAcrossTurns(t *testing.T) {
 	}
 
 	// Mode should still be compact.
-	if got := conv.GetTaskMode(); got != "compact" {
+	if got := conv.GetTaskMode(); got != testModeCompact {
 		t.Errorf("expected mode 'compact' after turn 1, got %q", got)
 	}
 
@@ -418,7 +423,7 @@ func TestConversation_TaskMode_PersistsAcrossTurns(t *testing.T) {
 	}
 
 	// Mode should still be compact.
-	if got := conv.GetTaskMode(); got != "compact" {
+	if got := conv.GetTaskMode(); got != testModeCompact {
 		t.Errorf("expected mode 'compact' after turn 2, got %q", got)
 	}
 }
@@ -486,7 +491,7 @@ func TestConversation_SetTaskMode_ValidatesTask(t *testing.T) {
 
 	// This test verifies the validation path exists
 	// In practice, all built-in tasks should validate successfully.
-	err := conv.SetTaskMode("regular")
+	err := conv.SetTaskMode(testModeRegular)
 	if err != nil {
 		t.Errorf("expected regular task to validate, got error: %v", err)
 	}

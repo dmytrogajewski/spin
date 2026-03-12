@@ -8,6 +8,15 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 )
 
+const (
+	defaultRefineMaxBullets  = 1000
+	defaultRefineMaxTokens   = 100000
+	defaultRefineMinUtility  = 0.1
+	metricHistoryCapacity    = 100
+	tokensPerBulletEstimate  = 50
+	minHistoryForGrowthRate  = 2
+)
+
 // GrowthMetrics tracks playbook growth statistics.
 type GrowthMetrics struct {
 	BulletCount     int       // Total bullets.
@@ -39,9 +48,9 @@ type GrowthMonitor struct {
 // DefaultGrowthThresholds returns sensible default thresholds.
 func DefaultGrowthThresholds() GrowthThresholds {
 	return GrowthThresholds{
-		MaxBullets:    1000,
-		MaxTokens:     100000,
-		MinUtility:    0.1,
+		MaxBullets:    defaultRefineMaxBullets,
+		MaxTokens:     defaultRefineMaxTokens,
+		MinUtility:    defaultRefineMinUtility,
 		CheckInterval: 1 * time.Minute,
 	}
 }
@@ -52,8 +61,8 @@ func NewGrowthMonitor(pb *playbook.Playbook, thresholds GrowthThresholds) *Growt
 		playbook:      pb,
 		thresholds:    thresholds,
 		lastCheck:     time.Now(),
-		bulletHistory: make([]int, 0, 100),
-		timeHistory:   make([]time.Time, 0, 100),
+		bulletHistory: make([]int, 0, metricHistoryCapacity),
+		timeHistory:   make([]time.Time, 0, metricHistoryCapacity),
 	}
 }
 
@@ -70,7 +79,7 @@ func (m *GrowthMonitor) CheckGrowth(_ context.Context) (GrowthMetrics, bool) {
 	m.timeHistory = append(m.timeHistory, now)
 
 	// Keep only last 100 data points.
-	if len(m.bulletHistory) > 100 {
+	if len(m.bulletHistory) > metricHistoryCapacity {
 		m.bulletHistory = m.bulletHistory[1:]
 		m.timeHistory = m.timeHistory[1:]
 	}
@@ -142,12 +151,12 @@ func (m *GrowthMonitor) checkRefineNeeded(metrics GrowthMetrics) bool {
 // estimateTokens provides rough token count estimate.
 func (m *GrowthMonitor) estimateTokens(stats playbook.Stats) int {
 	// Rough estimate: average bullet is ~50 tokens.
-	return stats.TotalBullets * 50
+	return stats.TotalBullets * tokensPerBulletEstimate
 }
 
 // calculateGrowthRate computes bullets per hour based on history.
 func (m *GrowthMonitor) calculateGrowthRate() float64 {
-	if len(m.bulletHistory) < 2 {
+	if len(m.bulletHistory) < minHistoryForGrowthRate {
 		return 0.0
 	}
 

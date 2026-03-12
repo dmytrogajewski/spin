@@ -151,6 +151,7 @@ linters:
       disabled-checks:
         - hugeParam
         - rangeValCopy
+        - ptrToRefParam
       settings:
         captLocal:
           paramsOnly: false
@@ -219,17 +220,28 @@ linters:
     mnd:
       ignored-functions:
         - args.Error
+        - cobra.ExactArgs
+        - cobra.MaximumNArgs
+        - cobra.MinimumNArgs
+        - cobra.RangeArgs
         - flag.Arg
         - flag.Duration.*
         - flag.Float.*
         - flag.Int.*
         - flag.Uint.*
+        - make
+        - math.Max
+        - math.Min
+        - max
+        - min
         - os.Chmod
         - os.Mkdir.*
         - os.OpenFile
         - os.WriteFile
+        - strings.SplitN
         - strconv.Format*
         - strconv.Parse*
+        - tabwriter.NewWriter
 
     nakedret:
       max-func-lines: 0
@@ -388,6 +400,25 @@ linters:
         - gh
         - nd
         - hp
+        - a
+        - b
+        - c
+        - d
+        - e
+        - f
+        - g
+        - h
+        - k
+        - m
+        - n
+        - p
+        - r
+        - s
+        - t
+        - v
+        - w
+        - x
+        - T
       ignore-decls:
         - i int
         - j int

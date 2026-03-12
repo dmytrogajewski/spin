@@ -9,6 +9,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/filesearch"
 )
 
+const defaultFileSearchLimit = 10
+
 // FileSearchTool implements file search functionality with fuzzy matching.
 type FileSearchTool struct {
 	workspaceRoot string
@@ -81,7 +83,7 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 	}
 
 	// Extract limit parameter (optional, default 10).
-	limit := params.GetIntOr("limit", 10)
+	limit := params.GetIntOr("limit", defaultFileSearchLimit)
 
 	// Get or create searcher for this workspace.
 	searcher, err := t.getOrCreateSearcher(workspaceRoot)

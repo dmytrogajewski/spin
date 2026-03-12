@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+const (
+	minHistoryForDetection  = 2
+	exactMatchConfidence    = 0.9
+	groupSimilarityDivisor  = 2.0
+	exactErrorConfidence    = 0.95
+)
+
 // Detector implements cycle detection for agent reasoning loops.
 // It maintains a rolling history of snapshots and detects various
 // patterns that indicate the agent may be stuck in a cycle.
@@ -58,7 +65,7 @@ func (d *Detector) Check() (Result, error) {
 	defer d.mu.RUnlock()
 
 	// Need minimum history for meaningful analysis.
-	if len(d.history) < 2 {
+	if len(d.history) < minHistoryForDetection {
 		return Result{
 			Type:       CycleNone,
 			Confidence: 0.0,
@@ -247,7 +254,7 @@ func (d *Detector) createRepeatedToolResult(recent []Snapshot) Result {
 
 	return Result{
 		Type:       CycleRepeatedTool,
-		Confidence: 0.9, // High confidence for exact tool name matches.
+		Confidence: exactMatchConfidence, // High confidence for exact tool name matches.
 		Details:    fmt.Sprintf("tool '%s' called %d times consecutively", firstTool, len(recent)),
 		Timestamp:  time.Now(),
 	}
@@ -271,7 +278,7 @@ func (d *Detector) checkOscillation() Result {
 	simAB := calculateSimilarity(recent[0].Response, recent[1].Response) // A1 vs B1.
 
 	// Average similarity within same groups (A's and B's).
-	withinGroupSimilarity := (simAA + simBB) / 2.0
+	withinGroupSimilarity := (simAA + simBB) / groupSimilarityDivisor
 
 	// Pattern: High similarity within groups (A's together, B's together),
 	// but low similarity between groups (A vs B).
@@ -340,7 +347,7 @@ func (d *Detector) createSameErrorResult(recent []Snapshot) Result {
 
 	return Result{
 		Type:       CycleSameError,
-		Confidence: 0.95, // Very high confidence for exact error matches.
+		Confidence: exactErrorConfidence, // Very high confidence for exact error matches.
 		Details:    fmt.Sprintf("error '%s' occurred %d times consecutively", firstError, len(recent)),
 		Timestamp:  time.Now(),
 	}

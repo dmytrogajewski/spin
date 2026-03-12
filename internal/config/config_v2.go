@@ -11,6 +11,32 @@ import (
 	"time"
 )
 
+// Default configuration constants.
+const (
+	defaultLLMTemperature = 0.7
+	defaultLLMMaxTokens   = 8192
+	defaultLLMTimeout     = 5 * time.Minute
+
+	defaultAgentMaxTurns     = 50
+	defaultAgentTimeoutMin   = 60
+	defaultAgentStreamBuffer = 100
+	defaultAgentHistoryLimit = 1000
+
+	defaultCycleWindowSize       = 3
+	defaultCycleSimilarityThresh = 0.8
+	defaultCycleToolRepeatLimit  = 3
+	defaultCycleErrorRepeatLimit = 3
+
+	defaultACETopK     = 5
+	defaultACEMinScore = 0.3
+
+	defaultSessionPolicyHours        = 8
+	defaultGlobalPolicyDays          = 30
+	defaultProtocolShellTimeout      = 5 * time.Minute
+	defaultAgentsMDMaxSize           = 100 * 1024 // 100KB.
+	defaultScratchpadMaxEntries      = 50
+)
+
 var (
 	ErrLlmProviderIsRequired               = errors.New("llm: provider is required")
 	ErrLlmModelIsRequired                  = errors.New("llm: model is required")
@@ -437,7 +463,10 @@ func (s *SecurityV2) Validate() error {
 			"firejail":       true,
 		}
 		if !validModes[s.SandboxMode] {
-			return fmt.Errorf("security: sandbox_mode must be one of [none, workspace-only, docker, firejail], got %q: %w", s.SandboxMode, ErrSecurityInvalidSandboxMode)
+			return fmt.Errorf(
+			"security: sandbox_mode must be one of [none, workspace-only, docker, firejail], got %q: %w",
+			s.SandboxMode, ErrSecurityInvalidSandboxMode,
+		)
 		}
 	}
 
@@ -450,7 +479,10 @@ func (p *ProtocolV2) Validate() error {
 
 	// Validate shell timeout if shell is enabled.
 	if p.EnableShell && p.ShellTimeout <= 0 {
-		errs.Add(fmt.Errorf("protocol: shell_timeout must be positive when shell is enabled, got %v: %w", p.ShellTimeout, ErrProtocolShellTimeoutPositive))
+		errs.Add(fmt.Errorf(
+			"protocol: shell_timeout must be positive when shell is enabled, got %v: %w",
+			p.ShellTimeout, ErrProtocolShellTimeoutPositive,
+		))
 	}
 
 	// Validate MCP servers if MCP is enabled.
@@ -489,11 +521,12 @@ func (m *MCPServerConfigV2) Validate() error {
 	}
 
 	// Validate based on transport type.
-	if transport == MCPTransportSmithery {
+	switch {
+	case transport == MCPTransportSmithery:
 		m.validateSmithery(errs)
-	} else if transport.IsRemote() {
+	case transport.IsRemote():
 		m.validateRemote(transport, errs)
-	} else {
+	default:
 		m.validateStdio(errs)
 	}
 
@@ -648,67 +681,67 @@ func DefaultV2() *V2 {
 		LLM: LLMV2{
 			Provider:       "ollama",
 			Model:          "qwen2.5-coder:7b",
-			Temperature:    0.7,
-			MaxTokens:      8192,
-			Timeout:        5 * time.Minute,
+			Temperature:    defaultLLMTemperature,
+			MaxTokens:      defaultLLMMaxTokens,
+			Timeout:        defaultLLMTimeout,
 			BaseURL:        "", // Empty - provider will use its own default.
 			APIKey:         "",
 			ProviderConfig: make(map[string]any),
 		},
 		Agent: AgentV2{
-			MaxTurns:        50,
-			Timeout:         60 * time.Minute,
+			MaxTurns:        defaultAgentMaxTurns,
+			Timeout:         defaultAgentTimeoutMin * time.Minute,
 			WorkDir:         ".",
 			RequireApproval: false,
-			StreamBuffer:    100,
+			StreamBuffer:    defaultAgentStreamBuffer,
 			CacheCommands:   false,
 			MaxFiles:        0,
 			MaxDepth:        0,
 			SkipGit:         false,
 			SessionDir:      "~/.spin/sessions",
-			HistoryLimit:    1000,
+			HistoryLimit:    defaultAgentHistoryLimit,
 			LogLevel:        "info",
 			LogFormat:       "text",
 			Debug:           false,
 			CycleDetection: CycleDetectionV2{
 				Enabled:          true,
-				WindowSize:       3,
-				SimilarityThresh: 0.8,
-				ToolRepeatLimit:  3,
-				ErrorRepeatLimit: 3,
+				WindowSize:       defaultCycleWindowSize,
+				SimilarityThresh: defaultCycleSimilarityThresh,
+				ToolRepeatLimit:  defaultCycleToolRepeatLimit,
+				ErrorRepeatLimit: defaultCycleErrorRepeatLimit,
 			},
 		},
 		ACE: ACEV2{
 			Enabled:        false,
 			PlaybookPath:   "~/.spin/ace/playbooks/default.json",
 			TrajectoryPath: "~/.spin/ace/trajectories/",
-			TopK:           5,
-			MinScore:       0.3,
+			TopK:           defaultACETopK,
+			MinScore:       defaultACEMinScore,
 		},
 		Security: SecurityV2{
 			SandboxMode:                "workspace-only",
 			PolicyFile:                 policyFile,
 			AllowedCommands:            []string{},
 			ApprovalPersistenceEnabled: true,
-			SessionPolicyTTL:           8 * time.Hour,
-			GlobalPolicyTTL:            30 * 24 * time.Hour,
+			SessionPolicyTTL:           defaultSessionPolicyHours * time.Hour,
+			GlobalPolicyTTL:            defaultGlobalPolicyDays * 24 * time.Hour,
 		},
 		Protocol: ProtocolV2{
 			EnableMCP:    false,
 			MCPServers:   []MCPServerConfigV2{},
 			EnableGit:    true,
 			EnableShell:  true,
-			ShellTimeout: 5 * time.Minute,
+			ShellTimeout: defaultProtocolShellTimeout,
 		},
 		AgentsMD: AgentsMDV2{
 			Enabled: true,
-			Path:    "",         // Auto-discover.
-			MaxSize: 100 * 1024, // 100KB.
+			Path:    "",                   // Auto-discover.
+			MaxSize: defaultAgentsMDMaxSize,
 		},
 		Memory: MemoryV2{
 			Scratchpad: ScratchpadV2{
 				Enabled:    true,
-				MaxEntries: 50,
+				MaxEntries: defaultScratchpadMaxEntries,
 				AutoEvict:  true,
 			},
 			Persistent: PersistentMemoryV2{

@@ -14,6 +14,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+const smitherySearchTimeout = 10 * time.Second
+
 // SmitheryRegistryConfig holds configuration for a Smithery MCP registry.
 type SmitheryRegistryConfig struct {
 	Name      string
@@ -237,7 +239,7 @@ func (r *SmitheryRegistry) Search(ctx context.Context, _ *SearchContext, query s
 	}
 
 	// Dynamic mode with context: search the Smithery API.
-	searchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	searchCtx, cancel := context.WithTimeout(ctx, smitherySearchTimeout)
 	defer cancel()
 
 	searchResp, err := r.apiClient.SearchTools(searchCtx, query, maxResults)

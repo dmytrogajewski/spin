@@ -76,8 +76,8 @@ func (b *Builder) BuildSystemPrompt(bullets []*bullet.Bullet) string {
 }
 
 // FormatBullet formats a bullet with marker for IL.
-func (b *Builder) FormatBullet(bullet *bullet.Bullet, index int) string {
-	return fmt.Sprintf("[B%d] %s", index, bullet.Content)
+func (b *Builder) FormatBullet(blt *bullet.Bullet, index int) string {
+	return fmt.Sprintf("[B%d] %s", index, blt.Content)
 }
 
 const itemizedLearningInstructions = `# Instructions for Using the Playbook
@@ -114,6 +114,7 @@ After solving the task, indicate which bullets were helpful or harmful:
 - HARMFUL: [B3] - bullets that misled or were incorrect
 - EXPLANATION: Brief reasoning for your feedback
 
-**NOTE**: Treat the playbook as a tool. Use only the parts that are relevant and applicable to your specific situation and task context. Use your own judgment for aspects not covered by the playbook.
+**NOTE**: Treat the playbook as a tool. Use only the parts that are relevant and applicable to your specific
+situation and task context. Use your own judgment for aspects not covered by the playbook.
 
 Format your response with the feedback markers at the end.`

@@ -16,14 +16,20 @@ var executeMetaValidateCases = []struct {
 	},
 	{
 		name:        "valid with optional fields",
-		meta:        ExecuteMeta{Command: "git status", CWD: "/home/user/project", Impact: "medium", TimeoutSec: 30, ExitCode: intPtr(0), DurationMS: int64Ptr(1500), LinesOut: intPtr(10)},
+		meta: ExecuteMeta{
+			Command: "git status", CWD: "/home/user/project", Impact: "medium",
+			TimeoutSec: 30, ExitCode: intPtr(0), DurationMS: int64Ptr(1500), LinesOut: intPtr(10),
+		},
 		expectError: false,
 	},
 	{name: "missing command", meta: ExecuteMeta{CWD: "/tmp", Impact: "low"}, expectError: true},
 	{name: "missing cwd", meta: ExecuteMeta{Command: "ls -la", Impact: "low"}, expectError: true},
 	{name: "invalid impact", meta: ExecuteMeta{Command: "ls -la", CWD: "/tmp", Impact: "invalid"}, expectError: true},
 	{name: "negative exit code", meta: ExecuteMeta{Command: "ls -la", CWD: "/tmp", Impact: "low", ExitCode: intPtr(-1)}, expectError: true},
-	{name: "negative duration", meta: ExecuteMeta{Command: "ls -la", CWD: "/tmp", Impact: "low", DurationMS: int64Ptr(-100)}, expectError: true},
+	{
+		name: "negative duration", expectError: true,
+		meta: ExecuteMeta{Command: "ls -la", CWD: "/tmp", Impact: "low", DurationMS: int64Ptr(-100)},
+	},
 	{name: "negative lines out", meta: ExecuteMeta{Command: "ls -la", CWD: "/tmp", Impact: "low", LinesOut: intPtr(-5)}, expectError: true},
 }
 

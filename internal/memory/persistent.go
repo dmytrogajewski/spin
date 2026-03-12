@@ -60,7 +60,7 @@ func NewPersistentStore(basePath string) (*PersistentStore, error) {
 	}
 
 	// Create directory if it doesn't exist.
-	err := os.MkdirAll(basePath, 0700)
+	err := os.MkdirAll(basePath, 0o700)
 	if err != nil {
 		return nil, fmt.Errorf("create directory: %w", err)
 	}
@@ -80,7 +80,7 @@ func NewPersistentStore(basePath string) (*PersistentStore, error) {
 }
 
 // Put stores a value to the filesystem.
-func (s *PersistentStore) Put(_ context.Context, key string, value string, opts PutOptions) error {
+func (s *PersistentStore) Put(_ context.Context, key, value string, opts PutOptions) error {
 	if key == "" {
 		return ErrEmptyKey
 	}
@@ -123,7 +123,7 @@ func (s *PersistentStore) Put(_ context.Context, key string, value string, opts 
 
 	// Create namespace directory.
 	namespaceDir := filepath.Join(s.basePath, namespace)
-	err := os.MkdirAll(namespaceDir, 0700)
+	err := os.MkdirAll(namespaceDir, 0o700)
 	if err != nil {
 		return fmt.Errorf("create namespace directory: %w", err)
 	}
@@ -138,7 +138,7 @@ func (s *PersistentStore) Put(_ context.Context, key string, value string, opts 
 	filePath := s.filePath(namespace, key)
 	tmpPath := filePath + ".tmp"
 
-	err = os.WriteFile(tmpPath, data, 0600)
+	err = os.WriteFile(tmpPath, data, 0o600)
 	if err != nil {
 		return fmt.Errorf("write temp file: %w", err)
 	}

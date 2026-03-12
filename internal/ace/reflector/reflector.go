@@ -13,6 +13,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
+const (
+	defaultReflectorMaxTokens = 4096
+	reflectorTemperature      = 0.3
+)
+
 // Reflector analyzes trajectories to extract insights.
 type Reflector interface {
 	// Reflect analyzes trajectories and extracts insights.
@@ -48,7 +53,7 @@ func NewReflector(llmProvider llm.Provider, opts ...Option) Reflector {
 		promptBuilder: NewPromptBuilder(),
 		validator:     NewInsightValidator(),
 		logger:        slog.Default(),
-		maxTokens:     4096, // Default max tokens for LLM calls.
+		maxTokens:     defaultReflectorMaxTokens, // Default max tokens for LLM calls.
 	}
 
 	for _, opt := range opts {
@@ -107,7 +112,7 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
 		}),
-		Temperature: openai.F(0.3),
+		Temperature: openai.F(reflectorTemperature),
 	}
 
 	// Set MaxTokens if configured.
@@ -115,7 +120,7 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		params.MaxTokens = openai.F(int64(r.maxTokens))
 	}
 
-	r.logger.DebugContext(ctx, "Calling LLM for reflection", "temperature", 0.3, "max_tokens", r.maxTokens)
+	r.logger.DebugContext(ctx, "Calling LLM for reflection", "temperature", reflectorTemperature, "max_tokens", r.maxTokens)
 
 	completion, err := r.llm.Complete(ctx, params)
 	if err != nil {
@@ -272,7 +277,7 @@ func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iterati
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
 		}),
-		Temperature: openai.F(0.3),
+		Temperature: openai.F(reflectorTemperature),
 	}
 
 	// Set MaxTokens if configured.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 
 	"github.com/openai/openai-go"
 
@@ -30,13 +31,13 @@ func mapError(err error) error {
 	var apiErr *openai.Error
 	if errors.As(err, &apiErr) {
 		switch apiErr.StatusCode {
-		case 401, 403:
+		case http.StatusUnauthorized, http.StatusForbidden:
 			return fmt.Errorf("unauthorized: %w", err)
-		case 429:
+		case http.StatusTooManyRequests:
 			return fmt.Errorf("%w: %w", llm.ErrRateLimited, err)
-		case 400, 404, 422:
+		case http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity:
 			return fmt.Errorf("%w: %w", llm.ErrInvalidRequest, err)
-		case 500, 502, 503:
+		case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable:
 			return fmt.Errorf("server error: %w", err)
 		default:
 			return fmt.Errorf("openai api error (status %d): %w", apiErr.StatusCode, err)

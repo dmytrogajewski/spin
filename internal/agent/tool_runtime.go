@@ -122,7 +122,10 @@ func (t *ToolRuntime) resolveTool(call *ToolCall) (tools.Tool, error) {
 			names[i] = at.Name()
 		}
 
-		return nil, fmt.Errorf("tool not found: %q is not a valid tool. Available tools: %v: %w", call.Function.Name, names, ErrToolNotFound)
+		return nil, fmt.Errorf(
+			"tool not found: %q is not a valid tool. Available tools: %v: %w",
+			call.Function.Name, names, ErrToolNotFound,
+		)
 	}
 
 	return tool, nil
@@ -142,7 +145,10 @@ func (t *ToolRuntime) checkToolApproval(ctx context.Context, tool tools.Tool, ar
 	}
 
 	if t.approvalService == nil {
-		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval required but no approval handler configured: %s (risk: %s): %w", needs.Reason, needs.Risk, ErrApprovalRequiredButNoApprovalHandler))
+		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf(
+			"approval required but no approval handler configured: %s (risk: %s): %w",
+			needs.Reason, needs.Risk, ErrApprovalRequiredButNoApprovalHandler,
+		))
 
 		return &result
 	}
@@ -164,7 +170,10 @@ func (t *ToolRuntime) checkToolApproval(ctx context.Context, tool tools.Tool, ar
 	}
 
 	if !approved {
-		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("operation denied: %s (risk: %s): %w", needs.Reason, needs.Risk, ErrOperationDenied))
+		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf(
+			"operation denied: %s (risk: %s): %w",
+			needs.Reason, needs.Risk, ErrOperationDenied,
+		))
 
 		return &result
 	}

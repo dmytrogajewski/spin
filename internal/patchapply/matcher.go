@@ -4,6 +4,8 @@ import (
 	"strings"
 )
 
+const defaultSimilarityThreshold = 0.85
+
 // Matcher finds hunk context in file content using fuzzy matching algorithms.
 //
 // The matcher uses a multi-strategy approach to locate context:
@@ -41,7 +43,7 @@ type Matcher struct {
 func NewMatcher(fileLines []string) *Matcher {
 	m := &Matcher{
 		fileLines: fileLines,
-		threshold: 0.85, // Default 85% similarity.
+		threshold: defaultSimilarityThreshold, // Default 85% similarity.
 	}
 	m.normalizedLines = m.normalizeLines(fileLines)
 
@@ -348,7 +350,7 @@ func calculateSimilarity(s1, s2 string) float64 {
 		return 1.0
 	}
 
-	if len(s1) == 0 || len(s2) == 0 {
+	if s1 == "" || s2 == "" {
 		return 0.0
 	}
 

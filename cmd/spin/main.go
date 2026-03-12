@@ -31,7 +31,7 @@ func handleSpecialBinaryName() int {
 	baseName := filepath.Base(arg0)
 
 	switch baseName {
-	case "spin-apply-patch":
+	case binaryApplyPatch:
 		return runApplyPatchMode()
 	case "spin-sandbox":
 		return runSandboxMode()

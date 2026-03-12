@@ -28,7 +28,9 @@ func TestRequestPermission_SessionNotFound(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: nil})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: nil,
+	})
 	acpAgent.SetApprovalService(approvalService)
 
 	req := acp.RequestPermissionRequest{
@@ -112,7 +114,9 @@ func TestRequestPermission_Approved(t *testing.T) {
 		}
 	}
 
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: approvalHandler, Emitter: emitter, Validator: nil,
+	})
 	acpAgent.SetApprovalService(approvalService)
 
 	// Create a session.
@@ -170,7 +174,9 @@ func TestRequestPermission_Denied(t *testing.T) {
 		}
 	}
 
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: approvalHandler, Emitter: emitter, Validator: nil,
+	})
 	acpAgent.SetApprovalService(approvalService)
 
 	// Create a session.
@@ -231,7 +237,9 @@ func TestRequestPermission_Canceled(t *testing.T) {
 		}
 	}
 
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: approvalHandler, Emitter: emitter, Validator: nil,
+	})
 	acpAgent.SetApprovalService(approvalService)
 
 	// Create a session.
@@ -291,7 +299,9 @@ func TestRequestPermission_WithRawInput(t *testing.T) {
 		}
 	}
 
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: approvalHandler, Emitter: emitter, Validator: nil,
+	})
 	acpAgent.SetApprovalService(approvalService)
 
 	// Create a session.
@@ -349,7 +359,9 @@ func TestRequestPermission_AllowAlwaysOption(t *testing.T) {
 		}
 	}
 
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: approvalHandler, Emitter: emitter, Validator: nil,
+	})
 	acpAgent.SetApprovalService(approvalService)
 
 	// Create a session.
@@ -395,7 +407,8 @@ func setupPermissionIntegrationAgent(t *testing.T) (*SpinACPAgent, acp.SessionId
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())), emitter, storage)
+	mcpSvc := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
+	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpSvc, emitter, storage)
 	require.NoError(t, err)
 
 	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
@@ -407,7 +420,9 @@ func setupPermissionIntegrationAgent(t *testing.T) (*SpinACPAgent, acp.SessionId
 		return security.ApprovalResponse{RequestID: req.ID, Approved: approved, Reason: reason}
 	}
 
-	acpAgent.SetApprovalService(security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter}))
+	acpAgent.SetApprovalService(security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: approvalHandler, Emitter: emitter,
+	}))
 
 	sess := session.NewSession("/tmp/test")
 	sessionID := acp.SessionId(sess.ID)

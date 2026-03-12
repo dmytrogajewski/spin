@@ -27,6 +27,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/appinfo"
 )
 
+const (
+	unknownValue  = "unknown"
+	mimeImagePNG  = "image/png"
+	roleAssistant = "assistant"
+	toolWriteFile = "write_file"
+)
+
 var (
 	// ErrNilAgent is returned when agent is nil.
 	ErrNilAgent = errors.New("agent cannot be nil")
@@ -92,12 +99,12 @@ type SpinACPAgent struct {
 // Returns an error if any required component is nil.
 // If storage is nil, session persistence features (LoadSession) will not be available.
 func NewSpinACPAgentWithStorage(
-	agent *agent.Agent,
+	spinAgent *agent.Agent,
 	mcpService *mcp.Service,
 	emitter *events.EventEmitter,
 	storage session.Storage,
 ) (*SpinACPAgent, error) {
-	if agent == nil {
+	if spinAgent == nil {
 		return nil, fmt.Errorf("%w", ErrNilAgent)
 	}
 
@@ -110,7 +117,7 @@ func NewSpinACPAgentWithStorage(
 	}
 
 	return &SpinACPAgent{
-		agent:           agent,
+		agent:           spinAgent,
 		mcpService:      mcpService,
 		emitter:         emitter,
 		approvalService: nil, // Optional - set via SetApprovalService() if needed.
@@ -394,7 +401,9 @@ func (a *SpinACPAgent) validatePromptRequest(req acp.PromptRequest) (*session.Se
 }
 
 // setupPromptContext creates a cancellable context with session metadata.
-func (a *SpinACPAgent) setupPromptContext(ctx context.Context, sessionID acp.SessionId, sess *session.Session) (context.Context, context.CancelFunc) {
+func (a *SpinACPAgent) setupPromptContext(
+	ctx context.Context, sessionID acp.SessionId, sess *session.Session,
+) (context.Context, context.CancelFunc) {
 	promptCtx, cancel := context.WithCancel(ctx)
 	promptCtx = executor.ContextWithSessionID(promptCtx, string(sessionID))
 	if sess != nil && sess.WorkDir != "" {
@@ -454,7 +463,9 @@ func (a *SpinACPAgent) tryExecuteCommand(ctx context.Context, sessionID acp.Sess
 
 // promptWithConversation executes a prompt using ConversationManager.
 // This is the new path that uses Conversation.RunTurn() for proper history management.
-func (a *SpinACPAgent) promptWithConversation(ctx context.Context, req acp.PromptRequest, input string, workDir string, cancel context.CancelFunc) (acp.PromptResponse, error) {
+func (a *SpinACPAgent) promptWithConversation(
+	ctx context.Context, req acp.PromptRequest, input, workDir string, cancel context.CancelFunc,
+) (acp.PromptResponse, error) {
 	a.mu.RLock()
 	convManager := a.convManager
 	conn := a.connection
@@ -514,7 +525,9 @@ func (a *SpinACPAgent) promptWithConversation(ctx context.Context, req acp.Promp
 }
 
 // ensureTransformer sets up an event transformer for the session if needed.
-func (a *SpinACPAgent) ensureTransformer(sessionID acp.SessionId, conn notificationSender, conv *conversation.Conversation) *EventTransformer {
+func (a *SpinACPAgent) ensureTransformer(
+	sessionID acp.SessionId, conn notificationSender, conv *conversation.Conversation,
+) *EventTransformer {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -530,7 +543,9 @@ func (a *SpinACPAgent) ensureTransformer(sessionID acp.SessionId, conn notificat
 
 // subscribeTransformerEvents subscribes to events and forwards them through the transformer.
 // Returns an unsubscribe function and a done channel.
-func (a *SpinACPAgent) subscribeTransformerEvents(ctx context.Context, conn notificationSender, transformer *EventTransformer) (func(), chan struct{}) {
+func (a *SpinACPAgent) subscribeTransformerEvents(
+	ctx context.Context, conn notificationSender, transformer *EventTransformer,
+) (cleanup func(), done chan struct{}) {
 	if conn == nil || transformer == nil {
 		return nil, nil
 	}
@@ -563,7 +578,9 @@ func (a *SpinACPAgent) subscribeTransformerEvents(ctx context.Context, conn noti
 
 // promptWithAgent executes a prompt using direct agent execution (legacy path).
 // This is the fallback path when ConversationManager is not configured.
-func (a *SpinACPAgent) promptWithAgent(ctx context.Context, req acp.PromptRequest, input string, cancel context.CancelFunc) (acp.PromptResponse, error) {
+func (a *SpinACPAgent) promptWithAgent(
+	ctx context.Context, req acp.PromptRequest, input string, cancel context.CancelFunc,
+) (acp.PromptResponse, error) {
 	a.mu.RLock()
 	conn := a.connection
 	a.mu.RUnlock()
@@ -703,7 +720,7 @@ func convertResourceBlock(res *acp.ContentBlockResource) (message.Message, bool)
 	}
 
 	if res.Resource.BlobResourceContents != nil {
-		mimeType := "unknown"
+		mimeType := unknownValue
 		if res.Resource.BlobResourceContents.MimeType != nil {
 			mimeType = *res.Resource.BlobResourceContents.MimeType
 		}
@@ -723,7 +740,7 @@ func convertResourceBlock(res *acp.ContentBlockResource) (message.Message, bool)
 func convertImageBlock(img *acp.ContentBlockImage) message.Message {
 	mimeType := img.MimeType
 	if mimeType == "" {
-		mimeType = "image/png"
+		mimeType = mimeImagePNG
 	}
 	return newUserMessage(fmt.Sprintf("[Image: %s, %d bytes]", mimeType, len(img.Data)))
 }
@@ -925,7 +942,7 @@ func (p *eventProcessor) detectAndSendPlan(ctx context.Context, content string) 
 // handleContentDelta processes content delta events.
 func (p *eventProcessor) handleContentDelta(ctx context.Context, event events.Event, accumulatedContent string) string {
 	data, hasData := event.ContentDeltaData()
-	if !hasData || data.Role != "assistant" {
+	if !hasData || data.Role != roleAssistant {
 		return accumulatedContent
 	}
 
@@ -1019,7 +1036,7 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 
 	sessionID := acp.SessionId(sess.ID)
 
-	if err = a.storeSessionWithMCPServers(ctx, sessionID, sess, req.McpServers); err != nil {
+	if err := a.storeSessionWithMCPServers(ctx, sessionID, sess, req.McpServers); err != nil {
 		return acp.LoadSessionResponse{}, err
 	}
 
@@ -1029,7 +1046,9 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 }
 
 // storeSessionWithMCPServers stores a session and connects MCP servers if provided.
-func (a *SpinACPAgent) storeSessionWithMCPServers(ctx context.Context, sessionID acp.SessionId, sess *session.Session, mcpServers []acp.McpServer) error {
+func (a *SpinACPAgent) storeSessionWithMCPServers(
+	ctx context.Context, sessionID acp.SessionId, sess *session.Session, mcpServers []acp.McpServer,
+) error {
 	if len(mcpServers) > 0 {
 		configs, err := convertMCPServers(mcpServers)
 		if err != nil {
@@ -1323,7 +1342,9 @@ return acp.SetSessionModeResponse{}, fmt.Errorf("session not found: %s: %w", req
 	}
 
 	if !validMode {
-return acp.SetSessionModeResponse{}, fmt.Errorf("invalid mode: %s (must be one of: regular, review, compact, planning): %w", req.ModeId, ErrInvalidMode)
+		return acp.SetSessionModeResponse{}, fmt.Errorf(
+			"invalid mode: %s (must be one of: regular, review, compact, planning): %w",
+			req.ModeId, ErrInvalidMode)
 	}
 
 	// Update stored mode.
@@ -1407,7 +1428,7 @@ func selectPermissionOption(approved bool, options []acp.PermissionOption) acp.R
 // convertToolCallToOperation converts an ACP tool call to a Spin security operation.
 func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.RequestPermissionToolCall, workDir string) (security.Operation, error) {
 	// Extract tool name from title.
-	toolName := "unknown"
+	toolName := unknownValue
 	if toolCall.Title != nil {
 		toolName = *toolCall.Title
 	}

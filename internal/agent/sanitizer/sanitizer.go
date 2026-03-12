@@ -31,7 +31,7 @@ func New() *Sanitizer {
 
 // Process feeds a chunk of text into the sanitizer and returns clean content and thoughts.
 // It buffers potential tags internally.
-func (s *Sanitizer) Process(chunk string) (content string, thought string) {
+func (s *Sanitizer) Process(chunk string) (content, thought string) {
 	// Prepend any buffered text from previous call.
 	if s.buffer.Len() > 0 {
 		chunk = s.buffer.String() + chunk

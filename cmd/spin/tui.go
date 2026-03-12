@@ -23,6 +23,11 @@ import (
 )
 
 // newTUICmd creates the TUI command for interactive terminal mode.
+const (
+	defaultMaxTurns = 50
+	defaultMaxTokens = 128000
+)
+
 func newTUICmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tui",
@@ -46,7 +51,7 @@ Examples:
 	}
 
 	// TUI-specific flags.
-	cmd.Flags().Int("max-turns", 50, "Maximum conversation turns")
+	cmd.Flags().Int("max-turns", defaultMaxTurns, "Maximum conversation turns")
 	cmd.Flags().Bool("debug", false, "Enable debug mode with detailed logging")
 	cmd.Flags().Bool("auto-approve", false, "Automatically approve all operations (DANGEROUS)")
 
@@ -123,7 +128,7 @@ func setupTUIProvider(ctx context.Context, cmd *cobra.Command, flags tuiFlags) (
 
 // configureMaxTokens sets max tokens on the UI based on provider capabilities.
 func configureMaxTokens(ctx context.Context, ui *adapters.PureTTY, provider llm.Provider, currentModel string) {
-	maxTokens := int64(128000)
+	maxTokens := int64(defaultMaxTokens)
 
 	models, err := provider.Models(ctx)
 	if err == nil && len(models) > 0 {
@@ -174,7 +179,11 @@ func updateTokensFromEvent(event events.Event, ui *adapters.PureTTY, conv *conve
 }
 
 // startEventLoop starts the event processing goroutine.
-func startEventLoop(ctx context.Context, eventStream <-chan events.Event, mapper *tui.Mapper, ui *adapters.PureTTY, conv *conversation.Conversation) chan struct{} {
+func startEventLoop(
+	ctx context.Context, eventStream <-chan events.Event,
+	mapper *tui.Mapper, ui *adapters.PureTTY,
+	conv *conversation.Conversation,
+) chan struct{} {
 	eventDone := make(chan struct{})
 
 	go func() {
@@ -196,7 +205,11 @@ func startEventLoop(ctx context.Context, eventStream <-chan events.Event, mapper
 }
 
 // handleTUIInput processes a single line of TUI input. Returns true if the loop should exit.
-func handleTUIInput(ctx context.Context, line string, ui *adapters.PureTTY, conv *conversation.Conversation, mapper *tui.Mapper, streamDone *chan struct{}) (bool, error) {
+func handleTUIInput(
+	ctx context.Context, line string, ui *adapters.PureTTY,
+	conv *conversation.Conversation, mapper *tui.Mapper,
+	streamDone *chan struct{},
+) (bool, error) {
 	cmdResult := parseCommand(line)
 	if cmdResult.isCommand {
 		return handleTUICommand(ctx, ui, conv, cmdResult)
@@ -221,7 +234,11 @@ func handleTUICommand(ctx context.Context, ui *adapters.PureTTY, conv *conversat
 }
 
 // executeTurn runs a conversation turn and resets streaming.
-func executeTurn(ctx context.Context, line string, conv *conversation.Conversation, mapper *tui.Mapper, ui *adapters.PureTTY, streamDone *chan struct{}) error {
+func executeTurn(
+	ctx context.Context, line string,
+	conv *conversation.Conversation, mapper *tui.Mapper,
+	ui *adapters.PureTTY, streamDone *chan struct{},
+) error {
 	turnCtx, turnCancel := context.WithCancel(ctx)
 	turnErr := conv.RunTurn(turnCtx, line)
 	turnCancel()
@@ -245,6 +262,8 @@ func executeTurn(ctx context.Context, line string, conv *conversation.Conversati
 }
 
 // runTUI executes the TUI mode.
+const tuiEventBuffer = 100
+
 func runTUI(cmd *cobra.Command, _ []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -317,12 +336,15 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 }
 
 // createConversationForTUI creates a conversation configured for TUI mode using the runtime pattern.
-func createConversationForTUI(ctx context.Context, provider llm.Provider, cfg *config.V2, ui *adapters.PureTTY, autoApprove bool) (*conversation.Conversation, error) {
+func createConversationForTUI(
+	ctx context.Context, provider llm.Provider,
+	cfg *config.V2, ui *adapters.PureTTY, autoApprove bool,
+) (*conversation.Conversation, error) {
 	workDir := cfg.Agent.WorkDir
 	logger := slog.Default()
 
 	// 1. Create shared infrastructure.
-	emitter := events.NewEventEmitter(100)
+	emitter := events.NewEventEmitter(tuiEventBuffer)
 
 	var storage session.Storage
 

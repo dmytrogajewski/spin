@@ -8,6 +8,11 @@ import (
 	"github.com/rivo/uniseg"
 )
 
+const (
+	defaultTermHeight = 24
+	minStatusGap      = 3 // minimum gap between content and status.
+)
+
 // TermRenderer renders a prompt model to a terminal using ANSI escape sequences.
 // It handles cursor positioning, wide characters, and optional status text.
 type TermRenderer struct {
@@ -23,7 +28,7 @@ func NewTermRenderer(out io.Writer, width int, prefix string) *TermRenderer {
 	return &TermRenderer{
 		out:    out,
 		width:  width,
-		height: 24, // default height.
+		height: defaultTermHeight, // default height.
 		prefix: prefix,
 	}
 }
@@ -78,7 +83,7 @@ func (r *TermRenderer) calculateWidths(bufferText, status string) widthInfo {
 }
 
 // calculateCursorInfo calculates cursor position information.
-func (r *TermRenderer) calculateCursorInfo(bufferText string, cursorRune int, prefixWidth int) cursorInfo {
+func (r *TermRenderer) calculateCursorInfo(bufferText string, cursorRune, prefixWidth int) cursorInfo {
 	textBeforeCursor := string([]rune(bufferText)[:cursorRune])
 	cursorOffset := uniseg.StringWidth(textBeforeCursor)
 	cursorCol := prefixWidth + cursorOffset + 1 // +1 for 1-indexed.
@@ -119,10 +124,10 @@ func (r *TermRenderer) calculateScrolledContent(bufferText string, cursorInfo cu
 }
 
 // calculateScrollBounds calculates scroll window bounds.
-func (r *TermRenderer) calculateScrollBounds(cursorOffset, scrollWindowWidth, bufferWidth int) (int, int) {
-	scrollStart := max(cursorOffset-scrollWindowWidth/2, 0)
+func (r *TermRenderer) calculateScrollBounds(cursorOffset, scrollWindowWidth, bufferWidth int) (scrollStart, scrollEnd int) {
+	scrollStart = max(cursorOffset-scrollWindowWidth/2, 0)
 
-	scrollEnd := scrollStart + scrollWindowWidth
+	scrollEnd = scrollStart + scrollWindowWidth
 	if scrollEnd > bufferWidth {
 		scrollEnd = bufferWidth
 
@@ -139,7 +144,7 @@ func (r *TermRenderer) addEllipses(visibleBuffer string, scrollStart, scrollEnd,
 	}
 
 	if scrollEnd < bufferWidth {
-		visibleBuffer = visibleBuffer + "…"
+		visibleBuffer += "…"
 	}
 
 	return visibleBuffer
@@ -193,11 +198,11 @@ func (r *TermRenderer) writeStatus(out *strings.Builder, status string, widths w
 	}
 
 	contentWidth := widths.prefixWidth + widths.bufferWidth
-	requiredSpace := contentWidth + 3 + widths.statusWidth // 3 = minimum gap.
+	requiredSpace := contentWidth + minStatusGap + widths.statusWidth // 3 = minimum gap.
 
 	if requiredSpace <= r.width {
 		r.writeFullStatus(out, contentWidth, status, widths.statusWidth)
-	} else if r.width-contentWidth >= 3 {
+	} else if r.width-contentWidth >= minStatusGap {
 		r.writeTruncatedStatus(out, contentWidth, status)
 	}
 }
@@ -211,10 +216,10 @@ func (r *TermRenderer) writeFullStatus(out *strings.Builder, contentWidth int, s
 
 // writeTruncatedStatus writes a truncated status text.
 func (r *TermRenderer) writeTruncatedStatus(out *strings.Builder, contentWidth int, status string) {
-	availableStatusWidth := r.width - contentWidth - 3
+	availableStatusWidth := r.width - contentWidth - minStatusGap
 	truncatedStatus := truncateLeft(status, availableStatusWidth)
 
-	out.WriteString(strings.Repeat(" ", 3))
+	out.WriteString(strings.Repeat(" ", minStatusGap))
 	out.WriteString(truncatedStatus)
 }
 
@@ -257,7 +262,7 @@ func (r *TermRenderer) isScrolling(bufferWidth, availableWidth int) bool {
 
 // extractVisibleSlice extracts a substring from text based on visual width range [start, end).
 // Returns the extracted string and the actual start offset in cells.
-func extractVisibleSlice(text string, startWidth, endWidth int) (string, int) {
+func extractVisibleSlice(text string, startWidth, endWidth int) (visible string, actualWidth int) {
 	if startWidth < 0 {
 		startWidth = 0
 	}

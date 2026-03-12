@@ -55,7 +55,7 @@ func detectMode(binaryName string) string {
 	baseName := filepath.Base(binaryName)
 
 	switch baseName {
-	case "spin-apply-patch":
+	case binaryApplyPatch:
 		return "apply-patch"
 	case "spin-sandbox":
 		return "sandbox"
@@ -72,7 +72,7 @@ func TestBinaryNameDetection(t *testing.T) {
 		binaryName string
 		wantMode   string
 	}{
-		{name: "spin-apply-patch", binaryName: "spin-apply-patch", wantMode: "apply-patch"},
+		{name: binaryApplyPatch, binaryName: binaryApplyPatch, wantMode: "apply-patch"},
 		{name: "spin-sandbox", binaryName: "spin-sandbox", wantMode: "sandbox"},
 		{name: "regular spin", binaryName: "spin", wantMode: ""},
 	}

@@ -132,7 +132,8 @@ func (p *Provider) Stream(ctx context.Context, params openai.ChatCompletionNewPa
 	stream := p.client.Chat.Completions.NewStreaming(ctx, params)
 
 	// Create channel for chunks (buffered to avoid blocking).
-	chunks := make(chan openai.ChatCompletionChunk, 10)
+	const streamChunkBuffer = 10
+	chunks := make(chan openai.ChatCompletionChunk, streamChunkBuffer)
 
 	// Spawn goroutine to read stream and send chunks.
 	go func() {
@@ -216,106 +217,120 @@ func (p *Provider) Close() error {
 	return nil
 }
 
+// Context window size constants for known LLM models.
+const (
+	ctxWindow4K   = 4096
+	ctxWindow8K   = 8192
+	ctxWindow16K  = 16385
+	ctxWindow32K  = 32768
+	ctxWindow64K  = 64000
+	ctxWindow65K  = 65536
+	ctxWindow128K = 128000
+	ctxWindow131K = 131072
+	ctxWindow200K = 200000
+	ctxWindow1M   = 1000000
+)
+
 // knownContextWindows maps model names to their context window sizes.
 // This is a best-effort lookup - not all models are listed.
 var knownContextWindows = map[string]int{
 	// OpenAI GPT-4 models.
-	"gpt-4":                  8192,
-	"gpt-4-32k":              32768,
-	"gpt-4-turbo":            128000,
-	"gpt-4-turbo-preview":    128000,
-	"gpt-4-0125-preview":     128000,
-	"gpt-4-1106-preview":     128000,
-	"gpt-4o":                 128000,
-	"gpt-4o-mini":            128000,
-	"gpt-4o-2024-05-13":      128000,
-	"gpt-4o-2024-08-06":      128000,
-	"gpt-4o-2024-11-20":      128000,
-	"gpt-4o-mini-2024-07-18": 128000,
-	"gpt-4.1":                1000000,
-	"gpt-4.1-mini":           1000000,
-	"gpt-4.1-nano":           1000000,
-	"o1":                     200000,
-	"o1-mini":                128000,
-	"o1-preview":             128000,
-	"o3":                     200000,
-	"o3-mini":                200000,
-	"o4-mini":                200000,
+	"gpt-4":                  ctxWindow8K,
+	"gpt-4-32k":              ctxWindow32K,
+	"gpt-4-turbo":            ctxWindow128K,
+	"gpt-4-turbo-preview":    ctxWindow128K,
+	"gpt-4-0125-preview":     ctxWindow128K,
+	"gpt-4-1106-preview":     ctxWindow128K,
+	"gpt-4o":                 ctxWindow128K,
+	"gpt-4o-mini":            ctxWindow128K,
+	"gpt-4o-2024-05-13":      ctxWindow128K,
+	"gpt-4o-2024-08-06":      ctxWindow128K,
+	"gpt-4o-2024-11-20":      ctxWindow128K,
+	"gpt-4o-mini-2024-07-18": ctxWindow128K,
+	"gpt-4.1":                ctxWindow1M,
+	"gpt-4.1-mini":           ctxWindow1M,
+	"gpt-4.1-nano":           ctxWindow1M,
+	"o1":                     ctxWindow200K,
+	"o1-mini":                ctxWindow128K,
+	"o1-preview":             ctxWindow128K,
+	"o3":                     ctxWindow200K,
+	"o3-mini":                ctxWindow200K,
+	"o4-mini":                ctxWindow200K,
 
 	// OpenAI GPT-3.5 models.
-	"gpt-3.5-turbo":          16385,
-	"gpt-3.5-turbo-16k":      16385,
-	"gpt-3.5-turbo-0125":     16385,
-	"gpt-3.5-turbo-1106":     16385,
-	"gpt-3.5-turbo-instruct": 4096,
+	"gpt-3.5-turbo":          ctxWindow16K,
+	"gpt-3.5-turbo-16k":      ctxWindow16K,
+	"gpt-3.5-turbo-0125":     ctxWindow16K,
+	"gpt-3.5-turbo-1106":     ctxWindow16K,
+	"gpt-3.5-turbo-instruct": ctxWindow4K,
 
 	// Anthropic Claude models (for OpenAI-compatible endpoints).
-	"claude-3-opus":            200000,
-	"claude-3-opus-20240229":   200000,
-	"claude-3-sonnet":          200000,
-	"claude-3-sonnet-20240229": 200000,
-	"claude-3-haiku":           200000,
-	"claude-3-haiku-20240307":  200000,
-	"claude-3.5-sonnet":        200000,
-	"claude-3-5-sonnet":        200000,
-	"claude-3.5-haiku":         200000,
-	"claude-3-5-haiku":         200000,
-	"claude-sonnet-4":          200000,
-	"claude-opus-4":            200000,
+	"claude-3-opus":            ctxWindow200K,
+	"claude-3-opus-20240229":   ctxWindow200K,
+	"claude-3-sonnet":          ctxWindow200K,
+	"claude-3-sonnet-20240229": ctxWindow200K,
+	"claude-3-haiku":           ctxWindow200K,
+	"claude-3-haiku-20240307":  ctxWindow200K,
+	"claude-3.5-sonnet":        ctxWindow200K,
+	"claude-3-5-sonnet":        ctxWindow200K,
+	"claude-3.5-haiku":         ctxWindow200K,
+	"claude-3-5-haiku":         ctxWindow200K,
+	"claude-sonnet-4":          ctxWindow200K,
+	"claude-opus-4":            ctxWindow200K,
 
 	// DeepSeek models.
-	"deepseek-chat":     64000,
-	"deepseek-coder":    64000,
-	"deepseek-r1":       64000,
-	"deepseek-v3":       64000,
-	"deepseek-v2":       128000,
-	"deepseek-v2.5":     128000,
-	"deepseek-reasoner": 64000,
+	"deepseek-chat":     ctxWindow64K,
+	"deepseek-coder":    ctxWindow64K,
+	"deepseek-r1":       ctxWindow64K,
+	"deepseek-v3":       ctxWindow64K,
+	"deepseek-v2":       ctxWindow128K,
+	"deepseek-v2.5":     ctxWindow128K,
+	"deepseek-reasoner": ctxWindow64K,
 
 	// Google Gemini models (for OpenAI-compatible endpoints).
-	"gemini-pro":       32768,
-	"gemini-1.5-pro":   1000000,
-	"gemini-1.5-flash": 1000000,
-	"gemini-2.0-flash": 1000000,
-	"gemini-2.0-pro":   1000000,
-	"gemini-2.5-pro":   1000000,
-	"gemini-2.5-flash": 1000000,
+	"gemini-pro":       ctxWindow32K,
+	"gemini-1.5-pro":   ctxWindow1M,
+	"gemini-1.5-flash": ctxWindow1M,
+	"gemini-2.0-flash": ctxWindow1M,
+	"gemini-2.0-pro":   ctxWindow1M,
+	"gemini-2.5-pro":   ctxWindow1M,
+	"gemini-2.5-flash": ctxWindow1M,
 
 	// Mistral models.
-	"mistral-tiny":       32768,
-	"mistral-small":      32768,
-	"mistral-medium":     32768,
-	"mistral-large":      128000,
-	"mistral-nemo":       128000,
-	"codestral":          32768,
-	"codestral-latest":   32768,
-	"open-mistral-7b":    32768,
-	"open-mixtral-8x7b":  32768,
-	"open-mixtral-8x22b": 65536,
+	"mistral-tiny":       ctxWindow32K,
+	"mistral-small":      ctxWindow32K,
+	"mistral-medium":     ctxWindow32K,
+	"mistral-large":      ctxWindow128K,
+	"mistral-nemo":       ctxWindow128K,
+	"codestral":          ctxWindow32K,
+	"codestral-latest":   ctxWindow32K,
+	"open-mistral-7b":    ctxWindow32K,
+	"open-mixtral-8x7b":  ctxWindow32K,
+	"open-mixtral-8x22b": ctxWindow65K,
 
 	// Groq-hosted models.
-	"llama3-8b-8192":     8192,
-	"llama3-70b-8192":    8192,
-	"llama-3.1-8b":       131072,
-	"llama-3.1-70b":      131072,
-	"llama-3.1-405b":     131072,
-	"llama-3.2-1b":       131072,
-	"llama-3.2-3b":       131072,
-	"llama-3.2-11b":      131072,
-	"llama-3.2-90b":      131072,
-	"llama-3.3-70b":      131072,
-	"mixtral-8x7b-32768": 32768,
-	"gemma-7b-it":        8192,
-	"gemma2-9b-it":       8192,
+	"llama3-8b-8192":     ctxWindow8K,
+	"llama3-70b-8192":    ctxWindow8K,
+	"llama-3.1-8b":       ctxWindow131K,
+	"llama-3.1-70b":      ctxWindow131K,
+	"llama-3.1-405b":     ctxWindow131K,
+	"llama-3.2-1b":       ctxWindow131K,
+	"llama-3.2-3b":       ctxWindow131K,
+	"llama-3.2-11b":      ctxWindow131K,
+	"llama-3.2-90b":      ctxWindow131K,
+	"llama-3.3-70b":      ctxWindow131K,
+	"mixtral-8x7b-32768": ctxWindow32K,
+	"gemma-7b-it":        ctxWindow8K,
+	"gemma2-9b-it":       ctxWindow8K,
 
 	// Qwen models.
-	"qwen-turbo":    8192,
-	"qwen-plus":     32768,
-	"qwen-max":      32768,
-	"qwen2-72b":     131072,
-	"qwen2.5-72b":   131072,
-	"qwen2.5-coder": 131072,
-	"qwq-32b":       131072,
+	"qwen-turbo":    ctxWindow8K,
+	"qwen-plus":     ctxWindow32K,
+	"qwen-max":      ctxWindow32K,
+	"qwen2-72b":     ctxWindow131K,
+	"qwen2.5-72b":   ctxWindow131K,
+	"qwen2.5-coder": ctxWindow131K,
+	"qwq-32b":       ctxWindow131K,
 }
 
 // getModelContextWindow returns the context window size for a model.

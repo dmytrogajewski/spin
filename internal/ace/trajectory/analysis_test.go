@@ -53,18 +53,29 @@ func hasRecentErrorCases() []hasRecentErrorCase {
 		},
 		{
 			name:     "returns false when error outside lookback window",
-			steps:    []generator.TrajectoryStep{{StepNumber: 0, Content: "error at start"}, {StepNumber: 1, Content: "step 2"}, {StepNumber: 2, Content: "step 3"}},
+			steps: []generator.TrajectoryStep{
+				{StepNumber: 0, Content: "error at start"},
+				{StepNumber: 1, Content: "step 2"},
+				{StepNumber: 2, Content: "step 3"},
+			},
 			lookback: 2, want: false,
 		},
 		{
-			name:     "returns false when no errors",
-			steps:    []generator.TrajectoryStep{{StepNumber: 0, Content: "all good"}, {StepNumber: 1, Content: "working fine"}},
+			name: "returns false when no errors",
+			steps: []generator.TrajectoryStep{
+				{StepNumber: 0, Content: "all good"},
+				{StepNumber: 1, Content: "working fine"},
+			},
 			lookback: 2, want: false,
 		},
 		{name: "handles empty trajectory", lookback: 2, want: false},
 		{
-			name:     "checks all steps when lookback is 0",
-			steps:    []generator.TrajectoryStep{{StepNumber: 0, Content: "error at start"}, {StepNumber: 1, Content: "step 2"}, {StepNumber: 2, Content: "step 3"}},
+			name: "checks all steps when lookback is 0",
+			steps: []generator.TrajectoryStep{
+				{StepNumber: 0, Content: "error at start"},
+				{StepNumber: 1, Content: "step 2"},
+				{StepNumber: 2, Content: "step 3"},
+			},
 			lookback: 0, want: true,
 		},
 		{

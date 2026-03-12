@@ -9,6 +9,11 @@ import (
 	"testing"
 )
 
+const (
+	testTmpPath = "/tmp"
+)
+
+
 var (
 	errExecutionFailed  = errors.New("execution failed")
 	errExecutionFailed2 = errors.New("execution failed")
@@ -362,12 +367,31 @@ func TestRegistryExecute(t *testing.T) {
 		wantErr    error
 		wantResult ToolResult
 	}{
-		{name: "execute success tool", toolName: "success_tool", params: map[string]any{}, wantResult: ToolResult{Success: true, Output: "success output"}},
-		{name: "execute error tool", toolName: "error_tool", params: map[string]any{}, wantErr: errExecutionFailed2},
-		{name: "execute non-existent tool", toolName: "nonexistent", params: map[string]any{}, wantErr: ErrToolNotFound},
-		{name: "execute with valid required params", toolName: "param_tool", params: map[string]any{"required_param": "test_value"}, wantResult: ToolResult{Success: true, Output: "received: test_value"}},
-		{name: "execute with missing required params", toolName: "param_tool", params: map[string]any{"optional_param": "test"}, wantErr: ErrInvalidParameters},
-		{name: "execute with wrong param type", toolName: "param_tool", params: map[string]any{"required_param": 123}, wantErr: ErrInvalidParameters},
+		{
+			name: "execute success tool", toolName: "success_tool",
+			params: map[string]any{}, wantResult: ToolResult{Success: true, Output: "success output"},
+		},
+		{
+			name: "execute error tool", toolName: "error_tool",
+			params: map[string]any{}, wantErr: errExecutionFailed2,
+		},
+		{
+			name: "execute non-existent tool", toolName: "nonexistent",
+			params: map[string]any{}, wantErr: ErrToolNotFound,
+		},
+		{
+			name: "execute with valid required params", toolName: "param_tool",
+			params:     map[string]any{"required_param": "test_value"},
+			wantResult: ToolResult{Success: true, Output: "received: test_value"},
+		},
+		{
+			name: "execute with missing required params", toolName: "param_tool",
+			params: map[string]any{"optional_param": "test"}, wantErr: ErrInvalidParameters,
+		},
+		{
+			name: "execute with wrong param type", toolName: "param_tool",
+			params: map[string]any{"required_param": 123}, wantErr: ErrInvalidParameters,
+		},
 	}
 
 	for _, tt := range tests {
@@ -708,8 +732,15 @@ func TestRegistryExecute_UnknownParameter(t *testing.T) {
 		{name: "all known parameters", params: map[string]any{"param1": "value1", "param2": "value2"}},
 		{name: "subset of known parameters", params: map[string]any{"param1": "value1"}},
 		{name: "empty parameters", params: map[string]any{}},
-		{name: "single unknown parameter", params: map[string]any{"unknown_param": "value"}, wantErr: true, errMsg: "unknown parameter \"unknown_param\""},
-		{name: "known and unknown parameters", params: map[string]any{"param1": "value1", "unknown_param": "value"}, wantErr: true, errMsg: "unknown parameter \"unknown_param\""},
+		{
+			name: "single unknown parameter", wantErr: true,
+			params: map[string]any{"unknown_param": "value"}, errMsg: "unknown parameter \"unknown_param\"",
+		},
+		{
+			name: "known and unknown parameters", wantErr: true,
+			params: map[string]any{"param1": "value1", "unknown_param": "value"},
+			errMsg: "unknown parameter \"unknown_param\"",
+		},
 		{name: "typo in parameter name", params: map[string]any{"parm1": "value"}, wantErr: true, errMsg: "unknown parameter \"parm1\""},
 	}
 
@@ -843,7 +874,7 @@ func TestRegistryExecute_UnknownParameter_ErrorMessage(t *testing.T) {
 
 func TestNewDefaultRegistry(t *testing.T) {
 	t.Parallel()
-	workDir := "/tmp"
+	workDir := testTmpPath
 	// Use a simple struct that implements the interface GetContextTool expects.
 	type testEnv struct {
 		WorkDir string
@@ -1015,7 +1046,7 @@ func TestNewDefaultRegistry_EquivalentToManual(t *testing.T) {
 
 func TestNewDefaultRegistry_AllToolsRegistered(t *testing.T) {
 	t.Parallel()
-	workDir := "/tmp"
+	workDir := testTmpPath
 
 	type testEnv struct {
 		WorkDir string
@@ -1057,7 +1088,7 @@ func TestNewDefaultRegistry_AllToolsRegistered(t *testing.T) {
 
 func TestNewDefaultRegistry_UniqueToolNames(t *testing.T) {
 	t.Parallel()
-	workDir := "/tmp"
+	workDir := testTmpPath
 
 	type testEnv struct {
 		WorkDir string

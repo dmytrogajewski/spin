@@ -6,28 +6,33 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/prompt"
 )
 
+const (
+	testThirdEntry = "third"
+)
+
+
 func TestHistory_Submit(t *testing.T) {
 	t.Parallel()
 	h := prompt.NewHistory(3)
 
 	// Submit first entry.
-	h.Submit("first")
+	h.Submit(testFirstEntry)
 
 	entries := h.Entries()
-	if len(entries) != 1 || entries[0] != "first" {
+	if len(entries) != 1 || entries[0] != testFirstEntry {
 		t.Errorf("After first submit, Entries() = %v, want [first]", entries)
 	}
 
 	// Submit second entry.
-	h.Submit("second")
+	h.Submit(testSecondEntry)
 
 	entries = h.Entries()
-	if len(entries) != 2 || entries[0] != "second" || entries[1] != "first" {
+	if len(entries) != 2 || entries[0] != testSecondEntry || entries[1] != testFirstEntry {
 		t.Errorf("After second submit, Entries() = %v, want [second first]", entries)
 	}
 
 	// Submit third entry.
-	h.Submit("third")
+	h.Submit(testThirdEntry)
 
 	entries = h.Entries()
 	if len(entries) != 3 {
@@ -42,7 +47,7 @@ func TestHistory_Submit(t *testing.T) {
 		t.Errorf("After fourth submit, len(Entries()) = %d, want 3 (limit)", len(entries))
 	}
 
-	if entries[0] != "fourth" || entries[1] != "third" || entries[2] != "second" {
+	if entries[0] != "fourth" || entries[1] != testThirdEntry || entries[2] != testSecondEntry {
 		t.Errorf("After fourth submit, Entries() = %v, want [fourth third second]", entries)
 	}
 }
@@ -64,7 +69,7 @@ func TestHistory_PrevHistory_Empty(t *testing.T) {
 func TestHistory_PrevHistory_SingleEntry(t *testing.T) {
 	t.Parallel()
 	h := prompt.NewHistory(10)
-	h.Submit("first")
+	h.Submit(testFirstEntry)
 
 	// First prev should return the entry.
 	entry, ok := h.PrevHistory("draft")
@@ -72,7 +77,7 @@ func TestHistory_PrevHistory_SingleEntry(t *testing.T) {
 		t.Errorf("First PrevHistory returned ok=false, want true")
 	}
 
-	if entry != "first" {
+	if entry != testFirstEntry {
 		t.Errorf("First PrevHistory returned entry=%q, want 'first'", entry)
 	}
 
@@ -86,23 +91,23 @@ func TestHistory_PrevHistory_SingleEntry(t *testing.T) {
 func TestHistory_PrevHistory_MultipleEntries(t *testing.T) {
 	t.Parallel()
 	h := prompt.NewHistory(10)
-	h.Submit("first")
-	h.Submit("second")
-	h.Submit("third")
+	h.Submit(testFirstEntry)
+	h.Submit(testSecondEntry)
+	h.Submit(testThirdEntry)
 
 	// Navigate backwards.
 	entry, ok := h.PrevHistory("draft")
-	if !ok || entry != "third" {
+	if !ok || entry != testThirdEntry {
 		t.Errorf("First PrevHistory = (%q, %v), want ('third', true)", entry, ok)
 	}
 
 	entry, ok = h.PrevHistory("draft")
-	if !ok || entry != "second" {
+	if !ok || entry != testSecondEntry {
 		t.Errorf("Second PrevHistory = (%q, %v), want ('second', true)", entry, ok)
 	}
 
 	entry, ok = h.PrevHistory("draft")
-	if !ok || entry != "first" {
+	if !ok || entry != testFirstEntry {
 		t.Errorf("Third PrevHistory = (%q, %v), want ('first', true)", entry, ok)
 	}
 
@@ -116,9 +121,9 @@ func TestHistory_PrevHistory_MultipleEntries(t *testing.T) {
 func TestHistory_NextHistory(t *testing.T) {
 	t.Parallel()
 	h := prompt.NewHistory(10)
-	h.Submit("first")
-	h.Submit("second")
-	h.Submit("third")
+	h.Submit(testFirstEntry)
+	h.Submit(testSecondEntry)
+	h.Submit(testThirdEntry)
 
 	// Navigate back.
 	h.PrevHistory("draft")
@@ -127,12 +132,12 @@ func TestHistory_NextHistory(t *testing.T) {
 
 	// Navigate forward.
 	entry, ok := h.NextHistory()
-	if !ok || entry != "second" {
+	if !ok || entry != testSecondEntry {
 		t.Errorf("First NextHistory = (%q, %v), want ('second', true)", entry, ok)
 	}
 
 	entry, ok = h.NextHistory()
-	if !ok || entry != "third" {
+	if !ok || entry != testThirdEntry {
 		t.Errorf("Second NextHistory = (%q, %v), want ('third', true)", entry, ok)
 	}
 
@@ -152,24 +157,24 @@ func TestHistory_NextHistory(t *testing.T) {
 func TestHistory_DraftPreservation(t *testing.T) {
 	t.Parallel()
 	h := prompt.NewHistory(10)
-	h.Submit("first")
-	h.Submit("second")
+	h.Submit(testFirstEntry)
+	h.Submit(testSecondEntry)
 
 	// Start navigating with a draft.
 	entry, ok := h.PrevHistory("my draft text")
-	if !ok || entry != "second" {
+	if !ok || entry != testSecondEntry {
 		t.Errorf("PrevHistory = (%q, %v), want ('second', true)", entry, ok)
 	}
 
 	// Navigate to oldest.
 	entry, ok = h.PrevHistory("my draft text")
-	if !ok || entry != "first" {
+	if !ok || entry != testFirstEntry {
 		t.Errorf("PrevHistory = (%q, %v), want ('first', true)", entry, ok)
 	}
 
 	// Navigate back to draft.
 	entry, ok = h.NextHistory()
-	if !ok || entry != "second" {
+	if !ok || entry != testSecondEntry {
 		t.Errorf("NextHistory = (%q, %v), want ('second', true)", entry, ok)
 	}
 
@@ -182,8 +187,8 @@ func TestHistory_DraftPreservation(t *testing.T) {
 func TestHistory_Reset(t *testing.T) {
 	t.Parallel()
 	h := prompt.NewHistory(10)
-	h.Submit("first")
-	h.Submit("second")
+	h.Submit(testFirstEntry)
+	h.Submit(testSecondEntry)
 
 	// Navigate.
 	h.PrevHistory("draft")
@@ -193,7 +198,7 @@ func TestHistory_Reset(t *testing.T) {
 
 	// Next PrevHistory should start from newest again.
 	entry, ok := h.PrevHistory("new draft")
-	if !ok || entry != "second" {
+	if !ok || entry != testSecondEntry {
 		t.Errorf("After Reset, PrevHistory = (%q, %v), want ('second', true)", entry, ok)
 	}
 }
@@ -201,8 +206,8 @@ func TestHistory_Reset(t *testing.T) {
 func TestHistory_SubmitDuringNavigation(t *testing.T) {
 	t.Parallel()
 	h := prompt.NewHistory(10)
-	h.Submit("first")
-	h.Submit("second")
+	h.Submit(testFirstEntry)
+	h.Submit(testSecondEntry)
 
 	// Navigate.
 	h.PrevHistory("draft")

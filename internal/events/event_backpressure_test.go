@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+const (
+	testEvent1 = "event1"
+	testEvent2 = "event2"
+)
+
+
 // Test BackpressureDrop mode - events dropped when channel full.
 func TestEventEmitter_BackpressureDrop(t *testing.T) {
 	t.Parallel()
@@ -23,20 +29,20 @@ func TestEventEmitter_BackpressureDrop(t *testing.T) {
 	}
 
 	// Fill the buffer (size=2).
-	emitter.Emit(Event{Type: EventInfo, Data: "event1"})
-	emitter.Emit(Event{Type: EventInfo, Data: "event2"})
+	emitter.Emit(Event{Type: EventInfo, Data: testEvent1})
+	emitter.Emit(Event{Type: EventInfo, Data: testEvent2})
 
 	// This should be dropped (buffer full, no consumer).
 	emitter.Emit(Event{Type: EventInfo, Data: "event3"})
 
 	// Read first two events.
 	event1 := <-events
-	if event1.Data != "event1" {
+	if event1.Data != testEvent1 {
 		t.Errorf("Expected event1, got %v", event1.Data)
 	}
 
 	event2 := <-events
-	if event2.Data != "event2" {
+	if event2.Data != testEvent2 {
 		t.Errorf("Expected event2, got %v", event2.Data)
 	}
 
@@ -124,8 +130,8 @@ func TestEventEmitter_BackpressureBlock(t *testing.T) {
 	}
 
 	// Fill the buffer (size=2).
-	emitter.Emit(Event{Type: EventInfo, Data: "event1"})
-	emitter.Emit(Event{Type: EventInfo, Data: "event2"})
+	emitter.Emit(Event{Type: EventInfo, Data: testEvent1})
+	emitter.Emit(Event{Type: EventInfo, Data: testEvent2})
 
 	// Track if emitter blocks.
 	blocked := make(chan bool, 1)
@@ -149,7 +155,7 @@ func TestEventEmitter_BackpressureBlock(t *testing.T) {
 
 	// Read one event to unblock.
 	event1 := <-events
-	if event1.Data != "event1" {
+	if event1.Data != testEvent1 {
 		t.Errorf("Expected event1, got %v", event1.Data)
 	}
 
@@ -163,7 +169,7 @@ func TestEventEmitter_BackpressureBlock(t *testing.T) {
 
 	// Read remaining events.
 	event2 := <-events
-	if event2.Data != "event2" {
+	if event2.Data != testEvent2 {
 		t.Errorf("Expected event2, got %v", event2.Data)
 	}
 
@@ -190,8 +196,8 @@ func TestEventEmitter_BackpressureBuffer(t *testing.T) {
 	}
 
 	// Fill channel buffer (2 events).
-	emitter.Emit(Event{Type: EventInfo, Data: "event1"})
-	emitter.Emit(Event{Type: EventInfo, Data: "event2"})
+	emitter.Emit(Event{Type: EventInfo, Data: testEvent1})
+	emitter.Emit(Event{Type: EventInfo, Data: testEvent2})
 
 	// Verify buffer is in dynamic buffer map.
 	emitter.bufferMu.Lock()
@@ -224,12 +230,12 @@ func TestEventEmitter_BackpressureBuffer(t *testing.T) {
 
 	// Read events from channel to make space.
 	event1 := <-events
-	if event1.Data != "event1" {
+	if event1.Data != testEvent1 {
 		t.Errorf("Expected event1, got %v", event1.Data)
 	}
 
 	event2 := <-events
-	if event2.Data != "event2" {
+	if event2.Data != testEvent2 {
 		t.Errorf("Expected event2, got %v", event2.Data)
 	}
 
@@ -296,12 +302,12 @@ func TestEventEmitter_BackpressureBuffer_LimitExceeded(t *testing.T) {
 
 	// Read events from channel.
 	event1 := <-events
-	if event1.Data != "event1" {
+	if event1.Data != testEvent1 {
 		t.Errorf("Expected event1, got %v", event1.Data)
 	}
 
 	event2 := <-events
-	if event2.Data != "event2" {
+	if event2.Data != testEvent2 {
 		t.Errorf("Expected event2, got %v", event2.Data)
 	}
 

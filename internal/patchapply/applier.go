@@ -453,7 +453,7 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 	lines := strings.Split(string(originalContent), "\n")
 
 	for i, hunk := range op.Hunks {
-		if err = a.applyHunk(&lines, hunk, op.FilePath, i); err != nil {
+		if err := a.applyHunk(&lines, hunk, op.FilePath, i); err != nil {
 			return err
 		}
 	}
@@ -467,7 +467,7 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 		return a.wrapError("Update", op.FilePath, err, "failed to write file")
 	}
 
-	if err = a.deleteOriginalIfMoved(op, targetPath, fullPath); err != nil {
+	if err := a.deleteOriginalIfMoved(op, targetPath, fullPath); err != nil {
 		return err
 	}
 

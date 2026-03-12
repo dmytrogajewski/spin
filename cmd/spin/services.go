@@ -106,7 +106,9 @@ func createMCPService(ctx context.Context, cfg *config.V2, logger *slog.Logger) 
 	registryManager := mcp.NewDefaultRegistryManager(logger)
 
 	for _, srv := range cfg.Protocol.MCPServers {
-		logger.DebugContext(ctx, "creating MCP registry", "name", srv.Name, "transport", srv.Transport, "dynamic_loadout", srv.DynamicLoadout)
+		logger.DebugContext(ctx, "creating MCP registry",
+			"name", srv.Name, "transport", srv.Transport,
+			"dynamic_loadout", srv.DynamicLoadout)
 
 		registerMCPServer(ctx, registryManager, srv, logger)
 	}
@@ -119,7 +121,10 @@ func createMCPService(ctx context.Context, cfg *config.V2, logger *slog.Logger) 
 }
 
 // registerMCPServer creates and registers a single MCP server.
-func registerMCPServer(ctx context.Context, registryManager *mcp.DefaultRegistryManager, srv config.MCPServerConfigV2, logger *slog.Logger) {
+func registerMCPServer(
+	ctx context.Context, registryManager *mcp.DefaultRegistryManager,
+	srv config.MCPServerConfigV2, logger *slog.Logger,
+) {
 	registry, err := createMCPRegistry(srv, logger)
 	if err != nil {
 		logger.WarnContext(ctx, "failed to create MCP registry", "name", srv.Name, "err", err)
@@ -255,7 +260,11 @@ func hasDynamicRegistries(cfg *config.V2) bool {
 }
 
 // createToolSelector creates a ToolSelector if dynamic registries are configured.
-func createToolSelector(ctx context.Context, mcpSvc *mcp.Service, coreRegistry *tools.Registry, emitter *events.EventEmitter, cfg *config.V2, logger *slog.Logger) *agent.ToolSelector {
+func createToolSelector(
+	ctx context.Context, mcpSvc *mcp.Service,
+	coreRegistry *tools.Registry, emitter *events.EventEmitter,
+	cfg *config.V2, logger *slog.Logger,
+) *agent.ToolSelector {
 	if mcpSvc == nil {
 		logger.DebugContext(ctx, "tool selector: MCP service is nil")
 

@@ -6,11 +6,34 @@ import (
 	"strings"
 )
 
+// Terminal width breakpoints for adaptive formatting.
+const (
+	compactWidthThreshold = 60
+	mediumWidthThreshold  = 100
+
+	// Truncation limits for status bar fields.
+	mediumStateTruncate   = 15
+	mediumModelTruncate   = 12
+	fullStateTruncate     = 20
+	fullModelTruncate     = 20
+	convIDShortLength     = 6
+
+	// Number formatting thresholds.
+	kiloThreshold = 1000
+	megaThreshold = 1000000
+
+	// Minimum truncation length for ellipsis.
+	minTruncateLen = 3
+
+	// StateReady is the default agent state.
+	StateReady = "Ready"
+)
+
 // FormatAdaptive selects the appropriate format based on terminal width.
 func (m *Manager) FormatAdaptive(width int) string {
-	if width < 60 {
+	if width < compactWidthThreshold {
 		return m.FormatCompact(width)
-	} else if width < 100 {
+	} else if width < mediumWidthThreshold {
 		return m.FormatMedium(width)
 	}
 
@@ -47,16 +70,16 @@ func (m *Manager) FormatMedium(_ int) string {
 	// Agent state.
 	state := m.status.Metrics.AgentState
 	if state == "" {
-		state = "Ready"
+		state = StateReady
 	}
 
-	parts = append(parts, truncate(state, 15))
+	parts = append(parts, truncate(state, mediumStateTruncate))
 
 	// Provider/model (truncated).
 	if m.status.Metrics.Provider != "" {
 		provider := fmt.Sprintf("%s/%s",
 			m.status.Metrics.Provider,
-			truncate(m.status.Metrics.Model, 12))
+			truncate(m.status.Metrics.Model, mediumModelTruncate))
 		parts = append(parts, provider)
 	}
 
@@ -102,10 +125,10 @@ func (m *Manager) FormatFull(_ int) string {
 	// Agent state.
 	state := m.status.Metrics.AgentState
 	if state == "" {
-		state = "Ready"
+		state = StateReady
 	}
 
-	parts = append(parts, truncate(state, 20))
+	parts = append(parts, truncate(state, fullStateTruncate))
 
 	// Task mode (if not default).
 	if m.status.Metrics.TaskMode != "" && m.status.Metrics.TaskMode != "regular" {
@@ -116,7 +139,7 @@ func (m *Manager) FormatFull(_ int) string {
 	if m.status.Metrics.Provider != "" {
 		provider := fmt.Sprintf("%s/%s",
 			m.status.Metrics.Provider,
-			truncate(m.status.Metrics.Model, 20))
+			truncate(m.status.Metrics.Model, fullModelTruncate))
 		parts = append(parts, provider)
 	}
 
@@ -129,8 +152,8 @@ func (m *Manager) FormatFull(_ int) string {
 	// Conversation ID (shortened to first 6 chars).
 	if m.status.Metrics.ConversationID != "" {
 		shortID := m.status.Metrics.ConversationID
-		if len(shortID) > 6 {
-			shortID = shortID[:6]
+		if len(shortID) > convIDShortLength {
+			shortID = shortID[:convIDShortLength]
 		}
 
 		convID := "conv:" + shortID
@@ -174,13 +197,13 @@ func formatPercentage(pct float64) string {
 
 // humanizeNumber formats large numbers with K/M suffixes.
 func humanizeNumber(n int64) string {
-	if n < 1000 {
+	if n < kiloThreshold {
 		return strconv.FormatInt(n, 10)
-	} else if n < 1000000 {
-		return fmt.Sprintf("%.1fK", float64(n)/1000)
+	} else if n < megaThreshold {
+		return fmt.Sprintf("%.1fK", float64(n)/kiloThreshold)
 	}
 
-	return fmt.Sprintf("%.1fM", float64(n)/1000000)
+	return fmt.Sprintf("%.1fM", float64(n)/megaThreshold)
 }
 
 // truncate truncates a string to maxLen characters, adding "..." if truncated.
@@ -189,7 +212,7 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 
-	if maxLen < 3 {
+	if maxLen < minTruncateLen {
 		return s[:maxLen]
 	}
 

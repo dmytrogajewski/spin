@@ -12,6 +12,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 )
 
+const bytesPerFloat32 = 4
+
 var (
 	ErrBulletCannotBeNil = errors.New("bullet cannot be nil")
 	ErrBulletWithIDAlreadyExists = errors.New("bullet with ID  already exists")
@@ -73,7 +75,7 @@ func (p *Playbook) Stats() Stats {
 		stats.TotalSizeBytes += int64(len(b.Content))
 		stats.TotalSizeBytes += 16 // counters + timestamps.
 
-		stats.TotalSizeBytes += int64(len(b.Embedding) * 4) // float32 = 4 bytes.
+		stats.TotalSizeBytes += int64(len(b.Embedding) * bytesPerFloat32) // float32 = 4 bytes.
 		for k, v := range b.Tags {
 			stats.TotalSizeBytes += int64(len(k) + len(v))
 		}

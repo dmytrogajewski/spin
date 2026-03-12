@@ -9,6 +9,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
 
+const (
+	verboseThresholdTokens = 1000
+	historyContextRatio    = 0.75
+)
+
 // createHistory creates a new history instance with event emitter, compression, and summarization configured.
 func (b *Builder) createHistory(ctx context.Context) *history.History {
 	// Use a reasonable default based on the LLM's max tokens.
@@ -19,7 +24,7 @@ func (b *Builder) createHistory(ctx context.Context) *history.History {
 
 	// Set up compression with classifier and compressor.
 	classifier := compress.NewClassifierWithOptions(
-		compress.WithVerboseThreshold(1000),
+		compress.WithVerboseThreshold(verboseThresholdTokens),
 	)
 	compressor := compress.NewHybridCompressor(classifier, compress.DefaultCompressorConfig())
 
@@ -82,7 +87,7 @@ func (b *Builder) getHistoryMaxTokens() int {
 	}
 
 	// Use 75% of context window for history (leave room for responses).
-	historyTokens := int(float64(contextWindow) * 0.75)
+	historyTokens := int(float64(contextWindow) * historyContextRatio)
 
 	if historyTokens < minTokens {
 		historyTokens = defaultTokens

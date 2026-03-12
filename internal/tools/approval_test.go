@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+const (
+	testMockToolDesc = "Mock tool for testing"
+)
+
+
 func TestRiskLevel_String(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -56,7 +61,7 @@ type mockToolWithApproval struct {
 }
 
 func (m *mockToolWithApproval) Name() string        { return "mock_tool" }
-func (m *mockToolWithApproval) Description() string { return "Mock tool for testing" }
+func (m *mockToolWithApproval) Description() string { return testMockToolDesc }
 func (m *mockToolWithApproval) Schema() ToolSchema  { return ToolSchema{} }
 func (m *mockToolWithApproval) Execute(_ context.Context, _ ToolParameters) (ToolResult, error) {
 	return ToolResult{Success: true}, nil

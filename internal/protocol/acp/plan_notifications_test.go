@@ -32,7 +32,9 @@ func (m *mockConnectionForPlan) SessionUpdate(_ context.Context, notification ac
 	return nil
 }
 
-func (m *mockConnectionForPlan) RequestPermission(_ context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (m *mockConnectionForPlan) RequestPermission(
+	_ context.Context, params acp.RequestPermissionRequest,
+) (acp.RequestPermissionResponse, error) {
 	// Auto-approve for testing by selecting the first allow option.
 	for _, opt := range params.Options {
 		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {

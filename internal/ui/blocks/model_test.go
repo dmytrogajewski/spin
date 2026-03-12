@@ -6,6 +6,11 @@ import (
 	"time"
 )
 
+const (
+	testGoTestCmd = "go test"
+)
+
+
 func TestNewBlock(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -138,7 +143,7 @@ func TestBlock_JSON_Roundtrip(t *testing.T) {
 	exitCode := 0
 
 	meta := &ExecuteMeta{
-		Command:  "go test",
+		Command:  testGoTestCmd,
 		CWD:      "/tmp",
 		Impact:   "low",
 		ExitCode: &exitCode,
@@ -199,7 +204,7 @@ func TestBlock_JSON_Roundtrip(t *testing.T) {
 		t.Fatalf("GetExecuteMeta() error = %v", err)
 	}
 
-	if restoredMeta.Command != "go test" {
+	if restoredMeta.Command != testGoTestCmd {
 		t.Errorf("Restored Meta.Command = %v, want 'go test'", restoredMeta.Command)
 	}
 }
@@ -215,7 +220,7 @@ func TestBlock_JSON_Format(t *testing.T) {
 	exitCode := 0
 
 	meta := &ExecuteMeta{
-		Command:  "go test",
+		Command:  testGoTestCmd,
 		CWD:      "/tmp",
 		Impact:   "low",
 		ExitCode: &exitCode,
@@ -257,7 +262,7 @@ func TestBlock_TypeSafeMetadata_Execute(t *testing.T) {
 	t.Parallel()
 
 	b := NewBlock(BlockTypeExecute)
-	meta := &ExecuteMeta{Command: "go test", CWD: "/tmp", TimeoutSec: 30, Impact: "low"}
+	meta := &ExecuteMeta{Command: testGoTestCmd, CWD: "/tmp", TimeoutSec: 30, Impact: "low"}
 
 	err := b.SetExecuteMeta(meta)
 	if err != nil {
@@ -269,7 +274,7 @@ func TestBlock_TypeSafeMetadata_Execute(t *testing.T) {
 		t.Fatalf("GetExecuteMeta() error = %v", err)
 	}
 
-	if retrieved.Command != "go test" {
+	if retrieved.Command != testGoTestCmd {
 		t.Errorf("Command = %v, want 'go test'", retrieved.Command)
 	}
 
@@ -347,7 +352,7 @@ func TestBlock_MetadataJSONRoundtrip(t *testing.T) {
 	exitCode := 0
 
 	meta := &ExecuteMeta{
-		Command:  "go test",
+		Command:  testGoTestCmd,
 		CWD:      "/tmp",
 		Impact:   "low",
 		ExitCode: &exitCode,
@@ -376,7 +381,7 @@ func TestBlock_MetadataJSONRoundtrip(t *testing.T) {
 		t.Fatalf("GetExecuteMeta() error = %v", err)
 	}
 
-	if restoredMeta.Command != "go test" {
+	if restoredMeta.Command != testGoTestCmd {
 		t.Errorf("Command = %v, want 'go test'", restoredMeta.Command)
 	}
 

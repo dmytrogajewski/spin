@@ -107,18 +107,18 @@ func (s *Session) UpdateMetadata(fn func(*Metadata)) error {
 }
 
 // SetState updates session state with validation.
-func (s *Session) SetState(state State) error {
+func (s *Session) SetState(newState State) error {
 	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// Validate state transition.
-	err := s.validateStateTransition(s.State, state)
+	err := s.validateStateTransition(s.State, newState)
 	if err != nil {
 		return err
 	}
 
-	s.State = state
+	s.State = newState
 	s.UpdatedAt = time.Now()
 
 	return nil
@@ -235,8 +235,8 @@ errs = append(errs, fmt.Errorf("invalid state: %s: %w", s.State, ErrInvalidState
 }
 
 // isValidState checks if a state value is valid.
-func isValidState(state State) bool {
-	switch state {
+func isValidState(st State) bool {
+	switch st {
 	case StateActive, StateCompleted, StateFailed, StateArchived, StateCancelled:
 		return true
 	default:

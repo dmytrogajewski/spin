@@ -23,6 +23,9 @@ import (
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 )
 
+const debugEventBufferSize = 100
+
+
 var (
 	ErrPromptCannotBeEmpty = errors.New("prompt cannot be empty")
 	ErrTaskFailed          = errors.New("task failed")
@@ -278,7 +281,7 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	}
 	defer svcs.close()
 
-	emitter := events.NewEventEmitter(100)
+	emitter := events.NewEventEmitter(debugEventBufferSize)
 	provider := llm.NewMockProvider("debug")
 
 	runtime, err := createBuiltinRuntime(workDir, emitter, cfg, svcs, logger)

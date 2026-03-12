@@ -31,7 +31,8 @@ type Review struct {
 
 // ReviewSystemPrompt is the system prompt for review mode.
 // It emphasizes read-only analysis without modification capabilities.
-const ReviewSystemPrompt = `You are an expert code reviewer. You have read-only access to analyze code, identify issues, and provide detailed feedback.
+const ReviewSystemPrompt = `You are an expert code reviewer. ` +
+	`You have read-only access to analyze code, identify issues, and provide detailed feedback.
 
 # Your Role
 
@@ -63,7 +64,7 @@ You cannot:
 // NewReview creates a new Review task instance.
 func NewReview() *Review {
 	return &Review{
-		name:         "review",
+		name:         TaskNameReview,
 		systemPrompt: ReviewSystemPrompt,
 		maxTokens:    DefaultReviewMaxTokens,
 	}

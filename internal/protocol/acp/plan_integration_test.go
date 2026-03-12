@@ -146,7 +146,9 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{

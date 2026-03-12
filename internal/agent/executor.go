@@ -16,6 +16,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 )
 
+const executorConcurrency = 2
+
 // Executor-specific errors.
 var (
 	ErrNilCommand       = errors.New("command is nil")
@@ -634,15 +636,17 @@ func (e *Executor) validateStreamingCommand(cmd *security.Command, opts *Execute
 }
 
 // prepareStreamingCmd creates an exec.Cmd with stdout/stderr pipes for streaming.
-func (e *Executor) prepareStreamingCmd(execCtx context.Context, cmd *security.Command, opts *ExecuteOptions) (*exec.Cmd, io.Reader, io.Reader, error) {
-	execCmd := e.prepareExecCmd(execCtx, cmd, opts)
+func (e *Executor) prepareStreamingCmd(
+	execCtx context.Context, cmd *security.Command, opts *ExecuteOptions,
+) (execCmd *exec.Cmd, stdout, stderr io.Reader, err error) {
+	execCmd = e.prepareExecCmd(execCtx, cmd, opts)
 
-	stdout, err := execCmd.StdoutPipe()
+	stdout, err = execCmd.StdoutPipe()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
-	stderr, err := execCmd.StderrPipe()
+	stderr, err = execCmd.StderrPipe()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
@@ -651,10 +655,14 @@ func (e *Executor) prepareStreamingCmd(execCtx context.Context, cmd *security.Co
 }
 
 // runStreamingGoroutines starts goroutines to stream stdout/stderr and wait for completion.
-func (e *Executor) runStreamingGoroutines(execCtx context.Context, execCmd *exec.Cmd, stdout, stderr io.Reader, chunks chan OutputChunk, cancel context.CancelFunc) {
+func (e *Executor) runStreamingGoroutines(
+	execCtx context.Context, execCmd *exec.Cmd,
+	stdout, stderr io.Reader, chunks chan OutputChunk,
+	cancel context.CancelFunc,
+) {
 	var wg sync.WaitGroup
 
-	wg.Add(2)
+	wg.Add(executorConcurrency)
 
 	go func() {
 		defer wg.Done()
@@ -764,9 +772,7 @@ func isSensitive(key string) bool {
 }
 
 // captureOutput captures command output with size limits.
-func (e *Executor) captureOutput(stdout, stderr io.Reader, maxSize int64) (string, string, bool) {
-	var truncated bool
-
+func (e *Executor) captureOutput(stdout, stderr io.Reader, maxSize int64) (stdoutStr, stderrStr string, truncated bool) {
 	// Read stdout.
 	stdoutBytes, err := io.ReadAll(io.LimitReader(stdout, maxSize))
 	if err != nil {

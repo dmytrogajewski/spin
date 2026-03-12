@@ -30,6 +30,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+const (
+	acpApprovalTimeout    = 60 * time.Second
+	historyContextRatio   = 0.75 // use 75% of context window for history.
+)
+
 // newACPCmd creates the ACP server command.
 func newACPCmd() *cobra.Command {
 	var (
@@ -95,7 +100,10 @@ type acpInfra struct {
 }
 
 // createACPInfra creates the infrastructure components for the ACP server.
-func createACPInfra(ctx context.Context, cmd *cobra.Command, workDir string, flagOverrides config.FlagOverrides, apiKey string) (*config.V2, *acpInfra, error) {
+func createACPInfra(
+	ctx context.Context, cmd *cobra.Command, workDir string,
+	flagOverrides config.FlagOverrides, apiKey string,
+) (*config.V2, *acpInfra, error) {
 	authMgr := createAuthManager()
 
 	cfg, err := config.Load(config.Source{
@@ -165,7 +173,7 @@ func wireACPAgent(
 	acpRuntime.SetACPAgent(acpAgent)
 	acpAgent.SetACPRuntime(acpRuntime)
 
-	acpApprovalHandler := acppkg.NewApprovalHandler(acpAgent, 60*time.Second)
+	acpApprovalHandler := acppkg.NewApprovalHandler(acpAgent, acpApprovalTimeout)
 	acpRuntime.SetApprovalHandler(acpApprovalHandler.HandleApprovalRequest)
 	acpAgent.SetApprovalHandler(acpApprovalHandler)
 	acpAgent.SetApprovalService(coreAgent.GetSecurityService().ApprovalService())
@@ -322,7 +330,7 @@ func getHistoryMaxTokens(cfg *config.V2, provider llm.Provider) int {
 	// Use 75% of context window for history (leave room for responses).
 	historyTokens := min(
 		// Apply constraints.
-		int(float64(contextWindow)*0.75), maxTokens)
+		int(float64(contextWindow)*historyContextRatio), maxTokens)
 
 	if historyTokens < minTokens {
 		historyTokens = defaultTokens
@@ -332,7 +340,10 @@ func getHistoryMaxTokens(cfg *config.V2, provider llm.Provider) int {
 }
 
 // buildProviderForACP creates and configures an LLM provider for the ACP server.
-func buildProviderForACP(ctx context.Context, cfg *config.V2, authMgr *auth.Manager, providerType, baseURL, model, apiKey string) (llm.Provider, error) {
+func buildProviderForACP(
+	ctx context.Context, cfg *config.V2, authMgr *auth.Manager,
+	providerType, baseURL, model, apiKey string,
+) (llm.Provider, error) {
 	extra, ok, err := createProviderForACPExtra(providerType, baseURL, model, apiKey)
 	if err != nil {
 		return nil, err
@@ -395,7 +406,10 @@ func buildCoreAgent(
 		}
 	}
 
-	agentInstance, err := agent.NewAgent(provider, securityService, detectionService, toolRuntime, planningService, environment, emitter, opts...)
+	agentInstance, err := agent.NewAgent(
+		provider, securityService, detectionService, toolRuntime,
+		planningService, environment, emitter, opts...,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("build agent: %w", err)
 	}

@@ -6,6 +6,12 @@ import (
 	"testing"
 )
 
+const (
+	testBlockID1 = "blk_1"
+	testOnlyFilter = "only"
+)
+
+
 // ========== Block Management Tests ==========.
 
 func TestTimeline_Append(t *testing.T) {
@@ -13,7 +19,7 @@ func TestTimeline_Append(t *testing.T) {
 	timeline := NewTimeline()
 
 	block := NewBlock(BlockTypeExecute)
-	block.ID = "blk_1"
+	block.ID = testBlockID1
 	block.Title = "Test block"
 
 	err := timeline.Append(block)
@@ -25,12 +31,12 @@ func TestTimeline_Append(t *testing.T) {
 		t.Errorf("Expected length 1, got %d", timeline.Len())
 	}
 
-	retrieved, err := timeline.Get("blk_1")
+	retrieved, err := timeline.Get(testBlockID1)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	if retrieved.ID != "blk_1" {
+	if retrieved.ID != testBlockID1 {
 		t.Errorf("Expected ID blk_1, got %s", retrieved.ID)
 	}
 }
@@ -93,22 +99,22 @@ func TestTimeline_Update(t *testing.T) {
 	timeline := NewTimeline()
 
 	block := NewBlock(BlockTypeExecute)
-	block.ID = "blk_1"
+	block.ID = testBlockID1
 	block.Title = "Original"
 	if err := timeline.Append(block); err != nil {
 		t.Fatalf("Append failed: %v", err)
 	}
 
 	updated := NewBlock(BlockTypeExecute)
-	updated.ID = "blk_1"
+	updated.ID = testBlockID1
 	updated.Title = "Updated"
 
-	err := timeline.Update("blk_1", updated)
+	err := timeline.Update(testBlockID1, updated)
 	if err != nil {
 		t.Fatalf("Update failed: %v", err)
 	}
 
-	retrieved, err := timeline.Get("blk_1")
+	retrieved, err := timeline.Get(testBlockID1)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -883,18 +889,18 @@ func TestTimeline_ToggleFold(t *testing.T) {
 	timeline := NewTimeline()
 
 	block := NewBlock(BlockTypeExecute)
-	block.ID = "blk_1"
+	block.ID = testBlockID1
 	block.FoldState = FoldStateExpanded
 	if err := timeline.Append(block); err != nil {
 		t.Fatalf("Append failed: %v", err)
 	}
 
-	err := timeline.ToggleFold("blk_1")
+	err := timeline.ToggleFold(testBlockID1)
 	if err != nil {
 		t.Fatalf("ToggleFold failed: %v", err)
 	}
 
-	retrieved, err := timeline.Get("blk_1")
+	retrieved, err := timeline.Get(testBlockID1)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -903,12 +909,12 @@ func TestTimeline_ToggleFold(t *testing.T) {
 	}
 
 	// Toggle again.
-	err = timeline.ToggleFold("blk_1")
+	err = timeline.ToggleFold(testBlockID1)
 	if err != nil {
 		t.Fatalf("ToggleFold failed: %v", err)
 	}
 
-	retrieved, err = timeline.Get("blk_1")
+	retrieved, err = timeline.Get(testBlockID1)
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -1005,12 +1011,12 @@ func TestTimeline_SingleBlock(t *testing.T) {
 	timeline := NewTimeline()
 
 	block := NewBlock(BlockTypeExecute)
-	block.ID = "only"
+	block.ID = testOnlyFilter
 	if err := timeline.Append(block); err != nil {
 		t.Fatalf("Append failed: %v", err)
 	}
 
-	if err := timeline.FocusBlock("only"); err != nil {
+	if err := timeline.FocusBlock(testOnlyFilter); err != nil {
 		t.Fatalf("FocusBlock failed: %v", err)
 	}
 
@@ -1023,7 +1029,7 @@ func TestTimeline_SingleBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetFocusedBlock failed: %v", err)
 	}
-	if focused.ID != "only" {
+	if focused.ID != testOnlyFilter {
 		t.Errorf("NextBlock on single block: expected 'only', got '%s'", focused.ID)
 	}
 
@@ -1037,7 +1043,7 @@ func TestTimeline_SingleBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetFocusedBlock failed: %v", err)
 	}
-	if focused.ID != "only" {
+	if focused.ID != testOnlyFilter {
 		t.Errorf("PrevBlock on single block: expected 'only', got '%s'", focused.ID)
 	}
 }

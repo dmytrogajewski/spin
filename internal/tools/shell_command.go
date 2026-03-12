@@ -9,6 +9,13 @@ import (
 	"github.com/google/shlex"
 )
 
+const (
+	classificationLow      = 2
+	classificationMedium   = 3
+	classificationHigh     = 4
+	shellCommandName       = "shell_command"
+)
+
 // CommandValidator validates commands for security (to avoid import cycle with security package).
 type CommandValidator interface {
 	Classify(cmd CommandInfo) (ValidationResult, error)
@@ -92,7 +99,7 @@ func NewShellCommandTool(validator CommandValidator, shellCtx ShellContext, exec
 
 // Name returns the tool name.
 func (t *ShellCommandTool) Name() string {
-	return "shell_command"
+	return shellCommandName
 }
 
 // Description returns the tool description.
@@ -112,12 +119,16 @@ func (t *ShellCommandTool) Schema() ToolSchema {
 				Properties: map[string]PropertyDefinition{
 					"operation": {
 						Type:        "string",
-						Description: "Operation type: 'execute' to run a shell command (most common), 'get_environment' to list env vars, 'get_shell_info' for shell info, 'detect_shell' to check if command needs shell, 'validate' to validate a command",
+						Description: "Operation type: 'execute' to run a shell command (most common), " +
+							"'get_environment' to list env vars, 'get_shell_info' for shell info, " +
+							"'detect_shell' to check if command needs shell, 'validate' to validate a command",
 						Enum:        []string{"execute", "get_environment", "get_shell_info", "detect_shell", "validate"},
 					},
 					"command": {
 						Type:        "string",
-						Description: "The shell command to execute (e.g., 'ls -la', 'uname -a', 'df -h'). REQUIRED for 'execute', 'detect_shell', and 'validate' operations. This is the actual command string you want to run.",
+						Description: "The shell command to execute (e.g., 'ls -la', 'uname -a', 'df -h'). " +
+							"REQUIRED for 'execute', 'detect_shell', and 'validate' operations. " +
+							"This is the actual command string you want to run.",
 					},
 					"working_directory": {
 						Type:        "string",
@@ -469,11 +480,11 @@ func classificationToString(classification int) string {
 		return "safe"
 	case 1:
 		return "interactive"
-	case 2:
+	case classificationLow:
 		return "dangerous"
-	case 3:
+	case classificationMedium:
 		return "forbidden"
-	case 4:
+	case classificationHigh:
 		return "unverified"
 	default:
 		return "unknown"
@@ -485,7 +496,7 @@ func (t *ShellCommandTool) formatClassification(result ValidationResult) ToolRes
 	classification := result.GetClassification()
 	reason := result.GetReason()
 	classStr := classificationToString(classification)
-	needsApproval := classification >= 1 && classification <= 4
+	needsApproval := classification >= 1 && classification <= classificationHigh
 
 	var output strings.Builder
 	output.WriteString("Command Validation Result:\n")

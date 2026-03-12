@@ -118,7 +118,7 @@ func TestConfigCommands_ShowEmpty(t *testing.T) {
 		t.Fatalf("config show failed: %v\nstderr: %s", err, stderr)
 	}
 
-	if len(stdout) == 0 && len(stderr) == 0 {
+	if stdout == "" && stderr == "" {
 		t.Errorf("Expected some output from config show, got nothing")
 	}
 }
@@ -264,15 +264,16 @@ func TestDebugCommands(t *testing.T) {
 
 		// On Linux, should fail with platform check
 		// On macOS, might work or show not implemented.
-		if strings.Contains(output, "only available on macOS") {
+		switch {
+		case strings.Contains(output, "only available on macOS"):
 			// Correct behavior on Linux.
 			if err == nil {
 				t.Error("Expected error on non-macOS platform")
 			}
-		} else if strings.Contains(output, "not yet implemented") {
+		case strings.Contains(output, "not yet implemented"):
 			// Acceptable - stub implementation on macOS.
 			t.Logf("Sandbox command reached stub (macOS): %s", output)
-		} else {
+		default:
 			t.Logf("Sandbox command output: %s", output)
 		}
 	})
@@ -286,15 +287,16 @@ func TestDebugCommands(t *testing.T) {
 
 		// On macOS, should fail with platform check
 		// On Linux, might work or show not implemented.
-		if strings.Contains(output, "only available on Linux") {
+		switch {
+		case strings.Contains(output, "only available on Linux"):
 			// Correct behavior on macOS.
 			if err == nil {
 				t.Error("Expected error on non-Linux platform")
 			}
-		} else if strings.Contains(output, "not yet implemented") {
+		case strings.Contains(output, "not yet implemented"):
 			// Acceptable - stub implementation on Linux.
 			t.Logf("Landlock command reached stub (Linux): %s", output)
-		} else {
+		default:
 			t.Logf("Landlock command output: %s", output)
 		}
 	})
@@ -330,7 +332,7 @@ func TestExecMode_BasicPrompt(t *testing.T) {
 
 	checkExecErrors(t, stderr)
 
-	if len(stdout) == 0 {
+	if stdout == "" {
 		t.Errorf("BUG #3 REGRESSION: No output from exec mode!\nstderr: %s", stderr)
 	}
 
@@ -359,13 +361,13 @@ func TestExecMode_FromStdin(t *testing.T) {
 		t.Errorf("exec from stdin failed: %v\nstderr: %s", runErr, stderr)
 	}
 
-	if len(stdout) > 0 && !strings.Contains(stdout, "8") {
+	if stdout != "" && !strings.Contains(stdout, "8") {
 		t.Logf("Warning: Expected answer '8', got: %s", stdout)
 	}
 }
 
 // runExecCommand runs a spin exec command and returns stdout and stderr.
-func runExecCommand(t *testing.T, configPath, prompt string) (string, string) {
+func runExecCommand(t *testing.T, configPath, prompt string) (stdout, stderr string) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -388,11 +390,12 @@ func runExecCommand(t *testing.T, configPath, prompt string) (string, string) {
 func checkExecRunError(t *testing.T, err error, stderr, stdout string) {
 	t.Helper()
 
-	if strings.Contains(stderr, "provider is required") || strings.Contains(stderr, "model is required") {
+	switch {
+	case strings.Contains(stderr, "provider is required") || strings.Contains(stderr, "model is required"):
 		t.Errorf("BUG #2 REGRESSION: Config integration broken!\nstderr: %s", stderr)
-	} else if strings.Contains(stderr, "context deadline exceeded") {
+	case strings.Contains(stderr, "context deadline exceeded"):
 		t.Skip("Test timed out")
-	} else {
+	default:
 		t.Errorf("exec failed: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
 	}
 }

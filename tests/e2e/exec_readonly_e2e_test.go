@@ -176,7 +176,7 @@ func assertExecSucceeded(t *testing.T, r execResult, label string) {
 		t.Errorf("%s failed unexpectedly: %v\nstderr: %s\nstdout: %s", label, r.err, r.stderr, r.stdout)
 	}
 
-	if len(r.stdout) == 0 {
+	if r.stdout == "" {
 		t.Errorf("No output from %s\nstderr: %s", label, r.stderr)
 	}
 }
@@ -186,7 +186,7 @@ func logExecResult(t *testing.T, label string, r execResult) {
 	t.Helper()
 
 	output := r.stdout + r.stderr
-	if !containsDenialIndicator(output) && len(output) > 0 {
+	if !containsDenialIndicator(output) && output != "" {
 		t.Logf("No explicit denial message found, but file was correctly not created. Output: %s", output)
 	}
 

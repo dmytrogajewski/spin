@@ -18,8 +18,14 @@ func getParseCommandTestCases() []parseCommandTestCase {
 	return []parseCommandTestCase{
 		{name: "slash command with no args", input: "/mode", wantCmd: true, wantName: "/mode", wantArgs: []string{}},
 		{name: "slash command with one arg", input: "/mode review", wantCmd: true, wantName: "/mode", wantArgs: []string{"review"}},
-		{name: "slash command with multiple args", input: "/mode review test", wantCmd: true, wantName: "/mode", wantArgs: []string{"review", "test"}},
-		{name: "slash command with leading/trailing whitespace", input: "  /help  ", wantCmd: true, wantName: "/help", wantArgs: []string{}},
+		{
+			name: "slash command with multiple args", input: "/mode review test",
+			wantCmd: true, wantName: "/mode", wantArgs: []string{"review", "test"},
+		},
+		{
+			name: "slash command with leading/trailing whitespace", input: "  /help  ",
+			wantCmd: true, wantName: "/help", wantArgs: []string{},
+		},
 		{name: "regular message", input: "Write a test for the auth module", wantCmd: false},
 		{name: "message with slash in middle (not a command)", input: "Use the /api endpoint to fetch data", wantCmd: false},
 		{name: "empty input", input: "", wantCmd: false},

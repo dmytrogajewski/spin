@@ -5,15 +5,20 @@ import (
 	"testing"
 )
 
+const (
+	testFileName = "file.txt"
+)
+
+
 // Test that WRITE block does not render failure/success before completion.
 func TestWriteRender_BeforeCompletion_NoStatusOrFooter(t *testing.T) {
 	t.Parallel()
 	r := NewRenderer(80)
 
 	b := NewBlock(BlockTypeApplyPatch)
-	b.Title = "file.txt"
+	b.Title = testFileName
 
-	meta := &PatchMeta{File: "file.txt", Succeeded: false, Completed: false}
+	meta := &PatchMeta{File: testFileName, Succeeded: false, Completed: false}
 	err := SetPatchMeta(b, meta)
 	if err != nil {
 		t.Fatalf("set meta: %v", err)
@@ -47,9 +52,9 @@ func TestWriteRender_AfterSuccess_ShowsSuccess(t *testing.T) {
 	r := NewRenderer(80)
 
 	b := NewBlock(BlockTypeApplyPatch)
-	b.Title = "file.txt"
+	b.Title = testFileName
 
-	meta := &PatchMeta{File: "file.txt", Succeeded: true, Completed: true}
+	meta := &PatchMeta{File: testFileName, Succeeded: true, Completed: true}
 	err := SetPatchMeta(b, meta)
 	if err != nil {
 		t.Fatalf("set meta: %v", err)
@@ -81,9 +86,9 @@ func TestWriteRender_AfterFailure_ShowsFailure(t *testing.T) {
 	r := NewRenderer(80)
 
 	b := NewBlock(BlockTypeApplyPatch)
-	b.Title = "file.txt"
+	b.Title = testFileName
 
-	meta := &PatchMeta{File: "file.txt", Succeeded: false, Completed: true, ErrorMsg: "boom"}
+	meta := &PatchMeta{File: testFileName, Succeeded: false, Completed: true, ErrorMsg: "boom"}
 	err := SetPatchMeta(b, meta)
 	if err != nil {
 		t.Fatalf("set meta: %v", err)

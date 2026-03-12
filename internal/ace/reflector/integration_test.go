@@ -104,7 +104,7 @@ func TestReflector_Integration_FullWorkflow(t *testing.T) {
 	// Step 2: Refine insights.
 	mockLLM.SetResponse(`[
 		{
-			"content": "Use table-driven tests with t.Run() for better test organization, coverage tracking, and parallel execution support",
+			"content": "Use table-driven tests with t.Run() for better test organization and parallel execution",
 			"evidence": ["Table-driven tests improved readability"],
 			"confidence": 0.9,
 			"category": "success_pattern"

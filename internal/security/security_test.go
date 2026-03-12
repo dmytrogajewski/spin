@@ -324,7 +324,8 @@ func TestService_ValidateAndApprove(t *testing.T) {
 	t.Run("forbidden command - blocked without approval", func(t *testing.T) {
 		t.Parallel()
 		svc := newServiceWithHandler(validator, panicHandler("should not be called for forbidden commands"))
-		approved, err := svc.ValidateAndApprove(context.Background(), &Command{Raw: "rm -rf /", Program: "rm", Args: []string{"-rf", "/"}}, "/tmp")
+		cmd := &Command{Raw: "rm -rf /", Program: "rm", Args: []string{"-rf", "/"}}
+		approved, err := svc.ValidateAndApprove(context.Background(), cmd, "/tmp")
 		require.NoError(t, err)
 		assert.False(t, approved)
 	})
@@ -332,7 +333,8 @@ func TestService_ValidateAndApprove(t *testing.T) {
 	t.Run("interactive command - approval granted", func(t *testing.T) {
 		t.Parallel()
 		svc := newServiceWithHandler(validator, approvalHandlerFunc(true, ""))
-		approved, err := svc.ValidateAndApprove(context.Background(), &Command{Raw: "mkdir testdir", Program: "mkdir", Args: []string{"testdir"}}, "/tmp")
+		cmd := &Command{Raw: "mkdir testdir", Program: "mkdir", Args: []string{"testdir"}}
+		approved, err := svc.ValidateAndApprove(context.Background(), cmd, "/tmp")
 		require.NoError(t, err)
 		assert.True(t, approved)
 	})
@@ -340,7 +342,8 @@ func TestService_ValidateAndApprove(t *testing.T) {
 	t.Run("interactive command - approval denied", func(t *testing.T) {
 		t.Parallel()
 		svc := newServiceWithHandler(validator, approvalHandlerFunc(false, "user denied"))
-		approved, err := svc.ValidateAndApprove(context.Background(), &Command{Raw: "mkdir sensitive_dir", Program: "mkdir", Args: []string{"sensitive_dir"}}, "/tmp")
+		cmd := &Command{Raw: "mkdir sensitive_dir", Program: "mkdir", Args: []string{"sensitive_dir"}}
+		approved, err := svc.ValidateAndApprove(context.Background(), cmd, "/tmp")
 		require.NoError(t, err)
 		assert.False(t, approved)
 	})
@@ -348,7 +351,8 @@ func TestService_ValidateAndApprove(t *testing.T) {
 	t.Run("unverified command - approval granted", func(t *testing.T) {
 		t.Parallel()
 		svc := newServiceWithHandler(validator, approvalHandlerFunc(true, ""))
-		approved, err := svc.ValidateAndApprove(context.Background(), &Command{Raw: "somecommand arg", Program: "somecommand", Args: []string{"arg"}}, "/tmp")
+		cmd := &Command{Raw: "somecommand arg", Program: "somecommand", Args: []string{"arg"}}
+		approved, err := svc.ValidateAndApprove(context.Background(), cmd, "/tmp")
 		require.NoError(t, err)
 		assert.True(t, approved)
 	})

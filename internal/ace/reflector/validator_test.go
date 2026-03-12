@@ -24,13 +24,46 @@ var validatorValidateCases = []struct {
 	wantErr bool
 	errMsg  string
 }{
-	{name: "valid insight", insight: &Insight{Content: "Always validate input parameters before processing them in Go", Confidence: 0.8, Category: CategorySuccessPattern}},
-	{name: "empty content", insight: &Insight{Content: "", Confidence: 0.8, Category: CategorySuccessPattern}, wantErr: true, errMsg: "content cannot be empty"},
-	{name: "content too short", insight: &Insight{Content: "short", Confidence: 0.8, Category: CategorySuccessPattern}, wantErr: true, errMsg: "content too short"},
-	{name: "content too long", insight: &Insight{Content: strings.Repeat("x", 501), Confidence: 0.8, Category: CategorySuccessPattern}, wantErr: true, errMsg: "content too long"},
-	{name: "confidence negative", insight: &Insight{Content: "Always validate input parameters before processing them", Confidence: -0.1, Category: CategorySuccessPattern}, wantErr: true, errMsg: "confidence"},
-	{name: "confidence too high", insight: &Insight{Content: "Always validate input parameters before processing them", Confidence: 1.5, Category: CategorySuccessPattern}, wantErr: true, errMsg: "confidence"},
-	{name: "invalid category", insight: &Insight{Content: "Always validate input parameters before processing them", Confidence: 0.8, Category: "invalid_category"}, wantErr: true, errMsg: "category"},
+	{
+		name:    "valid insight",
+		insight: &Insight{
+			Content: "Always validate input parameters before processing them in Go",
+			Confidence: 0.8, Category: CategorySuccessPattern,
+		},
+	},
+	{
+		name: "empty content", wantErr: true, errMsg: "content cannot be empty",
+		insight: &Insight{Content: "", Confidence: 0.8, Category: CategorySuccessPattern},
+	},
+	{
+		name: "content too short", wantErr: true, errMsg: "content too short",
+		insight: &Insight{Content: "short", Confidence: 0.8, Category: CategorySuccessPattern},
+	},
+	{
+		name: "content too long", wantErr: true, errMsg: "content too long",
+		insight: &Insight{Content: strings.Repeat("x", 501), Confidence: 0.8, Category: CategorySuccessPattern},
+	},
+	{
+		name: "confidence negative", wantErr: true, errMsg: "confidence",
+		insight: &Insight{
+			Content: "Always validate input parameters before processing them",
+			Confidence: -0.1, Category: CategorySuccessPattern,
+		},
+	},
+	{
+		name: "confidence too high", wantErr: true, errMsg: "confidence",
+		insight: &Insight{
+			Content: "Always validate input parameters before processing them",
+			Confidence: 1.5, Category: CategorySuccessPattern,
+		},
+	},
+	{
+		name: "invalid category", wantErr: true, errMsg: "category",
+		insight: &Insight{
+			Content: "Always validate input parameters before processing them",
+			Confidence: 0.8, Category: "invalid_category",
+		},
+	},
 }
 
 // TestInsightValidator_Validate tests insight validation with all rules.

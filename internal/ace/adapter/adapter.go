@@ -18,6 +18,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
 )
 
+const (
+	defaultDecayRate      = 0.5
+	highRelevanceThreshold = 0.85
+	defaultMaxRetainCount  = 3
+)
+
+
 var (
 	ErrSessionNotFound = errors.New("session not found")
 	ErrSessionNotFound2 = errors.New("session not found")
@@ -185,7 +192,7 @@ func (a *adapter) dispatchAction(ctx context.Context, action AdaptationAction, s
 }
 
 // maybeRefine checks if memory management should trigger and performs it.
-func (a *adapter) maybeRefine(ctx context.Context, reason string) (bool, string) {
+func (a *adapter) maybeRefine(ctx context.Context, reason string) (refined bool, detail string) {
 	if !a.memory.ShouldRefine(a.playbook.Stats().TotalBullets) {
 		return false, reason
 	}
@@ -221,7 +228,7 @@ func (a *adapter) extractInsights(ctx context.Context, traj *generator.Trajector
 	resp, err := a.reflector.Reflect(ctx, reflector.ReflectionRequest{
 		Trajectories:  []*generator.Trajectory{traj},
 		MaxIterations: 1,
-		MinConfidence: 0.5,
+		MinConfidence: defaultDecayRate,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("reflection failed: %w", err)
@@ -234,7 +241,7 @@ func (a *adapter) extractInsights(ctx context.Context, traj *generator.Trajector
 func (a *adapter) curateInsights(ctx context.Context, insights []*reflector.Insight) (int, error) {
 	resp, err := a.curator.Curate(ctx, curator.MergeRequest{
 		Insights:            insights,
-		SimilarityThreshold: 0.85,
+		SimilarityThreshold: highRelevanceThreshold,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("curation failed: %w", err)
@@ -275,7 +282,7 @@ func (a *adapter) executeQuickAdd(ctx context.Context, signal ExecutionSignal) (
 	bullets, err := a.generator.GenerateBullets(ctx, generator.BulletGenerationRequest{
 		Input:      signal.Context,
 		SourceType: mapSignalTypeToSource(signal.SignalType),
-		MaxBullets: 3,
+		MaxBullets: defaultMaxRetainCount,
 		Tags: map[string]string{
 			"signal_type": string(signal.SignalType),
 			"outcome":     string(signal.Outcome),

@@ -49,7 +49,7 @@ const CompactSystemPrompt = `You are a fast, efficient coding assistant optimize
 // NewCompact creates a new Compact task instance.
 func NewCompact() *Compact {
 	return &Compact{
-		name:         "compact",
+		name:         TaskNameCompact,
 		systemPrompt: CompactSystemPrompt,
 		maxTokens:    DefaultCompactMaxTokens,
 	}

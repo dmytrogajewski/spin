@@ -9,6 +9,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/memory"
 )
 
+const (
+	defaultMemorySearchLimit = 10
+	maxMemoryPreviewLen      = 100
+)
+
 // MemoryTool provides LLM access to persistent cross-session memory.
 //
 // The memory tool allows the agent to store information that persists
@@ -219,7 +224,7 @@ func (t *MemoryTool) executeSearch(ctx context.Context, params ToolParameters) (
 		return NewToolError(ErrQueryParameterRequiredForSearch), nil
 	}
 
-	entries, searchErr := t.store.Search(ctx, query, 10)
+	entries, searchErr := t.store.Search(ctx, query, defaultMemorySearchLimit)
 	if searchErr != nil {
 		return ErrToResultf("failed to search entries: %v", searchErr)
 	}
@@ -234,7 +239,7 @@ func (t *MemoryTool) executeSearch(ctx context.Context, params ToolParameters) (
 	for _, entry := range entries {
 		// Show preview of value (first 100 chars).
 		preview := entry.Value
-		if len(preview) > 100 {
+		if len(preview) > maxMemoryPreviewLen {
 			preview = preview[:100] + "..."
 		}
 

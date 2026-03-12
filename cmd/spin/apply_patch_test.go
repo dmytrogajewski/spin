@@ -38,7 +38,7 @@ func TestReadPatchInput_Stdin(t *testing.T) {
 	testPatch := "*** Begin Patch\n*** End Patch"
 
 	go func() {
-		_, _ = w.Write([]byte(testPatch))
+		_, _ = w.WriteString(testPatch)
 		w.Close()
 	}()
 

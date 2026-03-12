@@ -90,12 +90,35 @@ func TestMatcher_FindContext_ExactMatch(t *testing.T) {
 	t.Parallel()
 
 	runMatcherTests(t, []matcherTestCase{
-		{name: "empty context matches at start", fileLines: []string{"line1", "line2"}, contextLines: []string{}, want: 0},
-		{name: "exact match at start", fileLines: []string{"func main() {", "    fmt.Println(\"hello\")", "}"}, contextLines: []string{"func main() {", "    fmt.Println(\"hello\")"}, want: 0},
-		{name: "exact match in middle", fileLines: []string{"package main", "", "func main() {", "    return nil", "}"}, contextLines: []string{"func main() {", "    return nil"}, want: 2},
-		{name: "exact match at end", fileLines: []string{"package main", "", "func main() {"}, contextLines: []string{"func main() {"}, want: 2},
-		{name: "single line exact match", fileLines: []string{"line1", "line2", "line3"}, contextLines: []string{"line2"}, want: 1},
-		{name: "multi-line exact match", fileLines: []string{"line1", "line2", "line3", "line4"}, contextLines: []string{"line2", "line3"}, want: 1},
+		{
+			name: "empty context matches at start",
+			fileLines: []string{"line1", "line2"}, contextLines: []string{}, want: 0,
+		},
+		{
+			name:         "exact match at start",
+			fileLines:    []string{"func main() {", "    fmt.Println(\"hello\")", "}"},
+			contextLines: []string{"func main() {", "    fmt.Println(\"hello\")"}, want: 0,
+		},
+		{
+			name:         "exact match in middle",
+			fileLines:    []string{"package main", "", "func main() {", "    return nil", "}"},
+			contextLines: []string{"func main() {", "    return nil"}, want: 2,
+		},
+		{
+			name:         "exact match at end",
+			fileLines:    []string{"package main", "", "func main() {"},
+			contextLines: []string{"func main() {"}, want: 2,
+		},
+		{
+			name:         "single line exact match",
+			fileLines:    []string{"line1", "line2", "line3"},
+			contextLines: []string{"line2"}, want: 1,
+		},
+		{
+			name:         "multi-line exact match",
+			fileLines:    []string{"line1", "line2", "line3", "line4"},
+			contextLines: []string{"line2", "line3"}, want: 1,
+		},
 	})
 }
 
@@ -103,12 +126,39 @@ func TestMatcher_FindContext_FuzzyMatch(t *testing.T) {
 	t.Parallel()
 
 	runMatcherTests(t, []matcherTestCase{
-		{name: "whitespace variation - tabs vs spaces", fileLines: []string{"func main() {", "  fmt.Println(\"hello\")", "}"}, contextLines: []string{"func main() {", "    fmt.Println(\"hello\")"}, threshold: 0.85, want: 0},
-		{name: "trailing whitespace", fileLines: []string{"func foo() {   ", "}"}, contextLines: []string{"func foo() {", "}"}, threshold: 0.85, want: 0},
-		{name: "leading whitespace", fileLines: []string{"   func bar() {", "}"}, contextLines: []string{"func bar() {", "}"}, threshold: 0.85, want: 0},
-		{name: "minor text difference within threshold", fileLines: []string{"func Calculate(a, b int) int {", "    return a + b", "}"}, contextLines: []string{"func Calculate(x, y int) int {", "    return x + y"}, threshold: 0.80, want: 0},
-		{name: "below threshold - no match", fileLines: []string{"func totally_different() {", "}"}, contextLines: []string{"func original() {"}, threshold: 0.85, want: -1},
-		{name: "mixed whitespace - tabs and spaces", fileLines: []string{"func test() {", "\t\treturn 0"}, contextLines: []string{"func test() {", "        return 0"}, threshold: 0.85, want: 0},
+		{
+			name:         "whitespace variation - tabs vs spaces",
+			fileLines:    []string{"func main() {", "  fmt.Println(\"hello\")", "}"},
+			contextLines: []string{"func main() {", "    fmt.Println(\"hello\")"},
+			threshold:    0.85, want: 0,
+		},
+		{
+			name:         "trailing whitespace",
+			fileLines:    []string{"func foo() {   ", "}"},
+			contextLines: []string{"func foo() {", "}"}, threshold: 0.85, want: 0,
+		},
+		{
+			name:         "leading whitespace",
+			fileLines:    []string{"   func bar() {", "}"},
+			contextLines: []string{"func bar() {", "}"}, threshold: 0.85, want: 0,
+		},
+		{
+			name:         "minor text difference within threshold",
+			fileLines:    []string{"func Calculate(a, b int) int {", "    return a + b", "}"},
+			contextLines: []string{"func Calculate(x, y int) int {", "    return x + y"},
+			threshold:    0.80, want: 0,
+		},
+		{
+			name:         "below threshold - no match",
+			fileLines:    []string{"func totally_different() {", "}"},
+			contextLines: []string{"func original() {"}, threshold: 0.85, want: -1,
+		},
+		{
+			name:         "mixed whitespace - tabs and spaces",
+			fileLines:    []string{"func test() {", "\t\treturn 0"},
+			contextLines: []string{"func test() {", "        return 0"},
+			threshold:    0.85, want: 0,
+		},
 	})
 }
 
@@ -116,12 +166,56 @@ func TestMatcher_FindContext_HeaderMatching(t *testing.T) {
 	t.Parallel()
 
 	runMatcherTests(t, []matcherTestCase{
-		{name: "header helps disambiguate - exact function name", fileLines: []string{"func ProcessA(x int) {", "    return x + 1", "}", "", "func ProcessB(x int) {", "    return x + 1", "}"}, contextLines: []string{"    return x + 1"}, header: "func ProcessB", want: 5},
-		{name: "header helps disambiguate - partial match", fileLines: []string{"// Handler for GET requests", "func handleGet() {", "    return nil", "}", "", "// Handler for POST requests", "func handlePost() {", "    return nil", "}"}, contextLines: []string{"    return nil"}, header: "POST", want: 7},
-		{name: "header not found - fallback to full search", fileLines: []string{"func main() {", "    return 0", "}"}, contextLines: []string{"    return 0"}, header: "func nonexistent", want: 1},
-		{name: "empty header - full search", fileLines: []string{"line1", "line2", "line3"}, contextLines: []string{"line2"}, want: 1},
-		{name: "header matches but context doesn't - fallback", fileLines: []string{"func ProcessA(x int) {", "    return x + 1", "}", "", "func ProcessB(y int) {", "    return y * 2", "}"}, contextLines: []string{"    return x + 1"}, header: "func ProcessB", want: 1},
-		{name: "multiple header occurrences - use first", fileLines: []string{"// Process data", "func Process(x int) {", "    return x + 1", "}", "", "// Process batch", "func ProcessBatch() {", "    // Call Process", "    return Process(0)", "}"}, contextLines: []string{"    return x + 1"}, header: "Process", want: 2},
+		{
+			name: "header helps disambiguate - exact function name",
+			fileLines: []string{
+				"func ProcessA(x int) {", "    return x + 1", "}",
+				"", "func ProcessB(x int) {", "    return x + 1", "}",
+			},
+			contextLines: []string{"    return x + 1"},
+			header:       "func ProcessB", want: 5,
+		},
+		{
+			name: "header helps disambiguate - partial match",
+			fileLines: []string{
+				"// Handler for GET requests", "func handleGet() {",
+				"    return nil", "}", "",
+				"// Handler for POST requests", "func handlePost() {",
+				"    return nil", "}",
+			},
+			contextLines: []string{"    return nil"}, header: "POST", want: 7,
+		},
+		{
+			name:         "header not found - fallback to full search",
+			fileLines:    []string{"func main() {", "    return 0", "}"},
+			contextLines: []string{"    return 0"},
+			header:       "func nonexistent", want: 1,
+		},
+		{
+			name:         "empty header - full search",
+			fileLines:    []string{"line1", "line2", "line3"},
+			contextLines: []string{"line2"}, want: 1,
+		},
+		{
+			name: "header matches but context doesn't - fallback",
+			fileLines: []string{
+				"func ProcessA(x int) {", "    return x + 1", "}",
+				"", "func ProcessB(y int) {", "    return y * 2", "}",
+			},
+			contextLines: []string{"    return x + 1"},
+			header:       "func ProcessB", want: 1,
+		},
+		{
+			name: "multiple header occurrences - use first",
+			fileLines: []string{
+				"// Process data", "func Process(x int) {",
+				"    return x + 1", "}", "",
+				"// Process batch", "func ProcessBatch() {",
+				"    // Call Process", "    return Process(0)", "}",
+			},
+			contextLines: []string{"    return x + 1"},
+			header:       "Process", want: 2,
+		},
 	})
 }
 
@@ -131,16 +225,54 @@ func TestMatcher_FindContext_EdgeCases(t *testing.T) {
 	longLine := strings.Repeat("x", 1000)
 
 	runMatcherTests(t, []matcherTestCase{
-		{name: "empty file - empty context", fileLines: []string{}, contextLines: []string{}, want: 0},
-		{name: "empty file - non-empty context", fileLines: []string{}, contextLines: []string{"something"}, want: -1},
-		{name: "context larger than file", fileLines: []string{"line1", "line2"}, contextLines: []string{"line1", "line2", "line3", "line4"}, want: -1},
-		{name: "unicode content", fileLines: []string{"func Process() {", "    msg := \"Hello, 世界\"", "}"}, contextLines: []string{"    msg := \"Hello, 世界\""}, want: 1},
-		{name: "very long line", fileLines: []string{"short line", longLine, "another short line"}, contextLines: []string{longLine}, want: 1},
-		{name: "special characters", fileLines: []string{"if (a && b) || (c && d) {", "    return true", "}"}, contextLines: []string{"if (a && b) || (c && d) {"}, want: 0},
-		{name: "regex special characters", fileLines: []string{"pattern := `^[a-zA-Z0-9]+$`", "match := regexp.MatchString(pattern, input)"}, contextLines: []string{"pattern := `^[a-zA-Z0-9]+$`"}, want: 0},
-		{name: "empty lines", fileLines: []string{"", "", "func test() {", "}"}, contextLines: []string{"", "func test() {"}, want: 1},
-		{name: "context at exact file end", fileLines: []string{"line1", "line2", "line3"}, contextLines: []string{"line3"}, want: 2},
-		{name: "context would overflow file end", fileLines: []string{"line1", "line2"}, contextLines: []string{"line2", "line3"}, want: -1},
+		{
+			name: "empty file - empty context",
+			fileLines: []string{}, contextLines: []string{}, want: 0,
+		},
+		{
+			name: "empty file - non-empty context",
+			fileLines: []string{}, contextLines: []string{"something"}, want: -1,
+		},
+		{
+			name:         "context larger than file",
+			fileLines:    []string{"line1", "line2"},
+			contextLines: []string{"line1", "line2", "line3", "line4"}, want: -1,
+		},
+		{
+			name:         "unicode content",
+			fileLines:    []string{"func Process() {", "    msg := \"Hello, 世界\"", "}"},
+			contextLines: []string{"    msg := \"Hello, 世界\""}, want: 1,
+		},
+		{
+			name:         "very long line",
+			fileLines:    []string{"short line", longLine, "another short line"},
+			contextLines: []string{longLine}, want: 1,
+		},
+		{
+			name:         "special characters",
+			fileLines:    []string{"if (a && b) || (c && d) {", "    return true", "}"},
+			contextLines: []string{"if (a && b) || (c && d) {"}, want: 0,
+		},
+		{
+			name:         "regex special characters",
+			fileLines:    []string{"pattern := `^[a-zA-Z0-9]+$`", "match := regexp.MatchString(pattern, input)"},
+			contextLines: []string{"pattern := `^[a-zA-Z0-9]+$`"}, want: 0,
+		},
+		{
+			name:         "empty lines",
+			fileLines:    []string{"", "", "func test() {", "}"},
+			contextLines: []string{"", "func test() {"}, want: 1,
+		},
+		{
+			name:         "context at exact file end",
+			fileLines:    []string{"line1", "line2", "line3"},
+			contextLines: []string{"line3"}, want: 2,
+		},
+		{
+			name:         "context would overflow file end",
+			fileLines:    []string{"line1", "line2"},
+			contextLines: []string{"line2", "line3"}, want: -1,
+		},
 	})
 }
 
@@ -149,9 +281,18 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 
 	runMatcherTests(t, []matcherTestCase{
 		{
-			name:         "go code - function signature changed slightly",
-			fileLines:    []string{"package handler", "", "import \"context\"", "", "// Process handles incoming requests", "func Process(ctx context.Context, req *Request) error {", "    if req == nil {", "        return ErrNilRequest", "    }", "    return process(ctx, req)", "}"},
-			contextLines: []string{"func Process(ctx context.Context, req Request) error {", "    if req == nil {"},
+			name: "go code - function signature changed slightly",
+			fileLines: []string{
+				"package handler", "", "import \"context\"", "",
+				"// Process handles incoming requests",
+				"func Process(ctx context.Context, req *Request) error {",
+				"    if req == nil {", "        return ErrNilRequest",
+				"    }", "    return process(ctx, req)", "}",
+			},
+			contextLines: []string{
+				"func Process(ctx context.Context, req Request) error {",
+				"    if req == nil {",
+			},
 			header: "func Process", threshold: 0.80, want: 5,
 		},
 		{
@@ -168,7 +309,14 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 		},
 		{
 			name:         "multiple similar functions - use header",
-			fileLines:    []string{"func (s *Service) Create(data Data) error {", "    return s.repo.Insert(data)", "}", "", "func (s *Service) Update(data Data) error {", "    return s.repo.Update(data)", "}", "", "func (s *Service) Delete(id ID) error {", "    return s.repo.Delete(id)", "}"},
+			fileLines: []string{
+				"func (s *Service) Create(data Data) error {",
+				"    return s.repo.Insert(data)", "}", "",
+				"func (s *Service) Update(data Data) error {",
+				"    return s.repo.Update(data)", "}", "",
+				"func (s *Service) Delete(id ID) error {",
+				"    return s.repo.Delete(id)", "}",
+			},
 			contextLines: []string{"    return s.repo.Delete(id)"},
 			header: "Delete", threshold: 0.85, want: 9,
 		},

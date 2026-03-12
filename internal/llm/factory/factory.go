@@ -44,9 +44,9 @@ type ProviderConfig struct {
 	KeyName string
 
 	// APIKey is the authentication key (optional for local providers).
-	// DEPRECATED: Use KeyName with secure keystore instead.
-	// This field is deprecated and should not be used for new code.
 	// Only use for backward compatibility or testing.
+	//
+	// Deprecated: Use KeyName with secure keystore instead.
 	APIKey string
 
 	// Model is the default model identifier.
@@ -164,14 +164,18 @@ return "", fmt.Errorf("keyName %q provided but no auth manager configured: %w", 
 	// Priority 2: APIKey (deprecated, direct).
 	if cfg.APIKey != "" {
 		// Log deprecation warning.
-		f.logger.WarnContext(ctx, "Direct APIKey is deprecated for security reasons. Use KeyName with secure keystore instead", "provider_type", cfg.Type)
+		f.logger.WarnContext(ctx,
+			"Direct APIKey is deprecated for security reasons. Use KeyName with secure keystore instead",
+			"provider_type", cfg.Type)
 
 		return cfg.APIKey, nil
 	}
 
 	// Priority 3: No authentication.
 	if requiresAuth {
-return "", fmt.Errorf("authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated): %w", cfg.Type, ErrAuthenticationRequiredFor)
+		return "", fmt.Errorf(
+			"authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated): %w",
+			cfg.Type, ErrAuthenticationRequiredFor)
 	}
 
 	return "", nil // No auth needed (e.g., local Ollama).
@@ -207,7 +211,9 @@ return fmt.Errorf("baseURL is required for %s: %w", cfg.Type, ErrBaseurlIsRequir
 	}
 
 	if cfg.KeyName == "" && cfg.APIKey == "" {
-return fmt.Errorf("authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated): %w", cfg.Type, ErrAuthenticationRequiredFor2)
+		return fmt.Errorf(
+			"authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated): %w",
+			cfg.Type, ErrAuthenticationRequiredFor2)
 	}
 
 	if cfg.Model == "" {

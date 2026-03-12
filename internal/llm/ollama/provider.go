@@ -18,6 +18,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
+const maxPreviewLen = 100
+
 var ErrModelIsRequired = errors.New("model is required")
 
 const (
@@ -337,12 +339,12 @@ func filterToolCalls(toolCalls []api.ToolCall, tools []api.Tool, logger *slog.Lo
 
 // logResponsePreview logs a preview of the response content for debugging.
 func logResponsePreview(logger *slog.Logger, ctx context.Context, content string) {
-	if len(content) == 0 {
+	if content == "" {
 		return
 	}
 
 	preview := content
-	if len(preview) > 100 {
+	if len(preview) > maxPreviewLen {
 		preview = preview[:100]
 	}
 

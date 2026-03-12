@@ -147,6 +147,35 @@ type KeyReaderConfig struct {
 const (
 	defaultEscTimeout = 100 * time.Millisecond
 	maxPasteSize      = 1024 * 1024 // 1MB limit for bracketed paste.
+
+	// Key input buffer sizes.
+	keyEventBuffer   = 16   // buffered channel for burst input.
+	csiMaxReadBytes  = 8    // max bytes to read in CSI sequence.
+	pasteInitBufSize = 4096 // initial paste buffer size.
+
+	// ASCII/control byte values.
+	byteEscape    = 0x1b // ESC.
+	byteCtrlC     = 0x03 // Ctrl-C.
+	byteCtrlD     = 0x04 // Ctrl-D.
+	byteBackspace = 0x08 // Backspace (alternate).
+	byteDEL       = 0x7f // DEL / Backspace.
+	byteCtrlK     = 0x0b // Ctrl-K.
+	byteCtrlL     = 0x0c // Ctrl-L.
+	byteCtrlP     = 0x10 // Ctrl-P.
+	byteCtrlU     = 0x15 // Ctrl-U.
+	byteCtrlW     = 0x17 // Ctrl-W.
+
+	// UTF-8 byte classification masks.
+	utf8SingleByteMax = 0x80 // below this is single-byte ASCII.
+	utf8TwoBytesMask  = 0xe0 // mask for 2-byte prefix check.
+	utf8TwoBytesVal   = 0xc0 // value for 2-byte prefix.
+	utf8ThreeBytesMask = 0xf0 // mask for 3-byte prefix check.
+	utf8ThreeBytesVal  = 0xe0 // value for 3-byte prefix.
+	utf8FourBytesMask  = 0xf8 // mask for 4-byte prefix check.
+	utf8FourBytesVal   = 0xf0 // value for 4-byte prefix.
+	utf8TwoBytesLen    = 2
+	utf8ThreeBytesLen  = 3
+	utf8FourBytesLen   = 4
 )
 
 // ReadKeys reads keyboard events from r and sends them to the returned channel.
@@ -178,7 +207,7 @@ func ReadKeys(ctx context.Context, r io.Reader, cfg *KeyReaderConfig) (<-chan Ke
 		cfg.EscTimeout = defaultEscTimeout
 	}
 
-	ch := make(chan KeyEvent, 16) // buffered for burst input.
+	ch := make(chan KeyEvent, keyEventBuffer) // buffered for burst input.
 
 	go func() {
 		defer close(ch)
@@ -238,7 +267,7 @@ func (p *keyParser) parseByte(ctx context.Context, b byte) KeyEvent {
 		return event
 	}
 
-	if b == 0x1b {
+	if b == byteEscape {
 		return p.parseEscapeSequence(ctx)
 	}
 
@@ -249,25 +278,25 @@ func (p *keyParser) parseByte(ctx context.Context, b byte) KeyEvent {
 // parseControlChar parses control characters.
 func (p *keyParser) parseControlChar(b byte) KeyEvent {
 	switch b {
-	case 0x03: // Ctrl-C.
+	case byteCtrlC:
 		return KeyEvent{Kind: KeyCtrlC, Raw: []byte{b}}
-	case 0x04: // Ctrl-D.
+	case byteCtrlD:
 		return KeyEvent{Kind: KeyCtrlD, Raw: []byte{b}}
-	case 0x08, 0x7f: // Backspace.
+	case byteBackspace, byteDEL:
 		return KeyEvent{Kind: KeyBackspace, Raw: []byte{b}}
 	case '\t': // Tab.
 		return KeyEvent{Kind: KeyTab, Raw: []byte{b}}
 	case '\n', '\r': // Enter.
 		return KeyEvent{Kind: KeyEnter, Raw: []byte{b}}
-	case 0x0b: // Ctrl-K.
+	case byteCtrlK:
 		return KeyEvent{Kind: KeyCtrlK, Raw: []byte{b}}
-	case 0x0c: // Ctrl-L.
+	case byteCtrlL:
 		return KeyEvent{Kind: KeyCtrlL, Raw: []byte{b}}
-	case 0x10: // Ctrl-P.
+	case byteCtrlP:
 		return KeyEvent{Kind: KeyCtrlP, Raw: []byte{b}}
-	case 0x15: // Ctrl-U.
+	case byteCtrlU:
 		return KeyEvent{Kind: KeyCtrlU, Raw: []byte{b}}
-	case 0x17: // Ctrl-W.
+	case byteCtrlW:
 		return KeyEvent{Kind: KeyCtrlW, Raw: []byte{b}}
 	default:
 		return KeyEvent{Kind: KeyUnknown, Raw: []byte{b}}
@@ -276,7 +305,7 @@ func (p *keyParser) parseControlChar(b byte) KeyEvent {
 
 // parseEscapeSequence handles ESC sequences with timeout.
 func (p *keyParser) parseEscapeSequence(ctx context.Context) KeyEvent {
-	raw := []byte{0x1b}
+	raw := []byte{byteEscape}
 
 	// Try to read next byte with timeout.
 	timer := time.NewTimer(p.escTimeout)
@@ -327,7 +356,7 @@ func (p *keyParser) parseEscapeSeq(ctx context.Context, b byte, raw []byte) KeyE
 
 // parseCSI handles Control Sequence Introducer sequences (ESC [).
 func (p *keyParser) parseCSI(ctx context.Context, raw []byte) KeyEvent {
-	seq, err := p.readSequence(ctx, 8) // read up to 8 more bytes.
+	seq, err := p.readSequence(ctx, csiMaxReadBytes) // read up to 8 more bytes.
 	if err != nil {
 		return KeyEvent{Kind: KeyUnknown, Raw: raw}
 	}
@@ -440,7 +469,7 @@ func (p *keyParser) parseBracketedPaste(ctx context.Context, raw []byte) KeyEven
 	var paste []byte
 
 	endMarker := []byte{0x1b, '[', '2', '0', '1', '~'}
-	buf := make([]byte, 0, 4096) // start with 4KB buffer.
+	buf := make([]byte, 0, pasteInitBufSize) // start with 4KB buffer.
 
 	for {
 		select {
@@ -483,7 +512,7 @@ func (p *keyParser) parseRune(_ context.Context, b byte) KeyEvent {
 	raw := []byte{b}
 
 	// Single-byte ASCII.
-	if b < 0x80 {
+	if b < utf8SingleByteMax {
 		return KeyEvent{Kind: KeyRune, Rune: rune(b), Raw: raw}
 	}
 
@@ -503,16 +532,16 @@ func (p *keyParser) parseRune(_ context.Context, b byte) KeyEvent {
 
 // getUTF8Length determines the expected length of a UTF-8 sequence.
 func (p *keyParser) getUTF8Length(b byte) int {
-	if b&0xe0 == 0xc0 {
-		return 2
+	if b&utf8TwoBytesMask == utf8TwoBytesVal {
+		return utf8TwoBytesLen
 	}
 
-	if b&0xf0 == 0xe0 {
-		return 3
+	if b&utf8ThreeBytesMask == utf8ThreeBytesVal {
+		return utf8ThreeBytesLen
 	}
 
-	if b&0xf8 == 0xf0 {
-		return 4
+	if b&utf8FourBytesMask == utf8FourBytesVal {
+		return utf8FourBytesLen
 	}
 
 	return 0 // Invalid UTF-8 start byte.

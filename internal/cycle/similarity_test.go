@@ -4,11 +4,16 @@ import (
 	"testing"
 )
 
+const (
+	testSimilarityInput = "hello world test"
+)
+
+
 func TestCalculateSimilarity_Identical(t *testing.T) {
 	t.Parallel()
 
-	a := "hello world test"
-	b := "hello world test"
+	a := testSimilarityInput
+	b := testSimilarityInput
 
 	similarity := calculateSimilarity(a, b)
 	if similarity != 1.0 {
@@ -52,7 +57,7 @@ func TestCalculateSimilarity_CaseInsensitive(t *testing.T) {
 	t.Parallel()
 
 	a := "Hello World Test"
-	b := "hello world test"
+	b := testSimilarityInput
 
 	similarity := calculateSimilarity(a, b)
 	if similarity != 1.0 {

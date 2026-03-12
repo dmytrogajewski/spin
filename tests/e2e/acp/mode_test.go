@@ -225,14 +225,16 @@ func TestACP_SetSessionMode_Notifications(t *testing.T) {
 	hasModeUpdate := false
 
 	for _, notif := range notifications {
-		if notif.Update.CurrentModeUpdate != nil {
-			hasModeUpdate = true
-			modeUpdate := notif.Update.CurrentModeUpdate
-			assert.Equal(t, acp.SessionModeId("review"), modeUpdate.CurrentModeId, "Mode update should reflect new mode")
-			t.Logf("Found mode update notification: %s", modeUpdate.CurrentModeId)
-
-			break
+		if notif.Update.CurrentModeUpdate == nil {
+			continue
 		}
+
+		hasModeUpdate = true
+		modeUpdate := notif.Update.CurrentModeUpdate
+		assert.Equal(t, acp.SessionModeId("review"), modeUpdate.CurrentModeId, "Mode update should reflect new mode")
+		t.Logf("Found mode update notification: %s", modeUpdate.CurrentModeId)
+
+		break
 	}
 
 	// Mode update notification should be sent

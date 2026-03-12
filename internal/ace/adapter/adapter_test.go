@@ -210,7 +210,9 @@ func TestAdapter_AdaptOnline_QuickAddWithGenerator(t *testing.T) {
 	pb := playbook.New(nil, embedder)
 
 	// Mock LLM for generator.
-	bulletResponse := "1. Always run 'go mod tidy' before building\n2. Check for syntax errors in go.mod\n3. Ensure all dependencies are available"
+	bulletResponse := "1. Always run 'go mod tidy' before building\n" +
+		"2. Check for syntax errors in go.mod\n" +
+		"3. Ensure all dependencies are available"
 	llmProvider := llm.NewMockProvider("test-llm", llm.WithResponse(bulletResponse))
 
 	// Create retriever and generator.

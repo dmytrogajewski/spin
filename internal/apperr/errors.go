@@ -94,7 +94,7 @@ func (e *Error) Operation() string {
 //	    "llm completion failed",
 //	    underlyingErr,
 //	)
-func New(code ErrorCode, op string, message string, err error) *Error {
+func New(code ErrorCode, op, message string, err error) *Error {
 	return &Error{
 		Code:    code,
 		Op:      op,

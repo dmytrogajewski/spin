@@ -460,7 +460,7 @@ func TestRenderer_StripANSI(t *testing.T) {
 
 // Helper function.
 func containsRenderer(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && findIndexRenderer(s, substr) >= 0
+	return s != "" && substr != "" && findIndexRenderer(s, substr) >= 0
 }
 
 func findIndexRenderer(s, substr string) int {

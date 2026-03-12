@@ -9,6 +9,8 @@ import (
 	"github.com/openai/openai-go"
 )
 
+const minXMLMatchParts = 3
+
 // ToolCallXML represents the regex patterns for extracting tool calls from XML-like output.
 // Supports formats like:
 // <tool_call>
@@ -34,7 +36,7 @@ func parseToolCallsFromXML(content string) []openai.ChatCompletionMessageToolCal
 	matches := functionBlockRegex.FindAllStringSubmatch(content, -1)
 
 	for _, match := range matches {
-		if len(match) < 3 {
+		if len(match) < minXMLMatchParts {
 			continue
 		}
 
@@ -46,7 +48,7 @@ func parseToolCallsFromXML(content string) []openai.ChatCompletionMessageToolCal
 		paramMatches := parameterBlockRegex.FindAllStringSubmatch(functionBody, -1)
 
 		for _, paramMatch := range paramMatches {
-			if len(paramMatch) < 3 {
+			if len(paramMatch) < minXMLMatchParts {
 				continue
 			}
 

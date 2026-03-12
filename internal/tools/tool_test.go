@@ -353,7 +353,7 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 }
 
 // assertJSONField checks that a JSON field has the expected string value.
-func assertJSONField(t *testing.T, data map[string]any, key string, want string) {
+func assertJSONField(t *testing.T, data map[string]any, key, want string) {
 	t.Helper()
 
 	if data[key] != want {

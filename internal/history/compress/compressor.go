@@ -7,6 +7,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
 
+const defaultMinRetention = 0.3
+
 // Compressor compresses conversation history to fit within token budget.
 type Compressor interface {
 	// Compress reduces messages to fit target token count.
@@ -37,7 +39,7 @@ type CompressorConfig struct {
 func DefaultCompressorConfig() CompressorConfig {
 	return CompressorConfig{
 		PreserveCritical: true,
-		MinRetention:     0.3,
+		MinRetention:     defaultMinRetention,
 	}
 }
 

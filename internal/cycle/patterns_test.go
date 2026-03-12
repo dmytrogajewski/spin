@@ -82,23 +82,25 @@ func TestPatternDetector_AnalyzePatterns_RepeatedPhrase(t *testing.T) {
 	found := false
 
 	for _, result := range results {
-		if result.Type == PatternRepeatedPhrase {
-			found = true
-
-			if result.Confidence <= 0.0 {
-				t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase confidence = %f, want > 0.0", result.Confidence)
-			}
-
-			if result.Details == "" {
-				t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase details should not be empty")
-			}
-
-			if result.Suggestion == "" {
-				t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase suggestion should not be empty")
-			}
-
-			break
+		if result.Type != PatternRepeatedPhrase {
+			continue
 		}
+
+		found = true
+
+		if result.Confidence <= 0.0 {
+			t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase confidence = %f, want > 0.0", result.Confidence)
+		}
+
+		if result.Details == "" {
+			t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase details should not be empty")
+		}
+
+		if result.Suggestion == "" {
+			t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase suggestion should not be empty")
+		}
+
+		break
 	}
 
 	if !found {
@@ -132,23 +134,25 @@ func TestPatternDetector_AnalyzePatterns_CircularReasoning(t *testing.T) {
 	found := false
 
 	for _, result := range results {
-		if result.Type == PatternCircularReasoning {
-			found = true
-
-			if result.Confidence != 0.7 {
-				t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning confidence = %f, want 0.7", result.Confidence)
-			}
-
-			if result.Details == "" {
-				t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning details should not be empty")
-			}
-
-			if result.Suggestion == "" {
-				t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning suggestion should not be empty")
-			}
-
-			break
+		if result.Type != PatternCircularReasoning {
+			continue
 		}
+
+		found = true
+
+		if result.Confidence != 0.7 {
+			t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning confidence = %f, want 0.7", result.Confidence)
+		}
+
+		if result.Details == "" {
+			t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning details should not be empty")
+		}
+
+		if result.Suggestion == "" {
+			t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning suggestion should not be empty")
+		}
+
+		break
 	}
 
 	if !found {
@@ -182,23 +186,25 @@ func TestPatternDetector_AnalyzePatterns_ToolStuck(t *testing.T) {
 	found := false
 
 	for _, result := range results {
-		if result.Type == PatternToolStuck {
-			found = true
-
-			if result.Confidence <= 0.0 {
-				t.Errorf("PatternDetector.AnalyzePatterns() tool stuck confidence = %f, want > 0.0", result.Confidence)
-			}
-
-			if result.Details == "" {
-				t.Errorf("PatternDetector.AnalyzePatterns() tool stuck details should not be empty")
-			}
-
-			if result.Suggestion == "" {
-				t.Errorf("PatternDetector.AnalyzePatterns() tool stuck suggestion should not be empty")
-			}
-
-			break
+		if result.Type != PatternToolStuck {
+			continue
 		}
+
+		found = true
+
+		if result.Confidence <= 0.0 {
+			t.Errorf("PatternDetector.AnalyzePatterns() tool stuck confidence = %f, want > 0.0", result.Confidence)
+		}
+
+		if result.Details == "" {
+			t.Errorf("PatternDetector.AnalyzePatterns() tool stuck details should not be empty")
+		}
+
+		if result.Suggestion == "" {
+			t.Errorf("PatternDetector.AnalyzePatterns() tool stuck suggestion should not be empty")
+		}
+
+		break
 	}
 
 	if !found {
@@ -266,23 +272,25 @@ func TestPatternDetector_AnalyzePatterns_OscillatingTools(t *testing.T) {
 	found := false
 
 	for _, result := range results {
-		if result.Type == PatternOscillatingTools {
-			found = true
-
-			if result.Confidence != 0.8 {
-				t.Errorf("PatternDetector.AnalyzePatterns() oscillating tools confidence = %f, want 0.8", result.Confidence)
-			}
-
-			if result.Details == "" {
-				t.Errorf("PatternDetector.AnalyzePatterns() oscillating tools details should not be empty")
-			}
-
-			if result.Suggestion == "" {
-				t.Errorf("PatternDetector.AnalyzePatterns() oscillating tools suggestion should not be empty")
-			}
-
-			break
+		if result.Type != PatternOscillatingTools {
+			continue
 		}
+
+		found = true
+
+		if result.Confidence != 0.8 {
+			t.Errorf("PatternDetector.AnalyzePatterns() oscillating tools confidence = %f, want 0.8", result.Confidence)
+		}
+
+		if result.Details == "" {
+			t.Errorf("PatternDetector.AnalyzePatterns() oscillating tools details should not be empty")
+		}
+
+		if result.Suggestion == "" {
+			t.Errorf("PatternDetector.AnalyzePatterns() oscillating tools suggestion should not be empty")
+		}
+
+		break
 	}
 
 	if !found {

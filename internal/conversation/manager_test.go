@@ -408,7 +408,7 @@ func TestManager_GetTaskMode(t *testing.T) {
 	})
 }
 
-func newTestManagerWithStorage(t *testing.T) (*Manager, history.Storage) {
+func newTestManagerWithStorage(t *testing.T) (mgr *Manager, store history.Storage) {
 	t.Helper()
 
 	tmpDir := t.TempDir()
@@ -417,7 +417,7 @@ func newTestManagerWithStorage(t *testing.T) (*Manager, history.Storage) {
 		t.Fatalf("create history storage: %v", err)
 	}
 
-	mgr, err := NewManager(ManagerConfig{
+	mgr, err = NewManager(ManagerConfig{
 		Factory:        mockFactory(),
 		HistoryStorage: histStorage,
 	})

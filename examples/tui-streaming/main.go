@@ -14,6 +14,15 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 )
 
+const (
+	tokenArrivalDelay   = 100 * time.Millisecond
+	fastTokenDelay      = 20 * time.Millisecond
+	lineBreakPause      = 200 * time.Millisecond
+	spacePause          = 30 * time.Millisecond
+	normalTokenDelay    = 60 * time.Millisecond
+	msPerSecondFloat    = 1000.0
+)
+
 func main() {
 	ui, err := adapters.NewPureTTY(os.Stdout)
 	if err != nil {
@@ -154,7 +163,7 @@ func streamWords(ctx context.Context, ui *adapters.PureTTY, text string) {
 					chunks <- " "
 				}
 
-				time.Sleep(100 * time.Millisecond) // Simulate token arrival.
+				time.Sleep(tokenArrivalDelay) // Simulate token arrival.
 			}
 		}
 
@@ -179,7 +188,7 @@ func streamChars(ctx context.Context, ui *adapters.PureTTY, text string) {
 			case <-ctx.Done():
 				return
 			case chunks <- string(ch):
-				time.Sleep(20 * time.Millisecond)
+				time.Sleep(fastTokenDelay)
 			}
 		}
 
@@ -214,12 +223,13 @@ func streamLLM(ctx context.Context, ui *adapters.PureTTY) {
 				return
 			case chunks <- token:
 				// Variable delay to simulate realistic LLM token timing.
-				if strings.HasSuffix(token, "\n") {
-					time.Sleep(200 * time.Millisecond) // Pause at line breaks.
-				} else if token == " " {
-					time.Sleep(30 * time.Millisecond) // Short pause for spaces.
-				} else {
-					time.Sleep(60 * time.Millisecond) // Normal token delay.
+				switch {
+				case strings.HasSuffix(token, "\n"):
+					time.Sleep(lineBreakPause) // Pause at line breaks.
+				case token == " ":
+					time.Sleep(spacePause) // Short pause for spaces.
+				default:
+					time.Sleep(normalTokenDelay) // Normal token delay.
 				}
 			}
 		}
@@ -263,5 +273,5 @@ func streamFast(ctx context.Context, ui *adapters.PureTTY) {
 	elapsed := time.Since(start)
 
 	_ = ui.PrintLine(fmt.Sprintf("Streamed 1000 chunks in %v (throughput: %.0f chunks/sec)",
-		elapsed, 1000.0/elapsed.Seconds()))
+		elapsed, msPerSecondFloat/elapsed.Seconds()))
 }

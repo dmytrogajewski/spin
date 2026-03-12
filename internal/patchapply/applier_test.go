@@ -101,7 +101,7 @@ func TestNewApplier(t *testing.T) {
 	}{
 		{"valid workspace", workspace, false},
 		{"empty root", "", true},
-		{"nonexistent dir", filepath.Join(workspace, "nonexistent"), false}, {"nonexistent dir", filepath.Join(workspace, "nonexistent"), false}, // OK, can be created.
+		{"nonexistent dir", filepath.Join(workspace, "nonexistent"), false}, // OK, can be created.
 	}
 
 	for _, tt := range tests {
@@ -352,10 +352,43 @@ func TestApplier_UpdateFile(t *testing.T) {
 	t.Parallel()
 
 	tests := []updateFileTestCase{
-		{name: "simple replace", filePath: "test.txt", original: "line1\nline2\nline3", expected: "line1\nnewline\nline3", hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "line1"}, {Type: LineDelete, Text: "line2"}, {Type: LineInsert, Text: "newline"}, {Type: LineContext, Text: "line3"}}}}},
-		{name: "insert at beginning", filePath: "test.txt", original: "line1\nline2", expected: "newline\nline1\nline2", hunks: []Hunk{{Changes: []LineChange{{Type: LineInsert, Text: "newline"}, {Type: LineContext, Text: "line1"}}}}},
-		{name: "delete line", filePath: "test.txt", original: "line1\nline2\nline3", expected: "line1\nline3", hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "line1"}, {Type: LineDelete, Text: "line2"}, {Type: LineContext, Text: "line3"}}}}},
-		{name: "multiple hunks", filePath: "test.txt", original: "a\nb\nc\nd\ne", expected: "a\nB\nc\nd\nE", hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "a"}, {Type: LineDelete, Text: "b"}, {Type: LineInsert, Text: "B"}}}, {Changes: []LineChange{{Type: LineContext, Text: "d"}, {Type: LineDelete, Text: "e"}, {Type: LineInsert, Text: "E"}}}}},
+		{
+			name: "simple replace", filePath: "test.txt",
+			original: "line1\nline2\nline3", expected: "line1\nnewline\nline3",
+			hunks: []Hunk{{Changes: []LineChange{
+				{Type: LineContext, Text: "line1"}, {Type: LineDelete, Text: "line2"},
+				{Type: LineInsert, Text: "newline"}, {Type: LineContext, Text: "line3"},
+			}}},
+		},
+		{
+			name: "insert at beginning", filePath: "test.txt",
+			original: "line1\nline2", expected: "newline\nline1\nline2",
+			hunks: []Hunk{{Changes: []LineChange{
+				{Type: LineInsert, Text: "newline"}, {Type: LineContext, Text: "line1"},
+			}}},
+		},
+		{
+			name: "delete line", filePath: "test.txt",
+			original: "line1\nline2\nline3", expected: "line1\nline3",
+			hunks: []Hunk{{Changes: []LineChange{
+				{Type: LineContext, Text: "line1"}, {Type: LineDelete, Text: "line2"},
+				{Type: LineContext, Text: "line3"},
+			}}},
+		},
+		{
+			name: "multiple hunks", filePath: "test.txt",
+			original: "a\nb\nc\nd\ne", expected: "a\nB\nc\nd\nE",
+			hunks: []Hunk{
+				{Changes: []LineChange{
+					{Type: LineContext, Text: "a"}, {Type: LineDelete, Text: "b"},
+					{Type: LineInsert, Text: "B"},
+				}},
+				{Changes: []LineChange{
+					{Type: LineContext, Text: "d"}, {Type: LineDelete, Text: "e"},
+					{Type: LineInsert, Text: "E"},
+				}},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -370,8 +403,21 @@ func TestApplier_UpdateFile_Errors(t *testing.T) {
 	t.Parallel()
 
 	tests := []updateFileTestCase{
-		{name: "context not found", filePath: "test.txt", original: "line1\nline2\nline3", wantErr: true, errIs: ErrContextNotFound, hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "nonexistent"}, {Type: LineDelete, Text: "line2"}}}}},
-		{name: "update nonexistent file", filePath: "missing.txt", wantErr: true, errIs: ErrFileNotFound, hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "line1"}}}}},
+		{
+			name: "context not found", filePath: "test.txt",
+			original: "line1\nline2\nline3", wantErr: true, errIs: ErrContextNotFound,
+			hunks: []Hunk{{Changes: []LineChange{
+				{Type: LineContext, Text: "nonexistent"},
+				{Type: LineDelete, Text: "line2"},
+			}}},
+		},
+		{
+			name: "update nonexistent file", filePath: "missing.txt",
+			wantErr: true, errIs: ErrFileNotFound,
+			hunks: []Hunk{{Changes: []LineChange{
+				{Type: LineContext, Text: "line1"},
+			}}},
+		},
 	}
 
 	for _, tt := range tests {

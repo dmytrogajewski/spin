@@ -370,8 +370,9 @@ func TestFileContentTracker_StoreAndRetrieve(t *testing.T) {
 
 	// Cleanup.
 	tracker.cleanup(toolID)
-	_, _, _, ok = tracker.getContentForDiff(toolID)
-	assert.False(t, ok, "should not retrieve after cleanup")
+	oldAfterCleanup, _, _, ok2 := tracker.getContentForDiff(toolID)
+	_ = oldAfterCleanup
+	assert.False(t, ok2, "should not retrieve after cleanup")
 }
 
 // TestFileContentTracker_NewFile tests new file handling (empty old content).
@@ -504,7 +505,8 @@ func TestConvertToolCallComplete_WriteFile_IncludesDiff(t *testing.T) {
 	assert.NotNil(t, update)
 
 	// Verify tracker was cleaned up.
-	_, _, _, hasContent := tracker.getContentForDiff(toolID)
+	oldC, _, _, hasContent := tracker.getContentForDiff(toolID)
+	_ = oldC
 	assert.False(t, hasContent, "tracker should be cleaned up after completion")
 }
 
@@ -537,7 +539,8 @@ func TestConvertToolCallComplete_WriteFile_NewFile(t *testing.T) {
 	assert.NotNil(t, update)
 
 	// Verify tracker was cleaned up.
-	_, _, _, hasContent := tracker.getContentForDiff(toolID)
+	oldC, _, _, hasContent := tracker.getContentForDiff(toolID)
+	_ = oldC
 	assert.False(t, hasContent, "tracker should be cleaned up after completion")
 }
 

@@ -8,6 +8,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/git"
 )
 
+const defaultGitLogLimit = 10
+
 // GitOperationTool implements Git operations using Integration.
 type GitOperationTool struct {
 	gitIntegration *git.Integration
@@ -175,7 +177,7 @@ func handleGitDiff(ctx context.Context, t *GitOperationTool, params ToolParamete
 }
 
 func handleGitLog(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
-	limit := params.GetIntOr("limit", 10)
+	limit := params.GetIntOr("limit", defaultGitLogLimit)
 
 	logs, err := t.gitIntegration.GetLog(ctx, limit)
 	if err != nil {
@@ -212,8 +214,13 @@ func (t *GitOperationTool) Schema() ToolSchema {
 				Properties: map[string]PropertyDefinition{
 					"operation": {
 						Type:        "string",
-						Description: "Git operation: stage, commit, push, pull, create_branch, switch_branch, list_branches, list_remotes, get_status, get_diff, get_log",
-						Enum:        []string{"stage", "commit", "push", "pull", "create_branch", "switch_branch", "list_branches", "list_remotes", "get_status", "get_diff", "get_log"},
+						Description: "Git operation: stage, commit, push, pull, create_branch, " +
+							"switch_branch, list_branches, list_remotes, get_status, get_diff, get_log",
+						Enum: []string{
+							"stage", "commit", "push", "pull", "create_branch",
+							"switch_branch", "list_branches", "list_remotes",
+							"get_status", "get_diff", "get_log",
+						},
 					},
 					"file_path": {
 						Type:        "string",

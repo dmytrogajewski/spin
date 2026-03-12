@@ -25,6 +25,13 @@ var (
 	ErrKeyNotFound = errors.New("key not found")
 )
 
+const (
+	formatJSON       = "json"
+	formatText       = "text"
+	answerYes        = "yes"
+	binaryApplyPatch = "spin-apply-patch"
+)
+
 // newConfigCmd creates the config management command.
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -170,14 +177,14 @@ func runConfigShow(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Successfully loaded V2 config, show it.
-	if format == "text" || format == "yaml" {
+	if format == formatText || format == "yaml" {
 		fmt.Fprintf(cmd.OutOrStdout(), "# Configuration V2\n\n")
 	}
 
 	switch format {
-	case "json":
+	case formatJSON:
 		return printJSON(cmd.OutOrStdout(), cfgV2)
-	case "yaml", "text":
+	case "yaml", formatText:
 		return printYAML(cmd.OutOrStdout(), cfgV2)
 	default:
 return fmt.Errorf("unsupported format: %s (use: text, json, yaml): %w", format, ErrUnsupportedFormat)
@@ -362,10 +369,12 @@ func printJSON[T any](out io.Writer, data T) error {
 }
 
 // printYAML prints data as YAML.
+const yamlIndent = 2
+
 func printYAML[T any](out io.Writer, data T) error {
 	encoder := yaml.NewEncoder(out)
 
-	encoder.SetIndent(2)
+	encoder.SetIndent(yamlIndent)
 	defer encoder.Close()
 
 	if err := encoder.Encode(data); err != nil {

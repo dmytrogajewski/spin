@@ -27,7 +27,7 @@ var (
 // Factory creates new Conversation instances.
 // The factory receives the session ID and working directory, and returns
 // a fully configured Conversation or an error.
-type Factory func(ctx context.Context, sessionID string, workDir string) (*Conversation, error)
+type Factory func(ctx context.Context, sessionID, workDir string) (*Conversation, error)
 
 // Manager manages multiple concurrent conversations.
 // This is useful for protocols like ACP that support multiple sessions.
@@ -79,7 +79,7 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 // GetOrCreate returns an existing conversation or creates a new one.
 // If the conversation already exists, it is returned.
 // Otherwise, the factory is called to create a new conversation.
-func (m *Manager) GetOrCreate(ctx context.Context, sessionID string, workDir string) (*Conversation, error) {
+func (m *Manager) GetOrCreate(ctx context.Context, sessionID, workDir string) (*Conversation, error) {
 	if sessionID == "" {
 		return nil, ErrSessionIDCannotBeEmpty
 	}
@@ -166,7 +166,7 @@ func (m *Manager) Cancel(ctx context.Context, sessionID string) {
 
 // Load loads a conversation from storage.
 // This creates a new conversation and restores its history from storage.
-func (m *Manager) Load(ctx context.Context, sessionID string, workDir string) (*Conversation, error) {
+func (m *Manager) Load(ctx context.Context, sessionID, workDir string) (*Conversation, error) {
 	if m.histStorage == nil {
 		return nil, ErrHistoryStorageNotConfigured
 	}
@@ -272,7 +272,7 @@ return fmt.Errorf("errors closing conversations: %v: %w", errs, ErrErrorsClosing
 
 // RunTurn executes a turn on a specific session.
 // This is a convenience method that gets or creates the conversation and runs the turn.
-func (m *Manager) RunTurn(ctx context.Context, sessionID string, workDir string, input string) error {
+func (m *Manager) RunTurn(ctx context.Context, sessionID, workDir, input string) error {
 	conv, err := m.GetOrCreate(ctx, sessionID, workDir)
 	if err != nil {
 		return err
@@ -282,7 +282,7 @@ func (m *Manager) RunTurn(ctx context.Context, sessionID string, workDir string,
 }
 
 // SetTaskMode sets the task mode for a specific session.
-func (m *Manager) SetTaskMode(sessionID string, mode string) error {
+func (m *Manager) SetTaskMode(sessionID, mode string) error {
 	m.mu.RLock()
 	conv, ok := m.conversations[sessionID]
 	m.mu.RUnlock()

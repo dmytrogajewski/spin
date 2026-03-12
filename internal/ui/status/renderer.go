@@ -6,6 +6,16 @@ import (
 	"strings"
 )
 
+// Status bar rendering constants.
+const (
+	minTermHeight         = 3  // minimum terminal height to render status bar.
+	minTermWidth          = 10 // minimum terminal width to render status bar.
+	statusBarLines        = 2  // lines reserved for status bar and prompt.
+	percentMultiplier     = 100
+	highUsageThreshold    = 80 // context usage percentage for warning color.
+	convIDMaxLen          = 8  // max characters for shortened conversation ID.
+)
+
 // Renderer handles rendering the status bar to the terminal.
 // It uses ANSI escape sequences for positioning and scrolling regions.
 type Renderer struct {
@@ -31,14 +41,14 @@ func NewRenderer(out io.Writer, width, height int) *Renderer {
 // This reserves the bottom 2 lines for status bar and prompt,
 // allowing content to scroll only in the top area.
 func (r *Renderer) setupScrollingRegion() error {
-	if r.height < 3 {
+	if r.height < minTermHeight {
 		// Terminal too small.
 		return nil
 	}
 
 	// Set scrolling region to lines 1 through (height - 2)
 	// This leaves the last 2 lines for status bar and prompt.
-	scrollableLines := r.height - 2
+	scrollableLines := r.height - statusBarLines
 	fmt.Fprintf(r.out, "\x1b[1;%dr", scrollableLines)
 
 	// Move cursor to the bottom of the scrolling region
@@ -61,7 +71,7 @@ func (r *Renderer) SetSize(width, height int) {
 // It positions the status bar at line (height - 1) and the prompt at line (height).
 // Uses save/restore cursor to avoid disrupting the scrolling region.
 func (r *Renderer) Render(statusText string) error {
-	if r.height < 3 || r.width < 10 {
+	if r.height < minTermHeight || r.width < minTermWidth {
 		// Terminal too small, don't render status bar.
 		return nil
 	}
@@ -83,12 +93,12 @@ func (r *Renderer) Render(statusText string) error {
 		cleanText := stripANSI(statusText)
 
 		// Truncate if too long (now measuring actual visible length).
-		if len(cleanText) > r.width-2 {
+		if len(cleanText) > r.width-statusBarLines {
 			cleanText = cleanText[:r.width-5] + "..."
 		}
 
 		// Center the status text.
-		padding := (r.width - len(cleanText)) / 2
+		padding := (r.width - len(cleanText)) / statusBarLines
 		if padding > 0 {
 			fmt.Fprint(r.out, strings.Repeat(" ", padding))
 		}
@@ -123,11 +133,11 @@ func (r *Renderer) MoveToPrompt() error {
 // This ensures new content is printed in the scrollable area, not
 // at the fixed status/prompt lines.
 func (r *Renderer) MoveToScrollRegion() error {
-	if r.height < 3 {
+	if r.height < minTermHeight {
 		return nil
 	}
 
-	scrollableLines := r.height - 2
+	scrollableLines := r.height - statusBarLines
 	fmt.Fprintf(r.out, "\x1b[%d;1H", scrollableLines)
 
 	return nil
@@ -135,7 +145,7 @@ func (r *Renderer) MoveToScrollRegion() error {
 
 // RenderMetrics renders comprehensive completion metrics in the status bar.
 func (r *Renderer) RenderMetrics(metrics *Metrics) error {
-	if r.height < 3 || r.width < 10 {
+	if r.height < minTermHeight || r.width < minTermWidth {
 		// Terminal too small, don't render status bar.
 		return nil
 	}
@@ -178,10 +188,10 @@ func (r *Renderer) buildMetricsLine(metrics *Metrics) string {
 
 	// Context usage percentage.
 	if metrics.MaxTokens > 0 {
-		percentage := float64(metrics.TokenCount) / float64(metrics.MaxTokens) * 100
+		percentage := float64(metrics.TokenCount) / float64(metrics.MaxTokens) * percentMultiplier
 
 		usageStr := fmt.Sprintf("%.0f%%", percentage)
-		if percentage > 80 {
+		if percentage > highUsageThreshold {
 			usageStr = fmt.Sprintf("\x1b[33m%s\x1b[0m", usageStr) // Yellow for high usage.
 		}
 
@@ -208,8 +218,8 @@ func (r *Renderer) buildMetricsLine(metrics *Metrics) string {
 	// Conversation ID (shortened).
 	if metrics.ConversationID != "" {
 		shortID := metrics.ConversationID
-		if len(shortID) > 8 {
-			shortID = shortID[:8]
+		if len(shortID) > convIDMaxLen {
+			shortID = shortID[:convIDMaxLen]
 		}
 
 		parts = append(parts, fmt.Sprintf("conv:%s", shortID))

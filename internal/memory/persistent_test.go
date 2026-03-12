@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+const (
+	testValue1 = "value1"
+	testValue2 = "value2"
+)
+
+
 func TestNewPersistentStore(t *testing.T) {
 	t.Parallel()
 
@@ -66,7 +72,7 @@ func TestPersistentStorePutAndGet(t *testing.T) {
 	}
 
 	// Test Put.
-	err = store.Put(ctx, "key1", "value1", PutOptions{})
+	err = store.Put(ctx, "key1", testValue1, PutOptions{})
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -81,7 +87,7 @@ func TestPersistentStorePutAndGet(t *testing.T) {
 		t.Errorf("Key mismatch: got %q", entry.Key)
 	}
 
-	if entry.Value != "value1" {
+	if entry.Value != testValue1 {
 		t.Errorf("Value mismatch: got %q", entry.Value)
 	}
 
@@ -100,7 +106,7 @@ func TestPersistentStorePutWithNamespace(t *testing.T) {
 		t.Fatalf("NewPersistentStore failed: %v", err)
 	}
 
-	err = store.Put(ctx, "key1", "value1", PutOptions{Namespace: "custom"})
+	err = store.Put(ctx, "key1", testValue1, PutOptions{Namespace: "custom"})
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -132,7 +138,7 @@ func TestPersistentStorePutWithTags(t *testing.T) {
 		t.Fatalf("NewPersistentStore failed: %v", err)
 	}
 
-	err = store.Put(ctx, "key1", "value1", PutOptions{
+	err = store.Put(ctx, "key1", testValue1, PutOptions{
 		Tags: []string{"tag1", "tag2"},
 	})
 	if err != nil {
@@ -160,13 +166,13 @@ func TestPersistentStorePutUpdateExisting(t *testing.T) {
 	}
 
 	// First put.
-	err = store.Put(ctx, "key1", "value1", PutOptions{Overwrite: true})
+	err = store.Put(ctx, "key1", testValue1, PutOptions{Overwrite: true})
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
 	// Update with same key.
-	err = store.Put(ctx, "key1", "value2", PutOptions{Overwrite: true})
+	err = store.Put(ctx, "key1", testValue2, PutOptions{Overwrite: true})
 	if err != nil {
 		t.Fatalf("Put update failed: %v", err)
 	}
@@ -176,7 +182,7 @@ func TestPersistentStorePutUpdateExisting(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 
-	if entry.Value != "value2" {
+	if entry.Value != testValue2 {
 		t.Errorf("Value should be updated: got %q", entry.Value)
 	}
 
@@ -196,13 +202,13 @@ func TestPersistentStorePutWithoutOverwrite(t *testing.T) {
 	}
 
 	// First put.
-	err = store.Put(ctx, "key1", "value1", PutOptions{})
+	err = store.Put(ctx, "key1", testValue1, PutOptions{})
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
 	// Try to put again without overwrite - should fail.
-	err = store.Put(ctx, "key1", "value2", PutOptions{Overwrite: false})
+	err = store.Put(ctx, "key1", testValue2, PutOptions{Overwrite: false})
 	if !errors.Is(err, ErrKeyExists) {
 		t.Errorf("Expected ErrKeyExists, got %v", err)
 	}
@@ -267,7 +273,7 @@ func TestPersistentStoreDelete(t *testing.T) {
 	}
 
 	// Add entry.
-	err = store.Put(ctx, "key1", "value1", PutOptions{})
+	err = store.Put(ctx, "key1", testValue1, PutOptions{})
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
@@ -336,7 +342,7 @@ func TestPersistentStoreCount(t *testing.T) {
 		t.Errorf("Initial count should be 0")
 	}
 
-	if err = store.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
+	if err = store.Put(ctx, "key1", testValue1, PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
@@ -344,7 +350,7 @@ func TestPersistentStoreCount(t *testing.T) {
 		t.Errorf("Count should be 1")
 	}
 
-	if err = store.Put(ctx, "key2", "value2", PutOptions{}); err != nil {
+	if err = store.Put(ctx, "key2", testValue2, PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
@@ -371,10 +377,10 @@ func TestPersistentStoreList(t *testing.T) {
 		t.Fatalf("NewPersistentStore failed: %v", err)
 	}
 
-	if err = store.Put(ctx, "prefix_a", "value1", PutOptions{}); err != nil {
+	if err = store.Put(ctx, "prefix_a", testValue1, PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
-	if err = store.Put(ctx, "prefix_b", "value2", PutOptions{}); err != nil {
+	if err = store.Put(ctx, "prefix_b", testValue2, PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 	if err = store.Put(ctx, "other", "value3", PutOptions{}); err != nil {
@@ -463,7 +469,7 @@ func TestPersistentStoreSearchNoMatches(t *testing.T) {
 		t.Fatalf("NewPersistentStore failed: %v", err)
 	}
 
-	if err = store.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
+	if err = store.Put(ctx, "key1", testValue1, PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
@@ -488,10 +494,10 @@ func TestPersistentStorePersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPersistentStore failed: %v", err)
 	}
-	if err = store1.Put(ctx, "key1", "value1", PutOptions{Namespace: "ns1"}); err != nil {
+	if err = store1.Put(ctx, "key1", testValue1, PutOptions{Namespace: "ns1"}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
-	if err = store1.Put(ctx, "key2", "value2", PutOptions{Namespace: "ns2"}); err != nil {
+	if err = store1.Put(ctx, "key2", testValue2, PutOptions{Namespace: "ns2"}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 	if err = store1.Close(); err != nil {
@@ -513,7 +519,7 @@ func TestPersistentStorePersistence(t *testing.T) {
 		t.Fatalf("Get failed after reload: %v", err)
 	}
 
-	if entry.Value != "value1" {
+	if entry.Value != testValue1 {
 		t.Errorf("Value mismatch after reload: got %q", entry.Value)
 	}
 
@@ -599,7 +605,7 @@ func TestPersistentStoreWithTTL(t *testing.T) {
 		t.Fatalf("NewPersistentStore failed: %v", err)
 	}
 
-	err = store.Put(ctx, "key1", "value1", PutOptions{
+	err = store.Put(ctx, "key1", testValue1, PutOptions{
 		TTL: 1 * time.Hour,
 	})
 	if err != nil {
@@ -627,10 +633,10 @@ func TestPersistentStoreGetByNamespaceKey(t *testing.T) {
 	}
 
 	// Put in different namespaces.
-	if err = store.Put(ctx, "key1", "value1", PutOptions{Namespace: "ns1"}); err != nil {
+	if err = store.Put(ctx, "key1", testValue1, PutOptions{Namespace: "ns1"}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
-	if err = store.Put(ctx, "key1", "value2", PutOptions{Namespace: "ns2"}); err != nil {
+	if err = store.Put(ctx, "key1", testValue2, PutOptions{Namespace: "ns2"}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
@@ -640,7 +646,7 @@ func TestPersistentStoreGetByNamespaceKey(t *testing.T) {
 		t.Fatalf("Get failed: %v", err)
 	}
 	// Either value is acceptable since we don't specify namespace.
-	if entry.Value != "value1" && entry.Value != "value2" {
+	if entry.Value != testValue1 && entry.Value != testValue2 {
 		t.Errorf("Unexpected value: %q", entry.Value)
 	}
 }
@@ -655,7 +661,7 @@ func TestPersistentStoreDeleteByNamespaceKey(t *testing.T) {
 		t.Fatalf("NewPersistentStore failed: %v", err)
 	}
 
-	if err = store.Put(ctx, "key1", "value1", PutOptions{Namespace: "ns1"}); err != nil {
+	if err = store.Put(ctx, "key1", testValue1, PutOptions{Namespace: "ns1"}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
@@ -694,7 +700,7 @@ func TestPersistentStoreSearchCaseInsensitive(t *testing.T) {
 		t.Errorf("Expected 1 result (case-insensitive key), got %d", len(results))
 	}
 
-	results, err = store.Search(ctx, "value1", 10)
+	results, err = store.Search(ctx, testValue1, 10)
 	if err != nil {
 		t.Fatalf("Search failed: %v", err)
 	}
@@ -714,10 +720,10 @@ func TestPersistentStoreExactPatternMatch(t *testing.T) {
 		t.Fatalf("NewPersistentStore failed: %v", err)
 	}
 
-	if err = store.Put(ctx, "exact_key", "value1", PutOptions{}); err != nil {
+	if err = store.Put(ctx, "exact_key", testValue1, PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
-	if err = store.Put(ctx, "another_key", "value2", PutOptions{}); err != nil {
+	if err = store.Put(ctx, "another_key", testValue2, PutOptions{}); err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
@@ -739,16 +745,16 @@ func TestPersistentStoreRebuildIndexWithInvalidFiles(t *testing.T) {
 
 	// Create an invalid JSON file.
 	invalidPath := filepath.Join(tmpDir, "default", "invalid.json")
-	if err := os.MkdirAll(filepath.Dir(invalidPath), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(invalidPath), 0o700); err != nil {
 		t.Fatalf("MkdirAll failed: %v", err)
 	}
-	if err := os.WriteFile(invalidPath, []byte("not valid json"), 0600); err != nil {
+	if err := os.WriteFile(invalidPath, []byte("not valid json"), 0o600); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
 	// Create a tmp file (should be ignored).
 	tmpFilePath := filepath.Join(tmpDir, "default", "temp.json.tmp")
-	if err := os.WriteFile(tmpFilePath, []byte("{}"), 0600); err != nil {
+	if err := os.WriteFile(tmpFilePath, []byte("{}"), 0o600); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 

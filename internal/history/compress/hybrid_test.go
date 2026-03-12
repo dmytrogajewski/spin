@@ -9,6 +9,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
 
+const (
+	testHybridName = "hybrid"
+)
+
+
 // mockSummarizer is a test summarizer.
 type mockSummarizer struct {
 	summarizeMessagesCalled bool
@@ -23,7 +28,9 @@ func (m *mockSummarizer) Summarize(_ context.Context, _ string, _ summarizer.Opt
 	}, m.returnError
 }
 
-func (m *mockSummarizer) SummarizeMessages(_ context.Context, msgs []message.Message, _ summarizer.Options) (*summarizer.MessageResult, error) {
+func (m *mockSummarizer) SummarizeMessages(
+	_ context.Context, msgs []message.Message, _ summarizer.Options,
+) (*summarizer.MessageResult, error) {
 	m.summarizeMessagesCalled = true
 	if m.returnError != nil {
 		return nil, m.returnError
@@ -56,7 +63,7 @@ func TestHybridCompressor_Name(t *testing.T) {
 	t.Parallel()
 
 	c := NewHybridCompressor(nil, DefaultCompressorConfig())
-	if c.Name() != "hybrid" {
+	if c.Name() != testHybridName {
 		t.Errorf("expected 'hybrid', got %q", c.Name())
 	}
 }
@@ -308,7 +315,7 @@ func TestHybridCompressor_CompressWithStats(t *testing.T) {
 		t.Errorf("expected CompressedCount 2, got %d", stats.CompressedCount)
 	}
 
-	if stats.Strategy != "hybrid" {
+	if stats.Strategy != testHybridName {
 		t.Errorf("expected strategy 'hybrid', got %q", stats.Strategy)
 	}
 }

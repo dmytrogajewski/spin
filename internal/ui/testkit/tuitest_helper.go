@@ -7,6 +7,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 )
 
+const (
+	testTermWidth     = 80
+	testTermHeight    = 24
+	testSettleDelay   = 50 * time.Millisecond
+)
+
 // TUITestHelper provides utilities for testing TUI components.
 type TUITestHelper struct {
 	UI       *adapters.PureTTY
@@ -23,7 +29,7 @@ func NewTUITest(t interface {
 }) *TUITestHelper {
 	t.Helper()
 
-	fakeTTY := NewFakeTTY(80, 24)
+	fakeTTY := NewFakeTTY(testTermWidth, testTermHeight)
 	fakeKB := NewFakeKeyboard()
 	fakeOut := NewFakeWriter()
 
@@ -65,7 +71,7 @@ func (h *TUITestHelper) Start() {
 		_ = h.UI.Run(ctx)
 	}()
 	// Give UI time to initialize.
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(testSettleDelay)
 }
 
 // Stop stops the UI and cancels the context.

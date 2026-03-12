@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const writerTickInterval = 10 * time.Millisecond
+
 // FakeWriter captures all output written to it for testing.
 // It provides thread-safe access and ANSI sequence helpers.
 type FakeWriter struct {
@@ -91,7 +93,7 @@ func (f *FakeWriter) Lines() []string {
 func (f *FakeWriter) WaitForContent(s string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 
-	ticker := time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(writerTickInterval)
 	defer ticker.Stop()
 
 	for time.Now().Before(deadline) {

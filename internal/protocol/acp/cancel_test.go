@@ -241,11 +241,13 @@ func createBlockingTestAgent(t *testing.T) *agent.Agent {
 
 	mockProvider := llm.NewMockProvider("test",
 		llm.WithStreaming(chunks),
-		llm.WithDelay(500*time.Millisecond), llm.WithDelay(500*time.Millisecond), // Long delay between chunks to allow cancellation.
+		llm.WithDelay(500*time.Millisecond), // Long delay between chunks to allow cancellation.
 	)
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
@@ -286,7 +288,9 @@ func (m *mockConnectionForCancel) SessionUpdate(_ context.Context, notification 
 	return nil
 }
 
-func (m *mockConnectionForCancel) RequestPermission(_ context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (m *mockConnectionForCancel) RequestPermission(
+	_ context.Context, params acp.RequestPermissionRequest,
+) (acp.RequestPermissionResponse, error) {
 	// Auto-approve for testing by selecting the first allow option.
 	for _, opt := range params.Options {
 		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {

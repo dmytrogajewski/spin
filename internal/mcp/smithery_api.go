@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const smitheryAPITimeout = 10 * time.Second
+
 // SmitheryAPIClient provides access to Smithery's tool discovery API.
 type SmitheryAPIClient struct {
 	apiKey     string
@@ -33,7 +35,7 @@ func NewSmitheryAPIClient(config SmitheryAPIConfig) (*SmitheryAPIClient, error) 
 
 	timeout := config.Timeout
 	if timeout == 0 {
-		timeout = 10 * time.Second
+		timeout = smitheryAPITimeout
 	}
 
 	return &SmitheryAPIClient{
@@ -88,11 +90,11 @@ func (c *SmitheryAPIClient) SearchTools(ctx context.Context, query string, limit
 		return nil, fmt.Errorf("parse API URL: %w", err)
 	}
 
-	if parsedURL.Scheme != "https" {
+	if parsedURL.Scheme != schemeHTTPS {
 		return nil, fmt.Errorf("invalid URL scheme %q, expected https", parsedURL.Scheme)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", parsedURL.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", parsedURL.String(), http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}

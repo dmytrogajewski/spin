@@ -39,7 +39,10 @@ func (c *tuiCommandContext) GetWorkDir() string {
 // Returns:
 //   - handled: true if command was recognized and processed
 //   - error: non-nil if command execution failed or exit was requested
-func handleCommand(ctx context.Context, ui *adapters.PureTTY, conv *conversation.Conversation, cmdName string, args []string) (handled bool, err error) {
+func handleCommand(
+	ctx context.Context, ui *adapters.PureTTY,
+	conv *conversation.Conversation, cmdName string, args []string,
+) (handled bool, err error) {
 	// Create command context.
 	cmdCtx := &tuiCommandContext{conv: conv}
 

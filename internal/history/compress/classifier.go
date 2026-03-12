@@ -6,6 +6,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/message"
 )
 
+const (
+	defaultVerboseThreshold = 1000
+	minCodeBlockLines       = 3
+)
+
 // Importance represents message priority level for compression.
 type Importance int
 
@@ -49,7 +54,7 @@ type Classifier struct {
 // NewClassifier creates a new message classifier with default settings.
 func NewClassifier() *Classifier {
 	return &Classifier{
-		verboseThreshold: 1000,
+		verboseThreshold: defaultVerboseThreshold,
 	}
 }
 
@@ -172,7 +177,7 @@ func (c *Classifier) hasCodeBlock(msg message.Message) bool {
 	for _, line := range lines {
 		if len(line) >= 4 && (strings.HasPrefix(line, "    ") || strings.HasPrefix(line, "\t")) {
 			codeLineCount++
-			if codeLineCount >= 3 {
+			if codeLineCount >= minCodeBlockLines {
 				return true
 			}
 		}

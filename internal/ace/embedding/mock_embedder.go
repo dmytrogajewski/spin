@@ -4,6 +4,11 @@ import (
 	"context"
 )
 
+const (
+	mockEmbedModulus = 10
+	mockEmbedScale   = 0.1
+)
+
 // MockEmbedder is a simple mock implementation for testing.
 type MockEmbedder struct {
 	dimension  int
@@ -32,7 +37,7 @@ func (m *MockEmbedder) Embed(_ context.Context, text string) ([]float32, error) 
 	// Generate simple embedding based on text length.
 	embedding := make([]float32, m.dimension)
 	for i := range m.dimension {
-		embedding[i] = float32(len(text)%10) * 0.1
+		embedding[i] = float32(len(text)%mockEmbedModulus) * mockEmbedScale
 	}
 
 	return embedding, nil

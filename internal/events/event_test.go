@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+const (
+	testCallID1 = "call_1"
+	testUnknownType = "unknown"
+)
+
+
 // TestEvent_Structure tests Event struct serialization.
 func TestEvent_Structure(t *testing.T) {
 	t.Parallel()
@@ -77,7 +83,7 @@ func TestEventType_String_Unknown(t *testing.T) {
 	t.Parallel()
 
 	unknown := EventType(999)
-	if got := unknown.String(); got != "unknown" {
+	if got := unknown.String(); got != testUnknownType {
 		t.Errorf("String() = %v, want unknown", got)
 	}
 }
@@ -510,7 +516,8 @@ func TestEventEmitter_NoMemoryLeaks(t *testing.T) {
 // BenchmarkEventEmitter_Emit benchmarks single emission.
 func BenchmarkEventEmitter_Emit(b *testing.B) {
 	emitter := NewEventEmitter(100)
-	_, _, _ = emitter.Subscribe() // One subscriber.
+	_, _, subErr := emitter.Subscribe() // One subscriber.
+	_ = subErr
 
 	event := Event{Type: EventInfo, Data: "test"}
 
@@ -562,7 +569,7 @@ func TestEvent_ToolCallStartData(t *testing.T) {
 			Type: EventToolCallStart,
 			Data: ToolCallStartData{
 				ToolName: "read_file",
-				ToolID:   "call_1",
+				ToolID:   testCallID1,
 			},
 		}
 
@@ -576,8 +583,8 @@ func TestEvent_ToolCallStartData(t *testing.T) {
 			t.Errorf("ToolName = %q, want %q", data.ToolName, "read_file")
 		}
 
-		if data.ToolID != "call_1" {
-			t.Errorf("ToolID = %q, want %q", data.ToolID, "call_1")
+		if data.ToolID != testCallID1 {
+			t.Errorf("ToolID = %q, want %q", data.ToolID, testCallID1)
 		}
 	})
 
@@ -604,16 +611,16 @@ func TestEvent_TypeSafeHelpers(t *testing.T) {
 
 	t.Run("ToolCallCompleteData", func(t *testing.T) {
 		t.Parallel()
-		e := Event{Type: EventToolCallComplete, Data: ToolCallCompleteData{ToolID: "call_1", Success: true}}
+		e := Event{Type: EventToolCallComplete, Data: ToolCallCompleteData{ToolID: testCallID1, Success: true}}
 		data, ok := e.ToolCallCompleteData()
-		assertTypeSafeHelper(t, ok, data.ToolID == "call_1" && data.Success)
+		assertTypeSafeHelper(t, ok, data.ToolID == testCallID1 && data.Success)
 	})
 
 	t.Run("ToolProgressData", func(t *testing.T) {
 		t.Parallel()
-		e := Event{Type: EventToolCallProgress, Data: ToolProgressData{ToolID: "call_1", Status: "running"}}
+		e := Event{Type: EventToolCallProgress, Data: ToolProgressData{ToolID: testCallID1, Status: "running"}}
 		data, ok := e.ToolProgressData()
-		assertTypeSafeHelper(t, ok, data.ToolID == "call_1" && data.Status == "running")
+		assertTypeSafeHelper(t, ok, data.ToolID == testCallID1 && data.Status == "running")
 	})
 
 	t.Run("ContentDeltaData", func(t *testing.T) {
@@ -652,7 +659,7 @@ func TestEvent_TypeSafeHelpers(t *testing.T) {
 	})
 }
 
-func assertTypeSafeHelper(t *testing.T, ok bool, fieldsMatch bool) {
+func assertTypeSafeHelper(t *testing.T, ok, fieldsMatch bool) {
 	t.Helper()
 
 	if !ok {

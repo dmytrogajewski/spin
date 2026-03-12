@@ -61,7 +61,10 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 }
 
 // addEmbeddedBullet creates a bullet with content, helpful/harmful counts, embedding, and adds it to the playbook.
-func addEmbeddedBullet(t *testing.T, ctx context.Context, pb *playbook.Playbook, embedder *embedding.MockEmbedder, content string, helpful, harmful int) {
+func addEmbeddedBullet(
+	t *testing.T, ctx context.Context, pb *playbook.Playbook,
+	embedder *embedding.MockEmbedder, content string, helpful, harmful int,
+) {
 	t.Helper()
 
 	b, err := bullet.New(content)

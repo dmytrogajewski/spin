@@ -7,6 +7,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+const defaultSummaryMaxTokens = 500
+
 // MemoryService holds the memory stores for context offloading.
 type MemoryService struct {
 	scratchpad *memory.Scratchpad
@@ -54,7 +56,7 @@ func (m *MemoryService) NewSessionHandoff(summarizer memory.Summarizer) *memory.
 	}
 
 	if summarizer == nil {
-		summarizer = memory.NewSimpleSummarizer(500)
+		summarizer = memory.NewSimpleSummarizer(defaultSummaryMaxTokens)
 	}
 
 	return memory.NewSessionHandoff(m.persistent, summarizer)

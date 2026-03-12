@@ -79,7 +79,7 @@ return nil, fmt.Errorf("path exists but is not a directory: %s: %w", baseDir, Er
 	}
 
 	// Create directory if it doesn't exist.
-	err = os.MkdirAll(baseDir, 0700)
+	err = os.MkdirAll(baseDir, 0o700)
 	if err != nil {
 		return nil, fmt.Errorf("create directory: %w", err)
 	}
@@ -114,7 +114,7 @@ func (fs *FileStore[T]) Save(key string, data T) error {
 	finalPath := fs.filePath(key)
 	tmpPath := finalPath + ".tmp"
 
-	err = os.WriteFile(tmpPath, jsonData, 0600)
+	err = os.WriteFile(tmpPath, jsonData, 0o600)
 	if err != nil {
 		return fmt.Errorf("write temp file: %w", err)
 	}

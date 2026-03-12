@@ -65,7 +65,7 @@ func (s *Scratchpad) Count() int {
 //
 // If the scratchpad is at capacity, the least recently used entry
 // is evicted (unless pinned) before adding the new entry.
-func (s *Scratchpad) Put(_ context.Context, key string, value string, opts PutOptions) error {
+func (s *Scratchpad) Put(_ context.Context, key, value string, opts PutOptions) error {
 	if key == "" {
 		return ErrEmptyKey
 	}
@@ -325,7 +325,7 @@ func containsIgnoreCase(s, substr string) bool {
 
 // findIgnoreCase finds substr in s (case-insensitive).
 func findIgnoreCase(s, substr string) int {
-	if len(substr) == 0 {
+	if substr == "" {
 		return 0
 	}
 
@@ -370,7 +370,7 @@ func matchPattern(pattern, key string) bool {
 	}
 
 	// Simple prefix matching for patterns like "prefix*".
-	if len(pattern) > 0 && pattern[len(pattern)-1] == '*' {
+	if pattern != "" && pattern[len(pattern)-1] == '*' {
 		prefix := pattern[:len(pattern)-1]
 
 		return len(key) >= len(prefix) && key[:len(prefix)] == prefix

@@ -10,6 +10,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
 )
 
+const defaultBulletTTL = 10
+
 // TriggerType defines why retrieval was triggered.
 type TriggerType string
 
@@ -84,7 +86,7 @@ func NewContext(query string) *Context {
 		Steps:           make([]generator.TrajectoryStep, 0),
 		RetrievalEvents: make([]RetrievalEvent, 0),
 		BulletCache:     make(map[string]*CachedBullet),
-		BulletTTL:       10, // Default TTL of 10 turns.
+		BulletTTL:       defaultBulletTTL, // Default TTL of 10 turns.
 	}
 }
 

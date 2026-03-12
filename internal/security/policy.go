@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const policyEvictionInterval = 30 * time.Second
+
 // PolicyKey identifies a decision using normalized command and context.
 type PolicyKey struct {
 	Program string
@@ -120,7 +122,7 @@ type memoryPolicyStore struct {
 // NewMemoryPolicyStore creates an in-memory store with a janitor running at interval.
 func NewMemoryPolicyStore(evictionInterval time.Duration) PolicyStore {
 	if evictionInterval <= 0 {
-		evictionInterval = 30 * time.Second
+		evictionInterval = policyEvictionInterval
 	}
 
 	s := &memoryPolicyStore{

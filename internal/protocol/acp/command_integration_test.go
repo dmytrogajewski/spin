@@ -26,7 +26,9 @@ func newTestACPAgent(t *testing.T) (*SpinACPAgent, *mockConnectionForPlan, acp.S
 
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+		Handler: nil, Emitter: emitter, Validator: validator,
+	})
 	securityService := security.NewService(validator, approvalService)
 	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
@@ -39,7 +41,10 @@ func newTestACPAgent(t *testing.T) (*SpinACPAgent, *mockConnectionForPlan, acp.S
 	mockProvider := llm.NewMockProvider("test")
 	planningService := planning.NewService(mockProvider)
 
-	agentInstance, err := agent.NewAgent(mockProvider, securityService, detectionService, toolRuntime, planningService, &agent.Environment{WorkDir: "/tmp"}, emitter)
+	agentInstance, err := agent.NewAgent(
+		mockProvider, securityService, detectionService, toolRuntime,
+		planningService, &agent.Environment{WorkDir: "/tmp"}, emitter,
+	)
 	require.NoError(t, err)
 
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())), emitter, nil)
@@ -130,24 +135,26 @@ func TestNewSession_SendsAvailableCommandsUpdate(t *testing.T) {
 	found := false
 
 	for _, notif := range notifications {
-		if notif.Update.AvailableCommandsUpdate != nil {
-			found = true
-			update := notif.Update.AvailableCommandsUpdate
-			assert.NotEmpty(t, update.AvailableCommands, "should have available commands")
-			// Check that /mode and /help are included.
-			commandNames := make(map[string]bool)
-			for _, cmd := range update.AvailableCommands {
-				commandNames[cmd.Name] = true
-			}
-
-			assert.True(t, commandNames["/mode"], "should include /mode command")
-			assert.True(t, commandNames["/help"], "should include /help command")
-			// Check that /exit and /quit are NOT included (TUI-only).
-			assert.False(t, commandNames["/exit"], "should not include /exit command (TUI-only)")
-			assert.False(t, commandNames["/quit"], "should not include /quit command (TUI-only)")
-
-			break
+		if notif.Update.AvailableCommandsUpdate == nil {
+			continue
 		}
+
+		found = true
+		update := notif.Update.AvailableCommandsUpdate
+		assert.NotEmpty(t, update.AvailableCommands, "should have available commands")
+		// Check that /mode and /help are included.
+		commandNames := make(map[string]bool)
+		for _, cmd := range update.AvailableCommands {
+			commandNames[cmd.Name] = true
+		}
+
+		assert.True(t, commandNames["/mode"], "should include /mode command")
+		assert.True(t, commandNames["/help"], "should include /help command")
+		// Check that /exit and /quit are NOT included (TUI-only).
+		assert.False(t, commandNames["/exit"], "should not include /exit command (TUI-only)")
+		assert.False(t, commandNames["/quit"], "should not include /quit command (TUI-only)")
+
+		break
 	}
 
 	assert.True(t, found, "should send available commands update notification")

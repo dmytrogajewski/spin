@@ -22,6 +22,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
+const (
+	promptModelCapacity    = 100
+	percentMulPuretty      = 100
+	maxCommandDisplayLen   = 50
+)
+
 var ErrAlreadyRunning = errors.New("already running")
 
 // UIMode represents the current UI mode.
@@ -120,9 +126,9 @@ func WithExecMode() PureTTYOption {
 // WithModel sets a custom prompt model (for testing).
 
 // WithKeyboardEvents sets a custom keyboard event channel (for testing).
-func WithKeyboardEvents(events <-chan term.KeyEvent) PureTTYOption {
+func WithKeyboardEvents(keyEvents <-chan term.KeyEvent) PureTTYOption {
 	return func(p *PureTTY) error {
-		p.keyboardEvents = events
+		p.keyboardEvents = keyEvents
 
 		return nil
 	}
@@ -166,7 +172,7 @@ func (p *PureTTY) initCoreDeps(out io.Writer) error {
 	}
 
 	if p.model == nil {
-		p.model = prompt.NewModel(100)
+		p.model = prompt.NewModel(promptModelCapacity)
 	}
 
 	if p.renderer == nil {
@@ -436,7 +442,7 @@ func (u *PureTTY) SetTokenCount(tokenCount int64) {
 		u.statusManager.UpdateMetrics(func(m *status.Metrics) {
 			m.TokenCount = tokenCount
 			if m.MaxTokens > 0 {
-				m.TokenUsage = float64(tokenCount) / float64(m.MaxTokens) * 100
+				m.TokenUsage = float64(tokenCount) / float64(m.MaxTokens) * percentMulPuretty
 			}
 		})
 		u.updateStatusBar()
@@ -631,7 +637,7 @@ type rendererAdapter struct {
 }
 
 // Redraw implements the Redraw operation.
-func (a *rendererAdapter) Redraw(model output.PromptModel, status string) error {
+func (a *rendererAdapter) Redraw(model output.PromptModel, statusText string) error {
 	// Cast model back to *prompt.Model (safe because we control the type).
 	promptModel, ok := model.(*prompt.Model)
 	if !ok {
@@ -642,7 +648,7 @@ func (a *rendererAdapter) Redraw(model output.PromptModel, status string) error 
 		return nil
 	}
 
-	return a.renderer.Redraw(promptModel, status)
+	return a.renderer.Redraw(promptModel, statusText)
 }
 
 // formatFilterChips formats active filter as colored chips.
@@ -769,7 +775,7 @@ func (u *PureTTY) showApprovalStatus(req security.ApprovalRequest) {
 
 	// Create approval prompt text.
 	command := req.Command.Raw
-	if len(command) > 50 {
+	if len(command) > maxCommandDisplayLen {
 		command = command[:47] + "..."
 	}
 
@@ -791,13 +797,15 @@ func (u *PureTTY) showApprovalStatus(req security.ApprovalRequest) {
 
 	// Show scope-aware options: A=once, S=session, G=global, D=deny.
 	if keyPreview != "" {
-		approvalText := fmt.Sprintf("Executing: \"%s\" | Key: %s | %s | [A] once  [S] session  [G] global  [D] deny", command, keyPreview, ttlPreview)
+		approvalText := fmt.Sprintf(
+			"Executing: %q | Key: %s | %s | [A] once  [S] session  [G] global  [D] deny",
+			command, keyPreview, ttlPreview)
 		_ = u.statusRenderer.Render(approvalText)
 
 		return
 	}
 
-	approvalText := fmt.Sprintf("Executing: \"%s\" | %s | [A] once  [S] session  [G] global  [D] deny", command, ttlPreview)
+	approvalText := fmt.Sprintf("Executing: %q | %s | [A] once  [S] session  [G] global  [D] deny", command, ttlPreview)
 
 	// Render in status bar.
 	_ = u.statusRenderer.Render(approvalText)

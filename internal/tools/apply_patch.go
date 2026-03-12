@@ -9,9 +9,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/patchapply"
 )
 
+const minPatchLines = 3
+
 var (
 	ErrEmptyPatch = errors.New("empty patch")
-	ErrPatchMustBeInStandardDiff = errors.New("patch must be in standard diff format. Expected to start with '*** filename' or '--- filename'")
+	ErrPatchMustBeInStandardDiff = errors.New(
+		"patch must be in standard diff format. Expected to start with '*** filename' or '--- filename'",
+	)
 	ErrDiffFormatTooShort = errors.New("diff format too short")
 	ErrCouldNotExtractFilenameFromFirst = errors.New("could not extract filename from first line")
 )
@@ -60,7 +64,9 @@ func (t *ApplyPatchTool) Schema() ToolSchema {
 				Properties: map[string]PropertyDefinition{
 					"patch_text": {
 						Type:        "string",
-						Description: "The patch text in standard diff format. Must start with '*** filename' or '--- filename' and contain '@@ -start,count +start,count @@' hunks with '+', '-', or ' ' prefixed lines.",
+						Description: "The patch text in standard diff format. Must start with " +
+							"'*** filename' or '--- filename' and contain " +
+							"'@@ -start,count +start,count @@' hunks with '+', '-', or ' ' prefixed lines.",
 					},
 					"workspace_root": {
 						Type:        "string",
@@ -203,7 +209,9 @@ func (t *ApplyPatchTool) parsePatch(patchText string) (*patchapply.Patch, error)
 
 	// Check if it's a diff format (starts with "*** filename" or "--- filename").
 	if !strings.HasPrefix(firstLine, "*** ") && !strings.HasPrefix(firstLine, "--- ") {
-return nil, fmt.Errorf("patch must be in standard diff format. Expected to start with '*** filename' or '--- filename', got: %q: %w", firstLine, ErrPatchMustBeInStandardDiff)
+		return nil, fmt.Errorf(
+			"patch must be in standard diff format. Expected '*** filename' or '--- filename', got: %q: %w",
+			firstLine, ErrPatchMustBeInStandardDiff)
 	}
 
 	// Parse diff format directly.
@@ -213,7 +221,7 @@ return nil, fmt.Errorf("patch must be in standard diff format. Expected to start
 // parseDiffFormat parses a patch in standard diff format directly.
 func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, error) {
 	lines := strings.Split(diffText, "\n")
-	if len(lines) < 3 {
+	if len(lines) < minPatchLines {
 		return nil, ErrDiffFormatTooShort
 	}
 
@@ -280,7 +288,7 @@ return nil, fmt.Errorf("could not extract filename from first line: %q: %w", fir
 // parseDiffLine parses a single diff line into a LineChange.
 // Returns the change and true if the line is valid, or false to skip.
 func parseDiffLine(line string) (patchapply.LineChange, bool) {
-	if len(line) == 0 {
+	if line == "" {
 		return patchapply.LineChange{Type: patchapply.LineContext, Text: ""}, true
 	}
 

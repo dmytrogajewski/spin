@@ -175,7 +175,7 @@ func GenerateBlockID(seq int) string {
 	ts := time.Now().UnixMilli()
 	if seq == 0 {
 		// Use nanoseconds mod 100 as sequence for uniqueness within same millisecond.
-		seq = int(time.Now().UnixNano()%100) + 1
+		seq = int(time.Now().UnixNano()%blockIDSeqMod) + 1
 	}
 
 	return fmt.Sprintf("blk_%d_%02d", ts, seq)

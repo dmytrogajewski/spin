@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const fileStoreEvictionInterval = 30 * time.Second
+
 var ErrPathIsRequired = errors.New("path is required")
 
 // filePolicyStore persists global-scope policies to a single JSON file with
@@ -38,7 +40,7 @@ func NewFilePolicyStore(path string, evictionInterval time.Duration) (PolicyStor
 	}
 
 	if evictionInterval <= 0 {
-		evictionInterval = 30 * time.Second
+		evictionInterval = fileStoreEvictionInterval
 	}
 
 	s := &filePolicyStore{
@@ -256,7 +258,7 @@ func (s *filePolicyStore) persistGlobalLocked() error {
 	if err != nil {
 		return fmt.Errorf("lock policy file: %w", err)
 	}
-	defer syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_UN) // nolint:errcheck
+	defer func() { _ = syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_UN) }()
 
 	// Write temp, then rename over target for atomicity.
 	err = os.WriteFile(tmp, data, 0o600)
@@ -289,7 +291,7 @@ func (s *filePolicyStore) loadFromDisk() error {
 	if err != nil {
 		return fmt.Errorf("shared lock policy file: %w", err)
 	}
-	defer syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_UN) // nolint:errcheck
+	defer func() { _ = syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_UN) }()
 
 	var payload struct {
 		Global map[string]Policy `json:"global"`

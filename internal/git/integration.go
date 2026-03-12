@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const minDiffContextLines = 5
+
 var (
 	ErrNoGitStatusAvailable = errors.New("no Git status available")
 	ErrNoGitStatusAvailable2 = errors.New("no Git status available")
@@ -529,7 +531,7 @@ func parseGitLog(output string) []CommitInfo {
 		}
 
 		lines := strings.Split(block, "\n")
-		if len(lines) < 5 {
+		if len(lines) < minDiffContextLines {
 			continue // Invalid commit block.
 		}
 
@@ -553,7 +555,7 @@ func parseGitLog(output string) []CommitInfo {
 
 		var body string
 
-		if len(lines) > 5 {
+		if len(lines) > minDiffContextLines {
 			bodyLines := lines[5:]
 			body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
 		}

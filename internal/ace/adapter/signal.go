@@ -2,6 +2,8 @@ package adapter
 
 import "time"
 
+const maxRecentSignals = 50
+
 // SignalType categorizes execution signals.
 type SignalType string
 
@@ -57,7 +59,7 @@ func (s *Session) AddSignal(signal *ExecutionSignal) {
 	s.SignalCount++
 	s.LastSignal = signal
 	s.RecentSignals = append(s.RecentSignals, signal)
-	s.RecentSignals = trimToLastN(s.RecentSignals, 10)
+	s.RecentSignals = trimToLastN(s.RecentSignals, maxRecentSignals)
 }
 
 // trimToLastN keeps only the last n elements of a slice.

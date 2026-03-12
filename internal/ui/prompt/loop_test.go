@@ -11,6 +11,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
+const (
+	testHelloInput = "hello"
+)
+
+
 // FakeRenderer records redraw calls for testing.
 type FakeRenderer struct {
 	mu          sync.Mutex
@@ -122,8 +127,8 @@ func TestLoop_Insert(t *testing.T) {
 
 	out := loop.Run(ctx)
 
-	// Send keys: "hello".
-	for _, r := range "hello" {
+	// Send keys: testHelloInput.
+	for _, r := range testHelloInput {
 		keys <- term.KeyEvent{Kind: term.KeyRune, Rune: r}
 	}
 
@@ -132,7 +137,7 @@ func TestLoop_Insert(t *testing.T) {
 		t.Fatal("Timeout waiting for redraws")
 	}
 
-	if text := renderer.GetLastText(); text != "hello" {
+	if text := renderer.GetLastText(); text != testHelloInput {
 		t.Errorf("Expected 'hello', got %q", text)
 	}
 
@@ -219,8 +224,8 @@ func TestLoop_Submit(t *testing.T) {
 
 	out := loop.Run(ctx)
 
-	// Send: "hello" + enter.
-	for _, r := range "hello" {
+	// Send: testHelloInput + enter.
+	for _, r := range testHelloInput {
 		keys <- term.KeyEvent{Kind: term.KeyRune, Rune: r}
 	}
 
@@ -229,7 +234,7 @@ func TestLoop_Submit(t *testing.T) {
 	// Wait for submit.
 	select {
 	case line := <-out:
-		if line != "hello" {
+		if line != testHelloInput {
 			t.Errorf("Expected 'hello', got %q", line)
 		}
 	case <-time.After(100 * time.Millisecond):
@@ -434,8 +439,8 @@ func TestLoop_FullInteraction(t *testing.T) {
 
 	out := loop.Run(ctx)
 
-	// Send sequence: "hello" + enter.
-	for _, r := range "hello" {
+	// Send sequence: testHelloInput + enter.
+	for _, r := range testHelloInput {
 		keys <- term.KeyEvent{Kind: term.KeyRune, Rune: r}
 	}
 
@@ -443,7 +448,7 @@ func TestLoop_FullInteraction(t *testing.T) {
 
 	select {
 	case line := <-out:
-		if line != "hello" {
+		if line != testHelloInput {
 			t.Errorf("Expected 'hello', got %q", line)
 		}
 	case <-time.After(100 * time.Millisecond):
@@ -452,7 +457,7 @@ func TestLoop_FullInteraction(t *testing.T) {
 
 	// Verify redraws occurred.
 	output := buf.String()
-	if !strings.Contains(output, "hello") {
+	if !strings.Contains(output, testHelloInput) {
 		t.Errorf("Expected redraws to contain 'hello'")
 	}
 

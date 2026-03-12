@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+const (
+	testSessionName = "Test Session"
+)
+
+
 // Test Metadata Initialization.
 
 func TestMetadata_DefaultValues(t *testing.T) {
@@ -231,7 +236,7 @@ func TestMetadata_UpdateMetadata_Multiple(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	err := session.UpdateMetadata(func(m *Metadata) {
-		m.Title = "Test Session"
+		m.Title = testSessionName
 		m.Description = "Testing metadata updates"
 		m.Tags = []string{"test", "metadata"}
 	})
@@ -239,7 +244,7 @@ func TestMetadata_UpdateMetadata_Multiple(t *testing.T) {
 		t.Fatalf("UpdateMetadata() error = %v", err)
 	}
 
-	if session.Metadata.Title != "Test Session" {
+	if session.Metadata.Title != testSessionName {
 		t.Errorf("Title = %s, want 'Test Session'", session.Metadata.Title)
 	}
 

@@ -1,5 +1,7 @@
 package agentsmd
 
+const defaultAgentsMDMaxSizeBytes = 100 * 1024
+
 // Config configures AGENTS.md discovery and loading.
 type Config struct {
 	// Enabled controls whether AGENTS.md is loaded.
@@ -20,7 +22,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Enabled: true,
-		MaxSize: 100 * 1024, // 100KB.
+		MaxSize: defaultAgentsMDMaxSizeBytes, // 100KB.
 	}
 }
 

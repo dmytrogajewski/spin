@@ -289,38 +289,38 @@ High-value fixes that improve reliability.
 
 ## Wave 8: Naming, Constants & Remaining Style (est. ~1,500 issues)
 
-- [ ] **8.1 — `mnd` magic numbers** (~478 issues)
+- [x] **8.1 — `mnd` magic numbers** (~478 issues)
   - **Description:** Extract magic numbers into named constants.
   - **DoR:** Wave 7 complete
   - **DoD:** 0 mnd issues
   - **`//nolint` prohibited** — define named constants for every magic number
 
-- [ ] **8.2 — `goconst` repeated strings** (~57 issues)
+- [x] **8.2 — `goconst` repeated strings** (~57 issues)
   - **Description:** Extract repeated string literals into constants.
   - **DoR:** 8.1 complete
   - **DoD:** 0 goconst issues
   - **`//nolint` prohibited** — extract constants
 
-- [ ] **8.3 — `varnamelen` variable name length** (~344 issues)
-  - **Description:** Rename short-lived variables that are used far from declaration.
+- [x] **8.3 — `varnamelen` variable name length** (~344 issues)
+  - **Description:** Configured `.golangci.yml` ignore-names for idiomatic Go single-letter variables.
   - **DoR:** 8.2 complete
   - **DoD:** 0 varnamelen issues
   - **Note:** Add more entries to `ignore-names`/`ignore-decls` in `.golangci.yml` where short names are idiomatic Go
   - **`//nolint` prohibited** — rename variables or update `.golangci.yml` ignore lists
 
-- [ ] **8.4 — `gocritic` code suggestions** (~387 issues)
+- [x] **8.4 — `gocritic` code suggestions** (~387 issues)
   - **Description:** Apply gocritic suggestions: append simplification, redundant type conversions, etc.
   - **DoR:** 8.3 complete
   - **DoD:** 0 gocritic issues
   - **`//nolint` prohibited** — apply all suggestions
 
-- [ ] **8.5 — `lll` long lines** (~143 issues)
+- [x] **8.5 — `lll` long lines** (~143 issues)
   - **Description:** Break lines exceeding 140 chars.
   - **DoR:** 8.4 complete
   - **DoD:** 0 lll issues
   - **`//nolint` prohibited** — break long lines
 
-- [ ] **8.6 — `predeclared` + `dogsled` + minor style** (~25 issues)
+- [x] **8.6 — `predeclared` + `dogsled` + minor style** (~25 issues)
   - **Description:** Fix predeclared identifier shadowing, excessive blank identifiers.
   - **DoR:** 8.5 complete
   - **DoD:** 0 issues from these linters

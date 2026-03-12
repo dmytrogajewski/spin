@@ -13,6 +13,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
+const (
+	planningMaxTokens    = 1000
+	planningTemperature  = 0.3
+)
+
 var (
 	ErrPlanIDCannotBeEmpty = errors.New("plan ID cannot be empty")
 	ErrPlanMustHaveAtLeastOne = errors.New("plan must have at least one step")
@@ -49,8 +54,8 @@ func (s *Service) CreatePlan(ctx context.Context, taskName string) (*Plan, error
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(decompositionPrompt),
 		}),
-		MaxTokens:   openai.F(int64(1000)),
-		Temperature: openai.F(0.3), // Lower temperature for more consistent planning.
+		MaxTokens:   openai.F(int64(planningMaxTokens)),
+		Temperature: openai.F(planningTemperature), // Lower temperature for more consistent planning.
 	}
 
 	resp, err := s.llm.Complete(ctx, params)

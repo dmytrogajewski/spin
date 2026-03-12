@@ -23,7 +23,7 @@ func TestCompact_Name(t *testing.T) {
 
 	name := compact.Name()
 
-	if name != "compact" {
+	if name != TaskNameCompact {
 		t.Errorf("Compact.Name() = %s, want 'compact'", name)
 	}
 }
@@ -33,7 +33,7 @@ func TestCompact_SystemPrompt(t *testing.T) {
 	compact := NewCompact()
 	prompt := compact.SystemPrompt()
 
-	if len(prompt) == 0 {
+	if prompt == "" {
 		t.Error("Compact.SystemPrompt() returned empty string")
 	}
 

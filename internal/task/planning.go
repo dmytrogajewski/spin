@@ -35,7 +35,8 @@ type Planning struct {
 
 // PlanningSystemPrompt is the system prompt for planning mode.
 // Focused on task decomposition and analysis without execution.
-const PlanningSystemPrompt = `You are a technical planning assistant. Your role is to analyze codebases and break down complex tasks into clear, actionable implementation plans.
+const PlanningSystemPrompt = `You are a technical planning assistant. ` +
+	`Your role is to analyze codebases and break down complex tasks into clear, actionable implementation plans.
 
 # Your Role
 
@@ -68,7 +69,7 @@ Provide plans as numbered steps with:
 // NewPlanning creates a new Planning task instance.
 func NewPlanning() *Planning {
 	return &Planning{
-		name:         "planning",
+		name:         TaskNamePlanning,
 		systemPrompt: PlanningSystemPrompt,
 		maxTokens:    PlanningMaxTokens,
 	}

@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+const (
+	defaultInsightConfidence = 0.5
+	minInsightContentLen     = 50
+	maxInsightContentLen     = 500
+)
+
 var (
 	ErrContentCannotBeEmpty = errors.New("content cannot be empty")
 	ErrContentTooShortMin50Chars = errors.New("content too short (min 50 chars")
@@ -55,7 +61,7 @@ func NewInsight(content string, category InsightCategory) *Insight {
 	return &Insight{
 		Content:    content,
 		Category:   category,
-		Confidence: 0.5,
+		Confidence: defaultInsightConfidence,
 		Evidence:   []string{},
 		Iteration:  0,
 		CreatedAt:  time.Now(),
@@ -68,11 +74,11 @@ func (i *Insight) Validate() error {
 		return ErrContentCannotBeEmpty
 	}
 
-	if len(i.Content) < 50 {
+	if len(i.Content) < minInsightContentLen {
 return fmt.Errorf("content too short (min 50 chars, got %d): %w", len(i.Content), ErrContentTooShortMin50Chars)
 	}
 
-	if len(i.Content) > 500 {
+	if len(i.Content) > maxInsightContentLen {
 return fmt.Errorf("content too long (max 500 chars, got %d): %w", len(i.Content), ErrContentTooLongMax500Chars)
 	}
 

@@ -146,11 +146,12 @@ func (t *PlanTracker) UpdatePlanStatus() {
 	}
 
 	oldStatus := t.plan.Status
-	if anyFailed {
+	switch {
+	case anyFailed:
 		t.plan.Status = planning.PlanStatusFailed
-	} else if allCompleted {
+	case allCompleted:
 		t.plan.Status = planning.PlanStatusCompleted
-	} else if anyRunning {
+	case anyRunning:
 		t.plan.Status = planning.PlanStatusInProgress
 	}
 
