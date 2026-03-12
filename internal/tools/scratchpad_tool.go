@@ -169,14 +169,14 @@ func (t *ScratchpadTool) executeGet(ctx context.Context, params ToolParameters) 
 
 	// Format output with metadata.
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Key: %s\n", entry.Key))
-	sb.WriteString(fmt.Sprintf("Namespace: %s\n", entry.Namespace))
+	fmt.Fprintf(&sb, "Key: %s\n", entry.Key)
+	fmt.Fprintf(&sb, "Namespace: %s\n", entry.Namespace)
 
 	if len(entry.Tags) > 0 {
-		sb.WriteString(fmt.Sprintf("Tags: %s\n", strings.Join(entry.Tags, ", ")))
+		fmt.Fprintf(&sb, "Tags: %s\n", strings.Join(entry.Tags, ", "))
 	}
 
-	sb.WriteString(fmt.Sprintf("Value:\n%s", entry.Value))
+	fmt.Fprintf(&sb, "Value:\n%s", entry.Value)
 
 	return NewToolResult(sb.String()), nil
 }
@@ -208,10 +208,10 @@ func (t *ScratchpadTool) executeList(ctx context.Context, params ToolParameters)
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Found %d entries:\n", len(keys)))
+	fmt.Fprintf(&sb, "Found %d entries:\n", len(keys))
 
 	for _, key := range keys {
-		sb.WriteString(fmt.Sprintf("  - %s\n", key))
+		fmt.Fprintf(&sb, "  - %s\n", key)
 	}
 
 	return NewToolResult(sb.String()), nil
@@ -233,7 +233,7 @@ func (t *ScratchpadTool) executeSearch(ctx context.Context, params ToolParameter
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Found %d entries matching '%s':\n", len(entries), query))
+	fmt.Fprintf(&sb, "Found %d entries matching '%s':\n", len(entries), query)
 
 	for _, entry := range entries {
 		// Show preview of value (first 100 chars).
@@ -242,7 +242,7 @@ func (t *ScratchpadTool) executeSearch(ctx context.Context, params ToolParameter
 			preview = preview[:100] + "..."
 		}
 
-		sb.WriteString(fmt.Sprintf("  - %s: %s\n", entry.Key, preview))
+		fmt.Fprintf(&sb, "  - %s: %s\n", entry.Key, preview)
 	}
 
 	return NewToolResult(sb.String()), nil

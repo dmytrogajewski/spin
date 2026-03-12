@@ -566,27 +566,27 @@ func (c *Environment) String() string {
 	sb.WriteString("Environment Context:\n")
 
 	// OS Information.
-	sb.WriteString(fmt.Sprintf("- OS: %s (%s)\n", c.OS.OS, c.OS.Arch))
+	fmt.Fprintf(&sb, "- OS: %s (%s)\n", c.OS.OS, c.OS.Arch)
 
 	if c.OS.Kernel != "" {
-		sb.WriteString(fmt.Sprintf("- Kernel: %s\n", c.OS.Kernel))
+		fmt.Fprintf(&sb, "- Kernel: %s\n", c.OS.Kernel)
 	}
 
 	if c.OS.Shell != "" {
-		sb.WriteString(fmt.Sprintf("- Shell: %s\n", c.OS.Shell))
+		fmt.Fprintf(&sb, "- Shell: %s\n", c.OS.Shell)
 	}
 
 	// Working Directory.
-	sb.WriteString(fmt.Sprintf("- Working Directory: %s\n", c.WorkDir))
+	fmt.Fprintf(&sb, "- Working Directory: %s\n", c.WorkDir)
 
 	// Project Type.
 	if c.ProjectType != "unknown" {
-		sb.WriteString(fmt.Sprintf("- Project Type: %s\n", c.ProjectType))
+		fmt.Fprintf(&sb, "- Project Type: %s\n", c.ProjectType)
 	}
 
 	// Languages.
 	if len(c.Languages) > 0 {
-		sb.WriteString(fmt.Sprintf("- Languages: %s\n", strings.Join(c.Languages, ", ")))
+		fmt.Fprintf(&sb, "- Languages: %s\n", strings.Join(c.Languages, ", "))
 	}
 
 	// Git Information.
@@ -596,34 +596,34 @@ func (c *Environment) String() string {
 			status = "dirty"
 		}
 
-		sb.WriteString(fmt.Sprintf("- Git Branch: %s (%s)\n", c.Git.Branch, status))
+		fmt.Fprintf(&sb, "- Git Branch: %s (%s)\n", c.Git.Branch, status)
 
 		if len(c.Git.UntrackedFiles) > 0 {
-			sb.WriteString(fmt.Sprintf("- Untracked Files: %d\n", len(c.Git.UntrackedFiles)))
+			fmt.Fprintf(&sb, "- Untracked Files: %d\n", len(c.Git.UntrackedFiles))
 		}
 
 		if len(c.Git.Remotes) > 0 {
-			sb.WriteString(fmt.Sprintf("- Git Remotes: %d\n", len(c.Git.Remotes)))
+			fmt.Fprintf(&sb, "- Git Remotes: %d\n", len(c.Git.Remotes))
 		}
 	}
 
 	// Project Structure Summary.
 	if len(c.Files) > 0 {
-		sb.WriteString(fmt.Sprintf("\nProject Structure: %d files\n", len(c.Files)))
+		fmt.Fprintf(&sb, "\nProject Structure: %d files\n", len(c.Files))
 
 		// Show up to 20 files.
 		maxShow := 20
 		for i, file := range c.Files {
 			if i >= maxShow {
-				sb.WriteString(fmt.Sprintf("... and %d more files\n", len(c.Files)-maxShow))
+				fmt.Fprintf(&sb, "... and %d more files\n", len(c.Files)-maxShow)
 
 				break
 			}
 
 			if file.Language != "Unknown" {
-				sb.WriteString(fmt.Sprintf("- %s (%s, %d lines)\n", file.Path, file.Language, file.Lines))
+				fmt.Fprintf(&sb, "- %s (%s, %d lines)\n", file.Path, file.Language, file.Lines)
 			} else {
-				sb.WriteString(fmt.Sprintf("- %s\n", file.Path))
+				fmt.Fprintf(&sb, "- %s\n", file.Path)
 			}
 		}
 	}

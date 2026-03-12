@@ -113,10 +113,10 @@ func (r *Renderer) RenderHeader(b *Block) string {
 	bgColor := r.getBlockTypeColor(b.Type)
 	label := r.getBlockTypeLabel(b.Type)
 
-	out.WriteString(fmt.Sprintf("\x1b[48;5;%dm", bgColor)) // Background color.
+	fmt.Fprintf(&out, "\x1b[48;5;%dm", bgColor) // Background color.
 	out.WriteString("\x1b[38;5;232m")                      // Black text for contrast.
 	out.WriteString(string(ColorBold))
-	out.WriteString(fmt.Sprintf(" %s ", label))
+	fmt.Fprintf(&out, " %s ", label)
 	out.WriteString(string(ColorReset))
 
 	// Spacing after tag.
@@ -330,7 +330,7 @@ func (r *Renderer) renderCode(b *Block) (string, error) {
 		// Gutter.
 		out.WriteString(strings.Repeat(" ", S2))
 		out.WriteString(string(ColorMuted))
-		out.WriteString(fmt.Sprintf("%*d ", gutterWidth-1, lineNum))
+		fmt.Fprintf(&out, "%*d ", gutterWidth-1, lineNum)
 		out.WriteString(string(ColorReset))
 
 		// Line content.
@@ -644,11 +644,12 @@ func (r *Renderer) renderExecuteCompletionStatus(b *Block) string {
 
 	// Output summary.
 	if meta.LinesOut != nil {
-		if *meta.LinesOut == 0 {
+		switch *meta.LinesOut {
+		case 0:
 			parts = append(parts, "No output")
-		} else if *meta.LinesOut == 1 {
+		case 1:
 			parts = append(parts, "Output: 1 line")
-		} else {
+		default:
 			parts = append(parts, fmt.Sprintf("Output: %d lines", *meta.LinesOut))
 		}
 	}

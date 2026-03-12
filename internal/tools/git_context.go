@@ -88,11 +88,11 @@ func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (To
 	}
 
 	// Branch info.
-	output.WriteString(fmt.Sprintf("Branch: %s\n", status.Branch))
+	fmt.Fprintf(&output, "Branch: %s\n", status.Branch)
 
 	if status.RemoteBranch != "" {
-		output.WriteString(fmt.Sprintf("Remote: %s\n", status.RemoteBranch))
-		output.WriteString(fmt.Sprintf("Ahead: %d, Behind: %d\n", status.Ahead, status.Behind))
+		fmt.Fprintf(&output, "Remote: %s\n", status.RemoteBranch)
+		fmt.Fprintf(&output, "Ahead: %d, Behind: %d\n", status.Ahead, status.Behind)
 	}
 
 	if status.Detached {
@@ -103,18 +103,18 @@ func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (To
 	if status.Hash != "" {
 		hashLen := min(len(status.Hash), 8)
 
-		output.WriteString(fmt.Sprintf("Commit: %s\n", status.Hash[:hashLen]))
+		fmt.Fprintf(&output, "Commit: %s\n", status.Hash[:hashLen])
 	}
 
 	// File status.
-	output.WriteString(fmt.Sprintf("\nModified files: %d\n", len(status.ModifiedFiles)))
-	output.WriteString(fmt.Sprintf("Untracked files: %d\n", len(status.UntrackedFiles)))
+	fmt.Fprintf(&output, "\nModified files: %d\n", len(status.ModifiedFiles))
+	fmt.Fprintf(&output, "Untracked files: %d\n", len(status.UntrackedFiles))
 
 	if len(status.ModifiedFiles) > 0 {
 		output.WriteString("\nModified:\n")
 
 		for _, file := range status.ModifiedFiles {
-			output.WriteString(fmt.Sprintf("  - %s (%s)\n", file.Path, file.Worktree))
+			fmt.Fprintf(&output, "  - %s (%s)\n", file.Path, file.Worktree)
 		}
 	}
 
@@ -122,7 +122,7 @@ func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (To
 		output.WriteString("\nUntracked:\n")
 
 		for _, file := range status.UntrackedFiles {
-			output.WriteString(fmt.Sprintf("  - %s\n", file))
+			fmt.Fprintf(&output, "  - %s\n", file)
 		}
 	}
 

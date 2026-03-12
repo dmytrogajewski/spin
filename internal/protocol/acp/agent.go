@@ -37,7 +37,7 @@ var (
 	// ErrNotImplemented is returned for methods that are not implemented.
 	ErrNotImplemented = errors.New("not implemented")
 	ErrWorkingDirectoryIsRequired = errors.New("working directory is required")
-	ErrHttpTransportIsNotSupported = errors.New("HTTP transport is not supported")
+	ErrHTTPTransportIsNotSupported = errors.New("HTTP transport is not supported")
 	ErrSseTransportIsNotSupported = errors.New("SSE transport is not supported")
 	ErrNoTransportSpecified = errors.New("no transport specified")
 	ErrSessionNotFound = errors.New("session not found")
@@ -376,7 +376,7 @@ func convertACPMcpServerToSpin(acpServer acp.McpServer) (mcp.ServerConfig, error
 
 	// HTTP and SSE transports are not supported.
 	if acpServer.Http != nil {
-		return mcp.ServerConfig{}, ErrHttpTransportIsNotSupported
+		return mcp.ServerConfig{}, ErrHTTPTransportIsNotSupported
 	}
 
 	if acpServer.Sse != nil {

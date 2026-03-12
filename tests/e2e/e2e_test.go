@@ -270,7 +270,7 @@ func TestMCPCommands(t *testing.T) {
 		}
 
 		// Remove registry.
-		stdout, stderr, runErr = runSpin(t, "mcp", "registry", "remove", "test-server", "--yes")
+		_, stderr, runErr = runSpin(t, "mcp", "registry", "remove", "test-server", "--yes")
 		if runErr != nil {
 			t.Fatalf("mcp registry remove failed: %v\nstderr: %s", runErr, stderr)
 		}

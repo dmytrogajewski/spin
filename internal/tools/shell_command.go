@@ -317,7 +317,7 @@ func (t *ShellCommandTool) getEnvironment() (ToolResult, error) {
 		output.WriteString("Environment Variables:\n")
 
 		for key, value := range envMap {
-			output.WriteString(fmt.Sprintf("%s=%s\n", key, value))
+			fmt.Fprintf(&output, "%s=%s\n", key, value)
 		}
 
 		return ToolResult{
@@ -348,20 +348,20 @@ func (t *ShellCommandTool) getShellInfo() (ToolResult, error) {
 
 		var output strings.Builder
 		output.WriteString("Shell Information:\n")
-		output.WriteString(fmt.Sprintf("shell_enabled: %t\n", contextInfo.IsShellEnabled()))
+		fmt.Fprintf(&output, "shell_enabled: %t\n", contextInfo.IsShellEnabled())
 
 		if contextInfo.IsShellEnabled() {
-			output.WriteString(fmt.Sprintf("shell: %s\n", contextInfo.GetShell()))
+			fmt.Fprintf(&output, "shell: %s\n", contextInfo.GetShell())
 
 			if shellPath := contextInfo.GetShellPath(); shellPath != "" {
-				output.WriteString(fmt.Sprintf("shell_path: %s\n", shellPath))
+				fmt.Fprintf(&output, "shell_path: %s\n", shellPath)
 			}
 
 			if shellEnv := contextInfo.GetShellEnv(); len(shellEnv) > 0 {
 				output.WriteString("shell_env:\n")
 
 				for k, v := range shellEnv {
-					output.WriteString(fmt.Sprintf("  %s=%s\n", k, v))
+					fmt.Fprintf(&output, "  %s=%s\n", k, v)
 				}
 			}
 		}
@@ -380,7 +380,7 @@ func (t *ShellCommandTool) getShellInfo() (ToolResult, error) {
 
 	if shell != "" {
 		output.WriteString("shell_enabled: true\n")
-		output.WriteString(fmt.Sprintf("shell: %s\n", shell))
+		fmt.Fprintf(&output, "shell: %s\n", shell)
 	} else {
 		output.WriteString("shell_enabled: false\n")
 	}
@@ -510,11 +510,11 @@ func (t *ShellCommandTool) validateCommand(params ToolParameters) (ToolResult, e
 
 	var output strings.Builder
 	output.WriteString("Command Validation Result:\n")
-	output.WriteString(fmt.Sprintf("Classification: %s\n", classStr))
-	output.WriteString(fmt.Sprintf("Needs Approval: %t\n", needsApproval))
+	fmt.Fprintf(&output, "Classification: %s\n", classStr)
+	fmt.Fprintf(&output, "Needs Approval: %t\n", needsApproval)
 
 	if reason != "" {
-		output.WriteString(fmt.Sprintf("Reason: %s\n", reason))
+		fmt.Fprintf(&output, "Reason: %s\n", reason)
 	}
 
 	return ToolResult{

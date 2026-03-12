@@ -109,12 +109,12 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 	// Format output.
 	var output strings.Builder
 	if len(matches) == 0 {
-		output.WriteString(fmt.Sprintf("No files found matching '%s'\n", query))
+		fmt.Fprintf(&output, "No files found matching '%s'\n", query)
 	} else {
-		output.WriteString(fmt.Sprintf("Found %d file(s) matching '%s':\n\n", len(matches), query))
+		fmt.Fprintf(&output, "Found %d file(s) matching '%s':\n\n", len(matches), query)
 
 		for i, match := range matches {
-			output.WriteString(fmt.Sprintf("%d. %s (score: %d)\n", i+1, match.Path, match.Score))
+			fmt.Fprintf(&output, "%d. %s (score: %d)\n", i+1, match.Path, match.Score)
 		}
 	}
 

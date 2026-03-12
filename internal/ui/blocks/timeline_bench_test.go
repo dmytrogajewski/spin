@@ -377,7 +377,7 @@ func generateMockTranscript(lines int) string {
 	var resultSb316 strings.Builder
 
 	for i := range lines {
-		resultSb316.WriteString(fmt.Sprintf("Line %d: output from command execution\n", i))
+		fmt.Fprintf(&resultSb316, "Line %d: output from command execution\n", i)
 	}
 
 	result += resultSb316.String()

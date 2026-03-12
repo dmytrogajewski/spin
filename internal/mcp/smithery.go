@@ -77,11 +77,11 @@ type smitheryError struct {
 // APIKey is always required. MCPURL and Namespace are required for connection-based operations.
 func NewSmitheryClient(config SmitheryConfig) (*SmitheryClient, error) {
 	if config.APIKey == "" {
-		return nil, ErrSmitheryApiKeyRequired
+		return nil, ErrSmitheryAPIKeyRequired
 	}
 
 	if config.MCPURL == "" {
-		return nil, ErrSmitheryMcpUrlRequired
+		return nil, ErrSmitheryMcpURLRequired
 	}
 
 	if config.Namespace == "" {
@@ -282,7 +282,7 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 
-return nil, fmt.Errorf("rpc failed with status %d: %s: %w", resp.StatusCode, string(bodyBytes), ErrRpcFailedWithStatus)
+return nil, fmt.Errorf("rpc failed with status %d: %s: %w", resp.StatusCode, string(bodyBytes), ErrRPCFailedWithStatus)
 	}
 
 	var rpcResp smitheryRPCResponse
@@ -292,7 +292,7 @@ return nil, fmt.Errorf("rpc failed with status %d: %s: %w", resp.StatusCode, str
 	}
 
 	if rpcResp.Error != nil {
-return nil, fmt.Errorf("rpc error %d: %s: %w", rpcResp.Error.Code, rpcResp.Error.Message, ErrRpcError)
+return nil, fmt.Errorf("rpc error %d: %s: %w", rpcResp.Error.Code, rpcResp.Error.Message, ErrRPCError)
 	}
 
 	return rpcResp.Result, nil

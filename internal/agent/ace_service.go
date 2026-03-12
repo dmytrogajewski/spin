@@ -201,7 +201,8 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 
 			logger.Debug("Enabled merge engine for advanced bullet deduplication")
 
-			if cfg.Refine.Mode == "proactive" {
+			switch cfg.Refine.Mode {
+			case "proactive":
 				curatorOpts = append(curatorOpts, curator.WithRefinementMode(
 					curator.RefinementModeProactive,
 					curator.ProactiveRefinementConfig{
@@ -210,7 +211,7 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 						MinUtilityScore: cfg.Refine.MinUtilityScore,
 					},
 				))
-			} else if cfg.Refine.Mode == "lazy" {
+			case "lazy":
 				curatorOpts = append(curatorOpts, curator.WithRefinementMode(
 					curator.RefinementModeLazy,
 					curator.LazyRefinementConfig{

@@ -45,7 +45,7 @@ func NewRemoteRegistry(config RemoteRegistryConfig) (*RemoteRegistry, error) {
 	}
 
 	if config.URL == "" {
-		return nil, ErrUrlRequiredForRemoteRegistry
+		return nil, ErrURLRequiredForRemoteRegistry
 	}
 
 	if config.Transport != TransportSSE && config.Transport != TransportStreamableHTTP {

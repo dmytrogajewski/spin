@@ -629,8 +629,8 @@ func (m *Mapper) checkCloseThinking() {
 
 		// Summary.
 		out.WriteString("\x1b[2m\x1b[38;5;242m")
-		out.WriteString(fmt.Sprintf(" [thought for %.2fs, ~%d tokens]",
-			duration.Seconds(), m.thinkTokens))
+		fmt.Fprintf(&out, " [thought for %.2fs, ~%d tokens]",
+			duration.Seconds(), m.thinkTokens)
 		out.WriteString("\x1b[0m\n")
 
 		select {
@@ -737,7 +737,7 @@ func (m *Mapper) handleACERetrieval(event events.Event) error {
 		pluralS = "y"
 	}
 
-	hintText.WriteString(fmt.Sprintf("\x1b[32m⟐\x1b[0m \x1b[90mRetrieved %d new strateg%s:\x1b[0m\n", len(newBullets), pluralS))
+	fmt.Fprintf(&hintText, "\x1b[32m⟐\x1b[0m \x1b[90mRetrieved %d new strateg%s:\x1b[0m\n", len(newBullets), pluralS)
 
 	// Show each new bullet.
 	for _, bullet := range newBullets {
@@ -751,7 +751,7 @@ func (m *Mapper) handleACERetrieval(event events.Event) error {
 			content = content[:117] + "..."
 		}
 
-		hintText.WriteString(fmt.Sprintf("  \x1b[32m•\x1b[0m \x1b[90m%s\x1b[0m\n", content))
+		fmt.Fprintf(&hintText, "  \x1b[32m•\x1b[0m \x1b[90m%s\x1b[0m\n", content)
 	}
 
 	// Use PrintLine to show as a simple status message (not a block).
@@ -803,8 +803,8 @@ func (m *Mapper) handleACELearned(event events.Event) error {
 		statusText = "failed"
 	}
 
-	hintText.WriteString(fmt.Sprintf("\x1b[34m◆\x1b[0m \x1b[90mLearned %d new insight%s from %s%s\x1b[0m\x1b[90m execution:\x1b[0m\n",
-		len(newBullets), pluralS, statusColor, statusText))
+	fmt.Fprintf(&hintText, "\x1b[34m◆\x1b[0m \x1b[90mLearned %d new insight%s from %s%s\x1b[0m\x1b[90m execution:\x1b[0m\n",
+		len(newBullets), pluralS, statusColor, statusText)
 
 	// Show each new learned bullet.
 	for _, bullet := range newBullets {
@@ -818,7 +818,7 @@ func (m *Mapper) handleACELearned(event events.Event) error {
 			content = content[:117] + "..."
 		}
 
-		hintText.WriteString(fmt.Sprintf("  \x1b[34m•\x1b[0m \x1b[90m%s\x1b[0m\n", content))
+		fmt.Fprintf(&hintText, "  \x1b[34m•\x1b[0m \x1b[90m%s\x1b[0m\n", content)
 	}
 
 	_ = m.ui.PrintLine(hintText.String())

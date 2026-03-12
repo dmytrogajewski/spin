@@ -28,16 +28,16 @@ var (
 	ErrProtocolShellTimeoutPositive        = errors.New("protocol: shell_timeout must be positive when shell is enabled")
 	ErrNameIsRequired                      = errors.New("name is required")
 	ErrInvalidTransport                    = errors.New("invalid transport")
-	ErrSmitheryApiKeyRequired              = errors.New("smithery_api_key is required for smithery transport")
+	ErrSmitheryAPIKeyRequired              = errors.New("smithery_api_key is required for smithery transport")
 	ErrSmitheryNamespaceRequired           = errors.New("smithery_namespace is required when url is specified")
 	ErrCommandNotAllowedForSmithery        = errors.New("command is not allowed for smithery transport")
 	ErrCommandRequiredForStdio             = errors.New("command is required for stdio transport")
-	ErrUrlNotAllowedForStdio               = errors.New("url is not allowed for stdio transport")
+	ErrURLNotAllowedForStdio               = errors.New("url is not allowed for stdio transport")
 	ErrOauthNotAllowedForStdio             = errors.New("oauth is not allowed for stdio transport")
-	ErrUrlRequiredForTransport             = errors.New("url is required for transport")
-	ErrInvalidUrl                          = errors.New("invalid url")
+	ErrURLRequiredForTransport             = errors.New("url is required for transport")
+	ErrInvalidURL                          = errors.New("invalid url")
 	ErrCommandNotAllowedForRemote          = errors.New("command is not allowed for remote transport")
-	ErrOauthClientIdRequired               = errors.New("oauth client_id is required")
+	ErrOauthClientIDRequired               = errors.New("oauth client_id is required")
 	ErrScratchpadMaxEntriesPositive        = errors.New("memory.scratchpad: max_entries must be positive")
 	ErrPersistentBasePathRequired          = errors.New("memory.persistent: base_path is required when persistent memory is enabled")
 )
@@ -58,10 +58,10 @@ func (v *ValidationErrors) Error() string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("validation failed: %d errors found:\n", len(v.errors)))
+	fmt.Fprintf(&sb, "validation failed: %d errors found:\n", len(v.errors))
 
 	for i, err := range v.errors {
-		sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, err.Error()))
+		fmt.Fprintf(&sb, "  %d. %s\n", i+1, err.Error())
 	}
 
 	return strings.TrimSuffix(sb.String(), "\n")
@@ -504,7 +504,7 @@ func (m *MCPServerConfigV2) Validate() error {
 func (m *MCPServerConfigV2) validateSmithery(errs *ValidationErrors) {
 	// API key is always required for Smithery.
 	if m.SmitheryAPIKey == "" {
-		errs.Add(ErrSmitheryApiKeyRequired)
+		errs.Add(ErrSmitheryAPIKeyRequired)
 	}
 
 	// For dynamic loadout, URL and namespace are optional
@@ -548,7 +548,7 @@ func (m *MCPServerConfigV2) validateStdio(errs *ValidationErrors) {
 
 	// URL is not allowed for stdio.
 	if m.URL != "" {
-		errs.Add(ErrUrlNotAllowedForStdio)
+		errs.Add(ErrURLNotAllowedForStdio)
 	}
 
 	// OAuth is not allowed for stdio.
@@ -561,12 +561,12 @@ func (m *MCPServerConfigV2) validateStdio(errs *ValidationErrors) {
 func (m *MCPServerConfigV2) validateRemote(transport MCPTransportType, errs *ValidationErrors) {
 	// URL is required for remote transports.
 	if m.URL == "" {
-		errs.Add(fmt.Errorf("url is required for %s transport: %w", transport, ErrUrlRequiredForTransport))
+		errs.Add(fmt.Errorf("url is required for %s transport: %w", transport, ErrURLRequiredForTransport))
 	} else {
 		// Validate URL format.
 		parsedURL, err := url.Parse(m.URL)
 		if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-			errs.Add(fmt.Errorf("invalid url: %s: %w", m.URL, ErrInvalidUrl))
+			errs.Add(fmt.Errorf("invalid url: %s: %w", m.URL, ErrInvalidURL))
 		}
 	}
 
@@ -578,7 +578,7 @@ func (m *MCPServerConfigV2) validateRemote(transport MCPTransportType, errs *Val
 	// Validate OAuth if provided.
 	if m.OAuth != nil {
 		if m.OAuth.ClientID == "" {
-			errs.Add(ErrOauthClientIdRequired)
+			errs.Add(ErrOauthClientIDRequired)
 		}
 	}
 }

@@ -99,10 +99,7 @@ func (f *FakeWriter) WaitForContent(s string, timeout time.Duration) bool {
 			return true
 		}
 
-		select {
-		case <-ticker.C:
-			continue
-		}
+		<-ticker.C
 	}
 
 	return false

@@ -12,7 +12,7 @@ import (
 var (
 	ErrTopKMustBe0 = errors.New("top_k must be > 0")
 	ErrMinScoreMustBeBetween0 = errors.New("min_score must be between 0 and 1")
-	ErrCacheTtlMustBe0 = errors.New("cache_ttl must be > 0")
+	ErrCacheTTLMustBe0 = errors.New("cache_ttl must be > 0")
 	ErrMaxBulletsMustBe0 = errors.New("max_bullets must be > 0")
 	ErrErrorLookbackMustBe0 = errors.New("error_lookback must be > 0")
 	ErrToolChangeLookbackMustBe0 = errors.New("tool_change_lookback must be > 0")
@@ -269,7 +269,7 @@ func (c *ProgressiveContextConfig) Validate() error {
 
 	// Validate cache settings.
 	if c.CacheTTL <= 0 {
-errs = append(errs, fmt.Errorf("cache_ttl must be > 0, got %d: %w", c.CacheTTL, ErrCacheTtlMustBe0))
+errs = append(errs, fmt.Errorf("cache_ttl must be > 0, got %d: %w", c.CacheTTL, ErrCacheTTLMustBe0))
 	}
 
 	if c.MaxBullets <= 0 {

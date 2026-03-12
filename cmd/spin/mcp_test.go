@@ -8,7 +8,7 @@ import (
 func TestNewMCPCmd(t *testing.T) {
 	cmd := newMCPCmd()
 	if cmd == nil {
-		t.Errorf("newMCPCmd() returned nil")
+		t.Fatal("newMCPCmd() returned nil")
 	}
 
 	if cmd.Use != "mcp" {
@@ -23,7 +23,7 @@ func TestNewMCPCmd(t *testing.T) {
 func TestNewMCPRegistryListCmd(t *testing.T) {
 	cmd := newMCPRegistryListCmd()
 	if cmd == nil {
-		t.Errorf("newMCPRegistryListCmd() returned nil")
+		t.Fatal("newMCPRegistryListCmd() returned nil")
 	}
 
 	if cmd.Use != "list" {
@@ -38,7 +38,7 @@ func TestNewMCPRegistryListCmd(t *testing.T) {
 func TestNewMCPRegistryGetCmd(t *testing.T) {
 	cmd := newMCPRegistryGetCmd()
 	if cmd == nil {
-		t.Errorf("newMCPRegistryGetCmd() returned nil")
+		t.Fatal("newMCPRegistryGetCmd() returned nil")
 	}
 
 	if cmd.Use != "get <name>" {
@@ -53,7 +53,7 @@ func TestNewMCPRegistryGetCmd(t *testing.T) {
 func TestNewMCPRegistryRemoveCmd(t *testing.T) {
 	cmd := newMCPRegistryRemoveCmd()
 	if cmd == nil {
-		t.Errorf("newMCPRegistryRemoveCmd() returned nil")
+		t.Fatal("newMCPRegistryRemoveCmd() returned nil")
 	}
 
 	if cmd.Use != "remove <name>" {

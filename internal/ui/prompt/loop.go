@@ -251,7 +251,7 @@ func (l *Loop) handleCtrlD() bool {
 
 // handlePaste handles paste events.
 func (l *Loop) handlePaste(event term.KeyEvent) bool {
-	for _, r := range []rune(string(event.Paste)) {
+	for _, r := range string(event.Paste) {
 		l.model.Insert(r)
 	}
 

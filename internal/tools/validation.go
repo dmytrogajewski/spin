@@ -8,7 +8,7 @@ import (
 
 var (
 	ErrToolCallCannotBeNil = errors.New("tool call cannot be nil")
-	ErrToolCallIdCannotBeEmpty = errors.New("tool call ID cannot be empty")
+	ErrToolCallIDCannotBeEmpty = errors.New("tool call ID cannot be empty")
 	ErrToolFunctionNameCannotBeEmpty = errors.New("tool function name cannot be empty")
 )
 
@@ -25,7 +25,7 @@ func ValidateToolCall(call *message.ToolCall) error {
 	}
 
 	if call.ID == "" {
-		return ErrToolCallIdCannotBeEmpty
+		return ErrToolCallIDCannotBeEmpty
 	}
 
 	if call.Function.Name == "" {

@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	ErrBlockIdIsEmpty = errors.New("block ID is empty")
+	ErrBlockIDIsEmpty = errors.New("block ID is empty")
 	ErrInvalidBlockType = errors.New("invalid block type")
 	ErrInvalidFoldState = errors.New("invalid fold state")
 	ErrInvalidSeverity = errors.New("invalid severity")
@@ -80,7 +80,7 @@ func NewBlock(blockType BlockType) *Block {
 //   - Timestamp is zero or negative
 func (b *Block) Validate() error {
 	if b.ID == "" {
-		return ErrBlockIdIsEmpty
+		return ErrBlockIDIsEmpty
 	}
 
 	if !b.Type.Valid() {

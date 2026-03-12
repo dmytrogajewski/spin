@@ -7,7 +7,7 @@ import (
 func TestNewDebugCmd(t *testing.T) {
 	cmd := newDebugCmd()
 	if cmd == nil {
-		t.Errorf("newDebugCmd() returned nil")
+		t.Fatal("newDebugCmd() returned nil")
 	}
 
 	if cmd.Use != "debug" {
@@ -22,7 +22,7 @@ func TestNewDebugCmd(t *testing.T) {
 func TestNewDebugEventsCmd(t *testing.T) {
 	cmd := newDebugEventsCmd()
 	if cmd == nil {
-		t.Errorf("newDebugEventsCmd() returned nil")
+		t.Fatal("newDebugEventsCmd() returned nil")
 	}
 
 	if cmd.Use != "events <prompt>" {
@@ -37,7 +37,7 @@ func TestNewDebugEventsCmd(t *testing.T) {
 func TestNewDebugSandboxCmd(t *testing.T) {
 	cmd := newDebugSandboxCmd()
 	if cmd == nil {
-		t.Errorf("newDebugSandboxCmd() returned nil")
+		t.Fatal("newDebugSandboxCmd() returned nil")
 	}
 
 	if cmd.Use != "sandbox <command>" {
@@ -52,7 +52,7 @@ func TestNewDebugSandboxCmd(t *testing.T) {
 func TestNewDebugLandlockCmd(t *testing.T) {
 	cmd := newDebugLandlockCmd()
 	if cmd == nil {
-		t.Errorf("newDebugLandlockCmd() returned nil")
+		t.Fatal("newDebugLandlockCmd() returned nil")
 	}
 
 	if cmd.Use != "landlock <command>" {

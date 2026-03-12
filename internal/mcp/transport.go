@@ -10,12 +10,12 @@ var (
 	ErrNameIsRequired = errors.New("name is required")
 	ErrInvalidTransport = errors.New("invalid transport")
 	ErrCommandIsRequiredForStdioTransport = errors.New("command is required for stdio transport")
-	ErrUrlIsNotAllowedForStdio = errors.New("url is not allowed for stdio transport")
+	ErrURLIsNotAllowedForStdio = errors.New("url is not allowed for stdio transport")
 	ErrOauthIsNotAllowedForStdio = errors.New("oauth is not allowed for stdio transport")
-	ErrUrlIsRequiredForTransport = errors.New("url is required for  transport")
-	ErrInvalidUrl = errors.New("invalid url")
+	ErrURLIsRequiredForTransport = errors.New("url is required for  transport")
+	ErrInvalidURL = errors.New("invalid url")
 	ErrCommandIsNotAllowedForRemote = errors.New("command is not allowed for remote transport")
-	ErrOauthClientIdIsRequired = errors.New("oauth client_id is required")
+	ErrOauthClientIDIsRequired = errors.New("oauth client_id is required")
 )
 
 // TransportType defines the MCP server connection transport.
@@ -92,7 +92,7 @@ func (c *ServerConfig) validateStdio() error {
 
 	// URL is not allowed for stdio.
 	if c.URL != "" {
-		return ErrUrlIsNotAllowedForStdio
+		return ErrURLIsNotAllowedForStdio
 	}
 
 	// OAuth is not allowed for stdio.
@@ -107,13 +107,13 @@ func (c *ServerConfig) validateStdio() error {
 func (c *ServerConfig) validateRemote(transport TransportType) error {
 	// URL is required for remote transports.
 	if c.URL == "" {
-return fmt.Errorf("url is required for %s transport: %w", transport, ErrUrlIsRequiredForTransport)
+return fmt.Errorf("url is required for %s transport: %w", transport, ErrURLIsRequiredForTransport)
 	}
 
 	// Validate URL format.
 	parsedURL, err := url.Parse(c.URL)
 	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-return fmt.Errorf("invalid url: %s: %w", c.URL, ErrInvalidUrl)
+return fmt.Errorf("invalid url: %s: %w", c.URL, ErrInvalidURL)
 	}
 
 	// Command is not allowed for remote transports.
@@ -124,7 +124,7 @@ return fmt.Errorf("invalid url: %s: %w", c.URL, ErrInvalidUrl)
 	// Validate OAuth if provided.
 	if c.OAuth != nil {
 		if c.OAuth.ClientID == "" {
-			return ErrOauthClientIdIsRequired
+			return ErrOauthClientIDIsRequired
 		}
 	}
 

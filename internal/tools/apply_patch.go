@@ -148,34 +148,34 @@ func (t *ApplyPatchTool) Execute(_ context.Context, params ToolParameters) (Tool
 	}
 
 	if len(result.FilesCreated) > 0 {
-		output.WriteString(fmt.Sprintf("Created %d file(s):\n", len(result.FilesCreated)))
+		fmt.Fprintf(&output, "Created %d file(s):\n", len(result.FilesCreated))
 
 		for _, file := range result.FilesCreated {
-			output.WriteString(fmt.Sprintf("  + %s\n", file))
+			fmt.Fprintf(&output, "  + %s\n", file)
 		}
 	}
 
 	if len(result.FilesDeleted) > 0 {
-		output.WriteString(fmt.Sprintf("Deleted %d file(s):\n", len(result.FilesDeleted)))
+		fmt.Fprintf(&output, "Deleted %d file(s):\n", len(result.FilesDeleted))
 
 		for _, file := range result.FilesDeleted {
-			output.WriteString(fmt.Sprintf("  - %s\n", file))
+			fmt.Fprintf(&output, "  - %s\n", file)
 		}
 	}
 
 	if len(result.FilesUpdated) > 0 {
-		output.WriteString(fmt.Sprintf("Updated %d file(s):\n", len(result.FilesUpdated)))
+		fmt.Fprintf(&output, "Updated %d file(s):\n", len(result.FilesUpdated))
 
 		for _, file := range result.FilesUpdated {
-			output.WriteString(fmt.Sprintf("  ~ %s\n", file))
+			fmt.Fprintf(&output, "  ~ %s\n", file)
 		}
 	}
 
 	if len(result.FilesMoved) > 0 {
-		output.WriteString(fmt.Sprintf("Moved %d file(s):\n", len(result.FilesMoved)))
+		fmt.Fprintf(&output, "Moved %d file(s):\n", len(result.FilesMoved))
 
 		for oldPath, newPath := range result.FilesMoved {
-			output.WriteString(fmt.Sprintf("  %s → %s\n", oldPath, newPath))
+			fmt.Fprintf(&output, "  %s → %s\n", oldPath, newPath)
 		}
 	}
 

@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	ErrBaseUrlIsRequired = errors.New("base URL is required")
+	ErrBaseURLIsRequired = errors.New("base URL is required")
 	ErrModelIsRequired = errors.New("model is required")
 	ErrTimeoutMustBe0 = errors.New("timeout must be > 0")
 )
@@ -30,7 +30,7 @@ type Config struct {
 // Validate validates the OpenAI configuration.
 func (c *Config) Validate() error {
 	if c.BaseURL == "" {
-		return ErrBaseUrlIsRequired
+		return ErrBaseURLIsRequired
 	}
 
 	if c.Model == "" {
@@ -179,9 +179,7 @@ func (p *Provider) Models(ctx context.Context) ([]openai.Model, error) {
 
 	var models []openai.Model
 	// Add models from first page.
-	for _, sdkModel := range resp.Data {
-		models = append(models, sdkModel)
-	}
+	models = append(models, resp.Data...)
 
 	// Iterate through remaining pages.
 	for {
@@ -191,9 +189,7 @@ func (p *Provider) Models(ctx context.Context) ([]openai.Model, error) {
 		}
 
 		resp = nextPage
-		for _, sdkModel := range resp.Data {
-			models = append(models, sdkModel)
-		}
+		models = append(models, resp.Data...)
 	}
 
 	return models, nil

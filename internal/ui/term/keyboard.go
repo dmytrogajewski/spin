@@ -404,9 +404,7 @@ func (p *keyParser) parseTildeCSI(seq, raw []byte) (KeyEvent, bool) {
 		return KeyEvent{}, false
 	}
 
-	code := string(seq[:len(seq)-1])
-
-	kind, ok := tildeCSIMap[code]
+	kind, ok := tildeCSIMap[string(seq[:len(seq)-1])]
 	if !ok {
 		return KeyEvent{}, false
 	}

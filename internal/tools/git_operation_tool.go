@@ -155,10 +155,10 @@ func handleGitStatus(_ context.Context, t *GitOperationTool, _ ToolParameters) (
 	}
 
 	var output strings.Builder
-	output.WriteString(fmt.Sprintf("Branch: %s\n", status.Branch))
-	output.WriteString(fmt.Sprintf("Modified: %d files\n", len(status.ModifiedFiles)))
-	output.WriteString(fmt.Sprintf("Untracked: %d files\n", len(status.UntrackedFiles)))
-	output.WriteString(fmt.Sprintf("Ahead: %d, Behind: %d\n", status.Ahead, status.Behind))
+	fmt.Fprintf(&output, "Branch: %s\n", status.Branch)
+	fmt.Fprintf(&output, "Modified: %d files\n", len(status.ModifiedFiles))
+	fmt.Fprintf(&output, "Untracked: %d files\n", len(status.UntrackedFiles))
+	fmt.Fprintf(&output, "Ahead: %d, Behind: %d\n", status.Ahead, status.Behind)
 
 	return gitSuccessResult(output.String()), nil
 }
@@ -184,7 +184,7 @@ func handleGitLog(_ context.Context, t *GitOperationTool, params ToolParameters)
 
 	var output strings.Builder
 	for _, log := range logs {
-		output.WriteString(fmt.Sprintf("%s: %s\n", log.Hash[:7], log.Message))
+		fmt.Fprintf(&output, "%s: %s\n", log.Hash[:7], log.Message)
 	}
 
 	return gitSuccessResult(output.String()), nil

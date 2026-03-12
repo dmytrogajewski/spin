@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -30,8 +29,8 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 
 	// Extract ApprovalService and Validator from SecurityService for ToolRuntime.
 	var (
-		approvalSvc      *security.ApprovalService = securitySvc.ApprovalService()
-		runtimeValidator *security.Validator       = securitySvc.Validator()
+		approvalSvc      = securitySvc.ApprovalService()
+		runtimeValidator = securitySvc.Validator()
 	)
 
 	// Build tool registry - use runtime's tool registration if available, otherwise build from integrations.

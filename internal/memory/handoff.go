@@ -11,7 +11,7 @@ import (
 
 var (
 	ErrNoPersistentStoreConfigured = errors.New("no persistent store configured")
-	ErrSessionIdIsRequired = errors.New("session ID is required")
+	ErrSessionIDIsRequired = errors.New("session ID is required")
 	ErrNoPersistentStoreConfigured2 = errors.New("no persistent store configured")
 	ErrNoPersistentStoreConfigured3 = errors.New("no persistent store configured")
 	ErrNoPersistentStoreConfigured4 = errors.New("no persistent store configured")
@@ -71,7 +71,7 @@ func (h *SessionHandoff) SaveSession(ctx context.Context, data HandoffData) erro
 	}
 
 	if data.SessionID == "" {
-		return ErrSessionIdIsRequired
+		return ErrSessionIDIsRequired
 	}
 
 	// Set last activity if not provided.
@@ -204,11 +204,11 @@ func (h *SessionHandoff) BuildContinuationPrompt(data *HandoffData) string {
 	}
 
 	if data.WorkDir != "" {
-		sb.WriteString(fmt.Sprintf("Working directory: %s\n", data.WorkDir))
+		fmt.Fprintf(&sb, "Working directory: %s\n", data.WorkDir)
 	}
 
 	if !data.LastActivity.IsZero() {
-		sb.WriteString(fmt.Sprintf("Last activity: %s\n", data.LastActivity.Format("2006-01-02 15:04:05")))
+		fmt.Fprintf(&sb, "Last activity: %s\n", data.LastActivity.Format("2006-01-02 15:04:05"))
 	}
 
 	return sb.String()

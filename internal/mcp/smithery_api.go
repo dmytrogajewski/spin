@@ -28,7 +28,7 @@ type SmitheryAPIConfig struct {
 // NewSmitheryAPIClient creates a new Smithery API client.
 func NewSmitheryAPIClient(config SmitheryAPIConfig) (*SmitheryAPIClient, error) {
 	if config.APIKey == "" {
-		return nil, ErrSmitheryApiKeyRequired
+		return nil, ErrSmitheryAPIKeyRequired
 	}
 
 	timeout := config.Timeout
@@ -104,7 +104,7 @@ func (c *SmitheryAPIClient) SearchTools(ctx context.Context, query string, limit
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 
-return nil, fmt.Errorf("API error (status %d): %s: %w", resp.StatusCode, string(body), ErrApiErrorStatus)
+return nil, fmt.Errorf("API error (status %d): %s: %w", resp.StatusCode, string(body), ErrAPIErrorStatus)
 	}
 
 	var result SmitherySearchResponse

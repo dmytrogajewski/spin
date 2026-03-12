@@ -35,15 +35,15 @@ func (pb *PromptBuilder) BuildSingleTrajectory(traj *generator.Trajectory) strin
 	sb.WriteString("- Be specific about what should be done differently or what pattern should be remembered\n\n")
 
 	sb.WriteString("**Trajectory:**\n")
-	sb.WriteString(fmt.Sprintf("Task: %s\n", traj.Query))
-	sb.WriteString(fmt.Sprintf("Success: %t\n\n", traj.Success))
+	fmt.Fprintf(&sb, "Task: %s\n", traj.Query)
+	fmt.Fprintf(&sb, "Success: %t\n\n", traj.Success)
 
 	// Include detailed execution steps if available.
 	if len(traj.Steps) > 0 {
 		sb.WriteString("**Execution Steps:**\n")
 
 		for _, step := range traj.Steps {
-			sb.WriteString(fmt.Sprintf("%d. [%s] %s\n", step.StepNumber+1, step.Type, step.Content))
+			fmt.Fprintf(&sb, "%d. [%s] %s\n", step.StepNumber+1, step.Type, step.Content)
 		}
 
 		sb.WriteString("\n")
@@ -56,8 +56,8 @@ func (pb *PromptBuilder) BuildSingleTrajectory(traj *generator.Trajectory) strin
 			sb.WriteString("(Shows when and why bullets were retrieved during execution)\n")
 
 			for _, event := range events {
-				sb.WriteString(fmt.Sprintf("Turn %d [%s]: Query=\"%s\" → Retrieved %d bullets\n",
-					event.Turn, event.Trigger, event.Query, len(event.BulletsAdded)))
+				fmt.Fprintf(&sb, "Turn %d [%s]: Query=\"%s\" → Retrieved %d bullets\n",
+					event.Turn, event.Trigger, event.Query, len(event.BulletsAdded))
 			}
 
 			sb.WriteString("\n")
@@ -69,13 +69,13 @@ func (pb *PromptBuilder) BuildSingleTrajectory(traj *generator.Trajectory) strin
 		sb.WriteString("**Retrieved Playbook Bullets:**\n")
 
 		for _, bullet := range traj.RetrievedBullets {
-			sb.WriteString(fmt.Sprintf("- [%s] %s\n", bullet.ID, bullet.Content))
+			fmt.Fprintf(&sb, "- [%s] %s\n", bullet.ID, bullet.Content)
 		}
 
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(fmt.Sprintf("**Final Output:**\n%s\n\n", traj.Output))
+	fmt.Fprintf(&sb, "**Final Output:**\n%s\n\n", traj.Output)
 
 	sb.WriteString("**Your output should be a JSON object with the following fields:**\n")
 	sb.WriteString("- reasoning: Your chain of thought, detailed analysis of what happened\n")
@@ -118,24 +118,24 @@ func (pb *PromptBuilder) BuildWithGroundTruth(traj *generator.Trajectory, ground
 	sb.WriteString("- Analyze which playbook bullets were helpful, harmful, or neutral\n\n")
 
 	sb.WriteString("**Task:**\n")
-	sb.WriteString(fmt.Sprintf("%s\n\n", traj.Query))
+	fmt.Fprintf(&sb, "%s\n\n", traj.Query)
 
 	sb.WriteString("**Execution Trace:**\n")
-	sb.WriteString(fmt.Sprintf("%s\n\n", traj.Output))
+	fmt.Fprintf(&sb, "%s\n\n", traj.Output)
 
 	sb.WriteString("**Actual Outcome:**\n")
-	sb.WriteString(fmt.Sprintf("Success: %t\n\n", traj.Success))
+	fmt.Fprintf(&sb, "Success: %t\n\n", traj.Success)
 
 	if groundTruth != "" {
 		sb.WriteString("**Expected Outcome:**\n")
-		sb.WriteString(fmt.Sprintf("%s\n\n", groundTruth))
+		fmt.Fprintf(&sb, "%s\n\n", groundTruth)
 	}
 
 	if len(usedBullets) > 0 {
 		sb.WriteString("**Playbook Bullets Used:**\n")
 
 		for _, bulletID := range usedBullets {
-			sb.WriteString(fmt.Sprintf("- %s\n", bulletID))
+			fmt.Fprintf(&sb, "- %s\n", bulletID)
 		}
 
 		sb.WriteString("\n")
@@ -181,12 +181,12 @@ func (pb *PromptBuilder) BuildRefinementPrompt(insights []*Insight) string {
 	sb.WriteString("# Current Insights\n")
 
 	for i, insight := range insights {
-		sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, insight.Content))
-		sb.WriteString(fmt.Sprintf("   Category: %s\n", insight.Category))
-		sb.WriteString(fmt.Sprintf("   Confidence: %.2f\n", insight.Confidence))
+		fmt.Fprintf(&sb, "%d. %s\n", i+1, insight.Content)
+		fmt.Fprintf(&sb, "   Category: %s\n", insight.Category)
+		fmt.Fprintf(&sb, "   Confidence: %.2f\n", insight.Confidence)
 
 		if len(insight.Evidence) > 0 {
-			sb.WriteString(fmt.Sprintf("   Evidence: %s\n", strings.Join(insight.Evidence, "; ")))
+			fmt.Fprintf(&sb, "   Evidence: %s\n", strings.Join(insight.Evidence, "; "))
 		}
 
 		sb.WriteString("\n")
@@ -215,10 +215,10 @@ func (pb *PromptBuilder) BuildBatchTrajectory(trajs []*generator.Trajectory) str
 	sb.WriteString("# Trajectories\n")
 
 	for i, traj := range trajs {
-		sb.WriteString(fmt.Sprintf("## Trajectory %d (ID: %s)\n", i+1, traj.ID))
-		sb.WriteString(fmt.Sprintf("Query: %s\n", traj.Query))
-		sb.WriteString(fmt.Sprintf("Success: %t\n", traj.Success))
-		sb.WriteString(fmt.Sprintf("Output: %s\n\n", traj.Output))
+		fmt.Fprintf(&sb, "## Trajectory %d (ID: %s)\n", i+1, traj.ID)
+		fmt.Fprintf(&sb, "Query: %s\n", traj.Query)
+		fmt.Fprintf(&sb, "Success: %t\n", traj.Success)
+		fmt.Fprintf(&sb, "Output: %s\n\n", traj.Output)
 	}
 
 	sb.WriteString("# Task\n")

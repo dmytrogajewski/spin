@@ -13,7 +13,7 @@ import (
 
 var (
 	ErrConversationFactoryIsRequired = errors.New("conversation factory is required")
-	ErrSessionIdCannotBeEmpty = errors.New("session ID cannot be empty")
+	ErrSessionIDCannotBeEmpty = errors.New("session ID cannot be empty")
 	ErrConversationNotFound = errors.New("conversation not found")
 	ErrHistoryStorageNotConfigured = errors.New("history storage not configured")
 	ErrSessionNotFound = errors.New("session not found")
@@ -81,7 +81,7 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 // Otherwise, the factory is called to create a new conversation.
 func (m *Manager) GetOrCreate(ctx context.Context, sessionID string, workDir string) (*Conversation, error) {
 	if sessionID == "" {
-		return nil, ErrSessionIdCannotBeEmpty
+		return nil, ErrSessionIDCannotBeEmpty
 	}
 
 	// Fast path: check if conversation exists.

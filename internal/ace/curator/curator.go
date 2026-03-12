@@ -234,7 +234,7 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 
 	var playbookBuilder strings.Builder
 	for _, b := range bullets {
-		playbookBuilder.WriteString(fmt.Sprintf("[%s] %s\n", b.ID, b.Content))
+		fmt.Fprintf(&playbookBuilder, "[%s] %s\n", b.ID, b.Content)
 	}
 
 	currentPlaybook := playbookBuilder.String()

@@ -14,9 +14,9 @@ import (
 
 var (
 	ErrBulletCannotBeNil = errors.New("bullet cannot be nil")
-	ErrBulletWithIdAlreadyExists = errors.New("bullet with ID  already exists")
+	ErrBulletWithIDAlreadyExists = errors.New("bullet with ID  already exists")
 	ErrBulletCannotBeNil2 = errors.New("bullet cannot be nil")
-	ErrBulletWithIdNotFound = errors.New("bullet with ID  not found")
+	ErrBulletWithIDNotFound = errors.New("bullet with ID  not found")
 )
 
 // Playbook manages a collection of context bullets.
@@ -96,7 +96,7 @@ func (p *Playbook) Add(_ context.Context, b *bullet.Bullet) error {
 
 	// Check for duplicate ID.
 	if _, exists := p.bullets[b.ID]; exists {
-return fmt.Errorf("bullet with ID %s already exists: %w", b.ID, ErrBulletWithIdAlreadyExists)
+return fmt.Errorf("bullet with ID %s already exists: %w", b.ID, ErrBulletWithIDAlreadyExists)
 	}
 
 	p.bullets[b.ID] = b
@@ -126,7 +126,7 @@ func (p *Playbook) Update(_ context.Context, b *bullet.Bullet) error {
 	defer p.mu.Unlock()
 
 	if _, exists := p.bullets[b.ID]; !exists {
-return fmt.Errorf("bullet with ID %s not found: %w", b.ID, ErrBulletWithIdNotFound)
+return fmt.Errorf("bullet with ID %s not found: %w", b.ID, ErrBulletWithIDNotFound)
 	}
 
 	p.bullets[b.ID] = b

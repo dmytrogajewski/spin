@@ -182,7 +182,7 @@ func (m *MCPConfigStore) validateStdio(server MCPServer) error {
 	}
 
 	if server.URL != "" {
-		return ErrUrlNotAllowedForStdio
+		return ErrURLNotAllowedForStdio
 	}
 
 	if server.OAuth != nil {
@@ -195,7 +195,7 @@ func (m *MCPConfigStore) validateStdio(server MCPServer) error {
 // validateRemote validates remote transport configuration.
 func (m *MCPConfigStore) validateRemote(server MCPServer, transport MCPTransportType) error {
 	if server.URL == "" {
-		return fmt.Errorf("url is required for %s transport: %w", transport, ErrUrlRequiredForTransport)
+		return fmt.Errorf("url is required for %s transport: %w", transport, ErrURLRequiredForTransport)
 	}
 
 	if server.Command != "" {
@@ -203,7 +203,7 @@ func (m *MCPConfigStore) validateRemote(server MCPServer, transport MCPTransport
 	}
 
 	if server.OAuth != nil && server.OAuth.ClientID == "" {
-		return ErrOauthClientIdRequired
+		return ErrOauthClientIDRequired
 	}
 
 	return nil
@@ -213,7 +213,7 @@ func (m *MCPConfigStore) validateRemote(server MCPServer, transport MCPTransport
 func (m *MCPConfigStore) validateSmithery(server MCPServer) error {
 	// API key is always required.
 	if server.SmitheryAPIKey == "" {
-		return ErrSmitheryApiKeyRequired
+		return ErrSmitheryAPIKeyRequired
 	}
 	// For static mode (URL provided), namespace is also required.
 	if server.URL != "" && server.SmitheryNamespace == "" {

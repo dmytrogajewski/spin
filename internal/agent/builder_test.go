@@ -32,7 +32,7 @@ func TestBuilder_WithUnifiedConfig_FluentInterface(t *testing.T) {
 		WithApprovalHandler(nil)
 
 	if builder == nil {
-		t.Error("Fluent interface broke chain")
+		t.Fatal("Fluent interface broke chain")
 	}
 
 	if builder.config != cfg {

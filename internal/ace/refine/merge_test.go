@@ -306,7 +306,7 @@ func TestMergeEngine_ChooseMergeDirection(t *testing.T) {
 	}
 
 	// Reverse order.
-	sourceID, targetID = engine.chooseMergeDirection(b2, b1)
+	_, targetID = engine.chooseMergeDirection(b2, b1)
 	if targetID != b1.ID {
 		t.Errorf("expected b1 (high utility) to be target regardless of order, got %s", targetID)
 	}

@@ -313,7 +313,7 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 	// Create TUI adapter. Use real TTY when available; otherwise, mock one.
 	opts := []adapters.PureTTYOption{adapters.WithExecMode()}
 
-	if !(termx.IsTerminal(int(os.Stdout.Fd())) && termx.IsTerminal(int(os.Stdin.Fd()))) {
+	if !termx.IsTerminal(int(os.Stdout.Fd())) || !termx.IsTerminal(int(os.Stdin.Fd())) {
 		mockTty := &mockTTY{width: 120, height: 30}
 		opts = append(opts, adapters.WithTTY(mockTty))
 	}

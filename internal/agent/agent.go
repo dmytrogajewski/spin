@@ -386,7 +386,7 @@ func (a *Agent) Execute(ctx context.Context, req *Request) (*Response, error) {
 			summaryBuilder.WriteString("\n\nExecution Steps:\n")
 
 			for _, step := range trajectory.Steps {
-				summaryBuilder.WriteString(fmt.Sprintf("- [%s] %s\n", step.Type, step.Content))
+				fmt.Fprintf(&summaryBuilder, "- [%s] %s\n", step.Type, step.Content)
 			}
 
 			summaryBuilder.WriteString("\nResult: ")

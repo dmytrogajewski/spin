@@ -45,18 +45,18 @@ func (pb *PromptBuilder) BuildCurationPrompt(req CurationRequest) string {
 	sb.WriteString("- For coding tasks, explicitly curate API schemas, error patterns, and best practices\n\n")
 
 	sb.WriteString("**Task Context (the actual task instruction):**\n")
-	sb.WriteString(fmt.Sprintf("%s\n\n", req.TaskContext))
+	fmt.Fprintf(&sb, "%s\n\n", req.TaskContext)
 
 	sb.WriteString("**Current Playbook:**\n")
 
 	if req.CurrentPlaybook != "" {
-		sb.WriteString(fmt.Sprintf("%s\n\n", req.CurrentPlaybook))
+		fmt.Fprintf(&sb, "%s\n\n", req.CurrentPlaybook)
 	} else {
 		sb.WriteString("[Empty playbook - this is the first entry]\n\n")
 	}
 
 	sb.WriteString("**Current Reflection (insights from the execution):**\n")
-	sb.WriteString(fmt.Sprintf("%s\n\n", req.Reflection))
+	fmt.Fprintf(&sb, "%s\n\n", req.Reflection)
 
 	// Add examples.
 	sb.WriteString("**Examples:**\n\n")
@@ -152,12 +152,12 @@ func (pb *PromptBuilder) BuildRefinementPrompt(currentPlaybook string, stats Pla
 	sb.WriteString("  4. Contradict other bullets\n\n")
 
 	sb.WriteString("**Playbook Statistics:**\n")
-	sb.WriteString(fmt.Sprintf("- Total bullets: %d\n", stats.TotalBullets))
-	sb.WriteString(fmt.Sprintf("- Average helpful count: %.2f\n", stats.AvgHelpfulCount))
-	sb.WriteString(fmt.Sprintf("- Average harmful count: %.2f\n\n", stats.AvgHarmfulCount))
+	fmt.Fprintf(&sb, "- Total bullets: %d\n", stats.TotalBullets)
+	fmt.Fprintf(&sb, "- Average helpful count: %.2f\n", stats.AvgHelpfulCount)
+	fmt.Fprintf(&sb, "- Average harmful count: %.2f\n\n", stats.AvgHarmfulCount)
 
 	sb.WriteString("**Current Playbook:**\n")
-	sb.WriteString(fmt.Sprintf("%s\n\n", currentPlaybook))
+	fmt.Fprintf(&sb, "%s\n\n", currentPlaybook)
 
 	sb.WriteString("**Your Task:**\n")
 	sb.WriteString("Analyze the playbook and identify bullets that should be removed or merged.\n\n")
@@ -230,18 +230,18 @@ type RefinementOperation struct {
 func FormatReflectionForCurator(insight *reflector.Insight) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("**Category:** %s\n", insight.Category))
-	sb.WriteString(fmt.Sprintf("**Confidence:** %.2f\n\n", insight.Confidence))
+	fmt.Fprintf(&sb, "**Category:** %s\n", insight.Category)
+	fmt.Fprintf(&sb, "**Confidence:** %.2f\n\n", insight.Confidence)
 
 	// Main insight content.
-	sb.WriteString(fmt.Sprintf("**Insight:** %s\n\n", insight.Content))
+	fmt.Fprintf(&sb, "**Insight:** %s\n\n", insight.Content)
 
 	// Supporting evidence if available.
 	if len(insight.Evidence) > 0 {
 		sb.WriteString("**Evidence:**\n")
 
 		for _, evidence := range insight.Evidence {
-			sb.WriteString(fmt.Sprintf("- %s\n", evidence))
+			fmt.Fprintf(&sb, "- %s\n", evidence)
 		}
 
 		sb.WriteString("\n")

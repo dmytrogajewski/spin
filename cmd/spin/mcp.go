@@ -19,9 +19,9 @@ import (
 
 var (
 	ErrInvalidTransport = errors.New("invalid transport")
-	ErrApiKeyIsRequired = errors.New("API key is required")
+	ErrAPIKeyIsRequired = errors.New("API key is required")
 	ErrRegistryNotFound = errors.New("registry '' not found")
-	ErrApiErrorStatus = errors.New("API error (status )")
+	ErrAPIErrorStatus = errors.New("API error (status )")
 	ErrInvalidServerPathFormat = errors.New("invalid server path format")
 )
 
@@ -448,7 +448,7 @@ func runMCPRegistrySmitheryAdd(cmd *cobra.Command, args []string) error {
 
 		apiKey = strings.TrimSpace(input)
 		if apiKey == "" {
-			return ErrApiKeyIsRequired
+			return ErrAPIKeyIsRequired
 		}
 	}
 
@@ -922,7 +922,7 @@ func searchSmitheryAPI(query, apiKey string, limit int, verified bool) (*smither
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 
-return nil, fmt.Errorf("API error (status %d): %s: %w", resp.StatusCode, string(body), ErrApiErrorStatus)
+return nil, fmt.Errorf("API error (status %d): %s: %w", resp.StatusCode, string(body), ErrAPIErrorStatus)
 	}
 
 	var result smitheryToolsResponse

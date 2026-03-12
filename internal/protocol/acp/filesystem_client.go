@@ -12,7 +12,7 @@ import (
 
 var (
 	ErrAcpConnectionNotAvailable = errors.New("ACP connection not available")
-	ErrSessionIdNotFoundInContext = errors.New("session ID not found in context")
+	ErrSessionIDNotFoundInContext = errors.New("session ID not found in context")
 )
 
 // FilesystemClient implements filesystem operations using ACP connection.
@@ -35,7 +35,7 @@ func (c *FilesystemClient) ReadTextFile(ctx context.Context, path string, line *
 
 	sessionID := executor.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return "", ErrSessionIdNotFoundInContext
+		return "", ErrSessionIDNotFoundInContext
 	}
 
 	params := acp.ReadTextFileRequest{
@@ -61,7 +61,7 @@ func (c *FilesystemClient) WriteTextFile(ctx context.Context, path, content stri
 
 	sessionID := executor.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return ErrSessionIdNotFoundInContext
+		return ErrSessionIDNotFoundInContext
 	}
 
 	params := acp.WriteTextFileRequest{

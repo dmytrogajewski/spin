@@ -240,7 +240,7 @@ func (s *LLMSummarizer) SummarizeMessages(ctx context.Context, messages []messag
 func (s *LLMSummarizer) formatMessages(messages []message.Message) string {
 	var sb strings.Builder
 	for _, msg := range messages {
-		sb.WriteString(fmt.Sprintf("[%s]: %s\n", msg.Role, msg.Content))
+		fmt.Fprintf(&sb, "[%s]: %s\n", msg.Role, msg.Content)
 	}
 
 	return sb.String()

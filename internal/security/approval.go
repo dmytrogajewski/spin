@@ -15,7 +15,7 @@ import (
 var (
 	ErrNoApprovalHandlerConfigured = errors.New("no approval handler configured")
 	ErrContextCanceled = errors.New("context canceled")
-	ErrRequestIdMismatch = errors.New("request ID mismatch")
+	ErrRequestIDMismatch = errors.New("request ID mismatch")
 	ErrModifiedCommandNotSafe = errors.New("modified command not safe")
 )
 
@@ -142,7 +142,7 @@ func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operati
 			s.emitApprovalDenied(reqID, operation.Command, "response request ID mismatch")
 		}
 
-		return reqID, false, ErrRequestIdMismatch
+		return reqID, false, ErrRequestIDMismatch
 	}
 
 	// Handle command modification if needed.

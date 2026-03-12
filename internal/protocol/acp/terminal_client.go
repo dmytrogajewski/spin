@@ -41,7 +41,7 @@ func (c *TerminalClient) Create(ctx context.Context, cmd string, args []string, 
 
 	sessionID := executor.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return "", ErrSessionIdNotFoundInContext
+		return "", ErrSessionIDNotFoundInContext
 	}
 
 	params := acp.CreateTerminalRequest{
@@ -69,7 +69,7 @@ func (c *TerminalClient) WaitForExit(ctx context.Context, terminalID string) (in
 
 	sessionID := executor.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return -1, nil, ErrSessionIdNotFoundInContext
+		return -1, nil, ErrSessionIDNotFoundInContext
 	}
 
 	params := acp.WaitForTerminalExitRequest{
@@ -98,7 +98,7 @@ func (c *TerminalClient) GetOutput(ctx context.Context, terminalID string) (stri
 
 	sessionID := executor.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return "", false, nil, ErrSessionIdNotFoundInContext
+		return "", false, nil, ErrSessionIDNotFoundInContext
 	}
 
 	params := acp.TerminalOutputRequest{
@@ -138,7 +138,7 @@ func (c *TerminalClient) Release(ctx context.Context, terminalID string) error {
 
 	sessionID := executor.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return ErrSessionIdNotFoundInContext
+		return ErrSessionIDNotFoundInContext
 	}
 
 	params := acp.ReleaseTerminalRequest{

@@ -9,7 +9,7 @@ import (
 
 var (
 	ErrLine = errors.New("line")
-	ErrUnexpectedEofMissingEndPatch = errors.New("unexpected EOF: missing '*** End Patch'")
+	ErrUnexpectedEOFMissingEndPatch = errors.New("unexpected EOF: missing '*** End Patch'")
 	ErrUnknownOperation = errors.New("unknown operation")
 	ErrInvalidPath = errors.New("invalid path")
 	ErrInvalidPath2 = errors.New("invalid path")
@@ -85,7 +85,7 @@ return nil, fmt.Errorf("line %d: expected '*** Begin Patch': %w", p.lineNum, Err
 		return nil, fmt.Errorf("scan error at line %d: %w", p.lineNum, err)
 	}
 
-	return nil, ErrUnexpectedEofMissingEndPatch
+	return nil, ErrUnexpectedEOFMissingEndPatch
 }
 
 // nextLine returns the next line, either from peek buffer or scanner.

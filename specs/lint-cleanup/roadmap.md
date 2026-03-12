@@ -175,7 +175,7 @@ High-value fixes that improve reliability.
   - **Note:** Shadow checks (strict mode) will be the bulk — requires variable renames
   - **`//nolint` prohibited** — rename shadowed variables, fix format strings
 
-- [ ] **4.7 — `staticcheck` analysis** (~306 issues)
+- [x] **4.7 — `staticcheck` analysis** (~306 issues)
   - **Description:** Fix deprecated API usage, unreachable code, unnecessary conversions, etc.
   - **DoR:** 4.6 complete
   - **DoD:** 0 staticcheck issues

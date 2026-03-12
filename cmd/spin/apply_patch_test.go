@@ -109,8 +109,8 @@ func TestFormatParseError(t *testing.T) {
 	resultStr := result.Error()
 
 	// Check key elements.
-	if !strings.Contains(resultStr, "Invalid patch syntax") {
-		t.Errorf("formatParseError() missing 'Invalid patch syntax'")
+	if !strings.Contains(resultStr, "invalid patch syntax") {
+		t.Errorf("formatParseError() missing 'invalid patch syntax'")
 	}
 
 	if !strings.Contains(resultStr, "Hint") {
@@ -139,13 +139,13 @@ func TestFormatApplyError(t *testing.T) {
 				Err:  patchapply.ErrContextNotFound,
 			},
 			wantErr:  true,
-			contains: []string{"Failed to apply patch", "Update", "test.go", "Hint"},
+			contains: []string{"failed to apply patch", "Update", "test.go", "Hint"},
 		},
 		{
 			name:     "generic error",
 			err:      patchapply.ErrEmptyWorkspace,
 			wantErr:  true,
-			contains: []string{"Error"},
+			contains: []string{"error"},
 		},
 	}
 
@@ -374,8 +374,8 @@ func TestApplyPatch_ParseError(t *testing.T) {
 		t.Error("runApplyPatch() expected error for invalid patch")
 	}
 
-	if !strings.Contains(err.Error(), "Invalid patch syntax") {
-		t.Errorf("runApplyPatch() error = %v, want 'Invalid patch syntax'", err)
+	if !strings.Contains(err.Error(), "invalid patch syntax") {
+		t.Errorf("runApplyPatch() error = %v, want 'invalid patch syntax'", err)
 	}
 }
 

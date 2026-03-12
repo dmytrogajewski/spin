@@ -186,7 +186,7 @@ func (c *HelpCommand) Execute(_ context.Context, _ []string, _ CommandContext) (
 	// List all registered commands.
 	commands := ListCommands()
 	for _, cmd := range commands {
-		help.WriteString(fmt.Sprintf("  %s  - %s\n", cmd.Name(), cmd.Description()))
+		fmt.Fprintf(&help, "  %s  - %s\n", cmd.Name(), cmd.Description())
 	}
 
 	help.WriteString("\nAvailable modes:\n\n")

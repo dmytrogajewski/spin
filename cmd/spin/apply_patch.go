@@ -204,7 +204,7 @@ func printResults(result *patchapply.ApplyResult) {
 
 // formatParseError formats parse errors with helpful hints.
 func formatParseError(err error) error {
-	return fmt.Errorf(`Error: Invalid patch syntax
+	return fmt.Errorf(`error: invalid patch syntax
 %w
 
 Hint: Check the patch format specification.
@@ -220,7 +220,7 @@ func formatApplyError(err error) error {
 	// Extract structured error if available.
 	var applyErr *patchapply.Error
 	if errors.As(err, &applyErr) {
-		return fmt.Errorf(`Error: Failed to apply patch
+		return fmt.Errorf(`error: failed to apply patch
   %s operation on %s (line %d)
   %w
 
@@ -232,7 +232,7 @@ Hint: %s`,
 			getHintForError(applyErr))
 	}
 
-	return fmt.Errorf("Error: %w", err)
+	return fmt.Errorf("error: %w", err)
 }
 
 // getHintForError provides helpful hints for common errors.

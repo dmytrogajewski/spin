@@ -133,7 +133,7 @@ func TestNewIgnoreHandler_OnlyComments(t *testing.T) {
 	require.NoError(t, err)
 	// Should not add comment lines.
 	for _, pattern := range handler.patterns {
-		assert.False(t, filepath.HasPrefix(pattern, "#"))
+		assert.False(t, strings.HasPrefix(pattern, "#"))
 	}
 }
 

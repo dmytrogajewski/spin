@@ -48,7 +48,7 @@ func NewSmitheryRegistry(config SmitheryRegistryConfig) (*SmitheryRegistry, erro
 	}
 
 	if config.APIKey == "" {
-		return nil, ErrApiKeyRequiredForSmithery
+		return nil, ErrAPIKeyRequiredForSmithery
 	}
 	// MCPURL and Namespace are only required for static registries (non-dynamic loadout)
 	// Dynamic loadout registries use the Smithery API for search and create connections on-demand.
@@ -461,7 +461,7 @@ func (r *SmitheryRegistry) IsDynamic() bool {
 // This is used for dynamic tool discovery before loading.
 func (r *SmitheryRegistry) SearchAPI(ctx context.Context, query string, limit int) (*SmitherySearchResponse, error) {
 	if r.apiClient == nil {
-		return nil, ErrApiClientNotInitialized
+		return nil, ErrAPIClientNotInitialized
 	}
 
 	return r.apiClient.SearchTools(ctx, query, limit)

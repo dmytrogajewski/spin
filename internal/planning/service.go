@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	ErrPlanIdCannotBeEmpty = errors.New("plan ID cannot be empty")
+	ErrPlanIDCannotBeEmpty = errors.New("plan ID cannot be empty")
 	ErrPlanMustHaveAtLeastOne = errors.New("plan must have at least one step")
 )
 
@@ -224,7 +224,7 @@ func NewPlan() *Plan {
 // ValidateStructure validates the plan structure.
 func (p *Plan) ValidateStructure() error {
 	if p.ID == "" {
-		return ErrPlanIdCannotBeEmpty
+		return ErrPlanIDCannotBeEmpty
 	}
 
 	if len(p.Steps) == 0 {

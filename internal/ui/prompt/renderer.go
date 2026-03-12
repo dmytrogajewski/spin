@@ -155,7 +155,7 @@ func (r *TermRenderer) renderOutput(_ *Model, status string, visibleInfo visible
 	r.writeStatus(&out, status, widths)
 
 	cursorCol := widths.prefixWidth + cursorInfo.cursorOffset + 1
-	out.WriteString(fmt.Sprintf("\x1b[%dG", cursorCol))
+	fmt.Fprintf(&out, "\x1b[%dG", cursorCol)
 
 	_, err := r.out.Write([]byte(out.String()))
 	if err != nil {
@@ -168,7 +168,7 @@ func (r *TermRenderer) renderOutput(_ *Model, status string, visibleInfo visible
 // writePromptLine writes the prompt line positioning.
 func (r *TermRenderer) writePromptLine(out *strings.Builder) {
 	if r.height > 0 {
-		out.WriteString(fmt.Sprintf("\x1b[%d;1H", r.height))
+		fmt.Fprintf(out, "\x1b[%d;1H", r.height)
 	} else {
 		out.WriteString("\r") // fallback to carriage return.
 	}

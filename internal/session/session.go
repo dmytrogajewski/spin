@@ -16,7 +16,7 @@ import (
 var (
 	ErrCannotTransitionFromArchivedState = errors.New("cannot transition from archived state")
 	ErrCannotTransitionFromToActive = errors.New("cannot transition from  to active")
-	ErrSessionIdIsEmpty = errors.New("session ID is empty")
+	ErrSessionIDIsEmpty = errors.New("session ID is empty")
 	ErrWorkDirectoryIsEmpty = errors.New("work directory is empty")
 	ErrUpdatedAtIsBeforeCreatedAt = errors.New("updated_at is before created_at")
 	ErrInvalidState = errors.New("invalid state")
@@ -208,7 +208,7 @@ func (s *Session) validateBasicFields() []error {
 
 	// Validate ID.
 	if s.ID == "" {
-		errs = append(errs, ErrSessionIdIsEmpty)
+		errs = append(errs, ErrSessionIDIsEmpty)
 	}
 
 	_, err := uuid.Parse(s.ID)

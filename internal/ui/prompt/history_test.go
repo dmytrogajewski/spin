@@ -74,7 +74,7 @@ func TestHistory_PrevHistory_SingleEntry(t *testing.T) {
 	}
 
 	// Second prev should return false (already at oldest).
-	entry, ok = h.PrevHistory("draft")
+	_, ok = h.PrevHistory("draft")
 	if ok {
 		t.Errorf("Second PrevHistory returned ok=true, want false (at oldest)")
 	}
@@ -103,7 +103,7 @@ func TestHistory_PrevHistory_MultipleEntries(t *testing.T) {
 	}
 
 	// At oldest, should return false.
-	entry, ok = h.PrevHistory("draft")
+	_, ok = h.PrevHistory("draft")
 	if ok {
 		t.Errorf("Fourth PrevHistory returned ok=true, want false (at oldest)")
 	}
@@ -138,7 +138,7 @@ func TestHistory_NextHistory(t *testing.T) {
 	}
 
 	// Beyond newest, should return false.
-	entry, ok = h.NextHistory()
+	_, ok = h.NextHistory()
 	if ok {
 		t.Errorf("Fourth NextHistory returned ok=true, want false (beyond newest)")
 	}

@@ -137,13 +137,11 @@ func (tc *Context) RecordRetrieval(event RetrievalEvent, bullets []*bullet.Bulle
 // Uses the configured BulletTTL to determine which bullets are still active.
 func (tc *Context) GetActiveBullets() []*bullet.Bullet {
 	bullets := make([]*bullet.Bullet, 0, len(tc.BulletCache))
-	ids := make([]string, 0, len(tc.BulletCache))
 
 	// Collect active bullets within TTL.
-	for id, cached := range tc.BulletCache {
+	for _, cached := range tc.BulletCache {
 		if tc.CurrentTurn-cached.RetrievedAt <= tc.BulletTTL {
 			bullets = append(bullets, cached.Bullet)
-			ids = append(ids, id)
 			cached.LastAccessed = tc.CurrentTurn
 		}
 	}

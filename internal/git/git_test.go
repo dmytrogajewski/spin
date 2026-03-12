@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -31,7 +30,7 @@ func setupTestRepo(t *testing.T) string {
 
 	// Create initial file.
 	filename := filepath.Join(tmpDir, "README.md")
-	err = ioutil.WriteFile(filename, []byte("# Test\n"), 0644)
+	err = os.WriteFile(filename, []byte("# Test\n"), 0644)
 	if err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
@@ -71,14 +70,14 @@ func setupTestRepoWithModifications(t *testing.T) string {
 
 	// Modify existing file.
 	filename := filepath.Join(tmpDir, "README.md")
-	err := ioutil.WriteFile(filename, []byte("# Test\nModified\n"), 0644)
+	err := os.WriteFile(filename, []byte("# Test\nModified\n"), 0644)
 	if err != nil {
 		t.Fatalf("failed to modify file: %v", err)
 	}
 
 	// Create untracked file.
 	newFile := filepath.Join(tmpDir, "untracked.txt")
-	err = ioutil.WriteFile(newFile, []byte("untracked\n"), 0644)
+	err = os.WriteFile(newFile, []byte("untracked\n"), 0644)
 	if err != nil {
 		t.Fatalf("failed to create untracked file: %v", err)
 	}
