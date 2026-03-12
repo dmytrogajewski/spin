@@ -318,66 +318,75 @@ func TestShellCommandTool_Execute_Failure(t *testing.T) {
 	}
 }
 
+// shellExecuteSuccessCase describes a test case where shell execute should succeed.
+type shellExecuteSuccessCase struct {
+	name   string
+	stdout string
+	params map[string]any
+}
+
+func runShellExecuteSuccessTests(t *testing.T, cases []shellExecuteSuccessCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			executor := &mockExecutor{
+				executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
+					return &mockResult{
+						Stdout:   tt.stdout,
+						Stderr:   "",
+						ExitCode: 0,
+					}, nil
+				},
+			}
+			tool := NewShellCommandTool(nil, nil, executor)
+
+			params, err := FromMap(tt.params)
+			require.NoError(t, err)
+
+			result, err := tool.Execute(context.Background(), params)
+			if err != nil {
+				t.Fatalf("Execute() returned error: %v", err)
+			}
+
+			if !result.Success {
+				t.Errorf("Expected success, got failure: %s", result.Error)
+			}
+		})
+	}
+}
+
 // TestShellCommandTool_Execute_WithWorkDir tests execute with working directory.
 func TestShellCommandTool_Execute_WithWorkDir(t *testing.T) {
 	t.Parallel()
-	executor := &mockExecutor{
-		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
-			return &mockResult{
-				Stdout:   "success",
-				Stderr:   "",
-				ExitCode: 0,
-			}, nil
+	runShellExecuteSuccessTests(t, []shellExecuteSuccessCase{
+		{
+			name:   "with working directory",
+			stdout: "success",
+			params: map[string]any{
+				"operation":         "execute",
+				"command":           "ls",
+				"working_directory": "/tmp",
+			},
 		},
-	}
-	tool := NewShellCommandTool(nil, nil, executor)
-
-	params, err := FromMap(map[string]any{
-		"operation":         "execute",
-		"command":           "ls",
-		"working_directory": "/tmp",
 	})
-	require.NoError(t, err)
-
-	result, err := tool.Execute(context.Background(), params)
-	if err != nil {
-		t.Fatalf("Execute() returned error: %v", err)
-	}
-
-	if !result.Success {
-		t.Errorf("Expected success, got failure: %s", result.Error)
-	}
 }
 
 // TestShellCommandTool_Execute_WithTimeout tests execute with custom timeout.
 func TestShellCommandTool_Execute_WithTimeout(t *testing.T) {
 	t.Parallel()
-	executor := &mockExecutor{
-		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
-			return &mockResult{
-				Stdout:   "output",
-				Stderr:   "",
-				ExitCode: 0,
-			}, nil
+	runShellExecuteSuccessTests(t, []shellExecuteSuccessCase{
+		{
+			name:   "with timeout",
+			stdout: "output",
+			params: map[string]any{
+				"operation": "execute",
+				"command":   "sleep 1",
+				"timeout":   5.0,
+			},
 		},
-	}
-	tool := NewShellCommandTool(nil, nil, executor)
-
-	params, err := FromMap(map[string]any{
-		"operation": "execute",
-		"command":   "sleep 1",
-		"timeout":   5.0,
 	})
-	require.NoError(t, err)
-
-	result, err := tool.Execute(context.Background(), params)
-	if err != nil {
-		t.Fatalf("Execute() returned error: %v", err)
-	}
-
-	if !result.Success {
-		t.Errorf("Expected success, got failure: %s", result.Error)
-	}
 }
 
 // TestShellCommandTool_Execute_Timeout tests execute timeout.
@@ -521,53 +530,43 @@ func TestShellCommandTool_DetectShell_MissingCommand(t *testing.T) {
 	}
 }
 
-// TestShellCommandTool_DetectShell_Pipe tests detect_shell with pipe command.
-func TestShellCommandTool_DetectShell_Pipe(t *testing.T) {
+// TestShellCommandTool_DetectShell tests detect_shell with different commands.
+func TestShellCommandTool_DetectShell(t *testing.T) {
 	t.Parallel()
-	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, err := FromMap(map[string]any{
-		"operation": "detect_shell",
-		"command":   "ls | grep test",
-	})
-	require.NoError(t, err)
-
-	result, err := tool.Execute(context.Background(), params)
-	if err != nil {
-		t.Fatalf("Execute() returned error: %v", err)
+	tests := []struct {
+		name       string
+		command    string
+		wantOutput string
+	}{
+		{"pipe command", "ls | grep test", "Is shell command: true"},
+		{"simple command", "ls -la", "Is shell command: false"},
 	}
 
-	if !result.Success {
-		t.Errorf("Expected success, got failure: %s", result.Error)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			tool := NewShellCommandTool(nil, nil, nil)
 
-	if result.Output != "Is shell command: true" {
-		t.Errorf("Output = %q, want 'Is shell command: true'", result.Output)
-	}
-}
+			params, err := FromMap(map[string]any{
+				"operation": "detect_shell",
+				"command":   tt.command,
+			})
+			require.NoError(t, err)
 
-// TestShellCommandTool_DetectShell_Simple tests detect_shell with simple command.
-func TestShellCommandTool_DetectShell_Simple(t *testing.T) {
-	t.Parallel()
-	tool := NewShellCommandTool(nil, nil, nil)
+			result, err := tool.Execute(context.Background(), params)
+			if err != nil {
+				t.Fatalf("Execute() returned error: %v", err)
+			}
 
-	params, err := FromMap(map[string]any{
-		"operation": "detect_shell",
-		"command":   "ls -la",
-	})
-	require.NoError(t, err)
+			if !result.Success {
+				t.Errorf("Expected success, got failure: %s", result.Error)
+			}
 
-	result, err := tool.Execute(context.Background(), params)
-	if err != nil {
-		t.Fatalf("Execute() returned error: %v", err)
-	}
-
-	if !result.Success {
-		t.Errorf("Expected success, got failure: %s", result.Error)
-	}
-
-	if result.Output != "Is shell command: false" {
-		t.Errorf("Output = %q, want 'Is shell command: false'", result.Output)
+			if result.Output != tt.wantOutput {
+				t.Errorf("Output = %q, want %q", result.Output, tt.wantOutput)
+			}
+		})
 	}
 }
 
@@ -705,102 +704,53 @@ func TestShellCommandTool_Validate_MissingCommand(t *testing.T) {
 	}
 }
 
-// TestShellCommandTool_Validate_Safe tests validate with safe command.
-func TestShellCommandTool_Validate_Safe(t *testing.T) {
+// TestShellCommandTool_Validate_Classifications tests validate with different classification levels.
+func TestShellCommandTool_Validate_Classifications(t *testing.T) {
 	t.Parallel()
-	validator := &mockValidatorShell{
-		classifyFunc: func(_ CommandInfo) (ValidationResult, error) {
-			return &mockClassificationResult{
-				Classification: 0, // Safe.
-				Reason:         "read-only command",
-			}, nil
-		},
-	}
-	tool := NewShellCommandTool(validator, nil, nil)
 
-	params, err := FromMap(map[string]any{
-		"operation": "validate",
-		"command":   "ls -la",
-	})
-	require.NoError(t, err)
-
-	result, err := tool.Execute(context.Background(), params)
-	if err != nil {
-		t.Fatalf("Execute() returned error: %v", err)
+	tests := []struct {
+		name           string
+		classification int
+		reason         string
+		command        string
+	}{
+		{"safe", 0, "read-only command", "ls -la"},
+		{"dangerous", 1, "modifies filesystem", "rm -rf /tmp/test"},
+		{"critical", 2, "requires elevated privileges", "sudo rm -rf /"},
 	}
 
-	if !result.Success {
-		t.Errorf("Expected success, got failure: %s", result.Error)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			validator := &mockValidatorShell{
+				classifyFunc: func(_ CommandInfo) (ValidationResult, error) {
+					return &mockClassificationResult{
+						Classification: tt.classification,
+						Reason:         tt.reason,
+					}, nil
+				},
+			}
+			tool := NewShellCommandTool(validator, nil, nil)
 
-	if result.Output == "" {
-		t.Error("Expected non-empty output")
-	}
-}
+			params, err := FromMap(map[string]any{
+				"operation": "validate",
+				"command":   tt.command,
+			})
+			require.NoError(t, err)
 
-// TestShellCommandTool_Validate_Dangerous tests validate with dangerous command.
-func TestShellCommandTool_Validate_Dangerous(t *testing.T) {
-	t.Parallel()
-	validator := &mockValidatorShell{
-		classifyFunc: func(_ CommandInfo) (ValidationResult, error) {
-			return &mockClassificationResult{
-				Classification: 1, // Dangerous.
-				Reason:         "modifies filesystem",
-			}, nil
-		},
-	}
-	tool := NewShellCommandTool(validator, nil, nil)
+			result, err := tool.Execute(context.Background(), params)
+			if err != nil {
+				t.Fatalf("Execute() returned error: %v", err)
+			}
 
-	params, err := FromMap(map[string]any{
-		"operation": "validate",
-		"command":   "rm -rf /tmp/test",
-	})
-	require.NoError(t, err)
+			if !result.Success {
+				t.Errorf("Expected success, got failure: %s", result.Error)
+			}
 
-	result, err := tool.Execute(context.Background(), params)
-	if err != nil {
-		t.Fatalf("Execute() returned error: %v", err)
-	}
-
-	if !result.Success {
-		t.Errorf("Expected success, got failure: %s", result.Error)
-	}
-
-	if result.Output == "" {
-		t.Error("Expected non-empty output")
-	}
-}
-
-// TestShellCommandTool_Validate_Critical tests validate with critical command.
-func TestShellCommandTool_Validate_Critical(t *testing.T) {
-	t.Parallel()
-	validator := &mockValidatorShell{
-		classifyFunc: func(_ CommandInfo) (ValidationResult, error) {
-			return &mockClassificationResult{
-				Classification: 2, // Critical.
-				Reason:         "requires elevated privileges",
-			}, nil
-		},
-	}
-	tool := NewShellCommandTool(validator, nil, nil)
-
-	params, err := FromMap(map[string]any{
-		"operation": "validate",
-		"command":   "sudo rm -rf /",
-	})
-	require.NoError(t, err)
-
-	result, err := tool.Execute(context.Background(), params)
-	if err != nil {
-		t.Fatalf("Execute() returned error: %v", err)
-	}
-
-	if !result.Success {
-		t.Errorf("Expected success, got failure: %s", result.Error)
-	}
-
-	if result.Output == "" {
-		t.Error("Expected non-empty output")
+			if result.Output == "" {
+				t.Error("Expected non-empty output")
+			}
+		})
 	}
 }
 

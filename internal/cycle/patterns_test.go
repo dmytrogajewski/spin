@@ -56,8 +56,16 @@ func TestPatternDetector_AnalyzePatterns(t *testing.T) {
 	}
 }
 
-func TestPatternDetector_AnalyzePatterns_RepeatedPhrase(t *testing.T) {
-	t.Parallel()
+// patternDetectionCase describes a test case for pattern detection.
+type patternDetectionCase struct {
+	name           string
+	snapshots      []Snapshot
+	wantType       PatternType
+	wantConfidence float64 // -1 means "any positive"
+}
+
+func runPatternDetectionTests(t *testing.T, cases []patternDetectionCase) {
+	t.Helper()
 
 	config := Config{
 		Enabled:          true,
@@ -66,98 +74,80 @@ func TestPatternDetector_AnalyzePatterns_RepeatedPhrase(t *testing.T) {
 		ToolRepeatLimit:  3,
 		ErrorRepeatLimit: 2,
 	}
-
 	detector := NewPatternDetector(config)
 
-	// Test with repeated phrases.
-	snapshots := []Snapshot{
-		{Turn: 1, Response: "This is a test response with repeated phrase", ToolCalls: []string{}, Error: ""},
-		{Turn: 2, Response: "Another response with repeated phrase", ToolCalls: []string{}, Error: ""},
-		{Turn: 3, Response: "Third response with repeated phrase", ToolCalls: []string{}, Error: ""},
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			results := detector.analyzeInternal(tt.snapshots)
+
+			found := false
+			for _, result := range results {
+				if result.Type != tt.wantType {
+					continue
+				}
+
+				found = true
+
+				if tt.wantConfidence < 0 {
+					if result.Confidence <= 0.0 {
+						t.Errorf("confidence = %f, want > 0.0", result.Confidence)
+					}
+				} else if result.Confidence != tt.wantConfidence {
+					t.Errorf("confidence = %f, want %f", result.Confidence, tt.wantConfidence)
+				}
+
+				if result.Details == "" {
+					t.Errorf("details should not be empty")
+				}
+
+				if result.Suggestion == "" {
+					t.Errorf("suggestion should not be empty")
+				}
+
+				break
+			}
+
+			if !found {
+				t.Errorf("should detect %v pattern", tt.wantType)
+			}
+		})
 	}
+}
 
-	results := detector.analyzeInternal(snapshots)
+func TestPatternDetector_AnalyzePatterns_RepeatedPhrase(t *testing.T) {
+	t.Parallel()
 
-	// Should detect repeated phrase pattern.
-	found := false
-
-	for _, result := range results {
-		if result.Type != PatternRepeatedPhrase {
-			continue
-		}
-
-		found = true
-
-		if result.Confidence <= 0.0 {
-			t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase confidence = %f, want > 0.0", result.Confidence)
-		}
-
-		if result.Details == "" {
-			t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase details should not be empty")
-		}
-
-		if result.Suggestion == "" {
-			t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase suggestion should not be empty")
-		}
-
-		break
-	}
-
-	if !found {
-		t.Errorf("PatternDetector.AnalyzePatterns() should detect repeated phrase pattern")
-	}
+	runPatternDetectionTests(t, []patternDetectionCase{
+		{
+			name: "repeated phrases",
+			snapshots: []Snapshot{
+				{Turn: 1, Response: "This is a test response with repeated phrase", ToolCalls: []string{}, Error: ""},
+				{Turn: 2, Response: "Another response with repeated phrase", ToolCalls: []string{}, Error: ""},
+				{Turn: 3, Response: "Third response with repeated phrase", ToolCalls: []string{}, Error: ""},
+			},
+			wantType:       PatternRepeatedPhrase,
+			wantConfidence: -1, // Any positive.
+		},
+	})
 }
 
 func TestPatternDetector_AnalyzePatterns_CircularReasoning(t *testing.T) {
 	t.Parallel()
 
-	config := Config{
-		Enabled:          true,
-		WindowSize:       5,
-		SimilarityThresh: 0.8,
-		ToolRepeatLimit:  3,
-		ErrorRepeatLimit: 2,
-	}
-
-	detector := NewPatternDetector(config)
-
-	// Test with circular reasoning indicators.
-	snapshots := []Snapshot{
-		{Turn: 1, Response: "As I mentioned before, this is important", ToolCalls: []string{}, Error: ""},
-		{Turn: 2, Response: "Going back to the previous point", ToolCalls: []string{}, Error: ""},
-		{Turn: 3, Response: "As we saw earlier, this pattern continues", ToolCalls: []string{}, Error: ""},
-	}
-
-	results := detector.analyzeInternal(snapshots)
-
-	// Should detect circular reasoning pattern.
-	found := false
-
-	for _, result := range results {
-		if result.Type != PatternCircularReasoning {
-			continue
-		}
-
-		found = true
-
-		if result.Confidence != 0.7 {
-			t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning confidence = %f, want 0.7", result.Confidence)
-		}
-
-		if result.Details == "" {
-			t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning details should not be empty")
-		}
-
-		if result.Suggestion == "" {
-			t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning suggestion should not be empty")
-		}
-
-		break
-	}
-
-	if !found {
-		t.Errorf("PatternDetector.AnalyzePatterns() should detect circular reasoning pattern")
-	}
+	runPatternDetectionTests(t, []patternDetectionCase{
+		{
+			name: "circular reasoning",
+			snapshots: []Snapshot{
+				{Turn: 1, Response: "As I mentioned before, this is important", ToolCalls: []string{}, Error: ""},
+				{Turn: 2, Response: "Going back to the previous point", ToolCalls: []string{}, Error: ""},
+				{Turn: 3, Response: "As we saw earlier, this pattern continues", ToolCalls: []string{}, Error: ""},
+			},
+			wantType:       PatternCircularReasoning,
+			wantConfidence: 0.7,
+		},
+	})
 }
 
 func TestPatternDetector_AnalyzePatterns_ToolStuck(t *testing.T) {

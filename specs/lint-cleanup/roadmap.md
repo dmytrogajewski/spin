@@ -332,25 +332,25 @@ High-value fixes that improve reliability.
 
 ## Wave 9: Architecture & Interface Cleanup (est. ~200 issues)
 
-- [ ] **9.1 — `ireturn` interface returns** (~69 issues)
+- [x] **9.1 — `ireturn` interface returns** (~69 issues)
   - **Description:** Return concrete types instead of interfaces where possible.
   - **DoR:** Wave 8 complete
   - **DoD:** 0 ireturn issues; `make test` passes
   - **`//nolint` prohibited** — change return types to concrete types
 
-- [ ] **9.2 — `iface` interface hygiene** (~24 issues)
+- [x] **9.2 — `iface` interface hygiene** (~24 issues)
   - **Description:** Remove identical/unused/opaque interfaces.
   - **DoR:** 9.1 complete
   - **DoD:** 0 iface issues
   - **`//nolint` prohibited** — remove or consolidate interfaces
 
-- [ ] **9.3 — `interfacebloat` large interfaces** (~6 issues)
+- [x] **9.3 — `interfacebloat` large interfaces** (~6 issues)
   - **Description:** Split interfaces with >5 methods into focused role interfaces (ISP).
   - **DoR:** 9.2 complete
   - **DoD:** 0 interfacebloat issues
   - **`//nolint` prohibited** — decompose interfaces
 
-- [ ] **9.4 — `dupl` code duplication** (~107 issues)
+- [x] **9.4 — `dupl` code duplication** (~107 issues)
   - **Description:** Extract shared logic from duplicate code blocks (>100 token threshold).
   - **DoR:** 9.3 complete
   - **DoD:** 0 dupl issues; `make test` passes

@@ -209,14 +209,9 @@ func TestMockProvider_Complete(t *testing.T) {
 		testCompleteBasic(t)
 	})
 
-	t.Run("context cancellation", func(t *testing.T) {
-		t.Parallel()
-		testCompleteCancellation(t)
-	})
-
-	t.Run("timeout", func(t *testing.T) {
-		t.Parallel()
-		testCompleteTimeout(t)
+	testContextErrorCases(t, "Complete", func(p *MockProvider, ctx context.Context) error {
+		_, err := p.Complete(ctx, testParams())
+		return err
 	})
 
 	t.Run("with error", func(t *testing.T) {
@@ -261,34 +256,39 @@ func testCompleteBasic(t *testing.T) {
 	}
 }
 
-func testCompleteCancellation(t *testing.T) {
+// testContextErrorCases runs context cancellation and timeout subtests for a MockProvider operation.
+func testContextErrorCases(t *testing.T, opName string, op func(p *MockProvider, ctx context.Context) error) {
 	t.Helper()
 
-	p := NewMockProvider("test", WithDelay(100*time.Millisecond))
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	t.Run("context cancellation", func(t *testing.T) {
+		t.Parallel()
 
-	_, err := p.Complete(ctx, testParams())
-	if err == nil {
-		t.Error("Expected context cancellation error")
-	}
+		p := NewMockProvider("test", WithDelay(100*time.Millisecond))
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
 
-	if !errors.Is(err, context.Canceled) {
-		t.Errorf("Error = %v, want context.Canceled", err)
-	}
-}
+		err := op(p, ctx)
+		if err == nil {
+			t.Errorf("%s: Expected context cancellation error", opName)
+		}
 
-func testCompleteTimeout(t *testing.T) {
-	t.Helper()
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("%s: Error = %v, want context.Canceled", opName, err)
+		}
+	})
 
-	p := NewMockProvider("test", WithDelay(100*time.Millisecond))
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	defer cancel()
+	t.Run("timeout", func(t *testing.T) {
+		t.Parallel()
 
-	_, err := p.Complete(ctx, testParams())
-	if err == nil {
-		t.Error("Expected timeout error")
-	}
+		p := NewMockProvider("test", WithDelay(100*time.Millisecond))
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+
+		err := op(p, ctx)
+		if err == nil {
+			t.Errorf("%s: Expected timeout error", opName)
+		}
+	})
 }
 
 func TestMockProvider_Stream(t *testing.T) {
@@ -304,7 +304,7 @@ func TestMockProvider_Stream(t *testing.T) {
 		testStreamToolCalls(t)
 	})
 
-	t.Run("context cancellation", func(t *testing.T) {
+	t.Run("stream context cancellation", func(t *testing.T) {
 		t.Parallel()
 		testStreamCancellation(t)
 	})

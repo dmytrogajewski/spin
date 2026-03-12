@@ -184,90 +184,76 @@ func verifyFullProtocolSection(t *testing.T, cfg *V2) {
 	}
 }
 
+// goldenValidationCase defines a test case for golden file validation.
+type goldenValidationCase struct {
+	name         string
+	file         string
+	failMessage  string
+	wantSubstrs  []string
+}
+
+func runGoldenValidationTests(t *testing.T, cases []goldenValidationCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join("golden", tt.file)
+
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("Failed to read golden file: %v", err)
+			}
+
+			var cfg V2
+			err = yaml.Unmarshal(data, &cfg)
+			if err != nil {
+				t.Fatalf("Failed to unmarshal: %v", err)
+			}
+
+			err = cfg.Validate()
+			if err == nil {
+				t.Fatal(tt.failMessage)
+			}
+
+			errStr := err.Error()
+
+			for _, substr := range tt.wantSubstrs {
+				if !strings.Contains(errStr, substr) {
+					t.Errorf("Expected error about %q, got: %v", substr, errStr)
+				}
+			}
+		})
+	}
+}
+
 // TestGolden_InvalidMissingRequired tests that missing required fields are detected.
 func TestGolden_InvalidMissingRequired(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join("golden", "invalid_missing_required.yaml")
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("Failed to read golden file: %v", err)
-	}
-
-	var cfg V2
-	err = yaml.Unmarshal(data, &cfg)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal: %v", err)
-	}
-
-	err = cfg.Validate()
-	if err == nil {
-		t.Fatal("Expected validation to fail for missing required fields")
-	}
-
-	errStr := err.Error()
-
-	// Should report multiple errors - when fields are missing, zero values are used
-	// which fail validation.
-	if !strings.Contains(errStr, "provider") {
-		t.Errorf("Expected error about missing provider, got: %v", errStr)
-	}
-
-	if !strings.Contains(errStr, "max_turns") {
-		t.Errorf("Expected error about missing max_turns, got: %v", errStr)
-	}
-	// Note: sandbox_mode validation only checks if it's one of valid values when non-empty
-	// Zero value (empty string) would need explicit required check.
-	if !strings.Contains(errStr, "max_tokens") {
-		t.Errorf("Expected error about missing max_tokens, got: %v", errStr)
-	}
-
-	if !strings.Contains(errStr, "work_dir") {
-		t.Errorf("Expected error about missing work_dir, got: %v", errStr)
-	}
+	runGoldenValidationTests(t, []goldenValidationCase{
+		{
+			name:        "missing required",
+			file:        "invalid_missing_required.yaml",
+			failMessage: "Expected validation to fail for missing required fields",
+			wantSubstrs: []string{"provider", "max_turns", "max_tokens", "work_dir"},
+		},
+	})
 }
 
 // TestGolden_InvalidBadValues tests that invalid field values are detected.
 func TestGolden_InvalidBadValues(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join("golden", "invalid_bad_values.yaml")
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("Failed to read golden file: %v", err)
-	}
-
-	var cfg V2
-	err = yaml.Unmarshal(data, &cfg)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal: %v", err)
-	}
-
-	err = cfg.Validate()
-	if err == nil {
-		t.Fatal("Expected validation to fail for invalid values")
-	}
-
-	errStr := err.Error()
-
-	// Should report multiple validation errors.
-	if !strings.Contains(errStr, "provider") {
-		t.Errorf("Expected error about provider, got: %v", errStr)
-	}
-
-	if !strings.Contains(errStr, "temperature") {
-		t.Errorf("Expected error about invalid temperature, got: %v", errStr)
-	}
-
-	if !strings.Contains(errStr, "max_turns") {
-		t.Errorf("Expected error about invalid max_turns, got: %v", errStr)
-	}
-
-	if !strings.Contains(errStr, "sandbox_mode") {
-		t.Errorf("Expected error about invalid sandbox_mode, got: %v", errStr)
-	}
+	runGoldenValidationTests(t, []goldenValidationCase{
+		{
+			name:        "bad values",
+			file:        "invalid_bad_values.yaml",
+			failMessage: "Expected validation to fail for invalid values",
+			wantSubstrs: []string{"provider", "temperature", "max_turns", "sandbox_mode"},
+		},
+	})
 }
 
 // TestGolden_InvalidCrossSection tests cross-section validation rules.

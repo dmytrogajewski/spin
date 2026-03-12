@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
 
 	"github.com/mark3labs/mcp-go/client"
@@ -212,57 +211,10 @@ func (r *LocalRegistry) Execute(ctx context.Context, toolName string, args json.
 	r.mu.RUnlock()
 
 	if !exists {
-return tools.ToolResult{}, fmt.Errorf("tool not found: %s: %w", toolName, ErrToolNotFound)
+		return tools.ToolResult{}, fmt.Errorf("tool not found: %s: %w", toolName, ErrToolNotFound)
 	}
 
-	// Parse arguments.
-	var argsMap map[string]any
-	if len(args) > 0 {
-		err := json.Unmarshal(args, &argsMap)
-		if err != nil {
-			return tools.ToolResult{
-				Success: false,
-				Error:   fmt.Sprintf("invalid arguments: %v", err),
-			}, nil
-		}
-	}
-
-	// Call tool.
-	callReq := mcpSDK.CallToolRequest{
-		Params: mcpSDK.CallToolParams{
-			Name:      mcpTool.Tool.Name,
-			Arguments: argsMap,
-		},
-	}
-
-	resp, callErr := mcpClient.CallTool(ctx, callReq)
-	if callErr != nil {
-		return tools.ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("tool call failed: %v", callErr),
-		}, nil
-	}
-
-	if resp.IsError {
-		return tools.ToolResult{
-			Success: false,
-			Error:   "tool execution failed",
-		}, nil
-	}
-
-	// Convert response.
-	var output strings.Builder
-
-	for _, content := range resp.Content {
-		if textContent, ok := mcpSDK.AsTextContent(content); ok {
-			output.WriteString(textContent.Text)
-		}
-	}
-
-	return tools.ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return executeMCPTool(ctx, mcpClient, mcpTool, args)
 }
 
 // Close closes the registry and releases resources.
@@ -305,64 +257,12 @@ func (w *registryToolWrapper) Name() string {
 
 // Description implements the Description operation.
 func (w *registryToolWrapper) Description() string {
-	if w.mcpTool.Tool.Description != "" {
-		return w.mcpTool.Tool.Description
-	}
-
-	return fmt.Sprintf("MCP tool: %s", w.mcpTool.Tool.Name)
+	return toolDescription(w.mcpTool)
 }
 
 // Schema implements the Schema operation.
 func (w *registryToolWrapper) Schema() tools.ToolSchema {
-	// Marshal tool's InputSchema to JSON for parsing.
-	schemaBytes, err := json.Marshal(w.mcpTool.Tool.InputSchema)
-	if err != nil {
-		return w.fallbackSchema()
-	}
-
-	// Parse as structured JSON Schema.
-	var mcpSchema JSONSchema
-	err = json.Unmarshal(schemaBytes, &mcpSchema)
-	if err != nil {
-		return w.fallbackSchema()
-	}
-
-	// Convert properties.
-	properties := make(map[string]tools.PropertyDefinition)
-	for name, prop := range mcpSchema.Properties {
-		properties[name] = tools.PropertyDefinition{
-			Type:        prop.Type,
-			Description: prop.Description,
-		}
-	}
-
-	return tools.ToolSchema{
-		Type: "function",
-		Function: tools.FunctionSchema{
-			Name:        w.Name(),
-			Description: w.Description(),
-			Parameters: tools.ParameterSchema{
-				Type:       "object",
-				Properties: properties,
-				Required:   mcpSchema.Required,
-			},
-		},
-	}
-}
-
-func (w *registryToolWrapper) fallbackSchema() tools.ToolSchema {
-	return tools.ToolSchema{
-		Type: "function",
-		Function: tools.FunctionSchema{
-			Name:        w.Name(),
-			Description: w.Description(),
-			Parameters: tools.ParameterSchema{
-				Type:       "object",
-				Properties: make(map[string]tools.PropertyDefinition),
-				Required:   []string{},
-			},
-		},
-	}
+	return buildToolSchema(w, w.mcpTool)
 }
 
 // Execute implements the Execute operation.

@@ -213,44 +213,45 @@ func TestMemoryTool_Search(t *testing.T) {
 	assert.Contains(t, result.Output, "api-response")
 }
 
-func TestMemoryTool_InvalidOperation(t *testing.T) {
+func TestMemoryTool_BadOperation(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
-	require.NoError(t, err)
 
-	tool := NewMemoryTool(store)
+	tests := []struct {
+		name      string
+		params    map[string]any
+		wantError string
+	}{
+		{
+			name:      "invalid operation",
+			params:    map[string]any{"operation": "invalid"},
+			wantError: "unknown operation",
+		},
+		{
+			name:      "missing operation",
+			params:    map[string]any{"key": "test"},
+			wantError: "operation",
+		},
+	}
 
-	params, err := FromMap(map[string]any{
-		"operation": "invalid",
-	})
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+			tmpDir := t.TempDir()
+			store, err := memory.NewPersistentStore(tmpDir)
+			require.NoError(t, err)
 
-	result, err := tool.Execute(ctx, params)
-	require.NoError(t, err)
-	assert.False(t, result.Success)
-	assert.Contains(t, result.Error, "unknown operation")
-}
+			tool := NewMemoryTool(store)
 
-func TestMemoryTool_MissingOperation(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
-	require.NoError(t, err)
+			params, err := FromMap(tt.params)
+			require.NoError(t, err)
 
-	tool := NewMemoryTool(store)
-
-	params, err := FromMap(map[string]any{
-		"key": "test",
-	})
-	require.NoError(t, err)
-
-	result, err := tool.Execute(ctx, params)
-	require.NoError(t, err)
-	assert.False(t, result.Success)
-	assert.Contains(t, result.Error, "operation")
+			result, err := tool.Execute(ctx, params)
+			require.NoError(t, err)
+			assert.False(t, result.Success)
+			assert.Contains(t, result.Error, tt.wantError)
+		})
+	}
 }
 
 func TestMemoryTool_Put_WithNamespace(t *testing.T) {

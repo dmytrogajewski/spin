@@ -277,56 +277,47 @@ func BenchmarkMatcher_Match_1000(b *testing.B) {
 
 // Enhanced scoring tests for Feature 3.2.
 
-func TestMatcher_Score_ExactFilenameMatch(t *testing.T) {
-	t.Parallel()
+// exactScoreCase describes a test case where we expect an exact score.
+type exactScoreCase struct {
+	name  string
+	query string
+	path  string
+	want  int
+}
 
-	m := NewMatcher(false)
+func runExactScoreTests(t *testing.T, m *Matcher, cases []exactScoreCase, msg string) {
+	t.Helper()
 
-	tests := []struct {
-		name  string
-		query string
-		path  string
-		want  int
-	}{
-		{"exact match", "main.go", "main.go", 100},
-		{"exact match with path", "main.go", "src/main.go", 100},
-		{"exact match nested", "config.toml", "internal/config/config.toml", 100},
-	}
-
-	for _, tt := range tests {
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			score, _ := m.Score(tt.query, tt.path)
-			assert.Equal(t, tt.want, score, "Expected exact match score of 100")
+			assert.Equal(t, tt.want, score, msg)
 		})
 	}
+}
+
+func TestMatcher_Score_ExactFilenameMatch(t *testing.T) {
+	t.Parallel()
+
+	m := NewMatcher(false)
+	runExactScoreTests(t, m, []exactScoreCase{
+		{"exact match", "main.go", "main.go", 100},
+		{"exact match with path", "main.go", "src/main.go", 100},
+		{"exact match nested", "config.toml", "internal/config/config.toml", 100},
+	}, "Expected exact match score of 100")
 }
 
 func TestMatcher_Score_FilenamePrefix(t *testing.T) {
 	t.Parallel()
 
 	m := NewMatcher(false)
-
-	tests := []struct {
-		name  string
-		query string
-		path  string
-		want  int
-	}{
+	runExactScoreTests(t, m, []exactScoreCase{
 		{"prefix match", "config", "config.toml", 90},
 		{"prefix match with path", "test", "src/test_utils.go", 90},
 		{"prefix match nested", "app", "internal/app/application.go", 90},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			score, _ := m.Score(tt.query, tt.path)
-			assert.Equal(t, tt.want, score, "Expected filename prefix score of 90")
-		})
-	}
+	}, "Expected filename prefix score of 90")
 }
 
 func TestMatcher_Score_FilenameContains(t *testing.T) {
@@ -362,24 +353,30 @@ func TestMatcher_Score_PathSegmentMatch(t *testing.T) {
 	t.Parallel()
 
 	m := NewMatcher(false)
-
-	tests := []struct {
-		name  string
-		query string
-		path  string
-		want  int
-	}{
+	runExactScoreTests(t, m, []exactScoreCase{
 		{"exact segment", "src", "src/main.go", 60},
 		{"segment prefix", "int", "internal/agent.go", 50},
 		{"nested segment", "app", "src/app/handler.go", 60},
-	}
+	}, "Expected path segment score")
+}
 
-	for _, tt := range tests {
+// minScoreCase describes a test case where we expect at least a minimum score.
+type minScoreCase struct {
+	name     string
+	query    string
+	path     string
+	minScore int
+}
+
+func runMinScoreTests(t *testing.T, m *Matcher, cases []minScoreCase, msg string) {
+	t.Helper()
+
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			score, _ := m.Score(tt.query, tt.path)
-			assert.Equal(t, tt.want, score, "Expected path segment score")
+			assert.GreaterOrEqual(t, score, tt.minScore, msg, tt.minScore)
 		})
 	}
 }
@@ -388,50 +385,20 @@ func TestMatcher_Score_FuzzyConsecutive(t *testing.T) {
 	t.Parallel()
 
 	m := NewMatcher(false)
-
-	tests := []struct {
-		name     string
-		query    string
-		path     string
-		minScore int
-	}{
+	runMinScoreTests(t, m, []minScoreCase{
 		{"consecutive chars", "cfg", "config.go", 40},
 		{"multiple consecutive", "tst", "test.go", 40},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			score, _ := m.Score(tt.query, tt.path)
-			assert.GreaterOrEqual(t, score, tt.minScore, "Fuzzy consecutive should score at least %d", tt.minScore)
-		})
-	}
+	}, "Fuzzy consecutive should score at least %d")
 }
 
 func TestMatcher_Score_FuzzyScattered(t *testing.T) {
 	t.Parallel()
 
 	m := NewMatcher(false)
-
-	tests := []struct {
-		name     string
-		query    string
-		path     string
-		minScore int
-	}{
+	runMinScoreTests(t, m, []minScoreCase{
 		{"scattered chars", "mgo", "main.go", 20},
 		{"widely scattered", "abc", "a/b/c.txt", 20},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			score, _ := m.Score(tt.query, tt.path)
-			assert.GreaterOrEqual(t, score, tt.minScore, "Fuzzy scattered should score at least %d", tt.minScore)
-		})
-	}
+	}, "Fuzzy scattered should score at least %d")
 }
 
 func TestMatcher_Score_Ranking(t *testing.T) {

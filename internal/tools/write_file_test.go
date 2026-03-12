@@ -150,21 +150,17 @@ func TestWriteFileTool_ErrorCases(t *testing.T) {
 	}
 }
 
-func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
-	t.Parallel()
-	tool := NewWriteFileTool()
+// writeFileApprovalCase describes a test case for write file approval checking.
+type writeFileApprovalCase struct {
+	name string
+	path string
+	want RiskLevel
+}
 
-	tests := []struct {
-		name string
-		path string
-		want RiskLevel
-	}{
-		{"etc directory", "/etc/config.conf", RiskCritical},
-		{"sys directory", "/sys/kernel/param", RiskCritical},
-		{"usr directory", "/usr/bin/script", RiskCritical},
-	}
+func runWriteFileApprovalTests(t *testing.T, tool *WriteFileTool, cases []writeFileApprovalCase) {
+	t.Helper()
 
-	for _, tt := range tests {
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			params, _ := FromMap(map[string]any{
@@ -175,7 +171,7 @@ func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
 			needs := tool.CheckApproval(params)
 
 			if !needs.Required {
-				t.Error("CheckApproval should require approval for system paths")
+				t.Errorf("CheckApproval should require approval for %s", tt.path)
 			}
 
 			if needs.Risk != tt.want {
@@ -187,82 +183,34 @@ func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
+	t.Parallel()
+	tool := NewWriteFileTool()
+	runWriteFileApprovalTests(t, tool, []writeFileApprovalCase{
+		{"etc directory", "/etc/config.conf", RiskCritical},
+		{"sys directory", "/sys/kernel/param", RiskCritical},
+		{"usr directory", "/usr/bin/script", RiskCritical},
+	})
 }
 
 func TestWriteFileTool_CheckApproval_RegularFiles(t *testing.T) {
 	t.Parallel()
 	tool := NewWriteFileTool()
-
-	tests := []struct {
-		name string
-		path string
-		want RiskLevel
-	}{
+	runWriteFileApprovalTests(t, tool, []writeFileApprovalCase{
 		{"text file", "/tmp/notes.txt", RiskMedium},
 		{"markdown", "/tmp/README.md", RiskMedium},
 		{"json file", "/tmp/config.json", RiskMedium},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			params, _ := FromMap(map[string]any{
-				"path":    tt.path,
-				"content": "test",
-			})
-
-			needs := tool.CheckApproval(params)
-
-			if !needs.Required {
-				t.Error("CheckApproval should require approval for file writes")
-			}
-
-			if needs.Risk != tt.want {
-				t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, tt.want)
-			}
-
-			if needs.Reason == "" {
-				t.Error("CheckApproval should provide a reason")
-			}
-		})
-	}
+	})
 }
 
 func TestWriteFileTool_CheckApproval_ExecutableFiles(t *testing.T) {
 	t.Parallel()
 	tool := NewWriteFileTool()
-
-	tests := []struct {
-		name string
-		path string
-		want RiskLevel
-	}{
+	runWriteFileApprovalTests(t, tool, []writeFileApprovalCase{
 		{"shell script", "/tmp/script.sh", RiskHigh},
 		{"go source", "/tmp/main.go", RiskHigh},
 		{"python script", "/tmp/script.py", RiskHigh},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			params, _ := FromMap(map[string]any{
-				"path":    tt.path,
-				"content": "test",
-			})
-
-			needs := tool.CheckApproval(params)
-
-			if !needs.Required {
-				t.Error("CheckApproval should require approval for executable files")
-			}
-
-			if needs.Risk != tt.want {
-				t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, tt.want)
-			}
-
-			if needs.Reason == "" {
-				t.Error("CheckApproval should provide a reason")
-			}
-		})
-	}
+	})
 }

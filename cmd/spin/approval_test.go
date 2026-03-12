@@ -12,32 +12,51 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 )
 
-func TestApproval_List_Empty(t *testing.T) {
-	t.Parallel()
+// setupApprovalTest creates a test config and returns the config path, policy path, and tmpDir.
+func setupApprovalTest(t *testing.T, extraConfig string) (configPath, policyPath, tmpDir string) {
+	t.Helper()
 
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "spin.yaml")
+	tmpDir = t.TempDir()
+	configPath = filepath.Join(tmpDir, "spin.yaml")
+	policyPath = filepath.Join(tmpDir, "policies.json")
 
-	policyPath := filepath.Join(tmpDir, "policies.json")
-	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0o600)
+	configContent := "version: \"2.0\"\nsecurity:\n  policy_file: " + policyPath + "\n" + extraConfig
+
+	err := os.WriteFile(configPath, []byte(configContent), 0o600)
 	if err != nil {
 		t.Fatalf("write config: %v", err)
 	}
+
+	return configPath, policyPath, tmpDir
+}
+
+// runApprovalCmd executes an approval subcommand and returns the output.
+func runApprovalCmd(t *testing.T, configPath string, args ...string) string {
+	t.Helper()
 
 	root := newRootCmd()
 
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)
-	root.SetArgs([]string{"--config-file", configPath, "approval", "list", "--scope", "global"})
+	root.SetArgs(append([]string{"--config-file", configPath}, args...))
 
-	err = root.Execute()
+	err := root.Execute()
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
 
-	if !strings.Contains(out.String(), "No policies found.") {
-		t.Fatalf("expected 'No policies found.' got: %s", out.String())
+	return out.String()
+}
+
+func TestApproval_List_Empty(t *testing.T) {
+	t.Parallel()
+
+	configPath, _, _ := setupApprovalTest(t, "")
+	got := runApprovalCmd(t, configPath, "approval", "list", "--scope", "global")
+
+	if !strings.Contains(got, "No policies found.") {
+		t.Fatalf("expected 'No policies found.' got: %s", got)
 	}
 }
 
@@ -132,28 +151,10 @@ func TestApproval_Revoke_NonExistent(t *testing.T) {
 func TestApproval_Clear_Empty(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "spin.yaml")
+	configPath, _, _ := setupApprovalTest(t, "")
+	got := runApprovalCmd(t, configPath, "approval", "clear", "--scope", "global")
 
-	policyPath := filepath.Join(tmpDir, "policies.json")
-	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0o600)
-	if err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	root := newRootCmd()
-
-	var out bytes.Buffer
-	root.SetOut(&out)
-	root.SetErr(&out)
-	root.SetArgs([]string{"--config-file", configPath, "approval", "clear", "--scope", "global"})
-
-	err = root.Execute()
-	if err != nil {
-		t.Fatalf("execute: %v", err)
-	}
-
-	if !strings.Contains(out.String(), "Cleared 0 policies.") {
-		t.Fatalf("expected cleared 0, got: %s", out.String())
+	if !strings.Contains(got, "Cleared 0 policies.") {
+		t.Fatalf("expected cleared 0, got: %s", got)
 	}
 }

@@ -222,32 +222,53 @@ func TestHybridCompressor_MinRetention(t *testing.T) {
 	}
 }
 
+// compressPreserveCase describes a test case for compress-and-preserve-count tests.
+type compressPreserveCase struct {
+	name      string
+	config    CompressorConfig
+	messages  []message.Message
+	budget    int
+	wantCount int
+}
+
+func runCompressPreserveTests(t *testing.T, cases []compressPreserveCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := NewHybridCompressor(nil, tt.config)
+			tok := &tokenizer.SimpleTokenizer{}
+
+			result, err := c.Compress(context.Background(), tt.messages, tt.budget, tok)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if len(result) != tt.wantCount {
+				t.Errorf("expected %d messages, got %d", tt.wantCount, len(result))
+			}
+		})
+	}
+}
+
 func TestHybridCompressor_AllCritical(t *testing.T) {
 	t.Parallel()
 
-	c := NewHybridCompressor(nil, CompressorConfig{
-		PreserveCritical: true,
-		MinRetention:     0,
+	runCompressPreserveTests(t, []compressPreserveCase{
+		{
+			name:   "all critical preserved",
+			config: CompressorConfig{PreserveCritical: true, MinRetention: 0},
+			messages: []message.Message{
+				{Role: message.RoleUser, Content: "User 1", Tokens: 100},
+				{Role: message.RoleUser, Content: "User 2", Tokens: 100},
+				{Role: message.RoleUser, Content: "User 3", Tokens: 100},
+			},
+			budget:    50,
+			wantCount: 3,
+		},
 	})
-	tok := &tokenizer.SimpleTokenizer{}
-
-	// All critical messages.
-	messages := []message.Message{
-		{Role: message.RoleUser, Content: "User 1", Tokens: 100},
-		{Role: message.RoleUser, Content: "User 2", Tokens: 100},
-		{Role: message.RoleUser, Content: "User 3", Tokens: 100},
-	}
-
-	// Budget too small for all.
-	result, err := c.Compress(context.Background(), messages, 50, tok)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// All critical should be preserved regardless of budget.
-	if len(result) != 3 {
-		t.Errorf("expected all 3 critical messages preserved, got %d", len(result))
-	}
 }
 
 func TestHybridCompressor_MixedImportance(t *testing.T) {
@@ -342,66 +363,54 @@ func TestHybridCompressor_TokenCalculation(t *testing.T) {
 	}
 }
 
-func TestStats_CompressionRatio(t *testing.T) {
-	t.Parallel()
+// statsRatioCase describes a test case for Stats ratio computation.
+type statsRatioCase struct {
+	name       string
+	original   int
+	compressed int
+	expected   float64
+}
 
-	tests := []struct {
-		name       string
-		original   int
-		compressed int
-		expected   float64
-	}{
-		{"no compression", 100, 100, 0.0},
-		{"50% compression", 100, 50, 0.5},
-		{"zero original", 0, 0, 0.0},
-	}
+func runStatsRatioTests(t *testing.T, cases []statsRatioCase, opName string, makeStats func(int, int) Stats, op func(Stats) float64) {
+	t.Helper()
 
-	for _, tt := range tests {
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			s := Stats{
-				OriginalTokens:   tt.original,
-				CompressedTokens: tt.compressed,
-			}
-
-			ratio := s.CompressionRatio()
-			if ratio != tt.expected {
-				t.Errorf("expected ratio %f, got %f", tt.expected, ratio)
+			s := makeStats(tt.original, tt.compressed)
+			got := op(s)
+			if got != tt.expected {
+				t.Errorf("%s() = %f, want %f", opName, got, tt.expected)
 			}
 		})
 	}
 }
 
+func TestStats_CompressionRatio(t *testing.T) {
+	t.Parallel()
+
+	runStatsRatioTests(t, []statsRatioCase{
+		{"no compression", 100, 100, 0.0},
+		{"50% compression", 100, 50, 0.5},
+		{"zero original", 0, 0, 0.0},
+	}, "CompressionRatio",
+		func(orig, comp int) Stats { return Stats{OriginalTokens: orig, CompressedTokens: comp} },
+		Stats.CompressionRatio,
+	)
+}
+
 func TestStats_MessageReduction(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name       string
-		original   int
-		compressed int
-		expected   float64
-	}{
+	runStatsRatioTests(t, []statsRatioCase{
 		{"no reduction", 10, 10, 0.0},
 		{"50% reduction", 10, 5, 0.5},
 		{"zero original", 0, 0, 0.0},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			s := Stats{
-				OriginalCount:   tt.original,
-				CompressedCount: tt.compressed,
-			}
-
-			reduction := s.MessageReduction()
-			if reduction != tt.expected {
-				t.Errorf("expected reduction %f, got %f", tt.expected, reduction)
-			}
-		})
-	}
+	}, "MessageReduction",
+		func(orig, comp int) Stats { return Stats{OriginalCount: orig, CompressedCount: comp} },
+		Stats.MessageReduction,
+	)
 }
 
 func TestDefaultCompressorConfig(t *testing.T) {
@@ -586,28 +595,19 @@ func TestHybridCompressor_WithSummarizer_NoRemoved(t *testing.T) {
 func TestHybridCompressor_EnforceMinRetention_AlreadySufficient(t *testing.T) {
 	t.Parallel()
 
-	c := NewHybridCompressor(nil, CompressorConfig{
-		PreserveCritical: true,
-		MinRetention:     0.3,
+	runCompressPreserveTests(t, []compressPreserveCase{
+		{
+			name:   "already sufficient retention",
+			config: CompressorConfig{PreserveCritical: true, MinRetention: 0.3},
+			messages: []message.Message{
+				{Role: message.RoleUser, Content: "1", Tokens: 10},
+				{Role: message.RoleUser, Content: "2", Tokens: 10},
+				{Role: message.RoleUser, Content: "3", Tokens: 10},
+			},
+			budget:    1000,
+			wantCount: 3,
+		},
 	})
-	tok := &tokenizer.SimpleTokenizer{}
-
-	// All critical messages.
-	messages := []message.Message{
-		{Role: message.RoleUser, Content: "1", Tokens: 10},
-		{Role: message.RoleUser, Content: "2", Tokens: 10},
-		{Role: message.RoleUser, Content: "3", Tokens: 10},
-	}
-
-	result, err := c.Compress(context.Background(), messages, 1000, tok)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// All should be kept (already > min retention).
-	if len(result) != 3 {
-		t.Errorf("expected 3 messages, got %d", len(result))
-	}
 }
 
 func TestHybridCompressor_EnforceMinRetention_TooManyInClassified(t *testing.T) {

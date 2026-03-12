@@ -86,69 +86,31 @@ func TestBuffer_Insert(t *testing.T) {
 	}
 }
 
-func TestBuffer_Backspace(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name       string
-		initial    string
-		cursor     int
-		wantText   string
-		wantCursor int
-		wantOk     bool
-	}{
-		{
-			name:       "backspace at start (no-op)",
-			initial:    "hello",
-			cursor:     0,
-			wantText:   "hello",
-			wantCursor: 0,
-			wantOk:     false,
-		},
-		{
-			name:       "backspace at end",
-			initial:    "hello",
-			cursor:     5,
-			wantText:   "hell",
-			wantCursor: 4,
-			wantOk:     true,
-		},
-		{
-			name:       "backspace in middle",
-			initial:    "hello",
-			cursor:     3,
-			wantText:   "helo",
-			wantCursor: 2,
-			wantOk:     true,
-		},
-		{
-			name:       "backspace on empty buffer",
-			initial:    "",
-			cursor:     0,
-			wantText:   "",
-			wantCursor: 0,
-			wantOk:     false,
-		},
-		{
-			name:       "backspace emoji",
-			initial:    "hello😀",
-			cursor:     6,
-			wantText:   "hello",
-			wantCursor: 5,
-			wantOk:     true,
-		},
-	}
+// bufferEditCase is a test case for buffer editing operations that modify text.
+type bufferEditCase struct {
+	name       string
+	initial    string
+	cursor     int
+	wantText   string
+	wantCursor int
+	wantOk     bool
+}
 
-	for _, tt := range tests {
+// runBufferEditTests runs a set of buffer editing test cases against the given operation.
+func runBufferEditTests(t *testing.T, cases []bufferEditCase, opName string, op func(*prompt.Buffer) bool) {
+	t.Helper()
+
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.initial)
 			b.SetCursor(tt.cursor)
 
-			ok := b.Backspace()
+			ok := op(b)
 
 			if ok != tt.wantOk {
-				t.Errorf("Backspace() = %v, want %v", ok, tt.wantOk)
+				t.Errorf("%s() = %v, want %v", opName, ok, tt.wantOk)
 			}
 
 			if got := b.Text(); got != tt.wantText {
@@ -162,73 +124,54 @@ func TestBuffer_Backspace(t *testing.T) {
 	}
 }
 
+func TestBuffer_Backspace(t *testing.T) {
+	t.Parallel()
+
+	runBufferEditTests(t, []bufferEditCase{
+		{"backspace at start (no-op)", "hello", 0, "hello", 0, false},
+		{"backspace at end", "hello", 5, "hell", 4, true},
+		{"backspace in middle", "hello", 3, "helo", 2, true},
+		{"backspace on empty buffer", "", 0, "", 0, false},
+		{"backspace emoji", "hello\U0001f600", 6, "hello", 5, true},
+	}, "Backspace", (*prompt.Buffer).Backspace)
+}
+
 func TestBuffer_Delete(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name       string
-		initial    string
-		cursor     int
-		wantText   string
-		wantCursor int
-		wantOk     bool
-	}{
-		{
-			name:       "delete at end (no-op)",
-			initial:    "hello",
-			cursor:     5,
-			wantText:   "hello",
-			wantCursor: 5,
-			wantOk:     false,
-		},
-		{
-			name:       "delete at start",
-			initial:    "hello",
-			cursor:     0,
-			wantText:   "ello",
-			wantCursor: 0,
-			wantOk:     true,
-		},
-		{
-			name:       "delete in middle",
-			initial:    "hello",
-			cursor:     2,
-			wantText:   "helo",
-			wantCursor: 2,
-			wantOk:     true,
-		},
-		{
-			name:       "delete on empty buffer",
-			initial:    "",
-			cursor:     0,
-			wantText:   "",
-			wantCursor: 0,
-			wantOk:     false,
-		},
-		{
-			name:       "delete emoji",
-			initial:    "hello😀world",
-			cursor:     5,
-			wantText:   "helloworld",
-			wantCursor: 5,
-			wantOk:     true,
-		},
-	}
 
-	for _, tt := range tests {
+	runBufferEditTests(t, []bufferEditCase{
+		{"delete at end (no-op)", "hello", 5, "hello", 5, false},
+		{"delete at start", "hello", 0, "ello", 0, true},
+		{"delete in middle", "hello", 2, "helo", 2, true},
+		{"delete on empty buffer", "", 0, "", 0, false},
+		{"delete emoji", "hello\U0001f600world", 5, "helloworld", 5, true},
+	}, "Delete", (*prompt.Buffer).Delete)
+}
+
+// bufferMoveCase is a test case for buffer cursor movement operations.
+type bufferMoveCase struct {
+	name       string
+	initial    string
+	cursor     int
+	wantCursor int
+	wantOk     bool
+}
+
+// runBufferMoveTests runs a set of cursor movement test cases against the given operation.
+func runBufferMoveTests(t *testing.T, cases []bufferMoveCase, opName string, op func(*prompt.Buffer) bool) {
+	t.Helper()
+
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.initial)
 			b.SetCursor(tt.cursor)
 
-			ok := b.Delete()
+			ok := op(b)
 
 			if ok != tt.wantOk {
-				t.Errorf("Delete() = %v, want %v", ok, tt.wantOk)
-			}
-
-			if got := b.Text(); got != tt.wantText {
-				t.Errorf("Text() = %q, want %q", got, tt.wantText)
+				t.Errorf("%s() = %v, want %v", opName, ok, tt.wantOk)
 			}
 
 			if got := b.Cursor(); got != tt.wantCursor {
@@ -240,120 +183,24 @@ func TestBuffer_Delete(t *testing.T) {
 
 func TestBuffer_MoveLeft(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name       string
-		initial    string
-		cursor     int
-		wantCursor int
-		wantOk     bool
-	}{
-		{
-			name:       "move left at start (no-op)",
-			initial:    "hello",
-			cursor:     0,
-			wantCursor: 0,
-			wantOk:     false,
-		},
-		{
-			name:       "move left at end",
-			initial:    "hello",
-			cursor:     5,
-			wantCursor: 4,
-			wantOk:     true,
-		},
-		{
-			name:       "move left in middle",
-			initial:    "hello",
-			cursor:     3,
-			wantCursor: 2,
-			wantOk:     true,
-		},
-		{
-			name:       "move left through emoji",
-			initial:    "hello😀",
-			cursor:     6,
-			wantCursor: 5,
-			wantOk:     true,
-		},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			b := prompt.NewBuffer()
-			b.SetText(tt.initial)
-			b.SetCursor(tt.cursor)
-
-			ok := b.MoveLeft()
-
-			if ok != tt.wantOk {
-				t.Errorf("MoveLeft() = %v, want %v", ok, tt.wantOk)
-			}
-
-			if got := b.Cursor(); got != tt.wantCursor {
-				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
-			}
-		})
-	}
+	runBufferMoveTests(t, []bufferMoveCase{
+		{"move left at start (no-op)", "hello", 0, 0, false},
+		{"move left at end", "hello", 5, 4, true},
+		{"move left in middle", "hello", 3, 2, true},
+		{"move left through emoji", "hello\U0001f600", 6, 5, true},
+	}, "MoveLeft", (*prompt.Buffer).MoveLeft)
 }
 
 func TestBuffer_MoveRight(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name       string
-		initial    string
-		cursor     int
-		wantCursor int
-		wantOk     bool
-	}{
-		{
-			name:       "move right at end (no-op)",
-			initial:    "hello",
-			cursor:     5,
-			wantCursor: 5,
-			wantOk:     false,
-		},
-		{
-			name:       "move right at start",
-			initial:    "hello",
-			cursor:     0,
-			wantCursor: 1,
-			wantOk:     true,
-		},
-		{
-			name:       "move right in middle",
-			initial:    "hello",
-			cursor:     2,
-			wantCursor: 3,
-			wantOk:     true,
-		},
-		{
-			name:       "move right through emoji",
-			initial:    "hello😀",
-			cursor:     5,
-			wantCursor: 6,
-			wantOk:     true,
-		},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			b := prompt.NewBuffer()
-			b.SetText(tt.initial)
-			b.SetCursor(tt.cursor)
-
-			ok := b.MoveRight()
-
-			if ok != tt.wantOk {
-				t.Errorf("MoveRight() = %v, want %v", ok, tt.wantOk)
-			}
-
-			if got := b.Cursor(); got != tt.wantCursor {
-				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
-			}
-		})
-	}
+	runBufferMoveTests(t, []bufferMoveCase{
+		{"move right at end (no-op)", "hello", 5, 5, false},
+		{"move right at start", "hello", 0, 1, true},
+		{"move right in middle", "hello", 2, 3, true},
+		{"move right through emoji", "hello\U0001f600", 5, 6, true},
+	}, "MoveRight", (*prompt.Buffer).MoveRight)
 }
 
 func TestBuffer_MoveStartEnd(t *testing.T) {
@@ -377,174 +224,69 @@ func TestBuffer_MoveStartEnd(t *testing.T) {
 	}
 }
 
-func TestBuffer_ClearLineLeft(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name       string
-		initial    string
-		cursor     int
-		wantText   string
-		wantCursor int
-	}{
-		{
-			name:       "clear at start (no-op)",
-			initial:    "hello world",
-			cursor:     0,
-			wantText:   "hello world",
-			wantCursor: 0,
-		},
-		{
-			name:       "clear at end",
-			initial:    "hello world",
-			cursor:     11,
-			wantText:   "",
-			wantCursor: 0,
-		},
-		{
-			name:       "clear in middle",
-			initial:    "hello world",
-			cursor:     5,
-			wantText:   " world",
-			wantCursor: 0,
-		},
-	}
+// bufferClearCase is a test case for buffer clear-line operations.
+type bufferClearCase struct {
+	name       string
+	initial    string
+	cursor     int
+	wantText   string
+	wantCursor int
+}
 
-	for _, tt := range tests {
+// runBufferClearTests runs a set of clear-line test cases against the given operation.
+func runBufferClearTests(t *testing.T, cases []bufferClearCase, opName string, op func(*prompt.Buffer)) {
+	t.Helper()
+
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.initial)
 			b.SetCursor(tt.cursor)
 
-			b.ClearLineLeft()
+			op(b)
 
 			if got := b.Text(); got != tt.wantText {
-				t.Errorf("Text() = %q, want %q", got, tt.wantText)
+				t.Errorf("After %s: Text() = %q, want %q", opName, got, tt.wantText)
 			}
 
 			if got := b.Cursor(); got != tt.wantCursor {
-				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
+				t.Errorf("After %s: Cursor() = %d, want %d", opName, got, tt.wantCursor)
 			}
 		})
 	}
+}
+
+func TestBuffer_ClearLineLeft(t *testing.T) {
+	t.Parallel()
+
+	runBufferClearTests(t, []bufferClearCase{
+		{"clear at start (no-op)", "hello world", 0, "hello world", 0},
+		{"clear at end", "hello world", 11, "", 0},
+		{"clear in middle", "hello world", 5, " world", 0},
+	}, "ClearLineLeft", (*prompt.Buffer).ClearLineLeft)
 }
 
 func TestBuffer_ClearLineRight(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name       string
-		initial    string
-		cursor     int
-		wantText   string
-		wantCursor int
-	}{
-		{
-			name:       "clear at end (no-op)",
-			initial:    "hello world",
-			cursor:     11,
-			wantText:   "hello world",
-			wantCursor: 11,
-		},
-		{
-			name:       "clear at start",
-			initial:    "hello world",
-			cursor:     0,
-			wantText:   "",
-			wantCursor: 0,
-		},
-		{
-			name:       "clear in middle",
-			initial:    "hello world",
-			cursor:     5,
-			wantText:   "hello",
-			wantCursor: 5,
-		},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			b := prompt.NewBuffer()
-			b.SetText(tt.initial)
-			b.SetCursor(tt.cursor)
-
-			b.ClearLineRight()
-
-			if got := b.Text(); got != tt.wantText {
-				t.Errorf("Text() = %q, want %q", got, tt.wantText)
-			}
-
-			if got := b.Cursor(); got != tt.wantCursor {
-				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
-			}
-		})
-	}
+	runBufferClearTests(t, []bufferClearCase{
+		{"clear at end (no-op)", "hello world", 11, "hello world", 11},
+		{"clear at start", "hello world", 0, "", 0},
+		{"clear in middle", "hello world", 5, "hello", 5},
+	}, "ClearLineRight", (*prompt.Buffer).ClearLineRight)
 }
 
 func TestBuffer_DeleteWord(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name       string
-		initial    string
-		cursor     int
-		wantText   string
-		wantCursor int
-	}{
-		{
-			name:       "delete word at start (no-op)",
-			initial:    "hello world",
-			cursor:     0,
-			wantText:   "hello world",
-			wantCursor: 0,
-		},
-		{
-			name:       "delete word at end of first word",
-			initial:    "hello world",
-			cursor:     5,
-			wantText:   " world",
-			wantCursor: 0,
-		},
-		{
-			name:       "delete word in middle of second word",
-			initial:    "hello world",
-			cursor:     9,
-			wantText:   "hello ld",
-			wantCursor: 6,
-		},
-		{
-			name:       "delete word after space",
-			initial:    "hello world",
-			cursor:     6,
-			wantText:   "world",
-			wantCursor: 0,
-		},
-		{
-			name:       "delete word with punctuation",
-			initial:    "hello-world",
-			cursor:     11,
-			wantText:   "hello-",
-			wantCursor: 6,
-		},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			b := prompt.NewBuffer()
-			b.SetText(tt.initial)
-			b.SetCursor(tt.cursor)
-
-			b.DeleteWord()
-
-			if got := b.Text(); got != tt.wantText {
-				t.Errorf("Text() = %q, want %q", got, tt.wantText)
-			}
-
-			if got := b.Cursor(); got != tt.wantCursor {
-				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
-			}
-		})
-	}
+	runBufferClearTests(t, []bufferClearCase{
+		{"delete word at start (no-op)", "hello world", 0, "hello world", 0},
+		{"delete word at end of first word", "hello world", 5, " world", 0},
+		{"delete word in middle of second word", "hello world", 9, "hello ld", 6},
+		{"delete word after space", "hello world", 6, "world", 0},
+		{"delete word with punctuation", "hello-world", 11, "hello-", 6},
+	}, "DeleteWord", (*prompt.Buffer).DeleteWord)
 }
 
 func TestBuffer_Clear(t *testing.T) {

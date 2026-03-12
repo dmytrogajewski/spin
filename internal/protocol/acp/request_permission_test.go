@@ -93,124 +93,91 @@ func TestRequestPermission_NoApprovalService(t *testing.T) {
 	assert.Contains(t, err.Error(), "approval service not configured")
 }
 
+// permissionDecisionCase describes a test case for request permission with a specific decision.
+type permissionDecisionCase struct {
+	name           string
+	approved       bool
+	reason         string
+	wantOptionId   acp.PermissionOptionId
+}
+
+func runPermissionDecisionTests(t *testing.T, cases []permissionDecisionCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			agentInstance := &agent.Agent{}
+			mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
+			emitter := events.NewEventEmitter(100)
+
+			storage, err := session.NewFileStorage(t.TempDir())
+			require.NoError(t, err)
+			acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
+			require.NoError(t, err)
+
+			approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+				return security.ApprovalResponse{
+					RequestID: req.ID,
+					Approved:  tt.approved,
+					Reason:    tt.reason,
+				}
+			}
+
+			approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+				Handler: approvalHandler, Emitter: emitter, Validator: nil,
+			})
+			acpAgent.SetApprovalService(approvalService)
+
+			sess := session.NewSession("/tmp/test")
+			sessionID := acp.SessionId(sess.ID)
+
+			acpAgent.mu.Lock()
+			acpAgent.sessions[sessionID] = sess
+			acpAgent.mu.Unlock()
+
+			req := acp.RequestPermissionRequest{
+				SessionId: sessionID,
+				ToolCall: acp.RequestPermissionToolCall{
+					ToolCallId: acp.ToolCallId("tool-1"),
+					Title:      acp.Ptr("write_file"),
+				},
+				Options: []acp.PermissionOption{
+					{
+						OptionId: acp.PermissionOptionId("allow"),
+						Name:     "Allow",
+						Kind:     acp.PermissionOptionKindAllowOnce,
+					},
+					{
+						OptionId: acp.PermissionOptionId("reject"),
+						Name:     "Reject",
+						Kind:     acp.PermissionOptionKindRejectOnce,
+					},
+				},
+			}
+
+			resp, err := acpAgent.RequestPermission(context.Background(), req)
+			require.NoError(t, err)
+			require.NotNil(t, resp.Outcome.Selected)
+			assert.Equal(t, tt.wantOptionId, resp.Outcome.Selected.OptionId)
+		})
+	}
+}
+
 // TestRequestPermission_Approved tests successful approval flow.
 func TestRequestPermission_Approved(t *testing.T) {
 	t.Parallel()
-	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
-
-	storage, err := session.NewFileStorage(t.TempDir())
-	require.NoError(t, err)
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
-	require.NoError(t, err)
-
-	// Create approval handler that always approves.
-	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		return security.ApprovalResponse{
-			RequestID: req.ID,
-			Approved:  true,
-			Reason:    "approved for testing",
-		}
-	}
-
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
-		Handler: approvalHandler, Emitter: emitter, Validator: nil,
+	runPermissionDecisionTests(t, []permissionDecisionCase{
+		{"approved", true, "approved for testing", acp.PermissionOptionId("allow")},
 	})
-	acpAgent.SetApprovalService(approvalService)
-
-	// Create a session.
-	sess := session.NewSession("/tmp/test")
-	sessionID := acp.SessionId(sess.ID)
-
-	acpAgent.mu.Lock()
-	acpAgent.sessions[sessionID] = sess
-	acpAgent.mu.Unlock()
-
-	req := acp.RequestPermissionRequest{
-		SessionId: sessionID,
-		ToolCall: acp.RequestPermissionToolCall{
-			ToolCallId: acp.ToolCallId("tool-1"),
-			Title:      acp.Ptr("write_file"),
-		},
-		Options: []acp.PermissionOption{
-			{
-				OptionId: acp.PermissionOptionId("allow"),
-				Name:     "Allow",
-				Kind:     acp.PermissionOptionKindAllowOnce,
-			},
-			{
-				OptionId: acp.PermissionOptionId("reject"),
-				Name:     "Reject",
-				Kind:     acp.PermissionOptionKindRejectOnce,
-			},
-		},
-	}
-
-	resp, err := acpAgent.RequestPermission(context.Background(), req)
-	require.NoError(t, err)
-	require.NotNil(t, resp.Outcome.Selected)
-	assert.Equal(t, acp.PermissionOptionId("allow"), resp.Outcome.Selected.OptionId)
 }
 
 // TestRequestPermission_Denied tests denial flow.
 func TestRequestPermission_Denied(t *testing.T) {
 	t.Parallel()
-	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
-
-	storage, err := session.NewFileStorage(t.TempDir())
-	require.NoError(t, err)
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
-	require.NoError(t, err)
-
-	// Create approval handler that always denies.
-	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		return security.ApprovalResponse{
-			RequestID: req.ID,
-			Approved:  false,
-			Reason:    "denied for testing",
-		}
-	}
-
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
-		Handler: approvalHandler, Emitter: emitter, Validator: nil,
+	runPermissionDecisionTests(t, []permissionDecisionCase{
+		{"denied", false, "denied for testing", acp.PermissionOptionId("reject")},
 	})
-	acpAgent.SetApprovalService(approvalService)
-
-	// Create a session.
-	sess := session.NewSession("/tmp/test")
-	sessionID := acp.SessionId(sess.ID)
-
-	acpAgent.mu.Lock()
-	acpAgent.sessions[sessionID] = sess
-	acpAgent.mu.Unlock()
-
-	req := acp.RequestPermissionRequest{
-		SessionId: sessionID,
-		ToolCall: acp.RequestPermissionToolCall{
-			ToolCallId: acp.ToolCallId("tool-1"),
-			Title:      acp.Ptr("write_file"),
-		},
-		Options: []acp.PermissionOption{
-			{
-				OptionId: acp.PermissionOptionId("allow"),
-				Name:     "Allow",
-				Kind:     acp.PermissionOptionKindAllowOnce,
-			},
-			{
-				OptionId: acp.PermissionOptionId("reject"),
-				Name:     "Reject",
-				Kind:     acp.PermissionOptionKindRejectOnce,
-			},
-		},
-	}
-
-	resp, err := acpAgent.RequestPermission(context.Background(), req)
-	require.NoError(t, err)
-	require.NotNil(t, resp.Outcome.Selected)
-	assert.Equal(t, acp.PermissionOptionId("reject"), resp.Outcome.Selected.OptionId)
 }
 
 // TestRequestPermission_Canceled tests context cancellation.

@@ -151,77 +151,83 @@ func TestNewIgnoreHandler_OnlyComments(t *testing.T) {
 	}
 }
 
+// ignorePatternCase describes a test case for ignore pattern matching.
+type ignorePatternCase struct {
+	name       string
+	gitignore  string
+	checks     []ignoreCheck
+}
+
+type ignoreCheck struct {
+	name     string
+	path     string
+	isDir    bool
+	expected bool
+}
+
+func runIgnorePatternTests(t *testing.T, cases []ignorePatternCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmpDir := t.TempDir()
+
+			gitignorePath := filepath.Join(tmpDir, ".gitignore")
+			err := os.WriteFile(gitignorePath, []byte(tt.gitignore), 0o600)
+			require.NoError(t, err)
+
+			handler, err := NewIgnoreHandler(tmpDir)
+			require.NoError(t, err)
+
+			for _, check := range tt.checks {
+				t.Run(check.name, func(t *testing.T) {
+					t.Parallel()
+
+					result := handler.IsIgnored(check.path, check.isDir)
+					assert.Equal(t, check.expected, result)
+				})
+			}
+		})
+	}
+}
+
 // TestIgnoreHandler_IsIgnored_SimplePattern tests simple pattern matching.
 func TestIgnoreHandler_IsIgnored_SimplePattern(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-
-	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	// Use **/*.log to match .log files at any depth (proper gitignore syntax).
-	err := os.WriteFile(gitignorePath, []byte("*.log\n**/*.log\n"), 0o600)
-	require.NoError(t, err)
-
-	handler, err := NewIgnoreHandler(tmpDir)
-	require.NoError(t, err)
-
-	tests := []struct {
-		name     string
-		path     string
-		isDir    bool
-		expected bool
-	}{
-		{"match .log file", "debug.log", false, true},
-		{"match .log in subdir", "logs/debug.log", false, true},
-		{"no match .txt file", "readme.txt", false, false},
-		{"no match log.txt", "log.txt", false, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := handler.IsIgnored(tt.path, tt.isDir)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
+	runIgnorePatternTests(t, []ignorePatternCase{
+		{
+			name:      "simple log pattern",
+			gitignore: "*.log\n**/*.log\n",
+			checks: []ignoreCheck{
+				{"match .log file", "debug.log", false, true},
+				{"match .log in subdir", "logs/debug.log", false, true},
+				{"no match .txt file", "readme.txt", false, false},
+				{"no match log.txt", "log.txt", false, false},
+			},
+		},
+	})
 }
 
 // TestIgnoreHandler_IsIgnored_DirectoryPattern tests directory pattern matching.
 func TestIgnoreHandler_IsIgnored_DirectoryPattern(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-
-	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	// Pattern with trailing / should only match directories, not files with same name.
-	err := os.WriteFile(gitignorePath, []byte("dist/\n"), 0o600)
-	require.NoError(t, err)
-
-	handler, err := NewIgnoreHandler(tmpDir)
-	require.NoError(t, err)
-
-	tests := []struct {
-		name     string
-		path     string
-		isDir    bool
-		expected bool
-	}{
-		{"match dist dir", "dist", true, true},
-		// Note: dist/output won't match with just "dist/" pattern
-		// In real usage, Scanner will skip the dist directory entirely via SkipDir.
-		{"no match dist file", "dist", false, false},
-		{"no match dist.txt", "dist.txt", false, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := handler.IsIgnored(tt.path, tt.isDir)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
+	runIgnorePatternTests(t, []ignorePatternCase{
+		{
+			name:      "directory pattern",
+			gitignore: "dist/\n",
+			checks: []ignoreCheck{
+				{"match dist dir", "dist", true, true},
+				// Note: dist/output won't match with just "dist/" pattern
+				// In real usage, Scanner will skip the dist directory entirely via SkipDir.
+				{"no match dist file", "dist", false, false},
+				{"no match dist.txt", "dist.txt", false, false},
+			},
+		},
+	})
 }
 
 // TestIgnoreHandler_IsIgnored_DoubleStarPattern tests ** patterns.
@@ -264,35 +270,18 @@ func TestIgnoreHandler_IsIgnored_DoubleStarPattern(t *testing.T) {
 func TestIgnoreHandler_IsIgnored_WildcardPattern(t *testing.T) {
 	t.Parallel()
 
-	tmpDir := t.TempDir()
-
-	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	err := os.WriteFile(gitignorePath, []byte("**/temp\n"), 0o600)
-	require.NoError(t, err)
-
-	handler, err := NewIgnoreHandler(tmpDir)
-	require.NoError(t, err)
-
-	tests := []struct {
-		name     string
-		path     string
-		isDir    bool
-		expected bool
-	}{
-		{"match temp at root", "temp", true, true},
-		{"match temp in subdir", "build/temp", true, true},
-		{"match temp deeply nested", "a/b/c/temp", true, true},
-		{"no match tempfile", "tempfile", false, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := handler.IsIgnored(tt.path, tt.isDir)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
+	runIgnorePatternTests(t, []ignorePatternCase{
+		{
+			name:      "double-star wildcard",
+			gitignore: "**/temp\n",
+			checks: []ignoreCheck{
+				{"match temp at root", "temp", true, true},
+				{"match temp in subdir", "build/temp", true, true},
+				{"match temp deeply nested", "a/b/c/temp", true, true},
+				{"no match tempfile", "tempfile", false, false},
+			},
+		},
+	})
 }
 
 // TestIgnoreHandler_IsIgnored_DefaultPatterns tests default ignore patterns.

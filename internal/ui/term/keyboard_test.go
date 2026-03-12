@@ -117,25 +117,32 @@ func TestReadKeys_ControlKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-
-			r := bytes.NewReader(tt.input)
-
-			ch, err := ReadKeys(ctx, r, nil)
-			if err != nil {
-				t.Fatalf("ReadKeys() error = %v", err)
-			}
-
-			select {
-			case got := <-ch:
-				if got.Kind != tt.want {
-					t.Errorf("ReadKeys() got Kind = %v, want %v", got.Kind, tt.want)
-				}
-			case <-ctx.Done():
-				t.Fatal("timeout waiting for key event")
-			}
+			assertKeyParsed(t, tt.input, tt.want)
 		})
+	}
+}
+
+// assertKeyParsed is a shared helper that reads a key from input bytes and asserts the expected KeyKind.
+func assertKeyParsed(t *testing.T, input []byte, want KeyKind) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	r := bytes.NewReader(input)
+
+	ch, err := ReadKeys(ctx, r, nil)
+	if err != nil {
+		t.Fatalf("ReadKeys() error = %v", err)
+	}
+
+	select {
+	case got := <-ch:
+		if got.Kind != want {
+			t.Errorf("ReadKeys() got Kind = %v, want %v", got.Kind, want)
+		}
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for key event")
 	}
 }
 
@@ -155,24 +162,7 @@ func TestReadKeys_ArrowKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-
-			r := bytes.NewReader(tt.input)
-
-			ch, err := ReadKeys(ctx, r, nil)
-			if err != nil {
-				t.Fatalf("ReadKeys() error = %v", err)
-			}
-
-			select {
-			case got := <-ch:
-				if got.Kind != tt.want {
-					t.Errorf("ReadKeys() got Kind = %v, want %v", got.Kind, tt.want)
-				}
-			case <-ctx.Done():
-				t.Fatal("timeout waiting for key event")
-			}
+			assertKeyParsed(t, tt.input, tt.want)
 		})
 	}
 }
@@ -193,24 +183,7 @@ func TestReadKeys_HomeEnd(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-
-			r := bytes.NewReader(tt.input)
-
-			ch, err := ReadKeys(ctx, r, nil)
-			if err != nil {
-				t.Fatalf("ReadKeys() error = %v", err)
-			}
-
-			select {
-			case got := <-ch:
-				if got.Kind != tt.want {
-					t.Errorf("ReadKeys() got Kind = %v, want %v", got.Kind, tt.want)
-				}
-			case <-ctx.Done():
-				t.Fatal("timeout waiting for key event")
-			}
+			assertKeyParsed(t, tt.input, tt.want)
 		})
 	}
 }
@@ -229,24 +202,7 @@ func TestReadKeys_PageKeys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-
-			r := bytes.NewReader(tt.input)
-
-			ch, err := ReadKeys(ctx, r, nil)
-			if err != nil {
-				t.Fatalf("ReadKeys() error = %v", err)
-			}
-
-			select {
-			case got := <-ch:
-				if got.Kind != tt.want {
-					t.Errorf("ReadKeys() got Kind = %v, want %v", got.Kind, tt.want)
-				}
-			case <-ctx.Done():
-				t.Fatal("timeout waiting for key event")
-			}
+			assertKeyParsed(t, tt.input, tt.want)
 		})
 	}
 }
@@ -265,24 +221,7 @@ func TestReadKeys_Delete(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-
-			r := bytes.NewReader(tt.input)
-
-			ch, err := ReadKeys(ctx, r, nil)
-			if err != nil {
-				t.Fatalf("ReadKeys() error = %v", err)
-			}
-
-			select {
-			case got := <-ch:
-				if got.Kind != tt.want {
-					t.Errorf("ReadKeys() got Kind = %v, want %v", got.Kind, tt.want)
-				}
-			case <-ctx.Done():
-				t.Fatal("timeout waiting for key event")
-			}
+			assertKeyParsed(t, tt.input, tt.want)
 		})
 	}
 }

@@ -416,21 +416,10 @@ func TestGenerateBullets_FromTrajectory(t *testing.T) {
 func TestGenerateBullets_FromFeedback(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-
 	mockLLM := llm.NewMockProvider("test-provider")
-	mockLLM.SetResponse(`1. Add more comprehensive input validation
-2. Include timeout mechanisms for external calls`)
+	mockLLM.SetResponse("1. Add more comprehensive input validation\n2. Include timeout mechanisms for external calls")
 
-	pb := playbook.New(nil, nil)
-	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
-
-	gen, err := NewGenerator(Config{
-		LLM:       mockLLM,
-		Playbook:  pb,
-		Retriever: ret,
-	})
-	require.NoError(t, err)
+	gen := newTestGenerator(t, mockLLM)
 
 	req := BulletGenerationRequest{
 		Input:      "Users reported timeout issues during high load...",
@@ -438,7 +427,7 @@ func TestGenerateBullets_FromFeedback(t *testing.T) {
 		MaxBullets: 2,
 	}
 
-	bullets, err := gen.GenerateBullets(ctx, req)
+	bullets, err := gen.GenerateBullets(context.Background(), req)
 
 	require.NoError(t, err)
 	assert.Len(t, bullets, 2)
@@ -481,12 +470,10 @@ func TestGenerateBullets_FromError(t *testing.T) {
 	assert.Equal(t, "runtime-error", bullets[0].Tags["type"])
 }
 
-func TestGenerateBullets_EmptyInput(t *testing.T) {
-	t.Parallel()
+// newTestGenerator creates a generator with a mock LLM for testing.
+func newTestGenerator(t *testing.T, mockLLM *llm.MockProvider) Generator {
+	t.Helper()
 
-	ctx := context.Background()
-
-	mockLLM := llm.NewMockProvider("test-provider")
 	pb := playbook.New(nil, nil)
 	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
 
@@ -497,13 +484,21 @@ func TestGenerateBullets_EmptyInput(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	return gen
+}
+
+func TestGenerateBullets_EmptyInput(t *testing.T) {
+	t.Parallel()
+
+	gen := newTestGenerator(t, llm.NewMockProvider("test-provider"))
+
 	req := BulletGenerationRequest{
 		Input:      "",
 		SourceType: "task",
 		MaxBullets: 5,
 	}
 
-	bullets, err := gen.GenerateBullets(ctx, req)
+	bullets, err := gen.GenerateBullets(context.Background(), req)
 
 	require.Error(t, err)
 	assert.Nil(t, bullets)
@@ -513,18 +508,7 @@ func TestGenerateBullets_EmptyInput(t *testing.T) {
 func TestGenerateBullets_UnknownSourceType(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-
-	mockLLM := llm.NewMockProvider("test-provider")
-	pb := playbook.New(nil, nil)
-	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
-
-	gen, err := NewGenerator(Config{
-		LLM:       mockLLM,
-		Playbook:  pb,
-		Retriever: ret,
-	})
-	require.NoError(t, err)
+	gen := newTestGenerator(t, llm.NewMockProvider("test-provider"))
 
 	req := BulletGenerationRequest{
 		Input:      "Some input",
@@ -532,7 +516,7 @@ func TestGenerateBullets_UnknownSourceType(t *testing.T) {
 		MaxBullets: 5,
 	}
 
-	bullets, err := gen.GenerateBullets(ctx, req)
+	bullets, err := gen.GenerateBullets(context.Background(), req)
 
 	require.Error(t, err)
 	assert.Nil(t, bullets)
@@ -542,25 +526,10 @@ func TestGenerateBullets_UnknownSourceType(t *testing.T) {
 func TestGenerateBullets_NoLimit(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-
 	mockLLM := llm.NewMockProvider("test-provider")
-	mockLLM.SetResponse(`1. First strategy
-2. Second strategy
-3. Third strategy
-4. Fourth strategy
-5. Fifth strategy
-6. Sixth strategy`)
+	mockLLM.SetResponse("1. First strategy\n2. Second strategy\n3. Third strategy\n4. Fourth strategy\n5. Fifth strategy\n6. Sixth strategy")
 
-	pb := playbook.New(nil, nil)
-	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
-
-	gen, err := NewGenerator(Config{
-		LLM:       mockLLM,
-		Playbook:  pb,
-		Retriever: ret,
-	})
-	require.NoError(t, err)
+	gen := newTestGenerator(t, mockLLM)
 
 	req := BulletGenerationRequest{
 		Input:      "Test input",
@@ -568,7 +537,7 @@ func TestGenerateBullets_NoLimit(t *testing.T) {
 		MaxBullets: 0, // No limit - model decides.
 	}
 
-	bullets, err := gen.GenerateBullets(ctx, req)
+	bullets, err := gen.GenerateBullets(context.Background(), req)
 
 	require.NoError(t, err)
 	assert.Len(t, bullets, 6) // All 6 bullets returned, no truncation.
@@ -577,26 +546,10 @@ func TestGenerateBullets_NoLimit(t *testing.T) {
 func TestGenerateBullets_AllReturned(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-
 	mockLLM := llm.NewMockProvider("test-provider")
-	mockLLM.SetResponse(`1. Strategy one
-2. Strategy two
-3. Strategy three
-4. Strategy four
-5. Strategy five
-6. Strategy six
-7. Strategy seven`)
+	mockLLM.SetResponse("1. Strategy one\n2. Strategy two\n3. Strategy three\n4. Strategy four\n5. Strategy five\n6. Strategy six\n7. Strategy seven")
 
-	pb := playbook.New(nil, nil)
-	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
-
-	gen, err := NewGenerator(Config{
-		LLM:       mockLLM,
-		Playbook:  pb,
-		Retriever: ret,
-	})
-	require.NoError(t, err)
+	gen := newTestGenerator(t, mockLLM)
 
 	req := BulletGenerationRequest{
 		Input:      "Test input",
@@ -604,7 +557,7 @@ func TestGenerateBullets_AllReturned(t *testing.T) {
 		MaxBullets: 0, // No limit.
 	}
 
-	bullets, err := gen.GenerateBullets(ctx, req)
+	bullets, err := gen.GenerateBullets(context.Background(), req)
 
 	require.NoError(t, err)
 	assert.Len(t, bullets, 7) // All 7 bullets returned.

@@ -407,35 +407,10 @@ func TestApplyPatchTool_ErrorCases(t *testing.T) {
 	t.Parallel()
 	tool := NewApplyPatchTool("/tmp/test")
 
-	tests := []struct {
-		name   string
-		params map[string]any
-	}{
-		{
-			name:   "missing patch_text",
-			params: map[string]any{},
-		},
-		{
-			name:   "invalid patch_text type",
-			params: map[string]any{"patch_text": 123},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			params, _ := FromMap(tt.params)
-
-			result, err := tool.Execute(context.Background(), params)
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-
-			if result.Success {
-				t.Error("expected failure result")
-			}
-		})
-	}
+	runToolErrorTests(t, tool, []toolErrorCase{
+		{"missing patch_text", map[string]any{}},
+		{"invalid patch_text type", map[string]any{"patch_text": 123}},
+	})
 }
 
 func TestApplyPatchTool_CheckApproval(t *testing.T) {

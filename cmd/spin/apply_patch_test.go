@@ -334,24 +334,19 @@ func TestApplyPatch_DryRun(t *testing.T) {
 	}
 }
 
-// TestApplyPatch_ParseError tests invalid patch syntax.
-func TestApplyPatch_ParseError(t *testing.T) {
+// runApplyPatchErrorCase is a test helper for error cases in apply patch.
+func runApplyPatchErrorCase(t *testing.T, patchText, patchFileName, wantErrSubstr string) {
+	t.Helper()
 	t.Parallel()
 
 	tmpDir := t.TempDir()
 
-	// Create invalid patch.
-	patchText := `*** Begin Patch
-*** Invalid Operation: test.txt
-*** End Patch`
-
-	patchFile := filepath.Join(tmpDir, "invalid.patch")
+	patchFile := filepath.Join(tmpDir, patchFileName)
 	err := os.WriteFile(patchFile, []byte(patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Run command via cobra (should fail).
 	cmd := newApplyPatchCmd()
 	cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
 	cmd.SilenceUsage = true
@@ -359,46 +354,30 @@ func TestApplyPatch_ParseError(t *testing.T) {
 
 	err = cmd.Execute()
 	if err == nil {
-		t.Error("runApplyPatch() expected error for invalid patch")
+		t.Errorf("runApplyPatch() expected error containing %q", wantErrSubstr)
 	}
 
-	if !strings.Contains(err.Error(), "invalid patch syntax") {
-		t.Errorf("runApplyPatch() error = %v, want 'invalid patch syntax'", err)
+	if err != nil && !strings.Contains(err.Error(), wantErrSubstr) {
+		t.Errorf("runApplyPatch() error = %v, want %q", err, wantErrSubstr)
 	}
+}
+
+// TestApplyPatch_ParseError tests invalid patch syntax.
+func TestApplyPatch_ParseError(t *testing.T) {
+	runApplyPatchErrorCase(t,
+		"*** Begin Patch\n*** Invalid Operation: test.txt\n*** End Patch",
+		"invalid.patch",
+		"invalid patch syntax",
+	)
 }
 
 // TestApplyPatch_PathTraversal tests path traversal rejection.
 func TestApplyPatch_PathTraversal(t *testing.T) {
-	t.Parallel()
-
-	tmpDir := t.TempDir()
-
-	// Create patch with path traversal.
-	patchText := `*** Begin Patch
-*** Add File: ../../etc/passwd
-+malicious content
-*** End Patch`
-
-	patchFile := filepath.Join(tmpDir, "malicious.patch")
-	err := os.WriteFile(patchFile, []byte(patchText), 0o600)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Run command via cobra (should fail).
-	cmd := newApplyPatchCmd()
-	cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
-	cmd.SilenceUsage = true
-	cmd.SilenceErrors = true
-
-	err = cmd.Execute()
-	if err == nil {
-		t.Error("runApplyPatch() should reject path traversal")
-	}
-
-	if !strings.Contains(err.Error(), "path") {
-		t.Errorf("runApplyPatch() error = %v, want path-related error", err)
-	}
+	runApplyPatchErrorCase(t,
+		"*** Begin Patch\n*** Add File: ../../etc/passwd\n+malicious content\n*** End Patch",
+		"malicious.patch",
+		"path",
+	)
 }
 
 // TestApplyPatch_ForceOverwrite tests force mode.

@@ -103,13 +103,30 @@ func TestState_UnmarshalText(t *testing.T) {
 	}
 }
 
+// statePredicateCase describes a test case for a State predicate method.
+type statePredicateCase struct {
+	name     string
+	state    State
+	expected bool
+}
+
+func runStatePredicateTests(t *testing.T, cases []statePredicateCase, opName string, op func(State) bool) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := op(tt.state)
+			if result != tt.expected {
+				t.Errorf("State.%s() = %v, want %v", opName, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestState_IsTerminal(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name     string
-		state    State
-		expected bool
-	}{
+	runStatePredicateTests(t, []statePredicateCase{
 		{"StateIdle", StateIdle, false},
 		{"StateRunning", StateRunning, false},
 		{"StatePaused", StatePaused, false},
@@ -119,26 +136,12 @@ func TestState_IsTerminal(t *testing.T) {
 		{"StateCancelled", StateCancelled, true},
 		{"StateArchived", StateArchived, true},
 		{"Unknown", "invalid-state", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			result := tt.state.IsTerminal()
-			if result != tt.expected {
-				t.Errorf("State.IsTerminal() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
+	}, "IsTerminal", State.IsTerminal)
 }
 
 func TestState_IsActive(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name     string
-		state    State
-		expected bool
-	}{
+	runStatePredicateTests(t, []statePredicateCase{
 		{"StateIdle", StateIdle, false},
 		{"StateRunning", StateRunning, true},
 		{"StatePaused", StatePaused, true},
@@ -148,17 +151,7 @@ func TestState_IsActive(t *testing.T) {
 		{"StateCancelled", StateCancelled, false},
 		{"StateArchived", StateArchived, false},
 		{"Unknown", "invalid-state", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			result := tt.state.IsActive()
-			if result != tt.expected {
-				t.Errorf("State.IsActive() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
+	}, "IsActive", State.IsActive)
 }
 
 func TestState_CanTransitionTo(t *testing.T) {

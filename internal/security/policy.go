@@ -111,8 +111,8 @@ func normalizeArgs(args []string) []string {
 	return out
 }
 
-// memoryPolicyStore is an in-memory PolicyStore with TTL eviction.
-type memoryPolicyStore struct {
+// MemoryPolicyStore is an in-memory PolicyStore with TTL eviction.
+type MemoryPolicyStore struct {
 	mu       sync.RWMutex
 	byScope  map[string]map[string]Policy // scope -> keyStr -> policy.
 	stopCh   chan struct{}
@@ -120,12 +120,12 @@ type memoryPolicyStore struct {
 }
 
 // NewMemoryPolicyStore creates an in-memory store with a janitor running at interval.
-func NewMemoryPolicyStore(evictionInterval time.Duration) PolicyStore {
+func NewMemoryPolicyStore(evictionInterval time.Duration) *MemoryPolicyStore {
 	if evictionInterval <= 0 {
 		evictionInterval = policyEvictionInterval
 	}
 
-	s := &memoryPolicyStore{
+	s := &MemoryPolicyStore{
 		byScope:  make(map[string]map[string]Policy),
 		stopCh:   make(chan struct{}),
 		interval: evictionInterval,
@@ -135,7 +135,7 @@ func NewMemoryPolicyStore(evictionInterval time.Duration) PolicyStore {
 	return s
 }
 
-func (s *memoryPolicyStore) janitor() {
+func (s *MemoryPolicyStore) janitor() {
 	t := time.NewTicker(s.interval)
 	defer t.Stop()
 
@@ -149,7 +149,7 @@ func (s *memoryPolicyStore) janitor() {
 	}
 }
 
-func (s *memoryPolicyStore) removeExpired() {
+func (s *MemoryPolicyStore) removeExpired() {
 	now := time.Now()
 
 	s.mu.Lock()
@@ -169,7 +169,7 @@ func (s *memoryPolicyStore) removeExpired() {
 }
 
 // Save implements the Save operation.
-func (s *memoryPolicyStore) Save(_ context.Context, p Policy) error {
+func (s *MemoryPolicyStore) Save(_ context.Context, p Policy) error {
 	keyStr := keyString(p.Key)
 
 	s.mu.Lock()
@@ -186,40 +186,34 @@ func (s *memoryPolicyStore) Save(_ context.Context, p Policy) error {
 	return nil
 }
 
-// Get implements the Get operation.
-func (s *memoryPolicyStore) Get(_ context.Context, key PolicyKey, scope string) (Policy, bool, error) {
+// getFromScopeMap retrieves a policy from a scope-keyed map under a read lock.
+func getFromScopeMap(byScope map[string]map[string]Policy, key PolicyKey, scope string) (Policy, bool) {
 	keyStr := keyString(key)
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	m := s.byScope[scope]
+	m := byScope[scope]
 	if m == nil {
-		return Policy{}, false, nil
+		return Policy{}, false
 	}
 
 	p, ok := m[keyStr]
 	if !ok {
-		return Policy{}, false, nil
+		return Policy{}, false
 	}
 
 	if p.ExpiresAt != nil && time.Now().After(*p.ExpiresAt) {
-		return Policy{}, false, nil
+		return Policy{}, false
 	}
 
-	return p, true, nil
+	return p, true
 }
 
-// List implements the List operation.
-func (s *memoryPolicyStore) List(_ context.Context, scope string) ([]Policy, error) {
+// listFromScopeMap lists non-expired policies from a scope-keyed map.
+func listFromScopeMap(byScope map[string]map[string]Policy, scope string) []Policy {
 	now := time.Now()
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	m := s.byScope[scope]
+	m := byScope[scope]
 	if m == nil {
-		return []Policy{}, nil
+		return []Policy{}
 	}
 
 	out := make([]Policy, 0, len(m))
@@ -231,11 +225,29 @@ func (s *memoryPolicyStore) List(_ context.Context, scope string) ([]Policy, err
 		out = append(out, p)
 	}
 
-	return out, nil
+	return out
+}
+
+// Get implements the Get operation.
+func (s *MemoryPolicyStore) Get(_ context.Context, key PolicyKey, scope string) (Policy, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	p, ok := getFromScopeMap(s.byScope, key, scope)
+
+	return p, ok, nil
+}
+
+// List implements the List operation.
+func (s *MemoryPolicyStore) List(_ context.Context, scope string) ([]Policy, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return listFromScopeMap(s.byScope, scope), nil
 }
 
 // Delete implements the Delete operation.
-func (s *memoryPolicyStore) Delete(_ context.Context, key PolicyKey, scope string) (bool, error) {
+func (s *MemoryPolicyStore) Delete(_ context.Context, key PolicyKey, scope string) (bool, error) {
 	keyStr := keyString(key)
 
 	s.mu.Lock()
@@ -260,7 +272,7 @@ func (s *memoryPolicyStore) Delete(_ context.Context, key PolicyKey, scope strin
 }
 
 // Clear implements the Clear operation.
-func (s *memoryPolicyStore) Clear(_ context.Context, scope string) (int, error) {
+func (s *MemoryPolicyStore) Clear(_ context.Context, scope string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -277,7 +289,7 @@ func (s *memoryPolicyStore) Clear(_ context.Context, scope string) (int, error) 
 }
 
 // Close stops the janitor goroutine and releases resources.
-func (s *memoryPolicyStore) Close() error {
+func (s *MemoryPolicyStore) Close() error {
 	close(s.stopCh)
 
 	return nil

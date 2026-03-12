@@ -66,98 +66,80 @@ func (m *mockConnection) Clear() {
 	m.notifications = nil
 }
 
+// processEventCase describes a test case for event processing.
+type processEventCase struct {
+	name  string
+	event events.Event
+}
+
+func runProcessEventTests(t *testing.T, cases []processEventCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			agentInstance := &agent.Agent{}
+			mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
+			emitter := events.NewEventEmitter(100)
+
+			storage, err := session.NewFileStorage(t.TempDir())
+			require.NoError(t, err)
+			acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
+			require.NoError(t, err)
+
+			mockConn := &mockConnection{}
+			acpAgent.SetNotificationSender(mockConn)
+
+			ctx := t.Context()
+
+			sessionID := acp.SessionId("test-session")
+
+			subID, eventCh, err := emitter.Subscribe()
+			require.NoError(t, err)
+
+			defer emitter.Unsubscribe(subID)
+
+			go acpAgent.processEvents(ctx, sessionID, eventCh)
+
+			emitter.Emit(tt.event)
+
+			time.Sleep(50 * time.Millisecond)
+
+			notifications := mockConn.GetNotifications()
+			require.Len(t, notifications, 1, "should have one notification")
+			assert.Equal(t, sessionID, notifications[0].SessionId)
+		})
+	}
+}
+
 // TestProcessEvents_ContentDelta tests event processing for content delta.
 func TestProcessEvents_ContentDelta(t *testing.T) {
 	t.Parallel()
-	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
-
-	storage, err := session.NewFileStorage(t.TempDir())
-	require.NoError(t, err)
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
-	require.NoError(t, err)
-
-	mockConn := &mockConnection{}
-	acpAgent.SetNotificationSender(mockConn)
-
-	ctx := t.Context()
-
-	sessionID := acp.SessionId("test-session")
-
-	// Subscribe to events.
-	subID, eventCh, err := emitter.Subscribe()
-	require.NoError(t, err)
-
-	defer emitter.Unsubscribe(subID)
-
-	// Start event processing.
-	go acpAgent.processEvents(ctx, sessionID, eventCh)
-
-	// Emit a content delta event.
-	emitter.Emit(events.Event{
-		Type:      events.EventContentDelta,
-		Timestamp: time.Now(),
-		Data: events.ContentDeltaData{
-			Content: "Hello",
-			Role:    "assistant",
+	runProcessEventTests(t, []processEventCase{
+		{
+			name: "content delta",
+			event: events.Event{
+				Type:      events.EventContentDelta,
+				Timestamp: time.Now(),
+				Data:      events.ContentDeltaData{Content: "Hello", Role: "assistant"},
+			},
 		},
 	})
-
-	// Give it time to process.
-	time.Sleep(50 * time.Millisecond)
-
-	// Verify notification was sent.
-	notifications := mockConn.GetNotifications()
-	require.Len(t, notifications, 1, "should have one notification")
-	assert.Equal(t, sessionID, notifications[0].SessionId)
 }
 
 // TestProcessEvents_ToolCallStart tests event processing for tool call start.
 func TestProcessEvents_ToolCallStart(t *testing.T) {
 	t.Parallel()
-	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
-
-	storage, err := session.NewFileStorage(t.TempDir())
-	require.NoError(t, err)
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
-	require.NoError(t, err)
-
-	mockConn := &mockConnection{}
-	acpAgent.SetNotificationSender(mockConn)
-
-	ctx := t.Context()
-
-	sessionID := acp.SessionId("test-session")
-
-	// Subscribe to events.
-	subID, eventCh, err := emitter.Subscribe()
-	require.NoError(t, err)
-
-	defer emitter.Unsubscribe(subID)
-
-	// Start event processing.
-	go acpAgent.processEvents(ctx, sessionID, eventCh)
-
-	// Emit a tool call start event.
-	emitter.Emit(events.Event{
-		Type:      events.EventToolCallStart,
-		Timestamp: time.Now(),
-		Data: events.ToolCallStartData{
-			ToolID:   "tool-123",
-			ToolName: "read_file",
+	runProcessEventTests(t, []processEventCase{
+		{
+			name: "tool call start",
+			event: events.Event{
+				Type:      events.EventToolCallStart,
+				Timestamp: time.Now(),
+				Data:      events.ToolCallStartData{ToolID: "tool-123", ToolName: "read_file"},
+			},
 		},
 	})
-
-	// Give it time to process.
-	time.Sleep(50 * time.Millisecond)
-
-	// Verify notification was sent.
-	notifications := mockConn.GetNotifications()
-	require.Len(t, notifications, 1, "should have one notification")
-	assert.Equal(t, sessionID, notifications[0].SessionId)
 }
 
 // TestProcessEvents_NoConnection tests that events are not sent when connection is nil.

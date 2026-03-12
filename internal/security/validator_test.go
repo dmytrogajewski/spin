@@ -187,139 +187,59 @@ func TestValidator_Classify(t *testing.T) {
 	}
 }
 
-func TestValidator_IsSafe(t *testing.T) {
-	t.Parallel()
+// validatorPredicateCase describes a test case for a Validator predicate method.
+type validatorPredicateCase struct {
+	name     string
+	cmd      *Command
+	expected bool
+}
+
+func runValidatorPredicateTests(t *testing.T, cases []validatorPredicateCase, opName string, op func(*Validator, *Command) bool) {
+	t.Helper()
 	validator := NewValidator()
 
-	tests := []struct {
-		name     string
-		cmd      *Command
-		expected bool
-	}{
-		{
-			name: "safe command",
-			cmd: &Command{
-				Program: "ls",
-				Args:    []string{"-la"},
-				Raw:     "ls -la",
-			},
-			expected: true,
-		},
-		{
-			name: "dangerous command",
-			cmd: &Command{
-				Program: "rm",
-				Args:    []string{"-rf", "test"},
-				Raw:     "rm -rf test",
-			},
-			expected: false,
-		},
-		{
-			name:     "nil command",
-			cmd:      nil,
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := validator.IsSafe(tt.cmd)
+			result := op(validator, tt.cmd)
 			if result != tt.expected {
-				t.Errorf("IsSafe() = %v, want %v", result, tt.expected)
+				t.Errorf("%s() = %v, want %v", opName, result, tt.expected)
 			}
 		})
 	}
+}
+
+var (
+	safeCmd = &Command{Program: "ls", Args: []string{"-la"}, Raw: "ls -la"}
+	rmCmd   = &Command{Program: "rm", Args: []string{"-rf", "test"}, Raw: "rm -rf test"}
+	rmRoot  = &Command{Program: "rm", Args: []string{"-rf", "/"}, Raw: "rm -rf /"}
+)
+
+func TestValidator_IsSafe(t *testing.T) {
+	t.Parallel()
+	runValidatorPredicateTests(t, []validatorPredicateCase{
+		{"safe command", safeCmd, true},
+		{"dangerous command", rmCmd, false},
+		{"nil command", nil, false},
+	}, "IsSafe", (*Validator).IsSafe)
 }
 
 func TestValidator_IsDangerous(t *testing.T) {
 	t.Parallel()
-	validator := NewValidator()
-
-	tests := []struct {
-		name     string
-		cmd      *Command
-		expected bool
-	}{
-		{
-			name: "safe command",
-			cmd: &Command{
-				Program: "ls",
-				Args:    []string{"-la"},
-				Raw:     "ls -la",
-			},
-			expected: false,
-		},
-		{
-			name: "dangerous command",
-			cmd: &Command{
-				Program: "rm",
-				Args:    []string{"-rf", "test"},
-				Raw:     "rm -rf test",
-			},
-			expected: true,
-		},
-		{
-			name:     "nil command",
-			cmd:      nil,
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			result := validator.IsDangerous(tt.cmd)
-			if result != tt.expected {
-				t.Errorf("IsDangerous() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
+	runValidatorPredicateTests(t, []validatorPredicateCase{
+		{"safe command", safeCmd, false},
+		{"dangerous command", rmCmd, true},
+		{"nil command", nil, false},
+	}, "IsDangerous", (*Validator).IsDangerous)
 }
 
 func TestValidator_IsForbidden(t *testing.T) {
 	t.Parallel()
-	validator := NewValidator()
-
-	tests := []struct {
-		name     string
-		cmd      *Command
-		expected bool
-	}{
-		{
-			name: "safe command",
-			cmd: &Command{
-				Program: "ls",
-				Args:    []string{"-la"},
-				Raw:     "ls -la",
-			},
-			expected: false,
-		},
-		{
-			name: "forbidden command",
-			cmd: &Command{
-				Program: "rm",
-				Args:    []string{"-rf", "/"},
-				Raw:     "rm -rf /",
-			},
-			expected: true,
-		},
-		{
-			name:     "nil command",
-			cmd:      nil,
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			result := validator.IsForbidden(tt.cmd)
-			if result != tt.expected {
-				t.Errorf("IsForbidden() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
+	runValidatorPredicateTests(t, []validatorPredicateCase{
+		{"safe command", safeCmd, false},
+		{"forbidden command", rmRoot, true},
+		{"nil command", nil, false},
+	}, "IsForbidden", (*Validator).IsForbidden)
 }
 
 func TestValidator_NeedsApproval(t *testing.T) {

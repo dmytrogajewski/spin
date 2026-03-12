@@ -255,56 +255,54 @@ func TestLoop_Submit(t *testing.T) {
 	<-out
 }
 
+// loopExitCase describes a test case where a key event should cause the loop to exit.
+type loopExitCase struct {
+	name string
+	key  term.KeyKind
+}
+
+func runLoopExitTests(t *testing.T, cases []loopExitCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			renderer := NewFakeRenderer()
+			keys := make(chan term.KeyEvent, 10)
+			model := NewModel(100)
+
+			loop := NewLoop(model, renderer, keys)
+
+			ctx := t.Context()
+
+			out := loop.Run(ctx)
+
+			keys <- term.KeyEvent{Kind: tt.key}
+
+			select {
+			case _, ok := <-out:
+				if ok {
+					t.Errorf("Expected output channel to close on %v", tt.key)
+				}
+			case <-time.After(100 * time.Millisecond):
+				t.Error("Expected output channel to close quickly")
+			}
+		})
+	}
+}
+
 func TestLoop_CtrlC(t *testing.T) {
 	t.Parallel()
-	renderer := NewFakeRenderer()
-	keys := make(chan term.KeyEvent, 10)
-	model := NewModel(100)
-
-	loop := NewLoop(model, renderer, keys)
-
-	ctx := t.Context()
-
-	out := loop.Run(ctx)
-
-	// Send Ctrl-C.
-	keys <- term.KeyEvent{Kind: term.KeyCtrlC}
-
-	// Output channel should close.
-	select {
-	case _, ok := <-out:
-		if ok {
-			t.Error("Expected output channel to close on Ctrl-C")
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Expected output channel to close quickly")
-	}
+	runLoopExitTests(t, []loopExitCase{
+		{"ctrl-c exits", term.KeyCtrlC},
+	})
 }
 
 func TestLoop_CtrlD_EmptyBuffer(t *testing.T) {
 	t.Parallel()
-	renderer := NewFakeRenderer()
-	keys := make(chan term.KeyEvent, 10)
-	model := NewModel(100)
-
-	loop := NewLoop(model, renderer, keys)
-
-	ctx := t.Context()
-
-	out := loop.Run(ctx)
-
-	// Send Ctrl-D on empty buffer.
-	keys <- term.KeyEvent{Kind: term.KeyCtrlD}
-
-	// Output channel should close.
-	select {
-	case _, ok := <-out:
-		if ok {
-			t.Error("Expected output channel to close on Ctrl-D")
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Expected output channel to close quickly")
-	}
+	runLoopExitTests(t, []loopExitCase{
+		{"ctrl-d on empty exits", term.KeyCtrlD},
+	})
 }
 
 func TestLoop_CtrlD_NonEmptyBuffer(t *testing.T) {

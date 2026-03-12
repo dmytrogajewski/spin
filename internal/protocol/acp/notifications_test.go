@@ -476,72 +476,76 @@ func TestConvertToolCallStart_WriteFile_NewFile(t *testing.T) {
 	assert.Equal(t, tmpFile, filePath)
 }
 
+// writeFileDiffCase describes a test case for write_file completion diff generation.
+type writeFileDiffCase struct {
+	name       string
+	toolID     string
+	filePath   string
+	oldContent string
+	newContent string
+}
+
+func runWriteFileDiffTests(t *testing.T, cases []writeFileDiffCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			tracker := newFileContentTracker()
+
+			tracker.oldContent[tt.toolID] = tt.oldContent
+			tracker.filePaths[tt.toolID] = tt.filePath
+			tracker.newContent[tt.toolID] = tt.newContent
+
+			event := events.Event{
+				Type:      events.EventToolCallComplete,
+				Timestamp: time.Now(),
+				Data: events.ToolCallCompleteData{
+					ToolID:   tt.toolID,
+					ToolName: "write_file",
+					Success:  true,
+					Output:   "Successfully wrote file",
+				},
+			}
+
+			update, ok := convertToolCallComplete(event, tracker)
+
+			assert.True(t, ok, "should convert EventToolCallComplete")
+			assert.NotNil(t, update)
+
+			oldC, _, _, hasContent := tracker.getContentForDiff(tt.toolID)
+			_ = oldC
+			assert.False(t, hasContent, "tracker should be cleaned up after completion")
+		})
+	}
+}
+
 // TestConvertToolCallComplete_WriteFile_IncludesDiff tests that write_file completion includes diff.
 func TestConvertToolCallComplete_WriteFile_IncludesDiff(t *testing.T) {
 	t.Parallel()
-	tracker := newFileContentTracker()
-
-	// Pre-populate tracker with old and new content.
-	toolID := "tool-write"
-	filePath := "/tmp/test.txt"
-	tracker.oldContent[toolID] = "old line 1\nold line 2"
-	tracker.filePaths[toolID] = filePath
-	tracker.newContent[toolID] = "new line 1\nnew line 2\nnew line 3"
-
-	event := events.Event{
-		Type:      events.EventToolCallComplete,
-		Timestamp: time.Now(),
-		Data: events.ToolCallCompleteData{
-			ToolID:   toolID,
-			ToolName: "write_file",
-			Success:  true,
-			Output:   "Successfully wrote file",
+	runWriteFileDiffTests(t, []writeFileDiffCase{
+		{
+			name:       "existing file diff",
+			toolID:     "tool-write",
+			filePath:   "/tmp/test.txt",
+			oldContent: "old line 1\nold line 2",
+			newContent: "new line 1\nnew line 2\nnew line 3",
 		},
-	}
-
-	update, ok := convertToolCallComplete(event, tracker)
-
-	assert.True(t, ok, "should convert EventToolCallComplete")
-	assert.NotNil(t, update)
-
-	// Verify tracker was cleaned up.
-	oldC, _, _, hasContent := tracker.getContentForDiff(toolID)
-	_ = oldC
-	assert.False(t, hasContent, "tracker should be cleaned up after completion")
+	})
 }
 
 // TestConvertToolCallComplete_WriteFile_NewFile tests diff generation for new file creation.
 func TestConvertToolCallComplete_WriteFile_NewFile(t *testing.T) {
 	t.Parallel()
-	tracker := newFileContentTracker()
-
-	// Pre-populate tracker with empty old content (new file).
-	toolID := "tool-new"
-	filePath := "/tmp/newfile.txt"
-	tracker.oldContent[toolID] = "" // Empty for new file.
-	tracker.filePaths[toolID] = filePath
-	tracker.newContent[toolID] = "new file content\nline 2"
-
-	event := events.Event{
-		Type:      events.EventToolCallComplete,
-		Timestamp: time.Now(),
-		Data: events.ToolCallCompleteData{
-			ToolID:   toolID,
-			ToolName: "write_file",
-			Success:  true,
-			Output:   "Successfully wrote file",
+	runWriteFileDiffTests(t, []writeFileDiffCase{
+		{
+			name:       "new file diff",
+			toolID:     "tool-new",
+			filePath:   "/tmp/newfile.txt",
+			oldContent: "",
+			newContent: "new file content\nline 2",
 		},
-	}
-
-	update, ok := convertToolCallComplete(event, tracker)
-
-	assert.True(t, ok, "should convert EventToolCallComplete")
-	assert.NotNil(t, update)
-
-	// Verify tracker was cleaned up.
-	oldC, _, _, hasContent := tracker.getContentForDiff(toolID)
-	_ = oldC
-	assert.False(t, hasContent, "tracker should be cleaned up after completion")
+	})
 }
 
 // TestConvertToolCallComplete_NonWriteFile_NoDiff tests that non-write_file tools don't generate diffs.

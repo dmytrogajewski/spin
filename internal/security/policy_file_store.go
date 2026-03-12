@@ -16,9 +16,9 @@ const fileStoreEvictionInterval = 30 * time.Second
 
 var ErrPathIsRequired = errors.New("path is required")
 
-// filePolicyStore persists global-scope policies to a single JSON file with
+// FilePolicyStore persists global-scope policies to a single JSON file with
 // atomic writes and advisory locking. Non-global scopes are kept in-memory only.
-type filePolicyStore struct {
+type FilePolicyStore struct {
 	path     string
 	mu       sync.RWMutex
 	byScope  map[string]map[string]Policy // scope -> keyStr -> policy (in-memory view).
@@ -29,7 +29,7 @@ type filePolicyStore struct {
 // NewFilePolicyStore creates a file-backed policy store.
 // The janitor evictionInterval controls how often expired entries are pruned from memory.
 // If interval <= 0, a default of 30s is used.
-func NewFilePolicyStore(path string, evictionInterval time.Duration) (PolicyStore, error) {
+func NewFilePolicyStore(path string, evictionInterval time.Duration) (*FilePolicyStore, error) {
 	if path == "" {
 		return nil, ErrPathIsRequired
 	}
@@ -43,7 +43,7 @@ func NewFilePolicyStore(path string, evictionInterval time.Duration) (PolicyStor
 		evictionInterval = fileStoreEvictionInterval
 	}
 
-	s := &filePolicyStore{
+	s := &FilePolicyStore{
 		path:     path,
 		byScope:  make(map[string]map[string]Policy),
 		stopCh:   make(chan struct{}),
@@ -60,7 +60,7 @@ func NewFilePolicyStore(path string, evictionInterval time.Duration) (PolicyStor
 	return s, nil
 }
 
-func (s *filePolicyStore) janitor() {
+func (s *FilePolicyStore) janitor() {
 	t := time.NewTicker(s.interval)
 	defer t.Stop()
 
@@ -75,13 +75,13 @@ func (s *filePolicyStore) janitor() {
 }
 
 // Close stops the janitor goroutine and releases resources.
-func (s *filePolicyStore) Close() error {
+func (s *FilePolicyStore) Close() error {
 	close(s.stopCh)
 
 	return nil
 }
 
-func (s *filePolicyStore) removeExpired() {
+func (s *FilePolicyStore) removeExpired() {
 	now := time.Now()
 
 	s.mu.Lock()
@@ -103,7 +103,7 @@ func (s *filePolicyStore) removeExpired() {
 }
 
 // Save implements the Save operation.
-func (s *filePolicyStore) Save(_ context.Context, p Policy) error {
+func (s *FilePolicyStore) Save(_ context.Context, p Policy) error {
 	keyStr := keyString(p.Key)
 
 	s.mu.Lock()
@@ -124,55 +124,25 @@ func (s *filePolicyStore) Save(_ context.Context, p Policy) error {
 }
 
 // Get implements the Get operation.
-func (s *filePolicyStore) Get(_ context.Context, key PolicyKey, scope string) (Policy, bool, error) {
-	keyStr := keyString(key)
-
+func (s *FilePolicyStore) Get(_ context.Context, key PolicyKey, scope string) (Policy, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	m := s.byScope[scope]
-	if m == nil {
-		return Policy{}, false, nil
-	}
+	p, ok := getFromScopeMap(s.byScope, key, scope)
 
-	p, ok := m[keyStr]
-	if !ok {
-		return Policy{}, false, nil
-	}
-
-	if p.ExpiresAt != nil && time.Now().After(*p.ExpiresAt) {
-		return Policy{}, false, nil
-	}
-
-	return p, true, nil
+	return p, ok, nil
 }
 
 // List implements the List operation.
-func (s *filePolicyStore) List(_ context.Context, scope string) ([]Policy, error) {
-	now := time.Now()
-
+func (s *FilePolicyStore) List(_ context.Context, scope string) ([]Policy, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	m := s.byScope[scope]
-	if m == nil {
-		return []Policy{}, nil
-	}
-
-	out := make([]Policy, 0, len(m))
-	for _, p := range m {
-		if p.ExpiresAt != nil && now.After(*p.ExpiresAt) {
-			continue
-		}
-
-		out = append(out, p)
-	}
-
-	return out, nil
+	return listFromScopeMap(s.byScope, scope), nil
 }
 
 // Delete implements the Delete operation.
-func (s *filePolicyStore) Delete(_ context.Context, key PolicyKey, scope string) (bool, error) {
+func (s *FilePolicyStore) Delete(_ context.Context, key PolicyKey, scope string) (bool, error) {
 	keyStr := keyString(key)
 
 	s.mu.Lock()
@@ -203,7 +173,7 @@ func (s *filePolicyStore) Delete(_ context.Context, key PolicyKey, scope string)
 }
 
 // Clear implements the Clear operation.
-func (s *filePolicyStore) Clear(_ context.Context, scope string) (int, error) {
+func (s *FilePolicyStore) Clear(_ context.Context, scope string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -228,7 +198,7 @@ func (s *filePolicyStore) Clear(_ context.Context, scope string) (int, error) {
 
 // persistGlobalLocked writes the global scope policies to disk atomically
 // with an advisory lock. Caller must hold s.mu.
-func (s *filePolicyStore) persistGlobalLocked() error {
+func (s *FilePolicyStore) persistGlobalLocked() error {
 	global := s.byScope[ScopeGlobal]
 	if global == nil {
 		global = map[string]Policy{}
@@ -275,7 +245,7 @@ func (s *filePolicyStore) persistGlobalLocked() error {
 }
 
 // loadFromDisk loads global scope from disk into memory (best-effort).
-func (s *filePolicyStore) loadFromDisk() error {
+func (s *FilePolicyStore) loadFromDisk() error {
 	// Open with shared lock to read.
 	f, err := os.OpenFile(s.path, os.O_RDONLY, 0o600)
 	if err != nil {

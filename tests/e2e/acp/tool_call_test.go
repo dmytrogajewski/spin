@@ -423,49 +423,77 @@ func TestACP_ToolCall_Content_Text(t *testing.T) {
 	t.Log("No text content in tool calls found (may be expected)")
 }
 
+// toolCallNotificationCase describes a test that sends a prompt and checks notifications.
+type toolCallNotificationCase struct {
+	name       string
+	promptText string
+	checkFunc  func(t *testing.T, notifications []acp.SessionNotification) bool
+	notFoundMsg string
+}
+
+func runToolCallNotificationTests(t *testing.T, cases []toolCallNotificationCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if testing.Short() {
+				t.Skip("Skipping E2E test in short mode")
+			}
+
+			workDir := createTestWorkspace(t)
+
+			cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+			defer cleanupAgent(t, cmd, stdin)
+
+			clientImpl := &testClient{}
+			client := createACPClientWithClient(t, stdin, stdout, clientImpl)
+			ctx := context.Background()
+
+			_, err := client.Initialize(ctx, acp.InitializeRequest{
+				ProtocolVersion: acp.ProtocolVersionNumber,
+			})
+			require.NoError(t, err)
+
+			sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+				Cwd:        workDir,
+				McpServers: []acp.McpServer{},
+			})
+			require.NoError(t, err)
+
+			clientImpl.clearNotifications()
+
+			promptReq := acp.PromptRequest{
+				SessionId: sessionResp.SessionId,
+				Prompt:    []acp.ContentBlock{acp.TextBlock(tt.promptText)},
+			}
+
+			_, err = client.Prompt(ctx, promptReq)
+			require.NoError(t, err)
+
+			if tt.checkFunc(t, clientImpl.getNotifications()) {
+				return
+			}
+
+			t.Log(tt.notFoundMsg)
+		})
+	}
+}
+
 // TestACP_ToolCall_Content_Diff tests diff content in tool calls.
 func TestACP_ToolCall_Content_Diff(t *testing.T) {
 	t.Parallel()
-
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
-
-	workDir := createTestWorkspace(t)
-
-	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
-	defer cleanupAgent(t, cmd, stdin)
-
-	clientImpl := &testClient{}
-	client := createACPClientWithClient(t, stdin, stdout, clientImpl)
-	ctx := context.Background()
-
-	_, err := client.Initialize(ctx, acp.InitializeRequest{
-		ProtocolVersion: acp.ProtocolVersionNumber,
+	runToolCallNotificationTests(t, []toolCallNotificationCase{
+		{
+			name:       "diff content",
+			promptText: "write file test.txt with content hello",
+			checkFunc: func(t *testing.T, notifications []acp.SessionNotification) bool {
+				return findDiffInNotifications(t, notifications)
+			},
+			notFoundMsg: "No diff content in tool calls found (may be expected)",
+		},
 	})
-	require.NoError(t, err)
-
-	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
-		Cwd:        workDir,
-		McpServers: []acp.McpServer{},
-	})
-	require.NoError(t, err)
-
-	clientImpl.clearNotifications()
-
-	promptReq := acp.PromptRequest{
-		SessionId: sessionResp.SessionId,
-		Prompt:    []acp.ContentBlock{acp.TextBlock("write file test.txt with content hello")},
-	}
-
-	_, err = client.Prompt(ctx, promptReq)
-	require.NoError(t, err)
-
-	if findDiffInNotifications(t, clientImpl.getNotifications()) {
-		return
-	}
-
-	t.Log("No diff content in tool calls found (may be expected)")
 }
 
 // findDiffInNotifications searches for diff content in notifications and validates it.
@@ -509,46 +537,16 @@ func findDiffInContentList(t *testing.T, content []acp.ToolCallContent, label st
 // TestACP_ToolCall_Locations tests file locations in tool calls.
 func TestACP_ToolCall_Locations(t *testing.T) {
 	t.Parallel()
-
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
-
-	workDir := createTestWorkspace(t)
-
-	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
-	defer cleanupAgent(t, cmd, stdin)
-
-	clientImpl := &testClient{}
-	client := createACPClientWithClient(t, stdin, stdout, clientImpl)
-	ctx := context.Background()
-
-	_, err := client.Initialize(ctx, acp.InitializeRequest{
-		ProtocolVersion: acp.ProtocolVersionNumber,
+	runToolCallNotificationTests(t, []toolCallNotificationCase{
+		{
+			name:       "locations",
+			promptText: "read file test.txt",
+			checkFunc: func(t *testing.T, notifications []acp.SessionNotification) bool {
+				return findLocationInNotifications(t, notifications)
+			},
+			notFoundMsg: "No locations in tool calls found (may be expected)",
+		},
 	})
-	require.NoError(t, err)
-
-	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
-		Cwd:        workDir,
-		McpServers: []acp.McpServer{},
-	})
-	require.NoError(t, err)
-
-	clientImpl.clearNotifications()
-
-	promptReq := acp.PromptRequest{
-		SessionId: sessionResp.SessionId,
-		Prompt:    []acp.ContentBlock{acp.TextBlock("read file test.txt")},
-	}
-
-	_, err = client.Prompt(ctx, promptReq)
-	require.NoError(t, err)
-
-	if findLocationInNotifications(t, clientImpl.getNotifications()) {
-		return
-	}
-
-	t.Log("No locations in tool calls found (may be expected)")
 }
 
 // findLocationInNotifications searches for file locations in notifications.
@@ -666,132 +664,107 @@ func TestACP_ToolCall_Kinds(t *testing.T) {
 	}
 }
 
+// rawFieldCase describes a test case for checking raw fields in tool call notifications.
+type rawFieldCase struct {
+	name       string
+	promptText string
+	fieldName  string
+	checkFunc  func(notif acp.SessionNotification) (any, bool)
+}
+
+func runRawFieldTests(t *testing.T, cases []rawFieldCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if testing.Short() {
+				t.Skip("Skipping E2E test in short mode")
+			}
+
+			workDir := createTestWorkspace(t)
+
+			cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
+			defer cleanupAgent(t, cmd, stdin)
+
+			clientImpl := &testClient{}
+			client := createACPClientWithClient(t, stdin, stdout, clientImpl)
+			ctx := context.Background()
+
+			_, err := client.Initialize(ctx, acp.InitializeRequest{
+				ProtocolVersion: acp.ProtocolVersionNumber,
+			})
+			require.NoError(t, err)
+
+			sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
+				Cwd:        workDir,
+				McpServers: []acp.McpServer{},
+			})
+			require.NoError(t, err)
+
+			clientImpl.clearNotifications()
+
+			promptReq := acp.PromptRequest{
+				SessionId: sessionResp.SessionId,
+				Prompt:    []acp.ContentBlock{acp.TextBlock(tt.promptText)},
+			}
+
+			_, err = client.Prompt(ctx, promptReq)
+			require.NoError(t, err)
+
+			for _, notif := range clientImpl.getNotifications() {
+				if val, found := tt.checkFunc(notif); found {
+					t.Logf("Found %s: %v", tt.fieldName, val)
+					return
+				}
+			}
+
+			t.Logf("No %s in tool calls found (may be expected)", tt.fieldName)
+		})
+	}
+}
+
 // TestACP_ToolCall_RawInput tests rawInput field.
 func TestACP_ToolCall_RawInput(t *testing.T) {
 	t.Parallel()
-
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
-
-	workDir := createTestWorkspace(t)
-
-	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
-	defer cleanupAgent(t, cmd, stdin)
-
-	clientImpl := &testClient{}
-	client := createACPClientWithClient(t, stdin, stdout, clientImpl)
-	ctx := context.Background()
-
-	_, err := client.Initialize(ctx, acp.InitializeRequest{
-		ProtocolVersion: acp.ProtocolVersionNumber,
-	})
-	require.NoError(t, err)
-
-	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
-		Cwd:        workDir,
-		McpServers: []acp.McpServer{},
-	})
-	require.NoError(t, err)
-
-	clientImpl.clearNotifications()
-
-	// Send prompt that should trigger tool call.
-	promptReq := acp.PromptRequest{
-		SessionId: sessionResp.SessionId,
-		Prompt: []acp.ContentBlock{
-			acp.TextBlock("read file test.txt"),
+	runRawFieldTests(t, []rawFieldCase{
+		{
+			name:       "rawInput",
+			promptText: "read file test.txt",
+			fieldName:  "rawInput",
+			checkFunc: func(notif acp.SessionNotification) (any, bool) {
+				if tc := notif.Update.ToolCall; tc != nil && tc.RawInput != nil {
+					return tc.RawInput, true
+				}
+				if upd := notif.Update.ToolCallUpdate; upd != nil && upd.RawInput != nil {
+					return upd.RawInput, true
+				}
+				return nil, false
+			},
 		},
-	}
-
-	_, err = client.Prompt(ctx, promptReq)
-	require.NoError(t, err)
-
-	// Check for rawInput in tool calls.
-	notifications := clientImpl.getNotifications()
-	for _, notif := range notifications {
-		if toolCall := notif.Update.ToolCall; toolCall != nil {
-			if toolCall.RawInput != nil {
-				t.Logf("Found rawInput in tool call: %v", toolCall.RawInput)
-
-				return
-			}
-		}
-
-		if update := notif.Update.ToolCallUpdate; update != nil {
-			if update.RawInput != nil {
-				t.Logf("Found rawInput in tool call update: %v", update.RawInput)
-
-				return
-			}
-		}
-	}
-
-	t.Log("No rawInput in tool calls found (may be expected)")
+	})
 }
 
 // TestACP_ToolCall_RawOutput tests rawOutput field.
 func TestACP_ToolCall_RawOutput(t *testing.T) {
 	t.Parallel()
-
-	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
-	}
-
-	workDir := createTestWorkspace(t)
-
-	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
-	defer cleanupAgent(t, cmd, stdin)
-
-	clientImpl := &testClient{}
-	client := createACPClientWithClient(t, stdin, stdout, clientImpl)
-	ctx := context.Background()
-
-	_, err := client.Initialize(ctx, acp.InitializeRequest{
-		ProtocolVersion: acp.ProtocolVersionNumber,
-	})
-	require.NoError(t, err)
-
-	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
-		Cwd:        workDir,
-		McpServers: []acp.McpServer{},
-	})
-	require.NoError(t, err)
-
-	clientImpl.clearNotifications()
-
-	// Send prompt that should trigger tool call.
-	promptReq := acp.PromptRequest{
-		SessionId: sessionResp.SessionId,
-		Prompt: []acp.ContentBlock{
-			acp.TextBlock("read file test.txt"),
+	runRawFieldTests(t, []rawFieldCase{
+		{
+			name:       "rawOutput",
+			promptText: "read file test.txt",
+			fieldName:  "rawOutput",
+			checkFunc: func(notif acp.SessionNotification) (any, bool) {
+				if tc := notif.Update.ToolCall; tc != nil && tc.RawOutput != nil {
+					return tc.RawOutput, true
+				}
+				if upd := notif.Update.ToolCallUpdate; upd != nil && upd.RawOutput != nil {
+					return upd.RawOutput, true
+				}
+				return nil, false
+			},
 		},
-	}
-
-	_, err = client.Prompt(ctx, promptReq)
-	require.NoError(t, err)
-
-	// Check for rawOutput in tool calls.
-	notifications := clientImpl.getNotifications()
-	for _, notif := range notifications {
-		if toolCall := notif.Update.ToolCall; toolCall != nil {
-			if toolCall.RawOutput != nil {
-				t.Logf("Found rawOutput in tool call: %v", toolCall.RawOutput)
-
-				return
-			}
-		}
-
-		if update := notif.Update.ToolCallUpdate; update != nil {
-			if update.RawOutput != nil {
-				t.Logf("Found rawOutput in tool call update: %v", update.RawOutput)
-
-				return
-			}
-		}
-	}
-
-	t.Log("No rawOutput in tool calls found (may be expected)")
+	})
 }
 
 // TestACP_ToolCall_Multiple tests multiple tool calls in one turn.

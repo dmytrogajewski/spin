@@ -522,62 +522,61 @@ func TestTimeline_NextPrevBlock(t *testing.T) {
 	}
 }
 
+// blockClampingCase describes a test case for block navigation clamping.
+type blockClampingCase struct {
+	name     string
+	focusID  string
+	moveFunc func(*Timeline) error
+	wantID   string
+}
+
+func runBlockClampingTests(t *testing.T, cases []blockClampingCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			timeline := NewTimeline()
+
+			for i := range 3 {
+				block := NewBlock(BlockTypeExecute)
+				block.ID = string(rune('a' + i))
+				if err := timeline.Append(block); err != nil {
+					t.Fatalf("Append failed: %v", err)
+				}
+			}
+
+			if err := timeline.FocusBlock(tt.focusID); err != nil {
+				t.Fatalf("FocusBlock failed: %v", err)
+			}
+
+			if err := tt.moveFunc(timeline); err != nil {
+				t.Fatalf("move failed: %v", err)
+			}
+
+			focused, err := timeline.GetFocusedBlock()
+			if err != nil {
+				t.Fatalf("GetFocusedBlock failed: %v", err)
+			}
+			if focused.ID != tt.wantID {
+				t.Errorf("expected '%s', got '%s'", tt.wantID, focused.ID)
+			}
+		})
+	}
+}
+
 func TestTimeline_NextBlockClamping(t *testing.T) {
 	t.Parallel()
-	timeline := NewTimeline()
-
-	for i := range 3 {
-		block := NewBlock(BlockTypeExecute)
-		block.ID = string(rune('a' + i))
-		if err := timeline.Append(block); err != nil {
-			t.Fatalf("Append failed: %v", err)
-		}
-	}
-
-	if err := timeline.FocusBlock("c"); err != nil {
-		t.Fatalf("FocusBlock failed: %v", err)
-	}
-
-	if err := timeline.NextBlock(); err != nil {
-		t.Fatalf("NextBlock failed: %v", err)
-	}
-
-	focused, err := timeline.GetFocusedBlock()
-	if err != nil {
-		t.Fatalf("GetFocusedBlock failed: %v", err)
-	}
-	if focused.ID != "c" {
-		t.Errorf("NextBlock at end: expected 'c', got '%s'", focused.ID)
-	}
+	runBlockClampingTests(t, []blockClampingCase{
+		{"next at end stays", "c", (*Timeline).NextBlock, "c"},
+	})
 }
 
 func TestTimeline_PrevBlockClamping(t *testing.T) {
 	t.Parallel()
-	timeline := NewTimeline()
-
-	for i := range 3 {
-		block := NewBlock(BlockTypeExecute)
-		block.ID = string(rune('a' + i))
-		if err := timeline.Append(block); err != nil {
-			t.Fatalf("Append failed: %v", err)
-		}
-	}
-
-	if err := timeline.FocusBlock("a"); err != nil {
-		t.Fatalf("FocusBlock failed: %v", err)
-	}
-
-	if err := timeline.PrevBlock(); err != nil {
-		t.Fatalf("PrevBlock failed: %v", err)
-	}
-
-	focused, err := timeline.GetFocusedBlock()
-	if err != nil {
-		t.Fatalf("GetFocusedBlock failed: %v", err)
-	}
-	if focused.ID != "a" {
-		t.Errorf("PrevBlock at start: expected 'a', got '%s'", focused.ID)
-	}
+	runBlockClampingTests(t, []blockClampingCase{
+		{"prev at start stays", "a", (*Timeline).PrevBlock, "a"},
+	})
 }
 
 // ========== Filtering Tests ==========.
@@ -923,56 +922,58 @@ func TestTimeline_ToggleFold(t *testing.T) {
 	}
 }
 
+// foldAllCase describes a test case for bulk fold operations.
+type foldAllCase struct {
+	name       string
+	initState  FoldState
+	op         func(*Timeline)
+	wantState  FoldState
+}
+
+func runFoldAllTests(t *testing.T, cases []foldAllCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			timeline := NewTimeline()
+
+			for i := range 3 {
+				block := NewBlock(BlockTypeExecute)
+				block.ID = string(rune('a' + i))
+				block.FoldState = tt.initState
+				if err := timeline.Append(block); err != nil {
+					t.Fatalf("Append failed: %v", err)
+				}
+			}
+
+			tt.op(timeline)
+
+			for i := range 3 {
+				block, err := timeline.GetByIndex(i)
+				if err != nil {
+					t.Fatalf("GetByIndex(%d) failed: %v", i, err)
+				}
+				if block.FoldState != tt.wantState {
+					t.Errorf("Block %d: expected %v, got %v", i, tt.wantState, block.FoldState)
+				}
+			}
+		})
+	}
+}
+
 func TestTimeline_ExpandAll(t *testing.T) {
 	t.Parallel()
-	timeline := NewTimeline()
-
-	for i := range 3 {
-		block := NewBlock(BlockTypeExecute)
-		block.ID = string(rune('a' + i))
-		block.FoldState = FoldStateCollapsed
-		if err := timeline.Append(block); err != nil {
-			t.Fatalf("Append failed: %v", err)
-		}
-	}
-
-	timeline.ExpandAll()
-
-	for i := range 3 {
-		block, err := timeline.GetByIndex(i)
-		if err != nil {
-			t.Fatalf("GetByIndex(%d) failed: %v", i, err)
-		}
-		if block.FoldState != FoldStateExpanded {
-			t.Errorf("Block %d: expected FoldStateExpanded, got %v", i, block.FoldState)
-		}
-	}
+	runFoldAllTests(t, []foldAllCase{
+		{"expand all", FoldStateCollapsed, (*Timeline).ExpandAll, FoldStateExpanded},
+	})
 }
 
 func TestTimeline_CollapseAll(t *testing.T) {
 	t.Parallel()
-	timeline := NewTimeline()
-
-	for i := range 3 {
-		block := NewBlock(BlockTypeExecute)
-		block.ID = string(rune('a' + i))
-		block.FoldState = FoldStateExpanded
-		if err := timeline.Append(block); err != nil {
-			t.Fatalf("Append failed: %v", err)
-		}
-	}
-
-	timeline.CollapseAll()
-
-	for i := range 3 {
-		block, err := timeline.GetByIndex(i)
-		if err != nil {
-			t.Fatalf("GetByIndex(%d) failed: %v", i, err)
-		}
-		if block.FoldState != FoldStateCollapsed {
-			t.Errorf("Block %d: expected FoldStateCollapsed, got %v", i, block.FoldState)
-		}
-	}
+	runFoldAllTests(t, []foldAllCase{
+		{"collapse all", FoldStateExpanded, (*Timeline).CollapseAll, FoldStateCollapsed},
+	})
 }
 
 // ========== Edge Cases ==========.

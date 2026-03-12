@@ -201,56 +201,11 @@ func (t *ScratchpadTool) executeDelete(ctx context.Context, params ToolParameter
 }
 
 func (t *ScratchpadTool) executeList(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	pattern := params.GetStringOr("pattern", "*")
-
-	keys, listErr := t.scratchpad.List(ctx, pattern)
-	if listErr != nil {
-		return ErrToResultf("failed to list entries: %v", listErr)
-	}
-
-	if len(keys) == 0 {
-		return NewToolResult("No entries found"), nil
-	}
-
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Found %d entries:\n", len(keys))
-
-	for _, key := range keys {
-		fmt.Fprintf(&sb, "  - %s\n", key)
-	}
-
-	return NewToolResult(sb.String()), nil
+	return storeList(ctx, t.scratchpad, params, "scratchpad")
 }
 
 func (t *ScratchpadTool) executeSearch(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	query, _ := params.GetString("query")
-	if query == "" {
-		return NewToolError(ErrQueryParameterRequiredForSearch), nil
-	}
-
-	entries, searchErr := t.scratchpad.Search(ctx, query, defaultScratchpadSearchLimit)
-	if searchErr != nil {
-		return ErrToResultf("failed to search entries: %v", searchErr)
-	}
-
-	if len(entries) == 0 {
-		return NewToolResult(fmt.Sprintf("No entries found matching '%s'", query)), nil
-	}
-
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Found %d entries matching '%s':\n", len(entries), query)
-
-	for _, entry := range entries {
-		// Show preview of value (first 100 chars).
-		preview := entry.Value
-		if len(preview) > maxScratchpadPreviewLen {
-			preview = preview[:100] + "..."
-		}
-
-		fmt.Fprintf(&sb, "  - %s: %s\n", entry.Key, preview)
-	}
-
-	return NewToolResult(sb.String()), nil
+	return storeSearch(ctx, t.scratchpad, params, defaultScratchpadSearchLimit, maxScratchpadPreviewLen, "scratchpad")
 }
 
 func (t *ScratchpadTool) executePin(_ context.Context, params ToolParameters) (ToolResult, error) {

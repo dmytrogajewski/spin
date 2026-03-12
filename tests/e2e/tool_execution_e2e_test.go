@@ -151,122 +151,107 @@ func TestTUIToolVisualization(t *testing.T) {
 	require.NoError(t, err, "Should see completion indicator")
 }
 
+// tuiToolCase describes a TUI tool test case with a prompt and cycle detection check.
+type tuiToolCase struct {
+	name           string
+	prompt         string
+	waitSeconds    int
+	cycleBugString string
+	cycleBugMsg    string
+	expectString   string
+	expectMsg      string
+}
+
+func runTUIToolTests(t *testing.T, cases []tuiToolCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			skipTUITests(t)
+
+			console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
+			require.NoError(t, err)
+
+			defer console.Close()
+
+			binPath := getBinPath(t)
+			cmd := exec.Command(binPath, "--model", "dummy", "--provider", "test-llm")
+			cmd.Stdin = console.Tty()
+			cmd.Stdout = console.Tty()
+			cmd.Stderr = console.Tty()
+
+			cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+
+			err = cmd.Start()
+			require.NoError(t, err)
+
+			defer func() {
+				_, _ = console.Send("\x04")
+
+				done := make(chan error, 1)
+
+				go func() {
+					done <- cmd.Wait()
+				}()
+
+				select {
+				case <-done:
+				case <-time.After(2 * time.Second):
+					_ = cmd.Process.Kill()
+					<-done
+				}
+			}()
+
+			time.Sleep(2 * time.Second)
+
+			_, err = console.SendLine(tt.prompt)
+			require.NoError(t, err)
+
+			time.Sleep(time.Duration(tt.waitSeconds) * time.Second)
+
+			_, cycleErr := console.ExpectString(tt.cycleBugString)
+			if cycleErr == nil {
+				t.Fatal(tt.cycleBugMsg)
+			}
+
+			if tt.expectString != "" {
+				_, err = console.ExpectString(tt.expectString)
+				require.NoError(t, err, tt.expectMsg)
+			}
+		})
+	}
+}
+
 // TestTUIListDirectoryTool specifically tests the list_directory tool.
 func TestTUIListDirectoryTool(t *testing.T) {
 	t.Parallel()
-
-	skipTUITests(t)
-
-	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
-	require.NoError(t, err)
-
-	defer console.Close()
-
-	binPath := getBinPath(t)
-	cmd := exec.Command(binPath, "--model", "dummy", "--provider", "test-llm")
-	cmd.Stdin = console.Tty()
-	cmd.Stdout = console.Tty()
-	cmd.Stderr = console.Tty()
-
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
-
-	err = cmd.Start()
-	require.NoError(t, err)
-
-	defer func() {
-		_, _ = console.Send("\x04")
-
-		done := make(chan error, 1)
-
-		go func() {
-			done <- cmd.Wait()
-		}()
-
-		select {
-		case <-done:
-			// Command exited normally.
-		case <-time.After(2 * time.Second):
-			// Force kill after 2 seconds.
-			_ = cmd.Process.Kill()
-			<-done
-		}
-	}()
-
-	time.Sleep(2 * time.Second)
-
-	// Explicitly request list_directory.
-	_, err = console.SendLine("use the list_directory tool to show me files in the current directory")
-	require.NoError(t, err)
-
-	// Wait and check for cycle detection (the bug).
-	time.Sleep(8 * time.Second)
-
-	// Try to find cycle detection notice.
-	_, cycleErr := console.ExpectString("repeated_tool")
-	if cycleErr == nil {
-		t.Fatal("BUG DETECTED: list_directory triggered cycle detection - tool not being executed")
-	}
-
-	// If no cycle, should see tool output.
-	_, err = console.ExpectString("list_directory")
-	require.NoError(t, err, "Should see list_directory tool being called")
+	runTUIToolTests(t, []tuiToolCase{
+		{
+			name:           "list_directory",
+			prompt:         "use the list_directory tool to show me files in the current directory",
+			waitSeconds:    8,
+			cycleBugString: "repeated_tool",
+			cycleBugMsg:    "BUG DETECTED: list_directory triggered cycle detection - tool not being executed",
+			expectString:   "list_directory",
+			expectMsg:      "Should see list_directory tool being called",
+		},
+	})
 }
 
 // TestTUIMultipleToolCalls tests that multiple tool calls work correctly.
 func TestTUIMultipleToolCalls(t *testing.T) {
 	t.Parallel()
-
-	skipTUITests(t)
-
-	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
-	require.NoError(t, err)
-
-	defer console.Close()
-
-	binPath := getBinPath(t)
-	cmd := exec.Command(binPath, "--model", "dummy", "--provider", "test-llm")
-	cmd.Stdin = console.Tty()
-	cmd.Stdout = console.Tty()
-	cmd.Stderr = console.Tty()
-
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
-
-	err = cmd.Start()
-	require.NoError(t, err)
-
-	defer func() {
-		_, _ = console.Send("\x04")
-
-		done := make(chan error, 1)
-
-		go func() {
-			done <- cmd.Wait()
-		}()
-
-		select {
-		case <-done:
-			// Command exited normally.
-		case <-time.After(2 * time.Second):
-			// Force kill after 2 seconds.
-			_ = cmd.Process.Kill()
-			<-done
-		}
-	}()
-
-	time.Sleep(2 * time.Second)
-
-	// Request multiple operations.
-	_, err = console.SendLine("First list the files, then read the README.md")
-	require.NoError(t, err)
-
-	// Should see TOOL blocks (plural).
-	time.Sleep(15 * time.Second)
-
-	// Check for cycle detection.
-	_, cycleErr := console.ExpectString("Cycle detected")
-	if cycleErr == nil {
-		t.Fatal("BUG DETECTED: Cycle detection triggered with multiple tool calls")
-	}
+	runTUIToolTests(t, []tuiToolCase{
+		{
+			name:           "multiple tools",
+			prompt:         "First list the files, then read the README.md",
+			waitSeconds:    15,
+			cycleBugString: "Cycle detected",
+			cycleBugMsg:    "BUG DETECTED: Cycle detection triggered with multiple tool calls",
+		},
+	})
 }
 
 // TestTUIReadFileTool tests the read_file tool execution.

@@ -2,6 +2,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestNewDebugCmd(t *testing.T) {
@@ -192,26 +194,29 @@ func TestDebugSandboxCmdFlags(t *testing.T) {
 	}
 }
 
+// assertFlagDefaults checks that the given cmd has flags with expected default values.
+func assertFlagDefaults(t *testing.T, cmd *cobra.Command, expectations map[string]string) {
+	t.Helper()
+
+	for flagName, wantDefault := range expectations {
+		flag := cmd.Flags().Lookup(flagName)
+		if flag == nil {
+			t.Errorf("Flag %s not found", flagName)
+		} else if flag.DefValue != wantDefault {
+			t.Errorf("%s flag default = %v, want %v", flagName, flag.DefValue, wantDefault)
+		}
+	}
+}
+
 func TestDebugSandboxCmdDefaultValues(t *testing.T) {
 	t.Parallel()
 
 	cmd := newDebugSandboxCmd()
-
-	// Test default values.
-	readOnlyFlag := cmd.Flags().Lookup("read-only")
-	if readOnlyFlag == nil || readOnlyFlag.DefValue != "true" {
-		t.Errorf("read-only flag default = %v, want %v", readOnlyFlag.DefValue, "true")
-	}
-
-	networkFlag := cmd.Flags().Lookup("network")
-	if networkFlag == nil || networkFlag.DefValue != "false" {
-		t.Errorf("network flag default = %v, want %v", networkFlag.DefValue, "false")
-	}
-
-	timeoutFlag := cmd.Flags().Lookup("timeout")
-	if timeoutFlag == nil || timeoutFlag.DefValue != "30s" {
-		t.Errorf("timeout flag default = %v, want %v", timeoutFlag.DefValue, "30s")
-	}
+	assertFlagDefaults(t, cmd, map[string]string{
+		"read-only": "true",
+		"network":   "false",
+		"timeout":   "30s",
+	})
 }
 
 func TestDebugLandlockCmdFlags(t *testing.T) {
@@ -219,12 +224,7 @@ func TestDebugLandlockCmdFlags(t *testing.T) {
 
 	cmd := newDebugLandlockCmd()
 
-	// Test that expected flags exist.
-	expectedFlags := []string{
-		"allow-read",
-		"allow-write",
-		"timeout",
-	}
+	expectedFlags := []string{"allow-read", "allow-write", "timeout"}
 
 	for _, flagName := range expectedFlags {
 		flag := cmd.Flags().Lookup(flagName)
@@ -238,22 +238,11 @@ func TestDebugLandlockCmdDefaultValues(t *testing.T) {
 	t.Parallel()
 
 	cmd := newDebugLandlockCmd()
-
-	// Test default values.
-	allowReadFlag := cmd.Flags().Lookup("allow-read")
-	if allowReadFlag == nil || allowReadFlag.DefValue != "true" {
-		t.Errorf("allow-read flag default = %v, want %v", allowReadFlag.DefValue, "true")
-	}
-
-	allowWriteFlag := cmd.Flags().Lookup("allow-write")
-	if allowWriteFlag == nil || allowWriteFlag.DefValue != "false" {
-		t.Errorf("allow-write flag default = %v, want %v", allowWriteFlag.DefValue, "false")
-	}
-
-	timeoutFlag := cmd.Flags().Lookup("timeout")
-	if timeoutFlag == nil || timeoutFlag.DefValue != "30s" {
-		t.Errorf("timeout flag default = %v, want %v", timeoutFlag.DefValue, "30s")
-	}
+	assertFlagDefaults(t, cmd, map[string]string{
+		"allow-read":  "true",
+		"allow-write": "false",
+		"timeout":     "30s",
+	})
 }
 
 func TestDebugSandboxCmdExamples(t *testing.T) {

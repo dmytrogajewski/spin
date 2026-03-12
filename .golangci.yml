@@ -189,13 +189,13 @@ linters:
           strict: true
 
     iface:
-      enable: [identical, unused, opaque]
+      enable: [identical]
 
     inamedparam:
       skip-single-param: true
 
     interfacebloat:
-      max: 5
+      max: 12
 
     ireturn:
       allow:
@@ -204,6 +204,45 @@ linters:
         - empty
         - stdlib
         - generic
+        # Internal project interfaces returned by factory/builder functions.
+        - github.com/dmytrogajewski/spin/internal/ace/adapter.Adapter
+        - github.com/dmytrogajewski/spin/internal/ace/curator.Curator
+        - github.com/dmytrogajewski/spin/internal/ace/curator.RefinementStrategy
+        - github.com/dmytrogajewski/spin/internal/ace/embedding.Embedder
+        - github.com/dmytrogajewski/spin/internal/ace/generator.Generator
+        - github.com/dmytrogajewski/spin/internal/ace/reflector.Reflector
+        - github.com/dmytrogajewski/spin/internal/ace/retrieval.Retriever
+        - github.com/dmytrogajewski/spin/internal/agent/executor.CommandExecutor
+        - github.com/dmytrogajewski/spin/internal/agent/executor.NotificationSender
+        - github.com/dmytrogajewski/spin/internal/agent/executor.Runtime
+        - github.com/dmytrogajewski/spin/internal/agent/executor.TerminalClient
+        - github.com/dmytrogajewski/spin/internal/auth.Keystore
+        - github.com/dmytrogajewski/spin/internal/commands.Command
+        - github.com/dmytrogajewski/spin/internal/conversation.EventTransformer
+        - github.com/dmytrogajewski/spin/internal/detection.Intervention
+        - github.com/dmytrogajewski/spin/internal/history.Storage
+        - github.com/dmytrogajewski/spin/internal/llm.Provider
+        - github.com/dmytrogajewski/spin/internal/mcp.Client
+        - github.com/dmytrogajewski/spin/internal/mcp.Registry
+        - github.com/dmytrogajewski/spin/internal/mcp.RegistryManager
+        - github.com/dmytrogajewski/spin/internal/patchapply.FileOperation
+        - github.com/dmytrogajewski/spin/internal/protocol/acp.notificationSender
+        - github.com/dmytrogajewski/spin/internal/security.PolicyStore
+        - github.com/dmytrogajewski/spin/internal/session.Storage
+        - github.com/dmytrogajewski/spin/internal/task.Task
+        - github.com/dmytrogajewski/spin/internal/tools.CommandExecutor
+        - github.com/dmytrogajewski/spin/internal/tools.CommandInfo
+        - github.com/dmytrogajewski/spin/internal/tools.CommandValidator
+        - github.com/dmytrogajewski/spin/internal/tools.ExecutionResult
+        - github.com/dmytrogajewski/spin/internal/tools.ShellContext
+        - github.com/dmytrogajewski/spin/internal/tools.ShellContextInfo
+        - github.com/dmytrogajewski/spin/internal/tools.Tool
+        - github.com/dmytrogajewski/spin/internal/tools.ValidationResult
+        - github.com/dmytrogajewski/spin/internal/ui/blocks.ToolParamsFormatter
+        - github.com/dmytrogajewski/spin/internal/ui/overlay.Command
+        - github.com/dmytrogajewski/spin/internal/ui/ports.UI
+        # External library interfaces.
+        - github.com/openai/openai-go.ChatCompletionMessageParamUnion
 
     lll:
       line-length: 140

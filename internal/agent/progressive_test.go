@@ -134,72 +134,86 @@ func TestShouldRetrieveProgressive_TurnZero(t *testing.T) {
 	}
 }
 
+// progressiveTriggerCase is a test case for shouldRetrieveProgressive trigger detection.
+type progressiveTriggerCase struct {
+	name          string
+	config        ProgressiveContextConfig
+	steps         []generator.TrajectoryStep
+	wantRetrieve  bool
+	wantTrigger   trajectory.TriggerType
+	wantErrPrefix string
+}
+
+func runProgressiveTriggerTests(t *testing.T, cases []progressiveTriggerCase) {
+	t.Helper()
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			agent := &Agent{
+				aceConfig: &ACEConfig{
+					Retrieval: ACERetrievalConfig{
+						ProgressiveContext: tt.config,
+					},
+				},
+			}
+
+			ctx := trajectory.NewContext("test query")
+			ctx.CurrentTurn = 10
+			ctx.LastRetrievalTurn = 5
+			ctx.AppendSteps(tt.steps)
+
+			shouldRetrieve, trigger := agent.shouldRetrieveProgressive(ctx)
+
+			if shouldRetrieve != tt.wantRetrieve {
+				t.Errorf("shouldRetrieveProgressive() = %v, want %v", shouldRetrieve, tt.wantRetrieve)
+			}
+
+			if trigger != tt.wantTrigger {
+				t.Errorf("trigger = %q, want %q", trigger, tt.wantTrigger)
+			}
+		})
+	}
+}
+
 func TestShouldRetrieveProgressive_RecentError(t *testing.T) {
 	t.Parallel()
-	agent := &Agent{
-		aceConfig: &ACEConfig{
-			Retrieval: ACERetrievalConfig{
-				ProgressiveContext: ProgressiveContextConfig{
-					Enabled:       true,
-					ErrorLookback: 5,
-				},
+
+	runProgressiveTriggerTests(t, []progressiveTriggerCase{
+		{
+			name: "recent error detected",
+			config: ProgressiveContextConfig{
+				Enabled:       true,
+				ErrorLookback: 5,
 			},
+			steps: []generator.TrajectoryStep{
+				{StepNumber: 8, Content: "running command"},
+				{StepNumber: 9, Content: "error: command failed"},
+			},
+			wantRetrieve: true,
+			wantTrigger:  trajectory.TriggerError,
 		},
-	}
-
-	ctx := trajectory.NewContext("test query")
-	ctx.CurrentTurn = 10
-	ctx.LastRetrievalTurn = 5
-
-	// Add steps with error.
-	ctx.AppendSteps([]generator.TrajectoryStep{
-		{StepNumber: 8, Content: "running command"},
-		{StepNumber: 9, Content: "error: command failed"},
 	})
-
-	shouldRetrieve, trigger := agent.shouldRetrieveProgressive(ctx)
-
-	if !shouldRetrieve {
-		t.Error("expected true when recent error detected")
-	}
-
-	if trigger != trajectory.TriggerError {
-		t.Errorf("expected TriggerError, got %q", trigger)
-	}
 }
 
 func TestShouldRetrieveProgressive_ToolChange(t *testing.T) {
 	t.Parallel()
-	agent := &Agent{
-		aceConfig: &ACEConfig{
-			Retrieval: ACERetrievalConfig{
-				ProgressiveContext: ProgressiveContextConfig{
-					Enabled:            true,
-					ToolChangeLookback: 3,
-				},
+
+	runProgressiveTriggerTests(t, []progressiveTriggerCase{
+		{
+			name: "tool change detected",
+			config: ProgressiveContextConfig{
+				Enabled:            true,
+				ToolChangeLookback: 3,
 			},
+			steps: []generator.TrajectoryStep{
+				{StepNumber: 8, Content: "Tool: bash"},
+				{StepNumber: 9, Content: "Tool: grep"},
+			},
+			wantRetrieve: true,
+			wantTrigger:  trajectory.TriggerToolChange,
 		},
-	}
-
-	ctx := trajectory.NewContext("test query")
-	ctx.CurrentTurn = 10
-	ctx.LastRetrievalTurn = 5
-
-	// Add steps with tool change.
-	ctx.AppendSteps([]generator.TrajectoryStep{
-		{StepNumber: 8, Content: "Tool: bash"},
-		{StepNumber: 9, Content: "Tool: grep"}, // Different tool.
 	})
-
-	shouldRetrieve, trigger := agent.shouldRetrieveProgressive(ctx)
-
-	if !shouldRetrieve {
-		t.Error("expected true when tool change detected")
-	}
-
-	if trigger != trajectory.TriggerToolChange {
-		t.Errorf("expected TriggerToolChange, got %q", trigger)
-	}
 }
 
 func TestShouldRetrieveProgressive_Interval(t *testing.T) {

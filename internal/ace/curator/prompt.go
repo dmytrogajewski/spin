@@ -78,40 +78,68 @@ func (pb *PromptBuilder) writeCurationExamples(sb *strings.Builder) {
 	pb.writePaginationExample(sb)
 }
 
+// curationExample holds the parts of a curation example.
+type curationExample struct {
+	number     int
+	taskCtx    string
+	playbook   string
+	reflection string
+	reasoning  string
+	section    string
+	content    string
+}
+
+// writeCurationExample writes a single curation example to the builder.
+func (pb *PromptBuilder) writeCurationExample(sb *strings.Builder, ex curationExample) {
+	fmt.Fprintf(sb, "**Example %d:**\n", ex.number)
+	fmt.Fprintf(sb, "Task Context: %q\n\n", ex.taskCtx)
+	fmt.Fprintf(sb, "Current Playbook: [%s]\n\n", ex.playbook)
+	sb.WriteString("Reflection: \"")
+	sb.WriteString(ex.reflection)
+	sb.WriteString("\"\n\nResponse:\n```\n{\n")
+	sb.WriteString("  \"reasoning\": \"")
+	sb.WriteString(ex.reasoning)
+	sb.WriteString("\",\n")
+	fmt.Fprintf(sb, "  \"operations\": [\n    {\n      \"type\": \"ADD\",\n      \"section\": %q,\n", ex.section)
+	sb.WriteString("      \"content\": \"")
+	sb.WriteString(ex.content)
+	sb.WriteString("\"\n    }\n  ]\n}\n```\n\n")
+}
+
 // writeNilCheckExample writes the nil-check error handling example.
 func (pb *PromptBuilder) writeNilCheckExample(sb *strings.Builder) {
-	sb.WriteString("**Example 1:**\n")
-	sb.WriteString("Task Context: \"Fix null pointer exception in user authentication\"\n\n")
-	sb.WriteString("Current Playbook: [Basic error handling guidelines]\n\n")
-	sb.WriteString("Reflection: \"The agent failed because it didn't check if the user object was nil before accessing ")
-	sb.WriteString("its properties, leading to a null pointer exception. This is a common pattern in authentication flows.\"\n\n")
-	sb.WriteString("Response:\n```\n{\n")
-	sb.WriteString("  \"reasoning\": \"The reflection shows a critical error pattern where nil checks were skipped before ")
-	sb.WriteString("property access. This is a fundamental defensive programming principle that should be captured in the ")
-	sb.WriteString("playbook to prevent similar failures in authentication and user data handling.\",\n")
-	sb.WriteString("  \"operations\": [\n    {\n      \"type\": \"ADD\",\n      \"section\": \"error_handling\",\n")
-	sb.WriteString("      \"content\": \"Always check if objects are nil before accessing properties\\n- In authentication flows, ")
-	sb.WriteString("verify user object is not nil before accessing user.Email, user.ID, etc.\\n- Use early returns with error ")
-	sb.WriteString("checks to avoid nested nil checks\\n- Pattern: if user == nil { return ErrUserNotFound }\"\n")
-	sb.WriteString("    }\n  ]\n}\n```\n\n")
+	pb.writeCurationExample(sb, curationExample{
+		number:   1,
+		taskCtx:  "Fix null pointer exception in user authentication",
+		playbook: "Basic error handling guidelines",
+		reflection: "The agent failed because it didn't check if the user object was nil before accessing " +
+			"its properties, leading to a null pointer exception. This is a common pattern in authentication flows.",
+		reasoning: "The reflection shows a critical error pattern where nil checks were skipped before " +
+			"property access. This is a fundamental defensive programming principle that should be captured in the " +
+			"playbook to prevent similar failures in authentication and user data handling.",
+		section: "error_handling",
+		content: "Always check if objects are nil before accessing properties\\n- In authentication flows, " +
+			"verify user object is not nil before accessing user.Email, user.ID, etc.\\n- Use early returns with error " +
+			"checks to avoid nested nil checks\\n- Pattern: if user == nil { return ErrUserNotFound }",
+	})
 }
 
 // writePaginationExample writes the cursor-based pagination example.
 func (pb *PromptBuilder) writePaginationExample(sb *strings.Builder) {
-	sb.WriteString("**Example 2:**\n")
-	sb.WriteString("Task Context: \"Implement pagination for large database queries\"\n\n")
-	sb.WriteString("Current Playbook: [Basic database query examples]\n\n")
-	sb.WriteString("Reflection: \"The agent used a fixed LIMIT 100 instead of proper cursor-based pagination, ")
-	sb.WriteString("causing inconsistent results when data changed between page requests.\"\n\n")
-	sb.WriteString("Response:\n```\n{\n")
-	sb.WriteString("  \"reasoning\": \"The reflection identifies a pagination anti-pattern where offset-based ")
-	sb.WriteString("pagination was used instead of cursor-based. This is crucial for large datasets and should be ")
-	sb.WriteString("documented as a best practice.\",\n")
-	sb.WriteString("  \"operations\": [\n    {\n      \"type\": \"ADD\",\n      \"section\": \"database_patterns\",\n")
-	sb.WriteString("      \"content\": \"Use cursor-based pagination for large datasets\\n- Avoid OFFSET/LIMIT as ")
-	sb.WriteString("it's slow and inconsistent when data changes\\n- Use WHERE id > lastSeenId ORDER BY id LIMIT 100\\n- ")
-	sb.WriteString("Return the last ID as cursor for next page\\n- This ensures consistent results and better performance\"\n")
-	sb.WriteString("    }\n  ]\n}\n```\n\n")
+	pb.writeCurationExample(sb, curationExample{
+		number:   2,
+		taskCtx:  "Implement pagination for large database queries",
+		playbook: "Basic database query examples",
+		reflection: "The agent used a fixed LIMIT 100 instead of proper cursor-based pagination, " +
+			"causing inconsistent results when data changed between page requests.",
+		reasoning: "The reflection identifies a pagination anti-pattern where offset-based " +
+			"pagination was used instead of cursor-based. This is crucial for large datasets and should be " +
+			"documented as a best practice.",
+		section: "database_patterns",
+		content: "Use cursor-based pagination for large datasets\\n- Avoid OFFSET/LIMIT as " +
+			"it's slow and inconsistent when data changes\\n- Use WHERE id > lastSeenId ORDER BY id LIMIT 100\\n- " +
+			"Return the last ID as cursor for next page\\n- This ensures consistent results and better performance",
+	})
 }
 
 // writeCurationResponseFormat writes the expected response format instructions.

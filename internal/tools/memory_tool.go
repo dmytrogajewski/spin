@@ -197,54 +197,9 @@ func (t *MemoryTool) executeDelete(ctx context.Context, params ToolParameters) (
 }
 
 func (t *MemoryTool) executeList(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	pattern := params.GetStringOr("pattern", "*")
-
-	keys, listErr := t.store.List(ctx, pattern)
-	if listErr != nil {
-		return ErrToResultf("failed to list entries: %v", listErr)
-	}
-
-	if len(keys) == 0 {
-		return NewToolResult("No entries found in persistent memory"), nil
-	}
-
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Found %d entries in persistent memory:\n", len(keys))
-
-	for _, key := range keys {
-		fmt.Fprintf(&sb, "  - %s\n", key)
-	}
-
-	return NewToolResult(sb.String()), nil
+	return storeList(ctx, t.store, params, "persistent memory")
 }
 
 func (t *MemoryTool) executeSearch(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	query, _ := params.GetString("query")
-	if query == "" {
-		return NewToolError(ErrQueryParameterRequiredForSearch), nil
-	}
-
-	entries, searchErr := t.store.Search(ctx, query, defaultMemorySearchLimit)
-	if searchErr != nil {
-		return ErrToResultf("failed to search entries: %v", searchErr)
-	}
-
-	if len(entries) == 0 {
-		return NewToolResult(fmt.Sprintf("No entries found matching '%s' in persistent memory", query)), nil
-	}
-
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Found %d entries matching '%s':\n", len(entries), query)
-
-	for _, entry := range entries {
-		// Show preview of value (first 100 chars).
-		preview := entry.Value
-		if len(preview) > maxMemoryPreviewLen {
-			preview = preview[:100] + "..."
-		}
-
-		fmt.Fprintf(&sb, "  - %s: %s\n", entry.Key, preview)
-	}
-
-	return NewToolResult(sb.String()), nil
+	return storeSearch(ctx, t.store, params, defaultMemorySearchLimit, maxMemoryPreviewLen, "persistent memory")
 }

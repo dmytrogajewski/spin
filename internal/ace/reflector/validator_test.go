@@ -1,7 +1,6 @@
 package reflector
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,54 +16,8 @@ func TestInsightValidator_New(t *testing.T) {
 	require.NotNil(t, validator)
 }
 
-// validatorValidateCases contains test cases for validator validation.
-var validatorValidateCases = []struct {
-	name    string
-	insight *Insight
-	wantErr bool
-	errMsg  string
-}{
-	{
-		name:    "valid insight",
-		insight: &Insight{
-			Content: "Always validate input parameters before processing them in Go",
-			Confidence: 0.8, Category: CategorySuccessPattern,
-		},
-	},
-	{
-		name: "empty content", wantErr: true, errMsg: "content cannot be empty",
-		insight: &Insight{Content: "", Confidence: 0.8, Category: CategorySuccessPattern},
-	},
-	{
-		name: "content too short", wantErr: true, errMsg: "content too short",
-		insight: &Insight{Content: "short", Confidence: 0.8, Category: CategorySuccessPattern},
-	},
-	{
-		name: "content too long", wantErr: true, errMsg: "content too long",
-		insight: &Insight{Content: strings.Repeat("x", 501), Confidence: 0.8, Category: CategorySuccessPattern},
-	},
-	{
-		name: "confidence negative", wantErr: true, errMsg: "confidence",
-		insight: &Insight{
-			Content: "Always validate input parameters before processing them",
-			Confidence: -0.1, Category: CategorySuccessPattern,
-		},
-	},
-	{
-		name: "confidence too high", wantErr: true, errMsg: "confidence",
-		insight: &Insight{
-			Content: "Always validate input parameters before processing them",
-			Confidence: 1.5, Category: CategorySuccessPattern,
-		},
-	},
-	{
-		name: "invalid category", wantErr: true, errMsg: "category",
-		insight: &Insight{
-			Content: "Always validate input parameters before processing them",
-			Confidence: 0.8, Category: "invalid_category",
-		},
-	},
-}
+// validatorValidateCases reuses the shared validation cases from insight_test.go.
+var validatorValidateCases = insightValidateCases
 
 // TestInsightValidator_Validate tests insight validation with all rules.
 func TestInsightValidator_Validate(t *testing.T) {

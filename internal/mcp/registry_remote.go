@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
 
 	"github.com/mark3labs/mcp-go/client"
@@ -171,35 +170,61 @@ func (r *RemoteRegistry) initializeProtocol(ctx context.Context) error {
 	return nil
 }
 
-// createSSEClient creates an SSE MCP client.
-func (r *RemoteRegistry) createSSEClient() (*client.Client, error) {
-	var opts []transport.ClientOption
-	if len(r.config.Headers) > 0 {
-		opts = append(opts, transport.WithHeaders(r.config.Headers))
+// buildOAuthConfig extracts the OAuth configuration from the registry config.
+func (r *RemoteRegistry) buildOAuthConfig() transport.OAuthConfig {
+	return transport.OAuthConfig{
+		ClientID:     r.config.OAuth.ClientID,
+		ClientSecret: r.config.OAuth.ClientSecret,
+		RedirectURI:  r.config.OAuth.RedirectURL,
+		Scopes:       r.config.OAuth.Scopes,
 	}
+}
 
+// createMCPClient creates an MCP client using the provided factory functions.
+// This eliminates duplication between SSE and StreamableHTTP client creation paths.
+func (r *RemoteRegistry) createMCPClient(
+	newPlainClient func(url string) (*client.Client, error),
+	newOAuthClient func(url string, oauth transport.OAuthConfig) (*client.Client, error),
+	label string,
+) (*client.Client, error) {
 	if r.config.OAuth != nil {
-		oauthConfig := transport.OAuthConfig{
-			ClientID:     r.config.OAuth.ClientID,
-			ClientSecret: r.config.OAuth.ClientSecret,
-			RedirectURI:  r.config.OAuth.RedirectURL,
-			Scopes:       r.config.OAuth.Scopes,
-		}
-
-		c, err := client.NewOAuthSSEClient(r.config.URL, oauthConfig, opts...)
+		c, err := newOAuthClient(r.config.URL, r.buildOAuthConfig())
 		if err != nil {
-			return nil, fmt.Errorf("create OAuth SSE client: %w", err)
+			return nil, fmt.Errorf("create OAuth %s client: %w", label, err)
 		}
 
 		return c, nil
 	}
 
-	c, err := client.NewSSEMCPClient(r.config.URL, opts...)
+	c, err := newPlainClient(r.config.URL)
 	if err != nil {
-		return nil, fmt.Errorf("create SSE client: %w", err)
+		return nil, fmt.Errorf("create %s client: %w", label, err)
 	}
 
 	return c, nil
+}
+
+// sseClientFactories returns plain and OAuth factory functions for SSE transport.
+func sseClientFactories(headers map[string]string) (
+	func(string) (*client.Client, error),
+	func(string, transport.OAuthConfig) (*client.Client, error),
+) {
+	var opts []transport.ClientOption
+	if len(headers) > 0 {
+		opts = append(opts, transport.WithHeaders(headers))
+	}
+
+	return func(url string) (*client.Client, error) {
+			return client.NewSSEMCPClient(url, opts...)
+		}, func(url string, oauth transport.OAuthConfig) (*client.Client, error) {
+			return client.NewOAuthSSEClient(url, oauth, opts...)
+		}
+}
+
+// createSSEClient creates an SSE MCP client.
+func (r *RemoteRegistry) createSSEClient() (*client.Client, error) {
+	plain, oauth := sseClientFactories(r.config.Headers)
+	return r.createMCPClient(plain, oauth, "SSE")
 }
 
 // createStreamableHTTPClient creates a streamable HTTP MCP client.
@@ -209,28 +234,15 @@ func (r *RemoteRegistry) createStreamableHTTPClient() (*client.Client, error) {
 		opts = append(opts, transport.WithHTTPHeaders(r.config.Headers))
 	}
 
-	if r.config.OAuth != nil {
-		oauthConfig := transport.OAuthConfig{
-			ClientID:     r.config.OAuth.ClientID,
-			ClientSecret: r.config.OAuth.ClientSecret,
-			RedirectURI:  r.config.OAuth.RedirectURL,
-			Scopes:       r.config.OAuth.Scopes,
-		}
-
-		c, err := client.NewOAuthStreamableHttpClient(r.config.URL, oauthConfig, opts...)
-		if err != nil {
-			return nil, fmt.Errorf("create OAuth streamable HTTP client: %w", err)
-		}
-
-		return c, nil
-	}
-
-	c, err := client.NewStreamableHttpClient(r.config.URL, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("create streamable HTTP client: %w", err)
-	}
-
-	return c, nil
+	return r.createMCPClient(
+		func(url string) (*client.Client, error) {
+			return client.NewStreamableHttpClient(url, opts...)
+		},
+		func(url string, oauth transport.OAuthConfig) (*client.Client, error) {
+			return client.NewOAuthStreamableHttpClient(url, oauth, opts...)
+		},
+		"streamable HTTP",
+	)
 }
 
 // IsConnected returns true if the registry is connected.
@@ -304,57 +316,10 @@ func (r *RemoteRegistry) Execute(ctx context.Context, toolName string, args json
 	r.mu.RUnlock()
 
 	if !exists {
-return tools.ToolResult{}, fmt.Errorf("tool not found: %s: %w", toolName, ErrToolNotFound)
+		return tools.ToolResult{}, fmt.Errorf("tool not found: %s: %w", toolName, ErrToolNotFound)
 	}
 
-	// Parse arguments.
-	var argsMap map[string]any
-	if len(args) > 0 {
-		err := json.Unmarshal(args, &argsMap)
-		if err != nil {
-			return tools.ToolResult{
-				Success: false,
-				Error:   fmt.Sprintf("invalid arguments: %v", err),
-			}, nil
-		}
-	}
-
-	// Call tool.
-	callReq := mcpSDK.CallToolRequest{
-		Params: mcpSDK.CallToolParams{
-			Name:      mcpTool.Tool.Name,
-			Arguments: argsMap,
-		},
-	}
-
-	resp, callErr := mcpClient.CallTool(ctx, callReq)
-	if callErr != nil {
-		return tools.ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("tool call failed: %v", callErr),
-		}, nil
-	}
-
-	if resp.IsError {
-		return tools.ToolResult{
-			Success: false,
-			Error:   "tool execution failed",
-		}, nil
-	}
-
-	// Convert response.
-	var output strings.Builder
-
-	for _, content := range resp.Content {
-		if textContent, ok := mcpSDK.AsTextContent(content); ok {
-			output.WriteString(textContent.Text)
-		}
-	}
-
-	return tools.ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return executeMCPTool(ctx, mcpClient, mcpTool, args)
 }
 
 // Close closes the registry and releases resources.
@@ -397,61 +362,12 @@ func (w *remoteToolWrapper) Name() string {
 
 // Description implements the Description operation.
 func (w *remoteToolWrapper) Description() string {
-	if w.mcpTool.Tool.Description != "" {
-		return w.mcpTool.Tool.Description
-	}
-
-	return fmt.Sprintf("MCP tool: %s", w.mcpTool.Tool.Name)
+	return toolDescription(w.mcpTool)
 }
 
 // Schema implements the Schema operation.
 func (w *remoteToolWrapper) Schema() tools.ToolSchema {
-	schemaBytes, err := json.Marshal(w.mcpTool.Tool.InputSchema)
-	if err != nil {
-		return w.fallbackSchema()
-	}
-
-	var mcpSchema JSONSchema
-	err = json.Unmarshal(schemaBytes, &mcpSchema)
-	if err != nil {
-		return w.fallbackSchema()
-	}
-
-	properties := make(map[string]tools.PropertyDefinition)
-	for name, prop := range mcpSchema.Properties {
-		properties[name] = tools.PropertyDefinition{
-			Type:        prop.Type,
-			Description: prop.Description,
-		}
-	}
-
-	return tools.ToolSchema{
-		Type: "function",
-		Function: tools.FunctionSchema{
-			Name:        w.Name(),
-			Description: w.Description(),
-			Parameters: tools.ParameterSchema{
-				Type:       "object",
-				Properties: properties,
-				Required:   mcpSchema.Required,
-			},
-		},
-	}
-}
-
-func (w *remoteToolWrapper) fallbackSchema() tools.ToolSchema {
-	return tools.ToolSchema{
-		Type: "function",
-		Function: tools.FunctionSchema{
-			Name:        w.Name(),
-			Description: w.Description(),
-			Parameters: tools.ParameterSchema{
-				Type:       "object",
-				Properties: make(map[string]tools.PropertyDefinition),
-				Required:   []string{},
-			},
-		},
-	}
+	return buildToolSchema(w, w.mcpTool)
 }
 
 // Execute implements the Execute operation.

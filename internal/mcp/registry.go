@@ -3,11 +3,81 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	mcpSDK "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
+
+// toolSchemaBuilder provides a named interface for building schemas from MCP tools.
+type toolSchemaBuilder interface {
+	Name() string
+	Description() string
+}
+
+// buildToolSchema converts an MCP tool's InputSchema into a tools.ToolSchema.
+// Falls back to an empty schema if the input schema cannot be parsed.
+func buildToolSchema(wrapper toolSchemaBuilder, mcpTool *Tool) tools.ToolSchema {
+	schemaBytes, err := json.Marshal(mcpTool.Tool.InputSchema)
+	if err != nil {
+		return buildFallbackSchema(wrapper)
+	}
+
+	var mcpSchema JSONSchema
+
+	err = json.Unmarshal(schemaBytes, &mcpSchema)
+	if err != nil {
+		return buildFallbackSchema(wrapper)
+	}
+
+	properties := make(map[string]tools.PropertyDefinition)
+	for name, prop := range mcpSchema.Properties {
+		properties[name] = tools.PropertyDefinition{
+			Type:        prop.Type,
+			Description: prop.Description,
+		}
+	}
+
+	return tools.ToolSchema{
+		Type: "function",
+		Function: tools.FunctionSchema{
+			Name:        wrapper.Name(),
+			Description: wrapper.Description(),
+			Parameters: tools.ParameterSchema{
+				Type:       "object",
+				Properties: properties,
+				Required:   mcpSchema.Required,
+			},
+		},
+	}
+}
+
+// buildFallbackSchema returns a minimal schema when the MCP tool's input schema cannot be parsed.
+func buildFallbackSchema(wrapper toolSchemaBuilder) tools.ToolSchema {
+	return tools.ToolSchema{
+		Type: "function",
+		Function: tools.FunctionSchema{
+			Name:        wrapper.Name(),
+			Description: wrapper.Description(),
+			Parameters: tools.ParameterSchema{
+				Type:       "object",
+				Properties: make(map[string]tools.PropertyDefinition),
+				Required:   []string{},
+			},
+		},
+	}
+}
+
+// toolDescription returns the description of an MCP tool, with a fallback to a generated name.
+func toolDescription(mcpTool *Tool) string {
+	if mcpTool.Tool.Description != "" {
+		return mcpTool.Tool.Description
+	}
+
+	return fmt.Sprintf("MCP tool: %s", mcpTool.Tool.Name)
+}
 
 
 // RegistryMetadata contains information about a registry.
@@ -136,4 +206,57 @@ type RegistryManager interface {
 
 	// Close closes all registries.
 	Close() error
+}
+
+// executeMCPTool executes a tool via an MCP client, handling argument parsing and response conversion.
+// This is the shared implementation used by all registry Execute methods.
+func executeMCPTool(ctx context.Context, mcpClient Client, mcpTool *Tool, args json.RawMessage) (tools.ToolResult, error) {
+	// Parse arguments.
+	var argsMap map[string]any
+	if len(args) > 0 {
+		err := json.Unmarshal(args, &argsMap)
+		if err != nil {
+			return tools.ToolResult{
+				Success: false,
+				Error:   fmt.Sprintf("invalid arguments: %v", err),
+			}, nil
+		}
+	}
+
+	// Call tool.
+	callReq := mcpSDK.CallToolRequest{
+		Params: mcpSDK.CallToolParams{
+			Name:      mcpTool.Tool.Name,
+			Arguments: argsMap,
+		},
+	}
+
+	resp, callErr := mcpClient.CallTool(ctx, callReq)
+	if callErr != nil {
+		return tools.ToolResult{
+			Success: false,
+			Error:   fmt.Sprintf("tool call failed: %v", callErr),
+		}, nil
+	}
+
+	if resp.IsError {
+		return tools.ToolResult{
+			Success: false,
+			Error:   "tool execution failed",
+		}, nil
+	}
+
+	// Convert response.
+	var output strings.Builder
+
+	for _, content := range resp.Content {
+		if textContent, ok := mcpSDK.AsTextContent(content); ok {
+			output.WriteString(textContent.Text)
+		}
+	}
+
+	return tools.ToolResult{
+		Success: true,
+		Output:  output.String(),
+	}, nil
 }
