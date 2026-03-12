@@ -15,7 +15,7 @@ func TestNewAutoOffloader_Defaults(t *testing.T) {
 	offloader := NewAutoOffloader(AutoOffloaderConfig{})
 
 	assert.NotNil(t, offloader)
-	assert.Equal(t, 0.7, offloader.GetThreshold())
+	assert.InDelta(t, 0.7, offloader.GetThreshold(), 1e-9)
 }
 
 func TestNewAutoOffloader_WithConfig(t *testing.T) {
@@ -31,7 +31,7 @@ func TestNewAutoOffloader_WithConfig(t *testing.T) {
 	})
 
 	assert.NotNil(t, offloader)
-	assert.Equal(t, 0.8, offloader.GetThreshold())
+	assert.InDelta(t, 0.8, offloader.GetThreshold(), 1e-9)
 }
 
 func TestAutoOffloader_ShouldOffload(t *testing.T) {
@@ -105,7 +105,7 @@ func TestAutoOffloader_Offload_LargeCodeBlock(t *testing.T) {
 	assert.Len(t, results, 1)
 	assert.True(t, results[0].Success)
 	assert.Equal(t, ScopeSession, results[0].Destination)
-	assert.Greater(t, results[0].TokensSaved, 0)
+	assert.Positive(t, results[0].TokensSaved)
 
 	// Check that reference was added.
 	assert.Contains(t, modified[0].Content, "offloaded")
@@ -229,14 +229,14 @@ func TestAutoOffloader_SetThreshold(t *testing.T) {
 	offloader := NewAutoOffloader(AutoOffloaderConfig{})
 
 	offloader.SetThreshold(0.5)
-	assert.Equal(t, 0.5, offloader.GetThreshold())
+	assert.InDelta(t, 0.5, offloader.GetThreshold(), 1e-9)
 
 	// Invalid values should be ignored.
 	offloader.SetThreshold(0)
-	assert.Equal(t, 0.5, offloader.GetThreshold())
+	assert.InDelta(t, 0.5, offloader.GetThreshold(), 1e-9)
 
 	offloader.SetThreshold(1.5)
-	assert.Equal(t, 0.5, offloader.GetThreshold())
+	assert.InDelta(t, 0.5, offloader.GetThreshold(), 1e-9)
 }
 
 func TestAutoOffloader_Offload_MultipleMessages(t *testing.T) {

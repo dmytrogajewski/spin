@@ -195,7 +195,7 @@ High-value fixes that improve reliability.
   - **Risk:** Tests with shared file system or global state may break — run with `-race`
   - **`//nolint` prohibited** — make every test parallel-safe
 
-- [ ] **5.2 — `testifylint` testify best practices** (~216 issues)
+- [x] **5.2 — `testifylint` testify best practices** (~216 issues)
   - **Description:** Use `require` instead of `assert` for fatal checks, fix comparison order, etc.
   - **DoR:** 5.1 complete
   - **DoD:** 0 testifylint issues

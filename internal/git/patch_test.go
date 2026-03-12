@@ -178,7 +178,7 @@ func TestApplyPatch_ContextCancellation(t *testing.T) {
 
 	_, err = repo.ApplyPatch(ctx, "some patch", ApplyPatchOptions{})
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context canceled")
 }
 

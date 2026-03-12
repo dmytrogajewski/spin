@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewPaletteRenderer(t *testing.T) {
@@ -218,6 +219,6 @@ func TestPaletteRenderer_Integration(t *testing.T) {
 	cmd := palette.SelectedCommand()
 	assert.NotNil(t, cmd)
 	err := cmd.Execute(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, executed)
 }

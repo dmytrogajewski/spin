@@ -21,7 +21,7 @@ func TestReflectionRequest_Defaults(t *testing.T) {
 	}
 
 	require.NotNil(t, req)
-	assert.Equal(t, 1, len(req.Trajectories))
+	assert.Len(t, req.Trajectories, 1)
 }
 
 // TestReflectionResponse_Creation tests response creation.
@@ -40,7 +40,7 @@ func TestReflectionResponse_Creation(t *testing.T) {
 	}
 
 	require.NotNil(t, resp)
-	assert.Equal(t, 1, len(resp.Insights))
+	assert.Len(t, resp.Insights, 1)
 	assert.Equal(t, 3, resp.Iterations)
 	assert.Equal(t, 500, resp.TotalTokens)
 	assert.Equal(t, time.Second, resp.Duration)

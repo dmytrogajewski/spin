@@ -79,7 +79,7 @@ func TestCurator_Integration_WithReflector(t *testing.T) {
 	for _, bullet := range bullets {
 		assert.NotEmpty(t, bullet.Content)
 		assert.NotEmpty(t, bullet.Embedding)
-		assert.Greater(t, bullet.HelpfulCount, 0) // From confidence scaling.
+		assert.Positive(t, bullet.HelpfulCount) // From confidence scaling.
 	}
 }
 
@@ -216,5 +216,5 @@ func TestCurator_Integration_MultipleTrajectories(t *testing.T) {
 		}
 	}
 
-	assert.True(t, len(categories) > 0)
+	assert.NotEmpty(t, categories)
 }

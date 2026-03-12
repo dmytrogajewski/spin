@@ -44,7 +44,7 @@ func TestNewSearcher(t *testing.T) {
 
 	s, err := NewSearcher(root)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, s)
 	assert.Equal(t, root, s.root)
 	assert.NotNil(t, s.scanner)
@@ -79,7 +79,7 @@ func TestSearcher_IndexAsync(t *testing.T) {
 	ctx := context.Background()
 	err = s.IndexAsync(ctx)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, s.IsIndexed())
 	assert.Len(t, s.index, 3)
 }
@@ -95,7 +95,7 @@ func TestSearcher_IndexAsync_Empty(t *testing.T) {
 	ctx := context.Background()
 	err = s.IndexAsync(ctx)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, s.IsIndexed())
 	assert.Empty(t, s.index)
 }

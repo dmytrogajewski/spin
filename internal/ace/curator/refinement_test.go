@@ -107,7 +107,7 @@ func TestRefinement_Lazy_ManualRefine(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, 5, refinement.Pruned, "Should prune 5 low-utility bullets")
-	assert.Equal(t, 5, len(refinement.PrunedIDs))
+	assert.Len(t, refinement.PrunedIDs, 5)
 	assert.Equal(t, "manual refinement", refinement.Reason)
 
 	// Check playbook was pruned.

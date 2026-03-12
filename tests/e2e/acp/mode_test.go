@@ -172,7 +172,7 @@ func TestACP_SetSessionMode_InvalidMode(t *testing.T) {
 	}
 
 	_, err = client.SetSessionMode(ctx, setModeReq)
-	assert.Error(t, err, "SetSessionMode should fail with invalid mode")
+	require.Error(t, err, "SetSessionMode should fail with invalid mode")
 	assert.Contains(t, err.Error(), "invalid mode", "Error should mention invalid mode")
 }
 

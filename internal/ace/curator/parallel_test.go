@@ -30,8 +30,8 @@ func TestCurateBatch_EmptyRequests(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, 0, len(result.Results))
-	assert.Equal(t, 0, len(result.Errors))
+	assert.Empty(t, result.Results)
+	assert.Empty(t, result.Errors)
 }
 
 // TestCurateBatch_SingleRequest tests single request in batch.
@@ -62,9 +62,9 @@ func TestCurateBatch_SingleRequest(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, 1, len(result.Results))
-	assert.Equal(t, 1, len(result.Errors))
-	assert.Nil(t, result.Errors[0])
+	assert.Len(t, result.Results, 1)
+	assert.Len(t, result.Errors, 1)
+	require.NoError(t, result.Errors[0])
 	assert.Equal(t, 1, result.Results[0].Added)
 	assert.Equal(t, 0, result.Results[0].Skipped)
 }
@@ -122,17 +122,17 @@ func TestCurateBatch_MultipleRequests(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Equal(t, 3, len(result.Results))
-	assert.Equal(t, 3, len(result.Errors))
+	assert.Len(t, result.Results, 3)
+	assert.Len(t, result.Errors, 3)
 
 	// All should succeed.
 	for i := range 3 {
-		assert.Nil(t, result.Errors[i], "Request %d should not have error", i)
+		require.NoError(t, result.Errors[i], "Request %d should not have error", i)
 		assert.Equal(t, 1, result.Results[i].Added, "Request %d should add 1 bullet", i)
 		assert.Equal(t, 0, result.Results[i].Skipped, "Request %d should skip 0 bullets", i)
 	}
 
 	// Playbook should have 3 bullets total.
 	bullets := pb.List(nil)
-	assert.Equal(t, 3, len(bullets))
+	assert.Len(t, bullets, 3)
 }

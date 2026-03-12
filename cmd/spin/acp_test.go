@@ -98,13 +98,13 @@ func TestNewACPCmd_FlagDefaults(t *testing.T) {
 	assert.Equal(t, ".", workspace, "workspace should default to current directory")
 
 	provider, _ := cmd.Flags().GetString("provider")
-	assert.Equal(t, "", provider, "provider should default to empty (config takes precedence)")
+	assert.Empty(t, provider, "provider should default to empty (config takes precedence)")
 
 	baseURL, _ := cmd.Flags().GetString("base-url")
-	assert.Equal(t, "", baseURL, "base-url should default to empty (config takes precedence)")
+	assert.Empty(t, baseURL, "base-url should default to empty (config takes precedence)")
 
 	model, _ := cmd.Flags().GetString("model")
-	assert.Equal(t, "", model, "model should default to empty (config takes precedence)")
+	assert.Empty(t, model, "model should default to empty (config takes precedence)")
 }
 
 // TestBuildProviderForACP_Ollama tests Ollama provider creation using unified builder.

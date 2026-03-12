@@ -534,7 +534,7 @@ func TestDefaultV2(t *testing.T) {
 	// Check some expected defaults.
 	assert.Equal(t, "2.0", cfg.Version, "version should be 2.0")
 	assert.Equal(t, "ollama", cfg.LLM.Provider, "default provider should be ollama")
-	assert.Equal(t, 0.7, cfg.LLM.Temperature, "default temperature should be 0.7")
+	assert.InDelta(t, 0.7, cfg.LLM.Temperature, 1e-9, "default temperature should be 0.7")
 	assert.Equal(t, 50, cfg.Agent.MaxTurns, "default max_turns should be 50")
 	assert.False(t, cfg.ACE.Enabled, "ACE should be disabled by default")
 }

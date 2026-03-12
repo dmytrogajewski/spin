@@ -40,7 +40,7 @@ func TestACPCommandContext(t *testing.T) {
 	t.Run("GetWorkDir_no_session", func(t *testing.T) {
 		t.Parallel()
 		workDir := cmdCtx.GetWorkDir()
-		assert.Equal(t, "", workDir, "should return empty string when session not found")
+		assert.Empty(t, workDir, "should return empty string when session not found")
 	})
 }
 

@@ -193,7 +193,7 @@ func TestACP_Initialize_Timeout(t *testing.T) {
 
 	_, err := client.Initialize(ctx, req)
 	// Should fail due to timeout.
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
 

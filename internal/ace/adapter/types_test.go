@@ -137,8 +137,8 @@ func TestAdaptationResult_Creation(t *testing.T) {
 func TestAdaptationAction_Constants(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, AdaptationAction("skip"), ActionSkip)
-	assert.Equal(t, AdaptationAction("reflect"), ActionReflect)
-	assert.Equal(t, AdaptationAction("quick_add"), ActionQuickAdd)
-	assert.Equal(t, AdaptationAction("update"), ActionUpdate)
+	assert.Equal(t, ActionSkip, AdaptationAction("skip"))
+	assert.Equal(t, ActionReflect, AdaptationAction("reflect"))
+	assert.Equal(t, ActionQuickAdd, AdaptationAction("quick_add"))
+	assert.Equal(t, ActionUpdate, AdaptationAction("update"))
 }

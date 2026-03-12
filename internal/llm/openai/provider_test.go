@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestNewProvider tests provider creation and validation.
@@ -62,10 +63,10 @@ func TestNewProvider(t *testing.T) {
 
 			p, err := NewProvider(tt.cfg)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, p)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.NotNil(t, p)
 				assert.Equal(t, tt.cfg.Model, p.model)
 			}

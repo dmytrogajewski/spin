@@ -19,7 +19,7 @@ func TestMemoryConfig_Defaults(t *testing.T) {
 
 	assert.Equal(t, 1000, config.MaxBullets)
 	assert.Equal(t, 900, config.RefinementAt)
-	assert.Equal(t, 0.2, config.PruneThreshold)
+	assert.InDelta(t, 0.2, config.PruneThreshold, 1e-9)
 }
 
 func TestMemoryManager_ShouldRefine_BelowThreshold(t *testing.T) {

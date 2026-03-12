@@ -178,7 +178,7 @@ func TestNewSession_SendsAvailableCommandsUpdate(t *testing.T) {
 		if notif.Update.AvailableCommandsUpdate != nil {
 			found = true
 			update := notif.Update.AvailableCommandsUpdate
-			assert.Greater(t, len(update.AvailableCommands), 0, "should have available commands")
+			assert.NotEmpty(t, update.AvailableCommands, "should have available commands")
 			// Check that /mode and /help are included.
 			commandNames := make(map[string]bool)
 			for _, cmd := range update.AvailableCommands {

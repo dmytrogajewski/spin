@@ -260,7 +260,7 @@ func TestService_CheckCycle_NilDetector(t *testing.T) {
 
 	result, err := svc.CheckCycle()
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cycle detector not configured")
 	assert.Equal(t, CycleNone, result.Type)
 }
@@ -300,7 +300,7 @@ func TestService_DetectPattern_NilDetector(t *testing.T) {
 
 	results, err := svc.DetectPattern()
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "pattern detector not configured")
 	assert.Nil(t, results)
 }
@@ -323,7 +323,7 @@ func TestService_Reset(t *testing.T) {
 
 	// History should be empty.
 	history = svc.GetHistory()
-	assert.Len(t, history, 0)
+	assert.Empty(t, history)
 }
 
 func TestService_Reset_NilDetector(t *testing.T) {
@@ -343,7 +343,7 @@ func TestService_GetHistory(t *testing.T) {
 
 	// Empty history.
 	history := svc.GetHistory()
-	assert.Len(t, history, 0)
+	assert.Empty(t, history)
 
 	// Add snapshots.
 	svc.RecordSnapshot(Snapshot{Turn: 1, Response: "First"})
@@ -362,7 +362,7 @@ func TestService_GetHistory_NilDetector(t *testing.T) {
 	svc := NewService(nil, nil)
 
 	history := svc.GetHistory()
-	assert.Len(t, history, 0)
+	assert.Empty(t, history)
 }
 
 // Benchmark tests.

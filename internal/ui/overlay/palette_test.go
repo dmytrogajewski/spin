@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func createTestRegistry() *CommandRegistry {
@@ -26,7 +27,7 @@ func TestNewPalette(t *testing.T) {
 
 	assert.NotNil(t, palette)
 	assert.False(t, palette.IsOpen())
-	assert.Equal(t, "", palette.Query())
+	assert.Empty(t, palette.Query())
 	assert.Equal(t, 0, palette.Selection())
 	// Should have all commands when query is empty.
 	assert.Len(t, palette.FilteredCommands(), 6)
@@ -43,7 +44,7 @@ func TestPalette_OpenClose(t *testing.T) {
 	// Open.
 	palette.Open()
 	assert.True(t, palette.IsOpen())
-	assert.Equal(t, "", palette.Query())
+	assert.Empty(t, palette.Query())
 	assert.Equal(t, 0, palette.Selection())
 
 	// Close.
@@ -88,11 +89,11 @@ func TestPalette_Backspace(t *testing.T) {
 	assert.Equal(t, "t", palette.Query())
 
 	palette.Backspace()
-	assert.Equal(t, "", palette.Query())
+	assert.Empty(t, palette.Query())
 
 	// Backspace on empty does nothing.
 	palette.Backspace()
-	assert.Equal(t, "", palette.Query())
+	assert.Empty(t, palette.Query())
 }
 
 func TestPalette_ClearQuery(t *testing.T) {
@@ -108,7 +109,7 @@ func TestPalette_ClearQuery(t *testing.T) {
 	assert.Equal(t, "test", palette.Query())
 
 	palette.ClearQuery()
-	assert.Equal(t, "", palette.Query())
+	assert.Empty(t, palette.Query())
 	assert.Equal(t, 0, palette.Selection())
 }
 
@@ -252,7 +253,7 @@ func TestPalette_FuzzySearch_PartialMatch(t *testing.T) {
 	palette.Insert('h')
 
 	filtered := palette.FilteredCommands()
-	assert.Greater(t, len(filtered), 0, "Should match at least 'Search in repo...'")
+	assert.NotEmpty(t, filtered, "Should match at least 'Search in repo...'")
 
 	// First result should be "Search in repo...".
 	assert.Equal(t, "Search in repo...", filtered[0].Name())
@@ -271,7 +272,7 @@ func TestPalette_FuzzySearch_MultipleMatches(t *testing.T) {
 	palette.Insert('e')
 
 	filtered := palette.FilteredCommands()
-	assert.Greater(t, len(filtered), 0)
+	assert.NotEmpty(t, filtered)
 
 	found := false
 
@@ -300,7 +301,7 @@ func TestPalette_FuzzySearch_NoMatch(t *testing.T) {
 	palette.Insert('z')
 
 	filtered := palette.FilteredCommands()
-	assert.Len(t, filtered, 0)
+	assert.Empty(t, filtered)
 }
 
 func TestPalette_FuzzySearch_Description(t *testing.T) {
@@ -316,7 +317,7 @@ func TestPalette_FuzzySearch_Description(t *testing.T) {
 	palette.Insert('p')
 
 	filtered := palette.FilteredCommands()
-	assert.Greater(t, len(filtered), 0)
+	assert.NotEmpty(t, filtered)
 
 	found := false
 
@@ -404,7 +405,7 @@ func TestPalette_OpenResetsState(t *testing.T) {
 	palette.Open()
 
 	// State should be reset.
-	assert.Equal(t, "", palette.Query())
+	assert.Empty(t, palette.Query())
 	assert.Equal(t, 0, palette.Selection())
 	assert.Len(t, palette.FilteredCommands(), 6)
 }
@@ -426,6 +427,6 @@ func TestPalette_ExecuteSelectedCommand(t *testing.T) {
 	assert.NotNil(t, cmd)
 
 	err := cmd.Execute(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, executed)
 }

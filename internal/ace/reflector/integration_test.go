@@ -56,7 +56,7 @@ func TestReflector_Integration_WithGenerator(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	assert.Equal(t, 1, len(resp.Insights))
+	assert.Len(t, resp.Insights, 1)
 	assert.Equal(t, "integration-test-1", resp.Insights[0].Source)
 	assert.Greater(t, resp.Insights[0].Confidence, 0.5)
 	assert.NotZero(t, resp.TotalTokens)
@@ -96,7 +96,7 @@ func TestReflector_Integration_FullWorkflow(t *testing.T) {
 
 	resp, err := reflector.Reflect(ctx, req)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(resp.Insights))
+	require.Len(t, resp.Insights, 1)
 
 	initialInsight := resp.Insights[0]
 	assert.Equal(t, 0, initialInsight.Iteration)
@@ -113,7 +113,7 @@ func TestReflector_Integration_FullWorkflow(t *testing.T) {
 
 	refined, err := reflector.RefineInsights(ctx, resp.Insights, 2)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(refined))
+	require.Len(t, refined, 1)
 
 	refinedInsight := refined[0]
 	assert.Equal(t, 2, refinedInsight.Iteration)
@@ -127,7 +127,7 @@ func TestReflector_Integration_FullWorkflow(t *testing.T) {
 
 	// Step 4: Filter by quality threshold.
 	filtered := validator.FilterByQuality(refined, 0.85)
-	assert.Equal(t, 1, len(filtered))
+	assert.Len(t, filtered, 1)
 	assert.GreaterOrEqual(t, filtered[0].Confidence, 0.85)
 }
 
@@ -249,20 +249,20 @@ func TestReflector_Integration_QualityFiltering(t *testing.T) {
 
 	resp, err := reflector.Reflect(ctx, req)
 	require.NoError(t, err)
-	assert.Equal(t, 3, len(resp.Insights))
+	assert.Len(t, resp.Insights, 3)
 
 	// Filter by quality threshold.
 	validator := NewInsightValidator()
 
 	highQuality := validator.FilterByQuality(resp.Insights, 0.8)
-	assert.Equal(t, 1, len(highQuality))
+	assert.Len(t, highQuality, 1)
 	assert.GreaterOrEqual(t, highQuality[0].Confidence, 0.8)
 
 	mediumQuality := validator.FilterByQuality(resp.Insights, 0.5)
-	assert.Equal(t, 2, len(mediumQuality))
+	assert.Len(t, mediumQuality, 2)
 
 	allInsights := validator.FilterByQuality(resp.Insights, 0.0)
-	assert.Equal(t, 3, len(allInsights))
+	assert.Len(t, allInsights, 3)
 }
 
 // TestReflector_Integration_ErrorHandling tests error handling in integration scenarios.

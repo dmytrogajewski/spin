@@ -207,7 +207,7 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 
 	// Verify notification was sent.
 	notifications := mockConn.GetNotifications()
-	require.Greater(t, len(notifications), 0, "should send plan notification")
+	require.NotEmpty(t, notifications, "should send plan notification")
 
 	// Find plan notification.
 	found := false
@@ -256,7 +256,7 @@ Plan:
 
 	// Verify notification was sent (text-based detection should work).
 	notifications := mockConn.GetNotifications()
-	require.Greater(t, len(notifications), 0, "should send plan notification via text detection")
+	require.NotEmpty(t, notifications, "should send plan notification via text detection")
 }
 
 // Note: mockConnectionForPlan is defined in plan_notifications_test.go.

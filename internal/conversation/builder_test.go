@@ -295,7 +295,7 @@ func TestBuilder_ServiceReuse(t *testing.T) {
 
 	// Closing conv1 should not close the service.
 	err = conv1.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Service should still be usable by conv2.
 	assert.NotNil(t, conv2.gitService)

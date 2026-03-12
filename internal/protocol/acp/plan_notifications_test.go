@@ -212,7 +212,7 @@ func TestSendPlanNotifications_NoPlan(t *testing.T) {
 	}
 
 	err := acpAgent.sendPlanNotifications(context.Background(), "session-1", agentResp)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify no notifications were sent.
 	notifications := mockConn.GetNotifications()
@@ -228,7 +228,7 @@ func TestSendPlanNotifications_WithPlan(t *testing.T) {
 	}
 
 	err := acpAgent.sendPlanNotifications(context.Background(), "session-1", agentResp)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify plan notification was sent.
 	notifications := mockConn.GetNotifications()

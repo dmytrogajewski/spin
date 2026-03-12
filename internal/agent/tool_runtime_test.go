@@ -136,7 +136,7 @@ func TestToolRuntime_Execute_EmptyArguments(t *testing.T) {
 	require.NoError(t, err) // Execute returns nil error, error is in result.
 	require.NotNil(t, result)
 	assert.False(t, result.Success)
-	assert.NotNil(t, result.Err)
+	require.Error(t, result.Err)
 	assert.Contains(t, result.Err.Error(), "cannot be empty")
 }
 

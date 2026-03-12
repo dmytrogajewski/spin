@@ -24,7 +24,7 @@ func TestConvertInsights_Single(t *testing.T) {
 	bullets, err := ConvertInsights([]*reflector.Insight{insight})
 
 	require.NoError(t, err)
-	require.Equal(t, 1, len(bullets))
+	require.Len(t, bullets, 1)
 
 	bullet := bullets[0]
 	assert.Equal(t, "Always validate input parameters before processing them", bullet.Content)
@@ -45,7 +45,7 @@ func TestConvertInsights_Empty(t *testing.T) {
 	bullets, err := ConvertInsights([]*reflector.Insight{})
 
 	require.NoError(t, err)
-	assert.Equal(t, 0, len(bullets))
+	assert.Empty(t, bullets)
 }
 
 // TestConvertInsights_NoEvidence tests insight without evidence.
@@ -61,7 +61,7 @@ func TestConvertInsights_NoEvidence(t *testing.T) {
 	bullets, err := ConvertInsights([]*reflector.Insight{insight})
 
 	require.NoError(t, err)
-	require.Equal(t, 1, len(bullets))
+	require.Len(t, bullets, 1)
 
 	// Should not have evidence tag.
 	_, hasEvidence := bullets[0].Tags["evidence"]
@@ -82,7 +82,7 @@ func TestConvertInsights_MultipleEvidence(t *testing.T) {
 	bullets, err := ConvertInsights([]*reflector.Insight{insight})
 
 	require.NoError(t, err)
-	require.Equal(t, 1, len(bullets))
+	require.Len(t, bullets, 1)
 
 	// Check evidence is joined with semicolon.
 	assert.Equal(t, "first evidence; second evidence; third evidence", bullets[0].Tags["evidence"])

@@ -25,7 +25,7 @@ func TestNew_CreatesEmptyPlaybook(t *testing.T) {
 	assert.Equal(t, 0, stats.TotalBullets)
 	assert.Equal(t, 0, stats.TotalHelpful)
 	assert.Equal(t, 0, stats.TotalHarmful)
-	assert.Equal(t, 0.0, stats.AvgScore)
+	assert.InDelta(t, 0.0, stats.AvgScore, 1e-9)
 	assert.Equal(t, int64(0), stats.TotalSizeBytes)
 }
 
@@ -69,7 +69,7 @@ func TestAdd_RejectsDuplicateID(t *testing.T) {
 	require.NoError(t, err)
 
 	err = pb.Add(ctx, b2)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already exists")
 }
 
@@ -107,7 +107,7 @@ func TestUpdate_RejectsNonExistent(t *testing.T) {
 	require.NoError(t, err)
 
 	err = pb.Update(ctx, b)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
 
@@ -416,7 +416,7 @@ func TestAdd_RejectsNilBullet(t *testing.T) {
 
 	pb := playbook.New(nil, nil)
 	err := pb.Add(context.Background(), nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot be nil")
 }
 
@@ -425,7 +425,7 @@ func TestUpdate_RejectsNilBullet(t *testing.T) {
 
 	pb := playbook.New(nil, nil)
 	err := pb.Update(context.Background(), nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot be nil")
 }
 
@@ -434,7 +434,7 @@ func TestRestore_RejectsNilSnapshot(t *testing.T) {
 
 	pb := playbook.New(nil, nil)
 	err := pb.Restore(nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot be nil")
 }
 
@@ -458,7 +458,7 @@ func TestLoad_InvalidJSON(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = playbook.Load(tmpFile, nil, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal")
 }
 
@@ -466,7 +466,7 @@ func TestLoad_NonExistentFile(t *testing.T) {
 	t.Parallel()
 
 	_, err := playbook.Load("/nonexistent/file.json", nil, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestSave_ErrorCases(t *testing.T) {
@@ -476,7 +476,7 @@ func TestSave_ErrorCases(t *testing.T) {
 
 	// Try to save to invalid directory.
 	err := pb.Save("/nonexistent/directory/file.json")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestBulletsEqual_AllFields(t *testing.T) {

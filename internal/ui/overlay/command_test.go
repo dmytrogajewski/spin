@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var errExecutionFailed = errors.New("execution failed")
@@ -81,7 +82,7 @@ func TestSimpleCommand_Execute(t *testing.T) {
 
 	err := cmd.Execute(context.Background())
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, executed)
 }
 
@@ -94,7 +95,7 @@ func TestSimpleCommand_ExecuteError(t *testing.T) {
 
 	err := cmd.Execute(context.Background())
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, expectedErr, err)
 }
 
@@ -113,7 +114,7 @@ func TestSimpleCommand_ExecuteWithContext(t *testing.T) {
 
 	err := cmd.Execute(ctx)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, context.Canceled, err)
 	assert.NotNil(t, receivedCtx)
 }

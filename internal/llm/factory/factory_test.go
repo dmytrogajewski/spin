@@ -679,7 +679,7 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 
 				assert.Nil(t, provider, "Provider should be nil on error")
 			} else {
-				assert.NoError(t, err, "Unexpected error: %v", err)
+				require.NoError(t, err, "Unexpected error: %v", err)
 				assert.NotNil(t, provider, "Provider should not be nil")
 
 				if provider != nil {
@@ -716,7 +716,7 @@ func TestFactoryWithKeystore(t *testing.T) {
 	ctx := context.Background()
 	provider, err := factory.NewProvider(ctx, config)
 
-	assert.NoError(t, err, "Factory should create provider with keystore credentials")
+	require.NoError(t, err, "Factory should create provider with keystore credentials")
 	assert.NotNil(t, provider, "Provider should not be nil")
 
 	if provider != nil {
@@ -773,9 +773,9 @@ func TestFactoryTimeoutHandling(t *testing.T) {
 			provider, err := factory.NewProvider(ctx, config)
 
 			if tt.expectedError {
-				assert.Error(t, err, "Expected error but got none")
+				require.Error(t, err, "Expected error but got none")
 			} else {
-				assert.NoError(t, err, "Unexpected error: %v", err)
+				require.NoError(t, err, "Unexpected error: %v", err)
 				assert.NotNil(t, provider, "Provider should not be nil")
 
 				if provider != nil {
@@ -837,10 +837,10 @@ func TestFactoryLegacyCompatibility(t *testing.T) {
 			provider, err := NewProvider(tt.config)
 
 			if tt.expectedError {
-				assert.Error(t, err, "Expected error but got none")
+				require.Error(t, err, "Expected error but got none")
 				assert.Nil(t, provider, "Provider should be nil on error")
 			} else {
-				assert.NoError(t, err, "Unexpected error: %v", err)
+				require.NoError(t, err, "Unexpected error: %v", err)
 				assert.NotNil(t, provider, "Provider should not be nil")
 
 				if provider != nil {
@@ -868,7 +868,7 @@ func TestFactoryProviderRegistration(t *testing.T) {
 
 	provider, err := NewProvider(config)
 
-	assert.NoError(t, err, "Custom provider should be created successfully")
+	require.NoError(t, err, "Custom provider should be created successfully")
 	assert.NotNil(t, provider, "Provider should not be nil")
 	assert.Equal(t, "custom-provider", provider.Name(), "Provider name should match")
 

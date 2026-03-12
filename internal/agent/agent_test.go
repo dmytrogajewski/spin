@@ -916,7 +916,7 @@ func TestToolExecutionWithMockLLM(t *testing.T) {
 			case events.EventToolCallComplete:
 				toolCompleteEvents = append(toolCompleteEvents, evt)
 				data, ok := evt.Data.(events.ToolCallCompleteData)
-			require.True(t, ok, "expected ToolCallCompleteData type assertion to succeed")
+			assert.True(t, ok, "expected ToolCallCompleteData type assertion to succeed")
 				t.Logf("Tool complete: success=%v tool=%s", data.Success, data.ToolName)
 			}
 		}
@@ -2490,16 +2490,16 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 
 			// Check if agent got stuck (execution time should be reasonable).
 			if tt.expectedStuck {
-				assert.True(t, executionTime > tt.timeout/2, "Agent should have gotten stuck")
+				assert.Greater(t, executionTime, tt.timeout/2, "Agent should have gotten stuck")
 			} else {
-				assert.True(t, executionTime < tt.timeout/2, "Agent should not have gotten stuck, execution time: %v", executionTime)
+				assert.Less(t, executionTime, tt.timeout/2, "Agent should not have gotten stuck, execution time: %v", executionTime)
 			}
 
 			// Check error expectations.
 			if tt.expectedError {
-				assert.Error(t, err, "Expected error but got none")
+				require.Error(t, err, "Expected error but got none")
 			} else {
-				assert.NoError(t, err, "Unexpected error: %v", err)
+				require.NoError(t, err, "Unexpected error: %v", err)
 			}
 
 			// Check response.
@@ -2553,14 +2553,14 @@ func TestAgentTimeoutHandling(t *testing.T) {
 	executionTime := time.Since(start)
 
 	// Should timeout and return error.
-	assert.Error(t, err, "Expected timeout error")
-	assert.True(t, executionTime < 2*time.Second, "Execution should have timed out")
+	require.Error(t, err, "Expected timeout error")
+	assert.Less(t, executionTime, 2*time.Second, "Execution should have timed out")
 
 	// Response should contain error details, not be nil.
 	assert.NotNil(t, resp, "Response should contain error details")
 
 	if resp != nil {
-		assert.NotNil(t, resp.Error, "Response.Error should be set")
+		require.Error(t, resp.Error, "Response.Error should be set")
 		assert.Equal(t, "error", resp.FinishReason, "FinishReason should be 'error'")
 	}
 }
@@ -2633,8 +2633,8 @@ func TestAgentCycleDetection(t *testing.T) {
 	executionTime := time.Since(start)
 
 	// Should complete without getting stuck.
-	assert.NoError(t, err, "Agent should complete without error")
-	assert.True(t, executionTime < 10*time.Second, "Agent should not get stuck in cycle detection")
+	require.NoError(t, err, "Agent should complete without error")
+	assert.Less(t, executionTime, 10*time.Second, "Agent should not get stuck in cycle detection")
 	assert.NotNil(t, resp, "Response should not be nil")
 }
 

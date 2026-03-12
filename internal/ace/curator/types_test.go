@@ -23,8 +23,8 @@ func TestMergeRequest_Creation(t *testing.T) {
 	}
 
 	require.NotNil(t, req)
-	assert.Equal(t, 1, len(req.Insights))
-	assert.Equal(t, 0.85, req.SimilarityThreshold)
+	assert.Len(t, req.Insights, 1)
+	assert.InDelta(t, 0.85, req.SimilarityThreshold, 1e-9)
 }
 
 // TestMergeResult_Empty tests empty merge result.

@@ -49,7 +49,7 @@ func TestNewOllamaEmbedder_InvalidURL(t *testing.T) {
 	}
 
 	_, err := NewOllamaEmbedder(config)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid base URL")
 }
 
@@ -138,7 +138,7 @@ func TestOllamaEmbedder_Embed(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.NotNil(t, embedding)
-	assert.Equal(t, dim, len(embedding), "Expected 768-dimensional embedding")
+	assert.Len(t, embedding, dim, "Expected 768-dimensional embedding")
 
 	// Verify embedding is not all zeros.
 	hasNonZero := false

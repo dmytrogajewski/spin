@@ -149,7 +149,7 @@ func TestTrajectory_WithMetadata(t *testing.T) {
 
 	require.NotNil(t, traj)
 	assert.Equal(t, "gpt-4", traj.Metadata.Model)
-	assert.Equal(t, 0.7, traj.Metadata.Temperature)
+	assert.InDelta(t, 0.7, traj.Metadata.Temperature, 1e-9)
 	assert.Equal(t, 1000, traj.Metadata.MaxTokens)
 	assert.Equal(t, 500, traj.Metadata.TotalTokens)
 	assert.Equal(t, 2*time.Second, traj.Metadata.Duration)

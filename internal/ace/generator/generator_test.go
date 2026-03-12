@@ -44,7 +44,7 @@ func TestNewGenerator_MissingLLM(t *testing.T) {
 		Retriever: ret,
 	})
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, gen)
 	assert.Contains(t, err.Error(), "LLM provider is required")
 }
@@ -61,7 +61,7 @@ func TestNewGenerator_MissingPlaybook(t *testing.T) {
 		Retriever: ret,
 	})
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, gen)
 	assert.Contains(t, err.Error(), "playbook is required")
 }
@@ -77,7 +77,7 @@ func TestNewGenerator_MissingRetriever(t *testing.T) {
 		Playbook: pb,
 	})
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, gen)
 	assert.Contains(t, err.Error(), "retriever is required")
 }
@@ -245,7 +245,7 @@ func TestItemizedLearning_TrajectoryMetadata(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "gpt-4", resp.Trajectory.Metadata.Model)
-	assert.Equal(t, 0.8, resp.Trajectory.Metadata.Temperature)
+	assert.InDelta(t, 0.8, resp.Trajectory.Metadata.Temperature, 1e-9)
 	assert.Equal(t, 2000, resp.Trajectory.Metadata.MaxTokens)
 	assert.GreaterOrEqual(t, resp.Trajectory.Metadata.TotalTokens, 0) // MockProvider generates usage.
 	assert.Equal(t, 1, resp.Trajectory.Metadata.Turns)
@@ -505,7 +505,7 @@ func TestGenerateBullets_EmptyInput(t *testing.T) {
 
 	bullets, err := gen.GenerateBullets(ctx, req)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, bullets)
 	assert.Contains(t, err.Error(), "input is required")
 }
@@ -534,7 +534,7 @@ func TestGenerateBullets_UnknownSourceType(t *testing.T) {
 
 	bullets, err := gen.GenerateBullets(ctx, req)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, bullets)
 	assert.Contains(t, err.Error(), "unknown source type")
 }

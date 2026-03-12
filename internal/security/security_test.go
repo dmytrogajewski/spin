@@ -149,7 +149,7 @@ func TestService_ValidateCommand_NilValidator(t *testing.T) {
 	}
 
 	_, err := svc.ValidateCommand(cmd)
-	assert.Error(t, err, "should error when validator is nil")
+	require.Error(t, err, "should error when validator is nil")
 	assert.Contains(t, err.Error(), "validator not configured")
 }
 
@@ -333,7 +333,7 @@ func TestService_RequestApproval_NilApprovalService(t *testing.T) {
 	approved, err := svc.RequestApproval(ctx, operation)
 
 	assert.False(t, approved)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "approval service not configured")
 }
 
@@ -484,7 +484,7 @@ func TestService_ValidateAndApprove_ApprovalError(t *testing.T) {
 	approved, err := svc.ValidateAndApprove(ctx, cmd, "/tmp")
 
 	assert.False(t, approved)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "approval request failed")
 }
 
@@ -502,7 +502,7 @@ func TestService_ValidateAndApprove_NilValidator(t *testing.T) {
 	approved, err := svc.ValidateAndApprove(ctx, cmd, "/tmp")
 
 	assert.False(t, approved)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "validation failed")
 }
 
@@ -515,7 +515,7 @@ func TestService_ValidateAndApprove_NilCommand(t *testing.T) {
 	approved, err := svc.ValidateAndApprove(ctx, nil, "/tmp")
 
 	assert.False(t, approved)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "validation failed")
 }
 

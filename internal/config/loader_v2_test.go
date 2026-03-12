@@ -52,7 +52,7 @@ protocol:
 	assert.Equal(t, "2.0", cfg.Version)
 	assert.Equal(t, "openai", cfg.LLM.Provider)
 	assert.Equal(t, "gpt-4", cfg.LLM.Model)
-	assert.Equal(t, 0.8, cfg.LLM.Temperature)
+	assert.InDelta(t, 0.8, cfg.LLM.Temperature, 1e-9)
 	assert.Equal(t, 2048, cfg.LLM.MaxTokens)
 	assert.Equal(t, 3*time.Minute, cfg.LLM.Timeout)
 	assert.Equal(t, 20, cfg.Agent.MaxTurns)
@@ -164,7 +164,7 @@ func TestLoaderV2_LoadFromEnv(t *testing.T) {
 	// Verify env var values override defaults.
 	assert.Equal(t, "anthropic", cfg.LLM.Provider)
 	assert.Equal(t, "claude-3", cfg.LLM.Model)
-	assert.Equal(t, 0.5, cfg.LLM.Temperature)
+	assert.InDelta(t, 0.5, cfg.LLM.Temperature, 1e-9)
 	assert.Equal(t, 15, cfg.Agent.MaxTurns)
 	assert.False(t, cfg.ACE.Enabled)
 	assert.Equal(t, "firejail", cfg.Security.SandboxMode)
@@ -208,7 +208,7 @@ agent:
 	assert.Equal(t, "claude-3", cfg.LLM.Model, "env var should override file")
 
 	// File value should be used when no env var.
-	assert.Equal(t, 0.7, cfg.LLM.Temperature, "file value should be used")
+	assert.InDelta(t, 0.7, cfg.LLM.Temperature, 1e-9, "file value should be used")
 }
 
 // TestLoad_EmptySource tests that Load() with empty Source uses defaults.
@@ -257,7 +257,7 @@ func TestLoad_FlagOverrides(t *testing.T) {
 	assert.Equal(t, 20, cfg.Agent.MaxTurns, "flag should override default max_turns")
 
 	// Non-overridden values should keep defaults.
-	assert.Equal(t, 0.7, cfg.LLM.Temperature, "should keep default temperature")
+	assert.InDelta(t, 0.7, cfg.LLM.Temperature, 1e-9, "should keep default temperature")
 }
 
 // TestLoad_FileConfig tests that Load() loads config from file.
@@ -286,7 +286,7 @@ agent:
 	// File values should override defaults.
 	assert.Equal(t, "anthropic", cfg.LLM.Provider, "file should override default provider")
 	assert.Equal(t, "claude-3", cfg.LLM.Model, "file should override default model")
-	assert.Equal(t, 0.5, cfg.LLM.Temperature, "file should override default temperature")
+	assert.InDelta(t, 0.5, cfg.LLM.Temperature, 1e-9, "file should override default temperature")
 	assert.Equal(t, 30, cfg.Agent.MaxTurns, "file should override default max_turns")
 }
 

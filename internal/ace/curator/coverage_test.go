@@ -41,7 +41,7 @@ func TestCosineSimilarity_DifferentLengths(t *testing.T) {
 	b := []float32{1.0, 2.0}
 
 	similarity := cosineSimilarity(a, b)
-	assert.Equal(t, 0.0, similarity)
+	assert.InDelta(t, 0.0, similarity, 1e-9)
 }
 
 // TestCosineSimilarity_ZeroVectors tests zero norm vectors.
@@ -52,19 +52,19 @@ func TestCosineSimilarity_ZeroVectors(t *testing.T) {
 	a := []float32{0.0, 0.0, 0.0}
 	b := []float32{1.0, 2.0, 3.0}
 	similarity := cosineSimilarity(a, b)
-	assert.Equal(t, 0.0, similarity)
+	assert.InDelta(t, 0.0, similarity, 1e-9)
 
 	// Test with second vector being zero.
 	a = []float32{1.0, 2.0, 3.0}
 	b = []float32{0.0, 0.0, 0.0}
 	similarity = cosineSimilarity(a, b)
-	assert.Equal(t, 0.0, similarity)
+	assert.InDelta(t, 0.0, similarity, 1e-9)
 
 	// Test with both vectors being zero.
 	a = []float32{0.0, 0.0, 0.0}
 	b = []float32{0.0, 0.0, 0.0}
 	similarity = cosineSimilarity(a, b)
-	assert.Equal(t, 0.0, similarity)
+	assert.InDelta(t, 0.0, similarity, 1e-9)
 }
 
 // TestCurate_EmbedError tests error handling when embedding fails.

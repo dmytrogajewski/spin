@@ -247,7 +247,7 @@ func TestSetSessionMode_SendsNotification(t *testing.T) {
 
 	// Verify notification was sent.
 	notifications := mockConn.GetNotifications()
-	require.Greater(t, len(notifications), 0, "should have at least one notification")
+	require.NotEmpty(t, notifications, "should have at least one notification")
 
 	// Find the mode update notification.
 	found := false

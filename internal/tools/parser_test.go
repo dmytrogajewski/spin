@@ -144,12 +144,12 @@ func TestArgumentParser_CustomConfiguration(t *testing.T) {
 
 		// Should error on empty.
 		_, err := parser.Parse("")
-		assert.Error(t, err)
+		require.Error(t, err)
 
 		// Change to allow empty.
 		parser.AllowEmpty = true
 		result, err := parser.Parse("")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, ToolParameters{}, result)
 	})
 }

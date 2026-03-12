@@ -339,7 +339,7 @@ func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 	update := completeNotification.Update
 	require.NotNil(t, update.ToolCallUpdate, "should have tool call update")
 	require.NotNil(t, update.ToolCallUpdate.Content, "should have content")
-	require.Greater(t, len(update.ToolCallUpdate.Content), 0, "should have at least one content item")
+	require.NotEmpty(t, update.ToolCallUpdate.Content, "should have at least one content item")
 
 	// Check if diff content is present (ToolDiffContent).
 	hasDiff := false

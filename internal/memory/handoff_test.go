@@ -65,7 +65,7 @@ func TestSessionHandoff_SaveSession_NoStore(t *testing.T) {
 	handoff := NewSessionHandoff(nil, nil)
 
 	err := handoff.SaveSession(ctx, HandoffData{SessionID: "test"})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no persistent store")
 }
 
@@ -80,7 +80,7 @@ func TestSessionHandoff_SaveSession_NoSessionID(t *testing.T) {
 	handoff := NewSessionHandoff(store, nil)
 
 	err = handoff.SaveSession(ctx, HandoffData{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "session ID is required")
 }
 
@@ -226,8 +226,8 @@ func TestSimpleSummarizer(t *testing.T) {
 	result, err = summarizer.Summarize(ctx, long, 0)
 	require.NoError(t, err)
 	assert.Len(t, result, 100)
-	assert.True(t, len(result) <= 100)
-	assert.True(t, result[len(result)-3:] == "...")
+	assert.LessOrEqual(t, len(result), 100)
+	assert.Equal(t, "...", result[len(result)-3:])
 }
 
 func TestSimpleSummarizer_WithMaxTokens(t *testing.T) {

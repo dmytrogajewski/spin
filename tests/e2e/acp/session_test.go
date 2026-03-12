@@ -266,7 +266,7 @@ func TestACP_NewSession_Concurrent(t *testing.T) {
 
 	// Verify all sessions were created successfully.
 	for i, err := range errs {
-		assert.NoError(t, err, "Session %d should be created", i)
+		require.NoError(t, err, "Session %d should be created", i)
 		assert.NotEmpty(t, sessionIDs[i], "Session %d should have ID", i)
 	}
 

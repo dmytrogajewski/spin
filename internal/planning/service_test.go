@@ -59,7 +59,7 @@ func TestService_CreatePlan_Success(t *testing.T) {
 
 	// Verify plan structure.
 	assert.NotEmpty(t, plan.ID)
-	assert.Equal(t, 2, len(plan.Steps))
+	assert.Len(t, plan.Steps, 2)
 	assert.Equal(t, PlanStatusPending, plan.Status)
 
 	// Verify first step.
@@ -104,7 +104,7 @@ func TestService_CreatePlan_InvalidJSON(t *testing.T) {
 
 	plan, err := service.CreatePlan(ctx, "test task")
 	assert.Nil(t, plan)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse LLM response")
 }
 
@@ -121,7 +121,7 @@ func TestService_CreatePlan_EmptySteps(t *testing.T) {
 
 	plan, err := service.CreatePlan(ctx, "test task")
 	assert.Nil(t, plan)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "plan validation failed")
 }
 
@@ -136,7 +136,7 @@ func TestService_CreatePlan_LLMError(t *testing.T) {
 
 	plan, err := service.CreatePlan(ctx, "test task")
 	assert.Nil(t, plan)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "llm completion failed")
 }
 
@@ -174,7 +174,7 @@ func TestService_parseDecompositionResponse(t *testing.T) {
 	data, err := service.parseDecompositionResponse(validJSON)
 	require.NoError(t, err)
 	require.NotNil(t, data)
-	assert.Equal(t, 1, len(data.Steps))
+	assert.Len(t, data.Steps, 1)
 	assert.Equal(t, "step_1", data.Steps[0].ID)
 }
 
@@ -186,7 +186,7 @@ func TestService_parseDecompositionResponse_InvalidJSON(t *testing.T) {
 	invalidJSON := "not json"
 	data, err := service.parseDecompositionResponse(invalidJSON)
 	assert.Nil(t, data)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse JSON")
 }
 
@@ -216,7 +216,7 @@ func TestService_createStepsFromData(t *testing.T) {
 
 	steps, err := service.createStepsFromData(data)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(steps))
+	require.Len(t, steps, 2)
 
 	assert.Equal(t, "step_1", steps[0].ID)
 	assert.Equal(t, "test", steps[0].Description)
@@ -253,7 +253,7 @@ func TestService_createStepsFromData_InvalidDuration(t *testing.T) {
 
 	steps, err := service.createStepsFromData(data)
 	require.NoError(t, err) // Duration parsing errors are silently ignored.
-	require.Equal(t, 1, len(steps))
+	require.Len(t, steps, 1)
 	assert.Equal(t, time.Duration(0), steps[0].EstimatedDuration)
 }
 
@@ -295,7 +295,7 @@ func TestService_CreatePlan_MultipleSteps(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 
-	assert.Equal(t, 3, len(plan.Steps))
+	assert.Len(t, plan.Steps, 3)
 	assert.Equal(t, "step_1", plan.Steps[0].ID)
 	assert.Equal(t, "step_2", plan.Steps[1].ID)
 	assert.Equal(t, "step_3", plan.Steps[2].ID)
@@ -331,7 +331,7 @@ func TestService_CreatePlan_MalformedJSON(t *testing.T) {
 
 			plan, err := service.CreatePlan(ctx, "test task")
 			if tc.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 
 				if plan != nil {
 					// If plan is created, validation should fail.
@@ -372,7 +372,7 @@ func TestService_CreatePlan_JSONWithWhitespace(t *testing.T) {
 	plan, err := service.CreatePlan(ctx, "test task")
 	require.NoError(t, err)
 	require.NotNil(t, plan)
-	assert.Equal(t, 1, len(plan.Steps))
+	assert.Len(t, plan.Steps, 1)
 }
 
 // Test helper: verify that getContent works correctly.

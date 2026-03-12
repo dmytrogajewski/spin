@@ -41,13 +41,13 @@ func TestBuilder_registerMemoryTools_NilService(t *testing.T) {
 	registry := tools.NewRegistry()
 
 	err := builder.registerMemoryTools(registry)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// No memory tools should be registered.
 	_, err = registry.Get("scratchpad")
-	assert.Error(t, err)
+	require.Error(t, err)
 	_, err = registry.Get("memory")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestBuilder_registerMemoryTools_WithScratchpad(t *testing.T) {
@@ -59,16 +59,16 @@ func TestBuilder_registerMemoryTools_WithScratchpad(t *testing.T) {
 	registry := tools.NewRegistry()
 
 	err := builder.registerMemoryTools(registry)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Scratchpad tool should be registered.
 	tool, err := registry.Get("scratchpad")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "scratchpad", tool.Name())
 
 	// Memory tool should not be registered.
 	_, err = registry.Get("memory")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestBuilder_registerMemoryTools_WithPersistent(t *testing.T) {
@@ -83,15 +83,15 @@ func TestBuilder_registerMemoryTools_WithPersistent(t *testing.T) {
 	registry := tools.NewRegistry()
 
 	err = builder.registerMemoryTools(registry)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Scratchpad tool should not be registered.
 	_, err = registry.Get("scratchpad")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// Memory tool should be registered.
 	tool, err := registry.Get("memory")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "memory", tool.Name())
 }
 
@@ -108,15 +108,15 @@ func TestBuilder_registerMemoryTools_WithBoth(t *testing.T) {
 	registry := tools.NewRegistry()
 
 	err = builder.registerMemoryTools(registry)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Both tools should be registered.
 	tool1, err := registry.Get("scratchpad")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "scratchpad", tool1.Name())
 
 	tool2, err := registry.Get("memory")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "memory", tool2.Name())
 }
 
@@ -158,7 +158,7 @@ func TestMemoryService_NewAutoOffloader(t *testing.T) {
 
 	offloader := service.NewAutoOffloader(0.7)
 	assert.NotNil(t, offloader)
-	assert.Equal(t, 0.7, offloader.GetThreshold())
+	assert.InDelta(t, 0.7, offloader.GetThreshold(), 1e-9)
 }
 
 func TestMemoryService_NewAutoOffloader_NilStores(t *testing.T) {

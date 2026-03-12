@@ -148,7 +148,7 @@ func TestSpinACPAgent_NewSession_UnsupportedTransport(t *testing.T) {
 	_, err = acpAgent.NewSession(context.Background(), req)
 
 	// HTTP transport is not supported.
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "HTTP transport is not supported")
 }
 
@@ -174,6 +174,6 @@ func TestSpinACPAgent_NewSession_NoTransport(t *testing.T) {
 
 	_, err = acpAgent.NewSession(context.Background(), req)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no transport specified")
 }

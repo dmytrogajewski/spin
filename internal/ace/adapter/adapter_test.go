@@ -64,7 +64,7 @@ func TestAdapter_GetSession_NotFound(t *testing.T) {
 	// Get non-existent session.
 	session, err := adapter.GetSession("non-existent")
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, session)
 	assert.Contains(t, err.Error(), "session not found")
 }
@@ -94,7 +94,7 @@ func TestAdapter_EndSession(t *testing.T) {
 
 	// Session should no longer exist.
 	session, err := adapter.GetSession(sessionID)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, session)
 }
 
@@ -255,7 +255,7 @@ func TestAdapter_AdaptOnline_QuickAddWithGenerator(t *testing.T) {
 	assert.Equal(t, ActionQuickAdd, result.Action)
 
 	// Should have added bullets.
-	assert.Greater(t, result.BulletsAdded, 0)
+	assert.Positive(t, result.BulletsAdded)
 	assert.Equal(t, result.BulletsAdded, pb.Stats().TotalBullets)
 }
 
@@ -343,7 +343,7 @@ func TestAdapter_AdaptOnline_SessionNotFound(t *testing.T) {
 
 	// Should error.
 	result, err := adapter.AdaptOnline(ctx, signal)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "session not found")
 }
@@ -480,7 +480,7 @@ func TestAdapter_EndSession_NotFound(t *testing.T) {
 
 	// Try to end non-existent session.
 	err := adapter.EndSession(ctx, "non-existent")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "session not found")
 }
 

@@ -129,7 +129,7 @@ func TestStreamFilter_PhantomToolCallsDropped(t *testing.T) {
 	}
 
 	result := simulateStreamFilter(input, tools)
-	assert.Len(t, result, 0, "purely phantom tool calls should be dropped")
+	assert.Empty(t, result, "purely phantom tool calls should be dropped")
 }
 
 // TestStreamFilter_NamelessWithUniqueArgs verifies tool calls with empty name
@@ -252,7 +252,7 @@ func TestStreamFilter_NoToolsAvailable(t *testing.T) {
 	}
 
 	result := simulateStreamFilter(input, nil)
-	assert.Len(t, result, 0, "cannot infer without tools schema")
+	assert.Empty(t, result, "cannot infer without tools schema")
 }
 
 // TestConvertOllamaChunkToOpenAI_ToolCallsPreserved verifies the full chain:

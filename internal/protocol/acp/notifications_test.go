@@ -390,7 +390,7 @@ func TestFileContentTracker_NewFile(t *testing.T) {
 	retrievedOld, retrievedNew, retrievedPath, ok := tracker.getContentForDiff(toolID)
 
 	assert.True(t, ok, "should retrieve content for new file")
-	assert.Equal(t, "", retrievedOld, "old content should be empty for new file")
+	assert.Empty(t, retrievedOld, "old content should be empty for new file")
 	assert.Equal(t, "new file content", retrievedNew)
 	assert.Equal(t, filePath, retrievedPath)
 }
@@ -470,7 +470,7 @@ func TestConvertToolCallStart_WriteFile_NewFile(t *testing.T) {
 	// Verify old content is empty for new file.
 	oldContent, newContent, filePath, hasContent := tracker.getContentForDiff("tool-new")
 	assert.True(t, hasContent, "should have tracked content")
-	assert.Equal(t, "", oldContent, "old content should be empty for new file")
+	assert.Empty(t, oldContent, "old content should be empty for new file")
 	assert.Equal(t, "new file content", newContent)
 	assert.Equal(t, tmpFile, filePath)
 }

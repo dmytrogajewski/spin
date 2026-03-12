@@ -70,7 +70,7 @@ func TestCurator_Curate_NewBullets(t *testing.T) {
 	assert.Equal(t, 1, result.Added)
 	assert.Equal(t, 0, result.Skipped)
 	assert.Equal(t, 0, result.Updated)
-	assert.Equal(t, 1, len(result.AddedBullets))
+	assert.Len(t, result.AddedBullets, 1)
 }
 
 // TestCurator_Curate_MultipleBullets tests adding multiple insights.
@@ -127,7 +127,7 @@ func TestCurator_Curate_EmptyInsights(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Added)
-	assert.Equal(t, 0, len(result.AddedBullets))
+	assert.Empty(t, result.AddedBullets)
 }
 
 // TestCurator_Curate_WithDeduplication tests duplicate detection during curation.

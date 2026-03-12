@@ -58,7 +58,7 @@ func TestParseToolCallsFromXML(t *testing.T) {
 			t.Parallel()
 
 			got := parseToolCallsFromXML(tt.content)
-			assert.Equal(t, tt.want, len(got))
+			assert.Len(t, got, tt.want)
 
 			if tt.want > 0 {
 				for _, call := range got {

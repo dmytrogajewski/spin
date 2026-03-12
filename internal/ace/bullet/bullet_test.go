@@ -45,7 +45,7 @@ func TestNew_RejectsContentTooLong(t *testing.T) {
 
 	b, err := bullet.New(longContent)
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, b)
 	assert.Contains(t, err.Error(), "content length")
 }
@@ -65,8 +65,8 @@ func TestBullet_CloneWithEmbedding(t *testing.T) {
 
 	// Verify deep copy (modifying clone doesn't affect original).
 	clone.Embedding[0] = 0.9
-	assert.Equal(t, float32(0.1), original.Embedding[0])
-	assert.Equal(t, float32(0.9), clone.Embedding[0])
+	assert.InDelta(t, float32(0.1), original.Embedding[0], 1e-9)
+	assert.InDelta(t, float32(0.9), clone.Embedding[0], 1e-9)
 }
 
 func TestBullet_CloneWithoutOptionalFields(t *testing.T) {
@@ -177,7 +177,7 @@ func TestBullet_Score(t *testing.T) {
 			}
 
 			score := b.Score()
-			assert.Equal(t, tt.expected, score)
+			assert.InDelta(t, tt.expected, score, 1e-9)
 		})
 	}
 }

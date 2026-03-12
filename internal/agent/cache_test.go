@@ -125,10 +125,10 @@ func TestCommandCache_Size(t *testing.T) {
 	result2 := &Result{Command: &security.Command{Program: "echo", Args: []string{"2"}}, Stdout: "output2", ExitCode: 0, Duration: 100 * time.Millisecond}
 
 	cache.Set("key1", result1)
-	assert.True(t, cache.Size() > 0)
+	assert.Positive(t, cache.Size())
 
 	cache.Set("key2", result2)
-	assert.True(t, cache.Size() > 0)
+	assert.Positive(t, cache.Size())
 
 	// Clear.
 	cache.Clear()
@@ -257,7 +257,7 @@ func TestCommandCache_Stats(t *testing.T) {
 	cache.Get("non-existent")
 
 	stats = cache.Stats()
-	assert.True(t, stats.Size > 0)
+	assert.Positive(t, stats.Size)
 	assert.Equal(t, int64(1024*1024), stats.MaxSize)
 	assert.Equal(t, 2, stats.Entries)
 }
@@ -293,7 +293,7 @@ func TestCommandCache_ConcurrentAccess(t *testing.T) {
 	<-done
 
 	// Verify cache is in a consistent state.
-	assert.True(t, cache.Size() >= 0)
+	assert.GreaterOrEqual(t, cache.Size(), int64(0))
 }
 
 func TestCommandCache_SizeLimit(t *testing.T) {
@@ -313,7 +313,7 @@ func TestCommandCache_SizeLimit(t *testing.T) {
 	}
 
 	// Cache should not exceed the size limit.
-	assert.True(t, cache.Size() <= 100)
+	assert.LessOrEqual(t, cache.Size(), int64(100))
 }
 
 func TestCommandCache_UpdateExisting(t *testing.T) {
@@ -358,7 +358,7 @@ func TestCommandCache_Eviction(t *testing.T) {
 	}
 
 	// Cache should not exceed the size limit.
-	assert.True(t, cache.Size() <= 50)
+	assert.LessOrEqual(t, cache.Size(), int64(50))
 }
 
 func TestCacheStats_String(t *testing.T) {

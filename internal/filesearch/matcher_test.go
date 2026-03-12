@@ -42,7 +42,7 @@ func TestMatcher_Score_SimpleMatch(t *testing.T) {
 
 	score, indices := m.Score("abc", "a/b/c.txt")
 
-	assert.Greater(t, score, 0)
+	assert.Positive(t, score)
 	assert.Len(t, indices, 3)
 	assert.Contains(t, indices, 0) // 'a'.
 	assert.Contains(t, indices, 2) // 'b'.
@@ -119,8 +119,8 @@ func TestMatcher_Score_CaseInsensitive(t *testing.T) {
 	score2, _ := m.Score("ABC", "abc.txt")
 
 	// Case-insensitive: both should match.
-	assert.Greater(t, score1, 0)
-	assert.Greater(t, score2, 0)
+	assert.Positive(t, score1)
+	assert.Positive(t, score2)
 }
 
 func TestMatcher_Match_EmptyQuery(t *testing.T) {
@@ -131,7 +131,7 @@ func TestMatcher_Match_EmptyQuery(t *testing.T) {
 
 	matches := m.Match("", paths)
 
-	assert.Len(t, matches, 0)
+	assert.Empty(t, matches)
 }
 
 func TestMatcher_Match_EmptyPaths(t *testing.T) {
@@ -141,7 +141,7 @@ func TestMatcher_Match_EmptyPaths(t *testing.T) {
 
 	matches := m.Match("test", []string{})
 
-	assert.Len(t, matches, 0)
+	assert.Empty(t, matches)
 }
 
 func TestMatcher_Match_SinglePath(t *testing.T) {
@@ -154,7 +154,7 @@ func TestMatcher_Match_SinglePath(t *testing.T) {
 
 	assert.Len(t, matches, 1)
 	assert.Equal(t, "test.go", matches[0].Path)
-	assert.Greater(t, matches[0].Score, 0)
+	assert.Positive(t, matches[0].Score)
 }
 
 func TestMatcher_Match_MultiplePaths(t *testing.T) {
@@ -214,7 +214,7 @@ func TestMatcher_Match_NoMatches(t *testing.T) {
 
 	matches := m.Match("xyz", paths)
 
-	assert.Len(t, matches, 0)
+	assert.Empty(t, matches)
 }
 
 func TestMatcher_Match_PartialMatches(t *testing.T) {

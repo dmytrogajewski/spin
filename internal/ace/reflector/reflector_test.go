@@ -54,9 +54,9 @@ func TestReflector_Reflect(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	assert.Equal(t, 1, len(resp.Insights))
+	assert.Len(t, resp.Insights, 1)
 	assert.Equal(t, "Always use errors.Is for error type checking in Go", resp.Insights[0].Content)
-	assert.Equal(t, 0.9, resp.Insights[0].Confidence)
+	assert.InDelta(t, 0.9, resp.Insights[0].Confidence, 1e-9)
 	assert.Equal(t, CategorySuccessPattern, resp.Insights[0].Category)
 }
 
@@ -89,7 +89,7 @@ func TestReflector_RefineInsights(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, refined)
-	assert.Equal(t, 1, len(refined))
+	assert.Len(t, refined, 1)
 	assert.Greater(t, refined[0].Confidence, initialInsights[0].Confidence)
 	assert.Equal(t, 2, refined[0].Iteration)
 }
@@ -291,8 +291,8 @@ func TestReflector_Reflect_WithMarkdownJSON(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	assert.Equal(t, 1, len(resp.Insights))
+	assert.Len(t, resp.Insights, 1)
 	assert.Equal(t, "Always use errors.Is for error type checking in Go", resp.Insights[0].Content)
-	assert.Equal(t, 0.9, resp.Insights[0].Confidence)
+	assert.InDelta(t, 0.9, resp.Insights[0].Confidence, 1e-9)
 	assert.Equal(t, CategorySuccessPattern, resp.Insights[0].Category)
 }

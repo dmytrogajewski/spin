@@ -185,7 +185,7 @@ func TestCompliance_NewSession_SessionId(t *testing.T) {
 
 	// Verify session ID is generated and non-empty.
 	assert.NotEmpty(t, resp.SessionId, "Session ID should be generated")
-	assert.Greater(t, len(resp.SessionId), 0, "Session ID should have length > 0")
+	assert.NotEmpty(t, resp.SessionId, "Session ID should have length > 0")
 }
 
 // TestCompliance_NewSession_ModeState verifies session mode state compliance.

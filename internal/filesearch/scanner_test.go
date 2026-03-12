@@ -27,8 +27,8 @@ func TestScanner_Scan_EmptyDir(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
-	assert.Len(t, files, 0)
+	require.NoError(t, err)
+	assert.Empty(t, files)
 }
 
 func TestScanner_Scan_SingleFile(t *testing.T) {
@@ -44,7 +44,7 @@ func TestScanner_Scan_SingleFile(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, files, 1)
 	assert.Contains(t, files, "test.txt")
 }
@@ -65,7 +65,7 @@ func TestScanner_Scan_MultipleFiles(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	scanned, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, scanned, 3)
 	assert.ElementsMatch(t, files, scanned)
 }
@@ -84,7 +84,7 @@ func TestScanner_Scan_NestedDirectories(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, files, 3)
 	assert.Contains(t, files, "root.txt")
 	assert.Contains(t, files, "dir1/file1.txt")
@@ -105,7 +105,7 @@ func TestScanner_Scan_IgnoreGit(t *testing.T) {
 	s := NewScanner(tmpDir, true)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, files, 1)
 	assert.Contains(t, files, "regular.txt")
 	assert.NotContains(t, files, ".git/config")
@@ -127,7 +127,7 @@ func TestScanner_Scan_IncludeGit(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, files, "regular.txt")
 	// .git is in default ignore patterns, so it should NOT be included.
 	assert.NotContains(t, files, ".git/config")
@@ -144,7 +144,7 @@ func TestScanner_Scan_RelativePaths(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// Paths should be relative to baseDir.
 	assert.Contains(t, files, "subdir/file.txt")
 	// Should NOT contain absolute path.
@@ -173,7 +173,7 @@ func TestScanner_Scan_SymlinkHandling(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	// Should include both real file and symlink.
 	assert.GreaterOrEqual(t, len(files), 1)
 }
@@ -190,7 +190,7 @@ func TestScanner_Scan_HiddenFiles(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, files, 2)
 	assert.Contains(t, files, ".hidden")
 	assert.Contains(t, files, "visible.txt")
@@ -256,7 +256,7 @@ func TestScanner_WithGitignore_SimplePattern(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, files, 1)
 	assert.Contains(t, files, "app.txt")
 	assert.NotContains(t, files, "debug.log")
@@ -281,7 +281,7 @@ func TestScanner_WithGitignore_DirectoryPattern(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, files, "src/main.go")
 	assert.NotContains(t, files, "build/out.txt")
 }
@@ -299,7 +299,7 @@ func TestScanner_WithGitignore_NodeModules(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, files, "app.js")
 	assert.NotContains(t, files, "node_modules/pkg/index.js")
 }
@@ -321,7 +321,7 @@ func TestScanner_WithSpinignore(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, files, "test.txt")
 	assert.NotContains(t, files, "test.tmp")
 }
@@ -349,7 +349,7 @@ func TestScanner_WithBothIgnoreFiles(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Len(t, files, 1)
 	assert.Contains(t, files, "app.txt")
 	assert.NotContains(t, files, "debug.log")
@@ -372,7 +372,7 @@ func TestScanner_RealWorldNodeProject(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, files, "src/index.js")
 	assert.Contains(t, files, "package.json")
 	assert.NotContains(t, files, "node_modules/express/index.js")
@@ -396,7 +396,7 @@ func TestScanner_RealWorldGoProject(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, files, "cmd/app/main.go")
 	assert.Contains(t, files, "go.mod")
 	assert.NotContains(t, files, "vendor/lib/lib.go")
@@ -419,7 +419,7 @@ func TestScanner_RealWorldPythonProject(t *testing.T) {
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, files, "src/main.py")
 	assert.Contains(t, files, "requirements.txt")
 	assert.NotContains(t, files, "__pycache__/main.cpython-39.pyc")
@@ -440,7 +440,7 @@ func TestScanner_BackwardCompatibility_IgnoreGitFlag(t *testing.T) {
 	s := NewScanner(tmpDir, true)
 	files, err := s.Scan()
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, files, "README.md")
 	assert.NotContains(t, files, ".git/config")
 }

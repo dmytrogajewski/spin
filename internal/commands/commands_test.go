@@ -236,7 +236,7 @@ func TestListCommands(t *testing.T) {
 	t.Parallel()
 
 	commands := ListCommands()
-	assert.Greater(t, len(commands), 0)
+	assert.NotEmpty(t, commands)
 
 	// Check that expected commands are registered.
 	commandNames := make(map[string]bool)

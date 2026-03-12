@@ -90,7 +90,7 @@ Or bullet points.`,
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			entries := detectPlanFromOutput(tt.output)
-			assert.Equal(t, tt.expectedCount, len(entries), tt.description)
+			assert.Len(t, entries, tt.expectedCount, tt.description)
 
 			if len(entries) > 0 {
 				t.Logf("Detected entries: %v", entries)
