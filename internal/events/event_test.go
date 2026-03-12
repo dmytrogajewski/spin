@@ -9,6 +9,8 @@ import (
 
 // TestEvent_Structure tests Event struct serialization.
 func TestEvent_Structure(t *testing.T) {
+	t.Parallel()
+
 	event := Event{
 		Type:      EventContentDelta,
 		Timestamp: time.Now(),
@@ -36,6 +38,8 @@ func TestEvent_Structure(t *testing.T) {
 
 // TestEventType_String tests EventType String() method.
 func TestEventType_String(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		eventType EventType
 		expected  string
@@ -59,6 +63,8 @@ func TestEventType_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
+			t.Parallel()
+
 			if got := tt.eventType.String(); got != tt.expected {
 				t.Errorf("String() = %v, want %v", got, tt.expected)
 			}
@@ -68,6 +74,8 @@ func TestEventType_String(t *testing.T) {
 
 // TestEventType_String_Unknown tests unknown event type.
 func TestEventType_String_Unknown(t *testing.T) {
+	t.Parallel()
+
 	unknown := EventType(999)
 	if got := unknown.String(); got != "unknown" {
 		t.Errorf("String() = %v, want unknown", got)
@@ -76,6 +84,8 @@ func TestEventType_String_Unknown(t *testing.T) {
 
 // TestNewEventEmitter tests emitter creation.
 func TestNewEventEmitter(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(100)
 
 	if emitter == nil {
@@ -97,6 +107,8 @@ func TestNewEventEmitter(t *testing.T) {
 
 // TestEventEmitter_Subscribe tests subscription.
 func TestEventEmitter_Subscribe(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 
 	id, events, err := emitter.Subscribe()
@@ -120,6 +132,8 @@ func TestEventEmitter_Subscribe(t *testing.T) {
 
 // TestEventEmitter_Subscribe_AfterClose tests subscription after close.
 func TestEventEmitter_Subscribe_AfterClose(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 	emitter.Close()
 
@@ -131,6 +145,8 @@ func TestEventEmitter_Subscribe_AfterClose(t *testing.T) {
 
 // TestEventEmitter_Subscribe_MultipleSubscribers tests multiple subscriptions.
 func TestEventEmitter_Subscribe_MultipleSubscribers(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 
 	id1, _, err := emitter.Subscribe()
@@ -151,6 +167,8 @@ func TestEventEmitter_Subscribe_MultipleSubscribers(t *testing.T) {
 
 // TestEventEmitter_Unsubscribe tests unsubscription.
 func TestEventEmitter_Unsubscribe(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 
 	id, events, _ := emitter.Subscribe()
@@ -166,7 +184,9 @@ func TestEventEmitter_Unsubscribe(t *testing.T) {
 }
 
 // TestEventEmitter_Unsubscribe_NonExistent tests unsubscribing non-existent ID.
-func TestEventEmitter_Unsubscribe_NonExistent(_ *testing.T) {
+func TestEventEmitter_Unsubscribe_NonExistent(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 
 	// Should not panic.
@@ -175,6 +195,8 @@ func TestEventEmitter_Unsubscribe_NonExistent(_ *testing.T) {
 
 // TestEventEmitter_Emit tests event emission.
 func TestEventEmitter_Emit(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 
 	_, events, _ := emitter.Subscribe()
@@ -206,6 +228,8 @@ func TestEventEmitter_Emit(t *testing.T) {
 
 // TestEventEmitter_Emit_WithTimestamp tests emission with pre-set timestamp.
 func TestEventEmitter_Emit_WithTimestamp(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 
 	_, events, _ := emitter.Subscribe()
@@ -224,6 +248,8 @@ func TestEventEmitter_Emit_WithTimestamp(t *testing.T) {
 
 // TestEventEmitter_Emit_MultipleSubscribers tests broadcast to multiple subscribers.
 func TestEventEmitter_Emit_MultipleSubscribers(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 
 	_, events1, _ := emitter.Subscribe()
@@ -247,6 +273,8 @@ func TestEventEmitter_Emit_MultipleSubscribers(t *testing.T) {
 
 // TestEventEmitter_Emit_SlowSubscriber tests fire-and-forget with slow subscriber.
 func TestEventEmitter_Emit_SlowSubscriber(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(2) // Small buffer.
 
 	_, events, _ := emitter.Subscribe()
@@ -278,6 +306,8 @@ func TestEventEmitter_Emit_SlowSubscriber(t *testing.T) {
 
 // TestEventEmitter_Close tests emitter closure.
 func TestEventEmitter_Close(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 
 	_, events1, _ := emitter.Subscribe()
@@ -306,7 +336,9 @@ func TestEventEmitter_Close(t *testing.T) {
 }
 
 // TestEventEmitter_Close_Idempotent tests multiple closes.
-func TestEventEmitter_Close_Idempotent(_ *testing.T) {
+func TestEventEmitter_Close_Idempotent(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 
 	// Should not panic.
@@ -317,6 +349,8 @@ func TestEventEmitter_Close_Idempotent(_ *testing.T) {
 
 // TestEventEmitter_EventOrdering tests event order preservation.
 func TestEventEmitter_EventOrdering(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(100)
 
 	_, events, _ := emitter.Subscribe()
@@ -340,6 +374,8 @@ func TestEventEmitter_EventOrdering(t *testing.T) {
 
 // TestEventEmitter_ConcurrentSubscribe tests concurrent subscriptions.
 func TestEventEmitter_ConcurrentSubscribe(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 
 	var wg sync.WaitGroup
@@ -373,6 +409,8 @@ func TestEventEmitter_ConcurrentSubscribe(t *testing.T) {
 
 // TestEventEmitter_ConcurrentEmit tests concurrent emissions.
 func TestEventEmitter_ConcurrentEmit(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(100)
 
 	_, events, _ := emitter.Subscribe()
@@ -411,7 +449,9 @@ func TestEventEmitter_ConcurrentEmit(t *testing.T) {
 }
 
 // TestEventEmitter_ConcurrentMixed tests mixed concurrent operations.
-func TestEventEmitter_ConcurrentMixed(_ *testing.T) {
+func TestEventEmitter_ConcurrentMixed(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(50)
 
 	var wg sync.WaitGroup
@@ -447,6 +487,8 @@ func TestEventEmitter_ConcurrentMixed(_ *testing.T) {
 
 // TestEventEmitter_NoMemoryLeaks tests cleanup.
 func TestEventEmitter_NoMemoryLeaks(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 
 	// Create and cleanup many subscribers.
@@ -510,7 +552,11 @@ func BenchmarkEventEmitter_Subscribe(b *testing.B) {
 
 // TestEvent_ToolCallStartData tests type-safe helper for ToolCallStartData.
 func TestEvent_ToolCallStartData(t *testing.T) {
+	t.Parallel()
+
 	t.Run("valid data", func(t *testing.T) {
+		t.Parallel()
+
 		// Create event with ToolCallStartData.
 		event := Event{
 			Type: EventToolCallStart,
@@ -536,6 +582,8 @@ func TestEvent_ToolCallStartData(t *testing.T) {
 	})
 
 	t.Run("wrong data type", func(t *testing.T) {
+		t.Parallel()
+
 		// Create event with wrong data type.
 		event := Event{
 			Type: EventContentDelta,
@@ -552,6 +600,8 @@ func TestEvent_ToolCallStartData(t *testing.T) {
 
 // TestEvent_TypeSafeHelpers tests all type-safe helper methods.
 func TestEvent_TypeSafeHelpers(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		eventType EventType
@@ -632,6 +682,8 @@ func TestEvent_TypeSafeHelpers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			event := Event{
 				Type: tt.eventType,
 				Data: tt.data,
@@ -646,6 +698,8 @@ func TestEvent_TypeSafeHelpers(t *testing.T) {
 
 // TestEvent_TypeSafeHelpers_WrongType tests helpers return false for wrong types.
 func TestEvent_TypeSafeHelpers_WrongType(t *testing.T) {
+	t.Parallel()
+
 	// Create event with ContentDeltaData.
 	event := Event{
 		Type: EventContentDelta,
@@ -680,6 +734,8 @@ func TestEvent_TypeSafeHelpers_WrongType(t *testing.T) {
 
 // TestEvent_ACERetrievalData tests ACERetrievalData type assertion.
 func TestEvent_ACERetrievalData(t *testing.T) {
+	t.Parallel()
+
 	aceData := ACERetrievalData{
 		Turn:             5,
 		Trigger:          "error",

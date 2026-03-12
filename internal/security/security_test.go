@@ -10,6 +10,7 @@ import (
 )
 
 func TestNewService(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name            string
 		validator       *Validator
@@ -44,6 +45,7 @@ func TestNewService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			svc := NewService(tt.validator, tt.approvalService)
 
 			if tt.wantNil {
@@ -56,6 +58,7 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_ValidateCommand(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 	svc := NewService(validator, nil)
 
@@ -116,6 +119,7 @@ func TestService_ValidateCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if tt.setupValidator != nil {
 				tt.setupValidator(validator)
 			}
@@ -135,6 +139,7 @@ func TestService_ValidateCommand(t *testing.T) {
 }
 
 func TestService_ValidateCommand_NilValidator(t *testing.T) {
+	t.Parallel()
 	svc := NewService(nil, nil)
 
 	cmd := &Command{
@@ -149,6 +154,7 @@ func TestService_ValidateCommand_NilValidator(t *testing.T) {
 }
 
 func TestService_NeedsApproval(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 	svc := NewService(validator, nil)
 
@@ -197,6 +203,7 @@ func TestService_NeedsApproval(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			needs := svc.NeedsApproval(tt.cmd)
 			assert.Equal(t, tt.wantApproval, needs)
 		})
@@ -204,6 +211,7 @@ func TestService_NeedsApproval(t *testing.T) {
 }
 
 func TestService_NeedsApproval_NilValidator(t *testing.T) {
+	t.Parallel()
 	svc := NewService(nil, nil)
 
 	cmd := &Command{
@@ -217,6 +225,7 @@ func TestService_NeedsApproval_NilValidator(t *testing.T) {
 }
 
 func TestService_RequestApproval(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 
 	tests := []struct {
@@ -285,6 +294,7 @@ func TestService_RequestApproval(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			handler := tt.setupHandler()
 			approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: handler, Emitter: nil, Validator: validator})
 			svc := NewService(validator, approvalService)
@@ -309,6 +319,7 @@ func TestService_RequestApproval(t *testing.T) {
 }
 
 func TestService_RequestApproval_NilApprovalService(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 	svc := NewService(validator, nil)
 
@@ -327,6 +338,7 @@ func TestService_RequestApproval_NilApprovalService(t *testing.T) {
 }
 
 func TestService_ValidateAndApprove(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 
 	tests := []struct {
@@ -434,6 +446,7 @@ func TestService_ValidateAndApprove(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			handler := tt.setupHandler()
 			approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: handler, Emitter: nil, Validator: validator})
 			svc := NewService(validator, approvalService)
@@ -455,6 +468,7 @@ func TestService_ValidateAndApprove(t *testing.T) {
 
 // Benchmark tests.
 func TestService_ValidateAndApprove_ApprovalError(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 	// No approval service configured - will cause error.
 	svc := NewService(validator, nil)
@@ -475,6 +489,7 @@ func TestService_ValidateAndApprove_ApprovalError(t *testing.T) {
 }
 
 func TestService_ValidateAndApprove_NilValidator(t *testing.T) {
+	t.Parallel()
 	svc := NewService(nil, nil)
 
 	cmd := &Command{
@@ -492,6 +507,7 @@ func TestService_ValidateAndApprove_NilValidator(t *testing.T) {
 }
 
 func TestService_ValidateAndApprove_NilCommand(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 	svc := NewService(validator, nil)
 
@@ -538,6 +554,7 @@ func BenchmarkService_NeedsApproval(b *testing.B) {
 }
 
 func TestService_ApprovalService(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
 	svc := NewService(validator, approvalService)
@@ -547,6 +564,7 @@ func TestService_ApprovalService(t *testing.T) {
 }
 
 func TestService_ApprovalService_Nil(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 	svc := NewService(validator, nil)
 
@@ -555,6 +573,7 @@ func TestService_ApprovalService_Nil(t *testing.T) {
 }
 
 func TestService_Validator(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
 	svc := NewService(validator, approvalService)
@@ -564,6 +583,7 @@ func TestService_Validator(t *testing.T) {
 }
 
 func TestService_Validator_Nil(t *testing.T) {
+	t.Parallel()
 	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: nil})
 	svc := NewService(nil, approvalService)
 

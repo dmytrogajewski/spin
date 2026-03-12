@@ -17,6 +17,7 @@ import (
 
 // TestAgent_GetPlanner tests the GetPlanner method.
 func TestAgent_GetPlanner(t *testing.T) {
+	t.Parallel()
 	// Create agent.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
@@ -65,6 +66,7 @@ func TestAgent_GetPlanner(t *testing.T) {
 
 // TestAgent_GetPlanner_NoPlanner tests GetPlanner when no planner is set.
 func TestAgent_GetPlanner_NoPlanner(t *testing.T) {
+	t.Parallel()
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})

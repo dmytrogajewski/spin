@@ -13,6 +13,8 @@ import (
 
 // TestConversation_RunTurn_EmptyPrompt tests RunTurn with empty prompt.
 func TestConversation_RunTurn_EmptyPrompt(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 	ctx := context.Background()
 
@@ -25,6 +27,8 @@ func TestConversation_RunTurn_EmptyPrompt(t *testing.T) {
 
 // TestConversation_RunTurn_WithValidPrompt tests RunTurn with valid prompt.
 func TestConversation_RunTurn_WithValidPrompt(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 	ctx := context.Background()
 
@@ -36,6 +40,8 @@ func TestConversation_RunTurn_WithValidPrompt(t *testing.T) {
 
 // TestConversation_RunTurn_ContextCanceled tests RunTurn with canceled context.
 func TestConversation_RunTurn_ContextCanceled(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Cancel context.
@@ -51,6 +57,8 @@ func TestConversation_RunTurn_ContextCanceled(t *testing.T) {
 
 // TestConversation_Close_MultipleTimes tests Close called multiple times.
 func TestConversation_Close_MultipleTimes(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Close multiple times.
@@ -66,6 +74,8 @@ func TestConversation_Close_MultipleTimes(t *testing.T) {
 
 // TestConversation_Close_WithRunningTurn tests Close while turn is running.
 func TestConversation_Close_WithRunningTurn(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 	ctx := context.Background()
 
@@ -82,6 +92,8 @@ func TestConversation_Close_WithRunningTurn(t *testing.T) {
 
 // TestConversation_Stream_Functionality tests Stream().
 func TestConversation_Stream_ReceivesEvents(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 	ctx := context.Background()
 
@@ -101,11 +113,15 @@ func TestConversation_Stream_ReceivesEvents(t *testing.T) {
 
 // TestConversation_SetTaskMode_ValidModes tests SetTaskMode with all valid modes.
 func TestConversation_SetTaskMode_ValidModes(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	modes := []string{"regular", "review", "compact", "planning"}
 	for _, mode := range modes {
 		t.Run("mode_"+mode, func(t *testing.T) {
+			t.Parallel()
+
 			err := conv.SetTaskMode(mode)
 			if err != nil {
 				t.Errorf("SetTaskMode(%s) error = %v", mode, err)
@@ -116,6 +132,8 @@ func TestConversation_SetTaskMode_ValidModes(t *testing.T) {
 
 // TestConversation_SetTaskMode_InvalidMode tests SetTaskMode with invalid mode.
 func TestConversation_SetTaskMode_InvalidMode(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Invalid mode should return error.
@@ -127,6 +145,8 @@ func TestConversation_SetTaskMode_InvalidMode(t *testing.T) {
 
 // TestConversation_Close_MultipleCallsEdgeCase tests Close called multiple times.
 func TestConversation_Close_MultipleCalls(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// First close.
@@ -150,6 +170,8 @@ func TestConversation_Close_MultipleCalls(t *testing.T) {
 
 // TestConversation_Close_WithCanceledContext tests Close with canceled context.
 func TestConversation_Close_CanceledContext(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Close (note: Close doesn't take a context parameter).
@@ -160,6 +182,8 @@ func TestConversation_Close_CanceledContext(t *testing.T) {
 
 // TestConversation_Close_WithTimeout tests Close with timeout.
 func TestConversation_Close_TimeoutContext(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Create context with very short timeout (not used by Close).
@@ -178,11 +202,15 @@ func TestConversation_Close_TimeoutContext(t *testing.T) {
 
 // TestConversation_SetTaskMode_AllValidModes tests SetTaskMode with all built-in modes.
 func TestConversation_SetTaskMode_AllModes(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	modes := []string{"regular", "review", "compact", "planning"}
 	for _, mode := range modes {
 		t.Run("mode_"+mode, func(t *testing.T) {
+			t.Parallel()
+
 			err := conv.SetTaskMode(mode)
 			if err != nil {
 				t.Errorf("SetTaskMode(%s) error = %v", mode, err)
@@ -193,6 +221,8 @@ func TestConversation_SetTaskMode_AllModes(t *testing.T) {
 
 // TestConversation_SetTaskMode_UnknownMode tests SetTaskMode with unknown mode.
 func TestConversation_SetTaskMode_UnknownMode(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Unknown mode should return error.
@@ -204,6 +234,8 @@ func TestConversation_SetTaskMode_UnknownMode(t *testing.T) {
 
 // TestConversation_SetTaskMode_EmptyMode tests SetTaskMode with empty mode.
 func TestConversation_SetTaskMode_EmptyMode(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Empty mode is valid (means use default).
@@ -220,6 +252,8 @@ func TestConversation_SetTaskMode_EmptyMode(t *testing.T) {
 
 // TestConversation_SetTaskMode verifies that SetTaskMode successfully switches modes.
 func TestConversation_SetTaskMode(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Should default to "regular".
@@ -270,6 +304,8 @@ func TestConversation_SetTaskMode(t *testing.T) {
 
 // TestConversation_SetTaskMode_Invalid verifies that SetTaskMode returns an error for invalid modes.
 func TestConversation_SetTaskMode_Invalid(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	err := conv.SetTaskMode("invalid-mode")
@@ -289,6 +325,8 @@ func TestConversation_SetTaskMode_Invalid(t *testing.T) {
 
 // TestConversation_GetTaskMode_Default verifies that GetTaskMode returns "regular" by default.
 func TestConversation_GetTaskMode_Default(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Should default to "regular" without explicit SetTaskMode.
@@ -299,6 +337,8 @@ func TestConversation_GetTaskMode_Default(t *testing.T) {
 
 // TestConversation_TaskMode_Concurrent verifies thread-safe access to task mode.
 func TestConversation_TaskMode_Concurrent(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	var wg sync.WaitGroup
@@ -342,6 +382,8 @@ func TestConversation_TaskMode_Concurrent(t *testing.T) {
 
 // TestConversation_TaskMode_PersistsAcrossTurns verifies that the task mode persists across multiple turns.
 func TestConversation_TaskMode_PersistsAcrossTurns(t *testing.T) {
+	t.Parallel()
+
 	// Create a conversation with setupTestConv.
 	conv := setupTestConv(t)
 
@@ -383,6 +425,8 @@ func TestConversation_TaskMode_PersistsAcrossTurns(t *testing.T) {
 
 // TestConversation_SetTaskMode_EmitsEvent verifies that SetTaskMode emits a system info event.
 func TestConversation_SetTaskMode_EmitsEvent(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 	emitter := conv.emitter
 
@@ -436,6 +480,8 @@ func TestConversation_SetTaskMode_EmitsEvent(t *testing.T) {
 
 // TestConversation_SetTaskMode_ValidatesTask verifies that SetTaskMode validates the task.
 func TestConversation_SetTaskMode_ValidatesTask(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// This test verifies the validation path exists
@@ -469,6 +515,8 @@ func setupTestConv(t *testing.T) *Conversation {
 
 // TestConversation_ID tests unified ID getter and setter.
 func TestConversation_ID(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Use UUID string (standardized format).
@@ -489,6 +537,8 @@ func TestConversation_ID(t *testing.T) {
 
 // TestConversation_UnifiedID tests that sessionID and protocolID are unified.
 func TestConversation_UnifiedID(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Use UUID string (standardized format).
@@ -507,6 +557,8 @@ func TestConversation_UnifiedID(t *testing.T) {
 
 // TestConversation_TurnID tests turn ID getter and setter (thread-safe).
 func TestConversation_TurnID(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	turnID := "turn-123"
@@ -520,6 +572,8 @@ func TestConversation_TurnID(t *testing.T) {
 
 // TestConversation_TurnID_Empty tests empty turn ID.
 func TestConversation_TurnID_Empty(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	got := conv.GetTurnID()
@@ -530,6 +584,8 @@ func TestConversation_TurnID_Empty(t *testing.T) {
 
 // TestConversation_Cancel tests cancel getter, setter, and execution (thread-safe).
 func TestConversation_Cancel(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -550,6 +606,8 @@ func TestConversation_Cancel(t *testing.T) {
 
 // TestConversation_Cancel_Nil tests cancel with nil function.
 func TestConversation_Cancel_Nil(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	// Cancel should not panic with nil cancel function.
@@ -563,6 +621,8 @@ func TestConversation_Cancel_Nil(t *testing.T) {
 
 // TestConversation_ProtocolFields_ThreadSafety tests concurrent access to protocol fields.
 func TestConversation_ProtocolFields_ThreadSafety(t *testing.T) {
+	t.Parallel()
+
 	conv := setupTestConv(t)
 
 	var wg sync.WaitGroup

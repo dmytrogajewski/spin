@@ -9,6 +9,7 @@ import (
 )
 
 func TestListDirectoryTool(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	// Create test files and directories.
@@ -43,6 +44,7 @@ func TestListDirectoryTool(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(tt.params)
 			result, err := tool.Execute(context.Background(), params)
 
@@ -76,6 +78,7 @@ func TestListDirectoryTool(t *testing.T) {
 }
 
 func TestListDirectoryTool_ErrorCases(t *testing.T) {
+	t.Parallel()
 	tool := NewListDirectoryTool()
 
 	tests := []struct {
@@ -94,6 +97,7 @@ func TestListDirectoryTool_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(tt.params)
 
 			result, err := tool.Execute(context.Background(), params)

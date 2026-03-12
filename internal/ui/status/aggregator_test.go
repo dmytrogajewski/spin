@@ -7,6 +7,7 @@ import (
 )
 
 func TestAggregator_ProcessEvent(t *testing.T) {
+	t.Parallel()
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
@@ -52,6 +53,7 @@ func TestAggregator_ProcessEvent(t *testing.T) {
 }
 
 func TestAggregator_ProcessEvent_Disabled(t *testing.T) {
+	t.Parallel()
 	manager := NewManager()
 	manager.Disable() // Disable the manager.
 	aggregator := NewAggregator(manager)
@@ -68,6 +70,7 @@ func TestAggregator_ProcessEvent_Disabled(t *testing.T) {
 }
 
 func TestAggregator_SetMaxTokens(t *testing.T) {
+	t.Parallel()
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
@@ -88,6 +91,7 @@ func TestAggregator_SetMaxTokens(t *testing.T) {
 }
 
 func TestAggregator_UnknownEvent(t *testing.T) {
+	t.Parallel()
 	manager := NewManager()
 	manager.SetAgentState("InitialState") // Set an initial state.
 	aggregator := NewAggregator(manager)
@@ -104,6 +108,7 @@ func TestAggregator_UnknownEvent(t *testing.T) {
 }
 
 func TestAggregator_ProcessEvent_AllTypes(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		event         *events.Event
@@ -158,6 +163,7 @@ func TestAggregator_ProcessEvent_AllTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			manager := NewManager()
 			aggregator := NewAggregator(manager)
 
@@ -172,6 +178,7 @@ func TestAggregator_ProcessEvent_AllTypes(t *testing.T) {
 }
 
 func TestAggregator_ProcessEvent_ContentDelta_WithData(t *testing.T) {
+	t.Parallel()
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
@@ -193,6 +200,7 @@ func TestAggregator_ProcessEvent_ContentDelta_WithData(t *testing.T) {
 }
 
 func TestAggregator_ProcessEvent_ContentDelta_ShortContent(t *testing.T) {
+	t.Parallel()
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
@@ -210,6 +218,7 @@ func TestAggregator_ProcessEvent_ContentDelta_ShortContent(t *testing.T) {
 }
 
 func TestAggregator_ProcessEvent_TurnComplete(t *testing.T) {
+	t.Parallel()
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 
@@ -233,6 +242,7 @@ func TestAggregator_ProcessEvent_TurnComplete(t *testing.T) {
 }
 
 func TestAggregator_ProcessEvent_ContentComplete_ResetsStreaming(t *testing.T) {
+	t.Parallel()
 	manager := NewManager()
 	aggregator := NewAggregator(manager)
 

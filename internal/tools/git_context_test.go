@@ -8,9 +8,12 @@ import (
 )
 
 func TestGitContextTool_NotARepository(t *testing.T) {
+	t.Parallel(
 	// Use os.MkdirTemp with empty string to use system temp dir,
 	// ensuring the directory is outside any parent git repository
 	// (since GOTMPDIR may be set to a directory inside the project).
+	)
+
 	tmpDir, err := os.MkdirTemp("", "spin-test-nonrepo-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -37,7 +40,10 @@ func TestGitContextTool_NotARepository(t *testing.T) {
 }
 
 func TestGitContextTool_ValidRepository(t *testing.T) {
+	t.Parallel(
 	// Use the current repository (spin project itself).
+	)
+
 	tool := NewGitContextTool(".")
 
 	params, _ := FromMap(map[string]any{})
@@ -66,6 +72,7 @@ func TestGitContextTool_ValidRepository(t *testing.T) {
 }
 
 func TestGitContextTool_Schema(t *testing.T) {
+	t.Parallel()
 	tool := NewGitContextTool("/tmp")
 	schema := tool.Schema()
 
@@ -90,6 +97,7 @@ func TestGitContextTool_Schema(t *testing.T) {
 }
 
 func TestGitContextTool_ErrorCases(t *testing.T) {
+	t.Parallel()
 	tool := NewGitContextTool("/tmp/test")
 
 	// GitContextTool has only optional parameters, so it doesn't fail on invalid params

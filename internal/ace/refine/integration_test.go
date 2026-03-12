@@ -13,6 +13,8 @@ import (
 
 // TestIntegration_FullRefinementWorkflow tests the complete grow-and-refine mechanism.
 func TestIntegration_FullRefinementWorkflow(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -156,6 +158,8 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 
 // TestIntegration_GrowthMonitoring tests growth tracking and refinement triggering.
 func TestIntegration_GrowthMonitoring(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 
@@ -207,6 +211,8 @@ func TestIntegration_GrowthMonitoring(t *testing.T) {
 
 // TestIntegration_MergeOnly tests merge-only refinement.
 func TestIntegration_MergeOnly(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -264,6 +270,8 @@ func TestIntegration_MergeOnly(t *testing.T) {
 
 // TestIntegration_PruneOnly tests prune-only refinement.
 func TestIntegration_PruneOnly(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -322,6 +330,8 @@ func TestIntegration_PruneOnly(t *testing.T) {
 
 // TestIntegration_NoRefinementNeeded tests when no refinement occurs.
 func TestIntegration_NoRefinementNeeded(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)

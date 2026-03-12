@@ -13,6 +13,8 @@ import (
 // TestLoaderV2_LoadFromFile tests loading configuration from a YAML file.
 // Kills mutant: removing file loading would make this test fail.
 func TestLoaderV2_LoadFromFile(t *testing.T) {
+	t.Parallel()
+
 	// Create a temporary config file.
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
@@ -66,6 +68,8 @@ protocol:
 // TestLoaderV2_LoadFromFileNotFound tests that loading from a non-existent file returns an error.
 // Kills mutant: removing error handling would make this test fail.
 func TestLoaderV2_LoadFromFileNotFound(t *testing.T) {
+	t.Parallel()
+
 	loader := NewLoaderV2()
 	_, err := loader.LoadFromFile("/nonexistent/config.yaml")
 	require.Error(t, err, "loading from non-existent file should return error")
@@ -74,6 +78,8 @@ func TestLoaderV2_LoadFromFileNotFound(t *testing.T) {
 // TestLoaderV2_LoadFromFileInvalidYAML tests that invalid YAML returns an error.
 // Kills mutant: removing YAML validation would make this test fail.
 func TestLoaderV2_LoadFromFileInvalidYAML(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "invalid.yaml")
 
@@ -94,6 +100,8 @@ llm:
 // TestLoaderV2_LoadWithDefaults tests that missing fields use default values.
 // Kills mutant: removing default value merging would make this test fail.
 func TestLoaderV2_LoadWithDefaults(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "minimal.yaml")
 
@@ -139,6 +147,8 @@ agent:
 // TestLoaderV2_LoadFromEnv tests loading configuration from environment variables.
 // Kills mutant: removing environment variable support would make this test fail.
 func TestLoaderV2_LoadFromEnv(t *testing.T) {
+	// Not parallel: uses t.Setenv which modifies process-wide env.
+
 	// Set environment variables.
 	t.Setenv("SPIN_LLM_PROVIDER", "anthropic")
 	t.Setenv("SPIN_LLM_MODEL", "claude-3")
@@ -163,6 +173,8 @@ func TestLoaderV2_LoadFromEnv(t *testing.T) {
 // TestLoaderV2_Precedence tests that configuration sources have correct precedence.
 // Kills mutant: changing precedence order would make this test fail.
 func TestLoaderV2_Precedence(t *testing.T) {
+	// Not parallel: uses t.Setenv which modifies process-wide env.
+
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
 
@@ -224,6 +236,8 @@ func TestLoad_EmptySource(t *testing.T) {
 // TestLoad_FlagOverrides tests that flags override defaults.
 // Kills mutant: removing flag application would make this test fail.
 func TestLoad_FlagOverrides(t *testing.T) {
+	// Not parallel: uses t.Setenv which modifies process-wide env.
+
 	// Use temp dir as HOME to avoid loading user's config file.
 	tmpDir := t.TempDir()
 	t.Setenv("HOME", tmpDir)
@@ -249,6 +263,8 @@ func TestLoad_FlagOverrides(t *testing.T) {
 // TestLoad_FileConfig tests that Load() loads config from file.
 // Kills mutant: removing file loading would make this test fail.
 func TestLoad_FileConfig(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
 
@@ -277,6 +293,8 @@ agent:
 // TestLoad_PrecedenceFlagsOverFile tests that flags override file config.
 // Kills mutant: changing precedence order would make this test fail.
 func TestLoad_PrecedenceFlagsOverFile(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
 
@@ -311,6 +329,8 @@ agent:
 // TestLoad_AllFlagFields tests that all flag fields are applied.
 // Kills mutant: removing any flag field application would make this test fail.
 func TestLoad_AllFlagFields(t *testing.T) {
+	t.Parallel()
+
 	cfg, err := Load(Source{
 		Flags: FlagOverrides{
 			Provider: "openai",
@@ -337,6 +357,8 @@ func TestLoad_AllFlagFields(t *testing.T) {
 // TestLoad_APIKeyFromEnv tests that API key is loaded from environment.
 // Kills mutant: removing env API key resolution would make this test fail.
 func TestLoad_APIKeyFromEnv(t *testing.T) {
+	// Not parallel: uses t.Setenv which modifies process-wide env.
+
 	t.Setenv("OPENAI_API_KEY", "test-key-123")
 
 	cfg, err := Load(Source{

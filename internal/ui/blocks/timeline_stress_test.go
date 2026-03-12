@@ -17,6 +17,7 @@ import (
 // without OOM or performance degradation. Tests O(1) viewport calculation.
 // Uses 100k blocks for CI (reduced from 1M for speed).
 func TestTimeline_StressOOM_1MBlocks(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping stress test in short mode")
 	}
@@ -145,6 +146,7 @@ func TestTimeline_StressOOM_1MBlocks(t *testing.T) {
 // TestTimeline_StressConcurrent verifies thread-safety under high concurrency.
 // 100 writers + 10 scrollers + 10 filters running concurrently for 10 seconds.
 func TestTimeline_StressConcurrent(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping stress test in short mode")
 	}
@@ -273,6 +275,7 @@ func TestTimeline_StressConcurrent(t *testing.T) {
 
 // TestTimeline_StressScrolling verifies scroll performance on large timelines.
 func TestTimeline_StressScrolling(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping stress test in short mode")
 	}

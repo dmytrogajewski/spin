@@ -11,12 +11,14 @@ import (
 var errExecutionFailed = errors.New("execution failed")
 
 func TestNewCommandRegistry(t *testing.T) {
+	t.Parallel()
 	registry := NewCommandRegistry()
 	assert.NotNil(t, registry)
 	assert.Empty(t, registry.Commands())
 }
 
 func TestCommandRegistry_Register(t *testing.T) {
+	t.Parallel()
 	registry := NewCommandRegistry()
 	cmd := NewSimpleCommand("Test", "A test command", "Test", '🧪', nil)
 
@@ -27,6 +29,7 @@ func TestCommandRegistry_Register(t *testing.T) {
 }
 
 func TestCommandRegistry_RegisterMultiple(t *testing.T) {
+	t.Parallel()
 	registry := NewCommandRegistry()
 	cmd1 := NewSimpleCommand("First", "First command", "Test", 'A', nil)
 	cmd2 := NewSimpleCommand("Second", "Second command", "Test", 'B', nil)
@@ -43,6 +46,7 @@ func TestCommandRegistry_RegisterMultiple(t *testing.T) {
 }
 
 func TestSimpleCommand_Fields(t *testing.T) {
+	t.Parallel()
 	cmd := NewSimpleCommand(
 		"Run...",
 		"Execute shell command",
@@ -58,6 +62,7 @@ func TestSimpleCommand_Fields(t *testing.T) {
 }
 
 func TestSimpleCommand_ExecuteNil(t *testing.T) {
+	t.Parallel()
 	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', nil)
 
 	err := cmd.Execute(context.Background())
@@ -66,6 +71,7 @@ func TestSimpleCommand_ExecuteNil(t *testing.T) {
 }
 
 func TestSimpleCommand_Execute(t *testing.T) {
+	t.Parallel()
 	executed := false
 	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(_ context.Context) error {
 		executed = true
@@ -80,6 +86,7 @@ func TestSimpleCommand_Execute(t *testing.T) {
 }
 
 func TestSimpleCommand_ExecuteError(t *testing.T) {
+	t.Parallel()
 	expectedErr := errExecutionFailed
 	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(_ context.Context) error {
 		return expectedErr
@@ -92,6 +99,7 @@ func TestSimpleCommand_ExecuteError(t *testing.T) {
 }
 
 func TestSimpleCommand_ExecuteWithContext(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately.
 

@@ -7,6 +7,7 @@ import (
 
 // Test that WRITE block does not render failure/success before completion.
 func TestWriteRender_BeforeCompletion_NoStatusOrFooter(t *testing.T) {
+	t.Parallel()
 	r := NewRenderer(80)
 
 	b := NewBlock(BlockTypeApplyPatch)
@@ -42,6 +43,7 @@ func TestWriteRender_BeforeCompletion_NoStatusOrFooter(t *testing.T) {
 
 // Test that after successful completion, WRITE block shows success.
 func TestWriteRender_AfterSuccess_ShowsSuccess(t *testing.T) {
+	t.Parallel()
 	r := NewRenderer(80)
 
 	b := NewBlock(BlockTypeApplyPatch)
@@ -75,6 +77,7 @@ func TestWriteRender_AfterSuccess_ShowsSuccess(t *testing.T) {
 
 // Test that after failed completion, WRITE block shows failure.
 func TestWriteRender_AfterFailure_ShowsFailure(t *testing.T) {
+	t.Parallel()
 	r := NewRenderer(80)
 
 	b := NewBlock(BlockTypeApplyPatch)

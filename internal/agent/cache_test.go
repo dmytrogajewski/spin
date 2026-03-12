@@ -10,6 +10,7 @@ import (
 )
 
 func TestNewCommandCache(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 	assert.NotNil(t, cache)
 	assert.Equal(t, 5*time.Second, cache.ttl)
@@ -18,6 +19,7 @@ func TestNewCommandCache(t *testing.T) {
 }
 
 func TestCommandCache_SetAndGet(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Test setting and getting a value.
@@ -38,6 +40,7 @@ func TestCommandCache_SetAndGet(t *testing.T) {
 }
 
 func TestCommandCache_GetNonExistent(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Test getting a non-existent key.
@@ -47,6 +50,7 @@ func TestCommandCache_GetNonExistent(t *testing.T) {
 }
 
 func TestCommandCache_Expiration(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(100*time.Millisecond, 1024*1024)
 
 	key := "test-key"
@@ -75,6 +79,7 @@ func TestCommandCache_Expiration(t *testing.T) {
 }
 
 func TestCommandCache_Clear(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Set multiple values.
@@ -109,6 +114,7 @@ func TestCommandCache_Clear(t *testing.T) {
 }
 
 func TestCommandCache_Size(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Initially empty.
@@ -130,6 +136,7 @@ func TestCommandCache_Size(t *testing.T) {
 }
 
 func TestCommandCache_Key(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	cmd1 := &security.Command{
@@ -163,6 +170,7 @@ func TestCommandCache_Key(t *testing.T) {
 }
 
 func TestCommandCache_IsCacheable(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	tests := []struct {
@@ -219,12 +227,15 @@ func TestCommandCache_IsCacheable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.want, cache.IsCacheable(tt.cmd))
 		})
 	}
 }
 
 func TestCommandCache_Stats(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Initially empty.
@@ -252,6 +263,7 @@ func TestCommandCache_Stats(t *testing.T) {
 }
 
 func TestCommandCache_ConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	// Test concurrent reads and writes.
@@ -285,6 +297,7 @@ func TestCommandCache_ConcurrentAccess(t *testing.T) {
 }
 
 func TestCommandCache_SizeLimit(t *testing.T) {
+	t.Parallel()
 	// Create cache with very small size limit.
 	cache := NewCommandCache(5*time.Second, 100)
 
@@ -304,6 +317,7 @@ func TestCommandCache_SizeLimit(t *testing.T) {
 }
 
 func TestCommandCache_UpdateExisting(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	key := "test-key"
@@ -328,6 +342,7 @@ func TestCommandCache_UpdateExisting(t *testing.T) {
 }
 
 func TestCommandCache_Eviction(t *testing.T) {
+	t.Parallel()
 	// Create cache with very small size limit to force eviction.
 	cache := NewCommandCache(5*time.Second, 50)
 
@@ -347,6 +362,7 @@ func TestCommandCache_Eviction(t *testing.T) {
 }
 
 func TestCacheStats_String(t *testing.T) {
+	t.Parallel()
 	stats := CacheStats{
 		Size:     1024,
 		MaxSize:  2048,
@@ -363,6 +379,7 @@ func TestCacheStats_String(t *testing.T) {
 }
 
 func TestCommandCache_KeyConsistency(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	cmd := &security.Command{
@@ -383,6 +400,7 @@ func TestCommandCache_KeyConsistency(t *testing.T) {
 }
 
 func TestCommandCache_KeyUniqueness(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
 	cmd1 := &security.Command{
@@ -414,6 +432,7 @@ func TestCommandCache_KeyUniqueness(t *testing.T) {
 }
 
 func TestCommandCache_ZeroTTL(t *testing.T) {
+	t.Parallel()
 	// Test with zero TTL (should expire immediately).
 	cache := NewCommandCache(0, 1024*1024)
 
@@ -433,6 +452,7 @@ func TestCommandCache_ZeroTTL(t *testing.T) {
 }
 
 func TestCommandCache_ZeroMaxSize(t *testing.T) {
+	t.Parallel()
 	// Test with zero max size (should not cache anything).
 	cache := NewCommandCache(5*time.Second, 0)
 

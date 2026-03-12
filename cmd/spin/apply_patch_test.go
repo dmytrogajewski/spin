@@ -12,11 +12,12 @@ import (
 )
 
 var (
-	errInvalidOperation = errors.New("invalid operation")
-	errContentMismatch = errors.New("content mismatch")
+	errInvalidOperation  = errors.New("invalid operation")
+	errContentMismatch   = errors.New("content mismatch")
 	errFileShouldBeDeleted = errors.New("file should be deleted")
-	errContentMismatch2 = errors.New("content mismatch")
+	errContentMismatch2  = errors.New("content mismatch")
 )
+
 
 // TestReadPatchInput_Stdin tests reading patch from stdin.
 func TestReadPatchInput_Stdin(t *testing.T) {
@@ -41,8 +42,8 @@ func TestReadPatchInput_Stdin(t *testing.T) {
 		w.Close()
 	}()
 
-	// Test.
-	result, err := readPatchInput()
+	// Test with empty patchFile (reads from stdin).
+	result, err := readPatchInput("")
 	if err != nil {
 		t.Errorf("readPatchInput() error = %v", err)
 	}
@@ -54,6 +55,8 @@ func TestReadPatchInput_Stdin(t *testing.T) {
 
 // TestReadPatchInput_File tests reading patch from file.
 func TestReadPatchInput_File(t *testing.T) {
+	t.Parallel()
+
 	// Create temp file.
 	tmpDir := t.TempDir()
 	patchFile := filepath.Join(tmpDir, "test.patch")
@@ -64,13 +67,8 @@ func TestReadPatchInput_File(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Set flag.
-	applyPatchFile = patchFile
-
-	defer func() { applyPatchFile = "" }()
-
 	// Test.
-	result, err := readPatchInput()
+	result, err := readPatchInput(patchFile)
 	if err != nil {
 		t.Errorf("readPatchInput() error = %v", err)
 	}
@@ -82,11 +80,9 @@ func TestReadPatchInput_File(t *testing.T) {
 
 // TestReadPatchInput_FileNotFound tests error on missing file.
 func TestReadPatchInput_FileNotFound(t *testing.T) {
-	applyPatchFile = "/nonexistent/file.patch"
+	t.Parallel()
 
-	defer func() { applyPatchFile = "" }()
-
-	_, err := readPatchInput()
+	_, err := readPatchInput("/nonexistent/file.patch")
 	if err == nil {
 		t.Error("readPatchInput() expected error, got nil")
 	}
@@ -98,6 +94,8 @@ func TestReadPatchInput_FileNotFound(t *testing.T) {
 
 // TestFormatParseError tests parse error formatting.
 func TestFormatParseError(t *testing.T) {
+	t.Parallel()
+
 	testErr := &patchapply.Error{
 		Op:   "Parse",
 		Path: "",
@@ -124,6 +122,8 @@ func TestFormatParseError(t *testing.T) {
 
 // TestFormatApplyError tests apply error formatting.
 func TestFormatApplyError(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		err      error
@@ -151,6 +151,8 @@ func TestFormatApplyError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := formatApplyError(tt.err)
 			if result == nil {
 				if tt.wantErr {
@@ -172,6 +174,8 @@ func TestFormatApplyError(t *testing.T) {
 
 // TestGetHintForError tests error hint generation.
 func TestGetHintForError(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		err      *patchapply.Error
@@ -216,6 +220,8 @@ func TestGetHintForError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			hint := getHintForError(tt.err)
 			if !strings.Contains(hint, tt.contains) {
 				t.Errorf("getHintForError() = %q, want to contain %q", hint, tt.contains)
@@ -226,6 +232,8 @@ func TestGetHintForError(t *testing.T) {
 
 // TestApplyPatch_Success tests successful patch application.
 func TestApplyPatch_Success(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create test file.
@@ -251,23 +259,11 @@ func TestApplyPatch_Success(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Set flags.
-	applyPatchFile = patchFile
-	applyPatchWorkspace = tmpDir
-	applyPatchDryRun = false
-	applyPatchForce = false
-	applyPatchVerbose = false
+	// Run command via cobra.
+	cmd := newApplyPatchCmd()
+	cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
 
-	defer func() {
-		applyPatchFile = ""
-		applyPatchWorkspace = ""
-		applyPatchDryRun = false
-		applyPatchForce = false
-		applyPatchVerbose = false
-	}()
-
-	// Run command.
-	err = runApplyPatch(nil, nil)
+	err = cmd.Execute()
 	if err != nil {
 		t.Errorf("runApplyPatch() error = %v", err)
 	}
@@ -286,6 +282,8 @@ func TestApplyPatch_Success(t *testing.T) {
 
 // TestApplyPatch_DryRun tests dry-run mode.
 func TestApplyPatch_DryRun(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create test file.
@@ -309,19 +307,11 @@ func TestApplyPatch_DryRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Set flags.
-	applyPatchFile = patchFile
-	applyPatchWorkspace = tmpDir
-	applyPatchDryRun = true
+	// Run command via cobra.
+	cmd := newApplyPatchCmd()
+	cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir, "--dry-run"})
 
-	defer func() {
-		applyPatchFile = ""
-		applyPatchWorkspace = ""
-		applyPatchDryRun = false
-	}()
-
-	// Run command.
-	err = runApplyPatch(nil, nil)
+	err = cmd.Execute()
 	if err != nil {
 		t.Errorf("runApplyPatch() error = %v", err)
 	}
@@ -346,6 +336,8 @@ func TestApplyPatch_DryRun(t *testing.T) {
 
 // TestApplyPatch_ParseError tests invalid patch syntax.
 func TestApplyPatch_ParseError(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create invalid patch.
@@ -359,17 +351,13 @@ func TestApplyPatch_ParseError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Set flags.
-	applyPatchFile = patchFile
-	applyPatchWorkspace = tmpDir
+	// Run command via cobra (should fail).
+	cmd := newApplyPatchCmd()
+	cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
 
-	defer func() {
-		applyPatchFile = ""
-		applyPatchWorkspace = ""
-	}()
-
-	// Run command (should fail).
-	err = runApplyPatch(nil, nil)
+	err = cmd.Execute()
 	if err == nil {
 		t.Error("runApplyPatch() expected error for invalid patch")
 	}
@@ -381,6 +369,8 @@ func TestApplyPatch_ParseError(t *testing.T) {
 
 // TestApplyPatch_PathTraversal tests path traversal rejection.
 func TestApplyPatch_PathTraversal(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create patch with path traversal.
@@ -395,17 +385,13 @@ func TestApplyPatch_PathTraversal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Set flags.
-	applyPatchFile = patchFile
-	applyPatchWorkspace = tmpDir
+	// Run command via cobra (should fail).
+	cmd := newApplyPatchCmd()
+	cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
 
-	defer func() {
-		applyPatchFile = ""
-		applyPatchWorkspace = ""
-	}()
-
-	// Run command (should fail).
-	err = runApplyPatch(nil, nil)
+	err = cmd.Execute()
 	if err == nil {
 		t.Error("runApplyPatch() should reject path traversal")
 	}
@@ -417,6 +403,8 @@ func TestApplyPatch_PathTraversal(t *testing.T) {
 
 // TestApplyPatch_ForceOverwrite tests force mode.
 func TestApplyPatch_ForceOverwrite(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create existing file.
@@ -439,47 +427,52 @@ func TestApplyPatch_ForceOverwrite(t *testing.T) {
 	}
 
 	t.Run("without force", func(t *testing.T) {
-		// Set flags (no force).
-		applyPatchFile = patchFile
-		applyPatchWorkspace = tmpDir
-		applyPatchForce = false
+		t.Parallel()
 
-		defer func() {
-			applyPatchFile = ""
-			applyPatchWorkspace = ""
-			applyPatchForce = false
-		}()
+		cmd := newApplyPatchCmd()
+		cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
+		cmd.SilenceUsage = true
+		cmd.SilenceErrors = true
 
 		// Should fail.
-		err = runApplyPatch(nil, nil)
+		err = cmd.Execute()
 		if err == nil {
 			t.Error("runApplyPatch() should fail without --force")
 		}
 	})
 
 	t.Run("with force", func(t *testing.T) {
-		// Set flags (with force).
-		applyPatchFile = patchFile
-		applyPatchWorkspace = tmpDir
-		applyPatchForce = true
+		t.Parallel()
 
-		defer func() {
-			applyPatchFile = ""
-			applyPatchWorkspace = ""
-			applyPatchForce = false
-		}()
+		// Use a separate tmpDir to avoid sharing filesystem state with "without force".
+		forceDir := t.TempDir()
+		forceFile := filepath.Join(forceDir, "existing.txt")
+		forceErr := os.WriteFile(forceFile, []byte("existing content"), 0644)
+		if forceErr != nil {
+			t.Fatal(forceErr)
+		}
+
+		forcePatchFile := filepath.Join(forceDir, "test.patch")
+		forceErr = os.WriteFile(forcePatchFile, []byte(patchText), 0644)
+		if forceErr != nil {
+			t.Fatal(forceErr)
+		}
+
+		cmd := newApplyPatchCmd()
+		cmd.SetArgs([]string{"-f", forcePatchFile, "-w", forceDir, "--force"})
+		cmd.SilenceUsage = true
+		cmd.SilenceErrors = true
 
 		// Should succeed.
-		err = runApplyPatch(nil, nil)
-		if err != nil {
-			t.Errorf("runApplyPatch() with --force error = %v", err)
+		forceErr = cmd.Execute()
+		if forceErr != nil {
+			t.Errorf("runApplyPatch() with --force error = %v", forceErr)
 		}
 
 		// Verify file was overwritten.
-		var content []byte
-		content, err = os.ReadFile(testFile)
-		if err != nil {
-			t.Fatal(err)
+		content, readErr := os.ReadFile(forceFile)
+		if readErr != nil {
+			t.Fatal(readErr)
 		}
 		// Note: patch adds content as-is, no automatic trailing newline.
 		if string(content) != "new content" {
@@ -489,7 +482,9 @@ func TestApplyPatch_ForceOverwrite(t *testing.T) {
 }
 
 // TestPrintResults tests result output formatting.
-func TestPrintResults(_ *testing.T) {
+func TestPrintResults(t *testing.T) {
+	t.Parallel()
+
 	result := &patchapply.ApplyResult{
 		FilesCreated: []string{"new1.txt", "new2.txt"},
 		FilesUpdated: []string{"updated.txt"},
@@ -498,21 +493,17 @@ func TestPrintResults(_ *testing.T) {
 		DryRun:       false,
 	}
 
-	// Test with verbose=false.
-	applyPatchVerbose = false
-	// Just ensure it doesn't panic.
-	printResults(result)
+	// Test with verbose=false. Just ensure it doesn't panic.
+	printResults(result, false)
 
 	// Test with verbose=true.
-	applyPatchVerbose = true
-
-	printResults(result)
-
-	applyPatchVerbose = false
+	printResults(result, true)
 }
 
 // TestRunDryRun tests dry-run output.
 func TestRunDryRun(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create test files that the patch will operate on.
@@ -568,6 +559,8 @@ func TestRunDryRun(t *testing.T) {
 
 // TestApplyPatch_Integration tests full end-to-end scenarios.
 func TestApplyPatch_Integration(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		setup      func(dir string) error
@@ -666,6 +659,8 @@ func TestApplyPatch_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			tmpDir := t.TempDir()
 
 			// Setup.
@@ -683,17 +678,13 @@ func TestApplyPatch_Integration(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// Set flags.
-			applyPatchFile = patchFile
-			applyPatchWorkspace = tmpDir
+			// Run via cobra command.
+			cmd := newApplyPatchCmd()
+			cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
+			cmd.SilenceUsage = true
+			cmd.SilenceErrors = true
 
-			defer func() {
-				applyPatchFile = ""
-				applyPatchWorkspace = ""
-			}()
-
-			// Run.
-			err = runApplyPatch(nil, nil)
+			err = cmd.Execute()
 
 			// Check error.
 			if (err != nil) != tt.wantErr {

@@ -7,15 +7,16 @@ import (
 )
 
 var (
-	errTestError = errors.New("test error")
+	errTestError          = errors.New("test error")
 	errSomethingWentWrong = errors.New("something went wrong")
-	errOperationFailed = errors.New("operation failed")
-	errFail = errors.New("fail")
-	errSomethingBroke = errors.New("something broke")
+	errOperationFailed    = errors.New("operation failed")
+	errFail               = errors.New("fail")
+	errSomethingBroke     = errors.New("something broke")
 )
 
 // TestBuiltinTools_Count verifies that we have exactly 8 builtin tools.
 func TestBuiltinTools_Count(t *testing.T) {
+	t.Parallel()
 	if len(BuiltinTools) != 8 {
 		t.Errorf("BuiltinTools count = %d, want 8", len(BuiltinTools))
 	}
@@ -23,6 +24,7 @@ func TestBuiltinTools_Count(t *testing.T) {
 
 // TestBuiltinTools_Names verifies that all expected builtin tools are present.
 func TestBuiltinTools_Names(t *testing.T) {
+	t.Parallel()
 	expected := map[string]bool{
 		"read_file":      false,
 		"write_file":     false,
@@ -54,6 +56,7 @@ func TestBuiltinTools_Names(t *testing.T) {
 
 // TestBuiltinTools_NonNil verifies that all builtin tools are non-nil.
 func TestBuiltinTools_NonNil(t *testing.T) {
+	t.Parallel()
 	for i, tool := range BuiltinTools {
 		if tool == nil {
 			t.Errorf("BuiltinTools[%d] is nil", i)
@@ -63,6 +66,7 @@ func TestBuiltinTools_NonNil(t *testing.T) {
 
 // TestToolResult_ID verifies that ToolResult has ID field.
 func TestToolResult_ID(t *testing.T) {
+	t.Parallel()
 	const testID = "call_abc123"
 
 	result := ToolResult{
@@ -86,6 +90,7 @@ func TestToolResult_ID(t *testing.T) {
 
 // TestToolResult_ExitCode verifies that ToolResult has ExitCode field.
 func TestToolResult_ExitCode(t *testing.T) {
+	t.Parallel()
 	const testExitCode = 1
 
 	result := ToolResult{
@@ -104,6 +109,7 @@ func TestToolResult_ExitCode(t *testing.T) {
 
 // TestToolResult_ErrorAsError verifies that ToolResult has Err field of error type.
 func TestToolResult_ErrorAsError(t *testing.T) {
+	t.Parallel()
 	testErr := errTestError
 	result := ToolResult{
 		Success: false,
@@ -121,6 +127,7 @@ func TestToolResult_ErrorAsError(t *testing.T) {
 
 // TestNewToolResult creates a success result with output.
 func TestNewToolResult(t *testing.T) {
+	t.Parallel()
 	const testOutput = "test output"
 
 	result := NewToolResult(testOutput)
@@ -136,6 +143,7 @@ func TestNewToolResult(t *testing.T) {
 
 // TestNewToolError creates a failed result from error.
 func TestNewToolError(t *testing.T) {
+	t.Parallel()
 	testErr := errSomethingWentWrong
 	result := NewToolError(testErr)
 
@@ -154,6 +162,7 @@ func TestNewToolError(t *testing.T) {
 
 // TestNewToolErrorWithID creates a failed result with ID from error.
 func TestNewToolErrorWithID(t *testing.T) {
+	t.Parallel()
 	const testID = "call_err123"
 
 	testErr := errOperationFailed
@@ -174,6 +183,7 @@ func TestNewToolErrorWithID(t *testing.T) {
 
 // TestToolResult_WithID returns copy with ID set.
 func TestToolResult_WithID(t *testing.T) {
+	t.Parallel()
 	const testID = "call_new456"
 
 	original := ToolResult{Success: true, Output: "test"}
@@ -190,6 +200,7 @@ func TestToolResult_WithID(t *testing.T) {
 
 // TestToolResult_WithExitCode returns copy with exit code set.
 func TestToolResult_WithExitCode(t *testing.T) {
+	t.Parallel()
 	const testCode = 42
 
 	original := ToolResult{Success: false}
@@ -206,6 +217,7 @@ func TestToolResult_WithExitCode(t *testing.T) {
 
 // TestToolResult_WithMetadata returns copy with metadata set.
 func TestToolResult_WithMetadata(t *testing.T) {
+	t.Parallel()
 	testMeta := map[string]any{"key": "value"}
 	original := ToolResult{Success: true}
 	result := original.WithMetadata(testMeta)
@@ -221,6 +233,7 @@ func TestToolResult_WithMetadata(t *testing.T) {
 
 // TestToolResult_GetErr returns error or nil.
 func TestToolResult_GetErr(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		result  ToolResult
@@ -240,6 +253,7 @@ func TestToolResult_GetErr(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			err := tt.result.GetErr()
 			if tt.wantNil && err != nil {
 				t.Errorf("GetErr() = %v, want nil", err)
@@ -254,6 +268,7 @@ func TestToolResult_GetErr(t *testing.T) {
 
 // TestToolResult_String returns appropriate content.
 func TestToolResult_String(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		result ToolResult
@@ -278,6 +293,7 @@ func TestToolResult_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := tt.result.String()
 			if got != tt.want {
 				t.Errorf("String() = %q, want %q", got, tt.want)
@@ -288,6 +304,7 @@ func TestToolResult_String(t *testing.T) {
 
 // TestToolResult_JSONSerialization verifies JSON marshaling.
 func TestToolResult_JSONSerialization(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		result ToolResult
@@ -306,7 +323,7 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 				}
 
 				successVal, _ := data["success"].(bool)
-			if !successVal {
+				if !successVal {
 					t.Errorf("JSON success = %v, want true", data["success"])
 				}
 
@@ -346,6 +363,7 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			jsonBytes, err := json.Marshal(tt.result)
 			if err != nil {
 				t.Fatalf("json.Marshal() error = %v", err)

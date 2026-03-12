@@ -7,6 +7,8 @@ import (
 )
 
 func TestVersionCommand(t *testing.T) {
+	t.Parallel()
+
 	cmd := newVersionCmd()
 
 	if cmd.Use != "version" {
@@ -19,8 +21,9 @@ func TestVersionCommand(t *testing.T) {
 }
 
 func TestVersionCommand_Execute(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.SetArgs([]string{"version"})
 
 	var out bytes.Buffer
@@ -38,8 +41,9 @@ func TestVersionCommand_Execute(t *testing.T) {
 }
 
 func TestVersionCommand_WithVerbose(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.SetArgs([]string{"version", "--verbose"})
 
 	var out bytes.Buffer
@@ -65,8 +69,9 @@ func TestVersionCommand_WithVerbose(t *testing.T) {
 }
 
 func TestVersionCommand_Short(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
-	rootCmd.AddCommand(newVersionCmd())
 	rootCmd.SetArgs([]string{"version", "--short"})
 
 	var out bytes.Buffer

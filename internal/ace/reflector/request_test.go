@@ -12,6 +12,8 @@ import (
 
 // TestReflectionRequest_Defaults tests default values for request.
 func TestReflectionRequest_Defaults(t *testing.T) {
+	t.Parallel()
+
 	req := &ReflectionRequest{
 		Trajectories: []*generator.Trajectory{
 			{ID: "test-1"},
@@ -24,6 +26,8 @@ func TestReflectionRequest_Defaults(t *testing.T) {
 
 // TestReflectionResponse_Creation tests response creation.
 func TestReflectionResponse_Creation(t *testing.T) {
+	t.Parallel()
+
 	insights := []*Insight{
 		NewInsight("Always validate input parameters before processing them", CategorySuccessPattern),
 	}

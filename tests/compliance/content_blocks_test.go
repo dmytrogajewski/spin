@@ -9,6 +9,8 @@ import (
 
 // TestCompliance_ContentBlock_Text verifies text content block format compliance.
 func TestCompliance_ContentBlock_Text(t *testing.T) {
+	t.Parallel()
+
 	block := acp.TextBlock("Hello, world!")
 
 	verifyContentBlock(t, block)
@@ -18,6 +20,8 @@ func TestCompliance_ContentBlock_Text(t *testing.T) {
 
 // TestCompliance_ContentBlock_Image verifies image content block format compliance.
 func TestCompliance_ContentBlock_Image(t *testing.T) {
+	t.Parallel()
+
 	data := "base64imagedata123"
 	mimeType := "image/png"
 	block := acp.ImageBlock(data, mimeType)
@@ -30,6 +34,8 @@ func TestCompliance_ContentBlock_Image(t *testing.T) {
 
 // TestCompliance_ContentBlock_Audio verifies audio content block format compliance.
 func TestCompliance_ContentBlock_Audio(t *testing.T) {
+	t.Parallel()
+
 	data := "base64audiodata456"
 	mimeType := "audio/mpeg"
 	block := acp.AudioBlock(data, mimeType)
@@ -42,6 +48,8 @@ func TestCompliance_ContentBlock_Audio(t *testing.T) {
 
 // TestCompliance_ContentBlock_ResourceLink verifies resource link content block format compliance.
 func TestCompliance_ContentBlock_ResourceLink(t *testing.T) {
+	t.Parallel()
+
 	name := "file.txt"
 	uri := "file:///path/to/file.txt"
 	block := acp.ResourceLinkBlock(name, uri)
@@ -53,6 +61,8 @@ func TestCompliance_ContentBlock_ResourceLink(t *testing.T) {
 
 // TestCompliance_ContentBlock_Resource verifies embedded resource content block format compliance.
 func TestCompliance_ContentBlock_Resource(t *testing.T) {
+	t.Parallel()
+
 	// Text resource.
 	textResource := acp.ContentBlock{
 		Resource: &acp.ContentBlockResource{
@@ -89,6 +99,8 @@ func TestCompliance_ContentBlock_Resource(t *testing.T) {
 
 // TestCompliance_ContentBlock_UTF8 verifies UTF-8 encoding compliance.
 func TestCompliance_ContentBlock_UTF8(t *testing.T) {
+	t.Parallel()
+
 	// Test with UTF-8 characters.
 	utf8Text := "Hello, 世界! 🌍"
 	block := acp.TextBlock(utf8Text)

@@ -5,6 +5,7 @@ import (
 )
 
 func TestParseCommand(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		cmdStr      string
@@ -67,6 +68,7 @@ func TestParseCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			cmd, err := ParseCommand(tt.cmdStr)
 
 			if tt.expectError && err == nil {
@@ -113,6 +115,7 @@ func TestParseCommand(t *testing.T) {
 }
 
 func TestCommandClass_String(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		class    CommandClass
@@ -128,6 +131,7 @@ func TestCommandClass_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := tt.class.String()
 			if result != tt.expected {
 				t.Errorf("CommandClass.String() = %v, want %v", result, tt.expected)
@@ -137,6 +141,7 @@ func TestCommandClass_String(t *testing.T) {
 }
 
 func TestCommandClass_NeedsApproval(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		class    CommandClass
@@ -151,6 +156,7 @@ func TestCommandClass_NeedsApproval(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := tt.class.NeedsApproval()
 			if result != tt.expected {
 				t.Errorf("CommandClass.NeedsApproval() = %v, want %v", result, tt.expected)
@@ -160,6 +166,7 @@ func TestCommandClass_NeedsApproval(t *testing.T) {
 }
 
 func TestValidator_Classify(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 
 	tests := []struct {
@@ -238,6 +245,7 @@ func TestValidator_Classify(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result, err := validator.Classify(tt.cmd)
 
 			if tt.expectError && err == nil {
@@ -256,6 +264,7 @@ func TestValidator_Classify(t *testing.T) {
 }
 
 func TestValidator_IsSafe(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 
 	tests := []struct {
@@ -290,6 +299,7 @@ func TestValidator_IsSafe(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := validator.IsSafe(tt.cmd)
 			if result != tt.expected {
 				t.Errorf("IsSafe() = %v, want %v", result, tt.expected)
@@ -299,6 +309,7 @@ func TestValidator_IsSafe(t *testing.T) {
 }
 
 func TestValidator_IsDangerous(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 
 	tests := []struct {
@@ -333,6 +344,7 @@ func TestValidator_IsDangerous(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := validator.IsDangerous(tt.cmd)
 			if result != tt.expected {
 				t.Errorf("IsDangerous() = %v, want %v", result, tt.expected)
@@ -342,6 +354,7 @@ func TestValidator_IsDangerous(t *testing.T) {
 }
 
 func TestValidator_IsForbidden(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 
 	tests := []struct {
@@ -376,6 +389,7 @@ func TestValidator_IsForbidden(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := validator.IsForbidden(tt.cmd)
 			if result != tt.expected {
 				t.Errorf("IsForbidden() = %v, want %v", result, tt.expected)
@@ -385,6 +399,7 @@ func TestValidator_IsForbidden(t *testing.T) {
 }
 
 func TestValidator_NeedsApproval(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 
 	tests := []struct {
@@ -446,6 +461,7 @@ func TestValidator_NeedsApproval(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := validator.NeedsApproval(tt.cmd)
 			if result != tt.expected {
 				t.Errorf("NeedsApproval() = %v, want %v", result, tt.expected)
@@ -455,6 +471,7 @@ func TestValidator_NeedsApproval(t *testing.T) {
 }
 
 func TestValidator_SpecialForbiddenPatterns(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 
 	tests := []struct {
@@ -493,6 +510,7 @@ func TestValidator_SpecialForbiddenPatterns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result, err := validator.Classify(tt.cmd)
 			if err != nil {
 				t.Errorf("Classify() error = %v", err)
@@ -506,6 +524,7 @@ func TestValidator_SpecialForbiddenPatterns(t *testing.T) {
 }
 
 func TestValidator_Concurrency(t *testing.T) {
+	t.Parallel()
 	validator := NewValidator()
 
 	// Test concurrent classification.

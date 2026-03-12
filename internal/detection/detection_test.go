@@ -54,7 +54,11 @@ func (m *mockPatternDetector) AnalyzePatterns(_ []Snapshot) []PatternResult {
 
 // TestEventData tests the EventData type.
 func TestEventData(t *testing.T) {
+	t.Parallel()
+
 	t.Run("create and access detection event data", func(t *testing.T) {
+		t.Parallel()
+
 		data := EventData{
 			"status":  "paused",
 			"message": "Agent stuck in cycle",
@@ -65,6 +69,8 @@ func TestEventData(t *testing.T) {
 	})
 
 	t.Run("event uses EventData", func(t *testing.T) {
+		t.Parallel()
+
 		evt := &event{
 			eventType: "turn_paused",
 			data: EventData{
@@ -83,6 +89,8 @@ func TestEventData(t *testing.T) {
 }
 
 func TestNewService(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name            string
 		cycleDetector   CycleDetector
@@ -117,6 +125,8 @@ func TestNewService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			svc := NewService(tt.cycleDetector, tt.patternDetector)
 
 			if tt.wantNil {
@@ -129,6 +139,8 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_RecordSnapshot(t *testing.T) {
+	t.Parallel()
+
 	detector := newMockCycleDetector()
 	svc := NewService(detector, nil)
 
@@ -148,7 +160,9 @@ func TestService_RecordSnapshot(t *testing.T) {
 	assert.Equal(t, 1, history[0].Turn)
 }
 
-func TestService_RecordSnapshot_NilDetector(_ *testing.T) {
+func TestService_RecordSnapshot_NilDetector(t *testing.T) {
+	t.Parallel()
+
 	svc := NewService(nil, nil)
 
 	snapshot := Snapshot{
@@ -161,6 +175,8 @@ func TestService_RecordSnapshot_NilDetector(_ *testing.T) {
 }
 
 func TestService_CheckCycle(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		snapshots  []Snapshot
@@ -206,6 +222,8 @@ func TestService_CheckCycle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			detector := newMockCycleDetector()
 			if tt.wantDetect {
 				detector.result = CycleResult{
@@ -236,6 +254,8 @@ func TestService_CheckCycle(t *testing.T) {
 }
 
 func TestService_CheckCycle_NilDetector(t *testing.T) {
+	t.Parallel()
+
 	svc := NewService(nil, nil)
 
 	result, err := svc.CheckCycle()
@@ -246,6 +266,8 @@ func TestService_CheckCycle_NilDetector(t *testing.T) {
 }
 
 func TestService_DetectPattern(t *testing.T) {
+	t.Parallel()
+
 	detector := newMockCycleDetector()
 	patternDetector := newMockPatternDetector()
 	patternDetector.results = []PatternResult{
@@ -272,6 +294,8 @@ func TestService_DetectPattern(t *testing.T) {
 }
 
 func TestService_DetectPattern_NilDetector(t *testing.T) {
+	t.Parallel()
+
 	svc := NewService(nil, nil)
 
 	results, err := svc.DetectPattern()
@@ -282,6 +306,8 @@ func TestService_DetectPattern_NilDetector(t *testing.T) {
 }
 
 func TestService_Reset(t *testing.T) {
+	t.Parallel()
+
 	detector := newMockCycleDetector()
 	svc := NewService(detector, nil)
 
@@ -300,7 +326,9 @@ func TestService_Reset(t *testing.T) {
 	assert.Len(t, history, 0)
 }
 
-func TestService_Reset_NilDetector(_ *testing.T) {
+func TestService_Reset_NilDetector(t *testing.T) {
+	t.Parallel()
+
 	svc := NewService(nil, nil)
 
 	// Should not panic even with nil detector.
@@ -308,6 +336,8 @@ func TestService_Reset_NilDetector(_ *testing.T) {
 }
 
 func TestService_GetHistory(t *testing.T) {
+	t.Parallel()
+
 	detector := newMockCycleDetector()
 	svc := NewService(detector, nil)
 
@@ -327,6 +357,8 @@ func TestService_GetHistory(t *testing.T) {
 }
 
 func TestService_GetHistory_NilDetector(t *testing.T) {
+	t.Parallel()
+
 	svc := NewService(nil, nil)
 
 	history := svc.GetHistory()

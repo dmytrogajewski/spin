@@ -13,6 +13,8 @@ import (
 )
 
 func TestApproval_List_Empty(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "spin.yaml")
 
@@ -40,6 +42,8 @@ func TestApproval_List_Empty(t *testing.T) {
 }
 
 func TestApproval_List_WithData(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "spin.yaml")
 
@@ -88,6 +92,8 @@ func TestApproval_List_WithData(t *testing.T) {
 }
 
 func TestApproval_Revoke_NonExistent(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "spin.yaml")
 
@@ -122,6 +128,8 @@ func TestApproval_Revoke_NonExistent(t *testing.T) {
 }
 
 func TestApproval_Clear_Empty(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "spin.yaml")
 

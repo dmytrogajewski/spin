@@ -11,6 +11,8 @@ import (
 )
 
 func TestTrajectory_Creation(t *testing.T) {
+	t.Parallel()
+
 	// Test creating a basic trajectory.
 	now := time.Now()
 
@@ -27,6 +29,8 @@ func TestTrajectory_Creation(t *testing.T) {
 }
 
 func TestTrajectory_WithRetrievedBullets(t *testing.T) {
+	t.Parallel()
+
 	// Test trajectory can store retrieved bullets.
 	b1, err := bullet.New("Always validate input")
 	require.NoError(t, err)
@@ -48,6 +52,8 @@ func TestTrajectory_WithRetrievedBullets(t *testing.T) {
 }
 
 func TestTrajectory_WithOutputAndSuccess(t *testing.T) {
+	t.Parallel()
+
 	// Test trajectory can store output and success status.
 	traj := &Trajectory{
 		ID:        "test-id-789",
@@ -63,6 +69,8 @@ func TestTrajectory_WithOutputAndSuccess(t *testing.T) {
 }
 
 func TestTrajectory_WithSteps(t *testing.T) {
+	t.Parallel()
+
 	// Test trajectory can store execution steps.
 	step1 := TrajectoryStep{
 		StepNumber: 0,
@@ -96,6 +104,8 @@ func TestTrajectory_WithSteps(t *testing.T) {
 }
 
 func TestTrajectory_WithFeedback(t *testing.T) {
+	t.Parallel()
+
 	// Test trajectory can store bullet feedback.
 	fb := &BulletFeedback{
 		HelpfulBullets: []string{"bullet-1", "bullet-2"},
@@ -118,6 +128,8 @@ func TestTrajectory_WithFeedback(t *testing.T) {
 }
 
 func TestTrajectory_WithMetadata(t *testing.T) {
+	t.Parallel()
+
 	// Test trajectory can store metadata.
 	metadata := TrajectoryMetadata{
 		Model:       "gpt-4",
@@ -145,6 +157,8 @@ func TestTrajectory_WithMetadata(t *testing.T) {
 }
 
 func TestTrajectory_Complete(t *testing.T) {
+	t.Parallel()
+
 	// Test complete trajectory with all fields.
 	b1, err := bullet.New("Test bullet")
 	require.NoError(t, err)

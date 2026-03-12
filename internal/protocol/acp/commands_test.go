@@ -16,6 +16,7 @@ import (
 
 // TestACPCommandContext tests the ACP command context implementation.
 func TestACPCommandContext(t *testing.T) {
+	t.Parallel()
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
@@ -31,11 +32,13 @@ func TestACPCommandContext(t *testing.T) {
 	}
 
 	t.Run("GetCurrentMode_default", func(t *testing.T) {
+		t.Parallel()
 		mode := cmdCtx.GetCurrentMode()
 		assert.Equal(t, "regular", mode, "should return default mode when session not found")
 	})
 
 	t.Run("GetWorkDir_no_session", func(t *testing.T) {
+		t.Parallel()
 		workDir := cmdCtx.GetWorkDir()
 		assert.Equal(t, "", workDir, "should return empty string when session not found")
 	})
@@ -43,6 +46,7 @@ func TestACPCommandContext(t *testing.T) {
 
 // TestExecuteCommand tests command execution in ACP context.
 func TestExecuteCommand(t *testing.T) {
+	t.Parallel()
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
@@ -60,6 +64,7 @@ func TestExecuteCommand(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("execute_mode_command_show_current", func(t *testing.T) {
+		t.Parallel()
 		var result string
 		result, err = acpAgent.executeCommand(context.Background(), "/mode", []string{}, sessionID)
 		require.NoError(t, err)
@@ -67,6 +72,7 @@ func TestExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("execute_help_command", func(t *testing.T) {
+		t.Parallel()
 		var result string
 		result, err = acpAgent.executeCommand(context.Background(), "/help", []string{}, sessionID)
 		require.NoError(t, err)
@@ -76,12 +82,14 @@ func TestExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("execute_exit_command_error", func(t *testing.T) {
+		t.Parallel()
 		_, err = acpAgent.executeCommand(context.Background(), "/exit", []string{}, sessionID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not available via ACP")
 	})
 
 	t.Run("execute_unknown_command", func(t *testing.T) {
+		t.Parallel()
 		_, err = acpAgent.executeCommand(context.Background(), "/unknown", []string{}, sessionID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown command")

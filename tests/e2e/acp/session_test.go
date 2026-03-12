@@ -12,6 +12,8 @@ import (
 
 // TestACP_NewSession tests creating a new session.
 func TestACP_NewSession(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -54,6 +56,8 @@ func TestACP_NewSession(t *testing.T) {
 
 // TestACP_NewSession_WithMcpServers tests creating a session with MCP servers.
 func TestACP_NewSession_WithMcpServers(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -96,6 +100,8 @@ func TestACP_NewSession_WithMcpServers(t *testing.T) {
 
 // TestACP_NewSession_InvalidCwd tests error handling for invalid working directory.
 func TestACP_NewSession_InvalidCwd(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -124,6 +130,8 @@ func TestACP_NewSession_InvalidCwd(t *testing.T) {
 
 // TestACP_NewSession_ModeState tests that session mode state is included.
 func TestACP_NewSession_ModeState(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -173,6 +181,8 @@ func TestACP_NewSession_ModeState(t *testing.T) {
 
 // TestACP_LoadSession tests loading an existing session (if storage available).
 func TestACP_LoadSession(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -218,6 +228,8 @@ func TestACP_LoadSession(t *testing.T) {
 
 // TestACP_NewSession_Concurrent tests creating multiple sessions concurrently.
 func TestACP_NewSession_Concurrent(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -268,6 +280,8 @@ func TestACP_NewSession_Concurrent(t *testing.T) {
 
 // TestACP_NewSession_AbsolutePath tests that cwd must be absolute.
 func TestACP_NewSession_AbsolutePath(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -315,6 +329,8 @@ func TestACP_NewSession_AbsolutePath(t *testing.T) {
 
 // TestACP_NewSession_MCP_Stdio tests stdio MCP server connection.
 func TestACP_NewSession_MCP_Stdio(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -358,6 +374,8 @@ func TestACP_NewSession_MCP_Stdio(t *testing.T) {
 
 // TestACP_NewSession_MCP_EnvVars tests MCP server environment variables.
 func TestACP_NewSession_MCP_EnvVars(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -406,6 +424,8 @@ func TestACP_NewSession_MCP_EnvVars(t *testing.T) {
 
 // TestACP_NewSession_MCP_Args tests MCP server command arguments.
 func TestACP_NewSession_MCP_Args(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -449,6 +469,8 @@ func TestACP_NewSession_MCP_Args(t *testing.T) {
 
 // TestACP_NewSession_AvailableCommands tests available commands notification.
 func TestACP_NewSession_AvailableCommands(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -500,6 +522,8 @@ func TestACP_NewSession_AvailableCommands(t *testing.T) {
 
 // TestACP_NewSession_ModeState_Complete tests all mode fields.
 func TestACP_NewSession_ModeState_Complete(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}

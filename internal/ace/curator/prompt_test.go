@@ -11,12 +11,16 @@ import (
 
 // TestNewPromptBuilder tests creating a new prompt builder.
 func TestNewPromptBuilder(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 	require.NotNil(t, builder)
 }
 
 // TestBuildCurationPrompt tests building a curation prompt.
 func TestBuildCurationPrompt(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	req := CurationRequest{
@@ -37,6 +41,8 @@ func TestBuildCurationPrompt(t *testing.T) {
 
 // TestBuildRefinementPrompt tests building a refinement prompt.
 func TestBuildRefinementPrompt(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	stats := PlaybookStats{
@@ -58,6 +64,8 @@ func TestBuildRefinementPrompt(t *testing.T) {
 
 // TestFormatReflectionForCurator tests formatting insights for curator.
 func TestFormatReflectionForCurator(t *testing.T) {
+	t.Parallel()
+
 	insight := &reflector.Insight{
 		Content:    "Always validate user input before processing",
 		Confidence: 0.95,

@@ -105,6 +105,8 @@ func setupNonRepo(t *testing.T) string {
 // Test Discovery.
 
 func TestDiscover(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		setup   func(t *testing.T) string
@@ -139,6 +141,8 @@ func TestDiscover(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			startPath := tt.setup(t)
 			ctx := context.Background()
 
@@ -179,6 +183,8 @@ func TestDiscover(t *testing.T) {
 }
 
 func TestDiscoverCancellation(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := setupTestRepo(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -195,6 +201,8 @@ func TestDiscoverCancellation(t *testing.T) {
 }
 
 func TestRepositoryRoot(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := setupTestRepo(t)
 
 	nestedDir := filepath.Join(tmpDir, "subdir")
@@ -274,6 +282,8 @@ func isError(err, target error) bool {
 // Test GetContextInfo.
 
 func TestGetContextInfo_NotRepository(t *testing.T) {
+	t.Parallel()
+
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	gi := NewIntegration(true, t.TempDir(), logger)
 
@@ -304,6 +314,8 @@ func TestGetContextInfo_NotRepository(t *testing.T) {
 }
 
 func TestGetContextInfo_Repository(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := setupTestRepo(t)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	gi := NewIntegration(true, tmpDir, logger)
@@ -350,6 +362,8 @@ func TestGetContextInfo_Repository(t *testing.T) {
 }
 
 func TestGetContextInfo_WithModifications(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := setupTestRepoWithModifications(t)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	gi := NewIntegration(true, tmpDir, logger)
@@ -388,6 +402,8 @@ func TestGetContextInfo_WithModifications(t *testing.T) {
 }
 
 func TestGetContextInfo_AllFields(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := setupTestRepoWithModifications(t)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	gi := NewIntegration(true, tmpDir, logger)
@@ -437,6 +453,8 @@ func TestGetContextInfo_AllFields(t *testing.T) {
 }
 
 func TestContextInfo_JSON(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		info ContextInfo
@@ -487,6 +505,8 @@ func TestContextInfo_JSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Marshal to JSON.
 			data, err := json.Marshal(tt.info)
 			if err != nil {

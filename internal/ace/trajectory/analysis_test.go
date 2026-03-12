@@ -7,7 +7,11 @@ import (
 )
 
 func TestContainsError(t *testing.T) {
+	t.Parallel()
+
 	t.Run("detects lowercase error keyword", func(t *testing.T) {
+		t.Parallel()
+
 		content := "command failed with error"
 		if !containsError(content) {
 			t.Error("expected true for content with 'error'")
@@ -15,6 +19,8 @@ func TestContainsError(t *testing.T) {
 	})
 
 	t.Run("detects failed keyword", func(t *testing.T) {
+		t.Parallel()
+
 		content := "operation failed"
 		if !containsError(content) {
 			t.Error("expected true for content with 'failed'")
@@ -22,6 +28,8 @@ func TestContainsError(t *testing.T) {
 	})
 
 	t.Run("detects exception keyword", func(t *testing.T) {
+		t.Parallel()
+
 		content := "NullPointerException occurred"
 		if !containsError(content) {
 			t.Error("expected true for content with 'exception'")
@@ -29,6 +37,8 @@ func TestContainsError(t *testing.T) {
 	})
 
 	t.Run("detects panic keyword", func(t *testing.T) {
+		t.Parallel()
+
 		content := "panic: runtime error"
 		if !containsError(content) {
 			t.Error("expected true for content with 'panic'")
@@ -36,6 +46,8 @@ func TestContainsError(t *testing.T) {
 	})
 
 	t.Run("detects fatal keyword", func(t *testing.T) {
+		t.Parallel()
+
 		content := "fatal: cannot continue"
 		if !containsError(content) {
 			t.Error("expected true for content with 'fatal'")
@@ -43,6 +55,8 @@ func TestContainsError(t *testing.T) {
 	})
 
 	t.Run("case insensitive detection", func(t *testing.T) {
+		t.Parallel()
+
 		content := "ERROR occurred"
 		if !containsError(content) {
 			t.Error("expected true for uppercase 'ERROR'")
@@ -50,6 +64,8 @@ func TestContainsError(t *testing.T) {
 	})
 
 	t.Run("returns false when no error keywords", func(t *testing.T) {
+		t.Parallel()
+
 		content := "everything is working fine"
 		if containsError(content) {
 			t.Error("expected false for content without error keywords")
@@ -57,6 +73,8 @@ func TestContainsError(t *testing.T) {
 	})
 
 	t.Run("handles empty string", func(t *testing.T) {
+		t.Parallel()
+
 		content := ""
 		if containsError(content) {
 			t.Error("expected false for empty string")
@@ -65,7 +83,11 @@ func TestContainsError(t *testing.T) {
 }
 
 func TestHasRecentError(t *testing.T) {
+	t.Parallel()
+
 	t.Run("detects error in recent steps", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test query")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Content: "starting task"},
@@ -78,6 +100,8 @@ func TestHasRecentError(t *testing.T) {
 	})
 
 	t.Run("returns false when error outside lookback window", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test query")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Content: "error at start"},
@@ -91,6 +115,8 @@ func TestHasRecentError(t *testing.T) {
 	})
 
 	t.Run("returns false when no errors", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test query")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Content: "all good"},
@@ -103,6 +129,8 @@ func TestHasRecentError(t *testing.T) {
 	})
 
 	t.Run("handles empty trajectory", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test query")
 
 		if ctx.HasRecentError(2) {
@@ -111,6 +139,8 @@ func TestHasRecentError(t *testing.T) {
 	})
 
 	t.Run("checks all steps when lookback is 0", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test query")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Content: "error at start"},
@@ -124,6 +154,8 @@ func TestHasRecentError(t *testing.T) {
 	})
 
 	t.Run("checks all steps when lookback exceeds length", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test query")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Content: "error here"},
@@ -136,7 +168,11 @@ func TestHasRecentError(t *testing.T) {
 }
 
 func TestExtractErrorPatterns(t *testing.T) {
+	t.Parallel()
+
 	t.Run("extracts error content from steps", func(t *testing.T) {
+		t.Parallel()
+
 		steps := []generator.TrajectoryStep{
 			{StepNumber: 0, Content: "starting"},
 			{StepNumber: 1, Content: "error: file not found"},
@@ -153,6 +189,8 @@ func TestExtractErrorPatterns(t *testing.T) {
 	})
 
 	t.Run("returns empty slice when no errors", func(t *testing.T) {
+		t.Parallel()
+
 		steps := []generator.TrajectoryStep{
 			{StepNumber: 0, Content: "all good"},
 		}
@@ -164,6 +202,8 @@ func TestExtractErrorPatterns(t *testing.T) {
 	})
 
 	t.Run("respects lookback window", func(t *testing.T) {
+		t.Parallel()
+
 		steps := []generator.TrajectoryStep{
 			{StepNumber: 0, Content: "error at start"},
 			{StepNumber: 1, Content: "step 2"},
@@ -182,7 +222,11 @@ func TestExtractErrorPatterns(t *testing.T) {
 }
 
 func TestExtractToolName(t *testing.T) {
+	t.Parallel()
+
 	t.Run("extracts tool name from content", func(t *testing.T) {
+		t.Parallel()
+
 		content := "Calling tool: bash"
 
 		name := extractToolName(content)
@@ -192,6 +236,8 @@ func TestExtractToolName(t *testing.T) {
 	})
 
 	t.Run("handles Tool: prefix", func(t *testing.T) {
+		t.Parallel()
+
 		content := "Tool: read /file"
 
 		name := extractToolName(content)
@@ -201,6 +247,8 @@ func TestExtractToolName(t *testing.T) {
 	})
 
 	t.Run("case insensitive", func(t *testing.T) {
+		t.Parallel()
+
 		content := "TOOL: grep"
 
 		name := extractToolName(content)
@@ -210,6 +258,8 @@ func TestExtractToolName(t *testing.T) {
 	})
 
 	t.Run("returns empty when no tool found", func(t *testing.T) {
+		t.Parallel()
+
 		content := "just some text"
 
 		name := extractToolName(content)
@@ -220,7 +270,11 @@ func TestExtractToolName(t *testing.T) {
 }
 
 func TestGetRecentTools(t *testing.T) {
+	t.Parallel()
+
 	t.Run("extracts unique tool names from recent steps", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Type: "tool_call", Content: "Tool: bash"},
@@ -239,6 +293,8 @@ func TestGetRecentTools(t *testing.T) {
 	})
 
 	t.Run("deduplicates repeated tools", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{Content: "Tool: bash"},
@@ -253,6 +309,8 @@ func TestGetRecentTools(t *testing.T) {
 	})
 
 	t.Run("respects lookback window", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{Content: "Tool: old"},
@@ -267,6 +325,8 @@ func TestGetRecentTools(t *testing.T) {
 	})
 
 	t.Run("returns empty slice when no tools", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{Content: "no tools here"},
@@ -280,7 +340,11 @@ func TestGetRecentTools(t *testing.T) {
 }
 
 func TestExtractConcepts(t *testing.T) {
+	t.Parallel()
+
 	t.Run("extracts capitalized words", func(t *testing.T) {
+		t.Parallel()
+
 		steps := []generator.TrajectoryStep{
 			{Content: "Analyzing Dockerfile for optimization"},
 			{Content: "Using BuildKit caching"},
@@ -311,6 +375,8 @@ func TestExtractConcepts(t *testing.T) {
 	})
 
 	t.Run("returns empty for common words only", func(t *testing.T) {
+		t.Parallel()
+
 		steps := []generator.TrajectoryStep{
 			{Content: "the and or but"},
 		}
@@ -322,6 +388,8 @@ func TestExtractConcepts(t *testing.T) {
 	})
 
 	t.Run("respects lookback window", func(t *testing.T) {
+		t.Parallel()
+
 		steps := []generator.TrajectoryStep{
 			{Content: "OldConcept here"},
 			{Content: "NewConcept here"},
@@ -338,6 +406,8 @@ func TestExtractConcepts(t *testing.T) {
 	})
 
 	t.Run("handles empty steps", func(t *testing.T) {
+		t.Parallel()
+
 		steps := []generator.TrajectoryStep{}
 
 		concepts := ExtractConcepts(steps, 0)

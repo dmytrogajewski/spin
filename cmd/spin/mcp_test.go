@@ -6,6 +6,8 @@ import (
 )
 
 func TestNewMCPCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPCmd()
 	if cmd == nil {
 		t.Fatal("newMCPCmd() returned nil")
@@ -21,6 +23,8 @@ func TestNewMCPCmd(t *testing.T) {
 }
 
 func TestNewMCPRegistryListCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPRegistryListCmd()
 	if cmd == nil {
 		t.Fatal("newMCPRegistryListCmd() returned nil")
@@ -36,6 +40,8 @@ func TestNewMCPRegistryListCmd(t *testing.T) {
 }
 
 func TestNewMCPRegistryGetCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPRegistryGetCmd()
 	if cmd == nil {
 		t.Fatal("newMCPRegistryGetCmd() returned nil")
@@ -51,6 +57,8 @@ func TestNewMCPRegistryGetCmd(t *testing.T) {
 }
 
 func TestNewMCPRegistryRemoveCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPRegistryRemoveCmd()
 	if cmd == nil {
 		t.Fatal("newMCPRegistryRemoveCmd() returned nil")
@@ -66,6 +74,8 @@ func TestNewMCPRegistryRemoveCmd(t *testing.T) {
 }
 
 func TestMCPCmdSubcommands(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPCmd()
 
 	expectedSubcommands := []string{
@@ -97,6 +107,8 @@ func TestMCPCmdSubcommands(t *testing.T) {
 }
 
 func TestMCPCmdHelp(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPCmd()
 
 	if cmd.Long == "" {
@@ -109,6 +121,8 @@ func TestMCPCmdHelp(t *testing.T) {
 }
 
 func TestMCPCmdExamples(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPCmd()
 
 	helpText := cmd.Long
@@ -127,6 +141,8 @@ func TestMCPCmdExamples(t *testing.T) {
 }
 
 func TestMCPRegistryListCmdFlags(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPRegistryListCmd()
 
 	flag := cmd.Flags().Lookup("format")
@@ -136,6 +152,8 @@ func TestMCPRegistryListCmdFlags(t *testing.T) {
 }
 
 func TestMCPRegistryListCmdDefaultValues(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPRegistryListCmd()
 
 	formatFlag := cmd.Flags().Lookup("format")
@@ -145,6 +163,8 @@ func TestMCPRegistryListCmdDefaultValues(t *testing.T) {
 }
 
 func TestMCPRegistryGetCmdFlags(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPRegistryGetCmd()
 
 	flag := cmd.Flags().Lookup("format")
@@ -154,6 +174,8 @@ func TestMCPRegistryGetCmdFlags(t *testing.T) {
 }
 
 func TestMCPRegistryGetCmdDefaultValues(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPRegistryGetCmd()
 
 	formatFlag := cmd.Flags().Lookup("format")
@@ -163,6 +185,8 @@ func TestMCPRegistryGetCmdDefaultValues(t *testing.T) {
 }
 
 func TestMCPRegistrySubcommands(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPRegistryCmd()
 
 	expectedSubcommands := []string{

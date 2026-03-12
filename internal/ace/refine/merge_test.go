@@ -9,6 +9,8 @@ import (
 )
 
 func TestNewMergeEngine(t *testing.T) {
+	t.Parallel()
+
 	embedder := embedding.NewMockEmbedder(384)
 
 	// Valid threshold.
@@ -31,6 +33,8 @@ func TestNewMergeEngine(t *testing.T) {
 }
 
 func TestMergeEngine_MergeBullets(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
@@ -65,6 +69,8 @@ func TestMergeEngine_MergeBullets(t *testing.T) {
 }
 
 func TestMergeEngine_MergeBullets_UtilityTransfer(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
@@ -89,6 +95,8 @@ func TestMergeEngine_MergeBullets_UtilityTransfer(t *testing.T) {
 }
 
 func TestMergeEngine_MergeBullets_NilBullets(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
@@ -115,6 +123,8 @@ func TestMergeEngine_MergeBullets_NilBullets(t *testing.T) {
 }
 
 func TestMergeEngine_FindMergeCandidates_WithEmbeddings(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
@@ -146,6 +156,8 @@ func TestMergeEngine_FindMergeCandidates_WithEmbeddings(t *testing.T) {
 }
 
 func TestMergeEngine_FindMergeCandidates_WithoutEmbeddings(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	engine := NewMergeEngine(nil, 0.90) // No embedder.
 
@@ -180,6 +192,8 @@ func TestMergeEngine_FindMergeCandidates_WithoutEmbeddings(t *testing.T) {
 }
 
 func TestMergeEngine_FindMergeCandidates_Empty(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
@@ -195,6 +209,8 @@ func TestMergeEngine_FindMergeCandidates_Empty(t *testing.T) {
 }
 
 func TestMergeEngine_FindMergeCandidates_Single(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
@@ -213,6 +229,8 @@ func TestMergeEngine_FindMergeCandidates_Single(t *testing.T) {
 }
 
 func TestMergeEngine_CosineSimilarity(t *testing.T) {
+	t.Parallel()
+
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
 
@@ -254,6 +272,8 @@ func TestMergeEngine_CosineSimilarity(t *testing.T) {
 }
 
 func TestMergeEngine_SimpleSimilarity(t *testing.T) {
+	t.Parallel()
+
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
 
@@ -283,6 +303,8 @@ func TestMergeEngine_SimpleSimilarity(t *testing.T) {
 }
 
 func TestMergeEngine_ChooseMergeDirection(t *testing.T) {
+	t.Parallel()
+
 	embedder := embedding.NewMockEmbedder(384)
 	engine := NewMergeEngine(embedder, 0.90)
 

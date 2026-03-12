@@ -16,7 +16,10 @@ func (m *mockEnvironment) String() string {
 }
 
 func TestGetContextTool_Success(t *testing.T) {
+	t.Parallel(
 	// Create a valid mock context with String() method.
+	)
+
 	env := &mockEnvironment{
 		data: `Environment Context:
 - OS: linux (amd64)
@@ -55,6 +58,7 @@ func TestGetContextTool_Success(t *testing.T) {
 }
 
 func TestGetContextTool_NilContext(t *testing.T) {
+	t.Parallel()
 	tool := NewGetContextTool(nil)
 	params, _ := FromMap(map[string]any{})
 
@@ -73,7 +77,10 @@ func TestGetContextTool_NilContext(t *testing.T) {
 }
 
 func TestGetContextTool_InvalidType(t *testing.T) {
+	t.Parallel(
 	// Type without String() method.
+	)
+
 	type InvalidContext struct {
 		Data string
 	}
@@ -96,7 +103,10 @@ func TestGetContextTool_InvalidType(t *testing.T) {
 }
 
 func TestGetContextTool_WithGitInfo(t *testing.T) {
+	t.Parallel(
 	// Create mock environment with Git information.
+	)
+
 	env := &mockEnvironment{
 		data: `Environment Context:
 - OS: darwin (arm64)
@@ -129,7 +139,10 @@ func TestGetContextTool_WithGitInfo(t *testing.T) {
 }
 
 func TestGetContextTool_OutputFormat(t *testing.T) {
+	t.Parallel(
 	// Verify the String() method is called correctly via reflection.
+	)
+
 	env := &mockEnvironment{
 		data: `Environment Context:
 - OS: linux (amd64)
@@ -189,6 +202,7 @@ Project Structure: 2 files
 }
 
 func TestGetContextTool_Schema(t *testing.T) {
+	t.Parallel()
 	tool := NewGetContextTool(nil)
 	schema := tool.Schema()
 
@@ -207,6 +221,7 @@ func TestGetContextTool_Schema(t *testing.T) {
 }
 
 func TestGetContextTool_ErrorCases(t *testing.T) {
+	t.Parallel()
 	tool := NewGetContextTool(nil)
 
 	// GetContextTool has only optional parameters, so it doesn't fail on invalid params

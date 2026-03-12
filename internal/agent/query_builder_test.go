@@ -12,6 +12,7 @@ import (
 
 // TestBuildQueryFromContext_Initial verifies that TriggerInitial returns base query only.
 func TestBuildQueryFromContext_Initial(t *testing.T) {
+	t.Parallel()
 	// Setup.
 	agent := &Agent{}
 	ctx := trajectory.NewContext("install nodejs")
@@ -25,6 +26,7 @@ func TestBuildQueryFromContext_Initial(t *testing.T) {
 
 // TestBuildQueryFromContext_Error verifies that TriggerError includes error patterns.
 func TestBuildQueryFromContext_Error(t *testing.T) {
+	t.Parallel()
 	// Setup.
 	agent := &Agent{
 		aceConfig: &ACEConfig{
@@ -52,6 +54,7 @@ func TestBuildQueryFromContext_Error(t *testing.T) {
 
 // TestBuildQueryFromContext_ToolChange verifies that TriggerToolChange includes tool names.
 func TestBuildQueryFromContext_ToolChange(t *testing.T) {
+	t.Parallel()
 	// Setup.
 	agent := &Agent{
 		aceConfig: &ACEConfig{
@@ -79,6 +82,7 @@ func TestBuildQueryFromContext_ToolChange(t *testing.T) {
 
 // TestBuildQueryFromContext_Interval verifies that TriggerInterval includes concepts.
 func TestBuildQueryFromContext_Interval(t *testing.T) {
+	t.Parallel()
 	// Setup.
 	agent := &Agent{
 		aceConfig: &ACEConfig{},
@@ -100,6 +104,7 @@ func TestBuildQueryFromContext_Interval(t *testing.T) {
 
 // TestBuildQueryFromContext_EmptySteps verifies fallback to base query when no steps.
 func TestBuildQueryFromContext_EmptySteps(t *testing.T) {
+	t.Parallel()
 	// Setup.
 	agent := &Agent{
 		aceConfig: &ACEConfig{
@@ -122,6 +127,7 @@ func TestBuildQueryFromContext_EmptySteps(t *testing.T) {
 
 // TestBuildQueryFromContext_AllTriggers verifies all triggers work.
 func TestBuildQueryFromContext_AllTriggers(t *testing.T) {
+	t.Parallel()
 	// Setup.
 	agent := &Agent{
 		aceConfig: &ACEConfig{
@@ -146,6 +152,8 @@ func TestBuildQueryFromContext_AllTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx := trajectory.NewContext("base query")
 			ctx.AppendSteps([]generator.TrajectoryStep{
 				{Content: "Tool: bash"},

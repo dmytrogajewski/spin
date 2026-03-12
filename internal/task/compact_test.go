@@ -6,6 +6,7 @@ import (
 )
 
 func TestNewCompact(t *testing.T) {
+	t.Parallel()
 	compact := NewCompact()
 
 	if compact == nil {
@@ -17,6 +18,7 @@ func TestNewCompact(t *testing.T) {
 }
 
 func TestCompact_Name(t *testing.T) {
+	t.Parallel()
 	compact := NewCompact()
 
 	name := compact.Name()
@@ -27,6 +29,7 @@ func TestCompact_Name(t *testing.T) {
 }
 
 func TestCompact_SystemPrompt(t *testing.T) {
+	t.Parallel()
 	compact := NewCompact()
 	prompt := compact.SystemPrompt()
 
@@ -41,6 +44,7 @@ func TestCompact_SystemPrompt(t *testing.T) {
 }
 
 func TestCompact_AllowedTools(t *testing.T) {
+	t.Parallel()
 	compact := NewCompact()
 	tools := compact.AllowedTools()
 
@@ -58,6 +62,7 @@ func TestCompact_AllowedTools(t *testing.T) {
 }
 
 func TestCompact_MaxTokens(t *testing.T) {
+	t.Parallel()
 	compact := NewCompact()
 	maxTokens := compact.MaxTokens()
 
@@ -71,6 +76,7 @@ func TestCompact_MaxTokens(t *testing.T) {
 }
 
 func TestCompact_Validate(t *testing.T) {
+	t.Parallel()
 	compact := NewCompact()
 
 	err := compact.Validate()
@@ -80,6 +86,7 @@ func TestCompact_Validate(t *testing.T) {
 }
 
 func TestCompact_DefaultPrompt(t *testing.T) {
+	t.Parallel()
 	compact := NewCompact()
 	prompt := compact.SystemPrompt()
 
@@ -90,6 +97,7 @@ func TestCompact_DefaultPrompt(t *testing.T) {
 }
 
 func TestCompact_DefaultTools(t *testing.T) {
+	t.Parallel()
 	compact := NewCompact()
 	tools := compact.AllowedTools()
 
@@ -107,6 +115,7 @@ func TestCompact_DefaultTools(t *testing.T) {
 }
 
 func TestCompact_DefaultMaxTokens(t *testing.T) {
+	t.Parallel()
 	compact := NewCompact()
 	maxTokens := compact.MaxTokens()
 
@@ -115,7 +124,8 @@ func TestCompact_DefaultMaxTokens(t *testing.T) {
 	}
 }
 
-func TestCompact_Concurrency(_ *testing.T) {
+func TestCompact_Concurrency(t *testing.T) {
+	t.Parallel()
 	compact := NewCompact()
 
 	// Test concurrent access to methods.
@@ -141,6 +151,7 @@ func TestCompact_Concurrency(_ *testing.T) {
 }
 
 func TestCompact_TaskInterface(t *testing.T) {
+	t.Parallel()
 	compact := NewCompact()
 
 	// Verify all interface methods work.
@@ -167,7 +178,10 @@ func TestCompact_TaskInterface(t *testing.T) {
 }
 
 func TestCompact_Constants(t *testing.T) {
+	t.Parallel(
 	// Verify constants are reasonable.
+	)
+
 	if DefaultCompactMaxTokens <= 0 {
 		t.Errorf("DefaultCompactMaxTokens = %d, want > 0", DefaultCompactMaxTokens)
 	}

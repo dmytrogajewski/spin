@@ -69,6 +69,8 @@ func createTestRuntime(t *testing.T, workDir string) (agentexec.Runtime, *events
 }
 
 func TestNewBuilder(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig()
 	workDir := t.TempDir()
 	rt, emitter, provider := createTestRuntime(t, workDir)
@@ -83,6 +85,8 @@ func TestNewBuilder(t *testing.T) {
 }
 
 func TestBuilder_WithGit(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig()
 	workDir := t.TempDir()
 	rt, emitter, provider := createTestRuntime(t, workDir)
@@ -100,6 +104,8 @@ func TestBuilder_WithGit(t *testing.T) {
 }
 
 func TestBuilder_WithShell(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig()
 	workDir := t.TempDir()
 	rt, emitter, provider := createTestRuntime(t, workDir)
@@ -117,6 +123,8 @@ func TestBuilder_WithShell(t *testing.T) {
 }
 
 func TestBuilder_WithMCP(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig()
 	workDir := t.TempDir()
 	rt, emitter, provider := createTestRuntime(t, workDir)
@@ -133,6 +141,8 @@ func TestBuilder_WithMCP(t *testing.T) {
 }
 
 func TestBuilder_Build_Minimal(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig()
 	tempDir := t.TempDir()
 	rt, emitter, provider := createTestRuntime(t, tempDir)
@@ -160,6 +170,8 @@ func TestBuilder_Build_Minimal(t *testing.T) {
 }
 
 func TestBuilder_Build_WithServices(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig()
 	tempDir := t.TempDir()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -201,6 +213,8 @@ func TestBuilder_Build_WithServices(t *testing.T) {
 }
 
 func TestBuilder_Build_NilConfig(t *testing.T) {
+	t.Parallel()
+
 	// Panics are caught by require.Panics.
 	require.Panics(t, func() {
 		NewBuilder(nil, "/tmp", nil, nil, nil)
@@ -208,6 +222,8 @@ func TestBuilder_Build_NilConfig(t *testing.T) {
 }
 
 func TestBuilder_Build_EmptyWorkDir(t *testing.T) {
+	t.Parallel()
+
 	// Panics are caught by require.Panics.
 	require.Panics(t, func() {
 		NewBuilder(testConfig(), "", nil, nil, nil)
@@ -215,6 +231,8 @@ func TestBuilder_Build_EmptyWorkDir(t *testing.T) {
 }
 
 func TestBuilder_FluentAPI(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig()
 	tempDir := t.TempDir()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -243,6 +261,8 @@ func TestBuilder_FluentAPI(t *testing.T) {
 }
 
 func TestBuilder_ServiceReuse(t *testing.T) {
+	t.Parallel()
+
 	cfg := testConfig()
 	tempDir := t.TempDir()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))

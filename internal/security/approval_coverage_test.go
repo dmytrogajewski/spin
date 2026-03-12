@@ -8,6 +8,7 @@ import (
 )
 
 func TestApprovalService_RequestApproval(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		service      *ApprovalService
@@ -58,6 +59,7 @@ func TestApprovalService_RequestApproval(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			_, approved, err := tt.service.RequestApproval(context.Background(), tt.operation)
 
 			if tt.wantErr {

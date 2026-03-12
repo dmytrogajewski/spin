@@ -6,6 +6,8 @@ import (
 )
 
 func TestNewDetector(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -30,6 +32,8 @@ func TestNewDetector(t *testing.T) {
 }
 
 func TestDetector_Record(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       3,
@@ -68,6 +72,8 @@ func TestDetector_Record(t *testing.T) {
 }
 
 func TestDetector_Record_ZeroWindowSize(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       0, // Zero window size.
@@ -97,6 +103,8 @@ func TestDetector_Record_ZeroWindowSize(t *testing.T) {
 }
 
 func TestDetector_Check_InsufficientHistory(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -125,6 +133,8 @@ func TestDetector_Check_InsufficientHistory(t *testing.T) {
 }
 
 func TestDetector_Check_RepeatedTool(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -165,6 +175,8 @@ func TestDetector_Check_RepeatedTool(t *testing.T) {
 }
 
 func TestDetector_Check_SameError(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -204,6 +216,8 @@ func TestDetector_Check_SameError(t *testing.T) {
 }
 
 func TestDetector_Check_Oscillation(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -247,6 +261,8 @@ func TestDetector_Check_Oscillation(t *testing.T) {
 }
 
 func TestDetector_Check_SimilarResponses(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -287,6 +303,8 @@ func TestDetector_Check_SimilarResponses(t *testing.T) {
 }
 
 func TestDetector_GetHistory(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -324,6 +342,8 @@ func TestDetector_GetHistory(t *testing.T) {
 }
 
 func TestDetector_Reset(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -359,6 +379,8 @@ func TestDetector_Reset(t *testing.T) {
 }
 
 func TestDetector_Concurrency(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       10,
@@ -398,6 +420,8 @@ func TestDetector_Concurrency(t *testing.T) {
 }
 
 func TestDetector_Check_Disabled(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          false, // Disabled.
 		WindowSize:       5,
@@ -438,6 +462,8 @@ func TestDetector_Check_Disabled(t *testing.T) {
 //	ls .                      <- Cycle detected ✓ (correct - same params)
 //	ls advanced-features-20251012  <- Cycle detected ✗ (WRONG - different params!)
 func TestCheckRepeatedTool_SameToolDifferentParams(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -508,6 +534,8 @@ func TestCheckRepeatedTool_SameToolDifferentParams(t *testing.T) {
 // TestCheckRepeatedTool_SameToolSameParams tests that cycle detection
 // DOES trigger when the same tool is called with the SAME parameters.
 func TestCheckRepeatedTool_SameToolSameParams(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -541,6 +569,8 @@ func TestCheckRepeatedTool_SameToolSameParams(t *testing.T) {
 
 // TestCheckRepeatedTool_DifferentTools tests that different tools don't trigger cycles.
 func TestCheckRepeatedTool_DifferentTools(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -585,6 +615,8 @@ func TestCheckRepeatedTool_DifferentTools(t *testing.T) {
 // Agent exploring filesystem: ls . → ls dir1 → ls dir2 → ls dir1/subdir
 // This should NOT trigger cycles even though all use list_directory.
 func TestCheckRepeatedTool_ExploratoryPattern(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,

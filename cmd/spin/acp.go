@@ -70,7 +70,7 @@ Examples:
 				flagOverrides.BaseURL = baseURL
 			}
 
-			return runACPServer(workDir, flagOverrides, apiKey)
+			return runACPServer(cmd, workDir, flagOverrides, apiKey)
 		},
 	}
 
@@ -85,7 +85,7 @@ Examples:
 }
 
 // runACPServer starts the ACP server.
-func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey string) error {
+func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagOverrides, apiKey string) error {
 	// Ensure workDir is an absolute path.
 	var err error
 
@@ -97,7 +97,7 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 	authMgr := createAuthManager()
 
 	cfg, err := config.Load(config.Source{
-		File:    flagConfigFile,
+		File:    flagConfigFile(cmd),
 		Flags:   flagOverrides,
 		WorkDir: workDir,
 	})
@@ -106,8 +106,8 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 	}
 
 	// Apply --agents-md flag override.
-	if flagAgentsMD != "" {
-		cfg.AgentsMD.Path = flagAgentsMD
+	if agentsMD := flagAgentsMD(cmd); agentsMD != "" {
+		cfg.AgentsMD.Path = agentsMD
 	}
 
 	ctx := context.Background()

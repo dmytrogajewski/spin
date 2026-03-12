@@ -10,6 +10,8 @@ import (
 )
 
 func TestNewScanner(t *testing.T) {
+	t.Parallel()
+
 	s := NewScanner(".", true)
 
 	assert.NotNil(t, s)
@@ -18,6 +20,8 @@ func TestNewScanner(t *testing.T) {
 }
 
 func TestScanner_Scan_EmptyDir(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	s := NewScanner(tmpDir, false)
@@ -28,6 +32,8 @@ func TestScanner_Scan_EmptyDir(t *testing.T) {
 }
 
 func TestScanner_Scan_SingleFile(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create a file.
@@ -44,6 +50,8 @@ func TestScanner_Scan_SingleFile(t *testing.T) {
 }
 
 func TestScanner_Scan_MultipleFiles(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create multiple files.
@@ -63,6 +71,8 @@ func TestScanner_Scan_MultipleFiles(t *testing.T) {
 }
 
 func TestScanner_Scan_NestedDirectories(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create nested structure.
@@ -82,6 +92,8 @@ func TestScanner_Scan_NestedDirectories(t *testing.T) {
 }
 
 func TestScanner_Scan_IgnoreGit(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create .git directory with files.
@@ -100,6 +112,8 @@ func TestScanner_Scan_IgnoreGit(t *testing.T) {
 }
 
 func TestScanner_Scan_IncludeGit(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create .git directory with files.
@@ -120,6 +134,8 @@ func TestScanner_Scan_IncludeGit(t *testing.T) {
 }
 
 func TestScanner_Scan_RelativePaths(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755))
@@ -138,6 +154,8 @@ func TestScanner_Scan_RelativePaths(t *testing.T) {
 }
 
 func TestScanner_Scan_SymlinkHandling(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create a regular file.
@@ -161,6 +179,8 @@ func TestScanner_Scan_SymlinkHandling(t *testing.T) {
 }
 
 func TestScanner_Scan_HiddenFiles(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create hidden file.
@@ -220,6 +240,8 @@ func BenchmarkScanner_Scan_1000Files(b *testing.B) {
 // Integration tests for IgnoreHandler with Scanner.
 
 func TestScanner_WithGitignore_SimplePattern(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create .gitignore.
@@ -241,6 +263,8 @@ func TestScanner_WithGitignore_SimplePattern(t *testing.T) {
 }
 
 func TestScanner_WithGitignore_DirectoryPattern(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create .gitignore.
@@ -263,6 +287,8 @@ func TestScanner_WithGitignore_DirectoryPattern(t *testing.T) {
 }
 
 func TestScanner_WithGitignore_NodeModules(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// No need to create .gitignore - node_modules is in defaults.
@@ -279,6 +305,8 @@ func TestScanner_WithGitignore_NodeModules(t *testing.T) {
 }
 
 func TestScanner_WithSpinignore(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create .spinignore.
@@ -299,6 +327,8 @@ func TestScanner_WithSpinignore(t *testing.T) {
 }
 
 func TestScanner_WithBothIgnoreFiles(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create .gitignore.
@@ -327,6 +357,8 @@ func TestScanner_WithBothIgnoreFiles(t *testing.T) {
 }
 
 func TestScanner_RealWorldNodeProject(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Simulate a real Node.js project structure.
@@ -348,6 +380,8 @@ func TestScanner_RealWorldNodeProject(t *testing.T) {
 }
 
 func TestScanner_RealWorldGoProject(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Simulate a real Go project structure.
@@ -370,6 +404,8 @@ func TestScanner_RealWorldGoProject(t *testing.T) {
 }
 
 func TestScanner_RealWorldPythonProject(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Simulate a real Python project structure.
@@ -391,6 +427,8 @@ func TestScanner_RealWorldPythonProject(t *testing.T) {
 }
 
 func TestScanner_BackwardCompatibility_IgnoreGitFlag(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create .git directory.

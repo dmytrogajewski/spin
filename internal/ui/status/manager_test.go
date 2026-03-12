@@ -6,6 +6,7 @@ import (
 )
 
 func TestManager_GetStatus(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	status := m.GetStatus()
 
@@ -19,6 +20,7 @@ func TestManager_GetStatus(t *testing.T) {
 }
 
 func TestManager_SetStatus(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetStatus("Processing...")
 
@@ -33,6 +35,7 @@ func TestManager_SetStatus(t *testing.T) {
 }
 
 func TestManager_SetProvider(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetProvider("openai", "gpt-4")
 
@@ -51,6 +54,7 @@ func TestManager_SetProvider(t *testing.T) {
 }
 
 func TestManager_IncrementTurn(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	// Initial turn count should be 0.
@@ -70,6 +74,7 @@ func TestManager_IncrementTurn(t *testing.T) {
 }
 
 func TestManager_AddTokens(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetMaxTokens(1000) // Set max tokens first.
 
@@ -99,6 +104,7 @@ func TestManager_AddTokens(t *testing.T) {
 }
 
 func TestManager_SetResponseTime(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	duration := 2 * time.Second
@@ -116,6 +122,7 @@ func TestManager_SetResponseTime(t *testing.T) {
 }
 
 func TestManager_EnableDisable(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	if !m.IsEnabled() {
@@ -136,6 +143,7 @@ func TestManager_EnableDisable(t *testing.T) {
 }
 
 func TestManager_Reset(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	// Set some data.
@@ -171,6 +179,7 @@ func TestManager_Reset(t *testing.T) {
 }
 
 func TestManager_Concurrency(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	// Test concurrent access.
@@ -205,6 +214,7 @@ func TestManager_Concurrency(t *testing.T) {
 }
 
 func TestManager_SetAgentState(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	m.SetAgentState("Calling tools")
@@ -216,6 +226,7 @@ func TestManager_SetAgentState(t *testing.T) {
 }
 
 func TestManager_SetTaskMode(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	m.SetTaskMode("review")
@@ -227,6 +238,7 @@ func TestManager_SetTaskMode(t *testing.T) {
 }
 
 func TestManager_SetConversationID(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	testID := "abc123def456"
@@ -239,6 +251,7 @@ func TestManager_SetConversationID(t *testing.T) {
 }
 
 func TestManager_CalculateTPS(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	// 100 tokens in 2 seconds = 50 tok/s.
@@ -253,6 +266,7 @@ func TestManager_CalculateTPS(t *testing.T) {
 }
 
 func TestManager_CalculateTPS_ZeroDuration(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	// Zero duration should not cause panic.
@@ -265,6 +279,7 @@ func TestManager_CalculateTPS_ZeroDuration(t *testing.T) {
 }
 
 func TestManager_SetConnected(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	// Test setting connected to true.

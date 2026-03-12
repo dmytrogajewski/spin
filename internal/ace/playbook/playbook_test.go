@@ -15,6 +15,8 @@ import (
 )
 
 func TestNew_CreatesEmptyPlaybook(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 
 	require.NotNil(t, pb)
@@ -28,6 +30,8 @@ func TestNew_CreatesEmptyPlaybook(t *testing.T) {
 }
 
 func TestAdd_AddsNewBullet(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -49,6 +53,8 @@ func TestAdd_AddsNewBullet(t *testing.T) {
 }
 
 func TestAdd_RejectsDuplicateID(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -68,6 +74,8 @@ func TestAdd_RejectsDuplicateID(t *testing.T) {
 }
 
 func TestUpdate_UpdatesExistingBullet(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -90,6 +98,8 @@ func TestUpdate_UpdatesExistingBullet(t *testing.T) {
 }
 
 func TestUpdate_RejectsNonExistent(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -102,6 +112,8 @@ func TestUpdate_RejectsNonExistent(t *testing.T) {
 }
 
 func TestDelete_RemovesBullet(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -121,6 +133,8 @@ func TestDelete_RemovesBullet(t *testing.T) {
 }
 
 func TestDelete_IsIdempotent(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -130,6 +144,8 @@ func TestDelete_IsIdempotent(t *testing.T) {
 }
 
 func TestList_ReturnsAllBullets(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -149,6 +165,8 @@ func TestList_ReturnsAllBullets(t *testing.T) {
 }
 
 func TestList_WithFilter(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -172,6 +190,8 @@ func TestList_WithFilter(t *testing.T) {
 }
 
 func TestSearch_WithNoEmbedder(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -181,6 +201,8 @@ func TestSearch_WithNoEmbedder(t *testing.T) {
 }
 
 func TestSearch_WithEmbeddings(t *testing.T) {
+	t.Parallel()
+
 	embedder := embedding.NewMockEmbedder(3)
 	pb := playbook.New(nil, embedder)
 	ctx := context.Background()
@@ -207,6 +229,8 @@ func TestSearch_WithEmbeddings(t *testing.T) {
 }
 
 func TestSaveAndLoad(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -238,6 +262,8 @@ func TestSaveAndLoad(t *testing.T) {
 }
 
 func TestSnapshot_CapturesState(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -254,6 +280,8 @@ func TestSnapshot_CapturesState(t *testing.T) {
 }
 
 func TestSnapshot_IsImmutable(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -272,6 +300,8 @@ func TestSnapshot_IsImmutable(t *testing.T) {
 }
 
 func TestRestore_RestoresFromSnapshot(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -307,6 +337,8 @@ func TestRestore_RestoresFromSnapshot(t *testing.T) {
 }
 
 func TestDiff_DetectsChanges(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -339,6 +371,8 @@ func TestDiff_DetectsChanges(t *testing.T) {
 }
 
 func TestConcurrentOperations(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -378,6 +412,8 @@ func TestConcurrentOperations(t *testing.T) {
 }
 
 func TestAdd_RejectsNilBullet(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	err := pb.Add(context.Background(), nil)
 	assert.Error(t, err)
@@ -385,6 +421,8 @@ func TestAdd_RejectsNilBullet(t *testing.T) {
 }
 
 func TestUpdate_RejectsNilBullet(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	err := pb.Update(context.Background(), nil)
 	assert.Error(t, err)
@@ -392,6 +430,8 @@ func TestUpdate_RejectsNilBullet(t *testing.T) {
 }
 
 func TestRestore_RejectsNilSnapshot(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	err := pb.Restore(nil)
 	assert.Error(t, err)
@@ -399,6 +439,8 @@ func TestRestore_RejectsNilSnapshot(t *testing.T) {
 }
 
 func TestDiff_WithNilSnapshot(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	snapshot := pb.Snapshot()
 	diff := snapshot.Diff(nil)
@@ -409,6 +451,8 @@ func TestDiff_WithNilSnapshot(t *testing.T) {
 }
 
 func TestLoad_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	tmpFile := t.TempDir() + "/invalid.json"
 	err := os.WriteFile(tmpFile, []byte("invalid json"), 0644)
 	require.NoError(t, err)
@@ -419,11 +463,15 @@ func TestLoad_InvalidJSON(t *testing.T) {
 }
 
 func TestLoad_NonExistentFile(t *testing.T) {
+	t.Parallel()
+
 	_, err := playbook.Load("/nonexistent/file.json", nil, nil)
 	assert.Error(t, err)
 }
 
 func TestSave_ErrorCases(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 
 	// Try to save to invalid directory.
@@ -432,6 +480,8 @@ func TestSave_ErrorCases(t *testing.T) {
 }
 
 func TestBulletsEqual_AllFields(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
@@ -463,6 +513,8 @@ func TestBulletsEqual_AllFields(t *testing.T) {
 }
 
 func TestSearch_WithNoBulletsHavingEmbeddings(t *testing.T) {
+	t.Parallel()
+
 	embedder := embedding.NewMockEmbedder(3)
 	pb := playbook.New(nil, embedder)
 	ctx := context.Background()
@@ -482,6 +534,8 @@ func TestSearch_WithNoBulletsHavingEmbeddings(t *testing.T) {
 }
 
 func TestCosineSimilarity_EdgeCases(t *testing.T) {
+	t.Parallel()
+
 	embedder := embedding.NewMockEmbedder(3)
 	pb := playbook.New(nil, embedder)
 	ctx := context.Background()

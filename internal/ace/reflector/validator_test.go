@@ -10,6 +10,8 @@ import (
 
 // TestInsightValidator_New tests creating a new validator.
 func TestInsightValidator_New(t *testing.T) {
+	t.Parallel()
+
 	validator := NewInsightValidator()
 
 	require.NotNil(t, validator)
@@ -17,6 +19,8 @@ func TestInsightValidator_New(t *testing.T) {
 
 // TestInsightValidator_Validate tests insight validation with all rules.
 func TestInsightValidator_Validate(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		insight *Insight
@@ -98,6 +102,8 @@ func TestInsightValidator_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := validator.Validate(tt.insight)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -111,6 +117,8 @@ func TestInsightValidator_Validate(t *testing.T) {
 
 // TestInsightValidator_ValidateBatch tests batch validation.
 func TestInsightValidator_ValidateBatch(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		insights []*Insight
@@ -163,6 +171,8 @@ func TestInsightValidator_ValidateBatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			errs := validator.ValidateBatch(tt.insights)
 			if tt.wantErr {
 				assert.Len(t, errs, tt.errCount)
@@ -175,6 +185,8 @@ func TestInsightValidator_ValidateBatch(t *testing.T) {
 
 // TestInsightValidator_FilterByQuality tests quality filtering.
 func TestInsightValidator_FilterByQuality(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		insights      []*Insight
@@ -227,6 +239,8 @@ func TestInsightValidator_FilterByQuality(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			filtered := validator.FilterByQuality(tt.insights, tt.minConfidence)
 			assert.Len(t, filtered, tt.wantCount)
 

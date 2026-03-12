@@ -25,6 +25,8 @@ func (c *interceptingClient) CreateTerminal(ctx context.Context, params acp.Crea
 }
 
 func TestACPTerminalExecution(t *testing.T) {
+	t.Parallel()
+
 	// 1. Start the ACP agent process.
 	cmd, stdin, stdout := startACPAgent(t)
 	defer cleanupAgent(t, cmd, stdin)

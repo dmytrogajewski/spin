@@ -8,6 +8,8 @@ import (
 )
 
 func TestContentTypeValues(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		ct       ContentType
@@ -20,6 +22,8 @@ func TestContentTypeValues(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if string(tt.ct) != tt.expected {
 				t.Errorf("ContentType %s = %q, want %q", tt.name, string(tt.ct), tt.expected)
 			}
@@ -28,6 +32,8 @@ func TestContentTypeValues(t *testing.T) {
 }
 
 func TestSummaryStyleValues(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		style    SummaryStyle
@@ -41,6 +47,8 @@ func TestSummaryStyleValues(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if string(tt.style) != tt.expected {
 				t.Errorf("SummaryStyle %s = %q, want %q", tt.name, string(tt.style), tt.expected)
 			}
@@ -49,6 +57,8 @@ func TestSummaryStyleValues(t *testing.T) {
 }
 
 func TestOptionsDefaults(t *testing.T) {
+	t.Parallel()
+
 	opts := Options{}
 
 	// Zero values should be the defaults.
@@ -74,6 +84,8 @@ func TestOptionsDefaults(t *testing.T) {
 }
 
 func TestOptionsWithValues(t *testing.T) {
+	t.Parallel()
+
 	const (
 		maxTokens   = 500
 		targetRatio = 0.3
@@ -109,6 +121,8 @@ func TestOptionsWithValues(t *testing.T) {
 }
 
 func TestResultFields(t *testing.T) {
+	t.Parallel()
+
 	const (
 		originalTokens   = 1000
 		summaryTokens    = 300
@@ -150,6 +164,8 @@ func TestResultFields(t *testing.T) {
 }
 
 func TestMessageResultFields(t *testing.T) {
+	t.Parallel()
+
 	const (
 		originalCount = 10
 		rangeStart    = 0
@@ -221,6 +237,8 @@ func (m *mockSummarizer) SummarizeMessages(ctx context.Context, messages []messa
 }
 
 func TestSummarizerInterface(t *testing.T) {
+	t.Parallel()
+
 	// Verify mockSummarizer implements Summarizer interface.
 	var _ Summarizer = (*mockSummarizer)(nil)
 
@@ -228,6 +246,8 @@ func TestSummarizerInterface(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Summarize", func(t *testing.T) {
+		t.Parallel()
+
 		result, err := mock.Summarize(ctx, "test content", Options{})
 		if err != nil {
 			t.Fatalf("Summarize error: %v", err)
@@ -239,6 +259,8 @@ func TestSummarizerInterface(t *testing.T) {
 	})
 
 	t.Run("SummarizeMessages", func(t *testing.T) {
+		t.Parallel()
+
 		messages := []message.Message{{Role: message.RoleUser, Content: "test"}}
 
 		result, err := mock.SummarizeMessages(ctx, messages, Options{})

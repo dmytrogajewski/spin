@@ -7,6 +7,7 @@ import (
 )
 
 func TestNewPolicyKey_Normalization(t *testing.T) {
+	t.Parallel()
 	key := NewPolicyKey("  /bin/echo  ", []string{"  hello", "world  ", "foo   bar", ""}, " /tmp ")
 	if key.Program != "/bin/echo" {
 		t.Fatalf("Program normalization failed: %q", key.Program)
@@ -29,6 +30,7 @@ func TestNewPolicyKey_Normalization(t *testing.T) {
 }
 
 func TestMemoryPolicyStore_SaveGetListDelete(t *testing.T) {
+	t.Parallel()
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
 	t.Cleanup(func() { store.Close() })
@@ -80,6 +82,7 @@ func TestMemoryPolicyStore_SaveGetListDelete(t *testing.T) {
 }
 
 func TestMemoryPolicyStore_TTLExpiry(t *testing.T) {
+	t.Parallel()
 	store := NewMemoryPolicyStore(5 * time.Millisecond)
 
 	t.Cleanup(func() { store.Close() })
@@ -113,6 +116,7 @@ func TestMemoryPolicyStore_TTLExpiry(t *testing.T) {
 }
 
 func TestMemoryPolicyStore_ConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	store := NewMemoryPolicyStore(5 * time.Millisecond)
 
 	t.Cleanup(func() { store.Close() })

@@ -1,10 +1,9 @@
 package conversation
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 
@@ -41,7 +40,11 @@ return nil, fmt.Errorf("%s: %w", errMsg, errError)
 }
 
 func TestManager_NewManager(t *testing.T) {
+	t.Parallel()
+
 	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
 		mgr, err := NewManager(ManagerConfig{
 			Factory: mockFactory(),
 		})
@@ -55,6 +58,8 @@ func TestManager_NewManager(t *testing.T) {
 	})
 
 	t.Run("nil factory", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := NewManager(ManagerConfig{})
 		if err == nil {
 			t.Fatal("NewManager should fail with nil factory")
@@ -63,9 +68,13 @@ func TestManager_NewManager(t *testing.T) {
 }
 
 func TestManager_GetOrCreate(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	t.Run("create new", func(t *testing.T) {
+		t.Parallel()
+
 		mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 		if err != nil {
 			t.Fatalf("NewManager failed: %v", err)
@@ -86,6 +95,8 @@ func TestManager_GetOrCreate(t *testing.T) {
 	})
 
 	t.Run("get existing", func(t *testing.T) {
+		t.Parallel()
+
 		mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 		if err != nil {
 			t.Fatalf("NewManager failed: %v", err)
@@ -106,6 +117,8 @@ func TestManager_GetOrCreate(t *testing.T) {
 	})
 
 	t.Run("empty session ID", func(t *testing.T) {
+		t.Parallel()
+
 		mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 		if err != nil {
 			t.Fatalf("NewManager failed: %v", err)
@@ -118,6 +131,8 @@ func TestManager_GetOrCreate(t *testing.T) {
 	})
 
 	t.Run("factory error", func(t *testing.T) {
+		t.Parallel()
+
 		mgr, err := NewManager(ManagerConfig{Factory: errorFactory("factory failed")})
 		if err != nil {
 			t.Fatalf("NewManager failed: %v", err)
@@ -131,6 +146,8 @@ func TestManager_GetOrCreate(t *testing.T) {
 }
 
 func TestManager_Get(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 	if err != nil {
@@ -138,6 +155,8 @@ func TestManager_Get(t *testing.T) {
 	}
 
 	t.Run("not found", func(t *testing.T) {
+		t.Parallel()
+
 		conv, ok := mgr.Get("non-existent")
 		if ok {
 			t.Error("should not find non-existent conversation")
@@ -149,6 +168,8 @@ func TestManager_Get(t *testing.T) {
 	})
 
 	t.Run("found", func(t *testing.T) {
+		t.Parallel()
+
 		_, err = mgr.GetOrCreate(ctx, "session-1", "/tmp")
 		if err != nil {
 			t.Fatalf("GetOrCreate failed: %v", err)
@@ -166,6 +187,8 @@ func TestManager_Get(t *testing.T) {
 }
 
 func TestManager_Remove(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 	if err != nil {
@@ -173,6 +196,8 @@ func TestManager_Remove(t *testing.T) {
 	}
 
 	t.Run("remove existing", func(t *testing.T) {
+		t.Parallel()
+
 		_, err = mgr.GetOrCreate(ctx, "session-1", "/tmp")
 		if err != nil {
 			t.Fatalf("GetOrCreate failed: %v", err)
@@ -190,6 +215,8 @@ func TestManager_Remove(t *testing.T) {
 	})
 
 	t.Run("remove non-existent", func(t *testing.T) {
+		t.Parallel()
+
 		err = mgr.Remove("non-existent")
 		if err == nil {
 			t.Fatal("should fail when removing non-existent")
@@ -198,6 +225,8 @@ func TestManager_Remove(t *testing.T) {
 }
 
 func TestManager_Cancel(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 	if err != nil {
@@ -226,13 +255,18 @@ func TestManager_Cancel(t *testing.T) {
 }
 
 func TestManager_List(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
-	mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
-	if err != nil {
-		t.Fatalf("NewManager failed: %v", err)
-	}
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
+		mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
+		if err != nil {
+			t.Fatalf("NewManager failed: %v", err)
+		}
+
 		list := mgr.List()
 		if len(list) != 0 {
 			t.Errorf("should be empty, got %d", len(list))
@@ -240,6 +274,13 @@ func TestManager_List(t *testing.T) {
 	})
 
 	t.Run("with conversations", func(t *testing.T) {
+		t.Parallel()
+
+		mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
+		if err != nil {
+			t.Fatalf("NewManager failed: %v", err)
+		}
+
 		if _, err = mgr.GetOrCreate(ctx, "session-1", "/tmp"); err != nil {
 			t.Fatalf("GetOrCreate failed: %v", err)
 		}
@@ -255,6 +296,8 @@ func TestManager_List(t *testing.T) {
 }
 
 func TestManager_Count(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 	if err != nil {
@@ -291,6 +334,8 @@ func TestManager_Count(t *testing.T) {
 }
 
 func TestManager_Close(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 	if err != nil {
@@ -315,6 +360,8 @@ func TestManager_Close(t *testing.T) {
 }
 
 func TestManager_SetTaskMode(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 	if err != nil {
@@ -322,6 +369,8 @@ func TestManager_SetTaskMode(t *testing.T) {
 	}
 
 	t.Run("set mode", func(t *testing.T) {
+		t.Parallel()
+
 		if _, err = mgr.GetOrCreate(ctx, "session-1", "/tmp"); err != nil {
 			t.Fatalf("GetOrCreate failed: %v", err)
 		}
@@ -342,6 +391,8 @@ func TestManager_SetTaskMode(t *testing.T) {
 	})
 
 	t.Run("not found", func(t *testing.T) {
+		t.Parallel()
+
 		err = mgr.SetTaskMode("non-existent", "compact")
 		if err == nil {
 			t.Fatal("should fail for non-existent session")
@@ -350,12 +401,16 @@ func TestManager_SetTaskMode(t *testing.T) {
 }
 
 func TestManager_GetTaskMode(t *testing.T) {
+	t.Parallel()
+
 	mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 	if err != nil {
 		t.Fatalf("NewManager failed: %v", err)
 	}
 
 	t.Run("not found", func(t *testing.T) {
+		t.Parallel()
+
 		_, err = mgr.GetTaskMode("non-existent")
 		if err == nil {
 			t.Fatal("should fail for non-existent session")
@@ -364,23 +419,20 @@ func TestManager_GetTaskMode(t *testing.T) {
 }
 
 func TestManager_SaveAndLoad(t *testing.T) {
-	// Create temp directory for storage.
-	tmpDir, err := os.MkdirTemp("", "manager-test-*")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	histStorage, err := history.NewFileStorage(tmpDir)
-	if err != nil {
-		t.Fatalf("create history storage: %v", err)
-	}
+	t.Parallel()
 
 	ctx := context.Background()
 
 	t.Run("save and load", func(t *testing.T) {
-		var mgr *Manager
-		mgr, err = NewManager(ManagerConfig{
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		histStorage, err := history.NewFileStorage(tmpDir)
+		if err != nil {
+			t.Fatalf("create history storage: %v", err)
+		}
+
+		mgr, err := NewManager(ManagerConfig{
 			Factory:        mockFactory(),
 			HistoryStorage: histStorage,
 		})
@@ -389,8 +441,7 @@ func TestManager_SaveAndLoad(t *testing.T) {
 		}
 
 		// Create conversation and add messages.
-		var conv *Conversation
-		conv, err = mgr.GetOrCreate(ctx, "session-save", "/tmp")
+		conv, err := mgr.GetOrCreate(ctx, "session-save", "/tmp")
 		if err != nil {
 			t.Fatalf("GetOrCreate failed: %v", err)
 		}
@@ -411,8 +462,7 @@ func TestManager_SaveAndLoad(t *testing.T) {
 		}
 
 		// Create new manager and load.
-		var mgr2 *Manager
-		mgr2, err = NewManager(ManagerConfig{
+		mgr2, err := NewManager(ManagerConfig{
 			Factory:        mockFactory(),
 			HistoryStorage: histStorage,
 		})
@@ -420,8 +470,7 @@ func TestManager_SaveAndLoad(t *testing.T) {
 			t.Fatalf("NewManager failed: %v", err)
 		}
 
-		var conv2 *Conversation
-		conv2, err = mgr2.Load(ctx, "session-save", "/tmp")
+		conv2, err := mgr2.Load(ctx, "session-save", "/tmp")
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -435,8 +484,15 @@ func TestManager_SaveAndLoad(t *testing.T) {
 	})
 
 	t.Run("load non-existent", func(t *testing.T) {
-		var mgr *Manager
-		mgr, err = NewManager(ManagerConfig{
+		t.Parallel()
+
+		tmpDir := t.TempDir()
+		histStorage, err := history.NewFileStorage(tmpDir)
+		if err != nil {
+			t.Fatalf("create history storage: %v", err)
+		}
+
+		mgr, err := NewManager(ManagerConfig{
 			Factory:        mockFactory(),
 			HistoryStorage: histStorage,
 		})
@@ -451,8 +507,9 @@ func TestManager_SaveAndLoad(t *testing.T) {
 	})
 
 	t.Run("save without storage", func(t *testing.T) {
-		var mgr *Manager
-		mgr, err = NewManager(ManagerConfig{Factory: mockFactory()})
+		t.Parallel()
+
+		mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 		if err != nil {
 			t.Fatalf("NewManager failed: %v", err)
 		}
@@ -467,8 +524,9 @@ func TestManager_SaveAndLoad(t *testing.T) {
 	})
 
 	t.Run("load without storage", func(t *testing.T) {
-		var mgr *Manager
-		mgr, err = NewManager(ManagerConfig{Factory: mockFactory()})
+		t.Parallel()
+
+		mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 		if err != nil {
 			t.Fatalf("NewManager failed: %v", err)
 		}
@@ -481,6 +539,8 @@ func TestManager_SaveAndLoad(t *testing.T) {
 }
 
 func TestManager_Concurrent(t *testing.T) {
+	t.Parallel()
+
 	mgr, err := NewManager(ManagerConfig{Factory: mockFactory()})
 	if err != nil {
 		t.Fatalf("NewManager failed: %v", err)

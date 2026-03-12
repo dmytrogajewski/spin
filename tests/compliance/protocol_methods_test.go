@@ -36,6 +36,8 @@ func createTestACPAgent(t *testing.T) *acppkg.SpinACPAgent {
 
 // TestCompliance_Initialize_ProtocolVersion verifies protocol version negotiation compliance.
 func TestCompliance_Initialize_ProtocolVersion(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -55,6 +57,8 @@ func TestCompliance_Initialize_ProtocolVersion(t *testing.T) {
 
 // TestCompliance_Initialize_Capabilities verifies capability advertisement compliance.
 func TestCompliance_Initialize_Capabilities(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -81,6 +85,8 @@ func TestCompliance_Initialize_Capabilities(t *testing.T) {
 
 // TestCompliance_Initialize_AgentInfo verifies agent info exchange compliance.
 func TestCompliance_Initialize_AgentInfo(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -99,6 +105,8 @@ func TestCompliance_Initialize_AgentInfo(t *testing.T) {
 
 // TestCompliance_Initialize_ClientCapabilities verifies client capability storage.
 func TestCompliance_Initialize_ClientCapabilities(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -120,6 +128,8 @@ func TestCompliance_Initialize_ClientCapabilities(t *testing.T) {
 
 // TestCompliance_Initialize_ResponseFormat verifies Initialize response format compliance.
 func TestCompliance_Initialize_ResponseFormat(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -136,6 +146,8 @@ func TestCompliance_Initialize_ResponseFormat(t *testing.T) {
 
 // TestCompliance_NewSession_Cwd verifies working directory validation compliance.
 func TestCompliance_NewSession_Cwd(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -159,6 +171,8 @@ func TestCompliance_NewSession_Cwd(t *testing.T) {
 
 // TestCompliance_NewSession_SessionId verifies session ID generation compliance.
 func TestCompliance_NewSession_SessionId(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -176,6 +190,8 @@ func TestCompliance_NewSession_SessionId(t *testing.T) {
 
 // TestCompliance_NewSession_ModeState verifies session mode state compliance.
 func TestCompliance_NewSession_ModeState(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -195,6 +211,8 @@ func TestCompliance_NewSession_ModeState(t *testing.T) {
 
 // TestCompliance_NewSession_ResponseFormat verifies NewSession response format compliance.
 func TestCompliance_NewSession_ResponseFormat(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -210,6 +228,8 @@ func TestCompliance_NewSession_ResponseFormat(t *testing.T) {
 
 // TestCompliance_Prompt_SessionId verifies session ID validation compliance.
 func TestCompliance_Prompt_SessionId(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -228,6 +248,8 @@ func TestCompliance_Prompt_SessionId(t *testing.T) {
 
 // TestCompliance_Prompt_ContentBlocks verifies content block format compliance.
 func TestCompliance_Prompt_ContentBlocks(t *testing.T) {
+	t.Parallel()
+
 	// Test content block format compliance (without execution).
 	textBlock := acp.TextBlock("test message")
 	verifyContentBlock(t, textBlock)
@@ -244,6 +266,8 @@ func TestCompliance_Prompt_ContentBlocks(t *testing.T) {
 
 // TestCompliance_Prompt_StopReason verifies stop reason format compliance.
 func TestCompliance_Prompt_StopReason(t *testing.T) {
+	t.Parallel()
+
 	// Test stop reason format (without execution)
 	// Create a mock response with valid stop reason.
 	resp := acp.PromptResponse{
@@ -270,6 +294,8 @@ func TestCompliance_Prompt_StopReason(t *testing.T) {
 
 // TestCompliance_Prompt_ResponseFormat verifies Prompt response format compliance.
 func TestCompliance_Prompt_ResponseFormat(t *testing.T) {
+	t.Parallel()
+
 	// Test response format (without execution).
 	resp := acp.PromptResponse{
 		StopReason: acp.StopReasonEndTurn,

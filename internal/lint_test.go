@@ -14,6 +14,8 @@ import (
 // See: https://go.dev/doc/effective_go#package-names
 // See: https://github.com/golang/go/wiki/CodeReviewComments#package-names
 func TestNoTypesPackage(t *testing.T) {
+	t.Parallel()
+
 	prohibitedNames := []string{
 		"types",
 		"common",
@@ -66,6 +68,8 @@ func TestNoTypesPackage(t *testing.T) {
 // TestNoTypesGoFile ensures we never have a file named "types.go" in the root of a package.
 // This is another anti-pattern - files should be named after their primary type or functionality.
 func TestNoTypesGoFile(t *testing.T) {
+	t.Parallel()
+
 	prohibitedFileNames := []string{
 		"types.go",
 		"common.go",

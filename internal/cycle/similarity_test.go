@@ -5,6 +5,8 @@ import (
 )
 
 func TestCalculateSimilarity_Identical(t *testing.T) {
+	t.Parallel()
+
 	a := "hello world test"
 	b := "hello world test"
 
@@ -15,6 +17,8 @@ func TestCalculateSimilarity_Identical(t *testing.T) {
 }
 
 func TestCalculateSimilarity_CompletelyDifferent(t *testing.T) {
+	t.Parallel()
+
 	a := "hello world"
 	b := "goodbye universe"
 
@@ -25,6 +29,8 @@ func TestCalculateSimilarity_CompletelyDifferent(t *testing.T) {
 }
 
 func TestCalculateSimilarity_PartialOverlap(t *testing.T) {
+	t.Parallel()
+
 	a := "the quick brown fox jumps"
 	b := "the lazy brown dog sleeps"
 
@@ -43,6 +49,8 @@ func TestCalculateSimilarity_PartialOverlap(t *testing.T) {
 }
 
 func TestCalculateSimilarity_CaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	a := "Hello World Test"
 	b := "hello world test"
 
@@ -53,6 +61,8 @@ func TestCalculateSimilarity_CaseInsensitive(t *testing.T) {
 }
 
 func TestCalculateSimilarity_Punctuation(t *testing.T) {
+	t.Parallel()
+
 	a := "Hello, world! How are you?"
 	b := "Hello world How are you"
 
@@ -63,6 +73,8 @@ func TestCalculateSimilarity_Punctuation(t *testing.T) {
 }
 
 func TestCalculateSimilarity_EmptyStrings(t *testing.T) {
+	t.Parallel()
+
 	// Both empty.
 	similarity := calculateSimilarity("", "")
 	if similarity != 1.0 {
@@ -82,6 +94,8 @@ func TestCalculateSimilarity_EmptyStrings(t *testing.T) {
 }
 
 func TestCalculateSimilarity_ShortWords(t *testing.T) {
+	t.Parallel()
+
 	a := "a is test"
 	b := "this is a test"
 
@@ -100,6 +114,8 @@ func TestCalculateSimilarity_ShortWords(t *testing.T) {
 }
 
 func TestCalculateSimilarity_SemanticSimilarity(t *testing.T) {
+	t.Parallel()
+
 	a := "the cat sat on the mat"
 	b := "feline rested on rug"
 
@@ -114,6 +130,8 @@ func TestCalculateSimilarity_SemanticSimilarity(t *testing.T) {
 }
 
 func TestExtractWords(t *testing.T) {
+	t.Parallel()
+
 	text := "Hello, world! This is a test... with multiple sentences."
 	words := extractWords(text)
 
@@ -131,6 +149,8 @@ func TestExtractWords(t *testing.T) {
 }
 
 func TestExtractWords_Empty(t *testing.T) {
+	t.Parallel()
+
 	words := extractWords("")
 	if len(words) != 0 {
 		t.Errorf("Expected 0 words for empty string, got %d", len(words))
@@ -138,6 +158,8 @@ func TestExtractWords_Empty(t *testing.T) {
 }
 
 func TestExtractWords_Punctuation(t *testing.T) {
+	t.Parallel()
+
 	text := "test,word!with@punctuation#and$symbols%"
 	words := extractWords(text)
 

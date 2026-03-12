@@ -14,7 +14,9 @@ import (
 
 // TestInterfaceSatisfaction verifies that the curator struct implements
 // all the segregated interfaces at compile time.
-func TestInterfaceSatisfaction(_ *testing.T) {
+func TestInterfaceSatisfaction(t *testing.T) {
+	t.Parallel()
+
 	// These assignments verify interface satisfaction at compile time.
 	// If curator does not implement an interface, this test will not compile.
 	var (
@@ -27,6 +29,8 @@ func TestInterfaceSatisfaction(_ *testing.T) {
 
 // TestNewCurator tests creating a new curator.
 func TestNewCurator(t *testing.T) {
+	t.Parallel()
+
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
 
@@ -37,6 +41,8 @@ func TestNewCurator(t *testing.T) {
 
 // TestCurator_Curate_NewBullets tests adding new insights to empty playbook.
 func TestCurator_Curate_NewBullets(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -69,6 +75,8 @@ func TestCurator_Curate_NewBullets(t *testing.T) {
 
 // TestCurator_Curate_MultipleBullets tests adding multiple insights.
 func TestCurator_Curate_MultipleBullets(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -102,6 +110,8 @@ func TestCurator_Curate_MultipleBullets(t *testing.T) {
 
 // TestCurator_Curate_EmptyInsights tests empty insights list.
 func TestCurator_Curate_EmptyInsights(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -122,6 +132,8 @@ func TestCurator_Curate_EmptyInsights(t *testing.T) {
 
 // TestCurator_Curate_WithDeduplication tests duplicate detection during curation.
 func TestCurator_Curate_WithDeduplication(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -167,6 +179,8 @@ func TestCurator_Curate_WithDeduplication(t *testing.T) {
 
 // TestCurator_Curate_UpdatesHelpfulCount tests that duplicates increment helpful count.
 func TestCurator_Curate_UpdatesHelpfulCount(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)

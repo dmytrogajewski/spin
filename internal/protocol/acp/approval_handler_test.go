@@ -30,6 +30,7 @@ func (m *mockACPConnection) RequestPermission(_ context.Context, req acp.Request
 }
 
 func TestApprovalHandler_NoActiveSession(t *testing.T) {
+	t.Parallel()
 	handler := NewApprovalHandler(&SpinACPAgent{}, time.Second)
 
 	resp := handler.HandleApprovalRequest(context.Background(), security.ApprovalRequest{
@@ -46,6 +47,7 @@ func TestApprovalHandler_NoActiveSession(t *testing.T) {
 }
 
 func TestApprovalHandler_MapsAllowOnceAndAlways(t *testing.T) {
+	t.Parallel()
 	conn := &mockACPConnection{
 		resp: acp.RequestPermissionResponse{
 			Outcome: acp.NewRequestPermissionOutcomeSelected(acp.PermissionOptionId("allow_once")),
@@ -84,6 +86,7 @@ func TestApprovalHandler_MapsAllowOnceAndAlways(t *testing.T) {
 }
 
 func TestApprovalHandler_DenyAndCancelPaths(t *testing.T) {
+	t.Parallel()
 	conn := &mockACPConnection{
 		resp: acp.RequestPermissionResponse{
 			Outcome: acp.NewRequestPermissionOutcomeSelected(acp.PermissionOptionId("deny")),

@@ -10,6 +10,8 @@ import (
 
 // TestInsight_New tests creating a new insight.
 func TestInsight_New(t *testing.T) {
+	t.Parallel()
+
 	insight := NewInsight("Always validate input parameters", CategorySuccessPattern)
 
 	require.NotNil(t, insight)
@@ -20,6 +22,8 @@ func TestInsight_New(t *testing.T) {
 
 // TestInsight_Validate tests insight validation.
 func TestInsight_Validate(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		insight *Insight
@@ -99,6 +103,8 @@ func TestInsight_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.insight.Validate()
 			if tt.wantErr {
 				require.Error(t, err)

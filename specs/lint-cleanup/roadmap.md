@@ -187,7 +187,7 @@ High-value fixes that improve reliability.
 
 ## Wave 5: Testing Quality (est. ~3,100 issues)
 
-- [ ] **5.1 — `paralleltest` + `tparallel` parallel tests** (~2,639 issues)
+- [x] **5.1 — `paralleltest` + `tparallel` parallel tests** (~2,639 issues)
   - **Description:** Add `t.Parallel()` to test functions and subtests.
   - **DoR:** Wave 4 complete
   - **DoD:** 0 paralleltest/tparallel issues; `make test -race` passes

@@ -7,6 +7,8 @@ import (
 )
 
 func TestStatus(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		setup  func(t *testing.T) *Repository
@@ -72,6 +74,8 @@ func TestStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			repo := tt.setup(t)
 			ctx := context.Background()
 
@@ -90,6 +94,8 @@ func TestStatus(t *testing.T) {
 }
 
 func TestStatusCancellation(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := setupTestRepo(t)
 
 	repo, err := Discover(context.Background(), tmpDir)
@@ -130,6 +136,8 @@ func BenchmarkStatus(b *testing.B) {
 }
 
 func TestStatusCodeString(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		code StatusCode
 		want string
@@ -146,6 +154,8 @@ func TestStatusCodeString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
+			t.Parallel()
+
 			got := tt.code.String()
 			if got != tt.want {
 				t.Errorf("StatusCode.String() = %q, want %q", got, tt.want)

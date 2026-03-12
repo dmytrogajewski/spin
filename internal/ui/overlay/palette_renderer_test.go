@@ -8,17 +8,20 @@ import (
 )
 
 func TestNewPaletteRenderer(t *testing.T) {
+	t.Parallel()
 	renderer := NewPaletteRenderer(80, 24)
 	assert.NotNil(t, renderer)
 }
 
-func TestPaletteRenderer_SetSize(_ *testing.T) {
+func TestPaletteRenderer_SetSize(t *testing.T) {
+	t.Parallel()
 	renderer := NewPaletteRenderer(80, 24)
 	renderer.SetSize(120, 40)
 	// No assertion needed - just verify it doesn't panic.
 }
 
 func TestPaletteRenderer_Render_Empty(t *testing.T) {
+	t.Parallel()
 	registry := NewCommandRegistry() // Empty.
 	palette := NewPalette(registry)
 	palette.Open()
@@ -33,6 +36,7 @@ func TestPaletteRenderer_Render_Empty(t *testing.T) {
 }
 
 func TestPaletteRenderer_Render_WithCommands(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -48,6 +52,7 @@ func TestPaletteRenderer_Render_WithCommands(t *testing.T) {
 }
 
 func TestPaletteRenderer_Render_WithQuery(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -66,6 +71,7 @@ func TestPaletteRenderer_Render_WithQuery(t *testing.T) {
 }
 
 func TestPaletteRenderer_Render_NoMatch(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -80,6 +86,7 @@ func TestPaletteRenderer_Render_NoMatch(t *testing.T) {
 }
 
 func TestPaletteRenderer_Render_Selection(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -94,6 +101,7 @@ func TestPaletteRenderer_Render_Selection(t *testing.T) {
 }
 
 func TestPaletteRenderer_Render_SmallTerminal(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -107,6 +115,7 @@ func TestPaletteRenderer_Render_SmallTerminal(t *testing.T) {
 }
 
 func TestPaletteRenderer_Render_LargeTerminal(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -123,6 +132,7 @@ func TestPaletteRenderer_Render_LargeTerminal(t *testing.T) {
 }
 
 func TestPaletteRenderer_Render_MultipleItems(t *testing.T) {
+	t.Parallel()
 	registry := NewCommandRegistry()
 	for i := range 20 {
 		registry.Register(NewSimpleCommand(
@@ -146,6 +156,7 @@ func TestPaletteRenderer_Render_MultipleItems(t *testing.T) {
 }
 
 func TestPaletteRenderer_RenderItem(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	commands := registry.Commands()
 
@@ -164,6 +175,7 @@ func TestPaletteRenderer_RenderItem(t *testing.T) {
 }
 
 func TestMin(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, 5, min(5, 10))
 	assert.Equal(t, 5, min(10, 5))
 	assert.Equal(t, 5, min(5, 5))
@@ -174,7 +186,10 @@ func TestMin(t *testing.T) {
 // stripANSI removes ANSI escape codes for testing purposes.
 
 func TestPaletteRenderer_Integration(t *testing.T) {
+	t.Parallel(
 	// Full integration test: registry → palette → renderer.
+	)
+
 	registry := NewCommandRegistry()
 	executed := false
 

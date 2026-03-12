@@ -11,6 +11,7 @@ import (
 
 // TestExecuteShellCommand_SuccessfulCommand tests successful command execution.
 func TestExecuteShellCommand_SuccessfulCommand(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	integration := NewContext(true, "/tmp", logger, 30*time.Second)
 
@@ -37,6 +38,7 @@ func TestExecuteShellCommand_SuccessfulCommand(t *testing.T) {
 // TestExecuteShellCommand_FailedCommand tests command execution failure.
 // This test reproduces the bug where stderr is lost and error messages are uninformative.
 func TestExecuteShellCommand_FailedCommand(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	integration := NewContext(true, "/tmp", logger, 30*time.Second)
 
@@ -81,6 +83,7 @@ func TestExecuteShellCommand_FailedCommand(t *testing.T) {
 // TestExecuteShellCommand_CommandWithStderr tests that stderr is captured.
 // This reproduces the bug where stderr output is completely lost.
 func TestExecuteShellCommand_CommandWithStderr(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	integration := NewContext(true, "/tmp", logger, 30*time.Second)
 
@@ -125,6 +128,7 @@ func TestExecuteShellCommand_CommandWithStderr(t *testing.T) {
 
 // TestExecuteShellCommand_ExitCode tests that exit codes are reported.
 func TestExecuteShellCommand_ExitCode(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	integration := NewContext(true, "/tmp", logger, 30*time.Second)
 
@@ -157,6 +161,7 @@ func TestExecuteShellCommand_ExitCode(t *testing.T) {
 // TestExecuteShellCommand_MissingTool tests a realistic scenario.
 // This simulates the user's deb-to-rpm conversion issue where tools are missing.
 func TestExecuteShellCommand_MissingTool(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	integration := NewContext(true, "/tmp", logger, 30*time.Second)
 
@@ -203,6 +208,7 @@ func TestExecuteShellCommand_MissingTool(t *testing.T) {
 
 // TestExecuteShellCommand_Disabled tests behavior when integration is disabled.
 func TestExecuteShellCommand_Disabled(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	integration := NewContext(false, "/tmp", logger, 30*time.Second)
 
@@ -223,6 +229,7 @@ func TestExecuteShellCommand_Disabled(t *testing.T) {
 
 // TestIsShellCommand tests shell command detection.
 func TestIsShellCommand(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	integration := NewContext(true, "/tmp", logger, 30*time.Second)
 
@@ -247,6 +254,7 @@ func TestIsShellCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := integration.IsShellCommand(tt.command)
 			if result != tt.expected {
 				t.Errorf("IsShellCommand(%q) = %v, want %v", tt.command, result, tt.expected)
@@ -257,6 +265,7 @@ func TestIsShellCommand(t *testing.T) {
 
 // TestExecuteShellCommand_Timeout tests shell command timeout functionality.
 func TestExecuteShellCommand_Timeout(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Test with a very short timeout (1 second).
@@ -289,6 +298,7 @@ func TestExecuteShellCommand_Timeout(t *testing.T) {
 
 // TestExecuteShellCommand_CustomTimeout tests shell command with custom timeout.
 func TestExecuteShellCommand_CustomTimeout(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Test with a custom timeout (5 seconds).
@@ -331,6 +341,7 @@ func TestExecuteShellCommand_CustomTimeout(t *testing.T) {
 
 // TestExecuteShellCommand_ContextTimeout tests shell command with context timeout.
 func TestExecuteShellCommand_ContextTimeout(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Integration with longer timeout than context.
@@ -368,6 +379,7 @@ func TestExecuteShellCommand_ContextTimeout(t *testing.T) {
 
 // TestExecuteShellCommand_ZeroTimeout tests shell command with zero timeout.
 func TestExecuteShellCommand_ZeroTimeout(t *testing.T) {
+	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Test with zero timeout (should fail validation).

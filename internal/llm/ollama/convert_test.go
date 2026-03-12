@@ -26,6 +26,8 @@ func init() {
 // This can happen when assistant messages with tool_calls are serialized
 // differently or when the mapping is built from a subset of messages.
 func TestBuildToolCallIDToNameMap_ReproducesMissingMapping(t *testing.T) {
+	t.Parallel()
+
 	// Simulate messages as they would be sent to Ollama after agent execution:
 	// - User message
 	// - Assistant with 5 tool calls (IDs: chatcmpl-123-0 through chatcmpl-123-4)
@@ -68,6 +70,8 @@ func TestBuildToolCallIDToNameMap_ReproducesMissingMapping(t *testing.T) {
 // correctly parses assistant messages when they come from JSON marshaling
 // (simulating the agent's convertMessageToOpenAI output after round-trip).
 func TestBuildToolCallIDToNameMap_FromJSON(t *testing.T) {
+	t.Parallel()
+
 	// Marshal and unmarshal to simulate what parseGenericMessage does.
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
@@ -104,6 +108,8 @@ func TestBuildToolCallIDToNameMap_FromJSON(t *testing.T) {
 // when tool_call_id is not in the mapping, we can still resolve tool_name
 // using the positional fallback (preceding assistant + tool message order).
 func TestConvertMessageToOllama_ToolResultWithPositionalFallback(t *testing.T) {
+	t.Parallel()
+
 	// Scenario: mapping has only 2 entries (e.g. from compression) but we have
 	// 5 tool results. The positional fallback should resolve the missing ones.
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
@@ -141,6 +147,8 @@ func TestConvertMessageToOllama_ToolResultWithPositionalFallback(t *testing.T) {
 // chatcmpl-1769975533529433976-1 through 5, but the primary pass (from assistant
 // tool_calls) may fail to parse them. The positional fallback fills the mapping.
 func TestBuildToolCallIDToNameMap_PositionalFallbackWhenPrimaryFails(t *testing.T) {
+	t.Parallel()
+
 	// Assistant with 5 tool calls - use IDs that match the bug report format.
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
@@ -191,6 +199,8 @@ func TestBuildToolCallIDToNameMap_PositionalFallbackWhenPrimaryFails(t *testing.
 // TestBuildToolCallIDToNameMap_MultipleAssistantTurns verifies mapping with
 // multiple assistant+tool turn pairs (as in a long conversation).
 func TestBuildToolCallIDToNameMap_MultipleAssistantTurns(t *testing.T) {
+	t.Parallel()
+
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.UserMessage("Do something"),
 		openai.ChatCompletionAssistantMessageParam{
@@ -223,6 +233,8 @@ func TestBuildToolCallIDToNameMap_MultipleAssistantTurns(t *testing.T) {
 // This handles cases where assistant tool_calls fail to parse but tool messages
 // are in correct order after their assistant.
 func TestConvertMessageToOllama_ToolResultFallback(t *testing.T) {
+	t.Parallel()
+
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
@@ -249,6 +261,8 @@ func TestConvertMessageToOllama_ToolResultFallback(t *testing.T) {
 // empty function names (phantom entries emitted by some models like qwen3) are
 // handled gracefully. The mapping should only contain entries for valid tool calls.
 func TestBuildToolCallIDToNameMap_PhantomToolCalls(t *testing.T) {
+	t.Parallel()
+
 	// Simulate the pattern observed: first tool call has empty name+args,
 	// subsequent tool calls are valid.
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
@@ -291,6 +305,8 @@ func TestBuildToolCallIDToNameMap_PhantomToolCalls(t *testing.T) {
 // TestBuildToolCallIDToNameMap_AllPhantomToolCalls verifies behavior when ALL
 // tool calls in an assistant message have empty names.
 func TestBuildToolCallIDToNameMap_AllPhantomToolCalls(t *testing.T) {
+	t.Parallel()
+
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
@@ -311,6 +327,8 @@ func TestBuildToolCallIDToNameMap_AllPhantomToolCalls(t *testing.T) {
 // TestConvertOllamaResponseToOpenAI_AfterPhantomFiltering verifies that after
 // filtering phantom tool calls, convertOllamaResponseToOpenAI produces correct output.
 func TestConvertOllamaResponseToOpenAI_AfterPhantomFiltering(t *testing.T) {
+	t.Parallel()
+
 	resp := api.ChatResponse{
 		Message: api.Message{
 			Role: "assistant",
@@ -356,6 +374,8 @@ func TestConvertOllamaResponseToOpenAI_AfterPhantomFiltering(t *testing.T) {
 // TestConvertOllamaChunkToOpenAI_AfterPhantomFiltering verifies the streaming
 // chunk conversion after phantom tool calls are filtered.
 func TestConvertOllamaChunkToOpenAI_AfterPhantomFiltering(t *testing.T) {
+	t.Parallel()
+
 	resp := api.ChatResponse{
 		Message: api.Message{
 			Role: "assistant",
@@ -388,6 +408,8 @@ func TestConvertOllamaChunkToOpenAI_AfterPhantomFiltering(t *testing.T) {
 // TestInferToolName verifies that inferToolName correctly matches argument keys
 // against tool parameter schemas to identify the intended tool.
 func TestInferToolName(t *testing.T) {
+	t.Parallel()
+
 	tools := []api.Tool{
 		{
 			Type: "function",
@@ -467,6 +489,8 @@ func TestInferToolName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := inferToolName(tt.args, tools, testLogger, testCtx)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -474,6 +498,8 @@ func TestInferToolName(t *testing.T) {
 }
 
 func TestExtractContent(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		content  json.RawMessage
@@ -484,6 +510,8 @@ func TestExtractContent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := extractContent(tt.content)
 			assert.Equal(t, tt.expected, got)
 		})
@@ -493,6 +521,8 @@ func TestExtractContent(t *testing.T) {
 // TestThinkingFieldMerge verifies that Ollama's Message.Thinking field
 // is properly merged into Content as <think> tags.
 func TestThinkingFieldMerge(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name            string
 		thinking        string
@@ -527,6 +557,8 @@ func TestThinkingFieldMerge(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			resp := api.ChatResponse{
 				Message: api.Message{
 					Role:     "assistant",

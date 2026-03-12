@@ -6,6 +6,8 @@ import (
 )
 
 func TestDefaultCacheConfig(t *testing.T) {
+	t.Parallel()
+
 	config := DefaultCacheConfig()
 
 	const (
@@ -23,6 +25,8 @@ func TestDefaultCacheConfig(t *testing.T) {
 }
 
 func TestNewCache(t *testing.T) {
+	t.Parallel()
+
 	config := DefaultCacheConfig()
 	cache := NewCache(config)
 
@@ -36,6 +40,8 @@ func TestNewCache(t *testing.T) {
 }
 
 func TestCache_Get_Miss(t *testing.T) {
+	t.Parallel()
+
 	cache := NewCache(DefaultCacheConfig())
 
 	result, ok := cache.Get("uncached content")
@@ -50,6 +56,8 @@ func TestCache_Get_Miss(t *testing.T) {
 }
 
 func TestCache_SetAndGet_Hit(t *testing.T) {
+	t.Parallel()
+
 	cache := NewCache(DefaultCacheConfig())
 	content := "test content to cache"
 	summary := &Result{
@@ -81,6 +89,8 @@ func TestCache_SetAndGet_Hit(t *testing.T) {
 }
 
 func TestCache_TTLExpiration(t *testing.T) {
+	t.Parallel()
+
 	// Use very short TTL.
 	config := CacheConfig{
 		MaxSize: 100,
@@ -107,6 +117,8 @@ func TestCache_TTLExpiration(t *testing.T) {
 }
 
 func TestCache_LRUEviction(t *testing.T) {
+	t.Parallel()
+
 	// Use small cache.
 	const maxSize = 2
 
@@ -150,6 +162,8 @@ func TestCache_LRUEviction(t *testing.T) {
 }
 
 func TestCache_Clear(t *testing.T) {
+	t.Parallel()
+
 	cache := NewCache(DefaultCacheConfig())
 
 	cache.Set("content1", &Result{Summary: "summary1"})

@@ -8,6 +8,8 @@ import (
 )
 
 func TestMCPServerConfig_Validate_Stdio(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		config  ServerConfig
@@ -56,6 +58,8 @@ func TestMCPServerConfig_Validate_Stdio(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.config.Validate()
 			if tt.wantErr {
 				require.Error(t, err)
@@ -68,6 +72,8 @@ func TestMCPServerConfig_Validate_Stdio(t *testing.T) {
 }
 
 func TestMCPServerConfig_Validate_SSE(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		config  ServerConfig
@@ -129,6 +135,8 @@ func TestMCPServerConfig_Validate_SSE(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.config.Validate()
 			if tt.wantErr {
 				require.Error(t, err)
@@ -141,6 +149,8 @@ func TestMCPServerConfig_Validate_SSE(t *testing.T) {
 }
 
 func TestMCPServerConfig_Validate_StreamableHTTP(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		config  ServerConfig
@@ -169,6 +179,8 @@ func TestMCPServerConfig_Validate_StreamableHTTP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.config.Validate()
 			if tt.wantErr {
 				require.Error(t, err)
@@ -181,6 +193,8 @@ func TestMCPServerConfig_Validate_StreamableHTTP(t *testing.T) {
 }
 
 func TestMCPServerConfig_Validate_OAuth(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		config  ServerConfig
@@ -241,6 +255,8 @@ func TestMCPServerConfig_Validate_OAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.config.Validate()
 			if tt.wantErr {
 				require.Error(t, err)
@@ -253,6 +269,8 @@ func TestMCPServerConfig_Validate_OAuth(t *testing.T) {
 }
 
 func TestMCPServerConfig_Validate_InvalidTransport(t *testing.T) {
+	t.Parallel()
+
 	config := ServerConfig{
 		Name:      "test-server",
 		Transport: "websocket",
@@ -264,6 +282,8 @@ func TestMCPServerConfig_Validate_InvalidTransport(t *testing.T) {
 }
 
 func TestMCPServerConfig_Validate_MissingName(t *testing.T) {
+	t.Parallel()
+
 	config := ServerConfig{
 		Command: "echo",
 	}

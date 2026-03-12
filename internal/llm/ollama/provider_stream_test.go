@@ -103,6 +103,8 @@ func standardTools() []api.Tool {
 
 // TestStreamFilter_NamedToolCallsPassThrough verifies normal tool calls are never dropped.
 func TestStreamFilter_NamedToolCallsPassThrough(t *testing.T) {
+	t.Parallel()
+
 	tools := standardTools()
 	input := []api.ToolCall{
 		{Function: api.ToolCallFunction{Name: "read_file", Arguments: map[string]any{"path": "main.go"}}},
@@ -118,6 +120,8 @@ func TestStreamFilter_NamedToolCallsPassThrough(t *testing.T) {
 // TestStreamFilter_PhantomToolCallsDropped verifies truly phantom tool calls
 // (empty name AND empty args) are dropped.
 func TestStreamFilter_PhantomToolCallsDropped(t *testing.T) {
+	t.Parallel()
+
 	tools := standardTools()
 	input := []api.ToolCall{
 		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{}}},
@@ -131,6 +135,8 @@ func TestStreamFilter_PhantomToolCallsDropped(t *testing.T) {
 // TestStreamFilter_NamelessWithUniqueArgs verifies tool calls with empty name
 // but unique argument keys are correctly inferred.
 func TestStreamFilter_NamelessWithUniqueArgs(t *testing.T) {
+	t.Parallel()
+
 	tools := standardTools()
 
 	tests := []struct {
@@ -157,6 +163,8 @@ func TestStreamFilter_NamelessWithUniqueArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			input := []api.ToolCall{
 				{Function: api.ToolCallFunction{Name: "", Arguments: tt.args}},
 			}
@@ -172,6 +180,8 @@ func TestStreamFilter_NamelessWithUniqueArgs(t *testing.T) {
 // Models like kimi2.5 emit tool calls like {name:"", args:{path:"internal/llm"}}
 // which are ambiguous. The filter MUST NOT drop these — it should pick one.
 func TestStreamFilter_NamelessWithAmbiguousArgs(t *testing.T) {
+	t.Parallel()
+
 	tools := standardTools()
 	input := []api.ToolCall{
 		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "internal/llm"}}},
@@ -187,6 +197,8 @@ func TestStreamFilter_NamelessWithAmbiguousArgs(t *testing.T) {
 // TestStreamFilter_MixedNamedAndNameless verifies mixed scenarios:
 // some tool calls have names, some don't.
 func TestStreamFilter_MixedNamedAndNameless(t *testing.T) {
+	t.Parallel()
+
 	tools := standardTools()
 	input := []api.ToolCall{
 		// Phantom: empty name AND empty args.
@@ -210,6 +222,8 @@ func TestStreamFilter_MixedNamedAndNameless(t *testing.T) {
 // model returns ONLY nameless tool calls, filter drops ALL of them,
 // agent sees 0 tool calls and exits.
 func TestStreamFilter_AllNamelessToolCalls(t *testing.T) {
+	t.Parallel()
+
 	tools := standardTools()
 
 	// This is what kimi2.5 actually sends — 3 tool calls, all with empty names.
@@ -231,6 +245,8 @@ func TestStreamFilter_AllNamelessToolCalls(t *testing.T) {
 // Cannot infer anything — but should still keep tool calls with valid args? No,
 // if no tools schema is available, we can't do anything meaningful. Drop them.
 func TestStreamFilter_NoToolsAvailable(t *testing.T) {
+	t.Parallel()
+
 	input := []api.ToolCall{
 		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "test.go"}}},
 	}
@@ -242,6 +258,8 @@ func TestStreamFilter_NoToolsAvailable(t *testing.T) {
 // TestConvertOllamaChunkToOpenAI_ToolCallsPreserved verifies the full chain:
 // filter -> convert -> OpenAI chunk has correct tool calls.
 func TestConvertOllamaChunkToOpenAI_ToolCallsPreserved(t *testing.T) {
+	t.Parallel()
+
 	tools := standardTools()
 
 	// Simulate what Ollama sends.
@@ -278,6 +296,8 @@ func TestConvertOllamaChunkToOpenAI_ToolCallsPreserved(t *testing.T) {
 
 // TestConvertOllamaResponseToOpenAI_ToolCallsPreserved verifies the Complete path chain.
 func TestConvertOllamaResponseToOpenAI_ToolCallsPreserved(t *testing.T) {
+	t.Parallel()
+
 	tools := standardTools()
 
 	toolCalls := []api.ToolCall{
@@ -311,6 +331,8 @@ func TestConvertOllamaResponseToOpenAI_ToolCallsPreserved(t *testing.T) {
 // TestThinkingMergeWithToolCalls verifies that thinking content is merged
 // AND tool calls are preserved in the same response.
 func TestThinkingMergeWithToolCalls(t *testing.T) {
+	t.Parallel()
+
 	tools := standardTools()
 
 	// This is what thinking models actually send:
@@ -347,6 +369,8 @@ func TestThinkingMergeWithToolCalls(t *testing.T) {
 // TestThinkingOnlyResponse verifies that a response with only thinking content
 // and no tool calls produces non-empty content after merge.
 func TestThinkingOnlyResponse(t *testing.T) {
+	t.Parallel()
+
 	resp := api.ChatResponse{
 		Message: api.Message{
 			Role:     "assistant",
@@ -369,6 +393,8 @@ func TestThinkingOnlyResponse(t *testing.T) {
 // TestEmptyResponseProducesEmptyContent verifies that a truly empty response
 // (no content, no thinking, no tool calls) stays empty.
 func TestEmptyResponseProducesEmptyContent(t *testing.T) {
+	t.Parallel()
+
 	resp := api.ChatResponse{
 		Message: api.Message{
 			Role: "assistant",
@@ -388,6 +414,8 @@ func TestEmptyResponseProducesEmptyContent(t *testing.T) {
 
 // TestFinishReasonMapping verifies done_reason -> finish_reason mapping.
 func TestFinishReasonMapping(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name         string
 		doneReason   string
@@ -404,6 +432,8 @@ func TestFinishReasonMapping(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := mapOllamaDoneReasonToOpenAICompletion(tt.doneReason, tt.hasToolCalls, streamTestLogger, streamTestCtx)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -412,6 +442,8 @@ func TestFinishReasonMapping(t *testing.T) {
 
 // TestInferToolName_Comprehensive tests inferToolName with the full standard tool set.
 func TestInferToolName_Comprehensive(t *testing.T) {
+	t.Parallel()
+
 	tools := standardTools()
 
 	tests := []struct {
@@ -464,6 +496,8 @@ func TestInferToolName_Comprehensive(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := inferToolName(tt.args, tools, streamTestLogger, streamTestCtx)
 			if tt.expectEmpty {
 				assert.Empty(t, result)
@@ -480,6 +514,8 @@ func TestInferToolName_Comprehensive(t *testing.T) {
 
 // TestStreamContextCancellation verifies that Stream respects context cancellation.
 func TestStreamContextCancellation(t *testing.T) {
+	t.Parallel()
+
 	provider, err := NewProvider(Config{Model: "test-model"})
 	require.NoError(t, err)
 
@@ -501,6 +537,8 @@ func TestStreamContextCancellation(t *testing.T) {
 // TestConvertToolToOllama_PreservesProperties verifies that converting OpenAI tools
 // to Ollama format preserves parameter properties (needed for inferToolName).
 func TestConvertToolToOllama_PreservesProperties(t *testing.T) {
+	t.Parallel()
+
 	openaiTool := openai.ChatCompletionToolParam{
 		Type: openai.F(openai.ChatCompletionToolTypeFunction),
 		Function: openai.F(openai.FunctionDefinitionParam{
@@ -531,6 +569,8 @@ func TestConvertToolToOllama_PreservesProperties(t *testing.T) {
 // TestConvertToolToOllama_RoundTrip verifies that OpenAI tools survive the
 // OpenAI -> Ollama conversion and that inferToolName works with converted tools.
 func TestConvertToolToOllama_RoundTrip(t *testing.T) {
+	t.Parallel()
+
 	openaiTools := []openai.ChatCompletionToolParam{
 		{
 			Type: openai.F(openai.ChatCompletionToolTypeFunction),
@@ -579,6 +619,8 @@ func TestConvertToolToOllama_RoundTrip(t *testing.T) {
 // TestConvertToolToOllama_RoundTripWithAllSpinTools mirrors the EXACT tool set
 // that spin sends to Ollama. This is the real-world scenario where ambiguity occurs.
 func TestConvertToolToOllama_RoundTripWithAllSpinTools(t *testing.T) {
+	t.Parallel()
+
 	// These match the actual tool definitions from internal/tools/*.go.
 	openaiTools := []openai.ChatCompletionToolParam{
 		{
@@ -696,6 +738,8 @@ func TestConvertToolToOllama_RoundTripWithAllSpinTools(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := inferToolName(tt.args, ollamaTools, streamTestLogger, streamTestCtx)
 			if tt.mustInfer {
 				assert.NotEmpty(t, result, "inferToolName must return non-empty for args: %v", tt.args)
@@ -715,6 +759,8 @@ func TestConvertToolToOllama_RoundTripWithAllSpinTools(t *testing.T) {
 // 4. Convert filtered response to OpenAI format
 // 5. Verify tool calls appear in final OpenAI response.
 func TestEndToEnd_NamelessToolCallSurvivesFullPipeline(t *testing.T) {
+	t.Parallel()
+
 	// Step 1: Build OpenAI tools (same as agent does).
 	openaiTools := []openai.ChatCompletionToolParam{
 		{

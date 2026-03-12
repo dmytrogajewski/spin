@@ -17,6 +17,7 @@ import (
 
 // TestSpinACPAgent_Initialize_Success tests successful initialization.
 func TestSpinACPAgent_Initialize_Success(t *testing.T) {
+	t.Parallel()
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -46,6 +47,7 @@ func TestSpinACPAgent_Initialize_Success(t *testing.T) {
 
 // TestSpinACPAgent_Initialize_ProtocolVersion tests protocol version negotiation.
 func TestSpinACPAgent_Initialize_ProtocolVersion(t *testing.T) {
+	t.Parallel()
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -74,6 +76,7 @@ func TestSpinACPAgent_Initialize_ProtocolVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			req := acp.InitializeRequest{
 				ProtocolVersion: tt.clientVersion,
 			}
@@ -89,6 +92,7 @@ func TestSpinACPAgent_Initialize_ProtocolVersion(t *testing.T) {
 
 // TestSpinACPAgent_Initialize_AgentCapabilities tests agent capability advertisement.
 func TestSpinACPAgent_Initialize_AgentCapabilities(t *testing.T) {
+	t.Parallel()
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -116,6 +120,7 @@ func TestSpinACPAgent_Initialize_AgentCapabilities(t *testing.T) {
 
 // TestSpinACPAgent_Initialize_ClientCapabilitiesStorage tests that client capabilities are stored.
 func TestSpinACPAgent_Initialize_ClientCapabilitiesStorage(t *testing.T) {
+	t.Parallel()
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -144,6 +149,7 @@ func TestSpinACPAgent_Initialize_ClientCapabilitiesStorage(t *testing.T) {
 
 // TestSpinACPAgent_Initialize_AgentInfo tests agent info exchange.
 func TestSpinACPAgent_Initialize_AgentInfo(t *testing.T) {
+	t.Parallel()
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -168,6 +174,7 @@ func TestSpinACPAgent_Initialize_AgentInfo(t *testing.T) {
 
 // TestSpinACPAgent_Initialize_AuthMethods tests authentication methods advertisement.
 func TestSpinACPAgent_Initialize_AuthMethods(t *testing.T) {
+	t.Parallel()
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)

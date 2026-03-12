@@ -17,11 +17,11 @@ import (
 // This test covers the scenario documented in docs/job-ci-automation.md Flow 3.
 // This test uses the test-llm provider (requires e2e_llm_test build tag).
 func TestExecMode_ReadOnlyDeniesWrites(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
-
-	t.Parallel()
 
 	// Create temporary workspace.
 	workDir := t.TempDir()
@@ -61,6 +61,8 @@ security:
 	}
 
 	t.Run("write operation denied without auto-approve", func(t *testing.T) {
+		t.Parallel()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
 
@@ -128,6 +130,8 @@ security:
 	})
 
 	t.Run("read operation works without auto-approve", func(t *testing.T) {
+		t.Parallel()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
 
@@ -176,6 +180,8 @@ security:
 	})
 
 	t.Run("list directory works without auto-approve", func(t *testing.T) {
+		t.Parallel()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
 

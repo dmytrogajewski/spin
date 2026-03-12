@@ -9,6 +9,8 @@ import (
 
 // TestNewProvider tests provider creation and validation.
 func TestNewProvider(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		cfg     Config
@@ -56,6 +58,8 @@ func TestNewProvider(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			p, err := NewProvider(tt.cfg)
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -71,6 +75,8 @@ func TestNewProvider(t *testing.T) {
 
 // TestProvider_Capabilities tests that capabilities are correctly reported.
 func TestProvider_Capabilities(t *testing.T) {
+	t.Parallel()
+
 	p := &Provider{
 		model: "gpt-4",
 	}
@@ -82,12 +88,16 @@ func TestProvider_Capabilities(t *testing.T) {
 
 // TestProvider_Name tests provider name.
 func TestProvider_Name(t *testing.T) {
+	t.Parallel()
+
 	p := &Provider{}
 	assert.Equal(t, "openai-compatible", p.Name())
 }
 
 // TestProvider_Close tests cleanup.
 func TestProvider_Close(t *testing.T) {
+	t.Parallel()
+
 	p := &Provider{}
 	err := p.Close()
 	assert.NoError(t, err)
@@ -95,6 +105,8 @@ func TestProvider_Close(t *testing.T) {
 
 // TestProvider_Models tests model listing.
 func TestProvider_Models(t *testing.T) {
+	t.Parallel()
+
 	t.Skip("Models() requires SDK API call - covered by integration tests")
 }
 

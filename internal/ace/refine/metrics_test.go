@@ -10,6 +10,8 @@ import (
 )
 
 func TestDefaultGrowthThresholds(t *testing.T) {
+	t.Parallel()
+
 	thresholds := DefaultGrowthThresholds()
 
 	if thresholds.MaxBullets <= 0 {
@@ -30,6 +32,8 @@ func TestDefaultGrowthThresholds(t *testing.T) {
 }
 
 func TestNewGrowthMonitor(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	thresholds := DefaultGrowthThresholds()
 
@@ -45,6 +49,8 @@ func TestNewGrowthMonitor(t *testing.T) {
 }
 
 func TestGrowthMonitor_CheckGrowth(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	thresholds := GrowthThresholds{
@@ -89,6 +95,8 @@ func TestGrowthMonitor_CheckGrowth(t *testing.T) {
 }
 
 func TestGrowthMonitor_ThresholdTriggers(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	tests := []struct {
@@ -131,6 +139,8 @@ func TestGrowthMonitor_ThresholdTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Create fresh playbook for each test.
 			testPb := playbook.New(nil, nil)
 			monitor := NewGrowthMonitor(testPb, tt.thresholds)
@@ -152,6 +162,8 @@ func TestGrowthMonitor_ThresholdTriggers(t *testing.T) {
 }
 
 func TestGrowthMonitor_GetMetrics(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	monitor := NewGrowthMonitor(pb, DefaultGrowthThresholds())
@@ -174,6 +186,8 @@ func TestGrowthMonitor_GetMetrics(t *testing.T) {
 }
 
 func TestGrowthMonitor_MarkRefinement(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	monitor := NewGrowthMonitor(pb, DefaultGrowthThresholds())
 
@@ -203,6 +217,8 @@ func TestGrowthMonitor_MarkRefinement(t *testing.T) {
 }
 
 func TestGrowthMonitor_GrowthRate(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	monitor := NewGrowthMonitor(pb, DefaultGrowthThresholds())
@@ -224,6 +240,8 @@ func TestGrowthMonitor_GrowthRate(t *testing.T) {
 }
 
 func TestGrowthMonitor_HistoryLimit(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	monitor := NewGrowthMonitor(pb, DefaultGrowthThresholds())
@@ -245,6 +263,8 @@ func TestGrowthMonitor_HistoryLimit(t *testing.T) {
 }
 
 func TestGrowthMonitor_ShouldRefine(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	thresholds := GrowthThresholds{
@@ -273,7 +293,9 @@ func TestGrowthMonitor_ShouldRefine(t *testing.T) {
 	}
 }
 
-func TestGrowthMonitor_Concurrency(_ *testing.T) {
+func TestGrowthMonitor_Concurrency(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	monitor := NewGrowthMonitor(pb, DefaultGrowthThresholds())

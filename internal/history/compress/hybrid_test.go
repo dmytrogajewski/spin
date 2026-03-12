@@ -40,6 +40,8 @@ func (m *mockSummarizer) SummarizeMessages(_ context.Context, msgs []message.Mes
 }
 
 func TestNewHybridCompressor(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, DefaultCompressorConfig())
 	if c == nil {
 		t.Fatal("NewHybridCompressor returned nil")
@@ -51,6 +53,8 @@ func TestNewHybridCompressor(t *testing.T) {
 }
 
 func TestHybridCompressor_Name(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, DefaultCompressorConfig())
 	if c.Name() != "hybrid" {
 		t.Errorf("expected 'hybrid', got %q", c.Name())
@@ -58,6 +62,8 @@ func TestHybridCompressor_Name(t *testing.T) {
 }
 
 func TestHybridCompressor_EmptyMessages(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, DefaultCompressorConfig())
 	tok := &tokenizer.SimpleTokenizer{}
 
@@ -72,6 +78,8 @@ func TestHybridCompressor_EmptyMessages(t *testing.T) {
 }
 
 func TestHybridCompressor_PreserveCritical(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, CompressorConfig{
 		PreserveCritical: true,
 		MinRetention:     0,
@@ -105,6 +113,8 @@ func TestHybridCompressor_PreserveCritical(t *testing.T) {
 }
 
 func TestHybridCompressor_GreedySelection(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, CompressorConfig{
 		PreserveCritical: false, // Disable to test greedy selection.
 		MinRetention:     0,
@@ -140,6 +150,8 @@ func TestHybridCompressor_GreedySelection(t *testing.T) {
 }
 
 func TestHybridCompressor_ChronologicalOrder(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, DefaultCompressorConfig())
 	tok := &tokenizer.SimpleTokenizer{}
 
@@ -173,6 +185,8 @@ func TestHybridCompressor_ChronologicalOrder(t *testing.T) {
 }
 
 func TestHybridCompressor_MinRetention(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, CompressorConfig{
 		PreserveCritical: false,
 		MinRetention:     0.5, // Keep at least 50%.
@@ -202,6 +216,8 @@ func TestHybridCompressor_MinRetention(t *testing.T) {
 }
 
 func TestHybridCompressor_AllCritical(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, CompressorConfig{
 		PreserveCritical: true,
 		MinRetention:     0,
@@ -228,6 +244,8 @@ func TestHybridCompressor_AllCritical(t *testing.T) {
 }
 
 func TestHybridCompressor_MixedImportance(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, CompressorConfig{
 		PreserveCritical: true,
 		MinRetention:     0,
@@ -263,6 +281,8 @@ func TestHybridCompressor_MixedImportance(t *testing.T) {
 }
 
 func TestHybridCompressor_CompressWithStats(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, DefaultCompressorConfig())
 	tok := &tokenizer.SimpleTokenizer{}
 
@@ -294,6 +314,8 @@ func TestHybridCompressor_CompressWithStats(t *testing.T) {
 }
 
 func TestHybridCompressor_TokenCalculation(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, DefaultCompressorConfig())
 	tok := &tokenizer.SimpleTokenizer{}
 
@@ -314,6 +336,8 @@ func TestHybridCompressor_TokenCalculation(t *testing.T) {
 }
 
 func TestStats_CompressionRatio(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		original   int
@@ -327,6 +351,8 @@ func TestStats_CompressionRatio(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			s := Stats{
 				OriginalTokens:   tt.original,
 				CompressedTokens: tt.compressed,
@@ -341,6 +367,8 @@ func TestStats_CompressionRatio(t *testing.T) {
 }
 
 func TestStats_MessageReduction(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		original   int
@@ -354,6 +382,8 @@ func TestStats_MessageReduction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			s := Stats{
 				OriginalCount:   tt.original,
 				CompressedCount: tt.compressed,
@@ -368,6 +398,8 @@ func TestStats_MessageReduction(t *testing.T) {
 }
 
 func TestDefaultCompressorConfig(t *testing.T) {
+	t.Parallel()
+
 	cfg := DefaultCompressorConfig()
 	if !cfg.PreserveCritical {
 		t.Error("expected PreserveCritical to be true by default")
@@ -379,6 +411,8 @@ func TestDefaultCompressorConfig(t *testing.T) {
 }
 
 func TestHybridCompressor_ToolResults(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, DefaultCompressorConfig())
 	tok := &tokenizer.SimpleTokenizer{}
 
@@ -407,6 +441,8 @@ func TestHybridCompressor_ToolResults(t *testing.T) {
 }
 
 func TestHybridCompressor_ErrorMessages(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, DefaultCompressorConfig())
 	tok := &tokenizer.SimpleTokenizer{}
 
@@ -437,6 +473,8 @@ func TestHybridCompressor_ErrorMessages(t *testing.T) {
 }
 
 func TestHybridCompressor_WithSummarizer(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, CompressorConfig{
 		PreserveCritical: false,
 		MinRetention:     0,
@@ -485,6 +523,8 @@ func TestHybridCompressor_WithSummarizer(t *testing.T) {
 }
 
 func TestHybridCompressor_WithSummarizer_Error(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, CompressorConfig{
 		PreserveCritical: false,
 		MinRetention:     0,
@@ -512,6 +552,8 @@ func TestHybridCompressor_WithSummarizer_Error(t *testing.T) {
 }
 
 func TestHybridCompressor_WithSummarizer_NoRemoved(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, DefaultCompressorConfig())
 	mock := &mockSummarizer{}
 	c.WithSummarizer(mock)
@@ -535,6 +577,8 @@ func TestHybridCompressor_WithSummarizer_NoRemoved(t *testing.T) {
 }
 
 func TestHybridCompressor_EnforceMinRetention_AlreadySufficient(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, CompressorConfig{
 		PreserveCritical: true,
 		MinRetention:     0.3,
@@ -560,6 +604,8 @@ func TestHybridCompressor_EnforceMinRetention_AlreadySufficient(t *testing.T) {
 }
 
 func TestHybridCompressor_EnforceMinRetention_TooManyInClassified(t *testing.T) {
+	t.Parallel()
+
 	c := NewHybridCompressor(nil, CompressorConfig{
 		PreserveCritical: false,
 		MinRetention:     0.9, // Very high min retention.

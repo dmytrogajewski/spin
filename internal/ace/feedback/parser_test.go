@@ -8,6 +8,8 @@ import (
 )
 
 func TestNewRegexParser(t *testing.T) {
+	t.Parallel()
+
 	parser := NewRegexParser()
 	require.NotNil(t, parser)
 	assert.NotNil(t, parser.helpfulPattern)
@@ -16,6 +18,8 @@ func TestNewRegexParser(t *testing.T) {
 }
 
 func TestRegexParser_ParseEmpty(t *testing.T) {
+	t.Parallel()
+
 	parser := NewRegexParser()
 	feedback, err := parser.Parse("")
 
@@ -26,6 +30,8 @@ func TestRegexParser_ParseEmpty(t *testing.T) {
 }
 
 func TestRegexParser_ParseHelpful(t *testing.T) {
+	t.Parallel()
+
 	parser := NewRegexParser()
 	response := `The answer is 42.
 
@@ -42,6 +48,8 @@ HELPFUL: [B0, B1, B3]`
 }
 
 func TestRegexParser_ParseHarmful(t *testing.T) {
+	t.Parallel()
+
 	parser := NewRegexParser()
 	response := `The answer is incorrect.
 
@@ -56,6 +64,8 @@ HARMFUL: [B2]`
 }
 
 func TestRegexParser_ParseBoth(t *testing.T) {
+	t.Parallel()
+
 	parser := NewRegexParser()
 	response := `Solution here.
 
@@ -74,6 +84,8 @@ HARMFUL: [B2, B3]`
 }
 
 func TestRegexParser_ParseWithExplanation(t *testing.T) {
+	t.Parallel()
+
 	parser := NewRegexParser()
 	response := `Answer: 42
 
@@ -90,6 +102,8 @@ EXPLANATION: B0 provided the correct formula while B1 was outdated`
 }
 
 func TestRegexParser_ParseNoMarkers(t *testing.T) {
+	t.Parallel()
+
 	parser := NewRegexParser()
 	response := `Just a regular response with no markers.`
 
@@ -102,6 +116,8 @@ func TestRegexParser_ParseNoMarkers(t *testing.T) {
 }
 
 func TestRegexParser_ParseEmptyBrackets(t *testing.T) {
+	t.Parallel()
+
 	parser := NewRegexParser()
 	response := `HELPFUL: []
 HARMFUL: []`
@@ -114,6 +130,8 @@ HARMFUL: []`
 }
 
 func TestRegexParser_ParseSingleMarker(t *testing.T) {
+	t.Parallel()
+
 	parser := NewRegexParser()
 	response := `HELPFUL: [B5]`
 
@@ -125,6 +143,8 @@ func TestRegexParser_ParseSingleMarker(t *testing.T) {
 }
 
 func TestRegexParser_ParseWhitespace(t *testing.T) {
+	t.Parallel()
+
 	parser := NewRegexParser()
 	response := `HELPFUL: [ B0 , B1 , B2 ]
 HARMFUL: [ B3 ]`
@@ -141,6 +161,8 @@ HARMFUL: [ B3 ]`
 }
 
 func TestParseBulletMarkers(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		input    string
@@ -155,6 +177,8 @@ func TestParseBulletMarkers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := parseBulletMarkers(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})

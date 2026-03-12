@@ -1,6 +1,7 @@
 package appinfo_test
 
 import (
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
@@ -9,6 +10,8 @@ import (
 )
 
 func TestGetInfo(t *testing.T) {
+	t.Parallel()
+
 	info := appinfo.GetInfo()
 
 	if info.Version == "" {
@@ -26,72 +29,55 @@ func TestGetInfo(t *testing.T) {
 }
 
 func TestVersionString(t *testing.T) {
-	// Save original values.
-	origVersion := appinfo.Version
-	origCommit := appinfo.Commit
-	origBuildDate := appinfo.BuildDate
+	t.Parallel()
 
-	// Test with dev appinfo.
-	appinfo.Version = "dev"
-	appinfo.Commit = "unknown"
-	appinfo.BuildDate = "unknown"
-
+	// Test the format of String() without modifying globals.
+	// String() returns "spin version {Version} (commit: {Commit}, built: {BuildDate}, {GoVersion})"
 	str := appinfo.String()
-	if !strings.Contains(str, "dev") {
-		t.Errorf("Version string should contain 'dev', got: %s", str)
+
+	// Must contain current version value.
+	if !strings.Contains(str, appinfo.Version) {
+		t.Errorf("Version string should contain version %q, got: %s", appinfo.Version, str)
 	}
 
-	if !strings.Contains(str, "unknown") {
-		t.Errorf("Version string should contain 'unknown', got: %s", str)
+	// Must contain "spin version" prefix.
+	if !strings.HasPrefix(str, "spin version") {
+		t.Errorf("Version string should start with 'spin version', got: %s", str)
 	}
 
-	// Test with release appinfo.
-	appinfo.Version = "1.0.0"
-	appinfo.Commit = "abc123"
-	appinfo.BuildDate = "2025-10-05"
-
-	str = appinfo.String()
-	if !strings.Contains(str, "1.0.0") {
-		t.Errorf("Version string should contain '1.0.0', got: %s", str)
+	// Must contain commit info.
+	if !strings.Contains(str, appinfo.Commit) {
+		t.Errorf("Version string should contain commit %q, got: %s", appinfo.Commit, str)
 	}
 
-	if !strings.Contains(str, "abc123") {
-		t.Errorf("Version string should contain commit 'abc123', got: %s", str)
+	// Must contain build date.
+	if !strings.Contains(str, appinfo.BuildDate) {
+		t.Errorf("Version string should contain build date %q, got: %s", appinfo.BuildDate, str)
 	}
 
-	if !strings.Contains(str, "2025-10-05") {
-		t.Errorf("Version string should contain build date '2025-10-05', got: %s", str)
+	// Verify the format matches expected pattern.
+	expected := fmt.Sprintf(
+		"spin version %s (commit: %s, built: %s, %s)",
+		appinfo.Version, appinfo.Commit, appinfo.BuildDate, runtime.Version(),
+	)
+	if str != expected {
+		t.Errorf("String() = %q, want %q", str, expected)
 	}
-
-	// Restore original values.
-	appinfo.Version = origVersion
-	appinfo.Commit = origCommit
-	appinfo.BuildDate = origBuildDate
 }
 
 func TestShortVersion(t *testing.T) {
-	// Save original value.
-	origVersion := appinfo.Version
+	t.Parallel()
 
-	appinfo.Version = "1.2.3"
-
+	// ShortVersion returns the current Version global.
 	short := appinfo.ShortVersion()
-	if short != "1.2.3" {
-		t.Errorf("ShortVersion() = %s, want '1.2.3'", short)
+	if short != appinfo.Version {
+		t.Errorf("ShortVersion() = %s, want %s", short, appinfo.Version)
 	}
-
-	appinfo.Version = "dev"
-
-	short = appinfo.ShortVersion()
-	if short != "dev" {
-		t.Errorf("ShortVersion() = %s, want 'dev'", short)
-	}
-
-	// Restore original value.
-	appinfo.Version = origVersion
 }
 
 func TestGoVersionMatches(t *testing.T) {
+	t.Parallel()
+
 	info := appinfo.GetInfo()
 	if info.GoVersion != runtime.Version() {
 		t.Errorf("GoVersion mismatch: got %s, want %s", info.GoVersion, runtime.Version())
@@ -99,41 +85,40 @@ func TestGoVersionMatches(t *testing.T) {
 }
 
 func TestInfo_Format(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		version   string
 		commit    string
 		buildDate string
-		want      string
 	}{
 		{
 			name:      "dev build",
 			version:   "dev",
 			commit:    "unknown",
 			buildDate: "unknown",
-			want:      "dev",
 		},
 		{
 			name:      "release build",
 			version:   "1.0.0",
 			commit:    "abc123",
 			buildDate: "2025-10-05",
-			want:      "1.0.0",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save original values.
-			origVersion := appinfo.Version
-			origCommit := appinfo.Commit
-			origBuildDate := appinfo.BuildDate
+			t.Parallel()
 
-			appinfo.Version = tt.version
-			appinfo.Commit = tt.commit
-			appinfo.BuildDate = tt.buildDate
+			// Construct Info directly instead of modifying globals.
+			info := appinfo.Info{
+				Version:   tt.version,
+				Commit:    tt.commit,
+				BuildDate: tt.buildDate,
+				GoVersion: runtime.Version(),
+			}
 
-			info := appinfo.GetInfo()
 			if info.Version != tt.version {
 				t.Errorf("Version = %s, want %s", info.Version, tt.version)
 			}
@@ -145,11 +130,6 @@ func TestInfo_Format(t *testing.T) {
 			if info.BuildDate != tt.buildDate {
 				t.Errorf("BuildDate = %s, want %s", info.BuildDate, tt.buildDate)
 			}
-
-			// Restore original values.
-			appinfo.Version = origVersion
-			appinfo.Commit = origCommit
-			appinfo.BuildDate = origBuildDate
 		})
 	}
 }

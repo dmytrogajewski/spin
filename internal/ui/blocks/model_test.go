@@ -7,6 +7,7 @@ import (
 )
 
 func TestNewBlock(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		blockType BlockType
@@ -23,6 +24,7 @@ func TestNewBlock(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := NewBlock(tt.blockType)
 			if b == nil {
 				t.Fatal("NewBlock() returned nil")
@@ -56,6 +58,7 @@ func TestNewBlock(t *testing.T) {
 }
 
 func TestBlock_Validate(t *testing.T) {
+	t.Parallel()
 	validBlock := func() *Block {
 		b := NewBlock(BlockTypeExecute)
 		b.Body = "test output"
@@ -78,6 +81,7 @@ func TestBlock_Validate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := validBlock()
 			tt.modify(b)
 
@@ -93,7 +97,10 @@ func TestBlock_Validate(t *testing.T) {
 // See TestBlock_TypeSafeMetadata for the new approach.
 
 func TestGenerateBlockID(t *testing.T) {
+	t.Parallel(
 	// Test uniqueness.
+	)
+
 	id1 := GenerateBlockID(1)
 
 	time.Sleep(1 * time.Millisecond)
@@ -116,6 +123,7 @@ func TestGenerateBlockID(t *testing.T) {
 }
 
 func TestBlock_JSON_Roundtrip(t *testing.T) {
+	t.Parallel()
 	original := NewBlock(BlockTypeExecute)
 	original.Title = "Test Command"
 	original.Body = "command output here"
@@ -191,6 +199,7 @@ func TestBlock_JSON_Roundtrip(t *testing.T) {
 }
 
 func TestBlock_JSON_Format(t *testing.T) {
+	t.Parallel()
 	b := NewBlock(BlockTypeExecute)
 	b.ID = "blk_1738950123_07"
 	b.Title = "Run tests"
@@ -240,7 +249,9 @@ func TestBlock_JSON_Format(t *testing.T) {
 
 // TestBlock_TypeSafeMetadata tests the new type-safe metadata accessors.
 func TestBlock_TypeSafeMetadata(t *testing.T) {
+	t.Parallel()
 	t.Run("ExecuteMeta", func(t *testing.T) {
+		t.Parallel()
 		b := NewBlock(BlockTypeExecute)
 
 		// Set metadata.
@@ -272,6 +283,7 @@ func TestBlock_TypeSafeMetadata(t *testing.T) {
 	})
 
 	t.Run("ReadMeta", func(t *testing.T) {
+		t.Parallel()
 		b := NewBlock(BlockTypeRead)
 
 		meta := &ReadMeta{
@@ -296,6 +308,7 @@ func TestBlock_TypeSafeMetadata(t *testing.T) {
 	})
 
 	t.Run("ToolMeta", func(t *testing.T) {
+		t.Parallel()
 		b := NewBlock(BlockTypeTool)
 
 		meta := &ToolMeta{
@@ -323,6 +336,7 @@ func TestBlock_TypeSafeMetadata(t *testing.T) {
 
 // TestBlock_MetadataValidation tests that invalid metadata is rejected.
 func TestBlock_MetadataValidation(t *testing.T) {
+	t.Parallel()
 	b := NewBlock(BlockTypeExecute)
 
 	// Invalid ExecuteMeta (empty command).
@@ -339,6 +353,7 @@ func TestBlock_MetadataValidation(t *testing.T) {
 
 // TestBlock_MetadataJSONRoundtrip tests JSON serialization with json.RawMessage.
 func TestBlock_MetadataJSONRoundtrip(t *testing.T) {
+	t.Parallel()
 	original := NewBlock(BlockTypeExecute)
 	original.Title = "Test Command"
 	original.Body = "output"

@@ -35,6 +35,8 @@ func (m *mockErrorEmbedder) Dimension() int {
 
 // TestCosineSimilarity_DifferentLengths tests mismatched vector lengths.
 func TestCosineSimilarity_DifferentLengths(t *testing.T) {
+	t.Parallel()
+
 	a := []float32{1.0, 2.0, 3.0}
 	b := []float32{1.0, 2.0}
 
@@ -44,6 +46,8 @@ func TestCosineSimilarity_DifferentLengths(t *testing.T) {
 
 // TestCosineSimilarity_ZeroVectors tests zero norm vectors.
 func TestCosineSimilarity_ZeroVectors(t *testing.T) {
+	t.Parallel()
+
 	// Test with first vector being zero.
 	a := []float32{0.0, 0.0, 0.0}
 	b := []float32{1.0, 2.0, 3.0}
@@ -65,6 +69,8 @@ func TestCosineSimilarity_ZeroVectors(t *testing.T) {
 
 // TestCurate_EmbedError tests error handling when embedding fails.
 func TestCurate_EmbedError(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	errorEmbedder := &mockErrorEmbedder{shouldError: true}
 	pb := playbook.New(nil, errorEmbedder)
@@ -87,6 +93,8 @@ func TestCurate_EmbedError(t *testing.T) {
 
 // TestCurate_PlaybookAddError tests error handling when playbook.Add fails.
 func TestCurate_PlaybookAddError(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 
@@ -117,6 +125,8 @@ func TestCurate_PlaybookAddError(t *testing.T) {
 
 // TestConvertInsights_InvalidContent tests conversion error handling.
 func TestConvertInsights_InvalidContent(t *testing.T) {
+	t.Parallel()
+
 	// Test with empty content - bullet.New should handle this.
 	insights := []*reflector.Insight{
 		{
@@ -137,6 +147,8 @@ func TestConvertInsights_InvalidContent(t *testing.T) {
 
 // TestFindDuplicates_NoBulletEmbedding tests when bullet has no embedding.
 func TestFindDuplicates_NoBulletEmbedding(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -154,6 +166,8 @@ func TestFindDuplicates_NoBulletEmbedding(t *testing.T) {
 
 // TestCurate_DuplicateNotFoundInPlaybook tests edge case where duplicate ID isn't found.
 func TestCurate_DuplicateNotFoundInPlaybook(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)

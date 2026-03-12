@@ -2,12 +2,14 @@ package blocks
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 )
 
 // ========== Block Management Tests ==========.
 
 func TestTimeline_Append(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	block := NewBlock(BlockTypeExecute)
@@ -34,6 +36,7 @@ func TestTimeline_Append(t *testing.T) {
 }
 
 func TestTimeline_AppendMultiple(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	for i := range 5 {
@@ -63,6 +66,7 @@ func TestTimeline_AppendMultiple(t *testing.T) {
 }
 
 func TestTimeline_AppendDuplicateID(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	block1 := NewBlock(BlockTypeExecute)
@@ -85,6 +89,7 @@ func TestTimeline_AppendDuplicateID(t *testing.T) {
 }
 
 func TestTimeline_Update(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	block := NewBlock(BlockTypeExecute)
@@ -113,6 +118,7 @@ func TestTimeline_Update(t *testing.T) {
 }
 
 func TestTimeline_UpdateNonExistent(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	block := NewBlock(BlockTypeExecute)
@@ -125,6 +131,7 @@ func TestTimeline_UpdateNonExistent(t *testing.T) {
 }
 
 func TestTimeline_Delete(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	for i := range 3 {
@@ -163,6 +170,7 @@ func TestTimeline_Delete(t *testing.T) {
 }
 
 func TestTimeline_DeleteNonExistent(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	err := timeline.Delete("nonexistent")
@@ -174,6 +182,7 @@ func TestTimeline_DeleteNonExistent(t *testing.T) {
 // ========== Viewport Tests ==========.
 
 func TestTimeline_Viewport_Basic(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(5)
 
@@ -204,6 +213,7 @@ func TestTimeline_Viewport_Basic(t *testing.T) {
 }
 
 func TestTimeline_Viewport_AtBottom(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(5)
 
@@ -235,6 +245,7 @@ func TestTimeline_Viewport_AtBottom(t *testing.T) {
 }
 
 func TestTimeline_Viewport_LargerThanBlocks(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(10)
 
@@ -260,6 +271,7 @@ func TestTimeline_Viewport_LargerThanBlocks(t *testing.T) {
 }
 
 func TestTimeline_Viewport_Empty(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(5)
 
@@ -278,11 +290,13 @@ func TestTimeline_Viewport_Empty(t *testing.T) {
 // ========== Navigation Tests ==========.
 
 func TestTimeline_ScrollDown(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(5)
 
-	for range 10 {
+	for i := range 10 {
 		block := NewBlock(BlockTypeExecute)
+		block.ID = fmt.Sprintf("scroll-%d", i)
 		if err := timeline.Append(block); err != nil {
 			t.Fatalf("Append failed: %v", err)
 		}
@@ -297,6 +311,7 @@ func TestTimeline_ScrollDown(t *testing.T) {
 }
 
 func TestTimeline_ScrollDownClamping(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(5)
 
@@ -318,6 +333,7 @@ func TestTimeline_ScrollDownClamping(t *testing.T) {
 }
 
 func TestTimeline_ScrollUp(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(5)
 
@@ -339,6 +355,7 @@ func TestTimeline_ScrollUp(t *testing.T) {
 }
 
 func TestTimeline_ScrollUpClamping(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(5)
 
@@ -360,6 +377,7 @@ func TestTimeline_ScrollUpClamping(t *testing.T) {
 }
 
 func TestTimeline_ScrollToTopBottom(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(5)
 
@@ -387,6 +405,7 @@ func TestTimeline_ScrollToTopBottom(t *testing.T) {
 }
 
 func TestTimeline_ScrollToBlock(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(5)
 
@@ -412,6 +431,7 @@ func TestTimeline_ScrollToBlock(t *testing.T) {
 }
 
 func TestTimeline_ScrollToBlockNonExistent(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(5)
 
@@ -428,6 +448,7 @@ func TestTimeline_ScrollToBlockNonExistent(t *testing.T) {
 }
 
 func TestTimeline_FocusBlock(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	for i := range 5 {
@@ -454,6 +475,7 @@ func TestTimeline_FocusBlock(t *testing.T) {
 }
 
 func TestTimeline_NextPrevBlock(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	for i := range 5 {
@@ -495,6 +517,7 @@ func TestTimeline_NextPrevBlock(t *testing.T) {
 }
 
 func TestTimeline_NextBlockClamping(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	for i := range 3 {
@@ -523,6 +546,7 @@ func TestTimeline_NextBlockClamping(t *testing.T) {
 }
 
 func TestTimeline_PrevBlockClamping(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	for i := range 3 {
@@ -553,6 +577,7 @@ func TestTimeline_PrevBlockClamping(t *testing.T) {
 // ========== Filtering Tests ==========.
 
 func TestTimeline_FilterByType(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	types := []BlockType{BlockTypeExecute, BlockTypePlan, BlockTypeRead, BlockTypeExecute}
@@ -581,6 +606,7 @@ func TestTimeline_FilterByType(t *testing.T) {
 }
 
 func TestTimeline_FilterByMultipleTypes(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	types := []BlockType{BlockTypeExecute, BlockTypePlan, BlockTypeRead, BlockTypeError}
@@ -608,6 +634,7 @@ func TestTimeline_FilterByMultipleTypes(t *testing.T) {
 }
 
 func TestTimeline_FilterByFile(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	files := []string{"main.go", "test.go", "util.go"}
@@ -639,6 +666,7 @@ func TestTimeline_FilterByFile(t *testing.T) {
 }
 
 func TestTimeline_FilterByExitCode(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	exitCodes := []int{0, 1, 0, 2}
@@ -676,6 +704,7 @@ func TestTimeline_FilterByExitCode(t *testing.T) {
 }
 
 func TestTimeline_FilterByImpact(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	impacts := []string{"low", "medium", "high", "medium"}
@@ -712,6 +741,7 @@ func TestTimeline_FilterByImpact(t *testing.T) {
 }
 
 func TestTimeline_FilterCombined(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	// Block 0: EXECUTE, main.go, exit 0, impact low.
@@ -794,6 +824,7 @@ func TestTimeline_FilterCombined(t *testing.T) {
 }
 
 func TestTimeline_ClearFilter(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	for i := range 5 {
@@ -823,6 +854,7 @@ func TestTimeline_ClearFilter(t *testing.T) {
 }
 
 func TestTimeline_GetFilter(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	if timeline.GetFilter() != nil {
@@ -847,6 +879,7 @@ func TestTimeline_GetFilter(t *testing.T) {
 // ========== Collapse/Expand Tests ==========.
 
 func TestTimeline_ToggleFold(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	block := NewBlock(BlockTypeExecute)
@@ -885,6 +918,7 @@ func TestTimeline_ToggleFold(t *testing.T) {
 }
 
 func TestTimeline_ExpandAll(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	for i := range 3 {
@@ -910,6 +944,7 @@ func TestTimeline_ExpandAll(t *testing.T) {
 }
 
 func TestTimeline_CollapseAll(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	for i := range 3 {
@@ -937,6 +972,7 @@ func TestTimeline_CollapseAll(t *testing.T) {
 // ========== Edge Cases ==========.
 
 func TestTimeline_EmptyOperations(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	if timeline.Len() != 0 {
@@ -965,6 +1001,7 @@ func TestTimeline_EmptyOperations(t *testing.T) {
 }
 
 func TestTimeline_SingleBlock(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 
 	block := NewBlock(BlockTypeExecute)
@@ -1006,6 +1043,7 @@ func TestTimeline_SingleBlock(t *testing.T) {
 }
 
 func TestTimeline_LargeTimeline(t *testing.T) {
+	t.Parallel()
 	timeline := NewTimeline()
 	timeline.SetViewportHeight(20)
 

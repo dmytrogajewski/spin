@@ -19,6 +19,8 @@ import (
 )
 
 func TestAdapter_StartSession(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create dependencies.
@@ -47,6 +49,8 @@ func TestAdapter_StartSession(t *testing.T) {
 }
 
 func TestAdapter_GetSession_NotFound(t *testing.T) {
+	t.Parallel()
+
 	// Create dependencies.
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -66,6 +70,8 @@ func TestAdapter_GetSession_NotFound(t *testing.T) {
 }
 
 func TestAdapter_EndSession(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create dependencies.
@@ -93,6 +99,8 @@ func TestAdapter_EndSession(t *testing.T) {
 }
 
 func TestAdapter_AdaptOnline_SkipSuccess(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create dependencies.
@@ -129,6 +137,8 @@ func TestAdapter_AdaptOnline_SkipSuccess(t *testing.T) {
 }
 
 func TestAdapter_AdaptOnline_FullReflect(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create dependencies.
@@ -191,6 +201,8 @@ func TestAdapter_AdaptOnline_FullReflect(t *testing.T) {
 }
 
 func TestAdapter_AdaptOnline_QuickAddWithGenerator(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create dependencies.
@@ -248,6 +260,8 @@ func TestAdapter_AdaptOnline_QuickAddWithGenerator(t *testing.T) {
 }
 
 func TestAdapter_AdaptOnline_MemoryRefinement(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create dependencies with low refinement threshold.
@@ -304,6 +318,8 @@ func TestAdapter_AdaptOnline_MemoryRefinement(t *testing.T) {
 }
 
 func TestAdapter_AdaptOnline_SessionNotFound(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create dependencies.
@@ -333,6 +349,8 @@ func TestAdapter_AdaptOnline_SessionNotFound(t *testing.T) {
 }
 
 func TestAdapter_AdaptOnline_MultipleSignals(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create dependencies.
@@ -369,6 +387,8 @@ func TestAdapter_AdaptOnline_MultipleSignals(t *testing.T) {
 }
 
 func TestAdapter_AdaptOnline_ReflectWithNoInsights(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create dependencies.
@@ -407,6 +427,8 @@ func TestAdapter_AdaptOnline_ReflectWithNoInsights(t *testing.T) {
 }
 
 func TestAdapter_AdaptOnline_QuickAddWithoutGenerator(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create dependencies.
@@ -442,6 +464,8 @@ func TestAdapter_AdaptOnline_QuickAddWithoutGenerator(t *testing.T) {
 }
 
 func TestAdapter_EndSession_NotFound(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create dependencies.
@@ -461,6 +485,8 @@ func TestAdapter_EndSession_NotFound(t *testing.T) {
 }
 
 func TestDecideAction_UnknownSignalType(t *testing.T) {
+	t.Parallel()
+
 	signal := ExecutionSignal{
 		SignalType: SignalType("unknown"),
 		Outcome:    OutcomeFailure,

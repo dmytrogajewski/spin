@@ -29,19 +29,20 @@ import (
 )
 
 var (
-	errFsReadtextfileNotSupportedInStub = errors.New("fs.readTextFile not supported in stub client")
-	errFsWritetextfileNotSupportedInStub = errors.New("fs.writeTextFile not supported in stub client")
-	errTerminalCapabilityNotEnabledInStub = errors.New("terminal capability not enabled in stub client")
+	errFsReadtextfileNotSupportedInStub    = errors.New("fs.readTextFile not supported in stub client")
+	errFsWritetextfileNotSupportedInStub   = errors.New("fs.writeTextFile not supported in stub client")
+	errTerminalCapabilityNotEnabledInStub  = errors.New("terminal capability not enabled in stub client")
 	errTerminalCapabilityNotEnabledInStub2 = errors.New("terminal capability not enabled in stub client")
 	errTerminalCapabilityNotEnabledInStub3 = errors.New("terminal capability not enabled in stub client")
 	errTerminalCapabilityNotEnabledInStub4 = errors.New("terminal capability not enabled in stub client")
 	errTerminalCapabilityNotEnabledInStub5 = errors.New("terminal capability not enabled in stub client")
-	errSomeError = errors.New("some error")
-	errSomeError2 = errors.New("some error")
+	errSomeError                           = errors.New("some error")
+	errSomeError2                          = errors.New("some error")
 )
 
 // TestSpinACPAgent_Prompt_InvalidSession tests Prompt with invalid session ID.
 func TestSpinACPAgent_Prompt_InvalidSession(t *testing.T) {
+	t.Parallel()
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -64,6 +65,7 @@ func TestSpinACPAgent_Prompt_InvalidSession(t *testing.T) {
 
 // TestSpinACPAgent_Prompt_EmptyPrompt tests Prompt with empty prompt blocks.
 func TestSpinACPAgent_Prompt_EmptyPrompt(t *testing.T) {
+	t.Parallel()
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -93,6 +95,7 @@ func TestSpinACPAgent_Prompt_EmptyPrompt(t *testing.T) {
 
 // TestSpinACPAgent_Prompt_Success tests successful prompt execution.
 func TestSpinACPAgent_Prompt_Success(t *testing.T) {
+	t.Parallel()
 	agentInstance := createTestAgent(t)
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -123,6 +126,7 @@ func TestSpinACPAgent_Prompt_Success(t *testing.T) {
 
 // TestAgentEmitterStreams ensures the underlying agent emits content delta events.
 func TestAgentEmitterStreams(t *testing.T) {
+	t.Parallel()
 	agentInstance, emitter := createTestAgentWithEmitter(t)
 
 	subID, ch, err := emitter.Subscribe()
@@ -162,6 +166,7 @@ func TestAgentEmitterStreams(t *testing.T) {
 
 // TestEmitterManualSubscribe ensures subscribing before execution captures events.
 func TestEmitterManualSubscribe(t *testing.T) {
+	t.Parallel()
 	agentInstance, emitter := createTestAgentWithEmitter(t)
 
 	subID, ch, err := emitter.Subscribe()
@@ -232,6 +237,7 @@ func createTestAgentWithEmitter(t *testing.T) (*agent.Agent, *events.EventEmitte
 
 // TestSpinACPAgent_Prompt_SendsNotifications ensures prompt execution emits agent message chunks.
 func TestSpinACPAgent_Prompt_SendsNotifications(t *testing.T) {
+	t.Parallel()
 	agentInstance, emitter := createTestAgentWithEmitter(t)
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 
@@ -273,6 +279,7 @@ func TestSpinACPAgent_Prompt_SendsNotifications(t *testing.T) {
 
 // TestSpinACPAgent_EndToEndNotifications verifies notifications over JSON-RPC connection.
 func TestSpinACPAgent_EndToEndNotifications(t *testing.T) {
+	t.Parallel()
 	agentInstance, emitter := createTestAgentWithEmitter(t)
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 
@@ -392,6 +399,7 @@ func (c *stubClient) WaitForTerminalExit(_ context.Context, _ acp.WaitForTermina
 
 // TestSpinACPAgent_Prompt_ContentBlockConversion tests content block conversion.
 func TestSpinACPAgent_Prompt_ContentBlockConversion(t *testing.T) {
+	t.Parallel()
 	agentInstance := createTestAgent(t)
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -442,6 +450,7 @@ func TestSpinACPAgent_Prompt_ContentBlockConversion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			req := acp.PromptRequest{
 				SessionId: sessionResp.SessionId,
 				Prompt:    tt.blocks,
@@ -462,6 +471,7 @@ func TestSpinACPAgent_Prompt_ContentBlockConversion(t *testing.T) {
 
 // TestConvertACPContentBlocksToMessages tests content block conversion directly.
 func TestConvertACPContentBlocksToMessages(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		blocks  []acp.ContentBlock
@@ -595,6 +605,7 @@ func TestConvertACPContentBlocksToMessages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			messages, err := convertACPContentBlocksToMessages(tt.blocks)
 
 			if tt.wantErr {
@@ -615,6 +626,7 @@ func TestConvertACPContentBlocksToMessages(t *testing.T) {
 
 // TestConvertACPContentBlocksToMessages_ImageAudio tests image and audio block conversion with content verification.
 func TestConvertACPContentBlocksToMessages_ImageAudio(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		block          acp.ContentBlock
@@ -652,6 +664,7 @@ func TestConvertACPContentBlocksToMessages_ImageAudio(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			messages, err := convertACPContentBlocksToMessages([]acp.ContentBlock{tt.block})
 			require.NoError(t, err)
 			require.Len(t, messages, 1)
@@ -667,6 +680,7 @@ func TestConvertACPContentBlocksToMessages_ImageAudio(t *testing.T) {
 
 // TestConvertACPContentBlocksToMessages_EnhancedResources tests enhanced resource block handling with names.
 func TestConvertACPContentBlocksToMessages_EnhancedResources(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		block          acp.ContentBlock
@@ -709,6 +723,7 @@ func TestConvertACPContentBlocksToMessages_EnhancedResources(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			messages, err := convertACPContentBlocksToMessages([]acp.ContentBlock{tt.block})
 			require.NoError(t, err)
 			require.Len(t, messages, 1)
@@ -722,6 +737,7 @@ func TestConvertACPContentBlocksToMessages_EnhancedResources(t *testing.T) {
 
 // TestMapStopReason tests stop reason mapping.
 func TestMapStopReason(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		finishReason string
@@ -748,6 +764,7 @@ func TestMapStopReason(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := mapStopReason(tt.finishReason)
 			assert.Equal(t, tt.want, got, "finishReason: %s", tt.finishReason)
 		})
@@ -756,6 +773,7 @@ func TestMapStopReason(t *testing.T) {
 
 // TestExtractPathFromURI tests URI path extraction.
 func TestExtractPathFromURI(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		uri  string
@@ -768,6 +786,7 @@ func TestExtractPathFromURI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := extractPathFromURI(tt.uri)
 			assert.Equal(t, tt.want, got)
 		})
@@ -776,6 +795,7 @@ func TestExtractPathFromURI(t *testing.T) {
 
 // TestMapStopReasonFromError tests error to stop reason mapping.
 func TestMapStopReasonFromError(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		err  error
@@ -812,6 +832,7 @@ func TestMapStopReasonFromError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := mapStopReasonFromError(tt.err, tt.resp)
 			assert.Equal(t, tt.want, got)
 		})

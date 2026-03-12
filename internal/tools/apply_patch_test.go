@@ -9,6 +9,7 @@ import (
 )
 
 func TestApplyPatchTool_AddFile(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tool := NewApplyPatchTool(tmpDir)
 
@@ -49,6 +50,7 @@ func TestApplyPatchTool_AddFile(t *testing.T) {
 }
 
 func TestApplyPatchTool_DeleteFile(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "delete_me.txt")
 
@@ -85,6 +87,7 @@ func TestApplyPatchTool_DeleteFile(t *testing.T) {
 }
 
 func TestApplyPatchTool_UpdateFile(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "update_me.txt")
 
@@ -135,6 +138,7 @@ func TestApplyPatchTool_UpdateFile(t *testing.T) {
 }
 
 func TestApplyPatchTool_DryRun(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tool := NewApplyPatchTool(tmpDir)
 
@@ -170,6 +174,7 @@ func TestApplyPatchTool_DryRun(t *testing.T) {
 }
 
 func TestApplyPatchTool_ParseError(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tool := NewApplyPatchTool(tmpDir)
 
@@ -198,6 +203,7 @@ func TestApplyPatchTool_ParseError(t *testing.T) {
 }
 
 func TestApplyPatchTool_PathTraversal(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tool := NewApplyPatchTool(tmpDir)
 
@@ -227,6 +233,7 @@ func TestApplyPatchTool_PathTraversal(t *testing.T) {
 }
 
 func TestApplyPatchTool_MissingParameters(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tool := NewApplyPatchTool(tmpDir)
 
@@ -254,6 +261,7 @@ func TestApplyPatchTool_MissingParameters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(tt.params)
 
 			result, err := tool.Execute(context.Background(), params)
@@ -273,6 +281,7 @@ func TestApplyPatchTool_MissingParameters(t *testing.T) {
 }
 
 func TestApplyPatchTool_MultipleOperations(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	// Create file to delete.
@@ -322,7 +331,10 @@ func TestApplyPatchTool_MultipleOperations(t *testing.T) {
 }
 
 func TestApplyPatchTool_CustomWorkspace(t *testing.T) {
+	t.Parallel(
 	// Create two directories.
+	)
+
 	workspace1 := t.TempDir()
 	workspace2 := t.TempDir()
 
@@ -362,6 +374,7 @@ func TestApplyPatchTool_CustomWorkspace(t *testing.T) {
 }
 
 func TestApplyPatchTool_Schema(t *testing.T) {
+	t.Parallel()
 	tool := NewApplyPatchTool("/tmp")
 	schema := tool.Schema()
 
@@ -391,6 +404,7 @@ func TestApplyPatchTool_Schema(t *testing.T) {
 }
 
 func TestApplyPatchTool_ErrorCases(t *testing.T) {
+	t.Parallel()
 	tool := NewApplyPatchTool("/tmp/test")
 
 	tests := []struct {
@@ -409,6 +423,7 @@ func TestApplyPatchTool_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(tt.params)
 
 			result, err := tool.Execute(context.Background(), params)
@@ -424,6 +439,7 @@ func TestApplyPatchTool_ErrorCases(t *testing.T) {
 }
 
 func TestApplyPatchTool_CheckApproval(t *testing.T) {
+	t.Parallel()
 	tool := NewApplyPatchTool("/tmp")
 
 	params, _ := FromMap(map[string]any{
@@ -446,6 +462,7 @@ func TestApplyPatchTool_CheckApproval(t *testing.T) {
 }
 
 func TestApplyPatchTool_CheckApproval_EmptyPatch(t *testing.T) {
+	t.Parallel()
 	tool := NewApplyPatchTool("/tmp")
 
 	params, _ := FromMap(map[string]any{

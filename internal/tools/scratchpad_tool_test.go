@@ -11,18 +11,21 @@ import (
 )
 
 func TestScratchpadTool_Name(t *testing.T) {
+	t.Parallel()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
 	assert.Equal(t, "scratchpad", tool.Name())
 }
 
 func TestScratchpadTool_Description(t *testing.T) {
+	t.Parallel()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
 	assert.Contains(t, tool.Description(), "session-scoped")
 }
 
 func TestScratchpadTool_Schema(t *testing.T) {
+	t.Parallel()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
 	schema := tool.Schema()
@@ -40,6 +43,7 @@ func TestScratchpadTool_Schema(t *testing.T) {
 }
 
 func TestScratchpadTool_Put(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -63,6 +67,7 @@ func TestScratchpadTool_Put(t *testing.T) {
 }
 
 func TestScratchpadTool_Get(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -84,6 +89,7 @@ func TestScratchpadTool_Get(t *testing.T) {
 }
 
 func TestScratchpadTool_Get_NotFound(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -101,6 +107,7 @@ func TestScratchpadTool_Get_NotFound(t *testing.T) {
 }
 
 func TestScratchpadTool_Delete(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -126,6 +133,7 @@ func TestScratchpadTool_Delete(t *testing.T) {
 }
 
 func TestScratchpadTool_List(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -150,6 +158,7 @@ func TestScratchpadTool_List(t *testing.T) {
 }
 
 func TestScratchpadTool_List_All(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -171,6 +180,7 @@ func TestScratchpadTool_List_All(t *testing.T) {
 }
 
 func TestScratchpadTool_Search(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -192,6 +202,7 @@ func TestScratchpadTool_Search(t *testing.T) {
 }
 
 func TestScratchpadTool_Pin(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -212,6 +223,7 @@ func TestScratchpadTool_Pin(t *testing.T) {
 }
 
 func TestScratchpadTool_Unpin(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -233,6 +245,7 @@ func TestScratchpadTool_Unpin(t *testing.T) {
 }
 
 func TestScratchpadTool_Clear(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -257,6 +270,7 @@ func TestScratchpadTool_Clear(t *testing.T) {
 }
 
 func TestScratchpadTool_InvalidOperation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -273,6 +287,7 @@ func TestScratchpadTool_InvalidOperation(t *testing.T) {
 }
 
 func TestScratchpadTool_MissingOperation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -289,6 +304,7 @@ func TestScratchpadTool_MissingOperation(t *testing.T) {
 }
 
 func TestScratchpadTool_MissingKey_Put(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -306,6 +322,7 @@ func TestScratchpadTool_MissingKey_Put(t *testing.T) {
 }
 
 func TestScratchpadTool_MissingValue_Put(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -323,6 +340,7 @@ func TestScratchpadTool_MissingValue_Put(t *testing.T) {
 }
 
 func TestScratchpadTool_Put_WithNamespace(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -346,6 +364,7 @@ func TestScratchpadTool_Put_WithNamespace(t *testing.T) {
 }
 
 func TestScratchpadTool_Put_WithTags(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
@@ -370,6 +389,7 @@ func TestScratchpadTool_Put_WithTags(t *testing.T) {
 }
 
 func TestScratchpadTool_NilScratchpad(t *testing.T) {
+	t.Parallel()
 	tool := NewScratchpadTool(nil)
 	assert.Nil(t, tool)
 }

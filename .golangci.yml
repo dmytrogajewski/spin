@@ -426,3 +426,11 @@ linters:
       - linters: [misspell]
         text: "Cancelled"
         path: ".*\\.go"
+
+      # Tests that modify process-global state (os.Stdin, os.Args, os.Setenv) cannot be parallelized.
+      - linters: [paralleltest]
+        text: "TestReadPatchInput_Stdin"
+      - linters: [paralleltest]
+        text: "TestConfigEdit"
+      - linters: [paralleltest]
+        text: "TestGetEditor"

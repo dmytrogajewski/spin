@@ -9,6 +9,7 @@ import (
 
 // TestRequest_UsesCanonicalMessage verifies Request uses message.Message.
 func TestRequest_UsesCanonicalMessage(t *testing.T) {
+	t.Parallel()
 	msg := message.Message{
 		ID:        "test-1",
 		Role:      message.RoleUser,

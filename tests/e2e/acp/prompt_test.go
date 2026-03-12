@@ -11,6 +11,8 @@ import (
 
 // TestACP_Prompt_Basic tests basic prompt processing.
 func TestACP_Prompt_Basic(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -57,6 +59,8 @@ func TestACP_Prompt_Basic(t *testing.T) {
 
 // TestACP_Prompt_ContentBlocks tests prompt with different content block types.
 func TestACP_Prompt_ContentBlocks(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -64,7 +68,7 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 	workDir := createTestWorkspace(t)
 
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
-	defer cleanupAgent(t, cmd, stdin)
+	t.Cleanup(func() { cleanupAgent(t, cmd, stdin) })
 
 	client := createACPClient(t, stdin, stdout)
 	ctx := context.Background()
@@ -82,6 +86,8 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 
 	// Test with text block.
 	t.Run("text block", func(t *testing.T) {
+		t.Parallel()
+
 		req := acp.PromptRequest{
 			SessionId: sessionResp.SessionId,
 			Prompt: []acp.ContentBlock{
@@ -96,6 +102,8 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 
 	// Test with image block (converted to text description).
 	t.Run("image block", func(t *testing.T) {
+		t.Parallel()
+
 		req := acp.PromptRequest{
 			SessionId: sessionResp.SessionId,
 			Prompt: []acp.ContentBlock{
@@ -110,6 +118,8 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 
 	// Test with mixed content blocks.
 	t.Run("mixed content blocks", func(t *testing.T) {
+		t.Parallel()
+
 		req := acp.PromptRequest{
 			SessionId: sessionResp.SessionId,
 			Prompt: []acp.ContentBlock{
@@ -126,6 +136,8 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 
 // TestACP_Prompt_InvalidSession tests error handling for invalid session.
 func TestACP_Prompt_InvalidSession(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -155,6 +167,8 @@ func TestACP_Prompt_InvalidSession(t *testing.T) {
 
 // TestACP_Prompt_TextBlock tests text content block (baseline).
 func TestACP_Prompt_TextBlock(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -192,6 +206,8 @@ func TestACP_Prompt_TextBlock(t *testing.T) {
 
 // TestACP_Prompt_ResourceLink tests resource link content block (baseline).
 func TestACP_Prompt_ResourceLink(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -229,6 +245,8 @@ func TestACP_Prompt_ResourceLink(t *testing.T) {
 
 // TestACP_Prompt_AudioBlock tests audio content block.
 func TestACP_Prompt_AudioBlock(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -271,6 +289,8 @@ func TestACP_Prompt_AudioBlock(t *testing.T) {
 
 // TestACP_Prompt_ResourceBlock tests embedded resource block.
 func TestACP_Prompt_ResourceBlock(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -313,6 +333,8 @@ func TestACP_Prompt_ResourceBlock(t *testing.T) {
 
 // TestACP_Prompt_StopReason_MaxTokens tests max_tokens stop reason.
 func TestACP_Prompt_StopReason_MaxTokens(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -354,6 +376,8 @@ func TestACP_Prompt_StopReason_MaxTokens(t *testing.T) {
 
 // TestACP_Prompt_StopReason_MaxTurnRequests tests max_turn_requests stop reason.
 func TestACP_Prompt_StopReason_MaxTurnRequests(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -395,6 +419,8 @@ func TestACP_Prompt_StopReason_MaxTurnRequests(t *testing.T) {
 
 // TestACP_Prompt_StopReason_Refusal tests refusal stop reason.
 func TestACP_Prompt_StopReason_Refusal(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -436,6 +462,8 @@ func TestACP_Prompt_StopReason_Refusal(t *testing.T) {
 
 // TestACP_Prompt_StopReason_Canceled tests canceled stop reason.
 func TestACP_Prompt_StopReason_Canceled(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -487,6 +515,8 @@ func TestACP_Prompt_StopReason_Canceled(t *testing.T) {
 
 // TestACP_Prompt_AgentMessageChunks tests agent_message_chunk notifications.
 func TestACP_Prompt_AgentMessageChunks(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}

@@ -6,6 +6,7 @@ import (
 )
 
 func TestNewPlanning(t *testing.T) {
+	t.Parallel()
 	planning := NewPlanning()
 
 	if planning == nil {
@@ -21,6 +22,7 @@ func TestNewPlanning(t *testing.T) {
 }
 
 func TestPlanning_Name(t *testing.T) {
+	t.Parallel()
 	planning := NewPlanning()
 
 	name := planning.Name()
@@ -31,6 +33,7 @@ func TestPlanning_Name(t *testing.T) {
 }
 
 func TestPlanning_SystemPrompt(t *testing.T) {
+	t.Parallel()
 	planning := NewPlanning()
 	prompt := planning.SystemPrompt()
 
@@ -57,6 +60,7 @@ func TestPlanning_SystemPrompt(t *testing.T) {
 }
 
 func TestPlanning_AllowedTools(t *testing.T) {
+	t.Parallel()
 	planning := NewPlanning()
 	tools := planning.AllowedTools()
 
@@ -74,6 +78,7 @@ func TestPlanning_AllowedTools(t *testing.T) {
 }
 
 func TestPlanning_MaxTokens(t *testing.T) {
+	t.Parallel()
 	planning := NewPlanning()
 	maxTokens := planning.MaxTokens()
 
@@ -87,6 +92,7 @@ func TestPlanning_MaxTokens(t *testing.T) {
 }
 
 func TestPlanning_Validate(t *testing.T) {
+	t.Parallel()
 	planning := NewPlanning()
 
 	err := planning.Validate()
@@ -96,6 +102,7 @@ func TestPlanning_Validate(t *testing.T) {
 }
 
 func TestPlanning_DefaultPrompt(t *testing.T) {
+	t.Parallel()
 	planning := NewPlanning()
 	prompt := planning.SystemPrompt()
 
@@ -106,6 +113,7 @@ func TestPlanning_DefaultPrompt(t *testing.T) {
 }
 
 func TestPlanning_DefaultTools(t *testing.T) {
+	t.Parallel()
 	planning := NewPlanning()
 	tools := planning.AllowedTools()
 
@@ -123,6 +131,7 @@ func TestPlanning_DefaultTools(t *testing.T) {
 }
 
 func TestPlanning_DefaultMaxTokens(t *testing.T) {
+	t.Parallel()
 	planning := NewPlanning()
 	maxTokens := planning.MaxTokens()
 
@@ -131,7 +140,8 @@ func TestPlanning_DefaultMaxTokens(t *testing.T) {
 	}
 }
 
-func TestPlanning_Concurrency(_ *testing.T) {
+func TestPlanning_Concurrency(t *testing.T) {
+	t.Parallel()
 	planning := NewPlanning()
 
 	// Test concurrent access to methods.
@@ -157,6 +167,7 @@ func TestPlanning_Concurrency(_ *testing.T) {
 }
 
 func TestPlanning_TaskInterface(t *testing.T) {
+	t.Parallel()
 	planning := NewPlanning()
 
 	// Verify all interface methods work.
@@ -183,7 +194,10 @@ func TestPlanning_TaskInterface(t *testing.T) {
 }
 
 func TestPlanning_Constants(t *testing.T) {
+	t.Parallel(
 	// Test that constants are properly defined.
+	)
+
 	if PlanningMaxTokens <= 0 {
 		t.Errorf("PlanningMaxTokens = %d, want > 0", PlanningMaxTokens)
 	}

@@ -5,6 +5,8 @@ import (
 )
 
 func TestNewPatternDetector(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -25,6 +27,8 @@ func TestNewPatternDetector(t *testing.T) {
 }
 
 func TestPatternDetector_AnalyzePatterns(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -53,6 +57,8 @@ func TestPatternDetector_AnalyzePatterns(t *testing.T) {
 }
 
 func TestPatternDetector_AnalyzePatterns_RepeatedPhrase(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -101,6 +107,8 @@ func TestPatternDetector_AnalyzePatterns_RepeatedPhrase(t *testing.T) {
 }
 
 func TestPatternDetector_AnalyzePatterns_CircularReasoning(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -149,6 +157,8 @@ func TestPatternDetector_AnalyzePatterns_CircularReasoning(t *testing.T) {
 }
 
 func TestPatternDetector_AnalyzePatterns_ToolStuck(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -197,6 +207,8 @@ func TestPatternDetector_AnalyzePatterns_ToolStuck(t *testing.T) {
 }
 
 func TestPatternDetector_AnalyzePatterns_ErrorLoop(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -248,6 +260,8 @@ func TestPatternDetector_AnalyzePatterns_ErrorLoop(t *testing.T) {
 }
 
 func TestPatternDetector_AnalyzePatterns_OscillatingTools(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -297,6 +311,8 @@ func TestPatternDetector_AnalyzePatterns_OscillatingTools(t *testing.T) {
 }
 
 func TestPatternType_String(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		pattern PatternType
 		want    string
@@ -312,6 +328,8 @@ func TestPatternType_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
+			t.Parallel()
+
 			got := tt.pattern.String()
 			if got != tt.want {
 				t.Errorf("PatternType.String() = %s, want %s", got, tt.want)
@@ -321,6 +339,8 @@ func TestPatternType_String(t *testing.T) {
 }
 
 func TestPatternDetector_DetectCircularReasoning(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -356,6 +376,8 @@ func TestPatternDetector_DetectCircularReasoning(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := detector.detectCircularReasoning(tt.snapshots)
 			if got != tt.want {
 				t.Errorf("PatternDetector.detectCircularReasoning() = %v, want %v", got, tt.want)
@@ -365,6 +387,8 @@ func TestPatternDetector_DetectCircularReasoning(t *testing.T) {
 }
 
 func TestPatternDetector_DetectOscillatingTools(t *testing.T) {
+	t.Parallel()
+
 	config := Config{
 		Enabled:          true,
 		WindowSize:       5,
@@ -410,6 +434,8 @@ func TestPatternDetector_DetectOscillatingTools(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := detector.detectOscillatingTools(tt.snapshots)
 			if got != tt.want {
 				t.Errorf("PatternDetector.detectOscillatingTools() = %v, want %v", got, tt.want)

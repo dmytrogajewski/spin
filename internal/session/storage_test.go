@@ -9,6 +9,7 @@ import (
 // Test FileStorage Creation.
 
 func TestNewFileStorage(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	storage, err := NewFileStorage(tmpDir)
@@ -22,6 +23,7 @@ func TestNewFileStorage(t *testing.T) {
 }
 
 func TestNewFileStorage_CreatesDirectory(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	sessionDir := filepath.Join(tmpDir, "sessions")
 
@@ -42,7 +44,10 @@ func TestNewFileStorage_CreatesDirectory(t *testing.T) {
 }
 
 func TestNewFileStorage_InvalidPath(t *testing.T) {
+	t.Parallel(
 	// Try to create storage in a file (not directory).
+	)
+
 	tmpFile := filepath.Join(t.TempDir(), "file.txt")
 	_ = os.WriteFile(tmpFile, []byte("test"), 0600)
 
@@ -55,6 +60,7 @@ func TestNewFileStorage_InvalidPath(t *testing.T) {
 // Test Save.
 
 func TestFileStorage_Save(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)
@@ -79,6 +85,7 @@ func TestFileStorage_Save(t *testing.T) {
 }
 
 func TestFileStorage_Save_Overwrite(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)
@@ -112,6 +119,7 @@ func TestFileStorage_Save_Overwrite(t *testing.T) {
 }
 
 func TestFileStorage_Save_InvalidSession(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)
@@ -129,6 +137,7 @@ func TestFileStorage_Save_InvalidSession(t *testing.T) {
 // Test Load.
 
 func TestFileStorage_Load(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)
@@ -163,6 +172,7 @@ func TestFileStorage_Load(t *testing.T) {
 }
 
 func TestFileStorage_Load_NotFound(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)
@@ -177,6 +187,7 @@ func TestFileStorage_Load_NotFound(t *testing.T) {
 // Test Delete.
 
 func TestFileStorage_Delete(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)
@@ -204,6 +215,7 @@ func TestFileStorage_Delete(t *testing.T) {
 }
 
 func TestFileStorage_Delete_NotFound(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)
@@ -219,6 +231,7 @@ func TestFileStorage_Delete_NotFound(t *testing.T) {
 // Test Exists.
 
 func TestFileStorage_Exists(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)
@@ -256,6 +269,7 @@ func TestFileStorage_Exists(t *testing.T) {
 // Test List.
 
 func TestFileStorage_List(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)
@@ -283,6 +297,7 @@ func TestFileStorage_List(t *testing.T) {
 }
 
 func TestFileStorage_List_EmptyStorage(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)
@@ -301,6 +316,7 @@ func TestFileStorage_List_EmptyStorage(t *testing.T) {
 // Test Concurrent Access.
 
 func TestFileStorage_ConcurrentSaves(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)
@@ -339,6 +355,7 @@ func TestFileStorage_ConcurrentSaves(t *testing.T) {
 }
 
 func TestFileStorage_ConcurrentReads(t *testing.T) {
+	t.Parallel()
 	storage, err := NewFileStorage(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewFileStorage() error = %v", err)

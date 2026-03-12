@@ -13,6 +13,8 @@ import (
 // TestTUIToolExecution tests that tools are properly executed when called by the LLM.
 // This reproduces the bug where list_directory is called but not executed.
 func TestTUIToolExecution(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
@@ -97,6 +99,8 @@ func TestTUIToolExecution(t *testing.T) {
 
 // TestTUIToolVisualization tests that tool calls are properly visualized.
 func TestTUIToolVisualization(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
@@ -160,6 +164,8 @@ func TestTUIToolVisualization(t *testing.T) {
 
 // TestTUIListDirectoryTool specifically tests the list_directory tool.
 func TestTUIListDirectoryTool(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
@@ -219,6 +225,8 @@ func TestTUIListDirectoryTool(t *testing.T) {
 
 // TestTUIMultipleToolCalls tests that multiple tool calls work correctly.
 func TestTUIMultipleToolCalls(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
@@ -274,6 +282,8 @@ func TestTUIMultipleToolCalls(t *testing.T) {
 
 // TestTUIReadFileTool tests the read_file tool execution.
 func TestTUIReadFileTool(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
@@ -336,6 +346,8 @@ func TestTUIReadFileTool(t *testing.T) {
 // TestTUIToolWithoutCycleDetection tests tool execution with cycle detection disabled.
 // This helps isolate whether cycle detection is the problem.
 func TestTUIToolWithoutCycleDetection(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))

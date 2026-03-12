@@ -38,7 +38,7 @@ func newApprovalListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope, _ := cmd.Flags().GetString("scope")
 
-			store, err := buildPolicyStore()
+			store, err := buildPolicyStore(cmd)
 			if err != nil {
 				return err
 			}
@@ -92,7 +92,7 @@ func newApprovalRevokeCmd() *cobra.Command {
 				return ErrProgramIsRequired
 			}
 
-			store, err := buildPolicyStore()
+			store, err := buildPolicyStore(cmd)
 			if err != nil {
 				return err
 			}
@@ -134,7 +134,7 @@ func newApprovalClearCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope, _ := cmd.Flags().GetString("scope")
 
-			store, err := buildPolicyStore()
+			store, err := buildPolicyStore(cmd)
 			if err != nil {
 				return err
 			}
@@ -158,12 +158,12 @@ func newApprovalClearCmd() *cobra.Command {
 }
 
 // buildPolicyStore constructs a PolicyStore consistent with agent builder logic.
-func buildPolicyStore() (security.PolicyStore, error) {
+func buildPolicyStore(cmd *cobra.Command) (security.PolicyStore, error) {
 	loader := config.NewLoaderV2()
 
 	cfg, err := func() (*config.V2, error) {
-		if flagConfigFile != "" {
-			return loader.LoadFromFileWithEnv(flagConfigFile)
+		if cf := flagConfigFile(cmd); cf != "" {
+			return loader.LoadFromFileWithEnv(cf)
 		}
 
 		return loader.LoadWithEnv()

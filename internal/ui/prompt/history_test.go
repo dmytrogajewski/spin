@@ -7,6 +7,7 @@ import (
 )
 
 func TestHistory_Submit(t *testing.T) {
+	t.Parallel()
 	h := prompt.NewHistory(3)
 
 	// Submit first entry.
@@ -47,6 +48,7 @@ func TestHistory_Submit(t *testing.T) {
 }
 
 func TestHistory_PrevHistory_Empty(t *testing.T) {
+	t.Parallel()
 	h := prompt.NewHistory(10)
 
 	entry, ok := h.PrevHistory("draft")
@@ -60,6 +62,7 @@ func TestHistory_PrevHistory_Empty(t *testing.T) {
 }
 
 func TestHistory_PrevHistory_SingleEntry(t *testing.T) {
+	t.Parallel()
 	h := prompt.NewHistory(10)
 	h.Submit("first")
 
@@ -81,6 +84,7 @@ func TestHistory_PrevHistory_SingleEntry(t *testing.T) {
 }
 
 func TestHistory_PrevHistory_MultipleEntries(t *testing.T) {
+	t.Parallel()
 	h := prompt.NewHistory(10)
 	h.Submit("first")
 	h.Submit("second")
@@ -110,6 +114,7 @@ func TestHistory_PrevHistory_MultipleEntries(t *testing.T) {
 }
 
 func TestHistory_NextHistory(t *testing.T) {
+	t.Parallel()
 	h := prompt.NewHistory(10)
 	h.Submit("first")
 	h.Submit("second")
@@ -145,6 +150,7 @@ func TestHistory_NextHistory(t *testing.T) {
 }
 
 func TestHistory_DraftPreservation(t *testing.T) {
+	t.Parallel()
 	h := prompt.NewHistory(10)
 	h.Submit("first")
 	h.Submit("second")
@@ -174,6 +180,7 @@ func TestHistory_DraftPreservation(t *testing.T) {
 }
 
 func TestHistory_Reset(t *testing.T) {
+	t.Parallel()
 	h := prompt.NewHistory(10)
 	h.Submit("first")
 	h.Submit("second")
@@ -192,6 +199,7 @@ func TestHistory_Reset(t *testing.T) {
 }
 
 func TestHistory_SubmitDuringNavigation(t *testing.T) {
+	t.Parallel()
 	h := prompt.NewHistory(10)
 	h.Submit("first")
 	h.Submit("second")
@@ -219,6 +227,7 @@ func TestHistory_SubmitDuringNavigation(t *testing.T) {
 }
 
 func TestHistory_EmptyStringSubmit(t *testing.T) {
+	t.Parallel()
 	h := prompt.NewHistory(10)
 
 	// Submit empty string (should be allowed, readline does this).
@@ -231,6 +240,7 @@ func TestHistory_EmptyStringSubmit(t *testing.T) {
 }
 
 func TestHistory_DuplicateEntries(t *testing.T) {
+	t.Parallel()
 	h := prompt.NewHistory(10)
 
 	// Submit duplicate (should be allowed, both stored).

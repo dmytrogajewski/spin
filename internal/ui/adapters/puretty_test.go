@@ -18,7 +18,10 @@ import (
 // TestUpdateBlock_PrintsCompletionStatus verifies that UpdateBlock prints the completion status line.
 // This is a regression test for the bug where UpdateBlock was storing updates but not displaying them.
 func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
+	t.Parallel(
 	// Setup with actual output capture.
+	)
+
 	var buf bytes.Buffer
 
 	renderer := prompt.NewTermRenderer(&buf, 80, "> ")
@@ -106,7 +109,10 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 
 // TestUpdateBlock_NoStatusForIncompleteBlock verifies that UpdateBlock doesn't print status for incomplete blocks.
 func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
+	t.Parallel(
 	// Setup.
+	)
+
 	p := setupPureTTY(t)
 	defer func() { _ = p.Stop() }()
 
@@ -150,7 +156,10 @@ func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
 
 // TestUpdateBlock_HandlesReadBlocks verifies READ blocks don't print completion status.
 func TestUpdateBlock_HandlesReadBlocks(t *testing.T) {
+	t.Parallel(
 	// Setup.
+	)
+
 	p := setupPureTTY(t)
 	defer func() { _ = p.Stop() }()
 
@@ -239,7 +248,10 @@ func captureOutput(_ *PureTTY) string {
 // This is a regression test for the bug where arrow keys and A/D keys
 // didn't work because all keyboard events were consumed by the prompt loop.
 func TestApprovalDialog_KeyboardInput(t *testing.T) {
+	t.Parallel(
 	// Create a buffer for output.
+	)
+
 	var buf bytes.Buffer
 
 	// Create a keyboard event channel.
@@ -330,6 +342,7 @@ func TestApprovalDialog_KeyboardInput(t *testing.T) {
 
 // TestApprovalDialog_DenyKey tests that 'D' key denies the request.
 func TestApprovalDialog_DenyKey(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	keyCh := make(chan term.KeyEvent, 10)
@@ -389,6 +402,7 @@ func TestApprovalDialog_DenyKey(t *testing.T) {
 
 // TestApprovalDialog_ArrowKeys tests arrow key navigation in approval dialog.
 func TestApprovalDialog_ArrowKeys(t *testing.T) {
+	t.Parallel()
 	t.Skip("Arrow key navigation implemented but needs approval dialog HandleKey support")
 
 	// Placeholder: This test requires the approval dialog to handle arrow key escape sequences
@@ -427,12 +441,14 @@ func (m *mockTerminalController) OnResize(f func(int, int)) {
 	m.resizeFunc = f
 }
 
-
 // TestUpdateBlock_NoDuplicateToolCompleted reproduces and tests the fix for duplicate "Tool completed" messages.
 // This test simulates the exact scenario where a TOOL block is updated multiple times,
 // which was causing "Tool completed" to print twice.
 func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
+	t.Parallel(
 	// Setup with actual output capture.
+	)
+
 	var buf bytes.Buffer
 
 	renderer := prompt.NewTermRenderer(&buf, 80, "> ")
@@ -548,7 +564,10 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 
 // TestExecuteBlock_NoDuplicateExitStatus tests that EXECUTE blocks also don't duplicate status.
 func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
+	t.Parallel(
 	// Setup with actual output capture.
+	)
+
 	var buf bytes.Buffer
 
 	renderer := prompt.NewTermRenderer(&buf, 80, "> ")
@@ -667,7 +686,10 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 // is not overwritten by event-driven status updates.
 // This is a regression test for BUG-20251029001449.
 func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
+	t.Parallel(
 	// Create a buffer for output.
+	)
+
 	var buf bytes.Buffer
 
 	// Create mock TTY.

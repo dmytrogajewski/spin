@@ -210,7 +210,7 @@ func runMCPRegistryLocalAdd(cmd *cobra.Command, args []string) error {
 
 	// Load config.
 	loader := config.NewLoaderV2()
-	_, err := loader.LoadFromFile(flagConfigFile)
+	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -319,7 +319,7 @@ return fmt.Errorf("invalid transport: %s (use 'sse' or 'streamable-http'): %w", 
 
 	// Load config.
 	loader := config.NewLoaderV2()
-	_, err := loader.LoadFromFile(flagConfigFile)
+	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -454,7 +454,7 @@ func runMCPRegistrySmitheryAdd(cmd *cobra.Command, args []string) error {
 
 	// Load config.
 	loader := config.NewLoaderV2()
-	_, err = loader.LoadFromFile(flagConfigFile)
+	_, err = loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -516,7 +516,7 @@ func runMCPRegistryList(cmd *cobra.Command, _ []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
 	loader := config.NewLoaderV2()
-	_, err := loader.LoadFromFile(flagConfigFile)
+	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -588,7 +588,7 @@ func runMCPRegistryGet(cmd *cobra.Command, args []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
 	loader := config.NewLoaderV2()
-	_, err := loader.LoadFromFile(flagConfigFile)
+	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -696,7 +696,7 @@ func runMCPRegistryRemove(cmd *cobra.Command, args []string) error {
 	yes, _ := cmd.Flags().GetBool("yes")
 
 	loader := config.NewLoaderV2()
-	_, err := loader.LoadFromFile(flagConfigFile)
+	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -790,7 +790,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	loader := config.NewLoaderV2()
-	_, err := loader.LoadFromFile(flagConfigFile)
+	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -970,7 +970,7 @@ func runMCPListTools(cmd *cobra.Command, _ []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
 	loader := config.NewLoaderV2()
-	_, err := loader.LoadFromFile(flagConfigFile)
+	_, err := loader.LoadFromFile(flagConfigFile(cmd))
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

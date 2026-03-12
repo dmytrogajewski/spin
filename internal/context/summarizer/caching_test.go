@@ -8,6 +8,8 @@ import (
 )
 
 func TestNewCachingSummarizer(t *testing.T) {
+	t.Parallel()
+
 	inner := &mockSummarizer{}
 	cache := NewCache(DefaultCacheConfig())
 
@@ -22,6 +24,8 @@ func TestNewCachingSummarizer(t *testing.T) {
 }
 
 func TestCachingSummarizer_CacheHit(t *testing.T) {
+	t.Parallel()
+
 	callCount := 0
 	inner := &mockSummarizer{
 		summarizeFunc: func(_ context.Context, _ string, _ Options) (*Result, error) {
@@ -66,6 +70,8 @@ func TestCachingSummarizer_CacheHit(t *testing.T) {
 }
 
 func TestCachingSummarizer_MessagesNotCached(t *testing.T) {
+	t.Parallel()
+
 	callCount := 0
 	inner := &mockSummarizer{
 		summarizeMessagesFunc: func(_ context.Context, _ []message.Message, _ Options) (*MessageResult, error) {

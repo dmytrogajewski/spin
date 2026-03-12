@@ -61,6 +61,8 @@ func fileExists(workspace, path string) bool {
 // Test: Applier Creation.
 
 func TestNewApplier(t *testing.T) {
+	t.Parallel()
+
 	workspace := createTempWorkspace(t)
 
 	tests := []struct {
@@ -75,6 +77,8 @@ func TestNewApplier(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			applier, err := NewApplier(tt.root)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewApplier() error = %v, wantErr %v", err, tt.wantErr)
@@ -92,6 +96,8 @@ func TestNewApplier(t *testing.T) {
 // Test: Path Validation.
 
 func TestApplier_ValidatePath(t *testing.T) {
+	t.Parallel()
+
 	workspace := createTempWorkspace(t)
 
 	applier, err := NewApplier(workspace)
@@ -114,6 +120,8 @@ func TestApplier_ValidatePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Use a dummy Add operation to test path validation.
 			patch := &Patch{
 				Operations: []FileOperation{
@@ -132,6 +140,8 @@ func TestApplier_ValidatePath(t *testing.T) {
 // Test: Add File Operation.
 
 func TestApplier_AddFile(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name           string
 		filePath       string
@@ -179,6 +189,8 @@ func TestApplier_AddFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			workspace := createTempWorkspace(t)
 			applier, _ := NewApplier(workspace)
 			applier.SetForceOverwrite(tt.forceOverwrite)
@@ -235,6 +247,8 @@ func TestApplier_AddFile(t *testing.T) {
 // Test: Delete File Operation.
 
 func TestApplier_DeleteFile(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name         string
 		filePath     string
@@ -264,6 +278,8 @@ func TestApplier_DeleteFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			workspace := createTempWorkspace(t)
 			applier, _ := NewApplier(workspace)
 
@@ -309,6 +325,8 @@ func TestApplier_DeleteFile(t *testing.T) {
 // Test: Update File Operation.
 
 func TestApplier_UpdateFile(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		filePath string
@@ -426,6 +444,8 @@ func TestApplier_UpdateFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			workspace := createTempWorkspace(t)
 			applier, _ := NewApplier(workspace)
 
@@ -475,6 +495,8 @@ func TestApplier_UpdateFile(t *testing.T) {
 // Test: Move File Operation.
 
 func TestApplier_MoveFile(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		oldPath  string
@@ -507,6 +529,8 @@ func TestApplier_MoveFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			workspace := createTempWorkspace(t)
 			applier, _ := NewApplier(workspace)
 
@@ -561,6 +585,8 @@ func TestApplier_MoveFile(t *testing.T) {
 // Test: Dry-Run Mode.
 
 func TestApplier_DryRun(t *testing.T) {
+	t.Parallel()
+
 	workspace := createTempWorkspace(t)
 	applier, _ := NewApplier(workspace)
 	applier.SetDryRun(true)
@@ -592,6 +618,8 @@ func TestApplier_DryRun(t *testing.T) {
 // Test: Atomic Rollback.
 
 func TestApplier_AtomicRollback(t *testing.T) {
+	t.Parallel()
+
 	workspace := createTempWorkspace(t)
 	applier, _ := NewApplier(workspace)
 
@@ -643,6 +671,8 @@ func TestApplier_AtomicRollback(t *testing.T) {
 // Test: Multiple Operations.
 
 func TestApplier_MultipleOperations(t *testing.T) {
+	t.Parallel()
+
 	workspace := createTempWorkspace(t)
 	applier, _ := NewApplier(workspace)
 
@@ -706,6 +736,8 @@ func TestApplier_MultipleOperations(t *testing.T) {
 // Test: ValidatePatch.
 
 func TestApplier_ValidatePatch(t *testing.T) {
+	t.Parallel()
+
 	workspace := createTempWorkspace(t)
 	applier, _ := NewApplier(workspace)
 
@@ -743,6 +775,8 @@ func TestApplier_ValidatePatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := applier.ValidatePatch(tt.patch)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidatePatch() error = %v, wantErr %v", err, tt.wantErr)
@@ -754,6 +788,8 @@ func TestApplier_ValidatePatch(t *testing.T) {
 // Test: Error Messages.
 
 func TestApplier_ErrorMessages(t *testing.T) {
+	t.Parallel()
+
 	workspace := createTempWorkspace(t)
 	applier, _ := NewApplier(workspace)
 
@@ -805,6 +841,8 @@ func TestApplier_ErrorMessages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Create test.txt for update test.
 			if tt.name == "context not found" {
 				createFile(t, workspace, "test.txt", "some content")

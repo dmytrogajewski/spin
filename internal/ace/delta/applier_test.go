@@ -11,6 +11,8 @@ import (
 )
 
 func TestDeltaApplier_ApplyContentUpdate(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -56,6 +58,8 @@ func TestDeltaApplier_ApplyContentUpdate(t *testing.T) {
 }
 
 func TestDeltaApplier_ApplyIncrementHelpful(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -96,6 +100,8 @@ func TestDeltaApplier_ApplyIncrementHelpful(t *testing.T) {
 }
 
 func TestDeltaApplier_ApplyIncrementHarmful(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -128,6 +134,8 @@ func TestDeltaApplier_ApplyIncrementHarmful(t *testing.T) {
 }
 
 func TestDeltaApplier_ApplyAddTag(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -180,6 +188,8 @@ func TestDeltaApplier_ApplyAddTag(t *testing.T) {
 }
 
 func TestDeltaApplier_ApplyRemoveTag(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -219,6 +229,8 @@ func TestDeltaApplier_ApplyRemoveTag(t *testing.T) {
 }
 
 func TestDeltaApplier_ApplyUpdateEmbedding(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -258,6 +270,8 @@ func TestDeltaApplier_ApplyUpdateEmbedding(t *testing.T) {
 }
 
 func TestDeltaApplier_BulletNotFound(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -281,6 +295,8 @@ func TestDeltaApplier_BulletNotFound(t *testing.T) {
 }
 
 func TestDeltaApplier_InvalidFieldType(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -313,6 +329,8 @@ func TestDeltaApplier_InvalidFieldType(t *testing.T) {
 }
 
 func TestDeltaApplier_UnknownOperation(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -344,6 +362,8 @@ func TestDeltaApplier_UnknownOperation(t *testing.T) {
 }
 
 func TestDeltaApplier_MultipleDeltas(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)

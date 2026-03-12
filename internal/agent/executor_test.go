@@ -15,6 +15,7 @@ import (
 )
 
 func TestNewExecutor(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 
 	executor, err := NewExecutor(workDir)
@@ -24,6 +25,7 @@ func TestNewExecutor(t *testing.T) {
 }
 
 func TestNewExecutor_WithOptions(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	validator := security.NewValidator()
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
@@ -36,18 +38,21 @@ func TestNewExecutor_WithOptions(t *testing.T) {
 }
 
 func TestNewExecutor_EmptyWorkDir(t *testing.T) {
+	t.Parallel()
 	executor, err := NewExecutor("")
 	require.Error(t, err)
 	assert.Nil(t, executor)
 }
 
 func TestNewExecutor_NonExistentWorkDir(t *testing.T) {
+	t.Parallel()
 	executor, err := NewExecutor("/non/existent/directory")
 	require.NoError(t, err) // NewExecutor doesn't validate directory existence.
 	assert.NotNil(t, executor)
 }
 
 func TestExecutor_Execute(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
@@ -66,6 +71,7 @@ func TestExecutor_Execute(t *testing.T) {
 }
 
 func TestExecutor_Execute_WithTimeout(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
@@ -87,6 +93,7 @@ func TestExecutor_Execute_WithTimeout(t *testing.T) {
 }
 
 func TestExecutor_Execute_WithWorkingDirectory(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
@@ -110,6 +117,7 @@ func TestExecutor_Execute_WithWorkingDirectory(t *testing.T) {
 }
 
 func TestExecutor_Execute_WithEnvironment(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
@@ -134,6 +142,7 @@ func TestExecutor_Execute_WithEnvironment(t *testing.T) {
 }
 
 func TestExecutor_Execute_NonExistentCommand(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
@@ -151,6 +160,7 @@ func TestExecutor_Execute_NonExistentCommand(t *testing.T) {
 }
 
 func TestExecutor_Validate(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	validator := security.NewValidator()
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
@@ -180,6 +190,7 @@ func TestExecutor_Validate(t *testing.T) {
 }
 
 func TestExecutor_Validate_NilCommand(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
@@ -190,6 +201,7 @@ func TestExecutor_Validate_NilCommand(t *testing.T) {
 }
 
 func TestExecutor_Validate_EmptyProgram(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
@@ -206,6 +218,7 @@ func TestExecutor_Validate_EmptyProgram(t *testing.T) {
 }
 
 func TestResult_Success(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		result   *Result
@@ -239,12 +252,15 @@ func TestResult_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.expected, tt.result.Success())
 		})
 	}
 }
 
 func TestResult_Failed(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		result   *Result
@@ -270,12 +286,15 @@ func TestResult_Failed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.expected, tt.result.Failed())
 		})
 	}
 }
 
 func TestResult_Output(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		result   *Result
@@ -317,12 +336,15 @@ func TestResult_Output(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.expected, tt.result.Output())
 		})
 	}
 }
 
 func TestDefaultExecuteOptions(t *testing.T) {
+	t.Parallel()
 	opts := DefaultExecuteOptions()
 	assert.NotNil(t, opts)
 	assert.Equal(t, time.Duration(0), opts.Timeout) // 0 means use executor's default.
@@ -331,6 +353,7 @@ func TestDefaultExecuteOptions(t *testing.T) {
 }
 
 func TestExecutorOption_WithSecurityService(t *testing.T) {
+	t.Parallel()
 	validator := security.NewValidator()
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
 	securityService := security.NewService(validator, approvalService)
@@ -343,6 +366,7 @@ func TestExecutorOption_WithSecurityService(t *testing.T) {
 }
 
 func TestExecutorOption_WithSecurityService_Nil(t *testing.T) {
+	t.Parallel()
 	executor := &Executor{}
 
 	opt := WithSecurityService(nil)
@@ -352,6 +376,7 @@ func TestExecutorOption_WithSecurityService_Nil(t *testing.T) {
 }
 
 func TestExecutorOption_WithApprovalService(t *testing.T) {
+	t.Parallel()
 	approvalService := &security.ApprovalService{}
 	executor := &Executor{}
 
@@ -362,6 +387,7 @@ func TestExecutorOption_WithApprovalService(t *testing.T) {
 }
 
 func TestExecutorOption_WithTimeout(t *testing.T) {
+	t.Parallel()
 	timeout := 30 * time.Second
 	executor := &Executor{}
 
@@ -372,6 +398,7 @@ func TestExecutorOption_WithTimeout(t *testing.T) {
 }
 
 func TestExecutorOption_WithCache(t *testing.T) {
+	t.Parallel()
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 	executor := &Executor{}
 
@@ -382,6 +409,7 @@ func TestExecutorOption_WithCache(t *testing.T) {
 }
 
 func TestExecutor_ConcurrentExecution(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
@@ -415,6 +443,7 @@ func TestExecutor_ConcurrentExecution(t *testing.T) {
 }
 
 func TestExecutor_ExecuteStreaming(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
@@ -441,6 +470,7 @@ func TestExecutor_ExecuteStreaming(t *testing.T) {
 }
 
 func TestExecutor_ExecuteStreaming_WithTimeout(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
@@ -468,6 +498,7 @@ func TestExecutor_ExecuteStreaming_WithTimeout(t *testing.T) {
 }
 
 func TestExecutor_ErrorHandling(t *testing.T) {
+	t.Parallel()
 	workDir := t.TempDir()
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)

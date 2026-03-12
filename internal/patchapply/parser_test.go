@@ -6,6 +6,8 @@ import (
 )
 
 func TestParser_Parse(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		input   string
@@ -449,6 +451,8 @@ invalid prefix
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			p := NewParser(tt.input)
 			got, err := p.Parse()
 
@@ -483,6 +487,8 @@ invalid prefix
 }
 
 func TestParser_Parse_LineNumbers(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		input      string
@@ -517,6 +523,8 @@ invalid line without prefix
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			p := NewParser(tt.input)
 
 			_, err := p.Parse()
@@ -534,6 +542,8 @@ invalid line without prefix
 }
 
 func TestLineChangeType_String(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		typ  LineChangeType
 		want string
@@ -546,6 +556,8 @@ func TestLineChangeType_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
+			t.Parallel()
+
 			if got := tt.typ.String(); got != tt.want {
 				t.Errorf("LineChangeType.String() = %v, want %v", got, tt.want)
 			}

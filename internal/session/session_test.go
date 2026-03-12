@@ -8,6 +8,7 @@ import (
 // Test Session Creation.
 
 func TestNewSession(t *testing.T) {
+	t.Parallel()
 	workDir := "/test/workdir"
 
 	session := NewSession(workDir)
@@ -42,6 +43,7 @@ func TestNewSession(t *testing.T) {
 }
 
 func TestNewSession_GeneratesUniqueIDs(t *testing.T) {
+	t.Parallel()
 	workDir := "/test/workdir"
 
 	s1 := NewSession(workDir)
@@ -53,6 +55,7 @@ func TestNewSession_GeneratesUniqueIDs(t *testing.T) {
 }
 
 func TestNewSession_InitializesMetadata(t *testing.T) {
+	t.Parallel()
 	workDir := "/test/workdir"
 
 	session := NewSession(workDir)
@@ -69,6 +72,7 @@ func TestNewSession_InitializesMetadata(t *testing.T) {
 // Test IncrementTurnCount.
 
 func TestSession_IncrementTurnCount(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 	originalUpdatedAt := session.UpdatedAt
 
@@ -91,6 +95,7 @@ func TestSession_IncrementTurnCount(t *testing.T) {
 }
 
 func TestSession_IncrementTurnCount_Multiple(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	for i := 1; i <= 5; i++ {
@@ -110,6 +115,7 @@ func TestSession_IncrementTurnCount_Multiple(t *testing.T) {
 // Test Metadata Operations.
 
 func TestSession_UpdateMetadata(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	err := session.UpdateMetadata(func(m *Metadata) {
@@ -130,6 +136,7 @@ func TestSession_UpdateMetadata(t *testing.T) {
 }
 
 func TestSession_SetState(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	err := session.SetState(StateCompleted)
@@ -143,6 +150,7 @@ func TestSession_SetState(t *testing.T) {
 }
 
 func TestSession_SetState_InvalidTransition(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	// Archive the session.
@@ -159,6 +167,7 @@ func TestSession_SetState_InvalidTransition(t *testing.T) {
 }
 
 func TestSession_AddTag(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	err := session.AddTag("test-tag")
@@ -176,6 +185,7 @@ func TestSession_AddTag(t *testing.T) {
 }
 
 func TestSession_AddTag_Duplicate(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	_ = session.AddTag("test-tag")
@@ -187,6 +197,7 @@ func TestSession_AddTag_Duplicate(t *testing.T) {
 }
 
 func TestSession_RemoveTag(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	_ = session.AddTag("tag1")
@@ -207,6 +218,7 @@ func TestSession_RemoveTag(t *testing.T) {
 }
 
 func TestSession_SetTitle(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	err := session.SetTitle("My Session")
@@ -222,6 +234,7 @@ func TestSession_SetTitle(t *testing.T) {
 // Test Validation.
 
 func TestSession_Validate_Valid(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	err := session.Validate()
@@ -231,6 +244,7 @@ func TestSession_Validate_Valid(t *testing.T) {
 }
 
 func TestSession_Validate_EmptyID(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 	session.ID = ""
 
@@ -241,6 +255,7 @@ func TestSession_Validate_EmptyID(t *testing.T) {
 }
 
 func TestSession_Validate_EmptyWorkDir(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 	session.WorkDir = ""
 
@@ -251,6 +266,7 @@ func TestSession_Validate_EmptyWorkDir(t *testing.T) {
 }
 
 func TestSession_Validate_InvalidTimestamps(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 	session.UpdatedAt = session.CreatedAt.Add(-1 * time.Hour) // UpdatedAt before CreatedAt.
 
@@ -261,6 +277,7 @@ func TestSession_Validate_InvalidTimestamps(t *testing.T) {
 }
 
 func TestSession_Validate_InvalidState(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 	session.State = "invalid-state" // Invalid state value.
 
@@ -273,6 +290,7 @@ func TestSession_Validate_InvalidState(t *testing.T) {
 // Test Concurrent Access.
 
 func TestSession_ConcurrentMetadataUpdates(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	done := make(chan bool)
@@ -303,6 +321,7 @@ func TestSession_ConcurrentMetadataUpdates(t *testing.T) {
 }
 
 func TestSession_ConcurrentTagOperations(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	done := make(chan bool)
@@ -311,7 +330,7 @@ func TestSession_ConcurrentTagOperations(t *testing.T) {
 	for i := range 5 {
 		go func(_ int) {
 			for range 10 {
-					_ = session.AddTag("tag")
+				_ = session.AddTag("tag")
 			}
 
 			done <- true

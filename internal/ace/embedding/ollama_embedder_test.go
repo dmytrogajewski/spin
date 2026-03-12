@@ -13,6 +13,8 @@ import (
 )
 
 func TestNewOllamaEmbedder(t *testing.T) {
+	t.Parallel()
+
 	config := DefaultOllamaEmbedderConfig()
 	embedder, err := NewOllamaEmbedder(config)
 
@@ -23,6 +25,8 @@ func TestNewOllamaEmbedder(t *testing.T) {
 }
 
 func TestNewOllamaEmbedder_CustomConfig(t *testing.T) {
+	t.Parallel()
+
 	config := OllamaEmbedderConfig{
 		BaseURL:   "http://custom:11434",
 		Model:     "mxbai-embed-large",
@@ -38,6 +42,8 @@ func TestNewOllamaEmbedder_CustomConfig(t *testing.T) {
 }
 
 func TestNewOllamaEmbedder_InvalidURL(t *testing.T) {
+	t.Parallel()
+
 	config := OllamaEmbedderConfig{
 		BaseURL: "://invalid-url",
 	}
@@ -105,6 +111,8 @@ func newMockOllamaServer(t *testing.T, handler func(model string, input string) 
 }
 
 func TestOllamaEmbedder_Embed(t *testing.T) {
+	t.Parallel()
+
 	const dim = 768
 
 	fakeEmbedding := makeTestEmbedding(dim, 1.0)
@@ -152,6 +160,8 @@ func TestOllamaEmbedder_Embed(t *testing.T) {
 }
 
 func TestOllamaEmbedder_Embed_Similarity(t *testing.T) {
+	t.Parallel()
+
 	const dim = 768
 
 	// Create three distinct embeddings where embed1 and embed2 are similar,

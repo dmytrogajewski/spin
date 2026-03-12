@@ -6,6 +6,8 @@ import (
 )
 
 func TestNewMatcher(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		fileLines []string
@@ -31,6 +33,8 @@ func TestNewMatcher(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			m := NewMatcher(tt.fileLines)
 			if m == nil {
 				t.Fatal("NewMatcher() returned nil")
@@ -52,6 +56,8 @@ func TestNewMatcher(t *testing.T) {
 }
 
 func TestMatcher_FindContext_ExactMatch(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name         string
 		fileLines    []string
@@ -136,6 +142,8 @@ func TestMatcher_FindContext_ExactMatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			m := NewMatcher(tt.fileLines)
 
 			got := m.FindContext(tt.contextLines, tt.header)
@@ -147,6 +155,8 @@ func TestMatcher_FindContext_ExactMatch(t *testing.T) {
 }
 
 func TestMatcher_FindContext_FuzzyMatch(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name         string
 		fileLines    []string
@@ -244,6 +254,8 @@ func TestMatcher_FindContext_FuzzyMatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			m := NewMatcher(tt.fileLines)
 			if tt.threshold != 0 {
 				// Note: threshold customization removed - using default 0.85.
@@ -259,6 +271,8 @@ func TestMatcher_FindContext_FuzzyMatch(t *testing.T) {
 }
 
 func TestMatcher_FindContext_HeaderMatching(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name         string
 		fileLines    []string
@@ -357,6 +371,8 @@ func TestMatcher_FindContext_HeaderMatching(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			m := NewMatcher(tt.fileLines)
 
 			got := m.FindContext(tt.contextLines, tt.header)
@@ -368,6 +384,8 @@ func TestMatcher_FindContext_HeaderMatching(t *testing.T) {
 }
 
 func TestMatcher_FindContext_EdgeCases(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name         string
 		fileLines    []string
@@ -500,6 +518,8 @@ func TestMatcher_FindContext_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			m := NewMatcher(tt.fileLines)
 
 			got := m.FindContext(tt.contextLines, tt.header)
@@ -511,6 +531,8 @@ func TestMatcher_FindContext_EdgeCases(t *testing.T) {
 }
 
 func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name         string
 		fileLines    []string
@@ -603,6 +625,8 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			m := NewMatcher(tt.fileLines)
 			if tt.threshold != 0 {
 				// Note: threshold customization removed - using default 0.85.

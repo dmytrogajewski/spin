@@ -8,6 +8,7 @@ import (
 // Test Metadata Initialization.
 
 func TestMetadata_DefaultValues(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	if session.Metadata.Title != "" {
@@ -38,6 +39,7 @@ func TestMetadata_DefaultValues(t *testing.T) {
 // Test Token Tracking.
 
 func TestMetadata_TokenTracking(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	// Add turns with different token counts using IncrementTurnCount.
@@ -54,6 +56,7 @@ func TestMetadata_TokenTracking(t *testing.T) {
 // Test Turn Count Consistency.
 
 func TestMetadata_TurnCountConsistency(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	// Add multiple turns.
@@ -70,6 +73,7 @@ func TestMetadata_TurnCountConsistency(t *testing.T) {
 // Test Title Management.
 
 func TestMetadata_SetTitle_Valid(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	err := session.SetTitle("My Project Session")
@@ -83,6 +87,7 @@ func TestMetadata_SetTitle_Valid(t *testing.T) {
 }
 
 func TestMetadata_SetTitle_UpdatesTimestamp(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 	originalUpdatedAt := session.UpdatedAt
 
@@ -102,6 +107,7 @@ func TestMetadata_SetTitle_UpdatesTimestamp(t *testing.T) {
 // Test Tag Management.
 
 func TestMetadata_AddTag_Single(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	err := session.AddTag("backend")
@@ -119,6 +125,7 @@ func TestMetadata_AddTag_Single(t *testing.T) {
 }
 
 func TestMetadata_AddTag_Multiple(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	tags := []string{"backend", "api", "database", "auth"}
@@ -136,6 +143,7 @@ func TestMetadata_AddTag_Multiple(t *testing.T) {
 }
 
 func TestMetadata_AddTag_Duplicate(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	// Add same tag twice.
@@ -149,6 +157,7 @@ func TestMetadata_AddTag_Duplicate(t *testing.T) {
 }
 
 func TestMetadata_RemoveTag_Existing(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	_ = session.AddTag("backend")
@@ -173,6 +182,7 @@ func TestMetadata_RemoveTag_Existing(t *testing.T) {
 }
 
 func TestMetadata_RemoveTag_NonExistent(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	_ = session.AddTag("backend")
@@ -192,6 +202,7 @@ func TestMetadata_RemoveTag_NonExistent(t *testing.T) {
 // Test Last Error Tracking.
 
 func TestMetadata_LastError(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	// Initially empty.
@@ -216,6 +227,7 @@ func TestMetadata_LastError(t *testing.T) {
 // Test Metadata Update Callback.
 
 func TestMetadata_UpdateMetadata_Multiple(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	err := session.UpdateMetadata(func(m *Metadata) {
@@ -242,6 +254,7 @@ func TestMetadata_UpdateMetadata_Multiple(t *testing.T) {
 }
 
 func TestMetadata_UpdateMetadata_UpdatesTimestamp(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 	originalUpdatedAt := session.UpdatedAt
 
@@ -263,6 +276,7 @@ func TestMetadata_UpdateMetadata_UpdatesTimestamp(t *testing.T) {
 // Test Description.
 
 func TestMetadata_SetDescription(t *testing.T) {
+	t.Parallel()
 	session := NewSession("/test/workdir")
 
 	description := "This session implements user authentication"

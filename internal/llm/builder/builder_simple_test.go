@@ -15,6 +15,8 @@ import (
 
 // TestNewBuilder_Simple tests that the new simplified builder works.
 func TestNewBuilder_Simple(t *testing.T) {
+	t.Parallel()
+
 	cfg := &config.V2{
 		LLM: config.LLMV2{
 			Provider: "ollama",
@@ -34,6 +36,8 @@ func TestNewBuilder_Simple(t *testing.T) {
 
 // TestBuild_ConfigAlreadyMerged tests that Build uses config directly.
 func TestBuild_ConfigAlreadyMerged(t *testing.T) {
+	t.Parallel()
+
 	// Use a mock server so we don't depend on a real Ollama instance.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

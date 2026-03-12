@@ -9,6 +9,7 @@ import (
 // TestDetectPlanFromOutput_ExitsPlanSection tests that detectPlanFromOutput
 // properly exits plan sections when encountering non-plan content.
 func TestDetectPlanFromOutput_ExitsPlanSection(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		output        string
@@ -87,6 +88,7 @@ Or bullet points.`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			entries := detectPlanFromOutput(tt.output)
 			assert.Equal(t, tt.expectedCount, len(entries), tt.description)
 
@@ -100,6 +102,7 @@ Or bullet points.`,
 // TestDetectPlanFromOutput_RealWorldScenario tests a realistic scenario
 // where an LLM describes a project with multiple sections.
 func TestDetectPlanFromOutput_RealWorldScenario(t *testing.T) {
+	t.Parallel()
 	output := `I'll help you review this project. Here's my analysis:
 
 ## Project Structure

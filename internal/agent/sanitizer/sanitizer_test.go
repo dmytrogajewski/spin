@@ -8,6 +8,7 @@ import (
 )
 
 func TestSanitizer_Process(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		chunks      []string
@@ -78,6 +79,8 @@ func TestSanitizer_Process(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			s := New()
 
 			var content, thought string

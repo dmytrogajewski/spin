@@ -7,6 +7,8 @@ import (
 )
 
 func TestNewMatcher(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	assert.NotNil(t, m)
@@ -14,6 +16,8 @@ func TestNewMatcher(t *testing.T) {
 }
 
 func TestNewMatcher_CaseSensitive(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(true)
 
 	assert.NotNil(t, m)
@@ -21,6 +25,8 @@ func TestNewMatcher_CaseSensitive(t *testing.T) {
 }
 
 func TestMatcher_Score_EmptyQuery(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	score, indices := m.Score("", "path/to/file.go")
@@ -30,6 +36,8 @@ func TestMatcher_Score_EmptyQuery(t *testing.T) {
 }
 
 func TestMatcher_Score_SimpleMatch(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	score, indices := m.Score("abc", "a/b/c.txt")
@@ -42,6 +50,8 @@ func TestMatcher_Score_SimpleMatch(t *testing.T) {
 }
 
 func TestMatcher_Score_NoMatch(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	score, indices := m.Score("xyz", "a/b/c.txt")
@@ -51,6 +61,8 @@ func TestMatcher_Score_NoMatch(t *testing.T) {
 }
 
 func TestMatcher_Score_PartialMatch(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	// "ab" exists but "abc" doesn't fully match.
@@ -60,6 +72,8 @@ func TestMatcher_Score_PartialMatch(t *testing.T) {
 }
 
 func TestMatcher_Score_ConsecutiveBonus(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	score1, _ := m.Score("abc", "a/b/c.txt")
@@ -70,6 +84,8 @@ func TestMatcher_Score_ConsecutiveBonus(t *testing.T) {
 }
 
 func TestMatcher_Score_SeparatorBonus(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	score1, _ := m.Score("ft", "file_test.go")
@@ -80,6 +96,8 @@ func TestMatcher_Score_SeparatorBonus(t *testing.T) {
 }
 
 func TestMatcher_Score_PathLengthBonus(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	// Both are filename prefix matches (90), path length bonus should differentiate
@@ -93,6 +111,8 @@ func TestMatcher_Score_PathLengthBonus(t *testing.T) {
 }
 
 func TestMatcher_Score_CaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	score1, _ := m.Score("abc", "ABC.txt")
@@ -104,6 +124,8 @@ func TestMatcher_Score_CaseInsensitive(t *testing.T) {
 }
 
 func TestMatcher_Match_EmptyQuery(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 	paths := []string{"file1.go", "file2.go"}
 
@@ -113,6 +135,8 @@ func TestMatcher_Match_EmptyQuery(t *testing.T) {
 }
 
 func TestMatcher_Match_EmptyPaths(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	matches := m.Match("test", []string{})
@@ -121,6 +145,8 @@ func TestMatcher_Match_EmptyPaths(t *testing.T) {
 }
 
 func TestMatcher_Match_SinglePath(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 	paths := []string{"test.go"}
 
@@ -132,6 +158,8 @@ func TestMatcher_Match_SinglePath(t *testing.T) {
 }
 
 func TestMatcher_Match_MultiplePaths(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 	paths := []string{
 		"src/app.go",
@@ -150,6 +178,8 @@ func TestMatcher_Match_MultiplePaths(t *testing.T) {
 }
 
 func TestMatcher_Match_Sorting(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 	paths := []string{
 		"very/long/path/test.go",
@@ -174,6 +204,8 @@ func TestMatcher_Match_Sorting(t *testing.T) {
 }
 
 func TestMatcher_Match_NoMatches(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 	paths := []string{
 		"file1.go",
@@ -186,6 +218,8 @@ func TestMatcher_Match_NoMatches(t *testing.T) {
 }
 
 func TestMatcher_Match_PartialMatches(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 	paths := []string{
 		"readme.md",
@@ -244,6 +278,8 @@ func BenchmarkMatcher_Match_1000(b *testing.B) {
 // Enhanced scoring tests for Feature 3.2.
 
 func TestMatcher_Score_ExactFilenameMatch(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	tests := []struct {
@@ -259,6 +295,8 @@ func TestMatcher_Score_ExactFilenameMatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			score, _ := m.Score(tt.query, tt.path)
 			assert.Equal(t, tt.want, score, "Expected exact match score of 100")
 		})
@@ -266,6 +304,8 @@ func TestMatcher_Score_ExactFilenameMatch(t *testing.T) {
 }
 
 func TestMatcher_Score_FilenamePrefix(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	tests := []struct {
@@ -281,6 +321,8 @@ func TestMatcher_Score_FilenamePrefix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			score, _ := m.Score(tt.query, tt.path)
 			assert.Equal(t, tt.want, score, "Expected filename prefix score of 90")
 		})
@@ -288,6 +330,8 @@ func TestMatcher_Score_FilenamePrefix(t *testing.T) {
 }
 
 func TestMatcher_Score_FilenameContains(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	tests := []struct {
@@ -305,6 +349,8 @@ func TestMatcher_Score_FilenameContains(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			score, _ := m.Score(tt.query, tt.path)
 			assert.GreaterOrEqual(t, score, tt.minScore, "Score should be at least %d", tt.minScore)
 			assert.LessOrEqual(t, score, tt.maxScore, "Score should be at most %d", tt.maxScore)
@@ -313,6 +359,8 @@ func TestMatcher_Score_FilenameContains(t *testing.T) {
 }
 
 func TestMatcher_Score_PathSegmentMatch(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	tests := []struct {
@@ -328,6 +376,8 @@ func TestMatcher_Score_PathSegmentMatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			score, _ := m.Score(tt.query, tt.path)
 			assert.Equal(t, tt.want, score, "Expected path segment score")
 		})
@@ -335,6 +385,8 @@ func TestMatcher_Score_PathSegmentMatch(t *testing.T) {
 }
 
 func TestMatcher_Score_FuzzyConsecutive(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	tests := []struct {
@@ -349,6 +401,8 @@ func TestMatcher_Score_FuzzyConsecutive(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			score, _ := m.Score(tt.query, tt.path)
 			assert.GreaterOrEqual(t, score, tt.minScore, "Fuzzy consecutive should score at least %d", tt.minScore)
 		})
@@ -356,6 +410,8 @@ func TestMatcher_Score_FuzzyConsecutive(t *testing.T) {
 }
 
 func TestMatcher_Score_FuzzyScattered(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	tests := []struct {
@@ -370,6 +426,8 @@ func TestMatcher_Score_FuzzyScattered(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			score, _ := m.Score(tt.query, tt.path)
 			assert.GreaterOrEqual(t, score, tt.minScore, "Fuzzy scattered should score at least %d", tt.minScore)
 		})
@@ -377,6 +435,8 @@ func TestMatcher_Score_FuzzyScattered(t *testing.T) {
 }
 
 func TestMatcher_Score_Ranking(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	paths := []string{
@@ -409,6 +469,8 @@ func TestMatcher_Score_Ranking(t *testing.T) {
 }
 
 func TestMatcher_Match_AdvancedRanking(t *testing.T) {
+	t.Parallel()
+
 	m := NewMatcher(false)
 
 	paths := []string{

@@ -20,6 +20,7 @@ func createTestRegistry() *CommandRegistry {
 }
 
 func TestNewPalette(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 
@@ -32,6 +33,7 @@ func TestNewPalette(t *testing.T) {
 }
 
 func TestPalette_OpenClose(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 
@@ -50,6 +52,7 @@ func TestPalette_OpenClose(t *testing.T) {
 }
 
 func TestPalette_Insert(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -66,6 +69,7 @@ func TestPalette_Insert(t *testing.T) {
 }
 
 func TestPalette_Backspace(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -92,6 +96,7 @@ func TestPalette_Backspace(t *testing.T) {
 }
 
 func TestPalette_ClearQuery(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -108,6 +113,7 @@ func TestPalette_ClearQuery(t *testing.T) {
 }
 
 func TestPalette_MoveUpDown_EmptyResults(t *testing.T) {
+	t.Parallel()
 	registry := NewCommandRegistry() // Empty registry.
 	palette := NewPalette(registry)
 	palette.Open()
@@ -121,6 +127,7 @@ func TestPalette_MoveUpDown_EmptyResults(t *testing.T) {
 }
 
 func TestPalette_MoveDown(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -135,6 +142,7 @@ func TestPalette_MoveDown(t *testing.T) {
 }
 
 func TestPalette_MoveDown_Wrapping(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -152,6 +160,7 @@ func TestPalette_MoveDown_Wrapping(t *testing.T) {
 }
 
 func TestPalette_MoveUp(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -171,6 +180,7 @@ func TestPalette_MoveUp(t *testing.T) {
 }
 
 func TestPalette_MoveUp_Wrapping(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -183,6 +193,7 @@ func TestPalette_MoveUp_Wrapping(t *testing.T) {
 }
 
 func TestPalette_SelectedCommand_NoSelection(t *testing.T) {
+	t.Parallel()
 	registry := NewCommandRegistry() // Empty.
 	palette := NewPalette(registry)
 	palette.Open()
@@ -192,6 +203,7 @@ func TestPalette_SelectedCommand_NoSelection(t *testing.T) {
 }
 
 func TestPalette_SelectedCommand(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -215,6 +227,7 @@ func TestPalette_SelectedCommand(t *testing.T) {
 }
 
 func TestPalette_FuzzySearch_EmptyQuery(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -225,6 +238,7 @@ func TestPalette_FuzzySearch_EmptyQuery(t *testing.T) {
 }
 
 func TestPalette_FuzzySearch_PartialMatch(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -245,6 +259,7 @@ func TestPalette_FuzzySearch_PartialMatch(t *testing.T) {
 }
 
 func TestPalette_FuzzySearch_MultipleMatches(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -272,6 +287,7 @@ func TestPalette_FuzzySearch_MultipleMatches(t *testing.T) {
 }
 
 func TestPalette_FuzzySearch_NoMatch(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -288,6 +304,7 @@ func TestPalette_FuzzySearch_NoMatch(t *testing.T) {
 }
 
 func TestPalette_FuzzySearch_Description(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -315,6 +332,7 @@ func TestPalette_FuzzySearch_Description(t *testing.T) {
 }
 
 func TestPalette_SelectionResetOnQueryChange(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -330,6 +348,7 @@ func TestPalette_SelectionResetOnQueryChange(t *testing.T) {
 }
 
 func TestPalette_SelectionClampOnFilter(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -351,6 +370,7 @@ func TestPalette_SelectionClampOnFilter(t *testing.T) {
 }
 
 func TestPalette_FilteredCommands_Order(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
@@ -366,6 +386,7 @@ func TestPalette_FilteredCommands_Order(t *testing.T) {
 }
 
 func TestPalette_OpenResetsState(t *testing.T) {
+	t.Parallel()
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 
@@ -389,6 +410,7 @@ func TestPalette_OpenResetsState(t *testing.T) {
 }
 
 func TestPalette_ExecuteSelectedCommand(t *testing.T) {
+	t.Parallel()
 	executed := false
 	registry := NewCommandRegistry()
 	registry.Register(NewSimpleCommand("Test", "Test command", "Test", 'T', func(_ context.Context) error {

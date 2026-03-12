@@ -11,6 +11,8 @@ import (
 )
 
 func TestDeltaApplier_ApplyBatch_Success(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -79,6 +81,8 @@ func TestDeltaApplier_ApplyBatch_Success(t *testing.T) {
 }
 
 func TestDeltaApplier_ApplyBatch_PartialFailure(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -125,6 +129,8 @@ func TestDeltaApplier_ApplyBatch_PartialFailure(t *testing.T) {
 }
 
 func TestDeltaApplier_ApplyBatch_AtomicFailure(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -161,6 +167,8 @@ func TestDeltaApplier_ApplyBatch_AtomicFailure(t *testing.T) {
 }
 
 func TestDeltaApplier_ApplyBatch_DefaultWorkers(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -197,6 +205,8 @@ func TestDeltaApplier_ApplyBatch_DefaultWorkers(t *testing.T) {
 }
 
 func TestDeltaApplier_ApplyBatch_EmptyBatch(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -222,6 +232,8 @@ func TestDeltaApplier_ApplyBatch_EmptyBatch(t *testing.T) {
 }
 
 func TestDeltaApplier_ApplyBatch_LargeBatch(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -281,6 +293,8 @@ func TestDeltaApplier_ApplyBatch_LargeBatch(t *testing.T) {
 }
 
 func TestDeltaApplier_ApplyBatch_ConcurrentSafety(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)

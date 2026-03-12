@@ -14,6 +14,8 @@ import (
 
 // TestFindDuplicates_NoDuplicates tests when playbook is empty.
 func TestFindDuplicates_NoDuplicates(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -40,6 +42,8 @@ func TestFindDuplicates_NoDuplicates(t *testing.T) {
 
 // TestFindDuplicates_ExactDuplicate tests exact duplicate detection.
 func TestFindDuplicates_ExactDuplicate(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -74,6 +78,8 @@ func TestFindDuplicates_ExactDuplicate(t *testing.T) {
 
 // TestFindDuplicates_SimilarContent tests near-duplicate detection.
 func TestFindDuplicates_SimilarContent(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -110,6 +116,8 @@ func TestFindDuplicates_SimilarContent(t *testing.T) {
 
 // TestFindDuplicates_ThresholdBoundary tests similarity threshold.
 func TestFindDuplicates_ThresholdBoundary(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -145,6 +153,8 @@ func TestFindDuplicates_ThresholdBoundary(t *testing.T) {
 
 // TestFindDuplicates_MultipleBullets tests batch duplicate detection.
 func TestFindDuplicates_MultipleBullets(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -193,6 +203,8 @@ func TestFindDuplicates_MultipleBullets(t *testing.T) {
 
 // TestFindDuplicates_EmptyPlaybook tests with empty playbook.
 func TestFindDuplicates_EmptyPlaybook(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -214,6 +226,8 @@ func TestFindDuplicates_EmptyPlaybook(t *testing.T) {
 
 // TestFindDuplicates_EmptyInput tests with empty input.
 func TestFindDuplicates_EmptyInput(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)

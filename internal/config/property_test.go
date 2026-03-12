@@ -11,6 +11,8 @@ import (
 // TestV2_RoundTrip_YAML tests that V2 can be marshaled and unmarshaled without data loss.
 // This is a property-based test that generates random valid configs.
 func TestV2_RoundTrip_YAML(t *testing.T) {
+	t.Parallel()
+
 	rapid.Check(t, func(t *rapid.T) {
 		// Generate a random valid V2.
 		cfg := genValidV2(t)
@@ -59,6 +61,8 @@ func TestV2_RoundTrip_YAML(t *testing.T) {
 // TestV2_Validation_GeneratedConfigs tests that generated configs pass validation.
 // This ensures our validation logic is consistent with our data model.
 func TestV2_Validation_GeneratedConfigs(t *testing.T) {
+	t.Parallel()
+
 	rapid.Check(t, func(t *rapid.T) {
 		cfg := genValidV2(t)
 

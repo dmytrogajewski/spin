@@ -38,6 +38,7 @@ func (m *mockFilesystemClient) WriteTextFile(_ context.Context, path, _ string) 
 }
 
 func TestACPWriteFileTool_PathResolution(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		workDir       string
@@ -106,6 +107,8 @@ func TestACPWriteFileTool_PathResolution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			mockFS := &mockFilesystemClient{}
 			runtime := &ACPRuntime{
 				workDir:          tt.workDir,
@@ -148,6 +151,7 @@ func TestACPWriteFileTool_PathResolution(t *testing.T) {
 }
 
 func TestACPReadFileTool_PathResolution(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		workDir       string
@@ -188,6 +192,8 @@ func TestACPReadFileTool_PathResolution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			mockFS := &mockFilesystemClient{
 				readContent: "file content",
 			}
@@ -231,6 +237,7 @@ func TestACPReadFileTool_PathResolution(t *testing.T) {
 }
 
 func TestACPWriteFileTool_InvalidPathErrorMessage(t *testing.T) {
+	t.Parallel()
 	// Test that when the client returns "invalid path" error, we provide a helpful message.
 	mockFS := &mockFilesystemClient{
 		writeErr: errInvalidPath,
@@ -268,6 +275,7 @@ func TestACPWriteFileTool_InvalidPathErrorMessage(t *testing.T) {
 }
 
 func TestACPReadFileTool_InvalidPathErrorMessage(t *testing.T) {
+	t.Parallel()
 	// Test that when the client returns "invalid path" error, we provide a helpful message.
 	mockFS := &mockFilesystemClient{
 		readErr: errInvalidPath2,
@@ -300,6 +308,7 @@ func TestACPReadFileTool_InvalidPathErrorMessage(t *testing.T) {
 }
 
 func TestIsPathWithinWorkspace(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		path     string
@@ -352,6 +361,8 @@ func TestIsPathWithinWorkspace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := isPathWithinWorkspace(tt.path, tt.workDir)
 			if result != tt.expected {
 				t.Errorf("isPathWithinWorkspace(%q, %q) = %v, want %v", tt.path, tt.workDir, result, tt.expected)
@@ -372,6 +383,7 @@ func containsString(s, substr string) bool {
 
 // TestACPWriteFileTool_ContextWorkDir tests that workDir from context takes precedence over runtime.workDir.
 func TestACPWriteFileTool_ContextWorkDir(t *testing.T) {
+	t.Parallel()
 	mockFS := &mockFilesystemClient{}
 	runtime := &ACPRuntime{
 		workDir:          "/runtime/workspace", // This should be overridden by context.
@@ -408,6 +420,7 @@ func TestACPWriteFileTool_ContextWorkDir(t *testing.T) {
 
 // TestACPReadFileTool_ContextWorkDir tests that workDir from context takes precedence over runtime.workDir.
 func TestACPReadFileTool_ContextWorkDir(t *testing.T) {
+	t.Parallel()
 	mockFS := &mockFilesystemClient{
 		readContent: "test content",
 	}
@@ -445,6 +458,7 @@ func TestACPReadFileTool_ContextWorkDir(t *testing.T) {
 
 // TestACPWriteFileTool_FallbackToRuntimeWorkDir tests that runtime.workDir is used when context has no workDir.
 func TestACPWriteFileTool_FallbackToRuntimeWorkDir(t *testing.T) {
+	t.Parallel()
 	mockFS := &mockFilesystemClient{}
 	runtime := &ACPRuntime{
 		workDir:          "/runtime/workspace",

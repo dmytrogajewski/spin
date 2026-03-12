@@ -12,6 +12,8 @@ import (
 
 // TestGolden_ValidMinimal tests loading a minimal valid configuration.
 func TestGolden_ValidMinimal(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join("golden", "valid_minimal.yaml")
 
 	data, err := os.ReadFile(path)
@@ -62,6 +64,8 @@ func TestGolden_ValidMinimal(t *testing.T) {
 
 // TestGolden_ValidFull tests loading a full configuration with all fields.
 func TestGolden_ValidFull(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join("golden", "valid_full.yaml")
 
 	data, err := os.ReadFile(path)
@@ -156,6 +160,8 @@ func TestGolden_ValidFull(t *testing.T) {
 
 // TestGolden_InvalidMissingRequired tests that missing required fields are detected.
 func TestGolden_InvalidMissingRequired(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join("golden", "invalid_missing_required.yaml")
 
 	data, err := os.ReadFile(path)
@@ -198,6 +204,8 @@ func TestGolden_InvalidMissingRequired(t *testing.T) {
 
 // TestGolden_InvalidBadValues tests that invalid field values are detected.
 func TestGolden_InvalidBadValues(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join("golden", "invalid_bad_values.yaml")
 
 	data, err := os.ReadFile(path)
@@ -238,6 +246,8 @@ func TestGolden_InvalidBadValues(t *testing.T) {
 
 // TestGolden_InvalidCrossSection tests cross-section validation rules.
 func TestGolden_InvalidCrossSection(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join("golden", "invalid_cross_section.yaml")
 
 	data, err := os.ReadFile(path)
@@ -274,6 +284,8 @@ func TestGolden_InvalidCrossSection(t *testing.T) {
 
 // TestGolden_LoaderV2 tests LoaderV2 with golden files.
 func TestGolden_LoaderV2_ValidMinimal(t *testing.T) {
+	t.Parallel()
+
 	loader := NewLoaderV2()
 
 	path := filepath.Join("golden", "valid_minimal.yaml")
@@ -290,6 +302,8 @@ func TestGolden_LoaderV2_ValidMinimal(t *testing.T) {
 
 // TestGolden_LoaderV2_Invalid tests LoaderV2 with invalid files.
 func TestGolden_LoaderV2_Invalid(t *testing.T) {
+	t.Parallel()
+
 	loader := NewLoaderV2()
 
 	testCases := []struct {
@@ -308,6 +322,8 @@ func TestGolden_LoaderV2_Invalid(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			path := filepath.Join("golden", tc.file)
 
 			_, err := loader.LoadFromFile(path)
@@ -325,6 +341,8 @@ func TestGolden_LoaderV2_Invalid(t *testing.T) {
 // TestGolden_LoaderV2_MissingFieldsWithDefaults tests that LoaderV2 applies defaults
 // for missing fields, making them valid.
 func TestGolden_LoaderV2_MissingFieldsWithDefaults(t *testing.T) {
+	t.Parallel()
+
 	loader := NewLoaderV2()
 
 	path := filepath.Join("golden", "invalid_missing_required.yaml")
@@ -347,6 +365,8 @@ func TestGolden_LoaderV2_MissingFieldsWithDefaults(t *testing.T) {
 // TestGolden_LoaderV2_CrossSectionWithDefaults tests cross-section validation
 // even when defaults are applied.
 func TestGolden_LoaderV2_CrossSectionWithDefaults(t *testing.T) {
+	t.Parallel()
+
 	loader := NewLoaderV2()
 
 	path := filepath.Join("golden", "invalid_cross_section.yaml")

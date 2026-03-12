@@ -12,6 +12,8 @@ import (
 
 // TestACP_Prompt_ToolCalls tests that tool calls are executed and notifications are sent.
 func TestACP_Prompt_ToolCalls(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -90,6 +92,8 @@ func TestACP_Prompt_ToolCalls(t *testing.T) {
 
 // TestACP_Prompt_ToolCallNotifications tests that tool call notifications have correct structure.
 func TestACP_Prompt_ToolCallNotifications(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -161,6 +165,8 @@ func TestACP_Prompt_ToolCallNotifications(t *testing.T) {
 
 // TestACP_ToolCall_Create tests tool_call notification structure.
 func TestACP_ToolCall_Create(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -223,6 +229,8 @@ func TestACP_ToolCall_Create(t *testing.T) {
 
 // TestACP_ToolCall_Update_Status tests status transitions.
 func TestACP_ToolCall_Update_Status(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -286,6 +294,8 @@ func TestACP_ToolCall_Update_Status(t *testing.T) {
 
 // TestACP_ToolCall_Update_Failed tests failed status.
 func TestACP_ToolCall_Update_Failed(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -347,6 +357,8 @@ func TestACP_ToolCall_Update_Failed(t *testing.T) {
 
 // TestACP_ToolCall_Content_Text tests text content in tool calls.
 func TestACP_ToolCall_Content_Text(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -411,6 +423,8 @@ func TestACP_ToolCall_Content_Text(t *testing.T) {
 
 // TestACP_ToolCall_Content_Diff tests diff content in tool calls.
 func TestACP_ToolCall_Content_Diff(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -485,6 +499,8 @@ func TestACP_ToolCall_Content_Diff(t *testing.T) {
 
 // TestACP_ToolCall_Locations tests file locations in tool calls.
 func TestACP_ToolCall_Locations(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -553,6 +569,8 @@ func TestACP_ToolCall_Locations(t *testing.T) {
 
 // TestACP_ToolCall_Kinds tests all tool kinds.
 func TestACP_ToolCall_Kinds(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -560,7 +578,7 @@ func TestACP_ToolCall_Kinds(t *testing.T) {
 	workDir := createTestWorkspace(t)
 
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
-	defer cleanupAgent(t, cmd, stdin)
+	t.Cleanup(func() { cleanupAgent(t, cmd, stdin) })
 
 	clientImpl := &testClient{}
 	client := createACPClientWithClient(t, stdin, stdout, clientImpl)
@@ -592,6 +610,8 @@ func TestACP_ToolCall_Kinds(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			clientImpl.clearNotifications()
 
 			promptReq := acp.PromptRequest{
@@ -636,6 +656,8 @@ func TestACP_ToolCall_Kinds(t *testing.T) {
 
 // TestACP_ToolCall_RawInput tests rawInput field.
 func TestACP_ToolCall_RawInput(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -698,6 +720,8 @@ func TestACP_ToolCall_RawInput(t *testing.T) {
 
 // TestACP_ToolCall_RawOutput tests rawOutput field.
 func TestACP_ToolCall_RawOutput(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -760,6 +784,8 @@ func TestACP_ToolCall_RawOutput(t *testing.T) {
 
 // TestACP_ToolCall_Multiple tests multiple tool calls in one turn.
 func TestACP_ToolCall_Multiple(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -816,6 +842,8 @@ func TestACP_ToolCall_Multiple(t *testing.T) {
 
 // TestACP_ToolCall_Sequential tests sequential tool calls.
 func TestACP_ToolCall_Sequential(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}

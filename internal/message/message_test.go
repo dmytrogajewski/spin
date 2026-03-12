@@ -7,6 +7,7 @@ import (
 
 // TestToolCall_Creation tests creating a ToolCall with all fields.
 func TestToolCall_Creation(t *testing.T) {
+	t.Parallel()
 	tc := ToolCall{
 		ID:   "call_abc123",
 		Type: "function",
@@ -35,6 +36,7 @@ func TestToolCall_Creation(t *testing.T) {
 
 // TestToolCall_JSONMarshaling tests JSON marshaling and unmarshaling.
 func TestToolCall_JSONMarshaling(t *testing.T) {
+	t.Parallel()
 	original := ToolCall{
 		ID:   "call_123",
 		Type: "function",
@@ -78,6 +80,7 @@ func TestToolCall_JSONMarshaling(t *testing.T) {
 
 // TestMetadata_StringValues tests that Metadata stores string key-value pairs.
 func TestMetadata_StringValues(t *testing.T) {
+	t.Parallel()
 	meta := Metadata{
 		"user":      "test_user",
 		"session":   "abc123",
@@ -99,6 +102,7 @@ func TestMetadata_StringValues(t *testing.T) {
 
 // TestMessage_WithToolCalls tests Message with typed ToolCalls.
 func TestMessage_WithToolCalls(t *testing.T) {
+	t.Parallel()
 	msg := Message{
 		ID:      "msg_1",
 		Role:    RoleAssistant,
@@ -156,6 +160,7 @@ func TestMessage_WithToolCalls(t *testing.T) {
 
 // TestMessage_WithMetadata tests Message with typed Metadata.
 func TestMessage_WithMetadata(t *testing.T) {
+	t.Parallel()
 	msg := Message{
 		ID:      "msg_2",
 		Role:    RoleUser,
@@ -196,6 +201,7 @@ func TestMessage_WithMetadata(t *testing.T) {
 
 // TestMessage_JSONSerialization tests complete Message JSON marshaling/unmarshaling.
 func TestMessage_JSONSerialization(t *testing.T) {
+	t.Parallel()
 	original := Message{
 		ID:      "msg_123",
 		Role:    RoleAssistant,

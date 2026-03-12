@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	errExecutionFailed = errors.New("execution failed")
+	errExecutionFailed  = errors.New("execution failed")
 	errExecutionFailed2 = errors.New("execution failed")
 )
 
@@ -22,6 +22,7 @@ func contains(s, substr string) bool {
 // TestNewRegistryWithBuiltins_ContainsAllBuiltins verifies that the constructor
 // pre-populates the registry with all builtin tools.
 func TestNewRegistryWithBuiltins_ContainsAllBuiltins(t *testing.T) {
+	t.Parallel()
 	registry := NewRegistryWithBuiltins()
 
 	for _, tool := range BuiltinTools {
@@ -42,6 +43,7 @@ func TestNewRegistryWithBuiltins_ContainsAllBuiltins(t *testing.T) {
 
 // TestNewRegistryWithBuiltins_CountMatches verifies the count matches BuiltinTools.
 func TestNewRegistryWithBuiltins_CountMatches(t *testing.T) {
+	t.Parallel()
 	registry := NewRegistryWithBuiltins()
 
 	tools := registry.List()
@@ -94,6 +96,7 @@ func newMockTool(name string) *mockTool {
 }
 
 func TestNewRegistry(t *testing.T) {
+	t.Parallel()
 	reg := NewRegistry()
 	if reg == nil {
 		t.Fatal("NewRegistry() returned nil")
@@ -107,7 +110,9 @@ func TestNewRegistry(t *testing.T) {
 }
 
 func TestRegistryRegisterOrReplace(t *testing.T) {
+	t.Parallel()
 	t.Run("register new tool", func(t *testing.T) {
+		t.Parallel()
 		reg := NewRegistry()
 		tool1 := newMockTool("tool1")
 
@@ -128,6 +133,7 @@ func TestRegistryRegisterOrReplace(t *testing.T) {
 	})
 
 	t.Run("replace existing tool", func(t *testing.T) {
+		t.Parallel()
 		reg := NewRegistry()
 
 		// Register initial tool.
@@ -156,6 +162,7 @@ func TestRegistryRegisterOrReplace(t *testing.T) {
 	})
 
 	t.Run("replace does not affect other tools", func(t *testing.T) {
+		t.Parallel()
 		reg := NewRegistry()
 
 		// Register multiple tools.
@@ -188,6 +195,7 @@ func TestRegistryRegisterOrReplace(t *testing.T) {
 }
 
 func TestRegistryRegister(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		tools     []Tool
@@ -213,6 +221,7 @@ func TestRegistryRegister(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			reg := NewRegistry()
 
 			var lastErr error
@@ -244,6 +253,7 @@ func TestRegistryRegister(t *testing.T) {
 }
 
 func TestRegistryGet(t *testing.T) {
+	t.Parallel()
 	reg := NewRegistry()
 	tool1 := newMockTool("tool1")
 	_ = reg.Register(tool1)
@@ -268,6 +278,7 @@ func TestRegistryGet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			tool, err := reg.Get(tt.toolName)
 
 			if tt.wantErr != nil {
@@ -290,6 +301,7 @@ func TestRegistryGet(t *testing.T) {
 }
 
 func TestRegistryList(t *testing.T) {
+	t.Parallel()
 	reg := NewRegistry()
 
 	// Empty list.
@@ -321,6 +333,7 @@ func TestRegistryList(t *testing.T) {
 }
 
 func TestRegistryListSchemas(t *testing.T) {
+	t.Parallel()
 	reg := NewRegistry()
 
 	// Empty schemas.
@@ -354,6 +367,7 @@ func TestRegistryListSchemas(t *testing.T) {
 }
 
 func TestRegistryExecute(t *testing.T) {
+	t.Parallel()
 	reg := NewRegistry()
 
 	// Tool that returns success.
@@ -465,6 +479,7 @@ func TestRegistryExecute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx := context.Background()
 			params, _ := FromMap(tt.params)
 			result, err := reg.Execute(ctx, tt.toolName, params)
@@ -504,6 +519,7 @@ func TestRegistryExecute(t *testing.T) {
 }
 
 func TestRegistryExecuteContextCancellation(t *testing.T) {
+	t.Parallel()
 	reg := NewRegistry()
 
 	// Tool that checks context.
@@ -538,6 +554,7 @@ func TestRegistryExecuteContextCancellation(t *testing.T) {
 }
 
 func TestRegistryConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	reg := NewRegistry()
 
 	// Register initial tools.
@@ -594,6 +611,7 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 }
 
 func TestRegistryTypeValidation(t *testing.T) {
+	t.Parallel()
 	reg := NewRegistry()
 
 	// Tool with various parameter types.
@@ -696,6 +714,7 @@ func TestRegistryTypeValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(tt.params)
 			_, err := reg.Execute(context.Background(), "type_tool", params)
 
@@ -713,6 +732,7 @@ func TestRegistryTypeValidation(t *testing.T) {
 }
 
 func TestRegistryEnumValidation(t *testing.T) {
+	t.Parallel()
 	reg := NewRegistry()
 
 	// Tool with enum parameter.
@@ -777,6 +797,7 @@ func TestRegistryEnumValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(tt.params)
 			_, err := reg.Execute(context.Background(), "enum_tool", params)
 
@@ -796,6 +817,7 @@ func TestRegistryEnumValidation(t *testing.T) {
 // TestRegistryExecute_UnknownParameter verifies that unknown parameters are rejected.
 // See FRD-8.12 for specification.
 func TestRegistryExecute_UnknownParameter(t *testing.T) {
+	t.Parallel()
 	reg := NewRegistry()
 
 	// Tool with defined parameters.
@@ -877,6 +899,7 @@ func TestRegistryExecute_UnknownParameter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(tt.params)
 			_, err := reg.Execute(context.Background(), "test_tool", params)
 
@@ -906,6 +929,7 @@ func TestRegistryExecute_UnknownParameter(t *testing.T) {
 // TestRegistryExecute_UnknownParameter_ErrorMessage verifies error messages are helpful.
 // See FRD-8.12 TC-8.12.3 for specification.
 func TestRegistryExecute_UnknownParameter_ErrorMessage(t *testing.T) {
+	t.Parallel()
 	reg := NewRegistry()
 
 	// Tool with multiple defined parameters.
@@ -970,6 +994,7 @@ func TestRegistryExecute_UnknownParameter_ErrorMessage(t *testing.T) {
 }
 
 func TestNewDefaultRegistry(t *testing.T) {
+	t.Parallel()
 	workDir := "/tmp"
 	// Use a simple struct that implements the interface GetContextTool expects.
 	type testEnv struct {
@@ -1001,6 +1026,7 @@ func TestNewDefaultRegistry(t *testing.T) {
 }
 
 func TestNewDefaultRegistry_ToolsConfigured(t *testing.T) {
+	t.Parallel()
 	workDir := "/tmp/workdir"
 
 	type testEnv struct {
@@ -1052,7 +1078,10 @@ func TestNewDefaultRegistry_ToolsConfigured(t *testing.T) {
 }
 
 func TestNewDefaultRegistry_NilEnvironment(t *testing.T) {
+	t.Parallel(
 	// Should handle nil gracefully - create tools with empty WorkDir.
+	)
+
 	registry := NewDefaultRegistry("", nil)
 	if registry == nil {
 		t.Fatal("NewDefaultRegistry should not return nil")
@@ -1080,6 +1109,7 @@ func TestNewDefaultRegistry_NilEnvironment(t *testing.T) {
 }
 
 func TestNewDefaultRegistry_EquivalentToManual(t *testing.T) {
+	t.Parallel()
 	workDir := "/tmp/test"
 
 	type testEnv struct {
@@ -1136,6 +1166,7 @@ func TestNewDefaultRegistry_EquivalentToManual(t *testing.T) {
 }
 
 func TestNewDefaultRegistry_AllToolsRegistered(t *testing.T) {
+	t.Parallel()
 	workDir := "/tmp"
 
 	type testEnv struct {
@@ -1177,6 +1208,7 @@ func TestNewDefaultRegistry_AllToolsRegistered(t *testing.T) {
 }
 
 func TestNewDefaultRegistry_UniqueToolNames(t *testing.T) {
+	t.Parallel()
 	workDir := "/tmp"
 
 	type testEnv struct {

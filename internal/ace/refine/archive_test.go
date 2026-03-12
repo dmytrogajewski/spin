@@ -8,6 +8,8 @@ import (
 )
 
 func TestArchiveReason_Constants(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		reason ArchiveReason
@@ -21,6 +23,8 @@ func TestArchiveReason_Constants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if string(tt.reason) != tt.want {
 				t.Errorf("expected %s, got %s", tt.want, string(tt.reason))
 			}
@@ -29,6 +33,8 @@ func TestArchiveReason_Constants(t *testing.T) {
 }
 
 func TestArchive_Archive(t *testing.T) {
+	t.Parallel()
+
 	archive := NewArchive()
 
 	b, _ := bullet.New("Test content")
@@ -63,6 +69,8 @@ func TestArchive_Archive(t *testing.T) {
 }
 
 func TestArchive_Get(t *testing.T) {
+	t.Parallel()
+
 	archive := NewArchive()
 
 	b, _ := bullet.New("Test content")
@@ -86,6 +94,8 @@ func TestArchive_Get(t *testing.T) {
 }
 
 func TestArchive_List(t *testing.T) {
+	t.Parallel()
+
 	archive := NewArchive()
 
 	b1, _ := bullet.New("Content 1")
@@ -120,6 +130,8 @@ func TestArchive_List(t *testing.T) {
 }
 
 func TestArchive_Stats(t *testing.T) {
+	t.Parallel()
+
 	archive := NewArchive()
 
 	// Empty archive.
@@ -166,6 +178,8 @@ func TestArchive_Stats(t *testing.T) {
 }
 
 func TestArchive_Clear(t *testing.T) {
+	t.Parallel()
+
 	archive := NewArchive()
 
 	b1, _ := bullet.New("Content 1")
@@ -191,6 +205,8 @@ func TestArchive_Clear(t *testing.T) {
 }
 
 func TestArchive_Clone(t *testing.T) {
+	t.Parallel()
+
 	archive := NewArchive()
 
 	original, _ := bullet.New("Original content")
@@ -214,6 +230,8 @@ func TestArchive_Clone(t *testing.T) {
 }
 
 func TestArchive_MetadataPreservation(t *testing.T) {
+	t.Parallel()
+
 	archive := NewArchive()
 
 	b, _ := bullet.New("Test content")
@@ -235,6 +253,8 @@ func TestArchive_MetadataPreservation(t *testing.T) {
 }
 
 func TestArchive_NilMetadata(t *testing.T) {
+	t.Parallel()
+
 	archive := NewArchive()
 
 	b, _ := bullet.New("Test content")
@@ -251,6 +271,8 @@ func TestArchive_NilMetadata(t *testing.T) {
 }
 
 func TestArchive_Concurrency(t *testing.T) {
+	t.Parallel()
+
 	archive := NewArchive()
 
 	const (

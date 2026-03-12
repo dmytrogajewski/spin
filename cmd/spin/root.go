@@ -6,17 +6,53 @@ import (
 	"github.com/dmytrogajewski/spin/internal/appinfo"
 )
 
-// Global flags.
-var (
-	flagModel      string
-	flagProvider   string
-	flagSandbox    string
-	flagWorkDir    string
-	flagConfigFile string
-	flagConfig     []string
-	flagTaskMode   string
-	flagAgentsMD   string
-)
+// flagModel returns the --model flag value from a cobra command.
+func flagModel(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("model")
+	return v
+}
+
+// flagProvider returns the --provider flag value from a cobra command.
+func flagProvider(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("provider")
+	return v
+}
+
+// flagSandbox returns the --sandbox flag value from a cobra command.
+func flagSandbox(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("sandbox")
+	return v
+}
+
+// flagWorkDir returns the --cd flag value from a cobra command.
+func flagWorkDir(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("cd")
+	return v
+}
+
+// flagConfigFile returns the --config-file flag value from a cobra command.
+func flagConfigFile(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("config-file")
+	return v
+}
+
+// flagConfig returns the --config flag values from a cobra command.
+func flagConfig(cmd *cobra.Command) []string {
+	v, _ := cmd.Root().PersistentFlags().GetStringSlice("config")
+	return v
+}
+
+// flagTaskMode returns the --mode flag value from a cobra command.
+func flagTaskMode(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("mode")
+	return v
+}
+
+// flagAgentsMD returns the --agents-md flag value from a cobra command.
+func flagAgentsMD(cmd *cobra.Command) string {
+	v, _ := cmd.Root().PersistentFlags().GetString("agents-md")
+	return v
+}
 
 // newRootCmd creates the root command for spin CLI.
 func newRootCmd() *cobra.Command {
@@ -41,15 +77,15 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 	// Set custom version template.
 	cmd.SetVersionTemplate(appinfo.String() + "\n")
 
-	// Global flags.
-	cmd.PersistentFlags().StringVar(&flagModel, "model", "", "Model to use (e.g., llama3.1, mixtral, gpt-4o)")
-	cmd.PersistentFlags().StringVar(&flagProvider, "provider", "", "Provider (ollama, lmstudio, openai, anthropic)")
-	cmd.PersistentFlags().StringVar(&flagSandbox, "sandbox", "", "Sandbox mode (read-only, workspace-write, full-access)")
-	cmd.PersistentFlags().StringVar(&flagWorkDir, "cd", "", "Working directory")
-	cmd.PersistentFlags().StringVar(&flagConfigFile, "config-file", "", "Path to configuration file")
-	cmd.PersistentFlags().StringSliceVarP(&flagConfig, "config", "c", nil, "Config overrides (key=value)")
-	cmd.PersistentFlags().StringVarP(&flagTaskMode, "mode", "m", "regular", "Task mode: regular (full-featured, 16K tokens), review (read-only, 12K tokens), compact (minimal, 4K tokens), planning (context-only, 4K tokens)")
-	cmd.PersistentFlags().StringVar(&flagAgentsMD, "agents-md", "", "Path to AGENTS.md file (overrides auto-discovery)")
+	// Global flags (command-local, no package-level variables).
+	cmd.PersistentFlags().String("model", "", "Model to use (e.g., llama3.1, mixtral, gpt-4o)")
+	cmd.PersistentFlags().String("provider", "", "Provider (ollama, lmstudio, openai, anthropic)")
+	cmd.PersistentFlags().String("sandbox", "", "Sandbox mode (read-only, workspace-write, full-access)")
+	cmd.PersistentFlags().String("cd", "", "Working directory")
+	cmd.PersistentFlags().String("config-file", "", "Path to configuration file")
+	cmd.PersistentFlags().StringSliceP("config", "c", nil, "Config overrides (key=value)")
+	cmd.PersistentFlags().StringP("mode", "m", "regular", "Task mode: regular (full-featured, 16K tokens), review (read-only, 12K tokens), compact (minimal, 4K tokens), planning (context-only, 4K tokens)")
+	cmd.PersistentFlags().String("agents-md", "", "Path to AGENTS.md file (overrides auto-discovery)")
 
 	// Add commands.
 	cmd.AddCommand(newTUICmd()) // TUI mode (Phase 7.4 complete!)

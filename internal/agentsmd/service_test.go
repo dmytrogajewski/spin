@@ -9,6 +9,8 @@ import (
 )
 
 func TestNewService(t *testing.T) {
+	t.Parallel()
+
 	cfg := DefaultConfig()
 	svc := NewService(cfg, "/tmp", "")
 
@@ -26,6 +28,8 @@ func TestNewService(t *testing.T) {
 }
 
 func TestNewService_NilConfig(t *testing.T) {
+	t.Parallel()
+
 	svc := NewService(nil, "/tmp", "")
 
 	if svc == nil {
@@ -38,6 +42,8 @@ func TestNewService_NilConfig(t *testing.T) {
 }
 
 func TestService_Load_Success(t *testing.T) {
+	t.Parallel()
+
 	tempDir := t.TempDir()
 	agentsPath := filepath.Join(tempDir, FileName)
 
@@ -73,6 +79,8 @@ func TestService_Load_Success(t *testing.T) {
 }
 
 func TestService_Load_Disabled(t *testing.T) {
+	t.Parallel()
+
 	tempDir := t.TempDir()
 
 	agentsPath := filepath.Join(tempDir, FileName)
@@ -102,6 +110,8 @@ func TestService_Load_Disabled(t *testing.T) {
 }
 
 func TestService_Load_CustomPath(t *testing.T) {
+	t.Parallel()
+
 	tempDir := t.TempDir()
 	customPath := filepath.Join(tempDir, "custom-agents.md")
 
@@ -134,6 +144,8 @@ func TestService_Load_CustomPath(t *testing.T) {
 }
 
 func TestService_Load_CustomPath_NotFound(t *testing.T) {
+	t.Parallel()
+
 	cfg := &Config{
 		Enabled: true,
 		Path:    "/nonexistent/path/AGENTS.md",
@@ -149,6 +161,8 @@ func TestService_Load_CustomPath_NotFound(t *testing.T) {
 }
 
 func TestService_Load_NotFound(t *testing.T) {
+	t.Parallel()
+
 	// Create an isolated directory structure to prevent finding
 	// real AGENTS.md files when walking up the directory tree.
 	tempDir := t.TempDir()
@@ -178,6 +192,8 @@ func TestService_Load_NotFound(t *testing.T) {
 }
 
 func TestService_Load_SizeLimit(t *testing.T) {
+	t.Parallel()
+
 	tempDir := t.TempDir()
 	agentsPath := filepath.Join(tempDir, FileName)
 
@@ -216,6 +232,8 @@ func TestService_Load_SizeLimit(t *testing.T) {
 }
 
 func TestService_Refresh(t *testing.T) {
+	t.Parallel()
+
 	tempDir := t.TempDir()
 	agentsPath := filepath.Join(tempDir, FileName)
 
@@ -259,6 +277,8 @@ func TestService_Refresh(t *testing.T) {
 }
 
 func TestService_ThreadSafety(t *testing.T) {
+	t.Parallel()
+
 	tempDir := t.TempDir()
 
 	agentsPath := filepath.Join(tempDir, FileName)

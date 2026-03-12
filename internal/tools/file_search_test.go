@@ -9,6 +9,7 @@ import (
 )
 
 func TestFileSearchTool_BasicSearch(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	// Create test files.
@@ -52,6 +53,7 @@ func TestFileSearchTool_BasicSearch(t *testing.T) {
 }
 
 func TestFileSearchTool_MissingQuery(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tool := NewFileSearchTool(tmpDir)
 
@@ -72,6 +74,7 @@ func TestFileSearchTool_MissingQuery(t *testing.T) {
 }
 
 func TestFileSearchTool_NoResults(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	// Create one file that won't match.
@@ -98,6 +101,7 @@ func TestFileSearchTool_NoResults(t *testing.T) {
 }
 
 func TestFileSearchTool_CustomWorkspace(t *testing.T) {
+	t.Parallel()
 	workspace1 := t.TempDir()
 	workspace2 := t.TempDir()
 
@@ -128,6 +132,7 @@ func TestFileSearchTool_CustomWorkspace(t *testing.T) {
 }
 
 func TestFileSearchTool_Schema(t *testing.T) {
+	t.Parallel()
 	tool := NewFileSearchTool("/tmp")
 	schema := tool.Schema()
 
@@ -143,6 +148,7 @@ func TestFileSearchTool_Schema(t *testing.T) {
 }
 
 func TestFileSearchTool_ErrorCases(t *testing.T) {
+	t.Parallel()
 	tool := NewFileSearchTool("/tmp/test")
 
 	tests := []struct {
@@ -161,6 +167,7 @@ func TestFileSearchTool_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(tt.params)
 
 			result, err := tool.Execute(context.Background(), params)

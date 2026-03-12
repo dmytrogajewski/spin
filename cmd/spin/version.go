@@ -8,11 +8,6 @@ import (
 	"github.com/dmytrogajewski/spin/internal/appinfo"
 )
 
-var (
-	versionVerbose bool
-	versionShort   bool
-)
-
 // newVersionCmd creates the version command.
 func newVersionCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -20,13 +15,16 @@ func newVersionCmd() *cobra.Command {
 		Short: "Show version information",
 		Long:  `Display the version, build information, and Go version for Spin.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if versionShort {
+			short, _ := cmd.Flags().GetBool("short")
+			verbose, _ := cmd.Flags().GetBool("verbose")
+
+			if short {
 				fmt.Fprintln(cmd.OutOrStdout(), appinfo.ShortVersion())
 
 				return nil
 			}
 
-			if versionVerbose {
+			if verbose {
 				info := appinfo.GetInfo()
 				fmt.Fprintf(cmd.OutOrStdout(), "spin version %s\n", info.Version)
 				fmt.Fprintf(cmd.OutOrStdout(), "  commit: %s\n", info.Commit)
@@ -43,8 +41,8 @@ func newVersionCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVarP(&versionVerbose, "verbose", "v", false, "Show verbose version information")
-	cmd.Flags().BoolVarP(&versionShort, "short", "s", false, "Show only the version number")
+	cmd.Flags().BoolP("verbose", "v", false, "Show verbose version information")
+	cmd.Flags().BoolP("short", "s", false, "Show only the version number")
 
 	return cmd
 }

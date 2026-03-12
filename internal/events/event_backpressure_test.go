@@ -9,6 +9,8 @@ import (
 
 // Test BackpressureDrop mode - events dropped when channel full.
 func TestEventEmitter_BackpressureDrop(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitterWithConfig(EventEmitterConfig{
 		BufferSize:       2,
 		BackpressureMode: BackpressureDrop,
@@ -51,6 +53,8 @@ func TestEventEmitter_BackpressureDrop(t *testing.T) {
 
 // Test BackpressureDrop with fast consumer - no drops.
 func TestEventEmitter_BackpressureDrop_FastConsumer(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitterWithConfig(EventEmitterConfig{
 		BufferSize:       10, // Larger buffer to prevent drops.
 		BackpressureMode: BackpressureDrop,
@@ -106,6 +110,8 @@ func TestEventEmitter_BackpressureDrop_FastConsumer(t *testing.T) {
 
 // Test BackpressureBlock mode - emitter blocks until consumer ready.
 func TestEventEmitter_BackpressureBlock(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitterWithConfig(EventEmitterConfig{
 		BufferSize:       2,
 		BackpressureMode: BackpressureBlock,
@@ -169,6 +175,8 @@ func TestEventEmitter_BackpressureBlock(t *testing.T) {
 
 // Test BackpressureBuffer mode - dynamic buffering.
 func TestEventEmitter_BackpressureBuffer(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitterWithConfig(EventEmitterConfig{
 		BufferSize:       2,
 		BackpressureMode: BackpressureBuffer,
@@ -245,6 +253,8 @@ func TestEventEmitter_BackpressureBuffer(t *testing.T) {
 
 // Test BackpressureBuffer with limit exceeded.
 func TestEventEmitter_BackpressureBuffer_LimitExceeded(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitterWithConfig(EventEmitterConfig{
 		BufferSize:       2,
 		BackpressureMode: BackpressureBuffer,
@@ -300,6 +310,8 @@ func TestEventEmitter_BackpressureBuffer_LimitExceeded(t *testing.T) {
 
 // Test NewEventEmitter backward compatibility (should use BackpressureDrop).
 func TestNewEventEmitter_BackwardCompatibility(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitter(10)
 	defer emitter.Close()
 
@@ -314,6 +326,8 @@ func TestNewEventEmitter_BackwardCompatibility(t *testing.T) {
 
 // Test config defaults.
 func TestEventEmitterConfig_Defaults(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitterWithConfig(EventEmitterConfig{
 		BufferSize:       5,
 		BackpressureMode: BackpressureBuffer,
@@ -328,10 +342,14 @@ func TestEventEmitterConfig_Defaults(t *testing.T) {
 
 // Test concurrent emissions with different modes.
 func TestEventEmitter_ConcurrentEmissions(t *testing.T) {
+	t.Parallel()
+
 	modes := []BackpressureMode{BackpressureDrop, BackpressureBlock, BackpressureBuffer}
 
 	for _, mode := range modes {
 		t.Run(mode.String(), func(t *testing.T) {
+			t.Parallel()
+
 			emitter := NewEventEmitterWithConfig(EventEmitterConfig{
 				BufferSize:       10,
 				BackpressureMode: mode,
@@ -386,7 +404,9 @@ func TestEventEmitter_ConcurrentEmissions(t *testing.T) {
 }
 
 // Test Subscribe/Unsubscribe during emission.
-func TestEventEmitter_SubscribeUnsubscribeDuringEmit(_ *testing.T) {
+func TestEventEmitter_SubscribeUnsubscribeDuringEmit(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitterWithConfig(EventEmitterConfig{
 		BufferSize:       10,
 		BackpressureMode: BackpressureDrop,
@@ -446,6 +466,8 @@ func TestEventEmitter_SubscribeUnsubscribeDuringEmit(_ *testing.T) {
 
 // Test Close during emission.
 func TestEventEmitter_CloseDuringEmit(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitterWithConfig(EventEmitterConfig{
 		BufferSize:       10,
 		BackpressureMode: BackpressureDrop,
@@ -490,6 +512,8 @@ func TestEventEmitter_CloseDuringEmit(t *testing.T) {
 
 // Test buffer cleanup on Unsubscribe.
 func TestEventEmitter_BufferCleanupOnUnsubscribe(t *testing.T) {
+	t.Parallel()
+
 	emitter := NewEventEmitterWithConfig(EventEmitterConfig{
 		BufferSize:       2,
 		BackpressureMode: BackpressureBuffer,
@@ -527,6 +551,8 @@ func TestEventEmitter_BufferCleanupOnUnsubscribe(t *testing.T) {
 
 // Test BackpressureMode.String() for coverage.
 func TestBackpressureMode_String(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		mode BackpressureMode
 		want string
@@ -539,6 +565,8 @@ func TestBackpressureMode_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
+			t.Parallel()
+
 			got := tt.mode.String()
 			if got != tt.want {
 				t.Errorf("BackpressureMode.String() = %v, want %v", got, tt.want)

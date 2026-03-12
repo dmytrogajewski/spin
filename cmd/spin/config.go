@@ -159,8 +159,8 @@ func runConfigShow(cmd *cobra.Command, _ []string) error {
 		errV2 error
 	)
 
-	if flagConfigFile != "" {
-		cfgV2, errV2 = loaderV2.LoadFromFileWithEnv(flagConfigFile)
+	if cf := flagConfigFile(cmd); cf != "" {
+		cfgV2, errV2 = loaderV2.LoadFromFileWithEnv(cf)
 	} else {
 		cfgV2, errV2 = loaderV2.Load()
 	}
@@ -189,7 +189,7 @@ func runConfigValidate(cmd *cobra.Command, _ []string) error {
 	file, _ := cmd.Flags().GetString("file")
 
 	// Determine which file to load.
-	configPath := flagConfigFile
+	configPath := flagConfigFile(cmd)
 	if file != "" {
 		configPath = file
 	}
@@ -242,8 +242,8 @@ func runConfigPath(cmd *cobra.Command, _ []string) error {
 
 	var errV2 error
 
-	if flagConfigFile != "" {
-		_, errV2 = loaderV2.LoadFromFile(flagConfigFile)
+	if cf := flagConfigFile(cmd); cf != "" {
+		_, errV2 = loaderV2.LoadFromFile(cf)
 	} else {
 		_, errV2 = loaderV2.Load()
 	}

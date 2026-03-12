@@ -14,6 +14,8 @@ import (
 
 // TestCurateBatch_EmptyRequests tests empty batch.
 func TestCurateBatch_EmptyRequests(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -34,6 +36,8 @@ func TestCurateBatch_EmptyRequests(t *testing.T) {
 
 // TestCurateBatch_SingleRequest tests single request in batch.
 func TestCurateBatch_SingleRequest(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -67,6 +71,8 @@ func TestCurateBatch_SingleRequest(t *testing.T) {
 
 // TestCurateBatch_MultipleRequests tests multiple requests processed in batch.
 func TestCurateBatch_MultipleRequests(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 

@@ -7,6 +7,7 @@ import (
 )
 
 func TestBuffer_Insert(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		initial    string
@@ -67,6 +68,7 @@ func TestBuffer_Insert(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.initial)
 			b.SetCursor(tt.cursor)
@@ -85,6 +87,7 @@ func TestBuffer_Insert(t *testing.T) {
 }
 
 func TestBuffer_Backspace(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		initial    string
@@ -137,6 +140,7 @@ func TestBuffer_Backspace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.initial)
 			b.SetCursor(tt.cursor)
@@ -159,6 +163,7 @@ func TestBuffer_Backspace(t *testing.T) {
 }
 
 func TestBuffer_Delete(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		initial    string
@@ -211,6 +216,7 @@ func TestBuffer_Delete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.initial)
 			b.SetCursor(tt.cursor)
@@ -233,6 +239,7 @@ func TestBuffer_Delete(t *testing.T) {
 }
 
 func TestBuffer_MoveLeft(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		initial    string
@@ -272,6 +279,7 @@ func TestBuffer_MoveLeft(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.initial)
 			b.SetCursor(tt.cursor)
@@ -290,6 +298,7 @@ func TestBuffer_MoveLeft(t *testing.T) {
 }
 
 func TestBuffer_MoveRight(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		initial    string
@@ -329,6 +338,7 @@ func TestBuffer_MoveRight(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.initial)
 			b.SetCursor(tt.cursor)
@@ -347,6 +357,7 @@ func TestBuffer_MoveRight(t *testing.T) {
 }
 
 func TestBuffer_MoveStartEnd(t *testing.T) {
+	t.Parallel()
 	b := prompt.NewBuffer()
 	b.SetText("hello world")
 	b.SetCursor(5)
@@ -367,6 +378,7 @@ func TestBuffer_MoveStartEnd(t *testing.T) {
 }
 
 func TestBuffer_ClearLineLeft(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		initial    string
@@ -399,6 +411,7 @@ func TestBuffer_ClearLineLeft(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.initial)
 			b.SetCursor(tt.cursor)
@@ -417,6 +430,7 @@ func TestBuffer_ClearLineLeft(t *testing.T) {
 }
 
 func TestBuffer_ClearLineRight(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		initial    string
@@ -449,6 +463,7 @@ func TestBuffer_ClearLineRight(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.initial)
 			b.SetCursor(tt.cursor)
@@ -467,6 +482,7 @@ func TestBuffer_ClearLineRight(t *testing.T) {
 }
 
 func TestBuffer_DeleteWord(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		initial    string
@@ -513,6 +529,7 @@ func TestBuffer_DeleteWord(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.initial)
 			b.SetCursor(tt.cursor)
@@ -531,6 +548,7 @@ func TestBuffer_DeleteWord(t *testing.T) {
 }
 
 func TestBuffer_Clear(t *testing.T) {
+	t.Parallel()
 	b := prompt.NewBuffer()
 	b.SetText("hello world")
 	b.SetCursor(5)
@@ -547,6 +565,7 @@ func TestBuffer_Clear(t *testing.T) {
 }
 
 func TestBuffer_Len(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		text    string
 		wantLen int
@@ -559,6 +578,7 @@ func TestBuffer_Len(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.text, func(t *testing.T) {
+			t.Parallel()
 			b := prompt.NewBuffer()
 			b.SetText(tt.text)
 
@@ -570,6 +590,7 @@ func TestBuffer_Len(t *testing.T) {
 }
 
 func TestBuffer_SetCursor(t *testing.T) {
+	t.Parallel()
 	b := prompt.NewBuffer()
 	b.SetText("hello")
 
@@ -596,6 +617,7 @@ func TestBuffer_SetCursor(t *testing.T) {
 }
 
 func TestBuffer_DeleteWord_Punctuation(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		initial    string
@@ -642,6 +664,7 @@ func TestBuffer_DeleteWord_Punctuation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			b := prompt.NewBuffer()
 			for _, r := range tt.initial {
 				b.Insert(r)

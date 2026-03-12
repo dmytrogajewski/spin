@@ -6,6 +6,7 @@ import (
 )
 
 func TestRenderer_Render(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 80, 24)
@@ -32,6 +33,7 @@ func TestRenderer_Render(t *testing.T) {
 }
 
 func TestRenderer_Clear(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 80, 24)
@@ -52,6 +54,7 @@ func TestRenderer_Clear(t *testing.T) {
 }
 
 func TestRenderer_SetSize(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 80, 24)
@@ -72,6 +75,7 @@ func TestRenderer_SetSize(t *testing.T) {
 }
 
 func TestRenderer_SmallTerminal(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	// Terminal too small (height < 3).
 	renderer := NewRenderer(&buf, 80, 2)
@@ -89,6 +93,7 @@ func TestRenderer_SmallTerminal(t *testing.T) {
 }
 
 func TestRenderer_Render_LongText(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 20, 24)
@@ -109,6 +114,7 @@ func TestRenderer_Render_LongText(t *testing.T) {
 }
 
 func TestRenderer_Render_WithPadding(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 80, 24)
@@ -133,6 +139,7 @@ func TestRenderer_Render_WithPadding(t *testing.T) {
 }
 
 func TestRenderer_Render_WithANSICodes(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 80, 24)
@@ -153,6 +160,7 @@ func TestRenderer_Render_WithANSICodes(t *testing.T) {
 }
 
 func TestRenderer_Render_EmptyText(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 80, 24)
@@ -175,6 +183,7 @@ func TestRenderer_Render_EmptyText(t *testing.T) {
 }
 
 func TestRenderer_MoveToPrompt(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 80, 24)
@@ -192,6 +201,7 @@ func TestRenderer_MoveToPrompt(t *testing.T) {
 }
 
 func TestRenderer_MoveToScrollRegion(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 80, 24)
@@ -209,6 +219,7 @@ func TestRenderer_MoveToScrollRegion(t *testing.T) {
 }
 
 func TestRenderer_MoveToScrollRegion_SmallTerminal(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 80, 2)
@@ -226,6 +237,7 @@ func TestRenderer_MoveToScrollRegion_SmallTerminal(t *testing.T) {
 }
 
 func TestRenderer_RenderMetrics(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 80, 24)
@@ -265,6 +277,7 @@ func TestRenderer_RenderMetrics(t *testing.T) {
 }
 
 func TestRenderer_RenderMetrics_SmallTerminal(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 5, 2)
@@ -287,6 +300,7 @@ func TestRenderer_RenderMetrics_SmallTerminal(t *testing.T) {
 }
 
 func TestRenderer_BuildMetricsLine(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	renderer := NewRenderer(&buf, 120, 24)
@@ -336,6 +350,7 @@ func TestRenderer_BuildMetricsLine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			line := renderer.buildMetricsLine(tt.metrics)
 			for _, substr := range tt.contains {
 				if !containsRenderer(line, substr) {
@@ -347,6 +362,7 @@ func TestRenderer_BuildMetricsLine(t *testing.T) {
 }
 
 func TestRenderer_BuildMetricsLine_Truncation(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 	// Small width to test truncation.
 	renderer := NewRenderer(&buf, 20, 24)
@@ -373,6 +389,7 @@ func TestRenderer_BuildMetricsLine_Truncation(t *testing.T) {
 }
 
 func TestRenderer_StripANSI(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		input    string
@@ -432,6 +449,7 @@ func TestRenderer_StripANSI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := stripANSI(tt.input)
 			if result != tt.expected {
 				t.Errorf("stripANSI(%q) = %q, expected %q", tt.input, result, tt.expected)

@@ -8,6 +8,8 @@ import (
 )
 
 func TestNewClassifier(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifier()
 	if c == nil {
 		t.Fatal("NewClassifier returned nil")
@@ -19,6 +21,8 @@ func TestNewClassifier(t *testing.T) {
 }
 
 func TestNewClassifierWithOptions(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifierWithOptions(WithVerboseThreshold(500))
 	if c.verboseThreshold != 500 {
 		t.Errorf("expected verboseThreshold 500, got %d", c.verboseThreshold)
@@ -26,6 +30,8 @@ func TestNewClassifierWithOptions(t *testing.T) {
 }
 
 func TestClassifier_SystemMessage(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifier()
 	msg := message.Message{
 		Role:    message.RoleSystem,
@@ -39,6 +45,8 @@ func TestClassifier_SystemMessage(t *testing.T) {
 }
 
 func TestClassifier_UserMessage(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifier()
 	msg := message.Message{
 		Role:    message.RoleUser,
@@ -52,6 +60,8 @@ func TestClassifier_UserMessage(t *testing.T) {
 }
 
 func TestClassifier_ToolResult(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifier()
 	msg := message.Message{
 		Role:       message.RoleTool,
@@ -66,6 +76,8 @@ func TestClassifier_ToolResult(t *testing.T) {
 }
 
 func TestClassifier_ToolCall(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifier()
 	msg := message.Message{
 		Role:    message.RoleAssistant,
@@ -89,6 +101,8 @@ func TestClassifier_ToolCall(t *testing.T) {
 }
 
 func TestClassifier_ErrorMessage(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		content string
@@ -107,6 +121,8 @@ func TestClassifier_ErrorMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			msg := message.Message{
 				Role:    message.RoleAssistant,
 				Content: tt.content,
@@ -121,6 +137,8 @@ func TestClassifier_ErrorMessage(t *testing.T) {
 }
 
 func TestClassifier_ErrorMetadata(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifier()
 
 	// Metadata is map[string]string, so we only test string "true".
@@ -137,6 +155,8 @@ func TestClassifier_ErrorMetadata(t *testing.T) {
 }
 
 func TestClassifier_CodeBlock(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		content string
@@ -159,6 +179,8 @@ func TestClassifier_CodeBlock(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			msg := message.Message{
 				Role:    message.RoleAssistant,
 				Content: tt.content,
@@ -173,6 +195,8 @@ func TestClassifier_CodeBlock(t *testing.T) {
 }
 
 func TestClassifier_RegularAssistant(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifier()
 	msg := message.Message{
 		Role:    message.RoleAssistant,
@@ -186,6 +210,8 @@ func TestClassifier_RegularAssistant(t *testing.T) {
 }
 
 func TestClassifier_VerboseAssistant(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifierWithOptions(WithVerboseThreshold(100))
 
 	// Create a long message without code.
@@ -208,6 +234,8 @@ func TestClassifier_VerboseAssistant(t *testing.T) {
 }
 
 func TestClassifier_VerboseWithCode(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifierWithOptions(WithVerboseThreshold(100))
 
 	// Create a long message WITH code.
@@ -232,6 +260,8 @@ func TestClassifier_VerboseWithCode(t *testing.T) {
 }
 
 func TestClassifier_UnknownRole(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifier()
 	msg := message.Message{
 		Role:    "unknown",
@@ -245,6 +275,8 @@ func TestClassifier_UnknownRole(t *testing.T) {
 }
 
 func TestImportance_String(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		importance Importance
 		expected   string
@@ -258,6 +290,8 @@ func TestImportance_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
+			t.Parallel()
+
 			if got := tt.importance.String(); got != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, got)
 			}
@@ -266,6 +300,8 @@ func TestImportance_String(t *testing.T) {
 }
 
 func TestClassifier_TabIndentedCode(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifier()
 	msg := message.Message{
 		Role:    message.RoleAssistant,
@@ -279,6 +315,8 @@ func TestClassifier_TabIndentedCode(t *testing.T) {
 }
 
 func TestClassifier_NilMetadata(t *testing.T) {
+	t.Parallel()
+
 	c := NewClassifier()
 	msg := message.Message{
 		Role:     message.RoleAssistant,

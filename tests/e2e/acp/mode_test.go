@@ -12,6 +12,8 @@ import (
 
 // TestACP_SetSessionMode tests setting session mode.
 func TestACP_SetSessionMode(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -58,6 +60,8 @@ func TestACP_SetSessionMode(t *testing.T) {
 
 // TestACP_SetSessionMode_AllModes tests setting all available modes.
 func TestACP_SetSessionMode_AllModes(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -65,7 +69,7 @@ func TestACP_SetSessionMode_AllModes(t *testing.T) {
 	workDir := createTestWorkspace(t)
 
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
-	defer cleanupAgent(t, cmd, stdin)
+	t.Cleanup(func() { cleanupAgent(t, cmd, stdin) })
 
 	client := createACPClient(t, stdin, stdout)
 	ctx := context.Background()
@@ -90,6 +94,8 @@ func TestACP_SetSessionMode_AllModes(t *testing.T) {
 
 	for _, mode := range modes {
 		t.Run(string(mode), func(t *testing.T) {
+			t.Parallel()
+
 			setModeReq := acp.SetSessionModeRequest{
 				SessionId: sessionResp.SessionId,
 				ModeId:    mode,
@@ -105,6 +111,8 @@ func TestACP_SetSessionMode_AllModes(t *testing.T) {
 
 // TestACP_SetSessionMode_InvalidSession tests setting mode with invalid session.
 func TestACP_SetSessionMode_InvalidSession(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -132,6 +140,8 @@ func TestACP_SetSessionMode_InvalidSession(t *testing.T) {
 
 // TestACP_SetSessionMode_InvalidMode tests setting invalid mode.
 func TestACP_SetSessionMode_InvalidMode(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -168,6 +178,8 @@ func TestACP_SetSessionMode_InvalidMode(t *testing.T) {
 
 // TestACP_SetSessionMode_Notifications tests that mode changes send notifications.
 func TestACP_SetSessionMode_Notifications(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -234,6 +246,8 @@ func TestACP_SetSessionMode_Notifications(t *testing.T) {
 
 // TestACP_Mode_SetMode_Basic tests setting mode via session/set_mode.
 func TestACP_Mode_SetMode_Basic(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -270,6 +284,8 @@ func TestACP_Mode_SetMode_Basic(t *testing.T) {
 
 // TestACP_Mode_CurrentModeUpdate tests current_mode_update notification.
 func TestACP_Mode_CurrentModeUpdate(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -325,6 +341,8 @@ func TestACP_Mode_CurrentModeUpdate(t *testing.T) {
 
 // TestACP_Mode_InitialState tests initial mode from session/new.
 func TestACP_Mode_InitialState(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}

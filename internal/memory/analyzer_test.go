@@ -8,12 +8,16 @@ import (
 )
 
 func TestDefaultContextAnalyzer_Analyze_EmptyMessages(t *testing.T) {
+	t.Parallel()
+
 	analyzer := NewDefaultContextAnalyzer()
 	candidates := analyzer.Analyze([]AnalyzableMessage{})
 	assert.Empty(t, candidates)
 }
 
 func TestDefaultContextAnalyzer_Analyze_NoOffloadableContent(t *testing.T) {
+	t.Parallel()
+
 	analyzer := NewDefaultContextAnalyzer()
 	messages := []AnalyzableMessage{
 		{Role: "user", Content: "Hello, how are you?"},
@@ -25,6 +29,8 @@ func TestDefaultContextAnalyzer_Analyze_NoOffloadableContent(t *testing.T) {
 }
 
 func TestDefaultContextAnalyzer_Analyze_LargeCodeBlock(t *testing.T) {
+	t.Parallel()
+
 	analyzer := NewDefaultContextAnalyzer()
 	analyzer.CodeBlockThreshold = 50 // Lower threshold for testing.
 
@@ -41,6 +47,8 @@ func TestDefaultContextAnalyzer_Analyze_LargeCodeBlock(t *testing.T) {
 }
 
 func TestDefaultContextAnalyzer_Analyze_LargeToolOutput(t *testing.T) {
+	t.Parallel()
+
 	analyzer := NewDefaultContextAnalyzer()
 	analyzer.ToolOutputThreshold = 100 // Lower threshold for testing.
 
@@ -57,6 +65,8 @@ func TestDefaultContextAnalyzer_Analyze_LargeToolOutput(t *testing.T) {
 }
 
 func TestDefaultContextAnalyzer_Analyze_Decision(t *testing.T) {
+	t.Parallel()
+
 	analyzer := NewDefaultContextAnalyzer()
 	messages := []AnalyzableMessage{
 		{Role: "assistant", Content: "After reviewing the options, I decided to use JWT for authentication."},
@@ -71,6 +81,8 @@ func TestDefaultContextAnalyzer_Analyze_Decision(t *testing.T) {
 }
 
 func TestDefaultContextAnalyzer_Analyze_MultipleCodeBlocks(t *testing.T) {
+	t.Parallel()
+
 	analyzer := NewDefaultContextAnalyzer()
 	analyzer.CodeBlockThreshold = 20 // Low threshold.
 
@@ -85,6 +97,8 @@ func TestDefaultContextAnalyzer_Analyze_MultipleCodeBlocks(t *testing.T) {
 }
 
 func TestExtractCodeBlocks(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		content  string
@@ -114,6 +128,8 @@ func TestExtractCodeBlocks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			blocks := extractCodeBlocks(tt.content)
 			assert.Len(t, blocks, tt.expected)
 		})
@@ -121,6 +137,8 @@ func TestExtractCodeBlocks(t *testing.T) {
 }
 
 func TestExtractDecision(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		content  string
@@ -155,6 +173,8 @@ func TestExtractDecision(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			decision := extractDecision(tt.content)
 			if tt.hasMatch {
 				assert.NotEmpty(t, decision)
@@ -166,6 +186,8 @@ func TestExtractDecision(t *testing.T) {
 }
 
 func TestEstimateTokens(t *testing.T) {
+	t.Parallel()
+
 	// Simple heuristic: ~4 chars per token.
 	assert.Equal(t, 25, estimateTokens(strings.Repeat("a", 100)))
 	assert.Equal(t, 0, estimateTokens(""))
@@ -173,6 +195,8 @@ func TestEstimateTokens(t *testing.T) {
 }
 
 func TestGenerateKey(t *testing.T) {
+	t.Parallel()
+
 	key := generateKey("code", 1, 2)
 	assert.NotEmpty(t, key)
 	assert.Contains(t, key, "code")

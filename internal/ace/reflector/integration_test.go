@@ -13,6 +13,8 @@ import (
 
 // TestReflector_Integration_WithGenerator tests end-to-end reflection with generator output.
 func TestReflector_Integration_WithGenerator(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
 		{
@@ -63,6 +65,8 @@ func TestReflector_Integration_WithGenerator(t *testing.T) {
 
 // TestReflector_Integration_FullWorkflow tests complete reflection workflow.
 func TestReflector_Integration_FullWorkflow(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 
 	// First response for initial reflection.
@@ -129,6 +133,8 @@ func TestReflector_Integration_FullWorkflow(t *testing.T) {
 
 // TestReflector_Integration_BatchAnalysis tests batch trajectory analysis.
 func TestReflector_Integration_BatchAnalysis(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
 		{
@@ -203,6 +209,8 @@ func TestReflector_Integration_BatchAnalysis(t *testing.T) {
 
 // TestReflector_Integration_QualityFiltering tests quality-based filtering.
 func TestReflector_Integration_QualityFiltering(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
 		{
@@ -259,6 +267,8 @@ func TestReflector_Integration_QualityFiltering(t *testing.T) {
 
 // TestReflector_Integration_ErrorHandling tests error handling in integration scenarios.
 func TestReflector_Integration_ErrorHandling(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name         string
 		trajectories []*generator.Trajectory
@@ -299,6 +309,8 @@ func TestReflector_Integration_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx := context.Background()
 			req := ReflectionRequest{
 				Trajectories: tt.trajectories,

@@ -38,6 +38,8 @@ func createTestFiles(t *testing.T, root string, files []string) {
 // Constructor Tests.
 
 func TestNewSearcher(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 
 	s, err := NewSearcher(root)
@@ -52,6 +54,8 @@ func TestNewSearcher(t *testing.T) {
 }
 
 func TestNewSearcher_InvalidRoot(t *testing.T) {
+	t.Parallel()
+
 	_, err := NewSearcher("/nonexistent/path/that/does/not/exist")
 
 	assert.Error(t, err)
@@ -60,6 +64,8 @@ func TestNewSearcher_InvalidRoot(t *testing.T) {
 // Indexing Tests.
 
 func TestSearcher_IndexAsync(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	createTestFiles(t, root, []string{
 		"main.go",
@@ -79,6 +85,8 @@ func TestSearcher_IndexAsync(t *testing.T) {
 }
 
 func TestSearcher_IndexAsync_Empty(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 
 	s, err := NewSearcher(root)
@@ -93,6 +101,8 @@ func TestSearcher_IndexAsync_Empty(t *testing.T) {
 }
 
 func TestSearcher_IndexAsync_Cancellation(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 
 	// Create many files to increase indexing time.
@@ -119,6 +129,8 @@ func TestSearcher_IndexAsync_Cancellation(t *testing.T) {
 }
 
 func TestSearcher_IndexAsync_Timeout(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 
 	// Create some files.
@@ -142,6 +154,8 @@ func TestSearcher_IndexAsync_Timeout(t *testing.T) {
 }
 
 func TestSearcher_IndexAsync_Idempotent(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	createTestFiles(t, root, []string{"main.go"})
 
@@ -164,6 +178,8 @@ func TestSearcher_IndexAsync_Idempotent(t *testing.T) {
 // Search Tests.
 
 func TestSearcher_Search_NotIndexed(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	s, err := NewSearcher(root)
 	require.NoError(t, err)
@@ -174,6 +190,8 @@ func TestSearcher_Search_NotIndexed(t *testing.T) {
 }
 
 func TestSearcher_Search_EmptyQuery(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	createTestFiles(t, root, []string{"main.go"})
 
@@ -187,6 +205,8 @@ func TestSearcher_Search_EmptyQuery(t *testing.T) {
 }
 
 func TestSearcher_Search_Basic(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	createTestFiles(t, root, []string{
 		"test.go",
@@ -206,6 +226,8 @@ func TestSearcher_Search_Basic(t *testing.T) {
 }
 
 func TestSearcher_Search_Ranking(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	createTestFiles(t, root, []string{
 		"test.go",                  // Exact match.
@@ -230,6 +252,8 @@ func TestSearcher_Search_Ranking(t *testing.T) {
 }
 
 func TestSearcher_Search_Limit(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	createTestFiles(t, root, []string{
 		"test1.go",
@@ -257,6 +281,8 @@ func TestSearcher_Search_Limit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			results := s.Search("test", tt.limit)
 			assert.Len(t, results, tt.want)
 		})
@@ -264,6 +290,8 @@ func TestSearcher_Search_Limit(t *testing.T) {
 }
 
 func TestSearcher_Search_NoMatches(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	createTestFiles(t, root, []string{
 		"main.go",
@@ -280,6 +308,8 @@ func TestSearcher_Search_NoMatches(t *testing.T) {
 }
 
 func TestSearcher_Search_CaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	createTestFiles(t, root, []string{
 		"Main.go",
@@ -300,6 +330,8 @@ func TestSearcher_Search_CaseInsensitive(t *testing.T) {
 // IsIndexed Tests.
 
 func TestSearcher_IsIndexed_False(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	s, err := NewSearcher(root)
 	require.NoError(t, err)
@@ -308,6 +340,8 @@ func TestSearcher_IsIndexed_False(t *testing.T) {
 }
 
 func TestSearcher_IsIndexed_True(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	s, err := NewSearcher(root)
 	require.NoError(t, err)
@@ -320,6 +354,8 @@ func TestSearcher_IsIndexed_True(t *testing.T) {
 // Integration Tests.
 
 func TestSearcher_RealProject(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 
 	// Create realistic project structure.
@@ -358,6 +394,8 @@ func TestSearcher_RealProject(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			results := s.Search(tt.query, 10)
 			assert.GreaterOrEqual(t, len(results), tt.minCount)
 
@@ -369,6 +407,8 @@ func TestSearcher_RealProject(t *testing.T) {
 }
 
 func TestSearcher_WithGitignore(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 
 	// Create .gitignore.
@@ -409,6 +449,8 @@ dist/
 // Concurrent Tests.
 
 func TestSearcher_ConcurrentSearch(t *testing.T) {
+	t.Parallel()
+
 	root := createTestDir(t)
 	createTestFiles(t, root, []string{
 		"test1.go",

@@ -15,6 +15,8 @@ import (
 )
 
 func TestNewGenerator_Success(t *testing.T) {
+	t.Parallel()
+
 	// Setup.
 	mockLLM := llm.NewMockProvider("test-provider")
 	pb := playbook.New(nil, nil)
@@ -32,6 +34,8 @@ func TestNewGenerator_Success(t *testing.T) {
 }
 
 func TestNewGenerator_MissingLLM(t *testing.T) {
+	t.Parallel()
+
 	pb := playbook.New(nil, nil)
 	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
 
@@ -46,6 +50,8 @@ func TestNewGenerator_MissingLLM(t *testing.T) {
 }
 
 func TestNewGenerator_MissingPlaybook(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test-provider")
 	pb := playbook.New(nil, nil)
 	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
@@ -61,6 +67,8 @@ func TestNewGenerator_MissingPlaybook(t *testing.T) {
 }
 
 func TestNewGenerator_MissingRetriever(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test-provider")
 	pb := playbook.New(nil, nil)
 
@@ -75,6 +83,8 @@ func TestNewGenerator_MissingRetriever(t *testing.T) {
 }
 
 func TestItemizedLearning_WithEmptyPlaybook(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Setup with empty playbook.
@@ -111,6 +121,8 @@ func TestItemizedLearning_WithEmptyPlaybook(t *testing.T) {
 }
 
 func TestItemizedLearning_WithBullets(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Setup playbook with bullets.
@@ -170,6 +182,8 @@ func TestItemizedLearning_WithBullets(t *testing.T) {
 }
 
 func TestItemizedLearning_WithGroundTruth(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -202,6 +216,8 @@ func TestItemizedLearning_WithGroundTruth(t *testing.T) {
 }
 
 func TestItemizedLearning_TrajectoryMetadata(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -237,6 +253,8 @@ func TestItemizedLearning_TrajectoryMetadata(t *testing.T) {
 }
 
 func TestItemizedLearning_HarmfulBulletUpdate(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Setup playbook with bullets.
@@ -282,6 +300,8 @@ func TestItemizedLearning_HarmfulBulletUpdate(t *testing.T) {
 }
 
 func TestItemizedLearning_InvalidFeedbackGraceful(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Mock LLM with malformed feedback.
@@ -316,6 +336,8 @@ func TestItemizedLearning_InvalidFeedbackGraceful(t *testing.T) {
 }
 
 func TestGenerateBullets_FromTask(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -357,6 +379,8 @@ func TestGenerateBullets_FromTask(t *testing.T) {
 }
 
 func TestGenerateBullets_FromTrajectory(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -390,6 +414,8 @@ func TestGenerateBullets_FromTrajectory(t *testing.T) {
 }
 
 func TestGenerateBullets_FromFeedback(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -419,6 +445,8 @@ func TestGenerateBullets_FromFeedback(t *testing.T) {
 }
 
 func TestGenerateBullets_FromError(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -454,6 +482,8 @@ func TestGenerateBullets_FromError(t *testing.T) {
 }
 
 func TestGenerateBullets_EmptyInput(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -481,6 +511,8 @@ func TestGenerateBullets_EmptyInput(t *testing.T) {
 }
 
 func TestGenerateBullets_UnknownSourceType(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -508,6 +540,8 @@ func TestGenerateBullets_UnknownSourceType(t *testing.T) {
 }
 
 func TestGenerateBullets_NoLimit(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -541,6 +575,8 @@ func TestGenerateBullets_NoLimit(t *testing.T) {
 }
 
 func TestGenerateBullets_AllReturned(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockLLM := llm.NewMockProvider("test-provider")
@@ -575,6 +611,8 @@ func TestGenerateBullets_AllReturned(t *testing.T) {
 }
 
 func TestParseBulletCandidates(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		input    string
@@ -619,6 +657,8 @@ func TestParseBulletCandidates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := parseBulletCandidates(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})

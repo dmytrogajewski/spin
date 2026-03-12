@@ -5,6 +5,8 @@ import (
 )
 
 func TestDelta_NewContentUpdate(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-123"
 	newContent := "Updated bullet content"
 
@@ -47,6 +49,8 @@ func TestDelta_NewContentUpdate(t *testing.T) {
 }
 
 func TestDelta_NewIncrementHelpful(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-456"
 
 	delta := NewIncrementHelpful(bulletID, Metadata{
@@ -77,6 +81,8 @@ func TestDelta_NewIncrementHelpful(t *testing.T) {
 }
 
 func TestDelta_NewIncrementHarmful(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-789"
 
 	delta := NewIncrementHarmful(bulletID, Metadata{
@@ -103,6 +109,8 @@ func TestDelta_NewIncrementHarmful(t *testing.T) {
 }
 
 func TestDelta_NewAddTag(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-abc"
 	key := "category"
 	value := "error_handling"
@@ -142,6 +150,8 @@ func TestDelta_NewAddTag(t *testing.T) {
 }
 
 func TestDelta_NewRemoveTag(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-def"
 	key := "obsolete"
 
@@ -172,6 +182,8 @@ func TestDelta_NewRemoveTag(t *testing.T) {
 }
 
 func TestDelta_NewUpdateEmbedding(t *testing.T) {
+	t.Parallel()
+
 	bulletID := "bullet-ghi"
 	embedding := []float32{0.1, 0.2, 0.3}
 

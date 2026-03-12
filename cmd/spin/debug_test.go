@@ -5,6 +5,8 @@ import (
 )
 
 func TestNewDebugCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugCmd()
 	if cmd == nil {
 		t.Fatal("newDebugCmd() returned nil")
@@ -20,6 +22,8 @@ func TestNewDebugCmd(t *testing.T) {
 }
 
 func TestNewDebugEventsCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugEventsCmd()
 	if cmd == nil {
 		t.Fatal("newDebugEventsCmd() returned nil")
@@ -35,6 +39,8 @@ func TestNewDebugEventsCmd(t *testing.T) {
 }
 
 func TestNewDebugSandboxCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugSandboxCmd()
 	if cmd == nil {
 		t.Fatal("newDebugSandboxCmd() returned nil")
@@ -50,6 +56,8 @@ func TestNewDebugSandboxCmd(t *testing.T) {
 }
 
 func TestNewDebugLandlockCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugLandlockCmd()
 	if cmd == nil {
 		t.Fatal("newDebugLandlockCmd() returned nil")
@@ -65,6 +73,8 @@ func TestNewDebugLandlockCmd(t *testing.T) {
 }
 
 func TestDebugCmdSubcommands(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugCmd()
 
 	// Test that all expected subcommands exist.
@@ -97,6 +107,8 @@ func TestDebugCmdSubcommands(t *testing.T) {
 }
 
 func TestDebugCmdHelp(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugCmd()
 
 	// Test that help text is properly set.
@@ -110,6 +122,8 @@ func TestDebugCmdHelp(t *testing.T) {
 }
 
 func TestDebugEventsCmdFlags(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugEventsCmd()
 
 	// Test that expected flags exist.
@@ -127,6 +141,8 @@ func TestDebugEventsCmdFlags(t *testing.T) {
 }
 
 func TestDebugEventsCmdDefaultValues(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugEventsCmd()
 
 	// Test default values.
@@ -137,6 +153,8 @@ func TestDebugEventsCmdDefaultValues(t *testing.T) {
 }
 
 func TestDebugEventsCmdExamples(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugEventsCmd()
 
 	// Test that examples are included in help text.
@@ -155,6 +173,8 @@ func TestDebugEventsCmdExamples(t *testing.T) {
 }
 
 func TestDebugSandboxCmdFlags(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugSandboxCmd()
 
 	// Test that expected flags exist.
@@ -173,6 +193,8 @@ func TestDebugSandboxCmdFlags(t *testing.T) {
 }
 
 func TestDebugSandboxCmdDefaultValues(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugSandboxCmd()
 
 	// Test default values.
@@ -193,6 +215,8 @@ func TestDebugSandboxCmdDefaultValues(t *testing.T) {
 }
 
 func TestDebugLandlockCmdFlags(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugLandlockCmd()
 
 	// Test that expected flags exist.
@@ -211,6 +235,8 @@ func TestDebugLandlockCmdFlags(t *testing.T) {
 }
 
 func TestDebugLandlockCmdDefaultValues(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugLandlockCmd()
 
 	// Test default values.
@@ -231,6 +257,8 @@ func TestDebugLandlockCmdDefaultValues(t *testing.T) {
 }
 
 func TestDebugSandboxCmdExamples(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugSandboxCmd()
 
 	// Test that examples are included in help text.
@@ -249,6 +277,8 @@ func TestDebugSandboxCmdExamples(t *testing.T) {
 }
 
 func TestDebugLandlockCmdExamples(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugLandlockCmd()
 
 	// Test that examples are included in help text.

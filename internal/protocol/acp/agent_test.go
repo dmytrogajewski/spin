@@ -17,7 +17,10 @@ import (
 
 // TestNewSpinACPAgent tests the constructor with valid inputs.
 func TestNewSpinACPAgentWithStorage(t *testing.T) {
+	t.Parallel(
 	// Create minimal mocks for required components.
+	)
+
 	agentInstance := &agent.Agent{} // Will need proper setup in real tests.
 	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -36,6 +39,7 @@ func TestNewSpinACPAgentWithStorage(t *testing.T) {
 
 // TestNewSpinACPAgent_Validation tests constructor validation.
 func TestNewSpinACPAgent_Validation(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		agent       *agent.Agent
@@ -79,6 +83,7 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			storage, err := session.NewFileStorage(t.TempDir())
 			require.NoError(t, err)
 			acpAgent, err := NewSpinACPAgentWithStorage(tt.agent, tt.mcpService, tt.emitter, storage)
@@ -97,6 +102,7 @@ func TestNewSpinACPAgent_Validation(t *testing.T) {
 
 // TestSpinACPAgent_ImplementsInterface verifies that SpinACPAgent implements acp.Agent.
 func TestSpinACPAgent_ImplementsInterface(t *testing.T) {
+	t.Parallel()
 	agentInstance := &agent.Agent{}
 	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -113,6 +119,7 @@ func TestSpinACPAgent_ImplementsInterface(t *testing.T) {
 
 // TestSpinACPAgent_MethodStubs tests that all methods exist and return errors (stubs).
 func TestSpinACPAgent_MethodStubs(t *testing.T) {
+	t.Parallel()
 	agentInstance := &agent.Agent{}
 	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -126,6 +133,7 @@ func TestSpinACPAgent_MethodStubs(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Initialize", func(t *testing.T) {
+		t.Parallel()
 		req := acp.InitializeRequest{
 			ProtocolVersion: acp.ProtocolVersionNumber,
 		}
@@ -137,6 +145,7 @@ func TestSpinACPAgent_MethodStubs(t *testing.T) {
 	})
 
 	t.Run("NewSession", func(t *testing.T) {
+		t.Parallel()
 		req := acp.NewSessionRequest{
 			Cwd: "/tmp/test",
 		}
@@ -147,30 +156,40 @@ func TestSpinACPAgent_MethodStubs(t *testing.T) {
 	})
 
 	t.Run("Prompt", func(t *testing.T) {
+		t.Parallel(
 		// Skip this test - Prompt is now implemented and requires proper agent setup
 		// See prompt_test.go for proper Prompt tests.
+		)
+
 		t.Skip("Prompt is implemented - see prompt_test.go for tests")
 	})
 
 	t.Run("LoadSession", func(t *testing.T) {
+		t.Parallel(
 		// Skip this test - LoadSession is now implemented and requires storage
 		// See load_session_test.go for proper LoadSession tests.
+		)
+
 		t.Skip("LoadSession is implemented - see load_session_test.go for tests")
 	})
 
 	t.Run("Cancel", func(t *testing.T) {
+		t.Parallel()
 		t.Skip("Cancel is implemented - see cancel_test.go for tests")
 	})
 
 	t.Run("SetSessionMode", func(t *testing.T) {
+		t.Parallel()
 		t.Skip("SetSessionMode is implemented - see session_mode_test.go for tests")
 	})
 
 	t.Run("RequestPermission", func(t *testing.T) {
+		t.Parallel()
 		t.Skip("RequestPermission is implemented - see request_permission_test.go for tests")
 	})
 
 	t.Run("Authenticate", func(t *testing.T) {
+		t.Parallel()
 		req := acp.AuthenticateRequest{
 			MethodId: acp.AuthMethodId("test"),
 		}

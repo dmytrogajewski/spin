@@ -7,6 +7,8 @@ import (
 )
 
 func TestTransportType_String(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		transport TransportType
@@ -31,12 +33,16 @@ func TestTransportType_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.want, string(tt.transport))
 		})
 	}
 }
 
 func TestTransportType_IsValid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		transport TransportType
@@ -71,12 +77,16 @@ func TestTransportType_IsValid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.want, tt.transport.IsValid())
 		})
 	}
 }
 
 func TestTransportType_IsRemote(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		transport TransportType
@@ -106,6 +116,8 @@ func TestTransportType_IsRemote(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.want, tt.transport.IsRemote())
 		})
 	}

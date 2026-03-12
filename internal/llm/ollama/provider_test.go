@@ -13,6 +13,8 @@ import (
 )
 
 func TestNewProvider(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		cfg     Config
@@ -58,6 +60,8 @@ func TestNewProvider(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			provider, err := NewProvider(tt.cfg)
 
 			if tt.wantErr {
@@ -83,6 +87,8 @@ func TestNewProvider(t *testing.T) {
 }
 
 func TestProvider_Name(t *testing.T) {
+	t.Parallel()
+
 	provider, err := NewProvider(Config{
 		Model: "llama3.1",
 	})
@@ -92,6 +98,8 @@ func TestProvider_Name(t *testing.T) {
 }
 
 func TestProvider_Capabilities(t *testing.T) {
+	t.Parallel()
+
 	provider, err := NewProvider(Config{
 		Model: "llama3.1",
 	})
@@ -108,6 +116,8 @@ func TestProvider_Capabilities(t *testing.T) {
 }
 
 func TestProvider_Models(t *testing.T) {
+	t.Parallel()
+
 	// Mock /api/tags response matching Ollama's ListResponse format.
 	mockResponse := map[string]any{
 		"models": []map[string]any{

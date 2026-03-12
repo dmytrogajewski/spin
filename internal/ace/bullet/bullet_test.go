@@ -11,6 +11,8 @@ import (
 )
 
 func TestNew_AutoGeneratesID(t *testing.T) {
+	t.Parallel()
+
 	b, err := bullet.New("test content")
 
 	require.NoError(t, err)
@@ -19,6 +21,8 @@ func TestNew_AutoGeneratesID(t *testing.T) {
 }
 
 func TestNew_StoresContentAndTimestamps(t *testing.T) {
+	t.Parallel()
+
 	content := "Always validate user input"
 	before := time.Now()
 
@@ -34,6 +38,8 @@ func TestNew_StoresContentAndTimestamps(t *testing.T) {
 }
 
 func TestNew_RejectsContentTooLong(t *testing.T) {
+	t.Parallel()
+
 	// Create content longer than 2048 characters.
 	longContent := string(make([]byte, 2049))
 
@@ -45,6 +51,8 @@ func TestNew_RejectsContentTooLong(t *testing.T) {
 }
 
 func TestBullet_CloneWithEmbedding(t *testing.T) {
+	t.Parallel()
+
 	embedding := []float32{0.1, 0.2, 0.3, 0.4, 0.5}
 	original, err := bullet.New("content", bullet.WithEmbedding(embedding))
 	require.NoError(t, err)
@@ -62,6 +70,8 @@ func TestBullet_CloneWithEmbedding(t *testing.T) {
 }
 
 func TestBullet_CloneWithoutOptionalFields(t *testing.T) {
+	t.Parallel()
+
 	// Test cloning bullet without embedding or tags.
 	original, err := bullet.New("simple content")
 	require.NoError(t, err)
@@ -74,6 +84,8 @@ func TestBullet_CloneWithoutOptionalFields(t *testing.T) {
 }
 
 func TestBullet_IncrementHelpful(t *testing.T) {
+	t.Parallel()
+
 	b, err := bullet.New("test content")
 	require.NoError(t, err)
 
@@ -87,6 +99,8 @@ func TestBullet_IncrementHelpful(t *testing.T) {
 }
 
 func TestBullet_IncrementHarmful(t *testing.T) {
+	t.Parallel()
+
 	b, err := bullet.New("test content")
 	require.NoError(t, err)
 
@@ -100,6 +114,8 @@ func TestBullet_IncrementHarmful(t *testing.T) {
 }
 
 func TestBullet_Score(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		helpful  int
@@ -146,6 +162,8 @@ func TestBullet_Score(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			b, err := bullet.New("test content")
 			require.NoError(t, err)
 
@@ -165,6 +183,8 @@ func TestBullet_Score(t *testing.T) {
 }
 
 func TestBullet_Clone(t *testing.T) {
+	t.Parallel()
+
 	original, err := bullet.New("original content",
 		bullet.WithTags(map[string]string{"key": "value"}),
 	)
@@ -194,6 +214,8 @@ func TestBullet_Clone(t *testing.T) {
 }
 
 func TestWithID(t *testing.T) {
+	t.Parallel()
+
 	customID := "custom-test-id"
 	b, err := bullet.New("content", bullet.WithID(customID))
 
@@ -202,6 +224,8 @@ func TestWithID(t *testing.T) {
 }
 
 func TestWithEmbedding(t *testing.T) {
+	t.Parallel()
+
 	embedding := []float32{0.1, 0.2, 0.3}
 	b, err := bullet.New("content", bullet.WithEmbedding(embedding))
 
@@ -211,6 +235,8 @@ func TestWithEmbedding(t *testing.T) {
 }
 
 func TestWithTags(t *testing.T) {
+	t.Parallel()
+
 	tags := map[string]string{
 		"category": "security",
 		"priority": "high",
@@ -224,6 +250,8 @@ func TestWithTags(t *testing.T) {
 }
 
 func TestWithMultipleOptions(t *testing.T) {
+	t.Parallel()
+
 	customID := "test-123"
 	embedding := []float32{0.5, 0.6}
 	tags := map[string]string{"key": "value"}

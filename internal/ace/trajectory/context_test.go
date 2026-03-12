@@ -9,7 +9,11 @@ import (
 )
 
 func TestNewContext(t *testing.T) {
+	t.Parallel()
+
 	t.Run("creates non-empty session ID", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test query")
 
 		if ctx.SessionID == "" {
@@ -18,6 +22,8 @@ func TestNewContext(t *testing.T) {
 	})
 
 	t.Run("stores query", func(t *testing.T) {
+		t.Parallel()
+
 		query := "debug file upload"
 		ctx := NewContext(query)
 
@@ -27,6 +33,8 @@ func TestNewContext(t *testing.T) {
 	})
 
 	t.Run("sets start time", func(t *testing.T) {
+		t.Parallel()
+
 		before := time.Now()
 		ctx := NewContext("test")
 		after := time.Now()
@@ -41,6 +49,8 @@ func TestNewContext(t *testing.T) {
 	})
 
 	t.Run("initializes empty collections", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 
 		if ctx.Steps == nil {
@@ -69,6 +79,8 @@ func TestNewContext(t *testing.T) {
 	})
 
 	t.Run("initializes turn to zero", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 
 		if ctx.CurrentTurn != 0 {
@@ -78,7 +90,11 @@ func TestNewContext(t *testing.T) {
 }
 
 func TestAppendSteps(t *testing.T) {
+	t.Parallel()
+
 	t.Run("appends single step", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		steps := []generator.TrajectoryStep{
 			{StepNumber: 0, Type: "reasoning", Content: "test"},
@@ -96,6 +112,8 @@ func TestAppendSteps(t *testing.T) {
 	})
 
 	t.Run("appends multiple steps", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		steps := []generator.TrajectoryStep{
 			{StepNumber: 0, Type: "reasoning", Content: "step1"},
@@ -110,6 +128,8 @@ func TestAppendSteps(t *testing.T) {
 	})
 
 	t.Run("preserves order", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		step1 := []generator.TrajectoryStep{{StepNumber: 0, Content: "first"}}
 		step2 := []generator.TrajectoryStep{{StepNumber: 1, Content: "second"}}
@@ -131,6 +151,8 @@ func TestAppendSteps(t *testing.T) {
 	})
 
 	t.Run("handles nil steps", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		ctx.AppendSteps(nil)
 
@@ -140,6 +162,8 @@ func TestAppendSteps(t *testing.T) {
 	})
 
 	t.Run("handles empty steps", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		ctx.AppendSteps([]generator.TrajectoryStep{})
 
@@ -150,7 +174,11 @@ func TestAppendSteps(t *testing.T) {
 }
 
 func TestRecordRetrieval(t *testing.T) {
+	t.Parallel()
+
 	t.Run("records first retrieval", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		event := RetrievalEvent{
 			Turn:         0,
@@ -184,6 +212,8 @@ func TestRecordRetrieval(t *testing.T) {
 	})
 
 	t.Run("counts cache misses for new bullets", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		event := RetrievalEvent{Turn: 0}
 		bullets := []*bullet.Bullet{
@@ -203,6 +233,8 @@ func TestRecordRetrieval(t *testing.T) {
 	})
 
 	t.Run("counts cache hits for duplicate bullets", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		event1 := RetrievalEvent{Turn: 0}
 		bullets1 := []*bullet.Bullet{{ID: "B1"}}
@@ -224,6 +256,8 @@ func TestRecordRetrieval(t *testing.T) {
 	})
 
 	t.Run("increments access count on cache hit", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		event1 := RetrievalEvent{Turn: 0}
 		bullets1 := []*bullet.Bullet{{ID: "B1"}}
@@ -240,6 +274,8 @@ func TestRecordRetrieval(t *testing.T) {
 	})
 
 	t.Run("handles mixed new and cached bullets", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		event1 := RetrievalEvent{Turn: 0}
 		bullets1 := []*bullet.Bullet{{ID: "B1"}}
@@ -267,7 +303,11 @@ func TestRecordRetrieval(t *testing.T) {
 }
 
 func TestGetActiveBullets(t *testing.T) {
+	t.Parallel()
+
 	t.Run("returns bullets within TTL", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		ctx.CurrentTurn = 5
 		event := RetrievalEvent{Turn: 0}
@@ -284,6 +324,8 @@ func TestGetActiveBullets(t *testing.T) {
 	})
 
 	t.Run("excludes bullets beyond TTL", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		ctx.CurrentTurn = 15 // 15 turns later.
 		event := RetrievalEvent{Turn: 0}
@@ -298,6 +340,8 @@ func TestGetActiveBullets(t *testing.T) {
 	})
 
 	t.Run("handles mixed fresh and expired bullets", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 
 		// Add old bullet (will expire).
@@ -324,6 +368,8 @@ func TestGetActiveBullets(t *testing.T) {
 	})
 
 	t.Run("returns bullets in deterministic order", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		event := RetrievalEvent{Turn: 0}
 		bullets := []*bullet.Bullet{
@@ -346,6 +392,8 @@ func TestGetActiveBullets(t *testing.T) {
 	})
 
 	t.Run("updates last accessed time", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		event := RetrievalEvent{Turn: 0}
 		bullets := []*bullet.Bullet{{ID: "B1"}}
@@ -362,7 +410,11 @@ func TestGetActiveBullets(t *testing.T) {
 }
 
 func TestToTrajectory(t *testing.T) {
+	t.Parallel()
+
 	t.Run("converts empty context", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test query")
 
 		traj := ctx.ToTrajectory()
@@ -395,6 +447,8 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("includes all steps", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		steps := []generator.TrajectoryStep{
 			{StepNumber: 0, Content: "step1"},
@@ -410,6 +464,8 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("includes all cached bullets", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		event := RetrievalEvent{Turn: 0}
 		bullets := []*bullet.Bullet{
@@ -426,6 +482,8 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("includes retrieval events", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		event := RetrievalEvent{
 			Turn:    0,
@@ -451,6 +509,8 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("preserves multiple retrieval events in order", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 
 		// Record multiple events.
@@ -503,6 +563,8 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("sets success flag", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		ctx.Success = true
 
@@ -514,6 +576,8 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("calculates turns", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 		ctx.CurrentTurn = 5
 
@@ -525,6 +589,8 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("calculates duration", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := NewContext("test")
 
 		time.Sleep(10 * time.Millisecond)

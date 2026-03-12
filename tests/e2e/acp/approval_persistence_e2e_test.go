@@ -17,6 +17,8 @@ import (
 // Prompt -> tool call needing approval -> policy persisted -> subsequent prompt
 // bypasses approval via policy, and revocation causes re-prompt.
 func TestACP_ApprovalPersistence_PromptToToolCall(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}

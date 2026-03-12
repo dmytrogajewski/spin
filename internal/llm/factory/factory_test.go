@@ -29,6 +29,8 @@ const testOllamaURL = "http://localhost:11434"
 
 // TestNewProvider_OpenAI tests creating an OpenAI provider from config.
 func TestNewProvider_OpenAI(t *testing.T) {
+	t.Parallel()
+
 	cfg := ProviderConfig{
 		Type:    "openai",
 		BaseURL: "https://api.openai.com/v1",
@@ -53,6 +55,8 @@ func TestNewProvider_OpenAI(t *testing.T) {
 
 // TestNewProvider_Ollama tests creating an Ollama provider from config.
 func TestNewProvider_Ollama(t *testing.T) {
+	t.Parallel()
+
 	cfg := ProviderConfig{
 		Type:    "ollama",
 		BaseURL: testOllamaURL,
@@ -76,6 +80,8 @@ func TestNewProvider_Ollama(t *testing.T) {
 
 // TestNewProvider_LMStudio tests creating an LMStudio provider from config.
 func TestNewProvider_LMStudio(t *testing.T) {
+	t.Parallel()
+
 	cfg := ProviderConfig{
 		Type:    "lmstudio",
 		BaseURL: "http://localhost:1234/v1",
@@ -99,6 +105,8 @@ func TestNewProvider_LMStudio(t *testing.T) {
 
 // TestNewProvider_OpenAICompatible tests creating a generic OpenAI-compatible provider.
 func TestNewProvider_OpenAICompatible(t *testing.T) {
+	t.Parallel()
+
 	cfg := ProviderConfig{
 		Type:    "openai-compatible",
 		BaseURL: "https://custom-api.example.com/v1",
@@ -123,6 +131,8 @@ func TestNewProvider_OpenAICompatible(t *testing.T) {
 
 // TestNewProvider_UnknownType tests that unknown provider types return error.
 func TestNewProvider_UnknownType(t *testing.T) {
+	t.Parallel()
+
 	cfg := ProviderConfig{
 		Type:    "unknown-provider",
 		BaseURL: "http://localhost:8080",
@@ -145,6 +155,8 @@ func TestNewProvider_UnknownType(t *testing.T) {
 
 // TestNewProvider_ValidationErrors tests configuration validation.
 func TestNewProvider_ValidationErrors(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		cfg     ProviderConfig
@@ -206,6 +218,8 @@ func TestNewProvider_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			provider, err := NewProvider(tt.cfg)
 			if err == nil {
 				t.Fatal("NewProvider() expected error, got nil")
@@ -224,6 +238,8 @@ func TestNewProvider_ValidationErrors(t *testing.T) {
 
 // TestRegisterProvider tests custom provider registration.
 func TestRegisterProvider(t *testing.T) {
+	t.Parallel()
+
 	// Create a custom provider factory.
 	customProvider := &mockProvider{name: "custom"}
 	customFactory := func(_ ProviderConfig) (llm.Provider, error) {
@@ -256,6 +272,8 @@ func TestRegisterProvider(t *testing.T) {
 
 // TestRegisterProvider_Override tests overriding built-in providers.
 func TestRegisterProvider_Override(t *testing.T) {
+	t.Parallel()
+
 	// Create a custom factory that overrides "openai".
 	customProvider := &mockProvider{name: "custom-openai"}
 	customFactory := func(_ ProviderConfig) (llm.Provider, error) {
@@ -290,6 +308,8 @@ func TestRegisterProvider_Override(t *testing.T) {
 
 // TestRegisterProvider_Concurrent tests thread-safety of registration.
 func TestRegisterProvider_Concurrent(t *testing.T) {
+	t.Parallel()
+
 	var wg sync.WaitGroup
 
 	errChan := make(chan error, 100)
@@ -336,6 +356,8 @@ func TestRegisterProvider_Concurrent(t *testing.T) {
 
 // TestProviderFactory_ErrorPropagation tests that factory errors are propagated.
 func TestProviderFactory_ErrorPropagation(t *testing.T) {
+	t.Parallel()
+
 	factoryErr := errFactoryCreationFailed
 	failingFactory := func(_ ProviderConfig) (llm.Provider, error) {
 		return nil, factoryErr
@@ -365,6 +387,8 @@ func TestProviderFactory_ErrorPropagation(t *testing.T) {
 
 // TestNewProvider_TimeoutDefault tests default timeout handling.
 func TestNewProvider_TimeoutDefault(t *testing.T) {
+	t.Parallel()
+
 	cfg := ProviderConfig{
 		Type:    "openai",
 		BaseURL: "https://api.openai.com/v1",
@@ -387,6 +411,8 @@ func TestNewProvider_TimeoutDefault(t *testing.T) {
 
 // TestNewProvider_URLNormalization tests URL normalization.
 func TestNewProvider_URLNormalization(t *testing.T) {
+	t.Parallel()
+
 	cfg := ProviderConfig{
 		Type:    "ollama",
 		BaseURL: testOllamaURL + "/", // Trailing slash.
@@ -405,6 +431,8 @@ func TestNewProvider_URLNormalization(t *testing.T) {
 
 // TestNewProvider_OptionsPassthrough tests that Options are passed to providers.
 func TestNewProvider_OptionsPassthrough(t *testing.T) {
+	t.Parallel()
+
 	capturedCfg := ProviderConfig{}
 	captureFactory := func(cfg ProviderConfig) (llm.Provider, error) {
 		capturedCfg = cfg
@@ -432,6 +460,8 @@ func TestNewProvider_OptionsPassthrough(t *testing.T) {
 
 // TestNewProvider_LMStudioDefaultURL tests LMStudio default URL handling.
 func TestNewProvider_LMStudioDefaultURL(t *testing.T) {
+	t.Parallel()
+
 	cfg := ProviderConfig{
 		Type:  "lmstudio",
 		Model: "local-model",
@@ -526,6 +556,8 @@ func stringContains(s, substr string) bool {
 
 // TestFactoryConfigurationBugFix tests the fix for the "invalid configuration: model is required" error.
 func TestFactoryConfigurationBugFix(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		config        ProviderConfig
@@ -624,6 +656,8 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Test with factory (recommended approach).
 			authMgr := auth.NewManager(auth.NewKeystore())
 
@@ -658,6 +692,8 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 
 // TestFactoryWithKeystore tests that factory properly handles keystore credentials.
 func TestFactoryWithKeystore(t *testing.T) {
+	t.Parallel()
+
 	// Create keystore with test credentials.
 	keystore := auth.NewKeystore()
 	err := keystore.Set("test-openai-key", "sk-test-key-value")
@@ -690,6 +726,8 @@ func TestFactoryWithKeystore(t *testing.T) {
 
 // TestFactoryTimeoutHandling tests that factory properly handles timeout configuration.
 func TestFactoryTimeoutHandling(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		configTimeout time.Duration
@@ -718,6 +756,8 @@ func TestFactoryTimeoutHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			config := ProviderConfig{
 				Type:    "ollama",
 				BaseURL: testOllamaURL,
@@ -748,6 +788,8 @@ func TestFactoryTimeoutHandling(t *testing.T) {
 
 // TestFactoryLegacyCompatibility tests that legacy NewProvider function still works.
 func TestFactoryLegacyCompatibility(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		config        ProviderConfig
@@ -789,6 +831,8 @@ func TestFactoryLegacyCompatibility(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Test legacy function.
 			provider, err := NewProvider(tt.config)
 
@@ -809,6 +853,8 @@ func TestFactoryLegacyCompatibility(t *testing.T) {
 
 // TestFactoryProviderRegistration tests that custom providers can be registered.
 func TestFactoryProviderRegistration(t *testing.T) {
+	t.Parallel()
+
 	// Register a custom provider.
 	RegisterProvider("custom", func(_ ProviderConfig) (llm.Provider, error) {
 		return &mockProviderBugFix{name: "custom-provider"}, nil
@@ -910,6 +956,8 @@ func (m *mockProviderBugFix) Close() error {
 
 // TestNewFactory tests factory creation with auth manager.
 func TestNewFactory(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		authMgr *auth.Manager
@@ -926,6 +974,8 @@ func TestNewFactory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			factory := NewFactory(tt.authMgr)
 			if factory == nil {
 				t.Fatal("NewFactory() returned nil")
@@ -940,6 +990,8 @@ func TestNewFactory(t *testing.T) {
 
 // TestFactory_NewProvider_WithKeyName tests provider creation using keystore credentials.
 func TestFactory_NewProvider_WithKeyName(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Setup keystore with test credential.
@@ -984,6 +1036,8 @@ func TestFactory_NewProvider_WithKeyName(t *testing.T) {
 
 // TestFactory_NewProvider_WithAPIKey tests provider creation using direct API key (deprecated).
 func TestFactory_NewProvider_WithAPIKey(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create factory without auth manager.
@@ -1010,6 +1064,8 @@ func TestFactory_NewProvider_WithAPIKey(t *testing.T) {
 
 // TestFactory_NewProvider_KeyNamePrecedence tests that KeyName takes precedence over APIKey.
 func TestFactory_NewProvider_KeyNamePrecedence(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Setup keystore.
@@ -1050,6 +1106,8 @@ func TestFactory_NewProvider_KeyNamePrecedence(t *testing.T) {
 
 // TestFactory_NewProvider_KeyNameNotFound tests error when keystore credential not found.
 func TestFactory_NewProvider_KeyNameNotFound(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Setup empty keystore.
@@ -1083,6 +1141,8 @@ func TestFactory_NewProvider_KeyNameNotFound(t *testing.T) {
 
 // TestFactory_NewProvider_NoAuthManager tests error when KeyName provided but no auth manager.
 func TestFactory_NewProvider_NoAuthManager(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create factory without auth manager.
@@ -1113,6 +1173,8 @@ func TestFactory_NewProvider_NoAuthManager(t *testing.T) {
 
 // TestFactory_NewProvider_OllamaNoAuth tests Ollama provider without authentication.
 func TestFactory_NewProvider_OllamaNoAuth(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create factory with auth manager (but Ollama doesn't need it).
@@ -1144,6 +1206,8 @@ func TestFactory_NewProvider_OllamaNoAuth(t *testing.T) {
 
 // TestFactory_NewProvider_AllProviderTypes tests all provider types with auth.
 func TestFactory_NewProvider_AllProviderTypes(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Setup keystore.
@@ -1208,6 +1272,8 @@ func TestFactory_NewProvider_AllProviderTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			var provider llm.Provider
 			provider, err = factory.NewProvider(ctx, tt.cfg)
 			if err != nil {
@@ -1227,6 +1293,8 @@ func TestFactory_NewProvider_AllProviderTypes(t *testing.T) {
 
 // TestFactory_NewProvider_ContextCancellation tests context cancellation during credential retrieval.
 func TestFactory_NewProvider_ContextCancellation(t *testing.T) {
+	t.Parallel()
+
 	// Create canceled context.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Immediately cancel.
@@ -1259,6 +1327,8 @@ func TestFactory_NewProvider_ContextCancellation(t *testing.T) {
 
 // TestFactory_NewProvider_BackwardCompatibility tests that legacy NewProvider still works.
 func TestFactory_NewProvider_BackwardCompatibility(t *testing.T) {
+	t.Parallel()
+
 	// This test ensures that existing code using NewProvider() still works.
 	cfg := ProviderConfig{
 		Type:    "openai",
@@ -1283,6 +1353,8 @@ func TestFactory_NewProvider_BackwardCompatibility(t *testing.T) {
 
 // TestFactory_resolveCredential tests the credential resolution logic.
 func TestFactory_resolveCredential(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Setup keystore.
@@ -1365,8 +1437,9 @@ func TestFactory_resolveCredential(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var value string
-			value, err = tt.factory.resolveCredential(ctx, tt.cfg, tt.requiresAuth)
+			t.Parallel()
+
+			value, err := tt.factory.resolveCredential(ctx, tt.cfg, tt.requiresAuth)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("resolveCredential() error = %v, wantErr %v", err, tt.wantErr)
 

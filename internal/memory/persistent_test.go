@@ -10,6 +10,8 @@ import (
 )
 
 func TestNewPersistentStore(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	store, err := NewPersistentStore(tmpDir)
@@ -27,6 +29,8 @@ func TestNewPersistentStore(t *testing.T) {
 }
 
 func TestNewPersistentStoreCreatesDirectory(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	subDir := filepath.Join(tmpDir, "subdir", "nested")
 
@@ -51,6 +55,8 @@ func TestNewPersistentStoreCreatesDirectory(t *testing.T) {
 }
 
 func TestPersistentStorePutAndGet(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -84,6 +90,8 @@ func TestPersistentStorePutAndGet(t *testing.T) {
 }
 
 func TestPersistentStorePutWithNamespace(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -114,6 +122,8 @@ func TestPersistentStorePutWithNamespace(t *testing.T) {
 }
 
 func TestPersistentStorePutWithTags(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -139,6 +149,8 @@ func TestPersistentStorePutWithTags(t *testing.T) {
 }
 
 func TestPersistentStorePutUpdateExisting(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -173,6 +185,8 @@ func TestPersistentStorePutUpdateExisting(t *testing.T) {
 }
 
 func TestPersistentStorePutWithoutOverwrite(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -194,6 +208,8 @@ func TestPersistentStorePutWithoutOverwrite(t *testing.T) {
 }
 
 func TestPersistentStoreGetNotFound(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -208,6 +224,8 @@ func TestPersistentStoreGetNotFound(t *testing.T) {
 }
 
 func TestPersistentStorePutEmptyKey(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -222,6 +240,8 @@ func TestPersistentStorePutEmptyKey(t *testing.T) {
 }
 
 func TestPersistentStoreGetEmptyKey(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -236,6 +256,8 @@ func TestPersistentStoreGetEmptyKey(t *testing.T) {
 }
 
 func TestPersistentStoreDelete(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -267,6 +289,8 @@ func TestPersistentStoreDelete(t *testing.T) {
 }
 
 func TestPersistentStoreDeleteNonexistent(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -282,6 +306,8 @@ func TestPersistentStoreDeleteNonexistent(t *testing.T) {
 }
 
 func TestPersistentStoreDeleteEmptyKey(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -296,6 +322,8 @@ func TestPersistentStoreDeleteEmptyKey(t *testing.T) {
 }
 
 func TestPersistentStoreCount(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -333,6 +361,8 @@ func TestPersistentStoreCount(t *testing.T) {
 }
 
 func TestPersistentStoreList(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -372,6 +402,8 @@ func TestPersistentStoreList(t *testing.T) {
 }
 
 func TestPersistentStoreSearch(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -421,6 +453,8 @@ func TestPersistentStoreSearch(t *testing.T) {
 }
 
 func TestPersistentStoreSearchNoMatches(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -443,6 +477,8 @@ func TestPersistentStoreSearchNoMatches(t *testing.T) {
 }
 
 func TestPersistentStorePersistence(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 
@@ -486,6 +522,8 @@ func TestPersistentStorePersistence(t *testing.T) {
 }
 
 func TestPersistentStoreConcurrentAccess(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -536,6 +574,8 @@ func TestPersistentStoreConcurrentAccess(t *testing.T) {
 }
 
 func TestPersistentStoreClose(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
 	if err != nil {
@@ -549,6 +589,8 @@ func TestPersistentStoreClose(t *testing.T) {
 }
 
 func TestPersistentStoreWithTTL(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -574,6 +616,8 @@ func TestPersistentStoreWithTTL(t *testing.T) {
 }
 
 func TestPersistentStoreGetByNamespaceKey(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -601,6 +645,8 @@ func TestPersistentStoreGetByNamespaceKey(t *testing.T) {
 }
 
 func TestPersistentStoreDeleteByNamespaceKey(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -624,6 +670,8 @@ func TestPersistentStoreDeleteByNamespaceKey(t *testing.T) {
 }
 
 func TestPersistentStoreSearchCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -656,6 +704,8 @@ func TestPersistentStoreSearchCaseInsensitive(t *testing.T) {
 }
 
 func TestPersistentStoreExactPatternMatch(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -682,6 +732,8 @@ func TestPersistentStoreExactPatternMatch(t *testing.T) {
 }
 
 func TestPersistentStoreRebuildIndexWithInvalidFiles(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create an invalid JSON file.

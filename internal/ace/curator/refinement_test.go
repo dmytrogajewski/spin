@@ -15,6 +15,8 @@ import (
 
 // TestRefinement_NoRefine tests no refinement strategy.
 func TestRefinement_NoRefine(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -41,6 +43,8 @@ func TestRefinement_NoRefine(t *testing.T) {
 
 // TestRefinement_Lazy_NoAutoRefine tests lazy refinement doesn't auto-refine.
 func TestRefinement_Lazy_NoAutoRefine(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -70,6 +74,8 @@ func TestRefinement_Lazy_NoAutoRefine(t *testing.T) {
 
 // TestRefinement_Lazy_ManualRefine tests manual refinement in lazy mode.
 func TestRefinement_Lazy_ManualRefine(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -111,6 +117,8 @@ func TestRefinement_Lazy_ManualRefine(t *testing.T) {
 
 // TestRefinement_Proactive_Trigger tests proactive refinement triggers at threshold.
 func TestRefinement_Proactive_Trigger(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -156,6 +164,8 @@ func TestRefinement_Proactive_Trigger(t *testing.T) {
 
 // TestRefinement_Proactive_NoTrigger tests proactive refinement doesn't trigger below threshold.
 func TestRefinement_Proactive_NoTrigger(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
@@ -186,6 +196,8 @@ func TestRefinement_Proactive_NoTrigger(t *testing.T) {
 
 // TestRefinement_DefaultConfig tests default configuration values.
 func TestRefinement_DefaultConfig(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)

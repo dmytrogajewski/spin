@@ -9,6 +9,8 @@ import (
 var errOther = errors.New("other")
 
 func TestScopeConstants(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		scope    Scope
@@ -21,6 +23,8 @@ func TestScopeConstants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if string(tt.scope) != tt.expected {
 				t.Errorf("got %q, want %q", tt.scope, tt.expected)
 			}
@@ -29,6 +33,8 @@ func TestScopeConstants(t *testing.T) {
 }
 
 func TestEntryTypeConstants(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		entryType EntryType
@@ -43,6 +49,8 @@ func TestEntryTypeConstants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if string(tt.entryType) != tt.expected {
 				t.Errorf("got %q, want %q", tt.entryType, tt.expected)
 			}
@@ -51,6 +59,8 @@ func TestEntryTypeConstants(t *testing.T) {
 }
 
 func TestPutOptionsDefaults(t *testing.T) {
+	t.Parallel()
+
 	opts := PutOptions{}
 
 	if opts.TTL != 0 {
@@ -71,6 +81,8 @@ func TestPutOptionsDefaults(t *testing.T) {
 }
 
 func TestEntryFields(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 	entry := Entry{
 		Key:       "test-key",
@@ -112,12 +124,16 @@ func TestEntryFields(t *testing.T) {
 }
 
 func TestDefaultNamespace(t *testing.T) {
+	t.Parallel()
+
 	if DefaultNamespace != "default" {
 		t.Errorf("DefaultNamespace should be 'default', got %q", DefaultNamespace)
 	}
 }
 
 func TestErrNotFound(t *testing.T) {
+	t.Parallel()
+
 	err := ErrNotFound
 	if err == nil {
 		t.Fatal("ErrNotFound should not be nil")
@@ -129,6 +145,8 @@ func TestErrNotFound(t *testing.T) {
 }
 
 func TestErrKeyExists(t *testing.T) {
+	t.Parallel()
+
 	err := ErrKeyExists
 	if err == nil {
 		t.Fatal("ErrKeyExists should not be nil")
@@ -140,6 +158,8 @@ func TestErrKeyExists(t *testing.T) {
 }
 
 func TestErrEmptyKey(t *testing.T) {
+	t.Parallel()
+
 	err := ErrEmptyKey
 	if err == nil {
 		t.Fatal("ErrEmptyKey should not be nil")
@@ -151,6 +171,8 @@ func TestErrEmptyKey(t *testing.T) {
 }
 
 func TestIsNotFound(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		err      error
@@ -163,6 +185,8 @@ func TestIsNotFound(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := errors.Is(tt.err, ErrNotFound)
 			if errors.Is(tt.err, ErrNotFound) && !got {
 				t.Errorf("errors.Is should return true for ErrNotFound")

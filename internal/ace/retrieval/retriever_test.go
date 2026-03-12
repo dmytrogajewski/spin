@@ -13,6 +13,8 @@ import (
 )
 
 func TestSemanticRetriever_Creation(t *testing.T) {
+	t.Parallel()
+
 	// Test creating a semantic retriever.
 	pb := playbook.New(nil, nil)
 	embedder := embedding.NewMockEmbedder(1536)
@@ -23,6 +25,8 @@ func TestSemanticRetriever_Creation(t *testing.T) {
 }
 
 func TestSemanticRetriever_RetrieveEmpty(t *testing.T) {
+	t.Parallel()
+
 	// Test retrieving from empty playbook.
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
@@ -36,6 +40,8 @@ func TestSemanticRetriever_RetrieveEmpty(t *testing.T) {
 }
 
 func TestSemanticRetriever_RetrieveTopK(t *testing.T) {
+	t.Parallel()
+
 	// Test retrieving top-K bullets.
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(1536)
@@ -71,6 +77,8 @@ func TestSemanticRetriever_RetrieveTopK(t *testing.T) {
 }
 
 func TestSemanticRetriever_RetrieveWithScores(t *testing.T) {
+	t.Parallel()
+
 	// Test retrieving bullets with scores.
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(1536)
@@ -96,6 +104,8 @@ func TestSemanticRetriever_RetrieveWithScores(t *testing.T) {
 }
 
 func TestSemanticRetriever_RetrieveTopKExceedsAvailable(t *testing.T) {
+	t.Parallel()
+
 	// Test requesting more bullets than available.
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(1536)

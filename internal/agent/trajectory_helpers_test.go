@@ -10,7 +10,11 @@ import (
 )
 
 func TestExtractInitialQuery(t *testing.T) {
+	t.Parallel()
+
 	t.Run("returns first user message content", func(t *testing.T) {
+		t.Parallel()
+
 		messages := []message.Message{
 			{Role: message.RoleUser, Content: "install nodejs", Timestamp: time.Now()},
 		}
@@ -24,6 +28,8 @@ func TestExtractInitialQuery(t *testing.T) {
 	})
 
 	t.Run("returns empty string when no user messages", func(t *testing.T) {
+		t.Parallel()
+
 		messages := []message.Message{
 			{Role: message.RoleAssistant, Content: "I can help", Timestamp: time.Now()},
 			{Role: message.RoleSystem, Content: "System prompt", Timestamp: time.Now()},
@@ -38,6 +44,8 @@ func TestExtractInitialQuery(t *testing.T) {
 	})
 
 	t.Run("returns user message after system message", func(t *testing.T) {
+		t.Parallel()
+
 		messages := []message.Message{
 			{Role: message.RoleSystem, Content: "System prompt", Timestamp: time.Now()},
 			{Role: message.RoleUser, Content: "debug the app", Timestamp: time.Now()},
@@ -53,7 +61,11 @@ func TestExtractInitialQuery(t *testing.T) {
 }
 
 func TestExtractNewSteps(t *testing.T) {
+	t.Parallel()
+
 	t.Run("extracts single assistant reasoning message", func(t *testing.T) {
+		t.Parallel()
+
 		ts := time.Now()
 		messages := []message.Message{
 			{Role: message.RoleAssistant, Content: "I'll check the file", Timestamp: ts},
@@ -91,6 +103,8 @@ func TestExtractNewSteps(t *testing.T) {
 	})
 
 	t.Run("extracts tool call from assistant message", func(t *testing.T) {
+		t.Parallel()
+
 		ts := time.Now()
 		messages := []message.Message{
 			{
@@ -131,6 +145,8 @@ func TestExtractNewSteps(t *testing.T) {
 	})
 
 	t.Run("extracts tool result message", func(t *testing.T) {
+		t.Parallel()
+
 		ts := time.Now()
 		messages := []message.Message{
 			{
@@ -164,7 +180,11 @@ func TestExtractNewSteps(t *testing.T) {
 }
 
 func TestExtractBulletIDs(t *testing.T) {
+	t.Parallel()
+
 	t.Run("extracts IDs from bullets", func(t *testing.T) {
+		t.Parallel()
+
 		bullets := []*bullet.Bullet{
 			{ID: "b1", Content: "First bullet"},
 			{ID: "b2", Content: "Second bullet"},
@@ -186,6 +206,8 @@ func TestExtractBulletIDs(t *testing.T) {
 	})
 
 	t.Run("returns empty slice for nil bullets", func(t *testing.T) {
+		t.Parallel()
+
 		ids := extractBulletIDs(nil)
 
 		if len(ids) != 0 {

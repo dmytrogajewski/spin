@@ -10,6 +10,8 @@ import (
 )
 
 func TestNewSessionHandoff(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
 	require.NoError(t, err)
@@ -19,6 +21,8 @@ func TestNewSessionHandoff(t *testing.T) {
 }
 
 func TestSessionHandoff_SaveAndLoad(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -55,6 +59,8 @@ func TestSessionHandoff_SaveAndLoad(t *testing.T) {
 }
 
 func TestSessionHandoff_SaveSession_NoStore(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	handoff := NewSessionHandoff(nil, nil)
 
@@ -64,6 +70,8 @@ func TestSessionHandoff_SaveSession_NoStore(t *testing.T) {
 }
 
 func TestSessionHandoff_SaveSession_NoSessionID(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -77,6 +85,8 @@ func TestSessionHandoff_SaveSession_NoSessionID(t *testing.T) {
 }
 
 func TestSessionHandoff_LoadSession_NotFound(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -89,6 +99,8 @@ func TestSessionHandoff_LoadSession_NotFound(t *testing.T) {
 }
 
 func TestSessionHandoff_ListSessions(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -115,6 +127,8 @@ func TestSessionHandoff_ListSessions(t *testing.T) {
 }
 
 func TestSessionHandoff_DeleteSession(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	store, err := NewPersistentStore(tmpDir)
@@ -139,6 +153,8 @@ func TestSessionHandoff_DeleteSession(t *testing.T) {
 }
 
 func TestSessionHandoff_BuildContinuationPrompt(t *testing.T) {
+	t.Parallel()
+
 	handoff := NewSessionHandoff(nil, nil)
 
 	data := &HandoffData{
@@ -167,12 +183,16 @@ func TestSessionHandoff_BuildContinuationPrompt(t *testing.T) {
 }
 
 func TestSessionHandoff_BuildContinuationPrompt_Nil(t *testing.T) {
+	t.Parallel()
+
 	handoff := NewSessionHandoff(nil, nil)
 	prompt := handoff.BuildContinuationPrompt(nil)
 	assert.Empty(t, prompt)
 }
 
 func TestSessionHandoff_BuildContinuationPrompt_Minimal(t *testing.T) {
+	t.Parallel()
+
 	handoff := NewSessionHandoff(nil, nil)
 
 	data := &HandoffData{
@@ -188,6 +208,8 @@ func TestSessionHandoff_BuildContinuationPrompt_Minimal(t *testing.T) {
 }
 
 func TestSimpleSummarizer(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	summarizer := NewSimpleSummarizer(100)
@@ -209,6 +231,8 @@ func TestSimpleSummarizer(t *testing.T) {
 }
 
 func TestSimpleSummarizer_WithMaxTokens(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	summarizer := NewSimpleSummarizer(1000)
@@ -221,6 +245,8 @@ func TestSimpleSummarizer_WithMaxTokens(t *testing.T) {
 }
 
 func TestSimpleSummarizer_DefaultMaxLength(t *testing.T) {
+	t.Parallel()
+
 	summarizer := NewSimpleSummarizer(0)
 	assert.Equal(t, 500, summarizer.maxLength)
 }

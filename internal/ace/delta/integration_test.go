@@ -16,6 +16,8 @@ import (
 // 4. Query deltas by bullet
 // 5. Get recent deltas.
 func TestIntegration_FullWorkflow(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -147,6 +149,8 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 
 // TestIntegration_BatchWithHistory tests batch processing with history queries.
 func TestIntegration_BatchWithHistory(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -214,6 +218,8 @@ func TestIntegration_BatchWithHistory(t *testing.T) {
 
 // TestIntegration_TimestampQueries tests time-based delta queries.
 func TestIntegration_TimestampQueries(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
@@ -260,6 +266,8 @@ func TestIntegration_TimestampQueries(t *testing.T) {
 
 // TestIntegration_ErrorRecovery tests error handling and recovery.
 func TestIntegration_ErrorRecovery(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)

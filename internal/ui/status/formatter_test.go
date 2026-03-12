@@ -6,6 +6,7 @@ import (
 )
 
 func TestFormatCompact(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetAgentState("Thinking")
 	m.SetMaxTokens(1000)
@@ -31,6 +32,7 @@ func TestFormatCompact(t *testing.T) {
 }
 
 func TestFormatCompact_WithExplicitStatusText(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetStatus("Custom Status Message")
 	m.SetAgentState("Thinking")
@@ -44,6 +46,7 @@ func TestFormatCompact_WithExplicitStatusText(t *testing.T) {
 }
 
 func TestFormatCompact_LongStateName(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	// Set a very long state name that will be truncated.
 	m.SetAgentState("This is a very long agent state name that should be truncated")
@@ -61,6 +64,7 @@ func TestFormatCompact_LongStateName(t *testing.T) {
 }
 
 func TestFormatCompact_ConnectedState(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetConnected(true)
 	m.SetAgentState("Ready")
@@ -74,6 +78,7 @@ func TestFormatCompact_ConnectedState(t *testing.T) {
 }
 
 func TestFormatCompact_DisconnectedState(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetConnected(false)
 	m.SetAgentState("Ready")
@@ -87,6 +92,7 @@ func TestFormatCompact_DisconnectedState(t *testing.T) {
 }
 
 func TestFormatMedium(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetAgentState("Calling tools")
 	m.SetProvider("ollama", "qwen3:1.7b")
@@ -115,6 +121,7 @@ func TestFormatMedium(t *testing.T) {
 }
 
 func TestFormatMedium_NoMaxTokens(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetAgentState("Ready")
 	m.SetProvider("openai", "gpt-4")
@@ -137,6 +144,7 @@ func TestFormatMedium_NoMaxTokens(t *testing.T) {
 }
 
 func TestFormatMedium_LowTPS(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetAgentState("Thinking")
 	m.CalculateTPS(1, 1000000000) // Exactly 1.0 tok/s (below threshold).
@@ -150,6 +158,7 @@ func TestFormatMedium_LowTPS(t *testing.T) {
 }
 
 func TestFormatMedium_HighTPS(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetAgentState("Thinking")
 	m.CalculateTPS(2, 1000000000) // 2.0 tok/s (above threshold).
@@ -163,6 +172,7 @@ func TestFormatMedium_HighTPS(t *testing.T) {
 }
 
 func TestFormatMedium_NoProvider(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetAgentState("Ready")
 	m.SetMaxTokens(1000)
@@ -186,6 +196,7 @@ func TestFormatMedium_NoProvider(t *testing.T) {
 }
 
 func TestFormatFull(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetAgentState("Planning")
 	m.SetProvider("ollama", "qwen3:1.7b")
@@ -228,6 +239,7 @@ func TestFormatFull(t *testing.T) {
 }
 
 func TestFormatAdaptive_NarrowTerminal(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetAgentState("Ready")
 
@@ -241,6 +253,7 @@ func TestFormatAdaptive_NarrowTerminal(t *testing.T) {
 }
 
 func TestFormatAdaptive_MediumTerminal(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetProvider("ollama", "model")
 
@@ -254,6 +267,7 @@ func TestFormatAdaptive_MediumTerminal(t *testing.T) {
 }
 
 func TestFormatAdaptive_WideTerminal(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetConversationID("test123")
 
@@ -267,6 +281,7 @@ func TestFormatAdaptive_WideTerminal(t *testing.T) {
 }
 
 func TestHumanizeNumber(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input    int64
 		expected string
@@ -292,6 +307,7 @@ func TestHumanizeNumber(t *testing.T) {
 }
 
 func TestFormatPercentage(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input    float64
 		expected string
@@ -311,6 +327,7 @@ func TestFormatPercentage(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input    string
 		maxLen   int
@@ -340,6 +357,7 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestCapitalize(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input    string
 		expected string
@@ -360,7 +378,10 @@ func TestCapitalize(t *testing.T) {
 }
 
 func TestActivityIndicator(t *testing.T) {
+	t.Parallel(
 	// Connected.
+	)
+
 	result := activityIndicator(true)
 	if result != "[●]" {
 		t.Errorf("Expected '[●]' for connected, got %q", result)
@@ -374,6 +395,7 @@ func TestActivityIndicator(t *testing.T) {
 }
 
 func TestEdgeCases_ZeroValues(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	// No data set.
 
@@ -386,6 +408,7 @@ func TestEdgeCases_ZeroValues(t *testing.T) {
 }
 
 func TestEdgeCases_NoProvider(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetAgentState("Thinking")
 
@@ -398,6 +421,7 @@ func TestEdgeCases_NoProvider(t *testing.T) {
 }
 
 func TestEdgeCases_Disabled(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.Disable()
 
@@ -410,6 +434,7 @@ func TestEdgeCases_Disabled(t *testing.T) {
 }
 
 func TestFormatFull_OmitsRegularMode(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetTaskMode("regular")
 
@@ -422,6 +447,7 @@ func TestFormatFull_OmitsRegularMode(t *testing.T) {
 }
 
 func TestFormatFull_ShowsNonDefaultMode(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetTaskMode("compact")
 
@@ -434,6 +460,7 @@ func TestFormatFull_ShowsNonDefaultMode(t *testing.T) {
 }
 
 func TestFormatFull_HidesTPSWhenZero(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 	m.SetAgentState("Ready")
 	// TPS is 0.
@@ -446,7 +473,8 @@ func TestFormatFull_HidesTPSWhenZero(t *testing.T) {
 	}
 }
 
-func TestFormatFull_HidesHotkeysOnNarrowerTerminals(_ *testing.T) {
+func TestFormatFull_HidesHotkeysOnNarrowerTerminals(t *testing.T) {
+	t.Parallel()
 	m := NewManager()
 
 	// Hotkeys are currently disabled, so this test is not applicable

@@ -12,6 +12,8 @@ import (
 )
 
 func TestMemoryService_NewMemoryService(t *testing.T) {
+	t.Parallel()
+
 	scratchpad := memory.NewScratchpad("test-session", 10)
 	tmpDir := t.TempDir()
 	persistent, err := memory.NewPersistentStore(tmpDir)
@@ -24,6 +26,8 @@ func TestMemoryService_NewMemoryService(t *testing.T) {
 }
 
 func TestMemoryService_NilStores(t *testing.T) {
+	t.Parallel()
+
 	service := NewMemoryService(nil, nil)
 	assert.NotNil(t, service)
 	assert.Nil(t, service.Scratchpad())
@@ -31,6 +35,8 @@ func TestMemoryService_NilStores(t *testing.T) {
 }
 
 func TestBuilder_registerMemoryTools_NilService(t *testing.T) {
+	t.Parallel()
+
 	builder := &Builder{}
 	registry := tools.NewRegistry()
 
@@ -45,6 +51,8 @@ func TestBuilder_registerMemoryTools_NilService(t *testing.T) {
 }
 
 func TestBuilder_registerMemoryTools_WithScratchpad(t *testing.T) {
+	t.Parallel()
+
 	scratchpad := memory.NewScratchpad("test-session", 10)
 	service := NewMemoryService(scratchpad, nil)
 	builder := &Builder{memoryService: service}
@@ -64,6 +72,8 @@ func TestBuilder_registerMemoryTools_WithScratchpad(t *testing.T) {
 }
 
 func TestBuilder_registerMemoryTools_WithPersistent(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	persistent, err := memory.NewPersistentStore(tmpDir)
 	require.NoError(t, err)
@@ -86,6 +96,8 @@ func TestBuilder_registerMemoryTools_WithPersistent(t *testing.T) {
 }
 
 func TestBuilder_registerMemoryTools_WithBoth(t *testing.T) {
+	t.Parallel()
+
 	scratchpad := memory.NewScratchpad("test-session", 10)
 	tmpDir := t.TempDir()
 	persistent, err := memory.NewPersistentStore(tmpDir)
@@ -109,6 +121,8 @@ func TestBuilder_registerMemoryTools_WithBoth(t *testing.T) {
 }
 
 func TestBuilder_registerMemoryTools_ToolsWork(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	scratchpad := memory.NewScratchpad("test-session", 10)
 	service := NewMemoryService(scratchpad, nil)
@@ -137,6 +151,8 @@ func TestBuilder_registerMemoryTools_ToolsWork(t *testing.T) {
 }
 
 func TestMemoryService_NewAutoOffloader(t *testing.T) {
+	t.Parallel()
+
 	scratchpad := memory.NewScratchpad("test-session", 10)
 	service := NewMemoryService(scratchpad, nil)
 
@@ -146,12 +162,16 @@ func TestMemoryService_NewAutoOffloader(t *testing.T) {
 }
 
 func TestMemoryService_NewAutoOffloader_NilStores(t *testing.T) {
+	t.Parallel()
+
 	service := NewMemoryService(nil, nil)
 	offloader := service.NewAutoOffloader(0.7)
 	assert.Nil(t, offloader)
 }
 
 func TestMemoryService_NewSessionHandoff(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	persistent, err := memory.NewPersistentStore(tmpDir)
 	require.NoError(t, err)
@@ -164,6 +184,8 @@ func TestMemoryService_NewSessionHandoff(t *testing.T) {
 }
 
 func TestMemoryService_NewSessionHandoff_NoPersistent(t *testing.T) {
+	t.Parallel()
+
 	scratchpad := memory.NewScratchpad("test-session", 10)
 	service := NewMemoryService(scratchpad, nil)
 

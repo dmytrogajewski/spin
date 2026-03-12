@@ -11,6 +11,8 @@ import (
 
 // TestConvertInsights_Single tests converting single insight.
 func TestConvertInsights_Single(t *testing.T) {
+	t.Parallel()
+
 	insight := &reflector.Insight{
 		Content:    "Always validate input parameters before processing them",
 		Source:     "traj-123",
@@ -38,6 +40,8 @@ func TestConvertInsights_Single(t *testing.T) {
 
 // TestConvertInsights_Empty tests converting empty insight list.
 func TestConvertInsights_Empty(t *testing.T) {
+	t.Parallel()
+
 	bullets, err := ConvertInsights([]*reflector.Insight{})
 
 	require.NoError(t, err)
@@ -46,6 +50,8 @@ func TestConvertInsights_Empty(t *testing.T) {
 
 // TestConvertInsights_NoEvidence tests insight without evidence.
 func TestConvertInsights_NoEvidence(t *testing.T) {
+	t.Parallel()
+
 	insight := &reflector.Insight{
 		Content:    "Always validate input parameters before processing them",
 		Confidence: 0.85,
@@ -64,6 +70,8 @@ func TestConvertInsights_NoEvidence(t *testing.T) {
 
 // TestConvertInsights_MultipleEvidence tests joining multiple evidence strings.
 func TestConvertInsights_MultipleEvidence(t *testing.T) {
+	t.Parallel()
+
 	insight := &reflector.Insight{
 		Content:    "Always validate input parameters before processing them",
 		Confidence: 0.85,

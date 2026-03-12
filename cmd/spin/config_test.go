@@ -9,6 +9,8 @@ import (
 )
 
 func TestConfigShow(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		configYAML string
@@ -81,6 +83,8 @@ llm:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Create temp config file.
 			tmpDir := t.TempDir()
 
@@ -93,25 +97,14 @@ llm:
 			// Capture output.
 			var stdout, stderr bytes.Buffer
 
-			oldStdout := os.Stdout
-			oldStderr := os.Stderr
-
-			defer func() {
-				os.Stdout = oldStdout
-				os.Stderr = oldStderr
-			}()
-
-			// Create command.
-			cmd := newConfigShowCmd()
-			cmd.SetArgs([]string{"--format", tt.format})
-			cmd.SetOut(&stdout)
-			cmd.SetErr(&stderr)
-
-			// Set config file flag.
-			flagConfigFile = configFile
+			// Create root command with config subcommand (provides --config-file persistent flag).
+			root := newRootCmd()
+			root.SetArgs([]string{"--config-file", configFile, "config", "show", "--format", tt.format})
+			root.SetOut(&stdout)
+			root.SetErr(&stderr)
 
 			// Execute.
-			err = cmd.Execute()
+			err = root.Execute()
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
@@ -132,6 +125,8 @@ llm:
 }
 
 func TestConfigValidate(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		configYAML string
@@ -170,6 +165,8 @@ llm:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Create temp config file.
 			tmpDir := t.TempDir()
 
@@ -182,17 +179,14 @@ llm:
 			// Capture output.
 			var stdout, stderr bytes.Buffer
 
-			// Create command.
-			cmd := newConfigValidateCmd()
-			cmd.SetArgs([]string{})
-			cmd.SetOut(&stdout)
-			cmd.SetErr(&stderr)
-
-			// Set config file flag.
-			flagConfigFile = configFile
+			// Create root command with config subcommand.
+			root := newRootCmd()
+			root.SetArgs([]string{"--config-file", configFile, "config", "validate"})
+			root.SetOut(&stdout)
+			root.SetErr(&stderr)
 
 			// Execute.
-			err = cmd.Execute()
+			err = root.Execute()
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Execute() error = %v, wantErr %v\nStdout: %s\nStderr: %s",
@@ -212,6 +206,8 @@ llm:
 }
 
 func TestConfigPath(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		setupFile  bool
@@ -238,6 +234,8 @@ func TestConfigPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Create temp dir.
 			tmpDir := t.TempDir()
 			configFile := filepath.Join(tmpDir, "spin.yaml")
@@ -258,21 +256,20 @@ llm:
 			// Capture output.
 			var stdout, stderr bytes.Buffer
 
-			// Create command.
-			cmd := newConfigPathCmd()
-			cmd.SetArgs([]string{})
-			cmd.SetOut(&stdout)
-			cmd.SetErr(&stderr)
-
-			// Set config file flag.
-			if tt.setupFile {
-				flagConfigFile = configFile
-			} else {
-				flagConfigFile = filepath.Join(tmpDir, "nonexistent.yaml")
+			// Determine config file path.
+			cfgPath := configFile
+			if !tt.setupFile {
+				cfgPath = filepath.Join(tmpDir, "nonexistent.yaml")
 			}
 
+			// Create root command with config subcommand.
+			root := newRootCmd()
+			root.SetArgs([]string{"--config-file", cfgPath, "config", "path"})
+			root.SetOut(&stdout)
+			root.SetErr(&stderr)
+
 			// Execute.
-			err := cmd.Execute()
+			err := root.Execute()
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
@@ -291,6 +288,8 @@ llm:
 }
 
 func TestConfigPathShowAll(t *testing.T) {
+	t.Parallel()
+
 	// Create temp dir.
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "nonexistent.yaml")
@@ -298,17 +297,14 @@ func TestConfigPathShowAll(t *testing.T) {
 	// Capture output.
 	var stdout, stderr bytes.Buffer
 
-	// Create command.
-	cmd := newConfigPathCmd()
-	cmd.SetArgs([]string{"--all"})
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&stderr)
-
-	// Set nonexistent config file.
-	flagConfigFile = configFile
+	// Create root command with config subcommand.
+	root := newRootCmd()
+	root.SetArgs([]string{"--config-file", configFile, "config", "path", "--all"})
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
 
 	// Execute.
-	err := cmd.Execute()
+	err := root.Execute()
 	if err == nil {
 		t.Error("Expected error for nonexistent config, got nil")
 	}
@@ -328,7 +324,7 @@ func TestConfigPathShowAll(t *testing.T) {
 
 func TestConfigEdit(t *testing.T) {
 	t.Run("fails when no editor found", func(t *testing.T) {
-		// Clear all editor env vars.
+		// Clear all editor env vars (cannot use t.Parallel — modifies process-global env).
 		oldEditor := os.Getenv("EDITOR")
 		oldVisual := os.Getenv("VISUAL")
 		oldPath := os.Getenv("PATH")
@@ -357,14 +353,12 @@ llm:
 			t.Fatalf("Failed to create config file: %v", err)
 		}
 
-		// Create command.
-		cmd := newConfigEditCmd()
-		cmd.SetArgs([]string{})
-
-		flagConfigFile = configFile
+		// Create root command with config subcommand.
+		root := newRootCmd()
+		root.SetArgs([]string{"--config-file", configFile, "config", "edit"})
 
 		// Execute - should fail with no editor.
-		err = cmd.Execute()
+		err = root.Execute()
 		if err == nil {
 			t.Error("Expected error when no editor found, got nil")
 		}
@@ -376,6 +370,7 @@ llm:
 }
 
 func TestGetEditor(t *testing.T) {
+	// Cannot use t.Parallel — subtests modify process-global env vars.
 	tests := []struct {
 		name         string
 		editorEnv    string
@@ -431,6 +426,8 @@ func TestGetEditor(t *testing.T) {
 }
 
 func TestGetConfigSearchPaths(t *testing.T) {
+	t.Parallel()
+
 	paths := getConfigSearchPaths()
 
 	if len(paths) == 0 {

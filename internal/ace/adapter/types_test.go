@@ -8,6 +8,8 @@ import (
 )
 
 func TestExecutionSignal_Creation(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 
 	signal := ExecutionSignal{
@@ -32,6 +34,8 @@ func TestExecutionSignal_Creation(t *testing.T) {
 }
 
 func TestSession_Creation(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 
 	session := Session{
@@ -50,6 +54,8 @@ func TestSession_Creation(t *testing.T) {
 }
 
 func TestSession_AddSignal(t *testing.T) {
+	t.Parallel()
+
 	session := Session{
 		ID:            "session-123",
 		StartTime:     time.Now(),
@@ -72,6 +78,8 @@ func TestSession_AddSignal(t *testing.T) {
 }
 
 func TestSession_SlidingWindow(t *testing.T) {
+	t.Parallel()
+
 	session := Session{
 		ID:            "session-123",
 		StartTime:     time.Now(),
@@ -107,6 +115,8 @@ func TestSession_SlidingWindow(t *testing.T) {
 }
 
 func TestAdaptationResult_Creation(t *testing.T) {
+	t.Parallel()
+
 	result := AdaptationResult{
 		Action:              ActionReflect,
 		BulletsAdded:        3,
@@ -125,6 +135,8 @@ func TestAdaptationResult_Creation(t *testing.T) {
 }
 
 func TestAdaptationAction_Constants(t *testing.T) {
+	t.Parallel()
+
 	assert.Equal(t, AdaptationAction("skip"), ActionSkip)
 	assert.Equal(t, AdaptationAction("reflect"), ActionReflect)
 	assert.Equal(t, AdaptationAction("quick_add"), ActionQuickAdd)

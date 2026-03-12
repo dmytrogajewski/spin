@@ -16,6 +16,8 @@ import (
 
 // TestCurator_Integration_WithReflector tests end-to-end Reflector → Curator flow.
 func TestCurator_Integration_WithReflector(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Setup.
@@ -83,6 +85,8 @@ func TestCurator_Integration_WithReflector(t *testing.T) {
 
 // TestCurator_Integration_IdempotentCuration tests that curating twice doesn't duplicate.
 func TestCurator_Integration_IdempotentCuration(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	embedder := embedding.NewMockEmbedder(384)
@@ -143,6 +147,8 @@ func TestCurator_Integration_IdempotentCuration(t *testing.T) {
 
 // TestCurator_Integration_MultipleTrajectories tests curating insights from multiple trajectories.
 func TestCurator_Integration_MultipleTrajectories(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	embedder := embedding.NewMockEmbedder(384)

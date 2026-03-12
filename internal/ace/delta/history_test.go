@@ -6,6 +6,8 @@ import (
 )
 
 func TestDeltaHistory_Record(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory()
 
 	delta := NewContentUpdate("bullet-1", "content", Metadata{Source: "test"})
@@ -17,6 +19,8 @@ func TestDeltaHistory_Record(t *testing.T) {
 }
 
 func TestDeltaHistory_GetByBullet(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory()
 
 	// Add deltas for two different bullets.
@@ -48,6 +52,8 @@ func TestDeltaHistory_GetByBullet(t *testing.T) {
 }
 
 func TestDeltaHistory_GetRecent(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory()
 
 	// Add 5 deltas.
@@ -83,6 +89,8 @@ func TestDeltaHistory_GetRecent(t *testing.T) {
 }
 
 func TestDeltaHistory_GetSince(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory()
 
 	now := time.Now()
@@ -126,6 +134,8 @@ func TestDeltaHistory_GetSince(t *testing.T) {
 }
 
 func TestDeltaHistory_Stats(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory()
 
 	// Empty history.
@@ -178,6 +188,8 @@ func TestDeltaHistory_Stats(t *testing.T) {
 }
 
 func TestDeltaHistory_Clear(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory()
 
 	// Add deltas.
@@ -203,6 +215,8 @@ func TestDeltaHistory_Clear(t *testing.T) {
 }
 
 func TestDeltaHistory_Concurrency(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory()
 
 	// Concurrent writes.

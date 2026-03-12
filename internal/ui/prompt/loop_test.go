@@ -53,7 +53,7 @@ func (f *FakeRenderer) ClearScreen() error {
 	return nil
 }
 
-func (f *FakeRenderer) SetWidth(_ int)      {}
+func (f *FakeRenderer) SetWidth(_ int)     {}
 func (f *FakeRenderer) SetPrefix(_ string) {}
 
 func (f *FakeRenderer) GetRedrawCount() int {
@@ -93,6 +93,7 @@ func (f *FakeRenderer) WaitForRedraws(n int, timeout time.Duration) bool {
 }
 
 func TestNewLoop(t *testing.T) {
+	t.Parallel()
 	model := NewModel(100)
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent)
@@ -109,6 +110,7 @@ func TestNewLoop(t *testing.T) {
 }
 
 func TestLoop_Insert(t *testing.T) {
+	t.Parallel()
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent, 10)
 	model := NewModel(100)
@@ -139,6 +141,7 @@ func TestLoop_Insert(t *testing.T) {
 }
 
 func TestLoop_Backspace(t *testing.T) {
+	t.Parallel()
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent, 10)
 	model := NewModel(100)
@@ -172,6 +175,7 @@ func TestLoop_Backspace(t *testing.T) {
 }
 
 func TestLoop_Navigation(t *testing.T) {
+	t.Parallel()
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent, 10)
 	model := NewModel(100)
@@ -203,6 +207,7 @@ func TestLoop_Navigation(t *testing.T) {
 }
 
 func TestLoop_Submit(t *testing.T) {
+	t.Parallel()
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent, 10)
 	model := NewModel(100)
@@ -246,6 +251,7 @@ func TestLoop_Submit(t *testing.T) {
 }
 
 func TestLoop_CtrlC(t *testing.T) {
+	t.Parallel()
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent, 10)
 	model := NewModel(100)
@@ -271,6 +277,7 @@ func TestLoop_CtrlC(t *testing.T) {
 }
 
 func TestLoop_CtrlD_EmptyBuffer(t *testing.T) {
+	t.Parallel()
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent, 10)
 	model := NewModel(100)
@@ -296,6 +303,7 @@ func TestLoop_CtrlD_EmptyBuffer(t *testing.T) {
 }
 
 func TestLoop_CtrlD_NonEmptyBuffer(t *testing.T) {
+	t.Parallel()
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent, 10)
 	model := NewModel(100)
@@ -332,6 +340,7 @@ func TestLoop_CtrlD_NonEmptyBuffer(t *testing.T) {
 }
 
 func TestLoop_ClearScreen(t *testing.T) {
+	t.Parallel()
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent, 10)
 	model := NewModel(100)
@@ -359,6 +368,7 @@ func TestLoop_ClearScreen(t *testing.T) {
 }
 
 func TestLoop_ContextCancel(t *testing.T) {
+	t.Parallel()
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent, 10)
 	model := NewModel(100)
@@ -383,6 +393,7 @@ func TestLoop_ContextCancel(t *testing.T) {
 }
 
 func TestLoop_KeyChannelClose(t *testing.T) {
+	t.Parallel()
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent, 10)
 	model := NewModel(100)
@@ -408,6 +419,7 @@ func TestLoop_KeyChannelClose(t *testing.T) {
 }
 
 func TestLoop_FullInteraction(t *testing.T) {
+	t.Parallel()
 	model := NewModel(100)
 
 	var buf bytes.Buffer
@@ -449,6 +461,7 @@ func TestLoop_FullInteraction(t *testing.T) {
 }
 
 func TestLoop_History(t *testing.T) {
+	t.Parallel()
 	renderer := NewFakeRenderer()
 	keys := make(chan term.KeyEvent, 20)
 	model := NewModel(100)

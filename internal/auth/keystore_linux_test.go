@@ -11,6 +11,8 @@ import (
 
 // TestLinuxKeystore_Get tests retrieving values.
 func TestLinuxKeystore_Get(t *testing.T) {
+	t.Parallel()
+
 	ks := &linuxKeystore{}
 
 	// Clean up before test.
@@ -36,6 +38,8 @@ func TestLinuxKeystore_Get(t *testing.T) {
 
 // TestLinuxKeystore_Get_NotFound tests getting non-existent values.
 func TestLinuxKeystore_Get_NotFound(t *testing.T) {
+	t.Parallel()
+
 	ks := &linuxKeystore{}
 
 	// Clean up to ensure it doesn't exist.
@@ -53,6 +57,8 @@ func TestLinuxKeystore_Get_NotFound(t *testing.T) {
 
 // TestLinuxKeystore_Set tests storing values.
 func TestLinuxKeystore_Set(t *testing.T) {
+	t.Parallel()
+
 	ks := &linuxKeystore{}
 
 	// Clean up before test.
@@ -78,6 +84,8 @@ func TestLinuxKeystore_Set(t *testing.T) {
 
 // TestLinuxKeystore_Set_Overwrite tests overwriting values.
 func TestLinuxKeystore_Set_Overwrite(t *testing.T) {
+	t.Parallel()
+
 	ks := &linuxKeystore{}
 
 	// Clean up before test.
@@ -109,6 +117,8 @@ func TestLinuxKeystore_Set_Overwrite(t *testing.T) {
 
 // TestLinuxKeystore_Delete tests deleting values.
 func TestLinuxKeystore_Delete(t *testing.T) {
+	t.Parallel()
+
 	ks := &linuxKeystore{}
 
 	// Clean up before test.
@@ -135,6 +145,8 @@ func TestLinuxKeystore_Delete(t *testing.T) {
 
 // TestLinuxKeystore_Delete_Idempotent tests deleting non-existent values.
 func TestLinuxKeystore_Delete_Idempotent(t *testing.T) {
+	t.Parallel()
+
 	ks := &linuxKeystore{}
 
 	// Ensure it doesn't exist.
@@ -149,6 +161,8 @@ func TestLinuxKeystore_Delete_Idempotent(t *testing.T) {
 
 // TestLinuxKeystore_List tests that List returns error.
 func TestLinuxKeystore_List(t *testing.T) {
+	t.Parallel()
+
 	ks := &linuxKeystore{}
 
 	_, err := ks.List()
@@ -164,6 +178,8 @@ func TestLinuxKeystore_List(t *testing.T) {
 
 // TestLinuxKeystore_Integration tests full workflow.
 func TestLinuxKeystore_Integration(t *testing.T) {
+	t.Parallel()
+
 	ks := &linuxKeystore{}
 
 	testKey := "integration-test"
@@ -222,6 +238,8 @@ func TestLinuxKeystore_Integration(t *testing.T) {
 
 // TestNewPlatformKeystore tests keystore creation.
 func TestNewPlatformKeystore(t *testing.T) {
+	t.Parallel()
+
 	ks := newPlatformKeystore()
 
 	if ks == nil {
@@ -241,6 +259,8 @@ func TestNewPlatformKeystore(t *testing.T) {
 
 // TestIsSecretServiceAvailable tests Secret Service detection.
 func TestIsSecretServiceAvailable(t *testing.T) {
+	t.Parallel()
+
 	available := isSecretServiceAvailable()
 	t.Logf("Secret Service available: %v", available)
 
@@ -259,6 +279,8 @@ func TestIsSecretServiceAvailable(t *testing.T) {
 
 // TestLinuxKeystore_EmptyValue tests storing empty values.
 func TestLinuxKeystore_EmptyValue(t *testing.T) {
+	t.Parallel()
+
 	ks := &linuxKeystore{}
 
 	testKey := "empty-value-test"
@@ -286,6 +308,8 @@ func TestLinuxKeystore_EmptyValue(t *testing.T) {
 
 // TestLinuxKeystore_SpecialCharacters tests keys with special characters.
 func TestLinuxKeystore_SpecialCharacters(t *testing.T) {
+	t.Parallel()
+
 	ks := &linuxKeystore{}
 
 	tests := []struct {
@@ -301,6 +325,8 @@ func TestLinuxKeystore_SpecialCharacters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Clean up.
 			_ = keyring.Delete(serviceName, tt.key)
 			defer func() { _ = keyring.Delete(serviceName, tt.key) }()

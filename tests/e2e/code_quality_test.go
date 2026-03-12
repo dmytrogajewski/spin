@@ -16,6 +16,8 @@ import (
 // - TODO, FIXME, XXX, HACK comments
 // - "for now", "not yet", "will be", "later" patterns that indicate deferred work.
 func TestNoTODOsOrDeferredPatterns(t *testing.T) {
+	t.Parallel()
+
 	// Patterns to detect.
 	patterns := []struct {
 		name    string

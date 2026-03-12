@@ -12,6 +12,8 @@ import (
 
 // TestNewProvider tests provider construction.
 func TestNewProvider(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		cfg     Config
@@ -58,6 +60,8 @@ func TestNewProvider(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			p, err := NewProvider(tt.cfg)
 
 			if tt.wantErr {
@@ -87,6 +91,8 @@ func TestNewProvider(t *testing.T) {
 
 // TestProvider_Name tests Name() method.
 func TestProvider_Name(t *testing.T) {
+	t.Parallel()
+
 	p, _ := NewProvider(Config{})
 
 	name := p.Name()
@@ -99,6 +105,8 @@ func TestProvider_Name(t *testing.T) {
 
 // TestProvider_Capabilities tests Capabilities() method.
 func TestProvider_Capabilities(t *testing.T) {
+	t.Parallel()
+
 	p, _ := NewProvider(Config{})
 
 	caps := p.Capabilities()
@@ -118,6 +126,8 @@ func TestProvider_Capabilities(t *testing.T) {
 
 // TestProvider_Complete tests completion delegation.
 func TestProvider_Complete(t *testing.T) {
+	t.Parallel()
+
 	// Create test server.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -191,6 +201,8 @@ func TestProvider_Complete(t *testing.T) {
 
 // TestProvider_Stream tests streaming delegation.
 func TestProvider_Stream(t *testing.T) {
+	t.Parallel()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chat/completions" {
 			t.Errorf("Request path = %s, want /chat/completions", r.URL.Path)
@@ -238,6 +250,8 @@ func TestProvider_Stream(t *testing.T) {
 
 // TestProvider_Models tests model listing delegation.
 func TestProvider_Models(t *testing.T) {
+	t.Parallel()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/models" {
 			t.Errorf("Request path = %s, want /models", r.URL.Path)
@@ -272,6 +286,8 @@ func TestProvider_Models(t *testing.T) {
 
 // TestProvider_Close tests cleanup delegation.
 func TestProvider_Close(t *testing.T) {
+	t.Parallel()
+
 	p, _ := NewProvider(Config{})
 
 	err := p.Close()
@@ -282,6 +298,8 @@ func TestProvider_Close(t *testing.T) {
 
 // TestProvider_DefaultBaseURL tests default base URL.
 func TestProvider_DefaultBaseURL(t *testing.T) {
+	t.Parallel()
+
 	// We can't easily test the internal baseURL, but we can verify
 	// that the provider is created successfully without a baseURL.
 	p, err := NewProvider(Config{})
@@ -296,6 +314,8 @@ func TestProvider_DefaultBaseURL(t *testing.T) {
 
 // TestProvider_ErrorHandling tests error propagation.
 func TestProvider_ErrorHandling(t *testing.T) {
+	t.Parallel()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error": {"message": "Unauthorized"}}`))
@@ -324,6 +344,8 @@ func TestProvider_ErrorHandling(t *testing.T) {
 
 // TestProvider_ContextCancellation tests context cancellation propagation.
 func TestProvider_ContextCancellation(t *testing.T) {
+	t.Parallel()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// This should not be reached due to cancellation.
 		w.WriteHeader(http.StatusOK)

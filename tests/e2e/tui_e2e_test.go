@@ -110,6 +110,8 @@ func setupTUITest(t *testing.T) (*testkit.TUITestHelper, *conversation.Conversat
 
 // TestTUILaunch tests that TUI launches successfully.
 func TestTUILaunch(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)
@@ -123,6 +125,8 @@ func TestTUILaunch(t *testing.T) {
 
 // TestTUIBasicChat tests sending a message and receiving response.
 func TestTUIBasicChat(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	helper, conv, mockLLM := setupTUITest(t)
@@ -187,6 +191,8 @@ func TestTUIBasicChat(t *testing.T) {
 
 // TestTUIFilePickerTrigger tests @ key triggers file picker.
 func TestTUIFilePickerTrigger(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)
@@ -207,6 +213,8 @@ func TestTUIFilePickerTrigger(t *testing.T) {
 
 // TestTUIHelpModal tests Ctrl+H triggers help.
 func TestTUIHelpModal(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)
@@ -221,6 +229,8 @@ func TestTUIHelpModal(t *testing.T) {
 
 // TestTUIExitWithCtrlD tests Ctrl+D exits cleanly.
 func TestTUIExitWithCtrlD(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)
@@ -239,6 +249,8 @@ func TestTUIExitWithCtrlD(t *testing.T) {
 
 // TestTUIToolApproval tests approval workflow.
 func TestTUIToolApproval(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)
@@ -253,6 +265,8 @@ func TestTUIToolApproval(t *testing.T) {
 
 // TestTUIMultiTurn tests conversation context is maintained.
 func TestTUIMultiTurn(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	helper, conv, mockLLM := setupTUITest(t)
@@ -328,6 +342,8 @@ func TestTUIMultiTurn(t *testing.T) {
 
 // TestTUIStopStreaming tests Ctrl+C stops streaming.
 func TestTUIStopStreaming(t *testing.T) {
+	t.Parallel()
+
 	skipTUITests(t)
 
 	helper, _, _ := setupTUITest(t)

@@ -6,6 +6,7 @@ import (
 )
 
 func TestState_String(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		state    State
@@ -24,6 +25,7 @@ func TestState_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := tt.state.String()
 			if result != tt.expected {
 				t.Errorf("State.String() = %v, want %v", result, tt.expected)
@@ -33,6 +35,7 @@ func TestState_String(t *testing.T) {
 }
 
 func TestState_MarshalText(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		state    State
@@ -50,6 +53,7 @@ func TestState_MarshalText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result, err := tt.state.MarshalText()
 			if err != nil {
 				t.Errorf("State.MarshalText() unexpected error: %v", err)
@@ -63,6 +67,7 @@ func TestState_MarshalText(t *testing.T) {
 }
 
 func TestState_UnmarshalText(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		input     string
@@ -83,6 +88,7 @@ func TestState_UnmarshalText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			var state State
 
 			err := state.UnmarshalText([]byte(tt.input))
@@ -98,6 +104,7 @@ func TestState_UnmarshalText(t *testing.T) {
 }
 
 func TestState_IsTerminal(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		state    State
@@ -116,6 +123,7 @@ func TestState_IsTerminal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := tt.state.IsTerminal()
 			if result != tt.expected {
 				t.Errorf("State.IsTerminal() = %v, want %v", result, tt.expected)
@@ -125,6 +133,7 @@ func TestState_IsTerminal(t *testing.T) {
 }
 
 func TestState_IsActive(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		state    State
@@ -143,6 +152,7 @@ func TestState_IsActive(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := tt.state.IsActive()
 			if result != tt.expected {
 				t.Errorf("State.IsActive() = %v, want %v", result, tt.expected)
@@ -152,6 +162,7 @@ func TestState_IsActive(t *testing.T) {
 }
 
 func TestState_CanTransitionTo(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		from     State
@@ -210,6 +221,7 @@ func TestState_CanTransitionTo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := tt.from.CanTransitionTo(tt.to)
 			if result != tt.expected {
 				t.Errorf("State.CanTransitionTo(%v, %v) = %v, want %v", tt.from, tt.to, result, tt.expected)
@@ -219,6 +231,7 @@ func TestState_CanTransitionTo(t *testing.T) {
 }
 
 func TestState_JSONRoundTrip(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		state State
@@ -235,7 +248,10 @@ func TestState_JSONRoundTrip(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel(
 			// Marshal to JSON.
+			)
+
 			data, err := json.Marshal(tt.state)
 			if err != nil {
 				t.Errorf("json.Marshal() unexpected error: %v", err)
@@ -257,8 +273,10 @@ func TestState_JSONRoundTrip(t *testing.T) {
 	}
 }
 
-func TestState_Concurrency(_ *testing.T) {
+func TestState_Concurrency(t *testing.T) {
+	t.Parallel()
 	// Test concurrent access to state methods.
+
 	done := make(chan bool, 10)
 
 	for range 10 {

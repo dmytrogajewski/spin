@@ -15,6 +15,8 @@ var (
 )
 
 func TestErrors(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		err  error
@@ -49,6 +51,8 @@ func TestErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := tt.err.Error(); got != tt.want {
 				t.Errorf("Error() = %v, want %v", got, tt.want)
 			}
@@ -57,6 +61,8 @@ func TestErrors(t *testing.T) {
 }
 
 func TestErrorWrapping(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		err    error
@@ -103,6 +109,8 @@ func TestErrorWrapping(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := errors.Is(tt.err, tt.target); got != tt.want {
 				t.Errorf("errors.Is() = %v, want %v", got, tt.want)
 			}
@@ -111,6 +119,8 @@ func TestErrorWrapping(t *testing.T) {
 }
 
 func TestErrorEquality(t *testing.T) {
+	t.Parallel()
+
 	// Verify all errors are distinct.
 	errs := []error{
 		ErrProviderNotFound,

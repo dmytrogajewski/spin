@@ -12,6 +12,8 @@ import (
 
 // TestACP_Initialize tests the initialization flow.
 func TestACP_Initialize(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -55,17 +57,19 @@ func TestACP_Initialize(t *testing.T) {
 
 // TestACP_Initialize_ProtocolVersion tests protocol version negotiation.
 func TestACP_Initialize_ProtocolVersion(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
 	cmd, stdin, stdout := startACPAgent(t)
-	defer cleanupAgent(t, cmd, stdin)
+	t.Cleanup(func() { cleanupAgent(t, cmd, stdin) })
 
 	client := createACPClient(t, stdin, stdout)
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-	defer cancel()
+	t.Cleanup(cancel)
 
 	tests := []struct {
 		name            string
@@ -86,6 +90,8 @@ func TestACP_Initialize_ProtocolVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			req := acp.InitializeRequest{
 				ProtocolVersion:    tt.clientVersion,
 				ClientCapabilities: acp.ClientCapabilities{},
@@ -100,6 +106,8 @@ func TestACP_Initialize_ProtocolVersion(t *testing.T) {
 
 // TestACP_Initialize_AgentCapabilities tests agent capability advertisement.
 func TestACP_Initialize_AgentCapabilities(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -129,6 +137,8 @@ func TestACP_Initialize_AgentCapabilities(t *testing.T) {
 
 // TestACP_Initialize_ClientCapabilitiesStorage tests that client capabilities are stored.
 func TestACP_Initialize_ClientCapabilitiesStorage(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -159,6 +169,8 @@ func TestACP_Initialize_ClientCapabilitiesStorage(t *testing.T) {
 
 // TestACP_Initialize_Timeout tests that initialization times out correctly.
 func TestACP_Initialize_Timeout(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -187,6 +199,8 @@ func TestACP_Initialize_Timeout(t *testing.T) {
 
 // TestACP_Initialize_ClientCapabilities_FS tests file system capabilities.
 func TestACP_Initialize_ClientCapabilities_FS(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -232,6 +246,8 @@ func TestACP_Initialize_ClientCapabilities_FS(t *testing.T) {
 
 // TestACP_Initialize_ClientCapabilities_Terminal tests terminal capability.
 func TestACP_Initialize_ClientCapabilities_Terminal(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -271,6 +287,8 @@ func TestACP_Initialize_ClientCapabilities_Terminal(t *testing.T) {
 
 // TestACP_Initialize_AgentCapabilities_MCP tests MCP capabilities.
 func TestACP_Initialize_AgentCapabilities_MCP(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -302,6 +320,8 @@ func TestACP_Initialize_AgentCapabilities_MCP(t *testing.T) {
 
 // TestACP_Initialize_AgentCapabilities_LoadSession tests loadSession capability.
 func TestACP_Initialize_AgentCapabilities_LoadSession(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -330,6 +350,8 @@ func TestACP_Initialize_AgentCapabilities_LoadSession(t *testing.T) {
 
 // TestACP_Initialize_AgentCapabilities_PromptCapabilities tests all prompt capabilities.
 func TestACP_Initialize_AgentCapabilities_PromptCapabilities(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -361,6 +383,8 @@ func TestACP_Initialize_AgentCapabilities_PromptCapabilities(t *testing.T) {
 
 // TestACP_Initialize_ClientInfo tests client info exchange.
 func TestACP_Initialize_ClientInfo(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -394,6 +418,8 @@ func TestACP_Initialize_ClientInfo(t *testing.T) {
 
 // TestACP_Initialize_AgentInfo tests agent info exchange.
 func TestACP_Initialize_AgentInfo(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -422,6 +448,8 @@ func TestACP_Initialize_AgentInfo(t *testing.T) {
 
 // TestACP_Initialize_AuthMethods tests auth methods advertisement.
 func TestACP_Initialize_AuthMethods(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}

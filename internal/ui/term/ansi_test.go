@@ -6,6 +6,7 @@ import (
 
 // TestANSIConstants verifies ANSI escape sequences match specification.
 func TestANSIConstants(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		got  string
@@ -21,6 +22,7 @@ func TestANSIConstants(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if tt.got != tt.want {
 				t.Errorf("got %q, want %q", tt.got, tt.want)
 			}

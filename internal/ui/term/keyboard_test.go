@@ -9,6 +9,7 @@ import (
 )
 
 func TestKeyKind_String(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		kind KeyKind
 		want string
@@ -42,6 +43,7 @@ func TestKeyKind_String(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
+			t.Parallel()
 			got := tt.kind.String()
 			if got != tt.want {
 				t.Errorf("KeyKind.String() = %q, want %q", got, tt.want)
@@ -51,6 +53,7 @@ func TestKeyKind_String(t *testing.T) {
 }
 
 func TestReadKeys_SingleByteKeys(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input []byte
@@ -73,6 +76,7 @@ func TestReadKeys_SingleByteKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -96,6 +100,7 @@ func TestReadKeys_SingleByteKeys(t *testing.T) {
 }
 
 func TestReadKeys_ControlKeys(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input []byte
@@ -111,6 +116,7 @@ func TestReadKeys_ControlKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -134,6 +140,7 @@ func TestReadKeys_ControlKeys(t *testing.T) {
 }
 
 func TestReadKeys_ArrowKeys(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input []byte
@@ -147,6 +154,7 @@ func TestReadKeys_ArrowKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -170,6 +178,7 @@ func TestReadKeys_ArrowKeys(t *testing.T) {
 }
 
 func TestReadKeys_HomeEnd(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input []byte
@@ -183,6 +192,7 @@ func TestReadKeys_HomeEnd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -206,6 +216,7 @@ func TestReadKeys_HomeEnd(t *testing.T) {
 }
 
 func TestReadKeys_PageKeys(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input []byte
@@ -217,6 +228,7 @@ func TestReadKeys_PageKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -240,6 +252,7 @@ func TestReadKeys_PageKeys(t *testing.T) {
 }
 
 func TestReadKeys_Delete(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input []byte
@@ -251,6 +264,7 @@ func TestReadKeys_Delete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -274,6 +288,7 @@ func TestReadKeys_Delete(t *testing.T) {
 }
 
 func TestReadKeys_FunctionKeys(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input []byte
@@ -295,6 +310,7 @@ func TestReadKeys_FunctionKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -318,6 +334,7 @@ func TestReadKeys_FunctionKeys(t *testing.T) {
 }
 
 func TestReadKeys_EscapeAlone(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
@@ -349,6 +366,7 @@ func TestReadKeys_EscapeAlone(t *testing.T) {
 }
 
 func TestReadKeys_EscapeSequence(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
@@ -372,6 +390,7 @@ func TestReadKeys_EscapeSequence(t *testing.T) {
 }
 
 func TestReadKeys_UTF8(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -387,6 +406,7 @@ func TestReadKeys_UTF8(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -414,6 +434,7 @@ func TestReadKeys_UTF8(t *testing.T) {
 }
 
 func TestReadKeys_BracketedPaste(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		payload string
@@ -428,6 +449,7 @@ func TestReadKeys_BracketedPaste(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
@@ -457,6 +479,7 @@ func TestReadKeys_BracketedPaste(t *testing.T) {
 }
 
 func TestReadKeys_BracketedPasteLarge(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
@@ -495,6 +518,7 @@ func TestReadKeys_BracketedPasteLarge(t *testing.T) {
 }
 
 func TestReadKeys_ContextCancel(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Slow reader that will block.
@@ -520,6 +544,7 @@ func TestReadKeys_ContextCancel(t *testing.T) {
 }
 
 func TestReadKeys_EOF(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
@@ -543,6 +568,7 @@ func TestReadKeys_EOF(t *testing.T) {
 }
 
 func TestReadKeys_PartialSequence(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input []byte
@@ -554,6 +580,7 @@ func TestReadKeys_PartialSequence(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer cancel()
 
@@ -579,6 +606,7 @@ func TestReadKeys_PartialSequence(t *testing.T) {
 }
 
 func TestReadKeys_RapidInput(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 

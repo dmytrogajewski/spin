@@ -20,6 +20,8 @@ var (
 )
 
 func TestError_Error(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		err  *Error
@@ -48,6 +50,8 @@ func TestError_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := tt.err.Error(); got != tt.want {
 				t.Errorf("Error.Error() = %q, want %q", got, tt.want)
 			}
@@ -56,6 +60,8 @@ func TestError_Error(t *testing.T) {
 }
 
 func TestError_Unwrap(t *testing.T) {
+	t.Parallel()
+
 	underlying := errUnderlyingError
 	err := &Error{
 		Code:    CodeInternal,
@@ -71,6 +77,8 @@ func TestError_Unwrap(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
+	t.Parallel()
+
 	underlying := errUnderlying
 	err := New(CodeTimeout, "Test.Op", "timeout occurred", underlying)
 
@@ -92,6 +100,8 @@ func TestNew(t *testing.T) {
 }
 
 func TestNewf(t *testing.T) {
+	t.Parallel()
+
 	underlying := errUnderlying2
 	err := Newf(CodeValidation, "Test.Op", underlying, "invalid value: %d", 42)
 
@@ -109,6 +119,8 @@ func TestNewf(t *testing.T) {
 }
 
 func TestIs(t *testing.T) {
+	t.Parallel()
+
 	sentinel := errSentinelError
 	wrapped := New(CodeInternal, "Test.Op", "wrapped error", sentinel)
 
@@ -123,6 +135,8 @@ func TestIs(t *testing.T) {
 }
 
 func TestAs(t *testing.T) {
+	t.Parallel()
+
 	inner := New(CodeTimeout, "Inner.Op", "inner timeout", nil)
 	outer := New(CodeInternal, "Outer.Op", "outer error", inner)
 
@@ -137,6 +151,8 @@ func TestAs(t *testing.T) {
 }
 
 func TestErrorCodes(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		code ErrorCode
 		want string
@@ -160,6 +176,8 @@ func TestErrorCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(string(tt.code), func(t *testing.T) {
+			t.Parallel()
+
 			if string(tt.code) != tt.want {
 				t.Errorf("ErrorCode = %q, want %q", tt.code, tt.want)
 			}
@@ -168,6 +186,8 @@ func TestErrorCodes(t *testing.T) {
 }
 
 func TestErrorChaining(t *testing.T) {
+	t.Parallel()
+
 	// Create error chain: root -> middle -> top.
 	root := errRootCause
 	middle := New(CodeNetwork, "Middle.Op", "network error", root)
@@ -237,6 +257,8 @@ func ExampleAs() {
 
 // TestSpinErrorInterface verifies that Error implements SpinError interface.
 func TestSpinErrorInterface(t *testing.T) {
+	t.Parallel()
+
 	err := New(CodeLLM, "Agent.Execute", "llm failed", nil)
 
 	// Verify Error implements SpinError.
@@ -252,6 +274,8 @@ func TestSpinErrorInterface(t *testing.T) {
 
 // TestSpinError_Operation verifies Operation() returns correct operation.
 func TestSpinError_Operation(t *testing.T) {
+	t.Parallel()
+
 	const expectedOp = "Tool.ReadFile"
 
 	err := New(CodeIO, expectedOp, "read failed", nil)
@@ -263,6 +287,8 @@ func TestSpinError_Operation(t *testing.T) {
 
 // TestSpinError_UnwrapMethod verifies Unwrap() returns underlying error.
 func TestSpinError_UnwrapMethod(t *testing.T) {
+	t.Parallel()
+
 	underlying := errUnderlyingCause
 	err := New(CodeInternal, "Test.Op", "test error", underlying)
 
@@ -274,6 +300,8 @@ func TestSpinError_UnwrapMethod(t *testing.T) {
 
 // TestSpinError_NilUnderlying verifies Unwrap() returns nil when no underlying error.
 func TestSpinError_NilUnderlying(t *testing.T) {
+	t.Parallel()
+
 	err := New(CodeValidation, "Test.Op", "validation failed", nil)
 
 	got := err.Unwrap()

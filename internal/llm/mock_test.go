@@ -17,7 +17,11 @@ var (
 )
 
 func TestNewMockProvider(t *testing.T) {
+	t.Parallel()
+
 	t.Run("default configuration", func(t *testing.T) {
+		t.Parallel()
+
 		p := NewMockProvider("test")
 
 		if p.Name() != "test" {
@@ -35,6 +39,8 @@ func TestNewMockProvider(t *testing.T) {
 	})
 
 	t.Run("with custom response", func(t *testing.T) {
+		t.Parallel()
+
 		p := NewMockProvider("test", WithResponse("custom response"))
 
 		params := openai.ChatCompletionNewParams{
@@ -59,6 +65,8 @@ func TestNewMockProvider(t *testing.T) {
 	})
 
 	t.Run("with tool calls", func(t *testing.T) {
+		t.Parallel()
+
 		toolCalls := []openai.ChatCompletionMessageToolCall{
 			{
 				ID:   "call_1",
@@ -97,6 +105,8 @@ func TestNewMockProvider(t *testing.T) {
 	})
 
 	t.Run("with error", func(t *testing.T) {
+		t.Parallel()
+
 		expectedErr := errMockError
 		p := NewMockProvider("test", WithError(expectedErr))
 
@@ -113,6 +123,8 @@ func TestNewMockProvider(t *testing.T) {
 	})
 
 	t.Run("with streaming chunks", func(t *testing.T) {
+		t.Parallel()
+
 		chunks := []string{"Hello", " ", "World"}
 		p := NewMockProvider("test", WithStreaming(chunks))
 
@@ -139,6 +151,8 @@ func TestNewMockProvider(t *testing.T) {
 	})
 
 	t.Run("with capabilities", func(t *testing.T) {
+		t.Parallel()
+
 		caps := Capabilities{
 			Streaming:       false,
 			FunctionCalling: true,
@@ -162,6 +176,8 @@ func TestNewMockProvider(t *testing.T) {
 	})
 
 	t.Run("with models", func(t *testing.T) {
+		t.Parallel()
+
 		models := []openai.Model{
 			{ID: "model-1"},
 			{ID: "model-2"},
@@ -185,7 +201,11 @@ func TestNewMockProvider(t *testing.T) {
 }
 
 func TestMockProvider_Complete(t *testing.T) {
+	t.Parallel()
+
 	t.Run("basic completion", func(t *testing.T) {
+		t.Parallel()
+
 		p := NewMockProvider("test", WithResponse("Hello, World!"))
 
 		params := openai.ChatCompletionNewParams{
@@ -223,6 +243,8 @@ func TestMockProvider_Complete(t *testing.T) {
 	})
 
 	t.Run("context cancellation", func(t *testing.T) {
+		t.Parallel()
+
 		p := NewMockProvider("test", WithDelay(100*time.Millisecond))
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -245,6 +267,8 @@ func TestMockProvider_Complete(t *testing.T) {
 	})
 
 	t.Run("timeout", func(t *testing.T) {
+		t.Parallel()
+
 		p := NewMockProvider("test", WithDelay(100*time.Millisecond))
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
@@ -263,6 +287,8 @@ func TestMockProvider_Complete(t *testing.T) {
 	})
 
 	t.Run("with error", func(t *testing.T) {
+		t.Parallel()
+
 		expectedErr := errTestError
 		p := NewMockProvider("test", WithError(expectedErr))
 
@@ -280,7 +306,11 @@ func TestMockProvider_Complete(t *testing.T) {
 }
 
 func TestMockProvider_Stream(t *testing.T) {
+	t.Parallel()
+
 	t.Run("stream chunks", func(t *testing.T) {
+		t.Parallel()
+
 		chunks := []string{"Hello", " ", "World", "!"}
 		p := NewMockProvider("test", WithStreaming(chunks))
 
@@ -329,6 +359,8 @@ func TestMockProvider_Stream(t *testing.T) {
 	})
 
 	t.Run("stream tool calls", func(t *testing.T) {
+		t.Parallel()
+
 		toolCalls := []openai.ChatCompletionMessageToolCall{
 			{ID: "call_1", Type: openai.ChatCompletionMessageToolCallTypeFunction},
 			{ID: "call_2", Type: openai.ChatCompletionMessageToolCallTypeFunction},
@@ -374,6 +406,8 @@ func TestMockProvider_Stream(t *testing.T) {
 	})
 
 	t.Run("context cancellation", func(t *testing.T) {
+		t.Parallel()
+
 		p := NewMockProvider("test", WithDelay(50*time.Millisecond), WithStreaming([]string{"a", "b", "c"}))
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -404,6 +438,8 @@ func TestMockProvider_Stream(t *testing.T) {
 	})
 
 	t.Run("error before streaming", func(t *testing.T) {
+		t.Parallel()
+
 		expectedErr := errTestError2
 		p := NewMockProvider("test", WithError(expectedErr))
 
@@ -421,7 +457,11 @@ func TestMockProvider_Stream(t *testing.T) {
 }
 
 func TestMockProvider_Models(t *testing.T) {
+	t.Parallel()
+
 	t.Run("default models", func(t *testing.T) {
+		t.Parallel()
+
 		p := NewMockProvider("test")
 
 		models, err := p.Models(context.Background())
@@ -435,6 +475,8 @@ func TestMockProvider_Models(t *testing.T) {
 	})
 
 	t.Run("custom models", func(t *testing.T) {
+		t.Parallel()
+
 		customModels := []openai.Model{
 			{ID: "custom-1"},
 		}
@@ -456,6 +498,8 @@ func TestMockProvider_Models(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
+		t.Parallel()
+
 		expectedErr := errModelsError
 		p := NewMockProvider("test", WithError(expectedErr))
 
@@ -466,7 +510,9 @@ func TestMockProvider_Models(t *testing.T) {
 	})
 }
 
-func TestMockProvider_ThreadSafety(_ *testing.T) {
+func TestMockProvider_ThreadSafety(t *testing.T) {
+	t.Parallel()
+
 	p := NewMockProvider("test")
 
 	// Concurrent reads.
@@ -510,6 +556,8 @@ func TestMockProvider_ThreadSafety(_ *testing.T) {
 }
 
 func TestMockProvider_Close(t *testing.T) {
+	t.Parallel()
+
 	p := NewMockProvider("test")
 
 	err := p.Close()

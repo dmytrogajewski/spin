@@ -13,6 +13,8 @@ import (
 
 // TestPromptBuilder_New tests creating a new prompt builder.
 func TestPromptBuilder_New(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	require.NotNil(t, builder)
@@ -20,6 +22,8 @@ func TestPromptBuilder_New(t *testing.T) {
 
 // TestPromptBuilder_BuildSingleTrajectory tests building prompt for one trajectory.
 func TestPromptBuilder_BuildSingleTrajectory(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	traj := &generator.Trajectory{
@@ -42,6 +46,8 @@ func TestPromptBuilder_BuildSingleTrajectory(t *testing.T) {
 
 // TestPromptBuilder_BuildSingleTrajectory_WithRetrievalEvents tests prompt includes retrieval events.
 func TestPromptBuilder_BuildSingleTrajectory_WithRetrievalEvents(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	// Create trajectory with retrieval events.
@@ -93,6 +99,8 @@ func TestPromptBuilder_BuildSingleTrajectory_WithRetrievalEvents(t *testing.T) {
 
 // TestPromptBuilder_BuildSingleTrajectory_NoRetrievalEvents tests backward compatibility.
 func TestPromptBuilder_BuildSingleTrajectory_NoRetrievalEvents(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	// Create trajectory without retrieval events (nil).
@@ -119,6 +127,8 @@ func TestPromptBuilder_BuildSingleTrajectory_NoRetrievalEvents(t *testing.T) {
 
 // TestPromptBuilder_BuildSingleTrajectory_EmptyRetrievalEvents tests empty events array.
 func TestPromptBuilder_BuildSingleTrajectory_EmptyRetrievalEvents(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	// Create trajectory with empty retrieval events.
@@ -145,6 +155,8 @@ func TestPromptBuilder_BuildSingleTrajectory_EmptyRetrievalEvents(t *testing.T) 
 
 // TestPromptBuilder_PromptHasInstructions tests that prompt includes task instructions.
 func TestPromptBuilder_PromptHasInstructions(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	traj := &generator.Trajectory{
@@ -169,6 +181,8 @@ func TestPromptBuilder_PromptHasInstructions(t *testing.T) {
 
 // TestPromptBuilder_BuildRefinementPrompt tests refinement prompt generation.
 func TestPromptBuilder_BuildRefinementPrompt(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	insights := []*Insight{
@@ -192,6 +206,8 @@ func TestPromptBuilder_BuildRefinementPrompt(t *testing.T) {
 
 // TestPromptBuilder_BuildBatchTrajectory tests batch trajectory prompt generation.
 func TestPromptBuilder_BuildBatchTrajectory(t *testing.T) {
+	t.Parallel()
+
 	builder := NewPromptBuilder()
 
 	trajs := []*generator.Trajectory{

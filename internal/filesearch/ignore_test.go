@@ -12,6 +12,8 @@ import (
 
 // TestNewIgnoreHandler_BasicCreation tests basic creation.
 func TestNewIgnoreHandler_BasicCreation(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -25,6 +27,8 @@ func TestNewIgnoreHandler_BasicCreation(t *testing.T) {
 
 // TestNewIgnoreHandler_MissingFiles tests handler creation when no .gitignore exists.
 func TestNewIgnoreHandler_MissingFiles(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	// No .gitignore or .spinignore files.
 
@@ -39,6 +43,8 @@ func TestNewIgnoreHandler_MissingFiles(t *testing.T) {
 
 // TestNewIgnoreHandler_LoadGitignore tests loading .gitignore.
 func TestNewIgnoreHandler_LoadGitignore(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create .gitignore.
@@ -63,6 +69,8 @@ temp
 
 // TestNewIgnoreHandler_LoadSpinignore tests loading .spinignore.
 func TestNewIgnoreHandler_LoadSpinignore(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	// Create .spinignore.
@@ -82,6 +90,8 @@ func TestNewIgnoreHandler_LoadSpinignore(t *testing.T) {
 
 // TestNewIgnoreHandler_BothFiles tests loading both .gitignore and .spinignore.
 func TestNewIgnoreHandler_BothFiles(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -101,6 +111,8 @@ func TestNewIgnoreHandler_BothFiles(t *testing.T) {
 
 // TestNewIgnoreHandler_EmptyFile tests empty .gitignore.
 func TestNewIgnoreHandler_EmptyFile(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -117,6 +129,8 @@ func TestNewIgnoreHandler_EmptyFile(t *testing.T) {
 
 // TestNewIgnoreHandler_OnlyComments tests .gitignore with only comments.
 func TestNewIgnoreHandler_OnlyComments(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -139,6 +153,8 @@ func TestNewIgnoreHandler_OnlyComments(t *testing.T) {
 
 // TestIgnoreHandler_IsIgnored_SimplePattern tests simple pattern matching.
 func TestIgnoreHandler_IsIgnored_SimplePattern(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -163,6 +179,8 @@ func TestIgnoreHandler_IsIgnored_SimplePattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := handler.IsIgnored(tt.path, tt.isDir)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -171,6 +189,8 @@ func TestIgnoreHandler_IsIgnored_SimplePattern(t *testing.T) {
 
 // TestIgnoreHandler_IsIgnored_DirectoryPattern tests directory pattern matching.
 func TestIgnoreHandler_IsIgnored_DirectoryPattern(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -196,6 +216,8 @@ func TestIgnoreHandler_IsIgnored_DirectoryPattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := handler.IsIgnored(tt.path, tt.isDir)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -204,6 +226,8 @@ func TestIgnoreHandler_IsIgnored_DirectoryPattern(t *testing.T) {
 
 // TestIgnoreHandler_IsIgnored_DoubleStarPattern tests ** patterns.
 func TestIgnoreHandler_IsIgnored_DoubleStarPattern(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -228,6 +252,8 @@ func TestIgnoreHandler_IsIgnored_DoubleStarPattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := handler.IsIgnored(tt.path, tt.isDir)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -236,6 +262,8 @@ func TestIgnoreHandler_IsIgnored_DoubleStarPattern(t *testing.T) {
 
 // TestIgnoreHandler_IsIgnored_WildcardPattern tests **/pattern matching.
 func TestIgnoreHandler_IsIgnored_WildcardPattern(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -259,6 +287,8 @@ func TestIgnoreHandler_IsIgnored_WildcardPattern(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := handler.IsIgnored(tt.path, tt.isDir)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -267,6 +297,8 @@ func TestIgnoreHandler_IsIgnored_WildcardPattern(t *testing.T) {
 
 // TestIgnoreHandler_IsIgnored_DefaultPatterns tests default ignore patterns.
 func TestIgnoreHandler_IsIgnored_DefaultPatterns(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -299,6 +331,8 @@ func TestIgnoreHandler_IsIgnored_DefaultPatterns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := handler.IsIgnored(tt.path, tt.isDir)
 			assert.Equal(t, tt.expected, result, "path: %s, isDir: %v", tt.path, tt.isDir)
 		})
@@ -307,6 +341,8 @@ func TestIgnoreHandler_IsIgnored_DefaultPatterns(t *testing.T) {
 
 // TestIgnoreHandler_IsIgnored_MultiplePatterns tests multiple patterns.
 func TestIgnoreHandler_IsIgnored_MultiplePatterns(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -342,6 +378,8 @@ dist/
 
 // TestIgnoreHandler_IsIgnored_CaseSensitive tests case sensitivity.
 func TestIgnoreHandler_IsIgnored_CaseSensitive(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -360,6 +398,8 @@ func TestIgnoreHandler_IsIgnored_CaseSensitive(t *testing.T) {
 
 // TestIgnoreHandler_IsIgnored_EmptyPath tests empty path.
 func TestIgnoreHandler_IsIgnored_EmptyPath(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -371,6 +411,8 @@ func TestIgnoreHandler_IsIgnored_EmptyPath(t *testing.T) {
 
 // TestIgnoreHandler_IsIgnored_RootDot tests . and ./ paths.
 func TestIgnoreHandler_IsIgnored_RootDot(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -382,6 +424,8 @@ func TestIgnoreHandler_IsIgnored_RootDot(t *testing.T) {
 
 // TestIgnoreHandler_LoadIgnoreFile_Whitespace tests whitespace handling.
 func TestIgnoreHandler_LoadIgnoreFile_Whitespace(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -403,6 +447,8 @@ temp
 
 // TestIgnoreHandler_LoadIgnoreFile_LongPatternList tests performance with many patterns.
 func TestIgnoreHandler_LoadIgnoreFile_LongPatternList(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -427,6 +473,8 @@ func TestIgnoreHandler_LoadIgnoreFile_LongPatternList(t *testing.T) {
 
 // TestIgnoreHandler_IsIgnored_PerformanceCheck tests performance.
 func TestIgnoreHandler_IsIgnored_PerformanceCheck(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -454,6 +502,8 @@ func TestIgnoreHandler_IsIgnored_PerformanceCheck(t *testing.T) {
 
 // TestDefaultPatterns tests the default patterns function.
 func TestDefaultPatterns(t *testing.T) {
+	t.Parallel()
+
 	patterns := defaultPatterns()
 
 	assert.NotEmpty(t, patterns)

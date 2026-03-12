@@ -8,6 +8,7 @@ import (
 )
 
 func TestWriteFileTool(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tool := NewWriteFileTool()
 
@@ -55,6 +56,7 @@ func TestWriteFileTool(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(tt.params)
 			result, err := tool.Execute(context.Background(), params)
 
@@ -109,6 +111,7 @@ func TestWriteFileTool(t *testing.T) {
 }
 
 func TestWriteFileTool_ErrorCases(t *testing.T) {
+	t.Parallel()
 	tool := NewWriteFileTool()
 
 	tests := []struct {
@@ -135,6 +138,7 @@ func TestWriteFileTool_ErrorCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(tt.params)
 
 			result, err := tool.Execute(context.Background(), params)
@@ -150,6 +154,7 @@ func TestWriteFileTool_ErrorCases(t *testing.T) {
 }
 
 func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
+	t.Parallel()
 	tool := NewWriteFileTool()
 
 	tests := []struct {
@@ -164,6 +169,7 @@ func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(map[string]any{
 				"path":    tt.path,
 				"content": "test",
@@ -187,6 +193,7 @@ func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
 }
 
 func TestWriteFileTool_CheckApproval_RegularFiles(t *testing.T) {
+	t.Parallel()
 	tool := NewWriteFileTool()
 
 	tests := []struct {
@@ -201,6 +208,7 @@ func TestWriteFileTool_CheckApproval_RegularFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(map[string]any{
 				"path":    tt.path,
 				"content": "test",
@@ -224,6 +232,7 @@ func TestWriteFileTool_CheckApproval_RegularFiles(t *testing.T) {
 }
 
 func TestWriteFileTool_CheckApproval_ExecutableFiles(t *testing.T) {
+	t.Parallel()
 	tool := NewWriteFileTool()
 
 	tests := []struct {
@@ -238,6 +247,7 @@ func TestWriteFileTool_CheckApproval_ExecutableFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(map[string]any{
 				"path":    tt.path,
 				"content": "test",

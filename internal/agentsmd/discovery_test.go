@@ -8,6 +8,8 @@ import (
 )
 
 func TestDiscover_WorkDir(t *testing.T) {
+	t.Parallel()
+
 	// Create temp directory with AGENTS.md.
 	tempDir := t.TempDir()
 
@@ -31,6 +33,8 @@ func TestDiscover_WorkDir(t *testing.T) {
 }
 
 func TestDiscover_GitRoot(t *testing.T) {
+	t.Parallel()
+
 	// Create temp directory structure.
 	tempDir := t.TempDir()
 
@@ -61,6 +65,8 @@ func TestDiscover_GitRoot(t *testing.T) {
 }
 
 func TestDiscover_ParentDir(t *testing.T) {
+	t.Parallel()
+
 	// Create temp directory structure.
 	tempDir := t.TempDir()
 
@@ -91,6 +97,8 @@ func TestDiscover_ParentDir(t *testing.T) {
 }
 
 func TestDiscover_NotFound(t *testing.T) {
+	t.Parallel()
+
 	// Create temp directory without AGENTS.md
 	// Use a deeply nested path to avoid accidentally finding a real AGENTS.md
 	// when walking up the directory tree during tests.
@@ -118,6 +126,8 @@ func TestDiscover_NotFound(t *testing.T) {
 }
 
 func TestDiscover_ContextCanceled(t *testing.T) {
+	t.Parallel()
+
 	tempDir := t.TempDir()
 
 	d := NewDiscoverer("")
@@ -131,6 +141,8 @@ func TestDiscover_ContextCanceled(t *testing.T) {
 }
 
 func TestDiscover_WorkDirPriority(t *testing.T) {
+	t.Parallel()
+
 	// Create temp directory structure with AGENTS.md in both locations.
 	tempDir := t.TempDir()
 
@@ -169,6 +181,8 @@ func TestDiscover_WorkDirPriority(t *testing.T) {
 }
 
 func TestFileExists(t *testing.T) {
+	t.Parallel()
+
 	tempDir := t.TempDir()
 
 	// Test file that exists.

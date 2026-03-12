@@ -12,6 +12,8 @@ import (
 )
 
 func TestApplyPatch_SimplePatch(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
@@ -46,6 +48,8 @@ index 557db03..980a0d5 100644
 }
 
 func TestApplyPatch_AddFile(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
@@ -74,6 +78,8 @@ index 0000000..ce01362
 }
 
 func TestApplyPatch_DeleteFile(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
@@ -106,6 +112,8 @@ index abc123..0000000
 }
 
 func TestApplyPatch_DryRun(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
@@ -141,6 +149,8 @@ index abc..def 100644
 }
 
 func TestApplyPatch_EmptyPatch(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
@@ -155,6 +165,8 @@ func TestApplyPatch_EmptyPatch(t *testing.T) {
 }
 
 func TestApplyPatch_ContextCancellation(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	setupGitRepo(t, tmpDir)
 
@@ -171,6 +183,8 @@ func TestApplyPatch_ContextCancellation(t *testing.T) {
 }
 
 func TestPatchError_Error(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		patchErr  *PatchError
@@ -207,6 +221,8 @@ func TestPatchError_Error(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := tt.patchErr.Error()
 			assert.Equal(t, tt.wantMatch, got)
 		})

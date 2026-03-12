@@ -6,6 +6,7 @@ import (
 )
 
 func TestFakeWriter_Write(t *testing.T) {
+	t.Parallel()
 	w := NewFakeWriter()
 
 	n, err := w.Write([]byte("hello"))
@@ -23,6 +24,7 @@ func TestFakeWriter_Write(t *testing.T) {
 }
 
 func TestFakeWriter_Snapshot(t *testing.T) {
+	t.Parallel()
 	w := NewFakeWriter()
 
 	_, _ = w.Write([]byte("test"))
@@ -34,6 +36,7 @@ func TestFakeWriter_Snapshot(t *testing.T) {
 }
 
 func TestFakeWriter_Reset(t *testing.T) {
+	t.Parallel()
 	w := NewFakeWriter()
 
 	_, _ = w.Write([]byte("test"))
@@ -45,6 +48,7 @@ func TestFakeWriter_Reset(t *testing.T) {
 }
 
 func TestFakeWriter_Contains(t *testing.T) {
+	t.Parallel()
 	w := NewFakeWriter()
 
 	_, _ = w.Write([]byte("hello world"))
@@ -63,6 +67,7 @@ func TestFakeWriter_Contains(t *testing.T) {
 }
 
 func TestFakeWriter_ContainsANSI(t *testing.T) {
+	t.Parallel()
 	w := NewFakeWriter()
 
 	_, _ = w.Write([]byte("\x1b[31mred\x1b[0m"))
@@ -77,6 +82,7 @@ func TestFakeWriter_ContainsANSI(t *testing.T) {
 }
 
 func TestFakeWriter_StripANSI(t *testing.T) {
+	t.Parallel()
 	w := NewFakeWriter()
 
 	_, _ = w.Write([]byte("\x1b[31mred\x1b[0m text"))
@@ -88,6 +94,7 @@ func TestFakeWriter_StripANSI(t *testing.T) {
 }
 
 func TestFakeWriter_Lines(t *testing.T) {
+	t.Parallel()
 	w := NewFakeWriter()
 
 	_, _ = w.Write([]byte("line1\nline2\nline3"))
@@ -107,6 +114,7 @@ func TestFakeWriter_Lines(t *testing.T) {
 }
 
 func TestFakeWriter_WaitForContent(t *testing.T) {
+	t.Parallel()
 	w := NewFakeWriter()
 
 	// Start goroutine that writes after delay.
@@ -122,6 +130,7 @@ func TestFakeWriter_WaitForContent(t *testing.T) {
 }
 
 func TestFakeWriter_WaitForContent_Timeout(t *testing.T) {
+	t.Parallel()
 	w := NewFakeWriter()
 
 	// WaitForContent should timeout if content never appears.
@@ -131,6 +140,7 @@ func TestFakeWriter_WaitForContent_Timeout(t *testing.T) {
 }
 
 func TestFakeWriter_ConcurrentWrite(t *testing.T) {
+	t.Parallel()
 	w := NewFakeWriter()
 
 	// Write concurrently.

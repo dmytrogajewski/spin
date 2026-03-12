@@ -33,6 +33,8 @@ var (
 
 // TestNewAgent tests the refactored agent creation with services.
 func TestNewAgent(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		provider    llm.Provider
@@ -187,6 +189,8 @@ func TestNewAgent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			opts := []Option{}
 			if tt.aceService != nil {
 				opts = append(opts, WithACEService(tt.aceService))
@@ -212,6 +216,7 @@ func TestNewAgent(t *testing.T) {
 
 // TestAgent_WithACEService tests Agent with ACE integration.
 func TestAgent_WithACEService(t *testing.T) {
+	t.Parallel()
 	// Create ACE service.
 	tmpDir := t.TempDir()
 	cfg := &ACEConfig{
@@ -252,6 +257,7 @@ func TestAgent_WithACEService(t *testing.T) {
 
 // TestAgent_ACEIntegration_EndToEnd tests full ACE workflow with agent execution.
 func TestAgent_ACEIntegration_EndToEnd(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	// Setup ACE with ItemizedLearning enabled.
@@ -343,6 +349,7 @@ Here's my solution...`)
 
 // TestAgent_ACEDisabled tests that agent works correctly when ACE is disabled.
 func TestAgent_ACEDisabled(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	// Create ACE service with disabled config.
@@ -394,6 +401,7 @@ func TestAgent_ACEDisabled(t *testing.T) {
 
 // TestAgent_Execute_Integration is a minimal integration test.
 func TestAgent_Execute_Integration(t *testing.T) {
+	t.Parallel()
 	t.Skip("Integration test - requires full setup")
 
 	agent := createTestAgentWithServices(t)
@@ -540,6 +548,7 @@ func newAgentForTest(
 // TestToolExecutionBugReproduction reproduces the exact bug from the user's output:
 // The LLM calls list_directory but it's not executed, causing cycle detection.
 func TestToolExecutionBugReproduction(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	// Setup: Create mock LLM that returns list_directory tool call.
@@ -668,6 +677,7 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 
 // TestToolExecutionWithRealToolCall tests that processToolCall actually executes the tool.
 func TestToolExecutionWithRealToolCall(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	// Setup tool registry.
@@ -726,6 +736,7 @@ func TestToolExecutionWithRealToolCall(t *testing.T) {
 
 // TestStreamProcessingWithToolCalls tests that tool calls are extracted from stream.
 func TestStreamProcessingWithToolCalls(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -770,6 +781,7 @@ func TestStreamProcessingWithToolCalls(t *testing.T) {
 
 // TestGetToolResultContent tests that error messages are properly sent to LLM on tool failure.
 func TestGetToolResultContent(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		toolCall *ToolCall
@@ -827,6 +839,8 @@ func TestGetToolResultContent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := getToolResultContent(tt.toolCall, tt.result, slog.Default())
 			assert.Equal(t, tt.want, got)
 		})
@@ -835,6 +849,7 @@ func TestGetToolResultContent(t *testing.T) {
 
 // TestToolExecutionWithMockLLM tests tool execution with a mock LLM that returns tool calls.
 func TestToolExecutionWithMockLLM(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -954,6 +969,7 @@ func TestToolExecutionWithMockLLM(t *testing.T) {
 
 // TestDirectToolCallWithMockLLM tests ProcessToolCall directly with a mock provider.
 func TestDirectToolCallWithMockLLM(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	toolRegistry := tools.NewRegistry()
@@ -1381,6 +1397,7 @@ func (m *mockLLMProvider) Close() error {
 // modified messages locally but didn't return them, causing interventions
 // to be silently discarded.
 func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
+	t.Parallel()
 	agent := createTestAgentWithServices(t)
 
 	// Enable cycle detection.
@@ -1560,6 +1577,7 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 // TestExecuteAgentLoop_CycleInterventionPropagated tests that the full agent loop
 // properly uses intervention messages.
 func TestExecuteAgentLoop_CycleInterventionPropagated(t *testing.T) {
+	t.Parallel()
 	agent := createTestAgentWithServices(t)
 	agent.cycleDetection = true
 	agent.maxTurns = 10
@@ -1653,6 +1671,7 @@ func indexOfSubstring(s, substr string) int {
 // TestAgent_TaskBudgetOverridesConfig verifies that a task's MaxTokens
 // overrides the agent's config.MaxTokens when task.MaxTokens() > 0.
 func TestAgent_TaskBudgetOverridesConfig(t *testing.T) {
+	t.Parallel()
 	// Create agent with 4K config.
 	llmCapture := newCapturingLLMProvider()
 	validator := security.NewValidator()
@@ -1703,6 +1722,7 @@ func TestAgent_TaskBudgetOverridesConfig(t *testing.T) {
 // TestAgent_ConfigBudgetUsedWhenTaskZero verifies that agent's config.MaxTokens
 // is used when task.MaxTokens() returns 0.
 func TestAgent_ConfigBudgetUsedWhenTaskZero(t *testing.T) {
+	t.Parallel()
 	// Create agent with 8K config.
 	llmCapture := newCapturingLLMProvider()
 	validator := security.NewValidator()
@@ -1750,6 +1770,7 @@ func TestAgent_ConfigBudgetUsedWhenTaskZero(t *testing.T) {
 // TestAgent_ConcurrentTokenBudget verifies that token budget handling
 // works correctly under concurrent access.
 func TestAgent_ConcurrentTokenBudget(t *testing.T) {
+	t.Parallel()
 	// Create agent.
 	llmCapture := newCapturingLLMProvider()
 	validator := security.NewValidator()
@@ -2004,6 +2025,7 @@ func newTestToolRuntime(_ any, registry *tools.Registry) *ToolRuntime {
 // has changed significantly and these tests are no longer applicable.
 
 func TestAgent_validateToolCall(t *testing.T) {
+	t.Parallel()
 	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
@@ -2056,6 +2078,8 @@ func TestAgent_validateToolCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := agent.validateToolCall(tt.call)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Agent.validateToolCall() error = %v, wantErr %v", err, tt.wantErr)
@@ -2065,6 +2089,7 @@ func TestAgent_validateToolCall(t *testing.T) {
 }
 
 func TestAgent_parseToolArguments(t *testing.T) {
+	t.Parallel()
 	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
@@ -2112,6 +2137,8 @@ func TestAgent_parseToolArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			args, err := agent.parseToolArguments(tt.call)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Agent.parseToolArguments() error = %v, wantErr %v", err, tt.wantErr)
@@ -2125,6 +2152,7 @@ func TestAgent_parseToolArguments(t *testing.T) {
 }
 
 func TestAgent_addFinalMessage(t *testing.T) {
+	t.Parallel()
 	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
@@ -2157,6 +2185,8 @@ func TestAgent_addFinalMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := agent.addFinalMessage(tt.messages, tt.content)
 			if len(result) != tt.wantLen {
 				t.Errorf("Agent.addFinalMessage() result length = %d, want %d", len(result), tt.wantLen)
@@ -2165,7 +2195,8 @@ func TestAgent_addFinalMessage(t *testing.T) {
 	}
 }
 
-func TestAgent_emitTurnStart(_ *testing.T) {
+func TestAgent_emitTurnStart(t *testing.T) {
+	t.Parallel()
 	agent := newTestAgentMinimal(nil)
 
 	// This test mainly ensures the method doesn't panic
@@ -2176,6 +2207,7 @@ func TestAgent_emitTurnStart(_ *testing.T) {
 }
 
 func TestAgent_applyTimeout(t *testing.T) {
+	t.Parallel()
 	agent := newTestAgentMinimal(nil)
 
 	ctx := context.Background()
@@ -2202,6 +2234,7 @@ func TestAgent_applyTimeout(t *testing.T) {
 }
 
 func TestAgent_executeSetup(t *testing.T) {
+	t.Parallel()
 	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
@@ -2232,6 +2265,8 @@ func TestAgent_executeSetup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx, resp, err := agent.executeSetup(context.Background(), tt.req)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Agent.executeSetup() error = %v, wantErr %v", err, tt.wantErr)
@@ -2249,6 +2284,7 @@ func TestAgent_executeSetup(t *testing.T) {
 }
 
 func TestAgent_finalizeResponse(t *testing.T) {
+	t.Parallel()
 	agent := newTestAgentMinimal(nil)
 
 	tests := []struct {
@@ -2281,6 +2317,8 @@ func TestAgent_finalizeResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			agent.finalizeResponse(tt.resp, tt.messages, tt.historyLen)
 
 			if tt.resp.Output != tt.wantOutput {
@@ -2292,6 +2330,7 @@ func TestAgent_finalizeResponse(t *testing.T) {
 
 // TestAgentThinkingStateBugFix tests the fix for the agent getting stuck in thinking state.
 func TestAgentThinkingStateBugFix(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name          string
 		llmResponses  []openai.ChatCompletion
@@ -2420,6 +2459,8 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			// Create mock LLM provider.
 			mockLLM := &MockLLMProvider{
 				responses: tt.llmResponses,
@@ -2471,6 +2512,7 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 
 // TestAgentTimeoutHandling tests that agent properly handles timeouts.
 func TestAgentTimeoutHandling(t *testing.T) {
+	t.Parallel()
 	// Create mock LLM that takes a long time to respond.
 	mockLLM := &MockLLMProvider{
 		responses: []openai.ChatCompletion{
@@ -2525,6 +2567,7 @@ func TestAgentTimeoutHandling(t *testing.T) {
 
 // TestAgentCycleDetection tests that agent properly handles cycle detection without getting stuck.
 func TestAgentCycleDetection(t *testing.T) {
+	t.Parallel()
 	// Create mock LLM that returns repetitive responses (potential cycle).
 	mockLLM := &MockLLMProvider{
 		responses: []openai.ChatCompletion{
@@ -2816,6 +2859,7 @@ func (m *mockTask) Validate() error {
 
 // TestAgent_emitACERetrievalEvent tests ACE retrieval event emission.
 func TestAgent_emitACERetrievalEvent(t *testing.T) {
+	t.Parallel()
 	emitter := events.NewEventEmitter(10)
 	_, eventCh, _ := emitter.Subscribe()
 

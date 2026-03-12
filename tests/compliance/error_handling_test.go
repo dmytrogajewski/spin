@@ -11,6 +11,8 @@ import (
 
 // TestCompliance_Error_InvalidSession verifies error handling for invalid session.
 func TestCompliance_Error_InvalidSession(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -29,6 +31,8 @@ func TestCompliance_Error_InvalidSession(t *testing.T) {
 
 // TestCompliance_Error_InvalidParams verifies error handling for invalid parameters.
 func TestCompliance_Error_InvalidParams(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -44,6 +48,8 @@ func TestCompliance_Error_InvalidParams(t *testing.T) {
 
 // TestCompliance_Error_InvalidMode verifies error handling for invalid mode.
 func TestCompliance_Error_InvalidMode(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
@@ -67,6 +73,8 @@ func TestCompliance_Error_InvalidMode(t *testing.T) {
 
 // TestCompliance_Error_ResponseFormat verifies error response format compliance.
 func TestCompliance_Error_ResponseFormat(t *testing.T) {
+	t.Parallel()
+
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 

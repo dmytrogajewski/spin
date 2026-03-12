@@ -10,6 +10,8 @@ import (
 )
 
 func TestNewAutoOffloader_Defaults(t *testing.T) {
+	t.Parallel()
+
 	offloader := NewAutoOffloader(AutoOffloaderConfig{})
 
 	assert.NotNil(t, offloader)
@@ -17,6 +19,8 @@ func TestNewAutoOffloader_Defaults(t *testing.T) {
 }
 
 func TestNewAutoOffloader_WithConfig(t *testing.T) {
+	t.Parallel()
+
 	scratchpad := NewScratchpad("test", 10)
 	analyzer := NewDefaultContextAnalyzer()
 
@@ -31,6 +35,8 @@ func TestNewAutoOffloader_WithConfig(t *testing.T) {
 }
 
 func TestAutoOffloader_ShouldOffload(t *testing.T) {
+	t.Parallel()
+
 	offloader := NewAutoOffloader(AutoOffloaderConfig{
 		Threshold: 0.7,
 	})
@@ -50,6 +56,8 @@ func TestAutoOffloader_ShouldOffload(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := offloader.ShouldOffload(tt.currentTokens, tt.maxTokens)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -57,6 +65,8 @@ func TestAutoOffloader_ShouldOffload(t *testing.T) {
 }
 
 func TestAutoOffloader_Offload_NoContent(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	offloader := NewAutoOffloader(AutoOffloaderConfig{})
 
@@ -72,6 +82,8 @@ func TestAutoOffloader_Offload_NoContent(t *testing.T) {
 }
 
 func TestAutoOffloader_Offload_LargeCodeBlock(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	scratchpad := NewScratchpad("test", 10)
 
@@ -105,6 +117,8 @@ func TestAutoOffloader_Offload_LargeCodeBlock(t *testing.T) {
 }
 
 func TestAutoOffloader_Offload_Decision(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	persistent, err := NewPersistentStore(tmpDir)
@@ -129,6 +143,8 @@ func TestAutoOffloader_Offload_Decision(t *testing.T) {
 }
 
 func TestAutoOffloader_Offload_NoStoresConfigured(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	analyzer := NewDefaultContextAnalyzer()
@@ -154,6 +170,8 @@ func TestAutoOffloader_Offload_NoStoresConfigured(t *testing.T) {
 }
 
 func TestAutoOffloader_Recall_FromScratchpad(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	scratchpad := NewScratchpad("test", 10)
 
@@ -171,6 +189,8 @@ func TestAutoOffloader_Recall_FromScratchpad(t *testing.T) {
 }
 
 func TestAutoOffloader_Recall_FromPersistent(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	persistent, err := NewPersistentStore(tmpDir)
@@ -190,6 +210,8 @@ func TestAutoOffloader_Recall_FromPersistent(t *testing.T) {
 }
 
 func TestAutoOffloader_Recall_NotFound(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	scratchpad := NewScratchpad("test", 10)
 
@@ -202,6 +224,8 @@ func TestAutoOffloader_Recall_NotFound(t *testing.T) {
 }
 
 func TestAutoOffloader_SetThreshold(t *testing.T) {
+	t.Parallel()
+
 	offloader := NewAutoOffloader(AutoOffloaderConfig{})
 
 	offloader.SetThreshold(0.5)
@@ -216,6 +240,8 @@ func TestAutoOffloader_SetThreshold(t *testing.T) {
 }
 
 func TestAutoOffloader_Offload_MultipleMessages(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	scratchpad := NewScratchpad("test", 10)
 

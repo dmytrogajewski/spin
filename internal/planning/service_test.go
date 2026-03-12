@@ -16,6 +16,8 @@ import (
 var errLlmError = errors.New("llm error")
 
 func TestNewService(t *testing.T) {
+	t.Parallel()
+
 	provider := llm.NewMockProvider("test response")
 	service := NewService(provider)
 
@@ -24,6 +26,8 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_CreatePlan_Success(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create mock response with valid JSON.
@@ -78,6 +82,8 @@ func TestService_CreatePlan_Success(t *testing.T) {
 }
 
 func TestService_CreatePlan_EmptyTask(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	provider := llm.NewMockProvider("response")
 	service := NewService(provider)
@@ -88,6 +94,8 @@ func TestService_CreatePlan_EmptyTask(t *testing.T) {
 }
 
 func TestService_CreatePlan_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create mock response with invalid JSON.
@@ -101,6 +109,8 @@ func TestService_CreatePlan_InvalidJSON(t *testing.T) {
 }
 
 func TestService_CreatePlan_EmptySteps(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create mock response with empty steps.
@@ -116,6 +126,8 @@ func TestService_CreatePlan_EmptySteps(t *testing.T) {
 }
 
 func TestService_CreatePlan_LLMError(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// Create mock provider that returns an error.
@@ -129,6 +141,8 @@ func TestService_CreatePlan_LLMError(t *testing.T) {
 }
 
 func TestService_buildDecompositionPrompt(t *testing.T) {
+	t.Parallel()
+
 	service := &Service{}
 	taskName := "test task name"
 
@@ -141,6 +155,8 @@ func TestService_buildDecompositionPrompt(t *testing.T) {
 }
 
 func TestService_parseDecompositionResponse(t *testing.T) {
+	t.Parallel()
+
 	service := &Service{}
 
 	validJSON := `{
@@ -163,6 +179,8 @@ func TestService_parseDecompositionResponse(t *testing.T) {
 }
 
 func TestService_parseDecompositionResponse_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
 	service := &Service{}
 
 	invalidJSON := "not json"
@@ -173,6 +191,8 @@ func TestService_parseDecompositionResponse_InvalidJSON(t *testing.T) {
 }
 
 func TestService_createStepsFromData(t *testing.T) {
+	t.Parallel()
+
 	service := &Service{}
 
 	data := &decompositionData{
@@ -214,6 +234,8 @@ func TestService_createStepsFromData(t *testing.T) {
 }
 
 func TestService_createStepsFromData_InvalidDuration(t *testing.T) {
+	t.Parallel()
+
 	service := &Service{}
 
 	// Invalid duration should not cause error (parseDuration returns zero on error).
@@ -236,6 +258,8 @@ func TestService_createStepsFromData_InvalidDuration(t *testing.T) {
 }
 
 func TestService_CreatePlan_MultipleSteps(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	mockResponse := `{
@@ -283,6 +307,8 @@ func TestService_CreatePlan_MultipleSteps(t *testing.T) {
 }
 
 func TestService_CreatePlan_MalformedJSON(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	testCases := []struct {
@@ -298,6 +324,8 @@ func TestService_CreatePlan_MalformedJSON(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			provider := llm.NewMockProvider("test-provider", llm.WithResponse(tc.json))
 			service := NewService(provider)
 
@@ -321,6 +349,8 @@ func TestService_CreatePlan_MalformedJSON(t *testing.T) {
 }
 
 func TestService_CreatePlan_JSONWithWhitespace(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 
 	// JSON with extra whitespace and newlines.
@@ -347,12 +377,18 @@ func TestService_CreatePlan_JSONWithWhitespace(t *testing.T) {
 
 // Test helper: verify that getContent works correctly.
 func TestGetContent(t *testing.T) {
+	t.Parallel()
+
 	t.Run("nil completion", func(t *testing.T) {
+		t.Parallel()
+
 		content := getContent(nil)
 		assert.Empty(t, content)
 	})
 
 	t.Run("empty choices", func(t *testing.T) {
+		t.Parallel()
+
 		completion := &openai.ChatCompletion{
 			Choices: []openai.ChatCompletionChoice{},
 		}
@@ -361,6 +397,8 @@ func TestGetContent(t *testing.T) {
 	})
 
 	t.Run("valid completion", func(t *testing.T) {
+		t.Parallel()
+
 		completion := &openai.ChatCompletion{
 			Choices: []openai.ChatCompletionChoice{
 				{

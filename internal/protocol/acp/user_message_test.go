@@ -20,6 +20,7 @@ import (
 // The client already knows what they sent in the session/prompt request, so we shouldn't echo it back.
 // user_message_chunk is only sent when replaying history in LoadSession.
 func TestPrompt_NoUserMessageChunk(t *testing.T) {
+	t.Parallel()
 	agentInstance := createTestAgent(t)
 
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))

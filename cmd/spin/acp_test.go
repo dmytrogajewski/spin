@@ -63,6 +63,8 @@ func createACPAgentComponents(t *testing.T, workDir string, provider llm.Provide
 
 // TestNewACPCmd tests ACP command creation.
 func TestNewACPCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newACPCmd()
 
 	assert.Equal(t, "acp", cmd.Use)
@@ -74,6 +76,8 @@ func TestNewACPCmd(t *testing.T) {
 
 // TestNewACPCmd_Flags tests that all flags are registered.
 func TestNewACPCmd_Flags(t *testing.T) {
+	t.Parallel()
+
 	cmd := newACPCmd()
 
 	flags := []string{"workspace", "provider", "base-url", "model", "api-key"}
@@ -86,6 +90,8 @@ func TestNewACPCmd_Flags(t *testing.T) {
 
 // TestNewACPCmd_FlagDefaults tests flag default values.
 func TestNewACPCmd_FlagDefaults(t *testing.T) {
+	t.Parallel()
+
 	cmd := newACPCmd()
 
 	workspace, _ := cmd.Flags().GetString("workspace")
@@ -103,6 +109,8 @@ func TestNewACPCmd_FlagDefaults(t *testing.T) {
 
 // TestBuildProviderForACP_Ollama tests Ollama provider creation using unified builder.
 func TestBuildProviderForACP_Ollama(t *testing.T) {
+	t.Parallel()
+
 	// Create a mock HTTP server to stand in for Ollama.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -130,6 +138,8 @@ func TestBuildProviderForACP_Ollama(t *testing.T) {
 
 // TestBuildProviderForACP_OpenAI tests OpenAI provider creation using unified builder.
 func TestBuildProviderForACP_OpenAI(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	cfg := config.DefaultV2()
 	cfg.LLM.Provider = "openai"
@@ -148,6 +158,8 @@ func TestBuildProviderForACP_OpenAI(t *testing.T) {
 
 // TestBuildProviderForACP_UnknownProvider tests error handling for unknown provider.
 func TestBuildProviderForACP_UnknownProvider(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	cfg := config.DefaultV2()
 	cfg.LLM.Provider = "unknown"
@@ -164,6 +176,8 @@ func TestBuildProviderForACP_UnknownProvider(t *testing.T) {
 
 // TestCreateACPConversation tests ACP conversation creation.
 func TestCreateACPConversation(t *testing.T) {
+	t.Parallel()
+
 	// Create a temporary directory for workspace.
 	tmpDir := t.TempDir()
 
@@ -183,6 +197,8 @@ func TestCreateACPConversation(t *testing.T) {
 
 // TestCreateACPConversation_InvalidWorkDir tests error handling for invalid work directory.
 func TestCreateACPConversation_InvalidWorkDir(t *testing.T) {
+	t.Parallel()
+
 	provider := llm.NewMockProvider("test")
 	defer provider.Close()
 
@@ -200,6 +216,8 @@ func TestCreateACPConversation_InvalidWorkDir(t *testing.T) {
 
 // TestACPCmd_Help tests help output.
 func TestACPCmd_Help(t *testing.T) {
+	t.Parallel()
+
 	cmd := newACPCmd()
 	cmd.SetArgs([]string{"--help"})
 
@@ -217,6 +235,8 @@ func TestACPCmd_Help(t *testing.T) {
 
 // TestACPCmd_Examples tests that examples are shown in help.
 func TestACPCmd_Examples(t *testing.T) {
+	t.Parallel()
+
 	cmd := newACPCmd()
 	cmd.SetArgs([]string{"--help"})
 
@@ -234,6 +254,8 @@ func TestACPCmd_Examples(t *testing.T) {
 
 // TestACPCmd_FlagParsing tests flag parsing.
 func TestACPCmd_FlagParsing(t *testing.T) {
+	t.Parallel()
+
 	cmd := newACPCmd()
 	// Parse flags by executing with args (but we'll catch the error since we don't have a real provider).
 	cmd.SetArgs([]string{
@@ -272,6 +294,8 @@ func TestACPCmd_FlagParsing(t *testing.T) {
 
 // TestLogACPServerStart tests logging function.
 func TestLogACPServerStart(t *testing.T) {
+	t.Parallel()
+
 	// Capture log output.
 	var buf bytes.Buffer
 
@@ -289,6 +313,8 @@ func TestLogACPServerStart(t *testing.T) {
 
 // TestCreateAgentComponents_RegistersTools tests that all tools are registered.
 func TestCreateAgentComponents_RegistersTools(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	provider := llm.NewMockProvider("test")
@@ -309,6 +335,8 @@ func TestCreateAgentComponents_RegistersTools(t *testing.T) {
 
 // TestCreateACPComponents_ReturnsApprovalService tests that ApprovalService is returned.
 func TestCreateACPComponents_ReturnsApprovalService(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 
 	provider := llm.NewMockProvider("test")

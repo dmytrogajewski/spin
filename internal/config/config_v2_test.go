@@ -11,6 +11,8 @@ import (
 // TestV2_Validate_MinimalValid tests that a minimal valid v2 config passes validation.
 // This is the first step in the new v2.0 config structure.
 func TestV2_Validate_MinimalValid(t *testing.T) {
+	t.Parallel()
+
 	cfg := &V2{
 		Version: "2.0",
 		LLM: LLMV2{
@@ -34,6 +36,8 @@ func TestV2_Validate_MinimalValid(t *testing.T) {
 // TestV2_Validate_LLMProviderRequired tests that validation fails when LLM.Provider is empty.
 // Kills mutant: removing the provider check would make this test fail.
 func TestV2_Validate_LLMProviderRequired(t *testing.T) {
+	t.Parallel()
+
 	cfg := &V2{
 		Version: "2.0",
 		LLM: LLMV2{
@@ -51,6 +55,8 @@ func TestV2_Validate_LLMProviderRequired(t *testing.T) {
 // TestV2_Validate_LLMModelRequired tests that validation fails when LLM.Model is empty.
 // Kills mutant: removing the model check would make this test fail.
 func TestV2_Validate_LLMModelRequired(t *testing.T) {
+	t.Parallel()
+
 	cfg := &V2{
 		Version: "2.0",
 		LLM: LLMV2{
@@ -68,6 +74,8 @@ func TestV2_Validate_LLMModelRequired(t *testing.T) {
 // TestV2_Validate_LLMFieldRanges tests validation of numeric field ranges.
 // Kills mutants: removing range checks would make these tests fail.
 func TestV2_Validate_LLMFieldRanges(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		cfg     V2
@@ -161,6 +169,8 @@ func TestV2_Validate_LLMFieldRanges(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.cfg.Validate()
 			require.Error(t, err, "validation should fail for %s", tt.name)
 			assert.Contains(t, err.Error(), tt.wantErr, "error should mention %s", tt.wantErr)
@@ -170,6 +180,8 @@ func TestV2_Validate_LLMFieldRanges(t *testing.T) {
 
 // TestV2_Validate_LLMValidRanges tests that valid values pass validation.
 func TestV2_Validate_LLMValidRanges(t *testing.T) {
+	t.Parallel()
+
 	cfg := &V2{
 		Version: "2.0",
 		LLM: LLMV2{
@@ -193,6 +205,8 @@ func TestV2_Validate_LLMValidRanges(t *testing.T) {
 // TestV2_Validate_AgentMaxTurnsRequired tests that MaxTurns must be positive.
 // Kills mutant: removing the MaxTurns check would make this test fail.
 func TestV2_Validate_AgentMaxTurnsRequired(t *testing.T) {
+	t.Parallel()
+
 	agent := validAgentConfig()
 	agent.MaxTurns = 0 // Invalid.
 
@@ -210,6 +224,8 @@ func TestV2_Validate_AgentMaxTurnsRequired(t *testing.T) {
 // TestV2_Validate_AgentTimeoutRequired tests that Timeout must be positive.
 // Kills mutant: removing the Timeout check would make this test fail.
 func TestV2_Validate_AgentTimeoutRequired(t *testing.T) {
+	t.Parallel()
+
 	agent := validAgentConfig()
 	agent.Timeout = 0 // Invalid.
 
@@ -227,6 +243,8 @@ func TestV2_Validate_AgentTimeoutRequired(t *testing.T) {
 // TestV2_Validate_AgentWorkDirRequired tests that WorkDir is required.
 // Kills mutant: removing the WorkDir check would make this test fail.
 func TestV2_Validate_AgentWorkDirRequired(t *testing.T) {
+	t.Parallel()
+
 	agent := validAgentConfig()
 	agent.WorkDir = "" // Invalid.
 
@@ -296,6 +314,8 @@ func validProtocolConfig() ProtocolV2 {
 // TestV2_Validate_ACEPlaybookPathRequired tests that PlaybookPath is required when ACE is enabled.
 // Kills mutant: removing the PlaybookPath check would make this test fail.
 func TestV2_Validate_ACEPlaybookPathRequired(t *testing.T) {
+	t.Parallel()
+
 	ace := validACEConfig()
 	ace.PlaybookPath = "" // Invalid.
 
@@ -314,6 +334,8 @@ func TestV2_Validate_ACEPlaybookPathRequired(t *testing.T) {
 // TestV2_Validate_ACETrajectoryPathRequired tests that TrajectoryPath is required when ACE is enabled.
 // Kills mutant: removing the TrajectoryPath check would make this test fail.
 func TestV2_Validate_ACETrajectoryPathRequired(t *testing.T) {
+	t.Parallel()
+
 	ace := validACEConfig()
 	ace.TrajectoryPath = "" // Invalid.
 
@@ -332,6 +354,8 @@ func TestV2_Validate_ACETrajectoryPathRequired(t *testing.T) {
 // TestV2_Validate_ACETopKPositive tests that TopK must be positive when ACE is enabled.
 // Kills mutant: removing the TopK check would make this test fail.
 func TestV2_Validate_ACETopKPositive(t *testing.T) {
+	t.Parallel()
+
 	ace := validACEConfig()
 	ace.TopK = 0 // Invalid.
 
@@ -350,6 +374,8 @@ func TestV2_Validate_ACETopKPositive(t *testing.T) {
 // TestV2_Validate_ACEMinScoreRange tests that MinScore must be between 0 and 1.
 // Kills mutant: removing the MinScore check would make this test fail.
 func TestV2_Validate_ACEMinScoreRange(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		minScore float64
@@ -360,6 +386,8 @@ func TestV2_Validate_ACEMinScoreRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			ace := validACEConfig()
 			ace.MinScore = tt.minScore
 
@@ -380,6 +408,8 @@ func TestV2_Validate_ACEMinScoreRange(t *testing.T) {
 // TestV2_Validate_ACEDisabled tests that validation passes when ACE is disabled.
 // Kills mutant: removing the ACE.Enabled check would make this test fail.
 func TestV2_Validate_ACEDisabled(t *testing.T) {
+	t.Parallel()
+
 	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
@@ -401,9 +431,13 @@ func TestV2_Validate_ACEDisabled(t *testing.T) {
 // TestV2_Validate_SecuritySandboxModeValid tests that only valid sandbox modes are accepted.
 // Kills mutant: removing the SandboxMode validation would make this test fail.
 func TestV2_Validate_SecuritySandboxModeValid(t *testing.T) {
+	t.Parallel()
+
 	validModes := []string{"", "none", "docker", "firejail"}
 	for _, mode := range validModes {
 		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+
 			cfg := &V2{
 				Version:  "2.0",
 				LLM:      validLLMConfig(),
@@ -422,6 +456,8 @@ func TestV2_Validate_SecuritySandboxModeValid(t *testing.T) {
 // TestV2_Validate_SecuritySandboxModeInvalid tests that invalid sandbox modes are rejected.
 // Kills mutant: removing the SandboxMode validation would make this test fail.
 func TestV2_Validate_SecuritySandboxModeInvalid(t *testing.T) {
+	t.Parallel()
+
 	cfg := &V2{
 		Version:  "2.0",
 		LLM:      validLLMConfig(),
@@ -439,6 +475,8 @@ func TestV2_Validate_SecuritySandboxModeInvalid(t *testing.T) {
 // TestV2_Validate_ProtocolShellTimeoutPositive tests that ShellTimeout must be positive when shell is enabled.
 // Kills mutant: removing the ShellTimeout check would make this test fail.
 func TestV2_Validate_ProtocolShellTimeoutPositive(t *testing.T) {
+	t.Parallel()
+
 	protocol := validProtocolConfig()
 	protocol.EnableShell = true
 	protocol.ShellTimeout = 0 // Invalid.
@@ -460,6 +498,8 @@ func TestV2_Validate_ProtocolShellTimeoutPositive(t *testing.T) {
 // TestV2_Validate_ProtocolMCPServersValid tests that MCP server configs are validated when MCP is enabled.
 // Kills mutant: removing the MCP server validation would make this test fail.
 func TestV2_Validate_ProtocolMCPServersValid(t *testing.T) {
+	t.Parallel()
+
 	protocol := validProtocolConfig()
 	protocol.EnableMCP = true
 	protocol.MCPServers = []MCPServerConfigV2{
@@ -483,6 +523,8 @@ func TestV2_Validate_ProtocolMCPServersValid(t *testing.T) {
 // TestDefaultV2 tests that the default configuration is valid.
 // Kills mutant: changing defaults to invalid values would make this test fail.
 func TestDefaultV2(t *testing.T) {
+	t.Parallel()
+
 	cfg := DefaultV2()
 
 	// Should be valid by default.
@@ -500,6 +542,8 @@ func TestDefaultV2(t *testing.T) {
 // TestV2_CrossSectionValidation_ACEPlaybookRequired tests that ACE playbook is required when enabled.
 // Kills mutant: removing cross-section validation would make this test fail.
 func TestV2_CrossSectionValidation_ACEPlaybookRequired(t *testing.T) {
+	t.Parallel()
+
 	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
@@ -520,6 +564,8 @@ func TestV2_CrossSectionValidation_ACEPlaybookRequired(t *testing.T) {
 // TestV2_CrossSectionValidation_ACETrajectoryRequired tests that ACE trajectory is required when enabled.
 // Kills mutant: removing cross-section validation would make this test fail.
 func TestV2_CrossSectionValidation_ACETrajectoryRequired(t *testing.T) {
+	t.Parallel()
+
 	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
@@ -541,6 +587,8 @@ func TestV2_CrossSectionValidation_ACETrajectoryRequired(t *testing.T) {
 // TestV2_CrossSectionValidation_ShellTimeoutRequired tests that shell timeout is required when shell enabled.
 // Kills mutant: removing cross-section validation would make this test fail.
 func TestV2_CrossSectionValidation_ShellTimeoutRequired(t *testing.T) {
+	t.Parallel()
+
 	cfg := &V2{
 		Version:  "2.0",
 		LLM:      validLLMConfig(),
@@ -561,6 +609,8 @@ func TestV2_CrossSectionValidation_ShellTimeoutRequired(t *testing.T) {
 // TestV2_Validation_AllErrors tests that validation returns ALL errors, not just the first.
 // Kills mutant: fail-fast validation would make this test fail.
 func TestV2_Validation_AllErrors(t *testing.T) {
+	t.Parallel()
+
 	cfg := &V2{
 		Version: "2.0",
 		LLM: LLMV2{
@@ -588,6 +638,8 @@ func TestV2_Validation_AllErrors(t *testing.T) {
 
 // TestMCPServerConfigV2_Validate_SSE tests SSE transport validation.
 func TestMCPServerConfigV2_Validate_SSE(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		config  MCPServerConfigV2
@@ -639,6 +691,8 @@ func TestMCPServerConfigV2_Validate_SSE(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.config.Validate()
 			if tt.wantErr {
 				require.Error(t, err)
@@ -652,6 +706,8 @@ func TestMCPServerConfigV2_Validate_SSE(t *testing.T) {
 
 // TestMCPServerConfigV2_Validate_StreamableHTTP tests streamable-http transport validation.
 func TestMCPServerConfigV2_Validate_StreamableHTTP(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		config  MCPServerConfigV2
@@ -680,6 +736,8 @@ func TestMCPServerConfigV2_Validate_StreamableHTTP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.config.Validate()
 			if tt.wantErr {
 				require.Error(t, err)
@@ -693,6 +751,8 @@ func TestMCPServerConfigV2_Validate_StreamableHTTP(t *testing.T) {
 
 // TestMCPServerConfigV2_Validate_OAuth tests OAuth configuration validation.
 func TestMCPServerConfigV2_Validate_OAuth(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		config  MCPServerConfigV2
@@ -739,6 +799,8 @@ func TestMCPServerConfigV2_Validate_OAuth(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.config.Validate()
 			if tt.wantErr {
 				require.Error(t, err)
@@ -752,6 +814,8 @@ func TestMCPServerConfigV2_Validate_OAuth(t *testing.T) {
 
 // TestMCPTransportType_IsValid tests transport type validation.
 func TestMCPTransportType_IsValid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		transport MCPTransportType
 		want      bool
@@ -766,6 +830,8 @@ func TestMCPTransportType_IsValid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(string(tt.transport), func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.want, tt.transport.IsValid())
 		})
 	}
@@ -773,6 +839,8 @@ func TestMCPTransportType_IsValid(t *testing.T) {
 
 // TestMCPTransportType_IsRemote tests transport type remote detection.
 func TestMCPTransportType_IsRemote(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		transport MCPTransportType
 		want      bool
@@ -785,6 +853,8 @@ func TestMCPTransportType_IsRemote(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(string(tt.transport), func(t *testing.T) {
+			t.Parallel()
+
 			assert.Equal(t, tt.want, tt.transport.IsRemote())
 		})
 	}

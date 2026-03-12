@@ -12,6 +12,8 @@ import (
 
 // TestACP_Cancel tests cancellation of in-progress prompt execution.
 func TestACP_Cancel(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -92,6 +94,8 @@ func TestACP_Cancel(t *testing.T) {
 
 // TestACP_Cancel_InvalidSession tests cancellation with invalid session ID.
 func TestACP_Cancel_InvalidSession(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -123,6 +127,8 @@ func TestACP_Cancel_InvalidSession(t *testing.T) {
 
 // TestACP_Cancel_NoActivePrompt tests cancellation when no prompt is active.
 func TestACP_Cancel_NoActivePrompt(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -159,6 +165,8 @@ func TestACP_Cancel_NoActivePrompt(t *testing.T) {
 
 // TestACP_Cancel_DuringPrompt tests cancel during active prompt.
 func TestACP_Cancel_DuringPrompt(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -219,6 +227,8 @@ func TestACP_Cancel_DuringPrompt(t *testing.T) {
 
 // TestACP_Cancel_DuringToolCall tests cancel during tool execution.
 func TestACP_Cancel_DuringToolCall(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -279,6 +289,8 @@ func TestACP_Cancel_DuringToolCall(t *testing.T) {
 
 // TestACP_Cancel_PermissionRequest tests cancel with pending permission request.
 func TestACP_Cancel_PermissionRequest(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -339,6 +351,8 @@ func TestACP_Cancel_PermissionRequest(t *testing.T) {
 
 // TestACP_Cancel_StopReason tests canceled stop reason.
 func TestACP_Cancel_StopReason(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -403,6 +417,8 @@ func TestACP_Cancel_StopReason(t *testing.T) {
 
 // TestACP_Cancel_PendingUpdates tests that pending updates are sent before response.
 func TestACP_Cancel_PendingUpdates(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -468,6 +484,8 @@ func TestACP_Cancel_PendingUpdates(t *testing.T) {
 
 // TestACP_Cancel_ToolCallStatus tests that tool calls are marked as canceled.
 func TestACP_Cancel_ToolCallStatus(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}

@@ -35,6 +35,8 @@ func (m *mockCommandContext) GetWorkDir() string {
 
 // TestParseCommand tests command parsing.
 func TestParseCommand(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		input     string
@@ -109,6 +111,8 @@ func TestParseCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			cmd, args, isCmd := ParseCommand(tt.input)
 			assert.Equal(t, tt.wantIsCmd, isCmd)
 
@@ -122,11 +126,15 @@ func TestParseCommand(t *testing.T) {
 
 // TestModeCommand tests the /mode command.
 func TestModeCommand(t *testing.T) {
+	t.Parallel()
+
 	cmd := &ModeCommand{}
 	assert.Equal(t, "/mode", cmd.Name())
 	assert.Equal(t, "Show current mode or switch to a different mode", cmd.Description())
 
 	t.Run("show current mode", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := &mockCommandContext{currentMode: "regular"}
 		result, err := cmd.Execute(context.Background(), []string{}, ctx)
 		require.NoError(t, err)
@@ -134,6 +142,8 @@ func TestModeCommand(t *testing.T) {
 	})
 
 	t.Run("switch mode", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := &mockCommandContext{currentMode: "regular"}
 		result, err := cmd.Execute(context.Background(), []string{"review"}, ctx)
 		require.NoError(t, err)
@@ -142,6 +152,8 @@ func TestModeCommand(t *testing.T) {
 	})
 
 	t.Run("invalid mode", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := &mockCommandContext{currentMode: "regular"}
 		_, err := cmd.Execute(context.Background(), []string{"invalid"}, ctx)
 		require.Error(t, err)
@@ -151,6 +163,8 @@ func TestModeCommand(t *testing.T) {
 
 // TestHelpCommand tests the /help command.
 func TestHelpCommand(t *testing.T) {
+	t.Parallel()
+
 	cmd := &HelpCommand{}
 	assert.Equal(t, "/help", cmd.Name())
 	assert.Equal(t, "Show this help message", cmd.Description())
@@ -170,6 +184,8 @@ func TestHelpCommand(t *testing.T) {
 
 // TestExitCommand tests the /exit command.
 func TestExitCommand(t *testing.T) {
+	t.Parallel()
+
 	cmd := &ExitCommand{}
 	assert.Equal(t, "/exit", cmd.Name())
 
@@ -181,6 +197,8 @@ func TestExitCommand(t *testing.T) {
 
 // TestQuitCommand tests the /quit command.
 func TestQuitCommand(t *testing.T) {
+	t.Parallel()
+
 	cmd := &QuitCommand{}
 	assert.Equal(t, "/quit", cmd.Name())
 
@@ -192,15 +210,21 @@ func TestQuitCommand(t *testing.T) {
 
 // TestExecuteCommand tests command execution.
 func TestExecuteCommand(t *testing.T) {
+	t.Parallel()
+
 	ctx := &mockCommandContext{currentMode: "regular"}
 
 	t.Run("valid command", func(t *testing.T) {
+		t.Parallel()
+
 		result, err := ExecuteCommand(context.Background(), "/mode", []string{}, ctx)
 		require.NoError(t, err)
 		assert.Contains(t, result, "Current mode")
 	})
 
 	t.Run("unknown command", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := ExecuteCommand(context.Background(), "/unknown", []string{}, ctx)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown command")
@@ -209,6 +233,8 @@ func TestExecuteCommand(t *testing.T) {
 
 // TestListCommands tests command listing.
 func TestListCommands(t *testing.T) {
+	t.Parallel()
+
 	commands := ListCommands()
 	assert.Greater(t, len(commands), 0)
 

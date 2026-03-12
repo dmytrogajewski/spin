@@ -12,6 +12,8 @@ import (
 )
 
 func TestDefaultLLMSummarizerConfig(t *testing.T) {
+	t.Parallel()
+
 	config := DefaultLLMSummarizerConfig()
 
 	const (
@@ -43,6 +45,8 @@ func TestDefaultLLMSummarizerConfig(t *testing.T) {
 }
 
 func TestNewLLMSummarizer(t *testing.T) {
+	t.Parallel()
+
 	provider := llm.NewMockProvider("test-summarizer")
 	tok := &tokenizer.SimpleTokenizer{}
 	config := DefaultLLMSummarizerConfig()
@@ -58,6 +62,8 @@ func TestNewLLMSummarizer(t *testing.T) {
 }
 
 func TestNewLLMSummarizerWithNilTokenizer(t *testing.T) {
+	t.Parallel()
+
 	provider := llm.NewMockProvider("test-summarizer")
 	config := DefaultLLMSummarizerConfig()
 
@@ -70,6 +76,8 @@ func TestNewLLMSummarizerWithNilTokenizer(t *testing.T) {
 }
 
 func TestLLMSummarizer_Summarize_EmptyContent(t *testing.T) {
+	t.Parallel()
+
 	provider := llm.NewMockProvider("test-summarizer")
 	config := DefaultLLMSummarizerConfig()
 	s := NewLLMSummarizer(provider, nil, config)
@@ -100,6 +108,8 @@ func TestLLMSummarizer_Summarize_EmptyContent(t *testing.T) {
 }
 
 func TestLLMSummarizer_Summarize_BasicContent(t *testing.T) {
+	t.Parallel()
+
 	const mockResponse = "This is a summary of the content."
 
 	provider := llm.NewMockProvider("test-summarizer", llm.WithResponse(mockResponse))
@@ -128,6 +138,8 @@ func TestLLMSummarizer_Summarize_BasicContent(t *testing.T) {
 }
 
 func TestLLMSummarizer_SummarizeMessages_EmptyMessages(t *testing.T) {
+	t.Parallel()
+
 	provider := llm.NewMockProvider("test-summarizer")
 	config := DefaultLLMSummarizerConfig()
 	s := NewLLMSummarizer(provider, nil, config)
@@ -149,6 +161,8 @@ func TestLLMSummarizer_SummarizeMessages_EmptyMessages(t *testing.T) {
 }
 
 func TestLLMSummarizer_SummarizeMessages_BasicMessages(t *testing.T) {
+	t.Parallel()
+
 	const mockResponse = "User asked about authentication. Assistant explained the auth flow."
 
 	provider := llm.NewMockProvider("test-summarizer", llm.WithResponse(mockResponse))

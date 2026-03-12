@@ -8,7 +8,10 @@ import (
 )
 
 func TestReadFileTool(t *testing.T) {
+	t.Parallel(
 	// Create temp file.
+	)
+
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
 
@@ -45,6 +48,7 @@ func TestReadFileTool(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			params, _ := FromMap(tt.params)
 			var result ToolResult
 			result, err = tool.Execute(context.Background(), params)

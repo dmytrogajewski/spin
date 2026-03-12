@@ -10,6 +10,7 @@ import (
 )
 
 func TestValidateToolCall_Valid(t *testing.T) {
+	t.Parallel()
 	call := &message.ToolCall{
 		ID:   "test-id",
 		Type: "function",
@@ -24,12 +25,14 @@ func TestValidateToolCall_Valid(t *testing.T) {
 }
 
 func TestValidateToolCall_Nil(t *testing.T) {
+	t.Parallel()
 	err := ValidateToolCall(nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot be nil")
 }
 
 func TestValidateToolCall_EmptyID(t *testing.T) {
+	t.Parallel()
 	call := &message.ToolCall{
 		ID:   "",
 		Type: "function",
@@ -45,6 +48,7 @@ func TestValidateToolCall_EmptyID(t *testing.T) {
 }
 
 func TestValidateToolCall_EmptyFunctionName(t *testing.T) {
+	t.Parallel()
 	call := &message.ToolCall{
 		ID:   "test-id",
 		Type: "function",
@@ -60,7 +64,10 @@ func TestValidateToolCall_EmptyFunctionName(t *testing.T) {
 }
 
 func TestValidateToolCall_EmptyType(t *testing.T) {
+	t.Parallel(
 	// Empty Type should not cause validation error (not required).
+	)
+
 	call := &message.ToolCall{
 		ID:   "test-id",
 		Type: "",
@@ -75,7 +82,10 @@ func TestValidateToolCall_EmptyType(t *testing.T) {
 }
 
 func TestValidateToolCall_EmptyArguments(t *testing.T) {
+	t.Parallel(
 	// Empty Arguments should not cause validation error (not required).
+	)
+
 	call := &message.ToolCall{
 		ID:   "test-id",
 		Type: "function",

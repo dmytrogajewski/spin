@@ -13,6 +13,7 @@ import (
 
 // TestE2E_InputSubmit_PromptsRedraw tests that user input appears and prompt redraws after submission.
 func TestE2E_InputSubmit_PromptsRedraw(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 
@@ -28,6 +29,7 @@ func TestE2E_InputSubmit_PromptsRedraw(t *testing.T) {
 
 // TestE2E_StreamingChunks_PromptAtBottom tests that streaming output doesn't tear the prompt.
 func TestE2E_StreamingChunks_PromptAtBottom(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 
@@ -48,6 +50,7 @@ func TestE2E_StreamingChunks_PromptAtBottom(t *testing.T) {
 
 // TestE2E_BackspaceEditing tests character deletion works correctly.
 func TestE2E_BackspaceEditing(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 
@@ -65,6 +68,7 @@ func TestE2E_BackspaceEditing(t *testing.T) {
 
 // TestE2E_AppendBlock_RendersCorrectly tests that blocks appear in timeline.
 func TestE2E_AppendBlock_RendersCorrectly(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 
@@ -88,6 +92,7 @@ func TestE2E_AppendBlock_RendersCorrectly(t *testing.T) {
 
 // TestE2E_UpdateBlock_ShowsCompletion tests that block updates show completion status.
 func TestE2E_UpdateBlock_ShowsCompletion(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 
@@ -121,6 +126,7 @@ func TestE2E_UpdateBlock_ShowsCompletion(t *testing.T) {
 
 // TestE2E_BlockNavigation_PgUpPgDn tests keyboard navigation works.
 func TestE2E_BlockNavigation_PgUpPgDn(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 
@@ -149,6 +155,7 @@ func TestE2E_BlockNavigation_PgUpPgDn(t *testing.T) {
 
 // TestE2E_StatusBar_UpdatesOnEvents tests that status bar updates in real-time.
 func TestE2E_StatusBar_UpdatesOnEvents(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 
@@ -167,6 +174,7 @@ func TestE2E_StatusBar_UpdatesOnEvents(t *testing.T) {
 
 // TestE2E_TerminalResize_RedrawsWithNewWidth tests that resize triggers redraw.
 func TestE2E_TerminalResize_RedrawsWithNewWidth(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 
@@ -186,6 +194,7 @@ func TestE2E_TerminalResize_RedrawsWithNewWidth(t *testing.T) {
 
 // TestE2E_ShutdownCtrlC_ExitsCleanly tests that Ctrl+C exits cleanly.
 func TestE2E_ShutdownCtrlC_ExitsCleanly(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 
@@ -203,6 +212,7 @@ func TestE2E_ShutdownCtrlC_ExitsCleanly(t *testing.T) {
 
 // TestE2E_ShutdownContextCancel_ExitsCleanly tests that context cancel exits cleanly.
 func TestE2E_ShutdownContextCancel_ExitsCleanly(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 
 	helper.Start()
@@ -216,6 +226,7 @@ func TestE2E_ShutdownContextCancel_ExitsCleanly(t *testing.T) {
 
 // TestE2E_ShutdownCtrlD_ExitsOnEOF tests that Ctrl+D exits on EOF.
 func TestE2E_ShutdownCtrlD_ExitsOnEOF(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 
@@ -234,6 +245,7 @@ func TestE2E_ShutdownCtrlD_ExitsOnEOF(t *testing.T) {
 // Note: This test is simplified since we can't easily test the full approval dialog
 // without importing security package (which would create import cycle).
 func TestE2E_ApprovalDialog_ShowsOnDangerousCommand(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 
@@ -246,6 +258,7 @@ func TestE2E_ApprovalDialog_ShowsOnDangerousCommand(t *testing.T) {
 
 // TestE2E_FilterMode_Slash tests that filter mode activates with '/'.
 func TestE2E_FilterMode_Slash(t *testing.T) {
+	t.Parallel()
 	helper := testkit.NewTUITest(t)
 	defer helper.Stop()
 

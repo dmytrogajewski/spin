@@ -6,6 +6,8 @@ import (
 )
 
 func TestNewModeCmd(t *testing.T) {
+	t.Parallel()
+
 	cmd := newModeCmd()
 
 	if cmd.Use != "mode [command]" {
@@ -41,6 +43,8 @@ func TestNewModeCmd(t *testing.T) {
 }
 
 func TestRunModeList(t *testing.T) {
+	t.Parallel()
+
 	cmd := newModeListCmd()
 
 	// Execute command - it will print to stdout.
@@ -55,10 +59,14 @@ func TestRunModeList(t *testing.T) {
 }
 
 func TestRunModeDescribe_ValidMode(t *testing.T) {
+	t.Parallel()
+
 	modes := []string{"regular", "review", "compact", "planning"}
 
 	for _, modeName := range modes {
 		t.Run(modeName, func(t *testing.T) {
+			t.Parallel()
+
 			cmd := newModeDescribeCmd()
 			cmd.SetArgs([]string{modeName})
 
@@ -96,6 +104,8 @@ func TestRunModeDescribe_ValidMode(t *testing.T) {
 }
 
 func TestRunModeDescribe_InvalidMode(t *testing.T) {
+	t.Parallel()
+
 	cmd := newModeDescribeCmd()
 	cmd.SetArgs([]string{"invalid-mode"})
 
@@ -121,6 +131,8 @@ func TestRunModeDescribe_InvalidMode(t *testing.T) {
 }
 
 func TestRunModeDescribe_NoArgument(t *testing.T) {
+	t.Parallel()
+
 	cmd := newModeDescribeCmd()
 
 	// Execute command with no args - should error.
@@ -137,6 +149,8 @@ func TestRunModeDescribe_NoArgument(t *testing.T) {
 }
 
 func TestAllModesInfo_Consistency(t *testing.T) {
+	t.Parallel()
+
 	// Verify all expected modes are present.
 	expectedModes := []string{"regular", "review", "compact", "planning"}
 	for _, modeName := range expectedModes {
@@ -171,6 +185,8 @@ func TestAllModesInfo_Consistency(t *testing.T) {
 }
 
 func TestModeInfo_TokenBudgets(t *testing.T) {
+	t.Parallel()
+
 	// Verify token budgets match documented values.
 	expectedBudgets := map[string]int{
 		"regular":  16384,
@@ -189,6 +205,8 @@ func TestModeInfo_TokenBudgets(t *testing.T) {
 }
 
 func TestModeInfo_ToolCounts(t *testing.T) {
+	t.Parallel()
+
 	// Verify tool counts for each mode.
 	expectedToolCounts := map[string]int{
 		"regular":  8, // all tools.
@@ -207,6 +225,8 @@ func TestModeInfo_ToolCounts(t *testing.T) {
 }
 
 func TestModeInfo_RegularModeHasAllTools(t *testing.T) {
+	t.Parallel()
+
 	info := allModes["regular"]
 
 	// Verify regular mode has all expected tools.
@@ -234,6 +254,8 @@ func TestModeInfo_RegularModeHasAllTools(t *testing.T) {
 }
 
 func TestModeInfo_ReviewModeIsReadOnly(t *testing.T) {
+	t.Parallel()
+
 	info := allModes["review"]
 
 	// Verify review mode does not have write tools.
@@ -263,6 +285,8 @@ func TestModeInfo_ReviewModeIsReadOnly(t *testing.T) {
 }
 
 func TestModeInfo_CompactModeIsMinimal(t *testing.T) {
+	t.Parallel()
+
 	info := allModes["compact"]
 
 	// Compact mode should have exactly 3 tools.
@@ -286,6 +310,8 @@ func TestModeInfo_CompactModeIsMinimal(t *testing.T) {
 }
 
 func TestModeInfo_PlanningModeIsContextOnly(t *testing.T) {
+	t.Parallel()
+
 	info := allModes["planning"]
 
 	// Planning mode should have exactly 3 context tools.

@@ -13,6 +13,7 @@ import (
 )
 
 func TestToolRuntime_parseToolArguments(t *testing.T) {
+	t.Parallel()
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
@@ -83,6 +84,8 @@ func TestToolRuntime_parseToolArguments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			args, err := toolRuntime.parseToolArguments(tt.call)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ToolRuntime.parseToolArguments() error = %v, wantErr %v", err, tt.wantErr)
@@ -104,6 +107,7 @@ func TestToolRuntime_parseToolArguments(t *testing.T) {
 }
 
 func TestToolRuntime_Execute_EmptyArguments(t *testing.T) {
+	t.Parallel()
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
@@ -137,6 +141,7 @@ func TestToolRuntime_Execute_EmptyArguments(t *testing.T) {
 }
 
 func TestToolRuntime_Execute_ValidArguments(t *testing.T) {
+	t.Parallel()
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})

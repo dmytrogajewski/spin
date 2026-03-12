@@ -8,6 +8,7 @@ import (
 
 // TestRenderer_Redraw_Golden verifies exact ANSI output for various scenarios.
 func TestRenderer_Redraw_Golden(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		prefix     string
@@ -121,6 +122,7 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			var buf bytes.Buffer
 
 			r := NewTermRenderer(&buf, tt.width, tt.prefix)
@@ -147,6 +149,7 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 
 // TestRenderer_Redraw_CursorPositioning focuses on cursor column accuracy.
 func TestRenderer_Redraw_CursorPositioning(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		bufferText string
@@ -170,6 +173,7 @@ func TestRenderer_Redraw_CursorPositioning(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			var buf bytes.Buffer
 
 			r := NewTermRenderer(&buf, 80, "> ")
@@ -200,6 +204,7 @@ func TestRenderer_Redraw_CursorPositioning(t *testing.T) {
 
 // TestRenderer_Redraw_StatusRendering tests right-aligned status behavior.
 func TestRenderer_Redraw_StatusRendering(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		bufferText     string
@@ -241,6 +246,7 @@ func TestRenderer_Redraw_StatusRendering(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			var buf bytes.Buffer
 
 			r := NewTermRenderer(&buf, tt.width, "> ")
@@ -278,6 +284,7 @@ func TestRenderer_Redraw_StatusRendering(t *testing.T) {
 
 // TestRenderer_Redraw_HorizontalScrolling tests scrolling for long lines.
 func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name              string
 		bufferText        string
@@ -322,6 +329,7 @@ func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			var buf bytes.Buffer
 
 			r := NewTermRenderer(&buf, tt.width, "> ")
@@ -355,7 +363,8 @@ func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
 }
 
 // TestRenderer_SetWidth tests dynamic width updates.
-func TestRenderer_SetWidth(_ *testing.T) {
+func TestRenderer_SetWidth(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	r := NewTermRenderer(&buf, 80, "> ")
@@ -369,6 +378,7 @@ func TestRenderer_SetWidth(_ *testing.T) {
 
 // TestRenderer_SetPrefix tests dynamic prefix updates.
 func TestRenderer_SetPrefix(t *testing.T) {
+	t.Parallel()
 	var buf bytes.Buffer
 
 	r := NewTermRenderer(&buf, 80, "> ")
@@ -386,6 +396,7 @@ func TestRenderer_SetPrefix(t *testing.T) {
 
 // TestRenderer_Redraw_EdgeCases tests boundary conditions.
 func TestRenderer_Redraw_EdgeCases(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		fn   func(t *testing.T)
@@ -462,7 +473,10 @@ func TestRenderer_Redraw_EdgeCases(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, tt.fn)
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			tt.fn(t)
+		})
 	}
 }
 

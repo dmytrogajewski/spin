@@ -7,6 +7,8 @@ import (
 )
 
 func TestExecCommand(t *testing.T) {
+	t.Parallel()
+
 	cmd := newExecCmd()
 	if !strings.HasPrefix(cmd.Use, "exec") {
 		t.Errorf("Exec command Use = %s, should start with 'exec'", cmd.Use)
@@ -14,6 +16,8 @@ func TestExecCommand(t *testing.T) {
 }
 
 func TestConfigCommand(t *testing.T) {
+	t.Parallel()
+
 	cmd := newConfigCmd()
 	if cmd.Use != "config" {
 		t.Errorf("Config command Use = %s, want 'config'", cmd.Use)
@@ -39,6 +43,8 @@ func TestConfigCommand(t *testing.T) {
 }
 
 func TestMCPCommand(t *testing.T) {
+	t.Parallel()
+
 	cmd := newMCPCmd()
 	if cmd.Use != "mcp" {
 		t.Errorf("MCP command Use = %s, want 'mcp'", cmd.Use)
@@ -64,6 +70,8 @@ func TestMCPCommand(t *testing.T) {
 }
 
 func TestDebugCommand(t *testing.T) {
+	t.Parallel()
+
 	cmd := newDebugCmd()
 	if cmd.Use != "debug" {
 		t.Errorf("Debug command Use = %s, want 'debug'", cmd.Use)
@@ -89,6 +97,8 @@ func TestDebugCommand(t *testing.T) {
 }
 
 func TestStubCommands_NotImplemented(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		args []string
@@ -99,6 +109,8 @@ func TestStubCommands_NotImplemented(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			rootCmd := newRootCmd()
 			rootCmd.SetArgs(tt.args)
 
@@ -121,6 +133,8 @@ func TestStubCommands_NotImplemented(t *testing.T) {
 }
 
 func TestAllCommandsAvailable(t *testing.T) {
+	t.Parallel()
+
 	rootCmd := newRootCmd()
 
 	expectedCommands := []string{"version", "completion", "exec", "config", "mcp", "debug"}

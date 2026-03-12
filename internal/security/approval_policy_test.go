@@ -9,6 +9,7 @@ import (
 )
 
 func TestApprovalService_PolicyShortCircuit(t *testing.T) {
+	t.Parallel()
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
@@ -54,6 +55,7 @@ func TestApprovalService_PolicyShortCircuit(t *testing.T) {
 }
 
 func TestApprovalService_PersistOnApprove(t *testing.T) {
+	t.Parallel()
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
@@ -114,6 +116,7 @@ func TestApprovalService_PersistOnApprove(t *testing.T) {
 }
 
 func TestApprovalService_ApproveOnceDoesNotPersist(t *testing.T) {
+	t.Parallel()
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
@@ -155,6 +158,7 @@ func TestApprovalService_ApproveOnceDoesNotPersist(t *testing.T) {
 }
 
 func TestApprovalService_OnceScopeReasks(t *testing.T) {
+	t.Parallel()
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
@@ -206,6 +210,7 @@ func TestApprovalService_OnceScopeReasks(t *testing.T) {
 }
 
 func TestApprovalService_GlobalScopePersistsAndShortCircuits(t *testing.T) {
+	t.Parallel()
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 
@@ -263,6 +268,7 @@ func TestApprovalService_GlobalScopePersistsAndShortCircuits(t *testing.T) {
 }
 
 func TestApprovalService_RevocationReasks(t *testing.T) {
+	t.Parallel()
 	emitter := events.NewEventEmitter(10)
 	store := NewMemoryPolicyStore(10 * time.Millisecond)
 

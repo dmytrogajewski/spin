@@ -13,6 +13,8 @@ import (
 
 // TestNewReflector tests creating a new reflector.
 func TestNewReflector(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 
 	reflector := NewReflector(mockLLM)
@@ -22,6 +24,8 @@ func TestNewReflector(t *testing.T) {
 
 // TestReflector_Reflect tests reflection on a single trajectory.
 func TestReflector_Reflect(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
 		{
@@ -58,6 +62,8 @@ func TestReflector_Reflect(t *testing.T) {
 
 // TestReflector_RefineInsights tests multi-iteration refinement.
 func TestReflector_RefineInsights(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
 		{
@@ -90,6 +96,8 @@ func TestReflector_RefineInsights(t *testing.T) {
 
 // TestReflector_RefineInsights_MaxIterations tests iteration limit.
 func TestReflector_RefineInsights_MaxIterations(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
 		{
@@ -120,6 +128,8 @@ func TestReflector_RefineInsights_MaxIterations(t *testing.T) {
 
 // TestReflector_RefineInsights_EmptySlice tests empty input.
 func TestReflector_RefineInsights_EmptySlice(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 	reflector := NewReflector(mockLLM)
 
@@ -132,6 +142,8 @@ func TestReflector_RefineInsights_EmptySlice(t *testing.T) {
 
 // TestReflector_Reflect_MultipleTrajectories tests batch trajectory analysis.
 func TestReflector_Reflect_MultipleTrajectories(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
 		{
@@ -177,6 +189,8 @@ func TestReflector_Reflect_MultipleTrajectories(t *testing.T) {
 
 // TestReflector_Reflect_EmptyTrajectories tests empty trajectory list.
 func TestReflector_Reflect_EmptyTrajectories(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 	reflector := NewReflector(mockLLM)
 
@@ -195,6 +209,8 @@ func TestReflector_Reflect_EmptyTrajectories(t *testing.T) {
 
 // TestCleanJSONResponse tests extraction of JSON from markdown code blocks.
 func TestCleanJSONResponse(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		input    string
@@ -234,6 +250,8 @@ func TestCleanJSONResponse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := cleanJSONResponse(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -242,6 +260,8 @@ func TestCleanJSONResponse(t *testing.T) {
 
 // TestReflector_Reflect_WithMarkdownJSON tests reflection with markdown-wrapped JSON.
 func TestReflector_Reflect_WithMarkdownJSON(t *testing.T) {
+	t.Parallel()
+
 	mockLLM := llm.NewMockProvider("test")
 	// Simulate LLM returning JSON wrapped in markdown code block.
 	mockLLM.SetResponse("```json\n" + `[

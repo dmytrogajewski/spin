@@ -7,6 +7,8 @@ import (
 )
 
 func TestNewScratchpad(t *testing.T) {
+	t.Parallel()
+
 	sessionID := "test-session-123"
 	maxSize := 50
 
@@ -30,6 +32,8 @@ func TestNewScratchpad(t *testing.T) {
 }
 
 func TestScratchpadPutAndGet(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -59,6 +63,8 @@ func TestScratchpadPutAndGet(t *testing.T) {
 }
 
 func TestScratchpadPutWithNamespace(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -78,6 +84,8 @@ func TestScratchpadPutWithNamespace(t *testing.T) {
 }
 
 func TestScratchpadPutUpdateExisting(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -108,6 +116,8 @@ func TestScratchpadPutUpdateExisting(t *testing.T) {
 }
 
 func TestScratchpadPutWithoutOverwrite(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -125,6 +135,8 @@ func TestScratchpadPutWithoutOverwrite(t *testing.T) {
 }
 
 func TestScratchpadGetNotFound(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -135,6 +147,8 @@ func TestScratchpadGetNotFound(t *testing.T) {
 }
 
 func TestScratchpadPutEmptyKey(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -145,6 +159,8 @@ func TestScratchpadPutEmptyKey(t *testing.T) {
 }
 
 func TestScratchpadGetEmptyKey(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -155,6 +171,8 @@ func TestScratchpadGetEmptyKey(t *testing.T) {
 }
 
 func TestScratchpadDelete(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -182,6 +200,8 @@ func TestScratchpadDelete(t *testing.T) {
 }
 
 func TestScratchpadDeleteNonexistent(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -193,6 +213,8 @@ func TestScratchpadDeleteNonexistent(t *testing.T) {
 }
 
 func TestScratchpadCount(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -226,6 +248,8 @@ func TestScratchpadCount(t *testing.T) {
 }
 
 func TestScratchpadClear(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -251,6 +275,8 @@ func TestScratchpadClear(t *testing.T) {
 }
 
 func TestScratchpadAccessCountIncrement(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -282,6 +308,8 @@ func TestScratchpadAccessCountIncrement(t *testing.T) {
 }
 
 func TestScratchpadLRUEviction(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 3) // Small capacity for testing.
 
@@ -337,6 +365,8 @@ func TestScratchpadLRUEviction(t *testing.T) {
 }
 
 func TestScratchpadPinnedEntryNotEvicted(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 3)
 
@@ -397,6 +427,8 @@ func TestScratchpadPinnedEntryNotEvicted(t *testing.T) {
 }
 
 func TestScratchpadPin(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -411,6 +443,8 @@ func TestScratchpadPin(t *testing.T) {
 }
 
 func TestScratchpadPinNotFound(t *testing.T) {
+	t.Parallel()
+
 	pad := NewScratchpad("session-1", 10)
 
 	err := pad.Pin("nonexistent")
@@ -420,6 +454,8 @@ func TestScratchpadPinNotFound(t *testing.T) {
 }
 
 func TestScratchpadPinEmptyKey(t *testing.T) {
+	t.Parallel()
+
 	pad := NewScratchpad("session-1", 10)
 
 	err := pad.Pin("")
@@ -429,6 +465,8 @@ func TestScratchpadPinEmptyKey(t *testing.T) {
 }
 
 func TestScratchpadUnpin(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -446,6 +484,8 @@ func TestScratchpadUnpin(t *testing.T) {
 }
 
 func TestScratchpadUnpinNotFound(t *testing.T) {
+	t.Parallel()
+
 	pad := NewScratchpad("session-1", 10)
 
 	err := pad.Unpin("nonexistent")
@@ -455,6 +495,8 @@ func TestScratchpadUnpinNotFound(t *testing.T) {
 }
 
 func TestScratchpadList(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -490,6 +532,8 @@ func TestScratchpadList(t *testing.T) {
 }
 
 func TestScratchpadSearch(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -535,6 +579,8 @@ func TestScratchpadSearch(t *testing.T) {
 }
 
 func TestScratchpadSearchNoMatches(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -553,6 +599,8 @@ func TestScratchpadSearchNoMatches(t *testing.T) {
 }
 
 func TestScratchpadSearchCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -581,6 +629,8 @@ func TestScratchpadSearchCaseInsensitive(t *testing.T) {
 }
 
 func TestScratchpadConcurrentAccess(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 100)
 
@@ -628,6 +678,8 @@ func TestScratchpadConcurrentAccess(t *testing.T) {
 }
 
 func TestScratchpadDeleteEmptyKey(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -638,6 +690,8 @@ func TestScratchpadDeleteEmptyKey(t *testing.T) {
 }
 
 func TestScratchpadUnpinEmptyKey(t *testing.T) {
+	t.Parallel()
+
 	pad := NewScratchpad("session-1", 10)
 
 	err := pad.Unpin("")
@@ -647,6 +701,8 @@ func TestScratchpadUnpinEmptyKey(t *testing.T) {
 }
 
 func TestScratchpadEntryTypeInference(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
@@ -666,6 +722,8 @@ func TestScratchpadEntryTypeInference(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
+			t.Parallel()
+
 			if err := pad.Put(ctx, tt.key, tt.value, PutOptions{}); err != nil {
 				t.Fatalf("Put failed: %v", err)
 			}

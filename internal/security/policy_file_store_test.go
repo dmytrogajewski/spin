@@ -9,6 +9,7 @@ import (
 )
 
 func TestFilePolicyStore_SaveGetListDeleteClear_GlobalScope(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	store, err := NewFilePolicyStore(filepath.Join(tmpDir, "policies.json"), 10*time.Millisecond)
@@ -89,6 +90,7 @@ func TestFilePolicyStore_SaveGetListDeleteClear_GlobalScope(t *testing.T) {
 }
 
 func TestFilePolicyStore_ExpiryEviction(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	store, err := NewFilePolicyStore(filepath.Join(tmpDir, "policies.json"), 5*time.Millisecond)
@@ -132,6 +134,7 @@ func TestFilePolicyStore_ExpiryEviction(t *testing.T) {
 }
 
 func TestFilePolicyStore_FileIsCreatedAndLocked(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "policies.json")
 

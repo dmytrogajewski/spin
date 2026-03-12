@@ -8,18 +8,21 @@ import (
 )
 
 func TestNewArgumentParser(t *testing.T) {
+	t.Parallel()
 	parser := &ArgumentParser{AllowEmpty: true}
 	assert.NotNil(t, parser)
 	assert.True(t, parser.AllowEmpty, "default parser should allow empty arguments")
 }
 
 func TestNewStrictArgumentParser(t *testing.T) {
+	t.Parallel()
 	parser := NewStrictArgumentParser()
 	assert.NotNil(t, parser)
 	assert.False(t, parser.AllowEmpty, "strict parser should not allow empty arguments")
 }
 
 func TestArgumentParser_Parse(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		parser     *ArgumentParser
@@ -113,6 +116,7 @@ func TestArgumentParser_Parse(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := tt.parser.Parse(tt.input)
 
 			if tt.wantErr {
@@ -133,7 +137,9 @@ func TestArgumentParser_Parse(t *testing.T) {
 }
 
 func TestArgumentParser_CustomConfiguration(t *testing.T) {
+	t.Parallel()
 	t.Run("can_modify_allow_empty", func(t *testing.T) {
+		t.Parallel()
 		parser := &ArgumentParser{AllowEmpty: false}
 
 		// Should error on empty.

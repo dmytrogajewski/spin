@@ -11,6 +11,8 @@ import (
 
 // TestMergeRequest_Creation tests creating a merge request.
 func TestMergeRequest_Creation(t *testing.T) {
+	t.Parallel()
+
 	insights := []*reflector.Insight{
 		reflector.NewInsight("Test insight", reflector.CategorySuccessPattern),
 	}
@@ -27,6 +29,8 @@ func TestMergeRequest_Creation(t *testing.T) {
 
 // TestMergeResult_Empty tests empty merge result.
 func TestMergeResult_Empty(t *testing.T) {
+	t.Parallel()
+
 	result := &MergeResult{
 		Added:   0,
 		Skipped: 0,

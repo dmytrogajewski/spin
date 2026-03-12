@@ -8,35 +8,33 @@ import (
 )
 
 func TestExecute(t *testing.T) {
-	// Save original args.
-	oldArgs := os.Args
+	t.Parallel()
 
-	defer func() { os.Args = oldArgs }()
+	// Test help flag using cobra command directly.
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"--help"})
 
-	// Test help flag.
-	os.Args = []string{"spin", "--help"}
-
-	err := execute()
+	err := cmd.Execute()
 	if err != nil {
 		t.Errorf("execute() with --help should not error, got: %v", err)
 	}
 }
 
 func TestExecute_InvalidCommand(t *testing.T) {
-	// Save original args.
-	oldArgs := os.Args
+	t.Parallel()
 
-	defer func() { os.Args = oldArgs }()
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"invalid-command"})
 
-	os.Args = []string{"spin", "invalid-command"}
-
-	err := execute()
+	err := cmd.Execute()
 	if err == nil {
 		t.Error("execute() with invalid command should return error")
 	}
 }
 
 func TestRunApplyPatchMode(t *testing.T) {
+	t.Parallel()
+
 	code := runApplyPatchMode()
 	if code == 0 {
 		t.Error("runApplyPatchMode() should return non-zero exit code (not implemented)")
@@ -44,6 +42,8 @@ func TestRunApplyPatchMode(t *testing.T) {
 }
 
 func TestRunSandboxMode(t *testing.T) {
+	t.Parallel()
+
 	code := runSandboxMode()
 	if code == 0 {
 		t.Error("runSandboxMode() should return non-zero exit code (not implemented)")
@@ -51,6 +51,8 @@ func TestRunSandboxMode(t *testing.T) {
 }
 
 func TestBinaryNameDetection(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		binaryName string
@@ -75,6 +77,8 @@ func TestBinaryNameDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			baseName := filepath.Base(tt.binaryName)
 
 			switch baseName {

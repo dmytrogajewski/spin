@@ -10,6 +10,8 @@ import (
 
 // TestCompliance_Notification_AgentMessageChunk verifies agent message chunk notification format.
 func TestCompliance_Notification_AgentMessageChunk(t *testing.T) {
+	t.Parallel()
+
 	notif := acp.SessionNotification{
 		SessionId: acp.SessionId("test-session"),
 		Update: acp.SessionUpdate{
@@ -26,6 +28,8 @@ func TestCompliance_Notification_AgentMessageChunk(t *testing.T) {
 
 // TestCompliance_Notification_ToolCall verifies tool call notification format.
 func TestCompliance_Notification_ToolCall(t *testing.T) {
+	t.Parallel()
+
 	notif := acp.SessionNotification{
 		SessionId: acp.SessionId("test-session"),
 		Update: acp.SessionUpdate{
@@ -42,6 +46,8 @@ func TestCompliance_Notification_ToolCall(t *testing.T) {
 
 // TestCompliance_Notification_ToolCallUpdate verifies tool call update notification format.
 func TestCompliance_Notification_ToolCallUpdate(t *testing.T) {
+	t.Parallel()
+
 	status := acp.ToolCallStatusCompleted
 	notif := acp.SessionNotification{
 		SessionId: acp.SessionId("test-session"),
@@ -59,6 +65,8 @@ func TestCompliance_Notification_ToolCallUpdate(t *testing.T) {
 
 // TestCompliance_Notification_Plan verifies plan notification format.
 func TestCompliance_Notification_Plan(t *testing.T) {
+	t.Parallel()
+
 	notif := acp.SessionNotification{
 		SessionId: acp.SessionId("test-session"),
 		Update: acp.SessionUpdate{
@@ -81,6 +89,8 @@ func TestCompliance_Notification_Plan(t *testing.T) {
 
 // TestCompliance_Notification_Commands verifies available commands update notification format.
 func TestCompliance_Notification_Commands(t *testing.T) {
+	t.Parallel()
+
 	notif := acp.SessionNotification{
 		SessionId: acp.SessionId("test-session"),
 		Update: acp.SessionUpdate{
@@ -102,6 +112,8 @@ func TestCompliance_Notification_Commands(t *testing.T) {
 
 // TestCompliance_Notification_ContentBlocks verifies notification content block format.
 func TestCompliance_Notification_ContentBlocks(t *testing.T) {
+	t.Parallel()
+
 	notif := acp.SessionNotification{
 		SessionId: acp.SessionId("test-session"),
 		Update: acp.SessionUpdate{
@@ -120,6 +132,8 @@ func TestCompliance_Notification_ContentBlocks(t *testing.T) {
 
 // TestCompliance_Notification_Streaming verifies streaming notification support.
 func TestCompliance_Notification_Streaming(t *testing.T) {
+	t.Parallel()
+
 	// Test incremental updates.
 	notif1 := acp.SessionNotification{
 		SessionId: acp.SessionId("test-session"),

@@ -76,21 +76,21 @@ func runExec(cmd *cobra.Command, args []string) error {
 
 	// Load configuration using new unified API.
 	cfg, err := config.Load(config.Source{
-		File: flagConfigFile,
+		File: flagConfigFile(cmd),
 		Flags: config.FlagOverrides{
-			Provider: flagProvider,
-			Model:    flagModel,
+			Provider: flagProvider(cmd),
+			Model:    flagModel(cmd),
 			Debug:    debugFlag,
 		},
-		WorkDir: flagWorkDir,
+		WorkDir: flagWorkDir(cmd),
 	})
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
 
 	// Apply --agents-md flag override.
-	if flagAgentsMD != "" {
-		cfg.AgentsMD.Path = flagAgentsMD
+	if agentsMD := flagAgentsMD(cmd); agentsMD != "" {
+		cfg.AgentsMD.Path = agentsMD
 	}
 
 	authMgr := createAuthManager()

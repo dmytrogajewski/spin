@@ -9,6 +9,7 @@ import (
 )
 
 func TestNewApprovalDialog(t *testing.T) {
+	t.Parallel()
 	req := security.ApprovalRequest{
 		ID:        "test-id",
 		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
@@ -33,6 +34,7 @@ func TestNewApprovalDialog(t *testing.T) {
 }
 
 func TestApprovalDialog_Show_Approve(t *testing.T) {
+	t.Parallel()
 	req := security.ApprovalRequest{
 		ID:        "test-id",
 		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
@@ -82,6 +84,7 @@ func TestApprovalDialog_Show_Approve(t *testing.T) {
 }
 
 func TestApprovalDialog_Show_Deny(t *testing.T) {
+	t.Parallel()
 	req := security.ApprovalRequest{
 		ID:        "test-id",
 		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
@@ -126,6 +129,7 @@ func TestApprovalDialog_Show_Deny(t *testing.T) {
 }
 
 func TestApprovalDialog_HandleKey(t *testing.T) {
+	t.Parallel()
 	req := security.ApprovalRequest{
 		ID:        "test-id",
 		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
@@ -152,6 +156,7 @@ func TestApprovalDialog_HandleKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			closed := dialog.HandleKey(string(tt.key))
 			if closed != tt.shouldClose {
 				t.Errorf("HandleKey(%c) returned %v, expected %v", tt.key, closed, tt.shouldClose)
@@ -161,6 +166,7 @@ func TestApprovalDialog_HandleKey(t *testing.T) {
 }
 
 func TestApprovalDialog_Render(t *testing.T) {
+	t.Parallel()
 	req := security.ApprovalRequest{
 		ID:        "test-id",
 		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
@@ -179,6 +185,7 @@ func TestApprovalDialog_Render(t *testing.T) {
 }
 
 func TestApprovalDialog_Render_LongContent(t *testing.T) {
+	t.Parallel()
 	req := security.ApprovalRequest{
 		ID:        "test-id",
 		Command:   &security.Command{Raw: "rm -rf /very/long/path/that/exceeds/normal/terminal/width/and/should/be/truncated"},
@@ -197,6 +204,7 @@ func TestApprovalDialog_Render_LongContent(t *testing.T) {
 }
 
 func TestApprovalDialog_ConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	req := security.ApprovalRequest{
 		ID:        "test-id",
 		Command:   &security.Command{Raw: "rm -rf /tmp/test"},
@@ -233,6 +241,7 @@ func TestApprovalDialog_ConcurrentAccess(t *testing.T) {
 }
 
 func TestApprovalDialog_MultipleResponses(t *testing.T) {
+	t.Parallel()
 	req := security.ApprovalRequest{
 		ID:        "test-id",
 		Command:   &security.Command{Raw: "rm -rf /tmp/test"},

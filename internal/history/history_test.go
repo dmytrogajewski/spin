@@ -10,6 +10,8 @@ import (
 )
 
 func TestNewHistory(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 	if h == nil {
 		t.Fatal("NewHistory returned nil")
@@ -21,6 +23,8 @@ func TestNewHistory(t *testing.T) {
 }
 
 func TestNewHistory_NilTokenizer(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, nil)
 	if h == nil {
 		t.Fatal("NewHistory returned nil")
@@ -32,6 +36,8 @@ func TestNewHistory_NilTokenizer(t *testing.T) {
 }
 
 func TestNewHistoryWithDefaults(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistoryWithDefaults()
 	if h == nil {
 		t.Fatal("NewHistoryWithDefaults returned nil")
@@ -43,6 +49,8 @@ func TestNewHistoryWithDefaults(t *testing.T) {
 }
 
 func TestHistory_AddMessage(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
 	err := h.AddMessage(message.Message{
@@ -72,6 +80,8 @@ func TestHistory_AddMessage(t *testing.T) {
 }
 
 func TestHistory_AddMessage_EmptyRole(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
 	err := h.AddMessage(message.Message{
@@ -83,6 +93,8 @@ func TestHistory_AddMessage_EmptyRole(t *testing.T) {
 }
 
 func TestHistory_AddSystemMessage(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
 	err := h.AddSystemMessage("You are helpful.")
@@ -101,6 +113,8 @@ func TestHistory_AddSystemMessage(t *testing.T) {
 }
 
 func TestHistory_AddUserMessage(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
 	err := h.AddUserMessage("Hello!")
@@ -119,6 +133,8 @@ func TestHistory_AddUserMessage(t *testing.T) {
 }
 
 func TestHistory_TokenCount(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
 	_ = h.AddMessage(message.Message{
@@ -139,6 +155,8 @@ func TestHistory_TokenCount(t *testing.T) {
 }
 
 func TestHistory_Messages_DefensiveCopy(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 	_ = h.AddUserMessage("Hello")
 
@@ -152,7 +170,9 @@ func TestHistory_Messages_DefensiveCopy(t *testing.T) {
 	}
 }
 
-func TestHistory_SetCompressor(_ *testing.T) {
+func TestHistory_SetCompressor(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 	classifier := compress.NewClassifier()
 	compressor := compress.NewHybridCompressor(classifier, compress.DefaultCompressorConfig())
@@ -161,7 +181,9 @@ func TestHistory_SetCompressor(_ *testing.T) {
 	// No way to verify directly, but should not panic.
 }
 
-func TestHistory_SetCompressionConfig(_ *testing.T) {
+func TestHistory_SetCompressionConfig(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 	cfg := CompressionConfig{
 		Enabled:     true,
@@ -174,6 +196,8 @@ func TestHistory_SetCompressionConfig(_ *testing.T) {
 }
 
 func TestDefaultCompressionConfig(t *testing.T) {
+	t.Parallel()
+
 	cfg := DefaultCompressionConfig()
 	if !cfg.Enabled {
 		t.Error("expected Enabled to be true by default")
@@ -189,6 +213,8 @@ func TestDefaultCompressionConfig(t *testing.T) {
 }
 
 func TestHistory_CompressionTrigger(t *testing.T) {
+	t.Parallel()
+
 	// Create history with small token limit.
 	h := NewHistory(100, &tokenizer.SimpleTokenizer{})
 
@@ -237,6 +263,8 @@ func TestHistory_CompressionTrigger(t *testing.T) {
 }
 
 func TestHistory_CompressionDisabled(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(100, &tokenizer.SimpleTokenizer{})
 
 	// Set up compressor but disable compression.
@@ -262,6 +290,8 @@ func TestHistory_CompressionDisabled(t *testing.T) {
 }
 
 func TestHistory_NoCompressorSet(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(100, &tokenizer.SimpleTokenizer{})
 
 	// Enable compression but no compressor set.
@@ -301,6 +331,8 @@ func (m *mockCompressor) Name() string {
 }
 
 func TestHistory_CompressionCallsCompressor(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(100, &tokenizer.SimpleTokenizer{})
 
 	mock := &mockCompressor{}
@@ -323,6 +355,8 @@ func TestHistory_CompressionCallsCompressor(t *testing.T) {
 }
 
 func TestHistory_MessagesForLLM(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 	_ = h.AddSystemMessage("System")
 	_ = h.AddUserMessage("User")
@@ -334,6 +368,8 @@ func TestHistory_MessagesForLLM(t *testing.T) {
 }
 
 func TestHistory_ToolCallTokenCounting(t *testing.T) {
+	t.Parallel()
+
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
 	err := h.AddMessage(message.Message{

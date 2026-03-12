@@ -16,6 +16,8 @@ import (
 )
 
 func TestOllamaStreaming(t *testing.T) {
+	t.Parallel()
+
 	const testModel = "qwen2.5-coder:1.5b"
 
 	// Define the streaming responses the mock server will return.

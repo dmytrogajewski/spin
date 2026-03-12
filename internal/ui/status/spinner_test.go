@@ -8,6 +8,7 @@ import (
 )
 
 func TestSpinner_Frame(t *testing.T) {
+	t.Parallel()
 	s := NewSpinner(SpinnerDots)
 
 	// Not running - should return empty.
@@ -42,6 +43,7 @@ func TestSpinner_Frame(t *testing.T) {
 }
 
 func TestSpinner_StartStop(t *testing.T) {
+	t.Parallel()
 	s := NewSpinner(SpinnerCircle)
 
 	if s.IsRunning() {
@@ -66,6 +68,7 @@ func TestSpinner_StartStop(t *testing.T) {
 }
 
 func TestSpinner_DoubleStart(t *testing.T) {
+	t.Parallel()
 	s := NewSpinner(SpinnerBraille)
 
 	ctx := t.Context()
@@ -82,6 +85,7 @@ func TestSpinner_DoubleStart(t *testing.T) {
 }
 
 func TestSpinner_UpdateCallback(t *testing.T) {
+	t.Parallel()
 	s := NewSpinner(SpinnerDots)
 	s.SetInterval(20 * time.Millisecond)
 
@@ -107,6 +111,7 @@ func TestSpinner_UpdateCallback(t *testing.T) {
 }
 
 func TestSpinner_Styles(t *testing.T) {
+	t.Parallel()
 	styles := []SpinnerStyle{
 		SpinnerDots,
 		SpinnerBraille,
@@ -132,6 +137,7 @@ func TestSpinner_Styles(t *testing.T) {
 }
 
 func TestSpinner_SetStyle(t *testing.T) {
+	t.Parallel()
 	s := NewSpinner(SpinnerDots)
 
 	// Change style.
@@ -156,6 +162,7 @@ func TestSpinner_SetStyle(t *testing.T) {
 }
 
 func TestSpinner_ContextCancel(t *testing.T) {
+	t.Parallel()
 	s := NewSpinner(SpinnerDots)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -179,6 +186,7 @@ func TestSpinner_ContextCancel(t *testing.T) {
 }
 
 func TestActivitySpinner_ShouldAnimate(t *testing.T) {
+	t.Parallel()
 	as := NewActivitySpinner(SpinnerDots)
 
 	tests := []struct {
@@ -206,6 +214,7 @@ func TestActivitySpinner_ShouldAnimate(t *testing.T) {
 }
 
 func TestActivitySpinner_UpdateState(t *testing.T) {
+	t.Parallel()
 	as := NewActivitySpinner(SpinnerDots)
 
 	ctx := t.Context()
@@ -233,6 +242,7 @@ func TestActivitySpinner_UpdateState(t *testing.T) {
 }
 
 func TestActivitySpinner_AddActiveState(t *testing.T) {
+	t.Parallel()
 	as := NewActivitySpinner(SpinnerDots)
 
 	// Custom state not active by default.

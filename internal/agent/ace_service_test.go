@@ -18,6 +18,7 @@ func contains(s, substr string) bool {
 
 // Test ACEService creation with valid config.
 func TestNewACEService_Enabled(t *testing.T) {
+	t.Parallel()
 	cfg := &ACEConfig{
 		Enabled:      true,
 		PlaybookPath: "/tmp/test-playbook.json",
@@ -39,6 +40,7 @@ func TestNewACEService_Enabled(t *testing.T) {
 
 // Test ACEService creation with disabled config returns no-op.
 func TestNewACEService_Disabled(t *testing.T) {
+	t.Parallel()
 	cfg := &ACEConfig{
 		Enabled: false,
 	}
@@ -67,6 +69,7 @@ func TestNewACEService_Disabled(t *testing.T) {
 
 // Test SavePlaybook saves to configured path.
 func TestACEService_SavePlaybook(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	playbookPath := tmpDir + "/test-playbook.json"
 
@@ -99,6 +102,7 @@ func TestACEService_SavePlaybook(t *testing.T) {
 
 // Test BuildPrompt creates system prompt with bullets.
 func TestACEService_BuildPrompt(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	cfg := &ACEConfig{
@@ -157,6 +161,7 @@ func TestACEService_BuildPrompt(t *testing.T) {
 
 // Test BuildPrompt when disabled returns base prompt.
 func TestACEService_BuildPrompt_Disabled(t *testing.T) {
+	t.Parallel()
 	cfg := &ACEConfig{
 		Enabled: false,
 	}
@@ -182,6 +187,7 @@ func TestACEService_BuildPrompt_Disabled(t *testing.T) {
 
 // Test ParseFeedback extracts HELPFUL/HARMFUL markers.
 func TestACEService_ParseFeedback(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	cfg := &ACEConfig{
@@ -232,6 +238,7 @@ EXPLANATION: B0 and B2 were directly applicable, B1 suggested the wrong approach
 
 // Test ParseFeedback when disabled returns nil.
 func TestACEService_ParseFeedback_Disabled(t *testing.T) {
+	t.Parallel()
 	cfg := &ACEConfig{
 		Enabled: false,
 	}
@@ -254,6 +261,7 @@ func TestACEService_ParseFeedback_Disabled(t *testing.T) {
 
 // Test UpdateBullets increments counters based on feedback.
 func TestACEService_UpdateBullets(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	cfg := &ACEConfig{

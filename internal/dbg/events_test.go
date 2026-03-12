@@ -16,6 +16,8 @@ import (
 var errWriteFailed = errors.New("write failed")
 
 func TestEventLogger_New(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name   string
 		format string
@@ -28,6 +30,8 @@ func TestEventLogger_New(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			logger := NewEventLogger(tt.format, tt.filter)
 			if logger == nil {
 				t.Fatal("expected non-nil logger")
@@ -41,6 +45,8 @@ func TestEventLogger_New(t *testing.T) {
 }
 
 func TestEventLogger_ShouldLog(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		filter   []string
@@ -69,6 +75,8 @@ func TestEventLogger_ShouldLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			logger := NewEventLogger("text", tt.filter)
 
 			result := logger.shouldLog(tt.event)
@@ -80,6 +88,8 @@ func TestEventLogger_ShouldLog(t *testing.T) {
 }
 
 func TestEventLogger_LogEvent_Text(t *testing.T) {
+	t.Parallel()
+
 	logger := NewEventLogger("text", []string{})
 
 	// Capture stderr.
@@ -109,6 +119,8 @@ func TestEventLogger_LogEvent_Text(t *testing.T) {
 }
 
 func TestEventLogger_LogEvent_JSON(t *testing.T) {
+	t.Parallel()
+
 	logger := NewEventLogger("json", []string{})
 
 	// Capture stderr.
@@ -144,6 +156,8 @@ func TestEventLogger_LogEvent_JSON(t *testing.T) {
 }
 
 func TestEventLogger_Run(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -161,6 +175,8 @@ func TestEventLogger_Run(t *testing.T) {
 }
 
 func TestEventLogger_Run_Success(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -182,6 +198,8 @@ func TestEventLogger_Run_Success(t *testing.T) {
 }
 
 func TestEventLogger_Run_WithFilter(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -203,6 +221,8 @@ func TestEventLogger_Run_WithFilter(t *testing.T) {
 }
 
 func TestEventLogger_Run_JSONFormat(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -224,6 +244,8 @@ func TestEventLogger_Run_JSONFormat(t *testing.T) {
 }
 
 func TestEventLogger_Run_EmptyPrompt(t *testing.T) {
+	t.Parallel()
+
 	logger := NewEventLogger("text", []string{})
 
 	var buf bytes.Buffer
@@ -243,6 +265,8 @@ func TestEventLogger_Run_EmptyPrompt(t *testing.T) {
 }
 
 func TestEventLogger_Filter_Multiple(t *testing.T) {
+	t.Parallel()
+
 	logger := NewEventLogger("text", []string{"tool_call_start", "tool_call_complete"})
 
 	tests := []struct {
@@ -257,6 +281,8 @@ func TestEventLogger_Filter_Multiple(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.eventType.String(), func(t *testing.T) {
+			t.Parallel()
+
 			event := events.Event{Type: tt.eventType}
 
 			result := logger.shouldLog(event)
@@ -268,6 +294,8 @@ func TestEventLogger_Filter_Multiple(t *testing.T) {
 }
 
 func TestEventLogger_LogEventJSON(t *testing.T) {
+	t.Parallel()
+
 	logger := NewEventLogger("json", []string{})
 
 	var buf bytes.Buffer
@@ -299,6 +327,8 @@ func TestEventLogger_LogEventJSON(t *testing.T) {
 }
 
 func TestEventLogger_LogEventText(t *testing.T) {
+	t.Parallel()
+
 	logger := NewEventLogger("text", []string{})
 
 	var buf bytes.Buffer
@@ -327,6 +357,8 @@ func TestEventLogger_LogEventText(t *testing.T) {
 }
 
 func TestEventLogger_LogEventJSON_InvalidData(t *testing.T) {
+	t.Parallel()
+
 	logger := NewEventLogger("json", []string{})
 
 	var buf bytes.Buffer
@@ -355,7 +387,9 @@ func TestEventLogger_LogEventJSON_InvalidData(t *testing.T) {
 	}
 }
 
-func TestEventLogger_LogEventJSON_EncodeError(_ *testing.T) {
+func TestEventLogger_LogEventJSON_EncodeError(t *testing.T) {
+	t.Parallel()
+
 	logger := NewEventLogger("json", []string{})
 
 	// Create event with unmarshalable output structure
@@ -380,6 +414,8 @@ func TestEventLogger_LogEventJSON_EncodeError(_ *testing.T) {
 }
 
 func TestEventLogger_LogEventJSON_MarshalError(t *testing.T) {
+	t.Parallel()
+
 	logger := NewEventLogger("json", []string{})
 
 	var buf bytes.Buffer
@@ -416,6 +452,8 @@ func (fw *failingWriter) Write(_ []byte) (n int, err error) {
 }
 
 func TestEventLogger_Concurrency(t *testing.T) {
+	t.Parallel()
+
 	logger := NewEventLogger("text", []string{})
 
 	var buf bytes.Buffer

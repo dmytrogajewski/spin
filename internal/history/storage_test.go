@@ -11,6 +11,8 @@ import (
 )
 
 func TestFileStorage_SaveAndLoad(t *testing.T) {
+	t.Parallel()
+
 	// Create temp directory.
 	tmpDir, err := os.MkdirTemp("", "history-test-*")
 	if err != nil {
@@ -111,6 +113,8 @@ func TestFileStorage_SaveAndLoad(t *testing.T) {
 }
 
 func TestFileStorage_Delete(t *testing.T) {
+	t.Parallel()
+
 	tmpDir, err := os.MkdirTemp("", "history-test-*")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
@@ -160,6 +164,8 @@ func TestFileStorage_Delete(t *testing.T) {
 }
 
 func TestFileStorage_LoadNotFound(t *testing.T) {
+	t.Parallel()
+
 	tmpDir, err := os.MkdirTemp("", "history-test-*")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
@@ -178,6 +184,8 @@ func TestFileStorage_LoadNotFound(t *testing.T) {
 }
 
 func TestFileStorage_EmptySessionID(t *testing.T) {
+	t.Parallel()
+
 	tmpDir, err := os.MkdirTemp("", "history-test-*")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
@@ -212,6 +220,8 @@ func TestFileStorage_EmptySessionID(t *testing.T) {
 }
 
 func TestFileStorage_HomeExpansion(t *testing.T) {
+	t.Parallel()
+
 	// Skip if HOME not set.
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -259,6 +269,8 @@ func TestFileStorage_HomeExpansion(t *testing.T) {
 }
 
 func TestHistory_SaveAndLoad(t *testing.T) {
+	t.Parallel()
+
 	tmpDir, err := os.MkdirTemp("", "history-test-*")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
@@ -310,6 +322,8 @@ func TestHistory_SaveAndLoad(t *testing.T) {
 }
 
 func TestHistory_ToFromData(t *testing.T) {
+	t.Parallel()
+
 	history := NewHistory(8192, &tokenizer.SimpleTokenizer{})
 	_ = history.AddSystemMessage("System prompt")
 	_ = history.AddUserMessage("User input")
@@ -364,6 +378,8 @@ func TestHistory_ToFromData(t *testing.T) {
 }
 
 func TestHistory_FromData_NilError(t *testing.T) {
+	t.Parallel()
+
 	history := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
 	err := history.FromData(nil)
@@ -373,6 +389,8 @@ func TestHistory_FromData_NilError(t *testing.T) {
 }
 
 func TestFileStorage_AtomicWrite(t *testing.T) {
+	t.Parallel()
+
 	tmpDir, err := os.MkdirTemp("", "history-test-*")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)

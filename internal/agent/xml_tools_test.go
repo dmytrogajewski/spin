@@ -9,6 +9,7 @@ import (
 )
 
 func TestParseToolCallsFromXML(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		content string
@@ -54,6 +55,8 @@ func TestParseToolCallsFromXML(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := parseToolCallsFromXML(tt.content)
 			assert.Equal(t, tt.want, len(got))
 

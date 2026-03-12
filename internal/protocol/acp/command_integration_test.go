@@ -22,7 +22,10 @@ import (
 
 // TestPrompt_CommandExecution tests command execution via Prompt method.
 func TestPrompt_CommandExecution(t *testing.T) {
+	t.Parallel(
 	// Create agent with all dependencies.
+	)
+
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
@@ -70,6 +73,7 @@ func TestPrompt_CommandExecution(t *testing.T) {
 	sessionID := sessionResp.SessionId
 
 	t.Run("execute_mode_command", func(t *testing.T) {
+		t.Parallel()
 		promptReq := acp.PromptRequest{
 			SessionId: sessionID,
 			Prompt: []acp.ContentBlock{
@@ -100,6 +104,7 @@ func TestPrompt_CommandExecution(t *testing.T) {
 	})
 
 	t.Run("execute_help_command", func(t *testing.T) {
+		t.Parallel()
 		promptReq := acp.PromptRequest{
 			SessionId: sessionID,
 			Prompt: []acp.ContentBlock{
@@ -128,6 +133,7 @@ func TestPrompt_CommandExecution(t *testing.T) {
 	})
 
 	t.Run("execute_exit_command_error", func(t *testing.T) {
+		t.Parallel()
 		promptReq := acp.PromptRequest{
 			SessionId: sessionID,
 			Prompt: []acp.ContentBlock{
@@ -145,6 +151,7 @@ func TestPrompt_CommandExecution(t *testing.T) {
 
 // TestNewSession_SendsAvailableCommandsUpdate tests that NewSession sends available commands notification.
 func TestNewSession_SendsAvailableCommandsUpdate(t *testing.T) {
+	t.Parallel()
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),

@@ -16,6 +16,7 @@ import (
 
 // TestGetAvailableModes tests that all Spin task modes are mapped to ACP session modes.
 func TestGetAvailableModes(t *testing.T) {
+	t.Parallel()
 	modes := getAvailableModes()
 
 	require.Len(t, modes, 4, "should have 4 modes")
@@ -53,12 +54,14 @@ func TestGetAvailableModes(t *testing.T) {
 
 // TestGetDefaultMode tests that default mode is "regular".
 func TestGetDefaultMode(t *testing.T) {
+	t.Parallel()
 	defaultMode := getDefaultMode()
 	assert.Equal(t, acp.SessionModeId("regular"), defaultMode)
 }
 
 // TestNewSession_IncludesModeState tests that NewSessionResponse includes SessionModeState.
 func TestNewSession_IncludesModeState(t *testing.T) {
+	t.Parallel()
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		createTestAgent(t),
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
@@ -84,6 +87,7 @@ func TestNewSession_IncludesModeState(t *testing.T) {
 
 // TestSetSessionMode_SessionNotFound tests error when session doesn't exist.
 func TestSetSessionMode_SessionNotFound(t *testing.T) {
+	t.Parallel()
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		createTestAgent(t),
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
@@ -104,6 +108,7 @@ func TestSetSessionMode_SessionNotFound(t *testing.T) {
 
 // TestSetSessionMode_InvalidMode tests error when mode ID is invalid.
 func TestSetSessionMode_InvalidMode(t *testing.T) {
+	t.Parallel()
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		createTestAgent(t),
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
@@ -132,6 +137,7 @@ func TestSetSessionMode_InvalidMode(t *testing.T) {
 
 // TestSetSessionMode_Success tests successful mode change.
 func TestSetSessionMode_Success(t *testing.T) {
+	t.Parallel()
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		createTestAgent(t),
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
@@ -168,6 +174,7 @@ func TestSetSessionMode_Success(t *testing.T) {
 
 // TestSetSessionMode_AllModes tests that all valid modes can be set.
 func TestSetSessionMode_AllModes(t *testing.T) {
+	t.Parallel()
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		createTestAgent(t),
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
@@ -209,6 +216,7 @@ func TestSetSessionMode_AllModes(t *testing.T) {
 
 // TestSetSessionMode_SendsNotification tests that mode change sends notification.
 func TestSetSessionMode_SendsNotification(t *testing.T) {
+	t.Parallel()
 	acpAgent, err := NewSpinACPAgentWithStorage(
 		&agent.Agent{},
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),

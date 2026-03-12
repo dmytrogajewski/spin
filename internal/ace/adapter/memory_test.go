@@ -13,6 +13,8 @@ import (
 )
 
 func TestMemoryConfig_Defaults(t *testing.T) {
+	t.Parallel()
+
 	config := DefaultMemoryConfig()
 
 	assert.Equal(t, 1000, config.MaxBullets)
@@ -21,6 +23,8 @@ func TestMemoryConfig_Defaults(t *testing.T) {
 }
 
 func TestMemoryManager_ShouldRefine_BelowThreshold(t *testing.T) {
+	t.Parallel()
+
 	config := MemoryConfig{
 		MaxBullets:     1000,
 		RefinementAt:   900,
@@ -36,6 +40,8 @@ func TestMemoryManager_ShouldRefine_BelowThreshold(t *testing.T) {
 }
 
 func TestMemoryManager_ShouldRefine_AboveThreshold(t *testing.T) {
+	t.Parallel()
+
 	config := MemoryConfig{
 		MaxBullets:     1000,
 		RefinementAt:   900,
@@ -51,6 +57,8 @@ func TestMemoryManager_ShouldRefine_AboveThreshold(t *testing.T) {
 }
 
 func TestMemoryManager_CalculateUtility(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		helpful  int
@@ -87,6 +95,8 @@ func TestMemoryManager_CalculateUtility(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			b, err := bullet.New("test content")
 			require.NoError(t, err)
 
@@ -106,6 +116,8 @@ func TestMemoryManager_CalculateUtility(t *testing.T) {
 }
 
 func TestMemoryManager_Prune(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	config := MemoryConfig{
 		MaxBullets:     1000,
