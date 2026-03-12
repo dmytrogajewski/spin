@@ -325,19 +325,9 @@ func TestConfigPathShowAll(t *testing.T) {
 func TestConfigEdit(t *testing.T) {
 	t.Run("fails when no editor found", func(t *testing.T) {
 		// Clear all editor env vars (cannot use t.Parallel — modifies process-global env).
-		oldEditor := os.Getenv("EDITOR")
-		oldVisual := os.Getenv("VISUAL")
-		oldPath := os.Getenv("PATH")
-
-		os.Unsetenv("EDITOR")
-		os.Unsetenv("VISUAL")
-		os.Setenv("PATH", "/nonexistent") // Make sure no editors in path.
-
-		defer func() {
-			os.Setenv("EDITOR", oldEditor)
-			os.Setenv("VISUAL", oldVisual)
-			os.Setenv("PATH", oldPath)
-		}()
+		t.Setenv("EDITOR", "")
+		t.Setenv("VISUAL", "")
+		t.Setenv("PATH", "/nonexistent") // Make sure no editors in path.
 
 		tmpDir := t.TempDir()
 		configFile := filepath.Join(tmpDir, "spin.yaml")
@@ -395,26 +385,9 @@ func TestGetEditor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save and restore env vars.
-			oldEditor := os.Getenv("EDITOR")
-			oldVisual := os.Getenv("VISUAL")
-
-			defer func() {
-				os.Setenv("EDITOR", oldEditor)
-				os.Setenv("VISUAL", oldVisual)
-			}()
-
-			// Set test env vars.
-			os.Unsetenv("EDITOR")
-			os.Unsetenv("VISUAL")
-
-			if tt.editorEnv != "" {
-				os.Setenv("EDITOR", tt.editorEnv)
-			}
-
-			if tt.visualEnv != "" {
-				os.Setenv("VISUAL", tt.visualEnv)
-			}
+			// Set test env vars (t.Setenv handles save/restore automatically).
+			t.Setenv("EDITOR", tt.editorEnv)
+			t.Setenv("VISUAL", tt.visualEnv)
 
 			editor := getEditor()
 

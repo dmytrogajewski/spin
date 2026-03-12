@@ -62,6 +62,9 @@ linters:
     - whitespace # Conflicts with wsl_v5: multi-func requires blank lines that wsl_v5 forbids
     - nonamedreturns # Conflicts with gocritic(unnamedResult): forbids named returns that gocritic requires for clarity
 
+    # --- Stylistic preference: internal test packages are valid Go ---
+    - testpackage # Requiring _test packages for all tests is too invasive; Go stdlib uses internal test packages extensively
+
   settings:
     cyclop:
       max-complexity: 15

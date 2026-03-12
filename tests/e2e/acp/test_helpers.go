@@ -276,12 +276,5 @@ func waitForInitialization(t *testing.T, conn *acp.ClientSideConnection) error {
 func createTestWorkspace(t *testing.T) string {
 	t.Helper()
 
-	dir, err := os.MkdirTemp("", "spin-acp-e2e-*")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		os.RemoveAll(dir)
-	})
-
-	return dir
+	return t.TempDir()
 }

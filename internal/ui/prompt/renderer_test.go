@@ -404,6 +404,8 @@ func TestRenderer_Redraw_EdgeCases(t *testing.T) {
 		{
 			name: "zero width terminal",
 			fn: func(t *testing.T) {
+				t.Helper()
+
 				var buf bytes.Buffer
 
 				r := NewTermRenderer(&buf, 0, "> ")
@@ -419,6 +421,8 @@ func TestRenderer_Redraw_EdgeCases(t *testing.T) {
 		{
 			name: "negative width terminal",
 			fn: func(t *testing.T) {
+				t.Helper()
+
 				var buf bytes.Buffer
 
 				r := NewTermRenderer(&buf, -10, "> ")
@@ -434,6 +438,8 @@ func TestRenderer_Redraw_EdgeCases(t *testing.T) {
 		{
 			name: "very long buffer",
 			fn: func(t *testing.T) {
+				t.Helper()
+
 				var buf bytes.Buffer
 
 				r := NewTermRenderer(&buf, 80, "> ")
@@ -458,6 +464,8 @@ func TestRenderer_Redraw_EdgeCases(t *testing.T) {
 		{
 			name: "empty prefix",
 			fn: func(t *testing.T) {
+				t.Helper()
+
 				var buf bytes.Buffer
 
 				r := NewTermRenderer(&buf, 80, "")

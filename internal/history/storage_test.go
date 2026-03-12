@@ -14,11 +14,7 @@ func TestFileStorage_SaveAndLoad(t *testing.T) {
 	t.Parallel()
 
 	// Create temp directory.
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	storage, err := NewFileStorage(tmpDir)
 	if err != nil {
@@ -115,11 +111,7 @@ func TestFileStorage_SaveAndLoad(t *testing.T) {
 func TestFileStorage_Delete(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	storage, err := NewFileStorage(tmpDir)
 	if err != nil {
@@ -166,11 +158,7 @@ func TestFileStorage_Delete(t *testing.T) {
 func TestFileStorage_LoadNotFound(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	storage, err := NewFileStorage(tmpDir)
 	if err != nil {
@@ -186,11 +174,7 @@ func TestFileStorage_LoadNotFound(t *testing.T) {
 func TestFileStorage_EmptySessionID(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	storage, err := NewFileStorage(tmpDir)
 	if err != nil {
@@ -229,11 +213,7 @@ func TestFileStorage_HomeExpansion(t *testing.T) {
 	}
 
 	// Use a unique subdirectory in temp to avoid conflicts.
-	tmpDir, err := os.MkdirTemp("", "history-home-test-*")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	// Create storage with path relative to tmpDir (not home, to avoid polluting home).
 	storage, err := NewFileStorage(tmpDir)
@@ -271,11 +251,7 @@ func TestFileStorage_HomeExpansion(t *testing.T) {
 func TestHistory_SaveAndLoad(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	storage, err := NewFileStorage(tmpDir)
 	if err != nil {
@@ -391,11 +367,7 @@ func TestHistory_FromData_NilError(t *testing.T) {
 func TestFileStorage_AtomicWrite(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "history-test-*")
-	if err != nil {
-		t.Fatalf("create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	storage, err := NewFileStorage(tmpDir)
 	if err != nil {

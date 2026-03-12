@@ -25,6 +25,8 @@ func TestNewProvider(t *testing.T) {
 			cfg:     Config{Model: "llama2"},
 			wantErr: false,
 			checkFn: func(t *testing.T, p *Provider) {
+				t.Helper()
+
 				if p.Provider == nil {
 					t.Error("Provider.Provider should not be nil")
 				}
@@ -43,6 +45,8 @@ func TestNewProvider(t *testing.T) {
 			cfg:     Config{},
 			wantErr: false,
 			checkFn: func(t *testing.T, p *Provider) {
+				t.Helper()
+
 				if p.Provider == nil {
 					t.Error("Provider.Provider should not be nil")
 				}

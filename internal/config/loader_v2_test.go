@@ -216,10 +216,7 @@ agent:
 func TestLoad_EmptySource(t *testing.T) {
 	// Change to temp dir to avoid picking up real config files.
 	tmpDir := t.TempDir()
-	origDir, _ := os.Getwd()
-
-	require.NoError(t, os.Chdir(tmpDir))
-	t.Cleanup(func() { _ = os.Chdir(origDir) })
+	t.Chdir(tmpDir)
 
 	// Also set HOME to temp dir to avoid ~/.spin/spin.yaml.
 	t.Setenv("HOME", tmpDir)

@@ -17,11 +17,7 @@ import (
 func createTestDir(t *testing.T) string {
 	t.Helper()
 
-	tmpDir, err := os.MkdirTemp("", "filesearch-searcher-*")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-
-	return tmpDir
+	return t.TempDir()
 }
 
 func createTestFiles(t *testing.T, root string, files []string) {

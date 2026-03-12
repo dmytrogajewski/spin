@@ -318,6 +318,8 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 				Output:  "result data",
 			},
 			check: func(t *testing.T, data map[string]any) {
+				t.Helper()
+
 				if data["id"] != "call_123" {
 					t.Errorf("JSON id = %v, want call_123", data["id"])
 				}
@@ -339,6 +341,8 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 				Error:   "operation failed",
 			},
 			check: func(t *testing.T, data map[string]any) {
+				t.Helper()
+
 				if data["error"] != "operation failed" {
 					t.Errorf("JSON error = %v, want operation failed", data["error"])
 				}
@@ -351,6 +355,8 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 				ExitCode: 1,
 			},
 			check: func(t *testing.T, data map[string]any) {
+				t.Helper()
+
 				// exit_code should be present when non-zero.
 				if code, ok := data["exit_code"]; ok {
 					if code != float64(1) {

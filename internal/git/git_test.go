@@ -86,20 +86,10 @@ func setupTestRepoWithModifications(t *testing.T) string {
 }
 
 // setupNonRepo creates a directory that is not a Git repository.
-// It uses os.MkdirTemp with the system temp dir to ensure the directory
-// is outside any parent git repository (since GOTMPDIR may be set to
-// a directory inside the project).
 func setupNonRepo(t *testing.T) string {
 	t.Helper()
 
-	tmpDir, err := os.MkdirTemp("", "spin-test-nonrepo-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-
-	return tmpDir
+	return t.TempDir()
 }
 
 // Test Discovery.
@@ -120,6 +110,8 @@ func TestDiscover(t *testing.T) {
 		{
 			name: "nested directory",
 			setup: func(t *testing.T) string {
+				t.Helper()
+
 				tmpDir := setupTestRepo(t)
 
 				nestedDir := filepath.Join(tmpDir, "subdir", "deep")

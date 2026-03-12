@@ -17,6 +17,8 @@ func TestStatus(t *testing.T) {
 		{
 			name: "clean repo",
 			setup: func(t *testing.T) *Repository {
+				t.Helper()
+
 				tmpDir := setupTestRepo(t)
 
 				repo, err := Discover(context.Background(), tmpDir)
@@ -27,6 +29,8 @@ func TestStatus(t *testing.T) {
 				return repo
 			},
 			verify: func(t *testing.T, s *Status) {
+				t.Helper()
+
 				if len(s.ModifiedFiles) != 0 {
 					t.Errorf("expected no modified files, got %d", len(s.ModifiedFiles))
 				}
@@ -51,6 +55,8 @@ func TestStatus(t *testing.T) {
 		{
 			name: "modified files",
 			setup: func(t *testing.T) *Repository {
+				t.Helper()
+
 				tmpDir := setupTestRepoWithModifications(t)
 
 				repo, err := Discover(context.Background(), tmpDir)
@@ -61,6 +67,8 @@ func TestStatus(t *testing.T) {
 				return repo
 			},
 			verify: func(t *testing.T, s *Status) {
+				t.Helper()
+
 				if len(s.ModifiedFiles) == 0 {
 					t.Error("expected modified files")
 				}

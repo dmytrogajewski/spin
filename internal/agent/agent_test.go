@@ -1273,6 +1273,8 @@ func BenchmarkAgent_ProcessToolCall(b *testing.B) {
 
 // newBenchAgent creates an agent optimized for benchmarking.
 func newBenchAgent(b *testing.B) *Agent {
+	b.Helper()
+
 	// Create minimal services for benchmarking.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
@@ -2795,6 +2797,8 @@ func (m *MockLLMProvider) Close() error {
 
 // createTestAgentWithMockLLM creates a test agent with mock LLM provider.
 func createTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *Agent {
+	t.Helper()
+
 	// Create required services.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)

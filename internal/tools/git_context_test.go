@@ -2,24 +2,14 @@ package tools
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 )
 
 func TestGitContextTool_NotARepository(t *testing.T) {
-	t.Parallel(
-	// Use os.MkdirTemp with empty string to use system temp dir,
-	// ensuring the directory is outside any parent git repository
-	// (since GOTMPDIR may be set to a directory inside the project).
-	)
+	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "spin-test-nonrepo-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	tmpDir := t.TempDir()
 
 	tool := NewGitContextTool(tmpDir)
 

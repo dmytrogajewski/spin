@@ -13,11 +13,10 @@ func TestNewWithNonTerminal(t *testing.T) {
 	// Use a regular file FD (guaranteed not terminal).
 	)
 
-	tmpFile, err := os.CreateTemp("", "tty_test")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "tty_test")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
 	_, err = New(int(tmpFile.Fd()), int(tmpFile.Fd()))
@@ -254,11 +253,10 @@ func TestConcurrentResize(t *testing.T) {
 // TestErrNotATTY verifies error type for non-TTY.
 func TestErrNotATTY(t *testing.T) {
 	t.Parallel()
-	tmpFile, err := os.CreateTemp("", "tty_test")
+	tmpFile, err := os.CreateTemp(t.TempDir(), "tty_test")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
 	_, err = New(int(tmpFile.Fd()), int(tmpFile.Fd()))

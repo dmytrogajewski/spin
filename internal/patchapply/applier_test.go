@@ -13,14 +13,7 @@ import (
 func createTempWorkspace(t *testing.T) string {
 	t.Helper()
 
-	dir, err := os.MkdirTemp("", "applier-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-
-	t.Cleanup(func() { os.RemoveAll(dir) })
-
-	return dir
+	return t.TempDir()
 }
 
 func createFile(t *testing.T, workspace, path, content string) {
