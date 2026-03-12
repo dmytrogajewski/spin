@@ -1,3 +1,4 @@
+// Package playbook provides playbook management for agent workflows.
 package playbook
 
 import (
@@ -9,6 +10,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/events"
+)
+
+var (
+	ErrBulletCannotBeNil = errors.New("bullet cannot be nil")
+	ErrBulletWithIdAlreadyExists = errors.New("bullet with ID  already exists")
+	ErrBulletCannotBeNil2 = errors.New("bullet cannot be nil")
+	ErrBulletWithIdNotFound = errors.New("bullet with ID  not found")
 )
 
 // Playbook manages a collection of context bullets.
@@ -78,9 +86,9 @@ func (p *Playbook) Stats() Stats {
 
 // Add adds a new bullet to the playbook.
 // Returns an error if a bullet with the same ID already exists.
-func (p *Playbook) Add(ctx context.Context, b *bullet.Bullet) error {
+func (p *Playbook) Add(_ context.Context, b *bullet.Bullet) error {
 	if b == nil {
-		return errors.New("bullet cannot be nil")
+		return ErrBulletCannotBeNil
 	}
 
 	p.mu.Lock()
@@ -88,7 +96,7 @@ func (p *Playbook) Add(ctx context.Context, b *bullet.Bullet) error {
 
 	// Check for duplicate ID.
 	if _, exists := p.bullets[b.ID]; exists {
-		return fmt.Errorf("bullet with ID %s already exists", b.ID)
+return fmt.Errorf("bullet with ID %s already exists: %w", b.ID, ErrBulletWithIdAlreadyExists)
 	}
 
 	p.bullets[b.ID] = b
@@ -109,16 +117,16 @@ func (p *Playbook) Get(id string) (*bullet.Bullet, bool) {
 
 // Update updates an existing bullet in the playbook.
 // Returns an error if the bullet doesn't exist.
-func (p *Playbook) Update(ctx context.Context, b *bullet.Bullet) error {
+func (p *Playbook) Update(_ context.Context, b *bullet.Bullet) error {
 	if b == nil {
-		return errors.New("bullet cannot be nil")
+		return ErrBulletCannotBeNil2
 	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if _, exists := p.bullets[b.ID]; !exists {
-		return fmt.Errorf("bullet with ID %s not found", b.ID)
+return fmt.Errorf("bullet with ID %s not found: %w", b.ID, ErrBulletWithIdNotFound)
 	}
 
 	p.bullets[b.ID] = b
@@ -128,7 +136,7 @@ func (p *Playbook) Update(ctx context.Context, b *bullet.Bullet) error {
 
 // Delete removes a bullet by ID.
 // This operation is idempotent - no error if ID doesn't exist.
-func (p *Playbook) Delete(ctx context.Context, id string) error {
+func (p *Playbook) Delete(_ context.Context, id string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

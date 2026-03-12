@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"errors"
 	"context"
 	"testing"
 )
@@ -118,7 +119,7 @@ func TestScratchpadPutWithoutOverwrite(t *testing.T) {
 
 	// Try to put again without overwrite - should fail.
 	err = pad.Put(ctx, "key1", "value2", PutOptions{Overwrite: false})
-	if err != ErrKeyExists {
+	if !errors.Is(err, ErrKeyExists) {
 		t.Errorf("Expected ErrKeyExists, got %v", err)
 	}
 }
@@ -128,7 +129,7 @@ func TestScratchpadGetNotFound(t *testing.T) {
 	pad := NewScratchpad("session-1", 10)
 
 	_, err := pad.Get(ctx, "nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("Expected ErrNotFound, got %v", err)
 	}
 }
@@ -138,7 +139,7 @@ func TestScratchpadPutEmptyKey(t *testing.T) {
 	pad := NewScratchpad("session-1", 10)
 
 	err := pad.Put(ctx, "", "value", PutOptions{})
-	if err != ErrEmptyKey {
+	if !errors.Is(err, ErrEmptyKey) {
 		t.Errorf("Expected ErrEmptyKey, got %v", err)
 	}
 }
@@ -148,7 +149,7 @@ func TestScratchpadGetEmptyKey(t *testing.T) {
 	pad := NewScratchpad("session-1", 10)
 
 	_, err := pad.Get(ctx, "")
-	if err != ErrEmptyKey {
+	if !errors.Is(err, ErrEmptyKey) {
 		t.Errorf("Expected ErrEmptyKey, got %v", err)
 	}
 }
@@ -171,7 +172,7 @@ func TestScratchpadDelete(t *testing.T) {
 
 	// Verify it's gone.
 	_, err = pad.Get(ctx, "key1")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("Expected ErrNotFound after delete, got %v", err)
 	}
 
@@ -199,19 +200,25 @@ func TestScratchpadCount(t *testing.T) {
 		t.Errorf("Initial count should be 0")
 	}
 
-	pad.Put(ctx, "key1", "value1", PutOptions{})
+	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	if pad.Count() != 1 {
 		t.Errorf("Count should be 1")
 	}
 
-	pad.Put(ctx, "key2", "value2", PutOptions{})
+	if err := pad.Put(ctx, "key2", "value2", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	if pad.Count() != 2 {
 		t.Errorf("Count should be 2")
 	}
 
-	pad.Delete(ctx, "key1")
+	if err := pad.Delete(ctx, "key1"); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
 
 	if pad.Count() != 1 {
 		t.Errorf("Count should be 1 after delete")
@@ -222,9 +229,15 @@ func TestScratchpadClear(t *testing.T) {
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
-	pad.Put(ctx, "key1", "value1", PutOptions{})
-	pad.Put(ctx, "key2", "value2", PutOptions{})
-	pad.Put(ctx, "key3", "value3", PutOptions{})
+	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
+	if err := pad.Put(ctx, "key2", "value2", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
+	if err := pad.Put(ctx, "key3", "value3", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	if pad.Count() != 3 {
 		t.Errorf("Count should be 3 before clear")
@@ -241,14 +254,25 @@ func TestScratchpadAccessCountIncrement(t *testing.T) {
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
-	pad.Put(ctx, "key1", "value1", PutOptions{})
+	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	// First get - access count should be 1.
-	pad.Get(ctx, "key1")
+	_, err := pad.Get(ctx, "key1")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 	// Second get - access count should be 2.
-	pad.Get(ctx, "key1")
+	_, err = pad.Get(ctx, "key1")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 	// Third get - access count should be 3.
-	entry, _ := pad.Get(ctx, "key1")
+	entry, err := pad.Get(ctx, "key1")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 
 	// Access count starts at 0 and increments on Get
 	// After 3 Gets, it should be 3.
@@ -262,16 +286,28 @@ func TestScratchpadLRUEviction(t *testing.T) {
 	pad := NewScratchpad("session-1", 3) // Small capacity for testing.
 
 	// Add 3 entries.
-	pad.Put(ctx, "key1", "value1", PutOptions{})
-	pad.Put(ctx, "key2", "value2", PutOptions{})
-	pad.Put(ctx, "key3", "value3", PutOptions{})
+	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
+	if err := pad.Put(ctx, "key2", "value2", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
+	if err := pad.Put(ctx, "key3", "value3", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	// Access key2 and key3 to make them more recently used.
-	pad.Get(ctx, "key2")
-	pad.Get(ctx, "key3")
+	if _, err := pad.Get(ctx, "key2"); err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if _, err := pad.Get(ctx, "key3"); err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 
 	// Add 4th entry - should evict key1 (least accessed).
-	pad.Put(ctx, "key4", "value4", PutOptions{})
+	if err := pad.Put(ctx, "key4", "value4", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	if pad.Count() != 3 {
 		t.Errorf("Count should be 3 after eviction, got %d", pad.Count())
@@ -279,7 +315,7 @@ func TestScratchpadLRUEviction(t *testing.T) {
 
 	// key1 should be evicted.
 	_, err := pad.Get(ctx, "key1")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("key1 should have been evicted")
 	}
 
@@ -305,9 +341,15 @@ func TestScratchpadPinnedEntryNotEvicted(t *testing.T) {
 	pad := NewScratchpad("session-1", 3)
 
 	// Add 3 entries.
-	pad.Put(ctx, "key1", "value1", PutOptions{})
-	pad.Put(ctx, "key2", "value2", PutOptions{})
-	pad.Put(ctx, "key3", "value3", PutOptions{})
+	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
+	if err := pad.Put(ctx, "key2", "value2", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
+	if err := pad.Put(ctx, "key3", "value3", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	// Pin key1 (access count 0).
 	err := pad.Pin("key1")
@@ -317,12 +359,18 @@ func TestScratchpadPinnedEntryNotEvicted(t *testing.T) {
 
 	// Access key3 multiple times to make it more recently used
 	// key2 stays at 0 access count, key3 gets 2 access counts.
-	pad.Get(ctx, "key3")
-	pad.Get(ctx, "key3")
+	if _, err = pad.Get(ctx, "key3"); err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if _, err = pad.Get(ctx, "key3"); err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 
 	// Add 4th entry - should evict key2 (access count 0, unpinned)
 	// key1 has 0 but is pinned, key3 has 2.
-	pad.Put(ctx, "key4", "value4", PutOptions{})
+	if err = pad.Put(ctx, "key4", "value4", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	// key1 should still exist (pinned).
 	_, err = pad.Get(ctx, "key1")
@@ -332,7 +380,7 @@ func TestScratchpadPinnedEntryNotEvicted(t *testing.T) {
 
 	// key2 should be evicted (lowest access count among unpinned).
 	_, err = pad.Get(ctx, "key2")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("key2 should have been evicted")
 	}
 
@@ -352,7 +400,9 @@ func TestScratchpadPin(t *testing.T) {
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
-	pad.Put(ctx, "key1", "value1", PutOptions{})
+	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	err := pad.Pin("key1")
 	if err != nil {
@@ -364,7 +414,7 @@ func TestScratchpadPinNotFound(t *testing.T) {
 	pad := NewScratchpad("session-1", 10)
 
 	err := pad.Pin("nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("Expected ErrNotFound, got %v", err)
 	}
 }
@@ -373,7 +423,7 @@ func TestScratchpadPinEmptyKey(t *testing.T) {
 	pad := NewScratchpad("session-1", 10)
 
 	err := pad.Pin("")
-	if err != ErrEmptyKey {
+	if !errors.Is(err, ErrEmptyKey) {
 		t.Errorf("Expected ErrEmptyKey, got %v", err)
 	}
 }
@@ -382,8 +432,12 @@ func TestScratchpadUnpin(t *testing.T) {
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
-	pad.Put(ctx, "key1", "value1", PutOptions{})
-	pad.Pin("key1")
+	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
+	if err := pad.Pin("key1"); err != nil {
+		t.Fatalf("Pin failed: %v", err)
+	}
 
 	err := pad.Unpin("key1")
 	if err != nil {
@@ -395,7 +449,7 @@ func TestScratchpadUnpinNotFound(t *testing.T) {
 	pad := NewScratchpad("session-1", 10)
 
 	err := pad.Unpin("nonexistent")
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("Expected ErrNotFound, got %v", err)
 	}
 }
@@ -404,9 +458,15 @@ func TestScratchpadList(t *testing.T) {
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
-	pad.Put(ctx, "prefix_a", "value1", PutOptions{})
-	pad.Put(ctx, "prefix_b", "value2", PutOptions{})
-	pad.Put(ctx, "other", "value3", PutOptions{})
+	if err := pad.Put(ctx, "prefix_a", "value1", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
+	if err := pad.Put(ctx, "prefix_b", "value2", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
+	if err := pad.Put(ctx, "other", "value3", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	// List all.
 	keys, err := pad.List(ctx, "*")
@@ -433,9 +493,15 @@ func TestScratchpadSearch(t *testing.T) {
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
-	pad.Put(ctx, "api_response", "status ok", PutOptions{})
-	pad.Put(ctx, "error_log", "status error", PutOptions{})
-	pad.Put(ctx, "config", "database url", PutOptions{})
+	if err := pad.Put(ctx, "api_response", "status ok", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
+	if err := pad.Put(ctx, "error_log", "status error", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
+	if err := pad.Put(ctx, "config", "database url", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	// Search by keyword in value.
 	results, err := pad.Search(ctx, "status", 10)
@@ -472,7 +538,9 @@ func TestScratchpadSearchNoMatches(t *testing.T) {
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
-	pad.Put(ctx, "key1", "value1", PutOptions{})
+	if err := pad.Put(ctx, "key1", "value1", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	results, err := pad.Search(ctx, "nonexistent", 10)
 	if err != nil {
@@ -488,7 +556,9 @@ func TestScratchpadSearchCaseInsensitive(t *testing.T) {
 	ctx := context.Background()
 	pad := NewScratchpad("session-1", 10)
 
-	pad.Put(ctx, "Key1", "VALUE1", PutOptions{})
+	if err := pad.Put(ctx, "Key1", "VALUE1", PutOptions{}); err != nil {
+		t.Fatalf("Put failed: %v", err)
+	}
 
 	// Search with different case.
 	results, err := pad.Search(ctx, "key1", 10)
@@ -527,7 +597,7 @@ func TestScratchpadConcurrentAccess(t *testing.T) {
 		go func(writerID int) {
 			for j := range numOps {
 				key := "key" + string(rune('A'+writerID)) + string(rune('0'+j%10))
-				pad.Put(ctx, key, "value", PutOptions{Overwrite: true})
+				_ = pad.Put(ctx, key, "value", PutOptions{Overwrite: true})
 			}
 
 			done <- true
@@ -538,8 +608,8 @@ func TestScratchpadConcurrentAccess(t *testing.T) {
 	for range numWriters {
 		go func() {
 			for range numOps {
-				pad.List(ctx, "*")
-				pad.Search(ctx, "key", 5)
+				_, _ = pad.List(ctx, "*")
+				_, _ = pad.Search(ctx, "key", 5)
 			}
 
 			done <- true
@@ -562,7 +632,7 @@ func TestScratchpadDeleteEmptyKey(t *testing.T) {
 	pad := NewScratchpad("session-1", 10)
 
 	err := pad.Delete(ctx, "")
-	if err != ErrEmptyKey {
+	if !errors.Is(err, ErrEmptyKey) {
 		t.Errorf("Expected ErrEmptyKey, got %v", err)
 	}
 }
@@ -571,7 +641,7 @@ func TestScratchpadUnpinEmptyKey(t *testing.T) {
 	pad := NewScratchpad("session-1", 10)
 
 	err := pad.Unpin("")
-	if err != ErrEmptyKey {
+	if !errors.Is(err, ErrEmptyKey) {
 		t.Errorf("Expected ErrEmptyKey, got %v", err)
 	}
 }
@@ -596,7 +666,9 @@ func TestScratchpadEntryTypeInference(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
-			pad.Put(ctx, tt.key, tt.value, PutOptions{})
+			if err := pad.Put(ctx, tt.key, tt.value, PutOptions{}); err != nil {
+				t.Fatalf("Put failed: %v", err)
+			}
 			// We can't directly check the type, but the entry should exist.
 			_, err := pad.Get(ctx, tt.key)
 			if err != nil {

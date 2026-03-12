@@ -15,7 +15,7 @@ type mockSummarizer struct {
 	returnError             error
 }
 
-func (m *mockSummarizer) Summarize(ctx context.Context, content string, opts summarizer.Options) (*summarizer.Result, error) {
+func (m *mockSummarizer) Summarize(_ context.Context, _ string, _ summarizer.Options) (*summarizer.Result, error) {
 	return &summarizer.Result{
 		Summary:        "Summary of content",
 		OriginalTokens: 100,
@@ -23,7 +23,7 @@ func (m *mockSummarizer) Summarize(ctx context.Context, content string, opts sum
 	}, m.returnError
 }
 
-func (m *mockSummarizer) SummarizeMessages(ctx context.Context, msgs []message.Message, opts summarizer.Options) (*summarizer.MessageResult, error) {
+func (m *mockSummarizer) SummarizeMessages(_ context.Context, msgs []message.Message, _ summarizer.Options) (*summarizer.MessageResult, error) {
 	m.summarizeMessagesCalled = true
 	if m.returnError != nil {
 		return nil, m.returnError

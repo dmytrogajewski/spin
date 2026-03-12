@@ -1,8 +1,8 @@
 package tools
 
 import (
-	"context"
 	"errors"
+	"context"
 	"fmt"
 	"strings"
 
@@ -29,15 +29,18 @@ func NewScratchpadTool(scratchpad *memory.Scratchpad) *ScratchpadTool {
 	}
 }
 
+// Name implements the Name operation.
 func (t *ScratchpadTool) Name() string {
 	return "scratchpad"
 }
 
+// Description implements the Description operation.
 func (t *ScratchpadTool) Description() string {
 	return "Store and retrieve session-scoped ephemeral memory. Use this to offload " +
 		"information from the context window that you may need to reference in the future."
 }
 
+// Schema implements the Schema operation.
 func (t *ScratchpadTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -83,10 +86,11 @@ func (t *ScratchpadTool) Schema() ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (t *ScratchpadTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	operation, err := params.GetString("operation")
-	if err != nil {
-		return NewToolError(errors.New("operation parameter is required")), nil
+	operation, _ := params.GetString("operation")
+	if operation == "" {
+		return NewToolError(ErrOperationParameterRequired), nil
 	}
 
 	switch operation {
@@ -107,60 +111,60 @@ func (t *ScratchpadTool) Execute(ctx context.Context, params ToolParameters) (To
 	case "clear":
 		return t.executeClear(ctx, params)
 	default:
-		return NewToolError(fmt.Errorf("unknown operation: %s", operation)), nil
+		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, ErrUnknownOperation)), nil
 	}
 }
 
 func (t *ScratchpadTool) executePut(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, err := params.GetString("key")
-	if err != nil || key == "" {
-		return NewToolError(errors.New("key parameter is required for put operation")), nil
+	key, _ := params.GetString("key")
+	if key == "" {
+		return NewToolError(ErrKeyParameterRequiredForPut), nil
 	}
 
-	value, err := params.GetString("value")
-	if err != nil || value == "" {
-		return NewToolError(errors.New("value parameter is required for put operation")), nil
+	value, _ := params.GetString("value")
+	if value == "" {
+		return NewToolError(ErrValueParameterRequiredForPut), nil
 	}
 
 	opts := memory.PutOptions{
 		Overwrite: true,
 	}
 
-	ns, err := params.GetString("namespace")
-	if err == nil && ns != "" {
+	ns, _ := params.GetString("namespace")
+	if ns != "" {
 		opts.Namespace = ns
 	}
 
 	// Handle tags - they come as an array.
 	if params.Has("tags") {
 		var tags []string
-		err := params.GetObject("tags", &tags)
-		if err == nil {
+		tagsErr := params.GetObject("tags", &tags)
+		if tagsErr == nil {
 			opts.Tags = tags
 		}
 	}
 
-	err = t.scratchpad.Put(ctx, key, value, opts)
-	if err != nil {
-		return NewToolError(fmt.Errorf("failed to store entry: %w", err)), nil
+	putErr := t.scratchpad.Put(ctx, key, value, opts)
+	if putErr != nil {
+		return ErrToResultf("failed to store entry: %v", putErr)
 	}
 
 	return NewToolResult(fmt.Sprintf("Stored entry with key '%s' (%d bytes)", key, len(value))), nil
 }
 
 func (t *ScratchpadTool) executeGet(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, err := params.GetString("key")
-	if err != nil || key == "" {
-		return NewToolError(errors.New("key parameter is required for get operation")), nil
+	key, _ := params.GetString("key")
+	if key == "" {
+		return NewToolError(ErrKeyParameterRequiredForGet), nil
 	}
 
-	entry, err := t.scratchpad.Get(ctx, key)
-	if err != nil {
-		if err == memory.ErrNotFound {
-			return NewToolError(fmt.Errorf("key '%s' not found in scratchpad", key)), nil
+	entry, getErr := t.scratchpad.Get(ctx, key)
+	if getErr != nil {
+		if errors.Is(getErr, memory.ErrNotFound) {
+			return ErrToResultf("key '%s' not found in scratchpad", fmt.Errorf("%s: %w", key, ErrKeyNotFound))
 		}
 
-		return NewToolError(fmt.Errorf("failed to get entry: %w", err)), nil
+		return ErrToResultf("failed to get entry: %v", getErr)
 	}
 
 	// Format output with metadata.
@@ -178,14 +182,14 @@ func (t *ScratchpadTool) executeGet(ctx context.Context, params ToolParameters) 
 }
 
 func (t *ScratchpadTool) executeDelete(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, err := params.GetString("key")
-	if err != nil || key == "" {
-		return NewToolError(errors.New("key parameter is required for delete operation")), nil
+	key, _ := params.GetString("key")
+	if key == "" {
+		return NewToolError(ErrKeyParameterRequiredForDelete), nil
 	}
 
-	err = t.scratchpad.Delete(ctx, key)
-	if err != nil {
-		return NewToolError(fmt.Errorf("failed to delete entry: %w", err)), nil
+	delErr := t.scratchpad.Delete(ctx, key)
+	if delErr != nil {
+		return ErrToResultf("failed to delete entry: %v", delErr)
 	}
 
 	return NewToolResult(fmt.Sprintf("Entry '%s' deleted", key)), nil
@@ -194,9 +198,9 @@ func (t *ScratchpadTool) executeDelete(ctx context.Context, params ToolParameter
 func (t *ScratchpadTool) executeList(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	pattern := params.GetStringOr("pattern", "*")
 
-	keys, err := t.scratchpad.List(ctx, pattern)
-	if err != nil {
-		return NewToolError(fmt.Errorf("failed to list entries: %w", err)), nil
+	keys, listErr := t.scratchpad.List(ctx, pattern)
+	if listErr != nil {
+		return ErrToResultf("failed to list entries: %v", listErr)
 	}
 
 	if len(keys) == 0 {
@@ -214,14 +218,14 @@ func (t *ScratchpadTool) executeList(ctx context.Context, params ToolParameters)
 }
 
 func (t *ScratchpadTool) executeSearch(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	query, err := params.GetString("query")
-	if err != nil || query == "" {
-		return NewToolError(errors.New("query parameter is required for search operation")), nil
+	query, _ := params.GetString("query")
+	if query == "" {
+		return NewToolError(ErrQueryParameterRequiredForSearch), nil
 	}
 
-	entries, err := t.scratchpad.Search(ctx, query, 10)
-	if err != nil {
-		return NewToolError(fmt.Errorf("failed to search entries: %w", err)), nil
+	entries, searchErr := t.scratchpad.Search(ctx, query, 10)
+	if searchErr != nil {
+		return ErrToResultf("failed to search entries: %v", searchErr)
 	}
 
 	if len(entries) == 0 {
@@ -244,43 +248,43 @@ func (t *ScratchpadTool) executeSearch(ctx context.Context, params ToolParameter
 	return NewToolResult(sb.String()), nil
 }
 
-func (t *ScratchpadTool) executePin(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, err := params.GetString("key")
-	if err != nil || key == "" {
-		return NewToolError(errors.New("key parameter is required for pin operation")), nil
+func (t *ScratchpadTool) executePin(_ context.Context, params ToolParameters) (ToolResult, error) {
+	key, _ := params.GetString("key")
+	if key == "" {
+		return NewToolError(ErrKeyParameterRequiredForPin), nil
 	}
 
-	err = t.scratchpad.Pin(key)
-	if err != nil {
-		if err == memory.ErrNotFound {
-			return NewToolError(fmt.Errorf("key '%s' not found in scratchpad", key)), nil
+	pinErr := t.scratchpad.Pin(key)
+	if pinErr != nil {
+		if errors.Is(pinErr, memory.ErrNotFound) {
+			return ErrToResultf("key '%s' not found in scratchpad", fmt.Errorf("%s: %w", key, ErrKeyNotFound))
 		}
 
-		return NewToolError(fmt.Errorf("failed to pin entry: %w", err)), nil
+		return ErrToResultf("failed to pin entry: %v", pinErr)
 	}
 
 	return NewToolResult(fmt.Sprintf("Entry '%s' pinned (protected from eviction)", key)), nil
 }
 
-func (t *ScratchpadTool) executeUnpin(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, err := params.GetString("key")
-	if err != nil || key == "" {
-		return NewToolError(errors.New("key parameter is required for unpin operation")), nil
+func (t *ScratchpadTool) executeUnpin(_ context.Context, params ToolParameters) (ToolResult, error) {
+	key, _ := params.GetString("key")
+	if key == "" {
+		return NewToolError(ErrKeyParameterRequiredForUnpin), nil
 	}
 
-	err = t.scratchpad.Unpin(key)
-	if err != nil {
-		if err == memory.ErrNotFound {
-			return NewToolError(fmt.Errorf("key '%s' not found in scratchpad", key)), nil
+	unpinErr := t.scratchpad.Unpin(key)
+	if unpinErr != nil {
+		if errors.Is(unpinErr, memory.ErrNotFound) {
+			return ErrToResultf("key '%s' not found in scratchpad", fmt.Errorf("%s: %w", key, ErrKeyNotFound))
 		}
 
-		return NewToolError(fmt.Errorf("failed to unpin entry: %w", err)), nil
+		return ErrToResultf("failed to unpin entry: %v", unpinErr)
 	}
 
 	return NewToolResult(fmt.Sprintf("Entry '%s' unpinned (can be evicted)", key)), nil
 }
 
-func (t *ScratchpadTool) executeClear(ctx context.Context, params ToolParameters) (ToolResult, error) {
+func (t *ScratchpadTool) executeClear(_ context.Context, _ ToolParameters) (ToolResult, error) {
 	t.scratchpad.Clear()
 
 	return NewToolResult("Scratchpad cleared"), nil

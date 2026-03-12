@@ -6,6 +6,14 @@ import (
 	"testing"
 )
 
+var (
+	errTestError = errors.New("test error")
+	errSomethingWentWrong = errors.New("something went wrong")
+	errOperationFailed = errors.New("operation failed")
+	errFail = errors.New("fail")
+	errSomethingBroke = errors.New("something broke")
+)
+
 // TestBuiltinTools_Count verifies that we have exactly 8 builtin tools.
 func TestBuiltinTools_Count(t *testing.T) {
 	if len(BuiltinTools) != 8 {
@@ -66,6 +74,14 @@ func TestToolResult_ID(t *testing.T) {
 	if result.ID != testID {
 		t.Errorf("ToolResult.ID = %q, want %q", result.ID, testID)
 	}
+
+	if !result.Success {
+		t.Error("ToolResult.Success = false, want true")
+	}
+
+	if result.Output != "test output" {
+		t.Errorf("ToolResult.Output = %q, want %q", result.Output, "test output")
+	}
 }
 
 // TestToolResult_ExitCode verifies that ToolResult has ExitCode field.
@@ -77,6 +93,10 @@ func TestToolResult_ExitCode(t *testing.T) {
 		ExitCode: testExitCode,
 	}
 
+	if result.Success {
+		t.Error("ToolResult.Success = true, want false")
+	}
+
 	if result.ExitCode != testExitCode {
 		t.Errorf("ToolResult.ExitCode = %d, want %d", result.ExitCode, testExitCode)
 	}
@@ -84,13 +104,17 @@ func TestToolResult_ExitCode(t *testing.T) {
 
 // TestToolResult_ErrorAsError verifies that ToolResult has Err field of error type.
 func TestToolResult_ErrorAsError(t *testing.T) {
-	testErr := errors.New("test error")
+	testErr := errTestError
 	result := ToolResult{
 		Success: false,
 		Err:     testErr,
 	}
 
-	if result.Err != testErr {
+	if result.Success {
+		t.Error("ToolResult.Success = true, want false")
+	}
+
+	if !errors.Is(result.Err, testErr) {
 		t.Errorf("ToolResult.Err = %v, want %v", result.Err, testErr)
 	}
 }
@@ -112,14 +136,14 @@ func TestNewToolResult(t *testing.T) {
 
 // TestNewToolError creates a failed result from error.
 func TestNewToolError(t *testing.T) {
-	testErr := errors.New("something went wrong")
+	testErr := errSomethingWentWrong
 	result := NewToolError(testErr)
 
 	if result.Success {
 		t.Error("NewToolError().Success = true, want false")
 	}
 
-	if result.Err != testErr {
+	if !errors.Is(result.Err, testErr) {
 		t.Errorf("NewToolError().Err = %v, want %v", result.Err, testErr)
 	}
 
@@ -132,7 +156,7 @@ func TestNewToolError(t *testing.T) {
 func TestNewToolErrorWithID(t *testing.T) {
 	const testID = "call_err123"
 
-	testErr := errors.New("operation failed")
+	testErr := errOperationFailed
 	result := NewToolErrorWithID(testID, testErr)
 
 	if result.ID != testID {
@@ -143,7 +167,7 @@ func TestNewToolErrorWithID(t *testing.T) {
 		t.Error("NewToolErrorWithID().Success = true, want false")
 	}
 
-	if result.Err != testErr {
+	if !errors.Is(result.Err, testErr) {
 		t.Errorf("NewToolErrorWithID().Err = %v, want %v", result.Err, testErr)
 	}
 }
@@ -209,7 +233,7 @@ func TestToolResult_GetErr(t *testing.T) {
 		},
 		{
 			name:    "with error",
-			result:  ToolResult{Success: false, Err: errors.New("fail")},
+			result:  ToolResult{Success: false, Err: errFail},
 			wantNil: false,
 		},
 	}
@@ -242,7 +266,7 @@ func TestToolResult_String(t *testing.T) {
 		},
 		{
 			name:   "failure with Err returns error string",
-			result: ToolResult{Success: false, Err: errors.New("something broke")},
+			result: ToolResult{Success: false, Err: errSomethingBroke},
 			want:   "something broke",
 		},
 		{
@@ -281,7 +305,8 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 					t.Errorf("JSON id = %v, want call_123", data["id"])
 				}
 
-				if data["success"] != true {
+				successVal, _ := data["success"].(bool)
+			if !successVal {
 					t.Errorf("JSON success = %v, want true", data["success"])
 				}
 

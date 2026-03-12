@@ -8,19 +8,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestConfigV2_Validate_MinimalValid tests that a minimal valid v2 config passes validation.
+// TestV2_Validate_MinimalValid tests that a minimal valid v2 config passes validation.
 // This is the first step in the new v2.0 config structure.
-func TestConfigV2_Validate_MinimalValid(t *testing.T) {
-	cfg := &ConfigV2{
+func TestV2_Validate_MinimalValid(t *testing.T) {
+	cfg := &V2{
 		Version: "2.0",
-		LLM: LLMConfigV2{
+		LLM: LLMV2{
 			Provider:    "ollama",
 			Model:       "qwen",
 			Temperature: 0.7,
 			MaxTokens:   4096,
 			Timeout:     30 * time.Second,
 		},
-		Agent: AgentConfigV2{
+		Agent: AgentV2{
 			MaxTurns: 10,
 			Timeout:  60 * time.Second,
 			WorkDir:  "/tmp",
@@ -31,12 +31,12 @@ func TestConfigV2_Validate_MinimalValid(t *testing.T) {
 	require.NoError(t, err, "minimal valid config should pass validation")
 }
 
-// TestConfigV2_Validate_LLMProviderRequired tests that validation fails when LLM.Provider is empty.
+// TestV2_Validate_LLMProviderRequired tests that validation fails when LLM.Provider is empty.
 // Kills mutant: removing the provider check would make this test fail.
-func TestConfigV2_Validate_LLMProviderRequired(t *testing.T) {
-	cfg := &ConfigV2{
+func TestV2_Validate_LLMProviderRequired(t *testing.T) {
+	cfg := &V2{
 		Version: "2.0",
-		LLM: LLMConfigV2{
+		LLM: LLMV2{
 			Provider: "", // Empty provider should fail.
 			Model:    "qwen",
 		},
@@ -48,12 +48,12 @@ func TestConfigV2_Validate_LLMProviderRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "required", "error should indicate field is required")
 }
 
-// TestConfigV2_Validate_LLMModelRequired tests that validation fails when LLM.Model is empty.
+// TestV2_Validate_LLMModelRequired tests that validation fails when LLM.Model is empty.
 // Kills mutant: removing the model check would make this test fail.
-func TestConfigV2_Validate_LLMModelRequired(t *testing.T) {
-	cfg := &ConfigV2{
+func TestV2_Validate_LLMModelRequired(t *testing.T) {
+	cfg := &V2{
 		Version: "2.0",
-		LLM: LLMConfigV2{
+		LLM: LLMV2{
 			Provider: "ollama",
 			Model:    "", // Empty model should fail.
 		},
@@ -65,19 +65,19 @@ func TestConfigV2_Validate_LLMModelRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "required", "error should indicate field is required")
 }
 
-// TestConfigV2_Validate_LLMFieldRanges tests validation of numeric field ranges.
+// TestV2_Validate_LLMFieldRanges tests validation of numeric field ranges.
 // Kills mutants: removing range checks would make these tests fail.
-func TestConfigV2_Validate_LLMFieldRanges(t *testing.T) {
+func TestV2_Validate_LLMFieldRanges(t *testing.T) {
 	tests := []struct {
 		name    string
-		cfg     ConfigV2
+		cfg     V2
 		wantErr string
 	}{
 		{
 			name: "temperature too low",
-			cfg: ConfigV2{
+			cfg: V2{
 				Version: "2.0",
-				LLM: LLMConfigV2{
+				LLM: LLMV2{
 					Provider:    "ollama",
 					Model:       "qwen",
 					Temperature: -0.1,
@@ -89,9 +89,9 @@ func TestConfigV2_Validate_LLMFieldRanges(t *testing.T) {
 		},
 		{
 			name: "temperature too high",
-			cfg: ConfigV2{
+			cfg: V2{
 				Version: "2.0",
-				LLM: LLMConfigV2{
+				LLM: LLMV2{
 					Provider:    "ollama",
 					Model:       "qwen",
 					Temperature: 2.1,
@@ -103,9 +103,9 @@ func TestConfigV2_Validate_LLMFieldRanges(t *testing.T) {
 		},
 		{
 			name: "max_tokens zero",
-			cfg: ConfigV2{
+			cfg: V2{
 				Version: "2.0",
-				LLM: LLMConfigV2{
+				LLM: LLMV2{
 					Provider:    "ollama",
 					Model:       "qwen",
 					Temperature: 0.7,
@@ -117,9 +117,9 @@ func TestConfigV2_Validate_LLMFieldRanges(t *testing.T) {
 		},
 		{
 			name: "max_tokens negative",
-			cfg: ConfigV2{
+			cfg: V2{
 				Version: "2.0",
-				LLM: LLMConfigV2{
+				LLM: LLMV2{
 					Provider:    "ollama",
 					Model:       "qwen",
 					Temperature: 0.7,
@@ -131,9 +131,9 @@ func TestConfigV2_Validate_LLMFieldRanges(t *testing.T) {
 		},
 		{
 			name: "timeout zero",
-			cfg: ConfigV2{
+			cfg: V2{
 				Version: "2.0",
-				LLM: LLMConfigV2{
+				LLM: LLMV2{
 					Provider:    "ollama",
 					Model:       "qwen",
 					Temperature: 0.7,
@@ -145,9 +145,9 @@ func TestConfigV2_Validate_LLMFieldRanges(t *testing.T) {
 		},
 		{
 			name: "timeout negative",
-			cfg: ConfigV2{
+			cfg: V2{
 				Version: "2.0",
-				LLM: LLMConfigV2{
+				LLM: LLMV2{
 					Provider:    "ollama",
 					Model:       "qwen",
 					Temperature: 0.7,
@@ -168,18 +168,18 @@ func TestConfigV2_Validate_LLMFieldRanges(t *testing.T) {
 	}
 }
 
-// TestConfigV2_Validate_LLMValidRanges tests that valid values pass validation.
-func TestConfigV2_Validate_LLMValidRanges(t *testing.T) {
-	cfg := &ConfigV2{
+// TestV2_Validate_LLMValidRanges tests that valid values pass validation.
+func TestV2_Validate_LLMValidRanges(t *testing.T) {
+	cfg := &V2{
 		Version: "2.0",
-		LLM: LLMConfigV2{
+		LLM: LLMV2{
 			Provider:    "ollama",
 			Model:       "qwen",
 			Temperature: 0.7,
 			MaxTokens:   4096,
 			Timeout:     5 * time.Minute,
 		},
-		Agent: AgentConfigV2{
+		Agent: AgentV2{
 			MaxTurns: 10,
 			Timeout:  60 * time.Second,
 			WorkDir:  "/tmp",
@@ -190,13 +190,13 @@ func TestConfigV2_Validate_LLMValidRanges(t *testing.T) {
 	require.NoError(t, err, "valid config should pass validation")
 }
 
-// TestConfigV2_Validate_AgentMaxTurnsRequired tests that MaxTurns must be positive.
+// TestV2_Validate_AgentMaxTurnsRequired tests that MaxTurns must be positive.
 // Kills mutant: removing the MaxTurns check would make this test fail.
-func TestConfigV2_Validate_AgentMaxTurnsRequired(t *testing.T) {
+func TestV2_Validate_AgentMaxTurnsRequired(t *testing.T) {
 	agent := validAgentConfig()
 	agent.MaxTurns = 0 // Invalid.
 
-	cfg := &ConfigV2{
+	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
 		Agent:   agent,
@@ -207,13 +207,13 @@ func TestConfigV2_Validate_AgentMaxTurnsRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "max_turns", "error should mention max_turns field")
 }
 
-// TestConfigV2_Validate_AgentTimeoutRequired tests that Timeout must be positive.
+// TestV2_Validate_AgentTimeoutRequired tests that Timeout must be positive.
 // Kills mutant: removing the Timeout check would make this test fail.
-func TestConfigV2_Validate_AgentTimeoutRequired(t *testing.T) {
+func TestV2_Validate_AgentTimeoutRequired(t *testing.T) {
 	agent := validAgentConfig()
 	agent.Timeout = 0 // Invalid.
 
-	cfg := &ConfigV2{
+	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
 		Agent:   agent,
@@ -224,13 +224,13 @@ func TestConfigV2_Validate_AgentTimeoutRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "timeout", "error should mention timeout field")
 }
 
-// TestConfigV2_Validate_AgentWorkDirRequired tests that WorkDir is required.
+// TestV2_Validate_AgentWorkDirRequired tests that WorkDir is required.
 // Kills mutant: removing the WorkDir check would make this test fail.
-func TestConfigV2_Validate_AgentWorkDirRequired(t *testing.T) {
+func TestV2_Validate_AgentWorkDirRequired(t *testing.T) {
 	agent := validAgentConfig()
 	agent.WorkDir = "" // Invalid.
 
-	cfg := &ConfigV2{
+	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
 		Agent:   agent,
@@ -242,8 +242,8 @@ func TestConfigV2_Validate_AgentWorkDirRequired(t *testing.T) {
 }
 
 // validLLMConfig returns a valid LLM configuration for testing other sections.
-func validLLMConfig() LLMConfigV2 {
-	return LLMConfigV2{
+func validLLMConfig() LLMV2 {
+	return LLMV2{
 		Provider:    "ollama",
 		Model:       "qwen",
 		Temperature: 0.7,
@@ -253,8 +253,8 @@ func validLLMConfig() LLMConfigV2 {
 }
 
 // validAgentConfig returns a valid Agent configuration for testing other sections.
-func validAgentConfig() AgentConfigV2 {
-	return AgentConfigV2{
+func validAgentConfig() AgentV2 {
+	return AgentV2{
 		MaxTurns: 10,
 		Timeout:  60 * time.Second,
 		WorkDir:  "/tmp",
@@ -262,8 +262,8 @@ func validAgentConfig() AgentConfigV2 {
 }
 
 // validACEConfig returns a valid ACE configuration for testing other sections.
-func validACEConfig() ACEConfigV2 {
-	return ACEConfigV2{
+func validACEConfig() ACEV2 {
+	return ACEV2{
 		Enabled:        true,
 		PlaybookPath:   "~/.spin/ace/playbooks/default.json",
 		TrajectoryPath: "~/.spin/ace/trajectories/",
@@ -273,8 +273,8 @@ func validACEConfig() ACEConfigV2 {
 }
 
 // validSecurityConfig returns a valid Security configuration for testing other sections.
-func validSecurityConfig() SecurityConfigV2 {
-	return SecurityConfigV2{
+func validSecurityConfig() SecurityV2 {
+	return SecurityV2{
 		SandboxMode:                "none",
 		PolicyFile:                 "",
 		AllowedCommands:            []string{},
@@ -283,8 +283,8 @@ func validSecurityConfig() SecurityConfigV2 {
 }
 
 // validProtocolConfig returns a valid Protocol configuration for testing other sections.
-func validProtocolConfig() ProtocolConfigV2 {
-	return ProtocolConfigV2{
+func validProtocolConfig() ProtocolV2 {
+	return ProtocolV2{
 		EnableMCP:    false,
 		MCPServers:   []MCPServerConfigV2{},
 		EnableGit:    true,
@@ -293,13 +293,13 @@ func validProtocolConfig() ProtocolConfigV2 {
 	}
 }
 
-// TestConfigV2_Validate_ACEPlaybookPathRequired tests that PlaybookPath is required when ACE is enabled.
+// TestV2_Validate_ACEPlaybookPathRequired tests that PlaybookPath is required when ACE is enabled.
 // Kills mutant: removing the PlaybookPath check would make this test fail.
-func TestConfigV2_Validate_ACEPlaybookPathRequired(t *testing.T) {
+func TestV2_Validate_ACEPlaybookPathRequired(t *testing.T) {
 	ace := validACEConfig()
 	ace.PlaybookPath = "" // Invalid.
 
-	cfg := &ConfigV2{
+	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
 		Agent:   validAgentConfig(),
@@ -311,13 +311,13 @@ func TestConfigV2_Validate_ACEPlaybookPathRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "playbook_path", "error should mention playbook_path field")
 }
 
-// TestConfigV2_Validate_ACETrajectoryPathRequired tests that TrajectoryPath is required when ACE is enabled.
+// TestV2_Validate_ACETrajectoryPathRequired tests that TrajectoryPath is required when ACE is enabled.
 // Kills mutant: removing the TrajectoryPath check would make this test fail.
-func TestConfigV2_Validate_ACETrajectoryPathRequired(t *testing.T) {
+func TestV2_Validate_ACETrajectoryPathRequired(t *testing.T) {
 	ace := validACEConfig()
 	ace.TrajectoryPath = "" // Invalid.
 
-	cfg := &ConfigV2{
+	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
 		Agent:   validAgentConfig(),
@@ -329,13 +329,13 @@ func TestConfigV2_Validate_ACETrajectoryPathRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "trajectory_path", "error should mention trajectory_path field")
 }
 
-// TestConfigV2_Validate_ACETopKPositive tests that TopK must be positive when ACE is enabled.
+// TestV2_Validate_ACETopKPositive tests that TopK must be positive when ACE is enabled.
 // Kills mutant: removing the TopK check would make this test fail.
-func TestConfigV2_Validate_ACETopKPositive(t *testing.T) {
+func TestV2_Validate_ACETopKPositive(t *testing.T) {
 	ace := validACEConfig()
 	ace.TopK = 0 // Invalid.
 
-	cfg := &ConfigV2{
+	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
 		Agent:   validAgentConfig(),
@@ -347,9 +347,9 @@ func TestConfigV2_Validate_ACETopKPositive(t *testing.T) {
 	assert.Contains(t, err.Error(), "top_k", "error should mention top_k field")
 }
 
-// TestConfigV2_Validate_ACEMinScoreRange tests that MinScore must be between 0 and 1.
+// TestV2_Validate_ACEMinScoreRange tests that MinScore must be between 0 and 1.
 // Kills mutant: removing the MinScore check would make this test fail.
-func TestConfigV2_Validate_ACEMinScoreRange(t *testing.T) {
+func TestV2_Validate_ACEMinScoreRange(t *testing.T) {
 	tests := []struct {
 		name     string
 		minScore float64
@@ -363,7 +363,7 @@ func TestConfigV2_Validate_ACEMinScoreRange(t *testing.T) {
 			ace := validACEConfig()
 			ace.MinScore = tt.minScore
 
-			cfg := &ConfigV2{
+			cfg := &V2{
 				Version: "2.0",
 				LLM:     validLLMConfig(),
 				Agent:   validAgentConfig(),
@@ -377,14 +377,14 @@ func TestConfigV2_Validate_ACEMinScoreRange(t *testing.T) {
 	}
 }
 
-// TestConfigV2_Validate_ACEDisabled tests that validation passes when ACE is disabled.
+// TestV2_Validate_ACEDisabled tests that validation passes when ACE is disabled.
 // Kills mutant: removing the ACE.Enabled check would make this test fail.
-func TestConfigV2_Validate_ACEDisabled(t *testing.T) {
-	cfg := &ConfigV2{
+func TestV2_Validate_ACEDisabled(t *testing.T) {
+	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
 		Agent:   validAgentConfig(),
-		ACE: ACEConfigV2{
+		ACE: ACEV2{
 			Enabled: false,
 			// Empty paths should be OK when disabled.
 			PlaybookPath:   "",
@@ -398,18 +398,18 @@ func TestConfigV2_Validate_ACEDisabled(t *testing.T) {
 	require.NoError(t, err, "ACE disabled config should pass validation")
 }
 
-// TestConfigV2_Validate_SecuritySandboxModeValid tests that only valid sandbox modes are accepted.
+// TestV2_Validate_SecuritySandboxModeValid tests that only valid sandbox modes are accepted.
 // Kills mutant: removing the SandboxMode validation would make this test fail.
-func TestConfigV2_Validate_SecuritySandboxModeValid(t *testing.T) {
+func TestV2_Validate_SecuritySandboxModeValid(t *testing.T) {
 	validModes := []string{"", "none", "docker", "firejail"}
 	for _, mode := range validModes {
 		t.Run(mode, func(t *testing.T) {
-			cfg := &ConfigV2{
+			cfg := &V2{
 				Version:  "2.0",
 				LLM:      validLLMConfig(),
 				Agent:    validAgentConfig(),
 				ACE:      validACEConfig(),
-				Security: SecurityConfigV2{SandboxMode: mode},
+				Security: SecurityV2{SandboxMode: mode},
 				Protocol: validProtocolConfig(),
 			}
 
@@ -419,15 +419,15 @@ func TestConfigV2_Validate_SecuritySandboxModeValid(t *testing.T) {
 	}
 }
 
-// TestConfigV2_Validate_SecuritySandboxModeInvalid tests that invalid sandbox modes are rejected.
+// TestV2_Validate_SecuritySandboxModeInvalid tests that invalid sandbox modes are rejected.
 // Kills mutant: removing the SandboxMode validation would make this test fail.
-func TestConfigV2_Validate_SecuritySandboxModeInvalid(t *testing.T) {
-	cfg := &ConfigV2{
+func TestV2_Validate_SecuritySandboxModeInvalid(t *testing.T) {
+	cfg := &V2{
 		Version:  "2.0",
 		LLM:      validLLMConfig(),
 		Agent:    validAgentConfig(),
 		ACE:      validACEConfig(),
-		Security: SecurityConfigV2{SandboxMode: "invalid"},
+		Security: SecurityV2{SandboxMode: "invalid"},
 		Protocol: validProtocolConfig(),
 	}
 
@@ -436,14 +436,14 @@ func TestConfigV2_Validate_SecuritySandboxModeInvalid(t *testing.T) {
 	assert.Contains(t, err.Error(), "sandbox_mode", "error should mention sandbox_mode field")
 }
 
-// TestConfigV2_Validate_ProtocolShellTimeoutPositive tests that ShellTimeout must be positive when shell is enabled.
+// TestV2_Validate_ProtocolShellTimeoutPositive tests that ShellTimeout must be positive when shell is enabled.
 // Kills mutant: removing the ShellTimeout check would make this test fail.
-func TestConfigV2_Validate_ProtocolShellTimeoutPositive(t *testing.T) {
+func TestV2_Validate_ProtocolShellTimeoutPositive(t *testing.T) {
 	protocol := validProtocolConfig()
 	protocol.EnableShell = true
 	protocol.ShellTimeout = 0 // Invalid.
 
-	cfg := &ConfigV2{
+	cfg := &V2{
 		Version:  "2.0",
 		LLM:      validLLMConfig(),
 		Agent:    validAgentConfig(),
@@ -457,16 +457,16 @@ func TestConfigV2_Validate_ProtocolShellTimeoutPositive(t *testing.T) {
 	assert.Contains(t, err.Error(), "shell_timeout", "error should mention shell_timeout field")
 }
 
-// TestConfigV2_Validate_ProtocolMCPServersValid tests that MCP server configs are validated when MCP is enabled.
+// TestV2_Validate_ProtocolMCPServersValid tests that MCP server configs are validated when MCP is enabled.
 // Kills mutant: removing the MCP server validation would make this test fail.
-func TestConfigV2_Validate_ProtocolMCPServersValid(t *testing.T) {
+func TestV2_Validate_ProtocolMCPServersValid(t *testing.T) {
 	protocol := validProtocolConfig()
 	protocol.EnableMCP = true
 	protocol.MCPServers = []MCPServerConfigV2{
 		{Name: "", Command: "/usr/bin/mcp"}, // Invalid: empty name.
 	}
 
-	cfg := &ConfigV2{
+	cfg := &V2{
 		Version:  "2.0",
 		LLM:      validLLMConfig(),
 		Agent:    validAgentConfig(),
@@ -480,10 +480,10 @@ func TestConfigV2_Validate_ProtocolMCPServersValid(t *testing.T) {
 	assert.Contains(t, err.Error(), "mcp", "error should mention mcp")
 }
 
-// TestDefaultConfigV2 tests that the default configuration is valid.
+// TestDefaultV2 tests that the default configuration is valid.
 // Kills mutant: changing defaults to invalid values would make this test fail.
-func TestDefaultConfigV2(t *testing.T) {
-	cfg := DefaultConfigV2()
+func TestDefaultV2(t *testing.T) {
+	cfg := DefaultV2()
 
 	// Should be valid by default.
 	err := cfg.Validate()
@@ -497,14 +497,14 @@ func TestDefaultConfigV2(t *testing.T) {
 	assert.False(t, cfg.ACE.Enabled, "ACE should be disabled by default")
 }
 
-// TestConfigV2_CrossSectionValidation_ACEPlaybookRequired tests that ACE playbook is required when enabled.
+// TestV2_CrossSectionValidation_ACEPlaybookRequired tests that ACE playbook is required when enabled.
 // Kills mutant: removing cross-section validation would make this test fail.
-func TestConfigV2_CrossSectionValidation_ACEPlaybookRequired(t *testing.T) {
-	cfg := &ConfigV2{
+func TestV2_CrossSectionValidation_ACEPlaybookRequired(t *testing.T) {
+	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
 		Agent:   validAgentConfig(),
-		ACE: ACEConfigV2{
+		ACE: ACEV2{
 			Enabled:      true,
 			PlaybookPath: "", // Invalid - required when enabled.
 		},
@@ -517,14 +517,14 @@ func TestConfigV2_CrossSectionValidation_ACEPlaybookRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "playbook_path", "error should mention playbook_path")
 }
 
-// TestConfigV2_CrossSectionValidation_ACETrajectoryRequired tests that ACE trajectory is required when enabled.
+// TestV2_CrossSectionValidation_ACETrajectoryRequired tests that ACE trajectory is required when enabled.
 // Kills mutant: removing cross-section validation would make this test fail.
-func TestConfigV2_CrossSectionValidation_ACETrajectoryRequired(t *testing.T) {
-	cfg := &ConfigV2{
+func TestV2_CrossSectionValidation_ACETrajectoryRequired(t *testing.T) {
+	cfg := &V2{
 		Version: "2.0",
 		LLM:     validLLMConfig(),
 		Agent:   validAgentConfig(),
-		ACE: ACEConfigV2{
+		ACE: ACEV2{
 			Enabled:        true,
 			PlaybookPath:   "/path/to/playbook.json",
 			TrajectoryPath: "", // Invalid - required when enabled.
@@ -538,16 +538,16 @@ func TestConfigV2_CrossSectionValidation_ACETrajectoryRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "trajectory_path", "error should mention trajectory_path")
 }
 
-// TestConfigV2_CrossSectionValidation_ShellTimeoutRequired tests that shell timeout is required when shell enabled.
+// TestV2_CrossSectionValidation_ShellTimeoutRequired tests that shell timeout is required when shell enabled.
 // Kills mutant: removing cross-section validation would make this test fail.
-func TestConfigV2_CrossSectionValidation_ShellTimeoutRequired(t *testing.T) {
-	cfg := &ConfigV2{
+func TestV2_CrossSectionValidation_ShellTimeoutRequired(t *testing.T) {
+	cfg := &V2{
 		Version:  "2.0",
 		LLM:      validLLMConfig(),
 		Agent:    validAgentConfig(),
 		ACE:      validACEConfig(),
 		Security: validSecurityConfig(),
-		Protocol: ProtocolConfigV2{
+		Protocol: ProtocolV2{
 			EnableShell:  true,
 			ShellTimeout: 0, // Invalid - required when enabled.
 		},
@@ -558,12 +558,12 @@ func TestConfigV2_CrossSectionValidation_ShellTimeoutRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "shell_timeout", "error should mention shell_timeout")
 }
 
-// TestConfigV2_Validation_AllErrors tests that validation returns ALL errors, not just the first.
+// TestV2_Validation_AllErrors tests that validation returns ALL errors, not just the first.
 // Kills mutant: fail-fast validation would make this test fail.
-func TestConfigV2_Validation_AllErrors(t *testing.T) {
-	cfg := &ConfigV2{
+func TestV2_Validation_AllErrors(t *testing.T) {
+	cfg := &V2{
 		Version: "2.0",
-		LLM: LLMConfigV2{
+		LLM: LLMV2{
 			Provider:    "",  // Error 1.
 			Model:       "",  // Error 2.
 			Temperature: 3.0, // Error 3.

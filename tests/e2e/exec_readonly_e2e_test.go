@@ -85,8 +85,8 @@ security:
 		stderr := errBuf.String()
 
 		// Check if file was created (it should NOT be).
-		_, err := os.Stat(targetFile)
-		if err == nil {
+		_, statErr := os.Stat(targetFile)
+		if statErr == nil {
 			t.Errorf("File was created despite no --auto-approve flag! File exists: %s", targetFile)
 		}
 
@@ -144,13 +144,13 @@ security:
 		cmd.Stdout = &outBuf
 		cmd.Stderr = &errBuf
 
-		err := cmd.Run()
+		runErr := cmd.Run()
 		stdout := outBuf.String()
 		stderr := errBuf.String()
 
 		// Read operations should succeed.
-		if err != nil {
-			t.Errorf("Read operation failed unexpectedly: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
+		if runErr != nil {
+			t.Errorf("Read operation failed unexpectedly: %v\nstderr: %s\nstdout: %s", runErr, stderr, stdout)
 		}
 
 		// Should have output.
@@ -192,13 +192,13 @@ security:
 		cmd.Stdout = &outBuf
 		cmd.Stderr = &errBuf
 
-		err := cmd.Run()
+		runErr := cmd.Run()
 		stdout := outBuf.String()
 		stderr := errBuf.String()
 
 		// List operations should succeed.
-		if err != nil {
-			t.Errorf("List operation failed unexpectedly: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
+		if runErr != nil {
+			t.Errorf("List operation failed unexpectedly: %v\nstderr: %s\nstdout: %s", runErr, stderr, stdout)
 		}
 
 		// Should have output.

@@ -5,6 +5,15 @@ import (
 	"testing"
 )
 
+var (
+	errContext = errors.New("context")
+	errContext2 = errors.New("context")
+	errContext3 = errors.New("context")
+	errContext4 = errors.New("context")
+	errContext5 = errors.New("context")
+	errDifferent = errors.New("different")
+)
+
 func TestErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -56,37 +65,37 @@ func TestErrorWrapping(t *testing.T) {
 	}{
 		{
 			name:   "wrapped ErrProviderNotFound",
-			err:    errors.Join(errors.New("context"), ErrProviderNotFound),
+			err:    errors.Join(errContext, ErrProviderNotFound),
 			target: ErrProviderNotFound,
 			want:   true,
 		},
 		{
 			name:   "wrapped ErrInvalidRequest",
-			err:    errors.Join(errors.New("context"), ErrInvalidRequest),
+			err:    errors.Join(errContext2, ErrInvalidRequest),
 			target: ErrInvalidRequest,
 			want:   true,
 		},
 		{
 			name:   "wrapped ErrRateLimited",
-			err:    errors.Join(errors.New("context"), ErrRateLimited),
+			err:    errors.Join(errContext3, ErrRateLimited),
 			target: ErrRateLimited,
 			want:   true,
 		},
 		{
 			name:   "wrapped ErrContextLengthExceeded",
-			err:    errors.Join(errors.New("context"), ErrContextLengthExceeded),
+			err:    errors.Join(errContext4, ErrContextLengthExceeded),
 			target: ErrContextLengthExceeded,
 			want:   true,
 		},
 		{
 			name:   "wrapped ErrModelNotFound",
-			err:    errors.Join(errors.New("context"), ErrModelNotFound),
+			err:    errors.Join(errContext5, ErrModelNotFound),
 			target: ErrModelNotFound,
 			want:   true,
 		},
 		{
 			name:   "different error",
-			err:    errors.New("different"),
+			err:    errDifferent,
 			target: ErrProviderNotFound,
 			want:   false,
 		},

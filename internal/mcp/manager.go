@@ -1,7 +1,9 @@
+// Package mcp provides MCP (Model Context Protocol) client and registry.
 package mcp
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/mark3labs/mcp-go/client"
 	mcpSDK "github.com/mark3labs/mcp-go/mcp"
@@ -10,7 +12,7 @@ import (
 // Config holds MCP configuration.
 type Config struct {
 	EnableMCP  bool
-	MCPServers []MCPServerConfig
+	MCPServers []ServerConfig
 }
 
 // OAuthConfig holds OAuth configuration for protected MCP servers.
@@ -21,8 +23,8 @@ type OAuthConfig struct {
 	Scopes       []string `mapstructure:"scopes"        yaml:"scopes,omitempty"`
 }
 
-// MCPServerConfig holds configuration for a single MCP server.
-type MCPServerConfig struct {
+// ServerConfig holds configuration for a single MCP server.
+type ServerConfig struct {
 	// Common fields.
 	Name      string        `mapstructure:"name"      yaml:"name"`
 	Transport TransportType `mapstructure:"transport" yaml:"transport,omitempty"`
@@ -44,40 +46,63 @@ type MCPServerConfig struct {
 	SmitheryNamespace string `mapstructure:"smithery_namespace" yaml:"smithery_namespace,omitempty"`
 }
 
-// MCPClient is the interface for MCP clients (SDK client or Smithery client).
-type MCPClient interface {
+// Client is the interface for MCP clients (SDK client or Smithery client).
+type Client interface {
 	Initialize(ctx context.Context, request mcpSDK.InitializeRequest) (*mcpSDK.InitializeResult, error)
 	ListTools(ctx context.Context, request mcpSDK.ListToolsRequest) (*mcpSDK.ListToolsResult, error)
 	CallTool(ctx context.Context, request mcpSDK.CallToolRequest) (*mcpSDK.CallToolResult, error)
 	Close() error
 }
 
-// sdkClientWrapper wraps the SDK client to implement MCPClient interface.
+// sdkClientWrapper wraps the SDK client to implement Client interface.
 type sdkClientWrapper struct {
 	client *client.Client
 }
 
+// Initialize implements the Initialize operation.
 func (w *sdkClientWrapper) Initialize(ctx context.Context, request mcpSDK.InitializeRequest) (*mcpSDK.InitializeResult, error) {
-	return w.client.Initialize(ctx, request)
+	result, err := w.client.Initialize(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("mcp initialize: %w", err)
+	}
+
+	return result, nil
 }
 
+// ListTools implements the ListTools operation.
 func (w *sdkClientWrapper) ListTools(ctx context.Context, request mcpSDK.ListToolsRequest) (*mcpSDK.ListToolsResult, error) {
-	return w.client.ListTools(ctx, request)
+	result, err := w.client.ListTools(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("mcp list tools: %w", err)
+	}
+
+	return result, nil
 }
 
+// CallTool implements the CallTool operation.
 func (w *sdkClientWrapper) CallTool(ctx context.Context, request mcpSDK.CallToolRequest) (*mcpSDK.CallToolResult, error) {
-	return w.client.CallTool(ctx, request)
+	result, err := w.client.CallTool(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("mcp call tool: %w", err)
+	}
+
+	return result, nil
 }
 
+// Close implements the Close operation.
 func (w *sdkClientWrapper) Close() error {
-	return w.client.Close()
+	if err := w.client.Close(); err != nil {
+		return fmt.Errorf("mcp close: %w", err)
+	}
+
+	return nil
 }
 
-// MCPTool wraps an MCP tool for integration with registries.
-type MCPTool struct {
+// Tool wraps an MCP tool for integration with registries.
+type Tool struct {
 	ServerName string
 	Tool       mcpSDK.Tool
-	Client     MCPClient
+	Client     Client
 }
 
 // JSONSchemaProperty represents a property in a JSON Schema.

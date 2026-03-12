@@ -1,15 +1,16 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 )
 
-// FuzzConfigV2_UnmarshalYAML fuzzes the YAML unmarshaling of ConfigV2.
+// FuzzV2_UnmarshalYAML fuzzes the YAML unmarshaling of V2.
 // This ensures that arbitrary YAML input doesn't cause panics or unexpected behavior.
-func FuzzConfigV2_UnmarshalYAML(f *testing.F) {
+func FuzzV2_UnmarshalYAML(f *testing.F) {
 	// Add seed corpus with known valid configs.
 	f.Add([]byte(`version: "2.0"
 llm:
@@ -47,9 +48,9 @@ ace:
 	f.Add([]byte(`version: "2.0"`))
 	f.Add([]byte(`invalid yaml: [unclosed`))
 
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(_ *testing.T, data []byte) {
 		// Fuzzing should not panic.
-		var cfg ConfigV2
+		var cfg V2
 
 		_ = yaml.Unmarshal(data, &cfg)
 
@@ -104,5 +105,10 @@ protocol:
 
 // writeFile is a helper for fuzz tests.
 func writeFile(path string, data []byte) error {
-	return os.WriteFile(path, data, 0644)
+	err := os.WriteFile(path, data, 0644)
+	if err != nil {
+		return fmt.Errorf("write file %s: %w", path, err)
+	}
+
+	return nil
 }

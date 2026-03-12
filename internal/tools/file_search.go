@@ -23,14 +23,17 @@ func NewFileSearchTool(workspaceRoot string) *FileSearchTool {
 	}
 }
 
+// Name implements the Name operation.
 func (t *FileSearchTool) Name() string {
 	return "file_search"
 }
 
+// Description implements the Description operation.
 func (t *FileSearchTool) Description() string {
 	return "Search for files in the workspace using fuzzy matching with .gitignore support"
 }
 
+// Schema implements the Schema operation.
 func (t *FileSearchTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -59,10 +62,11 @@ func (t *FileSearchTool) Schema() ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	// Extract query parameter.
-	query, err := params.GetString("query")
-	if err != nil || query == "" {
+	query, _ := params.GetString("query")
+	if query == "" {
 		return ToolResult{
 			Success: false,
 			Error:   "query parameter must be a non-empty string",
@@ -90,11 +94,11 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 
 	// Index if not already indexed.
 	if !searcher.IsIndexed() {
-		err := searcher.IndexAsync(ctx)
-		if err != nil {
+		indexErr := searcher.IndexAsync(ctx)
+		if indexErr != nil {
 			return ToolResult{
 				Success: false,
-				Error:   fmt.Sprintf("failed to index workspace: %v", err),
+				Error:   fmt.Sprintf("failed to index workspace: %v", indexErr),
 			}, nil
 		}
 	}

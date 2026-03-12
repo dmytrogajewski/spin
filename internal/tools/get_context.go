@@ -17,14 +17,17 @@ func NewGetContextTool(context any) *GetContextTool {
 	}
 }
 
+// Name implements the Name operation.
 func (t *GetContextTool) Name() string {
 	return "get_context"
 }
 
+// Description implements the Description operation.
 func (t *GetContextTool) Description() string {
 	return "Get environment context information"
 }
 
+// Schema implements the Schema operation.
 func (t *GetContextTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -40,7 +43,8 @@ func (t *GetContextTool) Schema() ToolSchema {
 	}
 }
 
-func (t *GetContextTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
+// Execute implements the Execute operation.
+func (t *GetContextTool) Execute(_ context.Context, _ ToolParameters) (ToolResult, error) {
 	if t.context == nil {
 		return ToolResult{
 			Success: false,

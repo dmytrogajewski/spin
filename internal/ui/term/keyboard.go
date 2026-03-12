@@ -3,6 +3,7 @@ package term
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"time"
 	"unicode/utf8"
@@ -12,41 +13,76 @@ import (
 type KeyKind int
 
 const (
+	// KeyRune defines a KeyRune constant.
 	KeyRune KeyKind = iota
+	// KeyEnter defines a KeyEnter constant.
 	KeyEnter
+	// KeyTab represents the tab key.
 	KeyTab
+	// KeyBackspace represents the backspace key.
 	KeyBackspace
+	// KeyDelete represents the delete key.
 	KeyDelete
+	// KeyUp represents the up arrow key.
 	KeyUp
+	// KeyDown represents the down arrow key.
 	KeyDown
+	// KeyLeft represents the left arrow key.
 	KeyLeft
+	// KeyRight represents the right arrow key.
 	KeyRight
+	// KeyHome represents the home key.
 	KeyHome
+	// KeyEnd represents the end key.
 	KeyEnd
+	// KeyPgUp represents the page up key.
 	KeyPgUp
+	// KeyPgDn represents the page down key.
 	KeyPgDn
+	// KeyEscape represents the escape key.
 	KeyEscape
+	// KeyCtrlC represents the ctrl+c key combination.
 	KeyCtrlC
+	// KeyCtrlD represents the ctrl+d key combination.
 	KeyCtrlD
-	KeyCtrlU // kill line left.
-	KeyCtrlK // kill line right.
-	KeyCtrlW // delete word left.
-	KeyCtrlL // redraw.
-	KeyCtrlP // command palette.
-	KeyPaste // bracketed paste.
+	// KeyCtrlU represents the ctrl+u key combination (kill line left).
+	KeyCtrlU
+	// KeyCtrlK represents the ctrl+k key combination (kill line right).
+	KeyCtrlK
+	// KeyCtrlW represents the ctrl+w key combination (delete word left).
+	KeyCtrlW
+	// KeyCtrlL represents the ctrl+l key combination (redraw).
+	KeyCtrlL
+	// KeyCtrlP represents the ctrl+p key combination (command palette).
+	KeyCtrlP
+	// KeyPaste represents a bracketed paste event.
+	KeyPaste
+	// KeyF1 represents the F1 key.
 	KeyF1
+	// KeyF2 represents the F2 key.
 	KeyF2
+	// KeyF3 represents the F3 key.
 	KeyF3
+	// KeyF4 represents the F4 key.
 	KeyF4
+	// KeyF5 represents the F5 key.
 	KeyF5
+	// KeyF6 represents the F6 key.
 	KeyF6
+	// KeyF7 represents the F7 key.
 	KeyF7
+	// KeyF8 represents the F8 key.
 	KeyF8
+	// KeyF9 represents the F9 key.
 	KeyF9
+	// KeyF10 represents the F10 key.
 	KeyF10
+	// KeyF11 represents the F11 key.
 	KeyF11
+	// KeyF12 represents the F12 key.
 	KeyF12
-	KeyUnknown // fallback for unrecognized sequences.
+	// KeyUnknown is the fallback for unrecognized sequences.
+	KeyUnknown
 )
 
 // String returns a human-readable name for the key kind.
@@ -379,7 +415,7 @@ func (p *keyParser) parseTildeCSI(seq, raw []byte) (KeyEvent, bool) {
 }
 
 // parseSS3 handles Single Shift 3 sequences (ESC O), typically function keys.
-func (p *keyParser) parseSS3(ctx context.Context, raw []byte) KeyEvent {
+func (p *keyParser) parseSS3(_ context.Context, raw []byte) KeyEvent {
 	n, err := p.r.Read(p.buf[:])
 	if err != nil || n == 0 {
 		return KeyEvent{Kind: KeyUnknown, Raw: raw}
@@ -445,7 +481,7 @@ func (p *keyParser) parseBracketedPaste(ctx context.Context, raw []byte) KeyEven
 }
 
 // parseRune decodes a UTF-8 rune starting with the given byte.
-func (p *keyParser) parseRune(ctx context.Context, b byte) KeyEvent {
+func (p *keyParser) parseRune(_ context.Context, b byte) KeyEvent {
 	raw := []byte{b}
 
 	// Single-byte ASCII.
@@ -510,12 +546,16 @@ func (p *keyParser) decodeUTF8Rune(raw []byte) KeyEvent {
 
 // readSequence reads up to maxLen bytes until a terminating character.
 // Returns when it sees a letter, '~', or reaches maxLen.
-func (p *keyParser) readSequence(ctx context.Context, maxLen int) ([]byte, error) {
+func (p *keyParser) readSequence(_ context.Context, maxLen int) ([]byte, error) {
 	seq := make([]byte, 0, maxLen)
 	for range maxLen {
 		n, err := p.r.Read(p.buf[:])
 		if err != nil || n == 0 {
-			return seq, err
+			if err != nil {
+				return seq, fmt.Errorf("read sequence: %w", err)
+			}
+
+			return seq, nil
 		}
 
 		b := p.buf[0]

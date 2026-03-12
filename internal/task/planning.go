@@ -1,7 +1,6 @@
 package task
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -75,30 +74,35 @@ func NewPlanning() *Planning {
 	}
 }
 
+// Name implements the Name operation.
 func (p *Planning) Name() string {
 	return p.name
 }
 
+// SystemPrompt implements the SystemPrompt operation.
 func (p *Planning) SystemPrompt() string {
 	return p.systemPrompt
 }
 
+// AllowedTools implements the AllowedTools operation.
 func (p *Planning) AllowedTools() []string {
 	// Planning mode allows analysis tools (context-only, no file reading).
 	return []string{"list_directory", "file_search", "git_context", "get_context"}
 }
 
+// MaxTokens implements the MaxTokens operation.
 func (p *Planning) MaxTokens() int {
 	return p.maxTokens
 }
 
+// Validate implements the Validate operation.
 func (p *Planning) Validate() error {
 	if p.maxTokens <= 0 {
-		return errors.New("max tokens must be positive")
+		return ErrMaxTokensMustBePositive
 	}
 
 	if p.maxTokens > MaxAllowedTokens {
-		return fmt.Errorf("max tokens %d exceeds maximum allowed %d", p.maxTokens, MaxAllowedTokens)
+return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", p.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
 	}
 
 	return nil

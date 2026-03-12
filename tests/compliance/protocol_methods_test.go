@@ -261,10 +261,10 @@ func TestCompliance_Prompt_StopReason(t *testing.T) {
 	}
 
 	for _, reason := range validReasons {
-		resp := acp.PromptResponse{
+		reasonResp := acp.PromptResponse{
 			StopReason: reason,
 		}
-		verifyPromptResponse(t, resp)
+		verifyPromptResponse(t, reasonResp)
 	}
 }
 

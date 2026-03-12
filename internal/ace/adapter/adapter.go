@@ -1,6 +1,8 @@
+// Package adapter provides adapters between ACE components and external interfaces.
 package adapter
 
 import (
+	"errors"
 	"context"
 	"fmt"
 	"log/slog"
@@ -14,6 +16,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
+)
+
+var (
+	ErrSessionNotFound = errors.New("session not found")
+	ErrSessionNotFound2 = errors.New("session not found")
+	ErrSessionNotFound3 = errors.New("session not found")
 )
 
 // Adapter handles online context adaptation.
@@ -38,6 +46,7 @@ type adapter struct {
 	curator   curator.Curator
 	generator generator.Generator
 	memory    *MemoryManager
+	logger    *slog.Logger
 
 	sessions map[string]*Session
 	mu       sync.RWMutex
@@ -70,12 +79,13 @@ func NewAdapterWithConfig(cfg Config) Adapter {
 		curator:   cfg.Curator,
 		generator: cfg.Generator,
 		memory:    NewMemoryManager(cfg.MemoryConfig),
+		logger:    slog.Default(),
 		sessions:  make(map[string]*Session),
 	}
 }
 
 // StartSession begins a new online learning session.
-func (a *adapter) StartSession(ctx context.Context) (string, error) {
+func (a *adapter) StartSession(_ context.Context) (string, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -100,7 +110,7 @@ func newSession(id string) *Session {
 func (a *adapter) AdaptOnline(ctx context.Context, signal ExecutionSignal) (*AdaptationResult, error) {
 	startTime := time.Now()
 
-	slog.Debug("Adapter processing signal",
+	a.logger.DebugContext(ctx, "Adapter processing signal",
 		"session_id", signal.SessionID,
 		"signal_type", signal.SignalType,
 		"outcome", signal.Outcome)
@@ -111,7 +121,7 @@ func (a *adapter) AdaptOnline(ctx context.Context, signal ExecutionSignal) (*Ada
 	}
 
 	action, reason := decideAction(signal)
-	slog.Debug("Adapter decided action", "action", action, "reason", reason)
+	a.logger.DebugContext(ctx, "Adapter decided action", "action", action, "reason", reason)
 
 	bulletsAdded, err := a.executeAction(ctx, action, signal, session)
 	if err != nil {
@@ -137,13 +147,13 @@ func (a *adapter) getAndUpdateSession(signal ExecutionSignal) (*Session, error) 
 	a.mu.RUnlock()
 
 	if !exists {
-		slog.Warn("Adapter: session not found", "session_id", signal.SessionID)
+		a.logger.Warn("Adapter: session not found", "session_id", signal.SessionID)
 
-		return nil, fmt.Errorf("session not found: %s", signal.SessionID)
+return nil, fmt.Errorf("session not found: %s: %w", signal.SessionID, ErrSessionNotFound)
 	}
 
 	session.AddSignal(&signal)
-	slog.Debug("Signal added to session",
+	a.logger.Debug("Signal added to session",
 		"session_id", signal.SessionID,
 		"total_signals", session.SignalCount)
 
@@ -182,7 +192,7 @@ func (a *adapter) maybeRefine(ctx context.Context, reason string) (bool, string)
 
 	pruned, err := a.memory.Prune(ctx, a.playbook)
 	if err != nil {
-		slog.Error("Memory refinement failed", "error", err)
+		a.logger.ErrorContext(ctx, "Memory refinement failed", "error", err)
 
 		return false, reason
 	}
@@ -301,12 +311,12 @@ func (a *adapter) addBulletsToPlaybook(ctx context.Context, bullets []*bullet.Bu
 }
 
 // EndSession finalizes session and persists state.
-func (a *adapter) EndSession(ctx context.Context, sessionID string) error {
+func (a *adapter) EndSession(_ context.Context, sessionID string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	if _, exists := a.sessions[sessionID]; !exists {
-		return fmt.Errorf("session not found: %s", sessionID)
+return fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound2)
 	}
 
 	delete(a.sessions, sessionID)
@@ -321,7 +331,7 @@ func (a *adapter) GetSession(sessionID string) (*Session, error) {
 
 	session, exists := a.sessions[sessionID]
 	if !exists {
-		return nil, fmt.Errorf("session not found: %s", sessionID)
+return nil, fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound3)
 	}
 
 	return session, nil

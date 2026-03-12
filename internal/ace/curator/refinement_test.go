@@ -25,7 +25,7 @@ func TestRefinement_NoRefine(t *testing.T) {
 	// Add bullets.
 	for range 100 {
 		b, _ := bullet.New("bullet content")
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	insights := []*reflector.Insight{
@@ -54,7 +54,7 @@ func TestRefinement_Lazy_NoAutoRefine(t *testing.T) {
 	// Add many bullets.
 	for range 100 {
 		b, _ := bullet.New("bullet content")
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	insights := []*reflector.Insight{
@@ -83,14 +83,14 @@ func TestRefinement_Lazy_ManualRefine(t *testing.T) {
 	// Add bullets with low utility (score = 0).
 	for range 5 {
 		b, _ := bullet.New("low utility bullet")
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	// Add bullets with high utility.
 	for range 5 {
 		b, _ := bullet.New("high utility bullet")
 		b.IncrementHelpful()
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	initialCount := pb.Stats().TotalBullets
@@ -125,14 +125,14 @@ func TestRefinement_Proactive_Trigger(t *testing.T) {
 	// Add 5 low-utility bullets.
 	for range 5 {
 		b, _ := bullet.New("low utility")
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	// Add 4 high-utility bullets (total = 9, below threshold).
 	for range 4 {
 		b, _ := bullet.New("high utility")
 		b.IncrementHelpful()
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	assert.Equal(t, 9, pb.Stats().TotalBullets)
@@ -170,7 +170,7 @@ func TestRefinement_Proactive_NoTrigger(t *testing.T) {
 	// Add only 10 bullets (well below threshold).
 	for range 10 {
 		b, _ := bullet.New("bullet")
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	insights := []*reflector.Insight{

@@ -21,7 +21,7 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 	// Setup with actual output capture.
 	var buf bytes.Buffer
 
-	renderer := prompt.NewRenderer(&buf, 80, "> ")
+	renderer := prompt.NewTermRenderer(&buf, 80, "> ")
 	model := prompt.NewModel(100)
 	blockRenderer := blocks.NewRenderer(80)
 
@@ -108,7 +108,7 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
 	// Setup.
 	p := setupPureTTY(t)
-	defer p.Stop()
+	defer func() { _ = p.Stop() }()
 
 	// Create a block without completion metadata.
 	block := blocks.NewBlock(blocks.BlockTypeExecute)
@@ -152,7 +152,7 @@ func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
 func TestUpdateBlock_HandlesReadBlocks(t *testing.T) {
 	// Setup.
 	p := setupPureTTY(t)
-	defer p.Stop()
+	defer func() { _ = p.Stop() }()
 
 	// Create a READ block.
 	block := blocks.NewBlock(blocks.BlockTypeRead)
@@ -194,7 +194,7 @@ func setupPureTTY(t *testing.T) *PureTTY {
 
 	out := &bytes.Buffer{}
 	model := prompt.NewModel(100)
-	renderer := prompt.NewRenderer(out, 80, "> ")
+	renderer := prompt.NewTermRenderer(out, 80, "> ")
 	printer := output.NewPrinter(out)
 	timeline := blocks.NewTimeline()
 	blockRenderer := blocks.NewRenderer(80)
@@ -226,7 +226,7 @@ func setupPureTTY(t *testing.T) *PureTTY {
 }
 
 // Helper: captureOutput returns all output written to the PureTTY.
-func captureOutput(p *PureTTY) string {
+func captureOutput(_ *PureTTY) string {
 	// Placeholder: Output capture requires a test mode in PureTTY
 	// that intercepts writes instead of sending to terminal
 	// This would require refactoring PureTTY to accept an io.Writer
@@ -254,7 +254,7 @@ func TestApprovalDialog_KeyboardInput(t *testing.T) {
 	// Create PureTTY with test options.
 	ui, err := NewPureTTY(&buf,
 		WithTTY(mockTTY),
-		withKeyboardEvents(keyCh),
+		WithKeyboardEvents(keyCh),
 	)
 	if err != nil {
 		t.Fatalf("NewPureTTY failed: %v", err)
@@ -335,7 +335,7 @@ func TestApprovalDialog_DenyKey(t *testing.T) {
 	keyCh := make(chan term.KeyEvent, 10)
 	mockTTY := &mockTerminalController{width: 80, height: 24}
 
-	ui, err := NewPureTTY(&buf, WithTTY(mockTTY), withKeyboardEvents(keyCh))
+	ui, err := NewPureTTY(&buf, WithTTY(mockTTY), WithKeyboardEvents(keyCh))
 	if err != nil {
 		t.Fatalf("NewPureTTY failed: %v", err)
 	}
@@ -427,14 +427,6 @@ func (m *mockTerminalController) OnResize(f func(int, int)) {
 	m.resizeFunc = f
 }
 
-// withKeyboardEvents is a test option to inject keyboard events.
-func withKeyboardEvents(keyCh <-chan term.KeyEvent) PureTTYOption {
-	return func(p *PureTTY) error {
-		p.keyboardEvents = keyCh
-
-		return nil
-	}
-}
 
 // TestUpdateBlock_NoDuplicateToolCompleted reproduces and tests the fix for duplicate "Tool completed" messages.
 // This test simulates the exact scenario where a TOOL block is updated multiple times,
@@ -443,7 +435,7 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 	// Setup with actual output capture.
 	var buf bytes.Buffer
 
-	renderer := prompt.NewRenderer(&buf, 80, "> ")
+	renderer := prompt.NewTermRenderer(&buf, 80, "> ")
 	model := prompt.NewModel(100)
 	blockRenderer := blocks.NewRenderer(80)
 
@@ -559,7 +551,7 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 	// Setup with actual output capture.
 	var buf bytes.Buffer
 
-	renderer := prompt.NewRenderer(&buf, 80, "> ")
+	renderer := prompt.NewTermRenderer(&buf, 80, "> ")
 	model := prompt.NewModel(100)
 	blockRenderer := blocks.NewRenderer(80)
 

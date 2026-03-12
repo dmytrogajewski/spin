@@ -1,3 +1,4 @@
+// Package feedback provides feedback parsing and processing.
 package feedback
 
 import (

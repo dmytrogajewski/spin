@@ -98,7 +98,7 @@ func TestSessionHandoff_ListSessions(t *testing.T) {
 
 	// Save multiple sessions.
 	for _, id := range []string{"session-1", "session-2", "session-3"} {
-		err := handoff.SaveSession(ctx, HandoffData{
+		err = handoff.SaveSession(ctx, HandoffData{
 			SessionID: id,
 			Summary:   "Test session " + id,
 		})

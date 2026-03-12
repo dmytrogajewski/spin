@@ -1,8 +1,7 @@
-package runtime
+package executor
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -26,7 +25,7 @@ type BuiltinRuntime struct {
 	validator       *security.Validator
 	shellService    *shellpkg.Service
 	gitService      *gitpkg.Service
-	mapper          *tui.TUIMapper
+	mapper          *tui.Mapper
 	approvalHandler security.ApprovalHandler
 	logger          *slog.Logger
 }
@@ -49,11 +48,11 @@ type BuiltinRuntimeConfig struct {
 // NewBuiltinRuntime creates a new builtin runtime.
 func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 	if cfg.WorkDir == "" {
-		return nil, errors.New("workDir is required")
+		return nil, ErrWorkdirIsRequired
 	}
 
 	if cfg.Emitter == nil {
-		return nil, errors.New("emitter is required")
+		return nil, ErrEmitterIsRequired
 	}
 
 	logger := cfg.Logger
@@ -61,7 +60,7 @@ func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 		logger = slog.Default()
 	}
 
-	mapper := tui.NewTUIMapper(cfg.UI)
+	mapper := tui.NewMapper(cfg.UI)
 
 	return &BuiltinRuntime{
 		workDir:         cfg.WorkDir,
@@ -81,9 +80,9 @@ func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 // RegisterTools registers builtin-specific tools.
 func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
 	// Read-only tools (shared, no runtime dependency).
-	registry.Register(tools.NewReadFileTool())
-	registry.Register(tools.NewWriteFileTool())
-	registry.Register(tools.NewListDirectoryTool())
+	_ = registry.Register(tools.NewReadFileTool())
+	_ = registry.Register(tools.NewWriteFileTool())
+	_ = registry.Register(tools.NewListDirectoryTool())
 
 	// Builtin-specific shell command tool (uses local executor).
 	var (
@@ -101,10 +100,10 @@ func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
 	}
 
 	if r.executor != nil {
-		execAdapt = &ExecutorAdapter{executor: r.executor}
+		execAdapt = &Adapter{executor: r.executor}
 	}
 
-	registry.Register(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
+	_ = registry.Register(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
 
 	r.logger.Debug("registered builtin tools", "count", 4)
 }
@@ -141,37 +140,42 @@ func (r *BuiltinRuntime) TerminalClient() TerminalClient {
 
 // Mapper returns the TUI mapper for event processing.
 // This is exposed so TUI code can use it directly for mapping events.
-func (r *BuiltinRuntime) Mapper() *tui.TUIMapper {
+func (r *BuiltinRuntime) Mapper() *tui.Mapper {
 	return r.mapper
 }
 
 // builtinNotificationSender wraps TUIMapper to implement NotificationSender.
 type builtinNotificationSender struct {
-	mapper *tui.TUIMapper
+	mapper *tui.Mapper
 }
 
-func (s *builtinNotificationSender) SendToolCallStart(ctx context.Context, toolID, toolName string, params tools.ToolParameters) error {
+// SendToolCallStart implements the SendToolCallStart operation.
+func (s *builtinNotificationSender) SendToolCallStart(_ context.Context, _, _ string, _ tools.ToolParameters) error {
 	// TUIMapper handles EventToolCallStart events, not direct notifications
 	// This is called from event emission, handled by the mapper's MapEvent.
 	return nil
 }
 
-func (s *builtinNotificationSender) SendToolCallUpdate(ctx context.Context, toolID string, status string, content any) error {
+// SendToolCallUpdate implements the SendToolCallUpdate operation.
+func (s *builtinNotificationSender) SendToolCallUpdate(_ context.Context, _ string, _ string, _ any) error {
 	// TUIMapper handles EventToolCallProgress events.
 	return nil
 }
 
-func (s *builtinNotificationSender) SendToolCallComplete(ctx context.Context, toolID string, success bool, output string, err error) error {
+// SendToolCallComplete implements the SendToolCallComplete operation.
+func (s *builtinNotificationSender) SendToolCallComplete(_ context.Context, _ string, _ bool, _ string, _ error) error {
 	// TUIMapper handles EventToolCallComplete events.
 	return nil
 }
 
-func (s *builtinNotificationSender) SendMessageChunk(ctx context.Context, content string) error {
+// SendMessageChunk implements the SendMessageChunk operation.
+func (s *builtinNotificationSender) SendMessageChunk(_ context.Context, _ string) error {
 	// TUIMapper handles EventContentDelta events.
 	return nil
 }
 
-func (s *builtinNotificationSender) SendPlanUpdate(ctx context.Context, entries []PlanEntry) error {
+// SendPlanUpdate implements the SendPlanUpdate operation.
+func (s *builtinNotificationSender) SendPlanUpdate(_ context.Context, _ []PlanEntry) error {
 	// Plan updates are handled via events.
 	return nil
 }

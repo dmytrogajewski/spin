@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	"github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
@@ -24,7 +24,7 @@ import (
 )
 
 // createACPAgentComponents is a test helper that creates ACP agent components using the new refactored flow.
-func createACPAgentComponents(t *testing.T, workDir string, provider llm.Provider, cfg *config.ConfigV2) (*agent.Agent, *events.EventEmitter, *runtime.ACPRuntime) {
+func createACPAgentComponents(t *testing.T, workDir string, provider llm.Provider, cfg *config.V2) (*agent.Agent, *events.EventEmitter, *executor.ACPRuntime) {
 	logger := slog.Default()
 
 	// 1. Create shared infrastructure.
@@ -44,7 +44,7 @@ func createACPAgentComponents(t *testing.T, workDir string, provider llm.Provide
 	t.Cleanup(cleanup)
 
 	// 3. Create ACP runtime (complete, self-contained).
-	acpRuntime, err := runtime.NewACP(runtime.ACPConfig{
+	acpRuntime, err := executor.NewACP(executor.ACPConfig{
 		WorkDir:      workDir,
 		Emitter:      emitter,
 		Storage:      storage,
@@ -54,7 +54,7 @@ func createACPAgentComponents(t *testing.T, workDir string, provider llm.Provide
 	})
 	require.NoError(t, err)
 
-	// 4. Build core agent using runtime.
+	// 4. Build core agent using executor.
 	coreAgent, err := buildCoreAgent(cfg, provider, workDir, emitter, acpRuntime)
 	require.NoError(t, err)
 
@@ -104,13 +104,13 @@ func TestNewACPCmd_FlagDefaults(t *testing.T) {
 // TestBuildProviderForACP_Ollama tests Ollama provider creation using unified builder.
 func TestBuildProviderForACP_Ollama(t *testing.T) {
 	// Create a mock HTTP server to stand in for Ollama.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
 	ctx := context.Background()
-	cfg := config.DefaultConfigV2()
+	cfg := config.DefaultV2()
 	cfg.LLM.Provider = "ollama"
 	cfg.LLM.BaseURL = server.URL
 	cfg.LLM.Model = "test-model"
@@ -131,7 +131,7 @@ func TestBuildProviderForACP_Ollama(t *testing.T) {
 // TestBuildProviderForACP_OpenAI tests OpenAI provider creation using unified builder.
 func TestBuildProviderForACP_OpenAI(t *testing.T) {
 	ctx := context.Background()
-	cfg := config.DefaultConfigV2()
+	cfg := config.DefaultV2()
 	cfg.LLM.Provider = "openai"
 	cfg.LLM.BaseURL = "https://api.openai.com"
 	cfg.LLM.Model = "gpt-4"
@@ -149,7 +149,7 @@ func TestBuildProviderForACP_OpenAI(t *testing.T) {
 // TestBuildProviderForACP_UnknownProvider tests error handling for unknown provider.
 func TestBuildProviderForACP_UnknownProvider(t *testing.T) {
 	ctx := context.Background()
-	cfg := config.DefaultConfigV2()
+	cfg := config.DefaultV2()
 	cfg.LLM.Provider = "unknown"
 	cfg.LLM.Model = "test-model"
 	authMgr := createAuthManager()
@@ -170,7 +170,7 @@ func TestCreateACPConversation(t *testing.T) {
 	provider := llm.NewMockProvider("test")
 	defer provider.Close()
 
-	cfg := config.DefaultConfigV2()
+	cfg := config.DefaultV2()
 	cfg.Agent.WorkDir = tmpDir
 
 	// Test the new refactored flow.
@@ -189,7 +189,7 @@ func TestCreateACPConversation_InvalidWorkDir(t *testing.T) {
 	// Use a non-existent directory.
 	invalidDir := filepath.Join(t.TempDir(), "nonexistent", "path")
 
-	cfg := config.DefaultConfigV2()
+	cfg := config.DefaultV2()
 	cfg.Agent.WorkDir = invalidDir
 
 	// The new flow should handle invalid directories gracefully or panic.
@@ -294,7 +294,7 @@ func TestCreateAgentComponents_RegistersTools(t *testing.T) {
 	provider := llm.NewMockProvider("test")
 	defer provider.Close()
 
-	cfg := config.DefaultConfigV2()
+	cfg := config.DefaultV2()
 	cfg.Agent.WorkDir = tmpDir
 
 	agentInstance, emitter, runtime := createACPAgentComponents(t, tmpDir, provider, cfg)
@@ -314,7 +314,7 @@ func TestCreateACPComponents_ReturnsApprovalService(t *testing.T) {
 	provider := llm.NewMockProvider("test")
 	defer provider.Close()
 
-	cfg := config.DefaultConfigV2()
+	cfg := config.DefaultV2()
 	cfg.Agent.WorkDir = tmpDir
 
 	agentInstance, emitter, _ := createACPAgentComponents(t, tmpDir, provider, cfg)

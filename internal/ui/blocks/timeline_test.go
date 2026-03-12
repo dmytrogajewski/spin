@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -38,7 +39,9 @@ func TestTimeline_AppendMultiple(t *testing.T) {
 	for i := range 5 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	if timeline.Len() != 5 {
@@ -64,13 +67,15 @@ func TestTimeline_AppendDuplicateID(t *testing.T) {
 
 	block1 := NewBlock(BlockTypeExecute)
 	block1.ID = "duplicate"
-	timeline.Append(block1)
+	if err := timeline.Append(block1); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
 	block2 := NewBlock(BlockTypePlan)
 	block2.ID = "duplicate"
 	err := timeline.Append(block2)
 
-	if err != ErrDuplicateID {
+	if !errors.Is(err, ErrDuplicateID) {
 		t.Errorf("Expected ErrDuplicateID, got %v", err)
 	}
 
@@ -85,7 +90,9 @@ func TestTimeline_Update(t *testing.T) {
 	block := NewBlock(BlockTypeExecute)
 	block.ID = "blk_1"
 	block.Title = "Original"
-	timeline.Append(block)
+	if err := timeline.Append(block); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
 	updated := NewBlock(BlockTypeExecute)
 	updated.ID = "blk_1"
@@ -96,7 +103,10 @@ func TestTimeline_Update(t *testing.T) {
 		t.Fatalf("Update failed: %v", err)
 	}
 
-	retrieved, _ := timeline.Get("blk_1")
+	retrieved, err := timeline.Get("blk_1")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 	if retrieved.Title != "Updated" {
 		t.Errorf("Expected title 'Updated', got '%s'", retrieved.Title)
 	}
@@ -109,7 +119,7 @@ func TestTimeline_UpdateNonExistent(t *testing.T) {
 	block.ID = "nonexistent"
 
 	err := timeline.Update("nonexistent", block)
-	if err != ErrBlockNotFound {
+	if !errors.Is(err, ErrBlockNotFound) {
 		t.Errorf("Expected ErrBlockNotFound, got %v", err)
 	}
 }
@@ -120,7 +130,9 @@ func TestTimeline_Delete(t *testing.T) {
 	for i := range 3 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	err := timeline.Delete("b")
@@ -133,12 +145,18 @@ func TestTimeline_Delete(t *testing.T) {
 	}
 
 	// Verify remaining blocks.
-	block0, _ := timeline.GetByIndex(0)
+	block0, err := timeline.GetByIndex(0)
+	if err != nil {
+		t.Fatalf("GetByIndex(0) failed: %v", err)
+	}
 	if block0.ID != "a" {
 		t.Errorf("Index 0: expected 'a', got '%s'", block0.ID)
 	}
 
-	block1, _ := timeline.GetByIndex(1)
+	block1, err := timeline.GetByIndex(1)
+	if err != nil {
+		t.Fatalf("GetByIndex(1) failed: %v", err)
+	}
 	if block1.ID != "c" {
 		t.Errorf("Index 1: expected 'c', got '%s'", block1.ID)
 	}
@@ -148,7 +166,7 @@ func TestTimeline_DeleteNonExistent(t *testing.T) {
 	timeline := NewTimeline()
 
 	err := timeline.Delete("nonexistent")
-	if err != ErrBlockNotFound {
+	if !errors.Is(err, ErrBlockNotFound) {
 		t.Errorf("Expected ErrBlockNotFound, got %v", err)
 	}
 }
@@ -163,7 +181,9 @@ func TestTimeline_Viewport_Basic(t *testing.T) {
 	for i := range 10 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	viewport := timeline.GetViewport()
@@ -190,7 +210,9 @@ func TestTimeline_Viewport_AtBottom(t *testing.T) {
 	for i := range 10 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	timeline.ScrollToBottom()
@@ -220,7 +242,9 @@ func TestTimeline_Viewport_LargerThanBlocks(t *testing.T) {
 	for i := range 3 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	viewport := timeline.GetViewport()
@@ -259,7 +283,9 @@ func TestTimeline_ScrollDown(t *testing.T) {
 
 	for range 10 {
 		block := NewBlock(BlockTypeExecute)
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	timeline.ScrollDown(3)
@@ -277,7 +303,9 @@ func TestTimeline_ScrollDownClamping(t *testing.T) {
 	for i := range 10 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	timeline.ScrollDown(100) // Way past end.
@@ -296,7 +324,9 @@ func TestTimeline_ScrollUp(t *testing.T) {
 	for i := range 10 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	timeline.ScrollDown(5)
@@ -315,7 +345,9 @@ func TestTimeline_ScrollUpClamping(t *testing.T) {
 	for i := range 10 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	timeline.ScrollDown(2)
@@ -334,7 +366,9 @@ func TestTimeline_ScrollToTopBottom(t *testing.T) {
 	for i := range 10 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	timeline.ScrollToBottom()
@@ -360,7 +394,9 @@ func TestTimeline_ScrollToBlock(t *testing.T) {
 	for i := range 15 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	err := timeline.ScrollToBlock("g") // Index 6.
@@ -381,10 +417,12 @@ func TestTimeline_ScrollToBlockNonExistent(t *testing.T) {
 
 	block := NewBlock(BlockTypeExecute)
 	block.ID = "exists"
-	timeline.Append(block)
+	if err := timeline.Append(block); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
 	err := timeline.ScrollToBlock("nonexistent")
-	if err != ErrBlockNotFound {
+	if !errors.Is(err, ErrBlockNotFound) {
 		t.Errorf("Expected ErrBlockNotFound, got %v", err)
 	}
 }
@@ -395,7 +433,9 @@ func TestTimeline_FocusBlock(t *testing.T) {
 	for i := range 5 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	err := timeline.FocusBlock("c")
@@ -419,21 +459,36 @@ func TestTimeline_NextPrevBlock(t *testing.T) {
 	for i := range 5 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
-	timeline.FocusBlock("b")
+	if err := timeline.FocusBlock("b"); err != nil {
+		t.Fatalf("FocusBlock failed: %v", err)
+	}
 
-	timeline.NextBlock()
+	if err := timeline.NextBlock(); err != nil {
+		t.Fatalf("NextBlock failed: %v", err)
+	}
 
-	focused, _ := timeline.GetFocusedBlock()
+	focused, err := timeline.GetFocusedBlock()
+	if err != nil {
+		t.Fatalf("GetFocusedBlock failed: %v", err)
+	}
 	if focused.ID != "c" {
 		t.Errorf("NextBlock: expected 'c', got '%s'", focused.ID)
 	}
 
-	timeline.PrevBlock()
+	err = timeline.PrevBlock()
+	if err != nil {
+		t.Fatalf("PrevBlock failed: %v", err)
+	}
 
-	focused, _ = timeline.GetFocusedBlock()
+	focused, err = timeline.GetFocusedBlock()
+	if err != nil {
+		t.Fatalf("GetFocusedBlock failed: %v", err)
+	}
 	if focused.ID != "b" {
 		t.Errorf("PrevBlock: expected 'b', got '%s'", focused.ID)
 	}
@@ -445,14 +500,23 @@ func TestTimeline_NextBlockClamping(t *testing.T) {
 	for i := range 3 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
-	timeline.FocusBlock("c") // Last block.
+	if err := timeline.FocusBlock("c"); err != nil {
+		t.Fatalf("FocusBlock failed: %v", err)
+	}
 
-	timeline.NextBlock() // Should stay at 'c'.
+	if err := timeline.NextBlock(); err != nil {
+		t.Fatalf("NextBlock failed: %v", err)
+	}
 
-	focused, _ := timeline.GetFocusedBlock()
+	focused, err := timeline.GetFocusedBlock()
+	if err != nil {
+		t.Fatalf("GetFocusedBlock failed: %v", err)
+	}
 	if focused.ID != "c" {
 		t.Errorf("NextBlock at end: expected 'c', got '%s'", focused.ID)
 	}
@@ -464,14 +528,23 @@ func TestTimeline_PrevBlockClamping(t *testing.T) {
 	for i := range 3 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
-	timeline.FocusBlock("a") // First block.
+	if err := timeline.FocusBlock("a"); err != nil {
+		t.Fatalf("FocusBlock failed: %v", err)
+	}
 
-	timeline.PrevBlock() // Should stay at 'a'.
+	if err := timeline.PrevBlock(); err != nil {
+		t.Fatalf("PrevBlock failed: %v", err)
+	}
 
-	focused, _ := timeline.GetFocusedBlock()
+	focused, err := timeline.GetFocusedBlock()
+	if err != nil {
+		t.Fatalf("GetFocusedBlock failed: %v", err)
+	}
 	if focused.ID != "a" {
 		t.Errorf("PrevBlock at start: expected 'a', got '%s'", focused.ID)
 	}
@@ -486,7 +559,9 @@ func TestTimeline_FilterByType(t *testing.T) {
 	for i, typ := range types {
 		block := NewBlock(typ)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	filter := &Filter{
@@ -512,7 +587,9 @@ func TestTimeline_FilterByMultipleTypes(t *testing.T) {
 	for i, typ := range types {
 		block := NewBlock(typ)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	filter := &Filter{
@@ -538,8 +615,12 @@ func TestTimeline_FilterByFile(t *testing.T) {
 		block := NewBlock(BlockTypeRead)
 		block.ID = string(rune('a' + i))
 		meta := &ReadMeta{File: file}
-		SetReadMeta(block, meta)
-		timeline.Append(block)
+		if err := SetReadMeta(block, meta); err != nil {
+			t.Fatalf("SetReadMeta failed: %v", err)
+		}
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	filter := &Filter{
@@ -570,8 +651,12 @@ func TestTimeline_FilterByExitCode(t *testing.T) {
 			Impact:   "low",
 			ExitCode: &code,
 		}
-		SetExecuteMeta(block, meta)
-		timeline.Append(block)
+		if err := SetExecuteMeta(block, meta); err != nil {
+			t.Fatalf("SetExecuteMeta failed: %v", err)
+		}
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	exitCode1 := 1
@@ -602,8 +687,12 @@ func TestTimeline_FilterByImpact(t *testing.T) {
 			CWD:     "./",
 			Impact:  impact,
 		}
-		SetExecuteMeta(block, meta)
-		timeline.Append(block)
+		if err := SetExecuteMeta(block, meta); err != nil {
+			t.Fatalf("SetExecuteMeta failed: %v", err)
+		}
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	filter := &Filter{
@@ -635,8 +724,12 @@ func TestTimeline_FilterCombined(t *testing.T) {
 		Impact:   "low",
 		ExitCode: &exitCode0,
 	}
-	SetExecuteMeta(block0, meta0)
-	timeline.Append(block0)
+	if err := SetExecuteMeta(block0, meta0); err != nil {
+		t.Fatalf("SetExecuteMeta failed: %v", err)
+	}
+	if err := timeline.Append(block0); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
 	// Block 1: EXECUTE, test.go, exit 1, impact high.
 	block1 := NewBlock(BlockTypeExecute)
@@ -648,13 +741,19 @@ func TestTimeline_FilterCombined(t *testing.T) {
 		Impact:   "high",
 		ExitCode: &exitCode1,
 	}
-	SetExecuteMeta(block1, meta1)
-	timeline.Append(block1)
+	if err := SetExecuteMeta(block1, meta1); err != nil {
+		t.Fatalf("SetExecuteMeta failed: %v", err)
+	}
+	if err := timeline.Append(block1); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
 	// Block 2: PLAN.
 	block2 := NewBlock(BlockTypePlan)
 	block2.ID = "c"
-	timeline.Append(block2)
+	if err := timeline.Append(block2); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
 	// Block 3: EXECUTE, util.go, exit 1, impact high.
 	block3 := NewBlock(BlockTypeExecute)
@@ -666,8 +765,12 @@ func TestTimeline_FilterCombined(t *testing.T) {
 		Impact:   "high",
 		ExitCode: &exitCode3,
 	}
-	SetExecuteMeta(block3, meta3)
-	timeline.Append(block3)
+	if err := SetExecuteMeta(block3, meta3); err != nil {
+		t.Fatalf("SetExecuteMeta failed: %v", err)
+	}
+	if err := timeline.Append(block3); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
 	// Filter: type=EXECUTE AND exitCode=1 AND impact=high.
 	exitCode := 1
@@ -696,7 +799,9 @@ func TestTimeline_ClearFilter(t *testing.T) {
 	for i := range 5 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	filter := &Filter{
@@ -747,22 +852,33 @@ func TestTimeline_ToggleFold(t *testing.T) {
 	block := NewBlock(BlockTypeExecute)
 	block.ID = "blk_1"
 	block.FoldState = FoldStateExpanded
-	timeline.Append(block)
+	if err := timeline.Append(block); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
 	err := timeline.ToggleFold("blk_1")
 	if err != nil {
 		t.Fatalf("ToggleFold failed: %v", err)
 	}
 
-	retrieved, _ := timeline.Get("blk_1")
+	retrieved, err := timeline.Get("blk_1")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 	if retrieved.FoldState != FoldStateCollapsed {
 		t.Errorf("Expected FoldStateCollapsed, got %v", retrieved.FoldState)
 	}
 
 	// Toggle again.
-	timeline.ToggleFold("blk_1")
+	err = timeline.ToggleFold("blk_1")
+	if err != nil {
+		t.Fatalf("ToggleFold failed: %v", err)
+	}
 
-	retrieved, _ = timeline.Get("blk_1")
+	retrieved, err = timeline.Get("blk_1")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 	if retrieved.FoldState != FoldStateExpanded {
 		t.Errorf("Expected FoldStateExpanded after second toggle, got %v", retrieved.FoldState)
 	}
@@ -775,13 +891,18 @@ func TestTimeline_ExpandAll(t *testing.T) {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
 		block.FoldState = FoldStateCollapsed
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	timeline.ExpandAll()
 
 	for i := range 3 {
-		block, _ := timeline.GetByIndex(i)
+		block, err := timeline.GetByIndex(i)
+		if err != nil {
+			t.Fatalf("GetByIndex(%d) failed: %v", i, err)
+		}
 		if block.FoldState != FoldStateExpanded {
 			t.Errorf("Block %d: expected FoldStateExpanded, got %v", i, block.FoldState)
 		}
@@ -795,13 +916,18 @@ func TestTimeline_CollapseAll(t *testing.T) {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = string(rune('a' + i))
 		block.FoldState = FoldStateExpanded
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	timeline.CollapseAll()
 
 	for i := range 3 {
-		block, _ := timeline.GetByIndex(i)
+		block, err := timeline.GetByIndex(i)
+		if err != nil {
+			t.Fatalf("GetByIndex(%d) failed: %v", i, err)
+		}
 		if block.FoldState != FoldStateCollapsed {
 			t.Errorf("Block %d: expected FoldStateCollapsed, got %v", i, block.FoldState)
 		}
@@ -818,12 +944,12 @@ func TestTimeline_EmptyOperations(t *testing.T) {
 	}
 
 	_, err := timeline.Get("nonexistent")
-	if err != ErrBlockNotFound {
+	if !errors.Is(err, ErrBlockNotFound) {
 		t.Errorf("Get on empty timeline: expected ErrBlockNotFound, got %v", err)
 	}
 
 	_, err = timeline.GetByIndex(0)
-	if err != ErrInvalidIndex {
+	if !errors.Is(err, ErrInvalidIndex) {
 		t.Errorf("GetByIndex on empty timeline: expected ErrInvalidIndex, got %v", err)
 	}
 
@@ -833,7 +959,7 @@ func TestTimeline_EmptyOperations(t *testing.T) {
 	}
 
 	err = timeline.NextBlock()
-	if err != ErrNoFocusedBlock {
+	if !errors.Is(err, ErrNoFocusedBlock) {
 		t.Errorf("NextBlock on empty timeline: expected ErrNoFocusedBlock, got %v", err)
 	}
 }
@@ -843,22 +969,37 @@ func TestTimeline_SingleBlock(t *testing.T) {
 
 	block := NewBlock(BlockTypeExecute)
 	block.ID = "only"
-	timeline.Append(block)
+	if err := timeline.Append(block); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
 
-	timeline.FocusBlock("only")
+	if err := timeline.FocusBlock("only"); err != nil {
+		t.Fatalf("FocusBlock failed: %v", err)
+	}
 
 	// NextBlock should stay at same block.
-	timeline.NextBlock()
+	if err := timeline.NextBlock(); err != nil {
+		t.Fatalf("NextBlock failed: %v", err)
+	}
 
-	focused, _ := timeline.GetFocusedBlock()
+	focused, err := timeline.GetFocusedBlock()
+	if err != nil {
+		t.Fatalf("GetFocusedBlock failed: %v", err)
+	}
 	if focused.ID != "only" {
 		t.Errorf("NextBlock on single block: expected 'only', got '%s'", focused.ID)
 	}
 
 	// PrevBlock should stay at same block.
-	timeline.PrevBlock()
+	err = timeline.PrevBlock()
+	if err != nil {
+		t.Fatalf("PrevBlock failed: %v", err)
+	}
 
-	focused, _ = timeline.GetFocusedBlock()
+	focused, err = timeline.GetFocusedBlock()
+	if err != nil {
+		t.Fatalf("GetFocusedBlock failed: %v", err)
+	}
 	if focused.ID != "only" {
 		t.Errorf("PrevBlock on single block: expected 'only', got '%s'", focused.ID)
 	}
@@ -872,7 +1013,9 @@ func TestTimeline_LargeTimeline(t *testing.T) {
 	for i := range 1000 {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = GenerateBlockID(i + 1)
-		timeline.Append(block)
+		if err := timeline.Append(block); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
 	}
 
 	if timeline.Len() != 1000 {

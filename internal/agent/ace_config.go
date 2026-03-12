@@ -1,3 +1,4 @@
+// Package agent provides the core agent implementation.
 package agent
 
 import (
@@ -6,6 +7,22 @@ import (
 	"slices"
 
 	"github.com/dmytrogajewski/spin/internal/config"
+)
+
+var (
+	ErrTopKMustBe0 = errors.New("top_k must be > 0")
+	ErrMinScoreMustBeBetween0 = errors.New("min_score must be between 0 and 1")
+	ErrCacheTtlMustBe0 = errors.New("cache_ttl must be > 0")
+	ErrMaxBulletsMustBe0 = errors.New("max_bullets must be > 0")
+	ErrErrorLookbackMustBe0 = errors.New("error_lookback must be > 0")
+	ErrToolChangeLookbackMustBe0 = errors.New("tool_change_lookback must be > 0")
+	ErrMaxRetrievalLatencyMsMustBe = errors.New("max_retrieval_latency_ms must be > 0")
+	ErrMaxTrajectoryStepsMustBe0 = errors.New("max_trajectory_steps must be > 0")
+	ErrInitialQueryMustBeBetween0 = errors.New("initial_query must be between 0 and 1")
+	ErrErrorContextMustBeBetween0 = errors.New("error_context must be between 0 and 1")
+	ErrToolContextMustBeBetween0 = errors.New("tool_context must be between 0 and 1")
+	ErrQueryWeightsShouldSumToApproximately = errors.New("query weights should sum to approximately 1.0")
+	ErrInvalidEvictionStrategy = errors.New("invalid eviction strategy")
 )
 
 // ACEConfig configures the Agentic Context Engineering system.
@@ -20,10 +37,10 @@ type ACEConfig struct {
 	Refine           ACERefineConfig           `mapstructure:"refine"            yaml:"refine"`
 }
 
-// ConvertACEConfig converts config.ACEConfigV2 to agent.ACEConfig.
-// This is needed because the conversation package uses config.ACEConfigV2
+// ConvertACEConfig converts config.ACEV2 to agent.ACEConfig.
+// This is needed because the conversation package uses config.ACEV2
 // but the agent package uses its own ACEConfig type.
-func ConvertACEConfig(v2cfg *config.ACEConfigV2) *ACEConfig {
+func ConvertACEConfig(v2cfg *config.ACEV2) *ACEConfig {
 	if v2cfg == nil {
 		return nil
 	}
@@ -226,11 +243,11 @@ func (c *ACERetrievalConfig) Validate() error {
 	var errs []error
 
 	if c.TopK <= 0 {
-		errs = append(errs, fmt.Errorf("top_k must be > 0, got %d", c.TopK))
+errs = append(errs, fmt.Errorf("top_k must be > 0, got %d: %w", c.TopK, ErrTopKMustBe0))
 	}
 
 	if c.MinScore < 0 || c.MinScore > 1 {
-		errs = append(errs, fmt.Errorf("min_score must be between 0 and 1, got %f", c.MinScore))
+errs = append(errs, fmt.Errorf("min_score must be between 0 and 1, got %f: %w", c.MinScore, ErrMinScoreMustBeBetween0))
 	}
 
 	// Validate progressive context config.
@@ -252,25 +269,25 @@ func (c *ProgressiveContextConfig) Validate() error {
 
 	// Validate cache settings.
 	if c.CacheTTL <= 0 {
-		errs = append(errs, fmt.Errorf("cache_ttl must be > 0, got %d", c.CacheTTL))
+errs = append(errs, fmt.Errorf("cache_ttl must be > 0, got %d: %w", c.CacheTTL, ErrCacheTtlMustBe0))
 	}
 
 	if c.MaxBullets <= 0 {
-		errs = append(errs, fmt.Errorf("max_bullets must be > 0, got %d", c.MaxBullets))
+errs = append(errs, fmt.Errorf("max_bullets must be > 0, got %d: %w", c.MaxBullets, ErrMaxBulletsMustBe0))
 	}
 
 	validStrategies := []string{"lru", "lfu", "fifo"}
 	if !stringSliceContains(validStrategies, c.EvictionStrategy) {
-		errs = append(errs, fmt.Errorf("eviction_strategy must be one of %v, got %q", validStrategies, c.EvictionStrategy))
+		errs = append(errs, fmt.Errorf("eviction_strategy must be one of %v, got %q: %w", validStrategies, c.EvictionStrategy, ErrInvalidEvictionStrategy))
 	}
 
 	// Validate lookback windows.
 	if c.ErrorLookback <= 0 {
-		errs = append(errs, fmt.Errorf("error_lookback must be > 0, got %d", c.ErrorLookback))
+errs = append(errs, fmt.Errorf("error_lookback must be > 0, got %d: %w", c.ErrorLookback, ErrErrorLookbackMustBe0))
 	}
 
 	if c.ToolChangeLookback <= 0 {
-		errs = append(errs, fmt.Errorf("tool_change_lookback must be > 0, got %d", c.ToolChangeLookback))
+errs = append(errs, fmt.Errorf("tool_change_lookback must be > 0, got %d: %w", c.ToolChangeLookback, ErrToolChangeLookbackMustBe0))
 	}
 
 	// Validate query weights.
@@ -281,11 +298,11 @@ func (c *ProgressiveContextConfig) Validate() error {
 
 	// Validate performance limits.
 	if c.MaxRetrievalLatencyMs <= 0 {
-		errs = append(errs, fmt.Errorf("max_retrieval_latency_ms must be > 0, got %d", c.MaxRetrievalLatencyMs))
+errs = append(errs, fmt.Errorf("max_retrieval_latency_ms must be > 0, got %d: %w", c.MaxRetrievalLatencyMs, ErrMaxRetrievalLatencyMsMustBe))
 	}
 
 	if c.MaxTrajectorySteps <= 0 {
-		errs = append(errs, fmt.Errorf("max_trajectory_steps must be > 0, got %d", c.MaxTrajectorySteps))
+errs = append(errs, fmt.Errorf("max_trajectory_steps must be > 0, got %d: %w", c.MaxTrajectorySteps, ErrMaxTrajectoryStepsMustBe0))
 	}
 
 	if len(errs) > 0 {
@@ -300,21 +317,21 @@ func (q *QueryWeights) Validate() error {
 	var errs []error
 
 	if q.InitialQuery < 0 || q.InitialQuery > 1 {
-		errs = append(errs, fmt.Errorf("initial_query must be between 0 and 1, got %f", q.InitialQuery))
+errs = append(errs, fmt.Errorf("initial_query must be between 0 and 1, got %f: %w", q.InitialQuery, ErrInitialQueryMustBeBetween0))
 	}
 
 	if q.ErrorContext < 0 || q.ErrorContext > 1 {
-		errs = append(errs, fmt.Errorf("error_context must be between 0 and 1, got %f", q.ErrorContext))
+errs = append(errs, fmt.Errorf("error_context must be between 0 and 1, got %f: %w", q.ErrorContext, ErrErrorContextMustBeBetween0))
 	}
 
 	if q.ToolContext < 0 || q.ToolContext > 1 {
-		errs = append(errs, fmt.Errorf("tool_context must be between 0 and 1, got %f", q.ToolContext))
+errs = append(errs, fmt.Errorf("tool_context must be between 0 and 1, got %f: %w", q.ToolContext, ErrToolContextMustBeBetween0))
 	}
 
 	// Weights should sum to ~1.0 (allow some tolerance).
 	sum := q.InitialQuery + q.ErrorContext + q.ToolContext
 	if sum < 0.9 || sum > 1.1 {
-		errs = append(errs, fmt.Errorf("query weights should sum to approximately 1.0, got %f", sum))
+errs = append(errs, fmt.Errorf("query weights should sum to approximately 1.0, got %f: %w", sum, ErrQueryWeightsShouldSumToApproximately))
 	}
 
 	if len(errs) > 0 {

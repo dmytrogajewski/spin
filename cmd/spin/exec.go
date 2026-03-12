@@ -25,6 +25,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 )
 
+var ErrNoPromptProvidedUseCommandLine = errors.New("no prompt provided (use command line args or stdin)")
+
 // newExecCmd creates the exec command for non-interactive execution.
 func newExecCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -111,7 +113,8 @@ func runExec(cmd *cobra.Command, args []string) error {
 
 	// Apply timeout if specified.
 	if timeout != "" {
-		duration, err := parseDuration(timeout)
+		var duration time.Duration
+		duration, err = parseDuration(timeout)
 		if err != nil {
 			return fmt.Errorf("invalid timeout: %w", err)
 		}
@@ -146,7 +149,7 @@ func createAuthManager() *auth.Manager {
 }
 
 // buildProvider creates an LLM provider from configuration.
-func buildProvider(ctx context.Context, cfg *config.ConfigV2, authMgr *auth.Manager) (llm.Provider, error) {
+func buildProvider(ctx context.Context, cfg *config.V2, authMgr *auth.Manager) (llm.Provider, error) {
 	extra, ok, err := createProviderForExecExtra(cfg.LLM.Provider)
 	if err != nil {
 		return nil, err
@@ -174,7 +177,7 @@ func parsePrompt(args []string) (string, error) {
 
 	prompt := string(data)
 	if len(prompt) == 0 {
-		return "", errors.New("no prompt provided (use command line args or stdin)")
+		return "", ErrNoPromptProvidedUseCommandLine
 	}
 
 	return prompt, nil
@@ -182,11 +185,16 @@ func parsePrompt(args []string) (string, error) {
 
 // parseDuration parses a duration string like "5m", "1h", etc.
 func parseDuration(s string) (time.Duration, error) {
-	return time.ParseDuration(s)
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("parsing duration %q: %w", s, err)
+	}
+
+	return d, nil
 }
 
 // createConversationForExec creates a conversation configured for exec mode using the runtime pattern.
-func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *config.ConfigV2, autoApprove bool, debug bool) (*conversation.Conversation, error) {
+func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *config.V2, autoApprove bool, _ bool) (*conversation.Conversation, error) {
 	workDir := cfg.Agent.WorkDir
 	logger := slog.Default()
 	emitter := events.NewEventEmitter(100)
@@ -227,8 +235,6 @@ func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *
 	var ui ports.UI
 
 	if termx.IsTerminal(int(os.Stdout.Fd())) && termx.IsTerminal(int(os.Stdin.Fd())) {
-		var err error
-
 		ui, err = adapters.NewPureTTY(os.Stdout, adapters.WithExecMode())
 		if err != nil {
 			cleanup()
@@ -237,8 +243,6 @@ func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *
 		}
 	} else {
 		mockTty := &mockTTY{width: 120, height: 30}
-
-		var err error
 
 		ui, err = adapters.NewPureTTY(os.Stdout, adapters.WithExecMode(), adapters.WithTTY(mockTty))
 		if err != nil {
@@ -302,10 +306,10 @@ type mockTTY struct {
 func (m *mockTTY) Enter() error               { return nil }
 func (m *mockTTY) Exit() error                { return nil }
 func (m *mockTTY) Size() (int, int)           { return m.width, m.height }
-func (m *mockTTY) OnResize(cb func(w, h int)) {}
+func (m *mockTTY) OnResize(_ func(w, h int)) {}
 
 // executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
-func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, format string, noStream, exitOnError bool) error {
+func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, _ string, _, exitOnError bool) error {
 	// Create TUI adapter. Use real TTY when available; otherwise, mock one.
 	opts := []adapters.PureTTYOption{adapters.WithExecMode()}
 
@@ -318,13 +322,13 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 	if err != nil {
 		return fmt.Errorf("create TUI: %w", err)
 	}
-	defer ui.Stop()
+	defer func() { _ = ui.Stop() }()
 
 	// Initialize UI with conversation metadata.
 	ui.SetTaskMode(conv.GetTaskMode())
 
 	// Create event mapper.
-	mapper := tui.NewTUIMapper(ui)
+	mapper := tui.NewMapper(ui)
 	defer mapper.Close()
 
 	// Start streaming channel.
@@ -332,7 +336,7 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 	streamDone := make(chan struct{})
 
 	go func() {
-		ui.PrintChunks(ctx, streamCh)
+		_ = ui.PrintChunks(ctx, streamCh)
 		close(streamDone)
 	}()
 
@@ -359,9 +363,9 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 					return
 				}
 
-				err := mapper.MapEvent(event)
-				if err != nil {
-					ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", err))
+				mapErr := mapper.MapEvent(event)
+				if mapErr != nil {
+					_ = ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", mapErr))
 				}
 
 				// Update token count from conversation history after each event.
@@ -372,7 +376,7 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 
 				// Handle real-time token count updates during turn execution.
 				if event.Type == events.EventTurnProgress {
-					if data, ok := event.Data.(events.TurnEventData); ok {
+					if data, okData := event.Data.(events.TurnEventData); okData {
 						if data.TokensUsed > 0 {
 							ui.SetTokenCount(int64(data.TokensUsed))
 						}
@@ -385,9 +389,9 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 	// Wait for completion.
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("execution canceled: %w", ctx.Err())
 
-	case err := <-errChan:
+	case err = <-errChan:
 		mapper.StopStreaming()
 
 		<-streamDone
@@ -397,7 +401,7 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 				return err
 			}
 
-			ui.PrintLine(fmt.Sprintf("✗ Error: %v\n", err))
+			_ = ui.PrintLine(fmt.Sprintf("✗ Error: %v\n", err))
 		}
 
 		return nil

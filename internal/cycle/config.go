@@ -19,12 +19,14 @@ import (
 	"github.com/dmytrogajewski/spin/internal/detection"
 )
 
-// Type aliases to detection package - cycle uses detection types directly.
-type (
-	CycleType   = detection.CycleType
-	Snapshot    = detection.Snapshot
-	CycleResult = detection.CycleResult
-)
+// Type is an alias to detection.CycleType.
+type Type = detection.CycleType
+
+// Snapshot is an alias to detection.Snapshot.
+type Snapshot = detection.Snapshot
+
+// Result is an alias to detection.CycleResult.
+type Result = detection.CycleResult
 
 // Re-export detection constants for backward compatibility.
 const (

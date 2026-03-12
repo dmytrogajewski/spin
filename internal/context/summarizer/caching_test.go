@@ -24,7 +24,7 @@ func TestNewCachingSummarizer(t *testing.T) {
 func TestCachingSummarizer_CacheHit(t *testing.T) {
 	callCount := 0
 	inner := &mockSummarizer{
-		summarizeFunc: func(ctx context.Context, content string, opts Options) (*Result, error) {
+		summarizeFunc: func(_ context.Context, _ string, _ Options) (*Result, error) {
 			callCount++
 
 			return &Result{Summary: "inner summary"}, nil
@@ -68,7 +68,7 @@ func TestCachingSummarizer_CacheHit(t *testing.T) {
 func TestCachingSummarizer_MessagesNotCached(t *testing.T) {
 	callCount := 0
 	inner := &mockSummarizer{
-		summarizeMessagesFunc: func(ctx context.Context, messages []message.Message, opts Options) (*MessageResult, error) {
+		summarizeMessagesFunc: func(_ context.Context, _ []message.Message, _ Options) (*MessageResult, error) {
 			callCount++
 
 			return &MessageResult{

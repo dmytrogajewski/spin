@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
 )
+
+var ErrPathIsRequired = errors.New("path is required")
 
 // filePolicyStore persists global-scope policies to a single JSON file with
 // atomic writes and advisory locking. Non-global scopes are kept in-memory only.
@@ -26,12 +29,12 @@ type filePolicyStore struct {
 // If interval <= 0, a default of 30s is used.
 func NewFilePolicyStore(path string, evictionInterval time.Duration) (PolicyStore, error) {
 	if path == "" {
-		return nil, errors.New("path is required")
+		return nil, ErrPathIsRequired
 	}
 
 	err := os.MkdirAll(filepath.Dir(path), 0o755)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create policy store directory: %w", err)
 	}
 
 	if evictionInterval <= 0 {
@@ -97,6 +100,7 @@ func (s *filePolicyStore) removeExpired() {
 	_ = s.persistGlobalLocked()
 }
 
+// Save implements the Save operation.
 func (s *filePolicyStore) Save(_ context.Context, p Policy) error {
 	keyStr := keyString(p.Key)
 
@@ -117,6 +121,7 @@ func (s *filePolicyStore) Save(_ context.Context, p Policy) error {
 	return nil
 }
 
+// Get implements the Get operation.
 func (s *filePolicyStore) Get(_ context.Context, key PolicyKey, scope string) (Policy, bool, error) {
 	keyStr := keyString(key)
 
@@ -140,6 +145,7 @@ func (s *filePolicyStore) Get(_ context.Context, key PolicyKey, scope string) (P
 	return p, true, nil
 }
 
+// List implements the List operation.
 func (s *filePolicyStore) List(_ context.Context, scope string) ([]Policy, error) {
 	now := time.Now()
 
@@ -163,6 +169,7 @@ func (s *filePolicyStore) List(_ context.Context, scope string) ([]Policy, error
 	return out, nil
 }
 
+// Delete implements the Delete operation.
 func (s *filePolicyStore) Delete(_ context.Context, key PolicyKey, scope string) (bool, error) {
 	keyStr := keyString(key)
 
@@ -194,6 +201,7 @@ func (s *filePolicyStore) Delete(_ context.Context, key PolicyKey, scope string)
 	return false, nil
 }
 
+// Clear implements the Clear operation.
 func (s *filePolicyStore) Clear(_ context.Context, scope string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -233,7 +241,7 @@ func (s *filePolicyStore) persistGlobalLocked() error {
 
 	data, err := json.MarshalIndent(payload, "", "\t")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal policies: %w", err)
 	}
 
 	tmp := s.path + ".tmp"
@@ -241,23 +249,28 @@ func (s *filePolicyStore) persistGlobalLocked() error {
 	// Acquire advisory lock on the target file (create if not exists).
 	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("open policy file: %w", err)
 	}
 	defer f.Close()
 
 	err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
 	if err != nil {
-		return err
+		return fmt.Errorf("lock policy file: %w", err)
 	}
 	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN) // nolint:errcheck
 
 	// Write temp, then rename over target for atomicity.
 	err = os.WriteFile(tmp, data, 0o644)
 	if err != nil {
-		return err
+		return fmt.Errorf("write temp policy file: %w", err)
 	}
 
-	return os.Rename(tmp, s.path)
+	err = os.Rename(tmp, s.path)
+	if err != nil {
+		return fmt.Errorf("rename policy file: %w", err)
+	}
+
+	return nil
 }
 
 // loadFromDisk loads global scope from disk into memory (best-effort).
@@ -269,13 +282,13 @@ func (s *filePolicyStore) loadFromDisk() error {
 			return nil
 		}
 
-		return err
+		return fmt.Errorf("open policy file for reading: %w", err)
 	}
 	defer f.Close()
 
 	err = syscall.Flock(int(f.Fd()), syscall.LOCK_SH)
 	if err != nil {
-		return err
+		return fmt.Errorf("shared lock policy file: %w", err)
 	}
 	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN) // nolint:errcheck
 
@@ -286,7 +299,7 @@ func (s *filePolicyStore) loadFromDisk() error {
 	dec := json.NewDecoder(f)
 	err = dec.Decode(&payload)
 	if err != nil {
-		return err
+		return fmt.Errorf("decode policy file: %w", err)
 	}
 
 	s.mu.Lock()

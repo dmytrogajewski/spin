@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+var ErrInsightCannotBeNil = errors.New("insight cannot be nil")
+
 // InsightValidator validates insight quality.
 type InsightValidator struct {
 	// Future: add configuration options.
@@ -18,7 +20,7 @@ func NewInsightValidator() *InsightValidator {
 // Validate checks if an insight meets quality requirements.
 func (v *InsightValidator) Validate(insight *Insight) error {
 	if insight == nil {
-		return errors.New("insight cannot be nil")
+		return ErrInsightCannotBeNil
 	}
 
 	// Delegate to existing Validate method on Insight.

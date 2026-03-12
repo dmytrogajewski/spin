@@ -36,7 +36,7 @@ type IndexEntry struct {
 
 // PersistentStore provides file-based cross-session memory.
 //
-// It implements the MemoryStore interface and persists entries to
+// It implements the Store interface and persists entries to
 // the filesystem as JSON files, organized by namespace.
 type PersistentStore struct {
 	basePath string
@@ -80,7 +80,7 @@ func NewPersistentStore(basePath string) (*PersistentStore, error) {
 }
 
 // Put stores a value to the filesystem.
-func (s *PersistentStore) Put(ctx context.Context, key string, value string, opts PutOptions) error {
+func (s *PersistentStore) Put(_ context.Context, key string, value string, opts PutOptions) error {
 	if key == "" {
 		return ErrEmptyKey
 	}
@@ -165,7 +165,7 @@ func (s *PersistentStore) Put(ctx context.Context, key string, value string, opt
 }
 
 // Get retrieves an entry from the filesystem.
-func (s *PersistentStore) Get(ctx context.Context, key string) (*MemoryEntry, error) {
+func (s *PersistentStore) Get(_ context.Context, key string) (*Entry, error) {
 	if key == "" {
 		return nil, ErrEmptyKey
 	}
@@ -216,7 +216,7 @@ func (s *PersistentStore) Get(ctx context.Context, key string) (*MemoryEntry, er
 		ttl = time.Duration(entry.TTL) * time.Second
 	}
 
-	return &MemoryEntry{
+	return &Entry{
 		Key:       entry.Key,
 		Value:     entry.Value,
 		Namespace: entry.Namespace,
@@ -228,7 +228,7 @@ func (s *PersistentStore) Get(ctx context.Context, key string) (*MemoryEntry, er
 }
 
 // Delete removes an entry from the filesystem.
-func (s *PersistentStore) Delete(ctx context.Context, key string) error {
+func (s *PersistentStore) Delete(_ context.Context, key string) error {
 	if key == "" {
 		return ErrEmptyKey
 	}
@@ -268,7 +268,7 @@ func (s *PersistentStore) Delete(ctx context.Context, key string) error {
 }
 
 // List returns keys matching the pattern.
-func (s *PersistentStore) List(ctx context.Context, pattern string) ([]string, error) {
+func (s *PersistentStore) List(_ context.Context, pattern string) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -283,11 +283,11 @@ func (s *PersistentStore) List(ctx context.Context, pattern string) ([]string, e
 }
 
 // Search finds entries containing the query string.
-func (s *PersistentStore) Search(ctx context.Context, query string, topK int) ([]MemoryEntry, error) {
+func (s *PersistentStore) Search(_ context.Context, query string, topK int) ([]Entry, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	matches := make([]MemoryEntry, 0)
+	matches := make([]Entry, 0)
 
 	for _, indexEntry := range s.index {
 		// Check key match.
@@ -332,12 +332,8 @@ func (s *PersistentStore) Close() error {
 // rebuildIndex scans the directory structure and rebuilds the in-memory index.
 func (s *PersistentStore) rebuildIndex() error {
 	// Walk directory looking for .json files.
-	return filepath.Walk(s.basePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Skip errors.
-		}
-
-		if info.IsDir() {
+	walkErr := filepath.Walk(s.basePath, func(path string, info os.FileInfo, _ error) error {
+		if info == nil || info.IsDir() {
 			return nil
 		}
 
@@ -345,16 +341,18 @@ func (s *PersistentStore) rebuildIndex() error {
 			return nil
 		}
 
-		// Read and parse entry.
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil // Skip unreadable files.
+		// Read and parse entry — skip files that cannot be read or parsed.
+		data, _ := os.ReadFile(path)
+		if data == nil {
+			return nil
 		}
 
 		var entry persistedEntry
-		err = json.Unmarshal(data, &entry)
-		if err != nil {
-			return nil // Skip invalid files.
+		_ = json.Unmarshal(data, &entry)
+
+		// Skip entries with empty keys (unmarshal failed or invalid data).
+		if entry.Key == "" {
+			return nil
 		}
 
 		// Add to index.
@@ -371,19 +369,24 @@ func (s *PersistentStore) rebuildIndex() error {
 
 		return nil
 	})
+	if walkErr != nil {
+		return fmt.Errorf("walk memory store: %w", walkErr)
+	}
+
+	return nil
 }
 
 // readEntryUnsafe reads an entry without locking. Must be called with lock held.
-func (s *PersistentStore) readEntryUnsafe(filePath string) (*MemoryEntry, error) {
+func (s *PersistentStore) readEntryUnsafe(filePath string) (*Entry, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read entry file: %w", err)
 	}
 
 	var entry persistedEntry
 	err = json.Unmarshal(data, &entry)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal entry: %w", err)
 	}
 
 	var ttl time.Duration
@@ -391,7 +394,7 @@ func (s *PersistentStore) readEntryUnsafe(filePath string) (*MemoryEntry, error)
 		ttl = time.Duration(entry.TTL) * time.Second
 	}
 
-	return &MemoryEntry{
+	return &Entry{
 		Key:       entry.Key,
 		Value:     entry.Value,
 		Namespace: entry.Namespace,

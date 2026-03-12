@@ -11,9 +11,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/planning"
 )
 
-// ACPEventTransformer transforms internal events to ACP protocol notifications.
+// EventTransformer transforms internal events to ACP protocol notifications.
 // It implements the conversation.EventTransformer interface.
-type ACPEventTransformer struct {
+type EventTransformer struct {
 	sessionID   acp.SessionId
 	connection  notificationSender
 	agent       *agent.Agent
@@ -25,9 +25,9 @@ type ACPEventTransformer struct {
 	mu sync.RWMutex
 }
 
-// NewACPEventTransformer creates a new ACP event transformer.
-func NewACPEventTransformer(sessionID acp.SessionId, conn notificationSender, ag *agent.Agent) *ACPEventTransformer {
-	return &ACPEventTransformer{
+// NewEventTransformer creates a new ACP event transformer.
+func NewEventTransformer(sessionID acp.SessionId, conn notificationSender, ag *agent.Agent) *EventTransformer {
+	return &EventTransformer{
 		sessionID:   sessionID,
 		connection:  conn,
 		agent:       ag,
@@ -37,7 +37,7 @@ func NewACPEventTransformer(sessionID acp.SessionId, conn notificationSender, ag
 
 // Transform processes an event and sends ACP notifications.
 // Returns true if the event was handled (notification sent).
-func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event) bool {
+func (t *EventTransformer) Transform(ctx context.Context, event events.Event) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -154,8 +154,8 @@ func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event)
 	var terminalIDToRelease string
 
 	if event.Type == events.EventToolCallComplete {
-		if data, ok := event.ToolCallCompleteData(); ok {
-			if terminalID, ok := data.Metadata["terminal_id"].(string); ok && terminalID != "" {
+		if data, hasComplete := event.ToolCallCompleteData(); hasComplete {
+			if terminalID, isStr := data.Metadata["terminal_id"].(string); isStr && terminalID != "" {
 				terminalIDToRelease = terminalID
 			}
 		}
@@ -170,8 +170,8 @@ func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event)
 
 	// Release terminal AFTER notification is sent (per ACP spec).
 	if terminalIDToRelease != "" {
-		if acpConn, ok := t.connection.(*acp.AgentSideConnection); ok {
-			terminalClient := NewACPTerminalClient(acpConn)
+		if acpConn, isACPConn := t.connection.(*acp.AgentSideConnection); isACPConn {
+			terminalClient := NewTerminalClient(acpConn)
 			_ = terminalClient.Release(ctx, terminalIDToRelease)
 		}
 	}
@@ -180,7 +180,7 @@ func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event)
 }
 
 // Close releases resources held by the transformer.
-func (t *ACPEventTransformer) Close() error {
+func (t *EventTransformer) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -191,7 +191,7 @@ func (t *ACPEventTransformer) Close() error {
 }
 
 // SetConnection updates the connection (for reconnection scenarios).
-func (t *ACPEventTransformer) SetConnection(conn notificationSender) {
+func (t *EventTransformer) SetConnection(conn notificationSender) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -199,6 +199,6 @@ func (t *ACPEventTransformer) SetConnection(conn notificationSender) {
 }
 
 // GetSessionID returns the session ID this transformer is associated with.
-func (t *ACPEventTransformer) GetSessionID() acp.SessionId {
+func (t *EventTransformer) GetSessionID() acp.SessionId {
 	return t.sessionID
 }

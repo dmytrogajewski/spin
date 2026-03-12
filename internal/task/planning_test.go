@@ -131,7 +131,7 @@ func TestPlanning_DefaultMaxTokens(t *testing.T) {
 	}
 }
 
-func TestPlanning_Concurrency(t *testing.T) {
+func TestPlanning_Concurrency(_ *testing.T) {
 	planning := NewPlanning()
 
 	// Test concurrent access to methods.
@@ -144,7 +144,7 @@ func TestPlanning_Concurrency(t *testing.T) {
 			planning.SystemPrompt()
 			planning.AllowedTools()
 			planning.MaxTokens()
-			planning.Validate()
+			_ = planning.Validate()
 
 			done <- true
 		}()

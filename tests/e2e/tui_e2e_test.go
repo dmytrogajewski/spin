@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	agentexec "github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -56,20 +56,20 @@ func setupTUITest(t *testing.T) (*testkit.TUITestHelper, *conversation.Conversat
 	mockLLM := llm.NewMockProvider("test-model", llm.WithResponse("Hello! How can I help?"))
 
 	// Create minimal config.
-	cfg := config.DefaultConfigV2()
+	cfg := config.DefaultV2()
 	cfg.Agent.WorkDir = t.TempDir()
 	cfg.Protocol.EnableShell = false // Disable shell for faster tests.
 	cfg.Protocol.EnableGit = false
 	cfg.Protocol.EnableMCP = false
 
-	// Create conversation with runtime.
+	// Create conversation with executor.
 	ctx := context.Background()
 
 	// Create emitter.
 	emitter := events.NewEventEmitter(100)
 
 	// Auto-approve handler for tests.
-	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
@@ -83,7 +83,7 @@ func setupTUITest(t *testing.T) (*testkit.TUITestHelper, *conversation.Conversat
 
 	validator := security.NewValidator()
 
-	builtinRuntime, err := runtime.NewBuiltinRuntime(runtime.BuiltinRuntimeConfig{
+	builtinRuntime, err := agentexec.NewBuiltinRuntime(agentexec.BuiltinRuntimeConfig{
 		WorkDir:         cfg.Agent.WorkDir,
 		Emitter:         emitter,
 		Storage:         nil,
@@ -135,7 +135,7 @@ func TestTUIBasicChat(t *testing.T) {
 	helper.Start()
 
 	// Create event mapper.
-	mapper := tui.NewTUIMapper(helper.UI)
+	mapper := tui.NewMapper(helper.UI)
 	defer mapper.Close()
 
 	// Start streaming channel.
@@ -144,7 +144,7 @@ func TestTUIBasicChat(t *testing.T) {
 	streamDone := make(chan struct{})
 
 	go func() {
-		helper.UI.PrintChunks(ctx, streamCh)
+		_ = helper.UI.PrintChunks(ctx, streamCh)
 		close(streamDone)
 	}()
 
@@ -265,7 +265,7 @@ func TestTUIMultiTurn(t *testing.T) {
 	helper.Start()
 
 	// Create event mapper.
-	mapper := tui.NewTUIMapper(helper.UI)
+	mapper := tui.NewMapper(helper.UI)
 	defer mapper.Close()
 
 	ctx := context.Background()
@@ -275,7 +275,7 @@ func TestTUIMultiTurn(t *testing.T) {
 	streamDone := make(chan struct{})
 
 	go func() {
-		helper.UI.PrintChunks(ctx, streamCh)
+		_ = helper.UI.PrintChunks(ctx, streamCh)
 		close(streamDone)
 	}()
 
@@ -311,7 +311,7 @@ func TestTUIMultiTurn(t *testing.T) {
 	streamDone = make(chan struct{})
 
 	go func() {
-		helper.UI.PrintChunks(ctx, streamCh)
+		_ = helper.UI.PrintChunks(ctx, streamCh)
 		close(streamDone)
 	}()
 
@@ -351,7 +351,7 @@ func TestTUIStopStreaming(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
-		helper.UI.PrintChunks(ctx, chunks)
+		_ = helper.UI.PrintChunks(ctx, chunks)
 		close(done)
 	}()
 

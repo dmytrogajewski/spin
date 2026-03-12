@@ -53,10 +53,10 @@ func TestACP_Cancel(t *testing.T) {
 	var promptResp *acp.PromptResponse
 
 	go func() {
-		resp, err := client.Prompt(ctx, promptReq)
+		resp, promptErr := client.Prompt(ctx, promptReq)
 		promptResp = &resp
 
-		done <- err
+		done <- promptErr
 	}()
 
 	// Wait a moment for prompt to start.
@@ -71,10 +71,10 @@ func TestACP_Cancel(t *testing.T) {
 
 	// Wait for prompt to complete (should be canceled).
 	select {
-	case err := <-done:
+	case promptErr := <-done:
 		// Prompt should complete (either successfully or with cancellation).
-		if err != nil {
-			t.Logf("Prompt returned error (expected for cancellation): %v", err)
+		if promptErr != nil {
+			t.Logf("Prompt returned error (expected for cancellation): %v", promptErr)
 		}
 
 		if promptResp != nil {
@@ -193,8 +193,8 @@ func TestACP_Cancel_DuringPrompt(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		_, err := client.Prompt(ctx, promptReq)
-		done <- err
+		_, promptErr := client.Prompt(ctx, promptReq)
+		done <- promptErr
 	}()
 
 	// Cancel during prompt.
@@ -208,9 +208,9 @@ func TestACP_Cancel_DuringPrompt(t *testing.T) {
 
 	// Wait for completion.
 	select {
-	case err := <-done:
-		if err != nil {
-			t.Logf("Prompt canceled: %v", err)
+	case promptErr := <-done:
+		if promptErr != nil {
+			t.Logf("Prompt canceled: %v", promptErr)
 		}
 	case <-time.After(5 * time.Second):
 		t.Log("Prompt may still be running")
@@ -253,8 +253,8 @@ func TestACP_Cancel_DuringToolCall(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		_, err := client.Prompt(ctx, promptReq)
-		done <- err
+		_, promptErr := client.Prompt(ctx, promptReq)
+		done <- promptErr
 	}()
 
 	// Cancel during tool call.
@@ -268,9 +268,9 @@ func TestACP_Cancel_DuringToolCall(t *testing.T) {
 
 	// Wait for completion.
 	select {
-	case err := <-done:
-		if err != nil {
-			t.Logf("Tool call canceled: %v", err)
+	case promptErr := <-done:
+		if promptErr != nil {
+			t.Logf("Tool call canceled: %v", promptErr)
 		}
 	case <-time.After(5 * time.Second):
 		t.Log("Tool call may still be running")
@@ -313,8 +313,8 @@ func TestACP_Cancel_PermissionRequest(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		_, err := client.Prompt(ctx, promptReq)
-		done <- err
+		_, promptErr := client.Prompt(ctx, promptReq)
+		done <- promptErr
 	}()
 
 	// Cancel (may interrupt permission request).
@@ -328,9 +328,9 @@ func TestACP_Cancel_PermissionRequest(t *testing.T) {
 
 	// Wait for completion.
 	select {
-	case err := <-done:
-		if err != nil {
-			t.Logf("Permission request canceled: %v", err)
+	case promptErr := <-done:
+		if promptErr != nil {
+			t.Logf("Permission request canceled: %v", promptErr)
 		}
 	case <-time.After(5 * time.Second):
 		t.Log("Permission request may still be pending")
@@ -375,10 +375,10 @@ func TestACP_Cancel_StopReason(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		resp, err := client.Prompt(ctx, promptReq)
+		resp, promptErr := client.Prompt(ctx, promptReq)
 		promptResp = &resp
 
-		done <- err
+		done <- promptErr
 	}()
 
 	// Cancel.
@@ -440,8 +440,8 @@ func TestACP_Cancel_PendingUpdates(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		_, err := client.Prompt(ctx, promptReq)
-		done <- err
+		_, promptErr := client.Prompt(ctx, promptReq)
+		done <- promptErr
 	}()
 
 	// Cancel.
@@ -505,8 +505,8 @@ func TestACP_Cancel_ToolCallStatus(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		_, err := client.Prompt(ctx, promptReq)
-		done <- err
+		_, promptErr := client.Prompt(ctx, promptReq)
+		done <- promptErr
 	}()
 
 	// Cancel.

@@ -434,9 +434,9 @@ func TestGetObject(t *testing.T) {
 			}
 
 			if !tt.wantErr {
-				destStruct := tt.dest.(*testStruct)
+				destStruct, _ := tt.dest.(*testStruct)
 
-				wantStruct := tt.want.(*testStruct)
+				wantStruct, _ := tt.want.(*testStruct)
 				if destStruct.Field1 != wantStruct.Field1 || destStruct.Field2 != wantStruct.Field2 {
 					t.Errorf("GetObject() = %+v, want %+v", destStruct, wantStruct)
 				}
@@ -640,7 +640,8 @@ func TestMarshalJSON(t *testing.T) {
 		t.Errorf("number = %v, want 42", result["number"])
 	}
 
-	if result["bool"] != true {
+	boolVal, _ := result["bool"].(bool)
+	if !boolVal {
 		t.Errorf("bool = %v, want true", result["bool"])
 	}
 }
@@ -665,7 +666,7 @@ func TestUnmarshalJSON(t *testing.T) {
 	}
 
 	b, err := params.GetBool("bool")
-	if err != nil || b != true {
+	if err != nil || !b {
 		t.Errorf("GetBool(bool) = %v, %v; want true, nil", b, err)
 	}
 }

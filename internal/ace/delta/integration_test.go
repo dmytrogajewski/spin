@@ -18,40 +18,40 @@ import (
 func TestIntegration_FullWorkflow(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Create initial bullets.
 	b1, _ := bullet.New("Initial content for bullet 1")
 	b2, _ := bullet.New("Initial content for bullet 2")
 	b3, _ := bullet.New("Initial content for bullet 3")
 
-	pb.Add(ctx, b1)
-	pb.Add(ctx, b2)
-	pb.Add(ctx, b3)
+	_ = pb.Add(ctx, b1)
+	_ = pb.Add(ctx, b2)
+	_ = pb.Add(ctx, b3)
 
 	// Apply various deltas.
 	deltas := []Delta{
-		*NewContentUpdate(b1.ID, "Updated content", DeltaMetadata{
+		*NewContentUpdate(b1.ID, "Updated content", Metadata{
 			Source: "reflector",
 			Reason: "Content refinement",
 		}),
-		*NewIncrementHelpful(b1.ID, DeltaMetadata{
+		*NewIncrementHelpful(b1.ID, Metadata{
 			Source: "curator",
 			Reason: "Duplicate insight",
 		}),
-		*NewAddTag(b1.ID, "category", "testing", DeltaMetadata{
+		*NewAddTag(b1.ID, "category", "testing", Metadata{
 			Source: "adapter",
 			Reason: "Categorization",
 		}),
-		*NewIncrementHelpful(b2.ID, DeltaMetadata{
+		*NewIncrementHelpful(b2.ID, Metadata{
 			Source: "curator",
 			Reason: "Useful pattern",
 		}),
-		*NewIncrementHarmful(b2.ID, DeltaMetadata{
+		*NewIncrementHarmful(b2.ID, Metadata{
 			Source: "feedback",
 			Reason: "Misleading advice",
 		}),
-		*NewUpdateEmbedding(b3.ID, []float32{0.1, 0.2, 0.3}, DeltaMetadata{
+		*NewUpdateEmbedding(b3.ID, []float32{0.1, 0.2, 0.3}, Metadata{
 			Source: "embedder",
 			Reason: "Re-embedding",
 		}),
@@ -149,22 +149,22 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 func TestIntegration_BatchWithHistory(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Create 10 bullets.
 	bulletIDs := make([]string, 10)
 
 	for i := range 10 {
 		b, _ := bullet.New("Content")
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 		bulletIDs[i] = b.ID
 	}
 
 	// Create batch of deltas.
 	deltas := make([]Delta, 20)
 	for i := range 10 {
-		deltas[i*2] = *NewIncrementHelpful(bulletIDs[i], DeltaMetadata{Source: "test"})
-		deltas[i*2+1] = *NewAddTag(bulletIDs[i], "batch", "true", DeltaMetadata{Source: "test"})
+		deltas[i*2] = *NewIncrementHelpful(bulletIDs[i], Metadata{Source: "test"})
+		deltas[i*2+1] = *NewAddTag(bulletIDs[i], "batch", "true", Metadata{Source: "test"})
 	}
 
 	// Apply batch.
@@ -216,26 +216,26 @@ func TestIntegration_BatchWithHistory(t *testing.T) {
 func TestIntegration_TimestampQueries(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Create bullet.
 	b, _ := bullet.New("Content")
-	pb.Add(ctx, b)
+	_ = pb.Add(ctx, b)
 
 	// Apply delta and record timestamp.
 	beforeFirst := time.Now()
 
 	time.Sleep(10 * time.Millisecond)
 
-	delta1 := NewIncrementHelpful(b.ID, DeltaMetadata{Source: "test"})
-	applier.Apply(ctx, *delta1)
+	delta1 := NewIncrementHelpful(b.ID, Metadata{Source: "test"})
+	_, _ = applier.Apply(ctx, *delta1)
 
 	afterFirst := time.Now()
 
 	time.Sleep(10 * time.Millisecond)
 
-	delta2 := NewIncrementHelpful(b.ID, DeltaMetadata{Source: "test"})
-	applier.Apply(ctx, *delta2)
+	delta2 := NewIncrementHelpful(b.ID, Metadata{Source: "test"})
+	_, _ = applier.Apply(ctx, *delta2)
 
 	afterSecond := time.Now()
 
@@ -262,14 +262,14 @@ func TestIntegration_TimestampQueries(t *testing.T) {
 func TestIntegration_ErrorRecovery(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Create bullet.
 	b, _ := bullet.New("Content")
-	pb.Add(ctx, b)
+	_ = pb.Add(ctx, b)
 
 	// Apply successful delta.
-	delta1 := NewIncrementHelpful(b.ID, DeltaMetadata{Source: "test"})
+	delta1 := NewIncrementHelpful(b.ID, Metadata{Source: "test"})
 
 	result1, err1 := applier.Apply(ctx, *delta1)
 	if err1 != nil || !result1.Success {
@@ -277,7 +277,7 @@ func TestIntegration_ErrorRecovery(t *testing.T) {
 	}
 
 	// Apply delta for non-existent bullet (should fail).
-	delta2 := NewIncrementHelpful("non-existent", DeltaMetadata{Source: "test"})
+	delta2 := NewIncrementHelpful("non-existent", Metadata{Source: "test"})
 
 	result2, err2 := applier.Apply(ctx, *delta2)
 	if err2 == nil || result2.Success {
@@ -285,7 +285,7 @@ func TestIntegration_ErrorRecovery(t *testing.T) {
 	}
 
 	// Apply another successful delta.
-	delta3 := NewIncrementHelpful(b.ID, DeltaMetadata{Source: "test"})
+	delta3 := NewIncrementHelpful(b.ID, Metadata{Source: "test"})
 
 	result3, err3 := applier.Apply(ctx, *delta3)
 	if err3 != nil || !result3.Success {

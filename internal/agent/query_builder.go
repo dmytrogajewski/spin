@@ -19,7 +19,7 @@ import (
 // Requires: ctx != nil, trigger != ""
 // Ensures: result != "".
 func (a *Agent) buildQueryFromContext(
-	ctx *trajectory.TrajectoryContext,
+	ctx *trajectory.Context,
 	trigger trajectory.TriggerType,
 ) string {
 	// Start with base query.

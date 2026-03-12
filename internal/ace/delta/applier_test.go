@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 )
@@ -11,14 +13,16 @@ import (
 func TestDeltaApplier_ApplyContentUpdate(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Add bullet.
-	b, _ := bullet.New("Original content")
-	pb.Add(ctx, b)
+	b, err := bullet.New("Original content")
+	require.NoError(t, err)
+
+	require.NoError(t, pb.Add(ctx, b))
 
 	// Apply content update delta.
-	delta := NewContentUpdate(b.ID, "Updated content", DeltaMetadata{Source: "test"})
+	delta := NewContentUpdate(b.ID, "Updated content", Metadata{Source: "test"})
 
 	result, err := applier.Apply(ctx, *delta)
 	if err != nil {
@@ -38,7 +42,9 @@ func TestDeltaApplier_ApplyContentUpdate(t *testing.T) {
 	}
 
 	// Verify bullet was updated.
-	updated, _ := pb.Get(b.ID)
+	updated, ok := pb.Get(b.ID)
+	require.True(t, ok, "bullet not found")
+
 	if updated.Content != "Updated content" {
 		t.Errorf("expected bullet content 'Updated content', got '%s'", updated.Content)
 	}
@@ -52,14 +58,16 @@ func TestDeltaApplier_ApplyContentUpdate(t *testing.T) {
 func TestDeltaApplier_ApplyIncrementHelpful(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Add bullet.
-	b, _ := bullet.New("Test content")
-	pb.Add(ctx, b)
+	b, err := bullet.New("Test content")
+	require.NoError(t, err)
+
+	require.NoError(t, pb.Add(ctx, b))
 
 	// Apply increment helpful delta.
-	delta := NewIncrementHelpful(b.ID, DeltaMetadata{Source: "curator"})
+	delta := NewIncrementHelpful(b.ID, Metadata{Source: "curator"})
 
 	result, err := applier.Apply(ctx, *delta)
 	if err != nil {
@@ -79,7 +87,9 @@ func TestDeltaApplier_ApplyIncrementHelpful(t *testing.T) {
 	}
 
 	// Verify bullet was updated.
-	updated, _ := pb.Get(b.ID)
+	updated, ok := pb.Get(b.ID)
+	require.True(t, ok, "bullet not found")
+
 	if updated.HelpfulCount != 1 {
 		t.Errorf("expected helpful count 1, got %d", updated.HelpfulCount)
 	}
@@ -88,14 +98,16 @@ func TestDeltaApplier_ApplyIncrementHelpful(t *testing.T) {
 func TestDeltaApplier_ApplyIncrementHarmful(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Add bullet.
-	b, _ := bullet.New("Test content")
-	pb.Add(ctx, b)
+	b, err := bullet.New("Test content")
+	require.NoError(t, err)
+
+	require.NoError(t, pb.Add(ctx, b))
 
 	// Apply increment harmful delta.
-	delta := NewIncrementHarmful(b.ID, DeltaMetadata{Source: "feedback"})
+	delta := NewIncrementHarmful(b.ID, Metadata{Source: "feedback"})
 
 	result, err := applier.Apply(ctx, *delta)
 	if err != nil {
@@ -107,7 +119,9 @@ func TestDeltaApplier_ApplyIncrementHarmful(t *testing.T) {
 	}
 
 	// Verify bullet was updated.
-	updated, _ := pb.Get(b.ID)
+	updated, ok := pb.Get(b.ID)
+	require.True(t, ok, "bullet not found")
+
 	if updated.HarmfulCount != 1 {
 		t.Errorf("expected harmful count 1, got %d", updated.HarmfulCount)
 	}
@@ -116,14 +130,16 @@ func TestDeltaApplier_ApplyIncrementHarmful(t *testing.T) {
 func TestDeltaApplier_ApplyAddTag(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Add bullet.
-	b, _ := bullet.New("Test content")
-	pb.Add(ctx, b)
+	b, err := bullet.New("Test content")
+	require.NoError(t, err)
+
+	require.NoError(t, pb.Add(ctx, b))
 
 	// Apply add tag delta.
-	delta := NewAddTag(b.ID, "category", "testing", DeltaMetadata{Source: "adapter"})
+	delta := NewAddTag(b.ID, "category", "testing", Metadata{Source: "adapter"})
 
 	result, err := applier.Apply(ctx, *delta)
 	if err != nil {
@@ -135,13 +151,15 @@ func TestDeltaApplier_ApplyAddTag(t *testing.T) {
 	}
 
 	// Verify bullet was updated.
-	updated, _ := pb.Get(b.ID)
+	updated, ok := pb.Get(b.ID)
+	require.True(t, ok, "bullet not found")
+
 	if updated.Tags["category"] != "testing" {
 		t.Errorf("expected tag 'category'='testing', got '%s'", updated.Tags["category"])
 	}
 
 	// Apply another tag.
-	delta2 := NewAddTag(b.ID, "priority", "high", DeltaMetadata{Source: "adapter"})
+	delta2 := NewAddTag(b.ID, "priority", "high", Metadata{Source: "adapter"})
 
 	result2, err := applier.Apply(ctx, *delta2)
 	if err != nil {
@@ -153,7 +171,9 @@ func TestDeltaApplier_ApplyAddTag(t *testing.T) {
 	}
 
 	// Verify both tags exist.
-	updated, _ = pb.Get(b.ID)
+	updated, ok = pb.Get(b.ID)
+	require.True(t, ok, "bullet not found")
+
 	if len(updated.Tags) != 2 {
 		t.Errorf("expected 2 tags, got %d", len(updated.Tags))
 	}
@@ -162,17 +182,19 @@ func TestDeltaApplier_ApplyAddTag(t *testing.T) {
 func TestDeltaApplier_ApplyRemoveTag(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Add bullet with tags.
-	b, _ := bullet.New("Test content", bullet.WithTags(map[string]string{
+	b, err := bullet.New("Test content", bullet.WithTags(map[string]string{
 		"category": "testing",
 		"priority": "high",
 	}))
-	pb.Add(ctx, b)
+	require.NoError(t, err)
+
+	require.NoError(t, pb.Add(ctx, b))
 
 	// Apply remove tag delta.
-	delta := NewRemoveTag(b.ID, "category", DeltaMetadata{Source: "manual"})
+	delta := NewRemoveTag(b.ID, "category", Metadata{Source: "manual"})
 
 	result, err := applier.Apply(ctx, *delta)
 	if err != nil {
@@ -184,7 +206,9 @@ func TestDeltaApplier_ApplyRemoveTag(t *testing.T) {
 	}
 
 	// Verify tag was removed.
-	updated, _ := pb.Get(b.ID)
+	updated, ok := pb.Get(b.ID)
+	require.True(t, ok, "bullet not found")
+
 	if _, exists := updated.Tags["category"]; exists {
 		t.Error("expected tag 'category' to be removed")
 	}
@@ -197,15 +221,17 @@ func TestDeltaApplier_ApplyRemoveTag(t *testing.T) {
 func TestDeltaApplier_ApplyUpdateEmbedding(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Add bullet.
-	b, _ := bullet.New("Test content")
-	pb.Add(ctx, b)
+	b, err := bullet.New("Test content")
+	require.NoError(t, err)
+
+	require.NoError(t, pb.Add(ctx, b))
 
 	// Apply update embedding delta.
 	newEmbedding := []float32{0.1, 0.2, 0.3}
-	delta := NewUpdateEmbedding(b.ID, newEmbedding, DeltaMetadata{Source: "embedder"})
+	delta := NewUpdateEmbedding(b.ID, newEmbedding, Metadata{Source: "embedder"})
 
 	result, err := applier.Apply(ctx, *delta)
 	if err != nil {
@@ -217,7 +243,9 @@ func TestDeltaApplier_ApplyUpdateEmbedding(t *testing.T) {
 	}
 
 	// Verify bullet was updated.
-	updated, _ := pb.Get(b.ID)
+	updated, ok := pb.Get(b.ID)
+	require.True(t, ok, "bullet not found")
+
 	if len(updated.Embedding) != 3 {
 		t.Errorf("expected embedding length 3, got %d", len(updated.Embedding))
 	}
@@ -232,10 +260,10 @@ func TestDeltaApplier_ApplyUpdateEmbedding(t *testing.T) {
 func TestDeltaApplier_BulletNotFound(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Apply delta for non-existent bullet.
-	delta := NewContentUpdate("non-existent", "content", DeltaMetadata{Source: "test"})
+	delta := NewContentUpdate("non-existent", "content", Metadata{Source: "test"})
 
 	result, err := applier.Apply(ctx, *delta)
 	if err == nil {
@@ -255,11 +283,13 @@ func TestDeltaApplier_BulletNotFound(t *testing.T) {
 func TestDeltaApplier_InvalidFieldType(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Add bullet.
-	b, _ := bullet.New("Test content")
-	pb.Add(ctx, b)
+	b, err := bullet.New("Test content")
+	require.NoError(t, err)
+
+	require.NoError(t, pb.Add(ctx, b))
 
 	// Create delta with invalid field type
 	// Create delta with missing content field.
@@ -267,8 +297,8 @@ func TestDeltaApplier_InvalidFieldType(t *testing.T) {
 		ID:        "delta-1",
 		BulletID:  b.ID,
 		Operation: OpUpdateContent,
-		Fields:    DeltaFields{}, // Missing Content field.
-		Metadata:  DeltaMetadata{Source: "test"},
+		Fields:    Fields{}, // Missing Content field.
+		Metadata:  Metadata{Source: "test"},
 		CreatedAt: b.CreatedAt,
 	}
 
@@ -285,19 +315,21 @@ func TestDeltaApplier_InvalidFieldType(t *testing.T) {
 func TestDeltaApplier_UnknownOperation(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Add bullet.
-	b, _ := bullet.New("Test content")
-	pb.Add(ctx, b)
+	b, err := bullet.New("Test content")
+	require.NoError(t, err)
+
+	require.NoError(t, pb.Add(ctx, b))
 
 	// Create delta with unknown operation.
 	unknownDelta := Delta{
 		ID:        "delta-1",
 		BulletID:  b.ID,
-		Operation: DeltaOperation("unknown_op"),
-		Fields:    DeltaFields{},
-		Metadata:  DeltaMetadata{Source: "test"},
+		Operation: Operation("unknown_op"),
+		Fields:    Fields{},
+		Metadata:  Metadata{Source: "test"},
 		CreatedAt: b.CreatedAt,
 	}
 
@@ -314,22 +346,25 @@ func TestDeltaApplier_UnknownOperation(t *testing.T) {
 func TestDeltaApplier_MultipleDeltas(t *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
-	applier := NewDeltaApplier(pb)
+	applier := NewApplier(pb)
 
 	// Add bullet.
-	b, _ := bullet.New("Original content")
-	pb.Add(ctx, b)
+	b, err := bullet.New("Original content")
+	require.NoError(t, err)
+
+	require.NoError(t, pb.Add(ctx, b))
 
 	// Apply multiple deltas.
 	deltas := []Delta{
-		*NewContentUpdate(b.ID, "Updated content", DeltaMetadata{Source: "test"}),
-		*NewIncrementHelpful(b.ID, DeltaMetadata{Source: "test"}),
-		*NewIncrementHelpful(b.ID, DeltaMetadata{Source: "test"}),
-		*NewAddTag(b.ID, "category", "testing", DeltaMetadata{Source: "test"}),
+		*NewContentUpdate(b.ID, "Updated content", Metadata{Source: "test"}),
+		*NewIncrementHelpful(b.ID, Metadata{Source: "test"}),
+		*NewIncrementHelpful(b.ID, Metadata{Source: "test"}),
+		*NewAddTag(b.ID, "category", "testing", Metadata{Source: "test"}),
 	}
 
 	for _, delta := range deltas {
-		result, err := applier.Apply(ctx, delta)
+		var result *ApplyResult
+		result, err = applier.Apply(ctx, delta)
 		if err != nil {
 			t.Fatalf("unexpected error applying delta: %v", err)
 		}
@@ -340,7 +375,9 @@ func TestDeltaApplier_MultipleDeltas(t *testing.T) {
 	}
 
 	// Verify all changes were applied.
-	updated, _ := pb.Get(b.ID)
+	updated, ok := pb.Get(b.ID)
+	require.True(t, ok, "bullet not found")
+
 	if updated.Content != "Updated content" {
 		t.Errorf("expected content 'Updated content', got '%s'", updated.Content)
 	}

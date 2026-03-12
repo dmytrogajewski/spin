@@ -9,6 +9,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 )
 
+var ErrSnapshotCannotBeNil = errors.New("snapshot cannot be nil")
+
 // Snapshot is an immutable point-in-time capture of a playbook.
 type Snapshot struct {
 	ID        string
@@ -54,7 +56,7 @@ func (p *Playbook) Snapshot() *Snapshot {
 // This replaces all current bullets with those from the snapshot.
 func (p *Playbook) Restore(snapshot *Snapshot) error {
 	if snapshot == nil {
-		return errors.New("snapshot cannot be nil")
+		return ErrSnapshotCannotBeNil
 	}
 
 	p.mu.Lock()

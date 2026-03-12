@@ -11,6 +11,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 )
 
+var ErrExitRequested = errors.New("exit requested")
+
 // tuiCommandContext implements commands.CommandContext for TUI.
 type tuiCommandContext struct {
 	conv *conversation.Conversation
@@ -43,7 +45,7 @@ func handleCommand(ui *adapters.PureTTY, conv *conversation.Conversation, cmdNam
 
 	// Special handling for exit/quit commands (TUI-only).
 	if cmdName == "/exit" || cmdName == "/quit" {
-		return true, errors.New("exit requested")
+		return true, ErrExitRequested
 	}
 
 	// Execute command via command system.
@@ -51,21 +53,21 @@ func handleCommand(ui *adapters.PureTTY, conv *conversation.Conversation, cmdNam
 	if err != nil {
 		// Check if it's an unknown command.
 		if strings.Contains(err.Error(), "unknown command") {
-			ui.PrintLine(fmt.Sprintf("Unknown command: %s (type /help for available commands)\n", cmdName))
+			_ = ui.PrintLine(fmt.Sprintf("Unknown command: %s (type /help for available commands)\n", cmdName))
 
 			return true, nil
 		}
 		// Other errors.
-		ui.PrintLine(fmt.Sprintf("Error: %v\n", err))
+		_ = ui.PrintLine(fmt.Sprintf("Error: %v\n", err))
 
 		return true, nil
 	}
 
 	// Print command output.
-	ui.PrintLine(result)
+	_ = ui.PrintLine(result)
 
 	if !strings.HasSuffix(result, "\n") {
-		ui.PrintLine("")
+		_ = ui.PrintLine("")
 	}
 
 	return true, nil

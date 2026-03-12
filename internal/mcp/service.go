@@ -29,12 +29,12 @@ func (s *Service) GetTools() []tools.Tool {
 
 // Search searches for tools matching the query across all registries.
 // ctx can be nil for simple searches; pass SearchContext for dynamic registry API access.
-func (s *Service) Search(ctx *SearchContext, query string, max int) []tools.Tool {
+func (s *Service) Search(ctx *SearchContext, query string, maxResults int) []tools.Tool {
 	if s.registryManager == nil {
 		return nil
 	}
 
-	return s.registryManager.Search(ctx, query, max)
+	return s.registryManager.Search(ctx, query, maxResults)
 }
 
 // Tool returns a specific tool by name.
@@ -54,7 +54,7 @@ func (s *Service) GetRegistryManager() RegistryManager {
 
 // ConnectServer connects a new MCP server dynamically.
 // This creates a registry for the server and registers it with the manager.
-func (s *Service) ConnectServer(ctx context.Context, config MCPServerConfig) error {
+func (s *Service) ConnectServer(ctx context.Context, config ServerConfig) error {
 	if s.registryManager == nil {
 		return nil
 	}
@@ -88,8 +88,8 @@ func (s *Service) Close() error {
 	return s.registryManager.Close()
 }
 
-// createRegistryFromConfig creates an MCPRegistry from MCPServerConfig.
-func createRegistryFromConfig(config MCPServerConfig, logger any) (MCPRegistry, error) {
+// createRegistryFromConfig creates an Registry from ServerConfig.
+func createRegistryFromConfig(config ServerConfig, _ any) (Registry, error) {
 	transport := config.Transport
 	if transport == "" {
 		transport = TransportStdio

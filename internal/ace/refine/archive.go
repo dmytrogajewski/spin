@@ -1,3 +1,4 @@
+// Package refine provides response refinement and archival.
 package refine
 
 import (

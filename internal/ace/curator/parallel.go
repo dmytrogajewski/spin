@@ -2,6 +2,7 @@ package curator
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"sync"
 )
@@ -90,7 +91,7 @@ func (c *curator) curateBatchParallel(ctx context.Context, requests []MergeReque
 
 	// Check for context cancellation.
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("batch merge canceled: %w", ctx.Err())
 	}
 
 	return &BatchMergeResult{

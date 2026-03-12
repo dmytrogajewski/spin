@@ -72,7 +72,7 @@ func TestSpinACPAgent_LoadSession_Success(t *testing.T) {
 
 	// Create and save a session.
 	sess := session.NewSession("/tmp/test")
-	sess.SetTitle("Test Session")
+	_ = sess.SetTitle("Test Session")
 	err = storage.Save(sess.ID, *sess)
 	require.NoError(t, err)
 

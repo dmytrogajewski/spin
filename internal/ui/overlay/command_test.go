@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var errExecutionFailed = errors.New("execution failed")
+
 func TestNewCommandRegistry(t *testing.T) {
 	registry := NewCommandRegistry()
 	assert.NotNil(t, registry)
@@ -65,7 +67,7 @@ func TestSimpleCommand_ExecuteNil(t *testing.T) {
 
 func TestSimpleCommand_Execute(t *testing.T) {
 	executed := false
-	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context) error {
+	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(_ context.Context) error {
 		executed = true
 
 		return nil
@@ -78,8 +80,8 @@ func TestSimpleCommand_Execute(t *testing.T) {
 }
 
 func TestSimpleCommand_ExecuteError(t *testing.T) {
-	expectedErr := errors.New("execution failed")
-	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context) error {
+	expectedErr := errExecutionFailed
+	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(_ context.Context) error {
 		return expectedErr
 	})
 

@@ -19,7 +19,7 @@ func TestGolden_ValidMinimal(t *testing.T) {
 		t.Fatalf("Failed to read golden file: %v", err)
 	}
 
-	var cfg ConfigV2
+	var cfg V2
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
@@ -69,7 +69,7 @@ func TestGolden_ValidFull(t *testing.T) {
 		t.Fatalf("Failed to read golden file: %v", err)
 	}
 
-	var cfg ConfigV2
+	var cfg V2
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
@@ -163,7 +163,7 @@ func TestGolden_InvalidMissingRequired(t *testing.T) {
 		t.Fatalf("Failed to read golden file: %v", err)
 	}
 
-	var cfg ConfigV2
+	var cfg V2
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
@@ -205,7 +205,7 @@ func TestGolden_InvalidBadValues(t *testing.T) {
 		t.Fatalf("Failed to read golden file: %v", err)
 	}
 
-	var cfg ConfigV2
+	var cfg V2
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
@@ -245,7 +245,7 @@ func TestGolden_InvalidCrossSection(t *testing.T) {
 		t.Fatalf("Failed to read golden file: %v", err)
 	}
 
-	var cfg ConfigV2
+	var cfg V2
 	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)

@@ -30,23 +30,29 @@ type RefinementResult struct {
 type RefinementMode string
 
 const (
+	// RefinementModeNone defines a RefinementModeNone constant.
 	RefinementModeNone      RefinementMode = "none"      // No refinement.
+	// RefinementModeLazy defines a RefinementModeLazy constant.
 	RefinementModeLazy      RefinementMode = "lazy"      // Manual only.
-	RefinementModeProactive RefinementMode = "proactive" // After each Curate.
+	// RefinementModeProactive refines after each Curate call.
+	RefinementModeProactive RefinementMode = "proactive"
 )
 
 // noRefinementStrategy never refines.
 type noRefinementStrategy struct{}
 
-func (n *noRefinementStrategy) ShouldRefine(ctx context.Context, pb *playbook.Playbook) (bool, error) {
+// ShouldRefine implements the ShouldRefine operation.
+func (n *noRefinementStrategy) ShouldRefine(_ context.Context, _ *playbook.Playbook) (bool, error) {
 	return false, nil
 }
 
-func (n *noRefinementStrategy) Refine(ctx context.Context, pb *playbook.Playbook) (*RefinementResult, error) {
+// Refine implements the Refine operation.
+func (n *noRefinementStrategy) Refine(_ context.Context, _ *playbook.Playbook) (*RefinementResult, error) {
 	return &RefinementResult{Pruned: 0, Reason: "no refinement"}, nil
 }
 
-func (n *noRefinementStrategy) SetOrchestrator(orchestrator *refine.RefinementOrchestrator) {
+// SetOrchestrator implements the SetOrchestrator operation.
+func (n *noRefinementStrategy) SetOrchestrator(_ *refine.RefinementOrchestrator) {
 	// No-op.
 }
 
@@ -72,11 +78,13 @@ func newLazyRefinementStrategy(cfg LazyRefinementConfig) RefinementStrategy {
 	}
 }
 
-func (l *lazyRefinementStrategy) ShouldRefine(ctx context.Context, pb *playbook.Playbook) (bool, error) {
+// ShouldRefine implements the ShouldRefine operation.
+func (l *lazyRefinementStrategy) ShouldRefine(_ context.Context, _ *playbook.Playbook) (bool, error) {
 	// Lazy never auto-refines.
 	return false, nil
 }
 
+// Refine implements the Refine operation.
 func (l *lazyRefinementStrategy) Refine(ctx context.Context, pb *playbook.Playbook) (*RefinementResult, error) {
 	// Use orchestrator if available for advanced refinement.
 	if l.orchestrator != nil {
@@ -86,6 +94,7 @@ func (l *lazyRefinementStrategy) Refine(ctx context.Context, pb *playbook.Playbo
 	return refinePlaybook(ctx, pb, l.minUtilityScore, "manual refinement")
 }
 
+// SetOrchestrator implements the SetOrchestrator operation.
 func (l *lazyRefinementStrategy) SetOrchestrator(orchestrator *refine.RefinementOrchestrator) {
 	l.orchestrator = orchestrator
 }
@@ -128,12 +137,14 @@ func newProactiveRefinementStrategy(cfg ProactiveRefinementConfig) RefinementStr
 	}
 }
 
-func (p *proactiveRefinementStrategy) ShouldRefine(ctx context.Context, pb *playbook.Playbook) (bool, error) {
+// ShouldRefine implements the ShouldRefine operation.
+func (p *proactiveRefinementStrategy) ShouldRefine(_ context.Context, pb *playbook.Playbook) (bool, error) {
 	stats := pb.Stats()
 
 	return stats.TotalBullets >= p.maxBullets, nil
 }
 
+// Refine implements the Refine operation.
 func (p *proactiveRefinementStrategy) Refine(ctx context.Context, pb *playbook.Playbook) (*RefinementResult, error) {
 	// Use orchestrator if available for advanced refinement with merging.
 	if p.orchestrator != nil {
@@ -143,6 +154,7 @@ func (p *proactiveRefinementStrategy) Refine(ctx context.Context, pb *playbook.P
 	return refinePlaybook(ctx, pb, p.minUtilityScore, "proactive refinement")
 }
 
+// SetOrchestrator implements the SetOrchestrator operation.
 func (p *proactiveRefinementStrategy) SetOrchestrator(orchestrator *refine.RefinementOrchestrator) {
 	p.orchestrator = orchestrator
 }
@@ -193,10 +205,10 @@ func refineWithOrchestrator(ctx context.Context, orchestrator *refine.Refinement
 	}, nil
 }
 
-func (l *lazyRefinementStrategy) refineWithOrchestrator(ctx context.Context, pb *playbook.Playbook, minUtilityScore float64, reason string) (*RefinementResult, error) {
+func (l *lazyRefinementStrategy) refineWithOrchestrator(ctx context.Context, _ *playbook.Playbook, minUtilityScore float64, reason string) (*RefinementResult, error) {
 	return refineWithOrchestrator(ctx, l.orchestrator, minUtilityScore, reason)
 }
 
-func (p *proactiveRefinementStrategy) refineWithOrchestrator(ctx context.Context, pb *playbook.Playbook, minUtilityScore float64, reason string) (*RefinementResult, error) {
+func (p *proactiveRefinementStrategy) refineWithOrchestrator(ctx context.Context, _ *playbook.Playbook, minUtilityScore float64, reason string) (*RefinementResult, error) {
 	return refineWithOrchestrator(ctx, p.orchestrator, minUtilityScore, reason)
 }

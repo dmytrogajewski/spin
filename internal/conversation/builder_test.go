@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	agentexec "github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
@@ -23,8 +23,8 @@ import (
 )
 
 // testConfig creates a valid test configuration.
-func testConfig() *config.ConfigV2 {
-	cfg := config.DefaultConfigV2()
+func testConfig() *config.V2 {
+	cfg := config.DefaultV2()
 	cfg.LLM.Provider = "mock"
 	cfg.LLM.Model = "test-model"
 
@@ -32,14 +32,14 @@ func testConfig() *config.ConfigV2 {
 }
 
 // createTestRuntime creates a builtin runtime for testing with auto-approve handler.
-func createTestRuntime(t *testing.T, workDir string) (runtime.Runtime, *events.EventEmitter, llm.Provider) {
+func createTestRuntime(t *testing.T, workDir string) (agentexec.Runtime, *events.EventEmitter, llm.Provider) {
 	t.Helper()
 
 	emitter := events.NewEventEmitter(100)
 	provider := llm.NewMockProvider("test")
 
 	// Auto-approve handler for tests.
-	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
@@ -52,7 +52,7 @@ func createTestRuntime(t *testing.T, workDir string) (runtime.Runtime, *events.E
 
 	validator := security.NewValidator()
 
-	builtinRuntime, err := runtime.NewBuiltinRuntime(runtime.BuiltinRuntimeConfig{
+	builtinRuntime, err := agentexec.NewBuiltinRuntime(agentexec.BuiltinRuntimeConfig{
 		WorkDir:         workDir,
 		Emitter:         emitter,
 		Storage:         nil, // No persistence in tests.

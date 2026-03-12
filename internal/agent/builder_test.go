@@ -21,8 +21,8 @@ func TestNewBuilder_CreatesBuilder(t *testing.T) {
 }
 
 func TestBuilder_WithUnifiedConfig_FluentInterface(t *testing.T) {
-	cfg := &config.ConfigV2{
-		LLM: config.LLMConfigV2{Model: "test"},
+	cfg := &config.V2{
+		LLM: config.LLMV2{Model: "test"},
 	}
 
 	builder := NewBuilder().
@@ -45,8 +45,8 @@ func TestBuilder_WithUnifiedConfig_FluentInterface(t *testing.T) {
 }
 
 func TestBuilder_BuildExecutor(t *testing.T) {
-	cfg := &config.ConfigV2{
-		Agent: config.AgentConfigV2{
+	cfg := &config.V2{
+		Agent: config.AgentV2{
 			Timeout:       30 * time.Second,
 			CacheCommands: false,
 		},
@@ -69,8 +69,8 @@ func TestBuilder_BuildExecutor(t *testing.T) {
 func TestBuilder_BuildEnvironment(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cfg := &config.ConfigV2{
-		Agent: config.AgentConfigV2{
+	cfg := &config.V2{
+		Agent: config.AgentV2{
 			MaxFiles: 100,
 			MaxDepth: 5,
 			SkipGit:  false,
@@ -98,13 +98,13 @@ func TestBuilder_BuildHelpers(t *testing.T) {
 	// Create a mock LLM provider.
 	mockLLM := &mockProvider{}
 
-	cfg := &config.ConfigV2{
-		LLM: config.LLMConfigV2{
+	cfg := &config.V2{
+		LLM: config.LLMV2{
 			Model:       "test-model",
 			Temperature: 0.7,
 			MaxTokens:   1000,
 		},
-		Agent: config.AgentConfigV2{
+		Agent: config.AgentV2{
 			MaxTurns: 10,
 			Timeout:  30 * time.Second,
 		},
@@ -134,9 +134,9 @@ func TestBuilder_BuildHelpers(t *testing.T) {
 		t.Fatal("BuildPlanningService() returned nil")
 	}
 
-	opts := builder.BuildAgentOptions()
+	opts := builder.BuildOptions()
 	if len(opts) == 0 {
-		t.Fatal("BuildAgentOptions() returned empty options")
+		t.Fatal("BuildOptions() returned empty options")
 	}
 }
 
@@ -172,7 +172,7 @@ func TestBuilder_BuildPlanningService_NilProvider(t *testing.T) {
 // mockProvider is a simple mock LLM provider for testing.
 type mockProvider struct{}
 
-func (m *mockProvider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+func (m *mockProvider) Complete(_ context.Context, _ openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	return &openai.ChatCompletion{
 		ID:    "test-completion",
 		Model: "test-model",
@@ -188,14 +188,14 @@ func (m *mockProvider) Complete(ctx context.Context, params openai.ChatCompletio
 	}, nil
 }
 
-func (m *mockProvider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
+func (m *mockProvider) Stream(_ context.Context, _ openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	ch := make(chan openai.ChatCompletionChunk)
 	close(ch)
 
 	return ch, nil
 }
 
-func (m *mockProvider) Models(ctx context.Context) ([]openai.Model, error) {
+func (m *mockProvider) Models(_ context.Context) ([]openai.Model, error) {
 	return []openai.Model{{ID: "test-model"}}, nil
 }
 
@@ -219,20 +219,20 @@ func TestBuilder_BuildACEService(t *testing.T) {
 	tmpDir := t.TempDir()
 	mockLLM := &mockProvider{}
 
-	// Use config.ConfigV2 with ACE enabled.
-	cfg := &config.ConfigV2{
-		LLM: config.LLMConfigV2{
+	// Use config.V2 with ACE enabled.
+	cfg := &config.V2{
+		LLM: config.LLMV2{
 			Provider:    "openai",
 			Model:       "gpt-4",
 			Temperature: 0.7,
 			MaxTokens:   1000,
 		},
-		Agent: config.AgentConfigV2{
+		Agent: config.AgentV2{
 			MaxTurns: 10,
 			Timeout:  30 * time.Second,
 			WorkDir:  tmpDir,
 		},
-		ACE: config.ACEConfigV2{
+		ACE: config.ACEV2{
 			Enabled:        true,
 			PlaybookPath:   tmpDir + "/playbook.json",
 			TrajectoryPath: tmpDir + "/trajectories/",

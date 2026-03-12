@@ -1,3 +1,4 @@
+// Package message provides message types and handling.
 package message
 
 import (

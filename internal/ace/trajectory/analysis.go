@@ -1,3 +1,4 @@
+// Package trajectory provides trajectory analysis for agent execution.
 package trajectory
 
 import (
@@ -9,7 +10,7 @@ import (
 // HasRecentError checks if any step in the last 'lookback' steps contains an error.
 // Returns true if error detected, false otherwise.
 // Lookback of 0 or negative value checks all steps.
-func (tc *TrajectoryContext) HasRecentError(lookback int) bool {
+func (tc *Context) HasRecentError(lookback int) bool {
 	steps := getRecentSteps(tc.Steps, lookback)
 	for _, step := range steps {
 		if containsError(step.Content) {
@@ -49,7 +50,7 @@ func ExtractErrorPatterns(steps []generator.TrajectoryStep, lookback int) []stri
 // GetRecentTools extracts tool names from recent steps.
 // Returns unique tool names in order of first appearance.
 // Lookback of 0 or negative value checks all steps.
-func (tc *TrajectoryContext) GetRecentTools(lookback int) []string {
+func (tc *Context) GetRecentTools(lookback int) []string {
 	steps := getRecentSteps(tc.Steps, lookback)
 	seen := make(map[string]bool)
 	tools := make([]string, 0)

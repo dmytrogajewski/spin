@@ -1,3 +1,4 @@
+// Package acp provides the ACP protocol implementation.
 package acp
 
 import (
@@ -11,7 +12,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	"github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
 	"github.com/dmytrogajewski/spin/internal/commands"
 	"github.com/dmytrogajewski/spin/internal/conversation"
@@ -23,7 +24,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/task"
-	"github.com/dmytrogajewski/spin/internal/version"
+	"github.com/dmytrogajewski/spin/internal/appinfo"
 )
 
 var (
@@ -35,6 +36,21 @@ var (
 	ErrNilEmitter = errors.New("emitter cannot be nil")
 	// ErrNotImplemented is returned for methods that are not implemented.
 	ErrNotImplemented = errors.New("not implemented")
+	ErrWorkingDirectoryIsRequired = errors.New("working directory is required")
+	ErrHttpTransportIsNotSupported = errors.New("HTTP transport is not supported")
+	ErrSseTransportIsNotSupported = errors.New("SSE transport is not supported")
+	ErrNoTransportSpecified = errors.New("no transport specified")
+	ErrSessionNotFound = errors.New("session not found")
+	ErrPromptCannotBeEmpty = errors.New("prompt cannot be empty")
+	ErrConversationManagerNotConfigured = errors.New("conversation manager not configured")
+	ErrNoValidContentBlocksFound = errors.New("no valid content blocks found")
+	ErrSessionPersistenceNotAvailable = errors.New("session persistence not available")
+	ErrSessionNotFound2 = errors.New("session not found")
+	ErrSessionNotFound3 = errors.New("session not found")
+	ErrInvalidMode = errors.New("invalid mode")
+	ErrSessionNotFound4 = errors.New("session not found")
+	ErrApprovalServiceNotConfigured = errors.New("approval service not configured")
+	ErrSessionNotFound5 = errors.New("session not found")
 )
 
 // SpinACPAgent implements the acp.Agent interface, adapting Spin's components
@@ -50,7 +66,7 @@ type SpinACPAgent struct {
 	mcpService      *mcp.Service
 	emitter         *events.EventEmitter
 	approvalService *security.ApprovalService // Optional approval service for permission requests.
-	approvalHandler *ACPApprovalHandler       // ACP-specific approval handler.
+	approvalHandler *ApprovalHandler       // ACP-specific approval handler.
 	clientCaps      *acp.ClientCapabilities   // Stored after Initialize.
 	sessions        map[acp.SessionId]*session.Session
 	sessionModes    map[acp.SessionId]acp.SessionModeId    // Current mode per session.
@@ -59,8 +75,8 @@ type SpinACPAgent struct {
 	connection      notificationSender                     // Optional connection for sending notifications.
 	cancels         map[acp.SessionId]context.CancelFunc   // Cancel functions for in-progress prompt executions.
 	convManager     *conversation.Manager                  // Manages conversations per session.
-	transformers    map[acp.SessionId]*ACPEventTransformer // Event transformers per session.
-	acpRuntime      *runtime.ACPRuntime                    // ACP runtime for tool registration.
+	transformers    map[acp.SessionId]*EventTransformer // Event transformers per session.
+	acpRuntime      *executor.ACPRuntime                    // ACP runtime for tool registration.
 	mu              sync.RWMutex                           // Protects sessions map, sessionModes, connection, cancels, and transformers.
 }
 
@@ -106,7 +122,7 @@ func NewSpinACPAgentWithStorage(
 		sessionModes:    make(map[acp.SessionId]acp.SessionModeId),
 		cancels:         make(map[acp.SessionId]context.CancelFunc),
 		convManager:     nil, // Set via SetConversationManager() if needed.
-		transformers:    make(map[acp.SessionId]*ACPEventTransformer),
+		transformers:    make(map[acp.SessionId]*EventTransformer),
 	}, nil
 }
 
@@ -166,7 +182,7 @@ func (a *SpinACPAgent) SetApprovalService(service *security.ApprovalService) {
 // SetApprovalHandler sets the ACP approval handler used for session tracking.
 // The handler must be the same instance wired into the approval service so the
 // active session tracking lines up with actual permission requests.
-func (a *SpinACPAgent) SetApprovalHandler(handler *ACPApprovalHandler) {
+func (a *SpinACPAgent) SetApprovalHandler(handler *ApprovalHandler) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -176,7 +192,7 @@ func (a *SpinACPAgent) SetApprovalHandler(handler *ACPApprovalHandler) {
 // SetACPRuntime sets the ACP runtime for dynamic tool registration.
 // This allows Initialize to update the runtime with client capabilities
 // and re-register tools based on client support.
-func (a *SpinACPAgent) SetACPRuntime(rt *runtime.ACPRuntime) {
+func (a *SpinACPAgent) SetACPRuntime(rt *executor.ACPRuntime) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -187,7 +203,7 @@ func (a *SpinACPAgent) SetACPRuntime(rt *runtime.ACPRuntime) {
 //
 // Negotiates protocol version, advertises agent capabilities based on Spin's
 // features, stores client capabilities, and exchanges client/agent info.
-func (a *SpinACPAgent) Initialize(ctx context.Context, req acp.InitializeRequest) (acp.InitializeResponse, error) {
+func (a *SpinACPAgent) Initialize(_ context.Context, req acp.InitializeRequest) (acp.InitializeResponse, error) {
 	// Negotiate protocol version.
 	negotiatedVersion := a.negotiateProtocolVersion(req.ProtocolVersion)
 
@@ -215,7 +231,7 @@ func (a *SpinACPAgent) Initialize(ctx context.Context, req acp.InitializeRequest
 	// Build agent info.
 	agentInfo := &acp.Implementation{
 		Name:    "spin",
-		Version: version.ShortVersion(),
+		Version: appinfo.ShortVersion(),
 	}
 
 	// Build response.
@@ -270,7 +286,7 @@ func (a *SpinACPAgent) hasSessionPersistence() bool {
 func (a *SpinACPAgent) NewSession(ctx context.Context, req acp.NewSessionRequest) (acp.NewSessionResponse, error) {
 	// Validate working directory.
 	if req.Cwd == "" {
-		return acp.NewSessionResponse{}, errors.New("working directory is required")
+		return acp.NewSessionResponse{}, ErrWorkingDirectoryIsRequired
 	}
 
 	// Create session.
@@ -282,7 +298,7 @@ func (a *SpinACPAgent) NewSession(ctx context.Context, req acp.NewSessionRequest
 	// Validate and convert MCP servers synchronously (to catch conversion errors)
 	// Connection happens in background to avoid blocking.
 	if len(req.McpServers) > 0 {
-		configs := make([]mcp.MCPServerConfig, 0, len(req.McpServers))
+		configs := make([]mcp.ServerConfig, 0, len(req.McpServers))
 		for _, server := range req.McpServers {
 			config, err := convertACPMcpServerToSpin(server)
 			if err != nil {
@@ -341,8 +357,8 @@ func (a *SpinACPAgent) NewSession(ctx context.Context, req acp.NewSessionRequest
 	return resp, nil
 }
 
-// convertACPMcpServerToSpin converts an ACP McpServer to Spin MCPServerConfig.
-func convertACPMcpServerToSpin(acpServer acp.McpServer) (mcp.MCPServerConfig, error) {
+// convertACPMcpServerToSpin converts an ACP McpServer to Spin ServerConfig.
+func convertACPMcpServerToSpin(acpServer acp.McpServer) (mcp.ServerConfig, error) {
 	if acpServer.Stdio != nil {
 		// Convert environment variables.
 		env := make(map[string]string)
@@ -350,7 +366,7 @@ func convertACPMcpServerToSpin(acpServer acp.McpServer) (mcp.MCPServerConfig, er
 			env[envVar.Name] = envVar.Value
 		}
 
-		return mcp.MCPServerConfig{
+		return mcp.ServerConfig{
 			Name:    acpServer.Stdio.Name,
 			Command: acpServer.Stdio.Command,
 			Args:    acpServer.Stdio.Args,
@@ -360,14 +376,14 @@ func convertACPMcpServerToSpin(acpServer acp.McpServer) (mcp.MCPServerConfig, er
 
 	// HTTP and SSE transports are not supported.
 	if acpServer.Http != nil {
-		return mcp.MCPServerConfig{}, errors.New("HTTP transport is not supported")
+		return mcp.ServerConfig{}, ErrHttpTransportIsNotSupported
 	}
 
 	if acpServer.Sse != nil {
-		return mcp.MCPServerConfig{}, errors.New("SSE transport is not supported")
+		return mcp.ServerConfig{}, ErrSseTransportIsNotSupported
 	}
 
-	return mcp.MCPServerConfig{}, errors.New("no transport specified")
+	return mcp.ServerConfig{}, ErrNoTransportSpecified
 }
 
 // Prompt processes a user prompt and executes the agent loop.
@@ -378,12 +394,12 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 	a.mu.RUnlock()
 
 	if !exists {
-		return acp.PromptResponse{}, fmt.Errorf("session not found: %s", req.SessionId)
+return acp.PromptResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound)
 	}
 
 	// Validate prompt is not empty.
 	if len(req.Prompt) == 0 {
-		return acp.PromptResponse{}, errors.New("prompt cannot be empty")
+		return acp.PromptResponse{}, ErrPromptCannotBeEmpty
 	}
 
 	// Create cancellable context for this prompt execution
@@ -391,15 +407,15 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 	promptCtx, cancel := context.WithCancel(ctx)
 
 	// Add session ID and workDir to context so they're available for tools (e.g. TerminalExecutor, filesystem tools).
-	promptCtx = runtime.ContextWithSessionID(promptCtx, string(req.SessionId))
+	promptCtx = executor.ContextWithSessionID(promptCtx, string(req.SessionId))
 	if sess != nil && sess.WorkDir != "" {
-		promptCtx = runtime.ContextWithWorkDir(promptCtx, sess.WorkDir)
+		promptCtx = executor.ContextWithWorkDir(promptCtx, sess.WorkDir)
 	}
 
 	// Store cancel function so Cancel method can cancel this execution.
 	a.mu.Lock()
 	// Cancel any existing in-progress execution for this session.
-	if existingCancel, exists := a.cancels[req.SessionId]; exists {
+	if existingCancel, cancelExists := a.cancels[req.SessionId]; cancelExists {
 		existingCancel()
 	}
 
@@ -426,7 +442,8 @@ func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.P
 	// Check if input is a command.
 	if cmd, cmdArgs, isCmd := commands.ParseCommand(input); isCmd {
 		// Execute command.
-		result, err := a.executeCommand(promptCtx, cmd, cmdArgs, req.SessionId)
+		var result string
+		result, err = a.executeCommand(promptCtx, cmd, cmdArgs, req.SessionId)
 		if err != nil {
 			// Return error response.
 			return acp.PromptResponse{
@@ -490,7 +507,7 @@ func (a *SpinACPAgent) promptWithConversation(ctx context.Context, req acp.Promp
 	a.mu.RUnlock()
 
 	if convManager == nil {
-		return acp.PromptResponse{}, errors.New("conversation manager not configured")
+		return acp.PromptResponse{}, ErrConversationManagerNotConfigured
 	}
 
 	// Get or create conversation for this session.
@@ -504,7 +521,7 @@ func (a *SpinACPAgent) promptWithConversation(ctx context.Context, req acp.Promp
 
 	transformer, exists := a.transformers[req.SessionId]
 	if !exists && conn != nil {
-		transformer = NewACPEventTransformer(req.SessionId, conn, a.agent)
+		transformer = NewEventTransformer(req.SessionId, conn, a.agent)
 		a.transformers[req.SessionId] = transformer
 		conv.SetEventTransformer(transformer)
 	}
@@ -596,7 +613,7 @@ func (a *SpinACPAgent) promptWithAgent(ctx context.Context, req acp.PromptReques
 	a.mu.RUnlock()
 
 	// Create agent request.
-	agentReq := &agent.AgentRequest{
+	agentReq := &agent.Request{
 		Input:   input,
 		Task:    task.DefaultTask(),
 		History: []message.Message{},
@@ -656,10 +673,10 @@ func (a *SpinACPAgent) promptWithAgent(ctx context.Context, req acp.PromptReques
 
 	// Send plan notifications if a plan is available.
 	if conn != nil && agentResp != nil {
-		err := a.sendPlanNotifications(ctx, req.SessionId, agentResp)
-		if err != nil {
+		planErr := a.sendPlanNotifications(ctx, req.SessionId, agentResp)
+		if planErr != nil {
 			// Log error but continue - plan notifications are non-critical.
-			_ = err
+			_ = planErr
 		}
 	}
 
@@ -763,7 +780,7 @@ func convertACPContentBlocksToMessages(blocks []acp.ContentBlock) ([]message.Mes
 	}
 
 	if len(messages) == 0 {
-		return nil, errors.New("no valid content blocks found")
+		return nil, ErrNoValidContentBlocksFound
 	}
 
 	return messages, nil
@@ -859,7 +876,7 @@ func mapStopReason(finishReason string) acp.StopReason {
 }
 
 // mapStopReasonFromError maps agent error to ACP stop reason.
-func mapStopReasonFromError(err error, resp *agent.AgentResponse) acp.StopReason {
+func mapStopReasonFromError(err error, resp *agent.Response) acp.StopReason {
 	// Check if error is context cancellation (including wrapped errors).
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return acp.StopReasonCancelled
@@ -922,9 +939,9 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 							SessionId: sessionID,
 							Update:    planUpdate,
 						}
-						err := conn.SessionUpdate(ctx, notification)
-						if err != nil {
-							_ = err
+						sendErr := conn.SessionUpdate(ctx, notification)
+						if sendErr != nil {
+							_ = sendErr
 						}
 					}
 				}
@@ -932,8 +949,8 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 
 			// Handle content delta.
 			if event.Type == events.EventContentDelta {
-				data, ok := event.ContentDeltaData()
-				if !ok || data.Role != "assistant" {
+				data, hasData := event.ContentDeltaData()
+				if !hasData || data.Role != "assistant" {
 					continue
 				}
 
@@ -945,9 +962,9 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 					SessionId: sessionID,
 					Update:    update,
 				}
-				err := conn.SessionUpdate(ctx, notification)
-				if err != nil {
-					_ = err
+				sendErr := conn.SessionUpdate(ctx, notification)
+				if sendErr != nil {
+					_ = sendErr
 				}
 
 				continue
@@ -955,8 +972,8 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 
 			// Handle thinking delta.
 			if event.Type == events.EventThinkingDelta {
-				data, ok := event.ThinkingDeltaData()
-				if !ok {
+				data, hasThinking := event.ThinkingDeltaData()
+				if !hasThinking {
 					continue
 				}
 
@@ -966,9 +983,9 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 					SessionId: sessionID,
 					Update:    update,
 				}
-				err := conn.SessionUpdate(ctx, notification)
-				if err != nil {
-					_ = err
+				sendErr := conn.SessionUpdate(ctx, notification)
+				if sendErr != nil {
+					_ = sendErr
 				}
 
 				continue
@@ -976,8 +993,8 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 
 			// Handle plan updates.
 			if event.Type == events.EventPlanUpdate {
-				data, ok := event.PlanUpdateData()
-				if !ok {
+				data, hasPlan := event.PlanUpdateData()
+				if !hasPlan {
 					continue
 				}
 
@@ -994,17 +1011,17 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 					Update:    planUpdate,
 				}
 
-				err := conn.SessionUpdate(ctx, notification)
-				if err != nil {
-					_ = err // Log but continue.
+				sendErr := conn.SessionUpdate(ctx, notification)
+				if sendErr != nil {
+					_ = sendErr // Log but continue.
 				}
 
 				continue
 			}
 
 			// Convert other events to ACP notification (with file tracker for diff generation).
-			update, ok := convertEventToSessionUpdate(event, fileTracker)
-			if !ok {
+			update, converted := convertEventToSessionUpdate(event, fileTracker)
+			if !converted {
 				// Event not mapped to ACP notification, skip.
 				continue
 			}
@@ -1014,8 +1031,8 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 			var terminalIDToRelease string
 
 			if event.Type == events.EventToolCallComplete {
-				if data, ok := event.ToolCallCompleteData(); ok {
-					if terminalID, ok := data.Metadata["terminal_id"].(string); ok && terminalID != "" {
+				if data, hasComplete := event.ToolCallCompleteData(); hasComplete {
+					if terminalID, isStr := data.Metadata["terminal_id"].(string); isStr && terminalID != "" {
 						terminalIDToRelease = terminalID
 					}
 				}
@@ -1027,17 +1044,17 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 				Update:    update,
 			}
 			// Send notification (errors are logged but don't fail execution).
-			err := conn.SessionUpdate(ctx, notification)
-			if err != nil {
+			sendErr := conn.SessionUpdate(ctx, notification)
+			if sendErr != nil {
 				// Log error but continue processing.
-				_ = err
+				_ = sendErr
 			}
 
 			// Release terminal AFTER notification is sent (per ACP spec requirement).
 			if terminalIDToRelease != "" {
 				// Type assert to get concrete connection type for terminal client.
-				if acpConn, ok := conn.(*acp.AgentSideConnection); ok {
-					terminalClient := NewACPTerminalClient(acpConn)
+				if acpConn, isACPConn := conn.(*acp.AgentSideConnection); isACPConn {
+					terminalClient := NewTerminalClient(acpConn)
 					_ = terminalClient.Release(ctx, terminalIDToRelease)
 				}
 			}
@@ -1049,7 +1066,7 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionRequest) (acp.LoadSessionResponse, error) {
 	// Check if storage is available.
 	if a.storage == nil {
-		return acp.LoadSessionResponse{}, errors.New("session persistence not available")
+		return acp.LoadSessionResponse{}, ErrSessionPersistenceNotAvailable
 	}
 
 	// Load session from storage.
@@ -1071,9 +1088,10 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 
 	// Validate and convert MCP servers synchronously (to catch conversion errors).
 	if len(req.McpServers) > 0 {
-		configs := make([]mcp.MCPServerConfig, 0, len(req.McpServers))
+		configs := make([]mcp.ServerConfig, 0, len(req.McpServers))
 		for _, server := range req.McpServers {
-			config, err := convertACPMcpServerToSpin(server)
+			var config mcp.ServerConfig
+			config, err = convertACPMcpServerToSpin(server)
 			if err != nil {
 				return acp.LoadSessionResponse{}, fmt.Errorf("invalid MCP server config: %w", err)
 			}
@@ -1089,10 +1107,10 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 		// Connect servers in background (non-blocking - connection failures don't prevent session loading).
 		go func() {
 			for _, config := range configs {
-				err := a.mcpService.ConnectServer(ctx, config)
-				if err != nil {
+				connErr := a.mcpService.ConnectServer(ctx, config)
+				if connErr != nil {
 					// Log error but don't fail session loading.
-					_ = err // Error logged but session still loaded.
+					_ = connErr // Error logged but session still loaded.
 				}
 			}
 		}()
@@ -1111,8 +1129,8 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 
 	if conn != nil && histStorage != nil {
 		// Load history from storage.
-		histData, err := histStorage.Load(string(sessionID))
-		if err == nil {
+		histData, loadErr := histStorage.Load(string(sessionID))
+		if loadErr == nil {
 			// Send conversation history as notifications
 			// This allows clients to see the full conversation when loading a session.
 			for _, msg := range histData.Messages {
@@ -1126,9 +1144,9 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 							SessionId: sessionID,
 							Update:    userUpdate,
 						}
-						err := conn.SessionUpdate(ctx, notification)
-						if err != nil {
-							_ = err // Log error but continue replaying.
+						sendErr := conn.SessionUpdate(ctx, notification)
+						if sendErr != nil {
+							_ = sendErr // Log error but continue replaying.
 						}
 					}
 				case message.RoleAssistant:
@@ -1146,9 +1164,9 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 								SessionId: sessionID,
 								Update:    thinkUpdate,
 							}
-							err := conn.SessionUpdate(ctx, notification)
-							if err != nil {
-								_ = err
+							sendErr := conn.SessionUpdate(ctx, notification)
+							if sendErr != nil {
+								_ = sendErr
 							}
 						}
 
@@ -1160,9 +1178,9 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 								SessionId: sessionID,
 								Update:    messageUpdate,
 							}
-							err := conn.SessionUpdate(ctx, notification)
-							if err != nil {
-								_ = err
+							sendErr := conn.SessionUpdate(ctx, notification)
+							if sendErr != nil {
+								_ = sendErr
 							}
 						}
 					}
@@ -1183,7 +1201,7 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 
 // sendPlanNotifications sends plan notifications if a plan is detected.
 // First checks for structured planning.Plan, then falls back to text-based detection.
-func (a *SpinACPAgent) sendPlanNotifications(ctx context.Context, sessionID acp.SessionId, agentResp *agent.AgentResponse) error {
+func (a *SpinACPAgent) sendPlanNotifications(ctx context.Context, sessionID acp.SessionId, agentResp *agent.Response) error {
 	// Get connection.
 	a.mu.RLock()
 	conn := a.connection
@@ -1242,21 +1260,21 @@ func (a *SpinACPAgent) sendPlanNotifications(ctx context.Context, sessionID acp.
 // which will cause the agent execution to stop and return a canceled stop reason.
 //
 // If there is no in-progress execution for the session, this is a no-op.
-func (a *SpinACPAgent) Cancel(ctx context.Context, notif acp.CancelNotification) error {
+func (a *SpinACPAgent) Cancel(_ context.Context, notif acp.CancelNotification) error {
 	// Validate session exists.
 	a.mu.RLock()
 	_, exists := a.sessions[notif.SessionId]
 	a.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("session not found: %s", notif.SessionId)
+return fmt.Errorf("session not found: %s: %w", notif.SessionId, ErrSessionNotFound2)
 	}
 
 	// Cancel in-progress execution for this session.
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if cancel, exists := a.cancels[notif.SessionId]; exists {
+	if cancel, hasCancel := a.cancels[notif.SessionId]; hasCancel {
 		// Cancel the context for this session's prompt execution.
 		cancel()
 		// Remove cancel function (it is cleaned up by defer in Prompt, but remove it here too).
@@ -1361,7 +1379,7 @@ func (a *SpinACPAgent) SetSessionMode(ctx context.Context, req acp.SetSessionMod
 	a.mu.RUnlock()
 
 	if !exists {
-		return acp.SetSessionModeResponse{}, fmt.Errorf("session not found: %s", req.SessionId)
+return acp.SetSessionModeResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound3)
 	}
 
 	// Validate mode ID is in available modes.
@@ -1377,7 +1395,7 @@ func (a *SpinACPAgent) SetSessionMode(ctx context.Context, req acp.SetSessionMod
 	}
 
 	if !validMode {
-		return acp.SetSessionModeResponse{}, fmt.Errorf("invalid mode: %s (must be one of: regular, review, compact, planning)", req.ModeId)
+return acp.SetSessionModeResponse{}, fmt.Errorf("invalid mode: %s (must be one of: regular, review, compact, planning): %w", req.ModeId, ErrInvalidMode)
 	}
 
 	// Update stored mode.
@@ -1409,7 +1427,7 @@ func (a *SpinACPAgent) SetSessionMode(ctx context.Context, req acp.SetSessionMod
 
 // Authenticate handles authentication requests.
 // This method is not implemented.
-func (a *SpinACPAgent) Authenticate(ctx context.Context, req acp.AuthenticateRequest) (acp.AuthenticateResponse, error) {
+func (a *SpinACPAgent) Authenticate(_ context.Context, _ acp.AuthenticateRequest) (acp.AuthenticateResponse, error) {
 	return acp.AuthenticateResponse{}, fmt.Errorf("Authenticate: %w", ErrNotImplemented)
 }
 
@@ -1426,11 +1444,11 @@ func (a *SpinACPAgent) RequestPermission(ctx context.Context, req acp.RequestPer
 	a.mu.RUnlock()
 
 	if !exists {
-		return acp.RequestPermissionResponse{}, fmt.Errorf("session not found: %s", req.SessionId)
+return acp.RequestPermissionResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound4)
 	}
 
 	if approvalService == nil {
-		return acp.RequestPermissionResponse{}, errors.New("approval service not configured")
+		return acp.RequestPermissionResponse{}, ErrApprovalServiceNotConfigured
 	}
 
 	// The agent's RequestPermission method is called by the CLIENT.
@@ -1452,7 +1470,7 @@ func (a *SpinACPAgent) RequestPermission(ctx context.Context, req acp.RequestPer
 	a.mu.RUnlock()
 
 	if !exists {
-		return acp.RequestPermissionResponse{}, fmt.Errorf("session not found: %s", req.SessionId)
+return acp.RequestPermissionResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound5)
 	}
 
 	// Convert tool call to operation.
@@ -1462,16 +1480,17 @@ func (a *SpinACPAgent) RequestPermission(ctx context.Context, req acp.RequestPer
 	}
 
 	// Request approval through the approval service.
-	_, approved, err := approvalService.RequestApproval(ctx, operation)
-	if err != nil {
+	_, approved, approvalErr := approvalService.RequestApproval(ctx, operation)
+	if approvalErr != nil {
 		// If context was canceled, return canceled outcome.
-		if ctx.Err() != nil {
+		select {
+		case <-ctx.Done():
 			return acp.RequestPermissionResponse{
 				Outcome: acp.NewRequestPermissionOutcomeCancelled(),
 			}, nil
+		default:
+			return acp.RequestPermissionResponse{}, fmt.Errorf("approval request failed: %w", approvalErr)
 		}
-
-		return acp.RequestPermissionResponse{}, fmt.Errorf("approval request failed: %w", err)
 	}
 
 	// Select appropriate option based on approval response.

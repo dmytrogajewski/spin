@@ -20,7 +20,10 @@ func BenchmarkTimelineAppend_10k(b *testing.B) {
 		for j := range 10000 {
 			block := blocks.NewBlock(blocks.BlockTypeExecute)
 			block.Title = fmt.Sprintf("Block %d", j)
-			_ = tl.Append(block)
+
+			if err := tl.Append(block); err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
 }
@@ -43,8 +46,14 @@ func BenchmarkTimelineGetVisibleBlocks_10k(b *testing.B) {
 			DurationMS: ptr(int64(4200)),
 			LinesOut:   ptr(50),
 		}
-		blocks.SetExecuteMeta(block, meta)
-		_ = tl.Append(block)
+
+		if err := blocks.SetExecuteMeta(block, meta); err != nil {
+			b.Fatal(err)
+		}
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	// Scroll to middle to test realistic scenario.
@@ -68,7 +77,10 @@ func BenchmarkTimelineGetVisibleBlocks_100k(b *testing.B) {
 	for i := range 100000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	// Scroll to middle.
@@ -92,7 +104,10 @@ func BenchmarkTimelineScrollDown_10k(b *testing.B) {
 	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	b.ResetTimer()
@@ -118,7 +133,10 @@ func BenchmarkTimelineScrollPgDn_10k(b *testing.B) {
 	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	b.ResetTimer()
@@ -144,7 +162,10 @@ func BenchmarkTimelineScrollToBottom_10k(b *testing.B) {
 	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	b.ResetTimer()
@@ -172,7 +193,10 @@ func BenchmarkTimelineFilter_10k(b *testing.B) {
 
 		block := blocks.NewBlock(blockType)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	filter := &blocks.Filter{
@@ -209,8 +233,14 @@ func BenchmarkTimelineFilter_ExitCode_10k(b *testing.B) {
 			Command:  "test command",
 			ExitCode: ptr(exitCode),
 		}
-		blocks.SetExecuteMeta(block, meta)
-		_ = tl.Append(block)
+
+		if err := blocks.SetExecuteMeta(block, meta); err != nil {
+			b.Fatal(err)
+		}
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	exitCode := 1
@@ -237,23 +267,41 @@ func BenchmarkTimelineNextBlock_10k(b *testing.B) {
 	for i := range 10000 {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	// Focus first block.
-	firstBlock, _ := tl.GetByIndex(0)
-	tl.FocusBlock(firstBlock.ID)
+	firstBlock, err := tl.GetByIndex(0)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	err = tl.FocusBlock(firstBlock.ID)
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	b.ResetTimer()
 
 	// Benchmark: Navigation through all blocks.
 	for range b.N {
 		b.StopTimer()
-		tl.FocusBlock(firstBlock.ID)
+
+		err = tl.FocusBlock(firstBlock.ID)
+		if err != nil {
+			b.Fatal(err)
+		}
+
 		b.StartTimer()
 
 		for range 10000 {
-			tl.NextBlock()
+			err = tl.NextBlock()
+			if err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
 }
@@ -267,17 +315,26 @@ func BenchmarkTimelineToggleFold_10k(b *testing.B) {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
 		block.Body = generateMockTranscript(100) // Large body.
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	// Get middle block ID.
-	middleBlock, _ := tl.GetByIndex(5000)
+	middleBlock, err := tl.GetByIndex(5000)
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	b.ResetTimer()
 
 	// Benchmark: Toggle fold state.
 	for range b.N {
-		tl.ToggleFold(middleBlock.ID)
+		err = tl.ToggleFold(middleBlock.ID)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -290,7 +347,10 @@ func BenchmarkTimelineExpandAll_10k(b *testing.B) {
 		block := blocks.NewBlock(blocks.BlockTypeExecute)
 		block.Title = fmt.Sprintf("Block %d", i)
 		block.FoldState = blocks.FoldStateCollapsed
-		_ = tl.Append(block)
+
+		if err := tl.Append(block); err != nil {
+			b.Fatal(err)
+		}
 	}
 
 	b.ResetTimer()
@@ -315,9 +375,11 @@ func ptr[T any](v T) *T {
 func generateMockTranscript(lines int) string {
 	result := ""
 	var resultSb316 strings.Builder
+
 	for i := range lines {
 		resultSb316.WriteString(fmt.Sprintf("Line %d: output from command execution\n", i))
 	}
+
 	result += resultSb316.String()
 
 	return result

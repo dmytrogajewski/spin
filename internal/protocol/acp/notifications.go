@@ -227,12 +227,12 @@ func convertToolCallStart(event events.Event, tracker *fileContentTracker) (acp.
 
 	// For write_file operations, track old file content for diff generation.
 	if tracker != nil && data.ToolName == "write_file" {
-		path, err := data.Parameters.GetString("path")
-		if err == nil && path != "" {
+		path, pathErr := data.Parameters.GetString("path")
+		if pathErr == nil && path != "" {
 			tracker.storeOldContent(data.ToolID, path)
 			// Also store new content from parameters.
-			content, err := data.Parameters.GetString("content")
-			if err == nil {
+			content, contentErr := data.Parameters.GetString("content")
+			if contentErr == nil {
 				tracker.storeNewContent(data.ToolID, content)
 			}
 		}
@@ -331,7 +331,7 @@ func convertToolCallComplete(event events.Event, tracker *fileContentTracker) (a
 	}
 
 	// Check for terminal execution.
-	if terminalID, ok := data.Metadata["terminal_id"].(string); ok && terminalID != "" {
+	if terminalID, isStr := data.Metadata["terminal_id"].(string); isStr && terminalID != "" {
 		content = append(content, acp.ToolTerminalRef(terminalID))
 	} else if data.Output != "" {
 		// Wrap text output as a content block (only if not using terminal content).

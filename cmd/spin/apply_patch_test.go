@@ -2,12 +2,20 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dmytrogajewski/spin/internal/patchapply"
+)
+
+var (
+	errInvalidOperation = errors.New("invalid operation")
+	errContentMismatch = errors.New("content mismatch")
+	errFileShouldBeDeleted = errors.New("file should be deleted")
+	errContentMismatch2 = errors.New("content mismatch")
 )
 
 // TestReadPatchInput_Stdin tests reading patch from stdin.
@@ -29,7 +37,7 @@ func TestReadPatchInput_Stdin(t *testing.T) {
 	testPatch := "*** Begin Patch\n*** End Patch"
 
 	go func() {
-		w.Write([]byte(testPatch))
+		_, _ = w.Write([]byte(testPatch))
 		w.Close()
 	}()
 
@@ -94,7 +102,7 @@ func TestFormatParseError(t *testing.T) {
 		Op:   "Parse",
 		Path: "",
 		Line: 5,
-		Err:  errors.New("invalid operation"),
+		Err:  errInvalidOperation,
 	}
 
 	result := formatParseError(testErr)
@@ -443,7 +451,7 @@ func TestApplyPatch_ForceOverwrite(t *testing.T) {
 		}()
 
 		// Should fail.
-		err := runApplyPatch(nil, nil)
+		err = runApplyPatch(nil, nil)
 		if err == nil {
 			t.Error("runApplyPatch() should fail without --force")
 		}
@@ -462,13 +470,14 @@ func TestApplyPatch_ForceOverwrite(t *testing.T) {
 		}()
 
 		// Should succeed.
-		err := runApplyPatch(nil, nil)
+		err = runApplyPatch(nil, nil)
 		if err != nil {
 			t.Errorf("runApplyPatch() with --force error = %v", err)
 		}
 
 		// Verify file was overwritten.
-		content, err := os.ReadFile(testFile)
+		var content []byte
+		content, err = os.ReadFile(testFile)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -480,7 +489,7 @@ func TestApplyPatch_ForceOverwrite(t *testing.T) {
 }
 
 // TestPrintResults tests result output formatting.
-func TestPrintResults(t *testing.T) {
+func TestPrintResults(_ *testing.T) {
 	result := &patchapply.ApplyResult{
 		FilesCreated: []string{"new1.txt", "new2.txt"},
 		FilesUpdated: []string{"updated.txt"},
@@ -569,7 +578,7 @@ func TestApplyPatch_Integration(t *testing.T) {
 	}{
 		{
 			name: "add new file",
-			setup: func(dir string) error {
+			setup: func(_ string) error {
 				return nil
 			},
 			patchText: `*** Begin Patch
@@ -580,11 +589,11 @@ func TestApplyPatch_Integration(t *testing.T) {
 			verify: func(dir string) error {
 				content, err := os.ReadFile(filepath.Join(dir, "hello.txt"))
 				if err != nil {
-					return err
+					return fmt.Errorf("reading hello.txt: %w", err)
 				}
 				// Note: patch adds content as-is, no automatic trailing newline.
 				if string(content) != "Hello World" {
-					return errors.New("content mismatch")
+					return errContentMismatch
 				}
 
 				return nil
@@ -602,7 +611,7 @@ func TestApplyPatch_Integration(t *testing.T) {
 			verify: func(dir string) error {
 				_, err := os.Stat(filepath.Join(dir, "delete-me.txt"))
 				if !os.IsNotExist(err) {
-					return errors.New("file should be deleted")
+					return errFileShouldBeDeleted
 				}
 
 				return nil
@@ -626,12 +635,12 @@ func TestApplyPatch_Integration(t *testing.T) {
 			verify: func(dir string) error {
 				content, err := os.ReadFile(filepath.Join(dir, "update.txt"))
 				if err != nil {
-					return err
+					return fmt.Errorf("reading update.txt: %w", err)
 				}
 
 				expected := "line 1\nline 2 updated\nline 3\n"
 				if string(content) != expected {
-					return errors.New("content mismatch")
+					return errContentMismatch2
 				}
 
 				return nil
@@ -697,7 +706,7 @@ func TestApplyPatch_Integration(t *testing.T) {
 
 			// Verify.
 			if !tt.wantErr && tt.verify != nil {
-				err := tt.verify(tmpDir)
+				err = tt.verify(tmpDir)
 				if err != nil {
 					t.Errorf("verification failed: %v", err)
 				}

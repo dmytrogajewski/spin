@@ -60,13 +60,15 @@ func TestExecuteCommand(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("execute_mode_command_show_current", func(t *testing.T) {
-		result, err := acpAgent.executeCommand(context.Background(), "/mode", []string{}, sessionID)
+		var result string
+		result, err = acpAgent.executeCommand(context.Background(), "/mode", []string{}, sessionID)
 		require.NoError(t, err)
 		assert.Contains(t, result, "Current mode")
 	})
 
 	t.Run("execute_help_command", func(t *testing.T) {
-		result, err := acpAgent.executeCommand(context.Background(), "/help", []string{}, sessionID)
+		var result string
+		result, err = acpAgent.executeCommand(context.Background(), "/help", []string{}, sessionID)
 		require.NoError(t, err)
 		assert.Contains(t, result, "Available commands")
 		assert.Contains(t, result, "/mode")
@@ -74,13 +76,13 @@ func TestExecuteCommand(t *testing.T) {
 	})
 
 	t.Run("execute_exit_command_error", func(t *testing.T) {
-		_, err := acpAgent.executeCommand(context.Background(), "/exit", []string{}, sessionID)
+		_, err = acpAgent.executeCommand(context.Background(), "/exit", []string{}, sessionID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not available via ACP")
 	})
 
 	t.Run("execute_unknown_command", func(t *testing.T) {
-		_, err := acpAgent.executeCommand(context.Background(), "/unknown", []string{}, sessionID)
+		_, err = acpAgent.executeCommand(context.Background(), "/unknown", []string{}, sessionID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown command")
 	})

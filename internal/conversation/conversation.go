@@ -19,6 +19,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
 
+var (
+	ErrAgentIsRequired = errors.New("agent is required")
+	ErrEmitterIsRequired = errors.New("emitter is required")
+	ErrWorkdirIsRequired = errors.New("workDir is required")
+)
+
 // Conversation represents an active conversation instance.
 type Conversation struct {
 	// Services (optional, can be nil).
@@ -64,35 +70,35 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 	}
 
 	// Create agent request with task and history.
-	req := &agent.AgentRequest{
+	req := &agent.Request{
 		Input:   input,
 		Task:    taskInstance,
 		History: historyMessages,
 	}
 
 	// Execute agent (user message is in resp.Messages).
-	resp, err := c.agent.Execute(ctx, req)
-	if err != nil {
+	resp, execErr := c.agent.Execute(ctx, req)
+	if execErr != nil {
 		// Add user message first (since it wasn't added before execution).
-		err := c.history.AddUserMessage(input)
+		err = c.history.AddUserMessage(input)
 		if err != nil {
 			return fmt.Errorf("failed to add user message: %w", err)
 		}
 		// Add error message to history so it's preserved.
 		errorMsg := message.Message{
 			Role:    message.RoleAssistant,
-			Content: fmt.Sprintf("Error: %v", err),
+			Content: fmt.Sprintf("Error: %v", execErr),
 		}
 		_ = c.history.AddMessage(errorMsg)
 
-		return fmt.Errorf("agent execution failed: %w", err)
+		return fmt.Errorf("agent execution failed: %w", execErr)
 	}
 
 	// Add all messages from the agent's execution to history
 	// This includes: user input, assistant messages with tool calls, tool results, final assistant
 	// This maintains proper OpenAI message format and ensures accurate token counting.
 	for _, msg := range resp.Messages {
-		err := c.history.AddMessage(msg)
+		err = c.history.AddMessage(msg)
 		if err != nil {
 			return fmt.Errorf("failed to add message to history: %w", err)
 		}
@@ -292,15 +298,15 @@ func generateConversationID() string {
 // This is useful for modes like ACP where the agent is pre-built.
 func NewFromAgent(cfg NewFromAgentConfig) (*Conversation, error) {
 	if cfg.Agent == nil {
-		return nil, errors.New("agent is required")
+		return nil, ErrAgentIsRequired
 	}
 
 	if cfg.Emitter == nil {
-		return nil, errors.New("emitter is required")
+		return nil, ErrEmitterIsRequired
 	}
 
 	if cfg.WorkDir == "" {
-		return nil, errors.New("workDir is required")
+		return nil, ErrWorkdirIsRequired
 	}
 
 	hist := cfg.History

@@ -391,7 +391,7 @@ func TestPalette_OpenResetsState(t *testing.T) {
 func TestPalette_ExecuteSelectedCommand(t *testing.T) {
 	executed := false
 	registry := NewCommandRegistry()
-	registry.Register(NewSimpleCommand("Test", "Test command", "Test", 'T', func(ctx context.Context) error {
+	registry.Register(NewSimpleCommand("Test", "Test command", "Test", 'T', func(_ context.Context) error {
 		executed = true
 
 		return nil

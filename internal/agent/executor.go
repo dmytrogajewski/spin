@@ -25,6 +25,10 @@ var (
 	ErrValidationFailed = errors.New("validation failed")
 	ErrTimeout          = errors.New("execution timeout")
 	ErrExecutionFailed  = errors.New("execution failed")
+	ErrSecurityServiceCannotBeNil = errors.New("security service cannot be nil")
+	ErrTimeoutMustBePositive = errors.New("timeout must be positive")
+	ErrWorkdirCannotBeEmpty = errors.New("workDir cannot be empty")
+	ErrCommandExecutionDeniedByUser = errors.New("command execution denied by user")
 )
 
 // Default values for execution.
@@ -180,7 +184,7 @@ type OutputChunk struct {
 //
 //	Executor is thread-safe and can execute commands concurrently.
 type Executor struct {
-	securityService *security.SecurityService
+	securityService *security.Service
 	approvalService *security.ApprovalService
 	sandbox         any // sandbox.Sandbox interface (avoiding import cycle).
 	cache           *CommandCache
@@ -195,10 +199,10 @@ type Executor struct {
 type ExecutorOption func(*Executor) error
 
 // WithSecurityService sets the security service.
-func WithSecurityService(s *security.SecurityService) ExecutorOption {
+func WithSecurityService(s *security.Service) ExecutorOption {
 	return func(e *Executor) error {
 		if s == nil {
-			return errors.New("security service cannot be nil")
+			return ErrSecurityServiceCannotBeNil
 		}
 
 		e.securityService = s
@@ -220,7 +224,7 @@ func WithApprovalService(s *security.ApprovalService) ExecutorOption {
 func WithTimeout(d time.Duration) ExecutorOption {
 	return func(e *Executor) error {
 		if d <= 0 {
-			return errors.New("timeout must be positive")
+			return ErrTimeoutMustBePositive
 		}
 
 		e.timeout = d
@@ -241,7 +245,7 @@ func WithCache(c *CommandCache) ExecutorOption {
 // NewExecutor creates a new command executor with default settings.
 func NewExecutor(workDir string, opts ...ExecutorOption) (*Executor, error) {
 	if workDir == "" {
-		return nil, errors.New("workDir cannot be empty")
+		return nil, ErrWorkdirCannotBeEmpty
 	}
 
 	e := &Executor{
@@ -351,7 +355,7 @@ func (e *Executor) requestApprovalIfNeeded(ctx context.Context, cmd *security.Co
 	}
 
 	if !approved {
-		return errors.New("command execution denied by user")
+		return ErrCommandExecutionDeniedByUser
 	}
 
 	return nil
@@ -383,7 +387,7 @@ func (e *Executor) Validate(cmd *security.Command) error {
 	if securityService != nil {
 		result, err := securityService.ValidateCommand(cmd)
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrValidationFailed, err)
+			return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 		}
 
 		if result.Classification == security.CommandForbidden {
@@ -498,7 +502,7 @@ func (e *Executor) executeCommand(ctx context.Context, cmd *security.Command, op
 	// Start execution.
 	err := execCmd.Start()
 	if err != nil {
-		result.Error = fmt.Errorf("%w: %v", ErrCommandNotFound, err)
+		result.Error = fmt.Errorf("%w: %w", ErrCommandNotFound, err)
 		result.ExitCode = -1
 		result.CompletedAt = time.Now()
 		result.Duration = result.CompletedAt.Sub(result.StartedAt)
@@ -530,14 +534,14 @@ func (e *Executor) executeCommand(ctx context.Context, cmd *security.Command, op
 
 	// Handle execution error.
 	if err != nil {
-		if execCtx.Err() == context.DeadlineExceeded {
+		if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
 			result.Error = ErrTimeout
 			result.ExitCode = -1
 
 			return result
 		}
 
-		if execCtx.Err() == context.Canceled {
+		if errors.Is(execCtx.Err(), context.Canceled) {
 			result.Error = context.Canceled
 			result.ExitCode = -1
 
@@ -545,13 +549,14 @@ func (e *Executor) executeCommand(ctx context.Context, cmd *security.Command, op
 		}
 
 		// Extract exit code.
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			result.ExitCode = exitErr.ExitCode()
 		} else {
 			result.ExitCode = -1
 		}
 
-		result.Error = fmt.Errorf("%w: %v", ErrExecutionFailed, err)
+		result.Error = fmt.Errorf("%w: %w", ErrExecutionFailed, err)
 
 		return result
 	}
@@ -642,7 +647,7 @@ func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *security.Command, 
 	if err != nil {
 		cancel()
 
-		return nil, fmt.Errorf("%w: %v", ErrCommandNotFound, err)
+		return nil, fmt.Errorf("%w: %w", ErrCommandNotFound, err)
 	}
 
 	// Stream output in goroutines.
@@ -675,17 +680,17 @@ func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *security.Command, 
 		wg.Wait()
 
 		// Wait for command to complete.
-		err := execCmd.Wait()
+		waitErr := execCmd.Wait()
 
 		// Send completion or error.
-		if err != nil {
-			if execCtx.Err() == context.DeadlineExceeded {
+		if waitErr != nil {
+			if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
 				chunks <- OutputChunk{
 					Timestamp: time.Now(),
 					Done:      true,
 					Error:     ErrTimeout,
 				}
-			} else if execCtx.Err() == context.Canceled {
+			} else if errors.Is(execCtx.Err(), context.Canceled) {
 				chunks <- OutputChunk{
 					Timestamp: time.Now(),
 					Done:      true,
@@ -695,7 +700,7 @@ func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *security.Command, 
 				chunks <- OutputChunk{
 					Timestamp: time.Now(),
 					Done:      true,
-					Error:     fmt.Errorf("%w: %v", ErrExecutionFailed, err),
+					Error:     fmt.Errorf("%w: %w", ErrExecutionFailed, waitErr),
 				}
 			}
 		} else {

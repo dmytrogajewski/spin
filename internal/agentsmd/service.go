@@ -1,6 +1,7 @@
 package agentsmd
 
 import (
+	"errors"
 	"context"
 	"fmt"
 	"io"
@@ -9,10 +10,13 @@ import (
 	"sync"
 )
 
+var ErrAgentsMdNotFoundAtCustom = errors.New("AGENTS.md not found at custom path")
+
 // Service provides AGENTS.md content for system prompt injection.
 type Service struct {
 	config     *Config
 	discoverer Discoverer
+	logger     *slog.Logger
 	workDir    string
 
 	mu      sync.RWMutex
@@ -32,6 +36,7 @@ func NewService(cfg *Config, workDir string, gitRoot string) *Service {
 	return &Service{
 		config:     cfg,
 		discoverer: NewDiscoverer(gitRoot),
+		logger:     slog.Default(),
 		workDir:    workDir,
 	}
 }
@@ -41,7 +46,7 @@ func NewService(cfg *Config, workDir string, gitRoot string) *Service {
 // Returns an error for filesystem errors or if custom path doesn't exist.
 func (s *Service) Load(ctx context.Context) error {
 	if !s.config.Enabled {
-		slog.Debug("AGENTS.md loading disabled")
+		s.logger.DebugContext(ctx, "AGENTS.md loading disabled")
 
 		return nil
 	}
@@ -59,7 +64,7 @@ func (s *Service) Load(ctx context.Context) error {
 	if s.config.Path != "" {
 		path = s.config.Path
 		if !fileExists(path) {
-			return fmt.Errorf("AGENTS.md not found at custom path: %s", path)
+return fmt.Errorf("AGENTS.md not found at custom path: %s: %w", path, ErrAgentsMdNotFoundAtCustom)
 		}
 	} else {
 		// Auto-discover.
@@ -71,7 +76,7 @@ func (s *Service) Load(ctx context.Context) error {
 
 	// Not found is not an error.
 	if path == "" {
-		slog.Debug("AGENTS.md not found")
+		s.logger.DebugContext(ctx, "AGENTS.md not found")
 
 		return nil
 	}
@@ -86,7 +91,7 @@ func (s *Service) Load(ctx context.Context) error {
 	s.path = path
 	s.loaded = true
 
-	slog.Info("loaded AGENTS.md", "path", path, "size", len(content))
+	s.logger.InfoContext(ctx, "loaded AGENTS.md", "path", path, "size", len(content))
 
 	return nil
 }
@@ -133,7 +138,7 @@ func (s *Service) Refresh(ctx context.Context) error {
 func (s *Service) readWithLimit(path string) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("stat agents.md: %w", err)
 	}
 
 	// Determine read size.
@@ -144,7 +149,7 @@ func (s *Service) readWithLimit(path string) (string, error) {
 		readSize = s.config.MaxSize
 		truncated = true
 
-		slog.Warn("AGENTS.md exceeds size limit, truncating",
+		s.logger.Warn("AGENTS.md exceeds size limit, truncating",
 			"path", path,
 			"size", info.Size(),
 			"limit", s.config.MaxSize)
@@ -152,7 +157,7 @@ func (s *Service) readWithLimit(path string) (string, error) {
 
 	file, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("open agents.md: %w", err)
 	}
 	defer file.Close()
 
@@ -160,8 +165,8 @@ func (s *Service) readWithLimit(path string) (string, error) {
 	buf := make([]byte, readSize)
 
 	n, err := io.ReadFull(file, buf)
-	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-		return "", err
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return "", fmt.Errorf("read agents.md: %w", err)
 	}
 
 	content := string(buf[:n])

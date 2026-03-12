@@ -6,6 +6,18 @@ import (
 	"net/url"
 )
 
+var (
+	ErrNameIsRequired = errors.New("name is required")
+	ErrInvalidTransport = errors.New("invalid transport")
+	ErrCommandIsRequiredForStdioTransport = errors.New("command is required for stdio transport")
+	ErrUrlIsNotAllowedForStdio = errors.New("url is not allowed for stdio transport")
+	ErrOauthIsNotAllowedForStdio = errors.New("oauth is not allowed for stdio transport")
+	ErrUrlIsRequiredForTransport = errors.New("url is required for  transport")
+	ErrInvalidUrl = errors.New("invalid url")
+	ErrCommandIsNotAllowedForRemote = errors.New("command is not allowed for remote transport")
+	ErrOauthClientIdIsRequired = errors.New("oauth client_id is required")
+)
+
 // TransportType defines the MCP server connection transport.
 type TransportType string
 
@@ -46,15 +58,15 @@ func (t TransportType) IsRemote() bool {
 }
 
 // Validate validates the MCP server configuration.
-func (c *MCPServerConfig) Validate() error {
+func (c *ServerConfig) Validate() error {
 	// Name is always required.
 	if c.Name == "" {
-		return errors.New("name is required")
+		return ErrNameIsRequired
 	}
 
 	// Validate transport type.
 	if !c.Transport.IsValid() {
-		return fmt.Errorf("invalid transport: %s", c.Transport)
+return fmt.Errorf("invalid transport: %s: %w", c.Transport, ErrInvalidTransport)
 	}
 
 	// Determine effective transport (empty defaults to stdio).
@@ -72,47 +84,47 @@ func (c *MCPServerConfig) Validate() error {
 }
 
 // validateStdio validates stdio transport configuration.
-func (c *MCPServerConfig) validateStdio() error {
+func (c *ServerConfig) validateStdio() error {
 	// Command is required for stdio.
 	if c.Command == "" {
-		return errors.New("command is required for stdio transport")
+		return ErrCommandIsRequiredForStdioTransport
 	}
 
 	// URL is not allowed for stdio.
 	if c.URL != "" {
-		return errors.New("url is not allowed for stdio transport")
+		return ErrUrlIsNotAllowedForStdio
 	}
 
 	// OAuth is not allowed for stdio.
 	if c.OAuth != nil {
-		return errors.New("oauth is not allowed for stdio transport")
+		return ErrOauthIsNotAllowedForStdio
 	}
 
 	return nil
 }
 
 // validateRemote validates remote transport configuration.
-func (c *MCPServerConfig) validateRemote(transport TransportType) error {
+func (c *ServerConfig) validateRemote(transport TransportType) error {
 	// URL is required for remote transports.
 	if c.URL == "" {
-		return fmt.Errorf("url is required for %s transport", transport)
+return fmt.Errorf("url is required for %s transport: %w", transport, ErrUrlIsRequiredForTransport)
 	}
 
 	// Validate URL format.
 	parsedURL, err := url.Parse(c.URL)
 	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-		return fmt.Errorf("invalid url: %s", c.URL)
+return fmt.Errorf("invalid url: %s: %w", c.URL, ErrInvalidUrl)
 	}
 
 	// Command is not allowed for remote transports.
 	if c.Command != "" {
-		return errors.New("command is not allowed for remote transport")
+		return ErrCommandIsNotAllowedForRemote
 	}
 
 	// Validate OAuth if provided.
 	if c.OAuth != nil {
 		if c.OAuth.ClientID == "" {
-			return errors.New("oauth client_id is required")
+			return ErrOauthClientIdIsRequired
 		}
 	}
 

@@ -55,6 +55,7 @@ type toolExecutionResult struct {
 	result *Result
 }
 
+// GetStdout implements the GetStdout operation.
 func (r *toolExecutionResult) GetStdout() string {
 	if r.result == nil {
 		return ""
@@ -63,6 +64,7 @@ func (r *toolExecutionResult) GetStdout() string {
 	return r.result.Stdout
 }
 
+// GetStderr implements the GetStderr operation.
 func (r *toolExecutionResult) GetStderr() string {
 	if r.result == nil {
 		return ""
@@ -71,6 +73,7 @@ func (r *toolExecutionResult) GetStderr() string {
 	return r.result.Stderr
 }
 
+// GetExitCode implements the GetExitCode operation.
 func (r *toolExecutionResult) GetExitCode() int {
 	if r.result == nil {
 		return -1
@@ -79,6 +82,7 @@ func (r *toolExecutionResult) GetExitCode() int {
 	return r.result.ExitCode
 }
 
+// GetMetadata implements the GetMetadata operation.
 func (r *toolExecutionResult) GetMetadata() map[string]any {
 	return nil
 }

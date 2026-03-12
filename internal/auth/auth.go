@@ -77,6 +77,11 @@ var (
 
 	// ErrInvalidCredential indicates credential validation failed.
 	ErrInvalidCredential = errors.New("invalid credential")
+	ErrInvalidCredentialFormat = errors.New("invalid credential format")
+	ErrUnknownCredentialType = errors.New("unknown credential type")
+	ErrNoneCredentialMustHaveEmptyValue = errors.New("none credential must have empty value")
+	ErrCredentialValueCannotBeEmpty = errors.New("credential value cannot be empty")
+	ErrUnknownCredentialType2 = errors.New("unknown credential type")
 )
 
 // Manager implements Auth interface using a Keystore.
@@ -97,7 +102,7 @@ func (m *Manager) GetCredential(ctx context.Context, provider string) (Credentia
 	// Check context.
 	err := ctx.Err()
 	if err != nil {
-		return Credential{}, err
+		return Credential{}, fmt.Errorf("get credential: %w", err)
 	}
 
 	// Normalize provider name.
@@ -122,13 +127,13 @@ func (m *Manager) SetCredential(ctx context.Context, provider string, cred Crede
 	// Check context.
 	err := ctx.Err()
 	if err != nil {
-		return err
+		return fmt.Errorf("set credential: %w", err)
 	}
 
 	// Validate credential.
 	err = validateCredential(cred)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidCredential, err)
+		return fmt.Errorf("%w: %w", ErrInvalidCredential, err)
 	}
 
 	// Normalize provider name.
@@ -151,7 +156,7 @@ func (m *Manager) DeleteCredential(ctx context.Context, provider string) error {
 	// Check context.
 	err := ctx.Err()
 	if err != nil {
-		return err
+		return fmt.Errorf("delete credential: %w", err)
 	}
 
 	// Normalize provider name.
@@ -176,7 +181,7 @@ func (m *Manager) ListProviders(ctx context.Context) ([]string, error) {
 	// Check context.
 	err := ctx.Err()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list providers: %w", err)
 	}
 
 	// List all keys.
@@ -233,7 +238,7 @@ func parseCredential(s string) (Credential, error) {
 func splitCredentialString(s string) (string, string, error) {
 	parts := strings.SplitN(s, ":", 2)
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid credential format: %q", s)
+return "", "", fmt.Errorf("invalid credential format: %q: %w", s, ErrInvalidCredentialFormat)
 	}
 
 	return parts[0], parts[1], nil
@@ -249,7 +254,7 @@ func parseCredentialType(typeName string) (CredentialType, error) {
 	case "token":
 		return CredentialTypeToken, nil
 	default:
-		return CredentialTypeNone, fmt.Errorf("unknown credential type: %q", typeName)
+return CredentialTypeNone, fmt.Errorf("unknown credential type: %q: %w", typeName, ErrUnknownCredentialType)
 	}
 }
 
@@ -260,15 +265,15 @@ func validateCredential(cred Credential) error {
 	case CredentialTypeNone:
 		// None is valid but value should be empty.
 		if cred.Value != "" {
-			return errors.New("none credential must have empty value")
+			return ErrNoneCredentialMustHaveEmptyValue
 		}
 	case CredentialTypeAPIKey, CredentialTypeToken:
 		// API key and token must have non-empty value.
 		if cred.Value == "" {
-			return errors.New("credential value cannot be empty")
+			return ErrCredentialValueCannotBeEmpty
 		}
 	default:
-		return fmt.Errorf("unknown credential type: %d", cred.Type)
+return fmt.Errorf("unknown credential type: %d: %w", cred.Type, ErrUnknownCredentialType2)
 	}
 
 	return nil

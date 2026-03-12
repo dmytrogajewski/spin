@@ -1,3 +1,4 @@
+// Package generator provides content generation capabilities.
 package generator
 
 import (
@@ -17,6 +18,14 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/prompt"
 	"github.com/dmytrogajewski/spin/internal/ace/retrieval"
 	"github.com/dmytrogajewski/spin/internal/llm"
+)
+
+var (
+	ErrLlmProviderIsRequired = errors.New("LLM provider is required")
+	ErrPlaybookIsRequired = errors.New("playbook is required")
+	ErrRetrieverIsRequired = errors.New("retriever is required")
+	ErrInputIsRequired = errors.New("input is required")
+	ErrUnknownSourceType = errors.New("unknown source type")
 )
 
 // Generator produces reasoning trajectories with context bullets.
@@ -90,6 +99,7 @@ type generator struct {
 	retriever      retrieval.Retriever
 	promptBuilder  *prompt.Builder
 	feedbackParser feedback.Parser
+	logger         *slog.Logger
 }
 
 // Config configures a generator.
@@ -102,15 +112,15 @@ type Config struct {
 // NewGenerator creates a new generator.
 func NewGenerator(cfg Config) (Generator, error) {
 	if cfg.LLM == nil {
-		return nil, errors.New("LLM provider is required")
+		return nil, ErrLlmProviderIsRequired
 	}
 
 	if cfg.Playbook == nil {
-		return nil, errors.New("playbook is required")
+		return nil, ErrPlaybookIsRequired
 	}
 
 	if cfg.Retriever == nil {
-		return nil, errors.New("retriever is required")
+		return nil, ErrRetrieverIsRequired
 	}
 
 	return &generator{
@@ -119,6 +129,7 @@ func NewGenerator(cfg Config) (Generator, error) {
 		retriever:      cfg.Retriever,
 		promptBuilder:  prompt.NewBuilder(prompt.WithItemizedLearning()),
 		feedbackParser: feedback.NewRegexParser(),
+		logger:         slog.Default(),
 	}, nil
 }
 
@@ -342,7 +353,7 @@ func (g *generator) checkSuccess(output, groundTruth string) bool {
 // GenerateBullets implements Generator interface.
 func (g *generator) GenerateBullets(ctx context.Context, req BulletGenerationRequest) ([]*bullet.Bullet, error) {
 	if req.Input == "" {
-		return nil, errors.New("input is required")
+		return nil, ErrInputIsRequired
 	}
 	// Select prompt template based on source type.
 	systemPrompt := bulletGenerationSystemPrompt
@@ -359,7 +370,7 @@ func (g *generator) GenerateBullets(ctx context.Context, req BulletGenerationReq
 	case "error":
 		userPrompt = fmt.Sprintf(errorBulletPrompt, req.Input)
 	default:
-		return nil, fmt.Errorf("unknown source type: %s", req.SourceType)
+return nil, fmt.Errorf("unknown source type: %s: %w", req.SourceType, ErrUnknownSourceType)
 	}
 
 	// Call LLM.
@@ -373,7 +384,7 @@ func (g *generator) GenerateBullets(ctx context.Context, req BulletGenerationReq
 		model = "gpt-4" // Default model.
 	}
 
-	slog.Debug("ACE Generator: Calling LLM", "model", model, "system_prompt_len", len(systemPrompt), "user_prompt_len", len(userPrompt))
+	g.logger.DebugContext(ctx, "ACE Generator: Calling LLM", "model", model, "system_prompt_len", len(systemPrompt), "user_prompt_len", len(userPrompt))
 
 	params := openai.ChatCompletionNewParams{
 		Messages:    openai.F(messages),
@@ -384,18 +395,18 @@ func (g *generator) GenerateBullets(ctx context.Context, req BulletGenerationReq
 
 	resp, err := g.llm.Complete(ctx, params)
 	if err != nil {
-		slog.Debug("ACE Generator: LLM call failed", "error", err)
+		g.logger.DebugContext(ctx, "ACE Generator: LLM call failed", "error", err)
 
 		return nil, fmt.Errorf("llm complete: %w", err)
 	}
 
-	slog.Debug("ACE Generator: LLM returned successfully", "choices", len(resp.Choices))
+	g.logger.DebugContext(ctx, "ACE Generator: LLM returned successfully", "choices", len(resp.Choices))
 
 	// Extract output.
 	output := ""
 	if len(resp.Choices) > 0 {
 		output = resp.Choices[0].Message.Content
-		slog.Debug("ACE Generator: LLM response", "length", len(output))
+		g.logger.DebugContext(ctx, "ACE Generator: LLM response", "length", len(output))
 
 		if len(output) > 0 {
 			preview := output
@@ -403,15 +414,15 @@ func (g *generator) GenerateBullets(ctx context.Context, req BulletGenerationReq
 				preview = preview[:200]
 			}
 
-			slog.Debug("ACE Generator: LLM response preview", "preview", preview)
+			g.logger.DebugContext(ctx, "ACE Generator: LLM response preview", "preview", preview)
 		}
 	} else {
-		slog.Warn("ACE Generator: No choices in LLM response!")
+		g.logger.WarnContext(ctx, "ACE Generator: No choices in LLM response!")
 	}
 
 	// Parse bullet candidates from output.
 	candidates := parseBulletCandidates(output)
-	slog.Debug("ACE Generator: Parsed candidates", "count", len(candidates))
+	g.logger.DebugContext(ctx, "ACE Generator: Parsed candidates", "count", len(candidates))
 
 	// Create bullet objects with tags.
 	bullets := make([]*bullet.Bullet, 0, len(candidates))
@@ -426,7 +437,8 @@ func (g *generator) GenerateBullets(ctx context.Context, req BulletGenerationReq
 			opts = append(opts, bullet.WithTags(req.Tags))
 		}
 
-		b, err := bullet.New(content, opts...)
+		var b *bullet.Bullet
+		b, err = bullet.New(content, opts...)
 		if err != nil {
 			// Log but continue with other bullets.
 			continue
@@ -435,7 +447,7 @@ func (g *generator) GenerateBullets(ctx context.Context, req BulletGenerationReq
 		bullets = append(bullets, b)
 	}
 
-	slog.Debug("ACE Generator: Created bullets", "count", len(bullets))
+	g.logger.DebugContext(ctx, "ACE Generator: Created bullets", "count", len(bullets))
 
 	return bullets, nil
 }

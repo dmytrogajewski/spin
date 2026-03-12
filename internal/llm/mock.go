@@ -71,7 +71,7 @@ func (p *MockProvider) Complete(ctx context.Context, params openai.ChatCompletio
 		select {
 		case <-time.After(p.delay):
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, fmt.Errorf("mock complete: %w", ctx.Err())
 		}
 	}
 
@@ -120,7 +120,7 @@ func (p *MockProvider) Complete(ctx context.Context, params openai.ChatCompletio
 }
 
 // Stream implements Provider.Stream.
-func (p *MockProvider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
+func (p *MockProvider) Stream(ctx context.Context, _ openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -262,7 +262,7 @@ func (p *MockProvider) Stream(ctx context.Context, params openai.ChatCompletionN
 }
 
 // Models implements Provider.Models.
-func (p *MockProvider) Models(ctx context.Context) ([]openai.Model, error) {
+func (p *MockProvider) Models(_ context.Context) ([]openai.Model, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 

@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -24,13 +23,13 @@ type LocalRegistryConfig struct {
 	Logger  *slog.Logger
 }
 
-// LocalRegistry wraps a local stdio MCP server as an MCPRegistry.
+// LocalRegistry wraps a local stdio MCP server as an Registry.
 type LocalRegistry struct {
 	name      string
 	config    LocalRegistryConfig
 	sdkClient *client.Client
-	mcpClient MCPClient
-	tools     map[string]*MCPTool
+	mcpClient Client
+	tools     map[string]*Tool
 	metadata  RegistryMetadata
 	logger    *slog.Logger
 	mu        sync.RWMutex
@@ -40,17 +39,17 @@ type LocalRegistry struct {
 // NewLocalRegistry creates a new LocalRegistry for stdio MCP servers.
 func NewLocalRegistry(config LocalRegistryConfig) (*LocalRegistry, error) {
 	if config.Name == "" {
-		return nil, errors.New("registry name is required")
+		return nil, ErrRegistryNameRequired
 	}
 
 	if config.Command == "" {
-		return nil, errors.New("command is required for local registry")
+		return nil, ErrCommandRequiredForLocalRegistry
 	}
 
 	return &LocalRegistry{
 		name:   config.Name,
 		config: config,
-		tools:  make(map[string]*MCPTool),
+		tools:  make(map[string]*Tool),
 		logger: config.Logger,
 		metadata: RegistryMetadata{
 			Name: config.Name,
@@ -122,7 +121,7 @@ func (r *LocalRegistry) Initialize(ctx context.Context) error {
 
 	// Register tools.
 	for _, tool := range toolsResp.Tools {
-		r.tools[tool.Name] = &MCPTool{
+		r.tools[tool.Name] = &Tool{
 			ServerName: r.name,
 			Tool:       tool,
 			Client:     r.mcpClient,
@@ -134,7 +133,7 @@ func (r *LocalRegistry) Initialize(ctx context.Context) error {
 	r.connected = true
 
 	if r.logger != nil {
-		r.logger.Info("local registry initialized",
+		r.logger.InfoContext(ctx, "local registry initialized",
 			"name", r.name,
 			"tools", len(r.tools))
 	}
@@ -159,7 +158,7 @@ func (r *LocalRegistry) Metadata() RegistryMetadata {
 }
 
 // Client returns the underlying MCP client.
-func (r *LocalRegistry) Client() MCPClient {
+func (r *LocalRegistry) Client() Client {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -188,8 +187,8 @@ func (r *LocalRegistry) Count() int {
 }
 
 // Search finds tools matching the query.
-func (r *LocalRegistry) Search(ctx *SearchContext, query string, max int) []tools.Tool {
-	return SearchTools(r.List(), query, max, DefaultSearchOptions())
+func (r *LocalRegistry) Search(_ *SearchContext, query string, maxResults int) []tools.Tool {
+	return SearchTools(r.List(), query, maxResults, DefaultSearchOptions())
 }
 
 // Tool returns a specific tool by name.
@@ -213,7 +212,7 @@ func (r *LocalRegistry) Execute(ctx context.Context, toolName string, args json.
 	r.mu.RUnlock()
 
 	if !exists {
-		return tools.ToolResult{}, fmt.Errorf("tool not found: %s", toolName)
+return tools.ToolResult{}, fmt.Errorf("tool not found: %s: %w", toolName, ErrToolNotFound)
 	}
 
 	// Parse arguments.
@@ -236,11 +235,11 @@ func (r *LocalRegistry) Execute(ctx context.Context, toolName string, args json.
 		},
 	}
 
-	resp, err := mcpClient.CallTool(ctx, callReq)
-	if err != nil {
+	resp, callErr := mcpClient.CallTool(ctx, callReq)
+	if callErr != nil {
 		return tools.ToolResult{
 			Success: false,
-			Error:   err.Error(),
+			Error:   fmt.Sprintf("tool call failed: %v", callErr),
 		}, nil
 	}
 
@@ -285,24 +284,26 @@ func (r *LocalRegistry) Close() error {
 	return nil
 }
 
-// wrapTool wraps an MCPTool as a tools.Tool with qualified name.
-func (r *LocalRegistry) wrapTool(mcpTool *MCPTool) tools.Tool {
+// wrapTool wraps an Tool as a tools.Tool with qualified name.
+func (r *LocalRegistry) wrapTool(mcpTool *Tool) tools.Tool {
 	return &registryToolWrapper{
 		registry: r,
 		mcpTool:  mcpTool,
 	}
 }
 
-// registryToolWrapper wraps an MCPTool to implement tools.Tool.
+// registryToolWrapper wraps an Tool to implement tools.Tool.
 type registryToolWrapper struct {
 	registry *LocalRegistry
-	mcpTool  *MCPTool
+	mcpTool  *Tool
 }
 
+// Name implements the Name operation.
 func (w *registryToolWrapper) Name() string {
 	return fmt.Sprintf("mcp_%s_%s", w.registry.name, w.mcpTool.Tool.Name)
 }
 
+// Description implements the Description operation.
 func (w *registryToolWrapper) Description() string {
 	if w.mcpTool.Tool.Description != "" {
 		return w.mcpTool.Tool.Description
@@ -311,6 +312,7 @@ func (w *registryToolWrapper) Description() string {
 	return fmt.Sprintf("MCP tool: %s", w.mcpTool.Tool.Name)
 }
 
+// Schema implements the Schema operation.
 func (w *registryToolWrapper) Schema() tools.ToolSchema {
 	// Marshal tool's InputSchema to JSON for parsing.
 	schemaBytes, err := json.Marshal(w.mcpTool.Tool.InputSchema)
@@ -363,6 +365,7 @@ func (w *registryToolWrapper) fallbackSchema() tools.ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (w *registryToolWrapper) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
 	argsJSON, err := json.Marshal(params.ToMap())
 	if err != nil {

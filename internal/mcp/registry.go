@@ -3,15 +3,12 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"errors"
 
 	mcpSDK "github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
-// ErrUnsupportedTransport is returned when a transport type is not supported.
-var ErrUnsupportedTransport = errors.New("unsupported transport type")
 
 // RegistryMetadata contains information about a registry.
 // Implementations can extend this with custom fields via the Extra map.
@@ -71,7 +68,7 @@ type ToolSearcher interface {
 	// ctx can be nil for simple searches; required for dynamic registries that call APIs.
 	// max limits results (0 = no limit).
 	// Returns tools sorted by relevance.
-	Search(ctx *SearchContext, query string, max int) []tools.Tool
+	Search(ctx *SearchContext, query string, maxResults int) []tools.Tool
 }
 
 // ToolExecutor can execute tools directly.
@@ -90,12 +87,12 @@ type ToolExecutor interface {
 type ClientProvider interface {
 	// Client returns the MCP client for direct protocol access.
 	// Returns nil if no client is available.
-	Client() MCPClient
+	Client() Client
 }
 
-// MCPRegistry is the full interface for MCP-based tool registries.
+// Registry is the full interface for MCP-based tool registries.
 // It composes all tool source capabilities.
-type MCPRegistry interface {
+type Registry interface {
 	ToolLister
 	ToolSearcher
 	ToolExecutor
@@ -111,22 +108,22 @@ type MCPRegistry interface {
 	Metadata() RegistryMetadata
 }
 
-// RegistryManager manages multiple MCPRegistry instances.
+// RegistryManager manages multiple Registry instances.
 // It provides a unified view of tools from all registries.
 type RegistryManager interface {
 	// Register adds a registry to the manager.
 	// Returns error if a registry with the same name exists.
-	Register(registry MCPRegistry) error
+	Register(registry Registry) error
 
 	// Unregister removes a registry by name.
 	// Closes the registry before removal.
 	Unregister(name string) error
 
 	// Get retrieves a registry by name.
-	Get(name string) (MCPRegistry, bool)
+	Get(name string) (Registry, bool)
 
 	// All returns all registered registries.
-	All() []MCPRegistry
+	All() []Registry
 
 	// AllTools returns tools from all registries.
 	// Handles naming with mcp_{registry}_{tool} pattern.
@@ -134,7 +131,7 @@ type RegistryManager interface {
 
 	// Search searches across all registries.
 	// ctx can be nil for simple searches; required for dynamic registries.
-	Search(ctx *SearchContext, query string, max int) []tools.Tool
+	Search(ctx *SearchContext, query string, maxResults int) []tools.Tool
 
 	// Tool finds a tool by name.
 	// Supports qualified names (registry:tool) for explicit registry targeting.

@@ -1,3 +1,4 @@
+// Package prompt provides prompt building and rendering.
 package prompt
 
 import (

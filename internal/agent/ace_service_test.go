@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -241,13 +242,13 @@ func TestACEService_ParseFeedback_Disabled(t *testing.T) {
 	}
 
 	feedback, err := svc.ParseFeedback("HELPFUL: [B0]")
-	if err != nil {
-		t.Errorf("ParseFeedback() error = %v", err)
+	if !errors.Is(err, ErrACEDisabled) {
+		t.Errorf("ParseFeedback() on disabled service should return ErrACEDisabled, got %v", err)
 	}
 
-	// When disabled, should return nil.
+	// When disabled, should return nil feedback.
 	if feedback != nil {
-		t.Errorf("ParseFeedback() on disabled service should return nil")
+		t.Errorf("ParseFeedback() on disabled service should return nil feedback")
 	}
 }
 
@@ -279,7 +280,7 @@ func TestACEService_UpdateBullets(t *testing.T) {
 	}
 
 	for _, b := range bullets {
-		err := svc.playbook.Add(ctx, b)
+		err = svc.playbook.Add(ctx, b)
 		if err != nil {
 			t.Fatalf("Failed to add bullet: %v", err)
 		}

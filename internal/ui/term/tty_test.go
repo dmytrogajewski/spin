@@ -158,7 +158,7 @@ func TestEnterTwice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enter() error = %v", err)
 	}
-	defer tty.Exit()
+	defer func() { _ = tty.Exit() }()
 
 	// Second Enter should error or no-op.
 	err = tty.Enter()
@@ -184,11 +184,11 @@ func TestPanicCleanup(t *testing.T) {
 				t.Error("did not panic")
 			}
 		}()
-		defer tty.Exit()
+		defer func() { _ = tty.Exit() }()
 
-		err := tty.Enter()
-		if err != nil {
-			t.Fatalf("Enter() error = %v", err)
+		enterErr := tty.Enter()
+		if enterErr != nil {
+			t.Fatalf("Enter() error = %v", enterErr)
 		}
 
 		panic("test panic")

@@ -123,6 +123,19 @@ func TestMessage_WithToolCalls(t *testing.T) {
 		},
 	}
 
+	// Verify core fields.
+	if msg.ID != "msg_1" {
+		t.Errorf("ID = %q, want %q", msg.ID, "msg_1")
+	}
+
+	if msg.Role != RoleAssistant {
+		t.Errorf("Role = %q, want %q", msg.Role, RoleAssistant)
+	}
+
+	if msg.Content != "I'll read the file for you." {
+		t.Errorf("Content = %q, want %q", msg.Content, "I'll read the file for you.")
+	}
+
 	// Verify ToolCalls are typed.
 	if len(msg.ToolCalls) != 2 {
 		t.Fatalf("len(ToolCalls) = %d, want 2", len(msg.ToolCalls))
@@ -152,6 +165,19 @@ func TestMessage_WithMetadata(t *testing.T) {
 			"user_id":   "user_123",
 			"timestamp": "2025-10-26T10:00:00Z",
 		},
+	}
+
+	// Verify core fields.
+	if msg.ID != "msg_2" {
+		t.Errorf("ID = %q, want %q", msg.ID, "msg_2")
+	}
+
+	if msg.Role != RoleUser {
+		t.Errorf("Role = %q, want %q", msg.Role, RoleUser)
+	}
+
+	if msg.Content != "Hello" {
+		t.Errorf("Content = %q, want %q", msg.Content, "Hello")
 	}
 
 	// Verify Metadata is typed as map[string]string.

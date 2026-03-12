@@ -2,6 +2,8 @@ package filesearch
 
 import (
 	"bufio"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,21 +35,15 @@ func NewIgnoreHandler(rootDir string) (*IgnoreHandler, error) {
 	// Try to load .gitignore.
 	gitignorePath := filepath.Join(rootDir, ".gitignore")
 	err := h.loadIgnoreFile(gitignorePath)
-	if err != nil {
-		// Only return error if file exists but cannot be read.
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
 	}
 
 	// Try to load .spinignore.
 	spinignorePath := filepath.Join(rootDir, ".spinignore")
 	err = h.loadIgnoreFile(spinignorePath)
-	if err != nil {
-		// Only return error if file exists but cannot be read.
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
 	}
 
 	return h, nil
@@ -90,7 +86,7 @@ func (h *IgnoreHandler) IsIgnored(relPath string, isDir bool) bool {
 func (h *IgnoreHandler) loadIgnoreFile(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("open ignore file: %w", err)
 	}
 	defer f.Close()
 
@@ -112,7 +108,11 @@ func (h *IgnoreHandler) loadIgnoreFile(path string) error {
 		h.patterns = append(h.patterns, line)
 	}
 
-	return scanner.Err()
+	if scanErr := scanner.Err(); scanErr != nil {
+		return fmt.Errorf("scan ignore file: %w", scanErr)
+	}
+
+	return nil
 }
 
 // defaultPatterns returns the default ignore patterns that are always included.

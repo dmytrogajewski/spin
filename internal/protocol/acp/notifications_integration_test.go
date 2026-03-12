@@ -25,7 +25,7 @@ type mockConnection struct {
 	notifications []acp.SessionNotification
 }
 
-func (m *mockConnection) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
+func (m *mockConnection) SessionUpdate(_ context.Context, notification acp.SessionNotification) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -34,7 +34,7 @@ func (m *mockConnection) SessionUpdate(ctx context.Context, notification acp.Ses
 	return nil
 }
 
-func (m *mockConnection) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (m *mockConnection) RequestPermission(_ context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	// Auto-approve for testing by selecting the first allow option.
 	for _, opt := range params.Options {
 		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -16,14 +15,17 @@ func NewListDirectoryTool() *ListDirectoryTool {
 	return &ListDirectoryTool{}
 }
 
+// Name implements the Name operation.
 func (t *ListDirectoryTool) Name() string {
 	return "list_directory"
 }
 
+// Description implements the Description operation.
 func (t *ListDirectoryTool) Description() string {
 	return "List the contents of a directory"
 }
 
+// Schema implements the Schema operation.
 func (t *ListDirectoryTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -44,10 +46,11 @@ func (t *ListDirectoryTool) Schema() ToolSchema {
 	}
 }
 
-func (t *ListDirectoryTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	path, err := params.GetString("path")
-	if err != nil || path == "" {
-		return NewToolError(errors.New("path parameter must be a non-empty string")), nil
+// Execute implements the Execute operation.
+func (t *ListDirectoryTool) Execute(_ context.Context, params ToolParameters) (ToolResult, error) {
+	path, _ := params.GetString("path")
+	if path == "" {
+		return NewToolError(ErrPathParameterRequired), nil
 	}
 
 	entries, err := os.ReadDir(path)
@@ -58,8 +61,8 @@ func (t *ListDirectoryTool) Execute(ctx context.Context, params ToolParameters) 
 	var output strings.Builder
 
 	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil {
+		info, infoErr := entry.Info()
+		if infoErr != nil {
 			continue
 		}
 

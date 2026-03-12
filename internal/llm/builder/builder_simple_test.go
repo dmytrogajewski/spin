@@ -15,8 +15,8 @@ import (
 
 // TestNewBuilder_Simple tests that the new simplified builder works.
 func TestNewBuilder_Simple(t *testing.T) {
-	cfg := &config.ConfigV2{
-		LLM: config.LLMConfigV2{
+	cfg := &config.V2{
+		LLM: config.LLMV2{
 			Provider: "ollama",
 			Model:    "llama3.1",
 			BaseURL:  "http://localhost:11434",
@@ -35,15 +35,15 @@ func TestNewBuilder_Simple(t *testing.T) {
 // TestBuild_ConfigAlreadyMerged tests that Build uses config directly.
 func TestBuild_ConfigAlreadyMerged(t *testing.T) {
 	// Use a mock server so we don't depend on a real Ollama instance.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"models":[]}`))
 	}))
 	defer server.Close()
 
-	cfg := &config.ConfigV2{
-		LLM: config.LLMConfigV2{
+	cfg := &config.V2{
+		LLM: config.LLMV2{
 			Provider: "ollama",
 			Model:    "qwen2.5-coder:7b",
 			BaseURL:  server.URL,

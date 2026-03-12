@@ -1,3 +1,4 @@
+// Package status provides UI status aggregation.
 package status
 
 import (

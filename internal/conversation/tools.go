@@ -10,10 +10,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+var ErrToolRegistryIsNil = errors.New("tool registry is nil")
+
 // registerIntegrationTools registers tools from MCP and Git integrations.
 func (b *Builder) registerIntegrationTools(registry *tools.Registry) error {
 	if registry == nil {
-		return errors.New("tool registry is nil")
+		return ErrToolRegistryIsNil
 	}
 
 	if b.mcpService != nil {
@@ -68,7 +70,7 @@ func (b *Builder) registerGitTools(registry *tools.Registry) error {
 }
 
 // buildToolRegistry constructs a complete tool registry with all standard and integration tools.
-func (b *Builder) buildToolRegistry(exec *agent.Executor, securityService *security.SecurityService, env *agent.Environment) *tools.Registry {
+func (b *Builder) buildToolRegistry(exec *agent.Executor, securityService *security.Service, env *agent.Environment) *tools.Registry {
 	registry := b.toolRegistry
 	if registry == nil {
 		// Use shared factory to create base registry with configured tools.

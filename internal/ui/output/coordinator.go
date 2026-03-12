@@ -14,7 +14,7 @@ type PromptModel interface {
 }
 
 // PromptRenderer is the interface for rendering the prompt.
-// Implemented by prompt.Renderer.
+// Implemented by prompt.TermRenderer.
 type PromptRenderer interface {
 	Redraw(model PromptModel, status string) error
 }

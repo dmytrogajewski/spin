@@ -1,3 +1,4 @@
+// Package testkit provides test utilities for UI components.
 package testkit
 
 import (

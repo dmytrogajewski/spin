@@ -23,7 +23,7 @@ type mockConnectionForPlan struct {
 	notifications []acp.SessionNotification
 }
 
-func (m *mockConnectionForPlan) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
+func (m *mockConnectionForPlan) SessionUpdate(_ context.Context, notification acp.SessionNotification) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -32,7 +32,7 @@ func (m *mockConnectionForPlan) SessionUpdate(ctx context.Context, notification 
 	return nil
 }
 
-func (m *mockConnectionForPlan) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (m *mockConnectionForPlan) RequestPermission(_ context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	// Auto-approve for testing by selecting the first allow option.
 	for _, opt := range params.Options {
 		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {
@@ -186,7 +186,7 @@ func TestSendPlanNotifications_NoConnection(t *testing.T) {
 	acpAgent, _ := createTestACPAgentWithMock(t)
 	acpAgent.SetNotificationSender(nil) // No connection.
 
-	agentResp := &agent.AgentResponse{
+	agentResp := &agent.Response{
 		Output: "Plan:\n1. Step one\n2. Step two",
 	}
 
@@ -197,7 +197,7 @@ func TestSendPlanNotifications_NoConnection(t *testing.T) {
 func TestSendPlanNotifications_NoPlan(t *testing.T) {
 	acpAgent, mockConn := createTestACPAgentWithMock(t)
 
-	agentResp := &agent.AgentResponse{
+	agentResp := &agent.Response{
 		Output: "This is just regular text without any plan.",
 	}
 
@@ -212,7 +212,7 @@ func TestSendPlanNotifications_NoPlan(t *testing.T) {
 func TestSendPlanNotifications_WithPlan(t *testing.T) {
 	acpAgent, mockConn := createTestACPAgentWithMock(t)
 
-	agentResp := &agent.AgentResponse{
+	agentResp := &agent.Response{
 		Output: "Plan:\n1. Step one\n2. Step two\n3. Step three",
 	}
 

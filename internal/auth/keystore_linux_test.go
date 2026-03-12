@@ -3,6 +3,7 @@
 package auth
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/zalando/go-keyring"
@@ -13,14 +14,14 @@ func TestLinuxKeystore_Get(t *testing.T) {
 	ks := &linuxKeystore{}
 
 	// Clean up before test.
-	keyring.Delete(serviceName, "test-key")
+	_ = keyring.Delete(serviceName, "test-key")
 
 	// Set a value first.
 	err := keyring.Set(serviceName, "test-key", "test-value")
 	if err != nil {
 		t.Skipf("Secret Service not available: %v", err)
 	}
-	defer keyring.Delete(serviceName, "test-key")
+	defer func() { _ = keyring.Delete(serviceName, "test-key") }()
 
 	// Get the value.
 	value, err := ks.Get("test-key")
@@ -38,14 +39,14 @@ func TestLinuxKeystore_Get_NotFound(t *testing.T) {
 	ks := &linuxKeystore{}
 
 	// Clean up to ensure it doesn't exist.
-	keyring.Delete(serviceName, "nonexistent")
+	_ = keyring.Delete(serviceName, "nonexistent")
 
 	_, err := ks.Get("nonexistent")
 	if err == nil {
 		t.Fatal("Get() expected error, got nil")
 	}
 
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("Get() error = %v, want ErrNotFound", err)
 	}
 }
@@ -55,8 +56,8 @@ func TestLinuxKeystore_Set(t *testing.T) {
 	ks := &linuxKeystore{}
 
 	// Clean up before test.
-	keyring.Delete(serviceName, "test-set")
-	defer keyring.Delete(serviceName, "test-set")
+	_ = keyring.Delete(serviceName, "test-set")
+	defer func() { _ = keyring.Delete(serviceName, "test-set") }()
 
 	// Set a value.
 	err := ks.Set("test-set", "new-value")
@@ -80,8 +81,8 @@ func TestLinuxKeystore_Set_Overwrite(t *testing.T) {
 	ks := &linuxKeystore{}
 
 	// Clean up before test.
-	keyring.Delete(serviceName, "test-overwrite")
-	defer keyring.Delete(serviceName, "test-overwrite")
+	_ = keyring.Delete(serviceName, "test-overwrite")
+	defer func() { _ = keyring.Delete(serviceName, "test-overwrite") }()
 
 	// Set initial value.
 	err := keyring.Set(serviceName, "test-overwrite", "old-value")
@@ -111,7 +112,7 @@ func TestLinuxKeystore_Delete(t *testing.T) {
 	ks := &linuxKeystore{}
 
 	// Clean up before test.
-	keyring.Delete(serviceName, "test-delete")
+	_ = keyring.Delete(serviceName, "test-delete")
 
 	// Set a value first.
 	err := keyring.Set(serviceName, "test-delete", "test-value")
@@ -137,7 +138,7 @@ func TestLinuxKeystore_Delete_Idempotent(t *testing.T) {
 	ks := &linuxKeystore{}
 
 	// Ensure it doesn't exist.
-	keyring.Delete(serviceName, "nonexistent-delete")
+	_ = keyring.Delete(serviceName, "nonexistent-delete")
 
 	// Delete should not error.
 	err := ks.Delete("nonexistent-delete")
@@ -169,8 +170,8 @@ func TestLinuxKeystore_Integration(t *testing.T) {
 	testValue := "integration-value"
 
 	// Clean up before and after.
-	keyring.Delete(serviceName, testKey)
-	defer keyring.Delete(serviceName, testKey)
+	_ = keyring.Delete(serviceName, testKey)
+	defer func() { _ = keyring.Delete(serviceName, testKey) }()
 
 	// Store.
 	err := ks.Set(testKey, testValue)
@@ -214,7 +215,7 @@ func TestLinuxKeystore_Integration(t *testing.T) {
 
 	// Verify deleted.
 	_, err = ks.Get(testKey)
-	if err != ErrNotFound {
+	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("Get() after delete error = %v, want ErrNotFound", err)
 	}
 }
@@ -250,7 +251,7 @@ func TestIsSecretServiceAvailable(t *testing.T) {
 		ks := &linuxKeystore{}
 
 		_, err := ks.Get("test-availability")
-		if err != nil && err != ErrNotFound {
+		if err != nil && !errors.Is(err, ErrNotFound) {
 			t.Logf("Secret Service reported available but Get failed: %v", err)
 		}
 	}
@@ -263,8 +264,8 @@ func TestLinuxKeystore_EmptyValue(t *testing.T) {
 	testKey := "empty-value-test"
 
 	// Clean up.
-	keyring.Delete(serviceName, testKey)
-	defer keyring.Delete(serviceName, testKey)
+	_ = keyring.Delete(serviceName, testKey)
+	defer func() { _ = keyring.Delete(serviceName, testKey) }()
 
 	// Set empty value.
 	err := ks.Set(testKey, "")
@@ -301,8 +302,8 @@ func TestLinuxKeystore_SpecialCharacters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clean up.
-			keyring.Delete(serviceName, tt.key)
-			defer keyring.Delete(serviceName, tt.key)
+			_ = keyring.Delete(serviceName, tt.key)
+			defer func() { _ = keyring.Delete(serviceName, tt.key) }()
 
 			// Set.
 			err := ks.Set(tt.key, tt.value)

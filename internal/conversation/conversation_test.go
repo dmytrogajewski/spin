@@ -71,7 +71,7 @@ func TestConversation_Close_WithRunningTurn(t *testing.T) {
 
 	// Start a turn in background.
 	go func() {
-		conv.RunTurn(ctx, "test prompt")
+		_ = conv.RunTurn(ctx, "test prompt")
 	}()
 
 	// Close while turn may be running.
@@ -92,7 +92,7 @@ func TestConversation_Stream_ReceivesEvents(t *testing.T) {
 
 	// Start a turn to generate events.
 	go func() {
-		conv.RunTurn(ctx, "test prompt")
+		_ = conv.RunTurn(ctx, "test prompt")
 	}()
 
 	// Stream should be functional.

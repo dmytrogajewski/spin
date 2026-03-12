@@ -88,7 +88,8 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 				acp.TextBlock("What is 2+2?"),
 			},
 		}
-		resp, err := client.Prompt(ctx, req)
+		var resp acp.PromptResponse
+		resp, err = client.Prompt(ctx, req)
 		require.NoError(t, err)
 		assert.NotNil(t, resp.StopReason)
 	})
@@ -101,7 +102,8 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 				acp.ImageBlock("base64imagedata", "image/png"),
 			},
 		}
-		resp, err := client.Prompt(ctx, req)
+		var resp acp.PromptResponse
+		resp, err = client.Prompt(ctx, req)
 		require.NoError(t, err)
 		assert.NotNil(t, resp.StopReason)
 	})
@@ -115,7 +117,8 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 				acp.ImageBlock("base64imagedata", "image/jpeg"),
 			},
 		}
-		resp, err := client.Prompt(ctx, req)
+		var resp acp.PromptResponse
+		resp, err = client.Prompt(ctx, req)
 		require.NoError(t, err)
 		assert.NotNil(t, resp.StopReason)
 	})

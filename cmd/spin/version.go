@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dmytrogajewski/spin/internal/version"
+	"github.com/dmytrogajewski/spin/internal/appinfo"
 )
 
 var (
@@ -19,15 +19,15 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Show version information",
 		Long:  `Display the version, build information, and Go version for Spin.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			if versionShort {
-				fmt.Fprintln(cmd.OutOrStdout(), version.ShortVersion())
+				fmt.Fprintln(cmd.OutOrStdout(), appinfo.ShortVersion())
 
 				return nil
 			}
 
 			if versionVerbose {
-				info := version.GetVersionInfo()
+				info := appinfo.GetInfo()
 				fmt.Fprintf(cmd.OutOrStdout(), "spin version %s\n", info.Version)
 				fmt.Fprintf(cmd.OutOrStdout(), "  commit: %s\n", info.Commit)
 				fmt.Fprintf(cmd.OutOrStdout(), "  built: %s\n", info.BuildDate)
@@ -37,7 +37,7 @@ func newVersionCmd() *cobra.Command {
 			}
 
 			// Default: full version string.
-			fmt.Fprintln(cmd.OutOrStdout(), version.String())
+			fmt.Fprintln(cmd.OutOrStdout(), appinfo.String())
 
 			return nil
 		},

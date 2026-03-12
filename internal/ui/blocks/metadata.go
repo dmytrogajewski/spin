@@ -6,6 +6,36 @@ import (
 	"fmt"
 )
 
+var (
+	ErrCommandIsRequired = errors.New("command is required")
+	ErrCwdIsRequired = errors.New("cwd is required")
+	ErrImpactMustBeLowMediumOr = errors.New("impact must be low, medium, or high")
+	ErrExitCodeMustBe0 = errors.New("exit_code must be >= 0")
+	ErrDurationMsMustBe0 = errors.New("duration_ms must be >= 0")
+	ErrLinesOutMustBe0 = errors.New("lines_out must be >= 0")
+	ErrFileIsRequired = errors.New("file is required")
+	ErrOffsetMustBe0 = errors.New("offset must be >= 0")
+	ErrLimitMustBe0 = errors.New("limit must be >= 0")
+	ErrPatternIsRequired = errors.New("pattern is required")
+	ErrModeMustBeContentFilesWith = errors.New("mode must be content, files_with_matches, or count")
+	ErrContextMustBe0 = errors.New("context must be >= 0")
+	ErrToolNameIsRequired = errors.New("tool_name is required")
+	ErrFileIsRequired2 = errors.New("file is required")
+	ErrLinesAddedMustBe0 = errors.New("lines_added must be >= 0")
+	ErrLinesRemovedMustBe0 = errors.New("lines_removed must be >= 0")
+	ErrTotalMustBe0 = errors.New("total must be >= 0")
+	ErrPendingMustBe0 = errors.New("pending must be >= 0")
+	ErrInProgressMustBe0 = errors.New("in_progress must be >= 0")
+	ErrCompletedMustBe0 = errors.New("completed must be >= 0")
+	ErrPendingInProgressCompletedMustEqual = errors.New("pending + in_progress + completed () must equal total ()")
+	ErrMetadataIsEmpty = errors.New("metadata is empty")
+	ErrMetadataIsEmpty2 = errors.New("metadata is empty")
+	ErrMetadataIsEmpty3 = errors.New("metadata is empty")
+	ErrMetadataIsEmpty4 = errors.New("metadata is empty")
+	ErrMetadataIsEmpty5 = errors.New("metadata is empty")
+	ErrMetadataIsEmpty6 = errors.New("metadata is empty")
+)
+
 // ExecuteMeta holds metadata for EXECUTE blocks.
 type ExecuteMeta struct {
 	// Command is the shell command string.
@@ -33,27 +63,27 @@ type ExecuteMeta struct {
 // Validate validates the execute metadata.
 func (m *ExecuteMeta) Validate() error {
 	if m.Command == "" {
-		return errors.New("command is required")
+		return ErrCommandIsRequired
 	}
 
 	if m.CWD == "" {
-		return errors.New("cwd is required")
+		return ErrCwdIsRequired
 	}
 
 	if m.Impact != "low" && m.Impact != "medium" && m.Impact != "high" {
-		return errors.New("impact must be low, medium, or high")
+		return ErrImpactMustBeLowMediumOr
 	}
 
 	if m.ExitCode != nil && *m.ExitCode < 0 {
-		return errors.New("exit_code must be >= 0")
+		return ErrExitCodeMustBe0
 	}
 
 	if m.DurationMS != nil && *m.DurationMS < 0 {
-		return errors.New("duration_ms must be >= 0")
+		return ErrDurationMsMustBe0
 	}
 
 	if m.LinesOut != nil && *m.LinesOut < 0 {
-		return errors.New("lines_out must be >= 0")
+		return ErrLinesOutMustBe0
 	}
 
 	return nil
@@ -74,15 +104,15 @@ type ReadMeta struct {
 // Validate validates the read metadata.
 func (m *ReadMeta) Validate() error {
 	if m.File == "" {
-		return errors.New("file is required")
+		return ErrFileIsRequired
 	}
 
 	if m.Offset < 0 {
-		return errors.New("offset must be >= 0")
+		return ErrOffsetMustBe0
 	}
 
 	if m.Limit < 0 {
-		return errors.New("limit must be >= 0")
+		return ErrLimitMustBe0
 	}
 
 	return nil
@@ -103,15 +133,15 @@ type GrepMeta struct {
 // Validate validates the grep metadata.
 func (m *GrepMeta) Validate() error {
 	if m.Pattern == "" {
-		return errors.New("pattern is required")
+		return ErrPatternIsRequired
 	}
 
 	if m.Mode != "content" && m.Mode != "files_with_matches" && m.Mode != "count" {
-		return errors.New("mode must be content, files_with_matches, or count")
+		return ErrModeMustBeContentFilesWith
 	}
 
 	if m.Context < 0 {
-		return errors.New("context must be >= 0")
+		return ErrContextMustBe0
 	}
 
 	return nil
@@ -128,7 +158,7 @@ type ToolMeta struct {
 // Validate validates the tool metadata.
 func (m *ToolMeta) Validate() error {
 	if m.ToolName == "" {
-		return errors.New("tool_name is required")
+		return ErrToolNameIsRequired
 	}
 
 	return nil
@@ -159,15 +189,15 @@ type PatchMeta struct {
 // Validate validates the patch metadata.
 func (m *PatchMeta) Validate() error {
 	if m.File == "" {
-		return errors.New("file is required")
+		return ErrFileIsRequired2
 	}
 
 	if m.LinesAdded != nil && *m.LinesAdded < 0 {
-		return errors.New("lines_added must be >= 0")
+		return ErrLinesAddedMustBe0
 	}
 
 	if m.LinesRemoved != nil && *m.LinesRemoved < 0 {
-		return errors.New("lines_removed must be >= 0")
+		return ErrLinesRemovedMustBe0
 	}
 
 	return nil
@@ -191,24 +221,24 @@ type PlanMeta struct {
 // Validate validates the plan metadata.
 func (m *PlanMeta) Validate() error {
 	if m.Total < 0 {
-		return errors.New("total must be >= 0")
+		return ErrTotalMustBe0
 	}
 
 	if m.Pending < 0 {
-		return errors.New("pending must be >= 0")
+		return ErrPendingMustBe0
 	}
 
 	if m.InProgress < 0 {
-		return errors.New("in_progress must be >= 0")
+		return ErrInProgressMustBe0
 	}
 
 	if m.Completed < 0 {
-		return errors.New("completed must be >= 0")
+		return ErrCompletedMustBe0
 	}
 
 	sum := m.Pending + m.InProgress + m.Completed
 	if sum != m.Total {
-		return fmt.Errorf("pending + in_progress + completed (%d) must equal total (%d)", sum, m.Total)
+return fmt.Errorf("pending + in_progress + completed (%d) must equal total (%d): %w", sum, m.Total, ErrPendingInProgressCompletedMustEqual)
 	}
 
 	return nil
@@ -217,7 +247,7 @@ func (m *PlanMeta) Validate() error {
 // ParseExecuteMeta extracts ExecuteMeta from a block's metadata.
 func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, errors.New("metadata is empty")
+		return nil, ErrMetadataIsEmpty
 	}
 
 	var meta ExecuteMeta
@@ -232,7 +262,7 @@ func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) {
 // ParseReadMeta extracts ReadMeta from a block's metadata.
 func ParseReadMeta(b *Block) (*ReadMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, errors.New("metadata is empty")
+		return nil, ErrMetadataIsEmpty2
 	}
 
 	var meta ReadMeta
@@ -247,7 +277,7 @@ func ParseReadMeta(b *Block) (*ReadMeta, error) {
 // ParseGrepMeta extracts GrepMeta from a block's metadata.
 func ParseGrepMeta(b *Block) (*GrepMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, errors.New("metadata is empty")
+		return nil, ErrMetadataIsEmpty3
 	}
 
 	var meta GrepMeta
@@ -262,7 +292,7 @@ func ParseGrepMeta(b *Block) (*GrepMeta, error) {
 // ParseToolMeta extracts ToolMeta from a block's metadata.
 func ParseToolMeta(b *Block) (*ToolMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, errors.New("metadata is empty")
+		return nil, ErrMetadataIsEmpty4
 	}
 
 	var meta ToolMeta
@@ -277,7 +307,7 @@ func ParseToolMeta(b *Block) (*ToolMeta, error) {
 // ParsePatchMeta extracts PatchMeta from a block's metadata.
 func ParsePatchMeta(b *Block) (*PatchMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, errors.New("metadata is empty")
+		return nil, ErrMetadataIsEmpty5
 	}
 
 	var meta PatchMeta
@@ -292,7 +322,7 @@ func ParsePatchMeta(b *Block) (*PatchMeta, error) {
 // ParsePlanMeta extracts PlanMeta from a block's metadata.
 func ParsePlanMeta(b *Block) (*PlanMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, errors.New("metadata is empty")
+		return nil, ErrMetadataIsEmpty6
 	}
 
 	var meta PlanMeta

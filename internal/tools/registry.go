@@ -9,6 +9,11 @@ import (
 	"sync"
 )
 
+var (
+	ErrEnumValueMustBeString = errors.New("enum value must be string")
+	ErrValueNotInAllowedValues = errors.New("value  not in allowed values")
+)
+
 // Registry manages tool registration, lookup, and execution.
 // It provides a centralized registry for all tools available to the agent.
 type Registry struct {
@@ -211,7 +216,7 @@ func (r *Registry) validateParameter(paramSchema ParameterSchema, name string, p
 	if len(propDef.Enum) > 0 {
 		err := r.validateEnumFromJSON(rawValue, propDef.Enum)
 		if err != nil {
-			return fmt.Errorf("%w: parameter %s %v", ErrInvalidParameters, name, err)
+			return fmt.Errorf("%w: parameter %s %w", ErrInvalidParameters, name, err)
 		}
 	}
 
@@ -268,12 +273,12 @@ func (r *Registry) validateEnumFromJSON(rawValue json.RawMessage, enum []string)
 	var strValue string
 	err := json.Unmarshal(rawValue, &strValue)
 	if err != nil {
-		return errors.New("enum value must be string")
+		return ErrEnumValueMustBeString
 	}
 
 	if slices.Contains(enum, strValue) {
 		return nil
 	}
 
-	return fmt.Errorf("value %q not in allowed values %v", strValue, enum)
+return fmt.Errorf("value %q not in allowed values %v: %w", strValue, enum, ErrValueNotInAllowedValues)
 }

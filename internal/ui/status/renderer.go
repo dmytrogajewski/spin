@@ -22,7 +22,7 @@ func NewRenderer(out io.Writer, width, height int) *Renderer {
 		width:  width,
 		height: height,
 	}
-	r.setupScrollingRegion()
+	_ = r.setupScrollingRegion()
 
 	return r
 }
@@ -54,7 +54,7 @@ func (r *Renderer) setupScrollingRegion() error {
 func (r *Renderer) SetSize(width, height int) {
 	r.width = width
 	r.height = height
-	r.setupScrollingRegion()
+	_ = r.setupScrollingRegion()
 }
 
 // Render renders the status bar at the bottom of the terminal.

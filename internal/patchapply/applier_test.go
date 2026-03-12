@@ -121,7 +121,7 @@ func TestApplier_ValidatePath(t *testing.T) {
 				},
 			}
 
-			err := applier.ValidatePatch(patch)
+			err = applier.ValidatePatch(patch)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidatePath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
 			}
@@ -856,6 +856,6 @@ func BenchmarkApplier_SmallPatch(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		applier.Apply(patch)
+		_, _ = applier.Apply(patch)
 	}
 }

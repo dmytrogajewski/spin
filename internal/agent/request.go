@@ -9,8 +9,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/task"
 )
 
-// AgentRequest represents a request to the agent.
-type AgentRequest struct {
+// Request represents a request to the agent.
+type Request struct {
 	// Input is the user's request.
 	Input string
 
@@ -28,8 +28,8 @@ type AgentRequest struct {
 	History []message.Message
 }
 
-// AgentResponse represents the agent's response.
-type AgentResponse struct {
+// Response represents the agent's response.
+type Response struct {
 	// Output is the agent's response.
 	Output string
 
@@ -58,5 +58,5 @@ type AgentResponse struct {
 	RetrievedBullets []*bullet.Bullet
 
 	// TrajectoryContext contains progressive execution context (for Reflector).
-	TrajectoryContext *trajectory.TrajectoryContext
+	TrajectoryContext *trajectory.Context
 }

@@ -1,4 +1,4 @@
-package runtime
+package executor
 
 import (
 	"context"
@@ -6,6 +6,11 @@ import (
 	"testing"
 
 	"github.com/dmytrogajewski/spin/internal/tools"
+)
+
+var (
+	errInvalidPath = errors.New("invalid path")
+	errInvalidPath2 = errors.New("invalid path")
 )
 
 // mockFilesystemClient implements FilesystemClient for testing.
@@ -17,7 +22,7 @@ type mockFilesystemClient struct {
 	readErr     error
 }
 
-func (m *mockFilesystemClient) ReadTextFile(ctx context.Context, path string, line *int, limit *int) (string, error) {
+func (m *mockFilesystemClient) ReadTextFile(_ context.Context, path string, _ *int, _ *int) (string, error) {
 	m.readPath = path
 	if m.readErr != nil {
 		return "", m.readErr
@@ -26,7 +31,7 @@ func (m *mockFilesystemClient) ReadTextFile(ctx context.Context, path string, li
 	return m.readContent, nil
 }
 
-func (m *mockFilesystemClient) WriteTextFile(ctx context.Context, path, content string) error {
+func (m *mockFilesystemClient) WriteTextFile(_ context.Context, path, _ string) error {
 	m.writePath = path
 
 	return m.writeErr
@@ -228,7 +233,7 @@ func TestACPReadFileTool_PathResolution(t *testing.T) {
 func TestACPWriteFileTool_InvalidPathErrorMessage(t *testing.T) {
 	// Test that when the client returns "invalid path" error, we provide a helpful message.
 	mockFS := &mockFilesystemClient{
-		writeErr: errors.New("invalid path"),
+		writeErr: errInvalidPath,
 	}
 	runtime := &ACPRuntime{
 		workDir:          "/home/user/workspace",
@@ -265,7 +270,7 @@ func TestACPWriteFileTool_InvalidPathErrorMessage(t *testing.T) {
 func TestACPReadFileTool_InvalidPathErrorMessage(t *testing.T) {
 	// Test that when the client returns "invalid path" error, we provide a helpful message.
 	mockFS := &mockFilesystemClient{
-		readErr: errors.New("invalid path"),
+		readErr: errInvalidPath2,
 	}
 	runtime := &ACPRuntime{
 		workDir:          "/home/user/workspace",

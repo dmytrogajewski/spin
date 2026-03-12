@@ -191,13 +191,13 @@ func TestRegistryManager_MultipleRegistries(t *testing.T) {
 func TestMCPServerConfig_Validation(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  mcp.MCPServerConfig
+		config  mcp.ServerConfig
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name: "valid stdio config",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name:    "test",
 				Command: "/bin/echo",
 			},
@@ -205,7 +205,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "valid sse config",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name:      "test",
 				Transport: mcp.TransportSSE,
 				URL:       "https://example.com/mcp",
@@ -214,7 +214,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "valid streamable-http config",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name:      "test",
 				Transport: mcp.TransportStreamableHTTP,
 				URL:       "https://example.com/mcp",
@@ -223,7 +223,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "sse with oauth",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name:      "test",
 				Transport: mcp.TransportSSE,
 				URL:       "https://example.com/mcp",
@@ -235,7 +235,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "missing name",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Command: "/bin/echo",
 			},
 			wantErr: true,
@@ -243,7 +243,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "stdio missing command",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name: "test",
 			},
 			wantErr: true,
@@ -251,7 +251,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "sse missing url",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name:      "test",
 				Transport: mcp.TransportSSE,
 			},
@@ -260,7 +260,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "streamable-http missing url",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name:      "test",
 				Transport: mcp.TransportStreamableHTTP,
 			},
@@ -269,7 +269,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "stdio with url",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name:    "test",
 				Command: "/bin/echo",
 				URL:     "https://example.com",
@@ -279,7 +279,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "sse with command",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name:      "test",
 				Transport: mcp.TransportSSE,
 				URL:       "https://example.com/mcp",
@@ -290,7 +290,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "stdio with oauth",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name:    "test",
 				Command: "/bin/echo",
 				OAuth: &mcp.OAuthConfig{
@@ -302,7 +302,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "oauth missing client_id",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name:      "test",
 				Transport: mcp.TransportSSE,
 				URL:       "https://example.com/mcp",
@@ -313,7 +313,7 @@ func TestMCPServerConfig_Validation(t *testing.T) {
 		},
 		{
 			name: "invalid transport",
-			config: mcp.MCPServerConfig{
+			config: mcp.ServerConfig{
 				Name:      "test",
 				Transport: "websocket",
 			},

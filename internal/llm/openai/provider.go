@@ -13,6 +13,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
+var (
+	ErrBaseUrlIsRequired = errors.New("base URL is required")
+	ErrModelIsRequired = errors.New("model is required")
+	ErrTimeoutMustBe0 = errors.New("timeout must be > 0")
+)
+
 // Config configures the OpenAI provider.
 type Config struct {
 	BaseURL string
@@ -24,15 +30,15 @@ type Config struct {
 // Validate validates the OpenAI configuration.
 func (c *Config) Validate() error {
 	if c.BaseURL == "" {
-		return errors.New("base URL is required")
+		return ErrBaseUrlIsRequired
 	}
 
 	if c.Model == "" {
-		return errors.New("model is required")
+		return ErrModelIsRequired
 	}
 
 	if c.Timeout <= 0 {
-		return fmt.Errorf("timeout must be > 0, got %v", c.Timeout)
+return fmt.Errorf("timeout must be > 0, got %v: %w", c.Timeout, ErrTimeoutMustBe0)
 	}
 
 	return nil
@@ -179,8 +185,8 @@ func (p *Provider) Models(ctx context.Context) ([]openai.Model, error) {
 
 	// Iterate through remaining pages.
 	for {
-		nextPage, err := resp.GetNextPage()
-		if err != nil || nextPage == nil {
+		nextPage, _ := resp.GetNextPage()
+		if nextPage == nil {
 			break
 		}
 

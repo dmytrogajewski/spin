@@ -1,6 +1,7 @@
 package ollama
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -11,6 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var testLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+var testCtx = context.Background()
 
 func init() {
 	// Suppress warn logs during tests.
@@ -50,7 +54,7 @@ func TestBuildToolCallIDToNameMap_ReproducesMissingMapping(t *testing.T) {
 		openai.ToolMessage(toolCallIDs[4], "read contents"),
 	}
 
-	mapping := buildToolCallIDToNameMap(messages)
+	mapping := buildToolCallIDToNameMap(messages, testLogger, testCtx)
 	require.Len(t, mapping, 5, "mapping should contain all 5 tool call IDs")
 
 	for i, id := range toolCallIDs {
@@ -118,13 +122,13 @@ func TestConvertMessageToOllama_ToolResultWithPositionalFallback(t *testing.T) {
 		openai.ToolMessage("call-2", "content2"),
 	}
 
-	mapping := buildToolCallIDToNameMap(messages)
+	mapping := buildToolCallIDToNameMap(messages, testLogger, testCtx)
 	require.Len(t, mapping, 3)
 
 	// Convert each tool message - all should get ToolName set.
 	for i := range []string{"call-0", "call-1", "call-2"} {
 		msg := messages[i+1] // +1 to skip assistant.
-		result := convertMessageToOllama(msg, mapping)
+		result := convertMessageToOllama(msg, mapping, testLogger, testCtx)
 		assert.Equal(t, "tool", result.Role)
 
 		expectedName := []string{"read_file", "shell_command", "list_directory"}[i]
@@ -159,7 +163,7 @@ func TestBuildToolCallIDToNameMap_PositionalFallbackWhenPrimaryFails(t *testing.
 		openai.ToolMessage("chatcmpl-1769975533529433976-5", "content5"),
 	}
 
-	mapping := buildToolCallIDToNameMap(messages)
+	mapping := buildToolCallIDToNameMap(messages, testLogger, testCtx)
 	require.Len(t, mapping, 5, "mapping should contain all 5 tool call IDs (primary or positional)")
 
 	expected := map[string]string{
@@ -178,7 +182,7 @@ func TestBuildToolCallIDToNameMap_PositionalFallbackWhenPrimaryFails(t *testing.
 	// Convert each tool message - no WARN should occur, ToolName must be set.
 	for i := 1; i <= 5; i++ {
 		msg := messages[i+1] // +1 for user, +1 for assistant.
-		result := convertMessageToOllama(msg, mapping)
+		result := convertMessageToOllama(msg, mapping, testLogger, testCtx)
 		assert.Equal(t, "tool", result.Role)
 		assert.NotEmpty(t, result.ToolName, "tool message %d should have ToolName", i)
 	}
@@ -207,7 +211,7 @@ func TestBuildToolCallIDToNameMap_MultipleAssistantTurns(t *testing.T) {
 		openai.ToolMessage("turn2-0", "c3"),
 	}
 
-	mapping := buildToolCallIDToNameMap(messages)
+	mapping := buildToolCallIDToNameMap(messages, testLogger, testCtx)
 	assert.Len(t, mapping, 3)
 	assert.Equal(t, "read_file", mapping["turn1-0"])
 	assert.Equal(t, "shell_command", mapping["turn1-1"])
@@ -233,11 +237,11 @@ func TestConvertMessageToOllama_ToolResultFallback(t *testing.T) {
 
 	messages := []openai.ChatCompletionMessageParamUnion{assistantMsg, toolMsg}
 
-	mapping := buildToolCallIDToNameMap(messages)
+	mapping := buildToolCallIDToNameMap(messages, testLogger, testCtx)
 	require.NotEmpty(t, mapping, "mapping should have call-0 from assistant message")
 	assert.Equal(t, "shell_command", mapping["call-0"])
 
-	result := convertMessageToOllama(toolMsg, mapping)
+	result := convertMessageToOllama(toolMsg, mapping, testLogger, testCtx)
 	assert.Equal(t, "shell_command", result.ToolName)
 }
 
@@ -266,7 +270,7 @@ func TestBuildToolCallIDToNameMap_PhantomToolCalls(t *testing.T) {
 		openai.ToolMessage("chatcmpl-100-2", "output2"),
 	}
 
-	mapping := buildToolCallIDToNameMap(messages)
+	mapping := buildToolCallIDToNameMap(messages, testLogger, testCtx)
 
 	// The phantom entry (chatcmpl-100-0) should NOT be in the mapping.
 	_, hasPhantom := mapping["chatcmpl-100-0"]
@@ -279,7 +283,7 @@ func TestBuildToolCallIDToNameMap_PhantomToolCalls(t *testing.T) {
 	// Tool messages should resolve correctly.
 	for _, id := range []string{"chatcmpl-100-1", "chatcmpl-100-2"} {
 		toolMsg := openai.ToolMessage(id, "result")
-		result := convertMessageToOllama(toolMsg, mapping)
+		result := convertMessageToOllama(toolMsg, mapping, testLogger, testCtx)
 		assert.NotEmpty(t, result.ToolName, "tool message %s should have ToolName", id)
 	}
 }
@@ -300,7 +304,7 @@ func TestBuildToolCallIDToNameMap_AllPhantomToolCalls(t *testing.T) {
 		assistantMsg,
 	}
 
-	mapping := buildToolCallIDToNameMap(messages)
+	mapping := buildToolCallIDToNameMap(messages, testLogger, testCtx)
 	assert.Empty(t, mapping, "mapping should be empty when all tool calls have empty names")
 }
 
@@ -333,7 +337,7 @@ func TestConvertOllamaResponseToOpenAI_AfterPhantomFiltering(t *testing.T) {
 
 	resp.Message.ToolCalls = filtered
 
-	result := convertOllamaResponseToOpenAI(resp, "qwen3:1.7b")
+	result := convertOllamaResponseToOpenAI(resp, "qwen3:1.7b", testLogger, testCtx)
 
 	require.Len(t, result.Choices, 1)
 	require.Len(t, result.Choices[0].Message.ToolCalls, 2, "should only have 2 valid tool calls")
@@ -373,7 +377,7 @@ func TestConvertOllamaChunkToOpenAI_AfterPhantomFiltering(t *testing.T) {
 
 	resp.Message.ToolCalls = filtered
 
-	chunk := convertOllamaChunkToOpenAI(resp, "chatcmpl-test-123", "qwen3:1.7b")
+	chunk := convertOllamaChunkToOpenAI(resp, "chatcmpl-test-123", "qwen3:1.7b", testLogger, testCtx)
 
 	require.Len(t, chunk.Choices, 1)
 	require.Len(t, chunk.Choices[0].Delta.ToolCalls, 1, "should only have 1 valid tool call")
@@ -463,7 +467,7 @@ func TestInferToolName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := inferToolName(tt.args, tools)
+			result := inferToolName(tt.args, tools, testLogger, testCtx)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

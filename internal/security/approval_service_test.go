@@ -12,7 +12,7 @@ import (
 func TestApprovalService_RequestApproval_Success(t *testing.T) {
 	emitter := events.NewEventEmitter(100)
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: req.ID,
 				Approved:  true,
@@ -41,7 +41,7 @@ func TestApprovalService_RequestApproval_Success(t *testing.T) {
 // TestApprovalService_RequestApproval_Denial tests denial flow.
 func TestApprovalService_RequestApproval_Denial(t *testing.T) {
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: req.ID,
 				Approved:  false,
@@ -81,7 +81,7 @@ func TestApprovalService_RequestApproval_NoHandler(t *testing.T) {
 // TestApprovalService_RequestApproval_InvalidRequestID tests request ID validation.
 func TestApprovalService_RequestApproval_InvalidRequestID(t *testing.T) {
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+		Handler: func(_ context.Context, _ ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: "wrong-id", // Mismatched ID.
 				Approved:  true,
@@ -105,7 +105,7 @@ func TestApprovalService_RequestApproval_InvalidRequestID(t *testing.T) {
 func TestApprovalService_ModifiedCommand_Success(t *testing.T) {
 	validator := NewValidator()
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID:       req.ID,
 				Approved:        true,
@@ -133,9 +133,9 @@ func TestApprovalService_ModifiedCommand_Success(t *testing.T) {
 }
 
 // TestApprovalService_ModifiedCommand_ParseError tests parse error on modified command.
-func TestApprovalService_ModifiedCommand_ParseError(t *testing.T) {
+func TestApprovalService_ModifiedCommand_ParseError(_ *testing.T) {
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID:       req.ID,
 				Approved:        true,
@@ -157,7 +157,7 @@ func TestApprovalService_ModifiedCommand_ParseError(t *testing.T) {
 func TestApprovalService_ModifiedCommand_ValidationFailure(t *testing.T) {
 	validator := NewValidator()
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID:       req.ID,
 				Approved:        true,
@@ -186,7 +186,7 @@ func TestApprovalService_WithEmitter(t *testing.T) {
 	_, eventChan, _ := emitter.Subscribe()
 
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: req.ID,
 				Approved:  true,
@@ -232,7 +232,7 @@ func TestApprovalService_WithEmitter(t *testing.T) {
 // TestApprovalService_WithoutEmitter tests operation without emitter.
 func TestApprovalService_WithoutEmitter(t *testing.T) {
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: req.ID,
 				Approved:  true,
@@ -261,7 +261,7 @@ func TestApprovalService_ContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately.
 
 	service := NewApprovalServiceWithConfig(ApprovalServiceConfig{
-		Handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+		Handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 			return ApprovalResponse{
 				RequestID: req.ID,
 				Approved:  true,

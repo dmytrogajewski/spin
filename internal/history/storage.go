@@ -8,8 +8,10 @@ import (
 	"github.com/dmytrogajewski/spin/internal/storage"
 )
 
-// HistoryData is the serializable format for history persistence.
-type HistoryData struct {
+var ErrHistoryDataCannotBeNil = errors.New("history data cannot be nil")
+
+// Data is the serializable format for history persistence.
+type Data struct {
 	Version   int               `json:"version"`
 	SessionID string            `json:"session_id"`
 	Messages  []message.Message `json:"messages"`
@@ -21,12 +23,12 @@ type HistoryData struct {
 // CurrentHistoryVersion is the current schema version for migrations.
 const CurrentHistoryVersion = 1
 
-// Storage is a type alias for the generic store with HistoryData type.
-type Storage = storage.Store[HistoryData]
+// Storage is a type alias for the generic store with Data type.
+type Storage = storage.Store[Data]
 
 // NewFileStorage creates file-based history storage.
 func NewFileStorage(baseDir string) (Storage, error) {
-	return storage.NewFileStore[HistoryData](storage.FileStoreConfig{
+	return storage.NewFileStore[Data](storage.FileStoreConfig{
 		BaseDir: baseDir,
 		Suffix:  ".history.json",
 	})
@@ -37,7 +39,7 @@ func (h *History) Save(store Storage, sessionID string) error {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	data := HistoryData{
+	data := Data{
 		Version:   CurrentHistoryVersion,
 		SessionID: sessionID,
 		Messages:  make([]message.Message, len(h.messages)),
@@ -69,12 +71,12 @@ func (h *History) Load(store Storage, sessionID string) error {
 	return nil
 }
 
-// ToHistoryData exports the current history state as HistoryData.
-func (h *History) ToHistoryData(sessionID string) *HistoryData {
+// ToData exports the current history state as Data.
+func (h *History) ToData(sessionID string) *Data {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	data := &HistoryData{
+	data := &Data{
 		Version:   CurrentHistoryVersion,
 		SessionID: sessionID,
 		Messages:  make([]message.Message, len(h.messages)),
@@ -86,10 +88,10 @@ func (h *History) ToHistoryData(sessionID string) *HistoryData {
 	return data
 }
 
-// FromHistoryData imports history state from HistoryData.
-func (h *History) FromHistoryData(data *HistoryData) error {
+// FromData imports history state from Data.
+func (h *History) FromData(data *Data) error {
 	if data == nil {
-		return errors.New("history data cannot be nil")
+		return ErrHistoryDataCannotBeNil
 	}
 
 	h.mu.Lock()

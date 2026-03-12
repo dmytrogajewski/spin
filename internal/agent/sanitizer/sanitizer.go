@@ -1,3 +1,4 @@
+// Package sanitizer provides input and output sanitization.
 package sanitizer
 
 import (
@@ -7,6 +8,7 @@ import (
 // State represents the current state of the sanitizer.
 type State int
 
+// StateNormal defines a StateNormal constant.
 const (
 	StateNormal State = iota
 	StateInThink

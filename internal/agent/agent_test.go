@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -25,15 +26,20 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+var (
+	errFileNotFoundNonexistentTxt = errors.New("file not found: nonexistent.txt")
+	errLlmProviderError = errors.New("LLM provider error")
+)
+
 // TestNewAgent tests the refactored agent creation with services.
 func TestNewAgent(t *testing.T) {
 	tests := []struct {
 		name        string
 		provider    llm.Provider
-		security    *security.SecurityService
-		detection   *detection.DetectionService
+		security    *security.Service
+		detection   *detection.Service
 		toolRuntime *ToolRuntime
-		planning    *planning.PlanningService
+		planning    *planning.Service
 		environment *Environment
 		emitter     *events.EventEmitter
 		aceService  *ACEService
@@ -43,16 +49,16 @@ func TestNewAgent(t *testing.T) {
 		{
 			name:     "valid agent",
 			provider: llm.NewMockProvider("test"),
-			security: func() *security.SecurityService {
+			security: func() *security.Service {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 
-				return security.NewSecurityService(validator, approvalService)
+				return security.NewService(validator, approvalService)
 			}(),
-			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
+			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
 			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewPlanningService(llm.NewMockProvider("test")),
+			planning:    planning.NewService(llm.NewMockProvider("test")),
 			environment: &Environment{WorkDir: "/tmp"},
 			emitter:     events.NewEventEmitter(100),
 			wantErr:     false,
@@ -60,16 +66,16 @@ func TestNewAgent(t *testing.T) {
 		{
 			name:     "nil provider",
 			provider: nil,
-			security: func() *security.SecurityService {
+			security: func() *security.Service {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 
-				return security.NewSecurityService(validator, approvalService)
+				return security.NewService(validator, approvalService)
 			}(),
-			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
+			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
 			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewPlanningService(llm.NewMockProvider("test")),
+			planning:    planning.NewService(llm.NewMockProvider("test")),
 			environment: &Environment{WorkDir: "/tmp"},
 			emitter:     events.NewEventEmitter(100),
 			wantErr:     true,
@@ -79,9 +85,9 @@ func TestNewAgent(t *testing.T) {
 			name:        "nil security",
 			provider:    llm.NewMockProvider("test"),
 			security:    nil,
-			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
+			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
 			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewPlanningService(llm.NewMockProvider("test")),
+			planning:    planning.NewService(llm.NewMockProvider("test")),
 			environment: &Environment{WorkDir: "/tmp"},
 			emitter:     events.NewEventEmitter(100),
 			wantErr:     true,
@@ -90,16 +96,16 @@ func TestNewAgent(t *testing.T) {
 		{
 			name:     "nil detection",
 			provider: llm.NewMockProvider("test"),
-			security: func() *security.SecurityService {
+			security: func() *security.Service {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 
-				return security.NewSecurityService(validator, approvalService)
+				return security.NewService(validator, approvalService)
 			}(),
 			detection:   nil,
 			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewPlanningService(llm.NewMockProvider("test")),
+			planning:    planning.NewService(llm.NewMockProvider("test")),
 			environment: &Environment{WorkDir: "/tmp"},
 			emitter:     events.NewEventEmitter(100),
 			wantErr:     true,
@@ -108,16 +114,16 @@ func TestNewAgent(t *testing.T) {
 		{
 			name:     "nil tool runtime",
 			provider: llm.NewMockProvider("test"),
-			security: func() *security.SecurityService {
+			security: func() *security.Service {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 
-				return security.NewSecurityService(validator, approvalService)
+				return security.NewService(validator, approvalService)
 			}(),
-			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
+			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
 			toolRuntime: nil,
-			planning:    planning.NewPlanningService(llm.NewMockProvider("test")),
+			planning:    planning.NewService(llm.NewMockProvider("test")),
 			environment: &Environment{WorkDir: "/tmp"},
 			emitter:     events.NewEventEmitter(100),
 			wantErr:     true,
@@ -126,14 +132,14 @@ func TestNewAgent(t *testing.T) {
 		{
 			name:     "nil planning",
 			provider: llm.NewMockProvider("test"),
-			security: func() *security.SecurityService {
+			security: func() *security.Service {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 
-				return security.NewSecurityService(validator, approvalService)
+				return security.NewService(validator, approvalService)
 			}(),
-			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
+			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
 			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
 			planning:    nil,
 			environment: &Environment{WorkDir: "/tmp"},
@@ -144,16 +150,16 @@ func TestNewAgent(t *testing.T) {
 		{
 			name:     "nil environment",
 			provider: llm.NewMockProvider("test"),
-			security: func() *security.SecurityService {
+			security: func() *security.Service {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 
-				return security.NewSecurityService(validator, approvalService)
+				return security.NewService(validator, approvalService)
 			}(),
-			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
+			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
 			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewPlanningService(llm.NewMockProvider("test")),
+			planning:    planning.NewService(llm.NewMockProvider("test")),
 			environment: nil,
 			emitter:     events.NewEventEmitter(100),
 			wantErr:     true,
@@ -162,16 +168,16 @@ func TestNewAgent(t *testing.T) {
 		{
 			name:     "nil emitter",
 			provider: llm.NewMockProvider("test"),
-			security: func() *security.SecurityService {
+			security: func() *security.Service {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 
-				return security.NewSecurityService(validator, approvalService)
+				return security.NewService(validator, approvalService)
 			}(),
-			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
+			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
 			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewPlanningService(llm.NewMockProvider("test")),
+			planning:    planning.NewService(llm.NewMockProvider("test")),
 			environment: &Environment{WorkDir: "/tmp"},
 			emitter:     nil,
 			wantErr:     true,
@@ -181,7 +187,7 @@ func TestNewAgent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts := []AgentOption{}
+			opts := []Option{}
 			if tt.aceService != nil {
 				opts = append(opts, WithACEService(tt.aceService))
 			}
@@ -224,16 +230,16 @@ func TestAgent_WithACEService(t *testing.T) {
 	// Create agent with ACE.
 	agent, err := NewAgent(
 		mockLLM,
-		func() *security.SecurityService {
+		func() *security.Service {
 			validator := security.NewValidator()
 			emitter := events.NewEventEmitter(100)
 			approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 
-			return security.NewSecurityService(validator, approvalService)
+			return security.NewService(validator, approvalService)
 		}(),
-		detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
+		detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
 		newTestToolRuntime(nil, tools.NewRegistry()),
-		planning.NewPlanningService(mockLLM),
+		planning.NewService(mockLLM),
 		&Environment{WorkDir: "/tmp"},
 		events.NewEventEmitter(100),
 		WithACEService(aceService),
@@ -278,7 +284,7 @@ func TestAgent_ACEIntegration_EndToEnd(t *testing.T) {
 	testBullets := []*bullet.Bullet{b1, b2, b3}
 
 	for _, b := range testBullets {
-		err := aceService.playbook.Add(ctx, b)
+		err = aceService.playbook.Add(ctx, b)
 		require.NoError(t, err)
 	}
 
@@ -295,9 +301,9 @@ Here's my solution...`)
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
+	securityService := security.NewService(validator, approvalService)
 
-	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
+	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 
 	// Create task registry and register tasks.
 
@@ -309,7 +315,7 @@ Here's my solution...`)
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(mockProvider),
+		planning.NewService(mockProvider),
 		&Environment{WorkDir: tmpDir},
 		emitter,
 		WithACEService(aceService),
@@ -319,7 +325,7 @@ Here's my solution...`)
 	require.NoError(t, err)
 
 	// Execute agent with input that should trigger bullet retrieval.
-	request := &AgentRequest{
+	request := &Request{
 		Input: "Write a function to process user input",
 		Task:  task.NewRegular(),
 	}
@@ -353,9 +359,9 @@ func TestAgent_ACEDisabled(t *testing.T) {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
+	securityService := security.NewService(validator, approvalService)
 
-	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
+	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 
 	// Create task registry and register tasks.
 
@@ -367,7 +373,7 @@ func TestAgent_ACEDisabled(t *testing.T) {
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(mockProvider),
+		planning.NewService(mockProvider),
 		&Environment{WorkDir: tmpDir},
 		emitter,
 		WithACEService(aceService),
@@ -376,7 +382,7 @@ func TestAgent_ACEDisabled(t *testing.T) {
 
 	// Execute should work normally without ACE.
 	ctx := context.Background()
-	request := &AgentRequest{
+	request := &Request{
 		Input: "Simple test request",
 		Task:  task.NewRegular(),
 	}
@@ -392,7 +398,7 @@ func TestAgent_Execute_Integration(t *testing.T) {
 
 	agent := createTestAgentWithServices(t)
 
-	req := &AgentRequest{
+	req := &Request{
 		Input: "Hello, how are you?",
 		Task:  task.NewRegular(),
 	}
@@ -417,9 +423,9 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 
 	// Build SecurityService.
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
+	securityService := security.NewService(validator, approvalService)
 
-	// Build DetectionService.
+	// Build Service.
 	cycleConfig := cycle.Config{
 		WindowSize:       3,
 		SimilarityThresh: 0.8,
@@ -428,18 +434,18 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 		Enabled:          true,
 	}
 	cycleDetector := cycle.NewDetector(cycleConfig)
-	detectionService := detection.NewDetectionService(cycleDetector, nil)
+	detectionService := detection.NewService(cycleDetector, nil)
 
 	// Build tool registry with built-in tools.
 	toolRegistry := tools.NewRegistry()
-	_ = toolRegistry.Register(tools.NewReadFileTool())
-	_ = toolRegistry.Register(tools.NewWriteFileTool())
-	_ = toolRegistry.Register(tools.NewListDirectoryTool())
-	_ = toolRegistry.Register(tools.NewShellCommandTool(nil, nil, nil))
-	_ = toolRegistry.Register(tools.NewGetContextTool(env))
-	_ = toolRegistry.Register(tools.NewApplyPatchTool(workDir))
-	_ = toolRegistry.Register(tools.NewFileSearchTool(workDir))
-	_ = toolRegistry.Register(tools.NewGitContextTool(workDir))
+	require.NoError(t, toolRegistry.Register(tools.NewReadFileTool()))
+	require.NoError(t, toolRegistry.Register(tools.NewWriteFileTool()))
+	require.NoError(t, toolRegistry.Register(tools.NewListDirectoryTool()))
+	require.NoError(t, toolRegistry.Register(tools.NewShellCommandTool(nil, nil, nil)))
+	require.NoError(t, toolRegistry.Register(tools.NewGetContextTool(env)))
+	require.NoError(t, toolRegistry.Register(tools.NewApplyPatchTool(workDir)))
+	require.NoError(t, toolRegistry.Register(tools.NewFileSearchTool(workDir)))
+	require.NoError(t, toolRegistry.Register(tools.NewGitContextTool(workDir)))
 
 	// Build tool registry.
 
@@ -452,7 +458,7 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 	})
 
 	// Create agent.
-	agent, err := NewAgent(llmProvider, securityService, detectionService, toolRuntime, planning.NewPlanningService(llmProvider), env, emitter)
+	agent, err := NewAgent(llmProvider, securityService, detectionService, toolRuntime, planning.NewService(llmProvider), env, emitter)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
 	}
@@ -465,32 +471,39 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 // USE THIS IN TESTS INSTEAD OF NewAgent TO AVOID UPDATING EVERY TEST FILE.
 func newAgentForTest(
 	provider llm.Provider,
-	executor *Executor,
+	_ *Executor,
 	validator *security.Validator,
 	environment *Environment,
 	emitter *events.EventEmitter,
-	opts ...AgentOption,
+	opts ...Option,
 ) (*Agent, error) {
 	// Build SecurityService.
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
+	securityService := security.NewService(validator, approvalService)
 
-	// Build DetectionService.
+	// Build Service.
 	cycleDetector := cycle.NewDetector(cycle.Config{Enabled: false})
-	detectionService := detection.NewDetectionService(cycleDetector, nil)
+	detectionService := detection.NewService(cycleDetector, nil)
 
 	// Build tool registry.
 	toolRegistry := tools.NewRegistry()
-	_ = toolRegistry.Register(tools.NewReadFileTool())
-	_ = toolRegistry.Register(tools.NewWriteFileTool())
-	_ = toolRegistry.Register(tools.NewListDirectoryTool())
-	_ = toolRegistry.Register(tools.NewShellCommandTool(nil, nil, nil))
-	_ = toolRegistry.Register(tools.NewGetContextTool(environment))
-	_ = toolRegistry.Register(tools.NewApplyPatchTool(environment.WorkDir))
-	_ = toolRegistry.Register(tools.NewFileSearchTool(environment.WorkDir))
-	_ = toolRegistry.Register(tools.NewGitContextTool(environment.WorkDir))
 
-	// Build tool registry.
+	for _, tool := range []tools.Tool{
+		tools.NewReadFileTool(),
+		tools.NewWriteFileTool(),
+		tools.NewListDirectoryTool(),
+		tools.NewShellCommandTool(nil, nil, nil),
+		tools.NewGetContextTool(environment),
+		tools.NewApplyPatchTool(environment.WorkDir),
+		tools.NewFileSearchTool(environment.WorkDir),
+		tools.NewGitContextTool(environment.WorkDir),
+	} {
+		if err := toolRegistry.Register(tool); err != nil {
+			return nil, fmt.Errorf("registering tool: %w", err)
+		}
+	}
+
+	// Build tool runtime.
 
 	toolRuntime := NewToolRuntime(ToolRuntimeConfig{
 		Registry:        toolRegistry,
@@ -508,6 +521,7 @@ func newAgentForTest(
 		toolRuntime: toolRuntime,
 		context:     environment,
 		emitter:     emitter,
+		logger:      slog.Default(),
 		maxTurns:    10,               // Default for tests.
 		timeout:     30 * time.Second, // Default for tests.
 	}
@@ -549,13 +563,13 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 
 	// Setup services.
 	validator := security.NewValidator()
-	securityService := security.NewSecurityService(validator, nil)
+	securityService := security.NewService(validator, nil)
 
 	cycleDetector := cycle.NewDetector(cycle.Config{
 		WindowSize:       10,
 		SimilarityThresh: 0.8,
 	})
-	detectionService := detection.NewDetectionService(cycleDetector, nil)
+	detectionService := detection.NewService(cycleDetector, nil)
 
 	toolRuntime := newTestToolRuntime(nil, toolRegistry)
 
@@ -600,7 +614,7 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(mockLLM),
+		planning.NewService(mockLLM),
 		env,
 		emitter,
 		WithMaxTurns(10),
@@ -617,7 +631,7 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 	}
 
 	// Execute: Send request that should trigger tool call.
-	req := &AgentRequest{
+	req := &Request{
 		Input: "list files in current directory",
 		Task:  task,
 	}
@@ -663,10 +677,10 @@ func TestToolExecutionWithRealToolCall(t *testing.T) {
 
 	// Setup services.
 	validator := security.NewValidator()
-	securityService := security.NewSecurityService(validator, nil)
+	securityService := security.NewService(validator, nil)
 
 	cycleDetector := cycle.NewDetector(cycle.Config{WindowSize: 10})
-	detectionService := detection.NewDetectionService(cycleDetector, nil)
+	detectionService := detection.NewService(cycleDetector, nil)
 
 	toolRuntime := newTestToolRuntime(nil, toolRegistry)
 
@@ -683,7 +697,7 @@ func TestToolExecutionWithRealToolCall(t *testing.T) {
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(dummyProvider),
+		planning.NewService(dummyProvider),
 		env,
 		emitter,
 	)
@@ -790,7 +804,7 @@ func TestGetToolResultContent(t *testing.T) {
 			result: &ToolResult{
 				ID:      "call_2",
 				Success: false,
-				Err:     errors.New("file not found: nonexistent.txt"),
+				Err:     errFileNotFoundNonexistentTxt,
 			},
 			want: "Tool read_file failed: file not found: nonexistent.txt",
 		},
@@ -813,7 +827,7 @@ func TestGetToolResultContent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getToolResultContent(tt.toolCall, tt.result)
+			got := getToolResultContent(tt.toolCall, tt.result, slog.Default())
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -845,14 +859,14 @@ func TestToolExecutionWithMockLLM(t *testing.T) {
 
 	// Setup services.
 	validator := security.NewValidator()
-	securityService := security.NewSecurityService(validator, nil)
+	securityService := security.NewService(validator, nil)
 
 	cycleDetector := cycle.NewDetector(cycle.Config{
 		WindowSize:       10,
 		SimilarityThresh: 0.8,
 		ToolRepeatLimit:  3,
 	})
-	detectionService := detection.NewDetectionService(cycleDetector, nil)
+	detectionService := detection.NewService(cycleDetector, nil)
 
 	toolRuntime := newTestToolRuntime(nil, toolRegistry)
 
@@ -886,7 +900,8 @@ func TestToolExecutionWithMockLLM(t *testing.T) {
 				t.Logf("Tool start: %+v", evt.Data)
 			case events.EventToolCallComplete:
 				toolCompleteEvents = append(toolCompleteEvents, evt)
-				data, _ := evt.Data.(events.ToolCallCompleteData)
+				data, ok := evt.Data.(events.ToolCallCompleteData)
+			require.True(t, ok, "expected ToolCallCompleteData type assertion to succeed")
 				t.Logf("Tool complete: success=%v tool=%s", data.Success, data.ToolName)
 			}
 		}
@@ -898,7 +913,7 @@ func TestToolExecutionWithMockLLM(t *testing.T) {
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(mockLLM),
+		planning.NewService(mockLLM),
 		env,
 		emitter,
 		WithMaxTurns(10),
@@ -913,7 +928,7 @@ func TestToolExecutionWithMockLLM(t *testing.T) {
 		maxTokens:    4096,
 	}
 
-	req := &AgentRequest{
+	req := &Request{
 		Input: "list files in /tmp directory",
 		Task:  task,
 	}
@@ -946,10 +961,10 @@ func TestDirectToolCallWithMockLLM(t *testing.T) {
 	require.NoError(t, err)
 
 	validator := security.NewValidator()
-	securityService := security.NewSecurityService(validator, nil)
+	securityService := security.NewService(validator, nil)
 
 	cycleDetector := cycle.NewDetector(cycle.Config{WindowSize: 10})
-	detectionService := detection.NewDetectionService(cycleDetector, nil)
+	detectionService := detection.NewService(cycleDetector, nil)
 
 	toolRuntime := newTestToolRuntime(nil, toolRegistry)
 
@@ -967,7 +982,7 @@ func TestDirectToolCallWithMockLLM(t *testing.T) {
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(mockLLM),
+		planning.NewService(mockLLM),
 		env,
 		emitter,
 	)
@@ -1008,7 +1023,7 @@ func (s *simpleTask) Validate() error        { return nil }
 // dummyLLM is a minimal LLM for tests that don't use it.
 type dummyLLM struct{}
 
-func (d *dummyLLM) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+func (d *dummyLLM) Complete(_ context.Context, _ openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	return &openai.ChatCompletion{
 		ID:    "dummy-completion",
 		Model: "dummy-model",
@@ -1024,7 +1039,7 @@ func (d *dummyLLM) Complete(ctx context.Context, params openai.ChatCompletionNew
 	}, nil
 }
 
-func (d *dummyLLM) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
+func (d *dummyLLM) Stream(_ context.Context, _ openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	ch := make(chan openai.ChatCompletionChunk, 1)
 
 	go func() {
@@ -1048,7 +1063,7 @@ func (d *dummyLLM) Stream(ctx context.Context, params openai.ChatCompletionNewPa
 	return ch, nil
 }
 
-func (d *dummyLLM) Models(ctx context.Context) ([]openai.Model, error) {
+func (d *dummyLLM) Models(_ context.Context) ([]openai.Model, error) {
 	return []openai.Model{}, nil
 }
 
@@ -1073,7 +1088,7 @@ func (d *dummyLLM) Close() error {
 func BenchmarkAgent_ResolveTaskExplicit(b *testing.B) {
 	agent := newBenchAgent(b)
 	taskObj := task.NewRegular()
-	req := &AgentRequest{Task: taskObj}
+	req := &Request{Task: taskObj}
 
 	b.ResetTimer()
 
@@ -1093,7 +1108,7 @@ func BenchmarkAgent_ResolveTaskExplicit(b *testing.B) {
 // Expected: ~100-150 ns/op (map lookup + RLock).
 func BenchmarkAgent_ResolveTaskByName(b *testing.B) {
 	agent := newBenchAgent(b)
-	req := &AgentRequest{Task: task.NewReview()}
+	req := &Request{Task: task.NewReview()}
 
 	b.ResetTimer()
 
@@ -1113,7 +1128,7 @@ func BenchmarkAgent_ResolveTaskByName(b *testing.B) {
 // Expected: ~100-150 ns/op (map lookup + RLock).
 func BenchmarkAgent_ResolveTaskDefault(b *testing.B) {
 	agent := newBenchAgent(b)
-	req := &AgentRequest{} // No task specified, should use default.
+	req := &Request{} // No task specified, should use default.
 
 	b.ResetTimer()
 
@@ -1246,21 +1261,28 @@ func newBenchAgent(b *testing.B) *Agent {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
+	securityService := security.NewService(validator, approvalService)
 
 	cycleDetector := cycle.NewDetector(cycle.Config{Enabled: false})
-	detectionService := detection.NewDetectionService(cycleDetector, nil)
+	detectionService := detection.NewService(cycleDetector, nil)
 
 	// Create tool registry with all built-in tools.
 	toolRegistry := tools.NewRegistry()
-	_ = toolRegistry.Register(tools.NewReadFileTool())
-	_ = toolRegistry.Register(tools.NewWriteFileTool())
-	_ = toolRegistry.Register(tools.NewListDirectoryTool())
-	_ = toolRegistry.Register(tools.NewShellCommandTool(nil, nil, nil))
-	_ = toolRegistry.Register(tools.NewGetContextTool(&Environment{WorkDir: "/tmp"}))
-	_ = toolRegistry.Register(tools.NewApplyPatchTool("/tmp"))
-	_ = toolRegistry.Register(tools.NewFileSearchTool("/tmp"))
-	_ = toolRegistry.Register(tools.NewGitContextTool("/tmp"))
+
+	for _, tool := range []tools.Tool{
+		tools.NewReadFileTool(),
+		tools.NewWriteFileTool(),
+		tools.NewListDirectoryTool(),
+		tools.NewShellCommandTool(nil, nil, nil),
+		tools.NewGetContextTool(&Environment{WorkDir: "/tmp"}),
+		tools.NewApplyPatchTool("/tmp"),
+		tools.NewFileSearchTool("/tmp"),
+		tools.NewGitContextTool("/tmp"),
+	} {
+		if err := toolRegistry.Register(tool); err != nil {
+			b.Fatalf("registering tool: %v", err)
+		}
+	}
 
 	// Create task registry with all modes.
 
@@ -1279,7 +1301,7 @@ func newBenchAgent(b *testing.B) *Agent {
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(mockProvider),
+		planning.NewService(mockProvider),
 		&Environment{WorkDir: "/tmp"},
 		emitter,
 	)
@@ -1293,7 +1315,7 @@ func newBenchAgent(b *testing.B) *Agent {
 // mockLLMProvider is a minimal LLM provider for benchmarking.
 type mockLLMProvider struct{}
 
-func (m *mockLLMProvider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+func (m *mockLLMProvider) Complete(_ context.Context, _ openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	return &openai.ChatCompletion{
 		ID:    "mock-completion",
 		Model: "mock-model",
@@ -1309,7 +1331,7 @@ func (m *mockLLMProvider) Complete(ctx context.Context, params openai.ChatComple
 	}, nil
 }
 
-func (m *mockLLMProvider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
+func (m *mockLLMProvider) Stream(_ context.Context, _ openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	ch := make(chan openai.ChatCompletionChunk, 1)
 
 	go func() {
@@ -1333,7 +1355,7 @@ func (m *mockLLMProvider) Stream(ctx context.Context, params openai.ChatCompleti
 	return ch, nil
 }
 
-func (m *mockLLMProvider) Models(ctx context.Context) ([]openai.Model, error) {
+func (m *mockLLMProvider) Models(_ context.Context) ([]openai.Model, error) {
 	return []openai.Model{}, nil
 }
 
@@ -1455,7 +1477,7 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 	}
 
 	// Call handleCycleDetection.
-	resp := &AgentResponse{}
+	resp := &Response{}
 
 	modifiedMessages, shouldStop, err := agent.handleCycleDetection(
 		context.Background(),
@@ -1560,10 +1582,10 @@ func TestExecuteAgentLoop_CycleInterventionPropagated(t *testing.T) {
 	}
 
 	task := task.NewRegular()
-	resp := &AgentResponse{}
+	resp := &Response{}
 
 	// Initialize trajectory context for the test.
-	trajCtx := trajectory.NewTrajectoryContext("List files")
+	trajCtx := trajectory.NewContext("List files")
 
 	// Execute the loop - it should detect the cycle and add intervention.
 	resultMessages, resultResp, err := agent.executeAgentLoop(
@@ -1658,13 +1680,14 @@ func TestAgent_TaskBudgetOverridesConfig(t *testing.T) {
 	}
 
 	// Create request with regular task.
-	req := &AgentRequest{
+	req := &Request{
 		Input: "test input",
 		Task:  regularTask,
 	}
 
 	// Execute (will fail because no tools, but that's ok - we just want to capture the request).
-	_, _ = agent.Execute(context.Background(), req)
+	_, err = agent.Execute(context.Background(), req)
+	t.Logf("execute returned (expected): %v", err)
 
 	// Verify task budget was used (16K, not 4K from config).
 	if len(llmCapture.requests) == 0 {
@@ -1704,13 +1727,14 @@ func TestAgent_ConfigBudgetUsedWhenTaskZero(t *testing.T) {
 	zeroBudgetTask := &zeroBudgetTask{}
 
 	// Create request with zero budget task.
-	req := &AgentRequest{
+	req := &Request{
 		Input: "test input",
 		Task:  zeroBudgetTask,
 	}
 
 	// Execute (will fail because no tools, but that's ok - we just want to capture the request).
-	_, _ = agent.Execute(context.Background(), req)
+	_, err = agent.Execute(context.Background(), req)
+	t.Logf("execute returned (expected): %v", err)
 
 	// Verify config budget was used (8K, not 0 from task).
 	if len(llmCapture.requests) == 0 {
@@ -1766,7 +1790,7 @@ func TestAgent_ConcurrentTokenBudget(t *testing.T) {
 			defer wg.Done()
 
 			task := tasks[taskIndex%len(tasks)]
-			req := &AgentRequest{
+			req := &Request{
 				Input: "test input",
 				Task:  task,
 			}
@@ -1852,7 +1876,7 @@ func newCapturingLLMProvider() *capturingLLMProvider {
 	}
 }
 
-func (c *capturingLLMProvider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+func (c *capturingLLMProvider) Complete(_ context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	c.mu.Lock()
 	c.requests = append(c.requests, params)
 	c.mu.Unlock()
@@ -1872,7 +1896,7 @@ func (c *capturingLLMProvider) Complete(ctx context.Context, params openai.ChatC
 	}, nil
 }
 
-func (c *capturingLLMProvider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
+func (c *capturingLLMProvider) Stream(_ context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	c.mu.Lock()
 	c.requests = append(c.requests, params)
 	c.mu.Unlock()
@@ -1900,7 +1924,7 @@ func (c *capturingLLMProvider) Stream(ctx context.Context, params openai.ChatCom
 	return ch, nil
 }
 
-func (c *capturingLLMProvider) Models(ctx context.Context) ([]openai.Model, error) {
+func (c *capturingLLMProvider) Models(_ context.Context) ([]openai.Model, error) {
 	return []openai.Model{}, nil
 }
 
@@ -1925,10 +1949,10 @@ func newTestAgentMinimal(toolRegistry *tools.Registry) *Agent {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
+	securityService := security.NewService(validator, approvalService)
 
 	cycleDetector := cycle.NewDetector(cycle.Config{Enabled: false})
-	detectionService := detection.NewDetectionService(cycleDetector, nil)
+	detectionService := detection.NewService(cycleDetector, nil)
 
 	if toolRegistry == nil {
 		toolRegistry = tools.NewRegistry()
@@ -1948,7 +1972,7 @@ func newTestAgentMinimal(toolRegistry *tools.Registry) *Agent {
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(mockProvider),
+		planning.NewService(mockProvider),
 		&Environment{WorkDir: "/tmp"},
 		emitter,
 	)
@@ -2141,7 +2165,7 @@ func TestAgent_addFinalMessage(t *testing.T) {
 	}
 }
 
-func TestAgent_emitTurnStart(t *testing.T) {
+func TestAgent_emitTurnStart(_ *testing.T) {
 	agent := newTestAgentMinimal(nil)
 
 	// This test mainly ensures the method doesn't panic
@@ -2182,12 +2206,12 @@ func TestAgent_executeSetup(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		req     *AgentRequest
+		req     *Request
 		wantErr bool
 	}{
 		{
 			name: "valid request",
-			req: &AgentRequest{
+			req: &Request{
 				Input: "Hello, world!",
 			},
 			wantErr: false,
@@ -2199,7 +2223,7 @@ func TestAgent_executeSetup(t *testing.T) {
 		},
 		{
 			name: "empty input",
-			req: &AgentRequest{
+			req: &Request{
 				Input: "",
 			},
 			wantErr: true,
@@ -2229,14 +2253,14 @@ func TestAgent_finalizeResponse(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		resp       *AgentResponse
+		resp       *Response
 		messages   []message.Message
 		historyLen int
 		wantOutput string
 	}{
 		{
 			name: "response with assistant message",
-			resp: &AgentResponse{},
+			resp: &Response{},
 			messages: []message.Message{
 				{Role: message.RoleUser, Content: "Hello"},
 				{Role: message.RoleAssistant, Content: "Hi there!"},
@@ -2246,7 +2270,7 @@ func TestAgent_finalizeResponse(t *testing.T) {
 		},
 		{
 			name: "response without assistant message",
-			resp: &AgentResponse{},
+			resp: &Response{},
 			messages: []message.Message{
 				{Role: message.RoleUser, Content: "Hello"},
 			},
@@ -2340,7 +2364,7 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 					},
 				},
 			},
-			llmErrors:     []error{errors.New("LLM provider error")},
+			llmErrors:     []error{errLlmProviderError},
 			timeout:       30 * time.Second,
 			expectedError: false, // Transient errors are retried; mock succeeds on retry.
 			expectedStuck: false,
@@ -2410,7 +2434,7 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 			defer cancel()
 
 			// Create request.
-			req := &AgentRequest{
+			req := &Request{
 				Input: "Create a terminal Tetris game in Rust",
 				Task:  task.NewRegular(),
 			}
@@ -2476,7 +2500,7 @@ func TestAgentTimeoutHandling(t *testing.T) {
 	defer cancel()
 
 	// Create request.
-	req := &AgentRequest{
+	req := &Request{
 		Input: "Create a terminal Tetris game in Rust",
 		Task:  task.NewRegular(),
 	}
@@ -2555,7 +2579,7 @@ func TestAgentCycleDetection(t *testing.T) {
 	ctx := context.Background()
 
 	// Create request.
-	req := &AgentRequest{
+	req := &Request{
 		Input: "Create a terminal Tetris game in Rust",
 		Task:  task.NewRegular(),
 	}
@@ -2579,13 +2603,13 @@ type MockLLMProvider struct {
 	callCount int
 }
 
-func (m *MockLLMProvider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
+func (m *MockLLMProvider) Complete(ctx context.Context, _ openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	// Simulate delay if specified.
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, fmt.Errorf("mock provider canceled: %w", ctx.Err())
 		}
 	}
 
@@ -2621,7 +2645,7 @@ func (m *MockLLMProvider) Complete(ctx context.Context, params openai.ChatComple
 	}, nil
 }
 
-func (m *MockLLMProvider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
+func (m *MockLLMProvider) Stream(ctx context.Context, _ openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	// Check for error first - return it immediately before creating channel.
 	if m.callCount < len(m.errors) && m.errors[m.callCount] != nil {
 		err := m.errors[m.callCount]
@@ -2705,7 +2729,7 @@ func (m *MockLLMProvider) Stream(ctx context.Context, params openai.ChatCompleti
 	return ch, nil
 }
 
-func (m *MockLLMProvider) Models(ctx context.Context) ([]openai.Model, error) {
+func (m *MockLLMProvider) Models(_ context.Context) ([]openai.Model, error) {
 	return []openai.Model{
 		{ID: "test-model"},
 	}, nil
@@ -2732,9 +2756,9 @@ func createTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *Agent {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
+	securityService := security.NewService(validator, approvalService)
 
-	detectionService := detection.NewDetectionService(
+	detectionService := detection.NewService(
 		cycle.NewDetector(cycle.Config{Enabled: false}),
 		nil,
 	)
@@ -2754,7 +2778,7 @@ func createTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *Agent {
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(mockLLM),
+		planning.NewService(mockLLM),
 		environment,
 		emitter,
 		WithMaxTurns(10),
@@ -2800,7 +2824,7 @@ func TestAgent_emitACERetrievalEvent(t *testing.T) {
 	}
 
 	// Create trajectory context with known metrics.
-	ctx := trajectory.NewTrajectoryContext("install nodejs")
+	ctx := trajectory.NewContext("install nodejs")
 	ctx.CurrentTurn = 5
 
 	// Add some bullets to cache via RecordRetrieval (which updates stats).

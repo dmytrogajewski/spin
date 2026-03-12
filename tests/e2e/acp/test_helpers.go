@@ -1,9 +1,11 @@
 //go:build !e2e_llm_test
 
+// Package acp provides end-to-end tests for the ACP protocol.
 package acp
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -112,7 +114,7 @@ func cleanupAgent(t *testing.T, cmd *exec.Cmd, stdin io.WriteCloser) {
 	}
 
 	// Try graceful shutdown first.
-	cmd.Process.Signal(os.Interrupt)
+	_ = cmd.Process.Signal(os.Interrupt)
 
 	// Wait with timeout.
 	done := make(chan error, 1)
@@ -126,7 +128,7 @@ func cleanupAgent(t *testing.T, cmd *exec.Cmd, stdin io.WriteCloser) {
 		// Process exited.
 	case <-time.After(2 * time.Second):
 		// Force kill after timeout.
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 		<-done
 	}
 }
@@ -177,17 +179,17 @@ func (c *testClient) clearNotifications() {
 }
 
 // ReadTextFile implements acp.Client interface (not used in basic tests).
-func (c *testClient) ReadTextFile(ctx context.Context, params acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
+func (c *testClient) ReadTextFile(_ context.Context, _ acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
 	return acp.ReadTextFileResponse{}, nil
 }
 
 // WriteTextFile implements acp.Client interface (not used in basic tests).
-func (c *testClient) WriteTextFile(ctx context.Context, params acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
+func (c *testClient) WriteTextFile(_ context.Context, _ acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
 	return acp.WriteTextFileResponse{}, nil
 }
 
 // RequestPermission implements acp.Client interface.
-func (c *testClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (c *testClient) RequestPermission(_ context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	// For testing, we can auto-approve by selecting the first allow option
 	// Find an allow_once or allow_always option.
 	var selectedOptionID acp.PermissionOptionId
@@ -212,7 +214,7 @@ func (c *testClient) RequestPermission(ctx context.Context, params acp.RequestPe
 
 // SessionUpdate implements acp.Client interface.
 // This is called by the agent to send notifications.
-func (c *testClient) SessionUpdate(ctx context.Context, params acp.SessionNotification) error {
+func (c *testClient) SessionUpdate(_ context.Context, params acp.SessionNotification) error {
 	// Store notifications for verification in tests.
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -223,27 +225,27 @@ func (c *testClient) SessionUpdate(ctx context.Context, params acp.SessionNotifi
 }
 
 // CreateTerminal implements acp.Client interface (not used in basic tests).
-func (c *testClient) CreateTerminal(ctx context.Context, params acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
+func (c *testClient) CreateTerminal(_ context.Context, _ acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
 	return acp.CreateTerminalResponse{}, nil
 }
 
 // KillTerminalCommand implements acp.Client interface (not used in basic tests).
-func (c *testClient) KillTerminalCommand(ctx context.Context, params acp.KillTerminalCommandRequest) (acp.KillTerminalCommandResponse, error) {
+func (c *testClient) KillTerminalCommand(_ context.Context, _ acp.KillTerminalCommandRequest) (acp.KillTerminalCommandResponse, error) {
 	return acp.KillTerminalCommandResponse{}, nil
 }
 
 // TerminalOutput implements acp.Client interface (not used in basic tests).
-func (c *testClient) TerminalOutput(ctx context.Context, params acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
+func (c *testClient) TerminalOutput(_ context.Context, _ acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
 	return acp.TerminalOutputResponse{}, nil
 }
 
 // ReleaseTerminal implements acp.Client interface (not used in basic tests).
-func (c *testClient) ReleaseTerminal(ctx context.Context, params acp.ReleaseTerminalRequest) (acp.ReleaseTerminalResponse, error) {
+func (c *testClient) ReleaseTerminal(_ context.Context, _ acp.ReleaseTerminalRequest) (acp.ReleaseTerminalResponse, error) {
 	return acp.ReleaseTerminalResponse{}, nil
 }
 
 // WaitForTerminalExit implements acp.Client interface (not used in basic tests).
-func (c *testClient) WaitForTerminalExit(ctx context.Context, params acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
+func (c *testClient) WaitForTerminalExit(_ context.Context, _ acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
 	return acp.WaitForTerminalExitResponse{}, nil
 }
 
@@ -263,8 +265,11 @@ func waitForInitialization(t *testing.T, conn *acp.ClientSideConnection) error {
 			Version: "1.0.0",
 		},
 	})
+	if err != nil {
+		return fmt.Errorf("acp initialize: %w", err)
+	}
 
-	return err
+	return nil
 }
 
 // createTestWorkspace creates a temporary directory for testing.

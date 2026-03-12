@@ -23,8 +23,12 @@ func TestFindDuplicates_NoDuplicates(t *testing.T) {
 
 	// Create new bullet.
 	content := "Always validate input parameters before processing them in production systems"
-	emb, _ := embedder.Embed(ctx, content)
-	b, _ := bullet.New(content, bullet.WithEmbedding(emb))
+
+	emb, err := embedder.Embed(ctx, content)
+	require.NoError(t, err)
+
+	b, err := bullet.New(content, bullet.WithEmbedding(emb))
+	require.NoError(t, err)
 
 	// Find duplicates in empty playbook.
 	duplicates, err := curator.FindDuplicates(ctx, []*bullet.Bullet{b})
@@ -43,13 +47,22 @@ func TestFindDuplicates_ExactDuplicate(t *testing.T) {
 
 	// Add a bullet to playbook.
 	content := "Always validate input parameters"
-	emb1, _ := embedder.Embed(ctx, content)
-	b1, _ := bullet.New(content, bullet.WithEmbedding(emb1))
-	pb.Add(ctx, b1)
+
+	emb1, err := embedder.Embed(ctx, content)
+	require.NoError(t, err)
+
+	b1, err := bullet.New(content, bullet.WithEmbedding(emb1))
+	require.NoError(t, err)
+
+	err = pb.Add(ctx, b1)
+	require.NoError(t, err)
 
 	// Create new bullet with same content.
-	emb2, _ := embedder.Embed(ctx, content)
-	b2, _ := bullet.New(content, bullet.WithEmbedding(emb2))
+	emb2, err := embedder.Embed(ctx, content)
+	require.NoError(t, err)
+
+	b2, err := bullet.New(content, bullet.WithEmbedding(emb2))
+	require.NoError(t, err)
 
 	// Find duplicates.
 	duplicates, err := curator.FindDuplicates(ctx, []*bullet.Bullet{b2})
@@ -68,14 +81,24 @@ func TestFindDuplicates_SimilarContent(t *testing.T) {
 
 	// Add a bullet to playbook.
 	content1 := "Always validate input parameters before processing them to prevent errors"
-	emb1, _ := embedder.Embed(ctx, content1)
-	b1, _ := bullet.New(content1, bullet.WithEmbedding(emb1))
-	pb.Add(ctx, b1)
+
+	emb1, err := embedder.Embed(ctx, content1)
+	require.NoError(t, err)
+
+	b1, err := bullet.New(content1, bullet.WithEmbedding(emb1))
+	require.NoError(t, err)
+
+	err = pb.Add(ctx, b1)
+	require.NoError(t, err)
 
 	// Create new bullet with very similar content (just one word different).
 	content2 := "Always validate input parameters before processing them to avoid errors"
-	emb2, _ := embedder.Embed(ctx, content2)
-	b2, _ := bullet.New(content2, bullet.WithEmbedding(emb2))
+
+	emb2, err := embedder.Embed(ctx, content2)
+	require.NoError(t, err)
+
+	b2, err := bullet.New(content2, bullet.WithEmbedding(emb2))
+	require.NoError(t, err)
 
 	// Find duplicates.
 	duplicates, err := curator.FindDuplicates(ctx, []*bullet.Bullet{b2})
@@ -95,13 +118,21 @@ func TestFindDuplicates_ThresholdBoundary(t *testing.T) {
 	curator := NewCurator(pb, embedder, WithSimilarityThreshold(0.95))
 
 	// Add a bullet to playbook.
-	emb1, _ := embedder.Embed(ctx, "Use errors.Is")
-	b1, _ := bullet.New("Use errors.Is", bullet.WithEmbedding(emb1))
-	pb.Add(ctx, b1)
+	emb1, err := embedder.Embed(ctx, "Use errors.Is")
+	require.NoError(t, err)
+
+	b1, err := bullet.New("Use errors.Is", bullet.WithEmbedding(emb1))
+	require.NoError(t, err)
+
+	err = pb.Add(ctx, b1)
+	require.NoError(t, err)
 
 	// Create new bullet with somewhat similar content.
-	emb2, _ := embedder.Embed(ctx, "Use errors.Is for error checking")
-	b2, _ := bullet.New("Use errors.Is for error checking", bullet.WithEmbedding(emb2))
+	emb2, err := embedder.Embed(ctx, "Use errors.Is for error checking")
+	require.NoError(t, err)
+
+	b2, err := bullet.New("Use errors.Is for error checking", bullet.WithEmbedding(emb2))
+	require.NoError(t, err)
 
 	// Find duplicates with high threshold.
 	duplicates, err := curator.FindDuplicates(ctx, []*bullet.Bullet{b2})
@@ -121,17 +152,30 @@ func TestFindDuplicates_MultipleBullets(t *testing.T) {
 
 	// Add one bullet to playbook.
 	content1 := "Always validate input parameters before processing to ensure data integrity"
-	emb1, _ := embedder.Embed(ctx, content1)
-	b1, _ := bullet.New(content1, bullet.WithEmbedding(emb1))
-	pb.Add(ctx, b1)
+
+	emb1, err := embedder.Embed(ctx, content1)
+	require.NoError(t, err)
+
+	b1, err := bullet.New(content1, bullet.WithEmbedding(emb1))
+	require.NoError(t, err)
+
+	err = pb.Add(ctx, b1)
+	require.NoError(t, err)
 
 	// Create new bullets - one exact duplicate, one not.
-	emb2, _ := embedder.Embed(ctx, content1) // Exact duplicate.
-	b2, _ := bullet.New(content1, bullet.WithEmbedding(emb2))
+	emb2, err := embedder.Embed(ctx, content1) // Exact duplicate.
+	require.NoError(t, err)
+
+	b2, err := bullet.New(content1, bullet.WithEmbedding(emb2))
+	require.NoError(t, err)
 
 	content3 := "Use table-driven tests with subtests for comprehensive test coverage and better organization"
-	emb3, _ := embedder.Embed(ctx, content3) // Different content.
-	b3, _ := bullet.New(content3, bullet.WithEmbedding(emb3))
+
+	emb3, err := embedder.Embed(ctx, content3) // Different content.
+	require.NoError(t, err)
+
+	b3, err := bullet.New(content3, bullet.WithEmbedding(emb3))
+	require.NoError(t, err)
 
 	// Find duplicates.
 	duplicates, err := curator.FindDuplicates(ctx, []*bullet.Bullet{b2, b3})
@@ -155,8 +199,11 @@ func TestFindDuplicates_EmptyPlaybook(t *testing.T) {
 	curator := NewCurator(pb, embedder)
 
 	// Create new bullet.
-	emb, _ := embedder.Embed(ctx, "Always validate input")
-	b, _ := bullet.New("Always validate input", bullet.WithEmbedding(emb))
+	emb, err := embedder.Embed(ctx, "Always validate input")
+	require.NoError(t, err)
+
+	b, err := bullet.New("Always validate input", bullet.WithEmbedding(emb))
+	require.NoError(t, err)
 
 	// Find duplicates in empty playbook.
 	duplicates, err := curator.FindDuplicates(ctx, []*bullet.Bullet{b})

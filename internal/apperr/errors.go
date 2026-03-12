@@ -1,9 +1,9 @@
-// Package errors provides structured error types for the Spin agent.
+// Package apperr provides structured error types for the Spin agent.
 //
 // This package defines error codes, structured error types, and utilities
 // for creating and handling errors in a type-safe, consistent manner across
 // the codebase.
-package errors
+package apperr
 
 import (
 	"fmt"

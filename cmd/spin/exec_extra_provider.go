@@ -8,6 +8,6 @@ import (
 
 // createProviderForExecExtra allows build-tagged extensions to provide additional
 // providers for exec mode. This stub returns nil when not built with e2e_llm_test.
-func createProviderForExecExtra(providerType string) (llm.Provider, bool, error) {
+func createProviderForExecExtra(_ string) (llm.Provider, bool, error) {
 	return nil, false, nil
 }

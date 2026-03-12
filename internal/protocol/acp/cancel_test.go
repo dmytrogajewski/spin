@@ -63,8 +63,8 @@ func TestCancel_ValidSession_CancelsInProgressExecution(t *testing.T) {
 			Prompt:    []acp.ContentBlock{acp.TextBlock("test prompt")},
 		}
 
-		resp, err := acpAgent.Prompt(context.Background(), promptReq)
-		if err != nil {
+		resp, promptErr := acpAgent.Prompt(context.Background(), promptReq)
+		if promptErr != nil {
 			// Error is expected when canceled.
 			promptCompleted <- acp.PromptResponse{
 				StopReason: acp.StopReasonCancelled,
@@ -234,8 +234,8 @@ func createBlockingTestAgent(t *testing.T) *agent.Agent {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
-	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
+	securityService := security.NewService(validator, approvalService)
+	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
 		Registry:        tools.NewRegistry(),
 		Validator:       validator,
@@ -243,7 +243,7 @@ func createBlockingTestAgent(t *testing.T) *agent.Agent {
 		Emitter:         emitter,
 		WorkDir:         t.TempDir(),
 	})
-	planningService := planning.NewPlanningService(mockProvider)
+	planningService := planning.NewService(mockProvider)
 
 	agentInstance, err := agent.NewAgent(
 		mockProvider,
@@ -265,7 +265,7 @@ type mockConnectionForCancel struct {
 	notifications []acp.SessionNotification
 }
 
-func (m *mockConnectionForCancel) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
+func (m *mockConnectionForCancel) SessionUpdate(_ context.Context, notification acp.SessionNotification) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -274,7 +274,7 @@ func (m *mockConnectionForCancel) SessionUpdate(ctx context.Context, notificatio
 	return nil
 }
 
-func (m *mockConnectionForCancel) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (m *mockConnectionForCancel) RequestPermission(_ context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	// Auto-approve for testing by selecting the first allow option.
 	for _, opt := range params.Options {
 		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {

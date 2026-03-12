@@ -1,3 +1,4 @@
+// Package bullet provides bullet-point extraction and formatting.
 package bullet
 
 import (

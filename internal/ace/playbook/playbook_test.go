@@ -73,7 +73,7 @@ func TestUpdate_UpdatesExistingBullet(t *testing.T) {
 
 	b, err := bullet.New("original")
 	require.NoError(t, err)
-	pb.Add(ctx, b)
+	require.NoError(t, pb.Add(ctx, b))
 
 	// Modify and update.
 	b.Content = "updated"
@@ -107,7 +107,7 @@ func TestDelete_RemovesBullet(t *testing.T) {
 
 	b, err := bullet.New("content")
 	require.NoError(t, err)
-	pb.Add(ctx, b)
+	require.NoError(t, pb.Add(ctx, b))
 
 	err = pb.Delete(ctx, b.ID)
 	require.NoError(t, err)
@@ -133,13 +133,16 @@ func TestList_ReturnsAllBullets(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
-	b1, _ := bullet.New("bullet 1")
-	b2, _ := bullet.New("bullet 2")
-	b3, _ := bullet.New("bullet 3")
+	b1, err := bullet.New("bullet 1")
+	require.NoError(t, err)
+	b2, err := bullet.New("bullet 2")
+	require.NoError(t, err)
+	b3, err := bullet.New("bullet 3")
+	require.NoError(t, err)
 
-	pb.Add(ctx, b1)
-	pb.Add(ctx, b2)
-	pb.Add(ctx, b3)
+	require.NoError(t, pb.Add(ctx, b1))
+	require.NoError(t, pb.Add(ctx, b2))
+	require.NoError(t, pb.Add(ctx, b3))
 
 	bullets := pb.List(nil)
 	assert.Len(t, bullets, 3)
@@ -149,13 +152,16 @@ func TestList_WithFilter(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
-	b1, _ := bullet.New("test 1", bullet.WithTags(map[string]string{"category": "security"}))
-	b2, _ := bullet.New("test 2", bullet.WithTags(map[string]string{"category": "testing"}))
-	b3, _ := bullet.New("test 3", bullet.WithTags(map[string]string{"category": "security"}))
+	b1, err := bullet.New("test 1", bullet.WithTags(map[string]string{"category": "security"}))
+	require.NoError(t, err)
+	b2, err := bullet.New("test 2", bullet.WithTags(map[string]string{"category": "testing"}))
+	require.NoError(t, err)
+	b3, err := bullet.New("test 3", bullet.WithTags(map[string]string{"category": "security"}))
+	require.NoError(t, err)
 
-	pb.Add(ctx, b1)
-	pb.Add(ctx, b2)
-	pb.Add(ctx, b3)
+	require.NoError(t, pb.Add(ctx, b1))
+	require.NoError(t, pb.Add(ctx, b2))
+	require.NoError(t, pb.Add(ctx, b3))
 
 	// Filter for security category.
 	securityBullets := pb.List(func(b *bullet.Bullet) bool {
@@ -180,13 +186,16 @@ func TestSearch_WithEmbeddings(t *testing.T) {
 	ctx := context.Background()
 
 	// Add bullets with embeddings.
-	b1, _ := bullet.New("security testing", bullet.WithEmbedding([]float32{1.0, 0.0, 0.0}))
-	b2, _ := bullet.New("security audit", bullet.WithEmbedding([]float32{0.9, 0.1, 0.0}))
-	b3, _ := bullet.New("performance test", bullet.WithEmbedding([]float32{0.0, 0.0, 1.0}))
+	b1, err := bullet.New("security testing", bullet.WithEmbedding([]float32{1.0, 0.0, 0.0}))
+	require.NoError(t, err)
+	b2, err := bullet.New("security audit", bullet.WithEmbedding([]float32{0.9, 0.1, 0.0}))
+	require.NoError(t, err)
+	b3, err := bullet.New("performance test", bullet.WithEmbedding([]float32{0.0, 0.0, 1.0}))
+	require.NoError(t, err)
 
-	pb.Add(ctx, b1)
-	pb.Add(ctx, b2)
-	pb.Add(ctx, b3)
+	require.NoError(t, pb.Add(ctx, b1))
+	require.NoError(t, pb.Add(ctx, b2))
+	require.NoError(t, pb.Add(ctx, b3))
 
 	// Mock query embedding similar to security.
 	embedder.SetEmbedding("security check", []float32{0.95, 0.05, 0.0})
@@ -201,15 +210,17 @@ func TestSaveAndLoad(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
-	b1, _ := bullet.New("bullet 1")
-	b2, _ := bullet.New("bullet 2")
+	b1, err := bullet.New("bullet 1")
+	require.NoError(t, err)
+	b2, err := bullet.New("bullet 2")
+	require.NoError(t, err)
 
-	pb.Add(ctx, b1)
-	pb.Add(ctx, b2)
+	require.NoError(t, pb.Add(ctx, b1))
+	require.NoError(t, pb.Add(ctx, b2))
 
 	// Save to temp file.
 	tmpFile := t.TempDir() + "/playbook.json"
-	err := pb.Save(tmpFile)
+	err = pb.Save(tmpFile)
 	require.NoError(t, err)
 
 	// Load from file.
@@ -230,8 +241,9 @@ func TestSnapshot_CapturesState(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
-	b1, _ := bullet.New("bullet 1")
-	pb.Add(ctx, b1)
+	b1, err := bullet.New("bullet 1")
+	require.NoError(t, err)
+	require.NoError(t, pb.Add(ctx, b1))
 
 	snapshot := pb.Snapshot()
 
@@ -245,14 +257,15 @@ func TestSnapshot_IsImmutable(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
-	b, _ := bullet.New("original")
-	pb.Add(ctx, b)
+	b, err := bullet.New("original")
+	require.NoError(t, err)
+	require.NoError(t, pb.Add(ctx, b))
 
 	snapshot := pb.Snapshot()
 
 	// Modify original bullet.
 	b.Content = "modified"
-	pb.Update(ctx, b)
+	require.NoError(t, pb.Update(ctx, b))
 
 	// Snapshot should be unchanged.
 	assert.Equal(t, "original", snapshot.Bullets[0].Content)
@@ -262,22 +275,25 @@ func TestRestore_RestoresFromSnapshot(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
-	b1, _ := bullet.New("bullet 1")
-	b2, _ := bullet.New("bullet 2")
+	b1, err := bullet.New("bullet 1")
+	require.NoError(t, err)
+	b2, err := bullet.New("bullet 2")
+	require.NoError(t, err)
 
-	pb.Add(ctx, b1)
-	pb.Add(ctx, b2)
+	require.NoError(t, pb.Add(ctx, b1))
+	require.NoError(t, pb.Add(ctx, b2))
 
 	snapshot := pb.Snapshot()
 
 	// Modify playbook.
-	pb.Delete(ctx, b1.ID)
+	require.NoError(t, pb.Delete(ctx, b1.ID))
 
-	b3, _ := bullet.New("bullet 3")
-	pb.Add(ctx, b3)
+	b3, err := bullet.New("bullet 3")
+	require.NoError(t, err)
+	require.NoError(t, pb.Add(ctx, b3))
 
 	// Restore from snapshot.
-	err := pb.Restore(snapshot)
+	err = pb.Restore(snapshot)
 	require.NoError(t, err)
 
 	// Should have original state.
@@ -294,22 +310,25 @@ func TestDiff_DetectsChanges(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	ctx := context.Background()
 
-	b1, _ := bullet.New("bullet 1")
-	b2, _ := bullet.New("bullet 2")
+	b1, err := bullet.New("bullet 1")
+	require.NoError(t, err)
+	b2, err := bullet.New("bullet 2")
+	require.NoError(t, err)
 
-	pb.Add(ctx, b1)
-	pb.Add(ctx, b2)
+	require.NoError(t, pb.Add(ctx, b1))
+	require.NoError(t, pb.Add(ctx, b2))
 
 	snapshot1 := pb.Snapshot()
 
 	// Add, remove, modify.
-	pb.Delete(ctx, b1.ID) // Remove.
+	require.NoError(t, pb.Delete(ctx, b1.ID)) // Remove.
 
 	b2.Content = "modified bullet 2"
-	pb.Update(ctx, b2) // Modify.
+	require.NoError(t, pb.Update(ctx, b2)) // Modify.
 
-	b3, _ := bullet.New("bullet 3")
-	pb.Add(ctx, b3) // Add.
+	b3, err := bullet.New("bullet 3")
+	require.NoError(t, err)
+	require.NoError(t, pb.Add(ctx, b3)) // Add.
 
 	snapshot2 := pb.Snapshot()
 
@@ -328,8 +347,12 @@ func TestConcurrentOperations(t *testing.T) {
 
 	for i := range 10 {
 		go func(n int) {
-			b, _ := bullet.New(fmt.Sprintf("bullet %d", n))
-			pb.Add(ctx, b)
+			b, err := bullet.New(fmt.Sprintf("bullet %d", n))
+			if err != nil {
+				done <- true
+				return
+			}
+			_ = pb.Add(ctx, b)
 
 			done <- true
 		}(i)
@@ -413,24 +436,26 @@ func TestBulletsEqual_AllFields(t *testing.T) {
 	ctx := context.Background()
 
 	// Create bullets with all fields different.
-	b1, _ := bullet.New("content1",
+	b1, err := bullet.New("content1",
 		bullet.WithEmbedding([]float32{1.0, 2.0}),
 		bullet.WithTags(map[string]string{"key": "value"}))
+	require.NoError(t, err)
 	b1.IncrementHelpful()
 
-	b2, _ := bullet.New("content2",
+	b2, err := bullet.New("content2",
 		bullet.WithEmbedding([]float32{3.0, 4.0}),
 		bullet.WithTags(map[string]string{"key": "other"}))
+	require.NoError(t, err)
 	b2.IncrementHarmful()
 
-	pb.Add(ctx, b1)
-	pb.Add(ctx, b2)
+	require.NoError(t, pb.Add(ctx, b1))
+	require.NoError(t, pb.Add(ctx, b2))
 
 	snap1 := pb.Snapshot()
 
 	// Modify to test different comparison paths.
 	b1.Content = "content2"
-	pb.Update(ctx, b1)
+	require.NoError(t, pb.Update(ctx, b1))
 	snap2 := pb.Snapshot()
 
 	diff := snap1.Diff(snap2)
@@ -443,11 +468,13 @@ func TestSearch_WithNoBulletsHavingEmbeddings(t *testing.T) {
 	ctx := context.Background()
 
 	// Add bullets WITHOUT embeddings.
-	b1, _ := bullet.New("test 1")
-	b2, _ := bullet.New("test 2")
+	b1, err := bullet.New("test 1")
+	require.NoError(t, err)
+	b2, err := bullet.New("test 2")
+	require.NoError(t, err)
 
-	pb.Add(ctx, b1)
-	pb.Add(ctx, b2)
+	require.NoError(t, pb.Add(ctx, b1))
+	require.NoError(t, pb.Add(ctx, b2))
 
 	results, err := pb.Search(ctx, "query", 5)
 	require.NoError(t, err)
@@ -460,8 +487,9 @@ func TestCosineSimilarity_EdgeCases(t *testing.T) {
 	ctx := context.Background()
 
 	// Zero norm vector.
-	b1, _ := bullet.New("test", bullet.WithEmbedding([]float32{0.0, 0.0, 0.0}))
-	pb.Add(ctx, b1)
+	b1, err := bullet.New("test", bullet.WithEmbedding([]float32{0.0, 0.0, 0.0}))
+	require.NoError(t, err)
+	require.NoError(t, pb.Add(ctx, b1))
 
 	embedder.SetEmbedding("query", []float32{1.0, 0.0, 0.0})
 

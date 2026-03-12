@@ -12,7 +12,7 @@ func (r *Repository) ApplyPatch(ctx context.Context, patchText string, opts Appl
 	// Check context.
 	err := ctx.Err()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("apply patch: %w", err)
 	}
 
 	// Handle empty patch.
@@ -47,7 +47,7 @@ func (r *Repository) ApplyPatch(ctx context.Context, patchText string, opts Appl
 	if err != nil {
 		// Check if it's a context error.
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return nil, fmt.Errorf("apply patch context canceled: %w", ctx.Err())
 		}
 
 		// Patch failed to apply.

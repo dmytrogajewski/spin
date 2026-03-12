@@ -1,3 +1,4 @@
+// Package main provides the spin CLI application entry point.
 package main
 
 import (
@@ -15,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	agentexec "github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
@@ -49,7 +50,7 @@ Examples:
   spin acp
   spin acp --provider openai --model gpt-4
   spin acp --workspace /path/to/project`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			// Only pass flag values if they were explicitly set.
 			providerType, _ := cmd.Flags().GetString("provider")
 			baseURL, _ := cmd.Flags().GetString("base-url")
@@ -153,7 +154,7 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 		return fmt.Errorf("create session storage: %w", err)
 	}
 
-	acpRuntime, err := runtime.NewACP(runtime.ACPConfig{
+	acpRuntime, err := agentexec.NewACP(agentexec.ACPConfig{
 		WorkDir:      workDir,
 		Emitter:      emitter,
 		Storage:      storage,
@@ -192,7 +193,7 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 	maxTokens := getHistoryMaxTokens(cfg, provider)
 
 	// Create conversation factory that builds properly configured conversations.
-	convFactory := func(ctx context.Context, sessionID string, sessWorkDir string) (*conversation.Conversation, error) {
+	convFactory := func(_ context.Context, sessionID string, sessWorkDir string) (*conversation.Conversation, error) {
 		// Create a new conversation with the core agent's provider and tools.
 		return conversation.NewFromAgent(conversation.NewFromAgentConfig{
 			Agent:     coreAgent,
@@ -220,16 +221,16 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 
 	acpRuntime.SetACPAgent(acpAgent)
 	acpAgent.SetACPRuntime(acpRuntime)
-	acpApprovalHandler := acppkg.NewACPApprovalHandler(acpAgent, 60*time.Second)
+	acpApprovalHandler := acppkg.NewApprovalHandler(acpAgent, 60*time.Second)
 	acpRuntime.SetApprovalHandler(acpApprovalHandler.HandleApprovalRequest)
 	acpAgent.SetApprovalHandler(acpApprovalHandler)
 	acpAgent.SetApprovalService(coreAgent.GetSecurityService().ApprovalService())
 	conn := acp.NewAgentSideConnection(acpAgent, os.Stdout, os.Stdin)
 	acpAgent.SetConnection(conn)
-	terminalClient := acppkg.NewACPTerminalClient(conn)
+	terminalClient := acppkg.NewTerminalClient(conn)
 	acpRuntime.SetTerminalClient(terminalClient)
 
-	filesystemClient := acppkg.NewACPFilesystemClient(conn)
+	filesystemClient := acppkg.NewFilesystemClient(conn)
 	acpRuntime.SetFilesystemClient(filesystemClient)
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -257,7 +258,7 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 //
 // Note: LLM.MaxTokens is intentionally NOT used here - it's for generation limit,
 // not context window. Providers should report context window via Capabilities().
-func getHistoryMaxTokens(cfg *config.ConfigV2, provider llm.Provider) int {
+func getHistoryMaxTokens(cfg *config.V2, provider llm.Provider) int {
 	const (
 		defaultTokens = 8192
 		minTokens     = 2048
@@ -297,7 +298,7 @@ func getHistoryMaxTokens(cfg *config.ConfigV2, provider llm.Provider) int {
 }
 
 // buildProviderForACP creates and configures an LLM provider for the ACP server.
-func buildProviderForACP(ctx context.Context, cfg *config.ConfigV2, authMgr *auth.Manager, providerType, baseURL, model, apiKey string) (llm.Provider, error) {
+func buildProviderForACP(ctx context.Context, cfg *config.V2, authMgr *auth.Manager, providerType, baseURL, model, apiKey string) (llm.Provider, error) {
 	extra, ok, err := createProviderForACPExtra(providerType, baseURL, model, apiKey)
 	if err != nil {
 		return nil, err
@@ -312,11 +313,11 @@ func buildProviderForACP(ctx context.Context, cfg *config.ConfigV2, authMgr *aut
 
 // buildCoreAgent constructs the core agent with all required services and dependencies.
 func buildCoreAgent(
-	cfg *config.ConfigV2,
+	cfg *config.V2,
 	provider llm.Provider,
 	workDir string,
 	emitter *events.EventEmitter,
-	rt runtime.Runtime,
+	rt agentexec.Runtime,
 ) (*agent.Agent, error) {
 	agentBuilder := agent.NewBuilder().
 		WithConfig(cfg).
@@ -332,9 +333,9 @@ func buildCoreAgent(
 	executor := agentBuilder.BuildExecutor()
 	toolExecutor := agent.NewToolExecutorAdapter(executor)
 
-	if acpRT, ok := rt.(*runtime.ACPRuntime); ok {
+	if acpRT, ok := rt.(*agentexec.ACPRuntime); ok {
 		acpRT.SetExecutor(toolExecutor)
-		acpRT.SetValidator(runtime.NewValidatorAdapter(securityService.Validator()))
+		acpRT.SetValidator(agentexec.NewValidatorAdapter(securityService.Validator()))
 	}
 
 	toolRegistry := tools.NewRegistry()
@@ -348,7 +349,7 @@ func buildCoreAgent(
 		WorkDir:         workDir,
 	})
 
-	opts := agentBuilder.BuildAgentOptions()
+	opts := agentBuilder.BuildOptions()
 
 	if cfg != nil && cfg.ACE.Enabled {
 		aceSvc, err := agentBuilder.BuildACEService()

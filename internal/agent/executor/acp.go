@@ -1,4 +1,5 @@
-package runtime
+// Package executor provides agent runtime execution.
+package executor
 
 import (
 	"context"
@@ -13,6 +14,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tools"
+)
+
+var (
+	ErrWorkdirIsRequired = errors.New("workDir is required")
+	ErrEmitterIsRequired = errors.New("emitter is required")
 )
 
 // ACPAgentInterface defines the interface for ACP agent functionality needed by runtime.
@@ -62,11 +68,11 @@ type ACPConfig struct {
 // NewACP creates a new ACP runtime.
 func NewACP(cfg ACPConfig) (*ACPRuntime, error) {
 	if cfg.WorkDir == "" {
-		return nil, errors.New("workDir is required")
+		return nil, ErrWorkdirIsRequired
 	}
 
 	if cfg.Emitter == nil {
-		return nil, errors.New("emitter is required")
+		return nil, ErrEmitterIsRequired
 	}
 
 	logger := cfg.Logger
@@ -219,28 +225,33 @@ type acpNotificationSender struct {
 	emitter   *events.EventEmitter
 }
 
-func (s *acpNotificationSender) SendToolCallStart(ctx context.Context, toolID, toolName string, params tools.ToolParameters) error {
+// SendToolCallStart implements the SendToolCallStart operation.
+func (s *acpNotificationSender) SendToolCallStart(_ context.Context, _, _ string, _ tools.ToolParameters) error {
 	// ACP notifications are sent via event emission, which is handled by the ACP agent
 	// This is called from event emission, handled by the agent's event processing.
 	return nil
 }
 
-func (s *acpNotificationSender) SendToolCallUpdate(ctx context.Context, toolID string, status string, content any) error {
+// SendToolCallUpdate implements the SendToolCallUpdate operation.
+func (s *acpNotificationSender) SendToolCallUpdate(_ context.Context, _ string, _ string, _ any) error {
 	// ACP notifications are sent via event emission.
 	return nil
 }
 
-func (s *acpNotificationSender) SendToolCallComplete(ctx context.Context, toolID string, success bool, output string, err error) error {
+// SendToolCallComplete implements the SendToolCallComplete operation.
+func (s *acpNotificationSender) SendToolCallComplete(_ context.Context, _ string, _ bool, _ string, _ error) error {
 	// ACP notifications are sent via event emission.
 	return nil
 }
 
-func (s *acpNotificationSender) SendMessageChunk(ctx context.Context, content string) error {
+// SendMessageChunk implements the SendMessageChunk operation.
+func (s *acpNotificationSender) SendMessageChunk(_ context.Context, _ string) error {
 	// ACP notifications are sent via event emission.
 	return nil
 }
 
-func (s *acpNotificationSender) SendPlanUpdate(ctx context.Context, entries []PlanEntry) error {
+// SendPlanUpdate implements the SendPlanUpdate operation.
+func (s *acpNotificationSender) SendPlanUpdate(_ context.Context, _ []PlanEntry) error {
 	// ACP notifications are sent via event emission.
 	return nil
 }

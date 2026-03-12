@@ -26,7 +26,7 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 	// Check context cancellation.
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("get status: %w", ctx.Err())
 	default:
 	}
 
@@ -42,22 +42,20 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 	}
 
 	// Get current HEAD.
-	head, err := r.repo.Head()
-	if err != nil {
-		// Detached HEAD or no HEAD (empty repo).
-		return &Status{
-			Detached:       true,
-			ModifiedFiles:  make([]FileStatus, 0),
-			UntrackedFiles: make([]string, 0),
-		}, nil
-	}
+	head, _ := r.repo.Head()
 
 	status := &Status{
-		Branch:         head.Name().Short(),
-		Hash:           head.Hash().String(),
 		ModifiedFiles:  make([]FileStatus, 0),
 		UntrackedFiles: make([]string, 0),
-		Detached:       !head.Name().IsBranch(),
+	}
+
+	if head == nil {
+		// Detached HEAD or no HEAD (empty repo).
+		status.Detached = true
+	} else {
+		status.Branch = head.Name().Short()
+		status.Hash = head.Hash().String()
+		status.Detached = !head.Name().IsBranch()
 	}
 
 	// Parse file statuses.

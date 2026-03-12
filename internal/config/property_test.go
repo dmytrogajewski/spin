@@ -8,12 +8,12 @@ import (
 	"pgregory.net/rapid"
 )
 
-// TestConfigV2_RoundTrip_YAML tests that ConfigV2 can be marshaled and unmarshaled without data loss.
+// TestV2_RoundTrip_YAML tests that V2 can be marshaled and unmarshaled without data loss.
 // This is a property-based test that generates random valid configs.
-func TestConfigV2_RoundTrip_YAML(t *testing.T) {
+func TestV2_RoundTrip_YAML(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		// Generate a random valid ConfigV2.
-		cfg := genValidConfigV2(t)
+		// Generate a random valid V2.
+		cfg := genValidV2(t)
 
 		// Marshal to YAML.
 		yamlBytes, err := yaml.Marshal(cfg)
@@ -22,7 +22,7 @@ func TestConfigV2_RoundTrip_YAML(t *testing.T) {
 		}
 
 		// Unmarshal back.
-		var cfg2 ConfigV2
+		var cfg2 V2
 
 		err = yaml.Unmarshal(yamlBytes, &cfg2)
 		if err != nil {
@@ -56,11 +56,11 @@ func TestConfigV2_RoundTrip_YAML(t *testing.T) {
 	})
 }
 
-// TestConfigV2_Validation_GeneratedConfigs tests that generated configs pass validation.
+// TestV2_Validation_GeneratedConfigs tests that generated configs pass validation.
 // This ensures our validation logic is consistent with our data model.
-func TestConfigV2_Validation_GeneratedConfigs(t *testing.T) {
+func TestV2_Validation_GeneratedConfigs(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		cfg := genValidConfigV2(t)
+		cfg := genValidV2(t)
 
 		err := cfg.Validate()
 		if err != nil {
@@ -69,14 +69,14 @@ func TestConfigV2_Validation_GeneratedConfigs(t *testing.T) {
 	})
 }
 
-// genValidConfigV2 generates a random valid ConfigV2 using rapid.
-func genValidConfigV2(t *rapid.T) *ConfigV2 {
-	return &ConfigV2{
+// genValidV2 generates a random valid V2 using rapid.
+func genValidV2(t *rapid.T) *V2 {
+	return &V2{
 		Version: "2.0",
 		LLM:     genValidLLMConfig(t),
 		Agent:   genValidAgentConfig(t),
 		ACE:     genValidACEConfig(t),
-		Security: SecurityConfigV2{
+		Security: SecurityV2{
 			SandboxMode:     rapid.SampledFrom([]string{"none", "docker", "firejail"}).Draw(t, "sandbox_mode"),
 			PolicyFile:      rapid.StringMatching(`^[-a-zA-Z0-9_./]*$`).Draw(t, "policy_file"),
 			AllowedCommands: rapid.SliceOfN(rapid.StringMatching(`^[a-z]+$`), 0, 10).Draw(t, "allowed_commands"),
@@ -85,11 +85,11 @@ func genValidConfigV2(t *rapid.T) *ConfigV2 {
 	}
 }
 
-// genValidLLMConfig generates a random valid LLMConfigV2.
-func genValidLLMConfig(t *rapid.T) LLMConfigV2 {
+// genValidLLMConfig generates a random valid LLMV2.
+func genValidLLMConfig(t *rapid.T) LLMV2 {
 	timeoutSec := rapid.Int64Range(1, 3600).Draw(t, "llm_timeout_sec")
 
-	return LLMConfigV2{
+	return LLMV2{
 		Provider:    rapid.SampledFrom([]string{"ollama", "openai", "anthropic"}).Draw(t, "llm_provider"),
 		Model:       rapid.StringMatching(`^[a-z0-9.-]+$`).Draw(t, "llm_model"),
 		Temperature: rapid.Float64Range(0, 2).Draw(t, "llm_temperature"),
@@ -100,11 +100,11 @@ func genValidLLMConfig(t *rapid.T) LLMConfigV2 {
 	}
 }
 
-// genValidAgentConfig generates a random valid AgentConfigV2.
-func genValidAgentConfig(t *rapid.T) AgentConfigV2 {
+// genValidAgentConfig generates a random valid AgentV2.
+func genValidAgentConfig(t *rapid.T) AgentV2 {
 	timeoutSec := rapid.Int64Range(1, 7200).Draw(t, "agent_timeout_sec")
 
-	return AgentConfigV2{
+	return AgentV2{
 		MaxTurns:        rapid.IntRange(1, 1000).Draw(t, "agent_max_turns"),
 		Timeout:         time.Duration(timeoutSec) * time.Second,
 		WorkDir:         rapid.StringMatching(`^[/.][-a-zA-Z0-9_./]*$`).Draw(t, "agent_work_dir"),
@@ -112,17 +112,17 @@ func genValidAgentConfig(t *rapid.T) AgentConfigV2 {
 	}
 }
 
-// genValidACEConfig generates a random valid ACEConfigV2.
-func genValidACEConfig(t *rapid.T) ACEConfigV2 {
+// genValidACEConfig generates a random valid ACEV2.
+func genValidACEConfig(t *rapid.T) ACEV2 {
 	enabled := rapid.Bool().Draw(t, "ace_enabled")
 
 	if !enabled {
-		return ACEConfigV2{
+		return ACEV2{
 			Enabled: false,
 		}
 	}
 
-	return ACEConfigV2{
+	return ACEV2{
 		Enabled:        true,
 		PlaybookPath:   rapid.StringMatching(`^[/~][-a-zA-Z0-9_./]+\.json$`).Draw(t, "ace_playbook_path"),
 		TrajectoryPath: rapid.StringMatching(`^[/~][-a-zA-Z0-9_./]+/?$`).Draw(t, "ace_trajectory_path"),
@@ -131,8 +131,8 @@ func genValidACEConfig(t *rapid.T) ACEConfigV2 {
 	}
 }
 
-// genValidProtocolConfig generates a random valid ProtocolConfigV2.
-func genValidProtocolConfig(t *rapid.T) ProtocolConfigV2 {
+// genValidProtocolConfig generates a random valid ProtocolV2.
+func genValidProtocolConfig(t *rapid.T) ProtocolV2 {
 	enableShell := rapid.Bool().Draw(t, "protocol_enable_shell")
 
 	var shellTimeout time.Duration
@@ -144,7 +144,7 @@ func genValidProtocolConfig(t *rapid.T) ProtocolConfigV2 {
 		shellTimeout = 0
 	}
 
-	return ProtocolConfigV2{
+	return ProtocolV2{
 		EnableMCP:    rapid.Bool().Draw(t, "protocol_enable_mcp"),
 		MCPServers:   []MCPServerConfigV2{}, // Keep simple for now.
 		EnableGit:    rapid.Bool().Draw(t, "protocol_enable_git"),

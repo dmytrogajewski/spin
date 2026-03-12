@@ -90,7 +90,8 @@ func (o *RefinementOrchestrator) Refine(ctx context.Context, req RefinementReque
 				continue // Skip if bullet was already removed.
 			}
 
-			mergeResult, err := o.mergeEngine.MergeBullets(ctx, source, target)
+			var mergeResult *MergeResult
+		mergeResult, err = o.mergeEngine.MergeBullets(ctx, source, target)
 			if err != nil {
 				continue // Skip failed merges.
 			}
@@ -121,10 +122,10 @@ func (o *RefinementOrchestrator) Refine(ctx context.Context, req RefinementReque
 				}
 			}
 
-			o.playbook.Update(ctx, kept)
+			_ = o.playbook.Update(ctx, kept)
 
 			// Remove source bullet from playbook.
-			o.playbook.Delete(ctx, mergeResult.RemovedID)
+			_ = o.playbook.Delete(ctx, mergeResult.RemovedID)
 
 			result.Merged++
 			result.MergedPairs = append(result.MergedPairs, pair)

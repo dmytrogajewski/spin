@@ -1,7 +1,6 @@
 package task
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -74,30 +73,35 @@ func NewRegular() *Regular {
 	}
 }
 
+// Name implements the Name operation.
 func (r *Regular) Name() string {
 	return r.name
 }
 
+// SystemPrompt implements the SystemPrompt operation.
 func (r *Regular) SystemPrompt() string {
 	return r.systemPrompt
 }
 
+// AllowedTools implements the AllowedTools operation.
 func (r *Regular) AllowedTools() []string {
 	// Regular mode allows all tools.
 	return []string{}
 }
 
+// MaxTokens implements the MaxTokens operation.
 func (r *Regular) MaxTokens() int {
 	return r.maxTokens
 }
 
+// Validate implements the Validate operation.
 func (r *Regular) Validate() error {
 	if r.maxTokens <= 0 {
-		return errors.New("max tokens must be positive")
+		return ErrMaxTokensMustBePositive
 	}
 
 	if r.maxTokens > 100000 { // MaxAllowedTokens.
-		return fmt.Errorf("max tokens %d exceeds maximum allowed %d", r.maxTokens, 100000)
+return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", r.maxTokens, 100000, ErrMaxTokensExceedsMaximumAllowed)
 	}
 
 	return nil

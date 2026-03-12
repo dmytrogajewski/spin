@@ -3,33 +3,39 @@ package acp
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	"github.com/dmytrogajewski/spin/internal/agent/executor"
 )
 
-// ACPFilesystemClient implements filesystem operations using ACP connection.
-type ACPFilesystemClient struct {
+var (
+	ErrAcpConnectionNotAvailable = errors.New("ACP connection not available")
+	ErrSessionIdNotFoundInContext = errors.New("session ID not found in context")
+)
+
+// FilesystemClient implements filesystem operations using ACP connection.
+type FilesystemClient struct {
 	connection *acp.AgentSideConnection
 }
 
-// NewACPFilesystemClient creates a new filesystem client.
-func NewACPFilesystemClient(conn *acp.AgentSideConnection) *ACPFilesystemClient {
-	return &ACPFilesystemClient{
+// NewFilesystemClient creates a new filesystem client.
+func NewFilesystemClient(conn *acp.AgentSideConnection) *FilesystemClient {
+	return &FilesystemClient{
 		connection: conn,
 	}
 }
 
 // ReadTextFile reads a text file using ACP fs/read_text_file protocol.
-func (c *ACPFilesystemClient) ReadTextFile(ctx context.Context, path string, line *int, limit *int) (string, error) {
+func (c *FilesystemClient) ReadTextFile(ctx context.Context, path string, line *int, limit *int) (string, error) {
 	if c.connection == nil {
-		return "", errors.New("ACP connection not available")
+		return "", ErrAcpConnectionNotAvailable
 	}
 
-	sessionID := runtime.GetSessionIDFromContext(ctx)
+	sessionID := executor.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return "", errors.New("session ID not found in context")
+		return "", ErrSessionIdNotFoundInContext
 	}
 
 	params := acp.ReadTextFileRequest{
@@ -41,21 +47,21 @@ func (c *ACPFilesystemClient) ReadTextFile(ctx context.Context, path string, lin
 
 	resp, err := c.connection.ReadTextFile(ctx, params)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("acp read text file: %w", err)
 	}
 
 	return resp.Content, nil
 }
 
 // WriteTextFile writes a text file using ACP fs/write_text_file protocol.
-func (c *ACPFilesystemClient) WriteTextFile(ctx context.Context, path, content string) error {
+func (c *FilesystemClient) WriteTextFile(ctx context.Context, path, content string) error {
 	if c.connection == nil {
-		return errors.New("ACP connection not available")
+		return ErrAcpConnectionNotAvailable
 	}
 
-	sessionID := runtime.GetSessionIDFromContext(ctx)
+	sessionID := executor.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return errors.New("session ID not found in context")
+		return ErrSessionIdNotFoundInContext
 	}
 
 	params := acp.WriteTextFileRequest{
@@ -65,6 +71,9 @@ func (c *ACPFilesystemClient) WriteTextFile(ctx context.Context, path, content s
 	}
 
 	_, err := c.connection.WriteTextFile(ctx, params)
+	if err != nil {
+		return fmt.Errorf("acp write text file: %w", err)
+	}
 
-	return err
+	return nil
 }

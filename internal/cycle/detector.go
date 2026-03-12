@@ -53,13 +53,13 @@ func (d *Detector) Record(snapshot Snapshot) {
 // Check analyzes the current history for cycle patterns.
 // Returns the type of cycle detected (or CycleNone) along with
 // confidence and details about the detection.
-func (d *Detector) Check() (CycleResult, error) {
+func (d *Detector) Check() (Result, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
 	// Need minimum history for meaningful analysis.
 	if len(d.history) < 2 {
-		return CycleResult{
+		return Result{
 			Type:       CycleNone,
 			Confidence: 0.0,
 			Timestamp:  time.Now(),
@@ -84,7 +84,7 @@ func (d *Detector) Check() (CycleResult, error) {
 	}
 
 	// No cycle detected.
-	return CycleResult{
+	return Result{
 		Type:       CycleNone,
 		Confidence: 0.0,
 		Timestamp:  time.Now(),
@@ -115,9 +115,9 @@ func (d *Detector) Reset() {
 
 // checkSimilarResponses detects when consecutive responses are too similar.
 // This uses text similarity to identify when the LLM is repeating itself.
-func (d *Detector) checkSimilarResponses() CycleResult {
+func (d *Detector) checkSimilarResponses() Result {
 	if !d.hasMinimumSnapshots() {
-		return CycleResult{Type: CycleNone}
+		return Result{Type: CycleNone}
 	}
 
 	recent := d.getRecentSnapshots()
@@ -127,7 +127,7 @@ func (d *Detector) checkSimilarResponses() CycleResult {
 		return d.createSimilarResponseResult(similarities)
 	}
 
-	return CycleResult{Type: CycleNone}
+	return Result{Type: CycleNone}
 }
 
 // hasMinimumSnapshots checks if we have enough snapshots for detection.
@@ -180,8 +180,8 @@ func (d *Detector) isSimilarResponsePattern(similarities []float64) bool {
 }
 
 // createSimilarResponseResult creates a cycle result for similar responses.
-func (d *Detector) createSimilarResponseResult(similarities []float64) CycleResult {
-	return CycleResult{
+func (d *Detector) createSimilarResponseResult(similarities []float64) Result {
+	return Result{
 		Type:       CycleSimilarResponses,
 		Confidence: calculateAverageSimilarity(similarities),
 		Details:    fmt.Sprintf("detected %d similar consecutive responses", len(similarities)+1),
@@ -191,21 +191,21 @@ func (d *Detector) createSimilarResponseResult(similarities []float64) CycleResu
 
 // checkRepeatedTool detects when the same tool is called repeatedly.
 // This indicates the agent may be stuck trying the same approach.
-func (d *Detector) checkRepeatedTool() CycleResult {
+func (d *Detector) checkRepeatedTool() Result {
 	if !d.hasEnoughHistoryForToolCheck() {
-		return CycleResult{Type: CycleNone}
+		return Result{Type: CycleNone}
 	}
 
 	recent := d.getRecentSnapshotsForToolCheck()
 	if !d.hasValidToolCalls(recent) {
-		return CycleResult{Type: CycleNone}
+		return Result{Type: CycleNone}
 	}
 
 	if d.allToolsAreSame(recent) {
 		return d.createRepeatedToolResult(recent)
 	}
 
-	return CycleResult{Type: CycleNone}
+	return Result{Type: CycleNone}
 }
 
 // hasEnoughHistoryForToolCheck checks if we have enough history for tool analysis.
@@ -242,10 +242,10 @@ func (d *Detector) snapshotUsesTool(snapshot Snapshot, tool string) bool {
 }
 
 // createRepeatedToolResult creates a cycle result for repeated tool usage.
-func (d *Detector) createRepeatedToolResult(recent []Snapshot) CycleResult {
+func (d *Detector) createRepeatedToolResult(recent []Snapshot) Result {
 	firstTool := recent[0].ToolCalls[0]
 
-	return CycleResult{
+	return Result{
 		Type:       CycleRepeatedTool,
 		Confidence: 0.9, // High confidence for exact tool name matches.
 		Details:    fmt.Sprintf("tool '%s' called %d times consecutively", firstTool, len(recent)),
@@ -255,10 +255,10 @@ func (d *Detector) createRepeatedToolResult(recent []Snapshot) CycleResult {
 
 // checkOscillation detects A→B→A→B oscillation patterns in responses.
 // This indicates the agent is alternating between two states without progress.
-func (d *Detector) checkOscillation() CycleResult {
+func (d *Detector) checkOscillation() Result {
 	// Need at least 4 snapshots for oscillation detection.
 	if !d.config.Enabled || len(d.history) < 4 {
-		return CycleResult{Type: CycleNone}
+		return Result{Type: CycleNone}
 	}
 
 	recent := d.history[len(d.history)-4:]
@@ -276,7 +276,7 @@ func (d *Detector) checkOscillation() CycleResult {
 	// Pattern: High similarity within groups (A's together, B's together),
 	// but low similarity between groups (A vs B).
 	if withinGroupSimilarity >= d.config.SimilarityThresh && simAB < 0.5 {
-		return CycleResult{
+		return Result{
 			Type:       CycleOscillation,
 			Confidence: withinGroupSimilarity,
 			Details:    fmt.Sprintf("detected oscillation pattern with within-group similarity %.2f", withinGroupSimilarity),
@@ -284,26 +284,26 @@ func (d *Detector) checkOscillation() CycleResult {
 		}
 	}
 
-	return CycleResult{Type: CycleNone}
+	return Result{Type: CycleNone}
 }
 
 // checkSameError detects when the same error occurs repeatedly.
 // This indicates the agent is stuck in a failure loop.
-func (d *Detector) checkSameError() CycleResult {
+func (d *Detector) checkSameError() Result {
 	if !d.hasEnoughHistoryForErrorCheck() {
-		return CycleResult{Type: CycleNone}
+		return Result{Type: CycleNone}
 	}
 
 	recent := d.getRecentSnapshotsForErrorCheck()
 	if !d.hasValidError(recent) {
-		return CycleResult{Type: CycleNone}
+		return Result{Type: CycleNone}
 	}
 
 	if d.allErrorsAreSame(recent) {
 		return d.createSameErrorResult(recent)
 	}
 
-	return CycleResult{Type: CycleNone}
+	return Result{Type: CycleNone}
 }
 
 // hasEnoughHistoryForErrorCheck checks if we have enough history for error analysis.
@@ -335,10 +335,10 @@ func (d *Detector) allErrorsAreSame(recent []Snapshot) bool {
 }
 
 // createSameErrorResult creates a cycle result for repeated errors.
-func (d *Detector) createSameErrorResult(recent []Snapshot) CycleResult {
+func (d *Detector) createSameErrorResult(recent []Snapshot) Result {
 	firstError := recent[0].Error
 
-	return CycleResult{
+	return Result{
 		Type:       CycleSameError,
 		Confidence: 0.95, // Very high confidence for exact error matches.
 		Details:    fmt.Sprintf("error '%s' occurred %d times consecutively", firstError, len(recent)),

@@ -257,7 +257,7 @@ func TestState_JSONRoundTrip(t *testing.T) {
 	}
 }
 
-func TestState_Concurrency(t *testing.T) {
+func TestState_Concurrency(_ *testing.T) {
 	// Test concurrent access to state methods.
 	done := make(chan bool, 10)
 

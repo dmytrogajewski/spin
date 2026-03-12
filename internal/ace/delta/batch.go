@@ -23,7 +23,7 @@ type BatchApplyResult struct {
 }
 
 // ApplyBatch applies multiple deltas in parallel.
-func (a *DeltaApplier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*BatchApplyResult, error) {
+func (a *Applier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*BatchApplyResult, error) {
 	workers := req.MaxWorkers
 	if workers == 0 {
 		workers = runtime.NumCPU()
@@ -107,7 +107,7 @@ func (a *DeltaApplier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*
 		err := a.rollbackDeltas(ctx, req.Deltas, successfulIndices)
 		if err != nil {
 			// Log rollback error but return original error.
-			return result, fmt.Errorf("rollback failed after error: %w (original error: %v)", err, firstError)
+			return result, fmt.Errorf("rollback failed after error: %w (original error: %w)", err, firstError)
 		}
 
 		return result, firstError
@@ -118,7 +118,7 @@ func (a *DeltaApplier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*
 
 // rollbackDeltas reverses the effects of successfully applied deltas.
 // This is called when atomic mode is enabled and a failure occurs.
-func (a *DeltaApplier) rollbackDeltas(ctx context.Context, deltas []Delta, successfulIndices []int) error {
+func (a *Applier) rollbackDeltas(ctx context.Context, deltas []Delta, successfulIndices []int) error {
 	if len(successfulIndices) == 0 {
 		return nil // Nothing to rollback.
 	}
@@ -133,9 +133,7 @@ func (a *DeltaApplier) rollbackDeltas(ctx context.Context, deltas []Delta, succe
 			continue // Bullet may have been deleted, skip.
 		}
 
-		// Create inverse delta based on operation type.
-		var inverseDelta *Delta
-
+		// Apply inverse operation based on operation type.
 		switch delta.Operation {
 		case OpUpdateContent:
 			// Cannot reliably rollback content updates without storing old value
@@ -180,11 +178,6 @@ func (a *DeltaApplier) rollbackDeltas(ctx context.Context, deltas []Delta, succe
 		case OpUpdateEmbedding:
 			// Cannot reliably rollback embedding updates without storing old value.
 			continue
-		}
-
-		// Remove delta from history if rollback was successful.
-		if inverseDelta != nil {
-			a.history.Record(*inverseDelta)
 		}
 	}
 

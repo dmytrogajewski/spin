@@ -7,8 +7,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/message"
 )
 
-// TestAgentRequest_UsesCanonicalMessage verifies AgentRequest uses message.Message.
-func TestAgentRequest_UsesCanonicalMessage(t *testing.T) {
+// TestRequest_UsesCanonicalMessage verifies Request uses message.Message.
+func TestRequest_UsesCanonicalMessage(t *testing.T) {
 	msg := message.Message{
 		ID:        "test-1",
 		Role:      message.RoleUser,
@@ -16,9 +16,13 @@ func TestAgentRequest_UsesCanonicalMessage(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	req := AgentRequest{
+	req := Request{
 		Input:   "test input",
 		History: []message.Message{msg},
+	}
+
+	if req.Input != "test input" {
+		t.Errorf("expected input 'test input', got %q", req.Input)
 	}
 
 	if len(req.History) != 1 {

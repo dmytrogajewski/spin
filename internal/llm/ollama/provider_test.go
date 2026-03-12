@@ -143,7 +143,7 @@ func TestProvider_Models(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/tags" && r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockResponse)
+			_ = json.NewEncoder(w).Encode(mockResponse)
 
 			return
 		}

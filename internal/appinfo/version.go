@@ -1,5 +1,5 @@
-// Package version provides version information for Spin.
-package version
+// Package appinfo provides version information for Spin.
+package appinfo
 
 import (
 	"fmt"
@@ -19,17 +19,17 @@ var (
 	BuildDate = "unknown"
 )
 
-// VersionInfo contains version and build information.
-type VersionInfo struct {
+// Info contains version and build information.
+type Info struct {
 	Version   string
 	Commit    string
 	BuildDate string
 	GoVersion string
 }
 
-// GetVersionInfo returns the current version information.
-func GetVersionInfo() VersionInfo {
-	return VersionInfo{
+// GetInfo returns the current version information.
+func GetInfo() Info {
+	return Info{
 		Version:   Version,
 		Commit:    Commit,
 		BuildDate: BuildDate,
@@ -39,7 +39,7 @@ func GetVersionInfo() VersionInfo {
 
 // String returns a formatted version string with all build information.
 func String() string {
-	info := GetVersionInfo()
+	info := GetInfo()
 
 	return fmt.Sprintf(
 		"spin version %s (commit: %s, built: %s, %s)",

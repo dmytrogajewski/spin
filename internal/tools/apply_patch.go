@@ -9,6 +9,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/patchapply"
 )
 
+var (
+	ErrEmptyPatch = errors.New("empty patch")
+	ErrPatchMustBeInStandardDiff = errors.New("patch must be in standard diff format. Expected to start with '*** filename' or '--- filename'")
+	ErrDiffFormatTooShort = errors.New("diff format too short")
+	ErrCouldNotExtractFilenameFromFirst = errors.New("could not extract filename from first line")
+)
+
 // ApplyPatchTool implements structured patch application functionality.
 type ApplyPatchTool struct {
 	workspaceRoot string
@@ -21,10 +28,12 @@ func NewApplyPatchTool(workspaceRoot string) *ApplyPatchTool {
 	}
 }
 
+// Name implements the Name operation.
 func (t *ApplyPatchTool) Name() string {
 	return "apply_patch"
 }
 
+// Description implements the Description operation.
 func (t *ApplyPatchTool) Description() string {
 	return "Apply a patch to modify files in the workspace using standard diff format.\n" +
 		"Format: *** filename\n--- filename\n@@ -start,count +start,count @@\n+new line\n-old line\n" +
@@ -39,6 +48,7 @@ func (t *ApplyPatchTool) Description() string {
 		" func main() {\n"
 }
 
+// Schema implements the Schema operation.
 func (t *ApplyPatchTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -71,10 +81,11 @@ func (t *ApplyPatchTool) Schema() ToolSchema {
 	}
 }
 
-func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
+// Execute implements the Execute operation.
+func (t *ApplyPatchTool) Execute(_ context.Context, params ToolParameters) (ToolResult, error) {
 	// Extract patch_text parameter.
-	patchText, err := params.GetString("patch_text")
-	if err != nil || patchText == "" {
+	patchText, _ := params.GetString("patch_text")
+	if patchText == "" {
 		return ToolResult{
 			Success: false,
 			Error:   "patch_text parameter must be a non-empty string",
@@ -178,7 +189,7 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 func (t *ApplyPatchTool) parsePatch(patchText string) (*patchapply.Patch, error) {
 	lines := strings.Split(patchText, "\n")
 	if len(lines) == 0 {
-		return nil, errors.New("empty patch")
+		return nil, ErrEmptyPatch
 	}
 
 	// Check if it's a proper patchapply format (starts with "*** Begin Patch").
@@ -192,7 +203,7 @@ func (t *ApplyPatchTool) parsePatch(patchText string) (*patchapply.Patch, error)
 
 	// Check if it's a diff format (starts with "*** filename" or "--- filename").
 	if !strings.HasPrefix(firstLine, "*** ") && !strings.HasPrefix(firstLine, "--- ") {
-		return nil, fmt.Errorf("patch must be in standard diff format. Expected to start with '*** filename' or '--- filename', got: %q", firstLine)
+return nil, fmt.Errorf("patch must be in standard diff format. Expected to start with '*** filename' or '--- filename', got: %q: %w", firstLine, ErrPatchMustBeInStandardDiff)
 	}
 
 	// Parse diff format directly.
@@ -203,7 +214,7 @@ func (t *ApplyPatchTool) parsePatch(patchText string) (*patchapply.Patch, error)
 func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, error) {
 	lines := strings.Split(diffText, "\n")
 	if len(lines) < 3 {
-		return nil, errors.New("diff format too short")
+		return nil, ErrDiffFormatTooShort
 	}
 
 	// Extract filename from the first line.
@@ -212,10 +223,10 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 	var filename string
 	if after, ok := strings.CutPrefix(firstLine, "*** "); ok {
 		filename = strings.TrimSpace(after)
-	} else if after, ok := strings.CutPrefix(firstLine, "--- "); ok {
-		filename = strings.TrimSpace(after)
+	} else if afterDash, hasDash := strings.CutPrefix(firstLine, "--- "); hasDash {
+		filename = strings.TrimSpace(afterDash)
 	} else {
-		return nil, fmt.Errorf("could not extract filename from first line: %q", firstLine)
+return nil, fmt.Errorf("could not extract filename from first line: %q: %w", firstLine, ErrCouldNotExtractFilenameFromFirst)
 	}
 
 	// Create patch with update file operation.
@@ -237,10 +248,10 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 		if strings.HasPrefix(line, "@@") {
 			// Start of a new hunk.
 			if currentHunk != nil {
-				patch.Operations[0].(*patchapply.UpdateFile).Hunks = append(
-					patch.Operations[0].(*patchapply.UpdateFile).Hunks,
-					*currentHunk,
-				)
+				updateOp, ok := patch.Operations[0].(*patchapply.UpdateFile)
+				if ok {
+					updateOp.Hunks = append(updateOp.Hunks, *currentHunk)
+				}
 			}
 
 			currentHunk = &patchapply.Hunk{
@@ -286,10 +297,9 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 
 	// Add the last hunk.
 	if currentHunk != nil {
-		patch.Operations[0].(*patchapply.UpdateFile).Hunks = append(
-			patch.Operations[0].(*patchapply.UpdateFile).Hunks,
-			*currentHunk,
-		)
+		if updateOp, ok := patch.Operations[0].(*patchapply.UpdateFile); ok {
+			updateOp.Hunks = append(updateOp.Hunks, *currentHunk)
+		}
 	}
 
 	return patch, nil

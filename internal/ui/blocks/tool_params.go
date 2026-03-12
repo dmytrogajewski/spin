@@ -57,6 +57,7 @@ func (r *ParamsFormatterRegistry) getFormatter(blockType BlockType) ToolParamsFo
 // ExecuteParamsFormatter formats execute_command parameters.
 type ExecuteParamsFormatter struct{}
 
+// FormatTitle implements the FormatTitle operation.
 func (f *ExecuteParamsFormatter) FormatTitle(block *Block) string {
 	meta, err := ParseExecuteMeta(block)
 	if err != nil || meta == nil {
@@ -93,6 +94,7 @@ func (f *ExecuteParamsFormatter) FormatTitle(block *Block) string {
 // ReadParamsFormatter formats read_file parameters.
 type ReadParamsFormatter struct{}
 
+// FormatTitle implements the FormatTitle operation.
 func (f *ReadParamsFormatter) FormatTitle(block *Block) string {
 	meta, err := ParseReadMeta(block)
 	if err != nil || meta == nil {
@@ -123,6 +125,7 @@ func (f *ReadParamsFormatter) FormatTitle(block *Block) string {
 // WriteParamsFormatter formats write_file parameters.
 type WriteParamsFormatter struct{}
 
+// FormatTitle implements the FormatTitle operation.
 func (f *WriteParamsFormatter) FormatTitle(block *Block) string {
 	meta, err := ParsePatchMeta(block)
 	if err != nil || meta == nil {
@@ -136,6 +139,7 @@ func (f *WriteParamsFormatter) FormatTitle(block *Block) string {
 // GrepParamsFormatter formats grep parameters.
 type GrepParamsFormatter struct{}
 
+// FormatTitle implements the FormatTitle operation.
 func (f *GrepParamsFormatter) FormatTitle(block *Block) string {
 	meta, err := ParseGrepMeta(block)
 	if err != nil || meta == nil {
@@ -153,6 +157,7 @@ func (f *GrepParamsFormatter) FormatTitle(block *Block) string {
 // DefaultParamsFormatter is used for unknown tool types.
 type DefaultParamsFormatter struct{}
 
+// FormatTitle implements the FormatTitle operation.
 func (f *DefaultParamsFormatter) FormatTitle(block *Block) string {
 	// Fallback: use block title if available.
 	if block.Title != "" {
@@ -169,7 +174,7 @@ func (f *DefaultParamsFormatter) FormatTitle(block *Block) string {
 		// Build compact params list: key=value for a few keys.
 		var parts []string
 
-		max := 3
+		maxParams := 3
 		count := 0
 
 		for k, v := range meta.Params {
@@ -185,7 +190,7 @@ func (f *DefaultParamsFormatter) FormatTitle(block *Block) string {
 			}
 
 			count++
-			if count >= max {
+			if count >= maxParams {
 				break
 			}
 		}

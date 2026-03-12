@@ -1,3 +1,4 @@
+// Package conversation provides conversation management and adapters.
 package conversation
 
 import (
@@ -9,11 +10,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
-// validatorAdapter adapts security.SecurityService to tools.CommandValidator interface.
+// validatorAdapter adapts security.Service to tools.CommandValidator interface.
 type validatorAdapter struct {
-	securityService *security.SecurityService
+	securityService *security.Service
 }
 
+// Classify implements the Classify operation.
 func (a *validatorAdapter) Classify(cmd tools.CommandInfo) (tools.ValidationResult, error) {
 	return a.securityService.ValidateCommand(&security.Command{
 		Program: cmd.GetProgram(),
@@ -28,18 +30,22 @@ type shellContextAdapter struct {
 	shellCtx *shell.Context
 }
 
+// GetWorkingDirectory implements the GetWorkingDirectory operation.
 func (a *shellContextAdapter) GetWorkingDirectory() string {
 	return a.shellCtx.GetWorkingDirectory()
 }
 
+// GetEnvironmentVars implements the GetEnvironmentVars operation.
 func (a *shellContextAdapter) GetEnvironmentVars() map[string]string {
 	return a.shellCtx.GetEnvironmentVars()
 }
 
+// GetContextInfo implements the GetContextInfo operation.
 func (a *shellContextAdapter) GetContextInfo() tools.ShellContextInfo {
 	return a.shellCtx.GetContextInfo()
 }
 
+// IsShellCommand implements the IsShellCommand operation.
 func (a *shellContextAdapter) IsShellCommand(c string) bool {
 	return a.shellCtx.IsShellCommand(c)
 }
@@ -49,6 +55,7 @@ type executorAdapter struct {
 	executor *agent.Executor
 }
 
+// Execute implements the Execute operation.
 func (a *executorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, _ any) (tools.ExecutionResult, error) {
 	return a.executor.Execute(ctx, &security.Command{
 		Program: cmd.GetProgram(),

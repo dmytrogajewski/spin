@@ -101,7 +101,7 @@ func TestRequestPermission_Approved(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create approval handler that always approves.
-	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
@@ -158,7 +158,7 @@ func TestRequestPermission_Denied(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create approval handler that always denies.
-	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  false,
@@ -275,7 +275,7 @@ func TestRequestPermission_WithRawInput(t *testing.T) {
 	// Track the operation that was requested.
 	var capturedOperation security.Operation
 
-	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		// Capture the operation.
 		capturedOperation = security.NewOperation(req.Command, req.Reason, req.WorkDir)
 
@@ -335,7 +335,7 @@ func TestRequestPermission_AllowAlwaysOption(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
@@ -392,7 +392,7 @@ func TestRequestPermission_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create approval handler that simulates user interaction.
-	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		// Simulate approval based on command.
 		approved := req.Command.Program != "dangerous_command"
 

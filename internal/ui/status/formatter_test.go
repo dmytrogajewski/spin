@@ -446,7 +446,7 @@ func TestFormatFull_HidesTPSWhenZero(t *testing.T) {
 	}
 }
 
-func TestFormatFull_HidesHotkeysOnNarrowerTerminals(t *testing.T) {
+func TestFormatFull_HidesHotkeysOnNarrowerTerminals(_ *testing.T) {
 	m := NewManager()
 
 	// Hotkeys are currently disabled, so this test is not applicable

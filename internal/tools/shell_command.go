@@ -72,9 +72,13 @@ type simpleCommand struct {
 	workDir string
 }
 
+// GetProgram implements the GetProgram operation.
 func (c *simpleCommand) GetProgram() string { return c.program }
+// GetArgs implements the GetArgs operation.
 func (c *simpleCommand) GetArgs() []string  { return c.args }
+// GetRaw implements the GetRaw operation.
 func (c *simpleCommand) GetRaw() string     { return c.raw }
+// GetWorkDir implements the GetWorkDir operation.
 func (c *simpleCommand) GetWorkDir() string { return c.workDir }
 
 // NewShellCommandTool creates the unified shell command tool.
@@ -132,8 +136,8 @@ func (t *ShellCommandTool) Schema() ToolSchema {
 
 // Execute handles all shell operations.
 func (t *ShellCommandTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	operation, err := params.GetString("operation")
-	if err != nil {
+	operation, _ := params.GetString("operation")
+	if operation == "" {
 		return ToolResult{
 			Success: false,
 			Error:   "operation parameter is required",
@@ -168,8 +172,8 @@ func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParame
 		}, nil
 	}
 
-	cmdStr, err := params.GetString("command")
-	if err != nil || cmdStr == "" {
+	cmdStr, _ := params.GetString("command")
+	if cmdStr == "" {
 		return ToolResult{
 			Success: false,
 			Error:   "command parameter is required for execute operation",
@@ -389,8 +393,8 @@ func (t *ShellCommandTool) getShellInfo() (ToolResult, error) {
 
 // detectShell checks if a command requires shell execution.
 func (t *ShellCommandTool) detectShell(params ToolParameters) (ToolResult, error) {
-	command, err := params.GetString("command")
-	if err != nil || command == "" {
+	command, _ := params.GetString("command")
+	if command == "" {
 		return ToolResult{
 			Success: false,
 			Error:   "command parameter is required for detect_shell operation",
@@ -426,8 +430,8 @@ func (t *ShellCommandTool) detectShell(params ToolParameters) (ToolResult, error
 
 // validateCommand validates a command and returns its classification.
 func (t *ShellCommandTool) validateCommand(params ToolParameters) (ToolResult, error) {
-	command, err := params.GetString("command")
-	if err != nil || command == "" {
+	command, _ := params.GetString("command")
+	if command == "" {
 		return ToolResult{
 			Success: false,
 			Error:   "command parameter is required for validate operation",
@@ -469,11 +473,11 @@ func (t *ShellCommandTool) validateCommand(params ToolParameters) (ToolResult, e
 	}
 
 	// Call Classify using validator.
-	result, err := t.validator.Classify(cmd)
-	if err != nil {
+	result, classifyErr := t.validator.Classify(cmd)
+	if classifyErr != nil {
 		return ToolResult{
 			Success: false,
-			Error:   err.Error(),
+			Error:   fmt.Sprintf("classification failed: %v", classifyErr),
 		}, nil
 	}
 

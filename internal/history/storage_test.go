@@ -26,7 +26,7 @@ func TestFileStorage_SaveAndLoad(t *testing.T) {
 	sessionID := "test-session-123"
 
 	// Create history data.
-	data := HistoryData{
+	data := Data{
 		Version:   CurrentHistoryVersion,
 		SessionID: sessionID,
 		MaxTokens: 4096,
@@ -125,7 +125,7 @@ func TestFileStorage_Delete(t *testing.T) {
 	sessionID := "test-session-delete"
 
 	// Save some data.
-	data := HistoryData{
+	data := Data{
 		SessionID: sessionID,
 		Messages:  []message.Message{},
 	}
@@ -190,7 +190,7 @@ func TestFileStorage_EmptySessionID(t *testing.T) {
 	}
 
 	// All operations should fail with empty session ID.
-	err = storage.Save("", HistoryData{})
+	err = storage.Save("", Data{})
 	if err == nil {
 		t.Error("save with empty ID should fail")
 	}
@@ -232,7 +232,7 @@ func TestFileStorage_HomeExpansion(t *testing.T) {
 	}
 
 	// Verify storage works by saving and loading.
-	testData := HistoryData{SessionID: "test", MaxTokens: 1000}
+	testData := Data{SessionID: "test", MaxTokens: 1000}
 	err = storage.Save("test", testData)
 	if err != nil {
 		t.Fatalf("save failed: %v", err)
@@ -272,8 +272,8 @@ func TestHistory_SaveAndLoad(t *testing.T) {
 
 	// Create history and add messages.
 	history := NewHistory(4096, &tokenizer.SimpleTokenizer{})
-	history.AddSystemMessage("You are helpful.")
-	history.AddUserMessage("Hello!")
+	_ = history.AddSystemMessage("You are helpful.")
+	_ = history.AddUserMessage("Hello!")
 
 	sessionID := "test-history-save"
 
@@ -309,11 +309,11 @@ func TestHistory_SaveAndLoad(t *testing.T) {
 	}
 }
 
-func TestHistory_ToFromHistoryData(t *testing.T) {
+func TestHistory_ToFromData(t *testing.T) {
 	history := NewHistory(8192, &tokenizer.SimpleTokenizer{})
-	history.AddSystemMessage("System prompt")
-	history.AddUserMessage("User input")
-	history.AddMessage(message.Message{
+	_ = history.AddSystemMessage("System prompt")
+	_ = history.AddUserMessage("User input")
+	_ = history.AddMessage(message.Message{
 		Role:    message.RoleAssistant,
 		Content: "Assistant response",
 		ToolCalls: []message.ToolCall{
@@ -330,8 +330,8 @@ func TestHistory_ToFromHistoryData(t *testing.T) {
 
 	sessionID := "test-export"
 
-	// Export to HistoryData.
-	data := history.ToHistoryData(sessionID)
+	// Export to Data.
+	data := history.ToData(sessionID)
 
 	if data.SessionID != sessionID {
 		t.Errorf("session ID mismatch: got %q, want %q", data.SessionID, sessionID)
@@ -347,7 +347,7 @@ func TestHistory_ToFromHistoryData(t *testing.T) {
 
 	// Import into new history.
 	history2 := NewHistory(4096, &tokenizer.SimpleTokenizer{})
-	err := history2.FromHistoryData(data)
+	err := history2.FromData(data)
 	if err != nil {
 		t.Fatalf("import history data: %v", err)
 	}
@@ -363,12 +363,12 @@ func TestHistory_ToFromHistoryData(t *testing.T) {
 	}
 }
 
-func TestHistory_FromHistoryData_NilError(t *testing.T) {
+func TestHistory_FromData_NilError(t *testing.T) {
 	history := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
-	err := history.FromHistoryData(nil)
+	err := history.FromData(nil)
 	if err == nil {
-		t.Error("FromHistoryData(nil) should return error")
+		t.Error("FromData(nil) should return error")
 	}
 }
 
@@ -387,7 +387,7 @@ func TestFileStorage_AtomicWrite(t *testing.T) {
 	sessionID := "test-atomic"
 
 	// Save initial data.
-	data1 := HistoryData{
+	data1 := Data{
 		SessionID: sessionID,
 		Messages: []message.Message{
 			{Role: message.RoleUser, Content: "First"},
@@ -399,7 +399,7 @@ func TestFileStorage_AtomicWrite(t *testing.T) {
 	}
 
 	// Save updated data.
-	data2 := HistoryData{
+	data2 := Data{
 		SessionID: sessionID,
 		Messages: []message.Message{
 			{Role: message.RoleUser, Content: "First"},

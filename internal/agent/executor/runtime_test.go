@@ -1,66 +1,66 @@
-package runtime
+package executor
 
 import (
 	"testing"
 )
 
 // TestBuiltinRuntime_ImplementsToolRegistrar verifies BuiltinRuntime implements ToolRegistrar.
-func TestBuiltinRuntime_ImplementsToolRegistrar(t *testing.T) {
+func TestBuiltinRuntime_ImplementsToolRegistrar(_ *testing.T) {
 	var _ ToolRegistrar = (*BuiltinRuntime)(nil)
 }
 
 // TestACPRuntime_ImplementsToolRegistrar verifies ACPRuntime implements ToolRegistrar.
-func TestACPRuntime_ImplementsToolRegistrar(t *testing.T) {
+func TestACPRuntime_ImplementsToolRegistrar(_ *testing.T) {
 	var _ ToolRegistrar = (*ACPRuntime)(nil)
 }
 
 // TestBuiltinRuntime_ImplementsNotificationProvider verifies BuiltinRuntime implements NotificationProvider.
-func TestBuiltinRuntime_ImplementsNotificationProvider(t *testing.T) {
+func TestBuiltinRuntime_ImplementsNotificationProvider(_ *testing.T) {
 	var _ NotificationProvider = (*BuiltinRuntime)(nil)
 }
 
 // TestACPRuntime_ImplementsNotificationProvider verifies ACPRuntime implements NotificationProvider.
-func TestACPRuntime_ImplementsNotificationProvider(t *testing.T) {
+func TestACPRuntime_ImplementsNotificationProvider(_ *testing.T) {
 	var _ NotificationProvider = (*ACPRuntime)(nil)
 }
 
 // TestBuiltinRuntime_ImplementsApprovalProvider verifies BuiltinRuntime implements ApprovalProvider.
-func TestBuiltinRuntime_ImplementsApprovalProvider(t *testing.T) {
+func TestBuiltinRuntime_ImplementsApprovalProvider(_ *testing.T) {
 	var _ ApprovalProvider = (*BuiltinRuntime)(nil)
 }
 
 // TestACPRuntime_ImplementsApprovalProvider verifies ACPRuntime implements ApprovalProvider.
-func TestACPRuntime_ImplementsApprovalProvider(t *testing.T) {
+func TestACPRuntime_ImplementsApprovalProvider(_ *testing.T) {
 	var _ ApprovalProvider = (*ACPRuntime)(nil)
 }
 
 // TestBuiltinRuntime_ImplementsSessionProvider verifies BuiltinRuntime implements SessionProvider.
-func TestBuiltinRuntime_ImplementsSessionProvider(t *testing.T) {
+func TestBuiltinRuntime_ImplementsSessionProvider(_ *testing.T) {
 	var _ SessionProvider = (*BuiltinRuntime)(nil)
 }
 
 // TestACPRuntime_ImplementsSessionProvider verifies ACPRuntime implements SessionProvider.
-func TestACPRuntime_ImplementsSessionProvider(t *testing.T) {
+func TestACPRuntime_ImplementsSessionProvider(_ *testing.T) {
 	var _ SessionProvider = (*ACPRuntime)(nil)
 }
 
 // TestBuiltinRuntime_ImplementsTerminalProvider verifies BuiltinRuntime implements TerminalProvider.
-func TestBuiltinRuntime_ImplementsTerminalProvider(t *testing.T) {
+func TestBuiltinRuntime_ImplementsTerminalProvider(_ *testing.T) {
 	var _ TerminalProvider = (*BuiltinRuntime)(nil)
 }
 
 // TestACPRuntime_ImplementsTerminalProvider verifies ACPRuntime implements TerminalProvider.
-func TestACPRuntime_ImplementsTerminalProvider(t *testing.T) {
+func TestACPRuntime_ImplementsTerminalProvider(_ *testing.T) {
 	var _ TerminalProvider = (*ACPRuntime)(nil)
 }
 
 // TestBuiltinRuntime_ImplementsRuntime verifies BuiltinRuntime implements the composite Runtime interface.
-func TestBuiltinRuntime_ImplementsRuntime(t *testing.T) {
+func TestBuiltinRuntime_ImplementsRuntime(_ *testing.T) {
 	var _ Runtime = (*BuiltinRuntime)(nil)
 }
 
 // TestACPRuntime_ImplementsRuntime verifies ACPRuntime implements the composite Runtime interface.
-func TestACPRuntime_ImplementsRuntime(t *testing.T) {
+func TestACPRuntime_ImplementsRuntime(_ *testing.T) {
 	var _ Runtime = (*ACPRuntime)(nil)
 }
 

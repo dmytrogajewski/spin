@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,6 +12,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/security"
 )
+
+var ErrProgramIsRequired = errors.New("--program is required")
 
 // newApprovalCmd creates the 'approval' command group.
 func newApprovalCmd() *cobra.Command {
@@ -34,7 +35,7 @@ func newApprovalListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List persisted approval policies",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope, _ := cmd.Flags().GetString("scope")
 
 			store, err := buildPolicyStore()
@@ -81,14 +82,14 @@ func newApprovalRevokeCmd() *cobra.Command {
 		Use:   "revoke",
 		Short: "Revoke a specific approval policy",
 		Long:  "Revoke a policy by specifying program, args, workdir and scope.",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope, _ := cmd.Flags().GetString("scope")
 			prog, _ := cmd.Flags().GetString("program")
 			workDir, _ := cmd.Flags().GetString("workdir")
 			argList, _ := cmd.Flags().GetStringArray("arg")
 
 			if prog == "" {
-				return errors.New("--program is required")
+				return ErrProgramIsRequired
 			}
 
 			store, err := buildPolicyStore()
@@ -130,7 +131,7 @@ func newApprovalClearCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clear",
 		Short: "Clear all persisted approval policies for a scope",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope, _ := cmd.Flags().GetString("scope")
 
 			store, err := buildPolicyStore()
@@ -160,7 +161,7 @@ func newApprovalClearCmd() *cobra.Command {
 func buildPolicyStore() (security.PolicyStore, error) {
 	loader := config.NewLoaderV2()
 
-	cfg, err := func() (*config.ConfigV2, error) {
+	cfg, err := func() (*config.V2, error) {
 		if flagConfigFile != "" {
 			return loader.LoadFromFileWithEnv(flagConfigFile)
 		}
@@ -169,7 +170,7 @@ func buildPolicyStore() (security.PolicyStore, error) {
 	}()
 	if err != nil {
 		// Fallback to defaults if config cannot be loaded.
-		cfg = config.DefaultConfigV2()
+		cfg = config.DefaultV2()
 	}
 
 	// If approval persistence is disabled, operate purely in-memory.
@@ -177,23 +178,12 @@ func buildPolicyStore() (security.PolicyStore, error) {
 		return security.NewMemoryPolicyStore(30 * time.Second), nil
 	}
 
-	// If policy file path not set, default under user config dir matching DefaultConfigV2.
+	// If policy file path not set, default under user config dir matching DefaultV2.
 	path := cfg.Security.PolicyFile
-	if path == "" {
-		// Ensure we always operate on a deterministic path for file-backed policies
-		// DefaultConfigV2 sets it to ~/.config/spin/policies.json when available
-		// If still empty (edge), compute a local default.
-		home := filepath.Clean("~")
-		if strings.HasPrefix(path, "~") {
-			// leave as-is for file store to resolve via os.UserConfigDir in defaults.
-		} else if home == "~" {
-			// No explicit home expansion here; rely on DefaultConfigV2 typical path.
-		}
-	}
-
 	// Prefer file-backed store when path present; otherwise memory store.
 	if path != "" {
-		store, err := security.NewFilePolicyStore(path, 30*time.Second)
+		var store security.PolicyStore
+		store, err = security.NewFilePolicyStore(path, 30*time.Second)
 		if err == nil {
 			return store, nil
 		}

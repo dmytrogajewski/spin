@@ -18,6 +18,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
+var ErrModelIsRequired = errors.New("model is required")
+
 const (
 	// DefaultBaseURL is the default Ollama API endpoint.
 	DefaultBaseURL = "http://localhost:11434"
@@ -46,6 +48,7 @@ type Provider struct {
 	model   string
 	baseURL string
 	timeout time.Duration
+	logger  *slog.Logger
 
 	// Context length detected from model metadata.
 	detectedCtxLen int
@@ -54,7 +57,7 @@ type Provider struct {
 // NewProvider creates a new Ollama provider.
 func NewProvider(cfg Config) (*Provider, error) {
 	if cfg.Model == "" {
-		return nil, errors.New("model is required")
+		return nil, ErrModelIsRequired
 	}
 
 	baseURL := cfg.BaseURL
@@ -83,6 +86,7 @@ func NewProvider(cfg Config) (*Provider, error) {
 		model:   cfg.Model,
 		baseURL: baseURL,
 		timeout: timeout,
+		logger:  slog.Default(),
 	}, nil
 }
 
@@ -128,7 +132,7 @@ const FallbackContextLength = 32768
 func (p *Provider) detectContextLength(ctx context.Context) int {
 	resp, err := p.client.Show(ctx, &api.ShowRequest{Model: p.model})
 	if err != nil {
-		slog.Debug("ollama: failed to query model info for context length", "model", p.model, "error", err)
+		p.logger.DebugContext(ctx, "ollama: failed to query model info for context length", "model", p.model, "error", err)
 
 		return FallbackContextLength
 	}
@@ -136,10 +140,9 @@ func (p *Provider) detectContextLength(ctx context.Context) int {
 	// Look for context_length in model_info (key format: "<arch>.context_length").
 	for k, v := range resp.ModelInfo {
 		if strings.HasSuffix(k, ".context_length") || k == "context_length" {
-			switch val := v.(type) {
-			case float64:
+			if val, ok := v.(float64); ok {
 				if int(val) > 0 {
-					slog.Info("ollama: detected model context length", "model", p.model, "context_length", int(val))
+					p.logger.InfoContext(ctx, "ollama: detected model context length", "model", p.model, "context_length", int(val))
 
 					return int(val)
 				}
@@ -147,7 +150,7 @@ func (p *Provider) detectContextLength(ctx context.Context) int {
 		}
 	}
 
-	slog.Debug("ollama: no context_length found in model info, using fallback", "model", p.model)
+	p.logger.DebugContext(ctx, "ollama: no context_length found in model info, using fallback", "model", p.model)
 
 	return FallbackContextLength
 }
@@ -178,15 +181,15 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 
 	// Convert messages, building tool_call_id -> tool_name mapping for tool result messages.
 	if params.Messages.Present {
-		toolCallIDToName := buildToolCallIDToNameMap(params.Messages.Value)
+		toolCallIDToName := buildToolCallIDToNameMap(params.Messages.Value, p.logger, ctx)
 
 		req.Messages = make([]api.Message, len(params.Messages.Value))
 		for i, msg := range params.Messages.Value {
-			req.Messages[i] = convertMessageToOllama(msg, toolCallIDToName)
+			req.Messages[i] = convertMessageToOllama(msg, toolCallIDToName, p.logger, ctx)
 		}
 		// Debug: log the messages being sent.
 		for i, m := range req.Messages {
-			slog.Debug("ollama stream message",
+			p.logger.DebugContext(ctx, "ollama stream message",
 				"index", i,
 				"role", m.Role,
 				"content_len", len(m.Content),
@@ -202,7 +205,7 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 			req.Tools[i] = convertToolToOllama(tool)
 		}
 
-		slog.Debug("ollama request with tools", "tool_count", len(req.Tools), "model", p.model)
+		p.logger.DebugContext(ctx, "ollama request with tools", "tool_count", len(req.Tools), "model", p.model)
 	}
 
 	// Set options.
@@ -269,16 +272,16 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 		for _, tc := range resp.Message.ToolCalls {
 			if tc.Function.Name != "" {
 				filtered = append(filtered, tc)
-			} else if inferred := inferToolName(tc.Function.Arguments, req.Tools); inferred != "" {
+			} else if inferred := inferToolName(tc.Function.Arguments, req.Tools, p.logger, ctx); inferred != "" {
 				tc.Function.Name = inferred
-				slog.Info("ollama: inferred tool name for nameless tool call",
+				p.logger.InfoContext(ctx, "ollama: inferred tool name for nameless tool call",
 					"name", inferred, "args", tc.Function.Arguments)
 				filtered = append(filtered, tc)
 			} else if len(tc.Function.Arguments) > 0 {
-				slog.Warn("ollama: dropping tool call with empty name (could not infer)",
+				p.logger.WarnContext(ctx, "ollama: dropping tool call with empty name (could not infer)",
 					"args", tc.Function.Arguments)
 			} else {
-				slog.Debug("ollama: filtering phantom tool call (empty name and args)")
+				p.logger.DebugContext(ctx, "ollama: filtering phantom tool call (empty name and args)")
 			}
 		}
 
@@ -286,7 +289,7 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 	}
 
 	// Debug: Log the Ollama response.
-	slog.Debug("Ollama Complete", "callbacks", callbackCount, "content_length", len(resp.Message.Content))
+	p.logger.DebugContext(ctx, "Ollama Complete", "callbacks", callbackCount, "content_length", len(resp.Message.Content))
 
 	if len(resp.Message.Content) > 0 {
 		preview := resp.Message.Content
@@ -294,11 +297,11 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 			preview = preview[:100]
 		}
 
-		slog.Debug("Ollama Complete response preview", "preview", preview)
+		p.logger.DebugContext(ctx, "Ollama Complete response preview", "preview", preview)
 	}
 
 	// Convert response to OpenAI format.
-	return convertOllamaResponseToOpenAI(resp, p.model), nil
+	return convertOllamaResponseToOpenAI(resp, p.model, p.logger, ctx), nil
 }
 
 // Stream performs a streaming completion request using Ollama's native API.
@@ -312,11 +315,11 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 
 	// Convert messages, building tool_call_id -> tool_name mapping for tool result messages.
 	if params.Messages.Present {
-		toolCallIDToName := buildToolCallIDToNameMap(params.Messages.Value)
+		toolCallIDToName := buildToolCallIDToNameMap(params.Messages.Value, p.logger, ctx)
 
 		req.Messages = make([]api.Message, len(params.Messages.Value))
 		for i, msg := range params.Messages.Value {
-			req.Messages[i] = convertMessageToOllama(msg, toolCallIDToName)
+			req.Messages[i] = convertMessageToOllama(msg, toolCallIDToName, p.logger, ctx)
 		}
 		// Debug: log the messages being sent to Ollama.
 		for i, m := range req.Messages {
@@ -325,7 +328,7 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 				tcIDs[j] = tc.Function.Name
 			}
 
-			slog.Debug("ollama stream msg",
+			p.logger.DebugContext(ctx, "ollama stream msg",
 				"idx", i,
 				"role", m.Role,
 				"content_len", len(m.Content),
@@ -341,7 +344,7 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 			req.Tools[i] = convertToolToOllama(tool)
 		}
 
-		slog.Debug("ollama stream request with tools", "tool_count", len(req.Tools), "model", p.model)
+		p.logger.DebugContext(ctx, "ollama stream request with tools", "tool_count", len(req.Tools), "model", p.model)
 	}
 
 	// Set options.
@@ -399,17 +402,17 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 				for _, tc := range resp.Message.ToolCalls {
 					if tc.Function.Name != "" {
 						filtered = append(filtered, tc)
-					} else if inferred := inferToolName(tc.Function.Arguments, req.Tools); inferred != "" {
+					} else if inferred := inferToolName(tc.Function.Arguments, req.Tools, p.logger, ctx); inferred != "" {
 						tc.Function.Name = inferred
-						slog.Info("ollama: inferred tool name for nameless tool call",
+						p.logger.InfoContext(ctx, "ollama: inferred tool name for nameless tool call",
 							"name", inferred, "args", tc.Function.Arguments)
 						filtered = append(filtered, tc)
 					} else if len(tc.Function.Arguments) > 0 {
-						slog.Warn("ollama: dropping tool call with empty name (could not infer)",
+						p.logger.WarnContext(ctx, "ollama: dropping tool call with empty name (could not infer)",
 							"chunk_index", chunkIndex,
 							"args", tc.Function.Arguments)
 					} else {
-						slog.Debug("ollama: filtering phantom tool call (empty name and args)",
+						p.logger.DebugContext(ctx, "ollama: filtering phantom tool call (empty name and args)",
 							"chunk_index", chunkIndex)
 					}
 				}
@@ -423,7 +426,7 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 			}
 
 			// Convert to OpenAI chunk and send.
-			chunk := convertOllamaChunkToOpenAI(resp, chunkID, p.model)
+			chunk := convertOllamaChunkToOpenAI(resp, chunkID, p.model, p.logger, ctx)
 
 			select {
 			case chunks <- chunk:
@@ -439,10 +442,10 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 		// The caller (callLLM) detects 0-chunk streams and returns an error,
 		// which allows the retry loop to handle transient failures (e.g. HTTP 500).
 		if err != nil && ctx.Err() == nil {
-			slog.Error("ollama stream error", "error", err, "chunks_sent", chunkIndex, "done_reason", lastDoneReason)
+			p.logger.ErrorContext(ctx, "ollama stream error", "error", err, "chunks_sent", chunkIndex, "done_reason", lastDoneReason)
 		}
 
-		slog.Debug("ollama stream finished",
+		p.logger.DebugContext(ctx, "ollama stream finished",
 			"total_chunks", chunkIndex,
 			"done_reason", lastDoneReason)
 	}()

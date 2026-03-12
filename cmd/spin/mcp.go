@@ -17,6 +17,14 @@ import (
 	"github.com/dmytrogajewski/spin/internal/config"
 )
 
+var (
+	ErrInvalidTransport = errors.New("invalid transport")
+	ErrApiKeyIsRequired = errors.New("API key is required")
+	ErrRegistryNotFound = errors.New("registry '' not found")
+	ErrApiErrorStatus = errors.New("API error (status )")
+	ErrInvalidServerPathFormat = errors.New("invalid server path format")
+)
+
 // ============================================================================
 // Smithery API Types
 // ============================================================================.
@@ -228,7 +236,7 @@ func runMCPRegistryLocalAdd(cmd *cobra.Command, args []string) error {
 		configFile = homeDir + "/.spin/spin.yaml"
 	}
 
-	fmt.Printf("Added local registry '%s' to %s\n", name, configFile)
+	fmt.Fprintf(cmd.OutOrStdout(), "Added local registry '%s' to %s\n", name, configFile)
 
 	return nil
 }
@@ -280,7 +288,7 @@ Examples:
 	cmd.Flags().String("oauth-client-secret", "", "OAuth client secret")
 	cmd.Flags().String("oauth-redirect-url", "", "OAuth redirect URL")
 	cmd.Flags().StringArray("oauth-scope", nil, "OAuth scopes")
-	cmd.MarkFlagRequired("url")
+	_ = cmd.MarkFlagRequired("url")
 
 	return cmd
 }
@@ -306,7 +314,7 @@ func runMCPRegistryRemoteAdd(cmd *cobra.Command, args []string) error {
 	case "streamable-http":
 		transportType = config.MCPTransportStreamableHTTP
 	default:
-		return fmt.Errorf("invalid transport: %s (use 'sse' or 'streamable-http')", transport)
+return fmt.Errorf("invalid transport: %s (use 'sse' or 'streamable-http'): %w", transport, ErrInvalidTransport)
 	}
 
 	// Load config.
@@ -347,7 +355,7 @@ func runMCPRegistryRemoteAdd(cmd *cobra.Command, args []string) error {
 		configFile = homeDir + "/.spin/spin.yaml"
 	}
 
-	fmt.Printf("Added remote registry '%s' to %s\n", name, configFile)
+	fmt.Fprintf(cmd.OutOrStdout(), "Added remote registry '%s' to %s\n", name, configFile)
 
 	return nil
 }
@@ -428,18 +436,19 @@ func runMCPRegistrySmitheryAdd(cmd *cobra.Command, args []string) error {
 
 	// Prompt for API key if still not set.
 	if apiKey == "" {
-		fmt.Print("Enter Smithery API key: ")
+		fmt.Fprint(cmd.OutOrStdout(), "Enter Smithery API key: ")
 
 		reader := bufio.NewReader(os.Stdin)
 
-		input, err := reader.ReadString('\n')
+		var input string
+		input, err = reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read API key: %w", err)
 		}
 
 		apiKey = strings.TrimSpace(input)
 		if apiKey == "" {
-			return errors.New("API key is required")
+			return ErrApiKeyIsRequired
 		}
 	}
 
@@ -472,9 +481,9 @@ func runMCPRegistrySmitheryAdd(cmd *cobra.Command, args []string) error {
 		configFile = homeDir + "/.spin/spin.yaml"
 	}
 
-	fmt.Printf("Added Smithery registry '%s' to %s\n", name, configFile)
-	fmt.Printf("  URL: %s\n", serverURL)
-	fmt.Printf("  Namespace: %s\n", namespace)
+	fmt.Fprintf(cmd.OutOrStdout(), "Added Smithery registry '%s' to %s\n", name, configFile)
+	fmt.Fprintf(cmd.OutOrStdout(), "  URL: %s\n", serverURL)
+	fmt.Fprintf(cmd.OutOrStdout(), "  Namespace: %s\n", namespace)
 
 	return nil
 }
@@ -503,7 +512,7 @@ Examples:
 	return cmd
 }
 
-func runMCPRegistryList(cmd *cobra.Command, args []string) error {
+func runMCPRegistryList(cmd *cobra.Command, _ []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
 	loader := config.NewLoaderV2()
@@ -520,11 +529,11 @@ func runMCPRegistryList(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(servers) == 0 {
-		fmt.Println("No registries configured.")
-		fmt.Println("\nTo add a registry:")
-		fmt.Println("  spin mcp registry local add <name> <command> [args...]")
-		fmt.Println("  spin mcp registry remote add <name> --url <url>")
-		fmt.Println("  spin mcp registry smithery add <name> @namespace/server")
+		fmt.Fprintln(cmd.OutOrStdout(), "No registries configured.")
+		fmt.Fprintln(cmd.OutOrStdout(), "\nTo add a registry:")
+		fmt.Fprintln(cmd.OutOrStdout(), "  spin mcp registry local add <name> <command> [args...]")
+		fmt.Fprintln(cmd.OutOrStdout(), "  spin mcp registry remote add <name> --url <url>")
+		fmt.Fprintln(cmd.OutOrStdout(), "  spin mcp registry smithery add <name> @namespace/server")
 
 		return nil
 	}
@@ -596,22 +605,23 @@ func runMCPRegistryGet(cmd *cobra.Command, args []string) error {
 	}
 
 	// Text format.
-	fmt.Printf("Name: %s\n", server.Name)
-	fmt.Printf("Type: %s\n", config.GetRegistryTypeName(*server))
-	fmt.Printf("Dynamic Loadout: %v\n", server.DynamicLoadout)
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "Name: %s\n", server.Name)
+	fmt.Fprintf(out, "Type: %s\n", config.GetRegistryTypeName(*server))
+	fmt.Fprintf(out, "Dynamic Loadout: %v\n", server.DynamicLoadout)
 
 	transport := string(server.Transport)
 	if transport == "" {
 		transport = "stdio"
 	}
 
-	fmt.Printf("Transport: %s\n", transport)
+	fmt.Fprintf(out, "Transport: %s\n", transport)
 
 	if server.Transport.IsRemote() {
-		fmt.Printf("URL: %s\n", server.URL)
+		fmt.Fprintf(out, "URL: %s\n", server.URL)
 
 		if len(server.Headers) > 0 {
-			fmt.Println("Headers:")
+			fmt.Fprintln(out, "Headers:")
 
 			for key, value := range server.Headers {
 				displayValue := value
@@ -619,42 +629,42 @@ func runMCPRegistryGet(cmd *cobra.Command, args []string) error {
 					displayValue = "***"
 				}
 
-				fmt.Printf("  %s: %s\n", key, displayValue)
+				fmt.Fprintf(out, "  %s: %s\n", key, displayValue)
 			}
 		}
 
 		if server.Transport == config.MCPTransportSmithery {
-			fmt.Printf("Smithery Namespace: %s\n", server.SmitheryNamespace)
-			fmt.Printf("Smithery API Key: %s\n", maskAPIKey(server.SmitheryAPIKey))
+			fmt.Fprintf(out, "Smithery Namespace: %s\n", server.SmitheryNamespace)
+			fmt.Fprintf(out, "Smithery API Key: %s\n", maskAPIKey(server.SmitheryAPIKey))
 		}
 	} else {
-		fmt.Printf("Command: %s\n", server.Command)
+		fmt.Fprintf(out, "Command: %s\n", server.Command)
 
 		if len(server.Args) > 0 {
-			fmt.Printf("Args: %s\n", strings.Join(server.Args, " "))
+			fmt.Fprintf(out, "Args: %s\n", strings.Join(server.Args, " "))
 		}
 
 		if len(server.Env) > 0 {
-			fmt.Println("Environment:")
+			fmt.Fprintln(out, "Environment:")
 
 			for key, value := range server.Env {
-				fmt.Printf("  %s=%s\n", key, value)
+				fmt.Fprintf(out, "  %s=%s\n", key, value)
 			}
 		}
 	}
 
 	if server.OAuth != nil {
-		fmt.Println("OAuth:")
-		fmt.Printf("  Client ID: %s\n", server.OAuth.ClientID)
+		fmt.Fprintln(out, "OAuth:")
+		fmt.Fprintf(out, "  Client ID: %s\n", server.OAuth.ClientID)
 
 		if server.OAuth.ClientSecret != "" {
-			fmt.Println("  Client Secret: ***")
+			fmt.Fprintln(out, "  Client Secret: ***")
 		}
 	}
 
 	configFile := loader.ConfigFileUsed()
 	if configFile != "" {
-		fmt.Printf("Source: %s\n", configFile)
+		fmt.Fprintf(out, "Source: %s\n", configFile)
 	}
 
 	return nil
@@ -699,14 +709,14 @@ func runMCPRegistryRemove(cmd *cobra.Command, args []string) error {
 	}
 
 	if !yes {
-		fmt.Printf("Remove registry '%s'? (y/N): ", name)
+		fmt.Fprintf(cmd.OutOrStdout(), "Remove registry '%s'? (y/N): ", name)
 
 		var response string
-		fmt.Scanln(&response)
+		_, _ = fmt.Fscanln(os.Stdin, &response)
 
 		response = strings.ToLower(strings.TrimSpace(response))
 		if response != "y" && response != "yes" {
-			fmt.Println("Canceled.")
+			fmt.Fprintln(cmd.OutOrStdout(), "Canceled.")
 
 			return nil
 		}
@@ -723,7 +733,7 @@ func runMCPRegistryRemove(cmd *cobra.Command, args []string) error {
 		configFile = homeDir + "/.spin/spin.yaml"
 	}
 
-	fmt.Printf("Removed registry '%s' from %s\n", name, configFile)
+	fmt.Fprintf(cmd.OutOrStdout(), "Removed registry '%s' from %s\n", name, configFile)
 
 	return nil
 }
@@ -803,7 +813,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 		}
 
 		if len(filtered) == 0 {
-			return fmt.Errorf("registry '%s' not found", registryFilter)
+return fmt.Errorf("registry '%s' not found: %w", registryFilter, ErrRegistryNotFound)
 		}
 
 		servers = filtered
@@ -834,9 +844,9 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
-			smitheryResults, err := searchSmitheryAPI(query, key, limit, verified)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to search Smithery registry '%s': %v\n", server.Name, err)
+			smitheryResults, searchErr := searchSmitheryAPI(query, key, limit, verified)
+			if searchErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to search Smithery registry '%s': %v\n", server.Name, searchErr)
 
 				continue
 			}
@@ -856,7 +866,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(results) == 0 {
-		fmt.Printf("No tools found for query: %s\n", query)
+		fmt.Fprintf(cmd.OutOrStdout(), "No tools found for query: %s\n", query)
 
 		return nil
 	}
@@ -880,7 +890,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 
 	w.Flush()
 
-	fmt.Printf("\nFound %d tools.\n", len(results))
+	fmt.Fprintf(cmd.OutOrStdout(), "\nFound %d tools.\n", len(results))
 
 	return nil
 }
@@ -912,7 +922,7 @@ func searchSmitheryAPI(query, apiKey string, limit int, verified bool) (*smither
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+return nil, fmt.Errorf("API error (status %d): %s: %w", resp.StatusCode, string(body), ErrApiErrorStatus)
 	}
 
 	var result smitheryToolsResponse
@@ -955,7 +965,7 @@ Examples:
 	return cmd
 }
 
-func runMCPListTools(cmd *cobra.Command, args []string) error {
+func runMCPListTools(cmd *cobra.Command, _ []string) error {
 	registryFilter, _ := cmd.Flags().GetString("registry")
 	format, _ := cmd.Flags().GetString("format")
 
@@ -987,9 +997,9 @@ func runMCPListTools(cmd *cobra.Command, args []string) error {
 
 	if len(servers) == 0 {
 		if registryFilter != "" {
-			fmt.Printf("No registry found with name '%s'.\n", registryFilter)
+			fmt.Fprintf(cmd.OutOrStdout(), "No registry found with name '%s'.\n", registryFilter)
 		} else {
-			fmt.Println("No registries configured.")
+			fmt.Fprintln(cmd.OutOrStdout(), "No registries configured.")
 		}
 
 		return nil
@@ -1027,8 +1037,8 @@ func runMCPListTools(cmd *cobra.Command, args []string) error {
 
 	w.Flush()
 
-	fmt.Printf("\n%d registries configured.\n", len(servers))
-	fmt.Println("Note: Use 'spin mcp search <query>' to discover available tools.")
+	fmt.Fprintf(cmd.OutOrStdout(), "\n%d registries configured.\n", len(servers))
+	fmt.Fprintln(cmd.OutOrStdout(), "Note: Use 'spin mcp search <query>' to discover available tools.")
 
 	return nil
 }
@@ -1072,7 +1082,8 @@ func parseSmitheryPath(path string) (serverURL string, namespace string, err err
 	const baseURL = "https://server.smithery.ai"
 
 	if strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "http://") {
-		parsedURL, err := url.Parse(path)
+		var parsedURL *url.URL
+		parsedURL, err = url.Parse(path)
 		if err != nil {
 			return "", "", fmt.Errorf("invalid URL: %w", err)
 		}
@@ -1097,7 +1108,7 @@ func parseSmitheryPath(path string) (serverURL string, namespace string, err err
 
 	parts := strings.SplitN(cleanPath, "/", 2)
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid server path format: %s (expected @namespace/server-name)", path)
+return "", "", fmt.Errorf("invalid server path format: %s (expected @namespace/server-name): %w", path, ErrInvalidServerPathFormat)
 	}
 
 	namespace = parts[0]
@@ -1121,5 +1132,9 @@ func outputJSON[T any](data T) error {
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
 
-	return encoder.Encode(data)
+	if err := encoder.Encode(data); err != nil {
+		return fmt.Errorf("encoding JSON output: %w", err)
+	}
+
+	return nil
 }

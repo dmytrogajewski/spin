@@ -10,6 +10,11 @@ import (
 	"github.com/ollama/ollama/api"
 )
 
+var (
+	ErrOllamaReturnedNoEmbeddings = errors.New("ollama returned no embeddings")
+	ErrExpectedEmbeddingDimension = errors.New("expected embedding dimension")
+)
+
 // OllamaEmbedder uses Ollama to generate semantic embeddings.
 type OllamaEmbedder struct {
 	client    *api.Client
@@ -90,14 +95,14 @@ func (e *OllamaEmbedder) Embed(ctx context.Context, text string) ([]float32, err
 
 	// Validate response.
 	if len(resp.Embeddings) == 0 {
-		return nil, errors.New("ollama returned no embeddings")
+		return nil, ErrOllamaReturnedNoEmbeddings
 	}
 
 	embedding := resp.Embeddings[0]
 
 	// Validate dimension.
 	if len(embedding) != e.dimension {
-		return nil, fmt.Errorf("expected embedding dimension %d, got %d", e.dimension, len(embedding))
+return nil, fmt.Errorf("expected embedding dimension %d, got %d: %w", e.dimension, len(embedding), ErrExpectedEmbeddingDimension)
 	}
 
 	return embedding, nil

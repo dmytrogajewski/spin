@@ -146,7 +146,7 @@ func (c *CommandCache) evictOldestLocked() bool {
 			return true
 		}
 
-		if keyStr, ok := key.(string); ok {
+		if keyStr, isStr := key.(string); isStr {
 			if !found || entry.expiresAt.Before(oldestTime) {
 				oldestKey = keyStr
 				oldestTime = entry.expiresAt
@@ -163,7 +163,7 @@ func (c *CommandCache) evictOldestLocked() bool {
 
 	// Evict oldest.
 	if val, ok := c.cache.LoadAndDelete(oldestKey); ok {
-		if entry, ok := val.(*cacheEntry); ok {
+		if entry, isEntry := val.(*cacheEntry); isEntry {
 			c.size.Add(-entry.size)
 		}
 
@@ -258,7 +258,7 @@ func (c *CommandCache) IsCacheable(cmd *security.Command) bool {
 
 // Clear removes all entries from the cache.
 func (c *CommandCache) Clear() {
-	c.cache.Range(func(key, value any) bool {
+	c.cache.Range(func(key, _ any) bool {
 		c.cache.Delete(key)
 
 		return true
@@ -271,7 +271,7 @@ func (c *CommandCache) Size() int64 {
 	return c.size.Load()
 }
 
-// Stats returns cache statistics.
+// CacheStats holds cache statistics.
 type CacheStats struct {
 	Size     int64 // Current size in bytes.
 	MaxSize  int64 // Maximum size in bytes.
@@ -284,7 +284,7 @@ type CacheStats struct {
 func (c *CommandCache) Stats() CacheStats {
 	entries := 0
 
-	c.cache.Range(func(key, value any) bool {
+	c.cache.Range(func(_, _ any) bool {
 		entries++
 
 		return true

@@ -70,7 +70,7 @@ func TestGrowthMonitor_CheckGrowth(t *testing.T) {
 	for range 5 {
 		b, _ := bullet.New("Test content")
 		b.IncrementHelpful()
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	metrics, needsRefine = monitor.CheckGrowth(ctx)
@@ -139,7 +139,7 @@ func TestGrowthMonitor_ThresholdTriggers(t *testing.T) {
 			for range tt.bulletCount {
 				b, _ := bullet.New("Test content")
 				b.IncrementHelpful()
-				testPb.Add(ctx, b)
+				_ = testPb.Add(ctx, b)
 			}
 
 			_, needsRefine := monitor.CheckGrowth(ctx)
@@ -159,7 +159,7 @@ func TestGrowthMonitor_GetMetrics(t *testing.T) {
 	// Add bullets.
 	for range 3 {
 		b, _ := bullet.New("Test content")
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	// First check to populate metrics.
@@ -210,7 +210,7 @@ func TestGrowthMonitor_GrowthRate(t *testing.T) {
 	// Add bullets over time.
 	for range 5 {
 		b, _ := bullet.New("Test content")
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 		monitor.CheckGrowth(ctx)
 		time.Sleep(1 * time.Millisecond)
 	}
@@ -231,7 +231,7 @@ func TestGrowthMonitor_HistoryLimit(t *testing.T) {
 	// Add 150 data points (more than the 100 limit).
 	for range 150 {
 		b, _ := bullet.New("Test content")
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 		monitor.CheckGrowth(ctx)
 	}
 
@@ -261,7 +261,7 @@ func TestGrowthMonitor_ShouldRefine(t *testing.T) {
 	// Add bullets to exceed threshold.
 	for range 6 {
 		b, _ := bullet.New("Test content")
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	// Check to update metrics.
@@ -273,7 +273,7 @@ func TestGrowthMonitor_ShouldRefine(t *testing.T) {
 	}
 }
 
-func TestGrowthMonitor_Concurrency(t *testing.T) {
+func TestGrowthMonitor_Concurrency(_ *testing.T) {
 	ctx := context.Background()
 	pb := playbook.New(nil, nil)
 	monitor := NewGrowthMonitor(pb, DefaultGrowthThresholds())
@@ -281,7 +281,7 @@ func TestGrowthMonitor_Concurrency(t *testing.T) {
 	// Add initial bullets.
 	for range 10 {
 		b, _ := bullet.New("Test content")
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	const goroutines = 10

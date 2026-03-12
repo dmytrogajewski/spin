@@ -15,6 +15,16 @@ import (
 	"github.com/dmytrogajewski/spin/internal/config"
 )
 
+var (
+	ErrUnsupportedFormat = errors.New("unsupported format")
+	ErrValidationFailed = errors.New("validation failed")
+	ErrValidationFailed2 = errors.New("validation failed")
+	ErrNoConfigFile = errors.New("no config file")
+	ErrNoConfigFile2 = errors.New("no config file")
+	ErrNoEditorFoundSetEditorOr = errors.New("no editor found. Set $EDITOR or $VISUAL environment variable")
+	ErrKeyNotFound = errors.New("key not found")
+)
+
 // newConfigCmd creates the config management command.
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -138,14 +148,14 @@ Examples:
 }
 
 // runConfigShow implements the 'config show' command.
-func runConfigShow(cmd *cobra.Command, args []string) error {
+func runConfigShow(cmd *cobra.Command, _ []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
 	// Use V2 loader with env override support.
 	loaderV2 := config.NewLoaderV2()
 
 	var (
-		cfgV2 *config.ConfigV2
+		cfgV2 *config.V2
 		errV2 error
 	)
 
@@ -170,12 +180,12 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	case "yaml", "text":
 		return printYAML(cmd.OutOrStdout(), cfgV2)
 	default:
-		return fmt.Errorf("unsupported format: %s (use: text, json, yaml)", format)
+return fmt.Errorf("unsupported format: %s (use: text, json, yaml): %w", format, ErrUnsupportedFormat)
 	}
 }
 
 // runConfigValidate implements the 'config validate' command.
-func runConfigValidate(cmd *cobra.Command, args []string) error {
+func runConfigValidate(cmd *cobra.Command, _ []string) error {
 	file, _ := cmd.Flags().GetString("file")
 
 	// Determine which file to load.
@@ -188,7 +198,7 @@ func runConfigValidate(cmd *cobra.Command, args []string) error {
 	loaderV2 := config.NewLoaderV2()
 
 	var (
-		cfgV2 *config.ConfigV2
+		cfgV2 *config.V2
 		errV2 error
 	)
 
@@ -207,7 +217,7 @@ func runConfigValidate(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.ErrOrStderr(), "✗ Configuration is invalid\n\n")
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", errV2)
 
-		return errors.New("validation failed")
+		return ErrValidationFailed
 	}
 
 	// V2 config loaded successfully (possibly migrated from V1), validate it.
@@ -216,7 +226,7 @@ func runConfigValidate(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.ErrOrStderr(), "✗ Configuration V2 is invalid\n\n")
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 
-		return errors.New("validation failed")
+		return ErrValidationFailed2
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "✓ Configuration V2 is valid (version: %s)\n", cfgV2.Version)
@@ -225,7 +235,7 @@ func runConfigValidate(cmd *cobra.Command, args []string) error {
 }
 
 // runConfigPath implements the 'config path' command.
-func runConfigPath(cmd *cobra.Command, args []string) error {
+func runConfigPath(cmd *cobra.Command, _ []string) error {
 	showAll, _ := cmd.Flags().GetBool("all")
 
 	loaderV2 := config.NewLoaderV2()
@@ -251,14 +261,14 @@ func runConfigPath(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(cmd.OutOrStdout(), "Run 'spin config path --all' to see search paths.\n")
 		}
 
-		return errors.New("no config file")
+		return ErrNoConfigFile
 	}
 
 	configPath := loaderV2.ConfigFileUsed()
 	if configPath == "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "No configuration file found. Using defaults.\n")
 
-		return errors.New("no config file")
+		return ErrNoConfigFile2
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "%s\n", configPath)
@@ -267,7 +277,7 @@ func runConfigPath(cmd *cobra.Command, args []string) error {
 }
 
 // runConfigEdit implements the 'config edit' command.
-func runConfigEdit(cmd *cobra.Command, args []string) error {
+func runConfigEdit(cmd *cobra.Command, _ []string) error {
 	noValidate, _ := cmd.Flags().GetBool("no-validate")
 
 	// Load or determine config path.
@@ -303,7 +313,7 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 	// Find editor.
 	editor := getEditor()
 	if editor == "" {
-		return errors.New("no editor found. Set $EDITOR or $VISUAL environment variable")
+		return ErrNoEditorFoundSetEditorOr
 	}
 
 	// Open editor.
@@ -320,7 +330,8 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 	// Validate after editing.
 	if !noValidate {
 		newLoaderV2 := config.NewLoaderV2()
-		cfgV2, err := newLoaderV2.LoadFromFile(configPath)
+		var cfgV2 *config.V2
+		cfgV2, err = newLoaderV2.LoadFromFile(configPath)
 		if err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "⚠ Warning: configuration has errors:\n%v\n", err)
 			fmt.Fprintf(cmd.ErrOrStderr(), "\nRun 'spin config validate' for details.\n")
@@ -343,7 +354,11 @@ func printJSON[T any](out io.Writer, data T) error {
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
 
-	return encoder.Encode(data)
+	if err := encoder.Encode(data); err != nil {
+		return fmt.Errorf("encoding JSON: %w", err)
+	}
+
+	return nil
 }
 
 // printYAML prints data as YAML.
@@ -353,7 +368,11 @@ func printYAML[T any](out io.Writer, data T) error {
 	encoder.SetIndent(2)
 	defer encoder.Close()
 
-	return encoder.Encode(data)
+	if err := encoder.Encode(data); err != nil {
+		return fmt.Errorf("encoding YAML: %w", err)
+	}
+
+	return nil
 }
 
 // getEditor returns the preferred editor.
@@ -428,7 +447,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 
 	value := loaderV2.Get(key)
 	if value == nil {
-		return fmt.Errorf("key not found: %s", key)
+return fmt.Errorf("key not found: %s: %w", key, ErrKeyNotFound)
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "%v\n", value)
@@ -556,5 +575,9 @@ protocol:
   shell_timeout: 5m
 `
 
-	return os.WriteFile(path, []byte(defaultConfig), 0644)
+	if err := os.WriteFile(path, []byte(defaultConfig), 0644); err != nil {
+		return fmt.Errorf("writing default config: %w", err)
+	}
+
+	return nil
 }

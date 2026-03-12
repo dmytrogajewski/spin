@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,14 +16,17 @@ func NewWriteFileTool() *WriteFileTool {
 	return &WriteFileTool{}
 }
 
+// Name implements the Name operation.
 func (t *WriteFileTool) Name() string {
 	return "write_file"
 }
 
+// Description implements the Description operation.
 func (t *WriteFileTool) Description() string {
 	return "Write content to a file"
 }
 
+// Schema implements the Schema operation.
 func (t *WriteFileTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -49,15 +51,16 @@ func (t *WriteFileTool) Schema() ToolSchema {
 	}
 }
 
-func (t *WriteFileTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	path, err := params.GetString("path")
-	if err != nil || path == "" {
-		return NewToolError(errors.New("path parameter must be a non-empty string")), nil
+// Execute implements the Execute operation.
+func (t *WriteFileTool) Execute(_ context.Context, params ToolParameters) (ToolResult, error) {
+	path, _ := params.GetString("path")
+	if path == "" {
+		return NewToolError(ErrPathParameterRequired), nil
 	}
 
-	content, err := params.GetString("content")
-	if err != nil {
-		return NewToolError(errors.New("content parameter must be a string")), nil
+	content, contentErr := params.GetString("content")
+	if contentErr != nil {
+		return NewToolError(fmt.Errorf("content parameter required: %w", contentErr)), nil
 	}
 
 	// Create parent directories if they don't exist.
@@ -69,9 +72,9 @@ func (t *WriteFileTool) Execute(ctx context.Context, params ToolParameters) (Too
 		}
 	}
 
-	err = os.WriteFile(path, []byte(content), 0644)
-	if err != nil {
-		return NewToolError(fmt.Errorf("failed to write file: %w", err)), nil
+	writeErr := os.WriteFile(path, []byte(content), 0644)
+	if writeErr != nil {
+		return NewToolError(fmt.Errorf("failed to write file: %w", writeErr)), nil
 	}
 
 	return NewToolResult(fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path)), nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -17,6 +18,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm/lmstudio"
 	"github.com/dmytrogajewski/spin/internal/llm/ollama"
 	"github.com/dmytrogajewski/spin/internal/llm/openai"
+)
+
+var (
+	errFactoryCreationFailed = errors.New("factory creation failed")
+	errUnknownProviderType = errors.New("unknown provider type")
 )
 
 const testOllamaURL = "http://localhost:11434"
@@ -132,8 +138,8 @@ func TestNewProvider_UnknownType(t *testing.T) {
 		t.Error("NewProvider() should return nil provider for unknown type")
 	}
 
-	if err.Error() != "unknown provider type: unknown-provider" {
-		t.Errorf("Error message = %q, want %q", err.Error(), "unknown provider type: unknown-provider")
+	if !strings.Contains(err.Error(), "unknown-provider") {
+		t.Errorf("Error should contain provider name, got: %v", err)
 	}
 }
 
@@ -220,7 +226,7 @@ func TestNewProvider_ValidationErrors(t *testing.T) {
 func TestRegisterProvider(t *testing.T) {
 	// Create a custom provider factory.
 	customProvider := &mockProvider{name: "custom"}
-	customFactory := func(cfg ProviderConfig) (llm.Provider, error) {
+	customFactory := func(_ ProviderConfig) (llm.Provider, error) {
 		return customProvider, nil
 	}
 
@@ -252,7 +258,7 @@ func TestRegisterProvider(t *testing.T) {
 func TestRegisterProvider_Override(t *testing.T) {
 	// Create a custom factory that overrides "openai".
 	customProvider := &mockProvider{name: "custom-openai"}
-	customFactory := func(cfg ProviderConfig) (llm.Provider, error) {
+	customFactory := func(_ ProviderConfig) (llm.Provider, error) {
 		return customProvider, nil
 	}
 
@@ -293,11 +299,11 @@ func TestRegisterProvider_Concurrent(t *testing.T) {
 		wg.Add(2)
 
 		// Register.
-		go func(n int) {
+		go func(_ int) {
 			defer wg.Done()
 
 			name := "concurrent-provider"
-			factory := func(cfg ProviderConfig) (llm.Provider, error) {
+			factory := func(_ ProviderConfig) (llm.Provider, error) {
 				return &mockProvider{name: name}, nil
 			}
 			RegisterProvider(name, factory)
@@ -330,8 +336,8 @@ func TestRegisterProvider_Concurrent(t *testing.T) {
 
 // TestProviderFactory_ErrorPropagation tests that factory errors are propagated.
 func TestProviderFactory_ErrorPropagation(t *testing.T) {
-	factoryErr := errors.New("factory creation failed")
-	failingFactory := func(cfg ProviderConfig) (llm.Provider, error) {
+	factoryErr := errFactoryCreationFailed
+	failingFactory := func(_ ProviderConfig) (llm.Provider, error) {
 		return nil, factoryErr
 	}
 
@@ -455,7 +461,7 @@ func (m *mockProvider) Name() string {
 	return m.name
 }
 
-func (m *mockProvider) Complete(ctx context.Context, params openaisdk.ChatCompletionNewParams) (*openaisdk.ChatCompletion, error) {
+func (m *mockProvider) Complete(_ context.Context, _ openaisdk.ChatCompletionNewParams) (*openaisdk.ChatCompletion, error) {
 	return &openaisdk.ChatCompletion{
 		ID:      fmt.Sprintf("mock-%d", time.Now().UnixNano()),
 		Created: time.Now().Unix(),
@@ -472,7 +478,7 @@ func (m *mockProvider) Complete(ctx context.Context, params openaisdk.ChatComple
 	}, nil
 }
 
-func (m *mockProvider) Stream(ctx context.Context, params openaisdk.ChatCompletionNewParams) (<-chan openaisdk.ChatCompletionChunk, error) {
+func (m *mockProvider) Stream(_ context.Context, _ openaisdk.ChatCompletionNewParams) (<-chan openaisdk.ChatCompletionChunk, error) {
 	ch := make(chan openaisdk.ChatCompletionChunk, 1)
 	ch <- openaisdk.ChatCompletionChunk{
 		ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
@@ -490,7 +496,7 @@ func (m *mockProvider) Stream(ctx context.Context, params openaisdk.ChatCompleti
 	return ch, nil
 }
 
-func (m *mockProvider) Models(ctx context.Context) ([]openaisdk.Model, error) {
+func (m *mockProvider) Models(_ context.Context) ([]openaisdk.Model, error) {
 	return []openaisdk.Model{{ID: "mock"}}, nil
 }
 
@@ -804,7 +810,7 @@ func TestFactoryLegacyCompatibility(t *testing.T) {
 // TestFactoryProviderRegistration tests that custom providers can be registered.
 func TestFactoryProviderRegistration(t *testing.T) {
 	// Register a custom provider.
-	RegisterProvider("custom", func(cfg ProviderConfig) (llm.Provider, error) {
+	RegisterProvider("custom", func(_ ProviderConfig) (llm.Provider, error) {
 		return &mockProviderBugFix{name: "custom-provider"}, nil
 	})
 
@@ -830,7 +836,7 @@ type mockProviderBugFix struct {
 	name string
 }
 
-func (m *mockProviderBugFix) Complete(ctx context.Context, params openaisdk.ChatCompletionNewParams) (*openaisdk.ChatCompletion, error) {
+func (m *mockProviderBugFix) Complete(_ context.Context, _ openaisdk.ChatCompletionNewParams) (*openaisdk.ChatCompletion, error) {
 	return &openaisdk.ChatCompletion{
 		ID:      fmt.Sprintf("mock-%d", time.Now().UnixNano()),
 		Created: time.Now().Unix(),
@@ -847,7 +853,7 @@ func (m *mockProviderBugFix) Complete(ctx context.Context, params openaisdk.Chat
 	}, nil
 }
 
-func (m *mockProviderBugFix) Stream(ctx context.Context, params openaisdk.ChatCompletionNewParams) (<-chan openaisdk.ChatCompletionChunk, error) {
+func (m *mockProviderBugFix) Stream(_ context.Context, _ openaisdk.ChatCompletionNewParams) (<-chan openaisdk.ChatCompletionChunk, error) {
 	ch := make(chan openaisdk.ChatCompletionChunk, 2)
 
 	go func() {
@@ -881,7 +887,7 @@ func (m *mockProviderBugFix) Stream(ctx context.Context, params openaisdk.ChatCo
 	return ch, nil
 }
 
-func (m *mockProviderBugFix) Models(ctx context.Context) ([]openaisdk.Model, error) {
+func (m *mockProviderBugFix) Models(_ context.Context) ([]openaisdk.Model, error) {
 	return []openaisdk.Model{
 		{ID: "mock-model"},
 	}, nil
@@ -1202,7 +1208,8 @@ func TestFactory_NewProvider_AllProviderTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := factory.NewProvider(ctx, tt.cfg)
+			var provider llm.Provider
+			provider, err = factory.NewProvider(ctx, tt.cfg)
 			if err != nil {
 				t.Fatalf("Factory.NewProvider() error = %v", err)
 			}
@@ -1358,7 +1365,8 @@ func TestFactory_resolveCredential(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value, err := tt.factory.resolveCredential(ctx, tt.cfg, tt.requiresAuth)
+			var value string
+			value, err = tt.factory.resolveCredential(ctx, tt.cfg, tt.requiresAuth)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("resolveCredential() error = %v, wantErr %v", err, tt.wantErr)
 
@@ -1402,7 +1410,7 @@ func NewProvider(cfg ProviderConfig) (llm.Provider, error) {
 	factoryMu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
+return nil, fmt.Errorf("unknown provider type: %s: %w", cfg.Type, errUnknownProviderType)
 	}
 
 	return factory(cfg)

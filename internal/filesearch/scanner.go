@@ -2,6 +2,7 @@ package filesearch
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -42,7 +43,7 @@ func (s *Scanner) ScanWithContext(ctx context.Context) ([]string, error) {
 
 	s.ensureIgnoreHandler()
 
-	err := filepath.WalkDir(s.baseDir, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(s.baseDir, func(path string, d os.DirEntry, walkErr error) error {
 		// Check context cancellation.
 		select {
 		case <-ctx.Done():
@@ -50,23 +51,26 @@ func (s *Scanner) ScanWithContext(ctx context.Context) ([]string, error) {
 		default:
 		}
 
-		if err != nil {
-			return nil // Skip errors (permission denied, etc.)
-		}
+		// Only process entries without walk errors.
+		if walkErr == nil {
+			relPath, shouldSkip := s.processPath(path, d)
+			if shouldSkip {
+				return filepath.SkipDir
+			}
 
-		relPath, shouldSkip := s.processPath(path, d)
-		if shouldSkip {
-			return filepath.SkipDir
-		}
-
-		if relPath != "" {
-			files = append(files, relPath)
+			if relPath != "" {
+				files = append(files, relPath)
+			}
 		}
 
 		return nil
 	})
 
-	return files, err
+	if err != nil {
+		return nil, fmt.Errorf("walking directory: %w", err)
+	}
+
+	return files, nil
 }
 
 // ensureIgnoreHandler creates an IgnoreHandler if not provided.

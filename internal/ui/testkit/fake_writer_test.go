@@ -25,7 +25,7 @@ func TestFakeWriter_Write(t *testing.T) {
 func TestFakeWriter_Snapshot(t *testing.T) {
 	w := NewFakeWriter()
 
-	w.Write([]byte("test"))
+	_, _ = w.Write([]byte("test"))
 
 	snapshot := w.Snapshot()
 	if snapshot != "test" {
@@ -36,7 +36,7 @@ func TestFakeWriter_Snapshot(t *testing.T) {
 func TestFakeWriter_Reset(t *testing.T) {
 	w := NewFakeWriter()
 
-	w.Write([]byte("test"))
+	_, _ = w.Write([]byte("test"))
 	w.Reset()
 
 	if w.Snapshot() != "" {
@@ -47,7 +47,7 @@ func TestFakeWriter_Reset(t *testing.T) {
 func TestFakeWriter_Contains(t *testing.T) {
 	w := NewFakeWriter()
 
-	w.Write([]byte("hello world"))
+	_, _ = w.Write([]byte("hello world"))
 
 	if !w.Contains("hello") {
 		t.Error("Contains(\"hello\") = false, want true")
@@ -65,7 +65,7 @@ func TestFakeWriter_Contains(t *testing.T) {
 func TestFakeWriter_ContainsANSI(t *testing.T) {
 	w := NewFakeWriter()
 
-	w.Write([]byte("\x1b[31mred\x1b[0m"))
+	_, _ = w.Write([]byte("\x1b[31mred\x1b[0m"))
 
 	if !w.ContainsANSI("\x1b[31m") {
 		t.Error("ContainsANSI(\"\\x1b[31m\") = false, want true")
@@ -79,7 +79,7 @@ func TestFakeWriter_ContainsANSI(t *testing.T) {
 func TestFakeWriter_StripANSI(t *testing.T) {
 	w := NewFakeWriter()
 
-	w.Write([]byte("\x1b[31mred\x1b[0m text"))
+	_, _ = w.Write([]byte("\x1b[31mred\x1b[0m text"))
 
 	stripped := w.StripANSI()
 	if stripped != "red text" {
@@ -90,7 +90,7 @@ func TestFakeWriter_StripANSI(t *testing.T) {
 func TestFakeWriter_Lines(t *testing.T) {
 	w := NewFakeWriter()
 
-	w.Write([]byte("line1\nline2\nline3"))
+	_, _ = w.Write([]byte("line1\nline2\nline3"))
 
 	lines := w.Lines()
 	if len(lines) != 3 {
@@ -112,7 +112,7 @@ func TestFakeWriter_WaitForContent(t *testing.T) {
 	// Start goroutine that writes after delay.
 	go func() {
 		time.Sleep(50 * time.Millisecond)
-		w.Write([]byte("delayed content"))
+		_, _ = w.Write([]byte("delayed content"))
 	}()
 
 	// WaitForContent should find it.
@@ -137,8 +137,8 @@ func TestFakeWriter_ConcurrentWrite(t *testing.T) {
 	done := make(chan bool)
 
 	for i := range 10 {
-		go func(n int) {
-			w.Write([]byte("test"))
+		go func(_ int) {
+			_, _ = w.Write([]byte("test"))
 
 			done <- true
 		}(i)

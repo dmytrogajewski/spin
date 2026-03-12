@@ -1,3 +1,4 @@
+// Package main provides a TUI demo example.
 package main
 
 import (
@@ -33,42 +34,42 @@ func main() {
 
 	// Start TUI in background.
 	go func() {
-		err := ui.Run(ctx)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+		runErr := ui.Run(ctx)
+		if runErr != nil {
+			fmt.Fprintf(os.Stderr, "TUI error: %v\n", runErr)
 			cancel()
 		}
 	}()
 
 	// Print welcome message.
-	ui.PrintLine("╔══════════════════════════════════════════╗")
-	ui.PrintLine("║   Spin TUI Demo - Minimal Example       ║")
-	ui.PrintLine("╚══════════════════════════════════════════╝")
-	ui.PrintLine("")
-	ui.PrintLine("Welcome to the Spin TUI minimal demo!")
-	ui.PrintLine("This example shows the simplest possible TUI usage.")
-	ui.PrintLine("")
-	ui.PrintLine("Commands:")
-	ui.PrintLine("  help    - Show this message")
-	ui.PrintLine("  hello   - Print a greeting")
-	ui.PrintLine("  quit    - Exit the demo")
-	ui.PrintLine("")
-	ui.PrintLine("Type a command and press Enter:")
+	_ = ui.PrintLine("╔══════════════════════════════════════════╗")
+	_ = ui.PrintLine("║   Spin TUI Demo - Minimal Example       ║")
+	_ = ui.PrintLine("╚══════════════════════════════════════════╝")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("Welcome to the Spin TUI minimal demo!")
+	_ = ui.PrintLine("This example shows the simplest possible TUI usage.")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("Commands:")
+	_ = ui.PrintLine("  help    - Show this message")
+	_ = ui.PrintLine("  hello   - Print a greeting")
+	_ = ui.PrintLine("  quit    - Exit the demo")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("Type a command and press Enter:")
 
 	// Main input loop.
 	for {
 		select {
 		case <-ctx.Done():
 			// Clean shutdown.
-			ui.Stop()
-			fmt.Println("\nGoodbye!")
+			_ = ui.Stop()
+			_, _ = fmt.Fprintln(os.Stdout, "\nGoodbye!")
 
 			return
 
 		case line, ok := <-ui.RequestInput():
 			if !ok {
 				// Input channel closed.
-				ui.Stop()
+				_ = ui.Stop()
 
 				return
 			}
@@ -76,31 +77,31 @@ func main() {
 			// Handle commands.
 			switch line {
 			case "quit", "exit", "q":
-				ui.PrintLine("Exiting demo...")
+				_ = ui.PrintLine("Exiting demo...")
 				cancel()
 
 			case "help", "h", "?":
-				ui.PrintLine("")
-				ui.PrintLine("Available commands:")
-				ui.PrintLine("  help    - Show this message")
-				ui.PrintLine("  hello   - Print a greeting")
-				ui.PrintLine("  quit    - Exit the demo")
-				ui.PrintLine("")
+				_ = ui.PrintLine("")
+				_ = ui.PrintLine("Available commands:")
+				_ = ui.PrintLine("  help    - Show this message")
+				_ = ui.PrintLine("  hello   - Print a greeting")
+				_ = ui.PrintLine("  quit    - Exit the demo")
+				_ = ui.PrintLine("")
 
 			case "hello":
-				ui.PrintLine("")
-				ui.PrintLine("Hello from Spin TUI! 👋")
-				ui.PrintLine("The quick brown fox jumps over the lazy dog.")
-				ui.PrintLine("")
+				_ = ui.PrintLine("")
+				_ = ui.PrintLine("Hello from Spin TUI! 👋")
+				_ = ui.PrintLine("The quick brown fox jumps over the lazy dog.")
+				_ = ui.PrintLine("")
 
 			case "":
 				// Empty line, do nothing.
 
 			default:
-				ui.PrintLine("")
-				ui.PrintLine(fmt.Sprintf("Unknown command: '%s'", line))
-				ui.PrintLine("Type 'help' for available commands.")
-				ui.PrintLine("")
+				_ = ui.PrintLine("")
+				_ = ui.PrintLine(fmt.Sprintf("Unknown command: '%s'", line))
+				_ = ui.PrintLine("Type 'help' for available commands.")
+				_ = ui.PrintLine("")
 			}
 		}
 	}

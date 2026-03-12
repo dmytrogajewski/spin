@@ -1,4 +1,4 @@
-// Package debug provides debugging and development utilities for Spin.
+// Package dbg provides debugging and development utilities for Spin.
 //
 // This package implements tools for:
 //   - Sandbox testing (macOS sandbox-exec, Linux Landlock)
@@ -37,4 +37,4 @@
 //
 // All debug utilities are designed for development and troubleshooting.
 // They should not be used in production environments.
-package debug
+package dbg

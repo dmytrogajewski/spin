@@ -13,6 +13,15 @@ import (
 	"github.com/dmytrogajewski/spin/internal/state"
 )
 
+var (
+	ErrCannotTransitionFromArchivedState = errors.New("cannot transition from archived state")
+	ErrCannotTransitionFromToActive = errors.New("cannot transition from  to active")
+	ErrSessionIdIsEmpty = errors.New("session ID is empty")
+	ErrWorkDirectoryIsEmpty = errors.New("work directory is empty")
+	ErrUpdatedAtIsBeforeCreatedAt = errors.New("updated_at is before created_at")
+	ErrInvalidState = errors.New("invalid state")
+)
+
 // CurrentSchemaVersion is the current session schema version for migrations.
 const CurrentSchemaVersion = 1
 
@@ -44,7 +53,7 @@ type Session struct {
 	Metadata  Metadata     // Session metadata.
 	State     State        // Current session state.
 	Version   int          // Schema version for migrations.
-	mu        sync.RWMutex // Protects all fields.
+	mu        *sync.RWMutex // Protects all fields.
 }
 
 // NewSession creates a new session with the given working directory.
@@ -62,12 +71,21 @@ func NewSession(workDir string) *Session {
 		Metadata:  Metadata{},
 		State:     StateActive,
 		Version:   CurrentSchemaVersion,
+		mu:        &sync.RWMutex{},
+	}
+}
+
+// ensureMu lazily initializes the mutex for deserialized sessions.
+func (s *Session) ensureMu() {
+	if s.mu == nil {
+		s.mu = &sync.RWMutex{}
 	}
 }
 
 // IncrementTurnCount increments the turn counter and updates tokens used.
 // This is called when a turn completes. The actual messages are stored in history.History.
 func (s *Session) IncrementTurnCount(tokensUsed int) {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -78,6 +96,7 @@ func (s *Session) IncrementTurnCount(tokensUsed int) {
 
 // UpdateMetadata updates session metadata using a callback function.
 func (s *Session) UpdateMetadata(fn func(*Metadata)) error {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -89,6 +108,7 @@ func (s *Session) UpdateMetadata(fn func(*Metadata)) error {
 
 // SetState updates session state with validation.
 func (s *Session) SetState(state State) error {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -108,12 +128,12 @@ func (s *Session) SetState(state State) error {
 func (s *Session) validateStateTransition(from, to State) error {
 	// Archived is terminal - cannot transition from it.
 	if from == StateArchived {
-		return errors.New("cannot transition from archived state")
+		return ErrCannotTransitionFromArchivedState
 	}
 
 	// Cannot transition back to active from terminal states.
 	if to == StateActive && (from == StateCompleted || from == StateFailed || from == StateCancelled) {
-		return fmt.Errorf("cannot transition from %s to active", from)
+return fmt.Errorf("cannot transition from %s to active: %w", from, ErrCannotTransitionFromToActive)
 	}
 
 	return nil
@@ -121,6 +141,7 @@ func (s *Session) validateStateTransition(from, to State) error {
 
 // AddTag adds a tag to the session.
 func (s *Session) AddTag(tag string) error {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -137,6 +158,7 @@ func (s *Session) AddTag(tag string) error {
 
 // RemoveTag removes a tag from the session.
 func (s *Session) RemoveTag(tag string) error {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -155,6 +177,7 @@ func (s *Session) RemoveTag(tag string) error {
 
 // SetTitle updates the session title.
 func (s *Session) SetTitle(title string) error {
+	s.ensureMu()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -166,6 +189,7 @@ func (s *Session) SetTitle(title string) error {
 
 // Validate checks session integrity.
 func (s *Session) Validate() error {
+	s.ensureMu()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -184,7 +208,7 @@ func (s *Session) validateBasicFields() []error {
 
 	// Validate ID.
 	if s.ID == "" {
-		errs = append(errs, errors.New("session ID is empty"))
+		errs = append(errs, ErrSessionIdIsEmpty)
 	}
 
 	_, err := uuid.Parse(s.ID)
@@ -194,17 +218,17 @@ func (s *Session) validateBasicFields() []error {
 
 	// Validate WorkDir.
 	if s.WorkDir == "" {
-		errs = append(errs, errors.New("work directory is empty"))
+		errs = append(errs, ErrWorkDirectoryIsEmpty)
 	}
 
 	// Validate timestamps.
 	if s.UpdatedAt.Before(s.CreatedAt) {
-		errs = append(errs, errors.New("updated_at is before created_at"))
+		errs = append(errs, ErrUpdatedAtIsBeforeCreatedAt)
 	}
 
 	// Validate state.
 	if !isValidState(s.State) {
-		errs = append(errs, fmt.Errorf("invalid state: %s", s.State))
+errs = append(errs, fmt.Errorf("invalid state: %s: %w", s.State, ErrInvalidState))
 	}
 
 	return errs

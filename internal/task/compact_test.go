@@ -115,7 +115,7 @@ func TestCompact_DefaultMaxTokens(t *testing.T) {
 	}
 }
 
-func TestCompact_Concurrency(t *testing.T) {
+func TestCompact_Concurrency(_ *testing.T) {
 	compact := NewCompact()
 
 	// Test concurrent access to methods.
@@ -128,7 +128,7 @@ func TestCompact_Concurrency(t *testing.T) {
 			compact.SystemPrompt()
 			compact.AllowedTools()
 			compact.MaxTokens()
-			compact.Validate()
+			_ = compact.Validate()
 
 			done <- true
 		}()

@@ -1,3 +1,4 @@
+// Package planning provides planning services and parsing.
 package planning
 
 import (

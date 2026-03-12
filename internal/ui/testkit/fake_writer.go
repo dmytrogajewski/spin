@@ -2,6 +2,7 @@ package testkit
 
 import (
 	"bytes"
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -25,7 +26,12 @@ func (f *FakeWriter) Write(p []byte) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	return f.buf.Write(p)
+	n, err := f.buf.Write(p)
+	if err != nil {
+		return n, fmt.Errorf("fake writer write: %w", err)
+	}
+
+	return n, nil
 }
 
 // Snapshot returns the current output as a string.

@@ -1,3 +1,4 @@
+// Package curator provides curation and refinement of agent responses.
 package curator
 
 import (

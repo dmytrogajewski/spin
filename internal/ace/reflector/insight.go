@@ -1,3 +1,4 @@
+// Package reflector provides reflection and insight generation.
 package reflector
 
 import (
@@ -6,9 +7,18 @@ import (
 	"time"
 )
 
+var (
+	ErrContentCannotBeEmpty = errors.New("content cannot be empty")
+	ErrContentTooShortMin50Chars = errors.New("content too short (min 50 chars")
+	ErrContentTooLongMax500Chars = errors.New("content too long (max 500 chars")
+	ErrConfidenceMustBeBetween00 = errors.New("confidence must be between 0.0 and 1.0")
+	ErrInvalidCategory = errors.New("invalid category")
+)
+
 // InsightCategory classifies the type of insight.
 type InsightCategory string
 
+// CategorySuccessPattern defines a CategorySuccessPattern constant.
 const (
 	CategorySuccessPattern InsightCategory = "success_pattern"
 	CategoryErrorMode      InsightCategory = "error_mode"
@@ -55,23 +65,23 @@ func NewInsight(content string, category InsightCategory) *Insight {
 // Validate checks if the insight meets quality requirements.
 func (i *Insight) Validate() error {
 	if i.Content == "" {
-		return errors.New("content cannot be empty")
+		return ErrContentCannotBeEmpty
 	}
 
 	if len(i.Content) < 50 {
-		return fmt.Errorf("content too short (min 50 chars, got %d)", len(i.Content))
+return fmt.Errorf("content too short (min 50 chars, got %d): %w", len(i.Content), ErrContentTooShortMin50Chars)
 	}
 
 	if len(i.Content) > 500 {
-		return fmt.Errorf("content too long (max 500 chars, got %d)", len(i.Content))
+return fmt.Errorf("content too long (max 500 chars, got %d): %w", len(i.Content), ErrContentTooLongMax500Chars)
 	}
 
 	if i.Confidence < 0.0 || i.Confidence > 1.0 {
-		return fmt.Errorf("confidence must be between 0.0 and 1.0, got %.2f", i.Confidence)
+return fmt.Errorf("confidence must be between 0.0 and 1.0, got %.2f: %w", i.Confidence, ErrConfidenceMustBeBetween00)
 	}
 
 	if !isValidCategory(i.Category) {
-		return fmt.Errorf("invalid category: %s", i.Category)
+return fmt.Errorf("invalid category: %s: %w", i.Category, ErrInvalidCategory)
 	}
 
 	return nil

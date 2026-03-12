@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
@@ -44,37 +46,65 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 
 	// Add bullets to playbook
 	// High utility bullets.
-	b1, _ := bullet.New("Always validate user input")
+	b1, err := bullet.New("Always validate user input")
+	require.NoError(t, err)
+
 	b1.IncrementHelpful()
 	b1.IncrementHelpful()
 	b1.IncrementHelpful()
-	emb1, _ := embedder.Embed(ctx, b1.Content)
+
+	emb1, err := embedder.Embed(ctx, b1.Content)
+	require.NoError(t, err)
+
 	b1.Embedding = emb1
-	pb.Add(ctx, b1)
+
+	err = pb.Add(ctx, b1)
+	require.NoError(t, err)
 
 	// Similar to b1 (should be merged).
-	b2, _ := bullet.New("Always validate user input") // Exact duplicate.
+	b2, err := bullet.New("Always validate user input") // Exact duplicate.
+	require.NoError(t, err)
+
 	b2.IncrementHelpful()
-	emb2, _ := embedder.Embed(ctx, b2.Content)
+
+	emb2, err := embedder.Embed(ctx, b2.Content)
+	require.NoError(t, err)
+
 	b2.Embedding = emb2
-	pb.Add(ctx, b2)
+
+	err = pb.Add(ctx, b2)
+	require.NoError(t, err)
 
 	// Low utility bullet (should be pruned).
-	b3, _ := bullet.New("Low utility content")
+	b3, err := bullet.New("Low utility content")
+	require.NoError(t, err)
+
 	b3.IncrementHarmful()
 	b3.IncrementHarmful()
 	b3.IncrementHarmful()
-	emb3, _ := embedder.Embed(ctx, b3.Content)
+
+	emb3, err := embedder.Embed(ctx, b3.Content)
+	require.NoError(t, err)
+
 	b3.Embedding = emb3
-	pb.Add(ctx, b3)
+
+	err = pb.Add(ctx, b3)
+	require.NoError(t, err)
 
 	// Different bullet (should remain).
-	b4, _ := bullet.New("Use errors.Is for error checking")
+	b4, err := bullet.New("Use errors.Is for error checking")
+	require.NoError(t, err)
+
 	b4.IncrementHelpful()
 	b4.IncrementHelpful()
-	emb4, _ := embedder.Embed(ctx, b4.Content)
+
+	emb4, err := embedder.Embed(ctx, b4.Content)
+	require.NoError(t, err)
+
 	b4.Embedding = emb4
-	pb.Add(ctx, b4)
+
+	err = pb.Add(ctx, b4)
+	require.NoError(t, err)
 
 	initialCount := pb.Stats().TotalBullets
 	if initialCount != 4 {
@@ -139,9 +169,13 @@ func TestIntegration_GrowthMonitoring(t *testing.T) {
 
 	// Add bullets gradually.
 	for i := range 5 {
-		b, _ := bullet.New("Test content")
+		b, err := bullet.New("Test content")
+		require.NoError(t, err)
+
 		b.IncrementHelpful()
-		pb.Add(ctx, b)
+
+		err = pb.Add(ctx, b)
+		require.NoError(t, err)
 
 		metrics, needsRefine := monitor.CheckGrowth(ctx)
 
@@ -156,8 +190,12 @@ func TestIntegration_GrowthMonitoring(t *testing.T) {
 
 	// Add more to exceed threshold.
 	for i := 5; i < 12; i++ {
-		b, _ := bullet.New("Test content")
-		pb.Add(ctx, b)
+		b, err := bullet.New("Test content")
+		require.NoError(t, err)
+
+		err = pb.Add(ctx, b)
+		require.NoError(t, err)
+
 		monitor.CheckGrowth(ctx)
 	}
 
@@ -178,16 +216,29 @@ func TestIntegration_MergeOnly(t *testing.T) {
 	orchestrator := NewRefinementOrchestrator(pb, mergeEngine, archive, nil) // No curator.
 
 	// Add identical bullets.
-	b1, _ := bullet.New("Identical content")
-	b1.IncrementHelpful()
-	emb1, _ := embedder.Embed(ctx, b1.Content)
-	b1.Embedding = emb1
-	pb.Add(ctx, b1)
+	b1, err := bullet.New("Identical content")
+	require.NoError(t, err)
 
-	b2, _ := bullet.New("Identical content")
-	emb2, _ := embedder.Embed(ctx, b2.Content)
+	b1.IncrementHelpful()
+
+	emb1, err := embedder.Embed(ctx, b1.Content)
+	require.NoError(t, err)
+
+	b1.Embedding = emb1
+
+	err = pb.Add(ctx, b1)
+	require.NoError(t, err)
+
+	b2, err := bullet.New("Identical content")
+	require.NoError(t, err)
+
+	emb2, err := embedder.Embed(ctx, b2.Content)
+	require.NoError(t, err)
+
 	b2.Embedding = emb2
-	pb.Add(ctx, b2)
+
+	err = pb.Add(ctx, b2)
+	require.NoError(t, err)
 
 	result, err := orchestrator.Refine(ctx, RefinementRequest{
 		PruneEnabled:   false, // Merge only.
@@ -241,11 +292,15 @@ func TestIntegration_PruneOnly(t *testing.T) {
 	orchestrator := NewRefinementOrchestrator(pb, nil, nil, pruneFunc) // No merge engine or archive.
 
 	// Add low utility bullet.
-	b, _ := bullet.New("Low utility")
+	b, err := bullet.New("Low utility")
+	require.NoError(t, err)
+
 	b.IncrementHarmful()
 	b.IncrementHarmful()
 	b.IncrementHarmful()
-	pb.Add(ctx, b)
+
+	err = pb.Add(ctx, b)
+	require.NoError(t, err)
 
 	result, err := orchestrator.Refine(ctx, RefinementRequest{
 		PruneEnabled:   true,
@@ -276,15 +331,23 @@ func TestIntegration_NoRefinementNeeded(t *testing.T) {
 	orchestrator := NewRefinementOrchestrator(pb, mergeEngine, archive, nil) // No curator to avoid pruning.
 
 	// Add high utility, unique bullets.
-	b1, _ := bullet.New("Unique content 1")
-	b1.IncrementHelpful()
-	b1.IncrementHelpful()
-	pb.Add(ctx, b1)
+	b1, err := bullet.New("Unique content 1")
+	require.NoError(t, err)
 
-	b2, _ := bullet.New("Unique content 2")
+	b1.IncrementHelpful()
+	b1.IncrementHelpful()
+
+	err = pb.Add(ctx, b1)
+	require.NoError(t, err)
+
+	b2, err := bullet.New("Unique content 2")
+	require.NoError(t, err)
+
 	b2.IncrementHelpful()
 	b2.IncrementHelpful()
-	pb.Add(ctx, b2)
+
+	err = pb.Add(ctx, b2)
+	require.NoError(t, err)
 
 	initialCount := pb.Stats().TotalBullets
 

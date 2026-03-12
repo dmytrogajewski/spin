@@ -262,7 +262,7 @@ func TestArchive_Concurrency(t *testing.T) {
 
 	// Concurrent writes.
 	for g := range goroutines {
-		go func(id int) {
+		go func(_ int) {
 			for range bulletsPerGoroutine {
 				b, _ := bullet.New("Test content")
 				archive.Archive(b, ReasonLowUtility, nil)

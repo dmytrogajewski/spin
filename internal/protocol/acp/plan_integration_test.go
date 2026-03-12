@@ -140,8 +140,8 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
-	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
+	securityService := security.NewService(validator, approvalService)
+	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
 		Registry:        tools.NewRegistry(),
 		Validator:       validator,
@@ -156,7 +156,7 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(provider),
+		planning.NewService(provider),
 		&agent.Environment{WorkDir: "/tmp"},
 		emitter,
 	)
@@ -189,7 +189,7 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 	acpAgent.SetNotificationSender(mockConn)
 
 	// Create agent response.
-	agentResp := &agent.AgentResponse{
+	agentResp := &agent.Response{
 		Output:  "Plan created",
 		Success: true,
 	}
@@ -233,7 +233,7 @@ func TestSendPlanNotifications_FallbackToTextDetection(t *testing.T) {
 	acpAgent.SetNotificationSender(mockConn)
 
 	// Agent response with plan-like text but no structured plan.
-	agentResp := &agent.AgentResponse{
+	agentResp := &agent.Response{
 		Output: `
 Plan:
 1. First step

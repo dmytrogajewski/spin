@@ -1,3 +1,4 @@
+// Package history provides conversation history management.
 package history
 
 import (

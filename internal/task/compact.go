@@ -1,7 +1,7 @@
+// Package task provides task execution and compaction.
 package task
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -55,30 +55,35 @@ func NewCompact() *Compact {
 	}
 }
 
+// Name implements the Name operation.
 func (c *Compact) Name() string {
 	return c.name
 }
 
+// SystemPrompt implements the SystemPrompt operation.
 func (c *Compact) SystemPrompt() string {
 	return c.systemPrompt
 }
 
+// AllowedTools implements the AllowedTools operation.
 func (c *Compact) AllowedTools() []string {
 	// Compact mode allows basic tools only.
 	return []string{"read_file", "list_directory", "file_search", "get_context"}
 }
 
+// MaxTokens implements the MaxTokens operation.
 func (c *Compact) MaxTokens() int {
 	return c.maxTokens
 }
 
+// Validate implements the Validate operation.
 func (c *Compact) Validate() error {
 	if c.maxTokens <= 0 {
-		return errors.New("max tokens must be positive")
+		return ErrMaxTokensMustBePositive
 	}
 
 	if c.maxTokens > MaxAllowedTokens {
-		return fmt.Errorf("max tokens %d exceeds maximum allowed %d", c.maxTokens, MaxAllowedTokens)
+return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", c.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
 	}
 
 	return nil

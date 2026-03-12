@@ -10,13 +10,13 @@ import (
 func TestMCPServerConfig_Validate_Stdio(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  MCPServerConfig
+		config  ServerConfig
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name: "valid stdio config",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "test-server",
 				Transport: TransportStdio,
 				Command:   "npx",
@@ -26,7 +26,7 @@ func TestMCPServerConfig_Validate_Stdio(t *testing.T) {
 		},
 		{
 			name: "valid stdio config with empty transport",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:    "test-server",
 				Command: "echo",
 			},
@@ -34,7 +34,7 @@ func TestMCPServerConfig_Validate_Stdio(t *testing.T) {
 		},
 		{
 			name: "invalid stdio config missing command",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "test-server",
 				Transport: TransportStdio,
 			},
@@ -43,7 +43,7 @@ func TestMCPServerConfig_Validate_Stdio(t *testing.T) {
 		},
 		{
 			name: "invalid stdio config with URL",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "test-server",
 				Transport: TransportStdio,
 				Command:   "echo",
@@ -70,13 +70,13 @@ func TestMCPServerConfig_Validate_Stdio(t *testing.T) {
 func TestMCPServerConfig_Validate_SSE(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  MCPServerConfig
+		config  ServerConfig
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name: "valid sse config",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "smithery-server",
 				Transport: TransportSSE,
 				URL:       "https://server.smithery.ai/sse",
@@ -85,7 +85,7 @@ func TestMCPServerConfig_Validate_SSE(t *testing.T) {
 		},
 		{
 			name: "valid sse config with headers",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "smithery-server",
 				Transport: TransportSSE,
 				URL:       "https://server.smithery.ai/sse",
@@ -97,7 +97,7 @@ func TestMCPServerConfig_Validate_SSE(t *testing.T) {
 		},
 		{
 			name: "invalid sse config missing url",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "smithery-server",
 				Transport: TransportSSE,
 			},
@@ -106,7 +106,7 @@ func TestMCPServerConfig_Validate_SSE(t *testing.T) {
 		},
 		{
 			name: "invalid sse config with command",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "smithery-server",
 				Transport: TransportSSE,
 				URL:       "https://server.smithery.ai/sse",
@@ -117,7 +117,7 @@ func TestMCPServerConfig_Validate_SSE(t *testing.T) {
 		},
 		{
 			name: "invalid sse config with invalid url",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "smithery-server",
 				Transport: TransportSSE,
 				URL:       "not-a-valid-url",
@@ -143,13 +143,13 @@ func TestMCPServerConfig_Validate_SSE(t *testing.T) {
 func TestMCPServerConfig_Validate_StreamableHTTP(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  MCPServerConfig
+		config  ServerConfig
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name: "valid streamable-http config",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "remote-server",
 				Transport: TransportStreamableHTTP,
 				URL:       "https://mcp.example.com/v1",
@@ -158,7 +158,7 @@ func TestMCPServerConfig_Validate_StreamableHTTP(t *testing.T) {
 		},
 		{
 			name: "invalid streamable-http missing url",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "remote-server",
 				Transport: TransportStreamableHTTP,
 			},
@@ -183,13 +183,13 @@ func TestMCPServerConfig_Validate_StreamableHTTP(t *testing.T) {
 func TestMCPServerConfig_Validate_OAuth(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  MCPServerConfig
+		config  ServerConfig
 		wantErr bool
 		errMsg  string
 	}{
 		{
 			name: "valid sse config with oauth",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "protected-server",
 				Transport: TransportSSE,
 				URL:       "https://protected.example.com/mcp",
@@ -201,7 +201,7 @@ func TestMCPServerConfig_Validate_OAuth(t *testing.T) {
 		},
 		{
 			name: "valid streamable-http config with oauth",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "protected-server",
 				Transport: TransportStreamableHTTP,
 				URL:       "https://protected.example.com/mcp",
@@ -215,7 +215,7 @@ func TestMCPServerConfig_Validate_OAuth(t *testing.T) {
 		},
 		{
 			name: "invalid oauth with stdio transport",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "local-server",
 				Transport: TransportStdio,
 				Command:   "echo",
@@ -228,7 +228,7 @@ func TestMCPServerConfig_Validate_OAuth(t *testing.T) {
 		},
 		{
 			name: "invalid oauth missing client_id",
-			config: MCPServerConfig{
+			config: ServerConfig{
 				Name:      "protected-server",
 				Transport: TransportSSE,
 				URL:       "https://protected.example.com/mcp",
@@ -253,7 +253,7 @@ func TestMCPServerConfig_Validate_OAuth(t *testing.T) {
 }
 
 func TestMCPServerConfig_Validate_InvalidTransport(t *testing.T) {
-	config := MCPServerConfig{
+	config := ServerConfig{
 		Name:      "test-server",
 		Transport: "websocket",
 	}
@@ -264,7 +264,7 @@ func TestMCPServerConfig_Validate_InvalidTransport(t *testing.T) {
 }
 
 func TestMCPServerConfig_Validate_MissingName(t *testing.T) {
-	config := MCPServerConfig{
+	config := ServerConfig{
 		Command: "echo",
 	}
 

@@ -9,6 +9,13 @@ import (
 	"github.com/openai/openai-go"
 )
 
+var (
+	errMockError = errors.New("mock error")
+	errTestError = errors.New("test error")
+	errTestError2 = errors.New("test error")
+	errModelsError = errors.New("models error")
+)
+
 func TestNewMockProvider(t *testing.T) {
 	t.Run("default configuration", func(t *testing.T) {
 		p := NewMockProvider("test")
@@ -90,7 +97,7 @@ func TestNewMockProvider(t *testing.T) {
 	})
 
 	t.Run("with error", func(t *testing.T) {
-		expectedErr := errors.New("mock error")
+		expectedErr := errMockError
 		p := NewMockProvider("test", WithError(expectedErr))
 
 		params := openai.ChatCompletionNewParams{
@@ -141,15 +148,15 @@ func TestNewMockProvider(t *testing.T) {
 		p := NewMockProvider("test", WithCapabilities(caps))
 
 		got := p.Capabilities()
-		if got.Streaming != false {
+		if got.Streaming {
 			t.Error("Expected Streaming = false")
 		}
 
-		if got.FunctionCalling != true {
+		if !got.FunctionCalling {
 			t.Error("Expected FunctionCalling = true")
 		}
 
-		if got.Vision != true {
+		if !got.Vision {
 			t.Error("Expected Vision = true")
 		}
 	})
@@ -256,7 +263,7 @@ func TestMockProvider_Complete(t *testing.T) {
 	})
 
 	t.Run("with error", func(t *testing.T) {
-		expectedErr := errors.New("test error")
+		expectedErr := errTestError
 		p := NewMockProvider("test", WithError(expectedErr))
 
 		params := openai.ChatCompletionNewParams{
@@ -397,7 +404,7 @@ func TestMockProvider_Stream(t *testing.T) {
 	})
 
 	t.Run("error before streaming", func(t *testing.T) {
-		expectedErr := errors.New("test error")
+		expectedErr := errTestError2
 		p := NewMockProvider("test", WithError(expectedErr))
 
 		params := openai.ChatCompletionNewParams{
@@ -449,7 +456,7 @@ func TestMockProvider_Models(t *testing.T) {
 	})
 
 	t.Run("error", func(t *testing.T) {
-		expectedErr := errors.New("models error")
+		expectedErr := errModelsError
 		p := NewMockProvider("test", WithError(expectedErr))
 
 		_, err := p.Models(context.Background())
@@ -459,7 +466,7 @@ func TestMockProvider_Models(t *testing.T) {
 	})
 }
 
-func TestMockProvider_ThreadSafety(t *testing.T) {
+func TestMockProvider_ThreadSafety(_ *testing.T) {
 	p := NewMockProvider("test")
 
 	// Concurrent reads.

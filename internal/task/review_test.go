@@ -88,7 +88,7 @@ func TestReview_Validate(t *testing.T) {
 	}
 }
 
-func TestReview_Concurrency(t *testing.T) {
+func TestReview_Concurrency(_ *testing.T) {
 	review := NewReview()
 
 	// Test concurrent access.

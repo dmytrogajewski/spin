@@ -56,8 +56,8 @@ func TestACP_Prompt_ToolCalls(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		_, err := client.Prompt(ctx, promptReq)
-		done <- err
+		_, promptErr := client.Prompt(ctx, promptReq)
+		done <- promptErr
 	}()
 
 	// Wait a bit for notifications.
@@ -81,8 +81,8 @@ func TestACP_Prompt_ToolCalls(t *testing.T) {
 
 	// Wait for prompt to complete.
 	select {
-	case err := <-done:
-		require.NoError(t, err, "Prompt should complete")
+	case promptErr := <-done:
+		require.NoError(t, promptErr, "Prompt should complete")
 	case <-time.After(30 * time.Second):
 		t.Fatal("Prompt timed out")
 	}

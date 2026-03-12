@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+var (
+	ErrBlockIdIsEmpty = errors.New("block ID is empty")
+	ErrInvalidBlockType = errors.New("invalid block type")
+	ErrInvalidFoldState = errors.New("invalid fold state")
+	ErrInvalidSeverity = errors.New("invalid severity")
+	ErrInvalidTimestamp = errors.New("invalid timestamp")
+)
+
 // Block represents a single block in the TUI timeline.
 //
 // Each block has a unique ID, type, optional title, type-specific metadata,
@@ -72,23 +80,23 @@ func NewBlock(blockType BlockType) *Block {
 //   - Timestamp is zero or negative
 func (b *Block) Validate() error {
 	if b.ID == "" {
-		return errors.New("block ID is empty")
+		return ErrBlockIdIsEmpty
 	}
 
 	if !b.Type.Valid() {
-		return fmt.Errorf("invalid block type: %s", b.Type)
+return fmt.Errorf("invalid block type: %s: %w", b.Type, ErrInvalidBlockType)
 	}
 
 	if !b.FoldState.Valid() {
-		return fmt.Errorf("invalid fold state: %s", b.FoldState)
+return fmt.Errorf("invalid fold state: %s: %w", b.FoldState, ErrInvalidFoldState)
 	}
 
 	if !b.Severity.Valid() {
-		return fmt.Errorf("invalid severity: %s", b.Severity)
+return fmt.Errorf("invalid severity: %s: %w", b.Severity, ErrInvalidSeverity)
 	}
 
 	if b.Timestamp <= 0 {
-		return fmt.Errorf("invalid timestamp: %d", b.Timestamp)
+return fmt.Errorf("invalid timestamp: %d: %w", b.Timestamp, ErrInvalidTimestamp)
 	}
 
 	return nil

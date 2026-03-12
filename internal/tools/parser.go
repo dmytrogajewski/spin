@@ -6,6 +6,8 @@ import (
 	"fmt"
 )
 
+var ErrToolArgumentsCannotBeEmpty = errors.New("tool arguments cannot be empty")
+
 // ArgumentParser parses tool call arguments from JSON.
 // This provides a single source of truth for argument parsing across the codebase.
 type ArgumentParser struct {
@@ -36,7 +38,7 @@ func (p *ArgumentParser) Parse(raw string) (ToolParameters, error) {
 			return ToolParameters{}, nil
 		}
 
-		return ToolParameters{}, errors.New("tool arguments cannot be empty")
+		return ToolParameters{}, ErrToolArgumentsCannotBeEmpty
 	}
 
 	var args map[string]any

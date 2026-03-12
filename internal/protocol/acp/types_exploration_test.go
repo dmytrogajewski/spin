@@ -210,7 +210,7 @@ func TestConnectionInfrastructure(t *testing.T) {
 	t.Run("NewAgentSideConnection", func(t *testing.T) {
 		// This test verifies we understand the connection setup
 		// Actual connection requires a real Agent implementation.
-		var agent acp.Agent = nil
+		var agent acp.Agent
 		// conn := acp.NewAgentSideConnection(agent, os.Stdout, os.Stdin)
 		// We'll test this when we have a real Agent implementation.
 		t.Log("NewAgentSideConnection requires Agent implementation")

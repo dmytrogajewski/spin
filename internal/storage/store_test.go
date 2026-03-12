@@ -47,7 +47,7 @@ func TestFileStore_Delete(t *testing.T) {
 	}
 
 	data := TestData{ID: "test-1", Name: "Test", Value: 42}
-	store.Save("test-1", data)
+	_ = store.Save("test-1", data)
 
 	// Delete.
 	err = store.Delete("test-1")
@@ -81,7 +81,7 @@ func TestFileStore_Exists(t *testing.T) {
 	}
 
 	// Save and check.
-	store.Save("test-1", TestData{ID: "test-1"})
+	_ = store.Save("test-1", TestData{ID: "test-1"})
 
 	exists, err = store.Exists("test-1")
 	if err != nil {
@@ -103,7 +103,7 @@ func TestFileStore_List(t *testing.T) {
 
 	// Save multiple items.
 	for i := range 5 {
-		store.Save(string(rune('a'+i)), TestData{ID: string(rune('a' + i))})
+		_ = store.Save(string(rune('a'+i)), TestData{ID: string(rune('a' + i))})
 	}
 
 	keys, err := store.List()
@@ -126,7 +126,7 @@ func TestFileStore_CustomSuffix(t *testing.T) {
 	}
 
 	data := TestData{ID: "test-1", Name: "Test", Value: 42}
-	store.Save("test-1", data)
+	_ = store.Save("test-1", data)
 
 	// Load should work.
 	loaded, err := store.Load("test-1")

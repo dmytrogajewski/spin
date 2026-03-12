@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/dmytrogajewski/spin/internal/version"
+	"github.com/dmytrogajewski/spin/internal/appinfo"
 )
 
 // Global flags.
@@ -29,7 +29,7 @@ It provides an interactive terminal UI, non-interactive execution mode,
 and integrates with IDEs via JSON-RPC.
 
 Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible API.`,
-		Version: version.ShortVersion(),
+		Version: appinfo.ShortVersion(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Default behavior: launch TUI when no subcommand is provided.
 			return runTUI(cmd, args)
@@ -39,7 +39,7 @@ Compatible with: Ollama, LMStudio, OpenAI, Anthropic, and any OpenAI-compatible 
 	}
 
 	// Set custom version template.
-	cmd.SetVersionTemplate(version.String() + "\n")
+	cmd.SetVersionTemplate(appinfo.String() + "\n")
 
 	// Global flags.
 	cmd.PersistentFlags().StringVar(&flagModel, "model", "", "Model to use (e.g., llama3.1, mixtral, gpt-4o)")

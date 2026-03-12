@@ -86,9 +86,9 @@ func TestWriteFileTool(t *testing.T) {
 					return
 				}
 
-				content, err := os.ReadFile(path)
-				if err != nil {
-					t.Errorf("failed to read written file: %v", err)
+				content, readErr := os.ReadFile(path)
+				if readErr != nil {
+					t.Errorf("failed to read written file: %v", readErr)
 
 					return
 				}

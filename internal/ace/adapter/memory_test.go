@@ -128,7 +128,7 @@ func TestMemoryManager_Prune(t *testing.T) {
 	b1.IncrementHarmful()
 	emb1, _ := embedder.Embed(ctx, b1.Content)
 	b1.Embedding = emb1
-	pb.Add(ctx, b1)
+	_ = pb.Add(ctx, b1)
 
 	// Low utility bullet (should prune).
 	b2, _ := bullet.New("Low utility bullet")
@@ -138,13 +138,13 @@ func TestMemoryManager_Prune(t *testing.T) {
 	b2.IncrementHarmful()
 	emb2, _ := embedder.Embed(ctx, b2.Content)
 	b2.Embedding = emb2
-	pb.Add(ctx, b2)
+	_ = pb.Add(ctx, b2)
 
 	// Zero utility bullet (should prune).
 	b3, _ := bullet.New("Zero utility bullet")
 	emb3, _ := embedder.Embed(ctx, b3.Content)
 	b3.Embedding = emb3
-	pb.Add(ctx, b3)
+	_ = pb.Add(ctx, b3)
 
 	// Initial count.
 	assert.Equal(t, 3, pb.Stats().TotalBullets)

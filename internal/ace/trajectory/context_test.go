@@ -8,9 +8,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
 )
 
-func TestNewTrajectoryContext(t *testing.T) {
+func TestNewContext(t *testing.T) {
 	t.Run("creates non-empty session ID", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test query")
+		ctx := NewContext("test query")
 
 		if ctx.SessionID == "" {
 			t.Error("expected non-empty session ID, got empty string")
@@ -19,7 +19,7 @@ func TestNewTrajectoryContext(t *testing.T) {
 
 	t.Run("stores query", func(t *testing.T) {
 		query := "debug file upload"
-		ctx := NewTrajectoryContext(query)
+		ctx := NewContext(query)
 
 		if ctx.Query != query {
 			t.Errorf("expected query %q, got %q", query, ctx.Query)
@@ -28,7 +28,7 @@ func TestNewTrajectoryContext(t *testing.T) {
 
 	t.Run("sets start time", func(t *testing.T) {
 		before := time.Now()
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		after := time.Now()
 
 		if ctx.StartTime.IsZero() {
@@ -41,7 +41,7 @@ func TestNewTrajectoryContext(t *testing.T) {
 	})
 
 	t.Run("initializes empty collections", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 
 		if ctx.Steps == nil {
 			t.Error("expected non-nil Steps slice")
@@ -69,7 +69,7 @@ func TestNewTrajectoryContext(t *testing.T) {
 	})
 
 	t.Run("initializes turn to zero", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 
 		if ctx.CurrentTurn != 0 {
 			t.Errorf("expected CurrentTurn 0, got %d", ctx.CurrentTurn)
@@ -79,7 +79,7 @@ func TestNewTrajectoryContext(t *testing.T) {
 
 func TestAppendSteps(t *testing.T) {
 	t.Run("appends single step", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		steps := []generator.TrajectoryStep{
 			{StepNumber: 0, Type: "reasoning", Content: "test"},
 		}
@@ -96,7 +96,7 @@ func TestAppendSteps(t *testing.T) {
 	})
 
 	t.Run("appends multiple steps", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		steps := []generator.TrajectoryStep{
 			{StepNumber: 0, Type: "reasoning", Content: "step1"},
 			{StepNumber: 1, Type: "tool_call", Content: "step2"},
@@ -110,7 +110,7 @@ func TestAppendSteps(t *testing.T) {
 	})
 
 	t.Run("preserves order", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		step1 := []generator.TrajectoryStep{{StepNumber: 0, Content: "first"}}
 		step2 := []generator.TrajectoryStep{{StepNumber: 1, Content: "second"}}
 
@@ -131,7 +131,7 @@ func TestAppendSteps(t *testing.T) {
 	})
 
 	t.Run("handles nil steps", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		ctx.AppendSteps(nil)
 
 		if len(ctx.Steps) != 0 {
@@ -140,7 +140,7 @@ func TestAppendSteps(t *testing.T) {
 	})
 
 	t.Run("handles empty steps", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		ctx.AppendSteps([]generator.TrajectoryStep{})
 
 		if len(ctx.Steps) != 0 {
@@ -151,7 +151,7 @@ func TestAppendSteps(t *testing.T) {
 
 func TestRecordRetrieval(t *testing.T) {
 	t.Run("records first retrieval", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		event := RetrievalEvent{
 			Turn:         0,
 			Trigger:      TriggerInitial,
@@ -184,7 +184,7 @@ func TestRecordRetrieval(t *testing.T) {
 	})
 
 	t.Run("counts cache misses for new bullets", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		event := RetrievalEvent{Turn: 0}
 		bullets := []*bullet.Bullet{
 			{ID: "B1"},
@@ -203,7 +203,7 @@ func TestRecordRetrieval(t *testing.T) {
 	})
 
 	t.Run("counts cache hits for duplicate bullets", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		event1 := RetrievalEvent{Turn: 0}
 		bullets1 := []*bullet.Bullet{{ID: "B1"}}
 
@@ -224,7 +224,7 @@ func TestRecordRetrieval(t *testing.T) {
 	})
 
 	t.Run("increments access count on cache hit", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		event1 := RetrievalEvent{Turn: 0}
 		bullets1 := []*bullet.Bullet{{ID: "B1"}}
 		ctx.RecordRetrieval(event1, bullets1)
@@ -240,7 +240,7 @@ func TestRecordRetrieval(t *testing.T) {
 	})
 
 	t.Run("handles mixed new and cached bullets", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		event1 := RetrievalEvent{Turn: 0}
 		bullets1 := []*bullet.Bullet{{ID: "B1"}}
 		ctx.RecordRetrieval(event1, bullets1)
@@ -268,7 +268,7 @@ func TestRecordRetrieval(t *testing.T) {
 
 func TestGetActiveBullets(t *testing.T) {
 	t.Run("returns bullets within TTL", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		ctx.CurrentTurn = 5
 		event := RetrievalEvent{Turn: 0}
 		bullets := []*bullet.Bullet{
@@ -284,7 +284,7 @@ func TestGetActiveBullets(t *testing.T) {
 	})
 
 	t.Run("excludes bullets beyond TTL", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		ctx.CurrentTurn = 15 // 15 turns later.
 		event := RetrievalEvent{Turn: 0}
 		bullets := []*bullet.Bullet{{ID: "B1"}}
@@ -298,7 +298,7 @@ func TestGetActiveBullets(t *testing.T) {
 	})
 
 	t.Run("handles mixed fresh and expired bullets", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 
 		// Add old bullet (will expire).
 		event1 := RetrievalEvent{Turn: 0}
@@ -324,7 +324,7 @@ func TestGetActiveBullets(t *testing.T) {
 	})
 
 	t.Run("returns bullets in deterministic order", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		event := RetrievalEvent{Turn: 0}
 		bullets := []*bullet.Bullet{
 			{ID: "B3"},
@@ -346,7 +346,7 @@ func TestGetActiveBullets(t *testing.T) {
 	})
 
 	t.Run("updates last accessed time", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		event := RetrievalEvent{Turn: 0}
 		bullets := []*bullet.Bullet{{ID: "B1"}}
 		ctx.RecordRetrieval(event, bullets)
@@ -363,7 +363,7 @@ func TestGetActiveBullets(t *testing.T) {
 
 func TestToTrajectory(t *testing.T) {
 	t.Run("converts empty context", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test query")
+		ctx := NewContext("test query")
 
 		traj := ctx.ToTrajectory()
 
@@ -395,7 +395,7 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("includes all steps", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		steps := []generator.TrajectoryStep{
 			{StepNumber: 0, Content: "step1"},
 			{StepNumber: 1, Content: "step2"},
@@ -410,7 +410,7 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("includes all cached bullets", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		event := RetrievalEvent{Turn: 0}
 		bullets := []*bullet.Bullet{
 			{ID: "B1"},
@@ -426,7 +426,7 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("includes retrieval events", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		event := RetrievalEvent{
 			Turn:    0,
 			Trigger: TriggerInitial,
@@ -451,7 +451,7 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("preserves multiple retrieval events in order", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 
 		// Record multiple events.
 		event1 := RetrievalEvent{
@@ -503,7 +503,7 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("sets success flag", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		ctx.Success = true
 
 		traj := ctx.ToTrajectory()
@@ -514,7 +514,7 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("calculates turns", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		ctx.CurrentTurn = 5
 
 		traj := ctx.ToTrajectory()
@@ -525,7 +525,7 @@ func TestToTrajectory(t *testing.T) {
 	})
 
 	t.Run("calculates duration", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 
 		time.Sleep(10 * time.Millisecond)
 

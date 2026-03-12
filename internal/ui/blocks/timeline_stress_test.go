@@ -288,7 +288,7 @@ func TestTimeline_StressScrolling(t *testing.T) {
 		block := NewBlock(BlockTypeExecute)
 		block.ID = fmt.Sprintf("scroll-block-%d", i) // Unique ID.
 		block.Title = fmt.Sprintf("Block %d", i)
-		timeline.Append(block)
+		_ = timeline.Append(block)
 	}
 
 	t.Logf("Created %d blocks, testing scroll performance...", totalBlocks)

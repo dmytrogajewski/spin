@@ -79,13 +79,13 @@ security:
 		done := make(chan error, 1)
 
 		go func() {
-			_, err := client.Prompt(ctx, req)
-			done <- err
+			_, promptErr := client.Prompt(ctx, req)
+			done <- promptErr
 		}()
 
 		select {
-		case err := <-done:
-			require.NoError(t, err, "Prompt should complete")
+		case promptErr := <-done:
+			require.NoError(t, promptErr, "Prompt should complete")
 		case <-time.After(60 * time.Second):
 			t.Fatal("Prompt timed out")
 		}
@@ -129,13 +129,13 @@ security:
 	bin := getBinPath(t)
 	clearCmd := filepath.Clean(bin)
 
-	clear := execCommand(t, clearCmd,
+	clearResult := execCommand(t, clearCmd,
 		"--config-file", configPath,
 		"approval", "clear",
 		"--scope", "global",
 	)
-	if !strings.Contains(clear.stdout, "Cleared") {
-		t.Fatalf("expected clear command to report cleared policies, got stdout=%s stderr=%s", clear.stdout, clear.stderr)
+	if !strings.Contains(clearResult.stdout, "Cleared") {
+		t.Fatalf("expected clear command to report cleared policies, got stdout=%s stderr=%s", clearResult.stdout, clearResult.stderr)
 	}
 
 	// 4) Third prompt: after revocation, approval should no longer be short-circuited.

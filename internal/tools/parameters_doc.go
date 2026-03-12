@@ -1,4 +1,4 @@
-// Package toolparams provides type-safe parameter handling for tool execution.
+// Package tools provides type-safe parameter handling for tool execution.
 //
 // This package replaces the use of map[string]interface{} with a structured
 // ToolParameters type that provides type-safe accessors and better error handling.

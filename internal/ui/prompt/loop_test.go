@@ -53,8 +53,8 @@ func (f *FakeRenderer) ClearScreen() error {
 	return nil
 }
 
-func (f *FakeRenderer) SetWidth(width int)      {}
-func (f *FakeRenderer) SetPrefix(prefix string) {}
+func (f *FakeRenderer) SetWidth(_ int)      {}
+func (f *FakeRenderer) SetPrefix(_ string) {}
 
 func (f *FakeRenderer) GetRedrawCount() int {
 	f.mu.Lock()
@@ -412,7 +412,7 @@ func TestLoop_FullInteraction(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	renderer := NewRenderer(&buf, 80, "> ")
+	renderer := NewTermRenderer(&buf, 80, "> ")
 	keys := make(chan term.KeyEvent, 20)
 
 	loop := NewLoop(model, renderer, keys)

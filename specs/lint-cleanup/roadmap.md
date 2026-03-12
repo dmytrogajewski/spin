@@ -101,7 +101,7 @@ Adopt modern Go idioms and fix low-severity code issues.
   - **DoD:** 0 noinlineerr issues
   - **`//nolint` prohibited** — restructure error handling code
 
-- [ ] **2.3 — `revive` miscellaneous style** (~772 issues)
+- [x] **2.3 — `revive` miscellaneous style** (~772 issues)
   - **Description:** Fix exported function docs, var declarations, error returns, naming conventions.
   - **DoR:** 2.2 complete
   - **DoD:** 0 revive issues; `make test` passes
@@ -114,14 +114,14 @@ Adopt modern Go idioms and fix low-severity code issues.
 
 ## Wave 3: Logging & Forbidden Calls (est. ~500 issues)
 
-- [ ] **3.1 — `forbidigo` replace fmt.Print with slog** (~86 issues)
+- [x] **3.1 — `forbidigo` replace fmt.Print with slog** (~86 issues)
   - **Description:** Replace `fmt.Print*` calls with structured logging via `log/slog`.
   - **DoR:** Wave 2 complete
   - **DoD:** 0 forbidigo issues; `make test` passes
   - **Note:** Requires deciding on slog handler strategy (context-based vs global)
   - **`//nolint` prohibited** — replace every fmt.Print call with slog
 
-- [ ] **3.2 — `sloglint` structured logging compliance** (~412 issues)
+- [x] **3.2 — `sloglint` structured logging compliance** (~412 issues)
   - **Description:** Fix slog usage: use context-scoped loggers, avoid global slog calls.
   - **DoR:** 3.1 complete
   - **DoD:** 0 sloglint issues; `make test` passes
@@ -136,39 +136,39 @@ Adopt modern Go idioms and fix low-severity code issues.
 
 High-value fixes that improve reliability.
 
-- [ ] **4.1 — `errcheck` unchecked errors** (~1,239 issues)
+- [x] **4.1 — `errcheck` unchecked errors** (~1,239 issues)
   - **Description:** Handle or explicitly ignore all error returns with `_ =` assignment. Largest correctness bucket.
   - **DoR:** Wave 3 complete
   - **DoD:** 0 errcheck issues; `make test` passes
   - **Strategy:** Triage by package — start with `internal/agent`, `internal/llm`, `cmd/spin`
   - **`//nolint` prohibited** — handle every error or use explicit `_ =` assignment
 
-- [ ] **4.2 — `err113` sentinel errors / error wrapping** (~505 issues)
+- [x] **4.2 — `err113` sentinel errors / error wrapping** (~505 issues)
   - **Description:** Define sentinel errors, use `%w` for wrapping, use `errors.Is`/`errors.As`.
   - **DoR:** 4.1 complete
   - **DoD:** 0 err113 issues
   - **Note:** Requires creating package-level `var Err* = errors.New(...)` vars
   - **`//nolint` prohibited** — define proper sentinel errors and wrap with `%w`
 
-- [ ] **4.3 — `errorlint` error comparison** (~69 issues)
+- [x] **4.3 — `errorlint` error comparison** (~69 issues)
   - **Description:** Replace `==` error comparisons with `errors.Is`, type switches with `errors.As`.
   - **DoR:** 4.2 complete
   - **DoD:** 0 errorlint issues
   - **`//nolint` prohibited** — use errors.Is/errors.As
 
-- [ ] **4.4 — `wrapcheck` error wrapping at boundaries** (~92 issues)
+- [x] **4.4 — `wrapcheck` error wrapping at boundaries** (~92 issues)
   - **Description:** Wrap errors at package boundaries for better stack traces.
   - **DoR:** 4.3 complete
   - **DoD:** 0 wrapcheck issues
   - **`//nolint` prohibited** — wrap errors with `fmt.Errorf("...: %w", err)`
 
-- [ ] **4.5 — `nilerr` + `nilnil` return consistency** (~58 issues)
+- [x] **4.5 — `nilerr` + `nilnil` return consistency** (~58 issues)
   - **Description:** Fix functions that return nil error with nil value, or return nil when err != nil.
   - **DoR:** 4.4 complete
   - **DoD:** 0 nilerr + nilnil issues
   - **`//nolint` prohibited** — fix return logic
 
-- [ ] **4.6 — `govet` vet checks** (~336 issues)
+- [x] **4.6 — `govet` vet checks** (~336 issues)
   - **Description:** Fix shadow variables, printf format strings, struct tags, atomic operations, etc.
   - **DoR:** 4.5 complete
   - **DoD:** 0 govet issues; `make test` passes

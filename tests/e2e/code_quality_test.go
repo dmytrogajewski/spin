@@ -91,9 +91,9 @@ func TestNoTODOsOrDeferredPatterns(t *testing.T) {
 	for _, dir := range dirs {
 		fullPath := filepath.Join(workspaceRoot, dir)
 
-		err := filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
+		walkErr := filepath.Walk(fullPath, func(path string, _ os.FileInfo, walkFnErr error) error {
+			if walkFnErr != nil {
+				return walkFnErr
 			}
 			// Skip vendor and test files.
 			if strings.Contains(path, "/vendor/") || strings.Contains(path, "/.git/") {
@@ -110,8 +110,8 @@ func TestNoTODOsOrDeferredPatterns(t *testing.T) {
 
 			return checkFile(t, path, patterns, &violations)
 		})
-		if err != nil {
-			t.Fatalf("Failed to walk %s: %v", fullPath, err)
+		if walkErr != nil {
+			t.Fatalf("Failed to walk %s: %v", fullPath, walkErr)
 		}
 	}
 
@@ -141,12 +141,12 @@ func TestNoTODOsOrDeferredPatterns(t *testing.T) {
 func getWorkspaceRoot() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("get working directory: %w", err)
 	}
 
 	for {
-		_, err := os.Stat(filepath.Join(dir, "go.mod"))
-		if err == nil {
+		_, statErr := os.Stat(filepath.Join(dir, "go.mod"))
+		if statErr == nil {
 			return dir, nil
 		}
 
@@ -167,67 +167,39 @@ type violation struct {
 	context string
 }
 
-func checkFile(t *testing.T, filePath string, patterns []struct {
+func checkFile(_ *testing.T, filePath string, patterns []struct {
 	name    string
 	pattern *regexp.Regexp
 	desc    string
 }, violations *[]violation) error {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read file %s: %w", filePath, err)
 	}
 
 	lines := strings.Split(string(content), "\n")
 
 	for lineNum, line := range lines {
-		// Skip lines that are only comments with these patterns (they might be in documentation)
-		// But catch them if they're in actual code comments.
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") {
-			// Check comment lines.
-			for _, p := range patterns {
-				if p.pattern.MatchString(line) {
-					// Get context (previous and next line if available).
-					context := line
-					if lineNum > 0 {
-						context = lines[lineNum-1] + "\n" + context
-					}
-
-					if lineNum < len(lines)-1 {
-						context = context + "\n" + lines[lineNum+1]
-					}
-
-					*violations = append(*violations, violation{
-						file:    filePath,
-						line:    lineNum + 1,
-						pattern: p.name,
-						desc:    p.desc,
-						context: context,
-					})
+		// Check both comment and code lines for pattern violations.
+		for _, p := range patterns {
+			if p.pattern.MatchString(line) {
+				// Get context (previous and next line if available).
+				lineContext := line
+				if lineNum > 0 {
+					lineContext = lines[lineNum-1] + "\n" + lineContext
 				}
-			}
-		} else {
-			// Check code lines (might have inline comments).
-			for _, p := range patterns {
-				if p.pattern.MatchString(line) {
-					// Get context.
-					context := line
-					if lineNum > 0 {
-						context = lines[lineNum-1] + "\n" + context
-					}
 
-					if lineNum < len(lines)-1 {
-						context = context + "\n" + lines[lineNum+1]
-					}
-
-					*violations = append(*violations, violation{
-						file:    filePath,
-						line:    lineNum + 1,
-						pattern: p.name,
-						desc:    p.desc,
-						context: context,
-					})
+				if lineNum < len(lines)-1 {
+					lineContext = lineContext + "\n" + lines[lineNum+1]
 				}
+
+				*violations = append(*violations, violation{
+					file:    filePath,
+					line:    lineNum + 1,
+					pattern: p.name,
+					desc:    p.desc,
+					context: lineContext,
+				})
 			}
 		}
 	}
@@ -236,7 +208,7 @@ func checkFile(t *testing.T, filePath string, patterns []struct {
 }
 
 // printImplementationInstructions writes actionable instructions to help AI agents fix violations.
-func printImplementationInstructions(w io.Writer, byPattern map[string][]violation, allViolations []violation) {
+func printImplementationInstructions(w io.Writer, _ map[string][]violation, allViolations []violation) {
 	separator := strings.Repeat("=", 80)
 	fmt.Fprintf(w, "\n%s\n", separator)
 	fmt.Fprintf(w, "IMPLEMENTATION INSTRUCTIONS FOR AI AGENTS\n")

@@ -9,6 +9,11 @@ import (
 	"testing"
 )
 
+var (
+	errExecutionFailed = errors.New("execution failed")
+	errExecutionFailed2 = errors.New("execution failed")
+)
+
 // contains checks if s contains substr.
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
@@ -354,7 +359,7 @@ func TestRegistryExecute(t *testing.T) {
 	// Tool that returns success.
 	successTool := &mockTool{
 		name: "success_tool",
-		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
+		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
 			return ToolResult{
 				Success: true,
 				Output:  "success output",
@@ -365,8 +370,8 @@ func TestRegistryExecute(t *testing.T) {
 	// Tool that returns error.
 	errorTool := &mockTool{
 		name: "error_tool",
-		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
-			return ToolResult{}, errors.New("execution failed")
+		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
+			return ToolResult{}, errExecutionFailed
 		},
 	}
 
@@ -421,7 +426,7 @@ func TestRegistryExecute(t *testing.T) {
 			name:     "execute error tool",
 			toolName: "error_tool",
 			params:   map[string]any{},
-			wantErr:  errors.New("execution failed"),
+			wantErr:  errExecutionFailed2,
 		},
 		{
 			name:     "execute non-existent tool",
@@ -504,7 +509,7 @@ func TestRegistryExecuteContextCancellation(t *testing.T) {
 	// Tool that checks context.
 	ctxTool := &mockTool{
 		name: "ctx_tool",
-		executeFunc: func(ctx context.Context, params ToolParameters) (ToolResult, error) {
+		executeFunc: func(ctx context.Context, _ ToolParameters) (ToolResult, error) {
 			select {
 			case <-ctx.Done():
 				return ToolResult{}, ctx.Err()
@@ -612,7 +617,7 @@ func TestRegistryTypeValidation(t *testing.T) {
 				},
 			},
 		},
-		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
+		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
 			return ToolResult{Success: true, Output: "ok"}, nil
 		},
 	}
@@ -730,7 +735,7 @@ func TestRegistryEnumValidation(t *testing.T) {
 				},
 			},
 		},
-		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
+		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
 			return ToolResult{Success: true, Output: "ok"}, nil
 		},
 	}
@@ -810,7 +815,7 @@ func TestRegistryExecute_UnknownParameter(t *testing.T) {
 				},
 			},
 		},
-		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
+		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
 			return ToolResult{Success: true, Output: "ok"}, nil
 		},
 	}
@@ -921,7 +926,7 @@ func TestRegistryExecute_UnknownParameter_ErrorMessage(t *testing.T) {
 				},
 			},
 		},
-		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
+		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
 			return ToolResult{Success: true, Output: "ok"}, nil
 		},
 	}

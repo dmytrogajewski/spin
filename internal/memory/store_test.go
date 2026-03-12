@@ -6,10 +6,12 @@ import (
 	"time"
 )
 
-func TestMemoryScopeConstants(t *testing.T) {
+var errOther = errors.New("other")
+
+func TestScopeConstants(t *testing.T) {
 	tests := []struct {
 		name     string
-		scope    MemoryScope
+		scope    Scope
 		expected string
 	}{
 		{"session scope", ScopeSession, "session"},
@@ -63,14 +65,14 @@ func TestPutOptionsDefaults(t *testing.T) {
 		t.Errorf("default Tags should be nil, got %v", opts.Tags)
 	}
 
-	if opts.Overwrite != false {
+	if opts.Overwrite {
 		t.Errorf("default Overwrite should be false, got %v", opts.Overwrite)
 	}
 }
 
-func TestMemoryEntryFields(t *testing.T) {
+func TestEntryFields(t *testing.T) {
 	now := time.Now()
-	entry := MemoryEntry{
+	entry := Entry{
 		Key:       "test-key",
 		Value:     "test-value",
 		Namespace: "test-namespace",
@@ -98,6 +100,14 @@ func TestMemoryEntryFields(t *testing.T) {
 
 	if entry.TTL != time.Hour {
 		t.Errorf("TTL mismatch: got %v", entry.TTL)
+	}
+
+	if !entry.CreatedAt.Equal(now) {
+		t.Errorf("CreatedAt mismatch: got %v, want %v", entry.CreatedAt, now)
+	}
+
+	if !entry.UpdatedAt.Equal(now) {
+		t.Errorf("UpdatedAt mismatch: got %v, want %v", entry.UpdatedAt, now)
 	}
 }
 
@@ -148,13 +158,13 @@ func TestIsNotFound(t *testing.T) {
 	}{
 		{"nil error", nil, false},
 		{"not found error", ErrNotFound, false},
-		{"other error", errors.New("other"), false},
+		{"other error", errOther, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := errors.Is(tt.err, ErrNotFound)
-			if tt.err == ErrNotFound && !got {
+			if errors.Is(tt.err, ErrNotFound) && !got {
 				t.Errorf("errors.Is should return true for ErrNotFound")
 			}
 		})

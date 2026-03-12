@@ -46,7 +46,8 @@ func TestReadFileTool(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			params, _ := FromMap(tt.params)
-			result, err := tool.Execute(context.Background(), params)
+			var result ToolResult
+			result, err = tool.Execute(context.Background(), params)
 
 			if tt.wantErr {
 				if err == nil && result.Success {

@@ -14,14 +14,16 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
 )
 
+var errEmbeddingError = errors.New("embedding error")
+
 // mockErrorEmbedder is an embedder that returns errors.
 type mockErrorEmbedder struct {
 	shouldError bool
 }
 
-func (m *mockErrorEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+func (m *mockErrorEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
 	if m.shouldError {
-		return nil, errors.New("embedding error")
+		return nil, errEmbeddingError
 	}
 
 	return make([]float32, 384), nil

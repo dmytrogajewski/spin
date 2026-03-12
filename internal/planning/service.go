@@ -9,18 +9,23 @@ import (
 
 	"github.com/openai/openai-go"
 
-	spinerrors "github.com/dmytrogajewski/spin/internal/errors"
+	spinerrors "github.com/dmytrogajewski/spin/internal/apperr"
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
-// PlanningService handles task decomposition into execution plans.
-type PlanningService struct {
+var (
+	ErrPlanIdCannotBeEmpty = errors.New("plan ID cannot be empty")
+	ErrPlanMustHaveAtLeastOne = errors.New("plan must have at least one step")
+)
+
+// Service handles task decomposition into execution plans.
+type Service struct {
 	llm llm.Provider
 }
 
-// NewPlanningService creates a new planning service with the given LLM provider.
-func NewPlanningService(provider llm.Provider) *PlanningService {
-	return &PlanningService{llm: provider}
+// NewService creates a new planning service with the given LLM provider.
+func NewService(provider llm.Provider) *Service {
+	return &Service{llm: provider}
 }
 
 // ErrEmptyInput is returned when task name is empty.
@@ -28,7 +33,7 @@ var ErrEmptyInput = errors.New("task name cannot be empty")
 
 // CreatePlan creates a new execution plan for the given task.
 // This method uses the LLM to decompose complex tasks into manageable steps.
-func (s *PlanningService) CreatePlan(ctx context.Context, taskName string) (*Plan, error) {
+func (s *Service) CreatePlan(ctx context.Context, taskName string) (*Plan, error) {
 	if taskName == "" {
 		return nil, ErrEmptyInput
 	}
@@ -50,7 +55,7 @@ func (s *PlanningService) CreatePlan(ctx context.Context, taskName string) (*Pla
 
 	resp, err := s.llm.Complete(ctx, params)
 	if err != nil {
-		return nil, spinerrors.New(spinerrors.CodeLLM, "PlanningService.CreatePlan", "llm completion failed", err)
+		return nil, spinerrors.New(spinerrors.CodeLLM, "Service.CreatePlan", "llm completion failed", err)
 	}
 
 	// Parse the response and create steps.
@@ -58,13 +63,13 @@ func (s *PlanningService) CreatePlan(ctx context.Context, taskName string) (*Pla
 
 	decomposition, err := s.parseDecompositionResponse(responseContent)
 	if err != nil {
-		return nil, spinerrors.New(spinerrors.CodeLLM, "PlanningService.CreatePlan", "failed to parse LLM response", err)
+		return nil, spinerrors.New(spinerrors.CodeLLM, "Service.CreatePlan", "failed to parse LLM response", err)
 	}
 
 	// Create steps from parsed data.
 	steps, err := s.createStepsFromData(decomposition)
 	if err != nil {
-		return nil, spinerrors.New(spinerrors.CodeValidation, "PlanningService.CreatePlan", "failed to create steps", err)
+		return nil, spinerrors.New(spinerrors.CodeValidation, "Service.CreatePlan", "failed to create steps", err)
 	}
 
 	plan.Steps = steps
@@ -72,14 +77,14 @@ func (s *PlanningService) CreatePlan(ctx context.Context, taskName string) (*Pla
 	// Validate the plan structure.
 	err = plan.ValidateStructure()
 	if err != nil {
-		return nil, spinerrors.New(spinerrors.CodeValidation, "PlanningService.CreatePlan", "plan validation failed", err)
+		return nil, spinerrors.New(spinerrors.CodeValidation, "Service.CreatePlan", "plan validation failed", err)
 	}
 
 	return plan, nil
 }
 
 // buildDecompositionPrompt creates the prompt for task decomposition.
-func (s *PlanningService) buildDecompositionPrompt(taskName string) string {
+func (s *Service) buildDecompositionPrompt(taskName string) string {
 	return fmt.Sprintf(`
 Decompose the following task into specific, actionable steps:
 
@@ -121,7 +126,7 @@ type stepData struct {
 }
 
 // parseDecompositionResponse parses the JSON response from the LLM.
-func (s *PlanningService) parseDecompositionResponse(content string) (*decompositionData, error) {
+func (s *Service) parseDecompositionResponse(content string) (*decompositionData, error) {
 	var decomposition decompositionData
 	err := json.Unmarshal([]byte(content), &decomposition)
 	if err != nil {
@@ -132,7 +137,7 @@ func (s *PlanningService) parseDecompositionResponse(content string) (*decomposi
 }
 
 // createStepsFromData creates Step instances from parsed decomposition data.
-func (s *PlanningService) createStepsFromData(data *decompositionData) ([]Step, error) {
+func (s *Service) createStepsFromData(data *decompositionData) ([]Step, error) {
 	steps := make([]Step, 0, len(data.Steps))
 	for _, stepData := range data.Steps {
 		duration, _ := time.ParseDuration(stepData.EstimatedDuration)
@@ -164,10 +169,15 @@ type Plan struct {
 type PlanStatus int
 
 const (
+	// PlanStatusPending defines a PlanStatusPending constant.
 	PlanStatusPending PlanStatus = iota
+	// PlanStatusInProgress defines a PlanStatusInProgress constant.
 	PlanStatusInProgress
+	// PlanStatusCompleted indicates the plan completed.
 	PlanStatusCompleted
+	// PlanStatusFailed indicates the plan failed.
 	PlanStatusFailed
+	// PlanStatusCancelled indicates the plan was cancelled.
 	PlanStatusCancelled
 )
 
@@ -187,11 +197,17 @@ type Step struct {
 type StepStatus int
 
 const (
+	// StepStatusPending defines a StepStatusPending constant.
 	StepStatusPending StepStatus = iota
+	// StepStatusReady defines a StepStatusReady constant.
 	StepStatusReady
+	// StepStatusRunning indicates the step is running.
 	StepStatusRunning
+	// StepStatusCompleted indicates the step completed.
 	StepStatusCompleted
+	// StepStatusFailed indicates the step failed.
 	StepStatusFailed
+	// StepStatusSkipped indicates the step was skipped.
 	StepStatusSkipped
 )
 
@@ -208,11 +224,11 @@ func NewPlan() *Plan {
 // ValidateStructure validates the plan structure.
 func (p *Plan) ValidateStructure() error {
 	if p.ID == "" {
-		return errors.New("plan ID cannot be empty")
+		return ErrPlanIdCannotBeEmpty
 	}
 
 	if len(p.Steps) == 0 {
-		return errors.New("plan must have at least one step")
+		return ErrPlanMustHaveAtLeastOne
 	}
 
 	return nil

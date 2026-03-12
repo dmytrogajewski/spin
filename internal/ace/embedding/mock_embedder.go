@@ -24,7 +24,7 @@ func (m *MockEmbedder) SetEmbedding(text string, embedding []float32) {
 }
 
 // Embed returns a predefined embedding or generates a simple one.
-func (m *MockEmbedder) Embed(ctx context.Context, text string) ([]float32, error) {
+func (m *MockEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
 	if embed, ok := m.embeddings[text]; ok {
 		return embed, nil
 	}

@@ -5,7 +5,7 @@
 // (Scratchpad) and cross-session persistent storage (PersistentStore).
 //
 // Key concepts:
-//   - MemoryStore: Unified interface for all memory operations
+//   - Store: Unified interface for all memory operations
 //   - Scratchpad: In-memory session-scoped store with LRU eviction
 //   - PersistentStore: File-based cross-session store
 //
@@ -33,19 +33,19 @@ import (
 // DefaultNamespace is used when no namespace is specified.
 const DefaultNamespace = "default"
 
-// MemoryScope defines where memory is stored.
-type MemoryScope string
+// Scope defines where memory is stored.
+type Scope string
 
 // Memory scope constants.
 const (
 	// ScopeSession indicates memory exists only for the current session.
-	ScopeSession MemoryScope = "session"
+	ScopeSession Scope = "session"
 
 	// ScopeThread indicates memory exists for the current conversation thread.
-	ScopeThread MemoryScope = "thread"
+	ScopeThread Scope = "thread"
 
 	// ScopePersistent indicates memory persists across sessions.
-	ScopePersistent MemoryScope = "persistent"
+	ScopePersistent Scope = "persistent"
 )
 
 // EntryType categorizes memory entries.
@@ -85,8 +85,8 @@ type PutOptions struct {
 	Overwrite bool
 }
 
-// MemoryEntry represents a stored memory item.
-type MemoryEntry struct {
+// Entry represents a stored memory item.
+type Entry struct {
 	// Key is the unique identifier within the namespace.
 	Key string
 
@@ -109,18 +109,18 @@ type MemoryEntry struct {
 	TTL time.Duration
 }
 
-// MemoryStore defines the interface for context offloading storage.
+// Store defines the interface for context offloading storage.
 //
 // Implementations include Scratchpad (session-scoped) and PersistentStore
 // (cross-session). All methods are safe for concurrent use.
-type MemoryStore interface {
+type Store interface {
 	// Put stores a value with optional configuration.
 	// If opts.Namespace is empty, DefaultNamespace is used.
 	Put(ctx context.Context, key string, value string, opts PutOptions) error
 
 	// Get retrieves an entry by key.
 	// Returns ErrNotFound if the key does not exist.
-	Get(ctx context.Context, key string) (*MemoryEntry, error)
+	Get(ctx context.Context, key string) (*Entry, error)
 
 	// Delete removes an entry by key.
 	// Returns nil if key does not exist (idempotent).
@@ -132,5 +132,5 @@ type MemoryStore interface {
 
 	// Search finds entries containing the query string.
 	// Returns up to topK results, sorted by relevance.
-	Search(ctx context.Context, query string, topK int) ([]MemoryEntry, error)
+	Search(ctx context.Context, query string, topK int) ([]Entry, error)
 }

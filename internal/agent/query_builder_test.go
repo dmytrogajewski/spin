@@ -14,7 +14,7 @@ import (
 func TestBuildQueryFromContext_Initial(t *testing.T) {
 	// Setup.
 	agent := &Agent{}
-	ctx := trajectory.NewTrajectoryContext("install nodejs")
+	ctx := trajectory.NewContext("install nodejs")
 
 	// Execute.
 	query := agent.buildQueryFromContext(ctx, trajectory.TriggerInitial)
@@ -35,7 +35,7 @@ func TestBuildQueryFromContext_Error(t *testing.T) {
 			},
 		},
 	}
-	ctx := trajectory.NewTrajectoryContext("install nodejs")
+	ctx := trajectory.NewContext("install nodejs")
 	ctx.AppendSteps([]generator.TrajectoryStep{
 		{StepNumber: 0, Type: "tool_call", Content: "Tool: bash"},
 		{StepNumber: 1, Type: "tool_result", Content: "Error: command not found"},
@@ -62,7 +62,7 @@ func TestBuildQueryFromContext_ToolChange(t *testing.T) {
 			},
 		},
 	}
-	ctx := trajectory.NewTrajectoryContext("debug app")
+	ctx := trajectory.NewContext("debug app")
 	ctx.AppendSteps([]generator.TrajectoryStep{
 		{StepNumber: 0, Type: "tool_call", Content: "Tool: Read"},
 		{StepNumber: 1, Type: "tool_call", Content: "Tool: Bash"},
@@ -83,7 +83,7 @@ func TestBuildQueryFromContext_Interval(t *testing.T) {
 	agent := &Agent{
 		aceConfig: &ACEConfig{},
 	}
-	ctx := trajectory.NewTrajectoryContext("fix build")
+	ctx := trajectory.NewContext("fix build")
 	ctx.AppendSteps([]generator.TrajectoryStep{
 		{StepNumber: 0, Type: "reasoning", Content: "Checking Dockerfile syntax"},
 		{StepNumber: 1, Type: "reasoning", Content: "BuildKit optimization needed"},
@@ -110,7 +110,7 @@ func TestBuildQueryFromContext_EmptySteps(t *testing.T) {
 			},
 		},
 	}
-	ctx := trajectory.NewTrajectoryContext("test query")
+	ctx := trajectory.NewContext("test query")
 	// No steps appended.
 
 	// Execute - try error trigger with no steps.
@@ -146,7 +146,7 @@ func TestBuildQueryFromContext_AllTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := trajectory.NewTrajectoryContext("base query")
+			ctx := trajectory.NewContext("base query")
 			ctx.AppendSteps([]generator.TrajectoryStep{
 				{Content: "Tool: bash"},
 				{Content: "Error: test error"},

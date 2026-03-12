@@ -27,6 +27,7 @@ type reflector struct {
 	llm           llm.Provider
 	promptBuilder *PromptBuilder
 	validator     *InsightValidator
+	logger        *slog.Logger
 	maxTokens     int
 }
 
@@ -46,6 +47,7 @@ func NewReflector(llmProvider llm.Provider, opts ...Option) Reflector {
 		llm:           llmProvider,
 		promptBuilder: NewPromptBuilder(),
 		validator:     NewInsightValidator(),
+		logger:        slog.Default(),
 		maxTokens:     4096, // Default max tokens for LLM calls.
 	}
 
@@ -60,11 +62,11 @@ func NewReflector(llmProvider llm.Provider, opts ...Option) Reflector {
 func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*ReflectionResponse, error) {
 	startTime := time.Now()
 
-	slog.Debug("Reflector starting analysis", "num_trajectories", len(req.Trajectories))
+	r.logger.DebugContext(ctx, "Reflector starting analysis", "num_trajectories", len(req.Trajectories))
 
 	// Handle empty trajectory list.
 	if len(req.Trajectories) == 0 {
-		slog.Debug("No trajectories to reflect on")
+		r.logger.DebugContext(ctx, "No trajectories to reflect on")
 
 		return &ReflectionResponse{
 			Insights:    []*Insight{},
@@ -83,7 +85,7 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 	if len(req.Trajectories) == 1 {
 		// Single trajectory.
 		traj := req.Trajectories[0]
-		slog.Debug("Building prompt for single trajectory",
+		r.logger.DebugContext(ctx, "Building prompt for single trajectory",
 			"id", traj.ID,
 			"query", traj.Query,
 			"steps", len(traj.Steps),
@@ -92,13 +94,13 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		sourceID = traj.ID
 	} else {
 		// Multiple trajectories - batch analysis.
-		slog.Debug("Building prompt for batch trajectories", "count", len(req.Trajectories))
+		r.logger.DebugContext(ctx, "Building prompt for batch trajectories", "count", len(req.Trajectories))
 		prompt = r.promptBuilder.BuildBatchTrajectory(req.Trajectories)
 		sourceID = "batch"
 	}
 
-	slog.Debug("Reflector prompt generated", "length", len(prompt))
-	slog.Debug("Reflector prompt content", "prompt", prompt)
+	r.logger.DebugContext(ctx, "Reflector prompt generated", "length", len(prompt))
+	r.logger.DebugContext(ctx, "Reflector prompt content", "prompt", prompt)
 
 	// Call LLM.
 	params := openai.ChatCompletionNewParams{
@@ -113,11 +115,11 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		params.MaxTokens = openai.F(int64(r.maxTokens))
 	}
 
-	slog.Debug("Calling LLM for reflection", "temperature", 0.3, "max_tokens", r.maxTokens)
+	r.logger.DebugContext(ctx, "Calling LLM for reflection", "temperature", 0.3, "max_tokens", r.maxTokens)
 
 	completion, err := r.llm.Complete(ctx, params)
 	if err != nil {
-		slog.Warn("LLM call failed during reflection", "error", err)
+		r.logger.WarnContext(ctx, "LLM call failed during reflection", "error", err)
 
 		return nil, err
 	}
@@ -125,10 +127,10 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 	// Parse JSON response into insights.
 	responseText := completion.Choices[0].Message.Content
 
-	slog.Debug("LLM response received",
+	r.logger.DebugContext(ctx, "LLM response received",
 		"length", len(responseText),
 		"tokens", completion.Usage.TotalTokens)
-	slog.Debug("LLM response content", "response", responseText)
+	r.logger.DebugContext(ctx, "LLM response content", "response", responseText)
 
 	// Clean response text to extract JSON from markdown code blocks.
 	responseText = cleanJSONResponse(responseText)
@@ -172,11 +174,11 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		insight.CreatedAt = time.Now()
 
 		// Validate insight before adding.
-		err := r.validator.Validate(insight)
+		err = r.validator.Validate(insight)
 		if err == nil {
 			insights = append(insights, insight)
 		} else {
-			slog.Debug("Insight validation failed", "error", err, "content", insight.Content)
+			r.logger.DebugContext(ctx, "Insight validation failed", "error", err, "content", insight.Content)
 		}
 	} else {
 		// Try parsing as simplified array format (for compatibility with tests/simple responses).
@@ -188,9 +190,9 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		}
 
 		var simpleInsights []simplifiedInsight
-		err := json.Unmarshal([]byte(responseText), &simpleInsights)
+		err = json.Unmarshal([]byte(responseText), &simpleInsights)
 		if err != nil {
-			slog.Warn("Failed to parse reflection response in both formats", "error", err, "response", responseText)
+			r.logger.WarnContext(ctx, "Failed to parse reflection response in both formats", "error", err, "response", responseText)
 
 			return nil, fmt.Errorf("failed to parse reflection response: %w", err)
 		}
@@ -205,11 +207,11 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 			insight.CreatedAt = time.Now()
 
 			// Validate insight before adding.
-			err := r.validator.Validate(insight)
+			err = r.validator.Validate(insight)
 			if err == nil {
 				insights = append(insights, insight)
 			} else {
-				slog.Debug("Insight validation failed", "error", err, "content", insight.Content)
+				r.logger.DebugContext(ctx, "Insight validation failed", "error", err, "content", insight.Content)
 			}
 		}
 	}
@@ -286,7 +288,7 @@ func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iterati
 	var rawInsights []refinedInsightResponse
 	err = json.Unmarshal([]byte(responseText), &rawInsights)
 	if err != nil {
-		slog.Warn("Failed to parse refinement response", "error", err)
+		r.logger.WarnContext(ctx, "Failed to parse refinement response", "error", err)
 
 		return nil, fmt.Errorf("failed to parse refinement response: %w", err)
 	}
@@ -325,9 +327,9 @@ func cleanJSONResponse(response string) string {
 		response = after
 		response = strings.TrimSuffix(response, "```")
 		response = strings.TrimSpace(response)
-	} else if after, ok := strings.CutPrefix(response, "```"); ok {
+	} else if afterPlain, okPlain := strings.CutPrefix(response, "```"); okPlain {
 		// Remove ``` prefix and ``` suffix.
-		response = after
+		response = afterPlain
 		response = strings.TrimSuffix(response, "```")
 		response = strings.TrimSpace(response)
 	}

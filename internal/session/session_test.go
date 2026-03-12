@@ -178,8 +178,8 @@ func TestSession_AddTag(t *testing.T) {
 func TestSession_AddTag_Duplicate(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	session.AddTag("test-tag")
-	session.AddTag("test-tag") // Add same tag again.
+	_ = session.AddTag("test-tag")
+	_ = session.AddTag("test-tag") // Add same tag again.
 
 	if len(session.Metadata.Tags) != 1 {
 		t.Errorf("Tags length = %d, want 1 (duplicates should be ignored)", len(session.Metadata.Tags))
@@ -189,8 +189,8 @@ func TestSession_AddTag_Duplicate(t *testing.T) {
 func TestSession_RemoveTag(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	session.AddTag("tag1")
-	session.AddTag("tag2")
+	_ = session.AddTag("tag1")
+	_ = session.AddTag("tag2")
 
 	err := session.RemoveTag("tag1")
 	if err != nil {
@@ -278,7 +278,7 @@ func TestSession_ConcurrentMetadataUpdates(t *testing.T) {
 	done := make(chan bool)
 
 	for i := range 10 {
-		go func(n int) {
+		go func(_ int) {
 			for range 10 {
 				session.IncrementTurnCount(100)
 			}
@@ -309,9 +309,9 @@ func TestSession_ConcurrentTagOperations(t *testing.T) {
 
 	// Add tags concurrently.
 	for i := range 5 {
-		go func(n int) {
+		go func(_ int) {
 			for range 10 {
-				session.AddTag("tag")
+					_ = session.AddTag("tag")
 			}
 
 			done <- true

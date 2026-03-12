@@ -11,7 +11,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/dmytrogajewski/spin/internal/debug"
+	"github.com/dmytrogajewski/spin/internal/dbg"
+)
+
+var (
+	ErrSandboxCommandIsOnlyAvailableOn = errors.New("sandbox command is only available on macOS (current")
+	ErrLandlockCommandIsOnlyAvailableOn = errors.New("landlock command is only available on Linux (current")
+	ErrSandboxTestingNotImplemented = errors.New("sandbox testing not implemented")
+	ErrLandlockTestingNotImplemented = errors.New("landlock testing not implemented")
 )
 
 // newDebugCmd creates the debug command with subcommands.
@@ -91,7 +98,7 @@ func runDebugEvents(ctx context.Context, prompt, format, filterStr string) error
 	}
 
 	// Create event logger.
-	logger := debug.NewEventLogger(format, filter)
+	logger := dbg.NewEventLogger(format, filter)
 
 	// Run with timeout.
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -129,7 +136,7 @@ filesystem restrictions before deploying in production.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Check platform.
 			if runtime.GOOS != "darwin" {
-				return fmt.Errorf("sandbox command is only available on macOS (current: %s)", runtime.GOOS)
+return fmt.Errorf("sandbox command is only available on macOS (current: %s): %w", runtime.GOOS, ErrSandboxCommandIsOnlyAvailableOn)
 			}
 
 			return runDebugSandbox(cmd.Context(), args[0], args[1:], mode, workspace)
@@ -174,7 +181,7 @@ filesystem restrictions before deploying in production.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Check platform.
 			if runtime.GOOS != "linux" {
-				return fmt.Errorf("landlock command is only available on Linux (current: %s)", runtime.GOOS)
+return fmt.Errorf("landlock command is only available on Linux (current: %s): %w", runtime.GOOS, ErrLandlockCommandIsOnlyAvailableOn)
 			}
 
 			return runDebugLandlock(cmd.Context(), args[0], args[1:], mode, workspace)
@@ -191,7 +198,7 @@ filesystem restrictions before deploying in production.`,
 }
 
 // runDebugSandbox executes the sandbox testing command.
-func runDebugSandbox(ctx context.Context, command string, args []string, mode, workspace string) error {
+func runDebugSandbox(_ context.Context, command string, args []string, mode, workspace string) error {
 	fmt.Fprintf(os.Stderr, "⚠️  Sandbox mode: %s\n", mode)
 	fmt.Fprintf(os.Stderr, "⚠️  Workspace: %s\n", workspace)
 	fmt.Fprintf(os.Stderr, "⚠️  Command: %s %s\n\n", command, strings.Join(args, " "))
@@ -199,11 +206,11 @@ func runDebugSandbox(ctx context.Context, command string, args []string, mode, w
 	// Placeholder: Sandbox execution requires proper sandbox implementation
 	// via internal/security/sandbox with appropriate isolation (namespaces, chroot, etc.)
 	// This is a complex feature that requires OS-specific implementations.
-	return errors.New("sandbox testing not implemented")
+	return ErrSandboxTestingNotImplemented
 }
 
 // runDebugLandlock executes the Landlock testing command.
-func runDebugLandlock(ctx context.Context, command string, args []string, mode, workspace string) error {
+func runDebugLandlock(_ context.Context, command string, args []string, mode, workspace string) error {
 	fmt.Fprintf(os.Stderr, "⚠️  Landlock mode: %s\n", mode)
 	fmt.Fprintf(os.Stderr, "⚠️  Workspace: %s\n", workspace)
 	fmt.Fprintf(os.Stderr, "⚠️  Command: %s %s\n\n", command, strings.Join(args, " "))
@@ -211,5 +218,5 @@ func runDebugLandlock(ctx context.Context, command string, args []string, mode, 
 	// Placeholder: Landlock execution requires Linux-specific implementation
 	// via internal/security/sandbox using Landlock ABI
 	// This is a kernel feature that requires appropriate system calls.
-	return errors.New("landlock testing not implemented")
+	return ErrLandlockTestingNotImplemented
 }

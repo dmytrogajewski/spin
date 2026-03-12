@@ -23,6 +23,8 @@ const (
 var (
 	ErrNotATTY          = errors.New("not a terminal")
 	ErrTerminalTooSmall = errors.New("terminal too small (minimum 40x10)")
+	ErrInfdIsNotATerminal = errors.New("inFD  is not a terminal")
+	ErrAlreadyInRawMode = errors.New("already in raw mode")
 )
 
 // TTY manages terminal state for raw mode interaction.
@@ -45,7 +47,7 @@ type TTY struct {
 // Returns error if the input FD is not a terminal.
 func New(inFD, outFD int) (*TTY, error) {
 	if !isTerminal(inFD) {
-		return nil, fmt.Errorf("inFD %d is not a terminal", inFD)
+return nil, fmt.Errorf("inFD %d is not a terminal: %w", inFD, ErrInfdIsNotATerminal)
 	}
 
 	tty := &TTY{
@@ -73,7 +75,7 @@ func (tty *TTY) Enter() error {
 	defer tty.mu.Unlock()
 
 	if tty.entered {
-		return errors.New("already in raw mode")
+		return ErrAlreadyInRawMode
 	}
 
 	// Save original terminal state.
@@ -152,7 +154,7 @@ func (tty *TTY) OnResize(cb func(int, int)) {
 func (tty *TTY) updateSize() error {
 	w, h, err := term.GetSize(tty.outFD)
 	if err != nil {
-		return err
+		return fmt.Errorf("get terminal size: %w", err)
 	}
 
 	tty.mu.Lock()

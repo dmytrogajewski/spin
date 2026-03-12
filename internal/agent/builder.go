@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	"github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/agentsmd"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/cycle"
@@ -15,23 +15,25 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 )
 
+var ErrAceNotEnabled = errors.New("ACE not enabled")
+
 // Builder constructs Agent instances with all dependencies.
 type Builder struct {
-	config          *config.ConfigV2 // Config from config package (V2).
+	config          *config.V2 // Config from config package (V2).
 	provider        llm.Provider
 	workingDir      string
 	emitter         *events.EventEmitter
 	approvalHandler security.ApprovalHandler
-	runtime         runtime.Runtime // Optional runtime for tool registration and approval.
+	runtime         executor.Runtime // Optional runtime for tool registration and approval.
 }
 
 // NewBuilder creates a new agent builder.
 func NewBuilder() *Builder {
-	return &Builder{config: config.DefaultConfigV2()}
+	return &Builder{config: config.DefaultV2()}
 }
 
 // WithConfig sets the configuration from config package (V2).
-func (b *Builder) WithConfig(cfg *config.ConfigV2) *Builder {
+func (b *Builder) WithConfig(cfg *config.V2) *Builder {
 	if cfg != nil {
 		b.config = cfg
 	}
@@ -101,7 +103,7 @@ func (b *Builder) getCycleDetectionConfig() cycle.Config {
 }
 
 // getACEConfig returns ACE config from unified config.
-// Converts ConfigV2 ACE config to nested ACEConfig.
+// Converts V2 ACE config to nested ACEConfig.
 func (b *Builder) getACEConfig() *ACEConfig {
 	// Convert V2 config to nested ACEConfig.
 	return &ACEConfig{
@@ -168,7 +170,7 @@ func (b *Builder) WithApprovalHandler(handler security.ApprovalHandler) *Builder
 
 // WithRuntime sets the runtime for tool registration and approval handling.
 // If set, the runtime's approval handler and tool registry are used.
-func (b *Builder) WithRuntime(rt runtime.Runtime) *Builder {
+func (b *Builder) WithRuntime(rt executor.Runtime) *Builder {
 	b.runtime = rt
 
 	return b
@@ -177,11 +179,11 @@ func (b *Builder) WithRuntime(rt runtime.Runtime) *Builder {
 // BuildExecutor creates an Executor with appropriate options based on configuration.
 // This is a public helper for use by conversation package.
 func (b *Builder) BuildExecutor() *Executor {
-	return b.buildExecutor()
+	return b.newExecutor()
 }
 
-// buildExecutor creates an Executor with appropriate options based on configuration.
-func (b *Builder) buildExecutor() *Executor {
+// newExecutor creates an Executor with appropriate options based on configuration.
+func (b *Builder) newExecutor() *Executor {
 	// Build SecurityService (which includes Validator internally).
 	securityService := b.BuildSecurityService()
 	opts := []ExecutorOption{
@@ -217,11 +219,11 @@ func (b *Builder) buildExecutor() *Executor {
 // BuildEnvironment gathers environment information for the working directory.
 // This is a public helper for use by conversation package.
 func (b *Builder) BuildEnvironment() *Environment {
-	return b.buildEnvironment()
+	return b.gatherEnvironment()
 }
 
-// buildEnvironment gathers environment information for the working directory.
-func (b *Builder) buildEnvironment() *Environment {
+// gatherEnvironment gathers environment information for the working directory.
+func (b *Builder) gatherEnvironment() *Environment {
 	opts := b.buildEnvironmentOptions()
 
 	env, err := GatherEnvironment(b.workingDir, opts...)
@@ -254,7 +256,7 @@ func (b *Builder) buildEnvironmentOptions() []EnvironmentOption {
 // BuildSecurityService creates security service with approval handling.
 // This is a public helper for use by conversation package.
 // If a runtime is set, uses the runtime's approval handler; otherwise uses the builder's approval handler.
-func (b *Builder) BuildSecurityService() *security.SecurityService {
+func (b *Builder) BuildSecurityService() *security.Service {
 	validator := security.NewValidator()
 
 	// Use runtime's approval handler if available, otherwise use builder's.
@@ -293,12 +295,12 @@ func (b *Builder) BuildSecurityService() *security.SecurityService {
 	}
 	approvalSvc = security.NewApprovalServiceWithConfig(cfg)
 
-	return security.NewSecurityService(validator, approvalSvc)
+	return security.NewService(validator, approvalSvc)
 }
 
 // BuildDetectionService creates detection service with cycle detection.
 // This is a public helper for use by conversation package.
-func (b *Builder) BuildDetectionService() *detection.DetectionService {
+func (b *Builder) BuildDetectionService() *detection.Service {
 	var (
 		cycleDetector   detection.CycleDetector
 		patternDetector detection.PatternDetector
@@ -312,19 +314,19 @@ func (b *Builder) BuildDetectionService() *detection.DetectionService {
 		cycleDetector = cycle.NewDetector(cycle.Config{Enabled: false})
 	}
 
-	return detection.NewDetectionService(cycleDetector, patternDetector)
+	return detection.NewService(cycleDetector, patternDetector)
 }
 
 // BuildPlanningService creates planning service with LLM provider.
 // This is a public helper for use by conversation package.
-func (b *Builder) BuildPlanningService() *planning.PlanningService {
-	return planning.NewPlanningService(b.provider)
+func (b *Builder) BuildPlanningService() *planning.Service {
+	return planning.NewService(b.provider)
 }
 
-// BuildAgentOptions constructs agent options from configuration.
+// BuildOptions constructs agent options from configuration.
 // This is a public helper for use by conversation package.
-func (b *Builder) BuildAgentOptions() []AgentOption {
-	opts := []AgentOption{
+func (b *Builder) BuildOptions() []Option {
+	opts := []Option{
 		WithRequireApproval(true),
 	}
 
@@ -352,7 +354,7 @@ func (b *Builder) BuildAgentOptions() []AgentOption {
 func (b *Builder) BuildACEService() (*ACEService, error) {
 	aceConfig := b.getACEConfig()
 	if aceConfig == nil || !aceConfig.Enabled {
-		return nil, errors.New("ACE not enabled")
+		return nil, ErrAceNotEnabled
 	}
 
 	return NewACEService(aceConfig, b.workingDir, b.provider, b.getModel(), b.getMaxTokens())

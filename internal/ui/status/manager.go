@@ -203,7 +203,7 @@ func (m *Manager) CalculateTPS(tokens int64, duration time.Duration) {
 	})
 }
 
-// Enable/Disable controls whether the status manager is active.
+// Enable activates the status manager.
 func (m *Manager) Enable() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -211,6 +211,7 @@ func (m *Manager) Enable() {
 	m.enabled = true
 }
 
+// Disable implements the Disable operation.
 func (m *Manager) Disable() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -218,6 +219,7 @@ func (m *Manager) Disable() {
 	m.enabled = false
 }
 
+// IsEnabled implements the IsEnabled operation.
 func (m *Manager) IsEnabled() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -286,7 +288,7 @@ func (m *Manager) Reset() {
 // FormatCompact formats status for narrow terminals (<60 columns).
 // Shows: activity indicator, context%, and agent state only.
 // NOTE: This replaces the old FormatCompact() implementation.
-func (m *Manager) FormatCompact(width int) string {
+func (m *Manager) FormatCompact(_ int) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

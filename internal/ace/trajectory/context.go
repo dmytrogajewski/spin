@@ -42,14 +42,14 @@ type CachedBullet struct {
 	LastAccessed int            // Last turn accessed.
 }
 
-// TrajectoryContext is the progressive execution context built during agent loop.
+// Context is the progressive execution context built during agent loop.
 // It serves as the SINGLE SOURCE OF TRUTH for:
 // - Retrieval: Dynamic query building and bullet caching
 // - Reflector: Rich trajectory with retrieval provenance
 // - Agent: Execution state tracking
 //
 // NOT thread-safe. Must be used within single goroutine.
-type TrajectoryContext struct {
+type Context struct {
 	// Immutable (set at creation).
 	Query     string    // Initial user query.
 	SessionID string    // Unique session identifier.
@@ -74,10 +74,10 @@ type TrajectoryContext struct {
 	CacheMisses     int
 }
 
-// NewTrajectoryContext creates a new progressive context.
+// NewContext creates a new progressive context.
 // Generates unique session ID and initializes empty collections.
-func NewTrajectoryContext(query string) *TrajectoryContext {
-	return &TrajectoryContext{
+func NewContext(query string) *Context {
+	return &Context{
 		Query:           query,
 		SessionID:       uuid.New().String(),
 		StartTime:       time.Now(),
@@ -89,7 +89,7 @@ func NewTrajectoryContext(query string) *TrajectoryContext {
 }
 
 // SetBulletTTL sets the bullet cache TTL (time-to-live in turns).
-func (tc *TrajectoryContext) SetBulletTTL(ttl int) {
+func (tc *Context) SetBulletTTL(ttl int) {
 	if ttl > 0 {
 		tc.BulletTTL = ttl
 	}
@@ -97,7 +97,7 @@ func (tc *TrajectoryContext) SetBulletTTL(ttl int) {
 
 // AppendSteps adds new execution steps to context.
 // Steps are appended in order (FIFO).
-func (tc *TrajectoryContext) AppendSteps(steps []generator.TrajectoryStep) {
+func (tc *Context) AppendSteps(steps []generator.TrajectoryStep) {
 	if len(steps) == 0 {
 		return
 	}
@@ -107,7 +107,7 @@ func (tc *TrajectoryContext) AppendSteps(steps []generator.TrajectoryStep) {
 
 // RecordRetrieval records a retrieval event and merges bullets into cache.
 // Updates cache hits/misses metrics.
-func (tc *TrajectoryContext) RecordRetrieval(event RetrievalEvent, bullets []*bullet.Bullet) {
+func (tc *Context) RecordRetrieval(event RetrievalEvent, bullets []*bullet.Bullet) {
 	// Record event.
 	tc.RetrievalEvents = append(tc.RetrievalEvents, event)
 	tc.LastRetrievalTurn = event.Turn
@@ -135,7 +135,7 @@ func (tc *TrajectoryContext) RecordRetrieval(event RetrievalEvent, bullets []*bu
 // GetActiveBullets returns bullets for LLM prompt (cache + TTL filtering).
 // Updates last accessed time for returned bullets.
 // Uses the configured BulletTTL to determine which bullets are still active.
-func (tc *TrajectoryContext) GetActiveBullets() []*bullet.Bullet {
+func (tc *Context) GetActiveBullets() []*bullet.Bullet {
 	bullets := make([]*bullet.Bullet, 0, len(tc.BulletCache))
 	ids := make([]string, 0, len(tc.BulletCache))
 
@@ -158,7 +158,7 @@ func (tc *TrajectoryContext) GetActiveBullets() []*bullet.Bullet {
 
 // ToTrajectory converts context to Trajectory for Reflector.
 // Includes all steps, bullets, and retrieval events.
-func (tc *TrajectoryContext) ToTrajectory() *generator.Trajectory {
+func (tc *Context) ToTrajectory() *generator.Trajectory {
 	// Extract all bullets from cache (regardless of TTL).
 	allBullets := make([]*bullet.Bullet, 0, len(tc.BulletCache))
 	for _, cached := range tc.BulletCache {

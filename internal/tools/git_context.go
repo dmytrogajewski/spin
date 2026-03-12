@@ -20,14 +20,17 @@ func NewGitContextTool(workspaceRoot string) *GitContextTool {
 	}
 }
 
+// Name implements the Name operation.
 func (t *GitContextTool) Name() string {
 	return "git_context"
 }
 
+// Description implements the Description operation.
 func (t *GitContextTool) Description() string {
 	return "Get Git repository context including branch, status, and modifications"
 }
 
+// Schema implements the Schema operation.
 func (t *GitContextTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -52,6 +55,7 @@ func (t *GitContextTool) Schema() ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	// Get workspace root.
 	workspaceRoot := t.workspaceRoot

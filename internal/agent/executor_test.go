@@ -27,7 +27,7 @@ func TestNewExecutor_WithOptions(t *testing.T) {
 	workDir := t.TempDir()
 	validator := security.NewValidator()
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
+	securityService := security.NewService(validator, approvalService)
 
 	executor, err := NewExecutor(workDir, WithSecurityService(securityService))
 	require.NoError(t, err)
@@ -154,7 +154,7 @@ func TestExecutor_Validate(t *testing.T) {
 	workDir := t.TempDir()
 	validator := security.NewValidator()
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
+	securityService := security.NewService(validator, approvalService)
 	executor, err := NewExecutor(workDir, WithSecurityService(securityService))
 	require.NoError(t, err)
 
@@ -333,7 +333,7 @@ func TestDefaultExecuteOptions(t *testing.T) {
 func TestExecutorOption_WithSecurityService(t *testing.T) {
 	validator := security.NewValidator()
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
+	securityService := security.NewService(validator, approvalService)
 	executor := &Executor{}
 
 	opt := WithSecurityService(securityService)

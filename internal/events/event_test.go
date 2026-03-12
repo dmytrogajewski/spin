@@ -166,7 +166,7 @@ func TestEventEmitter_Unsubscribe(t *testing.T) {
 }
 
 // TestEventEmitter_Unsubscribe_NonExistent tests unsubscribing non-existent ID.
-func TestEventEmitter_Unsubscribe_NonExistent(t *testing.T) {
+func TestEventEmitter_Unsubscribe_NonExistent(_ *testing.T) {
 	emitter := NewEventEmitter(10)
 
 	// Should not panic.
@@ -306,7 +306,7 @@ func TestEventEmitter_Close(t *testing.T) {
 }
 
 // TestEventEmitter_Close_Idempotent tests multiple closes.
-func TestEventEmitter_Close_Idempotent(t *testing.T) {
+func TestEventEmitter_Close_Idempotent(_ *testing.T) {
 	emitter := NewEventEmitter(10)
 
 	// Should not panic.
@@ -411,7 +411,7 @@ func TestEventEmitter_ConcurrentEmit(t *testing.T) {
 }
 
 // TestEventEmitter_ConcurrentMixed tests mixed concurrent operations.
-func TestEventEmitter_ConcurrentMixed(t *testing.T) {
+func TestEventEmitter_ConcurrentMixed(_ *testing.T) {
 	emitter := NewEventEmitter(50)
 
 	var wg sync.WaitGroup
@@ -468,7 +468,7 @@ func TestEventEmitter_NoMemoryLeaks(t *testing.T) {
 // BenchmarkEventEmitter_Emit benchmarks single emission.
 func BenchmarkEventEmitter_Emit(b *testing.B) {
 	emitter := NewEventEmitter(100)
-	emitter.Subscribe() // One subscriber.
+	_, _, _ = emitter.Subscribe() // One subscriber.
 
 	event := Event{Type: EventInfo, Data: "test"}
 
@@ -485,7 +485,7 @@ func BenchmarkEventEmitter_EmitMultipleSubscribers(b *testing.B) {
 
 	// 10 subscribers.
 	for range 10 {
-		emitter.Subscribe()
+		_, _, _ = emitter.Subscribe()
 	}
 
 	event := Event{Type: EventInfo, Data: "test"}
@@ -504,7 +504,7 @@ func BenchmarkEventEmitter_Subscribe(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		emitter.Subscribe()
+		_, _, _ = emitter.Subscribe()
 	}
 }
 
@@ -730,11 +730,11 @@ func TestEvent_ACERetrievalData(t *testing.T) {
 	}
 
 	// Other type assertions should return false.
-	if _, ok := event.ToolCallStartData(); ok {
+	if _, toolOk := event.ToolCallStartData(); toolOk {
 		t.Error("ToolCallStartData() should return false for ACE event")
 	}
 
-	if _, ok := event.ErrorData(); ok {
+	if _, errOk := event.ErrorData(); errOk {
 		t.Error("ErrorData() should return false for ACE event")
 	}
 }

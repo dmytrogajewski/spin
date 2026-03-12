@@ -1,3 +1,4 @@
+// Package events provides event handling and emission.
 package events
 
 import (
@@ -11,6 +12,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
+
+var ErrEmitterIsClosed = errors.New("emitter is closed")
 
 // Event represents a conversation event that can be streamed to UI.
 // Events are emitted during agent execution to provide real-time feedback
@@ -136,41 +139,58 @@ func (e Event) ACELearningData() (ACELearningData, bool) {
 type EventType int
 
 const (
-	// Content events - text generation from LLM.
+	// EventContentDelta represents text generation from LLM.
 	EventContentDelta EventType = iota
+	// EventThinkingDelta represents thinking/reasoning output.
 	EventThinkingDelta
+	// EventContentComplete indicates content generation is complete.
 	EventContentComplete
 
-	// Tool events - tool execution lifecycle.
+	// EventToolCallStart indicates a tool execution has started.
 	EventToolCallStart
+	// EventToolCallProgress represents tool execution progress.
 	EventToolCallProgress
+	// EventToolCallComplete indicates a tool execution has completed.
 	EventToolCallComplete
+	// EventPlanUpdate represents a plan update event.
 	EventPlanUpdate
 
-	// Turn events - turn lifecycle.
+	// EventTurnStart indicates a new turn has started.
 	EventTurnStart
+	// EventTurnProgress represents turn progress.
 	EventTurnProgress
+	// EventTurnComplete indicates a turn has completed.
 	EventTurnComplete
+	// EventTurnFailed indicates a turn has failed.
 	EventTurnFailed
+	// EventTurnPaused indicates a turn has been paused.
 	EventTurnPaused
+	// EventTurnResumed indicates a turn has been resumed.
 	EventTurnResumed
 
-	// Approval events - user approval required.
+	// EventCommandApproval indicates user approval is required.
 	EventCommandApproval
+	// EventACERetrieval represents an ACE retrieval event.
 	EventACERetrieval
+	// EventACELearned represents an ACE learning event.
 	EventACELearned
+	// EventCommandApproved indicates a command was approved.
 	EventCommandApproved
+	// EventCommandDenied indicates a command was denied.
 	EventCommandDenied
-	// Policy events - approval policy application and persistence.
+	// EventPolicyApplied indicates an approval policy was applied.
 	EventPolicyApplied
+	// EventPolicySaved indicates an approval policy was saved.
 	EventPolicySaved
 
-	// Tool selection events - dynamic tool discovery.
+	// EventTypeToolSelection represents a dynamic tool discovery event.
 	EventTypeToolSelection
 
-	// System events - system-level messages.
+	// EventError represents a system error event.
 	EventError
+	// EventWarning represents a system warning event.
 	EventWarning
+	// EventInfo represents a system info event.
 	EventInfo
 )
 
@@ -274,12 +294,16 @@ type ApprovalEventData struct {
 	Timestamp       time.Time      `json:"timestamp"`
 }
 
+// ApprovalStatus represents the status of an approval request.
 type ApprovalStatus string
 
 const (
-	ApprovalStatusPending  ApprovalStatus = "pending"
+	// ApprovalStatusPending indicates the approval is pending.
+	ApprovalStatusPending ApprovalStatus = "pending"
+	// ApprovalStatusApproved defines a ApprovalStatusApproved constant.
 	ApprovalStatusApproved ApprovalStatus = "approved"
-	ApprovalStatusDenied   ApprovalStatus = "denied"
+	// ApprovalStatusDenied indicates the approval was denied.
+	ApprovalStatusDenied ApprovalStatus = "denied"
 )
 
 // BulletData represents a single ACE bullet for display.
@@ -422,7 +446,7 @@ func (e *EventEmitter) Subscribe() (id string, events <-chan Event, err error) {
 	defer e.mu.Unlock()
 
 	if e.closed {
-		return "", nil, errors.New("emitter is closed")
+		return "", nil, ErrEmitterIsClosed
 	}
 
 	// Generate unique subscriber ID.

@@ -1,3 +1,4 @@
+// Package shell provides shell context management.
 package shell
 
 import (
@@ -15,6 +16,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+)
+
+var (
+	ErrShellIntegrationDisabled = errors.New("shell integration disabled")
+	ErrNoShellAvailable = errors.New("no shell available")
+	ErrShellCommandTimedOutAfter = errors.New("shell command timed out after")
+	ErrExecutionFailed = errors.New("execution failed")
+	ErrExecutionFailed2 = errors.New("execution failed")
+	ErrExecutionFailed3 = errors.New("execution failed")
 )
 
 // Context provides shell-aware functionality for the agent.
@@ -43,7 +53,7 @@ func NewContext(enabled bool, workDir string, logger *slog.Logger, timeout time.
 // Initialize sets up Shell context.
 func (s *Context) Initialize(ctx context.Context) error {
 	if !s.enabled {
-		s.logger.Debug("Shell integration disabled")
+		s.logger.DebugContext(ctx, "Shell integration disabled")
 
 		return nil
 	}
@@ -51,7 +61,7 @@ func (s *Context) Initialize(ctx context.Context) error {
 	// Detect shell.
 	shell, shellPath := s.detectShell()
 	if shell == "" {
-		s.logger.Debug("No shell detected")
+		s.logger.DebugContext(ctx, "No shell detected")
 
 		return nil
 	}
@@ -64,7 +74,7 @@ func (s *Context) Initialize(ctx context.Context) error {
 	// Gather shell environment variables.
 	s.gatherEnvironmentVars()
 
-	s.logger.Info("Shell integration initialized",
+	s.logger.InfoContext(ctx, "Shell integration initialized",
 		"shell", shell,
 		"path", shellPath,
 		"workDir", s.workDir)
@@ -144,12 +154,12 @@ func (s *Context) GetContextInfo() ContextInfo {
 // ExecuteShellCommand executes a command using the detected shell.
 func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (string, error) {
 	if !s.IsEnabled() {
-		return "", errors.New("shell integration disabled")
+		return "", ErrShellIntegrationDisabled
 	}
 
 	shellPath := s.GetShellPath()
 	if shellPath == "" {
-		return "", errors.New("no shell available")
+		return "", ErrNoShellAvailable
 	}
 
 	// Create a context with timeout for the shell command
@@ -201,12 +211,13 @@ func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (stri
 	err := cmd.Run()
 	if err != nil {
 		// Check if it's a timeout error.
-		if cmdCtx.Err() == context.DeadlineExceeded {
+		if errors.Is(cmdCtx.Err(), context.DeadlineExceeded) {
 			// Report the timeout that was configured (not remaining time which is negative).
-			return "", fmt.Errorf("shell command timed out after %v: %s", s.timeout, command)
+return "", fmt.Errorf("shell command timed out after %v: %s: %w", s.timeout, command, ErrShellCommandTimedOutAfter)
 		}
 		// Check if it's an ExitError to get exit code and stderr.
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			exitCode := exitErr.ExitCode()
 
 			// Get stdout and stderr as strings.
@@ -215,7 +226,7 @@ func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (stri
 
 			// If stdout and stderr are identical, only show it once.
 			if stdoutStr == stderrStr && stderrStr != "" {
-				return "", fmt.Errorf("execution failed: exit status %d\n%s", exitCode, stderrStr)
+return "", fmt.Errorf("execution failed: exit status %d\n%s: %w", exitCode, stderrStr, ErrExecutionFailed)
 			}
 
 			// If they're different, show both.
@@ -232,10 +243,10 @@ func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (stri
 			}
 
 			if output != "" {
-				return "", fmt.Errorf("execution failed: exit status %d\n%s", exitCode, output)
+return "", fmt.Errorf("execution failed: exit status %d\n%s: %w", exitCode, output, ErrExecutionFailed2)
 			}
 
-			return "", fmt.Errorf("execution failed: exit status %d", exitCode)
+return "", fmt.Errorf("execution failed: exit status %d: %w", exitCode, ErrExecutionFailed3)
 		}
 
 		return "", fmt.Errorf("shell command failed: %w", err)

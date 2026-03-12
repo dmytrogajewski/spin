@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -9,9 +10,14 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+var (
+	ErrRegistryAlreadyRegistered = errors.New("registry already registered")
+	ErrRegistryNotFound = errors.New("registry not found")
+)
+
 // DefaultRegistryManager is the standard RegistryManager implementation.
 type DefaultRegistryManager struct {
-	registries map[string]MCPRegistry
+	registries map[string]Registry
 	logger     *slog.Logger
 	mu         sync.RWMutex
 }
@@ -19,19 +25,19 @@ type DefaultRegistryManager struct {
 // NewDefaultRegistryManager creates a new DefaultRegistryManager.
 func NewDefaultRegistryManager(logger *slog.Logger) *DefaultRegistryManager {
 	return &DefaultRegistryManager{
-		registries: make(map[string]MCPRegistry),
+		registries: make(map[string]Registry),
 		logger:     logger,
 	}
 }
 
 // Register adds a registry to the manager.
-func (m *DefaultRegistryManager) Register(registry MCPRegistry) error {
+func (m *DefaultRegistryManager) Register(registry Registry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	name := registry.Name()
 	if _, exists := m.registries[name]; exists {
-		return fmt.Errorf("registry already registered: %s", name)
+return fmt.Errorf("registry already registered: %s: %w", name, ErrRegistryAlreadyRegistered)
 	}
 
 	m.registries[name] = registry
@@ -50,7 +56,7 @@ func (m *DefaultRegistryManager) Unregister(name string) error {
 
 	registry, exists := m.registries[name]
 	if !exists {
-		return fmt.Errorf("registry not found: %s", name)
+return fmt.Errorf("registry not found: %s: %w", name, ErrRegistryNotFound)
 	}
 
 	// Close the registry.
@@ -71,7 +77,7 @@ func (m *DefaultRegistryManager) Unregister(name string) error {
 }
 
 // Get retrieves a registry by name.
-func (m *DefaultRegistryManager) Get(name string) (MCPRegistry, bool) {
+func (m *DefaultRegistryManager) Get(name string) (Registry, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -81,11 +87,11 @@ func (m *DefaultRegistryManager) Get(name string) (MCPRegistry, bool) {
 }
 
 // All returns all registered registries.
-func (m *DefaultRegistryManager) All() []MCPRegistry {
+func (m *DefaultRegistryManager) All() []Registry {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	result := make([]MCPRegistry, 0, len(m.registries))
+	result := make([]Registry, 0, len(m.registries))
 	for _, registry := range m.registries {
 		result = append(result, registry)
 	}
@@ -108,7 +114,7 @@ func (m *DefaultRegistryManager) AllTools() []tools.Tool {
 
 // Search searches across all registries.
 // ctx can be nil for simple searches; required for dynamic registries that call APIs.
-func (m *DefaultRegistryManager) Search(ctx *SearchContext, query string, max int) []tools.Tool {
+func (m *DefaultRegistryManager) Search(ctx *SearchContext, query string, maxResults int) []tools.Tool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -116,13 +122,13 @@ func (m *DefaultRegistryManager) Search(ctx *SearchContext, query string, max in
 
 	// Search each registry.
 	for _, registry := range m.registries {
-		results := registry.Search(ctx, query, max)
+		results := registry.Search(ctx, query, maxResults)
 		allResults = append(allResults, results...)
 	}
 
 	// Apply max limit if specified.
-	if max > 0 && len(allResults) > max {
-		allResults = allResults[:max]
+	if maxResults > 0 && len(allResults) > maxResults {
+		allResults = allResults[:maxResults]
 	}
 
 	return allResults
@@ -184,7 +190,7 @@ func (m *DefaultRegistryManager) Close() error {
 		}
 	}
 
-	m.registries = make(map[string]MCPRegistry)
+	m.registries = make(map[string]Registry)
 
 	if m.logger != nil {
 		m.logger.Info("registry manager closed")

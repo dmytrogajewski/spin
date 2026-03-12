@@ -6,9 +6,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
-// PromptRenderer is the interface for rendering the prompt.
+// Renderer is the interface for rendering the prompt.
 // It allows for testing with fake renderers.
-type PromptRenderer interface {
+type Renderer interface {
 	Redraw(model *Model, status string) error
 	ClearScreen() error
 	SetWidth(width int)
@@ -20,7 +20,7 @@ type PromptRenderer interface {
 // and triggers redraws.
 type Loop struct {
 	model      *Model
-	renderer   PromptRenderer
+	renderer   Renderer
 	keys       <-chan term.KeyEvent
 	out        chan string
 	onRender   func() // Callback to trigger re-render (for sticky coordination).
@@ -29,7 +29,7 @@ type Loop struct {
 
 // NewLoop creates a new input loop with the specified components.
 // The loop does not start until Run() is called.
-func NewLoop(model *Model, renderer PromptRenderer, keys <-chan term.KeyEvent) *Loop {
+func NewLoop(model *Model, renderer Renderer, keys <-chan term.KeyEvent) *Loop {
 	return &Loop{
 		model:      model,
 		renderer:   renderer,
@@ -212,7 +212,7 @@ func (l *Loop) handleCtrlW() bool {
 
 // handleCtrlL handles Ctrl+L (clear screen).
 func (l *Loop) handleCtrlL() bool {
-	l.renderer.ClearScreen()
+	_ = l.renderer.ClearScreen()
 	l.redraw()
 
 	return false
@@ -273,6 +273,6 @@ func (l *Loop) redraw() {
 		l.onRender()
 	} else {
 		// Direct render (backward compatibility).
-		l.renderer.Redraw(l.model, "")
+		_ = l.renderer.Redraw(l.model, "")
 	}
 }

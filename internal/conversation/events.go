@@ -17,7 +17,7 @@ import (
 //
 // Usage:
 //
-//	transformer := &ACPEventTransformer{conn: acpConn, sessionID: sid}
+//	transformer := &EventTransformer{conn: acpConn, sessionID: sid}
 //	conversation.SetEventTransformer(transformer)
 //
 // The transformer receives all events emitted during conversation execution
@@ -53,7 +53,7 @@ func (b *Builder) attachJSONLEventLogger(ctx context.Context, sessionID string) 
 	err := os.MkdirAll(dir, 0o755)
 	if err != nil {
 		if b.logger != nil {
-			b.logger.Warn("event logger mkdir failed", "dir", dir, "err", err)
+			b.logger.WarnContext(ctx, "event logger mkdir failed", "dir", dir, "err", err)
 		}
 
 		return
@@ -64,7 +64,7 @@ func (b *Builder) attachJSONLEventLogger(ctx context.Context, sessionID string) 
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		if b.logger != nil {
-			b.logger.Warn("event logger open failed", "path", logPath, "err", err)
+			b.logger.WarnContext(ctx, "event logger open failed", "path", logPath, "err", err)
 		}
 
 		return
@@ -75,7 +75,7 @@ func (b *Builder) attachJSONLEventLogger(ctx context.Context, sessionID string) 
 		_ = f.Close()
 
 		if b.logger != nil {
-			b.logger.Warn("event subscribe failed", "err", subErr)
+			b.logger.WarnContext(ctx, "event subscribe failed", "err", subErr)
 		}
 
 		return

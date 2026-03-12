@@ -8,6 +8,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var (
+	ErrMcpServerNotFound               = errors.New("mcp server not found")
+	ErrMcpServerAlreadyExists          = errors.New("mcp server already exists")
+	ErrServerNameIsRequired            = errors.New("server name is required")
+	ErrServerCommandRequiredForStdio   = errors.New("server command is required for stdio transport")
+)
+
 // MCPServer represents an MCP server configuration.
 type MCPServer struct {
 	// Common fields.
@@ -52,11 +59,8 @@ func NewMCPConfigStore(loader *LoaderV2) *MCPConfigStore {
 func (m *MCPConfigStore) List() ([]MCPServer, error) {
 	var servers []MCPServer
 
-	err := m.loader.UnmarshalKey("protocol.mcp_servers", &servers)
-	if err != nil {
-		// If key doesn't exist, return empty list.
-		return []MCPServer{}, nil
-	}
+	// Missing key is not an error — return empty list on unmarshal failure.
+	_ = m.loader.UnmarshalKey("protocol.mcp_servers", &servers)
 
 	if servers == nil {
 		return []MCPServer{}, nil
@@ -78,7 +82,7 @@ func (m *MCPConfigStore) Get(name string) (*MCPServer, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("mcp server '%s' not found", name)
+	return nil, fmt.Errorf("mcp server '%s' not found: %w", name, ErrMcpServerNotFound)
 }
 
 // Add adds a new MCP server configuration.
@@ -92,7 +96,7 @@ func (m *MCPConfigStore) Add(server MCPServer) error {
 	// Check for duplicates.
 	existing, _ := m.Get(server.Name)
 	if existing != nil {
-		return fmt.Errorf("mcp server '%s' already exists", server.Name)
+		return fmt.Errorf("mcp server '%s' already exists: %w", server.Name, ErrMcpServerAlreadyExists)
 	}
 
 	// Get current servers.
@@ -134,7 +138,7 @@ func (m *MCPConfigStore) Remove(name string) error {
 	}
 
 	if !found {
-		return fmt.Errorf("mcp server '%s' not found", name)
+		return fmt.Errorf("mcp server '%s' not found: %w", name, ErrMcpServerNotFound)
 	}
 
 	// Update config.
@@ -147,12 +151,12 @@ func (m *MCPConfigStore) Remove(name string) error {
 // validate validates an MCP server configuration.
 func (m *MCPConfigStore) validate(server MCPServer) error {
 	if server.Name == "" {
-		return errors.New("server name is required")
+		return ErrServerNameIsRequired
 	}
 
 	// Validate transport type.
 	if !server.Transport.IsValid() {
-		return fmt.Errorf("invalid transport: %s", server.Transport)
+		return fmt.Errorf("invalid transport: %s: %w", server.Transport, ErrInvalidTransport)
 	}
 
 	// Determine effective transport (empty defaults to stdio).
@@ -174,15 +178,15 @@ func (m *MCPConfigStore) validate(server MCPServer) error {
 // validateStdio validates stdio transport configuration.
 func (m *MCPConfigStore) validateStdio(server MCPServer) error {
 	if server.Command == "" {
-		return errors.New("server command is required for stdio transport")
+		return ErrServerCommandRequiredForStdio
 	}
 
 	if server.URL != "" {
-		return errors.New("url is not allowed for stdio transport")
+		return ErrUrlNotAllowedForStdio
 	}
 
 	if server.OAuth != nil {
-		return errors.New("oauth is not allowed for stdio transport")
+		return ErrOauthNotAllowedForStdio
 	}
 
 	return nil
@@ -191,15 +195,15 @@ func (m *MCPConfigStore) validateStdio(server MCPServer) error {
 // validateRemote validates remote transport configuration.
 func (m *MCPConfigStore) validateRemote(server MCPServer, transport MCPTransportType) error {
 	if server.URL == "" {
-		return fmt.Errorf("url is required for %s transport", transport)
+		return fmt.Errorf("url is required for %s transport: %w", transport, ErrUrlRequiredForTransport)
 	}
 
 	if server.Command != "" {
-		return errors.New("command is not allowed for remote transport")
+		return ErrCommandNotAllowedForRemote
 	}
 
 	if server.OAuth != nil && server.OAuth.ClientID == "" {
-		return errors.New("oauth client_id is required")
+		return ErrOauthClientIdRequired
 	}
 
 	return nil
@@ -209,15 +213,15 @@ func (m *MCPConfigStore) validateRemote(server MCPServer, transport MCPTransport
 func (m *MCPConfigStore) validateSmithery(server MCPServer) error {
 	// API key is always required.
 	if server.SmitheryAPIKey == "" {
-		return errors.New("smithery_api_key is required for smithery transport")
+		return ErrSmitheryApiKeyRequired
 	}
 	// For static mode (URL provided), namespace is also required.
 	if server.URL != "" && server.SmitheryNamespace == "" {
-		return errors.New("smithery_namespace is required when url is specified")
+		return ErrSmitheryNamespaceRequired
 	}
 	// Command is not allowed.
 	if server.Command != "" {
-		return errors.New("command is not allowed for smithery transport")
+		return ErrCommandNotAllowedForSmithery
 	}
 
 	return nil

@@ -166,6 +166,7 @@ func (s *memoryPolicyStore) removeExpired() {
 	}
 }
 
+// Save implements the Save operation.
 func (s *memoryPolicyStore) Save(_ context.Context, p Policy) error {
 	keyStr := keyString(p.Key)
 
@@ -183,6 +184,7 @@ func (s *memoryPolicyStore) Save(_ context.Context, p Policy) error {
 	return nil
 }
 
+// Get implements the Get operation.
 func (s *memoryPolicyStore) Get(_ context.Context, key PolicyKey, scope string) (Policy, bool, error) {
 	keyStr := keyString(key)
 
@@ -206,6 +208,7 @@ func (s *memoryPolicyStore) Get(_ context.Context, key PolicyKey, scope string) 
 	return p, true, nil
 }
 
+// List implements the List operation.
 func (s *memoryPolicyStore) List(_ context.Context, scope string) ([]Policy, error) {
 	now := time.Now()
 
@@ -229,6 +232,7 @@ func (s *memoryPolicyStore) List(_ context.Context, scope string) ([]Policy, err
 	return out, nil
 }
 
+// Delete implements the Delete operation.
 func (s *memoryPolicyStore) Delete(_ context.Context, key PolicyKey, scope string) (bool, error) {
 	keyStr := keyString(key)
 
@@ -253,6 +257,7 @@ func (s *memoryPolicyStore) Delete(_ context.Context, key PolicyKey, scope strin
 	return false, nil
 }
 
+// Clear implements the Clear operation.
 func (s *memoryPolicyStore) Clear(_ context.Context, scope string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

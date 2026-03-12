@@ -1,4 +1,4 @@
-package debug
+package dbg
 
 import (
 	"bytes"
@@ -12,6 +12,8 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/events"
 )
+
+var errWriteFailed = errors.New("write failed")
 
 func TestEventLogger_New(t *testing.T) {
 	tests := []struct {
@@ -353,7 +355,7 @@ func TestEventLogger_LogEventJSON_InvalidData(t *testing.T) {
 	}
 }
 
-func TestEventLogger_LogEventJSON_EncodeError(t *testing.T) {
+func TestEventLogger_LogEventJSON_EncodeError(_ *testing.T) {
 	logger := NewEventLogger("json", []string{})
 
 	// Create event with unmarshalable output structure
@@ -409,8 +411,8 @@ func TestEventLogger_LogEventJSON_MarshalError(t *testing.T) {
 // failingWriter is a writer that always fails.
 type failingWriter struct{}
 
-func (fw *failingWriter) Write(p []byte) (n int, err error) {
-	return 0, errors.New("write failed")
+func (fw *failingWriter) Write(_ []byte) (n int, err error) {
+	return 0, errWriteFailed
 }
 
 func TestEventLogger_Concurrency(t *testing.T) {

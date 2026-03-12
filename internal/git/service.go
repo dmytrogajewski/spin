@@ -5,16 +5,16 @@ import (
 	"log/slog"
 )
 
-// Service wraps GitIntegration to provide a clean service interface
+// Service wraps Integration to provide a clean service interface
 // following the dependency injection pattern used in the tools package.
 type Service struct {
-	integration *GitIntegration
+	integration *Integration
 }
 
 // NewService creates a new Git service and initializes it.
 // If enabled is false, the service is created but not initialized.
 func NewService(enabled bool, workDir string, logger *slog.Logger) (*Service, error) {
-	integration := NewGitIntegration(enabled, workDir, logger)
+	integration := NewIntegration(enabled, workDir, logger)
 
 	if enabled {
 		err := integration.Initialize(context.Background())
@@ -28,13 +28,13 @@ func NewService(enabled bool, workDir string, logger *slog.Logger) (*Service, er
 	}, nil
 }
 
-// GetIntegration returns the underlying GitIntegration for use with tools.
-func (s *Service) GetIntegration() *GitIntegration {
+// GetIntegration returns the underlying Integration for use with tools.
+func (s *Service) GetIntegration() *Integration {
 	return s.integration
 }
 
 // GetContextInfo returns Git context information for the agent.
-func (s *Service) GetContextInfo() GitContextInfo {
+func (s *Service) GetContextInfo() ContextInfo {
 	return s.integration.GetContextInfo()
 }
 

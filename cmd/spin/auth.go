@@ -15,6 +15,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/auth"
 )
 
+var ErrApiKeyCannotBeEmpty = errors.New("api key cannot be empty")
+
 // newAuthCmd creates the auth management command.
 func newAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -135,7 +137,7 @@ func runAuthLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	if apiKey == "" {
-		return errors.New("api key cannot be empty")
+		return ErrApiKeyCannotBeEmpty
 	}
 
 	// Create auth manager.
@@ -178,7 +180,7 @@ func runAuthLogout(cmd *cobra.Command, args []string) error {
 }
 
 // runAuthList implements the 'auth list' command.
-func runAuthList(cmd *cobra.Command, args []string) error {
+func runAuthList(cmd *cobra.Command, _ []string) error {
 	// Create auth manager.
 	authMgr := createAuthManager()
 

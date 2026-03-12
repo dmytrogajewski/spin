@@ -21,7 +21,7 @@ type ScratchpadEntry struct {
 
 // Scratchpad provides session-scoped ephemeral memory with LRU eviction.
 //
-// It implements the MemoryStore interface and provides additional methods
+// It implements the Store interface and provides additional methods
 // for session-specific operations like pinning entries.
 type Scratchpad struct {
 	entries   map[string]*ScratchpadEntry
@@ -65,7 +65,7 @@ func (s *Scratchpad) Count() int {
 //
 // If the scratchpad is at capacity, the least recently used entry
 // is evicted (unless pinned) before adding the new entry.
-func (s *Scratchpad) Put(ctx context.Context, key string, value string, opts PutOptions) error {
+func (s *Scratchpad) Put(_ context.Context, key string, value string, opts PutOptions) error {
 	if key == "" {
 		return ErrEmptyKey
 	}
@@ -117,7 +117,7 @@ func (s *Scratchpad) Put(ctx context.Context, key string, value string, opts Put
 }
 
 // Get retrieves an entry by key and increments its access count.
-func (s *Scratchpad) Get(ctx context.Context, key string) (*MemoryEntry, error) {
+func (s *Scratchpad) Get(_ context.Context, key string) (*Entry, error) {
 	if key == "" {
 		return nil, ErrEmptyKey
 	}
@@ -133,7 +133,7 @@ func (s *Scratchpad) Get(ctx context.Context, key string) (*MemoryEntry, error) 
 	// Increment access count.
 	entry.AccessCount++
 
-	return &MemoryEntry{
+	return &Entry{
 		Key:       entry.Key,
 		Value:     entry.Value,
 		Namespace: entry.Namespace,
@@ -146,7 +146,7 @@ func (s *Scratchpad) Get(ctx context.Context, key string) (*MemoryEntry, error) 
 // Delete removes an entry by key.
 //
 // Returns nil if the key does not exist (idempotent).
-func (s *Scratchpad) Delete(ctx context.Context, key string) error {
+func (s *Scratchpad) Delete(_ context.Context, key string) error {
 	if key == "" {
 		return ErrEmptyKey
 	}
@@ -162,7 +162,7 @@ func (s *Scratchpad) Delete(ctx context.Context, key string) error {
 // List returns keys matching the pattern.
 //
 // Pattern supports * as wildcard. Use "*" to list all keys.
-func (s *Scratchpad) List(ctx context.Context, pattern string) ([]string, error) {
+func (s *Scratchpad) List(_ context.Context, pattern string) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -180,16 +180,16 @@ func (s *Scratchpad) List(ctx context.Context, pattern string) ([]string, error)
 //
 // Searches both keys and values. Returns up to topK results,
 // sorted by access count (most accessed first).
-func (s *Scratchpad) Search(ctx context.Context, query string, topK int) ([]MemoryEntry, error) {
+func (s *Scratchpad) Search(_ context.Context, query string, topK int) ([]Entry, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	// Collect matching entries.
-	matches := make([]MemoryEntry, 0)
+	matches := make([]Entry, 0)
 
 	for _, entry := range s.entries {
 		if containsIgnoreCase(entry.Key, query) || containsIgnoreCase(entry.Value, query) {
-			matches = append(matches, MemoryEntry{
+			matches = append(matches, Entry{
 				Key:       entry.Key,
 				Value:     entry.Value,
 				Namespace: entry.Namespace,
@@ -373,7 +373,7 @@ func matchPattern(pattern, key string) bool {
 }
 
 // sortByAccessCount sorts entries by access count (descending).
-func sortByAccessCount(entries []MemoryEntry, lookup map[string]*ScratchpadEntry) {
+func sortByAccessCount(entries []Entry, lookup map[string]*ScratchpadEntry) {
 	// Simple bubble sort for small lists.
 	for i := range len(entries) - 1 {
 		for j := range len(entries) - i - 1 {

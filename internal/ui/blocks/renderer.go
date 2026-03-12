@@ -8,6 +8,8 @@ import (
 	"github.com/rivo/uniseg"
 )
 
+var ErrBlockIsNil = errors.New("block is nil")
+
 // Renderer renders blocks to ANSI terminal output.
 type Renderer struct {
 	width           int                      // Terminal width in columns.
@@ -38,7 +40,7 @@ func (r *Renderer) SetWidth(width int) {
 // Returns ANSI-formatted string suitable for terminal output.
 func (r *Renderer) Render(b *Block) (string, error) {
 	if b == nil {
-		return "", errors.New("block is nil")
+		return "", ErrBlockIsNil
 	}
 
 	var out strings.Builder
@@ -602,7 +604,7 @@ func (r *Renderer) getBlockTypeLabel(blockType BlockType) string {
 	}
 }
 
-// renderCompletionStatus renders the completion status line (⤷ ...) for completed tools.
+// RenderCompletionStatus renders the completion status line for completed tools.
 // Returns empty string if tool hasn't completed or has no status to show.
 func (r *Renderer) RenderCompletionStatus(b *Block) string {
 	if b == nil {
@@ -663,7 +665,7 @@ func (r *Renderer) renderExecuteCompletionStatus(b *Block) string {
 }
 
 // renderReadCompletionStatus renders completion status for READ blocks.
-func (r *Renderer) renderReadCompletionStatus(b *Block) string {
+func (r *Renderer) renderReadCompletionStatus(_ *Block) string {
 	// Read blocks typically don't show completion status
 	// (the body contains the file content).
 	return ""
@@ -689,7 +691,7 @@ func (r *Renderer) renderWriteCompletionStatus(b *Block) string {
 }
 
 // renderGrepCompletionStatus renders completion status for GREP blocks.
-func (r *Renderer) renderGrepCompletionStatus(b *Block) string {
+func (r *Renderer) renderGrepCompletionStatus(_ *Block) string {
 	// Grep blocks typically don't show completion status
 	// (the body contains the matches).
 	return ""

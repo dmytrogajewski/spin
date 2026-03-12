@@ -16,6 +16,10 @@ var (
 	ErrContextNotFound      = errors.New("context not found")
 	ErrPermissionDenied     = errors.New("permission denied")
 	ErrEmptyWorkspace       = errors.New("empty workspace root")
+	ErrUnknownOperationType = errors.New("unknown operation type")
+	ErrNoContextLinesInHunk = errors.New("no context lines in hunk")
+	ErrContextMismatch = errors.New("context mismatch")
+	ErrDeleteBeyondEndOfFile = errors.New("delete beyond end of file")
 )
 
 // modOperation represents the type of file modification.
@@ -161,7 +165,7 @@ func (a *Applier) SetForceOverwrite(enabled bool) {
 func (a *Applier) Apply(patch *Patch) (*ApplyResult, error) {
 	a.resetModifications()
 
-	err := a.validatePatch(patch)
+	err := a.ValidatePatch(patch)
 	if err != nil {
 		return nil, err
 	}
@@ -184,11 +188,6 @@ func (a *Applier) Apply(patch *Patch) (*ApplyResult, error) {
 // resetModifications resets the modifications tracking.
 func (a *Applier) resetModifications() {
 	a.modifications = make([]*fileModification, 0)
-}
-
-// validatePatch validates the patch without applying it.
-func (a *Applier) validatePatch(patch *Patch) error {
-	return a.ValidatePatch(patch)
 }
 
 // createApplyResult creates a new ApplyResult with initialized slices.
@@ -223,7 +222,7 @@ func (a *Applier) applyOperation(op FileOperation, result *ApplyResult) error {
 	case *UpdateFile:
 		return a.applyUpdateFile(op, result)
 	default:
-		return fmt.Errorf("unknown operation type: %T", op)
+return fmt.Errorf("unknown operation type: %T: %w", op, ErrUnknownOperationType)
 	}
 }
 
@@ -319,7 +318,7 @@ func (a *Applier) validateUpdateFile(op *UpdateFile) error {
 
 	// Validate new path if move operation.
 	if op.NewPath != "" {
-		_, err := a.resolvePath(op.NewPath)
+		_, err = a.resolvePath(op.NewPath)
 		if err != nil {
 			return a.wrapError("Move", op.NewPath, err, "")
 		}
@@ -461,7 +460,7 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 
 	// Apply each hunk.
 	for i, hunk := range op.Hunks {
-		err := a.applyHunk(&lines, hunk, op.FilePath, i)
+		err = a.applyHunk(&lines, hunk, op.FilePath, i)
 		if err != nil {
 			return err
 		}
@@ -476,7 +475,7 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 		}
 
 		// Ensure parent directories exist.
-		err := os.MkdirAll(filepath.Dir(targetPath), 0755)
+		err = os.MkdirAll(filepath.Dir(targetPath), 0755)
 		if err != nil {
 			return a.wrapError("Move", op.NewPath, err, "failed to create parent directories")
 		}
@@ -493,7 +492,7 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 
 	// If moved, delete original.
 	if op.NewPath != "" && targetPath != fullPath {
-		err := os.Remove(fullPath)
+		err = os.Remove(fullPath)
 		if err != nil {
 			return a.wrapError("Move", op.FilePath, err, "failed to delete original file")
 		}
@@ -512,7 +511,7 @@ func (a *Applier) applyHunk(lines *[]string, hunk Hunk, filePath string, hunkIdx
 	// Extract context lines from hunk.
 	contextLines := a.extractContextLines(hunk)
 	if len(contextLines) == 0 {
-		return a.wrapError("Update", filePath, errors.New("no context lines in hunk"),
+		return a.wrapError("Update", filePath, ErrNoContextLinesInHunk,
 			fmt.Sprintf("hunk %d must have context lines for matching", hunkIdx))
 	}
 
@@ -536,7 +535,7 @@ func (a *Applier) applyHunk(lines *[]string, hunk Hunk, filePath string, hunkIdx
 		case LineContext:
 			// Verify context matches (within fuzzy threshold).
 			if pos+offset >= len(*lines) {
-				return a.wrapError("Update", filePath, errors.New("context mismatch"),
+				return a.wrapError("Update", filePath, ErrContextMismatch,
 					fmt.Sprintf("hunk %d: ran out of lines", hunkIdx))
 			}
 
@@ -546,7 +545,7 @@ func (a *Applier) applyHunk(lines *[]string, hunk Hunk, filePath string, hunkIdx
 		case LineDelete:
 			// Skip this line (delete).
 			if pos+offset >= len(*lines) {
-				return a.wrapError("Update", filePath, errors.New("delete beyond end of file"),
+				return a.wrapError("Update", filePath, ErrDeleteBeyondEndOfFile,
 					fmt.Sprintf("hunk %d: cannot delete line beyond end", hunkIdx))
 			}
 
@@ -633,12 +632,12 @@ func (a *Applier) rollbackCreate(fullPath string) {
 
 // rollbackUpdate restores original content for an updated file.
 func (a *Applier) rollbackUpdate(fullPath string, originalContent []byte) {
-	os.WriteFile(fullPath, originalContent, 0644)
+	_ = os.WriteFile(fullPath, originalContent, 0644)
 }
 
 // rollbackDelete recreates a deleted file.
 func (a *Applier) rollbackDelete(fullPath string, originalContent []byte) {
-	os.WriteFile(fullPath, originalContent, 0644)
+	_ = os.WriteFile(fullPath, originalContent, 0644)
 }
 
 // clearModifications clears the modifications tracking.

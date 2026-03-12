@@ -27,7 +27,7 @@ func TestApprovalService_RequestApproval(t *testing.T) {
 		{
 			name: "handler approves",
 			service: &ApprovalService{
-				handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+				handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  true,
@@ -42,7 +42,7 @@ func TestApprovalService_RequestApproval(t *testing.T) {
 		{
 			name: "handler denies",
 			service: &ApprovalService{
-				handler: func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+				handler: func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  false,

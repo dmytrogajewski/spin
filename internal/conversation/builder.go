@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	"github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -24,7 +24,7 @@ import (
 // Runtime is REQUIRED - it provides approval handler, tool registration, and other runtime-specific behavior.
 type Builder struct {
 	// Core configuration.
-	cfg     *config.ConfigV2
+	cfg     *config.V2
 	workDir string
 
 	// Services (injected from application layer).
@@ -33,7 +33,7 @@ type Builder struct {
 	mcpService   *mcppkg.Service
 
 	// Required.
-	runtime runtime.Runtime      // Runtime provides approval handler, tools, notifications.
+	runtime executor.Runtime      // Runtime provides approval handler, tools, notifications.
 	emitter *events.EventEmitter // Emitter MUST match runtime's emitter.
 
 	// Optional overrides.
@@ -51,7 +51,7 @@ type Builder struct {
 // NewBuilder creates a new Conversation builder with required dependencies.
 // Runtime and emitter are REQUIRED - they must be created by the caller (cmd layer).
 // The same emitter instance must be passed to both the runtime and the builder.
-func NewBuilder(cfg *config.ConfigV2, workDir string, runtime runtime.Runtime, emitter *events.EventEmitter, provider llm.Provider) *Builder {
+func NewBuilder(cfg *config.V2, workDir string, runtime executor.Runtime, emitter *events.EventEmitter, provider llm.Provider) *Builder {
 	if cfg == nil {
 		panic("config cannot be nil")
 	}
@@ -118,7 +118,7 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	}
 
 	logger := b.getLogger()
-	logger.Info("building conversation", "work_dir", b.workDir)
+	logger.InfoContext(ctx, "building conversation", "work_dir", b.workDir)
 
 	// Initialize core dependencies.
 	err = b.initializeCoreDependencies()
@@ -127,7 +127,7 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	}
 
 	// Build executor using agent package helper with unified config
-	// Runtime provides approval handler via runtime.ApprovalHandler().
+	// Runtime provides approval handler via executor.ApprovalHandler().
 	exec := agent.NewBuilder().
 		WithConfig(b.cfg).
 		WithWorkingDir(b.workDir).
@@ -146,7 +146,7 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 
 	// Create session early (ID is needed for memory initialization).
 	sess := session.NewSession(b.workDir)
-	logger.Info("session created", "session_id", sess.ID)
+	logger.InfoContext(ctx, "session created", "session_id", sess.ID)
 
 	// Initialize memory services if configured.
 	err = b.initializeMemory(sess.ID)
@@ -186,7 +186,7 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 		b.attachJSONLEventLogger(ctx, convID)
 	}
 
-	logger.Info("conversation built successfully", "session_id", convID)
+	logger.InfoContext(ctx, "conversation built successfully", "session_id", convID)
 
 	return conv, nil
 }
@@ -258,7 +258,7 @@ func (b *Builder) addGitContext(env *agent.Environment) {
 
 	if !info.IsRepo {
 		if b.logger != nil {
-			b.logger.Debug("git context: not a repository")
+			b.logger.DebugContext(context.Background(), "git context: not a repository")
 		}
 
 		return
@@ -299,7 +299,7 @@ func (b *Builder) addGitContext(env *agent.Environment) {
 	}
 
 	if b.logger != nil {
-		b.logger.Debug("git context added", "branch", info.Branch, "clean", info.IsClean)
+		b.logger.DebugContext(context.Background(), "git context added", "branch", info.Branch, "clean", info.IsClean)
 	}
 }
 
@@ -323,7 +323,7 @@ func (b *Builder) addShellContext(env *agent.Environment) {
 	}
 
 	if b.logger != nil {
-		b.logger.Debug("shell context added", "shell", info.Shell)
+		b.logger.DebugContext(context.Background(), "shell context added", "shell", info.Shell)
 	}
 }
 

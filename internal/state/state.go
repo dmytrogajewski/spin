@@ -1,8 +1,14 @@
+// Package state provides application state management.
 package state
 
 import (
 	"errors"
 	"fmt"
+)
+
+var (
+	ErrStateCannotBeEmpty = errors.New("state cannot be empty")
+	ErrInvalidState = errors.New("invalid state")
 )
 
 // State represents the current state of the system.
@@ -98,11 +104,11 @@ func (s State) MarshalText() ([]byte, error) {
 func (s *State) UnmarshalText(text []byte) error {
 	state := State(text)
 	if len(text) == 0 {
-		return errors.New("state cannot be empty")
+		return ErrStateCannotBeEmpty
 	}
 
 	if !validStates[state] {
-		return fmt.Errorf("invalid state: %s", text)
+return fmt.Errorf("invalid state: %s: %w", text, ErrInvalidState)
 	}
 
 	*s = state

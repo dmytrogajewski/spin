@@ -1,4 +1,4 @@
-package debug
+package dbg
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	agentexec "github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -21,6 +21,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
+)
+
+var (
+	ErrPromptCannotBeEmpty = errors.New("prompt cannot be empty")
+	ErrTaskFailed = errors.New("task failed")
 )
 
 // EventLogger captures and logs all core events for debugging.
@@ -50,11 +55,11 @@ func NewEventLogger(format string, filter []string) *EventLogger {
 // Run executes a task with event logging enabled.
 func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	if prompt == "" {
-		return errors.New("prompt cannot be empty")
+		return ErrPromptCannotBeEmpty
 	}
 
 	// Create conversation with default config using builder pattern.
-	cfg := config.DefaultConfigV2()
+	cfg := config.DefaultV2()
 	// Set required fields for validation.
 	cfg.LLM.Provider = "mock"
 	cfg.LLM.Model = "test-model"
@@ -92,7 +97,8 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	if cfg.Protocol.EnableMCP && len(cfg.Protocol.MCPServers) > 0 {
 		registryManager := mcppkg.NewDefaultRegistryManager(logger)
 		for _, srv := range cfg.Protocol.MCPServers {
-			registry, err := mcppkg.NewLocalRegistry(mcppkg.LocalRegistryConfig{
+			var registry *mcppkg.LocalRegistry
+			registry, err = mcppkg.NewLocalRegistry(mcppkg.LocalRegistryConfig{
 				Name:    srv.Name,
 				Command: srv.Command,
 				Args:    srv.Args,
@@ -100,23 +106,23 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 				Logger:  logger,
 			})
 			if err != nil {
-				logger.Warn("failed to create MCP registry", "name", srv.Name, "err", err)
+				logger.WarnContext(ctx, "failed to create MCP registry", "name", srv.Name, "err", err)
 
 				continue
 			}
 
 			err = registryManager.Register(registry)
 			if err != nil {
-				logger.Warn("failed to register MCP registry", "name", srv.Name, "err", err)
+				logger.WarnContext(ctx, "failed to register MCP registry", "name", srv.Name, "err", err)
 
 				continue
 			}
 		}
 
 		for _, reg := range registryManager.All() {
-			err := reg.Initialize(ctx)
+			err = reg.Initialize(ctx)
 			if err != nil {
-				logger.Warn("failed to initialize MCP registry", "name", reg.Name(), "err", err)
+				logger.WarnContext(ctx, "failed to initialize MCP registry", "name", reg.Name(), "err", err)
 			}
 		}
 
@@ -135,7 +141,7 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	}
 
 	// Create auto-approve handler for debug (no approval needed for event logging).
-	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
@@ -147,7 +153,7 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	executor, _ := agent.NewExecutor(workDir)
 	validator := security.NewValidator()
 
-	builtinRuntime, err := runtime.NewBuiltinRuntime(runtime.BuiltinRuntimeConfig{
+	builtinRuntime, err := agentexec.NewBuiltinRuntime(agentexec.BuiltinRuntimeConfig{
 		WorkDir:         workDir,
 		Emitter:         emitter,
 		Storage:         storage,
@@ -203,7 +209,7 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 
 		// Check for errors.
 		if event.Type == events.EventError {
-			return fmt.Errorf("task failed: %v", event.Data)
+return fmt.Errorf("task failed: %v: %w", event.Data, ErrTaskFailed)
 		}
 
 		// Stop on turn complete or failed.
@@ -214,9 +220,9 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 
 	// Check for turn execution error.
 	select {
-	case err := <-errChan:
-		if err != nil {
-			return fmt.Errorf("turn execution failed: %w", err)
+	case turnErr := <-errChan:
+		if turnErr != nil {
+			return fmt.Errorf("turn execution failed: %w", turnErr)
 		}
 	default:
 	}

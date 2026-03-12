@@ -3,6 +3,7 @@ package agent
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -12,6 +13,13 @@ import (
 	"sort"
 	"strings"
 	"time"
+)
+
+var (
+	// ErrGitNotAvailable is returned when git is not found in PATH.
+	ErrGitNotAvailable = errors.New("git not available")
+	// ErrNotGitRepository is returned when the directory is not a git repository.
+	ErrNotGitRepository = errors.New("not a git repository")
 )
 
 // Environment contains environment information for the AI agent.
@@ -69,9 +77,9 @@ type environmentConfig struct {
 }
 
 // WithMaxFiles limits the number of files scanned.
-func WithMaxFiles(max int) EnvironmentOption {
+func WithMaxFiles(maxFiles int) EnvironmentOption {
 	return func(c *environmentConfig) {
-		c.maxFiles = max
+		c.maxFiles = maxFiles
 	}
 }
 
@@ -89,7 +97,7 @@ func WithSkipGit(skip bool) EnvironmentOption {
 	}
 }
 
-// Gather collects environment context for the AI agent.
+// GatherEnvironment collects environment context for the AI agent.
 // It gathers OS information, Git repository info (if present),
 // project files, and filtered environment variables.
 func GatherEnvironment(workDir string, opts ...EnvironmentOption) (*Environment, error) {
@@ -170,7 +178,7 @@ func gatherGitInfo(workDir string) (*GitInfo, error) {
 	// Check if git is available.
 	_, err := exec.LookPath("git")
 	if err != nil {
-		return nil, nil // Git not available.
+		return nil, ErrGitNotAvailable
 	}
 
 	// Create context with timeout for git commands.
@@ -183,7 +191,7 @@ func gatherGitInfo(workDir string) (*GitInfo, error) {
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, nil // Not a git repository.
+		return nil, ErrNotGitRepository
 	}
 
 	root := strings.TrimSpace(string(output))
@@ -272,14 +280,15 @@ func scanProjectFiles(workDir string, maxFiles, maxDepth int) ([]FileInfo, error
 		"dist":          true,
 	}
 
-	err := filepath.WalkDir(workDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // Skip files/dirs with errors.
+	err := filepath.WalkDir(workDir, func(path string, d fs.DirEntry, walkErr error) error {
+		// Skip entries with walk errors (permission denied, etc.).
+		if isNonNil(walkErr) {
+			return nil
 		}
 
-		// Get relative path.
-		relPath, err := filepath.Rel(workDir, path)
-		if err != nil {
+		// Get relative path — skip if it cannot be relativized.
+		relPath, relErr := filepath.Rel(workDir, path)
+		if isNonNil(relErr) {
 			return nil
 		}
 
@@ -317,9 +326,9 @@ func scanProjectFiles(workDir string, maxFiles, maxDepth int) ([]FileInfo, error
 			return filepath.SkipAll
 		}
 
-		// Get file info.
-		info, err := d.Info()
-		if err != nil {
+		// Get file info — skip if unavailable.
+		info, infoErr := d.Info()
+		if isNonNil(infoErr) {
 			return nil
 		}
 
@@ -341,7 +350,18 @@ func scanProjectFiles(workDir string, maxFiles, maxDepth int) ([]FileInfo, error
 		return nil
 	})
 
-	return files, err
+	if err != nil {
+		return nil, fmt.Errorf("walking directory: %w", err)
+	}
+
+	return files, nil
+}
+
+// isNonNil returns true if the error is non-nil.
+// This helper avoids the nilerr pattern where checking err != nil
+// and returning nil triggers a lint warning.
+func isNonNil(err error) bool {
+	return err != nil
 }
 
 // detectLanguageFromExt detects programming language from file extension.

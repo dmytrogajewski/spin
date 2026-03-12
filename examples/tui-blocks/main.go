@@ -1,3 +1,4 @@
+// Package main provides a TUI blocks rendering example.
 package main
 
 import (
@@ -35,61 +36,61 @@ func main() {
 
 	// Start TUI.
 	go func() {
-		err := ui.Run(ctx)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+		runErr := ui.Run(ctx)
+		if runErr != nil {
+			fmt.Fprintf(os.Stderr, "TUI error: %v\n", runErr)
 			cancel()
 		}
 	}()
 
 	// Print header.
-	ui.PrintLine("╔══════════════════════════════════════════════════════════╗")
-	ui.PrintLine("║   Spin TUI - Block Types Demo                           ║")
-	ui.PrintLine("╚══════════════════════════════════════════════════════════╝")
-	ui.PrintLine("")
-	ui.PrintLine("This demo shows all 9 block types with realistic examples.")
-	ui.PrintLine("")
+	_ = ui.PrintLine("╔══════════════════════════════════════════════════════════╗")
+	_ = ui.PrintLine("║   Spin TUI - Block Types Demo                           ║")
+	_ = ui.PrintLine("╚══════════════════════════════════════════════════════════╝")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("This demo shows all 9 block types with realistic examples.")
+	_ = ui.PrintLine("")
 
 	// Create blocks and append to timeline.
 	createBlocks(ui)
 
 	// Instructions.
-	ui.PrintLine("")
-	ui.PrintLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	ui.PrintLine("")
-	ui.PrintLine("🎯 Try these actions:")
-	ui.PrintLine("")
-	ui.PrintLine("Navigation:")
-	ui.PrintLine("  PgUp / PgDn     Scroll timeline by page")
-	ui.PrintLine("  g / G           Jump to top / bottom")
-	ui.PrintLine("  [ / ]           Previous / next block")
-	ui.PrintLine("")
-	ui.PrintLine("Block actions:")
-	ui.PrintLine("  Enter           Toggle fold/expand block")
-	ui.PrintLine("  y               Copy block body")
-	ui.PrintLine("  S               Save block to file")
-	ui.PrintLine("  r               Rerun EXECUTE block")
-	ui.PrintLine("")
-	ui.PrintLine("Advanced:")
-	ui.PrintLine("  Ctrl-P          Command palette")
-	ui.PrintLine("  /               Filter timeline")
-	ui.PrintLine("  zR / zM         Expand / collapse all")
-	ui.PrintLine("")
-	ui.PrintLine("Type 'quit' to exit, or press Ctrl-D")
-	ui.PrintLine("")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("🎯 Try these actions:")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("Navigation:")
+	_ = ui.PrintLine("  PgUp / PgDn     Scroll timeline by page")
+	_ = ui.PrintLine("  g / G           Jump to top / bottom")
+	_ = ui.PrintLine("  [ / ]           Previous / next block")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("Block actions:")
+	_ = ui.PrintLine("  Enter           Toggle fold/expand block")
+	_ = ui.PrintLine("  y               Copy block body")
+	_ = ui.PrintLine("  S               Save block to file")
+	_ = ui.PrintLine("  r               Rerun EXECUTE block")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("Advanced:")
+	_ = ui.PrintLine("  Ctrl-P          Command palette")
+	_ = ui.PrintLine("  /               Filter timeline")
+	_ = ui.PrintLine("  zR / zM         Expand / collapse all")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("Type 'quit' to exit, or press Ctrl-D")
+	_ = ui.PrintLine("")
 
 	// Main loop.
 	for {
 		select {
 		case <-ctx.Done():
-			ui.Stop()
-			fmt.Println("\nGoodbye!")
+			_ = ui.Stop()
+			_, _ = fmt.Fprintln(os.Stdout, "\nGoodbye!")
 
 			return
 
 		case line, ok := <-ui.RequestInput():
 			if !ok {
-				ui.Stop()
+				_ = ui.Stop()
 
 				return
 			}
@@ -98,13 +99,13 @@ func main() {
 			case "quit", "exit", "q":
 				cancel()
 			case "help", "h", "?":
-				ui.PrintLine("")
-				ui.PrintLine("See navigation and block actions above.")
-				ui.PrintLine("")
+				_ = ui.PrintLine("")
+				_ = ui.PrintLine("See navigation and block actions above.")
+				_ = ui.PrintLine("")
 			case "":
 				// Ignore empty lines.
 			default:
-				ui.PrintLine(fmt.Sprintf("Echo: %s", line))
+				_ = ui.PrintLine(fmt.Sprintf("Echo: %s", line))
 			}
 		}
 	}
@@ -140,7 +141,7 @@ ok      github.com/user/project    0.051s`
 		fmt.Fprintf(os.Stderr, "Error setting execute meta: %v\n", err)
 	}
 
-	ui.AppendBlock(execBlock)
+	_ = ui.AppendBlock(execBlock)
 
 	// 2. PLAN block.
 	planBlock := blocks.NewBlock(blocks.BlockTypePlan)
@@ -164,7 +165,7 @@ ok      github.com/user/project    0.051s`
 		log.Printf("Failed to set plan metadata: %v", err)
 	}
 
-	ui.AppendBlock(planBlock)
+	_ = ui.AppendBlock(planBlock)
 
 	// 3. READ block.
 	readBlock := blocks.NewBlock(blocks.BlockTypeRead)
@@ -201,7 +202,7 @@ func NewInput() *Input {
 		fmt.Fprintf(os.Stderr, "Error setting read meta: %v\n", err)
 	}
 
-	ui.AppendBlock(readBlock)
+	_ = ui.AppendBlock(readBlock)
 
 	// 4. GREP block.
 	grepBlock := blocks.NewBlock(blocks.BlockTypeGrep)
@@ -228,7 +229,7 @@ utils.go:18:
 		fmt.Fprintf(os.Stderr, "Error setting grep meta: %v\n", err)
 	}
 
-	ui.AppendBlock(grepBlock)
+	_ = ui.AppendBlock(grepBlock)
 
 	// 5. APPLY_PATCH block (success).
 	patchBlock := blocks.NewBlock(blocks.BlockTypeApplyPatch)
@@ -254,7 +255,7 @@ utils.go:18:
 		fmt.Fprintf(os.Stderr, "Error setting patch meta: %v\n", err)
 	}
 
-	ui.AppendBlock(patchBlock)
+	_ = ui.AppendBlock(patchBlock)
 
 	// 6. SUMMARY block.
 	summaryBlock := blocks.NewBlock(blocks.BlockTypeSummary)
@@ -269,7 +270,7 @@ Files modified:
 • main.go (+3 lines)
 • No breaking changes`
 
-	ui.AppendBlock(summaryBlock)
+	_ = ui.AppendBlock(summaryBlock)
 
 	// 7. TESTING block (mixed results).
 	testingBlock := blocks.NewBlock(blocks.BlockTypeTesting)
@@ -282,7 +283,7 @@ Files modified:
 
 	// TESTING block currently has no specific metadata type
 	// Can use generic Meta map or leave empty.
-	ui.AppendBlock(testingBlock)
+	_ = ui.AppendBlock(testingBlock)
 
 	// 8. NOTICE block.
 	noticeBlock := blocks.NewBlock(blocks.BlockTypeNotice)
@@ -293,7 +294,7 @@ Previous messages have been summarized. Full history available in:
 ~/.spin/sessions/20251011-103042.json`
 	noticeBlock.Severity = blocks.SeverityInfo
 
-	ui.AppendBlock(noticeBlock)
+	_ = ui.AppendBlock(noticeBlock)
 
 	// 9. ERROR block.
 	errorBlock := blocks.NewBlock(blocks.BlockTypeError)
@@ -317,9 +318,9 @@ Suggestion: Check file permissions and retry with sudo`
 		fmt.Fprintf(os.Stderr, "Error setting error meta: %v\n", err)
 	}
 
-	ui.AppendBlock(errorBlock)
+	_ = ui.AppendBlock(errorBlock)
 
 	// Print separator.
-	ui.PrintLine("")
-	ui.PrintLine("✅ Created 9 blocks (one of each type)")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("✅ Created 9 blocks (one of each type)")
 }

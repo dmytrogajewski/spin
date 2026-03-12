@@ -63,7 +63,7 @@ func BenchmarkFindDuplicates_WithPlaybook(b *testing.B) {
 		content := "Test bullet " + string(rune('A'+i%26))
 		emb, _ := embedder.Embed(ctx, content)
 		b, _ := bullet.New(content, bullet.WithEmbedding(emb))
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 	}
 
 	// New bullet to check.

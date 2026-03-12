@@ -19,8 +19,8 @@ func TestApplyPatch_SimplePatch(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "hello.txt")
 	err := os.WriteFile(testFile, []byte("Hello World\n"), 0644)
 	require.NoError(t, err)
-	exec.Command("git", "-C", tmpDir, "add", ".").Run()
-	exec.Command("git", "-C", tmpDir, "commit", "-m", "initial").Run()
+	_ = exec.Command("git", "-C", tmpDir, "add", ".").Run()
+	_ = exec.Command("git", "-C", tmpDir, "commit", "-m", "initial").Run()
 
 	patchText := `diff --git a/hello.txt b/hello.txt
 index 557db03..980a0d5 100644
@@ -79,9 +79,9 @@ func TestApplyPatch_DeleteFile(t *testing.T) {
 
 	// Create file to delete.
 	testFile := filepath.Join(tmpDir, "delete.txt")
-	os.WriteFile(testFile, []byte("to be deleted\n"), 0644)
-	exec.Command("git", "-C", tmpDir, "add", ".").Run()
-	exec.Command("git", "-C", tmpDir, "commit", "-m", "add file").Run()
+	_ = os.WriteFile(testFile, []byte("to be deleted\n"), 0644)
+	_ = exec.Command("git", "-C", tmpDir, "add", ".").Run()
+	_ = exec.Command("git", "-C", tmpDir, "commit", "-m", "add file").Run()
 
 	patchText := `diff --git a/delete.txt b/delete.txt
 deleted file mode 100644
@@ -110,9 +110,9 @@ func TestApplyPatch_DryRun(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	testFile := filepath.Join(tmpDir, "test.txt")
-	os.WriteFile(testFile, []byte("line 1\nline 2\n"), 0644)
-	exec.Command("git", "-C", tmpDir, "add", ".").Run()
-	exec.Command("git", "-C", tmpDir, "commit", "-m", "initial").Run()
+	_ = os.WriteFile(testFile, []byte("line 1\nline 2\n"), 0644)
+	_ = exec.Command("git", "-C", tmpDir, "add", ".").Run()
+	_ = exec.Command("git", "-C", tmpDir, "commit", "-m", "initial").Run()
 
 	patchText := `diff --git a/test.txt b/test.txt
 index abc..def 100644
@@ -221,12 +221,12 @@ func setupGitRepo(t *testing.T, dir string) {
 	cmd.Dir = dir
 	require.NoError(t, cmd.Run(), "git init failed")
 
-	exec.Command("git", "-C", dir, "config", "user.email", "test@example.com").Run()
-	exec.Command("git", "-C", dir, "config", "user.name", "Test User").Run()
+	_ = exec.Command("git", "-C", dir, "config", "user.email", "test@example.com").Run()
+	_ = exec.Command("git", "-C", dir, "config", "user.name", "Test User").Run()
 
 	// Create initial commit.
 	readmeFile := filepath.Join(dir, "README.md")
-	os.WriteFile(readmeFile, []byte("# Test Repo\n"), 0644)
-	exec.Command("git", "-C", dir, "add", ".").Run()
-	exec.Command("git", "-C", dir, "commit", "-m", "Initial commit").Run()
+	_ = os.WriteFile(readmeFile, []byte("# Test Repo\n"), 0644)
+	_ = exec.Command("git", "-C", dir, "add", ".").Run()
+	_ = exec.Command("git", "-C", dir, "commit", "-m", "Initial commit").Run()
 }

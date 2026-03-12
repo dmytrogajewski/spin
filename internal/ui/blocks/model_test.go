@@ -68,7 +68,7 @@ func TestBlock_Validate(t *testing.T) {
 		modify  func(*Block)
 		wantErr bool
 	}{
-		{"valid", func(b *Block) {}, false},
+		{"valid", func(_ *Block) {}, false},
 		{"empty_id", func(b *Block) { b.ID = "" }, true},
 		{"invalid_type", func(b *Block) { b.Type = BlockType("INVALID") }, true},
 		{"invalid_fold_state", func(b *Block) { b.FoldState = FoldState("invalid") }, true},

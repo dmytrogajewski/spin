@@ -42,7 +42,7 @@ func TestShouldRetrieveProgressive_Disabled(t *testing.T) {
 		},
 	}
 
-	ctx := trajectory.NewTrajectoryContext("test query")
+	ctx := trajectory.NewContext("test query")
 	ctx.CurrentTurn = 5
 
 	shouldRetrieve, trigger := agent.shouldRetrieveProgressive(ctx)
@@ -70,7 +70,7 @@ func TestShouldRetrieveProgressive_TriggerPriority(t *testing.T) {
 	}
 
 	// Test 1: Turn 0 with error - should return TriggerInitial (higher priority).
-	ctx := trajectory.NewTrajectoryContext("test query")
+	ctx := trajectory.NewContext("test query")
 	ctx.CurrentTurn = 0
 	ctx.AppendSteps([]generator.TrajectoryStep{
 		{StepNumber: 0, Content: "error occurred"},
@@ -87,7 +87,7 @@ func TestShouldRetrieveProgressive_TriggerPriority(t *testing.T) {
 	}
 
 	// Test 2: Error + TTL expired - should return TriggerError (higher than interval).
-	ctx2 := trajectory.NewTrajectoryContext("test query")
+	ctx2 := trajectory.NewContext("test query")
 	ctx2.CurrentTurn = 20
 	ctx2.LastRetrievalTurn = 0 // 20 turns ago, TTL expired.
 	ctx2.AppendSteps([]generator.TrajectoryStep{
@@ -116,7 +116,7 @@ func TestShouldRetrieveProgressive_TurnZero(t *testing.T) {
 		},
 	}
 
-	ctx := trajectory.NewTrajectoryContext("test query")
+	ctx := trajectory.NewContext("test query")
 	ctx.CurrentTurn = 0
 
 	shouldRetrieve, trigger := agent.shouldRetrieveProgressive(ctx)
@@ -142,7 +142,7 @@ func TestShouldRetrieveProgressive_RecentError(t *testing.T) {
 		},
 	}
 
-	ctx := trajectory.NewTrajectoryContext("test query")
+	ctx := trajectory.NewContext("test query")
 	ctx.CurrentTurn = 10
 	ctx.LastRetrievalTurn = 5
 
@@ -175,7 +175,7 @@ func TestShouldRetrieveProgressive_ToolChange(t *testing.T) {
 		},
 	}
 
-	ctx := trajectory.NewTrajectoryContext("test query")
+	ctx := trajectory.NewContext("test query")
 	ctx.CurrentTurn = 10
 	ctx.LastRetrievalTurn = 5
 
@@ -208,7 +208,7 @@ func TestShouldRetrieveProgressive_Interval(t *testing.T) {
 		},
 	}
 
-	ctx := trajectory.NewTrajectoryContext("test query")
+	ctx := trajectory.NewContext("test query")
 	ctx.CurrentTurn = 15
 	ctx.LastRetrievalTurn = 0 // 15 turns ago, exceeds TTL.
 
@@ -235,7 +235,7 @@ func TestShouldRetrieveProgressive_NoTrigger(t *testing.T) {
 		},
 	}
 
-	ctx := trajectory.NewTrajectoryContext("test query")
+	ctx := trajectory.NewContext("test query")
 	ctx.CurrentTurn = 8
 	ctx.LastRetrievalTurn = 5 // 3 turns ago, within TTL.
 	// No errors, no tool changes.

@@ -1,3 +1,4 @@
+// Package security provides security approval handling.
 package security
 
 import (
@@ -9,6 +10,13 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/dmytrogajewski/spin/internal/events"
+)
+
+var (
+	ErrNoApprovalHandlerConfigured = errors.New("no approval handler configured")
+	ErrContextCanceled = errors.New("context canceled")
+	ErrRequestIdMismatch = errors.New("request ID mismatch")
+	ErrModifiedCommandNotSafe = errors.New("modified command not safe")
 )
 
 // ApprovalService provides centralized approval handling for various operations.
@@ -115,7 +123,7 @@ func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operati
 			s.emitApprovalDenied(reqID, operation.Command, "no approval handler configured")
 		}
 
-		return reqID, false, errors.New("no approval handler configured")
+		return reqID, false, ErrNoApprovalHandlerConfigured
 	}
 
 	// Invoke approval handler.
@@ -125,7 +133,7 @@ func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operati
 			s.emitApprovalDenied(reqID, operation.Command, "context canceled")
 		}
 
-		return reqID, false, errors.New("context canceled")
+		return reqID, false, ErrContextCanceled
 	}
 
 	// Validate response.
@@ -134,7 +142,7 @@ func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operati
 			s.emitApprovalDenied(reqID, operation.Command, "response request ID mismatch")
 		}
 
-		return reqID, false, errors.New("request ID mismatch")
+		return reqID, false, ErrRequestIdMismatch
 	}
 
 	// Handle command modification if needed.
@@ -238,7 +246,8 @@ func (s *ApprovalService) handleModifiedCommand(_ context.Context, reqID string,
 
 	// Re-validate modified command if validator available.
 	if s.validator != nil {
-		result, err := s.validator.Classify(modCmd)
+		var result *ValidationResult
+		result, err = s.validator.Classify(modCmd)
 		if err != nil {
 			if s.emitter != nil {
 				s.emitApprovalDenied(reqID, originalCmd, "modified command validation error: "+err.Error())
@@ -253,7 +262,7 @@ func (s *ApprovalService) handleModifiedCommand(_ context.Context, reqID string,
 				s.emitApprovalDenied(reqID, originalCmd, "modified command failed validation: "+result.Classification.String())
 			}
 
-			return reqID, false, fmt.Errorf("modified command not safe: %s", result.Classification)
+return reqID, false, fmt.Errorf("modified command not safe: %s: %w", result.Classification, ErrModifiedCommandNotSafe)
 		}
 	}
 

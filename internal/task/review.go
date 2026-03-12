@@ -1,7 +1,6 @@
 package task
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -70,30 +69,35 @@ func NewReview() *Review {
 	}
 }
 
+// Name implements the Name operation.
 func (r *Review) Name() string {
 	return r.name
 }
 
+// SystemPrompt implements the SystemPrompt operation.
 func (r *Review) SystemPrompt() string {
 	return r.systemPrompt
 }
 
+// AllowedTools implements the AllowedTools operation.
 func (r *Review) AllowedTools() []string {
 	// Review mode allows only read-only tools.
 	return []string{"read_file", "list_directory", "file_search", "git_context", "get_context"}
 }
 
+// MaxTokens implements the MaxTokens operation.
 func (r *Review) MaxTokens() int {
 	return r.maxTokens
 }
 
+// Validate implements the Validate operation.
 func (r *Review) Validate() error {
 	if r.maxTokens <= 0 {
-		return errors.New("max tokens must be positive")
+		return ErrMaxTokensMustBePositive
 	}
 
 	if r.maxTokens > MaxAllowedTokens {
-		return fmt.Errorf("max tokens %d exceeds maximum allowed %d", r.maxTokens, MaxAllowedTokens)
+return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", r.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
 	}
 
 	return nil

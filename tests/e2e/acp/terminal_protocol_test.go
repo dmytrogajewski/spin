@@ -34,7 +34,7 @@ func TestACPTerminalExecution(t *testing.T) {
 
 	handler := &interceptingClient{
 		testClient: &testClient{},
-		createTerminalFunc: func(ctx context.Context, req acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
+		createTerminalFunc: func(_ context.Context, _ acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
 			terminalCreated <- true
 
 			return acp.CreateTerminalResponse{

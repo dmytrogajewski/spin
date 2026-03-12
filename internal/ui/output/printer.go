@@ -5,6 +5,7 @@ package output
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -67,8 +68,11 @@ func (p *Printer) PrintLine(s string) error {
 	// Convert \n to \r\n for raw terminal mode.
 	output := strings.ReplaceAll(s+"\n", "\n", "\r\n")
 	_, err := io.WriteString(p.out, output)
+	if err != nil {
+		return fmt.Errorf("print line: %w", err)
+	}
 
-	return err
+	return nil
 }
 
 // PrintChunks streams chunks from a channel with optional coalescing.
@@ -102,9 +106,9 @@ func (p *Printer) printChunksWithCoalescing(ctx context.Context, chunks <-chan s
 	for {
 		select {
 		case <-ctx.Done():
-			flush()
+			_ = flush()
 
-			return ctx.Err()
+			return fmt.Errorf("print chunks: %w", ctx.Err())
 
 		case chunk, ok := <-chunks:
 			if !ok {
@@ -143,7 +147,11 @@ func (p *Printer) createFlushFunc(buf *strings.Builder, wroteContent *bool) func
 
 		buf.Reset()
 
-		return err
+		if err != nil {
+			return fmt.Errorf("flush output: %w", err)
+		}
+
+		return nil
 	}
 }
 
@@ -159,7 +167,7 @@ func (p *Printer) handleChannelClosed(flush func() error, wroteContent bool) err
 	// Only add newline if content was actually written.
 	if wroteContent {
 		p.mu.Lock()
-		io.WriteString(p.out, "\r\n")
+		_, _ = io.WriteString(p.out, "\r\n")
 		p.mu.Unlock()
 	}
 
@@ -207,7 +215,11 @@ func (p *Printer) handleLargeChunk(chunk string, wroteContent *bool, flush func(
 	_, err = io.WriteString(p.out, output)
 	p.mu.Unlock()
 
-	return err
+	if err != nil {
+		return fmt.Errorf("write large chunk: %w", err)
+	}
+
+	return nil
 }
 
 // resetTimer resets the coalescing timer.
@@ -239,11 +251,11 @@ func (p *Printer) printChunksImmediate(ctx context.Context, chunks <-chan string
 				wroteContent = true
 
 				p.mu.Lock()
-				io.WriteString(p.out, output)
+				_, _ = io.WriteString(p.out, output)
 				p.mu.Unlock()
 			}
 
-			return ctx.Err()
+			return fmt.Errorf("print chunks immediate: %w", ctx.Err())
 
 		case chunk, ok := <-chunks:
 			if !ok {
@@ -258,14 +270,14 @@ func (p *Printer) printChunksImmediate(ctx context.Context, chunks <-chan string
 					p.mu.Unlock()
 
 					if err != nil {
-						return err
+						return fmt.Errorf("flush remaining output: %w", err)
 					}
 				}
 				// Always ensure output ends with newline to prevent prompt overlap
 				// This guarantees the prompt will appear on a fresh line.
 				if wroteContent {
 					p.mu.Lock()
-					io.WriteString(p.out, "\r\n")
+					_, _ = io.WriteString(p.out, "\r\n")
 					p.mu.Unlock()
 				}
 

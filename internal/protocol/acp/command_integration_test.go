@@ -26,8 +26,8 @@ func TestPrompt_CommandExecution(t *testing.T) {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
-	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
+	securityService := security.NewService(validator, approvalService)
+	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
 		Registry:        tools.NewRegistry(),
 		Validator:       validator,
@@ -36,7 +36,7 @@ func TestPrompt_CommandExecution(t *testing.T) {
 		WorkDir:         "/tmp",
 	})
 	mockProvider := llm.NewMockProvider("test")
-	planningService := planning.NewPlanningService(mockProvider)
+	planningService := planning.NewService(mockProvider)
 
 	agentInstance, err := agent.NewAgent(
 		mockProvider,
@@ -77,7 +77,8 @@ func TestPrompt_CommandExecution(t *testing.T) {
 			},
 		}
 
-		resp, err := acpAgent.Prompt(context.Background(), promptReq)
+		var resp acp.PromptResponse
+		resp, err = acpAgent.Prompt(context.Background(), promptReq)
 		require.NoError(t, err)
 		assert.Equal(t, acp.StopReasonEndTurn, resp.StopReason)
 
@@ -106,7 +107,8 @@ func TestPrompt_CommandExecution(t *testing.T) {
 			},
 		}
 
-		resp, err := acpAgent.Prompt(context.Background(), promptReq)
+		var resp acp.PromptResponse
+		resp, err = acpAgent.Prompt(context.Background(), promptReq)
 		require.NoError(t, err)
 		assert.Equal(t, acp.StopReasonEndTurn, resp.StopReason)
 
@@ -133,7 +135,8 @@ func TestPrompt_CommandExecution(t *testing.T) {
 			},
 		}
 
-		resp, err := acpAgent.Prompt(context.Background(), promptReq)
+		var resp acp.PromptResponse
+		resp, err = acpAgent.Prompt(context.Background(), promptReq)
 		require.Error(t, err)
 		assert.Equal(t, acp.StopReasonRefusal, resp.StopReason)
 		assert.Contains(t, err.Error(), "not available via ACP")

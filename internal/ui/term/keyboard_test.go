@@ -628,7 +628,7 @@ type slowReader struct {
 	delay time.Duration
 }
 
-func (s *slowReader) Read(p []byte) (n int, err error) {
+func (s *slowReader) Read(_ []byte) (n int, err error) {
 	time.Sleep(s.delay)
 
 	return 0, io.EOF
@@ -671,6 +671,7 @@ func BenchmarkReadKeys_SingleByte(b *testing.B) {
 	}
 
 	for range ch {
+		_ = 0 // consume event
 	}
 }
 
@@ -686,6 +687,7 @@ func BenchmarkReadKeys_ArrowKeys(b *testing.B) {
 	}
 
 	for range ch {
+		_ = 0 // consume event
 	}
 }
 
@@ -701,5 +703,6 @@ func BenchmarkReadKeys_UTF8(b *testing.B) {
 	}
 
 	for range ch {
+		_ = 0 // consume event
 	}
 }

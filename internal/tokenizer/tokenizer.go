@@ -1,3 +1,4 @@
+// Package tokenizer provides text tokenization utilities.
 package tokenizer
 
 import "strings"

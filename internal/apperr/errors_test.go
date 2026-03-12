@@ -1,9 +1,22 @@
-package errors
+package apperr
 
 import (
 	"errors"
 	"fmt"
 	"testing"
+)
+
+var (
+	errConnectionTimeout = errors.New("connection timeout")
+	errUnderlyingError = errors.New("underlying error")
+	errUnderlying = errors.New("underlying")
+	errUnderlying2 = errors.New("underlying")
+	errSentinelError = errors.New("sentinel error")
+	errOtherError = errors.New("other error")
+	errRootCause = errors.New("root cause")
+	errConnectionRefused = errors.New("connection refused")
+	errDiskFull = errors.New("disk full")
+	errUnderlyingCause = errors.New("underlying cause")
 )
 
 func TestError_Error(t *testing.T) {
@@ -18,7 +31,7 @@ func TestError_Error(t *testing.T) {
 				Code:    CodeLLM,
 				Op:      "Agent.Execute",
 				Message: "llm completion failed",
-				Err:     errors.New("connection timeout"),
+				Err:     errConnectionTimeout,
 			},
 			want: "Agent.Execute: llm completion failed: connection timeout",
 		},
@@ -43,7 +56,7 @@ func TestError_Error(t *testing.T) {
 }
 
 func TestError_Unwrap(t *testing.T) {
-	underlying := errors.New("underlying error")
+	underlying := errUnderlyingError
 	err := &Error{
 		Code:    CodeInternal,
 		Op:      "Test.Operation",
@@ -52,13 +65,13 @@ func TestError_Unwrap(t *testing.T) {
 	}
 
 	got := err.Unwrap()
-	if got != underlying {
+	if !errors.Is(got, underlying) {
 		t.Errorf("Error.Unwrap() = %v, want %v", got, underlying)
 	}
 }
 
 func TestNew(t *testing.T) {
-	underlying := errors.New("underlying")
+	underlying := errUnderlying
 	err := New(CodeTimeout, "Test.Op", "timeout occurred", underlying)
 
 	if err.Code != CodeTimeout {
@@ -73,13 +86,13 @@ func TestNew(t *testing.T) {
 		t.Errorf("New().Message = %v, want %v", err.Message, "timeout occurred")
 	}
 
-	if err.Err != underlying {
+	if !errors.Is(err.Err, underlying) {
 		t.Errorf("New().Err = %v, want %v", err.Err, underlying)
 	}
 }
 
 func TestNewf(t *testing.T) {
-	underlying := errors.New("underlying")
+	underlying := errUnderlying2
 	err := Newf(CodeValidation, "Test.Op", underlying, "invalid value: %d", 42)
 
 	if err.Code != CodeValidation {
@@ -90,20 +103,20 @@ func TestNewf(t *testing.T) {
 		t.Errorf("Newf().Message = %v, want %v", err.Message, "invalid value: 42")
 	}
 
-	if err.Err != underlying {
+	if !errors.Is(err.Err, underlying) {
 		t.Errorf("Newf().Err = %v, want %v", err.Err, underlying)
 	}
 }
 
 func TestIs(t *testing.T) {
-	sentinel := errors.New("sentinel error")
+	sentinel := errSentinelError
 	wrapped := New(CodeInternal, "Test.Op", "wrapped error", sentinel)
 
 	if !errors.Is(wrapped, sentinel) {
 		t.Error("errors.Is() should find sentinel error in chain")
 	}
 
-	other := errors.New("other error")
+	other := errOtherError
 	if errors.Is(wrapped, other) {
 		t.Error("errors.Is() should not match different error")
 	}
@@ -156,7 +169,7 @@ func TestErrorCodes(t *testing.T) {
 
 func TestErrorChaining(t *testing.T) {
 	// Create error chain: root -> middle -> top.
-	root := errors.New("root cause")
+	root := errRootCause
 	middle := New(CodeNetwork, "Middle.Op", "network error", root)
 	top := New(CodeInternal, "Top.Op", "operation failed", middle)
 
@@ -194,7 +207,7 @@ func TestErrorChaining(t *testing.T) {
 
 func ExampleNew() {
 	// Create a structured error wrapping an underlying error.
-	underlying := errors.New("connection refused")
+	underlying := errConnectionRefused
 	err := New(CodeNetwork, "Client.Connect", "failed to connect to server", underlying)
 
 	fmt.Println(err)
@@ -211,7 +224,7 @@ func ExampleNewf() {
 
 func ExampleAs() {
 	// Create an error chain.
-	underlying := errors.New("disk full")
+	underlying := errDiskFull
 	err := New(CodeIO, "File.Write", "failed to write file", underlying)
 
 	// Extract structured error information.
@@ -250,11 +263,11 @@ func TestSpinError_Operation(t *testing.T) {
 
 // TestSpinError_UnwrapMethod verifies Unwrap() returns underlying error.
 func TestSpinError_UnwrapMethod(t *testing.T) {
-	underlying := errors.New("underlying cause")
+	underlying := errUnderlyingCause
 	err := New(CodeInternal, "Test.Op", "test error", underlying)
 
 	got := err.Unwrap()
-	if got != underlying {
+	if !errors.Is(got, underlying) {
 		t.Errorf("Unwrap() = %v, want %v", got, underlying)
 	}
 }

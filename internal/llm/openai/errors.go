@@ -33,9 +33,9 @@ func mapError(err error) error {
 		case 401, 403:
 			return fmt.Errorf("unauthorized: %w", err)
 		case 429:
-			return fmt.Errorf("%w: %v", llm.ErrRateLimited, err)
+			return fmt.Errorf("%w: %w", llm.ErrRateLimited, err)
 		case 400, 404, 422:
-			return fmt.Errorf("%w: %v", llm.ErrInvalidRequest, err)
+			return fmt.Errorf("%w: %w", llm.ErrInvalidRequest, err)
 		case 500, 502, 503:
 			return fmt.Errorf("server error: %w", err)
 		default:

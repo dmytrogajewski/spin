@@ -1,8 +1,8 @@
 package tools
 
 import (
-	"context"
 	"errors"
+	"context"
 	"fmt"
 	"strings"
 
@@ -29,15 +29,18 @@ func NewMemoryTool(store *memory.PersistentStore) *MemoryTool {
 	}
 }
 
+// Name implements the Name operation.
 func (t *MemoryTool) Name() string {
 	return "memory"
 }
 
+// Description implements the Description operation.
 func (t *MemoryTool) Description() string {
 	return "Store and retrieve persistent cross-session memory. Use this for information " +
 		"that should persist across sessions like user preferences and learned patterns."
 }
 
+// Schema implements the Schema operation.
 func (t *MemoryTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -83,10 +86,11 @@ func (t *MemoryTool) Schema() ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (t *MemoryTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	operation, err := params.GetString("operation")
-	if err != nil {
-		return NewToolError(errors.New("operation parameter is required")), nil
+	operation, _ := params.GetString("operation")
+	if operation == "" {
+		return NewToolError(ErrOperationParameterRequired), nil
 	}
 
 	switch operation {
@@ -101,60 +105,60 @@ func (t *MemoryTool) Execute(ctx context.Context, params ToolParameters) (ToolRe
 	case "search":
 		return t.executeSearch(ctx, params)
 	default:
-		return NewToolError(fmt.Errorf("unknown operation: %s", operation)), nil
+		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, ErrUnknownOperation)), nil
 	}
 }
 
 func (t *MemoryTool) executePut(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, err := params.GetString("key")
-	if err != nil || key == "" {
-		return NewToolError(errors.New("key parameter is required for put operation")), nil
+	key, _ := params.GetString("key")
+	if key == "" {
+		return NewToolError(ErrKeyParameterRequiredForPut), nil
 	}
 
-	value, err := params.GetString("value")
-	if err != nil || value == "" {
-		return NewToolError(errors.New("value parameter is required for put operation")), nil
+	value, _ := params.GetString("value")
+	if value == "" {
+		return NewToolError(ErrValueParameterRequiredForPut), nil
 	}
 
 	opts := memory.PutOptions{
 		Overwrite: true,
 	}
 
-	ns, err := params.GetString("namespace")
-	if err == nil && ns != "" {
+	ns, _ := params.GetString("namespace")
+	if ns != "" {
 		opts.Namespace = ns
 	}
 
 	// Handle tags - they come as an array.
 	if params.Has("tags") {
 		var tags []string
-		err := params.GetObject("tags", &tags)
-		if err == nil {
+		tagsErr := params.GetObject("tags", &tags)
+		if tagsErr == nil {
 			opts.Tags = tags
 		}
 	}
 
-	err = t.store.Put(ctx, key, value, opts)
-	if err != nil {
-		return NewToolError(fmt.Errorf("failed to store entry: %w", err)), nil
+	putErr := t.store.Put(ctx, key, value, opts)
+	if putErr != nil {
+		return NewToolError(fmt.Errorf("failed to store entry: %w", putErr)), nil
 	}
 
 	return NewToolResult(fmt.Sprintf("Stored entry with key '%s' (%d bytes, persistent)", key, len(value))), nil
 }
 
 func (t *MemoryTool) executeGet(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, err := params.GetString("key")
-	if err != nil || key == "" {
-		return NewToolError(errors.New("key parameter is required for get operation")), nil
+	key, _ := params.GetString("key")
+	if key == "" {
+		return NewToolError(ErrKeyParameterRequiredForGet), nil
 	}
 
-	entry, err := t.store.Get(ctx, key)
-	if err != nil {
-		if err == memory.ErrNotFound {
-			return NewToolError(fmt.Errorf("key '%s' not found in persistent memory", key)), nil
+	entry, getErr := t.store.Get(ctx, key)
+	if getErr != nil {
+		if errors.Is(getErr, memory.ErrNotFound) {
+			return ErrToResultf("key '%s' not found in persistent memory", fmt.Errorf("%s: %w", key, ErrKeyNotFound))
 		}
 
-		return NewToolError(fmt.Errorf("failed to get entry: %w", err)), nil
+		return ErrToResultf("failed to get entry: %v", getErr)
 	}
 
 	// Format output with metadata.
@@ -174,14 +178,14 @@ func (t *MemoryTool) executeGet(ctx context.Context, params ToolParameters) (Too
 }
 
 func (t *MemoryTool) executeDelete(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, err := params.GetString("key")
-	if err != nil || key == "" {
-		return NewToolError(errors.New("key parameter is required for delete operation")), nil
+	key, _ := params.GetString("key")
+	if key == "" {
+		return NewToolError(ErrKeyParameterRequiredForDelete), nil
 	}
 
-	err = t.store.Delete(ctx, key)
-	if err != nil {
-		return NewToolError(fmt.Errorf("failed to delete entry: %w", err)), nil
+	delErr := t.store.Delete(ctx, key)
+	if delErr != nil {
+		return ErrToResultf("failed to delete entry: %v", delErr)
 	}
 
 	return NewToolResult(fmt.Sprintf("Entry '%s' deleted from persistent memory", key)), nil
@@ -190,9 +194,9 @@ func (t *MemoryTool) executeDelete(ctx context.Context, params ToolParameters) (
 func (t *MemoryTool) executeList(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	pattern := params.GetStringOr("pattern", "*")
 
-	keys, err := t.store.List(ctx, pattern)
-	if err != nil {
-		return NewToolError(fmt.Errorf("failed to list entries: %w", err)), nil
+	keys, listErr := t.store.List(ctx, pattern)
+	if listErr != nil {
+		return ErrToResultf("failed to list entries: %v", listErr)
 	}
 
 	if len(keys) == 0 {
@@ -210,14 +214,14 @@ func (t *MemoryTool) executeList(ctx context.Context, params ToolParameters) (To
 }
 
 func (t *MemoryTool) executeSearch(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	query, err := params.GetString("query")
-	if err != nil || query == "" {
-		return NewToolError(errors.New("query parameter is required for search operation")), nil
+	query, _ := params.GetString("query")
+	if query == "" {
+		return NewToolError(ErrQueryParameterRequiredForSearch), nil
 	}
 
-	entries, err := t.store.Search(ctx, query, 10)
-	if err != nil {
-		return NewToolError(fmt.Errorf("failed to search entries: %w", err)), nil
+	entries, searchErr := t.store.Search(ctx, query, 10)
+	if searchErr != nil {
+		return ErrToResultf("failed to search entries: %v", searchErr)
 	}
 
 	if len(entries) == 0 {

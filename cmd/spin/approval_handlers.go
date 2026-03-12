@@ -9,7 +9,7 @@ import (
 
 // createAutoApproveHandler returns an approval handler that auto-approves all requests.
 func createAutoApproveHandler() security.ApprovalHandler {
-	return func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	return func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
@@ -20,7 +20,7 @@ func createAutoApproveHandler() security.ApprovalHandler {
 
 // createDenyHandler returns an approval handler that denies all requests with given reason.
 func createDenyHandler(reason string) security.ApprovalHandler {
-	return func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	return func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  false,

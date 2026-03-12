@@ -1,3 +1,4 @@
+// Package config provides configuration management.
 package config
 
 import (
@@ -8,6 +9,37 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+)
+
+var (
+	ErrLlmProviderIsRequired               = errors.New("llm: provider is required")
+	ErrLlmModelIsRequired                  = errors.New("llm: model is required")
+	ErrLlmTemperatureRange                 = errors.New("llm: temperature must be between 0 and 2")
+	ErrLlmMaxTokensPositive                = errors.New("llm: max_tokens must be positive")
+	ErrLlmTimeoutPositive                  = errors.New("llm: timeout must be positive")
+	ErrAgentMaxTurnsPositive               = errors.New("agent: max_turns must be positive")
+	ErrAgentTimeoutPositive                = errors.New("agent: timeout must be positive")
+	ErrAgentWorkDirIsRequired              = errors.New("agent: work_dir is required")
+	ErrAcePlaybookPathRequired             = errors.New("ace: playbook_path is required when ACE is enabled")
+	ErrAceTrajectoryPathRequired           = errors.New("ace: trajectory_path is required when ACE is enabled")
+	ErrAceTopKPositive                     = errors.New("ace: top_k must be positive")
+	ErrAceMinScoreRange                    = errors.New("ace: min_score must be between 0 and 1")
+	ErrSecurityInvalidSandboxMode          = errors.New("security: invalid sandbox_mode")
+	ErrProtocolShellTimeoutPositive        = errors.New("protocol: shell_timeout must be positive when shell is enabled")
+	ErrNameIsRequired                      = errors.New("name is required")
+	ErrInvalidTransport                    = errors.New("invalid transport")
+	ErrSmitheryApiKeyRequired              = errors.New("smithery_api_key is required for smithery transport")
+	ErrSmitheryNamespaceRequired           = errors.New("smithery_namespace is required when url is specified")
+	ErrCommandNotAllowedForSmithery        = errors.New("command is not allowed for smithery transport")
+	ErrCommandRequiredForStdio             = errors.New("command is required for stdio transport")
+	ErrUrlNotAllowedForStdio               = errors.New("url is not allowed for stdio transport")
+	ErrOauthNotAllowedForStdio             = errors.New("oauth is not allowed for stdio transport")
+	ErrUrlRequiredForTransport             = errors.New("url is required for transport")
+	ErrInvalidUrl                          = errors.New("invalid url")
+	ErrCommandNotAllowedForRemote          = errors.New("command is not allowed for remote transport")
+	ErrOauthClientIdRequired               = errors.New("oauth client_id is required")
+	ErrScratchpadMaxEntriesPositive        = errors.New("memory.scratchpad: max_entries must be positive")
+	ErrPersistentBasePathRequired          = errors.New("memory.persistent: base_path is required when persistent memory is enabled")
 )
 
 // ValidationErrors collects multiple validation errors.
@@ -56,21 +88,21 @@ func (v *ValidationErrors) ToError() error {
 	return v
 }
 
-// ConfigV2 is the unified configuration for Spin v2.0.
+// V2 is the unified configuration for Spin v2.0.
 // This replaces the flat Config structure with organized sections.
-type ConfigV2 struct {
+type V2 struct {
 	Version  string           `mapstructure:"version"   yaml:"version"`
-	LLM      LLMConfigV2      `mapstructure:"llm"       yaml:"llm"`
-	Agent    AgentConfigV2    `mapstructure:"agent"     yaml:"agent"`
-	ACE      ACEConfigV2      `mapstructure:"ace"       yaml:"ace"`
-	Security SecurityConfigV2 `mapstructure:"security"  yaml:"security"`
-	Protocol ProtocolConfigV2 `mapstructure:"protocol"  yaml:"protocol"`
-	AgentsMD AgentsMDConfigV2 `mapstructure:"agents_md" yaml:"agents_md"`
-	Memory   MemoryConfigV2   `mapstructure:"memory"    yaml:"memory"`
+	LLM      LLMV2      `mapstructure:"llm"       yaml:"llm"`
+	Agent    AgentV2    `mapstructure:"agent"     yaml:"agent"`
+	ACE      ACEV2      `mapstructure:"ace"       yaml:"ace"`
+	Security SecurityV2 `mapstructure:"security"  yaml:"security"`
+	Protocol ProtocolV2 `mapstructure:"protocol"  yaml:"protocol"`
+	AgentsMD AgentsMDV2 `mapstructure:"agents_md" yaml:"agents_md"`
+	Memory   MemoryV2   `mapstructure:"memory"    yaml:"memory"`
 }
 
-// AgentsMDConfigV2 configures AGENTS.md project instructions support.
-type AgentsMDConfigV2 struct {
+// AgentsMDV2 configures AGENTS.md project instructions support.
+type AgentsMDV2 struct {
 	// Enabled controls whether AGENTS.md is loaded (default: true).
 	Enabled bool `mapstructure:"enabled" yaml:"enabled"`
 
@@ -83,8 +115,8 @@ type AgentsMDConfigV2 struct {
 	MaxSize int64 `mapstructure:"max_size" yaml:"max_size"`
 }
 
-// LLMConfigV2 configures the LLM provider.
-type LLMConfigV2 struct {
+// LLMV2 configures the LLM provider.
+type LLMV2 struct {
 	Provider       string         `mapstructure:"provider"        yaml:"provider"`
 	Model          string         `mapstructure:"model"           yaml:"model"`
 	Temperature    float64        `mapstructure:"temperature"     yaml:"temperature"`
@@ -102,8 +134,8 @@ type LLMConfigV2 struct {
 	ContextWindow int `mapstructure:"context_window" yaml:"context_window"`
 }
 
-// AgentConfigV2 configures the agent behavior.
-type AgentConfigV2 struct {
+// AgentV2 configures the agent behavior.
+type AgentV2 struct {
 	MaxTurns        int           `mapstructure:"max_turns"        yaml:"max_turns"`
 	Timeout         time.Duration `mapstructure:"timeout"          yaml:"timeout"`
 	WorkDir         string        `mapstructure:"work_dir"         yaml:"work_dir"`
@@ -128,11 +160,11 @@ type AgentConfigV2 struct {
 	Debug     bool   `mapstructure:"debug"      yaml:"debug"`      // Enable debug mode.
 
 	// Cycle Detection Configuration.
-	CycleDetection CycleDetectionConfigV2 `mapstructure:"cycle_detection" yaml:"cycle_detection"`
+	CycleDetection CycleDetectionV2 `mapstructure:"cycle_detection" yaml:"cycle_detection"`
 }
 
-// ACEConfigV2 configures Agentic Context Engineering.
-type ACEConfigV2 struct {
+// ACEV2 configures Agentic Context Engineering.
+type ACEV2 struct {
 	Enabled        bool    `mapstructure:"enabled"         yaml:"enabled"`
 	PlaybookPath   string  `mapstructure:"playbook_path"   yaml:"playbook_path"`
 	TrajectoryPath string  `mapstructure:"trajectory_path" yaml:"trajectory_path"`
@@ -140,8 +172,8 @@ type ACEConfigV2 struct {
 	MinScore       float64 `mapstructure:"min_score"       yaml:"min_score"`
 }
 
-// SecurityConfigV2 configures security and sandboxing.
-type SecurityConfigV2 struct {
+// SecurityV2 configures security and sandboxing.
+type SecurityV2 struct {
 	SandboxMode     string   `mapstructure:"sandbox_mode"     yaml:"sandbox_mode"`
 	PolicyFile      string   `mapstructure:"policy_file"      yaml:"policy_file"`
 	AllowedCommands []string `mapstructure:"allowed_commands" yaml:"allowed_commands"`
@@ -152,8 +184,8 @@ type SecurityConfigV2 struct {
 	GlobalPolicyTTL  time.Duration `mapstructure:"global_policy_ttl"  yaml:"global_policy_ttl"`
 }
 
-// ProtocolConfigV2 configures protocol features (MCP, Git, Shell).
-type ProtocolConfigV2 struct {
+// ProtocolV2 configures protocol features (MCP, Git, Shell).
+type ProtocolV2 struct {
 	EnableMCP    bool                `mapstructure:"enable_mcp"    yaml:"enable_mcp"`
 	MCPServers   []MCPServerConfigV2 `mapstructure:"mcp_servers"   yaml:"mcp_servers"`
 	EnableGit    bool                `mapstructure:"enable_git"    yaml:"enable_git"`
@@ -214,8 +246,8 @@ type MCPServerConfigV2 struct {
 	DynamicLoadout bool `mapstructure:"dynamic_loadout" yaml:"dynamic_loadout,omitempty"`
 }
 
-// CycleDetectionConfigV2 configures automatic cycle detection and intervention.
-type CycleDetectionConfigV2 struct {
+// CycleDetectionV2 configures automatic cycle detection and intervention.
+type CycleDetectionV2 struct {
 	// Enabled controls whether cycle detection is active (default: true).
 	Enabled bool `mapstructure:"enabled" yaml:"enabled"`
 
@@ -232,17 +264,17 @@ type CycleDetectionConfigV2 struct {
 	ErrorRepeatLimit int `mapstructure:"error_repeat_limit" yaml:"error_repeat_limit"`
 }
 
-// MemoryConfigV2 configures context offloading memory storage.
-type MemoryConfigV2 struct {
+// MemoryV2 configures context offloading memory storage.
+type MemoryV2 struct {
 	// Scratchpad configures session-scoped ephemeral memory.
-	Scratchpad ScratchpadConfigV2 `mapstructure:"scratchpad" yaml:"scratchpad"`
+	Scratchpad ScratchpadV2 `mapstructure:"scratchpad" yaml:"scratchpad"`
 
 	// Persistent configures cross-session persistent memory.
-	Persistent PersistentMemoryConfigV2 `mapstructure:"persistent" yaml:"persistent"`
+	Persistent PersistentMemoryV2 `mapstructure:"persistent" yaml:"persistent"`
 }
 
-// ScratchpadConfigV2 configures the session-scoped scratchpad.
-type ScratchpadConfigV2 struct {
+// ScratchpadV2 configures the session-scoped scratchpad.
+type ScratchpadV2 struct {
 	// Enabled controls whether scratchpad is available (default: true).
 	Enabled bool `mapstructure:"enabled" yaml:"enabled"`
 
@@ -253,8 +285,8 @@ type ScratchpadConfigV2 struct {
 	AutoEvict bool `mapstructure:"auto_evict" yaml:"auto_evict"`
 }
 
-// PersistentMemoryConfigV2 configures cross-session persistent memory.
-type PersistentMemoryConfigV2 struct {
+// PersistentMemoryV2 configures cross-session persistent memory.
+type PersistentMemoryV2 struct {
 	// Enabled controls whether persistent memory is available (default: false).
 	Enabled bool `mapstructure:"enabled" yaml:"enabled"`
 
@@ -263,7 +295,7 @@ type PersistentMemoryConfigV2 struct {
 }
 
 // Validate performs validation on the config.
-func (c *ConfigV2) Validate() error {
+func (c *V2) Validate() error {
 	errs := &ValidationErrors{}
 
 	// Validate each section (collect all errors, don't fail fast).
@@ -306,7 +338,7 @@ func (c *ConfigV2) Validate() error {
 }
 
 // Validate performs validation on the AgentsMD configuration.
-func (a *AgentsMDConfigV2) Validate() error {
+func (a *AgentsMDV2) Validate() error {
 	// MaxSize validation: if negative, treat as no limit.
 	if a.MaxSize < 0 {
 		a.MaxSize = 0
@@ -316,56 +348,56 @@ func (a *AgentsMDConfigV2) Validate() error {
 }
 
 // Validate performs validation on the LLM configuration.
-func (l *LLMConfigV2) Validate() error {
+func (l *LLMV2) Validate() error {
 	errs := &ValidationErrors{}
 
 	// Required fields.
 	if l.Provider == "" {
-		errs.Add(errors.New("llm: provider is required"))
+		errs.Add(ErrLlmProviderIsRequired)
 	}
 
 	if l.Model == "" {
-		errs.Add(errors.New("llm: model is required"))
+		errs.Add(ErrLlmModelIsRequired)
 	}
 
 	// Numeric field ranges.
 	if l.Temperature < 0 || l.Temperature > 2 {
-		errs.Add(fmt.Errorf("llm: temperature must be between 0 and 2, got %.2f", l.Temperature))
+		errs.Add(fmt.Errorf("llm: temperature must be between 0 and 2, got %.2f: %w", l.Temperature, ErrLlmTemperatureRange))
 	}
 
 	if l.MaxTokens <= 0 {
-		errs.Add(fmt.Errorf("llm: max_tokens must be positive, got %d", l.MaxTokens))
+		errs.Add(fmt.Errorf("llm: max_tokens must be positive, got %d: %w", l.MaxTokens, ErrLlmMaxTokensPositive))
 	}
 
 	if l.Timeout <= 0 {
-		errs.Add(fmt.Errorf("llm: timeout must be positive, got %v", l.Timeout))
+		errs.Add(fmt.Errorf("llm: timeout must be positive, got %v: %w", l.Timeout, ErrLlmTimeoutPositive))
 	}
 
 	return errs.ToError()
 }
 
 // Validate performs validation on the Agent configuration.
-func (a *AgentConfigV2) Validate() error {
+func (a *AgentV2) Validate() error {
 	errs := &ValidationErrors{}
 
 	// Required fields.
 	if a.MaxTurns <= 0 {
-		errs.Add(fmt.Errorf("agent: max_turns must be positive, got %d", a.MaxTurns))
+		errs.Add(fmt.Errorf("agent: max_turns must be positive, got %d: %w", a.MaxTurns, ErrAgentMaxTurnsPositive))
 	}
 
 	if a.Timeout <= 0 {
-		errs.Add(fmt.Errorf("agent: timeout must be positive, got %v", a.Timeout))
+		errs.Add(fmt.Errorf("agent: timeout must be positive, got %v: %w", a.Timeout, ErrAgentTimeoutPositive))
 	}
 
 	if a.WorkDir == "" {
-		errs.Add(errors.New("agent: work_dir is required"))
+		errs.Add(ErrAgentWorkDirIsRequired)
 	}
 
 	return errs.ToError()
 }
 
 // Validate performs validation on the ACE configuration.
-func (ace *ACEConfigV2) Validate() error {
+func (ace *ACEV2) Validate() error {
 	// Only validate if ACE is enabled.
 	if !ace.Enabled {
 		return nil
@@ -375,27 +407,27 @@ func (ace *ACEConfigV2) Validate() error {
 
 	// Required fields when enabled.
 	if ace.PlaybookPath == "" {
-		errs.Add(errors.New("ace: playbook_path is required when ACE is enabled"))
+		errs.Add(ErrAcePlaybookPathRequired)
 	}
 
 	if ace.TrajectoryPath == "" {
-		errs.Add(errors.New("ace: trajectory_path is required when ACE is enabled"))
+		errs.Add(ErrAceTrajectoryPathRequired)
 	}
 
 	// Numeric field ranges.
 	if ace.TopK <= 0 {
-		errs.Add(fmt.Errorf("ace: top_k must be positive, got %d", ace.TopK))
+		errs.Add(fmt.Errorf("ace: top_k must be positive, got %d: %w", ace.TopK, ErrAceTopKPositive))
 	}
 
 	if ace.MinScore < 0 || ace.MinScore > 1 {
-		errs.Add(fmt.Errorf("ace: min_score must be between 0 and 1, got %.2f", ace.MinScore))
+		errs.Add(fmt.Errorf("ace: min_score must be between 0 and 1, got %.2f: %w", ace.MinScore, ErrAceMinScoreRange))
 	}
 
 	return errs.ToError()
 }
 
 // Validate performs validation on the Security configuration.
-func (s *SecurityConfigV2) Validate() error {
+func (s *SecurityV2) Validate() error {
 	// Validate sandbox mode if set.
 	if s.SandboxMode != "" {
 		validModes := map[string]bool{
@@ -405,7 +437,7 @@ func (s *SecurityConfigV2) Validate() error {
 			"firejail":       true,
 		}
 		if !validModes[s.SandboxMode] {
-			return fmt.Errorf("security: sandbox_mode must be one of [none, workspace-only, docker, firejail], got %q", s.SandboxMode)
+			return fmt.Errorf("security: sandbox_mode must be one of [none, workspace-only, docker, firejail], got %q: %w", s.SandboxMode, ErrSecurityInvalidSandboxMode)
 		}
 	}
 
@@ -413,12 +445,12 @@ func (s *SecurityConfigV2) Validate() error {
 }
 
 // Validate performs validation on the Protocol configuration.
-func (p *ProtocolConfigV2) Validate() error {
+func (p *ProtocolV2) Validate() error {
 	errs := &ValidationErrors{}
 
 	// Validate shell timeout if shell is enabled.
 	if p.EnableShell && p.ShellTimeout <= 0 {
-		errs.Add(fmt.Errorf("protocol: shell_timeout must be positive when shell is enabled, got %v", p.ShellTimeout))
+		errs.Add(fmt.Errorf("protocol: shell_timeout must be positive when shell is enabled, got %v: %w", p.ShellTimeout, ErrProtocolShellTimeoutPositive))
 	}
 
 	// Validate MCP servers if MCP is enabled.
@@ -440,12 +472,12 @@ func (m *MCPServerConfigV2) Validate() error {
 
 	// Name is always required.
 	if m.Name == "" {
-		errs.Add(errors.New("name is required"))
+		errs.Add(ErrNameIsRequired)
 	}
 
 	// Validate transport type.
 	if !m.Transport.IsValid() {
-		errs.Add(fmt.Errorf("invalid transport: %s", m.Transport))
+		errs.Add(fmt.Errorf("invalid transport: %s: %w", m.Transport, ErrInvalidTransport))
 
 		return errs.ToError()
 	}
@@ -472,18 +504,18 @@ func (m *MCPServerConfigV2) Validate() error {
 func (m *MCPServerConfigV2) validateSmithery(errs *ValidationErrors) {
 	// API key is always required for Smithery.
 	if m.SmitheryAPIKey == "" {
-		errs.Add(errors.New("smithery_api_key is required for smithery transport"))
+		errs.Add(ErrSmitheryApiKeyRequired)
 	}
 
 	// For dynamic loadout, URL and namespace are optional
 	// For static mode (URL provided), namespace is also required.
 	if m.URL != "" && m.SmitheryNamespace == "" {
-		errs.Add(errors.New("smithery_namespace is required when url is specified"))
+		errs.Add(ErrSmitheryNamespaceRequired)
 	}
 
 	// Command is not allowed for smithery transport.
 	if m.Command != "" {
-		errs.Add(errors.New("command is not allowed for smithery transport"))
+		errs.Add(ErrCommandNotAllowedForSmithery)
 	}
 }
 
@@ -511,17 +543,17 @@ func (t MCPTransportType) IsRemote() bool {
 func (m *MCPServerConfigV2) validateStdio(errs *ValidationErrors) {
 	// Command is required for stdio.
 	if m.Command == "" {
-		errs.Add(errors.New("command is required for stdio transport"))
+		errs.Add(ErrCommandRequiredForStdio)
 	}
 
 	// URL is not allowed for stdio.
 	if m.URL != "" {
-		errs.Add(errors.New("url is not allowed for stdio transport"))
+		errs.Add(ErrUrlNotAllowedForStdio)
 	}
 
 	// OAuth is not allowed for stdio.
 	if m.OAuth != nil {
-		errs.Add(errors.New("oauth is not allowed for stdio transport"))
+		errs.Add(ErrOauthNotAllowedForStdio)
 	}
 }
 
@@ -529,30 +561,30 @@ func (m *MCPServerConfigV2) validateStdio(errs *ValidationErrors) {
 func (m *MCPServerConfigV2) validateRemote(transport MCPTransportType, errs *ValidationErrors) {
 	// URL is required for remote transports.
 	if m.URL == "" {
-		errs.Add(fmt.Errorf("url is required for %s transport", transport))
+		errs.Add(fmt.Errorf("url is required for %s transport: %w", transport, ErrUrlRequiredForTransport))
 	} else {
 		// Validate URL format.
 		parsedURL, err := url.Parse(m.URL)
 		if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-			errs.Add(fmt.Errorf("invalid url: %s", m.URL))
+			errs.Add(fmt.Errorf("invalid url: %s: %w", m.URL, ErrInvalidUrl))
 		}
 	}
 
 	// Command is not allowed for remote transports.
 	if m.Command != "" {
-		errs.Add(errors.New("command is not allowed for remote transport"))
+		errs.Add(ErrCommandNotAllowedForRemote)
 	}
 
 	// Validate OAuth if provided.
 	if m.OAuth != nil {
 		if m.OAuth.ClientID == "" {
-			errs.Add(errors.New("oauth client_id is required"))
+			errs.Add(ErrOauthClientIdRequired)
 		}
 	}
 }
 
 // Validate performs validation on the Memory configuration.
-func (m *MemoryConfigV2) Validate() error {
+func (m *MemoryV2) Validate() error {
 	errs := &ValidationErrors{}
 
 	// Validate scratchpad config.
@@ -571,7 +603,7 @@ func (m *MemoryConfigV2) Validate() error {
 }
 
 // Validate performs validation on the Scratchpad configuration.
-func (s *ScratchpadConfigV2) Validate() error {
+func (s *ScratchpadV2) Validate() error {
 	// Only validate if scratchpad is enabled.
 	if !s.Enabled {
 		return nil
@@ -580,14 +612,14 @@ func (s *ScratchpadConfigV2) Validate() error {
 	errs := &ValidationErrors{}
 
 	if s.MaxEntries <= 0 {
-		errs.Add(fmt.Errorf("memory.scratchpad: max_entries must be positive, got %d", s.MaxEntries))
+		errs.Add(fmt.Errorf("memory.scratchpad: max_entries must be positive, got %d: %w", s.MaxEntries, ErrScratchpadMaxEntriesPositive))
 	}
 
 	return errs.ToError()
 }
 
 // Validate performs validation on the PersistentMemory configuration.
-func (p *PersistentMemoryConfigV2) Validate() error {
+func (p *PersistentMemoryV2) Validate() error {
 	// Only validate if persistent memory is enabled.
 	if !p.Enabled {
 		return nil
@@ -596,14 +628,14 @@ func (p *PersistentMemoryConfigV2) Validate() error {
 	errs := &ValidationErrors{}
 
 	if p.BasePath == "" {
-		errs.Add(errors.New("memory.persistent: base_path is required when persistent memory is enabled"))
+		errs.Add(ErrPersistentBasePathRequired)
 	}
 
 	return errs.ToError()
 }
 
-// DefaultConfigV2 returns a ConfigV2 with sensible defaults.
-func DefaultConfigV2() *ConfigV2 {
+// DefaultV2 returns a V2 with sensible defaults.
+func DefaultV2() *V2 {
 	// Derive default policy file path under user config directory.
 	policyFile := ""
 	cfgDir, err := os.UserConfigDir()
@@ -611,9 +643,9 @@ func DefaultConfigV2() *ConfigV2 {
 		policyFile = filepath.Join(cfgDir, "spin", "policies.json")
 	}
 
-	return &ConfigV2{
+	return &V2{
 		Version: "2.0",
-		LLM: LLMConfigV2{
+		LLM: LLMV2{
 			Provider:       "ollama",
 			Model:          "qwen2.5-coder:7b",
 			Temperature:    0.7,
@@ -623,7 +655,7 @@ func DefaultConfigV2() *ConfigV2 {
 			APIKey:         "",
 			ProviderConfig: make(map[string]any),
 		},
-		Agent: AgentConfigV2{
+		Agent: AgentV2{
 			MaxTurns:        50,
 			Timeout:         60 * time.Minute,
 			WorkDir:         ".",
@@ -638,7 +670,7 @@ func DefaultConfigV2() *ConfigV2 {
 			LogLevel:        "info",
 			LogFormat:       "text",
 			Debug:           false,
-			CycleDetection: CycleDetectionConfigV2{
+			CycleDetection: CycleDetectionV2{
 				Enabled:          true,
 				WindowSize:       3,
 				SimilarityThresh: 0.8,
@@ -646,14 +678,14 @@ func DefaultConfigV2() *ConfigV2 {
 				ErrorRepeatLimit: 3,
 			},
 		},
-		ACE: ACEConfigV2{
+		ACE: ACEV2{
 			Enabled:        false,
 			PlaybookPath:   "~/.spin/ace/playbooks/default.json",
 			TrajectoryPath: "~/.spin/ace/trajectories/",
 			TopK:           5,
 			MinScore:       0.3,
 		},
-		Security: SecurityConfigV2{
+		Security: SecurityV2{
 			SandboxMode:                "workspace-only",
 			PolicyFile:                 policyFile,
 			AllowedCommands:            []string{},
@@ -661,25 +693,25 @@ func DefaultConfigV2() *ConfigV2 {
 			SessionPolicyTTL:           8 * time.Hour,
 			GlobalPolicyTTL:            30 * 24 * time.Hour,
 		},
-		Protocol: ProtocolConfigV2{
+		Protocol: ProtocolV2{
 			EnableMCP:    false,
 			MCPServers:   []MCPServerConfigV2{},
 			EnableGit:    true,
 			EnableShell:  true,
 			ShellTimeout: 5 * time.Minute,
 		},
-		AgentsMD: AgentsMDConfigV2{
+		AgentsMD: AgentsMDV2{
 			Enabled: true,
 			Path:    "",         // Auto-discover.
 			MaxSize: 100 * 1024, // 100KB.
 		},
-		Memory: MemoryConfigV2{
-			Scratchpad: ScratchpadConfigV2{
+		Memory: MemoryV2{
+			Scratchpad: ScratchpadV2{
 				Enabled:    true,
 				MaxEntries: 50,
 				AutoEvict:  true,
 			},
-			Persistent: PersistentMemoryConfigV2{
+			Persistent: PersistentMemoryV2{
 				Enabled:  false,
 				BasePath: "~/.spin/memory",
 			},

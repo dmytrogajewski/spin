@@ -6,23 +6,29 @@ import (
 	"fmt"
 )
 
-// SecurityService handles all security-related operations including
+var (
+	ErrCommandCannotBeNil = errors.New("command cannot be nil")
+	ErrValidatorNotConfigured = errors.New("validator not configured")
+	ErrApprovalServiceNotConfigured = errors.New("approval service not configured")
+)
+
+// Service handles all security-related operations including
 // command validation and approval management.
 //
 // This service centralizes security logic that was previously scattered
 // across Agent and other components. It provides a clean interface for
 // validating commands and requesting user approval for dangerous operations.
-type SecurityService struct {
+type Service struct {
 	validator       *Validator
 	approvalService *ApprovalService
 }
 
-// NewSecurityService creates a new security service with the given dependencies.
+// NewService creates a new security service with the given dependencies.
 //
 // Both validator and approvalService can be nil, though the service will
 // return errors when methods requiring these dependencies are called.
-func NewSecurityService(validator *Validator, approvalService *ApprovalService) *SecurityService {
-	return &SecurityService{
+func NewService(validator *Validator, approvalService *ApprovalService) *Service {
+	return &Service{
 		validator:       validator,
 		approvalService: approvalService,
 	}
@@ -32,13 +38,13 @@ func NewSecurityService(validator *Validator, approvalService *ApprovalService) 
 //
 // The classification determines whether the command is safe, neutral, or dangerous.
 // Returns an error if the validator is not configured or if the command is nil.
-func (s *SecurityService) ValidateCommand(cmd *Command) (*ValidationResult, error) {
+func (s *Service) ValidateCommand(cmd *Command) (*ValidationResult, error) {
 	if cmd == nil {
-		return nil, errors.New("command cannot be nil")
+		return nil, ErrCommandCannotBeNil
 	}
 
 	if s.validator == nil {
-		return nil, errors.New("validator not configured")
+		return nil, ErrValidatorNotConfigured
 	}
 
 	result, err := s.validator.Classify(cmd)
@@ -53,7 +59,7 @@ func (s *SecurityService) ValidateCommand(cmd *Command) (*ValidationResult, erro
 //
 // Returns true if the command is classified as dangerous and requires approval.
 // Returns false if the validator is not configured (fail-open for testing).
-func (s *SecurityService) NeedsApproval(cmd *Command) bool {
+func (s *Service) NeedsApproval(cmd *Command) bool {
 	if s.validator == nil {
 		return false
 	}
@@ -68,9 +74,9 @@ func (s *SecurityService) NeedsApproval(cmd *Command) bool {
 //
 // Returns true if the operation was approved, false if denied, and an error
 // if the approval process failed (timeout, validation error, etc.).
-func (s *SecurityService) RequestApproval(ctx context.Context, operation Operation) (bool, error) {
+func (s *Service) RequestApproval(ctx context.Context, operation Operation) (bool, error) {
 	if s.approvalService == nil {
-		return false, errors.New("approval service not configured")
+		return false, ErrApprovalServiceNotConfigured
 	}
 
 	_, approved, err := s.approvalService.RequestApproval(ctx, operation)
@@ -91,7 +97,7 @@ func (s *SecurityService) RequestApproval(ctx context.Context, operation Operati
 //
 // Returns true if the command is approved (either safe or explicitly approved),
 // false if denied or forbidden, and an error if validation or approval fails.
-func (s *SecurityService) ValidateAndApprove(ctx context.Context, cmd *Command, workDir string) (bool, error) {
+func (s *Service) ValidateAndApprove(ctx context.Context, cmd *Command, workDir string) (bool, error) {
 	// Validate the command first.
 	result, err := s.ValidateCommand(cmd)
 	if err != nil {
@@ -127,20 +133,20 @@ func (s *SecurityService) ValidateAndApprove(ctx context.Context, cmd *Command, 
 // ApprovalService returns the approval service instance.
 // This method allows access to the ApprovalService for components that need it directly,
 // such as ToolRuntime.
-func (s *SecurityService) ApprovalService() *ApprovalService {
+func (s *Service) ApprovalService() *ApprovalService {
 	return s.approvalService
 }
 
 // Validator returns the validator instance.
 // This method allows access to the Validator for components that need it directly,
 // such as ToolRuntime.
-func (s *SecurityService) Validator() *Validator {
+func (s *Service) Validator() *Validator {
 	return s.validator
 }
 
 // SetApprovalService updates the approval service instance.
 // This allows updating the approval service after creation, which is useful
 // when the approval handler is configured (e.g., in ACP mode).
-func (s *SecurityService) SetApprovalService(service *ApprovalService) {
+func (s *Service) SetApprovalService(service *ApprovalService) {
 	s.approvalService = service
 }

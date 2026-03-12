@@ -1,4 +1,4 @@
-package runtime
+package executor
 
 import (
 	"context"
@@ -10,6 +10,13 @@ import (
 	"github.com/google/shlex"
 
 	"github.com/dmytrogajewski/spin/internal/tools"
+)
+
+var (
+	ErrSessionWorkingDirectoryNotSet = errors.New("session working directory not set")
+	ErrPathIsOutsideTheAllowedWorkspace = errors.New("path '' is outside the allowed workspace (). Use relative paths or absolute paths within the workspace")
+	ErrSessionWorkingDirectoryNotSet2 = errors.New("session working directory not set")
+	ErrPathIsOutsideTheAllowedWorkspace2 = errors.New("path '' is outside the allowed workspace (). Use relative paths or absolute paths within the workspace")
 )
 
 // ACPTerminalTool exposes terminal/create as a tool to the LLM.
@@ -25,14 +32,17 @@ func NewACPTerminalTool(runtime *ACPRuntime) *ACPTerminalTool {
 	}
 }
 
+// Name implements the Name operation.
 func (t *ACPTerminalTool) Name() string {
 	return "shell_command"
 }
 
+// Description implements the Description operation.
 func (t *ACPTerminalTool) Description() string {
 	return "Execute shell commands using ACP terminal protocol"
 }
 
+// Schema implements the Schema operation.
 func (t *ACPTerminalTool) Schema() tools.ToolSchema {
 	return tools.ToolSchema{
 		Type: "function",
@@ -62,17 +72,18 @@ func (t *ACPTerminalTool) Schema() tools.ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
-	operation, err := params.GetString("operation")
-	if err != nil || operation != "execute" {
+	operation, _ := params.GetString("operation")
+	if operation != "execute" {
 		return tools.ToolResult{
 			Success: false,
 			Error:   "operation must be 'execute' for ACP mode",
 		}, nil
 	}
 
-	cmdStr, err := params.GetString("command")
-	if err != nil || cmdStr == "" {
+	cmdStr, _ := params.GetString("command")
+	if cmdStr == "" {
 		return tools.ToolResult{
 			Success: false,
 			Error:   "command parameter is required",
@@ -178,9 +189,13 @@ type simpleCommand struct {
 	workDir string
 }
 
+// GetProgram implements the GetProgram operation.
 func (c *simpleCommand) GetProgram() string { return c.program }
+// GetArgs implements the GetArgs operation.
 func (c *simpleCommand) GetArgs() []string  { return c.args }
+// GetRaw implements the GetRaw operation.
 func (c *simpleCommand) GetRaw() string     { return c.raw }
+// GetWorkDir implements the GetWorkDir operation.
 func (c *simpleCommand) GetWorkDir() string { return c.workDir }
 
 // ACPReadFileTool exposes fs/read_text_file as a tool to the LLM.
@@ -195,14 +210,17 @@ func NewACPReadFileTool(runtime *ACPRuntime) *ACPReadFileTool {
 	}
 }
 
+// Name implements the Name operation.
 func (t *ACPReadFileTool) Name() string {
 	return "read_file"
 }
 
+// Description implements the Description operation.
 func (t *ACPReadFileTool) Description() string {
 	return "Read the contents of a file. Use paths relative to the session working directory, or absolute paths within the workspace."
 }
 
+// Schema implements the Schema operation.
 func (t *ACPReadFileTool) Schema() tools.ToolSchema {
 	return tools.ToolSchema{
 		Type: "function",
@@ -223,9 +241,10 @@ func (t *ACPReadFileTool) Schema() tools.ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (t *ACPReadFileTool) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
-	path, err := params.GetString("path")
-	if err != nil || path == "" {
+	path, _ := params.GetString("path")
+	if path == "" {
 		return tools.ToolResult{
 			Success: false,
 			Error:   "path parameter must be a non-empty string",
@@ -240,11 +259,11 @@ func (t *ACPReadFileTool) Execute(ctx context.Context, params tools.ToolParamete
 	}
 
 	// Resolve and validate the path.
-	resolvedPath, err := t.resolvePathWithContext(ctx, path)
-	if err != nil {
+	resolvedPath, resolveErr := t.resolvePathWithContext(ctx, path)
+	if resolveErr != nil {
 		return tools.ToolResult{
 			Success: false,
-			Error:   err.Error(),
+			Error:   fmt.Sprintf("path resolution failed: %v", resolveErr),
 		}, nil
 	}
 
@@ -287,7 +306,7 @@ func (t *ACPReadFileTool) resolvePathWithContext(ctx context.Context, path strin
 	}
 
 	if workDir == "" {
-		return "", errors.New("session working directory not set")
+		return "", ErrSessionWorkingDirectoryNotSet
 	}
 
 	// If path is relative, resolve it against workDir.
@@ -300,7 +319,7 @@ func (t *ACPReadFileTool) resolvePathWithContext(ctx context.Context, path strin
 
 	// Ensure the path is within the workspace.
 	if !isPathWithinWorkspace(cleanPath, workDir) {
-		return "", fmt.Errorf("path '%s' is outside the allowed workspace (%s). Use relative paths or absolute paths within the workspace", path, workDir)
+return "", fmt.Errorf("path '%s' is outside the allowed workspace (%s). Use relative paths or absolute paths within the workspace: %w", path, workDir, ErrPathIsOutsideTheAllowedWorkspace)
 	}
 
 	return cleanPath, nil
@@ -318,14 +337,17 @@ func NewACPWriteFileTool(runtime *ACPRuntime) *ACPWriteFileTool {
 	}
 }
 
+// Name implements the Name operation.
 func (t *ACPWriteFileTool) Name() string {
 	return "write_file"
 }
 
+// Description implements the Description operation.
 func (t *ACPWriteFileTool) Description() string {
 	return "Write content to a file. Use paths relative to the session working directory, or absolute paths within the workspace."
 }
 
+// Schema implements the Schema operation.
 func (t *ACPWriteFileTool) Schema() tools.ToolSchema {
 	return tools.ToolSchema{
 		Type: "function",
@@ -350,20 +372,21 @@ func (t *ACPWriteFileTool) Schema() tools.ToolSchema {
 	}
 }
 
+// Execute implements the Execute operation.
 func (t *ACPWriteFileTool) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
-	path, err := params.GetString("path")
-	if err != nil || path == "" {
+	path, _ := params.GetString("path")
+	if path == "" {
 		return tools.ToolResult{
 			Success: false,
 			Error:   "path parameter must be a non-empty string",
 		}, nil
 	}
 
-	content, err := params.GetString("content")
-	if err != nil {
+	content, contentErr := params.GetString("content")
+	if contentErr != nil {
 		return tools.ToolResult{
 			Success: false,
-			Error:   "content parameter must be a string",
+			Error:   fmt.Sprintf("content parameter must be a string: %v", contentErr),
 		}, nil
 	}
 
@@ -375,15 +398,15 @@ func (t *ACPWriteFileTool) Execute(ctx context.Context, params tools.ToolParamet
 	}
 
 	// Resolve and validate the path.
-	resolvedPath, err := t.resolvePathWithContext(ctx, path)
-	if err != nil {
+	resolvedPath, resolveErr := t.resolvePathWithContext(ctx, path)
+	if resolveErr != nil {
 		return tools.ToolResult{
 			Success: false,
-			Error:   err.Error(),
+			Error:   fmt.Sprintf("path resolution failed: %v", resolveErr),
 		}, nil
 	}
 
-	err = t.runtime.filesystemClient.WriteTextFile(ctx, resolvedPath, content)
+	err := t.runtime.filesystemClient.WriteTextFile(ctx, resolvedPath, content)
 	if err != nil {
 		// Provide helpful error message for path-related errors.
 		errMsg := err.Error()
@@ -422,7 +445,7 @@ func (t *ACPWriteFileTool) resolvePathWithContext(ctx context.Context, path stri
 	}
 
 	if workDir == "" {
-		return "", errors.New("session working directory not set")
+		return "", ErrSessionWorkingDirectoryNotSet2
 	}
 
 	// If path is relative, resolve it against workDir.
@@ -435,7 +458,7 @@ func (t *ACPWriteFileTool) resolvePathWithContext(ctx context.Context, path stri
 
 	// Ensure the path is within the workspace.
 	if !isPathWithinWorkspace(cleanPath, workDir) {
-		return "", fmt.Errorf("path '%s' is outside the allowed workspace (%s). Use relative paths or absolute paths within the workspace", path, workDir)
+return "", fmt.Errorf("path '%s' is outside the allowed workspace (%s). Use relative paths or absolute paths within the workspace: %w", path, workDir, ErrPathIsOutsideTheAllowedWorkspace2)
 	}
 
 	return cleanPath, nil

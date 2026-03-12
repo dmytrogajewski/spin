@@ -11,19 +11,19 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 )
 
-// ACPApprovalHandler coordinates approval requests between Spin's approval service
+// ApprovalHandler coordinates approval requests between Spin's approval service
 // and ACP clients. When a tool needs approval, it calls the client's RequestPermission
 // method and waits for the client's response with the selected option.
-type ACPApprovalHandler struct {
+type ApprovalHandler struct {
 	mu            sync.RWMutex
 	agent         *SpinACPAgent
 	timeout       time.Duration
 	activeSession acp.SessionId // Currently active session for approval requests.
 }
 
-// NewACPApprovalHandler creates a new ACP approval handler.
-func NewACPApprovalHandler(agent *SpinACPAgent, timeout time.Duration) *ACPApprovalHandler {
-	return &ACPApprovalHandler{
+// NewApprovalHandler creates a new ACP approval handler.
+func NewApprovalHandler(agent *SpinACPAgent, timeout time.Duration) *ApprovalHandler {
+	return &ApprovalHandler{
 		agent:   agent,
 		timeout: timeout,
 	}
@@ -31,7 +31,7 @@ func NewACPApprovalHandler(agent *SpinACPAgent, timeout time.Duration) *ACPAppro
 
 // SetActiveSession sets the currently active session for approval requests.
 // This should be called at the start of each Prompt execution.
-func (h *ACPApprovalHandler) SetActiveSession(sessionID acp.SessionId) {
+func (h *ApprovalHandler) SetActiveSession(sessionID acp.SessionId) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -40,7 +40,7 @@ func (h *ACPApprovalHandler) SetActiveSession(sessionID acp.SessionId) {
 
 // ClearActiveSession clears the active session.
 // This should be called when a Prompt execution completes.
-func (h *ACPApprovalHandler) ClearActiveSession() {
+func (h *ApprovalHandler) ClearActiveSession() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -49,7 +49,7 @@ func (h *ACPApprovalHandler) ClearActiveSession() {
 
 // HandleApprovalRequest handles an approval request by calling the client's RequestPermission
 // method and waiting for the client's response. This implements the security.ApprovalHandler interface.
-func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+func (h *ApprovalHandler) HandleApprovalRequest(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 	// Get the active session ID.
 	h.mu.RLock()
 	sessionID := h.activeSession
@@ -230,7 +230,7 @@ func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req secu
 }
 
 // convertApprovalRequestToToolCall converts a security approval request to an ACP tool call.
-func (h *ACPApprovalHandler) convertApprovalRequestToToolCall(req security.ApprovalRequest) (acp.RequestPermissionToolCall, error) {
+func (h *ApprovalHandler) convertApprovalRequestToToolCall(req security.ApprovalRequest) (acp.RequestPermissionToolCall, error) {
 	// Extract tool name from command.
 	toolName := "unknown"
 	if req.Command != nil {

@@ -15,6 +15,17 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm/openai"
 )
 
+var (
+	ErrUnknownProviderType = errors.New("unknown provider type")
+	ErrKeynameProvidedButNoAuthManager = errors.New("keyName  provided but no auth manager configured")
+	ErrAuthenticationRequiredFor = errors.New("authentication required for")
+	ErrProviderTypeIsRequired = errors.New("provider type is required")
+	ErrBaseurlIsRequiredFor = errors.New("baseURL is required for")
+	ErrAuthenticationRequiredFor2 = errors.New("authentication required for")
+	ErrModelIsRequiredFor = errors.New("model is required for")
+	ErrModelIsRequiredForOllama = errors.New("model is required for ollama")
+)
+
 // ProviderOptions contains provider-specific configuration options.
 type ProviderOptions struct {
 }
@@ -54,6 +65,7 @@ type ProviderFactory func(ProviderConfig) (llm.Provider, error)
 // Factory creates LLM providers with optional authentication support.
 type Factory struct {
 	authMgr *auth.Manager
+	logger  *slog.Logger
 }
 
 // NewFactory creates a new provider factory with optional auth support.
@@ -69,6 +81,7 @@ type Factory struct {
 func NewFactory(authMgr *auth.Manager) *Factory {
 	return &Factory{
 		authMgr: authMgr,
+		logger:  slog.Default(),
 	}
 }
 
@@ -122,7 +135,7 @@ func (f *Factory) NewProvider(ctx context.Context, cfg ProviderConfig) (llm.Prov
 		return provider(ctx, cfg)
 	}
 
-	return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
+return nil, fmt.Errorf("unknown provider type: %s: %w", cfg.Type, ErrUnknownProviderType)
 }
 
 // resolveCredential resolves a credential from configuration.
@@ -137,7 +150,7 @@ func (f *Factory) resolveCredential(ctx context.Context, cfg ProviderConfig, req
 	// Priority 1: KeyName (secure keystore).
 	if cfg.KeyName != "" {
 		if f.authMgr == nil {
-			return "", fmt.Errorf("keyName %q provided but no auth manager configured", cfg.KeyName)
+return "", fmt.Errorf("keyName %q provided but no auth manager configured: %w", cfg.KeyName, ErrKeynameProvidedButNoAuthManager)
 		}
 
 		cred, err := f.authMgr.GetCredential(ctx, cfg.KeyName)
@@ -151,14 +164,14 @@ func (f *Factory) resolveCredential(ctx context.Context, cfg ProviderConfig, req
 	// Priority 2: APIKey (deprecated, direct).
 	if cfg.APIKey != "" {
 		// Log deprecation warning.
-		slog.Warn("Direct APIKey is deprecated for security reasons. Use KeyName with secure keystore instead", "provider_type", cfg.Type)
+		f.logger.WarnContext(ctx, "Direct APIKey is deprecated for security reasons. Use KeyName with secure keystore instead", "provider_type", cfg.Type)
 
 		return cfg.APIKey, nil
 	}
 
 	// Priority 3: No authentication.
 	if requiresAuth {
-		return "", fmt.Errorf("authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated)", cfg.Type)
+return "", fmt.Errorf("authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated): %w", cfg.Type, ErrAuthenticationRequiredFor)
 	}
 
 	return "", nil // No auth needed (e.g., local Ollama).
@@ -167,7 +180,7 @@ func (f *Factory) resolveCredential(ctx context.Context, cfg ProviderConfig, req
 // validateConfig validates provider configuration.
 func validateConfig(cfg ProviderConfig) error {
 	if cfg.Type == "" {
-		return errors.New("provider type is required")
+		return ErrProviderTypeIsRequired
 	}
 
 	validators := map[string]func(ProviderConfig) error{
@@ -190,15 +203,15 @@ func validateConfig(cfg ProviderConfig) error {
 // validateOpenAIConfig validates OpenAI provider configuration.
 func validateOpenAIConfig(cfg ProviderConfig) error {
 	if cfg.BaseURL == "" {
-		return fmt.Errorf("baseURL is required for %s", cfg.Type)
+return fmt.Errorf("baseURL is required for %s: %w", cfg.Type, ErrBaseurlIsRequiredFor)
 	}
 
 	if cfg.KeyName == "" && cfg.APIKey == "" {
-		return fmt.Errorf("authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated)", cfg.Type)
+return fmt.Errorf("authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated): %w", cfg.Type, ErrAuthenticationRequiredFor2)
 	}
 
 	if cfg.Model == "" {
-		return fmt.Errorf("model is required for %s", cfg.Type)
+return fmt.Errorf("model is required for %s: %w", cfg.Type, ErrModelIsRequiredFor)
 	}
 
 	return nil
@@ -207,14 +220,14 @@ func validateOpenAIConfig(cfg ProviderConfig) error {
 // validateOllamaConfig validates Ollama provider configuration.
 func validateOllamaConfig(cfg ProviderConfig) error {
 	if cfg.Model == "" {
-		return errors.New("model is required for ollama")
+		return ErrModelIsRequiredForOllama
 	}
 
 	return nil
 }
 
 // validateLMStudioConfig validates LMStudio provider configuration.
-func validateLMStudioConfig(cfg ProviderConfig) error {
+func validateLMStudioConfig(_ ProviderConfig) error {
 	return nil
 }
 

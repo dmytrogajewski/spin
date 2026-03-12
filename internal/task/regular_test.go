@@ -78,7 +78,7 @@ func TestRegular_Validate(t *testing.T) {
 	}
 }
 
-func TestRegular_Concurrency(t *testing.T) {
+func TestRegular_Concurrency(_ *testing.T) {
 	regular := NewRegular()
 
 	// Test concurrent access.

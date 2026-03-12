@@ -123,7 +123,7 @@ func TestRenderer_Redraw_Golden(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 
-			r := NewRenderer(&buf, tt.width, tt.prefix)
+			r := NewTermRenderer(&buf, tt.width, tt.prefix)
 
 			model := NewModel(100)
 			if tt.bufferText != "" {
@@ -172,7 +172,7 @@ func TestRenderer_Redraw_CursorPositioning(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 
-			r := NewRenderer(&buf, 80, "> ")
+			r := NewTermRenderer(&buf, 80, "> ")
 
 			model := NewModel(100)
 			if tt.bufferText != "" {
@@ -180,7 +180,7 @@ func TestRenderer_Redraw_CursorPositioning(t *testing.T) {
 				model.buffer.SetCursor(tt.cursor)
 			}
 
-			r.Redraw(model, "")
+			_ = r.Redraw(model, "")
 
 			got := buf.String()
 
@@ -243,7 +243,7 @@ func TestRenderer_Redraw_StatusRendering(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 
-			r := NewRenderer(&buf, tt.width, "> ")
+			r := NewTermRenderer(&buf, tt.width, "> ")
 
 			model := NewModel(100)
 			if tt.bufferText != "" {
@@ -251,7 +251,7 @@ func TestRenderer_Redraw_StatusRendering(t *testing.T) {
 				model.buffer.SetCursor(len([]rune(tt.bufferText)))
 			}
 
-			r.Redraw(model, tt.status)
+			_ = r.Redraw(model, tt.status)
 
 			got := buf.String()
 
@@ -324,12 +324,12 @@ func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 
-			r := NewRenderer(&buf, tt.width, "> ")
+			r := NewTermRenderer(&buf, tt.width, "> ")
 			model := NewModel(100)
 			model.buffer.SetText(tt.bufferText)
 			model.buffer.SetCursor(tt.cursor)
 
-			r.Redraw(model, "")
+			_ = r.Redraw(model, "")
 
 			got := buf.String()
 
@@ -355,15 +355,15 @@ func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
 }
 
 // TestRenderer_SetWidth tests dynamic width updates.
-func TestRenderer_SetWidth(t *testing.T) {
+func TestRenderer_SetWidth(_ *testing.T) {
 	var buf bytes.Buffer
 
-	r := NewRenderer(&buf, 80, "> ")
+	r := NewTermRenderer(&buf, 80, "> ")
 	r.SetWidth(40)
 	// Subsequent Redraw should use new width.
 	model := NewModel(100)
 	model.buffer.SetText("hello")
-	r.Redraw(model, "")
+	_ = r.Redraw(model, "")
 	// Just verify no panic.
 }
 
@@ -371,12 +371,12 @@ func TestRenderer_SetWidth(t *testing.T) {
 func TestRenderer_SetPrefix(t *testing.T) {
 	var buf bytes.Buffer
 
-	r := NewRenderer(&buf, 80, "> ")
+	r := NewTermRenderer(&buf, 80, "> ")
 	r.SetPrefix("$ ")
 
 	model := NewModel(100)
 	model.buffer.SetText("hello")
-	r.Redraw(model, "")
+	_ = r.Redraw(model, "")
 
 	got := buf.String()
 	if !bytes.Contains([]byte(got), []byte("$ hello")) {
@@ -395,7 +395,7 @@ func TestRenderer_Redraw_EdgeCases(t *testing.T) {
 			fn: func(t *testing.T) {
 				var buf bytes.Buffer
 
-				r := NewRenderer(&buf, 0, "> ")
+				r := NewTermRenderer(&buf, 0, "> ")
 				model := NewModel(100)
 				model.buffer.SetText("hello")
 
@@ -410,7 +410,7 @@ func TestRenderer_Redraw_EdgeCases(t *testing.T) {
 			fn: func(t *testing.T) {
 				var buf bytes.Buffer
 
-				r := NewRenderer(&buf, -10, "> ")
+				r := NewTermRenderer(&buf, -10, "> ")
 				model := NewModel(100)
 				model.buffer.SetText("hello")
 
@@ -425,7 +425,7 @@ func TestRenderer_Redraw_EdgeCases(t *testing.T) {
 			fn: func(t *testing.T) {
 				var buf bytes.Buffer
 
-				r := NewRenderer(&buf, 80, "> ")
+				r := NewTermRenderer(&buf, 80, "> ")
 				model := NewModel(100)
 
 				longText := ""
@@ -449,7 +449,7 @@ func TestRenderer_Redraw_EdgeCases(t *testing.T) {
 			fn: func(t *testing.T) {
 				var buf bytes.Buffer
 
-				r := NewRenderer(&buf, 80, "")
+				r := NewTermRenderer(&buf, 80, "")
 				model := NewModel(100)
 				model.buffer.SetText("hello")
 

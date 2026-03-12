@@ -31,13 +31,13 @@ type FlagOverrides struct {
 	Sandbox  string
 }
 
-// LoaderV2 handles loading ConfigV2 from multiple sources with proper precedence.
+// LoaderV2 handles loading V2 from multiple sources with proper precedence.
 // Precedence order: flags > environment > config file > defaults.
 type LoaderV2 struct {
 	viper *viper.Viper
 }
 
-// NewLoaderV2 creates a new configuration loader for ConfigV2.
+// NewLoaderV2 creates a new configuration loader for V2.
 func NewLoaderV2() *LoaderV2 {
 	v := viper.New()
 
@@ -103,7 +103,7 @@ func bindEnvVars(v *viper.Viper) {
 }
 
 // LoadFromFile loads configuration from a specific YAML file.
-func (l *LoaderV2) LoadFromFile(path string) (*ConfigV2, error) {
+func (l *LoaderV2) LoadFromFile(path string) (*V2, error) {
 	l.viper.SetConfigFile(path)
 
 	err := l.viper.ReadInConfig()
@@ -115,13 +115,13 @@ func (l *LoaderV2) LoadFromFile(path string) (*ConfigV2, error) {
 }
 
 // LoadWithEnv loads configuration from environment variables and defaults.
-func (l *LoaderV2) LoadWithEnv() (*ConfigV2, error) {
+func (l *LoaderV2) LoadWithEnv() (*V2, error) {
 	// Don't try to read config file, just use env and defaults.
 	return l.unmarshalWithDefaults()
 }
 
 // LoadFromFileWithEnv loads configuration from a file, with environment variable overrides.
-func (l *LoaderV2) LoadFromFileWithEnv(path string) (*ConfigV2, error) {
+func (l *LoaderV2) LoadFromFileWithEnv(path string) (*V2, error) {
 	l.viper.SetConfigFile(path)
 
 	err := l.viper.ReadInConfig()
@@ -134,7 +134,7 @@ func (l *LoaderV2) LoadFromFileWithEnv(path string) (*ConfigV2, error) {
 
 // Load attempts to load configuration from default locations.
 // It searches for config files in: ., ~/.spin, /etc/spin.
-func (l *LoaderV2) Load() (*ConfigV2, error) {
+func (l *LoaderV2) Load() (*V2, error) {
 	// Try to read config file from default locations
 	// If not found, that's OK - we'll use defaults and env vars.
 	_ = l.viper.ReadInConfig()
@@ -143,9 +143,9 @@ func (l *LoaderV2) Load() (*ConfigV2, error) {
 }
 
 // unmarshalWithDefaults unmarshals the configuration and applies defaults for missing values.
-func (l *LoaderV2) unmarshalWithDefaults() (*ConfigV2, error) {
+func (l *LoaderV2) unmarshalWithDefaults() (*V2, error) {
 	// Unmarshal into a new config struct.
-	cfg := &ConfigV2{}
+	cfg := &V2{}
 	err := l.viper.Unmarshal(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
@@ -164,8 +164,8 @@ func (l *LoaderV2) unmarshalWithDefaults() (*ConfigV2, error) {
 }
 
 // applyDefaults applies default values to any unset fields in the config.
-func (l *LoaderV2) applyDefaults(cfg *ConfigV2) {
-	defaults := DefaultConfigV2()
+func (l *LoaderV2) applyDefaults(cfg *V2) {
+	defaults := DefaultV2()
 
 	// Apply version default.
 	if !l.viper.IsSet("version") {
@@ -298,7 +298,12 @@ func (l *LoaderV2) ConfigFileUsed() string {
 
 // UnmarshalKey unmarshals a specific key into a provided struct.
 func (l *LoaderV2) UnmarshalKey(key string, rawVal any) error {
-	return l.viper.UnmarshalKey(key, rawVal)
+	err := l.viper.UnmarshalKey(key, rawVal)
+	if err != nil {
+		return fmt.Errorf("unmarshal key %s: %w", key, err)
+	}
+
+	return nil
 }
 
 // AllSettings returns all settings as a map.
@@ -308,11 +313,11 @@ func (l *LoaderV2) AllSettings() map[string]any {
 
 // Load loads and merges configuration from all sources.
 // Precedence: flags > env > file > defaults.
-func Load(src Source) (*ConfigV2, error) {
+func Load(src Source) (*V2, error) {
 	loader := NewLoaderV2()
 
 	var (
-		cfg *ConfigV2
+		cfg *V2
 		err error
 	)
 
@@ -374,7 +379,7 @@ func Load(src Source) (*ConfigV2, error) {
 }
 
 // applyEnvVars applies environment variables to config.
-func applyEnvVars(cfg *ConfigV2) {
+func applyEnvVars(cfg *V2) {
 	// Apply API key from environment based on provider.
 	if cfg.LLM.APIKey == "" {
 		apiKey := getAPIKeyFromEnv(cfg.LLM.Provider)
@@ -387,7 +392,7 @@ func applyEnvVars(cfg *ConfigV2) {
 // mergeMCPServers merges MCP servers from mcp.servers into protocol.mcp_servers.
 // The CLI (spin mcp add) stores servers at mcp.servers, while the runtime reads
 // from protocol.mcp_servers. This function ensures both sources are unified.
-func mergeMCPServers(loader *LoaderV2, cfg *ConfigV2) {
+func mergeMCPServers(loader *LoaderV2, cfg *V2) {
 	// Try to load servers from mcp.servers path.
 	var mcpServers []MCPServerConfigV2
 	err := loader.UnmarshalKey("mcp.servers", &mcpServers)

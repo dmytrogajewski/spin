@@ -12,7 +12,7 @@ func TestNewPaletteRenderer(t *testing.T) {
 	assert.NotNil(t, renderer)
 }
 
-func TestPaletteRenderer_SetSize(t *testing.T) {
+func TestPaletteRenderer_SetSize(_ *testing.T) {
 	renderer := NewPaletteRenderer(80, 24)
 	renderer.SetSize(120, 40)
 	// No assertion needed - just verify it doesn't panic.
@@ -183,7 +183,7 @@ func TestPaletteRenderer_Integration(t *testing.T) {
 		"Test description",
 		"Test",
 		'T',
-		func(ctx context.Context) error {
+		func(_ context.Context) error {
 			executed = true
 
 			return nil

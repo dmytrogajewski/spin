@@ -60,7 +60,7 @@ func TestApprovalService_PersistOnApprove(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 	// Handler that approves with session scope and 50ms TTL.
 	ttl := 50 * time.Millisecond
-	handler := func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+	handler := func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 		return ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
@@ -120,7 +120,7 @@ func TestApprovalService_ApproveOnceDoesNotPersist(t *testing.T) {
 	t.Cleanup(func() { store.Close() })
 
 	// Handler approves with scope=once (no persistence expected).
-	handler := func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+	handler := func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 		return ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
@@ -162,7 +162,7 @@ func TestApprovalService_OnceScopeReasks(t *testing.T) {
 
 	var calls int
 
-	handler := func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+	handler := func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 		calls++
 
 		return ApprovalResponse{
@@ -214,7 +214,7 @@ func TestApprovalService_GlobalScopePersistsAndShortCircuits(t *testing.T) {
 	// Track handler invocations to prove short-circuit on second call.
 	var calls int
 
-	handler := func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+	handler := func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 		calls++
 
 		return ApprovalResponse{
@@ -270,7 +270,7 @@ func TestApprovalService_RevocationReasks(t *testing.T) {
 
 	var calls int
 
-	handler := func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+	handler := func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 		calls++
 
 		return ApprovalResponse{

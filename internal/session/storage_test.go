@@ -44,7 +44,7 @@ func TestNewFileStorage_CreatesDirectory(t *testing.T) {
 func TestNewFileStorage_InvalidPath(t *testing.T) {
 	// Try to create storage in a file (not directory).
 	tmpFile := filepath.Join(t.TempDir(), "file.txt")
-	os.WriteFile(tmpFile, []byte("test"), 0600)
+	_ = os.WriteFile(tmpFile, []byte("test"), 0600)
 
 	_, err := NewFileStorage(tmpFile)
 	if err == nil {
@@ -93,7 +93,7 @@ func TestFileStorage_Save_Overwrite(t *testing.T) {
 	}
 
 	// Modify and save again.
-	session.SetTitle("Updated Title")
+	_ = session.SetTitle("Updated Title")
 
 	err = storage.Save(session.ID, *session)
 	if err != nil {
@@ -135,7 +135,7 @@ func TestFileStorage_Load(t *testing.T) {
 	}
 
 	original := NewSession("/test/workdir")
-	original.SetTitle("Test Session")
+	_ = original.SetTitle("Test Session")
 
 	// Save session.
 	err = storage.Save(original.ID, *original)
@@ -313,9 +313,9 @@ func TestFileStorage_ConcurrentSaves(t *testing.T) {
 		go func() {
 			session := NewSession("/test/workdir")
 
-			err := storage.Save(session.ID, *session)
-			if err != nil {
-				t.Errorf("Save() error = %v", err)
+			saveErr := storage.Save(session.ID, *session)
+			if saveErr != nil {
+				t.Errorf("Save() error = %v", saveErr)
 			}
 
 			done <- true
@@ -357,9 +357,9 @@ func TestFileStorage_ConcurrentReads(t *testing.T) {
 	// Start multiple concurrent readers.
 	for range 10 {
 		go func() {
-			_, err := storage.Load(session.ID)
-			if err != nil {
-				t.Errorf("Load() error = %v", err)
+			_, loadErr := storage.Load(session.ID)
+			if loadErr != nil {
+				t.Errorf("Load() error = %v", loadErr)
 			}
 
 			done <- true

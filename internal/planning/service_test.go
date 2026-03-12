@@ -13,15 +13,17 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
-func TestNewPlanningService(t *testing.T) {
+var errLlmError = errors.New("llm error")
+
+func TestNewService(t *testing.T) {
 	provider := llm.NewMockProvider("test response")
-	service := NewPlanningService(provider)
+	service := NewService(provider)
 
 	assert.NotNil(t, service)
 	assert.Equal(t, provider, service.llm)
 }
 
-func TestPlanningService_CreatePlan_Success(t *testing.T) {
+func TestService_CreatePlan_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Create mock response with valid JSON.
@@ -45,7 +47,7 @@ func TestPlanningService_CreatePlan_Success(t *testing.T) {
 	}`
 
 	provider := llm.NewMockProvider("test-provider", llm.WithResponse(mockResponse))
-	service := NewPlanningService(provider)
+	service := NewService(provider)
 
 	plan, err := service.CreatePlan(ctx, "test task")
 	require.NoError(t, err)
@@ -75,22 +77,22 @@ func TestPlanningService_CreatePlan_Success(t *testing.T) {
 	assert.Equal(t, StepStatusPending, step2.Status)
 }
 
-func TestPlanningService_CreatePlan_EmptyTask(t *testing.T) {
+func TestService_CreatePlan_EmptyTask(t *testing.T) {
 	ctx := context.Background()
 	provider := llm.NewMockProvider("response")
-	service := NewPlanningService(provider)
+	service := NewService(provider)
 
 	plan, err := service.CreatePlan(ctx, "")
 	assert.Nil(t, plan)
 	assert.Equal(t, ErrEmptyInput, err)
 }
 
-func TestPlanningService_CreatePlan_InvalidJSON(t *testing.T) {
+func TestService_CreatePlan_InvalidJSON(t *testing.T) {
 	ctx := context.Background()
 
 	// Create mock response with invalid JSON.
 	provider := llm.NewMockProvider("invalid json response")
-	service := NewPlanningService(provider)
+	service := NewService(provider)
 
 	plan, err := service.CreatePlan(ctx, "test task")
 	assert.Nil(t, plan)
@@ -98,14 +100,14 @@ func TestPlanningService_CreatePlan_InvalidJSON(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to parse LLM response")
 }
 
-func TestPlanningService_CreatePlan_EmptySteps(t *testing.T) {
+func TestService_CreatePlan_EmptySteps(t *testing.T) {
 	ctx := context.Background()
 
 	// Create mock response with empty steps.
 	mockResponse := `{"steps": []}`
 
 	provider := llm.NewMockProvider("test-provider", llm.WithResponse(mockResponse))
-	service := NewPlanningService(provider)
+	service := NewService(provider)
 
 	plan, err := service.CreatePlan(ctx, "test task")
 	assert.Nil(t, plan)
@@ -113,12 +115,12 @@ func TestPlanningService_CreatePlan_EmptySteps(t *testing.T) {
 	assert.Contains(t, err.Error(), "plan validation failed")
 }
 
-func TestPlanningService_CreatePlan_LLMError(t *testing.T) {
+func TestService_CreatePlan_LLMError(t *testing.T) {
 	ctx := context.Background()
 
 	// Create mock provider that returns an error.
-	provider := llm.NewMockProvider("error-provider", llm.WithError(errors.New("llm error")))
-	service := NewPlanningService(provider)
+	provider := llm.NewMockProvider("error-provider", llm.WithError(errLlmError))
+	service := NewService(provider)
 
 	plan, err := service.CreatePlan(ctx, "test task")
 	assert.Nil(t, plan)
@@ -126,8 +128,8 @@ func TestPlanningService_CreatePlan_LLMError(t *testing.T) {
 	assert.Contains(t, err.Error(), "llm completion failed")
 }
 
-func TestPlanningService_buildDecompositionPrompt(t *testing.T) {
-	service := &PlanningService{}
+func TestService_buildDecompositionPrompt(t *testing.T) {
+	service := &Service{}
 	taskName := "test task name"
 
 	prompt := service.buildDecompositionPrompt(taskName)
@@ -138,8 +140,8 @@ func TestPlanningService_buildDecompositionPrompt(t *testing.T) {
 	assert.Contains(t, prompt, "steps")
 }
 
-func TestPlanningService_parseDecompositionResponse(t *testing.T) {
-	service := &PlanningService{}
+func TestService_parseDecompositionResponse(t *testing.T) {
+	service := &Service{}
 
 	validJSON := `{
 		"steps": [
@@ -160,8 +162,8 @@ func TestPlanningService_parseDecompositionResponse(t *testing.T) {
 	assert.Equal(t, "step_1", data.Steps[0].ID)
 }
 
-func TestPlanningService_parseDecompositionResponse_InvalidJSON(t *testing.T) {
-	service := &PlanningService{}
+func TestService_parseDecompositionResponse_InvalidJSON(t *testing.T) {
+	service := &Service{}
 
 	invalidJSON := "not json"
 	data, err := service.parseDecompositionResponse(invalidJSON)
@@ -170,8 +172,8 @@ func TestPlanningService_parseDecompositionResponse_InvalidJSON(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to parse JSON")
 }
 
-func TestPlanningService_createStepsFromData(t *testing.T) {
-	service := &PlanningService{}
+func TestService_createStepsFromData(t *testing.T) {
+	service := &Service{}
 
 	data := &decompositionData{
 		Steps: []stepData{
@@ -211,8 +213,8 @@ func TestPlanningService_createStepsFromData(t *testing.T) {
 	assert.Equal(t, StepStatusPending, steps[1].Status)
 }
 
-func TestPlanningService_createStepsFromData_InvalidDuration(t *testing.T) {
-	service := &PlanningService{}
+func TestService_createStepsFromData_InvalidDuration(t *testing.T) {
+	service := &Service{}
 
 	// Invalid duration should not cause error (parseDuration returns zero on error).
 	data := &decompositionData{
@@ -233,7 +235,7 @@ func TestPlanningService_createStepsFromData_InvalidDuration(t *testing.T) {
 	assert.Equal(t, time.Duration(0), steps[0].EstimatedDuration)
 }
 
-func TestPlanningService_CreatePlan_MultipleSteps(t *testing.T) {
+func TestService_CreatePlan_MultipleSteps(t *testing.T) {
 	ctx := context.Background()
 
 	mockResponse := `{
@@ -263,7 +265,7 @@ func TestPlanningService_CreatePlan_MultipleSteps(t *testing.T) {
 	}`
 
 	provider := llm.NewMockProvider("test-provider", llm.WithResponse(mockResponse))
-	service := NewPlanningService(provider)
+	service := NewService(provider)
 
 	plan, err := service.CreatePlan(ctx, "complex task")
 	require.NoError(t, err)
@@ -280,7 +282,7 @@ func TestPlanningService_CreatePlan_MultipleSteps(t *testing.T) {
 	assert.Equal(t, []string{"step_2"}, plan.Steps[2].DependsOn)
 }
 
-func TestPlanningService_CreatePlan_MalformedJSON(t *testing.T) {
+func TestService_CreatePlan_MalformedJSON(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
@@ -297,7 +299,7 @@ func TestPlanningService_CreatePlan_MalformedJSON(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			provider := llm.NewMockProvider("test-provider", llm.WithResponse(tc.json))
-			service := NewPlanningService(provider)
+			service := NewService(provider)
 
 			plan, err := service.CreatePlan(ctx, "test task")
 			if tc.wantErr {
@@ -318,7 +320,7 @@ func TestPlanningService_CreatePlan_MalformedJSON(t *testing.T) {
 	}
 }
 
-func TestPlanningService_CreatePlan_JSONWithWhitespace(t *testing.T) {
+func TestService_CreatePlan_JSONWithWhitespace(t *testing.T) {
 	ctx := context.Background()
 
 	// JSON with extra whitespace and newlines.
@@ -335,7 +337,7 @@ func TestPlanningService_CreatePlan_JSONWithWhitespace(t *testing.T) {
 	}`
 
 	provider := llm.NewMockProvider("test-provider", llm.WithResponse(mockResponse))
-	service := NewPlanningService(provider)
+	service := NewService(provider)
 
 	plan, err := service.CreatePlan(ctx, "test task")
 	require.NoError(t, err)

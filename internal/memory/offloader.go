@@ -159,7 +159,7 @@ type OffloadResult struct {
 	Error string
 
 	// Destination is where the content was stored.
-	Destination MemoryScope
+	Destination Scope
 
 	// Reason explains why this was offloaded.
 	Reason string

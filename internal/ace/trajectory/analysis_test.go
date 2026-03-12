@@ -66,7 +66,7 @@ func TestContainsError(t *testing.T) {
 
 func TestHasRecentError(t *testing.T) {
 	t.Run("detects error in recent steps", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test query")
+		ctx := NewContext("test query")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Content: "starting task"},
 			{StepNumber: 1, Content: "error occurred"},
@@ -78,7 +78,7 @@ func TestHasRecentError(t *testing.T) {
 	})
 
 	t.Run("returns false when error outside lookback window", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test query")
+		ctx := NewContext("test query")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Content: "error at start"},
 			{StepNumber: 1, Content: "step 2"},
@@ -91,7 +91,7 @@ func TestHasRecentError(t *testing.T) {
 	})
 
 	t.Run("returns false when no errors", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test query")
+		ctx := NewContext("test query")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Content: "all good"},
 			{StepNumber: 1, Content: "working fine"},
@@ -103,7 +103,7 @@ func TestHasRecentError(t *testing.T) {
 	})
 
 	t.Run("handles empty trajectory", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test query")
+		ctx := NewContext("test query")
 
 		if ctx.HasRecentError(2) {
 			t.Error("expected false for empty trajectory")
@@ -111,7 +111,7 @@ func TestHasRecentError(t *testing.T) {
 	})
 
 	t.Run("checks all steps when lookback is 0", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test query")
+		ctx := NewContext("test query")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Content: "error at start"},
 			{StepNumber: 1, Content: "step 2"},
@@ -124,7 +124,7 @@ func TestHasRecentError(t *testing.T) {
 	})
 
 	t.Run("checks all steps when lookback exceeds length", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test query")
+		ctx := NewContext("test query")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Content: "error here"},
 		})
@@ -221,7 +221,7 @@ func TestExtractToolName(t *testing.T) {
 
 func TestGetRecentTools(t *testing.T) {
 	t.Run("extracts unique tool names from recent steps", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{StepNumber: 0, Type: "tool_call", Content: "Tool: bash"},
 			{StepNumber: 1, Type: "tool_result", Content: "output"},
@@ -239,7 +239,7 @@ func TestGetRecentTools(t *testing.T) {
 	})
 
 	t.Run("deduplicates repeated tools", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{Content: "Tool: bash"},
 			{Content: "Tool: bash"},
@@ -253,7 +253,7 @@ func TestGetRecentTools(t *testing.T) {
 	})
 
 	t.Run("respects lookback window", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{Content: "Tool: old"},
 			{Content: "Tool: grep"},
@@ -267,7 +267,7 @@ func TestGetRecentTools(t *testing.T) {
 	})
 
 	t.Run("returns empty slice when no tools", func(t *testing.T) {
-		ctx := NewTrajectoryContext("test")
+		ctx := NewContext("test")
 		ctx.AppendSteps([]generator.TrajectoryStep{
 			{Content: "no tools here"},
 		})

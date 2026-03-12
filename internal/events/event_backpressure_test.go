@@ -81,7 +81,8 @@ func TestEventEmitter_BackpressureDrop_FastConsumer(t *testing.T) {
 			case event := <-events:
 				mu.Lock()
 
-				received = append(received, event.Data.(string))
+				s, _ := event.Data.(string)
+				received = append(received, s)
 				mu.Unlock()
 			case <-timeout:
 				return // Timeout - not all events received.
@@ -385,7 +386,7 @@ func TestEventEmitter_ConcurrentEmissions(t *testing.T) {
 }
 
 // Test Subscribe/Unsubscribe during emission.
-func TestEventEmitter_SubscribeUnsubscribeDuringEmit(t *testing.T) {
+func TestEventEmitter_SubscribeUnsubscribeDuringEmit(_ *testing.T) {
 	emitter := NewEventEmitterWithConfig(EventEmitterConfig{
 		BufferSize:       10,
 		BackpressureMode: BackpressureDrop,
@@ -421,7 +422,7 @@ func TestEventEmitter_SubscribeUnsubscribeDuringEmit(t *testing.T) {
 	for i := range 5 {
 		wg.Add(1)
 
-		go func(id int) {
+		go func(_ int) {
 			defer wg.Done()
 
 			subID, events, err := emitter.Subscribe()
@@ -475,6 +476,7 @@ func TestEventEmitter_CloseDuringEmit(t *testing.T) {
 
 	// Drain channel.
 	for range events {
+		_ = 0 // discard remaining events
 	}
 
 	wg.Wait()

@@ -75,7 +75,7 @@ func TestFakeTTY_OnResize(t *testing.T) {
 	}
 }
 
-func TestFakeTTY_ConcurrentResize(t *testing.T) {
+func TestFakeTTY_ConcurrentResize(_ *testing.T) {
 	tty := NewFakeTTY(80, 24)
 
 	var wg sync.WaitGroup

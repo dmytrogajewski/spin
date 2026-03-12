@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -29,7 +28,7 @@ type SmitheryAPIConfig struct {
 // NewSmitheryAPIClient creates a new Smithery API client.
 func NewSmitheryAPIClient(config SmitheryAPIConfig) (*SmitheryAPIClient, error) {
 	if config.APIKey == "" {
-		return nil, errors.New("smithery API key is required")
+		return nil, ErrSmitheryApiKeyRequired
 	}
 
 	timeout := config.Timeout
@@ -93,7 +92,7 @@ func (c *SmitheryAPIClient) SearchTools(ctx context.Context, query string, limit
 	req.Header.Set("Accept", "application/json")
 
 	if c.logger != nil {
-		c.logger.Debug("searching Smithery API", "query", query, "limit", limit)
+		c.logger.DebugContext(ctx, "searching Smithery API", "query", query, "limit", limit)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -105,7 +104,7 @@ func (c *SmitheryAPIClient) SearchTools(ctx context.Context, query string, limit
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+return nil, fmt.Errorf("API error (status %d): %s: %w", resp.StatusCode, string(body), ErrApiErrorStatus)
 	}
 
 	var result SmitherySearchResponse
@@ -115,7 +114,7 @@ func (c *SmitheryAPIClient) SearchTools(ctx context.Context, query string, limit
 	}
 
 	if c.logger != nil {
-		c.logger.Debug("Smithery search complete", "query", query, "found", len(result.Tools))
+		c.logger.DebugContext(ctx, "Smithery search complete", "query", query, "found", len(result.Tools))
 	}
 
 	return &result, nil

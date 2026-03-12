@@ -1,8 +1,16 @@
 package task
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+)
+
+var (
+	ErrUnknownTask                 = errors.New("unknown task")
+	ErrInvalidTaskMode             = errors.New("invalid task mode")
+	ErrMaxTokensMustBePositive     = errors.New("max tokens must be positive")
+	ErrMaxTokensExceedsMaximumAllowed = errors.New("max tokens  exceeds maximum allowed")
 )
 
 // Task represents a task mode implementation.
@@ -39,7 +47,7 @@ func NewTask(name string) (Task, error) {
 	case "planning":
 		return NewPlanning(), nil
 	default:
-		return nil, fmt.Errorf("unknown task: %s", name)
+return nil, fmt.Errorf("unknown task: %s: %w", name, ErrUnknownTask)
 	}
 }
 
@@ -72,7 +80,7 @@ func ValidateMode(mode string) error {
 	}
 
 	if !validModesMap[mode] {
-		return fmt.Errorf("invalid task mode: %s (must be one of: %s)", mode, strings.Join(ValidModes, ", "))
+return fmt.Errorf("invalid task mode: %s (must be one of: %s): %w", mode, strings.Join(ValidModes, ", "), ErrInvalidTaskMode)
 	}
 
 	return nil

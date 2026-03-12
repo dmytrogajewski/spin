@@ -142,14 +142,14 @@ func TestMemoryPolicyStore_ConcurrentAccess(t *testing.T) {
 			defer func() { done <- struct{}{} }()
 
 			for range 100 {
-				_, _, err := store.Get(ctx, key, ScopeSession)
-				if err != nil {
-					t.Errorf("Get error: %v", err)
+				_, _, getErr := store.Get(ctx, key, ScopeSession)
+				if getErr != nil {
+					t.Errorf("Get error: %v", getErr)
 				}
 
-				_, err = store.List(ctx, ScopeSession)
-				if err != nil {
-					t.Errorf("List error: %v", err)
+				_, listErr := store.List(ctx, ScopeSession)
+				if listErr != nil {
+					t.Errorf("List error: %v", listErr)
 				}
 			}
 		}()

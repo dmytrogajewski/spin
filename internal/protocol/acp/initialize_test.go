@@ -78,7 +78,8 @@ func TestSpinACPAgent_Initialize_ProtocolVersion(t *testing.T) {
 				ProtocolVersion: tt.clientVersion,
 			}
 
-			resp, err := acpAgent.Initialize(context.Background(), req)
+			var resp acp.InitializeResponse
+			resp, err = acpAgent.Initialize(context.Background(), req)
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedVersion, resp.ProtocolVersion)

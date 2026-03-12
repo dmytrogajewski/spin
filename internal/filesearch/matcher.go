@@ -137,7 +137,7 @@ func (m *Matcher) scoreFuzzyMatch(queryLower, pathLower, path string) (int, []in
 }
 
 // allIndicesInPath returns indices for all characters in a substring.
-func (m *Matcher) allIndicesInPath(path string, start, length int) []int {
+func (m *Matcher) allIndicesInPath(_ string, start, length int) []int {
 	indices := make([]int, length)
 	for i := range length {
 		indices[i] = start + i

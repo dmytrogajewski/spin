@@ -9,7 +9,7 @@ import (
 
 // FindDuplicates detects semantic duplicates using cosine similarity.
 // Returns a map from new bullet ID to existing bullet ID for duplicates found.
-func (c *curator) FindDuplicates(ctx context.Context, newBullets []*bullet.Bullet) (map[string]string, error) {
+func (c *curator) FindDuplicates(_ context.Context, newBullets []*bullet.Bullet) (map[string]string, error) {
 	duplicates := make(map[string]string)
 
 	// Handle empty input.

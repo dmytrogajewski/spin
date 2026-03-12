@@ -34,7 +34,7 @@ func TestTUIToolExecution(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		console.Send("\x04")
+		_, _ = console.Send("\x04")
 
 		done := make(chan error, 1)
 
@@ -47,7 +47,7 @@ func TestTUIToolExecution(t *testing.T) {
 			// Command exited normally.
 		case <-time.After(2 * time.Second):
 			// Force kill after 2 seconds.
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 			<-done
 		}
 	}()
@@ -116,7 +116,7 @@ func TestTUIToolVisualization(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		console.Send("\x04")
+		_, _ = console.Send("\x04")
 
 		done := make(chan error, 1)
 
@@ -129,7 +129,7 @@ func TestTUIToolVisualization(t *testing.T) {
 			// Command exited normally.
 		case <-time.After(2 * time.Second):
 			// Force kill after 2 seconds.
-			cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 			<-done
 		}
 	}()
@@ -179,7 +179,7 @@ func TestTUIListDirectoryTool(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		console.Send("\x04")
+		_, _ = console.Send("\x04")
 
 		done := make(chan error, 1)
 
@@ -192,7 +192,7 @@ func TestTUIListDirectoryTool(t *testing.T) {
 			// Command exited normally.
 		case <-time.After(2 * time.Second):
 			// Force kill after 2 seconds.
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 			<-done
 		}
 	}()
@@ -238,7 +238,7 @@ func TestTUIMultipleToolCalls(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		console.Send("\x04")
+		_, _ = console.Send("\x04")
 
 		done := make(chan error, 1)
 
@@ -251,7 +251,7 @@ func TestTUIMultipleToolCalls(t *testing.T) {
 			// Command exited normally.
 		case <-time.After(2 * time.Second):
 			// Force kill after 2 seconds.
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 			<-done
 		}
 	}()
@@ -293,7 +293,7 @@ func TestTUIReadFileTool(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		console.Send("\x04")
+		_, _ = console.Send("\x04")
 
 		done := make(chan error, 1)
 
@@ -306,7 +306,7 @@ func TestTUIReadFileTool(t *testing.T) {
 			// Command exited normally.
 		case <-time.After(2 * time.Second):
 			// Force kill after 2 seconds.
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 			<-done
 		}
 	}()
@@ -358,7 +358,7 @@ func TestTUIToolWithoutCycleDetection(t *testing.T) {
 	require.NoError(t, err)
 
 	defer func() {
-		console.Send("\x04")
+		_, _ = console.Send("\x04")
 
 		done := make(chan error, 1)
 
@@ -371,7 +371,7 @@ func TestTUIToolWithoutCycleDetection(t *testing.T) {
 			// Command exited normally.
 		case <-time.After(2 * time.Second):
 			// Force kill after 2 seconds.
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 			<-done
 		}
 	}()

@@ -1,3 +1,4 @@
+// Package compliance provides compliance test utilities.
 package compliance
 
 import (

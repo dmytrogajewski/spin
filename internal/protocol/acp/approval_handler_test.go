@@ -11,6 +11,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 )
 
+var errBoom = errors.New("boom")
+
 type mockACPConnection struct {
 	requests []acp.RequestPermissionRequest
 	resp     acp.RequestPermissionResponse
@@ -27,8 +29,8 @@ func (m *mockACPConnection) RequestPermission(_ context.Context, req acp.Request
 	return m.resp, m.err
 }
 
-func TestACPApprovalHandler_NoActiveSession(t *testing.T) {
-	handler := NewACPApprovalHandler(&SpinACPAgent{}, time.Second)
+func TestApprovalHandler_NoActiveSession(t *testing.T) {
+	handler := NewApprovalHandler(&SpinACPAgent{}, time.Second)
 
 	resp := handler.HandleApprovalRequest(context.Background(), security.ApprovalRequest{
 		ID: "test-no-session",
@@ -43,7 +45,7 @@ func TestACPApprovalHandler_NoActiveSession(t *testing.T) {
 	}
 }
 
-func TestACPApprovalHandler_MapsAllowOnceAndAlways(t *testing.T) {
+func TestApprovalHandler_MapsAllowOnceAndAlways(t *testing.T) {
 	conn := &mockACPConnection{
 		resp: acp.RequestPermissionResponse{
 			Outcome: acp.NewRequestPermissionOutcomeSelected(acp.PermissionOptionId("allow_once")),
@@ -53,7 +55,7 @@ func TestACPApprovalHandler_MapsAllowOnceAndAlways(t *testing.T) {
 	agent := &SpinACPAgent{
 		connection: conn,
 	}
-	handler := NewACPApprovalHandler(agent, 5*time.Second)
+	handler := NewApprovalHandler(agent, 5*time.Second)
 	handler.SetActiveSession(acp.SessionId("sess-1"))
 
 	// First: allow_once.
@@ -81,7 +83,7 @@ func TestACPApprovalHandler_MapsAllowOnceAndAlways(t *testing.T) {
 	}
 }
 
-func TestACPApprovalHandler_DenyAndCancelPaths(t *testing.T) {
+func TestApprovalHandler_DenyAndCancelPaths(t *testing.T) {
 	conn := &mockACPConnection{
 		resp: acp.RequestPermissionResponse{
 			Outcome: acp.NewRequestPermissionOutcomeSelected(acp.PermissionOptionId("deny")),
@@ -91,7 +93,7 @@ func TestACPApprovalHandler_DenyAndCancelPaths(t *testing.T) {
 	agent := &SpinACPAgent{
 		connection: conn,
 	}
-	handler := NewACPApprovalHandler(agent, 10*time.Millisecond)
+	handler := NewApprovalHandler(agent, 10*time.Millisecond)
 	handler.SetActiveSession(acp.SessionId("sess-2"))
 
 	// Deny path.
@@ -103,7 +105,7 @@ func TestACPApprovalHandler_DenyAndCancelPaths(t *testing.T) {
 	}
 
 	// Cancel / error path.
-	conn.err = errors.New("boom")
+	conn.err = errBoom
 
 	resp = handler.HandleApprovalRequest(context.Background(), security.ApprovalRequest{
 		ID: "req-error",

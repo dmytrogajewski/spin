@@ -48,14 +48,14 @@ func newMockPatternDetector() *mockPatternDetector {
 	}
 }
 
-func (m *mockPatternDetector) AnalyzePatterns(history []Snapshot) []PatternResult {
+func (m *mockPatternDetector) AnalyzePatterns(_ []Snapshot) []PatternResult {
 	return m.results
 }
 
-// TestDetectionEventData tests the DetectionEventData type.
-func TestDetectionEventData(t *testing.T) {
+// TestEventData tests the EventData type.
+func TestEventData(t *testing.T) {
 	t.Run("create and access detection event data", func(t *testing.T) {
-		data := DetectionEventData{
+		data := EventData{
 			"status":  "paused",
 			"message": "Agent stuck in cycle",
 		}
@@ -64,10 +64,10 @@ func TestDetectionEventData(t *testing.T) {
 		assert.Equal(t, "Agent stuck in cycle", data["message"])
 	})
 
-	t.Run("event uses DetectionEventData", func(t *testing.T) {
+	t.Run("event uses EventData", func(t *testing.T) {
 		evt := &event{
 			eventType: "turn_paused",
-			data: DetectionEventData{
+			data: EventData{
 				"status":  "paused",
 				"message": "Test message",
 			},
@@ -75,14 +75,14 @@ func TestDetectionEventData(t *testing.T) {
 
 		// Verify data is strongly typed.
 		data := evt.GetData()
-		detectionData, ok := data.(DetectionEventData)
-		require.True(t, ok, "GetData() should return DetectionEventData")
+		detectionData, ok := data.(EventData)
+		require.True(t, ok, "GetData() should return EventData")
 		assert.Equal(t, "paused", detectionData["status"])
 		assert.Equal(t, "Test message", detectionData["message"])
 	})
 }
 
-func TestNewDetectionService(t *testing.T) {
+func TestNewService(t *testing.T) {
 	tests := []struct {
 		name            string
 		cycleDetector   CycleDetector
@@ -117,7 +117,7 @@ func TestNewDetectionService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := NewDetectionService(tt.cycleDetector, tt.patternDetector)
+			svc := NewService(tt.cycleDetector, tt.patternDetector)
 
 			if tt.wantNil {
 				assert.Nil(t, svc)
@@ -128,9 +128,9 @@ func TestNewDetectionService(t *testing.T) {
 	}
 }
 
-func TestDetectionService_RecordSnapshot(t *testing.T) {
+func TestService_RecordSnapshot(t *testing.T) {
 	detector := newMockCycleDetector()
-	svc := NewDetectionService(detector, nil)
+	svc := NewService(detector, nil)
 
 	snapshot := Snapshot{
 		Turn:      1,
@@ -148,8 +148,8 @@ func TestDetectionService_RecordSnapshot(t *testing.T) {
 	assert.Equal(t, 1, history[0].Turn)
 }
 
-func TestDetectionService_RecordSnapshot_NilDetector(t *testing.T) {
-	svc := NewDetectionService(nil, nil)
+func TestService_RecordSnapshot_NilDetector(_ *testing.T) {
+	svc := NewService(nil, nil)
 
 	snapshot := Snapshot{
 		Turn:     1,
@@ -160,7 +160,7 @@ func TestDetectionService_RecordSnapshot_NilDetector(t *testing.T) {
 	svc.RecordSnapshot(snapshot)
 }
 
-func TestDetectionService_CheckCycle(t *testing.T) {
+func TestService_CheckCycle(t *testing.T) {
 	tests := []struct {
 		name       string
 		snapshots  []Snapshot
@@ -214,7 +214,7 @@ func TestDetectionService_CheckCycle(t *testing.T) {
 				}
 			}
 
-			svc := NewDetectionService(detector, nil)
+			svc := NewService(detector, nil)
 
 			// Record snapshots.
 			for _, snapshot := range tt.snapshots {
@@ -235,8 +235,8 @@ func TestDetectionService_CheckCycle(t *testing.T) {
 	}
 }
 
-func TestDetectionService_CheckCycle_NilDetector(t *testing.T) {
-	svc := NewDetectionService(nil, nil)
+func TestService_CheckCycle_NilDetector(t *testing.T) {
+	svc := NewService(nil, nil)
 
 	result, err := svc.CheckCycle()
 
@@ -245,13 +245,13 @@ func TestDetectionService_CheckCycle_NilDetector(t *testing.T) {
 	assert.Equal(t, CycleNone, result.Type)
 }
 
-func TestDetectionService_DetectPattern(t *testing.T) {
+func TestService_DetectPattern(t *testing.T) {
 	detector := newMockCycleDetector()
 	patternDetector := newMockPatternDetector()
 	patternDetector.results = []PatternResult{
 		{Type: "oscillation", Confidence: 0.8, Details: "A-B pattern detected"},
 	}
-	svc := NewDetectionService(detector, patternDetector)
+	svc := NewService(detector, patternDetector)
 
 	// Add some snapshots.
 	snapshots := []Snapshot{
@@ -271,8 +271,8 @@ func TestDetectionService_DetectPattern(t *testing.T) {
 	assert.NotNil(t, results)
 }
 
-func TestDetectionService_DetectPattern_NilDetector(t *testing.T) {
-	svc := NewDetectionService(nil, nil)
+func TestService_DetectPattern_NilDetector(t *testing.T) {
+	svc := NewService(nil, nil)
 
 	results, err := svc.DetectPattern()
 
@@ -281,9 +281,9 @@ func TestDetectionService_DetectPattern_NilDetector(t *testing.T) {
 	assert.Nil(t, results)
 }
 
-func TestDetectionService_Reset(t *testing.T) {
+func TestService_Reset(t *testing.T) {
 	detector := newMockCycleDetector()
-	svc := NewDetectionService(detector, nil)
+	svc := NewService(detector, nil)
 
 	// Add some snapshots.
 	svc.RecordSnapshot(Snapshot{Turn: 1, Response: "Test"})
@@ -300,16 +300,16 @@ func TestDetectionService_Reset(t *testing.T) {
 	assert.Len(t, history, 0)
 }
 
-func TestDetectionService_Reset_NilDetector(t *testing.T) {
-	svc := NewDetectionService(nil, nil)
+func TestService_Reset_NilDetector(_ *testing.T) {
+	svc := NewService(nil, nil)
 
 	// Should not panic even with nil detector.
 	svc.Reset()
 }
 
-func TestDetectionService_GetHistory(t *testing.T) {
+func TestService_GetHistory(t *testing.T) {
 	detector := newMockCycleDetector()
-	svc := NewDetectionService(detector, nil)
+	svc := NewService(detector, nil)
 
 	// Empty history.
 	history := svc.GetHistory()
@@ -326,17 +326,17 @@ func TestDetectionService_GetHistory(t *testing.T) {
 	assert.Equal(t, "Second", history[1].Response)
 }
 
-func TestDetectionService_GetHistory_NilDetector(t *testing.T) {
-	svc := NewDetectionService(nil, nil)
+func TestService_GetHistory_NilDetector(t *testing.T) {
+	svc := NewService(nil, nil)
 
 	history := svc.GetHistory()
 	assert.Len(t, history, 0)
 }
 
 // Benchmark tests.
-func BenchmarkDetectionService_RecordSnapshot(b *testing.B) {
+func BenchmarkService_RecordSnapshot(b *testing.B) {
 	detector := newMockCycleDetector()
-	svc := NewDetectionService(detector, nil)
+	svc := NewService(detector, nil)
 
 	snapshot := Snapshot{
 		Turn:      1,
@@ -351,9 +351,9 @@ func BenchmarkDetectionService_RecordSnapshot(b *testing.B) {
 	}
 }
 
-func BenchmarkDetectionService_CheckCycle(b *testing.B) {
+func BenchmarkService_CheckCycle(b *testing.B) {
 	detector := newMockCycleDetector()
-	svc := NewDetectionService(detector, nil)
+	svc := NewService(detector, nil)
 
 	// Pre-populate with some snapshots.
 	for i := range 10 {

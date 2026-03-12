@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+var errKeystoreError = errors.New("keystore error")
+
 // TestNewManager tests manager creation.
 func TestNewManager(t *testing.T) {
 	ks := newMockKeystore()
@@ -423,7 +425,7 @@ func TestManager_ThreadSafety(t *testing.T) {
 	for i := range 10 {
 		wg.Add(1)
 
-		go func(n int) {
+		go func(_ int) {
 			defer wg.Done()
 
 			cred := Credential{
@@ -585,7 +587,7 @@ func TestManager_ContextTimeout(t *testing.T) {
 
 // TestManager_KeystoreErrors tests handling of keystore errors.
 func TestManager_KeystoreErrors(t *testing.T) {
-	ks := &errorKeystore{err: errors.New("keystore error")}
+	ks := &errorKeystore{err: errKeystoreError}
 	m := NewManager(ks)
 	ctx := context.Background()
 
@@ -621,15 +623,15 @@ type errorKeystore struct {
 	err error
 }
 
-func (e *errorKeystore) Get(key string) (string, error) {
+func (e *errorKeystore) Get(_ string) (string, error) {
 	return "", e.err
 }
 
-func (e *errorKeystore) Set(key, value string) error {
+func (e *errorKeystore) Set(_, _ string) error {
 	return e.err
 }
 
-func (e *errorKeystore) Delete(key string) error {
+func (e *errorKeystore) Delete(_ string) error {
 	return e.err
 }
 

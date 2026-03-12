@@ -9,6 +9,14 @@ import (
 	"time"
 )
 
+var (
+	ErrNoPersistentStoreConfigured = errors.New("no persistent store configured")
+	ErrSessionIdIsRequired = errors.New("session ID is required")
+	ErrNoPersistentStoreConfigured2 = errors.New("no persistent store configured")
+	ErrNoPersistentStoreConfigured3 = errors.New("no persistent store configured")
+	ErrNoPersistentStoreConfigured4 = errors.New("no persistent store configured")
+)
+
 // SessionHandoff manages context transfer between sessions.
 type SessionHandoff struct {
 	store      *PersistentStore
@@ -59,11 +67,11 @@ func NewSessionHandoff(store *PersistentStore, summarizer Summarizer) *SessionHa
 // SaveSession saves the current session state for future continuation.
 func (h *SessionHandoff) SaveSession(ctx context.Context, data HandoffData) error {
 	if h.store == nil {
-		return errors.New("no persistent store configured")
+		return ErrNoPersistentStoreConfigured
 	}
 
 	if data.SessionID == "" {
-		return errors.New("session ID is required")
+		return ErrSessionIdIsRequired
 	}
 
 	// Set last activity if not provided.
@@ -89,7 +97,7 @@ func (h *SessionHandoff) SaveSession(ctx context.Context, data HandoffData) erro
 // LoadSession retrieves a previously saved session state.
 func (h *SessionHandoff) LoadSession(ctx context.Context, sessionID string) (*HandoffData, error) {
 	if h.store == nil {
-		return nil, errors.New("no persistent store configured")
+		return nil, ErrNoPersistentStoreConfigured2
 	}
 
 	key := "session_" + sessionID
@@ -111,7 +119,7 @@ func (h *SessionHandoff) LoadSession(ctx context.Context, sessionID string) (*Ha
 // ListSessions returns all saved session IDs.
 func (h *SessionHandoff) ListSessions(ctx context.Context) ([]string, error) {
 	if h.store == nil {
-		return nil, errors.New("no persistent store configured")
+		return nil, ErrNoPersistentStoreConfigured3
 	}
 
 	keys, err := h.store.List(ctx, "session_*")
@@ -133,7 +141,7 @@ func (h *SessionHandoff) ListSessions(ctx context.Context) ([]string, error) {
 // DeleteSession removes a saved session.
 func (h *SessionHandoff) DeleteSession(ctx context.Context, sessionID string) error {
 	if h.store == nil {
-		return errors.New("no persistent store configured")
+		return ErrNoPersistentStoreConfigured4
 	}
 
 	key := "session_" + sessionID
@@ -222,7 +230,7 @@ func NewSimpleSummarizer(maxLength int) *SimpleSummarizer {
 }
 
 // Summarize truncates content to the max length.
-func (s *SimpleSummarizer) Summarize(ctx context.Context, content string, maxTokens int) (string, error) {
+func (s *SimpleSummarizer) Summarize(_ context.Context, content string, maxTokens int) (string, error) {
 	// Use maxTokens if provided, otherwise use configured maxLength.
 	limit := s.maxLength
 	if maxTokens > 0 {

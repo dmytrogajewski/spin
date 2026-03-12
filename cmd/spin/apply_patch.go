@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -58,7 +59,7 @@ func newApplyPatchCmd() *cobra.Command {
 }
 
 // runApplyPatch executes the apply-patch command.
-func runApplyPatch(cmd *cobra.Command, args []string) error {
+func runApplyPatch(_ *cobra.Command, _ []string) error {
 	// Read patch text.
 	patchText, err := readPatchInput()
 	if err != nil {
@@ -136,19 +137,19 @@ func runDryRun(applier *patchapply.Applier, patch *patchapply.Patch) error {
 		return formatApplyError(err)
 	}
 
-	fmt.Println("[DRY RUN] Would apply the following changes:")
+	fmt.Fprintln(os.Stdout, "[DRY RUN] Would apply the following changes:")
 
 	for _, op := range patch.Operations {
 		switch v := op.(type) {
 		case *patchapply.AddFile:
-			fmt.Printf("  Would create: %s (%d lines)\n", v.FilePath, len(v.Lines))
+			fmt.Fprintf(os.Stdout, "  Would create: %s (%d lines)\n", v.FilePath, len(v.Lines))
 		case *patchapply.DeleteFile:
-			fmt.Printf("  Would delete: %s\n", v.FilePath)
+			fmt.Fprintf(os.Stdout, "  Would delete: %s\n", v.FilePath)
 		case *patchapply.UpdateFile:
 			if v.NewPath != "" {
-				fmt.Printf("  Would move: %s → %s (%d hunks)\n", v.FilePath, v.NewPath, len(v.Hunks))
+				fmt.Fprintf(os.Stdout, "  Would move: %s → %s (%d hunks)\n", v.FilePath, v.NewPath, len(v.Hunks))
 			} else {
-				fmt.Printf("  Would update: %s (%d hunks)\n", v.FilePath, len(v.Hunks))
+				fmt.Fprintf(os.Stdout, "  Would update: %s (%d hunks)\n", v.FilePath, len(v.Hunks))
 			}
 		}
 	}
@@ -158,44 +159,44 @@ func runDryRun(applier *patchapply.Applier, patch *patchapply.Patch) error {
 
 // printResults prints successful application results.
 func printResults(result *patchapply.ApplyResult) {
-	fmt.Println("✓ Applied patch successfully")
+	fmt.Fprintln(os.Stdout, "✓ Applied patch successfully")
 
 	if len(result.FilesCreated) > 0 {
-		fmt.Printf("  Created: %d files\n", len(result.FilesCreated))
+		fmt.Fprintf(os.Stdout, "  Created: %d files\n", len(result.FilesCreated))
 
 		if applyPatchVerbose {
 			for _, f := range result.FilesCreated {
-				fmt.Printf("    - %s\n", f)
+				fmt.Fprintf(os.Stdout, "    - %s\n", f)
 			}
 		}
 	}
 
 	if len(result.FilesUpdated) > 0 {
-		fmt.Printf("  Updated: %d files\n", len(result.FilesUpdated))
+		fmt.Fprintf(os.Stdout, "  Updated: %d files\n", len(result.FilesUpdated))
 
 		if applyPatchVerbose {
 			for _, f := range result.FilesUpdated {
-				fmt.Printf("    - %s\n", f)
+				fmt.Fprintf(os.Stdout, "    - %s\n", f)
 			}
 		}
 	}
 
 	if len(result.FilesDeleted) > 0 {
-		fmt.Printf("  Deleted: %d files\n", len(result.FilesDeleted))
+		fmt.Fprintf(os.Stdout, "  Deleted: %d files\n", len(result.FilesDeleted))
 
 		if applyPatchVerbose {
 			for _, f := range result.FilesDeleted {
-				fmt.Printf("    - %s\n", f)
+				fmt.Fprintf(os.Stdout, "    - %s\n", f)
 			}
 		}
 	}
 
 	if len(result.FilesMoved) > 0 {
-		fmt.Printf("  Moved: %d files\n", len(result.FilesMoved))
+		fmt.Fprintf(os.Stdout, "  Moved: %d files\n", len(result.FilesMoved))
 
 		if applyPatchVerbose {
 			for old, new := range result.FilesMoved {
-				fmt.Printf("    - %s → %s\n", old, new)
+				fmt.Fprintf(os.Stdout, "    - %s → %s\n", old, new)
 			}
 		}
 	}
@@ -204,7 +205,7 @@ func printResults(result *patchapply.ApplyResult) {
 // formatParseError formats parse errors with helpful hints.
 func formatParseError(err error) error {
 	return fmt.Errorf(`Error: Invalid patch syntax
-%v
+%w
 
 Hint: Check the patch format specification.
 Expected format:
@@ -217,10 +218,11 @@ Expected format:
 // formatApplyError formats application errors with context.
 func formatApplyError(err error) error {
 	// Extract structured error if available.
-	if applyErr, ok := err.(*patchapply.Error); ok {
+	var applyErr *patchapply.Error
+	if errors.As(err, &applyErr) {
 		return fmt.Errorf(`Error: Failed to apply patch
   %s operation on %s (line %d)
-  %v
+  %w
 
 Hint: %s`,
 			applyErr.Op,
@@ -230,19 +232,19 @@ Hint: %s`,
 			getHintForError(applyErr))
 	}
 
-	return fmt.Errorf("Error: %v", err)
+	return fmt.Errorf("Error: %w", err)
 }
 
 // getHintForError provides helpful hints for common errors.
 func getHintForError(err *patchapply.Error) string {
-	switch err.Err {
-	case patchapply.ErrContextNotFound:
+	switch {
+	case errors.Is(err.Err, patchapply.ErrContextNotFound):
 		return "The context may have changed. Update the patch with current file content."
-	case patchapply.ErrPathOutsideWorkspace:
+	case errors.Is(err.Err, patchapply.ErrPathOutsideWorkspace):
 		return "Use relative paths within the workspace only."
-	case patchapply.ErrFileExists:
+	case errors.Is(err.Err, patchapply.ErrFileExists):
 		return "Use --force to overwrite existing files."
-	case patchapply.ErrFileNotFound:
+	case errors.Is(err.Err, patchapply.ErrFileNotFound):
 		return "Ensure the file exists before updating."
 	default:
 		return "Check the error message above for details."

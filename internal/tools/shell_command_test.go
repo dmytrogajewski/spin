@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // Mock executor for shell_command tests.
@@ -16,7 +18,7 @@ func (m *mockExecutor) Execute(ctx context.Context, cmd CommandInfo, opts any) (
 		return m.executeFunc(ctx, cmd, opts)
 	}
 
-	return nil, nil
+	return &mockResult{}, nil
 }
 
 // Mock result that implements ExecutionResult interface.
@@ -122,7 +124,8 @@ func TestShellCommandTool_Schema(t *testing.T) {
 func TestShellCommandTool_Execute_MissingOperation(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]any{})
+	params, err := FromMap(map[string]any{})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -142,9 +145,10 @@ func TestShellCommandTool_Execute_MissingOperation(t *testing.T) {
 func TestShellCommandTool_Execute_UnknownOperation(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "unknown_op",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -164,10 +168,11 @@ func TestShellCommandTool_Execute_UnknownOperation(t *testing.T) {
 func TestShellCommandTool_Execute_NilExecutor(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "echo test",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -186,15 +191,16 @@ func TestShellCommandTool_Execute_NilExecutor(t *testing.T) {
 // TestShellCommandTool_Execute_MissingCommand tests execute without command.
 func TestShellCommandTool_Execute_MissingCommand(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
+		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 			return &mockResult{Stdout: "", Stderr: "", ExitCode: 0}, nil
 		},
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "execute",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -214,10 +220,11 @@ func TestShellCommandTool_Execute_MissingCommand(t *testing.T) {
 func TestShellCommandTool_Execute_EmptyCommand(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -232,7 +239,7 @@ func TestShellCommandTool_Execute_EmptyCommand(t *testing.T) {
 // TestShellCommandTool_Execute_Success tests successful command execution.
 func TestShellCommandTool_Execute_Success(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
+		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 			return &mockResult{
 				Stdout:   "hello world",
 				Stderr:   "",
@@ -242,10 +249,11 @@ func TestShellCommandTool_Execute_Success(t *testing.T) {
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "echo hello",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -264,7 +272,7 @@ func TestShellCommandTool_Execute_Success(t *testing.T) {
 // TestShellCommandTool_Execute_Failure tests failed command execution.
 func TestShellCommandTool_Execute_Failure(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
+		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 			return &mockResult{
 				Stdout:   "",
 				Stderr:   "command not found",
@@ -274,10 +282,11 @@ func TestShellCommandTool_Execute_Failure(t *testing.T) {
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "nonexistent",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -296,7 +305,7 @@ func TestShellCommandTool_Execute_Failure(t *testing.T) {
 // TestShellCommandTool_Execute_WithWorkDir tests execute with working directory.
 func TestShellCommandTool_Execute_WithWorkDir(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
+		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 			return &mockResult{
 				Stdout:   "success",
 				Stderr:   "",
@@ -306,11 +315,12 @@ func TestShellCommandTool_Execute_WithWorkDir(t *testing.T) {
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation":         "execute",
 		"command":           "ls",
 		"working_directory": "/tmp",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -325,7 +335,7 @@ func TestShellCommandTool_Execute_WithWorkDir(t *testing.T) {
 // TestShellCommandTool_Execute_WithTimeout tests execute with custom timeout.
 func TestShellCommandTool_Execute_WithTimeout(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
+		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 			return &mockResult{
 				Stdout:   "output",
 				Stderr:   "",
@@ -335,11 +345,12 @@ func TestShellCommandTool_Execute_WithTimeout(t *testing.T) {
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "sleep 1",
 		"timeout":   5.0,
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -354,17 +365,18 @@ func TestShellCommandTool_Execute_WithTimeout(t *testing.T) {
 // TestShellCommandTool_Execute_Timeout tests execute timeout.
 func TestShellCommandTool_Execute_Timeout(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
+		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 			return nil, context.DeadlineExceeded
 		},
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "sleep 10",
 		"timeout":   0.1,
 	})
+	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -390,9 +402,10 @@ func TestShellCommandTool_GetEnvironment_WithShellInfo(t *testing.T) {
 	// For now, test fallback.
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "get_environment",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -418,9 +431,10 @@ func TestShellCommandTool_GetEnvironment_WithShellInfo(t *testing.T) {
 func TestShellCommandTool_GetEnvironment_Fallback(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "get_environment",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -440,9 +454,10 @@ func TestShellCommandTool_GetEnvironment_Fallback(t *testing.T) {
 func TestShellCommandTool_GetShellInfo_Fallback(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "get_shell_info",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -462,9 +477,10 @@ func TestShellCommandTool_GetShellInfo_Fallback(t *testing.T) {
 func TestShellCommandTool_DetectShell_MissingCommand(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "detect_shell",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -484,10 +500,11 @@ func TestShellCommandTool_DetectShell_MissingCommand(t *testing.T) {
 func TestShellCommandTool_DetectShell_Pipe(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "detect_shell",
 		"command":   "ls | grep test",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -507,10 +524,11 @@ func TestShellCommandTool_DetectShell_Pipe(t *testing.T) {
 func TestShellCommandTool_DetectShell_Simple(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "detect_shell",
 		"command":   "ls -la",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -547,10 +565,11 @@ func TestShellCommandTool_DetectShell_Redirect(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, _ := FromMap(map[string]any{
+			params, err := FromMap(map[string]any{
 				"operation": "detect_shell",
 				"command":   tt.command,
 			})
+			require.NoError(t, err)
 
 			result, err := tool.Execute(context.Background(), params)
 			if err != nil {
@@ -611,10 +630,11 @@ func (m *mockValidatorShell) Classify(cmd CommandInfo) (ValidationResult, error)
 func TestShellCommandTool_Validate_NilValidator(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "validate",
 		"command":   "ls",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -635,9 +655,10 @@ func TestShellCommandTool_Validate_MissingCommand(t *testing.T) {
 	validator := &mockValidatorShell{}
 	tool := NewShellCommandTool(validator, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "validate",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -656,7 +677,7 @@ func TestShellCommandTool_Validate_MissingCommand(t *testing.T) {
 // TestShellCommandTool_Validate_Safe tests validate with safe command.
 func TestShellCommandTool_Validate_Safe(t *testing.T) {
 	validator := &mockValidatorShell{
-		classifyFunc: func(cmd CommandInfo) (ValidationResult, error) {
+		classifyFunc: func(_ CommandInfo) (ValidationResult, error) {
 			return &mockClassificationResult{
 				Classification: 0, // Safe.
 				Reason:         "read-only command",
@@ -665,10 +686,11 @@ func TestShellCommandTool_Validate_Safe(t *testing.T) {
 	}
 	tool := NewShellCommandTool(validator, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "validate",
 		"command":   "ls -la",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -687,7 +709,7 @@ func TestShellCommandTool_Validate_Safe(t *testing.T) {
 // TestShellCommandTool_Validate_Dangerous tests validate with dangerous command.
 func TestShellCommandTool_Validate_Dangerous(t *testing.T) {
 	validator := &mockValidatorShell{
-		classifyFunc: func(cmd CommandInfo) (ValidationResult, error) {
+		classifyFunc: func(_ CommandInfo) (ValidationResult, error) {
 			return &mockClassificationResult{
 				Classification: 1, // Dangerous.
 				Reason:         "modifies filesystem",
@@ -696,10 +718,11 @@ func TestShellCommandTool_Validate_Dangerous(t *testing.T) {
 	}
 	tool := NewShellCommandTool(validator, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "validate",
 		"command":   "rm -rf /tmp/test",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -718,7 +741,7 @@ func TestShellCommandTool_Validate_Dangerous(t *testing.T) {
 // TestShellCommandTool_Validate_Critical tests validate with critical command.
 func TestShellCommandTool_Validate_Critical(t *testing.T) {
 	validator := &mockValidatorShell{
-		classifyFunc: func(cmd CommandInfo) (ValidationResult, error) {
+		classifyFunc: func(_ CommandInfo) (ValidationResult, error) {
 			return &mockClassificationResult{
 				Classification: 2, // Critical.
 				Reason:         "requires elevated privileges",
@@ -727,10 +750,11 @@ func TestShellCommandTool_Validate_Critical(t *testing.T) {
 	}
 	tool := NewShellCommandTool(validator, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "validate",
 		"command":   "sudo rm -rf /",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
@@ -751,10 +775,11 @@ func TestShellCommandTool_Validate_EmptyCommand(t *testing.T) {
 	validator := &mockValidatorShell{}
 	tool := NewShellCommandTool(validator, nil, nil)
 
-	params, _ := FromMap(map[string]any{
+	params, err := FromMap(map[string]any{
 		"operation": "validate",
 		"command":   "",
 	})
+	require.NoError(t, err)
 
 	result, err := tool.Execute(context.Background(), params)
 	if err != nil {

@@ -25,7 +25,7 @@ func BenchmarkRendererRender_Execute(b *testing.B) {
 		DurationMS: ptr(int64(45200)),
 		LinesOut:   ptr(500),
 	}
-	blocks.SetExecuteMeta(block, meta)
+	_ = blocks.SetExecuteMeta(block, meta)
 
 	b.ResetTimer()
 
@@ -49,7 +49,7 @@ func BenchmarkRendererRender_Diff(b *testing.B) {
 		LinesAdded:   ptr(42),
 		LinesRemoved: ptr(18),
 	}
-	blocks.SetPatchMeta(block, meta)
+	_ = blocks.SetPatchMeta(block, meta)
 
 	b.ResetTimer()
 
@@ -72,7 +72,7 @@ func BenchmarkRendererRender_Code(b *testing.B) {
 		Offset: 0,
 		Limit:  200,
 	}
-	blocks.SetReadMeta(block, meta)
+	_ = blocks.SetReadMeta(block, meta)
 
 	b.ResetTimer()
 
@@ -141,7 +141,7 @@ func BenchmarkRendererRenderHeader(b *testing.B) {
 		Impact:     "high",
 		TimeoutSec: 600,
 	}
-	blocks.SetExecuteMeta(block, meta)
+	_ = blocks.SetExecuteMeta(block, meta)
 
 	b.ResetTimer()
 
@@ -177,7 +177,7 @@ func BenchmarkRendererRenderFooter(b *testing.B) {
 		DurationMS: ptr(int64(45200)),
 		LinesOut:   ptr(542),
 	}
-	blocks.SetExecuteMeta(block, meta)
+	_ = blocks.SetExecuteMeta(block, meta)
 
 	b.ResetTimer()
 
@@ -217,7 +217,7 @@ func BenchmarkRenderViewport_40Blocks(b *testing.B) {
 				Impact:   "medium",
 				ExitCode: ptr(0),
 			}
-			blocks.SetExecuteMeta(block, meta)
+			_ = blocks.SetExecuteMeta(block, meta)
 		case blocks.BlockTypeApplyPatch:
 			block.Body = generateUnifiedDiff(20)
 		case blocks.BlockTypeRead:

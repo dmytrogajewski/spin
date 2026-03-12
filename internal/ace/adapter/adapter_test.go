@@ -274,7 +274,7 @@ func TestAdapter_AdaptOnline_MemoryRefinement(t *testing.T) {
 		b, _ := bullet.New("Low utility bullet")
 		emb, _ := embedder.Embed(ctx, b.Content)
 		b.Embedding = emb
-		pb.Add(ctx, b)
+		_ = pb.Add(ctx, b)
 		// Low utility: no helpful/harmful marks.
 	}
 
@@ -357,7 +357,7 @@ func TestAdapter_AdaptOnline_MultipleSignals(t *testing.T) {
 	}
 
 	for _, sig := range signals {
-		_, err := adapter.AdaptOnline(ctx, sig)
+		_, err = adapter.AdaptOnline(ctx, sig)
 		require.NoError(t, err)
 	}
 

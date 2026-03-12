@@ -187,7 +187,7 @@ func (s *ToolSelector) SelectToolsForTurn(ctx context.Context, query string, tur
 	candidates := s.collectCandidates(searchCtx, query)
 
 	if s.logger != nil {
-		s.logger.Debug("tool selection: candidates collected",
+		s.logger.DebugContext(ctx, "tool selection: candidates collected",
 			"total", len(candidates),
 			"query", query,
 			"turn", turn)
@@ -205,7 +205,7 @@ func (s *ToolSelector) SelectToolsForTurn(ctx context.Context, query string, tur
 	// Step 5: Load any dynamic tools that need loading.
 	loadResult, err := s.loadDynamicTools(ctx, selected)
 	if err != nil && s.logger != nil {
-		s.logger.Warn("some dynamic tools failed to load", "error", err)
+		s.logger.WarnContext(ctx, "some dynamic tools failed to load", "error", err)
 	}
 
 	// Step 6: Build final tool list (includes newly loaded tools).
@@ -236,13 +236,13 @@ func (s *ToolSelector) SelectToolsForTurn(ctx context.Context, query string, tur
 			serverNames[i] = srv.ServerPath
 		}
 
-		s.logger.Debug("some servers require OAuth authentication",
+		s.logger.DebugContext(ctx, "some servers require OAuth authentication",
 			"servers", serverNames,
 			"hint", "configure these servers statically with OAuth credentials to use them")
 	}
 
 	if s.logger != nil {
-		s.logger.Info("tool selection complete",
+		s.logger.InfoContext(ctx, "tool selection complete",
 			"turn", turn,
 			"selected", len(finalTools),
 			"newly_loaded", len(loadResult.loaded),
@@ -314,11 +314,8 @@ func (s *ToolSelector) searchMCPRegistries(ctx context.Context, query string) []
 		// Determine if this is a static or dynamic registry.
 		isDynamic := false
 
-		var smitheryReg *mcp.SmitheryRegistry
-
 		if sr, ok := reg.(*mcp.SmitheryRegistry); ok && sr.IsDynamic() {
 			isDynamic = true
-			smitheryReg = sr
 		}
 
 		// Search the registry.
@@ -357,12 +354,6 @@ func (s *ToolSelector) searchMCPRegistries(ctx context.Context, query string) []
 				}
 
 				s.mu.RUnlock()
-			}
-
-			// For Smithery dynamic tools, get server verification status.
-			if smitheryReg != nil && scored.IsLoadable {
-				// Verified servers get a small boost
-				// (verification info would come from search results).
 			}
 
 			results = append(results, scored)
@@ -463,7 +454,7 @@ func (s *ToolSelector) loadDynamicTools(ctx context.Context, selected []ScoredTo
 				})
 				// Debug level only - not user visible.
 				if s.logger != nil {
-					s.logger.Debug("server requires OAuth authentication",
+					s.logger.DebugContext(ctx, "server requires OAuth authentication",
 						"server", serverPath,
 						"tools", toolNames,
 						"error", err.Error())
@@ -471,7 +462,7 @@ func (s *ToolSelector) loadDynamicTools(ctx context.Context, selected []ScoredTo
 			} else {
 				// Debug level for other errors too.
 				if s.logger != nil {
-					s.logger.Debug("failed to load server", "server", serverPath, "error", err)
+					s.logger.DebugContext(ctx, "failed to load server", "server", serverPath, "error", err)
 				}
 			}
 
@@ -484,7 +475,7 @@ func (s *ToolSelector) loadDynamicTools(ctx context.Context, selected []ScoredTo
 	}
 
 	if len(loadErrors) > 0 && s.logger != nil {
-		s.logger.Debug("some servers failed to load", "errors", len(loadErrors))
+		s.logger.DebugContext(ctx, "some servers failed to load", "errors", len(loadErrors))
 	}
 
 	return result, nil
@@ -541,11 +532,12 @@ func (s *ToolSelector) loadServer(ctx context.Context, serverPath string) ([]too
 // buildFinalToolList extracts the actual tools from scored candidates,
 // replacing loadable stubs with their actual loaded implementations.
 func (s *ToolSelector) buildFinalToolList(selected []ScoredTool, newlyLoaded []tools.Tool) []tools.Tool {
+	ctx := context.Background()
 	result := make([]tools.Tool, 0, len(selected)+len(newlyLoaded))
 	seen := make(map[string]bool)
 
 	if s.logger != nil {
-		s.logger.Debug("buildFinalToolList called",
+		s.logger.DebugContext(ctx, "buildFinalToolList called",
 			"selected_count", len(selected),
 			"newly_loaded_count", len(newlyLoaded))
 	}
@@ -555,7 +547,7 @@ func (s *ToolSelector) buildFinalToolList(selected []ScoredTool, newlyLoaded []t
 		if st.IsLoadable {
 			// Skip loadable stubs - we'll add the actual loaded tools below.
 			if s.logger != nil {
-				s.logger.Debug("skipping loadable stub", "tool", st.Tool.Name(), "server", st.ServerPath)
+				s.logger.DebugContext(ctx, "skipping loadable stub", "tool", st.Tool.Name(), "server", st.ServerPath)
 			}
 
 			continue
@@ -576,7 +568,7 @@ func (s *ToolSelector) buildFinalToolList(selected []ScoredTool, newlyLoaded []t
 	for _, t := range newlyLoaded {
 		name := t.Name()
 		if s.logger != nil {
-			s.logger.Debug("adding newly loaded tool", "tool", name)
+			s.logger.DebugContext(ctx, "adding newly loaded tool", "tool", name)
 		}
 
 		if seen[name] {
@@ -592,18 +584,18 @@ func (s *ToolSelector) buildFinalToolList(selected []ScoredTool, newlyLoaded []t
 			err := s.runtimeRegistry.RegisterOrReplace(t)
 			if err != nil {
 				if s.logger != nil {
-					s.logger.Warn("failed to register dynamic tool", "tool", name, "error", err)
+					s.logger.WarnContext(ctx, "failed to register dynamic tool", "tool", name, "error", err)
 				}
 			} else {
 				if s.logger != nil {
-					s.logger.Debug("registered dynamic tool to runtime", "tool", name)
+					s.logger.DebugContext(ctx, "registered dynamic tool to runtime", "tool", name)
 				}
 			}
 		}
 	}
 
 	if s.logger != nil {
-		s.logger.Debug("buildFinalToolList result", "total_tools", len(result))
+		s.logger.DebugContext(ctx, "buildFinalToolList result", "total_tools", len(result))
 	}
 
 	return result

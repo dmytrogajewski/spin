@@ -1,3 +1,4 @@
+// Package commands provides slash command handling.
 package commands
 
 import (
@@ -6,6 +7,14 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+)
+
+var (
+	ErrUnknownCommand = errors.New("unknown command")
+	ErrExitCommandIsNotAvailableVia = errors.New("exit command is not available via ACP protocol")
+	ErrQuitCommandIsNotAvailableVia = errors.New("quit command is not available via ACP protocol")
+	ErrModeCannotBeEmpty = errors.New("mode cannot be empty")
+	ErrInvalidMode = errors.New("invalid mode")
 )
 
 // Command represents a command that can be executed.
@@ -102,7 +111,7 @@ func ParseCommand(input string) (command string, args []string, isCommand bool) 
 func ExecuteCommand(ctx context.Context, commandName string, args []string, cmdCtx CommandContext) (string, error) {
 	cmd, exists := GetCommand(commandName)
 	if !exists {
-		return "", fmt.Errorf("unknown command: %s (type /help for available commands)", commandName)
+return "", fmt.Errorf("unknown command: %s (type /help for available commands): %w", commandName, ErrUnknownCommand)
 	}
 
 	return cmd.Execute(ctx, args, cmdCtx)
@@ -111,15 +120,18 @@ func ExecuteCommand(ctx context.Context, commandName string, args []string, cmdC
 // ModeCommand handles the /mode command.
 type ModeCommand struct{}
 
+// Name implements the Name operation.
 func (c *ModeCommand) Name() string {
 	return "/mode"
 }
 
+// Description implements the Description operation.
 func (c *ModeCommand) Description() string {
 	return "Show current mode or switch to a different mode"
 }
 
-func (c *ModeCommand) Execute(ctx context.Context, args []string, cmdCtx CommandContext) (string, error) {
+// Execute implements the Execute operation.
+func (c *ModeCommand) Execute(_ context.Context, args []string, cmdCtx CommandContext) (string, error) {
 	// No arguments: show current mode.
 	if len(args) == 0 {
 		currentMode := cmdCtx.GetCurrentMode()
@@ -156,15 +168,18 @@ func (c *ModeCommand) Execute(ctx context.Context, args []string, cmdCtx Command
 // HelpCommand handles the /help command.
 type HelpCommand struct{}
 
+// Name implements the Name operation.
 func (c *HelpCommand) Name() string {
 	return "/help"
 }
 
+// Description implements the Description operation.
 func (c *HelpCommand) Description() string {
 	return "Show this help message"
 }
 
-func (c *HelpCommand) Execute(ctx context.Context, args []string, cmdCtx CommandContext) (string, error) {
+// Execute implements the Execute operation.
+func (c *HelpCommand) Execute(_ context.Context, _ []string, _ CommandContext) (string, error) {
 	var help strings.Builder
 	help.WriteString("Available commands:\n\n")
 
@@ -203,31 +218,37 @@ func (c *HelpCommand) Execute(ctx context.Context, args []string, cmdCtx Command
 // These commands are TUI-specific and should return an error when executed via ACP.
 type ExitCommand struct{}
 
+// Name implements the Name operation.
 func (c *ExitCommand) Name() string {
 	return "/exit"
 }
 
+// Description implements the Description operation.
 func (c *ExitCommand) Description() string {
 	return "Exit the session (TUI only, not available via ACP)"
 }
 
-func (c *ExitCommand) Execute(ctx context.Context, args []string, cmdCtx CommandContext) (string, error) {
-	return "", errors.New("exit command is not available via ACP protocol")
+// Execute implements the Execute operation.
+func (c *ExitCommand) Execute(_ context.Context, _ []string, _ CommandContext) (string, error) {
+	return "", ErrExitCommandIsNotAvailableVia
 }
 
 // QuitCommand is an alias for ExitCommand.
 type QuitCommand struct{}
 
+// Name implements the Name operation.
 func (c *QuitCommand) Name() string {
 	return "/quit"
 }
 
+// Description implements the Description operation.
 func (c *QuitCommand) Description() string {
 	return "Quit the session (TUI only, not available via ACP)"
 }
 
-func (c *QuitCommand) Execute(ctx context.Context, args []string, cmdCtx CommandContext) (string, error) {
-	return "", errors.New("quit command is not available via ACP protocol")
+// Execute implements the Execute operation.
+func (c *QuitCommand) Execute(_ context.Context, _ []string, _ CommandContext) (string, error) {
+	return "", ErrQuitCommandIsNotAvailableVia
 }
 
 // validTaskModes defines the valid task modes.
@@ -241,11 +262,11 @@ var validTaskModes = map[string]bool{
 // validateTaskMode validates that a mode name is valid.
 func validateTaskMode(mode string) error {
 	if mode == "" {
-		return errors.New("mode cannot be empty")
+		return ErrModeCannotBeEmpty
 	}
 
 	if !validTaskModes[mode] {
-		return fmt.Errorf("invalid mode: %s (valid modes: regular, review, compact, planning)", mode)
+return fmt.Errorf("invalid mode: %s (valid modes: regular, review, compact, planning): %w", mode, ErrInvalidMode)
 	}
 
 	return nil

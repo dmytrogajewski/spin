@@ -121,12 +121,12 @@ func TestHistory_AddUserMessage(t *testing.T) {
 func TestHistory_TokenCount(t *testing.T) {
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
-	h.AddMessage(message.Message{
+	_ = h.AddMessage(message.Message{
 		Role:    message.RoleUser,
 		Content: "Hello",
 		Tokens:  10,
 	})
-	h.AddMessage(message.Message{
+	_ = h.AddMessage(message.Message{
 		Role:    message.RoleAssistant,
 		Content: "Hi there!",
 		Tokens:  20,
@@ -140,7 +140,7 @@ func TestHistory_TokenCount(t *testing.T) {
 
 func TestHistory_Messages_DefensiveCopy(t *testing.T) {
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
-	h.AddUserMessage("Hello")
+	_ = h.AddUserMessage("Hello")
 
 	msgs := h.Messages()
 	msgs[0].Content = "Modified"
@@ -152,7 +152,7 @@ func TestHistory_Messages_DefensiveCopy(t *testing.T) {
 	}
 }
 
-func TestHistory_SetCompressor(t *testing.T) {
+func TestHistory_SetCompressor(_ *testing.T) {
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 	classifier := compress.NewClassifier()
 	compressor := compress.NewHybridCompressor(classifier, compress.DefaultCompressorConfig())
@@ -161,7 +161,7 @@ func TestHistory_SetCompressor(t *testing.T) {
 	// No way to verify directly, but should not panic.
 }
 
-func TestHistory_SetCompressionConfig(t *testing.T) {
+func TestHistory_SetCompressionConfig(_ *testing.T) {
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 	cfg := CompressionConfig{
 		Enabled:     true,
@@ -207,7 +207,7 @@ func TestHistory_CompressionTrigger(t *testing.T) {
 
 	// Add messages that will exceed threshold.
 	for range 5 {
-		h.AddUserMessage("User message content here")
+			_ = h.AddUserMessage("User message content here")
 	}
 
 	// Should have compressed.
@@ -251,7 +251,7 @@ func TestHistory_CompressionDisabled(t *testing.T) {
 
 	// Add messages that would exceed threshold.
 	for range 10 {
-		h.AddUserMessage("User message content")
+		_ = h.AddUserMessage("User message content")
 	}
 
 	// Should NOT have compressed.
@@ -273,7 +273,7 @@ func TestHistory_NoCompressorSet(t *testing.T) {
 
 	// Add messages.
 	for range 10 {
-		h.AddUserMessage("User message")
+		_ = h.AddUserMessage("User message")
 	}
 
 	// Should NOT have compressed (no compressor).
@@ -289,7 +289,7 @@ type mockCompressor struct {
 	messages  []message.Message
 }
 
-func (m *mockCompressor) Compress(ctx context.Context, msgs []message.Message, targetTokens int, tok tokenizer.Tokenizer) ([]message.Message, error) {
+func (m *mockCompressor) Compress(_ context.Context, msgs []message.Message, _ int, _ tokenizer.Tokenizer) ([]message.Message, error) {
 	m.callCount++
 	m.messages = msgs
 	// Return all messages (no actual compression).
@@ -312,9 +312,9 @@ func TestHistory_CompressionCallsCompressor(t *testing.T) {
 	})
 
 	// Add messages to trigger compression.
-	h.AddUserMessage("Message 1")
-	h.AddUserMessage("Message 2")
-	h.AddUserMessage("Message 3")
+	_ = h.AddUserMessage("Message 1")
+	_ = h.AddUserMessage("Message 2")
+	_ = h.AddUserMessage("Message 3")
 
 	// Compressor should have been called.
 	if mock.callCount == 0 {
@@ -324,8 +324,8 @@ func TestHistory_CompressionCallsCompressor(t *testing.T) {
 
 func TestHistory_MessagesForLLM(t *testing.T) {
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
-	h.AddSystemMessage("System")
-	h.AddUserMessage("User")
+	_ = h.AddSystemMessage("System")
+	_ = h.AddUserMessage("User")
 
 	msgs := h.MessagesForLLM()
 	if len(msgs) != 2 {

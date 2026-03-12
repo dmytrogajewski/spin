@@ -192,7 +192,8 @@ func TestSetSessionMode_AllModes(t *testing.T) {
 			ModeId:    mode,
 		}
 
-		resp, err := acpAgent.SetSessionMode(context.Background(), req)
+		var resp acp.SetSessionModeResponse
+		resp, err = acpAgent.SetSessionMode(context.Background(), req)
 		require.NoError(t, err, "should set mode %s", mode)
 		require.NotNil(t, resp)
 

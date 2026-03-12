@@ -3,6 +3,7 @@ package ollama
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -83,6 +84,7 @@ func TestOllamaStreaming(t *testing.T) {
 		model:   testModel,
 		baseURL: srv.URL,
 		timeout: 10 * time.Second,
+		logger:  slog.Default(),
 	}
 	defer provider.Close()
 

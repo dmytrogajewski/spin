@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewSecurityService(t *testing.T) {
+func TestNewService(t *testing.T) {
 	tests := []struct {
 		name            string
 		validator       *Validator
@@ -44,7 +44,7 @@ func TestNewSecurityService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := NewSecurityService(tt.validator, tt.approvalService)
+			svc := NewService(tt.validator, tt.approvalService)
 
 			if tt.wantNil {
 				assert.Nil(t, svc)
@@ -55,9 +55,9 @@ func TestNewSecurityService(t *testing.T) {
 	}
 }
 
-func TestSecurityService_ValidateCommand(t *testing.T) {
+func TestService_ValidateCommand(t *testing.T) {
 	validator := NewValidator()
-	svc := NewSecurityService(validator, nil)
+	svc := NewService(validator, nil)
 
 	tests := []struct {
 		name           string
@@ -134,8 +134,8 @@ func TestSecurityService_ValidateCommand(t *testing.T) {
 	}
 }
 
-func TestSecurityService_ValidateCommand_NilValidator(t *testing.T) {
-	svc := NewSecurityService(nil, nil)
+func TestService_ValidateCommand_NilValidator(t *testing.T) {
+	svc := NewService(nil, nil)
 
 	cmd := &Command{
 		Raw:     "echo test",
@@ -148,9 +148,9 @@ func TestSecurityService_ValidateCommand_NilValidator(t *testing.T) {
 	assert.Contains(t, err.Error(), "validator not configured")
 }
 
-func TestSecurityService_NeedsApproval(t *testing.T) {
+func TestService_NeedsApproval(t *testing.T) {
 	validator := NewValidator()
-	svc := NewSecurityService(validator, nil)
+	svc := NewService(validator, nil)
 
 	tests := []struct {
 		name         string
@@ -203,8 +203,8 @@ func TestSecurityService_NeedsApproval(t *testing.T) {
 	}
 }
 
-func TestSecurityService_NeedsApproval_NilValidator(t *testing.T) {
-	svc := NewSecurityService(nil, nil)
+func TestService_NeedsApproval_NilValidator(t *testing.T) {
+	svc := NewService(nil, nil)
 
 	cmd := &Command{
 		Raw:     "rm -rf /",
@@ -216,7 +216,7 @@ func TestSecurityService_NeedsApproval_NilValidator(t *testing.T) {
 	assert.False(t, needs, "should return false when validator is nil")
 }
 
-func TestSecurityService_RequestApproval(t *testing.T) {
+func TestService_RequestApproval(t *testing.T) {
 	validator := NewValidator()
 
 	tests := []struct {
@@ -235,7 +235,7 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 				Args:    []string{"-rf", "/tmp/test"},
 			}, "dangerous operation", "/tmp"),
 			setupHandler: func() ApprovalHandler {
-				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+				return func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  true,
@@ -255,7 +255,7 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 				Args:    []string{"-rf", "/"},
 			}, "extremely dangerous", "/"),
 			setupHandler: func() ApprovalHandler {
-				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+				return func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  false,
@@ -287,7 +287,7 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := tt.setupHandler()
 			approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: handler, Emitter: nil, Validator: validator})
-			svc := NewSecurityService(validator, approvalService)
+			svc := NewService(validator, approvalService)
 
 			ctx := context.Background()
 			approved, err := svc.RequestApproval(ctx, tt.operation)
@@ -308,9 +308,9 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 	}
 }
 
-func TestSecurityService_RequestApproval_NilApprovalService(t *testing.T) {
+func TestService_RequestApproval_NilApprovalService(t *testing.T) {
 	validator := NewValidator()
-	svc := NewSecurityService(validator, nil)
+	svc := NewService(validator, nil)
 
 	operation := NewOperation(&Command{
 		Raw:     "rm test",
@@ -326,7 +326,7 @@ func TestSecurityService_RequestApproval_NilApprovalService(t *testing.T) {
 	assert.Contains(t, err.Error(), "approval service not configured")
 }
 
-func TestSecurityService_ValidateAndApprove(t *testing.T) {
+func TestService_ValidateAndApprove(t *testing.T) {
 	validator := NewValidator()
 
 	tests := []struct {
@@ -345,7 +345,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 				Args:    []string{"-la"},
 			},
 			setupHandler: func() ApprovalHandler {
-				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+				return func(_ context.Context, _ ApprovalRequest) ApprovalResponse {
 					panic("should not be called for safe commands")
 				}
 			},
@@ -361,7 +361,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 				Args:    []string{"-rf", "/"},
 			},
 			setupHandler: func() ApprovalHandler {
-				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+				return func(_ context.Context, _ ApprovalRequest) ApprovalResponse {
 					panic("should not be called for forbidden commands")
 				}
 			},
@@ -377,7 +377,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 				Args:    []string{"testdir"},
 			},
 			setupHandler: func() ApprovalHandler {
-				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+				return func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  true,
@@ -397,7 +397,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 				Args:    []string{"sensitive_dir"},
 			},
 			setupHandler: func() ApprovalHandler {
-				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+				return func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  false,
@@ -418,7 +418,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 				Args:    []string{"arg"},
 			},
 			setupHandler: func() ApprovalHandler {
-				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
+				return func(_ context.Context, req ApprovalRequest) ApprovalResponse {
 					return ApprovalResponse{
 						RequestID: req.ID,
 						Approved:  true,
@@ -436,7 +436,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := tt.setupHandler()
 			approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: handler, Emitter: nil, Validator: validator})
-			svc := NewSecurityService(validator, approvalService)
+			svc := NewService(validator, approvalService)
 
 			ctx := context.Background()
 			approved, err := svc.ValidateAndApprove(ctx, tt.cmd, "/tmp")
@@ -454,10 +454,10 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 }
 
 // Benchmark tests.
-func TestSecurityService_ValidateAndApprove_ApprovalError(t *testing.T) {
+func TestService_ValidateAndApprove_ApprovalError(t *testing.T) {
 	validator := NewValidator()
 	// No approval service configured - will cause error.
-	svc := NewSecurityService(validator, nil)
+	svc := NewService(validator, nil)
 
 	// Interactive command that needs approval.
 	cmd := &Command{
@@ -474,8 +474,8 @@ func TestSecurityService_ValidateAndApprove_ApprovalError(t *testing.T) {
 	assert.Contains(t, err.Error(), "approval request failed")
 }
 
-func TestSecurityService_ValidateAndApprove_NilValidator(t *testing.T) {
-	svc := NewSecurityService(nil, nil)
+func TestService_ValidateAndApprove_NilValidator(t *testing.T) {
+	svc := NewService(nil, nil)
 
 	cmd := &Command{
 		Raw:     "echo test",
@@ -491,9 +491,9 @@ func TestSecurityService_ValidateAndApprove_NilValidator(t *testing.T) {
 	assert.Contains(t, err.Error(), "validation failed")
 }
 
-func TestSecurityService_ValidateAndApprove_NilCommand(t *testing.T) {
+func TestService_ValidateAndApprove_NilCommand(t *testing.T) {
 	validator := NewValidator()
-	svc := NewSecurityService(validator, nil)
+	svc := NewService(validator, nil)
 
 	ctx := context.Background()
 	approved, err := svc.ValidateAndApprove(ctx, nil, "/tmp")
@@ -503,9 +503,9 @@ func TestSecurityService_ValidateAndApprove_NilCommand(t *testing.T) {
 	assert.Contains(t, err.Error(), "validation failed")
 }
 
-func BenchmarkSecurityService_ValidateCommand(b *testing.B) {
+func BenchmarkService_ValidateCommand(b *testing.B) {
 	validator := NewValidator()
-	svc := NewSecurityService(validator, nil)
+	svc := NewService(validator, nil)
 
 	cmd := &Command{
 		Raw:     "ls -la",
@@ -520,9 +520,9 @@ func BenchmarkSecurityService_ValidateCommand(b *testing.B) {
 	}
 }
 
-func BenchmarkSecurityService_NeedsApproval(b *testing.B) {
+func BenchmarkService_NeedsApproval(b *testing.B) {
 	validator := NewValidator()
-	svc := NewSecurityService(validator, nil)
+	svc := NewService(validator, nil)
 
 	cmd := &Command{
 		Raw:     "rm -rf /tmp",
@@ -537,35 +537,35 @@ func BenchmarkSecurityService_NeedsApproval(b *testing.B) {
 	}
 }
 
-func TestSecurityService_ApprovalService(t *testing.T) {
+func TestService_ApprovalService(t *testing.T) {
 	validator := NewValidator()
 	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
-	svc := NewSecurityService(validator, approvalService)
+	svc := NewService(validator, approvalService)
 
 	retrieved := svc.ApprovalService()
 	assert.Equal(t, approvalService, retrieved)
 }
 
-func TestSecurityService_ApprovalService_Nil(t *testing.T) {
+func TestService_ApprovalService_Nil(t *testing.T) {
 	validator := NewValidator()
-	svc := NewSecurityService(validator, nil)
+	svc := NewService(validator, nil)
 
 	retrieved := svc.ApprovalService()
 	assert.Nil(t, retrieved)
 }
 
-func TestSecurityService_Validator(t *testing.T) {
+func TestService_Validator(t *testing.T) {
 	validator := NewValidator()
 	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: validator})
-	svc := NewSecurityService(validator, approvalService)
+	svc := NewService(validator, approvalService)
 
 	retrieved := svc.Validator()
 	assert.Equal(t, validator, retrieved)
 }
 
-func TestSecurityService_Validator_Nil(t *testing.T) {
+func TestService_Validator_Nil(t *testing.T) {
 	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: nil})
-	svc := NewSecurityService(nil, approvalService)
+	svc := NewService(nil, approvalService)
 
 	retrieved := svc.Validator()
 	assert.Nil(t, retrieved)

@@ -58,7 +58,7 @@ func NewGrowthMonitor(pb *playbook.Playbook, thresholds GrowthThresholds) *Growt
 }
 
 // CheckGrowth evaluates current playbook state and returns metrics.
-func (m *GrowthMonitor) CheckGrowth(ctx context.Context) (GrowthMetrics, bool) {
+func (m *GrowthMonitor) CheckGrowth(_ context.Context) (GrowthMetrics, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -88,7 +88,7 @@ func (m *GrowthMonitor) CheckGrowth(ctx context.Context) (GrowthMetrics, bool) {
 	m.lastCheck = now
 
 	// Check if refinement needed.
-	needsRefinement := m.shouldRefine(metrics)
+	needsRefinement := m.checkRefineNeeded(metrics)
 
 	return metrics, needsRefinement
 }
@@ -106,7 +106,7 @@ func (m *GrowthMonitor) ShouldRefine() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return m.shouldRefine(m.metrics)
+	return m.checkRefineNeeded(m.metrics)
 }
 
 // MarkRefinement records that refinement occurred.
@@ -117,8 +117,8 @@ func (m *GrowthMonitor) MarkRefinement() {
 	m.metrics.LastRefinement = time.Now()
 }
 
-// shouldRefine determines if any threshold is breached (internal, no lock).
-func (m *GrowthMonitor) shouldRefine(metrics GrowthMetrics) bool {
+// checkRefineNeeded determines if any threshold is breached (internal, no lock).
+func (m *GrowthMonitor) checkRefineNeeded(metrics GrowthMetrics) bool {
 	// Don't refine empty playbook.
 	if metrics.BulletCount == 0 {
 		return false

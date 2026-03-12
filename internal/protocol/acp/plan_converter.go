@@ -60,7 +60,7 @@ func mapStepStatus(status planning.StepStatus) acp.PlanEntryStatus {
 // mapStepPriority maps step priority based on dependencies.
 // Steps with no dependencies are high priority (can start immediately).
 // Steps with dependencies are medium priority.
-func mapStepPriority(step planning.Step, plan *planning.Plan) acp.PlanEntryPriority {
+func mapStepPriority(step planning.Step, _ *planning.Plan) acp.PlanEntryPriority {
 	lowerDesc := strings.ToLower(step.Description)
 
 	// Heuristics: check for explicit priority keywords.

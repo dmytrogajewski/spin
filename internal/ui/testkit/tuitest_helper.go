@@ -35,7 +35,10 @@ func NewTUITest(t interface {
 		adapters.WithKeyboardEvents(fakeKB.Events()),
 	)
 	if err != nil {
-		t.(interface{ Fatalf(string, ...any) }).Fatalf("NewPureTTY: %v", err)
+		tf, ok := t.(interface{ Fatalf(string, ...any) })
+		if ok {
+			tf.Fatalf("NewPureTTY: %v", err)
+		}
 	}
 
 	helper := &TUITestHelper{
@@ -49,7 +52,7 @@ func NewTUITest(t interface {
 
 	t.Cleanup(func() {
 		cancel()
-		ui.Stop()
+		_ = ui.Stop()
 		fakeKB.Close()
 	})
 
@@ -68,7 +71,7 @@ func (h *TUITestHelper) Start() {
 // Stop stops the UI and cancels the context.
 func (h *TUITestHelper) Stop() {
 	h.cancel()
-	h.UI.Stop()
+	_ = h.UI.Stop()
 	h.Keyboard.Close()
 }
 

@@ -11,17 +11,30 @@ import (
 	"github.com/dmytrogajewski/spin/internal/session"
 )
 
-// ConversationFactory creates new Conversation instances.
+var (
+	ErrConversationFactoryIsRequired = errors.New("conversation factory is required")
+	ErrSessionIdCannotBeEmpty = errors.New("session ID cannot be empty")
+	ErrConversationNotFound = errors.New("conversation not found")
+	ErrHistoryStorageNotConfigured = errors.New("history storage not configured")
+	ErrSessionNotFound = errors.New("session not found")
+	ErrHistoryStorageNotConfigured2 = errors.New("history storage not configured")
+	ErrConversationNotFound2 = errors.New("conversation not found")
+	ErrErrorsClosingConversations = errors.New("errors closing conversations")
+	ErrConversationNotFound3 = errors.New("conversation not found")
+	ErrConversationNotFound4 = errors.New("conversation not found")
+)
+
+// Factory creates new Conversation instances.
 // The factory receives the session ID and working directory, and returns
 // a fully configured Conversation or an error.
-type ConversationFactory func(ctx context.Context, sessionID string, workDir string) (*Conversation, error)
+type Factory func(ctx context.Context, sessionID string, workDir string) (*Conversation, error)
 
 // Manager manages multiple concurrent conversations.
 // This is useful for protocols like ACP that support multiple sessions.
 // For single-session modes (TUI, exec), use Conversation directly.
 type Manager struct {
 	conversations map[string]*Conversation
-	factory       ConversationFactory
+	factory       Factory
 	storage       session.Storage
 	histStorage   history.Storage
 	logger        *slog.Logger
@@ -31,7 +44,7 @@ type Manager struct {
 // ManagerConfig contains configuration for creating a Manager.
 type ManagerConfig struct {
 	// Factory creates new Conversation instances (required).
-	Factory ConversationFactory
+	Factory Factory
 
 	// Storage for session persistence (optional).
 	Storage session.Storage
@@ -46,7 +59,7 @@ type ManagerConfig struct {
 // NewManager creates a new conversation manager.
 func NewManager(cfg ManagerConfig) (*Manager, error) {
 	if cfg.Factory == nil {
-		return nil, errors.New("conversation factory is required")
+		return nil, ErrConversationFactoryIsRequired
 	}
 
 	logger := cfg.Logger
@@ -68,7 +81,7 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 // Otherwise, the factory is called to create a new conversation.
 func (m *Manager) GetOrCreate(ctx context.Context, sessionID string, workDir string) (*Conversation, error) {
 	if sessionID == "" {
-		return nil, errors.New("session ID cannot be empty")
+		return nil, ErrSessionIdCannotBeEmpty
 	}
 
 	// Fast path: check if conversation exists.
@@ -101,7 +114,7 @@ func (m *Manager) GetOrCreate(ctx context.Context, sessionID string, workDir str
 	conv.SetID(sessionID)
 
 	m.conversations[sessionID] = conv
-	m.logger.Info("conversation created", "session_id", sessionID, "work_dir", workDir)
+	m.logger.InfoContext(ctx, "conversation created", "session_id", sessionID, "work_dir", workDir)
 
 	return conv, nil
 }
@@ -124,17 +137,17 @@ func (m *Manager) Remove(sessionID string) error {
 
 	conv, ok := m.conversations[sessionID]
 	if !ok {
-		return fmt.Errorf("conversation not found: %s", sessionID)
+return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound)
 	}
 
 	// Close the conversation.
 	err := conv.Close()
 	if err != nil {
-		m.logger.Warn("error closing conversation", "session_id", sessionID, "error", err)
+		m.logger.WarnContext(context.Background(), "error closing conversation", "session_id", sessionID, "error", err)
 	}
 
 	delete(m.conversations, sessionID)
-	m.logger.Info("conversation removed", "session_id", sessionID)
+	m.logger.InfoContext(context.Background(), "conversation removed", "session_id", sessionID)
 
 	return nil
 }
@@ -147,7 +160,7 @@ func (m *Manager) Cancel(sessionID string) {
 
 	if ok {
 		conv.Cancel()
-		m.logger.Debug("conversation canceled", "session_id", sessionID)
+		m.logger.DebugContext(context.Background(), "conversation canceled", "session_id", sessionID)
 	}
 }
 
@@ -155,7 +168,7 @@ func (m *Manager) Cancel(sessionID string) {
 // This creates a new conversation and restores its history from storage.
 func (m *Manager) Load(ctx context.Context, sessionID string, workDir string) (*Conversation, error) {
 	if m.histStorage == nil {
-		return nil, errors.New("history storage not configured")
+		return nil, ErrHistoryStorageNotConfigured
 	}
 
 	// Check if history exists.
@@ -165,7 +178,7 @@ func (m *Manager) Load(ctx context.Context, sessionID string, workDir string) (*
 	}
 
 	if !exists {
-		return nil, fmt.Errorf("session not found: %s", sessionID)
+return nil, fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound)
 	}
 
 	// Create conversation via factory.
@@ -179,12 +192,12 @@ func (m *Manager) Load(ctx context.Context, sessionID string, workDir string) (*
 	err = hist.Load(m.histStorage, sessionID)
 	if err != nil {
 		// Remove the conversation if loading fails.
-		m.Remove(sessionID)
+		_ = m.Remove(sessionID)
 
 		return nil, fmt.Errorf("load history: %w", err)
 	}
 
-	m.logger.Info("conversation loaded from storage", "session_id", sessionID)
+	m.logger.InfoContext(ctx, "conversation loaded from storage", "session_id", sessionID)
 
 	return conv, nil
 }
@@ -192,7 +205,7 @@ func (m *Manager) Load(ctx context.Context, sessionID string, workDir string) (*
 // Save persists a conversation's history to storage.
 func (m *Manager) Save(sessionID string) error {
 	if m.histStorage == nil {
-		return errors.New("history storage not configured")
+		return ErrHistoryStorageNotConfigured2
 	}
 
 	m.mu.RLock()
@@ -200,7 +213,7 @@ func (m *Manager) Save(sessionID string) error {
 	m.mu.RUnlock()
 
 	if !ok {
-		return fmt.Errorf("conversation not found: %s", sessionID)
+return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound2)
 	}
 
 	err := conv.history.Save(m.histStorage, sessionID)
@@ -208,7 +221,7 @@ func (m *Manager) Save(sessionID string) error {
 		return fmt.Errorf("save history: %w", err)
 	}
 
-	m.logger.Debug("conversation saved", "session_id", sessionID)
+	m.logger.DebugContext(context.Background(), "conversation saved", "session_id", sessionID)
 
 	return nil
 }
@@ -251,7 +264,7 @@ func (m *Manager) Close() error {
 	m.conversations = make(map[string]*Conversation)
 
 	if len(errs) > 0 {
-		return fmt.Errorf("errors closing conversations: %v", errs)
+return fmt.Errorf("errors closing conversations: %v: %w", errs, ErrErrorsClosingConversations)
 	}
 
 	return nil
@@ -275,7 +288,7 @@ func (m *Manager) SetTaskMode(sessionID string, mode string) error {
 	m.mu.RUnlock()
 
 	if !ok {
-		return fmt.Errorf("conversation not found: %s", sessionID)
+return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound3)
 	}
 
 	return conv.SetTaskMode(mode)
@@ -288,7 +301,7 @@ func (m *Manager) GetTaskMode(sessionID string) (string, error) {
 	m.mu.RUnlock()
 
 	if !ok {
-		return "", fmt.Errorf("conversation not found: %s", sessionID)
+return "", fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound4)
 	}
 
 	return conv.GetTaskMode(), nil

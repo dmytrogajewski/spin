@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +13,7 @@ import (
 
 	mcpSDK "github.com/mark3labs/mcp-go/mcp"
 )
+
 
 // SmitheryClient implements an MCP client for Smithery's connection-based API.
 // Smithery uses a different protocol than standard MCP transports:
@@ -77,15 +77,15 @@ type smitheryError struct {
 // APIKey is always required. MCPURL and Namespace are required for connection-based operations.
 func NewSmitheryClient(config SmitheryConfig) (*SmitheryClient, error) {
 	if config.APIKey == "" {
-		return nil, errors.New("smithery API key is required")
+		return nil, ErrSmitheryApiKeyRequired
 	}
 
 	if config.MCPURL == "" {
-		return nil, errors.New("smithery MCP URL is required")
+		return nil, ErrSmitheryMcpUrlRequired
 	}
 
 	if config.Namespace == "" {
-		return nil, errors.New("smithery namespace is required")
+		return nil, ErrSmitheryNamespaceRequired
 	}
 
 	return &SmitheryClient{
@@ -129,7 +129,7 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 	req.Header.Set("Content-Type", "application/json")
 
 	if c.logger != nil {
-		c.logger.Debug("Creating Smithery connection", "url", url, "mcpUrl", c.mcpURL)
+		c.logger.DebugContext(ctx, "Creating Smithery connection", "url", url, "mcpUrl", c.mcpURL)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -141,7 +141,7 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 
-		return fmt.Errorf("connect failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+return fmt.Errorf("connect failed with status %d: %s: %w", resp.StatusCode, string(bodyBytes), ErrConnectFailedWithStatus)
 	}
 
 	var connectResp smitheryConnectResponse
@@ -153,7 +153,7 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 	c.connectionID = connectResp.ConnectionID
 
 	if c.logger != nil {
-		c.logger.Debug("Smithery connection established", "connectionId", c.connectionID)
+		c.logger.DebugContext(ctx, "Smithery connection established", "connectionId", c.connectionID)
 	}
 
 	return nil
@@ -246,7 +246,7 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 	c.mu.RUnlock()
 
 	if connectionID == "" {
-		return nil, errors.New("not connected")
+		return nil, ErrNotConnected
 	}
 
 	reqBody := smitheryRPCRequest{
@@ -270,7 +270,7 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 	req.Header.Set("Content-Type", "application/json")
 
 	if c.logger != nil {
-		c.logger.Debug("Smithery RPC call", "method", method, "url", url)
+		c.logger.DebugContext(ctx, "Smithery RPC call", "method", method, "url", url)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -282,7 +282,7 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 
-		return nil, fmt.Errorf("rpc failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+return nil, fmt.Errorf("rpc failed with status %d: %s: %w", resp.StatusCode, string(bodyBytes), ErrRpcFailedWithStatus)
 	}
 
 	var rpcResp smitheryRPCResponse
@@ -292,7 +292,7 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 	}
 
 	if rpcResp.Error != nil {
-		return nil, fmt.Errorf("rpc error %d: %s", rpcResp.Error.Code, rpcResp.Error.Message)
+return nil, fmt.Errorf("rpc error %d: %s: %w", rpcResp.Error.Code, rpcResp.Error.Message, ErrRpcError)
 	}
 
 	return rpcResp.Result, nil

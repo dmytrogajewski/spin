@@ -15,7 +15,7 @@ import (
 //
 // Requires: ctx != nil
 // Ensures: if shouldRetrieve, then triggerType is valid (not empty).
-func (a *Agent) shouldRetrieveProgressive(ctx *trajectory.TrajectoryContext) (bool, trajectory.TriggerType) {
+func (a *Agent) shouldRetrieveProgressive(ctx *trajectory.Context) (bool, trajectory.TriggerType) {
 	// Check if progressive context is enabled.
 	if a.aceConfig == nil || !a.aceConfig.Retrieval.ProgressiveContext.Enabled {
 		return false, ""

@@ -35,10 +35,10 @@ type searchResult struct {
 }
 
 // SearchTools searches through tools and returns matches sorted by relevance.
-func SearchTools(toolList []tools.Tool, query string, max int, opts SearchOptions) []tools.Tool {
+func SearchTools(toolList []tools.Tool, query string, maxResults int, opts SearchOptions) []tools.Tool {
 	if query == "" {
-		if max > 0 && len(toolList) > max {
-			return toolList[:max]
+		if maxResults > 0 && len(toolList) > maxResults {
+			return toolList[:maxResults]
 		}
 
 		return toolList
@@ -61,8 +61,8 @@ func SearchTools(toolList []tools.Tool, query string, max int, opts SearchOption
 	})
 
 	// Apply limit.
-	if max > 0 && len(results) > max {
-		results = results[:max]
+	if maxResults > 0 && len(results) > maxResults {
+		results = results[:maxResults]
 	}
 
 	// Extract tools.

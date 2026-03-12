@@ -2,8 +2,6 @@ package tools
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
 )
 
@@ -15,14 +13,17 @@ func NewReadFileTool() *ReadFileTool {
 	return &ReadFileTool{}
 }
 
+// Name implements the Name operation.
 func (t *ReadFileTool) Name() string {
 	return "read_file"
 }
 
+// Description implements the Description operation.
 func (t *ReadFileTool) Description() string {
 	return "Read the contents of a file"
 }
 
+// Schema implements the Schema operation.
 func (t *ReadFileTool) Schema() ToolSchema {
 	return ToolSchema{
 		Type: "function",
@@ -43,19 +44,16 @@ func (t *ReadFileTool) Schema() ToolSchema {
 	}
 }
 
-func (t *ReadFileTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	path, err := params.GetString("path")
-	if err != nil {
-		return NewToolError(errors.New("path parameter must be a non-empty string")), nil
-	}
-
+// Execute implements the Execute operation.
+func (t *ReadFileTool) Execute(_ context.Context, params ToolParameters) (ToolResult, error) {
+	path, _ := params.GetString("path")
 	if path == "" {
-		return NewToolError(errors.New("path parameter must be a non-empty string")), nil
+		return NewToolError(ErrPathParameterRequired), nil
 	}
 
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return NewToolError(fmt.Errorf("failed to read file: %w", err)), nil
+	content, readErr := os.ReadFile(path)
+	if readErr != nil {
+		return ErrToResultf("failed to read file: %v", readErr)
 	}
 
 	return NewToolResult(string(content)), nil

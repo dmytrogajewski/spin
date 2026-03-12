@@ -34,7 +34,7 @@ func TestE2E_StreamingChunks_PromptAtBottom(t *testing.T) {
 	helper.Start()
 
 	// Stream some chunks.
-	helper.UI.PrintChunks(context.Background(), makeChunkChannel("chunk1", "chunk2", "chunk3"))
+	_ = helper.UI.PrintChunks(context.Background(), makeChunkChannel("chunk1", "chunk2", "chunk3"))
 
 	// Wait a bit for streaming.
 	time.Sleep(100 * time.Millisecond)

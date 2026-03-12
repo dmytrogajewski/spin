@@ -2,6 +2,7 @@ package agentsmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -44,13 +45,13 @@ func (d *DefaultDiscoverer) Discover(ctx context.Context, workDir string) (strin
 	// Check context cancellation.
 	err := ctx.Err()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("discover agents.md: %w", err)
 	}
 
 	// Normalize workDir to absolute path.
 	absWorkDir, err := filepath.Abs(workDir)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("resolve absolute path: %w", err)
 	}
 
 	// 1. Check working directory first.
@@ -61,7 +62,8 @@ func (d *DefaultDiscoverer) Discover(ctx context.Context, workDir string) (strin
 
 	// 2. Check git root if available and different from workDir.
 	if d.gitRoot != "" {
-		absGitRoot, err := filepath.Abs(d.gitRoot)
+		var absGitRoot string
+		absGitRoot, err = filepath.Abs(d.gitRoot)
 		if err == nil && absGitRoot != absWorkDir {
 			path = filepath.Join(absGitRoot, FileName)
 			if fileExists(path) {
@@ -90,9 +92,9 @@ func (d *DefaultDiscoverer) Discover(ctx context.Context, workDir string) (strin
 		}
 
 		// Check context cancellation periodically.
-		err := ctx.Err()
+		err = ctx.Err()
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("discover agents.md walk: %w", err)
 		}
 
 		path = filepath.Join(parent, FileName)

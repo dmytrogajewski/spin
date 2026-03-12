@@ -177,7 +177,7 @@ func TestManager_Concurrency(t *testing.T) {
 	done := make(chan bool, 10)
 
 	for i := range 10 {
-		go func(id int) {
+		go func(_ int) {
 			for range 100 {
 				m.SetStatus("Test")
 				m.IncrementTurn()

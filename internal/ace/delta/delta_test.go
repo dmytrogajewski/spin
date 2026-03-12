@@ -8,7 +8,7 @@ func TestDelta_NewContentUpdate(t *testing.T) {
 	bulletID := "bullet-123"
 	newContent := "Updated bullet content"
 
-	delta := NewContentUpdate(bulletID, newContent, DeltaMetadata{
+	delta := NewContentUpdate(bulletID, newContent, Metadata{
 		Source: "test",
 		Reason: "testing content update",
 	})
@@ -49,7 +49,7 @@ func TestDelta_NewContentUpdate(t *testing.T) {
 func TestDelta_NewIncrementHelpful(t *testing.T) {
 	bulletID := "bullet-456"
 
-	delta := NewIncrementHelpful(bulletID, DeltaMetadata{
+	delta := NewIncrementHelpful(bulletID, Metadata{
 		Source: "curator",
 		Reason: "duplicate insight detected",
 	})
@@ -79,7 +79,7 @@ func TestDelta_NewIncrementHelpful(t *testing.T) {
 func TestDelta_NewIncrementHarmful(t *testing.T) {
 	bulletID := "bullet-789"
 
-	delta := NewIncrementHarmful(bulletID, DeltaMetadata{
+	delta := NewIncrementHarmful(bulletID, Metadata{
 		Source: "feedback",
 		Reason: "bullet was harmful",
 	})
@@ -107,7 +107,7 @@ func TestDelta_NewAddTag(t *testing.T) {
 	key := "category"
 	value := "error_handling"
 
-	delta := NewAddTag(bulletID, key, value, DeltaMetadata{
+	delta := NewAddTag(bulletID, key, value, Metadata{
 		Source: "adapter",
 		Reason: "categorizing bullet",
 	})
@@ -145,7 +145,7 @@ func TestDelta_NewRemoveTag(t *testing.T) {
 	bulletID := "bullet-def"
 	key := "obsolete"
 
-	delta := NewRemoveTag(bulletID, key, DeltaMetadata{
+	delta := NewRemoveTag(bulletID, key, Metadata{
 		Source: "manual",
 		Reason: "removing obsolete tag",
 	})
@@ -175,7 +175,7 @@ func TestDelta_NewUpdateEmbedding(t *testing.T) {
 	bulletID := "bullet-ghi"
 	embedding := []float32{0.1, 0.2, 0.3}
 
-	delta := NewUpdateEmbedding(bulletID, embedding, DeltaMetadata{
+	delta := NewUpdateEmbedding(bulletID, embedding, Metadata{
 		Source: "embedder",
 		Reason: "re-embedding after content update",
 	})

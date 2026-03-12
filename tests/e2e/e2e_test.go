@@ -31,9 +31,9 @@ func TestMain(m *testing.M) {
 	if shouldSkipBuild() {
 		_, err := os.Stat(binPath)
 		if err == nil {
-			fmt.Println("Using existing spin binary for e2e tests")
+			fmt.Fprintln(os.Stdout, "Using existing spin binary for e2e tests")
 		} else {
-			fmt.Println("Pre-built spin binary not found, rebuilding...")
+			fmt.Fprintln(os.Stdout, "Pre-built spin binary not found, rebuilding...")
 			buildSpinBinary()
 		}
 	} else {
@@ -56,12 +56,12 @@ func shouldSkipBuild() bool {
 func buildSpinBinary() {
 	// Build the binary with e2e_llm_test tag to enable test-llm provider
 	// This allows e2e tests to run without requiring external LLM services.
-	fmt.Println("Building spin binary for e2e tests (with e2e_llm_test tag)...")
+	fmt.Fprintln(os.Stdout, "Building spin binary for e2e tests (with e2e_llm_test tag)...")
 
 	cmd := exec.Command("go", "build", "-tags", "e2e_llm_test", "-o", binPath, "../../cmd/spin")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Printf("Failed to build binary: %v\n%s\n", err, output)
+		fmt.Fprintf(os.Stderr, "Failed to build binary: %v\n%s\n", err, output)
 		os.Exit(1)
 	}
 }
@@ -116,11 +116,11 @@ func TestConfigCommands(t *testing.T) {
 		// Backup existing config.
 		_, err := os.Stat(configPath)
 		if err == nil {
-			err := os.Rename(configPath, tempBackup)
-			if err != nil {
-				t.Fatalf("Failed to backup config: %v", err)
+			renameErr := os.Rename(configPath, tempBackup)
+			if renameErr != nil {
+				t.Fatalf("Failed to backup config: %v", renameErr)
 			}
-			defer os.Rename(tempBackup, configPath)
+			defer func() { _ = os.Rename(tempBackup, configPath) }()
 		}
 
 		stdout, stderr, err := runSpin(t, "config", "show")
@@ -203,11 +203,11 @@ func TestMCPCommands(t *testing.T) {
 	// Backup existing config.
 	_, err := os.Stat(configPath)
 	if err == nil {
-		err := os.Rename(configPath, tempBackup)
-		if err != nil {
-			t.Fatalf("Failed to backup config: %v", err)
+		renameErr := os.Rename(configPath, tempBackup)
+		if renameErr != nil {
+			t.Fatalf("Failed to backup config: %v", renameErr)
 		}
-		defer os.Rename(tempBackup, configPath)
+		defer func() { _ = os.Rename(tempBackup, configPath) }()
 	}
 
 	// Create .spin directory if it doesn't exist.
@@ -226,9 +226,9 @@ func TestMCPCommands(t *testing.T) {
 	defer os.Remove(configPath)
 
 	t.Run("mcp registry list empty", func(t *testing.T) {
-		stdout, stderr, err := runSpin(t, "mcp", "registry", "list")
-		if err != nil {
-			t.Fatalf("mcp registry list failed: %v\nstderr: %s", err, stderr)
+		stdout, stderr, runErr := runSpin(t, "mcp", "registry", "list")
+		if runErr != nil {
+			t.Fatalf("mcp registry list failed: %v\nstderr: %s", runErr, stderr)
 		}
 
 		if !strings.Contains(stdout, "No registries configured") {
@@ -238,9 +238,11 @@ func TestMCPCommands(t *testing.T) {
 
 	t.Run("mcp registry add and remove", func(t *testing.T) {
 		// Add MCP registry (local type).
-		stdout, stderr, err := runSpin(t, "mcp", "registry", "local", "add", "test-server", "echo", "test")
-		if err != nil {
-			t.Fatalf("mcp registry local add failed: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
+		var stdout, stderr string
+		var runErr error
+		stdout, stderr, runErr = runSpin(t, "mcp", "registry", "local", "add", "test-server", "echo", "test")
+		if runErr != nil {
+			t.Fatalf("mcp registry local add failed: %v\nstderr: %s\nstdout: %s", runErr, stderr, stdout)
 		}
 
 		if !strings.Contains(stdout+stderr, "Added local registry 'test-server'") {
@@ -248,9 +250,9 @@ func TestMCPCommands(t *testing.T) {
 		}
 
 		// List should show the registry.
-		stdout, stderr, err = runSpin(t, "mcp", "registry", "list")
-		if err != nil {
-			t.Fatalf("mcp registry list failed: %v\nstderr: %s", err, stderr)
+		stdout, stderr, runErr = runSpin(t, "mcp", "registry", "list")
+		if runErr != nil {
+			t.Fatalf("mcp registry list failed: %v\nstderr: %s", runErr, stderr)
 		}
 
 		if !strings.Contains(stdout, "test-server") {
@@ -258,9 +260,9 @@ func TestMCPCommands(t *testing.T) {
 		}
 
 		// Get registry details.
-		stdout, stderr, err = runSpin(t, "mcp", "registry", "get", "test-server")
-		if err != nil {
-			t.Fatalf("mcp registry get failed: %v\nstderr: %s", err, stderr)
+		stdout, stderr, runErr = runSpin(t, "mcp", "registry", "get", "test-server")
+		if runErr != nil {
+			t.Fatalf("mcp registry get failed: %v\nstderr: %s", runErr, stderr)
 		}
 
 		if !strings.Contains(stdout, "test-server") || !strings.Contains(stdout, "echo") {
@@ -268,15 +270,15 @@ func TestMCPCommands(t *testing.T) {
 		}
 
 		// Remove registry.
-		stdout, stderr, err = runSpin(t, "mcp", "registry", "remove", "test-server", "--yes")
-		if err != nil {
-			t.Fatalf("mcp registry remove failed: %v\nstderr: %s", err, stderr)
+		stdout, stderr, runErr = runSpin(t, "mcp", "registry", "remove", "test-server", "--yes")
+		if runErr != nil {
+			t.Fatalf("mcp registry remove failed: %v\nstderr: %s", runErr, stderr)
 		}
 
 		// List should be empty again.
-		stdout, stderr, err = runSpin(t, "mcp", "registry", "list")
-		if err != nil {
-			t.Fatalf("mcp registry list failed: %v\nstderr: %s", err, stderr)
+		stdout, stderr, runErr = runSpin(t, "mcp", "registry", "list")
+		if runErr != nil {
+			t.Fatalf("mcp registry list failed: %v\nstderr: %s", runErr, stderr)
 		}
 
 		if !strings.Contains(stdout, "No registries configured") {
@@ -364,19 +366,19 @@ sandbox:
 		cmd.Stdout = &outBuf
 		cmd.Stderr = &errBuf
 
-		err := cmd.Run()
+		runErr := cmd.Run()
 
 		stdout := outBuf.String()
 		stderr := errBuf.String()
 
 		// Should not error (Bug #2 regression test).
-		if err != nil {
+		if runErr != nil {
 			if strings.Contains(stderr, "provider is required") || strings.Contains(stderr, "model is required") {
 				t.Errorf("BUG #2 REGRESSION: Config integration broken!\nstderr: %s", stderr)
 			} else if strings.Contains(stderr, "context deadline exceeded") {
 				t.Skip("Test timed out")
 			} else {
-				t.Errorf("exec failed: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
+				t.Errorf("exec failed: %v\nstderr: %s\nstdout: %s", runErr, stderr, stdout)
 			}
 		}
 
@@ -405,13 +407,13 @@ sandbox:
 		cmd.Stdout = &outBuf
 		cmd.Stderr = &errBuf
 
-		err := cmd.Run()
+		runErr := cmd.Run()
 
 		stdout := outBuf.String()
 		stderr := errBuf.String()
 
-		if err != nil && !strings.Contains(stderr, "context deadline exceeded") {
-			t.Errorf("exec from stdin failed: %v\nstderr: %s", err, stderr)
+		if runErr != nil && !strings.Contains(stderr, "context deadline exceeded") {
+			t.Errorf("exec from stdin failed: %v\nstderr: %s", runErr, stderr)
 		}
 
 		if len(stdout) > 0 && !strings.Contains(stdout, "8") {
@@ -482,8 +484,8 @@ func TestJSONOutput(t *testing.T) {
 
 	t.Run("mcp registry get json", func(t *testing.T) {
 		// First add a registry.
-		runSpin(t, "mcp", "registry", "local", "add", "json-test", "echo", "test")
-		defer runSpin(t, "mcp", "registry", "remove", "json-test", "--yes")
+		_, _, _ = runSpin(t, "mcp", "registry", "local", "add", "json-test", "echo", "test")
+		defer func() { _, _, _ = runSpin(t, "mcp", "registry", "remove", "json-test", "--yes") }()
 
 		stdout, stderr, err := runSpin(t, "mcp", "registry", "get", "json-test", "--format", "json")
 		if err != nil {

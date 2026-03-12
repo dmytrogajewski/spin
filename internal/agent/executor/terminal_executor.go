@@ -1,4 +1,4 @@
-package runtime
+package executor
 
 import (
 	"context"
@@ -52,13 +52,13 @@ func (e *TerminalExecutor) Execute(ctx context.Context, cmd tools.CommandInfo, o
 		// Check if opts has Env field (struct-based, e.g., ExecuteOptions).
 		if envMap := extractEnvFromStruct(opts); envMap != nil {
 			env = envMap
-		} else if envMap, ok := opts.(map[string]any); ok {
+		} else if optsMap, optsOk := opts.(map[string]any); optsOk {
 			// Check if opts is a map with env vars.
-			if envVars, exists := envMap["env"]; exists {
-				if envSlice, ok := envVars.([]any); ok {
+			if envVars, exists := optsMap["env"]; exists {
+				if envSlice, sliceOk := envVars.([]any); sliceOk {
 					env = make([]EnvVar, 0, len(envSlice))
 					for _, ev := range envSlice {
-						if evMap, ok := ev.(map[string]any); ok {
+						if evMap, mapOk := ev.(map[string]any); mapOk {
 							name, _ := evMap["name"].(string)
 
 							value, _ := evMap["value"].(string)
@@ -67,11 +67,11 @@ func (e *TerminalExecutor) Execute(ctx context.Context, cmd tools.CommandInfo, o
 							}
 						}
 					}
-				} else if envMap, ok := envVars.(map[string]any); ok {
+				} else if envVarMap, mapOk := envVars.(map[string]any); mapOk {
 					// Handle map[string]string format.
-					env = make([]EnvVar, 0, len(envMap))
-					for name, value := range envMap {
-						if strValue, ok := value.(string); ok {
+					env = make([]EnvVar, 0, len(envVarMap))
+					for name, value := range envVarMap {
+						if strValue, strOk := value.(string); strOk {
 							env = append(env, EnvVar{Name: name, Value: strValue})
 						}
 					}
@@ -191,18 +191,22 @@ type terminalExecutionResult struct {
 	terminalID string
 }
 
+// GetStdout implements the GetStdout operation.
 func (r *terminalExecutionResult) GetStdout() string {
 	return r.stdout
 }
 
+// GetStderr implements the GetStderr operation.
 func (r *terminalExecutionResult) GetStderr() string {
 	return r.stderr
 }
 
+// GetExitCode implements the GetExitCode operation.
 func (r *terminalExecutionResult) GetExitCode() int {
 	return r.exitCode
 }
 
+// GetMetadata implements the GetMetadata operation.
 func (r *terminalExecutionResult) GetMetadata() map[string]any {
 	return map[string]any{
 		"terminal_id": r.terminalID,

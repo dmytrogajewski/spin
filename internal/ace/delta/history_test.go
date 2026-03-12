@@ -6,9 +6,9 @@ import (
 )
 
 func TestDeltaHistory_Record(t *testing.T) {
-	h := NewDeltaHistory()
+	h := NewHistory()
 
-	delta := NewContentUpdate("bullet-1", "content", DeltaMetadata{Source: "test"})
+	delta := NewContentUpdate("bullet-1", "content", Metadata{Source: "test"})
 	h.Record(*delta)
 
 	if h.Len() != 1 {
@@ -17,12 +17,12 @@ func TestDeltaHistory_Record(t *testing.T) {
 }
 
 func TestDeltaHistory_GetByBullet(t *testing.T) {
-	h := NewDeltaHistory()
+	h := NewHistory()
 
 	// Add deltas for two different bullets.
-	delta1 := NewContentUpdate("bullet-1", "content1", DeltaMetadata{Source: "test"})
-	delta2 := NewIncrementHelpful("bullet-1", DeltaMetadata{Source: "test"})
-	delta3 := NewContentUpdate("bullet-2", "content2", DeltaMetadata{Source: "test"})
+	delta1 := NewContentUpdate("bullet-1", "content1", Metadata{Source: "test"})
+	delta2 := NewIncrementHelpful("bullet-1", Metadata{Source: "test"})
+	delta3 := NewContentUpdate("bullet-2", "content2", Metadata{Source: "test"})
 
 	h.Record(*delta1)
 	h.Record(*delta2)
@@ -48,11 +48,11 @@ func TestDeltaHistory_GetByBullet(t *testing.T) {
 }
 
 func TestDeltaHistory_GetRecent(t *testing.T) {
-	h := NewDeltaHistory()
+	h := NewHistory()
 
 	// Add 5 deltas.
 	for range 5 {
-		delta := NewContentUpdate("bullet-1", "content", DeltaMetadata{Source: "test"})
+		delta := NewContentUpdate("bullet-1", "content", Metadata{Source: "test"})
 		h.Record(*delta)
 		time.Sleep(1 * time.Millisecond) // Ensure different timestamps.
 	}
@@ -83,26 +83,26 @@ func TestDeltaHistory_GetRecent(t *testing.T) {
 }
 
 func TestDeltaHistory_GetSince(t *testing.T) {
-	h := NewDeltaHistory()
+	h := NewHistory()
 
 	now := time.Now()
 	past := now.Add(-10 * time.Second)
 	future := now.Add(10 * time.Second)
 
 	// Add deltas with known timestamps (using metadata to track).
-	delta1 := NewContentUpdate("bullet-1", "content1", DeltaMetadata{Source: "test"})
+	delta1 := NewContentUpdate("bullet-1", "content1", Metadata{Source: "test"})
 	delta1.CreatedAt = past
 	h.Record(*delta1)
 
 	time.Sleep(1 * time.Millisecond)
 
-	delta2 := NewContentUpdate("bullet-2", "content2", DeltaMetadata{Source: "test"})
+	delta2 := NewContentUpdate("bullet-2", "content2", Metadata{Source: "test"})
 	delta2.CreatedAt = now
 	h.Record(*delta2)
 
 	time.Sleep(1 * time.Millisecond)
 
-	delta3 := NewContentUpdate("bullet-3", "content3", DeltaMetadata{Source: "test"})
+	delta3 := NewContentUpdate("bullet-3", "content3", Metadata{Source: "test"})
 	delta3.CreatedAt = future
 	h.Record(*delta3)
 
@@ -126,7 +126,7 @@ func TestDeltaHistory_GetSince(t *testing.T) {
 }
 
 func TestDeltaHistory_Stats(t *testing.T) {
-	h := NewDeltaHistory()
+	h := NewHistory()
 
 	// Empty history.
 	stats := h.Stats()
@@ -139,9 +139,9 @@ func TestDeltaHistory_Stats(t *testing.T) {
 	}
 
 	// Add deltas.
-	h.Record(*NewContentUpdate("bullet-1", "content", DeltaMetadata{Source: "test"}))
-	h.Record(*NewIncrementHelpful("bullet-1", DeltaMetadata{Source: "test"}))
-	h.Record(*NewIncrementHarmful("bullet-2", DeltaMetadata{Source: "test"}))
+	h.Record(*NewContentUpdate("bullet-1", "content", Metadata{Source: "test"}))
+	h.Record(*NewIncrementHelpful("bullet-1", Metadata{Source: "test"}))
+	h.Record(*NewIncrementHarmful("bullet-2", Metadata{Source: "test"}))
 
 	stats = h.Stats()
 	if stats.TotalDeltas != 3 {
@@ -178,11 +178,11 @@ func TestDeltaHistory_Stats(t *testing.T) {
 }
 
 func TestDeltaHistory_Clear(t *testing.T) {
-	h := NewDeltaHistory()
+	h := NewHistory()
 
 	// Add deltas.
-	h.Record(*NewContentUpdate("bullet-1", "content", DeltaMetadata{Source: "test"}))
-	h.Record(*NewIncrementHelpful("bullet-1", DeltaMetadata{Source: "test"}))
+	h.Record(*NewContentUpdate("bullet-1", "content", Metadata{Source: "test"}))
+	h.Record(*NewIncrementHelpful("bullet-1", Metadata{Source: "test"}))
 
 	if h.Len() != 2 {
 		t.Errorf("expected len 2 before clear, got %d", h.Len())
@@ -203,7 +203,7 @@ func TestDeltaHistory_Clear(t *testing.T) {
 }
 
 func TestDeltaHistory_Concurrency(t *testing.T) {
-	h := NewDeltaHistory()
+	h := NewHistory()
 
 	// Concurrent writes.
 	const (
@@ -213,9 +213,9 @@ func TestDeltaHistory_Concurrency(t *testing.T) {
 
 	done := make(chan bool, goroutines)
 	for g := range goroutines {
-		go func(id int) {
+		go func(_ int) {
 			for range deltasPerGoroutine {
-				delta := NewContentUpdate("bullet-1", "content", DeltaMetadata{Source: "test"})
+				delta := NewContentUpdate("bullet-1", "content", Metadata{Source: "test"})
 				h.Record(*delta)
 			}
 
@@ -257,7 +257,7 @@ func TestDeltaHistory_Concurrency(t *testing.T) {
 	for range goroutines {
 		go func() {
 			for range 10 {
-				delta := NewContentUpdate("bullet-1", "content", DeltaMetadata{Source: "test"})
+				delta := NewContentUpdate("bullet-1", "content", Metadata{Source: "test"})
 				h.Record(*delta)
 			}
 

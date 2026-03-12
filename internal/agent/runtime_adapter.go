@@ -3,17 +3,17 @@ package agent
 import (
 	"context"
 
-	"github.com/dmytrogajewski/spin/internal/agent/runtime"
+	"github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/security"
 )
 
-// executorRuntimeAdapter adapts agent.Executor to runtime.CommandExecutor interface.
+// executorRuntimeAdapter adapts agent.Executor to executor.CommandExecutor interface.
 type executorRuntimeAdapter struct {
 	executor *Executor
 }
 
-// NewExecutorRuntimeAdapter creates an adapter for agent.Executor to runtime.CommandExecutor.
-func NewExecutorRuntimeAdapter(exec *Executor) runtime.CommandExecutor {
+// NewExecutorRuntimeAdapter creates an adapter for agent.Executor to executor.CommandExecutor.
+func NewExecutorRuntimeAdapter(exec *Executor) executor.CommandExecutor {
 	if exec == nil {
 		return nil
 	}
@@ -21,8 +21,8 @@ func NewExecutorRuntimeAdapter(exec *Executor) runtime.CommandExecutor {
 	return &executorRuntimeAdapter{executor: exec}
 }
 
-// Execute implements runtime.CommandExecutor interface.
-func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *security.Command, opts any) (*runtime.CommandResult, error) {
+// Execute implements executor.CommandExecutor interface.
+func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *security.Command, opts any) (*executor.CommandResult, error) {
 	var execOpts *ExecuteOptions
 
 	if opts != nil {
@@ -33,8 +33,8 @@ func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *security.Comm
 
 	result, err := a.executor.Execute(ctx, cmd, execOpts)
 	if err != nil {
-		// Convert agent.Result to runtime.CommandResult.
-		return &runtime.CommandResult{
+		// Convert agent.Result to executor.CommandResult.
+		return &executor.CommandResult{
 			Command:     result.Command,
 			Stdout:      result.Stdout,
 			Stderr:      result.Stderr,
@@ -47,8 +47,8 @@ func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *security.Comm
 		}, err
 	}
 
-	// Convert agent.Result to runtime.CommandResult.
-	return &runtime.CommandResult{
+	// Convert agent.Result to executor.CommandResult.
+	return &executor.CommandResult{
 		Command:     result.Command,
 		Stdout:      result.Stdout,
 		Stderr:      result.Stderr,

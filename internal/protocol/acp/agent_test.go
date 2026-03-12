@@ -129,7 +129,8 @@ func TestSpinACPAgent_MethodStubs(t *testing.T) {
 		req := acp.InitializeRequest{
 			ProtocolVersion: acp.ProtocolVersionNumber,
 		}
-		resp, err := acpAgent.Initialize(ctx, req)
+		var resp acp.InitializeResponse
+		resp, err = acpAgent.Initialize(ctx, req)
 		assert.NoError(t, err)
 		assert.Equal(t, acp.ProtocolVersion(acp.ProtocolVersionNumber), resp.ProtocolVersion)
 		assert.NotNil(t, resp.AgentCapabilities)
@@ -139,7 +140,8 @@ func TestSpinACPAgent_MethodStubs(t *testing.T) {
 		req := acp.NewSessionRequest{
 			Cwd: "/tmp/test",
 		}
-		resp, err := acpAgent.NewSession(ctx, req)
+		var resp acp.NewSessionResponse
+		resp, err = acpAgent.NewSession(ctx, req)
 		assert.NoError(t, err)
 		assert.NotEmpty(t, resp.SessionId)
 	})
@@ -172,8 +174,8 @@ func TestSpinACPAgent_MethodStubs(t *testing.T) {
 		req := acp.AuthenticateRequest{
 			MethodId: acp.AuthMethodId("test"),
 		}
-		_, err := acpAgent.Authenticate(ctx, req)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not implemented")
+		_, authErr := acpAgent.Authenticate(ctx, req)
+		assert.Error(t, authErr)
+		assert.Contains(t, authErr.Error(), "not implemented")
 	})
 }

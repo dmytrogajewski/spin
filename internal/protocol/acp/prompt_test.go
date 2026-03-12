@@ -28,6 +28,18 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+var (
+	errFsReadtextfileNotSupportedInStub = errors.New("fs.readTextFile not supported in stub client")
+	errFsWritetextfileNotSupportedInStub = errors.New("fs.writeTextFile not supported in stub client")
+	errTerminalCapabilityNotEnabledInStub = errors.New("terminal capability not enabled in stub client")
+	errTerminalCapabilityNotEnabledInStub2 = errors.New("terminal capability not enabled in stub client")
+	errTerminalCapabilityNotEnabledInStub3 = errors.New("terminal capability not enabled in stub client")
+	errTerminalCapabilityNotEnabledInStub4 = errors.New("terminal capability not enabled in stub client")
+	errTerminalCapabilityNotEnabledInStub5 = errors.New("terminal capability not enabled in stub client")
+	errSomeError = errors.New("some error")
+	errSomeError2 = errors.New("some error")
+)
+
 // TestSpinACPAgent_Prompt_InvalidSession tests Prompt with invalid session ID.
 func TestSpinACPAgent_Prompt_InvalidSession(t *testing.T) {
 	agentInstance := &agent.Agent{}
@@ -118,7 +130,7 @@ func TestAgentEmitterStreams(t *testing.T) {
 
 	defer emitter.Unsubscribe(subID)
 
-	req := &agent.AgentRequest{
+	req := &agent.Request{
 		Input:   "hello emitter",
 		Task:    task.DefaultTask(),
 		History: []message.Message{},
@@ -157,7 +169,7 @@ func TestEmitterManualSubscribe(t *testing.T) {
 
 	defer emitter.Unsubscribe(subID)
 
-	req := &agent.AgentRequest{
+	req := &agent.Request{
 		Input:   "manual subscribe",
 		Task:    task.DefaultTask(),
 		History: []message.Message{},
@@ -193,8 +205,8 @@ func createTestAgentWithEmitter(t *testing.T) (*agent.Agent, *events.EventEmitte
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
-	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
+	securityService := security.NewService(validator, approvalService)
+	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
 		Registry:        tools.NewRegistry(),
 		Validator:       validator,
@@ -202,7 +214,7 @@ func createTestAgentWithEmitter(t *testing.T) (*agent.Agent, *events.EventEmitte
 		Emitter:         emitter,
 		WorkDir:         t.TempDir(),
 	})
-	planningService := planning.NewPlanningService(mockProvider)
+	planningService := planning.NewService(mockProvider)
 
 	agentInstance, err := agent.NewAgent(
 		mockProvider,
@@ -334,22 +346,22 @@ func (c *stubClient) Notifications() []acp.SessionNotification {
 	return result
 }
 
-func (c *stubClient) ReadTextFile(ctx context.Context, params acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
-	return acp.ReadTextFileResponse{}, errors.New("fs.readTextFile not supported in stub client")
+func (c *stubClient) ReadTextFile(_ context.Context, _ acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
+	return acp.ReadTextFileResponse{}, errFsReadtextfileNotSupportedInStub
 }
 
-func (c *stubClient) WriteTextFile(ctx context.Context, params acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
-	return acp.WriteTextFileResponse{}, errors.New("fs.writeTextFile not supported in stub client")
+func (c *stubClient) WriteTextFile(_ context.Context, _ acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
+	return acp.WriteTextFileResponse{}, errFsWritetextfileNotSupportedInStub
 }
 
-func (c *stubClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (c *stubClient) RequestPermission(_ context.Context, _ acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	// Always cancel to keep tests deterministic.
 	return acp.RequestPermissionResponse{
 		Outcome: acp.NewRequestPermissionOutcomeCancelled(),
 	}, nil
 }
 
-func (c *stubClient) SessionUpdate(ctx context.Context, params acp.SessionNotification) error {
+func (c *stubClient) SessionUpdate(_ context.Context, params acp.SessionNotification) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -358,24 +370,24 @@ func (c *stubClient) SessionUpdate(ctx context.Context, params acp.SessionNotifi
 	return nil
 }
 
-func (c *stubClient) CreateTerminal(ctx context.Context, params acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
-	return acp.CreateTerminalResponse{}, errors.New("terminal capability not enabled in stub client")
+func (c *stubClient) CreateTerminal(_ context.Context, _ acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
+	return acp.CreateTerminalResponse{}, errTerminalCapabilityNotEnabledInStub
 }
 
-func (c *stubClient) KillTerminalCommand(ctx context.Context, params acp.KillTerminalCommandRequest) (acp.KillTerminalCommandResponse, error) {
-	return acp.KillTerminalCommandResponse{}, errors.New("terminal capability not enabled in stub client")
+func (c *stubClient) KillTerminalCommand(_ context.Context, _ acp.KillTerminalCommandRequest) (acp.KillTerminalCommandResponse, error) {
+	return acp.KillTerminalCommandResponse{}, errTerminalCapabilityNotEnabledInStub2
 }
 
-func (c *stubClient) TerminalOutput(ctx context.Context, params acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
-	return acp.TerminalOutputResponse{}, errors.New("terminal capability not enabled in stub client")
+func (c *stubClient) TerminalOutput(_ context.Context, _ acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
+	return acp.TerminalOutputResponse{}, errTerminalCapabilityNotEnabledInStub3
 }
 
-func (c *stubClient) ReleaseTerminal(ctx context.Context, params acp.ReleaseTerminalRequest) (acp.ReleaseTerminalResponse, error) {
-	return acp.ReleaseTerminalResponse{}, errors.New("terminal capability not enabled in stub client")
+func (c *stubClient) ReleaseTerminal(_ context.Context, _ acp.ReleaseTerminalRequest) (acp.ReleaseTerminalResponse, error) {
+	return acp.ReleaseTerminalResponse{}, errTerminalCapabilityNotEnabledInStub4
 }
 
-func (c *stubClient) WaitForTerminalExit(ctx context.Context, params acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
-	return acp.WaitForTerminalExitResponse{}, errors.New("terminal capability not enabled in stub client")
+func (c *stubClient) WaitForTerminalExit(_ context.Context, _ acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
+	return acp.WaitForTerminalExitResponse{}, errTerminalCapabilityNotEnabledInStub5
 }
 
 // TestSpinACPAgent_Prompt_ContentBlockConversion tests content block conversion.
@@ -435,7 +447,8 @@ func TestSpinACPAgent_Prompt_ContentBlockConversion(t *testing.T) {
 				Prompt:    tt.blocks,
 			}
 
-			resp, err := acpAgent.Prompt(context.Background(), req)
+			var resp acp.PromptResponse
+			resp, err = acpAgent.Prompt(context.Background(), req)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -766,7 +779,7 @@ func TestMapStopReasonFromError(t *testing.T) {
 	tests := []struct {
 		name string
 		err  error
-		resp *agent.AgentResponse
+		resp *agent.Response
 		want acp.StopReason
 	}{
 		{
@@ -783,15 +796,15 @@ func TestMapStopReasonFromError(t *testing.T) {
 		},
 		{
 			name: "error with response",
-			err:  errors.New("some error"),
-			resp: &agent.AgentResponse{
+			err:  errSomeError,
+			resp: &agent.Response{
 				FinishReason: "max_tokens",
 			},
 			want: acp.StopReasonMaxTokens,
 		},
 		{
 			name: "error without response",
-			err:  errors.New("some error"),
+			err:  errSomeError2,
 			resp: nil,
 			want: acp.StopReasonEndTurn,
 		},

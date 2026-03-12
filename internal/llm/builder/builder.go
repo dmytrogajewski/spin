@@ -13,14 +13,14 @@ import (
 // Builder builds LLM providers from final configuration.
 // NOTE: Config merging now happens in config.Load(), not here.
 type Builder struct {
-	cfg     *config.ConfigV2
+	cfg     *config.V2
 	authMgr *auth.Manager
 	factory *factory.Factory
 }
 
 // NewBuilder creates a new provider builder.
 // Expects cfg to be fully resolved (via config.Load()).
-func NewBuilder(cfg *config.ConfigV2, authMgr *auth.Manager) *Builder {
+func NewBuilder(cfg *config.V2, authMgr *auth.Manager) *Builder {
 	return &Builder{
 		cfg:     cfg,
 		authMgr: authMgr,

@@ -21,8 +21,8 @@ func TestAgent_GetPlanner(t *testing.T) {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
-	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
+	securityService := security.NewService(validator, approvalService)
+	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := NewToolRuntime(ToolRuntimeConfig{
 		Registry:        tools.NewRegistry(),
 		Validator:       validator,
@@ -36,7 +36,7 @@ func TestAgent_GetPlanner(t *testing.T) {
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(llm.NewMockProvider("test")),
+		planning.NewService(llm.NewMockProvider("test")),
 		&Environment{WorkDir: "/tmp"},
 		emitter,
 	)
@@ -68,8 +68,8 @@ func TestAgent_GetPlanner_NoPlanner(t *testing.T) {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	securityService := security.NewSecurityService(validator, approvalService)
-	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
+	securityService := security.NewService(validator, approvalService)
+	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 	toolRuntime := NewToolRuntime(ToolRuntimeConfig{
 		Registry:        tools.NewRegistry(),
 		Validator:       validator,
@@ -83,7 +83,7 @@ func TestAgent_GetPlanner_NoPlanner(t *testing.T) {
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(llm.NewMockProvider("test")),
+		planning.NewService(llm.NewMockProvider("test")),
 		&Environment{WorkDir: "/tmp"},
 		emitter,
 	)

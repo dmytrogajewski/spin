@@ -19,7 +19,7 @@ func (m *Manager) FormatAdaptive(width int) string {
 
 // FormatMedium formats status for medium-width terminals (60-100 columns).
 // Shows: activity, context%, state, provider/model, TPS.
-func (m *Manager) FormatMedium(width int) string {
+func (m *Manager) FormatMedium(_ int) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -71,7 +71,7 @@ func (m *Manager) FormatMedium(width int) string {
 
 // FormatFull formats status for wide terminals (≥100 columns).
 // Shows all fields including context absolute values, conversation ID, and hotkeys.
-func (m *Manager) FormatFull(width int) string {
+func (m *Manager) FormatFull(_ int) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

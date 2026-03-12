@@ -190,7 +190,7 @@ func TestDiscoverCancellation(t *testing.T) {
 		t.Error("expected context cancellation error")
 	}
 
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled, got %v", err)
 	}
 }
@@ -260,7 +260,7 @@ func BenchmarkDiscoverNested(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_, err := Discover(ctx, nestedDir)
+		_, err = Discover(ctx, nestedDir)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -276,17 +276,17 @@ func isError(err, target error) bool {
 
 func TestGetContextInfo_NotRepository(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	gi := NewGitIntegration(true, t.TempDir(), logger)
+	gi := NewIntegration(true, t.TempDir(), logger)
 
 	// Don't initialize - should not be a repository.
 	info := gi.GetContextInfo()
 
 	// Verify basic fields.
-	if info.GitEnabled != false {
+	if info.GitEnabled {
 		t.Errorf("expected GitEnabled=false, got %v", info.GitEnabled)
 	}
 
-	if info.IsRepo != false {
+	if info.IsRepo {
 		t.Errorf("expected IsRepo=false, got %v", info.IsRepo)
 	}
 
@@ -307,7 +307,7 @@ func TestGetContextInfo_NotRepository(t *testing.T) {
 func TestGetContextInfo_Repository(t *testing.T) {
 	tmpDir := setupTestRepo(t)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	gi := NewGitIntegration(true, tmpDir, logger)
+	gi := NewIntegration(true, tmpDir, logger)
 
 	ctx := context.Background()
 	err := gi.Initialize(ctx)
@@ -318,11 +318,11 @@ func TestGetContextInfo_Repository(t *testing.T) {
 	info := gi.GetContextInfo()
 
 	// Verify basic fields.
-	if info.GitEnabled != true {
+	if !info.GitEnabled {
 		t.Errorf("expected GitEnabled=true, got %v", info.GitEnabled)
 	}
 
-	if info.IsRepo != true {
+	if !info.IsRepo {
 		t.Errorf("expected IsRepo=true, got %v", info.IsRepo)
 	}
 
@@ -337,7 +337,7 @@ func TestGetContextInfo_Repository(t *testing.T) {
 	}
 
 	// Verify clean repository.
-	if info.IsClean != true {
+	if !info.IsClean {
 		t.Errorf("expected IsClean=true for clean repo, got %v", info.IsClean)
 	}
 
@@ -353,7 +353,7 @@ func TestGetContextInfo_Repository(t *testing.T) {
 func TestGetContextInfo_WithModifications(t *testing.T) {
 	tmpDir := setupTestRepoWithModifications(t)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	gi := NewGitIntegration(true, tmpDir, logger)
+	gi := NewIntegration(true, tmpDir, logger)
 
 	ctx := context.Background()
 	err := gi.Initialize(ctx)
@@ -364,16 +364,16 @@ func TestGetContextInfo_WithModifications(t *testing.T) {
 	info := gi.GetContextInfo()
 
 	// Verify repository fields.
-	if info.GitEnabled != true {
+	if !info.GitEnabled {
 		t.Errorf("expected GitEnabled=true, got %v", info.GitEnabled)
 	}
 
-	if info.IsRepo != true {
+	if !info.IsRepo {
 		t.Errorf("expected IsRepo=true, got %v", info.IsRepo)
 	}
 
 	// Verify dirty repository.
-	if info.IsClean != false {
+	if info.IsClean {
 		t.Errorf("expected IsClean=false for dirty repo, got %v", info.IsClean)
 	}
 
@@ -391,7 +391,7 @@ func TestGetContextInfo_WithModifications(t *testing.T) {
 func TestGetContextInfo_AllFields(t *testing.T) {
 	tmpDir := setupTestRepoWithModifications(t)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	gi := NewGitIntegration(true, tmpDir, logger)
+	gi := NewIntegration(true, tmpDir, logger)
 
 	ctx := context.Background()
 	err := gi.Initialize(ctx)
@@ -402,11 +402,11 @@ func TestGetContextInfo_AllFields(t *testing.T) {
 	info := gi.GetContextInfo()
 
 	// Verify all boolean fields are set.
-	if info.GitEnabled == false {
+	if !info.GitEnabled {
 		t.Error("expected GitEnabled=true")
 	}
 
-	if info.IsRepo == false {
+	if !info.IsRepo {
 		t.Error("expected IsRepo=true")
 	}
 
@@ -437,21 +437,21 @@ func TestGetContextInfo_AllFields(t *testing.T) {
 	}
 }
 
-func TestGitContextInfo_JSON(t *testing.T) {
+func TestContextInfo_JSON(t *testing.T) {
 	tests := []struct {
 		name string
-		info GitContextInfo
+		info ContextInfo
 	}{
 		{
 			name: "not a repository",
-			info: GitContextInfo{
+			info: ContextInfo{
 				GitEnabled: false,
 				IsRepo:     false,
 			},
 		},
 		{
 			name: "clean repository",
-			info: GitContextInfo{
+			info: ContextInfo{
 				GitEnabled: true,
 				IsRepo:     true,
 				Branch:     "main",
@@ -461,7 +461,7 @@ func TestGitContextInfo_JSON(t *testing.T) {
 		},
 		{
 			name: "dirty repository",
-			info: GitContextInfo{
+			info: ContextInfo{
 				GitEnabled:     true,
 				IsRepo:         true,
 				Branch:         "feature/test",
@@ -477,7 +477,7 @@ func TestGitContextInfo_JSON(t *testing.T) {
 		},
 		{
 			name: "detached HEAD",
-			info: GitContextInfo{
+			info: ContextInfo{
 				GitEnabled: true,
 				IsRepo:     true,
 				Commit:     "xyz789",
@@ -495,7 +495,7 @@ func TestGitContextInfo_JSON(t *testing.T) {
 			}
 
 			// Unmarshal back.
-			var decoded GitContextInfo
+			var decoded ContextInfo
 			err = json.Unmarshal(data, &decoded)
 			if err != nil {
 				t.Fatalf("Unmarshal failed: %v", err)

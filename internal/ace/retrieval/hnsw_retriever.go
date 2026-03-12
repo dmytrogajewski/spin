@@ -1,3 +1,4 @@
+// Package retrieval provides HNSW-based vector retrieval.
 package retrieval
 
 import (
@@ -11,6 +12,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 )
+
+var ErrBulletHasNoEmbedding = errors.New("bullet has no embedding")
 
 // HNSWRetriever uses HNSW (Hierarchical Navigable Small World) graph for fast vector search.
 // Provides O(log n) search complexity instead of O(n) with linear scan.
@@ -43,7 +46,7 @@ func (r *HNSWRetriever) rebuildIndex() {
 	r.indexMap = make(map[string]*bullet.Bullet)
 
 	// Add all bullets with embeddings to the graph.
-	allBullets := r.playbook.List(func(b *bullet.Bullet) bool { return true })
+	allBullets := r.playbook.List(func(_ *bullet.Bullet) bool { return true })
 	for _, b := range allBullets {
 		if len(b.Embedding) == 0 {
 			continue // Skip bullets without embeddings.
@@ -130,7 +133,7 @@ func (r *HNSWRetriever) RetrieveWithScores(ctx context.Context, query string, to
 // This is more efficient than rebuilding the entire index.
 func (r *HNSWRetriever) AddBullet(b *bullet.Bullet) error {
 	if len(b.Embedding) == 0 {
-		return errors.New("bullet has no embedding")
+		return ErrBulletHasNoEmbedding
 	}
 
 	// Add to HNSW graph.

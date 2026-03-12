@@ -13,6 +13,15 @@ import (
 	"sync"
 )
 
+var (
+	ErrPathExistsButIsNotA = errors.New("path exists but is not a directory")
+	ErrKeyCannotBeEmpty = errors.New("key cannot be empty")
+	ErrKeyCannotBeEmpty2 = errors.New("key cannot be empty")
+	ErrNotFound = errors.New("not found")
+	ErrKeyCannotBeEmpty3 = errors.New("key cannot be empty")
+	ErrKeyCannotBeEmpty4 = errors.New("key cannot be empty")
+)
+
 // Store is a generic key-value store interface.
 // Domain packages can use this or define their own specialized interfaces.
 type Store[T any] interface {
@@ -66,7 +75,7 @@ func NewFileStore[T any](cfg FileStoreConfig) (*FileStore[T], error) {
 	// Check if path exists and is a file (not directory).
 	info, err := os.Stat(baseDir)
 	if err == nil && !info.IsDir() {
-		return nil, fmt.Errorf("path exists but is not a directory: %s", baseDir)
+return nil, fmt.Errorf("path exists but is not a directory: %s: %w", baseDir, ErrPathExistsButIsNotA)
 	}
 
 	// Create directory if it doesn't exist.
@@ -89,7 +98,7 @@ func NewFileStore[T any](cfg FileStoreConfig) (*FileStore[T], error) {
 // Save persists data with atomic write.
 func (fs *FileStore[T]) Save(key string, data T) error {
 	if key == "" {
-		return errors.New("key cannot be empty")
+		return ErrKeyCannotBeEmpty
 	}
 
 	fs.mu.Lock()
@@ -125,7 +134,7 @@ func (fs *FileStore[T]) Load(key string) (T, error) {
 	var zero T
 
 	if key == "" {
-		return zero, errors.New("key cannot be empty")
+		return zero, ErrKeyCannotBeEmpty2
 	}
 
 	fs.mu.RLock()
@@ -136,7 +145,7 @@ func (fs *FileStore[T]) Load(key string) (T, error) {
 	jsonData, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return zero, fmt.Errorf("not found: %s", key)
+return zero, fmt.Errorf("not found: %s: %w", key, ErrNotFound)
 		}
 
 		return zero, fmt.Errorf("read file: %w", err)
@@ -154,7 +163,7 @@ func (fs *FileStore[T]) Load(key string) (T, error) {
 // Delete removes data by key.
 func (fs *FileStore[T]) Delete(key string) error {
 	if key == "" {
-		return errors.New("key cannot be empty")
+		return ErrKeyCannotBeEmpty3
 	}
 
 	fs.mu.Lock()
@@ -172,7 +181,7 @@ func (fs *FileStore[T]) Delete(key string) error {
 // Exists checks if key exists.
 func (fs *FileStore[T]) Exists(key string) (bool, error) {
 	if key == "" {
-		return false, errors.New("key cannot be empty")
+		return false, ErrKeyCannotBeEmpty4
 	}
 
 	fs.mu.RLock()
@@ -189,7 +198,7 @@ func (fs *FileStore[T]) Exists(key string) (bool, error) {
 		return false, nil
 	}
 
-	return false, err
+	return false, fmt.Errorf("stat file: %w", err)
 }
 
 // List returns all keys.

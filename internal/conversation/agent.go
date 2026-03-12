@@ -67,11 +67,12 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 	planningSvc := agentBuilder.BuildPlanningService()
 
 	// Agent options using builder helper.
-	opts := agentBuilder.BuildAgentOptions()
+	opts := agentBuilder.BuildOptions()
 
 	// ACE service using builder helper.
 	if b.cfg != nil && b.cfg.ACE.Enabled {
-		aceSvc, err := agentBuilder.BuildACEService()
+		var aceSvc *agent.ACEService
+		aceSvc, err = agentBuilder.BuildACEService()
 		if err != nil {
 			if b.logger != nil {
 				b.logger.Warn("ACE init failed, continuing", "err", err)
@@ -79,7 +80,7 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 		} else {
 			opts = append(opts, agent.WithACEService(aceSvc))
 			// Also pass ACE config to agent so it can emit events
-			// Convert ConfigV2 ACE to agent.ACEConfig.
+			// Convert V2 ACE to agent.ACEConfig.
 			aceConfig := agent.ConvertACEConfig(&b.cfg.ACE)
 			opts = append(opts, agent.WithACEConfig(aceConfig))
 
@@ -103,7 +104,7 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 		agentsMDSvc := agentBuilder.BuildAgentsMDService(gitRoot)
 		if agentsMDSvc != nil {
 			// Load AGENTS.md content (errors are logged but don't fail startup).
-			err := agentsMDSvc.Load(context.Background())
+			err = agentsMDSvc.Load(context.Background())
 			if err != nil {
 				if b.logger != nil {
 					b.logger.Warn("failed to load AGENTS.md", "error", err)

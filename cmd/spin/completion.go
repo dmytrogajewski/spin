@@ -1,10 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 )
+
+var ErrUnsupportedShell = errors.New("unsupported shell")
 
 // newCompletionCmd creates the completion command.
 func newCompletionCmd() *cobra.Command {
@@ -61,7 +64,7 @@ PowerShell:
 			case "powershell":
 				return cmd.Root().GenPowerShellCompletionWithDesc(cmd.OutOrStdout())
 			default:
-				return fmt.Errorf("unsupported shell: %s", args[0])
+return fmt.Errorf("unsupported shell: %s: %w", args[0], ErrUnsupportedShell)
 			}
 		},
 	}

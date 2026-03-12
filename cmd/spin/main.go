@@ -58,7 +58,11 @@ func handleInternalFlags() int {
 func execute() error {
 	cmd := newRootCmd()
 
-	return cmd.Execute()
+	if err := cmd.Execute(); err != nil {
+		return fmt.Errorf("executing command: %w", err)
+	}
+
+	return nil
 }
 
 // runApplyPatchMode is now implemented in apply_patch.go.

@@ -130,7 +130,7 @@ func TestProvider_Complete(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"id": "chatcmpl-123",
 			"object": "chat.completion",
 			"created": 1677652288,
@@ -203,7 +203,7 @@ func TestProvider_Stream(t *testing.T) {
 			"data: " + `{"id":"1","choices":[{"delta":{"content":" there"}}]}` + "\n\n" +
 			"data: [DONE]\n\n"
 
-		w.Write([]byte(data))
+		_, _ = w.Write([]byte(data))
 	}))
 	defer server.Close()
 
@@ -245,7 +245,7 @@ func TestProvider_Models(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"data": [
 				{"id": "llama2", "created": 1677652288},
 				{"id": "mistral", "created": 1677652289}
@@ -296,9 +296,9 @@ func TestProvider_DefaultBaseURL(t *testing.T) {
 
 // TestProvider_ErrorHandling tests error propagation.
 func TestProvider_ErrorHandling(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error": {"message": "Unauthorized"}}`))
+		_, _ = w.Write([]byte(`{"error": {"message": "Unauthorized"}}`))
 	}))
 	defer server.Close()
 
@@ -324,10 +324,10 @@ func TestProvider_ErrorHandling(t *testing.T) {
 
 // TestProvider_ContextCancellation tests context cancellation propagation.
 func TestProvider_ContextCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// This should not be reached due to cancellation.
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"choices":[{"message":{"content":"test"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"test"}}]}`))
 	}))
 	defer server.Close()
 

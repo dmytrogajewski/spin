@@ -63,11 +63,17 @@ func (pd *PatternDetector) analyzeInternal(snapshots []Snapshot) []PatternResult
 type PatternType int
 
 const (
+	// PatternNone defines a PatternNone constant.
 	PatternNone PatternType = iota
+	// PatternRepeatedPhrase defines a PatternRepeatedPhrase constant.
 	PatternRepeatedPhrase
+	// PatternCircularReasoning detects circular reasoning patterns.
 	PatternCircularReasoning
+	// PatternToolStuck detects stuck tool patterns.
 	PatternToolStuck
+	// PatternErrorLoop detects error loop patterns.
 	PatternErrorLoop
+	// PatternOscillatingTools detects oscillating tool patterns.
 	PatternOscillatingTools
 )
 

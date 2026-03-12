@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"context"
 	"fmt"
 	"sync"
@@ -9,6 +10,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
+)
+
+var (
+	ErrToolNotFound                        = errors.New("tool not found")
+	ErrApprovalRequiredButNoApprovalHandler = errors.New("approval required but no approval handler configured")
+	ErrOperationDenied                     = errors.New("operation denied")
 )
 
 // ToolCall is an alias for message.ToolCall to avoid duplication.
@@ -91,7 +98,7 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 			names[i] = at.Name()
 		}
 
-		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("tool not found: %q is not a valid tool. Available tools: %v", call.Function.Name, names))
+		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("tool not found: %q is not a valid tool. Available tools: %v: %w", call.Function.Name, names, ErrToolNotFound))
 
 		return &result, nil
 	}
@@ -100,7 +107,7 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 		needs := toolWithApproval.CheckApproval(args)
 		if needs.Required {
 			if t.approvalService == nil {
-				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval required but no approval handler configured: %s (risk: %s)", needs.Reason, needs.Risk))
+				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval required but no approval handler configured: %s (risk: %s): %w", needs.Reason, needs.Risk, ErrApprovalRequiredButNoApprovalHandler))
 
 				return &result, nil
 			}
@@ -116,15 +123,15 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 			// use the same tool call ID as the tool call events.
 			operation := security.NewOperationWithToolCallID(cmd, needs.Reason, t.workDir, call.ID)
 
-			_, approved, err := t.approvalService.RequestApproval(ctx, operation)
-			if err != nil {
-				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval request failed: %w", err))
+			_, approved, approvalErr := t.approvalService.RequestApproval(ctx, operation)
+			if approvalErr != nil {
+				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval request failed: %w", approvalErr))
 
 				return &result, nil
 			}
 
 			if !approved {
-				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("operation denied: %s (risk: %s)", needs.Reason, needs.Risk))
+				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("operation denied: %s (risk: %s): %w", needs.Reason, needs.Risk, ErrOperationDenied))
 
 				return &result, nil
 			}

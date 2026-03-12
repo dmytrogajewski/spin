@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -39,17 +40,17 @@ func Discover(ctx context.Context, startPath string) (*Repository, error) {
 		// Check context cancellation.
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, fmt.Errorf("discover git repository: %w", ctx.Err())
 		default:
 		}
 
 		// Try to open repository at current path.
-		repo, err := gogit.PlainOpen(absPath)
-		if err == nil {
+		repo, openErr := gogit.PlainOpen(absPath)
+		if openErr == nil {
 			// Successfully opened repository.
-			worktree, err := repo.Worktree()
-			if err != nil {
-				return nil, fmt.Errorf("get worktree: %w", err)
+			worktree, wtErr := repo.Worktree()
+			if wtErr != nil {
+				return nil, fmt.Errorf("get worktree: %w", wtErr)
 			}
 
 			return &Repository{
@@ -59,9 +60,9 @@ func Discover(ctx context.Context, startPath string) (*Repository, error) {
 		}
 
 		// Check if this was a "not a repository" error or something else.
-		if err != gogit.ErrRepositoryNotExists {
+		if !errors.Is(openErr, gogit.ErrRepositoryNotExists) {
 			// Some other error occurred, return it.
-			return nil, fmt.Errorf("open repository: %w", err)
+			return nil, fmt.Errorf("open repository: %w", openErr)
 		}
 
 		// Not a repo at this level, try parent directory.

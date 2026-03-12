@@ -413,7 +413,7 @@ func TestIgnoreHandler_LoadIgnoreFile_LongPatternList(t *testing.T) {
 
 	// Write 1000 patterns.
 	for i := range 1000 {
-		f.WriteString("pattern_" + string(rune(i)) + "\n")
+		_, _ = f.WriteString("pattern_" + string(rune(i)) + "\n")
 	}
 
 	f.Close()
@@ -437,7 +437,7 @@ func TestIgnoreHandler_IsIgnored_PerformanceCheck(t *testing.T) {
 
 	// Write 100 patterns.
 	for i := range 100 {
-		f.WriteString("*.pattern" + string(rune(i)) + "\n")
+		_, _ = f.WriteString("*.pattern" + string(rune(i)) + "\n")
 	}
 
 	f.Close()
@@ -480,7 +480,7 @@ func BenchmarkIgnoreHandler_IsIgnored_10Patterns(b *testing.B) {
 	}
 	content += contentSb476.String()
 
-	os.WriteFile(gitignorePath, []byte(content), 0644)
+	_ = os.WriteFile(gitignorePath, []byte(content), 0644)
 
 	handler, _ := NewIgnoreHandler(tmpDir)
 
@@ -503,7 +503,7 @@ func BenchmarkIgnoreHandler_IsIgnored_100Patterns(b *testing.B) {
 	}
 	content += contentSb497.String()
 
-	os.WriteFile(gitignorePath, []byte(content), 0644)
+	_ = os.WriteFile(gitignorePath, []byte(content), 0644)
 
 	handler, _ := NewIgnoreHandler(tmpDir)
 
@@ -526,7 +526,7 @@ func BenchmarkIgnoreHandler_IsIgnored_1000Patterns(b *testing.B) {
 	}
 	content += contentSb518.String()
 
-	os.WriteFile(gitignorePath, []byte(content), 0644)
+	_ = os.WriteFile(gitignorePath, []byte(content), 0644)
 
 	handler, _ := NewIgnoreHandler(tmpDir)
 
@@ -541,7 +541,7 @@ func BenchmarkIgnoreHandler_IsIgnored_Match(b *testing.B) {
 	tmpDir := b.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	os.WriteFile(gitignorePath, []byte("*.log\n"), 0644)
+	_ = os.WriteFile(gitignorePath, []byte("*.log\n"), 0644)
 
 	handler, _ := NewIgnoreHandler(tmpDir)
 

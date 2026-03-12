@@ -100,7 +100,7 @@ func newMockOllamaServer(t *testing.T, handler func(model string, input string) 
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 }
 
@@ -175,7 +175,7 @@ func TestOllamaEmbedder_Embed_Similarity(t *testing.T) {
 		"Quantum physics and relativity": embed3Data,
 	}
 
-	server := newMockOllamaServer(t, func(model, input string) ([]float64, error) {
+	server := newMockOllamaServer(t, func(_, input string) ([]float64, error) {
 		emb, ok := embeddings[input]
 		require.True(t, ok, "Unexpected input text: %s", input)
 

@@ -6,6 +6,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/message"
 )
 
+var (
+	ErrToolCallCannotBeNil = errors.New("tool call cannot be nil")
+	ErrToolCallIdCannotBeEmpty = errors.New("tool call ID cannot be empty")
+	ErrToolFunctionNameCannotBeEmpty = errors.New("tool function name cannot be empty")
+)
+
 // ValidateToolCall validates the tool call structure.
 // Returns an error if the tool call is invalid.
 //
@@ -15,15 +21,15 @@ import (
 //   - Tool function name must not be empty
 func ValidateToolCall(call *message.ToolCall) error {
 	if call == nil {
-		return errors.New("tool call cannot be nil")
+		return ErrToolCallCannotBeNil
 	}
 
 	if call.ID == "" {
-		return errors.New("tool call ID cannot be empty")
+		return ErrToolCallIdCannotBeEmpty
 	}
 
 	if call.Function.Name == "" {
-		return errors.New("tool function name cannot be empty")
+		return ErrToolFunctionNameCannotBeEmpty
 	}
 
 	return nil

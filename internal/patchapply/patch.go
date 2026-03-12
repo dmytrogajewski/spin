@@ -26,6 +26,7 @@ type AddFile struct {
 	Lines    []string
 }
 
+// Path implements the Path operation.
 func (a *AddFile) Path() string { return a.FilePath }
 
 // DeleteFile represents an operation to delete an existing file.
@@ -33,6 +34,7 @@ type DeleteFile struct {
 	FilePath string
 }
 
+// Path implements the Path operation.
 func (d *DeleteFile) Path() string { return d.FilePath }
 
 // UpdateFile represents an operation to modify an existing file.
@@ -43,6 +45,7 @@ type UpdateFile struct {
 	Hunks    []Hunk
 }
 
+// Path implements the Path operation.
 func (u UpdateFile) Path() string { return u.FilePath }
 
 // Hunk represents a change section within a file update.

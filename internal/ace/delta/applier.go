@@ -1,3 +1,4 @@
+// Package delta provides delta-based change tracking and application.
 package delta
 
 import (
@@ -11,10 +12,20 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 )
 
-// DeltaApplier applies deltas to bullets in a playbook.
-type DeltaApplier struct {
+var (
+	ErrBulletNotFound = errors.New("bullet  not found")
+	ErrContentFieldIsRequiredForOpupdatecontent = errors.New("content field is required for OpUpdateContent")
+	ErrTagKeyAndTagValueFields = errors.New("tag_key and tag_value fields are required for OpAddTag")
+	ErrTagKeyFieldIsRequiredFor = errors.New("tag_key field is required for OpRemoveTag")
+	ErrEmbeddingFieldIsRequiredForOpupdateembedding = errors.New("embedding field is required for OpUpdateEmbedding")
+	ErrUnknownOperation = errors.New("unknown operation")
+)
+
+// Applier applies deltas to bullets in a playbook.
+type Applier struct {
 	playbook *playbook.Playbook
-	history  *DeltaHistory
+	history  *History
+	logger   *slog.Logger
 }
 
 // ApplyResult contains the result of applying a delta.
@@ -28,17 +39,18 @@ type ApplyResult struct {
 	AppliedAt time.Time
 }
 
-// NewDeltaApplier creates a new delta applier.
-func NewDeltaApplier(pb *playbook.Playbook) *DeltaApplier {
-	return &DeltaApplier{
+// NewApplier creates a new delta applier.
+func NewApplier(pb *playbook.Playbook) *Applier {
+	return &Applier{
 		playbook: pb,
-		history:  NewDeltaHistory(),
+		history:  NewHistory(),
+		logger:   slog.Default(),
 	}
 }
 
 // Apply applies a single delta to the playbook.
-func (a *DeltaApplier) Apply(ctx context.Context, delta Delta) (*ApplyResult, error) {
-	slog.Debug("Applying delta operation",
+func (a *Applier) Apply(ctx context.Context, delta Delta) (*ApplyResult, error) {
+	a.logger.DebugContext(ctx, "Applying delta operation",
 		"delta_id", delta.ID,
 		"bullet_id", delta.BulletID,
 		"operation", delta.Operation,
@@ -48,8 +60,8 @@ func (a *DeltaApplier) Apply(ctx context.Context, delta Delta) (*ApplyResult, er
 	// Get bullet from playbook.
 	b, exists := a.playbook.Get(delta.BulletID)
 	if !exists {
-		err := fmt.Errorf("bullet %s not found", delta.BulletID)
-		slog.Warn("Delta apply failed: bullet not found",
+err := fmt.Errorf("bullet %s not found: %w", delta.BulletID, ErrBulletNotFound)
+		a.logger.WarnContext(ctx, "Delta apply failed: bullet not found",
 			"delta_id", delta.ID,
 			"bullet_id", delta.BulletID)
 
@@ -66,9 +78,9 @@ func (a *DeltaApplier) Apply(ctx context.Context, delta Delta) (*ApplyResult, er
 	modified := b.Clone()
 
 	// Apply delta based on operation.
-	oldValue, newValue, err := applyDeltaOperation(modified, delta)
+	oldValue, newValue, err := applyOperation(modified, delta)
 	if err != nil {
-		slog.Warn("Delta operation failed",
+		a.logger.WarnContext(ctx, "Delta operation failed",
 			"delta_id", delta.ID,
 			"operation", delta.Operation,
 			"error", err)
@@ -82,7 +94,7 @@ func (a *DeltaApplier) Apply(ctx context.Context, delta Delta) (*ApplyResult, er
 		}, err
 	}
 
-	slog.Debug("Delta operation applied",
+	a.logger.DebugContext(ctx, "Delta operation applied",
 		"operation", delta.Operation,
 		"old_value", oldValue,
 		"new_value", newValue)
@@ -90,7 +102,7 @@ func (a *DeltaApplier) Apply(ctx context.Context, delta Delta) (*ApplyResult, er
 	// Update bullet in playbook.
 	err = a.playbook.Update(ctx, modified)
 	if err != nil {
-		slog.Warn("Failed to update bullet in playbook",
+		a.logger.WarnContext(ctx, "Failed to update bullet in playbook",
 			"delta_id", delta.ID,
 			"bullet_id", delta.BulletID,
 			"error", err)
@@ -107,7 +119,7 @@ func (a *DeltaApplier) Apply(ctx context.Context, delta Delta) (*ApplyResult, er
 	// Record delta in history.
 	a.history.Record(delta)
 
-	slog.Debug("Delta applied successfully",
+	a.logger.DebugContext(ctx, "Delta applied successfully",
 		"delta_id", delta.ID,
 		"bullet_id", delta.BulletID,
 		"operation", delta.Operation)
@@ -123,16 +135,16 @@ func (a *DeltaApplier) Apply(ctx context.Context, delta Delta) (*ApplyResult, er
 }
 
 // GetHistory returns the delta history.
-func (a *DeltaApplier) GetHistory() *DeltaHistory {
+func (a *Applier) GetHistory() *History {
 	return a.history
 }
 
-// applyDeltaOperation applies a delta operation to a bullet (copy-on-write).
-func applyDeltaOperation(b *bullet.Bullet, delta Delta) (oldValue, newValue any, err error) {
+// applyOperation applies a delta operation to a bullet (copy-on-write).
+func applyOperation(b *bullet.Bullet, delta Delta) (oldValue, newValue any, err error) {
 	switch delta.Operation {
 	case OpUpdateContent:
 		if delta.Fields.Content == nil {
-			return nil, nil, errors.New("content field is required for OpUpdateContent")
+			return nil, nil, ErrContentFieldIsRequiredForOpupdatecontent
 		}
 
 		oldValue = b.Content
@@ -151,7 +163,7 @@ func applyDeltaOperation(b *bullet.Bullet, delta Delta) (oldValue, newValue any,
 
 	case OpAddTag:
 		if delta.Fields.TagKey == nil || delta.Fields.TagValue == nil {
-			return nil, nil, errors.New("tag_key and tag_value fields are required for OpAddTag")
+			return nil, nil, ErrTagKeyAndTagValueFields
 		}
 
 		if b.Tags == nil {
@@ -164,7 +176,7 @@ func applyDeltaOperation(b *bullet.Bullet, delta Delta) (oldValue, newValue any,
 
 	case OpRemoveTag:
 		if delta.Fields.TagKey == nil {
-			return nil, nil, errors.New("tag_key field is required for OpRemoveTag")
+			return nil, nil, ErrTagKeyFieldIsRequiredFor
 		}
 
 		if b.Tags == nil {
@@ -178,7 +190,7 @@ func applyDeltaOperation(b *bullet.Bullet, delta Delta) (oldValue, newValue any,
 
 	case OpUpdateEmbedding:
 		if delta.Fields.Embedding == nil {
-			return nil, nil, errors.New("embedding field is required for OpUpdateEmbedding")
+			return nil, nil, ErrEmbeddingFieldIsRequiredForOpupdateembedding
 		}
 
 		oldValue = b.Embedding
@@ -186,7 +198,7 @@ func applyDeltaOperation(b *bullet.Bullet, delta Delta) (oldValue, newValue any,
 		newValue = b.Embedding
 
 	default:
-		return nil, nil, fmt.Errorf("unknown operation: %s", delta.Operation)
+return nil, nil, fmt.Errorf("unknown operation: %s: %w", delta.Operation, ErrUnknownOperation)
 	}
 
 	// Update timestamp.

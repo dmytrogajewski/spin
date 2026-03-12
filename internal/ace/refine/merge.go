@@ -9,6 +9,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 )
 
+var ErrSourceAndTargetBulletsCannotBe = errors.New("source and target bullets cannot be nil")
+
 // MergePair represents two bullets to merge.
 type MergePair struct {
 	SourceID   string  // Bullet to merge from (removed during merge).
@@ -71,9 +73,9 @@ func (m *MergeEngine) FindMergeCandidates(ctx context.Context, bullets []*bullet
 
 // MergeBullets combines source into target.
 // Returns the result with kept and removed bullet IDs.
-func (m *MergeEngine) MergeBullets(ctx context.Context, source, target *bullet.Bullet) (*MergeResult, error) {
+func (m *MergeEngine) MergeBullets(_ context.Context, source, target *bullet.Bullet) (*MergeResult, error) {
 	if source == nil || target == nil {
-		return nil, errors.New("source and target bullets cannot be nil")
+		return nil, ErrSourceAndTargetBulletsCannotBe
 	}
 
 	// Determine which to keep based on utility score.

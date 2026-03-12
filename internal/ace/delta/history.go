@@ -5,32 +5,32 @@ import (
 	"time"
 )
 
-// DeltaHistory manages versioned delta records.
-type DeltaHistory struct {
+// History manages versioned delta records.
+type History struct {
 	deltas   []Delta          // Ordered list of deltas (append-only).
 	byBullet map[string][]int // Index: bulletID → delta indices.
 	mu       sync.RWMutex     // Thread-safe access.
 }
 
-// DeltaHistoryStats contains history statistics.
-type DeltaHistoryStats struct {
+// HistoryStats contains history statistics.
+type HistoryStats struct {
 	TotalDeltas       int
 	UniqueBullets     int
 	OldestDelta       time.Time
 	NewestDelta       time.Time
-	DeltasByOperation map[DeltaOperation]int
+	DeltasByOperation map[Operation]int
 }
 
-// NewDeltaHistory creates a new delta history.
-func NewDeltaHistory() *DeltaHistory {
-	return &DeltaHistory{
+// NewHistory creates a new delta history.
+func NewHistory() *History {
+	return &History{
 		deltas:   make([]Delta, 0),
 		byBullet: make(map[string][]int),
 	}
 }
 
 // Record adds a delta to the history.
-func (h *DeltaHistory) Record(delta Delta) {
+func (h *History) Record(delta Delta) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -43,7 +43,7 @@ func (h *DeltaHistory) Record(delta Delta) {
 }
 
 // GetByBullet returns all deltas for a bullet.
-func (h *DeltaHistory) GetByBullet(bulletID string) []Delta {
+func (h *History) GetByBullet(bulletID string) []Delta {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -61,7 +61,7 @@ func (h *DeltaHistory) GetByBullet(bulletID string) []Delta {
 }
 
 // GetRecent returns the N most recent deltas.
-func (h *DeltaHistory) GetRecent(count int) []Delta {
+func (h *History) GetRecent(count int) []Delta {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -82,7 +82,7 @@ func (h *DeltaHistory) GetRecent(count int) []Delta {
 }
 
 // GetSince returns all deltas since a timestamp.
-func (h *DeltaHistory) GetSince(since time.Time) []Delta {
+func (h *History) GetSince(since time.Time) []Delta {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -98,14 +98,14 @@ func (h *DeltaHistory) GetSince(since time.Time) []Delta {
 }
 
 // Stats returns history statistics.
-func (h *DeltaHistory) Stats() DeltaHistoryStats {
+func (h *History) Stats() HistoryStats {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	stats := DeltaHistoryStats{
+	stats := HistoryStats{
 		TotalDeltas:       len(h.deltas),
 		UniqueBullets:     len(h.byBullet),
-		DeltasByOperation: make(map[DeltaOperation]int),
+		DeltasByOperation: make(map[Operation]int),
 	}
 
 	if stats.TotalDeltas == 0 {
@@ -123,7 +123,7 @@ func (h *DeltaHistory) Stats() DeltaHistoryStats {
 }
 
 // Clear removes all history (use with caution).
-func (h *DeltaHistory) Clear() {
+func (h *History) Clear() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -132,7 +132,7 @@ func (h *DeltaHistory) Clear() {
 }
 
 // Len returns the total number of deltas in history.
-func (h *DeltaHistory) Len() int {
+func (h *History) Len() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 

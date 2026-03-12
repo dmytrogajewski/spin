@@ -455,7 +455,7 @@ func BenchmarkSearcher_IndexAsync_100(b *testing.B) {
 
 	for range b.N {
 		s, _ := NewSearcher(root)
-		s.IndexAsync(context.Background())
+		_ = s.IndexAsync(context.Background())
 	}
 }
 
@@ -474,7 +474,7 @@ func BenchmarkSearcher_IndexAsync_1000(b *testing.B) {
 
 	for range b.N {
 		s, _ := NewSearcher(root)
-		s.IndexAsync(context.Background())
+		_ = s.IndexAsync(context.Background())
 	}
 }
 
@@ -490,7 +490,7 @@ func BenchmarkSearcher_Search_100(b *testing.B) {
 	createTestFiles(&testing.T{}, root, files)
 
 	s, _ := NewSearcher(root)
-	s.IndexAsync(context.Background())
+	_ = s.IndexAsync(context.Background())
 
 	b.ResetTimer()
 
@@ -511,7 +511,7 @@ func BenchmarkSearcher_Search_10000(b *testing.B) {
 	createTestFiles(&testing.T{}, root, files)
 
 	s, _ := NewSearcher(root)
-	s.IndexAsync(context.Background())
+	_ = s.IndexAsync(context.Background())
 
 	b.ResetTimer()
 

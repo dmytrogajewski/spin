@@ -1,9 +1,18 @@
 package tools
 
 import (
+	"errors"
 	"encoding/json"
 	"fmt"
 	"sort"
+)
+
+var (
+	ErrParameterNotFound = errors.New("parameter  not found")
+	ErrParameterNotFound2 = errors.New("parameter  not found")
+	ErrParameterNotFound3 = errors.New("parameter  not found")
+	ErrParameterNotFound4 = errors.New("parameter  not found")
+	ErrParameterNotFound5 = errors.New("parameter  not found")
 )
 
 // ToolParameters provides type-safe access to tool parameters.
@@ -74,7 +83,7 @@ func (p ToolParameters) Keys() []string {
 func (p ToolParameters) GetString(key string) (string, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
-		return "", fmt.Errorf("parameter %q not found", key)
+return "", fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
 	}
 
 	var value string
@@ -91,7 +100,7 @@ func (p ToolParameters) GetString(key string) (string, error) {
 func (p ToolParameters) GetInt(key string) (int, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
-		return 0, fmt.Errorf("parameter %q not found", key)
+return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound2)
 	}
 
 	var value int
@@ -108,7 +117,7 @@ func (p ToolParameters) GetInt(key string) (int, error) {
 func (p ToolParameters) GetBool(key string) (bool, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
-		return false, fmt.Errorf("parameter %q not found", key)
+return false, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound3)
 	}
 
 	var value bool
@@ -125,7 +134,7 @@ func (p ToolParameters) GetBool(key string) (bool, error) {
 func (p ToolParameters) GetFloat64(key string) (float64, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
-		return 0, fmt.Errorf("parameter %q not found", key)
+return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound4)
 	}
 
 	var value float64
@@ -142,7 +151,7 @@ func (p ToolParameters) GetFloat64(key string) (float64, error) {
 func (p ToolParameters) GetObject(key string, dest any) error {
 	rawValue, exists := p.raw[key]
 	if !exists {
-		return fmt.Errorf("parameter %q not found", key)
+return fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound5)
 	}
 
 	err := json.Unmarshal(rawValue, dest)
@@ -199,10 +208,19 @@ func (p ToolParameters) GetFloat64Or(key string, defaultValue float64) float64 {
 
 // MarshalJSON implements json.Marshaler.
 func (p ToolParameters) MarshalJSON() ([]byte, error) {
-	return json.Marshal(p.raw)
+	data, err := json.Marshal(p.raw)
+	if err != nil {
+		return nil, fmt.Errorf("marshal tool parameters: %w", err)
+	}
+
+	return data, nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
 func (p *ToolParameters) UnmarshalJSON(data []byte) error {
-	return json.Unmarshal(data, &p.raw)
+	if err := json.Unmarshal(data, &p.raw); err != nil {
+		return fmt.Errorf("unmarshal tool parameters: %w", err)
+	}
+
+	return nil
 }

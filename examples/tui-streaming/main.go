@@ -1,6 +1,8 @@
+// Package main provides a TUI streaming example.
 package main
 
 import (
+	"errors"
 	"context"
 	"fmt"
 	"os"
@@ -35,67 +37,67 @@ func main() {
 
 	// Start TUI.
 	go func() {
-		err := ui.Run(ctx)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+		runErr := ui.Run(ctx)
+		if runErr != nil {
+			fmt.Fprintf(os.Stderr, "TUI error: %v\n", runErr)
 			cancel()
 		}
 	}()
 
 	// Print header.
-	ui.PrintLine("╔══════════════════════════════════════════╗")
-	ui.PrintLine("║   Spin TUI - Streaming Demo             ║")
-	ui.PrintLine("╚══════════════════════════════════════════╝")
-	ui.PrintLine("")
-	ui.PrintLine("This demo shows how to stream chunks (like LLM tokens).")
-	ui.PrintLine("Watch how the output appears word-by-word with coalescing.")
-	ui.PrintLine("")
+	_ = ui.PrintLine("╔══════════════════════════════════════════╗")
+	_ = ui.PrintLine("║   Spin TUI - Streaming Demo             ║")
+	_ = ui.PrintLine("╚══════════════════════════════════════════╝")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("This demo shows how to stream chunks (like LLM tokens).")
+	_ = ui.PrintLine("Watch how the output appears word-by-word with coalescing.")
+	_ = ui.PrintLine("")
 
 	// Demo 1: Word-by-word streaming.
-	ui.PrintLine("━━━ Demo 1: Word-by-word streaming ━━━")
-	ui.PrintLine("")
+	_ = ui.PrintLine("━━━ Demo 1: Word-by-word streaming ━━━")
+	_ = ui.PrintLine("")
 	streamWords(ctx, ui, "The quick brown fox jumps over the lazy dog.")
-	ui.PrintLine("")
+	_ = ui.PrintLine("")
 
 	// Demo 2: Character-by-character streaming.
-	ui.PrintLine("━━━ Demo 2: Character-by-character streaming ━━━")
-	ui.PrintLine("")
+	_ = ui.PrintLine("━━━ Demo 2: Character-by-character streaming ━━━")
+	_ = ui.PrintLine("")
 	streamChars(ctx, ui, "Hello, world! This is character-level streaming.")
-	ui.PrintLine("")
+	_ = ui.PrintLine("")
 
 	// Demo 3: Simulated LLM response.
-	ui.PrintLine("━━━ Demo 3: Simulated LLM response ━━━")
-	ui.PrintLine("")
-	ui.PrintLine("User: Write a haiku about coding")
-	ui.PrintLine("")
+	_ = ui.PrintLine("━━━ Demo 3: Simulated LLM response ━━━")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("User: Write a haiku about coding")
+	_ = ui.PrintLine("")
 	streamLLM(ctx, ui)
-	ui.PrintLine("")
+	_ = ui.PrintLine("")
 
 	// Demo 4: Fast streaming (shows coalescing).
-	ui.PrintLine("━━━ Demo 4: Fast streaming (1000 chunks, shows coalescing) ━━━")
-	ui.PrintLine("")
+	_ = ui.PrintLine("━━━ Demo 4: Fast streaming (1000 chunks, shows coalescing) ━━━")
+	_ = ui.PrintLine("")
 	streamFast(ctx, ui)
-	ui.PrintLine("")
+	_ = ui.PrintLine("")
 
 	// Done.
-	ui.PrintLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	ui.PrintLine("")
-	ui.PrintLine("Streaming demo complete!")
-	ui.PrintLine("Press Ctrl-D or Ctrl-C to exit, or type 'quit'")
-	ui.PrintLine("")
+	_ = ui.PrintLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	_ = ui.PrintLine("")
+	_ = ui.PrintLine("Streaming demo complete!")
+	_ = ui.PrintLine("Press Ctrl-D or Ctrl-C to exit, or type 'quit'")
+	_ = ui.PrintLine("")
 
 	// Wait for exit.
 	for {
 		select {
 		case <-ctx.Done():
-			ui.Stop()
-			fmt.Println("\nGoodbye!")
+			_ = ui.Stop()
+			_, _ = fmt.Fprintln(os.Stdout, "\nGoodbye!")
 
 			return
 
 		case line, ok := <-ui.RequestInput():
 			if !ok {
-				ui.Stop()
+				_ = ui.Stop()
 
 				return
 			}
@@ -103,7 +105,7 @@ func main() {
 			if line == "quit" || line == "exit" {
 				cancel()
 			} else if line != "" {
-				ui.PrintLine(fmt.Sprintf("Echo: %s", line))
+				_ = ui.PrintLine(fmt.Sprintf("Echo: %s", line))
 			}
 		}
 	}
@@ -134,8 +136,8 @@ func streamWords(ctx context.Context, ui *adapters.PureTTY, text string) {
 	}()
 
 	err := ui.PrintChunks(ctx, chunks)
-	if err != nil && err != context.Canceled {
-		ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
+	if err != nil && !errors.Is(err, context.Canceled) {
+		_ = ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
 	}
 }
 
@@ -159,8 +161,8 @@ func streamChars(ctx context.Context, ui *adapters.PureTTY, text string) {
 	}()
 
 	err := ui.PrintChunks(ctx, chunks)
-	if err != nil && err != context.Canceled {
-		ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
+	if err != nil && !errors.Is(err, context.Canceled) {
+		_ = ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
 	}
 }
 
@@ -178,7 +180,7 @@ func streamLLM(ctx context.Context, ui *adapters.PureTTY) {
 	go func() {
 		defer close(chunks)
 
-		ui.SetStatus("generating...") // Show status during generation.
+		_ = ui.SetStatus("generating...") // Show status during generation.
 
 		for _, token := range response {
 			select {
@@ -196,12 +198,12 @@ func streamLLM(ctx context.Context, ui *adapters.PureTTY) {
 			}
 		}
 
-		ui.SetStatus("") // Clear status when done.
+		_ = ui.SetStatus("") // Clear status when done.
 	}()
 
 	err := ui.PrintChunks(ctx, chunks)
-	if err != nil && err != context.Canceled {
-		ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
+	if err != nil && !errors.Is(err, context.Canceled) {
+		_ = ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
 	}
 }
 
@@ -228,12 +230,12 @@ func streamFast(ctx context.Context, ui *adapters.PureTTY) {
 	start := time.Now()
 
 	err := ui.PrintChunks(ctx, chunks)
-	if err != nil && err != context.Canceled {
-		ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
+	if err != nil && !errors.Is(err, context.Canceled) {
+		_ = ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
 	}
 
 	elapsed := time.Since(start)
 
-	ui.PrintLine(fmt.Sprintf("Streamed 1000 chunks in %v (throughput: %.0f chunks/sec)",
+	_ = ui.PrintLine(fmt.Sprintf("Streamed 1000 chunks in %v (throughput: %.0f chunks/sec)",
 		elapsed, 1000.0/elapsed.Seconds()))
 }

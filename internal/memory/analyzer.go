@@ -17,7 +17,7 @@ type OffloadCandidate struct {
 	Reason string
 
 	// Destination indicates where to offload (session or persistent).
-	Destination MemoryScope
+	Destination Scope
 
 	// Key is the suggested storage key.
 	Key string

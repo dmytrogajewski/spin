@@ -34,7 +34,7 @@ func (d *ApprovalDialog) SetDimensions(width, height int) {
 
 // Render renders the approval dialog.
 // Returns empty string since we now use status bar instead of modal dialog.
-func (d *ApprovalDialog) Render(width, height int) string {
+func (d *ApprovalDialog) Render(_, _ int) string {
 	// No longer render modal dialog - status bar handles the display.
 	return ""
 }
