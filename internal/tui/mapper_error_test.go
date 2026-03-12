@@ -73,7 +73,7 @@ func TestMapper_ExecuteError_NoDuplication(t *testing.T) {
 			RequiresApproval: false,
 		},
 	}
-	err := mapper.MapEvent(start)
+	err := mapper.MapEvent(context.Background(), start)
 	if err != nil {
 		t.Fatalf("handle start failed: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestMapper_ExecuteError_NoDuplication(t *testing.T) {
 			Error:    "execution failed: exit status 1",
 		},
 	}
-	err = mapper.MapEvent(complete)
+	err = mapper.MapEvent(context.Background(), complete)
 	if err != nil {
 		t.Fatalf("handle complete failed: %v", err)
 	}

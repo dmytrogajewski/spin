@@ -239,6 +239,20 @@ func (tty *TTY) notifyResizeCallbacks() {
 	}
 }
 
+// SafeFd converts a file descriptor from uintptr to int with bounds checking.
+// Terminal file descriptors are always small non-negative values, so overflow
+// from uintptr to int is not possible in practice, but this satisfies static analysis.
+func SafeFd(fd uintptr) int {
+	if fd > uintptr(maxInt) {
+		return -1
+	}
+
+	return int(fd)
+}
+
+// maxInt is the maximum value of int on the current platform.
+const maxInt = int(^uint(0) >> 1)
+
 // isTerminal returns true if fd refers to a terminal.
 func isTerminal(fd int) bool {
 	return term.IsTerminal(fd)

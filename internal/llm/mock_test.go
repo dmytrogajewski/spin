@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -512,7 +513,7 @@ func TestMockProvider_ThreadSafety(t *testing.T) {
 	for i := range 10 {
 		go func(i int) {
 			for range 100 {
-				p.SetResponse("response" + string(rune(i)))
+				p.SetResponse("response" + strconv.Itoa(i))
 				p.SetError(nil)
 				p.SetToolCalls(nil)
 			}

@@ -3,6 +3,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -392,7 +393,7 @@ func TestService_Search(t *testing.T) {
 	defer service.Close()
 
 	// Search on empty registry should return empty
-	results := service.Search(nil, "test", 10)
+	results := service.Search(context.Background(), nil, "test", 10)
 	assert.Empty(t, results)
 }
 

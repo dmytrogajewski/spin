@@ -193,7 +193,7 @@ func TestManager_Remove(t *testing.T) {
 			t.Fatalf("GetOrCreate failed: %v", err)
 		}
 
-		err = mgr.Remove("session-1")
+		err = mgr.Remove(ctx, "session-1")
 		if err != nil {
 			t.Fatalf("Remove failed: %v", err)
 		}
@@ -207,7 +207,7 @@ func TestManager_Remove(t *testing.T) {
 	t.Run("remove non-existent", func(t *testing.T) {
 		t.Parallel()
 
-		err = mgr.Remove("non-existent")
+		err = mgr.Remove(ctx, "non-existent")
 		if err == nil {
 			t.Fatal("should fail when removing non-existent")
 		}
@@ -234,14 +234,14 @@ func TestManager_Cancel(t *testing.T) {
 	conv.SetCancel(func() { canceled = true })
 
 	// Cancel via manager.
-	mgr.Cancel("session-1")
+	mgr.Cancel(ctx, "session-1")
 
 	if !canceled {
 		t.Error("cancel function should have been called")
 	}
 
 	// Cancel non-existent should not panic.
-	mgr.Cancel("non-existent")
+	mgr.Cancel(ctx, "non-existent")
 }
 
 func TestManager_List(t *testing.T) {
@@ -314,7 +314,7 @@ func TestManager_Count(t *testing.T) {
 		t.Error("should have 2 conversations")
 	}
 
-	if err = mgr.Remove("session-1"); err != nil {
+	if err = mgr.Remove(ctx, "session-1"); err != nil {
 		t.Fatalf("Remove failed: %v", err)
 	}
 
@@ -456,7 +456,7 @@ func TestManager_SaveAndLoad(t *testing.T) {
 			t.Fatalf("GetOrCreate failed: %v", err)
 		}
 
-		if err := mgr.Save("session-1"); err == nil {
+		if err := mgr.Save(ctx, "session-1"); err == nil {
 			t.Fatal("should fail without storage configured")
 		}
 	})
@@ -480,17 +480,17 @@ func testManagerSaveAndLoad(t *testing.T, ctx context.Context) {
 	if err != nil {
 		t.Fatalf("GetOrCreate failed: %v", err)
 	}
-	if err = conv.history.AddUserMessage("Hello!"); err != nil {
+	if err = conv.history.AddUserMessage(ctx, "Hello!"); err != nil {
 		t.Fatalf("AddUserMessage failed: %v", err)
 	}
-	if err = conv.history.AddMessage(message.Message{
+	if err = conv.history.AddMessage(ctx, message.Message{
 		Role:    message.RoleAssistant,
 		Content: "Hi there!",
 	}); err != nil {
 		t.Fatalf("AddMessage failed: %v", err)
 	}
 
-	if err = mgr.Save("session-save"); err != nil {
+	if err = mgr.Save(ctx, "session-save"); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
 

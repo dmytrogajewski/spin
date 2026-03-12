@@ -139,10 +139,10 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	env := agent.NewBuilder().
 		WithConfig(b.cfg).
 		WithWorkingDir(b.workDir).
-		BuildEnvironment()
+		BuildEnvironment(ctx)
 
 		// Enrich environment with Git/Shell context (conversation-level concern).
-	b.enrichEnvironmentWithIntegrations(env)
+	b.enrichEnvironmentWithIntegrations(ctx, env)
 
 	// Create session early (ID is needed for memory initialization).
 	sess := session.NewSession(b.workDir)
@@ -155,13 +155,13 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	}
 
 	// Build agent (orchestration handled by conversation).
-	agentInstance, err := b.buildAgent(exec, env)
+	agentInstance, err := b.buildAgent(ctx, exec, env)
 	if err != nil {
 		return nil, fmt.Errorf("build agent: %w", err)
 	}
 
 	// Create history.
-	hist := b.createHistory()
+	hist := b.createHistory(ctx)
 
 	// Use session ID as conversation ID (both are UUID strings)
 	// This maintains clean dependency direction: conversation doesn't depend on protocol.
@@ -238,18 +238,18 @@ func (b *Builder) initializeCoreDependencies() error {
 }
 
 // enrichEnvironmentWithIntegrations adds context from Git and Shell integrations.
-func (b *Builder) enrichEnvironmentWithIntegrations(env *agent.Environment) {
+func (b *Builder) enrichEnvironmentWithIntegrations(ctx context.Context, env *agent.Environment) {
 	if b.gitService != nil && b.gitService.IsRepository() {
-		b.addGitContext(env)
+		b.addGitContext(ctx, env)
 	}
 
 	if b.shellService != nil && b.shellService.IsEnabled() {
-		b.addShellContext(env)
+		b.addShellContext(ctx, env)
 	}
 }
 
 // addGitContext enriches environment with Git repository information.
-func (b *Builder) addGitContext(env *agent.Environment) {
+func (b *Builder) addGitContext(ctx context.Context, env *agent.Environment) {
 	info := b.gitService.GetContextInfo()
 	set := func(k, v string) { env.Environment[k] = v }
 
@@ -258,7 +258,7 @@ func (b *Builder) addGitContext(env *agent.Environment) {
 
 	if !info.IsRepo {
 		if b.logger != nil {
-			b.logger.DebugContext(context.Background(), "git context: not a repository")
+			b.logger.DebugContext(ctx, "git context: not a repository")
 		}
 
 		return
@@ -299,12 +299,12 @@ func (b *Builder) addGitContext(env *agent.Environment) {
 	}
 
 	if b.logger != nil {
-		b.logger.DebugContext(context.Background(), "git context added", "branch", info.Branch, "clean", info.IsClean)
+		b.logger.DebugContext(ctx, "git context added", "branch", info.Branch, "clean", info.IsClean)
 	}
 }
 
 // addShellContext enriches environment with Shell context information.
-func (b *Builder) addShellContext(env *agent.Environment) {
+func (b *Builder) addShellContext(ctx context.Context, env *agent.Environment) {
 	info := b.shellService.GetContextInfo()
 	set := func(k, v string) { env.Environment[k] = v }
 
@@ -323,7 +323,7 @@ func (b *Builder) addShellContext(env *agent.Environment) {
 	}
 
 	if b.logger != nil {
-		b.logger.DebugContext(context.Background(), "shell context added", "shell", info.Shell)
+		b.logger.DebugContext(ctx, "shell context added", "shell", info.Shell)
 	}
 }
 

@@ -30,7 +30,7 @@ func setupTestRepo(t *testing.T) string {
 
 	// Create initial file.
 	filename := filepath.Join(tmpDir, "README.md")
-	err = os.WriteFile(filename, []byte("# Test\n"), 0644)
+	err = os.WriteFile(filename, []byte("# Test\n"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
@@ -70,14 +70,14 @@ func setupTestRepoWithModifications(t *testing.T) string {
 
 	// Modify existing file.
 	filename := filepath.Join(tmpDir, "README.md")
-	err := os.WriteFile(filename, []byte("# Test\nModified\n"), 0644)
+	err := os.WriteFile(filename, []byte("# Test\nModified\n"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to modify file: %v", err)
 	}
 
 	// Create untracked file.
 	newFile := filepath.Join(tmpDir, "untracked.txt")
-	err = os.WriteFile(newFile, []byte("untracked\n"), 0644)
+	err = os.WriteFile(newFile, []byte("untracked\n"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create untracked file: %v", err)
 	}
@@ -142,7 +142,7 @@ func setupNestedRepo(t *testing.T) string {
 	tmpDir := setupTestRepo(t)
 
 	nestedDir := filepath.Join(tmpDir, "subdir", "deep")
-	err := os.MkdirAll(nestedDir, 0755)
+	err := os.MkdirAll(nestedDir, 0o750)
 	if err != nil {
 		t.Fatalf("failed to create nested dir: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestRepositoryRoot(t *testing.T) {
 	tmpDir := setupTestRepo(t)
 
 	nestedDir := filepath.Join(tmpDir, "subdir")
-	err := os.MkdirAll(nestedDir, 0755)
+	err := os.MkdirAll(nestedDir, 0o750)
 	if err != nil {
 		t.Fatalf("failed to create nested dir: %v", err)
 	}
@@ -258,7 +258,7 @@ func BenchmarkDiscoverNested(b *testing.B) {
 		nestedDir = filepath.Join(nestedDir, "subdir")
 	}
 
-	err := os.MkdirAll(nestedDir, 0755)
+	err := os.MkdirAll(nestedDir, 0o750)
 	if err != nil {
 		b.Fatal(err)
 	}

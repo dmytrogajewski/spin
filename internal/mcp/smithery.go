@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -118,9 +119,18 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 		return fmt.Errorf("marshal connect request: %w", err)
 	}
 
-	url := fmt.Sprintf("https://api.smithery.ai/connect/%s", c.namespace)
+	rawURL := fmt.Sprintf("https://api.smithery.ai/connect/%s", c.namespace)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("parse connect URL: %w", err)
+	}
+
+	if parsedURL.Scheme != "https" {
+		return fmt.Errorf("invalid URL scheme %q, expected https", parsedURL.Scheme)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", parsedURL.String(), bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create connect request: %w", err)
 	}
@@ -129,7 +139,7 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 	req.Header.Set("Content-Type", "application/json")
 
 	if c.logger != nil {
-		c.logger.DebugContext(ctx, "Creating Smithery connection", "url", url, "mcpUrl", c.mcpURL)
+		c.logger.DebugContext(ctx, "Creating Smithery connection", "url", parsedURL.String(), "mcpUrl", c.mcpURL)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -259,9 +269,18 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 		return nil, fmt.Errorf("marshal rpc request: %w", err)
 	}
 
-	url := fmt.Sprintf("https://api.smithery.ai/connect/%s/%s/rpc", c.namespace, connectionID)
+	rawURL := fmt.Sprintf("https://api.smithery.ai/connect/%s/%s/rpc", c.namespace, connectionID)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse rpc URL: %w", err)
+	}
+
+	if parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf("invalid URL scheme %q, expected https", parsedURL.Scheme)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", parsedURL.String(), bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create rpc request: %w", err)
 	}
@@ -270,7 +289,7 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 	req.Header.Set("Content-Type", "application/json")
 
 	if c.logger != nil {
-		c.logger.DebugContext(ctx, "Smithery RPC call", "method", method, "url", url)
+		c.logger.DebugContext(ctx, "Smithery RPC call", "method", method, "url", parsedURL.String())
 	}
 
 	resp, err := c.httpClient.Do(req)

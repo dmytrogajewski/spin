@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,10 +16,10 @@ func TestGatherEnvironment(t *testing.T) {
 
 	// Create some test files.
 	testFile := filepath.Join(workDir, "test.go")
-	err := os.WriteFile(testFile, []byte("package main\n\nfunc main() {\n\tprintln(\"hello\")\n}"), 0644)
+	err := os.WriteFile(testFile, []byte("package main\n\nfunc main() {\n\tprintln(\"hello\")\n}"), 0o600)
 	require.NoError(t, err)
 
-	env, err := GatherEnvironment(workDir)
+	env, err := GatherEnvironment(context.Background(), workDir)
 	require.NoError(t, err)
 	assert.NotNil(t, env)
 	assert.Equal(t, workDir, env.WorkDir)
@@ -35,12 +36,12 @@ func TestGatherEnvironment_WithOptions(t *testing.T) {
 	// Create some test files.
 	for i := range 5 {
 		testFile := filepath.Join(workDir, "test"+string(rune(i+'0'))+".go")
-		err := os.WriteFile(testFile, []byte("package main"), 0644)
+		err := os.WriteFile(testFile, []byte("package main"), 0o600)
 		require.NoError(t, err)
 	}
 
 	// Test with max files limit.
-	env, err := GatherEnvironment(workDir, WithMaxFiles(2))
+	env, err := GatherEnvironment(context.Background(), workDir, WithMaxFiles(2))
 	require.NoError(t, err)
 	assert.NotNil(t, env)
 	assert.LessOrEqual(t, len(env.Files), 2)
@@ -50,7 +51,7 @@ func TestGatherEnvironment_WithSkipGit(t *testing.T) {
 	t.Parallel()
 	workDir := t.TempDir()
 
-	env, err := GatherEnvironment(workDir, WithSkipGit(true))
+	env, err := GatherEnvironment(context.Background(), workDir, WithSkipGit(true))
 	require.NoError(t, err)
 	assert.NotNil(t, env)
 	assert.Nil(t, env.Git)
@@ -62,14 +63,14 @@ func TestGatherEnvironment_WithMaxDepth(t *testing.T) {
 
 	// Create nested directories.
 	subDir := filepath.Join(workDir, "subdir")
-	err := os.Mkdir(subDir, 0755)
+	err := os.Mkdir(subDir, 0o750)
 	require.NoError(t, err)
 
 	testFile := filepath.Join(subDir, "test.go")
-	err = os.WriteFile(testFile, []byte("package main"), 0644)
+	err = os.WriteFile(testFile, []byte("package main"), 0o600)
 	require.NoError(t, err)
 
-	env, err := GatherEnvironment(workDir, WithMaxDepth(1))
+	env, err := GatherEnvironment(context.Background(), workDir, WithMaxDepth(1))
 	require.NoError(t, err)
 	assert.NotNil(t, env)
 }
@@ -78,7 +79,7 @@ func TestGatherEnvironment_EmptyDirectory(t *testing.T) {
 	t.Parallel()
 	workDir := t.TempDir()
 
-	env, err := GatherEnvironment(workDir)
+	env, err := GatherEnvironment(context.Background(), workDir)
 	require.NoError(t, err)
 	assert.NotNil(t, env)
 	assert.Equal(t, workDir, env.WorkDir)
@@ -87,7 +88,7 @@ func TestGatherEnvironment_EmptyDirectory(t *testing.T) {
 
 func TestGatherEnvironment_NonExistentDirectory(t *testing.T) {
 	t.Parallel()
-	env, err := GatherEnvironment("/non/existent/directory")
+	env, err := GatherEnvironment(context.Background(), "/non/existent/directory")
 	require.Error(t, err)
 	assert.Nil(t, env)
 }
@@ -118,7 +119,7 @@ func TestEnvironmentOption_WithSkipGit(t *testing.T) {
 
 func TestGatherOSInfo(t *testing.T) {
 	t.Parallel()
-	osInfo := gatherOSInfo()
+	osInfo := gatherOSInfo(context.Background())
 	assert.NotEmpty(t, osInfo.OS)
 	assert.NotEmpty(t, osInfo.Arch)
 }
@@ -159,7 +160,7 @@ func TestCountLines(t *testing.T) {
 	// Create a test file with known line count.
 	testFile := filepath.Join(workDir, "test.txt")
 	content := "line1\nline2\nline3\n"
-	err := os.WriteFile(testFile, []byte(content), 0644)
+	err := os.WriteFile(testFile, []byte(content), 0o600)
 	require.NoError(t, err)
 
 	lines := countLines(testFile)

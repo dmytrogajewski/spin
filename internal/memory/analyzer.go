@@ -2,6 +2,7 @@ package memory
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -172,7 +173,7 @@ func estimateTokens(content string) int {
 func generateKey(prefix string, messageIdx, blockIdx int) string {
 	return strings.ToLower(strings.ReplaceAll(
 		strings.TrimSpace(prefix)+"_"+
-			string(rune('0'+messageIdx))+"_"+
-			string(rune('0'+blockIdx)),
+			strconv.Itoa(messageIdx)+"_"+
+			strconv.Itoa(blockIdx),
 		" ", "_"))
 }

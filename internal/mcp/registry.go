@@ -46,9 +46,6 @@ type ToolLister interface {
 // SearchContext provides optional context for tool search operations.
 // Pass nil for simple searches without trajectory context.
 type SearchContext struct {
-	// Ctx is the context for cancellation and timeouts (required for dynamic registries).
-	Ctx context.Context
-
 	// TrajectoryContext provides execution context for relevance scoring (optional).
 	TrajectoryContext interface {
 		GetQuery() string
@@ -65,10 +62,10 @@ type ToolSearcher interface {
 	ToolSource
 
 	// Search finds tools matching the query.
-	// ctx can be nil for simple searches; required for dynamic registries that call APIs.
+	// ctx is for cancellation and timeouts; searchCtx provides additional search options (can be nil).
 	// max limits results (0 = no limit).
 	// Returns tools sorted by relevance.
-	Search(ctx *SearchContext, query string, maxResults int) []tools.Tool
+	Search(ctx context.Context, searchCtx *SearchContext, query string, maxResults int) []tools.Tool
 }
 
 // ToolExecutor can execute tools directly.
@@ -130,8 +127,8 @@ type RegistryManager interface {
 	AllTools() []tools.Tool
 
 	// Search searches across all registries.
-	// ctx can be nil for simple searches; required for dynamic registries.
-	Search(ctx *SearchContext, query string, maxResults int) []tools.Tool
+	// ctx is for cancellation and timeouts; searchCtx provides additional search options (can be nil).
+	Search(ctx context.Context, searchCtx *SearchContext, query string, maxResults int) []tools.Tool
 
 	// Tool finds a tool by name.
 	// Supports qualified names (registry:tool) for explicit registry targeting.

@@ -402,7 +402,7 @@ func TestConvertToolCallStart_WriteFile_TracksOldContent(t *testing.T) {
 	)
 
 	tmpFile := t.TempDir() + "/test.txt"
-	err := os.WriteFile(tmpFile, []byte("existing content\nline 2"), 0644)
+	err := os.WriteFile(tmpFile, []byte("existing content\nline 2"), 0o600)
 	require.NoError(t, err)
 
 	tracker := newFileContentTracker()

@@ -69,7 +69,7 @@ func createServices(ctx context.Context, cfg *config.V2, workDir string, logger 
 	if cfg.Protocol.EnableGit {
 		var err error
 
-		gitSvc, err = git.NewService(true, workDir, logger)
+		gitSvc, err = git.NewService(ctx, true, workDir, logger)
 		if err != nil {
 			cleanup()
 			return nil, nil, fmt.Errorf("create git service: %w", err)
@@ -79,7 +79,7 @@ func createServices(ctx context.Context, cfg *config.V2, workDir string, logger 
 	if cfg.Protocol.EnableShell {
 		var err error
 
-		shellSvc, err = shell.NewService(true, workDir, logger, cfg.Protocol.ShellTimeout)
+		shellSvc, err = shell.NewService(ctx, true, workDir, logger, cfg.Protocol.ShellTimeout)
 		if err != nil {
 			cleanup()
 			return nil, nil, fmt.Errorf("create shell service: %w", err)
@@ -255,20 +255,20 @@ func hasDynamicRegistries(cfg *config.V2) bool {
 }
 
 // createToolSelector creates a ToolSelector if dynamic registries are configured.
-func createToolSelector(mcpSvc *mcp.Service, coreRegistry *tools.Registry, emitter *events.EventEmitter, cfg *config.V2, logger *slog.Logger) *agent.ToolSelector {
+func createToolSelector(ctx context.Context, mcpSvc *mcp.Service, coreRegistry *tools.Registry, emitter *events.EventEmitter, cfg *config.V2, logger *slog.Logger) *agent.ToolSelector {
 	if mcpSvc == nil {
-		logger.DebugContext(context.Background(), "tool selector: MCP service is nil")
+		logger.DebugContext(ctx, "tool selector: MCP service is nil")
 
 		return nil
 	}
 
 	if !hasDynamicRegistries(cfg) {
-		logger.DebugContext(context.Background(), "tool selector: no dynamic registries configured")
+		logger.DebugContext(ctx, "tool selector: no dynamic registries configured")
 
 		return nil
 	}
 
-	logger.InfoContext(context.Background(), "tool selector: creating with dynamic registries")
+	logger.InfoContext(ctx, "tool selector: creating with dynamic registries")
 
 	return agent.NewToolSelector(
 		mcpSvc,

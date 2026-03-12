@@ -80,7 +80,7 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 	resp, execErr := c.agent.Execute(ctx, req)
 	if execErr != nil {
 		// Add user message first (since it wasn't added before execution).
-		err = c.history.AddUserMessage(input)
+		err = c.history.AddUserMessage(ctx, input)
 		if err != nil {
 			return fmt.Errorf("failed to add user message: %w", err)
 		}
@@ -89,7 +89,7 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 			Role:    message.RoleAssistant,
 			Content: fmt.Sprintf("Error: %v", execErr),
 		}
-		_ = c.history.AddMessage(errorMsg)
+		_ = c.history.AddMessage(ctx, errorMsg)
 
 		return fmt.Errorf("agent execution failed: %w", execErr)
 	}
@@ -98,7 +98,7 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 	// This includes: user input, assistant messages with tool calls, tool results, final assistant
 	// This maintains proper OpenAI message format and ensures accurate token counting.
 	for _, msg := range resp.Messages {
-		err = c.history.AddMessage(msg)
+		err = c.history.AddMessage(ctx, msg)
 		if err != nil {
 			return fmt.Errorf("failed to add message to history: %w", err)
 		}
@@ -145,8 +145,8 @@ func (c *Conversation) GetHistoryMessages() []message.Message {
 }
 
 // AddHistoryMessage adds a message to the conversation history.
-func (c *Conversation) AddHistoryMessage(msg message.Message) error {
-	return c.history.AddMessage(msg)
+func (c *Conversation) AddHistoryMessage(ctx context.Context, msg message.Message) error {
+	return c.history.AddMessage(ctx, msg)
 }
 
 // ID returns the conversation ID as a string.

@@ -158,7 +158,7 @@ func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 // initCoreDeps initializes the TTY, model, renderer, and coordinator.
 func (p *PureTTY) initCoreDeps(out io.Writer) error {
 	if p.tty == nil {
-		tty, err := term.New(int(os.Stdin.Fd()), int(os.Stdout.Fd()))
+		tty, err := term.New(term.SafeFd(os.Stdin.Fd()), term.SafeFd(os.Stdout.Fd()))
 		if err != nil {
 			return fmt.Errorf("create TTY: %w", err)
 		}

@@ -56,12 +56,12 @@ func createFile(t *testing.T, workspace, path, content string) {
 	t.Helper()
 
 	fullPath := filepath.Join(workspace, path)
-	err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+	err := os.MkdirAll(filepath.Dir(fullPath), 0o750)
 	if err != nil {
 		t.Fatalf("failed to create parent dirs: %v", err)
 	}
 
-	err = os.WriteFile(fullPath, []byte(content), 0644)
+	err = os.WriteFile(fullPath, []byte(content), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create file: %v", err)
 	}

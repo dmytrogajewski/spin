@@ -257,27 +257,27 @@ High-value fixes that improve reliability.
 
 ## Wave 7: Security & Context Propagation (est. ~300 issues)
 
-- [ ] **7.1 — `gosec` security issues** (~256 issues)
+- [x] **7.1 — `gosec` security issues** (~256 issues)
   - **Description:** Fix potential security issues: weak crypto, hardcoded credentials, integer overflow, file permissions.
   - **DoR:** Wave 6 complete
   - **DoD:** 0 gosec issues
   - **Note:** G204 already excluded globally in `.golangci.yml` (subprocess with variable — needed for command execution)
   - **`//nolint` prohibited** — fix security issues in code; if a rule is project-wide inapplicable, disable in `.golangci.yml`
 
-- [ ] **7.2 — `contextcheck` context propagation** (~14 issues)
+- [x] **7.2 — `contextcheck` context propagation** (~14 issues)
   - **Description:** Pass `context.Context` through call chains instead of using `context.Background()`.
   - **DoR:** 7.1 complete
   - **DoD:** 0 contextcheck issues
   - **`//nolint` prohibited** — thread context through function signatures
 
-- [ ] **7.3 — `containedctx` context in structs** (~3 issues)
+- [x] **7.3 — `containedctx` context in structs** (~3 issues)
   - **Description:** Remove `context.Context` from struct fields; pass via method parameters.
   - **DoR:** 7.2 complete
   - **DoD:** 0 containedctx issues
   - **Key targets:** `internal/mcp/registry.go:52`, `internal/tui/mapper.go:27`, `internal/ui/testkit/tuitest_helper.go:16`
   - **`//nolint` prohibited** — refactor structs to accept ctx as method parameter
 
-- [ ] **7.4 — `noctx` HTTP without context** (~32 issues)
+- [x] **7.4 — `noctx` HTTP without context** (~32 issues)
   - **Description:** Replace `http.Get`/`http.Post` with `http.NewRequestWithContext`.
   - **DoR:** 7.3 complete
   - **DoD:** 0 noctx issues

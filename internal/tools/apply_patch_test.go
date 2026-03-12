@@ -55,7 +55,7 @@ func TestApplyPatchTool_DeleteFile(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "delete_me.txt")
 
 	// Create file to delete.
-	err := os.WriteFile(testFile, []byte("content"), 0644)
+	err := os.WriteFile(testFile, []byte("content"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestApplyPatchTool_UpdateFile(t *testing.T) {
 
 	// Create file to update.
 	original := "line1\nline2\nline3\n"
-	err := os.WriteFile(testFile, []byte(original), 0644)
+	err := os.WriteFile(testFile, []byte(original), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestApplyPatchTool_MultipleOperations(t *testing.T) {
 
 	// Create file to delete.
 	deleteFile := filepath.Join(tmpDir, "old.txt")
-	err := os.WriteFile(deleteFile, []byte("old content"), 0644)
+	err := os.WriteFile(deleteFile, []byte("old content"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}

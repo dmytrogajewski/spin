@@ -270,7 +270,12 @@ func (a *Agent) handleLLMError(ctx context.Context, err error, retry, maxRetries
 
 // waitWithBackoff waits with exponential backoff, respecting context cancellation.
 func (a *Agent) waitWithBackoff(ctx context.Context, retry, turn int, resp *Response, logMsg string) error {
-	backoff := time.Duration(1<<uint(retry)) * time.Second
+	retryUint := uint(0)
+	if retry > 0 {
+		retryUint = uint(retry)
+	}
+
+	backoff := time.Duration(1<<retryUint) * time.Second
 	a.logger.WarnContext(ctx, logMsg, "turn", turn+1, "retry", retry+1, "backoff", backoff)
 
 	select {

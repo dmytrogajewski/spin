@@ -13,6 +13,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/dmytrogajewski/spin/internal/auth"
+	termx "github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
 var ErrAPIKeyCannotBeEmpty = errors.New("api key cannot be empty")
@@ -225,7 +226,7 @@ func promptForAPIKey(cmd *cobra.Command, provider string) (string, error) {
 	fmt.Fprintf(cmd.OutOrStdout(), "Enter API key for %s: ", provider)
 
 	// Check if stdin is a terminal.
-	fd := int(os.Stdin.Fd())
+	fd := termx.SafeFd(os.Stdin.Fd())
 	if term.IsTerminal(fd) {
 		// Read password without echo.
 		keyBytes, err := term.ReadPassword(fd)

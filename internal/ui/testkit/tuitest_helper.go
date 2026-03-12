@@ -13,7 +13,6 @@ type TUITestHelper struct {
 	TTY      *FakeTTY
 	Keyboard *FakeKeyboard
 	Writer   *FakeWriter
-	ctx      context.Context
 	cancel   context.CancelFunc
 }
 
@@ -27,8 +26,6 @@ func NewTUITest(t interface {
 	fakeTTY := NewFakeTTY(80, 24)
 	fakeKB := NewFakeKeyboard()
 	fakeOut := NewFakeWriter()
-
-	ctx, cancel := context.WithCancel(context.Background())
 
 	ui, err := adapters.NewPureTTY(fakeOut,
 		adapters.WithTTY(fakeTTY),
@@ -46,12 +43,12 @@ func NewTUITest(t interface {
 		TTY:      fakeTTY,
 		Keyboard: fakeKB,
 		Writer:   fakeOut,
-		ctx:      ctx,
-		cancel:   cancel,
 	}
 
 	t.Cleanup(func() {
-		cancel()
+		if helper.cancel != nil {
+			helper.cancel()
+		}
 		_ = ui.Stop()
 		fakeKB.Close()
 	})
@@ -59,10 +56,13 @@ func NewTUITest(t interface {
 	return helper
 }
 
-// Start runs the UI in a background goroutine.
+// Start runs the UI in a background goroutine using the helper's lifecycle context.
 func (h *TUITestHelper) Start() {
+	ctx, cancel := context.WithCancel(context.Background())
+	h.cancel = cancel
+
 	go func() {
-		_ = h.UI.Run(h.ctx)
+		_ = h.UI.Run(ctx)
 	}()
 	// Give UI time to initialize.
 	time.Sleep(50 * time.Millisecond)

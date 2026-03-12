@@ -13,11 +13,11 @@ type Service struct {
 
 // NewService creates a new Git service and initializes it.
 // If enabled is false, the service is created but not initialized.
-func NewService(enabled bool, workDir string, logger *slog.Logger) (*Service, error) {
+func NewService(ctx context.Context, enabled bool, workDir string, logger *slog.Logger) (*Service, error) {
 	integration := NewIntegration(enabled, workDir, logger)
 
 	if enabled {
-		err := integration.Initialize(context.Background())
+		err := integration.Initialize(ctx)
 		if err != nil {
 			return nil, err
 		}

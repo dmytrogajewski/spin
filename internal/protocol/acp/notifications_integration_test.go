@@ -282,7 +282,7 @@ func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 
 	// Create a temporary file with existing content.
 	tmpFile := t.TempDir() + "/test.txt"
-	err = os.WriteFile(tmpFile, []byte("old content\nline 2"), 0644)
+	err = os.WriteFile(tmpFile, []byte("old content\nline 2"), 0o600)
 	require.NoError(t, err)
 
 	// Emit tool call start event for write_file.

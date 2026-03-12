@@ -14,11 +14,11 @@ type Service struct {
 
 // NewService creates a new Shell service and initializes it.
 // If enabled is false, the service is created but not initialized.
-func NewService(enabled bool, workDir string, logger *slog.Logger, timeout time.Duration) (*Service, error) {
+func NewService(callCtx context.Context, enabled bool, workDir string, logger *slog.Logger, timeout time.Duration) (*Service, error) {
 	ctx := NewContext(enabled, workDir, logger, timeout)
 
 	if enabled {
-		err := ctx.Initialize(context.Background())
+		err := ctx.Initialize(callCtx)
 		if err != nil {
 			return nil, err
 		}

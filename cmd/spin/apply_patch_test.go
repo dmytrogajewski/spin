@@ -62,7 +62,7 @@ func TestReadPatchInput_File(t *testing.T) {
 	patchFile := filepath.Join(tmpDir, "test.patch")
 	testContent := "*** Begin Patch\n*** End Patch"
 
-	err := os.WriteFile(patchFile, []byte(testContent), 0644)
+	err := os.WriteFile(patchFile, []byte(testContent), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func TestApplyPatch_Success(t *testing.T) {
 
 	// Create test file.
 	testFile := filepath.Join(tmpDir, "test.txt")
-	err := os.WriteFile(testFile, []byte("line 1\nline 2\nline 3\n"), 0644)
+	err := os.WriteFile(testFile, []byte("line 1\nline 2\nline 3\n"), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestApplyPatch_Success(t *testing.T) {
 *** End Patch`
 
 	patchFile := filepath.Join(tmpDir, "test.patch")
-	err = os.WriteFile(patchFile, []byte(patchText), 0644)
+	err = os.WriteFile(patchFile, []byte(patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func TestApplyPatch_DryRun(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "test.txt")
 
 	originalContent := "original content\n"
-	err := os.WriteFile(testFile, []byte(originalContent), 0644)
+	err := os.WriteFile(testFile, []byte(originalContent), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestApplyPatch_DryRun(t *testing.T) {
 *** End Patch`
 
 	patchFile := filepath.Join(tmpDir, "test.patch")
-	err = os.WriteFile(patchFile, []byte(patchText), 0644)
+	err = os.WriteFile(patchFile, []byte(patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +346,7 @@ func TestApplyPatch_ParseError(t *testing.T) {
 *** End Patch`
 
 	patchFile := filepath.Join(tmpDir, "invalid.patch")
-	err := os.WriteFile(patchFile, []byte(patchText), 0644)
+	err := os.WriteFile(patchFile, []byte(patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +380,7 @@ func TestApplyPatch_PathTraversal(t *testing.T) {
 *** End Patch`
 
 	patchFile := filepath.Join(tmpDir, "malicious.patch")
-	err := os.WriteFile(patchFile, []byte(patchText), 0644)
+	err := os.WriteFile(patchFile, []byte(patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,7 +409,7 @@ func TestApplyPatch_ForceOverwrite(t *testing.T) {
 
 	// Create existing file.
 	testFile := filepath.Join(tmpDir, "existing.txt")
-	err := os.WriteFile(testFile, []byte("existing content"), 0644)
+	err := os.WriteFile(testFile, []byte("existing content"), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +421,7 @@ func TestApplyPatch_ForceOverwrite(t *testing.T) {
 *** End Patch`
 
 	patchFile := filepath.Join(tmpDir, "test.patch")
-	err = os.WriteFile(patchFile, []byte(patchText), 0644)
+	err = os.WriteFile(patchFile, []byte(patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,13 +447,13 @@ func TestApplyPatch_ForceOverwrite(t *testing.T) {
 		// Use a separate tmpDir to avoid sharing filesystem state with "without force".
 		forceDir := t.TempDir()
 		forceFile := filepath.Join(forceDir, "existing.txt")
-		forceErr := os.WriteFile(forceFile, []byte("existing content"), 0644)
+		forceErr := os.WriteFile(forceFile, []byte("existing content"), 0o600)
 		if forceErr != nil {
 			t.Fatal(forceErr)
 		}
 
 		forcePatchFile := filepath.Join(forceDir, "test.patch")
-		forceErr = os.WriteFile(forcePatchFile, []byte(patchText), 0644)
+		forceErr = os.WriteFile(forcePatchFile, []byte(patchText), 0o600)
 		if forceErr != nil {
 			t.Fatal(forceErr)
 		}
@@ -507,12 +507,12 @@ func TestRunDryRun(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create test files that the patch will operate on.
-	err := os.WriteFile(filepath.Join(tmpDir, "old.txt"), []byte("old content\n"), 0644)
+	err := os.WriteFile(filepath.Join(tmpDir, "old.txt"), []byte("old content\n"), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = os.WriteFile(filepath.Join(tmpDir, "existing.txt"), []byte("existing content\n"), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "existing.txt"), []byte("existing content\n"), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -593,7 +593,7 @@ func getIntegrationTestCases() []integrationTestCase {
 		{
 			name: "delete file",
 			setup: func(dir string) error {
-				return os.WriteFile(filepath.Join(dir, "delete-me.txt"), []byte("content"), 0644)
+				return os.WriteFile(filepath.Join(dir, "delete-me.txt"), []byte("content"), 0o600)
 			},
 			patchText: "*** Begin Patch\n*** Delete File: delete-me.txt\n*** End Patch",
 			wantErr:   false,
@@ -610,7 +610,7 @@ func getIntegrationTestCases() []integrationTestCase {
 			name: "update file",
 			setup: func(dir string) error {
 				return os.WriteFile(filepath.Join(dir, "update.txt"),
-					[]byte("line 1\nline 2\nline 3\n"), 0644)
+					[]byte("line 1\nline 2\nline 3\n"), 0o600)
 			},
 			patchText: "*** Begin Patch\n*** Update File: update.txt\n@@\n line 1\n-line 2\n+line 2 updated\n line 3\n*** End Patch",
 			wantErr:   false,
@@ -631,7 +631,7 @@ func getIntegrationTestCases() []integrationTestCase {
 			name: "context not found",
 			setup: func(dir string) error {
 				return os.WriteFile(filepath.Join(dir, "mismatch.txt"),
-					[]byte("different content\n"), 0644)
+					[]byte("different content\n"), 0o600)
 			},
 			patchText:  "*** Begin Patch\n*** Update File: mismatch.txt\n@@\n expected line\n-old line\n+new line\n*** End Patch",
 			wantErr:    true,
@@ -655,7 +655,7 @@ func runIntegrationTestCase(t *testing.T, tt integrationTestCase) {
 	}
 
 	patchFile := filepath.Join(tmpDir, "test.patch")
-	err := os.WriteFile(patchFile, []byte(tt.patchText), 0644)
+	err := os.WriteFile(patchFile, []byte(tt.patchText), 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}

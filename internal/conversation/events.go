@@ -39,14 +39,14 @@ func (b *Builder) attachJSONLEventLogger(ctx context.Context, sessionID string) 
 	base := b.resolveSessionDir()
 
 	dir := filepath.Join(base, sessionID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		b.logWarnCtx(ctx, "event logger mkdir failed", "dir", dir, "err", err)
 		return
 	}
 
 	logPath := filepath.Join(dir, "events.jsonl")
 
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		b.logWarnCtx(ctx, "event logger open failed", "path", logPath, "err", err)
 		return

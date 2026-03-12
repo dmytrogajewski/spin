@@ -209,7 +209,7 @@ func (s *ToolSelector) SelectToolsForTurn(ctx context.Context, query string, tur
 	}
 
 	// Step 6: Build final tool list (includes newly loaded tools).
-	finalTools := s.buildFinalToolList(selected, loadResult.loaded)
+	finalTools := s.buildFinalToolList(ctx, selected, loadResult.loaded)
 
 	// Step 7: Update sticky tools.
 	s.updateStickyTools(finalTools)
@@ -304,7 +304,6 @@ func (s *ToolSelector) searchMCPRegistries(ctx context.Context, query string) []
 	}
 
 	searchCtx := &mcp.SearchContext{
-		Ctx:            ctx,
 		DynamicLoadout: true,
 	}
 
@@ -312,7 +311,7 @@ func (s *ToolSelector) searchMCPRegistries(ctx context.Context, query string) []
 
 	for _, reg := range registryMgr.All() {
 		isDynamic := isRegistryDynamic(reg)
-		foundTools := reg.Search(searchCtx, query, s.config.MaxToolsPerSearch)
+		foundTools := reg.Search(ctx, searchCtx, query, s.config.MaxToolsPerSearch)
 
 		for i, t := range foundTools {
 			scored := s.scoreRegistryTool(t, i, len(foundTools), isDynamic, reg)
@@ -549,8 +548,7 @@ func (s *ToolSelector) loadServer(ctx context.Context, serverPath string) ([]too
 
 // buildFinalToolList extracts the actual tools from scored candidates,
 // replacing loadable stubs with their actual loaded implementations.
-func (s *ToolSelector) buildFinalToolList(selected []ScoredTool, newlyLoaded []tools.Tool) []tools.Tool {
-	ctx := context.Background()
+func (s *ToolSelector) buildFinalToolList(ctx context.Context, selected []ScoredTool, newlyLoaded []tools.Tool) []tools.Tool {
 	result := make([]tools.Tool, 0, len(selected)+len(newlyLoaded))
 	seen := make(map[string]bool)
 

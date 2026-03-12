@@ -19,10 +19,10 @@ func TestApplyPatch_SimplePatch(t *testing.T) {
 
 	// Create initial file.
 	testFile := filepath.Join(tmpDir, "hello.txt")
-	err := os.WriteFile(testFile, []byte("Hello World\n"), 0644)
+	err := os.WriteFile(testFile, []byte("Hello World\n"), 0o600)
 	require.NoError(t, err)
-	_ = exec.Command("git", "-C", tmpDir, "add", ".").Run()
-	_ = exec.Command("git", "-C", tmpDir, "commit", "-m", "initial").Run()
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "add", ".").Run()
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "commit", "-m", "initial").Run()
 
 	patchText := `diff --git a/hello.txt b/hello.txt
 index 557db03..980a0d5 100644
@@ -85,9 +85,9 @@ func TestApplyPatch_DeleteFile(t *testing.T) {
 
 	// Create file to delete.
 	testFile := filepath.Join(tmpDir, "delete.txt")
-	_ = os.WriteFile(testFile, []byte("to be deleted\n"), 0644)
-	_ = exec.Command("git", "-C", tmpDir, "add", ".").Run()
-	_ = exec.Command("git", "-C", tmpDir, "commit", "-m", "add file").Run()
+	_ = os.WriteFile(testFile, []byte("to be deleted\n"), 0o600)
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "add", ".").Run()
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "commit", "-m", "add file").Run()
 
 	patchText := `diff --git a/delete.txt b/delete.txt
 deleted file mode 100644
@@ -118,9 +118,9 @@ func TestApplyPatch_DryRun(t *testing.T) {
 	setupGitRepo(t, tmpDir)
 
 	testFile := filepath.Join(tmpDir, "test.txt")
-	_ = os.WriteFile(testFile, []byte("line 1\nline 2\n"), 0644)
-	_ = exec.Command("git", "-C", tmpDir, "add", ".").Run()
-	_ = exec.Command("git", "-C", tmpDir, "commit", "-m", "initial").Run()
+	_ = os.WriteFile(testFile, []byte("line 1\nline 2\n"), 0o600)
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "add", ".").Run()
+	_ = exec.CommandContext(t.Context(), "git", "-C", tmpDir, "commit", "-m", "initial").Run()
 
 	patchText := `diff --git a/test.txt b/test.txt
 index abc..def 100644
@@ -233,16 +233,18 @@ func TestPatchError_Error(t *testing.T) {
 func setupGitRepo(t *testing.T, dir string) {
 	t.Helper()
 
-	cmd := exec.Command("git", "init")
+	ctx := t.Context()
+
+	cmd := exec.CommandContext(ctx, "git", "init")
 	cmd.Dir = dir
 	require.NoError(t, cmd.Run(), "git init failed")
 
-	_ = exec.Command("git", "-C", dir, "config", "user.email", "test@example.com").Run()
-	_ = exec.Command("git", "-C", dir, "config", "user.name", "Test User").Run()
+	_ = exec.CommandContext(ctx, "git", "-C", dir, "config", "user.email", "test@example.com").Run()
+	_ = exec.CommandContext(ctx, "git", "-C", dir, "config", "user.name", "Test User").Run()
 
 	// Create initial commit.
 	readmeFile := filepath.Join(dir, "README.md")
-	_ = os.WriteFile(readmeFile, []byte("# Test Repo\n"), 0644)
-	_ = exec.Command("git", "-C", dir, "add", ".").Run()
-	_ = exec.Command("git", "-C", dir, "commit", "-m", "Initial commit").Run()
+	_ = os.WriteFile(readmeFile, []byte("# Test Repo\n"), 0o600)
+	_ = exec.CommandContext(ctx, "git", "-C", dir, "add", ".").Run()
+	_ = exec.CommandContext(ctx, "git", "-C", dir, "commit", "-m", "Initial commit").Run()
 }

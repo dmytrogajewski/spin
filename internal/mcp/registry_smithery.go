@@ -224,20 +224,20 @@ func (r *SmitheryRegistry) Count() int {
 
 // Search finds tools matching the query.
 // For static registries, this searches already-loaded tools.
-// For dynamic registries (with SearchContext.Ctx), this calls the Smithery API and returns loadable tool stubs.
-func (r *SmitheryRegistry) Search(ctx *SearchContext, query string, maxResults int) []tools.Tool {
+// For dynamic registries (with context), this calls the Smithery API and returns loadable tool stubs.
+func (r *SmitheryRegistry) Search(ctx context.Context, _ *SearchContext, query string, maxResults int) []tools.Tool {
 	// For static mode, just search loaded tools.
 	if !r.IsDynamic() {
 		return SearchTools(r.List(), query, maxResults, DefaultSearchOptions())
 	}
 
 	// For dynamic mode without context, fall back to loaded tools.
-	if ctx == nil || ctx.Ctx == nil {
+	if ctx == nil {
 		return SearchTools(r.List(), query, maxResults, DefaultSearchOptions())
 	}
 
 	// Dynamic mode with context: search the Smithery API.
-	searchCtx, cancel := context.WithTimeout(ctx.Ctx, 10*time.Second)
+	searchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	searchResp, err := r.apiClient.SearchTools(searchCtx, query, maxResults)

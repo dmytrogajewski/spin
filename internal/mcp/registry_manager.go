@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -113,8 +114,8 @@ func (m *DefaultRegistryManager) AllTools() []tools.Tool {
 }
 
 // Search searches across all registries.
-// ctx can be nil for simple searches; required for dynamic registries that call APIs.
-func (m *DefaultRegistryManager) Search(ctx *SearchContext, query string, maxResults int) []tools.Tool {
+// ctx is for cancellation and timeouts; searchCtx provides additional search options (can be nil).
+func (m *DefaultRegistryManager) Search(ctx context.Context, searchCtx *SearchContext, query string, maxResults int) []tools.Tool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -122,7 +123,7 @@ func (m *DefaultRegistryManager) Search(ctx *SearchContext, query string, maxRes
 
 	// Search each registry.
 	for _, registry := range m.registries {
-		results := registry.Search(ctx, query, maxResults)
+		results := registry.Search(ctx, searchCtx, query, maxResults)
 		allResults = append(allResults, results...)
 	}
 

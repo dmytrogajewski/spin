@@ -40,7 +40,7 @@ protocol:
   shell_timeout: 60s
 `
 
-	err := os.WriteFile(configPath, []byte(configYAML), 0644)
+	err := os.WriteFile(configPath, []byte(configYAML), 0o600)
 	require.NoError(t, err, "failed to write test config file")
 
 	// Load the configuration.
@@ -89,7 +89,7 @@ llm:
   invalid yaml here: [unclosed
 `
 
-	err := os.WriteFile(configPath, []byte(invalidYAML), 0644)
+	err := os.WriteFile(configPath, []byte(invalidYAML), 0o600)
 	require.NoError(t, err, "failed to write test config file")
 
 	loader := NewLoaderV2()
@@ -119,7 +119,7 @@ agent:
   work_dir: "."
 `
 
-	err := os.WriteFile(configPath, []byte(minimalYAML), 0644)
+	err := os.WriteFile(configPath, []byte(minimalYAML), 0o600)
 	require.NoError(t, err, "failed to write test config file")
 
 	loader := NewLoaderV2()
@@ -192,7 +192,7 @@ agent:
   work_dir: "."
 `
 
-	err := os.WriteFile(configPath, []byte(configYAML), 0644)
+	err := os.WriteFile(configPath, []byte(configYAML), 0o600)
 	require.NoError(t, err, "failed to write test config file")
 
 	// Env var has provider="anthropic" - should override file.
@@ -274,7 +274,7 @@ agent:
   max_turns: 30
 `
 
-	err := os.WriteFile(configPath, []byte(configYAML), 0644)
+	err := os.WriteFile(configPath, []byte(configYAML), 0o600)
 	require.NoError(t, err, "failed to write test config file")
 
 	cfg, err := Load(Source{File: configPath})
@@ -303,7 +303,7 @@ agent:
   max_turns: 30
 `
 
-	err := os.WriteFile(configPath, []byte(configYAML), 0644)
+	err := os.WriteFile(configPath, []byte(configYAML), 0o600)
 	require.NoError(t, err, "failed to write test config file")
 
 	cfg, err := Load(Source{

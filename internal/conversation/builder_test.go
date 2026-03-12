@@ -93,7 +93,7 @@ func TestBuilder_WithGit(t *testing.T) {
 	b := NewBuilder(cfg, workDir, rt, emitter, provider)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	gitSvc, err := gitpkg.NewService(false, "/tmp", logger)
+	gitSvc, err := gitpkg.NewService(context.Background(), false, "/tmp", logger)
 	require.NoError(t, err)
 
 	defer gitSvc.Close()
@@ -112,7 +112,7 @@ func TestBuilder_WithShell(t *testing.T) {
 	b := NewBuilder(cfg, workDir, rt, emitter, provider)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	shellSvc, err := shellpkg.NewService(false, workDir, logger, 30*time.Second)
+	shellSvc, err := shellpkg.NewService(context.Background(), false, workDir, logger, 30*time.Second)
 	require.NoError(t, err)
 
 	defer shellSvc.Close()
@@ -177,12 +177,12 @@ func TestBuilder_Build_WithServices(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Create services.
-	gitSvc, err := gitpkg.NewService(false, tempDir, logger)
+	gitSvc, err := gitpkg.NewService(context.Background(), false, tempDir, logger)
 	require.NoError(t, err)
 
 	defer gitSvc.Close()
 
-	shellSvc, err := shellpkg.NewService(false, tempDir, logger, 30*time.Second)
+	shellSvc, err := shellpkg.NewService(context.Background(), false, tempDir, logger, 30*time.Second)
 	require.NoError(t, err)
 
 	defer shellSvc.Close()
@@ -238,10 +238,10 @@ func TestBuilder_FluentAPI(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Test fluent API chaining.
-	gitSvc, _ := gitpkg.NewService(false, tempDir, logger)
+	gitSvc, _ := gitpkg.NewService(context.Background(), false, tempDir, logger)
 	defer gitSvc.Close()
 
-	shellSvc, _ := shellpkg.NewService(false, tempDir, logger, 30*time.Second)
+	shellSvc, _ := shellpkg.NewService(context.Background(), false, tempDir, logger, 30*time.Second)
 	defer shellSvc.Close()
 
 	rt, emitter, provider := createTestRuntime(t, tempDir)
@@ -268,7 +268,7 @@ func TestBuilder_ServiceReuse(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	// Create a single Git service.
-	gitSvc, err := gitpkg.NewService(false, tempDir, logger)
+	gitSvc, err := gitpkg.NewService(context.Background(), false, tempDir, logger)
 	require.NoError(t, err)
 
 	defer gitSvc.Close()

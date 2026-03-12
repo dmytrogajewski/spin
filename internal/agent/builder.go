@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -218,15 +219,15 @@ func (b *Builder) newExecutor() *Executor {
 
 // BuildEnvironment gathers environment information for the working directory.
 // This is a public helper for use by conversation package.
-func (b *Builder) BuildEnvironment() *Environment {
-	return b.gatherEnvironment()
+func (b *Builder) BuildEnvironment(ctx context.Context) *Environment {
+	return b.gatherEnvironment(ctx)
 }
 
 // gatherEnvironment gathers environment information for the working directory.
-func (b *Builder) gatherEnvironment() *Environment {
+func (b *Builder) gatherEnvironment(ctx context.Context) *Environment {
 	opts := b.buildEnvironmentOptions()
 
-	env, err := GatherEnvironment(b.workingDir, opts...)
+	env, err := GatherEnvironment(ctx, b.workingDir, opts...)
 	if err != nil {
 		// In builder pattern, we panic on invalid configuration.
 		panic("failed to gather environment: " + err.Error())
@@ -349,13 +350,13 @@ func (b *Builder) BuildOptions() []Option {
 
 // BuildACEService creates ACE service if enabled.
 // This is a public helper for use by conversation package.
-func (b *Builder) BuildACEService() (*ACEService, error) {
+func (b *Builder) BuildACEService(ctx context.Context) (*ACEService, error) {
 	aceConfig := b.getACEConfig()
 	if aceConfig == nil || !aceConfig.Enabled {
 		return nil, ErrAceNotEnabled
 	}
 
-	return NewACEService(aceConfig, b.workingDir, b.provider, b.getModel(), b.getMaxTokens())
+	return NewACEService(ctx, aceConfig, b.workingDir, b.provider, b.getModel(), b.getMaxTokens())
 }
 
 // BuildAgentsMDService creates AGENTS.md service if enabled.

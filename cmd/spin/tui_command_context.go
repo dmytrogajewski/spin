@@ -39,7 +39,7 @@ func (c *tuiCommandContext) GetWorkDir() string {
 // Returns:
 //   - handled: true if command was recognized and processed
 //   - error: non-nil if command execution failed or exit was requested
-func handleCommand(ui *adapters.PureTTY, conv *conversation.Conversation, cmdName string, args []string) (handled bool, err error) {
+func handleCommand(ctx context.Context, ui *adapters.PureTTY, conv *conversation.Conversation, cmdName string, args []string) (handled bool, err error) {
 	// Create command context.
 	cmdCtx := &tuiCommandContext{conv: conv}
 
@@ -49,7 +49,7 @@ func handleCommand(ui *adapters.PureTTY, conv *conversation.Conversation, cmdNam
 	}
 
 	// Execute command via command system.
-	result, err := commands.ExecuteCommand(context.Background(), cmdName, args, cmdCtx)
+	result, err := commands.ExecuteCommand(ctx, cmdName, args, cmdCtx)
 	if err != nil {
 		// Check if it's an unknown command.
 		if strings.Contains(err.Error(), "unknown command") {

@@ -152,7 +152,7 @@ func (h *History) MaxTokens() int {
 // compression is triggered after adding the message.
 //
 // Returns an error if the message is invalid (e.g., empty role).
-func (h *History) AddMessage(msg message.Message) error {
+func (h *History) AddMessage(ctx context.Context, msg message.Message) error {
 	if msg.Role == "" {
 		return fmt.Errorf("%w: role is required", ErrInvalidMessage)
 	}
@@ -194,7 +194,7 @@ func (h *History) AddMessage(msg message.Message) error {
 	// Check if compression needed.
 	if h.shouldCompressLocked() {
 		// Compression is best-effort; errors are logged but don't fail AddMessage.
-		_ = h.compressLocked(context.Background())
+		_ = h.compressLocked(ctx)
 	}
 
 	return nil
@@ -274,8 +274,8 @@ func (h *History) emitCompressionEventLocked(beforeCount, beforeTokens, afterCou
 // AddSystemMessage adds a system message to the history.
 //
 // This is a convenience method for adding system role messages.
-func (h *History) AddSystemMessage(content string) error {
-	return h.AddMessage(message.Message{
+func (h *History) AddSystemMessage(ctx context.Context, content string) error {
+	return h.AddMessage(ctx, message.Message{
 		Role:    message.RoleSystem,
 		Content: content,
 	})
@@ -284,8 +284,8 @@ func (h *History) AddSystemMessage(content string) error {
 // AddUserMessage adds a user message to the history.
 //
 // This is a convenience method for adding user role messages.
-func (h *History) AddUserMessage(content string) error {
-	return h.AddMessage(message.Message{
+func (h *History) AddUserMessage(ctx context.Context, content string) error {
+	return h.AddMessage(ctx, message.Message{
 		Role:    message.RoleUser,
 		Content: content,
 	})

@@ -48,7 +48,7 @@ func TestService_Load_Success(t *testing.T) {
 	agentsPath := filepath.Join(tempDir, FileName)
 
 	content := "# Test Project Instructions\n\nThis is a test."
-	err := os.WriteFile(agentsPath, []byte(content), 0644)
+	err := os.WriteFile(agentsPath, []byte(content), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestService_Load_Disabled(t *testing.T) {
 	tempDir := t.TempDir()
 
 	agentsPath := filepath.Join(tempDir, FileName)
-	err := os.WriteFile(agentsPath, []byte("content"), 0644)
+	err := os.WriteFile(agentsPath, []byte("content"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestService_Load_CustomPath(t *testing.T) {
 	customPath := filepath.Join(tempDir, "custom-agents.md")
 
 	content := "# Custom Instructions"
-	err := os.WriteFile(customPath, []byte(content), 0644)
+	err := os.WriteFile(customPath, []byte(content), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestService_Load_NotFound(t *testing.T) {
 	tempDir := t.TempDir()
 
 	isolatedDir := filepath.Join(tempDir, "isolated", "deep", "path")
-	err := os.MkdirAll(isolatedDir, 0755)
+	err := os.MkdirAll(isolatedDir, 0o750)
 	if err != nil {
 		t.Fatalf("failed to create isolated dir: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestService_Load_SizeLimit(t *testing.T) {
 
 	// Create content larger than limit.
 	largeContent := strings.Repeat("A", 1000)
-	err := os.WriteFile(agentsPath, []byte(largeContent), 0644)
+	err := os.WriteFile(agentsPath, []byte(largeContent), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -238,7 +238,7 @@ func TestService_Refresh(t *testing.T) {
 	agentsPath := filepath.Join(tempDir, FileName)
 
 	// Initial content.
-	err := os.WriteFile(agentsPath, []byte("# Version 1"), 0644)
+	err := os.WriteFile(agentsPath, []byte("# Version 1"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestService_Refresh(t *testing.T) {
 	}
 
 	// Update file.
-	err = os.WriteFile(agentsPath, []byte("# Version 2"), 0644)
+	err = os.WriteFile(agentsPath, []byte("# Version 2"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to update test file: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestService_ThreadSafety(t *testing.T) {
 	tempDir := t.TempDir()
 
 	agentsPath := filepath.Join(tempDir, FileName)
-	err := os.WriteFile(agentsPath, []byte("# Concurrent Test"), 0644)
+	err := os.WriteFile(agentsPath, []byte("# Concurrent Test"), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}

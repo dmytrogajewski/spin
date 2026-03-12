@@ -95,7 +95,7 @@ func TestArgumentParser_CustomConfiguration(t *testing.T) {
 // Benchmark tests.
 func BenchmarkArgumentParser_Parse(b *testing.B) {
 	parser := &ArgumentParser{AllowEmpty: true}
-	input := `{"path": "/tmp/file.txt", "mode": 0644, "recursive": true}`
+	input := `{"path": "/tmp/file.txt", "mode": 0o600, "recursive": true}`
 
 	b.ResetTimer()
 

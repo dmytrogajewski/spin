@@ -1,6 +1,7 @@
 package acp
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,7 +33,7 @@ func shouldSkipBuild() bool {
 func buildSpinBinary() {
 	fmt.Fprintln(os.Stdout, "Building spin binary for ACP e2e tests (with e2e_llm_test tag)...")
 
-	cmd := exec.Command("go", "build", "-tags", "e2e_llm_test", "-o", binPath, "../../../cmd/spin")
+	cmd := exec.CommandContext(context.Background(), "go", "build", "-tags", "e2e_llm_test", "-o", binPath, "../../../cmd/spin")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to build binary: %v\n%s\n", err, output)

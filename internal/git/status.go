@@ -74,7 +74,7 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 	// Get tracking branch and ahead/behind
 	// This is a best-effort operation - if it fails, we continue without tracking info.
 	if head.Name().IsBranch() {
-		remoteBranch, ahead, behind := r.getTrackingInfo(head.Name().Short())
+		remoteBranch, ahead, behind := r.getTrackingInfo(ctx, head.Name().Short())
 		status.RemoteBranch = remoteBranch
 		status.Ahead = ahead
 		status.Behind = behind
@@ -107,9 +107,9 @@ func mapGoGitStatus(status gogit.StatusCode) StatusCode {
 
 // getTrackingInfo returns tracking branch name and ahead/behind counts
 // Returns empty string and 0, 0 if no tracking branch.
-func (r *Repository) getTrackingInfo(branchName string) (remoteBranch string, ahead, behind int) {
+func (r *Repository) getTrackingInfo(ctx context.Context, branchName string) (remoteBranch string, ahead, behind int) {
 	// Get upstream branch.
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", branchName+"@{upstream}")
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", branchName+"@{upstream}")
 	cmd.Dir = r.root
 
 	output, err := cmd.Output()
@@ -123,7 +123,7 @@ func (r *Repository) getTrackingInfo(branchName string) (remoteBranch string, ah
 	}
 
 	// Get ahead/behind counts.
-	cmd = exec.Command("git", "rev-list", "--left-right", "--count", branchName+"..."+remoteBranch)
+	cmd = exec.CommandContext(ctx, "git", "rev-list", "--left-right", "--count", branchName+"..."+remoteBranch)
 	cmd.Dir = r.root
 
 	output, err = cmd.Output()

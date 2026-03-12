@@ -168,7 +168,7 @@ func TestTUIBasicChat(t *testing.T) {
 					return
 				}
 
-				_ = mapper.MapEvent(event)
+				_ = mapper.MapEvent(ctx, event)
 			}
 		}
 	}()
@@ -308,7 +308,7 @@ func TestTUIMultiTurn(t *testing.T) {
 					return
 				}
 
-				_ = mapper.MapEvent(event)
+				_ = mapper.MapEvent(ctx, event)
 			}
 		}
 	}()

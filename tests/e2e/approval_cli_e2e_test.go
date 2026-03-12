@@ -74,7 +74,7 @@ func TestApprovalCLI_Revoke_NonExistent(t *testing.T) {
 
 // writeFile is a tiny helper to reduce boilerplate in e2e tests.
 func writeFile(path, content string) error {
-	err := os.WriteFile(path, []byte(content), 0644)
+	err := os.WriteFile(path, []byte(content), 0o600)
 	if err != nil {
 		return fmt.Errorf("write file %s: %w", path, err)
 	}

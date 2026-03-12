@@ -13,6 +13,7 @@ import (
 	termx "golang.org/x/term"
 
 	"github.com/dmytrogajewski/spin/internal/agent/executor"
+	spinterm "github.com/dmytrogajewski/spin/internal/ui/term"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
@@ -208,7 +209,7 @@ func resolveSessionID(storage session.Storage, workDir, prefix string) string {
 func createExecUI() (ports.UI, error) {
 	opts := []adapters.PureTTYOption{adapters.WithExecMode()}
 
-	if !termx.IsTerminal(int(os.Stdout.Fd())) || !termx.IsTerminal(int(os.Stdin.Fd())) {
+	if !termx.IsTerminal(spinterm.SafeFd(os.Stdout.Fd())) || !termx.IsTerminal(spinterm.SafeFd(os.Stdin.Fd())) {
 		mockTty := &mockTTY{width: 120, height: 30}
 		opts = append(opts, adapters.WithTTY(mockTty))
 	}
@@ -231,7 +232,7 @@ func buildConversation(ctx context.Context, cfg *config.V2, workDir string, buil
 	if services.MCP != nil {
 		builder = builder.WithMCP(services.MCP)
 
-		if toolSelector := createToolSelector(services.MCP, nil, emitter, cfg, slog.Default()); toolSelector != nil {
+		if toolSelector := createToolSelector(ctx, services.MCP, nil, emitter, cfg, slog.Default()); toolSelector != nil {
 			builder = builder.WithToolSelector(toolSelector)
 		}
 	}
@@ -296,8 +297,8 @@ func (m *mockTTY) Size() (int, int)           { return m.width, m.height }
 func (m *mockTTY) OnResize(_ func(w, h int)) {}
 
 // processExecEvent handles a single event in exec mode.
-func processExecEvent(event events.Event, mapper *tui.Mapper, ui *adapters.PureTTY, conv *conversation.Conversation) {
-	mapErr := mapper.MapEvent(event)
+func processExecEvent(ctx context.Context, event events.Event, mapper *tui.Mapper, ui *adapters.PureTTY, conv *conversation.Conversation) {
+	mapErr := mapper.MapEvent(ctx, event)
 	if mapErr != nil {
 		_ = ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", mapErr))
 	}
@@ -323,7 +324,7 @@ func startExecEventLoop(ctx context.Context, eventStream <-chan events.Event, ma
 				if !ok {
 					return
 				}
-				processExecEvent(event, mapper, ui, conv)
+				processExecEvent(ctx, event, mapper, ui, conv)
 			}
 		}
 	}()

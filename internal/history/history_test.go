@@ -53,7 +53,7 @@ func TestHistory_AddMessage(t *testing.T) {
 
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
-	err := h.AddMessage(message.Message{
+	err := h.AddMessage(context.Background(), message.Message{
 		Role:    message.RoleUser,
 		Content: "Hello",
 	})
@@ -84,7 +84,7 @@ func TestHistory_AddMessage_EmptyRole(t *testing.T) {
 
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
-	err := h.AddMessage(message.Message{
+	err := h.AddMessage(context.Background(), message.Message{
 		Content: "Hello",
 	})
 	if err == nil {
@@ -97,7 +97,7 @@ func TestHistory_AddSystemMessage(t *testing.T) {
 
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
-	err := h.AddSystemMessage("You are helpful.")
+	err := h.AddSystemMessage(context.Background(), "You are helpful.")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestHistory_AddUserMessage(t *testing.T) {
 
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
-	err := h.AddUserMessage("Hello!")
+	err := h.AddUserMessage(context.Background(), "Hello!")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -137,12 +137,12 @@ func TestHistory_TokenCount(t *testing.T) {
 
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
-	_ = h.AddMessage(message.Message{
+	_ = h.AddMessage(context.Background(), message.Message{
 		Role:    message.RoleUser,
 		Content: "Hello",
 		Tokens:  10,
 	})
-	_ = h.AddMessage(message.Message{
+	_ = h.AddMessage(context.Background(), message.Message{
 		Role:    message.RoleAssistant,
 		Content: "Hi there!",
 		Tokens:  20,
@@ -158,7 +158,7 @@ func TestHistory_Messages_DefensiveCopy(t *testing.T) {
 	t.Parallel()
 
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
-	_ = h.AddUserMessage("Hello")
+	_ = h.AddUserMessage(context.Background(), "Hello")
 
 	msgs := h.Messages()
 	msgs[0].Content = "Modified"
@@ -233,7 +233,7 @@ func TestHistory_CompressionTrigger(t *testing.T) {
 
 	// Add messages that will exceed threshold.
 	for range 5 {
-			_ = h.AddUserMessage("User message content here")
+			_ = h.AddUserMessage(context.Background(), "User message content here")
 	}
 
 	// Should have compressed.
@@ -279,7 +279,7 @@ func TestHistory_CompressionDisabled(t *testing.T) {
 
 	// Add messages that would exceed threshold.
 	for range 10 {
-		_ = h.AddUserMessage("User message content")
+		_ = h.AddUserMessage(context.Background(), "User message content")
 	}
 
 	// Should NOT have compressed.
@@ -303,7 +303,7 @@ func TestHistory_NoCompressorSet(t *testing.T) {
 
 	// Add messages.
 	for range 10 {
-		_ = h.AddUserMessage("User message")
+		_ = h.AddUserMessage(context.Background(), "User message")
 	}
 
 	// Should NOT have compressed (no compressor).
@@ -344,9 +344,9 @@ func TestHistory_CompressionCallsCompressor(t *testing.T) {
 	})
 
 	// Add messages to trigger compression.
-	_ = h.AddUserMessage("Message 1")
-	_ = h.AddUserMessage("Message 2")
-	_ = h.AddUserMessage("Message 3")
+	_ = h.AddUserMessage(context.Background(), "Message 1")
+	_ = h.AddUserMessage(context.Background(), "Message 2")
+	_ = h.AddUserMessage(context.Background(), "Message 3")
 
 	// Compressor should have been called.
 	if mock.callCount == 0 {
@@ -358,8 +358,8 @@ func TestHistory_MessagesForLLM(t *testing.T) {
 	t.Parallel()
 
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
-	_ = h.AddSystemMessage("System")
-	_ = h.AddUserMessage("User")
+	_ = h.AddSystemMessage(context.Background(), "System")
+	_ = h.AddUserMessage(context.Background(), "User")
 
 	msgs := h.MessagesForLLM()
 	if len(msgs) != 2 {
@@ -372,7 +372,7 @@ func TestHistory_ToolCallTokenCounting(t *testing.T) {
 
 	h := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
-	err := h.AddMessage(message.Message{
+	err := h.AddMessage(context.Background(), message.Message{
 		Role:    message.RoleAssistant,
 		Content: "Let me check that file.",
 		ToolCalls: []message.ToolCall{

@@ -121,7 +121,7 @@ func TestAgent_WithACEService(t *testing.T) {
 	}
 
 	mockLLM := llm.NewMockProvider("test")
-	aceService, err := NewACEService(cfg, tmpDir, mockLLM, "test-model", 0)
+	aceService, err := NewACEService(context.Background(), cfg, tmpDir, mockLLM, "test-model", 0)
 	require.NoError(t, err)
 
 	// Create agent with ACE.
@@ -161,7 +161,7 @@ func TestAgent_ACEIntegration_EndToEnd(t *testing.T) {
 		},
 	}
 
-	aceService, err := NewACEService(cfg, tmpDir, nil, "", 0)
+	aceService, err := NewACEService(context.Background(), cfg, tmpDir, nil, "", 0)
 	require.NoError(t, err)
 
 	// Add test bullets to playbook.
@@ -243,7 +243,7 @@ func TestAgent_ACEDisabled(t *testing.T) {
 		Enabled: false,
 	}
 
-	aceService, err := NewACEService(cfg, tmpDir, nil, "", 0)
+	aceService, err := NewACEService(context.Background(), cfg, tmpDir, nil, "", 0)
 	require.NoError(t, err)
 
 	mockProvider := llm.NewMockProvider("test-response")

@@ -243,7 +243,7 @@ func (m *MCPConfigStore) writeConfig() error {
 		m.configFile = configFile
 
 		// Create directory if needed.
-		err = os.MkdirAll(spinDir, 0755)
+		err = os.MkdirAll(spinDir, 0o750)
 		if err != nil {
 			return fmt.Errorf("failed to create config directory: %w", err)
 		}

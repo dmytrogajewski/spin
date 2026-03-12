@@ -26,8 +26,8 @@ func createTestFiles(t *testing.T, root string, files []string) {
 	for _, file := range files {
 		fullPath := filepath.Join(root, file)
 		dir := filepath.Dir(fullPath)
-		require.NoError(t, os.MkdirAll(dir, 0755))
-		require.NoError(t, os.WriteFile(fullPath, []byte("test"), 0644))
+		require.NoError(t, os.MkdirAll(dir, 0o750))
+		require.NoError(t, os.WriteFile(fullPath, []byte("test"), 0o600))
 	}
 }
 
@@ -413,7 +413,7 @@ func TestSearcher_WithGitignore(t *testing.T) {
 *.log
 dist/
 `
-	require.NoError(t, os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644))
+	require.NoError(t, os.WriteFile(gitignorePath, []byte(gitignoreContent), 0o600))
 
 	// Create files.
 	files := []string{

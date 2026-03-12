@@ -57,7 +57,7 @@ type ACEService struct {
 // The llm parameter is optional - if nil, bullet generation is disabled.
 // The modelName parameter specifies which LLM model to use for generation.
 // The maxTokens parameter sets the max tokens for LLM calls (0 = use default).
-func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName string, maxTokens int) (*ACEService, error) {
+func NewACEService(ctx context.Context, cfg *ACEConfig, workDir string, llm llm.Provider, modelName string, maxTokens int) (*ACEService, error) {
 	if cfg == nil {
 		return nil, ErrConfigIsRequired
 	}
@@ -76,7 +76,7 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 
 	embedder := createEmbedder(logger)
 
-	pb, err := loadOrCreatePlaybook(playbookPath, embedder, logger)
+	pb, err := loadOrCreatePlaybook(ctx, playbookPath, embedder, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func createEmbedder(logger *slog.Logger) embedding.Embedder {
 }
 
 // loadOrCreatePlaybook loads an existing playbook or creates a new one with seeds.
-func loadOrCreatePlaybook(playbookPath string, embedder embedding.Embedder, logger *slog.Logger) (*playbook.Playbook, error) {
+func loadOrCreatePlaybook(ctx context.Context, playbookPath string, embedder embedding.Embedder, logger *slog.Logger) (*playbook.Playbook, error) {
 	_, statErr := os.Stat(playbookPath)
 	if statErr == nil {
 		pb, err := playbook.Load(playbookPath, nil, embedder)
@@ -144,11 +144,11 @@ func loadOrCreatePlaybook(playbookPath string, embedder embedding.Embedder, logg
 	pb := playbook.New(nil, embedder)
 
 	dir := filepath.Dir(playbookPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create playbook directory: %w", err)
 	}
 
-	if err := seedInitialBullets(pb, embedder); err != nil {
+	if err := seedInitialBullets(ctx, pb, embedder); err != nil {
 		logger.Warn("Failed to seed initial bullets", "error", err)
 	}
 
@@ -759,10 +759,9 @@ func (s *ACEService) checkGrowthAndRefine(ctx context.Context) {
 			"bullet_count", metrics.BulletCount,
 			"estimated_tokens", metrics.EstimatedTokens)
 
-		// Trigger refinement asynchronously.
+		// Trigger refinement asynchronously with a detached context.
+		bgCtx := context.WithoutCancel(ctx)
 		go func() {
-			bgCtx := context.Background()
-
 			result, err := s.curator.Refine(bgCtx)
 			if err != nil {
 				s.logger.WarnContext(bgCtx, "Refinement failed", "error", err)
@@ -856,8 +855,7 @@ func expandPath(path string) string {
 
 // seedInitialBullets seeds the playbook with initial Go/coding best practices.
 // This provides a starting point for ACE to learn from.
-func seedInitialBullets(pb *playbook.Playbook, embedder embedding.Embedder) error {
-	ctx := context.Background()
+func seedInitialBullets(ctx context.Context, pb *playbook.Playbook, embedder embedding.Embedder) error {
 
 	// Seed bullets covering common Go patterns and best practices.
 	seeds := []struct {

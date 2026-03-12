@@ -1,6 +1,8 @@
 package conversation
 
 import (
+	"context"
+
 	"github.com/dmytrogajewski/spin/internal/context/summarizer"
 	"github.com/dmytrogajewski/spin/internal/history"
 	"github.com/dmytrogajewski/spin/internal/history/compress"
@@ -8,7 +10,7 @@ import (
 )
 
 // createHistory creates a new history instance with event emitter, compression, and summarization configured.
-func (b *Builder) createHistory() *history.History {
+func (b *Builder) createHistory(ctx context.Context) *history.History {
 	// Use a reasonable default based on the LLM's max tokens.
 	maxTokens := b.getHistoryMaxTokens()
 
@@ -40,7 +42,7 @@ func (b *Builder) createHistory() *history.History {
 	h.SetCompressor(compressor)
 	h.SetCompressionConfig(history.DefaultCompressionConfig())
 
-	_ = h.AddSystemMessage("You are a helpful AI coding assistant.")
+	_ = h.AddSystemMessage(ctx, "You are a helpful AI coding assistant.")
 
 	return h
 }

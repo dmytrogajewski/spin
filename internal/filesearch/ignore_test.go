@@ -54,7 +54,7 @@ func TestNewIgnoreHandler_LoadGitignore(t *testing.T) {
 build/
 temp
 `
-	err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644)
+	err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -78,7 +78,7 @@ func TestNewIgnoreHandler_LoadSpinignore(t *testing.T) {
 	spinignoreContent := `custom-dir/
 *.tmp
 `
-	err := os.WriteFile(spinignorePath, []byte(spinignoreContent), 0644)
+	err := os.WriteFile(spinignorePath, []byte(spinignoreContent), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -95,11 +95,11 @@ func TestNewIgnoreHandler_BothFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	err := os.WriteFile(gitignorePath, []byte("*.log\n"), 0644)
+	err := os.WriteFile(gitignorePath, []byte("*.log\n"), 0o600)
 	require.NoError(t, err)
 
 	spinignorePath := filepath.Join(tmpDir, ".spinignore")
-	err = os.WriteFile(spinignorePath, []byte("*.tmp\n"), 0644)
+	err = os.WriteFile(spinignorePath, []byte("*.tmp\n"), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -116,7 +116,7 @@ func TestNewIgnoreHandler_EmptyFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	err := os.WriteFile(gitignorePath, []byte(""), 0644)
+	err := os.WriteFile(gitignorePath, []byte(""), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -139,7 +139,7 @@ func TestNewIgnoreHandler_OnlyComments(t *testing.T) {
 
 
 `
-	err := os.WriteFile(gitignorePath, []byte(content), 0644)
+	err := os.WriteFile(gitignorePath, []byte(content), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -159,7 +159,7 @@ func TestIgnoreHandler_IsIgnored_SimplePattern(t *testing.T) {
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
 	// Use **/*.log to match .log files at any depth (proper gitignore syntax).
-	err := os.WriteFile(gitignorePath, []byte("*.log\n**/*.log\n"), 0644)
+	err := os.WriteFile(gitignorePath, []byte("*.log\n**/*.log\n"), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -195,7 +195,7 @@ func TestIgnoreHandler_IsIgnored_DirectoryPattern(t *testing.T) {
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
 	// Pattern with trailing / should only match directories, not files with same name.
-	err := os.WriteFile(gitignorePath, []byte("dist/\n"), 0644)
+	err := os.WriteFile(gitignorePath, []byte("dist/\n"), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -231,7 +231,7 @@ func TestIgnoreHandler_IsIgnored_DoubleStarPattern(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	err := os.WriteFile(gitignorePath, []byte("node_modules/**\n"), 0644)
+	err := os.WriteFile(gitignorePath, []byte("node_modules/**\n"), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -267,7 +267,7 @@ func TestIgnoreHandler_IsIgnored_WildcardPattern(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	err := os.WriteFile(gitignorePath, []byte("**/temp\n"), 0644)
+	err := os.WriteFile(gitignorePath, []byte("**/temp\n"), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -351,7 +351,7 @@ func TestIgnoreHandler_IsIgnored_MultiplePatterns(t *testing.T) {
 build/
 dist/
 `
-	err := os.WriteFile(gitignorePath, []byte(content), 0644)
+	err := os.WriteFile(gitignorePath, []byte(content), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -383,7 +383,7 @@ func TestIgnoreHandler_IsIgnored_CaseSensitive(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	err := os.WriteFile(gitignorePath, []byte("Build/\n"), 0644)
+	err := os.WriteFile(gitignorePath, []byte("Build/\n"), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -433,7 +433,7 @@ func TestIgnoreHandler_LoadIgnoreFile_Whitespace(t *testing.T) {
 	build/
 temp
 `
-	err := os.WriteFile(gitignorePath, []byte(content), 0644)
+	err := os.WriteFile(gitignorePath, []byte(content), 0o600)
 	require.NoError(t, err)
 
 	handler, err := NewIgnoreHandler(tmpDir)
@@ -530,7 +530,7 @@ func BenchmarkIgnoreHandler_IsIgnored_10Patterns(b *testing.B) {
 	}
 	content += contentSb476.String()
 
-	_ = os.WriteFile(gitignorePath, []byte(content), 0644)
+	_ = os.WriteFile(gitignorePath, []byte(content), 0o600)
 
 	handler, _ := NewIgnoreHandler(tmpDir)
 
@@ -553,7 +553,7 @@ func BenchmarkIgnoreHandler_IsIgnored_100Patterns(b *testing.B) {
 	}
 	content += contentSb497.String()
 
-	_ = os.WriteFile(gitignorePath, []byte(content), 0644)
+	_ = os.WriteFile(gitignorePath, []byte(content), 0o600)
 
 	handler, _ := NewIgnoreHandler(tmpDir)
 
@@ -576,7 +576,7 @@ func BenchmarkIgnoreHandler_IsIgnored_1000Patterns(b *testing.B) {
 	}
 	content += contentSb518.String()
 
-	_ = os.WriteFile(gitignorePath, []byte(content), 0644)
+	_ = os.WriteFile(gitignorePath, []byte(content), 0o600)
 
 	handler, _ := NewIgnoreHandler(tmpDir)
 
@@ -591,7 +591,7 @@ func BenchmarkIgnoreHandler_IsIgnored_Match(b *testing.B) {
 	tmpDir := b.TempDir()
 
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	_ = os.WriteFile(gitignorePath, []byte("*.log\n"), 0644)
+	_ = os.WriteFile(gitignorePath, []byte("*.log\n"), 0o600)
 
 	handler, _ := NewIgnoreHandler(tmpDir)
 

@@ -152,8 +152,8 @@ func startTUIBackground(ctx context.Context, ui *adapters.PureTTY) context.Cance
 }
 
 // processEvent handles a single event from the conversation stream.
-func processEvent(event events.Event, mapper *tui.Mapper, ui *adapters.PureTTY, conv *conversation.Conversation) {
-	mapErr := mapper.MapEvent(event)
+func processEvent(ctx context.Context, event events.Event, mapper *tui.Mapper, ui *adapters.PureTTY, conv *conversation.Conversation) {
+	mapErr := mapper.MapEvent(ctx, event)
 	if mapErr != nil {
 		_ = ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", mapErr))
 	}
@@ -187,7 +187,7 @@ func startEventLoop(ctx context.Context, eventStream <-chan events.Event, mapper
 				if !ok {
 					return
 				}
-				processEvent(event, mapper, ui, conv)
+				processEvent(ctx, event, mapper, ui, conv)
 			}
 		}
 	}()
@@ -199,15 +199,15 @@ func startEventLoop(ctx context.Context, eventStream <-chan events.Event, mapper
 func handleTUIInput(ctx context.Context, line string, ui *adapters.PureTTY, conv *conversation.Conversation, mapper *tui.Mapper, streamDone *chan struct{}) (bool, error) {
 	cmdResult := parseCommand(line)
 	if cmdResult.isCommand {
-		return handleTUICommand(ui, conv, cmdResult)
+		return handleTUICommand(ctx, ui, conv, cmdResult)
 	}
 
 	return false, executeTurn(ctx, line, conv, mapper, ui, streamDone)
 }
 
 // handleTUICommand handles a parsed command input. Returns true if exit is requested.
-func handleTUICommand(ui *adapters.PureTTY, conv *conversation.Conversation, cmdResult commandResult) (bool, error) {
-	_, cmdErr := handleCommand(ui, conv, cmdResult.command, cmdResult.args)
+func handleTUICommand(ctx context.Context, ui *adapters.PureTTY, conv *conversation.Conversation, cmdResult commandResult) (bool, error) {
+	_, cmdErr := handleCommand(ctx, ui, conv, cmdResult.command, cmdResult.args)
 	if cmdErr == nil {
 		return false, nil
 	}
@@ -392,7 +392,7 @@ func createConversationForTUI(ctx context.Context, provider llm.Provider, cfg *c
 		builder = builder.WithMCP(protocolServices.MCP)
 
 		// Create dynamic tool selector if any registry has dynamic_loadout.
-		if toolSelector := createToolSelector(protocolServices.MCP, nil, emitter, cfg, slog.Default()); toolSelector != nil {
+		if toolSelector := createToolSelector(ctx, protocolServices.MCP, nil, emitter, cfg, slog.Default()); toolSelector != nil {
 			builder = builder.WithToolSelector(toolSelector)
 		}
 	}

@@ -131,7 +131,7 @@ func (m *Manager) Get(sessionID string) (*Conversation, bool) {
 
 // Remove removes and closes a conversation.
 // Returns an error if the conversation doesn't exist or close fails.
-func (m *Manager) Remove(sessionID string) error {
+func (m *Manager) Remove(ctx context.Context, sessionID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -143,24 +143,24 @@ return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNo
 	// Close the conversation.
 	err := conv.Close()
 	if err != nil {
-		m.logger.WarnContext(context.Background(), "error closing conversation", "session_id", sessionID, "error", err)
+		m.logger.WarnContext(ctx, "error closing conversation", "session_id", sessionID, "error", err)
 	}
 
 	delete(m.conversations, sessionID)
-	m.logger.InfoContext(context.Background(), "conversation removed", "session_id", sessionID)
+	m.logger.InfoContext(ctx, "conversation removed", "session_id", sessionID)
 
 	return nil
 }
 
 // Cancel cancels the active turn for a specific session.
-func (m *Manager) Cancel(sessionID string) {
+func (m *Manager) Cancel(ctx context.Context, sessionID string) {
 	m.mu.RLock()
 	conv, ok := m.conversations[sessionID]
 	m.mu.RUnlock()
 
 	if ok {
 		conv.Cancel()
-		m.logger.DebugContext(context.Background(), "conversation canceled", "session_id", sessionID)
+		m.logger.DebugContext(ctx, "conversation canceled", "session_id", sessionID)
 	}
 }
 
@@ -192,7 +192,7 @@ return nil, fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFoun
 	err = hist.Load(m.histStorage, sessionID)
 	if err != nil {
 		// Remove the conversation if loading fails.
-		_ = m.Remove(sessionID)
+		_ = m.Remove(ctx, sessionID)
 
 		return nil, fmt.Errorf("load history: %w", err)
 	}
@@ -203,7 +203,7 @@ return nil, fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFoun
 }
 
 // Save persists a conversation's history to storage.
-func (m *Manager) Save(sessionID string) error {
+func (m *Manager) Save(ctx context.Context, sessionID string) error {
 	if m.histStorage == nil {
 		return ErrHistoryStorageNotConfigured2
 	}
@@ -221,7 +221,7 @@ return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNo
 		return fmt.Errorf("save history: %w", err)
 	}
 
-	m.logger.DebugContext(context.Background(), "conversation saved", "session_id", sessionID)
+	m.logger.DebugContext(ctx, "conversation saved", "session_id", sessionID)
 
 	return nil
 }

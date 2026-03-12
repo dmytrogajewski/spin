@@ -58,7 +58,7 @@ func buildSpinBinary() {
 	// This allows e2e tests to run without requiring external LLM services.
 	fmt.Fprintln(os.Stdout, "Building spin binary for e2e tests (with e2e_llm_test tag)...")
 
-	cmd := exec.Command("go", "build", "-tags", "e2e_llm_test", "-o", binPath, "../../cmd/spin")
+	cmd := exec.CommandContext(context.Background(), "go", "build", "-tags", "e2e_llm_test", "-o", binPath, "../../cmd/spin")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to build binary: %v\n%s\n", err, output)
@@ -109,7 +109,7 @@ func TestConfigCommands_ShowEmpty(t *testing.T) {
 	t.Parallel()
 
 	emptyConfig := filepath.Join(t.TempDir(), "spin.yaml")
-	if err := os.WriteFile(emptyConfig, []byte(""), 0644); err != nil {
+	if err := os.WriteFile(emptyConfig, []byte(""), 0o600); err != nil {
 		t.Fatalf("Failed to create empty config: %v", err)
 	}
 
@@ -127,11 +127,11 @@ func TestConfigCommands_ShowWithBinaryInCwd(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(tmpDir, "spin"), []byte{0x7f, 0x45, 0x4c, 0x46}, 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "spin"), []byte{0x7f, 0x45, 0x4c, 0x46}, 0o600); err != nil {
 		t.Fatalf("Failed to create fake binary: %v", err)
 	}
 
-	cmd := exec.Command(binPath, "config", "show")
+	cmd := exec.CommandContext(t.Context(), binPath, "config", "show")
 	cmd.Dir = tmpDir
 
 	var outBuf, errBuf bytes.Buffer
@@ -214,7 +214,7 @@ func createTempConfig(t *testing.T) string {
 	t.Helper()
 
 	configPath := filepath.Join(t.TempDir(), "spin.yaml")
-	if err := os.WriteFile(configPath, []byte("# Spin configuration\n"), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte("# Spin configuration\n"), 0o600); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
 
@@ -315,7 +315,7 @@ sandbox:
   mode: workspace-write
 `
 
-	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
 	}
 
@@ -481,7 +481,7 @@ func TestJSONOutput(t *testing.T) {
 
 		// Use a temp config file to avoid races with other tests.
 		tmpConfigPath := filepath.Join(t.TempDir(), "spin.yaml")
-		err := os.WriteFile(tmpConfigPath, []byte("# Spin configuration\n"), 0644)
+		err := os.WriteFile(tmpConfigPath, []byte("# Spin configuration\n"), 0o600)
 		if err != nil {
 			t.Fatalf("Failed to create test config: %v", err)
 		}

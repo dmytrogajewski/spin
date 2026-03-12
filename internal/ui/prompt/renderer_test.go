@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"bytes"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -108,10 +109,7 @@ func TestRenderer_Redraw_CursorPositioning(t *testing.T) {
 
 			// Extract cursor position from ANSI sequence
 			// Expected format: "\r\x1b[2K> <text>\x1b[<col>G".
-			wantSeq := "\x1b[" + string(rune('0'+tt.wantCol/10)) + string(rune('0'+tt.wantCol%10)) + "G"
-			if tt.wantCol < 10 {
-				wantSeq = "\x1b[" + string(rune('0'+tt.wantCol)) + "G"
-			}
+			wantSeq := "\x1b[" + strconv.Itoa(tt.wantCol) + "G"
 			// Simple check: output should end with cursor positioning.
 			if !bytes.HasSuffix([]byte(got), []byte(wantSeq)) {
 				t.Errorf("Redraw() cursor position mismatch\ngot output: %q\nwant cursor at col %d (seq %q)", got, tt.wantCol, wantSeq)

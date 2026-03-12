@@ -19,7 +19,7 @@ func TestNewWithNonTerminal(t *testing.T) {
 	}
 	defer tmpFile.Close()
 
-	_, err = New(int(tmpFile.Fd()), int(tmpFile.Fd()))
+	_, err = New(SafeFd(tmpFile.Fd()), SafeFd(tmpFile.Fd()))
 	if err == nil {
 		t.Error("New() with non-terminal FD should return error")
 	}
@@ -28,12 +28,12 @@ func TestNewWithNonTerminal(t *testing.T) {
 // TestNew creates TTY with valid file descriptors.
 func TestNew(t *testing.T) {
 	t.Parallel()
-	if !isTerminal(int(os.Stdin.Fd())) {
+	if !isTerminal(SafeFd(os.Stdin.Fd())) {
 		t.Skip("stdin is not a terminal, skipping New test")
 	}
 
 	// Use stdin/stdout as valid FDs.
-	tty, err := New(int(os.Stdin.Fd()), int(os.Stdout.Fd()))
+	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -46,7 +46,7 @@ func TestNew(t *testing.T) {
 // TestSize verifies cached dimensions are returned.
 func TestSize(t *testing.T) {
 	t.Parallel()
-	tty, err := New(int(os.Stdin.Fd()), int(os.Stdout.Fd()))
+	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Skipf("New() error = %v, skipping (not a terminal?)", err)
 	}
@@ -60,7 +60,7 @@ func TestSize(t *testing.T) {
 // TestOnResize registers callback and verifies it can be called.
 func TestOnResize(t *testing.T) {
 	t.Parallel()
-	tty, err := New(int(os.Stdin.Fd()), int(os.Stdout.Fd()))
+	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Skipf("New() error = %v, skipping (not a terminal?)", err)
 	}
@@ -111,7 +111,7 @@ func TestOnResize(t *testing.T) {
 // TestExitWithoutEnter ensures Exit is idempotent and safe.
 func TestExitWithoutEnter(t *testing.T) {
 	t.Parallel()
-	tty, err := New(int(os.Stdin.Fd()), int(os.Stdout.Fd()))
+	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Skipf("New() error = %v, skipping (not a terminal?)", err)
 	}
@@ -126,11 +126,11 @@ func TestExitWithoutEnter(t *testing.T) {
 // TestEnterExit verifies state transitions.
 func TestEnterExit(t *testing.T) {
 	t.Parallel()
-	if !isTerminal(int(os.Stdin.Fd())) {
+	if !isTerminal(SafeFd(os.Stdin.Fd())) {
 		t.Skip("stdin is not a terminal, skipping Enter/Exit test")
 	}
 
-	tty, err := New(int(os.Stdin.Fd()), int(os.Stdout.Fd()))
+	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -153,11 +153,11 @@ func TestEnterExit(t *testing.T) {
 // TestEnterTwice ensures calling Enter twice returns error or is idempotent.
 func TestEnterTwice(t *testing.T) {
 	t.Parallel()
-	if !isTerminal(int(os.Stdin.Fd())) {
+	if !isTerminal(SafeFd(os.Stdin.Fd())) {
 		t.Skip("stdin is not a terminal, skipping Enter test")
 	}
 
-	tty, err := New(int(os.Stdin.Fd()), int(os.Stdout.Fd()))
+	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -178,11 +178,11 @@ func TestEnterTwice(t *testing.T) {
 // TestPanicCleanup verifies defer Exit works in panic scenario.
 func TestPanicCleanup(t *testing.T) {
 	t.Parallel()
-	if !isTerminal(int(os.Stdin.Fd())) {
+	if !isTerminal(SafeFd(os.Stdin.Fd())) {
 		t.Skip("stdin is not a terminal, skipping panic test")
 	}
 
-	tty, err := New(int(os.Stdin.Fd()), int(os.Stdout.Fd()))
+	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -209,7 +209,7 @@ func TestPanicCleanup(t *testing.T) {
 // TestConcurrentResize ensures no race between resize and Size().
 func TestConcurrentResize(t *testing.T) {
 	t.Parallel()
-	tty, err := New(int(os.Stdin.Fd()), int(os.Stdout.Fd()))
+	tty, err := New(SafeFd(os.Stdin.Fd()), SafeFd(os.Stdout.Fd()))
 	if err != nil {
 		t.Skipf("New() error = %v, skipping (not a terminal?)", err)
 	}
@@ -259,7 +259,7 @@ func TestErrNotATTY(t *testing.T) {
 	}
 	defer tmpFile.Close()
 
-	_, err = New(int(tmpFile.Fd()), int(tmpFile.Fd()))
+	_, err = New(SafeFd(tmpFile.Fd()), SafeFd(tmpFile.Fd()))
 	if err == nil {
 		t.Fatal("New() with non-TTY should return error")
 	}

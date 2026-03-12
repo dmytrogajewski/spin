@@ -57,7 +57,7 @@ func createACPAgentComponents(t *testing.T, workDir string, provider llm.Provide
 	require.NoError(t, err)
 
 	// 4. Build core agent using executor.
-	coreAgent, err := buildCoreAgent(cfg, provider, workDir, emitter, acpRuntime)
+	coreAgent, err := buildCoreAgent(context.Background(), cfg, provider, workDir, emitter, acpRuntime)
 	require.NoError(t, err)
 
 	return coreAgent, emitter, acpRuntime

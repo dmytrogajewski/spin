@@ -281,7 +281,7 @@ func (g *Integration) GetContextInfo() ContextInfo {
 }
 
 // GetDiff returns the diff for a specific file or all changes.
-func (g *Integration) GetDiff(filePath string) (string, error) {
+func (g *Integration) GetDiff(ctx context.Context, filePath string) (string, error) {
 	if !g.IsRepository() {
 		return "", ErrNotAGitRepository
 	}
@@ -293,7 +293,7 @@ func (g *Integration) GetDiff(filePath string) (string, error) {
 		args = []string{"diff"}
 	}
 
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = g.workDir
 
 	output, err := cmd.Output()
@@ -305,7 +305,7 @@ func (g *Integration) GetDiff(filePath string) (string, error) {
 }
 
 // GetLog returns recent commit history.
-func (g *Integration) GetLog(limit int) ([]CommitInfo, error) {
+func (g *Integration) GetLog(ctx context.Context, limit int) ([]CommitInfo, error) {
 	if !g.IsRepository() {
 		return nil, ErrNotAGitRepository2
 	}
@@ -315,7 +315,7 @@ func (g *Integration) GetLog(limit int) ([]CommitInfo, error) {
 	}
 
 	// Use git log with format to get commit info.
-	cmd := exec.Command("git", "log",
+	cmd := exec.CommandContext(ctx, "git", "log",
 		fmt.Sprintf("-%d", limit),
 		"--format=%H%n%an%n%ae%n%at%n%s%n%b%n---END---")
 	cmd.Dir = g.workDir
@@ -330,12 +330,12 @@ func (g *Integration) GetLog(limit int) ([]CommitInfo, error) {
 }
 
 // StageFile stages a file for commit.
-func (g *Integration) StageFile(filePath string) error {
+func (g *Integration) StageFile(ctx context.Context, filePath string) error {
 	if !g.IsRepository() {
 		return ErrNotAGitRepository3
 	}
 
-	cmd := exec.Command("git", "add", filePath)
+	cmd := exec.CommandContext(ctx, "git", "add", filePath)
 	cmd.Dir = g.workDir
 
 	if err := cmd.Run(); err != nil {
@@ -346,12 +346,12 @@ func (g *Integration) StageFile(filePath string) error {
 }
 
 // UnstageFile unstages a file.
-func (g *Integration) UnstageFile(filePath string) error {
+func (g *Integration) UnstageFile(ctx context.Context, filePath string) error {
 	if !g.IsRepository() {
 		return ErrNotAGitRepository4
 	}
 
-	cmd := exec.Command("git", "reset", "HEAD", filePath)
+	cmd := exec.CommandContext(ctx, "git", "reset", "HEAD", filePath)
 	cmd.Dir = g.workDir
 
 	if err := cmd.Run(); err != nil {
@@ -362,12 +362,12 @@ func (g *Integration) UnstageFile(filePath string) error {
 }
 
 // Commit creates a commit with the given message.
-func (g *Integration) Commit(message string) error {
+func (g *Integration) Commit(ctx context.Context, message string) error {
 	if !g.IsRepository() {
 		return ErrNotAGitRepository5
 	}
 
-	cmd := exec.Command("git", "commit", "-m", message)
+	cmd := exec.CommandContext(ctx, "git", "commit", "-m", message)
 	cmd.Dir = g.workDir
 
 	if err := cmd.Run(); err != nil {
@@ -378,12 +378,12 @@ func (g *Integration) Commit(message string) error {
 }
 
 // Push pushes changes to the remote repository.
-func (g *Integration) Push() error {
+func (g *Integration) Push(ctx context.Context) error {
 	if !g.IsRepository() {
 		return ErrNotAGitRepository6
 	}
 
-	cmd := exec.Command("git", "push")
+	cmd := exec.CommandContext(ctx, "git", "push")
 	cmd.Dir = g.workDir
 
 	if err := cmd.Run(); err != nil {
@@ -394,12 +394,12 @@ func (g *Integration) Push() error {
 }
 
 // Pull pulls changes from the remote repository.
-func (g *Integration) Pull() error {
+func (g *Integration) Pull(ctx context.Context) error {
 	if !g.IsRepository() {
 		return ErrNotAGitRepository7
 	}
 
-	cmd := exec.Command("git", "pull")
+	cmd := exec.CommandContext(ctx, "git", "pull")
 	cmd.Dir = g.workDir
 
 	if err := cmd.Run(); err != nil {
@@ -410,12 +410,12 @@ func (g *Integration) Pull() error {
 }
 
 // CreateBranch creates a new branch.
-func (g *Integration) CreateBranch(branchName string) error {
+func (g *Integration) CreateBranch(ctx context.Context, branchName string) error {
 	if !g.IsRepository() {
 		return ErrNotAGitRepository8
 	}
 
-	cmd := exec.Command("git", "checkout", "-b", branchName)
+	cmd := exec.CommandContext(ctx, "git", "checkout", "-b", branchName)
 	cmd.Dir = g.workDir
 
 	if err := cmd.Run(); err != nil {
@@ -426,12 +426,12 @@ func (g *Integration) CreateBranch(branchName string) error {
 }
 
 // SwitchBranch switches to an existing branch.
-func (g *Integration) SwitchBranch(branchName string) error {
+func (g *Integration) SwitchBranch(ctx context.Context, branchName string) error {
 	if !g.IsRepository() {
 		return ErrNotAGitRepository9
 	}
 
-	cmd := exec.Command("git", "checkout", branchName)
+	cmd := exec.CommandContext(ctx, "git", "checkout", branchName)
 	cmd.Dir = g.workDir
 
 	if err := cmd.Run(); err != nil {
@@ -442,12 +442,12 @@ func (g *Integration) SwitchBranch(branchName string) error {
 }
 
 // ListBranches returns the list of local and remote branches.
-func (g *Integration) ListBranches() ([]string, error) {
+func (g *Integration) ListBranches(ctx context.Context) ([]string, error) {
 	if !g.IsRepository() {
 		return nil, ErrNotAGitRepository10
 	}
 
-	cmd := exec.Command("git", "branch", "--format=%(refname:short)")
+	cmd := exec.CommandContext(ctx, "git", "branch", "--format=%(refname:short)")
 	cmd.Dir = g.workDir
 
 	output, branchErr := cmd.Output()
@@ -470,12 +470,12 @@ func (g *Integration) ListBranches() ([]string, error) {
 }
 
 // ListRemotes returns the list of remote repositories.
-func (g *Integration) ListRemotes() ([]string, error) {
+func (g *Integration) ListRemotes(ctx context.Context) ([]string, error) {
 	if !g.IsRepository() {
 		return nil, ErrNotAGitRepository11
 	}
 
-	cmd := exec.Command("git", "remote")
+	cmd := exec.CommandContext(ctx, "git", "remote")
 	cmd.Dir = g.workDir
 
 	output, remoteErr := cmd.Output()

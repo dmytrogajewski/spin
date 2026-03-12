@@ -19,7 +19,7 @@ func TestApproval_List_Empty(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "spin.yaml")
 
 	policyPath := filepath.Join(tmpDir, "policies.json")
-	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0644)
+	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0o600)
 	if err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestApproval_List_WithData(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "spin.yaml")
 
 	policyPath := filepath.Join(tmpDir, "policies.json")
-	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n  approval_persistence_enabled: true\n"), 0644)
+	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n  approval_persistence_enabled: true\n"), 0o600)
 	if err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestApproval_Revoke_NonExistent(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "spin.yaml")
 
 	policyPath := filepath.Join(tmpDir, "policies.json")
-	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0644)
+	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0o600)
 	if err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestApproval_Clear_Empty(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "spin.yaml")
 
 	policyPath := filepath.Join(tmpDir, "policies.json")
-	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0644)
+	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0o600)
 	if err != nil {
 		t.Fatalf("write config: %v", err)
 	}

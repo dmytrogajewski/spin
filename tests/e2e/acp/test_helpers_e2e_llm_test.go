@@ -45,7 +45,7 @@ protocol:
   enable_shell: true
 `
 	configPath := filepath.Join(t.TempDir(), "test-config.yaml")
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	err := os.WriteFile(configPath, []byte(configContent), 0o600)
 	require.NoError(t, err)
 	return configPath
 }
@@ -313,7 +313,7 @@ func createTestFile(t *testing.T, dir, filename, content string) string {
 	t.Helper()
 
 	filePath := filepath.Join(dir, filename)
-	err := os.WriteFile(filePath, []byte(content), 0644)
+	err := os.WriteFile(filePath, []byte(content), 0o600)
 	require.NoError(t, err)
 	return filePath
 }

@@ -1,10 +1,11 @@
 package memory
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -542,7 +543,7 @@ func TestPersistentStoreConcurrentAccess(t *testing.T) {
 	for i := range numWriters {
 		go func(writerID int) {
 			for j := range numOps {
-				key := "key" + string(rune('A'+writerID)) + string(rune('0'+j%10))
+				key := "keyW" + strconv.Itoa(writerID) + "_" + strconv.Itoa(j%10)
 				_ = store.Put(ctx, key, "value", PutOptions{Overwrite: true})
 			}
 

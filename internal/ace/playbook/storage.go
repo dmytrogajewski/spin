@@ -19,6 +19,8 @@ type playbookJSON struct {
 // Save serializes the playbook to a JSON file.
 // Uses atomic writes (temp file + rename) for crash safety.
 func (p *Playbook) Save(path string) error {
+	path = filepath.Clean(path)
+
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -76,6 +78,8 @@ func (p *Playbook) Save(path string) error {
 // Load deserializes a playbook from a JSON file.
 // Validates all bullets on load.
 func Load(path string, emitter *events.EventEmitter, embedder embedding.Embedder) (*Playbook, error) {
+	path = filepath.Clean(path)
+
 	// Read file.
 	data, err := os.ReadFile(path)
 	if err != nil {

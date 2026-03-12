@@ -454,7 +454,7 @@ func TestLoad_InvalidJSON(t *testing.T) {
 	t.Parallel()
 
 	tmpFile := t.TempDir() + "/invalid.json"
-	err := os.WriteFile(tmpFile, []byte("invalid json"), 0644)
+	err := os.WriteFile(tmpFile, []byte("invalid json"), 0o600)
 	require.NoError(t, err)
 
 	_, err = playbook.Load(tmpFile, nil, nil)

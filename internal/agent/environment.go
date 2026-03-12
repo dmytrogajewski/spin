@@ -100,7 +100,7 @@ func WithSkipGit(skip bool) EnvironmentOption {
 // GatherEnvironment collects environment context for the AI agent.
 // It gathers OS information, Git repository info (if present),
 // project files, and filtered environment variables.
-func GatherEnvironment(workDir string, opts ...EnvironmentOption) (*Environment, error) {
+func GatherEnvironment(ctx context.Context, workDir string, opts ...EnvironmentOption) (*Environment, error) {
 	// Apply options.
 	cfg := &environmentConfig{
 		maxFiles: 1000,
@@ -118,12 +118,12 @@ func GatherEnvironment(workDir string, opts ...EnvironmentOption) (*Environment,
 	}
 
 	// Gather OS information.
-	osInfo := gatherOSInfo()
+	osInfo := gatherOSInfo(ctx)
 
 	// Gather Git information (if not skipped).
 	var gitInfo *GitInfo
 	if !cfg.skipGit {
-		gitInfo, _ = gatherGitInfo(workDir) // Ignore errors, Git may not be available.
+		gitInfo, _ = gatherGitInfo(ctx, workDir) // Ignore errors, Git may not be available.
 	}
 
 	// Scan project files.
@@ -152,7 +152,7 @@ func GatherEnvironment(workDir string, opts ...EnvironmentOption) (*Environment,
 }
 
 // gatherOSInfo collects operating system information.
-func gatherOSInfo() OSInfo {
+func gatherOSInfo(ctx context.Context) OSInfo {
 	info := OSInfo{
 		OS:   runtime.GOOS,
 		Arch: runtime.GOARCH,
@@ -163,7 +163,7 @@ func gatherOSInfo() OSInfo {
 
 	// Get kernel version on Linux/Unix.
 	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" || runtime.GOOS == "freebsd" {
-		output, err := exec.Command("uname", "-r").Output()
+		output, err := exec.CommandContext(ctx, "uname", "-r").Output()
 		if err == nil {
 			info.Kernel = strings.TrimSpace(string(output))
 		}
@@ -174,13 +174,13 @@ func gatherOSInfo() OSInfo {
 
 // gatherGitInfo collects Git repository information.
 // Returns nil if the directory is not in a Git repository.
-func gatherGitInfo(workDir string) (*GitInfo, error) {
+func gatherGitInfo(parentCtx context.Context, workDir string) (*GitInfo, error) {
 	_, err := exec.LookPath("git")
 	if err != nil {
 		return nil, ErrGitNotAvailable
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(parentCtx, 5*time.Second)
 	defer cancel()
 
 	root, err := gitCommand(ctx, workDir, "rev-parse", "--show-toplevel")

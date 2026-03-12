@@ -16,7 +16,7 @@ func TestReadFileTool(t *testing.T) {
 	testFile := filepath.Join(tmpDir, "test.txt")
 
 	testContent := "Hello, World!"
-	err := os.WriteFile(testFile, []byte(testContent), 0644)
+	err := os.WriteFile(testFile, []byte(testContent), 0o600)
 	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}

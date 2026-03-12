@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -859,7 +860,7 @@ func filterServersByRegistry(servers []config.MCPServer, registryFilter string) 
 }
 
 // searchSmitheryServer searches a single Smithery server and returns results.
-func searchSmitheryServer(server config.MCPServer, flags mcpSearchFlags) []mcpSearchResult {
+func searchSmitheryServer(ctx context.Context, server config.MCPServer, flags mcpSearchFlags) []mcpSearchResult {
 	key := flags.apiKey
 	if key == "" {
 		key = server.SmitheryAPIKey
@@ -870,7 +871,7 @@ func searchSmitheryServer(server config.MCPServer, flags mcpSearchFlags) []mcpSe
 		return nil
 	}
 
-	smitheryResults, searchErr := searchSmitheryAPI(flags.query, key, flags.limit, flags.verified)
+	smitheryResults, searchErr := searchSmitheryAPI(ctx, flags.query, key, flags.limit, flags.verified)
 	if searchErr != nil {
 		fmt.Fprintf(os.Stderr, "Warning: Failed to search Smithery registry '%s': %v\n", server.Name, searchErr)
 		return nil
@@ -933,7 +934,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 	var results []mcpSearchResult
 	for _, server := range servers {
 		if server.Transport == config.MCPTransportSmithery {
-			results = append(results, searchSmitheryServer(server, flags)...)
+			results = append(results, searchSmitheryServer(cmd.Context(), server, flags)...)
 		}
 	}
 
@@ -950,7 +951,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func searchSmitheryAPI(query, apiKey string, limit int, verified bool) (*smitheryToolsResponse, error) {
+func searchSmitheryAPI(ctx context.Context, query, apiKey string, limit int, verified bool) (*smitheryToolsResponse, error) {
 	apiURL := fmt.Sprintf("https://api.smithery.ai/tools?q=%s&pageSize=%d",
 		url.QueryEscape(query), limit)
 
@@ -958,7 +959,16 @@ func searchSmitheryAPI(query, apiKey string, limit int, verified bool) (*smither
 		apiURL += "&serverVerified=true"
 	}
 
-	req, err := http.NewRequest("GET", apiURL, nil)
+	parsedURL, err := url.Parse(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse API URL: %w", err)
+	}
+
+	if parsedURL.Scheme != "https" || parsedURL.Host != "api.smithery.ai" {
+		return nil, fmt.Errorf("invalid Smithery API URL: %s", apiURL)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", parsedURL.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

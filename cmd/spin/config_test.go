@@ -25,7 +25,7 @@ func runConfigShowTestCase(t *testing.T, tt configShowTestCase) {
 	tmpDir := t.TempDir()
 
 	configFile := filepath.Join(tmpDir, "spin.yaml")
-	err := os.WriteFile(configFile, []byte(tt.configYAML), 0644)
+	err := os.WriteFile(configFile, []byte(tt.configYAML), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create config file: %v", err)
 	}
@@ -142,7 +142,7 @@ llm:
 			tmpDir := t.TempDir()
 
 			configFile := filepath.Join(tmpDir, "spin.yaml")
-			err := os.WriteFile(configFile, []byte(tt.configYAML), 0644)
+			err := os.WriteFile(configFile, []byte(tt.configYAML), 0o600)
 			if err != nil {
 				t.Fatalf("Failed to create config file: %v", err)
 			}
@@ -194,7 +194,7 @@ func runConfigPathTestCase(t *testing.T, tt configPathTestCase) {
 
 	if tt.setupFile {
 		configYAML := "version: \"2.0\"\nllm:\n  provider: openai\n  model: gpt-4o\n"
-		err := os.WriteFile(configFile, []byte(configYAML), 0644)
+		err := os.WriteFile(configFile, []byte(configYAML), 0o600)
 		if err != nil {
 			t.Fatalf("Failed to create config file: %v", err)
 		}
@@ -303,7 +303,7 @@ llm:
   provider: openai
   model: gpt-4o
 `
-		err := os.WriteFile(configFile, []byte(configYAML), 0644)
+		err := os.WriteFile(configFile, []byte(configYAML), 0o600)
 		if err != nil {
 			t.Fatalf("Failed to create config file: %v", err)
 		}

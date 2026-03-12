@@ -44,7 +44,7 @@ func (c *filesystemTestClient) WriteTextFile(ctx context.Context, params acp.Wri
 	c.writeCalls = append(c.writeCalls, params)
 
 	// Write the actual file
-	err := os.WriteFile(params.Path, []byte(params.Content), 0644)
+	err := os.WriteFile(params.Path, []byte(params.Content), 0o600)
 	if err != nil {
 		return acp.WriteTextFileResponse{}, err
 	}
@@ -87,7 +87,7 @@ func TestACP_Filesystem_ReadTextFile_Basic(t *testing.T) {
 	// Create a test file
 	testFile := filepath.Join(workDir, "test.txt")
 	testContent := "Hello, World!\nThis is a test file."
-	err = os.WriteFile(testFile, []byte(testContent), 0644)
+	err = os.WriteFile(testFile, []byte(testContent), 0o600)
 	require.NoError(t, err)
 
 	// Send prompt that should trigger file read
@@ -147,7 +147,7 @@ func TestACP_Filesystem_ReadTextFile_LineRange(t *testing.T) {
 	// Create a test file with multiple lines
 	testFile := filepath.Join(workDir, "multiline.txt")
 	testContent := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
-	err = os.WriteFile(testFile, []byte(testContent), 0644)
+	err = os.WriteFile(testFile, []byte(testContent), 0o600)
 	require.NoError(t, err)
 
 	// Send prompt that might trigger file read with line range
@@ -439,7 +439,7 @@ func TestACP_Filesystem_WriteTextFile_Overwrite(t *testing.T) {
 	// Create existing file
 	testFile := filepath.Join(workDir, "existing.txt")
 	oldContent := "Old content"
-	err = os.WriteFile(testFile, []byte(oldContent), 0644)
+	err = os.WriteFile(testFile, []byte(oldContent), 0o600)
 	require.NoError(t, err)
 
 	// Send prompt that should overwrite file

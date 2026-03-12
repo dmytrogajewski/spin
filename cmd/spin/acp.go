@@ -249,7 +249,7 @@ func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagO
 		return fmt.Errorf("create ACP runtime: %w", err)
 	}
 
-	coreAgent, err := buildCoreAgent(cfg, infra.provider, workDir, infra.emitter, acpRuntime)
+	coreAgent, err := buildCoreAgent(ctx, cfg, infra.provider, workDir, infra.emitter, acpRuntime)
 	if err != nil {
 		return fmt.Errorf("build core agent: %w", err)
 	}
@@ -347,6 +347,7 @@ func buildProviderForACP(ctx context.Context, cfg *config.V2, authMgr *auth.Mana
 
 // buildCoreAgent constructs the core agent with all required services and dependencies.
 func buildCoreAgent(
+	ctx context.Context,
 	cfg *config.V2,
 	provider llm.Provider,
 	workDir string,
@@ -360,7 +361,7 @@ func buildCoreAgent(
 		WithEmitter(emitter).
 		WithRuntime(rt)
 
-	environment := agentBuilder.BuildEnvironment()
+	environment := agentBuilder.BuildEnvironment(ctx)
 	securityService := agentBuilder.BuildSecurityService()
 	detectionService := agentBuilder.BuildDetectionService()
 	planningService := agentBuilder.BuildPlanningService()
@@ -386,7 +387,7 @@ func buildCoreAgent(
 	opts := agentBuilder.BuildOptions()
 
 	if cfg != nil && cfg.ACE.Enabled {
-		aceSvc, err := agentBuilder.BuildACEService()
+		aceSvc, err := agentBuilder.BuildACEService(ctx)
 		if err == nil {
 			opts = append(opts, agent.WithACEService(aceSvc))
 			aceConfig := agent.ConvertACEConfig(&cfg.ACE)

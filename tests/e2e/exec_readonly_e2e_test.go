@@ -78,7 +78,7 @@ func setupReadOnlyTestEnv(t *testing.T) (workDir, configPath string) {
 	workDir = t.TempDir()
 	testFile := filepath.Join(workDir, "test.txt")
 
-	err := os.WriteFile(testFile, []byte("This is a test file for read operations"), 0644)
+	err := os.WriteFile(testFile, []byte("This is a test file for read operations"), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
@@ -102,7 +102,7 @@ security:
     mode: workspace-write
 `
 
-	err = os.WriteFile(configPath, []byte(config), 0644)
+	err = os.WriteFile(configPath, []byte(config), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
 	}

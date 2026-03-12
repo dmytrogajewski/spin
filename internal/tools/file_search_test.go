@@ -24,10 +24,10 @@ func TestFileSearchTool_BasicSearch(t *testing.T) {
 	for _, file := range files {
 		dir := filepath.Dir(filepath.Join(tmpDir, file))
 		if dir != tmpDir {
-			_ = os.MkdirAll(dir, 0755)
+			_ = os.MkdirAll(dir, 0o750)
 		}
 
-		_ = os.WriteFile(filepath.Join(tmpDir, file), []byte("content"), 0644)
+		_ = os.WriteFile(filepath.Join(tmpDir, file), []byte("content"), 0o600)
 	}
 
 	tool := NewFileSearchTool(tmpDir)
@@ -78,7 +78,7 @@ func TestFileSearchTool_NoResults(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create one file that won't match.
-	_ = os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte("content"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte("content"), 0o600)
 
 	tool := NewFileSearchTool(tmpDir)
 
@@ -106,7 +106,7 @@ func TestFileSearchTool_CustomWorkspace(t *testing.T) {
 	workspace2 := t.TempDir()
 
 	// Create files in workspace2.
-	_ = os.WriteFile(filepath.Join(workspace2, "search_me.txt"), []byte("content"), 0644)
+	_ = os.WriteFile(filepath.Join(workspace2, "search_me.txt"), []byte("content"), 0o600)
 
 	// Tool with workspace1 as default.
 	tool := NewFileSearchTool(workspace1)

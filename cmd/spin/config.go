@@ -296,7 +296,7 @@ func runConfigEdit(cmd *cobra.Command, _ []string) error {
 		configPath = filepath.Join(configDir, "spin.yaml")
 
 		// Create directory if needed.
-		err = os.MkdirAll(configDir, 0755)
+		err = os.MkdirAll(configDir, 0o750)
 		if err != nil {
 			return fmt.Errorf("failed to create config directory: %w", err)
 		}
@@ -317,7 +317,7 @@ func runConfigEdit(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Open editor.
-	editorCmd := exec.Command(editor, configPath)
+	editorCmd := exec.CommandContext(cmd.Context(), editor, configPath)
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
 	editorCmd.Stderr = os.Stderr
@@ -576,7 +576,7 @@ protocol:
 
 // createDefaultConfig creates a default configuration file.
 func createDefaultConfig(path string) error {
-	if err := os.WriteFile(path, []byte(defaultConfigTemplate), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(defaultConfigTemplate), 0o600); err != nil {
 		return fmt.Errorf("writing default config: %w", err)
 	}
 

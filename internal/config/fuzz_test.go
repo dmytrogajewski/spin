@@ -105,7 +105,7 @@ protocol:
 
 // writeFile is a helper for fuzz tests.
 func writeFile(path string, data []byte) error {
-	err := os.WriteFile(path, data, 0644)
+	err := os.WriteFile(path, data, 0o600)
 	if err != nil {
 		return fmt.Errorf("write file %s: %w", path, err)
 	}

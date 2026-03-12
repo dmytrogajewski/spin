@@ -28,7 +28,7 @@ func TestNewACEService_Enabled(t *testing.T) {
 		},
 	}
 
-	svc, err := NewACEService(cfg, "/tmp/workdir", nil, "", 0)
+	svc, err := NewACEService(context.Background(), cfg, "/tmp/workdir", nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -45,7 +45,7 @@ func TestNewACEService_Disabled(t *testing.T) {
 		Enabled: false,
 	}
 
-	svc, err := NewACEService(cfg, "/tmp/workdir", nil, "", 0)
+	svc, err := NewACEService(context.Background(), cfg, "/tmp/workdir", nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -82,7 +82,7 @@ func TestACEService_SavePlaybook(t *testing.T) {
 		},
 	}
 
-	svc, err := NewACEService(cfg, tmpDir, nil, "", 0)
+	svc, err := NewACEService(context.Background(), cfg, tmpDir, nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -119,7 +119,7 @@ func TestACEService_BuildPrompt(t *testing.T) {
 		},
 	}
 
-	svc, err := NewACEService(cfg, tmpDir, nil, "", 0)
+	svc, err := NewACEService(context.Background(), cfg, tmpDir, nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -166,7 +166,7 @@ func TestACEService_BuildPrompt_Disabled(t *testing.T) {
 		Enabled: false,
 	}
 
-	svc, err := NewACEService(cfg, "/tmp", nil, "", 0)
+	svc, err := NewACEService(context.Background(), cfg, "/tmp", nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -199,7 +199,7 @@ func TestACEService_ParseFeedback(t *testing.T) {
 		},
 	}
 
-	svc, err := NewACEService(cfg, tmpDir, nil, "", 0)
+	svc, err := NewACEService(context.Background(), cfg, tmpDir, nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -243,7 +243,7 @@ func TestACEService_ParseFeedback_Disabled(t *testing.T) {
 		Enabled: false,
 	}
 
-	svc, err := NewACEService(cfg, "/tmp", nil, "", 0)
+	svc, err := NewACEService(context.Background(), cfg, "/tmp", nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}
@@ -273,7 +273,7 @@ func TestACEService_UpdateBullets(t *testing.T) {
 		},
 	}
 
-	svc, err := NewACEService(cfg, tmpDir, nil, "", 0)
+	svc, err := NewACEService(context.Background(), cfg, tmpDir, nil, "", 0)
 	if err != nil {
 		t.Fatalf("NewACEService() error = %v", err)
 	}

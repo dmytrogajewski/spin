@@ -10,7 +10,7 @@ import (
 )
 
 // buildAgent constructs a fully configured agent with all services and integrations.
-func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*agent.Agent, error) {
+func (b *Builder) buildAgent(ctx context.Context, exec *agent.Executor, env *agent.Environment) (*agent.Agent, error) {
 	agentBuilder := agent.NewBuilder().
 		WithConfig(b.cfg).
 		WithProvider(b.llm).
@@ -37,8 +37,8 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 
 	planningSvc := agentBuilder.BuildPlanningService()
 	opts := agentBuilder.BuildOptions()
-	opts = b.appendACEOptions(agentBuilder, opts)
-	opts = b.appendAgentsMDOptions(agentBuilder, opts)
+	opts = b.appendACEOptions(ctx, agentBuilder, opts)
+	opts = b.appendAgentsMDOptions(ctx, agentBuilder, opts)
 	opts = b.appendToolSelectorOptions(toolReg, opts)
 
 	ag, err := agent.NewAgent(b.llm, securitySvc, detectionSvc, toolRuntime, planningSvc, env, b.emitter, opts...)
@@ -61,12 +61,12 @@ func (b *Builder) buildOrRegisterTools(exec *agent.Executor, securitySvc *securi
 }
 
 // appendACEOptions adds ACE-related agent options if ACE is enabled.
-func (b *Builder) appendACEOptions(agentBuilder *agent.Builder, opts []agent.Option) []agent.Option {
+func (b *Builder) appendACEOptions(ctx context.Context, agentBuilder *agent.Builder, opts []agent.Option) []agent.Option {
 	if b.cfg == nil || !b.cfg.ACE.Enabled {
 		return opts
 	}
 
-	aceSvc, err := agentBuilder.BuildACEService()
+	aceSvc, err := agentBuilder.BuildACEService(ctx)
 	if err != nil {
 		b.logWarn("ACE init failed, continuing", "err", err)
 		return opts
@@ -81,7 +81,7 @@ func (b *Builder) appendACEOptions(agentBuilder *agent.Builder, opts []agent.Opt
 }
 
 // appendAgentsMDOptions adds AGENTS.md-related agent options if enabled.
-func (b *Builder) appendAgentsMDOptions(agentBuilder *agent.Builder, opts []agent.Option) []agent.Option {
+func (b *Builder) appendAgentsMDOptions(ctx context.Context, agentBuilder *agent.Builder, opts []agent.Option) []agent.Option {
 	if b.cfg == nil || !b.cfg.AgentsMD.Enabled {
 		return opts
 	}
@@ -92,7 +92,7 @@ func (b *Builder) appendAgentsMDOptions(agentBuilder *agent.Builder, opts []agen
 		return opts
 	}
 
-	if err := agentsMDSvc.Load(context.Background()); err != nil {
+	if err := agentsMDSvc.Load(ctx); err != nil {
 		b.logWarn("failed to load AGENTS.md", "error", err)
 		return opts
 	}

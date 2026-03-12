@@ -367,14 +367,14 @@ func (a *Applier) applyAddFile(op *AddFile, result *ApplyResult) error {
 	}
 
 	// Create parent directories.
-	err = os.MkdirAll(filepath.Dir(fullPath), 0755)
+	err = os.MkdirAll(filepath.Dir(fullPath), 0o750)
 	if err != nil {
 		return a.wrapError("Add", op.FilePath, err, "failed to create parent directories")
 	}
 
 	// Write file content.
 	content := strings.Join(op.Lines, "\n")
-	err = os.WriteFile(fullPath, []byte(content), 0644)
+	err = os.WriteFile(fullPath, []byte(content), 0o600)
 	if err != nil {
 		return a.wrapError("Add", op.FilePath, err, "failed to write file")
 	}
@@ -463,7 +463,7 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 		return err
 	}
 
-	if err = os.WriteFile(targetPath, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+	if err = os.WriteFile(targetPath, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
 		return a.wrapError("Update", op.FilePath, err, "failed to write file")
 	}
 
@@ -502,7 +502,7 @@ func (a *Applier) resolveTargetPath(fullPath string, op *UpdateFile, result *App
 		return "", a.wrapError("Move", op.NewPath, err, "")
 	}
 
-	if err = os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(targetPath), 0o750); err != nil {
 		return "", a.wrapError("Move", op.NewPath, err, "failed to create parent directories")
 	}
 
@@ -650,12 +650,12 @@ func (a *Applier) rollbackCreate(fullPath string) {
 
 // rollbackUpdate restores original content for an updated file.
 func (a *Applier) rollbackUpdate(fullPath string, originalContent []byte) {
-	_ = os.WriteFile(fullPath, originalContent, 0644)
+	_ = os.WriteFile(fullPath, originalContent, 0o600)
 }
 
 // rollbackDelete recreates a deleted file.
 func (a *Applier) rollbackDelete(fullPath string, originalContent []byte) {
-	_ = os.WriteFile(fullPath, originalContent, 0644)
+	_ = os.WriteFile(fullPath, originalContent, 0o600)
 }
 
 // clearModifications clears the modifications tracking.

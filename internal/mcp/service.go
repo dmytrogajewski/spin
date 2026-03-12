@@ -28,13 +28,13 @@ func (s *Service) GetTools() []tools.Tool {
 }
 
 // Search searches for tools matching the query across all registries.
-// ctx can be nil for simple searches; pass SearchContext for dynamic registry API access.
-func (s *Service) Search(ctx *SearchContext, query string, maxResults int) []tools.Tool {
+// ctx is for cancellation and timeouts; searchCtx provides additional search options (can be nil).
+func (s *Service) Search(ctx context.Context, searchCtx *SearchContext, query string, maxResults int) []tools.Tool {
 	if s.registryManager == nil {
 		return nil
 	}
 
-	return s.registryManager.Search(ctx, query, maxResults)
+	return s.registryManager.Search(ctx, searchCtx, query, maxResults)
 }
 
 // Tool returns a specific tool by name.

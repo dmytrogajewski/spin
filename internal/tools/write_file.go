@@ -66,13 +66,13 @@ func (t *WriteFileTool) Execute(_ context.Context, params ToolParameters) (ToolR
 	// Create parent directories if they don't exist.
 	dir := filepath.Dir(path)
 	if dir != "." && dir != "" {
-		err := os.MkdirAll(dir, 0755)
+		err := os.MkdirAll(dir, 0o750)
 		if err != nil {
 			return NewToolError(fmt.Errorf("failed to create parent directories: %w", err)), nil
 		}
 	}
 
-	writeErr := os.WriteFile(path, []byte(content), 0644)
+	writeErr := os.WriteFile(path, []byte(content), 0o600)
 	if writeErr != nil {
 		return NewToolError(fmt.Errorf("failed to write file: %w", writeErr)), nil
 	}

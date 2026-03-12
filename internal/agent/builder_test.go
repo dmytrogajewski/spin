@@ -85,7 +85,7 @@ func TestBuilder_BuildEnvironment(t *testing.T) {
 		WithConfig(cfg).
 		WithWorkingDir(tmpDir)
 
-	env := builder.BuildEnvironment()
+	env := builder.BuildEnvironment(context.Background())
 
 	if env == nil {
 		t.Fatal("BuildEnvironment() returned nil")
@@ -254,7 +254,7 @@ func TestBuilder_BuildACEService(t *testing.T) {
 		WithProvider(mockLLM).
 		WithWorkingDir(tmpDir)
 
-	aceSvc, err := builder.BuildACEService()
+	aceSvc, err := builder.BuildACEService(context.Background())
 	if err != nil {
 		t.Fatalf("BuildACEService() error = %v", err)
 	}

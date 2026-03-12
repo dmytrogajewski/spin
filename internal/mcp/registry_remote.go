@@ -279,7 +279,7 @@ func (r *RemoteRegistry) Count() int {
 }
 
 // Search finds tools matching the query.
-func (r *RemoteRegistry) Search(_ *SearchContext, query string, maxResults int) []tools.Tool {
+func (r *RemoteRegistry) Search(_ context.Context, _ *SearchContext, query string, maxResults int) []tools.Tool {
 	return SearchTools(r.List(), query, maxResults, DefaultSearchOptions())
 }
 

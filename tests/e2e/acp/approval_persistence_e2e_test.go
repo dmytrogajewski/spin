@@ -46,7 +46,6 @@ func TestACP_ApprovalPersistence_PromptToToolCall(t *testing.T) {
 type approvalPersistenceEnv struct {
 	clientImpl *testClient
 	client     *acp.ClientSideConnection
-	ctx        context.Context
 	sessionID  acp.SessionId
 	configPath string
 }
@@ -65,7 +64,7 @@ security:
   policy_file: ` + policyPath + `
   approval_persistence_enabled: true
 `
-	require.NoError(t, os.WriteFile(configPath, []byte(cfg), 0o644))
+	require.NoError(t, os.WriteFile(configPath, []byte(cfg), 0o600))
 
 	cmd, stdin, stdout := startACPAgent(t,
 		"--config-file", configPath,
@@ -86,7 +85,7 @@ security:
 	require.NoError(t, err)
 
 	return &approvalPersistenceEnv{
-		clientImpl: clientImpl, client: client, ctx: ctx,
+		clientImpl: clientImpl, client: client,
 		sessionID: sessionResp.SessionId, configPath: configPath,
 	}
 }
@@ -101,9 +100,10 @@ func (e *approvalPersistenceEnv) runPrompt(t *testing.T) {
 		Prompt:    []acp.ContentBlock{acp.TextBlock("Run a shell command that prints 'approval persistence test' and then stop.")},
 	}
 
+	ctx := context.Background()
 	done := make(chan error, 1)
 	go func() {
-		_, promptErr := e.client.Prompt(e.ctx, req)
+		_, promptErr := e.client.Prompt(ctx, req)
 		done <- promptErr
 	}()
 
@@ -158,7 +158,7 @@ type cmdResult struct {
 func execCommand(t *testing.T, bin string, args ...string) cmdResult {
 	t.Helper()
 
-	cmd := exec.Command(bin, args...)
+	cmd := exec.CommandContext(t.Context(), bin, args...)
 
 	var outBuf, errBuf strings.Builder
 

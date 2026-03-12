@@ -53,7 +53,7 @@ protocol:
   enable_shell: true
 `
 	configPath := filepath.Join(t.TempDir(), "test-config.yaml")
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	err := os.WriteFile(configPath, []byte(configContent), 0o600)
 	require.NoError(t, err)
 
 	return configPath
@@ -79,7 +79,7 @@ func startACPAgent(t *testing.T, args ...string) (*exec.Cmd, io.WriteCloser, io.
 	cmdArgs := append([]string{"acp"}, args...)
 	cmdArgs = append(cmdArgs, override...)
 
-	cmd := exec.Command(binPath, cmdArgs...)
+	cmd := exec.CommandContext(t.Context(), binPath, cmdArgs...)
 
 	// Get stdin/stdout pipes.
 	stdin, err := cmd.StdinPipe()

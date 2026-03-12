@@ -60,12 +60,12 @@ type debugServices struct {
 }
 
 // createGitService creates a git service if enabled by config.
-func createGitService(cfg *config.V2, workDir string, logger *slog.Logger) (*gitpkg.Service, error) {
+func createGitService(ctx context.Context, cfg *config.V2, workDir string, logger *slog.Logger) (*gitpkg.Service, error) {
 	if !cfg.Protocol.EnableGit {
 		return nil, nil
 	}
 
-	svc, err := gitpkg.NewService(true, workDir, logger)
+	svc, err := gitpkg.NewService(ctx, true, workDir, logger)
 	if err != nil {
 		return nil, fmt.Errorf("create git service: %w", err)
 	}
@@ -74,12 +74,12 @@ func createGitService(cfg *config.V2, workDir string, logger *slog.Logger) (*git
 }
 
 // createShellService creates a shell service if enabled by config.
-func createShellService(cfg *config.V2, workDir string, logger *slog.Logger) (*shellpkg.Service, error) {
+func createShellService(ctx context.Context, cfg *config.V2, workDir string, logger *slog.Logger) (*shellpkg.Service, error) {
 	if !cfg.Protocol.EnableShell {
 		return nil, nil
 	}
 
-	svc, err := shellpkg.NewService(true, workDir, logger, cfg.Protocol.ShellTimeout)
+	svc, err := shellpkg.NewService(ctx, true, workDir, logger, cfg.Protocol.ShellTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("create shell service: %w", err)
 	}
@@ -127,12 +127,12 @@ func createMCPService(ctx context.Context, cfg *config.V2, logger *slog.Logger) 
 
 // initServices creates all required services based on configuration.
 func initServices(ctx context.Context, cfg *config.V2, workDir string, logger *slog.Logger) (*debugServices, error) {
-	gitSvc, err := createGitService(cfg, workDir, logger)
+	gitSvc, err := createGitService(ctx, cfg, workDir, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	shellSvc, err := createShellService(cfg, workDir, logger)
+	shellSvc, err := createShellService(ctx, cfg, workDir, logger)
 	if err != nil {
 		if gitSvc != nil {
 			gitSvc.Close()

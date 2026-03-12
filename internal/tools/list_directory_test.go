@@ -13,9 +13,9 @@ func TestListDirectoryTool(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create test files and directories.
-	_ = os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("content1"), 0644)
-	_ = os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("content2"), 0644)
-	_ = os.Mkdir(filepath.Join(tmpDir, "subdir"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("content1"), 0o600)
+	_ = os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("content2"), 0o600)
+	_ = os.Mkdir(filepath.Join(tmpDir, "subdir"), 0o750)
 
 	tool := NewListDirectoryTool()
 

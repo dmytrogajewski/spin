@@ -1,6 +1,7 @@
 package cycle
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -398,8 +399,8 @@ func TestDetector_Concurrency(t *testing.T) {
 		go func(i int) {
 			snapshot := Snapshot{
 				Turn:      i,
-				Response:  "Response " + string(rune(i)),
-				ToolCalls: []string{"tool" + string(rune(i))},
+				Response:  "Response " + strconv.Itoa(i),
+				ToolCalls: []string{"tool" + strconv.Itoa(i)},
 				Error:     "",
 			}
 			detector.Record(snapshot)

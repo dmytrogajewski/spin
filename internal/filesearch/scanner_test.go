@@ -38,7 +38,7 @@ func TestScanner_Scan_SingleFile(t *testing.T) {
 
 	// Create a file.
 	testFile := filepath.Join(tmpDir, "test.txt")
-	err := os.WriteFile(testFile, []byte("test"), 0644)
+	err := os.WriteFile(testFile, []byte("test"), 0o600)
 	require.NoError(t, err)
 
 	s := NewScanner(tmpDir, false)
@@ -58,7 +58,7 @@ func TestScanner_Scan_MultipleFiles(t *testing.T) {
 	files := []string{"file1.txt", "file2.go", "file3.md"}
 	for _, file := range files {
 		path := filepath.Join(tmpDir, file)
-		err := os.WriteFile(path, []byte(""), 0644)
+		err := os.WriteFile(path, []byte(""), 0o600)
 		require.NoError(t, err)
 	}
 
@@ -76,10 +76,10 @@ func TestScanner_Scan_NestedDirectories(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create nested structure.
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "dir1", "dir2"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "root.txt"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "dir1", "file1.txt"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "dir1", "dir2", "file2.txt"), []byte(""), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "dir1", "dir2"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "root.txt"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "dir1", "file1.txt"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "dir1", "dir2", "file2.txt"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
@@ -98,9 +98,9 @@ func TestScanner_Scan_IgnoreGit(t *testing.T) {
 
 	// Create .git directory with files.
 	gitDir := filepath.Join(tmpDir, ".git")
-	require.NoError(t, os.MkdirAll(gitDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "config"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "regular.txt"), []byte(""), 0644))
+	require.NoError(t, os.MkdirAll(gitDir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "config"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "regular.txt"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, true)
 	files, err := s.Scan()
@@ -118,9 +118,9 @@ func TestScanner_Scan_IncludeGit(t *testing.T) {
 
 	// Create .git directory with files.
 	gitDir := filepath.Join(tmpDir, ".git")
-	require.NoError(t, os.MkdirAll(gitDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "config"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "regular.txt"), []byte(""), 0644))
+	require.NoError(t, os.MkdirAll(gitDir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "config"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "regular.txt"), []byte(""), 0o600))
 
 	// NOTE: With IgnoreHandler, .git is ALWAYS ignored by default patterns
 	// This test now verifies that default ignore patterns are applied.
@@ -138,8 +138,8 @@ func TestScanner_Scan_RelativePaths(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir", "file.txt"), []byte(""), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir", "file.txt"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
@@ -160,7 +160,7 @@ func TestScanner_Scan_SymlinkHandling(t *testing.T) {
 
 	// Create a regular file.
 	realFile := filepath.Join(tmpDir, "real.txt")
-	require.NoError(t, os.WriteFile(realFile, []byte(""), 0644))
+	require.NoError(t, os.WriteFile(realFile, []byte(""), 0o600))
 
 	// Create a symlink.
 	linkFile := filepath.Join(tmpDir, "link.txt")
@@ -184,8 +184,8 @@ func TestScanner_Scan_HiddenFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create hidden file.
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".hidden"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "visible.txt"), []byte(""), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".hidden"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "visible.txt"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
@@ -202,7 +202,7 @@ func BenchmarkScanner_Scan_100Files(b *testing.B) {
 	// Create 100 files.
 	for i := range 100 {
 		path := filepath.Join(tmpDir, "file_"+string(rune(i))+".txt")
-		_ = os.WriteFile(path, []byte(""), 0644)
+		_ = os.WriteFile(path, []byte(""), 0o600)
 	}
 
 	s := NewScanner(tmpDir, false)
@@ -220,11 +220,11 @@ func BenchmarkScanner_Scan_1000Files(b *testing.B) {
 	// Create 1000 files in subdirectories.
 	for i := range 10 {
 		dir := filepath.Join(tmpDir, "dir"+string(rune(i)))
-		_ = os.MkdirAll(dir, 0755)
+		_ = os.MkdirAll(dir, 0o750)
 
 		for j := range 100 {
 			path := filepath.Join(dir, "file_"+string(rune(j))+".txt")
-			_ = os.WriteFile(path, []byte(""), 0644)
+			_ = os.WriteFile(path, []byte(""), 0o600)
 		}
 	}
 
@@ -246,12 +246,12 @@ func TestScanner_WithGitignore_SimplePattern(t *testing.T) {
 
 	// Create .gitignore.
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	err := os.WriteFile(gitignorePath, []byte("*.log\n"), 0644)
+	err := os.WriteFile(gitignorePath, []byte("*.log\n"), 0o600)
 	require.NoError(t, err)
 
 	// Create files.
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "debug.log"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "app.txt"), []byte(""), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "debug.log"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "app.txt"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
@@ -269,14 +269,14 @@ func TestScanner_WithGitignore_DirectoryPattern(t *testing.T) {
 
 	// Create .gitignore.
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	err := os.WriteFile(gitignorePath, []byte("build/\n"), 0644)
+	err := os.WriteFile(gitignorePath, []byte("build/\n"), 0o600)
 	require.NoError(t, err)
 
 	// Create directories and files.
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "build"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "build", "out.txt"), []byte(""), 0644))
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "src", "main.go"), []byte(""), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "build"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "build", "out.txt"), []byte(""), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "src", "main.go"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
@@ -292,9 +292,9 @@ func TestScanner_WithGitignore_NodeModules(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// No need to create .gitignore - node_modules is in defaults.
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "node_modules", "pkg"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "node_modules", "pkg", "index.js"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "app.js"), []byte(""), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "node_modules", "pkg"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "node_modules", "pkg", "index.js"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "app.js"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
@@ -311,12 +311,12 @@ func TestScanner_WithSpinignore(t *testing.T) {
 
 	// Create .spinignore.
 	spinignorePath := filepath.Join(tmpDir, ".spinignore")
-	err := os.WriteFile(spinignorePath, []byte("*.tmp\n"), 0644)
+	err := os.WriteFile(spinignorePath, []byte("*.tmp\n"), 0o600)
 	require.NoError(t, err)
 
 	// Create files.
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.tmp"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(""), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.tmp"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
@@ -333,18 +333,18 @@ func TestScanner_WithBothIgnoreFiles(t *testing.T) {
 
 	// Create .gitignore.
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	err := os.WriteFile(gitignorePath, []byte("*.log\n"), 0644)
+	err := os.WriteFile(gitignorePath, []byte("*.log\n"), 0o600)
 	require.NoError(t, err)
 
 	// Create .spinignore.
 	spinignorePath := filepath.Join(tmpDir, ".spinignore")
-	err = os.WriteFile(spinignorePath, []byte("*.tmp\n"), 0644)
+	err = os.WriteFile(spinignorePath, []byte("*.tmp\n"), 0o600)
 	require.NoError(t, err)
 
 	// Create files.
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "debug.log"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.tmp"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "app.txt"), []byte(""), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "debug.log"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.tmp"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "app.txt"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
@@ -362,12 +362,12 @@ func TestScanner_RealWorldNodeProject(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Simulate a real Node.js project structure.
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "src", "index.js"), []byte(""), 0644))
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "node_modules", "express"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "node_modules", "express", "index.js"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".DS_Store"), []byte(""), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "src", "index.js"), []byte(""), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "node_modules", "express"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "node_modules", "express", "index.js"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".DS_Store"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
@@ -385,13 +385,13 @@ func TestScanner_RealWorldGoProject(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Simulate a real Go project structure.
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "cmd", "app"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "cmd", "app", "main.go"), []byte(""), 0644))
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "vendor", "lib"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "vendor", "lib", "lib.go"), []byte(""), 0644))
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".git", "objects"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".git", "config"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(""), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "cmd", "app"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "cmd", "app", "main.go"), []byte(""), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "vendor", "lib"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "vendor", "lib", "lib.go"), []byte(""), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".git", "objects"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".git", "config"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
@@ -409,12 +409,12 @@ func TestScanner_RealWorldPythonProject(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Simulate a real Python project structure.
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "src", "main.py"), []byte(""), 0644))
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "__pycache__"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "__pycache__", "main.cpython-39.pyc"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "module.pyc"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "requirements.txt"), []byte(""), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "src", "main.py"), []byte(""), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "__pycache__"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "__pycache__", "main.cpython-39.pyc"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "module.pyc"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "requirements.txt"), []byte(""), 0o600))
 
 	s := NewScanner(tmpDir, false)
 	files, err := s.Scan()
@@ -432,9 +432,9 @@ func TestScanner_BackwardCompatibility_IgnoreGitFlag(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create .git directory.
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".git"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".git", "config"), []byte(""), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte(""), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".git"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".git", "config"), []byte(""), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte(""), 0o600))
 
 	// Test with ignoreGit=true (old behavior should still work).
 	s := NewScanner(tmpDir, true)
@@ -449,25 +449,25 @@ func BenchmarkScanner_WithIgnore_10kFiles(b *testing.B) {
 	tmpDir := b.TempDir()
 
 	// Create .gitignore with a few patterns.
-	_ = os.WriteFile(filepath.Join(tmpDir, ".gitignore"), []byte("*.log\n*.tmp\nbuild/\n"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".gitignore"), []byte("*.log\n*.tmp\nbuild/\n"), 0o600)
 
 	// Create 10k files.
 	for i := range 100 {
 		dir := filepath.Join(tmpDir, "dir_"+string(rune(i)))
-		_ = os.MkdirAll(dir, 0755)
+		_ = os.MkdirAll(dir, 0o750)
 
 		for j := range 100 {
 			path := filepath.Join(dir, "file_"+string(rune(j))+".txt")
-			_ = os.WriteFile(path, []byte(""), 0644)
+			_ = os.WriteFile(path, []byte(""), 0o600)
 		}
 	}
 
 	// Create some files to be ignored.
-	_ = os.MkdirAll(filepath.Join(tmpDir, "build"), 0755)
+	_ = os.MkdirAll(filepath.Join(tmpDir, "build"), 0o750)
 
 	for i := range 50 {
 		path := filepath.Join(tmpDir, "build", "file_"+string(rune(i))+".txt")
-		_ = os.WriteFile(path, []byte(""), 0644)
+		_ = os.WriteFile(path, []byte(""), 0o600)
 	}
 
 	s := NewScanner(tmpDir, false)

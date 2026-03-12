@@ -64,7 +64,7 @@ func (h *ApprovalHandler) HandleApprovalRequest(ctx context.Context, req securit
 
 	options := buildPermissionOptions()
 
-	h.sendPendingNotification(sessionID, conn, toolCall.ToolCallId, toolName)
+	h.sendPendingNotification(ctx, sessionID, conn, toolCall.ToolCallId, toolName)
 
 	acpResp, err := h.requestPermission(ctx, conn, sessionID, toolCall, options)
 	if err != nil {
@@ -123,7 +123,7 @@ func buildPermissionOptions() []acp.PermissionOption {
 }
 
 // sendPendingNotification sends a pending tool call notification.
-func (h *ApprovalHandler) sendPendingNotification(sessionID acp.SessionId, conn notificationSender, toolCallID acp.ToolCallId, toolName string) {
+func (h *ApprovalHandler) sendPendingNotification(ctx context.Context, sessionID acp.SessionId, conn notificationSender, toolCallID acp.ToolCallId, toolName string) {
 	kind := mapToolNameToKind(toolName)
 
 	update := acp.UpdateToolCall(
@@ -144,7 +144,7 @@ func (h *ApprovalHandler) sendPendingNotification(sessionID acp.SessionId, conn 
 		SessionId: sessionID,
 		Update:    update,
 	}
-	_ = conn.SessionUpdate(context.Background(), notification)
+	_ = conn.SessionUpdate(ctx, notification)
 }
 
 // mapToolNameToKind maps a tool name to an ACP tool kind.

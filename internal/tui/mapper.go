@@ -26,8 +26,7 @@ type Mapper struct {
 	applyPatchByFile map[string]*blocks.Block   // file path → latest APPLY_PATCH block (write_file).
 	streamCh         chan string                // Content streaming channel.
 	streamMu         sync.Mutex                 // Protects streamCh.
-	streamCtx        context.Context
-	streamCancel     context.CancelFunc
+	streamDone       chan struct{}               // Closed when streaming is stopped.
 	// State for thinking blocks.
 	thinking           bool
 	thinkStart         time.Time
@@ -55,7 +54,7 @@ func NewMapper(ui ports.UI) *Mapper {
 // MapEvent processes a core event and updates the TUI accordingly.
 // It handles tool calls, content streaming, errors, and system messages.
 // Returns an error only for critical failures; gracefully handles unexpected data.
-func (m *Mapper) MapEvent(event events.Event) error {
+func (m *Mapper) MapEvent(ctx context.Context, event events.Event) error {
 	// Handle nil data gracefully.
 	if event.Data == nil {
 		return nil
@@ -68,7 +67,7 @@ func (m *Mapper) MapEvent(event events.Event) error {
 
 	switch event.Type {
 	case events.EventToolCallStart:
-		return m.handleToolStart(event)
+		return m.handleToolStart(ctx, event)
 	case events.EventToolCallComplete:
 		return m.handleToolComplete(event)
 	case events.EventContentDelta:
@@ -92,7 +91,7 @@ func (m *Mapper) MapEvent(event events.Event) error {
 }
 
 // handleToolStart creates a new block when a tool execution starts.
-func (m *Mapper) handleToolStart(event events.Event) error {
+func (m *Mapper) handleToolStart(ctx context.Context, event events.Event) error {
 	data, ok := event.Data.(events.ToolCallStartData)
 	if !ok {
 		return nil // Gracefully handle type assertion failure.
@@ -109,7 +108,7 @@ func (m *Mapper) handleToolStart(event events.Event) error {
 	m.mu.Lock()
 
 	// Debug: log registry state.
-	m.logger.DebugContext(context.Background(), "Checking blockRegistry for duplicate",
+	m.logger.DebugContext(ctx, "Checking blockRegistry for duplicate",
 		"tool_id", data.ToolID,
 		"registry_size", len(m.blockRegistry),
 		"registry_contains", len(m.blockRegistry[data.ToolID]) > 0)
@@ -117,7 +116,7 @@ func (m *Mapper) handleToolStart(event events.Event) error {
 	if _, exists := m.blockRegistry[data.ToolID]; exists {
 		// Duplicate tool ID from LLM - make block ID unique by appending counter
 		// This is a workaround for LLM bugs that reuse tool IDs.
-		m.logger.WarnContext(context.Background(), "Duplicate tool ID from LLM, making block ID unique",
+		m.logger.WarnContext(ctx, "Duplicate tool ID from LLM, making block ID unique",
 			"tool_id", data.ToolID,
 			"new_tool_name", data.ToolName,
 			"existing_blocks_count", len(m.blockRegistry[data.ToolID]))
@@ -127,7 +126,7 @@ func (m *Mapper) handleToolStart(event events.Event) error {
 		// Use the number of existing blocks as suffix to avoid collisions.
 		block.ID = fmt.Sprintf("%s-%d", originalID, len(m.blockRegistry[data.ToolID]))
 
-		m.logger.InfoContext(context.Background(), "Created unique block ID for duplicate tool",
+		m.logger.InfoContext(ctx, "Created unique block ID for duplicate tool",
 			"original_tool_id", data.ToolID,
 			"new_block_id", block.ID)
 
@@ -143,7 +142,7 @@ func (m *Mapper) handleToolStart(event events.Event) error {
 	err := m.ui.AppendBlock(block)
 	if err != nil {
 		// Log the error with context for debugging.
-		m.logger.ErrorContext(context.Background(), "Failed to append block to timeline",
+		m.logger.ErrorContext(ctx, "Failed to append block to timeline",
 			"error", err,
 			"block_id", block.ID,
 			"tool_id", data.ToolID,
@@ -561,7 +560,7 @@ func (m *Mapper) handleContentDelta(event events.Event) error {
 	if m.streamCh != nil && data.Content != "" {
 		select {
 		case m.streamCh <- data.Content:
-		case <-m.streamCtx.Done():
+		case <-m.streamDone:
 			// Stream closed, drop.
 		default:
 			// Channel full, drop (UI has coalescing).
@@ -842,7 +841,7 @@ func (m *Mapper) StartStreaming() <-chan string {
 	}
 
 	m.streamCh = make(chan string, 100)
-	m.streamCtx, m.streamCancel = context.WithCancel(context.Background())
+	m.streamDone = make(chan struct{})
 
 	return m.streamCh
 }
@@ -855,8 +854,13 @@ func (m *Mapper) StopStreaming() {
 	m.streamMu.Lock()
 	defer m.streamMu.Unlock()
 
-	if m.streamCancel != nil {
-		m.streamCancel()
+	if m.streamDone != nil {
+		select {
+		case <-m.streamDone:
+			// Already closed.
+		default:
+			close(m.streamDone)
+		}
 	}
 
 	if m.streamCh != nil {

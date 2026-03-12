@@ -32,7 +32,7 @@ func NewFilePolicyStore(path string, evictionInterval time.Duration) (PolicyStor
 		return nil, ErrPathIsRequired
 	}
 
-	err := os.MkdirAll(filepath.Dir(path), 0o755)
+	err := os.MkdirAll(filepath.Dir(path), 0o750)
 	if err != nil {
 		return nil, fmt.Errorf("create policy store directory: %w", err)
 	}
@@ -246,20 +246,20 @@ func (s *filePolicyStore) persistGlobalLocked() error {
 	tmp := s.path + ".tmp"
 
 	// Acquire advisory lock on the target file (create if not exists).
-	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_RDWR, 0o644)
+	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return fmt.Errorf("open policy file: %w", err)
 	}
 	defer f.Close()
 
-	err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
+	err = syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_EX)
 	if err != nil {
 		return fmt.Errorf("lock policy file: %w", err)
 	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN) // nolint:errcheck
+	defer syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_UN) // nolint:errcheck
 
 	// Write temp, then rename over target for atomicity.
-	err = os.WriteFile(tmp, data, 0o644)
+	err = os.WriteFile(tmp, data, 0o600)
 	if err != nil {
 		return fmt.Errorf("write temp policy file: %w", err)
 	}
@@ -275,7 +275,7 @@ func (s *filePolicyStore) persistGlobalLocked() error {
 // loadFromDisk loads global scope from disk into memory (best-effort).
 func (s *filePolicyStore) loadFromDisk() error {
 	// Open with shared lock to read.
-	f, err := os.OpenFile(s.path, os.O_RDONLY, 0o644)
+	f, err := os.OpenFile(s.path, os.O_RDONLY, 0o600)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -285,11 +285,11 @@ func (s *filePolicyStore) loadFromDisk() error {
 	}
 	defer f.Close()
 
-	err = syscall.Flock(int(f.Fd()), syscall.LOCK_SH)
+	err = syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_SH)
 	if err != nil {
 		return fmt.Errorf("shared lock policy file: %w", err)
 	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN) // nolint:errcheck
+	defer syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_UN) // nolint:errcheck
 
 	var payload struct {
 		Global map[string]Policy `json:"global"`
@@ -313,4 +313,15 @@ func (s *filePolicyStore) loadFromDisk() error {
 	}
 
 	return nil
+}
+
+// safeFlockFd converts a file descriptor from uintptr to int for syscall.Flock.
+// File descriptors are always small non-negative values on supported platforms.
+func safeFlockFd(fd uintptr) int {
+	const maxFd = int(^uint(0) >> 1)
+	if fd > uintptr(maxFd) {
+		return -1
+	}
+
+	return int(fd)
 }

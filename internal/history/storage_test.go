@@ -1,6 +1,7 @@
 package history
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -256,8 +257,8 @@ func TestHistory_SaveAndLoad(t *testing.T) {
 
 	// Create history and add messages.
 	history := NewHistory(4096, &tokenizer.SimpleTokenizer{})
-	_ = history.AddSystemMessage("You are helpful.")
-	_ = history.AddUserMessage("Hello!")
+	_ = history.AddSystemMessage(context.Background(), "You are helpful.")
+	_ = history.AddUserMessage(context.Background(), "Hello!")
 
 	sessionID := "test-history-save"
 
@@ -297,9 +298,9 @@ func TestHistory_ToFromData(t *testing.T) {
 	t.Parallel()
 
 	history := NewHistory(8192, &tokenizer.SimpleTokenizer{})
-	_ = history.AddSystemMessage("System prompt")
-	_ = history.AddUserMessage("User input")
-	_ = history.AddMessage(message.Message{
+	_ = history.AddSystemMessage(context.Background(), "System prompt")
+	_ = history.AddUserMessage(context.Background(), "User input")
+	_ = history.AddMessage(context.Background(), message.Message{
 		Role:    message.RoleAssistant,
 		Content: "Assistant response",
 		ToolCalls: []message.ToolCall{

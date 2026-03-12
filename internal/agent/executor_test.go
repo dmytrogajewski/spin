@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -100,7 +101,7 @@ func TestExecutor_Execute_WithWorkingDirectory(t *testing.T) {
 
 	// Create a test file.
 	testFile := filepath.Join(workDir, "test.txt")
-	err = os.WriteFile(testFile, []byte("test content"), 0644)
+	err = os.WriteFile(testFile, []byte("test content"), 0o600)
 	require.NoError(t, err)
 
 	cmd := &security.Command{
@@ -421,7 +422,7 @@ func TestExecutor_ConcurrentExecution(t *testing.T) {
 		go func(i int) {
 			cmd := &security.Command{
 				Program: "echo",
-				Args:    []string{"test", string(rune(i + '0'))},
+				Args:    []string{"test", strconv.Itoa(i)},
 				WorkDir: workDir,
 			}
 
