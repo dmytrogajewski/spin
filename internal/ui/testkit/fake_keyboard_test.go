@@ -18,6 +18,7 @@ func TestFakeKeyboard_InjectKey(t *testing.T) {
 		if event.Kind != term.KeyRune {
 			t.Errorf("event.Kind = %v, want KeyRune", event.Kind)
 		}
+
 		if event.Rune != 'a' {
 			t.Errorf("event.Rune = %c, want 'a'", event.Rune)
 		}
@@ -39,6 +40,7 @@ func TestFakeKeyboard_InjectString(t *testing.T) {
 			if event.Kind != term.KeyRune {
 				t.Errorf("event.Kind = %v, want KeyRune", event.Kind)
 			}
+
 			if event.Rune != r {
 				t.Errorf("event.Rune = %c, want %c", event.Rune, r)
 			}
@@ -108,6 +110,7 @@ func TestFakeKeyboard_InjectPaste(t *testing.T) {
 		if event.Kind != term.KeyPaste {
 			t.Errorf("event.Kind = %v, want KeyPaste", event.Kind)
 		}
+
 		if string(event.Paste) != text {
 			t.Errorf("event.Paste = %q, want %q", string(event.Paste), text)
 		}
@@ -121,13 +124,13 @@ func TestFakeKeyboard_Close(t *testing.T) {
 
 	kb.InjectKey(term.KeyRune, 'a')
 
-	// Read the event
+	// Read the event.
 	<-kb.Events()
 
-	// Close should close the channel
+	// Close should close the channel.
 	kb.Close()
 
-	// Channel should be closed
+	// Channel should be closed.
 	select {
 	case _, ok := <-kb.Events():
 		if ok {
@@ -137,13 +140,6 @@ func TestFakeKeyboard_Close(t *testing.T) {
 		t.Error("channel should be closed after Close()")
 	}
 
-	// Injecting after close should be safe (no-op)
+	// Injecting after close should be safe (no-op).
 	kb.InjectKey(term.KeyRune, 'b')
 }
-
-
-
-
-
-
-

@@ -15,7 +15,7 @@ func TestNewReview(t *testing.T) {
 		t.Errorf("NewReview().Name() = %v, want %v", review.Name(), "review")
 	}
 
-	// Test that it implements the Task interface
+	// Test that it implements the Task interface.
 	var _ Task = review
 }
 
@@ -35,7 +35,7 @@ func TestReview_SystemPrompt(t *testing.T) {
 		t.Error("Review.SystemPrompt() returned empty string")
 	}
 
-	// Should be a reasonable length
+	// Should be a reasonable length.
 	if len(result) < 50 {
 		t.Errorf("Review.SystemPrompt() too short: %d characters", len(result))
 	}
@@ -53,7 +53,7 @@ func TestReview_AllowedTools(t *testing.T) {
 		t.Error("Review.AllowedTools() returned empty slice")
 	}
 
-	// Review mode should have read-only tools
+	// Review mode should have read-only tools.
 	expectedTools := []string{"read_file", "list_directory", "file_search", "git_context", "get_context"}
 	if len(tools) != len(expectedTools) {
 		t.Errorf("Review.AllowedTools() length = %d, want %d", len(tools), len(expectedTools))
@@ -81,8 +81,8 @@ func TestReview_MaxTokens(t *testing.T) {
 
 func TestReview_Validate(t *testing.T) {
 	review := NewReview()
-	err := review.Validate()
 
+	err := review.Validate()
 	if err != nil {
 		t.Errorf("Review.Validate() unexpected error: %v", err)
 	}
@@ -91,21 +91,23 @@ func TestReview_Validate(t *testing.T) {
 func TestReview_Concurrency(t *testing.T) {
 	review := NewReview()
 
-	// Test concurrent access
+	// Test concurrent access.
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+
+	for range 10 {
 		go func() {
 			_ = review.Name()
 			_ = review.SystemPrompt()
 			_ = review.AllowedTools()
 			_ = review.MaxTokens()
 			_ = review.Validate()
+
 			done <- true
 		}()
 	}
 
-	// Wait for all goroutines to complete
-	for i := 0; i < 10; i++ {
+	// Wait for all goroutines to complete.
+	for range 10 {
 		<-done
 	}
 }
@@ -113,7 +115,7 @@ func TestReview_Concurrency(t *testing.T) {
 func TestReview_TaskInterface(t *testing.T) {
 	review := NewReview()
 
-	// Verify all interface methods work
+	// Verify all interface methods work.
 	if review.Name() == "" {
 		t.Error("Review.Name() returned empty string")
 	}
@@ -130,13 +132,14 @@ func TestReview_TaskInterface(t *testing.T) {
 		t.Error("Review.MaxTokens() returned non-positive value")
 	}
 
-	if err := review.Validate(); err != nil {
+	err := review.Validate()
+	if err != nil {
 		t.Errorf("Review.Validate() returned error: %v", err)
 	}
 }
 
 func TestReview_Constants(t *testing.T) {
-	// Verify constants are reasonable
+	// Verify constants are reasonable.
 	if DefaultReviewMaxTokens <= 0 {
 		t.Errorf("DefaultReviewMaxTokens = %d, want > 0", DefaultReviewMaxTokens)
 	}
@@ -150,7 +153,7 @@ func TestReview_MaxTokensInRange(t *testing.T) {
 	review := NewReview()
 	maxTokens := review.MaxTokens()
 
-	// Should be within reasonable bounds
+	// Should be within reasonable bounds.
 	if maxTokens < 1000 {
 		t.Errorf("Review.MaxTokens() = %d, seems too small", maxTokens)
 	}

@@ -60,7 +60,7 @@ func (t *FileSearchTool) Schema() ToolSchema {
 }
 
 func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	// Extract query parameter
+	// Extract query parameter.
 	query, err := params.GetString("query")
 	if err != nil || query == "" {
 		return ToolResult{
@@ -69,16 +69,17 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 		}, nil
 	}
 
-	// Extract workspace_root parameter (optional)
+	// Extract workspace_root parameter (optional).
 	workspaceRoot := t.workspaceRoot
-	if customRoot, err := params.GetString("workspace_root"); err == nil && customRoot != "" {
+	customRoot, err := params.GetString("workspace_root")
+	if err == nil && customRoot != "" {
 		workspaceRoot = customRoot
 	}
 
-	// Extract limit parameter (optional, default 10)
+	// Extract limit parameter (optional, default 10).
 	limit := params.GetIntOr("limit", 10)
 
-	// Get or create searcher for this workspace
+	// Get or create searcher for this workspace.
 	searcher, err := t.getOrCreateSearcher(workspaceRoot)
 	if err != nil {
 		return ToolResult{
@@ -87,9 +88,10 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 		}, nil
 	}
 
-	// Index if not already indexed
+	// Index if not already indexed.
 	if !searcher.IsIndexed() {
-		if err := searcher.IndexAsync(ctx); err != nil {
+		err := searcher.IndexAsync(ctx)
+		if err != nil {
 			return ToolResult{
 				Success: false,
 				Error:   fmt.Sprintf("failed to index workspace: %v", err),
@@ -97,15 +99,16 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 		}
 	}
 
-	// Search
+	// Search.
 	matches := searcher.Search(query, limit)
 
-	// Format output
+	// Format output.
 	var output strings.Builder
 	if len(matches) == 0 {
 		output.WriteString(fmt.Sprintf("No files found matching '%s'\n", query))
 	} else {
 		output.WriteString(fmt.Sprintf("Found %d file(s) matching '%s':\n\n", len(matches), query))
+
 		for i, match := range matches {
 			output.WriteString(fmt.Sprintf("%d. %s (score: %d)\n", i+1, match.Path, match.Score))
 		}
@@ -122,18 +125,18 @@ func (t *FileSearchTool) getOrCreateSearcher(workspaceRoot string) (*filesearch.
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	// If searcher exists and matches workspace, return it
+	// If searcher exists and matches workspace, return it.
 	if t.searcher != nil && t.workspaceRoot == workspaceRoot {
 		return t.searcher, nil
 	}
 
-	// Create new searcher
+	// Create new searcher.
 	searcher, err := filesearch.NewSearcher(workspaceRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update state
+	// Update state.
 	t.searcher = searcher
 	t.workspaceRoot = workspaceRoot
 

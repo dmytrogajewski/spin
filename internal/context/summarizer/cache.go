@@ -52,6 +52,7 @@ func NewCache(config CacheConfig) *Cache {
 func (c *Cache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return len(c.cache)
 }
 
@@ -59,6 +60,7 @@ func (c *Cache) Size() int {
 func (c *Cache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.cache = make(map[string]*CachedSummary)
 }
 
@@ -74,15 +76,16 @@ func (c *Cache) Get(content string) (*Result, bool) {
 		return nil, false
 	}
 
-	// Check TTL
+	// Check TTL.
 	if time.Since(cached.CreatedAt) > c.config.TTL {
 		c.mu.Lock()
 		delete(c.cache, hash)
 		c.mu.Unlock()
+
 		return nil, false
 	}
 
-	// Update access count
+	// Update access count.
 	c.mu.Lock()
 	cached.AccessCount++
 	c.mu.Unlock()
@@ -97,7 +100,7 @@ func (c *Cache) Set(content string, summary *Result) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Evict if at capacity
+	// Evict if at capacity.
 	if len(c.cache) >= c.config.MaxSize {
 		c.evictLRU()
 	}
@@ -119,7 +122,9 @@ func (c *Cache) evictLRU() {
 	}
 
 	var lruKey string
+
 	lruCount := -1
+
 	var lruTime time.Time
 
 	for key, entry := range c.cache {
@@ -139,5 +144,6 @@ func (c *Cache) evictLRU() {
 func hashContent(content string) string {
 	h := sha256.New()
 	h.Write([]byte(content))
+
 	return hex.EncodeToString(h.Sum(nil))
 }

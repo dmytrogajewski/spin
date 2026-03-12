@@ -12,7 +12,8 @@ func TestFakeTTY_EnterExit(t *testing.T) {
 		t.Error("should not be in raw mode initially")
 	}
 
-	if err := tty.Enter(); err != nil {
+	err := tty.Enter()
+	if err != nil {
 		t.Fatalf("Enter() error = %v", err)
 	}
 
@@ -20,7 +21,8 @@ func TestFakeTTY_EnterExit(t *testing.T) {
 		t.Error("should be in raw mode after Enter()")
 	}
 
-	if err := tty.Exit(); err != nil {
+	err = tty.Exit()
+	if err != nil {
 		t.Fatalf("Exit() error = %v", err)
 	}
 
@@ -36,6 +38,7 @@ func TestFakeTTY_Size(t *testing.T) {
 	if w != 120 {
 		t.Errorf("Size() width = %d, want 120", w)
 	}
+
 	if h != 40 {
 		t.Errorf("Size() height = %d, want 40", h)
 	}
@@ -44,13 +47,16 @@ func TestFakeTTY_Size(t *testing.T) {
 func TestFakeTTY_OnResize(t *testing.T) {
 	tty := NewFakeTTY(80, 24)
 
-	var called bool
-	var gotW, gotH int
-	var mu sync.Mutex
+	var (
+		called     bool
+		gotW, gotH int
+		mu         sync.Mutex
+	)
 
 	tty.OnResize(func(w, h int) {
 		mu.Lock()
 		defer mu.Unlock()
+
 		called = true
 		gotW, gotH = w, h
 	})
@@ -59,9 +65,11 @@ func TestFakeTTY_OnResize(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
+
 	if !called {
 		t.Error("OnResize callback was not invoked")
 	}
+
 	if gotW != 120 || gotH != 40 {
 		t.Errorf("callback received (%d, %d), want (120, 40)", gotW, gotH)
 	}
@@ -73,28 +81,23 @@ func TestFakeTTY_ConcurrentResize(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	// Goroutine 1: Read size repeatedly
+	// Goroutine 1: Read size repeatedly.
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 100; i++ {
+
+		for range 100 {
 			_, _ = tty.Size()
 		}
 	}()
 
-	// Goroutine 2: Resize
+	// Goroutine 2: Resize.
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 100; i++ {
+
+		for i := range 100 {
 			tty.SetSize(80+i, 24+i)
 		}
 	}()
 
 	wg.Wait()
 }
-
-
-
-
-
-
-

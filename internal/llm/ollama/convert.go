@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/ollama/ollama/api"
@@ -43,7 +44,7 @@ func convertMessageToOllama(msg openai.ChatCompletionMessageParamUnion, toolCall
 	}
 
 	// For tool result messages, set ToolName from the mapping
-	// This is required for Gemini and other models that need tool_name instead of tool_call_id
+	// This is required for Gemini and other models that need tool_name instead of tool_call_id.
 	if genericMsg.Role == "tool" && genericMsg.ToolCallID != "" && toolCallIDToName != nil {
 		if toolName, ok := toolCallIDToName[genericMsg.ToolCallID]; ok {
 			result.ToolName = toolName
@@ -51,11 +52,12 @@ func convertMessageToOllama(msg openai.ChatCompletionMessageParamUnion, toolCall
 				"tool_call_id", genericMsg.ToolCallID,
 				"tool_name", toolName)
 		} else {
-			// Log the mapping keys to help diagnose why this ID isn't found
+			// Log the mapping keys to help diagnose why this ID isn't found.
 			mapKeys := make([]string, 0, len(toolCallIDToName))
 			for k := range toolCallIDToName {
 				mapKeys = append(mapKeys, k)
 			}
+
 			slog.Warn("tool_call_id not found in mapping, tool result may fail",
 				"tool_call_id", genericMsg.ToolCallID,
 				"mapping_size", len(toolCallIDToName),
@@ -89,13 +91,14 @@ type genericMessage struct {
 func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion) map[string]string {
 	result := make(map[string]string)
 
-	// Pass 1: Extract from assistant messages
+	// Pass 1: Extract from assistant messages.
 	for msgIdx, msg := range messages {
 		genericMsg, err := parseGenericMessage(msg)
 		if err != nil {
 			slog.Debug("buildToolCallIDToNameMap: failed to parse message",
 				"index", msgIdx,
 				"error", err)
+
 			continue
 		}
 
@@ -113,11 +116,13 @@ func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion)
 				Name string `json:"name"`
 			} `json:"function"`
 		}
-		if err := json.Unmarshal(genericMsg.ToolCalls, &toolCalls); err != nil {
+		err = json.Unmarshal(genericMsg.ToolCalls, &toolCalls)
+		if err != nil {
 			slog.Debug("buildToolCallIDToNameMap: failed to unmarshal tool_calls",
 				"index", msgIdx,
 				"error", err,
 				"raw", string(genericMsg.ToolCalls))
+
 			continue
 		}
 
@@ -135,17 +140,18 @@ func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion)
 		}
 	}
 
-	// Pass 2: Positional fallback for tool messages with missing mapping
+	// Pass 2: Positional fallback for tool messages with missing mapping.
 	for i, msg := range messages {
 		genericMsg, err := parseGenericMessage(msg)
 		if err != nil || genericMsg.Role != "tool" || genericMsg.ToolCallID == "" {
 			continue
 		}
+
 		if _, ok := result[genericMsg.ToolCallID]; ok {
-			continue // Already in mapping
+			continue // Already in mapping.
 		}
 
-		// Find preceding assistant with tool_calls and our position among following tool messages
+		// Find preceding assistant with tool_calls and our position among following tool messages.
 		toolName := resolveToolNameByPosition(messages, i)
 		if toolName != "" {
 			result[genericMsg.ToolCallID] = toolName
@@ -170,9 +176,11 @@ func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion)
 // resolveToolNameByPosition finds the tool name for a tool message at index i
 // by locating the preceding assistant message and using tool message order.
 func resolveToolNameByPosition(messages []openai.ChatCompletionMessageParamUnion, toolMsgIndex int) string {
-	// Walk backwards to find assistant with tool_calls
-	var assistantToolNames []string
-	var toolCountBeforeMe int
+	// Walk backwards to find assistant with tool_calls.
+	var (
+		assistantToolNames []string
+		toolCountBeforeMe  int
+	)
 
 	for j := toolMsgIndex - 1; j >= 0; j-- {
 		genericMsg, err := parseGenericMessage(messages[j])
@@ -182,6 +190,7 @@ func resolveToolNameByPosition(messages []openai.ChatCompletionMessageParamUnion
 
 		if genericMsg.Role == "tool" {
 			toolCountBeforeMe++
+
 			continue
 		}
 
@@ -194,23 +203,26 @@ func resolveToolNameByPosition(messages []openai.ChatCompletionMessageParamUnion
 			if json.Unmarshal(genericMsg.ToolCalls, &toolCalls) != nil {
 				return ""
 			}
+
 			for _, tc := range toolCalls {
 				assistantToolNames = append(assistantToolNames, tc.Function.Name)
 			}
-			// Reverse: we walked backwards so names are in reverse order
+			// Reverse: we walked backwards so names are in reverse order.
 			for left, right := 0, len(assistantToolNames)-1; left < right; left, right = left+1, right-1 {
 				assistantToolNames[left], assistantToolNames[right] = assistantToolNames[right], assistantToolNames[left]
 			}
+
 			break
 		}
 
-		// Other role (user, system) - no preceding assistant with tool_calls
+		// Other role (user, system) - no preceding assistant with tool_calls.
 		return ""
 	}
 
 	if toolCountBeforeMe >= len(assistantToolNames) {
 		return ""
 	}
+
 	return assistantToolNames[toolCountBeforeMe]
 }
 
@@ -222,7 +234,8 @@ func parseGenericMessage(msg openai.ChatCompletionMessageParamUnion) (*genericMe
 	}
 
 	var genericMsg genericMessage
-	if err := json.Unmarshal(jsonData, &genericMsg); err != nil {
+	err = json.Unmarshal(jsonData, &genericMsg)
+	if err != nil {
 		return nil, err
 	}
 
@@ -232,22 +245,28 @@ func parseGenericMessage(msg openai.ChatCompletionMessageParamUnion) (*genericMe
 // extractContent extracts content from raw JSON, handling both string and array formats.
 func extractContent(content json.RawMessage) string {
 	var contentStr string
-	if err := json.Unmarshal(content, &contentStr); err == nil {
+	err := json.Unmarshal(content, &contentStr)
+	if err == nil {
 		return contentStr
 	}
 
-	// Try as array of content parts
+	// Try as array of content parts.
 	var contentParts []struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
 	}
-	if err := json.Unmarshal(content, &contentParts); err == nil {
+	err = json.Unmarshal(content, &contentParts)
+	if err == nil {
 		var result string
+
+		var resultSb257 strings.Builder
 		for _, part := range contentParts {
 			if part.Type == "text" {
-				result += part.Text
+				resultSb257.WriteString(part.Text)
 			}
 		}
+		result += resultSb257.String()
+
 		return result
 	}
 
@@ -265,13 +284,14 @@ func extractToolCalls(toolCallsJSON json.RawMessage) []api.ToolCall {
 		} `json:"function"`
 	}
 
-	if err := json.Unmarshal(toolCallsJSON, &toolCalls); err != nil {
+	err := json.Unmarshal(toolCallsJSON, &toolCalls)
+	if err != nil {
 		return nil
 	}
 
 	result := make([]api.ToolCall, len(toolCalls))
 	for i, tc := range toolCalls {
-		var args map[string]interface{}
+		var args map[string]any
 		json.Unmarshal([]byte(tc.Function.Arguments), &args)
 		result[i] = api.ToolCall{
 			Function: api.ToolCallFunction{
@@ -287,20 +307,22 @@ func extractToolCalls(toolCallsJSON json.RawMessage) []api.ToolCall {
 // inferToolName attempts to match a nameless tool call to a tool from the schema
 // by comparing argument keys against each tool's parameter properties.
 // Returns the inferred name, or "" if no unique match is found.
-func inferToolName(args map[string]interface{}, tools []api.Tool) string {
+func inferToolName(args map[string]any, tools []api.Tool) string {
 	if len(args) == 0 || len(tools) == 0 {
 		return ""
 	}
 
-	// Build set of argument keys
+	// Build set of argument keys.
 	argKeys := make(map[string]bool, len(args))
 	for k := range args {
 		argKeys[k] = true
 	}
 
-	var bestMatch string
-	var bestScore int
-	var ambiguous bool
+	var (
+		bestMatch string
+		bestScore int
+		ambiguous bool
+	)
 
 	for _, tool := range tools {
 		props := tool.Function.Parameters.Properties
@@ -308,15 +330,16 @@ func inferToolName(args map[string]interface{}, tools []api.Tool) string {
 			continue
 		}
 
-		// Count how many argument keys match this tool's parameter names
+		// Count how many argument keys match this tool's parameter names.
 		score := 0
+
 		for k := range argKeys {
 			if _, ok := props[k]; ok {
 				score++
 			}
 		}
 
-		// All arg keys must match (no extra unknown keys)
+		// All arg keys must match (no extra unknown keys).
 		if score == len(argKeys) && score > 0 {
 			if score > bestScore {
 				bestMatch = tool.Function.Name
@@ -335,20 +358,21 @@ func inferToolName(args map[string]interface{}, tools []api.Tool) string {
 		slog.Debug("ollama: ambiguous tool name inference, using first match",
 			"name", bestMatch, "args_keys", argKeys)
 	}
+
 	return bestMatch
 }
 
 // convertToolToOllama converts an OpenAI tool to Ollama format.
 func convertToolToOllama(tool openai.ChatCompletionToolParam) api.Tool {
-	// Serialize to JSON and parse to extract fields
+	// Serialize to JSON and parse to extract fields.
 	jsonData, _ := json.Marshal(tool)
 
 	var genericTool struct {
 		Type     string `json:"type"`
 		Function struct {
-			Name        string                 `json:"name"`
-			Description string                 `json:"description"`
-			Parameters  map[string]interface{} `json:"parameters"`
+			Name        string         `json:"name"`
+			Description string         `json:"description"`
+			Parameters  map[string]any `json:"parameters"`
 		} `json:"function"`
 	}
 	json.Unmarshal(jsonData, &genericTool)
@@ -367,43 +391,50 @@ func convertToolToOllama(tool openai.ChatCompletionToolParam) api.Tool {
 	}
 }
 
-func extractProperties(params map[string]interface{}) map[string]api.ToolProperty {
-	if props, ok := params["properties"].(map[string]interface{}); ok {
+func extractProperties(params map[string]any) map[string]api.ToolProperty {
+	if props, ok := params["properties"].(map[string]any); ok {
 		result := make(map[string]api.ToolProperty)
+
 		for k, v := range props {
-			if propMap, ok := v.(map[string]interface{}); ok {
+			if propMap, ok := v.(map[string]any); ok {
 				prop := api.ToolProperty{}
 				if typ, ok := propMap["type"].(string); ok {
 					prop.Type = api.PropertyType{typ}
 				}
+
 				if desc, ok := propMap["description"].(string); ok {
 					prop.Description = desc
 				}
+
 				result[k] = prop
 			}
 		}
+
 		return result
 	}
+
 	return nil
 }
 
-func extractRequired(params map[string]interface{}) []string {
-	if req, ok := params["required"].([]interface{}); ok {
+func extractRequired(params map[string]any) []string {
+	if req, ok := params["required"].([]any); ok {
 		result := make([]string, len(req))
 		for i, v := range req {
 			if s, ok := v.(string); ok {
 				result[i] = s
 			}
 		}
+
 		return result
 	}
+
 	return nil
 }
 
 // mapOllamaDoneReasonToOpenAICompletion maps Ollama's done_reason to OpenAI's finish_reason for non-streaming.
 // This is separate from the chunk version because OpenAI uses different types for streaming vs non-streaming.
 func mapOllamaDoneReasonToOpenAICompletion(doneReason string, hasToolCalls bool) openai.ChatCompletionChoicesFinishReason {
-	// Tool calls take precedence
+	// Tool calls take precedence.
 	if hasToolCalls {
 		return openai.ChatCompletionChoicesFinishReasonToolCalls
 	}
@@ -414,8 +445,9 @@ func mapOllamaDoneReasonToOpenAICompletion(doneReason string, hasToolCalls bool)
 	case "stop", "load", "unload", "":
 		return openai.ChatCompletionChoicesFinishReasonStop
 	default:
-		// Unknown reason, default to stop
+		// Unknown reason, default to stop.
 		slog.Debug("unknown ollama done_reason, defaulting to stop", "done_reason", doneReason)
+
 		return openai.ChatCompletionChoicesFinishReasonStop
 	}
 }
@@ -439,20 +471,21 @@ func convertOllamaResponseToOpenAI(resp api.ChatResponse, model string) *openai.
 		},
 	}
 
-	// Convert tool calls if present
+	// Convert tool calls if present.
 	if len(resp.Message.ToolCalls) > 0 {
 		result.Choices[0].Message.ToolCalls = make([]openai.ChatCompletionMessageToolCall, len(resp.Message.ToolCalls))
 		for i, tc := range resp.Message.ToolCalls {
 			argsJSON, err := json.Marshal(tc.Function.Arguments)
 			if err != nil {
-				// Log the error and use empty object as fallback
+				// Log the error and use empty object as fallback.
 				slog.Warn("failed to marshal tool call arguments",
 					"tool", tc.Function.Name,
 					"error", err,
 					"arguments", fmt.Sprintf("%v", tc.Function.Arguments))
+
 				argsJSON = []byte("{}")
 			}
-			// Debug: Log tool call arguments from Ollama
+			// Debug: Log tool call arguments from Ollama.
 			slog.Debug("ollama tool call received",
 				"tool", tc.Function.Name,
 				"arguments", string(argsJSON),
@@ -466,10 +499,10 @@ func convertOllamaResponseToOpenAI(resp api.ChatResponse, model string) *openai.
 				},
 			}
 		}
-		// FinishReason already set by mapOllamaDoneReasonToOpenAICompletion above
+		// FinishReason already set by mapOllamaDoneReasonToOpenAICompletion above.
 	}
 
-	// Add usage information if available
+	// Add usage information if available.
 	if resp.PromptEvalCount > 0 || resp.EvalCount > 0 {
 		result.Usage = openai.CompletionUsage{
 			PromptTokens:     int64(resp.PromptEvalCount),
@@ -483,9 +516,9 @@ func convertOllamaResponseToOpenAI(resp api.ChatResponse, model string) *openai.
 
 // mapOllamaDoneReasonToOpenAI maps Ollama's done_reason to OpenAI's finish_reason.
 // Ollama uses: "stop", "load", "unload", "length" (when hitting token limit)
-// OpenAI uses: "stop", "length", "tool_calls", "content_filter", "function_call"
+// OpenAI uses: "stop", "length", "tool_calls", "content_filter", "function_call".
 func mapOllamaDoneReasonToOpenAI(doneReason string, hasToolCalls bool) openai.ChatCompletionChunkChoicesFinishReason {
-	// Tool calls take precedence
+	// Tool calls take precedence.
 	if hasToolCalls {
 		return openai.ChatCompletionChunkChoicesFinishReasonToolCalls
 	}
@@ -496,8 +529,9 @@ func mapOllamaDoneReasonToOpenAI(doneReason string, hasToolCalls bool) openai.Ch
 	case "stop", "load", "unload", "":
 		return openai.ChatCompletionChunkChoicesFinishReasonStop
 	default:
-		// Unknown reason, default to stop
+		// Unknown reason, default to stop.
 		slog.Debug("unknown ollama done_reason, defaulting to stop", "done_reason", doneReason)
+
 		return openai.ChatCompletionChunkChoicesFinishReasonStop
 	}
 }
@@ -520,25 +554,26 @@ func convertOllamaChunkToOpenAI(resp api.ChatResponse, chunkID, model string) op
 		},
 	}
 
-	// Handle finish reason - map Ollama's done_reason to OpenAI format
+	// Handle finish reason - map Ollama's done_reason to OpenAI format.
 	if resp.Done {
 		chunk.Choices[0].FinishReason = mapOllamaDoneReasonToOpenAI(resp.DoneReason, len(resp.Message.ToolCalls) > 0)
 	}
 
-	// Convert tool calls if present
+	// Convert tool calls if present.
 	if len(resp.Message.ToolCalls) > 0 {
 		chunk.Choices[0].Delta.ToolCalls = make([]openai.ChatCompletionChunkChoicesDeltaToolCall, len(resp.Message.ToolCalls))
 		for i, tc := range resp.Message.ToolCalls {
 			argsJSON, err := json.Marshal(tc.Function.Arguments)
 			if err != nil {
-				// Log the error and use empty object as fallback
+				// Log the error and use empty object as fallback.
 				slog.Warn("failed to marshal tool call arguments",
 					"tool", tc.Function.Name,
 					"error", err,
 					"arguments", fmt.Sprintf("%v", tc.Function.Arguments))
+
 				argsJSON = []byte("{}")
 			}
-			// Debug: Log tool call arguments from Ollama streaming
+			// Debug: Log tool call arguments from Ollama streaming.
 			slog.Debug("ollama stream tool call received",
 				"tool", tc.Function.Name,
 				"arguments", string(argsJSON),

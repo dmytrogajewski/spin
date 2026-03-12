@@ -14,7 +14,7 @@ func TestConfigShow(t *testing.T) {
 		configYAML string
 		format     string
 		wantErr    bool
-		wantOutput []string // Strings that should appear in output
+		wantOutput []string // Strings that should appear in output.
 	}{
 		{
 			name: "text format with valid config",
@@ -81,36 +81,41 @@ llm:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temp config file
+			// Create temp config file.
 			tmpDir := t.TempDir()
+
 			configFile := filepath.Join(tmpDir, "spin.yaml")
-			if err := os.WriteFile(configFile, []byte(tt.configYAML), 0644); err != nil {
+			err := os.WriteFile(configFile, []byte(tt.configYAML), 0644)
+			if err != nil {
 				t.Fatalf("Failed to create config file: %v", err)
 			}
 
-			// Capture output
+			// Capture output.
 			var stdout, stderr bytes.Buffer
+
 			oldStdout := os.Stdout
 			oldStderr := os.Stderr
+
 			defer func() {
 				os.Stdout = oldStdout
 				os.Stderr = oldStderr
 			}()
 
-			// Create command
+			// Create command.
 			cmd := newConfigShowCmd()
 			cmd.SetArgs([]string{"--format", tt.format})
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
 
-			// Set config file flag
+			// Set config file flag.
 			flagConfigFile = configFile
 
-			// Execute
-			err := cmd.Execute()
+			// Execute.
+			err = cmd.Execute()
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
 
@@ -165,31 +170,34 @@ llm:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temp config file
+			// Create temp config file.
 			tmpDir := t.TempDir()
+
 			configFile := filepath.Join(tmpDir, "spin.yaml")
-			if err := os.WriteFile(configFile, []byte(tt.configYAML), 0644); err != nil {
+			err := os.WriteFile(configFile, []byte(tt.configYAML), 0644)
+			if err != nil {
 				t.Fatalf("Failed to create config file: %v", err)
 			}
 
-			// Capture output
+			// Capture output.
 			var stdout, stderr bytes.Buffer
 
-			// Create command
+			// Create command.
 			cmd := newConfigValidateCmd()
 			cmd.SetArgs([]string{})
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
 
-			// Set config file flag
+			// Set config file flag.
 			flagConfigFile = configFile
 
-			// Execute
-			err := cmd.Execute()
+			// Execute.
+			err = cmd.Execute()
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Execute() error = %v, wantErr %v\nStdout: %s\nStderr: %s",
 					err, tt.wantErr, stdout.String(), stderr.String())
+
 				return
 			}
 
@@ -230,43 +238,45 @@ func TestConfigPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temp dir
+			// Create temp dir.
 			tmpDir := t.TempDir()
 			configFile := filepath.Join(tmpDir, "spin.yaml")
 
 			if tt.setupFile {
-				// Create minimal valid config
+				// Create minimal valid config.
 				configYAML := `version: "2.0"
 llm:
   provider: openai
   model: gpt-4o
 `
-				if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+				err := os.WriteFile(configFile, []byte(configYAML), 0644)
+				if err != nil {
 					t.Fatalf("Failed to create config file: %v", err)
 				}
 			}
 
-			// Capture output
+			// Capture output.
 			var stdout, stderr bytes.Buffer
 
-			// Create command
+			// Create command.
 			cmd := newConfigPathCmd()
 			cmd.SetArgs([]string{})
 			cmd.SetOut(&stdout)
 			cmd.SetErr(&stderr)
 
-			// Set config file flag
+			// Set config file flag.
 			if tt.setupFile {
 				flagConfigFile = configFile
 			} else {
 				flagConfigFile = filepath.Join(tmpDir, "nonexistent.yaml")
 			}
 
-			// Execute
+			// Execute.
 			err := cmd.Execute()
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
 
@@ -281,25 +291,24 @@ llm:
 }
 
 func TestConfigPathShowAll(t *testing.T) {
-	// Create temp dir
+	// Create temp dir.
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "nonexistent.yaml")
 
-	// Capture output
+	// Capture output.
 	var stdout, stderr bytes.Buffer
 
-	// Create command
+	// Create command.
 	cmd := newConfigPathCmd()
 	cmd.SetArgs([]string{"--all"})
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
 
-	// Set nonexistent config file
+	// Set nonexistent config file.
 	flagConfigFile = configFile
 
-	// Execute
+	// Execute.
 	err := cmd.Execute()
-
 	if err == nil {
 		t.Error("Expected error for nonexistent config, got nil")
 	}
@@ -319,13 +328,15 @@ func TestConfigPathShowAll(t *testing.T) {
 
 func TestConfigEdit(t *testing.T) {
 	t.Run("fails when no editor found", func(t *testing.T) {
-		// Clear all editor env vars
+		// Clear all editor env vars.
 		oldEditor := os.Getenv("EDITOR")
 		oldVisual := os.Getenv("VISUAL")
 		oldPath := os.Getenv("PATH")
+
 		os.Unsetenv("EDITOR")
 		os.Unsetenv("VISUAL")
-		os.Setenv("PATH", "/nonexistent") // Make sure no editors in path
+		os.Setenv("PATH", "/nonexistent") // Make sure no editors in path.
+
 		defer func() {
 			os.Setenv("EDITOR", oldEditor)
 			os.Setenv("VISUAL", oldVisual)
@@ -335,24 +346,25 @@ func TestConfigEdit(t *testing.T) {
 		tmpDir := t.TempDir()
 		configFile := filepath.Join(tmpDir, "spin.yaml")
 
-		// Create minimal config
+		// Create minimal config.
 		configYAML := `version: "2.0"
 llm:
   provider: openai
   model: gpt-4o
 `
-		if err := os.WriteFile(configFile, []byte(configYAML), 0644); err != nil {
+		err := os.WriteFile(configFile, []byte(configYAML), 0644)
+		if err != nil {
 			t.Fatalf("Failed to create config file: %v", err)
 		}
 
-		// Create command
+		// Create command.
 		cmd := newConfigEditCmd()
 		cmd.SetArgs([]string{})
 
 		flagConfigFile = configFile
 
-		// Execute - should fail with no editor
-		err := cmd.Execute()
+		// Execute - should fail with no editor.
+		err = cmd.Execute()
 		if err == nil {
 			t.Error("Expected error when no editor found, got nil")
 		}
@@ -382,26 +394,29 @@ func TestGetEditor(t *testing.T) {
 		},
 		{
 			name:         "falls back to vi",
-			wantNonEmpty: true, // vi should exist on most systems
+			wantNonEmpty: true, // vi should exist on most systems.
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Save and restore env vars
+			// Save and restore env vars.
 			oldEditor := os.Getenv("EDITOR")
 			oldVisual := os.Getenv("VISUAL")
+
 			defer func() {
 				os.Setenv("EDITOR", oldEditor)
 				os.Setenv("VISUAL", oldVisual)
 			}()
 
-			// Set test env vars
+			// Set test env vars.
 			os.Unsetenv("EDITOR")
 			os.Unsetenv("VISUAL")
+
 			if tt.editorEnv != "" {
 				os.Setenv("EDITOR", tt.editorEnv)
 			}
+
 			if tt.visualEnv != "" {
 				os.Setenv("VISUAL", tt.visualEnv)
 			}
@@ -422,7 +437,7 @@ func TestGetConfigSearchPaths(t *testing.T) {
 		t.Error("getConfigSearchPaths() returned empty slice")
 	}
 
-	// Should contain at least current dir and home dir
+	// Should contain at least current dir and home dir.
 	foundCurrent := false
 	foundHome := false
 
@@ -430,6 +445,7 @@ func TestGetConfigSearchPaths(t *testing.T) {
 		if strings.Contains(path, "./spin.yaml") || strings.Contains(path, "spin.yaml") {
 			foundCurrent = true
 		}
+
 		if strings.Contains(path, ".spin") || strings.Contains(path, "HOME") {
 			foundHome = true
 		}
@@ -438,6 +454,7 @@ func TestGetConfigSearchPaths(t *testing.T) {
 	if !foundCurrent {
 		t.Error("Search paths missing current directory")
 	}
+
 	if !foundHome {
 		t.Error("Search paths missing home directory")
 	}

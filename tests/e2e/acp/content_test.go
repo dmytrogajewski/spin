@@ -161,7 +161,7 @@ func TestACP_Content_Image_Base64(t *testing.T) {
 
 	// Create minimal valid base64 image data (1x1 PNG)
 	minimalPNG := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-	
+
 	req := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -469,4 +469,3 @@ func TestACP_Content_ResourceLink_Metadata(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, resp.StopReason)
 }
-

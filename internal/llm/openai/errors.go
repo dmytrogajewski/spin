@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/openai/openai-go"
+
+	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
 // mapError maps SDK errors to standard llm errors.
@@ -16,15 +17,16 @@ func mapError(err error) error {
 		return nil
 	}
 
-	// Context errors (pass-through)
+	// Context errors (pass-through).
 	if errors.Is(err, context.Canceled) {
 		return context.Canceled
 	}
+
 	if errors.Is(err, context.DeadlineExceeded) {
 		return fmt.Errorf("timeout: %w", err)
 	}
 
-	// SDK API errors
+	// SDK API errors.
 	var apiErr *openai.Error
 	if errors.As(err, &apiErr) {
 		switch apiErr.StatusCode {
@@ -41,12 +43,12 @@ func mapError(err error) error {
 		}
 	}
 
-	// Network errors
+	// Network errors.
 	var netErr net.Error
 	if errors.As(err, &netErr) {
 		return fmt.Errorf("connection error: %w", err)
 	}
 
-	// Unknown error - wrap with context
+	// Unknown error - wrap with context.
 	return fmt.Errorf("openai: %w", err)
 }

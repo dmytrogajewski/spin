@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/coder/acp-go-sdk"
+
 	"github.com/dmytrogajewski/spin/internal/planning"
 )
 
@@ -32,6 +33,7 @@ func buildStepContent(step planning.Step) string {
 	if step.Action != "" {
 		return fmt.Sprintf("%s: %s", step.Description, step.Action)
 	}
+
 	return step.Description
 }
 
@@ -41,15 +43,15 @@ func mapStepStatus(status planning.StepStatus) acp.PlanEntryStatus {
 	case planning.StepStatusPending:
 		return acp.PlanEntryStatusPending
 	case planning.StepStatusReady:
-		return acp.PlanEntryStatusPending // Ready steps are still pending from ACP perspective
+		return acp.PlanEntryStatusPending // Ready steps are still pending from ACP perspective.
 	case planning.StepStatusRunning:
-		return acp.PlanEntryStatus("in_progress") // ACP uses "in_progress" for running steps
+		return acp.PlanEntryStatus("in_progress") // ACP uses "in_progress" for running steps.
 	case planning.StepStatusCompleted:
 		return acp.PlanEntryStatus("completed")
 	case planning.StepStatusFailed:
 		return acp.PlanEntryStatus("failed")
 	case planning.StepStatusSkipped:
-		return acp.PlanEntryStatus("cancelled")
+		return acp.PlanEntryStatus("canceled")
 	default:
 		return acp.PlanEntryStatusPending
 	}
@@ -61,21 +63,21 @@ func mapStepStatus(status planning.StepStatus) acp.PlanEntryStatus {
 func mapStepPriority(step planning.Step, plan *planning.Plan) acp.PlanEntryPriority {
 	lowerDesc := strings.ToLower(step.Description)
 
-	// Heuristics: check for explicit priority keywords
+	// Heuristics: check for explicit priority keywords.
 	if strings.Contains(lowerDesc, "critical") || strings.Contains(lowerDesc, "urgent") ||
 		strings.Contains(lowerDesc, "important") || strings.Contains(lowerDesc, "priority") {
 		return acp.PlanEntryPriorityHigh
 	}
+
 	if strings.Contains(lowerDesc, "optional") || strings.Contains(lowerDesc, "nice to have") {
 		return acp.PlanEntryPriorityLow
 	}
 
-	// Steps with no dependencies are high priority (critical path start)
+	// Steps with no dependencies are high priority (critical path start).
 	if len(step.DependsOn) == 0 {
 		return acp.PlanEntryPriorityHigh
 	}
 
-	// Steps with dependencies are medium priority
+	// Steps with dependencies are medium priority.
 	return acp.PlanEntryPriorityMedium
 }
-

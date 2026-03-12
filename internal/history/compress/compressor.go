@@ -67,6 +67,7 @@ func (s Stats) CompressionRatio() float64 {
 	if s.OriginalTokens == 0 {
 		return 0
 	}
+
 	return 1.0 - float64(s.CompressedTokens)/float64(s.OriginalTokens)
 }
 
@@ -75,5 +76,6 @@ func (s Stats) MessageReduction() float64 {
 	if s.OriginalCount == 0 {
 		return 0
 	}
+
 	return 1.0 - float64(s.CompressedCount)/float64(s.OriginalCount)
 }

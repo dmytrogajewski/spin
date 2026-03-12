@@ -10,7 +10,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
 )
 
-// BenchmarkConvertInsights benchmarks insight to bullet conversion
+// BenchmarkConvertInsights benchmarks insight to bullet conversion.
 func BenchmarkConvertInsights(b *testing.B) {
 	insights := []*reflector.Insight{
 		{
@@ -22,7 +22,8 @@ func BenchmarkConvertInsights(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := ConvertInsights(insights)
 		if err != nil {
 			b.Fatal(err)
@@ -30,7 +31,7 @@ func BenchmarkConvertInsights(b *testing.B) {
 	}
 }
 
-// BenchmarkFindDuplicates_EmptyPlaybook benchmarks duplicate detection with empty playbook
+// BenchmarkFindDuplicates_EmptyPlaybook benchmarks duplicate detection with empty playbook.
 func BenchmarkFindDuplicates_EmptyPlaybook(b *testing.B) {
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
@@ -41,7 +42,8 @@ func BenchmarkFindDuplicates_EmptyPlaybook(b *testing.B) {
 	testBullet, _ := bullet.New("Always validate input", bullet.WithEmbedding(emb))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := curator.FindDuplicates(ctx, []*bullet.Bullet{testBullet})
 		if err != nil {
 			b.Fatal(err)
@@ -49,27 +51,28 @@ func BenchmarkFindDuplicates_EmptyPlaybook(b *testing.B) {
 	}
 }
 
-// BenchmarkFindDuplicates_WithPlaybook benchmarks duplicate detection with populated playbook
+// BenchmarkFindDuplicates_WithPlaybook benchmarks duplicate detection with populated playbook.
 func BenchmarkFindDuplicates_WithPlaybook(b *testing.B) {
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
 	curator := NewCurator(pb, embedder)
 
-	// Add 100 bullets to playbook
-	for i := 0; i < 100; i++ {
+	// Add 100 bullets to playbook.
+	for i := range 100 {
 		content := "Test bullet " + string(rune('A'+i%26))
 		emb, _ := embedder.Embed(ctx, content)
 		b, _ := bullet.New(content, bullet.WithEmbedding(emb))
 		pb.Add(ctx, b)
 	}
 
-	// New bullet to check
+	// New bullet to check.
 	emb, _ := embedder.Embed(ctx, "Always validate input")
 	newBullet, _ := bullet.New("Always validate input", bullet.WithEmbedding(emb))
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := curator.FindDuplicates(ctx, []*bullet.Bullet{newBullet})
 		if err != nil {
 			b.Fatal(err)
@@ -77,7 +80,7 @@ func BenchmarkFindDuplicates_WithPlaybook(b *testing.B) {
 	}
 }
 
-// BenchmarkCurate_SingleInsight benchmarks curating a single insight
+// BenchmarkCurate_SingleInsight benchmarks curating a single insight.
 func BenchmarkCurate_SingleInsight(b *testing.B) {
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
@@ -93,7 +96,8 @@ func BenchmarkCurate_SingleInsight(b *testing.B) {
 	req := MergeRequest{Insights: insights}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		pb := playbook.New(nil, embedder)
 		curator := NewCurator(pb, embedder)
 
@@ -104,13 +108,13 @@ func BenchmarkCurate_SingleInsight(b *testing.B) {
 	}
 }
 
-// BenchmarkCurate_MultipleInsights benchmarks curating multiple insights
+// BenchmarkCurate_MultipleInsights benchmarks curating multiple insights.
 func BenchmarkCurate_MultipleInsights(b *testing.B) {
 	ctx := context.Background()
 	embedder := embedding.NewMockEmbedder(384)
 
 	insights := make([]*reflector.Insight, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		insights[i] = &reflector.Insight{
 			Content:    "Test insight " + string(rune('A'+i)),
 			Confidence: 0.8,
@@ -121,7 +125,8 @@ func BenchmarkCurate_MultipleInsights(b *testing.B) {
 	req := MergeRequest{Insights: insights}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		pb := playbook.New(nil, embedder)
 		curator := NewCurator(pb, embedder)
 
@@ -132,7 +137,7 @@ func BenchmarkCurate_MultipleInsights(b *testing.B) {
 	}
 }
 
-// BenchmarkCosineSimilarity benchmarks the cosine similarity calculation
+// BenchmarkCosineSimilarity benchmarks the cosine similarity calculation.
 func BenchmarkCosineSimilarity(b *testing.B) {
 	a := make([]float32, 384)
 	bVec := make([]float32, 384)
@@ -143,7 +148,8 @@ func BenchmarkCosineSimilarity(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = cosineSimilarity(a, bVec)
 	}
 }

@@ -5,19 +5,19 @@ import (
 	"fmt"
 )
 
-// Constants for Planning mode configuration
+// Constants for Planning mode configuration.
 const (
 	// PlanningMaxTokens is the token budget for Planning mode
-	// Sufficient for detailed multi-step plans with dependencies
+	// Sufficient for detailed multi-step plans with dependencies.
 	PlanningMaxTokens = 4096
 
-	// PlanningMinSteps is the minimum number of steps for a plan
+	// PlanningMinSteps is the minimum number of steps for a plan.
 	PlanningMinSteps = 1
 
-	// PlanningMaxSteps is the maximum number of steps for a plan
+	// PlanningMaxSteps is the maximum number of steps for a plan.
 	PlanningMaxSteps = 100
 
-	// PlanningMinEstimate is the minimum estimated duration per step (minutes)
+	// PlanningMinEstimate is the minimum estimated duration per step (minutes).
 	PlanningMinEstimate = 1
 )
 
@@ -84,7 +84,7 @@ func (p *Planning) SystemPrompt() string {
 }
 
 func (p *Planning) AllowedTools() []string {
-	// Planning mode allows analysis tools (context-only, no file reading)
+	// Planning mode allows analysis tools (context-only, no file reading).
 	return []string{"list_directory", "file_search", "git_context", "get_context"}
 }
 
@@ -96,8 +96,10 @@ func (p *Planning) Validate() error {
 	if p.maxTokens <= 0 {
 		return errors.New("max tokens must be positive")
 	}
+
 	if p.maxTokens > MaxAllowedTokens {
 		return fmt.Errorf("max tokens %d exceeds maximum allowed %d", p.maxTokens, MaxAllowedTokens)
 	}
+
 	return nil
 }

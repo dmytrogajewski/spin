@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Test Metadata Initialization
+// Test Metadata Initialization.
 
 func TestMetadata_DefaultValues(t *testing.T) {
 	session := NewSession("/test/workdir")
@@ -35,12 +35,12 @@ func TestMetadata_DefaultValues(t *testing.T) {
 	}
 }
 
-// Test Token Tracking
+// Test Token Tracking.
 
 func TestMetadata_TokenTracking(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	// Add turns with different token counts using IncrementTurnCount
+	// Add turns with different token counts using IncrementTurnCount.
 	session.IncrementTurnCount(100)
 	session.IncrementTurnCount(250)
 	session.IncrementTurnCount(150)
@@ -51,23 +51,23 @@ func TestMetadata_TokenTracking(t *testing.T) {
 	}
 }
 
-// Test Turn Count Consistency
+// Test Turn Count Consistency.
 
 func TestMetadata_TurnCountConsistency(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	// Add multiple turns
-	for i := 0; i < 10; i++ {
+	// Add multiple turns.
+	for range 10 {
 		session.IncrementTurnCount(100)
 	}
 
-	// Metadata should have correct turn count
+	// Metadata should have correct turn count.
 	if session.Metadata.TotalTurns != 10 {
 		t.Errorf("Metadata.TotalTurns = %d, want 10", session.Metadata.TotalTurns)
 	}
 }
 
-// Test Title Management
+// Test Title Management.
 
 func TestMetadata_SetTitle_Valid(t *testing.T) {
 	session := NewSession("/test/workdir")
@@ -86,7 +86,7 @@ func TestMetadata_SetTitle_UpdatesTimestamp(t *testing.T) {
 	session := NewSession("/test/workdir")
 	originalUpdatedAt := session.UpdatedAt
 
-	// Wait a bit to ensure timestamp difference
+	// Wait a bit to ensure timestamp difference.
 	time.Sleep(10 * time.Millisecond)
 
 	err := session.SetTitle("Updated Title")
@@ -99,7 +99,7 @@ func TestMetadata_SetTitle_UpdatesTimestamp(t *testing.T) {
 	}
 }
 
-// Test Tag Management
+// Test Tag Management.
 
 func TestMetadata_AddTag_Single(t *testing.T) {
 	session := NewSession("/test/workdir")
@@ -138,7 +138,7 @@ func TestMetadata_AddTag_Multiple(t *testing.T) {
 func TestMetadata_AddTag_Duplicate(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	// Add same tag twice
+	// Add same tag twice.
 	_ = session.AddTag("backend")
 	_ = session.AddTag("backend")
 
@@ -164,7 +164,7 @@ func TestMetadata_RemoveTag_Existing(t *testing.T) {
 		t.Errorf("Tags length = %d, want 2", len(session.Metadata.Tags))
 	}
 
-	// Verify frontend was removed
+	// Verify frontend was removed.
 	for _, tag := range session.Metadata.Tags {
 		if tag == "frontend" {
 			t.Error("Tag 'frontend' was not removed")
@@ -177,33 +177,32 @@ func TestMetadata_RemoveTag_NonExistent(t *testing.T) {
 
 	_ = session.AddTag("backend")
 
-	// Removing non-existent tag should not error
+	// Removing non-existent tag should not error.
 	err := session.RemoveTag("nonexistent")
 	if err != nil {
 		t.Errorf("RemoveTag() error = %v, want nil", err)
 	}
 
-	// Original tag should still be there
+	// Original tag should still be there.
 	if len(session.Metadata.Tags) != 1 {
 		t.Errorf("Tags length = %d, want 1", len(session.Metadata.Tags))
 	}
 }
 
-// Test Last Error Tracking
+// Test Last Error Tracking.
 
 func TestMetadata_LastError(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	// Initially empty
+	// Initially empty.
 	if session.Metadata.LastError != "" {
 		t.Errorf("LastError = %s, want empty string", session.Metadata.LastError)
 	}
 
-	// Set error
+	// Set error.
 	err := session.UpdateMetadata(func(m *Metadata) {
 		m.LastError = "command execution failed"
 	})
-
 	if err != nil {
 		t.Fatalf("UpdateMetadata() error = %v", err)
 	}
@@ -214,7 +213,7 @@ func TestMetadata_LastError(t *testing.T) {
 	}
 }
 
-// Test Metadata Update Callback
+// Test Metadata Update Callback.
 
 func TestMetadata_UpdateMetadata_Multiple(t *testing.T) {
 	session := NewSession("/test/workdir")
@@ -224,7 +223,6 @@ func TestMetadata_UpdateMetadata_Multiple(t *testing.T) {
 		m.Description = "Testing metadata updates"
 		m.Tags = []string{"test", "metadata"}
 	})
-
 	if err != nil {
 		t.Fatalf("UpdateMetadata() error = %v", err)
 	}
@@ -247,13 +245,12 @@ func TestMetadata_UpdateMetadata_UpdatesTimestamp(t *testing.T) {
 	session := NewSession("/test/workdir")
 	originalUpdatedAt := session.UpdatedAt
 
-	// Wait a bit to ensure timestamp difference
+	// Wait a bit to ensure timestamp difference.
 	time.Sleep(10 * time.Millisecond)
 
 	err := session.UpdateMetadata(func(m *Metadata) {
 		m.Description = "Updated"
 	})
-
 	if err != nil {
 		t.Fatalf("UpdateMetadata() error = %v", err)
 	}
@@ -263,7 +260,7 @@ func TestMetadata_UpdateMetadata_UpdatesTimestamp(t *testing.T) {
 	}
 }
 
-// Test Description
+// Test Description.
 
 func TestMetadata_SetDescription(t *testing.T) {
 	session := NewSession("/test/workdir")
@@ -273,7 +270,6 @@ func TestMetadata_SetDescription(t *testing.T) {
 	err := session.UpdateMetadata(func(m *Metadata) {
 		m.Description = description
 	})
-
 	if err != nil {
 		t.Fatalf("UpdateMetadata() error = %v", err)
 	}

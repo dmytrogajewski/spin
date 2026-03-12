@@ -32,7 +32,7 @@ func TestCalculateSimilarity_PartialOverlap(t *testing.T) {
 	// vs: the, lazy, brown, dog, sleeps
 	// Intersection: the, brown (2)
 	// Union: the, quick, brown, fox, jumps, lazy, dog, sleeps (8)
-	// Similarity: 2/8 = 0.25
+	// Similarity: 2/8 = 0.25.
 
 	expected := 2.0 / 8.0
 	similarity := calculateSimilarity(a, b)
@@ -63,13 +63,13 @@ func TestCalculateSimilarity_Punctuation(t *testing.T) {
 }
 
 func TestCalculateSimilarity_EmptyStrings(t *testing.T) {
-	// Both empty
+	// Both empty.
 	similarity := calculateSimilarity("", "")
 	if similarity != 1.0 {
 		t.Errorf("Expected similarity 1.0 for both empty strings, got %f", similarity)
 	}
 
-	// One empty, one not
+	// One empty, one not.
 	similarity = calculateSimilarity("", "hello world")
 	if similarity != 0.0 {
 		t.Errorf("Expected similarity 0.0 for one empty string, got %f", similarity)
@@ -89,7 +89,7 @@ func TestCalculateSimilarity_ShortWords(t *testing.T) {
 	// vs: this, test
 	// Intersection: test (1)
 	// Union: test, this (2)
-	// Similarity: 1/2 = 0.5
+	// Similarity: 1/2 = 0.5.
 
 	expected := 1.0 / 2.0
 	similarity := calculateSimilarity(a, b)
@@ -105,7 +105,7 @@ func TestCalculateSimilarity_SemanticSimilarity(t *testing.T) {
 
 	// After processing: cat, sat, mat
 	// vs: feline, rested, rug
-	// No common words, so similarity should be 0
+	// No common words, so similarity should be 0.
 
 	similarity := calculateSimilarity(a, b)
 	if similarity != 0.0 {
@@ -122,7 +122,7 @@ func TestExtractWords(t *testing.T) {
 		t.Errorf("Expected %d words, got %d", len(expected), len(words))
 	}
 
-	// Check that short words are filtered out
+	// Check that short words are filtered out.
 	for _, word := range words {
 		if len(word) < 3 {
 			t.Errorf("Short word '%s' should have been filtered out", word)
@@ -142,17 +142,18 @@ func TestExtractWords_Punctuation(t *testing.T) {
 	words := extractWords(text)
 
 	// Should extract at least "test", "word", "with", "punctuation", "and"
-	// Note: "symbols" might be filtered out as too short
-	expectedMin := 3 // At least these words should be extracted
+	// Note: "symbols" might be filtered out as too short.
+	expectedMin := 3 // At least these words should be extracted.
 	if len(words) < expectedMin {
 		t.Errorf("Expected at least %d words, got %d", expectedMin, len(words))
 	}
 }
 
-// Helper function for floating point comparison
+// Helper function for floating point comparison.
 func abs(x float64) float64 {
 	if x < 0 {
 		return -x
 	}
+
 	return x
 }

@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	// MaxContentLength is the maximum allowed length for bullet content
+	// MaxContentLength is the maximum allowed length for bullet content.
 	MaxContentLength = 2048
 )
 

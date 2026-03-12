@@ -70,17 +70,17 @@ type ApplyResult struct {
 	FilesCreated []string
 	FilesDeleted []string
 	FilesUpdated []string
-	FilesMoved   map[string]string // old path -> new path
+	FilesMoved   map[string]string // old path -> new path.
 	DryRun       bool
 }
 
 // Error represents a patch application error with context.
 type Error struct {
-	Op      string // Operation (Add, Delete, Update, Move)
-	Path    string // File path
-	Line    int    // Line number (for hunk errors)
-	Err     error  // Underlying error
-	Context string // Additional context
+	Op      string // Operation (Add, Delete, Update, Move).
+	Path    string // File path.
+	Line    int    // Line number (for hunk errors).
+	Err     error  // Underlying error.
+	Context string // Additional context.
 }
 
 // Error implements the error interface.
@@ -88,9 +88,11 @@ func (e *Error) Error() string {
 	if e.Context != "" {
 		return fmt.Sprintf("%s %q: %v (%s)", e.Op, e.Path, e.Err, e.Context)
 	}
+
 	if e.Line > 0 {
 		return fmt.Sprintf("%s %q at line %d: %v", e.Op, e.Path, e.Line, e.Err)
 	}
+
 	return fmt.Sprintf("%s %q: %v", e.Op, e.Path, e.Err)
 }
 
@@ -115,7 +117,7 @@ func NewApplier(workspaceRoot string) (*Applier, error) {
 		return nil, ErrEmptyWorkspace
 	}
 
-	// Resolve to absolute path
+	// Resolve to absolute path.
 	absRoot, err := filepath.Abs(workspaceRoot)
 	if err != nil {
 		return nil, fmt.Errorf("invalid workspace root: %w", err)
@@ -159,7 +161,8 @@ func (a *Applier) SetForceOverwrite(enabled bool) {
 func (a *Applier) Apply(patch *Patch) (*ApplyResult, error) {
 	a.resetModifications()
 
-	if err := a.validatePatch(patch); err != nil {
+	err := a.validatePatch(patch)
+	if err != nil {
 		return nil, err
 	}
 
@@ -168,8 +171,10 @@ func (a *Applier) Apply(patch *Patch) (*ApplyResult, error) {
 	}
 
 	result := a.createApplyResult()
-	if err := a.applyOperations(patch.Operations, result); err != nil {
+	err = a.applyOperations(patch.Operations, result)
+	if err != nil {
 		a.rollback()
+
 		return nil, err
 	}
 
@@ -199,10 +204,12 @@ func (a *Applier) createApplyResult() *ApplyResult {
 // applyOperations applies all operations in the patch.
 func (a *Applier) applyOperations(operations []FileOperation, result *ApplyResult) error {
 	for _, op := range operations {
-		if err := a.applyOperation(op, result); err != nil {
+		err := a.applyOperation(op, result)
+		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -230,10 +237,12 @@ func (a *Applier) applyOperation(op FileOperation, result *ApplyResult) error {
 // Returns nil if the patch is valid, error otherwise.
 func (a *Applier) ValidatePatch(patch *Patch) error {
 	for _, op := range patch.Operations {
-		if err := a.validateOperation(op); err != nil {
+		err := a.validateOperation(op)
+		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -241,13 +250,13 @@ func (a *Applier) ValidatePatch(patch *Patch) error {
 func (a *Applier) validateOperation(op FileOperation) error {
 	path := op.Path()
 
-	// Validate path
+	// Validate path.
 	_, err := a.resolvePath(path)
 	if err != nil {
 		return a.wrapError("Validate", path, err, "")
 	}
 
-	// Type-specific validation
+	// Type-specific validation.
 	switch op := op.(type) {
 	case *AddFile:
 		return a.validateAddFile(op)
@@ -267,8 +276,9 @@ func (a *Applier) validateAddFile(op *AddFile) error {
 		return a.wrapError("Add", op.FilePath, err, "")
 	}
 
-	// Check if file exists
-	if _, err := os.Stat(fullPath); err == nil {
+	// Check if file exists.
+	_, err = os.Stat(fullPath)
+	if err == nil {
 		if !a.forceOverwrite {
 			return a.wrapError("Add", op.FilePath, ErrFileExists, "use force mode to overwrite")
 		}
@@ -284,8 +294,9 @@ func (a *Applier) validateDeleteFile(op *DeleteFile) error {
 		return a.wrapError("Delete", op.FilePath, err, "")
 	}
 
-	// Check if file exists
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+	// Check if file exists.
+	_, err = os.Stat(fullPath)
+	if os.IsNotExist(err) {
 		return a.wrapError("Delete", op.FilePath, ErrFileNotFound, "")
 	}
 
@@ -294,18 +305,19 @@ func (a *Applier) validateDeleteFile(op *DeleteFile) error {
 
 // validateUpdateFile validates an Update operation.
 func (a *Applier) validateUpdateFile(op *UpdateFile) error {
-	// Validate old path
+	// Validate old path.
 	fullPath, err := a.resolvePath(op.FilePath)
 	if err != nil {
 		return a.wrapError("Update", op.FilePath, err, "")
 	}
 
-	// Check if file exists
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+	// Check if file exists.
+	_, err = os.Stat(fullPath)
+	if os.IsNotExist(err) {
 		return a.wrapError("Update", op.FilePath, ErrFileNotFound, "file must exist for update")
 	}
 
-	// Validate new path if move operation
+	// Validate new path if move operation.
 	if op.NewPath != "" {
 		_, err := a.resolvePath(op.NewPath)
 		if err != nil {
@@ -320,15 +332,15 @@ func (a *Applier) validateUpdateFile(op *UpdateFile) error {
 //
 // Returns the absolute path if valid, error if outside workspace or invalid.
 func (a *Applier) resolvePath(relPath string) (string, error) {
-	// Validate relative path
+	// Validate relative path.
 	if strings.Contains(relPath, "..") || filepath.IsAbs(relPath) {
 		return "", ErrPathOutsideWorkspace
 	}
 
-	// Safely join with workspace root
+	// Safely join with workspace root.
 	fullPath := filepath.Join(a.workspaceRoot, relPath)
 
-	// Ensure the resolved path is still within workspace
+	// Ensure the resolved path is still within workspace.
 	if !strings.HasPrefix(fullPath, a.workspaceRoot) {
 		return "", ErrPathOutsideWorkspace
 	}
@@ -343,28 +355,32 @@ func (a *Applier) applyAddFile(op *AddFile, result *ApplyResult) error {
 		return a.wrapError("Add", op.FilePath, err, "")
 	}
 
-	// Check if file exists
+	// Check if file exists.
 	existingContent := []byte(nil)
-	if _, err := os.Stat(fullPath); err == nil {
+
+	_, err = os.Stat(fullPath)
+	if err == nil {
 		if !a.forceOverwrite {
 			return a.wrapError("Add", op.FilePath, ErrFileExists, "use force mode to overwrite")
 		}
-		// Read existing content for rollback
+		// Read existing content for rollback.
 		existingContent, _ = os.ReadFile(fullPath)
 	}
 
-	// Create parent directories
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+	// Create parent directories.
+	err = os.MkdirAll(filepath.Dir(fullPath), 0755)
+	if err != nil {
 		return a.wrapError("Add", op.FilePath, err, "failed to create parent directories")
 	}
 
-	// Write file content
+	// Write file content.
 	content := strings.Join(op.Lines, "\n")
-	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+	err = os.WriteFile(fullPath, []byte(content), 0644)
+	if err != nil {
 		return a.wrapError("Add", op.FilePath, err, "failed to write file")
 	}
 
-	// Track for rollback
+	// Track for rollback.
 	if existingContent != nil {
 		a.trackModification(op.FilePath, opUpdate, existingContent)
 	} else {
@@ -372,6 +388,7 @@ func (a *Applier) applyAddFile(op *AddFile, result *ApplyResult) error {
 	}
 
 	result.FilesCreated = append(result.FilesCreated, op.FilePath)
+
 	return nil
 }
 
@@ -387,12 +404,14 @@ func (a *Applier) applyDeleteFile(op *DeleteFile, result *ApplyResult) error {
 		return err
 	}
 
-	if err := a.deleteFile(fullPath, op.FilePath); err != nil {
+	err = a.deleteFile(fullPath, op.FilePath)
+	if err != nil {
 		return err
 	}
 
 	a.trackModification(op.FilePath, opDelete, originalContent)
 	result.FilesDeleted = append(result.FilesDeleted, op.FilePath)
+
 	return nil
 }
 
@@ -403,16 +422,20 @@ func (a *Applier) readFileForRollback(fullPath, filePath string) ([]byte, error)
 		if os.IsNotExist(err) {
 			return nil, a.wrapError("Delete", filePath, ErrFileNotFound, "")
 		}
+
 		return nil, a.wrapError("Delete", filePath, err, "failed to read file")
 	}
+
 	return originalContent, nil
 }
 
 // deleteFile deletes the file from the filesystem.
 func (a *Applier) deleteFile(fullPath, filePath string) error {
-	if err := os.Remove(fullPath); err != nil {
+	err := os.Remove(fullPath)
+	if err != nil {
 		return a.wrapError("Delete", filePath, err, "failed to delete file")
 	}
+
 	return nil
 }
 
@@ -423,26 +446,28 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 		return a.wrapError("Update", op.FilePath, err, "")
 	}
 
-	// Read file content
+	// Read file content.
 	originalContent, err := os.ReadFile(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return a.wrapError("Update", op.FilePath, ErrFileNotFound, "file must exist for update")
 		}
+
 		return a.wrapError("Update", op.FilePath, err, "failed to read file")
 	}
 
-	// Parse lines
+	// Parse lines.
 	lines := strings.Split(string(originalContent), "\n")
 
-	// Apply each hunk
+	// Apply each hunk.
 	for i, hunk := range op.Hunks {
-		if err := a.applyHunk(&lines, hunk, op.FilePath, i); err != nil {
+		err := a.applyHunk(&lines, hunk, op.FilePath, i)
+		if err != nil {
 			return err
 		}
 	}
 
-	// Determine target path (original or new if moving)
+	// Determine target path (original or new if moving).
 	targetPath := fullPath
 	if op.NewPath != "" {
 		targetPath, err = a.resolvePath(op.NewPath)
@@ -450,99 +475,110 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 			return a.wrapError("Move", op.NewPath, err, "")
 		}
 
-		// Ensure parent directories exist
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		// Ensure parent directories exist.
+		err := os.MkdirAll(filepath.Dir(targetPath), 0755)
+		if err != nil {
 			return a.wrapError("Move", op.NewPath, err, "failed to create parent directories")
 		}
 
 		result.FilesMoved[op.FilePath] = op.NewPath
 	}
 
-	// Write modified content
+	// Write modified content.
 	newContent := strings.Join(lines, "\n")
-	if err := os.WriteFile(targetPath, []byte(newContent), 0644); err != nil {
+	err = os.WriteFile(targetPath, []byte(newContent), 0644)
+	if err != nil {
 		return a.wrapError("Update", op.FilePath, err, "failed to write file")
 	}
 
-	// If moved, delete original
+	// If moved, delete original.
 	if op.NewPath != "" && targetPath != fullPath {
-		if err := os.Remove(fullPath); err != nil {
+		err := os.Remove(fullPath)
+		if err != nil {
 			return a.wrapError("Move", op.FilePath, err, "failed to delete original file")
 		}
 	}
 
-	// Track for rollback
+	// Track for rollback.
 	a.trackModification(op.FilePath, opUpdate, originalContent)
 
 	result.FilesUpdated = append(result.FilesUpdated, op.FilePath)
+
 	return nil
 }
 
 // applyHunk applies a single hunk to the file lines.
 func (a *Applier) applyHunk(lines *[]string, hunk Hunk, filePath string, hunkIdx int) error {
-	// Extract context lines from hunk
+	// Extract context lines from hunk.
 	contextLines := a.extractContextLines(hunk)
 	if len(contextLines) == 0 {
 		return a.wrapError("Update", filePath, errors.New("no context lines in hunk"),
 			fmt.Sprintf("hunk %d must have context lines for matching", hunkIdx))
 	}
 
-	// Find context in file using fuzzy matcher
+	// Find context in file using fuzzy matcher.
 	matcher := NewMatcher(*lines)
+
 	pos := matcher.FindContext(contextLines, hunk.Header)
 	if pos < 0 {
 		return a.wrapError("Update", filePath, ErrContextNotFound,
 			fmt.Sprintf("could not find context for hunk %d (header: %q)", hunkIdx, hunk.Header))
 	}
 
-	// Apply changes at found position
+	// Apply changes at found position.
 	newLines := make([]string, 0, len(*lines))
-	newLines = append(newLines, (*lines)[:pos]...) // Before context
+	newLines = append(newLines, (*lines)[:pos]...) // Before context.
 
 	offset := 0
+
 	for _, change := range hunk.Changes {
 		switch change.Type {
 		case LineContext:
-			// Verify context matches (within fuzzy threshold)
+			// Verify context matches (within fuzzy threshold).
 			if pos+offset >= len(*lines) {
 				return a.wrapError("Update", filePath, errors.New("context mismatch"),
 					fmt.Sprintf("hunk %d: ran out of lines", hunkIdx))
 			}
+
 			newLines = append(newLines, change.Text)
 			offset++
 
 		case LineDelete:
-			// Skip this line (delete)
+			// Skip this line (delete).
 			if pos+offset >= len(*lines) {
 				return a.wrapError("Update", filePath, errors.New("delete beyond end of file"),
 					fmt.Sprintf("hunk %d: cannot delete line beyond end", hunkIdx))
 			}
+
 			offset++
 
 		case LineInsert:
-			// Add this line
+			// Add this line.
 			newLines = append(newLines, change.Text)
 		}
 	}
 
-	// Add remaining lines after hunk
+	// Add remaining lines after hunk.
 	if pos+offset <= len(*lines) {
 		newLines = append(newLines, (*lines)[pos+offset:]...)
 	}
 
-	// Replace lines
+	// Replace lines.
 	*lines = newLines
+
 	return nil
 }
 
 // extractContextLines extracts context lines from a hunk for matching.
 func (a *Applier) extractContextLines(hunk Hunk) []string {
 	var contextLines []string
+
 	for _, change := range hunk.Changes {
 		if change.Type == LineContext {
 			contextLines = append(contextLines, change.Text)
 		}
 	}
+
 	return contextLines
 }
 
@@ -567,11 +603,13 @@ func (a *Applier) rollback() {
 func (a *Applier) rollbackModifications() {
 	for i := len(a.modifications) - 1; i >= 0; i-- {
 		mod := a.modifications[i]
+
 		fullPath, err := a.resolvePath(mod.path)
 		if err != nil {
-			// Best effort rollback, log and continue
+			// Best effort rollback, log and continue.
 			continue
 		}
+
 		a.rollbackModification(mod, fullPath)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
+
 	"github.com/dmytrogajewski/spin/internal/security"
 )
 
@@ -17,7 +18,7 @@ type ACPApprovalHandler struct {
 	mu            sync.RWMutex
 	agent         *SpinACPAgent
 	timeout       time.Duration
-	activeSession acp.SessionId // Currently active session for approval requests
+	activeSession acp.SessionId // Currently active session for approval requests.
 }
 
 // NewACPApprovalHandler creates a new ACP approval handler.
@@ -33,6 +34,7 @@ func NewACPApprovalHandler(agent *SpinACPAgent, timeout time.Duration) *ACPAppro
 func (h *ACPApprovalHandler) SetActiveSession(sessionID acp.SessionId) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	h.activeSession = sessionID
 }
 
@@ -41,13 +43,14 @@ func (h *ACPApprovalHandler) SetActiveSession(sessionID acp.SessionId) {
 func (h *ACPApprovalHandler) ClearActiveSession() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	h.activeSession = ""
 }
 
 // HandleApprovalRequest handles an approval request by calling the client's RequestPermission
 // method and waiting for the client's response. This implements the security.ApprovalHandler interface.
 func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-	// Get the active session ID
+	// Get the active session ID.
 	h.mu.RLock()
 	sessionID := h.activeSession
 	h.mu.RUnlock()
@@ -60,13 +63,13 @@ func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req secu
 		}
 	}
 
-	// Extract tool name from command
+	// Extract tool name from command.
 	toolName := "unknown"
 	if req.Command != nil {
 		toolName = req.Command.Program
 	}
 
-	// Convert approval request to ACP tool call
+	// Convert approval request to ACP tool call.
 	toolCall, err := h.convertApprovalRequestToToolCall(req)
 	if err != nil {
 		return security.ApprovalResponse{
@@ -76,7 +79,7 @@ func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req secu
 		}
 	}
 
-	// Get connection to call client
+	// Get connection to call client.
 	h.agent.mu.RLock()
 	conn := h.agent.connection
 	h.agent.mu.RUnlock()
@@ -90,7 +93,7 @@ func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req secu
 	}
 
 	// Build permission options
-	// For write_file and other dangerous operations, provide allow/deny options
+	// For write_file and other dangerous operations, provide allow/deny options.
 	options := []acp.PermissionOption{
 		{
 			OptionId: acp.PermissionOptionId("allow_once"),
@@ -118,8 +121,9 @@ func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req secu
 	// This follows the ACP spec: "When the language model requests a tool invocation,
 	// the Agent SHOULD report it to the Client" with status "pending" when awaiting approval
 	// conn is guaranteed to be non-nil here (checked above)
-	// Map tool name to kind (reuse logic from notifications.go)
+	// Map tool name to kind (reuse logic from notifications.go).
 	var kind *acp.ToolKind
+
 	switch toolName {
 	case "read_file":
 		kind = acp.Ptr(acp.ToolKindRead)
@@ -133,7 +137,7 @@ func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req secu
 		kind = acp.Ptr(acp.ToolKindRead)
 	}
 
-	// Build update using SDK helper
+	// Build update using SDK helper.
 	update := acp.UpdateToolCall(
 		toolCall.ToolCallId,
 		acp.WithUpdateStatus(acp.ToolCallStatusPending),
@@ -152,10 +156,10 @@ func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req secu
 		SessionId: sessionID,
 		Update:    update,
 	}
-	// Use background context for notification (non-blocking)
+	// Use background context for notification (non-blocking).
 	_ = conn.SessionUpdate(context.Background(), notification)
 
-	// Create ACP permission request
+	// Create ACP permission request.
 	acpReq := acp.RequestPermissionRequest{
 		SessionId: sessionID,
 		ToolCall:  toolCall,
@@ -163,20 +167,21 @@ func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req secu
 	}
 
 	// Call client's RequestPermission method
-	// Derive timeout context from parent context to propagate cancellation
+	// Derive timeout context from parent context to propagate cancellation.
 	timeoutCtx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 
 	acpResp, err := conn.RequestPermission(timeoutCtx, acpReq)
 	if err != nil {
-		// Check if context was cancelled (either parent or timeout)
+		// Check if context was canceled (either parent or timeout).
 		if timeoutCtx.Err() != nil {
 			return security.ApprovalResponse{
 				RequestID: req.ID,
 				Approved:  false,
-				Reason:    "approval request cancelled",
+				Reason:    "approval request canceled",
 			}
 		}
+
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  false,
@@ -184,12 +189,14 @@ func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req secu
 		}
 	}
 
-	// Extract selected option from response
+	// Extract selected option from response.
 	approved := false
+
 	var scope string
+
 	if acpResp.Outcome.Selected != nil {
 		selectedID := acpResp.Outcome.Selected.OptionId
-		// Check if selected option is an allow option
+		// Check if selected option is an allow option.
 		for _, opt := range options {
 			if opt.OptionId == selectedID {
 				switch opt.Kind {
@@ -198,16 +205,17 @@ func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req secu
 					scope = security.ScopeOnce
 				case acp.PermissionOptionKindAllowAlways:
 					approved = true
-					// Map "always" to global persistence by default
+					// Map "always" to global persistence by default.
 					scope = security.ScopeGlobal
 				case acp.PermissionOptionKindRejectOnce:
 					approved = false
 					scope = security.ScopeOnce
 				case acp.PermissionOptionKindRejectAlways:
 					approved = false
-					// For symmetry, treat as global persistent deny (not persisted yet)
+					// For symmetry, treat as global persistent deny (not persisted yet).
 					scope = security.ScopeGlobal
 				}
+
 				break
 			}
 		}
@@ -223,26 +231,26 @@ func (h *ACPApprovalHandler) HandleApprovalRequest(ctx context.Context, req secu
 
 // convertApprovalRequestToToolCall converts a security approval request to an ACP tool call.
 func (h *ACPApprovalHandler) convertApprovalRequestToToolCall(req security.ApprovalRequest) (acp.RequestPermissionToolCall, error) {
-	// Extract tool name from command
+	// Extract tool name from command.
 	toolName := "unknown"
 	if req.Command != nil {
 		toolName = req.Command.Program
 	}
 
-	// Use tool call ID from request if available, otherwise use approval request ID
+	// Use tool call ID from request if available, otherwise use approval request ID.
 	toolCallID := req.ToolCallID
 	if toolCallID == "" {
 		toolCallID = req.ID
 	}
 
-	// Create tool call
+	// Create tool call.
 	toolCall := acp.RequestPermissionToolCall{
 		ToolCallId: acp.ToolCallId(toolCallID),
 		Title:      acp.Ptr(toolName),
 	}
 
 	// Note: ACP RequestPermissionToolCall doesn't have a Description field
-	// The reason is typically included in the permission options or handled by the client
+	// The reason is typically included in the permission options or handled by the client.
 
 	return toolCall, nil
 }

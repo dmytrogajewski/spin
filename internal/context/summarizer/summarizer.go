@@ -21,10 +21,10 @@ type SummaryStyle string
 
 // Summary styles.
 const (
-	StyleBrief     SummaryStyle = "brief"     // Minimal, key points only
-	StyleDetailed  SummaryStyle = "detailed"  // More context preserved
-	StyleBullet    SummaryStyle = "bullet"    // Bullet point format
-	StyleNarrative SummaryStyle = "narrative" // Flowing narrative
+	StyleBrief     SummaryStyle = "brief"     // Minimal, key points only.
+	StyleDetailed  SummaryStyle = "detailed"  // More context preserved.
+	StyleBullet    SummaryStyle = "bullet"    // Bullet point format.
+	StyleNarrative SummaryStyle = "narrative" // Flowing narrative.
 )
 
 // Options configures summarization behavior.

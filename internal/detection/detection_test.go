@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Mock implementations for testing
+// Mock implementations for testing.
 
 type mockCycleDetector struct {
 	snapshots []Snapshot
@@ -52,7 +52,7 @@ func (m *mockPatternDetector) AnalyzePatterns(history []Snapshot) []PatternResul
 	return m.results
 }
 
-// TestDetectionEventData tests the DetectionEventData type
+// TestDetectionEventData tests the DetectionEventData type.
 func TestDetectionEventData(t *testing.T) {
 	t.Run("create and access detection event data", func(t *testing.T) {
 		data := DetectionEventData{
@@ -73,7 +73,7 @@ func TestDetectionEventData(t *testing.T) {
 			},
 		}
 
-		// Verify data is strongly typed
+		// Verify data is strongly typed.
 		data := evt.GetData()
 		detectionData, ok := data.(DetectionEventData)
 		require.True(t, ok, "GetData() should return DetectionEventData")
@@ -99,19 +99,19 @@ func TestNewDetectionService(t *testing.T) {
 			name:            "with nil cycle detector",
 			cycleDetector:   nil,
 			patternDetector: newMockPatternDetector(),
-			wantNil:         false, // Service allows nil
+			wantNil:         false, // Service allows nil.
 		},
 		{
 			name:            "with nil pattern detector",
 			cycleDetector:   newMockCycleDetector(),
 			patternDetector: nil,
-			wantNil:         false, // Service allows nil
+			wantNil:         false, // Service allows nil.
 		},
 		{
 			name:            "with both nil",
 			cycleDetector:   nil,
 			patternDetector: nil,
-			wantNil:         false, // Service allows nil
+			wantNil:         false, // Service allows nil.
 		},
 	}
 
@@ -139,10 +139,10 @@ func TestDetectionService_RecordSnapshot(t *testing.T) {
 		Error:     "",
 	}
 
-	// Should not panic
+	// Should not panic.
 	svc.RecordSnapshot(snapshot)
 
-	// Verify snapshot was recorded
+	// Verify snapshot was recorded.
 	history := svc.GetHistory()
 	require.Len(t, history, 1)
 	assert.Equal(t, 1, history[0].Turn)
@@ -156,7 +156,7 @@ func TestDetectionService_RecordSnapshot_NilDetector(t *testing.T) {
 		Response: "Hello",
 	}
 
-	// Should not panic even with nil detector
+	// Should not panic even with nil detector.
 	svc.RecordSnapshot(snapshot)
 }
 
@@ -213,14 +213,15 @@ func TestDetectionService_CheckCycle(t *testing.T) {
 					Confidence: 0.9,
 				}
 			}
+
 			svc := NewDetectionService(detector, nil)
 
-			// Record snapshots
+			// Record snapshots.
 			for _, snapshot := range tt.snapshots {
 				svc.RecordSnapshot(snapshot)
 			}
 
-			// Check for cycle
+			// Check for cycle.
 			result, err := svc.CheckCycle()
 			require.NoError(t, err)
 
@@ -252,7 +253,7 @@ func TestDetectionService_DetectPattern(t *testing.T) {
 	}
 	svc := NewDetectionService(detector, patternDetector)
 
-	// Add some snapshots
+	// Add some snapshots.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "Reading file A", ToolCalls: []string{"read_file"}},
 		{Turn: 2, Response: "Writing to file B", ToolCalls: []string{"write_file"}},
@@ -264,7 +265,7 @@ func TestDetectionService_DetectPattern(t *testing.T) {
 		svc.RecordSnapshot(s)
 	}
 
-	// Detect pattern
+	// Detect pattern.
 	results, err := svc.DetectPattern()
 	require.NoError(t, err)
 	assert.NotNil(t, results)
@@ -284,17 +285,17 @@ func TestDetectionService_Reset(t *testing.T) {
 	detector := newMockCycleDetector()
 	svc := NewDetectionService(detector, nil)
 
-	// Add some snapshots
+	// Add some snapshots.
 	svc.RecordSnapshot(Snapshot{Turn: 1, Response: "Test"})
 	svc.RecordSnapshot(Snapshot{Turn: 2, Response: "Test"})
 
 	history := svc.GetHistory()
 	require.Len(t, history, 2)
 
-	// Reset
+	// Reset.
 	svc.Reset()
 
-	// History should be empty
+	// History should be empty.
 	history = svc.GetHistory()
 	assert.Len(t, history, 0)
 }
@@ -302,7 +303,7 @@ func TestDetectionService_Reset(t *testing.T) {
 func TestDetectionService_Reset_NilDetector(t *testing.T) {
 	svc := NewDetectionService(nil, nil)
 
-	// Should not panic even with nil detector
+	// Should not panic even with nil detector.
 	svc.Reset()
 }
 
@@ -310,15 +311,15 @@ func TestDetectionService_GetHistory(t *testing.T) {
 	detector := newMockCycleDetector()
 	svc := NewDetectionService(detector, nil)
 
-	// Empty history
+	// Empty history.
 	history := svc.GetHistory()
 	assert.Len(t, history, 0)
 
-	// Add snapshots
+	// Add snapshots.
 	svc.RecordSnapshot(Snapshot{Turn: 1, Response: "First"})
 	svc.RecordSnapshot(Snapshot{Turn: 2, Response: "Second"})
 
-	// Get history
+	// Get history.
 	history = svc.GetHistory()
 	assert.Len(t, history, 2)
 	assert.Equal(t, "First", history[0].Response)
@@ -332,7 +333,7 @@ func TestDetectionService_GetHistory_NilDetector(t *testing.T) {
 	assert.Len(t, history, 0)
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkDetectionService_RecordSnapshot(b *testing.B) {
 	detector := newMockCycleDetector()
 	svc := NewDetectionService(detector, nil)
@@ -344,7 +345,8 @@ func BenchmarkDetectionService_RecordSnapshot(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		svc.RecordSnapshot(snapshot)
 	}
 }
@@ -353,8 +355,8 @@ func BenchmarkDetectionService_CheckCycle(b *testing.B) {
 	detector := newMockCycleDetector()
 	svc := NewDetectionService(detector, nil)
 
-	// Pre-populate with some snapshots
-	for i := 0; i < 10; i++ {
+	// Pre-populate with some snapshots.
+	for i := range 10 {
 		svc.RecordSnapshot(Snapshot{
 			Turn:      i,
 			Response:  "Test response",
@@ -363,7 +365,8 @@ func BenchmarkDetectionService_CheckCycle(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = svc.CheckCycle()
 	}
 }

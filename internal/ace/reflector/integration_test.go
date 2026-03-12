@@ -4,13 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/ace/generator"
-	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/ace/generator"
+	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
-// TestReflector_Integration_WithGenerator tests end-to-end reflection with generator output
+// TestReflector_Integration_WithGenerator tests end-to-end reflection with generator output.
 func TestReflector_Integration_WithGenerator(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
@@ -24,7 +25,7 @@ func TestReflector_Integration_WithGenerator(t *testing.T) {
 
 	reflector := NewReflector(mockLLM)
 
-	// Simulate a trajectory from Generator
+	// Simulate a trajectory from Generator.
 	traj := &generator.Trajectory{
 		ID:    "integration-test-1",
 		Query: "How to validate function inputs in Go?",
@@ -60,11 +61,11 @@ func TestReflector_Integration_WithGenerator(t *testing.T) {
 	assert.GreaterOrEqual(t, resp.Duration.Microseconds(), int64(0))
 }
 
-// TestReflector_Integration_FullWorkflow tests complete reflection workflow
+// TestReflector_Integration_FullWorkflow tests complete reflection workflow.
 func TestReflector_Integration_FullWorkflow(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 
-	// First response for initial reflection
+	// First response for initial reflection.
 	mockLLM.SetResponse(`[
 		{
 			"content": "Use table-driven tests for better test organization and coverage",
@@ -76,7 +77,7 @@ func TestReflector_Integration_FullWorkflow(t *testing.T) {
 
 	reflector := NewReflector(mockLLM)
 
-	// Step 1: Initial reflection
+	// Step 1: Initial reflection.
 	traj := &generator.Trajectory{
 		ID:      "workflow-test-1",
 		Query:   "How to write better tests in Go?",
@@ -96,7 +97,7 @@ func TestReflector_Integration_FullWorkflow(t *testing.T) {
 	initialInsight := resp.Insights[0]
 	assert.Equal(t, 0, initialInsight.Iteration)
 
-	// Step 2: Refine insights
+	// Step 2: Refine insights.
 	mockLLM.SetResponse(`[
 		{
 			"content": "Use table-driven tests with t.Run() for better test organization, coverage tracking, and parallel execution support",
@@ -115,18 +116,18 @@ func TestReflector_Integration_FullWorkflow(t *testing.T) {
 	assert.Greater(t, refinedInsight.Confidence, initialInsight.Confidence)
 	assert.Greater(t, len(refinedInsight.Content), len(initialInsight.Content))
 
-	// Step 3: Validate quality
+	// Step 3: Validate quality.
 	validator := NewInsightValidator()
 	err = validator.Validate(refinedInsight)
 	require.NoError(t, err)
 
-	// Step 4: Filter by quality threshold
+	// Step 4: Filter by quality threshold.
 	filtered := validator.FilterByQuality(refined, 0.85)
 	assert.Equal(t, 1, len(filtered))
 	assert.GreaterOrEqual(t, filtered[0].Confidence, 0.85)
 }
 
-// TestReflector_Integration_BatchAnalysis tests batch trajectory analysis
+// TestReflector_Integration_BatchAnalysis tests batch trajectory analysis.
 func TestReflector_Integration_BatchAnalysis(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
@@ -146,7 +147,7 @@ func TestReflector_Integration_BatchAnalysis(t *testing.T) {
 
 	reflector := NewReflector(mockLLM)
 
-	// Multiple related trajectories
+	// Multiple related trajectories.
 	trajectories := []*generator.Trajectory{
 		{
 			ID:      "batch-1",
@@ -179,7 +180,7 @@ func TestReflector_Integration_BatchAnalysis(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.GreaterOrEqual(t, len(resp.Insights), 2)
 
-	// Verify insights from batch analysis
+	// Verify insights from batch analysis.
 	foundPattern := false
 	foundError := false
 
@@ -187,9 +188,11 @@ func TestReflector_Integration_BatchAnalysis(t *testing.T) {
 		if insight.Category == CategorySuccessPattern {
 			foundPattern = true
 		}
+
 		if insight.Category == CategoryErrorMode {
 			foundError = true
 		}
+
 		assert.Equal(t, "batch", insight.Source)
 		assert.NotEmpty(t, insight.Evidence)
 	}
@@ -198,7 +201,7 @@ func TestReflector_Integration_BatchAnalysis(t *testing.T) {
 	assert.True(t, foundError, "Should find error modes")
 }
 
-// TestReflector_Integration_QualityFiltering tests quality-based filtering
+// TestReflector_Integration_QualityFiltering tests quality-based filtering.
 func TestReflector_Integration_QualityFiltering(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
@@ -240,7 +243,7 @@ func TestReflector_Integration_QualityFiltering(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, len(resp.Insights))
 
-	// Filter by quality threshold
+	// Filter by quality threshold.
 	validator := NewInsightValidator()
 
 	highQuality := validator.FilterByQuality(resp.Insights, 0.8)
@@ -254,7 +257,7 @@ func TestReflector_Integration_QualityFiltering(t *testing.T) {
 	assert.Equal(t, 3, len(allInsights))
 }
 
-// TestReflector_Integration_ErrorHandling tests error handling in integration scenarios
+// TestReflector_Integration_ErrorHandling tests error handling in integration scenarios.
 func TestReflector_Integration_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -307,6 +310,7 @@ func TestReflector_Integration_ErrorHandling(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+
 				if tt.wantEmpty {
 					assert.Empty(t, resp.Insights)
 				}

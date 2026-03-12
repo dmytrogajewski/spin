@@ -49,7 +49,7 @@ type executorAdapter struct {
 	executor *agent.Executor
 }
 
-func (a *executorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, _ interface{}) (tools.ExecutionResult, error) {
+func (a *executorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, _ any) (tools.ExecutionResult, error) {
 	return a.executor.Execute(ctx, &security.Command{
 		Program: cmd.GetProgram(),
 		Args:    cmd.GetArgs(),

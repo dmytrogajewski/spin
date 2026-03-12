@@ -93,5 +93,6 @@ func GetTagColor(bt BlockType) Color {
 	if color, ok := TagColors[bt]; ok {
 		return color
 	}
+
 	return ColorMuted
 }

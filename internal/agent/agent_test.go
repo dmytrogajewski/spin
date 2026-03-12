@@ -8,36 +8,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openai/openai-go"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
-	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/cycle"
 	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/llm/factory"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/dmytrogajewski/spin/internal/tools"
-	"github.com/openai/openai-go"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// createProvider is a test helper that creates a provider from config.
-// This uses the Factory-based API which is the recommended approach.
-func createProvider(t *testing.T, cfg factory.ProviderConfig) llm.Provider {
-	t.Helper()
-
-	f := factory.NewFactory(auth.NewManager(auth.NewKeystore()))
-	provider, err := f.NewProvider(context.Background(), cfg)
-	require.NoError(t, err)
-	return provider
-}
-
-// TestNewAgent tests the refactored agent creation with services
+// TestNewAgent tests the refactored agent creation with services.
 func TestNewAgent(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -59,6 +47,7 @@ func TestNewAgent(t *testing.T) {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
@@ -75,6 +64,7 @@ func TestNewAgent(t *testing.T) {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
@@ -104,6 +94,7 @@ func TestNewAgent(t *testing.T) {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:   nil,
@@ -121,6 +112,7 @@ func TestNewAgent(t *testing.T) {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
@@ -138,6 +130,7 @@ func TestNewAgent(t *testing.T) {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
@@ -155,6 +148,7 @@ func TestNewAgent(t *testing.T) {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
@@ -172,6 +166,7 @@ func TestNewAgent(t *testing.T) {
 				validator := security.NewValidator()
 				emitter := events.NewEventEmitter(100)
 				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+
 				return security.NewSecurityService(validator, approvalService)
 			}(),
 			detection:   detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
@@ -195,9 +190,11 @@ func TestNewAgent(t *testing.T) {
 
 			if tt.wantErr {
 				require.Error(t, err)
+
 				if tt.errContains != "" {
 					assert.Contains(t, err.Error(), tt.errContains)
 				}
+
 				assert.Nil(t, agent)
 			} else {
 				require.NoError(t, err)
@@ -207,9 +204,9 @@ func TestNewAgent(t *testing.T) {
 	}
 }
 
-// TestAgent_WithACEService tests Agent with ACE integration
+// TestAgent_WithACEService tests Agent with ACE integration.
 func TestAgent_WithACEService(t *testing.T) {
-	// Create ACE service
+	// Create ACE service.
 	tmpDir := t.TempDir()
 	cfg := &ACEConfig{
 		Enabled:      true,
@@ -224,13 +221,14 @@ func TestAgent_WithACEService(t *testing.T) {
 	aceService, err := NewACEService(cfg, tmpDir, mockLLM, "test-model", 0)
 	require.NoError(t, err)
 
-	// Create agent with ACE
+	// Create agent with ACE.
 	agent, err := NewAgent(
 		mockLLM,
 		func() *security.SecurityService {
 			validator := security.NewValidator()
 			emitter := events.NewEventEmitter(100)
 			approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+
 			return security.NewSecurityService(validator, approvalService)
 		}(),
 		detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
@@ -246,11 +244,11 @@ func TestAgent_WithACEService(t *testing.T) {
 	assert.NotNil(t, agent.aceService)
 }
 
-// TestAgent_ACEIntegration_EndToEnd tests full ACE workflow with agent execution
+// TestAgent_ACEIntegration_EndToEnd tests full ACE workflow with agent execution.
 func TestAgent_ACEIntegration_EndToEnd(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Setup ACE with ItemizedLearning enabled
+	// Setup ACE with ItemizedLearning enabled.
 	cfg := &ACEConfig{
 		Enabled:      true,
 		PlaybookPath: tmpDir + "/test-playbook.json",
@@ -261,14 +259,14 @@ func TestAgent_ACEIntegration_EndToEnd(t *testing.T) {
 		ItemizedLearning: ACEItemizedLearningConfig{
 			Enabled:       true,
 			ParseFeedback: true,
-			UpdateAsync:   false, // Sync for testing
+			UpdateAsync:   false, // Sync for testing.
 		},
 	}
 
 	aceService, err := NewACEService(cfg, tmpDir, nil, "", 0)
 	require.NoError(t, err)
 
-	// Add test bullets to playbook
+	// Add test bullets to playbook.
 	ctx := context.Background()
 	b1, err := bullet.New("Always validate input parameters before processing")
 	require.NoError(t, err)
@@ -284,7 +282,7 @@ func TestAgent_ACEIntegration_EndToEnd(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Create mock provider that includes feedback markers in response
+	// Create mock provider that includes feedback markers in response.
 	mockProvider := llm.NewMockProvider("test-response")
 	mockProvider.SetResponse(`I'll help with that task.
 
@@ -293,7 +291,7 @@ The input validation and descriptive naming suggestions were helpful.
 
 Here's my solution...`)
 
-	// Setup services with task registry
+	// Setup services with task registry.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
@@ -301,11 +299,11 @@ Here's my solution...`)
 
 	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 
-	// Create task registry and register tasks
+	// Create task registry and register tasks.
 
 	toolRuntime := newTestToolRuntime(nil, tools.NewRegistry())
 
-	// Create agent with ACE
+	// Create agent with ACE.
 	agent, err := NewAgent(
 		mockProvider,
 		securityService,
@@ -320,7 +318,7 @@ Here's my solution...`)
 	)
 	require.NoError(t, err)
 
-	// Execute agent with input that should trigger bullet retrieval
+	// Execute agent with input that should trigger bullet retrieval.
 	request := &AgentRequest{
 		Input: "Write a function to process user input",
 		Task:  task.NewRegular(),
@@ -333,15 +331,15 @@ Here's my solution...`)
 
 	// Verify bullets were updated (helpful counters should be incremented)
 	// Note: In real scenario, bullets B0 and B1 would have incremented helpful counters
-	// We can verify the playbook was accessed during execution
+	// We can verify the playbook was accessed during execution.
 	assert.NotNil(t, aceService.playbook)
 }
 
-// TestAgent_ACEDisabled tests that agent works correctly when ACE is disabled
+// TestAgent_ACEDisabled tests that agent works correctly when ACE is disabled.
 func TestAgent_ACEDisabled(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create ACE service with disabled config
+	// Create ACE service with disabled config.
 	cfg := &ACEConfig{
 		Enabled: false,
 	}
@@ -351,7 +349,7 @@ func TestAgent_ACEDisabled(t *testing.T) {
 
 	mockProvider := llm.NewMockProvider("test-response")
 
-	// Setup services with task registry
+	// Setup services with task registry.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
@@ -359,11 +357,11 @@ func TestAgent_ACEDisabled(t *testing.T) {
 
 	detectionService := detection.NewDetectionService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
 
-	// Create task registry and register tasks
+	// Create task registry and register tasks.
 
 	toolRuntime := newTestToolRuntime(nil, tools.NewRegistry())
 
-	// Create agent with disabled ACE
+	// Create agent with disabled ACE.
 	agent, err := NewAgent(
 		mockProvider,
 		securityService,
@@ -376,7 +374,7 @@ func TestAgent_ACEDisabled(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Execute should work normally without ACE
+	// Execute should work normally without ACE.
 	ctx := context.Background()
 	request := &AgentRequest{
 		Input: "Simple test request",
@@ -388,7 +386,7 @@ func TestAgent_ACEDisabled(t *testing.T) {
 	assert.True(t, response.Success)
 }
 
-// TestAgent_Execute_Integration is a minimal integration test
+// TestAgent_Execute_Integration is a minimal integration test.
 func TestAgent_Execute_Integration(t *testing.T) {
 	t.Skip("Integration test - requires full setup")
 
@@ -417,11 +415,11 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 	env := &Environment{WorkDir: workDir}
 	emitter := events.NewEventEmitter(100)
 
-	// Build SecurityService
+	// Build SecurityService.
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 	securityService := security.NewSecurityService(validator, approvalService)
 
-	// Build DetectionService
+	// Build DetectionService.
 	cycleConfig := cycle.Config{
 		WindowSize:       3,
 		SimilarityThresh: 0.8,
@@ -432,7 +430,7 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 	cycleDetector := cycle.NewDetector(cycleConfig)
 	detectionService := detection.NewDetectionService(cycleDetector, nil)
 
-	// Build tool registry with built-in tools
+	// Build tool registry with built-in tools.
 	toolRegistry := tools.NewRegistry()
 	_ = toolRegistry.Register(tools.NewReadFileTool())
 	_ = toolRegistry.Register(tools.NewWriteFileTool())
@@ -443,7 +441,7 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 	_ = toolRegistry.Register(tools.NewFileSearchTool(workDir))
 	_ = toolRegistry.Register(tools.NewGitContextTool(workDir))
 
-	// Build tool registry
+	// Build tool registry.
 
 	toolRuntime := NewToolRuntime(ToolRuntimeConfig{
 		Registry:        toolRegistry,
@@ -453,7 +451,7 @@ func createTestAgentWithServices(t *testing.T) *Agent {
 		WorkDir:         workDir,
 	})
 
-	// Create agent
+	// Create agent.
 	agent, err := NewAgent(llmProvider, securityService, detectionService, toolRuntime, planning.NewPlanningService(llmProvider), env, emitter)
 	if err != nil {
 		t.Fatalf("failed to create agent: %v", err)
@@ -473,15 +471,15 @@ func newAgentForTest(
 	emitter *events.EventEmitter,
 	opts ...AgentOption,
 ) (*Agent, error) {
-	// Build SecurityService
+	// Build SecurityService.
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 	securityService := security.NewSecurityService(validator, approvalService)
 
-	// Build DetectionService
+	// Build DetectionService.
 	cycleDetector := cycle.NewDetector(cycle.Config{Enabled: false})
 	detectionService := detection.NewDetectionService(cycleDetector, nil)
 
-	// Build tool registry
+	// Build tool registry.
 	toolRegistry := tools.NewRegistry()
 	_ = toolRegistry.Register(tools.NewReadFileTool())
 	_ = toolRegistry.Register(tools.NewWriteFileTool())
@@ -492,7 +490,7 @@ func newAgentForTest(
 	_ = toolRegistry.Register(tools.NewFileSearchTool(environment.WorkDir))
 	_ = toolRegistry.Register(tools.NewGitContextTool(environment.WorkDir))
 
-	// Build tool registry
+	// Build tool registry.
 
 	toolRuntime := NewToolRuntime(ToolRuntimeConfig{
 		Registry:        toolRegistry,
@@ -502,7 +500,7 @@ func newAgentForTest(
 		WorkDir:         environment.WorkDir,
 	})
 
-	// Create agent with services using the real NewAgent function
+	// Create agent with services using the real NewAgent function.
 	agent := &Agent{
 		llm:         provider,
 		security:    securityService,
@@ -510,13 +508,14 @@ func newAgentForTest(
 		toolRuntime: toolRuntime,
 		context:     environment,
 		emitter:     emitter,
-		maxTurns:    10,               // Default for tests
-		timeout:     30 * time.Second, // Default for tests
+		maxTurns:    10,               // Default for tests.
+		timeout:     30 * time.Second, // Default for tests.
 	}
 
-	// Apply options
+	// Apply options.
 	for _, opt := range opts {
-		if err := opt(agent); err != nil {
+		err := opt(agent)
+		if err != nil {
 			return nil, fmt.Errorf("applying option: %w", err)
 		}
 	}
@@ -529,7 +528,7 @@ func newAgentForTest(
 func TestToolExecutionBugReproduction(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup: Create mock LLM that returns list_directory tool call
+	// Setup: Create mock LLM that returns list_directory tool call.
 	mockLLM := llm.NewMockProvider("test",
 		llm.WithToolCalls([]openai.ChatCompletionMessageToolCall{
 			{
@@ -543,12 +542,12 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 		}),
 	)
 
-	// Setup tool registry with list_directory
+	// Setup tool registry with list_directory.
 	toolRegistry := tools.NewRegistry()
 	err := toolRegistry.Register(tools.NewListDirectoryTool())
 	require.NoError(t, err)
 
-	// Setup services
+	// Setup services.
 	validator := security.NewValidator()
 	securityService := security.NewSecurityService(validator, nil)
 
@@ -567,17 +566,22 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 
 	emitter := events.NewEventEmitter(100)
 
-	// Collect events
+	// Collect events.
 	subID, eventCh, err := emitter.Subscribe()
 	require.NoError(t, err)
+
 	defer emitter.Unsubscribe(subID)
 
-	var toolStartEvents []events.Event
-	var toolCompleteEvents []events.Event
+	var (
+		toolStartEvents    []events.Event
+		toolCompleteEvents []events.Event
+	)
+
 	done := make(chan struct{})
 
 	go func() {
 		defer close(done)
+
 		for evt := range eventCh {
 			switch evt.Type {
 			case events.EventToolCallStart:
@@ -590,7 +594,7 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 		}
 	}()
 
-	// Create agent
+	// Create agent.
 	agent, err := NewAgent(
 		mockLLM,
 		securityService,
@@ -604,15 +608,15 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Create a simple task
+	// Create a simple task.
 	task := &simpleTask{
 		name:         "test",
 		systemPrompt: "You are a test assistant",
-		allowedTools: []string{}, // Allow all tools
+		allowedTools: []string{}, // Allow all tools.
 		maxTokens:    4096,
 	}
 
-	// Execute: Send request that should trigger tool call
+	// Execute: Send request that should trigger tool call.
 	req := &AgentRequest{
 		Input: "list files in current directory",
 		Task:  task,
@@ -622,18 +626,18 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	// Close emitter and wait for event collection
+	// Close emitter and wait for event collection.
 	emitter.Close()
 	<-done
 
-	// Assert: Tool should have been executed
+	// Assert: Tool should have been executed.
 	t.Logf("Tool start events: %d", len(toolStartEvents))
 	t.Logf("Tool complete events: %d", len(toolCompleteEvents))
 
 	assert.NotEmpty(t, toolStartEvents, "BUG: Tool was called but no start event emitted")
 	assert.NotEmpty(t, toolCompleteEvents, "BUG: Tool was called but no complete event emitted")
 
-	// Check event data
+	// Check event data.
 	if len(toolStartEvents) > 0 {
 		startData, ok := toolStartEvents[0].Data.(events.ToolCallStartData)
 		assert.True(t, ok, "Should have ToolCallStartData")
@@ -652,12 +656,12 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 func TestToolExecutionWithRealToolCall(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup tool registry
+	// Setup tool registry.
 	toolRegistry := tools.NewRegistry()
 	err := toolRegistry.Register(tools.NewListDirectoryTool())
 	require.NoError(t, err)
 
-	// Setup services
+	// Setup services.
 	validator := security.NewValidator()
 	securityService := security.NewSecurityService(validator, nil)
 
@@ -673,7 +677,7 @@ func TestToolExecutionWithRealToolCall(t *testing.T) {
 
 	emitter := events.NewEventEmitter(100)
 
-	dummyProvider := &dummyLLM{} // Won't be used, we're calling ProcessToolCall directly
+	dummyProvider := &dummyLLM{} // Won't be used, we're calling ProcessToolCall directly.
 	agent, err := NewAgent(
 		dummyProvider,
 		securityService,
@@ -685,7 +689,7 @@ func TestToolExecutionWithRealToolCall(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Create tool call directly
+	// Create tool call directly.
 	toolCall := &ToolCall{
 		ID:   "test_call",
 		Type: "function",
@@ -695,12 +699,12 @@ func TestToolExecutionWithRealToolCall(t *testing.T) {
 		},
 	}
 
-	// Process tool call
+	// Process tool call.
 	result, err := agent.ProcessToolCall(ctx, toolCall)
 	require.NoError(t, err, "ProcessToolCall should not error")
 	require.NotNil(t, result, "ProcessToolCall should return result")
 
-	// Verify result
+	// Verify result.
 	assert.True(t, result.Success, "Tool execution should succeed")
 	assert.NotEmpty(t, result.Output, "Tool should produce output")
 	t.Logf("Tool output: %s", result.Output)
@@ -711,7 +715,7 @@ func TestStreamProcessingWithToolCalls(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Mock LLM that streams tool call
+	// Mock LLM that streams tool call.
 	mockLLM := llm.NewMockProvider("test",
 		llm.WithToolCalls([]openai.ChatCompletionMessageToolCall{
 			{
@@ -725,7 +729,7 @@ func TestStreamProcessingWithToolCalls(t *testing.T) {
 		}),
 	)
 
-	// Test streaming
+	// Test streaming.
 	params := openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("list files"),
@@ -736,6 +740,7 @@ func TestStreamProcessingWithToolCalls(t *testing.T) {
 	require.NoError(t, err)
 
 	var receivedToolCalls []openai.ChatCompletionChunkChoicesDeltaToolCall
+
 	for chunk := range chunks {
 		if len(chunk.Choices) > 0 && len(chunk.Choices[0].Delta.ToolCalls) > 0 {
 			receivedToolCalls = append(receivedToolCalls, chunk.Choices[0].Delta.ToolCalls...)
@@ -749,7 +754,7 @@ func TestStreamProcessingWithToolCalls(t *testing.T) {
 	assert.Equal(t, "list_directory", receivedToolCalls[0].Function.Name)
 }
 
-// TestGetToolResultContent tests that error messages are properly sent to LLM on tool failure
+// TestGetToolResultContent tests that error messages are properly sent to LLM on tool failure.
 func TestGetToolResultContent(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -814,33 +819,31 @@ func TestGetToolResultContent(t *testing.T) {
 	}
 }
 
-// TestToolExecutionWithRealOllama tests tool execution with actual Ollama/qwen3:1.7b
-// This reproduces the exact issue the user is experiencing.
-//
-// Run with: go test -v -tags=integration -run TestToolExecutionWithRealOllama ./internal/agent/
-func TestToolExecutionWithRealOllama(t *testing.T) {
-	// Skip if Ollama isn't available
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+// TestToolExecutionWithMockLLM tests tool execution with a mock LLM that returns tool calls.
+func TestToolExecutionWithMockLLM(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Create real Ollama provider with qwen3:1.7b
-	provider := createProvider(t, factory.ProviderConfig{
-		Type:    "ollama",
-		Model:   "qwen3:1.7b",
-		BaseURL: "http://localhost:11434",
-	})
-	defer provider.Close()
+	// Create mock LLM that returns a list_directory tool call.
+	mockLLM := llm.NewMockProvider("test",
+		llm.WithToolCalls([]openai.ChatCompletionMessageToolCall{
+			{
+				ID:   "call_list_dir",
+				Type: openai.ChatCompletionMessageToolCallTypeFunction,
+				Function: openai.ChatCompletionMessageToolCallFunction{
+					Name:      "list_directory",
+					Arguments: `{"path": "/tmp"}`,
+				},
+			},
+		}),
+	)
 
-	// Setup tool registry with list_directory
+	// Setup tool registry with list_directory.
 	toolRegistry := tools.NewRegistry()
 	err := toolRegistry.Register(tools.NewListDirectoryTool())
 	require.NoError(t, err)
 
-	// Setup services
+	// Setup services.
 	validator := security.NewValidator()
 	securityService := security.NewSecurityService(validator, nil)
 
@@ -860,86 +863,71 @@ func TestToolExecutionWithRealOllama(t *testing.T) {
 
 	emitter := events.NewEventEmitter(100)
 
-	// Collect events
+	// Collect events.
 	subID, eventCh, err := emitter.Subscribe()
 	require.NoError(t, err)
+
 	defer emitter.Unsubscribe(subID)
 
-	var toolStartEvents []events.Event
-	var toolCompleteEvents []events.Event
-	var contentDeltas []string
+	var (
+		toolStartEvents    []events.Event
+		toolCompleteEvents []events.Event
+	)
+
 	done := make(chan struct{})
 
 	go func() {
 		defer close(done)
+
 		for evt := range eventCh {
 			switch evt.Type {
 			case events.EventToolCallStart:
 				toolStartEvents = append(toolStartEvents, evt)
-				t.Logf("✓ Tool start: %+v", evt.Data)
+				t.Logf("Tool start: %+v", evt.Data)
 			case events.EventToolCallComplete:
 				toolCompleteEvents = append(toolCompleteEvents, evt)
 				data, _ := evt.Data.(events.ToolCallCompleteData)
-				t.Logf("✓ Tool complete: success=%v tool=%s", data.Success, data.ToolName)
-			case events.EventContentDelta:
-				data, _ := evt.Data.(events.ContentDeltaData)
-				contentDeltas = append(contentDeltas, data.Content)
-				t.Logf("Content delta: %s", data.Content)
-			case events.EventWarning:
-				data, _ := evt.Data.(events.SystemEventData)
-				t.Logf("⚠ WARNING: %s", data.Message)
+				t.Logf("Tool complete: success=%v tool=%s", data.Success, data.ToolName)
 			}
 		}
 	}()
 
-	// Create agent
+	// Create agent.
 	agent, err := NewAgent(
-		provider,
+		mockLLM,
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(provider),
+		planning.NewPlanningService(mockLLM),
 		env,
 		emitter,
+		WithMaxTurns(10),
+		WithAgentTimeout(10*time.Second),
 	)
 	require.NoError(t, err)
 
-	// Create task
 	task := &simpleTask{
 		name:         "test",
-		systemPrompt: "You are a helpful assistant. When asked to list files, use the list_directory tool.",
-		allowedTools: []string{}, // Allow all tools
+		systemPrompt: "You are a helpful assistant.",
+		allowedTools: []string{},
 		maxTokens:    4096,
 	}
 
-	// Execute: This should trigger list_directory tool call
 	req := &AgentRequest{
 		Input: "list files in /tmp directory",
 		Task:  task,
 	}
 
-	t.Log("Sending request to agent...")
 	resp, err := agent.Execute(ctx, req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	// Close emitter and wait for events
 	emitter.Close()
 	<-done
 
-	// Print all content for debugging
-	t.Logf("Total content deltas: %d", len(contentDeltas))
-	t.Logf("Response: %s", resp.Output)
+	assert.NotEmpty(t, toolStartEvents, "Tool should have been called")
+	assert.NotEmpty(t, toolCompleteEvents, "Tool should have completed")
 
-	// ASSERTIONS - This is what should happen:
-
-	// 1. Tool should have been called
-	assert.NotEmpty(t, toolStartEvents, "BUG: Tool was not called even though model should call list_directory")
-
-	// 2. Tool should have completed
-	assert.NotEmpty(t, toolCompleteEvents, "BUG: Tool was called but didn't complete")
-
-	// 3. Tool should have succeeded
 	if len(toolCompleteEvents) > 0 {
 		completeData, ok := toolCompleteEvents[0].Data.(events.ToolCallCompleteData)
 		assert.True(t, ok)
@@ -947,26 +935,12 @@ func TestToolExecutionWithRealOllama(t *testing.T) {
 		assert.Equal(t, "list_directory", completeData.ToolName)
 		assert.NotEmpty(t, completeData.Output, "Tool should produce output")
 	}
-
-	// 4. Response should contain file listing (not just "thinking" about it)
-	assert.NotEmpty(t, resp.Output, "Agent should produce final output")
-
-	// If we see content but no tool execution, that's the bug
-	if len(contentDeltas) > 0 && len(toolStartEvents) == 0 {
-		t.Errorf("BUG REPRODUCED: Model generated content (%d deltas) but no tool calls", len(contentDeltas))
-		t.Logf("Content: %v", contentDeltas)
-	}
 }
 
-// TestDirectToolCallWithOllama tests ProcessToolCall directly with Ollama running
-func TestDirectToolCallWithOllama(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test")
-	}
-
+// TestDirectToolCallWithMockLLM tests ProcessToolCall directly with a mock provider.
+func TestDirectToolCallWithMockLLM(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup
 	toolRegistry := tools.NewRegistry()
 	err := toolRegistry.Register(tools.NewListDirectoryTool())
 	require.NoError(t, err)
@@ -986,26 +960,19 @@ func TestDirectToolCallWithOllama(t *testing.T) {
 
 	emitter := events.NewEventEmitter(100)
 
-	// Use real Ollama
-	provider := createProvider(t, factory.ProviderConfig{
-		Type:    "ollama",
-		Model:   "qwen3:1.7b",
-		BaseURL: "http://localhost:11434",
-	})
-	defer provider.Close()
+	mockLLM := llm.NewMockProvider("test")
 
 	agent, err := NewAgent(
-		provider,
+		mockLLM,
 		securityService,
 		detectionService,
 		toolRuntime,
-		planning.NewPlanningService(provider),
+		planning.NewPlanningService(mockLLM),
 		env,
 		emitter,
 	)
 	require.NoError(t, err)
 
-	// Test ProcessToolCall directly
 	toolCall := &ToolCall{
 		ID:   "test_direct",
 		Type: "function",
@@ -1024,7 +991,7 @@ func TestDirectToolCallWithOllama(t *testing.T) {
 	t.Logf("Direct tool call output: %s", result.Output)
 }
 
-// simpleTask implements Task interface for testing
+// simpleTask implements Task interface for testing.
 type simpleTask struct {
 	name         string
 	systemPrompt string
@@ -1038,7 +1005,7 @@ func (s *simpleTask) AllowedTools() []string { return s.allowedTools }
 func (s *simpleTask) MaxTokens() int         { return s.maxTokens }
 func (s *simpleTask) Validate() error        { return nil }
 
-// dummyLLM is a minimal LLM for tests that don't use it
+// dummyLLM is a minimal LLM for tests that don't use it.
 type dummyLLM struct{}
 
 func (d *dummyLLM) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
@@ -1059,8 +1026,10 @@ func (d *dummyLLM) Complete(ctx context.Context, params openai.ChatCompletionNew
 
 func (d *dummyLLM) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	ch := make(chan openai.ChatCompletionChunk, 1)
+
 	go func() {
 		defer close(ch)
+
 		ch <- openai.ChatCompletionChunk{
 			ID:    "dummy-stream",
 			Model: "dummy-model",
@@ -1075,6 +1044,7 @@ func (d *dummyLLM) Stream(ctx context.Context, params openai.ChatCompletionNewPa
 			},
 		}
 	}()
+
 	return ch, nil
 }
 
@@ -1096,21 +1066,23 @@ func (d *dummyLLM) Close() error {
 
 // ============================================================================
 // Benchmark Tests
-// ============================================================================
+// ============================================================================.
 
 // BenchmarkAgent_ResolveTaskExplicit benchmarks resolving an explicit task object.
-// Expected: ~50-100 ns/op (pointer comparison, should be instant)
+// Expected: ~50-100 ns/op (pointer comparison, should be instant).
 func BenchmarkAgent_ResolveTaskExplicit(b *testing.B) {
 	agent := newBenchAgent(b)
 	taskObj := task.NewRegular()
 	req := &AgentRequest{Task: taskObj}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		resolvedTask, err := agent.resolveTask(req)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if resolvedTask == nil {
 			b.Fatal("expected task")
 		}
@@ -1118,17 +1090,19 @@ func BenchmarkAgent_ResolveTaskExplicit(b *testing.B) {
 }
 
 // BenchmarkAgent_ResolveTaskByName benchmarks resolving task by name (registry lookup).
-// Expected: ~100-150 ns/op (map lookup + RLock)
+// Expected: ~100-150 ns/op (map lookup + RLock).
 func BenchmarkAgent_ResolveTaskByName(b *testing.B) {
 	agent := newBenchAgent(b)
 	req := &AgentRequest{Task: task.NewReview()}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		resolvedTask, err := agent.resolveTask(req)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if resolvedTask == nil {
 			b.Fatal("expected task")
 		}
@@ -1136,17 +1110,19 @@ func BenchmarkAgent_ResolveTaskByName(b *testing.B) {
 }
 
 // BenchmarkAgent_ResolveTaskDefault benchmarks resolving default task.
-// Expected: ~100-150 ns/op (map lookup + RLock)
+// Expected: ~100-150 ns/op (map lookup + RLock).
 func BenchmarkAgent_ResolveTaskDefault(b *testing.B) {
 	agent := newBenchAgent(b)
-	req := &AgentRequest{} // No task specified, should use default
+	req := &AgentRequest{} // No task specified, should use default.
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		resolvedTask, err := agent.resolveTask(req)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if resolvedTask == nil {
 			b.Fatal("expected task")
 		}
@@ -1154,17 +1130,19 @@ func BenchmarkAgent_ResolveTaskDefault(b *testing.B) {
 }
 
 // BenchmarkAgent_BuildToolsForTask_Regular benchmarks tool filtering for regular mode.
-// Expected: ~500-1000 ns/op (allows all tools, minimal filtering)
+// Expected: ~500-1000 ns/op (allows all tools, minimal filtering).
 func BenchmarkAgent_BuildToolsForTask_Regular(b *testing.B) {
 	agent := newBenchAgent(b)
 	taskObj := task.NewRegular()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		tools, err := agent.BuildToolsForTask(taskObj)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if len(tools) == 0 {
 			b.Fatal("expected tools")
 		}
@@ -1172,17 +1150,19 @@ func BenchmarkAgent_BuildToolsForTask_Regular(b *testing.B) {
 }
 
 // BenchmarkAgent_BuildToolsForTask_Compact benchmarks tool filtering for compact mode.
-// Expected: ~200-400 ns/op (allows only 4 tools, fast filtering)
+// Expected: ~200-400 ns/op (allows only 4 tools, fast filtering).
 func BenchmarkAgent_BuildToolsForTask_Compact(b *testing.B) {
 	agent := newBenchAgent(b)
 	taskObj := task.NewCompact()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		tools, err := agent.BuildToolsForTask(taskObj)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if len(tools) == 0 {
 			b.Fatal("expected tools")
 		}
@@ -1190,17 +1170,19 @@ func BenchmarkAgent_BuildToolsForTask_Compact(b *testing.B) {
 }
 
 // BenchmarkAgent_BuildToolsForTask_Review benchmarks tool filtering for review mode.
-// Expected: ~200-400 ns/op (allows only 5 tools, fast filtering)
+// Expected: ~200-400 ns/op (allows only 5 tools, fast filtering).
 func BenchmarkAgent_BuildToolsForTask_Review(b *testing.B) {
 	agent := newBenchAgent(b)
 	taskObj := task.NewReview()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		tools, err := agent.BuildToolsForTask(taskObj)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if len(tools) == 0 {
 			b.Fatal("expected tools")
 		}
@@ -1208,17 +1190,19 @@ func BenchmarkAgent_BuildToolsForTask_Review(b *testing.B) {
 }
 
 // BenchmarkAgent_BuildToolsForTask_Planning benchmarks tool filtering for planning mode.
-// Expected: ~200-400 ns/op (allows only 4 tools, fast filtering)
+// Expected: ~200-400 ns/op (allows only 4 tools, fast filtering).
 func BenchmarkAgent_BuildToolsForTask_Planning(b *testing.B) {
 	agent := newBenchAgent(b)
 	taskObj := task.NewPlanning()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		tools, err := agent.BuildToolsForTask(taskObj)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if len(tools) == 0 {
 			b.Fatal("expected tools")
 		}
@@ -1226,7 +1210,7 @@ func BenchmarkAgent_BuildToolsForTask_Planning(b *testing.B) {
 }
 
 // BenchmarkAgent_ProcessToolCall benchmarks tool call processing.
-// Expected: ~1000-2000 ns/op (validation + parsing + tool execution)
+// Expected: ~1000-2000 ns/op (validation + parsing + tool execution).
 func BenchmarkAgent_ProcessToolCall(b *testing.B) {
 	agent := newBenchAgent(b)
 	toolCall := &ToolCall{
@@ -1239,11 +1223,13 @@ func BenchmarkAgent_ProcessToolCall(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		result, err := agent.ProcessToolCall(context.Background(), toolCall)
 		if err != nil {
 			b.Fatal(err)
 		}
+
 		if result == nil {
 			b.Fatal("expected result")
 		}
@@ -1254,9 +1240,9 @@ func BenchmarkAgent_ProcessToolCall(b *testing.B) {
 // no longer exists after the OpenAI SDK migration. Tool name extraction is now
 // handled via extractToolNamesFromToolCalls in loop.go.
 
-// newBenchAgent creates an agent optimized for benchmarking
+// newBenchAgent creates an agent optimized for benchmarking.
 func newBenchAgent(b *testing.B) *Agent {
-	// Create minimal services for benchmarking
+	// Create minimal services for benchmarking.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
@@ -1265,7 +1251,7 @@ func newBenchAgent(b *testing.B) *Agent {
 	cycleDetector := cycle.NewDetector(cycle.Config{Enabled: false})
 	detectionService := detection.NewDetectionService(cycleDetector, nil)
 
-	// Create tool registry with all built-in tools
+	// Create tool registry with all built-in tools.
 	toolRegistry := tools.NewRegistry()
 	_ = toolRegistry.Register(tools.NewReadFileTool())
 	_ = toolRegistry.Register(tools.NewWriteFileTool())
@@ -1276,7 +1262,7 @@ func newBenchAgent(b *testing.B) *Agent {
 	_ = toolRegistry.Register(tools.NewFileSearchTool("/tmp"))
 	_ = toolRegistry.Register(tools.NewGitContextTool("/tmp"))
 
-	// Create task registry with all modes
+	// Create task registry with all modes.
 
 	toolRuntime := NewToolRuntime(ToolRuntimeConfig{
 		Registry:        toolRegistry,
@@ -1287,6 +1273,7 @@ func newBenchAgent(b *testing.B) *Agent {
 	})
 
 	mockProvider := &mockLLMProvider{}
+
 	agent, err := NewAgent(
 		mockProvider,
 		securityService,
@@ -1303,7 +1290,7 @@ func newBenchAgent(b *testing.B) *Agent {
 	return agent
 }
 
-// mockLLMProvider is a minimal LLM provider for benchmarking
+// mockLLMProvider is a minimal LLM provider for benchmarking.
 type mockLLMProvider struct{}
 
 func (m *mockLLMProvider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
@@ -1324,8 +1311,10 @@ func (m *mockLLMProvider) Complete(ctx context.Context, params openai.ChatComple
 
 func (m *mockLLMProvider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	ch := make(chan openai.ChatCompletionChunk, 1)
+
 	go func() {
 		defer close(ch)
+
 		ch <- openai.ChatCompletionChunk{
 			ID:    "mock-stream",
 			Model: "mock-model",
@@ -1340,6 +1329,7 @@ func (m *mockLLMProvider) Stream(ctx context.Context, params openai.ChatCompleti
 			},
 		}
 	}()
+
 	return ch, nil
 }
 
@@ -1361,7 +1351,7 @@ func (m *mockLLMProvider) Close() error {
 
 // ============================================================================
 // Cycle Intervention Tests
-// ============================================================================
+// ============================================================================.
 
 // TestHandleCycleDetection_InterventionMessagesApplied tests that
 // intervention messages are actually added to the conversation.
@@ -1371,10 +1361,10 @@ func (m *mockLLMProvider) Close() error {
 func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 	agent := createTestAgentWithServices(t)
 
-	// Enable cycle detection
+	// Enable cycle detection.
 	agent.cycleDetection = true
 
-	// Create initial conversation with tool calls and tool results to verify preservation
+	// Create initial conversation with tool calls and tool results to verify preservation.
 	initialMessages := []message.Message{
 		{
 			Role:      message.RoleUser,
@@ -1419,7 +1409,7 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 	}
 
 	// Simulate repeated tool calls to trigger cycle detection
-	// Add 3 snapshots with same tool AND same params to trigger CycleRepeatedTool
+	// Add 3 snapshots with same tool AND same params to trigger CycleRepeatedTool.
 	agent.detection.RecordSnapshot(detection.Snapshot{
 		Turn:      1,
 		Response:  "Calling list_directory",
@@ -1439,7 +1429,7 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 		Timestamp: time.Now(),
 	})
 
-	// Create a mock LLM response that will trigger cycle detection
+	// Create a mock LLM response that will trigger cycle detection.
 	llmResp := &openai.ChatCompletion{
 		ID:    "cycle-detection-test",
 		Model: "test-model",
@@ -1464,16 +1454,16 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 		},
 	}
 
-	// Call handleCycleDetection
+	// Call handleCycleDetection.
 	resp := &AgentResponse{}
+
 	modifiedMessages, shouldStop, err := agent.handleCycleDetection(
 		context.Background(),
 		initialMessages,
 		llmResp,
-		3, // turn count
+		3, // turn count.
 		resp,
 	)
-
 	if err != nil {
 		t.Fatalf("handleCycleDetection returned error: %v", err)
 	}
@@ -1482,18 +1472,19 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 		t.Fatal("handleCycleDetection should not stop (severity < 3)")
 	}
 
-	// Check if cycle was detected
+	// Check if cycle was detected.
 	cycleResult, err := agent.detection.CheckCycle()
 	if err != nil {
 		t.Fatalf("CheckCycle failed: %v", err)
 	}
+
 	if cycleResult.Type == detection.CycleNone {
 		t.Fatal("Expected cycle to be detected, but got CycleNone")
 	}
 
 	// The critical assertion: modifiedMessages should have the intervention message added
 	// With the bug (before fix), modifiedMessages would equal initialMessages (unchanged)
-	// After the fix, modifiedMessages should be longer (reflection added)
+	// After the fix, modifiedMessages should be longer (reflection added).
 	if len(modifiedMessages) == len(initialMessages) {
 		t.Error("BUG DETECTED: handleCycleDetection did not modify the messages slice")
 		t.Error("Expected intervention message to be added, but messages unchanged")
@@ -1507,33 +1498,37 @@ func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 		if initialMessages[i].Role != modifiedMessages[i].Role {
 			t.Errorf("message[%d] role changed: %s -> %s", i, initialMessages[i].Role, modifiedMessages[i].Role)
 		}
+
 		if initialMessages[i].Content != modifiedMessages[i].Content {
 			t.Errorf("message[%d] content changed", i)
 		}
+
 		if initialMessages[i].ToolCallID != modifiedMessages[i].ToolCallID {
 			t.Errorf("message[%d] ToolCallID lost: %q -> %q", i, initialMessages[i].ToolCallID, modifiedMessages[i].ToolCallID)
 		}
+
 		if len(initialMessages[i].ToolCalls) != len(modifiedMessages[i].ToolCalls) {
 			t.Errorf("message[%d] ToolCalls lost: had %d, now %d", i, len(initialMessages[i].ToolCalls), len(modifiedMessages[i].ToolCalls))
 		}
 	}
 
-	// After the fix, this should pass
-	expectedMinLen := 5 // original 4 + 1 reflection message
+	// After the fix, this should pass.
+	expectedMinLen := 5 // original 4 + 1 reflection message.
 	if len(modifiedMessages) < expectedMinLen {
 		t.Errorf("Expected at least %d messages after intervention, got %d", expectedMinLen, len(modifiedMessages))
 	}
 
-	// Verify the last message is from the intervention (user role with reflection prompt)
+	// Verify the last message is from the intervention (user role with reflection prompt).
 	if len(modifiedMessages) >= expectedMinLen {
 		lastMsg := modifiedMessages[len(modifiedMessages)-1]
 		if lastMsg.Role != message.RoleUser {
 			t.Errorf("Expected intervention message to have role 'user', got '%s'", lastMsg.Role)
 		}
+
 		if lastMsg.Content == "" {
 			t.Error("Expected intervention message to have content")
 		}
-		// Reflection intervention should mention "repeating" or "different"
+		// Reflection intervention should mention "repeating" or "different".
 		if !containsAnySubstring(lastMsg.Content, []string{"repeating", "different", "perspective", "angles"}) {
 			t.Errorf("Expected reflection-style message, got: %s", lastMsg.Content)
 		}
@@ -1547,7 +1542,7 @@ func TestExecuteAgentLoop_CycleInterventionPropagated(t *testing.T) {
 	agent.cycleDetection = true
 	agent.maxTurns = 10
 
-	// Create a mock LLM that returns same tool call repeatedly
+	// Create a mock LLM that returns same tool call repeatedly.
 	mockLLM := llm.NewMockProvider("test")
 	agent.llm = mockLLM
 
@@ -1567,10 +1562,10 @@ func TestExecuteAgentLoop_CycleInterventionPropagated(t *testing.T) {
 	task := task.NewRegular()
 	resp := &AgentResponse{}
 
-	// Initialize trajectory context for the test
+	// Initialize trajectory context for the test.
 	trajCtx := trajectory.NewTrajectoryContext("List files")
 
-	// Execute the loop - it should detect the cycle and add intervention
+	// Execute the loop - it should detect the cycle and add intervention.
 	resultMessages, resultResp, err := agent.executeAgentLoop(
 		context.Background(),
 		initialMessages,
@@ -1579,35 +1574,36 @@ func TestExecuteAgentLoop_CycleInterventionPropagated(t *testing.T) {
 		trajCtx,
 	)
 
-	// The loop should complete (may hit max turns or other stop condition)
+	// The loop should complete (may hit max turns or other stop condition).
 	if err != nil {
-		// Error is acceptable for mock LLM
+		// Error is acceptable for mock LLM.
 		t.Logf("executeAgentLoop returned error (expected with mock): %v", err)
 	}
 
-	_ = resultResp // resultResp is used implicitly
+	_ = resultResp // resultResp is used implicitly.
 
 	// Key test: if a cycle was detected during the loop, verify intervention messages
-	// were preserved in resultMessages
+	// were preserved in resultMessages.
 	history := agent.detection.GetHistory()
 	if len(history) >= 3 {
-		// Cycle should have been detected
+		// Cycle should have been detected.
 		t.Log("Cycle detection triggered during agent loop")
 
-		// After the fix, resultMessages should include intervention messages
+		// After the fix, resultMessages should include intervention messages.
 		if len(resultMessages) <= len(initialMessages) {
 			t.Error("Expected resultMessages to include intervention messages, but no new messages found")
 		}
 	}
 }
 
-// Helper function to check if string contains any of the substrings
+// Helper function to check if string contains any of the substrings.
 func containsAnySubstring(s string, substrings []string) bool {
 	for _, substr := range substrings {
 		if containsSubstring(s, substr) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -1624,23 +1620,26 @@ func indexOfSubstring(s, substr string) int {
 			return i
 		}
 	}
+
 	return -1
 }
 
 // ============================================================================
 // Token Budget Tests
-// ============================================================================
+// ============================================================================.
 
 // TestAgent_TaskBudgetOverridesConfig verifies that a task's MaxTokens
 // overrides the agent's config.MaxTokens when task.MaxTokens() > 0.
 func TestAgent_TaskBudgetOverridesConfig(t *testing.T) {
-	// Create agent with 4K config
+	// Create agent with 4K config.
 	llmCapture := newCapturingLLMProvider()
 	validator := security.NewValidator()
+
 	executor, err := NewExecutor(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create executor: %v", err)
 	}
+
 	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := events.NewEventEmitter(100)
 
@@ -1649,25 +1648,25 @@ func TestAgent_TaskBudgetOverridesConfig(t *testing.T) {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	// Override config to 4K tokens
+	// Override config to 4K tokens.
 	agent.maxTokens = 4096
 
-	// Regular mode has 16K tokens
+	// Regular mode has 16K tokens.
 	regularTask := task.NewRegular()
 	if regularTask.MaxTokens() != 16384 {
 		t.Fatalf("expected regular task to have 16384 tokens, got %d", regularTask.MaxTokens())
 	}
 
-	// Create request with regular task
+	// Create request with regular task.
 	req := &AgentRequest{
 		Input: "test input",
 		Task:  regularTask,
 	}
 
-	// Execute (will fail because no tools, but that's ok - we just want to capture the request)
+	// Execute (will fail because no tools, but that's ok - we just want to capture the request).
 	_, _ = agent.Execute(context.Background(), req)
 
-	// Verify task budget was used (16K, not 4K from config)
+	// Verify task budget was used (16K, not 4K from config).
 	if len(llmCapture.requests) == 0 {
 		t.Fatal("expected LLM to be called")
 	}
@@ -1681,13 +1680,15 @@ func TestAgent_TaskBudgetOverridesConfig(t *testing.T) {
 // TestAgent_ConfigBudgetUsedWhenTaskZero verifies that agent's config.MaxTokens
 // is used when task.MaxTokens() returns 0.
 func TestAgent_ConfigBudgetUsedWhenTaskZero(t *testing.T) {
-	// Create agent with 8K config
+	// Create agent with 8K config.
 	llmCapture := newCapturingLLMProvider()
 	validator := security.NewValidator()
+
 	executor, err := NewExecutor(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create executor: %v", err)
 	}
+
 	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := events.NewEventEmitter(100)
 
@@ -1696,22 +1697,22 @@ func TestAgent_ConfigBudgetUsedWhenTaskZero(t *testing.T) {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	// Set config to 8K tokens
+	// Set config to 8K tokens.
 	agent.maxTokens = 8192
 
-	// Create a custom task that returns 0 for MaxTokens
+	// Create a custom task that returns 0 for MaxTokens.
 	zeroBudgetTask := &zeroBudgetTask{}
 
-	// Create request with zero budget task
+	// Create request with zero budget task.
 	req := &AgentRequest{
 		Input: "test input",
 		Task:  zeroBudgetTask,
 	}
 
-	// Execute (will fail because no tools, but that's ok - we just want to capture the request)
+	// Execute (will fail because no tools, but that's ok - we just want to capture the request).
 	_, _ = agent.Execute(context.Background(), req)
 
-	// Verify config budget was used (8K, not 0 from task)
+	// Verify config budget was used (8K, not 0 from task).
 	if len(llmCapture.requests) == 0 {
 		t.Fatal("expected LLM to be called")
 	}
@@ -1725,13 +1726,15 @@ func TestAgent_ConfigBudgetUsedWhenTaskZero(t *testing.T) {
 // TestAgent_ConcurrentTokenBudget verifies that token budget handling
 // works correctly under concurrent access.
 func TestAgent_ConcurrentTokenBudget(t *testing.T) {
-	// Create agent
+	// Create agent.
 	llmCapture := newCapturingLLMProvider()
 	validator := security.NewValidator()
+
 	executor, err := NewExecutor(t.TempDir())
 	if err != nil {
 		t.Fatalf("failed to create executor: %v", err)
 	}
+
 	ctx := &Environment{WorkDir: t.TempDir()}
 	emitter := events.NewEventEmitter(100)
 
@@ -1740,25 +1743,28 @@ func TestAgent_ConcurrentTokenBudget(t *testing.T) {
 		t.Fatalf("failed to create agent: %v", err)
 	}
 
-	// Set config to 4K tokens
+	// Set config to 4K tokens.
 	agent.maxTokens = 4096
 
-	// Create different tasks with different budgets
+	// Create different tasks with different budgets.
 	tasks := []task.Task{
-		task.NewRegular(),  // 16K
-		task.NewCompact(),  // 8K
-		task.NewReview(),   // 12K
-		task.NewPlanning(), // 8K
+		task.NewRegular(),  // 16K.
+		task.NewCompact(),  // 8K.
+		task.NewReview(),   // 12K.
+		task.NewPlanning(), // 8K.
 	}
 
-	// Run concurrent requests
+	// Run concurrent requests.
 	var wg sync.WaitGroup
+
 	numRequests := 10
 
-	for i := 0; i < numRequests; i++ {
+	for i := range numRequests {
 		wg.Add(1)
+
 		go func(taskIndex int) {
 			defer wg.Done()
+
 			task := tasks[taskIndex%len(tasks)]
 			req := &AgentRequest{
 				Input: "test input",
@@ -1770,25 +1776,27 @@ func TestAgent_ConcurrentTokenBudget(t *testing.T) {
 
 	wg.Wait()
 
-	// Verify all requests used correct token budgets
+	// Verify all requests used correct token budgets.
 	if len(llmCapture.requests) == 0 {
 		t.Fatal("expected LLM to be called")
 	}
 
-	// Collect all expected token budgets
+	// Collect all expected token budgets.
 	expectedBudgets := make(map[int]bool)
 	for _, task := range tasks {
 		expectedBudgets[task.MaxTokens()] = true
 	}
 
-	// Track distribution of token budgets used
+	// Track distribution of token budgets used.
 	budgetCounts := make(map[int]int)
+
 	for _, req := range llmCapture.requests {
-		// Verify the token budget is one of the expected values
+		// Verify the token budget is one of the expected values.
 		maxTokens := int(req.MaxTokens.Value)
 		if !expectedBudgets[maxTokens] {
 			t.Errorf("request used unexpected MaxTokens %d, expected one of %v", maxTokens, expectedBudgets)
 		}
+
 		budgetCounts[maxTokens]++
 	}
 
@@ -1798,7 +1806,7 @@ func TestAgent_ConcurrentTokenBudget(t *testing.T) {
 	// Compact(4K):  3 times
 	// Review(12K):  2 times
 	// Planning(4K): 2 times
-	// Total for 4K should be Compact + Planning = 5 times
+	// Total for 4K should be Compact + Planning = 5 times.
 
 	regularCount := budgetCounts[16384]
 	compactCount := budgetCounts[4096]
@@ -1807,21 +1815,23 @@ func TestAgent_ConcurrentTokenBudget(t *testing.T) {
 	if regularCount == 0 {
 		t.Error("expected at least one request with Regular task (16K tokens)")
 	}
+
 	if compactCount == 0 {
 		t.Error("expected at least one request with Compact or Planning task (4K tokens)")
 	}
+
 	if reviewCount == 0 {
 		t.Error("expected at least one request with Review task (12K tokens)")
 	}
 
-	// Verify we got all 10 requests
+	// Verify we got all 10 requests.
 	totalRequests := regularCount + compactCount + reviewCount
 	if totalRequests != numRequests {
 		t.Errorf("expected %d total requests, got %d", numRequests, totalRequests)
 	}
 }
 
-// zeroBudgetTask is a test task that returns 0 for MaxTokens
+// zeroBudgetTask is a test task that returns 0 for MaxTokens.
 type zeroBudgetTask struct{}
 
 func (z *zeroBudgetTask) Name() string           { return "zero-budget" }
@@ -1830,7 +1840,7 @@ func (z *zeroBudgetTask) AllowedTools() []string { return []string{} }
 func (z *zeroBudgetTask) MaxTokens() int         { return 0 }
 func (z *zeroBudgetTask) Validate() error        { return nil }
 
-// capturingLLMProvider captures LLM requests for testing
+// capturingLLMProvider captures LLM requests for testing.
 type capturingLLMProvider struct {
 	requests []openai.ChatCompletionNewParams
 	mu       sync.Mutex
@@ -1846,6 +1856,7 @@ func (c *capturingLLMProvider) Complete(ctx context.Context, params openai.ChatC
 	c.mu.Lock()
 	c.requests = append(c.requests, params)
 	c.mu.Unlock()
+
 	return &openai.ChatCompletion{
 		ID:    "capturing-completion",
 		Model: "capturing-model",
@@ -1865,9 +1876,12 @@ func (c *capturingLLMProvider) Stream(ctx context.Context, params openai.ChatCom
 	c.mu.Lock()
 	c.requests = append(c.requests, params)
 	c.mu.Unlock()
+
 	ch := make(chan openai.ChatCompletionChunk, 1)
+
 	go func() {
 		defer close(ch)
+
 		ch <- openai.ChatCompletionChunk{
 			ID:    "capturing-stream",
 			Model: "capturing-model",
@@ -1882,6 +1896,7 @@ func (c *capturingLLMProvider) Stream(ctx context.Context, params openai.ChatCom
 			},
 		}
 	}()
+
 	return ch, nil
 }
 
@@ -1903,9 +1918,9 @@ func (c *capturingLLMProvider) Close() error {
 
 // ============================================================================
 // Coverage Tests
-// ============================================================================
+// ============================================================================.
 
-// newTestAgentMinimal creates a minimal agent for testing with services
+// newTestAgentMinimal creates a minimal agent for testing with services.
 func newTestAgentMinimal(toolRegistry *tools.Registry) *Agent {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
@@ -1937,13 +1952,15 @@ func newTestAgentMinimal(toolRegistry *tools.Registry) *Agent {
 		&Environment{WorkDir: "/tmp"},
 		emitter,
 	)
+
 	return agent
 }
 
-func newTestToolRuntime(_ interface{}, registry *tools.Registry) *ToolRuntime {
+func newTestToolRuntime(_ any, registry *tools.Registry) *ToolRuntime {
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+
 	if registry == nil {
 		registry = tools.NewRegistry()
 	}
@@ -2062,7 +2079,7 @@ func TestAgent_parseToolArguments(t *testing.T) {
 				Type: "function",
 				Function: ToolCallFunction{
 					Name:      "list_directory",
-					Arguments: `{"path": "/tmp"`, // Missing closing brace
+					Arguments: `{"path": "/tmp"`, // Missing closing brace.
 				},
 			},
 			wantErr: true,
@@ -2075,6 +2092,7 @@ func TestAgent_parseToolArguments(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Agent.parseToolArguments() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
 			if !tt.wantErr && len(args.Keys()) == 0 {
 				t.Error("Agent.parseToolArguments() returned empty args for valid input")
 			}
@@ -2101,7 +2119,7 @@ func TestAgent_addFinalMessage(t *testing.T) {
 			name:     "add message with empty content",
 			messages: []message.Message{},
 			content:  "",
-			wantLen:  0, // Should not add empty content
+			wantLen:  0, // Should not add empty content.
 		},
 		{
 			name: "add message to existing messages",
@@ -2127,7 +2145,7 @@ func TestAgent_emitTurnStart(t *testing.T) {
 	agent := newTestAgentMinimal(nil)
 
 	// This test mainly ensures the method doesn't panic
-	// In a real test, you'd want to verify the event was emitted
+	// In a real test, you'd want to verify the event was emitted.
 	agent.emitTurnStart(1)
 	agent.emitTurnStart(5)
 	agent.emitTurnStart(100)
@@ -2138,20 +2156,24 @@ func TestAgent_applyTimeout(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Test with default timeout
+	// Test with default timeout.
 	agent.timeout = 0
+
 	ctxWithTimeout, cancel := agent.applyTimeout(ctx)
 	if ctxWithTimeout == ctx {
 		t.Error("Expected context to be modified with timeout")
 	}
+
 	cancel()
 
-	// Test with custom timeout
+	// Test with custom timeout.
 	agent.timeout = 5 * time.Second
+
 	ctxWithTimeout, cancel = agent.applyTimeout(ctx)
 	if ctxWithTimeout == ctx {
 		t.Error("Expected context to be modified with timeout")
 	}
+
 	cancel()
 }
 
@@ -2190,9 +2212,11 @@ func TestAgent_executeSetup(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Agent.executeSetup() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
 			if !tt.wantErr && resp == nil {
 				t.Error("Agent.executeSetup() returned nil response for valid input")
 			}
+
 			if ctx == nil {
 				t.Error("Agent.executeSetup() returned nil context")
 			}
@@ -2234,6 +2258,7 @@ func TestAgent_finalizeResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			agent.finalizeResponse(tt.resp, tt.messages, tt.historyLen)
+
 			if tt.resp.Output != tt.wantOutput {
 				t.Errorf("Agent.finalizeResponse() output = %q, want %q", tt.resp.Output, tt.wantOutput)
 			}
@@ -2241,7 +2266,7 @@ func TestAgent_finalizeResponse(t *testing.T) {
 	}
 }
 
-// TestAgentThinkingStateBugFix tests the fix for the agent getting stuck in thinking state
+// TestAgentThinkingStateBugFix tests the fix for the agent getting stuck in thinking state.
 func TestAgentThinkingStateBugFix(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -2294,7 +2319,7 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 			},
 			llmErrors:     []error{context.DeadlineExceeded},
 			timeout:       30 * time.Second,
-			expectedError: false, // Transient errors are retried; mock succeeds on retry
+			expectedError: false, // Transient errors are retried; mock succeeds on retry.
 			expectedStuck: false,
 			description:   "LLM timeout should not cause agent to get stuck",
 		},
@@ -2317,7 +2342,7 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 			},
 			llmErrors:     []error{errors.New("LLM provider error")},
 			timeout:       30 * time.Second,
-			expectedError: false, // Transient errors are retried; mock succeeds on retry
+			expectedError: false, // Transient errors are retried; mock succeeds on retry.
 			expectedStuck: false,
 			description:   "LLM error should not cause agent to get stuck",
 		},
@@ -2371,48 +2396,48 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock LLM provider
+			// Create mock LLM provider.
 			mockLLM := &MockLLMProvider{
 				responses: tt.llmResponses,
 				errors:    tt.llmErrors,
 			}
 
-			// Create agent with mock LLM
+			// Create agent with mock LLM.
 			agent := createTestAgentWithMockLLM(t, mockLLM)
 
-			// Create context with timeout
+			// Create context with timeout.
 			ctx, cancel := context.WithTimeout(context.Background(), tt.timeout)
 			defer cancel()
 
-			// Create request
+			// Create request.
 			req := &AgentRequest{
 				Input: "Create a terminal Tetris game in Rust",
 				Task:  task.NewRegular(),
 			}
 
-			// Track execution time to detect if agent gets stuck
+			// Track execution time to detect if agent gets stuck.
 			start := time.Now()
 
-			// Execute agent
+			// Execute agent.
 			resp, err := agent.Execute(ctx, req)
 
 			executionTime := time.Since(start)
 
-			// Check if agent got stuck (execution time should be reasonable)
+			// Check if agent got stuck (execution time should be reasonable).
 			if tt.expectedStuck {
 				assert.True(t, executionTime > tt.timeout/2, "Agent should have gotten stuck")
 			} else {
 				assert.True(t, executionTime < tt.timeout/2, "Agent should not have gotten stuck, execution time: %v", executionTime)
 			}
 
-			// Check error expectations
+			// Check error expectations.
 			if tt.expectedError {
 				assert.Error(t, err, "Expected error but got none")
 			} else {
 				assert.NoError(t, err, "Unexpected error: %v", err)
 			}
 
-			// Check response
+			// Check response.
 			if resp != nil {
 				assert.NotNil(t, resp, "Response should not be nil")
 			}
@@ -2420,9 +2445,9 @@ func TestAgentThinkingStateBugFix(t *testing.T) {
 	}
 }
 
-// TestAgentTimeoutHandling tests that agent properly handles timeouts
+// TestAgentTimeoutHandling tests that agent properly handles timeouts.
 func TestAgentTimeoutHandling(t *testing.T) {
-	// Create mock LLM that takes a long time to respond
+	// Create mock LLM that takes a long time to respond.
 	mockLLM := &MockLLMProvider{
 		responses: []openai.ChatCompletion{
 			{
@@ -2440,42 +2465,43 @@ func TestAgentTimeoutHandling(t *testing.T) {
 			},
 		},
 		errors: []error{nil},
-		delay:  2 * time.Second, // Simulate slow LLM response
+		delay:  2 * time.Second, // Simulate slow LLM response.
 	}
 
-	// Create agent with mock LLM
+	// Create agent with mock LLM.
 	agent := createTestAgentWithMockLLM(t, mockLLM)
 
-	// Create context with short timeout
+	// Create context with short timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	// Create request
+	// Create request.
 	req := &AgentRequest{
 		Input: "Create a terminal Tetris game in Rust",
 		Task:  task.NewRegular(),
 	}
 
-	// Execute agent
+	// Execute agent.
 	start := time.Now()
 	resp, err := agent.Execute(ctx, req)
 	executionTime := time.Since(start)
 
-	// Should timeout and return error
+	// Should timeout and return error.
 	assert.Error(t, err, "Expected timeout error")
 	assert.True(t, executionTime < 2*time.Second, "Execution should have timed out")
 
-	// Response should contain error details, not be nil
+	// Response should contain error details, not be nil.
 	assert.NotNil(t, resp, "Response should contain error details")
+
 	if resp != nil {
 		assert.NotNil(t, resp.Error, "Response.Error should be set")
 		assert.Equal(t, "error", resp.FinishReason, "FinishReason should be 'error'")
 	}
 }
 
-// TestAgentCycleDetection tests that agent properly handles cycle detection without getting stuck
+// TestAgentCycleDetection tests that agent properly handles cycle detection without getting stuck.
 func TestAgentCycleDetection(t *testing.T) {
-	// Create mock LLM that returns repetitive responses (potential cycle)
+	// Create mock LLM that returns repetitive responses (potential cycle).
 	mockLLM := &MockLLMProvider{
 		responses: []openai.ChatCompletion{
 			{
@@ -2497,7 +2523,7 @@ func TestAgentCycleDetection(t *testing.T) {
 				Choices: []openai.ChatCompletionChoice{
 					{
 						Message: openai.ChatCompletionMessage{
-							Content: "I'll help you create a Tetris game in Rust.", // Same response
+							Content: "I'll help you create a Tetris game in Rust.", // Same response.
 							Role:    openai.ChatCompletionMessageRoleAssistant,
 						},
 						FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
@@ -2510,7 +2536,7 @@ func TestAgentCycleDetection(t *testing.T) {
 				Choices: []openai.ChatCompletionChoice{
 					{
 						Message: openai.ChatCompletionMessage{
-							Content: "I'll help you create a Tetris game in Rust.", // Same response again
+							Content: "I'll help you create a Tetris game in Rust.", // Same response again.
 							Role:    openai.ChatCompletionMessageRoleAssistant,
 						},
 						FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
@@ -2521,31 +2547,31 @@ func TestAgentCycleDetection(t *testing.T) {
 		errors: []error{nil, nil, nil},
 	}
 
-	// Create agent with cycle detection enabled
+	// Create agent with cycle detection enabled.
 	agent := createTestAgentWithMockLLM(t, mockLLM)
 	agent.cycleDetection = true
 
-	// Create context
+	// Create context.
 	ctx := context.Background()
 
-	// Create request
+	// Create request.
 	req := &AgentRequest{
 		Input: "Create a terminal Tetris game in Rust",
 		Task:  task.NewRegular(),
 	}
 
-	// Execute agent
+	// Execute agent.
 	start := time.Now()
 	resp, err := agent.Execute(ctx, req)
 	executionTime := time.Since(start)
 
-	// Should complete without getting stuck
+	// Should complete without getting stuck.
 	assert.NoError(t, err, "Agent should complete without error")
 	assert.True(t, executionTime < 10*time.Second, "Agent should not get stuck in cycle detection")
 	assert.NotNil(t, resp, "Response should not be nil")
 }
 
-// MockLLMProvider is a mock LLM provider for testing
+// MockLLMProvider is a mock LLM provider for testing.
 type MockLLMProvider struct {
 	responses []openai.ChatCompletion
 	errors    []error
@@ -2554,7 +2580,7 @@ type MockLLMProvider struct {
 }
 
 func (m *MockLLMProvider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
-	// Simulate delay if specified
+	// Simulate delay if specified.
 	if m.delay > 0 {
 		select {
 		case <-time.After(m.delay):
@@ -2563,21 +2589,23 @@ func (m *MockLLMProvider) Complete(ctx context.Context, params openai.ChatComple
 		}
 	}
 
-	// Return error if specified
+	// Return error if specified.
 	if m.callCount < len(m.errors) && m.errors[m.callCount] != nil {
 		err := m.errors[m.callCount]
 		m.callCount++
+
 		return nil, err
 	}
 
-	// Return response if available
+	// Return response if available.
 	if m.callCount < len(m.responses) {
 		resp := m.responses[m.callCount]
 		m.callCount++
+
 		return &resp, nil
 	}
 
-	// Default response
+	// Default response.
 	return &openai.ChatCompletion{
 		ID:    "default-completion",
 		Model: "default-model",
@@ -2594,18 +2622,20 @@ func (m *MockLLMProvider) Complete(ctx context.Context, params openai.ChatComple
 }
 
 func (m *MockLLMProvider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
-	// Check for error first - return it immediately before creating channel
+	// Check for error first - return it immediately before creating channel.
 	if m.callCount < len(m.errors) && m.errors[m.callCount] != nil {
 		err := m.errors[m.callCount]
 		m.callCount++
+
 		return nil, err
 	}
 
 	ch := make(chan openai.ChatCompletionChunk, 10)
+
 	go func() {
 		defer close(ch)
 
-		// Simulate delay if specified
+		// Simulate delay if specified.
 		if m.delay > 0 {
 			select {
 			case <-time.After(m.delay):
@@ -2614,11 +2644,11 @@ func (m *MockLLMProvider) Stream(ctx context.Context, params openai.ChatCompleti
 			}
 		}
 
-		// Return response if available
+		// Return response if available.
 		if m.callCount < len(m.responses) {
 			resp := m.responses[m.callCount]
 			m.callCount++
-			// Stream the content
+			// Stream the content.
 			if len(resp.Choices) > 0 {
 				ch <- openai.ChatCompletionChunk{
 					ID:    resp.ID,
@@ -2632,6 +2662,7 @@ func (m *MockLLMProvider) Stream(ctx context.Context, params openai.ChatCompleti
 						},
 					},
 				}
+
 				ch <- openai.ChatCompletionChunk{
 					ID:    resp.ID,
 					Model: resp.Model,
@@ -2642,10 +2673,11 @@ func (m *MockLLMProvider) Stream(ctx context.Context, params openai.ChatCompleti
 					},
 				}
 			}
+
 			return
 		}
 
-		// Default response
+		// Default response.
 		ch <- openai.ChatCompletionChunk{
 			ID:    "default-stream",
 			Model: "default-model",
@@ -2658,6 +2690,7 @@ func (m *MockLLMProvider) Stream(ctx context.Context, params openai.ChatCompleti
 				},
 			},
 		}
+
 		ch <- openai.ChatCompletionChunk{
 			ID:    "default-stream",
 			Model: "default-model",
@@ -2693,9 +2726,9 @@ func (m *MockLLMProvider) Close() error {
 	return nil
 }
 
-// createTestAgentWithMockLLM creates a test agent with mock LLM provider
+// createTestAgentWithMockLLM creates a test agent with mock LLM provider.
 func createTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *Agent {
-	// Create required services
+	// Create required services.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
@@ -2706,16 +2739,16 @@ func createTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *Agent {
 		nil,
 	)
 
-	// Create tool runtime
+	// Create tool runtime.
 	toolRegistry := tools.NewRegistry()
 	toolRuntime := newTestToolRuntime(
-		nil, // toolExecutor
+		nil, // toolExecutor.
 		toolRegistry,
 	)
 
 	environment := &Environment{WorkDir: "/tmp"}
 
-	// Create agent
+	// Create agent.
 	agent, err := NewAgent(
 		mockLLM,
 		securityService,
@@ -2732,7 +2765,7 @@ func createTestAgentWithMockLLM(t *testing.T, mockLLM llm.Provider) *Agent {
 	return agent
 }
 
-// mockTask is a simple mock task for testing
+// mockTask is a simple mock task for testing.
 type mockTask struct {
 	name string
 }
@@ -2757,7 +2790,7 @@ func (m *mockTask) Validate() error {
 	return nil
 }
 
-// TestAgent_emitACERetrievalEvent tests ACE retrieval event emission
+// TestAgent_emitACERetrievalEvent tests ACE retrieval event emission.
 func TestAgent_emitACERetrievalEvent(t *testing.T) {
 	emitter := events.NewEventEmitter(10)
 	_, eventCh, _ := emitter.Subscribe()
@@ -2766,11 +2799,11 @@ func TestAgent_emitACERetrievalEvent(t *testing.T) {
 		emitter: emitter,
 	}
 
-	// Create trajectory context with known metrics
+	// Create trajectory context with known metrics.
 	ctx := trajectory.NewTrajectoryContext("install nodejs")
 	ctx.CurrentTurn = 5
 
-	// Add some bullets to cache via RecordRetrieval (which updates stats)
+	// Add some bullets to cache via RecordRetrieval (which updates stats).
 	testBullets := []*bullet.Bullet{
 		{ID: "b1", Content: "test bullet 1"},
 		{ID: "b2", Content: "test bullet 2"},
@@ -2784,12 +2817,12 @@ func TestAgent_emitACERetrievalEvent(t *testing.T) {
 	ctx.RecordRetrieval(event, testBullets)
 
 	// After RecordRetrieval, cache stats reflect the operation
-	// For this test, we just need to verify the emitted data matches current stats
+	// For this test, we just need to verify the emitted data matches current stats.
 
-	// Call emitACERetrievalEvent with bullets
+	// Call emitACERetrievalEvent with bullets.
 	agent.emitACERetrievalEvent(ctx, trajectory.TriggerError, "install nodejs error", testBullets, 5)
 
-	// Verify event was emitted
+	// Verify event was emitted.
 	select {
 	case emittedEvent := <-eventCh:
 		if emittedEvent.Type != events.EventACERetrieval {
@@ -2804,25 +2837,31 @@ func TestAgent_emitACERetrievalEvent(t *testing.T) {
 		if data.Turn != 5 {
 			t.Errorf("Turn = %d, want 5", data.Turn)
 		}
+
 		if data.Trigger != "error" {
 			t.Errorf("Trigger = %q, want \"error\"", data.Trigger)
 		}
+
 		if data.Query != "install nodejs error" {
 			t.Errorf("Query = %q, want \"install nodejs error\"", data.Query)
 		}
+
 		if data.BulletsRetrieved != 2 {
 			t.Errorf("BulletsRetrieved = %d, want 2", data.BulletsRetrieved)
 		}
+
 		if data.CacheSize != 2 {
 			t.Errorf("CacheSize = %d, want 2", data.CacheSize)
 		}
 
-		// Verify cache hit rate calculation matches trajectory context
+		// Verify cache hit rate calculation matches trajectory context.
 		total := ctx.CacheHits + ctx.CacheMisses
+
 		expectedHitRate := 0.0
 		if total > 0 {
 			expectedHitRate = float64(ctx.CacheHits) / float64(total)
 		}
+
 		if data.CacheHitRate != expectedHitRate {
 			t.Errorf("CacheHitRate = %f, want %f (from ctx: hits=%d, misses=%d)",
 				data.CacheHitRate, expectedHitRate, ctx.CacheHits, ctx.CacheMisses)

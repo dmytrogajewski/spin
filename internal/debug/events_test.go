@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -29,6 +30,7 @@ func TestEventLogger_New(t *testing.T) {
 			if logger == nil {
 				t.Fatal("expected non-nil logger")
 			}
+
 			if logger.format != tt.format {
 				t.Errorf("expected format %s, got %s", tt.format, logger.format)
 			}
@@ -66,6 +68,7 @@ func TestEventLogger_ShouldLog(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := NewEventLogger("text", tt.filter)
+
 			result := logger.shouldLog(tt.event)
 			if result != tt.expected {
 				t.Errorf("expected %v, got %v", tt.expected, result)
@@ -77,8 +80,9 @@ func TestEventLogger_ShouldLog(t *testing.T) {
 func TestEventLogger_LogEvent_Text(t *testing.T) {
 	logger := NewEventLogger("text", []string{})
 
-	// Capture stderr
+	// Capture stderr.
 	var buf bytes.Buffer
+
 	logger.writer = &buf
 
 	event := events.Event{
@@ -96,6 +100,7 @@ func TestEventLogger_LogEvent_Text(t *testing.T) {
 	if !strings.Contains(output, "tool_call_start") {
 		t.Errorf("expected output to contain 'tool_call_start', got: %s", output)
 	}
+
 	if !strings.Contains(output, "bash") {
 		t.Errorf("expected output to contain 'bash', got: %s", output)
 	}
@@ -104,8 +109,9 @@ func TestEventLogger_LogEvent_Text(t *testing.T) {
 func TestEventLogger_LogEvent_JSON(t *testing.T) {
 	logger := NewEventLogger("json", []string{})
 
-	// Capture stderr
+	// Capture stderr.
 	var buf bytes.Buffer
+
 	logger.writer = &buf
 
 	event := events.Event{
@@ -118,16 +124,18 @@ func TestEventLogger_LogEvent_JSON(t *testing.T) {
 
 	logger.logEvent(event)
 
-	// Verify valid JSON
+	// Verify valid JSON.
 	var parsed EventLogOutput
-	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
+	err := json.Unmarshal(buf.Bytes(), &parsed)
+	if err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
 
-	// Verify the output structure
+	// Verify the output structure.
 	if parsed.Type != events.EventContentDelta {
 		t.Errorf("expected type %v, got %v", events.EventContentDelta, parsed.Type)
 	}
+
 	if parsed.Timestamp == "" {
 		t.Error("expected non-empty timestamp")
 	}
@@ -139,11 +147,12 @@ func TestEventLogger_Run(t *testing.T) {
 
 	logger := NewEventLogger("text", []string{})
 
-	// Test with invalid prompt should return error
+	// Test with invalid prompt should return error.
 	err := logger.Run(ctx, "")
 	if err == nil {
 		t.Error("expected error with empty prompt")
 	}
+
 	if !strings.Contains(err.Error(), "prompt cannot be empty") {
 		t.Errorf("expected 'prompt cannot be empty' error, got: %v", err)
 	}
@@ -156,12 +165,12 @@ func TestEventLogger_Run_Success(t *testing.T) {
 	logger := NewEventLogger("text", []string{})
 
 	// Test with valid prompt - this will create a real conversation
-	// Note: This test may fail if no LLM provider is configured
+	// Note: This test may fail if no LLM provider is configured.
 	err := logger.Run(ctx, "Hello, this is a test prompt")
 
-	// We expect either success or a configuration error
+	// We expect either success or a configuration error.
 	if err != nil {
-		// Check if it's a configuration error (expected in test environment)
+		// Check if it's a configuration error (expected in test environment).
 		if !strings.Contains(err.Error(), "failed to create manager") &&
 			!strings.Contains(err.Error(), "failed to create conversation") &&
 			!strings.Contains(err.Error(), "turn execution failed") {
@@ -174,15 +183,15 @@ func TestEventLogger_Run_WithFilter(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	// Test with filter
+	// Test with filter.
 	logger := NewEventLogger("text", []string{"turn_start", "turn_complete"})
 
-	// Test with valid prompt
+	// Test with valid prompt.
 	err := logger.Run(ctx, "Test prompt")
 
-	// We expect either success or a configuration error
+	// We expect either success or a configuration error.
 	if err != nil {
-		// Check if it's a configuration error (expected in test environment)
+		// Check if it's a configuration error (expected in test environment).
 		if !strings.Contains(err.Error(), "failed to create manager") &&
 			!strings.Contains(err.Error(), "failed to create conversation") &&
 			!strings.Contains(err.Error(), "turn execution failed") {
@@ -195,15 +204,15 @@ func TestEventLogger_Run_JSONFormat(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	// Test with JSON format
+	// Test with JSON format.
 	logger := NewEventLogger("json", []string{})
 
-	// Test with valid prompt
+	// Test with valid prompt.
 	err := logger.Run(ctx, "Test prompt")
 
-	// We expect either success or a configuration error
+	// We expect either success or a configuration error.
 	if err != nil {
-		// Check if it's a configuration error (expected in test environment)
+		// Check if it's a configuration error (expected in test environment).
 		if !strings.Contains(err.Error(), "failed to create manager") &&
 			!strings.Contains(err.Error(), "failed to create conversation") &&
 			!strings.Contains(err.Error(), "turn execution failed") {
@@ -214,15 +223,18 @@ func TestEventLogger_Run_JSONFormat(t *testing.T) {
 
 func TestEventLogger_Run_EmptyPrompt(t *testing.T) {
 	logger := NewEventLogger("text", []string{})
+
 	var buf bytes.Buffer
+
 	logger.writer = &buf
 
 	ctx := context.Background()
-	err := logger.Run(ctx, "")
 
+	err := logger.Run(ctx, "")
 	if err == nil {
 		t.Error("Run() expected error for empty prompt, got nil")
 	}
+
 	if !strings.Contains(err.Error(), "prompt cannot be empty") {
 		t.Errorf("Run() error should contain 'prompt cannot be empty', got: %v", err)
 	}
@@ -244,6 +256,7 @@ func TestEventLogger_Filter_Multiple(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.eventType.String(), func(t *testing.T) {
 			event := events.Event{Type: tt.eventType}
+
 			result := logger.shouldLog(event)
 			if result != tt.expected {
 				t.Errorf("for event %s: expected %v, got %v", tt.eventType, tt.expected, result)
@@ -254,7 +267,9 @@ func TestEventLogger_Filter_Multiple(t *testing.T) {
 
 func TestEventLogger_LogEventJSON(t *testing.T) {
 	logger := NewEventLogger("json", []string{})
+
 	var buf bytes.Buffer
+
 	logger.writer = &buf
 
 	event := events.Event{
@@ -271,9 +286,11 @@ func TestEventLogger_LogEventJSON(t *testing.T) {
 	if !strings.Contains(output, "timestamp") {
 		t.Errorf("expected output to contain 'timestamp', got: %s", output)
 	}
+
 	if !strings.Contains(output, "type") {
 		t.Errorf("expected output to contain 'type', got: %s", output)
 	}
+
 	if !strings.Contains(output, "data") {
 		t.Errorf("expected output to contain 'data', got: %s", output)
 	}
@@ -281,7 +298,9 @@ func TestEventLogger_LogEventJSON(t *testing.T) {
 
 func TestEventLogger_LogEventText(t *testing.T) {
 	logger := NewEventLogger("text", []string{})
+
 	var buf bytes.Buffer
+
 	logger.writer = &buf
 
 	event := events.Event{
@@ -295,9 +314,11 @@ func TestEventLogger_LogEventText(t *testing.T) {
 	if !strings.Contains(output, "2023-01-01 12:00:00") {
 		t.Errorf("expected output to contain timestamp, got: %s", output)
 	}
+
 	if !strings.Contains(output, "turn_start") {
 		t.Errorf("expected output to contain event type, got: %s", output)
 	}
+
 	if !strings.Contains(output, "Starting turn") {
 		t.Errorf("expected output to contain event data, got: %s", output)
 	}
@@ -305,13 +326,15 @@ func TestEventLogger_LogEventText(t *testing.T) {
 
 func TestEventLogger_LogEventJSON_InvalidData(t *testing.T) {
 	logger := NewEventLogger("json", []string{})
+
 	var buf bytes.Buffer
+
 	logger.writer = &buf
 
-	// Create event with data that can't be marshaled to JSON
+	// Create event with data that can't be marshaled to JSON.
 	event := events.Event{
 		Type: events.EventError,
-		Data: func() {}, // Function can't be marshaled to JSON
+		Data: func() {}, // Function can't be marshaled to JSON.
 	}
 
 	logger.logEventJSON("2023-01-01 12:00:00", event)
@@ -320,10 +343,11 @@ func TestEventLogger_LogEventJSON_InvalidData(t *testing.T) {
 	if !strings.Contains(output, "timestamp") {
 		t.Errorf("expected output to contain 'timestamp', got: %s", output)
 	}
+
 	if !strings.Contains(output, "type") {
 		t.Errorf("expected output to contain 'type', got: %s", output)
 	}
-	// Should fall back to empty JSON object for data
+	// Should fall back to empty JSON object for data.
 	if !strings.Contains(output, "{}") {
 		t.Errorf("expected output to contain empty JSON object for invalid data, got: %s", output)
 	}
@@ -333,31 +357,34 @@ func TestEventLogger_LogEventJSON_EncodeError(t *testing.T) {
 	logger := NewEventLogger("json", []string{})
 
 	// Create event with unmarshalable output structure
-	// This will trigger the error path at line 129-131
+	// This will trigger the error path at line 129-131.
 	event := events.Event{
 		Type: events.EventError,
 		Data: "normal data",
 	}
 
-	// Create a writer that will capture the output
+	// Create a writer that will capture the output.
 	var buf bytes.Buffer
+
 	logger.writer = &buf
 
 	// Save original writer field to create an impossible encoding scenario
 	// We can't easily trigger json.Marshal error on a normal map, but we can verify
-	// the error handling path works with a failing writer
+	// the error handling path works with a failing writer.
 	logger.writer = &failingWriter{}
 
-	// This should not panic and should handle write failures gracefully
+	// This should not panic and should handle write failures gracefully.
 	logger.logEventJSON("2023-01-01 12:00:00", event)
 }
 
 func TestEventLogger_LogEventJSON_MarshalError(t *testing.T) {
 	logger := NewEventLogger("json", []string{})
+
 	var buf bytes.Buffer
+
 	logger.writer = &buf
 
-	// Create a more complex unmarshalable structure
+	// Create a more complex unmarshalable structure.
 	type unmarshalable struct {
 		Chan chan int
 	}
@@ -367,48 +394,53 @@ func TestEventLogger_LogEventJSON_MarshalError(t *testing.T) {
 		Data: unmarshalable{Chan: make(chan int)},
 	}
 
-	// This should handle marshal error and use {}
+	// This should handle marshal error and use {}.
 	logger.logEventJSON("2023-01-01 12:00:00", event)
 
 	output := buf.String()
-	// Should still produce valid JSON with empty object for data
+	// Should still produce valid JSON with empty object for data.
 	var parsed EventLogOutput
-	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+	err := json.Unmarshal([]byte(output), &parsed)
+	if err != nil {
 		t.Fatalf("output should be valid JSON: %v, got: %s", err, output)
 	}
 }
 
-// failingWriter is a writer that always fails
+// failingWriter is a writer that always fails.
 type failingWriter struct{}
 
 func (fw *failingWriter) Write(p []byte) (n int, err error) {
-	return 0, fmt.Errorf("write failed")
+	return 0, errors.New("write failed")
 }
 
 func TestEventLogger_Concurrency(t *testing.T) {
 	logger := NewEventLogger("text", []string{})
+
 	var buf bytes.Buffer
+
 	logger.writer = &buf
 
-	// Test concurrent logging
+	// Test concurrent logging.
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+
+	for i := range 10 {
 		go func(i int) {
 			event := events.Event{
 				Type: events.EventContentDelta,
 				Data: fmt.Sprintf("message %d", i),
 			}
 			logger.logEvent(event)
+
 			done <- true
 		}(i)
 	}
 
-	// Wait for all goroutines to complete
-	for i := 0; i < 10; i++ {
+	// Wait for all goroutines to complete.
+	for range 10 {
 		<-done
 	}
 
-	// Verify some output was written
+	// Verify some output was written.
 	if buf.Len() == 0 {
 		t.Error("expected some output from concurrent logging")
 	}

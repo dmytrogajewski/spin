@@ -3,9 +3,12 @@ package curator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"github.com/openai/openai-go"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/delta"
@@ -13,45 +16,44 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/refine"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/openai/openai-go"
 )
 
 // BulletMerger handles insight-to-bullet conversion and playbook merging.
 // Use this interface when only curation/deduplication functionality is needed.
 type BulletMerger interface {
-	// Curate converts insights to bullets and merges into playbook
+	// Curate converts insights to bullets and merges into playbook.
 	Curate(ctx context.Context, req MergeRequest) (*MergeResult, error)
 
-	// CurateBatch processes multiple merge requests in parallel
+	// CurateBatch processes multiple merge requests in parallel.
 	CurateBatch(ctx context.Context, req BatchMergeRequest) (*BatchMergeResult, error)
 
-	// FindDuplicates detects semantic duplicates using cosine similarity
+	// FindDuplicates detects semantic duplicates using cosine similarity.
 	FindDuplicates(ctx context.Context, newBullets []*bullet.Bullet) (map[string]string, error)
 }
 
 // BulletRefiner handles playbook quality maintenance through pruning.
 // Use this interface when only refinement/pruning functionality is needed.
 type BulletRefiner interface {
-	// Refine explicitly prunes low-utility bullets (for lazy mode)
+	// Refine explicitly prunes low-utility bullets (for lazy mode).
 	Refine(ctx context.Context) (*RefinementResult, error)
 }
 
 // BulletUpdater handles individual bullet modifications via delta operations.
 // Use this interface when only bullet update functionality is needed.
 type BulletUpdater interface {
-	// ApplyBulletFeedback applies helpful/harmful feedback using batch delta operations
+	// ApplyBulletFeedback applies helpful/harmful feedback using batch delta operations.
 	ApplyBulletFeedback(ctx context.Context, feedback map[string]string) error
 
-	// UpdateBulletContent updates bullet content using delta operation
+	// UpdateBulletContent updates bullet content using delta operation.
 	UpdateBulletContent(ctx context.Context, bulletID, newContent string) error
 
-	// AddBulletTag adds or updates a tag on a bullet using delta operation
+	// AddBulletTag adds or updates a tag on a bullet using delta operation.
 	AddBulletTag(ctx context.Context, bulletID, key, value string) error
 
-	// RemoveBulletTag removes a tag from a bullet using delta operation
+	// RemoveBulletTag removes a tag from a bullet using delta operation.
 	RemoveBulletTag(ctx context.Context, bulletID, key string) error
 
-	// UpdateBulletEmbedding updates bullet embedding using delta operation
+	// UpdateBulletEmbedding updates bullet embedding using delta operation.
 	UpdateBulletEmbedding(ctx context.Context, bulletID string, embedding []float32) error
 }
 
@@ -109,7 +111,7 @@ func WithMergeEngine(similarityThreshold float64) Option {
 }
 
 // WithRefinementMode sets the refinement strategy.
-func WithRefinementMode(mode RefinementMode, config interface{}) Option {
+func WithRefinementMode(mode RefinementMode, config any) Option {
 	return func(c *curator) {
 		switch mode {
 		case RefinementModeNone:
@@ -119,6 +121,7 @@ func WithRefinementMode(mode RefinementMode, config interface{}) Option {
 			if !ok {
 				cfg = LazyRefinementConfig{MinUtilityScore: 0.1}
 			}
+
 			c.refinementStrategy = newLazyRefinementStrategy(cfg)
 		case RefinementModeProactive:
 			cfg, ok := config.(ProactiveRefinementConfig)
@@ -128,6 +131,7 @@ func WithRefinementMode(mode RefinementMode, config interface{}) Option {
 					MinUtilityScore: 0.1,
 				}
 			}
+
 			c.refinementStrategy = newProactiveRefinementStrategy(cfg)
 		default:
 			c.refinementStrategy = &noRefinementStrategy{}
@@ -149,29 +153,31 @@ func NewCurator(pb *playbook.Playbook, emb embedding.Embedder, opts ...Option) C
 		embedder:           emb,
 		deltaApplier:       delta.NewDeltaApplier(pb),
 		threshold:          0.85,
-		refinementStrategy: &noRefinementStrategy{}, // Default: no refinement
-		maxTokens:          4096,                    // Default max tokens for LLM calls
+		refinementStrategy: &noRefinementStrategy{}, // Default: no refinement.
+		maxTokens:          4096,                    // Default max tokens for LLM calls.
 	}
 
 	for _, opt := range opts {
 		opt(c)
 	}
 
-	// Create orchestrator if merge engine is enabled
+	// Create orchestrator if merge engine is enabled.
 	if c.useMergeEngine && c.mergeEngine != nil {
-		// Create prune function that calls basic refinement
+		// Create prune function that calls basic refinement.
 		pruneFunc := func(ctx context.Context) (int, []string, error) {
-			// Use basic pruning logic from refinement strategies
+			// Use basic pruning logic from refinement strategies.
 			bullets := pb.List(nil)
 			prunedIDs := make([]string, 0)
-			minUtilityScore := 0.1 // Default threshold
+			minUtilityScore := 0.1 // Default threshold.
 
 			for _, b := range bullets {
 				score := b.Score()
 				if score < minUtilityScore {
-					if err := pb.Delete(ctx, b.ID); err != nil {
+					err := pb.Delete(ctx, b.ID)
+					if err != nil {
 						return 0, nil, err
 					}
+
 					prunedIDs = append(prunedIDs, b.ID)
 				}
 			}
@@ -179,10 +185,10 @@ func NewCurator(pb *playbook.Playbook, emb embedding.Embedder, opts ...Option) C
 			return len(prunedIDs), prunedIDs, nil
 		}
 
-		// Create archive for storing removed bullets
+		// Create archive for storing removed bullets.
 		archive := refine.NewArchive()
 		c.orchestrator = refine.NewRefinementOrchestrator(pb, c.mergeEngine, archive, pruneFunc)
-		// Pass orchestrator to refinement strategy
+		// Pass orchestrator to refinement strategy.
 		c.refinementStrategy.SetOrchestrator(c.orchestrator)
 	}
 
@@ -196,12 +202,15 @@ func (c *curator) Curate(ctx context.Context, req MergeRequest) (*MergeResult, e
 		"use_llm", c.useLLMCuration,
 		"threshold", req.SimilarityThreshold)
 
-	// Use LLM-based curation if enabled, otherwise use deduplication
+	// Use LLM-based curation if enabled, otherwise use deduplication.
 	if c.useLLMCuration && c.llmProvider != nil && c.promptBuilder != nil {
 		slog.Debug("Using LLM-based curation")
+
 		return c.curateLLMBased(ctx, req)
 	}
+
 	slog.Debug("Using deduplication-based curation")
+
 	return c.curateDeduplicationBased(ctx, req)
 }
 
@@ -209,7 +218,7 @@ func (c *curator) Curate(ctx context.Context, req MergeRequest) (*MergeResult, e
 func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeResult, error) {
 	slog.Debug("LLM-based curation starting", "num_insights", len(req.Insights))
 
-	// Format current playbook
+	// Format current playbook.
 	bullets := c.playbook.List(nil)
 	slog.Debug("Current playbook state", "num_bullets", len(bullets))
 
@@ -217,10 +226,12 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 	for _, b := range bullets {
 		playbookBuilder.WriteString(fmt.Sprintf("[%s] %s\n", b.ID, b.Content))
 	}
+
 	currentPlaybook := playbookBuilder.String()
 
-	// Format insights into reflection text
+	// Format insights into reflection text.
 	var reflectionBuilder strings.Builder
+
 	for i, insight := range req.Insights {
 		slog.Debug("Formatting insight for curation",
 			"index", i,
@@ -230,7 +241,7 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 		reflectionBuilder.WriteString("\n---\n")
 	}
 
-	// Build curation prompt
+	// Build curation prompt.
 	curationReq := CurationRequest{
 		TaskContext:     "Processing new insights from agent execution",
 		CurrentPlaybook: currentPlaybook,
@@ -242,7 +253,7 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 	slog.Debug("Curation prompt built", "length", len(prompt))
 	slog.Debug("Curation prompt content", "prompt", prompt)
 
-	// Call LLM
+	// Call LLM.
 	params := openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
@@ -250,7 +261,7 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 		Temperature: openai.F(0.3),
 	}
 
-	// Set MaxTokens if configured
+	// Set MaxTokens if configured.
 	if c.maxTokens > 0 {
 		params.MaxTokens = openai.F(int64(c.maxTokens))
 	}
@@ -260,10 +271,11 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 	completion, err := c.llmProvider.Complete(ctx, params)
 	if err != nil {
 		slog.Warn("LLM call failed during curation", "error", err)
+
 		return nil, err
 	}
 
-	// Parse response
+	// Parse response.
 	responseText := completion.Choices[0].Message.Content
 
 	slog.Debug("LLM curation response received",
@@ -274,14 +286,16 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 	responseText = cleanJSONResponse(responseText)
 
 	var curationResp CurationResponse
-	if err := json.Unmarshal([]byte(responseText), &curationResp); err != nil {
+	err = json.Unmarshal([]byte(responseText), &curationResp)
+	if err != nil {
 		slog.Warn("Failed to parse curation response", "error", err, "response", responseText)
+
 		return nil, err
 	}
 
 	slog.Debug("Parsed curation response", "num_operations", len(curationResp.Operations))
 
-	// Apply operations
+	// Apply operations.
 	addedBullets := make([]*bullet.Bullet, 0, len(curationResp.Operations))
 	for i, op := range curationResp.Operations {
 		slog.Debug("Processing curation operation",
@@ -291,24 +305,29 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 			"content", op.Content)
 
 		if op.Type == "ADD" {
-			// Create bullet from operation
+			// Create bullet from operation.
 			newBullet, err := bullet.New(op.Content)
 			if err != nil {
 				slog.Warn("Failed to create bullet", "error", err, "content", op.Content)
+
 				return nil, err
 			}
 
-			// Get embedding
+			// Get embedding.
 			emb, err := c.embedder.Embed(ctx, newBullet.Content)
 			if err != nil {
 				slog.Warn("Failed to generate embedding", "error", err)
+
 				return nil, err
 			}
+
 			newBullet.Embedding = emb
 
-			// Add to playbook
-			if err := c.playbook.Add(ctx, newBullet); err != nil {
+			// Add to playbook.
+			err = c.playbook.Add(ctx, newBullet)
+			if err != nil {
 				slog.Warn("Failed to add bullet to playbook", "error", err)
+
 				return nil, err
 			}
 
@@ -327,37 +346,43 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 func (c *curator) curateDeduplicationBased(ctx context.Context, req MergeRequest) (*MergeResult, error) {
 	slog.Debug("Deduplication-based curation starting", "num_insights", len(req.Insights))
 
-	// Convert insights to bullets
+	// Convert insights to bullets.
 	bullets, err := ConvertInsights(req.Insights)
 	if err != nil {
 		slog.Warn("Failed to convert insights to bullets", "error", err)
+
 		return nil, err
 	}
 
 	slog.Debug("Converted insights to bullets", "count", len(bullets))
 
-	// Get embeddings for all bullets
+	// Get embeddings for all bullets.
 	for i, b := range bullets {
 		slog.Debug("Generating embedding for bullet", "index", i, "content", b.Content)
+
 		emb, err := c.embedder.Embed(ctx, b.Content)
 		if err != nil {
 			slog.Warn("Failed to generate embedding", "error", err, "bullet", b.Content)
+
 			return nil, err
 		}
+
 		b.Embedding = emb
 	}
 
-	// Find duplicates
+	// Find duplicates.
 	slog.Debug("Searching for duplicates", "threshold", c.threshold)
+
 	duplicates, err := c.FindDuplicates(ctx, bullets)
 	if err != nil {
 		slog.Warn("Failed to find duplicates", "error", err)
+
 		return nil, err
 	}
 
 	slog.Debug("Duplicate detection complete", "num_duplicates", len(duplicates))
 
-	// Process bullets: add new ones, update duplicates
+	// Process bullets: add new ones, update duplicates.
 	addedBullets := make([]*bullet.Bullet, 0, len(bullets))
 	skipped := 0
 	updated := 0
@@ -371,7 +396,7 @@ func (c *curator) curateDeduplicationBased(ctx context.Context, req MergeRequest
 				"existing_bullet", existingID,
 				"content", b.Content)
 
-			// Duplicate found - update existing bullet's helpful count using delta operation
+			// Duplicate found - update existing bullet's helpful count using delta operation.
 			deltaOp := delta.NewIncrementHelpful(existingID, delta.DeltaMetadata{
 				Source: "curator",
 				Reason: "duplicate insight detected",
@@ -380,10 +405,12 @@ func (c *curator) curateDeduplicationBased(ctx context.Context, req MergeRequest
 			_, err := c.deltaApplier.Apply(ctx, *deltaOp)
 			if err == nil {
 				updated++
+
 				slog.Debug("Updated duplicate bullet helpful count", "bullet_id", existingID)
 			} else {
 				slog.Warn("Failed to update duplicate", "error", err, "bullet_id", existingID)
 			}
+
 			duplicateIDs = append(duplicateIDs, existingID)
 			skipped++
 		} else {
@@ -392,11 +419,14 @@ func (c *curator) curateDeduplicationBased(ctx context.Context, req MergeRequest
 				"id", b.ID,
 				"content", b.Content)
 
-			// Not a duplicate - add to playbook
-			if err := c.playbook.Add(ctx, b); err != nil {
+			// Not a duplicate - add to playbook.
+			err := c.playbook.Add(ctx, b)
+			if err != nil {
 				slog.Warn("Failed to add bullet", "error", err, "bullet", b.Content)
+
 				return nil, err
 			}
+
 			addedBullets = append(addedBullets, b)
 		}
 	}
@@ -414,7 +444,7 @@ func (c *curator) curateDeduplicationBased(ctx context.Context, req MergeRequest
 		AddedBullets: addedBullets,
 	}
 
-	// Check if refinement should be triggered (proactive mode)
+	// Check if refinement should be triggered (proactive mode).
 	shouldRefine, err := c.refinementStrategy.ShouldRefine(ctx, c.playbook)
 	if err != nil {
 		return nil, err
@@ -425,6 +455,7 @@ func (c *curator) curateDeduplicationBased(ctx context.Context, req MergeRequest
 		if err != nil {
 			return nil, err
 		}
+
 		result.Refined = true
 		result.Refinement = refinement
 	}
@@ -442,7 +473,7 @@ func (c *curator) CurateBatch(ctx context.Context, req BatchMergeRequest) (*Batc
 	results := make([]MergeResult, len(req.Requests))
 	errors := make([]error, len(req.Requests))
 
-	// For empty requests, return empty results
+	// For empty requests, return empty results.
 	if len(req.Requests) == 0 {
 		return &BatchMergeResult{
 			Results: results,
@@ -450,7 +481,7 @@ func (c *curator) CurateBatch(ctx context.Context, req BatchMergeRequest) (*Batc
 		}, nil
 	}
 
-	// For single request, process sequentially
+	// For single request, process sequentially.
 	if len(req.Requests) == 1 {
 		result, err := c.Curate(ctx, req.Requests[0])
 		if err != nil {
@@ -458,13 +489,14 @@ func (c *curator) CurateBatch(ctx context.Context, req BatchMergeRequest) (*Batc
 		} else {
 			results[0] = *result
 		}
+
 		return &BatchMergeResult{
 			Results: results,
 			Errors:  errors,
 		}, nil
 	}
 
-	// For multiple requests, process in parallel with worker pool
+	// For multiple requests, process in parallel with worker pool.
 	return c.curateBatchParallel(ctx, req.Requests, req.MaxWorkers)
 }
 
@@ -472,18 +504,18 @@ func (c *curator) CurateBatch(ctx context.Context, req BatchMergeRequest) (*Batc
 func cleanJSONResponse(response string) string {
 	response = strings.TrimSpace(response)
 
-	// Handle markdown code blocks
-	if strings.HasPrefix(response, "```json") {
-		response = strings.TrimPrefix(response, "```json")
+	// Handle markdown code blocks.
+	if after, ok := strings.CutPrefix(response, "```json"); ok {
+		response = after
 		response = strings.TrimSpace(response)
-	} else if strings.HasPrefix(response, "```") {
-		response = strings.TrimPrefix(response, "```")
+	} else if after, ok := strings.CutPrefix(response, "```"); ok {
+		response = after
 		response = strings.TrimSpace(response)
 	}
 
-	// Remove trailing code block markers
-	if strings.HasSuffix(response, "```") {
-		response = strings.TrimSuffix(response, "```")
+	// Remove trailing code block markers.
+	if before, ok := strings.CutSuffix(response, "```"); ok {
+		response = before
 		response = strings.TrimSpace(response)
 	}
 
@@ -494,13 +526,14 @@ func cleanJSONResponse(response string) string {
 // This is used for itemized learning where the LLM provides helpful/harmful feedback.
 func (c *curator) ApplyBulletFeedback(ctx context.Context, feedback map[string]string) error {
 	if c.deltaApplier == nil {
-		return fmt.Errorf("delta applier not initialized")
+		return errors.New("delta applier not initialized")
 	}
 
-	// Build delta operations for each feedback item
+	// Build delta operations for each feedback item.
 	deltas := make([]delta.Delta, 0, len(feedback))
 	for bulletID, feedbackType := range feedback {
 		var deltaOp *delta.Delta
+
 		switch feedbackType {
 		case "helpful", "HELPFUL":
 			deltaOp = delta.NewIncrementHelpful(bulletID, delta.DeltaMetadata{
@@ -513,7 +546,7 @@ func (c *curator) ApplyBulletFeedback(ctx context.Context, feedback map[string]s
 				Reason: "marked harmful by LLM",
 			})
 		default:
-			continue // Skip unknown feedback types
+			continue // Skip unknown feedback types.
 		}
 
 		if deltaOp != nil {
@@ -522,24 +555,25 @@ func (c *curator) ApplyBulletFeedback(ctx context.Context, feedback map[string]s
 	}
 
 	if len(deltas) == 0 {
-		return nil // No feedback to apply
+		return nil // No feedback to apply.
 	}
 
-	// Apply batch deltas in parallel
+	// Apply batch deltas in parallel.
 	req := delta.BatchApplyRequest{
 		Deltas:     deltas,
-		MaxWorkers: 0,     // Use NumCPU
-		Atomic:     false, // Best-effort application
+		MaxWorkers: 0,     // Use NumCPU.
+		Atomic:     false, // Best-effort application.
 	}
 
 	_, err := c.deltaApplier.ApplyBatch(ctx, req)
+
 	return err
 }
 
 // UpdateBulletContent updates bullet content using delta operation.
 func (c *curator) UpdateBulletContent(ctx context.Context, bulletID, newContent string) error {
 	if c.deltaApplier == nil {
-		return fmt.Errorf("delta applier not initialized")
+		return errors.New("delta applier not initialized")
 	}
 
 	deltaOp := delta.NewContentUpdate(bulletID, newContent, delta.DeltaMetadata{
@@ -548,13 +582,14 @@ func (c *curator) UpdateBulletContent(ctx context.Context, bulletID, newContent 
 	})
 
 	_, err := c.deltaApplier.Apply(ctx, *deltaOp)
+
 	return err
 }
 
 // AddBulletTag adds or updates a tag on a bullet using delta operation.
 func (c *curator) AddBulletTag(ctx context.Context, bulletID, key, value string) error {
 	if c.deltaApplier == nil {
-		return fmt.Errorf("delta applier not initialized")
+		return errors.New("delta applier not initialized")
 	}
 
 	deltaOp := delta.NewAddTag(bulletID, key, value, delta.DeltaMetadata{
@@ -563,13 +598,14 @@ func (c *curator) AddBulletTag(ctx context.Context, bulletID, key, value string)
 	})
 
 	_, err := c.deltaApplier.Apply(ctx, *deltaOp)
+
 	return err
 }
 
 // RemoveBulletTag removes a tag from a bullet using delta operation.
 func (c *curator) RemoveBulletTag(ctx context.Context, bulletID, key string) error {
 	if c.deltaApplier == nil {
-		return fmt.Errorf("delta applier not initialized")
+		return errors.New("delta applier not initialized")
 	}
 
 	deltaOp := delta.NewRemoveTag(bulletID, key, delta.DeltaMetadata{
@@ -578,13 +614,14 @@ func (c *curator) RemoveBulletTag(ctx context.Context, bulletID, key string) err
 	})
 
 	_, err := c.deltaApplier.Apply(ctx, *deltaOp)
+
 	return err
 }
 
 // UpdateBulletEmbedding updates bullet embedding using delta operation.
 func (c *curator) UpdateBulletEmbedding(ctx context.Context, bulletID string, embedding []float32) error {
 	if c.deltaApplier == nil {
-		return fmt.Errorf("delta applier not initialized")
+		return errors.New("delta applier not initialized")
 	}
 
 	deltaOp := delta.NewUpdateEmbedding(bulletID, embedding, delta.DeltaMetadata{
@@ -593,5 +630,6 @@ func (c *curator) UpdateBulletEmbedding(ctx context.Context, bulletID string, em
 	})
 
 	_, err := c.deltaApplier.Apply(ctx, *deltaOp)
+
 	return err
 }

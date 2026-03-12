@@ -67,7 +67,7 @@ func TestNewDebugLandlockCmd(t *testing.T) {
 func TestDebugCmdSubcommands(t *testing.T) {
 	cmd := newDebugCmd()
 
-	// Test that all expected subcommands exist
+	// Test that all expected subcommands exist.
 	expectedSubcommands := []string{
 		"events",
 		"sandbox",
@@ -81,12 +81,15 @@ func TestDebugCmdSubcommands(t *testing.T) {
 
 	for _, expected := range expectedSubcommands {
 		found := false
+
 		for _, subcmd := range subcommands {
 			if subcmd.Name() == expected {
 				found = true
+
 				break
 			}
 		}
+
 		if !found {
 			t.Errorf("Debug subcommand %s not found", expected)
 		}
@@ -96,7 +99,7 @@ func TestDebugCmdSubcommands(t *testing.T) {
 func TestDebugCmdHelp(t *testing.T) {
 	cmd := newDebugCmd()
 
-	// Test that help text is properly set
+	// Test that help text is properly set.
 	if cmd.Long == "" {
 		t.Errorf("Debug command Long description is empty")
 	}
@@ -109,7 +112,7 @@ func TestDebugCmdHelp(t *testing.T) {
 func TestDebugEventsCmdFlags(t *testing.T) {
 	cmd := newDebugEventsCmd()
 
-	// Test that expected flags exist
+	// Test that expected flags exist.
 	expectedFlags := []string{
 		"format",
 		"filter",
@@ -126,7 +129,7 @@ func TestDebugEventsCmdFlags(t *testing.T) {
 func TestDebugEventsCmdDefaultValues(t *testing.T) {
 	cmd := newDebugEventsCmd()
 
-	// Test default values
+	// Test default values.
 	formatFlag := cmd.Flags().Lookup("format")
 	if formatFlag == nil || formatFlag.DefValue != "text" {
 		t.Errorf("format flag default = %v, want %v", formatFlag.DefValue, "text")
@@ -136,7 +139,7 @@ func TestDebugEventsCmdDefaultValues(t *testing.T) {
 func TestDebugEventsCmdExamples(t *testing.T) {
 	cmd := newDebugEventsCmd()
 
-	// Test that examples are included in help text
+	// Test that examples are included in help text.
 	helpText := cmd.Example
 	expectedExamples := []string{
 		"spin debug events \"list files in current directory\"",
@@ -154,7 +157,7 @@ func TestDebugEventsCmdExamples(t *testing.T) {
 func TestDebugSandboxCmdFlags(t *testing.T) {
 	cmd := newDebugSandboxCmd()
 
-	// Test that expected flags exist
+	// Test that expected flags exist.
 	expectedFlags := []string{
 		"read-only",
 		"network",
@@ -172,7 +175,7 @@ func TestDebugSandboxCmdFlags(t *testing.T) {
 func TestDebugSandboxCmdDefaultValues(t *testing.T) {
 	cmd := newDebugSandboxCmd()
 
-	// Test default values
+	// Test default values.
 	readOnlyFlag := cmd.Flags().Lookup("read-only")
 	if readOnlyFlag == nil || readOnlyFlag.DefValue != "true" {
 		t.Errorf("read-only flag default = %v, want %v", readOnlyFlag.DefValue, "true")
@@ -192,7 +195,7 @@ func TestDebugSandboxCmdDefaultValues(t *testing.T) {
 func TestDebugLandlockCmdFlags(t *testing.T) {
 	cmd := newDebugLandlockCmd()
 
-	// Test that expected flags exist
+	// Test that expected flags exist.
 	expectedFlags := []string{
 		"allow-read",
 		"allow-write",
@@ -210,7 +213,7 @@ func TestDebugLandlockCmdFlags(t *testing.T) {
 func TestDebugLandlockCmdDefaultValues(t *testing.T) {
 	cmd := newDebugLandlockCmd()
 
-	// Test default values
+	// Test default values.
 	allowReadFlag := cmd.Flags().Lookup("allow-read")
 	if allowReadFlag == nil || allowReadFlag.DefValue != "true" {
 		t.Errorf("allow-read flag default = %v, want %v", allowReadFlag.DefValue, "true")
@@ -230,7 +233,7 @@ func TestDebugLandlockCmdDefaultValues(t *testing.T) {
 func TestDebugSandboxCmdExamples(t *testing.T) {
 	cmd := newDebugSandboxCmd()
 
-	// Test that examples are included in help text
+	// Test that examples are included in help text.
 	helpText := cmd.Example
 	expectedExamples := []string{
 		"spin debug sandbox \"ls -la\"",
@@ -248,7 +251,7 @@ func TestDebugSandboxCmdExamples(t *testing.T) {
 func TestDebugLandlockCmdExamples(t *testing.T) {
 	cmd := newDebugLandlockCmd()
 
-	// Test that examples are included in help text
+	// Test that examples are included in help text.
 	helpText := cmd.Example
 	expectedExamples := []string{
 		"spin debug landlock \"ls -la\"",
@@ -263,7 +266,7 @@ func TestDebugLandlockCmdExamples(t *testing.T) {
 	}
 }
 
-// Helper function to check if a string contains a substring
+// Helper function to check if a string contains a substring.
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr ||
 		(len(s) > len(substr) &&
@@ -278,5 +281,6 @@ func findSubstring(s, substr string) bool {
 			return true
 		}
 	}
+
 	return false
 }

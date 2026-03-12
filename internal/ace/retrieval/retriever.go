@@ -20,7 +20,7 @@ type Retriever interface {
 // ScoredBullet is a bullet with relevance score.
 type ScoredBullet struct {
 	Bullet *bullet.Bullet
-	Score  float64 // Relevance score (0.0 to 1.0)
+	Score  float64 // Relevance score (0.0 to 1.0).
 }
 
 // SemanticRetriever uses embeddings for retrieval.
@@ -39,13 +39,13 @@ func NewSemanticRetriever(pb *playbook.Playbook, emb embedding.Embedder) *Semant
 
 // Retrieve implements Retriever interface.
 func (r *SemanticRetriever) Retrieve(ctx context.Context, query string, topK int) ([]*bullet.Bullet, error) {
-	// Delegate to playbook's Search method
+	// Delegate to playbook's Search method.
 	return r.playbook.Search(ctx, query, topK)
 }
 
 // RetrieveWithScores returns bullets with scores.
 func (r *SemanticRetriever) RetrieveWithScores(ctx context.Context, query string, topK int) ([]ScoredBullet, error) {
-	// Use playbook's SearchWithScores to get actual similarity scores
+	// Use playbook's SearchWithScores to get actual similarity scores.
 	results, err := r.playbook.SearchWithScores(ctx, query, topK)
 	if err != nil {
 		return nil, err

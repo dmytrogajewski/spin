@@ -26,13 +26,13 @@ func (c *filesystemTestClient) ReadTextFile(ctx context.Context, params acp.Read
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.readCalls = append(c.readCalls, params)
-	
+
 	// Read the actual file
 	content, err := os.ReadFile(params.Path)
 	if err != nil {
 		return acp.ReadTextFileResponse{}, err
 	}
-	
+
 	return acp.ReadTextFileResponse{
 		Content: string(content),
 	}, nil
@@ -42,13 +42,13 @@ func (c *filesystemTestClient) WriteTextFile(ctx context.Context, params acp.Wri
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.writeCalls = append(c.writeCalls, params)
-	
+
 	// Write the actual file
 	err := os.WriteFile(params.Path, []byte(params.Content), 0644)
 	if err != nil {
 		return acp.WriteTextFileResponse{}, err
 	}
-	
+
 	return acp.WriteTextFileResponse{}, nil
 }
 
@@ -337,7 +337,7 @@ func TestACP_Filesystem_WriteTextFile_Basic(t *testing.T) {
 		assert.Equal(t, testFile, writeCalls[0].Path, "WriteTextFile should be called with correct path")
 		assert.Contains(t, writeCalls[0].Content, "written content", "WriteTextFile should have correct content")
 		t.Logf("WriteTextFile was called %d time(s)", len(writeCalls))
-		
+
 		// Verify file was written
 		content, err := os.ReadFile(testFile)
 		if err == nil {
@@ -629,7 +629,7 @@ func TestACP_Filesystem_ReadWrite_Integration(t *testing.T) {
 	testFile := filepath.Join(workDir, "integration_test.txt")
 	if len(writeCalls) > 0 && len(readCalls) > 0 {
 		t.Logf("WriteTextFile called %d time(s), ReadTextFile called %d time(s)", len(writeCalls), len(readCalls))
-		
+
 		// Verify file exists and has correct content
 		content, err := os.ReadFile(testFile)
 		if err == nil {

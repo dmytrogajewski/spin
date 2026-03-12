@@ -54,12 +54,15 @@ func TestPutOptionsDefaults(t *testing.T) {
 	if opts.TTL != 0 {
 		t.Errorf("default TTL should be 0, got %v", opts.TTL)
 	}
+
 	if opts.Namespace != "" {
 		t.Errorf("default Namespace should be empty, got %q", opts.Namespace)
 	}
+
 	if opts.Tags != nil {
 		t.Errorf("default Tags should be nil, got %v", opts.Tags)
 	}
+
 	if opts.Overwrite != false {
 		t.Errorf("default Overwrite should be false, got %v", opts.Overwrite)
 	}
@@ -80,15 +83,19 @@ func TestMemoryEntryFields(t *testing.T) {
 	if entry.Key != "test-key" {
 		t.Errorf("Key mismatch: got %q", entry.Key)
 	}
+
 	if entry.Value != "test-value" {
 		t.Errorf("Value mismatch: got %q", entry.Value)
 	}
+
 	if entry.Namespace != "test-namespace" {
 		t.Errorf("Namespace mismatch: got %q", entry.Namespace)
 	}
+
 	if len(entry.Tags) != 2 {
 		t.Errorf("Tags length mismatch: got %d", len(entry.Tags))
 	}
+
 	if entry.TTL != time.Hour {
 		t.Errorf("TTL mismatch: got %v", entry.TTL)
 	}
@@ -105,6 +112,7 @@ func TestErrNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("ErrNotFound should not be nil")
 	}
+
 	if err.Error() != "memory: key not found" {
 		t.Errorf("unexpected error message: %q", err.Error())
 	}
@@ -115,6 +123,7 @@ func TestErrKeyExists(t *testing.T) {
 	if err == nil {
 		t.Fatal("ErrKeyExists should not be nil")
 	}
+
 	if err.Error() != "memory: key already exists" {
 		t.Errorf("unexpected error message: %q", err.Error())
 	}
@@ -125,6 +134,7 @@ func TestErrEmptyKey(t *testing.T) {
 	if err == nil {
 		t.Fatal("ErrEmptyKey should not be nil")
 	}
+
 	if err.Error() != "memory: key cannot be empty" {
 		t.Errorf("unexpected error message: %q", err.Error())
 	}

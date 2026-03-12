@@ -12,26 +12,31 @@
 //
 //	m := prompt.NewModel(1000) // 1000 history entries
 //
-//	// Insert text
+// Insert text
+//
 //	m.Insert('h')
 //	m.Insert('i')
 //
-//	// Edit
+// Edit
+//
 //	m.Backspace()
 //	m.Delete()
 //	m.MoveLeft()
 //	m.MoveRight()
 //
-//	// Kill-line operations
+// Kill-line operations
+//
 //	m.ClearLineLeft()  // Ctrl-U
 //	m.ClearLineRight() // Ctrl-K
 //	m.DeleteWord()     // Ctrl-W
 //
-//	// History navigation
+// History navigation
+//
 //	m.PrevHistory() // Up arrow
 //	m.NextHistory() // Down arrow
 //
-//	// Submit
+// Submit
+//
 //	text := m.Submit() // Returns text, adds to history, clears buffer
 //
 // # Architecture

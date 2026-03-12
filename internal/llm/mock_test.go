@@ -21,6 +21,7 @@ func TestNewMockProvider(t *testing.T) {
 		if !caps.Streaming {
 			t.Error("Expected streaming capability by default")
 		}
+
 		if !caps.FunctionCalling {
 			t.Error("Expected function calling capability by default")
 		}
@@ -34,6 +35,7 @@ func TestNewMockProvider(t *testing.T) {
 				openai.UserMessage("test"),
 			}),
 		}
+
 		resp, err := p.Complete(context.Background(), params)
 		if err != nil {
 			t.Fatalf("Complete() error = %v", err)
@@ -44,6 +46,7 @@ func TestNewMockProvider(t *testing.T) {
 			if len(resp.Choices) > 0 {
 				content = resp.Choices[0].Message.Content
 			}
+
 			t.Errorf("Content = %s, want 'custom response'", content)
 		}
 	})
@@ -67,6 +70,7 @@ func TestNewMockProvider(t *testing.T) {
 				openai.UserMessage("test"),
 			}),
 		}
+
 		resp, err := p.Complete(context.Background(), params)
 		if err != nil {
 			t.Fatalf("Complete() error = %v", err)
@@ -94,6 +98,7 @@ func TestNewMockProvider(t *testing.T) {
 				openai.UserMessage("test"),
 			}),
 		}
+
 		_, err := p.Complete(context.Background(), params)
 		if !errors.Is(err, expectedErr) {
 			t.Errorf("Complete() error = %v, want %v", err, expectedErr)
@@ -104,12 +109,13 @@ func TestNewMockProvider(t *testing.T) {
 		chunks := []string{"Hello", " ", "World"}
 		p := NewMockProvider("test", WithStreaming(chunks))
 
-		// Complete should return concatenated chunks
+		// Complete should return concatenated chunks.
 		params := openai.ChatCompletionNewParams{
 			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 				openai.UserMessage("test"),
 			}),
 		}
+
 		resp, err := p.Complete(context.Background(), params)
 		if err != nil {
 			t.Fatalf("Complete() error = %v", err)
@@ -120,6 +126,7 @@ func TestNewMockProvider(t *testing.T) {
 			if len(resp.Choices) > 0 {
 				content = resp.Choices[0].Message.Content
 			}
+
 			t.Errorf("Content = %s, want 'Hello World'", content)
 		}
 	})
@@ -137,9 +144,11 @@ func TestNewMockProvider(t *testing.T) {
 		if got.Streaming != false {
 			t.Error("Expected Streaming = false")
 		}
+
 		if got.FunctionCalling != true {
 			t.Error("Expected FunctionCalling = true")
 		}
+
 		if got.Vision != true {
 			t.Error("Expected Vision = true")
 		}
@@ -189,6 +198,7 @@ func TestMockProvider_Complete(t *testing.T) {
 			if len(resp.Choices) > 0 {
 				content = resp.Choices[0].Message.Content
 			}
+
 			t.Errorf("Content = %s, want 'Hello, World!'", content)
 		}
 
@@ -209,13 +219,14 @@ func TestMockProvider_Complete(t *testing.T) {
 		p := NewMockProvider("test", WithDelay(100*time.Millisecond))
 
 		ctx, cancel := context.WithCancel(context.Background())
-		cancel() // Cancel immediately
+		cancel() // Cancel immediately.
 
 		params := openai.ChatCompletionNewParams{
 			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 				openai.UserMessage("test"),
 			}),
 		}
+
 		_, err := p.Complete(ctx, params)
 		if err == nil {
 			t.Error("Expected context cancellation error")
@@ -237,6 +248,7 @@ func TestMockProvider_Complete(t *testing.T) {
 				openai.UserMessage("test"),
 			}),
 		}
+
 		_, err := p.Complete(ctx, params)
 		if err == nil {
 			t.Error("Expected timeout error")
@@ -252,6 +264,7 @@ func TestMockProvider_Complete(t *testing.T) {
 				openai.UserMessage("test"),
 			}),
 		}
+
 		_, err := p.Complete(context.Background(), params)
 		if !errors.Is(err, expectedErr) {
 			t.Errorf("Error = %v, want %v", err, expectedErr)
@@ -269,13 +282,16 @@ func TestMockProvider_Stream(t *testing.T) {
 				openai.UserMessage("test"),
 			}),
 		}
+
 		stream, err := p.Stream(context.Background(), params)
 		if err != nil {
 			t.Fatalf("Stream() error = %v", err)
 		}
 
-		var received []string
-		var doneReceived bool
+		var (
+			received     []string
+			doneReceived bool
+		)
 
 		for chunk := range stream {
 			if len(chunk.Choices) > 0 {
@@ -283,6 +299,7 @@ func TestMockProvider_Stream(t *testing.T) {
 				if delta.Content != "" {
 					received = append(received, delta.Content)
 				}
+
 				if chunk.Choices[0].FinishReason != "" {
 					doneReceived = true
 				}
@@ -316,13 +333,16 @@ func TestMockProvider_Stream(t *testing.T) {
 				openai.UserMessage("test"),
 			}),
 		}
+
 		stream, err := p.Stream(context.Background(), params)
 		if err != nil {
 			t.Fatalf("Stream() error = %v", err)
 		}
 
-		var receivedToolCalls []openai.ChatCompletionChunkChoicesDeltaToolCall
-		var finishReason openai.ChatCompletionChunkChoicesFinishReason
+		var (
+			receivedToolCalls []openai.ChatCompletionChunkChoicesDeltaToolCall
+			finishReason      openai.ChatCompletionChunkChoicesFinishReason
+		)
 
 		for chunk := range stream {
 			if len(chunk.Choices) > 0 {
@@ -330,6 +350,7 @@ func TestMockProvider_Stream(t *testing.T) {
 				if len(delta.ToolCalls) > 0 {
 					receivedToolCalls = append(receivedToolCalls, delta.ToolCalls...)
 				}
+
 				if chunk.Choices[0].FinishReason != "" {
 					finishReason = chunk.Choices[0].FinishReason
 				}
@@ -355,12 +376,13 @@ func TestMockProvider_Stream(t *testing.T) {
 				openai.UserMessage("test"),
 			}),
 		}
+
 		stream, err := p.Stream(ctx, params)
 		if err != nil {
 			t.Fatalf("Stream() error = %v", err)
 		}
 
-		// Cancel after first chunk
+		// Cancel after first chunk.
 		time.AfterFunc(60*time.Millisecond, cancel)
 
 		chunkCount := 0
@@ -368,7 +390,7 @@ func TestMockProvider_Stream(t *testing.T) {
 			chunkCount++
 		}
 
-		// Should receive at least one chunk before cancellation
+		// Should receive at least one chunk before cancellation.
 		if chunkCount == 0 {
 			t.Error("Expected to receive at least one chunk")
 		}
@@ -383,6 +405,7 @@ func TestMockProvider_Stream(t *testing.T) {
 				openai.UserMessage("test"),
 			}),
 		}
+
 		_, err := p.Stream(context.Background(), params)
 		if !errors.Is(err, expectedErr) {
 			t.Errorf("Stream() error = %v, want %v", err, expectedErr)
@@ -439,38 +462,42 @@ func TestMockProvider_Models(t *testing.T) {
 func TestMockProvider_ThreadSafety(t *testing.T) {
 	p := NewMockProvider("test")
 
-	// Concurrent reads
+	// Concurrent reads.
 	done := make(chan bool)
-	for i := 0; i < 10; i++ {
+
+	for range 10 {
 		go func() {
 			params := openai.ChatCompletionNewParams{
 				Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 					openai.UserMessage("test"),
 				}),
 			}
-			for j := 0; j < 100; j++ {
+
+			for range 100 {
 				_ = p.Name()
 				_ = p.Capabilities()
 				_, _ = p.Complete(context.Background(), params)
 			}
+
 			done <- true
 		}()
 	}
 
-	// Concurrent writes
-	for i := 0; i < 10; i++ {
+	// Concurrent writes.
+	for i := range 10 {
 		go func(i int) {
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				p.SetResponse("response" + string(rune(i)))
 				p.SetError(nil)
 				p.SetToolCalls(nil)
 			}
+
 			done <- true
 		}(i)
 	}
 
-	// Wait for all goroutines
-	for i := 0; i < 20; i++ {
+	// Wait for all goroutines.
+	for range 20 {
 		<-done
 	}
 }
@@ -483,7 +510,7 @@ func TestMockProvider_Close(t *testing.T) {
 		t.Errorf("Close() error = %v, want nil", err)
 	}
 
-	// Should be idempotent
+	// Should be idempotent.
 	err = p.Close()
 	if err != nil {
 		t.Errorf("Close() second call error = %v, want nil", err)

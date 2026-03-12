@@ -7,11 +7,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/history/compress"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
-	"github.com/google/uuid"
 )
 
 // Common errors for history operations.
@@ -104,6 +105,7 @@ func NewHistory(maxTokens int, tok tokenizer.Tokenizer) *History {
 func (h *History) SetEventEmitter(emitter *events.EventEmitter) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	h.emitter = emitter
 }
 
@@ -111,6 +113,7 @@ func (h *History) SetEventEmitter(emitter *events.EventEmitter) {
 func (h *History) SetCompressor(c compress.Compressor) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	h.compressor = c
 }
 
@@ -118,6 +121,7 @@ func (h *History) SetCompressor(c compress.Compressor) {
 func (h *History) SetCompressionConfig(cfg CompressionConfig) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	h.config = cfg
 }
 
@@ -134,6 +138,7 @@ func NewHistoryWithDefaults() *History {
 func (h *History) MaxTokens() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+
 	return h.maxTokens
 }
 
@@ -154,24 +159,24 @@ func (h *History) AddMessage(msg message.Message) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Generate ID if not set
+	// Generate ID if not set.
 	if msg.ID == "" {
 		msg.ID = uuid.New().String()
 	}
 
-	// Set timestamp if not set
+	// Set timestamp if not set.
 	if msg.Timestamp.IsZero() {
 		msg.Timestamp = time.Now()
 	}
 
-	// Count tokens if not already set
+	// Count tokens if not already set.
 	if msg.Tokens == 0 {
 		msg.Tokens = h.tokenizer.Count(msg.Content)
 
-		// Count tokens for tool calls if present
+		// Count tokens for tool calls if present.
 		if len(msg.ToolCalls) > 0 {
 			for _, tc := range msg.ToolCalls {
-				// Count function name and arguments
+				// Count function name and arguments.
 				msg.Tokens += h.tokenizer.Count(tc.Function.Name)
 				msg.Tokens += h.tokenizer.Count(tc.Function.Arguments)
 				// Add tool call overhead (formatting, IDs, etc.)
@@ -179,15 +184,15 @@ func (h *History) AddMessage(msg message.Message) error {
 			}
 		}
 
-		// Add message overhead
+		// Add message overhead.
 		msg.Tokens += 4
 	}
 
 	h.messages = append(h.messages, msg)
 
-	// Check if compression needed
+	// Check if compression needed.
 	if h.shouldCompressLocked() {
-		// Compression is best-effort; errors are logged but don't fail AddMessage
+		// Compression is best-effort; errors are logged but don't fail AddMessage.
 		_ = h.compressLocked(context.Background())
 	}
 
@@ -216,22 +221,22 @@ func (h *History) compressLocked(ctx context.Context) error {
 	beforeCount := len(h.messages)
 	beforeTokens := h.tokenCountLocked()
 
-	// Calculate target tokens
+	// Calculate target tokens.
 	targetTokens := int(float64(h.maxTokens) * h.config.TargetRatio)
 
-	// Perform compression
+	// Perform compression.
 	compressed, err := h.compressor.Compress(ctx, h.messages, targetTokens, h.tokenizer)
 	if err != nil {
 		return err
 	}
 
-	// Update messages
+	// Update messages.
 	h.messages = compressed
 
 	afterCount := len(h.messages)
 	afterTokens := h.tokenCountLocked()
 
-	// Emit compression event
+	// Emit compression event.
 	h.emitCompressionEventLocked(beforeCount, beforeTokens, afterCount, afterTokens)
 
 	return nil
@@ -293,9 +298,10 @@ func (h *History) Messages() []message.Message {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	// Return a copy to prevent external modification
+	// Return a copy to prevent external modification.
 	msgs := make([]message.Message, len(h.messages))
 	copy(msgs, h.messages)
+
 	return msgs
 }
 
@@ -311,6 +317,7 @@ func (h *History) MessagesForLLM() []message.Message {
 func (h *History) TokenCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+
 	return h.tokenCountLocked()
 }
 
@@ -321,5 +328,6 @@ func (h *History) tokenCountLocked() int {
 	for _, msg := range h.messages {
 		total += msg.Tokens
 	}
+
 	return total
 }

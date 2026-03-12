@@ -8,11 +8,12 @@ import (
 )
 
 func TestExecute(t *testing.T) {
-	// Save original args
+	// Save original args.
 	oldArgs := os.Args
+
 	defer func() { os.Args = oldArgs }()
 
-	// Test help flag
+	// Test help flag.
 	os.Args = []string{"spin", "--help"}
 
 	err := execute()
@@ -22,8 +23,9 @@ func TestExecute(t *testing.T) {
 }
 
 func TestExecute_InvalidCommand(t *testing.T) {
-	// Save original args
+	// Save original args.
 	oldArgs := os.Args
+
 	defer func() { os.Args = oldArgs }()
 
 	os.Args = []string{"spin", "invalid-command"}
@@ -94,18 +96,19 @@ func TestBinaryNameDetection(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	// Redirect stderr to suppress error messages during tests
+	// Redirect stderr to suppress error messages during tests.
 	oldStderr := os.Stderr
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 
 	code := m.Run()
 
-	// Restore stderr
+	// Restore stderr.
 	w.Close()
+
 	os.Stderr = oldStderr
 
-	// Drain pipe
+	// Drain pipe.
 	var buf bytes.Buffer
 	buf.ReadFrom(r)
 

@@ -17,13 +17,14 @@ func ValidateToolCall(call *message.ToolCall) error {
 	if call == nil {
 		return errors.New("tool call cannot be nil")
 	}
+
 	if call.ID == "" {
 		return errors.New("tool call ID cannot be empty")
 	}
+
 	if call.Function.Name == "" {
 		return errors.New("tool function name cannot be empty")
 	}
+
 	return nil
 }
-
-

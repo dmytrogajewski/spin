@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Test Session Creation
+// Test Session Creation.
 
 func TestNewSession(t *testing.T) {
 	workDir := "/test/workdir"
@@ -66,13 +66,13 @@ func TestNewSession_InitializesMetadata(t *testing.T) {
 	}
 }
 
-// Test IncrementTurnCount
+// Test IncrementTurnCount.
 
 func TestSession_IncrementTurnCount(t *testing.T) {
 	session := NewSession("/test/workdir")
 	originalUpdatedAt := session.UpdatedAt
 
-	// Wait a bit to ensure timestamp difference
+	// Wait a bit to ensure timestamp difference.
 	time.Sleep(10 * time.Millisecond)
 
 	session.IncrementTurnCount(100)
@@ -107,7 +107,7 @@ func TestSession_IncrementTurnCount_Multiple(t *testing.T) {
 	}
 }
 
-// Test Metadata Operations
+// Test Metadata Operations.
 
 func TestSession_UpdateMetadata(t *testing.T) {
 	session := NewSession("/test/workdir")
@@ -116,7 +116,6 @@ func TestSession_UpdateMetadata(t *testing.T) {
 		m.Title = "Test Session"
 		m.Description = "Test Description"
 	})
-
 	if err != nil {
 		t.Fatalf("UpdateMetadata() error = %v", err)
 	}
@@ -146,13 +145,13 @@ func TestSession_SetState(t *testing.T) {
 func TestSession_SetState_InvalidTransition(t *testing.T) {
 	session := NewSession("/test/workdir")
 
-	// Archive the session
+	// Archive the session.
 	err := session.SetState(StateArchived)
 	if err != nil {
 		t.Fatalf("SetState(StateArchived) error = %v", err)
 	}
 
-	// Try to transition back to Active (should fail)
+	// Try to transition back to Active (should fail).
 	err = session.SetState(StateActive)
 	if err == nil {
 		t.Error("SetState() should return error for invalid transition from Archived")
@@ -180,7 +179,7 @@ func TestSession_AddTag_Duplicate(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	session.AddTag("test-tag")
-	session.AddTag("test-tag") // Add same tag again
+	session.AddTag("test-tag") // Add same tag again.
 
 	if len(session.Metadata.Tags) != 1 {
 		t.Errorf("Tags length = %d, want 1 (duplicates should be ignored)", len(session.Metadata.Tags))
@@ -220,7 +219,7 @@ func TestSession_SetTitle(t *testing.T) {
 	}
 }
 
-// Test Validation
+// Test Validation.
 
 func TestSession_Validate_Valid(t *testing.T) {
 	session := NewSession("/test/workdir")
@@ -253,7 +252,7 @@ func TestSession_Validate_EmptyWorkDir(t *testing.T) {
 
 func TestSession_Validate_InvalidTimestamps(t *testing.T) {
 	session := NewSession("/test/workdir")
-	session.UpdatedAt = session.CreatedAt.Add(-1 * time.Hour) // UpdatedAt before CreatedAt
+	session.UpdatedAt = session.CreatedAt.Add(-1 * time.Hour) // UpdatedAt before CreatedAt.
 
 	err := session.Validate()
 	if err == nil {
@@ -263,7 +262,7 @@ func TestSession_Validate_InvalidTimestamps(t *testing.T) {
 
 func TestSession_Validate_InvalidState(t *testing.T) {
 	session := NewSession("/test/workdir")
-	session.State = "invalid-state" // Invalid state value
+	session.State = "invalid-state" // Invalid state value.
 
 	err := session.Validate()
 	if err == nil {
@@ -271,27 +270,29 @@ func TestSession_Validate_InvalidState(t *testing.T) {
 	}
 }
 
-// Test Concurrent Access
+// Test Concurrent Access.
 
 func TestSession_ConcurrentMetadataUpdates(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	done := make(chan bool)
-	for i := 0; i < 10; i++ {
+
+	for i := range 10 {
 		go func(n int) {
-			for j := 0; j < 10; j++ {
+			for range 10 {
 				session.IncrementTurnCount(100)
 			}
+
 			done <- true
 		}(i)
 	}
 
-	// Wait for all writers to complete
-	for i := 0; i < 10; i++ {
+	// Wait for all writers to complete.
+	for range 10 {
 		<-done
 	}
 
-	// Should have exactly 100 turn increments
+	// Should have exactly 100 turn increments.
 	if session.Metadata.TotalTurns != 100 {
 		t.Errorf("TotalTurns = %d, want 100", session.Metadata.TotalTurns)
 	}
@@ -306,22 +307,23 @@ func TestSession_ConcurrentTagOperations(t *testing.T) {
 
 	done := make(chan bool)
 
-	// Add tags concurrently
-	for i := 0; i < 5; i++ {
+	// Add tags concurrently.
+	for i := range 5 {
 		go func(n int) {
-			for j := 0; j < 10; j++ {
+			for range 10 {
 				session.AddTag("tag")
 			}
+
 			done <- true
 		}(i)
 	}
 
-	// Wait for all goroutines
-	for i := 0; i < 5; i++ {
+	// Wait for all goroutines.
+	for range 5 {
 		<-done
 	}
 
-	// Should have exactly 1 tag (duplicates ignored)
+	// Should have exactly 1 tag (duplicates ignored).
 	if len(session.Metadata.Tags) != 1 {
 		t.Errorf("Tags length = %d, want 1", len(session.Metadata.Tags))
 	}

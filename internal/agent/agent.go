@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openai/openai-go"
+
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
@@ -21,10 +23,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/dmytrogajewski/spin/internal/tools"
-	"github.com/openai/openai-go"
 )
 
-// Default agent configuration values
+// Default agent configuration values.
 const (
 	DefaultMaxTurns        = 500
 	DefaultAgentTimeout    = 60 * time.Minute
@@ -33,7 +34,7 @@ const (
 	DefaultEventBufferSize = 100
 )
 
-// Common agent errors
+// Common agent errors.
 var (
 	ErrNilLLM         = errors.New("LLM provider cannot be nil")
 	ErrNilSecurity    = errors.New("security service cannot be nil")
@@ -54,25 +55,25 @@ var (
 // and tool executions until the task is complete or limits are reached.
 
 type Agent struct {
-	// Core LLM interaction
+	// Core LLM interaction.
 	llm llm.Provider
 
-	// Service layers
+	// Service layers.
 	security        *security.SecurityService
 	detection       *detection.DetectionService
 	toolRuntime     *ToolRuntime
 	planningService *planning.PlanningService
-	aceService      *ACEService       // ACE (Agentic Context Engineering) - optional
-	agentsMD        *agentsmd.Service // AGENTS.md project instructions - optional
-	toolSelector    *ToolSelector     // Dynamic tool selection - optional
+	aceService      *ACEService       // ACE (Agentic Context Engineering) - optional.
+	agentsMD        *agentsmd.Service // AGENTS.md project instructions - optional.
+	toolSelector    *ToolSelector     // Dynamic tool selection - optional.
 
-	// Infrastructure
+	// Infrastructure.
 	context     *Environment
 	emitter     *events.EventEmitter
 	planner     *planning.Plan
 	planTracker *PlanTracker
 
-	// Configuration (options-based)
+	// Configuration (options-based).
 	maxTurns        int
 	timeout         time.Duration
 	temperature     float64
@@ -90,6 +91,7 @@ type AgentOption func(*Agent) error
 func WithACEService(aceService *ACEService) AgentOption {
 	return func(a *Agent) error {
 		a.aceService = aceService
+
 		return nil
 	}
 }
@@ -98,6 +100,7 @@ func WithACEService(aceService *ACEService) AgentOption {
 func WithACEConfig(aceConfig *ACEConfig) AgentOption {
 	return func(a *Agent) error {
 		a.aceConfig = aceConfig
+
 		return nil
 	}
 }
@@ -107,6 +110,7 @@ func WithACEConfig(aceConfig *ACEConfig) AgentOption {
 func WithAgentsMDService(svc *agentsmd.Service) AgentOption {
 	return func(a *Agent) error {
 		a.agentsMD = svc
+
 		return nil
 	}
 }
@@ -116,6 +120,7 @@ func WithAgentsMDService(svc *agentsmd.Service) AgentOption {
 func WithToolSelector(selector *ToolSelector) AgentOption {
 	return func(a *Agent) error {
 		a.toolSelector = selector
+
 		return nil
 	}
 }
@@ -126,7 +131,9 @@ func WithMaxTurns(maxTurns int) AgentOption {
 		if maxTurns <= 0 {
 			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithMaxTurns", nil, "max turns must be positive, got %d", maxTurns)
 		}
+
 		a.maxTurns = maxTurns
+
 		return nil
 	}
 }
@@ -137,7 +144,9 @@ func WithAgentTimeout(timeout time.Duration) AgentOption {
 		if timeout <= 0 {
 			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithAgentTimeout", nil, "timeout must be positive, got %v", timeout)
 		}
+
 		a.timeout = timeout
+
 		return nil
 	}
 }
@@ -148,7 +157,9 @@ func WithTemperature(temperature float64) AgentOption {
 		if temperature < 0 || temperature > 2 {
 			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithTemperature", nil, "temperature must be between 0 and 2, got %f", temperature)
 		}
+
 		a.temperature = temperature
+
 		return nil
 	}
 }
@@ -159,7 +170,9 @@ func WithMaxTokens(maxTokens int) AgentOption {
 		if maxTokens <= 0 {
 			return spinerrors.Newf(spinerrors.CodeValidation, "Agent.WithMaxTokens", nil, "max tokens must be positive, got %d", maxTokens)
 		}
+
 		a.maxTokens = maxTokens
+
 		return nil
 	}
 }
@@ -168,6 +181,7 @@ func WithMaxTokens(maxTokens int) AgentOption {
 func WithRequireApproval(require bool) AgentOption {
 	return func(a *Agent) error {
 		a.requireApproval = require
+
 		return nil
 	}
 }
@@ -193,30 +207,36 @@ func NewAgent(
 	emitter *events.EventEmitter,
 	opts ...AgentOption,
 ) (*Agent, error) {
-	// Validate required dependencies
+	// Validate required dependencies.
 	if provider == nil {
 		return nil, ErrNilLLM
 	}
+
 	if security == nil {
 		return nil, ErrNilSecurity
 	}
+
 	if detection == nil {
 		return nil, ErrNilDetection
 	}
+
 	if runtime == nil {
 		return nil, ErrNilToolRuntime
 	}
+
 	if planning == nil {
 		return nil, ErrNilPlanning
 	}
+
 	if context == nil {
 		return nil, ErrNilContext
 	}
+
 	if emitter == nil {
 		return nil, ErrNilEmitter
 	}
 
-	// Create agent with services and reasonable defaults
+	// Create agent with services and reasonable defaults.
 	agent := &Agent{
 		llm:             provider,
 		security:        security,
@@ -225,15 +245,16 @@ func NewAgent(
 		planningService: planning,
 		context:         context,
 		emitter:         emitter,
-		maxTurns:        50,               // Default: 50 turns
-		timeout:         60 * time.Minute, // Default: 60 minutes
-		temperature:     0.7,              // Default: 0.7
-		maxTokens:       8192,             // Default: 8K tokens
+		maxTurns:        50,               // Default: 50 turns.
+		timeout:         60 * time.Minute, // Default: 60 minutes.
+		temperature:     0.7,              // Default: 0.7.
+		maxTokens:       8192,             // Default: 8K tokens.
 	}
 
-	// Apply options
+	// Apply options.
 	for _, opt := range opts {
-		if err := opt(agent); err != nil {
+		err := opt(agent)
+		if err != nil {
 			return nil, spinerrors.New(spinerrors.CodeValidation, "Agent.NewAgent", "applying option failed", err)
 		}
 	}
@@ -272,6 +293,7 @@ func (a *Agent) resolveTask(req *AgentRequest) (task.Task, error) {
 	}
 
 	slog.Debug("task resolution: using task", "name", req.Task.Name())
+
 	return req.Task, nil
 }
 
@@ -289,76 +311,86 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 	if req.Task != nil {
 		taskName = req.Task.Name()
 	}
+
 	slog.Info("agent execution started", "input_len", len(req.Input), "task_mode", taskName)
-	// Validate request and setup
+	// Validate request and setup.
 	ctx, resp, err := a.executeSetup(ctx, req)
 	if err != nil {
 		slog.Error("agent setup failed", "error", err)
+
 		return resp, err
 	}
 
-	// Resolve task mode
+	// Resolve task mode.
 	task, err := a.resolveTask(req)
 	if err != nil {
 		slog.Error("task resolution failed", "task_name", taskName, "error", err)
+
 		return nil, spinerrors.New(spinerrors.CodeNotFound, "Agent.Execute", "failed to resolve task mode", err)
 	}
+
 	slog.Debug("task resolved", "task_name", task.Name(), "max_tokens", task.MaxTokens())
 
-	// Apply timeout if needed
+	// Apply timeout if needed.
 	ctx, cancel := a.applyTimeout(ctx)
 	defer cancel()
 
-	// Build initial prompt and execute agent loop
+	// Build initial prompt and execute agent loop.
 	messages := a.buildPrompt(req)
 	historyLen := len(messages)
 
-	// Initialize trajectory context for progressive retrieval
+	// Initialize trajectory context for progressive retrieval.
 	initialQuery := extractInitialQuery(messages)
 	trajCtx := trajectory.NewTrajectoryContext(initialQuery)
 
 	messages, resp, err = a.executeAgentLoop(ctx, messages, task, resp, trajCtx)
 	if err != nil {
 		slog.Error("agent loop failed", "error", err, "finish_reason", resp.FinishReason)
-		// Emit turn failed event
+		// Emit turn failed event.
 		a.emitter.Emit(events.Event{
 			Type:      events.EventTurnFailed,
 			Timestamp: time.Now(),
 			Data:      events.TurnEventData{},
 		})
+
 		return resp, err
 	}
 
-	// Store trajectory context in response
+	// Store trajectory context in response.
 	resp.TrajectoryContext = trajCtx
 
-	// Finalize response
+	// Finalize response.
 	a.finalizeResponse(resp, messages, historyLen)
 
 	// ACE: Generate bullets from execution (both success AND failure) if enabled
-	// Run synchronously to ensure bullets are learned before returning
+	// Run synchronously to ensure bullets are learned before returning.
 	if a.aceService != nil {
 		slog.Info("Starting bullet generation from execution", "success", resp.Success)
 
-		// Use TrajectoryContext.ToTrajectory() instead of buildExecutionTrajectory()
+		// Use TrajectoryContext.ToTrajectory() instead of buildExecutionTrajectory().
 		trajectory := trajCtx.ToTrajectory()
-		trajectory.Success = resp.Success // Update success status from response
+		trajectory.Success = resp.Success // Update success status from response.
 		slog.Debug("Execution trajectory built", "steps", len(trajectory.Steps), "success", trajectory.Success)
 
-		// Use Reflector+Curator pipeline if AutoReflect is enabled, otherwise use simple generator
-		var learnedBullets []*bullet.Bullet
-		var err error
+		// Use Reflector+Curator pipeline if AutoReflect is enabled, otherwise use simple generator.
+		var (
+			learnedBullets []*bullet.Bullet
+			err            error
+		)
+
 		if a.aceService.config.Generation.AutoReflect {
 			learnedBullets, err = a.aceService.GenerateBulletsWithReflectionFromTrajectory(ctx, trajectory)
 		} else {
-			// For simple generation without reflection, convert trajectory to string
+			// For simple generation without reflection, convert trajectory to string.
 			var summaryBuilder strings.Builder
 			summaryBuilder.WriteString("Task: ")
 			summaryBuilder.WriteString(trajectory.Query)
 			summaryBuilder.WriteString("\n\nExecution Steps:\n")
+
 			for _, step := range trajectory.Steps {
 				summaryBuilder.WriteString(fmt.Sprintf("- [%s] %s\n", step.Type, step.Content))
 			}
+
 			summaryBuilder.WriteString("\nResult: ")
 			summaryBuilder.WriteString(trajectory.Output)
 
@@ -367,7 +399,7 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 
 		if err != nil {
 			slog.Warn("ACE bullet generation failed", "error", err)
-			// Don't fail the entire execution if bullet generation fails
+			// Don't fail the entire execution if bullet generation fails.
 		} else {
 			slog.Info("Successfully generated bullets from execution", "count", len(learnedBullets))
 
@@ -376,18 +408,18 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 			}
 
 			// Only show learning messages if ACE events are enabled
-			// This prevents noise for users who don't want to see ACE internals
+			// This prevents noise for users who don't want to see ACE internals.
 			if len(learnedBullets) > 0 && a.aceConfig != nil && a.aceConfig.Retrieval.ProgressiveContext.EmitACEEvents {
-				// Convert bullets to BulletData for event
+				// Convert bullets to BulletData for event.
 				bulletData := make([]events.BulletData, len(learnedBullets))
 				for i, b := range learnedBullets {
 					bulletData[i] = events.BulletData{
 						Content: b.Content,
-						// Category is optional and not present in bullet.Bullet
+						// Category is optional and not present in bullet.Bullet.
 					}
 				}
 
-				// Emit ACE learning event to show learned insights as compact hint
+				// Emit ACE learning event to show learned insights as compact hint.
 				a.emitter.Emit(events.Event{
 					Type:      events.EventACELearned,
 					Timestamp: time.Now(),
@@ -403,7 +435,7 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 	}
 
 	// Emit turn complete event after all processing (including ACE) is done
-	// This ensures clients waiting for completion get all events before the signal
+	// This ensures clients waiting for completion get all events before the signal.
 	a.emitter.Emit(events.Event{
 		Type:      events.EventTurnComplete,
 		Timestamp: time.Now(),
@@ -411,6 +443,7 @@ func (a *Agent) Execute(ctx context.Context, req *AgentRequest) (*AgentResponse,
 	})
 
 	slog.Info("agent execution completed", "finish_reason", resp.FinishReason, "success", resp.Success)
+
 	return resp, nil
 }
 
@@ -419,11 +452,12 @@ func (a *Agent) executeSetup(ctx context.Context, req *AgentRequest) (context.Co
 	if req == nil {
 		return ctx, nil, spinerrors.New(spinerrors.CodeValidation, "Agent.Execute", "request cannot be nil", nil)
 	}
+
 	if req.Input == "" {
 		return ctx, nil, spinerrors.New(spinerrors.CodeValidation, "Agent.Execute", "request input cannot be empty", nil)
 	}
 
-	// Create response
+	// Create response.
 	resp := &AgentResponse{
 		Success: true,
 	}
@@ -433,23 +467,23 @@ func (a *Agent) executeSetup(ctx context.Context, req *AgentRequest) (context.Co
 
 // applyTimeout applies timeout to the context if needed.
 func (a *Agent) applyTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	// If context already has a deadline, respect it
+	// If context already has a deadline, respect it.
 	if _, hasDeadline := ctx.Deadline(); hasDeadline {
-		return ctx, func() {} // Return no-op cancel function
+		return ctx, func() {} // Return no-op cancel function.
 	}
-	// Use config timeout (initialized from DefaultConfig: 60 minutes)
+	// Use config timeout (initialized from DefaultConfig: 60 minutes).
 	return context.WithTimeout(ctx, a.timeout)
 }
 
 // buildPrompt builds the initial prompt for the agent.
 func (a *Agent) buildPrompt(req *AgentRequest) []message.Message {
-	// Start with history messages if provided
+	// Start with history messages if provided.
 	messages := make([]message.Message, 0, len(req.History)+1)
 	if len(req.History) > 0 {
 		messages = append(messages, req.History...)
 	}
 
-	// Add current user input
+	// Add current user input.
 	messages = append(messages, message.Message{
 		Role:    message.RoleUser,
 		Content: req.Input,
@@ -461,21 +495,22 @@ func (a *Agent) buildPrompt(req *AgentRequest) []message.Message {
 // finalizeResponse finalizes the agent response.
 func (a *Agent) finalizeResponse(resp *AgentResponse, messages []message.Message, historyLen int) {
 	if len(messages) > historyLen {
-		// Get the last assistant message
+		// Get the last assistant message.
 		for i := len(messages) - 1; i >= historyLen; i-- {
 			if messages[i].Role == "assistant" {
 				resp.Output = messages[i].Content
+
 				break
 			}
 		}
 
 		// Extract new messages from this turn (excluding history)
-		// This includes: user input, assistant messages with tool calls, tool results, final assistant
+		// This includes: user input, assistant messages with tool calls, tool results, final assistant.
 		resp.Messages = messages[historyLen:]
 	}
 
 	// Note: EventTurnComplete is NOT emitted here - it's emitted after ACE bullet
-	// generation to ensure all post-execution events are emitted before signaling completion
+	// generation to ensure all post-execution events are emitted before signaling completion.
 }
 
 // GetPlanner returns the current execution planner.
@@ -488,7 +523,7 @@ func (a *Agent) GetPlanner() *planning.Plan {
 func (a *Agent) SetPlanner(planner *planning.Plan) {
 	a.planner = planner
 
-	// Initialize plan tracker to monitor execution
+	// Initialize plan tracker to monitor execution.
 	if planner != nil && a.emitter != nil {
 		a.planTracker = NewPlanTracker(planner, a.emitter)
 	}
@@ -508,19 +543,19 @@ func (a *Agent) BuildToolsForTask(task task.Task) ([]tools.Tool, error) {
 		return nil, nil
 	}
 
-	// Get all available tools from registry
+	// Get all available tools from registry.
 	allTools := toolRegistry.List()
 	if len(allTools) == 0 {
 		return nil, nil
 	}
 
-	// Get allowed tools for this mode
+	// Get allowed tools for this mode.
 	allowedTools := task.AllowedTools()
 
-	// Empty list means all tools are allowed (no filtering)
+	// Empty list means all tools are allowed (no filtering).
 	allowAllTools := len(allowedTools) == 0
 
-	// Build allowed tool set for O(1) lookup (if filtering is needed)
+	// Build allowed tool set for O(1) lookup (if filtering is needed).
 	var allowedSet map[string]bool
 	if !allowAllTools {
 		allowedSet = make(map[string]bool, len(allowedTools))
@@ -529,10 +564,10 @@ func (a *Agent) BuildToolsForTask(task task.Task) ([]tools.Tool, error) {
 		}
 	}
 
-	// Filter tools
+	// Filter tools.
 	filtered := make([]tools.Tool, 0, len(allTools))
 	for _, tool := range allTools {
-		// Check if tool is allowed in this mode
+		// Check if tool is allowed in this mode.
 		if !allowAllTools && !allowedSet[tool.Name()] {
 			continue
 		}
@@ -550,8 +585,8 @@ func (a *Agent) BuildToolsForTask(task task.Task) ([]tools.Tool, error) {
 
 // determineRequiresApproval determines if a tool call requires approval based on tool name and arguments.
 // This is used to populate the RequiresApproval field in ToolCallStartData.
-func (a *Agent) determineRequiresApproval(toolName string, args map[string]interface{}) bool {
-	// Tools that always require approval
+func (a *Agent) determineRequiresApproval(toolName string, args map[string]any) bool {
+	// Tools that always require approval.
 	requiresApprovalTools := map[string]bool{
 		"execute_command": true,
 		"write_file":      true,
@@ -562,29 +597,29 @@ func (a *Agent) determineRequiresApproval(toolName string, args map[string]inter
 		return true
 	}
 
-	// For execute_command, also check if the command itself requires approval
+	// For execute_command, also check if the command itself requires approval.
 	if toolName == "execute_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			cmdStruct := &security.Command{Program: cmd}
 
-			// Check Agent-level approval flag first
+			// Check Agent-level approval flag first.
 			if !a.requireApproval {
 				return false
 			}
 
-			// Validate command to check if forbidden (forbidden commands are blocked, not approved)
+			// Validate command to check if forbidden (forbidden commands are blocked, not approved).
 			result, err := a.security.ValidateCommand(cmdStruct)
 			if err != nil {
-				// On validation error, require approval for safety (fail-safe behavior)
+				// On validation error, require approval for safety (fail-safe behavior).
 				return true
 			}
 
-			// Forbidden commands are blocked, not approved
+			// Forbidden commands are blocked, not approved.
 			if result.Classification == security.CommandForbidden {
 				return false
 			}
 
-			// Use SecurityService to check if approval is needed
+			// Use SecurityService to check if approval is needed.
 			return a.security.NeedsApproval(cmdStruct)
 		}
 	}
@@ -600,27 +635,28 @@ func (a *Agent) determineRequiresApproval(toolName string, args map[string]inter
 func (a *Agent) processToolCallsFromCompletion(ctx context.Context, messages []message.Message, completion *openai.ChatCompletion, resp *AgentResponse) []message.Message {
 	content := getContent(completion)
 	toolCalls := getToolCalls(completion)
+
 	return a.processToolCallsInternal(ctx, messages, content, toolCalls, resp)
 }
 
 // processToolCallsInternal contains the actual logic for processing tool calls.
 func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message.Message, content string, toolCalls []ToolCall, resp *AgentResponse) []message.Message {
-	// Create assistant message with tool calls
+	// Create assistant message with tool calls.
 	assistantMsg := message.Message{
 		Role:      message.RoleAssistant,
 		Content:   content,
 		Timestamp: time.Now(),
 	}
 
-	// Add assistant message FIRST (before tool results)
+	// Add assistant message FIRST (before tool results).
 	messages = append(messages, assistantMsg)
-	assistantMsgIdx := len(messages) - 1 // Capture index before adding tool results
+	assistantMsgIdx := len(messages) - 1 // Capture index before adding tool results.
 
-	// Convert and process each tool call
+	// Convert and process each tool call.
 	for i := range toolCalls {
 		coreToolCall := &toolCalls[i]
 
-		// Add to assistant message (use captured index, not len-1 which changes as we add tool results)
+		// Add to assistant message (use captured index, not len-1 which changes as we add tool results).
 		msgToolCall := message.ToolCall{
 			ID:   coreToolCall.ID,
 			Type: coreToolCall.Type,
@@ -631,11 +667,10 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 		}
 		messages[assistantMsgIdx].ToolCalls = append(messages[assistantMsgIdx].ToolCalls, msgToolCall)
 
-		// Process the tool call (ProcessToolCall will emit EventToolCallStart)
+		// Process the tool call (ProcessToolCall will emit EventToolCallStart).
 		toolResult, err := a.ProcessToolCall(ctx, coreToolCall)
 		if err != nil {
-
-			// Add error message to conversation (after assistant message)
+			// Add error message to conversation (after assistant message).
 			messages = append(messages, message.Message{
 				Role: message.RoleTool,
 				Content: fmt.Sprintf("Tool %s failed: %v",
@@ -644,8 +679,7 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 				Timestamp:  time.Now(),
 			})
 		} else {
-
-			// Add tool result to conversation (after assistant message)
+			// Add tool result to conversation (after assistant message).
 			slog.Debug("Agent tool result", "tool", coreToolCall.Function.Name, "output_len", len(toolResult.Output), "success", toolResult.Success)
 			messages = append(messages, message.Message{
 				Role:       message.RoleTool,
@@ -654,12 +688,12 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 				Timestamp:  time.Now(),
 			})
 
-			// Track tool call in response
+			// Track tool call in response.
 			resp.ToolCalls = append(resp.ToolCalls, *coreToolCall)
 		}
 	}
 
-	// Verify tool calls were stored correctly on the assistant message
+	// Verify tool calls were stored correctly on the assistant message.
 	storedTC := messages[assistantMsgIdx].ToolCalls
 	if len(storedTC) != len(toolCalls) {
 		slog.Warn("tool call count mismatch after processing",
@@ -672,6 +706,7 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 		for i, tc := range storedTC {
 			ids[i] = tc.ID
 		}
+
 		slog.Debug("tool calls stored on assistant message",
 			"count", len(storedTC),
 			"ids", ids,
@@ -688,23 +723,26 @@ func (a *Agent) processToolCallsInternal(ctx context.Context, messages []message
 // - Command execution with approval workflow
 // - File operations (read, write, list)
 // - Event emission for tool lifecycle
-// - Error handling and recovery
+// - Error handling and recovery.
 func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResult, error) {
-	// 1. Validate tool call
-	if err := a.validateToolCall(call); err != nil {
+	// 1. Validate tool call.
+	err := a.validateToolCall(call)
+	if err != nil {
 		result := tools.NewToolErrorWithID(call.ID, err)
-		return &result, nil // Return nil error so agent continues
+
+		return &result, nil // Return nil error so agent continues.
 	}
 
-	// 2. Parse arguments
+	// 2. Parse arguments.
 	args, err := a.parseToolArguments(call)
 	if err != nil {
 		result := tools.NewToolErrorWithID(call.ID, err)
+
 		return &result, nil
 	}
 
 	// 3. Emit tool start event
-	// Determine if this tool requires approval
+	// Determine if this tool requires approval.
 	requiresApproval := a.determineRequiresApproval(call.Function.Name, args.ToMap())
 
 	a.emitter.Emit(events.Event{
@@ -718,7 +756,7 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 		},
 	})
 
-	// 4. Execute tool via runtime
+	// 4. Execute tool via runtime.
 	result, err := a.toolRuntime.Execute(ctx, call)
 	if err != nil {
 		slog.Error("tool execution failed", "tool", call.Function.Name, "error", err)
@@ -726,7 +764,7 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 		result = &errResult
 	}
 
-	// 5. Emit completion event
+	// 5. Emit completion event.
 	completion := events.ToolCallCompleteData{
 		ToolID:   call.ID,
 		ToolName: call.Function.Name,
@@ -743,13 +781,14 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 		completion.Error = result.Error
 		slog.Warn("tool execution failed", "tool", call.Function.Name, "error", result.Error)
 	}
+
 	a.emitter.Emit(events.Event{
 		Type:      events.EventToolCallComplete,
 		Timestamp: time.Now(),
 		Data:      completion,
 	})
 
-	// 6. Update plan status if tracker is active
+	// 6. Update plan status if tracker is active.
 	if a.planTracker != nil {
 		event := events.Event{
 			Type:      events.EventToolCallComplete,
@@ -759,7 +798,7 @@ func (a *Agent) ProcessToolCall(ctx context.Context, call *ToolCall) (*ToolResul
 		a.planTracker.OnToolCallComplete(event)
 	}
 
-	return result, nil // Always return nil error so agent continues
+	return result, nil // Always return nil error so agent continues.
 }
 
 // validateToolCall validates the tool call structure.
@@ -770,6 +809,7 @@ func (a *Agent) validateToolCall(call *ToolCall) error {
 // parseToolArguments extracts and parses JSON arguments from tool call.
 func (a *Agent) parseToolArguments(call *ToolCall) (tools.ToolParameters, error) {
 	parser := tools.NewStrictArgumentParser()
+
 	return parser.Parse(call.Function.Arguments)
 }
 
@@ -781,19 +821,22 @@ func getToolResultContent(toolCall *ToolCall, result *ToolResult) string {
 	}
 
 	// Tool failed - send error message to LLM so it knows what went wrong
-	// Check Err first (error type), then Error (string type) for backward compatibility
+	// Check Err first (error type), then Error (string type) for backward compatibility.
 	if result.Err != nil {
 		errorMsg := fmt.Sprintf("Tool %s failed: %v", toolCall.Function.Name, result.Err)
 		slog.Debug("Tool failed, sending error to LLM", "tool", toolCall.Function.Name, "error", result.Err)
-		return errorMsg
-	}
-	if result.Error != "" {
-		errorMsg := fmt.Sprintf("Tool %s failed: %s", toolCall.Function.Name, result.Error)
-		slog.Debug("Tool failed, sending error to LLM", "tool", toolCall.Function.Name, "error", result.Error)
+
 		return errorMsg
 	}
 
-	// Edge case: not successful but no error message
+	if result.Error != "" {
+		errorMsg := fmt.Sprintf("Tool %s failed: %s", toolCall.Function.Name, result.Error)
+		slog.Debug("Tool failed, sending error to LLM", "tool", toolCall.Function.Name, "error", result.Error)
+
+		return errorMsg
+	}
+
+	// Edge case: not successful but no error message.
 	return fmt.Sprintf("Tool %s failed with no error message", toolCall.Function.Name)
 }
 
@@ -803,19 +846,19 @@ func getToolResultContent(toolCall *ToolCall, result *ToolResult) string {
 //   - Tokens: Uses task.MaxTokens() if > 0, otherwise agent.config.MaxTokens
 //
 // The bullets parameter contains ACE bullets already retrieved for this turn.
-// Note: ACE bullet display is now handled by EventACERetrieval emission in loop.go
+// Note: ACE bullet display is now handled by EventACERetrieval emission in loop.go.
 func (a *Agent) callLLM(ctx context.Context, messages []message.Message, t task.Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
-	// Start with system message from task
+	// Start with system message from task.
 	openaiMessages := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages)+1)
 
 	// Build system prompt with proper layering:
 	// 1. AGENTS.md project instructions (if available)
 	// 2. Task system prompt
 	// 3. Thinking instructions
-	// 4. ACE bullets (if enabled)
+	// 4. ACE bullets (if enabled).
 	var promptBuilder strings.Builder
 
-	// 1. AGENTS.md project instructions (placed first for context)
+	// 1. AGENTS.md project instructions (placed first for context).
 	if a.agentsMD != nil && a.agentsMD.IsLoaded() {
 		promptBuilder.WriteString("# Project Instructions\n\n")
 		promptBuilder.WriteString(a.agentsMD.Content())
@@ -823,13 +866,13 @@ func (a *Agent) callLLM(ctx context.Context, messages []message.Message, t task.
 		slog.Debug("injected AGENTS.md into system prompt", "path", a.agentsMD.Path(), "size", len(a.agentsMD.Content()))
 	}
 
-	// 2. Task system prompt
+	// 2. Task system prompt.
 	systemPrompt := t.SystemPrompt()
 	if systemPrompt != "" {
 		promptBuilder.WriteString(systemPrompt)
 	}
 
-	// 3. Thinking instructions
+	// 3. Thinking instructions.
 	if promptBuilder.Len() > 0 {
 		promptBuilder.WriteString(`
 
@@ -844,15 +887,16 @@ Then provide your response after the thinking block.`)
 
 	enhancedSystemPrompt := promptBuilder.String()
 
-	// 4. ACE: Enhance system prompt with retrieved bullets
+	// 4. ACE: Enhance system prompt with retrieved bullets.
 	if enhancedSystemPrompt != "" {
 		if a.aceService != nil {
 			acePrompt, err := a.aceService.BuildPrompt(ctx, enhancedSystemPrompt, bullets)
 			if err != nil {
 				slog.Warn("ACE prompt building failed", "error", err)
-				// Fall back to non-ACE prompt
+				// Fall back to non-ACE prompt.
 			} else {
 				enhancedSystemPrompt = acePrompt
+
 				slog.Debug("ACE enhanced system prompt", "bullets_count", len(bullets))
 			}
 		}
@@ -860,18 +904,19 @@ Then provide your response after the thinking block.`)
 		openaiMessages = append(openaiMessages, openai.SystemMessage(enhancedSystemPrompt))
 	}
 
-	// Convert conversation messages to OpenAI format
+	// Convert conversation messages to OpenAI format.
 	for _, msg := range messages {
 		openaiMessages = append(openaiMessages, convertMessageToOpenAI(msg))
 	}
 
-	// Debug: log assistant messages with tool calls being sent to LLM
+	// Debug: log assistant messages with tool calls being sent to LLM.
 	for i, msg := range messages {
 		if msg.Role == message.RoleAssistant && len(msg.ToolCalls) > 0 {
 			ids := make([]string, len(msg.ToolCalls))
 			for j, tc := range msg.ToolCalls {
 				ids[j] = tc.ID
 			}
+
 			slog.Debug("callLLM: assistant message with tool_calls",
 				"msg_index", i,
 				"tool_call_count", len(msg.ToolCalls),
@@ -879,14 +924,15 @@ Then provide your response after the thinking block.`)
 		}
 	}
 
-	// Build filtered tool list for this task mode
+	// Build filtered tool list for this task mode.
 	toolList, err := a.BuildToolsForTask(t)
 	if err != nil {
 		return nil, spinerrors.New(spinerrors.CodeInternal, "Agent.callLLM", "failed to build tools", err)
 	}
 
-	// Determine token budget: task overrides agent config
+	// Determine token budget: task overrides agent config.
 	maxTokens := a.maxTokens
+
 	if t != nil {
 		taskMaxTokens := t.MaxTokens()
 		if taskMaxTokens > 0 {
@@ -894,46 +940,47 @@ Then provide your response after the thinking block.`)
 		}
 	}
 
-	// Build OpenAI request params
+	// Build OpenAI request params.
 	params := openai.ChatCompletionNewParams{
 		Messages:    openai.F(openaiMessages),
 		Temperature: openai.F(a.temperature),
 		MaxTokens:   openai.F(int64(maxTokens)),
 	}
 
-	// Add tools if present
+	// Add tools if present.
 	if len(toolList) > 0 {
 		params.Tools = openai.F(convertToolsToOpenAI(toolList))
 	}
 
 	slog.Debug("calling LLM", "tool_count", len(toolList), "message_count", len(openaiMessages))
 
-	// Call LLM with streaming
+	// Call LLM with streaming.
 	chunks, err := a.llm.Stream(ctx, params)
 	if err != nil {
 		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "failed to start LLM stream", err)
 	}
 
 	// Use ChatCompletionAccumulator to properly handle streaming chunks
-	// This handles tool call accumulation by index correctly
+	// This handles tool call accumulation by index correctly.
 	acc := openai.ChatCompletionAccumulator{}
 
-	// Initialize sanitizer for content stream
+	// Initialize sanitizer for content stream.
 	streamSanitizer := sanitizer.New()
 
 	chunkCount := 0
 	for chunk := range chunks {
 		chunkCount++
 
-		// Check context cancellation
-		if err := ctx.Err(); err != nil {
-			return nil, spinerrors.New(spinerrors.CodeTimeout, "Agent.callLLM", "context cancelled", err)
+		// Check context cancellation.
+		err := ctx.Err()
+		if err != nil {
+			return nil, spinerrors.New(spinerrors.CodeTimeout, "Agent.callLLM", "context canceled", err)
 		}
 
-		// Add chunk to accumulator - this handles proper merging of deltas
+		// Add chunk to accumulator - this handles proper merging of deltas.
 		acc.AddChunk(chunk)
 
-		// Handle empty chunk (shouldn't happen but be safe)
+		// Handle empty chunk (shouldn't happen but be safe).
 		if len(chunk.Choices) == 0 {
 			continue
 		}
@@ -942,7 +989,7 @@ Then provide your response after the thinking block.`)
 		delta := choice.Delta
 
 		// Emit content delta immediately for real-time streaming
-		// Use sanitizer to filter out protocol artifacts and separate thoughts
+		// Use sanitizer to filter out protocol artifacts and separate thoughts.
 		if delta.Content != "" {
 			content, thought := streamSanitizer.Process(delta.Content)
 
@@ -970,7 +1017,7 @@ Then provide your response after the thinking block.`)
 			}
 		}
 
-		// Check if a tool call just finished being accumulated
+		// Check if a tool call just finished being accumulated.
 		toolCall, finished := acc.JustFinishedToolCall()
 		if !finished && choice.FinishReason == openai.ChatCompletionChunkChoicesFinishReasonToolCalls {
 			finished = true
@@ -990,7 +1037,7 @@ Then provide your response after the thinking block.`)
 						plan := planning.DetectPlanFromText(content)
 						if plan != nil {
 							a.SetPlanner(plan)
-							// Manually emit EventPlanUpdate so ACP agent sees it
+							// Manually emit EventPlanUpdate so ACP agent sees it.
 							a.emitter.Emit(events.Event{
 								Type:      events.EventPlanUpdate,
 								Timestamp: time.Now(),
@@ -1006,21 +1053,23 @@ Then provide your response after the thinking block.`)
 			slog.Debug("tool call finished", "index", toolCall.Index, "name", toolCall.Name, "args_len", len(toolCall.Arguments))
 		}
 
-		// Log finish reason when received
+		// Log finish reason when received.
 		if choice.FinishReason != "" {
 			slog.Debug("received finish chunk", "finish_reason", choice.FinishReason, "total_chunks", chunkCount)
 		}
 	}
 
-	// Get the accumulated response
+	// Get the accumulated response.
 	response := &acc.ChatCompletion
 
-	// Check if we have any choices (may be empty on timeout/error)
+	// Check if we have any choices (may be empty on timeout/error).
 	if len(response.Choices) == 0 {
 		slog.Warn("stream ended with no choices", "total_chunks", chunkCount)
+
 		if chunkCount == 0 {
 			return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "stream returned no chunks - possible connection error or empty response from LLM", nil)
 		}
+
 		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "no choices in response after processing chunks", nil)
 	}
 
@@ -1029,12 +1078,13 @@ Then provide your response after the thinking block.`)
 		"content_len", len(response.Choices[0].Message.Content),
 		"tool_calls", len(response.Choices[0].Message.ToolCalls))
 
-	// Check if context was cancelled after stream ended
-	if err := ctx.Err(); err != nil {
-		return nil, spinerrors.New(spinerrors.CodeTimeout, "Agent.callLLM", "context cancelled", err)
+	// Check if context was canceled after stream ended.
+	err = ctx.Err()
+	if err != nil {
+		return nil, spinerrors.New(spinerrors.CodeTimeout, "Agent.callLLM", "context canceled", err)
 	}
 
-	// Fallback: if no finish reason was provided, set a default one
+	// Fallback: if no finish reason was provided, set a default one.
 	if response.Choices[0].FinishReason == "" {
 		if len(response.Choices[0].Message.ToolCalls) > 0 {
 			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
@@ -1048,15 +1098,16 @@ Then provide your response after the thinking block.`)
 	// This handles models like Qwen that may fallback to XML output.
 	if len(response.Choices[0].Message.ToolCalls) == 0 {
 		content := response.Choices[0].Message.Content
+
 		xmlToolCalls := parseToolCallsFromXML(content)
 		if len(xmlToolCalls) > 0 {
 			slog.Info("detected XML tool calls in content", "count", len(xmlToolCalls))
 			response.Choices[0].Message.ToolCalls = xmlToolCalls
-			// Force finish reason to tool_calls so the loop processes them
+			// Force finish reason to tool_calls so the loop processes them.
 			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
 
 			// Clean up content to remove XML tags (avoid duplication in history)
-			// We reconstruct content preserving thoughts but removing function tags
+			// We reconstruct content preserving thoughts but removing function tags.
 			s := sanitizer.New()
 			cleanContent, cleanThought := s.Process(content)
 
@@ -1066,20 +1117,23 @@ Then provide your response after the thinking block.`)
 				sb.WriteString(cleanThought)
 				sb.WriteString("</think>\n")
 			}
+
 			sb.WriteString(cleanContent)
 			response.Choices[0].Message.Content = sb.String()
 		}
 	}
 
-	// ACE: Parse feedback and update bullets if retrieved any
+	// ACE: Parse feedback and update bullets if retrieved any.
 	if a.aceService != nil && len(bullets) > 0 {
 		responseContent := response.Choices[0].Message.Content
+
 		feedback, err := a.aceService.ParseFeedback(responseContent)
 		if err != nil {
 			slog.Warn("ACE feedback parsing failed", "error", err)
 		} else if feedback != nil {
-			// Update bullets asynchronously (based on config)
-			if err := a.aceService.UpdateBullets(ctx, bullets, feedback); err != nil {
+			// Update bullets asynchronously (based on config).
+			err := a.aceService.UpdateBullets(ctx, bullets, feedback)
+			if err != nil {
 				slog.Warn("ACE bullet update failed", "error", err)
 			} else {
 				slog.Debug("ACE updated bullets", "helpful_count", len(feedback.HelpfulBullets), "harmful_count", len(feedback.HarmfulBullets))
@@ -1090,7 +1144,7 @@ Then provide your response after the thinking block.`)
 	return response, nil
 }
 
-// messageAdapter adapts message.Message to detection.Message interface
+// messageAdapter adapts message.Message to detection.Message interface.
 type messageAdapter struct {
 	msg message.Message
 }
@@ -1107,7 +1161,7 @@ func (m *messageAdapter) GetTimestamp() time.Time {
 	return m.msg.Timestamp
 }
 
-// emitACERetrievalEvent emits an ACE retrieval event with calculated metrics
+// emitACERetrievalEvent emits an ACE retrieval event with calculated metrics.
 func (a *Agent) emitACERetrievalEvent(
 	trajCtx *trajectory.TrajectoryContext,
 	trigger trajectory.TriggerType,
@@ -1115,23 +1169,25 @@ func (a *Agent) emitACERetrievalEvent(
 	bullets []*bullet.Bullet,
 	turn int,
 ) {
-	// Calculate cache hit rate
+	// Calculate cache hit rate.
 	total := trajCtx.CacheHits + trajCtx.CacheMisses
+
 	hitRate := 0.0
 	if total > 0 {
 		hitRate = float64(trajCtx.CacheHits) / float64(total)
 	}
 
-	// BulletsNew is approximated by cache misses
+	// BulletsNew is approximated by cache misses.
 	bulletsNew := trajCtx.CacheMisses
 
-	// Convert bullets to BulletData for event
+	// Convert bullets to BulletData for event.
 	bulletData := make([]events.BulletData, len(bullets))
 	for i, b := range bullets {
 		category := ""
 		if b.Tags != nil {
 			category = b.Tags["category"]
 		}
+
 		bulletData[i] = events.BulletData{
 			Content:  b.Content,
 			Category: category,

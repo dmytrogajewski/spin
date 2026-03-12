@@ -14,7 +14,7 @@ func TestCompliance_Error_InvalidSession(t *testing.T) {
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
-	// Test Prompt with invalid session
+	// Test Prompt with invalid session.
 	promptReq := acp.PromptRequest{
 		SessionId: acp.SessionId("invalid-session-id"),
 		Prompt: []acp.ContentBlock{
@@ -32,7 +32,7 @@ func TestCompliance_Error_InvalidParams(t *testing.T) {
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
-	// Test NewSession with empty CWD (invalid parameter)
+	// Test NewSession with empty CWD (invalid parameter).
 	req := acp.NewSessionRequest{
 		Cwd: "",
 	}
@@ -47,14 +47,14 @@ func TestCompliance_Error_InvalidMode(t *testing.T) {
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
-	// Create a session first
+	// Create a session first.
 	sessionReq := acp.NewSessionRequest{
 		Cwd: "/tmp/test",
 	}
 	sessionResp, err := acpAgent.NewSession(ctx, sessionReq)
 	require.NoError(t, err)
 
-	// Test SetSessionMode with invalid mode
+	// Test SetSessionMode with invalid mode.
 	modeReq := acp.SetSessionModeRequest{
 		SessionId: sessionResp.SessionId,
 		ModeId:    acp.SessionModeId("invalid-mode"),
@@ -70,7 +70,7 @@ func TestCompliance_Error_ResponseFormat(t *testing.T) {
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
-	// Trigger an error (invalid session)
+	// Trigger an error (invalid session).
 	promptReq := acp.PromptRequest{
 		SessionId: acp.SessionId("invalid-session-id"),
 		Prompt: []acp.ContentBlock{
@@ -82,7 +82,6 @@ func TestCompliance_Error_ResponseFormat(t *testing.T) {
 	require.Error(t, err)
 
 	// Verify error is a proper Go error (not JSON-RPC error, as that's handled by SDK)
-	// The error should be descriptive
+	// The error should be descriptive.
 	assert.NotEmpty(t, err.Error(), "Error should have a message")
 }
-

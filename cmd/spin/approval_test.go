@@ -15,19 +15,25 @@ import (
 func TestApproval_List_Empty(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "spin.yaml")
+
 	policyPath := filepath.Join(tmpDir, "policies.json")
-	if err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0644); err != nil {
+	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0644)
+	if err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
 	root := newRootCmd()
+
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)
 	root.SetArgs([]string{"--config-file", configPath, "approval", "list", "--scope", "global"})
-	if err := root.Execute(); err != nil {
+
+	err = root.Execute()
+	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
+
 	if !strings.Contains(out.String(), "No policies found.") {
 		t.Fatalf("expected 'No policies found.' got: %s", out.String())
 	}
@@ -36,8 +42,10 @@ func TestApproval_List_Empty(t *testing.T) {
 func TestApproval_List_WithData(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "spin.yaml")
+
 	policyPath := filepath.Join(tmpDir, "policies.json")
-	if err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n  approval_persistence_enabled: true\n"), 0644); err != nil {
+	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n  approval_persistence_enabled: true\n"), 0644)
+	if err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
@@ -45,8 +53,10 @@ func TestApproval_List_WithData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
+
 	ctx := context.Background()
 	key := security.NewPolicyKey("/bin/echo", []string{"hello"}, tmpDir)
+
 	p := security.Policy{
 		Version:   "1",
 		Scope:     security.ScopeGlobal,
@@ -54,18 +64,23 @@ func TestApproval_List_WithData(t *testing.T) {
 		Decision:  security.DecisionAllow,
 		CreatedAt: time.Now(),
 	}
-	if err := store.Save(ctx, p); err != nil {
+	err = store.Save(ctx, p)
+	if err != nil {
 		t.Fatalf("save policy: %v", err)
 	}
 
 	root := newRootCmd()
+
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)
 	root.SetArgs([]string{"--config-file", configPath, "approval", "list", "--scope", "global"})
-	if err := root.Execute(); err != nil {
+
+	err = root.Execute()
+	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
+
 	got := out.String()
 	if !strings.Contains(got, "[global] /bin/echo hello") {
 		t.Fatalf("expected list output to include policy, got: %s", got)
@@ -75,12 +90,15 @@ func TestApproval_List_WithData(t *testing.T) {
 func TestApproval_Revoke_NonExistent(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "spin.yaml")
+
 	policyPath := filepath.Join(tmpDir, "policies.json")
-	if err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0644); err != nil {
+	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0644)
+	if err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
 	root := newRootCmd()
+
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)
@@ -92,9 +110,12 @@ func TestApproval_Revoke_NonExistent(t *testing.T) {
 		"--arg", "hello",
 		"--workdir", tmpDir,
 	})
-	if err := root.Execute(); err != nil {
+
+	err = root.Execute()
+	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
+
 	if !strings.Contains(out.String(), "No matching policy found.") {
 		t.Fatalf("expected no match message, got: %s", out.String())
 	}
@@ -103,22 +124,26 @@ func TestApproval_Revoke_NonExistent(t *testing.T) {
 func TestApproval_Clear_Empty(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "spin.yaml")
+
 	policyPath := filepath.Join(tmpDir, "policies.json")
-	if err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0644); err != nil {
+	err := os.WriteFile(configPath, []byte("version: \"2.0\"\nsecurity:\n  policy_file: "+policyPath+"\n"), 0644)
+	if err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
 	root := newRootCmd()
+
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)
 	root.SetArgs([]string{"--config-file", configPath, "approval", "clear", "--scope", "global"})
-	if err := root.Execute(); err != nil {
+
+	err = root.Execute()
+	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
+
 	if !strings.Contains(out.String(), "Cleared 0 policies.") {
 		t.Fatalf("expected cleared 0, got: %s", out.String())
 	}
 }
-
-

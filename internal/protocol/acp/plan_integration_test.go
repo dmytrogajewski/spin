@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/cycle"
 	"github.com/dmytrogajewski/spin/internal/detection"
@@ -16,8 +19,6 @@ import (
 	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestConvertOrchestrationPlanToACP tests conversion of planning.Plan to ACP PlanEntry[].
@@ -50,12 +51,12 @@ func TestConvertOrchestrationPlanToACP(t *testing.T) {
 
 	require.Len(t, entries, 2, "should convert all steps")
 
-	// Check first step
+	// Check first step.
 	assert.Equal(t, "First step: Do something", entries[0].Content)
 	assert.Equal(t, acp.PlanEntryStatusPending, entries[0].Status)
 	assert.Equal(t, acp.PlanEntryPriorityHigh, entries[0].Priority, "step with no dependencies should be high priority")
 
-	// Check second step
+	// Check second step.
 	assert.Equal(t, "Second step: Do something else", entries[1].Content)
 	assert.Equal(t, acp.PlanEntryStatusPending, entries[1].Status)
 	assert.Equal(t, acp.PlanEntryPriorityMedium, entries[1].Priority, "step with dependencies should be medium priority")
@@ -73,7 +74,7 @@ func TestConvertOrchestrationPlanToACP_StatusMapping(t *testing.T) {
 		{"running", planning.StepStatusRunning, acp.PlanEntryStatus("in_progress")},
 		{"completed", planning.StepStatusCompleted, acp.PlanEntryStatus("completed")},
 		{"failed", planning.StepStatusFailed, acp.PlanEntryStatus("failed")},
-		{"skipped", planning.StepStatusSkipped, acp.PlanEntryStatus("cancelled")},
+		{"skipped", planning.StepStatusSkipped, acp.PlanEntryStatus("canceled")},
 	}
 
 	for _, tt := range tests {
@@ -135,7 +136,7 @@ func TestConvertOrchestrationPlanToACP_PriorityMapping(t *testing.T) {
 
 // TestSendPlanNotifications_WithOrchestrationPlan tests plan notification with agent plan.
 func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
-	// Create agent
+	// Create agent.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
@@ -161,7 +162,7 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Set plan on agent
+	// Set plan on agent.
 	plan := &planning.Plan{
 		ID:   "test-plan",
 		Task: "Test task",
@@ -187,30 +188,34 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 	mockConn := &mockConnectionForPlan{}
 	acpAgent.SetNotificationSender(mockConn)
 
-	// Create agent response
+	// Create agent response.
 	agentResp := &agent.AgentResponse{
 		Output:  "Plan created",
 		Success: true,
 	}
 
-	// Send plan notifications (should detect agent plan)
+	// Send plan notifications (should detect agent plan).
 	err = acpAgent.sendPlanNotifications(context.Background(), acp.SessionId("test-session"), agentResp)
 	require.NoError(t, err)
 
-	// Verify notification was sent
+	// Verify notification was sent.
 	notifications := mockConn.GetNotifications()
 	require.Greater(t, len(notifications), 0, "should send plan notification")
 
-	// Find plan notification
+	// Find plan notification.
 	found := false
+
 	for _, notif := range notifications {
 		if notif.Update.Plan != nil {
 			found = true
+
 			assert.Len(t, notif.Update.Plan.Entries, 1)
 			assert.Equal(t, "First step: Do something", notif.Update.Plan.Entries[0].Content)
+
 			break
 		}
 	}
+
 	assert.True(t, found, "should send plan notification with agent plan")
 }
 
@@ -227,7 +232,7 @@ func TestSendPlanNotifications_FallbackToTextDetection(t *testing.T) {
 	mockConn := &mockConnectionForPlan{}
 	acpAgent.SetNotificationSender(mockConn)
 
-	// Agent response with plan-like text but no structured plan
+	// Agent response with plan-like text but no structured plan.
 	agentResp := &agent.AgentResponse{
 		Output: `
 Plan:
@@ -241,9 +246,9 @@ Plan:
 	err = acpAgent.sendPlanNotifications(context.Background(), acp.SessionId("test-session"), agentResp)
 	require.NoError(t, err)
 
-	// Verify notification was sent (text-based detection should work)
+	// Verify notification was sent (text-based detection should work).
 	notifications := mockConn.GetNotifications()
 	require.Greater(t, len(notifications), 0, "should send plan notification via text detection")
 }
 
-// Note: mockConnectionForPlan is defined in plan_notifications_test.go
+// Note: mockConnectionForPlan is defined in plan_notifications_test.go.

@@ -8,14 +8,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestInsightValidator_New tests creating a new validator
+// TestInsightValidator_New tests creating a new validator.
 func TestInsightValidator_New(t *testing.T) {
 	validator := NewInsightValidator()
 
 	require.NotNil(t, validator)
 }
 
-// TestInsightValidator_Validate tests insight validation with all rules
+// TestInsightValidator_Validate tests insight validation with all rules.
 func TestInsightValidator_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -109,7 +109,7 @@ func TestInsightValidator_Validate(t *testing.T) {
 	}
 }
 
-// TestInsightValidator_ValidateBatch tests batch validation
+// TestInsightValidator_ValidateBatch tests batch validation.
 func TestInsightValidator_ValidateBatch(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -173,7 +173,7 @@ func TestInsightValidator_ValidateBatch(t *testing.T) {
 	}
 }
 
-// TestInsightValidator_FilterByQuality tests quality filtering
+// TestInsightValidator_FilterByQuality tests quality filtering.
 func TestInsightValidator_FilterByQuality(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -230,7 +230,7 @@ func TestInsightValidator_FilterByQuality(t *testing.T) {
 			filtered := validator.FilterByQuality(tt.insights, tt.minConfidence)
 			assert.Len(t, filtered, tt.wantCount)
 
-			// All filtered insights should meet minimum confidence
+			// All filtered insights should meet minimum confidence.
 			for _, insight := range filtered {
 				assert.GreaterOrEqual(t, insight.Confidence, tt.minConfidence)
 			}

@@ -3,9 +3,10 @@ package agent
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/planning"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestPlanTracker_OnToolCallComplete_MatchesAndUpdates(t *testing.T) {
@@ -22,7 +23,7 @@ func TestPlanTracker_OnToolCallComplete_MatchesAndUpdates(t *testing.T) {
 
 	tracker := NewPlanTracker(plan, emitter)
 
-	// Simulate tool call complete
+	// Simulate tool call complete.
 	event := events.Event{
 		Type: events.EventToolCallComplete,
 		Data: events.ToolCallCompleteData{
@@ -110,5 +111,3 @@ func TestPlanTracker_FuzzyMatching(t *testing.T) {
 		})
 	}
 }
-
-

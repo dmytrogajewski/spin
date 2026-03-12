@@ -23,6 +23,7 @@ func (s *Service) GetTools() []tools.Tool {
 	if s.registryManager == nil {
 		return nil
 	}
+
 	return s.registryManager.AllTools()
 }
 
@@ -32,6 +33,7 @@ func (s *Service) Search(ctx *SearchContext, query string, max int) []tools.Tool
 	if s.registryManager == nil {
 		return nil
 	}
+
 	return s.registryManager.Search(ctx, query, max)
 }
 
@@ -41,6 +43,7 @@ func (s *Service) Tool(name string) tools.Tool {
 	if s.registryManager == nil {
 		return nil
 	}
+
 	return s.registryManager.Tool(name)
 }
 
@@ -56,19 +59,20 @@ func (s *Service) ConnectServer(ctx context.Context, config MCPServerConfig) err
 		return nil
 	}
 
-	// Check if already registered
+	// Check if already registered.
 	if _, exists := s.registryManager.Get(config.Name); exists {
 		return nil
 	}
 
-	// Create appropriate registry based on transport
+	// Create appropriate registry based on transport.
 	registry, err := createRegistryFromConfig(config, nil)
 	if err != nil {
 		return err
 	}
 
-	// Register and initialize
-	if err := s.registryManager.Register(registry); err != nil {
+	// Register and initialize.
+	err = s.registryManager.Register(registry)
+	if err != nil {
 		return err
 	}
 
@@ -80,11 +84,12 @@ func (s *Service) Close() error {
 	if s.registryManager == nil {
 		return nil
 	}
+
 	return s.registryManager.Close()
 }
 
 // createRegistryFromConfig creates an MCPRegistry from MCPServerConfig.
-func createRegistryFromConfig(config MCPServerConfig, logger interface{}) (MCPRegistry, error) {
+func createRegistryFromConfig(config MCPServerConfig, logger any) (MCPRegistry, error) {
 	transport := config.Transport
 	if transport == "" {
 		transport = TransportStdio

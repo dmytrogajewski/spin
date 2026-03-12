@@ -53,8 +53,9 @@ func (m *DefaultRegistryManager) Unregister(name string) error {
 		return fmt.Errorf("registry not found: %s", name)
 	}
 
-	// Close the registry
-	if err := registry.Close(); err != nil {
+	// Close the registry.
+	err := registry.Close()
+	if err != nil {
 		if m.logger != nil {
 			m.logger.Warn("error closing registry", "name", name, "err", err)
 		}
@@ -75,6 +76,7 @@ func (m *DefaultRegistryManager) Get(name string) (MCPRegistry, bool) {
 	defer m.mu.RUnlock()
 
 	registry, exists := m.registries[name]
+
 	return registry, exists
 }
 
@@ -87,6 +89,7 @@ func (m *DefaultRegistryManager) All() []MCPRegistry {
 	for _, registry := range m.registries {
 		result = append(result, registry)
 	}
+
 	return result
 }
 
@@ -99,6 +102,7 @@ func (m *DefaultRegistryManager) AllTools() []tools.Tool {
 	for _, registry := range m.registries {
 		result = append(result, registry.List()...)
 	}
+
 	return result
 }
 
@@ -110,13 +114,13 @@ func (m *DefaultRegistryManager) Search(ctx *SearchContext, query string, max in
 
 	var allResults []tools.Tool
 
-	// Search each registry
+	// Search each registry.
 	for _, registry := range m.registries {
 		results := registry.Search(ctx, query, max)
 		allResults = append(allResults, results...)
 	}
 
-	// Apply max limit if specified
+	// Apply max limit if specified.
 	if max > 0 && len(allResults) > max {
 		allResults = allResults[:max]
 	}
@@ -130,7 +134,7 @@ func (m *DefaultRegistryManager) Tool(name string) tools.Tool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Check for qualified name (registry:tool)
+	// Check for qualified name (registry:tool).
 	if idx := strings.Index(name, ":"); idx > 0 {
 		registryName := name[:idx]
 		toolName := name[idx+1:]
@@ -139,10 +143,11 @@ func (m *DefaultRegistryManager) Tool(name string) tools.Tool {
 		if !exists {
 			return nil
 		}
+
 		return registry.Tool(toolName)
 	}
 
-	// Try to find in all registries by full qualified name (mcp_registry_tool)
+	// Try to find in all registries by full qualified name (mcp_registry_tool).
 	for _, registry := range m.registries {
 		for _, t := range registry.List() {
 			if t.Name() == name {
@@ -151,7 +156,7 @@ func (m *DefaultRegistryManager) Tool(name string) tools.Tool {
 		}
 	}
 
-	// Try to find by raw tool name in any registry
+	// Try to find by raw tool name in any registry.
 	for _, registry := range m.registries {
 		if t := registry.Tool(name); t != nil {
 			return t
@@ -167,11 +172,14 @@ func (m *DefaultRegistryManager) Close() error {
 	defer m.mu.Unlock()
 
 	var lastErr error
+
 	for name, registry := range m.registries {
-		if err := registry.Close(); err != nil {
+		err := registry.Close()
+		if err != nil {
 			if m.logger != nil {
 				m.logger.Warn("error closing registry", "name", name, "err", err)
 			}
+
 			lastErr = err
 		}
 	}
@@ -194,6 +202,7 @@ func (m *DefaultRegistryManager) Count() int {
 	for _, registry := range m.registries {
 		count += registry.Count()
 	}
+
 	return count
 }
 
@@ -201,5 +210,6 @@ func (m *DefaultRegistryManager) Count() int {
 func (m *DefaultRegistryManager) RegistryCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return len(m.registries)
 }

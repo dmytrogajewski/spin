@@ -9,13 +9,14 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tools"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // mockConnection is a mock AgentSideConnection for testing.
@@ -27,12 +28,14 @@ type mockConnection struct {
 func (m *mockConnection) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.notifications = append(m.notifications, notification)
+
 	return nil
 }
 
 func (m *mockConnection) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
-	// Auto-approve for testing by selecting the first allow option
+	// Auto-approve for testing by selecting the first allow option.
 	for _, opt := range params.Options {
 		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {
 			return acp.RequestPermissionResponse{
@@ -40,7 +43,7 @@ func (m *mockConnection) RequestPermission(ctx context.Context, params acp.Reque
 			}, nil
 		}
 	}
-	// No allow option found, return cancelled
+	// No allow option found, return canceled.
 	return acp.RequestPermissionResponse{
 		Outcome: acp.NewRequestPermissionOutcomeCancelled(),
 	}, nil
@@ -49,14 +52,17 @@ func (m *mockConnection) RequestPermission(ctx context.Context, params acp.Reque
 func (m *mockConnection) GetNotifications() []acp.SessionNotification {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	result := make([]acp.SessionNotification, len(m.notifications))
 	copy(result, m.notifications)
+
 	return result
 }
 
 func (m *mockConnection) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.notifications = nil
 }
 
@@ -74,20 +80,20 @@ func TestProcessEvents_ContentDelta(t *testing.T) {
 	mockConn := &mockConnection{}
 	acpAgent.SetNotificationSender(mockConn)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	sessionID := acp.SessionId("test-session")
 
-	// Subscribe to events
+	// Subscribe to events.
 	subID, eventCh, err := emitter.Subscribe()
 	require.NoError(t, err)
+
 	defer emitter.Unsubscribe(subID)
 
-	// Start event processing
+	// Start event processing.
 	go acpAgent.processEvents(ctx, sessionID, eventCh)
 
-	// Emit a content delta event
+	// Emit a content delta event.
 	emitter.Emit(events.Event{
 		Type:      events.EventContentDelta,
 		Timestamp: time.Now(),
@@ -97,10 +103,10 @@ func TestProcessEvents_ContentDelta(t *testing.T) {
 		},
 	})
 
-	// Give it time to process
+	// Give it time to process.
 	time.Sleep(50 * time.Millisecond)
 
-	// Verify notification was sent
+	// Verify notification was sent.
 	notifications := mockConn.GetNotifications()
 	require.Len(t, notifications, 1, "should have one notification")
 	assert.Equal(t, sessionID, notifications[0].SessionId)
@@ -120,20 +126,20 @@ func TestProcessEvents_ToolCallStart(t *testing.T) {
 	mockConn := &mockConnection{}
 	acpAgent.SetNotificationSender(mockConn)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	sessionID := acp.SessionId("test-session")
 
-	// Subscribe to events
+	// Subscribe to events.
 	subID, eventCh, err := emitter.Subscribe()
 	require.NoError(t, err)
+
 	defer emitter.Unsubscribe(subID)
 
-	// Start event processing
+	// Start event processing.
 	go acpAgent.processEvents(ctx, sessionID, eventCh)
 
-	// Emit a tool call start event
+	// Emit a tool call start event.
 	emitter.Emit(events.Event{
 		Type:      events.EventToolCallStart,
 		Timestamp: time.Now(),
@@ -143,10 +149,10 @@ func TestProcessEvents_ToolCallStart(t *testing.T) {
 		},
 	})
 
-	// Give it time to process
+	// Give it time to process.
 	time.Sleep(50 * time.Millisecond)
 
-	// Verify notification was sent
+	// Verify notification was sent.
 	notifications := mockConn.GetNotifications()
 	require.Len(t, notifications, 1, "should have one notification")
 	assert.Equal(t, sessionID, notifications[0].SessionId)
@@ -163,22 +169,22 @@ func TestProcessEvents_NoConnection(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Don't set connection
+	// Don't set connection.
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	sessionID := acp.SessionId("test-session")
 
-	// Subscribe to events
+	// Subscribe to events.
 	subID, eventCh, err := emitter.Subscribe()
 	require.NoError(t, err)
+
 	defer emitter.Unsubscribe(subID)
 
-	// Start event processing
+	// Start event processing.
 	go acpAgent.processEvents(ctx, sessionID, eventCh)
 
-	// Emit an event
+	// Emit an event.
 	emitter.Emit(events.Event{
 		Type:      events.EventContentDelta,
 		Timestamp: time.Now(),
@@ -188,11 +194,11 @@ func TestProcessEvents_NoConnection(t *testing.T) {
 		},
 	})
 
-	// Give it time to process
+	// Give it time to process.
 	time.Sleep(50 * time.Millisecond)
 
 	// No connection, so no notifications should be sent (no panic)
-	// This test just verifies graceful handling
+	// This test just verifies graceful handling.
 }
 
 // TestProcessEvents_ContextCancellation tests that event processing stops on context cancellation.
@@ -213,25 +219,27 @@ func TestProcessEvents_ContextCancellation(t *testing.T) {
 
 	sessionID := acp.SessionId("test-session")
 
-	// Subscribe to events
+	// Subscribe to events.
 	subID, eventCh, err := emitter.Subscribe()
 	require.NoError(t, err)
+
 	defer emitter.Unsubscribe(subID)
 
-	// Start event processing
+	// Start event processing.
 	done := make(chan struct{})
+
 	go func() {
 		acpAgent.processEvents(ctx, sessionID, eventCh)
 		close(done)
 	}()
 
-	// Cancel context
+	// Cancel context.
 	cancel()
 
-	// Wait for goroutine to finish
+	// Wait for goroutine to finish.
 	select {
 	case <-done:
-		// Success
+		// Success.
 	case <-time.After(1 * time.Second):
 		t.Fatal("processEvents did not stop on context cancellation")
 	}
@@ -251,25 +259,25 @@ func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 	mockConn := &mockConnection{}
 	acpAgent.SetNotificationSender(mockConn)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	sessionID := acp.SessionId("test-session")
 
-	// Subscribe to events
+	// Subscribe to events.
 	subID, eventCh, err := emitter.Subscribe()
 	require.NoError(t, err)
+
 	defer emitter.Unsubscribe(subID)
 
-	// Start event processing
+	// Start event processing.
 	go acpAgent.processEvents(ctx, sessionID, eventCh)
 
-	// Create a temporary file with existing content
+	// Create a temporary file with existing content.
 	tmpFile := t.TempDir() + "/test.txt"
 	err = os.WriteFile(tmpFile, []byte("old content\nline 2"), 0644)
 	require.NoError(t, err)
 
-	// Emit tool call start event for write_file
+	// Emit tool call start event for write_file.
 	params, err := tools.FromMap(map[string]any{
 		"path":    tmpFile,
 		"content": "new content\nline 2\nline 3",
@@ -286,10 +294,10 @@ func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 		},
 	})
 
-	// Give it time to process
+	// Give it time to process.
 	time.Sleep(50 * time.Millisecond)
 
-	// Emit tool call complete event
+	// Emit tool call complete event.
 	emitter.Emit(events.Event{
 		Type:      events.EventToolCallComplete,
 		Timestamp: time.Now(),
@@ -301,39 +309,45 @@ func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 		},
 	})
 
-	// Give it time to process
+	// Give it time to process.
 	time.Sleep(50 * time.Millisecond)
 
-	// Verify notifications were sent (start and complete)
+	// Verify notifications were sent (start and complete).
 	notifications := mockConn.GetNotifications()
 	require.GreaterOrEqual(t, len(notifications), 2, "should have at least start and complete notifications")
 
-	// Find the complete notification
+	// Find the complete notification.
 	var completeNotification *acp.SessionNotification
+
 	for i := range notifications {
 		if notifications[i].Update.ToolCallUpdate != nil {
 			completeNotification = &notifications[i]
+
 			break
 		}
 	}
+
 	require.NotNil(t, completeNotification, "should have tool call update notification")
 	assert.Equal(t, sessionID, completeNotification.SessionId)
 
-	// Verify diff content is included
+	// Verify diff content is included.
 	update := completeNotification.Update
 	require.NotNil(t, update.ToolCallUpdate, "should have tool call update")
 	require.NotNil(t, update.ToolCallUpdate.Content, "should have content")
 	require.Greater(t, len(update.ToolCallUpdate.Content), 0, "should have at least one content item")
 
-	// Check if diff content is present (ToolDiffContent)
+	// Check if diff content is present (ToolDiffContent).
 	hasDiff := false
+
 	for _, content := range update.ToolCallUpdate.Content {
 		if content.Diff != nil {
 			hasDiff = true
+
 			assert.Equal(t, tmpFile, content.Diff.Path, "diff should have correct file path")
+
 			break
 		}
 	}
+
 	assert.True(t, hasDiff, "should include diff content in notification")
 }
-

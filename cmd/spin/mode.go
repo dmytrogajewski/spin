@@ -106,7 +106,7 @@ Available commands:
 		SilenceUsage: true,
 	}
 
-	// Add subcommands
+	// Add subcommands.
 	cmd.AddCommand(newModeListCmd())
 	cmd.AddCommand(newModeDescribeCmd())
 
@@ -160,7 +160,7 @@ func runModeList(cmd *cobra.Command, args []string) error {
 	fmt.Println("Available task modes:")
 	fmt.Println()
 
-	// Print modes in a consistent order
+	// Print modes in a consistent order.
 	modeOrder := []string{"regular", "review", "compact", "planning"}
 	for _, name := range modeOrder {
 		info := allModes[name]
@@ -180,13 +180,13 @@ func runModeList(cmd *cobra.Command, args []string) error {
 func runModeDescribe(cmd *cobra.Command, args []string) error {
 	modeName := args[0]
 
-	// Validate mode name
+	// Validate mode name.
 	info, exists := allModes[modeName]
 	if !exists {
 		return fmt.Errorf("unknown mode: %s (valid modes: regular, review, compact, planning)", modeName)
 	}
 
-	// Print detailed mode information
+	// Print detailed mode information.
 	fmt.Printf("Mode: %s\n", info.name)
 	fmt.Println()
 	fmt.Printf("Description:\n  %s\n", info.description)
@@ -194,21 +194,25 @@ func runModeDescribe(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Token Budget: %d tokens\n", info.maxTokens)
 	fmt.Println()
 
-	// Print tools
+	// Print tools.
 	fmt.Printf("Available Tools (%d):\n", len(info.tools))
+
 	for _, tool := range info.tools {
 		fmt.Printf("  - %s\n", tool)
 	}
+
 	fmt.Println()
 
-	// Print best use cases
+	// Print best use cases.
 	fmt.Println("Best For:")
+
 	for _, useCase := range info.bestFor {
 		fmt.Printf("  • %s\n", useCase)
 	}
+
 	fmt.Println()
 
-	// Print usage examples
+	// Print usage examples.
 	fmt.Println("Usage:")
 	fmt.Printf("  spin --mode %s              # Start TUI in %s mode\n", modeName, modeName)
 	fmt.Printf("  spin --mode %s exec <task>  # Execute task in %s mode\n", modeName, modeName)

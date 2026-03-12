@@ -197,7 +197,7 @@ func TestACP_Error_ErrorData(t *testing.T) {
 		// Error data may contain additional information
 		errorStr := err.Error()
 		assert.NotEmpty(t, errorStr, "Error should have message")
-		
+
 		// Try to parse error as JSON to check for data field
 		var errorData map[string]interface{}
 		if json.Unmarshal([]byte(errorStr), &errorData) == nil {
@@ -205,5 +205,3 @@ func TestACP_Error_ErrorData(t *testing.T) {
 		}
 	}
 }
-
-

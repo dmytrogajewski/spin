@@ -35,7 +35,7 @@ func NewTUITest(t interface {
 		adapters.WithKeyboardEvents(fakeKB.Events()),
 	)
 	if err != nil {
-		t.(interface{ Fatalf(string, ...interface{}) }).Fatalf("NewPureTTY: %v", err)
+		t.(interface{ Fatalf(string, ...any) }).Fatalf("NewPureTTY: %v", err)
 	}
 
 	helper := &TUITestHelper{
@@ -61,7 +61,7 @@ func (h *TUITestHelper) Start() {
 	go func() {
 		_ = h.UI.Run(h.ctx)
 	}()
-	// Give UI time to initialize
+	// Give UI time to initialize.
 	time.Sleep(50 * time.Millisecond)
 }
 
@@ -80,9 +80,10 @@ func (h *TUITestHelper) WaitForOutput(s string, timeout time.Duration) bool {
 // AssertContains checks if output contains the given string.
 func (h *TUITestHelper) AssertContains(t interface {
 	Helper()
-	Errorf(string, ...interface{})
+	Errorf(string, ...any)
 }, s string) {
 	t.Helper()
+
 	if !h.Writer.Contains(s) {
 		t.Errorf("output does not contain %q\nGot: %s", s, h.Writer.StripANSI())
 	}
@@ -91,9 +92,10 @@ func (h *TUITestHelper) AssertContains(t interface {
 // AssertNotContains checks if output does not contain the given string.
 func (h *TUITestHelper) AssertNotContains(t interface {
 	Helper()
-	Errorf(string, ...interface{})
+	Errorf(string, ...any)
 }, s string) {
 	t.Helper()
+
 	if h.Writer.Contains(s) {
 		t.Errorf("output contains %q (should not)\nGot: %s", s, h.Writer.StripANSI())
 	}
@@ -102,11 +104,11 @@ func (h *TUITestHelper) AssertNotContains(t interface {
 // AssertANSISequence checks if output contains the given ANSI sequence.
 func (h *TUITestHelper) AssertANSISequence(t interface {
 	Helper()
-	Errorf(string, ...interface{})
+	Errorf(string, ...any)
 }, seq string) {
 	t.Helper()
+
 	if !h.Writer.ContainsANSI(seq) {
 		t.Errorf("output does not contain ANSI sequence %q\nGot: %s", seq, h.Writer.Snapshot())
 	}
 }
-

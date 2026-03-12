@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openai/openai-go"
+
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
-	"github.com/openai/openai-go"
 )
 
 // LLMSummarizerConfig configures the LLM summarizer.
@@ -53,6 +54,7 @@ func NewLLMSummarizer(provider llm.Provider, tok tokenizer.Tokenizer, config LLM
 	if tok == nil {
 		tok = &tokenizer.SimpleTokenizer{}
 	}
+
 	return &LLMSummarizer{
 		provider:  provider,
 		tokenizer: tok,
@@ -71,20 +73,20 @@ func (s *LLMSummarizer) Summarize(ctx context.Context, content string, opts Opti
 		}, nil
 	}
 
-	// Apply defaults
+	// Apply defaults.
 	opts = s.applyDefaults(opts)
 
-	// Count original tokens
+	// Count original tokens.
 	originalTokens := s.tokenizer.Count(content)
 
-	// Build prompt
+	// Build prompt.
 	prompt := s.buildPrompt(content, opts)
 
-	// Apply timeout
+	// Apply timeout.
 	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
 	defer cancel()
 
-	// Call LLM
+	// Call LLM.
 	params := openai.ChatCompletionNewParams{
 		Model: openai.F(s.config.Model),
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
@@ -98,7 +100,7 @@ func (s *LLMSummarizer) Summarize(ctx context.Context, content string, opts Opti
 		return nil, fmt.Errorf("summarization failed: %w", err)
 	}
 
-	// Extract summary from response
+	// Extract summary from response.
 	summary := ""
 	if len(completion.Choices) > 0 {
 		summary = completion.Choices[0].Message.Content
@@ -124,17 +126,21 @@ func (s *LLMSummarizer) applyDefaults(opts Options) Options {
 	if opts.MaxTokens <= 0 {
 		opts.MaxTokens = s.config.DefaultMaxTokens
 	}
+
 	if opts.TargetRatio <= 0 {
 		opts.TargetRatio = s.config.DefaultTargetRatio
 	}
+
 	if opts.Style == "" {
 		opts.Style = s.config.DefaultStyle
 	}
+
 	return opts
 }
 
 func (s *LLMSummarizer) buildPrompt(content string, opts Options) string {
 	styleGuide := s.getStyleGuide(opts.Style)
+
 	preserveGuide := ""
 	if len(opts.PreserveList) > 0 {
 		preserveGuide = fmt.Sprintf("\nPreserve these items verbatim: %s", strings.Join(opts.PreserveList, ", "))
@@ -188,20 +194,20 @@ func (s *LLMSummarizer) SummarizeMessages(ctx context.Context, messages []messag
 		}, nil
 	}
 
-	// Apply defaults
+	// Apply defaults.
 	opts = s.applyDefaults(opts)
 
-	// Format messages for summarization
+	// Format messages for summarization.
 	formatted := s.formatMessages(messages)
 
-	// Build specialized prompt for messages
+	// Build specialized prompt for messages.
 	prompt := s.buildMessagePrompt(formatted, opts, len(messages))
 
-	// Apply timeout
+	// Apply timeout.
 	ctx, cancel := context.WithTimeout(ctx, s.config.Timeout)
 	defer cancel()
 
-	// Call LLM
+	// Call LLM.
 	params := openai.ChatCompletionNewParams{
 		Model: openai.F(s.config.Model),
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
@@ -215,7 +221,7 @@ func (s *LLMSummarizer) SummarizeMessages(ctx context.Context, messages []messag
 		return nil, fmt.Errorf("message summarization failed: %w", err)
 	}
 
-	// Extract summary from response
+	// Extract summary from response.
 	summaryContent := ""
 	if len(completion.Choices) > 0 {
 		summaryContent = completion.Choices[0].Message.Content
@@ -236,6 +242,7 @@ func (s *LLMSummarizer) formatMessages(messages []message.Message) string {
 	for _, msg := range messages {
 		sb.WriteString(fmt.Sprintf("[%s]: %s\n", msg.Role, msg.Content))
 	}
+
 	return sb.String()
 }
 

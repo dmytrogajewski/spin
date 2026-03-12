@@ -35,12 +35,15 @@ func TestNewMatcher(t *testing.T) {
 			if m == nil {
 				t.Fatal("NewMatcher() returned nil")
 			}
+
 			if m.threshold != 0.85 {
 				t.Errorf("NewMatcher() threshold = %.2f, want 0.85", m.threshold)
 			}
+
 			if len(m.fileLines) != len(tt.fileLines) {
 				t.Errorf("NewMatcher() fileLines length = %d, want %d", len(m.fileLines), len(tt.fileLines))
 			}
+
 			if len(m.normalizedLines) != len(tt.fileLines) {
 				t.Errorf("NewMatcher() normalizedLines length = %d, want %d", len(m.normalizedLines), len(tt.fileLines))
 			}
@@ -134,6 +137,7 @@ func TestMatcher_FindContext_ExactMatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := NewMatcher(tt.fileLines)
+
 			got := m.FindContext(tt.contextLines, tt.header)
 			if got != tt.want {
 				t.Errorf("FindContext() = %d, want %d", got, tt.want)
@@ -155,12 +159,12 @@ func TestMatcher_FindContext_FuzzyMatch(t *testing.T) {
 			name: "whitespace variation - tabs vs spaces",
 			fileLines: []string{
 				"func main() {",
-				"  fmt.Println(\"hello\")", // 2 spaces
+				"  fmt.Println(\"hello\")", // 2 spaces.
 				"}",
 			},
 			contextLines: []string{
 				"func main() {",
-				"    fmt.Println(\"hello\")", // 4 spaces
+				"    fmt.Println(\"hello\")", // 4 spaces.
 			},
 			header:    "",
 			threshold: 0.85,
@@ -169,7 +173,7 @@ func TestMatcher_FindContext_FuzzyMatch(t *testing.T) {
 		{
 			name: "trailing whitespace",
 			fileLines: []string{
-				"func foo() {   ", // Trailing spaces
+				"func foo() {   ", // Trailing spaces.
 				"}",
 			},
 			contextLines: []string{
@@ -183,7 +187,7 @@ func TestMatcher_FindContext_FuzzyMatch(t *testing.T) {
 		{
 			name: "leading whitespace",
 			fileLines: []string{
-				"   func bar() {", // Leading spaces
+				"   func bar() {", // Leading spaces.
 				"}",
 			},
 			contextLines: []string{
@@ -202,11 +206,11 @@ func TestMatcher_FindContext_FuzzyMatch(t *testing.T) {
 				"}",
 			},
 			contextLines: []string{
-				"func Calculate(x, y int) int {", // Parameter names differ
+				"func Calculate(x, y int) int {", // Parameter names differ.
 				"    return x + y",
 			},
 			header:    "",
-			threshold: 0.80, // Lower threshold to accept this difference
+			threshold: 0.80, // Lower threshold to accept this difference.
 			want:      0,
 		},
 		{
@@ -226,11 +230,11 @@ func TestMatcher_FindContext_FuzzyMatch(t *testing.T) {
 			name: "mixed whitespace - tabs and spaces",
 			fileLines: []string{
 				"func test() {",
-				"\t\treturn 0", // Tabs
+				"\t\treturn 0", // Tabs.
 			},
 			contextLines: []string{
 				"func test() {",
-				"        return 0", // 8 spaces (equivalent to 2 tabs)
+				"        return 0", // 8 spaces (equivalent to 2 tabs).
 			},
 			header:    "",
 			threshold: 0.85,
@@ -242,9 +246,10 @@ func TestMatcher_FindContext_FuzzyMatch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := NewMatcher(tt.fileLines)
 			if tt.threshold != 0 {
-				// Note: threshold customization removed - using default 0.85
+				// Note: threshold customization removed - using default 0.85.
 				m.threshold = tt.threshold
 			}
+
 			got := m.FindContext(tt.contextLines, tt.header)
 			if got != tt.want {
 				t.Errorf("FindContext() = %d, want %d", got, tt.want)
@@ -274,7 +279,7 @@ func TestMatcher_FindContext_HeaderMatching(t *testing.T) {
 			},
 			contextLines: []string{"    return x + 1"},
 			header:       "func ProcessB",
-			want:         5, // Should match second occurrence
+			want:         5, // Should match second occurrence.
 		},
 		{
 			name: "header helps disambiguate - partial match",
@@ -291,7 +296,7 @@ func TestMatcher_FindContext_HeaderMatching(t *testing.T) {
 			},
 			contextLines: []string{"    return nil"},
 			header:       "POST",
-			want:         7, // Should match second occurrence (near "POST" comment)
+			want:         7, // Should match second occurrence (near "POST" comment).
 		},
 		{
 			name: "header not found - fallback to full search",
@@ -302,7 +307,7 @@ func TestMatcher_FindContext_HeaderMatching(t *testing.T) {
 			},
 			contextLines: []string{"    return 0"},
 			header:       "func nonexistent",
-			want:         1, // Found via fallback
+			want:         1, // Found via fallback.
 		},
 		{
 			name: "empty header - full search",
@@ -323,12 +328,12 @@ func TestMatcher_FindContext_HeaderMatching(t *testing.T) {
 				"}",
 				"",
 				"func ProcessB(y int) {",
-				"    return y * 2", // Different context
+				"    return y * 2", // Different context.
 				"}",
 			},
 			contextLines: []string{"    return x + 1"},
-			header:       "func ProcessB", // Header present but context doesn't match nearby
-			want:         1,               // Should fallback and find in ProcessA
+			header:       "func ProcessB", // Header present but context doesn't match nearby.
+			want:         1,               // Should fallback and find in ProcessA.
 		},
 		{
 			name: "multiple header occurrences - use first",
@@ -345,14 +350,15 @@ func TestMatcher_FindContext_HeaderMatching(t *testing.T) {
 				"}",
 			},
 			contextLines: []string{"    return x + 1"},
-			header:       "Process", // Matches multiple lines
-			want:         2,         // Should find near first occurrence
+			header:       "Process", // Matches multiple lines.
+			want:         2,         // Should find near first occurrence.
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := NewMatcher(tt.fileLines)
+
 			got := m.FindContext(tt.contextLines, tt.header)
 			if got != tt.want {
 				t.Errorf("FindContext() = %d, want %d", got, tt.want)
@@ -415,7 +421,7 @@ func TestMatcher_FindContext_EdgeCases(t *testing.T) {
 			name: "very long line",
 			fileLines: []string{
 				"short line",
-				strings.Repeat("x", 1000), // Very long line
+				strings.Repeat("x", 1000), // Very long line.
 				"another short line",
 			},
 			contextLines: []string{
@@ -485,7 +491,7 @@ func TestMatcher_FindContext_EdgeCases(t *testing.T) {
 			},
 			contextLines: []string{
 				"line2",
-				"line3", // This line doesn't exist in file
+				"line3", // This line doesn't exist in file.
 			},
 			header: "",
 			want:   -1,
@@ -495,6 +501,7 @@ func TestMatcher_FindContext_EdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := NewMatcher(tt.fileLines)
+
 			got := m.FindContext(tt.contextLines, tt.header)
 			if got != tt.want {
 				t.Errorf("FindContext() = %d, want %d", got, tt.want)
@@ -528,27 +535,27 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 				"}",
 			},
 			contextLines: []string{
-				"func Process(ctx context.Context, req Request) error {", // Changed *Request to Request
+				"func Process(ctx context.Context, req Request) error {", // Changed *Request to Request.
 				"    if req == nil {",
 			},
 			header:    "func Process",
-			threshold: 0.80, // Allow some difference
+			threshold: 0.80, // Allow some difference.
 			want:      5,
 		},
 		{
 			name: "formatted code - indentation changed",
 			fileLines: []string{
 				"type Config struct {",
-				"  Host string",   // 2 spaces
-				"  Port int",      // 2 spaces
-				"  Timeout int64", // 2 spaces
+				"  Host string",   // 2 spaces.
+				"  Port int",      // 2 spaces.
+				"  Timeout int64", // 2 spaces.
 				"}",
 			},
 			contextLines: []string{
 				"type Config struct {",
-				"    Host string",   // 4 spaces
-				"    Port int",      // 4 spaces
-				"    Timeout int64", // 4 spaces
+				"    Host string",   // 4 spaces.
+				"    Port int",      // 4 spaces.
+				"    Timeout int64", // 4 spaces.
 			},
 			header:    "type Config",
 			threshold: 0.85,
@@ -558,7 +565,7 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 			name: "comment added between code",
 			fileLines: []string{
 				"func Calculate(x, y int) int {",
-				"    // TODO: add validation", // Comment added
+				"    // TODO: add validation", // Comment added.
 				"    return x + y",
 				"}",
 			},
@@ -567,30 +574,30 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 				"    return x + y",
 			},
 			header:    "func Calculate",
-			threshold: 0.70, // Lower threshold to accept missing line
-			want:      -1,   // This should NOT match - we want exact context structure
+			threshold: 0.70, // Lower threshold to accept missing line.
+			want:      -1,   // This should NOT match - we want exact context structure.
 		},
 		{
 			name: "multiple similar functions - use header",
 			fileLines: []string{
-				"func (s *Service) Create(data Data) error {", // Line 0
-				"    return s.repo.Insert(data)",              // Line 1
-				"}",                                           // Line 2
-				"",                                            // Line 3
-				"func (s *Service) Update(data Data) error {", // Line 4
-				"    return s.repo.Update(data)",              // Line 5
-				"}",                                           // Line 6
-				"",                                            // Line 7
-				"func (s *Service) Delete(id ID) error {", // Line 8 - Header matches here
-				"    return s.repo.Delete(id)",            // Line 9 - Context matches here
-				"}",                                       // Line 10
+				"func (s *Service) Create(data Data) error {", // Line 0.
+				"    return s.repo.Insert(data)",              // Line 1.
+				"}",                                           // Line 2.
+				"",                                            // Line 3.
+				"func (s *Service) Update(data Data) error {", // Line 4.
+				"    return s.repo.Update(data)",              // Line 5.
+				"}",                                           // Line 6.
+				"",                                            // Line 7.
+				"func (s *Service) Delete(id ID) error {", // Line 8 - Header matches here.
+				"    return s.repo.Delete(id)",            // Line 9 - Context matches here.
+				"}",                                       // Line 10.
 			},
 			contextLines: []string{
 				"    return s.repo.Delete(id)",
 			},
 			header:    "Delete",
 			threshold: 0.85,
-			want:      9, // Should match Delete function at line 9, not others
+			want:      9, // Should match Delete function at line 9, not others.
 		},
 	}
 
@@ -598,9 +605,10 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := NewMatcher(tt.fileLines)
 			if tt.threshold != 0 {
-				// Note: threshold customization removed - using default 0.85
+				// Note: threshold customization removed - using default 0.85.
 				m.threshold = tt.threshold
 			}
+
 			got := m.FindContext(tt.contextLines, tt.header)
 			if got != tt.want {
 				t.Errorf("FindContext() = %d, want %d", got, tt.want)
@@ -609,13 +617,15 @@ func TestMatcher_FindContext_RealWorldScenarios(t *testing.T) {
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkMatcher_FindContext_ExactMatch_Small(b *testing.B) {
 	fileLines := generateTestLines(100)
-	contextLines := fileLines[50:55] // 5 lines of exact context
+	contextLines := fileLines[50:55] // 5 lines of exact context.
 	m := NewMatcher(fileLines)
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		m.FindContext(contextLines, "")
 	}
 }
@@ -624,8 +634,10 @@ func BenchmarkMatcher_FindContext_ExactMatch_1kLines(b *testing.B) {
 	fileLines := generateTestLines(1000)
 	contextLines := fileLines[500:505]
 	m := NewMatcher(fileLines)
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		m.FindContext(contextLines, "")
 	}
 }
@@ -634,8 +646,10 @@ func BenchmarkMatcher_FindContext_ExactMatch_10kLines(b *testing.B) {
 	fileLines := generateTestLines(10000)
 	contextLines := fileLines[5000:5005]
 	m := NewMatcher(fileLines)
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		m.FindContext(contextLines, "")
 	}
 }
@@ -644,8 +658,10 @@ func BenchmarkMatcher_FindContext_FuzzyMatch_Small(b *testing.B) {
 	fileLines := generateTestLines(100)
 	contextLines := generateSimilarLines(fileLines[50:55], 0.90)
 	m := NewMatcher(fileLines)
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		m.FindContext(contextLines, "")
 	}
 }
@@ -654,26 +670,30 @@ func BenchmarkMatcher_FindContext_FuzzyMatch_10kLines(b *testing.B) {
 	fileLines := generateTestLines(10000)
 	contextLines := generateSimilarLines(fileLines[5000:5005], 0.90)
 	m := NewMatcher(fileLines)
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		m.FindContext(contextLines, "")
 	}
 }
 
 func BenchmarkMatcher_FindContext_WithHeader_10kLines(b *testing.B) {
 	fileLines := generateTestLines(10000)
-	fileLines[5000] = "func TargetFunction() {" // Distinctive header
+	fileLines[5000] = "func TargetFunction() {" // Distinctive header.
 	contextLines := fileLines[5001:5005]
 	m := NewMatcher(fileLines)
+
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		m.FindContext(contextLines, "TargetFunction")
 	}
 }
 
-// Helper functions for tests
+// Helper functions for tests.
 
-// generateTestLines generates n lines of realistic Go code
+// generateTestLines generates n lines of realistic Go code.
 func generateTestLines(n int) []string {
 	lines := make([]string, n)
 	templates := []string{
@@ -691,22 +711,24 @@ func generateTestLines(n int) []string {
 		"}",
 	}
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		lines[i] = templates[i%len(templates)]
 	}
+
 	return lines
 }
 
-// generateSimilarLines generates lines similar to the input with given similarity ratio
+// generateSimilarLines generates lines similar to the input with given similarity ratio.
 func generateSimilarLines(original []string, similarity float64) []string {
 	similar := make([]string, len(original))
 	for i, line := range original {
 		if similarity >= 1.0 {
 			similar[i] = line
 		} else {
-			// Add some variation by changing whitespace
+			// Add some variation by changing whitespace.
 			similar[i] = "  " + strings.TrimSpace(line) + "  "
 		}
 	}
+
 	return similar
 }

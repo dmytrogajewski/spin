@@ -22,6 +22,7 @@ func NewHybridCompressor(classifier *Classifier, config CompressorConfig) *Hybri
 	if classifier == nil {
 		classifier = NewClassifier()
 	}
+
 	return &HybridCompressor{
 		classifier: classifier,
 		config:     config,
@@ -32,6 +33,7 @@ func NewHybridCompressor(classifier *Classifier, config CompressorConfig) *Hybri
 // When set, removed messages are summarized instead of discarded.
 func (c *HybridCompressor) WithSummarizer(s summarizer.Summarizer) *HybridCompressor {
 	c.summarizer = s
+
 	return c
 }
 
@@ -40,6 +42,7 @@ func (c *HybridCompressor) Name() string {
 	if c.summarizer != nil {
 		return "hybrid-summarizing"
 	}
+
 	return "hybrid"
 }
 
@@ -54,52 +57,55 @@ func (c *HybridCompressor) Compress(
 		return messages, nil
 	}
 
-	// 1. Classify all messages
+	// 1. Classify all messages.
 	classified := c.classifyMessages(messages, tok)
 
-	// 2. Sort by importance (stable sort preserves chronological order within same importance)
+	// 2. Sort by importance (stable sort preserves chronological order within same importance).
 	sort.SliceStable(classified, func(i, j int) bool {
 		if classified[i].Importance == classified[j].Importance {
 			return classified[i].Index < classified[j].Index
 		}
+
 		return classified[i].Importance > classified[j].Importance
 	})
 
-	// 3. Greedy selection
+	// 3. Greedy selection.
 	selected, removed := c.selectMessages(classified, targetTokens)
 
-	// 4. Optionally summarize removed messages
+	// 4. Optionally summarize removed messages.
 	if c.summarizer != nil && len(removed) > 0 {
 		summaryMsg, err := c.summarizeRemoved(ctx, removed)
 		if err == nil && summaryMsg != nil {
-			// Count summary tokens
+			// Count summary tokens.
 			summaryMsg.Tokens = tok.Count(summaryMsg.Content) + 4
 			selected = append(selected, ClassifiedMessage{
 				Message:    *summaryMsg,
 				Importance: ImportanceMedium,
 				Tokens:     summaryMsg.Tokens,
-				Index:      -1, // Placed at the beginning during chronological sort
+				Index:      -1, // Placed at the beginning during chronological sort.
 			})
 		}
-		// On error, just proceed without summary (best-effort)
+		// On error, just proceed without summary (best-effort).
 	}
 
-	// 5. Enforce minimum retention
+	// 5. Enforce minimum retention.
 	selected = c.enforceMinRetention(selected, classified, len(messages))
 
-	// 6. Restore chronological order
+	// 6. Restore chronological order.
 	sort.SliceStable(selected, func(i, j int) bool {
-		// Summary messages (Index -1) go first
+		// Summary messages (Index -1) go first.
 		if selected[i].Index == -1 {
 			return true
 		}
+
 		if selected[j].Index == -1 {
 			return false
 		}
+
 		return selected[i].Index < selected[j].Index
 	})
 
-	// 7. Extract messages
+	// 7. Extract messages.
 	result := make([]message.Message, len(selected))
 	for i, cm := range selected {
 		result[i] = cm.Message
@@ -116,6 +122,7 @@ func (c *HybridCompressor) classifyMessages(messages []message.Message, tok toke
 		if tokens == 0 {
 			tokens = tok.Count(msg.Content) + 4
 		}
+
 		classified[i] = ClassifiedMessage{
 			Message:    msg,
 			Importance: c.classifier.Classify(msg),
@@ -123,6 +130,7 @@ func (c *HybridCompressor) classifyMessages(messages []message.Message, tok toke
 			Index:      i,
 		}
 	}
+
 	return classified
 }
 
@@ -136,14 +144,15 @@ func (c *HybridCompressor) selectMessages(
 	tokensUsed := 0
 
 	for _, cm := range classified {
-		// Always include critical if config says so
+		// Always include critical if config says so.
 		if c.config.PreserveCritical && cm.Importance == ImportanceCritical {
 			selected = append(selected, cm)
 			tokensUsed += cm.Tokens
+
 			continue
 		}
 
-		// Include if within budget
+		// Include if within budget.
 		if tokensUsed+cm.Tokens <= targetTokens {
 			selected = append(selected, cm)
 			tokensUsed += cm.Tokens
@@ -160,28 +169,26 @@ func (c *HybridCompressor) summarizeRemoved(
 	ctx context.Context,
 	removed []ClassifiedMessage,
 ) (*message.Message, error) {
-	// Sort removed by original index for coherent summary
+	// Sort removed by original index for coherent summary.
 	sort.SliceStable(removed, func(i, j int) bool {
 		return removed[i].Index < removed[j].Index
 	})
 
-	// Extract messages
+	// Extract messages.
 	msgs := make([]message.Message, len(removed))
 	for i, cm := range removed {
 		msgs[i] = cm.Message
 	}
 
-	// Calculate target tokens (compress to ~20% of original)
+	// Calculate target tokens (compress to ~20% of original).
 	totalTokens := 0
 	for _, cm := range removed {
 		totalTokens += cm.Tokens
 	}
-	targetTokens := totalTokens / 5
-	if targetTokens < 100 {
-		targetTokens = 100
-	}
 
-	// Use summarizer
+	targetTokens := max(totalTokens/5, 100)
+
+	// Use summarizer.
 	result, err := c.summarizer.SummarizeMessages(ctx, msgs, summarizer.Options{
 		MaxTokens:   targetTokens,
 		TargetRatio: 0.2,
@@ -206,26 +213,28 @@ func (c *HybridCompressor) enforceMinRetention(
 		return selected
 	}
 
-	// Need to add more messages - take most recent ones not already selected
+	// Need to add more messages - take most recent ones not already selected.
 	selectedIndices := make(map[int]bool)
+
 	for _, cm := range selected {
 		if cm.Index >= 0 {
 			selectedIndices[cm.Index] = true
 		}
 	}
 
-	// Sort classified by index (most recent last)
+	// Sort classified by index (most recent last).
 	sortedByIndex := make([]ClassifiedMessage, len(classified))
 	copy(sortedByIndex, classified)
 	sort.SliceStable(sortedByIndex, func(i, j int) bool {
 		return sortedByIndex[i].Index > sortedByIndex[j].Index
 	})
 
-	// Add recent messages until we reach minimum
+	// Add recent messages until we reach minimum.
 	for _, cm := range sortedByIndex {
 		if len(selected) >= minMessages {
 			break
 		}
+
 		if !selectedIndices[cm.Index] {
 			selected = append(selected, cm)
 			selectedIndices[cm.Index] = true
@@ -242,29 +251,33 @@ func (c *HybridCompressor) CompressWithStats(
 	targetTokens int,
 	tok tokenizer.Tokenizer,
 ) ([]message.Message, *Stats, error) {
-	// Calculate original stats
+	// Calculate original stats.
 	originalTokens := 0
+
 	for _, msg := range messages {
 		tokens := msg.Tokens
 		if tokens == 0 {
 			tokens = tok.Count(msg.Content) + 4
 		}
+
 		originalTokens += tokens
 	}
 
-	// Perform compression
+	// Perform compression.
 	result, err := c.Compress(ctx, messages, targetTokens, tok)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Calculate compressed stats
+	// Calculate compressed stats.
 	compressedTokens := 0
+
 	for _, msg := range result {
 		tokens := msg.Tokens
 		if tokens == 0 {
 			tokens = tok.Count(msg.Content) + 4
 		}
+
 		compressedTokens += tokens
 	}
 

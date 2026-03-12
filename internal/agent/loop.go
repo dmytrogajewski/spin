@@ -2,9 +2,12 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/openai/openai-go"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
@@ -12,7 +15,6 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/task"
-	"github.com/openai/openai-go"
 )
 
 // estimateTokenCount provides a rough token count estimate for messages.
@@ -20,19 +22,20 @@ import (
 func estimateTokenCount(messages []message.Message) int {
 	total := 0
 	for _, msg := range messages {
-		// Content tokens (roughly 1 token per 4 characters)
+		// Content tokens (roughly 1 token per 4 characters).
 		total += len(msg.Content) / 4
 
-		// Tool call tokens
+		// Tool call tokens.
 		for _, tc := range msg.ToolCalls {
 			total += len(tc.Function.Name) / 4
 			total += len(tc.Function.Arguments) / 4
-			total += 8 // overhead per tool call
+			total += 8 // overhead per tool call.
 		}
 
-		// Message overhead
+		// Message overhead.
 		total += 4
 	}
+
 	return total
 }
 
@@ -52,55 +55,59 @@ func estimateTokenCount(messages []message.Message) int {
 func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message, t task.Task, resp *AgentResponse, trajCtx *trajectory.TrajectoryContext) ([]message.Message, *AgentResponse, error) {
 	maxTurns := a.maxTurns
 
-	// Initialize retrieved bullets slice to accumulate across turns
+	// Initialize retrieved bullets slice to accumulate across turns.
 	allRetrievedBullets := make([]*bullet.Bullet, 0)
 
-	for turn := 0; turn < maxTurns; turn++ {
-		// Check context cancellation
-		if err := ctx.Err(); err != nil {
+	for turn := range maxTurns {
+		// Check context cancellation.
+		err := ctx.Err()
+		if err != nil {
 			resp.FinishReason = "timeout"
+
 			return messages, resp, err
 		}
 
 		a.emitTurnStart(turn + 1)
 
-		// Dynamic tool selection on each turn based on current context
+		// Dynamic tool selection on each turn based on current context.
 		if a.toolSelector != nil && trajCtx != nil {
-			query := trajCtx.Query // Use trajectory context's query
-			if _, err := a.toolSelector.SelectToolsForTurn(ctx, query, turn); err != nil {
+			query := trajCtx.Query // Use trajectory context's query.
+			_, err := a.toolSelector.SelectToolsForTurn(ctx, query, turn)
+			if err != nil {
 				slog.Warn("dynamic tool selection failed", "turn", turn, "error", err)
 			}
 		}
 
-		// Update trajectory context
+		// Update trajectory context.
 		if trajCtx != nil {
 			trajCtx.CurrentTurn = turn
 
-			// Extract new steps from messages since last extraction
+			// Extract new steps from messages since last extraction.
 			newSteps := extractNewSteps(messages, len(trajCtx.Steps))
 			trajCtx.AppendSteps(newSteps)
 		}
 
-		// ACE: Progressive retrieval with caching
+		// ACE: Progressive retrieval with caching.
 		var currentTurnBullets []*bullet.Bullet
+
 		if a.aceService != nil && trajCtx != nil && a.aceConfig != nil && a.aceConfig.Retrieval.ProgressiveContext.Enabled {
-			// Progressive retrieval path
+			// Progressive retrieval path.
 			shouldRetrieve, trigger := a.shouldRetrieveProgressive(trajCtx)
 
 			if shouldRetrieve {
-				// Build dynamic query based on context and trigger
+				// Build dynamic query based on context and trigger.
 				query := a.buildQueryFromContext(trajCtx, trigger)
 				slog.Debug("Progressive retrieval triggered",
 					"trigger", trigger,
 					"query", query,
 					"turn", turn+1)
 
-				// Retrieve bullets
+				// Retrieve bullets.
 				retrievedBullets, err := a.aceService.Retrieve(ctx, query)
 				if err != nil {
 					slog.Warn("ACE retrieval failed", "error", err, "turn", turn+1)
 				} else {
-					// Record retrieval event
+					// Record retrieval event.
 					event := trajectory.RetrievalEvent{
 						Turn:         turn,
 						Trigger:      trigger,
@@ -117,75 +124,87 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 						"hits", trajCtx.CacheHits,
 						"misses", trajCtx.CacheMisses)
 
-					// Emit ACE retrieval event for TUI
+					// Emit ACE retrieval event for TUI.
 					if a.aceConfig.Retrieval.ProgressiveContext.EmitACEEvents {
 						a.emitACERetrievalEvent(trajCtx, trigger, query, retrievedBullets, turn)
 					}
 				}
 			}
 
-			// Get active bullets for this turn (TTL-filtered, from cache)
+			// Get active bullets for this turn (TTL-filtered, from cache).
 			currentTurnBullets = trajCtx.GetActiveBullets()
 		}
 
-		// Call LLM with timeout protection and retry on transient errors or empty responses
+		// Call LLM with timeout protection and retry on transient errors or empty responses.
 		const maxRetries = 3
-		var llmResp *openai.ChatCompletion
-		var content string
-		var toolCalls []ToolCall
-		var finishReason string
-		var lastErr error
+
+		var (
+			llmResp      *openai.ChatCompletion
+			content      string
+			toolCalls    []ToolCall
+			finishReason string
+			lastErr      error
+		)
 
 		for retry := 0; retry <= maxRetries; retry++ {
 			var err error
+
 			llmResp, err = a.callLLMWithTimeout(ctx, messages, t, currentTurnBullets)
 			if err != nil {
 				lastErr = err
-				// Check if context was cancelled (non-retryable)
+				// Check if context was canceled (non-retryable).
 				if ctx.Err() != nil {
-					slog.Error("LLM call failed (context cancelled)", "turn", turn+1, "error", err)
+					slog.Error("LLM call failed (context canceled)", "turn", turn+1, "error", err)
 					resp.Error = fmt.Errorf("llm call failed: %w", err)
 					resp.FinishReason = "error"
+
 					return messages, resp, err
 				}
-				// Transient error (e.g. HTTP 500, connection error) - retry
+				// Transient error (e.g. HTTP 500, connection error) - retry.
 				if retry < maxRetries {
-					backoff := time.Duration(1<<uint(retry)) * time.Second // 1s, 2s, 4s
+					backoff := time.Duration(1<<uint(retry)) * time.Second // 1s, 2s, 4s.
 					slog.Warn("LLM call failed, retrying",
 						"turn", turn+1, "retry", retry+1, "max_retries", maxRetries,
 						"backoff", backoff, "error", err)
+
 					select {
 					case <-ctx.Done():
 						resp.FinishReason = "timeout"
+
 						return messages, resp, ctx.Err()
 					case <-time.After(backoff):
 					}
+
 					continue
 				}
+
 				slog.Error("LLM call failed after retries", "turn", turn+1, "retries", maxRetries, "error", err)
 				resp.Error = fmt.Errorf("llm call failed: %w", err)
 				resp.FinishReason = "error"
+
 				return messages, resp, err
 			}
+
 			lastErr = nil
 
-			// Extract response data using helper functions
+			// Extract response data using helper functions.
 			content = getContent(llmResp)
 			toolCalls = getToolCalls(llmResp)
 			finishReason = getFinishReason(llmResp)
 
-			// Check for empty response
+			// Check for empty response.
 			if llmResp != nil && (content != "" || len(toolCalls) > 0) {
-				// Got a valid response, break out of retry loop
+				// Got a valid response, break out of retry loop.
 				if retry > 0 {
 					slog.Info("LLM retry succeeded", "turn", turn+1, "retry", retry)
 				}
+
 				break
 			}
 
-			// Empty response - retry if we have attempts left
+			// Empty response - retry if we have attempts left.
 			if retry < maxRetries {
-				backoff := time.Duration(1<<uint(retry)) * time.Second // 1s, 2s, 4s
+				backoff := time.Duration(1<<uint(retry)) * time.Second // 1s, 2s, 4s.
 				slog.Warn("Received empty response from LLM, retrying",
 					"turn", turn+1, "retry", retry+1, "max_retries", maxRetries,
 					"backoff", backoff,
@@ -194,19 +213,22 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 				select {
 				case <-ctx.Done():
 					resp.FinishReason = "timeout"
+
 					return messages, resp, ctx.Err()
 				case <-time.After(backoff):
 				}
+
 				continue
 			}
 
-			// All retries exhausted - break the agent loop
+			// All retries exhausted - break the agent loop.
 			slog.Warn("Received empty response from LLM after retries, breaking loop",
 				"turn", turn+1, "retries_exhausted", maxRetries,
 				"llm_resp_nil", llmResp == nil, "content_len", len(content), "tool_calls", len(toolCalls))
+
 			resp.FinishReason = "empty_response"
 
-			// Emit warning event so UI can show the error state
+			// Emit warning event so UI can show the error state.
 			a.emitter.Emit(events.Event{
 				Type:      events.EventWarning,
 				Timestamp: time.Now(),
@@ -216,38 +238,46 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 					Details: fmt.Sprintf("turn=%d, retries=%d", turn+1, maxRetries),
 				},
 			})
+
 			break
 		}
 
-		// If we exhausted retries and still have empty/error response, break outer loop
+		// If we exhausted retries and still have empty/error response, break outer loop.
 		if lastErr != nil || llmResp == nil || (content == "" && len(toolCalls) == 0) {
 			break
 		}
 
 		slog.Debug("LLM response received", "turn", turn+1, "content_len", len(content), "tool_calls", len(toolCalls), "finish_reason", finishReason)
 
-		// Handle cycle detection via detection service
+		// Handle cycle detection via detection service.
 		if a.cycleDetection {
-			var shouldStop bool
-			var err error
+			var (
+				shouldStop bool
+				err        error
+			)
+
 			messages, shouldStop, err = a.handleCycleDetection(ctx, messages, llmResp, turn+1, resp)
 			if err != nil {
 				slog.Error("cycle detection failed", "turn", turn+1, "error", err)
+
 				return messages, resp, err
 			}
+
 			if shouldStop {
 				slog.Info("cycle detected, stopping agent", "turn", turn+1)
+
 				return messages, resp, nil
 			}
 		}
 
-		// Process tool calls or finish
+		// Process tool calls or finish.
 		if len(toolCalls) > 0 {
 			slog.Debug("processing tool calls", "count", len(toolCalls), "turn", turn+1)
+
 			messages = a.processToolCallsFromCompletion(ctx, messages, llmResp, resp)
 
 			// Emit estimated token count for the UI to show progress
-			// This helps display accurate context percentage during execution
+			// This helps display accurate context percentage during execution.
 			estimatedTokens := estimateTokenCount(messages)
 			a.emitter.Emit(events.Event{
 				Type:      events.EventTurnProgress,
@@ -268,6 +298,7 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 		if finishReason == string(openai.ChatCompletionChoicesFinishReasonLength) {
 			slog.Warn("LLM response truncated (finish_reason=length), continuing",
 				"turn", turn+1, "content_len", len(content))
+
 			if content != "" {
 				messages = append(messages, message.Message{
 					Role:      message.RoleAssistant,
@@ -275,24 +306,27 @@ func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message
 					Timestamp: time.Now(),
 				})
 			}
-			// Add a user message to prompt continuation
+			// Add a user message to prompt continuation.
 			messages = append(messages, message.Message{
 				Role:      message.RoleUser,
 				Content:   "Your previous response was truncated. Please continue where you left off.",
 				Timestamp: time.Now(),
 			})
+
 			continue
 		}
 
 		messages = a.addFinalMessage(messages, content)
+
 		resp.FinishReason = finishReason
 		if resp.FinishReason == "" {
 			resp.FinishReason = "stop"
 		}
+
 		break
 	}
 
-	// Store accumulated retrieved bullets in response for trajectory building
+	// Store accumulated retrieved bullets in response for trajectory building.
 	resp.RetrievedBullets = allRetrievedBullets
 
 	return messages, resp, nil
@@ -331,7 +365,7 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 		return messages, false, nil
 	}
 
-	// Convert messages to detection.Message interface for the intervention
+	// Convert messages to detection.Message interface for the intervention.
 	detectionMessages := make([]detection.Message, len(messages))
 	for i, msg := range messages {
 		detectionMessages[i] = &messageAdapter{msg: msg}
@@ -340,6 +374,7 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 	modifiedDetectionMessages, err := intervention.Apply(ctx, detectionMessages)
 	if err != nil {
 		slog.Warn("cycle intervention failed", "error", err, "cycle_type", cycleResult.Type)
+
 		return messages, false, nil
 	}
 
@@ -347,9 +382,10 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 	// Interventions typically only append new messages, so we keep originals intact
 	// and only convert genuinely new messages added by the intervention.
 	if len(modifiedDetectionMessages) >= len(messages) {
-		// Intervention appended message(s) — keep originals, convert only new ones
+		// Intervention appended message(s) — keep originals, convert only new ones.
 		newMessages := make([]message.Message, len(messages), len(modifiedDetectionMessages))
 		copy(newMessages, messages)
+
 		for i := len(messages); i < len(modifiedDetectionMessages); i++ {
 			dm := modifiedDetectionMessages[i]
 			newMessages = append(newMessages, message.Message{
@@ -358,6 +394,7 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 				Timestamp: dm.GetTimestamp(),
 			})
 		}
+
 		messages = newMessages
 	} else {
 		// Intervention removed messages — fall back to full conversion but
@@ -365,7 +402,7 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 		newMessages := make([]message.Message, len(modifiedDetectionMessages))
 		for i, dm := range modifiedDetectionMessages {
 			if i < len(messages) && messages[i].Role == message.Role(dm.GetRole()) && messages[i].Content == dm.GetContent() {
-				newMessages[i] = messages[i] // Preserve original with full data
+				newMessages[i] = messages[i] // Preserve original with full data.
 			} else {
 				newMessages[i] = message.Message{
 					Role:      message.Role(dm.GetRole()),
@@ -374,10 +411,11 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 				}
 			}
 		}
+
 		messages = newMessages
 	}
 
-	// Emit cycle detection event
+	// Emit cycle detection event.
 	a.emitter.Emit(events.Event{
 		Type:      events.EventWarning,
 		Timestamp: time.Now(),
@@ -388,9 +426,10 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 		},
 	})
 
-	// If this was an escalation intervention, pause the agent
+	// If this was an escalation intervention, pause the agent.
 	if intervention.Severity() >= 3 {
 		resp.FinishReason = "cycle_intervention"
+
 		return messages, true, nil
 	}
 
@@ -411,17 +450,17 @@ func (a *Agent) emitTurnStart(turn int) {
 // callLLMWithTimeout calls the LLM provider with timeout protection to prevent getting stuck.
 func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []message.Message, t task.Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
 	// Use a reasonable timeout for LLM calls (5 minutes)
-	// Don't use agent timeout which may be very long for multi-step tasks
+	// Don't use agent timeout which may be very long for multi-step tasks.
 	llmTimeout := 5 * time.Minute
 
-	// Check if parent context has a deadline that's already expired
+	// Check if parent context has a deadline that's already expired.
 	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
 		remaining := time.Until(deadline)
-		// If parent is about to expire, return error immediately
+		// If parent is about to expire, return error immediately.
 		if remaining <= 0 {
-			return nil, fmt.Errorf("Agent.callLLM: context cancelled: context deadline exceeded")
+			return nil, errors.New("Agent.callLLM: context canceled: context deadline exceeded")
 		}
-		// If parent has less time remaining, use that instead
+		// If parent has less time remaining, use that instead.
 		if remaining < llmTimeout {
 			llmTimeout = remaining
 		}
@@ -430,15 +469,16 @@ func (a *Agent) callLLMWithTimeout(ctx context.Context, messages []message.Messa
 	slog.Debug("calling LLM with timeout", "timeout", llmTimeout, "message_count", len(messages), "bullets_count", len(bullets))
 
 	// Create context with LLM timeout, derived from parent context
-	// This ensures cancellation propagates from parent context
+	// This ensures cancellation propagates from parent context.
 	llmCtx, cancel := context.WithTimeout(ctx, llmTimeout)
 	defer cancel()
 
-	// Call the actual LLM method
+	// Call the actual LLM method.
 	resp, err := a.callLLM(llmCtx, messages, t, bullets)
 	if err != nil {
 		slog.Error("LLM call error", "error", err, "timeout", llmTimeout)
 	}
+
 	return resp, err
 }
 
@@ -452,6 +492,7 @@ func (a *Agent) addFinalMessage(messages []message.Message, content string) []me
 			Timestamp: time.Now(),
 		})
 	}
+
 	return messages
 }
 
@@ -460,21 +501,21 @@ func (a *Agent) addFinalMessage(messages []message.Message, content string) []me
 // The intervention escalation ladder:
 // - Early cycles (< 10 turns): Soft intervention (reflection)
 // - Mid-stage cycles (< 30 turns): Medium intervention (context summarization)
-// - Late-stage/persistent cycles (>= 30 turns): Escalate to user
+// - Late-stage/persistent cycles (>= 30 turns): Escalate to user.
 func (a *Agent) selectIntervention(cycleType detection.CycleType, turnCount int) detection.Intervention {
-	// Escalation ladder based on turn count
+	// Escalation ladder based on turn count.
 	switch {
 	case turnCount < 10:
-		// Early cycles: Use soft intervention (reflection)
+		// Early cycles: Use soft intervention (reflection).
 		return &detection.ReflectionIntervention{}
 
 	case turnCount < 30:
 		// Mid-stage cycles: Use medium intervention (context summarization)
-		// Using reflection intervention (context summarization requires compressor integration)
+		// Using reflection intervention (context summarization requires compressor integration).
 		return &detection.ReflectionIntervention{}
 
 	default:
-		// Late-stage/persistent cycles: Escalate to user
+		// Late-stage/persistent cycles: Escalate to user.
 		return &detection.EscalateIntervention{
 			Emitter: &eventEmitterAdapter{emitter: a.emitter},
 		}
@@ -490,9 +531,10 @@ func (a *Agent) selectIntervention(cycleType detection.CycleType, turnCount int)
 func extractToolNamesFromOrchestration(toolCalls []ToolCall) []string {
 	calls := make([]string, len(toolCalls))
 	for i, tc := range toolCalls {
-		// Include both name and arguments for accurate cycle detection
+		// Include both name and arguments for accurate cycle detection.
 		calls[i] = tc.Function.Name + "(" + tc.Function.Arguments + ")"
 	}
+
 	return calls
 }
 
@@ -503,13 +545,14 @@ type eventEmitterAdapter struct {
 
 func (a *eventEmitterAdapter) Emit(event detection.Event) {
 	// Convert detection.Event to events.Event
-	// Map event type based on string value
+	// Map event type based on string value.
 	var eventType events.EventType
+
 	switch event.GetType() {
 	case "turn_paused":
 		eventType = events.EventTurnPaused
 	default:
-		eventType = events.EventWarning // fallback
+		eventType = events.EventWarning // fallback.
 	}
 
 	coreEvent := events.Event{

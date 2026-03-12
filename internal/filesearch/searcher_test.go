@@ -12,18 +12,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Test helpers
+// Test helpers.
 
 func createTestDir(t *testing.T) string {
 	t.Helper()
+
 	tmpDir, err := os.MkdirTemp("", "filesearch-searcher-*")
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+
 	return tmpDir
 }
 
 func createTestFiles(t *testing.T, root string, files []string) {
 	t.Helper()
+
 	for _, file := range files {
 		fullPath := filepath.Join(root, file)
 		dir := filepath.Dir(fullPath)
@@ -32,7 +35,7 @@ func createTestFiles(t *testing.T, root string, files []string) {
 	}
 }
 
-// Constructor Tests
+// Constructor Tests.
 
 func TestNewSearcher(t *testing.T) {
 	root := createTestDir(t)
@@ -54,7 +57,7 @@ func TestNewSearcher_InvalidRoot(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// Indexing Tests
+// Indexing Tests.
 
 func TestSearcher_IndexAsync(t *testing.T) {
 	root := createTestDir(t)
@@ -92,23 +95,24 @@ func TestSearcher_IndexAsync_Empty(t *testing.T) {
 func TestSearcher_IndexAsync_Cancellation(t *testing.T) {
 	root := createTestDir(t)
 
-	// Create many files to increase indexing time
+	// Create many files to increase indexing time.
 	files := make([]string, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		files[i] = filepath.Join("dir", "subdir", fmt.Sprintf("file_%d.go", i))
 	}
+
 	createTestFiles(t, root, files)
 
 	s, err := NewSearcher(root)
 	require.NoError(t, err)
 
-	// Cancel context immediately
+	// Cancel context immediately.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	err = s.IndexAsync(ctx)
 
-	// Should return context.Canceled error or succeed if already indexed
+	// Should return context.Canceled error or succeed if already indexed.
 	if err != nil {
 		assert.ErrorIs(t, err, context.Canceled)
 	}
@@ -117,21 +121,21 @@ func TestSearcher_IndexAsync_Cancellation(t *testing.T) {
 func TestSearcher_IndexAsync_Timeout(t *testing.T) {
 	root := createTestDir(t)
 
-	// Create some files
+	// Create some files.
 	createTestFiles(t, root, []string{"test.go"})
 
 	s, err := NewSearcher(root)
 	require.NoError(t, err)
 
-	// Very short timeout
+	// Very short timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
 
-	time.Sleep(10 * time.Millisecond) // Ensure timeout occurs
+	time.Sleep(10 * time.Millisecond) // Ensure timeout occurs.
 
 	err = s.IndexAsync(ctx)
 
-	// May error with DeadlineExceeded or succeed if fast enough
+	// May error with DeadlineExceeded or succeed if fast enough.
 	if err != nil {
 		assert.ErrorIs(t, err, context.DeadlineExceeded)
 	}
@@ -146,7 +150,7 @@ func TestSearcher_IndexAsync_Idempotent(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Index multiple times
+	// Index multiple times.
 	err1 := s.IndexAsync(ctx)
 	err2 := s.IndexAsync(ctx)
 	err3 := s.IndexAsync(ctx)
@@ -157,7 +161,7 @@ func TestSearcher_IndexAsync_Idempotent(t *testing.T) {
 	assert.True(t, s.IsIndexed())
 }
 
-// Search Tests
+// Search Tests.
 
 func TestSearcher_Search_NotIndexed(t *testing.T) {
 	root := createTestDir(t)
@@ -204,11 +208,11 @@ func TestSearcher_Search_Basic(t *testing.T) {
 func TestSearcher_Search_Ranking(t *testing.T) {
 	root := createTestDir(t)
 	createTestFiles(t, root, []string{
-		"test.go",                  // Exact match
-		"test_utils.go",            // Prefix match
-		"my_test.go",               // Contains match
-		"src/test/handler.go",      // Path segment
-		"internal/testing/util.go", // Fuzzy match
+		"test.go",                  // Exact match.
+		"test_utils.go",            // Prefix match.
+		"my_test.go",               // Contains match.
+		"src/test/handler.go",      // Path segment.
+		"internal/testing/util.go", // Fuzzy match.
 	})
 
 	s, err := NewSearcher(root)
@@ -219,7 +223,7 @@ func TestSearcher_Search_Ranking(t *testing.T) {
 
 	assert.GreaterOrEqual(t, len(results), 4)
 
-	// Verify ranking order
+	// Verify ranking order.
 	assert.Equal(t, "test.go", results[0].Path, "Exact match should rank first")
 	assert.Equal(t, "test_utils.go", results[1].Path, "Prefix match should rank second")
 	assert.Equal(t, "my_test.go", results[2].Path, "Contains match should rank third")
@@ -247,7 +251,7 @@ func TestSearcher_Search_Limit(t *testing.T) {
 		{"limit 1", 1, 1},
 		{"limit 3", 3, 3},
 		{"limit 10", 10, 5},
-		{"limit 0", 0, 5}, // 0 means no limit
+		{"limit 0", 0, 5}, // 0 means no limit.
 		{"limit negative", -1, 5},
 	}
 
@@ -293,7 +297,7 @@ func TestSearcher_Search_CaseInsensitive(t *testing.T) {
 	assert.Equal(t, "TEST.go", results[0].Path)
 }
 
-// IsIndexed Tests
+// IsIndexed Tests.
 
 func TestSearcher_IsIndexed_False(t *testing.T) {
 	root := createTestDir(t)
@@ -313,12 +317,12 @@ func TestSearcher_IsIndexed_True(t *testing.T) {
 	assert.True(t, s.IsIndexed())
 }
 
-// Integration Tests
+// Integration Tests.
 
 func TestSearcher_RealProject(t *testing.T) {
 	root := createTestDir(t)
 
-	// Create realistic project structure
+	// Create realistic project structure.
 	files := []string{
 		"main.go",
 		"go.mod",
@@ -344,11 +348,11 @@ func TestSearcher_RealProject(t *testing.T) {
 		name       string
 		query      string
 		minCount   int
-		firstMatch string // Expected first result
+		firstMatch string // Expected first result.
 	}{
 		{"exact match", "main.go", 1, "cmd/server/main.go"},
 		{"config files", "config", 2, "internal/config/config.go"},
-		{"test files", "test", 4, "pkg/util/util_test.go"}, // Shorter path wins
+		{"test files", "test", 4, "pkg/util/util_test.go"}, // Shorter path wins.
 		{"util files", "util", 2, "pkg/util/util.go"},
 	}
 
@@ -356,6 +360,7 @@ func TestSearcher_RealProject(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			results := s.Search(tt.query, 10)
 			assert.GreaterOrEqual(t, len(results), tt.minCount)
+
 			if len(results) > 0 {
 				assert.Equal(t, tt.firstMatch, results[0].Path)
 			}
@@ -366,7 +371,7 @@ func TestSearcher_RealProject(t *testing.T) {
 func TestSearcher_WithGitignore(t *testing.T) {
 	root := createTestDir(t)
 
-	// Create .gitignore
+	// Create .gitignore.
 	gitignorePath := filepath.Join(root, ".gitignore")
 	gitignoreContent := `node_modules/
 *.log
@@ -374,7 +379,7 @@ dist/
 `
 	require.NoError(t, os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644))
 
-	// Create files
+	// Create files.
 	files := []string{
 		"main.go",
 		"test.go",
@@ -388,11 +393,12 @@ dist/
 	require.NoError(t, err)
 	require.NoError(t, s.IndexAsync(context.Background()))
 
-	// Search for "test"
+	// Search for "test".
 	results := s.Search("go", 10)
 
-	// Should only find main.go and test.go, not node_modules or dist
+	// Should only find main.go and test.go, not node_modules or dist.
 	assert.Len(t, results, 2)
+
 	for _, r := range results {
 		assert.NotContains(t, r.Path, "node_modules")
 		assert.NotContains(t, r.Path, "dist")
@@ -400,7 +406,7 @@ dist/
 	}
 }
 
-// Concurrent Tests
+// Concurrent Tests.
 
 func TestSearcher_ConcurrentSearch(t *testing.T) {
 	root := createTestDir(t)
@@ -414,36 +420,40 @@ func TestSearcher_ConcurrentSearch(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, s.IndexAsync(context.Background()))
 
-	// Run multiple concurrent searches
+	// Run multiple concurrent searches.
 	done := make(chan bool)
-	for i := 0; i < 10; i++ {
+
+	for range 10 {
 		go func() {
 			results := s.Search("test", 10)
 			assert.Len(t, results, 3)
+
 			done <- true
 		}()
 	}
 
-	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	// Wait for all goroutines.
+	for range 10 {
 		<-done
 	}
 }
 
-// Benchmark Tests
+// Benchmark Tests.
 
 func BenchmarkSearcher_IndexAsync_100(b *testing.B) {
 	root := createTestDir(&testing.T{})
 	defer os.RemoveAll(root)
 
 	files := make([]string, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		files[i] = "src/file_" + string(rune(i)) + ".go"
 	}
+
 	createTestFiles(&testing.T{}, root, files)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		s, _ := NewSearcher(root)
 		s.IndexAsync(context.Background())
 	}
@@ -454,13 +464,15 @@ func BenchmarkSearcher_IndexAsync_1000(b *testing.B) {
 	defer os.RemoveAll(root)
 
 	files := make([]string, 1000)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		files[i] = "src/package/file_" + string(rune(i%100)) + ".go"
 	}
+
 	createTestFiles(&testing.T{}, root, files)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		s, _ := NewSearcher(root)
 		s.IndexAsync(context.Background())
 	}
@@ -471,16 +483,18 @@ func BenchmarkSearcher_Search_100(b *testing.B) {
 	defer os.RemoveAll(root)
 
 	files := make([]string, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		files[i] = "src/file_" + string(rune(i)) + ".go"
 	}
+
 	createTestFiles(&testing.T{}, root, files)
 
 	s, _ := NewSearcher(root)
 	s.IndexAsync(context.Background())
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		s.Search("file", 10)
 	}
 }
@@ -490,16 +504,18 @@ func BenchmarkSearcher_Search_10000(b *testing.B) {
 	defer os.RemoveAll(root)
 
 	files := make([]string, 10000)
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		files[i] = "src/pkg/module/file_" + string(rune(i%100)) + ".go"
 	}
+
 	createTestFiles(&testing.T{}, root, files)
 
 	s, _ := NewSearcher(root)
 	s.IndexAsync(context.Background())
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		s.Search("file", 10)
 	}
 }

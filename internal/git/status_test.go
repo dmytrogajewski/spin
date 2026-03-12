@@ -15,25 +15,31 @@ func TestStatus(t *testing.T) {
 			name: "clean repo",
 			setup: func(t *testing.T) *Repository {
 				tmpDir := setupTestRepo(t)
+
 				repo, err := Discover(context.Background(), tmpDir)
 				if err != nil {
 					t.Fatalf("Discover failed: %v", err)
 				}
+
 				return repo
 			},
 			verify: func(t *testing.T, s *Status) {
 				if len(s.ModifiedFiles) != 0 {
 					t.Errorf("expected no modified files, got %d", len(s.ModifiedFiles))
 				}
+
 				if len(s.UntrackedFiles) != 0 {
 					t.Errorf("expected no untracked files, got %d", len(s.UntrackedFiles))
 				}
+
 				if s.Branch == "" {
 					t.Error("expected non-empty branch name")
 				}
+
 				if s.Hash == "" {
 					t.Error("expected non-empty hash")
 				}
+
 				if s.Detached {
 					t.Error("expected not detached")
 				}
@@ -43,16 +49,19 @@ func TestStatus(t *testing.T) {
 			name: "modified files",
 			setup: func(t *testing.T) *Repository {
 				tmpDir := setupTestRepoWithModifications(t)
+
 				repo, err := Discover(context.Background(), tmpDir)
 				if err != nil {
 					t.Fatalf("Discover failed: %v", err)
 				}
+
 				return repo
 			},
 			verify: func(t *testing.T, s *Status) {
 				if len(s.ModifiedFiles) == 0 {
 					t.Error("expected modified files")
 				}
+
 				if len(s.UntrackedFiles) == 0 {
 					t.Error("expected untracked files")
 				}
@@ -81,23 +90,25 @@ func TestStatus(t *testing.T) {
 
 func TestStatusCancellation(t *testing.T) {
 	tmpDir := setupTestRepo(t)
+
 	repo, err := Discover(context.Background(), tmpDir)
 	if err != nil {
 		t.Fatalf("Discover failed: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+	cancel() // Cancel immediately.
 
-	// Note: Status might complete before cancellation is checked
+	// Note: Status might complete before cancellation is checked.
 	_, err = repo.Status(ctx)
 	if err != nil && err != context.Canceled {
-		// This is ok - status might complete quickly
+		// This is ok - status might complete quickly.
 	}
 }
 
 func BenchmarkStatus(b *testing.B) {
 	tmpDir := setupTestRepo(&testing.T{})
+
 	repo, err := Discover(context.Background(), tmpDir)
 	if err != nil {
 		b.Fatal(err)
@@ -106,7 +117,8 @@ func BenchmarkStatus(b *testing.B) {
 	ctx := context.Background()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := repo.Status(ctx)
 		if err != nil {
 			b.Fatal(err)

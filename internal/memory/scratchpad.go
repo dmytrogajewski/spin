@@ -57,6 +57,7 @@ func (s *Scratchpad) MaxSize() int {
 func (s *Scratchpad) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return len(s.entries)
 }
 
@@ -72,13 +73,13 @@ func (s *Scratchpad) Put(ctx context.Context, key string, value string, opts Put
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Check if key exists
+	// Check if key exists.
 	existing, exists := s.entries[key]
 	if exists && !opts.Overwrite {
 		return ErrKeyExists
 	}
 
-	// Determine namespace
+	// Determine namespace.
 	namespace := opts.Namespace
 	if namespace == "" {
 		namespace = DefaultNamespace
@@ -87,18 +88,18 @@ func (s *Scratchpad) Put(ctx context.Context, key string, value string, opts Put
 	now := time.Now()
 
 	if exists {
-		// Update existing entry
+		// Update existing entry.
 		existing.Value = value
 		existing.UpdatedAt = now
 		existing.Namespace = namespace
 		existing.Tags = opts.Tags
 	} else {
-		// Evict if at capacity
+		// Evict if at capacity.
 		if len(s.entries) >= s.maxSize {
 			s.evictLRU()
 		}
 
-		// Create new entry
+		// Create new entry.
 		s.entries[key] = &ScratchpadEntry{
 			Key:         key,
 			Value:       value,
@@ -129,7 +130,7 @@ func (s *Scratchpad) Get(ctx context.Context, key string) (*MemoryEntry, error) 
 		return nil, ErrNotFound
 	}
 
-	// Increment access count
+	// Increment access count.
 	entry.AccessCount++
 
 	return &MemoryEntry{
@@ -154,6 +155,7 @@ func (s *Scratchpad) Delete(ctx context.Context, key string) error {
 	defer s.mu.Unlock()
 
 	delete(s.entries, key)
+
 	return nil
 }
 
@@ -170,6 +172,7 @@ func (s *Scratchpad) List(ctx context.Context, pattern string) ([]string, error)
 			keys = append(keys, key)
 		}
 	}
+
 	return keys, nil
 }
 
@@ -181,8 +184,9 @@ func (s *Scratchpad) Search(ctx context.Context, query string, topK int) ([]Memo
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Collect matching entries
+	// Collect matching entries.
 	matches := make([]MemoryEntry, 0)
+
 	for _, entry := range s.entries {
 		if containsIgnoreCase(entry.Key, query) || containsIgnoreCase(entry.Value, query) {
 			matches = append(matches, MemoryEntry{
@@ -196,10 +200,10 @@ func (s *Scratchpad) Search(ctx context.Context, query string, topK int) ([]Memo
 		}
 	}
 
-	// Sort by access count (descending) - most accessed first
+	// Sort by access count (descending) - most accessed first.
 	sortByAccessCount(matches, s.entries)
 
-	// Limit to topK
+	// Limit to topK.
 	if len(matches) > topK {
 		matches = matches[:topK]
 	}
@@ -222,6 +226,7 @@ func (s *Scratchpad) Pin(key string) error {
 	}
 
 	entry.Pinned = true
+
 	return nil
 }
 
@@ -240,6 +245,7 @@ func (s *Scratchpad) Unpin(key string) error {
 	}
 
 	entry.Pinned = false
+
 	return nil
 }
 
@@ -255,12 +261,14 @@ func (s *Scratchpad) Clear() {
 // Must be called with lock held.
 func (s *Scratchpad) evictLRU() {
 	var lruKey string
+
 	lruAccessCount := -1
 
 	for key, entry := range s.entries {
 		if entry.Pinned {
 			continue
 		}
+
 		if lruAccessCount == -1 || entry.AccessCount < lruAccessCount {
 			lruAccessCount = entry.AccessCount
 			lruKey = key
@@ -274,29 +282,30 @@ func (s *Scratchpad) evictLRU() {
 
 // inferEntryType guesses the entry type from its value.
 func inferEntryType(value string) EntryType {
-	// Simple heuristics
+	// Simple heuristics.
 	if len(value) > 0 {
-		// Check for code patterns
+		// Check for code patterns.
 		if containsIgnoreCase(value, "func ") || containsIgnoreCase(value, "class ") ||
 			containsIgnoreCase(value, "def ") || containsIgnoreCase(value, "```") {
 			return EntryTypeCode
 		}
-		// Check for URL patterns
+		// Check for URL patterns.
 		if containsIgnoreCase(value, "http://") || containsIgnoreCase(value, "https://") ||
 			containsIgnoreCase(value, "file://") {
 			return EntryTypeReference
 		}
-		// Check for decision patterns
+		// Check for decision patterns.
 		if containsIgnoreCase(value, "decided") || containsIgnoreCase(value, "decision") ||
 			containsIgnoreCase(value, "will use") || containsIgnoreCase(value, "chose") {
 			return EntryTypeDecision
 		}
-		// Check for task patterns
+		// Check for task patterns.
 		if containsIgnoreCase(value, "to-do") || containsIgnoreCase(value, "task") ||
 			containsIgnoreCase(value, "need to") || containsIgnoreCase(value, "should") {
 			return EntryTypeTask
 		}
 	}
+
 	return EntryTypeNote
 }
 
@@ -311,23 +320,28 @@ func findIgnoreCase(s, substr string) int {
 	if len(substr) == 0 {
 		return 0
 	}
+
 	if len(s) < len(substr) {
 		return -1
 	}
 
-	// Simple case-insensitive search
+	// Simple case-insensitive search.
 	for i := 0; i <= len(s)-len(substr); i++ {
 		match := true
-		for j := 0; j < len(substr); j++ {
+
+		for j := range len(substr) {
 			if toLower(s[i+j]) != toLower(substr[j]) {
 				match = false
+
 				break
 			}
 		}
+
 		if match {
 			return i
 		}
 	}
+
 	return -1
 }
 
@@ -336,6 +350,7 @@ func toLower(b byte) byte {
 	if b >= 'A' && b <= 'Z' {
 		return b + ('a' - 'A')
 	}
+
 	return b
 }
 
@@ -346,22 +361,24 @@ func matchPattern(pattern, key string) bool {
 		return true
 	}
 
-	// Simple prefix matching for patterns like "prefix*"
+	// Simple prefix matching for patterns like "prefix*".
 	if len(pattern) > 0 && pattern[len(pattern)-1] == '*' {
 		prefix := pattern[:len(pattern)-1]
+
 		return len(key) >= len(prefix) && key[:len(prefix)] == prefix
 	}
 
-	// Exact match
+	// Exact match.
 	return pattern == key
 }
 
 // sortByAccessCount sorts entries by access count (descending).
 func sortByAccessCount(entries []MemoryEntry, lookup map[string]*ScratchpadEntry) {
-	// Simple bubble sort for small lists
-	for i := 0; i < len(entries)-1; i++ {
-		for j := 0; j < len(entries)-i-1; j++ {
+	// Simple bubble sort for small lists.
+	for i := range len(entries) - 1 {
+		for j := range len(entries) - i - 1 {
 			countJ := lookup[entries[j].Key].AccessCount
+
 			countJ1 := lookup[entries[j+1].Key].AccessCount
 			if countJ < countJ1 {
 				entries[j], entries[j+1] = entries[j+1], entries[j]

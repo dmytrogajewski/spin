@@ -16,6 +16,7 @@ func (tc *TrajectoryContext) HasRecentError(lookback int) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -25,6 +26,7 @@ func getRecentSteps(steps []generator.TrajectoryStep, lookback int) []generator.
 	if lookback <= 0 || lookback >= len(steps) {
 		return steps
 	}
+
 	return steps[len(steps)-lookback:]
 }
 
@@ -34,11 +36,13 @@ func getRecentSteps(steps []generator.TrajectoryStep, lookback int) []generator.
 func ExtractErrorPatterns(steps []generator.TrajectoryStep, lookback int) []string {
 	recentSteps := getRecentSteps(steps, lookback)
 	patterns := make([]string, 0)
+
 	for _, step := range recentSteps {
 		if containsError(step.Content) {
 			patterns = append(patterns, step.Content)
 		}
 	}
+
 	return patterns
 }
 
@@ -66,18 +70,19 @@ func (tc *TrajectoryContext) GetRecentTools(lookback int) []string {
 // Returns empty string if no tool found.
 func extractToolName(content string) string {
 	lower := strings.ToLower(content)
+
 	idx := strings.Index(lower, "tool:")
 	if idx == -1 {
 		return ""
 	}
 
-	// Extract text after "tool:"
+	// Extract text after "tool:".
 	after := strings.TrimSpace(content[idx+5:])
 	if after == "" {
 		return ""
 	}
 
-	// Get first word (tool name)
+	// Get first word (tool name).
 	fields := strings.Fields(after)
 	if len(fields) == 0 {
 		return ""
@@ -95,7 +100,7 @@ func ExtractConcepts(steps []generator.TrajectoryStep, lookback int) []string {
 	seen := make(map[string]bool)
 	concepts := make([]string, 0)
 
-	// Common stopwords to filter out
+	// Common stopwords to filter out.
 	stopwords := map[string]bool{
 		"the": true, "and": true, "or": true, "but": true, "in": true,
 		"on": true, "at": true, "to": true, "for": true, "of": true,
@@ -104,17 +109,17 @@ func ExtractConcepts(steps []generator.TrajectoryStep, lookback int) []string {
 	}
 
 	for _, step := range recentSteps {
-		// Split content into words
-		words := strings.Fields(step.Content)
-		for _, word := range words {
-			// Clean up punctuation
+		// Split content into words.
+		words := strings.FieldsSeq(step.Content)
+		for word := range words {
+			// Clean up punctuation.
 			word = strings.Trim(word, ".,!?:;\"'()[]{}")
 
 			if word == "" {
 				continue
 			}
 
-			// Check if word is capitalized (potential concept)
+			// Check if word is capitalized (potential concept).
 			if len(word) > 0 && word[0] >= 'A' && word[0] <= 'Z' {
 				lower := strings.ToLower(word)
 				if !stopwords[lower] && !seen[word] {
@@ -140,11 +145,13 @@ func ExtractConcepts(steps []generator.TrajectoryStep, lookback int) []string {
 // Case-insensitive check for common error keywords.
 func containsError(content string) bool {
 	lower := strings.ToLower(content)
+
 	keywords := []string{"error", "failed", "exception", "panic", "fatal"}
 	for _, keyword := range keywords {
 		if strings.Contains(lower, keyword) {
 			return true
 		}
 	}
+
 	return false
 }

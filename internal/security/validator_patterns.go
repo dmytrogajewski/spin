@@ -11,7 +11,7 @@ package security
 // initializeForbiddenPatterns sets up forbidden command patterns.
 func (v *Validator) initializeForbiddenPatterns() {
 	v.forbiddenPatterns = []Pattern{
-		// Catastrophic deletion patterns
+		// Catastrophic deletion patterns.
 		{
 			Program:     "rm",
 			ArgPatterns: []string{"-rf", "/"},
@@ -32,12 +32,12 @@ func (v *Validator) initializeForbiddenPatterns() {
 			ArgPatterns: []string{"-rf", "$HOME"},
 			Description: "Attempting to delete home directory",
 		},
-		// Fork bomb - matches the actual fork bomb syntax
+		// Fork bomb - matches the actual fork bomb syntax.
 		{
 			Program:     ":()",
 			Description: "Fork bomb detected",
 		},
-		// Piping to shell (common RCE vector)
+		// Piping to shell (common RCE vector).
 		{
 			Program:           "curl",
 			ForbiddenPatterns: []string{"|", "bash", "sh"},
@@ -48,13 +48,13 @@ func (v *Validator) initializeForbiddenPatterns() {
 			ForbiddenPatterns: []string{"|", "bash", "sh"},
 			Description:       "Piping wget output to shell",
 		},
-		// Dangerous chmod
+		// Dangerous chmod.
 		{
 			Program:     "chmod",
 			ArgPatterns: []string{"-R", "777", "/"},
 			Description: "Setting insecure permissions on root",
 		},
-		// Disk operations
+		// Disk operations.
 		{
 			Program:     "dd",
 			ArgPatterns: []string{"of=/dev/sda"},
@@ -64,7 +64,7 @@ func (v *Validator) initializeForbiddenPatterns() {
 			Program:     "mkfs",
 			Description: "Formatting filesystem",
 		},
-		// Sudo with dangerous operations
+		// Sudo with dangerous operations.
 		{
 			Program:     "sudo",
 			ArgPatterns: []string{"rm", "-rf", "/"},
@@ -75,7 +75,7 @@ func (v *Validator) initializeForbiddenPatterns() {
 
 // initializeDangerousPatterns sets up dangerous command patterns.
 func (v *Validator) initializeDangerousPatterns() {
-	// rm patterns
+	// rm patterns.
 	v.dangerousPatterns["rm"] = []Pattern{
 		{
 			Program:     "rm",
@@ -89,7 +89,7 @@ func (v *Validator) initializeDangerousPatterns() {
 		},
 	}
 
-	// rmdir
+	// rmdir.
 	v.dangerousPatterns["rmdir"] = []Pattern{
 		{
 			Program:     "rmdir",
@@ -97,7 +97,7 @@ func (v *Validator) initializeDangerousPatterns() {
 		},
 	}
 
-	// chmod
+	// chmod.
 	v.dangerousPatterns["chmod"] = []Pattern{
 		{
 			Program:     "chmod",
@@ -110,7 +110,7 @@ func (v *Validator) initializeDangerousPatterns() {
 		},
 	}
 
-	// sudo - always dangerous
+	// sudo - always dangerous.
 	v.dangerousPatterns["sudo"] = []Pattern{
 		{
 			Program:     "sudo",
@@ -118,7 +118,7 @@ func (v *Validator) initializeDangerousPatterns() {
 		},
 	}
 
-	// su
+	// su.
 	v.dangerousPatterns["su"] = []Pattern{
 		{
 			Program:     "su",
@@ -126,7 +126,7 @@ func (v *Validator) initializeDangerousPatterns() {
 		},
 	}
 
-	// git dangerous operations
+	// git dangerous operations.
 	v.dangerousPatterns["git"] = []Pattern{
 		{
 			Program:     "git",
@@ -145,7 +145,7 @@ func (v *Validator) initializeDangerousPatterns() {
 		},
 	}
 
-	// curl with mutations
+	// curl with mutations.
 	v.dangerousPatterns["curl"] = []Pattern{
 		{
 			Program:     "curl",
@@ -164,7 +164,7 @@ func (v *Validator) initializeDangerousPatterns() {
 		},
 	}
 
-	// wget with output
+	// wget with output.
 	v.dangerousPatterns["wget"] = []Pattern{
 		{
 			Program:     "wget",
@@ -173,7 +173,7 @@ func (v *Validator) initializeDangerousPatterns() {
 		},
 	}
 
-	// Process control
+	// Process control.
 	v.dangerousPatterns["kill"] = []Pattern{
 		{
 			Program:     "kill",
@@ -196,7 +196,7 @@ func (v *Validator) initializeDangerousPatterns() {
 		},
 	}
 
-	// Package managers
+	// Package managers.
 	v.dangerousPatterns["apt"] = []Pattern{
 		{
 			Program:     "apt",
@@ -221,7 +221,7 @@ func (v *Validator) initializeDangerousPatterns() {
 
 // initializeInteractivePatterns sets up interactive command patterns.
 func (v *Validator) initializeInteractivePatterns() {
-	// File operations
+	// File operations.
 	v.interactivePatterns["mkdir"] = []Pattern{
 		{
 			Program:     "mkdir",
@@ -250,7 +250,7 @@ func (v *Validator) initializeInteractivePatterns() {
 		},
 	}
 
-	// Git write operations
+	// Git write operations.
 	v.interactivePatterns["git"] = []Pattern{
 		{
 			Program:     "git",
@@ -274,7 +274,7 @@ func (v *Validator) initializeInteractivePatterns() {
 		},
 	}
 
-	// Package managers (user-level)
+	// Package managers (user-level).
 	v.interactivePatterns["npm"] = []Pattern{
 		{
 			Program:     "npm",
@@ -299,7 +299,7 @@ func (v *Validator) initializeInteractivePatterns() {
 		},
 	}
 
-	// Build tools
+	// Build tools.
 	v.interactivePatterns["make"] = []Pattern{
 		{
 			Program:     "make",
@@ -315,7 +315,7 @@ func (v *Validator) initializeInteractivePatterns() {
 		},
 	}
 
-	// Echo with redirect (write operation)
+	// Echo with redirect (write operation).
 	v.interactivePatterns["echo"] = []Pattern{
 		{
 			Program:     "echo",
@@ -327,7 +327,7 @@ func (v *Validator) initializeInteractivePatterns() {
 
 // initializeSafePatterns sets up safe command patterns.
 func (v *Validator) initializeSafePatterns() {
-	// File listing and reading
+	// File listing and reading.
 	v.safePatterns["ls"] = []Pattern{
 		{
 			Program:     "ls",
@@ -370,7 +370,7 @@ func (v *Validator) initializeSafePatterns() {
 		},
 	}
 
-	// Git read operations
+	// Git read operations.
 	v.safePatterns["git"] = []Pattern{
 		{
 			Program:     "git",
@@ -394,7 +394,7 @@ func (v *Validator) initializeSafePatterns() {
 		},
 	}
 
-	// System info
+	// System info.
 	v.safePatterns["pwd"] = []Pattern{
 		{
 			Program:     "pwd",

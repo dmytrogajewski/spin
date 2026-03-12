@@ -19,14 +19,14 @@ import (
 	"github.com/dmytrogajewski/spin/internal/detection"
 )
 
-// Type aliases to detection package - cycle uses detection types directly
+// Type aliases to detection package - cycle uses detection types directly.
 type (
 	CycleType   = detection.CycleType
 	Snapshot    = detection.Snapshot
 	CycleResult = detection.CycleResult
 )
 
-// Re-export detection constants for backward compatibility
+// Re-export detection constants for backward compatibility.
 const (
 	CycleNone             = detection.CycleNone
 	CycleSimilarResponses = detection.CycleSimilarResponses
@@ -35,52 +35,52 @@ const (
 	CycleSameError        = detection.CycleSameError
 )
 
-// Config contains configuration for cycle detection
+// Config contains configuration for cycle detection.
 type Config struct {
-	// WindowSize is the number of snapshots to compare for pattern detection (default: 10)
+	// WindowSize is the number of snapshots to compare for pattern detection (default: 10).
 	WindowSize int
 
-	// SimilarityThresh is the threshold for response similarity detection (default: 0.8)
+	// SimilarityThresh is the threshold for response similarity detection (default: 0.8).
 	SimilarityThresh float64
 
-	// ToolRepeatLimit is the max identical tool calls before triggering cycle (default: 3)
+	// ToolRepeatLimit is the max identical tool calls before triggering cycle (default: 3).
 	ToolRepeatLimit int
 
-	// ErrorRepeatLimit is the max identical errors before triggering cycle (default: 3)
+	// ErrorRepeatLimit is the max identical errors before triggering cycle (default: 3).
 	ErrorRepeatLimit int
 
-	// Enabled controls whether cycle detection is active (default: true)
+	// Enabled controls whether cycle detection is active (default: true).
 	Enabled bool
 }
 
-// InterventionType represents the type of intervention applied
+// InterventionType represents the type of intervention applied.
 type InterventionType int
 
 const (
-	// InterventionNone indicates no intervention needed
+	// InterventionNone indicates no intervention needed.
 	InterventionNone InterventionType = iota
 
-	// InterventionReflection uses reflection prompts for early cycles
+	// InterventionReflection uses reflection prompts for early cycles.
 	InterventionReflection
 
-	// InterventionSummarize compresses context for mid-stage cycles
+	// InterventionSummarize compresses context for mid-stage cycles.
 	InterventionSummarize
 
-	// InterventionEscalate pauses agent and requests user guidance
+	// InterventionEscalate pauses agent and requests user guidance.
 	InterventionEscalate
 )
 
-// InterventionResult contains the result of applying an intervention
+// InterventionResult contains the result of applying an intervention.
 type InterventionResult struct {
-	// Type is the type of intervention applied
+	// Type is the type of intervention applied.
 	Type InterventionType
 
-	// Success indicates whether the intervention was applied successfully
+	// Success indicates whether the intervention was applied successfully.
 	Success bool
 
-	// Message describes what happened during the intervention
+	// Message describes what happened during the intervention.
 	Message string
 
-	// Timestamp when the intervention was applied
+	// Timestamp when the intervention was applied.
 	Timestamp time.Time
 }

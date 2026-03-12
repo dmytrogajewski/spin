@@ -20,19 +20,22 @@ func TestExecMode_ReadOnlyDeniesWrites(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
+
 	t.Parallel()
 
-	// Create temporary workspace
+	// Create temporary workspace.
 	workDir := t.TempDir()
 
-	// Create a test file for read operations
+	// Create a test file for read operations.
 	testFile := filepath.Join(workDir, "test.txt")
+
 	testContent := "This is a test file for read operations"
-	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+	err := os.WriteFile(testFile, []byte(testContent), 0644)
+	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	// Create temporary config with test-llm provider (no external LLM required)
+	// Create temporary config with test-llm provider (no external LLM required).
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "spin.yaml")
 
@@ -52,7 +55,8 @@ security:
     mode: workspace-write
 `
 
-	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
+	err = os.WriteFile(configPath, []byte(config), 0644)
+	if err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
 	}
 
@@ -60,10 +64,10 @@ security:
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
 
-		// Target file that should NOT be created
+		// Target file that should NOT be created.
 		targetFile := filepath.Join(workDir, "should-not-exist.txt")
 
-		// Run exec without --auto-approve, asking to create a file
+		// Run exec without --auto-approve, asking to create a file.
 		cmd := exec.CommandContext(ctx, binPath,
 			"--config-file", configPath,
 			"--cd", workDir,
@@ -72,6 +76,7 @@ security:
 		)
 
 		var outBuf, errBuf bytes.Buffer
+
 		cmd.Stdout = &outBuf
 		cmd.Stderr = &errBuf
 
@@ -79,13 +84,14 @@ security:
 		stdout := outBuf.String()
 		stderr := errBuf.String()
 
-		// Check if file was created (it should NOT be)
-		if _, err := os.Stat(targetFile); err == nil {
+		// Check if file was created (it should NOT be).
+		_, err := os.Stat(targetFile)
+		if err == nil {
 			t.Errorf("File was created despite no --auto-approve flag! File exists: %s", targetFile)
 		}
 
 		// Check for denial message in output
-		// The denial might appear in stdout (agent response) or stderr (error message)
+		// The denial might appear in stdout (agent response) or stderr (error message).
 		output := stdout + stderr
 		denialIndicators := []string{
 			"exec mode requires --auto-approve",
@@ -96,24 +102,27 @@ security:
 		}
 
 		foundDenial := false
+
 		for _, indicator := range denialIndicators {
 			if strings.Contains(strings.ToLower(output), strings.ToLower(indicator)) {
 				foundDenial = true
+
 				break
 			}
 		}
 
 		if !foundDenial && len(output) > 0 {
 			// If we got output but no clear denial message, log it for debugging
-			// The agent might have responded differently, but the file should still not exist
+			// The agent might have responded differently, but the file should still not exist.
 			t.Logf("No explicit denial message found, but file was correctly not created. Output: %s", output)
 		}
 
 		// The command may succeed (agent responds) or fail (approval denied)
-		// What matters is that the file was not created
+		// What matters is that the file was not created.
 		if runErr != nil {
 			t.Logf("Write test - command exited with error (expected for denied operations): %v", runErr)
 		}
+
 		t.Logf("Write test - stdout: %s", stdout)
 		t.Logf("Write test - stderr: %s", stderr)
 	})
@@ -122,7 +131,7 @@ security:
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
 
-		// Run exec without --auto-approve, asking to read the test file
+		// Run exec without --auto-approve, asking to read the test file.
 		cmd := exec.CommandContext(ctx, binPath,
 			"--config-file", configPath,
 			"--cd", workDir,
@@ -131,6 +140,7 @@ security:
 		)
 
 		var outBuf, errBuf bytes.Buffer
+
 		cmd.Stdout = &outBuf
 		cmd.Stderr = &errBuf
 
@@ -138,24 +148,24 @@ security:
 		stdout := outBuf.String()
 		stderr := errBuf.String()
 
-		// Read operations should succeed
+		// Read operations should succeed.
 		if err != nil {
 			t.Errorf("Read operation failed unexpectedly: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
 		}
 
-		// Should have output
+		// Should have output.
 		if len(stdout) == 0 {
 			t.Errorf("No output from read operation\nstderr: %s", stderr)
 		}
 
 		// Should contain the test file content (or at least part of it)
-		// The agent might paraphrase, but should mention the content
+		// The agent might paraphrase, but should mention the content.
 		if !strings.Contains(strings.ToLower(stdout), strings.ToLower("test file")) &&
 			!strings.Contains(strings.ToLower(stdout), strings.ToLower("read operations")) {
 			t.Logf("Warning: Expected test file content in response, got: %s", stdout)
 		}
 
-		// Should NOT contain denial messages for read operations
+		// Should NOT contain denial messages for read operations.
 		if strings.Contains(strings.ToLower(stdout+stderr), "requires --auto-approve") ||
 			strings.Contains(strings.ToLower(stdout+stderr), "denied") {
 			t.Errorf("Read operation was incorrectly denied. Output: %s", stdout+stderr)
@@ -169,7 +179,7 @@ security:
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
 
-		// Run exec without --auto-approve, asking to list directory
+		// Run exec without --auto-approve, asking to list directory.
 		cmd := exec.CommandContext(ctx, binPath,
 			"--config-file", configPath,
 			"--cd", workDir,
@@ -178,6 +188,7 @@ security:
 		)
 
 		var outBuf, errBuf bytes.Buffer
+
 		cmd.Stdout = &outBuf
 		cmd.Stderr = &errBuf
 
@@ -185,22 +196,22 @@ security:
 		stdout := outBuf.String()
 		stderr := errBuf.String()
 
-		// List operations should succeed
+		// List operations should succeed.
 		if err != nil {
 			t.Errorf("List operation failed unexpectedly: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
 		}
 
-		// Should have output
+		// Should have output.
 		if len(stdout) == 0 {
 			t.Errorf("No output from list operation\nstderr: %s", stderr)
 		}
 
-		// Should mention the test file
+		// Should mention the test file.
 		if !strings.Contains(strings.ToLower(stdout), "test.txt") {
 			t.Logf("Warning: Expected 'test.txt' in directory listing, got: %s", stdout)
 		}
 
-		// Should NOT contain denial messages for list operations
+		// Should NOT contain denial messages for list operations.
 		if strings.Contains(strings.ToLower(stdout+stderr), "requires --auto-approve") ||
 			strings.Contains(strings.ToLower(stdout+stderr), "denied") {
 			t.Errorf("List operation was incorrectly denied. Output: %s", stdout+stderr)

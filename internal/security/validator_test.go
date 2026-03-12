@@ -72,6 +72,7 @@ func TestParseCommand(t *testing.T) {
 			if tt.expectError && err == nil {
 				t.Errorf("ParseCommand() expected error but got none")
 			}
+
 			if !tt.expectError && err != nil {
 				t.Errorf("ParseCommand() unexpected error: %v", err)
 			}
@@ -80,11 +81,13 @@ func TestParseCommand(t *testing.T) {
 				if cmd != nil {
 					t.Errorf("ParseCommand() = %v, want %v", cmd, tt.expectedCmd)
 				}
+
 				return
 			}
 
 			if cmd == nil {
 				t.Errorf("ParseCommand() = %v, want %v", cmd, tt.expectedCmd)
+
 				return
 			}
 
@@ -240,6 +243,7 @@ func TestValidator_Classify(t *testing.T) {
 			if tt.expectError && err == nil {
 				t.Errorf("Classify() expected error but got none")
 			}
+
 			if !tt.expectError && err != nil {
 				t.Errorf("Classify() unexpected error: %v", err)
 			}
@@ -493,6 +497,7 @@ func TestValidator_SpecialForbiddenPatterns(t *testing.T) {
 			if err != nil {
 				t.Errorf("Classify() error = %v", err)
 			}
+
 			if result.Classification != tt.expectedClass {
 				t.Errorf("Classify().Classification = %v, want %v", result.Classification, tt.expectedClass)
 			}
@@ -503,31 +508,34 @@ func TestValidator_SpecialForbiddenPatterns(t *testing.T) {
 func TestValidator_Concurrency(t *testing.T) {
 	validator := NewValidator()
 
-	// Test concurrent classification
+	// Test concurrent classification.
 	results := make(chan *ValidationResult, 10)
 	errors := make(chan error, 10)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			cmd := &Command{
 				Program: "ls",
 				Args:    []string{"-la"},
 				Raw:     "ls -la",
 			}
+
 			result, err := validator.Classify(cmd)
 			results <- result
+
 			errors <- err
 		}()
 	}
 
-	// Collect results
-	for i := 0; i < 10; i++ {
+	// Collect results.
+	for range 10 {
 		result := <-results
-		err := <-errors
 
+		err := <-errors
 		if err != nil {
 			t.Errorf("Concurrent Classify() error = %v", err)
 		}
+
 		if result.Classification != CommandSafe {
 			t.Errorf("Concurrent Classify().Classification = %v, want %v", result.Classification, CommandSafe)
 		}

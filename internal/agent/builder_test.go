@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openai/openai-go"
+
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/openai/openai-go"
 )
 
 func TestNewBuilder_CreatesBuilder(t *testing.T) {
@@ -33,9 +34,11 @@ func TestBuilder_WithUnifiedConfig_FluentInterface(t *testing.T) {
 	if builder == nil {
 		t.Error("Fluent interface broke chain")
 	}
+
 	if builder.config != cfg {
 		t.Error("Config not set")
 	}
+
 	if builder.workingDir != "/test" {
 		t.Error("WorkingDir not set")
 	}
@@ -83,6 +86,7 @@ func TestBuilder_BuildEnvironment(t *testing.T) {
 	if env == nil {
 		t.Fatal("BuildEnvironment() returned nil")
 	}
+
 	if env.WorkDir != tmpDir {
 		t.Errorf("WorkDir = %s, want %s", env.WorkDir, tmpDir)
 	}
@@ -91,7 +95,7 @@ func TestBuilder_BuildEnvironment(t *testing.T) {
 func TestBuilder_BuildHelpers(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create a mock LLM provider
+	// Create a mock LLM provider.
 	mockLLM := &mockProvider{}
 
 	cfg := &config.ConfigV2{
@@ -114,7 +118,7 @@ func TestBuilder_BuildHelpers(t *testing.T) {
 		WithWorkingDir(tmpDir).
 		WithEmitter(emitter)
 
-	// Test individual builders
+		// Test individual builders.
 	secSvc := builder.BuildSecurityService()
 	if secSvc == nil {
 		t.Fatal("BuildSecurityService() returned nil")
@@ -151,12 +155,13 @@ func TestBuilder_BuildPlanningService_NilProvider(t *testing.T) {
 	builder := NewBuilder()
 	// Should handle nil provider gracefully
 	// BuildPlanningService will panic or return nil - test actual behavior
-	// For now, PlanningService creation requires provider, so this should panic
+	// For now, PlanningService creation requires provider, so this should panic.
 	defer func() {
 		if r := recover(); r == nil {
 			t.Log("BuildPlanningService with nil provider did not panic (may be acceptable)")
 		}
 	}()
+
 	_ = builder.BuildPlanningService()
 }
 
@@ -164,7 +169,7 @@ func TestBuilder_BuildPlanningService_NilProvider(t *testing.T) {
 // The conversation package now uses helper methods (BuildSecurityService, BuildDetectionService, etc.)
 // and calls NewAgent() directly, which is the preferred approach.
 
-// mockProvider is a simple mock LLM provider for testing
+// mockProvider is a simple mock LLM provider for testing.
 type mockProvider struct{}
 
 func (m *mockProvider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
@@ -186,6 +191,7 @@ func (m *mockProvider) Complete(ctx context.Context, params openai.ChatCompletio
 func (m *mockProvider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	ch := make(chan openai.ChatCompletionChunk)
 	close(ch)
+
 	return ch, nil
 }
 
@@ -213,7 +219,7 @@ func TestBuilder_BuildACEService(t *testing.T) {
 	tmpDir := t.TempDir()
 	mockLLM := &mockProvider{}
 
-	// Use config.ConfigV2 with ACE enabled
+	// Use config.ConfigV2 with ACE enabled.
 	cfg := &config.ConfigV2{
 		LLM: config.LLMConfigV2{
 			Provider:    "openai",
@@ -244,6 +250,7 @@ func TestBuilder_BuildACEService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildACEService() error = %v", err)
 	}
+
 	if aceSvc == nil {
 		t.Fatal("BuildACEService() returned nil")
 	}

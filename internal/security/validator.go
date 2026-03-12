@@ -29,7 +29,9 @@ import (
 //	result, _ := validator.Classify(cmd)
 //
 //	if result.Classification == CommandSafe {
-//	    // Execute automatically
+//
+// Execute automatically
+//
 //	}
 type Validator struct {
 	safePatterns        map[string][]Pattern
@@ -68,32 +70,32 @@ func (v *Validator) Classify(cmd *Command) (*ValidationResult, error) {
 		return nil, ErrInvalidCommand
 	}
 
-	// Check special forbidden patterns
+	// Check special forbidden patterns.
 	if result := v.checkSpecialForbiddenPatterns(cmd); result != nil {
 		return result, nil
 	}
 
-	// Check regular forbidden patterns
+	// Check regular forbidden patterns.
 	if result := v.checkPatternList(cmd, v.forbiddenPatterns, CommandForbidden); result != nil {
 		return result, nil
 	}
 
-	// Check dangerous patterns
+	// Check dangerous patterns.
 	if result := v.checkPatternMap(cmd, v.dangerousPatterns, CommandDangerous); result != nil {
 		return result, nil
 	}
 
-	// Check interactive patterns
+	// Check interactive patterns.
 	if result := v.checkPatternMap(cmd, v.interactivePatterns, CommandInteractive); result != nil {
 		return result, nil
 	}
 
-	// Check safe patterns
+	// Check safe patterns.
 	if result := v.checkPatternMap(cmd, v.safePatterns, CommandSafe); result != nil {
 		return result, nil
 	}
 
-	// Unknown command
+	// Unknown command.
 	return &ValidationResult{
 		Classification: CommandUnverified,
 		Reason:         fmt.Sprintf("no pattern matched for '%s'", cmd.Program),
@@ -108,6 +110,7 @@ func (v *Validator) IsSafe(cmd *Command) bool {
 	if err != nil {
 		return false
 	}
+
 	return result.Classification == CommandSafe
 }
 
@@ -117,6 +120,7 @@ func (v *Validator) IsInteractive(cmd *Command) bool {
 	if err != nil {
 		return false
 	}
+
 	return result.Classification == CommandInteractive
 }
 
@@ -126,6 +130,7 @@ func (v *Validator) IsDangerous(cmd *Command) bool {
 	if err != nil {
 		return false
 	}
+
 	return result.Classification == CommandDangerous
 }
 
@@ -135,6 +140,7 @@ func (v *Validator) IsForbidden(cmd *Command) bool {
 	if err != nil {
 		return false
 	}
+
 	return result.Classification == CommandForbidden
 }
 
@@ -146,10 +152,10 @@ func (v *Validator) IsForbidden(cmd *Command) bool {
 func (v *Validator) NeedsApproval(cmd *Command) bool {
 	result, err := v.Classify(cmd)
 	if err != nil {
-		return true // Err on the side of caution
+		return true // Err on the side of caution.
 	}
 
-	// Forbidden commands shouldn't be approved, they should be blocked
+	// Forbidden commands shouldn't be approved, they should be blocked.
 	if result.Classification == CommandForbidden {
 		return false
 	}

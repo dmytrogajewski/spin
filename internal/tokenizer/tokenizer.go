@@ -7,7 +7,7 @@ import "strings"
 // Different LLM providers may use different tokenization schemes.
 // This interface allows pluggable token counting implementations.
 type Tokenizer interface {
-	// Count returns the estimated token count for the given text
+	// Count returns the estimated token count for the given text.
 	Count(text string) int
 }
 
@@ -29,14 +29,14 @@ func (t *SimpleTokenizer) Count(text string) int {
 		return 0
 	}
 
-	// Count words
+	// Count words.
 	words := strings.Fields(text)
 	wordCount := len(words)
 
-	// Approximate: 1.3 tokens per word
+	// Approximate: 1.3 tokens per word.
 	tokens := int(float64(wordCount) * 1.3)
 
-	// Minimum 1 token for non-empty text
+	// Minimum 1 token for non-empty text.
 	if tokens == 0 && text != "" {
 		tokens = 1
 	}

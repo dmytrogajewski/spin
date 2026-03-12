@@ -26,10 +26,12 @@
 //
 // # Usage Example
 //
-//	// Create detector with default configuration
+// Create detector with default configuration
+//
 //	detector := cycle.NewDetector(cycle.DefaultConfig())
 //
-//	// Record agent behavior after each turn
+// Record agent behavior after each turn
+//
 //	detector.Record(cycle.Snapshot{
 //		Turn:      turn,
 //		Response:  llmResponse.Content,
@@ -38,23 +40,31 @@
 //		Timestamp: time.Now(),
 //	})
 //
-//	// Check for cycles
+// Check for cycles
+//
 //	result, err := detector.Check()
 //	if err != nil {
-//		// handle error
+//
+// handle error
+//
 //	}
 //
 //	if result.Type != cycle.CycleNone {
-//		// Select and apply intervention
-//		selector := cycle.NewInterventionSelector()
-//		intervention := selector.SelectIntervention(result.Type, turnCount)
 //
-//		modifiedMessages, err := intervention.Apply(ctx, messages)
-//		if err != nil {
-//			// handle intervention error
-//		}
+// Select and apply intervention
 //
-//		// Use modifiedMessages for next LLM call
+//	selector := cycle.NewInterventionSelector()
+//	intervention := selector.SelectIntervention(result.Type, turnCount)
+//
+//	modifiedMessages, err := intervention.Apply(ctx, messages)
+//	if err != nil {
+//
+// handle intervention error
+//
+//	}
+//
+// Use modifiedMessages for next LLM call
+//
 //	}
 //
 // # Configuration

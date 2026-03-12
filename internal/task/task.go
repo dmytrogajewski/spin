@@ -7,19 +7,19 @@ import (
 
 // Task represents a task mode implementation.
 type Task interface {
-	// Name returns the task name
+	// Name returns the task name.
 	Name() string
 
-	// SystemPrompt returns the system prompt for this task
+	// SystemPrompt returns the system prompt for this task.
 	SystemPrompt() string
 
-	// AllowedTools returns the list of allowed tools for this task
+	// AllowedTools returns the list of allowed tools for this task.
 	AllowedTools() []string
 
-	// MaxTokens returns the maximum token budget for this task
+	// MaxTokens returns the maximum token budget for this task.
 	MaxTokens() int
 
-	// Validate validates the task configuration
+	// Validate validates the task configuration.
 	Validate() error
 }
 
@@ -27,7 +27,7 @@ type Task interface {
 // This replaces the runtime registry pattern with compile-time safety.
 //
 // Supported task names: "regular", "review", "compact", "planning"
-// Default task: "regular"
+// Default task: "regular".
 func NewTask(name string) (Task, error) {
 	switch name {
 	case "regular", "":
@@ -70,8 +70,10 @@ func ValidateMode(mode string) error {
 	if mode == "" {
 		return nil
 	}
+
 	if !validModesMap[mode] {
 		return fmt.Errorf("invalid task mode: %s (must be one of: %s)", mode, strings.Join(ValidModes, ", "))
 	}
+
 	return nil
 }

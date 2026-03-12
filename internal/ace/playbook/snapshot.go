@@ -1,11 +1,12 @@
 package playbook
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/google/uuid"
+
+	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 )
 
 // Snapshot is an immutable point-in-time capture of a playbook.
@@ -53,16 +54,16 @@ func (p *Playbook) Snapshot() *Snapshot {
 // This replaces all current bullets with those from the snapshot.
 func (p *Playbook) Restore(snapshot *Snapshot) error {
 	if snapshot == nil {
-		return fmt.Errorf("snapshot cannot be nil")
+		return errors.New("snapshot cannot be nil")
 	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Clear current bullets
+	// Clear current bullets.
 	p.bullets = make(map[string]*bullet.Bullet)
 
-	// Add bullets from snapshot (deep copy)
+	// Add bullets from snapshot (deep copy).
 	for _, b := range snapshot.Bullets {
 		p.bullets[b.ID] = b.Clone()
 	}
@@ -76,7 +77,7 @@ func (s *Snapshot) Diff(other *Snapshot) *Diff {
 		return &Diff{}
 	}
 
-	// Build maps for fast lookup
+	// Build maps for fast lookup.
 	thisMap := make(map[string]*bullet.Bullet)
 	for _, b := range s.Bullets {
 		thisMap[b.ID] = b
@@ -93,14 +94,14 @@ func (s *Snapshot) Diff(other *Snapshot) *Diff {
 		Modified: make([]*BulletChange, 0),
 	}
 
-	// Find added and modified bullets
+	// Find added and modified bullets.
 	for id, otherBullet := range otherMap {
 		thisBullet, exists := thisMap[id]
 		if !exists {
-			// Bullet exists in other but not in this = added
+			// Bullet exists in other but not in this = added.
 			diff.Added = append(diff.Added, otherBullet)
 		} else if !bulletsEqual(thisBullet, otherBullet) {
-			// Bullet exists in both but different = modified
+			// Bullet exists in both but different = modified.
 			diff.Modified = append(diff.Modified, &BulletChange{
 				ID:     id,
 				Before: thisBullet,
@@ -109,10 +110,10 @@ func (s *Snapshot) Diff(other *Snapshot) *Diff {
 		}
 	}
 
-	// Find removed bullets
+	// Find removed bullets.
 	for id, thisBullet := range thisMap {
 		if _, exists := otherMap[id]; !exists {
-			// Bullet exists in this but not in other = removed
+			// Bullet exists in this but not in other = removed.
 			diff.Removed = append(diff.Removed, thisBullet)
 		}
 	}
@@ -131,10 +132,12 @@ func (p *Playbook) statsLocked() Stats {
 	}
 
 	totalScore := 0.0
+
 	for _, b := range p.bullets {
 		stats.TotalHelpful += b.HelpfulCount
 		stats.TotalHarmful += b.HarmfulCount
 		totalScore += b.Score()
+
 		stats.TotalSizeBytes += int64(len(b.ID) + len(b.Content) + 16 + len(b.Embedding)*4)
 		for k, v := range b.Tags {
 			stats.TotalSizeBytes += int64(len(k) + len(v))
@@ -151,24 +154,30 @@ func bulletsEqual(a, b *bullet.Bullet) bool {
 	if a.Content != b.Content {
 		return false
 	}
+
 	if a.HelpfulCount != b.HelpfulCount || a.HarmfulCount != b.HarmfulCount {
 		return false
 	}
+
 	if len(a.Embedding) != len(b.Embedding) {
 		return false
 	}
+
 	for i := range a.Embedding {
 		if a.Embedding[i] != b.Embedding[i] {
 			return false
 		}
 	}
+
 	if len(a.Tags) != len(b.Tags) {
 		return false
 	}
+
 	for k, v := range a.Tags {
 		if b.Tags[k] != v {
 			return false
 		}
 	}
+
 	return true
 }

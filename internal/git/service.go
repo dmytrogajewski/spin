@@ -17,7 +17,8 @@ func NewService(enabled bool, workDir string, logger *slog.Logger) (*Service, er
 	integration := NewGitIntegration(enabled, workDir, logger)
 
 	if enabled {
-		if err := integration.Initialize(context.Background()); err != nil {
+		err := integration.Initialize(context.Background())
+		if err != nil {
 			return nil, err
 		}
 	}

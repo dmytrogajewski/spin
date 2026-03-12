@@ -10,13 +10,13 @@ import (
 // It maintains a rolling history of snapshots and detects various
 // patterns that indicate the agent may be stuck in a cycle.
 type Detector struct {
-	// history stores recent snapshots for pattern analysis
+	// history stores recent snapshots for pattern analysis.
 	history []Snapshot
 
-	// config contains detection parameters
+	// config contains detection parameters.
 	config Config
 
-	// mu protects concurrent access to history
+	// mu protects concurrent access to history.
 	mu sync.RWMutex
 }
 
@@ -35,17 +35,17 @@ func (d *Detector) Record(snapshot Snapshot) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	// Add new snapshot
+	// Add new snapshot.
 	d.history = append(d.history, snapshot)
 
-	// Maintain rolling window (keep only the most recent snapshots)
+	// Maintain rolling window (keep only the most recent snapshots).
 	maxSize := d.config.WindowSize
 	if maxSize <= 0 {
-		maxSize = 3 // fallback to default
+		maxSize = 3 // fallback to default.
 	}
 
 	if len(d.history) > maxSize {
-		// Remove oldest snapshots to maintain window size
+		// Remove oldest snapshots to maintain window size.
 		d.history = d.history[len(d.history)-maxSize:]
 	}
 }
@@ -57,7 +57,7 @@ func (d *Detector) Check() (CycleResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	// Need minimum history for meaningful analysis
+	// Need minimum history for meaningful analysis.
 	if len(d.history) < 2 {
 		return CycleResult{
 			Type:       CycleNone,
@@ -66,7 +66,7 @@ func (d *Detector) Check() (CycleResult, error) {
 		}, nil
 	}
 
-	// Check each pattern type (order matters - more specific patterns first)
+	// Check each pattern type (order matters - more specific patterns first).
 	if result := d.checkRepeatedTool(); result.Type != CycleNone {
 		return result, nil
 	}
@@ -83,7 +83,7 @@ func (d *Detector) Check() (CycleResult, error) {
 		return result, nil
 	}
 
-	// No cycle detected
+	// No cycle detected.
 	return CycleResult{
 		Type:       CycleNone,
 		Confidence: 0.0,
@@ -97,9 +97,10 @@ func (d *Detector) GetHistory() []Snapshot {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	// Return a copy to prevent external modification
+	// Return a copy to prevent external modification.
 	history := make([]Snapshot, len(d.history))
 	copy(history, d.history)
+
 	return history
 }
 
@@ -132,6 +133,7 @@ func (d *Detector) checkSimilarResponses() CycleResult {
 // hasMinimumSnapshots checks if we have enough snapshots for detection.
 func (d *Detector) hasMinimumSnapshots() bool {
 	minSnapshots := 3
+
 	return d.config.Enabled && len(d.history) >= minSnapshots
 }
 
@@ -141,6 +143,7 @@ func (d *Detector) getRecentSnapshots() []Snapshot {
 	if maxToCheck <= 0 || maxToCheck > len(d.history) {
 		maxToCheck = len(d.history)
 	}
+
 	return d.history[len(d.history)-maxToCheck:]
 }
 
@@ -172,6 +175,7 @@ func (d *Detector) hasValidResponses(s1, s2 Snapshot) bool {
 // isSimilarResponsePattern checks if similarities indicate a pattern.
 func (d *Detector) isSimilarResponsePattern(similarities []float64) bool {
 	minSnapshots := 3
+
 	return len(similarities) >= minSnapshots-1
 }
 
@@ -240,9 +244,10 @@ func (d *Detector) snapshotUsesTool(snapshot Snapshot, tool string) bool {
 // createRepeatedToolResult creates a cycle result for repeated tool usage.
 func (d *Detector) createRepeatedToolResult(recent []Snapshot) CycleResult {
 	firstTool := recent[0].ToolCalls[0]
+
 	return CycleResult{
 		Type:       CycleRepeatedTool,
-		Confidence: 0.9, // High confidence for exact tool name matches
+		Confidence: 0.9, // High confidence for exact tool name matches.
 		Details:    fmt.Sprintf("tool '%s' called %d times consecutively", firstTool, len(recent)),
 		Timestamp:  time.Now(),
 	}
@@ -251,7 +256,7 @@ func (d *Detector) createRepeatedToolResult(recent []Snapshot) CycleResult {
 // checkOscillation detects A→B→A→B oscillation patterns in responses.
 // This indicates the agent is alternating between two states without progress.
 func (d *Detector) checkOscillation() CycleResult {
-	// Need at least 4 snapshots for oscillation detection
+	// Need at least 4 snapshots for oscillation detection.
 	if !d.config.Enabled || len(d.history) < 4 {
 		return CycleResult{Type: CycleNone}
 	}
@@ -260,16 +265,16 @@ func (d *Detector) checkOscillation() CycleResult {
 
 	// Check for A→B→A→B pattern where A responses are similar to each other
 	// and B responses are similar to each other, but A and B are different
-	// recent[0] = A1, recent[1] = B1, recent[2] = A2, recent[3] = B2
-	simAA := calculateSimilarity(recent[0].Response, recent[2].Response) // A1 vs A2
-	simBB := calculateSimilarity(recent[1].Response, recent[3].Response) // B1 vs B2
-	simAB := calculateSimilarity(recent[0].Response, recent[1].Response) // A1 vs B1
+	// recent[0] = A1, recent[1] = B1, recent[2] = A2, recent[3] = B2.
+	simAA := calculateSimilarity(recent[0].Response, recent[2].Response) // A1 vs A2.
+	simBB := calculateSimilarity(recent[1].Response, recent[3].Response) // B1 vs B2.
+	simAB := calculateSimilarity(recent[0].Response, recent[1].Response) // A1 vs B1.
 
-	// Average similarity within same groups (A's and B's)
+	// Average similarity within same groups (A's and B's).
 	withinGroupSimilarity := (simAA + simBB) / 2.0
 
 	// Pattern: High similarity within groups (A's together, B's together),
-	// but low similarity between groups (A vs B)
+	// but low similarity between groups (A vs B).
 	if withinGroupSimilarity >= d.config.SimilarityThresh && simAB < 0.5 {
 		return CycleResult{
 			Type:       CycleOscillation,
@@ -332,15 +337,16 @@ func (d *Detector) allErrorsAreSame(recent []Snapshot) bool {
 // createSameErrorResult creates a cycle result for repeated errors.
 func (d *Detector) createSameErrorResult(recent []Snapshot) CycleResult {
 	firstError := recent[0].Error
+
 	return CycleResult{
 		Type:       CycleSameError,
-		Confidence: 0.95, // Very high confidence for exact error matches
+		Confidence: 0.95, // Very high confidence for exact error matches.
 		Details:    fmt.Sprintf("error '%s' occurred %d times consecutively", firstError, len(recent)),
 		Timestamp:  time.Now(),
 	}
 }
 
-// calculateAverageSimilarity computes the average of similarity values
+// calculateAverageSimilarity computes the average of similarity values.
 func calculateAverageSimilarity(similarities []float64) float64 {
 	if len(similarities) == 0 {
 		return 0.0

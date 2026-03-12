@@ -6,10 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
 func TestNewPlanningService(t *testing.T) {
@@ -23,7 +24,7 @@ func TestNewPlanningService(t *testing.T) {
 func TestPlanningService_CreatePlan_Success(t *testing.T) {
 	ctx := context.Background()
 
-	// Create mock response with valid JSON
+	// Create mock response with valid JSON.
 	mockResponse := `{
 		"steps": [
 			{
@@ -50,12 +51,12 @@ func TestPlanningService_CreatePlan_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, plan)
 
-	// Verify plan structure
+	// Verify plan structure.
 	assert.NotEmpty(t, plan.ID)
 	assert.Equal(t, 2, len(plan.Steps))
 	assert.Equal(t, PlanStatusPending, plan.Status)
 
-	// Verify first step
+	// Verify first step.
 	step1 := plan.Steps[0]
 	assert.Equal(t, "step_1", step1.ID)
 	assert.Equal(t, "First step description", step1.Description)
@@ -64,7 +65,7 @@ func TestPlanningService_CreatePlan_Success(t *testing.T) {
 	assert.Equal(t, 5*time.Minute, step1.EstimatedDuration)
 	assert.Equal(t, StepStatusPending, step1.Status)
 
-	// Verify second step
+	// Verify second step.
 	step2 := plan.Steps[1]
 	assert.Equal(t, "step_2", step2.ID)
 	assert.Equal(t, "Second step description", step2.Description)
@@ -87,7 +88,7 @@ func TestPlanningService_CreatePlan_EmptyTask(t *testing.T) {
 func TestPlanningService_CreatePlan_InvalidJSON(t *testing.T) {
 	ctx := context.Background()
 
-	// Create mock response with invalid JSON
+	// Create mock response with invalid JSON.
 	provider := llm.NewMockProvider("invalid json response")
 	service := NewPlanningService(provider)
 
@@ -100,7 +101,7 @@ func TestPlanningService_CreatePlan_InvalidJSON(t *testing.T) {
 func TestPlanningService_CreatePlan_EmptySteps(t *testing.T) {
 	ctx := context.Background()
 
-	// Create mock response with empty steps
+	// Create mock response with empty steps.
 	mockResponse := `{"steps": []}`
 
 	provider := llm.NewMockProvider("test-provider", llm.WithResponse(mockResponse))
@@ -115,7 +116,7 @@ func TestPlanningService_CreatePlan_EmptySteps(t *testing.T) {
 func TestPlanningService_CreatePlan_LLMError(t *testing.T) {
 	ctx := context.Background()
 
-	// Create mock provider that returns an error
+	// Create mock provider that returns an error.
 	provider := llm.NewMockProvider("error-provider", llm.WithError(errors.New("llm error")))
 	service := NewPlanningService(provider)
 
@@ -213,7 +214,7 @@ func TestPlanningService_createStepsFromData(t *testing.T) {
 func TestPlanningService_createStepsFromData_InvalidDuration(t *testing.T) {
 	service := &PlanningService{}
 
-	// Invalid duration should not cause error (parseDuration returns zero on error)
+	// Invalid duration should not cause error (parseDuration returns zero on error).
 	data := &decompositionData{
 		Steps: []stepData{
 			{
@@ -227,7 +228,7 @@ func TestPlanningService_createStepsFromData_InvalidDuration(t *testing.T) {
 	}
 
 	steps, err := service.createStepsFromData(data)
-	require.NoError(t, err) // Duration parsing errors are silently ignored
+	require.NoError(t, err) // Duration parsing errors are silently ignored.
 	require.Equal(t, 1, len(steps))
 	assert.Equal(t, time.Duration(0), steps[0].EstimatedDuration)
 }
@@ -273,7 +274,7 @@ func TestPlanningService_CreatePlan_MultipleSteps(t *testing.T) {
 	assert.Equal(t, "step_2", plan.Steps[1].ID)
 	assert.Equal(t, "step_3", plan.Steps[2].ID)
 
-	// Verify dependencies
+	// Verify dependencies.
 	assert.Empty(t, plan.Steps[0].DependsOn)
 	assert.Equal(t, []string{"step_1"}, plan.Steps[1].DependsOn)
 	assert.Equal(t, []string{"step_2"}, plan.Steps[2].DependsOn)
@@ -289,7 +290,7 @@ func TestPlanningService_CreatePlan_MalformedJSON(t *testing.T) {
 	}{
 		{"missing steps", `{}`, true},
 		{"steps not array", `{"steps": "not array"}`, true},
-		{"step missing id", `{"steps": [{"description": "test"}]}`, false}, // Missing fields might parse but fail validation
+		{"step missing id", `{"steps": [{"description": "test"}]}`, false}, // Missing fields might parse but fail validation.
 		{"invalid structure", `{"not": "valid"}`, true},
 	}
 
@@ -301,14 +302,15 @@ func TestPlanningService_CreatePlan_MalformedJSON(t *testing.T) {
 			plan, err := service.CreatePlan(ctx, "test task")
 			if tc.wantErr {
 				assert.Error(t, err)
+
 				if plan != nil {
-					// If plan is created, validation should fail
+					// If plan is created, validation should fail.
 					_ = plan.ValidateStructure()
 				}
 			} else {
-				// Some cases might parse but fail later
+				// Some cases might parse but fail later.
 				if err == nil {
-					// If parsing succeeded, validation might fail
+					// If parsing succeeded, validation might fail.
 					_ = plan.ValidateStructure()
 				}
 			}
@@ -319,7 +321,7 @@ func TestPlanningService_CreatePlan_MalformedJSON(t *testing.T) {
 func TestPlanningService_CreatePlan_JSONWithWhitespace(t *testing.T) {
 	ctx := context.Background()
 
-	// JSON with extra whitespace and newlines
+	// JSON with extra whitespace and newlines.
 	mockResponse := `{
 		"steps": [
 			{
@@ -341,7 +343,7 @@ func TestPlanningService_CreatePlan_JSONWithWhitespace(t *testing.T) {
 	assert.Equal(t, 1, len(plan.Steps))
 }
 
-// Test helper: verify that getContent works correctly
+// Test helper: verify that getContent works correctly.
 func TestGetContent(t *testing.T) {
 	t.Run("nil completion", func(t *testing.T) {
 		content := getContent(nil)
@@ -370,5 +372,3 @@ func TestGetContent(t *testing.T) {
 		assert.Equal(t, "test content", content)
 	})
 }
-
-

@@ -12,7 +12,7 @@ func TestNewCompact(t *testing.T) {
 		t.Fatal("NewCompact() returned nil")
 	}
 
-	// Test that it implements the Task interface
+	// Test that it implements the Task interface.
 	var _ Task = compact
 }
 
@@ -34,7 +34,7 @@ func TestCompact_SystemPrompt(t *testing.T) {
 		t.Error("Compact.SystemPrompt() returned empty string")
 	}
 
-	// Check that prompt contains key elements
+	// Check that prompt contains key elements.
 	if !strings.Contains(prompt, "fast") || !strings.Contains(prompt, "efficient") {
 		t.Errorf("Compact.SystemPrompt() should contain key elements about efficiency")
 	}
@@ -72,8 +72,8 @@ func TestCompact_MaxTokens(t *testing.T) {
 
 func TestCompact_Validate(t *testing.T) {
 	compact := NewCompact()
-	err := compact.Validate()
 
+	err := compact.Validate()
 	if err != nil {
 		t.Errorf("Compact.Validate() unexpected error: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestCompact_DefaultPrompt(t *testing.T) {
 	compact := NewCompact()
 	prompt := compact.SystemPrompt()
 
-	// Check that default prompt is reasonable
+	// Check that default prompt is reasonable.
 	if len(prompt) < 50 {
 		t.Errorf("Compact default prompt too short: %d characters", len(prompt))
 	}
@@ -118,22 +118,24 @@ func TestCompact_DefaultMaxTokens(t *testing.T) {
 func TestCompact_Concurrency(t *testing.T) {
 	compact := NewCompact()
 
-	// Test concurrent access to methods
+	// Test concurrent access to methods.
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+
+	for range 10 {
 		go func() {
-			// These methods should be safe for concurrent access
+			// These methods should be safe for concurrent access.
 			compact.Name()
 			compact.SystemPrompt()
 			compact.AllowedTools()
 			compact.MaxTokens()
 			compact.Validate()
+
 			done <- true
 		}()
 	}
 
-	// Wait for all goroutines to complete
-	for i := 0; i < 10; i++ {
+	// Wait for all goroutines to complete.
+	for range 10 {
 		<-done
 	}
 }
@@ -141,7 +143,7 @@ func TestCompact_Concurrency(t *testing.T) {
 func TestCompact_TaskInterface(t *testing.T) {
 	compact := NewCompact()
 
-	// Verify all interface methods work
+	// Verify all interface methods work.
 	if compact.Name() == "" {
 		t.Error("Compact.Name() returned empty string")
 	}
@@ -158,13 +160,14 @@ func TestCompact_TaskInterface(t *testing.T) {
 		t.Error("Compact.MaxTokens() returned non-positive value")
 	}
 
-	if err := compact.Validate(); err != nil {
+	err := compact.Validate()
+	if err != nil {
 		t.Errorf("Compact.Validate() returned error: %v", err)
 	}
 }
 
 func TestCompact_Constants(t *testing.T) {
-	// Verify constants are reasonable
+	// Verify constants are reasonable.
 	if DefaultCompactMaxTokens <= 0 {
 		t.Errorf("DefaultCompactMaxTokens = %d, want > 0", DefaultCompactMaxTokens)
 	}

@@ -69,52 +69,53 @@ func NewClassifierWithOptions(opts ...ClassifierOption) *Classifier {
 	for _, opt := range opts {
 		opt(c)
 	}
+
 	return c
 }
 
 // Classify assigns importance to a message.
 func (c *Classifier) Classify(msg message.Message) Importance {
-	// Critical: System messages (always preserve system prompt)
+	// Critical: System messages (always preserve system prompt).
 	if msg.Role == message.RoleSystem {
 		return ImportanceCritical
 	}
 
-	// Critical: User messages (always preserve user intent)
+	// Critical: User messages (always preserve user intent).
 	if msg.Role == message.RoleUser {
 		return ImportanceCritical
 	}
 
-	// Critical: Tool results (must pair with tool calls)
+	// Critical: Tool results (must pair with tool calls).
 	if msg.Role == message.RoleTool {
 		return ImportanceCritical
 	}
 
-	// Critical: Tool calls (must pair with tool results)
+	// Critical: Tool calls (must pair with tool results).
 	if len(msg.ToolCalls) > 0 {
 		return ImportanceCritical
 	}
 
-	// Critical: Error messages
+	// Critical: Error messages.
 	if c.isErrorMessage(msg) {
 		return ImportanceCritical
 	}
 
-	// High: Code blocks (patches, diffs, code examples)
+	// High: Code blocks (patches, diffs, code examples).
 	if c.hasCodeBlock(msg) {
 		return ImportanceHigh
 	}
 
-	// Assistant messages
+	// Assistant messages.
 	if msg.Role == message.RoleAssistant {
-		// Low: Verbose "thinking" content (long responses without code)
+		// Low: Verbose "thinking" content (long responses without code).
 		if len(msg.Content) > c.verboseThreshold && !c.hasCodeBlock(msg) {
 			return ImportanceLow
 		}
-		// Medium: Regular assistant responses
+		// Medium: Regular assistant responses.
 		return ImportanceMedium
 	}
 
-	// Default: Low for any unknown content
+	// Default: Low for any unknown content.
 	return ImportanceLow
 }
 
@@ -122,7 +123,7 @@ func (c *Classifier) Classify(msg message.Message) Importance {
 func (c *Classifier) isErrorMessage(msg message.Message) bool {
 	content := strings.ToLower(msg.Content)
 
-	// Check for common error indicators
+	// Check for common error indicators.
 	errorIndicators := []string{
 		"error:",
 		"error ",
@@ -142,7 +143,7 @@ func (c *Classifier) isErrorMessage(msg message.Message) bool {
 		}
 	}
 
-	// Check metadata for error flag (Metadata is map[string]string)
+	// Check metadata for error flag (Metadata is map[string]string).
 	if msg.Metadata != nil {
 		if isError, ok := msg.Metadata["is_error"]; ok && isError == "true" {
 			return true
@@ -154,19 +155,20 @@ func (c *Classifier) isErrorMessage(msg message.Message) bool {
 
 // hasCodeBlock checks if a message contains code blocks.
 func (c *Classifier) hasCodeBlock(msg message.Message) bool {
-	// Check for fenced code blocks
+	// Check for fenced code blocks.
 	if strings.Contains(msg.Content, "```") {
 		return true
 	}
 
-	// Check for diff markers
+	// Check for diff markers.
 	if strings.Contains(msg.Content, "@@") {
 		return true
 	}
 
-	// Check for indented code (4+ spaces at line start)
+	// Check for indented code (4+ spaces at line start).
 	lines := strings.Split(msg.Content, "\n")
 	codeLineCount := 0
+
 	for _, line := range lines {
 		if len(line) >= 4 && (strings.HasPrefix(line, "    ") || strings.HasPrefix(line, "\t")) {
 			codeLineCount++
@@ -184,5 +186,5 @@ type ClassifiedMessage struct {
 	Message    message.Message
 	Importance Importance
 	Tokens     int
-	Index      int // Original index for preserving chronological order
+	Index      int // Original index for preserving chronological order.
 }

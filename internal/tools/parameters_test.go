@@ -50,8 +50,10 @@ func TestFromMap(t *testing.T) {
 			params, err := FromMap(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("FromMap() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if !tt.wantErr && len(params.raw) != len(tt.input) {
 				t.Errorf("expected %d parameters, got %d", len(tt.input), len(params.raw))
 			}
@@ -93,7 +95,7 @@ func TestHas(t *testing.T) {
 func TestToMap(t *testing.T) {
 	input := map[string]any{
 		"string": "hello",
-		"int":    float64(42), // JSON unmarshals numbers as float64
+		"int":    float64(42), // JSON unmarshals numbers as float64.
 		"bool":   true,
 	}
 
@@ -111,8 +113,10 @@ func TestToMap(t *testing.T) {
 		gotValue, exists := output[key]
 		if !exists {
 			t.Errorf("missing key %q in output", key)
+
 			continue
 		}
+
 		if gotValue != expectedValue {
 			t.Errorf("key %q: got %v, want %v", key, gotValue, expectedValue)
 		}
@@ -131,6 +135,7 @@ func TestKeys(t *testing.T) {
 
 	if len(keys) != len(expected) {
 		t.Errorf("expected %d keys, got %d", len(expected), len(keys))
+
 		return
 	}
 
@@ -185,8 +190,10 @@ func TestGetString(t *testing.T) {
 			got, err := params.GetString(tt.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetString() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("GetString() = %v, want %v", got, tt.want)
 			}
@@ -245,8 +252,10 @@ func TestGetInt(t *testing.T) {
 			got, err := params.GetInt(tt.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetInt() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("GetInt() = %v, want %v", got, tt.want)
 			}
@@ -298,8 +307,10 @@ func TestGetBool(t *testing.T) {
 			got, err := params.GetBool(tt.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetBool() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("GetBool() = %v, want %v", got, tt.want)
 			}
@@ -358,8 +369,10 @@ func TestGetFloat64(t *testing.T) {
 			got, err := params.GetFloat64(tt.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetFloat64() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if got != tt.want {
 				t.Errorf("GetFloat64() = %v, want %v", got, tt.want)
 			}
@@ -416,10 +429,13 @@ func TestGetObject(t *testing.T) {
 			err := params.GetObject(tt.key, tt.dest)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetObject() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if !tt.wantErr {
 				destStruct := tt.dest.(*testStruct)
+
 				wantStruct := tt.want.(*testStruct)
 				if destStruct.Field1 != wantStruct.Field1 || destStruct.Field2 != wantStruct.Field2 {
 					t.Errorf("GetObject() = %+v, want %+v", destStruct, wantStruct)
@@ -609,18 +625,21 @@ func TestMarshalJSON(t *testing.T) {
 		t.Fatalf("MarshalJSON() error = %v", err)
 	}
 
-	// Unmarshal to verify structure
+	// Unmarshal to verify structure.
 	var result map[string]any
-	if err := json.Unmarshal(data, &result); err != nil {
+	err = json.Unmarshal(data, &result)
+	if err != nil {
 		t.Fatalf("Unmarshal error = %v", err)
 	}
 
 	if result["string"] != "hello" {
 		t.Errorf("string = %v, want hello", result["string"])
 	}
+
 	if result["number"] != float64(42) {
 		t.Errorf("number = %v, want 42", result["number"])
 	}
+
 	if result["bool"] != true {
 		t.Errorf("bool = %v, want true", result["bool"])
 	}
@@ -630,19 +649,23 @@ func TestUnmarshalJSON(t *testing.T) {
 	jsonData := []byte(`{"string":"hello","number":42,"bool":true}`)
 
 	var params ToolParameters
-	if err := json.Unmarshal(jsonData, &params); err != nil {
+	err := json.Unmarshal(jsonData, &params)
+	if err != nil {
 		t.Fatalf("UnmarshalJSON() error = %v", err)
 	}
 
-	if str, err := params.GetString("string"); err != nil || str != "hello" {
+	str, err := params.GetString("string")
+	if err != nil || str != "hello" {
 		t.Errorf("GetString(string) = %v, %v; want hello, nil", str, err)
 	}
 
-	if num, err := params.GetInt("number"); err != nil || num != 42 {
+	num, err := params.GetInt("number")
+	if err != nil || num != 42 {
 		t.Errorf("GetInt(number) = %v, %v; want 42, nil", num, err)
 	}
 
-	if b, err := params.GetBool("bool"); err != nil || b != true {
+	b, err := params.GetBool("bool")
+	if err != nil || b != true {
 		t.Errorf("GetBool(bool) = %v, %v; want true, nil", b, err)
 	}
 }
@@ -657,16 +680,16 @@ func TestRoundTrip(t *testing.T) {
 		},
 	}
 
-	// Convert to ToolParameters
+	// Convert to ToolParameters.
 	params, err := FromMap(original)
 	if err != nil {
 		t.Fatalf("FromMap() error = %v", err)
 	}
 
-	// Convert back to map
+	// Convert back to map.
 	result := params.ToMap()
 
-	// Verify all keys exist
+	// Verify all keys exist.
 	for key := range original {
 		if _, exists := result[key]; !exists {
 			t.Errorf("missing key %q in result", key)

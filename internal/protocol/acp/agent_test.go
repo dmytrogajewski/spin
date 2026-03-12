@@ -6,18 +6,19 @@ import (
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/session"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestNewSpinACPAgent tests the constructor with valid inputs.
 func TestNewSpinACPAgentWithStorage(t *testing.T) {
-	// Create minimal mocks for required components
-	agentInstance := &agent.Agent{} // Will need proper setup in real tests
+	// Create minimal mocks for required components.
+	agentInstance := &agent.Agent{} // Will need proper setup in real tests.
 	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
@@ -106,7 +107,7 @@ func TestSpinACPAgent_ImplementsInterface(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpService, emitter, storage)
 	require.NoError(t, err)
 
-	// Verify it implements the interface by assignment
+	// Verify it implements the interface by assignment.
 	var _ acp.Agent = acpAgent
 }
 
@@ -145,13 +146,13 @@ func TestSpinACPAgent_MethodStubs(t *testing.T) {
 
 	t.Run("Prompt", func(t *testing.T) {
 		// Skip this test - Prompt is now implemented and requires proper agent setup
-		// See prompt_test.go for proper Prompt tests
+		// See prompt_test.go for proper Prompt tests.
 		t.Skip("Prompt is implemented - see prompt_test.go for tests")
 	})
 
 	t.Run("LoadSession", func(t *testing.T) {
 		// Skip this test - LoadSession is now implemented and requires storage
-		// See load_session_test.go for proper LoadSession tests
+		// See load_session_test.go for proper LoadSession tests.
 		t.Skip("LoadSession is implemented - see load_session_test.go for tests")
 	})
 

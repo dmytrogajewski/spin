@@ -12,7 +12,7 @@ type AutoOffloader struct {
 	scratchpad *Scratchpad
 	persistent *PersistentStore
 	analyzer   ContextAnalyzer
-	threshold  float64 // Token usage threshold (e.g., 0.7 = 70%)
+	threshold  float64 // Token usage threshold (e.g., 0.7 = 70%).
 	mu         sync.Mutex
 }
 
@@ -40,7 +40,7 @@ func NewAutoOffloader(cfg AutoOffloaderConfig) *AutoOffloader {
 
 	threshold := cfg.Threshold
 	if threshold <= 0 || threshold > 1.0 {
-		threshold = 0.7 // Default: 70%
+		threshold = 0.7 // Default: 70%.
 	}
 
 	return &AutoOffloader{
@@ -56,6 +56,7 @@ func (o *AutoOffloader) ShouldOffload(currentTokens, maxTokens int) bool {
 	if maxTokens <= 0 {
 		return false
 	}
+
 	return float64(currentTokens)/float64(maxTokens) > o.threshold
 }
 
@@ -65,24 +66,25 @@ func (o *AutoOffloader) Offload(ctx context.Context, messages []AnalyzableMessag
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	// Analyze messages for offloadable content
+	// Analyze messages for offloadable content.
 	candidates := o.analyzer.Analyze(messages)
 	if len(candidates) == 0 {
 		return messages, nil, nil
 	}
 
-	// Sort by priority (higher priority first)
+	// Sort by priority (higher priority first).
 	sort.Slice(candidates, func(i, j int) bool {
 		return candidates[i].Priority > candidates[j].Priority
 	})
 
-	// Track offloaded content
+	// Track offloaded content.
 	results := make([]OffloadResult, 0, len(candidates))
 	offloadedIndices := make(map[int][]OffloadCandidate)
 
 	for _, candidate := range candidates {
-		// Store to appropriate destination
+		// Store to appropriate destination.
 		var err error
+
 		switch candidate.Destination {
 		case ScopeSession:
 			if o.scratchpad != nil {
@@ -100,12 +102,13 @@ func (o *AutoOffloader) Offload(ctx context.Context, messages []AnalyzableMessag
 		}
 
 		if err != nil {
-			// Log but continue with other candidates
+			// Log but continue with other candidates.
 			results = append(results, OffloadResult{
 				Key:     candidate.Key,
 				Success: false,
 				Error:   err.Error(),
 			})
+
 			continue
 		}
 
@@ -123,19 +126,21 @@ func (o *AutoOffloader) Offload(ctx context.Context, messages []AnalyzableMessag
 		)
 	}
 
-	// Replace offloaded content with references
+	// Replace offloaded content with references.
 	modified := make([]AnalyzableMessage, len(messages))
 	copy(modified, messages)
 
 	for idx, candidates := range offloadedIndices {
 		msg := modified[idx]
+
 		for _, candidate := range candidates {
 			reference := fmt.Sprintf("[Content offloaded to %s as '%s': %s]",
 				candidate.Destination, candidate.Key, candidate.Reason)
 			// For simple implementation, append reference
-			// A more sophisticated version would replace the exact content
+			// A more sophisticated version would replace the exact content.
 			msg.Content = msg.Content + "\n" + reference
 		}
+
 		modified[idx] = msg
 	}
 
@@ -168,7 +173,7 @@ func (o *AutoOffloader) Recall(ctx context.Context, key string) (string, error) 
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	// Try scratchpad first
+	// Try scratchpad first.
 	if o.scratchpad != nil {
 		entry, err := o.scratchpad.Get(ctx, key)
 		if err == nil {
@@ -176,7 +181,7 @@ func (o *AutoOffloader) Recall(ctx context.Context, key string) (string, error) 
 		}
 	}
 
-	// Try persistent store
+	// Try persistent store.
 	if o.persistent != nil {
 		entry, err := o.persistent.Get(ctx, key)
 		if err == nil {

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/coder/acp-go-sdk"
+
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
@@ -13,9 +14,9 @@ import (
 // Used to generate diffs when file modifications complete.
 type fileContentTracker struct {
 	mu         sync.Mutex
-	oldContent map[string]string // toolID -> old file content
-	filePaths  map[string]string // toolID -> file path
-	newContent map[string]string // toolID -> new file content (from parameters)
+	oldContent map[string]string // toolID -> old file content.
+	filePaths  map[string]string // toolID -> file path.
+	newContent map[string]string // toolID -> new file content (from parameters).
 }
 
 // newFileContentTracker creates a new file content tracker.
@@ -33,17 +34,19 @@ func (t *fileContentTracker) storeOldContent(toolID, filePath string) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	// Read existing file content if file exists
+	// Read existing file content if file exists.
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		// File doesn't exist or error reading - treat as new file (empty old content)
+		// File doesn't exist or error reading - treat as new file (empty old content).
 		t.oldContent[toolID] = ""
 		t.filePaths[toolID] = filePath
+
 		return true
 	}
 
 	t.oldContent[toolID] = string(content)
 	t.filePaths[toolID] = filePath
+
 	return true
 }
 
@@ -51,6 +54,7 @@ func (t *fileContentTracker) storeOldContent(toolID, filePath string) bool {
 func (t *fileContentTracker) storeNewContent(toolID, content string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	t.newContent[toolID] = content
 }
 
@@ -65,7 +69,8 @@ func (t *fileContentTracker) getContentForDiff(toolID string) (oldContent, newCo
 		return "", "", "", false
 	}
 
-	oldContent = t.oldContent[toolID] // Empty string if new file
+	oldContent = t.oldContent[toolID] // Empty string if new file.
+
 	newContent, hasNew := t.newContent[toolID]
 	if !hasNew {
 		return "", "", "", false
@@ -78,6 +83,7 @@ func (t *fileContentTracker) getContentForDiff(toolID string) (oldContent, newCo
 func (t *fileContentTracker) cleanup(toolID string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	delete(t.oldContent, toolID)
 	delete(t.filePaths, toolID)
 	delete(t.newContent, toolID)
@@ -98,7 +104,7 @@ func convertEventToSessionUpdate(event events.Event, tracker *fileContentTracker
 	case events.EventToolCallComplete:
 		return convertToolCallComplete(event, tracker)
 	default:
-		// Event type not mapped to ACP notification
+		// Event type not mapped to ACP notification.
 		return acp.SessionUpdate{}, false
 	}
 }
@@ -112,8 +118,9 @@ func convertSystemEvent(event events.Event) (acp.SessionUpdate, bool) {
 		return acp.SessionUpdate{}, false
 	}
 
-	// Format the system message with level prefix and details
+	// Format the system message with level prefix and details.
 	var message string
+
 	switch data.Level {
 	case "warning", "warn":
 		message = "[warning] " + data.Message
@@ -127,8 +134,9 @@ func convertSystemEvent(event events.Event) (acp.SessionUpdate, bool) {
 		message += " — " + data.Details
 	}
 
-	// Send as agent thought (dimmed/secondary display) to distinguish from main content
+	// Send as agent thought (dimmed/secondary display) to distinguish from main content.
 	update := acp.UpdateAgentThoughtText(message + "\n")
+
 	return update, true
 }
 
@@ -139,13 +147,14 @@ func convertContentDelta(event events.Event) (acp.SessionUpdate, bool) {
 		return acp.SessionUpdate{}, false
 	}
 
-	// Only convert assistant content (agent messages)
+	// Only convert assistant content (agent messages).
 	if data.Role != "assistant" {
 		return acp.SessionUpdate{}, false
 	}
 
-	// Use SDK helper to create agent message chunk
+	// Use SDK helper to create agent message chunk.
 	update := acp.UpdateAgentMessageText(data.Content)
+
 	return update, true
 }
 
@@ -164,7 +173,7 @@ func mapToolNameToKind(toolName string) *acp.ToolKind {
 	case "list_directory":
 		return acp.Ptr(acp.ToolKindRead)
 	default:
-		return nil // No kind specified for unknown tools
+		return nil // No kind specified for unknown tools.
 	}
 }
 
@@ -175,13 +184,15 @@ func extractFileLocations(toolName string, params tools.ToolParameters) []acp.To
 
 	switch toolName {
 	case "read_file", "write_file", "list_directory":
-		if path, err := params.GetString("path"); err == nil && path != "" {
+		path, err := params.GetString("path")
+		if err == nil && path != "" {
 			locations = append(locations, acp.ToolCallLocation{
 				Path: path,
 			})
 		}
 	case "file_search":
-		if root, err := params.GetString("workspace_root"); err == nil && root != "" {
+		root, err := params.GetString("workspace_root")
+		if err == nil && root != "" {
 			locations = append(locations, acp.ToolCallLocation{
 				Path: root,
 			})
@@ -199,48 +210,52 @@ func convertToolCallStart(event events.Event, tracker *fileContentTracker) (acp.
 		return acp.SessionUpdate{}, false
 	}
 
-	// Use tool name as title
+	// Use tool name as title.
 	title := data.ToolName
 
-	// Convert Spin tool ID to ACP ToolCallId
+	// Convert Spin tool ID to ACP ToolCallId.
 	toolCallID := acp.ToolCallId(data.ToolID)
 
-	// Map tool kind
+	// Map tool kind.
 	kind := mapToolNameToKind(data.ToolName)
 
-	// Extract file locations
+	// Extract file locations.
 	locations := extractFileLocations(data.ToolName, data.Parameters)
 
-	// Extract raw input (parameters as map)
+	// Extract raw input (parameters as map).
 	rawInput := data.Parameters.ToMap()
 
-	// For write_file operations, track old file content for diff generation
+	// For write_file operations, track old file content for diff generation.
 	if tracker != nil && data.ToolName == "write_file" {
-		if path, err := data.Parameters.GetString("path"); err == nil && path != "" {
+		path, err := data.Parameters.GetString("path")
+		if err == nil && path != "" {
 			tracker.storeOldContent(data.ToolID, path)
-			// Also store new content from parameters
-			if content, err := data.Parameters.GetString("content"); err == nil {
+			// Also store new content from parameters.
+			content, err := data.Parameters.GetString("content")
+			if err == nil {
 				tracker.storeNewContent(data.ToolID, content)
 			}
 		}
 	}
 
-	// Build options
+	// Build options.
 	opts := []acp.ToolCallStartOpt{}
 	if kind != nil {
 		opts = append(opts, acp.WithStartKind(*kind))
 	}
+
 	if len(locations) > 0 {
 		opts = append(opts, acp.WithStartLocations(locations))
 	}
+
 	if len(rawInput) > 0 {
 		opts = append(opts, acp.WithStartRawInput(rawInput))
 	}
 
-	// Use SDK helper to create tool call start
+	// Use SDK helper to create tool call start.
 	update := acp.StartToolCall(toolCallID, title, opts...)
 
-	// Ensure status is set to pending (StartToolCall might not set it by default)
+	// Ensure status is set to pending (StartToolCall might not set it by default).
 	if update.ToolCall != nil && update.ToolCall.Status == "" {
 		update.ToolCall.Status = acp.ToolCallStatusPending
 	}
@@ -255,11 +270,12 @@ func convertToolCallProgress(event events.Event) (acp.SessionUpdate, bool) {
 		return acp.SessionUpdate{}, false
 	}
 
-	// Convert Spin tool ID to ACP ToolCallId
+	// Convert Spin tool ID to ACP ToolCallId.
 	toolCallID := acp.ToolCallId(data.ToolID)
 
-	// Use SDK helper with in_progress status
+	// Use SDK helper with in_progress status.
 	update := acp.UpdateToolCall(toolCallID, acp.WithUpdateStatus(acp.ToolCallStatusInProgress))
+
 	return update, true
 }
 
@@ -267,10 +283,11 @@ func convertToolCallProgress(event events.Event) (acp.SessionUpdate, bool) {
 // Returns ACP ToolCallContent with diff, or nil if generation fails.
 func generateUnifiedDiff(oldText, newText, filePath string) acp.ToolCallContent {
 	// Use SDK helper to create diff content
-	// If oldText is empty, it's a new file
+	// If oldText is empty, it's a new file.
 	if oldText == "" {
 		return acp.ToolDiffContent(filePath, newText)
 	}
+
 	return acp.ToolDiffContent(filePath, newText, oldText)
 }
 
@@ -282,10 +299,10 @@ func convertToolCallComplete(event events.Event, tracker *fileContentTracker) (a
 		return acp.SessionUpdate{}, false
 	}
 
-	// Convert Spin tool ID to ACP ToolCallId
+	// Convert Spin tool ID to ACP ToolCallId.
 	toolCallID := acp.ToolCallId(data.ToolID)
 
-	// Determine status based on success
+	// Determine status based on success.
 	var status acp.ToolCallStatus
 	if data.Success {
 		status = acp.ToolCallStatusCompleted
@@ -293,51 +310,53 @@ func convertToolCallComplete(event events.Event, tracker *fileContentTracker) (a
 		status = acp.ToolCallStatusFailed
 	}
 
-	// Build options
+	// Build options.
 	opts := []acp.ToolCallUpdateOpt{
 		acp.WithUpdateStatus(status),
 	}
 
-	// Build content array
+	// Build content array.
 	var content []acp.ToolCallContent
 
-	// For write_file operations, generate diff if tracker is available
+	// For write_file operations, generate diff if tracker is available.
 	if tracker != nil && data.ToolName == "write_file" {
 		oldContent, newContent, filePath, hasContent := tracker.getContentForDiff(data.ToolID)
 		if hasContent {
-			// Generate diff content
+			// Generate diff content.
 			diffContent := generateUnifiedDiff(oldContent, newContent, filePath)
 			content = append(content, diffContent)
 		}
-		// Clean up tracked content
+		// Clean up tracked content.
 		tracker.cleanup(data.ToolID)
 	}
 
-	// Check for terminal execution
+	// Check for terminal execution.
 	if terminalID, ok := data.Metadata["terminal_id"].(string); ok && terminalID != "" {
 		content = append(content, acp.ToolTerminalRef(terminalID))
 	} else if data.Output != "" {
-		// Wrap text output as a content block (only if not using terminal content)
+		// Wrap text output as a content block (only if not using terminal content).
 		textBlock := acp.TextBlock(data.Output)
 		content = append(content, acp.ToolContent(textBlock))
 	}
 
-	// Add content if we have any
+	// Add content if we have any.
 	if len(content) > 0 {
 		opts = append(opts, acp.WithUpdateContent(content))
 	}
 
-	// Add raw output
-	rawOutput := map[string]interface{}{
+	// Add raw output.
+	rawOutput := map[string]any{
 		"output":  data.Output,
 		"success": data.Success,
 	}
 	if data.Error != "" {
 		rawOutput["error"] = data.Error
 	}
+
 	opts = append(opts, acp.WithUpdateRawOutput(rawOutput))
 
-	// Use SDK helper with all options
+	// Use SDK helper with all options.
 	update := acp.UpdateToolCall(toolCallID, opts...)
+
 	return update, true
 }

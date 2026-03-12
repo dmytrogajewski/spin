@@ -17,27 +17,29 @@ func TestACP_Cancel(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
 	ctx := context.Background()
 
-	// Initialize
+	// Initialize.
 	_, err := client.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 	})
 	require.NoError(t, err)
 
-	// Create session
+	// Create session.
 	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
 		Cwd:        workDir,
 		McpServers: []acp.McpServer{},
 	})
 	require.NoError(t, err)
+
 	sessionID := sessionResp.SessionId
 
-	// Send a prompt that might take a while
+	// Send a prompt that might take a while.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionID,
 		Prompt: []acp.ContentBlock{
@@ -45,36 +47,40 @@ func TestACP_Cancel(t *testing.T) {
 		},
 	}
 
-	// Start prompt in goroutine
+	// Start prompt in goroutine.
 	done := make(chan error, 1)
+
 	var promptResp *acp.PromptResponse
+
 	go func() {
 		resp, err := client.Prompt(ctx, promptReq)
 		promptResp = &resp
+
 		done <- err
 	}()
 
-	// Wait a moment for prompt to start
+	// Wait a moment for prompt to start.
 	time.Sleep(1 * time.Second)
 
-	// Cancel the prompt
+	// Cancel the prompt.
 	cancelReq := acp.CancelNotification{
 		SessionId: sessionID,
 	}
 	err = client.Cancel(ctx, cancelReq)
 	require.NoError(t, err, "Cancel should succeed")
 
-	// Wait for prompt to complete (should be cancelled)
+	// Wait for prompt to complete (should be canceled).
 	select {
 	case err := <-done:
-		// Prompt should complete (either successfully or with cancellation)
+		// Prompt should complete (either successfully or with cancellation).
 		if err != nil {
 			t.Logf("Prompt returned error (expected for cancellation): %v", err)
 		}
+
 		if promptResp != nil {
-			// If we got a response, it should have cancelled stop reason
+			// If we got a response, it should have canceled stop reason.
 			if promptResp.StopReason == acp.StopReasonCancelled {
-				t.Log("Prompt correctly returned cancelled stop reason")
+				t.Log("Prompt correctly returned canceled stop reason")
 			} else {
 				t.Logf("Prompt stop reason: %v (may vary depending on timing)", promptResp.StopReason)
 			}
@@ -111,7 +117,7 @@ func TestACP_Cancel_InvalidSession(t *testing.T) {
 
 	err = client.Cancel(ctx, cancelReq)
 	// Notifications don't return errors in JSON-RPC, so this should succeed
-	// (the error is logged server-side but not returned)
+	// (the error is logged server-side but not returned).
 	assert.NoError(t, err, "Cancel notification should be accepted (error logged server-side)")
 }
 
@@ -122,6 +128,7 @@ func TestACP_Cancel_NoActivePrompt(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -139,14 +146,14 @@ func TestACP_Cancel_NoActivePrompt(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Cancel when no prompt is active (should not error, just be a no-op)
+	// Cancel when no prompt is active (should not error, just be a no-op).
 	cancelReq := acp.CancelNotification{
 		SessionId: sessionResp.SessionId,
 	}
 
 	err = client.Cancel(ctx, cancelReq)
-	// Cancelling when nothing is active should not error
-	// (it's a notification, not a request)
+	// Canceling when nothing is active should not error
+	// (it's a notification, not a request).
 	assert.NoError(t, err, "Cancel should not error even when no prompt is active")
 }
 
@@ -157,6 +164,7 @@ func TestACP_Cancel_DuringPrompt(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -174,7 +182,7 @@ func TestACP_Cancel_DuringPrompt(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Start prompt
+	// Start prompt.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -183,24 +191,26 @@ func TestACP_Cancel_DuringPrompt(t *testing.T) {
 	}
 
 	done := make(chan error, 1)
+
 	go func() {
 		_, err := client.Prompt(ctx, promptReq)
 		done <- err
 	}()
 
-	// Cancel during prompt
+	// Cancel during prompt.
 	time.Sleep(50 * time.Millisecond)
+
 	cancelReq := acp.CancelNotification{
 		SessionId: sessionResp.SessionId,
 	}
 	err = client.Cancel(ctx, cancelReq)
 	require.NoError(t, err)
 
-	// Wait for completion
+	// Wait for completion.
 	select {
 	case err := <-done:
 		if err != nil {
-			t.Logf("Prompt cancelled: %v", err)
+			t.Logf("Prompt canceled: %v", err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Log("Prompt may still be running")
@@ -214,6 +224,7 @@ func TestACP_Cancel_DuringToolCall(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -231,7 +242,7 @@ func TestACP_Cancel_DuringToolCall(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Start prompt that triggers tool call
+	// Start prompt that triggers tool call.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -240,24 +251,26 @@ func TestACP_Cancel_DuringToolCall(t *testing.T) {
 	}
 
 	done := make(chan error, 1)
+
 	go func() {
 		_, err := client.Prompt(ctx, promptReq)
 		done <- err
 	}()
 
-	// Cancel during tool call
+	// Cancel during tool call.
 	time.Sleep(50 * time.Millisecond)
+
 	cancelReq := acp.CancelNotification{
 		SessionId: sessionResp.SessionId,
 	}
 	err = client.Cancel(ctx, cancelReq)
 	require.NoError(t, err)
 
-	// Wait for completion
+	// Wait for completion.
 	select {
 	case err := <-done:
 		if err != nil {
-			t.Logf("Tool call cancelled: %v", err)
+			t.Logf("Tool call canceled: %v", err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Log("Tool call may still be running")
@@ -271,6 +284,7 @@ func TestACP_Cancel_PermissionRequest(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -288,7 +302,7 @@ func TestACP_Cancel_PermissionRequest(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Start prompt that might trigger permission request
+	// Start prompt that might trigger permission request.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -297,37 +311,40 @@ func TestACP_Cancel_PermissionRequest(t *testing.T) {
 	}
 
 	done := make(chan error, 1)
+
 	go func() {
 		_, err := client.Prompt(ctx, promptReq)
 		done <- err
 	}()
 
-	// Cancel (may interrupt permission request)
+	// Cancel (may interrupt permission request).
 	time.Sleep(50 * time.Millisecond)
+
 	cancelReq := acp.CancelNotification{
 		SessionId: sessionResp.SessionId,
 	}
 	err = client.Cancel(ctx, cancelReq)
 	require.NoError(t, err)
 
-	// Wait for completion
+	// Wait for completion.
 	select {
 	case err := <-done:
 		if err != nil {
-			t.Logf("Permission request cancelled: %v", err)
+			t.Logf("Permission request canceled: %v", err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Log("Permission request may still be pending")
 	}
 }
 
-// TestACP_Cancel_StopReason tests cancelled stop reason.
+// TestACP_Cancel_StopReason tests canceled stop reason.
 func TestACP_Cancel_StopReason(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -345,7 +362,7 @@ func TestACP_Cancel_StopReason(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Start prompt
+	// Start prompt.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -354,29 +371,33 @@ func TestACP_Cancel_StopReason(t *testing.T) {
 	}
 
 	var promptResp *acp.PromptResponse
+
 	done := make(chan error, 1)
+
 	go func() {
 		resp, err := client.Prompt(ctx, promptReq)
 		promptResp = &resp
+
 		done <- err
 	}()
 
-	// Cancel
+	// Cancel.
 	time.Sleep(50 * time.Millisecond)
+
 	cancelReq := acp.CancelNotification{
 		SessionId: sessionResp.SessionId,
 	}
 	err = client.Cancel(ctx, cancelReq)
 	require.NoError(t, err)
 
-	// Wait and check stop reason
+	// Wait and check stop reason.
 	select {
 	case <-done:
 		if promptResp != nil && promptResp.StopReason == acp.StopReasonCancelled {
-			t.Log("Stop reason is cancelled as expected")
+			t.Log("Stop reason is canceled as expected")
 		}
 	case <-time.After(5 * time.Second):
-		t.Log("Prompt may not have been cancelled")
+		t.Log("Prompt may not have been canceled")
 	}
 }
 
@@ -387,6 +408,7 @@ func TestACP_Cancel_PendingUpdates(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -407,7 +429,7 @@ func TestACP_Cancel_PendingUpdates(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Start prompt
+	// Start prompt.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -416,39 +438,42 @@ func TestACP_Cancel_PendingUpdates(t *testing.T) {
 	}
 
 	done := make(chan error, 1)
+
 	go func() {
 		_, err := client.Prompt(ctx, promptReq)
 		done <- err
 	}()
 
-	// Cancel
+	// Cancel.
 	time.Sleep(50 * time.Millisecond)
+
 	cancelReq := acp.CancelNotification{
 		SessionId: sessionResp.SessionId,
 	}
 	err = client.Cancel(ctx, cancelReq)
 	require.NoError(t, err)
 
-	// Wait for completion
+	// Wait for completion.
 	select {
 	case <-done:
-		// Check for pending updates
+		// Check for pending updates.
 		notifications := clientImpl.getNotifications()
 		if len(notifications) > 0 {
 			t.Logf("Received %d notifications before cancellation", len(notifications))
 		}
 	case <-time.After(5 * time.Second):
-		t.Log("Prompt may not have been cancelled")
+		t.Log("Prompt may not have been canceled")
 	}
 }
 
-// TestACP_Cancel_ToolCallStatus tests that tool calls are marked as cancelled.
+// TestACP_Cancel_ToolCallStatus tests that tool calls are marked as canceled.
 func TestACP_Cancel_ToolCallStatus(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -469,7 +494,7 @@ func TestACP_Cancel_ToolCallStatus(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Start prompt with tool call
+	// Start prompt with tool call.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -478,20 +503,22 @@ func TestACP_Cancel_ToolCallStatus(t *testing.T) {
 	}
 
 	done := make(chan error, 1)
+
 	go func() {
 		_, err := client.Prompt(ctx, promptReq)
 		done <- err
 	}()
 
-	// Cancel
+	// Cancel.
 	time.Sleep(50 * time.Millisecond)
+
 	cancelReq := acp.CancelNotification{
 		SessionId: sessionResp.SessionId,
 	}
 	err = client.Cancel(ctx, cancelReq)
 	require.NoError(t, err)
 
-	// Wait and check tool call status
+	// Wait and check tool call status.
 	select {
 	case <-done:
 		notifications := clientImpl.getNotifications()
@@ -502,6 +529,6 @@ func TestACP_Cancel_ToolCallStatus(t *testing.T) {
 			}
 		}
 	case <-time.After(5 * time.Second):
-		t.Log("Tool call may not have been cancelled")
+		t.Log("Tool call may not have been canceled")
 	}
 }

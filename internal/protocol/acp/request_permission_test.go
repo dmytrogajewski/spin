@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/session"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestRequestPermission_SessionNotFound tests that RequestPermission returns error for non-existent session.
@@ -60,9 +61,10 @@ func TestRequestPermission_NoApprovalService(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create a session
+	// Create a session.
 	sess := session.NewSession("/tmp/test")
 	sessionID := acp.SessionId(sess.ID)
+
 	acpAgent.mu.Lock()
 	acpAgent.sessions[sessionID] = sess
 	acpAgent.mu.Unlock()
@@ -98,7 +100,7 @@ func TestRequestPermission_Approved(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create approval handler that always approves
+	// Create approval handler that always approves.
 	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		return security.ApprovalResponse{
 			RequestID: req.ID,
@@ -110,9 +112,10 @@ func TestRequestPermission_Approved(t *testing.T) {
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
 	acpAgent.SetApprovalService(approvalService)
 
-	// Create a session
+	// Create a session.
 	sess := session.NewSession("/tmp/test")
 	sessionID := acp.SessionId(sess.ID)
+
 	acpAgent.mu.Lock()
 	acpAgent.sessions[sessionID] = sess
 	acpAgent.mu.Unlock()
@@ -154,7 +157,7 @@ func TestRequestPermission_Denied(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create approval handler that always denies
+	// Create approval handler that always denies.
 	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		return security.ApprovalResponse{
 			RequestID: req.ID,
@@ -166,9 +169,10 @@ func TestRequestPermission_Denied(t *testing.T) {
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
 	acpAgent.SetApprovalService(approvalService)
 
-	// Create a session
+	// Create a session.
 	sess := session.NewSession("/tmp/test")
 	sessionID := acp.SessionId(sess.ID)
+
 	acpAgent.mu.Lock()
 	acpAgent.sessions[sessionID] = sess
 	acpAgent.mu.Unlock()
@@ -199,8 +203,8 @@ func TestRequestPermission_Denied(t *testing.T) {
 	assert.Equal(t, acp.PermissionOptionId("reject"), resp.Outcome.Selected.OptionId)
 }
 
-// TestRequestPermission_Cancelled tests context cancellation.
-func TestRequestPermission_Cancelled(t *testing.T) {
+// TestRequestPermission_Canceled tests context cancellation.
+func TestRequestPermission_Canceled(t *testing.T) {
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -210,23 +214,25 @@ func TestRequestPermission_Cancelled(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create approval handler that blocks (simulating cancellation)
+	// Create approval handler that blocks (simulating cancellation).
 	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		// Block until context is cancelled
+		// Block until context is canceled.
 		<-ctx.Done()
+
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  false,
-			Reason:    "cancelled",
+			Reason:    "canceled",
 		}
 	}
 
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
 	acpAgent.SetApprovalService(approvalService)
 
-	// Create a session
+	// Create a session.
 	sess := session.NewSession("/tmp/test")
 	sessionID := acp.SessionId(sess.ID)
+
 	acpAgent.mu.Lock()
 	acpAgent.sessions[sessionID] = sess
 	acpAgent.mu.Unlock()
@@ -246,9 +252,9 @@ func TestRequestPermission_Cancelled(t *testing.T) {
 		},
 	}
 
-	// Create cancellable context
+	// Create cancellable context.
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+	cancel() // Cancel immediately.
 
 	resp, err := acpAgent.RequestPermission(ctx, req)
 	require.NoError(t, err)
@@ -266,11 +272,13 @@ func TestRequestPermission_WithRawInput(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Track the operation that was requested
+	// Track the operation that was requested.
 	var capturedOperation security.Operation
+
 	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		// Capture the operation
+		// Capture the operation.
 		capturedOperation = security.NewOperation(req.Command, req.Reason, req.WorkDir)
+
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
@@ -280,9 +288,10 @@ func TestRequestPermission_WithRawInput(t *testing.T) {
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
 	acpAgent.SetApprovalService(approvalService)
 
-	// Create a session
+	// Create a session.
 	sess := session.NewSession("/tmp/test")
 	sessionID := acp.SessionId(sess.ID)
+
 	acpAgent.mu.Lock()
 	acpAgent.sessions[sessionID] = sess
 	acpAgent.mu.Unlock()
@@ -292,7 +301,7 @@ func TestRequestPermission_WithRawInput(t *testing.T) {
 		ToolCall: acp.RequestPermissionToolCall{
 			ToolCallId: acp.ToolCallId("tool-1"),
 			Title:      acp.Ptr("write_file"),
-			RawInput: map[string]interface{}{
+			RawInput: map[string]any{
 				"path":    "/tmp/test.txt",
 				"content": "test content",
 			},
@@ -309,7 +318,7 @@ func TestRequestPermission_WithRawInput(t *testing.T) {
 	_, err = acpAgent.RequestPermission(context.Background(), req)
 	require.NoError(t, err)
 
-	// Verify operation was created correctly
+	// Verify operation was created correctly.
 	assert.Equal(t, "write_file", capturedOperation.Command.Program)
 	assert.Equal(t, "/tmp/test", capturedOperation.WorkDir)
 	assert.Contains(t, capturedOperation.Command.Raw, "write_file")
@@ -336,9 +345,10 @@ func TestRequestPermission_AllowAlwaysOption(t *testing.T) {
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
 	acpAgent.SetApprovalService(approvalService)
 
-	// Create a session
+	// Create a session.
 	sess := session.NewSession("/tmp/test")
 	sessionID := acp.SessionId(sess.ID)
+
 	acpAgent.mu.Lock()
 	acpAgent.sessions[sessionID] = sess
 	acpAgent.mu.Unlock()
@@ -366,7 +376,7 @@ func TestRequestPermission_AllowAlwaysOption(t *testing.T) {
 	resp, err := acpAgent.RequestPermission(context.Background(), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp.Outcome.Selected)
-	// Should select allow_once (first match)
+	// Should select allow_once (first match).
 	assert.Equal(t, acp.PermissionOptionId("allow-once"), resp.Outcome.Selected.OptionId)
 }
 
@@ -381,14 +391,16 @@ func TestRequestPermission_Integration(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create approval handler that simulates user interaction
+	// Create approval handler that simulates user interaction.
 	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		// Simulate approval based on command
+		// Simulate approval based on command.
 		approved := req.Command.Program != "dangerous_command"
+
 		reason := "approved"
 		if !approved {
 			reason = "denied - dangerous command"
 		}
+
 		return security.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  approved,
@@ -399,14 +411,15 @@ func TestRequestPermission_Integration(t *testing.T) {
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
 	acpAgent.SetApprovalService(approvalService)
 
-	// Create a session
+	// Create a session.
 	sess := session.NewSession("/tmp/test")
 	sessionID := acp.SessionId(sess.ID)
+
 	acpAgent.mu.Lock()
 	acpAgent.sessions[sessionID] = sess
 	acpAgent.mu.Unlock()
 
-	// Test approved case
+	// Test approved case.
 	reqApproved := acp.RequestPermissionRequest{
 		SessionId: sessionID,
 		ToolCall: acp.RequestPermissionToolCall{
@@ -432,7 +445,7 @@ func TestRequestPermission_Integration(t *testing.T) {
 	require.NotNil(t, resp.Outcome.Selected)
 	assert.Equal(t, acp.PermissionOptionId("allow"), resp.Outcome.Selected.OptionId)
 
-	// Test denied case
+	// Test denied case.
 	reqDenied := acp.RequestPermissionRequest{
 		SessionId: sessionID,
 		ToolCall: acp.RequestPermissionToolCall{

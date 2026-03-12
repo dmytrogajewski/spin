@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/session"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestSpinACPAgent_NewSession_Success tests successful session creation.
@@ -36,7 +37,7 @@ func TestSpinACPAgent_NewSession_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.SessionId)
 
-	// Verify session was stored
+	// Verify session was stored.
 	acpAgent.mu.RLock()
 	session, exists := acpAgent.sessions[resp.SessionId]
 	acpAgent.mu.RUnlock()
@@ -58,7 +59,7 @@ func TestSpinACPAgent_NewSession_WithMcpServers(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create context with timeout to prevent hanging
+	// Create context with timeout to prevent hanging.
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -78,11 +79,11 @@ func TestSpinACPAgent_NewSession_WithMcpServers(t *testing.T) {
 
 	resp, err := acpAgent.NewSession(ctx, req)
 
-	// Session creation should succeed even if MCP connection fails
+	// Session creation should succeed even if MCP connection fails.
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.SessionId)
 
-	// Verify session was stored
+	// Verify session was stored.
 	acpAgent.mu.RLock()
 	session, exists := acpAgent.sessions[resp.SessionId]
 	acpAgent.mu.RUnlock()
@@ -105,13 +106,13 @@ func TestSpinACPAgent_NewSession_InvalidCwd(t *testing.T) {
 	require.NoError(t, err)
 
 	req := acp.NewSessionRequest{
-		Cwd: "", // Empty working directory
+		Cwd: "", // Empty working directory.
 	}
 
 	_, err = acpAgent.NewSession(context.Background(), req)
 
 	// Session.NewSession may accept empty workDir, but we should validate
-	// For now, let's see what happens
+	// For now, let's see what happens.
 	if err != nil {
 		assert.Error(t, err)
 	}
@@ -142,7 +143,7 @@ func TestSpinACPAgent_NewSession_UnsupportedTransport(t *testing.T) {
 
 	_, err = acpAgent.NewSession(context.Background(), req)
 
-	// HTTP transport is not supported
+	// HTTP transport is not supported.
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "HTTP transport is not supported")
 }
@@ -162,7 +163,7 @@ func TestSpinACPAgent_NewSession_NoTransport(t *testing.T) {
 	req := acp.NewSessionRequest{
 		Cwd: "/tmp/test",
 		McpServers: []acp.McpServer{
-			{}, // No transport specified
+			{}, {}, // No transport specified.
 		},
 	}
 

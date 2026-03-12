@@ -15,33 +15,33 @@ type Config struct {
 
 // OAuthConfig holds OAuth configuration for protected MCP servers.
 type OAuthConfig struct {
-	ClientID     string   `yaml:"client_id" mapstructure:"client_id"`
-	ClientSecret string   `yaml:"client_secret,omitempty" mapstructure:"client_secret"`
-	RedirectURL  string   `yaml:"redirect_url,omitempty" mapstructure:"redirect_url"`
-	Scopes       []string `yaml:"scopes,omitempty" mapstructure:"scopes"`
+	ClientID     string   `mapstructure:"client_id"     yaml:"client_id"`
+	ClientSecret string   `mapstructure:"client_secret" yaml:"client_secret,omitempty"`
+	RedirectURL  string   `mapstructure:"redirect_url"  yaml:"redirect_url,omitempty"`
+	Scopes       []string `mapstructure:"scopes"        yaml:"scopes,omitempty"`
 }
 
 // MCPServerConfig holds configuration for a single MCP server.
 type MCPServerConfig struct {
-	// Common fields
-	Name      string        `yaml:"name" mapstructure:"name"`
-	Transport TransportType `yaml:"transport,omitempty" mapstructure:"transport"`
+	// Common fields.
+	Name      string        `mapstructure:"name"      yaml:"name"`
+	Transport TransportType `mapstructure:"transport" yaml:"transport,omitempty"`
 
-	// Stdio transport fields (mutually exclusive with URL)
-	Command string            `yaml:"command,omitempty" mapstructure:"command"`
-	Args    []string          `yaml:"args,omitempty" mapstructure:"args"`
-	Env     map[string]string `yaml:"env,omitempty" mapstructure:"env"`
+	// Stdio transport fields (mutually exclusive with URL).
+	Command string            `mapstructure:"command" yaml:"command,omitempty"`
+	Args    []string          `mapstructure:"args"    yaml:"args,omitempty"`
+	Env     map[string]string `mapstructure:"env"     yaml:"env,omitempty"`
 
-	// Remote transport fields (mutually exclusive with Command)
-	URL     string            `yaml:"url,omitempty" mapstructure:"url"`
-	Headers map[string]string `yaml:"headers,omitempty" mapstructure:"headers"`
+	// Remote transport fields (mutually exclusive with Command).
+	URL     string            `mapstructure:"url"     yaml:"url,omitempty"`
+	Headers map[string]string `mapstructure:"headers" yaml:"headers,omitempty"`
 
-	// OAuth configuration (optional, for protected servers)
-	OAuth *OAuthConfig `yaml:"oauth,omitempty" mapstructure:"oauth"`
+	// OAuth configuration (optional, for protected servers).
+	OAuth *OAuthConfig `mapstructure:"oauth" yaml:"oauth,omitempty"`
 
-	// Smithery-specific fields
-	SmitheryAPIKey    string `yaml:"smithery_api_key,omitempty" mapstructure:"smithery_api_key"`
-	SmitheryNamespace string `yaml:"smithery_namespace,omitempty" mapstructure:"smithery_namespace"`
+	// Smithery-specific fields.
+	SmitheryAPIKey    string `mapstructure:"smithery_api_key"   yaml:"smithery_api_key,omitempty"`
+	SmitheryNamespace string `mapstructure:"smithery_namespace" yaml:"smithery_namespace,omitempty"`
 }
 
 // MCPClient is the interface for MCP clients (SDK client or Smithery client).

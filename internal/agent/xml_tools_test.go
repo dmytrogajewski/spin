@@ -12,7 +12,7 @@ func TestParseToolCallsFromXML(t *testing.T) {
 	tests := []struct {
 		name    string
 		content string
-		want    int // number of tool calls
+		want    int // number of tool calls.
 	}{
 		{
 			name:    "no tool calls",
@@ -56,15 +56,16 @@ func TestParseToolCallsFromXML(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := parseToolCallsFromXML(tt.content)
 			assert.Equal(t, tt.want, len(got))
-			
+
 			if tt.want > 0 {
 				for _, call := range got {
 					assert.NotEmpty(t, call.ID)
 					assert.Equal(t, "function", string(call.Type))
 					assert.NotEmpty(t, call.Function.Name)
-					
-					// Verify args are valid JSON
-					var args map[string]interface{}
+
+					// Verify args are valid JSON.
+					var args map[string]any
+
 					err := json.Unmarshal([]byte(call.Function.Arguments), &args)
 					require.NoError(t, err)
 				}
@@ -72,5 +73,3 @@ func TestParseToolCallsFromXML(t *testing.T) {
 		})
 	}
 }
-
-

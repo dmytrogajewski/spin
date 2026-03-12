@@ -15,13 +15,15 @@
 //
 // # Example Usage
 //
-//	// Discover repository
+// Discover repository
+//
 //	repo, err := git.Discover(ctx, "/path/to/project")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
 //
-//	// Get status
+// Get status
+//
 //	status, err := repo.Status(ctx)
 //	if err != nil {
 //	    log.Fatal(err)
@@ -30,7 +32,8 @@
 //	fmt.Printf("Branch: %s\n", status.Branch)
 //	fmt.Printf("Modified: %d files\n", len(status.ModifiedFiles))
 //
-//	// List branches
+// List branches
+//
 //	branches, err := repo.ListBranches(ctx)
 //	if err != nil {
 //	    log.Fatal(err)

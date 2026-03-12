@@ -33,10 +33,10 @@ type Keystore interface {
 }
 
 var (
-	// ErrNotFound indicates the requested key was not found
+	// ErrNotFound indicates the requested key was not found.
 	ErrNotFound = errors.New("key not found")
 
-	// ErrNoKeystore indicates no keystore is available
+	// ErrNoKeystore indicates no keystore is available.
 	ErrNoKeystore = errors.New("no keystore available")
 )
 

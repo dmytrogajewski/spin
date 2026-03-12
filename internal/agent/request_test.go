@@ -7,7 +7,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/message"
 )
 
-// TestAgentRequest_UsesCanonicalMessage verifies AgentRequest uses message.Message
+// TestAgentRequest_UsesCanonicalMessage verifies AgentRequest uses message.Message.
 func TestAgentRequest_UsesCanonicalMessage(t *testing.T) {
 	msg := message.Message{
 		ID:        "test-1",

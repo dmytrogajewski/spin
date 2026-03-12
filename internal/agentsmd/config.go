@@ -3,7 +3,7 @@ package agentsmd
 // Config configures AGENTS.md discovery and loading.
 type Config struct {
 	// Enabled controls whether AGENTS.md is loaded.
-	// Default: true
+	// Default: true.
 	Enabled bool
 
 	// Path specifies a custom path to AGENTS.md.
@@ -12,7 +12,7 @@ type Config struct {
 
 	// MaxSize is the maximum file size in bytes.
 	// Files larger than this are truncated with a warning.
-	// Default: 100KB (100 * 1024)
+	// Default: 100KB (100 * 1024).
 	MaxSize int64
 }
 
@@ -20,7 +20,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Enabled: true,
-		MaxSize: 100 * 1024, // 100KB
+		MaxSize: 100 * 1024, // 100KB.
 	}
 }
 
@@ -29,5 +29,6 @@ func (c *Config) Validate() error {
 	if c.MaxSize < 0 {
 		c.MaxSize = 0
 	}
+
 	return nil
 }

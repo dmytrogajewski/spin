@@ -66,7 +66,7 @@ func TestDelta_NewIncrementHelpful(t *testing.T) {
 		t.Errorf("expected Operation %s, got %s", OpIncrementHelpful, delta.Operation)
 	}
 
-	// For increment operations, all fields should be nil
+	// For increment operations, all fields should be nil.
 	if delta.Fields.Content != nil || delta.Fields.TagKey != nil || delta.Fields.TagValue != nil || delta.Fields.Embedding != nil {
 		t.Error("expected all fields to be nil for increment operation")
 	}
@@ -96,7 +96,7 @@ func TestDelta_NewIncrementHarmful(t *testing.T) {
 		t.Errorf("expected Operation %s, got %s", OpIncrementHarmful, delta.Operation)
 	}
 
-	// For increment operations, all fields should be nil
+	// For increment operations, all fields should be nil.
 	if delta.Fields.Content != nil || delta.Fields.TagKey != nil || delta.Fields.TagValue != nil || delta.Fields.Embedding != nil {
 		t.Error("expected all fields to be nil for increment operation")
 	}
@@ -127,6 +127,7 @@ func TestDelta_NewAddTag(t *testing.T) {
 	if delta.Fields.TagKey == nil {
 		t.Fatal("expected tag_key field to be set")
 	}
+
 	if *delta.Fields.TagKey != key {
 		t.Errorf("expected key %s, got %s", key, *delta.Fields.TagKey)
 	}
@@ -134,6 +135,7 @@ func TestDelta_NewAddTag(t *testing.T) {
 	if delta.Fields.TagValue == nil {
 		t.Fatal("expected tag_value field to be set")
 	}
+
 	if *delta.Fields.TagValue != value {
 		t.Errorf("expected value %s, got %s", value, *delta.Fields.TagValue)
 	}
@@ -163,6 +165,7 @@ func TestDelta_NewRemoveTag(t *testing.T) {
 	if delta.Fields.TagKey == nil {
 		t.Fatal("expected tag_key field to be set")
 	}
+
 	if *delta.Fields.TagKey != key {
 		t.Errorf("expected key %s, got %s", key, *delta.Fields.TagKey)
 	}

@@ -10,20 +10,19 @@ import (
 func TestSpinner_Frame(t *testing.T) {
 	s := NewSpinner(SpinnerDots)
 
-	// Not running - should return empty
+	// Not running - should return empty.
 	frame := s.Frame()
 	if frame != "" {
 		t.Errorf("expected empty frame when not running, got %q", frame)
 	}
 
-	// Start and check frames exist
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// Start and check frames exist.
+	ctx := t.Context()
 
 	s.Start(ctx)
 	defer s.Stop()
 
-	// Wait a bit for animation to start
+	// Wait a bit for animation to start.
 	time.Sleep(10 * time.Millisecond)
 
 	frame = s.Frame()
@@ -31,7 +30,7 @@ func TestSpinner_Frame(t *testing.T) {
 		t.Error("expected non-empty frame when running")
 	}
 
-	// Frame should be one of the dots frames
+	// Frame should be one of the dots frames.
 	validFrames := map[string]bool{
 		"⠋": true, "⠙": true, "⠹": true, "⠸": true,
 		"⠼": true, "⠴": true, "⠦": true, "⠧": true,
@@ -49,8 +48,7 @@ func TestSpinner_StartStop(t *testing.T) {
 		t.Error("spinner should not be running initially")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	s.Start(ctx)
 	time.Sleep(10 * time.Millisecond)
@@ -70,13 +68,12 @@ func TestSpinner_StartStop(t *testing.T) {
 func TestSpinner_DoubleStart(t *testing.T) {
 	s := NewSpinner(SpinnerBraille)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	s.Start(ctx)
 	defer s.Stop()
 
-	// Double start should be a no-op
+	// Double start should be a no-op.
 	s.Start(ctx)
 
 	if !s.IsRunning() {
@@ -89,16 +86,16 @@ func TestSpinner_UpdateCallback(t *testing.T) {
 	s.SetInterval(20 * time.Millisecond)
 
 	var callCount atomic.Int32
+
 	s.SetUpdateCallback(func() {
 		callCount.Add(1)
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	s.Start(ctx)
 
-	// Wait for several animation frames
+	// Wait for several animation frames.
 	time.Sleep(100 * time.Millisecond)
 
 	s.Stop()
@@ -137,11 +134,10 @@ func TestSpinner_Styles(t *testing.T) {
 func TestSpinner_SetStyle(t *testing.T) {
 	s := NewSpinner(SpinnerDots)
 
-	// Change style
+	// Change style.
 	s.SetStyle(SpinnerCircle)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	s.Start(ctx)
 	defer s.Stop()
@@ -150,7 +146,7 @@ func TestSpinner_SetStyle(t *testing.T) {
 
 	frame := s.Frame()
 
-	// Should be a circle frame
+	// Should be a circle frame.
 	validFrames := map[string]bool{
 		"◐": true, "◓": true, "◑": true, "◒": true,
 	}
@@ -170,15 +166,15 @@ func TestSpinner_ContextCancel(t *testing.T) {
 		t.Error("spinner should be running after Start")
 	}
 
-	// Cancel context
+	// Cancel context.
 	cancel()
 
-	// Wait for goroutine to notice
+	// Wait for goroutine to notice.
 	time.Sleep(50 * time.Millisecond)
 
-	// Spinner should have stopped
+	// Spinner should have stopped.
 	if s.IsRunning() {
-		t.Error("spinner should stop when context is cancelled")
+		t.Error("spinner should stop when context is canceled")
 	}
 }
 
@@ -193,7 +189,7 @@ func TestActivitySpinner_ShouldAnimate(t *testing.T) {
 		{"Thinking", true},
 		{"Executing", true},
 		{"Calling tools", true},
-		{"Calling: Bash", true}, // Prefix match
+		{"Calling: Bash", true}, // Prefix match.
 		{"Waiting approval", true},
 		{"Ready", false},
 		{"Idle", false},
@@ -212,15 +208,14 @@ func TestActivitySpinner_ShouldAnimate(t *testing.T) {
 func TestActivitySpinner_UpdateState(t *testing.T) {
 	as := NewActivitySpinner(SpinnerDots)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
-	// Initially not running
+	// Initially not running.
 	if as.IsRunning() {
 		t.Error("should not be running initially")
 	}
 
-	// Update to active state
+	// Update to active state.
 	as.UpdateState(ctx, "Thinking")
 	time.Sleep(10 * time.Millisecond)
 
@@ -228,7 +223,7 @@ func TestActivitySpinner_UpdateState(t *testing.T) {
 		t.Error("should be running for Thinking state")
 	}
 
-	// Update to idle state
+	// Update to idle state.
 	as.UpdateState(ctx, "Ready")
 	time.Sleep(10 * time.Millisecond)
 
@@ -240,12 +235,12 @@ func TestActivitySpinner_UpdateState(t *testing.T) {
 func TestActivitySpinner_AddActiveState(t *testing.T) {
 	as := NewActivitySpinner(SpinnerDots)
 
-	// Custom state not active by default
+	// Custom state not active by default.
 	if as.ShouldAnimate("CustomState") {
 		t.Error("CustomState should not be active by default")
 	}
 
-	// Add it
+	// Add it.
 	as.AddActiveState("CustomState")
 
 	if !as.ShouldAnimate("CustomState") {

@@ -3,21 +3,23 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 
-	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	mcpSDK "github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // RemoteRegistryConfig holds configuration for a remote MCP registry.
 type RemoteRegistryConfig struct {
 	Name      string
-	Transport TransportType // sse or streamable-http
+	Transport TransportType // sse or streamable-http.
 	URL       string
 	Headers   map[string]string
 	OAuth     *OAuthConfig
@@ -40,13 +42,15 @@ type RemoteRegistry struct {
 // NewRemoteRegistry creates a new RemoteRegistry for SSE or HTTP MCP servers.
 func NewRemoteRegistry(config RemoteRegistryConfig) (*RemoteRegistry, error) {
 	if config.Name == "" {
-		return nil, fmt.Errorf("registry name is required")
+		return nil, errors.New("registry name is required")
 	}
+
 	if config.URL == "" {
-		return nil, fmt.Errorf("URL is required for remote registry")
+		return nil, errors.New("URL is required for remote registry")
 	}
+
 	if config.Transport != TransportSSE && config.Transport != TransportStreamableHTTP {
-		return nil, fmt.Errorf("transport must be 'sse' or 'streamable-http'")
+		return nil, errors.New("transport must be 'sse' or 'streamable-http'")
 	}
 
 	return &RemoteRegistry{
@@ -75,9 +79,11 @@ func (r *RemoteRegistry) Initialize(ctx context.Context) error {
 		return nil
 	}
 
-	// Create client based on transport
-	var sdkClient *client.Client
-	var err error
+	// Create client based on transport.
+	var (
+		sdkClient *client.Client
+		err       error
+	)
 
 	switch r.config.Transport {
 	case TransportSSE:
@@ -92,16 +98,18 @@ func (r *RemoteRegistry) Initialize(ctx context.Context) error {
 		return fmt.Errorf("create client: %w", err)
 	}
 
-	// Start the transport
-	if err := sdkClient.Start(ctx); err != nil {
+	// Start the transport.
+	err = sdkClient.Start(ctx)
+	if err != nil {
 		sdkClient.Close()
+
 		return fmt.Errorf("start transport: %w", err)
 	}
 
 	r.sdkClient = sdkClient
 	r.mcpClient = &sdkClientWrapper{client: sdkClient}
 
-	// Initialize connection
+	// Initialize connection.
 	initReq := mcpSDK.InitializeRequest{
 		Params: mcpSDK.InitializeParams{
 			ProtocolVersion: "2024-11-05",
@@ -116,21 +124,24 @@ func (r *RemoteRegistry) Initialize(ctx context.Context) error {
 	initResp, err := r.mcpClient.Initialize(ctx, initReq)
 	if err != nil {
 		r.mcpClient.Close()
+
 		return fmt.Errorf("initialize connection: %w", err)
 	}
 
 	r.metadata.ServerInfo = &initResp.ServerInfo
 	r.metadata.Capabilities = initResp.Capabilities
 
-	// List tools
+	// List tools.
 	listReq := mcpSDK.ListToolsRequest{}
+
 	toolsResp, err := r.mcpClient.ListTools(ctx, listReq)
 	if err != nil {
 		r.mcpClient.Close()
+
 		return fmt.Errorf("list tools: %w", err)
 	}
 
-	// Register tools
+	// Register tools.
 	for _, tool := range toolsResp.Tools {
 		r.tools[tool.Name] = &MCPTool{
 			ServerName: r.name,
@@ -167,6 +178,7 @@ func (r *RemoteRegistry) createSSEClient() (*client.Client, error) {
 			RedirectURI:  r.config.OAuth.RedirectURL,
 			Scopes:       r.config.OAuth.Scopes,
 		}
+
 		return client.NewOAuthSSEClient(r.config.URL, oauthConfig, opts...)
 	}
 
@@ -187,6 +199,7 @@ func (r *RemoteRegistry) createStreamableHTTPClient() (*client.Client, error) {
 			RedirectURI:  r.config.OAuth.RedirectURL,
 			Scopes:       r.config.OAuth.Scopes,
 		}
+
 		return client.NewOAuthStreamableHttpClient(r.config.URL, oauthConfig, opts...)
 	}
 
@@ -197,6 +210,7 @@ func (r *RemoteRegistry) createStreamableHTTPClient() (*client.Client, error) {
 func (r *RemoteRegistry) IsConnected() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.connected
 }
 
@@ -204,6 +218,7 @@ func (r *RemoteRegistry) IsConnected() bool {
 func (r *RemoteRegistry) Metadata() RegistryMetadata {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.metadata
 }
 
@@ -211,6 +226,7 @@ func (r *RemoteRegistry) Metadata() RegistryMetadata {
 func (r *RemoteRegistry) Client() MCPClient {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.mcpClient
 }
 
@@ -223,6 +239,7 @@ func (r *RemoteRegistry) List() []tools.Tool {
 	for _, mcpTool := range r.tools {
 		result = append(result, r.wrapTool(mcpTool))
 	}
+
 	return result
 }
 
@@ -230,6 +247,7 @@ func (r *RemoteRegistry) List() []tools.Tool {
 func (r *RemoteRegistry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return len(r.tools)
 }
 
@@ -247,6 +265,7 @@ func (r *RemoteRegistry) Tool(name string) tools.Tool {
 	if !exists {
 		return nil
 	}
+
 	return r.wrapTool(mcpTool)
 }
 
@@ -261,10 +280,11 @@ func (r *RemoteRegistry) Execute(ctx context.Context, toolName string, args json
 		return tools.ToolResult{}, fmt.Errorf("tool not found: %s", toolName)
 	}
 
-	// Parse arguments
+	// Parse arguments.
 	var argsMap map[string]any
 	if len(args) > 0 {
-		if err := json.Unmarshal(args, &argsMap); err != nil {
+		err := json.Unmarshal(args, &argsMap)
+		if err != nil {
 			return tools.ToolResult{
 				Success: false,
 				Error:   fmt.Sprintf("invalid arguments: %v", err),
@@ -272,7 +292,7 @@ func (r *RemoteRegistry) Execute(ctx context.Context, toolName string, args json
 		}
 	}
 
-	// Call tool
+	// Call tool.
 	callReq := mcpSDK.CallToolRequest{
 		Params: mcpSDK.CallToolParams{
 			Name:      mcpTool.Tool.Name,
@@ -295,8 +315,9 @@ func (r *RemoteRegistry) Execute(ctx context.Context, toolName string, args json
 		}, nil
 	}
 
-	// Convert response
+	// Convert response.
 	var output strings.Builder
+
 	for _, content := range resp.Content {
 		if textContent, ok := mcpSDK.AsTextContent(content); ok {
 			output.WriteString(textContent.Text)
@@ -324,6 +345,7 @@ func (r *RemoteRegistry) Close() error {
 	if r.mcpClient != nil {
 		return r.mcpClient.Close()
 	}
+
 	return nil
 }
 
@@ -349,6 +371,7 @@ func (w *remoteToolWrapper) Description() string {
 	if w.mcpTool.Tool.Description != "" {
 		return w.mcpTool.Tool.Description
 	}
+
 	return fmt.Sprintf("MCP tool: %s", w.mcpTool.Tool.Name)
 }
 
@@ -359,7 +382,8 @@ func (w *remoteToolWrapper) Schema() tools.ToolSchema {
 	}
 
 	var mcpSchema JSONSchema
-	if err := json.Unmarshal(schemaBytes, &mcpSchema); err != nil {
+	err = json.Unmarshal(schemaBytes, &mcpSchema)
+	if err != nil {
 		return w.fallbackSchema()
 	}
 
@@ -408,5 +432,6 @@ func (w *remoteToolWrapper) Execute(ctx context.Context, params tools.ToolParame
 			Error:   fmt.Sprintf("marshal arguments: %v", err),
 		}, nil
 	}
+
 	return w.registry.Execute(ctx, w.mcpTool.Tool.Name, argsJSON)
 }

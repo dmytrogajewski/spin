@@ -41,24 +41,25 @@ func NewDiscoverer(gitRoot string) *DefaultDiscoverer {
 //
 // Returns empty string if not found (this is not an error).
 func (d *DefaultDiscoverer) Discover(ctx context.Context, workDir string) (string, error) {
-	// Check context cancellation
-	if err := ctx.Err(); err != nil {
+	// Check context cancellation.
+	err := ctx.Err()
+	if err != nil {
 		return "", err
 	}
 
-	// Normalize workDir to absolute path
+	// Normalize workDir to absolute path.
 	absWorkDir, err := filepath.Abs(workDir)
 	if err != nil {
 		return "", err
 	}
 
-	// 1. Check working directory first
+	// 1. Check working directory first.
 	path := filepath.Join(absWorkDir, FileName)
 	if fileExists(path) {
 		return path, nil
 	}
 
-	// 2. Check git root if available and different from workDir
+	// 2. Check git root if available and different from workDir.
 	if d.gitRoot != "" {
 		absGitRoot, err := filepath.Abs(d.gitRoot)
 		if err == nil && absGitRoot != absWorkDir {
@@ -69,7 +70,7 @@ func (d *DefaultDiscoverer) Discover(ctx context.Context, workDir string) (strin
 		}
 	}
 
-	// 3. Walk up to filesystem root (but stop at gitRoot if specified)
+	// 3. Walk up to filesystem root (but stop at gitRoot if specified).
 	var stopAt string
 	if d.gitRoot != "" {
 		stopAt, _ = filepath.Abs(d.gitRoot)
@@ -79,17 +80,18 @@ func (d *DefaultDiscoverer) Discover(ctx context.Context, workDir string) (strin
 	for {
 		parent := filepath.Dir(current)
 		if parent == current {
-			// Reached filesystem root
+			// Reached filesystem root.
 			break
 		}
 
-		// Stop at git root if specified (already checked git root above)
+		// Stop at git root if specified (already checked git root above).
 		if stopAt != "" && parent == stopAt {
 			break
 		}
 
-		// Check context cancellation periodically
-		if err := ctx.Err(); err != nil {
+		// Check context cancellation periodically.
+		err := ctx.Err()
+		if err != nil {
 			return "", err
 		}
 
@@ -97,10 +99,11 @@ func (d *DefaultDiscoverer) Discover(ctx context.Context, workDir string) (strin
 		if fileExists(path) {
 			return path, nil
 		}
+
 		current = parent
 	}
 
-	// Not found (this is not an error)
+	// Not found (this is not an error).
 	return "", nil
 }
 
@@ -110,5 +113,6 @@ func fileExists(path string) bool {
 	if err != nil {
 		return false
 	}
+
 	return !info.IsDir()
 }

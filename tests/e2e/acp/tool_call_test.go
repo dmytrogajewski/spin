@@ -17,32 +17,34 @@ func TestACP_Prompt_ToolCalls(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
-	// Create client with notification tracking
+	// Create client with notification tracking.
 	clientImpl := &testClient{}
 	client := createACPClientWithClient(t, stdin, stdout, clientImpl)
 	ctx := context.Background()
 
-	// Initialize
+	// Initialize.
 	_, err := client.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 	})
 	require.NoError(t, err)
 
-	// Create session
+	// Create session.
 	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
 		Cwd:        workDir,
 		McpServers: []acp.McpServer{},
 	})
 	require.NoError(t, err)
+
 	sessionID := sessionResp.SessionId
 
-	// Clear any notifications from initialization
+	// Clear any notifications from initialization.
 	clientImpl.clearNotifications()
 
-	// Send prompt that should trigger tool calls (e.g., list files)
+	// Send prompt that should trigger tool calls (e.g., list files).
 	promptReq := acp.PromptRequest{
 		SessionId: sessionID,
 		Prompt: []acp.ContentBlock{
@@ -50,32 +52,34 @@ func TestACP_Prompt_ToolCalls(t *testing.T) {
 		},
 	}
 
-	// Start prompt in goroutine to allow notifications to arrive
+	// Start prompt in goroutine to allow notifications to arrive.
 	done := make(chan error, 1)
+
 	go func() {
 		_, err := client.Prompt(ctx, promptReq)
 		done <- err
 	}()
 
-	// Wait a bit for notifications
+	// Wait a bit for notifications.
 	time.Sleep(100 * time.Millisecond)
 
-	// Check for notifications
+	// Check for notifications.
 	notifications := clientImpl.getNotifications()
 
 	// Should receive at least some notifications (user message, tool calls, etc.)
-	// Note: Exact notifications depend on LLM response, so we just verify some were received
+	// Note: Exact notifications depend on LLM response, so we just verify some were received.
 	if len(notifications) == 0 {
-		// Wait a bit more
+		// Wait a bit more.
 		time.Sleep(100 * time.Millisecond)
+
 		notifications = clientImpl.getNotifications()
 	}
 
 	// Verify we got some notifications
-	// In a real scenario, we'd check for specific notification types
+	// In a real scenario, we'd check for specific notification types.
 	t.Logf("Received %d notifications", len(notifications))
 
-	// Wait for prompt to complete
+	// Wait for prompt to complete.
 	select {
 	case err := <-done:
 		require.NoError(t, err, "Prompt should complete")
@@ -91,7 +95,8 @@ func TestACP_Prompt_ToolCallNotifications(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	clientImpl := &testClient{}
@@ -111,7 +116,7 @@ func TestACP_Prompt_ToolCallNotifications(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt
+	// Send prompt.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -122,11 +127,12 @@ func TestACP_Prompt_ToolCallNotifications(t *testing.T) {
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check notifications for tool calls
+	// Check notifications for tool calls.
 	notifications := clientImpl.getNotifications()
 
-	// Look for tool call notifications
+	// Look for tool call notifications.
 	hasToolCall := false
+
 	for _, notif := range notifications {
 		if notif.Update.ToolCall != nil {
 			hasToolCall = true
@@ -135,6 +141,7 @@ func TestACP_Prompt_ToolCallNotifications(t *testing.T) {
 			assert.NotEmpty(t, toolCall.Title, "Tool call should have title")
 			t.Logf("Found tool call: %s (ID: %s)", toolCall.Title, toolCall.ToolCallId)
 		}
+
 		if notif.Update.ToolCallUpdate != nil {
 			hasToolCall = true
 			update := notif.Update.ToolCallUpdate
@@ -144,7 +151,7 @@ func TestACP_Prompt_ToolCallNotifications(t *testing.T) {
 	}
 
 	// Note: Tool calls depend on LLM response, so we don't require them
-	// But if they exist, they should have correct structure
+	// But if they exist, they should have correct structure.
 	if hasToolCall {
 		t.Log("Tool call notifications verified")
 	} else {
@@ -159,6 +166,7 @@ func TestACP_ToolCall_Create(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -179,7 +187,7 @@ func TestACP_ToolCall_Create(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that should trigger tool call
+	// Send prompt that should trigger tool call.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -190,14 +198,14 @@ func TestACP_ToolCall_Create(t *testing.T) {
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for tool_call notification
+	// Check for tool_call notification.
 	notifications := clientImpl.getNotifications()
 	for _, notif := range notifications {
 		if notif.Update.ToolCall != nil {
 			toolCall := notif.Update.ToolCall
 			assert.NotEmpty(t, toolCall.ToolCallId, "Tool call should have ID")
 			assert.NotEmpty(t, toolCall.Title, "Tool call should have title")
-			// Status is a value type, verify it's valid
+			// Status is a value type, verify it's valid.
 			validStatuses := []acp.ToolCallStatus{
 				acp.ToolCallStatusPending,
 				acp.ToolCallStatusInProgress,
@@ -205,9 +213,11 @@ func TestACP_ToolCall_Create(t *testing.T) {
 				acp.ToolCallStatusFailed,
 			}
 			assert.Contains(t, validStatuses, toolCall.Status, "Status should be valid")
+
 			return
 		}
 	}
+
 	t.Log("No tool_call notification found (may be expected)")
 }
 
@@ -218,6 +228,7 @@ func TestACP_ToolCall_Update_Status(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -238,7 +249,7 @@ func TestACP_ToolCall_Update_Status(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that should trigger tool call
+	// Send prompt that should trigger tool call.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -249,9 +260,10 @@ func TestACP_ToolCall_Update_Status(t *testing.T) {
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for status transitions in tool_call_update notifications
+	// Check for status transitions in tool_call_update notifications.
 	notifications := clientImpl.getNotifications()
 	statuses := make(map[acp.ToolCallId][]acp.ToolCallStatus)
+
 	for _, notif := range notifications {
 		if notif.Update.ToolCallUpdate != nil {
 			update := notif.Update.ToolCallUpdate
@@ -261,11 +273,11 @@ func TestACP_ToolCall_Update_Status(t *testing.T) {
 		}
 	}
 
-	// Verify status transitions if tool calls were made
+	// Verify status transitions if tool calls were made.
 	if len(statuses) > 0 {
 		for toolCallID, statusList := range statuses {
 			t.Logf("Tool call %s had statuses: %v", toolCallID, statusList)
-			// Status should progress: pending -> in_progress -> completed/failed
+			// Status should progress: pending -> in_progress -> completed/failed.
 		}
 	} else {
 		t.Log("No tool call status updates found (may be expected)")
@@ -279,6 +291,7 @@ func TestACP_ToolCall_Update_Failed(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -299,7 +312,7 @@ func TestACP_ToolCall_Update_Failed(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that might trigger a tool call that fails
+	// Send prompt that might trigger a tool call that fails.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -310,15 +323,18 @@ func TestACP_ToolCall_Update_Failed(t *testing.T) {
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for failed status in tool_call_update notifications
+	// Check for failed status in tool_call_update notifications.
 	notifications := clientImpl.getNotifications()
 	foundFailed := false
+
 	for _, notif := range notifications {
 		if notif.Update.ToolCallUpdate != nil {
 			update := notif.Update.ToolCallUpdate
 			if update.Status != nil && *update.Status == acp.ToolCallStatusFailed {
 				foundFailed = true
+
 				t.Logf("Found failed tool call: %s", update.ToolCallId)
+
 				break
 			}
 		}
@@ -336,6 +352,7 @@ func TestACP_ToolCall_Content_Text(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -356,7 +373,7 @@ func TestACP_ToolCall_Content_Text(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that should trigger tool call with text content
+	// Send prompt that should trigger tool call with text content.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -367,24 +384,28 @@ func TestACP_ToolCall_Content_Text(t *testing.T) {
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for text content in tool calls
+	// Check for text content in tool calls.
 	notifications := clientImpl.getNotifications()
 	for _, notif := range notifications {
 		if toolCall := notif.Update.ToolCall; toolCall != nil {
 			if len(toolCall.Content) > 0 {
-				// Content exists - structure depends on SDK implementation
+				// Content exists - structure depends on SDK implementation.
 				t.Logf("Found content in tool call (structure depends on SDK)")
+
 				return
 			}
 		}
+
 		if update := notif.Update.ToolCallUpdate; update != nil {
 			if len(update.Content) > 0 {
-				// Content exists - structure depends on SDK implementation
+				// Content exists - structure depends on SDK implementation.
 				t.Logf("Found content in tool call update (structure depends on SDK)")
+
 				return
 			}
 		}
 	}
+
 	t.Log("No text content in tool calls found (may be expected)")
 }
 
@@ -395,6 +416,7 @@ func TestACP_ToolCall_Content_Diff(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -415,7 +437,7 @@ func TestACP_ToolCall_Content_Diff(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that should trigger tool call with diff content
+	// Send prompt that should trigger tool call with diff content.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -426,7 +448,7 @@ func TestACP_ToolCall_Content_Diff(t *testing.T) {
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for diff content in tool calls
+	// Check for diff content in tool calls.
 	notifications := clientImpl.getNotifications()
 	for _, notif := range notifications {
 		if toolCall := notif.Update.ToolCall; toolCall != nil {
@@ -436,11 +458,13 @@ func TestACP_ToolCall_Content_Diff(t *testing.T) {
 						assert.NotEmpty(t, content.Diff.Path, "Diff should have path")
 						assert.NotEmpty(t, content.Diff.NewText, "Diff should have newText")
 						t.Logf("Found diff content in tool call: %s", content.Diff.Path)
+
 						return
 					}
 				}
 			}
 		}
+
 		if update := notif.Update.ToolCallUpdate; update != nil {
 			if update.Content != nil {
 				for _, content := range update.Content {
@@ -448,12 +472,14 @@ func TestACP_ToolCall_Content_Diff(t *testing.T) {
 						assert.NotEmpty(t, content.Diff.Path, "Diff should have path")
 						assert.NotEmpty(t, content.Diff.NewText, "Diff should have newText")
 						t.Logf("Found diff content in tool call update: %s", content.Diff.Path)
+
 						return
 					}
 				}
 			}
 		}
 	}
+
 	t.Log("No diff content in tool calls found (may be expected)")
 }
 
@@ -464,6 +490,7 @@ func TestACP_ToolCall_Locations(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -484,7 +511,7 @@ func TestACP_ToolCall_Locations(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that should trigger tool call with file location
+	// Send prompt that should trigger tool call with file location.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -495,7 +522,7 @@ func TestACP_ToolCall_Locations(t *testing.T) {
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for locations in tool calls
+	// Check for locations in tool calls.
 	notifications := clientImpl.getNotifications()
 	for _, notif := range notifications {
 		if toolCall := notif.Update.ToolCall; toolCall != nil {
@@ -503,20 +530,24 @@ func TestACP_ToolCall_Locations(t *testing.T) {
 				for _, loc := range toolCall.Locations {
 					assert.NotEmpty(t, loc.Path, "Location should have path")
 					t.Logf("Found location in tool call: %s (line: %v)", loc.Path, loc.Line)
+
 					return
 				}
 			}
 		}
+
 		if update := notif.Update.ToolCallUpdate; update != nil {
 			if len(update.Locations) > 0 {
 				for _, loc := range update.Locations {
 					assert.NotEmpty(t, loc.Path, "Location should have path")
 					t.Logf("Found location in tool call update: %s (line: %v)", loc.Path, loc.Line)
+
 					return
 				}
 			}
 		}
 	}
+
 	t.Log("No locations in tool calls found (may be expected)")
 }
 
@@ -527,6 +558,7 @@ func TestACP_ToolCall_Kinds(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -547,7 +579,7 @@ func TestACP_ToolCall_Kinds(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompts that might trigger different tool kinds
+	// Send prompts that might trigger different tool kinds.
 	testCases := []struct {
 		name   string
 		prompt string
@@ -561,6 +593,7 @@ func TestACP_ToolCall_Kinds(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			clientImpl.clearNotifications()
+
 			promptReq := acp.PromptRequest{
 				SessionId: sessionResp.SessionId,
 				Prompt: []acp.ContentBlock{
@@ -571,13 +604,13 @@ func TestACP_ToolCall_Kinds(t *testing.T) {
 			_, err = client.Prompt(ctx, promptReq)
 			require.NoError(t, err)
 
-			// Check for tool kind
+			// Check for tool kind.
 			notifications := clientImpl.getNotifications()
 			for _, notif := range notifications {
 				if toolCall := notif.Update.ToolCall; toolCall != nil {
 					if toolCall.Kind != "" {
 						t.Logf("Found tool kind: %v (expected: %v)", toolCall.Kind, tc.kind)
-						// Verify it's a valid tool kind
+						// Verify it's a valid tool kind.
 						validKinds := []acp.ToolKind{
 							acp.ToolKindRead,
 							acp.ToolKindEdit,
@@ -590,10 +623,12 @@ func TestACP_ToolCall_Kinds(t *testing.T) {
 							acp.ToolKindOther,
 						}
 						assert.Contains(t, validKinds, toolCall.Kind, "Tool kind should be valid")
+
 						return
 					}
 				}
 			}
+
 			t.Log("No tool kind found (may be expected)")
 		})
 	}
@@ -606,6 +641,7 @@ func TestACP_ToolCall_RawInput(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -626,7 +662,7 @@ func TestACP_ToolCall_RawInput(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that should trigger tool call
+	// Send prompt that should trigger tool call.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -637,22 +673,26 @@ func TestACP_ToolCall_RawInput(t *testing.T) {
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for rawInput in tool calls
+	// Check for rawInput in tool calls.
 	notifications := clientImpl.getNotifications()
 	for _, notif := range notifications {
 		if toolCall := notif.Update.ToolCall; toolCall != nil {
 			if toolCall.RawInput != nil {
 				t.Logf("Found rawInput in tool call: %v", toolCall.RawInput)
+
 				return
 			}
 		}
+
 		if update := notif.Update.ToolCallUpdate; update != nil {
 			if update.RawInput != nil {
 				t.Logf("Found rawInput in tool call update: %v", update.RawInput)
+
 				return
 			}
 		}
 	}
+
 	t.Log("No rawInput in tool calls found (may be expected)")
 }
 
@@ -663,6 +703,7 @@ func TestACP_ToolCall_RawOutput(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -683,7 +724,7 @@ func TestACP_ToolCall_RawOutput(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that should trigger tool call
+	// Send prompt that should trigger tool call.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -694,22 +735,26 @@ func TestACP_ToolCall_RawOutput(t *testing.T) {
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for rawOutput in tool calls
+	// Check for rawOutput in tool calls.
 	notifications := clientImpl.getNotifications()
 	for _, notif := range notifications {
 		if toolCall := notif.Update.ToolCall; toolCall != nil {
 			if toolCall.RawOutput != nil {
 				t.Logf("Found rawOutput in tool call: %v", toolCall.RawOutput)
+
 				return
 			}
 		}
+
 		if update := notif.Update.ToolCallUpdate; update != nil {
 			if update.RawOutput != nil {
 				t.Logf("Found rawOutput in tool call update: %v", update.RawOutput)
+
 				return
 			}
 		}
 	}
+
 	t.Log("No rawOutput in tool calls found (may be expected)")
 }
 
@@ -720,6 +765,7 @@ func TestACP_ToolCall_Multiple(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -740,7 +786,7 @@ func TestACP_ToolCall_Multiple(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that might trigger multiple tool calls
+	// Send prompt that might trigger multiple tool calls.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -751,9 +797,10 @@ func TestACP_ToolCall_Multiple(t *testing.T) {
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for multiple tool calls
+	// Check for multiple tool calls.
 	notifications := clientImpl.getNotifications()
 	toolCallIDs := make(map[acp.ToolCallId]bool)
+
 	for _, notif := range notifications {
 		if toolCall := notif.Update.ToolCall; toolCall != nil {
 			toolCallIDs[toolCall.ToolCallId] = true
@@ -774,6 +821,7 @@ func TestACP_ToolCall_Sequential(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -794,7 +842,7 @@ func TestACP_ToolCall_Sequential(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that might trigger sequential tool calls
+	// Send prompt that might trigger sequential tool calls.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -805,9 +853,10 @@ func TestACP_ToolCall_Sequential(t *testing.T) {
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for sequential tool calls (tool call -> update -> tool call)
+	// Check for sequential tool calls (tool call -> update -> tool call).
 	notifications := clientImpl.getNotifications()
 	toolCallSequence := []acp.ToolCallId{}
+
 	for _, notif := range notifications {
 		if toolCall := notif.Update.ToolCall; toolCall != nil {
 			toolCallSequence = append(toolCallSequence, toolCall.ToolCallId)

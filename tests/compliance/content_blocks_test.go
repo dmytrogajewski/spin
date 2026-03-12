@@ -53,7 +53,7 @@ func TestCompliance_ContentBlock_ResourceLink(t *testing.T) {
 
 // TestCompliance_ContentBlock_Resource verifies embedded resource content block format compliance.
 func TestCompliance_ContentBlock_Resource(t *testing.T) {
-	// Text resource
+	// Text resource.
 	textResource := acp.ContentBlock{
 		Resource: &acp.ContentBlockResource{
 			Resource: acp.EmbeddedResourceResource{
@@ -69,7 +69,7 @@ func TestCompliance_ContentBlock_Resource(t *testing.T) {
 	assert.NotNil(t, textResource.Resource, "Resource block should have Resource field")
 	assert.NotNil(t, textResource.Resource.Resource.TextResourceContents, "Text resource should have TextResourceContents")
 
-	// Blob resource
+	// Blob resource.
 	blobResource := acp.ContentBlock{
 		Resource: &acp.ContentBlockResource{
 			Resource: acp.EmbeddedResourceResource{
@@ -89,7 +89,7 @@ func TestCompliance_ContentBlock_Resource(t *testing.T) {
 
 // TestCompliance_ContentBlock_UTF8 verifies UTF-8 encoding compliance.
 func TestCompliance_ContentBlock_UTF8(t *testing.T) {
-	// Test with UTF-8 characters
+	// Test with UTF-8 characters.
 	utf8Text := "Hello, 世界! 🌍"
 	block := acp.TextBlock(utf8Text)
 
@@ -101,4 +101,3 @@ func TestCompliance_ContentBlock_UTF8(t *testing.T) {
 func stringPtr(s string) *string {
 	return &s
 }
-

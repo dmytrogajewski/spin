@@ -18,6 +18,7 @@ func NewShellContextAdapter(ctx *shellpkg.Context) tools.ShellContext {
 	if ctx == nil {
 		return nil
 	}
+
 	return &ShellContextAdapter{ctx: ctx}
 }
 
@@ -67,11 +68,12 @@ func NewValidatorAdapter(v *security.Validator) tools.CommandValidator {
 	if v == nil {
 		return nil
 	}
+
 	return &ValidatorAdapter{validator: v}
 }
 
 func (a *ValidatorAdapter) Classify(cmd tools.CommandInfo) (tools.ValidationResult, error) {
-	// Convert tools.CommandInfo to *security.Command
+	// Convert tools.CommandInfo to *security.Command.
 	secCmd := &security.Command{
 		Program: cmd.GetProgram(),
 		Args:    cmd.GetArgs(),
@@ -106,7 +108,7 @@ type ExecutorAdapter struct {
 	executor CommandExecutor
 }
 
-func (a *ExecutorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, opts interface{}) (tools.ExecutionResult, error) {
+func (a *ExecutorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, opts any) (tools.ExecutionResult, error) {
 	secCmd := &security.Command{
 		Program: cmd.GetProgram(),
 		Args:    cmd.GetArgs(),
@@ -130,6 +132,7 @@ func (a *executionResultAdapter) GetStdout() string {
 	if a.result == nil {
 		return ""
 	}
+
 	return a.result.Stdout
 }
 
@@ -137,6 +140,7 @@ func (a *executionResultAdapter) GetStderr() string {
 	if a.result == nil {
 		return ""
 	}
+
 	return a.result.Stderr
 }
 
@@ -144,9 +148,10 @@ func (a *executionResultAdapter) GetExitCode() int {
 	if a.result == nil {
 		return -1
 	}
+
 	return a.result.ExitCode
 }
 
-func (a *executionResultAdapter) GetMetadata() map[string]interface{} {
+func (a *executionResultAdapter) GetMetadata() map[string]any {
 	return nil
 }

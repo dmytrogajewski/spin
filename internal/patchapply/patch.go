@@ -2,9 +2,9 @@ package patchapply
 
 import "errors"
 
-// Errors
+// Errors.
 var (
-	// ErrInvalidThreshold indicates an invalid threshold value
+	// ErrInvalidThreshold indicates an invalid threshold value.
 	ErrInvalidThreshold = errors.New("threshold must be between 0.0 and 1.0")
 )
 
@@ -39,7 +39,7 @@ func (d *DeleteFile) Path() string { return d.FilePath }
 // It may optionally include a new path for rename/move operations.
 type UpdateFile struct {
 	FilePath string
-	NewPath  string // Optional, for move operations
+	NewPath  string // Optional, for move operations.
 	Hunks    []Hunk
 }
 
@@ -48,7 +48,7 @@ func (u UpdateFile) Path() string { return u.FilePath }
 // Hunk represents a change section within a file update.
 // Each hunk has an optional context header (e.g., "func MyFunc") and a list of changes.
 type Hunk struct {
-	Header  string // Optional context (e.g., "func MyFunc")
+	Header  string // Optional context (e.g., "func MyFunc").
 	Changes []LineChange
 }
 
@@ -62,11 +62,11 @@ type LineChange struct {
 type LineChangeType int
 
 const (
-	// LineContext represents a context line (prefix: " ")
+	// LineContext represents a context line (prefix: " ").
 	LineContext LineChangeType = iota
-	// LineDelete represents a line to be deleted (prefix: "-")
+	// LineDelete represents a line to be deleted (prefix: "-").
 	LineDelete
-	// LineInsert represents a line to be inserted (prefix: "+")
+	// LineInsert represents a line to be inserted (prefix: "+").
 	LineInsert
 )
 

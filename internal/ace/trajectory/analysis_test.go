@@ -146,6 +146,7 @@ func TestExtractErrorPatterns(t *testing.T) {
 		if len(patterns) != 1 {
 			t.Fatalf("expected 1 pattern, got %d", len(patterns))
 		}
+
 		if patterns[0] != "error: file not found" {
 			t.Errorf("expected 'error: file not found', got %q", patterns[0])
 		}
@@ -173,6 +174,7 @@ func TestExtractErrorPatterns(t *testing.T) {
 		if len(patterns) != 1 {
 			t.Fatalf("expected 1 pattern (within lookback), got %d", len(patterns))
 		}
+
 		if patterns[0] != "failed at end" {
 			t.Errorf("expected 'failed at end', got %q", patterns[0])
 		}
@@ -182,6 +184,7 @@ func TestExtractErrorPatterns(t *testing.T) {
 func TestExtractToolName(t *testing.T) {
 	t.Run("extracts tool name from content", func(t *testing.T) {
 		content := "Calling tool: bash"
+
 		name := extractToolName(content)
 		if name != "bash" {
 			t.Errorf("expected 'bash', got %q", name)
@@ -190,6 +193,7 @@ func TestExtractToolName(t *testing.T) {
 
 	t.Run("handles Tool: prefix", func(t *testing.T) {
 		content := "Tool: read /file"
+
 		name := extractToolName(content)
 		if name != "read" {
 			t.Errorf("expected 'read', got %q", name)
@@ -198,6 +202,7 @@ func TestExtractToolName(t *testing.T) {
 
 	t.Run("case insensitive", func(t *testing.T) {
 		content := "TOOL: grep"
+
 		name := extractToolName(content)
 		if name != "grep" {
 			t.Errorf("expected 'grep', got %q", name)
@@ -206,6 +211,7 @@ func TestExtractToolName(t *testing.T) {
 
 	t.Run("returns empty when no tool found", func(t *testing.T) {
 		content := "just some text"
+
 		name := extractToolName(content)
 		if name != "" {
 			t.Errorf("expected empty string, got %q", name)
@@ -226,6 +232,7 @@ func TestGetRecentTools(t *testing.T) {
 		if len(tools) != 2 {
 			t.Fatalf("expected 2 tools, got %d", len(tools))
 		}
+
 		if tools[0] != "bash" || tools[1] != "read" {
 			t.Errorf("expected [bash read], got %v", tools)
 		}
@@ -280,17 +287,19 @@ func TestExtractConcepts(t *testing.T) {
 		}
 
 		concepts := ExtractConcepts(steps, 0)
-		// Should extract: Dockerfile, BuildKit
+		// Should extract: Dockerfile, BuildKit.
 		if len(concepts) < 2 {
 			t.Fatalf("expected at least 2 concepts, got %d: %v", len(concepts), concepts)
 		}
 
 		hasDockerfile := false
 		hasBuildKit := false
+
 		for _, c := range concepts {
 			if c == "Dockerfile" {
 				hasDockerfile = true
 			}
+
 			if c == "BuildKit" {
 				hasBuildKit = true
 			}
@@ -322,6 +331,7 @@ func TestExtractConcepts(t *testing.T) {
 		if len(concepts) != 1 {
 			t.Fatalf("expected 1 concept in lookback, got %d: %v", len(concepts), concepts)
 		}
+
 		if concepts[0] != "NewConcept" {
 			t.Errorf("expected NewConcept, got %q", concepts[0])
 		}

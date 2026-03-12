@@ -26,7 +26,7 @@ func TestDefaultContextAnalyzer_Analyze_NoOffloadableContent(t *testing.T) {
 
 func TestDefaultContextAnalyzer_Analyze_LargeCodeBlock(t *testing.T) {
 	analyzer := NewDefaultContextAnalyzer()
-	analyzer.CodeBlockThreshold = 50 // Lower threshold for testing
+	analyzer.CodeBlockThreshold = 50 // Lower threshold for testing.
 
 	largeCode := "```go\n" + strings.Repeat("func example() {\n\treturn nil\n}\n", 20) + "```"
 	messages := []AnalyzableMessage{
@@ -42,7 +42,7 @@ func TestDefaultContextAnalyzer_Analyze_LargeCodeBlock(t *testing.T) {
 
 func TestDefaultContextAnalyzer_Analyze_LargeToolOutput(t *testing.T) {
 	analyzer := NewDefaultContextAnalyzer()
-	analyzer.ToolOutputThreshold = 100 // Lower threshold for testing
+	analyzer.ToolOutputThreshold = 100 // Lower threshold for testing.
 
 	largeOutput := strings.Repeat("Output line\n", 50)
 	messages := []AnalyzableMessage{
@@ -72,7 +72,7 @@ func TestDefaultContextAnalyzer_Analyze_Decision(t *testing.T) {
 
 func TestDefaultContextAnalyzer_Analyze_MultipleCodeBlocks(t *testing.T) {
 	analyzer := NewDefaultContextAnalyzer()
-	analyzer.CodeBlockThreshold = 20 // Low threshold
+	analyzer.CodeBlockThreshold = 20 // Low threshold.
 
 	content := "First block:\n```go\n" + strings.Repeat("x", 100) + "\n```\n" +
 		"Second block:\n```python\n" + strings.Repeat("y", 100) + "\n```"
@@ -166,7 +166,7 @@ func TestExtractDecision(t *testing.T) {
 }
 
 func TestEstimateTokens(t *testing.T) {
-	// Simple heuristic: ~4 chars per token
+	// Simple heuristic: ~4 chars per token.
 	assert.Equal(t, 25, estimateTokens(strings.Repeat("a", 100)))
 	assert.Equal(t, 0, estimateTokens(""))
 	assert.Equal(t, 1, estimateTokens("hello")) // 5/4 = 1

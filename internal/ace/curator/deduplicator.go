@@ -12,37 +12,38 @@ import (
 func (c *curator) FindDuplicates(ctx context.Context, newBullets []*bullet.Bullet) (map[string]string, error) {
 	duplicates := make(map[string]string)
 
-	// Handle empty input
+	// Handle empty input.
 	if len(newBullets) == 0 {
 		return duplicates, nil
 	}
 
-	// Get all existing bullets from playbook
+	// Get all existing bullets from playbook.
 	existingBullets := c.playbook.List(nil)
 
-	// Handle empty playbook
+	// Handle empty playbook.
 	if len(existingBullets) == 0 {
 		return duplicates, nil
 	}
 
-	// Check each new bullet against existing bullets
+	// Check each new bullet against existing bullets.
 	for _, newBullet := range newBullets {
-		// Skip if no embedding
+		// Skip if no embedding.
 		if len(newBullet.Embedding) == 0 {
 			continue
 		}
 
-		// Find most similar existing bullet
+		// Find most similar existing bullet.
 		maxSimilarity := 0.0
+
 		var mostSimilarID string
 
 		for _, existingBullet := range existingBullets {
-			// Skip if no embedding
+			// Skip if no embedding.
 			if len(existingBullet.Embedding) == 0 {
 				continue
 			}
 
-			// Calculate cosine similarity
+			// Calculate cosine similarity.
 			similarity := cosineSimilarity(newBullet.Embedding, existingBullet.Embedding)
 
 			if similarity > maxSimilarity {
@@ -51,7 +52,7 @@ func (c *curator) FindDuplicates(ctx context.Context, newBullets []*bullet.Bulle
 			}
 		}
 
-		// Check if similarity exceeds threshold
+		// Check if similarity exceeds threshold.
 		if maxSimilarity >= c.threshold {
 			duplicates[newBullet.ID] = mostSimilarID
 		}

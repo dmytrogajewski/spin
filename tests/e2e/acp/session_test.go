@@ -16,14 +16,14 @@ func TestACP_NewSession(t *testing.T) {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
-	// Create test workspace
+	// Create test workspace.
 	workDir := createTestWorkspace(t)
 
-	// Start ACP agent
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+	// Start ACP agent.
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
-	// Create client and initialize
+	// Create client and initialize.
 	client := createACPClient(t, stdin, stdout)
 	ctx := context.Background()
 
@@ -32,7 +32,7 @@ func TestACP_NewSession(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Test NewSession
+	// Test NewSession.
 	req := acp.NewSessionRequest{
 		Cwd:        workDir,
 		McpServers: []acp.McpServer{},
@@ -41,11 +41,11 @@ func TestACP_NewSession(t *testing.T) {
 	resp, err := client.NewSession(ctx, req)
 	require.NoError(t, err, "NewSession should succeed")
 
-	// Verify response
+	// Verify response.
 	assert.NotEmpty(t, resp.SessionId, "Session ID should be generated")
 	assert.NotNil(t, resp.Modes, "Session mode state should be set")
 
-	// Verify mode state
+	// Verify mode state.
 	if resp.Modes != nil {
 		assert.NotEmpty(t, resp.Modes.AvailableModes, "Available modes should be set")
 		assert.NotEmpty(t, resp.Modes.CurrentModeId, "Current mode should be set")
@@ -59,7 +59,8 @@ func TestACP_NewSession_WithMcpServers(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -70,7 +71,7 @@ func TestACP_NewSession_WithMcpServers(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Test NewSession with MCP server (using echo as a simple test server)
+	// Test NewSession with MCP server (using echo as a simple test server).
 	req := acp.NewSessionRequest{
 		Cwd: workDir,
 		McpServers: []acp.McpServer{
@@ -85,7 +86,7 @@ func TestACP_NewSession_WithMcpServers(t *testing.T) {
 
 	resp, err := client.NewSession(ctx, req)
 	// MCP server connection may fail, but session should still be created
-	// The agent creates sessions asynchronously with MCP connections
+	// The agent creates sessions asynchronously with MCP connections.
 	if err != nil {
 		t.Logf("NewSession with MCP server returned error (expected for test): %v", err)
 	} else {
@@ -99,7 +100,7 @@ func TestACP_NewSession_InvalidCwd(t *testing.T) {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b")
+	cmd, stdin, stdout := startACPAgent(t)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -110,14 +111,14 @@ func TestACP_NewSession_InvalidCwd(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Test with empty CWD
+	// Test with empty CWD.
 	req := acp.NewSessionRequest{
 		Cwd:        "",
 		McpServers: []acp.McpServer{},
 	}
 
 	_, err = client.NewSession(ctx, req)
-	// Should return error for empty CWD
+	// Should return error for empty CWD.
 	assert.Error(t, err, "NewSession should fail with empty CWD")
 }
 
@@ -128,7 +129,8 @@ func TestACP_NewSession_ModeState(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -147,17 +149,17 @@ func TestACP_NewSession_ModeState(t *testing.T) {
 	resp, err := client.NewSession(ctx, req)
 	require.NoError(t, err)
 
-	// Verify mode state
+	// Verify mode state.
 	require.NotNil(t, resp.Modes, "Session mode state should be set")
 
 	modeState := resp.Modes
 	assert.NotEmpty(t, modeState.AvailableModes, "Available modes should be set")
 	assert.NotEmpty(t, modeState.CurrentModeId, "Current mode should be set")
 
-	// Verify default mode is "regular"
+	// Verify default mode is "regular".
 	assert.Equal(t, acp.SessionModeId("regular"), modeState.CurrentModeId, "Default mode should be 'regular'")
 
-	// Verify available modes include expected modes
+	// Verify available modes include expected modes.
 	modeMap := make(map[acp.SessionModeId]bool)
 	for _, mode := range modeState.AvailableModes {
 		modeMap[mode.Id] = true
@@ -176,9 +178,10 @@ func TestACP_LoadSession(t *testing.T) {
 	}
 
 	// Note: LoadSession requires session storage to be configured
-	// This test may be skipped if storage is not available
+	// This test may be skipped if storage is not available.
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -189,24 +192,25 @@ func TestACP_LoadSession(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// First create a session
+	// First create a session.
 	newSessionReq := acp.NewSessionRequest{
 		Cwd:        workDir,
 		McpServers: []acp.McpServer{},
 	}
 	newSessionResp, err := client.NewSession(ctx, newSessionReq)
 	require.NoError(t, err)
+
 	sessionID := newSessionResp.SessionId
 
 	// Try to load the session
-	// Note: This may fail if session storage is not configured
+	// Note: This may fail if session storage is not configured.
 	loadReq := acp.LoadSessionRequest{
 		SessionId: sessionID,
 	}
 
 	_, err = client.LoadSession(ctx, loadReq)
 	// LoadSession may not be available if storage is not configured
-	// That's okay - we're just testing the method exists and can be called
+	// That's okay - we're just testing the method exists and can be called.
 	if err != nil {
 		t.Logf("LoadSession returned error (may be expected if storage not configured): %v", err)
 	}
@@ -219,7 +223,8 @@ func TestACP_NewSession_Concurrent(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -230,12 +235,13 @@ func TestACP_NewSession_Concurrent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Create multiple sessions concurrently
+	// Create multiple sessions concurrently.
 	const numSessions = 3
+
 	sessionIDs := make([]acp.SessionId, numSessions)
 	errs := make([]error, numSessions)
 
-	for i := 0; i < numSessions; i++ {
+	for i := range numSessions {
 		req := acp.NewSessionRequest{
 			Cwd:        workDir,
 			McpServers: []acp.McpServer{},
@@ -245,13 +251,13 @@ func TestACP_NewSession_Concurrent(t *testing.T) {
 		errs[i] = err
 	}
 
-	// Verify all sessions were created successfully
+	// Verify all sessions were created successfully.
 	for i, err := range errs {
 		assert.NoError(t, err, "Session %d should be created", i)
 		assert.NotEmpty(t, sessionIDs[i], "Session %d should have ID", i)
 	}
 
-	// Verify all session IDs are unique
+	// Verify all session IDs are unique.
 	seen := make(map[acp.SessionId]bool)
 	for _, id := range sessionIDs {
 		assert.False(t, seen[id], "Session ID should be unique: %s", id)
@@ -266,6 +272,7 @@ func TestACP_NewSession_AbsolutePath(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -278,23 +285,23 @@ func TestACP_NewSession_AbsolutePath(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test with relative path
-	// Note: The agent may normalize relative paths to absolute, so we test both behaviors
+	// Note: The agent may normalize relative paths to absolute, so we test both behaviors.
 	req := acp.NewSessionRequest{
 		Cwd:        "relative/path",
 		McpServers: []acp.McpServer{},
 	}
 
 	resp, err := client.NewSession(ctx, req)
-	// Agent may reject relative paths or normalize them - both are acceptable
+	// Agent may reject relative paths or normalize them - both are acceptable.
 	if err != nil {
 		t.Logf("NewSession with relative path returned error (agent validates): %v", err)
 	} else {
-		// Agent normalized the path - verify session was created
+		// Agent normalized the path - verify session was created.
 		assert.NotEmpty(t, resp.SessionId, "Session should be created even with relative path (if normalized)")
 		t.Log("Agent normalized relative path to absolute (acceptable behavior)")
 	}
 
-	// Test with absolute path (should succeed)
+	// Test with absolute path (should succeed).
 	req2 := acp.NewSessionRequest{
 		Cwd:        workDir,
 		McpServers: []acp.McpServer{},
@@ -312,6 +319,7 @@ func TestACP_NewSession_MCP_Stdio(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -323,7 +331,7 @@ func TestACP_NewSession_MCP_Stdio(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Test with stdio MCP server
+	// Test with stdio MCP server.
 	req := acp.NewSessionRequest{
 		Cwd: workDir,
 		McpServers: []acp.McpServer{
@@ -339,7 +347,7 @@ func TestACP_NewSession_MCP_Stdio(t *testing.T) {
 	}
 
 	resp, err := client.NewSession(ctx, req)
-	// MCP server connection may fail, but session should still be created
+	// MCP server connection may fail, but session should still be created.
 	if err != nil {
 		t.Logf("NewSession with MCP server returned error (may be expected): %v", err)
 	} else {
@@ -354,6 +362,7 @@ func TestACP_NewSession_MCP_EnvVars(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -365,7 +374,7 @@ func TestACP_NewSession_MCP_EnvVars(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Test with MCP server env vars
+	// Test with MCP server env vars.
 	req := acp.NewSessionRequest{
 		Cwd: workDir,
 		McpServers: []acp.McpServer{
@@ -386,7 +395,7 @@ func TestACP_NewSession_MCP_EnvVars(t *testing.T) {
 	}
 
 	resp, err := client.NewSession(ctx, req)
-	// MCP server connection may fail, but session should still be created
+	// MCP server connection may fail, but session should still be created.
 	if err != nil {
 		t.Logf("NewSession with MCP env vars returned error (may be expected): %v", err)
 	} else {
@@ -401,6 +410,7 @@ func TestACP_NewSession_MCP_Args(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -412,7 +422,7 @@ func TestACP_NewSession_MCP_Args(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Test with MCP server args
+	// Test with MCP server args.
 	req := acp.NewSessionRequest{
 		Cwd: workDir,
 		McpServers: []acp.McpServer{
@@ -428,7 +438,7 @@ func TestACP_NewSession_MCP_Args(t *testing.T) {
 	}
 
 	resp, err := client.NewSession(ctx, req)
-	// MCP server connection may fail, but session should still be created
+	// MCP server connection may fail, but session should still be created.
 	if err != nil {
 		t.Logf("NewSession with MCP args returned error (may be expected): %v", err)
 	} else {
@@ -443,6 +453,7 @@ func TestACP_NewSession_AvailableCommands(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -464,23 +475,25 @@ func TestACP_NewSession_AvailableCommands(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.SessionId)
 
-	// Wait a bit for notifications
+	// Wait a bit for notifications.
 	time.Sleep(50 * time.Millisecond)
 
 	// Check if available_commands_update notification was received
-	// Note: This depends on agent implementation - may or may not send commands
+	// Note: This depends on agent implementation - may or may not send commands.
 	notifications := testClientInstance.getNotifications()
 	foundCommands := false
+
 	for _, notif := range notifications {
 		if notif.Update.AvailableCommandsUpdate != nil {
 			// Check if it's an available_commands_update
-			// The exact structure depends on ACP SDK implementation
+			// The exact structure depends on ACP SDK implementation.
 			foundCommands = true
+
 			break
 		}
 	}
 	// We don't assert here because commands may or may not be sent
-	// depending on agent implementation
+	// depending on agent implementation.
 	t.Logf("Available commands notification received: %v", foundCommands)
 }
 
@@ -491,6 +504,7 @@ func TestACP_NewSession_ModeState_Complete(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -510,17 +524,17 @@ func TestACP_NewSession_ModeState_Complete(t *testing.T) {
 	resp, err := client.NewSession(ctx, req)
 	require.NoError(t, err)
 
-	// Verify mode state is complete
+	// Verify mode state is complete.
 	require.NotNil(t, resp.Modes, "Session mode state should be set")
 
 	modeState := resp.Modes
 	assert.NotEmpty(t, modeState.AvailableModes, "Available modes should be set")
 	assert.NotEmpty(t, modeState.CurrentModeId, "Current mode should be set")
 
-	// Verify each mode has all required fields
+	// Verify each mode has all required fields.
 	for _, mode := range modeState.AvailableModes {
 		assert.NotEmpty(t, mode.Id, "Mode ID should be set")
 		assert.NotEmpty(t, mode.Name, "Mode name should be set")
-		// Description is optional, so we don't assert it
+		// Description is optional, so we don't assert it.
 	}
 }

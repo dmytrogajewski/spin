@@ -8,11 +8,13 @@ import (
 )
 
 func TestReadFileTool(t *testing.T) {
-	// Create temp file
+	// Create temp file.
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
+
 	testContent := "Hello, World!"
-	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+	err := os.WriteFile(testFile, []byte(testContent), 0644)
+	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -20,23 +22,23 @@ func TestReadFileTool(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		params     map[string]interface{}
+		params     map[string]any
 		wantErr    bool
 		wantOutput string
 	}{
 		{
 			name:       "read existing file",
-			params:     map[string]interface{}{"path": testFile},
+			params:     map[string]any{"path": testFile},
 			wantOutput: testContent,
 		},
 		{
 			name:    "missing path parameter",
-			params:  map[string]interface{}{},
+			params:  map[string]any{},
 			wantErr: true,
 		},
 		{
 			name:    "non-existent file",
-			params:  map[string]interface{}{"path": filepath.Join(tmpDir, "nonexistent.txt")},
+			params:  map[string]any{"path": filepath.Join(tmpDir, "nonexistent.txt")},
 			wantErr: true,
 		},
 	}
@@ -50,16 +52,19 @@ func TestReadFileTool(t *testing.T) {
 				if err == nil && result.Success {
 					t.Error("expected error but got success")
 				}
+
 				return
 			}
 
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
+
 				return
 			}
 
 			if !result.Success {
 				t.Errorf("expected success, got error: %s", result.Error)
+
 				return
 			}
 

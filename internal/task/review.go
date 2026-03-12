@@ -5,10 +5,10 @@ import (
 	"fmt"
 )
 
-// Constants for Review mode configuration
+// Constants for Review mode configuration.
 const (
 	// DefaultReviewMaxTokens is the default token budget for Review mode
-	// Smaller than Regular mode since reviews typically need less context
+	// Smaller than Regular mode since reviews typically need less context.
 	DefaultReviewMaxTokens = 12288
 )
 
@@ -23,7 +23,7 @@ const (
 //   - Learning and exploration without side effects
 //   - Safe mode in restricted environments
 //
-// Example usage:
+// Example usage:.
 type Review struct {
 	name         string
 	systemPrompt string
@@ -79,7 +79,7 @@ func (r *Review) SystemPrompt() string {
 }
 
 func (r *Review) AllowedTools() []string {
-	// Review mode allows only read-only tools
+	// Review mode allows only read-only tools.
 	return []string{"read_file", "list_directory", "file_search", "git_context", "get_context"}
 }
 
@@ -91,8 +91,10 @@ func (r *Review) Validate() error {
 	if r.maxTokens <= 0 {
 		return errors.New("max tokens must be positive")
 	}
+
 	if r.maxTokens > MaxAllowedTokens {
 		return fmt.Errorf("max tokens %d exceeds maximum allowed %d", r.maxTokens, MaxAllowedTokens)
 	}
+
 	return nil
 }

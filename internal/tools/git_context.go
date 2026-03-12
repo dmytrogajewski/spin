@@ -53,16 +53,17 @@ func (t *GitContextTool) Schema() ToolSchema {
 }
 
 func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	// Get workspace root
+	// Get workspace root.
 	workspaceRoot := t.workspaceRoot
-	if root, err := params.GetString("workspace_root"); err == nil && root != "" {
+	root, err := params.GetString("workspace_root")
+	if err == nil && root != "" {
 		workspaceRoot = root
 	}
 
-	// Discover git repository
+	// Discover git repository.
 	repo, err := git.Discover(ctx, workspaceRoot)
 	if err != nil {
-		// Gracefully handle non-git directories
+		// Gracefully handle non-git directories.
 		return ToolResult{
 			Success: true,
 			Output:  fmt.Sprintf("Not a Git repository: %v\n", err),
@@ -73,7 +74,7 @@ func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (To
 	output.WriteString("Git Repository Context:\n")
 	output.WriteString("======================\n\n")
 
-	// Get status (includes branch info)
+	// Get status (includes branch info).
 	status, err := repo.Status(ctx)
 	if err != nil {
 		return ToolResult{
@@ -82,31 +83,32 @@ func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (To
 		}, nil
 	}
 
-	// Branch info
+	// Branch info.
 	output.WriteString(fmt.Sprintf("Branch: %s\n", status.Branch))
+
 	if status.RemoteBranch != "" {
 		output.WriteString(fmt.Sprintf("Remote: %s\n", status.RemoteBranch))
 		output.WriteString(fmt.Sprintf("Ahead: %d, Behind: %d\n", status.Ahead, status.Behind))
 	}
+
 	if status.Detached {
 		output.WriteString("(detached HEAD)\n")
 	}
 
-	// Commit hash
+	// Commit hash.
 	if status.Hash != "" {
-		hashLen := len(status.Hash)
-		if hashLen > 8 {
-			hashLen = 8
-		}
+		hashLen := min(len(status.Hash), 8)
+
 		output.WriteString(fmt.Sprintf("Commit: %s\n", status.Hash[:hashLen]))
 	}
 
-	// File status
+	// File status.
 	output.WriteString(fmt.Sprintf("\nModified files: %d\n", len(status.ModifiedFiles)))
 	output.WriteString(fmt.Sprintf("Untracked files: %d\n", len(status.UntrackedFiles)))
 
 	if len(status.ModifiedFiles) > 0 {
 		output.WriteString("\nModified:\n")
+
 		for _, file := range status.ModifiedFiles {
 			output.WriteString(fmt.Sprintf("  - %s (%s)\n", file.Path, file.Worktree))
 		}
@@ -114,6 +116,7 @@ func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (To
 
 	if len(status.UntrackedFiles) > 0 && len(status.UntrackedFiles) < 20 {
 		output.WriteString("\nUntracked:\n")
+
 		for _, file := range status.UntrackedFiles {
 			output.WriteString(fmt.Sprintf("  - %s\n", file))
 		}

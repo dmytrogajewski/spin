@@ -37,6 +37,7 @@ func (m *MemoryService) NewAutoOffloader(threshold float64) *memory.AutoOffloade
 	if m.scratchpad == nil && m.persistent == nil {
 		return nil
 	}
+
 	return memory.NewAutoOffloader(memory.AutoOffloaderConfig{
 		Scratchpad: m.scratchpad,
 		Persistent: m.persistent,
@@ -51,9 +52,11 @@ func (m *MemoryService) NewSessionHandoff(summarizer memory.Summarizer) *memory.
 	if m.persistent == nil {
 		return nil
 	}
+
 	if summarizer == nil {
 		summarizer = memory.NewSimpleSummarizer(500)
 	}
+
 	return memory.NewSessionHandoff(m.persistent, summarizer)
 }
 
@@ -65,38 +68,45 @@ func (b *Builder) initializeMemory(sessionID string) error {
 	}
 
 	memCfg := b.cfg.Memory
-	var scratchpad *memory.Scratchpad
-	var persistent *memory.PersistentStore
-	var err error
 
-	// Initialize scratchpad if enabled
+	var (
+		scratchpad *memory.Scratchpad
+		persistent *memory.PersistentStore
+		err        error
+	)
+
+	// Initialize scratchpad if enabled.
+
 	if memCfg.Scratchpad.Enabled {
 		maxEntries := memCfg.Scratchpad.MaxEntries
 		if maxEntries <= 0 {
-			maxEntries = 50 // Default
+			maxEntries = 50 // Default.
 		}
+
 		scratchpad = memory.NewScratchpad(sessionID, maxEntries)
 		if b.logger != nil {
 			b.logger.Debug("scratchpad initialized", "session_id", sessionID, "max_entries", maxEntries)
 		}
 	}
 
-	// Initialize persistent store if enabled
+	// Initialize persistent store if enabled.
 	if memCfg.Persistent.Enabled {
 		basePath := memCfg.Persistent.BasePath
 		if basePath == "" {
 			basePath = "~/.spin/memory"
 		}
+
 		persistent, err = memory.NewPersistentStore(basePath)
 		if err != nil {
 			return fmt.Errorf("initialize persistent memory: %w", err)
 		}
+
 		if b.logger != nil {
 			b.logger.Debug("persistent memory initialized", "base_path", basePath)
 		}
 	}
 
-	// Only create service if at least one store is enabled
+	// Only create service if at least one store is enabled.
 	if scratchpad != nil || persistent != nil {
 		b.memoryService = NewMemoryService(scratchpad, persistent)
 	}
@@ -110,26 +120,30 @@ func (b *Builder) registerMemoryTools(registry *tools.Registry) error {
 		return nil
 	}
 
-	// Register scratchpad tool if scratchpad is available
+	// Register scratchpad tool if scratchpad is available.
 	if b.memoryService.scratchpad != nil {
 		scratchpadTool := tools.NewScratchpadTool(b.memoryService.scratchpad)
 		if scratchpadTool != nil {
-			if err := registry.RegisterOrReplace(scratchpadTool); err != nil {
+			err := registry.RegisterOrReplace(scratchpadTool)
+			if err != nil {
 				return fmt.Errorf("register scratchpad tool: %w", err)
 			}
+
 			if b.logger != nil {
 				b.logger.Debug("scratchpad tool registered")
 			}
 		}
 	}
 
-	// Register memory tool if persistent store is available
+	// Register memory tool if persistent store is available.
 	if b.memoryService.persistent != nil {
 		memoryTool := tools.NewMemoryTool(b.memoryService.persistent)
 		if memoryTool != nil {
-			if err := registry.RegisterOrReplace(memoryTool); err != nil {
+			err := registry.RegisterOrReplace(memoryTool)
+			if err != nil {
 				return fmt.Errorf("register memory tool: %w", err)
 			}
+
 			if b.logger != nil {
 				b.logger.Debug("memory tool registered")
 			}

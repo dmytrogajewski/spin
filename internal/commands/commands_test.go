@@ -23,7 +23,9 @@ func (m *mockCommandContext) SetMode(mode string) error {
 	if m.setModeErr != nil {
 		return m.setModeErr
 	}
+
 	m.currentMode = mode
+
 	return nil
 }
 
@@ -109,6 +111,7 @@ func TestParseCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd, args, isCmd := ParseCommand(tt.input)
 			assert.Equal(t, tt.wantIsCmd, isCmd)
+
 			if tt.wantIsCmd {
 				assert.Equal(t, tt.wantCmd, cmd)
 				assert.Equal(t, tt.wantArgs, args)
@@ -209,7 +212,7 @@ func TestListCommands(t *testing.T) {
 	commands := ListCommands()
 	assert.Greater(t, len(commands), 0)
 
-	// Check that expected commands are registered
+	// Check that expected commands are registered.
 	commandNames := make(map[string]bool)
 	for _, cmd := range commands {
 		commandNames[cmd.Name()] = true
@@ -220,4 +223,3 @@ func TestListCommands(t *testing.T) {
 	assert.True(t, commandNames["/exit"], "should have /exit command")
 	assert.True(t, commandNames["/quit"], "should have /quit command")
 }
-

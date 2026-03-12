@@ -114,13 +114,13 @@ func TestCompliance_Notification_ContentBlocks(t *testing.T) {
 	verifySessionNotification(t, notif)
 	require.NotNil(t, notif.Update.AgentMessageChunk, "Agent message chunk should be set")
 
-	// Verify content block
+	// Verify content block.
 	verifyContentBlock(t, notif.Update.AgentMessageChunk.Content)
 }
 
 // TestCompliance_Notification_Streaming verifies streaming notification support.
 func TestCompliance_Notification_Streaming(t *testing.T) {
-	// Test incremental updates
+	// Test incremental updates.
 	notif1 := acp.SessionNotification{
 		SessionId: acp.SessionId("test-session"),
 		Update: acp.SessionUpdate{
@@ -139,9 +139,7 @@ func TestCompliance_Notification_Streaming(t *testing.T) {
 		},
 	}
 
-	// Both notifications should be valid
+	// Both notifications should be valid.
 	verifySessionNotification(t, notif1)
 	verifySessionNotification(t, notif2)
 }
-
-

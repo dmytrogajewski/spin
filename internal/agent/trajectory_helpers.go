@@ -17,6 +17,7 @@ func extractInitialQuery(messages []message.Message) string {
 			return msg.Content
 		}
 	}
+
 	return ""
 }
 
@@ -34,7 +35,7 @@ func extractNewSteps(messages []message.Message, lastStepNumber int) []generator
 
 		switch msg.Role {
 		case message.RoleAssistant:
-			// Reasoning
+			// Reasoning.
 			if msg.Content != "" {
 				steps = append(steps, generator.TrajectoryStep{
 					StepNumber: stepNum,
@@ -45,7 +46,7 @@ func extractNewSteps(messages []message.Message, lastStepNumber int) []generator
 				stepNum++
 			}
 
-			// Tool calls
+			// Tool calls.
 			for _, tc := range msg.ToolCalls {
 				content := fmt.Sprintf("Tool: %s\nArguments: %s",
 					tc.Function.Name, tc.Function.Arguments)
@@ -59,7 +60,7 @@ func extractNewSteps(messages []message.Message, lastStepNumber int) []generator
 			}
 
 		case message.RoleTool:
-			// Tool results
+			// Tool results.
 			content := fmt.Sprintf("Tool Result (ID: %s):\n%s",
 				msg.ToolCallID, msg.Content)
 			steps = append(steps, generator.TrajectoryStep{
@@ -81,5 +82,6 @@ func extractBulletIDs(bullets []*bullet.Bullet) []string {
 	for i, b := range bullets {
 		ids[i] = b.ID
 	}
+
 	return ids
 }

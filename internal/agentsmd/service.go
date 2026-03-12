@@ -28,6 +28,7 @@ func NewService(cfg *Config, workDir string, gitRoot string) *Service {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
+
 	return &Service{
 		config:     cfg,
 		discoverer: NewDiscoverer(gitRoot),
@@ -41,36 +42,41 @@ func NewService(cfg *Config, workDir string, gitRoot string) *Service {
 func (s *Service) Load(ctx context.Context) error {
 	if !s.config.Enabled {
 		slog.Debug("AGENTS.md loading disabled")
+
 		return nil
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var path string
-	var err error
+	var (
+		path string
+		err  error
+	)
 
-	// Use custom path if specified
+	// Use custom path if specified.
+
 	if s.config.Path != "" {
 		path = s.config.Path
 		if !fileExists(path) {
 			return fmt.Errorf("AGENTS.md not found at custom path: %s", path)
 		}
 	} else {
-		// Auto-discover
+		// Auto-discover.
 		path, err = s.discoverer.Discover(ctx, s.workDir)
 		if err != nil {
 			return fmt.Errorf("discover AGENTS.md: %w", err)
 		}
 	}
 
-	// Not found is not an error
+	// Not found is not an error.
 	if path == "" {
 		slog.Debug("AGENTS.md not found")
+
 		return nil
 	}
 
-	// Read file with size limit
+	// Read file with size limit.
 	content, err := s.readWithLimit(path)
 	if err != nil {
 		return fmt.Errorf("read AGENTS.md: %w", err)
@@ -81,6 +87,7 @@ func (s *Service) Load(ctx context.Context) error {
 	s.loaded = true
 
 	slog.Info("loaded AGENTS.md", "path", path, "size", len(content))
+
 	return nil
 }
 
@@ -89,6 +96,7 @@ func (s *Service) Load(ctx context.Context) error {
 func (s *Service) Content() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.content
 }
 
@@ -96,6 +104,7 @@ func (s *Service) Content() string {
 func (s *Service) IsLoaded() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.loaded
 }
 
@@ -104,6 +113,7 @@ func (s *Service) IsLoaded() bool {
 func (s *Service) Path() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.path
 }
 
@@ -126,12 +136,14 @@ func (s *Service) readWithLimit(path string) (string, error) {
 		return "", err
 	}
 
-	// Determine read size
+	// Determine read size.
 	readSize := info.Size()
 	truncated := false
+
 	if s.config.MaxSize > 0 && info.Size() > s.config.MaxSize {
 		readSize = s.config.MaxSize
 		truncated = true
+
 		slog.Warn("AGENTS.md exceeds size limit, truncating",
 			"path", path,
 			"size", info.Size(),
@@ -144,8 +156,9 @@ func (s *Service) readWithLimit(path string) (string, error) {
 	}
 	defer file.Close()
 
-	// Read up to readSize bytes
+	// Read up to readSize bytes.
 	buf := make([]byte, readSize)
+
 	n, err := io.ReadFull(file, buf)
 	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 		return "", err
@@ -153,7 +166,7 @@ func (s *Service) readWithLimit(path string) (string, error) {
 
 	content := string(buf[:n])
 
-	// Add truncation notice if needed
+	// Add truncation notice if needed.
 	if truncated {
 		content += "\n\n[Content truncated due to size limit]"
 	}

@@ -2,9 +2,10 @@ package acp
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/coder/acp-go-sdk"
+
 	"github.com/dmytrogajewski/spin/internal/agent/runtime"
 )
 
@@ -23,12 +24,12 @@ func NewACPFilesystemClient(conn *acp.AgentSideConnection) *ACPFilesystemClient 
 // ReadTextFile reads a text file using ACP fs/read_text_file protocol.
 func (c *ACPFilesystemClient) ReadTextFile(ctx context.Context, path string, line *int, limit *int) (string, error) {
 	if c.connection == nil {
-		return "", fmt.Errorf("ACP connection not available")
+		return "", errors.New("ACP connection not available")
 	}
 
 	sessionID := runtime.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return "", fmt.Errorf("session ID not found in context")
+		return "", errors.New("session ID not found in context")
 	}
 
 	params := acp.ReadTextFileRequest{
@@ -49,12 +50,12 @@ func (c *ACPFilesystemClient) ReadTextFile(ctx context.Context, path string, lin
 // WriteTextFile writes a text file using ACP fs/write_text_file protocol.
 func (c *ACPFilesystemClient) WriteTextFile(ctx context.Context, path, content string) error {
 	if c.connection == nil {
-		return fmt.Errorf("ACP connection not available")
+		return errors.New("ACP connection not available")
 	}
 
 	sessionID := runtime.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return fmt.Errorf("session ID not found in context")
+		return errors.New("session ID not found in context")
 	}
 
 	params := acp.WriteTextFileRequest{
@@ -64,6 +65,6 @@ func (c *ACPFilesystemClient) WriteTextFile(ctx context.Context, path, content s
 	}
 
 	_, err := c.connection.WriteTextFile(ctx, params)
+
 	return err
 }
-

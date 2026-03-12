@@ -4,9 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 )
 
 func TestNewBuilder_Default(t *testing.T) {
@@ -98,21 +99,23 @@ func TestBuilder_BuildSystemPrompt_MultipleBullets(t *testing.T) {
 	builder := NewBuilder(WithItemizedLearning())
 
 	bullets := make([]*bullet.Bullet, 5)
-	for i := 0; i < 5; i++ {
+
+	for i := range 5 {
 		b, err := bullet.New("Bullet " + string(rune('A'+i)))
 		require.NoError(t, err)
+
 		bullets[i] = b
 	}
 
 	prompt := builder.BuildSystemPrompt(bullets)
 
-	// Check all bullets are present with correct indices
-	for i := 0; i < 5; i++ {
+	// Check all bullets are present with correct indices.
+	for i := range 5 {
 		expected := "[B" + string(rune('0'+i)) + "]"
 		assert.Contains(t, prompt, expected)
 	}
 
-	// Check structure
+	// Check structure.
 	lines := strings.Split(prompt, "\n")
 	assert.NotEmpty(t, lines)
 }

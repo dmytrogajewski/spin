@@ -8,12 +8,15 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg == nil {
 		t.Fatal("DefaultConfig() returned nil")
 	}
+
 	if !cfg.Enabled {
 		t.Error("DefaultConfig().Enabled = false, want true")
 	}
+
 	if cfg.Path != "" {
 		t.Errorf("DefaultConfig().Path = %v, want empty string", cfg.Path)
 	}
+
 	if cfg.MaxSize != 100*1024 {
 		t.Errorf("DefaultConfig().MaxSize = %d, want %d", cfg.MaxSize, 100*1024)
 	}
@@ -65,7 +68,7 @@ func TestConfig_Validate(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			// Negative MaxSize should become 0 after validation
+			// Negative MaxSize should become 0 after validation.
 			if tt.config.MaxSize < 0 {
 				t.Errorf("MaxSize = %d after Validate(), want >= 0", tt.config.MaxSize)
 			}

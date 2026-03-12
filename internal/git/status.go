@@ -23,7 +23,7 @@ import (
 //	fmt.Printf("Modified: %d files\n", len(status.ModifiedFiles))
 //	fmt.Printf("Untracked: %d files\n", len(status.UntrackedFiles))
 func (r *Repository) Status(ctx context.Context) (*Status, error) {
-	// Check context cancellation
+	// Check context cancellation.
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -35,16 +35,16 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 		return nil, fmt.Errorf("get worktree: %w", err)
 	}
 
-	// Get worktree status
+	// Get worktree status.
 	gitStatus, err := worktree.Status()
 	if err != nil {
 		return nil, fmt.Errorf("get status: %w", err)
 	}
 
-	// Get current HEAD
+	// Get current HEAD.
 	head, err := r.repo.Head()
 	if err != nil {
-		// Detached HEAD or no HEAD (empty repo)
+		// Detached HEAD or no HEAD (empty repo).
 		return &Status{
 			Detached:       true,
 			ModifiedFiles:  make([]FileStatus, 0),
@@ -60,7 +60,7 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 		Detached:       !head.Name().IsBranch(),
 	}
 
-	// Parse file statuses
+	// Parse file statuses.
 	for path, fileStatus := range gitStatus {
 		if fileStatus.Worktree == gogit.Untracked {
 			status.UntrackedFiles = append(status.UntrackedFiles, path)
@@ -74,7 +74,7 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 	}
 
 	// Get tracking branch and ahead/behind
-	// This is a best-effort operation - if it fails, we continue without tracking info
+	// This is a best-effort operation - if it fails, we continue without tracking info.
 	if head.Name().IsBranch() {
 		remoteBranch, ahead, behind := r.getTrackingInfo(head.Name().Short())
 		status.RemoteBranch = remoteBranch
@@ -85,7 +85,7 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 	return status, nil
 }
 
-// mapGoGitStatus maps go-git status code to our StatusCode
+// mapGoGitStatus maps go-git status code to our StatusCode.
 func mapGoGitStatus(status gogit.StatusCode) StatusCode {
 	switch status {
 	case gogit.Unmodified:
@@ -108,14 +108,15 @@ func mapGoGitStatus(status gogit.StatusCode) StatusCode {
 }
 
 // getTrackingInfo returns tracking branch name and ahead/behind counts
-// Returns empty string and 0, 0 if no tracking branch
+// Returns empty string and 0, 0 if no tracking branch.
 func (r *Repository) getTrackingInfo(branchName string) (remoteBranch string, ahead, behind int) {
-	// Get upstream branch
+	// Get upstream branch.
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", branchName+"@{upstream}")
 	cmd.Dir = r.root
+
 	output, err := cmd.Output()
 	if err != nil {
-		return "", 0, 0 // No tracking branch
+		return "", 0, 0 // No tracking branch.
 	}
 
 	remoteBranch = strings.TrimSpace(string(output))
@@ -123,15 +124,16 @@ func (r *Repository) getTrackingInfo(branchName string) (remoteBranch string, ah
 		return "", 0, 0
 	}
 
-	// Get ahead/behind counts
+	// Get ahead/behind counts.
 	cmd = exec.Command("git", "rev-list", "--left-right", "--count", branchName+"..."+remoteBranch)
 	cmd.Dir = r.root
+
 	output, err = cmd.Output()
 	if err != nil {
 		return remoteBranch, 0, 0
 	}
 
-	// Parse output: "ahead\tbehind"
+	// Parse output: "ahead\tbehind".
 	parts := strings.Fields(strings.TrimSpace(string(output)))
 	if len(parts) == 2 {
 		ahead, _ = strconv.Atoi(parts[0])

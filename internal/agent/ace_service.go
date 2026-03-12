@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -31,18 +32,18 @@ type ACEService struct {
 	config         *ACEConfig
 	playbook       *playbook.Playbook
 	retriever      retrieval.Retriever
-	generator      generator.Generator   // Legacy quick generation
-	reflector      reflector.Reflector   // Deep analysis
-	curator        curator.Curator       // Quality control & deduplication
-	adapter        adapter.Adapter       // Online learning orchestration
-	deltaHistory   *delta.DeltaHistory   // Change tracking
-	growthMonitor  *refine.GrowthMonitor // Playbook growth management
+	generator      generator.Generator   // Legacy quick generation.
+	reflector      reflector.Reflector   // Deep analysis.
+	curator        curator.Curator       // Quality control & deduplication.
+	adapter        adapter.Adapter       // Online learning orchestration.
+	deltaHistory   *delta.DeltaHistory   // Change tracking.
+	growthMonitor  *refine.GrowthMonitor // Playbook growth management.
 	feedbackParser *feedback.RegexParser
 	embedder       embedding.Embedder
 	workDir        string
 	enabled        bool
 	llm            llm.Provider
-	modelName      string // LLM model name for generation
+	modelName      string // LLM model name for generation.
 }
 
 // NewACEService creates a new ACE service with the given configuration.
@@ -52,10 +53,10 @@ type ACEService struct {
 // The maxTokens parameter sets the max tokens for LLM calls (0 = use default).
 func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName string, maxTokens int) (*ACEService, error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("config is required")
+		return nil, errors.New("config is required")
 	}
 
-	// Return no-op service if disabled
+	// Return no-op service if disabled.
 	if !cfg.Enabled {
 		return &ACEService{
 			config:  cfg,
@@ -63,68 +64,79 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 		}, nil
 	}
 
-	// Expand home directory in paths
+	// Expand home directory in paths.
 	playbookPath := expandPath(cfg.PlaybookPath)
 
-	// Load or create playbook
-	var pb *playbook.Playbook
-	var err error
+	// Load or create playbook.
+	var (
+		pb  *playbook.Playbook
+		err error
+	)
 
-	// Create embedder - try Ollama first, fall back to mock
+	// Create embedder - try Ollama first, fall back to mock.
 	var embedder embedding.Embedder
+
 	ollamaConfig := embedding.DefaultOllamaEmbedderConfig()
+
 	ollamaEmbedder, err := embedding.NewOllamaEmbedder(ollamaConfig)
 	if err != nil {
 		slog.Warn("Failed to create Ollama embedder, using mock embedder", "error", err)
-		embedder = embedding.NewMockEmbedder(768) // Match nomic-embed-text dimension
+
+		embedder = embedding.NewMockEmbedder(768) // Match nomic-embed-text dimension.
 	} else {
 		embedder = ollamaEmbedder
+
 		slog.Info(" Using Ollama embedder", "model", ollamaConfig.Model, "dimension", ollamaConfig.Dimension)
 	}
 
-	// Check if playbook file exists
-	if _, statErr := os.Stat(playbookPath); statErr == nil {
-		// Load existing playbook
+	// Check if playbook file exists.
+	_, statErr := os.Stat(playbookPath)
+	if statErr == nil {
+		// Load existing playbook.
 		pb, err = playbook.Load(playbookPath, nil, embedder)
 		if err != nil {
-			// If load fails, create new playbook
+			// If load fails, create new playbook.
 			pb = playbook.New(nil, embedder)
 		}
 	} else {
-		// Create new playbook with seed bullets
+		// Create new playbook with seed bullets.
 		pb = playbook.New(nil, embedder)
 
-		// Ensure directory exists
+		// Ensure directory exists.
 		dir := filepath.Dir(playbookPath)
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		err := os.MkdirAll(dir, 0755)
+		if err != nil {
 			return nil, fmt.Errorf("failed to create playbook directory: %w", err)
 		}
 
-		// Seed with initial bullets for Go/coding best practices
-		if err := seedInitialBullets(pb, embedder); err != nil {
-			// Log warning but continue - ACE can still learn from scratch
+		// Seed with initial bullets for Go/coding best practices.
+		err = seedInitialBullets(pb, embedder)
+		if err != nil {
+			// Log warning but continue - ACE can still learn from scratch.
 			slog.Warn("Failed to seed initial bullets", "error", err)
 		}
 
-		// Save the seeded playbook
-		if err := pb.Save(playbookPath); err != nil {
-			// Log warning but continue
+		// Save the seeded playbook.
+		err = pb.Save(playbookPath)
+		if err != nil {
+			// Log warning but continue.
 			slog.Warn("Failed to save initial playbook", "error", err)
 		}
 	}
 
 	// Create components
-	// Use HNSW retriever by default for better performance, but fall back to semantic retriever if needed
+	// Use HNSW retriever by default for better performance, but fall back to semantic retriever if needed.
 	var retriever retrieval.Retriever
 	if embedder != nil {
 		retriever = retrieval.NewHNSWRetriever(pb, embedder)
 	} else {
-		// Fallback to semantic retriever when no embedder available
+		// Fallback to semantic retriever when no embedder available.
 		retriever = retrieval.NewSemanticRetriever(pb, embedder)
 	}
+
 	feedbackParser := feedback.NewRegexParser()
 
-	// Create generator if LLM is provided and generation is enabled
+	// Create generator if LLM is provided and generation is enabled.
 	var gen generator.Generator
 	if llm != nil && cfg.Generation.Enabled {
 		gen, err = generator.NewGenerator(generator.Config{
@@ -137,41 +149,47 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 		}
 	}
 
-	// Create reflector for deep analysis (if LLM available)
+	// Create reflector for deep analysis (if LLM available).
 	var refl reflector.Reflector
+
 	if llm != nil {
 		reflectorOpts := []reflector.Option{}
 		if maxTokens > 0 {
 			reflectorOpts = append(reflectorOpts, reflector.WithMaxTokens(maxTokens))
 		}
+
 		refl = reflector.NewReflector(llm, reflectorOpts...)
+
 		slog.Debug("Created reflector for deep insight analysis", "max_tokens", maxTokens)
 	}
 
-	// Create curator for quality control and deduplication
+	// Create curator for quality control and deduplication.
 	var cur curator.Curator
+
 	if embedder != nil {
-		// Configure curator based on config
+		// Configure curator based on config.
 		curatorOpts := []curator.Option{
-			curator.WithSimilarityThreshold(0.85), // High threshold for deduplication
+			curator.WithSimilarityThreshold(0.85), // High threshold for deduplication.
 		}
 
-		// Set max tokens for LLM calls
+		// Set max tokens for LLM calls.
 		if maxTokens > 0 {
 			curatorOpts = append(curatorOpts, curator.WithMaxTokens(maxTokens))
 		}
 
 		// Enable LLM-based curation if LLM is available and AutoReflect is enabled
-		// LLM-based curation provides intelligent filtering vs simple deduplication
+		// LLM-based curation provides intelligent filtering vs simple deduplication.
 		if llm != nil && cfg.Generation.AutoReflect {
 			curatorOpts = append(curatorOpts, curator.WithLLMProvider(llm))
+
 			slog.Debug("Enabled LLM-based intelligent curation")
 		}
 
-		// Set refinement mode based on config
+		// Set refinement mode based on config.
 		if cfg.Refine.Enabled {
-			// Enable merge engine for semantic deduplication (similarity-based merging)
+			// Enable merge engine for semantic deduplication (similarity-based merging).
 			curatorOpts = append(curatorOpts, curator.WithMergeEngine(0.90))
+
 			slog.Debug("Enabled merge engine for advanced bullet deduplication")
 
 			if cfg.Refine.Mode == "proactive" {
@@ -196,22 +214,25 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 		}
 
 		cur = curator.NewCurator(pb, embedder, curatorOpts...)
+
 		slog.Debug("Created curator for quality control")
 	}
 
-	// Create adapter for online learning orchestration (if reflector and curator available)
+	// Create adapter for online learning orchestration (if reflector and curator available).
 	var adp adapter.Adapter
+
 	if refl != nil && cur != nil {
-		// Check if we need custom configuration
+		// Check if we need custom configuration.
 		needsCustomConfig := cfg.Adapter.MaxMemorySize > 0 || cfg.Adapter.UtilityThreshold > 0 || gen != nil
 
 		if needsCustomConfig {
-			// Use default memory config as base, then override with user settings
+			// Use default memory config as base, then override with user settings.
 			memConfig := adapter.DefaultMemoryConfig()
 			if cfg.Adapter.MaxMemorySize > 0 {
 				memConfig.MaxBullets = cfg.Adapter.MaxMemorySize
-				memConfig.RefinementAt = int(float64(cfg.Adapter.MaxMemorySize) * 0.9) // 90% of max
+				memConfig.RefinementAt = int(float64(cfg.Adapter.MaxMemorySize) * 0.9) // 90% of max.
 			}
+
 			if cfg.Adapter.UtilityThreshold > 0 {
 				memConfig.PruneThreshold = cfg.Adapter.UtilityThreshold
 			}
@@ -225,33 +246,40 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 			}
 			adp = adapter.NewAdapterWithConfig(adapterConfig)
 		} else {
-			// Use simple constructor with defaults
+			// Use simple constructor with defaults.
 			adp = adapter.NewAdapter(pb, refl, cur)
 		}
+
 		slog.Info("Created adapter for online learning orchestration")
 	}
 
-	// Create delta history for tracking bullet changes
+	// Create delta history for tracking bullet changes.
 	deltaHist := delta.NewDeltaHistory()
+
 	slog.Debug("Created delta history for change tracking")
 
-	// Create growth monitor for playbook management
+	// Create growth monitor for playbook management.
 	var growthMon *refine.GrowthMonitor
+
 	if cfg.Refine.Enabled {
-		// Start with defaults and override with config values
+		// Start with defaults and override with config values.
 		thresholds := refine.DefaultGrowthThresholds()
 		if cfg.Refine.MaxBullets > 0 {
 			thresholds.MaxBullets = cfg.Refine.MaxBullets
 		}
+
 		if cfg.Refine.MaxTokens > 0 {
 			thresholds.MaxTokens = cfg.Refine.MaxTokens
 		}
+
 		if cfg.Refine.MinUtilityScore > 0 {
 			thresholds.MinUtility = cfg.Refine.MinUtilityScore
 		}
+
 		if cfg.Refine.CheckInterval > 0 {
 			thresholds.CheckInterval = time.Duration(cfg.Refine.CheckInterval) * time.Second
 		}
+
 		growthMon = refine.NewGrowthMonitor(pb, thresholds)
 		slog.Info("Created growth monitor", "max_bullets", thresholds.MaxBullets, "max_tokens", thresholds.MaxTokens)
 	}
@@ -282,13 +310,13 @@ func (s *ACEService) Retrieve(ctx context.Context, query string) ([]*bullet.Bull
 		return nil, nil
 	}
 
-	// Use RetrieveWithScores to get scores for filtering
+	// Use RetrieveWithScores to get scores for filtering.
 	results, err := s.retriever.RetrieveWithScores(ctx, query, s.config.Retrieval.TopK)
 	if err != nil {
 		return nil, fmt.Errorf("retrieval failed: %w", err)
 	}
 
-	// Filter by minimum score threshold
+	// Filter by minimum score threshold.
 	filtered := make([]*bullet.Bullet, 0, len(results))
 	for _, result := range results {
 		if result.Score >= s.config.Retrieval.MinScore {
@@ -307,17 +335,18 @@ func (s *ACEService) BuildPrompt(ctx context.Context, systemPrompt string, bulle
 		return systemPrompt, nil
 	}
 
-	// Build prompt builder with options
+	// Build prompt builder with options.
 	opts := []prompt.Option{
 		prompt.WithSystemPrompt(systemPrompt),
 	}
 
-	// Include ItemizedLearning instructions if enabled
+	// Include ItemizedLearning instructions if enabled.
 	if s.config.ItemizedLearning.Enabled && len(bullets) > 0 {
 		opts = append(opts, prompt.WithItemizedLearning())
 	}
 
 	builder := prompt.NewBuilder(opts...)
+
 	return builder.BuildSystemPrompt(bullets), nil
 }
 
@@ -340,10 +369,10 @@ func (s *ACEService) UpdateBullets(ctx context.Context, bullets []*bullet.Bullet
 		return nil
 	}
 
-	// Build feedback map for batch delta application
+	// Build feedback map for batch delta application.
 	feedbackMap := make(map[string]string)
 
-	// Map bullet markers (B0, B1, ...) to actual bullet IDs
+	// Map bullet markers (B0, B1, ...) to actual bullet IDs.
 	for _, marker := range fb.HelpfulBullets {
 		idx := parseBulletIndex(marker)
 		if idx >= 0 && idx < len(bullets) {
@@ -360,18 +389,20 @@ func (s *ACEService) UpdateBullets(ctx context.Context, bullets []*bullet.Bullet
 		}
 	}
 
-	// Use curator's batch delta application for parallel updates
+	// Use curator's batch delta application for parallel updates.
 	if s.curator != nil {
-		if err := s.curator.ApplyBulletFeedback(ctx, feedbackMap); err != nil {
+		err := s.curator.ApplyBulletFeedback(ctx, feedbackMap)
+		if err != nil {
 			return fmt.Errorf("failed to apply bullet feedback: %w", err)
 		}
 	}
 
-	// Save playbook
+	// Save playbook.
 	if s.config.ItemizedLearning.UpdateAsync {
 		go s.SavePlaybook()
 	} else {
-		if err := s.SavePlaybook(); err != nil {
+		err := s.SavePlaybook()
+		if err != nil {
 			return fmt.Errorf("failed to save playbook: %w", err)
 		}
 	}
@@ -387,6 +418,7 @@ func (s *ACEService) SavePlaybook() error {
 	}
 
 	playbookPath := expandPath(s.config.PlaybookPath)
+
 	return s.playbook.Save(playbookPath)
 }
 
@@ -397,23 +429,25 @@ func (s *ACEService) RestoreBullet(ctx context.Context, id, content string) (*bu
 		return nil, nil
 	}
 
-	// Create bullet with custom ID
+	// Create bullet with custom ID.
 	b, err := bullet.New(content, bullet.WithID(id))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create bullet: %w", err)
 	}
 
-	// Get embedding if embedder available
+	// Get embedding if embedder available.
 	if s.embedder != nil {
 		emb, err := s.embedder.Embed(ctx, content)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate embedding: %w", err)
 		}
+
 		b.Embedding = emb
 	}
 
-	// Add to playbook
-	if err := s.playbook.Add(ctx, b); err != nil {
+	// Add to playbook.
+	err = s.playbook.Add(ctx, b)
+	if err != nil {
 		return nil, fmt.Errorf("failed to add bullet to playbook: %w", err)
 	}
 
@@ -426,17 +460,18 @@ func (s *ACEService) RestoreBullet(ctx context.Context, id, content string) (*bu
 func (s *ACEService) GenerateBullets(ctx context.Context, input string, sourceType string) ([]*bullet.Bullet, error) {
 	if !s.enabled || s.generator == nil {
 		slog.Debug("GenerateBullets skipped", "enabled", s.enabled, "has_generator", s.generator != nil)
+
 		return nil, nil
 	}
 
 	slog.Info("Generating bullets", "source_type", sourceType, "input_len", len(input))
 
-	// Generate bullets using the generator
+	// Generate bullets using the generator.
 	req := generator.BulletGenerationRequest{
 		Input:      input,
 		SourceType: sourceType,
-		MaxBullets: 0,           // No limit - let the model decide
-		Model:      s.modelName, // Use same model as agent
+		MaxBullets: 0,           // No limit - let the model decide.
+		Model:      s.modelName, // Use same model as agent.
 		Tags: map[string]string{
 			"source":    sourceType,
 			"generated": "true",
@@ -451,42 +486,45 @@ func (s *ACEService) GenerateBullets(ctx context.Context, input string, sourceTy
 	generatedCount := len(bullets)
 	slog.Info("Generated bullets", "count", generatedCount)
 
-	// Generate embeddings and add bullets to playbook
+	// Generate embeddings and add bullets to playbook.
 	addedBullets := make([]*bullet.Bullet, 0, len(bullets))
 	for i, b := range bullets {
 		slog.Debug("Processing bullet", "index", i+1, "content", b.Content)
 
-		// Generate embedding for the bullet if embedder is available
+		// Generate embedding for the bullet if embedder is available.
 		if s.embedder != nil {
 			embedding, err := s.embedder.Embed(ctx, b.Content)
 			if err != nil {
 				slog.Warn("Failed to generate embedding for bullet", "error", err, "content", b.Content)
-				// Continue without embedding - bullet will still be added but won't be retrievable
+				// Continue without embedding - bullet will still be added but won't be retrievable.
 			} else {
-				// Update bullet with embedding
+				// Update bullet with embedding.
 				b.Embedding = embedding
 				slog.Debug("Generated embedding", "index", i+1, "embedding_len", len(embedding))
 			}
 		}
 
-		// Add bullet to playbook
-		if err := s.playbook.Add(ctx, b); err != nil {
-			// Log warning but continue with other bullets
+		// Add bullet to playbook.
+		err := s.playbook.Add(ctx, b)
+		if err != nil {
+			// Log warning but continue with other bullets.
 			slog.Warn("Failed to add bullet to playbook", "error", err)
 		} else {
 			addedBullets = append(addedBullets, b)
 		}
 	}
 
-	// Count bullets in playbook
+	// Count bullets in playbook.
 	bulletCount := 0
 	for range s.playbook.List(func(b *bullet.Bullet) bool { return true }) {
 		bulletCount++
 	}
+
 	slog.Info("Playbook updated", "total_bullets", bulletCount)
 
-	// Save playbook with new bullets
-	if err := s.SavePlaybook(); err != nil {
+	// Save playbook with new bullets.
+	err = s.SavePlaybook()
+	if err != nil {
 		return nil, fmt.Errorf("failed to save playbook: %w", err)
 	}
 
@@ -500,6 +538,7 @@ func (s *ACEService) GenerateBullets(ctx context.Context, input string, sourceTy
 func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Context, trajectory *generator.Trajectory) ([]*bullet.Bullet, error) {
 	if !s.enabled || s.reflector == nil || s.curator == nil {
 		slog.Debug("Reflection pipeline not available", "enabled", s.enabled, "has_reflector", s.reflector != nil, "has_curator", s.curator != nil)
+
 		return nil, nil
 	}
 
@@ -508,12 +547,13 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 		"success", trajectory.Success,
 		"retrieved_bullets", len(trajectory.RetrievedBullets))
 
-	// Debug: Log full trajectory details
+	// Debug: Log full trajectory details.
 	slog.Debug("Trajectory details",
 		"query", trajectory.Query,
 		"output", trajectory.Output,
 		"success", trajectory.Success,
 		"num_steps", len(trajectory.Steps))
+
 	for i, step := range trajectory.Steps {
 		slog.Debug("Trajectory step",
 			"index", i,
@@ -522,7 +562,7 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 			"content", step.Content)
 	}
 
-	// Reflect on trajectory to extract insights
+	// Reflect on trajectory to extract insights.
 	reflectionReq := reflector.ReflectionRequest{
 		Trajectories: []*generator.Trajectory{trajectory},
 	}
@@ -530,12 +570,13 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 	reflectionResp, err := s.reflector.Reflect(ctx, reflectionReq)
 	if err != nil {
 		slog.Warn("Reflection failed", "error", err)
+
 		return nil, err
 	}
 
 	slog.Info("Reflector extracted insights", "count", len(reflectionResp.Insights))
 
-	// Debug: Log all extracted insights
+	// Debug: Log all extracted insights.
 	for i, insight := range reflectionResp.Insights {
 		slog.Debug("Extracted insight",
 			"index", i,
@@ -547,10 +588,11 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 
 	if len(reflectionResp.Insights) == 0 {
 		slog.Debug("No insights extracted from reflection")
+
 		return nil, nil
 	}
 
-	// Curate insights into bullets with deduplication
+	// Curate insights into bullets with deduplication.
 	mergeReq := curator.MergeRequest{
 		Insights:            reflectionResp.Insights,
 		SimilarityThreshold: 0.85,
@@ -561,6 +603,7 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 	mergeResp, err := s.curator.Curate(ctx, mergeReq)
 	if err != nil {
 		slog.Warn("Curation failed", "error", err)
+
 		return nil, err
 	}
 
@@ -569,7 +612,7 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 		"updated", mergeResp.Updated,
 		"duplicates", len(mergeResp.Duplicates))
 
-	// Debug: Log added bullets
+	// Debug: Log added bullets.
 	for i, b := range mergeResp.AddedBullets {
 		slog.Debug("Added bullet",
 			"index", i,
@@ -579,17 +622,18 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 			"harmful_count", b.HarmfulCount)
 	}
 
-	// Debug: Log duplicates
+	// Debug: Log duplicates.
 	if len(mergeResp.Duplicates) > 0 {
 		slog.Debug("Found duplicates", "duplicate_ids", mergeResp.Duplicates)
 	}
 
-	// Save playbook
-	if err := s.SavePlaybook(); err != nil {
+	// Save playbook.
+	err = s.SavePlaybook()
+	if err != nil {
 		return nil, fmt.Errorf("failed to save playbook: %w", err)
 	}
 
-	// Return the new bullets that were added
+	// Return the new bullets that were added.
 	return mergeResp.AddedBullets, nil
 }
 
@@ -600,17 +644,18 @@ func (s *ACEService) ProcessExecutionSignal(ctx context.Context, signal *adapter
 		return nil, nil
 	}
 
-	// Debug: Log incoming signal
+	// Debug: Log incoming signal.
 	slog.Debug("Processing execution signal",
 		"signal_type", signal.SignalType,
 		"outcome", signal.Outcome,
 		"context", signal.Context,
 		"session_id", signal.SessionID)
 
-	// Process signal through adapter
+	// Process signal through adapter.
 	result, err := s.adapter.AdaptOnline(ctx, *signal)
 	if err != nil {
 		slog.Warn("Adapter failed to process signal", "error", err, "signal_type", signal.SignalType)
+
 		return nil, err
 	}
 
@@ -620,17 +665,17 @@ func (s *ACEService) ProcessExecutionSignal(ctx context.Context, signal *adapter
 		"bullets_updated", result.BulletsUpdated,
 		"latency_ms", result.LatencyMs)
 
-	// Debug: Log adaptation details
+	// Debug: Log adaptation details.
 	if result.BulletsAdded > 0 {
 		slog.Debug("Adaptation created new bullets", "count", result.BulletsAdded)
 	}
 
-	// Track delta if bullets were modified
+	// Track delta if bullets were modified.
 	if result.BulletsAdded > 0 || result.BulletsUpdated > 0 {
 		s.trackBulletChanges(ctx, result)
 	}
 
-	// Check growth and trigger refinement if needed
+	// Check growth and trigger refinement if needed.
 	if s.growthMonitor != nil {
 		s.checkGrowthAndRefine(ctx)
 	}
@@ -645,7 +690,7 @@ func (s *ACEService) trackBulletChanges(ctx context.Context, result *adapter.Ada
 	}
 
 	// Record adaptation event in delta history
-	// This is a simplified version - in production you'd track specific bullet changes
+	// This is a simplified version - in production you'd track specific bullet changes.
 	slog.Debug("Tracking bullet changes",
 		"added", result.BulletsAdded,
 		"updated", result.BulletsUpdated)
@@ -657,7 +702,7 @@ func (s *ACEService) checkGrowthAndRefine(ctx context.Context) {
 		return
 	}
 
-	// Check if refinement is needed
+	// Check if refinement is needed.
 	metrics, shouldRefine := s.growthMonitor.CheckGrowth(ctx)
 
 	if shouldRefine {
@@ -665,12 +710,14 @@ func (s *ACEService) checkGrowthAndRefine(ctx context.Context) {
 			"bullet_count", metrics.BulletCount,
 			"estimated_tokens", metrics.EstimatedTokens)
 
-		// Trigger refinement asynchronously
+		// Trigger refinement asynchronously.
 		go func() {
 			bgCtx := context.Background()
+
 			result, err := s.curator.Refine(bgCtx)
 			if err != nil {
 				slog.Warn("Refinement failed", "error", err)
+
 				return
 			}
 
@@ -678,11 +725,12 @@ func (s *ACEService) checkGrowthAndRefine(ctx context.Context) {
 				"pruned", result.Pruned,
 				"reason", result.Reason)
 
-			// Mark refinement in growth monitor
+			// Mark refinement in growth monitor.
 			s.growthMonitor.MarkRefinement()
 
-			// Save playbook after refinement
-			if err := s.SavePlaybook(); err != nil {
+			// Save playbook after refinement.
+			err = s.SavePlaybook()
+			if err != nil {
 				slog.Warn("Failed to save playbook after refinement", "error", err)
 			}
 		}()
@@ -702,6 +750,7 @@ func (s *ACEService) StartSession(ctx context.Context) (string, error) {
 	}
 
 	slog.Info("Started online learning session", "session_id", sessionID)
+
 	return sessionID, nil
 }
 
@@ -711,11 +760,13 @@ func (s *ACEService) EndSession(ctx context.Context, sessionID string) error {
 		return nil
 	}
 
-	if err := s.adapter.EndSession(ctx, sessionID); err != nil {
+	err := s.adapter.EndSession(ctx, sessionID)
+	if err != nil {
 		return fmt.Errorf("failed to end adapter session: %w", err)
 	}
 
 	slog.Info("Ended online learning session", "session_id", sessionID)
+
 	return nil
 }
 
@@ -727,6 +778,7 @@ func parseBulletIndex(marker string) int {
 	}
 
 	var idx int
+
 	_, err := fmt.Sscanf(marker[1:], "%d", &idx)
 	if err != nil {
 		return -1
@@ -758,33 +810,35 @@ func expandPath(path string) string {
 func seedInitialBullets(pb *playbook.Playbook, embedder embedding.Embedder) error {
 	ctx := context.Background()
 
-	// Seed bullets covering common Go patterns and best practices
+	// Seed bullets covering common Go patterns and best practices.
 	seeds := []struct {
 		content  string
 		category string
 	}{}
 
 	for _, seed := range seeds {
-		// Compute embedding for the bullet content
+		// Compute embedding for the bullet content.
 		emb, err := embedder.Embed(ctx, seed.content)
 		if err != nil {
 			return fmt.Errorf("failed to compute embedding: %w", err)
 		}
 
-		// Create bullet with embedding
+		// Create bullet with embedding.
 		b, err := bullet.New(seed.content, bullet.WithEmbedding(emb))
 		if err != nil {
 			return fmt.Errorf("failed to create seed bullet: %w", err)
 		}
 
-		// Initialize Tags map if needed
+		// Initialize Tags map if needed.
 		if b.Tags == nil {
 			b.Tags = make(map[string]string)
 		}
+
 		b.Tags["category"] = seed.category
 		b.Tags["source"] = "initial-seed"
 
-		if err := pb.Add(ctx, b); err != nil {
+		err = pb.Add(ctx, b)
+		if err != nil {
 			return fmt.Errorf("failed to add seed bullet: %w", err)
 		}
 	}

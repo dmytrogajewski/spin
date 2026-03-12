@@ -22,6 +22,7 @@ func NewModel(historyLimit int) *Model {
 func (m *Model) Insert(r rune) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.buffer.Insert(r)
 }
 
@@ -29,6 +30,7 @@ func (m *Model) Insert(r rune) {
 func (m *Model) Backspace() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.buffer.Backspace()
 }
 
@@ -36,6 +38,7 @@ func (m *Model) Backspace() bool {
 func (m *Model) Delete() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.buffer.Delete()
 }
 
@@ -43,6 +46,7 @@ func (m *Model) Delete() bool {
 func (m *Model) MoveLeft() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.buffer.MoveLeft()
 }
 
@@ -50,6 +54,7 @@ func (m *Model) MoveLeft() bool {
 func (m *Model) MoveRight() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.buffer.MoveRight()
 }
 
@@ -57,6 +62,7 @@ func (m *Model) MoveRight() bool {
 func (m *Model) MoveStart() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.buffer.MoveStart()
 }
 
@@ -64,6 +70,7 @@ func (m *Model) MoveStart() {
 func (m *Model) MoveEnd() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.buffer.MoveEnd()
 }
 
@@ -71,6 +78,7 @@ func (m *Model) MoveEnd() {
 func (m *Model) ClearLineLeft() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.buffer.ClearLineLeft()
 }
 
@@ -78,6 +86,7 @@ func (m *Model) ClearLineLeft() {
 func (m *Model) ClearLineRight() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.buffer.ClearLineRight()
 }
 
@@ -85,6 +94,7 @@ func (m *Model) ClearLineRight() {
 func (m *Model) DeleteWord() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.buffer.DeleteWord()
 }
 
@@ -92,6 +102,7 @@ func (m *Model) DeleteWord() {
 func (m *Model) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.buffer.Clear()
 }
 
@@ -100,12 +111,16 @@ func (m *Model) Clear() {
 func (m *Model) PrevHistory() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	currentDraft := m.buffer.Text()
+
 	entry, ok := m.history.PrevHistory(currentDraft)
 	if !ok {
 		return false
 	}
+
 	m.buffer.SetText(entry)
+
 	return true
 }
 
@@ -114,11 +129,14 @@ func (m *Model) PrevHistory() bool {
 func (m *Model) NextHistory() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	entry, ok := m.history.NextHistory()
 	if !ok {
 		return false
 	}
+
 	m.buffer.SetText(entry)
+
 	return true
 }
 
@@ -126,9 +144,11 @@ func (m *Model) NextHistory() bool {
 func (m *Model) Submit() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	text := m.buffer.Text()
 	m.history.Submit(text)
 	m.buffer.Clear()
+
 	return text
 }
 
@@ -136,6 +156,7 @@ func (m *Model) Submit() string {
 func (m *Model) Text() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.buffer.Text()
 }
 
@@ -143,6 +164,7 @@ func (m *Model) Text() string {
 func (m *Model) Cursor() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.buffer.Cursor()
 }
 
@@ -152,5 +174,6 @@ func (m *Model) Cursor() int {
 func (m *Model) History() *History {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	return m.history
 }

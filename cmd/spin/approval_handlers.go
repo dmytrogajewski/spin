@@ -35,4 +35,3 @@ func createTUIApprovalHandler(ui *adapters.PureTTY) security.ApprovalHandler {
 		return ui.ShowApprovalDialog(ctx, req)
 	}
 }
-

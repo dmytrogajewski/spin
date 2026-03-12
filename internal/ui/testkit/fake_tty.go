@@ -28,7 +28,9 @@ func NewFakeTTY(width, height int) *FakeTTY {
 func (f *FakeTTY) Enter() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	f.inRawMode = true
+
 	return nil
 }
 
@@ -36,7 +38,9 @@ func (f *FakeTTY) Enter() error {
 func (f *FakeTTY) Exit() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	f.inRawMode = false
+
 	return nil
 }
 
@@ -44,6 +48,7 @@ func (f *FakeTTY) Exit() error {
 func (f *FakeTTY) Size() (int, int) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
 	return f.width, f.height
 }
 
@@ -51,6 +56,7 @@ func (f *FakeTTY) Size() (int, int) {
 func (f *FakeTTY) OnResize(cb func(w, h int)) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	f.callbacks = append(f.callbacks, cb)
 }
 
@@ -63,7 +69,7 @@ func (f *FakeTTY) SetSize(width, height int) {
 	copy(callbacks, f.callbacks)
 	f.mu.Unlock()
 
-	// Invoke callbacks outside of lock
+	// Invoke callbacks outside of lock.
 	for _, cb := range callbacks {
 		cb(width, height)
 	}
@@ -73,15 +79,9 @@ func (f *FakeTTY) SetSize(width, height int) {
 func (f *FakeTTY) InRawMode() bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
 	return f.inRawMode
 }
 
-// Ensure FakeTTY implements TerminalController
+// Ensure FakeTTY implements TerminalController.
 var _ term.TerminalController = (*FakeTTY)(nil)
-
-
-
-
-
-
-

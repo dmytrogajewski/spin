@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
-	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // TestConvertEventToSessionUpdate_ContentDelta tests EventContentDelta conversion.
@@ -27,7 +28,7 @@ func TestConvertEventToSessionUpdate_ContentDelta(t *testing.T) {
 
 	assert.True(t, ok, "should convert EventContentDelta")
 	assert.NotNil(t, update)
-	// Verify it's a valid SessionUpdate (can't check internal structure easily)
+	// Verify it's a valid SessionUpdate (can't check internal structure easily).
 }
 
 // TestConvertEventToSessionUpdate_ToolCallStart tests EventToolCallStart conversion.
@@ -71,7 +72,7 @@ func TestConvertToolCallStart_IncludesKind(t *testing.T) {
 	assert.True(t, ok, "should convert EventToolCallStart")
 	assert.NotNil(t, update)
 	// Verify update contains tool kind (checking internal structure)
-	// The update should have kind set to ToolKindRead for read_file
+	// The update should have kind set to ToolKindRead for read_file.
 }
 
 // TestConvertEventToSessionUpdate_UnknownEvent tests unknown event handling.
@@ -85,7 +86,7 @@ func TestConvertEventToSessionUpdate_UnknownEvent(t *testing.T) {
 	update, ok := convertEventToSessionUpdate(event, nil)
 
 	assert.False(t, ok, "should not convert unknown events")
-	// SessionUpdate is a struct, not a pointer, so check if it's empty
+	// SessionUpdate is a struct, not a pointer, so check if it's empty.
 	assert.Equal(t, acp.SessionUpdate{}, update)
 }
 
@@ -143,7 +144,7 @@ func TestConvertToolCallComplete_IncludesContent(t *testing.T) {
 
 	assert.True(t, ok, "should convert EventToolCallComplete")
 	assert.NotNil(t, update)
-	// Verify update contains content and raw output (checking internal structure)
+	// Verify update contains content and raw output (checking internal structure).
 }
 
 // TestConvertEventToSessionUpdate_ToolCallComplete_Failed tests EventToolCallComplete conversion (failed).
@@ -286,7 +287,7 @@ func TestConvertToolCallStart_IncludesLocations(t *testing.T) {
 
 	assert.True(t, ok, "should convert EventToolCallStart")
 	assert.NotNil(t, update)
-	// Verify update contains locations (checking internal structure)
+	// Verify update contains locations (checking internal structure).
 }
 
 // TestConvertToolCallComplete_EmptyOutput tests that empty output doesn't include content.
@@ -298,7 +299,7 @@ func TestConvertToolCallComplete_EmptyOutput(t *testing.T) {
 			ToolID:   "tool-123",
 			ToolName: "read_file",
 			Success:  true,
-			Output:   "", // Empty output
+			Output:   "", // Empty output.
 		},
 	}
 
@@ -306,7 +307,7 @@ func TestConvertToolCallComplete_EmptyOutput(t *testing.T) {
 
 	assert.True(t, ok, "should convert EventToolCallComplete")
 	assert.NotNil(t, update)
-	// Verify update doesn't include content when output is empty
+	// Verify update doesn't include content when output is empty.
 }
 
 // TestConvertToolCallComplete_WithError tests that error is included in raw output.
@@ -327,14 +328,14 @@ func TestConvertToolCallComplete_WithError(t *testing.T) {
 
 	assert.True(t, ok, "should convert EventToolCallComplete")
 	assert.NotNil(t, update)
-	// Verify update includes error in raw output
+	// Verify update includes error in raw output.
 }
 
 // TestFileContentTracker_StoreAndRetrieve tests file content tracking.
 func TestFileContentTracker_StoreAndRetrieve(t *testing.T) {
 	tracker := newFileContentTracker()
 
-	// Store old content
+	// Store old content.
 	toolID := "tool-123"
 	filePath := "/tmp/test.txt"
 	oldContent := "old content\nline 2"
@@ -342,7 +343,7 @@ func TestFileContentTracker_StoreAndRetrieve(t *testing.T) {
 	tracker.filePaths[toolID] = filePath
 	tracker.newContent[toolID] = "new content\nline 2\nline 3"
 
-	// Retrieve content for diff
+	// Retrieve content for diff.
 	retrievedOld, retrievedNew, retrievedPath, ok := tracker.getContentForDiff(toolID)
 
 	assert.True(t, ok, "should retrieve content")
@@ -350,7 +351,7 @@ func TestFileContentTracker_StoreAndRetrieve(t *testing.T) {
 	assert.Equal(t, "new content\nline 2\nline 3", retrievedNew)
 	assert.Equal(t, filePath, retrievedPath)
 
-	// Cleanup
+	// Cleanup.
 	tracker.cleanup(toolID)
 	_, _, _, ok = tracker.getContentForDiff(toolID)
 	assert.False(t, ok, "should not retrieve after cleanup")
@@ -360,14 +361,14 @@ func TestFileContentTracker_StoreAndRetrieve(t *testing.T) {
 func TestFileContentTracker_NewFile(t *testing.T) {
 	tracker := newFileContentTracker()
 
-	// Store new file (no old content)
+	// Store new file (no old content).
 	toolID := "tool-456"
 	filePath := "/tmp/newfile.txt"
-	tracker.oldContent[toolID] = "" // Empty for new file
+	tracker.oldContent[toolID] = "" // Empty for new file.
 	tracker.filePaths[toolID] = filePath
 	tracker.newContent[toolID] = "new file content"
 
-	// Retrieve content for diff
+	// Retrieve content for diff.
 	retrievedOld, retrievedNew, retrievedPath, ok := tracker.getContentForDiff(toolID)
 
 	assert.True(t, ok, "should retrieve content for new file")
@@ -378,7 +379,7 @@ func TestFileContentTracker_NewFile(t *testing.T) {
 
 // TestConvertToolCallStart_WriteFile_TracksOldContent tests that write_file operations track old content.
 func TestConvertToolCallStart_WriteFile_TracksOldContent(t *testing.T) {
-	// Create a temporary file with content
+	// Create a temporary file with content.
 	tmpFile := t.TempDir() + "/test.txt"
 	err := os.WriteFile(tmpFile, []byte("existing content\nline 2"), 0644)
 	require.NoError(t, err)
@@ -406,7 +407,7 @@ func TestConvertToolCallStart_WriteFile_TracksOldContent(t *testing.T) {
 	assert.True(t, ok, "should convert EventToolCallStart")
 	assert.NotNil(t, update)
 
-	// Verify old content was stored
+	// Verify old content was stored.
 	oldContent, newContent, filePath, hasContent := tracker.getContentForDiff("tool-write")
 	assert.True(t, hasContent, "should have tracked content")
 	assert.Equal(t, "existing content\nline 2", oldContent)
@@ -416,7 +417,7 @@ func TestConvertToolCallStart_WriteFile_TracksOldContent(t *testing.T) {
 
 // TestConvertToolCallStart_WriteFile_NewFile tests that new file creation is tracked correctly.
 func TestConvertToolCallStart_WriteFile_NewFile(t *testing.T) {
-	// Use a non-existent file path
+	// Use a non-existent file path.
 	tmpFile := t.TempDir() + "/newfile.txt"
 
 	tracker := newFileContentTracker()
@@ -442,7 +443,7 @@ func TestConvertToolCallStart_WriteFile_NewFile(t *testing.T) {
 	assert.True(t, ok, "should convert EventToolCallStart")
 	assert.NotNil(t, update)
 
-	// Verify old content is empty for new file
+	// Verify old content is empty for new file.
 	oldContent, newContent, filePath, hasContent := tracker.getContentForDiff("tool-new")
 	assert.True(t, hasContent, "should have tracked content")
 	assert.Equal(t, "", oldContent, "old content should be empty for new file")
@@ -454,7 +455,7 @@ func TestConvertToolCallStart_WriteFile_NewFile(t *testing.T) {
 func TestConvertToolCallComplete_WriteFile_IncludesDiff(t *testing.T) {
 	tracker := newFileContentTracker()
 
-	// Pre-populate tracker with old and new content
+	// Pre-populate tracker with old and new content.
 	toolID := "tool-write"
 	filePath := "/tmp/test.txt"
 	tracker.oldContent[toolID] = "old line 1\nold line 2"
@@ -477,7 +478,7 @@ func TestConvertToolCallComplete_WriteFile_IncludesDiff(t *testing.T) {
 	assert.True(t, ok, "should convert EventToolCallComplete")
 	assert.NotNil(t, update)
 
-	// Verify tracker was cleaned up
+	// Verify tracker was cleaned up.
 	_, _, _, hasContent := tracker.getContentForDiff(toolID)
 	assert.False(t, hasContent, "tracker should be cleaned up after completion")
 }
@@ -486,10 +487,10 @@ func TestConvertToolCallComplete_WriteFile_IncludesDiff(t *testing.T) {
 func TestConvertToolCallComplete_WriteFile_NewFile(t *testing.T) {
 	tracker := newFileContentTracker()
 
-	// Pre-populate tracker with empty old content (new file)
+	// Pre-populate tracker with empty old content (new file).
 	toolID := "tool-new"
 	filePath := "/tmp/newfile.txt"
-	tracker.oldContent[toolID] = "" // Empty for new file
+	tracker.oldContent[toolID] = "" // Empty for new file.
 	tracker.filePaths[toolID] = filePath
 	tracker.newContent[toolID] = "new file content\nline 2"
 
@@ -509,7 +510,7 @@ func TestConvertToolCallComplete_WriteFile_NewFile(t *testing.T) {
 	assert.True(t, ok, "should convert EventToolCallComplete")
 	assert.NotNil(t, update)
 
-	// Verify tracker was cleaned up
+	// Verify tracker was cleaned up.
 	_, _, _, hasContent := tracker.getContentForDiff(toolID)
 	assert.False(t, hasContent, "tracker should be cleaned up after completion")
 }
@@ -533,7 +534,7 @@ func TestConvertToolCallComplete_NonWriteFile_NoDiff(t *testing.T) {
 
 	assert.True(t, ok, "should convert EventToolCallComplete")
 	assert.NotNil(t, update)
-	// Verify no diff was generated (tracker should not have been used)
+	// Verify no diff was generated (tracker should not have been used).
 }
 
 // TestConvertSystemEvent_Info tests that EventInfo is converted to agent thought.

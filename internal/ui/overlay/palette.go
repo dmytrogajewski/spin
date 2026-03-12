@@ -11,8 +11,8 @@ type Palette struct {
 	registry  *CommandRegistry
 	query     []rune
 	cursor    int
-	filtered  []fuzzy.Match // filtered commands with scores
-	selection int           // index in filtered list
+	filtered  []fuzzy.Match // filtered commands with scores.
+	selection int           // index in filtered list.
 	visible   bool
 }
 
@@ -27,6 +27,7 @@ func NewPalette(registry *CommandRegistry) *Palette {
 		visible:   false,
 	}
 	p.updateFilter()
+
 	return p
 }
 
@@ -54,7 +55,7 @@ func (p *Palette) Insert(r rune) {
 	p.query = append(p.query[:p.cursor], append([]rune{r}, p.query[p.cursor:]...)...)
 	p.cursor++
 	p.updateFilter()
-	p.selection = 0 // Reset selection on query change
+	p.selection = 0 // Reset selection on query change.
 }
 
 // Backspace deletes the rune before the cursor.
@@ -85,6 +86,7 @@ func (p *Palette) MoveUp() {
 	if len(p.filtered) == 0 {
 		return
 	}
+
 	p.selection--
 	if p.selection < 0 {
 		p.selection = len(p.filtered) - 1
@@ -96,6 +98,7 @@ func (p *Palette) MoveDown() {
 	if len(p.filtered) == 0 {
 		return
 	}
+
 	p.selection++
 	if p.selection >= len(p.filtered) {
 		p.selection = 0
@@ -107,23 +110,28 @@ func (p *Palette) SelectedCommand() Command {
 	if len(p.filtered) == 0 || p.selection < 0 || p.selection >= len(p.filtered) {
 		return nil
 	}
+
 	cmdIndex := p.filtered[p.selection].Index
+
 	commands := p.registry.Commands()
 	if cmdIndex >= 0 && cmdIndex < len(commands) {
 		return commands[cmdIndex]
 	}
+
 	return nil
 }
 
 // FilteredCommands returns the filtered command list (for rendering).
 func (p *Palette) FilteredCommands() []Command {
 	commands := p.registry.Commands()
+
 	result := make([]Command, 0, len(p.filtered))
 	for _, match := range p.filtered {
 		if match.Index >= 0 && match.Index < len(commands) {
 			result = append(result, commands[match.Index])
 		}
 	}
+
 	return result
 }
 
@@ -137,12 +145,14 @@ func (p *Palette) updateFilter() {
 	commands := p.registry.Commands()
 	if len(commands) == 0 {
 		p.filtered = nil
+
 		return
 	}
 
 	queryStr := string(p.query)
 	if p.isEmptyQuery(queryStr) {
 		p.setAllCommands(commands)
+
 		return
 	}
 
@@ -176,6 +186,7 @@ func (p *Palette) buildSearchStrings(commands []Command) []string {
 	for i, cmd := range commands {
 		searchStrings[i] = cmd.Name() + " " + cmd.Description()
 	}
+
 	return searchStrings
 }
 

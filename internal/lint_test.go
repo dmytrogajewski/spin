@@ -36,13 +36,13 @@ func TestNoTypesPackage(t *testing.T) {
 			return nil
 		}
 
-		// Skip hidden directories and vendor
+		// Skip hidden directories and vendor.
 		baseName := filepath.Base(path)
 		if strings.HasPrefix(baseName, ".") || baseName == "vendor" {
 			return filepath.SkipDir
 		}
 
-		// Check if directory name is prohibited
+		// Check if directory name is prohibited.
 		for _, prohibited := range prohibitedNames {
 			if baseName == prohibited {
 				t.Errorf("Found prohibited package name: %q at %q\n"+
@@ -58,7 +58,6 @@ func TestNoTypesPackage(t *testing.T) {
 
 		return nil
 	})
-
 	if err != nil {
 		t.Fatalf("Failed to walk internal directory: %v", err)
 	}
@@ -87,7 +86,7 @@ func TestNoTypesGoFile(t *testing.T) {
 			return nil
 		}
 
-		// Only check .go files (not _test.go)
+		// Only check .go files (not _test.go).
 		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
@@ -107,7 +106,6 @@ func TestNoTypesGoFile(t *testing.T) {
 
 		return nil
 	})
-
 	if err != nil {
 		t.Fatalf("Failed to walk internal directory: %v", err)
 	}

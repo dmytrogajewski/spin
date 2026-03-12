@@ -10,7 +10,7 @@ import (
 // PromptBuilder constructs curator prompts for integrating insights into playbook.
 // Aligned with ACE paper Figures 10, 11, 13, 14 (Curator prompts).
 type PromptBuilder struct {
-	// Future: configuration options can go here
+	// Future: configuration options can go here.
 }
 
 // NewPromptBuilder creates a new curator prompt builder.
@@ -48,6 +48,7 @@ func (pb *PromptBuilder) BuildCurationPrompt(req CurationRequest) string {
 	sb.WriteString(fmt.Sprintf("%s\n\n", req.TaskContext))
 
 	sb.WriteString("**Current Playbook:**\n")
+
 	if req.CurrentPlaybook != "" {
 		sb.WriteString(fmt.Sprintf("%s\n\n", req.CurrentPlaybook))
 	} else {
@@ -57,7 +58,7 @@ func (pb *PromptBuilder) BuildCurationPrompt(req CurationRequest) string {
 	sb.WriteString("**Current Reflection (insights from the execution):**\n")
 	sb.WriteString(fmt.Sprintf("%s\n\n", req.Reflection))
 
-	// Add examples
+	// Add examples.
 	sb.WriteString("**Examples:**\n\n")
 	sb.WriteString("**Example 1:**\n")
 	sb.WriteString("Task Context: \"Fix null pointer exception in user authentication\"\n\n")
@@ -185,9 +186,9 @@ func (pb *PromptBuilder) BuildRefinementPrompt(currentPlaybook string, stats Pla
 
 // CurationRequest contains all the data needed for the curator prompt.
 type CurationRequest struct {
-	TaskContext     string // The original task/query
-	CurrentPlaybook string // The current playbook content
-	Reflection      string // The reflection from the Reflector
+	TaskContext     string // The original task/query.
+	CurrentPlaybook string // The current playbook content.
+	Reflection      string // The reflection from the Reflector.
 }
 
 // PlaybookStats contains statistics about the playbook for refinement.
@@ -195,8 +196,8 @@ type PlaybookStats struct {
 	TotalBullets     int
 	AvgHelpfulCount  float64
 	AvgHarmfulCount  float64
-	LowUtilityCount  int // Bullets with harmful > helpful
-	HighUtilityCount int // Bullets with helpful > 10
+	LowUtilityCount  int // Bullets with harmful > helpful.
+	HighUtilityCount int // Bullets with helpful > 10.
 }
 
 // CurationResponse represents the LLM response from the curator prompt.
@@ -207,9 +208,9 @@ type CurationResponse struct {
 
 // CurationOperation represents a single playbook modification operation.
 type CurationOperation struct {
-	Type    string `json:"type"`    // "ADD" or "UPDATE"
-	Section string `json:"section"` // Section to add/update
-	Content string `json:"content"` // Bullet content
+	Type    string `json:"type"`    // "ADD" or "UPDATE".
+	Section string `json:"section"` // Section to add/update.
+	Content string `json:"content"` // Bullet content.
 }
 
 // RefinementResponse represents the LLM response from the refinement prompt.
@@ -220,9 +221,9 @@ type RefinementResponse struct {
 
 // RefinementOperation represents a refinement operation (remove/merge).
 type RefinementOperation struct {
-	Type      string   `json:"type"`       // "REMOVE" or "MERGE"
-	BulletIDs []string `json:"bullet_ids"` // IDs to remove/merge
-	Reason    string   `json:"reason"`     // Why this operation is needed
+	Type      string   `json:"type"`       // "REMOVE" or "MERGE".
+	BulletIDs []string `json:"bullet_ids"` // IDs to remove/merge.
+	Reason    string   `json:"reason"`     // Why this operation is needed.
 }
 
 // FormatReflectionForCurator converts a Reflector insight into text for the curator.
@@ -232,15 +233,17 @@ func FormatReflectionForCurator(insight *reflector.Insight) string {
 	sb.WriteString(fmt.Sprintf("**Category:** %s\n", insight.Category))
 	sb.WriteString(fmt.Sprintf("**Confidence:** %.2f\n\n", insight.Confidence))
 
-	// Main insight content
+	// Main insight content.
 	sb.WriteString(fmt.Sprintf("**Insight:** %s\n\n", insight.Content))
 
-	// Supporting evidence if available
+	// Supporting evidence if available.
 	if len(insight.Evidence) > 0 {
 		sb.WriteString("**Evidence:**\n")
+
 		for _, evidence := range insight.Evidence {
 			sb.WriteString(fmt.Sprintf("- %s\n", evidence))
 		}
+
 		sb.WriteString("\n")
 	}
 

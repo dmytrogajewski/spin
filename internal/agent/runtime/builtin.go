@@ -2,7 +2,7 @@ package runtime
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log/slog"
 
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -49,10 +49,11 @@ type BuiltinRuntimeConfig struct {
 // NewBuiltinRuntime creates a new builtin runtime.
 func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 	if cfg.WorkDir == "" {
-		return nil, fmt.Errorf("workDir is required")
+		return nil, errors.New("workDir is required")
 	}
+
 	if cfg.Emitter == nil {
-		return nil, fmt.Errorf("emitter is required")
+		return nil, errors.New("emitter is required")
 	}
 
 	logger := cfg.Logger
@@ -79,22 +80,26 @@ func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 
 // RegisterTools registers builtin-specific tools.
 func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
-	// Read-only tools (shared, no runtime dependency)
+	// Read-only tools (shared, no runtime dependency).
 	registry.Register(tools.NewReadFileTool())
 	registry.Register(tools.NewWriteFileTool())
 	registry.Register(tools.NewListDirectoryTool())
 
-	// Builtin-specific shell command tool (uses local executor)
-	var validatorAdapt tools.CommandValidator
-	var shellCtxAdapt tools.ShellContext
-	var execAdapt tools.CommandExecutor
+	// Builtin-specific shell command tool (uses local executor).
+	var (
+		validatorAdapt tools.CommandValidator
+		shellCtxAdapt  tools.ShellContext
+		execAdapt      tools.CommandExecutor
+	)
 
 	if r.validator != nil {
 		validatorAdapt = NewValidatorAdapter(r.validator)
 	}
+
 	if r.shellService != nil {
 		shellCtxAdapt = NewShellContextAdapter(r.shellService.GetContext())
 	}
+
 	if r.executor != nil {
 		execAdapt = &ExecutorAdapter{executor: r.executor}
 	}
@@ -147,26 +152,26 @@ type builtinNotificationSender struct {
 
 func (s *builtinNotificationSender) SendToolCallStart(ctx context.Context, toolID, toolName string, params tools.ToolParameters) error {
 	// TUIMapper handles EventToolCallStart events, not direct notifications
-	// This is called from event emission, handled by the mapper's MapEvent
+	// This is called from event emission, handled by the mapper's MapEvent.
 	return nil
 }
 
-func (s *builtinNotificationSender) SendToolCallUpdate(ctx context.Context, toolID string, status string, content interface{}) error {
-	// TUIMapper handles EventToolCallProgress events
+func (s *builtinNotificationSender) SendToolCallUpdate(ctx context.Context, toolID string, status string, content any) error {
+	// TUIMapper handles EventToolCallProgress events.
 	return nil
 }
 
 func (s *builtinNotificationSender) SendToolCallComplete(ctx context.Context, toolID string, success bool, output string, err error) error {
-	// TUIMapper handles EventToolCallComplete events
+	// TUIMapper handles EventToolCallComplete events.
 	return nil
 }
 
 func (s *builtinNotificationSender) SendMessageChunk(ctx context.Context, content string) error {
-	// TUIMapper handles EventContentDelta events
+	// TUIMapper handles EventContentDelta events.
 	return nil
 }
 
 func (s *builtinNotificationSender) SendPlanUpdate(ctx context.Context, entries []PlanEntry) error {
-	// Plan updates are handled via events
+	// Plan updates are handled via events.
 	return nil
 }

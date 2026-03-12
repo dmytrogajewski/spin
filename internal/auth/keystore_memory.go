@@ -25,6 +25,7 @@ func (m *memoryKeystore) Get(key string) (string, error) {
 	if !exists {
 		return "", ErrNotFound
 	}
+
 	return value, nil
 }
 
@@ -34,6 +35,7 @@ func (m *memoryKeystore) Set(key, value string) error {
 	defer m.mu.Unlock()
 
 	m.data[key] = value
+
 	return nil
 }
 
@@ -43,6 +45,7 @@ func (m *memoryKeystore) Delete(key string) error {
 	defer m.mu.Unlock()
 
 	delete(m.data, key)
+
 	return nil
 }
 
@@ -55,5 +58,6 @@ func (m *memoryKeystore) List() ([]string, error) {
 	for k := range m.data {
 		keys = append(keys, k)
 	}
+
 	return keys, nil
 }

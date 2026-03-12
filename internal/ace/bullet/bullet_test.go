@@ -15,7 +15,7 @@ func TestNew_AutoGeneratesID(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, b.ID)
-	assert.Len(t, b.ID, 36) // UUID v4 format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+	assert.Len(t, b.ID, 36) // UUID v4 format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
 }
 
 func TestNew_StoresContentAndTimestamps(t *testing.T) {
@@ -25,15 +25,16 @@ func TestNew_StoresContentAndTimestamps(t *testing.T) {
 	b, err := bullet.New(content)
 
 	after := time.Now()
+
 	require.NoError(t, err)
 	assert.Equal(t, content, b.Content)
 	assert.True(t, b.CreatedAt.After(before) || b.CreatedAt.Equal(before))
 	assert.True(t, b.UpdatedAt.Before(after) || b.UpdatedAt.Equal(after))
-	assert.Equal(t, b.CreatedAt, b.UpdatedAt) // Initially equal
+	assert.Equal(t, b.CreatedAt, b.UpdatedAt) // Initially equal.
 }
 
 func TestNew_RejectsContentTooLong(t *testing.T) {
-	// Create content longer than 2048 characters
+	// Create content longer than 2048 characters.
 	longContent := string(make([]byte, 2049))
 
 	b, err := bullet.New(longContent)
@@ -50,18 +51,18 @@ func TestBullet_CloneWithEmbedding(t *testing.T) {
 
 	clone := original.Clone()
 
-	// Verify embedding is copied
+	// Verify embedding is copied.
 	assert.Equal(t, original.Embedding, clone.Embedding)
 	assert.Len(t, clone.Embedding, 5)
 
-	// Verify deep copy (modifying clone doesn't affect original)
+	// Verify deep copy (modifying clone doesn't affect original).
 	clone.Embedding[0] = 0.9
 	assert.Equal(t, float32(0.1), original.Embedding[0])
 	assert.Equal(t, float32(0.9), clone.Embedding[0])
 }
 
 func TestBullet_CloneWithoutOptionalFields(t *testing.T) {
-	// Test cloning bullet without embedding or tags
+	// Test cloning bullet without embedding or tags.
 	original, err := bullet.New("simple content")
 	require.NoError(t, err)
 
@@ -148,11 +149,12 @@ func TestBullet_Score(t *testing.T) {
 			b, err := bullet.New("test content")
 			require.NoError(t, err)
 
-			// Set counters
-			for i := 0; i < tt.helpful; i++ {
+			// Set counters.
+			for range tt.helpful {
 				b.IncrementHelpful()
 			}
-			for i := 0; i < tt.harmful; i++ {
+
+			for range tt.harmful {
 				b.IncrementHarmful()
 			}
 
@@ -172,7 +174,7 @@ func TestBullet_Clone(t *testing.T) {
 
 	clone := original.Clone()
 
-	// Verify clone has same values
+	// Verify clone has same values.
 	assert.Equal(t, original.ID, clone.ID)
 	assert.Equal(t, original.Content, clone.Content)
 	assert.Equal(t, original.HelpfulCount, clone.HelpfulCount)
@@ -181,7 +183,7 @@ func TestBullet_Clone(t *testing.T) {
 	assert.Equal(t, original.UpdatedAt, clone.UpdatedAt)
 	assert.Equal(t, original.Tags, clone.Tags)
 
-	// Verify clone is independent (modifying clone doesn't affect original)
+	// Verify clone is independent (modifying clone doesn't affect original).
 	clone.Content = "modified content"
 	clone.IncrementHelpful()
 	clone.Tags["new"] = "tag"

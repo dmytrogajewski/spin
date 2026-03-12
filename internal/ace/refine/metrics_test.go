@@ -15,12 +15,15 @@ func TestDefaultGrowthThresholds(t *testing.T) {
 	if thresholds.MaxBullets <= 0 {
 		t.Error("expected positive MaxBullets")
 	}
+
 	if thresholds.MaxTokens <= 0 {
 		t.Error("expected positive MaxTokens")
 	}
+
 	if thresholds.MinUtility <= 0 {
 		t.Error("expected positive MinUtility")
 	}
+
 	if thresholds.CheckInterval <= 0 {
 		t.Error("expected positive CheckInterval")
 	}
@@ -35,6 +38,7 @@ func TestNewGrowthMonitor(t *testing.T) {
 	if monitor.playbook != pb {
 		t.Error("expected playbook to be set")
 	}
+
 	if monitor.thresholds.MaxBullets != thresholds.MaxBullets {
 		t.Error("expected thresholds to be set")
 	}
@@ -51,18 +55,19 @@ func TestGrowthMonitor_CheckGrowth(t *testing.T) {
 
 	monitor := NewGrowthMonitor(pb, thresholds)
 
-	// Initial check (empty playbook)
+	// Initial check (empty playbook).
 	metrics, needsRefine := monitor.CheckGrowth(ctx)
 
 	if metrics.BulletCount != 0 {
 		t.Errorf("expected 0 bullets, got %d", metrics.BulletCount)
 	}
+
 	if needsRefine {
 		t.Error("expected no refinement needed for empty playbook")
 	}
 
-	// Add some bullets
-	for i := 0; i < 5; i++ {
+	// Add some bullets.
+	for range 5 {
 		b, _ := bullet.New("Test content")
 		b.IncrementHelpful()
 		pb.Add(ctx, b)
@@ -73,9 +78,11 @@ func TestGrowthMonitor_CheckGrowth(t *testing.T) {
 	if metrics.BulletCount != 5 {
 		t.Errorf("expected 5 bullets, got %d", metrics.BulletCount)
 	}
+
 	if metrics.EstimatedTokens <= 0 {
 		t.Error("expected positive token estimate")
 	}
+
 	if needsRefine {
 		t.Error("expected no refinement needed (below threshold)")
 	}
@@ -114,7 +121,7 @@ func TestGrowthMonitor_ThresholdTriggers(t *testing.T) {
 			name: "exceeds token threshold",
 			thresholds: GrowthThresholds{
 				MaxBullets: 1000,
-				MaxTokens:  100, // 100 tokens = ~2 bullets at 50 tokens each
+				MaxTokens:  100, // 100 tokens = ~2 bullets at 50 tokens each.
 				MinUtility: 0.1,
 			},
 			bulletCount:   5,
@@ -124,12 +131,12 @@ func TestGrowthMonitor_ThresholdTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create fresh playbook for each test
+			// Create fresh playbook for each test.
 			testPb := playbook.New(nil, nil)
 			monitor := NewGrowthMonitor(testPb, tt.thresholds)
 
-			// Add bullets
-			for i := 0; i < tt.bulletCount; i++ {
+			// Add bullets.
+			for range tt.bulletCount {
 				b, _ := bullet.New("Test content")
 				b.IncrementHelpful()
 				testPb.Add(ctx, b)
@@ -149,16 +156,16 @@ func TestGrowthMonitor_GetMetrics(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	monitor := NewGrowthMonitor(pb, DefaultGrowthThresholds())
 
-	// Add bullets
-	for i := 0; i < 3; i++ {
+	// Add bullets.
+	for range 3 {
 		b, _ := bullet.New("Test content")
 		pb.Add(ctx, b)
 	}
 
-	// First check to populate metrics
+	// First check to populate metrics.
 	monitor.CheckGrowth(ctx)
 
-	// Get metrics without checking
+	// Get metrics without checking.
 	metrics := monitor.GetMetrics()
 
 	if metrics.BulletCount != 3 {
@@ -170,23 +177,26 @@ func TestGrowthMonitor_MarkRefinement(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	monitor := NewGrowthMonitor(pb, DefaultGrowthThresholds())
 
-	// Initially zero
+	// Initially zero.
 	metrics := monitor.GetMetrics()
 	if !metrics.LastRefinement.IsZero() {
 		t.Error("expected zero LastRefinement initially")
 	}
 
-	// Mark refinement
+	// Mark refinement.
 	before := time.Now()
+
 	time.Sleep(1 * time.Millisecond)
 	monitor.MarkRefinement()
 	time.Sleep(1 * time.Millisecond)
+
 	after := time.Now()
 
 	metrics = monitor.GetMetrics()
 	if metrics.LastRefinement.IsZero() {
 		t.Error("expected non-zero LastRefinement after marking")
 	}
+
 	if metrics.LastRefinement.Before(before) || metrics.LastRefinement.After(after) {
 		t.Error("expected LastRefinement to be between before and after times")
 	}
@@ -197,8 +207,8 @@ func TestGrowthMonitor_GrowthRate(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	monitor := NewGrowthMonitor(pb, DefaultGrowthThresholds())
 
-	// Add bullets over time
-	for i := 0; i < 5; i++ {
+	// Add bullets over time.
+	for range 5 {
 		b, _ := bullet.New("Test content")
 		pb.Add(ctx, b)
 		monitor.CheckGrowth(ctx)
@@ -207,7 +217,7 @@ func TestGrowthMonitor_GrowthRate(t *testing.T) {
 
 	metrics := monitor.GetMetrics()
 
-	// Growth rate should be calculated (may be 0 for short time periods)
+	// Growth rate should be calculated (may be 0 for short time periods).
 	if metrics.GrowthRate < 0 {
 		t.Errorf("expected non-negative growth rate, got %f", metrics.GrowthRate)
 	}
@@ -218,8 +228,8 @@ func TestGrowthMonitor_HistoryLimit(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	monitor := NewGrowthMonitor(pb, DefaultGrowthThresholds())
 
-	// Add 150 data points (more than the 100 limit)
-	for i := 0; i < 150; i++ {
+	// Add 150 data points (more than the 100 limit).
+	for range 150 {
 		b, _ := bullet.New("Test content")
 		pb.Add(ctx, b)
 		monitor.CheckGrowth(ctx)
@@ -243,21 +253,21 @@ func TestGrowthMonitor_ShouldRefine(t *testing.T) {
 
 	monitor := NewGrowthMonitor(pb, thresholds)
 
-	// Initially should not refine
+	// Initially should not refine.
 	if monitor.ShouldRefine() {
 		t.Error("expected ShouldRefine=false initially")
 	}
 
-	// Add bullets to exceed threshold
-	for i := 0; i < 6; i++ {
+	// Add bullets to exceed threshold.
+	for range 6 {
 		b, _ := bullet.New("Test content")
 		pb.Add(ctx, b)
 	}
 
-	// Check to update metrics
+	// Check to update metrics.
 	monitor.CheckGrowth(ctx)
 
-	// Now should refine
+	// Now should refine.
 	if !monitor.ShouldRefine() {
 		t.Error("expected ShouldRefine=true after exceeding threshold")
 	}
@@ -268,31 +278,33 @@ func TestGrowthMonitor_Concurrency(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	monitor := NewGrowthMonitor(pb, DefaultGrowthThresholds())
 
-	// Add initial bullets
-	for i := 0; i < 10; i++ {
+	// Add initial bullets.
+	for range 10 {
 		b, _ := bullet.New("Test content")
 		pb.Add(ctx, b)
 	}
 
 	const goroutines = 10
+
 	done := make(chan bool, goroutines)
 
-	// Concurrent reads
-	for g := 0; g < goroutines; g++ {
+	// Concurrent reads.
+	for range goroutines {
 		go func() {
-			for i := 0; i < 10; i++ {
+			for range 10 {
 				monitor.CheckGrowth(ctx)
 				monitor.GetMetrics()
 				monitor.ShouldRefine()
 			}
+
 			done <- true
 		}()
 	}
 
-	// Wait for completion
-	for g := 0; g < goroutines; g++ {
+	// Wait for completion.
+	for range goroutines {
 		<-done
 	}
 
-	// Should not panic or cause race conditions
+	// Should not panic or cause race conditions.
 }

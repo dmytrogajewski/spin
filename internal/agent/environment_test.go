@@ -12,7 +12,7 @@ import (
 func TestGatherEnvironment(t *testing.T) {
 	workDir := t.TempDir()
 
-	// Create some test files
+	// Create some test files.
 	testFile := filepath.Join(workDir, "test.go")
 	err := os.WriteFile(testFile, []byte("package main\n\nfunc main() {\n\tprintln(\"hello\")\n}"), 0644)
 	require.NoError(t, err)
@@ -30,14 +30,14 @@ func TestGatherEnvironment(t *testing.T) {
 func TestGatherEnvironment_WithOptions(t *testing.T) {
 	workDir := t.TempDir()
 
-	// Create some test files
-	for i := 0; i < 5; i++ {
+	// Create some test files.
+	for i := range 5 {
 		testFile := filepath.Join(workDir, "test"+string(rune(i+'0'))+".go")
 		err := os.WriteFile(testFile, []byte("package main"), 0644)
 		require.NoError(t, err)
 	}
 
-	// Test with max files limit
+	// Test with max files limit.
 	env, err := GatherEnvironment(workDir, WithMaxFiles(2))
 	require.NoError(t, err)
 	assert.NotNil(t, env)
@@ -56,7 +56,7 @@ func TestGatherEnvironment_WithSkipGit(t *testing.T) {
 func TestGatherEnvironment_WithMaxDepth(t *testing.T) {
 	workDir := t.TempDir()
 
-	// Create nested directories
+	// Create nested directories.
 	subDir := filepath.Join(workDir, "subdir")
 	err := os.Mkdir(subDir, 0755)
 	require.NoError(t, err)
@@ -142,7 +142,7 @@ func TestDetectLanguageFromExt(t *testing.T) {
 func TestCountLines(t *testing.T) {
 	workDir := t.TempDir()
 
-	// Create a test file with known line count
+	// Create a test file with known line count.
 	testFile := filepath.Join(workDir, "test.txt")
 	content := "line1\nline2\nline3\n"
 	err := os.WriteFile(testFile, []byte(content), 0644)
@@ -216,7 +216,7 @@ func TestDetectLanguages(t *testing.T) {
 	assert.Contains(t, languages, "go")
 	assert.Contains(t, languages, "python")
 	assert.Contains(t, languages, "javascript")
-	// README.md with empty language might add an entry, so check at least 3
+	// README.md with empty language might add an entry, so check at least 3.
 	assert.GreaterOrEqual(t, len(languages), 3)
 }
 
@@ -238,14 +238,14 @@ func TestFilterEnvironment(t *testing.T) {
 
 	filtered := filterEnvironment(env)
 
-	// Should include non-sensitive variables
+	// Should include non-sensitive variables.
 	assert.Contains(t, filtered, "PATH")
 	assert.Contains(t, filtered, "HOME")
 	assert.Contains(t, filtered, "USER")
 	assert.Contains(t, filtered, "DEBUG")
 	assert.Contains(t, filtered, "PORT")
 
-	// Should exclude sensitive variables
+	// Should exclude sensitive variables.
 	assert.NotContains(t, filtered, "SECRET_KEY")
 	assert.NotContains(t, filtered, "API_KEY")
 }

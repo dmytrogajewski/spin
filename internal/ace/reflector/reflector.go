@@ -8,16 +8,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/openai/openai-go"
+
+	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
 // Reflector analyzes trajectories to extract insights.
 type Reflector interface {
-	// Reflect analyzes trajectories and extracts insights
+	// Reflect analyzes trajectories and extracts insights.
 	Reflect(ctx context.Context, req ReflectionRequest) (*ReflectionResponse, error)
 
-	// RefineInsights improves insights through multiple iterations
+	// RefineInsights improves insights through multiple iterations.
 	RefineInsights(ctx context.Context, insights []*Insight, iterations int) ([]*Insight, error)
 }
 
@@ -45,7 +46,7 @@ func NewReflector(llmProvider llm.Provider, opts ...Option) Reflector {
 		llm:           llmProvider,
 		promptBuilder: NewPromptBuilder(),
 		validator:     NewInsightValidator(),
-		maxTokens:     4096, // Default max tokens for LLM calls
+		maxTokens:     4096, // Default max tokens for LLM calls.
 	}
 
 	for _, opt := range opts {
@@ -61,9 +62,10 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 
 	slog.Debug("Reflector starting analysis", "num_trajectories", len(req.Trajectories))
 
-	// Handle empty trajectory list
+	// Handle empty trajectory list.
 	if len(req.Trajectories) == 0 {
 		slog.Debug("No trajectories to reflect on")
+
 		return &ReflectionResponse{
 			Insights:    []*Insight{},
 			Iterations:  0,
@@ -72,12 +74,14 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		}, nil
 	}
 
-	// Build prompt based on number of trajectories
-	var prompt string
-	var sourceID string
+	// Build prompt based on number of trajectories.
+	var (
+		prompt   string
+		sourceID string
+	)
 
 	if len(req.Trajectories) == 1 {
-		// Single trajectory
+		// Single trajectory.
 		traj := req.Trajectories[0]
 		slog.Debug("Building prompt for single trajectory",
 			"id", traj.ID,
@@ -87,7 +91,7 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		prompt = r.promptBuilder.BuildSingleTrajectory(traj)
 		sourceID = traj.ID
 	} else {
-		// Multiple trajectories - batch analysis
+		// Multiple trajectories - batch analysis.
 		slog.Debug("Building prompt for batch trajectories", "count", len(req.Trajectories))
 		prompt = r.promptBuilder.BuildBatchTrajectory(req.Trajectories)
 		sourceID = "batch"
@@ -96,7 +100,7 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 	slog.Debug("Reflector prompt generated", "length", len(prompt))
 	slog.Debug("Reflector prompt content", "prompt", prompt)
 
-	// Call LLM
+	// Call LLM.
 	params := openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
@@ -104,7 +108,7 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		Temperature: openai.F(0.3),
 	}
 
-	// Set MaxTokens if configured
+	// Set MaxTokens if configured.
 	if r.maxTokens > 0 {
 		params.MaxTokens = openai.F(int64(r.maxTokens))
 	}
@@ -114,10 +118,11 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 	completion, err := r.llm.Complete(ctx, params)
 	if err != nil {
 		slog.Warn("LLM call failed during reflection", "error", err)
+
 		return nil, err
 	}
 
-	// Parse JSON response into insights
+	// Parse JSON response into insights.
 	responseText := completion.Choices[0].Message.Content
 
 	slog.Debug("LLM response received",
@@ -125,10 +130,10 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		"tokens", completion.Usage.TotalTokens)
 	slog.Debug("LLM response content", "response", responseText)
 
-	// Clean response text to extract JSON from markdown code blocks
+	// Clean response text to extract JSON from markdown code blocks.
 	responseText = cleanJSONResponse(responseText)
 
-	// Try to parse as detailed reflection response (object) first
+	// Try to parse as detailed reflection response (object) first.
 	var reflectionResp struct {
 		Reasoning           string  `json:"reasoning"`
 		ErrorIdentification string  `json:"error_identification"`
@@ -141,35 +146,40 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 
 	insights := make([]*Insight, 0, 1)
 
-	if err := json.Unmarshal([]byte(responseText), &reflectionResp); err == nil && reflectionResp.KeyInsight != "" {
-		// Successfully parsed as detailed object format
+	err = json.Unmarshal([]byte(responseText), &reflectionResp)
+	if err == nil && reflectionResp.KeyInsight != "" {
+		// Successfully parsed as detailed object format.
 		insight := NewInsight(reflectionResp.KeyInsight, InsightCategory(reflectionResp.Category))
 		insight.Source = sourceID
 		insight.Confidence = reflectionResp.Confidence
 
-		// Build evidence from the analysis
+		// Build evidence from the analysis.
 		evidence := make([]string, 0, 3)
 		if reflectionResp.ErrorIdentification != "" && reflectionResp.ErrorIdentification != "N/A" {
 			evidence = append(evidence, reflectionResp.ErrorIdentification)
 		}
+
 		if reflectionResp.RootCauseAnalysis != "" {
 			evidence = append(evidence, reflectionResp.RootCauseAnalysis)
 		}
+
 		if reflectionResp.CorrectApproach != "" {
 			evidence = append(evidence, reflectionResp.CorrectApproach)
 		}
+
 		insight.Evidence = evidence
 		insight.Iteration = 0
 		insight.CreatedAt = time.Now()
 
-		// Validate insight before adding
-		if err := r.validator.Validate(insight); err == nil {
+		// Validate insight before adding.
+		err := r.validator.Validate(insight)
+		if err == nil {
 			insights = append(insights, insight)
 		} else {
 			slog.Debug("Insight validation failed", "error", err, "content", insight.Content)
 		}
 	} else {
-		// Try parsing as simplified array format (for compatibility with tests/simple responses)
+		// Try parsing as simplified array format (for compatibility with tests/simple responses).
 		type simplifiedInsight struct {
 			Content    string   `json:"content"`
 			Evidence   []string `json:"evidence"`
@@ -178,12 +188,14 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		}
 
 		var simpleInsights []simplifiedInsight
-		if err := json.Unmarshal([]byte(responseText), &simpleInsights); err != nil {
+		err := json.Unmarshal([]byte(responseText), &simpleInsights)
+		if err != nil {
 			slog.Warn("Failed to parse reflection response in both formats", "error", err, "response", responseText)
+
 			return nil, fmt.Errorf("failed to parse reflection response: %w", err)
 		}
 
-		// Convert simplified insights
+		// Convert simplified insights.
 		for _, simple := range simpleInsights {
 			insight := NewInsight(simple.Content, InsightCategory(simple.Category))
 			insight.Source = sourceID
@@ -192,8 +204,9 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 			insight.Iteration = 0
 			insight.CreatedAt = time.Now()
 
-			// Validate insight before adding
-			if err := r.validator.Validate(insight); err == nil {
+			// Validate insight before adding.
+			err := r.validator.Validate(insight)
+			if err == nil {
 				insights = append(insights, insight)
 			} else {
 				slog.Debug("Insight validation failed", "error", err, "content", insight.Content)
@@ -211,21 +224,22 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 
 // RefineInsights improves insights through multiple iterations.
 func (r *reflector) RefineInsights(ctx context.Context, insights []*Insight, iterations int) ([]*Insight, error) {
-	// Handle empty input
+	// Handle empty input.
 	if len(insights) == 0 {
 		return []*Insight{}, nil
 	}
 
-	// Start with current insights
+	// Start with current insights.
 	current := make([]*Insight, len(insights))
 	copy(current, insights)
 
-	// Perform refinement iterations
-	for i := 0; i < iterations; i++ {
+	// Perform refinement iterations.
+	for i := range iterations {
 		refined, err := r.refineOnce(ctx, current, i+1)
 		if err != nil {
 			return nil, err
 		}
+
 		current = refined
 	}
 
@@ -234,10 +248,10 @@ func (r *reflector) RefineInsights(ctx context.Context, insights []*Insight, ite
 
 // refineOnce performs one refinement iteration on insights.
 func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iteration int) ([]*Insight, error) {
-	// Build refinement prompt
+	// Build refinement prompt.
 	prompt := r.promptBuilder.BuildRefinementPrompt(insights)
 
-	// Call LLM
+	// Call LLM.
 	params := openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
@@ -245,7 +259,7 @@ func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iterati
 		Temperature: openai.F(0.3),
 	}
 
-	// Set MaxTokens if configured
+	// Set MaxTokens if configured.
 	if r.maxTokens > 0 {
 		params.MaxTokens = openai.F(int64(r.maxTokens))
 	}
@@ -255,13 +269,13 @@ func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iterati
 		return nil, err
 	}
 
-	// Parse JSON response
+	// Parse JSON response.
 	responseText := completion.Choices[0].Message.Content
 
-	// Clean response text to extract JSON from markdown code blocks
+	// Clean response text to extract JSON from markdown code blocks.
 	responseText = cleanJSONResponse(responseText)
 
-	// Parse refinement response as array of insights
+	// Parse refinement response as array of insights.
 	type refinedInsightResponse struct {
 		Content    string   `json:"content"`
 		Evidence   []string `json:"evidence"`
@@ -270,21 +284,23 @@ func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iterati
 	}
 
 	var rawInsights []refinedInsightResponse
-	if err := json.Unmarshal([]byte(responseText), &rawInsights); err != nil {
+	err = json.Unmarshal([]byte(responseText), &rawInsights)
+	if err != nil {
 		slog.Warn("Failed to parse refinement response", "error", err)
+
 		return nil, fmt.Errorf("failed to parse refinement response: %w", err)
 	}
 
-	// Convert to Insight structs with updated iteration
+	// Convert to Insight structs with updated iteration.
 	refined := make([]*Insight, 0, len(rawInsights))
 	for i, raw := range rawInsights {
-		// Use source from original insight if available
+		// Use source from original insight if available.
 		source := ""
 		if i < len(insights) {
 			source = insights[i].Source
 		}
 
-		// Create insight using constructor
+		// Create insight using constructor.
 		insight := NewInsight(raw.Content, InsightCategory(raw.Category))
 		insight.Source = source
 		insight.Confidence = raw.Confidence
@@ -300,18 +316,18 @@ func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iterati
 // cleanJSONResponse extracts JSON content from markdown code blocks.
 // LLMs often wrap JSON responses in ```json ... ``` blocks, which need to be removed.
 func cleanJSONResponse(response string) string {
-	// Trim whitespace
+	// Trim whitespace.
 	response = strings.TrimSpace(response)
 
-	// Check for markdown code block with ```json or just ```
-	if strings.HasPrefix(response, "```json") {
-		// Remove ```json prefix and ``` suffix
-		response = strings.TrimPrefix(response, "```json")
+	// Check for markdown code block with ```json or just ```.
+	if after, ok := strings.CutPrefix(response, "```json"); ok {
+		// Remove ```json prefix and ``` suffix.
+		response = after
 		response = strings.TrimSuffix(response, "```")
 		response = strings.TrimSpace(response)
-	} else if strings.HasPrefix(response, "```") {
-		// Remove ``` prefix and ``` suffix
-		response = strings.TrimPrefix(response, "```")
+	} else if after, ok := strings.CutPrefix(response, "```"); ok {
+		// Remove ``` prefix and ``` suffix.
+		response = after
 		response = strings.TrimSuffix(response, "```")
 		response = strings.TrimSpace(response)
 	}

@@ -24,6 +24,7 @@ func NewFakeWriter() *FakeWriter {
 func (f *FakeWriter) Write(p []byte) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	return f.buf.Write(p)
 }
 
@@ -31,6 +32,7 @@ func (f *FakeWriter) Write(p []byte) (int, error) {
 func (f *FakeWriter) Snapshot() string {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
 	return f.buf.String()
 }
 
@@ -38,6 +40,7 @@ func (f *FakeWriter) Snapshot() string {
 func (f *FakeWriter) Reset() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	f.buf.Reset()
 }
 
@@ -45,6 +48,7 @@ func (f *FakeWriter) Reset() {
 func (f *FakeWriter) Contains(s string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
 	return strings.Contains(f.buf.String(), s)
 }
 
@@ -52,6 +56,7 @@ func (f *FakeWriter) Contains(s string) bool {
 func (f *FakeWriter) ContainsANSI(seq string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
 	return strings.Contains(f.buf.String(), seq)
 }
 
@@ -59,9 +64,11 @@ func (f *FakeWriter) ContainsANSI(seq string) bool {
 func (f *FakeWriter) StripANSI() string {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
 	content := f.buf.String()
-	// Remove ANSI escape sequences
+	// Remove ANSI escape sequences.
 	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
 	return ansiRegex.ReplaceAllString(content, "")
 }
 
@@ -69,6 +76,7 @@ func (f *FakeWriter) StripANSI() string {
 func (f *FakeWriter) Lines() []string {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
 	return strings.Split(f.buf.String(), "\n")
 }
 
@@ -76,6 +84,7 @@ func (f *FakeWriter) Lines() []string {
 // Returns true if content was found, false on timeout.
 func (f *FakeWriter) WaitForContent(s string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
+
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -83,11 +92,13 @@ func (f *FakeWriter) WaitForContent(s string, timeout time.Duration) bool {
 		if f.Contains(s) {
 			return true
 		}
+
 		select {
 		case <-ticker.C:
 			continue
 		}
 	}
+
 	return false
 }
 
@@ -95,12 +106,6 @@ func (f *FakeWriter) WaitForContent(s string, timeout time.Duration) bool {
 func (f *FakeWriter) Len() int {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+
 	return f.buf.Len()
 }
-
-
-
-
-
-
-

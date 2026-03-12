@@ -16,11 +16,6 @@ llm:
   # Request timeout
   timeout: 30s
 
-  # Optional: VRAM auto-tuning
-  auto_tune: true
-  vram:
-    headroom_mib: 1024
-
   # No authentication required for local Ollama
   # key_name: (not needed)
   # api_key: (not needed)

@@ -12,8 +12,8 @@ type ApprovalDialog struct {
 	response   *security.ApprovalResponse
 	width      int
 	height     int
-	selected   int  // 0=Approve, 1=Deny, 2=Cancel
-	shown      bool // tracks if Show() has been called
+	selected   int  // 0=Approve, 1=Deny, 2=Cancel.
+	shown      bool // tracks if Show() has been called.
 	responseCh chan security.ApprovalResponse
 }
 
@@ -21,7 +21,7 @@ type ApprovalDialog struct {
 func NewApprovalDialog(request security.ApprovalRequest) *ApprovalDialog {
 	return &ApprovalDialog{
 		request:    &request,
-		selected:   0, // Default to Approve
+		selected:   0, // Default to Approve.
 		responseCh: make(chan security.ApprovalResponse, 1),
 	}
 }
@@ -35,7 +35,7 @@ func (d *ApprovalDialog) SetDimensions(width, height int) {
 // Render renders the approval dialog.
 // Returns empty string since we now use status bar instead of modal dialog.
 func (d *ApprovalDialog) Render(width, height int) string {
-	// No longer render modal dialog - status bar handles the display
+	// No longer render modal dialog - status bar handles the display.
 	return ""
 }
 
@@ -46,41 +46,47 @@ func (d *ApprovalDialog) HandleKey(key string) bool {
 		return false
 	}
 
-	// Check first character of key
+	// Check first character of key.
 	switch key[0] {
 	case 'A', 'a':
-		// Approve once
+		// Approve once.
 		d.approveWithScope(security.ScopeOnce)
+
 		return true
 	case 'S', 's':
-		// Approve for session
+		// Approve for session.
 		d.approveWithScope(security.ScopeSession)
+
 		return true
 	case 'G', 'g':
-		// Approve always (global)
+		// Approve always (global).
 		d.approveWithScope(security.ScopeGlobal)
+
 		return true
 	case 'D', 'd':
 		d.Deny()
+
 		return true
-	case '\x1b': // ESC
-		// Cancel - deny with cancelled reason
+	case '\x1b': // ESC.
+		// Cancel - deny with canceled reason.
 		resp := security.ApprovalResponse{
 			RequestID: d.request.ID,
 			Approved:  false,
-			Reason:    "cancelled",
+			Reason:    "canceled",
 		}
+
 		d.response = &resp
 		select {
 		case d.responseCh <- resp:
 		default:
 		}
+
 		return true
 	case '?':
-		// Help - don't close
+		// Help - don't close.
 		return false
 	default:
-		// Other keys - don't close
+		// Other keys - don't close.
 		return false
 	}
 }
@@ -92,29 +98,31 @@ func (d *ApprovalDialog) GetResponse() *security.ApprovalResponse {
 
 // Show displays the approval dialog and waits for user input.
 func (d *ApprovalDialog) Show(ctx context.Context) security.ApprovalResponse {
-	// Mark as shown
+	// Mark as shown.
 	d.shown = true
 
-	// Wait for response from Approve/Deny or context cancellation
+	// Wait for response from Approve/Deny or context cancellation.
 	select {
 	case resp := <-d.responseCh:
 		d.response = &resp
+
 		return resp
 	case <-ctx.Done():
-		// Context cancelled
+		// Context canceled.
 		resp := security.ApprovalResponse{
 			RequestID: d.request.ID,
 			Approved:  false,
-			Reason:    "cancelled",
+			Reason:    "canceled",
 		}
 		d.response = &resp
+
 		return resp
 	}
 }
 
 // IsVisible returns whether the dialog is currently visible.
 func (d *ApprovalDialog) IsVisible() bool {
-	// Dialog is visible if Show() has been called and not responded to
+	// Dialog is visible if Show() has been called and not responded to.
 	return d.shown && d.response == nil
 }
 
@@ -126,11 +134,11 @@ func (d *ApprovalDialog) Approve() {
 		Reason:    "user approved",
 	}
 	d.response = &resp
-	// Send to channel if Show() is waiting
+	// Send to channel if Show() is waiting.
 	select {
 	case d.responseCh <- resp:
 	default:
-		// Channel already has a response or not being read
+		// Channel already has a response or not being read.
 	}
 }
 
@@ -143,11 +151,11 @@ func (d *ApprovalDialog) approveWithScope(scope string) {
 		Scope:     scope,
 	}
 	d.response = &resp
-	// Send to channel if Show() is waiting
+	// Send to channel if Show() is waiting.
 	select {
 	case d.responseCh <- resp:
 	default:
-		// Channel already has a response or not being read
+		// Channel already has a response or not being read.
 	}
 }
 
@@ -159,10 +167,10 @@ func (d *ApprovalDialog) Deny() {
 		Reason:    "user denied",
 	}
 	d.response = &resp
-	// Send to channel if Show() is waiting
+	// Send to channel if Show() is waiting.
 	select {
 	case d.responseCh <- resp:
 	default:
-		// Channel already has a response or not being read
+		// Channel already has a response or not being read.
 	}
 }

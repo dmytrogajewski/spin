@@ -2,7 +2,7 @@ package acp
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 	"log/slog"
 	"strings"
@@ -11,6 +11,9 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/cycle"
 	"github.com/dmytrogajewski/spin/internal/detection"
@@ -23,8 +26,6 @@ import (
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/dmytrogajewski/spin/internal/tools"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestSpinACPAgent_Prompt_InvalidSession tests Prompt with invalid session ID.
@@ -60,7 +61,7 @@ func TestSpinACPAgent_Prompt_EmptyPrompt(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create a session first
+	// Create a session first.
 	sessionReq := acp.NewSessionRequest{
 		Cwd: "/tmp/test",
 	}
@@ -69,7 +70,7 @@ func TestSpinACPAgent_Prompt_EmptyPrompt(t *testing.T) {
 
 	req := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
-		Prompt:    []acp.ContentBlock{}, // Empty prompt
+		Prompt:    []acp.ContentBlock{}, // Empty prompt.
 	}
 
 	_, err = acpAgent.Prompt(context.Background(), req)
@@ -89,7 +90,7 @@ func TestSpinACPAgent_Prompt_Success(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create a session first
+	// Create a session first.
 	sessionReq := acp.NewSessionRequest{
 		Cwd: t.TempDir(),
 	}
@@ -114,6 +115,7 @@ func TestAgentEmitterStreams(t *testing.T) {
 
 	subID, ch, err := emitter.Subscribe()
 	require.NoError(t, err)
+
 	defer emitter.Unsubscribe(subID)
 
 	req := &agent.AgentRequest{
@@ -122,12 +124,13 @@ func TestAgentEmitterStreams(t *testing.T) {
 		History: []message.Message{},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	done := make(chan struct{})
+
 	go func() {
 		_, _ = agentInstance.Execute(ctx, req)
+
 		close(done)
 	}()
 
@@ -139,6 +142,7 @@ func TestAgentEmitterStreams(t *testing.T) {
 			}
 		default:
 		}
+
 		return false
 	}, time.Second, 10*time.Millisecond, "expected EventContentDelta from agent emitter")
 	<-done
@@ -150,6 +154,7 @@ func TestEmitterManualSubscribe(t *testing.T) {
 
 	subID, ch, err := emitter.Subscribe()
 	require.NoError(t, err)
+
 	defer emitter.Unsubscribe(subID)
 
 	req := &agent.AgentRequest{
@@ -176,6 +181,7 @@ func TestEmitterManualSubscribe(t *testing.T) {
 func createTestAgent(t *testing.T) *agent.Agent {
 	t.Helper()
 	agentInstance, _ := createTestAgentWithEmitter(t)
+
 	return agentInstance
 }
 
@@ -208,6 +214,7 @@ func createTestAgentWithEmitter(t *testing.T) (*agent.Agent, *events.EventEmitte
 		emitter,
 	)
 	require.NoError(t, err)
+
 	return agentInstance, emitter
 }
 
@@ -225,20 +232,20 @@ func TestSpinACPAgent_Prompt_SendsNotifications(t *testing.T) {
 	mockConn := &mockConnection{}
 	acpAgent.SetNotificationSender(mockConn)
 
-	// Create a session to obtain session ID
+	// Create a session to obtain session ID.
 	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{
 		Cwd: t.TempDir(),
 	})
 	require.NoError(t, err)
 
-	// Execute prompt
+	// Execute prompt.
 	_, err = acpAgent.Prompt(context.Background(), acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt:    []acp.ContentBlock{acp.TextBlock("hello")},
 	})
 	require.NoError(t, err)
 
-	// Ensure at least one agent_message_chunk notification is sent
+	// Ensure at least one agent_message_chunk notification is sent.
 	require.Eventually(t, func() bool {
 		for _, n := range mockConn.GetNotifications() {
 			if chunk := n.Update.AgentMessageChunk; chunk != nil {
@@ -247,6 +254,7 @@ func TestSpinACPAgent_Prompt_SendsNotifications(t *testing.T) {
 				}
 			}
 		}
+
 		return false
 	}, time.Second, 10*time.Millisecond, "expected agent message chunk notification")
 }
@@ -302,8 +310,10 @@ func TestSpinACPAgent_EndToEndNotifications(t *testing.T) {
 				}
 			}
 		}
+
 		time.Sleep(10 * time.Millisecond)
 	}
+
 	notifs := testClient.Notifications()
 	t.Fatalf("expected agent message chunk notification via connection, got %d notifications: %+v", len(notifs), notifs)
 }
@@ -317,17 +327,19 @@ type stubClient struct {
 func (c *stubClient) Notifications() []acp.SessionNotification {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	result := make([]acp.SessionNotification, len(c.notifications))
 	copy(result, c.notifications)
+
 	return result
 }
 
 func (c *stubClient) ReadTextFile(ctx context.Context, params acp.ReadTextFileRequest) (acp.ReadTextFileResponse, error) {
-	return acp.ReadTextFileResponse{}, fmt.Errorf("fs.readTextFile not supported in stub client")
+	return acp.ReadTextFileResponse{}, errors.New("fs.readTextFile not supported in stub client")
 }
 
 func (c *stubClient) WriteTextFile(ctx context.Context, params acp.WriteTextFileRequest) (acp.WriteTextFileResponse, error) {
-	return acp.WriteTextFileResponse{}, fmt.Errorf("fs.writeTextFile not supported in stub client")
+	return acp.WriteTextFileResponse{}, errors.New("fs.writeTextFile not supported in stub client")
 }
 
 func (c *stubClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
@@ -340,28 +352,30 @@ func (c *stubClient) RequestPermission(ctx context.Context, params acp.RequestPe
 func (c *stubClient) SessionUpdate(ctx context.Context, params acp.SessionNotification) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.notifications = append(c.notifications, params)
+
 	return nil
 }
 
 func (c *stubClient) CreateTerminal(ctx context.Context, params acp.CreateTerminalRequest) (acp.CreateTerminalResponse, error) {
-	return acp.CreateTerminalResponse{}, fmt.Errorf("terminal capability not enabled in stub client")
+	return acp.CreateTerminalResponse{}, errors.New("terminal capability not enabled in stub client")
 }
 
 func (c *stubClient) KillTerminalCommand(ctx context.Context, params acp.KillTerminalCommandRequest) (acp.KillTerminalCommandResponse, error) {
-	return acp.KillTerminalCommandResponse{}, fmt.Errorf("terminal capability not enabled in stub client")
+	return acp.KillTerminalCommandResponse{}, errors.New("terminal capability not enabled in stub client")
 }
 
 func (c *stubClient) TerminalOutput(ctx context.Context, params acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
-	return acp.TerminalOutputResponse{}, fmt.Errorf("terminal capability not enabled in stub client")
+	return acp.TerminalOutputResponse{}, errors.New("terminal capability not enabled in stub client")
 }
 
 func (c *stubClient) ReleaseTerminal(ctx context.Context, params acp.ReleaseTerminalRequest) (acp.ReleaseTerminalResponse, error) {
-	return acp.ReleaseTerminalResponse{}, fmt.Errorf("terminal capability not enabled in stub client")
+	return acp.ReleaseTerminalResponse{}, errors.New("terminal capability not enabled in stub client")
 }
 
 func (c *stubClient) WaitForTerminalExit(ctx context.Context, params acp.WaitForTerminalExitRequest) (acp.WaitForTerminalExitResponse, error) {
-	return acp.WaitForTerminalExitResponse{}, fmt.Errorf("terminal capability not enabled in stub client")
+	return acp.WaitForTerminalExitResponse{}, errors.New("terminal capability not enabled in stub client")
 }
 
 // TestSpinACPAgent_Prompt_ContentBlockConversion tests content block conversion.
@@ -375,7 +389,7 @@ func TestSpinACPAgent_Prompt_ContentBlockConversion(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create a session
+	// Create a session.
 	sessionReq := acp.NewSessionRequest{
 		Cwd: t.TempDir(),
 	}
@@ -488,6 +502,7 @@ func TestConvertACPContentBlocksToMessages(t *testing.T) {
 								Blob: "base64data",
 								MimeType: func() *string {
 									s := "image/png"
+
 									return &s
 								}(),
 								Uri: "file:///tmp/image.png",
@@ -575,7 +590,7 @@ func TestConvertACPContentBlocksToMessages(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.NotEmpty(t, messages)
-				// Verify all messages have user role
+				// Verify all messages have user role.
 				for _, msg := range messages {
 					assert.Equal(t, message.RoleUser, msg.Role)
 					assert.NotEmpty(t, msg.Content)
@@ -590,7 +605,7 @@ func TestConvertACPContentBlocksToMessages_ImageAudio(t *testing.T) {
 	tests := []struct {
 		name           string
 		block          acp.ContentBlock
-		wantContentSub string // Substring that should be in the converted content
+		wantContentSub string // Substring that should be in the converted content.
 	}{
 		{
 			name:           "image block with mime type",
@@ -604,7 +619,7 @@ func TestConvertACPContentBlocksToMessages_ImageAudio(t *testing.T) {
 					Data: "base64imagedata456",
 				},
 			},
-			wantContentSub: "[Image: image/png", // Default mime type
+			wantContentSub: "[Image: image/png", // Default mime type.
 		},
 		{
 			name:           "audio block with mime type",
@@ -618,7 +633,7 @@ func TestConvertACPContentBlocksToMessages_ImageAudio(t *testing.T) {
 					Data: "base64audiodata012",
 				},
 			},
-			wantContentSub: "[Audio: audio/mpeg", // Default mime type
+			wantContentSub: "[Audio: audio/mpeg", // Default mime type.
 		},
 	}
 
@@ -631,7 +646,7 @@ func TestConvertACPContentBlocksToMessages_ImageAudio(t *testing.T) {
 			msg := messages[0]
 			assert.Equal(t, message.RoleUser, msg.Role)
 			assert.Contains(t, msg.Content, tt.wantContentSub)
-			// Verify it includes byte count
+			// Verify it includes byte count.
 			assert.Contains(t, msg.Content, "bytes]")
 		})
 	}
@@ -667,6 +682,7 @@ func TestConvertACPContentBlocksToMessages_EnhancedResources(t *testing.T) {
 							Uri: "file:///tmp/image.png",
 							MimeType: func() *string {
 								s := "image/png"
+
 								return &s
 							}(),
 							Blob: "base64data",
@@ -698,21 +714,21 @@ func TestMapStopReason(t *testing.T) {
 		finishReason string
 		want         acp.StopReason
 	}{
-		// Spin agent finish reasons
+		// Spin agent finish reasons.
 		{"timeout", "timeout", acp.StopReasonCancelled},
 		{"error", "error", acp.StopReasonEndTurn},
 		{"empty_response", "empty_response", acp.StopReasonEndTurn},
 		{"max_tokens", "max_tokens", acp.StopReasonMaxTokens},
 		{"max_turns", "max_turns", acp.StopReasonMaxTurnRequests},
-		{"cancelled", "cancelled", acp.StopReasonCancelled},
+		{"canceled", "canceled", acp.StopReasonCancelled},
 		{"refusal", "refusal", acp.StopReasonRefusal},
-		// OpenAI finish reasons
+		// OpenAI finish reasons.
 		{"stop", "stop", acp.StopReasonEndTurn},
 		{"length", "length", acp.StopReasonMaxTokens},
 		{"tool_calls", "tool_calls", acp.StopReasonEndTurn},
 		{"content_filter", "content_filter", acp.StopReasonRefusal},
 		{"function_call", "function_call", acp.StopReasonEndTurn},
-		// Default/unknown
+		// Default/unknown.
 		{"unknown", "unknown", acp.StopReasonEndTurn},
 		{"empty", "", acp.StopReasonEndTurn},
 	}
@@ -754,7 +770,7 @@ func TestMapStopReasonFromError(t *testing.T) {
 		want acp.StopReason
 	}{
 		{
-			name: "context cancelled",
+			name: "context canceled",
 			err:  context.Canceled,
 			resp: nil,
 			want: acp.StopReasonCancelled,
@@ -767,7 +783,7 @@ func TestMapStopReasonFromError(t *testing.T) {
 		},
 		{
 			name: "error with response",
-			err:  fmt.Errorf("some error"),
+			err:  errors.New("some error"),
 			resp: &agent.AgentResponse{
 				FinishReason: "max_tokens",
 			},
@@ -775,7 +791,7 @@ func TestMapStopReasonFromError(t *testing.T) {
 		},
 		{
 			name: "error without response",
-			err:  fmt.Errorf("some error"),
+			err:  errors.New("some error"),
 			resp: nil,
 			want: acp.StopReasonEndTurn,
 		},

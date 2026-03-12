@@ -17,7 +17,7 @@ type FakeKeyboard struct {
 // NewFakeKeyboard creates a new fake keyboard.
 func NewFakeKeyboard() *FakeKeyboard {
 	return &FakeKeyboard{
-		events: make(chan term.KeyEvent, 100), // Buffered for burst input
+		events: make(chan term.KeyEvent, 100), // Buffered for burst input.
 	}
 }
 
@@ -30,9 +30,11 @@ func (f *FakeKeyboard) Events() <-chan term.KeyEvent {
 func (f *FakeKeyboard) InjectKey(kind term.KeyKind, r rune) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	if f.closed {
 		return
 	}
+
 	f.events <- term.KeyEvent{Kind: kind, Rune: r}
 }
 
@@ -82,9 +84,11 @@ func (f *FakeKeyboard) InjectBackspace() {
 func (f *FakeKeyboard) InjectPaste(text string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	if f.closed {
 		return
 	}
+
 	f.events <- term.KeyEvent{
 		Kind:  term.KeyPaste,
 		Paste: []byte(text),
@@ -95,15 +99,9 @@ func (f *FakeKeyboard) InjectPaste(text string) {
 func (f *FakeKeyboard) Close() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	if !f.closed {
 		close(f.events)
 		f.closed = true
 	}
 }
-
-
-
-
-
-
-

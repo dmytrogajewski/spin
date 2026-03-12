@@ -35,16 +35,17 @@ func TestPatternDetector_AnalyzePatterns(t *testing.T) {
 
 	detector := NewPatternDetector(config)
 
-	// Test with empty snapshots
+	// Test with empty snapshots.
 	results := detector.analyzeInternal([]Snapshot{})
 	if len(results) != 0 {
 		t.Errorf("PatternDetector.AnalyzePatterns() with empty snapshots, got %d results, want 0", len(results))
 	}
 
-	// Test with insufficient snapshots
+	// Test with insufficient snapshots.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""},
 	}
+
 	results = detector.analyzeInternal(snapshots)
 	if len(results) != 0 {
 		t.Errorf("PatternDetector.AnalyzePatterns() with insufficient snapshots, got %d results, want 0", len(results))
@@ -62,7 +63,7 @@ func TestPatternDetector_AnalyzePatterns_RepeatedPhrase(t *testing.T) {
 
 	detector := NewPatternDetector(config)
 
-	// Test with repeated phrases
+	// Test with repeated phrases.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "This is a test response with repeated phrase", ToolCalls: []string{}, Error: ""},
 		{Turn: 2, Response: "Another response with repeated phrase", ToolCalls: []string{}, Error: ""},
@@ -71,20 +72,25 @@ func TestPatternDetector_AnalyzePatterns_RepeatedPhrase(t *testing.T) {
 
 	results := detector.analyzeInternal(snapshots)
 
-	// Should detect repeated phrase pattern
+	// Should detect repeated phrase pattern.
 	found := false
+
 	for _, result := range results {
 		if result.Type == PatternRepeatedPhrase {
 			found = true
+
 			if result.Confidence <= 0.0 {
 				t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase confidence = %f, want > 0.0", result.Confidence)
 			}
+
 			if result.Details == "" {
 				t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase details should not be empty")
 			}
+
 			if result.Suggestion == "" {
 				t.Errorf("PatternDetector.AnalyzePatterns() repeated phrase suggestion should not be empty")
 			}
+
 			break
 		}
 	}
@@ -105,7 +111,7 @@ func TestPatternDetector_AnalyzePatterns_CircularReasoning(t *testing.T) {
 
 	detector := NewPatternDetector(config)
 
-	// Test with circular reasoning indicators
+	// Test with circular reasoning indicators.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "As I mentioned before, this is important", ToolCalls: []string{}, Error: ""},
 		{Turn: 2, Response: "Going back to the previous point", ToolCalls: []string{}, Error: ""},
@@ -114,20 +120,25 @@ func TestPatternDetector_AnalyzePatterns_CircularReasoning(t *testing.T) {
 
 	results := detector.analyzeInternal(snapshots)
 
-	// Should detect circular reasoning pattern
+	// Should detect circular reasoning pattern.
 	found := false
+
 	for _, result := range results {
 		if result.Type == PatternCircularReasoning {
 			found = true
+
 			if result.Confidence != 0.7 {
 				t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning confidence = %f, want 0.7", result.Confidence)
 			}
+
 			if result.Details == "" {
 				t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning details should not be empty")
 			}
+
 			if result.Suggestion == "" {
 				t.Errorf("PatternDetector.AnalyzePatterns() circular reasoning suggestion should not be empty")
 			}
+
 			break
 		}
 	}
@@ -148,7 +159,7 @@ func TestPatternDetector_AnalyzePatterns_ToolStuck(t *testing.T) {
 
 	detector := NewPatternDetector(config)
 
-	// Test with stuck tool usage
+	// Test with stuck tool usage.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""},
 		{Turn: 2, Response: "Second response", ToolCalls: []string{"tool1"}, Error: ""},
@@ -157,20 +168,25 @@ func TestPatternDetector_AnalyzePatterns_ToolStuck(t *testing.T) {
 
 	results := detector.analyzeInternal(snapshots)
 
-	// Should detect tool stuck pattern
+	// Should detect tool stuck pattern.
 	found := false
+
 	for _, result := range results {
 		if result.Type == PatternToolStuck {
 			found = true
+
 			if result.Confidence <= 0.0 {
 				t.Errorf("PatternDetector.AnalyzePatterns() tool stuck confidence = %f, want > 0.0", result.Confidence)
 			}
+
 			if result.Details == "" {
 				t.Errorf("PatternDetector.AnalyzePatterns() tool stuck details should not be empty")
 			}
+
 			if result.Suggestion == "" {
 				t.Errorf("PatternDetector.AnalyzePatterns() tool stuck suggestion should not be empty")
 			}
+
 			break
 		}
 	}
@@ -191,7 +207,7 @@ func TestPatternDetector_AnalyzePatterns_ErrorLoop(t *testing.T) {
 
 	detector := NewPatternDetector(config)
 
-	// Test with error loop
+	// Test with error loop.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{}, Error: "test error"},
 		{Turn: 2, Response: "Second response", ToolCalls: []string{}, Error: "test error"},
@@ -199,23 +215,29 @@ func TestPatternDetector_AnalyzePatterns_ErrorLoop(t *testing.T) {
 
 	results := detector.analyzeInternal(snapshots)
 
-	// Should detect error loop pattern
+	// Should detect error loop pattern.
 	found := false
+
 	for _, result := range results {
 		if result.Type == PatternErrorLoop {
 			found = true
+
 			if result.Confidence <= 0.0 {
 				t.Errorf("PatternDetector.AnalyzePatterns() error loop confidence = %f, want > 0.0", result.Confidence)
 			}
+
 			if result.Details == "" {
 				t.Errorf("PatternDetector.AnalyzePatterns() error loop details should not be empty")
 			}
+
 			if result.Suggestion == "" {
 				t.Errorf("PatternDetector.AnalyzePatterns() error loop suggestion should not be empty")
 			}
+
 			if len(result.AffectedTurns) == 0 {
 				t.Errorf("PatternDetector.AnalyzePatterns() error loop affected turns should not be empty")
 			}
+
 			break
 		}
 	}
@@ -236,7 +258,7 @@ func TestPatternDetector_AnalyzePatterns_OscillatingTools(t *testing.T) {
 
 	detector := NewPatternDetector(config)
 
-	// Test with oscillating tools
+	// Test with oscillating tools.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""},
 		{Turn: 2, Response: "Second response", ToolCalls: []string{"tool2"}, Error: ""},
@@ -246,20 +268,25 @@ func TestPatternDetector_AnalyzePatterns_OscillatingTools(t *testing.T) {
 
 	results := detector.analyzeInternal(snapshots)
 
-	// Should detect oscillating tools pattern
+	// Should detect oscillating tools pattern.
 	found := false
+
 	for _, result := range results {
 		if result.Type == PatternOscillatingTools {
 			found = true
+
 			if result.Confidence != 0.8 {
 				t.Errorf("PatternDetector.AnalyzePatterns() oscillating tools confidence = %f, want 0.8", result.Confidence)
 			}
+
 			if result.Details == "" {
 				t.Errorf("PatternDetector.AnalyzePatterns() oscillating tools details should not be empty")
 			}
+
 			if result.Suggestion == "" {
 				t.Errorf("PatternDetector.AnalyzePatterns() oscillating tools suggestion should not be empty")
 			}
+
 			break
 		}
 	}
@@ -280,7 +307,7 @@ func TestPatternType_String(t *testing.T) {
 		{PatternToolStuck, "tool_stuck"},
 		{PatternErrorLoop, "error_loop"},
 		{PatternOscillatingTools, "oscillating_tools"},
-		{PatternType(999), "none"}, // Unknown pattern type
+		{PatternType(999), "none"}, {PatternType(999), "none"}, // Unknown pattern type.
 	}
 
 	for _, tt := range tests {

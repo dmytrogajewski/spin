@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestGetAvailableModes tests that all Spin task modes are mapped to ACP session modes.
@@ -19,31 +20,31 @@ func TestGetAvailableModes(t *testing.T) {
 
 	require.Len(t, modes, 4, "should have 4 modes")
 
-	// Check each mode
+	// Check each mode.
 	modeMap := make(map[acp.SessionModeId]acp.SessionMode)
 	for _, mode := range modes {
 		modeMap[mode.Id] = mode
 	}
 
-	// Regular mode
+	// Regular mode.
 	regular, ok := modeMap["regular"]
 	require.True(t, ok, "regular mode should exist")
 	assert.Equal(t, "Regular", regular.Name)
 	assert.NotEmpty(t, regular.Description)
 
-	// Review mode
+	// Review mode.
 	review, ok := modeMap["review"]
 	require.True(t, ok, "review mode should exist")
 	assert.Equal(t, "Review", review.Name)
 	assert.NotEmpty(t, review.Description)
 
-	// Compact mode
+	// Compact mode.
 	compact, ok := modeMap["compact"]
 	require.True(t, ok, "compact mode should exist")
 	assert.Equal(t, "Compact", compact.Name)
 	assert.NotEmpty(t, compact.Description)
 
-	// Planning mode
+	// Planning mode.
 	planning, ok := modeMap["planning"]
 	require.True(t, ok, "planning mode should exist")
 	assert.Equal(t, "Planning", planning.Name)
@@ -74,10 +75,10 @@ func TestNewSession_IncludesModeState(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp.Modes, "SessionModeState should be included")
 
-	// Check available modes
+	// Check available modes.
 	assert.Len(t, resp.Modes.AvailableModes, 4, "should have 4 available modes")
 
-	// Check default mode
+	// Check default mode.
 	assert.Equal(t, acp.SessionModeId("regular"), resp.Modes.CurrentModeId, "default mode should be regular")
 }
 
@@ -111,14 +112,14 @@ func TestSetSessionMode_InvalidMode(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Create a session first
+	// Create a session first.
 	sessionReq := acp.NewSessionRequest{
 		Cwd: "/tmp/test",
 	}
 	sessionResp, err := acpAgent.NewSession(context.Background(), sessionReq)
 	require.NoError(t, err)
 
-	// Try to set invalid mode
+	// Try to set invalid mode.
 	req := acp.SetSessionModeRequest{
 		SessionId: sessionResp.SessionId,
 		ModeId:    acp.SessionModeId("invalid-mode"),
@@ -139,14 +140,14 @@ func TestSetSessionMode_Success(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Create a session first
+	// Create a session first.
 	sessionReq := acp.NewSessionRequest{
 		Cwd: "/tmp/test",
 	}
 	sessionResp, err := acpAgent.NewSession(context.Background(), sessionReq)
 	require.NoError(t, err)
 
-	// Set mode to "review"
+	// Set mode to "review".
 	req := acp.SetSessionModeRequest{
 		SessionId: sessionResp.SessionId,
 		ModeId:    acp.SessionModeId("review"),
@@ -156,7 +157,7 @@ func TestSetSessionMode_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	// Verify mode is stored
+	// Verify mode is stored.
 	acpAgent.mu.RLock()
 	storedMode, exists := acpAgent.sessionModes[sessionResp.SessionId]
 	acpAgent.mu.RUnlock()
@@ -175,14 +176,14 @@ func TestSetSessionMode_AllModes(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Create a session
+	// Create a session.
 	sessionReq := acp.NewSessionRequest{
 		Cwd: "/tmp/test",
 	}
 	sessionResp, err := acpAgent.NewSession(context.Background(), sessionReq)
 	require.NoError(t, err)
 
-	// Test all modes
+	// Test all modes.
 	modes := []acp.SessionModeId{"regular", "review", "compact", "planning"}
 
 	for _, mode := range modes {
@@ -195,7 +196,7 @@ func TestSetSessionMode_AllModes(t *testing.T) {
 		require.NoError(t, err, "should set mode %s", mode)
 		require.NotNil(t, resp)
 
-		// Verify mode is stored
+		// Verify mode is stored.
 		acpAgent.mu.RLock()
 		storedMode, exists := acpAgent.sessionModes[sessionResp.SessionId]
 		acpAgent.mu.RUnlock()
@@ -215,18 +216,18 @@ func TestSetSessionMode_SendsNotification(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Create mock connection
+	// Create mock connection.
 	mockConn := &mockConnection{}
 	acpAgent.SetNotificationSender(mockConn)
 
-	// Create a session
+	// Create a session.
 	sessionReq := acp.NewSessionRequest{
 		Cwd: "/tmp/test",
 	}
 	sessionResp, err := acpAgent.NewSession(context.Background(), sessionReq)
 	require.NoError(t, err)
 
-	// Set mode
+	// Set mode.
 	req := acp.SetSessionModeRequest{
 		SessionId: sessionResp.SessionId,
 		ModeId:    acp.SessionModeId("review"),
@@ -235,19 +236,22 @@ func TestSetSessionMode_SendsNotification(t *testing.T) {
 	_, err = acpAgent.SetSessionMode(context.Background(), req)
 	require.NoError(t, err)
 
-	// Verify notification was sent
+	// Verify notification was sent.
 	notifications := mockConn.GetNotifications()
 	require.Greater(t, len(notifications), 0, "should have at least one notification")
 
-	// Find the mode update notification
+	// Find the mode update notification.
 	found := false
+
 	for _, notif := range notifications {
 		if notif.Update.CurrentModeUpdate != nil {
 			found = true
+
 			assert.Equal(t, acp.SessionModeId("review"), notif.Update.CurrentModeUpdate.CurrentModeId)
+
 			break
 		}
 	}
+
 	assert.True(t, found, "should send CurrentModeUpdate notification")
 }
-

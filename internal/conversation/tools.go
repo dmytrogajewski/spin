@@ -1,6 +1,7 @@
 package conversation
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -12,19 +13,23 @@ import (
 // registerIntegrationTools registers tools from MCP and Git integrations.
 func (b *Builder) registerIntegrationTools(registry *tools.Registry) error {
 	if registry == nil {
-		return fmt.Errorf("tool registry is nil")
+		return errors.New("tool registry is nil")
 	}
 
 	if b.mcpService != nil {
-		if err := b.registerMCPTools(registry); err != nil {
+		err := b.registerMCPTools(registry)
+		if err != nil {
 			return fmt.Errorf("mcp tools: %w", err)
 		}
 	}
+
 	if b.gitService != nil {
-		if err := b.registerGitTools(registry); err != nil {
+		err := b.registerGitTools(registry)
+		if err != nil {
 			return fmt.Errorf("git tools: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -36,18 +41,24 @@ func (b *Builder) registerMCPTools(registry *tools.Registry) error {
 	}
 
 	var names []string
+
 	for _, t := range mcpTools {
-		if err := registry.Register(t); err != nil {
+		err := registry.Register(t)
+		if err != nil {
 			if b.logger != nil {
 				b.logger.Warn("mcp tool register failed", "tool", t.Name(), "err", err)
 			}
+
 			continue
 		}
+
 		names = append(names, t.Name())
 	}
+
 	if len(names) > 0 && b.logger != nil {
 		b.logger.Info("mcp tools registered", "tools", strings.Join(names, ", "))
 	}
+
 	return nil
 }
 
@@ -60,8 +71,9 @@ func (b *Builder) registerGitTools(registry *tools.Registry) error {
 func (b *Builder) buildToolRegistry(exec *agent.Executor, securityService *security.SecurityService, env *agent.Environment) *tools.Registry {
 	registry := b.toolRegistry
 	if registry == nil {
-		// Use shared factory to create base registry with configured tools
+		// Use shared factory to create base registry with configured tools.
 		registry = tools.NewDefaultRegistry(env.WorkDir, env)
+
 		if b.logger != nil {
 			b.logger.Debug("created tool registry with builtins")
 		}
@@ -76,24 +88,28 @@ func (b *Builder) buildToolRegistry(exec *agent.Executor, securityService *secur
 	if securityService != nil {
 		validatorAdapt = &validatorAdapter{securityService: securityService}
 	}
+
 	if b.shellService != nil {
 		shellCtxAdapt = &shellContextAdapter{shellCtx: b.shellService.GetContext()}
 	}
+
 	if exec != nil {
 		execAdapt = &executorAdapter{executor: exec}
 	}
 
 	// Replace shell_command tool with configured version (factory creates it with nil params)
 	// Other tools (get_context, apply_patch, file_search, git_context) are already configured
-	// by the factory, but we replace them again if they need different configuration
+	// by the factory, but we replace them again if they need different configuration.
 	if validatorAdapt != nil || shellCtxAdapt != nil || execAdapt != nil {
-	_ = registry.RegisterOrReplace(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
+		_ = registry.RegisterOrReplace(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
 	}
 
-	if err := b.registerIntegrationTools(registry); err != nil {
+	err := b.registerIntegrationTools(registry)
+	if err != nil {
 		if b.logger != nil {
 			b.logger.Warn("integration tools registration failed", "err", err)
 		}
 	}
+
 	return registry
 }

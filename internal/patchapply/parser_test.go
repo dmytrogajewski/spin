@@ -12,7 +12,7 @@ func TestParser_Parse(t *testing.T) {
 		want    *Patch
 		wantErr string
 	}{
-		// ========== Valid Patches ==========
+		// ========== Valid Patches ==========.
 		{
 			name:  "empty patch",
 			input: "*** Begin Patch\n*** End Patch\n",
@@ -251,7 +251,7 @@ func TestParser_Parse(t *testing.T) {
 			},
 		},
 
-		// ========== Syntax Errors ==========
+		// ========== Syntax Errors ==========.
 		{
 			name:    "missing begin marker",
 			input:   "*** End Patch\n",
@@ -295,7 +295,7 @@ invalid prefix
 			wantErr: "invalid line prefix",
 		},
 
-		// ========== Path Validation Errors ==========
+		// ========== Path Validation Errors ==========.
 		{
 			name: "add file - absolute path",
 			input: `*** Begin Patch
@@ -367,7 +367,7 @@ invalid prefix
 			wantErr: "path traversal",
 		},
 
-		// ========== Edge Cases ==========
+		// ========== Edge Cases ==========.
 		{
 			name: "add file - nested path",
 			input: `*** Begin Patch
@@ -452,25 +452,29 @@ invalid prefix
 			p := NewParser(tt.input)
 			got, err := p.Parse()
 
-			// Check error expectations
+			// Check error expectations.
 			if tt.wantErr != "" {
 				if err == nil {
 					t.Errorf("Parse() error = nil, wantErr %q", tt.wantErr)
+
 					return
 				}
+
 				if !strings.Contains(err.Error(), tt.wantErr) {
 					t.Errorf("Parse() error = %v, wantErr substring %q", err, tt.wantErr)
 				}
+
 				return
 			}
 
-			// Check for unexpected errors
+			// Check for unexpected errors.
 			if err != nil {
 				t.Errorf("Parse() unexpected error = %v", err)
+
 				return
 			}
 
-			// Compare results
+			// Compare results.
 			if !equalPatch(got, tt.want) {
 				t.Errorf("Parse() mismatch:\ngot:  %+v\nwant: %+v", got, tt.want)
 			}
@@ -482,7 +486,7 @@ func TestParser_Parse_LineNumbers(t *testing.T) {
 	tests := []struct {
 		name       string
 		input      string
-		wantErrMsg string // Expected error message including line number
+		wantErrMsg string // Expected error message including line number.
 	}{
 		{
 			name: "add file invalid line at line 4",
@@ -514,10 +518,11 @@ invalid line without prefix
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := NewParser(tt.input)
-			_, err := p.Parse()
 
+			_, err := p.Parse()
 			if err == nil {
 				t.Errorf("Parse() error = nil, want error with %q", tt.wantErrMsg)
+
 				return
 			}
 
@@ -548,26 +553,30 @@ func TestLineChangeType_String(t *testing.T) {
 	}
 }
 
-// Helper function to compare patches
+// Helper function to compare patches.
 func equalPatch(a, b *Patch) bool {
 	if a == nil && b == nil {
 		return true
 	}
+
 	if a == nil || b == nil {
 		return false
 	}
+
 	if len(a.Operations) != len(b.Operations) {
 		return false
 	}
+
 	for i := range a.Operations {
 		if !equalOperation(a.Operations[i], b.Operations[i]) {
 			return false
 		}
 	}
+
 	return true
 }
 
-// Helper function to compare operations
+// Helper function to compare operations.
 func equalOperation(a, b FileOperation) bool {
 	switch a := a.(type) {
 	case *AddFile:
@@ -575,18 +584,21 @@ func equalOperation(a, b FileOperation) bool {
 		if !ok {
 			return false
 		}
+
 		return equalAddFile(a, b)
 	case *DeleteFile:
 		b, ok := b.(*DeleteFile)
 		if !ok {
 			return false
 		}
+
 		return equalDeleteFile(a, b)
 	case *UpdateFile:
 		b, ok := b.(*UpdateFile)
 		if !ok {
 			return false
 		}
+
 		return equalUpdateFile(a, b)
 	default:
 		return false
@@ -597,14 +609,17 @@ func equalAddFile(a, b *AddFile) bool {
 	if a.FilePath != b.FilePath {
 		return false
 	}
+
 	if len(a.Lines) != len(b.Lines) {
 		return false
 	}
+
 	for i := range a.Lines {
 		if a.Lines[i] != b.Lines[i] {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -616,14 +631,17 @@ func equalUpdateFile(a, b *UpdateFile) bool {
 	if a.FilePath != b.FilePath || a.NewPath != b.NewPath {
 		return false
 	}
+
 	if len(a.Hunks) != len(b.Hunks) {
 		return false
 	}
+
 	for i := range a.Hunks {
 		if !equalHunk(&a.Hunks[i], &b.Hunks[i]) {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -631,13 +649,16 @@ func equalHunk(a, b *Hunk) bool {
 	if a.Header != b.Header {
 		return false
 	}
+
 	if len(a.Changes) != len(b.Changes) {
 		return false
 	}
+
 	for i := range a.Changes {
 		if a.Changes[i].Type != b.Changes[i].Type || a.Changes[i].Text != b.Changes[i].Text {
 			return false
 		}
 	}
+
 	return true
 }

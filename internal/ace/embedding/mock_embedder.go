@@ -29,11 +29,12 @@ func (m *MockEmbedder) Embed(ctx context.Context, text string) ([]float32, error
 		return embed, nil
 	}
 
-	// Generate simple embedding based on text length
+	// Generate simple embedding based on text length.
 	embedding := make([]float32, m.dimension)
-	for i := 0; i < m.dimension; i++ {
+	for i := range m.dimension {
 		embedding[i] = float32(len(text)%10) * 0.1
 	}
+
 	return embedding, nil
 }
 

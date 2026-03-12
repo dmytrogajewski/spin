@@ -11,8 +11,8 @@ import (
 type Aggregator struct {
 	manager      *Manager
 	startTime    time.Time
-	streamStart  time.Time // When current stream started
-	streamTokens int64     // Tokens in current stream
+	streamStart  time.Time // When current stream started.
+	streamTokens int64     // Tokens in current stream.
 }
 
 // NewAggregator creates a new status aggregator.
@@ -29,7 +29,7 @@ func (a *Aggregator) ProcessEvent(event *events.Event) {
 		return
 	}
 
-	// Map events to user-friendly agent states
+	// Map events to user-friendly agent states.
 	switch event.Type {
 	case events.EventTurnStart:
 		a.manager.SetAgentState("Starting")
@@ -37,21 +37,19 @@ func (a *Aggregator) ProcessEvent(event *events.Event) {
 
 	case events.EventContentDelta:
 		a.manager.SetAgentState("Thinking")
-		// Track streaming for TPS calculation
+		// Track streaming for TPS calculation.
 		if a.streamStart.IsZero() {
 			a.streamStart = time.Now()
 			a.streamTokens = 0
 		}
-		// Estimate tokens from characters (rough: 1 token ≈ 4 chars)
+		// Estimate tokens from characters (rough: 1 token ≈ 4 chars).
 		if data, ok := event.Data.(events.ContentDeltaData); ok {
 			if data.Content != "" {
-				estimatedTokens := int64(len(data.Content) / 4)
-				if estimatedTokens < 1 {
-					estimatedTokens = 1
-				}
+				estimatedTokens := max(int64(len(data.Content)/4), 1)
+
 				a.streamTokens += estimatedTokens
 
-				// Calculate TPS based on stream duration
+				// Calculate TPS based on stream duration.
 				duration := time.Since(a.streamStart)
 				if duration > 0 {
 					a.manager.CalculateTPS(a.streamTokens, duration)
@@ -61,13 +59,13 @@ func (a *Aggregator) ProcessEvent(event *events.Event) {
 
 	case events.EventContentComplete:
 		a.manager.SetAgentState("Ready")
-		// Reset TPS and streaming state on content complete
+		// Reset TPS and streaming state on content complete.
 		a.streamStart = time.Time{}
 		a.streamTokens = 0
-		a.manager.CalculateTPS(0, 1) // Reset TPS to 0
+		a.manager.CalculateTPS(0, 1) // Reset TPS to 0.
 
 	case events.EventToolCallStart:
-		// Extract tool name for more specific status
+		// Extract tool name for more specific status.
 		if data, ok := event.Data.(events.ToolCallStartData); ok {
 			a.manager.SetAgentState("Calling: " + data.ToolName)
 		} else {
@@ -83,7 +81,7 @@ func (a *Aggregator) ProcessEvent(event *events.Event) {
 	case events.EventTurnComplete:
 		a.manager.SetAgentState("Idle")
 		// Note: Token counting is handled by SetTokenCount() in the main event loop
-		// which pulls the authoritative count from conversation history
+		// which pulls the authoritative count from conversation history.
 
 	case events.EventTurnFailed:
 		a.manager.SetAgentState("Error")
@@ -104,7 +102,7 @@ func (a *Aggregator) ProcessEvent(event *events.Event) {
 		a.manager.SetAgentState("Warning")
 
 	default:
-		// For unknown events, keep current state
+		// For unknown events, keep current state.
 	}
 }
 

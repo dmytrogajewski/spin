@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -29,23 +30,23 @@ type Manager struct {
 
 // ManagerConfig contains configuration for creating a Manager.
 type ManagerConfig struct {
-	// Factory creates new Conversation instances (required)
+	// Factory creates new Conversation instances (required).
 	Factory ConversationFactory
 
-	// Storage for session persistence (optional)
+	// Storage for session persistence (optional).
 	Storage session.Storage
 
-	// HistoryStorage for history persistence (optional)
+	// HistoryStorage for history persistence (optional).
 	HistoryStorage history.Storage
 
-	// Logger for debug output (optional, uses slog.Default() if nil)
+	// Logger for debug output (optional, uses slog.Default() if nil).
 	Logger *slog.Logger
 }
 
 // NewManager creates a new conversation manager.
 func NewManager(cfg ManagerConfig) (*Manager, error) {
 	if cfg.Factory == nil {
-		return nil, fmt.Errorf("conversation factory is required")
+		return nil, errors.New("conversation factory is required")
 	}
 
 	logger := cfg.Logger
@@ -67,33 +68,36 @@ func NewManager(cfg ManagerConfig) (*Manager, error) {
 // Otherwise, the factory is called to create a new conversation.
 func (m *Manager) GetOrCreate(ctx context.Context, sessionID string, workDir string) (*Conversation, error) {
 	if sessionID == "" {
-		return nil, fmt.Errorf("session ID cannot be empty")
+		return nil, errors.New("session ID cannot be empty")
 	}
 
-	// Fast path: check if conversation exists
+	// Fast path: check if conversation exists.
 	m.mu.RLock()
+
 	if conv, ok := m.conversations[sessionID]; ok {
 		m.mu.RUnlock()
+
 		return conv, nil
 	}
+
 	m.mu.RUnlock()
 
-	// Slow path: create new conversation
+	// Slow path: create new conversation.
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Double-check after acquiring write lock
+	// Double-check after acquiring write lock.
 	if conv, ok := m.conversations[sessionID]; ok {
 		return conv, nil
 	}
 
-	// Create new conversation via factory
+	// Create new conversation via factory.
 	conv, err := m.factory(ctx, sessionID, workDir)
 	if err != nil {
 		return nil, fmt.Errorf("create conversation: %w", err)
 	}
 
-	// Set the ID to match the session ID
+	// Set the ID to match the session ID.
 	conv.SetID(sessionID)
 
 	m.conversations[sessionID] = conv
@@ -108,6 +112,7 @@ func (m *Manager) Get(sessionID string) (*Conversation, bool) {
 	defer m.mu.RUnlock()
 
 	conv, ok := m.conversations[sessionID]
+
 	return conv, ok
 }
 
@@ -122,8 +127,9 @@ func (m *Manager) Remove(sessionID string) error {
 		return fmt.Errorf("conversation not found: %s", sessionID)
 	}
 
-	// Close the conversation
-	if err := conv.Close(); err != nil {
+	// Close the conversation.
+	err := conv.Close()
+	if err != nil {
 		m.logger.Warn("error closing conversation", "session_id", sessionID, "error", err)
 	}
 
@@ -141,7 +147,7 @@ func (m *Manager) Cancel(sessionID string) {
 
 	if ok {
 		conv.Cancel()
-		m.logger.Debug("conversation cancelled", "session_id", sessionID)
+		m.logger.Debug("conversation canceled", "session_id", sessionID)
 	}
 }
 
@@ -149,40 +155,44 @@ func (m *Manager) Cancel(sessionID string) {
 // This creates a new conversation and restores its history from storage.
 func (m *Manager) Load(ctx context.Context, sessionID string, workDir string) (*Conversation, error) {
 	if m.histStorage == nil {
-		return nil, fmt.Errorf("history storage not configured")
+		return nil, errors.New("history storage not configured")
 	}
 
-	// Check if history exists
+	// Check if history exists.
 	exists, err := m.histStorage.Exists(sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("check history exists: %w", err)
 	}
+
 	if !exists {
 		return nil, fmt.Errorf("session not found: %s", sessionID)
 	}
 
-	// Create conversation via factory
+	// Create conversation via factory.
 	conv, err := m.GetOrCreate(ctx, sessionID, workDir)
 	if err != nil {
 		return nil, fmt.Errorf("create conversation: %w", err)
 	}
 
-	// Load history into the conversation
+	// Load history into the conversation.
 	hist := conv.history
-	if err := hist.Load(m.histStorage, sessionID); err != nil {
-		// Remove the conversation if loading fails
+	err = hist.Load(m.histStorage, sessionID)
+	if err != nil {
+		// Remove the conversation if loading fails.
 		m.Remove(sessionID)
+
 		return nil, fmt.Errorf("load history: %w", err)
 	}
 
 	m.logger.Info("conversation loaded from storage", "session_id", sessionID)
+
 	return conv, nil
 }
 
 // Save persists a conversation's history to storage.
 func (m *Manager) Save(sessionID string) error {
 	if m.histStorage == nil {
-		return fmt.Errorf("history storage not configured")
+		return errors.New("history storage not configured")
 	}
 
 	m.mu.RLock()
@@ -193,11 +203,13 @@ func (m *Manager) Save(sessionID string) error {
 		return fmt.Errorf("conversation not found: %s", sessionID)
 	}
 
-	if err := conv.history.Save(m.histStorage, sessionID); err != nil {
+	err := conv.history.Save(m.histStorage, sessionID)
+	if err != nil {
 		return fmt.Errorf("save history: %w", err)
 	}
 
 	m.logger.Debug("conversation saved", "session_id", sessionID)
+
 	return nil
 }
 
@@ -210,6 +222,7 @@ func (m *Manager) List() []string {
 	for id := range m.conversations {
 		ids = append(ids, id)
 	}
+
 	return ids
 }
 
@@ -217,6 +230,7 @@ func (m *Manager) List() []string {
 func (m *Manager) Count() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return len(m.conversations)
 }
 
@@ -226,8 +240,10 @@ func (m *Manager) Close() error {
 	defer m.mu.Unlock()
 
 	var errs []error
+
 	for id, conv := range m.conversations {
-		if err := conv.Close(); err != nil {
+		err := conv.Close()
+		if err != nil {
 			errs = append(errs, fmt.Errorf("close %s: %w", id, err))
 		}
 	}
@@ -237,6 +253,7 @@ func (m *Manager) Close() error {
 	if len(errs) > 0 {
 		return fmt.Errorf("errors closing conversations: %v", errs)
 	}
+
 	return nil
 }
 
@@ -247,6 +264,7 @@ func (m *Manager) RunTurn(ctx context.Context, sessionID string, workDir string,
 	if err != nil {
 		return err
 	}
+
 	return conv.RunTurn(ctx, input)
 }
 

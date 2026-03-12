@@ -22,7 +22,7 @@ func (p *Playbook) Search(ctx context.Context, query string, topK int) ([]*bulle
 		return []*bullet.Bullet{}, nil
 	}
 
-	// Generate query embedding
+	// Generate query embedding.
 	queryEmbed, err := p.embedder.Embed(ctx, query)
 	if err != nil {
 		return nil, err
@@ -31,38 +31,40 @@ func (p *Playbook) Search(ctx context.Context, query string, topK int) ([]*bulle
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	// Calculate similarities
+	// Calculate similarities.
 	results := make([]searchResult, 0)
+
 	for _, b := range p.bullets {
 		if len(b.Embedding) == 0 {
 			continue
 		}
 
 		similarity := cosineSimilarity(queryEmbed, b.Embedding)
-		// Clamp similarity to [0, 1] to avoid floating point precision issues
+		// Clamp similarity to [0, 1] to avoid floating point precision issues.
 		if similarity > 1.0 {
 			similarity = 1.0
 		} else if similarity < 0.0 {
 			similarity = 0.0
 		}
+
 		results = append(results, searchResult{
 			bullet:     b,
 			similarity: similarity,
 		})
 	}
 
-	// Sort by similarity descending
+	// Sort by similarity descending.
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].similarity > results[j].similarity
 	})
 
-	// Return top-k
+	// Return top-k.
 	if topK > len(results) {
 		topK = len(results)
 	}
 
 	bullets := make([]*bullet.Bullet, topK)
-	for i := 0; i < topK; i++ {
+	for i := range topK {
 		bullets[i] = results[i].bullet
 	}
 
@@ -83,7 +85,7 @@ func (p *Playbook) SearchWithScores(ctx context.Context, query string, topK int)
 		return []SearchResult{}, nil
 	}
 
-	// Generate query embedding
+	// Generate query embedding.
 	queryEmbed, err := p.embedder.Embed(ctx, query)
 	if err != nil {
 		return nil, err
@@ -92,38 +94,40 @@ func (p *Playbook) SearchWithScores(ctx context.Context, query string, topK int)
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	// Calculate similarities
+	// Calculate similarities.
 	results := make([]searchResult, 0)
+
 	for _, b := range p.bullets {
 		if len(b.Embedding) == 0 {
 			continue
 		}
 
 		similarity := cosineSimilarity(queryEmbed, b.Embedding)
-		// Clamp similarity to [0, 1] to avoid floating point precision issues
+		// Clamp similarity to [0, 1] to avoid floating point precision issues.
 		if similarity > 1.0 {
 			similarity = 1.0
 		} else if similarity < 0.0 {
 			similarity = 0.0
 		}
+
 		results = append(results, searchResult{
 			bullet:     b,
 			similarity: similarity,
 		})
 	}
 
-	// Sort by similarity descending
+	// Sort by similarity descending.
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].similarity > results[j].similarity
 	})
 
-	// Return top-k
+	// Return top-k.
 	if topK > len(results) {
 		topK = len(results)
 	}
 
 	searchResults := make([]SearchResult, topK)
-	for i := 0; i < topK; i++ {
+	for i := range topK {
 		searchResults[i] = SearchResult{
 			Bullet:     results[i].bullet,
 			Similarity: results[i].similarity,
@@ -140,7 +144,7 @@ func cosineSimilarity(a, b []float32) float64 {
 	}
 
 	var dotProduct, normA, normB float64
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		dotProduct += float64(a[i]) * float64(b[i])
 		normA += float64(a[i]) * float64(a[i])
 		normB += float64(b[i]) * float64(b[i])

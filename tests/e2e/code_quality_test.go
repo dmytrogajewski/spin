@@ -14,9 +14,9 @@ import (
 // TestNoTODOsOrDeferredPatterns ensures no TODO/FIXME/XXX/HACK or deferred implementation patterns exist.
 // This test fails if any of these patterns are found in the codebase:
 // - TODO, FIXME, XXX, HACK comments
-// - "for now", "not yet", "will be", "later" patterns that indicate deferred work
+// - "for now", "not yet", "will be", "later" patterns that indicate deferred work.
 func TestNoTODOsOrDeferredPatterns(t *testing.T) {
-	// Patterns to detect
+	// Patterns to detect.
 	patterns := []struct {
 		name    string
 		pattern *regexp.Regexp
@@ -74,13 +74,13 @@ func TestNoTODOsOrDeferredPatterns(t *testing.T) {
 		},
 	}
 
-	// Get workspace root
+	// Get workspace root.
 	workspaceRoot, err := getWorkspaceRoot()
 	if err != nil {
 		t.Fatalf("Failed to find workspace root: %v", err)
 	}
 
-	// Directories to scan (all Go code, excluding tests and vendor)
+	// Directories to scan (all Go code, excluding tests and vendor).
 	dirs := []string{
 		"internal",
 		"cmd",
@@ -90,22 +90,24 @@ func TestNoTODOsOrDeferredPatterns(t *testing.T) {
 
 	for _, dir := range dirs {
 		fullPath := filepath.Join(workspaceRoot, dir)
+
 		err := filepath.Walk(fullPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
-			// Skip vendor and test files
+			// Skip vendor and test files.
 			if strings.Contains(path, "/vendor/") || strings.Contains(path, "/.git/") {
 				return nil
 			}
-			// Only check .go files
+			// Only check .go files.
 			if !strings.HasSuffix(path, ".go") {
 				return nil
 			}
-			// Skip test files (they may have examples)
+			// Skip test files (they may have examples).
 			if strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
+
 			return checkFile(t, path, patterns, &violations)
 		})
 		if err != nil {
@@ -116,26 +118,26 @@ func TestNoTODOsOrDeferredPatterns(t *testing.T) {
 	if len(violations) > 0 {
 		t.Errorf("Found %d code quality violations:\n", len(violations))
 
-		// Group violations by pattern type for better reporting
+		// Group violations by pattern type for better reporting.
 		byPattern := make(map[string][]violation)
 		for _, v := range violations {
 			byPattern[v.pattern] = append(byPattern[v.pattern], v)
 		}
 
-		// Print detailed violations
+		// Print detailed violations.
 		for _, v := range violations {
 			t.Errorf("  %s:%d: %s - %s", v.file, v.line, v.pattern, v.desc)
 			t.Errorf("    %s", strings.TrimSpace(v.context))
 		}
 
-		// Print implementation instructions to stdout (for AI agents)
+		// Print implementation instructions to stdout (for AI agents).
 		printImplementationInstructions(os.Stdout, byPattern, violations)
 
 		t.Fatalf("Code quality test failed: found %d violations", len(violations))
 	}
 }
 
-// getWorkspaceRoot finds the workspace root by looking for go.mod
+// getWorkspaceRoot finds the workspace root by looking for go.mod.
 func getWorkspaceRoot() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -143,13 +145,16 @@ func getWorkspaceRoot() (string, error) {
 	}
 
 	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+		_, err := os.Stat(filepath.Join(dir, "go.mod"))
+		if err == nil {
 			return dir, nil
 		}
+
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			return "", os.ErrNotExist
 		}
+
 		dir = parent
 	}
 }
@@ -176,17 +181,18 @@ func checkFile(t *testing.T, filePath string, patterns []struct {
 
 	for lineNum, line := range lines {
 		// Skip lines that are only comments with these patterns (they might be in documentation)
-		// But catch them if they're in actual code comments
+		// But catch them if they're in actual code comments.
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "//") {
-			// Check comment lines
+			// Check comment lines.
 			for _, p := range patterns {
 				if p.pattern.MatchString(line) {
-					// Get context (previous and next line if available)
+					// Get context (previous and next line if available).
 					context := line
 					if lineNum > 0 {
 						context = lines[lineNum-1] + "\n" + context
 					}
+
 					if lineNum < len(lines)-1 {
 						context = context + "\n" + lines[lineNum+1]
 					}
@@ -201,14 +207,15 @@ func checkFile(t *testing.T, filePath string, patterns []struct {
 				}
 			}
 		} else {
-			// Check code lines (might have inline comments)
+			// Check code lines (might have inline comments).
 			for _, p := range patterns {
 				if p.pattern.MatchString(line) {
-					// Get context
+					// Get context.
 					context := line
 					if lineNum > 0 {
 						context = lines[lineNum-1] + "\n" + context
 					}
+
 					if lineNum < len(lines)-1 {
 						context = context + "\n" + lines[lineNum+1]
 					}
@@ -238,17 +245,18 @@ func printImplementationInstructions(w io.Writer, byPattern map[string][]violati
 	fmt.Fprintf(w, "Found %d code quality violations that require implementation.\n", len(allViolations))
 	fmt.Fprintf(w, "DO NOT simply remove comments or change wording. IMPLEMENT the missing functionality.\n\n")
 
-	// Group by file for easier navigation
+	// Group by file for easier navigation.
 	byFile := make(map[string][]violation)
 	for _, v := range allViolations {
 		byFile[v.file] = append(byFile[v.file], v)
 	}
 
-	// Sort files for consistent output
+	// Sort files for consistent output.
 	files := make([]string, 0, len(byFile))
 	for f := range byFile {
 		files = append(files, f)
 	}
+
 	sort.Strings(files)
 
 	fmt.Fprintf(w, "VIOLATIONS BY FILE:\n")
@@ -262,7 +270,7 @@ func printImplementationInstructions(w io.Writer, byPattern map[string][]violati
 			fmt.Fprintf(w, "  Line %d [%s]: %s\n", v.line, v.pattern, v.desc)
 			fmt.Fprintf(w, "    Context: %s\n", strings.TrimSpace(v.context))
 
-			// Provide specific guidance based on pattern type
+			// Provide specific guidance based on pattern type.
 			switch v.pattern {
 			case "TODO":
 				fmt.Fprintf(w, "    ACTION: Implement the incomplete work described in the TODO comment.\n")
@@ -295,6 +303,7 @@ func printImplementationInstructions(w io.Writer, byPattern map[string][]violati
 				fmt.Fprintf(w, "    ACTION: Implement the deferred functionality now.\n")
 				fmt.Fprintf(w, "    DO NOT: Change wording - implement the feature.\n")
 			}
+
 			fmt.Fprintf(w, "\n")
 		}
 	}

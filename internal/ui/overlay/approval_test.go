@@ -43,33 +43,36 @@ func TestApprovalDialog_Show_Approve(t *testing.T) {
 
 	dialog := NewApprovalDialog(req)
 
-	// Start dialog in background
+	// Start dialog in background.
 	ctx := context.Background()
 	resultCh := make(chan security.ApprovalResponse, 1)
+
 	go func() {
 		resultCh <- dialog.Show(ctx)
 	}()
 
-	// Wait for dialog to be ready (use channel-based synchronization)
+	// Wait for dialog to be ready (use channel-based synchronization).
 	select {
 	case <-time.After(50 * time.Millisecond):
-		// Dialog should be ready by now
+		// Dialog should be ready by now.
 	case <-ctx.Done():
-		t.Fatal("Context cancelled before dialog ready")
+		t.Fatal("Context canceled before dialog ready")
 	}
 
-	// Approve the dialog
+	// Approve the dialog.
 	dialog.Approve()
 
-	// Wait for result
+	// Wait for result.
 	select {
 	case result := <-resultCh:
 		if !result.Approved {
 			t.Error("Expected approval, got denial")
 		}
+
 		if result.RequestID != req.ID {
 			t.Errorf("Expected request ID %s, got %s", req.ID, result.RequestID)
 		}
+
 		if result.Reason != "user approved" {
 			t.Errorf("Expected reason 'user approved', got %s", result.Reason)
 		}
@@ -89,28 +92,31 @@ func TestApprovalDialog_Show_Deny(t *testing.T) {
 
 	dialog := NewApprovalDialog(req)
 
-	// Start dialog in background
+	// Start dialog in background.
 	ctx := context.Background()
 	resultCh := make(chan security.ApprovalResponse, 1)
+
 	go func() {
 		resultCh <- dialog.Show(ctx)
 	}()
 
-	// Wait a bit for dialog to start
+	// Wait a bit for dialog to start.
 	time.Sleep(10 * time.Millisecond)
 
-	// Deny the dialog
+	// Deny the dialog.
 	dialog.Deny()
 
-	// Wait for result
+	// Wait for result.
 	select {
 	case result := <-resultCh:
 		if result.Approved {
 			t.Error("Expected denial, got approval")
 		}
+
 		if result.RequestID != req.ID {
 			t.Errorf("Expected request ID %s, got %s", req.ID, result.RequestID)
 		}
+
 		if result.Reason != "user denied" {
 			t.Errorf("Expected reason 'user denied', got %s", result.Reason)
 		}
@@ -165,7 +171,7 @@ func TestApprovalDialog_Render(t *testing.T) {
 
 	dialog := NewApprovalDialog(req)
 
-	// Render dialog - should return empty string since we now use status bar
+	// Render dialog - should return empty string since we now use status bar.
 	output := dialog.Render(80, 24)
 	if output != "" {
 		t.Error("Expected empty string since we now use status bar for approval display")
@@ -183,7 +189,7 @@ func TestApprovalDialog_Render_LongContent(t *testing.T) {
 
 	dialog := NewApprovalDialog(req)
 
-	// Render with small width - should return empty string since we now use status bar
+	// Render with small width - should return empty string since we now use status bar.
 	output := dialog.Render(40, 24)
 	if output != "" {
 		t.Error("Expected empty string since we now use status bar for approval display")
@@ -201,22 +207,23 @@ func TestApprovalDialog_ConcurrentAccess(t *testing.T) {
 
 	dialog := NewApprovalDialog(req)
 
-	// Test concurrent access
+	// Test concurrent access.
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+
+	for range 10 {
 		go func() {
 			defer func() { done <- true }()
 
-			// Test IsVisible
+			// Test IsVisible.
 			_ = dialog.IsVisible()
 
-			// Test HandleKey
+			// Test HandleKey.
 			_ = dialog.HandleKey("x")
 		}()
 	}
 
-	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	// Wait for all goroutines.
+	for range 10 {
 		select {
 		case <-done:
 		case <-time.After(1 * time.Second):
@@ -236,27 +243,28 @@ func TestApprovalDialog_MultipleResponses(t *testing.T) {
 
 	dialog := NewApprovalDialog(req)
 
-	// Start dialog
+	// Start dialog.
 	ctx := context.Background()
 	resultCh := make(chan security.ApprovalResponse, 1)
+
 	go func() {
 		resultCh <- dialog.Show(ctx)
 	}()
 
-	// Wait for dialog to be ready
+	// Wait for dialog to be ready.
 	select {
 	case <-time.After(50 * time.Millisecond):
-		// Dialog should be ready by now
+		// Dialog should be ready by now.
 	case <-ctx.Done():
-		t.Fatal("Context cancelled before dialog ready")
+		t.Fatal("Context canceled before dialog ready")
 	}
 
-	// Send multiple responses
+	// Send multiple responses.
 	dialog.Approve()
 	dialog.Deny()
 	dialog.Approve()
 
-	// Should only get first response
+	// Should only get first response.
 	select {
 	case result := <-resultCh:
 		if !result.Approved {

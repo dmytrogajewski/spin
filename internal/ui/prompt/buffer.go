@@ -9,8 +9,8 @@ import (
 // It stores text as a slice of runes and maintains a cursor index.
 // The cursor position is always valid: 0 <= cursor <= len(runes).
 type Buffer struct {
-	runes  []rune // text content
-	cursor int    // cursor position (0-based)
+	runes  []rune // text content.
+	cursor int    // cursor position (0-based).
 }
 
 // NewBuffer creates a new empty buffer.
@@ -23,7 +23,7 @@ func NewBuffer() *Buffer {
 
 // Insert inserts a rune at the cursor position and advances the cursor.
 func (b *Buffer) Insert(r rune) {
-	// Insert at cursor position
+	// Insert at cursor position.
 	b.runes = append(b.runes[:b.cursor], append([]rune{r}, b.runes[b.cursor:]...)...)
 	b.cursor++
 }
@@ -35,9 +35,10 @@ func (b *Buffer) Backspace() bool {
 		return false
 	}
 
-	// Delete character before cursor
+	// Delete character before cursor.
 	b.runes = append(b.runes[:b.cursor-1], b.runes[b.cursor:]...)
 	b.cursor--
+
 	return true
 }
 
@@ -48,8 +49,9 @@ func (b *Buffer) Delete() bool {
 		return false
 	}
 
-	// Delete character at cursor
+	// Delete character at cursor.
 	b.runes = append(b.runes[:b.cursor], b.runes[b.cursor+1:]...)
+
 	return true
 }
 
@@ -59,7 +61,9 @@ func (b *Buffer) MoveLeft() bool {
 	if b.cursor == 0 {
 		return false
 	}
+
 	b.cursor--
+
 	return true
 }
 
@@ -69,7 +73,9 @@ func (b *Buffer) MoveRight() bool {
 	if b.cursor >= len(b.runes) {
 		return false
 	}
+
 	b.cursor++
+
 	return true
 }
 
@@ -89,6 +95,7 @@ func (b *Buffer) ClearLineLeft() {
 	if b.cursor == 0 {
 		return
 	}
+
 	b.runes = b.runes[b.cursor:]
 	b.cursor = 0
 }
@@ -99,6 +106,7 @@ func (b *Buffer) ClearLineRight() {
 	if b.cursor >= len(b.runes) {
 		return
 	}
+
 	b.runes = b.runes[:b.cursor]
 }
 
@@ -130,6 +138,7 @@ func (b *Buffer) skipTrailingSpaces(pos int) int {
 	for pos >= 0 && unicode.IsSpace(b.runes[pos]) {
 		pos--
 	}
+
 	return pos
 }
 
@@ -140,6 +149,7 @@ func (b *Buffer) skipWordCharacters(pos int) int {
 	if isAlnum {
 		return b.skipAlphanumericCharacters(pos)
 	}
+
 	return b.skipPunctuationCharacters(pos)
 }
 
@@ -148,6 +158,7 @@ func (b *Buffer) skipAlphanumericCharacters(pos int) int {
 	for pos >= 0 && (unicode.IsLetter(b.runes[pos]) || unicode.IsDigit(b.runes[pos])) {
 		pos--
 	}
+
 	return pos
 }
 
@@ -156,12 +167,13 @@ func (b *Buffer) skipPunctuationCharacters(pos int) int {
 	for pos >= 0 && !unicode.IsSpace(b.runes[pos]) && !unicode.IsLetter(b.runes[pos]) && !unicode.IsDigit(b.runes[pos]) {
 		pos--
 	}
+
 	return pos
 }
 
 // deleteFromPosition deletes characters from the given position to the cursor.
 func (b *Buffer) deleteFromPosition(deleteFrom int) {
-	deleteFrom++ // Adjust for 0-based indexing
+	deleteFrom++ // Adjust for 0-based indexing.
 	b.runes = append(b.runes[:deleteFrom], b.runes[b.cursor:]...)
 	b.cursor = deleteFrom
 }
@@ -199,8 +211,10 @@ func (b *Buffer) SetCursor(pos int) {
 	if pos < 0 {
 		pos = 0
 	}
+
 	if pos > len(b.runes) {
 		pos = len(b.runes)
 	}
+
 	b.cursor = pos
 }

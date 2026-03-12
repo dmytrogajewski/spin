@@ -13,13 +13,13 @@ func TestWriteFileTool(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		params      map[string]interface{}
+		params      map[string]any
 		wantErr     bool
 		verifyWrite bool
 	}{
 		{
 			name: "write new file",
-			params: map[string]interface{}{
+			params: map[string]any{
 				"path":    filepath.Join(tmpDir, "new.txt"),
 				"content": "test content",
 			},
@@ -27,7 +27,7 @@ func TestWriteFileTool(t *testing.T) {
 		},
 		{
 			name: "overwrite existing file",
-			params: map[string]interface{}{
+			params: map[string]any{
 				"path":    filepath.Join(tmpDir, "overwrite.txt"),
 				"content": "new content",
 			},
@@ -35,7 +35,7 @@ func TestWriteFileTool(t *testing.T) {
 		},
 		{
 			name: "create parent directories",
-			params: map[string]interface{}{
+			params: map[string]any{
 				"path":    filepath.Join(tmpDir, "subdir", "nested", "file.txt"),
 				"content": "content in nested directory",
 			},
@@ -43,12 +43,12 @@ func TestWriteFileTool(t *testing.T) {
 		},
 		{
 			name:    "missing path parameter",
-			params:  map[string]interface{}{"content": "test"},
+			params:  map[string]any{"content": "test"},
 			wantErr: true,
 		},
 		{
 			name:    "missing content parameter",
-			params:  map[string]interface{}{"path": filepath.Join(tmpDir, "test.txt")},
+			params:  map[string]any{"path": filepath.Join(tmpDir, "test.txt")},
 			wantErr: true,
 		},
 	}
@@ -62,16 +62,19 @@ func TestWriteFileTool(t *testing.T) {
 				if err == nil && result.Success {
 					t.Error("expected error but got success")
 				}
+
 				return
 			}
 
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
+
 				return
 			}
 
 			if !result.Success {
 				t.Errorf("expected success, got error: %s", result.Error)
+
 				return
 			}
 
@@ -79,18 +82,24 @@ func TestWriteFileTool(t *testing.T) {
 				path, ok := tt.params["path"].(string)
 				if !ok {
 					t.Error("path parameter not found")
+
 					return
 				}
+
 				content, err := os.ReadFile(path)
 				if err != nil {
 					t.Errorf("failed to read written file: %v", err)
+
 					return
 				}
+
 				expectedContent, ok := tt.params["content"].(string)
 				if !ok {
 					t.Error("content parameter not found")
+
 					return
 				}
+
 				if string(content) != expectedContent {
 					t.Errorf("expected content %q, got %q", expectedContent, string(content))
 				}
@@ -104,33 +113,35 @@ func TestWriteFileTool_ErrorCases(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		params map[string]interface{}
+		params map[string]any
 	}{
 		{
 			name:   "missing path",
-			params: map[string]interface{}{"content": "test"},
+			params: map[string]any{"content": "test"},
 		},
 		{
 			name:   "missing content",
-			params: map[string]interface{}{"path": "test.txt"},
+			params: map[string]any{"path": "test.txt"},
 		},
 		{
 			name:   "invalid path type",
-			params: map[string]interface{}{"path": 123, "content": "test"},
+			params: map[string]any{"path": 123, "content": "test"},
 		},
 		{
 			name:   "invalid content type",
-			params: map[string]interface{}{"path": "test.txt", "content": 123},
+			params: map[string]any{"path": "test.txt", "content": 123},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			params, _ := FromMap(tt.params)
+
 			result, err := tool.Execute(context.Background(), params)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
+
 			if result.Success {
 				t.Error("expected failure result")
 			}
@@ -153,7 +164,7 @@ func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, _ := FromMap(map[string]interface{}{
+			params, _ := FromMap(map[string]any{
 				"path":    tt.path,
 				"content": "test",
 			})
@@ -163,9 +174,11 @@ func TestWriteFileTool_CheckApproval_SystemPaths(t *testing.T) {
 			if !needs.Required {
 				t.Error("CheckApproval should require approval for system paths")
 			}
+
 			if needs.Risk != tt.want {
 				t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, tt.want)
 			}
+
 			if needs.Reason == "" {
 				t.Error("CheckApproval should provide a reason")
 			}
@@ -188,7 +201,7 @@ func TestWriteFileTool_CheckApproval_RegularFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, _ := FromMap(map[string]interface{}{
+			params, _ := FromMap(map[string]any{
 				"path":    tt.path,
 				"content": "test",
 			})
@@ -198,9 +211,11 @@ func TestWriteFileTool_CheckApproval_RegularFiles(t *testing.T) {
 			if !needs.Required {
 				t.Error("CheckApproval should require approval for file writes")
 			}
+
 			if needs.Risk != tt.want {
 				t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, tt.want)
 			}
+
 			if needs.Reason == "" {
 				t.Error("CheckApproval should provide a reason")
 			}
@@ -223,7 +238,7 @@ func TestWriteFileTool_CheckApproval_ExecutableFiles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, _ := FromMap(map[string]interface{}{
+			params, _ := FromMap(map[string]any{
 				"path":    tt.path,
 				"content": "test",
 			})
@@ -233,9 +248,11 @@ func TestWriteFileTool_CheckApproval_ExecutableFiles(t *testing.T) {
 			if !needs.Required {
 				t.Error("CheckApproval should require approval for executable files")
 			}
+
 			if needs.Risk != tt.want {
 				t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, tt.want)
 			}
+
 			if needs.Reason == "" {
 				t.Error("CheckApproval should provide a reason")
 			}

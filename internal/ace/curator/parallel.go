@@ -6,35 +6,37 @@ import (
 	"sync"
 )
 
-// jobResult holds the result of processing a single merge request
+// jobResult holds the result of processing a single merge request.
 type jobResult struct {
 	index  int
 	result *MergeResult
 	err    error
 }
 
-// curateBatchParallel processes requests in parallel using a worker pool
+// curateBatchParallel processes requests in parallel using a worker pool.
 func (c *curator) curateBatchParallel(ctx context.Context, requests []MergeRequest, maxWorkers int) (*BatchMergeResult, error) {
-	// Determine worker count
+	// Determine worker count.
 	numWorkers := maxWorkers
 	if numWorkers <= 0 {
 		numWorkers = runtime.NumCPU()
 	}
-	// Cap workers at number of requests
+	// Cap workers at number of requests.
 	if numWorkers > len(requests) {
 		numWorkers = len(requests)
 	}
 
-	// Create channels
+	// Create channels.
 	jobs := make(chan int, len(requests))
 	resultsChan := make(chan jobResult, len(requests))
 
-	// Start workers
+	// Start workers.
 	var wg sync.WaitGroup
-	for w := 0; w < numWorkers; w++ {
+	for range numWorkers {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
+
 			for {
 				select {
 				case <-ctx.Done():
@@ -43,6 +45,7 @@ func (c *curator) curateBatchParallel(ctx context.Context, requests []MergeReque
 					if !ok {
 						return
 					}
+
 					result, err := c.Curate(ctx, requests[index])
 					resultsChan <- jobResult{
 						index:  index,
@@ -54,7 +57,7 @@ func (c *curator) curateBatchParallel(ctx context.Context, requests []MergeReque
 		}()
 	}
 
-	// Send jobs
+	// Send jobs.
 	go func() {
 		for i := range requests {
 			select {
@@ -63,16 +66,17 @@ func (c *curator) curateBatchParallel(ctx context.Context, requests []MergeReque
 			case jobs <- i:
 			}
 		}
+
 		close(jobs)
 	}()
 
-	// Wait for all workers
+	// Wait for all workers.
 	go func() {
 		wg.Wait()
 		close(resultsChan)
 	}()
 
-	// Collect results
+	// Collect results.
 	results := make([]MergeResult, len(requests))
 	errors := make([]error, len(requests))
 
@@ -84,7 +88,7 @@ func (c *curator) curateBatchParallel(ctx context.Context, requests []MergeReque
 		}
 	}
 
-	// Check for context cancellation
+	// Check for context cancellation.
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

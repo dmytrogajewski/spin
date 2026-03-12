@@ -1,7 +1,7 @@
 package history
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/message"
@@ -82,13 +82,14 @@ func (h *History) ToHistoryData(sessionID string) *HistoryData {
 		UpdatedAt: time.Now(),
 	}
 	copy(data.Messages, h.messages)
+
 	return data
 }
 
 // FromHistoryData imports history state from HistoryData.
 func (h *History) FromHistoryData(data *HistoryData) error {
 	if data == nil {
-		return fmt.Errorf("history data cannot be nil")
+		return errors.New("history data cannot be nil")
 	}
 
 	h.mu.Lock()

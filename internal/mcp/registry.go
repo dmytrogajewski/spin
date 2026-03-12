@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/dmytrogajewski/spin/internal/tools"
 	mcpSDK "github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // ErrUnsupportedTransport is returned when a transport type is not supported.
@@ -16,12 +17,12 @@ var ErrUnsupportedTransport = errors.New("unsupported transport type")
 // Implementations can extend this with custom fields via the Extra map.
 type RegistryMetadata struct {
 	Name         string
-	Type         string // Implementation-defined type identifier
+	Type         string // Implementation-defined type identifier.
 	ServerInfo   *mcpSDK.Implementation
 	Capabilities mcpSDK.ServerCapabilities
 	ToolCount    int
 	Connected    bool
-	Extra        map[string]any // Implementation-specific metadata
+	Extra        map[string]any // Implementation-specific metadata.
 }
 
 // ToolSource is the minimal interface for any source of tools.
@@ -48,17 +49,17 @@ type ToolLister interface {
 // SearchContext provides optional context for tool search operations.
 // Pass nil for simple searches without trajectory context.
 type SearchContext struct {
-	// Ctx is the context for cancellation and timeouts (required for dynamic registries)
+	// Ctx is the context for cancellation and timeouts (required for dynamic registries).
 	Ctx context.Context
 
-	// TrajectoryContext provides execution context for relevance scoring (optional)
+	// TrajectoryContext provides execution context for relevance scoring (optional).
 	TrajectoryContext interface {
 		GetQuery() string
 		GetRecentTools(n int) []string
 	}
 
 	// DynamicLoadout enables dynamic tool loading for this search (optional)
-	// When true, dynamic registries will search their APIs for matching tools
+	// When true, dynamic registries will search their APIs for matching tools.
 	DynamicLoadout bool
 }
 

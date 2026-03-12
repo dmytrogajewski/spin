@@ -76,7 +76,7 @@ func TestAutoOffloader_Offload_LargeCodeBlock(t *testing.T) {
 	scratchpad := NewScratchpad("test", 10)
 
 	analyzer := NewDefaultContextAnalyzer()
-	analyzer.CodeBlockThreshold = 50 // Low threshold for testing
+	analyzer.CodeBlockThreshold = 50 // Low threshold for testing.
 
 	offloader := NewAutoOffloader(AutoOffloaderConfig{
 		Scratchpad: scratchpad,
@@ -95,10 +95,10 @@ func TestAutoOffloader_Offload_LargeCodeBlock(t *testing.T) {
 	assert.Equal(t, ScopeSession, results[0].Destination)
 	assert.Greater(t, results[0].TokensSaved, 0)
 
-	// Check that reference was added
+	// Check that reference was added.
 	assert.Contains(t, modified[0].Content, "offloaded")
 
-	// Check that content was stored in scratchpad
+	// Check that content was stored in scratchpad.
 	entry, err := scratchpad.Get(ctx, results[0].Key)
 	require.NoError(t, err)
 	assert.NotEmpty(t, entry.Value)
@@ -124,7 +124,7 @@ func TestAutoOffloader_Offload_Decision(t *testing.T) {
 	assert.True(t, results[0].Success)
 	assert.Equal(t, ScopePersistent, results[0].Destination)
 
-	// Check that reference was added
+	// Check that reference was added.
 	assert.Contains(t, modified[0].Content, "offloaded")
 }
 
@@ -136,7 +136,7 @@ func TestAutoOffloader_Offload_NoStoresConfigured(t *testing.T) {
 
 	offloader := NewAutoOffloader(AutoOffloaderConfig{
 		Analyzer: analyzer,
-		// No scratchpad or persistent store
+		// No scratchpad or persistent store.
 	})
 
 	largeCode := "```go\n" + strings.Repeat("x", 100) + "\n```"
@@ -147,16 +147,17 @@ func TestAutoOffloader_Offload_NoStoresConfigured(t *testing.T) {
 	modified, results, err := offloader.Offload(ctx, messages)
 	require.NoError(t, err)
 	// Results will be empty since no stores are configured
-	// The analyzer finds candidates but storage fails silently
+	// The analyzer finds candidates but storage fails silently.
 	assert.Equal(t, messages[0].Content, modified[0].Content[:len(messages[0].Content)])
-	_ = results // Results may or may not be empty depending on implementation
+
+	_ = results // Results may or may not be empty depending on implementation.
 }
 
 func TestAutoOffloader_Recall_FromScratchpad(t *testing.T) {
 	ctx := context.Background()
 	scratchpad := NewScratchpad("test", 10)
 
-	// Pre-populate scratchpad
+	// Pre-populate scratchpad.
 	err := scratchpad.Put(ctx, "test-key", "test-value", PutOptions{})
 	require.NoError(t, err)
 
@@ -175,7 +176,7 @@ func TestAutoOffloader_Recall_FromPersistent(t *testing.T) {
 	persistent, err := NewPersistentStore(tmpDir)
 	require.NoError(t, err)
 
-	// Pre-populate persistent store
+	// Pre-populate persistent store.
 	err = persistent.Put(ctx, "test-key", "persistent-value", PutOptions{})
 	require.NoError(t, err)
 
@@ -206,7 +207,7 @@ func TestAutoOffloader_SetThreshold(t *testing.T) {
 	offloader.SetThreshold(0.5)
 	assert.Equal(t, 0.5, offloader.GetThreshold())
 
-	// Invalid values should be ignored
+	// Invalid values should be ignored.
 	offloader.SetThreshold(0)
 	assert.Equal(t, 0.5, offloader.GetThreshold())
 
@@ -235,8 +236,8 @@ func TestAutoOffloader_Offload_MultipleMessages(t *testing.T) {
 
 	modified, results, err := offloader.Offload(ctx, messages)
 	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(results), 2) // At least code block and tool output
+	assert.GreaterOrEqual(t, len(results), 2) // At least code block and tool output.
 
-	// User message should be unchanged
+	// User message should be unchanged.
 	assert.Equal(t, messages[2].Content, modified[2].Content)
 }

@@ -4,11 +4,13 @@ package session
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/state"
 	"github.com/google/uuid"
+
+	"github.com/dmytrogajewski/spin/internal/state"
 )
 
 // CurrentSchemaVersion is the current session schema version for migrations.
@@ -20,13 +22,13 @@ type State = state.State
 
 // Session states - now using unified state constants.
 const (
-	StateActive    = state.StateIdle      // Session is active (idle, not running)
-	StateRunning   = state.StateRunning   // Session has active execution
-	StatePaused    = state.StatePaused    // Session is paused
-	StateCompleted = state.StateCompleted // Session completed successfully
-	StateFailed    = state.StateFailed    // Session failed
-	StateCancelled = state.StateCancelled // Session cancelled by user
-	StateArchived  = state.StateArchived  // Session archived
+	StateActive    = state.StateIdle      // Session is active (idle, not running).
+	StateRunning   = state.StateRunning   // Session has active execution.
+	StatePaused    = state.StatePaused    // Session is paused.
+	StateCompleted = state.StateCompleted // Session completed successfully.
+	StateFailed    = state.StateFailed    // Session failed.
+	StateCancelled = state.StateCancelled // Session canceled by user.
+	StateArchived  = state.StateArchived  // Session archived.
 )
 
 // Session-specific state methods are now handled by state.UnifiedState.
@@ -35,14 +37,14 @@ const (
 // Note: Conversation content (messages) is stored separately in history.History.
 // Session only tracks metadata, state, and configuration.
 type Session struct {
-	ID        string       // Unique session identifier (UUID string, for storage)
-	WorkDir   string       // Working directory for this session
-	CreatedAt time.Time    // Session creation timestamp
-	UpdatedAt time.Time    // Last update timestamp
-	Metadata  Metadata     // Session metadata
-	State     State        // Current session state
-	Version   int          // Schema version for migrations
-	mu        sync.RWMutex // Protects all fields
+	ID        string       // Unique session identifier (UUID string, for storage).
+	WorkDir   string       // Working directory for this session.
+	CreatedAt time.Time    // Session creation timestamp.
+	UpdatedAt time.Time    // Last update timestamp.
+	Metadata  Metadata     // Session metadata.
+	State     State        // Current session state.
+	Version   int          // Schema version for migrations.
+	mu        sync.RWMutex // Protects all fields.
 }
 
 // NewSession creates a new session with the given working directory.
@@ -51,6 +53,7 @@ type Session struct {
 // when used in conversation.Conversation.
 func NewSession(workDir string) *Session {
 	now := time.Now()
+
 	return &Session{
 		ID:        uuid.New().String(),
 		WorkDir:   workDir,
@@ -89,8 +92,9 @@ func (s *Session) SetState(state State) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Validate state transition
-	if err := s.validateStateTransition(s.State, state); err != nil {
+	// Validate state transition.
+	err := s.validateStateTransition(s.State, state)
+	if err != nil {
 		return err
 	}
 
@@ -102,12 +106,12 @@ func (s *Session) SetState(state State) error {
 
 // validateStateTransition checks if a state transition is valid.
 func (s *Session) validateStateTransition(from, to State) error {
-	// Archived is terminal - cannot transition from it
+	// Archived is terminal - cannot transition from it.
 	if from == StateArchived {
-		return fmt.Errorf("cannot transition from archived state")
+		return errors.New("cannot transition from archived state")
 	}
 
-	// Cannot transition back to active from terminal states
+	// Cannot transition back to active from terminal states.
 	if to == StateActive && (from == StateCompleted || from == StateFailed || from == StateCancelled) {
 		return fmt.Errorf("cannot transition from %s to active", from)
 	}
@@ -120,11 +124,9 @@ func (s *Session) AddTag(tag string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Check for duplicate
-	for _, existingTag := range s.Metadata.Tags {
-		if existingTag == tag {
-			return nil // Silently ignore duplicate
-		}
+	// Check for duplicate.
+	if slices.Contains(s.Metadata.Tags, tag) {
+		return nil // Silently ignore duplicate.
 	}
 
 	s.Metadata.Tags = append(s.Metadata.Tags, tag)
@@ -138,11 +140,12 @@ func (s *Session) RemoveTag(tag string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Find and remove tag
+	// Find and remove tag.
 	for i, existingTag := range s.Metadata.Tags {
 		if existingTag == tag {
 			s.Metadata.Tags = append(s.Metadata.Tags[:i], s.Metadata.Tags[i+1:]...)
 			s.UpdatedAt = time.Now()
+
 			break
 		}
 	}
@@ -179,24 +182,27 @@ func (s *Session) Validate() error {
 func (s *Session) validateBasicFields() []error {
 	var errs []error
 
-	// Validate ID
+	// Validate ID.
 	if s.ID == "" {
 		errs = append(errs, errors.New("session ID is empty"))
-	} else if _, err := uuid.Parse(s.ID); err != nil {
+	}
+
+	_, err := uuid.Parse(s.ID)
+	if err != nil {
 		errs = append(errs, fmt.Errorf("session ID is not a valid UUID: %w", err))
 	}
 
-	// Validate WorkDir
+	// Validate WorkDir.
 	if s.WorkDir == "" {
 		errs = append(errs, errors.New("work directory is empty"))
 	}
 
-	// Validate timestamps
+	// Validate timestamps.
 	if s.UpdatedAt.Before(s.CreatedAt) {
 		errs = append(errs, errors.New("updated_at is before created_at"))
 	}
 
-	// Validate state
+	// Validate state.
 	if !isValidState(s.State) {
 		errs = append(errs, fmt.Errorf("invalid state: %s", s.State))
 	}

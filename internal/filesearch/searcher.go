@@ -22,15 +22,16 @@ type Searcher struct {
 // NewSearcher creates a new searcher for the given root directory.
 // Returns an error if the root directory does not exist.
 func NewSearcher(root string) (*Searcher, error) {
-	// Validate root exists
-	if _, err := os.Stat(root); err != nil {
+	// Validate root exists.
+	_, err := os.Stat(root)
+	if err != nil {
 		return nil, fmt.Errorf("invalid root directory: %w", err)
 	}
 
 	return &Searcher{
 		root:    root,
-		scanner: NewScanner(root, false), // Will auto-load .gitignore/.spinignore
-		matcher: NewMatcher(false),       // Case-insensitive by default
+		scanner: NewScanner(root, false), // Will auto-load .gitignore/.spinignore.
+		matcher: NewMatcher(false),       // Case-insensitive by default.
 		indexed: false,
 	}, nil
 }
@@ -51,6 +52,7 @@ func (s *Searcher) IndexAsync(ctx context.Context) error {
 func (s *Searcher) isAlreadyIndexed() bool {
 	s.indexMu.RLock()
 	defer s.indexMu.RUnlock()
+
 	return s.indexed
 }
 
@@ -58,6 +60,7 @@ func (s *Searcher) isAlreadyIndexed() bool {
 func (s *Searcher) getIndexError() error {
 	s.indexMu.RLock()
 	defer s.indexMu.RUnlock()
+
 	return s.indexErr
 }
 
@@ -66,7 +69,7 @@ func (s *Searcher) performIndexing(ctx context.Context) error {
 	s.indexMu.Lock()
 	defer s.indexMu.Unlock()
 
-	// Double-check after acquiring lock (another goroutine may have indexed)
+	// Double-check after acquiring lock (another goroutine may have indexed).
 	if s.indexed {
 		return s.indexErr
 	}
@@ -74,18 +77,20 @@ func (s *Searcher) performIndexing(ctx context.Context) error {
 	files, err := s.scanWithContext(ctx)
 	if err != nil {
 		s.indexErr = err
+
 		return err
 	}
 
 	s.index = files
 	s.indexed = true
 	s.indexErr = nil
+
 	return nil
 }
 
 // scanWithContext performs file scanning with context cancellation support.
 func (s *Searcher) scanWithContext(ctx context.Context) ([]string, error) {
-	// Use the context-aware scanning method
+	// Use the context-aware scanning method.
 	return s.scanner.ScanWithContext(ctx)
 }
 
@@ -98,7 +103,7 @@ func (s *Searcher) Search(query string, limit int) []Match {
 		return []Match{}
 	}
 
-	// Read lock for concurrent search
+	// Read lock for concurrent search.
 	s.indexMu.RLock()
 	defer s.indexMu.RUnlock()
 
@@ -106,10 +111,10 @@ func (s *Searcher) Search(query string, limit int) []Match {
 		return []Match{}
 	}
 
-	// Perform fuzzy matching with advanced scoring
+	// Perform fuzzy matching with advanced scoring.
 	matches := s.matcher.Match(query, s.index)
 
-	// Apply limit if specified
+	// Apply limit if specified.
 	if limit > 0 && len(matches) > limit {
 		matches = matches[:limit]
 	}
@@ -121,5 +126,6 @@ func (s *Searcher) Search(query string, limit int) []Match {
 func (s *Searcher) IsIndexed() bool {
 	s.indexMu.RLock()
 	defer s.indexMu.RUnlock()
+
 	return s.indexed
 }

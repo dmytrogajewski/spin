@@ -2,6 +2,7 @@ package playbook
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -14,10 +15,10 @@ import (
 // It provides thread-safe CRUD operations, semantic search,
 // serialization, and version control capabilities.
 type Playbook struct {
-	bullets  map[string]*bullet.Bullet // Index by ID for O(1) lookup
-	mu       sync.RWMutex              // Thread-safe access
-	emitter  *events.EventEmitter      // Event emission (optional)
-	embedder embedding.Embedder        // Semantic embedding provider (optional)
+	bullets  map[string]*bullet.Bullet // Index by ID for O(1) lookup.
+	mu       sync.RWMutex              // Thread-safe access.
+	emitter  *events.EventEmitter      // Event emission (optional).
+	embedder embedding.Embedder        // Semantic embedding provider (optional).
 }
 
 // Stats contains playbook statistics.
@@ -53,16 +54,18 @@ func (p *Playbook) Stats() Stats {
 	}
 
 	totalScore := 0.0
+
 	for _, b := range p.bullets {
 		stats.TotalHelpful += b.HelpfulCount
 		stats.TotalHarmful += b.HarmfulCount
 		totalScore += b.Score()
 
-		// Estimate size: ID + Content + counters + timestamps
+		// Estimate size: ID + Content + counters + timestamps.
 		stats.TotalSizeBytes += int64(len(b.ID))
 		stats.TotalSizeBytes += int64(len(b.Content))
-		stats.TotalSizeBytes += 16                          // counters + timestamps
-		stats.TotalSizeBytes += int64(len(b.Embedding) * 4) // float32 = 4 bytes
+		stats.TotalSizeBytes += 16 // counters + timestamps.
+
+		stats.TotalSizeBytes += int64(len(b.Embedding) * 4) // float32 = 4 bytes.
 		for k, v := range b.Tags {
 			stats.TotalSizeBytes += int64(len(k) + len(v))
 		}
@@ -77,13 +80,13 @@ func (p *Playbook) Stats() Stats {
 // Returns an error if a bullet with the same ID already exists.
 func (p *Playbook) Add(ctx context.Context, b *bullet.Bullet) error {
 	if b == nil {
-		return fmt.Errorf("bullet cannot be nil")
+		return errors.New("bullet cannot be nil")
 	}
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Check for duplicate ID
+	// Check for duplicate ID.
 	if _, exists := p.bullets[b.ID]; exists {
 		return fmt.Errorf("bullet with ID %s already exists", b.ID)
 	}
@@ -100,6 +103,7 @@ func (p *Playbook) Get(id string) (*bullet.Bullet, bool) {
 	defer p.mu.RUnlock()
 
 	b, found := p.bullets[id]
+
 	return b, found
 }
 
@@ -107,7 +111,7 @@ func (p *Playbook) Get(id string) (*bullet.Bullet, bool) {
 // Returns an error if the bullet doesn't exist.
 func (p *Playbook) Update(ctx context.Context, b *bullet.Bullet) error {
 	if b == nil {
-		return fmt.Errorf("bullet cannot be nil")
+		return errors.New("bullet cannot be nil")
 	}
 
 	p.mu.Lock()

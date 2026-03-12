@@ -34,10 +34,12 @@
 // Renderers accept an optional theme parameter. When nil, they use legacy
 // hardcoded colors for backward compatibility:
 //
-//	// Legacy (backward compatible):
+// Legacy (backward compatible):
+//
 //	renderer := blocks.NewRenderer(width)
 //
-//	// With theme:
+// With theme:
+//
 //	theme := theme.GetThemeFromEnv()
 //	renderer := blocks.NewRendererWithTheme(width, theme)
 //

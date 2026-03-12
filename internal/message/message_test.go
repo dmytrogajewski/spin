@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestToolCall_Creation tests creating a ToolCall with all fields
+// TestToolCall_Creation tests creating a ToolCall with all fields.
 func TestToolCall_Creation(t *testing.T) {
 	tc := ToolCall{
 		ID:   "call_abc123",
@@ -19,18 +19,21 @@ func TestToolCall_Creation(t *testing.T) {
 	if tc.ID != "call_abc123" {
 		t.Errorf("ID = %q, want %q", tc.ID, "call_abc123")
 	}
+
 	if tc.Type != "function" {
 		t.Errorf("Type = %q, want %q", tc.Type, "function")
 	}
+
 	if tc.Function.Name != "read_file" {
 		t.Errorf("Function.Name = %q, want %q", tc.Function.Name, "read_file")
 	}
+
 	if tc.Function.Arguments != `{"path": "test.go"}` {
 		t.Errorf("Function.Arguments = %q, want %q", tc.Function.Arguments, `{"path": "test.go"}`)
 	}
 }
 
-// TestToolCall_JSONMarshaling tests JSON marshaling and unmarshaling
+// TestToolCall_JSONMarshaling tests JSON marshaling and unmarshaling.
 func TestToolCall_JSONMarshaling(t *testing.T) {
 	original := ToolCall{
 		ID:   "call_123",
@@ -41,35 +44,39 @@ func TestToolCall_JSONMarshaling(t *testing.T) {
 		},
 	}
 
-	// Marshal to JSON
+	// Marshal to JSON.
 	data, err := json.Marshal(original)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
 
-	// Unmarshal back
+	// Unmarshal back.
 	var decoded ToolCall
+
 	err = json.Unmarshal(data, &decoded)
 	if err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
 
-	// Verify fields match
+	// Verify fields match.
 	if decoded.ID != original.ID {
 		t.Errorf("ID = %q, want %q", decoded.ID, original.ID)
 	}
+
 	if decoded.Type != original.Type {
 		t.Errorf("Type = %q, want %q", decoded.Type, original.Type)
 	}
+
 	if decoded.Function.Name != original.Function.Name {
 		t.Errorf("Function.Name = %q, want %q", decoded.Function.Name, original.Function.Name)
 	}
+
 	if decoded.Function.Arguments != original.Function.Arguments {
 		t.Errorf("Function.Arguments = %q, want %q", decoded.Function.Arguments, original.Function.Arguments)
 	}
 }
 
-// TestMetadata_StringValues tests that Metadata stores string key-value pairs
+// TestMetadata_StringValues tests that Metadata stores string key-value pairs.
 func TestMetadata_StringValues(t *testing.T) {
 	meta := Metadata{
 		"user":      "test_user",
@@ -80,15 +87,17 @@ func TestMetadata_StringValues(t *testing.T) {
 	if meta["user"] != "test_user" {
 		t.Errorf("user = %q, want %q", meta["user"], "test_user")
 	}
+
 	if meta["session"] != "abc123" {
 		t.Errorf("session = %q, want %q", meta["session"], "abc123")
 	}
+
 	if meta["timestamp"] != "2025-10-26" {
 		t.Errorf("timestamp = %q, want %q", meta["timestamp"], "2025-10-26")
 	}
 }
 
-// TestMessage_WithToolCalls tests Message with typed ToolCalls
+// TestMessage_WithToolCalls tests Message with typed ToolCalls.
 func TestMessage_WithToolCalls(t *testing.T) {
 	msg := Message{
 		ID:      "msg_1",
@@ -114,22 +123,25 @@ func TestMessage_WithToolCalls(t *testing.T) {
 		},
 	}
 
-	// Verify ToolCalls are typed
+	// Verify ToolCalls are typed.
 	if len(msg.ToolCalls) != 2 {
 		t.Fatalf("len(ToolCalls) = %d, want 2", len(msg.ToolCalls))
 	}
+
 	if msg.ToolCalls[0].ID != "call_1" {
 		t.Errorf("ToolCalls[0].ID = %q, want %q", msg.ToolCalls[0].ID, "call_1")
 	}
+
 	if msg.ToolCalls[0].Function.Name != "read_file" {
 		t.Errorf("ToolCalls[0].Function.Name = %q, want %q", msg.ToolCalls[0].Function.Name, "read_file")
 	}
+
 	if msg.ToolCalls[1].Function.Name != "execute_command" {
 		t.Errorf("ToolCalls[1].Function.Name = %q, want %q", msg.ToolCalls[1].Function.Name, "execute_command")
 	}
 }
 
-// TestMessage_WithMetadata tests Message with typed Metadata
+// TestMessage_WithMetadata tests Message with typed Metadata.
 func TestMessage_WithMetadata(t *testing.T) {
 	msg := Message{
 		ID:      "msg_2",
@@ -142,19 +154,21 @@ func TestMessage_WithMetadata(t *testing.T) {
 		},
 	}
 
-	// Verify Metadata is typed as map[string]string
+	// Verify Metadata is typed as map[string]string.
 	if msg.Metadata["source"] != "cli" {
 		t.Errorf("Metadata[source] = %q, want %q", msg.Metadata["source"], "cli")
 	}
+
 	if msg.Metadata["user_id"] != "user_123" {
 		t.Errorf("Metadata[user_id] = %q, want %q", msg.Metadata["user_id"], "user_123")
 	}
+
 	if msg.Metadata["timestamp"] != "2025-10-26T10:00:00Z" {
 		t.Errorf("Metadata[timestamp] = %q, want %q", msg.Metadata["timestamp"], "2025-10-26T10:00:00Z")
 	}
 }
 
-// TestMessage_JSONSerialization tests complete Message JSON marshaling/unmarshaling
+// TestMessage_JSONSerialization tests complete Message JSON marshaling/unmarshaling.
 func TestMessage_JSONSerialization(t *testing.T) {
 	original := Message{
 		ID:      "msg_123",
@@ -176,38 +190,44 @@ func TestMessage_JSONSerialization(t *testing.T) {
 		},
 	}
 
-	// Marshal to JSON
+	// Marshal to JSON.
 	data, err := json.Marshal(original)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
 
-	// Unmarshal back
+	// Unmarshal back.
 	var decoded Message
+
 	err = json.Unmarshal(data, &decoded)
 	if err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
 
-	// Verify all fields
+	// Verify all fields.
 	if decoded.ID != original.ID {
 		t.Errorf("ID = %q, want %q", decoded.ID, original.ID)
 	}
+
 	if decoded.Role != original.Role {
 		t.Errorf("Role = %q, want %q", decoded.Role, original.Role)
 	}
+
 	if decoded.Content != original.Content {
 		t.Errorf("Content = %q, want %q", decoded.Content, original.Content)
 	}
+
 	if len(decoded.ToolCalls) != len(original.ToolCalls) {
 		t.Fatalf("len(ToolCalls) = %d, want %d", len(decoded.ToolCalls), len(original.ToolCalls))
 	}
+
 	if decoded.ToolCalls[0].ID != original.ToolCalls[0].ID {
 		t.Errorf("ToolCalls[0].ID = %q, want %q", decoded.ToolCalls[0].ID, original.ToolCalls[0].ID)
 	}
+
 	if decoded.Metadata["session"] != original.Metadata["session"] {
 		t.Errorf("Metadata[session] = %q, want %q", decoded.Metadata["session"], original.Metadata["session"])
 	}
 }
 
-// TestMessage_InterfaceMethods tests the cycle.Message interface methods
+// TestMessage_InterfaceMethods tests the cycle.Message interface methods.

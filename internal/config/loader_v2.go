@@ -10,13 +10,13 @@ import (
 
 // Source specifies where to load configuration from.
 type Source struct {
-	// File path (empty = try default locations)
+	// File path (empty = try default locations).
 	File string
 
-	// CLI flag overrides
+	// CLI flag overrides.
 	Flags FlagOverrides
 
-	// Runtime parameters
+	// Runtime parameters.
 	WorkDir string
 }
 
@@ -32,7 +32,7 @@ type FlagOverrides struct {
 }
 
 // LoaderV2 handles loading ConfigV2 from multiple sources with proper precedence.
-// Precedence order: flags > environment > config file > defaults
+// Precedence order: flags > environment > config file > defaults.
 type LoaderV2 struct {
 	viper *viper.Viper
 }
@@ -41,20 +41,20 @@ type LoaderV2 struct {
 func NewLoaderV2() *LoaderV2 {
 	v := viper.New()
 
-	// Set config file properties
+	// Set config file properties.
 	v.SetConfigName("spin")
 	v.SetConfigType("yaml")
 	v.AddConfigPath(".")
 	v.AddConfigPath("$HOME/.spin")
 	v.AddConfigPath("/etc/spin")
 
-	// Set environment variable prefix
+	// Set environment variable prefix.
 	v.SetEnvPrefix("SPIN")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
 
 	// Bind all config keys to environment variables
-	// This is required for Unmarshal to pick up env vars
+	// This is required for Unmarshal to pick up env vars.
 	bindEnvVars(v)
 
 	return &LoaderV2{viper: v}
@@ -63,7 +63,7 @@ func NewLoaderV2() *LoaderV2 {
 // bindEnvVars explicitly binds all config keys to environment variables.
 // This is required because Viper's AutomaticEnv only works with Get(), not Unmarshal.
 func bindEnvVars(v *viper.Viper) {
-	// LLM fields
+	// LLM fields.
 	_ = v.BindEnv("llm.provider")
 	_ = v.BindEnv("llm.model")
 	_ = v.BindEnv("llm.temperature")
@@ -72,31 +72,31 @@ func bindEnvVars(v *viper.Viper) {
 	_ = v.BindEnv("llm.base_url")
 	_ = v.BindEnv("llm.api_key")
 
-	// Agent fields
+	// Agent fields.
 	_ = v.BindEnv("agent.max_turns")
 	_ = v.BindEnv("agent.timeout")
 	_ = v.BindEnv("agent.work_dir")
 	_ = v.BindEnv("agent.require_approval")
 
-	// ACE fields
+	// ACE fields.
 	_ = v.BindEnv("ace.enabled")
 	_ = v.BindEnv("ace.playbook_path")
 	_ = v.BindEnv("ace.trajectory_path")
 	_ = v.BindEnv("ace.top_k")
 	_ = v.BindEnv("ace.min_score")
 
-	// Security fields
+	// Security fields.
 	_ = v.BindEnv("security.sandbox_mode")
 	_ = v.BindEnv("security.policy_file")
 	_ = v.BindEnv("security.allowed_commands")
 
-	// Protocol fields
+	// Protocol fields.
 	_ = v.BindEnv("protocol.enable_mcp")
 	_ = v.BindEnv("protocol.enable_git")
 	_ = v.BindEnv("protocol.enable_shell")
 	_ = v.BindEnv("protocol.shell_timeout")
 
-	// AgentsMD fields
+	// AgentsMD fields.
 	_ = v.BindEnv("agents_md.enabled")
 	_ = v.BindEnv("agents_md.path")
 	_ = v.BindEnv("agents_md.max_size")
@@ -106,7 +106,8 @@ func bindEnvVars(v *viper.Viper) {
 func (l *LoaderV2) LoadFromFile(path string) (*ConfigV2, error) {
 	l.viper.SetConfigFile(path)
 
-	if err := l.viper.ReadInConfig(); err != nil {
+	err := l.viper.ReadInConfig()
+	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
@@ -115,7 +116,7 @@ func (l *LoaderV2) LoadFromFile(path string) (*ConfigV2, error) {
 
 // LoadWithEnv loads configuration from environment variables and defaults.
 func (l *LoaderV2) LoadWithEnv() (*ConfigV2, error) {
-	// Don't try to read config file, just use env and defaults
+	// Don't try to read config file, just use env and defaults.
 	return l.unmarshalWithDefaults()
 }
 
@@ -123,7 +124,8 @@ func (l *LoaderV2) LoadWithEnv() (*ConfigV2, error) {
 func (l *LoaderV2) LoadFromFileWithEnv(path string) (*ConfigV2, error) {
 	l.viper.SetConfigFile(path)
 
-	if err := l.viper.ReadInConfig(); err != nil {
+	err := l.viper.ReadInConfig()
+	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
@@ -131,10 +133,10 @@ func (l *LoaderV2) LoadFromFileWithEnv(path string) (*ConfigV2, error) {
 }
 
 // Load attempts to load configuration from default locations.
-// It searches for config files in: ., ~/.spin, /etc/spin
+// It searches for config files in: ., ~/.spin, /etc/spin.
 func (l *LoaderV2) Load() (*ConfigV2, error) {
 	// Try to read config file from default locations
-	// If not found, that's OK - we'll use defaults and env vars
+	// If not found, that's OK - we'll use defaults and env vars.
 	_ = l.viper.ReadInConfig()
 
 	return l.unmarshalWithDefaults()
@@ -142,17 +144,19 @@ func (l *LoaderV2) Load() (*ConfigV2, error) {
 
 // unmarshalWithDefaults unmarshals the configuration and applies defaults for missing values.
 func (l *LoaderV2) unmarshalWithDefaults() (*ConfigV2, error) {
-	// Unmarshal into a new config struct
+	// Unmarshal into a new config struct.
 	cfg := &ConfigV2{}
-	if err := l.viper.Unmarshal(cfg); err != nil {
+	err := l.viper.Unmarshal(cfg)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// Apply defaults for any unset fields
+	// Apply defaults for any unset fields.
 	l.applyDefaults(cfg)
 
-	// Validate the final configuration
-	if err := cfg.Validate(); err != nil {
+	// Validate the final configuration.
+	err = cfg.Validate()
+	if err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
 
@@ -163,113 +167,127 @@ func (l *LoaderV2) unmarshalWithDefaults() (*ConfigV2, error) {
 func (l *LoaderV2) applyDefaults(cfg *ConfigV2) {
 	defaults := DefaultConfigV2()
 
-	// Apply version default
+	// Apply version default.
 	if !l.viper.IsSet("version") {
 		cfg.Version = defaults.Version
 	}
 
-	// Apply LLM defaults
+	// Apply LLM defaults.
 	if !l.viper.IsSet("llm.provider") {
 		cfg.LLM.Provider = defaults.LLM.Provider
 	}
+
 	if !l.viper.IsSet("llm.model") {
 		cfg.LLM.Model = defaults.LLM.Model
 	}
+
 	if !l.viper.IsSet("llm.temperature") {
 		cfg.LLM.Temperature = defaults.LLM.Temperature
 	}
+
 	if !l.viper.IsSet("llm.max_tokens") {
 		cfg.LLM.MaxTokens = defaults.LLM.MaxTokens
 	}
+
 	if !l.viper.IsSet("llm.timeout") {
 		cfg.LLM.Timeout = defaults.LLM.Timeout
 	}
 
-	// Apply Agent defaults
+	// Apply Agent defaults.
 	if !l.viper.IsSet("agent.max_turns") {
 		cfg.Agent.MaxTurns = defaults.Agent.MaxTurns
 	}
+
 	if !l.viper.IsSet("agent.timeout") {
 		cfg.Agent.Timeout = defaults.Agent.Timeout
 	}
+
 	if !l.viper.IsSet("agent.work_dir") {
 		cfg.Agent.WorkDir = defaults.Agent.WorkDir
 	}
 
 	// Apply ACE defaults
-	// Check if any ACE field was explicitly set
+	// Check if any ACE field was explicitly set.
 	aceFieldsSet := l.viper.IsSet("ace.enabled") || l.viper.IsSet("ace.playbook_path") ||
 		l.viper.IsSet("ace.trajectory_path") || l.viper.IsSet("ace.top_k") || l.viper.IsSet("ace.min_score")
 
 	if !aceFieldsSet {
-		// No ACE fields set - apply full defaults
+		// No ACE fields set - apply full defaults.
 		cfg.ACE = defaults.ACE
 	} else {
-		// Some ACE fields set, apply field-level defaults
+		// Some ACE fields set, apply field-level defaults.
 		if !l.viper.IsSet("ace.enabled") {
 			cfg.ACE.Enabled = defaults.ACE.Enabled
 		}
+
 		if cfg.ACE.Enabled {
-			// Only apply path defaults if ACE is enabled
+			// Only apply path defaults if ACE is enabled.
 			if !l.viper.IsSet("ace.playbook_path") {
 				cfg.ACE.PlaybookPath = defaults.ACE.PlaybookPath
 			}
+
 			if !l.viper.IsSet("ace.trajectory_path") {
 				cfg.ACE.TrajectoryPath = defaults.ACE.TrajectoryPath
 			}
+
 			if !l.viper.IsSet("ace.top_k") {
 				cfg.ACE.TopK = defaults.ACE.TopK
 			}
+
 			if !l.viper.IsSet("ace.min_score") {
 				cfg.ACE.MinScore = defaults.ACE.MinScore
 			}
 		}
 	}
 
-	// Apply Security defaults
+	// Apply Security defaults.
 	if !l.viper.IsSet("security.sandbox_mode") {
 		cfg.Security.SandboxMode = defaults.Security.SandboxMode
 	}
 
-	// Apply Protocol defaults
+	// Apply Protocol defaults.
 	if !l.viper.IsSet("protocol") {
 		cfg.Protocol = defaults.Protocol
 	} else {
 		if !l.viper.IsSet("protocol.enable_mcp") {
 			cfg.Protocol.EnableMCP = defaults.Protocol.EnableMCP
 		}
+
 		if !l.viper.IsSet("protocol.enable_git") {
 			cfg.Protocol.EnableGit = defaults.Protocol.EnableGit
 		}
+
 		if !l.viper.IsSet("protocol.enable_shell") {
 			cfg.Protocol.EnableShell = defaults.Protocol.EnableShell
 		}
+
 		if !l.viper.IsSet("protocol.shell_timeout") {
 			cfg.Protocol.ShellTimeout = defaults.Protocol.ShellTimeout
 		}
 	}
 
-	// Apply AgentsMD defaults
+	// Apply AgentsMD defaults.
 	if !l.viper.IsSet("agents_md") {
 		cfg.AgentsMD = defaults.AgentsMD
 	} else {
 		if !l.viper.IsSet("agents_md.enabled") {
 			cfg.AgentsMD.Enabled = defaults.AgentsMD.Enabled
 		}
+
 		if !l.viper.IsSet("agents_md.max_size") {
 			cfg.AgentsMD.MaxSize = defaults.AgentsMD.MaxSize
 		}
-		// Path default is empty string (auto-discover), no need to apply
+		// Path default is empty string (auto-discover), no need to apply.
 	}
 }
 
 // Set sets a configuration value (useful for testing and programmatic config).
-func (l *LoaderV2) Set(key string, value interface{}) {
+func (l *LoaderV2) Set(key string, value any) {
 	l.viper.Set(key, value)
 }
 
 // Get retrieves a configuration value.
-func (l *LoaderV2) Get(key string) interface{} {
+func (l *LoaderV2) Get(key string) any {
 	return l.viper.Get(key)
 }
 
@@ -279,66 +297,75 @@ func (l *LoaderV2) ConfigFileUsed() string {
 }
 
 // UnmarshalKey unmarshals a specific key into a provided struct.
-func (l *LoaderV2) UnmarshalKey(key string, rawVal interface{}) error {
+func (l *LoaderV2) UnmarshalKey(key string, rawVal any) error {
 	return l.viper.UnmarshalKey(key, rawVal)
 }
 
 // AllSettings returns all settings as a map.
-func (l *LoaderV2) AllSettings() map[string]interface{} {
+func (l *LoaderV2) AllSettings() map[string]any {
 	return l.viper.AllSettings()
 }
 
 // Load loads and merges configuration from all sources.
-// Precedence: flags > env > file > defaults
+// Precedence: flags > env > file > defaults.
 func Load(src Source) (*ConfigV2, error) {
 	loader := NewLoaderV2()
-	var cfg *ConfigV2
-	var err error
 
-	// Load from file if specified, otherwise search default paths
+	var (
+		cfg *ConfigV2
+		err error
+	)
+
+	// Load from file if specified, otherwise search default paths.
+
 	if src.File != "" {
 		cfg, err = loader.LoadFromFile(src.File)
 		if err != nil {
 			return nil, fmt.Errorf("load config file: %w", err)
 		}
 	} else {
-		// Search default paths: ., ~/.spin, /etc/spin
+		// Search default paths: ., ~/.spin, /etc/spin.
 		cfg, err = loader.Load()
 		if err != nil {
 			return nil, fmt.Errorf("load config: %w", err)
 		}
 	}
 
-	// Apply flag overrides (before env so env knows the provider)
+	// Apply flag overrides (before env so env knows the provider).
 	if src.Flags.Provider != "" {
 		cfg.LLM.Provider = src.Flags.Provider
 	}
+
 	if src.Flags.Model != "" {
 		cfg.LLM.Model = src.Flags.Model
 	}
+
 	if src.Flags.BaseURL != "" {
 		cfg.LLM.BaseURL = src.Flags.BaseURL
 	}
+
 	if src.Flags.MaxTurns > 0 {
 		cfg.Agent.MaxTurns = src.Flags.MaxTurns
 	}
+
 	if src.Flags.Debug {
 		cfg.Agent.Debug = true
 		cfg.Agent.LogLevel = "debug"
 	}
+
 	if src.Flags.Sandbox != "" {
 		cfg.Security.SandboxMode = src.Flags.Sandbox
 	}
 
 	// Apply environment variables (after flags so we know the provider)
-	// Env vars fill in missing values but don't override explicit flags
+	// Env vars fill in missing values but don't override explicit flags.
 	applyEnvVars(cfg)
 
 	// Merge MCP servers from mcp.servers into protocol.mcp_servers
-	// The CLI stores servers at mcp.servers, so we need to merge them
+	// The CLI stores servers at mcp.servers, so we need to merge them.
 	mergeMCPServers(loader, cfg)
 
-	// Override WorkDir if provided
+	// Override WorkDir if provided.
 	if src.WorkDir != "" {
 		cfg.Agent.WorkDir = src.WorkDir
 	}
@@ -348,7 +375,7 @@ func Load(src Source) (*ConfigV2, error) {
 
 // applyEnvVars applies environment variables to config.
 func applyEnvVars(cfg *ConfigV2) {
-	// Apply API key from environment based on provider
+	// Apply API key from environment based on provider.
 	if cfg.LLM.APIKey == "" {
 		apiKey := getAPIKeyFromEnv(cfg.LLM.Provider)
 		if apiKey != "" {
@@ -361,23 +388,24 @@ func applyEnvVars(cfg *ConfigV2) {
 // The CLI (spin mcp add) stores servers at mcp.servers, while the runtime reads
 // from protocol.mcp_servers. This function ensures both sources are unified.
 func mergeMCPServers(loader *LoaderV2, cfg *ConfigV2) {
-	// Try to load servers from mcp.servers path
+	// Try to load servers from mcp.servers path.
 	var mcpServers []MCPServerConfigV2
-	if err := loader.UnmarshalKey("mcp.servers", &mcpServers); err != nil {
-		return // No servers at mcp.servers, nothing to merge
+	err := loader.UnmarshalKey("mcp.servers", &mcpServers)
+	if err != nil {
+		return // No servers at mcp.servers, nothing to merge.
 	}
 
 	if len(mcpServers) == 0 {
 		return
 	}
 
-	// Build a set of existing server names for deduplication
+	// Build a set of existing server names for deduplication.
 	existing := make(map[string]bool)
 	for _, srv := range cfg.Protocol.MCPServers {
 		existing[srv.Name] = true
 	}
 
-	// Append servers from mcp.servers that don't already exist
+	// Append servers from mcp.servers that don't already exist.
 	for _, srv := range mcpServers {
 		if !existing[srv.Name] {
 			cfg.Protocol.MCPServers = append(cfg.Protocol.MCPServers, srv)
@@ -391,6 +419,7 @@ func getAPIKeyFromEnv(provider string) string {
 	if envKey == "" {
 		return ""
 	}
+
 	return os.Getenv(envKey)
 }
 

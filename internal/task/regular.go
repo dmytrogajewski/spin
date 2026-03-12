@@ -5,12 +5,12 @@ import (
 	"fmt"
 )
 
-// Constants for Regular mode configuration
+// Constants for Regular mode configuration.
 const (
-	// DefaultMaxTokens is the default token budget for Regular mode
+	// DefaultMaxTokens is the default token budget for Regular mode.
 	DefaultMaxTokens = 16384
 
-	// MinPromptLength is the minimum length for custom system prompts
+	// MinPromptLength is the minimum length for custom system prompts.
 	MinPromptLength = 50
 )
 
@@ -24,7 +24,7 @@ const (
 //   - Complex multi-step tasks
 //   - Tasks requiring all available tools
 //
-// Example usage:
+// Example usage:.
 type Regular struct {
 	name         string
 	systemPrompt string
@@ -83,7 +83,7 @@ func (r *Regular) SystemPrompt() string {
 }
 
 func (r *Regular) AllowedTools() []string {
-	// Regular mode allows all tools
+	// Regular mode allows all tools.
 	return []string{}
 }
 
@@ -95,8 +95,10 @@ func (r *Regular) Validate() error {
 	if r.maxTokens <= 0 {
 		return errors.New("max tokens must be positive")
 	}
-	if r.maxTokens > 100000 { // MaxAllowedTokens
+
+	if r.maxTokens > 100000 { // MaxAllowedTokens.
 		return fmt.Errorf("max tokens %d exceeds maximum allowed %d", r.maxTokens, 100000)
 	}
+
 	return nil
 }

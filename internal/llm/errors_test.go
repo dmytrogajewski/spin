@@ -102,7 +102,7 @@ func TestErrorWrapping(t *testing.T) {
 }
 
 func TestErrorEquality(t *testing.T) {
-	// Verify all errors are distinct
+	// Verify all errors are distinct.
 	errs := []error{
 		ErrProviderNotFound,
 		ErrInvalidRequest,

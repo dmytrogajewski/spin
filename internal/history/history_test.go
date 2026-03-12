@@ -14,6 +14,7 @@ func TestNewHistory(t *testing.T) {
 	if h == nil {
 		t.Fatal("NewHistory returned nil")
 	}
+
 	if h.maxTokens != 4096 {
 		t.Errorf("expected maxTokens 4096, got %d", h.maxTokens)
 	}
@@ -24,6 +25,7 @@ func TestNewHistory_NilTokenizer(t *testing.T) {
 	if h == nil {
 		t.Fatal("NewHistory returned nil")
 	}
+
 	if h.tokenizer == nil {
 		t.Error("tokenizer should default to SimpleTokenizer")
 	}
@@ -34,6 +36,7 @@ func TestNewHistoryWithDefaults(t *testing.T) {
 	if h == nil {
 		t.Fatal("NewHistoryWithDefaults returned nil")
 	}
+
 	if h.maxTokens != 4096 {
 		t.Errorf("expected default maxTokens 4096, got %d", h.maxTokens)
 	}
@@ -54,12 +57,15 @@ func TestHistory_AddMessage(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(msgs))
 	}
+
 	if msgs[0].Role != message.RoleUser {
 		t.Errorf("expected role user, got %s", msgs[0].Role)
 	}
+
 	if msgs[0].ID == "" {
 		t.Error("message ID should be generated")
 	}
+
 	if msgs[0].Tokens == 0 {
 		t.Error("message tokens should be calculated")
 	}
@@ -88,6 +94,7 @@ func TestHistory_AddSystemMessage(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(msgs))
 	}
+
 	if msgs[0].Role != message.RoleSystem {
 		t.Errorf("expected role system, got %s", msgs[0].Role)
 	}
@@ -105,6 +112,7 @@ func TestHistory_AddUserMessage(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(msgs))
 	}
+
 	if msgs[0].Role != message.RoleUser {
 		t.Errorf("expected role user, got %s", msgs[0].Role)
 	}
@@ -137,7 +145,7 @@ func TestHistory_Messages_DefensiveCopy(t *testing.T) {
 	msgs := h.Messages()
 	msgs[0].Content = "Modified"
 
-	// Original should be unchanged
+	// Original should be unchanged.
 	original := h.Messages()
 	if original[0].Content == "Modified" {
 		t.Error("Messages() should return a defensive copy")
@@ -150,7 +158,7 @@ func TestHistory_SetCompressor(t *testing.T) {
 	compressor := compress.NewHybridCompressor(classifier, compress.DefaultCompressorConfig())
 
 	h.SetCompressor(compressor)
-	// No way to verify directly, but should not panic
+	// No way to verify directly, but should not panic.
 }
 
 func TestHistory_SetCompressionConfig(t *testing.T) {
@@ -162,7 +170,7 @@ func TestHistory_SetCompressionConfig(t *testing.T) {
 	}
 
 	h.SetCompressionConfig(cfg)
-	// No way to verify directly, but should not panic
+	// No way to verify directly, but should not panic.
 }
 
 func TestDefaultCompressionConfig(t *testing.T) {
@@ -170,19 +178,21 @@ func TestDefaultCompressionConfig(t *testing.T) {
 	if !cfg.Enabled {
 		t.Error("expected Enabled to be true by default")
 	}
+
 	if cfg.Threshold != 0.8 {
 		t.Errorf("expected Threshold 0.8, got %f", cfg.Threshold)
 	}
+
 	if cfg.TargetRatio != 0.7 {
 		t.Errorf("expected TargetRatio 0.7, got %f", cfg.TargetRatio)
 	}
 }
 
 func TestHistory_CompressionTrigger(t *testing.T) {
-	// Create history with small token limit
+	// Create history with small token limit.
 	h := NewHistory(100, &tokenizer.SimpleTokenizer{})
 
-	// Set up compressor
+	// Set up compressor.
 	classifier := compress.NewClassifier()
 	compressor := compress.NewHybridCompressor(classifier, compress.CompressorConfig{
 		PreserveCritical: true,
@@ -191,33 +201,36 @@ func TestHistory_CompressionTrigger(t *testing.T) {
 	h.SetCompressor(compressor)
 	h.SetCompressionConfig(CompressionConfig{
 		Enabled:     true,
-		Threshold:   0.5, // 50% = 50 tokens
-		TargetRatio: 0.3, // 30% = 30 tokens
+		Threshold:   0.5, // 50% = 50 tokens.
+		TargetRatio: 0.3, // 30% = 30 tokens.
 	})
 
-	// Add messages that will exceed threshold
-	for i := 0; i < 5; i++ {
+	// Add messages that will exceed threshold.
+	for range 5 {
 		h.AddUserMessage("User message content here")
 	}
 
-	// Should have compressed
+	// Should have compressed.
 	msgs := h.Messages()
 	tokens := h.TokenCount()
 
 	// After compression, should have fewer tokens
-	// The exact number depends on message sizes and compression logic
+	// The exact number depends on message sizes and compression logic.
 	if tokens > 100 {
 		t.Errorf("expected tokens <= 100 after compression, got %d", tokens)
 	}
 
-	// Should still have user messages (critical)
+	// Should still have user messages (critical).
 	hasUser := false
+
 	for _, msg := range msgs {
 		if msg.Role == message.RoleUser {
 			hasUser = true
+
 			break
 		}
 	}
+
 	if !hasUser {
 		t.Error("expected at least one user message to be preserved")
 	}
@@ -226,22 +239,22 @@ func TestHistory_CompressionTrigger(t *testing.T) {
 func TestHistory_CompressionDisabled(t *testing.T) {
 	h := NewHistory(100, &tokenizer.SimpleTokenizer{})
 
-	// Set up compressor but disable compression
+	// Set up compressor but disable compression.
 	classifier := compress.NewClassifier()
 	compressor := compress.NewHybridCompressor(classifier, compress.DefaultCompressorConfig())
 	h.SetCompressor(compressor)
 	h.SetCompressionConfig(CompressionConfig{
-		Enabled:     false, // Disabled
+		Enabled:     false, // Disabled.
 		Threshold:   0.5,
 		TargetRatio: 0.3,
 	})
 
-	// Add messages that would exceed threshold
-	for i := 0; i < 10; i++ {
+	// Add messages that would exceed threshold.
+	for range 10 {
 		h.AddUserMessage("User message content")
 	}
 
-	// Should NOT have compressed
+	// Should NOT have compressed.
 	msgs := h.Messages()
 	if len(msgs) != 10 {
 		t.Errorf("expected 10 messages (no compression), got %d", len(msgs))
@@ -251,26 +264,26 @@ func TestHistory_CompressionDisabled(t *testing.T) {
 func TestHistory_NoCompressorSet(t *testing.T) {
 	h := NewHistory(100, &tokenizer.SimpleTokenizer{})
 
-	// Enable compression but no compressor set
+	// Enable compression but no compressor set.
 	h.SetCompressionConfig(CompressionConfig{
 		Enabled:     true,
 		Threshold:   0.5,
 		TargetRatio: 0.3,
 	})
 
-	// Add messages
-	for i := 0; i < 10; i++ {
+	// Add messages.
+	for range 10 {
 		h.AddUserMessage("User message")
 	}
 
-	// Should NOT have compressed (no compressor)
+	// Should NOT have compressed (no compressor).
 	msgs := h.Messages()
 	if len(msgs) != 10 {
 		t.Errorf("expected 10 messages (no compressor), got %d", len(msgs))
 	}
 }
 
-// mockCompressor is a test compressor that tracks calls
+// mockCompressor is a test compressor that tracks calls.
 type mockCompressor struct {
 	callCount int
 	messages  []message.Message
@@ -279,7 +292,7 @@ type mockCompressor struct {
 func (m *mockCompressor) Compress(ctx context.Context, msgs []message.Message, targetTokens int, tok tokenizer.Tokenizer) ([]message.Message, error) {
 	m.callCount++
 	m.messages = msgs
-	// Return all messages (no actual compression)
+	// Return all messages (no actual compression).
 	return msgs, nil
 }
 
@@ -294,16 +307,16 @@ func TestHistory_CompressionCallsCompressor(t *testing.T) {
 	h.SetCompressor(mock)
 	h.SetCompressionConfig(CompressionConfig{
 		Enabled:     true,
-		Threshold:   0.1, // Very low threshold to trigger compression
+		Threshold:   0.1, // Very low threshold to trigger compression.
 		TargetRatio: 0.05,
 	})
 
-	// Add messages to trigger compression
+	// Add messages to trigger compression.
 	h.AddUserMessage("Message 1")
 	h.AddUserMessage("Message 2")
 	h.AddUserMessage("Message 3")
 
-	// Compressor should have been called
+	// Compressor should have been called.
 	if mock.callCount == 0 {
 		t.Error("expected compressor to be called")
 	}
@@ -342,7 +355,7 @@ func TestHistory_ToolCallTokenCounting(t *testing.T) {
 	}
 
 	msgs := h.Messages()
-	// Token count should include tool call overhead
+	// Token count should include tool call overhead.
 	if msgs[0].Tokens < 10 {
 		t.Errorf("expected tokens to include tool call overhead, got %d", msgs[0].Tokens)
 	}

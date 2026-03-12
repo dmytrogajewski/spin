@@ -10,7 +10,7 @@ import (
 	"github.com/openai/openai-go"
 )
 
-// TestNewProvider tests provider construction
+// TestNewProvider tests provider construction.
 func TestNewProvider(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -64,11 +64,13 @@ func TestNewProvider(t *testing.T) {
 				if err == nil {
 					t.Error("NewProvider() expected error, got nil")
 				}
+
 				return
 			}
 
 			if err != nil {
 				t.Errorf("NewProvider() unexpected error = %v", err)
+
 				return
 			}
 
@@ -83,7 +85,7 @@ func TestNewProvider(t *testing.T) {
 	}
 }
 
-// TestProvider_Name tests Name() method
+// TestProvider_Name tests Name() method.
 func TestProvider_Name(t *testing.T) {
 	p, _ := NewProvider(Config{})
 
@@ -95,7 +97,7 @@ func TestProvider_Name(t *testing.T) {
 	}
 }
 
-// TestProvider_Capabilities tests Capabilities() method
+// TestProvider_Capabilities tests Capabilities() method.
 func TestProvider_Capabilities(t *testing.T) {
 	p, _ := NewProvider(Config{})
 
@@ -104,21 +106,24 @@ func TestProvider_Capabilities(t *testing.T) {
 	if !caps.Streaming {
 		t.Error("Capabilities().Streaming = false, want true")
 	}
+
 	if !caps.FunctionCalling {
 		t.Error("Capabilities().FunctionCalling = false, want true")
 	}
+
 	if caps.Vision {
 		t.Error("Capabilities().Vision = true, want false")
 	}
 }
 
-// TestProvider_Complete tests completion delegation
+// TestProvider_Complete tests completion delegation.
 func TestProvider_Complete(t *testing.T) {
-	// Create test server
+	// Create test server.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("Request method = %s, want POST", r.Method)
 		}
+
 		if r.URL.Path != "/chat/completions" {
 			t.Errorf("Request path = %s, want /chat/completions", r.URL.Path)
 		}
@@ -147,7 +152,7 @@ func TestProvider_Complete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Create provider
+	// Create provider.
 	p, err := NewProvider(Config{
 		BaseURL: server.URL,
 		Model:   "llama2",
@@ -156,7 +161,7 @@ func TestProvider_Complete(t *testing.T) {
 		t.Fatalf("NewProvider() error = %v", err)
 	}
 
-	// Call Complete
+	// Call Complete.
 	params := openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("Hello"),
@@ -166,6 +171,7 @@ func TestProvider_Complete(t *testing.T) {
 	resp, err := p.Complete(context.Background(), params)
 	if err != nil {
 		t.Errorf("Complete() unexpected error = %v", err)
+
 		return
 	}
 
@@ -178,11 +184,12 @@ func TestProvider_Complete(t *testing.T) {
 		if len(resp.Choices) > 0 {
 			content = resp.Choices[0].Message.Content
 		}
+
 		t.Errorf("Response content = %q, want %q", content, "Hello! How can I help you?")
 	}
 }
 
-// TestProvider_Stream tests streaming delegation
+// TestProvider_Stream tests streaming delegation.
 func TestProvider_Stream(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chat/completions" {
@@ -210,14 +217,15 @@ func TestProvider_Stream(t *testing.T) {
 			openai.UserMessage("Hello"),
 		}),
 	}
-	chunks, err := p.Stream(context.Background(), params)
 
+	chunks, err := p.Stream(context.Background(), params)
 	if err != nil {
 		t.Errorf("Stream() unexpected error = %v", err)
+
 		return
 	}
 
-	// Collect chunks
+	// Collect chunks.
 	var collected []openai.ChatCompletionChunk
 	for chunk := range chunks {
 		collected = append(collected, chunk)
@@ -228,7 +236,7 @@ func TestProvider_Stream(t *testing.T) {
 	}
 }
 
-// TestProvider_Models tests model listing delegation
+// TestProvider_Models tests model listing delegation.
 func TestProvider_Models(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/models" {
@@ -251,9 +259,9 @@ func TestProvider_Models(t *testing.T) {
 	})
 
 	models, err := p.Models(context.Background())
-
 	if err != nil {
 		t.Errorf("Models() unexpected error = %v", err)
+
 		return
 	}
 
@@ -262,7 +270,7 @@ func TestProvider_Models(t *testing.T) {
 	}
 }
 
-// TestProvider_Close tests cleanup delegation
+// TestProvider_Close tests cleanup delegation.
 func TestProvider_Close(t *testing.T) {
 	p, _ := NewProvider(Config{})
 
@@ -272,12 +280,11 @@ func TestProvider_Close(t *testing.T) {
 	}
 }
 
-// TestProvider_DefaultBaseURL tests default base URL
+// TestProvider_DefaultBaseURL tests default base URL.
 func TestProvider_DefaultBaseURL(t *testing.T) {
 	// We can't easily test the internal baseURL, but we can verify
-	// that the provider is created successfully without a baseURL
+	// that the provider is created successfully without a baseURL.
 	p, err := NewProvider(Config{})
-
 	if err != nil {
 		t.Errorf("NewProvider() with empty baseURL should succeed, got error: %v", err)
 	}
@@ -287,7 +294,7 @@ func TestProvider_DefaultBaseURL(t *testing.T) {
 	}
 }
 
-// TestProvider_ErrorHandling tests error propagation
+// TestProvider_ErrorHandling tests error propagation.
 func TestProvider_ErrorHandling(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -304,8 +311,8 @@ func TestProvider_ErrorHandling(t *testing.T) {
 			openai.UserMessage("test"),
 		}),
 	}
-	_, err := p.Complete(context.Background(), params)
 
+	_, err := p.Complete(context.Background(), params)
 	if err == nil {
 		t.Error("Complete() with 401 response should return error")
 	}
@@ -315,10 +322,10 @@ func TestProvider_ErrorHandling(t *testing.T) {
 	}
 }
 
-// TestProvider_ContextCancellation tests context cancellation propagation
+// TestProvider_ContextCancellation tests context cancellation propagation.
 func TestProvider_ContextCancellation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// This should not be reached due to cancellation
+		// This should not be reached due to cancellation.
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"choices":[{"message":{"content":"test"}}]}`))
 	}))
@@ -329,16 +336,16 @@ func TestProvider_ContextCancellation(t *testing.T) {
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+	cancel() // Cancel immediately.
 
 	params := openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("test"),
 		}),
 	}
-	_, err := p.Complete(ctx, params)
 
+	_, err := p.Complete(ctx, params)
 	if err == nil {
-		t.Error("Complete() with cancelled context should return error")
+		t.Error("Complete() with canceled context should return error")
 	}
 }

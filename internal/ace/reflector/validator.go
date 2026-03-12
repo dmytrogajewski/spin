@@ -1,10 +1,13 @@
 package reflector
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // InsightValidator validates insight quality.
 type InsightValidator struct {
-	// Future: add configuration options
+	// Future: add configuration options.
 }
 
 // NewInsightValidator creates a new insight validator.
@@ -15,10 +18,10 @@ func NewInsightValidator() *InsightValidator {
 // Validate checks if an insight meets quality requirements.
 func (v *InsightValidator) Validate(insight *Insight) error {
 	if insight == nil {
-		return fmt.Errorf("insight cannot be nil")
+		return errors.New("insight cannot be nil")
 	}
 
-	// Delegate to existing Validate method on Insight
+	// Delegate to existing Validate method on Insight.
 	return insight.Validate()
 }
 
@@ -27,7 +30,8 @@ func (v *InsightValidator) ValidateBatch(insights []*Insight) []error {
 	var errs []error
 
 	for i, insight := range insights {
-		if err := v.Validate(insight); err != nil {
+		err := v.Validate(insight)
+		if err != nil {
 			errs = append(errs, fmt.Errorf("insight %d: %w", i, err))
 		}
 	}

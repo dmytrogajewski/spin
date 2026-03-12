@@ -3,9 +3,10 @@ package tools
 import (
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/message"
 )
 
 func TestValidateToolCall_Valid(t *testing.T) {
@@ -59,7 +60,7 @@ func TestValidateToolCall_EmptyFunctionName(t *testing.T) {
 }
 
 func TestValidateToolCall_EmptyType(t *testing.T) {
-	// Empty Type should not cause validation error (not required)
+	// Empty Type should not cause validation error (not required).
 	call := &message.ToolCall{
 		ID:   "test-id",
 		Type: "",
@@ -74,7 +75,7 @@ func TestValidateToolCall_EmptyType(t *testing.T) {
 }
 
 func TestValidateToolCall_EmptyArguments(t *testing.T) {
-	// Empty Arguments should not cause validation error (not required)
+	// Empty Arguments should not cause validation error (not required).
 	call := &message.ToolCall{
 		ID:   "test-id",
 		Type: "function",
@@ -87,5 +88,3 @@ func TestValidateToolCall_EmptyArguments(t *testing.T) {
 	err := ValidateToolCall(call)
 	assert.NoError(t, err)
 }
-
-

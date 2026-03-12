@@ -39,7 +39,7 @@ type Credential struct {
 	// Type is the credential type (API key, token, etc.)
 	Type CredentialType
 
-	// Value is the credential value (e.g., "sk-...", "bearer-...")
+	// Value is the credential value (e.g., "sk-...", "bearer-...").
 	Value string
 }
 
@@ -47,13 +47,13 @@ type Credential struct {
 type CredentialType int
 
 const (
-	// CredentialTypeNone indicates no authentication required
+	// CredentialTypeNone indicates no authentication required.
 	CredentialTypeNone CredentialType = iota
 
-	// CredentialTypeAPIKey indicates API key authentication
+	// CredentialTypeAPIKey indicates API key authentication.
 	CredentialTypeAPIKey
 
-	// CredentialTypeToken indicates bearer token authentication
+	// CredentialTypeToken indicates bearer token authentication.
 	CredentialTypeToken
 )
 
@@ -72,10 +72,10 @@ func (t CredentialType) String() string {
 }
 
 var (
-	// ErrNotAuthenticated indicates no credential found for provider
+	// ErrNotAuthenticated indicates no credential found for provider.
 	ErrNotAuthenticated = errors.New("not authenticated")
 
-	// ErrInvalidCredential indicates credential validation failed
+	// ErrInvalidCredential indicates credential validation failed.
 	ErrInvalidCredential = errors.New("invalid credential")
 )
 
@@ -94,47 +94,52 @@ func NewManager(keystore Keystore) *Manager {
 
 // GetCredential retrieves a credential for a provider.
 func (m *Manager) GetCredential(ctx context.Context, provider string) (Credential, error) {
-	// Check context
-	if err := ctx.Err(); err != nil {
+	// Check context.
+	err := ctx.Err()
+	if err != nil {
 		return Credential{}, err
 	}
 
-	// Normalize provider name
+	// Normalize provider name.
 	provider = normalizeProvider(provider)
 
-	// Get from keystore
+	// Get from keystore.
 	value, err := m.keystore.Get(credentialKey(provider))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return Credential{}, fmt.Errorf("%s: %w", provider, ErrNotAuthenticated)
 		}
+
 		return Credential{}, fmt.Errorf("get credential: %w", err)
 	}
 
-	// Parse credential
+	// Parse credential.
 	return parseCredential(value)
 }
 
 // SetCredential stores a credential for a provider.
 func (m *Manager) SetCredential(ctx context.Context, provider string, cred Credential) error {
-	// Check context
-	if err := ctx.Err(); err != nil {
+	// Check context.
+	err := ctx.Err()
+	if err != nil {
 		return err
 	}
 
-	// Validate credential
-	if err := validateCredential(cred); err != nil {
+	// Validate credential.
+	err = validateCredential(cred)
+	if err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidCredential, err)
 	}
 
-	// Normalize provider name
+	// Normalize provider name.
 	provider = normalizeProvider(provider)
 
-	// Format credential
+	// Format credential.
 	value := formatCredential(cred)
 
-	// Store in keystore
-	if err := m.keystore.Set(credentialKey(provider), value); err != nil {
+	// Store in keystore.
+	err = m.keystore.Set(credentialKey(provider), value)
+	if err != nil {
 		return fmt.Errorf("set credential: %w", err)
 	}
 
@@ -143,20 +148,23 @@ func (m *Manager) SetCredential(ctx context.Context, provider string, cred Crede
 
 // DeleteCredential removes a credential for a provider.
 func (m *Manager) DeleteCredential(ctx context.Context, provider string) error {
-	// Check context
-	if err := ctx.Err(); err != nil {
+	// Check context.
+	err := ctx.Err()
+	if err != nil {
 		return err
 	}
 
-	// Normalize provider name
+	// Normalize provider name.
 	provider = normalizeProvider(provider)
 
-	// Delete from keystore
-	if err := m.keystore.Delete(credentialKey(provider)); err != nil {
+	// Delete from keystore.
+	err = m.keystore.Delete(credentialKey(provider))
+	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			// Idempotent - no error if not found
+			// Idempotent - no error if not found.
 			return nil
 		}
+
 		return fmt.Errorf("delete credential: %w", err)
 	}
 
@@ -165,23 +173,25 @@ func (m *Manager) DeleteCredential(ctx context.Context, provider string) error {
 
 // ListProviders returns all providers with stored credentials.
 func (m *Manager) ListProviders(ctx context.Context) ([]string, error) {
-	// Check context
-	if err := ctx.Err(); err != nil {
+	// Check context.
+	err := ctx.Err()
+	if err != nil {
 		return nil, err
 	}
 
-	// List all keys
+	// List all keys.
 	keys, err := m.keystore.List()
 	if err != nil {
 		return nil, fmt.Errorf("list providers: %w", err)
 	}
 
-	// Extract provider names from credential keys
+	// Extract provider names from credential keys.
 	providers := make([]string, 0, len(keys))
+
 	prefix := "spin:cred:"
 	for _, key := range keys {
-		if strings.HasPrefix(key, prefix) {
-			provider := strings.TrimPrefix(key, prefix)
+		if after, ok := strings.CutPrefix(key, prefix); ok {
+			provider := after
 			providers = append(providers, provider)
 		}
 	}
@@ -201,7 +211,7 @@ func normalizeProvider(provider string) string {
 
 // parseCredential parses a credential from storage format.
 //
-// Format: "type:value"
+// Format: "type:value".
 func parseCredential(s string) (Credential, error) {
 	typeName, value, err := splitCredentialString(s)
 	if err != nil {
@@ -225,6 +235,7 @@ func splitCredentialString(s string) (string, string, error) {
 	if len(parts) != 2 {
 		return "", "", fmt.Errorf("invalid credential format: %q", s)
 	}
+
 	return parts[0], parts[1], nil
 }
 
@@ -244,15 +255,15 @@ func parseCredentialType(typeName string) (CredentialType, error) {
 
 // validateCredential validates a credential.
 func validateCredential(cred Credential) error {
-	// Validate type
+	// Validate type.
 	switch cred.Type {
 	case CredentialTypeNone:
-		// None is valid but value should be empty
+		// None is valid but value should be empty.
 		if cred.Value != "" {
 			return errors.New("none credential must have empty value")
 		}
 	case CredentialTypeAPIKey, CredentialTypeToken:
-		// API key and token must have non-empty value
+		// API key and token must have non-empty value.
 		if cred.Value == "" {
 			return errors.New("credential value cannot be empty")
 		}
@@ -266,6 +277,7 @@ func validateCredential(cred Credential) error {
 // formatCredential formats a credential for storage.
 func formatCredential(cred Credential) string {
 	var typeName string
+
 	switch cred.Type {
 	case CredentialTypeNone:
 		typeName = "none"

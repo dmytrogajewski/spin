@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -17,7 +18,7 @@ import (
 // SmitheryClient implements an MCP client for Smithery's connection-based API.
 // Smithery uses a different protocol than standard MCP transports:
 // 1. Create a connection: POST /connect/{namespace}
-// 2. Make RPC calls: POST /connect/{namespace}/{connectionId}/rpc
+// 2. Make RPC calls: POST /connect/{namespace}/{connectionId}/rpc.
 type SmitheryClient struct {
 	apiKey       string
 	mcpURL       string
@@ -33,20 +34,20 @@ type SmitheryClient struct {
 
 // SmitheryConfig holds configuration for creating a Smithery client.
 type SmitheryConfig struct {
-	// APIKey is the Smithery API key (Bearer token)
+	// APIKey is the Smithery API key (Bearer token).
 	APIKey string
 	// MCPURL is the MCP server URL (e.g., https://server.smithery.ai/@user/server)
 	MCPURL string
-	// Namespace is your Smithery namespace (e.g., your username)
+	// Namespace is your Smithery namespace (e.g., your username).
 	Namespace string
-	// Logger for debug output
+	// Logger for debug output.
 	Logger *slog.Logger
 }
 
 // smitheryConnectRequest is the request body for creating a connection.
 type smitheryConnectRequest struct {
-	MCPURL string                 `json:"mcpUrl"`
-	Config map[string]interface{} `json:"config,omitempty"`
+	MCPURL string         `json:"mcpUrl"`
+	Config map[string]any `json:"config,omitempty"`
 }
 
 // smitheryConnectResponse is the response from creating a connection.
@@ -56,8 +57,8 @@ type smitheryConnectResponse struct {
 
 // smitheryRPCRequest is the request body for RPC calls.
 type smitheryRPCRequest struct {
-	Method string      `json:"method"`
-	Params interface{} `json:"params,omitempty"`
+	Method string `json:"method"`
+	Params any    `json:"params,omitempty"`
 }
 
 // smitheryRPCResponse is the response from RPC calls.
@@ -76,13 +77,15 @@ type smitheryError struct {
 // APIKey is always required. MCPURL and Namespace are required for connection-based operations.
 func NewSmitheryClient(config SmitheryConfig) (*SmitheryClient, error) {
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("smithery API key is required")
+		return nil, errors.New("smithery API key is required")
 	}
+
 	if config.MCPURL == "" {
-		return nil, fmt.Errorf("smithery MCP URL is required")
+		return nil, errors.New("smithery MCP URL is required")
 	}
+
 	if config.Namespace == "" {
-		return nil, fmt.Errorf("smithery namespace is required")
+		return nil, errors.New("smithery namespace is required")
 	}
 
 	return &SmitheryClient{
@@ -102,10 +105,10 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 	defer c.mu.Unlock()
 
 	if c.connectionID != "" {
-		return nil // Already connected
+		return nil // Already connected.
 	}
 
-	// Create connection request
+	// Create connection request.
 	reqBody := smitheryConnectRequest{
 		MCPURL: c.mcpURL,
 	}
@@ -116,6 +119,7 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 	}
 
 	url := fmt.Sprintf("https://api.smithery.ai/connect/%s", c.namespace)
+
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create connect request: %w", err)
@@ -136,11 +140,13 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		bodyBytes, _ := io.ReadAll(resp.Body)
+
 		return fmt.Errorf("connect failed with status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var connectResp smitheryConnectResponse
-	if err := json.NewDecoder(resp.Body).Decode(&connectResp); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&connectResp)
+	if err != nil {
 		return fmt.Errorf("decode connect response: %w", err)
 	}
 
@@ -155,8 +161,9 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 
 // Initialize initializes the MCP connection.
 func (c *SmitheryClient) Initialize(ctx context.Context, request mcpSDK.InitializeRequest) (*mcpSDK.InitializeResult, error) {
-	// First ensure we have a connection
-	if err := c.Connect(ctx); err != nil {
+	// First ensure we have a connection.
+	err := c.Connect(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
 	}
 
@@ -166,7 +173,8 @@ func (c *SmitheryClient) Initialize(ctx context.Context, request mcpSDK.Initiali
 	}
 
 	var initResult mcpSDK.InitializeResult
-	if err := json.Unmarshal(result, &initResult); err != nil {
+	err = json.Unmarshal(result, &initResult)
+	if err != nil {
 		return nil, fmt.Errorf("decode initialize result: %w", err)
 	}
 
@@ -187,7 +195,8 @@ func (c *SmitheryClient) ListTools(ctx context.Context, request mcpSDK.ListTools
 	}
 
 	var toolsResult mcpSDK.ListToolsResult
-	if err := json.Unmarshal(result, &toolsResult); err != nil {
+	err = json.Unmarshal(result, &toolsResult)
+	if err != nil {
 		return nil, fmt.Errorf("decode tools/list result: %w", err)
 	}
 
@@ -202,7 +211,8 @@ func (c *SmitheryClient) CallTool(ctx context.Context, request mcpSDK.CallToolRe
 	}
 
 	var callResult mcpSDK.CallToolResult
-	if err := json.Unmarshal(result, &callResult); err != nil {
+	err = json.Unmarshal(result, &callResult)
+	if err != nil {
 		return nil, fmt.Errorf("decode tools/call result: %w", err)
 	}
 
@@ -214,7 +224,7 @@ func (c *SmitheryClient) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Smithery connections are stateless on our end, just clear the ID
+	// Smithery connections are stateless on our end, just clear the ID.
 	c.connectionID = ""
 	c.initialized = false
 
@@ -225,17 +235,18 @@ func (c *SmitheryClient) Close() error {
 func (c *SmitheryClient) IsInitialized() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return c.initialized
 }
 
 // rpc makes an RPC call to the Smithery server.
-func (c *SmitheryClient) rpc(ctx context.Context, method string, params interface{}) (json.RawMessage, error) {
+func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	c.mu.RLock()
 	connectionID := c.connectionID
 	c.mu.RUnlock()
 
 	if connectionID == "" {
-		return nil, fmt.Errorf("not connected")
+		return nil, errors.New("not connected")
 	}
 
 	reqBody := smitheryRPCRequest{
@@ -249,6 +260,7 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params interfac
 	}
 
 	url := fmt.Sprintf("https://api.smithery.ai/connect/%s/%s/rpc", c.namespace, connectionID)
+
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create rpc request: %w", err)
@@ -269,11 +281,13 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params interfac
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("rpc failed with status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var rpcResp smitheryRPCResponse
-	if err := json.NewDecoder(resp.Body).Decode(&rpcResp); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&rpcResp)
+	if err != nil {
 		return nil, fmt.Errorf("decode rpc response: %w", err)
 	}
 

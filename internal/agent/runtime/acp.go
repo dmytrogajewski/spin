@@ -2,10 +2,11 @@ package runtime
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log/slog"
 
 	acpsdk "github.com/coder/acp-go-sdk"
+
 	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/security"
@@ -28,7 +29,7 @@ type ACPRuntime struct {
 	emitter          *events.EventEmitter
 	storage          session.Storage
 	sessionID        string
-	acpAgent         ACPAgentInterface // Use interface to avoid import cycle
+	acpAgent         ACPAgentInterface // Use interface to avoid import cycle.
 	approvalHandler  security.ApprovalHandler
 	clientCaps       *acpsdk.ClientCapabilities
 	shellService     *shellpkg.Service
@@ -61,11 +62,13 @@ type ACPConfig struct {
 // NewACP creates a new ACP runtime.
 func NewACP(cfg ACPConfig) (*ACPRuntime, error) {
 	if cfg.WorkDir == "" {
-		return nil, fmt.Errorf("workDir is required")
+		return nil, errors.New("workDir is required")
 	}
+
 	if cfg.Emitter == nil {
-		return nil, fmt.Errorf("emitter is required")
+		return nil, errors.New("emitter is required")
 	}
+
 	logger := cfg.Logger
 	if logger == nil {
 		logger = slog.Default()
@@ -99,6 +102,7 @@ func (r *ACPRuntime) RegisterTools(registry *tools.Registry) {
 	// will check availability at execution time.
 	terminalTool := NewACPTerminalTool(r)
 	_ = registry.RegisterOrReplace(terminalTool)
+
 	r.logger.Debug("registered ACP terminal tool")
 
 	// Register ACP filesystem tools (uses fs/read_text_file and fs/write_text_file protocol)
@@ -108,11 +112,14 @@ func (r *ACPRuntime) RegisterTools(registry *tools.Registry) {
 		if r.clientCaps.Fs.ReadTextFile {
 			readTool := NewACPReadFileTool(r)
 			_ = registry.RegisterOrReplace(readTool)
+
 			r.logger.Debug("registered ACP read_file tool")
 		}
+
 		if r.clientCaps.Fs.WriteTextFile {
 			writeTool := NewACPWriteFileTool(r)
 			_ = registry.RegisterOrReplace(writeTool)
+
 			r.logger.Debug("registered ACP write_file tool")
 		}
 	}
@@ -131,13 +138,14 @@ func (r *ACPRuntime) NotificationSender() NotificationSender {
 
 // ApprovalHandler returns the ACP approval handler.
 func (r *ACPRuntime) ApprovalHandler() security.ApprovalHandler {
-	// Return a wrapper that delegates to the current handler
+	// Return a wrapper that delegates to the current handler.
 	return func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
 		handler := r.approvalHandler
 		if handler == nil {
-			// Fallback: auto-approve
+			// Fallback: auto-approve.
 			return security.ApprovalResponse{Approved: true}
 		}
+
 		return handler(ctx, req)
 	}
 }
@@ -174,13 +182,13 @@ func (r *ACPRuntime) SessionID() string {
 
 // SupportsTerminals returns true if client supports terminals.
 func (r *ACPRuntime) SupportsTerminals() bool {
-	// Check from ACP agent first (most up-to-date)
+	// Check from ACP agent first (most up-to-date).
 	if r.acpAgent != nil {
 		if caps := r.acpAgent.GetClientCapabilities(); caps != nil {
 			return caps.Terminal
 		}
 	}
-	// Fall back to stored capabilities
+	// Fall back to stored capabilities.
 	return r.clientCaps != nil && r.clientCaps.Terminal
 }
 
@@ -213,26 +221,26 @@ type acpNotificationSender struct {
 
 func (s *acpNotificationSender) SendToolCallStart(ctx context.Context, toolID, toolName string, params tools.ToolParameters) error {
 	// ACP notifications are sent via event emission, which is handled by the ACP agent
-	// This is called from event emission, handled by the agent's event processing
+	// This is called from event emission, handled by the agent's event processing.
 	return nil
 }
 
-func (s *acpNotificationSender) SendToolCallUpdate(ctx context.Context, toolID string, status string, content interface{}) error {
-	// ACP notifications are sent via event emission
+func (s *acpNotificationSender) SendToolCallUpdate(ctx context.Context, toolID string, status string, content any) error {
+	// ACP notifications are sent via event emission.
 	return nil
 }
 
 func (s *acpNotificationSender) SendToolCallComplete(ctx context.Context, toolID string, success bool, output string, err error) error {
-	// ACP notifications are sent via event emission
+	// ACP notifications are sent via event emission.
 	return nil
 }
 
 func (s *acpNotificationSender) SendMessageChunk(ctx context.Context, content string) error {
-	// ACP notifications are sent via event emission
+	// ACP notifications are sent via event emission.
 	return nil
 }
 
 func (s *acpNotificationSender) SendPlanUpdate(ctx context.Context, entries []PlanEntry) error {
-	// ACP notifications are sent via event emission
+	// ACP notifications are sent via event emission.
 	return nil
 }

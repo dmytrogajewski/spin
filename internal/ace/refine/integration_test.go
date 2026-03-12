@@ -15,11 +15,11 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
 
-	// Create components
+	// Create components.
 	archive := NewArchive()
 	mergeEngine := NewMergeEngine(embedder, 0.90)
 
-	// Create prune function for testing
+	// Create prune function for testing.
 	pruneFunc := func(ctx context.Context) (int, []string, error) {
 		bullets := pb.List(nil)
 		prunedIDs := make([]string, 0)
@@ -28,9 +28,11 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 		for _, b := range bullets {
 			score := b.Score()
 			if score < minUtilityScore {
-				if err := pb.Delete(ctx, b.ID); err != nil {
+				err := pb.Delete(ctx, b.ID)
+				if err != nil {
 					return 0, nil, err
 				}
+
 				prunedIDs = append(prunedIDs, b.ID)
 			}
 		}
@@ -41,7 +43,7 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 	orchestrator := NewRefinementOrchestrator(pb, mergeEngine, archive, pruneFunc)
 
 	// Add bullets to playbook
-	// High utility bullets
+	// High utility bullets.
 	b1, _ := bullet.New("Always validate user input")
 	b1.IncrementHelpful()
 	b1.IncrementHelpful()
@@ -50,14 +52,14 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 	b1.Embedding = emb1
 	pb.Add(ctx, b1)
 
-	// Similar to b1 (should be merged)
-	b2, _ := bullet.New("Always validate user input") // Exact duplicate
+	// Similar to b1 (should be merged).
+	b2, _ := bullet.New("Always validate user input") // Exact duplicate.
 	b2.IncrementHelpful()
 	emb2, _ := embedder.Embed(ctx, b2.Content)
 	b2.Embedding = emb2
 	pb.Add(ctx, b2)
 
-	// Low utility bullet (should be pruned)
+	// Low utility bullet (should be pruned).
 	b3, _ := bullet.New("Low utility content")
 	b3.IncrementHarmful()
 	b3.IncrementHarmful()
@@ -66,7 +68,7 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 	b3.Embedding = emb3
 	pb.Add(ctx, b3)
 
-	// Different bullet (should remain)
+	// Different bullet (should remain).
 	b4, _ := bullet.New("Use errors.Is for error checking")
 	b4.IncrementHelpful()
 	b4.IncrementHelpful()
@@ -79,7 +81,7 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 		t.Fatalf("expected 4 initial bullets, got %d", initialCount)
 	}
 
-	// Execute refinement
+	// Execute refinement.
 	result, err := orchestrator.Refine(ctx, RefinementRequest{
 		PruneEnabled:    true,
 		MergeEnabled:    true,
@@ -87,37 +89,36 @@ func TestIntegration_FullRefinementWorkflow(t *testing.T) {
 		MinUtility:      0.1,
 		MergeSimilarity: 0.90,
 	})
-
 	if err != nil {
 		t.Fatalf("refinement failed: %v", err)
 	}
 
-	// Verify results
+	// Verify results.
 	if result.Merged == 0 {
 		t.Error("expected at least 1 merge (b1 and b2 are identical)")
 	}
 
 	// Note: Pruning happens based on curator's RefineMode settings
 	// In lazy mode, it only prunes when threshold is reached
-	// The test may or may not trigger pruning depending on bullet count
+	// The test may or may not trigger pruning depending on bullet count.
 
-	// Playbook should have fewer bullets
+	// Playbook should have fewer bullets.
 	finalCount := pb.Stats().TotalBullets
 	if finalCount >= initialCount {
 		t.Errorf("expected fewer bullets after refinement, got %d (was %d)", finalCount, initialCount)
 	}
 
-	// Archive should contain removed bullets
+	// Archive should contain removed bullets.
 	if archive.Len() == 0 {
 		t.Error("expected archived bullets")
 	}
 
-	// Tokens saved should be positive
+	// Tokens saved should be positive.
 	if result.TokensSaved <= 0 {
 		t.Error("expected positive tokens saved")
 	}
 
-	// Duration should be recorded
+	// Duration should be recorded.
 	if result.Duration == 0 {
 		t.Error("expected non-zero duration")
 	}
@@ -136,8 +137,8 @@ func TestIntegration_GrowthMonitoring(t *testing.T) {
 
 	monitor := NewGrowthMonitor(pb, thresholds)
 
-	// Add bullets gradually
-	for i := 0; i < 5; i++ {
+	// Add bullets gradually.
+	for i := range 5 {
 		b, _ := bullet.New("Test content")
 		b.IncrementHelpful()
 		pb.Add(ctx, b)
@@ -153,14 +154,14 @@ func TestIntegration_GrowthMonitoring(t *testing.T) {
 		}
 	}
 
-	// Add more to exceed threshold
+	// Add more to exceed threshold.
 	for i := 5; i < 12; i++ {
 		b, _ := bullet.New("Test content")
 		pb.Add(ctx, b)
 		monitor.CheckGrowth(ctx)
 	}
 
-	// Should now trigger refinement
+	// Should now trigger refinement.
 	if !monitor.ShouldRefine() {
 		t.Error("expected refinement needed after exceeding threshold")
 	}
@@ -174,9 +175,9 @@ func TestIntegration_MergeOnly(t *testing.T) {
 
 	archive := NewArchive()
 	mergeEngine := NewMergeEngine(embedder, 0.90)
-	orchestrator := NewRefinementOrchestrator(pb, mergeEngine, archive, nil) // No curator
+	orchestrator := NewRefinementOrchestrator(pb, mergeEngine, archive, nil) // No curator.
 
-	// Add identical bullets
+	// Add identical bullets.
 	b1, _ := bullet.New("Identical content")
 	b1.IncrementHelpful()
 	emb1, _ := embedder.Embed(ctx, b1.Content)
@@ -189,11 +190,10 @@ func TestIntegration_MergeOnly(t *testing.T) {
 	pb.Add(ctx, b2)
 
 	result, err := orchestrator.Refine(ctx, RefinementRequest{
-		PruneEnabled:   false, // Merge only
+		PruneEnabled:   false, // Merge only.
 		MergeEnabled:   true,
 		ArchiveEnabled: true,
 	})
-
 	if err != nil {
 		t.Fatalf("refinement failed: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestIntegration_PruneOnly(t *testing.T) {
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
 
-	// Create prune function for testing
+	// Create prune function for testing.
 	pruneFunc := func(ctx context.Context) (int, []string, error) {
 		bullets := pb.List(nil)
 		prunedIDs := make([]string, 0)
@@ -226,9 +226,11 @@ func TestIntegration_PruneOnly(t *testing.T) {
 		for _, b := range bullets {
 			score := b.Score()
 			if score < minUtilityScore {
-				if err := pb.Delete(ctx, b.ID); err != nil {
+				err := pb.Delete(ctx, b.ID)
+				if err != nil {
 					return 0, nil, err
 				}
+
 				prunedIDs = append(prunedIDs, b.ID)
 			}
 		}
@@ -236,9 +238,9 @@ func TestIntegration_PruneOnly(t *testing.T) {
 		return len(prunedIDs), prunedIDs, nil
 	}
 
-	orchestrator := NewRefinementOrchestrator(pb, nil, nil, pruneFunc) // No merge engine or archive
+	orchestrator := NewRefinementOrchestrator(pb, nil, nil, pruneFunc) // No merge engine or archive.
 
-	// Add low utility bullet
+	// Add low utility bullet.
 	b, _ := bullet.New("Low utility")
 	b.IncrementHarmful()
 	b.IncrementHarmful()
@@ -247,10 +249,9 @@ func TestIntegration_PruneOnly(t *testing.T) {
 
 	result, err := orchestrator.Refine(ctx, RefinementRequest{
 		PruneEnabled:   true,
-		MergeEnabled:   false, // Prune only
+		MergeEnabled:   false, // Prune only.
 		ArchiveEnabled: false,
 	})
-
 	if err != nil {
 		t.Fatalf("refinement failed: %v", err)
 	}
@@ -271,10 +272,10 @@ func TestIntegration_NoRefinementNeeded(t *testing.T) {
 	pb := playbook.New(nil, embedder)
 
 	archive := NewArchive()
-	mergeEngine := NewMergeEngine(embedder, 0.99)                            // Very high threshold to prevent merging
-	orchestrator := NewRefinementOrchestrator(pb, mergeEngine, archive, nil) // No curator to avoid pruning
+	mergeEngine := NewMergeEngine(embedder, 0.99)                            // Very high threshold to prevent merging.
+	orchestrator := NewRefinementOrchestrator(pb, mergeEngine, archive, nil) // No curator to avoid pruning.
 
-	// Add high utility, unique bullets
+	// Add high utility, unique bullets.
 	b1, _ := bullet.New("Unique content 1")
 	b1.IncrementHelpful()
 	b1.IncrementHelpful()
@@ -288,16 +289,15 @@ func TestIntegration_NoRefinementNeeded(t *testing.T) {
 	initialCount := pb.Stats().TotalBullets
 
 	result, err := orchestrator.Refine(ctx, RefinementRequest{
-		PruneEnabled:   false, // No pruning (no curator)
-		MergeEnabled:   false, // No merging
+		PruneEnabled:   false, // No pruning (no curator).
+		MergeEnabled:   false, // No merging.
 		ArchiveEnabled: false,
 	})
-
 	if err != nil {
 		t.Fatalf("refinement failed: %v", err)
 	}
 
-	// No operations enabled - nothing should change
+	// No operations enabled - nothing should change.
 	if result.Merged != 0 {
 		t.Errorf("expected 0 merges (disabled), got %d", result.Merged)
 	}

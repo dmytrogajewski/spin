@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -58,26 +59,27 @@ func NewSessionHandoff(store *PersistentStore, summarizer Summarizer) *SessionHa
 // SaveSession saves the current session state for future continuation.
 func (h *SessionHandoff) SaveSession(ctx context.Context, data HandoffData) error {
 	if h.store == nil {
-		return fmt.Errorf("no persistent store configured")
+		return errors.New("no persistent store configured")
 	}
 
 	if data.SessionID == "" {
-		return fmt.Errorf("session ID is required")
+		return errors.New("session ID is required")
 	}
 
-	// Set last activity if not provided
+	// Set last activity if not provided.
 	if data.LastActivity.IsZero() {
 		data.LastActivity = time.Now()
 	}
 
-	// Serialize handoff data
+	// Serialize handoff data.
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("marshal handoff data: %w", err)
 	}
 
-	// Store with session namespace
+	// Store with session namespace.
 	key := "session_" + data.SessionID
+
 	return h.store.Put(ctx, key, string(jsonData), PutOptions{
 		Namespace: "sessions",
 		Overwrite: true,
@@ -87,17 +89,19 @@ func (h *SessionHandoff) SaveSession(ctx context.Context, data HandoffData) erro
 // LoadSession retrieves a previously saved session state.
 func (h *SessionHandoff) LoadSession(ctx context.Context, sessionID string) (*HandoffData, error) {
 	if h.store == nil {
-		return nil, fmt.Errorf("no persistent store configured")
+		return nil, errors.New("no persistent store configured")
 	}
 
 	key := "session_" + sessionID
+
 	entry, err := h.store.Get(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("load session: %w", err)
 	}
 
 	var data HandoffData
-	if err := json.Unmarshal([]byte(entry.Value), &data); err != nil {
+	err = json.Unmarshal([]byte(entry.Value), &data)
+	if err != nil {
 		return nil, fmt.Errorf("unmarshal handoff data: %w", err)
 	}
 
@@ -107,7 +111,7 @@ func (h *SessionHandoff) LoadSession(ctx context.Context, sessionID string) (*Ha
 // ListSessions returns all saved session IDs.
 func (h *SessionHandoff) ListSessions(ctx context.Context) ([]string, error) {
 	if h.store == nil {
-		return nil, fmt.Errorf("no persistent store configured")
+		return nil, errors.New("no persistent store configured")
 	}
 
 	keys, err := h.store.List(ctx, "session_*")
@@ -117,7 +121,7 @@ func (h *SessionHandoff) ListSessions(ctx context.Context) ([]string, error) {
 
 	sessions := make([]string, 0, len(keys))
 	for _, key := range keys {
-		// Remove "session_" prefix
+		// Remove "session_" prefix.
 		if strings.HasPrefix(key, "session_") {
 			sessions = append(sessions, key[8:])
 		}
@@ -129,10 +133,11 @@ func (h *SessionHandoff) ListSessions(ctx context.Context) ([]string, error) {
 // DeleteSession removes a saved session.
 func (h *SessionHandoff) DeleteSession(ctx context.Context, sessionID string) error {
 	if h.store == nil {
-		return fmt.Errorf("no persistent store configured")
+		return errors.New("no persistent store configured")
 	}
 
 	key := "session_" + sessionID
+
 	return h.store.Delete(ctx, key)
 }
 
@@ -154,26 +159,31 @@ func (h *SessionHandoff) BuildContinuationPrompt(data *HandoffData) string {
 
 	if len(data.PendingTasks) > 0 {
 		sb.WriteString("Pending tasks:\n")
+
 		for _, task := range data.PendingTasks {
 			sb.WriteString("- ")
 			sb.WriteString(task)
 			sb.WriteString("\n")
 		}
+
 		sb.WriteString("\n")
 	}
 
 	if len(data.Decisions) > 0 {
 		sb.WriteString("Key decisions made:\n")
+
 		for _, decision := range data.Decisions {
 			sb.WriteString("- ")
 			sb.WriteString(decision)
 			sb.WriteString("\n")
 		}
+
 		sb.WriteString("\n")
 	}
 
 	if len(data.KeyReferences) > 0 {
 		sb.WriteString("Key references:\n")
+
 		for name, ref := range data.KeyReferences {
 			sb.WriteString("- ")
 			sb.WriteString(name)
@@ -181,6 +191,7 @@ func (h *SessionHandoff) BuildContinuationPrompt(data *HandoffData) string {
 			sb.WriteString(ref)
 			sb.WriteString("\n")
 		}
+
 		sb.WriteString("\n")
 	}
 
@@ -206,15 +217,16 @@ func NewSimpleSummarizer(maxLength int) *SimpleSummarizer {
 	if maxLength <= 0 {
 		maxLength = 500
 	}
+
 	return &SimpleSummarizer{maxLength: maxLength}
 }
 
 // Summarize truncates content to the max length.
 func (s *SimpleSummarizer) Summarize(ctx context.Context, content string, maxTokens int) (string, error) {
-	// Use maxTokens if provided, otherwise use configured maxLength
+	// Use maxTokens if provided, otherwise use configured maxLength.
 	limit := s.maxLength
 	if maxTokens > 0 {
-		// Rough conversion: 1 token ≈ 4 characters
+		// Rough conversion: 1 token ≈ 4 characters.
 		limit = maxTokens * 4
 	}
 
@@ -222,6 +234,6 @@ func (s *SimpleSummarizer) Summarize(ctx context.Context, content string, maxTok
 		return content, nil
 	}
 
-	// Truncate and add ellipsis
+	// Truncate and add ellipsis.
 	return content[:limit-3] + "...", nil
 }

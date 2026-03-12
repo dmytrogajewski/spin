@@ -56,6 +56,7 @@ func trimToLastN(signals []*ExecutionSignal, n int) []*ExecutionSignal {
 	if len(signals) <= n {
 		return signals
 	}
+
 	return signals[len(signals)-n:]
 }
 

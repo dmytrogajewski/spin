@@ -9,13 +9,13 @@ import (
 // Build-time version information.
 // These variables are set via -ldflags during build.
 var (
-	// Version is the semantic version (e.g., "1.0.0", "dev")
+	// Version is the semantic version (e.g., "1.0.0", "dev").
 	Version = "dev"
 
-	// Commit is the git commit hash
+	// Commit is the git commit hash.
 	Commit = "unknown"
 
-	// BuildDate is the build timestamp
+	// BuildDate is the build timestamp.
 	BuildDate = "unknown"
 )
 
@@ -40,6 +40,7 @@ func GetVersionInfo() VersionInfo {
 // String returns a formatted version string with all build information.
 func String() string {
 	info := GetVersionInfo()
+
 	return fmt.Sprintf(
 		"spin version %s (commit: %s, built: %s, %s)",
 		info.Version,

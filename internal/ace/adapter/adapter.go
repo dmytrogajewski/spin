@@ -7,12 +7,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/curator"
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
-	"github.com/google/uuid"
 )
 
 // Adapter handles online context adaptation.
@@ -80,6 +81,7 @@ func (a *adapter) StartSession(ctx context.Context) (string, error) {
 
 	sessionID := uuid.New().String()
 	a.sessions[sessionID] = newSession(sessionID)
+
 	return sessionID, nil
 }
 
@@ -136,6 +138,7 @@ func (a *adapter) getAndUpdateSession(signal ExecutionSignal) (*Session, error) 
 
 	if !exists {
 		slog.Warn("Adapter: session not found", "session_id", signal.SessionID)
+
 		return nil, fmt.Errorf("session not found: %s", signal.SessionID)
 	}
 
@@ -153,7 +156,9 @@ func (a *adapter) executeAction(ctx context.Context, action AdaptationAction, si
 	if err != nil {
 		return 0, err
 	}
+
 	session.UpdateCount += added
+
 	return added, nil
 }
 
@@ -178,6 +183,7 @@ func (a *adapter) maybeRefine(ctx context.Context, reason string) (bool, string)
 	pruned, err := a.memory.Prune(ctx, a.playbook)
 	if err != nil {
 		slog.Error("Memory refinement failed", "error", err)
+
 		return false, reason
 	}
 
@@ -187,13 +193,16 @@ func (a *adapter) maybeRefine(ctx context.Context, reason string) (bool, string)
 // executeReflect performs full reflection cycle.
 func (a *adapter) executeReflect(ctx context.Context, signal ExecutionSignal) (int, error) {
 	traj := buildTrajectory(signal)
+
 	insights, err := a.extractInsights(ctx, traj)
 	if err != nil {
 		return 0, err
 	}
+
 	if len(insights) == 0 {
 		return 0, nil
 	}
+
 	return a.curateInsights(ctx, insights)
 }
 
@@ -207,6 +216,7 @@ func (a *adapter) extractInsights(ctx context.Context, traj *generator.Trajector
 	if err != nil {
 		return nil, fmt.Errorf("reflection failed: %w", err)
 	}
+
 	return resp.Insights, nil
 }
 
@@ -219,6 +229,7 @@ func (a *adapter) curateInsights(ctx context.Context, insights []*reflector.Insi
 	if err != nil {
 		return 0, fmt.Errorf("curation failed: %w", err)
 	}
+
 	return resp.Added, nil
 }
 
@@ -280,10 +291,12 @@ func mapSignalTypeToSource(st SignalType) string {
 // addBulletsToPlaybook adds bullets to the playbook and returns count added.
 func (a *adapter) addBulletsToPlaybook(ctx context.Context, bullets []*bullet.Bullet) (int, error) {
 	for _, b := range bullets {
-		if err := a.playbook.Add(ctx, b); err != nil {
+		err := a.playbook.Add(ctx, b)
+		if err != nil {
 			return 0, fmt.Errorf("failed to add bullet: %w", err)
 		}
 	}
+
 	return len(bullets), nil
 }
 
@@ -297,6 +310,7 @@ func (a *adapter) EndSession(ctx context.Context, sessionID string) error {
 	}
 
 	delete(a.sessions, sessionID)
+
 	return nil
 }
 

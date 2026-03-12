@@ -16,27 +16,29 @@ func TestACP_Prompt_Basic(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
 	ctx := context.Background()
 
-	// Initialize
+	// Initialize.
 	_, err := client.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 	})
 	require.NoError(t, err)
 
-	// Create session
+	// Create session.
 	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
 		Cwd:        workDir,
 		McpServers: []acp.McpServer{},
 	})
 	require.NoError(t, err)
+
 	sessionID := sessionResp.SessionId
 
-	// Send prompt
+	// Send prompt.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionID,
 		Prompt: []acp.ContentBlock{
@@ -47,9 +49,9 @@ func TestACP_Prompt_Basic(t *testing.T) {
 	resp, err := client.Prompt(ctx, promptReq)
 	require.NoError(t, err, "Prompt should succeed")
 
-	// Verify response
+	// Verify response.
 	assert.NotNil(t, resp.StopReason, "Stop reason should be set")
-	// Stop reason should be end_turn for successful completion
+	// Stop reason should be end_turn for successful completion.
 	assert.Equal(t, acp.StopReasonEndTurn, resp.StopReason, "Stop reason should be end_turn")
 }
 
@@ -60,7 +62,8 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b", "--workspace", workDir)
+
+	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -77,7 +80,7 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Test with text block
+	// Test with text block.
 	t.Run("text block", func(t *testing.T) {
 		req := acp.PromptRequest{
 			SessionId: sessionResp.SessionId,
@@ -90,7 +93,7 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 		assert.NotNil(t, resp.StopReason)
 	})
 
-	// Test with image block (converted to text description)
+	// Test with image block (converted to text description).
 	t.Run("image block", func(t *testing.T) {
 		req := acp.PromptRequest{
 			SessionId: sessionResp.SessionId,
@@ -103,7 +106,7 @@ func TestACP_Prompt_ContentBlocks(t *testing.T) {
 		assert.NotNil(t, resp.StopReason)
 	})
 
-	// Test with mixed content blocks
+	// Test with mixed content blocks.
 	t.Run("mixed content blocks", func(t *testing.T) {
 		req := acp.PromptRequest{
 			SessionId: sessionResp.SessionId,
@@ -124,7 +127,7 @@ func TestACP_Prompt_InvalidSession(t *testing.T) {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
-	cmd, stdin, stdout := startACPAgent(t, "--provider", "ollama", "--model", "qwen3:0.6b")
+	cmd, stdin, stdout := startACPAgent(t)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
@@ -135,7 +138,7 @@ func TestACP_Prompt_InvalidSession(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Try to prompt with invalid session ID
+	// Try to prompt with invalid session ID.
 	req := acp.PromptRequest{
 		SessionId: acp.SessionId("invalid-session-id"),
 		Prompt: []acp.ContentBlock{
@@ -154,6 +157,7 @@ func TestACP_Prompt_TextBlock(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -190,6 +194,7 @@ func TestACP_Prompt_ResourceLink(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -226,6 +231,7 @@ func TestACP_Prompt_AudioBlock(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -237,7 +243,7 @@ func TestACP_Prompt_AudioBlock(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Check if audio capability is supported
+	// Check if audio capability is supported.
 	if !initResp.AgentCapabilities.PromptCapabilities.Audio {
 		t.Skip("Audio capability not supported")
 	}
@@ -267,6 +273,7 @@ func TestACP_Prompt_ResourceBlock(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -278,7 +285,7 @@ func TestACP_Prompt_ResourceBlock(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Check if embeddedContext capability is supported
+	// Check if embeddedContext capability is supported.
 	if !initResp.AgentCapabilities.PromptCapabilities.EmbeddedContext {
 		t.Skip("EmbeddedContext capability not supported")
 	}
@@ -308,6 +315,7 @@ func TestACP_Prompt_StopReason_MaxTokens(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -326,7 +334,7 @@ func TestACP_Prompt_StopReason_MaxTokens(t *testing.T) {
 	require.NoError(t, err)
 
 	// Note: max_tokens stop reason depends on agent implementation
-	// This test verifies the agent can return this stop reason
+	// This test verifies the agent can return this stop reason.
 	req := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -337,7 +345,7 @@ func TestACP_Prompt_StopReason_MaxTokens(t *testing.T) {
 	resp, err := client.Prompt(ctx, req)
 	require.NoError(t, err)
 	assert.NotNil(t, resp.StopReason)
-	// Stop reason may be end_turn or max_tokens depending on implementation
+	// Stop reason may be end_turn or max_tokens depending on implementation.
 	t.Logf("Stop reason: %v", resp.StopReason)
 }
 
@@ -348,6 +356,7 @@ func TestACP_Prompt_StopReason_MaxTurnRequests(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -366,7 +375,7 @@ func TestACP_Prompt_StopReason_MaxTurnRequests(t *testing.T) {
 	require.NoError(t, err)
 
 	// Note: max_turn_requests stop reason depends on agent implementation
-	// This test verifies the agent can return this stop reason
+	// This test verifies the agent can return this stop reason.
 	req := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -377,7 +386,7 @@ func TestACP_Prompt_StopReason_MaxTurnRequests(t *testing.T) {
 	resp, err := client.Prompt(ctx, req)
 	require.NoError(t, err)
 	assert.NotNil(t, resp.StopReason)
-	// Stop reason may be end_turn or max_turn_requests depending on implementation
+	// Stop reason may be end_turn or max_turn_requests depending on implementation.
 	t.Logf("Stop reason: %v", resp.StopReason)
 }
 
@@ -388,6 +397,7 @@ func TestACP_Prompt_StopReason_Refusal(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -406,7 +416,7 @@ func TestACP_Prompt_StopReason_Refusal(t *testing.T) {
 	require.NoError(t, err)
 
 	// Note: refusal stop reason depends on agent implementation
-	// This test verifies the agent can return this stop reason
+	// This test verifies the agent can return this stop reason.
 	req := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -417,17 +427,18 @@ func TestACP_Prompt_StopReason_Refusal(t *testing.T) {
 	resp, err := client.Prompt(ctx, req)
 	require.NoError(t, err)
 	assert.NotNil(t, resp.StopReason)
-	// Stop reason may be end_turn or refusal depending on implementation
+	// Stop reason may be end_turn or refusal depending on implementation.
 	t.Logf("Stop reason: %v", resp.StopReason)
 }
 
-// TestACP_Prompt_StopReason_Cancelled tests cancelled stop reason.
-func TestACP_Prompt_StopReason_Cancelled(t *testing.T) {
+// TestACP_Prompt_StopReason_Canceled tests canceled stop reason.
+func TestACP_Prompt_StopReason_Canceled(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -445,7 +456,7 @@ func TestACP_Prompt_StopReason_Cancelled(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Start prompt in background
+	// Start prompt in background.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
 		Prompt: []acp.ContentBlock{
@@ -453,20 +464,20 @@ func TestACP_Prompt_StopReason_Cancelled(t *testing.T) {
 		},
 	}
 
-	// Send cancel notification
+	// Send cancel notification.
 	cancelNotif := acp.CancelNotification{
 		SessionId: sessionResp.SessionId,
 	}
 	err = client.Cancel(ctx, cancelNotif)
 	require.NoError(t, err)
 
-	// Send prompt (may be cancelled)
+	// Send prompt (may be canceled).
 	resp, err := client.Prompt(ctx, promptReq)
-	// Prompt may succeed or be cancelled
+	// Prompt may succeed or be canceled.
 	if err == nil {
-		// If prompt succeeded, check if stop reason is cancelled
+		// If prompt succeeded, check if stop reason is canceled.
 		if resp.StopReason == acp.StopReasonCancelled {
-			t.Log("Prompt was cancelled as expected")
+			t.Log("Prompt was canceled as expected")
 		}
 	}
 }
@@ -478,6 +489,7 @@ func TestACP_Prompt_AgentMessageChunks(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -496,7 +508,7 @@ func TestACP_Prompt_AgentMessageChunks(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Clear notifications
+	// Clear notifications.
 	testClientInstance.clearNotifications()
 
 	req := acp.PromptRequest{
@@ -509,18 +521,19 @@ func TestACP_Prompt_AgentMessageChunks(t *testing.T) {
 	_, err = client.Prompt(ctx, req)
 	require.NoError(t, err)
 
-	// Check for agent_message_chunk notifications
+	// Check for agent_message_chunk notifications.
 	notifications := testClientInstance.getNotifications()
 	foundAgentChunk := false
+
 	for _, notif := range notifications {
 		if notif.Update.AgentMessageChunk != nil {
 			// Check if it's an agent_message_chunk
-			// The exact structure depends on ACP SDK implementation
+			// The exact structure depends on ACP SDK implementation.
 			foundAgentChunk = true
+
 			break
 		}
 	}
-	// Note: Agent may or may not send chunks depending on implementation
+	// Note: Agent may or may not send chunks depending on implementation.
 	t.Logf("Agent message chunks received: %v", foundAgentChunk)
 }
-

@@ -11,7 +11,7 @@ import (
 	"golang.org/x/term"
 )
 
-// Terminal size constraints (Phase 8.2: Defensive error handling)
+// Terminal size constraints (Phase 8.2: Defensive error handling).
 const (
 	MinTerminalWidth  = 40
 	MinTerminalHeight = 10
@@ -19,7 +19,7 @@ const (
 	MaxTerminalHeight = 1000
 )
 
-// Errors (Phase 8.2)
+// Errors (Phase 8.2).
 var (
 	ErrNotATTY          = errors.New("not a terminal")
 	ErrTerminalTooSmall = errors.New("terminal too small (minimum 40x10)")
@@ -53,12 +53,13 @@ func New(inFD, outFD int) (*TTY, error) {
 		outFD: outFD,
 	}
 
-	// Read initial size
-	if err := tty.updateSize(); err != nil {
+	// Read initial size.
+	err := tty.updateSize()
+	if err != nil {
 		return nil, fmt.Errorf("failed to get terminal size: %w", err)
 	}
 
-	// Start SIGWINCH handler
+	// Start SIGWINCH handler.
 	tty.startSigwinchHandler()
 
 	return tty, nil
@@ -72,10 +73,10 @@ func (tty *TTY) Enter() error {
 	defer tty.mu.Unlock()
 
 	if tty.entered {
-		return fmt.Errorf("already in raw mode")
+		return errors.New("already in raw mode")
 	}
 
-	// Save original terminal state
+	// Save original terminal state.
 	state, err := term.MakeRaw(tty.inFD)
 	if err != nil {
 		return fmt.Errorf("failed to enter raw mode: %w", err)
@@ -84,7 +85,7 @@ func (tty *TTY) Enter() error {
 	tty.origState = state
 	tty.entered = true
 
-	// Hide cursor
+	// Hide cursor.
 	fmt.Fprint(os.Stdout, HideCursor)
 
 	return nil
@@ -98,14 +99,15 @@ func (tty *TTY) Exit() error {
 	defer tty.mu.Unlock()
 
 	if !tty.entered || tty.origState == nil {
-		return nil // Already exited or never entered
+		return nil // Already exited or never entered.
 	}
 
-	// Show cursor first
+	// Show cursor first.
 	fmt.Fprint(os.Stdout, ShowCursor)
 
-	// Restore terminal state
-	if err := term.Restore(tty.inFD, tty.origState); err != nil {
+	// Restore terminal state.
+	err := term.Restore(tty.inFD, tty.origState)
+	if err != nil {
 		return fmt.Errorf("failed to restore terminal: %w", err)
 	}
 
@@ -113,12 +115,14 @@ func (tty *TTY) Exit() error {
 	tty.origState = nil
 
 	// Stop signal handler goroutine
-	// Must acquire lock before accessing sigCh
+	// Must acquire lock before accessing sigCh.
 	ch := tty.sigCh
 	if ch != nil {
 		signal.Stop(ch)
-		tty.sigCh = nil // Set to nil first, goroutine will see this and exit
-		close(ch)       // Then close channel
+
+		tty.sigCh = nil // Set to nil first, goroutine will see this and exit.
+
+		close(ch) // Then close channel.
 	}
 
 	return nil
@@ -129,6 +133,7 @@ func (tty *TTY) Exit() error {
 func (tty *TTY) Size() (width, height int) {
 	tty.mu.RLock()
 	defer tty.mu.RUnlock()
+
 	return tty.width, tty.height
 }
 
@@ -138,6 +143,7 @@ func (tty *TTY) Size() (width, height int) {
 func (tty *TTY) OnResize(cb func(int, int)) {
 	tty.mu.Lock()
 	defer tty.mu.Unlock()
+
 	tty.onResize = append(tty.onResize, cb)
 }
 
@@ -161,6 +167,7 @@ func (tty *TTY) updateSize() error {
 func (tty *TTY) startSigwinchHandler() {
 	tty.setupSignalChannel()
 	signal.Notify(tty.sigCh, syscall.SIGWINCH)
+
 	go tty.handleSigwinchLoop()
 }
 
@@ -175,11 +182,11 @@ func (tty *TTY) setupSignalChannel() {
 func (tty *TTY) handleSigwinchLoop() {
 	for {
 		if !tty.waitForSignal() {
-			return // Channel closed or nil
+			return // Channel closed or nil.
 		}
 
 		if !tty.updateSizeAndNotify() {
-			continue // Error updating size, try again
+			continue // Error updating size, try again.
 		}
 	}
 }
@@ -191,26 +198,29 @@ func (tty *TTY) waitForSignal() bool {
 	tty.mu.RUnlock()
 
 	if ch == nil {
-		return false // Channel was closed, exit goroutine
+		return false // Channel was closed, exit goroutine.
 	}
 
 	sig, ok := <-ch
 	if !ok {
-		return false // Channel closed
+		return false // Channel closed.
 	}
 
-	_ = sig // Ignore signal value
+	_ = sig // Ignore signal value.
+
 	return true
 }
 
 // updateSizeAndNotify updates terminal size and notifies callbacks.
 func (tty *TTY) updateSizeAndNotify() bool {
-	if err := tty.updateSize(); err != nil {
-		// Log error but continue (terminal might be temporarily unavailable)
+	err := tty.updateSize()
+	if err != nil {
+		// Log error but continue (terminal might be temporarily unavailable).
 		return false
 	}
 
 	tty.notifyResizeCallbacks()
+
 	return true
 }
 

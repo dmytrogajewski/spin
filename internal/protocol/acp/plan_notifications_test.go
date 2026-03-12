@@ -7,13 +7,14 @@ import (
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/session"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // mockConnectionForPlan is a mock connection for testing plan notifications.
@@ -25,12 +26,14 @@ type mockConnectionForPlan struct {
 func (m *mockConnectionForPlan) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.notifications = append(m.notifications, notification)
+
 	return nil
 }
 
 func (m *mockConnectionForPlan) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
-	// Auto-approve for testing by selecting the first allow option
+	// Auto-approve for testing by selecting the first allow option.
 	for _, opt := range params.Options {
 		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {
 			return acp.RequestPermissionResponse{
@@ -38,7 +41,7 @@ func (m *mockConnectionForPlan) RequestPermission(ctx context.Context, params ac
 			}, nil
 		}
 	}
-	// No allow option found, return cancelled
+	// No allow option found, return canceled.
 	return acp.RequestPermissionResponse{
 		Outcome: acp.NewRequestPermissionOutcomeCancelled(),
 	}, nil
@@ -47,20 +50,24 @@ func (m *mockConnectionForPlan) RequestPermission(ctx context.Context, params ac
 func (m *mockConnectionForPlan) GetNotifications() []acp.SessionNotification {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	result := make([]acp.SessionNotification, len(m.notifications))
 	copy(result, m.notifications)
+
 	return result
 }
 
 func (m *mockConnectionForPlan) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.notifications = nil
 }
 
 // createTestACPAgentWithMock creates a SpinACPAgent with a mock connection.
 func createTestACPAgentWithMock(t *testing.T) (*SpinACPAgent, *mockConnectionForPlan) {
 	t.Helper()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -168,22 +175,23 @@ func TestDetectPlanFromOutput_EmptyOutput(t *testing.T) {
 	assert.Empty(t, entries)
 }
 
-// Helper for tests to wrap planning.DetectPlanFromText
+// Helper for tests to wrap planning.DetectPlanFromText.
 func detectPlanFromOutput(output string) []acp.PlanEntry {
 	plan := planning.DetectPlanFromText(output)
+
 	return convertOrchestrationPlanToACP(plan)
 }
 
 func TestSendPlanNotifications_NoConnection(t *testing.T) {
 	acpAgent, _ := createTestACPAgentWithMock(t)
-	acpAgent.SetNotificationSender(nil) // No connection
+	acpAgent.SetNotificationSender(nil) // No connection.
 
 	agentResp := &agent.AgentResponse{
 		Output: "Plan:\n1. Step one\n2. Step two",
 	}
 
 	err := acpAgent.sendPlanNotifications(context.Background(), "session-1", agentResp)
-	assert.NoError(t, err) // Should return nil when no connection
+	assert.NoError(t, err) // Should return nil when no connection.
 }
 
 func TestSendPlanNotifications_NoPlan(t *testing.T) {
@@ -196,7 +204,7 @@ func TestSendPlanNotifications_NoPlan(t *testing.T) {
 	err := acpAgent.sendPlanNotifications(context.Background(), "session-1", agentResp)
 	assert.NoError(t, err)
 
-	// Verify no notifications were sent
+	// Verify no notifications were sent.
 	notifications := mockConn.GetNotifications()
 	assert.Empty(t, notifications)
 }
@@ -211,17 +219,16 @@ func TestSendPlanNotifications_WithPlan(t *testing.T) {
 	err := acpAgent.sendPlanNotifications(context.Background(), "session-1", agentResp)
 	assert.NoError(t, err)
 
-	// Verify plan notification was sent
+	// Verify plan notification was sent.
 	notifications := mockConn.GetNotifications()
 	require.Len(t, notifications, 1)
 	notification := notifications[0]
 	assert.Equal(t, "session-1", string(notification.SessionId))
 	// Check that Plan is set (it's a union type)
-	// The Plan field should be non-nil
+	// The Plan field should be non-nil.
 	require.NotNil(t, notification.Update.Plan)
 	assert.Len(t, notification.Update.Plan.Entries, 3)
 	assert.Equal(t, "Step one", notification.Update.Plan.Entries[0].Content)
 	assert.Equal(t, "Step two", notification.Update.Plan.Entries[1].Content)
 	assert.Equal(t, "Step three", notification.Update.Plan.Entries[2].Content)
 }
-

@@ -2,6 +2,9 @@ package ollama
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -60,18 +63,20 @@ func TestNewProvider(t *testing.T) {
 			if tt.wantErr {
 				t.Logf("Expected error, got: %v", err)
 				require.Error(t, err, "Expected an error but got none")
+
 				if tt.errMsg != "" {
 					assert.Contains(t, err.Error(), tt.errMsg)
 				}
+
 				assert.Nil(t, provider)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, provider)
 				assert.Equal(t, "ollama", provider.Name())
 
-				// Verify capabilities
+				// Verify capabilities.
 				caps := provider.Capabilities()
-				assert.False(t, caps.Vision) // Ollama typically doesn't support vision
+				assert.False(t, caps.Vision) // Ollama typically doesn't support vision.
 			}
 		})
 	}
@@ -94,77 +99,73 @@ func TestProvider_Capabilities(t *testing.T) {
 
 	caps := provider.Capabilities()
 
-	// Ollama supports streaming and function calling via OpenAI compatibility
+	// Ollama supports streaming and function calling via OpenAI compatibility.
 	assert.True(t, caps.Streaming)
 	assert.True(t, caps.FunctionCalling)
 
-	// But typically not vision
+	// But typically not vision.
 	assert.False(t, caps.Vision)
 }
 
-func TestProvider_Models_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test")
+func TestProvider_Models(t *testing.T) {
+	// Mock /api/tags response matching Ollama's ListResponse format.
+	mockResponse := map[string]any{
+		"models": []map[string]any{
+			{
+				"name":        "llama3.1",
+				"model":       "llama3.1",
+				"modified_at": "2024-01-01T00:00:00Z",
+				"size":        1234567,
+				"digest":      "abc123",
+				"details": map[string]any{
+					"format":             "gguf",
+					"family":             "llama",
+					"parameter_size":     "8B",
+					"quantization_level": "Q4_0",
+				},
+			},
+			{
+				"name":        "mistral",
+				"model":       "mistral",
+				"modified_at": "2024-02-01T00:00:00Z",
+				"size":        7654321,
+				"digest":      "def456",
+				"details": map[string]any{
+					"format":             "gguf",
+					"family":             "mistral",
+					"parameter_size":     "7B",
+					"quantization_level": "Q4_0",
+				},
+			},
+		},
 	}
 
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/tags" && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockResponse)
+
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
 	provider, err := NewProvider(Config{
-		BaseURL: "http://localhost:11434",
+		BaseURL: server.URL,
 		Model:   "llama3.1",
 	})
 	require.NoError(t, err)
 
 	ctx := context.Background()
 	models, err := provider.Models(ctx)
-
-	// This test requires Ollama to be running locally
-	// If it fails, that's expected in CI/CD environments
-	if err != nil {
-		t.Logf("Ollama not available (expected in CI): %v", err)
-		return
-	}
-
-	// If we got here, Ollama is running
-	assert.NotNil(t, models)
-	t.Logf("Found %d models", len(models))
-}
-
-func TestProvider_AutoTune_Integration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test")
-	}
-
-	provider, err := NewProvider(Config{
-		BaseURL: "http://localhost:11434",
-		Model:   "llama3.1",
-	})
 	require.NoError(t, err)
+	require.Len(t, models, 2)
 
-	ctx := context.Background()
+	assert.Equal(t, "llama3.1", models[0].ID)
+	assert.EqualValues(t, "model", models[0].Object)
 
-	// AutoTune requires running Ollama with the model available
-	err = provider.AutoTune(ctx, 1024*1024*1024) // 1GB headroom
-
-	// If Ollama isn't running, that's fine for unit tests
-	if err != nil {
-		t.Logf("AutoTune requires running Ollama (expected in CI): %v", err)
-		return
-	}
-
-	t.Logf("AutoTune succeeded")
-}
-
-func TestProvider_GetAutoTuneWarning(t *testing.T) {
-	provider, err := NewProvider(Config{
-		Model: "llama3.1",
-	})
-	require.NoError(t, err)
-
-	// Initially no warning
-	warning := provider.GetAutoTuneWarning()
-	assert.Empty(t, warning)
-
-	// Set warning directly for testing
-	provider.autoTuneWarning = "test warning"
-	warning = provider.GetAutoTuneWarning()
-	assert.Equal(t, "test warning", warning)
+	assert.Equal(t, "mistral", models[1].ID)
+	assert.EqualValues(t, "model", models[1].Object)
 }

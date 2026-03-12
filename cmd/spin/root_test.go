@@ -38,6 +38,7 @@ func TestRootCommand_Help(t *testing.T) {
 	if !strings.Contains(output, "spin") {
 		t.Error("Help output should contain 'spin'")
 	}
+
 	if !strings.Contains(output, "Usage:") {
 		t.Error("Help output should contain 'Usage:'")
 	}
@@ -46,7 +47,7 @@ func TestRootCommand_Help(t *testing.T) {
 func TestGlobalFlags(t *testing.T) {
 	cmd := newRootCmd()
 
-	// Check that global flags are registered
+	// Check that global flags are registered.
 	flags := []string{"model", "provider", "sandbox", "cd", "config", "config-file", "mode"}
 
 	for _, flagName := range flags {
@@ -104,12 +105,13 @@ func TestGlobalFlags_Parsing(t *testing.T) {
 			cmd.SetOut(&out)
 			cmd.SetErr(&out)
 
-			// Execute should not error on --help
-			if err := cmd.Execute(); err != nil {
+			// Execute should not error on --help.
+			err := cmd.Execute()
+			if err != nil {
 				t.Fatalf("Execute() error = %v", err)
 			}
 
-			// Check flag values
+			// Check flag values.
 			if tt.wantModel != "" {
 				model, _ := cmd.Flags().GetString("model")
 				if model != tt.wantModel {
@@ -165,9 +167,11 @@ func TestRootCommand_InvalidFlag(t *testing.T) {
 		t.Error("Expected error for invalid flag, got nil")
 	}
 
+	errMsg := err.Error()
+
 	output := out.String()
-	if !strings.Contains(output, "unknown flag") {
-		t.Errorf("Error output should mention unknown flag, got: %s", output)
+	if !strings.Contains(output, "unknown flag") && !strings.Contains(errMsg, "unknown flag") {
+		t.Errorf("Error output should mention unknown flag, got output: %q, err: %q", output, errMsg)
 	}
 }
 
@@ -187,15 +191,17 @@ func TestConfigOverrides(t *testing.T) {
 	if len(config) != 2 {
 		t.Errorf("config overrides count = %d, want 2", len(config))
 	}
+
 	if config[0] != "key1=value1" {
 		t.Errorf("config[0] = %s, want 'key1=value1'", config[0])
 	}
+
 	if config[1] != "key2=value2" {
 		t.Errorf("config[1] = %s, want 'key2=value2'", config[1])
 	}
 }
 
-// TestTaskModeFlag tests the --mode flag functionality
+// TestTaskModeFlag tests the --mode flag functionality.
 func TestTaskModeFlag(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -241,7 +247,7 @@ func TestTaskModeFlag(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset global flagTaskMode to default
+			// Reset global flagTaskMode to default.
 			flagTaskMode = "regular"
 
 			cmd := newRootCmd()
@@ -251,13 +257,13 @@ func TestTaskModeFlag(t *testing.T) {
 			cmd.SetOut(&out)
 			cmd.SetErr(&out)
 
-			// Execute should not error with --help
+			// Execute should not error with --help.
 			err := cmd.Execute()
 			if err != nil {
 				t.Fatalf("Execute() error = %v, output: %s", err, out.String())
 			}
 
-			// Check flag value
+			// Check flag value.
 			mode, err := cmd.Flags().GetString("mode")
 			if err != nil {
 				t.Fatalf("Failed to get mode flag: %v", err)
@@ -270,7 +276,7 @@ func TestTaskModeFlag(t *testing.T) {
 	}
 }
 
-// TestTaskModeFlagHelp verifies the mode flag appears in help output
+// TestTaskModeFlagHelp verifies the mode flag appears in help output.
 func TestTaskModeFlagHelp(t *testing.T) {
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"--help"})
@@ -285,12 +291,12 @@ func TestTaskModeFlagHelp(t *testing.T) {
 
 	output := out.String()
 
-	// Check that mode flag is documented
+	// Check that mode flag is documented.
 	if !strings.Contains(output, "--mode") && !strings.Contains(output, "-m") {
 		t.Error("Help output should contain '--mode' or '-m' flag")
 	}
 
-	// Check that valid modes are mentioned in help
+	// Check that valid modes are mentioned in help.
 	modes := []string{"regular", "review", "compact", "planning"}
 	for _, mode := range modes {
 		if !strings.Contains(output, mode) {
@@ -299,7 +305,7 @@ func TestTaskModeFlagHelp(t *testing.T) {
 	}
 }
 
-// TestTaskModeFlagDefault verifies the default value
+// TestTaskModeFlagDefault verifies the default value.
 func TestTaskModeFlagDefault(t *testing.T) {
 	cmd := newRootCmd()
 
@@ -313,7 +319,7 @@ func TestTaskModeFlagDefault(t *testing.T) {
 	}
 }
 
-// TestTaskModeFlagShorthand verifies the short form
+// TestTaskModeFlagShorthand verifies the short form.
 func TestTaskModeFlagShorthand(t *testing.T) {
 	cmd := newRootCmd()
 

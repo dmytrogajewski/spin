@@ -4,12 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/ace/generator"
 )
 
-// TestReflectionRequest_Defaults tests default values for request
+// TestReflectionRequest_Defaults tests default values for request.
 func TestReflectionRequest_Defaults(t *testing.T) {
 	req := &ReflectionRequest{
 		Trajectories: []*generator.Trajectory{
@@ -21,7 +22,7 @@ func TestReflectionRequest_Defaults(t *testing.T) {
 	assert.Equal(t, 1, len(req.Trajectories))
 }
 
-// TestReflectionResponse_Creation tests response creation
+// TestReflectionResponse_Creation tests response creation.
 func TestReflectionResponse_Creation(t *testing.T) {
 	insights := []*Insight{
 		NewInsight("Always validate input parameters before processing them", CategorySuccessPattern),

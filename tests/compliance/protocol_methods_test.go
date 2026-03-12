@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	acppkg "github.com/dmytrogajewski/spin/internal/protocol/acp"
 	"github.com/dmytrogajewski/spin/internal/session"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // createTestACPAgent creates a test ACP agent for compliance testing.
@@ -23,7 +24,7 @@ func createTestACPAgent(t *testing.T) *acppkg.SpinACPAgent {
 	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
-	// Create proper storage for tests
+	// Create proper storage for tests.
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
 
@@ -45,10 +46,10 @@ func TestCompliance_Initialize_ProtocolVersion(t *testing.T) {
 	resp, err := acpAgent.Initialize(ctx, req)
 	require.NoError(t, err)
 
-	// Verify response format
+	// Verify response format.
 	verifyInitializeResponse(t, resp)
 
-	// Verify protocol version
+	// Verify protocol version.
 	assert.Equal(t, acp.ProtocolVersion(1), resp.ProtocolVersion, "Protocol version should be 1")
 }
 
@@ -64,18 +65,18 @@ func TestCompliance_Initialize_Capabilities(t *testing.T) {
 	resp, err := acpAgent.Initialize(ctx, req)
 	require.NoError(t, err)
 
-	// Verify capabilities are correctly advertised
+	// Verify capabilities are correctly advertised.
 	caps := resp.AgentCapabilities
 	require.NotNil(t, caps, "Agent capabilities should be set")
 
-	// Verify prompt capabilities
+	// Verify prompt capabilities.
 	assert.True(t, caps.PromptCapabilities.Image, "Image capability should be advertised")
 	assert.True(t, caps.PromptCapabilities.Audio, "Audio capability should be advertised")
 	assert.True(t, caps.PromptCapabilities.EmbeddedContext, "Embedded context capability should be advertised")
 
 	// Verify MCP capabilities
 	// Note: Stdio is always supported (required), but not a field in McpCapabilities
-	// Http and Sse are optional fields
+	// Http and Sse are optional fields.
 }
 
 // TestCompliance_Initialize_AgentInfo verifies agent info exchange compliance.
@@ -90,7 +91,7 @@ func TestCompliance_Initialize_AgentInfo(t *testing.T) {
 	resp, err := acpAgent.Initialize(ctx, req)
 	require.NoError(t, err)
 
-	// Verify agent info
+	// Verify agent info.
 	require.NotNil(t, resp.AgentInfo, "Agent info should be set")
 	assert.Equal(t, "spin", resp.AgentInfo.Name, "Agent name should be 'spin'")
 	assert.NotEmpty(t, resp.AgentInfo.Version, "Agent version should be set")
@@ -102,7 +103,7 @@ func TestCompliance_Initialize_ClientCapabilities(t *testing.T) {
 	ctx := context.Background()
 
 	clientCaps := acp.ClientCapabilities{
-		// Client capabilities
+		// Client capabilities.
 	}
 
 	req := acp.InitializeRequest{
@@ -113,7 +114,7 @@ func TestCompliance_Initialize_ClientCapabilities(t *testing.T) {
 	resp, err := acpAgent.Initialize(ctx, req)
 	require.NoError(t, err)
 
-	// If Initialize succeeds, client capabilities were processed
+	// If Initialize succeeds, client capabilities were processed.
 	verifyInitializeResponse(t, resp)
 }
 
@@ -129,7 +130,7 @@ func TestCompliance_Initialize_ResponseFormat(t *testing.T) {
 	resp, err := acpAgent.Initialize(ctx, req)
 	require.NoError(t, err)
 
-	// Verify complete response format
+	// Verify complete response format.
 	verifyInitializeResponse(t, resp)
 }
 
@@ -138,7 +139,7 @@ func TestCompliance_NewSession_Cwd(t *testing.T) {
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
-	// Test with valid CWD
+	// Test with valid CWD.
 	req := acp.NewSessionRequest{
 		Cwd: "/tmp/test",
 	}
@@ -147,7 +148,7 @@ func TestCompliance_NewSession_Cwd(t *testing.T) {
 	require.NoError(t, err)
 	verifyNewSessionResponse(t, resp)
 
-	// Test with empty CWD (should fail)
+	// Test with empty CWD (should fail).
 	reqEmpty := acp.NewSessionRequest{
 		Cwd: "",
 	}
@@ -168,7 +169,7 @@ func TestCompliance_NewSession_SessionId(t *testing.T) {
 	resp, err := acpAgent.NewSession(ctx, req)
 	require.NoError(t, err)
 
-	// Verify session ID is generated and non-empty
+	// Verify session ID is generated and non-empty.
 	assert.NotEmpty(t, resp.SessionId, "Session ID should be generated")
 	assert.Greater(t, len(resp.SessionId), 0, "Session ID should have length > 0")
 }
@@ -185,7 +186,7 @@ func TestCompliance_NewSession_ModeState(t *testing.T) {
 	resp, err := acpAgent.NewSession(ctx, req)
 	require.NoError(t, err)
 
-	// Verify mode state is included
+	// Verify mode state is included.
 	require.NotNil(t, resp.Modes, "Mode state should be included")
 	assert.NotEmpty(t, resp.Modes.AvailableModes, "Available modes should be set")
 	assert.NotEmpty(t, resp.Modes.CurrentModeId, "Current mode ID should be set")
@@ -212,7 +213,7 @@ func TestCompliance_Prompt_SessionId(t *testing.T) {
 	acpAgent := createTestACPAgent(t)
 	ctx := context.Background()
 
-	// Test with invalid session ID (should fail validation before execution)
+	// Test with invalid session ID (should fail validation before execution).
 	invalidReq := acp.PromptRequest{
 		SessionId: acp.SessionId("invalid-session-id"),
 		Prompt: []acp.ContentBlock{
@@ -227,7 +228,7 @@ func TestCompliance_Prompt_SessionId(t *testing.T) {
 
 // TestCompliance_Prompt_ContentBlocks verifies content block format compliance.
 func TestCompliance_Prompt_ContentBlocks(t *testing.T) {
-	// Test content block format compliance (without execution)
+	// Test content block format compliance (without execution).
 	textBlock := acp.TextBlock("test message")
 	verifyContentBlock(t, textBlock)
 
@@ -244,14 +245,14 @@ func TestCompliance_Prompt_ContentBlocks(t *testing.T) {
 // TestCompliance_Prompt_StopReason verifies stop reason format compliance.
 func TestCompliance_Prompt_StopReason(t *testing.T) {
 	// Test stop reason format (without execution)
-	// Create a mock response with valid stop reason
+	// Create a mock response with valid stop reason.
 	resp := acp.PromptResponse{
 		StopReason: acp.StopReasonEndTurn,
 	}
 
 	verifyPromptResponse(t, resp)
 
-	// Test other valid stop reasons
+	// Test other valid stop reasons.
 	validReasons := []acp.StopReason{
 		acp.StopReasonEndTurn,
 		acp.StopReasonCancelled,
@@ -269,7 +270,7 @@ func TestCompliance_Prompt_StopReason(t *testing.T) {
 
 // TestCompliance_Prompt_ResponseFormat verifies Prompt response format compliance.
 func TestCompliance_Prompt_ResponseFormat(t *testing.T) {
-	// Test response format (without execution)
+	// Test response format (without execution).
 	resp := acp.PromptResponse{
 		StopReason: acp.StopReasonEndTurn,
 	}

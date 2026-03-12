@@ -37,12 +37,13 @@ func TestApprovalNeeds_NoApprovalRequired(t *testing.T) {
 	if needs.Required {
 		t.Error("ApprovalNeeds.Required should be false for safe operations")
 	}
+
 	if needs.Risk != RiskSafe {
 		t.Errorf("ApprovalNeeds.Risk = %v, want RiskSafe", needs.Risk)
 	}
 }
 
-// mockToolWithApproval is a test tool that implements ToolWithApproval
+// mockToolWithApproval is a test tool that implements ToolWithApproval.
 type mockToolWithApproval struct {
 	checkApprovalFunc func(ToolParameters) ApprovalNeeds
 }
@@ -57,6 +58,7 @@ func (m *mockToolWithApproval) CheckApproval(params ToolParameters) ApprovalNeed
 	if m.checkApprovalFunc != nil {
 		return m.checkApprovalFunc(params)
 	}
+
 	return ApprovalNeeds{Required: false, Risk: RiskSafe}
 }
 
@@ -71,17 +73,19 @@ func TestToolWithApproval_Interface(t *testing.T) {
 		},
 	}
 
-	// Verify it implements ToolWithApproval
+	// Verify it implements ToolWithApproval.
 	var _ ToolWithApproval = tool
 
-	// Call CheckApproval
+	// Call CheckApproval.
 	needs := tool.CheckApproval(ToolParameters{})
 	if !needs.Required {
 		t.Error("CheckApproval should return Required=true")
 	}
+
 	if needs.Risk != RiskHigh {
 		t.Errorf("CheckApproval Risk = %v, want RiskHigh", needs.Risk)
 	}
+
 	if needs.Reason != "test reason" {
 		t.Errorf("CheckApproval Reason = %q, want %q", needs.Reason, "test reason")
 	}

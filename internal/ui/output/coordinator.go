@@ -37,9 +37,9 @@ type CoordinatedWriter struct {
 	printer       *Printer
 	renderer      PromptRenderer
 	model         PromptModel
-	scrollManager ScrollRegionManager // Optional: for scrolling region support
+	scrollManager ScrollRegionManager // Optional: for scrolling region support.
 	mu            sync.Mutex
-	status        string // Current status text (protected by mu)
+	status        string // Current status text (protected by mu).
 }
 
 // NewCoordinatedWriter creates a new coordinator that wraps a printer
@@ -52,7 +52,7 @@ type CoordinatedWriter struct {
 //
 //	coord := output.NewCoordinatedWriter(printer, renderer, model)
 //	coord.PrintLine("User: Hello!")
-//	// Output: "User: Hello!\n> [cursor]"
+//	Output: "User: Hello!\n> [cursor]".
 func NewCoordinatedWriter(
 	printer *Printer,
 	renderer PromptRenderer,
@@ -69,6 +69,7 @@ func NewCoordinatedWriter(
 func (c *CoordinatedWriter) SetScrollManager(mgr ScrollRegionManager) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.scrollManager = mgr
 }
 
@@ -82,22 +83,24 @@ func (c *CoordinatedWriter) PrintLine(s string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Move to scrolling region BEFORE writing content
+	// Move to scrolling region BEFORE writing content.
 	if c.scrollManager != nil {
 		_ = c.scrollManager.MoveToScrollRegion()
 	}
 
-	// Write line via printer
-	if err := c.printer.PrintLine(s); err != nil {
+	// Write line via printer.
+	err := c.printer.PrintLine(s)
+	if err != nil {
 		return fmt.Errorf("print line: %w", err)
 	}
 
-	// Redraw prompt
-	if err := c.renderer.Redraw(c.model, c.status); err != nil {
+	// Redraw prompt.
+	err = c.renderer.Redraw(c.model, c.status)
+	if err != nil {
 		return fmt.Errorf("redraw prompt: %w", err)
 	}
 
-	// Move cursor back to scrolling region after redrawing prompt
+	// Move cursor back to scrolling region after redrawing prompt.
 	if c.scrollManager != nil {
 		_ = c.scrollManager.MoveToScrollRegion()
 	}
@@ -114,29 +117,30 @@ func (c *CoordinatedWriter) PrintLine(s string) error {
 //
 // Returns context.Canceled if context is canceled, or any write/redraw error.
 func (c *CoordinatedWriter) PrintChunks(ctx context.Context, chunks <-chan string) error {
-	// Move to scrolling region BEFORE streaming content
+	// Move to scrolling region BEFORE streaming content.
 	c.mu.Lock()
 	if c.scrollManager != nil {
 		_ = c.scrollManager.MoveToScrollRegion()
 	}
 	c.mu.Unlock()
 
-	// Let printer handle streaming (it has internal coordination)
+	// Let printer handle streaming (it has internal coordination).
 	err := c.printer.PrintChunks(ctx, chunks)
 
-	// Redraw prompt after stream completes
+	// Redraw prompt after stream completes.
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if rerr := c.renderer.Redraw(c.model, c.status); rerr != nil {
+	rerr := c.renderer.Redraw(c.model, c.status)
+	if rerr != nil {
 		if err == nil {
 			err = fmt.Errorf("redraw prompt: %w", rerr)
 		}
 		// If both printer and renderer failed, return printer error
-		// (redraw error is secondary)
+		// (redraw error is secondary).
 	}
 
-	// Move cursor back to scrolling region after redrawing prompt
+	// Move cursor back to scrolling region after redrawing prompt.
 	if c.scrollManager != nil {
 		_ = c.scrollManager.MoveToScrollRegion()
 	}
@@ -153,20 +157,22 @@ func (c *CoordinatedWriter) PrintChunks(ctx context.Context, chunks <-chan strin
 // Example:
 //
 //	coord.SetStatus("typing...")
-//	// Prompt shows: "> [cursor]                    typing..."
+//
+// Prompt shows: "> [cursor]                    typing..."
 //
 //	coord.SetStatus("")
-//	// Prompt shows: "> [cursor]"
+//	Prompt shows: "> [cursor]".
 func (c *CoordinatedWriter) SetStatus(status string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.status = status
-	if err := c.renderer.Redraw(c.model, c.status); err != nil {
+	err := c.renderer.Redraw(c.model, c.status)
+	if err != nil {
 		return fmt.Errorf("redraw prompt: %w", err)
 	}
 
-	// Move cursor back to scrolling region if manager is set
+	// Move cursor back to scrolling region if manager is set.
 	if c.scrollManager != nil {
 		_ = c.scrollManager.MoveToScrollRegion()
 	}
@@ -181,18 +187,20 @@ func (c *CoordinatedWriter) SetStatus(status string) error {
 //
 // Example:
 //
-//	// On SIGWINCH handler:
+// On SIGWINCH handler:
+//
 //	renderer.SetWidth(newWidth)
 //	coord.RedrawPrompt()
 func (c *CoordinatedWriter) RedrawPrompt() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if err := c.renderer.Redraw(c.model, c.status); err != nil {
+	err := c.renderer.Redraw(c.model, c.status)
+	if err != nil {
 		return fmt.Errorf("redraw prompt: %w", err)
 	}
 
-	// Move cursor back to scrolling region if manager is set
+	// Move cursor back to scrolling region if manager is set.
 	if c.scrollManager != nil {
 		_ = c.scrollManager.MoveToScrollRegion()
 	}

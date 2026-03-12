@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -22,6 +23,7 @@ func NewMemoryTool(store *memory.PersistentStore) *MemoryTool {
 	if store == nil {
 		return nil
 	}
+
 	return &MemoryTool{
 		store: store,
 	}
@@ -84,7 +86,7 @@ func (t *MemoryTool) Schema() ToolSchema {
 func (t *MemoryTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	operation, err := params.GetString("operation")
 	if err != nil {
-		return NewToolError(fmt.Errorf("operation parameter is required")), nil
+		return NewToolError(errors.New("operation parameter is required")), nil
 	}
 
 	switch operation {
@@ -106,31 +108,34 @@ func (t *MemoryTool) Execute(ctx context.Context, params ToolParameters) (ToolRe
 func (t *MemoryTool) executePut(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	key, err := params.GetString("key")
 	if err != nil || key == "" {
-		return NewToolError(fmt.Errorf("key parameter is required for put operation")), nil
+		return NewToolError(errors.New("key parameter is required for put operation")), nil
 	}
 
 	value, err := params.GetString("value")
 	if err != nil || value == "" {
-		return NewToolError(fmt.Errorf("value parameter is required for put operation")), nil
+		return NewToolError(errors.New("value parameter is required for put operation")), nil
 	}
 
 	opts := memory.PutOptions{
 		Overwrite: true,
 	}
 
-	if ns, err := params.GetString("namespace"); err == nil && ns != "" {
+	ns, err := params.GetString("namespace")
+	if err == nil && ns != "" {
 		opts.Namespace = ns
 	}
 
-	// Handle tags - they come as an array
+	// Handle tags - they come as an array.
 	if params.Has("tags") {
 		var tags []string
-		if err := params.GetObject("tags", &tags); err == nil {
+		err := params.GetObject("tags", &tags)
+		if err == nil {
 			opts.Tags = tags
 		}
 	}
 
-	if err := t.store.Put(ctx, key, value, opts); err != nil {
+	err = t.store.Put(ctx, key, value, opts)
+	if err != nil {
 		return NewToolError(fmt.Errorf("failed to store entry: %w", err)), nil
 	}
 
@@ -140,7 +145,7 @@ func (t *MemoryTool) executePut(ctx context.Context, params ToolParameters) (Too
 func (t *MemoryTool) executeGet(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	key, err := params.GetString("key")
 	if err != nil || key == "" {
-		return NewToolError(fmt.Errorf("key parameter is required for get operation")), nil
+		return NewToolError(errors.New("key parameter is required for get operation")), nil
 	}
 
 	entry, err := t.store.Get(ctx, key)
@@ -148,16 +153,19 @@ func (t *MemoryTool) executeGet(ctx context.Context, params ToolParameters) (Too
 		if err == memory.ErrNotFound {
 			return NewToolError(fmt.Errorf("key '%s' not found in persistent memory", key)), nil
 		}
+
 		return NewToolError(fmt.Errorf("failed to get entry: %w", err)), nil
 	}
 
-	// Format output with metadata
+	// Format output with metadata.
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Key: %s\n", entry.Key))
 	sb.WriteString(fmt.Sprintf("Namespace: %s\n", entry.Namespace))
+
 	if len(entry.Tags) > 0 {
 		sb.WriteString(fmt.Sprintf("Tags: %s\n", strings.Join(entry.Tags, ", ")))
 	}
+
 	sb.WriteString(fmt.Sprintf("Created: %s\n", entry.CreatedAt.Format("2006-01-02 15:04:05")))
 	sb.WriteString(fmt.Sprintf("Updated: %s\n", entry.UpdatedAt.Format("2006-01-02 15:04:05")))
 	sb.WriteString(fmt.Sprintf("Value:\n%s", entry.Value))
@@ -168,10 +176,11 @@ func (t *MemoryTool) executeGet(ctx context.Context, params ToolParameters) (Too
 func (t *MemoryTool) executeDelete(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	key, err := params.GetString("key")
 	if err != nil || key == "" {
-		return NewToolError(fmt.Errorf("key parameter is required for delete operation")), nil
+		return NewToolError(errors.New("key parameter is required for delete operation")), nil
 	}
 
-	if err := t.store.Delete(ctx, key); err != nil {
+	err = t.store.Delete(ctx, key)
+	if err != nil {
 		return NewToolError(fmt.Errorf("failed to delete entry: %w", err)), nil
 	}
 
@@ -192,6 +201,7 @@ func (t *MemoryTool) executeList(ctx context.Context, params ToolParameters) (To
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Found %d entries in persistent memory:\n", len(keys)))
+
 	for _, key := range keys {
 		sb.WriteString(fmt.Sprintf("  - %s\n", key))
 	}
@@ -202,7 +212,7 @@ func (t *MemoryTool) executeList(ctx context.Context, params ToolParameters) (To
 func (t *MemoryTool) executeSearch(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	query, err := params.GetString("query")
 	if err != nil || query == "" {
-		return NewToolError(fmt.Errorf("query parameter is required for search operation")), nil
+		return NewToolError(errors.New("query parameter is required for search operation")), nil
 	}
 
 	entries, err := t.store.Search(ctx, query, 10)
@@ -216,12 +226,14 @@ func (t *MemoryTool) executeSearch(ctx context.Context, params ToolParameters) (
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Found %d entries matching '%s':\n", len(entries), query))
+
 	for _, entry := range entries {
-		// Show preview of value (first 100 chars)
+		// Show preview of value (first 100 chars).
 		preview := entry.Value
 		if len(preview) > 100 {
 			preview = preview[:100] + "..."
 		}
+
 		sb.WriteString(fmt.Sprintf("  - %s: %s\n", entry.Key, preview))
 	}
 

@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -32,23 +33,29 @@ type ExecuteMeta struct {
 // Validate validates the execute metadata.
 func (m *ExecuteMeta) Validate() error {
 	if m.Command == "" {
-		return fmt.Errorf("command is required")
+		return errors.New("command is required")
 	}
+
 	if m.CWD == "" {
-		return fmt.Errorf("cwd is required")
+		return errors.New("cwd is required")
 	}
+
 	if m.Impact != "low" && m.Impact != "medium" && m.Impact != "high" {
-		return fmt.Errorf("impact must be low, medium, or high")
+		return errors.New("impact must be low, medium, or high")
 	}
+
 	if m.ExitCode != nil && *m.ExitCode < 0 {
-		return fmt.Errorf("exit_code must be >= 0")
+		return errors.New("exit_code must be >= 0")
 	}
+
 	if m.DurationMS != nil && *m.DurationMS < 0 {
-		return fmt.Errorf("duration_ms must be >= 0")
+		return errors.New("duration_ms must be >= 0")
 	}
+
 	if m.LinesOut != nil && *m.LinesOut < 0 {
-		return fmt.Errorf("lines_out must be >= 0")
+		return errors.New("lines_out must be >= 0")
 	}
+
 	return nil
 }
 
@@ -67,14 +74,17 @@ type ReadMeta struct {
 // Validate validates the read metadata.
 func (m *ReadMeta) Validate() error {
 	if m.File == "" {
-		return fmt.Errorf("file is required")
+		return errors.New("file is required")
 	}
+
 	if m.Offset < 0 {
-		return fmt.Errorf("offset must be >= 0")
+		return errors.New("offset must be >= 0")
 	}
+
 	if m.Limit < 0 {
-		return fmt.Errorf("limit must be >= 0")
+		return errors.New("limit must be >= 0")
 	}
+
 	return nil
 }
 
@@ -93,14 +103,17 @@ type GrepMeta struct {
 // Validate validates the grep metadata.
 func (m *GrepMeta) Validate() error {
 	if m.Pattern == "" {
-		return fmt.Errorf("pattern is required")
+		return errors.New("pattern is required")
 	}
+
 	if m.Mode != "content" && m.Mode != "files_with_matches" && m.Mode != "count" {
-		return fmt.Errorf("mode must be content, files_with_matches, or count")
+		return errors.New("mode must be content, files_with_matches, or count")
 	}
+
 	if m.Context < 0 {
-		return fmt.Errorf("context must be >= 0")
+		return errors.New("context must be >= 0")
 	}
+
 	return nil
 }
 
@@ -115,8 +128,9 @@ type ToolMeta struct {
 // Validate validates the tool metadata.
 func (m *ToolMeta) Validate() error {
 	if m.ToolName == "" {
-		return fmt.Errorf("tool_name is required")
+		return errors.New("tool_name is required")
 	}
+
 	return nil
 }
 
@@ -145,14 +159,17 @@ type PatchMeta struct {
 // Validate validates the patch metadata.
 func (m *PatchMeta) Validate() error {
 	if m.File == "" {
-		return fmt.Errorf("file is required")
+		return errors.New("file is required")
 	}
+
 	if m.LinesAdded != nil && *m.LinesAdded < 0 {
-		return fmt.Errorf("lines_added must be >= 0")
+		return errors.New("lines_added must be >= 0")
 	}
+
 	if m.LinesRemoved != nil && *m.LinesRemoved < 0 {
-		return fmt.Errorf("lines_removed must be >= 0")
+		return errors.New("lines_removed must be >= 0")
 	}
+
 	return nil
 }
 
@@ -174,170 +191,217 @@ type PlanMeta struct {
 // Validate validates the plan metadata.
 func (m *PlanMeta) Validate() error {
 	if m.Total < 0 {
-		return fmt.Errorf("total must be >= 0")
+		return errors.New("total must be >= 0")
 	}
+
 	if m.Pending < 0 {
-		return fmt.Errorf("pending must be >= 0")
+		return errors.New("pending must be >= 0")
 	}
+
 	if m.InProgress < 0 {
-		return fmt.Errorf("in_progress must be >= 0")
+		return errors.New("in_progress must be >= 0")
 	}
+
 	if m.Completed < 0 {
-		return fmt.Errorf("completed must be >= 0")
+		return errors.New("completed must be >= 0")
 	}
+
 	sum := m.Pending + m.InProgress + m.Completed
 	if sum != m.Total {
 		return fmt.Errorf("pending + in_progress + completed (%d) must equal total (%d)", sum, m.Total)
 	}
+
 	return nil
 }
 
 // ParseExecuteMeta extracts ExecuteMeta from a block's metadata.
 func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
+		return nil, errors.New("metadata is empty")
 	}
+
 	var meta ExecuteMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
+	err := json.Unmarshal(b.Meta, &meta)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ExecuteMeta: %w", err)
 	}
+
 	return &meta, nil
 }
 
 // ParseReadMeta extracts ReadMeta from a block's metadata.
 func ParseReadMeta(b *Block) (*ReadMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
+		return nil, errors.New("metadata is empty")
 	}
+
 	var meta ReadMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
+	err := json.Unmarshal(b.Meta, &meta)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ReadMeta: %w", err)
 	}
+
 	return &meta, nil
 }
 
 // ParseGrepMeta extracts GrepMeta from a block's metadata.
 func ParseGrepMeta(b *Block) (*GrepMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
+		return nil, errors.New("metadata is empty")
 	}
+
 	var meta GrepMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
+	err := json.Unmarshal(b.Meta, &meta)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal GrepMeta: %w", err)
 	}
+
 	return &meta, nil
 }
 
 // ParseToolMeta extracts ToolMeta from a block's metadata.
 func ParseToolMeta(b *Block) (*ToolMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
+		return nil, errors.New("metadata is empty")
 	}
+
 	var meta ToolMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
+	err := json.Unmarshal(b.Meta, &meta)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal ToolMeta: %w", err)
 	}
+
 	return &meta, nil
 }
 
 // ParsePatchMeta extracts PatchMeta from a block's metadata.
 func ParsePatchMeta(b *Block) (*PatchMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
+		return nil, errors.New("metadata is empty")
 	}
+
 	var meta PatchMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
+	err := json.Unmarshal(b.Meta, &meta)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal PatchMeta: %w", err)
 	}
+
 	return &meta, nil
 }
 
 // ParsePlanMeta extracts PlanMeta from a block's metadata.
 func ParsePlanMeta(b *Block) (*PlanMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, fmt.Errorf("metadata is empty")
+		return nil, errors.New("metadata is empty")
 	}
+
 	var meta PlanMeta
-	if err := json.Unmarshal(b.Meta, &meta); err != nil {
+	err := json.Unmarshal(b.Meta, &meta)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal PlanMeta: %w", err)
 	}
+
 	return &meta, nil
 }
 
 // SetExecuteMeta sets ExecuteMeta on a block.
 func SetExecuteMeta(b *Block, m *ExecuteMeta) error {
-	if err := m.Validate(); err != nil {
+	err := m.Validate()
+	if err != nil {
 		return fmt.Errorf("invalid ExecuteMeta: %w", err)
 	}
+
 	data, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("failed to marshal ExecuteMeta: %w", err)
 	}
+
 	b.Meta = data
+
 	return nil
 }
 
 // SetReadMeta sets ReadMeta on a block.
 func SetReadMeta(b *Block, m *ReadMeta) error {
-	if err := m.Validate(); err != nil {
+	err := m.Validate()
+	if err != nil {
 		return fmt.Errorf("invalid ReadMeta: %w", err)
 	}
+
 	data, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("failed to marshal ReadMeta: %w", err)
 	}
+
 	b.Meta = data
+
 	return nil
 }
 
 // SetGrepMeta sets GrepMeta on a block.
 func SetGrepMeta(b *Block, m *GrepMeta) error {
-	if err := m.Validate(); err != nil {
+	err := m.Validate()
+	if err != nil {
 		return fmt.Errorf("invalid GrepMeta: %w", err)
 	}
+
 	data, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("failed to marshal GrepMeta: %w", err)
 	}
+
 	b.Meta = data
+
 	return nil
 }
 
 // SetToolMeta sets ToolMeta on a block.
 func SetToolMeta(b *Block, m *ToolMeta) error {
-	if err := m.Validate(); err != nil {
+	err := m.Validate()
+	if err != nil {
 		return fmt.Errorf("invalid ToolMeta: %w", err)
 	}
+
 	data, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("failed to marshal ToolMeta: %w", err)
 	}
+
 	b.Meta = data
+
 	return nil
 }
 
 // SetPatchMeta sets PatchMeta on a block.
 func SetPatchMeta(b *Block, m *PatchMeta) error {
-	if err := m.Validate(); err != nil {
+	err := m.Validate()
+	if err != nil {
 		return fmt.Errorf("invalid PatchMeta: %w", err)
 	}
+
 	data, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("failed to marshal PatchMeta: %w", err)
 	}
+
 	b.Meta = data
+
 	return nil
 }
 
 // SetPlanMeta sets PlanMeta on a block.
 func SetPlanMeta(b *Block, m *PlanMeta) error {
-	if err := m.Validate(); err != nil {
+	err := m.Validate()
+	if err != nil {
 		return fmt.Errorf("invalid PlanMeta: %w", err)
 	}
+
 	data, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("failed to marshal PlanMeta: %w", err)
 	}
+
 	b.Meta = data
+
 	return nil
 }

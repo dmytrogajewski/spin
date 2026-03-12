@@ -15,11 +15,11 @@ func TestNewPaletteRenderer(t *testing.T) {
 func TestPaletteRenderer_SetSize(t *testing.T) {
 	renderer := NewPaletteRenderer(80, 24)
 	renderer.SetSize(120, 40)
-	// No assertion needed - just verify it doesn't panic
+	// No assertion needed - just verify it doesn't panic.
 }
 
 func TestPaletteRenderer_Render_Empty(t *testing.T) {
-	registry := NewCommandRegistry() // Empty
+	registry := NewCommandRegistry() // Empty.
 	palette := NewPalette(registry)
 	palette.Open()
 
@@ -61,7 +61,7 @@ func TestPaletteRenderer_Render_WithQuery(t *testing.T) {
 	renderer := NewPaletteRenderer(80, 24)
 	output := renderer.Render(palette)
 
-	assert.Contains(t, output, "search_") // Query with cursor
+	assert.Contains(t, output, "search_") // Query with cursor.
 	assert.Contains(t, output, "Search in repo...")
 }
 
@@ -83,12 +83,12 @@ func TestPaletteRenderer_Render_Selection(t *testing.T) {
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 	palette.Open()
-	palette.MoveDown() // Select second item
+	palette.MoveDown() // Select second item.
 
 	renderer := NewPaletteRenderer(80, 24)
 	output := renderer.Render(palette)
 
-	// Selection should be visually distinct (inverted)
+	// Selection should be visually distinct (inverted).
 	assert.Contains(t, output, colorInvert)
 	assert.Contains(t, output, "Search in repo...")
 }
@@ -101,7 +101,7 @@ func TestPaletteRenderer_Render_SmallTerminal(t *testing.T) {
 	renderer := NewPaletteRenderer(40, 10)
 	output := renderer.Render(palette)
 
-	// Should not panic, should render something
+	// Should not panic, should render something.
 	assert.NotEmpty(t, output)
 	assert.Contains(t, output, "Command Palette")
 }
@@ -117,14 +117,14 @@ func TestPaletteRenderer_Render_LargeTerminal(t *testing.T) {
 	// Should cap at 80 chars width per spec (plus centering padding)
 	// Palette width = min(80, 200 - 2*s4) = 80
 	// With centering: (200 - 80) / 2 = 60 chars left padding
-	// Total line length can be up to 200 + some ANSI codes
+	// Total line length can be up to 200 + some ANSI codes.
 	assert.NotEmpty(t, output)
 	assert.Contains(t, output, "Command Palette")
 }
 
 func TestPaletteRenderer_Render_MultipleItems(t *testing.T) {
 	registry := NewCommandRegistry()
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		registry.Register(NewSimpleCommand(
 			"Command "+string(rune('A'+i)),
 			"Description "+string(rune('A'+i)),
@@ -140,7 +140,7 @@ func TestPaletteRenderer_Render_MultipleItems(t *testing.T) {
 	renderer := NewPaletteRenderer(80, 24)
 	output := renderer.Render(palette)
 
-	// Should render, but may truncate items based on maxHeight
+	// Should render, but may truncate items based on maxHeight.
 	assert.Contains(t, output, "Command A")
 	assert.NotEmpty(t, output)
 }
@@ -151,13 +151,13 @@ func TestPaletteRenderer_RenderItem(t *testing.T) {
 
 	renderer := NewPaletteRenderer(80, 24)
 
-	// Test unselected item
+	// Test unselected item.
 	output := renderer.renderItem(commands[0], false, 80, 0)
 	assert.Contains(t, output, "Run...")
 	assert.Contains(t, output, "Edit")
 	assert.NotContains(t, output, colorInvert)
 
-	// Test selected item
+	// Test selected item.
 	output = renderer.renderItem(commands[0], true, 80, 0)
 	assert.Contains(t, output, "Run...")
 	assert.Contains(t, output, colorInvert)
@@ -174,9 +174,10 @@ func TestMin(t *testing.T) {
 // stripANSI removes ANSI escape codes for testing purposes.
 
 func TestPaletteRenderer_Integration(t *testing.T) {
-	// Full integration test: registry → palette → renderer
+	// Full integration test: registry → palette → renderer.
 	registry := NewCommandRegistry()
 	executed := false
+
 	registry.Register(NewSimpleCommand(
 		"Test Command",
 		"Test description",
@@ -184,6 +185,7 @@ func TestPaletteRenderer_Integration(t *testing.T) {
 		'T',
 		func(ctx context.Context) error {
 			executed = true
+
 			return nil
 		},
 	))
@@ -194,10 +196,10 @@ func TestPaletteRenderer_Integration(t *testing.T) {
 	renderer := NewPaletteRenderer(80, 24)
 	output := renderer.Render(palette)
 
-	// Verify rendering
+	// Verify rendering.
 	assert.Contains(t, output, "Test Command")
 
-	// Execute command
+	// Execute command.
 	cmd := palette.SelectedCommand()
 	assert.NotNil(t, cmd)
 	err := cmd.Execute(context.Background())

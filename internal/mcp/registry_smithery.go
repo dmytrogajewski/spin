@@ -3,14 +3,16 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/tools"
 	mcpSDK "github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // SmitheryRegistryConfig holds configuration for a Smithery MCP registry.
@@ -34,8 +36,8 @@ type SmitheryRegistry struct {
 	mu        sync.RWMutex
 	connected bool
 
-	// Dynamic loading state - stores RemoteRegistry instances for each loaded server
-	loadedServers map[string]*RemoteRegistry // serverPath -> registry
+	// Dynamic loading state - stores RemoteRegistry instances for each loaded server.
+	loadedServers map[string]*RemoteRegistry // serverPath -> registry.
 }
 
 // NewSmitheryRegistry creates a new SmitheryRegistry.
@@ -43,15 +45,16 @@ type SmitheryRegistry struct {
 // For static registries that connect to a specific server, MCPURL and Namespace are also required.
 func NewSmitheryRegistry(config SmitheryRegistryConfig) (*SmitheryRegistry, error) {
 	if config.Name == "" {
-		return nil, fmt.Errorf("registry name is required")
+		return nil, errors.New("registry name is required")
 	}
+
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("API key is required for smithery registry")
+		return nil, errors.New("API key is required for smithery registry")
 	}
 	// MCPURL and Namespace are only required for static registries (non-dynamic loadout)
-	// Dynamic loadout registries use the Smithery API for search and create connections on-demand
+	// Dynamic loadout registries use the Smithery API for search and create connections on-demand.
 
-	// Create API client for dynamic operations
+	// Create API client for dynamic operations.
 	apiClient, err := NewSmitheryAPIClient(SmitheryAPIConfig{
 		APIKey: config.APIKey,
 		Logger: config.Logger,
@@ -90,21 +93,22 @@ func (r *SmitheryRegistry) Initialize(ctx context.Context) error {
 	}
 
 	// Dynamic loadout mode: no specific server to connect to
-	// Tools are discovered via Smithery API search and loaded on-demand
+	// Tools are discovered via Smithery API search and loaded on-demand.
 	if r.config.MCPURL == "" {
 		r.connected = true
 		r.metadata.Extra = map[string]any{
 			"mode": "dynamic",
 		}
+
 		return nil
 	}
 
-	// Static mode: connect to a specific Smithery server
+	// Static mode: connect to a specific Smithery server.
 	if r.config.Namespace == "" {
-		return fmt.Errorf("namespace is required for static smithery registry")
+		return errors.New("namespace is required for static smithery registry")
 	}
 
-	// Create Smithery client
+	// Create Smithery client.
 	smitheryClient, err := NewSmitheryClient(SmitheryConfig{
 		APIKey:    r.config.APIKey,
 		MCPURL:    r.config.MCPURL,
@@ -117,7 +121,7 @@ func (r *SmitheryRegistry) Initialize(ctx context.Context) error {
 
 	r.client = smitheryClient
 
-	// Initialize connection
+	// Initialize connection.
 	initReq := mcpSDK.InitializeRequest{
 		Params: mcpSDK.InitializeParams{
 			ProtocolVersion: "2024-11-05",
@@ -132,21 +136,24 @@ func (r *SmitheryRegistry) Initialize(ctx context.Context) error {
 	initResp, err := r.client.Initialize(ctx, initReq)
 	if err != nil {
 		r.client.Close()
+
 		return fmt.Errorf("initialize connection: %w", err)
 	}
 
 	r.metadata.ServerInfo = &initResp.ServerInfo
 	r.metadata.Capabilities = initResp.Capabilities
 
-	// List tools
+	// List tools.
 	listReq := mcpSDK.ListToolsRequest{}
+
 	toolsResp, err := r.client.ListTools(ctx, listReq)
 	if err != nil {
 		r.client.Close()
+
 		return fmt.Errorf("list tools: %w", err)
 	}
 
-	// Register tools
+	// Register tools.
 	for _, tool := range toolsResp.Tools {
 		r.tools[tool.Name] = &MCPTool{
 			ServerName: r.name,
@@ -173,6 +180,7 @@ func (r *SmitheryRegistry) Initialize(ctx context.Context) error {
 func (r *SmitheryRegistry) IsConnected() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.connected
 }
 
@@ -180,6 +188,7 @@ func (r *SmitheryRegistry) IsConnected() bool {
 func (r *SmitheryRegistry) Metadata() RegistryMetadata {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.metadata
 }
 
@@ -187,6 +196,7 @@ func (r *SmitheryRegistry) Metadata() RegistryMetadata {
 func (r *SmitheryRegistry) Client() MCPClient {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.client
 }
 
@@ -199,6 +209,7 @@ func (r *SmitheryRegistry) List() []tools.Tool {
 	for _, mcpTool := range r.tools {
 		result = append(result, r.wrapTool(mcpTool))
 	}
+
 	return result
 }
 
@@ -206,6 +217,7 @@ func (r *SmitheryRegistry) List() []tools.Tool {
 func (r *SmitheryRegistry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return len(r.tools)
 }
 
@@ -213,17 +225,17 @@ func (r *SmitheryRegistry) Count() int {
 // For static registries, this searches already-loaded tools.
 // For dynamic registries (with SearchContext.Ctx), this calls the Smithery API and returns loadable tool stubs.
 func (r *SmitheryRegistry) Search(ctx *SearchContext, query string, max int) []tools.Tool {
-	// For static mode, just search loaded tools
+	// For static mode, just search loaded tools.
 	if !r.IsDynamic() {
 		return SearchTools(r.List(), query, max, DefaultSearchOptions())
 	}
 
-	// For dynamic mode without context, fall back to loaded tools
+	// For dynamic mode without context, fall back to loaded tools.
 	if ctx == nil || ctx.Ctx == nil {
 		return SearchTools(r.List(), query, max, DefaultSearchOptions())
 	}
 
-	// Dynamic mode with context: search the Smithery API
+	// Dynamic mode with context: search the Smithery API.
 	searchCtx, cancel := context.WithTimeout(ctx.Ctx, 10*time.Second)
 	defer cancel()
 
@@ -232,11 +244,11 @@ func (r *SmitheryRegistry) Search(ctx *SearchContext, query string, max int) []t
 		if r.logger != nil {
 			r.logger.Warn("Smithery API search failed", "error", err)
 		}
-		// Fall back to searching loaded tools
+		// Fall back to searching loaded tools.
 		return SearchTools(r.List(), query, max, DefaultSearchOptions())
 	}
 
-	// Convert API results to loadable tool stubs
+	// Convert API results to loadable tool stubs.
 	results := make([]tools.Tool, 0, len(searchResp.Tools))
 	for _, t := range searchResp.Tools {
 		results = append(results, &smitheryLoadableTool{
@@ -259,6 +271,7 @@ func (r *SmitheryRegistry) Tool(name string) tools.Tool {
 	if !exists {
 		return nil
 	}
+
 	return r.wrapTool(mcpTool)
 }
 
@@ -273,10 +286,11 @@ func (r *SmitheryRegistry) Execute(ctx context.Context, toolName string, args js
 		return tools.ToolResult{}, fmt.Errorf("tool not found: %s", toolName)
 	}
 
-	// Parse arguments
+	// Parse arguments.
 	var argsMap map[string]any
 	if len(args) > 0 {
-		if err := json.Unmarshal(args, &argsMap); err != nil {
+		err := json.Unmarshal(args, &argsMap)
+		if err != nil {
 			return tools.ToolResult{
 				Success: false,
 				Error:   fmt.Sprintf("invalid arguments: %v", err),
@@ -284,7 +298,7 @@ func (r *SmitheryRegistry) Execute(ctx context.Context, toolName string, args js
 		}
 	}
 
-	// Call tool
+	// Call tool.
 	callReq := mcpSDK.CallToolRequest{
 		Params: mcpSDK.CallToolParams{
 			Name:      mcpTool.Tool.Name,
@@ -307,8 +321,9 @@ func (r *SmitheryRegistry) Execute(ctx context.Context, toolName string, args js
 		}, nil
 	}
 
-	// Convert response
+	// Convert response.
 	var output strings.Builder
+
 	for _, content := range resp.Content {
 		if textContent, ok := mcpSDK.AsTextContent(content); ok {
 			output.WriteString(textContent.Text)
@@ -336,6 +351,7 @@ func (r *SmitheryRegistry) Close() error {
 	if r.client != nil {
 		return r.client.Close()
 	}
+
 	return nil
 }
 
@@ -361,6 +377,7 @@ func (w *smitheryToolWrapper) Description() string {
 	if w.mcpTool.Tool.Description != "" {
 		return w.mcpTool.Tool.Description
 	}
+
 	return fmt.Sprintf("MCP tool: %s", w.mcpTool.Tool.Name)
 }
 
@@ -371,7 +388,8 @@ func (w *smitheryToolWrapper) Schema() tools.ToolSchema {
 	}
 
 	var mcpSchema JSONSchema
-	if err := json.Unmarshal(schemaBytes, &mcpSchema); err != nil {
+	err = json.Unmarshal(schemaBytes, &mcpSchema)
+	if err != nil {
 		return w.fallbackSchema()
 	}
 
@@ -420,17 +438,19 @@ func (w *smitheryToolWrapper) Execute(ctx context.Context, params tools.ToolPara
 			Error:   fmt.Sprintf("marshal arguments: %v", err),
 		}, nil
 	}
+
 	return w.registry.Execute(ctx, w.mcpTool.Tool.Name, argsJSON)
 }
 
 // ============================================================================
 // Dynamic Tool Loading
-// ============================================================================
+// ============================================================================.
 
 // IsDynamic returns true if this registry is in dynamic loadout mode.
 func (r *SmitheryRegistry) IsDynamic() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.config.MCPURL == ""
 }
 
@@ -438,8 +458,9 @@ func (r *SmitheryRegistry) IsDynamic() bool {
 // This is used for dynamic tool discovery before loading.
 func (r *SmitheryRegistry) SearchAPI(ctx context.Context, query string, limit int) (*SmitherySearchResponse, error) {
 	if r.apiClient == nil {
-		return nil, fmt.Errorf("API client not initialized")
+		return nil, errors.New("API client not initialized")
 	}
+
 	return r.apiClient.SearchTools(ctx, query, limit)
 }
 
@@ -450,11 +471,12 @@ func (r *SmitheryRegistry) LoadServer(ctx context.Context, serverPath string) ([
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// Check if already loaded
+	// Check if already loaded.
 	if _, exists := r.loadedServers[serverPath]; exists {
 		if r.logger != nil {
 			r.logger.Debug("server already loaded", "server", serverPath)
 		}
+
 		return nil, nil
 	}
 
@@ -462,7 +484,7 @@ func (r *SmitheryRegistry) LoadServer(ctx context.Context, serverPath string) ([
 	// Format: https://server.smithery.ai/@namespace/server/mcp?api_key=...
 	mcpURL := fmt.Sprintf("%s?api_key=%s", r.apiClient.GetServerMCPURL(serverPath), r.config.APIKey)
 
-	// Create a safe registry name from server path
+	// Create a safe registry name from server path.
 	safeName := strings.ReplaceAll(serverPath, "@", "")
 	safeName = strings.ReplaceAll(safeName, "/", "_")
 
@@ -473,7 +495,7 @@ func (r *SmitheryRegistry) LoadServer(ctx context.Context, serverPath string) ([
 			"url", mcpURL)
 	}
 
-	// Create RemoteRegistry with streamable-http transport
+	// Create RemoteRegistry with streamable-http transport.
 	remoteReg, err := NewRemoteRegistry(RemoteRegistryConfig{
 		Name:      safeName,
 		Transport: TransportStreamableHTTP,
@@ -484,16 +506,18 @@ func (r *SmitheryRegistry) LoadServer(ctx context.Context, serverPath string) ([
 		return nil, fmt.Errorf("create remote registry for %s: %w", serverPath, err)
 	}
 
-	// Initialize the connection (this discovers tools)
-	if err := remoteReg.Initialize(ctx); err != nil {
+	// Initialize the connection (this discovers tools).
+	err = remoteReg.Initialize(ctx)
+	if err != nil {
 		remoteReg.Close()
+
 		return nil, fmt.Errorf("initialize %s: %w", serverPath, err)
 	}
 
-	// Get tools from the remote registry
+	// Get tools from the remote registry.
 	newTools := remoteReg.List()
 
-	// Track loaded server
+	// Track loaded server.
 	r.loadedServers[serverPath] = remoteReg
 	r.metadata.ToolCount += len(newTools)
 
@@ -510,6 +534,7 @@ func (r *SmitheryRegistry) LoadServer(ctx context.Context, serverPath string) ([
 func (r *SmitheryRegistry) GetLoadedServer(serverPath string) *RemoteRegistry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.loadedServers[serverPath]
 }
 
@@ -517,16 +542,18 @@ func (r *SmitheryRegistry) GetLoadedServer(serverPath string) *RemoteRegistry {
 func (r *SmitheryRegistry) GetLoadedServerNames() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	names := make([]string, 0, len(r.loadedServers))
 	for name := range r.loadedServers {
 		names = append(names, name)
 	}
+
 	return names
 }
 
 // ============================================================================
 // Loadable Tool Stub (for dynamic tool discovery)
-// ============================================================================
+// ============================================================================.
 
 // smitheryLoadableTool is a tool stub returned from Smithery API search.
 // It represents a tool that CAN be loaded but isn't connected yet.
@@ -542,6 +569,7 @@ type smitheryLoadableTool struct {
 func (t *smitheryLoadableTool) Name() string {
 	safeName := strings.ReplaceAll(t.serverPath, "@", "")
 	safeName = strings.ReplaceAll(safeName, "/", "_")
+
 	return fmt.Sprintf("mcp_%s_%s", safeName, t.toolName)
 }
 
@@ -569,7 +597,7 @@ func (t *smitheryLoadableTool) Schema() tools.ToolSchema {
 // Execute attempts to load the server and execute the tool.
 // On first call, it loads the server. Subsequent calls use the loaded tool.
 func (t *smitheryLoadableTool) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
-	// Load the server if not already loaded
+	// Load the server if not already loaded.
 	_, err := t.registry.LoadServer(ctx, t.serverPath)
 	if err != nil {
 		return tools.ToolResult{
@@ -578,7 +606,7 @@ func (t *smitheryLoadableTool) Execute(ctx context.Context, params tools.ToolPar
 		}, nil
 	}
 
-	// Find the loaded tool and execute it
+	// Find the loaded tool and execute it.
 	loadedReg := t.registry.GetLoadedServer(t.serverPath)
 	if loadedReg == nil {
 		return tools.ToolResult{
@@ -587,7 +615,7 @@ func (t *smitheryLoadableTool) Execute(ctx context.Context, params tools.ToolPar
 		}, nil
 	}
 
-	// Find and execute the tool
+	// Find and execute the tool.
 	argsJSON, err := json.Marshal(params.ToMap())
 	if err != nil {
 		return tools.ToolResult{

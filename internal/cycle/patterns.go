@@ -13,7 +13,7 @@ type PatternDetector struct {
 	config Config
 }
 
-// NewPatternDetector creates a new pattern detector
+// NewPatternDetector creates a new pattern detector.
 func NewPatternDetector(config Config) *PatternDetector {
 	return &PatternDetector{config: config}
 }
@@ -23,7 +23,7 @@ func NewPatternDetector(config Config) *PatternDetector {
 func (pd *PatternDetector) AnalyzePatterns(snapshots []Snapshot) []detection.PatternResult {
 	internalResults := pd.analyzeInternal(snapshots)
 
-	// Convert internal results to detection.PatternResult
+	// Convert internal results to detection.PatternResult.
 	results := make([]detection.PatternResult, 0, len(internalResults))
 	for _, r := range internalResults {
 		results = append(results, detection.PatternResult{
@@ -32,6 +32,7 @@ func (pd *PatternDetector) AnalyzePatterns(snapshots []Snapshot) []detection.Pat
 			Details:    r.Details,
 		})
 	}
+
 	return results
 }
 
@@ -40,17 +41,17 @@ func (pd *PatternDetector) AnalyzePatterns(snapshots []Snapshot) []detection.Pat
 func (pd *PatternDetector) analyzeInternal(snapshots []Snapshot) []PatternResult {
 	var results []PatternResult
 
-	// Analyze response patterns
+	// Analyze response patterns.
 	if result := pd.analyzeResponsePatterns(snapshots); result.Type != PatternNone {
 		results = append(results, result)
 	}
 
-	// Analyze tool call patterns
+	// Analyze tool call patterns.
 	if result := pd.analyzeToolPatterns(snapshots); result.Type != PatternNone {
 		results = append(results, result)
 	}
 
-	// Analyze error patterns
+	// Analyze error patterns.
 	if result := pd.analyzeErrorPatterns(snapshots); result.Type != PatternNone {
 		results = append(results, result)
 	}
@@ -58,7 +59,7 @@ func (pd *PatternDetector) analyzeInternal(snapshots []Snapshot) []PatternResult
 	return results
 }
 
-// PatternType represents more granular pattern types
+// PatternType represents more granular pattern types.
 type PatternType int
 
 const (
@@ -70,7 +71,7 @@ const (
 	PatternOscillatingTools
 )
 
-// PatternResult contains detailed pattern analysis results
+// PatternResult contains detailed pattern analysis results.
 type PatternResult struct {
 	Type          PatternType
 	Confidence    float64
@@ -79,7 +80,7 @@ type PatternResult struct {
 	Suggestion    string
 }
 
-// String returns the string representation of the pattern type
+// String returns the string representation of the pattern type.
 func (pt PatternType) String() string {
 	switch pt {
 	case PatternRepeatedPhrase:
@@ -97,13 +98,13 @@ func (pt PatternType) String() string {
 	}
 }
 
-// analyzeResponsePatterns detects more sophisticated response patterns
+// analyzeResponsePatterns detects more sophisticated response patterns.
 func (pd *PatternDetector) analyzeResponsePatterns(snapshots []Snapshot) PatternResult {
 	if len(snapshots) < 3 {
 		return PatternResult{Type: PatternNone}
 	}
 
-	// Look for repeated phrases across responses
+	// Look for repeated phrases across responses.
 	phraseCounts := make(map[string]int)
 	totalWords := 0
 
@@ -115,16 +116,18 @@ func (pd *PatternDetector) analyzeResponsePatterns(snapshots []Snapshot) Pattern
 		words := extractWords(snapshot.Response)
 		totalWords += len(words)
 
-		// Count 3-word phrases (n-grams)
-		for i := 0; i < len(words)-2; i++ {
+		// Count 3-word phrases (n-grams).
+		for i := range len(words) - 2 {
 			phrase := strings.Join(words[i:i+3], " ")
 			phraseCounts[phrase]++
 		}
 	}
 
-	// Find most frequent phrases
-	var mostFrequentPhrase string
-	var maxCount int
+	// Find most frequent phrases.
+	var (
+		mostFrequentPhrase string
+		maxCount           int
+	)
 
 	for phrase, count := range phraseCounts {
 		if count > maxCount {
@@ -133,9 +136,10 @@ func (pd *PatternDetector) analyzeResponsePatterns(snapshots []Snapshot) Pattern
 		}
 	}
 
-	// If a phrase appears in most responses, it might indicate repetition
+	// If a phrase appears in most responses, it might indicate repetition.
 	if maxCount >= len(snapshots)/2 && maxCount >= 2 {
 		confidence := float64(maxCount) / float64(len(snapshots))
+
 		return PatternResult{
 			Type:       PatternRepeatedPhrase,
 			Confidence: confidence,
@@ -144,7 +148,7 @@ func (pd *PatternDetector) analyzeResponsePatterns(snapshots []Snapshot) Pattern
 		}
 	}
 
-	// Look for circular reasoning indicators
+	// Look for circular reasoning indicators.
 	if pd.detectCircularReasoning(snapshots) {
 		return PatternResult{
 			Type:       PatternCircularReasoning,
@@ -157,23 +161,26 @@ func (pd *PatternDetector) analyzeResponsePatterns(snapshots []Snapshot) Pattern
 	return PatternResult{Type: PatternNone}
 }
 
-// analyzeToolPatterns detects problematic tool usage patterns
+// analyzeToolPatterns detects problematic tool usage patterns.
 func (pd *PatternDetector) analyzeToolPatterns(snapshots []Snapshot) PatternResult {
 	if len(snapshots) < 3 {
 		return PatternResult{Type: PatternNone}
 	}
 
-	// Count tool usage frequency
+	// Count tool usage frequency.
 	toolCounts := make(map[string]int)
+
 	for _, snapshot := range snapshots {
 		for _, tool := range snapshot.ToolCalls {
 			toolCounts[tool]++
 		}
 	}
 
-	// Find most frequently used tool
-	var mostUsedTool string
-	var maxCount int
+	// Find most frequently used tool.
+	var (
+		mostUsedTool string
+		maxCount     int
+	)
 
 	for tool, count := range toolCounts {
 		if count > maxCount {
@@ -182,7 +189,7 @@ func (pd *PatternDetector) analyzeToolPatterns(snapshots []Snapshot) PatternResu
 		}
 	}
 
-	// If one tool dominates, it might indicate being stuck
+	// If one tool dominates, it might indicate being stuck.
 	if maxCount >= len(snapshots) && maxCount >= pd.config.ToolRepeatLimit {
 		return PatternResult{
 			Type:       PatternToolStuck,
@@ -192,7 +199,7 @@ func (pd *PatternDetector) analyzeToolPatterns(snapshots []Snapshot) PatternResu
 		}
 	}
 
-	// Check for oscillating tool usage
+	// Check for oscillating tool usage.
 	if pd.detectOscillatingTools(snapshots) {
 		return PatternResult{
 			Type:       PatternOscillatingTools,
@@ -205,13 +212,13 @@ func (pd *PatternDetector) analyzeToolPatterns(snapshots []Snapshot) PatternResu
 	return PatternResult{Type: PatternNone}
 }
 
-// analyzeErrorPatterns detects problematic error patterns
+// analyzeErrorPatterns detects problematic error patterns.
 func (pd *PatternDetector) analyzeErrorPatterns(snapshots []Snapshot) PatternResult {
 	if len(snapshots) < 2 {
 		return PatternResult{Type: PatternNone}
 	}
 
-	// Count error frequency
+	// Count error frequency.
 	errorCounts := make(map[string]int)
 	errorTurns := make([]int, 0)
 
@@ -222,9 +229,11 @@ func (pd *PatternDetector) analyzeErrorPatterns(snapshots []Snapshot) PatternRes
 		}
 	}
 
-	// Find most frequent error
-	var mostFrequentError string
-	var maxCount int
+	// Find most frequent error.
+	var (
+		mostFrequentError string
+		maxCount          int
+	)
 
 	for error, count := range errorCounts {
 		if count > maxCount {
@@ -233,7 +242,7 @@ func (pd *PatternDetector) analyzeErrorPatterns(snapshots []Snapshot) PatternRes
 		}
 	}
 
-	// If errors are repeating, it indicates a loop
+	// If errors are repeating, it indicates a loop.
 	if maxCount >= pd.config.ErrorRepeatLimit {
 		return PatternResult{
 			Type:          PatternErrorLoop,
@@ -247,9 +256,9 @@ func (pd *PatternDetector) analyzeErrorPatterns(snapshots []Snapshot) PatternRes
 	return PatternResult{Type: PatternNone}
 }
 
-// detectCircularReasoning looks for signs of circular reasoning in responses
+// detectCircularReasoning looks for signs of circular reasoning in responses.
 func (pd *PatternDetector) detectCircularReasoning(snapshots []Snapshot) bool {
-	// Look for phrases that indicate circular reasoning
+	// Look for phrases that indicate circular reasoning.
 	circularIndicators := []string{
 		"as i mentioned",
 		"as previously stated",
@@ -272,7 +281,7 @@ func (pd *PatternDetector) detectCircularReasoning(snapshots []Snapshot) bool {
 	return false
 }
 
-// detectOscillatingTools checks if tools are being used in an oscillating pattern
+// detectOscillatingTools checks if tools are being used in an oscillating pattern.
 func (pd *PatternDetector) detectOscillatingTools(snapshots []Snapshot) bool {
 	if len(snapshots) < 4 {
 		return false
@@ -280,7 +289,7 @@ func (pd *PatternDetector) detectOscillatingTools(snapshots []Snapshot) bool {
 
 	// Look for A→B→A→B pattern in tool usage
 	// This is a simplified check - a more sophisticated version would
-	// look for semantic oscillation rather than just different tools
+	// look for semantic oscillation rather than just different tools.
 	toolPattern := make([]string, len(snapshots))
 	for i, snapshot := range snapshots {
 		if len(snapshot.ToolCalls) > 0 {
@@ -290,7 +299,7 @@ func (pd *PatternDetector) detectOscillatingTools(snapshots []Snapshot) bool {
 		}
 	}
 
-	// Check for alternating pattern: toolA, toolB, toolA, toolB
+	// Check for alternating pattern: toolA, toolB, toolA, toolB.
 	if len(snapshots) >= 4 {
 		pattern := []string{toolPattern[0], toolPattern[1], toolPattern[2], toolPattern[3]}
 		if pattern[0] != "" && pattern[1] != "" && pattern[0] != pattern[1] &&

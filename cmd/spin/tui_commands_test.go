@@ -116,14 +116,15 @@ func TestParseCommand(t *testing.T) {
 			}
 
 			if !tt.wantCmd {
-				// For non-commands, just verify rawInput is preserved
+				// For non-commands, just verify rawInput is preserved.
 				if got.rawInput != tt.input {
 					t.Errorf("rawInput = %q, want %q", got.rawInput, tt.input)
 				}
+
 				return
 			}
 
-			// For commands, verify all fields
+			// For commands, verify all fields.
 			if got.command != tt.wantName {
 				t.Errorf("command = %q, want %q", got.command, tt.wantName)
 			}
@@ -131,11 +132,12 @@ func TestParseCommand(t *testing.T) {
 			if len(got.args) != len(tt.wantArgs) {
 				t.Errorf("args length = %d, want %d; args = %v, want = %v",
 					len(got.args), len(tt.wantArgs), got.args, tt.wantArgs)
+
 				return
 			}
 
 			for i, arg := range got.args {
-				// Args should be lowercase
+				// Args should be lowercase.
 				wantArg := tt.wantArgs[i]
 				if arg != wantArg {
 					t.Errorf("args[%d] = %q, want %q", i, arg, wantArg)

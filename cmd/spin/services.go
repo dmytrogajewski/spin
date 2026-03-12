@@ -29,17 +29,21 @@ type ProtocolServices struct {
 // Returns services and cleanup function for error handling.
 // The cleanup function closes all created services in reverse order.
 func createServices(ctx context.Context, cfg *config.ConfigV2, workDir string, logger *slog.Logger) (*ProtocolServices, func(), error) {
-	var gitSvc *git.Service
-	var shellSvc *shell.Service
-	var mcpSvc *mcp.Service
+	var (
+		gitSvc   *git.Service
+		shellSvc *shell.Service
+		mcpSvc   *mcp.Service
+	)
 
 	cleanup := func() {
 		if mcpSvc != nil {
 			mcpSvc.Close()
 		}
+
 		if shellSvc != nil {
 			shellSvc.Close()
 		}
+
 		if gitSvc != nil {
 			gitSvc.Close()
 		}
@@ -47,44 +51,55 @@ func createServices(ctx context.Context, cfg *config.ConfigV2, workDir string, l
 
 	if cfg.Protocol.EnableGit {
 		var err error
+
 		gitSvc, err = git.NewService(true, workDir, logger)
 		if err != nil {
 			cleanup()
+
 			return nil, nil, fmt.Errorf("create git service: %w", err)
 		}
 	}
 
 	if cfg.Protocol.EnableShell {
 		var err error
+
 		shellSvc, err = shell.NewService(true, workDir, logger, cfg.Protocol.ShellTimeout)
 		if err != nil {
 			cleanup()
+
 			return nil, nil, fmt.Errorf("create shell service: %w", err)
 		}
 	}
 
 	logger.Debug("MCP config check", "enable_mcp", cfg.Protocol.EnableMCP, "servers_count", len(cfg.Protocol.MCPServers))
+
 	if cfg.Protocol.EnableMCP && len(cfg.Protocol.MCPServers) > 0 {
 		registryManager := mcp.NewDefaultRegistryManager(logger)
 
 		for _, srv := range cfg.Protocol.MCPServers {
 			logger.Debug("creating MCP registry", "name", srv.Name, "transport", srv.Transport, "dynamic_loadout", srv.DynamicLoadout)
+
 			registry, err := createMCPRegistry(srv, logger)
 			if err != nil {
 				logger.Warn("failed to create MCP registry", "name", srv.Name, "err", err)
+
 				continue
 			}
 
-			if err := registryManager.Register(registry); err != nil {
+			err = registryManager.Register(registry)
+			if err != nil {
 				logger.Warn("failed to register MCP registry", "name", srv.Name, "err", err)
+
 				continue
 			}
+
 			logger.Debug("MCP registry registered", "name", srv.Name)
 		}
 
-		// Initialize all registries
+		// Initialize all registries.
 		for _, reg := range registryManager.All() {
-			if err := reg.Initialize(ctx); err != nil {
+			err := reg.Initialize(ctx)
+			if err != nil {
 				logger.Warn("failed to initialize MCP registry", "name", reg.Name(), "err", err)
 			} else {
 				logger.Debug("MCP registry initialized", "name", reg.Name())
@@ -115,19 +130,19 @@ func createBuiltinRuntime(
 	logger *slog.Logger,
 	cfg *config.ConfigV2,
 ) (*runtime.BuiltinRuntime, error) {
-	// Build agent components needed for runtime
+	// Build agent components needed for runtime.
 	agentBuilder := agent.NewBuilder().
 		WithConfig(cfg).
 		WithWorkingDir(workDir).
 		WithEmitter(emitter).
 		WithApprovalHandler(approvalHandler)
 
-	// Build security service and executor
+		// Build security service and executor.
 	securitySvc := agentBuilder.BuildSecurityService()
 	exec := agentBuilder.BuildExecutor()
 	validator := securitySvc.Validator()
 
-	// Create builtin runtime
+	// Create builtin runtime.
 	return runtime.NewBuiltinRuntime(runtime.BuiltinRuntimeConfig{
 		WorkDir:         workDir,
 		Emitter:         emitter,
@@ -170,6 +185,7 @@ func createMCPRegistry(srv config.MCPServerConfigV2, logger *slog.Logger) (mcp.M
 				Scopes:       srv.OAuth.Scopes,
 			}
 		}
+
 		return mcp.NewRemoteRegistry(mcp.RemoteRegistryConfig{
 			Name:      srv.Name,
 			Transport: transport,
@@ -198,11 +214,13 @@ func hasDynamicRegistries(cfg *config.ConfigV2) bool {
 	if cfg == nil || !cfg.Protocol.EnableMCP {
 		return false
 	}
+
 	for _, srv := range cfg.Protocol.MCPServers {
 		if srv.DynamicLoadout {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -210,14 +228,18 @@ func hasDynamicRegistries(cfg *config.ConfigV2) bool {
 func createToolSelector(mcpSvc *mcp.Service, coreRegistry *tools.Registry, emitter *events.EventEmitter, cfg *config.ConfigV2, logger *slog.Logger) *agent.ToolSelector {
 	if mcpSvc == nil {
 		logger.Debug("tool selector: MCP service is nil")
+
 		return nil
 	}
+
 	if !hasDynamicRegistries(cfg) {
 		logger.Debug("tool selector: no dynamic registries configured")
+
 		return nil
 	}
 
 	logger.Info("tool selector: creating with dynamic registries")
+
 	return agent.NewToolSelector(
 		mcpSvc,
 		coreRegistry,

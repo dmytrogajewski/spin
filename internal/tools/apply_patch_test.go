@@ -18,12 +18,11 @@ func TestApplyPatchTool_AddFile(t *testing.T) {
 +This is a test file.
 *** End Patch`
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"patch_text": patch,
 	})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -32,7 +31,7 @@ func TestApplyPatchTool_AddFile(t *testing.T) {
 		t.Fatalf("expected success, got error: %s", result.Error)
 	}
 
-	// Verify file was created
+	// Verify file was created.
 	content, err := os.ReadFile(filepath.Join(tmpDir, "test.txt"))
 	if err != nil {
 		t.Fatalf("failed to read created file: %v", err)
@@ -43,7 +42,7 @@ func TestApplyPatchTool_AddFile(t *testing.T) {
 		t.Errorf("expected content %q, got %q", expected, string(content))
 	}
 
-	// Verify output mentions the file
+	// Verify output mentions the file.
 	if !strings.Contains(result.Output, "test.txt") {
 		t.Errorf("expected output to mention test.txt, got: %s", result.Output)
 	}
@@ -53,8 +52,9 @@ func TestApplyPatchTool_DeleteFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "delete_me.txt")
 
-	// Create file to delete
-	if err := os.WriteFile(testFile, []byte("content"), 0644); err != nil {
+	// Create file to delete.
+	err := os.WriteFile(testFile, []byte("content"), 0644)
+	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -64,12 +64,11 @@ func TestApplyPatchTool_DeleteFile(t *testing.T) {
 *** Delete File: delete_me.txt
 *** End Patch`
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"patch_text": patch,
 	})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -78,8 +77,9 @@ func TestApplyPatchTool_DeleteFile(t *testing.T) {
 		t.Fatalf("expected success, got error: %s", result.Error)
 	}
 
-	// Verify file was deleted
-	if _, err := os.Stat(testFile); !os.IsNotExist(err) {
+	// Verify file was deleted.
+	_, err = os.Stat(testFile)
+	if !os.IsNotExist(err) {
 		t.Errorf("expected file to be deleted")
 	}
 }
@@ -88,9 +88,10 @@ func TestApplyPatchTool_UpdateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "update_me.txt")
 
-	// Create file to update
+	// Create file to update.
 	original := "line1\nline2\nline3\n"
-	if err := os.WriteFile(testFile, []byte(original), 0644); err != nil {
+	err := os.WriteFile(testFile, []byte(original), 0644)
+	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -105,12 +106,11 @@ func TestApplyPatchTool_UpdateFile(t *testing.T) {
  line3
 *** End Patch`
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"patch_text": patch,
 	})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestApplyPatchTool_UpdateFile(t *testing.T) {
 		t.Fatalf("expected success, got error: %s", result.Error)
 	}
 
-	// Verify file was updated
+	// Verify file was updated.
 	content, err := os.ReadFile(testFile)
 	if err != nil {
 		t.Fatalf("failed to read updated file: %v", err)
@@ -143,13 +143,12 @@ func TestApplyPatchTool_DryRun(t *testing.T) {
 +This file should not be created
 *** End Patch`
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"patch_text": patch,
 		"dry_run":    true,
 	})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -158,12 +157,13 @@ func TestApplyPatchTool_DryRun(t *testing.T) {
 		t.Fatalf("expected success, got error: %s", result.Error)
 	}
 
-	// Verify file was NOT created
-	if _, err := os.Stat(filepath.Join(tmpDir, "dry_run_test.txt")); !os.IsNotExist(err) {
+	// Verify file was NOT created.
+	_, err = os.Stat(filepath.Join(tmpDir, "dry_run_test.txt"))
+	if !os.IsNotExist(err) {
 		t.Errorf("expected file not to be created in dry-run mode")
 	}
 
-	// Verify output indicates dry-run
+	// Verify output indicates dry-run.
 	if !strings.Contains(strings.ToLower(result.Output), "dry run") {
 		t.Errorf("expected output to indicate dry-run mode, got: %s", result.Output)
 	}
@@ -173,17 +173,16 @@ func TestApplyPatchTool_ParseError(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewApplyPatchTool(tmpDir)
 
-	// Invalid patch - missing End Patch marker
+	// Invalid patch - missing End Patch marker.
 	patch := `*** Begin Patch
 *** Add File: test.txt
 +content`
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"patch_text": patch,
 	})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -192,7 +191,7 @@ func TestApplyPatchTool_ParseError(t *testing.T) {
 		t.Errorf("expected failure for invalid patch")
 	}
 
-	// Verify error message is clear
+	// Verify error message is clear.
 	if !strings.Contains(result.Error, "End Patch") {
 		t.Errorf("expected parse error mentioning 'End Patch', got: %s", result.Error)
 	}
@@ -202,18 +201,17 @@ func TestApplyPatchTool_PathTraversal(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewApplyPatchTool(tmpDir)
 
-	// Attempt path traversal
+	// Attempt path traversal.
 	patch := `*** Begin Patch
 *** Add File: ../../etc/passwd
 +malicious content
 *** End Patch`
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"patch_text": patch,
 	})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -222,7 +220,7 @@ func TestApplyPatchTool_PathTraversal(t *testing.T) {
 		t.Errorf("expected failure for path traversal attempt")
 	}
 
-	// Verify error message mentions path validation
+	// Verify error message mentions path validation.
 	if !strings.Contains(result.Error, "path") {
 		t.Errorf("expected error about invalid path, got: %s", result.Error)
 	}
@@ -234,22 +232,22 @@ func TestApplyPatchTool_MissingParameters(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		params     map[string]interface{}
+		params     map[string]any
 		wantErrMsg string
 	}{
 		{
 			name:       "missing patch_text",
-			params:     map[string]interface{}{},
+			params:     map[string]any{},
 			wantErrMsg: "patch_text parameter must be a non-empty string",
 		},
 		{
 			name:       "empty patch_text",
-			params:     map[string]interface{}{"patch_text": ""},
+			params:     map[string]any{"patch_text": ""},
 			wantErrMsg: "patch_text parameter must be a non-empty string",
 		},
 		{
 			name:       "non-string patch_text",
-			params:     map[string]interface{}{"patch_text": 123},
+			params:     map[string]any{"patch_text": 123},
 			wantErrMsg: "patch_text parameter must be a non-empty string",
 		},
 	}
@@ -257,8 +255,8 @@ func TestApplyPatchTool_MissingParameters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			params, _ := FromMap(tt.params)
-			result, err := tool.Execute(context.Background(), params)
 
+			result, err := tool.Execute(context.Background(), params)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -277,9 +275,10 @@ func TestApplyPatchTool_MissingParameters(t *testing.T) {
 func TestApplyPatchTool_MultipleOperations(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create file to delete
+	// Create file to delete.
 	deleteFile := filepath.Join(tmpDir, "old.txt")
-	if err := os.WriteFile(deleteFile, []byte("old content"), 0644); err != nil {
+	err := os.WriteFile(deleteFile, []byte("old content"), 0644)
+	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -291,12 +290,11 @@ func TestApplyPatchTool_MultipleOperations(t *testing.T) {
 *** Delete File: old.txt
 *** End Patch`
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"patch_text": patch,
 	})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -305,28 +303,30 @@ func TestApplyPatchTool_MultipleOperations(t *testing.T) {
 		t.Fatalf("expected success, got error: %s", result.Error)
 	}
 
-	// Verify new file created
-	if _, err := os.Stat(filepath.Join(tmpDir, "new.txt")); err != nil {
+	// Verify new file created.
+	_, err = os.Stat(filepath.Join(tmpDir, "new.txt"))
+	if err != nil {
 		t.Errorf("expected new.txt to be created: %v", err)
 	}
 
-	// Verify old file deleted
-	if _, err := os.Stat(deleteFile); !os.IsNotExist(err) {
+	// Verify old file deleted.
+	_, err = os.Stat(deleteFile)
+	if !os.IsNotExist(err) {
 		t.Errorf("expected old.txt to be deleted")
 	}
 
-	// Verify output mentions both operations
+	// Verify output mentions both operations.
 	if !strings.Contains(result.Output, "new.txt") || !strings.Contains(result.Output, "old.txt") {
 		t.Errorf("expected output to mention both files, got: %s", result.Output)
 	}
 }
 
 func TestApplyPatchTool_CustomWorkspace(t *testing.T) {
-	// Create two directories
+	// Create two directories.
 	workspace1 := t.TempDir()
 	workspace2 := t.TempDir()
 
-	// Tool with workspace1 as default
+	// Tool with workspace1 as default.
 	tool := NewApplyPatchTool(workspace1)
 
 	patch := `*** Begin Patch
@@ -334,14 +334,13 @@ func TestApplyPatchTool_CustomWorkspace(t *testing.T) {
 +content
 *** End Patch`
 
-	// Apply patch to workspace2
-	params, _ := FromMap(map[string]interface{}{
+	// Apply patch to workspace2.
+	params, _ := FromMap(map[string]any{
 		"patch_text":     patch,
 		"workspace_root": workspace2,
 	})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -350,12 +349,14 @@ func TestApplyPatchTool_CustomWorkspace(t *testing.T) {
 		t.Fatalf("expected success, got error: %s", result.Error)
 	}
 
-	// Verify file created in workspace2, not workspace1
-	if _, err := os.Stat(filepath.Join(workspace2, "test.txt")); err != nil {
+	// Verify file created in workspace2, not workspace1.
+	_, err = os.Stat(filepath.Join(workspace2, "test.txt"))
+	if err != nil {
 		t.Errorf("expected file in workspace2: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(workspace1, "test.txt")); !os.IsNotExist(err) {
+	_, err = os.Stat(filepath.Join(workspace1, "test.txt"))
+	if !os.IsNotExist(err) {
 		t.Errorf("did not expect file in workspace1")
 	}
 }
@@ -372,14 +373,15 @@ func TestApplyPatchTool_Schema(t *testing.T) {
 		t.Errorf("expected non-empty description")
 	}
 
-	// Verify required parameters
+	// Verify required parameters.
 	required := schema.Function.Parameters.Required
 	if len(required) != 1 || required[0] != "patch_text" {
 		t.Errorf("expected required parameter 'patch_text', got: %v", required)
 	}
 
-	// Verify all expected parameters are defined
+	// Verify all expected parameters are defined.
 	props := schema.Function.Parameters.Properties
+
 	expectedParams := []string{"patch_text", "workspace_root", "dry_run", "force"}
 	for _, param := range expectedParams {
 		if _, exists := props[param]; !exists {
@@ -393,25 +395,27 @@ func TestApplyPatchTool_ErrorCases(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		params map[string]interface{}
+		params map[string]any
 	}{
 		{
 			name:   "missing patch_text",
-			params: map[string]interface{}{},
+			params: map[string]any{},
 		},
 		{
 			name:   "invalid patch_text type",
-			params: map[string]interface{}{"patch_text": 123},
+			params: map[string]any{"patch_text": 123},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			params, _ := FromMap(tt.params)
+
 			result, err := tool.Execute(context.Background(), params)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
+
 			if result.Success {
 				t.Error("expected failure result")
 			}
@@ -422,7 +426,7 @@ func TestApplyPatchTool_ErrorCases(t *testing.T) {
 func TestApplyPatchTool_CheckApproval(t *testing.T) {
 	tool := NewApplyPatchTool("/tmp")
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"patch_text": "*** a/file.go\n--- b/file.go\n@@ -1,1 +1,2 @@\n package main\n+// comment\n",
 	})
 
@@ -431,9 +435,11 @@ func TestApplyPatchTool_CheckApproval(t *testing.T) {
 	if !needs.Required {
 		t.Error("CheckApproval should require approval for patch operations")
 	}
+
 	if needs.Risk != RiskHigh {
 		t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, RiskHigh)
 	}
+
 	if needs.Reason == "" {
 		t.Error("CheckApproval should provide a reason")
 	}
@@ -442,7 +448,7 @@ func TestApplyPatchTool_CheckApproval(t *testing.T) {
 func TestApplyPatchTool_CheckApproval_EmptyPatch(t *testing.T) {
 	tool := NewApplyPatchTool("/tmp")
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"patch_text": "",
 	})
 
@@ -451,6 +457,7 @@ func TestApplyPatchTool_CheckApproval_EmptyPatch(t *testing.T) {
 	if needs.Required {
 		t.Error("CheckApproval should not require approval for empty patch")
 	}
+
 	if needs.Risk != RiskSafe {
 		t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, RiskSafe)
 	}

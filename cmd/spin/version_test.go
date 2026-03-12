@@ -54,9 +54,11 @@ func TestVersionCommand_WithVerbose(t *testing.T) {
 	if !strings.Contains(output, "version") {
 		t.Error("Version output should contain 'version'")
 	}
+
 	if !strings.Contains(output, "commit") {
 		t.Error("Verbose version output should contain 'commit'")
 	}
+
 	if !strings.Contains(output, "built") {
 		t.Error("Verbose version output should contain 'built'")
 	}
@@ -76,7 +78,7 @@ func TestVersionCommand_Short(t *testing.T) {
 	}
 
 	output := strings.TrimSpace(out.String())
-	// Should just be the version number
+	// Should just be the version number.
 	if strings.Contains(output, "commit") || strings.Contains(output, "built") {
 		t.Errorf("Short version should not contain commit or build info, got: %s", output)
 	}

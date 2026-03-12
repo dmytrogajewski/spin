@@ -68,16 +68,17 @@ func TestArchive_Get(t *testing.T) {
 	b, _ := bullet.New("Test content")
 	archive.Archive(b, ReasonMerged, nil)
 
-	// Get existing
+	// Get existing.
 	archived, exists := archive.Get(b.ID)
 	if !exists {
 		t.Fatal("expected archived bullet to exist")
 	}
+
 	if archived.Bullet.ID != b.ID {
 		t.Errorf("expected ID %s, got %s", b.ID, archived.Bullet.ID)
 	}
 
-	// Get non-existent
+	// Get non-existent.
 	_, exists = archive.Get("non-existent")
 	if exists {
 		t.Error("expected non-existent bullet to not exist")
@@ -95,13 +96,13 @@ func TestArchive_List(t *testing.T) {
 	archive.Archive(b2, ReasonMerged, nil)
 	archive.Archive(b3, ReasonLowUtility, nil)
 
-	// List all
+	// List all.
 	all := archive.List(nil)
 	if len(all) != 3 {
 		t.Errorf("expected 3 archived bullets, got %d", len(all))
 	}
 
-	// List with filter (only low utility)
+	// List with filter (only low utility).
 	lowUtility := archive.List(func(ab *ArchivedBullet) bool {
 		return ab.Reason == ReasonLowUtility
 	})
@@ -109,7 +110,7 @@ func TestArchive_List(t *testing.T) {
 		t.Errorf("expected 2 low utility bullets, got %d", len(lowUtility))
 	}
 
-	// List with filter (only merged)
+	// List with filter (only merged).
 	merged := archive.List(func(ab *ArchivedBullet) bool {
 		return ab.Reason == ReasonMerged
 	})
@@ -121,13 +122,13 @@ func TestArchive_List(t *testing.T) {
 func TestArchive_Stats(t *testing.T) {
 	archive := NewArchive()
 
-	// Empty archive
+	// Empty archive.
 	stats := archive.Stats()
 	if stats.TotalBullets != 0 {
 		t.Errorf("expected 0 total bullets, got %d", stats.TotalBullets)
 	}
 
-	// Add bullets
+	// Add bullets.
 	b1, _ := bullet.New("Content 1")
 	b2, _ := bullet.New("Content 2")
 	b3, _ := bullet.New("Content 3")
@@ -197,15 +198,16 @@ func TestArchive_Clone(t *testing.T) {
 
 	archive.Archive(original, ReasonLowUtility, nil)
 
-	// Modify original after archiving
+	// Modify original after archiving.
 	original.IncrementHelpful()
 	original.Content = "Modified content"
 
-	// Archived bullet should be unchanged
+	// Archived bullet should be unchanged.
 	archived, _ := archive.Get(original.ID)
 	if archived.Bullet.Content != "Original content" {
 		t.Errorf("expected archived content 'Original content', got '%s'", archived.Bullet.Content)
 	}
+
 	if archived.Bullet.HelpfulCount != 1 {
 		t.Errorf("expected archived helpful count 1, got %d", archived.Bullet.HelpfulCount)
 	}
@@ -242,6 +244,7 @@ func TestArchive_NilMetadata(t *testing.T) {
 	if archived.Metadata == nil {
 		t.Error("expected metadata map to be initialized, got nil")
 	}
+
 	if len(archived.Metadata) != 0 {
 		t.Errorf("expected empty metadata map, got %d entries", len(archived.Metadata))
 	}
@@ -250,24 +253,27 @@ func TestArchive_NilMetadata(t *testing.T) {
 func TestArchive_Concurrency(t *testing.T) {
 	archive := NewArchive()
 
-	const goroutines = 10
-	const bulletsPerGoroutine = 10
+	const (
+		goroutines          = 10
+		bulletsPerGoroutine = 10
+	)
 
 	done := make(chan bool, goroutines)
 
-	// Concurrent writes
-	for g := 0; g < goroutines; g++ {
+	// Concurrent writes.
+	for g := range goroutines {
 		go func(id int) {
-			for i := 0; i < bulletsPerGoroutine; i++ {
+			for range bulletsPerGoroutine {
 				b, _ := bullet.New("Test content")
 				archive.Archive(b, ReasonLowUtility, nil)
 			}
+
 			done <- true
 		}(g)
 	}
 
-	// Wait for all goroutines
-	for g := 0; g < goroutines; g++ {
+	// Wait for all goroutines.
+	for range goroutines {
 		<-done
 	}
 
@@ -276,11 +282,11 @@ func TestArchive_Concurrency(t *testing.T) {
 		t.Errorf("expected %d archived bullets, got %d", expected, archive.Len())
 	}
 
-	// Concurrent reads
+	// Concurrent reads.
 	stop := make(chan bool)
 	errors := make(chan error, goroutines)
 
-	for g := 0; g < goroutines; g++ {
+	for range goroutines {
 		go func() {
 			for {
 				select {
@@ -294,15 +300,15 @@ func TestArchive_Concurrency(t *testing.T) {
 		}()
 	}
 
-	// Let readers run briefly
+	// Let readers run briefly.
 	time.Sleep(10 * time.Millisecond)
 	close(stop)
 
-	// Check for errors
+	// Check for errors.
 	select {
 	case err := <-errors:
 		t.Errorf("concurrent read error: %v", err)
 	default:
-		// No errors
+		// No errors.
 	}
 }

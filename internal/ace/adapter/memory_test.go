@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestMemoryConfig_Defaults(t *testing.T) {
@@ -28,7 +29,7 @@ func TestMemoryManager_ShouldRefine_BelowThreshold(t *testing.T) {
 
 	manager := NewMemoryManager(config)
 
-	// Playbook with 800 bullets (below threshold)
+	// Playbook with 800 bullets (below threshold).
 	shouldRefine := manager.ShouldRefine(800)
 
 	assert.False(t, shouldRefine)
@@ -43,7 +44,7 @@ func TestMemoryManager_ShouldRefine_AboveThreshold(t *testing.T) {
 
 	manager := NewMemoryManager(config)
 
-	// Playbook with 950 bullets (above threshold)
+	// Playbook with 950 bullets (above threshold).
 	shouldRefine := manager.ShouldRefine(950)
 
 	assert.True(t, shouldRefine)
@@ -89,11 +90,12 @@ func TestMemoryManager_CalculateUtility(t *testing.T) {
 			b, err := bullet.New("test content")
 			require.NoError(t, err)
 
-			// Set counters
-			for i := 0; i < tt.helpful; i++ {
+			// Set counters.
+			for range tt.helpful {
 				b.IncrementHelpful()
 			}
-			for i := 0; i < tt.harmful; i++ {
+
+			for range tt.harmful {
 				b.IncrementHarmful()
 			}
 
@@ -108,26 +110,27 @@ func TestMemoryManager_Prune(t *testing.T) {
 	config := MemoryConfig{
 		MaxBullets:     1000,
 		RefinementAt:   900,
-		PruneThreshold: 0.2, // Remove bullets with utility < 0.2
+		PruneThreshold: 0.2, // Remove bullets with utility < 0.2.
 	}
 
 	manager := NewMemoryManager(config)
 
-	// Create playbook with bullets of varying utility
+	// Create playbook with bullets of varying utility.
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
 
-	// High utility bullet (should keep)
+	// High utility bullet (should keep).
 	b1, _ := bullet.New("High utility bullet")
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		b1.IncrementHelpful()
 	}
+
 	b1.IncrementHarmful()
 	emb1, _ := embedder.Embed(ctx, b1.Content)
 	b1.Embedding = emb1
 	pb.Add(ctx, b1)
 
-	// Low utility bullet (should prune)
+	// Low utility bullet (should prune).
 	b2, _ := bullet.New("Low utility bullet")
 	b2.IncrementHelpful()
 	b2.IncrementHarmful()
@@ -137,24 +140,24 @@ func TestMemoryManager_Prune(t *testing.T) {
 	b2.Embedding = emb2
 	pb.Add(ctx, b2)
 
-	// Zero utility bullet (should prune)
+	// Zero utility bullet (should prune).
 	b3, _ := bullet.New("Zero utility bullet")
 	emb3, _ := embedder.Embed(ctx, b3.Content)
 	b3.Embedding = emb3
 	pb.Add(ctx, b3)
 
-	// Initial count
+	// Initial count.
 	assert.Equal(t, 3, pb.Stats().TotalBullets)
 
-	// Prune
+	// Prune.
 	pruned, err := manager.Prune(ctx, pb)
 	require.NoError(t, err)
 
-	// Should have pruned 2 bullets
+	// Should have pruned 2 bullets.
 	assert.Equal(t, 2, pruned)
 	assert.Equal(t, 1, pb.Stats().TotalBullets)
 
-	// Only high utility bullet should remain
+	// Only high utility bullet should remain.
 	remaining, found := pb.Get(b1.ID)
 	assert.True(t, found)
 	assert.Equal(t, "High utility bullet", remaining.Content)

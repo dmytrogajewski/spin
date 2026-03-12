@@ -3,14 +3,16 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 
-	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/mark3labs/mcp-go/client"
 	mcpSDK "github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // LocalRegistryConfig holds configuration for a local stdio MCP registry.
@@ -38,10 +40,11 @@ type LocalRegistry struct {
 // NewLocalRegistry creates a new LocalRegistry for stdio MCP servers.
 func NewLocalRegistry(config LocalRegistryConfig) (*LocalRegistry, error) {
 	if config.Name == "" {
-		return nil, fmt.Errorf("registry name is required")
+		return nil, errors.New("registry name is required")
 	}
+
 	if config.Command == "" {
-		return nil, fmt.Errorf("command is required for local registry")
+		return nil, errors.New("command is required for local registry")
 	}
 
 	return &LocalRegistry{
@@ -70,13 +73,13 @@ func (r *LocalRegistry) Initialize(ctx context.Context) error {
 		return nil
 	}
 
-	// Build environment slice
+	// Build environment slice.
 	var env []string
 	for k, v := range r.config.Env {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 
-	// Create stdio client
+	// Create stdio client.
 	sdkClient, err := client.NewStdioMCPClient(r.config.Command, env, r.config.Args...)
 	if err != nil {
 		return fmt.Errorf("create stdio client: %w", err)
@@ -85,7 +88,7 @@ func (r *LocalRegistry) Initialize(ctx context.Context) error {
 	r.sdkClient = sdkClient
 	r.mcpClient = &sdkClientWrapper{client: sdkClient}
 
-	// Initialize connection
+	// Initialize connection.
 	initReq := mcpSDK.InitializeRequest{
 		Params: mcpSDK.InitializeParams{
 			ProtocolVersion: "2024-11-05",
@@ -100,21 +103,24 @@ func (r *LocalRegistry) Initialize(ctx context.Context) error {
 	initResp, err := r.mcpClient.Initialize(ctx, initReq)
 	if err != nil {
 		r.mcpClient.Close()
+
 		return fmt.Errorf("initialize connection: %w", err)
 	}
 
 	r.metadata.ServerInfo = &initResp.ServerInfo
 	r.metadata.Capabilities = initResp.Capabilities
 
-	// List tools
+	// List tools.
 	listReq := mcpSDK.ListToolsRequest{}
+
 	toolsResp, err := r.mcpClient.ListTools(ctx, listReq)
 	if err != nil {
 		r.mcpClient.Close()
+
 		return fmt.Errorf("list tools: %w", err)
 	}
 
-	// Register tools
+	// Register tools.
 	for _, tool := range toolsResp.Tools {
 		r.tools[tool.Name] = &MCPTool{
 			ServerName: r.name,
@@ -140,6 +146,7 @@ func (r *LocalRegistry) Initialize(ctx context.Context) error {
 func (r *LocalRegistry) IsConnected() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.connected
 }
 
@@ -147,6 +154,7 @@ func (r *LocalRegistry) IsConnected() bool {
 func (r *LocalRegistry) Metadata() RegistryMetadata {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.metadata
 }
 
@@ -154,6 +162,7 @@ func (r *LocalRegistry) Metadata() RegistryMetadata {
 func (r *LocalRegistry) Client() MCPClient {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return r.mcpClient
 }
 
@@ -166,6 +175,7 @@ func (r *LocalRegistry) List() []tools.Tool {
 	for _, mcpTool := range r.tools {
 		result = append(result, r.wrapTool(mcpTool))
 	}
+
 	return result
 }
 
@@ -173,6 +183,7 @@ func (r *LocalRegistry) List() []tools.Tool {
 func (r *LocalRegistry) Count() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
 	return len(r.tools)
 }
 
@@ -190,6 +201,7 @@ func (r *LocalRegistry) Tool(name string) tools.Tool {
 	if !exists {
 		return nil
 	}
+
 	return r.wrapTool(mcpTool)
 }
 
@@ -204,10 +216,11 @@ func (r *LocalRegistry) Execute(ctx context.Context, toolName string, args json.
 		return tools.ToolResult{}, fmt.Errorf("tool not found: %s", toolName)
 	}
 
-	// Parse arguments
+	// Parse arguments.
 	var argsMap map[string]any
 	if len(args) > 0 {
-		if err := json.Unmarshal(args, &argsMap); err != nil {
+		err := json.Unmarshal(args, &argsMap)
+		if err != nil {
 			return tools.ToolResult{
 				Success: false,
 				Error:   fmt.Sprintf("invalid arguments: %v", err),
@@ -215,7 +228,7 @@ func (r *LocalRegistry) Execute(ctx context.Context, toolName string, args json.
 		}
 	}
 
-	// Call tool
+	// Call tool.
 	callReq := mcpSDK.CallToolRequest{
 		Params: mcpSDK.CallToolParams{
 			Name:      mcpTool.Tool.Name,
@@ -238,8 +251,9 @@ func (r *LocalRegistry) Execute(ctx context.Context, toolName string, args json.
 		}, nil
 	}
 
-	// Convert response
+	// Convert response.
 	var output strings.Builder
+
 	for _, content := range resp.Content {
 		if textContent, ok := mcpSDK.AsTextContent(content); ok {
 			output.WriteString(textContent.Text)
@@ -267,6 +281,7 @@ func (r *LocalRegistry) Close() error {
 	if r.mcpClient != nil {
 		return r.mcpClient.Close()
 	}
+
 	return nil
 }
 
@@ -292,23 +307,25 @@ func (w *registryToolWrapper) Description() string {
 	if w.mcpTool.Tool.Description != "" {
 		return w.mcpTool.Tool.Description
 	}
+
 	return fmt.Sprintf("MCP tool: %s", w.mcpTool.Tool.Name)
 }
 
 func (w *registryToolWrapper) Schema() tools.ToolSchema {
-	// Marshal tool's InputSchema to JSON for parsing
+	// Marshal tool's InputSchema to JSON for parsing.
 	schemaBytes, err := json.Marshal(w.mcpTool.Tool.InputSchema)
 	if err != nil {
 		return w.fallbackSchema()
 	}
 
-	// Parse as structured JSON Schema
+	// Parse as structured JSON Schema.
 	var mcpSchema JSONSchema
-	if err := json.Unmarshal(schemaBytes, &mcpSchema); err != nil {
+	err = json.Unmarshal(schemaBytes, &mcpSchema)
+	if err != nil {
 		return w.fallbackSchema()
 	}
 
-	// Convert properties
+	// Convert properties.
 	properties := make(map[string]tools.PropertyDefinition)
 	for name, prop := range mcpSchema.Properties {
 		properties[name] = tools.PropertyDefinition{
@@ -354,5 +371,6 @@ func (w *registryToolWrapper) Execute(ctx context.Context, params tools.ToolPara
 			Error:   fmt.Sprintf("marshal arguments: %v", err),
 		}, nil
 	}
+
 	return w.registry.Execute(ctx, w.mcpTool.Tool.Name, argsJSON)
 }

@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/openai/openai-go"
+
 	spinerrors "github.com/dmytrogajewski/spin/internal/errors"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/openai/openai-go"
 )
 
 // PlanningService handles task decomposition into execution plans.
@@ -32,19 +33,19 @@ func (s *PlanningService) CreatePlan(ctx context.Context, taskName string) (*Pla
 		return nil, ErrEmptyInput
 	}
 
-	// Create a new plan
+	// Create a new plan.
 	plan := NewPlan()
 
-	// Use LLM to decompose the task into steps
+	// Use LLM to decompose the task into steps.
 	decompositionPrompt := s.buildDecompositionPrompt(taskName)
 
-	// Call LLM for task decomposition
+	// Call LLM for task decomposition.
 	params := openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(decompositionPrompt),
 		}),
 		MaxTokens:   openai.F(int64(1000)),
-		Temperature: openai.F(0.3), // Lower temperature for more consistent planning
+		Temperature: openai.F(0.3), // Lower temperature for more consistent planning.
 	}
 
 	resp, err := s.llm.Complete(ctx, params)
@@ -52,14 +53,15 @@ func (s *PlanningService) CreatePlan(ctx context.Context, taskName string) (*Pla
 		return nil, spinerrors.New(spinerrors.CodeLLM, "PlanningService.CreatePlan", "llm completion failed", err)
 	}
 
-	// Parse the response and create steps
+	// Parse the response and create steps.
 	responseContent := getContent(resp)
+
 	decomposition, err := s.parseDecompositionResponse(responseContent)
 	if err != nil {
 		return nil, spinerrors.New(spinerrors.CodeLLM, "PlanningService.CreatePlan", "failed to parse LLM response", err)
 	}
 
-	// Create steps from parsed data
+	// Create steps from parsed data.
 	steps, err := s.createStepsFromData(decomposition)
 	if err != nil {
 		return nil, spinerrors.New(spinerrors.CodeValidation, "PlanningService.CreatePlan", "failed to create steps", err)
@@ -67,8 +69,9 @@ func (s *PlanningService) CreatePlan(ctx context.Context, taskName string) (*Pla
 
 	plan.Steps = steps
 
-	// Validate the plan structure
-	if err := plan.ValidateStructure(); err != nil {
+	// Validate the plan structure.
+	err = plan.ValidateStructure()
+	if err != nil {
 		return nil, spinerrors.New(spinerrors.CodeValidation, "PlanningService.CreatePlan", "plan validation failed", err)
 	}
 
@@ -120,9 +123,11 @@ type stepData struct {
 // parseDecompositionResponse parses the JSON response from the LLM.
 func (s *PlanningService) parseDecompositionResponse(content string) (*decompositionData, error) {
 	var decomposition decompositionData
-	if err := json.Unmarshal([]byte(content), &decomposition); err != nil {
+	err := json.Unmarshal([]byte(content), &decomposition)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
+
 	return &decomposition, nil
 }
 
@@ -141,6 +146,7 @@ func (s *PlanningService) createStepsFromData(data *decompositionData) ([]Step, 
 		}
 		steps = append(steps, step)
 	}
+
 	return steps, nil
 }
 
@@ -202,11 +208,13 @@ func NewPlan() *Plan {
 // ValidateStructure validates the plan structure.
 func (p *Plan) ValidateStructure() error {
 	if p.ID == "" {
-		return fmt.Errorf("plan ID cannot be empty")
+		return errors.New("plan ID cannot be empty")
 	}
+
 	if len(p.Steps) == 0 {
-		return fmt.Errorf("plan must have at least one step")
+		return errors.New("plan must have at least one step")
 	}
+
 	return nil
 }
 
@@ -216,6 +224,7 @@ func (p *Plan) CalculateEstimatedDuration() time.Duration {
 	for _, step := range p.Steps {
 		total += step.EstimatedDuration
 	}
+
 	return total
 }
 
@@ -224,5 +233,6 @@ func getContent(completion *openai.ChatCompletion) string {
 	if completion == nil || len(completion.Choices) == 0 {
 		return ""
 	}
+
 	return completion.Choices[0].Message.Content
 }

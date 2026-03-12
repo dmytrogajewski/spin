@@ -21,6 +21,8 @@
 //	}
 //	if svc.IsLoaded() {
 //	    content := svc.Content()
-//	    // Use content in system prompt
+//
+// Use content in system prompt
+//
 //	}
 package agentsmd

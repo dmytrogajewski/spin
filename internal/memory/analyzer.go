@@ -60,7 +60,7 @@ func (a *DefaultContextAnalyzer) Analyze(messages []AnalyzableMessage) []Offload
 	candidates := make([]OffloadCandidate, 0)
 
 	for i, msg := range messages {
-		// Large code blocks -> scratchpad
+		// Large code blocks -> scratchpad.
 		codeBlocks := extractCodeBlocks(msg.Content)
 		for j, block := range codeBlocks {
 			tokens := estimateTokens(block)
@@ -76,7 +76,7 @@ func (a *DefaultContextAnalyzer) Analyze(messages []AnalyzableMessage) []Offload
 			}
 		}
 
-		// Long tool outputs -> scratchpad
+		// Long tool outputs -> scratchpad.
 		if msg.Role == "tool" {
 			tokens := estimateTokens(msg.Content)
 			if tokens > a.ToolOutputThreshold {
@@ -91,7 +91,7 @@ func (a *DefaultContextAnalyzer) Analyze(messages []AnalyzableMessage) []Offload
 			}
 		}
 
-		// Decisions -> persistent
+		// Decisions -> persistent.
 		if decision := extractDecision(msg.Content); decision != "" {
 			candidates = append(candidates, OffloadCandidate{
 				MessageIndex: i,
@@ -109,7 +109,7 @@ func (a *DefaultContextAnalyzer) Analyze(messages []AnalyzableMessage) []Offload
 
 // extractCodeBlocks finds code blocks in markdown content.
 func extractCodeBlocks(content string) []string {
-	// Match fenced code blocks (```...```)
+	// Match fenced code blocks (```...```).
 	re := regexp.MustCompile("(?s)```[a-zA-Z]*\n?(.*?)```")
 	matches := re.FindAllStringSubmatch(content, -1)
 
@@ -127,7 +127,7 @@ func extractCodeBlocks(content string) []string {
 func extractDecision(content string) string {
 	lower := strings.ToLower(content)
 
-	// Decision indicators
+	// Decision indicators.
 	indicators := []string{
 		"decided to ",
 		"decision: ",
@@ -139,20 +139,22 @@ func extractDecision(content string) string {
 
 	for _, indicator := range indicators {
 		if idx := strings.Index(lower, indicator); idx != -1 {
-			// Extract sentence containing the decision
+			// Extract sentence containing the decision.
 			start := idx
-			// Find start of sentence
+			// Find start of sentence.
 			for start > 0 && content[start-1] != '.' && content[start-1] != '\n' {
 				start--
 			}
-			// Find end of sentence
+			// Find end of sentence.
 			end := idx + len(indicator)
 			for end < len(content) && content[end] != '.' && content[end] != '\n' {
 				end++
 			}
+
 			if end < len(content) {
-				end++ // Include the period
+				end++ // Include the period.
 			}
+
 			return strings.TrimSpace(content[start:end])
 		}
 	}

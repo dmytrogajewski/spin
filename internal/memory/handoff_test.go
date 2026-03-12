@@ -26,7 +26,7 @@ func TestSessionHandoff_SaveAndLoad(t *testing.T) {
 
 	handoff := NewSessionHandoff(store, nil)
 
-	// Save session
+	// Save session.
 	data := HandoffData{
 		SessionID:    "test-session-123",
 		Summary:      "Working on authentication feature",
@@ -42,7 +42,7 @@ func TestSessionHandoff_SaveAndLoad(t *testing.T) {
 	err = handoff.SaveSession(ctx, data)
 	require.NoError(t, err)
 
-	// Load session
+	// Load session.
 	loaded, err := handoff.LoadSession(ctx, "test-session-123")
 	require.NoError(t, err)
 
@@ -96,7 +96,7 @@ func TestSessionHandoff_ListSessions(t *testing.T) {
 
 	handoff := NewSessionHandoff(store, nil)
 
-	// Save multiple sessions
+	// Save multiple sessions.
 	for _, id := range []string{"session-1", "session-2", "session-3"} {
 		err := handoff.SaveSession(ctx, HandoffData{
 			SessionID: id,
@@ -105,7 +105,7 @@ func TestSessionHandoff_ListSessions(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// List sessions
+	// List sessions.
 	sessions, err := handoff.ListSessions(ctx)
 	require.NoError(t, err)
 	assert.Len(t, sessions, 3)
@@ -122,18 +122,18 @@ func TestSessionHandoff_DeleteSession(t *testing.T) {
 
 	handoff := NewSessionHandoff(store, nil)
 
-	// Save session
+	// Save session.
 	err = handoff.SaveSession(ctx, HandoffData{
 		SessionID: "to-delete",
 		Summary:   "Test session",
 	})
 	require.NoError(t, err)
 
-	// Delete session
+	// Delete session.
 	err = handoff.DeleteSession(ctx, "to-delete")
 	require.NoError(t, err)
 
-	// Verify deleted
+	// Verify deleted.
 	_, err = handoff.LoadSession(ctx, "to-delete")
 	assert.Error(t, err)
 }
@@ -192,13 +192,13 @@ func TestSimpleSummarizer(t *testing.T) {
 
 	summarizer := NewSimpleSummarizer(100)
 
-	// Short content - no truncation
+	// Short content - no truncation.
 	short := "This is short content."
 	result, err := summarizer.Summarize(ctx, short, 0)
 	require.NoError(t, err)
 	assert.Equal(t, short, result)
 
-	// Long content - truncated
+	// Long content - truncated.
 	long := "This is a very long piece of content that exceeds the maximum length " +
 		"allowed by the summarizer and should be truncated with an ellipsis."
 	result, err = summarizer.Summarize(ctx, long, 0)
@@ -214,7 +214,7 @@ func TestSimpleSummarizer_WithMaxTokens(t *testing.T) {
 	summarizer := NewSimpleSummarizer(1000)
 
 	long := "This is content that will be limited by maxTokens parameter instead of the default limit."
-	// maxTokens=10 -> ~40 chars
+	// maxTokens=10 -> ~40 chars.
 	result, err := summarizer.Summarize(ctx, long, 10)
 	require.NoError(t, err)
 	assert.LessOrEqual(t, len(result), 40)

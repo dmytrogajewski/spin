@@ -30,8 +30,10 @@ func TestBuiltinTools_Names(t *testing.T) {
 		name := tool.Name()
 		if _, exists := expected[name]; !exists {
 			t.Errorf("unexpected builtin tool: %s", name)
+
 			continue
 		}
+
 		expected[name] = true
 	}
 
@@ -54,6 +56,7 @@ func TestBuiltinTools_NonNil(t *testing.T) {
 // TestToolResult_ID verifies that ToolResult has ID field.
 func TestToolResult_ID(t *testing.T) {
 	const testID = "call_abc123"
+
 	result := ToolResult{
 		ID:      testID,
 		Success: true,
@@ -68,6 +71,7 @@ func TestToolResult_ID(t *testing.T) {
 // TestToolResult_ExitCode verifies that ToolResult has ExitCode field.
 func TestToolResult_ExitCode(t *testing.T) {
 	const testExitCode = 1
+
 	result := ToolResult{
 		Success:  false,
 		ExitCode: testExitCode,
@@ -94,11 +98,13 @@ func TestToolResult_ErrorAsError(t *testing.T) {
 // TestNewToolResult creates a success result with output.
 func TestNewToolResult(t *testing.T) {
 	const testOutput = "test output"
+
 	result := NewToolResult(testOutput)
 
 	if !result.Success {
 		t.Error("NewToolResult().Success = false, want true")
 	}
+
 	if result.Output != testOutput {
 		t.Errorf("NewToolResult().Output = %q, want %q", result.Output, testOutput)
 	}
@@ -112,9 +118,11 @@ func TestNewToolError(t *testing.T) {
 	if result.Success {
 		t.Error("NewToolError().Success = true, want false")
 	}
+
 	if result.Err != testErr {
 		t.Errorf("NewToolError().Err = %v, want %v", result.Err, testErr)
 	}
+
 	if result.Error != testErr.Error() {
 		t.Errorf("NewToolError().Error = %q, want %q", result.Error, testErr.Error())
 	}
@@ -123,15 +131,18 @@ func TestNewToolError(t *testing.T) {
 // TestNewToolErrorWithID creates a failed result with ID from error.
 func TestNewToolErrorWithID(t *testing.T) {
 	const testID = "call_err123"
+
 	testErr := errors.New("operation failed")
 	result := NewToolErrorWithID(testID, testErr)
 
 	if result.ID != testID {
 		t.Errorf("NewToolErrorWithID().ID = %q, want %q", result.ID, testID)
 	}
+
 	if result.Success {
 		t.Error("NewToolErrorWithID().Success = true, want false")
 	}
+
 	if result.Err != testErr {
 		t.Errorf("NewToolErrorWithID().Err = %v, want %v", result.Err, testErr)
 	}
@@ -140,13 +151,14 @@ func TestNewToolErrorWithID(t *testing.T) {
 // TestToolResult_WithID returns copy with ID set.
 func TestToolResult_WithID(t *testing.T) {
 	const testID = "call_new456"
+
 	original := ToolResult{Success: true, Output: "test"}
 	result := original.WithID(testID)
 
 	if result.ID != testID {
 		t.Errorf("WithID().ID = %q, want %q", result.ID, testID)
 	}
-	// Verify original is unchanged
+	// Verify original is unchanged.
 	if original.ID != "" {
 		t.Errorf("original.ID = %q, want empty", original.ID)
 	}
@@ -155,13 +167,14 @@ func TestToolResult_WithID(t *testing.T) {
 // TestToolResult_WithExitCode returns copy with exit code set.
 func TestToolResult_WithExitCode(t *testing.T) {
 	const testCode = 42
+
 	original := ToolResult{Success: false}
 	result := original.WithExitCode(testCode)
 
 	if result.ExitCode != testCode {
 		t.Errorf("WithExitCode().ExitCode = %d, want %d", result.ExitCode, testCode)
 	}
-	// Verify original is unchanged
+	// Verify original is unchanged.
 	if original.ExitCode != 0 {
 		t.Errorf("original.ExitCode = %d, want 0", original.ExitCode)
 	}
@@ -169,14 +182,14 @@ func TestToolResult_WithExitCode(t *testing.T) {
 
 // TestToolResult_WithMetadata returns copy with metadata set.
 func TestToolResult_WithMetadata(t *testing.T) {
-	testMeta := map[string]interface{}{"key": "value"}
+	testMeta := map[string]any{"key": "value"}
 	original := ToolResult{Success: true}
 	result := original.WithMetadata(testMeta)
 
 	if result.Metadata["key"] != "value" {
 		t.Errorf("WithMetadata().Metadata[key] = %v, want value", result.Metadata["key"])
 	}
-	// Verify original is unchanged
+	// Verify original is unchanged.
 	if original.Metadata != nil {
 		t.Error("original.Metadata should be nil")
 	}
@@ -207,6 +220,7 @@ func TestToolResult_GetErr(t *testing.T) {
 			if tt.wantNil && err != nil {
 				t.Errorf("GetErr() = %v, want nil", err)
 			}
+
 			if !tt.wantNil && err == nil {
 				t.Error("GetErr() = nil, want error")
 			}
@@ -253,7 +267,7 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 	tests := []struct {
 		name   string
 		result ToolResult
-		check  func(t *testing.T, data map[string]interface{})
+		check  func(t *testing.T, data map[string]any)
 	}{
 		{
 			name: "success result",
@@ -262,13 +276,15 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 				Success: true,
 				Output:  "result data",
 			},
-			check: func(t *testing.T, data map[string]interface{}) {
+			check: func(t *testing.T, data map[string]any) {
 				if data["id"] != "call_123" {
 					t.Errorf("JSON id = %v, want call_123", data["id"])
 				}
+
 				if data["success"] != true {
 					t.Errorf("JSON success = %v, want true", data["success"])
 				}
+
 				if data["output"] != "result data" {
 					t.Errorf("JSON output = %v, want result data", data["output"])
 				}
@@ -280,7 +296,7 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 				Success: false,
 				Error:   "operation failed",
 			},
-			check: func(t *testing.T, data map[string]interface{}) {
+			check: func(t *testing.T, data map[string]any) {
 				if data["error"] != "operation failed" {
 					t.Errorf("JSON error = %v, want operation failed", data["error"])
 				}
@@ -292,8 +308,8 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 				Success:  false,
 				ExitCode: 1,
 			},
-			check: func(t *testing.T, data map[string]interface{}) {
-				// exit_code should be present when non-zero
+			check: func(t *testing.T, data map[string]any) {
+				// exit_code should be present when non-zero.
 				if code, ok := data["exit_code"]; ok {
 					if code != float64(1) {
 						t.Errorf("JSON exit_code = %v, want 1", code)
@@ -310,8 +326,9 @@ func TestToolResult_JSONSerialization(t *testing.T) {
 				t.Fatalf("json.Marshal() error = %v", err)
 			}
 
-			var data map[string]interface{}
-			if err := json.Unmarshal(jsonBytes, &data); err != nil {
+			var data map[string]any
+			err = json.Unmarshal(jsonBytes, &data)
+			if err != nil {
 				t.Fatalf("json.Unmarshal() error = %v", err)
 			}
 

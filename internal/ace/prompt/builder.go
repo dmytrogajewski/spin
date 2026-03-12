@@ -10,7 +10,7 @@ import (
 // Builder constructs prompts with context bullets.
 type Builder struct {
 	systemPrompt string
-	includeIL    bool // Include ItemizedLearning instructions
+	includeIL    bool // Include ItemizedLearning instructions.
 }
 
 // Option configures Builder.
@@ -48,22 +48,24 @@ func NewBuilder(opts ...Option) *Builder {
 func (b *Builder) BuildSystemPrompt(bullets []*bullet.Bullet) string {
 	var sb strings.Builder
 
-	// Start with custom system prompt
+	// Start with custom system prompt.
 	sb.WriteString(b.systemPrompt)
 	sb.WriteString("\n\n")
 
-	// Add context playbook section if bullets provided
+	// Add context playbook section if bullets provided.
 	if len(bullets) > 0 {
 		sb.WriteString("# Context Playbook\n\n")
+
 		for i, bullet := range bullets {
 			formatted := b.FormatBullet(bullet, i)
 			sb.WriteString(formatted)
 			sb.WriteString("\n")
 		}
+
 		sb.WriteString("\n")
 	}
 
-	// Add ItemizedLearning instructions if enabled
+	// Add ItemizedLearning instructions if enabled.
 	if b.includeIL && len(bullets) > 0 {
 		sb.WriteString(itemizedLearningInstructions)
 		sb.WriteString("\n")

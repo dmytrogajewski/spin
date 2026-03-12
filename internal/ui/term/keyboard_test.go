@@ -77,6 +77,7 @@ func TestReadKeys_SingleByteKeys(t *testing.T) {
 			defer cancel()
 
 			r := bytes.NewReader(tt.input)
+
 			ch, err := ReadKeys(ctx, r, nil)
 			if err != nil {
 				t.Fatalf("ReadKeys() error = %v", err)
@@ -114,6 +115,7 @@ func TestReadKeys_ControlKeys(t *testing.T) {
 			defer cancel()
 
 			r := bytes.NewReader(tt.input)
+
 			ch, err := ReadKeys(ctx, r, nil)
 			if err != nil {
 				t.Fatalf("ReadKeys() error = %v", err)
@@ -149,6 +151,7 @@ func TestReadKeys_ArrowKeys(t *testing.T) {
 			defer cancel()
 
 			r := bytes.NewReader(tt.input)
+
 			ch, err := ReadKeys(ctx, r, nil)
 			if err != nil {
 				t.Fatalf("ReadKeys() error = %v", err)
@@ -184,6 +187,7 @@ func TestReadKeys_HomeEnd(t *testing.T) {
 			defer cancel()
 
 			r := bytes.NewReader(tt.input)
+
 			ch, err := ReadKeys(ctx, r, nil)
 			if err != nil {
 				t.Fatalf("ReadKeys() error = %v", err)
@@ -217,6 +221,7 @@ func TestReadKeys_PageKeys(t *testing.T) {
 			defer cancel()
 
 			r := bytes.NewReader(tt.input)
+
 			ch, err := ReadKeys(ctx, r, nil)
 			if err != nil {
 				t.Fatalf("ReadKeys() error = %v", err)
@@ -241,7 +246,7 @@ func TestReadKeys_Delete(t *testing.T) {
 		want  KeyKind
 	}{
 		{"Delete CSI 3~", []byte{0x1b, '[', '3', '~'}, KeyDelete},
-		{"Delete CSI 2~", []byte{0x1b, '[', '2', '~'}, KeyDelete}, // alternative
+		{"Delete CSI 2~", []byte{0x1b, '[', '2', '~'}, KeyDelete}, // alternative.
 	}
 
 	for _, tt := range tests {
@@ -250,6 +255,7 @@ func TestReadKeys_Delete(t *testing.T) {
 			defer cancel()
 
 			r := bytes.NewReader(tt.input)
+
 			ch, err := ReadKeys(ctx, r, nil)
 			if err != nil {
 				t.Fatalf("ReadKeys() error = %v", err)
@@ -293,6 +299,7 @@ func TestReadKeys_FunctionKeys(t *testing.T) {
 			defer cancel()
 
 			r := bytes.NewReader(tt.input)
+
 			ch, err := ReadKeys(ctx, r, nil)
 			if err != nil {
 				t.Fatalf("ReadKeys() error = %v", err)
@@ -314,22 +321,25 @@ func TestReadKeys_EscapeAlone(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	// Single ESC byte, followed by slow/no input (simulated by blocking reader)
+	// Single ESC byte, followed by slow/no input (simulated by blocking reader).
 	r := &slowByteReader{data: []byte{0x1b}, delay: 200 * time.Millisecond}
 	cfg := &KeyReaderConfig{EscTimeout: 50 * time.Millisecond}
+
 	ch, err := ReadKeys(ctx, r, cfg)
 	if err != nil {
 		t.Fatalf("ReadKeys() error = %v", err)
 	}
 
 	start := time.Now()
+
 	select {
 	case got := <-ch:
 		elapsed := time.Since(start)
+
 		if got.Kind != KeyEscape {
 			t.Errorf("ReadKeys() got Kind = %v, want %v", got.Kind, KeyEscape)
 		}
-		// Should emit after timeout (with some tolerance)
+		// Should emit after timeout (with some tolerance).
 		if elapsed < 40*time.Millisecond || elapsed > 100*time.Millisecond {
 			t.Errorf("ESC emitted at %v (expected ~50ms)", elapsed)
 		}
@@ -342,9 +352,10 @@ func TestReadKeys_EscapeSequence(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	// ESC followed immediately by [A (Up arrow)
+	// ESC followed immediately by [A (Up arrow).
 	r := bytes.NewReader([]byte{0x1b, '[', 'A'})
 	cfg := &KeyReaderConfig{EscTimeout: 100 * time.Millisecond}
+
 	ch, err := ReadKeys(ctx, r, cfg)
 	if err != nil {
 		t.Fatalf("ReadKeys() error = %v", err)
@@ -366,12 +377,12 @@ func TestReadKeys_UTF8(t *testing.T) {
 		input string
 		want  rune
 	}{
-		{"Euro", "€", '€'},         // U+20AC, 3 bytes: E2 82 AC
-		{"Chinese", "你", '你'},      // U+4F60, 3 bytes: E4 BD A0
-		{"Emoji rocket", "🚀", '🚀'}, // U+1F680, 4 bytes: F0 9F 9A 80
-		{"Emoji smile", "😀", '😀'},  // U+1F600, 4 bytes: F0 9F 98 80
-		{"Greek alpha", "α", 'α'},  // U+03B1, 2 bytes: CE B1
-		{"Cyrillic", "Д", 'Д'},     // U+0414, 2 bytes: D0 94
+		{"Euro", "€", '€'},         // U+20AC, 3 bytes: E2 82 AC.
+		{"Chinese", "你", '你'},      // U+4F60, 3 bytes: E4 BD A0.
+		{"Emoji rocket", "🚀", '🚀'}, // U+1F680, 4 bytes: F0 9F 9A 80.
+		{"Emoji smile", "😀", '😀'},  // U+1F600, 4 bytes: F0 9F 98 80.
+		{"Greek alpha", "α", 'α'},  // U+03B1, 2 bytes: CE B1.
+		{"Cyrillic", "Д", 'Д'},     // U+0414, 2 bytes: D0 94.
 	}
 
 	for _, tt := range tests {
@@ -380,6 +391,7 @@ func TestReadKeys_UTF8(t *testing.T) {
 			defer cancel()
 
 			r := bytes.NewReader([]byte(tt.input))
+
 			ch, err := ReadKeys(ctx, r, nil)
 			if err != nil {
 				t.Fatalf("ReadKeys() error = %v", err)
@@ -390,6 +402,7 @@ func TestReadKeys_UTF8(t *testing.T) {
 				if got.Kind != KeyRune {
 					t.Errorf("ReadKeys() got Kind = %v, want %v", got.Kind, KeyRune)
 				}
+
 				if got.Rune != tt.want {
 					t.Errorf("ReadKeys() got Rune = %U, want %U", got.Rune, tt.want)
 				}
@@ -418,9 +431,10 @@ func TestReadKeys_BracketedPaste(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 
-			// Bracketed paste format: \x1b[200~ + payload + \x1b[201~
+			// Bracketed paste format: \x1b[200~ + payload + \x1b[201~.
 			input := []byte("\x1b[200~" + tt.payload + "\x1b[201~")
 			r := bytes.NewReader(input)
+
 			ch, err := ReadKeys(ctx, r, nil)
 			if err != nil {
 				t.Fatalf("ReadKeys() error = %v", err)
@@ -431,6 +445,7 @@ func TestReadKeys_BracketedPaste(t *testing.T) {
 				if got.Kind != KeyPaste {
 					t.Errorf("ReadKeys() got Kind = %v, want %v", got.Kind, KeyPaste)
 				}
+
 				if string(got.Paste) != tt.want {
 					t.Errorf("ReadKeys() got Paste = %q, want %q", got.Paste, tt.want)
 				}
@@ -445,7 +460,7 @@ func TestReadKeys_BracketedPasteLarge(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	// 10KB payload
+	// 10KB payload.
 	payload := make([]byte, 10*1024)
 	for i := range payload {
 		payload[i] = byte('A' + (i % 26))
@@ -455,6 +470,7 @@ func TestReadKeys_BracketedPasteLarge(t *testing.T) {
 	input = append(input, []byte("\x1b[201~")...)
 
 	r := bytes.NewReader(input)
+
 	ch, err := ReadKeys(ctx, r, nil)
 	if err != nil {
 		t.Fatalf("ReadKeys() error = %v", err)
@@ -465,9 +481,11 @@ func TestReadKeys_BracketedPasteLarge(t *testing.T) {
 		if got.Kind != KeyPaste {
 			t.Errorf("ReadKeys() got Kind = %v, want %v", got.Kind, KeyPaste)
 		}
+
 		if len(got.Paste) != len(payload) {
 			t.Errorf("ReadKeys() got Paste len = %d, want %d", len(got.Paste), len(payload))
 		}
+
 		if !bytes.Equal(got.Paste, payload) {
 			t.Error("Paste payload mismatch")
 		}
@@ -479,17 +497,18 @@ func TestReadKeys_BracketedPasteLarge(t *testing.T) {
 func TestReadKeys_ContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// Slow reader that will block
+	// Slow reader that will block.
 	r := &slowReader{delay: 1 * time.Second}
+
 	ch, err := ReadKeys(ctx, r, nil)
 	if err != nil {
 		t.Fatalf("ReadKeys() error = %v", err)
 	}
 
-	// Cancel immediately
+	// Cancel immediately.
 	cancel()
 
-	// Channel should close
+	// Channel should close.
 	select {
 	case _, ok := <-ch:
 		if ok {
@@ -504,14 +523,15 @@ func TestReadKeys_EOF(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	// Empty reader (immediate EOF)
+	// Empty reader (immediate EOF).
 	r := bytes.NewReader([]byte{})
+
 	ch, err := ReadKeys(ctx, r, nil)
 	if err != nil {
 		t.Fatalf("ReadKeys() error = %v", err)
 	}
 
-	// Channel should close on EOF
+	// Channel should close on EOF.
 	select {
 	case _, ok := <-ch:
 		if ok {
@@ -539,12 +559,13 @@ func TestReadKeys_PartialSequence(t *testing.T) {
 
 			r := bytes.NewReader(tt.input)
 			cfg := &KeyReaderConfig{EscTimeout: 50 * time.Millisecond}
+
 			ch, err := ReadKeys(ctx, r, cfg)
 			if err != nil {
 				t.Fatalf("ReadKeys() error = %v", err)
 			}
 
-			// Should emit something (either KeyEscape or KeyUnknown) or close
+			// Should emit something (either KeyEscape or KeyUnknown) or close.
 			select {
 			case got, ok := <-ch:
 				if ok && got.Kind != KeyEscape && got.Kind != KeyUnknown {
@@ -561,13 +582,14 @@ func TestReadKeys_RapidInput(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	// 100 rapid keypresses
+	// 100 rapid keypresses.
 	var input []byte
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		input = append(input, byte('a'+(i%26)))
 	}
 
 	r := bytes.NewReader(input)
+
 	ch, err := ReadKeys(ctx, r, nil)
 	if err != nil {
 		t.Fatalf("ReadKeys() error = %v", err)
@@ -583,32 +605,36 @@ func TestReadKeys_RapidInput(t *testing.T) {
 	}
 }
 
-// Helper functions
+// Helper functions.
 
 func keyEventsEqual(a, b KeyEvent) bool {
 	if a.Kind != b.Kind {
 		return false
 	}
+
 	if a.Kind == KeyRune && a.Rune != b.Rune {
 		return false
 	}
+
 	if a.Kind == KeyPaste && !bytes.Equal(a.Paste, b.Paste) {
 		return false
 	}
+
 	return bytes.Equal(a.Raw, b.Raw)
 }
 
-// slowReader simulates a slow/blocking reader for testing cancellation
+// slowReader simulates a slow/blocking reader for testing cancellation.
 type slowReader struct {
 	delay time.Duration
 }
 
 func (s *slowReader) Read(p []byte) (n int, err error) {
 	time.Sleep(s.delay)
+
 	return 0, io.EOF
 }
 
-// slowByteReader simulates reading bytes with delay between them
+// slowByteReader simulates reading bytes with delay between them.
 type slowByteReader struct {
 	data  []byte
 	delay time.Duration
@@ -618,17 +644,21 @@ type slowByteReader struct {
 func (s *slowByteReader) Read(p []byte) (n int, err error) {
 	if s.pos >= len(s.data) {
 		time.Sleep(s.delay)
+
 		return 0, io.EOF
 	}
+
 	if len(p) == 0 {
 		return 0, nil
 	}
+
 	p[0] = s.data[s.pos]
 	s.pos++
+
 	return 1, nil
 }
 
-// Benchmarks
+// Benchmarks.
 
 func BenchmarkReadKeys_SingleByte(b *testing.B) {
 	input := bytes.Repeat([]byte{'a'}, b.N)
@@ -645,7 +675,7 @@ func BenchmarkReadKeys_SingleByte(b *testing.B) {
 }
 
 func BenchmarkReadKeys_ArrowKeys(b *testing.B) {
-	seq := []byte{0x1b, '[', 'A'} // Up arrow
+	seq := []byte{0x1b, '[', 'A'} // Up arrow.
 	input := bytes.Repeat(seq, b.N)
 	r := bytes.NewReader(input)
 	ctx := context.Background()

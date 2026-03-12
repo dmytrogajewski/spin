@@ -12,9 +12,10 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
 
-// mockConversation creates a minimal conversation for testing
+// mockConversation creates a minimal conversation for testing.
 func mockConversation(id string) *Conversation {
 	hist := history.NewHistory(8192, &tokenizer.SimpleTokenizer{})
+
 	return &Conversation{
 		id:       id,
 		history:  hist,
@@ -22,14 +23,14 @@ func mockConversation(id string) *Conversation {
 	}
 }
 
-// mockFactory creates a simple factory for testing
+// mockFactory creates a simple factory for testing.
 func mockFactory() ConversationFactory {
 	return func(ctx context.Context, sessionID string, workDir string) (*Conversation, error) {
 		return mockConversation(sessionID), nil
 	}
 }
 
-// errorFactory creates a factory that always returns an error
+// errorFactory creates a factory that always returns an error.
 func errorFactory(errMsg string) ConversationFactory {
 	return func(ctx context.Context, sessionID string, workDir string) (*Conversation, error) {
 		return nil, fmt.Errorf("%s", errMsg)
@@ -44,6 +45,7 @@ func TestManager_NewManager(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewManager failed: %v", err)
 		}
+
 		if mgr == nil {
 			t.Fatal("manager should not be nil")
 		}
@@ -67,9 +69,11 @@ func TestManager_GetOrCreate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetOrCreate failed: %v", err)
 		}
+
 		if conv == nil {
 			t.Fatal("conversation should not be nil")
 		}
+
 		if conv.ID() != "session-1" {
 			t.Errorf("ID mismatch: got %q, want %q", conv.ID(), "session-1")
 		}
@@ -114,6 +118,7 @@ func TestManager_Get(t *testing.T) {
 		if ok {
 			t.Error("should not find non-existent conversation")
 		}
+
 		if conv != nil {
 			t.Error("conversation should be nil")
 		}
@@ -126,6 +131,7 @@ func TestManager_Get(t *testing.T) {
 		if !ok {
 			t.Error("should find existing conversation")
 		}
+
 		if conv == nil {
 			t.Error("conversation should not be nil")
 		}
@@ -162,20 +168,21 @@ func TestManager_Cancel(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := NewManager(ManagerConfig{Factory: mockFactory()})
 
-	// Create conversation and set a cancel function
+	// Create conversation and set a cancel function.
 	conv, _ := mgr.GetOrCreate(ctx, "session-1", "/tmp")
 
-	cancelled := false
-	conv.SetCancel(func() { cancelled = true })
+	canceled := false
 
-	// Cancel via manager
+	conv.SetCancel(func() { canceled = true })
+
+	// Cancel via manager.
 	mgr.Cancel("session-1")
 
-	if !cancelled {
+	if !canceled {
 		t.Error("cancel function should have been called")
 	}
 
-	// Cancel non-existent should not panic
+	// Cancel non-existent should not panic.
 	mgr.Cancel("non-existent")
 }
 
@@ -210,16 +217,19 @@ func TestManager_Count(t *testing.T) {
 	}
 
 	mgr.GetOrCreate(ctx, "session-1", "/tmp")
+
 	if mgr.Count() != 1 {
 		t.Error("should have 1 conversation")
 	}
 
 	mgr.GetOrCreate(ctx, "session-2", "/tmp")
+
 	if mgr.Count() != 2 {
 		t.Error("should have 2 conversations")
 	}
 
 	mgr.Remove("session-1")
+
 	if mgr.Count() != 1 {
 		t.Error("should have 1 conversation after remove")
 	}
@@ -280,7 +290,7 @@ func TestManager_GetTaskMode(t *testing.T) {
 }
 
 func TestManager_SaveAndLoad(t *testing.T) {
-	// Create temp directory for storage
+	// Create temp directory for storage.
 	tmpDir, err := os.MkdirTemp("", "manager-test-*")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
@@ -300,7 +310,7 @@ func TestManager_SaveAndLoad(t *testing.T) {
 			HistoryStorage: histStorage,
 		})
 
-		// Create conversation and add messages
+		// Create conversation and add messages.
 		conv, _ := mgr.GetOrCreate(ctx, "session-save", "/tmp")
 		conv.history.AddUserMessage("Hello!")
 		conv.history.AddMessage(message.Message{
@@ -308,13 +318,13 @@ func TestManager_SaveAndLoad(t *testing.T) {
 			Content: "Hi there!",
 		})
 
-		// Save
+		// Save.
 		err := mgr.Save("session-save")
 		if err != nil {
 			t.Fatalf("Save failed: %v", err)
 		}
 
-		// Create new manager and load
+		// Create new manager and load.
 		mgr2, _ := NewManager(ManagerConfig{
 			Factory:        mockFactory(),
 			HistoryStorage: histStorage,
@@ -325,9 +335,9 @@ func TestManager_SaveAndLoad(t *testing.T) {
 			t.Fatalf("Load failed: %v", err)
 		}
 
-		// Verify messages loaded
+		// Verify messages loaded.
 		msgs := conv2.GetHistoryMessages()
-		// Should have system message + 2 added messages
+		// Should have system message + 2 added messages.
 		if len(msgs) < 2 {
 			t.Errorf("should have at least 2 messages, got %d", len(msgs))
 		}
@@ -369,14 +379,18 @@ func TestManager_Concurrent(t *testing.T) {
 	mgr, _ := NewManager(ManagerConfig{Factory: mockFactory()})
 
 	var wg sync.WaitGroup
+
 	numGoroutines := 100
 
-	// Concurrent GetOrCreate
-	for i := 0; i < numGoroutines; i++ {
+	// Concurrent GetOrCreate.
+	for i := range numGoroutines {
 		wg.Add(1)
+
 		go func(n int) {
 			defer wg.Done()
-			sessionID := fmt.Sprintf("session-%d", n%10) // 10 unique sessions
+
+			sessionID := fmt.Sprintf("session-%d", n%10) // 10 unique sessions.
+
 			_, err := mgr.GetOrCreate(context.Background(), sessionID, "/tmp")
 			if err != nil {
 				t.Errorf("GetOrCreate failed: %v", err)
@@ -386,16 +400,18 @@ func TestManager_Concurrent(t *testing.T) {
 
 	wg.Wait()
 
-	// Should have exactly 10 sessions
+	// Should have exactly 10 sessions.
 	if mgr.Count() != 10 {
 		t.Errorf("should have 10 sessions, got %d", mgr.Count())
 	}
 
-	// Concurrent Get
-	for i := 0; i < numGoroutines; i++ {
+	// Concurrent Get.
+	for i := range numGoroutines {
 		wg.Add(1)
+
 		go func(n int) {
 			defer wg.Done()
+
 			sessionID := fmt.Sprintf("session-%d", n%10)
 			mgr.Get(sessionID)
 		}(i)
@@ -403,11 +419,13 @@ func TestManager_Concurrent(t *testing.T) {
 
 	wg.Wait()
 
-	// Concurrent List
-	for i := 0; i < numGoroutines; i++ {
+	// Concurrent List.
+	for range numGoroutines {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
+
 			mgr.List()
 		}()
 	}

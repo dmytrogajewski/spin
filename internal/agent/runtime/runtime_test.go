@@ -67,6 +67,7 @@ func TestACPRuntime_ImplementsRuntime(t *testing.T) {
 // TestRuntime_TypeAssertionToToolRegistrar verifies Runtime can be type-asserted to ToolRegistrar.
 func TestRuntime_TypeAssertionToToolRegistrar(t *testing.T) {
 	var rt Runtime = &BuiltinRuntime{}
+
 	_, ok := rt.(ToolRegistrar)
 	if !ok {
 		t.Error("Runtime should be type-assertable to ToolRegistrar")
@@ -76,6 +77,7 @@ func TestRuntime_TypeAssertionToToolRegistrar(t *testing.T) {
 // TestRuntime_TypeAssertionToNotificationProvider verifies Runtime can be type-asserted to NotificationProvider.
 func TestRuntime_TypeAssertionToNotificationProvider(t *testing.T) {
 	var rt Runtime = &BuiltinRuntime{}
+
 	_, ok := rt.(NotificationProvider)
 	if !ok {
 		t.Error("Runtime should be type-assertable to NotificationProvider")
@@ -85,6 +87,7 @@ func TestRuntime_TypeAssertionToNotificationProvider(t *testing.T) {
 // TestRuntime_TypeAssertionToApprovalProvider verifies Runtime can be type-asserted to ApprovalProvider.
 func TestRuntime_TypeAssertionToApprovalProvider(t *testing.T) {
 	var rt Runtime = &BuiltinRuntime{}
+
 	_, ok := rt.(ApprovalProvider)
 	if !ok {
 		t.Error("Runtime should be type-assertable to ApprovalProvider")
@@ -94,6 +97,7 @@ func TestRuntime_TypeAssertionToApprovalProvider(t *testing.T) {
 // TestRuntime_TypeAssertionToSessionProvider verifies Runtime can be type-asserted to SessionProvider.
 func TestRuntime_TypeAssertionToSessionProvider(t *testing.T) {
 	var rt Runtime = &BuiltinRuntime{}
+
 	_, ok := rt.(SessionProvider)
 	if !ok {
 		t.Error("Runtime should be type-assertable to SessionProvider")
@@ -103,6 +107,7 @@ func TestRuntime_TypeAssertionToSessionProvider(t *testing.T) {
 // TestRuntime_TypeAssertionToTerminalProvider verifies Runtime can be type-asserted to TerminalProvider.
 func TestRuntime_TypeAssertionToTerminalProvider(t *testing.T) {
 	var rt Runtime = &BuiltinRuntime{}
+
 	_, ok := rt.(TerminalProvider)
 	if !ok {
 		t.Error("Runtime should be type-assertable to TerminalProvider")

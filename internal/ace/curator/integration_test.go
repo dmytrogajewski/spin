@@ -4,25 +4,26 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// TestCurator_Integration_WithReflector tests end-to-end Reflector → Curator flow
+// TestCurator_Integration_WithReflector tests end-to-end Reflector → Curator flow.
 func TestCurator_Integration_WithReflector(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup
+	// Setup.
 	embedder := embedding.NewMockEmbedder(384)
 	pb := playbook.New(nil, embedder)
 	mockLLM := llm.NewMockProvider("test")
 
-	// Mock LLM response with insights
+	// Mock LLM response with insights.
 	mockLLM.SetResponse(`[
 		{
 			"content": "Always validate input parameters before processing to prevent nil pointer errors and security issues",
@@ -38,11 +39,11 @@ func TestCurator_Integration_WithReflector(t *testing.T) {
 		}
 	]`)
 
-	// Create reflector and curator
+	// Create reflector and curator.
 	ref := reflector.NewReflector(mockLLM)
 	cur := NewCurator(pb, embedder)
 
-	// Step 1: Reflect on trajectory
+	// Step 1: Reflect on trajectory.
 	traj := &generator.Trajectory{
 		ID:      "integration-test-1",
 		Query:   "How to validate inputs?",
@@ -58,7 +59,7 @@ func TestCurator_Integration_WithReflector(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, reflectResp.Insights, 2)
 
-	// Step 2: Curate insights into playbook
+	// Step 2: Curate insights into playbook.
 	curateReq := MergeRequest{
 		Insights: reflectResp.Insights,
 	}
@@ -68,19 +69,19 @@ func TestCurator_Integration_WithReflector(t *testing.T) {
 	assert.Equal(t, 2, curateResp.Added)
 	assert.Equal(t, 0, curateResp.Skipped)
 
-	// Verify bullets were added to playbook
+	// Verify bullets were added to playbook.
 	bullets := pb.List(nil)
 	assert.Len(t, bullets, 2)
 
-	// Verify bullet properties
+	// Verify bullet properties.
 	for _, bullet := range bullets {
 		assert.NotEmpty(t, bullet.Content)
 		assert.NotEmpty(t, bullet.Embedding)
-		assert.Greater(t, bullet.HelpfulCount, 0) // From confidence scaling
+		assert.Greater(t, bullet.HelpfulCount, 0) // From confidence scaling.
 	}
 }
 
-// TestCurator_Integration_IdempotentCuration tests that curating twice doesn't duplicate
+// TestCurator_Integration_IdempotentCuration tests that curating twice doesn't duplicate.
 func TestCurator_Integration_IdempotentCuration(t *testing.T) {
 	ctx := context.Background()
 
@@ -107,7 +108,7 @@ func TestCurator_Integration_IdempotentCuration(t *testing.T) {
 		Success: true,
 	}
 
-	// First reflection and curation
+	// First reflection and curation.
 	reflectReq := reflector.ReflectionRequest{
 		Trajectories: []*generator.Trajectory{traj},
 	}
@@ -118,29 +119,29 @@ func TestCurator_Integration_IdempotentCuration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, curateResp1.Added)
 
-	// Capture initial helpful count before second curation
+	// Capture initial helpful count before second curation.
 	initialCount := curateResp1.AddedBullets[0].HelpfulCount
 
-	// Second reflection and curation (same trajectory)
+	// Second reflection and curation (same trajectory).
 	reflectResp2, _ := ref.Reflect(ctx, reflectReq)
 	curateReq2 := MergeRequest{Insights: reflectResp2.Insights}
 	curateResp2, err := cur.Curate(ctx, curateReq2)
 	require.NoError(t, err)
 
-	// Should skip duplicate
+	// Should skip duplicate.
 	assert.Equal(t, 0, curateResp2.Added)
 	assert.Equal(t, 1, curateResp2.Skipped)
 	assert.Equal(t, 1, curateResp2.Updated)
 
-	// Playbook should still have only 1 bullet
+	// Playbook should still have only 1 bullet.
 	bullets := pb.List(nil)
 	assert.Len(t, bullets, 1)
 
-	// Bullet's helpful count should have been incremented by 1
+	// Bullet's helpful count should have been incremented by 1.
 	assert.Equal(t, initialCount+1, bullets[0].HelpfulCount)
 }
 
-// TestCurator_Integration_MultipleTrajectories tests curating insights from multiple trajectories
+// TestCurator_Integration_MultipleTrajectories tests curating insights from multiple trajectories.
 func TestCurator_Integration_MultipleTrajectories(t *testing.T) {
 	ctx := context.Background()
 
@@ -148,7 +149,7 @@ func TestCurator_Integration_MultipleTrajectories(t *testing.T) {
 	pb := playbook.New(nil, embedder)
 	mockLLM := llm.NewMockProvider("test")
 
-	// Mock batch reflection response
+	// Mock batch reflection response.
 	mockLLM.SetResponse(`[
 		{
 			"content": "Always use table-driven tests with subtests for better organization and parallel execution",
@@ -167,7 +168,7 @@ func TestCurator_Integration_MultipleTrajectories(t *testing.T) {
 	ref := reflector.NewReflector(mockLLM)
 	cur := NewCurator(pb, embedder)
 
-	// Multiple trajectories
+	// Multiple trajectories.
 	trajectories := []*generator.Trajectory{
 		{
 			ID:      "multi-1",
@@ -183,7 +184,7 @@ func TestCurator_Integration_MultipleTrajectories(t *testing.T) {
 		},
 	}
 
-	// Reflect on batch
+	// Reflect on batch.
 	reflectReq := reflector.ReflectionRequest{
 		Trajectories: trajectories,
 	}
@@ -191,21 +192,23 @@ func TestCurator_Integration_MultipleTrajectories(t *testing.T) {
 	reflectResp, err := ref.Reflect(ctx, reflectReq)
 	require.NoError(t, err)
 
-	// Curate all insights
+	// Curate all insights.
 	curateReq := MergeRequest{Insights: reflectResp.Insights}
 	curateResp, err := cur.Curate(ctx, curateReq)
 	require.NoError(t, err)
 
 	assert.GreaterOrEqual(t, curateResp.Added, 2)
-	assert.Equal(t, 0, curateResp.Skipped) // No duplicates in first curation
+	assert.Equal(t, 0, curateResp.Skipped) // No duplicates in first curation.
 
-	// Verify different categories were preserved
+	// Verify different categories were preserved.
 	bullets := pb.List(nil)
 	categories := make(map[string]bool)
+
 	for _, b := range bullets {
 		if cat, ok := b.Tags["category"]; ok {
 			categories[cat] = true
 		}
 	}
+
 	assert.True(t, len(categories) > 0)
 }

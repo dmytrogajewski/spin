@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/memory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/memory"
 )
 
 func TestMemoryTool_Name(t *testing.T) {
@@ -40,12 +41,12 @@ func TestMemoryTool_Schema(t *testing.T) {
 	assert.Equal(t, "function", schema.Type)
 	assert.Equal(t, "memory", schema.Function.Name)
 
-	// Check required parameters
+	// Check required parameters.
 	props := schema.Function.Parameters.Properties
 	assert.Contains(t, props, "operation")
 	assert.Contains(t, props, "key")
 
-	// Check that operation is required
+	// Check that operation is required.
 	assert.Contains(t, schema.Function.Parameters.Required, "operation")
 }
 
@@ -69,12 +70,12 @@ func TestMemoryTool_Put(t *testing.T) {
 	assert.True(t, result.Success)
 	assert.Contains(t, result.Output, "test-key")
 
-	// Verify entry was stored
+	// Verify entry was stored.
 	entry, err := store.Get(ctx, "test-key")
 	require.NoError(t, err)
 	assert.Equal(t, "test-value", entry.Value)
 
-	// Verify file was created
+	// Verify file was created.
 	filePath := filepath.Join(tmpDir, "default", "test-key.json")
 	_, err = os.Stat(filePath)
 	assert.NoError(t, err)
@@ -88,7 +89,7 @@ func TestMemoryTool_Get(t *testing.T) {
 
 	tool := NewMemoryTool(store)
 
-	// First store an entry
+	// First store an entry.
 	err = store.Put(ctx, "test-key", "test-value", memory.PutOptions{})
 	require.NoError(t, err)
 
@@ -132,7 +133,7 @@ func TestMemoryTool_Delete(t *testing.T) {
 
 	tool := NewMemoryTool(store)
 
-	// First store an entry
+	// First store an entry.
 	err = store.Put(ctx, "test-key", "test-value", memory.PutOptions{})
 	require.NoError(t, err)
 
@@ -147,7 +148,7 @@ func TestMemoryTool_Delete(t *testing.T) {
 	assert.True(t, result.Success)
 	assert.Contains(t, result.Output, "deleted")
 
-	// Verify entry was deleted
+	// Verify entry was deleted.
 	_, err = store.Get(ctx, "test-key")
 	assert.ErrorIs(t, err, memory.ErrNotFound)
 }
@@ -160,7 +161,7 @@ func TestMemoryTool_List(t *testing.T) {
 
 	tool := NewMemoryTool(store)
 
-	// Store some entries
+	// Store some entries.
 	require.NoError(t, store.Put(ctx, "key1", "value1", memory.PutOptions{}))
 	require.NoError(t, store.Put(ctx, "key2", "value2", memory.PutOptions{}))
 	require.NoError(t, store.Put(ctx, "other", "value3", memory.PutOptions{}))
@@ -187,7 +188,7 @@ func TestMemoryTool_Search(t *testing.T) {
 
 	tool := NewMemoryTool(store)
 
-	// Store some entries
+	// Store some entries.
 	require.NoError(t, store.Put(ctx, "api-response", "contains user data", memory.PutOptions{}))
 	require.NoError(t, store.Put(ctx, "config", "database settings", memory.PutOptions{}))
 
@@ -261,7 +262,7 @@ func TestMemoryTool_Put_WithNamespace(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, result.Success)
 
-	// Verify file was created in custom namespace
+	// Verify file was created in custom namespace.
 	filePath := filepath.Join(tmpDir, "custom", "test-key.json")
 	_, err = os.Stat(filePath)
 	assert.NoError(t, err)

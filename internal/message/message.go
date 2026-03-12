@@ -37,30 +37,30 @@ const (
 // supporting system messages, user input, assistant responses, and tool
 // interaction results.
 type Message struct {
-	// ID is a unique identifier for this message
+	// ID is a unique identifier for this message.
 	ID string `json:"id"`
 
-	// Role indicates who created this message
+	// Role indicates who created this message.
 	Role Role `json:"role"`
 
-	// Content is the text content of the message
+	// Content is the text content of the message.
 	Content string `json:"content"`
 
-	// ToolCalls contains tool invocations from assistant messages
+	// ToolCalls contains tool invocations from assistant messages.
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 
-	// ToolCallID links a tool role message to the corresponding tool call
+	// ToolCallID links a tool role message to the corresponding tool call.
 	ToolCallID string `json:"tool_call_id,omitempty"`
 
-	// Timestamp records when this message was created
+	// Timestamp records when this message was created.
 	Timestamp time.Time `json:"timestamp"`
 
-	// Tokens is the estimated token count for this message
+	// Tokens is the estimated token count for this message.
 	Tokens int `json:"tokens"`
 
-	// Name is an optional name field for the message author
+	// Name is an optional name field for the message author.
 	Name string `json:"name,omitempty"`
 
-	// Metadata stores additional string key-value data
+	// Metadata stores additional string key-value data.
 	Metadata Metadata `json:"metadata,omitempty"`
 }

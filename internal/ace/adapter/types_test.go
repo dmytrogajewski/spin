@@ -78,9 +78,9 @@ func TestSession_SlidingWindow(t *testing.T) {
 		RecentSignals: []*ExecutionSignal{},
 	}
 
-	// Add 15 signals (more than max of 10)
+	// Add 15 signals (more than max of 10).
 	signals := make([]*ExecutionSignal, 15)
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		signals[i] = &ExecutionSignal{
 			SignalType: SignalTypeTest,
 			Context:    "Test signal",
@@ -90,19 +90,19 @@ func TestSession_SlidingWindow(t *testing.T) {
 		session.AddSignal(signals[i])
 	}
 
-	// Should have all 15 signals counted
+	// Should have all 15 signals counted.
 	assert.Equal(t, 15, session.SignalCount)
 
-	// But only last 10 in recent signals
+	// But only last 10 in recent signals.
 	assert.Len(t, session.RecentSignals, 10)
 
-	// Last signal should be the 15th
+	// Last signal should be the 15th.
 	assert.Equal(t, signals[14], session.LastSignal)
 
-	// First signal in recent should be the 6th (index 5)
+	// First signal in recent should be the 6th (index 5).
 	assert.Equal(t, signals[5], session.RecentSignals[0])
 
-	// Last signal in recent should be the 15th (index 14)
+	// Last signal in recent should be the 15th (index 14).
 	assert.Equal(t, signals[14], session.RecentSignals[9])
 }
 

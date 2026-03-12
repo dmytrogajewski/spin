@@ -15,7 +15,7 @@ type PlanTracker struct {
 	emitter *events.EventEmitter
 	mu      sync.RWMutex
 
-	// Track which steps are currently running
+	// Track which steps are currently running.
 	runningSteps map[string]bool
 }
 
@@ -38,12 +38,12 @@ func (t *PlanTracker) OnToolCallComplete(event events.Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	// Find matching step using fuzzy description match
+	// Find matching step using fuzzy description match.
 	for i := range t.plan.Steps {
 		step := &t.plan.Steps[i]
 
 		if t.matchesStep(step, data.ToolName) {
-			// Mark step as running if it was pending
+			// Mark step as running if it was pending.
 			if step.Status == planning.StepStatusPending {
 				step.Status = planning.StepStatusRunning
 				now := time.Now()
@@ -52,7 +52,7 @@ func (t *PlanTracker) OnToolCallComplete(event events.Event) {
 				t.emitPlanUpdate()
 			}
 
-			// Mark as completed/failed based on tool result
+			// Mark as completed/failed based on tool result.
 			if t.runningSteps[step.ID] {
 				if data.Success {
 					step.Status = planning.StepStatusCompleted
@@ -61,13 +61,14 @@ func (t *PlanTracker) OnToolCallComplete(event events.Event) {
 				} else {
 					step.Status = planning.StepStatusFailed
 				}
+
 				delete(t.runningSteps, step.ID)
 				t.emitPlanUpdate()
 			}
-			break // Only match first step
+
+			break // Only match first step.
 		}
 	}
-
 }
 
 // matchesStep performs fuzzy matching between step and tool name.
@@ -77,12 +78,12 @@ func (t *PlanTracker) matchesStep(step *planning.Step, toolName string) bool {
 	lowerDesc := strings.ToLower(step.Description)
 	lowerAction := strings.ToLower(step.Action)
 
-	// Direct tool name mention in description or action
+	// Direct tool name mention in description or action.
 	if strings.Contains(lowerDesc, lowerTool) || strings.Contains(lowerAction, lowerTool) {
 		return true
 	}
 
-	// Semantic matching for common patterns
+	// Semantic matching for common patterns.
 	toolPatterns := map[string][]string{
 		"read_file":       {"read", "open", "load", "get"},
 		"write_file":      {"write", "save", "create", "update"},
@@ -146,7 +147,7 @@ func (t *PlanTracker) UpdatePlanStatus() {
 		t.plan.Status = planning.PlanStatusInProgress
 	}
 
-	// Emit update if status changed
+	// Emit update if status changed.
 	if oldStatus != t.plan.Status {
 		t.emitPlanUpdate()
 	}

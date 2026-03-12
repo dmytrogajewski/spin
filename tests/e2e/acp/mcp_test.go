@@ -240,4 +240,3 @@ func TestACP_MCP_ToolsAvailable(t *testing.T) {
 	// Prompt should succeed (MCP tools may or may not be used)
 	require.NoError(t, err)
 }
-

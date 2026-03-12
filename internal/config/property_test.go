@@ -12,38 +12,44 @@ import (
 // This is a property-based test that generates random valid configs.
 func TestConfigV2_RoundTrip_YAML(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		// Generate a random valid ConfigV2
+		// Generate a random valid ConfigV2.
 		cfg := genValidConfigV2(t)
 
-		// Marshal to YAML
+		// Marshal to YAML.
 		yamlBytes, err := yaml.Marshal(cfg)
 		if err != nil {
 			t.Fatalf("failed to marshal config: %v", err)
 		}
 
-		// Unmarshal back
+		// Unmarshal back.
 		var cfg2 ConfigV2
+
 		err = yaml.Unmarshal(yamlBytes, &cfg2)
 		if err != nil {
 			t.Fatalf("failed to unmarshal config: %v", err)
 		}
 
-		// Verify fields match
+		// Verify fields match.
 		if cfg.Version != cfg2.Version {
 			t.Fatalf("Version mismatch: %v != %v", cfg.Version, cfg2.Version)
 		}
+
 		if cfg.LLM.Provider != cfg2.LLM.Provider {
 			t.Fatalf("LLM.Provider mismatch: %v != %v", cfg.LLM.Provider, cfg2.LLM.Provider)
 		}
+
 		if cfg.LLM.Model != cfg2.LLM.Model {
 			t.Fatalf("LLM.Model mismatch: %v != %v", cfg.LLM.Model, cfg2.LLM.Model)
 		}
+
 		if cfg.LLM.Temperature != cfg2.LLM.Temperature {
 			t.Fatalf("LLM.Temperature mismatch: %v != %v", cfg.LLM.Temperature, cfg2.LLM.Temperature)
 		}
+
 		if cfg.Agent.MaxTurns != cfg2.Agent.MaxTurns {
 			t.Fatalf("Agent.MaxTurns mismatch: %v != %v", cfg.Agent.MaxTurns, cfg2.Agent.MaxTurns)
 		}
+
 		if cfg.ACE.Enabled != cfg2.ACE.Enabled {
 			t.Fatalf("ACE.Enabled mismatch: %v != %v", cfg.ACE.Enabled, cfg2.ACE.Enabled)
 		}
@@ -130,6 +136,7 @@ func genValidProtocolConfig(t *rapid.T) ProtocolConfigV2 {
 	enableShell := rapid.Bool().Draw(t, "protocol_enable_shell")
 
 	var shellTimeout time.Duration
+
 	if enableShell {
 		timeoutSec := rapid.Int64Range(1, 3600).Draw(t, "protocol_shell_timeout_sec")
 		shellTimeout = time.Duration(timeoutSec) * time.Second
@@ -139,7 +146,7 @@ func genValidProtocolConfig(t *rapid.T) ProtocolConfigV2 {
 
 	return ProtocolConfigV2{
 		EnableMCP:    rapid.Bool().Draw(t, "protocol_enable_mcp"),
-		MCPServers:   []MCPServerConfigV2{}, // Keep simple for now
+		MCPServers:   []MCPServerConfigV2{}, // Keep simple for now.
 		EnableGit:    rapid.Bool().Draw(t, "protocol_enable_git"),
 		EnableShell:  enableShell,
 		ShellTimeout: shellTimeout,

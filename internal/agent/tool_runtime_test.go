@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestToolRuntime_parseToolArguments(t *testing.T) {
@@ -49,7 +50,7 @@ func TestToolRuntime_parseToolArguments(t *testing.T) {
 				Type: "function",
 				Function: ToolCallFunction{
 					Name:      "test_tool",
-					Arguments: "", // Empty arguments
+					Arguments: "", // Empty arguments.
 				},
 			},
 			wantErr: true,
@@ -61,7 +62,7 @@ func TestToolRuntime_parseToolArguments(t *testing.T) {
 				Type: "function",
 				Function: ToolCallFunction{
 					Name:      "test_tool",
-					Arguments: `{}`, // Empty JSON object (allowed)
+					Arguments: `{}`, // Empty JSON object (allowed).
 				},
 			},
 			wantErr: false,
@@ -73,7 +74,7 @@ func TestToolRuntime_parseToolArguments(t *testing.T) {
 				Type: "function",
 				Function: ToolCallFunction{
 					Name:      "test_tool",
-					Arguments: `{"key": "value"`, // Missing closing brace
+					Arguments: `{"key": "value"`, // Missing closing brace.
 				},
 			},
 			wantErr: true,
@@ -85,12 +86,15 @@ func TestToolRuntime_parseToolArguments(t *testing.T) {
 			args, err := toolRuntime.parseToolArguments(tt.call)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ToolRuntime.parseToolArguments() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if !tt.wantErr {
 				assert.NotNil(t, args)
 			} else {
 				assert.Error(t, err)
+
 				if tt.name == "empty arguments (strict parser rejects)" {
 					assert.Contains(t, err.Error(), "cannot be empty")
 				}
@@ -113,19 +117,19 @@ func TestToolRuntime_Execute_EmptyArguments(t *testing.T) {
 		WorkDir:         "/tmp",
 	})
 
-	// Test that Execute returns error for empty arguments (strict parser)
+	// Test that Execute returns error for empty arguments (strict parser).
 	call := &ToolCall{
 		ID:   "call_1",
 		Type: "function",
 		Function: ToolCallFunction{
 			Name:      "test_tool",
-			Arguments: "", // Empty arguments should be rejected
+			Arguments: "", // Empty arguments should be rejected.
 		},
 	}
 
 	ctx := context.Background()
 	result, err := toolRuntime.Execute(ctx, call)
-	require.NoError(t, err) // Execute returns nil error, error is in result
+	require.NoError(t, err) // Execute returns nil error, error is in result.
 	require.NotNil(t, result)
 	assert.False(t, result.Success)
 	assert.NotNil(t, result.Err)
@@ -138,7 +142,7 @@ func TestToolRuntime_Execute_ValidArguments(t *testing.T) {
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 	toolRegistry := tools.NewRegistry()
 
-	// Register a simple test tool
+	// Register a simple test tool.
 	testTool := tools.NewReadFileTool()
 	_ = toolRegistry.Register(testTool)
 
@@ -150,7 +154,7 @@ func TestToolRuntime_Execute_ValidArguments(t *testing.T) {
 		WorkDir:         "/tmp",
 	})
 
-	// Test that Execute succeeds with valid arguments
+	// Test that Execute succeeds with valid arguments.
 	call := &ToolCall{
 		ID:   "call_1",
 		Type: "function",
@@ -162,8 +166,8 @@ func TestToolRuntime_Execute_ValidArguments(t *testing.T) {
 
 	ctx := context.Background()
 	result, err := toolRuntime.Execute(ctx, call)
-	require.NoError(t, err) // Execute returns nil error, error is in result
+	require.NoError(t, err) // Execute returns nil error, error is in result.
 	require.NotNil(t, result)
 	// Note: Tool may fail (file doesn't exist), but parsing should succeed
-	// We're just verifying that strict parsing doesn't reject valid JSON
+	// We're just verifying that strict parsing doesn't reject valid JSON.
 }

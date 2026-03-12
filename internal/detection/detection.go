@@ -2,31 +2,32 @@ package detection
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
 
-// CycleType represents the type of cycle detected
+// CycleType represents the type of cycle detected.
 type CycleType int
 
 const (
-	// CycleNone indicates no cycle detected
+	// CycleNone indicates no cycle detected.
 	CycleNone CycleType = iota
 
-	// CycleSimilarResponses indicates repeated similar responses
+	// CycleSimilarResponses indicates repeated similar responses.
 	CycleSimilarResponses
 
-	// CycleRepeatedTool indicates same tool called repeatedly
+	// CycleRepeatedTool indicates same tool called repeatedly.
 	CycleRepeatedTool
 
-	// CycleOscillation indicates A→B→A→B oscillation pattern
+	// CycleOscillation indicates A→B→A→B oscillation pattern.
 	CycleOscillation
 
-	// CycleSameError indicates repeated identical errors
+	// CycleSameError indicates repeated identical errors.
 	CycleSameError
 )
 
-// String returns the string representation of the cycle type
+// String returns the string representation of the cycle type.
 func (ct CycleType) String() string {
 	switch ct {
 	case CycleSimilarResponses:
@@ -42,7 +43,7 @@ func (ct CycleType) String() string {
 	}
 }
 
-// Snapshot represents a point-in-time capture of agent state for cycle detection analysis
+// Snapshot represents a point-in-time capture of agent state for cycle detection analysis.
 type Snapshot struct {
 	Turn      int
 	Response  string
@@ -51,7 +52,7 @@ type Snapshot struct {
 	Timestamp time.Time
 }
 
-// CycleResult contains the result of cycle detection
+// CycleResult contains the result of cycle detection.
 type CycleResult struct {
 	Type       CycleType
 	Confidence float64
@@ -59,30 +60,30 @@ type CycleResult struct {
 	Timestamp  time.Time
 }
 
-// Message represents a conversation message for interventions
+// Message represents a conversation message for interventions.
 type Message interface {
 	GetRole() string
 	GetContent() string
 	GetTimestamp() time.Time
 }
 
-// EventEmitter defines the interface for emitting events
+// EventEmitter defines the interface for emitting events.
 type EventEmitter interface {
 	Emit(event Event)
 }
 
-// Event defines the interface for events
+// Event defines the interface for events.
 type Event interface {
 	GetType() string
 	GetTimestamp() time.Time
-	GetData() interface{}
+	GetData() any
 }
 
 // DetectionEventData represents the data payload for detection events.
 // This is a strongly-typed alternative to interface{} for detection-specific events.
-type DetectionEventData map[string]interface{}
+type DetectionEventData map[string]any
 
-// Intervention defines the interface for cycle-breaking strategies
+// Intervention defines the interface for cycle-breaking strategies.
 type Intervention interface {
 	Apply(ctx context.Context, messages []Message) ([]Message, error)
 	Name() string
@@ -90,7 +91,7 @@ type Intervention interface {
 	Severity() int
 }
 
-// ReflectionIntervention implements a soft intervention
+// ReflectionIntervention implements a soft intervention.
 type ReflectionIntervention struct{}
 
 func (i *ReflectionIntervention) Apply(ctx context.Context, messages []Message) ([]Message, error) {
@@ -99,6 +100,7 @@ func (i *ReflectionIntervention) Apply(ctx context.Context, messages []Message) 
 		content:   "I notice you may be repeating similar responses or approaches. Let's take a step back and try a different perspective. What other angles or methods could we explore for this task?",
 		timestamp: time.Now(),
 	}
+
 	return append(messages, reflectionMsg), nil
 }
 
@@ -108,7 +110,7 @@ func (i *ReflectionIntervention) Description() string {
 }
 func (i *ReflectionIntervention) Severity() int { return 1 }
 
-// EscalateIntervention implements a hard intervention
+// EscalateIntervention implements a hard intervention.
 type EscalateIntervention struct {
 	Emitter EventEmitter
 }
@@ -124,6 +126,7 @@ func (i *EscalateIntervention) Apply(ctx context.Context, messages []Message) ([
 			},
 		})
 	}
+
 	return messages, nil
 }
 
@@ -133,7 +136,7 @@ func (i *EscalateIntervention) Description() string {
 }
 func (i *EscalateIntervention) Severity() int { return 3 }
 
-// message implements the Message interface
+// message implements the Message interface.
 type message struct {
 	role      string
 	content   string
@@ -144,7 +147,7 @@ func (m *message) GetRole() string         { return m.role }
 func (m *message) GetContent() string      { return m.content }
 func (m *message) GetTimestamp() time.Time { return m.timestamp }
 
-// event implements the Event interface
+// event implements the Event interface.
 type event struct {
 	eventType string
 	timestamp time.Time
@@ -153,9 +156,9 @@ type event struct {
 
 func (e *event) GetType() string         { return e.eventType }
 func (e *event) GetTimestamp() time.Time { return e.timestamp }
-func (e *event) GetData() interface{}    { return e.data }
+func (e *event) GetData() any            { return e.data }
 
-// CycleDetector defines the interface for cycle detection implementations
+// CycleDetector defines the interface for cycle detection implementations.
 type CycleDetector interface {
 	Record(snapshot Snapshot)
 	Check() (CycleResult, error)
@@ -163,25 +166,25 @@ type CycleDetector interface {
 	Reset()
 }
 
-// PatternDetector defines the interface for pattern detection implementations
+// PatternDetector defines the interface for pattern detection implementations.
 type PatternDetector interface {
 	AnalyzePatterns(history []Snapshot) []PatternResult
 }
 
-// PatternResult represents the result of pattern detection
+// PatternResult represents the result of pattern detection.
 type PatternResult struct {
 	Type       string
 	Confidence float64
 	Details    string
 }
 
-// DetectionService handles cycle and pattern detection for agent behavior
+// DetectionService handles cycle and pattern detection for agent behavior.
 type DetectionService struct {
 	cycleDetector   CycleDetector
 	patternDetector PatternDetector
 }
 
-// NewDetectionService creates a new detection service with the given detectors
+// NewDetectionService creates a new detection service with the given detectors.
 func NewDetectionService(cycleDetector CycleDetector, patternDetector PatternDetector) *DetectionService {
 	return &DetectionService{
 		cycleDetector:   cycleDetector,
@@ -189,18 +192,19 @@ func NewDetectionService(cycleDetector CycleDetector, patternDetector PatternDet
 	}
 }
 
-// RecordSnapshot records an agent state snapshot for cycle detection
+// RecordSnapshot records an agent state snapshot for cycle detection.
 func (s *DetectionService) RecordSnapshot(snapshot Snapshot) {
 	if s.cycleDetector == nil {
 		return
 	}
+
 	s.cycleDetector.Record(snapshot)
 }
 
-// CheckCycle analyzes the current history for cycle patterns
+// CheckCycle analyzes the current history for cycle patterns.
 func (s *DetectionService) CheckCycle() (CycleResult, error) {
 	if s.cycleDetector == nil {
-		return CycleResult{Type: CycleNone}, fmt.Errorf("cycle detector not configured")
+		return CycleResult{Type: CycleNone}, errors.New("cycle detector not configured")
 	}
 
 	result, err := s.cycleDetector.Check()
@@ -211,33 +215,36 @@ func (s *DetectionService) CheckCycle() (CycleResult, error) {
 	return result, nil
 }
 
-// DetectPattern detects advanced patterns in agent behavior
+// DetectPattern detects advanced patterns in agent behavior.
 func (s *DetectionService) DetectPattern() ([]PatternResult, error) {
 	if s.patternDetector == nil {
-		return nil, fmt.Errorf("pattern detector not configured")
+		return nil, errors.New("pattern detector not configured")
 	}
 
 	if s.cycleDetector == nil {
-		return nil, fmt.Errorf("cycle detector required for pattern detection")
+		return nil, errors.New("cycle detector required for pattern detection")
 	}
 
 	history := s.cycleDetector.GetHistory()
 	results := s.patternDetector.AnalyzePatterns(history)
+
 	return results, nil
 }
 
-// Reset clears the detection history
+// Reset clears the detection history.
 func (s *DetectionService) Reset() {
 	if s.cycleDetector == nil {
 		return
 	}
+
 	s.cycleDetector.Reset()
 }
 
-// GetHistory returns a copy of the current snapshot history
+// GetHistory returns a copy of the current snapshot history.
 func (s *DetectionService) GetHistory() []Snapshot {
 	if s.cycleDetector == nil {
 		return []Snapshot{}
 	}
+
 	return s.cycleDetector.GetHistory()
 }

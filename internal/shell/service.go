@@ -18,7 +18,8 @@ func NewService(enabled bool, workDir string, logger *slog.Logger, timeout time.
 	ctx := NewContext(enabled, workDir, logger, timeout)
 
 	if enabled {
-		if err := ctx.Initialize(context.Background()); err != nil {
+		err := ctx.Initialize(context.Background())
+		if err != nil {
 			return nil, err
 		}
 	}

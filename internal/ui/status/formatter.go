@@ -2,6 +2,7 @@ package status
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -12,11 +13,12 @@ func (m *Manager) FormatAdaptive(width int) string {
 	} else if width < 100 {
 		return m.FormatMedium(width)
 	}
+
 	return m.FormatFull(width)
 }
 
 // FormatMedium formats status for medium-width terminals (60-100 columns).
-// Shows: activity, context%, state, provider/model, TPS
+// Shows: activity, context%, state, provider/model, TPS.
 func (m *Manager) FormatMedium(width int) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -27,28 +29,30 @@ func (m *Manager) FormatMedium(width int) string {
 
 	parts := []string{}
 
-	// Activity indicator with spinner
+	// Activity indicator with spinner.
 	spinnerFrame := ""
 	if m.spinner != nil && m.spinner.IsRunning() {
 		spinnerFrame = m.spinner.Frame()
 	}
+
 	activity := activityIndicatorWithSpinner(m.status.Metrics.Connected, spinnerFrame)
 	parts = append(parts, activity)
 
-	// Context percentage
+	// Context percentage.
 	if m.status.Metrics.MaxTokens > 0 {
 		pct := formatPercentage(m.status.Metrics.TokenUsage)
 		parts = append(parts, pct)
 	}
 
-	// Agent state
+	// Agent state.
 	state := m.status.Metrics.AgentState
 	if state == "" {
 		state = "Ready"
 	}
+
 	parts = append(parts, truncate(state, 15))
 
-	// Provider/model (truncated)
+	// Provider/model (truncated).
 	if m.status.Metrics.Provider != "" {
 		provider := fmt.Sprintf("%s/%s",
 			m.status.Metrics.Provider,
@@ -56,8 +60,8 @@ func (m *Manager) FormatMedium(width int) string {
 		parts = append(parts, provider)
 	}
 
-	// TPS (only if actively generating and non-zero)
-	if m.status.Metrics.TokensPerSec > 1.0 { // Use 1.0 threshold to filter out noise
+	// TPS (only if actively generating and non-zero).
+	if m.status.Metrics.TokensPerSec > 1.0 { // Use 1.0 threshold to filter out noise.
 		tps := fmt.Sprintf("%.0ftok/s", m.status.Metrics.TokensPerSec)
 		parts = append(parts, tps)
 	}
@@ -77,15 +81,16 @@ func (m *Manager) FormatFull(width int) string {
 
 	parts := []string{}
 
-	// Activity indicator with spinner
+	// Activity indicator with spinner.
 	spinnerFrame := ""
 	if m.spinner != nil && m.spinner.IsRunning() {
 		spinnerFrame = m.spinner.Frame()
 	}
+
 	activity := activityIndicatorWithSpinner(m.status.Metrics.Connected, spinnerFrame)
 	parts = append(parts, activity)
 
-	// Context usage (percentage and absolute)
+	// Context usage (percentage and absolute).
 	if m.status.Metrics.MaxTokens > 0 {
 		pct := formatPercentage(m.status.Metrics.TokenUsage)
 		abs := fmt.Sprintf("(%s/%s)",
@@ -94,19 +99,20 @@ func (m *Manager) FormatFull(width int) string {
 		parts = append(parts, pct, abs)
 	}
 
-	// Agent state
+	// Agent state.
 	state := m.status.Metrics.AgentState
 	if state == "" {
 		state = "Ready"
 	}
+
 	parts = append(parts, truncate(state, 20))
 
-	// Task mode (if not default)
+	// Task mode (if not default).
 	if m.status.Metrics.TaskMode != "" && m.status.Metrics.TaskMode != "regular" {
 		parts = append(parts, capitalize(m.status.Metrics.TaskMode))
 	}
 
-	// Provider/model
+	// Provider/model.
 	if m.status.Metrics.Provider != "" {
 		provider := fmt.Sprintf("%s/%s",
 			m.status.Metrics.Provider,
@@ -114,18 +120,19 @@ func (m *Manager) FormatFull(width int) string {
 		parts = append(parts, provider)
 	}
 
-	// TPS (only if actively generating and non-zero)
-	if m.status.Metrics.TokensPerSec > 1.0 { // Use 1.0 threshold to filter out noise
+	// TPS (only if actively generating and non-zero).
+	if m.status.Metrics.TokensPerSec > 1.0 { // Use 1.0 threshold to filter out noise.
 		tps := fmt.Sprintf("%.0f tok/s", m.status.Metrics.TokensPerSec)
 		parts = append(parts, tps)
 	}
 
-	// Conversation ID (shortened to first 6 chars)
+	// Conversation ID (shortened to first 6 chars).
 	if m.status.Metrics.ConversationID != "" {
 		shortID := m.status.Metrics.ConversationID
 		if len(shortID) > 6 {
 			shortID = shortID[:6]
 		}
+
 		convID := "conv:" + shortID
 		parts = append(parts, convID)
 	}
@@ -134,19 +141,20 @@ func (m *Manager) FormatFull(width int) string {
 	// Disabled as it adds clutter
 	// if width >= 140 {
 	// 	parts = append(parts, "?:help ^C:quit")
-	// }
+	// }.
 
 	return strings.Join(parts, "  ")
 }
 
-// Helper functions
+// Helper functions.
 
 // activityIndicator returns the activity indicator based on connection status.
 func activityIndicator(connected bool) string {
 	if connected {
-		return "[●]" // Active (colored green in render phase)
+		return "[●]" // Active (colored green in render phase).
 	}
-	return "[○]" // Idle (colored gray in render phase)
+
+	return "[○]" // Idle (colored gray in render phase).
 }
 
 // activityIndicatorWithSpinner returns the activity indicator with optional spinner.
@@ -155,6 +163,7 @@ func activityIndicatorWithSpinner(connected bool, spinnerFrame string) string {
 	if spinnerFrame != "" {
 		return "[" + spinnerFrame + "]"
 	}
+
 	return activityIndicator(connected)
 }
 
@@ -166,10 +175,11 @@ func formatPercentage(pct float64) string {
 // humanizeNumber formats large numbers with K/M suffixes.
 func humanizeNumber(n int64) string {
 	if n < 1000 {
-		return fmt.Sprintf("%d", n)
+		return strconv.FormatInt(n, 10)
 	} else if n < 1000000 {
 		return fmt.Sprintf("%.1fK", float64(n)/1000)
 	}
+
 	return fmt.Sprintf("%.1fM", float64(n)/1000000)
 }
 
@@ -178,9 +188,11 @@ func truncate(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
+
 	if maxLen < 3 {
 		return s[:maxLen]
 	}
+
 	return s[:maxLen-3] + "..."
 }
 
@@ -189,5 +201,6 @@ func capitalize(s string) string {
 	if s == "" {
 		return s
 	}
+
 	return strings.ToUpper(s[:1]) + s[1:]
 }

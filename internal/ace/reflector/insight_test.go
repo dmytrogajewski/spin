@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestInsight_New tests creating a new insight
+// TestInsight_New tests creating a new insight.
 func TestInsight_New(t *testing.T) {
 	insight := NewInsight("Always validate input parameters", CategorySuccessPattern)
 
@@ -18,7 +18,7 @@ func TestInsight_New(t *testing.T) {
 	assert.False(t, insight.CreatedAt.IsZero())
 }
 
-// TestInsight_Validate tests insight validation
+// TestInsight_Validate tests insight validation.
 func TestInsight_Validate(t *testing.T) {
 	tests := []struct {
 		name    string

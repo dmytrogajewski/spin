@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -28,7 +29,7 @@ func (c *tuiCommandContext) SetMode(mode string) error {
 // GetWorkDir returns the working directory for the session.
 func (c *tuiCommandContext) GetWorkDir() string {
 	// Conversation doesn't expose workDir directly, but we can get it from session if needed
-	// Return empty string as it's not currently used in TUI commands
+	// Return empty string as it's not currently used in TUI commands.
 	return ""
 }
 
@@ -37,29 +38,32 @@ func (c *tuiCommandContext) GetWorkDir() string {
 //   - handled: true if command was recognized and processed
 //   - error: non-nil if command execution failed or exit was requested
 func handleCommand(ui *adapters.PureTTY, conv *conversation.Conversation, cmdName string, args []string) (handled bool, err error) {
-	// Create command context
+	// Create command context.
 	cmdCtx := &tuiCommandContext{conv: conv}
 
-	// Special handling for exit/quit commands (TUI-only)
+	// Special handling for exit/quit commands (TUI-only).
 	if cmdName == "/exit" || cmdName == "/quit" {
-		return true, fmt.Errorf("exit requested")
+		return true, errors.New("exit requested")
 	}
 
-	// Execute command via command system
+	// Execute command via command system.
 	result, err := commands.ExecuteCommand(context.Background(), cmdName, args, cmdCtx)
 	if err != nil {
-		// Check if it's an unknown command
+		// Check if it's an unknown command.
 		if strings.Contains(err.Error(), "unknown command") {
 			ui.PrintLine(fmt.Sprintf("Unknown command: %s (type /help for available commands)\n", cmdName))
+
 			return true, nil
 		}
-		// Other errors
+		// Other errors.
 		ui.PrintLine(fmt.Sprintf("Error: %v\n", err))
+
 		return true, nil
 	}
 
-	// Print command output
+	// Print command output.
 	ui.PrintLine(result)
+
 	if !strings.HasSuffix(result, "\n") {
 		ui.PrintLine("")
 	}

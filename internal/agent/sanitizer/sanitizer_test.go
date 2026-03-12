@@ -1,6 +1,7 @@
 package sanitizer
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,15 +79,21 @@ func TestSanitizer_Process(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := New()
+
 			var content, thought string
+
+			var contentSb84 strings.Builder
+			var thoughtSb84 strings.Builder
 			for _, chunk := range tt.chunks {
 				c, th := s.Process(chunk)
-				content += c
-				thought += th
+				contentSb84.WriteString(c)
+				thoughtSb84.WriteString(th)
 			}
+			content += contentSb84.String()
+			thought += thoughtSb84.String()
+
 			assert.Equal(t, tt.wantContent, content, "content mismatch")
 			assert.Equal(t, tt.wantThought, thought, "thought mismatch")
 		})
 	}
 }
-

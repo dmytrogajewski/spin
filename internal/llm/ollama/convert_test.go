@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	// Suppress warn logs during tests
+	// Suppress warn logs during tests.
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
 }
 
@@ -25,7 +25,7 @@ func TestBuildToolCallIDToNameMap_ReproducesMissingMapping(t *testing.T) {
 	// Simulate messages as they would be sent to Ollama after agent execution:
 	// - User message
 	// - Assistant with 5 tool calls (IDs: chatcmpl-123-0 through chatcmpl-123-4)
-	// - 5 Tool result messages
+	// - 5 Tool result messages.
 	toolCallIDs := []string{"chatcmpl-123-0", "chatcmpl-123-1", "chatcmpl-123-2", "chatcmpl-123-3", "chatcmpl-123-4"}
 	toolNames := []string{"read_file", "list_directory", "shell_command", "write_file", "read_file"}
 
@@ -64,7 +64,7 @@ func TestBuildToolCallIDToNameMap_ReproducesMissingMapping(t *testing.T) {
 // correctly parses assistant messages when they come from JSON marshaling
 // (simulating the agent's convertMessageToOpenAI output after round-trip).
 func TestBuildToolCallIDToNameMap_FromJSON(t *testing.T) {
-	// Marshal and unmarshal to simulate what parseGenericMessage does
+	// Marshal and unmarshal to simulate what parseGenericMessage does.
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
@@ -76,6 +76,7 @@ func TestBuildToolCallIDToNameMap_FromJSON(t *testing.T) {
 	require.NoError(t, err)
 
 	var generic genericMessage
+
 	err = json.Unmarshal(jsonData, &generic)
 	require.NoError(t, err)
 	assert.Equal(t, "assistant", generic.Role)
@@ -87,6 +88,7 @@ func TestBuildToolCallIDToNameMap_FromJSON(t *testing.T) {
 			Name string `json:"name"`
 		} `json:"function"`
 	}
+
 	err = json.Unmarshal(generic.ToolCalls, &toolCalls)
 	require.NoError(t, err)
 	require.Len(t, toolCalls, 1)
@@ -119,11 +121,12 @@ func TestConvertMessageToOllama_ToolResultWithPositionalFallback(t *testing.T) {
 	mapping := buildToolCallIDToNameMap(messages)
 	require.Len(t, mapping, 3)
 
-	// Convert each tool message - all should get ToolName set
+	// Convert each tool message - all should get ToolName set.
 	for i := range []string{"call-0", "call-1", "call-2"} {
-		msg := messages[i+1] // +1 to skip assistant
+		msg := messages[i+1] // +1 to skip assistant.
 		result := convertMessageToOllama(msg, mapping)
 		assert.Equal(t, "tool", result.Role)
+
 		expectedName := []string{"read_file", "shell_command", "list_directory"}[i]
 		assert.Equal(t, expectedName, result.ToolName, "tool message %d", i)
 	}
@@ -134,7 +137,7 @@ func TestConvertMessageToOllama_ToolResultWithPositionalFallback(t *testing.T) {
 // chatcmpl-1769975533529433976-1 through 5, but the primary pass (from assistant
 // tool_calls) may fail to parse them. The positional fallback fills the mapping.
 func TestBuildToolCallIDToNameMap_PositionalFallbackWhenPrimaryFails(t *testing.T) {
-	// Assistant with 5 tool calls - use IDs that match the bug report format
+	// Assistant with 5 tool calls - use IDs that match the bug report format.
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
@@ -172,9 +175,9 @@ func TestBuildToolCallIDToNameMap_PositionalFallbackWhenPrimaryFails(t *testing.
 		assert.Equal(t, want, got, "tool name for %q", id)
 	}
 
-	// Convert each tool message - no WARN should occur, ToolName must be set
+	// Convert each tool message - no WARN should occur, ToolName must be set.
 	for i := 1; i <= 5; i++ {
-		msg := messages[i+1] // +1 for user, +1 for assistant
+		msg := messages[i+1] // +1 for user, +1 for assistant.
 		result := convertMessageToOllama(msg, mapping)
 		assert.Equal(t, "tool", result.Role)
 		assert.NotEmpty(t, result.ToolName, "tool message %d should have ToolName", i)
@@ -247,11 +250,11 @@ func TestBuildToolCallIDToNameMap_PhantomToolCalls(t *testing.T) {
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
 		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
-			// Phantom: empty name
+			// Phantom: empty name.
 			{ID: openai.F("chatcmpl-100-0"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F(""), Arguments: openai.F(`{}`)})},
-			// Valid
+			// Valid.
 			{ID: openai.F("chatcmpl-100-1"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("shell_command"), Arguments: openai.F(`{"command":"ls"}`)})},
-			// Valid
+			// Valid.
 			{ID: openai.F("chatcmpl-100-2"), Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction), Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{Name: openai.F("read_file"), Arguments: openai.F(`{"path":"test.go"}`)})},
 		}),
 	}
@@ -265,15 +268,15 @@ func TestBuildToolCallIDToNameMap_PhantomToolCalls(t *testing.T) {
 
 	mapping := buildToolCallIDToNameMap(messages)
 
-	// The phantom entry (chatcmpl-100-0) should NOT be in the mapping
+	// The phantom entry (chatcmpl-100-0) should NOT be in the mapping.
 	_, hasPhantom := mapping["chatcmpl-100-0"]
 	assert.False(t, hasPhantom, "phantom tool call with empty name should not be in mapping")
 
-	// Valid entries should be present
+	// Valid entries should be present.
 	assert.Equal(t, "shell_command", mapping["chatcmpl-100-1"])
 	assert.Equal(t, "read_file", mapping["chatcmpl-100-2"])
 
-	// Tool messages should resolve correctly
+	// Tool messages should resolve correctly.
 	for _, id := range []string{"chatcmpl-100-1", "chatcmpl-100-2"} {
 		toolMsg := openai.ToolMessage(id, "result")
 		result := convertMessageToOllama(toolMsg, mapping)
@@ -308,25 +311,26 @@ func TestConvertOllamaResponseToOpenAI_AfterPhantomFiltering(t *testing.T) {
 		Message: api.Message{
 			Role: "assistant",
 			ToolCalls: []api.ToolCall{
-				// Phantom: empty name (should be filtered before conversion)
-				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]interface{}{}}},
-				// Valid
-				{Function: api.ToolCallFunction{Name: "shell_command", Arguments: map[string]interface{}{"command": "ls"}}},
-				// Valid
-				{Function: api.ToolCallFunction{Name: "read_file", Arguments: map[string]interface{}{"path": "test.go"}}},
+				// Phantom: empty name (should be filtered before conversion).
+				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{}}},
+				// Valid.
+				{Function: api.ToolCallFunction{Name: "shell_command", Arguments: map[string]any{"command": "ls"}}},
+				// Valid.
+				{Function: api.ToolCallFunction{Name: "read_file", Arguments: map[string]any{"path": "test.go"}}},
 			},
 		},
 		Done:       true,
 		DoneReason: "stop",
 	}
 
-	// Apply the same filtering as provider.go
+	// Apply the same filtering as provider.go.
 	filtered := resp.Message.ToolCalls[:0]
 	for _, tc := range resp.Message.ToolCalls {
 		if tc.Function.Name != "" {
 			filtered = append(filtered, tc)
 		}
 	}
+
 	resp.Message.ToolCalls = filtered
 
 	result := convertOllamaResponseToOpenAI(resp, "qwen3:1.7b")
@@ -337,11 +341,11 @@ func TestConvertOllamaResponseToOpenAI_AfterPhantomFiltering(t *testing.T) {
 	assert.Equal(t, "shell_command", result.Choices[0].Message.ToolCalls[0].Function.Name)
 	assert.Equal(t, "read_file", result.Choices[0].Message.ToolCalls[1].Function.Name)
 
-	// IDs should be properly generated
+	// IDs should be properly generated.
 	assert.NotEmpty(t, result.Choices[0].Message.ToolCalls[0].ID)
 	assert.NotEmpty(t, result.Choices[0].Message.ToolCalls[1].ID)
 
-	// Finish reason should be tool_calls since there are valid tool calls
+	// Finish reason should be tool_calls since there are valid tool calls.
 	assert.Equal(t, openai.ChatCompletionChoicesFinishReasonToolCalls, result.Choices[0].FinishReason)
 }
 
@@ -352,20 +356,21 @@ func TestConvertOllamaChunkToOpenAI_AfterPhantomFiltering(t *testing.T) {
 		Message: api.Message{
 			Role: "assistant",
 			ToolCalls: []api.ToolCall{
-				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]interface{}{}}},
-				{Function: api.ToolCallFunction{Name: "shell_command", Arguments: map[string]interface{}{"command": "ls"}}},
+				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{}}},
+				{Function: api.ToolCallFunction{Name: "shell_command", Arguments: map[string]any{"command": "ls"}}},
 			},
 		},
 		Done: false,
 	}
 
-	// Apply filtering
+	// Apply filtering.
 	filtered := resp.Message.ToolCalls[:0]
 	for _, tc := range resp.Message.ToolCalls {
 		if tc.Function.Name != "" {
 			filtered = append(filtered, tc)
 		}
 	}
+
 	resp.Message.ToolCalls = filtered
 
 	chunk := convertOllamaChunkToOpenAI(resp, "chatcmpl-test-123", "qwen3:1.7b")
@@ -426,22 +431,22 @@ func TestInferToolName(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		args     map[string]interface{}
+		args     map[string]any
 		expected string
 	}{
 		{
 			name:     "infer shell_command from command arg",
-			args:     map[string]interface{}{"command": "ls -la"},
+			args:     map[string]any{"command": "ls -la"},
 			expected: "shell_command",
 		},
 		{
 			name:     "ambiguous path arg returns first match rather than empty",
-			args:     map[string]interface{}{"path": "internal/llm/vram/nvidia.go"},
-			expected: "read_file", // read_file comes first in the tools list
+			args:     map[string]any{"path": "internal/llm/vram/nvidia.go"},
+			expected: "read_file", // read_file comes first in the tools list.
 		},
 		{
 			name:     "empty args returns empty",
-			args:     map[string]interface{}{},
+			args:     map[string]any{},
 			expected: "",
 		},
 		{
@@ -451,7 +456,7 @@ func TestInferToolName(t *testing.T) {
 		},
 		{
 			name:     "unknown args returns empty",
-			args:     map[string]interface{}{"unknown_param": "value"},
+			args:     map[string]any{"unknown_param": "value"},
 			expected: "",
 		},
 	}
@@ -526,7 +531,7 @@ func TestThinkingFieldMerge(t *testing.T) {
 				},
 			}
 
-			// Simulate the merging logic from the provider
+			// Simulate the merging logic from the provider.
 			if resp.Message.Thinking != "" {
 				resp.Message.Content = "<think>" + resp.Message.Thinking + "</think>" + resp.Message.Content
 				resp.Message.Thinking = ""

@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/session"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestSpinACPAgent_LoadSession_NoStorage tests LoadSession when storage is not available.
@@ -21,7 +22,7 @@ func TestSpinACPAgent_LoadSession_NoStorage(t *testing.T) {
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
-	// This test specifically tests the case where storage is nil
+	// This test specifically tests the case where storage is nil.
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, nil)
 	require.NoError(t, err)
 
@@ -69,7 +70,7 @@ func TestSpinACPAgent_LoadSession_Success(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create and save a session
+	// Create and save a session.
 	sess := session.NewSession("/tmp/test")
 	sess.SetTitle("Test Session")
 	err = storage.Save(sess.ID, *sess)
@@ -85,7 +86,7 @@ func TestSpinACPAgent_LoadSession_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 
-	// Verify session was stored
+	// Verify session was stored.
 	acpAgent.mu.RLock()
 	loadedSession, exists := acpAgent.sessions[req.SessionId]
 	acpAgent.mu.RUnlock()
@@ -107,7 +108,7 @@ func TestSpinACPAgent_LoadSession_WithMcpServers(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create and save a session
+	// Create and save a session.
 	sess := session.NewSession("/tmp/test")
 	err = storage.Save(sess.ID, *sess)
 	require.NoError(t, err)
@@ -132,11 +133,11 @@ func TestSpinACPAgent_LoadSession_WithMcpServers(t *testing.T) {
 
 	resp, err := acpAgent.LoadSession(ctx, req)
 
-	// Session loading should succeed even if MCP connection fails
+	// Session loading should succeed even if MCP connection fails.
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 
-	// Verify session was stored
+	// Verify session was stored.
 	acpAgent.mu.RLock()
 	loadedSession, exists := acpAgent.sessions[req.SessionId]
 	acpAgent.mu.RUnlock()
@@ -156,7 +157,7 @@ func TestSpinACPAgent_LoadSession_InvalidMcpServer(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create and save a session
+	// Create and save a session.
 	sess := session.NewSession("/tmp/test")
 	err = storage.Save(sess.ID, *sess)
 	require.NoError(t, err)

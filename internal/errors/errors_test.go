@@ -51,7 +51,8 @@ func TestError_Unwrap(t *testing.T) {
 		Err:     underlying,
 	}
 
-	if got := err.Unwrap(); got != underlying {
+	got := err.Unwrap()
+	if got != underlying {
 		t.Errorf("Error.Unwrap() = %v, want %v", got, underlying)
 	}
 }
@@ -63,12 +64,15 @@ func TestNew(t *testing.T) {
 	if err.Code != CodeTimeout {
 		t.Errorf("New().Code = %v, want %v", err.Code, CodeTimeout)
 	}
+
 	if err.Op != "Test.Op" {
 		t.Errorf("New().Op = %v, want %v", err.Op, "Test.Op")
 	}
+
 	if err.Message != "timeout occurred" {
 		t.Errorf("New().Message = %v, want %v", err.Message, "timeout occurred")
 	}
+
 	if err.Err != underlying {
 		t.Errorf("New().Err = %v, want %v", err.Err, underlying)
 	}
@@ -81,9 +85,11 @@ func TestNewf(t *testing.T) {
 	if err.Code != CodeValidation {
 		t.Errorf("Newf().Code = %v, want %v", err.Code, CodeValidation)
 	}
+
 	if err.Message != "invalid value: 42" {
 		t.Errorf("Newf().Message = %v, want %v", err.Message, "invalid value: 42")
 	}
+
 	if err.Err != underlying {
 		t.Errorf("Newf().Err = %v, want %v", err.Err, underlying)
 	}
@@ -133,7 +139,7 @@ func TestErrorCodes(t *testing.T) {
 		{CodeInternal, "internal"},
 		{CodeNetwork, "network"},
 		{CodeIO, "io"},
-		// New error codes for patch/git operations
+		// New error codes for patch/git operations.
 		{CodePatch, "patch"},
 		{CodeGit, "git"},
 		{CodeContextMismatch, "context_mismatch"},
@@ -149,28 +155,28 @@ func TestErrorCodes(t *testing.T) {
 }
 
 func TestErrorChaining(t *testing.T) {
-	// Create error chain: root -> middle -> top
+	// Create error chain: root -> middle -> top.
 	root := errors.New("root cause")
 	middle := New(CodeNetwork, "Middle.Op", "network error", root)
 	top := New(CodeInternal, "Top.Op", "operation failed", middle)
 
-	// Test that we can find the root error
+	// Test that we can find the root error.
 	if !errors.Is(top, root) {
 		t.Error("errors.Is() should find root error through chain")
 	}
 
-	// Test that we can extract structured error info
+	// Test that we can extract structured error info.
 	var structErr *Error
 	if !errors.As(top, &structErr) {
 		t.Fatal("errors.As() should find *Error in chain")
 	}
 
-	// Should get the top-level error
+	// Should get the top-level error.
 	if structErr.Code != CodeInternal {
 		t.Errorf("errors.As() extracted Code = %v, want %v", structErr.Code, CodeInternal)
 	}
 
-	// Unwrap to get middle error
+	// Unwrap to get middle error.
 	unwrapped := structErr.Unwrap()
 	if unwrapped == nil {
 		t.Fatal("Unwrap() should return middle error")
@@ -187,8 +193,8 @@ func TestErrorChaining(t *testing.T) {
 }
 
 func ExampleNew() {
-	// Create a structured error wrapping an underlying error
-	underlying := fmt.Errorf("connection refused")
+	// Create a structured error wrapping an underlying error.
+	underlying := errors.New("connection refused")
 	err := New(CodeNetwork, "Client.Connect", "failed to connect to server", underlying)
 
 	fmt.Println(err)
@@ -196,7 +202,7 @@ func ExampleNew() {
 }
 
 func ExampleNewf() {
-	// Create a structured error with formatted message
+	// Create a structured error with formatted message.
 	err := Newf(CodeValidation, "Config.Validate", nil, "invalid timeout: %d seconds", -5)
 
 	fmt.Println(err)
@@ -204,11 +210,11 @@ func ExampleNewf() {
 }
 
 func ExampleAs() {
-	// Create an error chain
-	underlying := fmt.Errorf("disk full")
+	// Create an error chain.
+	underlying := errors.New("disk full")
 	err := New(CodeIO, "File.Write", "failed to write file", underlying)
 
-	// Extract structured error information
+	// Extract structured error information.
 	var structErr *Error
 	if errors.As(err, &structErr) {
 		fmt.Printf("Code: %s, Op: %s\n", structErr.Code, structErr.Op)
@@ -220,11 +226,12 @@ func ExampleAs() {
 func TestSpinErrorInterface(t *testing.T) {
 	err := New(CodeLLM, "Agent.Execute", "llm failed", nil)
 
-	// Verify Error implements SpinError
+	// Verify Error implements SpinError.
 	var spinErr SpinError = err
-	_ = spinErr // Compile-time check
 
-	// Test GetCode() method
+	_ = spinErr // Compile-time check.
+
+	// Test GetCode() method.
 	if got := err.GetCode(); got != CodeLLM {
 		t.Errorf("GetCode() = %v, want %v", got, CodeLLM)
 	}
@@ -233,6 +240,7 @@ func TestSpinErrorInterface(t *testing.T) {
 // TestSpinError_Operation verifies Operation() returns correct operation.
 func TestSpinError_Operation(t *testing.T) {
 	const expectedOp = "Tool.ReadFile"
+
 	err := New(CodeIO, expectedOp, "read failed", nil)
 
 	if got := err.Operation(); got != expectedOp {
@@ -245,7 +253,8 @@ func TestSpinError_UnwrapMethod(t *testing.T) {
 	underlying := errors.New("underlying cause")
 	err := New(CodeInternal, "Test.Op", "test error", underlying)
 
-	if got := err.Unwrap(); got != underlying {
+	got := err.Unwrap()
+	if got != underlying {
 		t.Errorf("Unwrap() = %v, want %v", got, underlying)
 	}
 }
@@ -254,7 +263,8 @@ func TestSpinError_UnwrapMethod(t *testing.T) {
 func TestSpinError_NilUnderlying(t *testing.T) {
 	err := New(CodeValidation, "Test.Op", "validation failed", nil)
 
-	if got := err.Unwrap(); got != nil {
+	got := err.Unwrap()
+	if got != nil {
 		t.Errorf("Unwrap() = %v, want nil", got)
 	}
 }

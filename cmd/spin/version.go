@@ -3,8 +3,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/dmytrogajewski/spin/internal/version"
 	"github.com/spf13/cobra"
+
+	"github.com/dmytrogajewski/spin/internal/version"
 )
 
 var (
@@ -21,6 +22,7 @@ func newVersionCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if versionShort {
 				fmt.Fprintln(cmd.OutOrStdout(), version.ShortVersion())
+
 				return nil
 			}
 
@@ -30,11 +32,13 @@ func newVersionCmd() *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "  commit: %s\n", info.Commit)
 				fmt.Fprintf(cmd.OutOrStdout(), "  built: %s\n", info.BuildDate)
 				fmt.Fprintf(cmd.OutOrStdout(), "  go: %s\n", info.GoVersion)
+
 				return nil
 			}
 
-			// Default: full version string
+			// Default: full version string.
 			fmt.Fprintln(cmd.OutOrStdout(), version.String())
+
 			return nil
 		},
 	}

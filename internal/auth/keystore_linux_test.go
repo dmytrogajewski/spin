@@ -12,17 +12,17 @@ import (
 func TestLinuxKeystore_Get(t *testing.T) {
 	ks := &linuxKeystore{}
 
-	// Clean up before test
+	// Clean up before test.
 	keyring.Delete(serviceName, "test-key")
 
-	// Set a value first
+	// Set a value first.
 	err := keyring.Set(serviceName, "test-key", "test-value")
 	if err != nil {
 		t.Skipf("Secret Service not available: %v", err)
 	}
 	defer keyring.Delete(serviceName, "test-key")
 
-	// Get the value
+	// Get the value.
 	value, err := ks.Get("test-key")
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
@@ -37,7 +37,7 @@ func TestLinuxKeystore_Get(t *testing.T) {
 func TestLinuxKeystore_Get_NotFound(t *testing.T) {
 	ks := &linuxKeystore{}
 
-	// Clean up to ensure it doesn't exist
+	// Clean up to ensure it doesn't exist.
 	keyring.Delete(serviceName, "nonexistent")
 
 	_, err := ks.Get("nonexistent")
@@ -54,17 +54,17 @@ func TestLinuxKeystore_Get_NotFound(t *testing.T) {
 func TestLinuxKeystore_Set(t *testing.T) {
 	ks := &linuxKeystore{}
 
-	// Clean up before test
+	// Clean up before test.
 	keyring.Delete(serviceName, "test-set")
 	defer keyring.Delete(serviceName, "test-set")
 
-	// Set a value
+	// Set a value.
 	err := ks.Set("test-set", "new-value")
 	if err != nil {
 		t.Skipf("Secret Service not available: %v", err)
 	}
 
-	// Verify it was stored
+	// Verify it was stored.
 	value, err := keyring.Get(serviceName, "test-set")
 	if err != nil {
 		t.Fatalf("Failed to verify set: %v", err)
@@ -79,23 +79,23 @@ func TestLinuxKeystore_Set(t *testing.T) {
 func TestLinuxKeystore_Set_Overwrite(t *testing.T) {
 	ks := &linuxKeystore{}
 
-	// Clean up before test
+	// Clean up before test.
 	keyring.Delete(serviceName, "test-overwrite")
 	defer keyring.Delete(serviceName, "test-overwrite")
 
-	// Set initial value
+	// Set initial value.
 	err := keyring.Set(serviceName, "test-overwrite", "old-value")
 	if err != nil {
 		t.Skipf("Secret Service not available: %v", err)
 	}
 
-	// Overwrite with new value
+	// Overwrite with new value.
 	err = ks.Set("test-overwrite", "new-value")
 	if err != nil {
 		t.Fatalf("Set() error = %v", err)
 	}
 
-	// Verify new value
+	// Verify new value.
 	value, err := keyring.Get(serviceName, "test-overwrite")
 	if err != nil {
 		t.Fatalf("Failed to verify overwrite: %v", err)
@@ -110,22 +110,22 @@ func TestLinuxKeystore_Set_Overwrite(t *testing.T) {
 func TestLinuxKeystore_Delete(t *testing.T) {
 	ks := &linuxKeystore{}
 
-	// Clean up before test
+	// Clean up before test.
 	keyring.Delete(serviceName, "test-delete")
 
-	// Set a value first
+	// Set a value first.
 	err := keyring.Set(serviceName, "test-delete", "test-value")
 	if err != nil {
 		t.Skipf("Secret Service not available: %v", err)
 	}
 
-	// Delete it
+	// Delete it.
 	err = ks.Delete("test-delete")
 	if err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 
-	// Verify it's gone
+	// Verify it's gone.
 	_, err = keyring.Get(serviceName, "test-delete")
 	if err == nil {
 		t.Error("Value still exists after delete")
@@ -136,10 +136,10 @@ func TestLinuxKeystore_Delete(t *testing.T) {
 func TestLinuxKeystore_Delete_Idempotent(t *testing.T) {
 	ks := &linuxKeystore{}
 
-	// Ensure it doesn't exist
+	// Ensure it doesn't exist.
 	keyring.Delete(serviceName, "nonexistent-delete")
 
-	// Delete should not error
+	// Delete should not error.
 	err := ks.Delete("nonexistent-delete")
 	if err != nil {
 		t.Errorf("Delete() error = %v, want nil", err)
@@ -155,7 +155,7 @@ func TestLinuxKeystore_List(t *testing.T) {
 		t.Fatal("List() expected error, got nil")
 	}
 
-	// Should mention not supported
+	// Should mention not supported.
 	if err.Error() == "" {
 		t.Error("List() error message is empty")
 	}
@@ -168,17 +168,17 @@ func TestLinuxKeystore_Integration(t *testing.T) {
 	testKey := "integration-test"
 	testValue := "integration-value"
 
-	// Clean up before and after
+	// Clean up before and after.
 	keyring.Delete(serviceName, testKey)
 	defer keyring.Delete(serviceName, testKey)
 
-	// Store
+	// Store.
 	err := ks.Set(testKey, testValue)
 	if err != nil {
 		t.Skipf("Secret Service not available: %v", err)
 	}
 
-	// Retrieve
+	// Retrieve.
 	value, err := ks.Get(testKey)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
@@ -188,14 +188,15 @@ func TestLinuxKeystore_Integration(t *testing.T) {
 		t.Errorf("Get() = %q, want %q", value, testValue)
 	}
 
-	// Update
+	// Update.
 	newValue := "updated-value"
+
 	err = ks.Set(testKey, newValue)
 	if err != nil {
 		t.Fatalf("Set() update error = %v", err)
 	}
 
-	// Verify update
+	// Verify update.
 	value, err = ks.Get(testKey)
 	if err != nil {
 		t.Fatalf("Get() after update error = %v", err)
@@ -205,13 +206,13 @@ func TestLinuxKeystore_Integration(t *testing.T) {
 		t.Errorf("Get() after update = %q, want %q", value, newValue)
 	}
 
-	// Delete
+	// Delete.
 	err = ks.Delete(testKey)
 	if err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 
-	// Verify deleted
+	// Verify deleted.
 	_, err = ks.Get(testKey)
 	if err != ErrNotFound {
 		t.Errorf("Get() after delete error = %v, want ErrNotFound", err)
@@ -226,7 +227,7 @@ func TestNewPlatformKeystore(t *testing.T) {
 		t.Fatal("newPlatformKeystore() returned nil")
 	}
 
-	// Should be either linuxKeystore or memoryKeystore (fallback)
+	// Should be either linuxKeystore or memoryKeystore (fallback).
 	switch ks.(type) {
 	case *linuxKeystore:
 		t.Log("Using Linux Secret Service keystore")
@@ -243,10 +244,11 @@ func TestIsSecretServiceAvailable(t *testing.T) {
 	t.Logf("Secret Service available: %v", available)
 
 	// The result depends on the environment, just verify it doesn't panic
-	// and returns a boolean
+	// and returns a boolean.
 	if available {
-		// If available, we should be able to use it
+		// If available, we should be able to use it.
 		ks := &linuxKeystore{}
+
 		_, err := ks.Get("test-availability")
 		if err != nil && err != ErrNotFound {
 			t.Logf("Secret Service reported available but Get failed: %v", err)
@@ -260,17 +262,17 @@ func TestLinuxKeystore_EmptyValue(t *testing.T) {
 
 	testKey := "empty-value-test"
 
-	// Clean up
+	// Clean up.
 	keyring.Delete(serviceName, testKey)
 	defer keyring.Delete(serviceName, testKey)
 
-	// Set empty value
+	// Set empty value.
 	err := ks.Set(testKey, "")
 	if err != nil {
 		t.Skipf("Secret Service not available: %v", err)
 	}
 
-	// Get empty value
+	// Get empty value.
 	value, err := ks.Get(testKey)
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
@@ -298,17 +300,17 @@ func TestLinuxKeystore_SpecialCharacters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clean up
+			// Clean up.
 			keyring.Delete(serviceName, tt.key)
 			defer keyring.Delete(serviceName, tt.key)
 
-			// Set
+			// Set.
 			err := ks.Set(tt.key, tt.value)
 			if err != nil {
 				t.Skipf("Secret Service not available: %v", err)
 			}
 
-			// Get
+			// Get.
 			value, err := ks.Get(tt.key)
 			if err != nil {
 				t.Fatalf("Get() error = %v", err)

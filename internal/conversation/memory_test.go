@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/memory"
-	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/memory"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 func TestMemoryService_NewMemoryService(t *testing.T) {
@@ -36,7 +37,7 @@ func TestBuilder_registerMemoryTools_NilService(t *testing.T) {
 	err := builder.registerMemoryTools(registry)
 	assert.NoError(t, err)
 
-	// No memory tools should be registered
+	// No memory tools should be registered.
 	_, err = registry.Get("scratchpad")
 	assert.Error(t, err)
 	_, err = registry.Get("memory")
@@ -52,12 +53,12 @@ func TestBuilder_registerMemoryTools_WithScratchpad(t *testing.T) {
 	err := builder.registerMemoryTools(registry)
 	assert.NoError(t, err)
 
-	// Scratchpad tool should be registered
+	// Scratchpad tool should be registered.
 	tool, err := registry.Get("scratchpad")
 	assert.NoError(t, err)
 	assert.Equal(t, "scratchpad", tool.Name())
 
-	// Memory tool should not be registered
+	// Memory tool should not be registered.
 	_, err = registry.Get("memory")
 	assert.Error(t, err)
 }
@@ -74,11 +75,11 @@ func TestBuilder_registerMemoryTools_WithPersistent(t *testing.T) {
 	err = builder.registerMemoryTools(registry)
 	assert.NoError(t, err)
 
-	// Scratchpad tool should not be registered
+	// Scratchpad tool should not be registered.
 	_, err = registry.Get("scratchpad")
 	assert.Error(t, err)
 
-	// Memory tool should be registered
+	// Memory tool should be registered.
 	tool, err := registry.Get("memory")
 	assert.NoError(t, err)
 	assert.Equal(t, "memory", tool.Name())
@@ -97,7 +98,7 @@ func TestBuilder_registerMemoryTools_WithBoth(t *testing.T) {
 	err = builder.registerMemoryTools(registry)
 	assert.NoError(t, err)
 
-	// Both tools should be registered
+	// Both tools should be registered.
 	tool1, err := registry.Get("scratchpad")
 	assert.NoError(t, err)
 	assert.Equal(t, "scratchpad", tool1.Name())
@@ -117,7 +118,7 @@ func TestBuilder_registerMemoryTools_ToolsWork(t *testing.T) {
 	err := builder.registerMemoryTools(registry)
 	require.NoError(t, err)
 
-	// Test executing the scratchpad tool
+	// Test executing the scratchpad tool.
 	params, err := tools.FromMap(map[string]any{
 		"operation": "put",
 		"key":       "test-key",
@@ -129,7 +130,7 @@ func TestBuilder_registerMemoryTools_ToolsWork(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, result.Success)
 
-	// Verify entry was stored
+	// Verify entry was stored.
 	entry, err := scratchpad.Get(ctx, "test-key")
 	require.NoError(t, err)
 	assert.Equal(t, "test-value", entry.Value)
@@ -157,7 +158,7 @@ func TestMemoryService_NewSessionHandoff(t *testing.T) {
 
 	service := NewMemoryService(nil, persistent)
 
-	// With nil summarizer (uses default)
+	// With nil summarizer (uses default).
 	handoff := service.NewSessionHandoff(nil)
 	assert.NotNil(t, handoff)
 }

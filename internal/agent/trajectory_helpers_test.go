@@ -76,12 +76,15 @@ func TestExtractNewSteps(t *testing.T) {
 		if got.StepNumber != want.StepNumber {
 			t.Errorf("StepNumber = %d, want %d", got.StepNumber, want.StepNumber)
 		}
+
 		if got.Type != want.Type {
 			t.Errorf("Type = %q, want %q", got.Type, want.Type)
 		}
+
 		if got.Content != want.Content {
 			t.Errorf("Content = %q, want %q", got.Content, want.Content)
 		}
+
 		if !got.Timestamp.Equal(want.Timestamp) {
 			t.Errorf("Timestamp = %v, want %v", got.Timestamp, want.Timestamp)
 		}
@@ -116,9 +119,11 @@ func TestExtractNewSteps(t *testing.T) {
 		if got.StepNumber != 0 {
 			t.Errorf("StepNumber = %d, want 0", got.StepNumber)
 		}
+
 		if got.Type != "tool_call" {
 			t.Errorf("Type = %q, want %q", got.Type, "tool_call")
 		}
+
 		wantContent := "Tool: read_file\nArguments: {\"path\": \"main.go\"}"
 		if got.Content != wantContent {
 			t.Errorf("Content = %q, want %q", got.Content, wantContent)
@@ -146,9 +151,11 @@ func TestExtractNewSteps(t *testing.T) {
 		if got.StepNumber != 0 {
 			t.Errorf("StepNumber = %d, want 0", got.StepNumber)
 		}
+
 		if got.Type != "tool_result" {
 			t.Errorf("Type = %q, want %q", got.Type, "tool_result")
 		}
+
 		wantContent := "Tool Result (ID: call_1):\npackage main\n\nfunc main() {}"
 		if got.Content != wantContent {
 			t.Errorf("Content = %q, want %q", got.Content, wantContent)

@@ -11,7 +11,7 @@ import (
 func TestFileSearchTool_BasicSearch(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create test files
+	// Create test files.
 	files := []string{
 		"test.txt",
 		"test_helper.go",
@@ -25,18 +25,18 @@ func TestFileSearchTool_BasicSearch(t *testing.T) {
 		if dir != tmpDir {
 			os.MkdirAll(dir, 0755)
 		}
+
 		os.WriteFile(filepath.Join(tmpDir, file), []byte("content"), 0644)
 	}
 
 	tool := NewFileSearchTool(tmpDir)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"query": "test",
 		"limit": 5,
 	})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestFileSearchTool_BasicSearch(t *testing.T) {
 		t.Fatalf("expected success, got error: %s", result.Error)
 	}
 
-	// Should find files with "test" in the name
+	// Should find files with "test" in the name.
 	if !strings.Contains(result.Output, "test") {
 		t.Errorf("expected output to contain 'test', got: %s", result.Output)
 	}
@@ -55,10 +55,9 @@ func TestFileSearchTool_MissingQuery(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewFileSearchTool(tmpDir)
 
-	params, _ := FromMap(map[string]interface{}{})
+	params, _ := FromMap(map[string]any{})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -75,17 +74,16 @@ func TestFileSearchTool_MissingQuery(t *testing.T) {
 func TestFileSearchTool_NoResults(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create one file that won't match
+	// Create one file that won't match.
 	os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte("content"), 0644)
 
 	tool := NewFileSearchTool(tmpDir)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"query": "nonexistent_unique_string_xyz",
 	})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -103,20 +101,19 @@ func TestFileSearchTool_CustomWorkspace(t *testing.T) {
 	workspace1 := t.TempDir()
 	workspace2 := t.TempDir()
 
-	// Create files in workspace2
+	// Create files in workspace2.
 	os.WriteFile(filepath.Join(workspace2, "search_me.txt"), []byte("content"), 0644)
 
-	// Tool with workspace1 as default
+	// Tool with workspace1 as default.
 	tool := NewFileSearchTool(workspace1)
 
-	// Search in workspace2
-	params, _ := FromMap(map[string]interface{}{
+	// Search in workspace2.
+	params, _ := FromMap(map[string]any{
 		"query":          "search",
 		"workspace_root": workspace2,
 	})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -138,7 +135,7 @@ func TestFileSearchTool_Schema(t *testing.T) {
 		t.Errorf("expected name 'file_search', got: %s", schema.Function.Name)
 	}
 
-	// Verify required parameter
+	// Verify required parameter.
 	required := schema.Function.Parameters.Required
 	if len(required) != 1 || required[0] != "query" {
 		t.Errorf("expected required parameter 'query', got: %v", required)
@@ -150,25 +147,27 @@ func TestFileSearchTool_ErrorCases(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		params map[string]interface{}
+		params map[string]any
 	}{
 		{
 			name:   "missing query",
-			params: map[string]interface{}{},
+			params: map[string]any{},
 		},
 		{
 			name:   "invalid query type",
-			params: map[string]interface{}{"query": 123},
+			params: map[string]any{"query": 123},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			params, _ := FromMap(tt.params)
+
 			result, err := tool.Execute(context.Background(), params)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
+
 			if result.Success {
 				t.Error("expected failure result")
 			}

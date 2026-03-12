@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -65,7 +66,7 @@ func (p *MockProvider) Complete(ctx context.Context, params openai.ChatCompletio
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	// Simulate delay if configured
+	// Simulate delay if configured.
 	if p.delay > 0 {
 		select {
 		case <-time.After(p.delay):
@@ -74,24 +75,24 @@ func (p *MockProvider) Complete(ctx context.Context, params openai.ChatCompletio
 		}
 	}
 
-	// Return error if configured
+	// Return error if configured.
 	if p.err != nil {
 		return nil, p.err
 	}
 
-	// Determine finish reason
+	// Determine finish reason.
 	finishReason := openai.ChatCompletionChoicesFinishReasonStop
 	if len(p.toolCalls) > 0 {
 		finishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
 	}
 
-	// Count messages for usage calculation
+	// Count messages for usage calculation.
 	messageCount := 0
 	if params.Messages.Present {
 		messageCount = len(params.Messages.Value)
 	}
 
-	// Build response
+	// Build response.
 	resp := &openai.ChatCompletion{
 		ID:      fmt.Sprintf("mock-%d", time.Now().UnixNano()),
 		Created: time.Now().Unix(),
@@ -123,7 +124,7 @@ func (p *MockProvider) Stream(ctx context.Context, params openai.ChatCompletionN
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	// Return error immediately if configured
+	// Return error immediately if configured.
 	if p.err != nil {
 		return nil, p.err
 	}
@@ -134,9 +135,9 @@ func (p *MockProvider) Stream(ctx context.Context, params openai.ChatCompletionN
 	go func() {
 		defer close(chunks)
 
-		// Send content chunks or tool calls
+		// Send content chunks or tool calls.
 		if len(p.streamChunks) > 0 {
-			// Stream configured chunks
+			// Stream configured chunks.
 			for _, content := range p.streamChunks {
 				select {
 				case <-ctx.Done():
@@ -158,7 +159,7 @@ func (p *MockProvider) Stream(ctx context.Context, params openai.ChatCompletionN
 				}:
 				}
 
-				// Simulate delay between chunks
+				// Simulate delay between chunks.
 				if p.delay > 0 {
 					select {
 					case <-time.After(p.delay):
@@ -168,7 +169,7 @@ func (p *MockProvider) Stream(ctx context.Context, params openai.ChatCompletionN
 				}
 			}
 		} else if len(p.toolCalls) > 0 {
-			// Stream tool calls
+			// Stream tool calls.
 			toolCallChunks := make([]openai.ChatCompletionChunkChoicesDeltaToolCall, len(p.toolCalls))
 			for i, tc := range p.toolCalls {
 				toolCallChunks[i] = openai.ChatCompletionChunkChoicesDeltaToolCall{
@@ -203,7 +204,7 @@ func (p *MockProvider) Stream(ctx context.Context, params openai.ChatCompletionN
 			}
 		} else {
 			// Stream response as single chunk
-			// Apply delay before sending if configured
+			// Apply delay before sending if configured.
 			if p.delay > 0 {
 				select {
 				case <-time.After(p.delay):
@@ -233,7 +234,7 @@ func (p *MockProvider) Stream(ctx context.Context, params openai.ChatCompletionN
 			}
 		}
 
-		// Send done chunk with finish reason
+		// Send done chunk with finish reason.
 		finishReason := openai.ChatCompletionChunkChoicesFinishReasonStop
 		if len(p.toolCalls) > 0 {
 			finishReason = openai.ChatCompletionChunkChoicesFinishReasonToolCalls
@@ -276,6 +277,7 @@ func (p *MockProvider) Models(ctx context.Context) ([]openai.Model, error) {
 func (p *MockProvider) Capabilities() Capabilities {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
+
 	return p.capabilities
 }
 
@@ -286,7 +288,7 @@ func (p *MockProvider) Name() string {
 
 // Close implements Provider.Close.
 func (p *MockProvider) Close() error {
-	// Mock provider has no resources to clean up
+	// Mock provider has no resources to clean up.
 	return nil
 }
 
@@ -295,6 +297,7 @@ func (p *MockProvider) Close() error {
 func (p *MockProvider) SetResponse(response string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
 	p.response = response
 }
 
@@ -303,6 +306,7 @@ func (p *MockProvider) SetResponse(response string) {
 func (p *MockProvider) SetError(err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
 	p.err = err
 }
 
@@ -311,6 +315,7 @@ func (p *MockProvider) SetError(err error) {
 func (p *MockProvider) SetToolCalls(calls []openai.ChatCompletionMessageToolCall) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
 	p.toolCalls = calls
 }
 
@@ -342,11 +347,14 @@ func WithToolCalls(calls []openai.ChatCompletionMessageToolCall) MockOption {
 func WithStreaming(chunks []string) MockOption {
 	return func(p *MockProvider) {
 		p.streamChunks = chunks
-		// Build response from chunks
+		// Build response from chunks.
 		var combined string
+		var combinedSb351 strings.Builder
 		for _, chunk := range chunks {
-			combined += chunk
+			combinedSb351.WriteString(chunk)
 		}
+		combined += combinedSb351.String()
+
 		p.response = combined
 	}
 }

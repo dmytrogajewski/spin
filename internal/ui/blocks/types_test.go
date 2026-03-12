@@ -149,64 +149,76 @@ func TestSeverity_Valid(t *testing.T) {
 }
 
 func TestBlockType_Constants(t *testing.T) {
-	// Test that all constants are properly defined
+	// Test that all constants are properly defined.
 	if BlockTypeExecute != "EXECUTE" {
 		t.Errorf("BlockTypeExecute = %v, want %v", BlockTypeExecute, "EXECUTE")
 	}
+
 	if BlockTypePlan != "PLAN" {
 		t.Errorf("BlockTypePlan = %v, want %v", BlockTypePlan, "PLAN")
 	}
+
 	if BlockTypeRead != "READ" {
 		t.Errorf("BlockTypeRead = %v, want %v", BlockTypeRead, "READ")
 	}
+
 	if BlockTypeGrep != "GREP" {
 		t.Errorf("BlockTypeGrep = %v, want %v", BlockTypeGrep, "GREP")
 	}
+
 	if BlockTypeApplyPatch != "APPLY_PATCH" {
 		t.Errorf("BlockTypeApplyPatch = %v, want %v", BlockTypeApplyPatch, "APPLY_PATCH")
 	}
+
 	if BlockTypeSummary != "SUMMARY" {
 		t.Errorf("BlockTypeSummary = %v, want %v", BlockTypeSummary, "SUMMARY")
 	}
+
 	if BlockTypeTool != "TOOL" {
 		t.Errorf("BlockTypeTool = %v, want %v", BlockTypeTool, "TOOL")
 	}
+
 	if BlockTypeTesting != "TESTING" {
 		t.Errorf("BlockTypeTesting = %v, want %v", BlockTypeTesting, "TESTING")
 	}
+
 	if BlockTypeNotice != "NOTICE" {
 		t.Errorf("BlockTypeNotice = %v, want %v", BlockTypeNotice, "NOTICE")
 	}
+
 	if BlockTypeError != "ERROR" {
 		t.Errorf("BlockTypeError = %v, want %v", BlockTypeError, "ERROR")
 	}
 }
 
 func TestFoldState_Constants(t *testing.T) {
-	// Test that all constants are properly defined
+	// Test that all constants are properly defined.
 	if FoldStateExpanded != "expanded" {
 		t.Errorf("FoldStateExpanded = %v, want %v", FoldStateExpanded, "expanded")
 	}
+
 	if FoldStateCollapsed != "collapsed" {
 		t.Errorf("FoldStateCollapsed = %v, want %v", FoldStateCollapsed, "collapsed")
 	}
 }
 
 func TestSeverity_Constants(t *testing.T) {
-	// Test that all constants are properly defined
+	// Test that all constants are properly defined.
 	if SeverityInfo != "info" {
 		t.Errorf("SeverityInfo = %v, want %v", SeverityInfo, "info")
 	}
+
 	if SeverityWarn != "warn" {
 		t.Errorf("SeverityWarn = %v, want %v", SeverityWarn, "warn")
 	}
+
 	if SeverityError != "error" {
 		t.Errorf("SeverityError = %v, want %v", SeverityError, "error")
 	}
 }
 
 func TestBlockType_AllValid(t *testing.T) {
-	// Test that all defined block types are valid
+	// Test that all defined block types are valid.
 	blockTypes := []BlockType{
 		BlockTypeExecute,
 		BlockTypePlan,
@@ -228,7 +240,7 @@ func TestBlockType_AllValid(t *testing.T) {
 }
 
 func TestFoldState_AllValid(t *testing.T) {
-	// Test that all defined fold states are valid
+	// Test that all defined fold states are valid.
 	foldStates := []FoldState{
 		FoldStateExpanded,
 		FoldStateCollapsed,
@@ -242,7 +254,7 @@ func TestFoldState_AllValid(t *testing.T) {
 }
 
 func TestSeverity_AllValid(t *testing.T) {
-	// Test that all defined severities are valid
+	// Test that all defined severities are valid.
 	severities := []Severity{
 		SeverityInfo,
 		SeverityWarn,

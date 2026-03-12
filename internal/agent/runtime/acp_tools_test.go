@@ -22,11 +22,13 @@ func (m *mockFilesystemClient) ReadTextFile(ctx context.Context, path string, li
 	if m.readErr != nil {
 		return "", m.readErr
 	}
+
 	return m.readContent, nil
 }
 
 func (m *mockFilesystemClient) WriteTextFile(ctx context.Context, path, content string) error {
 	m.writePath = path
+
 	return m.writeErr
 }
 
@@ -106,7 +108,7 @@ func TestACPWriteFileTool_PathResolution(t *testing.T) {
 			}
 			tool := NewACPWriteFileTool(runtime)
 
-			params, err := tools.FromMap(map[string]interface{}{
+			params, err := tools.FromMap(map[string]any{
 				"path":    tt.inputPath,
 				"content": "test content",
 			})
@@ -123,6 +125,7 @@ func TestACPWriteFileTool_PathResolution(t *testing.T) {
 				if result.Success {
 					t.Errorf("expected failure but got success")
 				}
+
 				if tt.errorContains != "" && !containsString(result.Error, tt.errorContains) {
 					t.Errorf("expected error to contain %q, got %q", tt.errorContains, result.Error)
 				}
@@ -130,6 +133,7 @@ func TestACPWriteFileTool_PathResolution(t *testing.T) {
 				if !result.Success {
 					t.Errorf("expected success but got error: %s", result.Error)
 				}
+
 				if mockFS.writePath != tt.expectedPath {
 					t.Errorf("expected path %q, got %q", tt.expectedPath, mockFS.writePath)
 				}
@@ -188,7 +192,7 @@ func TestACPReadFileTool_PathResolution(t *testing.T) {
 			}
 			tool := NewACPReadFileTool(runtime)
 
-			params, err := tools.FromMap(map[string]interface{}{
+			params, err := tools.FromMap(map[string]any{
 				"path": tt.inputPath,
 			})
 			if err != nil {
@@ -204,6 +208,7 @@ func TestACPReadFileTool_PathResolution(t *testing.T) {
 				if result.Success {
 					t.Errorf("expected failure but got success")
 				}
+
 				if tt.errorContains != "" && !containsString(result.Error, tt.errorContains) {
 					t.Errorf("expected error to contain %q, got %q", tt.errorContains, result.Error)
 				}
@@ -211,6 +216,7 @@ func TestACPReadFileTool_PathResolution(t *testing.T) {
 				if !result.Success {
 					t.Errorf("expected success but got error: %s", result.Error)
 				}
+
 				if mockFS.readPath != tt.expectedPath {
 					t.Errorf("expected path %q, got %q", tt.expectedPath, mockFS.readPath)
 				}
@@ -220,7 +226,7 @@ func TestACPReadFileTool_PathResolution(t *testing.T) {
 }
 
 func TestACPWriteFileTool_InvalidPathErrorMessage(t *testing.T) {
-	// Test that when the client returns "invalid path" error, we provide a helpful message
+	// Test that when the client returns "invalid path" error, we provide a helpful message.
 	mockFS := &mockFilesystemClient{
 		writeErr: errors.New("invalid path"),
 	}
@@ -230,7 +236,7 @@ func TestACPWriteFileTool_InvalidPathErrorMessage(t *testing.T) {
 	}
 	tool := NewACPWriteFileTool(runtime)
 
-	params, err := tools.FromMap(map[string]interface{}{
+	params, err := tools.FromMap(map[string]any{
 		"path":    "test.txt",
 		"content": "test content",
 	})
@@ -246,16 +252,18 @@ func TestACPWriteFileTool_InvalidPathErrorMessage(t *testing.T) {
 	if result.Success {
 		t.Error("expected failure but got success")
 	}
+
 	if !containsString(result.Error, "outside the allowed workspace") {
 		t.Errorf("expected helpful error message, got: %s", result.Error)
 	}
+
 	if !containsString(result.Error, "/home/user/workspace") {
 		t.Errorf("expected error to mention workspace directory, got: %s", result.Error)
 	}
 }
 
 func TestACPReadFileTool_InvalidPathErrorMessage(t *testing.T) {
-	// Test that when the client returns "invalid path" error, we provide a helpful message
+	// Test that when the client returns "invalid path" error, we provide a helpful message.
 	mockFS := &mockFilesystemClient{
 		readErr: errors.New("invalid path"),
 	}
@@ -265,7 +273,7 @@ func TestACPReadFileTool_InvalidPathErrorMessage(t *testing.T) {
 	}
 	tool := NewACPReadFileTool(runtime)
 
-	params, err := tools.FromMap(map[string]interface{}{
+	params, err := tools.FromMap(map[string]any{
 		"path": "test.txt",
 	})
 	if err != nil {
@@ -280,6 +288,7 @@ func TestACPReadFileTool_InvalidPathErrorMessage(t *testing.T) {
 	if result.Success {
 		t.Error("expected failure but got success")
 	}
+
 	if !containsString(result.Error, "outside the allowed workspace") {
 		t.Errorf("expected helpful error message, got: %s", result.Error)
 	}
@@ -352,6 +361,7 @@ func containsString(s, substr string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -359,15 +369,15 @@ func containsString(s, substr string) bool {
 func TestACPWriteFileTool_ContextWorkDir(t *testing.T) {
 	mockFS := &mockFilesystemClient{}
 	runtime := &ACPRuntime{
-		workDir:          "/runtime/workspace", // This should be overridden by context
+		workDir:          "/runtime/workspace", // This should be overridden by context.
 		filesystemClient: mockFS,
 	}
 	tool := NewACPWriteFileTool(runtime)
 
-	// Create context with different workDir
+	// Create context with different workDir.
 	ctx := ContextWithWorkDir(context.Background(), "/session/workspace")
 
-	params, err := tools.FromMap(map[string]interface{}{
+	params, err := tools.FromMap(map[string]any{
 		"path":    "test.py",
 		"content": "test content",
 	})
@@ -384,7 +394,7 @@ func TestACPWriteFileTool_ContextWorkDir(t *testing.T) {
 		t.Errorf("expected success but got error: %s", result.Error)
 	}
 
-	// Verify that the path was resolved using context workDir, not runtime workDir
+	// Verify that the path was resolved using context workDir, not runtime workDir.
 	expectedPath := "/session/workspace/test.py"
 	if mockFS.writePath != expectedPath {
 		t.Errorf("expected path %q (from context workDir), got %q", expectedPath, mockFS.writePath)
@@ -397,15 +407,15 @@ func TestACPReadFileTool_ContextWorkDir(t *testing.T) {
 		readContent: "test content",
 	}
 	runtime := &ACPRuntime{
-		workDir:          "/runtime/workspace", // This should be overridden by context
+		workDir:          "/runtime/workspace", // This should be overridden by context.
 		filesystemClient: mockFS,
 	}
 	tool := NewACPReadFileTool(runtime)
 
-	// Create context with different workDir
+	// Create context with different workDir.
 	ctx := ContextWithWorkDir(context.Background(), "/session/workspace")
 
-	params, err := tools.FromMap(map[string]interface{}{
+	params, err := tools.FromMap(map[string]any{
 		"path": "test.py",
 	})
 	if err != nil {
@@ -421,7 +431,7 @@ func TestACPReadFileTool_ContextWorkDir(t *testing.T) {
 		t.Errorf("expected success but got error: %s", result.Error)
 	}
 
-	// Verify that the path was resolved using context workDir, not runtime workDir
+	// Verify that the path was resolved using context workDir, not runtime workDir.
 	expectedPath := "/session/workspace/test.py"
 	if mockFS.readPath != expectedPath {
 		t.Errorf("expected path %q (from context workDir), got %q", expectedPath, mockFS.readPath)
@@ -437,10 +447,10 @@ func TestACPWriteFileTool_FallbackToRuntimeWorkDir(t *testing.T) {
 	}
 	tool := NewACPWriteFileTool(runtime)
 
-	// Use context without workDir
+	// Use context without workDir.
 	ctx := context.Background()
 
-	params, err := tools.FromMap(map[string]interface{}{
+	params, err := tools.FromMap(map[string]any{
 		"path":    "test.py",
 		"content": "test content",
 	})
@@ -457,7 +467,7 @@ func TestACPWriteFileTool_FallbackToRuntimeWorkDir(t *testing.T) {
 		t.Errorf("expected success but got error: %s", result.Error)
 	}
 
-	// Verify that the path was resolved using runtime workDir
+	// Verify that the path was resolved using runtime workDir.
 	expectedPath := "/runtime/workspace/test.py"
 	if mockFS.writePath != expectedPath {
 		t.Errorf("expected path %q (from runtime workDir), got %q", expectedPath, mockFS.writePath)

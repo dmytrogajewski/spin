@@ -11,13 +11,13 @@ import (
 type SpinnerStyle int
 
 const (
-	// SpinnerDots uses a dots animation: ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏
+	// SpinnerDots uses a dots animation: ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏.
 	SpinnerDots SpinnerStyle = iota
-	// SpinnerBraille uses a braille spinner: ⣾ ⣽ ⣻ ⢿ ⡿ ⣟ ⣯ ⣷
+	// SpinnerBraille uses a braille spinner: ⣾ ⣽ ⣻ ⢿ ⡿ ⣟ ⣯ ⣷.
 	SpinnerBraille
-	// SpinnerCircle uses a simple circle: ◐ ◓ ◑ ◒
+	// SpinnerCircle uses a simple circle: ◐ ◓ ◑ ◒.
 	SpinnerCircle
-	// SpinnerPulse uses a pulsing dot: · • ● ◉ ● • ·
+	// SpinnerPulse uses a pulsing dot: · • ● ◉ ● • ·.
 	SpinnerPulse
 )
 
@@ -37,7 +37,7 @@ type Spinner struct {
 	index    int
 	running  bool
 	interval time.Duration
-	onUpdate func() // Callback to trigger UI refresh
+	onUpdate func() // Callback to trigger UI refresh.
 
 	cancel context.CancelFunc
 }
@@ -52,7 +52,7 @@ func NewSpinner(style SpinnerStyle) *Spinner {
 	return &Spinner{
 		style:    style,
 		frames:   frames,
-		interval: 80 * time.Millisecond, // Default animation speed
+		interval: 80 * time.Millisecond, // Default animation speed.
 	}
 }
 
@@ -72,6 +72,7 @@ func (s *Spinner) SetStyle(style SpinnerStyle) {
 func (s *Spinner) SetInterval(d time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.interval = d
 }
 
@@ -80,6 +81,7 @@ func (s *Spinner) SetInterval(d time.Duration) {
 func (s *Spinner) SetUpdateCallback(callback func()) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.onUpdate = callback
 }
 
@@ -88,18 +90,20 @@ func (s *Spinner) Start(ctx context.Context) {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
+
 		return
 	}
+
 	s.running = true
 	s.index = 0
 
-	// Create cancelable context
+	// Create cancelable context.
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 	interval := s.interval
 	s.mu.Unlock()
 
-	// Start animation goroutine
+	// Start animation goroutine.
 	go s.animate(ctx, interval)
 }
 
@@ -123,6 +127,7 @@ func (s *Spinner) Stop() {
 func (s *Spinner) IsRunning() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return s.running
 }
 
@@ -143,7 +148,7 @@ func (s *Spinner) animate(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// Ensure running is set to false when animation stops
+	// Ensure running is set to false when animation stops.
 	defer func() {
 		s.mu.Lock()
 		s.running = false
@@ -158,13 +163,15 @@ func (s *Spinner) animate(ctx context.Context, interval time.Duration) {
 			s.mu.Lock()
 			if !s.running {
 				s.mu.Unlock()
+
 				return
 			}
+
 			s.index = (s.index + 1) % len(s.frames)
 			callback := s.onUpdate
 			s.mu.Unlock()
 
-			// Trigger UI refresh if callback is set
+			// Trigger UI refresh if callback is set.
 			if callback != nil {
 				callback()
 			}
@@ -176,7 +183,7 @@ func (s *Spinner) animate(ctx context.Context, interval time.Duration) {
 // It automatically starts/stops based on agent state.
 type ActivitySpinner struct {
 	*Spinner
-	activeStates map[string]bool // States that trigger animation
+	activeStates map[string]bool // States that trigger animation.
 }
 
 // NewActivitySpinner creates a spinner that activates for certain states.
@@ -188,7 +195,7 @@ func NewActivitySpinner(style SpinnerStyle) *ActivitySpinner {
 			"Thinking":         true,
 			"Executing":        true,
 			"Calling tools":    true,
-			"Calling:":         true, // Prefix for "Calling: <toolname>"
+			"Calling:":         true, // Prefix for "Calling: <toolname>".
 			"Waiting approval": true,
 		},
 	}
@@ -198,6 +205,7 @@ func NewActivitySpinner(style SpinnerStyle) *ActivitySpinner {
 func (a *ActivitySpinner) AddActiveState(state string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
 	a.activeStates[state] = true
 }
 
@@ -206,12 +214,12 @@ func (a *ActivitySpinner) ShouldAnimate(state string) bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 
-	// Check exact match
+	// Check exact match.
 	if a.activeStates[state] {
 		return true
 	}
 
-	// Check prefix match for states like "Calling: <toolname>"
+	// Check prefix match for states like "Calling: <toolname>".
 	for activeState := range a.activeStates {
 		if strings.HasPrefix(state, activeState) {
 			return true

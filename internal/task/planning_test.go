@@ -16,7 +16,7 @@ func TestNewPlanning(t *testing.T) {
 		t.Errorf("NewPlanning().Name() = %v, want 'planning'", planning.Name())
 	}
 
-	// Test that it implements the Task interface
+	// Test that it implements the Task interface.
 	var _ Task = planning
 }
 
@@ -38,7 +38,7 @@ func TestPlanning_SystemPrompt(t *testing.T) {
 		t.Error("Planning.SystemPrompt() returned empty string")
 	}
 
-	// Check that prompt contains key planning elements
+	// Check that prompt contains key planning elements.
 	expectedElements := []string{
 		"planning",
 		"step",
@@ -50,7 +50,7 @@ func TestPlanning_SystemPrompt(t *testing.T) {
 		}
 	}
 
-	// Should be a reasonable length
+	// Should be a reasonable length.
 	if len(prompt) < 50 {
 		t.Errorf("Planning.SystemPrompt() too short: %d characters", len(prompt))
 	}
@@ -88,8 +88,8 @@ func TestPlanning_MaxTokens(t *testing.T) {
 
 func TestPlanning_Validate(t *testing.T) {
 	planning := NewPlanning()
-	err := planning.Validate()
 
+	err := planning.Validate()
 	if err != nil {
 		t.Errorf("Planning.Validate() unexpected error: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestPlanning_DefaultPrompt(t *testing.T) {
 	planning := NewPlanning()
 	prompt := planning.SystemPrompt()
 
-	// Check that default prompt is reasonable
+	// Check that default prompt is reasonable.
 	if len(prompt) < 50 {
 		t.Errorf("Planning default prompt too short: %d characters", len(prompt))
 	}
@@ -134,22 +134,24 @@ func TestPlanning_DefaultMaxTokens(t *testing.T) {
 func TestPlanning_Concurrency(t *testing.T) {
 	planning := NewPlanning()
 
-	// Test concurrent access to methods
+	// Test concurrent access to methods.
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+
+	for range 10 {
 		go func() {
-			// These methods should be safe for concurrent access
+			// These methods should be safe for concurrent access.
 			planning.Name()
 			planning.SystemPrompt()
 			planning.AllowedTools()
 			planning.MaxTokens()
 			planning.Validate()
+
 			done <- true
 		}()
 	}
 
-	// Wait for all goroutines to complete
-	for i := 0; i < 10; i++ {
+	// Wait for all goroutines to complete.
+	for range 10 {
 		<-done
 	}
 }
@@ -157,7 +159,7 @@ func TestPlanning_Concurrency(t *testing.T) {
 func TestPlanning_TaskInterface(t *testing.T) {
 	planning := NewPlanning()
 
-	// Verify all interface methods work
+	// Verify all interface methods work.
 	if planning.Name() == "" {
 		t.Error("Planning.Name() returned empty string")
 	}
@@ -174,13 +176,14 @@ func TestPlanning_TaskInterface(t *testing.T) {
 		t.Error("Planning.MaxTokens() returned non-positive value")
 	}
 
-	if err := planning.Validate(); err != nil {
+	err := planning.Validate()
+	if err != nil {
 		t.Errorf("Planning.Validate() returned error: %v", err)
 	}
 }
 
 func TestPlanning_Constants(t *testing.T) {
-	// Test that constants are properly defined
+	// Test that constants are properly defined.
 	if PlanningMaxTokens <= 0 {
 		t.Errorf("PlanningMaxTokens = %d, want > 0", PlanningMaxTokens)
 	}
@@ -201,7 +204,7 @@ func TestPlanning_Constants(t *testing.T) {
 		t.Errorf("PlanningMinEstimate = %d, want > 0", PlanningMinEstimate)
 	}
 
-	// Test relationships
+	// Test relationships.
 	if PlanningMinSteps > PlanningMaxSteps {
 		t.Errorf("PlanningMinSteps (%d) > PlanningMaxSteps (%d)", PlanningMinSteps, PlanningMaxSteps)
 	}

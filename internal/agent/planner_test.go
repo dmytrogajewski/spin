@@ -3,6 +3,9 @@ package agent
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/cycle"
 	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -10,13 +13,11 @@ import (
 	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestAgent_GetPlanner tests the GetPlanner method.
 func TestAgent_GetPlanner(t *testing.T) {
-	// Create agent
+	// Create agent.
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
 	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
@@ -41,7 +42,7 @@ func TestAgent_GetPlanner(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Set plan on agent
+	// Set plan on agent.
 	plan := &planning.Plan{
 		ID:   "test-plan",
 		Task: "Test task",
@@ -55,7 +56,7 @@ func TestAgent_GetPlanner(t *testing.T) {
 	}
 	agent.SetPlanner(plan)
 
-	// Get planner
+	// Get planner.
 	retrievedPlan := agent.GetPlanner()
 	require.NotNil(t, retrievedPlan)
 	assert.Equal(t, "test-plan", retrievedPlan.ID)
@@ -88,8 +89,7 @@ func TestAgent_GetPlanner_NoPlanner(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Get planner (should be nil)
+	// Get planner (should be nil).
 	retrievedPlan := agent.GetPlanner()
 	assert.Nil(t, retrievedPlan)
 }
-

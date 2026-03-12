@@ -25,19 +25,19 @@ var (
 type CommandClass int
 
 const (
-	// CommandSafe - Read-only operations that can execute automatically
+	// CommandSafe - Read-only operations that can execute automatically.
 	CommandSafe CommandClass = iota
 
-	// CommandInteractive - Write operations that need user approval
+	// CommandInteractive - Write operations that need user approval.
 	CommandInteractive
 
-	// CommandDangerous - Destructive operations requiring strong approval
+	// CommandDangerous - Destructive operations requiring strong approval.
 	CommandDangerous
 
-	// CommandForbidden - Commands that should never execute
+	// CommandForbidden - Commands that should never execute.
 	CommandForbidden
 
-	// CommandUnverified - Unknown commands with indeterminate safety
+	// CommandUnverified - Unknown commands with indeterminate safety.
 	CommandUnverified
 )
 
@@ -69,19 +69,19 @@ func (c CommandClass) NeedsApproval() bool {
 
 // Command represents a parsed shell command for validation.
 type Command struct {
-	// Program is the command name (e.g., "ls", "git", "rm")
+	// Program is the command name (e.g., "ls", "git", "rm").
 	Program string
 
-	// Args are the command arguments
+	// Args are the command arguments.
 	Args []string
 
-	// Env contains environment variables
+	// Env contains environment variables.
 	Env map[string]string
 
-	// WorkDir is the working directory
+	// WorkDir is the working directory.
 	WorkDir string
 
-	// Raw is the original unparsed command string
+	// Raw is the original unparsed command string.
 	Raw string
 }
 
@@ -99,19 +99,19 @@ func (c *Command) GetWorkDir() string { return c.WorkDir }
 
 // ValidationResult contains the result of command validation.
 type ValidationResult struct {
-	// Classification is the determined safety level
+	// Classification is the determined safety level.
 	Classification CommandClass
 
-	// Reason explains why this classification was chosen
+	// Reason explains why this classification was chosen.
 	Reason string
 
-	// MatchedRule is the rule that matched (if any)
+	// MatchedRule is the rule that matched (if any).
 	MatchedRule string
 
-	// Confidence is how confident the validator is (0.0-1.0)
+	// Confidence is how confident the validator is (0.0-1.0).
 	Confidence float64
 
-	// Suggestions for safer alternatives (optional)
+	// Suggestions for safer alternatives (optional).
 	Suggestions []string
 }
 
@@ -123,16 +123,16 @@ func (r *ValidationResult) GetReason() string { return r.Reason }
 
 // Pattern represents a command pattern for matching.
 type Pattern struct {
-	// Program is the command name
+	// Program is the command name.
 	Program string
 
-	// ArgPatterns are patterns that must match in arguments
+	// ArgPatterns are patterns that must match in arguments.
 	ArgPatterns []string
 
-	// ForbiddenPatterns are patterns that must NOT appear
+	// ForbiddenPatterns are patterns that must NOT appear.
 	ForbiddenPatterns []string
 
-	// Description explains this pattern
+	// Description explains this pattern.
 	Description string
 }
 
@@ -147,7 +147,7 @@ func ParseCommand(cmdStr string) (*Command, error) {
 		return nil, ErrEmptyCommand
 	}
 
-	// Simple tokenization (space-separated)
+	// Simple tokenization (space-separated).
 	parts := strings.Fields(cmdStr)
 	if len(parts) == 0 {
 		return nil, ErrEmptyCommand

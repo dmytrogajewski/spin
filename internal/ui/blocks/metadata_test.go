@@ -95,6 +95,7 @@ func TestExecuteMeta_Validate(t *testing.T) {
 			if tt.expectError && err == nil {
 				t.Errorf("Validate() expected error but got none")
 			}
+
 			if !tt.expectError && err != nil {
 				t.Errorf("Validate() unexpected error: %v", err)
 			}
@@ -120,7 +121,7 @@ func TestExecuteMeta_ImpactValues(t *testing.T) {
 }
 
 func TestExecuteMeta_ZeroValues(t *testing.T) {
-	// Test that zero values are valid
+	// Test that zero values are valid.
 	meta := ExecuteMeta{
 		Command:    "test",
 		CWD:        "/tmp",
@@ -210,12 +211,12 @@ func TestExecuteMeta_EmptyValues(t *testing.T) {
 }
 
 func TestExecuteMeta_OptionalFields(t *testing.T) {
-	// Test that optional fields can be nil
+	// Test that optional fields can be nil.
 	meta := ExecuteMeta{
 		Command: "test",
 		CWD:     "/tmp",
 		Impact:  "low",
-		// ExitCode, DurationMS, LinesOut are nil
+		// ExitCode, DurationMS, LinesOut are nil.
 	}
 
 	err := meta.Validate()
@@ -223,7 +224,7 @@ func TestExecuteMeta_OptionalFields(t *testing.T) {
 		t.Errorf("Validate() error for nil optional fields: %v", err)
 	}
 
-	// Test that optional fields can be set
+	// Test that optional fields can be set.
 	meta.ExitCode = intPtr(1)
 	meta.DurationMS = int64Ptr(2000)
 	meta.LinesOut = intPtr(5)
@@ -287,6 +288,7 @@ func TestExecuteMeta_EdgeCases(t *testing.T) {
 			if tt.expectError && err == nil {
 				t.Errorf("Validate() expected error but got none")
 			}
+
 			if !tt.expectError && err != nil {
 				t.Errorf("Validate() unexpected error: %v", err)
 			}
@@ -294,7 +296,7 @@ func TestExecuteMeta_EdgeCases(t *testing.T) {
 	}
 }
 
-// Helper functions for creating pointers
+// Helper functions for creating pointers.
 func intPtr(i int) *int {
 	return &i
 }

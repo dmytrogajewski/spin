@@ -17,12 +17,14 @@ func NewExecutorRuntimeAdapter(exec *Executor) runtime.CommandExecutor {
 	if exec == nil {
 		return nil
 	}
+
 	return &executorRuntimeAdapter{executor: exec}
 }
 
 // Execute implements runtime.CommandExecutor interface.
-func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *security.Command, opts interface{}) (*runtime.CommandResult, error) {
+func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *security.Command, opts any) (*runtime.CommandResult, error) {
 	var execOpts *ExecuteOptions
+
 	if opts != nil {
 		if eOpts, ok := opts.(*ExecuteOptions); ok {
 			execOpts = eOpts
@@ -31,7 +33,7 @@ func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *security.Comm
 
 	result, err := a.executor.Execute(ctx, cmd, execOpts)
 	if err != nil {
-		// Convert agent.Result to runtime.CommandResult
+		// Convert agent.Result to runtime.CommandResult.
 		return &runtime.CommandResult{
 			Command:     result.Command,
 			Stdout:      result.Stdout,
@@ -45,7 +47,7 @@ func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *security.Comm
 		}, err
 	}
 
-	// Convert agent.Result to runtime.CommandResult
+	// Convert agent.Result to runtime.CommandResult.
 	return &runtime.CommandResult{
 		Command:     result.Command,
 		Stdout:      result.Stdout,

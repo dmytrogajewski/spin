@@ -35,7 +35,7 @@ type ExitStatus struct {
 	Signal   *string
 }
 
-// Context key for session ID
+// Context key for session ID.
 type contextKey string
 
 const sessionIDKey contextKey = "acp_session_id"
@@ -51,6 +51,7 @@ func GetSessionIDFromContext(ctx context.Context) string {
 	if val, ok := ctx.Value(sessionIDKey).(string); ok {
 		return val
 	}
+
 	return ""
 }
 
@@ -64,6 +65,7 @@ func GetWorkDirFromContext(ctx context.Context) string {
 	if val, ok := ctx.Value(workDirKey).(string); ok {
 		return val
 	}
+
 	return ""
 }
 

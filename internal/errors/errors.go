@@ -29,20 +29,20 @@ type SpinError interface {
 
 // Error codes for different failure categories.
 const (
-	CodeValidation      ErrorCode = "validation"       // Invalid input or configuration
-	CodeTimeout         ErrorCode = "timeout"          // Operation exceeded time limit
-	CodeNotFound        ErrorCode = "not_found"        // Resource not found
-	CodePermission      ErrorCode = "permission"       // Permission denied or unauthorized
-	CodeLLM             ErrorCode = "llm"              // LLM provider error
-	CodeToolExecution   ErrorCode = "tool_execution"   // Tool execution failed
-	CodeApprovalDenied  ErrorCode = "approval_denied"  // User denied approval
-	CodeCycle           ErrorCode = "cycle"            // Cycle or infinite loop detected
-	CodeInternal        ErrorCode = "internal"         // Internal error
-	CodeNetwork         ErrorCode = "network"          // Network or connection error
-	CodeIO              ErrorCode = "io"               // File or I/O error
-	CodePatch           ErrorCode = "patch"            // Patch application error
-	CodeGit             ErrorCode = "git"              // Git operation error
-	CodeContextMismatch ErrorCode = "context_mismatch" // Patch context not found
+	CodeValidation      ErrorCode = "validation"       // Invalid input or configuration.
+	CodeTimeout         ErrorCode = "timeout"          // Operation exceeded time limit.
+	CodeNotFound        ErrorCode = "not_found"        // Resource not found.
+	CodePermission      ErrorCode = "permission"       // Permission denied or unauthorized.
+	CodeLLM             ErrorCode = "llm"              // LLM provider error.
+	CodeToolExecution   ErrorCode = "tool_execution"   // Tool execution failed.
+	CodeApprovalDenied  ErrorCode = "approval_denied"  // User denied approval.
+	CodeCycle           ErrorCode = "cycle"            // Cycle or infinite loop detected.
+	CodeInternal        ErrorCode = "internal"         // Internal error.
+	CodeNetwork         ErrorCode = "network"          // Network or connection error.
+	CodeIO              ErrorCode = "io"               // File or I/O error.
+	CodePatch           ErrorCode = "patch"            // Patch application error.
+	CodeGit             ErrorCode = "git"              // Git operation error.
+	CodeContextMismatch ErrorCode = "context_mismatch" // Patch context not found.
 )
 
 // Error represents a structured error with context and error code.
@@ -50,10 +50,10 @@ const (
 // Error implements the error interface and supports error wrapping via Unwrap().
 // It includes operation context, error categorization, and optional underlying errors.
 type Error struct {
-	Code    ErrorCode // Error category code
+	Code    ErrorCode // Error category code.
 	Op      string    // Operation: "Agent.Execute", "Tool.Execute", etc.
-	Err     error     // Underlying error (optional)
-	Message string    // Human-readable message
+	Err     error     // Underlying error (optional).
+	Message string    // Human-readable message.
 }
 
 // Error returns the formatted error message.
@@ -63,6 +63,7 @@ func (e *Error) Error() string {
 	if e.Err != nil {
 		return fmt.Sprintf("%s: %s: %v", e.Op, e.Message, e.Err)
 	}
+
 	return fmt.Sprintf("%s: %s", e.Op, e.Message)
 }
 
@@ -113,7 +114,7 @@ func New(code ErrorCode, op string, message string, err error) *Error {
 //	    "invalid max_turns: %d",
 //	    maxTurns,
 //	)
-func Newf(code ErrorCode, op string, err error, format string, args ...interface{}) *Error {
+func Newf(code ErrorCode, op string, err error, format string, args ...any) *Error {
 	return &Error{
 		Code:    code,
 		Op:      op,

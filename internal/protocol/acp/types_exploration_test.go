@@ -14,7 +14,7 @@ func TestContentBlockHelpers(t *testing.T) {
 	t.Run("TextBlock", func(t *testing.T) {
 		block := acp.TextBlock("Hello, world!")
 		assert.NotNil(t, block)
-		// ContentBlock is a union type with optional fields
+		// ContentBlock is a union type with optional fields.
 		require.NotNil(t, block.Text, "TextBlock should set Text field")
 		assert.Equal(t, "Hello, world!", block.Text.Text)
 		assert.Nil(t, block.Image, "TextBlock should not set Image")
@@ -43,9 +43,9 @@ func TestContentBlockHelpers(t *testing.T) {
 
 // TestAgentInterface explores the acp.Agent interface structure.
 func TestAgentInterface(t *testing.T) {
-	// Verify Agent is an interface
+	// Verify Agent is an interface.
 	var agent acp.Agent
-	assert.Nil(t, agent) // Interface can be nil
+	assert.Nil(t, agent) // Interface can be nil.
 
 	// Explore interface methods via documentation
 	// Agent interface has these methods:
@@ -54,7 +54,7 @@ func TestAgentInterface(t *testing.T) {
 	// - Prompt(ctx, PromptRequest) (PromptResponse, error)
 	// - Cancel(ctx, CancelNotification) error
 	// - SetSessionMode(ctx, SetSessionModeRequest) (SetSessionModeResponse, error)
-	// - Authenticate(ctx, AuthenticateRequest) (AuthenticateResponse, error)
+	// - Authenticate(ctx, AuthenticateRequest) (AuthenticateResponse, error).
 
 	t.Log("Agent interface requires 6 methods")
 }
@@ -63,9 +63,9 @@ func TestAgentInterface(t *testing.T) {
 func TestRequestResponseTypes(t *testing.T) {
 	t.Run("InitializeRequest", func(t *testing.T) {
 		req := acp.InitializeRequest{
-			ProtocolVersion: acp.ProtocolVersionNumber,
+			ProtocolVersion:    acp.ProtocolVersionNumber,
 			ClientCapabilities: acp.ClientCapabilities{
-				// Client capabilities structure
+				// Client capabilities structure.
 			},
 			ClientInfo: &acp.Implementation{
 				Name:    "test-client",
@@ -79,9 +79,9 @@ func TestRequestResponseTypes(t *testing.T) {
 
 	t.Run("InitializeResponse", func(t *testing.T) {
 		resp := acp.InitializeResponse{
-			ProtocolVersion: acp.ProtocolVersionNumber,
+			ProtocolVersion:   acp.ProtocolVersionNumber,
 			AgentCapabilities: acp.AgentCapabilities{
-				// Agent capabilities structure
+				// Agent capabilities structure.
 			},
 			AgentInfo: &acp.Implementation{
 				Name:    "spin",
@@ -127,8 +127,8 @@ func TestCapabilityTypes(t *testing.T) {
 	t.Run("AgentCapabilities", func(t *testing.T) {
 		caps := acp.AgentCapabilities{
 			PromptCapabilities: acp.PromptCapabilities{
-				Image:          true,
-				Audio:          false,
+				Image:           true,
+				Audio:           false,
 				EmbeddedContext: true,
 			},
 			McpCapabilities: acp.McpCapabilities{
@@ -145,7 +145,7 @@ func TestCapabilityTypes(t *testing.T) {
 
 	t.Run("ClientCapabilities", func(t *testing.T) {
 		caps := acp.ClientCapabilities{
-			// Client capabilities structure
+			// Client capabilities structure.
 		}
 		assert.NotNil(t, caps)
 	})
@@ -154,7 +154,7 @@ func TestCapabilityTypes(t *testing.T) {
 // TestSessionTypes explores session-related types.
 func TestSessionTypes(t *testing.T) {
 	t.Run("SessionUpdate", func(t *testing.T) {
-		// SessionUpdate is a union type, use helper functions
+		// SessionUpdate is a union type, use helper functions.
 		update := acp.UpdateAgentMessageText("Hello")
 		assert.NotNil(t, update)
 		require.NotNil(t, update.AgentMessageChunk)
@@ -168,7 +168,7 @@ func TestSessionTypes(t *testing.T) {
 	})
 
 	t.Run("ToolCall", func(t *testing.T) {
-		// ToolCall is created via helper functions
+		// ToolCall is created via helper functions.
 		update := acp.StartToolCall(acp.ToolCallId("call-123"), "shell_command")
 		require.NotNil(t, update.ToolCall)
 		assert.Equal(t, acp.ToolCallId("call-123"), update.ToolCall.ToolCallId)
@@ -209,27 +209,27 @@ func TestMcpTypes(t *testing.T) {
 func TestConnectionInfrastructure(t *testing.T) {
 	t.Run("NewAgentSideConnection", func(t *testing.T) {
 		// This test verifies we understand the connection setup
-		// Actual connection requires a real Agent implementation
+		// Actual connection requires a real Agent implementation.
 		var agent acp.Agent = nil
 		// conn := acp.NewAgentSideConnection(agent, os.Stdout, os.Stdin)
-		// We'll test this when we have a real Agent implementation
+		// We'll test this when we have a real Agent implementation.
 		t.Log("NewAgentSideConnection requires Agent implementation")
-		assert.Nil(t, agent) // Placeholder
+		assert.Nil(t, agent) // Placeholder.
 	})
 }
 
 // TestTypeConversions explores potential type conversion patterns.
 func TestTypeConversions(t *testing.T) {
 	t.Run("ContentBlockToContentItem", func(t *testing.T) {
-		// This test documents the conversion pattern (not implementing yet
-			acpBlock := acp.TextBlock("Hello")
+		// This test documents the conversion pattern (not implementing yet.
+		acpBlock := acp.TextBlock("Hello")
 		assert.NotNil(t, acpBlock)
 
 		// Conversion pattern (conceptual):
 		// ACP ContentBlock -> Spin ContentItem
 		// - ContentBlockText -> ContentItem{Type: "text", Text: &TextContent{Text: ...}}
 		// - ContentBlockImage -> ContentItem{Type: "image", Image: &ImageContent{...}}
-		// - ContentBlockResourceLink -> ContentItem{Type: "file_pointer", FilePointer: &FilePointerContent{...}}
+		// - ContentBlockResourceLink -> ContentItem{Type: "file_pointer", FilePointer: &FilePointerContent{...}}.
 
 		t.Log("ContentBlock conversion pattern documented")
 	})
@@ -244,7 +244,7 @@ func TestTypeConversions(t *testing.T) {
 // TestHelperFunctions explores SDK helper functions.
 func TestHelperFunctions(t *testing.T) {
 	t.Run("Ptr", func(t *testing.T) {
-		// Ptr is a generic helper to create pointers
+		// Ptr is a generic helper to create pointers.
 		boolPtr := acp.Ptr(true)
 		require.NotNil(t, boolPtr)
 		assert.True(t, *boolPtr)
@@ -262,9 +262,9 @@ func TestProtocolConstants(t *testing.T) {
 	})
 
 	t.Run("AgentMethodConstants", func(t *testing.T) {
-		// Verify method name constants exist
+		// Verify method name constants exist.
 		assert.NotEmpty(t, acp.AgentMethodInitialize)
-		// Other method constants may be defined in agent_gen.go
+		// Other method constants may be defined in agent_gen.go.
 		t.Log("Agent method constants verified")
 	})
 }
@@ -273,7 +273,7 @@ func TestProtocolConstants(t *testing.T) {
 func TestErrorHandling(t *testing.T) {
 	t.Run("RequestError", func(t *testing.T) {
 		err := &acp.RequestError{
-			Code:    -32603, // Internal error
+			Code:    -32603, // Internal error.
 			Message: "Test error",
 		}
 		assert.Equal(t, -32603, err.Code)
@@ -284,7 +284,7 @@ func TestErrorHandling(t *testing.T) {
 // TestContextUsage verifies context is used in Agent interface.
 func TestContextUsage(t *testing.T) {
 	// All Agent interface methods accept context.Context as first parameter
-	// This is important for cancellation and timeouts
+	// This is important for cancellation and timeouts.
 	ctx := context.Background()
 	assert.NotNil(t, ctx)
 
@@ -292,4 +292,3 @@ func TestContextUsage(t *testing.T) {
 	// All methods: Method(ctx context.Context, ...)
 	t.Log("All Agent methods accept context.Context")
 }
-

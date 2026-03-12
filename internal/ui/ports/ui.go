@@ -18,9 +18,9 @@ import (
 // - Native terminal scrollback (no alt-screen buffer)
 // - Append-only transcript
 // - Single-line prompt redraw
-// - Zero full-screen repainting
+// - Zero full-screen repainting.
 type UI interface {
-	// Lifecycle
+	// Lifecycle.
 
 	// Run starts the UI event loop and blocks until context is canceled,
 	// user quits (Ctrl-C/Ctrl-D), or an error occurs.
@@ -34,7 +34,7 @@ type UI interface {
 	// Safe to call multiple times (idempotent).
 	Stop() error
 
-	// Output (append-only)
+	// Output (append-only).
 
 	// PrintLine prints a line to the transcript with newline appended.
 	// Automatically redraws prompt after printing.
@@ -49,7 +49,7 @@ type UI interface {
 	// or error if write fails.
 	PrintChunks(ctx context.Context, chunks <-chan string) error
 
-	// Prompt control
+	// Prompt control.
 
 	// SetStatus sets transient right-aligned status text in prompt.
 	// Automatically redraws prompt.
@@ -66,7 +66,7 @@ type UI interface {
 	// Returns the same channel on repeated calls.
 	RequestInput() <-chan string
 
-	// Block timeline operations (Phase 6.1)
+	// Block timeline operations (Phase 6.1).
 
 	// AppendBlock appends a new block to the timeline and triggers render.
 	// Thread-safe. Returns error if block validation fails or duplicate ID.

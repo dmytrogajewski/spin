@@ -7,11 +7,11 @@ import (
 
 // GetContextTool implements environment context retrieval.
 type GetContextTool struct {
-	context interface{} // agent.Environment - using interface{} to avoid circular import
+	context any // agent.Environment - using interface{} to avoid circular import.
 }
 
 // NewGetContextTool creates a new get context tool.
-func NewGetContextTool(context interface{}) *GetContextTool {
+func NewGetContextTool(context any) *GetContextTool {
 	return &GetContextTool{
 		context: context,
 	}
@@ -49,10 +49,10 @@ func (t *GetContextTool) Execute(ctx context.Context, params ToolParameters) (To
 	}
 
 	// Use reflection to call String() method to avoid circular import
-	// The context is agent.Environment which implements String() string
+	// The context is agent.Environment which implements String() string.
 	val := reflect.ValueOf(t.context)
 
-	// Check if the context has a String() method
+	// Check if the context has a String() method.
 	stringMethod := val.MethodByName("String")
 	if !stringMethod.IsValid() {
 		return ToolResult{
@@ -61,7 +61,7 @@ func (t *GetContextTool) Execute(ctx context.Context, params ToolParameters) (To
 		}, nil
 	}
 
-	// Call String() method
+	// Call String() method.
 	results := stringMethod.Call(nil)
 	if len(results) != 1 {
 		return ToolResult{
@@ -70,7 +70,7 @@ func (t *GetContextTool) Execute(ctx context.Context, params ToolParameters) (To
 		}, nil
 	}
 
-	// Extract string result
+	// Extract string result.
 	output, ok := results[0].Interface().(string)
 	if !ok {
 		return ToolResult{

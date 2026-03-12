@@ -11,13 +11,13 @@ import (
 type ArchiveReason string
 
 const (
-	// ReasonLowUtility indicates bullet was removed due to low utility score
+	// ReasonLowUtility indicates bullet was removed due to low utility score.
 	ReasonLowUtility ArchiveReason = "low_utility"
-	// ReasonMerged indicates bullet was merged into another bullet
+	// ReasonMerged indicates bullet was merged into another bullet.
 	ReasonMerged ArchiveReason = "merged"
-	// ReasonManual indicates bullet was manually archived
+	// ReasonManual indicates bullet was manually archived.
 	ReasonManual ArchiveReason = "manual"
-	// ReasonSuperseded indicates bullet was superseded by a better version
+	// ReasonSuperseded indicates bullet was superseded by a better version.
 	ReasonSuperseded ArchiveReason = "superseded"
 )
 
@@ -56,7 +56,7 @@ func (a *Archive) Archive(b *bullet.Bullet, reason ArchiveReason, metadata map[s
 	defer a.mu.Unlock()
 
 	archived := &ArchivedBullet{
-		Bullet:    b.Clone(), // Clone to preserve state
+		Bullet:    b.Clone(), // Clone to preserve state.
 		RemovedAt: time.Now(),
 		Reason:    reason,
 		Metadata:  metadata,
@@ -75,6 +75,7 @@ func (a *Archive) Get(id string) (*ArchivedBullet, bool) {
 	defer a.mu.RUnlock()
 
 	archived, exists := a.bullets[id]
+
 	return archived, exists
 }
 
@@ -109,15 +110,18 @@ func (a *Archive) Stats() ArchiveStats {
 	}
 
 	first := true
+
 	for _, archived := range a.bullets {
 		stats.ByReason[archived.Reason]++
 
 		if first || archived.RemovedAt.Before(stats.OldestArchive) {
 			stats.OldestArchive = archived.RemovedAt
 		}
+
 		if first || archived.RemovedAt.After(stats.NewestArchive) {
 			stats.NewestArchive = archived.RemovedAt
 		}
+
 		first = false
 	}
 
@@ -136,5 +140,6 @@ func (a *Archive) Clear() {
 func (a *Archive) Len() int {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
+
 	return len(a.bullets)
 }

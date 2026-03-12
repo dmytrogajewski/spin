@@ -31,7 +31,8 @@ func TestANSIConstants(t *testing.T) {
 // BenchmarkANSIConstants ensures constants don't allocate.
 func BenchmarkANSIConstants(b *testing.B) {
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = ClearLine
 		_ = HideCursor
 		_ = ShowCursor

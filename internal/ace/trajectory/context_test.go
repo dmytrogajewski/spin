@@ -34,6 +34,7 @@ func TestNewTrajectoryContext(t *testing.T) {
 		if ctx.StartTime.IsZero() {
 			t.Error("expected non-zero start time")
 		}
+
 		if ctx.StartTime.Before(before) || ctx.StartTime.After(after) {
 			t.Errorf("start time %v not between %v and %v", ctx.StartTime, before, after)
 		}
@@ -45,18 +46,23 @@ func TestNewTrajectoryContext(t *testing.T) {
 		if ctx.Steps == nil {
 			t.Error("expected non-nil Steps slice")
 		}
+
 		if len(ctx.Steps) != 0 {
 			t.Errorf("expected empty Steps, got %d items", len(ctx.Steps))
 		}
+
 		if ctx.RetrievalEvents == nil {
 			t.Error("expected non-nil RetrievalEvents slice")
 		}
+
 		if len(ctx.RetrievalEvents) != 0 {
 			t.Errorf("expected empty RetrievalEvents, got %d items", len(ctx.RetrievalEvents))
 		}
+
 		if ctx.BulletCache == nil {
 			t.Error("expected non-nil BulletCache map")
 		}
+
 		if len(ctx.BulletCache) != 0 {
 			t.Errorf("expected empty BulletCache, got %d items", len(ctx.BulletCache))
 		}
@@ -83,6 +89,7 @@ func TestAppendSteps(t *testing.T) {
 		if len(ctx.Steps) != 1 {
 			t.Errorf("expected 1 step, got %d", len(ctx.Steps))
 		}
+
 		if ctx.Steps[0].Content != "test" {
 			t.Errorf("expected content 'test', got %q", ctx.Steps[0].Content)
 		}
@@ -113,9 +120,11 @@ func TestAppendSteps(t *testing.T) {
 		if len(ctx.Steps) != 2 {
 			t.Fatalf("expected 2 steps, got %d", len(ctx.Steps))
 		}
+
 		if ctx.Steps[0].Content != "first" {
 			t.Errorf("expected first step content 'first', got %q", ctx.Steps[0].Content)
 		}
+
 		if ctx.Steps[1].Content != "second" {
 			t.Errorf("expected second step content 'second', got %q", ctx.Steps[1].Content)
 		}
@@ -160,12 +169,15 @@ func TestRecordRetrieval(t *testing.T) {
 		if len(ctx.RetrievalEvents) != 1 {
 			t.Errorf("expected 1 event, got %d", len(ctx.RetrievalEvents))
 		}
+
 		if ctx.LastRetrievalTurn != 0 {
 			t.Errorf("expected LastRetrievalTurn 0, got %d", ctx.LastRetrievalTurn)
 		}
+
 		if ctx.TotalRetrievals != 1 {
 			t.Errorf("expected TotalRetrievals 1, got %d", ctx.TotalRetrievals)
 		}
+
 		if len(ctx.BulletCache) != 2 {
 			t.Errorf("expected 2 cached bullets, got %d", len(ctx.BulletCache))
 		}
@@ -184,6 +196,7 @@ func TestRecordRetrieval(t *testing.T) {
 		if ctx.CacheMisses != 2 {
 			t.Errorf("expected 2 cache misses, got %d", ctx.CacheMisses)
 		}
+
 		if ctx.CacheHits != 0 {
 			t.Errorf("expected 0 cache hits, got %d", ctx.CacheHits)
 		}
@@ -204,6 +217,7 @@ func TestRecordRetrieval(t *testing.T) {
 		if ctx.CacheMisses != 1 {
 			t.Errorf("expected 1 cache miss, got %d", ctx.CacheMisses)
 		}
+
 		if ctx.CacheHits != 1 {
 			t.Errorf("expected 1 cache hit, got %d", ctx.CacheHits)
 		}
@@ -233,17 +247,19 @@ func TestRecordRetrieval(t *testing.T) {
 
 		event2 := RetrievalEvent{Turn: 5}
 		bullets2 := []*bullet.Bullet{
-			{ID: "B1"}, // cached
-			{ID: "B2"}, // new
+			{ID: "B1"}, // cached.
+			{ID: "B2"}, // new.
 		}
 		ctx.RecordRetrieval(event2, bullets2)
 
 		if ctx.CacheMisses != 2 {
 			t.Errorf("expected 2 cache misses, got %d", ctx.CacheMisses)
 		}
+
 		if ctx.CacheHits != 1 {
 			t.Errorf("expected 1 cache hit, got %d", ctx.CacheHits)
 		}
+
 		if len(ctx.BulletCache) != 2 {
 			t.Errorf("expected 2 cached bullets, got %d", len(ctx.BulletCache))
 		}
@@ -269,7 +285,7 @@ func TestGetActiveBullets(t *testing.T) {
 
 	t.Run("excludes bullets beyond TTL", func(t *testing.T) {
 		ctx := NewTrajectoryContext("test")
-		ctx.CurrentTurn = 15 // 15 turns later
+		ctx.CurrentTurn = 15 // 15 turns later.
 		event := RetrievalEvent{Turn: 0}
 		bullets := []*bullet.Bullet{{ID: "B1"}}
 		ctx.RecordRetrieval(event, bullets)
@@ -284,14 +300,14 @@ func TestGetActiveBullets(t *testing.T) {
 	t.Run("handles mixed fresh and expired bullets", func(t *testing.T) {
 		ctx := NewTrajectoryContext("test")
 
-		// Add old bullet (will expire)
+		// Add old bullet (will expire).
 		event1 := RetrievalEvent{Turn: 0}
 		bullets1 := []*bullet.Bullet{{ID: "B1"}}
 		ctx.RecordRetrieval(event1, bullets1)
 
 		ctx.CurrentTurn = 15
 
-		// Add fresh bullet
+		// Add fresh bullet.
 		event2 := RetrievalEvent{Turn: 15}
 		bullets2 := []*bullet.Bullet{{ID: "B2"}}
 		ctx.RecordRetrieval(event2, bullets2)
@@ -301,6 +317,7 @@ func TestGetActiveBullets(t *testing.T) {
 		if len(active) != 1 {
 			t.Errorf("expected 1 active bullet, got %d", len(active))
 		}
+
 		if active[0].ID != "B2" {
 			t.Errorf("expected active bullet B2, got %s", active[0].ID)
 		}
@@ -321,6 +338,7 @@ func TestGetActiveBullets(t *testing.T) {
 		if len(active) != 3 {
 			t.Fatalf("expected 3 bullets, got %d", len(active))
 		}
+
 		if active[0].ID != "B1" || active[1].ID != "B2" || active[2].ID != "B3" {
 			t.Errorf("expected sorted order [B1, B2, B3], got [%s, %s, %s]",
 				active[0].ID, active[1].ID, active[2].ID)
@@ -352,21 +370,25 @@ func TestToTrajectory(t *testing.T) {
 		if traj.ID != ctx.SessionID {
 			t.Errorf("expected ID %s, got %s", ctx.SessionID, traj.ID)
 		}
+
 		if traj.Query != "test query" {
 			t.Errorf("expected query 'test query', got %q", traj.Query)
 		}
+
 		if len(traj.Steps) != 0 {
 			t.Errorf("expected 0 steps, got %d", len(traj.Steps))
 		}
+
 		if len(traj.RetrievedBullets) != 0 {
 			t.Errorf("expected 0 bullets, got %d", len(traj.RetrievedBullets))
 		}
 
-		// Verify empty RetrievalEvents
+		// Verify empty RetrievalEvents.
 		events, ok := traj.Metadata.RetrievalEvents.([]RetrievalEvent)
 		if !ok {
 			t.Fatalf("expected []RetrievalEvent type, got %T", traj.Metadata.RetrievalEvents)
 		}
+
 		if len(events) != 0 {
 			t.Errorf("expected 0 retrieval events, got %d", len(events))
 		}
@@ -417,10 +439,12 @@ func TestToTrajectory(t *testing.T) {
 		if traj.Metadata.RetrievalEvents == nil {
 			t.Error("expected non-nil retrieval events")
 		}
+
 		events, ok := traj.Metadata.RetrievalEvents.([]RetrievalEvent)
 		if !ok {
 			t.Fatalf("expected []RetrievalEvent, got %T", traj.Metadata.RetrievalEvents)
 		}
+
 		if len(events) != 1 {
 			t.Errorf("expected 1 retrieval event, got %d", len(events))
 		}
@@ -429,7 +453,7 @@ func TestToTrajectory(t *testing.T) {
 	t.Run("preserves multiple retrieval events in order", func(t *testing.T) {
 		ctx := NewTrajectoryContext("test")
 
-		// Record multiple events
+		// Record multiple events.
 		event1 := RetrievalEvent{
 			Turn:    0,
 			Trigger: TriggerInitial,
@@ -456,19 +480,22 @@ func TestToTrajectory(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected []RetrievalEvent, got %T", traj.Metadata.RetrievalEvents)
 		}
+
 		if len(events) != 3 {
 			t.Fatalf("expected 3 retrieval events, got %d", len(events))
 		}
 
-		// Verify order preserved
+		// Verify order preserved.
 		if events[0].Turn != 0 || events[0].Trigger != TriggerInitial {
 			t.Errorf("event 0: expected turn=0, trigger=initial, got turn=%d, trigger=%s",
 				events[0].Turn, events[0].Trigger)
 		}
+
 		if events[1].Turn != 5 || events[1].Trigger != TriggerError {
 			t.Errorf("event 1: expected turn=5, trigger=error, got turn=%d, trigger=%s",
 				events[1].Turn, events[1].Trigger)
 		}
+
 		if events[2].Turn != 10 || events[2].Trigger != TriggerToolChange {
 			t.Errorf("event 2: expected turn=10, trigger=tool_change, got turn=%d, trigger=%s",
 				events[2].Turn, events[2].Trigger)
@@ -499,6 +526,7 @@ func TestToTrajectory(t *testing.T) {
 
 	t.Run("calculates duration", func(t *testing.T) {
 		ctx := NewTrajectoryContext("test")
+
 		time.Sleep(10 * time.Millisecond)
 
 		traj := ctx.ToTrajectory()

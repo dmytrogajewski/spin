@@ -15,10 +15,11 @@ package agent
 // Use unified types (e.g., agent.ToolCall) throughout the codebase instead.
 
 import (
-	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/shared"
+
+	"github.com/dmytrogajewski/spin/internal/message"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // convertMessageToOpenAI converts a message.Message to openai.ChatCompletionMessageParamUnion.
@@ -34,7 +35,7 @@ func convertMessageToOpenAI(msg message.Message) openai.ChatCompletionMessagePar
 
 	case "assistant":
 		if len(msg.ToolCalls) > 0 {
-			// Assistant message with tool calls
+			// Assistant message with tool calls.
 			param := openai.ChatCompletionAssistantMessageParam{
 				Role:      openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
 				ToolCalls: openai.F(convertToolCallsToOpenAI(msg.ToolCalls)),
@@ -47,8 +48,10 @@ func convertMessageToOpenAI(msg message.Message) openai.ChatCompletionMessagePar
 					},
 				})
 			}
+
 			return param
 		}
+
 		return openai.AssistantMessage(msg.Content)
 
 	case "tool":
@@ -64,7 +67,7 @@ func convertMessageToOpenAI(msg message.Message) openai.ChatCompletionMessagePar
 		}
 
 	default:
-		// Default to user message
+		// Default to user message.
 		return openai.UserMessage(msg.Content)
 	}
 }
@@ -82,6 +85,7 @@ func convertToolCallsToOpenAI(toolCalls []message.ToolCall) []openai.ChatComplet
 			}),
 		}
 	}
+
 	return result
 }
 
@@ -91,8 +95,8 @@ func convertToolsToOpenAI(toolList []tools.Tool) []openai.ChatCompletionToolPara
 	for i, tool := range toolList {
 		schema := tool.Schema()
 
-		// Convert ParameterSchema to map[string]interface{} for OpenAI SDK
-		paramsMap := map[string]interface{}{
+		// Convert ParameterSchema to map[string]interface{} for OpenAI SDK.
+		paramsMap := map[string]any{
 			"type":       schema.Function.Parameters.Type,
 			"properties": schema.Function.Parameters.Properties,
 			"required":   schema.Function.Parameters.Required,
@@ -107,6 +111,7 @@ func convertToolsToOpenAI(toolList []tools.Tool) []openai.ChatCompletionToolPara
 			}),
 		}
 	}
+
 	return result
 }
 
@@ -128,16 +133,18 @@ func convertOpenAIToolCalls(toolCalls []openai.ChatCompletionMessageToolCall) []
 			},
 		}
 	}
+
 	return result
 }
 
-// Helper functions to extract data from openai.ChatCompletion
+// Helper functions to extract data from openai.ChatCompletion.
 
 // getContent extracts the content from the first choice in a ChatCompletion.
 func getContent(completion *openai.ChatCompletion) string {
 	if completion == nil || len(completion.Choices) == 0 {
 		return ""
 	}
+
 	return completion.Choices[0].Message.Content
 }
 
@@ -146,6 +153,7 @@ func getToolCalls(completion *openai.ChatCompletion) []ToolCall {
 	if completion == nil || len(completion.Choices) == 0 {
 		return nil
 	}
+
 	return convertOpenAIToolCalls(completion.Choices[0].Message.ToolCalls)
 }
 
@@ -154,5 +162,6 @@ func getFinishReason(completion *openai.ChatCompletion) string {
 	if completion == nil || len(completion.Choices) == 0 {
 		return ""
 	}
+
 	return string(completion.Choices[0].FinishReason)
 }

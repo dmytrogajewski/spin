@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 )
@@ -45,11 +46,11 @@ func (t *ReadFileTool) Schema() ToolSchema {
 func (t *ReadFileTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	path, err := params.GetString("path")
 	if err != nil {
-		return NewToolError(fmt.Errorf("path parameter must be a non-empty string")), nil
+		return NewToolError(errors.New("path parameter must be a non-empty string")), nil
 	}
 
 	if path == "" {
-		return NewToolError(fmt.Errorf("path parameter must be a non-empty string")), nil
+		return NewToolError(errors.New("path parameter must be a non-empty string")), nil
 	}
 
 	content, err := os.ReadFile(path)

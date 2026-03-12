@@ -8,7 +8,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
-// BenchmarkReflector_Reflect_SingleTrajectory benchmarks single trajectory reflection
+// BenchmarkReflector_Reflect_SingleTrajectory benchmarks single trajectory reflection.
 func BenchmarkReflector_Reflect_SingleTrajectory(b *testing.B) {
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
@@ -35,7 +35,8 @@ func BenchmarkReflector_Reflect_SingleTrajectory(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := reflector.Reflect(ctx, req)
 		if err != nil {
 			b.Fatal(err)
@@ -43,7 +44,7 @@ func BenchmarkReflector_Reflect_SingleTrajectory(b *testing.B) {
 	}
 }
 
-// BenchmarkReflector_Reflect_MultipleTrajectories benchmarks batch trajectory analysis
+// BenchmarkReflector_Reflect_MultipleTrajectories benchmarks batch trajectory analysis.
 func BenchmarkReflector_Reflect_MultipleTrajectories(b *testing.B) {
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
@@ -59,7 +60,7 @@ func BenchmarkReflector_Reflect_MultipleTrajectories(b *testing.B) {
 	ctx := context.Background()
 
 	trajectories := make([]*generator.Trajectory, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		trajectories[i] = &generator.Trajectory{
 			ID:      "bench-multi",
 			Query:   "Resource management",
@@ -73,7 +74,8 @@ func BenchmarkReflector_Reflect_MultipleTrajectories(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := reflector.Reflect(ctx, req)
 		if err != nil {
 			b.Fatal(err)
@@ -81,7 +83,7 @@ func BenchmarkReflector_Reflect_MultipleTrajectories(b *testing.B) {
 	}
 }
 
-// BenchmarkReflector_RefineInsights benchmarks insight refinement
+// BenchmarkReflector_RefineInsights benchmarks insight refinement.
 func BenchmarkReflector_RefineInsights(b *testing.B) {
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
@@ -106,7 +108,8 @@ func BenchmarkReflector_RefineInsights(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, err := reflector.RefineInsights(ctx, insights, 3)
 		if err != nil {
 			b.Fatal(err)
@@ -114,7 +117,7 @@ func BenchmarkReflector_RefineInsights(b *testing.B) {
 	}
 }
 
-// BenchmarkInsightValidator_Validate benchmarks insight validation
+// BenchmarkInsightValidator_Validate benchmarks insight validation.
 func BenchmarkInsightValidator_Validate(b *testing.B) {
 	validator := NewInsightValidator()
 
@@ -125,7 +128,8 @@ func BenchmarkInsightValidator_Validate(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		err := validator.Validate(insight)
 		if err != nil {
 			b.Fatal(err)
@@ -133,12 +137,12 @@ func BenchmarkInsightValidator_Validate(b *testing.B) {
 	}
 }
 
-// BenchmarkInsightValidator_FilterByQuality benchmarks quality filtering
+// BenchmarkInsightValidator_FilterByQuality benchmarks quality filtering.
 func BenchmarkInsightValidator_FilterByQuality(b *testing.B) {
 	validator := NewInsightValidator()
 
 	insights := make([]*Insight, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		insights[i] = &Insight{
 			Content:    "Always validate input parameters before processing them",
 			Confidence: float64(i) / 100.0,
@@ -147,12 +151,13 @@ func BenchmarkInsightValidator_FilterByQuality(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = validator.FilterByQuality(insights, 0.5)
 	}
 }
 
-// BenchmarkPromptBuilder_BuildSingleTrajectory benchmarks prompt building
+// BenchmarkPromptBuilder_BuildSingleTrajectory benchmarks prompt building.
 func BenchmarkPromptBuilder_BuildSingleTrajectory(b *testing.B) {
 	builder := NewPromptBuilder()
 
@@ -164,17 +169,18 @@ func BenchmarkPromptBuilder_BuildSingleTrajectory(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = builder.BuildSingleTrajectory(traj)
 	}
 }
 
-// BenchmarkPromptBuilder_BuildBatchTrajectory benchmarks batch prompt building
+// BenchmarkPromptBuilder_BuildBatchTrajectory benchmarks batch prompt building.
 func BenchmarkPromptBuilder_BuildBatchTrajectory(b *testing.B) {
 	builder := NewPromptBuilder()
 
 	trajectories := make([]*generator.Trajectory, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		trajectories[i] = &generator.Trajectory{
 			ID:      "bench-multi",
 			Query:   "Resource management patterns",
@@ -184,12 +190,13 @@ func BenchmarkPromptBuilder_BuildBatchTrajectory(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = builder.BuildBatchTrajectory(trajectories)
 	}
 }
 
-// BenchmarkPromptBuilder_BuildRefinementPrompt benchmarks refinement prompt building
+// BenchmarkPromptBuilder_BuildRefinementPrompt benchmarks refinement prompt building.
 func BenchmarkPromptBuilder_BuildRefinementPrompt(b *testing.B) {
 	builder := NewPromptBuilder()
 
@@ -203,7 +210,8 @@ func BenchmarkPromptBuilder_BuildRefinementPrompt(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = builder.BuildRefinementPrompt(insights)
 	}
 }

@@ -37,11 +37,6 @@ llm:
     top_p: 0.9
   # Additional provider-specific options can be added here
 
-  # Optional auto-tuning (VRAM-based) for local providers
-  auto_tune: true
-  vram:
-    headroom_mib: 1024  # reserve 1GiB for system
-
 # ============================================================================
 # Execution Configuration
 # ============================================================================

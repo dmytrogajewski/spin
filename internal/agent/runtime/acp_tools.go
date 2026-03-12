@@ -2,12 +2,14 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
-	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/google/shlex"
+
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // ACPTerminalTool exposes terminal/create as a tool to the LLM.
@@ -77,13 +79,13 @@ func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParamete
 		}, nil
 	}
 
-	// Get working directory
+	// Get working directory.
 	workDir, _ := params.GetString("working_directory")
 	if workDir == "" {
 		workDir = t.runtime.workDir
 	}
 
-	// Check if terminal client is available
+	// Check if terminal client is available.
 	if !t.runtime.SupportsTerminals() || t.runtime.terminalClient == nil {
 		return tools.ToolResult{
 			Success: false,
@@ -91,11 +93,12 @@ func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParamete
 		}, nil
 	}
 
-	// Create terminal executor
+	// Create terminal executor.
 	terminalExec := NewTerminalExecutor(t.runtime.terminalClient, t.runtime.sessionID, t.runtime.workDir)
 
-	// Parse command
+	// Parse command.
 	var cmd tools.CommandInfo
+
 	isShellCommand := strings.Contains(cmdStr, "|") ||
 		strings.Contains(cmdStr, ">") ||
 		strings.Contains(cmdStr, "<") ||
@@ -121,12 +124,14 @@ func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParamete
 				Error:   fmt.Sprintf("failed to parse command: %v", err),
 			}, nil
 		}
+
 		if len(parts) == 0 {
 			return tools.ToolResult{
 				Success: false,
 				Error:   "command cannot be empty",
 			}, nil
 		}
+
 		cmd = &simpleCommand{
 			program: parts[0],
 			args:    parts[1:],
@@ -135,7 +140,7 @@ func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParamete
 		}
 	}
 
-	// Execute via terminal executor
+	// Execute via terminal executor.
 	result, err := terminalExec.Execute(ctx, cmd, nil)
 	if err != nil {
 		return tools.ToolResult{
@@ -144,16 +149,17 @@ func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParamete
 		}, nil
 	}
 
-	// Build output
+	// Build output.
 	output := result.GetStdout()
 	if stderr := result.GetStderr(); stderr != "" {
 		if output != "" {
 			output += "\n"
 		}
+
 		output += stderr
 	}
 
-	// Get metadata (includes terminal_id)
+	// Get metadata (includes terminal_id).
 	metadata := result.GetMetadata()
 
 	return tools.ToolResult{
@@ -164,7 +170,7 @@ func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParamete
 	}, nil
 }
 
-// simpleCommand implements tools.CommandInfo
+// simpleCommand implements tools.CommandInfo.
 type simpleCommand struct {
 	program string
 	args    []string
@@ -233,7 +239,7 @@ func (t *ACPReadFileTool) Execute(ctx context.Context, params tools.ToolParamete
 		}, nil
 	}
 
-	// Resolve and validate the path
+	// Resolve and validate the path.
 	resolvedPath, err := t.resolvePathWithContext(ctx, path)
 	if err != nil {
 		return tools.ToolResult{
@@ -244,18 +250,21 @@ func (t *ACPReadFileTool) Execute(ctx context.Context, params tools.ToolParamete
 
 	content, err := t.runtime.filesystemClient.ReadTextFile(ctx, resolvedPath, nil, nil)
 	if err != nil {
-		// Provide helpful error message for path-related errors
+		// Provide helpful error message for path-related errors.
 		errMsg := err.Error()
+
 		workDir := GetWorkDirFromContext(ctx)
 		if workDir == "" {
 			workDir = t.runtime.workDir
 		}
+
 		if strings.Contains(errMsg, "invalid path") {
 			return tools.ToolResult{
 				Success: false,
 				Error:   fmt.Sprintf("failed to read file: path '%s' is outside the allowed workspace. Use a path within the session directory: %s", path, workDir),
 			}, nil
 		}
+
 		return tools.ToolResult{
 			Success: false,
 			Error:   fmt.Sprintf("failed to read file: %v", err),
@@ -271,24 +280,25 @@ func (t *ACPReadFileTool) Execute(ctx context.Context, params tools.ToolParamete
 // resolvePath resolves a path relative to the session working directory.
 // It handles both relative and absolute paths, ensuring the result is within the workspace.
 func (t *ACPReadFileTool) resolvePathWithContext(ctx context.Context, path string) (string, error) {
-	// Get workDir from context first (session-specific), fall back to runtime
+	// Get workDir from context first (session-specific), fall back to runtime.
 	workDir := GetWorkDirFromContext(ctx)
 	if workDir == "" {
 		workDir = t.runtime.workDir
 	}
+
 	if workDir == "" {
-		return "", fmt.Errorf("session working directory not set")
+		return "", errors.New("session working directory not set")
 	}
 
-	// If path is relative, resolve it against workDir
+	// If path is relative, resolve it against workDir.
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(workDir, path)
 	}
 
-	// Clean the path to resolve any ".." components
+	// Clean the path to resolve any ".." components.
 	cleanPath := filepath.Clean(path)
 
-	// Ensure the path is within the workspace
+	// Ensure the path is within the workspace.
 	if !isPathWithinWorkspace(cleanPath, workDir) {
 		return "", fmt.Errorf("path '%s' is outside the allowed workspace (%s). Use relative paths or absolute paths within the workspace", path, workDir)
 	}
@@ -364,7 +374,7 @@ func (t *ACPWriteFileTool) Execute(ctx context.Context, params tools.ToolParamet
 		}, nil
 	}
 
-	// Resolve and validate the path
+	// Resolve and validate the path.
 	resolvedPath, err := t.resolvePathWithContext(ctx, path)
 	if err != nil {
 		return tools.ToolResult{
@@ -375,18 +385,21 @@ func (t *ACPWriteFileTool) Execute(ctx context.Context, params tools.ToolParamet
 
 	err = t.runtime.filesystemClient.WriteTextFile(ctx, resolvedPath, content)
 	if err != nil {
-		// Provide helpful error message for path-related errors
+		// Provide helpful error message for path-related errors.
 		errMsg := err.Error()
+
 		workDir := GetWorkDirFromContext(ctx)
 		if workDir == "" {
 			workDir = t.runtime.workDir
 		}
+
 		if strings.Contains(errMsg, "invalid path") {
 			return tools.ToolResult{
 				Success: false,
 				Error:   fmt.Sprintf("failed to write file: path '%s' is outside the allowed workspace. Use a path within the session directory: %s", path, workDir),
 			}, nil
 		}
+
 		return tools.ToolResult{
 			Success: false,
 			Error:   fmt.Sprintf("failed to write file: %v", err),
@@ -402,24 +415,25 @@ func (t *ACPWriteFileTool) Execute(ctx context.Context, params tools.ToolParamet
 // resolvePathWithContext resolves a path relative to the session working directory.
 // It handles both relative and absolute paths, ensuring the result is within the workspace.
 func (t *ACPWriteFileTool) resolvePathWithContext(ctx context.Context, path string) (string, error) {
-	// Get workDir from context first (session-specific), fall back to runtime
+	// Get workDir from context first (session-specific), fall back to runtime.
 	workDir := GetWorkDirFromContext(ctx)
 	if workDir == "" {
 		workDir = t.runtime.workDir
 	}
+
 	if workDir == "" {
-		return "", fmt.Errorf("session working directory not set")
+		return "", errors.New("session working directory not set")
 	}
 
-	// If path is relative, resolve it against workDir
+	// If path is relative, resolve it against workDir.
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(workDir, path)
 	}
 
-	// Clean the path to resolve any ".." components
+	// Clean the path to resolve any ".." components.
 	cleanPath := filepath.Clean(path)
 
-	// Ensure the path is within the workspace
+	// Ensure the path is within the workspace.
 	if !isPathWithinWorkspace(cleanPath, workDir) {
 		return "", fmt.Errorf("path '%s' is outside the allowed workspace (%s). Use relative paths or absolute paths within the workspace", path, workDir)
 	}
@@ -430,25 +444,25 @@ func (t *ACPWriteFileTool) resolvePathWithContext(ctx context.Context, path stri
 // isPathWithinWorkspace checks if a path is within the workspace directory.
 // It handles symlinks and ".." path components.
 func isPathWithinWorkspace(path, workDir string) bool {
-	// Clean both paths
+	// Clean both paths.
 	cleanPath := filepath.Clean(path)
 	cleanWorkDir := filepath.Clean(workDir)
 
 	// Check if path starts with workDir
 	// We need to ensure it's a proper prefix (not just string prefix)
 	// e.g., /home/user/workspace should match /home/user/workspace/file
-	// but not /home/user/workspace2/file
+	// but not /home/user/workspace2/file.
 	if !strings.HasPrefix(cleanPath, cleanWorkDir) {
 		return false
 	}
 
 	// Ensure it's a proper directory boundary
-	// Path must be exactly workDir or have a separator after workDir
+	// Path must be exactly workDir or have a separator after workDir.
 	if len(cleanPath) > len(cleanWorkDir) {
-		// Check that the next character is a path separator
+		// Check that the next character is a path separator.
 		return cleanPath[len(cleanWorkDir)] == filepath.Separator
 	}
 
-	// Path is exactly workDir
+	// Path is exactly workDir.
 	return true
 }

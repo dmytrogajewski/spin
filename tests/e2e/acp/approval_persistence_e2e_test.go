@@ -61,12 +61,14 @@ security:
 		McpServers: []acp.McpServer{},
 	})
 	require.NoError(t, err)
+
 	sessionID := sessionResp.SessionId
 
 	// Helper: run a prompt that is likely to trigger a shell_command tool call.
 	runPrompt := func(t *testing.T) {
 		t.Helper()
 		clientImpl.clearNotifications()
+
 		req := acp.PromptRequest{
 			SessionId: sessionID,
 			Prompt: []acp.ContentBlock{
@@ -75,6 +77,7 @@ security:
 		}
 
 		done := make(chan error, 1)
+
 		go func() {
 			_, err := client.Prompt(ctx, req)
 			done <- err
@@ -90,6 +93,7 @@ security:
 
 	// 1) First prompt should require approval and cause a policy to be persisted.
 	runPrompt(t)
+
 	firstNotifications := clientImpl.getNotifications()
 	if len(firstNotifications) == 0 {
 		// In environments without a functioning local LLM, we cannot assert the
@@ -101,14 +105,18 @@ security:
 	// Heuristically assert that at least one tool call occurred; we rely on unit
 	// tests for precise tool kind classification.
 	hasToolCall := false
+
 	for _, notif := range firstNotifications {
 		if notif.Update.ToolCall != nil || notif.Update.ToolCallUpdate != nil {
 			hasToolCall = true
+
 			break
 		}
 	}
+
 	if !hasToolCall {
 		t.Log("No tool calls observed; skipping persistence checking as LLM may have chosen a different strategy")
+
 		return
 	}
 
@@ -120,6 +128,7 @@ security:
 	// 3) Revocation via CLI: run "spin approval clear --scope global" in the same workspace.
 	bin := getBinPath(t)
 	clearCmd := filepath.Clean(bin)
+
 	clear := execCommand(t, clearCmd,
 		"--config-file", configPath,
 		"approval", "clear",
@@ -145,7 +154,9 @@ func execCommand(t *testing.T, bin string, args ...string) cmdResult {
 	t.Helper()
 
 	cmd := exec.Command(bin, args...)
+
 	var outBuf, errBuf strings.Builder
+
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 

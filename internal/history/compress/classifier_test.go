@@ -1,6 +1,7 @@
 package compress
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/dmytrogajewski/spin/internal/message"
@@ -11,6 +12,7 @@ func TestNewClassifier(t *testing.T) {
 	if c == nil {
 		t.Fatal("NewClassifier returned nil")
 	}
+
 	if c.verboseThreshold != 1000 {
 		t.Errorf("expected default verboseThreshold 1000, got %d", c.verboseThreshold)
 	}
@@ -102,6 +104,7 @@ func TestClassifier_ErrorMessage(t *testing.T) {
 	}
 
 	c := NewClassifier()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			msg := message.Message{
@@ -120,7 +123,7 @@ func TestClassifier_ErrorMessage(t *testing.T) {
 func TestClassifier_ErrorMetadata(t *testing.T) {
 	c := NewClassifier()
 
-	// Metadata is map[string]string, so we only test string "true"
+	// Metadata is map[string]string, so we only test string "true".
 	msg := message.Message{
 		Role:     message.RoleAssistant,
 		Content:  "Something happened",
@@ -153,6 +156,7 @@ func TestClassifier_CodeBlock(t *testing.T) {
 	}
 
 	c := NewClassifier()
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			msg := message.Message{
@@ -184,11 +188,13 @@ func TestClassifier_RegularAssistant(t *testing.T) {
 func TestClassifier_VerboseAssistant(t *testing.T) {
 	c := NewClassifierWithOptions(WithVerboseThreshold(100))
 
-	// Create a long message without code
+	// Create a long message without code.
 	longContent := "This is a very long explanation. "
-	for i := 0; i < 10; i++ {
-		longContent += "Let me explain in more detail how this works and why it's important. "
+	var longContentSb192 strings.Builder
+	for range 10 {
+		longContentSb192.WriteString("Let me explain in more detail how this works and why it's important. ")
 	}
+	longContent += longContentSb192.String()
 
 	msg := message.Message{
 		Role:    message.RoleAssistant,
@@ -204,11 +210,14 @@ func TestClassifier_VerboseAssistant(t *testing.T) {
 func TestClassifier_VerboseWithCode(t *testing.T) {
 	c := NewClassifierWithOptions(WithVerboseThreshold(100))
 
-	// Create a long message WITH code
+	// Create a long message WITH code.
 	longContent := "This is a very long explanation. "
-	for i := 0; i < 10; i++ {
-		longContent += "Let me explain in more detail how this works and why it's important. "
+	var longContentSb212 strings.Builder
+	for range 10 {
+		longContentSb212.WriteString("Let me explain in more detail how this works and why it's important. ")
 	}
+	longContent += longContentSb212.String()
+
 	longContent += "\n```go\nfunc main() {}\n```"
 
 	msg := message.Message{
@@ -277,7 +286,7 @@ func TestClassifier_NilMetadata(t *testing.T) {
 		Metadata: nil,
 	}
 
-	// Should not panic
+	// Should not panic.
 	importance := c.Classify(msg)
 	if importance != ImportanceMedium {
 		t.Errorf("expected ImportanceMedium, got %s", importance)

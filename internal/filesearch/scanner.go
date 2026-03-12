@@ -9,9 +9,9 @@ import (
 // Scanner scans directories for files with gitignore support.
 type Scanner struct {
 	baseDir       string
-	ignoreGit     bool // Deprecated: use IgnoreHandler instead
+	ignoreGit     bool // Deprecated: use IgnoreHandler instead.
 	maxDepth      int
-	ignoreHandler *IgnoreHandler // Handles .gitignore and .spinignore patterns
+	ignoreHandler *IgnoreHandler // Handles .gitignore and .spinignore patterns.
 }
 
 // NewScanner creates a new file scanner with gitignore support.
@@ -21,8 +21,8 @@ func NewScanner(baseDir string, ignoreGit bool) *Scanner {
 	return &Scanner{
 		baseDir:   baseDir,
 		ignoreGit: ignoreGit,
-		maxDepth:  20, // Reasonable default to prevent deep recursion
-		// ignoreHandler is lazily created in Scan()
+		maxDepth:  20, // Reasonable default to prevent deep recursion.
+		// ignoreHandler is lazily created in Scan().
 	}
 }
 
@@ -36,14 +36,14 @@ func (s *Scanner) Scan() ([]string, error) {
 // ScanWithContext returns all files in the directory recursively with context cancellation support.
 // Returns relative paths from baseDir.
 // Files matching .gitignore or .spinignore patterns are excluded.
-// If the context is cancelled, scanning stops and returns an error.
+// If the context is canceled, scanning stops and returns an error.
 func (s *Scanner) ScanWithContext(ctx context.Context) ([]string, error) {
 	var files []string
 
 	s.ensureIgnoreHandler()
 
 	err := filepath.WalkDir(s.baseDir, func(path string, d os.DirEntry, err error) error {
-		// Check context cancellation
+		// Check context cancellation.
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -62,6 +62,7 @@ func (s *Scanner) ScanWithContext(ctx context.Context) ([]string, error) {
 		if relPath != "" {
 			files = append(files, relPath)
 		}
+
 		return nil
 	})
 
@@ -80,17 +81,17 @@ func (s *Scanner) ensureIgnoreHandler() {
 func (s *Scanner) processPath(path string, d os.DirEntry) (string, bool) {
 	relPath, err := filepath.Rel(s.baseDir, path)
 	if err != nil {
-		return "", false // Skip if can't get relative path
+		return "", false // Skip if can't get relative path.
 	}
 
-	relPath = filepath.ToSlash(relPath) // Convert to forward slashes for consistency
+	relPath = filepath.ToSlash(relPath) // Convert to forward slashes for consistency.
 
 	if s.shouldIgnorePath(relPath, d) {
-		return "", d.IsDir() // Skip directory if ignored
+		return "", d.IsDir() // Skip directory if ignored.
 	}
 
 	if d.IsDir() {
-		return "", false // Don't add directories to results
+		return "", false // Don't add directories to results.
 	}
 
 	return relPath, false
@@ -98,12 +99,12 @@ func (s *Scanner) processPath(path string, d os.DirEntry) (string, bool) {
 
 // shouldIgnorePath checks if a path should be ignored.
 func (s *Scanner) shouldIgnorePath(relPath string, d os.DirEntry) bool {
-	// Check ignore handler first
+	// Check ignore handler first.
 	if s.ignoreHandler != nil && s.ignoreHandler.IsIgnored(relPath, d.IsDir()) {
 		return true
 	}
 
-	// Legacy ignoreGit support (for backward compatibility)
+	// Legacy ignoreGit support (for backward compatibility).
 	if d.IsDir() && s.ignoreGit && d.Name() == ".git" {
 		return true
 	}

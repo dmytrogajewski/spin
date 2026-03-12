@@ -62,30 +62,37 @@ func (t *ToolRuntime) Registry() *tools.Registry {
 
 // Execute executes a single tool call.
 func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult, error) {
-	if err := t.validateToolCall(call); err != nil {
+	err := t.validateToolCall(call)
+	if err != nil {
 		callID := ""
 		if call != nil {
 			callID = call.ID
 		}
+
 		result := tools.NewToolErrorWithID(callID, err)
+
 		return &result, nil
 	}
 
 	args, err := t.parseToolArguments(call)
 	if err != nil {
 		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("invalid arguments: %w", err))
+
 		return &result, nil
 	}
 
 	tool, err := t.registry.Get(call.Function.Name)
 	if err != nil {
-		// Include available tool names to help the model self-correct
+		// Include available tool names to help the model self-correct.
 		available := t.registry.List()
+
 		names := make([]string, len(available))
 		for i, at := range available {
 			names[i] = at.Name()
 		}
+
 		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("tool not found: %q is not a valid tool. Available tools: %v", call.Function.Name, names))
+
 		return &result, nil
 	}
 
@@ -94,6 +101,7 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 		if needs.Required {
 			if t.approvalService == nil {
 				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval required but no approval handler configured: %s (risk: %s)", needs.Reason, needs.Risk))
+
 				return &result, nil
 			}
 
@@ -105,17 +113,19 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 			}
 
 			// Pass tool call ID to approval service so approval notifications
-			// use the same tool call ID as the tool call events
+			// use the same tool call ID as the tool call events.
 			operation := security.NewOperationWithToolCallID(cmd, needs.Reason, t.workDir, call.ID)
 
 			_, approved, err := t.approvalService.RequestApproval(ctx, operation)
 			if err != nil {
 				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval request failed: %w", err))
+
 				return &result, nil
 			}
 
 			if !approved {
 				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("operation denied: %s (risk: %s)", needs.Reason, needs.Risk))
+
 				return &result, nil
 			}
 		}
@@ -124,11 +134,13 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 	toolResult, err := tool.Execute(ctx, args)
 	if err != nil {
 		result := tools.NewToolErrorWithID(call.ID, err)
+
 		return &result, nil
 	}
 
-	// The tool already returned a tools.ToolResult, just add the ID
+	// The tool already returned a tools.ToolResult, just add the ID.
 	result := toolResult.WithID(call.ID)
+
 	return &result, nil
 }
 
@@ -144,13 +156,16 @@ func (t *ToolRuntime) ExecuteBatch(ctx context.Context, calls []*ToolCall) ([]*T
 	var wg sync.WaitGroup
 	for i, call := range calls {
 		wg.Add(1)
+
 		go func(idx int, c *ToolCall) {
 			defer wg.Done()
+
 			res, err := t.Execute(ctx, c)
 			results[idx] = res
 			errs[idx] = err
 		}(i, call)
 	}
+
 	wg.Wait()
 
 	for i, err := range errs {
@@ -168,5 +183,6 @@ func (t *ToolRuntime) validateToolCall(call *ToolCall) error {
 
 func (t *ToolRuntime) parseToolArguments(call *ToolCall) (tools.ToolParameters, error) {
 	parser := tools.NewStrictArgumentParser()
+
 	return parser.Parse(call.Function.Arguments)
 }

@@ -71,5 +71,6 @@ func (c *simpleCommand) Execute(ctx context.Context) error {
 	if c.exec == nil {
 		return nil
 	}
+
 	return c.exec(ctx)
 }

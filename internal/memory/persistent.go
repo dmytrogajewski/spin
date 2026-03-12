@@ -19,7 +19,7 @@ type persistedEntry struct {
 	Tags      []string  `json:"tags,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-	TTL       int64     `json:"ttl_seconds,omitempty"` // TTL in seconds, 0 = no expiry
+	TTL       int64     `json:"ttl_seconds,omitempty"` // TTL in seconds, 0 = no expiry.
 }
 
 // IndexEntry tracks metadata for a persistent entry.
@@ -49,17 +49,19 @@ type PersistentStore struct {
 // The directory is created if it doesn't exist. On startup,
 // the store scans the directory to rebuild its index of existing entries.
 func NewPersistentStore(basePath string) (*PersistentStore, error) {
-	// Expand home directory if needed
+	// Expand home directory if needed.
 	if strings.HasPrefix(basePath, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return nil, fmt.Errorf("get home directory: %w", err)
 		}
+
 		basePath = filepath.Join(home, basePath[2:])
 	}
 
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(basePath, 0700); err != nil {
+	// Create directory if it doesn't exist.
+	err := os.MkdirAll(basePath, 0700)
+	if err != nil {
 		return nil, fmt.Errorf("create directory: %w", err)
 	}
 
@@ -68,8 +70,9 @@ func NewPersistentStore(basePath string) (*PersistentStore, error) {
 		index:    make(map[string]*IndexEntry),
 	}
 
-	// Rebuild index from existing files
-	if err := store.rebuildIndex(); err != nil {
+	// Rebuild index from existing files.
+	err = store.rebuildIndex()
+	if err != nil {
 		return nil, fmt.Errorf("rebuild index: %w", err)
 	}
 
@@ -85,14 +88,15 @@ func (s *PersistentStore) Put(ctx context.Context, key string, value string, opt
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Determine namespace
+	// Determine namespace.
 	namespace := opts.Namespace
 	if namespace == "" {
 		namespace = DefaultNamespace
 	}
 
-	// Check for existing entry
+	// Check for existing entry.
 	indexKey := s.indexKey(namespace, key)
+
 	existing, exists := s.index[indexKey]
 	if exists && !opts.Overwrite {
 		return ErrKeyExists
@@ -100,7 +104,7 @@ func (s *PersistentStore) Put(ctx context.Context, key string, value string, opt
 
 	now := time.Now()
 
-	// Prepare entry
+	// Prepare entry.
 	entry := persistedEntry{
 		Key:       key,
 		Value:     value,
@@ -112,36 +116,41 @@ func (s *PersistentStore) Put(ctx context.Context, key string, value string, opt
 	if opts.TTL > 0 {
 		entry.TTL = int64(opts.TTL.Seconds())
 	}
+
 	if exists {
 		entry.CreatedAt = existing.CreatedAt
 	}
 
-	// Create namespace directory
+	// Create namespace directory.
 	namespaceDir := filepath.Join(s.basePath, namespace)
-	if err := os.MkdirAll(namespaceDir, 0700); err != nil {
+	err := os.MkdirAll(namespaceDir, 0700)
+	if err != nil {
 		return fmt.Errorf("create namespace directory: %w", err)
 	}
 
-	// Serialize to JSON
+	// Serialize to JSON.
 	data, err := json.MarshalIndent(entry, "", "  ")
 	if err != nil {
 		return fmt.Errorf("serialize entry: %w", err)
 	}
 
-	// Atomic write: temp file + rename
+	// Atomic write: temp file + rename.
 	filePath := s.filePath(namespace, key)
 	tmpPath := filePath + ".tmp"
 
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+	err = os.WriteFile(tmpPath, data, 0600)
+	if err != nil {
 		return fmt.Errorf("write temp file: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, filePath); err != nil {
-		os.Remove(tmpPath) // Clean up on error
+	err = os.Rename(tmpPath, filePath)
+	if err != nil {
+		os.Remove(tmpPath) // Clean up on error.
+
 		return fmt.Errorf("atomic rename: %w", err)
 	}
 
-	// Update index
+	// Update index.
 	s.index[indexKey] = &IndexEntry{
 		Key:       key,
 		Namespace: namespace,
@@ -164,11 +173,13 @@ func (s *PersistentStore) Get(ctx context.Context, key string) (*MemoryEntry, er
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Find in index (search all namespaces if key doesn't include namespace)
+	// Find in index (search all namespaces if key doesn't include namespace).
 	var indexEntry *IndexEntry
+
 	for _, entry := range s.index {
 		if entry.Key == key {
 			indexEntry = entry
+
 			break
 		}
 	}
@@ -177,24 +188,27 @@ func (s *PersistentStore) Get(ctx context.Context, key string) (*MemoryEntry, er
 		return nil, ErrNotFound
 	}
 
-	// Read file
+	// Read file.
 	data, err := os.ReadFile(indexEntry.FilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Index is stale, remove entry
+			// Index is stale, remove entry.
 			delete(s.index, s.indexKey(indexEntry.Namespace, key))
+
 			return nil, ErrNotFound
 		}
+
 		return nil, fmt.Errorf("read file: %w", err)
 	}
 
-	// Deserialize
+	// Deserialize.
 	var entry persistedEntry
-	if err := json.Unmarshal(data, &entry); err != nil {
+	err = json.Unmarshal(data, &entry)
+	if err != nil {
 		return nil, fmt.Errorf("deserialize entry: %w", err)
 	}
 
-	// Increment access count
+	// Increment access count.
 	indexEntry.AccessCount++
 
 	var ttl time.Duration
@@ -222,27 +236,32 @@ func (s *PersistentStore) Delete(ctx context.Context, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Find in index
-	var indexKey string
-	var indexEntry *IndexEntry
+	// Find in index.
+	var (
+		indexKey   string
+		indexEntry *IndexEntry
+	)
+
 	for k, entry := range s.index {
 		if entry.Key == key {
 			indexKey = k
 			indexEntry = entry
+
 			break
 		}
 	}
 
 	if indexEntry == nil {
-		return nil // Idempotent - no error if doesn't exist
+		return nil // Idempotent - no error if doesn't exist.
 	}
 
-	// Delete file
-	if err := os.Remove(indexEntry.FilePath); err != nil && !os.IsNotExist(err) {
+	// Delete file.
+	err := os.Remove(indexEntry.FilePath)
+	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("delete file: %w", err)
 	}
 
-	// Remove from index
+	// Remove from index.
 	delete(s.index, indexKey)
 
 	return nil
@@ -259,6 +278,7 @@ func (s *PersistentStore) List(ctx context.Context, pattern string) ([]string, e
 			keys = append(keys, entry.Key)
 		}
 	}
+
 	return keys, nil
 }
 
@@ -270,23 +290,24 @@ func (s *PersistentStore) Search(ctx context.Context, query string, topK int) ([
 	matches := make([]MemoryEntry, 0)
 
 	for _, indexEntry := range s.index {
-		// Check key match
+		// Check key match.
 		if containsIgnoreCase(indexEntry.Key, query) {
 			entry, err := s.readEntryUnsafe(indexEntry.FilePath)
 			if err == nil {
 				matches = append(matches, *entry)
 			}
+
 			continue
 		}
 
-		// Check value match (need to read file)
+		// Check value match (need to read file).
 		entry, err := s.readEntryUnsafe(indexEntry.FilePath)
 		if err == nil && containsIgnoreCase(entry.Value, query) {
 			matches = append(matches, *entry)
 		}
 	}
 
-	// Limit to topK
+	// Limit to topK.
 	if len(matches) > topK {
 		matches = matches[:topK]
 	}
@@ -298,21 +319,22 @@ func (s *PersistentStore) Search(ctx context.Context, query string, topK int) ([
 func (s *PersistentStore) Count() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
 	return len(s.index)
 }
 
 // Close persists the index and releases resources.
 func (s *PersistentStore) Close() error {
-	// Index is rebuilt on startup from files, no need to persist
+	// Index is rebuilt on startup from files, no need to persist.
 	return nil
 }
 
 // rebuildIndex scans the directory structure and rebuilds the in-memory index.
 func (s *PersistentStore) rebuildIndex() error {
-	// Walk directory looking for .json files
+	// Walk directory looking for .json files.
 	return filepath.Walk(s.basePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // Skip errors
+			return nil // Skip errors.
 		}
 
 		if info.IsDir() {
@@ -323,18 +345,19 @@ func (s *PersistentStore) rebuildIndex() error {
 			return nil
 		}
 
-		// Read and parse entry
+		// Read and parse entry.
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil // Skip unreadable files
+			return nil // Skip unreadable files.
 		}
 
 		var entry persistedEntry
-		if err := json.Unmarshal(data, &entry); err != nil {
-			return nil // Skip invalid files
+		err = json.Unmarshal(data, &entry)
+		if err != nil {
+			return nil // Skip invalid files.
 		}
 
-		// Add to index
+		// Add to index.
 		indexKey := s.indexKey(entry.Namespace, entry.Key)
 		s.index[indexKey] = &IndexEntry{
 			Key:       entry.Key,
@@ -358,7 +381,8 @@ func (s *PersistentStore) readEntryUnsafe(filePath string) (*MemoryEntry, error)
 	}
 
 	var entry persistedEntry
-	if err := json.Unmarshal(data, &entry); err != nil {
+	err = json.Unmarshal(data, &entry)
+	if err != nil {
 		return nil, err
 	}
 

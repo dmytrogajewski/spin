@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -71,7 +72,7 @@ func (t *ApplyPatchTool) Schema() ToolSchema {
 }
 
 func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	// Extract patch_text parameter
+	// Extract patch_text parameter.
 	patchText, err := params.GetString("patch_text")
 	if err != nil || patchText == "" {
 		return ToolResult{
@@ -80,19 +81,20 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 		}, nil
 	}
 
-	// Extract workspace_root parameter (optional)
+	// Extract workspace_root parameter (optional).
 	workspaceRoot := t.workspaceRoot
-	if customRoot, err := params.GetString("workspace_root"); err == nil && customRoot != "" {
+	customRoot, err := params.GetString("workspace_root")
+	if err == nil && customRoot != "" {
 		workspaceRoot = customRoot
 	}
 
-	// Extract dry_run parameter (optional)
+	// Extract dry_run parameter (optional).
 	dryRun := params.GetBoolOr("dry_run", false)
 
-	// Extract force parameter (optional)
+	// Extract force parameter (optional).
 	force := params.GetBoolOr("force", false)
 
-	// Detect patch format and parse accordingly
+	// Detect patch format and parse accordingly.
 	patch, err := t.parsePatch(patchText)
 	if err != nil {
 		return ToolResult{
@@ -101,7 +103,7 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 		}, nil
 	}
 
-	// Create applier
+	// Create applier.
 	applier, err := patchapply.NewApplier(workspaceRoot)
 	if err != nil {
 		return ToolResult{
@@ -110,22 +112,23 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 		}, nil
 	}
 
-	// Configure applier
+	// Configure applier.
 	applier.SetDryRun(dryRun)
 	applier.SetForceOverwrite(force)
 
-	// Apply the patch
+	// Apply the patch.
 	result, err := applier.Apply(patch)
 	if err != nil {
-		// Extract error message
+		// Extract error message.
 		errMsg := err.Error()
+
 		return ToolResult{
 			Success: false,
 			Error:   fmt.Sprintf("failed to apply patch: %v", errMsg),
 		}, nil
 	}
 
-	// Format output
+	// Format output.
 	var output strings.Builder
 	if dryRun {
 		output.WriteString("Dry run completed successfully. No files were modified.\n\n")
@@ -135,6 +138,7 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 
 	if len(result.FilesCreated) > 0 {
 		output.WriteString(fmt.Sprintf("Created %d file(s):\n", len(result.FilesCreated)))
+
 		for _, file := range result.FilesCreated {
 			output.WriteString(fmt.Sprintf("  + %s\n", file))
 		}
@@ -142,6 +146,7 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 
 	if len(result.FilesDeleted) > 0 {
 		output.WriteString(fmt.Sprintf("Deleted %d file(s):\n", len(result.FilesDeleted)))
+
 		for _, file := range result.FilesDeleted {
 			output.WriteString(fmt.Sprintf("  - %s\n", file))
 		}
@@ -149,6 +154,7 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 
 	if len(result.FilesUpdated) > 0 {
 		output.WriteString(fmt.Sprintf("Updated %d file(s):\n", len(result.FilesUpdated)))
+
 		for _, file := range result.FilesUpdated {
 			output.WriteString(fmt.Sprintf("  ~ %s\n", file))
 		}
@@ -156,6 +162,7 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 
 	if len(result.FilesMoved) > 0 {
 		output.WriteString(fmt.Sprintf("Moved %d file(s):\n", len(result.FilesMoved)))
+
 		for oldPath, newPath := range result.FilesMoved {
 			output.WriteString(fmt.Sprintf("  %s → %s\n", oldPath, newPath))
 		}
@@ -171,23 +178,24 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 func (t *ApplyPatchTool) parsePatch(patchText string) (*patchapply.Patch, error) {
 	lines := strings.Split(patchText, "\n")
 	if len(lines) == 0 {
-		return nil, fmt.Errorf("empty patch")
+		return nil, errors.New("empty patch")
 	}
 
-	// Check if it's a proper patchapply format (starts with "*** Begin Patch")
+	// Check if it's a proper patchapply format (starts with "*** Begin Patch").
 	firstLine := strings.TrimSpace(lines[0])
 	if firstLine == "*** Begin Patch" {
-		// Use the proper patchapply parser
+		// Use the proper patchapply parser.
 		parser := patchapply.NewParser(patchText)
+
 		return parser.Parse()
 	}
 
-	// Check if it's a diff format (starts with "*** filename" or "--- filename")
+	// Check if it's a diff format (starts with "*** filename" or "--- filename").
 	if !strings.HasPrefix(firstLine, "*** ") && !strings.HasPrefix(firstLine, "--- ") {
 		return nil, fmt.Errorf("patch must be in standard diff format. Expected to start with '*** filename' or '--- filename', got: %q", firstLine)
 	}
 
-	// Parse diff format directly
+	// Parse diff format directly.
 	return t.parseDiffFormat(patchText)
 }
 
@@ -195,21 +203,22 @@ func (t *ApplyPatchTool) parsePatch(patchText string) (*patchapply.Patch, error)
 func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, error) {
 	lines := strings.Split(diffText, "\n")
 	if len(lines) < 3 {
-		return nil, fmt.Errorf("diff format too short")
+		return nil, errors.New("diff format too short")
 	}
 
-	// Extract filename from the first line
+	// Extract filename from the first line.
 	firstLine := strings.TrimSpace(lines[0])
+
 	var filename string
-	if strings.HasPrefix(firstLine, "*** ") {
-		filename = strings.TrimSpace(strings.TrimPrefix(firstLine, "*** "))
-	} else if strings.HasPrefix(firstLine, "--- ") {
-		filename = strings.TrimSpace(strings.TrimPrefix(firstLine, "--- "))
+	if after, ok := strings.CutPrefix(firstLine, "*** "); ok {
+		filename = strings.TrimSpace(after)
+	} else if after, ok := strings.CutPrefix(firstLine, "--- "); ok {
+		filename = strings.TrimSpace(after)
 	} else {
 		return nil, fmt.Errorf("could not extract filename from first line: %q", firstLine)
 	}
 
-	// Create patch with update file operation
+	// Create patch with update file operation.
 	patch := &patchapply.Patch{
 		Operations: []patchapply.FileOperation{
 			&patchapply.UpdateFile{
@@ -219,25 +228,27 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 		},
 	}
 
-	// Parse hunks
+	// Parse hunks.
 	var currentHunk *patchapply.Hunk
+
 	for i := 2; i < len(lines); i++ {
 		line := lines[i]
 
 		if strings.HasPrefix(line, "@@") {
-			// Start of a new hunk
+			// Start of a new hunk.
 			if currentHunk != nil {
 				patch.Operations[0].(*patchapply.UpdateFile).Hunks = append(
 					patch.Operations[0].(*patchapply.UpdateFile).Hunks,
 					*currentHunk,
 				)
 			}
+
 			currentHunk = &patchapply.Hunk{
 				Header:  strings.TrimSpace(strings.TrimPrefix(line, "@@")),
 				Changes: []patchapply.LineChange{},
 			}
 		} else if currentHunk != nil {
-			// Parse line change
+			// Parse line change.
 			if len(line) == 0 {
 				currentHunk.Changes = append(currentHunk.Changes, patchapply.LineChange{
 					Type: patchapply.LineContext,
@@ -245,12 +256,14 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 				})
 			} else {
 				prefix := line[0]
+
 				text := ""
 				if len(line) > 1 {
 					text = line[1:]
 				}
 
 				var changeType patchapply.LineChangeType
+
 				switch prefix {
 				case ' ':
 					changeType = patchapply.LineContext
@@ -259,7 +272,7 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 				case '+':
 					changeType = patchapply.LineInsert
 				default:
-					// Skip lines without proper prefixes
+					// Skip lines without proper prefixes.
 					continue
 				}
 
@@ -271,7 +284,7 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 		}
 	}
 
-	// Add the last hunk
+	// Add the last hunk.
 	if currentHunk != nil {
 		patch.Operations[0].(*patchapply.UpdateFile).Hunks = append(
 			patch.Operations[0].(*patchapply.UpdateFile).Hunks,

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,23 +52,25 @@ func (t *WriteFileTool) Schema() ToolSchema {
 func (t *WriteFileTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	path, err := params.GetString("path")
 	if err != nil || path == "" {
-		return NewToolError(fmt.Errorf("path parameter must be a non-empty string")), nil
+		return NewToolError(errors.New("path parameter must be a non-empty string")), nil
 	}
 
 	content, err := params.GetString("content")
 	if err != nil {
-		return NewToolError(fmt.Errorf("content parameter must be a string")), nil
+		return NewToolError(errors.New("content parameter must be a string")), nil
 	}
 
-	// Create parent directories if they don't exist
+	// Create parent directories if they don't exist.
 	dir := filepath.Dir(path)
 	if dir != "." && dir != "" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		err := os.MkdirAll(dir, 0755)
+		if err != nil {
 			return NewToolError(fmt.Errorf("failed to create parent directories: %w", err)), nil
 		}
 	}
 
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	err = os.WriteFile(path, []byte(content), 0644)
+	if err != nil {
 		return NewToolError(fmt.Errorf("failed to write file: %w", err)), nil
 	}
 
@@ -85,7 +88,7 @@ func (t *WriteFileTool) CheckApproval(params ToolParameters) ApprovalNeeds {
 		}
 	}
 
-	// System paths require critical approval
+	// System paths require critical approval.
 	systemPaths := []string{"/etc/", "/sys/", "/usr/"}
 	for _, sysPath := range systemPaths {
 		if strings.HasPrefix(path, sysPath) {
@@ -97,7 +100,7 @@ func (t *WriteFileTool) CheckApproval(params ToolParameters) ApprovalNeeds {
 		}
 	}
 
-	// Executable file extensions require high approval
+	// Executable file extensions require high approval.
 	executableExts := []string{".sh", ".go", ".py", ".rb", ".pl", ".js", ".ts"}
 	for _, ext := range executableExts {
 		if strings.HasSuffix(path, ext) {

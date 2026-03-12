@@ -11,34 +11,36 @@ import (
 )
 
 func main() {
-	// Create PureTTY adapter
+	// Create PureTTY adapter.
 	ui, err := adapters.NewPureTTY(os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create TUI: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Set up context with cancellation
+	// Set up context with cancellation.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle OS signals for clean shutdown
+	// Handle OS signals for clean shutdown.
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
 	go func() {
 		<-sigChan
 		cancel()
 	}()
 
-	// Start TUI in background
+	// Start TUI in background.
 	go func() {
-		if err := ui.Run(ctx); err != nil {
+		err := ui.Run(ctx)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
 			cancel()
 		}
 	}()
 
-	// Print welcome message
+	// Print welcome message.
 	ui.PrintLine("╔══════════════════════════════════════════╗")
 	ui.PrintLine("║   Spin TUI Demo - Minimal Example       ║")
 	ui.PrintLine("╚══════════════════════════════════════════╝")
@@ -53,23 +55,25 @@ func main() {
 	ui.PrintLine("")
 	ui.PrintLine("Type a command and press Enter:")
 
-	// Main input loop
+	// Main input loop.
 	for {
 		select {
 		case <-ctx.Done():
-			// Clean shutdown
+			// Clean shutdown.
 			ui.Stop()
 			fmt.Println("\nGoodbye!")
+
 			return
 
 		case line, ok := <-ui.RequestInput():
 			if !ok {
-				// Input channel closed
+				// Input channel closed.
 				ui.Stop()
+
 				return
 			}
 
-			// Handle commands
+			// Handle commands.
 			switch line {
 			case "quit", "exit", "q":
 				ui.PrintLine("Exiting demo...")
@@ -90,7 +94,7 @@ func main() {
 				ui.PrintLine("")
 
 			case "":
-				// Empty line, do nothing
+				// Empty line, do nothing.
 
 			default:
 				ui.PrintLine("")

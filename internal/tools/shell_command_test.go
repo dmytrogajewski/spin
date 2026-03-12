@@ -6,26 +6,27 @@ import (
 	"time"
 )
 
-// Mock executor for shell_command tests
+// Mock executor for shell_command tests.
 type mockExecutor struct {
-	executeFunc func(ctx context.Context, cmd CommandInfo, opts interface{}) (ExecutionResult, error)
+	executeFunc func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error)
 }
 
-func (m *mockExecutor) Execute(ctx context.Context, cmd CommandInfo, opts interface{}) (ExecutionResult, error) {
+func (m *mockExecutor) Execute(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
 	if m.executeFunc != nil {
 		return m.executeFunc(ctx, cmd, opts)
 	}
+
 	return nil, nil
 }
 
-// Mock result that implements ExecutionResult interface
+// Mock result that implements ExecutionResult interface.
 type mockResult struct {
 	Stdout   string
 	Stderr   string
 	ExitCode int
 }
 
-// Implement ExecutionResult interface for mockResult
+// Implement ExecutionResult interface for mockResult.
 func (m *mockResult) GetStdout() string {
 	return m.Stdout
 }
@@ -38,8 +39,8 @@ func (m *mockResult) GetExitCode() int {
 	return m.ExitCode
 }
 
-func (m *mockResult) GetMetadata() map[string]interface{} {
-	return map[string]interface{}{}
+func (m *mockResult) GetMetadata() map[string]any {
+	return map[string]any{}
 }
 
 // TestNewShellCommandTool_NilExecutor tests that creating tool with nil executor fails gracefully.
@@ -73,6 +74,7 @@ func TestShellCommandTool_Description(t *testing.T) {
 	if desc == "" {
 		t.Error("Description() returned empty string")
 	}
+
 	if len(desc) < 10 {
 		t.Errorf("Description() too short: %q", desc)
 	}
@@ -86,27 +88,31 @@ func TestShellCommandTool_Schema(t *testing.T) {
 	if schema.Type != "function" {
 		t.Errorf("Schema.Type = %q, want %q", schema.Type, "function")
 	}
+
 	if schema.Function.Name != "shell_command" {
 		t.Errorf("Schema.Function.Name = %q, want %q", schema.Function.Name, "shell_command")
 	}
 
-	// Check operation parameter
+	// Check operation parameter.
 	opProp, ok := schema.Function.Parameters.Properties["operation"]
 	if !ok {
 		t.Fatal("Schema missing 'operation' property")
 	}
+
 	if len(opProp.Enum) != 5 {
 		t.Errorf("operation.Enum has %d values, want 5", len(opProp.Enum))
 	}
 
 	// Check required fields - both operation and command are required
-	// (command is required to ensure LLMs always provide it for execute operations)
+	// (command is required to ensure LLMs always provide it for execute operations).
 	if len(schema.Function.Parameters.Required) != 2 {
 		t.Errorf("Required has %d fields, want 2", len(schema.Function.Parameters.Required))
 	}
+
 	if schema.Function.Parameters.Required[0] != "operation" {
 		t.Errorf("Required[0] = %q, want %q", schema.Function.Parameters.Required[0], "operation")
 	}
+
 	if schema.Function.Parameters.Required[1] != "command" {
 		t.Errorf("Required[1] = %q, want %q", schema.Function.Parameters.Required[1], "command")
 	}
@@ -116,15 +122,17 @@ func TestShellCommandTool_Schema(t *testing.T) {
 func TestShellCommandTool_Execute_MissingOperation(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{})
-	result, err := tool.Execute(context.Background(), params)
+	params, _ := FromMap(map[string]any{})
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if result.Success {
 		t.Error("Expected failure for missing operation")
 	}
+
 	if result.Error != "operation parameter is required" {
 		t.Errorf("Error = %q, want 'operation parameter is required'", result.Error)
 	}
@@ -134,17 +142,19 @@ func TestShellCommandTool_Execute_MissingOperation(t *testing.T) {
 func TestShellCommandTool_Execute_UnknownOperation(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "unknown_op",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if result.Success {
 		t.Error("Expected failure for unknown operation")
 	}
+
 	if result.Error != "unknown operation: unknown_op" {
 		t.Errorf("Error = %q, want 'unknown operation: unknown_op'", result.Error)
 	}
@@ -154,18 +164,20 @@ func TestShellCommandTool_Execute_UnknownOperation(t *testing.T) {
 func TestShellCommandTool_Execute_NilExecutor(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "echo test",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if result.Success {
 		t.Error("Expected failure for nil executor")
 	}
+
 	if result.Error != "executor not configured" {
 		t.Errorf("Error = %q, want 'executor not configured'", result.Error)
 	}
@@ -174,23 +186,25 @@ func TestShellCommandTool_Execute_NilExecutor(t *testing.T) {
 // TestShellCommandTool_Execute_MissingCommand tests execute without command.
 func TestShellCommandTool_Execute_MissingCommand(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts interface{}) (ExecutionResult, error) {
+		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
 			return &mockResult{Stdout: "", Stderr: "", ExitCode: 0}, nil
 		},
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "execute",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if result.Success {
 		t.Error("Expected failure for missing command")
 	}
+
 	if result.Error != "command parameter is required for execute operation" {
 		t.Errorf("Error = %q", result.Error)
 	}
@@ -200,15 +214,16 @@ func TestShellCommandTool_Execute_MissingCommand(t *testing.T) {
 func TestShellCommandTool_Execute_EmptyCommand(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if result.Success {
 		t.Error("Expected failure for empty command")
 	}
@@ -217,7 +232,7 @@ func TestShellCommandTool_Execute_EmptyCommand(t *testing.T) {
 // TestShellCommandTool_Execute_Success tests successful command execution.
 func TestShellCommandTool_Execute_Success(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts interface{}) (ExecutionResult, error) {
+		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
 			return &mockResult{
 				Stdout:   "hello world",
 				Stderr:   "",
@@ -227,18 +242,20 @@ func TestShellCommandTool_Execute_Success(t *testing.T) {
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "echo hello",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if !result.Success {
 		t.Errorf("Expected success, got failure: %s", result.Error)
 	}
+
 	if result.Output != "hello world" {
 		t.Errorf("Output = %q, want %q", result.Output, "hello world")
 	}
@@ -247,7 +264,7 @@ func TestShellCommandTool_Execute_Success(t *testing.T) {
 // TestShellCommandTool_Execute_Failure tests failed command execution.
 func TestShellCommandTool_Execute_Failure(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts interface{}) (ExecutionResult, error) {
+		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
 			return &mockResult{
 				Stdout:   "",
 				Stderr:   "command not found",
@@ -257,18 +274,20 @@ func TestShellCommandTool_Execute_Failure(t *testing.T) {
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "nonexistent",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if result.Success {
 		t.Error("Expected failure for non-zero exit code")
 	}
+
 	if result.Output != "command not found" {
 		t.Errorf("Output = %q, want %q", result.Output, "command not found")
 	}
@@ -277,7 +296,7 @@ func TestShellCommandTool_Execute_Failure(t *testing.T) {
 // TestShellCommandTool_Execute_WithWorkDir tests execute with working directory.
 func TestShellCommandTool_Execute_WithWorkDir(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts interface{}) (ExecutionResult, error) {
+		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
 			return &mockResult{
 				Stdout:   "success",
 				Stderr:   "",
@@ -287,16 +306,17 @@ func TestShellCommandTool_Execute_WithWorkDir(t *testing.T) {
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation":         "execute",
 		"command":           "ls",
 		"working_directory": "/tmp",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if !result.Success {
 		t.Errorf("Expected success, got failure: %s", result.Error)
 	}
@@ -305,7 +325,7 @@ func TestShellCommandTool_Execute_WithWorkDir(t *testing.T) {
 // TestShellCommandTool_Execute_WithTimeout tests execute with custom timeout.
 func TestShellCommandTool_Execute_WithTimeout(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts interface{}) (ExecutionResult, error) {
+		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
 			return &mockResult{
 				Stdout:   "output",
 				Stderr:   "",
@@ -315,16 +335,17 @@ func TestShellCommandTool_Execute_WithTimeout(t *testing.T) {
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "sleep 1",
 		"timeout":   5.0,
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if !result.Success {
 		t.Errorf("Expected success, got failure: %s", result.Error)
 	}
@@ -333,13 +354,13 @@ func TestShellCommandTool_Execute_WithTimeout(t *testing.T) {
 // TestShellCommandTool_Execute_Timeout tests execute timeout.
 func TestShellCommandTool_Execute_Timeout(t *testing.T) {
 	executor := &mockExecutor{
-		executeFunc: func(ctx context.Context, cmd CommandInfo, opts interface{}) (ExecutionResult, error) {
+		executeFunc: func(ctx context.Context, cmd CommandInfo, opts any) (ExecutionResult, error) {
 			return nil, context.DeadlineExceeded
 		},
 	}
 	tool := NewShellCommandTool(nil, nil, executor)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "execute",
 		"command":   "sleep 10",
 		"timeout":   0.1,
@@ -349,10 +370,10 @@ func TestShellCommandTool_Execute_Timeout(t *testing.T) {
 	defer cancel()
 
 	result, err := tool.Execute(ctx, params)
-
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if result.Success {
 		t.Error("Expected failure for timeout")
 	}
@@ -360,50 +381,56 @@ func TestShellCommandTool_Execute_Timeout(t *testing.T) {
 
 // TestShellCommandTool_GetEnvironment_WithShellInfo tests get_environment with shell integration.
 func TestShellCommandTool_GetEnvironment_WithShellInfo(t *testing.T) {
-	// Mock shell integration
+	// Mock shell integration.
 	type mockShellInfo struct{}
+
 	shellInfo := &mockShellInfo{}
 
 	// Add GetEnvironmentVars method dynamically (not possible in Go without reflection tricks)
-	// For now, test fallback
+	// For now, test fallback.
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "get_environment",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if !result.Success {
 		t.Errorf("Expected success, got failure: %s", result.Error)
 	}
+
 	if result.Output == "" {
 		t.Error("Expected non-empty output")
 	}
+
 	if len(result.Output) < 20 {
 		t.Errorf("Output too short: %q", result.Output)
 	}
 
-	_ = shellInfo // avoid unused warning
+	_ = shellInfo // avoid unused warning.
 }
 
 // TestShellCommandTool_GetEnvironment_Fallback tests get_environment without shell integration.
 func TestShellCommandTool_GetEnvironment_Fallback(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "get_environment",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if !result.Success {
 		t.Errorf("Expected success, got failure: %s", result.Error)
 	}
+
 	if result.Output == "" {
 		t.Error("Expected non-empty output")
 	}
@@ -413,17 +440,19 @@ func TestShellCommandTool_GetEnvironment_Fallback(t *testing.T) {
 func TestShellCommandTool_GetShellInfo_Fallback(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "get_shell_info",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if !result.Success {
 		t.Errorf("Expected success, got failure: %s", result.Error)
 	}
+
 	if result.Output == "" {
 		t.Error("Expected non-empty output")
 	}
@@ -433,17 +462,19 @@ func TestShellCommandTool_GetShellInfo_Fallback(t *testing.T) {
 func TestShellCommandTool_DetectShell_MissingCommand(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "detect_shell",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if result.Success {
 		t.Error("Expected failure for missing command")
 	}
+
 	if result.Error != "command parameter is required for detect_shell operation" {
 		t.Errorf("Error = %q", result.Error)
 	}
@@ -453,18 +484,20 @@ func TestShellCommandTool_DetectShell_MissingCommand(t *testing.T) {
 func TestShellCommandTool_DetectShell_Pipe(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "detect_shell",
 		"command":   "ls | grep test",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if !result.Success {
 		t.Errorf("Expected success, got failure: %s", result.Error)
 	}
+
 	if result.Output != "Is shell command: true" {
 		t.Errorf("Output = %q, want 'Is shell command: true'", result.Output)
 	}
@@ -474,18 +507,20 @@ func TestShellCommandTool_DetectShell_Pipe(t *testing.T) {
 func TestShellCommandTool_DetectShell_Simple(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "detect_shell",
 		"command":   "ls -la",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if !result.Success {
 		t.Errorf("Expected success, got failure: %s", result.Error)
 	}
+
 	if result.Output != "Is shell command: false" {
 		t.Errorf("Output = %q, want 'Is shell command: false'", result.Output)
 	}
@@ -512,15 +547,16 @@ func TestShellCommandTool_DetectShell_Redirect(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, _ := FromMap(map[string]interface{}{
+			params, _ := FromMap(map[string]any{
 				"operation": "detect_shell",
 				"command":   tt.command,
 			})
-			result, err := tool.Execute(context.Background(), params)
 
+			result, err := tool.Execute(context.Background(), params)
 			if err != nil {
 				t.Fatalf("Execute() returned error: %v", err)
 			}
+
 			if !result.Success {
 				t.Errorf("Expected success, got failure: %s", result.Error)
 			}
@@ -550,7 +586,7 @@ type mockClassificationResult struct {
 	Reason         string
 }
 
-// Implement ValidationResult interface for mockClassificationResult
+// Implement ValidationResult interface for mockClassificationResult.
 func (m *mockClassificationResult) GetClassification() int {
 	return m.Classification
 }
@@ -564,6 +600,7 @@ func (m *mockValidatorShell) Classify(cmd CommandInfo) (ValidationResult, error)
 	if m.classifyFunc != nil {
 		return m.classifyFunc(cmd)
 	}
+
 	return &mockClassificationResult{
 		Classification: 0,
 		Reason:         "",
@@ -574,18 +611,20 @@ func (m *mockValidatorShell) Classify(cmd CommandInfo) (ValidationResult, error)
 func TestShellCommandTool_Validate_NilValidator(t *testing.T) {
 	tool := NewShellCommandTool(nil, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "validate",
 		"command":   "ls",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if result.Success {
 		t.Error("Expected failure for nil validator")
 	}
+
 	if result.Error != "validator not configured" {
 		t.Errorf("Error = %q, want 'validator not configured'", result.Error)
 	}
@@ -596,17 +635,19 @@ func TestShellCommandTool_Validate_MissingCommand(t *testing.T) {
 	validator := &mockValidatorShell{}
 	tool := NewShellCommandTool(validator, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "validate",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if result.Success {
 		t.Error("Expected failure for missing command")
 	}
+
 	if result.Error != "command parameter is required for validate operation" {
 		t.Errorf("Error = %q", result.Error)
 	}
@@ -617,25 +658,27 @@ func TestShellCommandTool_Validate_Safe(t *testing.T) {
 	validator := &mockValidatorShell{
 		classifyFunc: func(cmd CommandInfo) (ValidationResult, error) {
 			return &mockClassificationResult{
-				Classification: 0, // Safe
+				Classification: 0, // Safe.
 				Reason:         "read-only command",
 			}, nil
 		},
 	}
 	tool := NewShellCommandTool(validator, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "validate",
 		"command":   "ls -la",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if !result.Success {
 		t.Errorf("Expected success, got failure: %s", result.Error)
 	}
+
 	if result.Output == "" {
 		t.Error("Expected non-empty output")
 	}
@@ -646,25 +689,27 @@ func TestShellCommandTool_Validate_Dangerous(t *testing.T) {
 	validator := &mockValidatorShell{
 		classifyFunc: func(cmd CommandInfo) (ValidationResult, error) {
 			return &mockClassificationResult{
-				Classification: 1, // Dangerous
+				Classification: 1, // Dangerous.
 				Reason:         "modifies filesystem",
 			}, nil
 		},
 	}
 	tool := NewShellCommandTool(validator, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "validate",
 		"command":   "rm -rf /tmp/test",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if !result.Success {
 		t.Errorf("Expected success, got failure: %s", result.Error)
 	}
+
 	if result.Output == "" {
 		t.Error("Expected non-empty output")
 	}
@@ -675,25 +720,27 @@ func TestShellCommandTool_Validate_Critical(t *testing.T) {
 	validator := &mockValidatorShell{
 		classifyFunc: func(cmd CommandInfo) (ValidationResult, error) {
 			return &mockClassificationResult{
-				Classification: 2, // Critical
+				Classification: 2, // Critical.
 				Reason:         "requires elevated privileges",
 			}, nil
 		},
 	}
 	tool := NewShellCommandTool(validator, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "validate",
 		"command":   "sudo rm -rf /",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if !result.Success {
 		t.Errorf("Expected success, got failure: %s", result.Error)
 	}
+
 	if result.Output == "" {
 		t.Error("Expected non-empty output")
 	}
@@ -704,15 +751,16 @@ func TestShellCommandTool_Validate_EmptyCommand(t *testing.T) {
 	validator := &mockValidatorShell{}
 	tool := NewShellCommandTool(validator, nil, nil)
 
-	params, _ := FromMap(map[string]interface{}{
+	params, _ := FromMap(map[string]any{
 		"operation": "validate",
 		"command":   "",
 	})
-	result, err := tool.Execute(context.Background(), params)
 
+	result, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Execute() returned error: %v", err)
 	}
+
 	if result.Success {
 		t.Error("Expected failure for empty command")
 	}

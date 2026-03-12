@@ -19,21 +19,21 @@ import (
 // It translates the event stream from the core agent into visual blocks
 // that are displayed in the terminal UI timeline.
 type TUIMapper struct {
-	ui                 ports.UI
-	blockRegistry      map[string][]*blocks.Block // toolID → blocks (supports duplicates)
-	applyPatchByFile   map[string]*blocks.Block   // file path → latest APPLY_PATCH block (write_file)
-	streamCh           chan string                // Content streaming channel
-	streamMu           sync.Mutex                 // Protects streamCh
-	streamCtx          context.Context
-	streamCancel       context.CancelFunc
-	// State for thinking blocks
+	ui               ports.UI
+	blockRegistry    map[string][]*blocks.Block // toolID → blocks (supports duplicates).
+	applyPatchByFile map[string]*blocks.Block   // file path → latest APPLY_PATCH block (write_file).
+	streamCh         chan string                // Content streaming channel.
+	streamMu         sync.Mutex                 // Protects streamCh.
+	streamCtx        context.Context
+	streamCancel     context.CancelFunc
+	// State for thinking blocks.
 	thinking           bool
 	thinkStart         time.Time
 	thinkTokens        int
-	mu                 sync.RWMutex        // Protects blockRegistry
-	lastBulletSet      map[string]bool     // Track last retrieved bullet content (for deduplication)
-	lastLearnedBullets map[string]bool     // Track last learned bullet content (for deduplication)
-	bulletMu           sync.Mutex          // Protects lastBulletSet and lastLearnedBullets
+	mu                 sync.RWMutex    // Protects blockRegistry.
+	lastBulletSet      map[string]bool // Track last retrieved bullet content (for deduplication).
+	lastLearnedBullets map[string]bool // Track last learned bullet content (for deduplication).
+	bulletMu           sync.Mutex      // Protects lastBulletSet and lastLearnedBullets.
 }
 
 // NewTUIMapper creates a new TUI event mapper.
@@ -53,12 +53,12 @@ func NewTUIMapper(ui ports.UI) *TUIMapper {
 // It handles tool calls, content streaming, errors, and system messages.
 // Returns an error only for critical failures; gracefully handles unexpected data.
 func (m *TUIMapper) MapEvent(event events.Event) error {
-	// Handle nil data gracefully
+	// Handle nil data gracefully.
 	if event.Data == nil {
 		return nil
 	}
 
-	// Process event for status updates (Phase 1)
+	// Process event for status updates (Phase 1).
 	if statusUI, ok := m.ui.(interface{ ProcessEvent(*events.Event) }); ok {
 		statusUI.ProcessEvent(&event)
 	}
@@ -83,7 +83,7 @@ func (m *TUIMapper) MapEvent(event events.Event) error {
 	case events.EventInfo, events.EventWarning:
 		return m.handleSystemEvent(event)
 	default:
-		// Ignore unknown events gracefully
+		// Ignore unknown events gracefully.
 		return nil
 	}
 }
@@ -92,20 +92,20 @@ func (m *TUIMapper) MapEvent(event events.Event) error {
 func (m *TUIMapper) handleToolStart(event events.Event) error {
 	data, ok := event.Data.(events.ToolCallStartData)
 	if !ok {
-		return nil // Gracefully handle type assertion failure
+		return nil // Gracefully handle type assertion failure.
 	}
 
-	// Create block based on tool type (block header provides compact feedback)
+	// Create block based on tool type (block header provides compact feedback).
 	block := m.createBlockForTool(data)
 	if block == nil {
-		// Unknown tool type, skip block creation
+		// Unknown tool type, skip block creation.
 		return nil
 	}
 
-	// Atomically check and register (prevent race condition)
+	// Atomically check and register (prevent race condition).
 	m.mu.Lock()
 
-	// Debug: log registry state
+	// Debug: log registry state.
 	slog.Debug("Checking blockRegistry for duplicate",
 		"tool_id", data.ToolID,
 		"registry_size", len(m.blockRegistry),
@@ -113,7 +113,7 @@ func (m *TUIMapper) handleToolStart(event events.Event) error {
 
 	if _, exists := m.blockRegistry[data.ToolID]; exists {
 		// Duplicate tool ID from LLM - make block ID unique by appending counter
-		// This is a workaround for LLM bugs that reuse tool IDs
+		// This is a workaround for LLM bugs that reuse tool IDs.
 		slog.Warn("Duplicate tool ID from LLM, making block ID unique",
 			"tool_id", data.ToolID,
 			"new_tool_name", data.ToolName,
@@ -121,31 +121,34 @@ func (m *TUIMapper) handleToolStart(event events.Event) error {
 
 		// Find a unique block ID by appending -1, -2, etc.
 		originalID := block.ID
-		// Use the number of existing blocks as suffix to avoid collisions
+		// Use the number of existing blocks as suffix to avoid collisions.
 		block.ID = fmt.Sprintf("%s-%d", originalID, len(m.blockRegistry[data.ToolID]))
 
 		slog.Info("Created unique block ID for duplicate tool",
 			"original_tool_id", data.ToolID,
 			"new_block_id", block.ID)
 
-		// Register duplicate block under the same tool ID for updates
+		// Register duplicate block under the same tool ID for updates.
 		m.blockRegistry[data.ToolID] = append(m.blockRegistry[data.ToolID], block)
 	} else {
-		// First time seeing this tool ID - register it normally
+		// First time seeing this tool ID - register it normally.
 		m.blockRegistry[data.ToolID] = []*blocks.Block{block}
 	}
 	m.mu.Unlock()
 
-	// Append to UI timeline
-	if err := m.ui.AppendBlock(block); err != nil {
-		// Log the error with context for debugging
+	// Append to UI timeline.
+	err := m.ui.AppendBlock(block)
+	if err != nil {
+		// Log the error with context for debugging.
 		slog.Error("Failed to append block to timeline",
 			"error", err,
 			"block_id", block.ID,
 			"tool_id", data.ToolID,
 			"tool_name", data.ToolName)
+
 		return err
 	}
+
 	return nil
 }
 
@@ -159,18 +162,18 @@ func (m *TUIMapper) createBlockForTool(data events.ToolCallStartData) *blocks.Bl
 	case "write_file":
 		return m.createOrReuseApplyPatchBlock(data)
 	case "list_directory":
-		return m.createExecuteBlock(data) // Treat as EXECUTE
+		return m.createExecuteBlock(data) // Treat as EXECUTE.
 	case "apply_patch":
 		// Dedicated apply_patch tool (structured patch). Show the patch text as a diff.
 		return m.createApplyPatchFromPatchTool(data)
 	case "file_search":
-		// Map file_search to GREP block type (files_with_matches style)
+		// Map file_search to GREP block type (files_with_matches style).
 		return m.createGrepBlockFromSearch(data)
 	case "git_context":
-		// Map to NOTICE block; details are filled on completion
+		// Map to NOTICE block; details are filled on completion.
 		return m.createNoticeBlock(data, "Git Context")
 	case "get_context":
-		// Map to NOTICE block for environment context
+		// Map to NOTICE block for environment context.
 		return m.createNoticeBlock(data, "Environment Context")
 	default:
 		return m.createToolBlock(data)
@@ -182,10 +185,10 @@ func (m *TUIMapper) createExecuteBlock(data events.ToolCallStartData) *blocks.Bl
 	block := blocks.NewBlock(blocks.BlockTypeExecute)
 	block.ID = data.ToolID
 
-	// Extract command from parameters (or path for list_directory)
+	// Extract command from parameters (or path for list_directory).
 	command := extractString(data.Parameters, "command")
 	if command == "" && data.ToolName == "list_directory" {
-		// For list_directory, use the path as the command
+		// For list_directory, use the path as the command.
 		command = "ls " + extractString(data.Parameters, "path")
 	}
 
@@ -193,23 +196,26 @@ func (m *TUIMapper) createExecuteBlock(data events.ToolCallStartData) *blocks.Bl
 	// tool name (data.ToolName) and command from metadata. Setting Title
 	// causes duplication in the block header.
 
-	// Store metadata
+	// Store metadata.
 	cwd := extractString(data.Parameters, "cwd")
 	if cwd == "" {
 		cwd = "."
 	}
+
 	meta := &blocks.ExecuteMeta{
 		Command: command,
 		CWD:     cwd,
-		Impact:  "medium", // Default impact level
+		Impact:  "medium", // Default impact level.
 	}
-	if err := blocks.SetExecuteMeta(block, meta); err != nil {
-		// Validation failed, marshal map to JSON to preserve data
+	err := blocks.SetExecuteMeta(block, meta)
+	if err != nil {
+		// Validation failed, marshal map to JSON to preserve data.
 		fallback := map[string]any{
 			"command": command,
 			"cwd":     cwd,
 		}
-		if data, marshalErr := json.Marshal(fallback); marshalErr == nil {
+		data, marshalErr := json.Marshal(fallback)
+		if marshalErr == nil {
 			block.Meta = data
 		}
 	}
@@ -230,12 +236,14 @@ func (m *TUIMapper) createReadBlock(data events.ToolCallStartData) *blocks.Block
 		Offset: extractIntValue(data.Parameters, "offset"),
 		Limit:  extractIntValue(data.Parameters, "limit"),
 	}
-	if err := blocks.SetReadMeta(block, meta); err != nil {
-		// Validation failed, marshal map to JSON
+	err := blocks.SetReadMeta(block, meta)
+	if err != nil {
+		// Validation failed, marshal map to JSON.
 		fallback := map[string]any{
 			"file": path,
 		}
-		if data, marshalErr := json.Marshal(fallback); marshalErr == nil {
+		data, marshalErr := json.Marshal(fallback)
+		if marshalErr == nil {
 			block.Meta = data
 		}
 	}
@@ -248,27 +256,31 @@ func (m *TUIMapper) createToolBlock(data events.ToolCallStartData) *blocks.Block
 	block := blocks.NewBlock(blocks.BlockTypeTool)
 	block.ID = data.ToolID
 
-	// Prefer the actual tool name from the event; fall back to param
+	// Prefer the actual tool name from the event; fall back to param.
 	toolName := data.ToolName
 	if toolName == "" {
 		toolName = extractString(data.Parameters, "tool_name")
 	}
 
-	// Convert parameters to a simple map for display (best-effort)
+	// Convert parameters to a simple map for display (best-effort).
 	params := data.Parameters.ToMap()
+
 	meta := &blocks.ToolMeta{
 		ToolName: toolName,
 		Params:   params,
 	}
-	if err := blocks.SetToolMeta(block, meta); err != nil {
-		// Validation failed, marshal map to JSON to preserve data
+	err := blocks.SetToolMeta(block, meta)
+	if err != nil {
+		// Validation failed, marshal map to JSON to preserve data.
 		fallback := map[string]any{
 			"tool_name": toolName,
 		}
-		if data, marshalErr := json.Marshal(fallback); marshalErr == nil {
+		data, marshalErr := json.Marshal(fallback)
+		if marshalErr == nil {
 			block.Meta = data
 		}
 	}
+
 	return block
 }
 
@@ -283,38 +295,42 @@ func (m *TUIMapper) createOrReuseApplyPatchBlock(data events.ToolCallStartData) 
 	defer m.mu.Unlock()
 
 	if existing, ok := m.applyPatchByFile[path]; ok && existing != nil {
-		// Map this tool ID to the existing block so completion updates it
+		// Map this tool ID to the existing block so completion updates it.
 		m.blockRegistry[data.ToolID] = append(m.blockRegistry[data.ToolID], existing)
 
-		// Update body/title to reflect the latest write intent
+		// Update body/title to reflect the latest write intent.
 		if content != "" {
 			existing.Body = content
 		}
+
 		if existing.Title == "" {
 			existing.Title = path
 		}
 
-		// Push in-place update; ignore error (best-effort)
+		// Push in-place update; ignore error (best-effort).
 		_ = m.ui.UpdateBlock(existing.ID, existing)
 
-		// Returning nil tells caller not to append a new block
+		// Returning nil tells caller not to append a new block.
 		return nil
 	}
 
-	// First write for this path: create a new block and remember it
+	// First write for this path: create a new block and remember it.
 	block := blocks.NewBlock(blocks.BlockTypeApplyPatch)
 	block.ID = data.ToolID
 	block.Title = path
 	block.Body = content
 
 	meta := &blocks.PatchMeta{File: path}
-	if err := blocks.SetPatchMeta(block, meta); err != nil {
-		if data, marshalErr := json.Marshal(map[string]any{"file": path}); marshalErr == nil {
+	err := blocks.SetPatchMeta(block, meta)
+	if err != nil {
+		data, marshalErr := json.Marshal(map[string]any{"file": path})
+		if marshalErr == nil {
 			block.Meta = data
 		}
 	}
 
 	m.applyPatchByFile[path] = block
+
 	return block
 }
 
@@ -325,28 +341,31 @@ func (m *TUIMapper) createApplyPatchFromPatchTool(data events.ToolCallStartData)
 	block := blocks.NewBlock(blocks.BlockTypeApplyPatch)
 	block.ID = data.ToolID
 
-	// Title: show workspace root if provided, otherwise generic label
+	// Title: show workspace root if provided, otherwise generic label.
 	workspaceRoot := extractString(data.Parameters, "workspace_root")
 	if workspaceRoot == "" {
 		workspaceRoot = "."
 	}
+
 	block.Title = workspaceRoot
 
-	// Body: show the raw patch text so the user sees exactly what is applied
+	// Body: show the raw patch text so the user sees exactly what is applied.
 	patchText := extractString(data.Parameters, "patch_text")
 	block.Body = patchText
 
-	// Metadata: PatchMeta requires a non-empty File; use workspace root as scope indicator
+	// Metadata: PatchMeta requires a non-empty File; use workspace root as scope indicator.
 	meta := &blocks.PatchMeta{
 		File:      workspaceRoot,
 		Completed: false,
 	}
-	if err := blocks.SetPatchMeta(block, meta); err != nil {
-		// Fallback to JSON if validation fails for any reason
+	err := blocks.SetPatchMeta(block, meta)
+	if err != nil {
+		// Fallback to JSON if validation fails for any reason.
 		fallback := map[string]any{
 			"file": workspaceRoot,
 		}
-		if data, marshalErr := json.Marshal(fallback); marshalErr == nil {
+		data, marshalErr := json.Marshal(fallback)
+		if marshalErr == nil {
 			block.Meta = data
 		}
 	}
@@ -360,17 +379,19 @@ func (m *TUIMapper) createGrepBlockFromSearch(data events.ToolCallStartData) *bl
 	block.ID = data.ToolID
 
 	query := extractString(data.Parameters, "query")
-	// Map file_search semantics to GREP meta for consistent rendering
+	// Map file_search semantics to GREP meta for consistent rendering.
 	meta := &blocks.GrepMeta{
 		Pattern: query,
 		Mode:    "files_with_matches",
 	}
-	if err := blocks.SetGrepMeta(block, meta); err != nil {
+	err := blocks.SetGrepMeta(block, meta)
+	if err != nil {
 		fallback := map[string]any{
 			"pattern": query,
 			"mode":    "files_with_matches",
 		}
-		if data, marshalErr := json.Marshal(fallback); marshalErr == nil {
+		data, marshalErr := json.Marshal(fallback)
+		if marshalErr == nil {
 			block.Meta = data
 		}
 	}
@@ -383,6 +404,7 @@ func (m *TUIMapper) createNoticeBlock(data events.ToolCallStartData, title strin
 	block := blocks.NewBlock(blocks.BlockTypeNotice)
 	block.ID = data.ToolID
 	block.Title = title
+
 	return block
 }
 
@@ -399,17 +421,20 @@ func (m *TUIMapper) handleToolComplete(event events.Event) error {
 	}
 
 	var lastErr error
+
 	for _, block := range blocksToUpdate {
 		if block == nil {
 			continue
 		}
 
-		if err := m.updateBlockWithToolResult(block, data); err != nil {
+		err := m.updateBlockWithToolResult(block, data)
+		if err != nil {
 			lastErr = err
 		}
 	}
 
 	m.cleanupToolRegistry(data.ToolID)
+
 	return lastErr
 }
 
@@ -417,22 +442,24 @@ func (m *TUIMapper) handleToolComplete(event events.Event) error {
 func (m *TUIMapper) getBlocksForTool(toolID string) ([]*blocks.Block, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	blocksToUpdate, exists := m.blockRegistry[toolID]
+
 	return blocksToUpdate, exists
 }
 
 // updateBlockWithToolResult updates a single block with tool execution results.
 func (m *TUIMapper) updateBlockWithToolResult(block *blocks.Block, data events.ToolCallCompleteData) error {
-	// Update block content
+	// Update block content.
 	m.updateBlockContent(block, data)
 
-	// Update block severity
+	// Update block severity.
 	m.updateBlockSeverity(block, data)
 
-	// Update block metadata based on type
+	// Update block metadata based on type.
 	m.updateBlockMetadata(block, data)
 
-	// Update in UI
+	// Update in UI.
 	return m.ui.UpdateBlock(block.ID, block)
 }
 
@@ -484,6 +511,7 @@ func (m *TUIMapper) updateExecuteBlockMetadata(block *blocks.Block, data events.
 	} else {
 		meta.ExitCode = intPtr(0)
 	}
+
 	meta.LinesOut = countLinesPtr(block.Body)
 	_ = blocks.SetExecuteMeta(block, meta)
 }
@@ -504,6 +532,7 @@ func (m *TUIMapper) updatePatchBlockMetadata(block *blocks.Block, data events.To
 func (m *TUIMapper) cleanupToolRegistry(toolID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	delete(m.blockRegistry, toolID)
 }
 
@@ -514,10 +543,10 @@ func (m *TUIMapper) handleContentDelta(event events.Event) error {
 		return nil
 	}
 
-	// Check if we need to close a previous thinking block
+	// Check if we need to close a previous thinking block.
 	m.checkCloseThinking()
 
-	// If streaming is active, send chunk
+	// If streaming is active, send chunk.
 	m.streamMu.Lock()
 	defer m.streamMu.Unlock()
 
@@ -525,9 +554,9 @@ func (m *TUIMapper) handleContentDelta(event events.Event) error {
 		select {
 		case m.streamCh <- data.Content:
 		case <-m.streamCtx.Done():
-			// Stream closed, drop
+			// Stream closed, drop.
 		default:
-			// Channel full, drop (UI has coalescing)
+			// Channel full, drop (UI has coalescing).
 		}
 	}
 
@@ -544,12 +573,12 @@ func (m *TUIMapper) handleThinkingDelta(event events.Event) error {
 	m.streamMu.Lock()
 	defer m.streamMu.Unlock()
 
-	// Start thinking block if not active
+	// Start thinking block if not active.
 	if !m.thinking {
 		m.thinking = true
 		m.thinkStart = time.Now()
 		m.thinkTokens = 0
-		// Send dim gray start code
+		// Send dim gray start code.
 		if m.streamCh != nil {
 			select {
 			case m.streamCh <- "\x1b[2m\x1b[38;5;244m":
@@ -559,14 +588,14 @@ func (m *TUIMapper) handleThinkingDelta(event events.Event) error {
 	}
 
 	// Update metrics
-	// Rough token estimation: whitespace-delimited words
+	// Rough token estimation: whitespace-delimited words.
 	for _, char := range data.Content {
 		if char == ' ' || char == '\n' || char == '\t' {
 			m.thinkTokens++
 		}
 	}
 
-	// Send content
+	// Send content.
 	if m.streamCh != nil && data.Content != "" {
 		select {
 		case m.streamCh <- data.Content:
@@ -591,11 +620,11 @@ func (m *TUIMapper) checkCloseThinking() {
 	m.thinking = false
 
 	if m.streamCh != nil {
-		// Reset dim gray formatting
+		// Reset dim gray formatting.
 		var out strings.Builder
-		out.WriteString("\x1b[0m") // Reset
+		out.WriteString("\x1b[0m") // Reset.
 
-		// Summary
+		// Summary.
 		out.WriteString("\x1b[2m\x1b[38;5;242m")
 		out.WriteString(fmt.Sprintf(" [thought for %.2fs, ~%d tokens]",
 			duration.Seconds(), m.thinkTokens))
@@ -616,7 +645,7 @@ func (m *TUIMapper) handleContentComplete(event events.Event) error {
 		return nil
 	}
 
-	// Create a NOTICE block to display the complete message
+	// Create a NOTICE block to display the complete message.
 	block := blocks.NewBlock(blocks.BlockTypeNotice)
 	block.ID = generateBlockID()
 	block.Body = data.Content
@@ -653,7 +682,7 @@ func (m *TUIMapper) handleSystemEvent(event events.Event) error {
 	block.Title = data.Message
 	block.Body = data.Details
 
-	// Map severity
+	// Map severity.
 	switch data.Level {
 	case "error":
 		block.Severity = blocks.SeverityError
@@ -673,11 +702,12 @@ func (m *TUIMapper) handleACERetrieval(event events.Event) error {
 		return nil
 	}
 
-	// Build set of current bullet content and track new bullets
+	// Build set of current bullet content and track new bullets.
 	currentSet := make(map[string]bool)
+
 	var newBullets []events.BulletData
 
-	// Compare with last retrieved set to find truly new bullets
+	// Compare with last retrieved set to find truly new bullets.
 	m.bulletMu.Lock()
 	for _, bullet := range data.Bullets {
 		currentSet[bullet.Content] = true
@@ -686,41 +716,44 @@ func (m *TUIMapper) handleACERetrieval(event events.Event) error {
 		}
 	}
 
-	// Update last bullet set for next comparison
+	// Update last bullet set for next comparison.
 	m.lastBulletSet = currentSet
 	m.bulletMu.Unlock()
 
-	// Only show hint if there are truly new unique bullets
+	// Only show hint if there are truly new unique bullets.
 	if len(newBullets) == 0 {
 		return nil
 	}
 
-	// Build hint with actual bullet content
+	// Build hint with actual bullet content.
 	var hintText strings.Builder
 
-	// Header
+	// Header.
 	pluralS := "ies"
 	if len(newBullets) == 1 {
 		pluralS = "y"
 	}
+
 	hintText.WriteString(fmt.Sprintf("\x1b[32m⟐\x1b[0m \x1b[90mRetrieved %d new strateg%s:\x1b[0m\n", len(newBullets), pluralS))
 
-	// Show each new bullet
+	// Show each new bullet.
 	for _, bullet := range newBullets {
-		// Truncate long bullets to first line for compact display
+		// Truncate long bullets to first line for compact display.
 		content := bullet.Content
 		if idx := strings.Index(content, "\n"); idx != -1 {
 			content = content[:idx] + "..."
 		}
-		// Limit to 120 chars per line
+		// Limit to 120 chars per line.
 		if len(content) > 120 {
 			content = content[:117] + "..."
 		}
+
 		hintText.WriteString(fmt.Sprintf("  \x1b[32m•\x1b[0m \x1b[90m%s\x1b[0m\n", content))
 	}
 
-	// Use PrintLine to show as a simple status message (not a block)
+	// Use PrintLine to show as a simple status message (not a block).
 	m.ui.PrintLine(hintText.String())
+
 	return nil
 }
 
@@ -732,10 +765,10 @@ func (m *TUIMapper) handleACELearned(event events.Event) error {
 		return nil
 	}
 
-	// Track new learned bullets separately from retrieved bullets
+	// Track new learned bullets separately from retrieved bullets.
 	var newBullets []events.BulletData
 
-	// Compare with last learned set to find truly new bullets
+	// Compare with last learned set to find truly new bullets.
 	m.bulletMu.Lock()
 	for _, bullet := range data.Bullets {
 		if !m.lastLearnedBullets[bullet.Content] {
@@ -745,41 +778,43 @@ func (m *TUIMapper) handleACELearned(event events.Event) error {
 	}
 	m.bulletMu.Unlock()
 
-	// Only show hint if there are truly new unique learned bullets
+	// Only show hint if there are truly new unique learned bullets.
 	if len(newBullets) == 0 {
 		return nil
 	}
 
-	// Build hint with actual bullet content
+	// Build hint with actual bullet content.
 	var hintText strings.Builder
 
-	// Header with success/failure indicator
+	// Header with success/failure indicator.
 	pluralS := "s"
 	if len(newBullets) == 1 {
 		pluralS = ""
 	}
 
-	statusColor := "\x1b[32m" // green for success
+	statusColor := "\x1b[32m" // green for success.
 	statusText := "successful"
+
 	if !data.Success {
-		statusColor = "\x1b[33m" // yellow for failure
+		statusColor = "\x1b[33m" // yellow for failure.
 		statusText = "failed"
 	}
 
 	hintText.WriteString(fmt.Sprintf("\x1b[34m◆\x1b[0m \x1b[90mLearned %d new insight%s from %s%s\x1b[0m\x1b[90m execution:\x1b[0m\n",
 		len(newBullets), pluralS, statusColor, statusText))
 
-	// Show each new learned bullet
+	// Show each new learned bullet.
 	for _, bullet := range newBullets {
-		// Truncate long bullets to first line for compact display
+		// Truncate long bullets to first line for compact display.
 		content := bullet.Content
 		if idx := strings.Index(content, "\n"); idx != -1 {
 			content = content[:idx] + "..."
 		}
-		// Limit to 120 chars per line
+		// Limit to 120 chars per line.
 		if len(content) > 120 {
 			content = content[:117] + "..."
 		}
+
 		hintText.WriteString(fmt.Sprintf("  \x1b[34m•\x1b[0m \x1b[90m%s\x1b[0m\n", content))
 	}
 
@@ -795,7 +830,7 @@ func (m *TUIMapper) StartStreaming() <-chan string {
 	defer m.streamMu.Unlock()
 
 	if m.streamCh != nil {
-		return m.streamCh // Already started
+		return m.streamCh // Already started.
 	}
 
 	m.streamCh = make(chan string, 100)
@@ -806,7 +841,7 @@ func (m *TUIMapper) StartStreaming() <-chan string {
 
 // StopStreaming closes the content streaming channel.
 func (m *TUIMapper) StopStreaming() {
-	// Flush any open thinking block
+	// Flush any open thinking block.
 	m.checkCloseThinking()
 
 	m.streamMu.Lock()
@@ -834,7 +869,7 @@ func (m *TUIMapper) Close() error {
 	return nil
 }
 
-// Helper functions
+// Helper functions.
 
 // extractString safely extracts a string parameter from ToolCallArguments.
 func extractString(params tools.ToolParameters, key string) string {
@@ -856,21 +891,23 @@ func countLinesPtr(s string) *int {
 	if s == "" {
 		return intPtr(0)
 	}
+
 	count := strings.Count(s, "\n")
 	if !strings.HasSuffix(s, "\n") {
 		count++
 	}
+
 	return intPtr(count)
 }
 
 // generateBlockID generates a unique block ID for blocks without tool IDs.
 func generateBlockID() string {
 	// Simple counter-based ID
-	// Use timestamp-based ID
+	// Use timestamp-based ID.
 	return fmt.Sprintf("block-%d", eventIDCounter.Add(1))
 }
 
-// Simple atomic counter for block IDs (thread-safe)
+// Simple atomic counter for block IDs (thread-safe).
 var eventIDCounter = &atomicCounter{}
 
 type atomicCounter struct {
@@ -881,6 +918,8 @@ type atomicCounter struct {
 func (c *atomicCounter) Add(delta int) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.val += delta
+
 	return c.val
 }

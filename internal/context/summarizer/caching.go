@@ -22,18 +22,18 @@ func NewCachingSummarizer(inner Summarizer, cache *Cache) *CachingSummarizer {
 
 // Summarize implements Summarizer.Summarize with caching.
 func (s *CachingSummarizer) Summarize(ctx context.Context, content string, opts Options) (*Result, error) {
-	// Check cache first
+	// Check cache first.
 	if cached, ok := s.cache.Get(content); ok {
 		return cached, nil
 	}
 
-	// Not cached, call inner summarizer
+	// Not cached, call inner summarizer.
 	result, err := s.inner.Summarize(ctx, content, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	// Cache the result
+	// Cache the result.
 	s.cache.Set(content, result)
 
 	return result, nil

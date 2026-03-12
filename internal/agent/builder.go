@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/agent/runtime"
@@ -17,12 +17,12 @@ import (
 
 // Builder constructs Agent instances with all dependencies.
 type Builder struct {
-	config          *config.ConfigV2 // Config from config package (V2)
+	config          *config.ConfigV2 // Config from config package (V2).
 	provider        llm.Provider
 	workingDir      string
 	emitter         *events.EventEmitter
 	approvalHandler security.ApprovalHandler
-	runtime         runtime.Runtime // Optional runtime for tool registration and approval
+	runtime         runtime.Runtime // Optional runtime for tool registration and approval.
 }
 
 // NewBuilder creates a new agent builder.
@@ -35,6 +35,7 @@ func (b *Builder) WithConfig(cfg *config.ConfigV2) *Builder {
 	if cfg != nil {
 		b.config = cfg
 	}
+
 	return b
 }
 
@@ -102,7 +103,7 @@ func (b *Builder) getCycleDetectionConfig() cycle.Config {
 // getACEConfig returns ACE config from unified config.
 // Converts ConfigV2 ACE config to nested ACEConfig.
 func (b *Builder) getACEConfig() *ACEConfig {
-	// Convert V2 config to nested ACEConfig
+	// Convert V2 config to nested ACEConfig.
 	return &ACEConfig{
 		Enabled:        b.config.ACE.Enabled,
 		PlaybookPath:   b.config.ACE.PlaybookPath,
@@ -140,24 +141,28 @@ func (b *Builder) getACEConfig() *ACEConfig {
 // WithProvider sets the LLM provider.
 func (b *Builder) WithProvider(provider llm.Provider) *Builder {
 	b.provider = provider
+
 	return b
 }
 
 // WithWorkingDir sets the working directory.
 func (b *Builder) WithWorkingDir(dir string) *Builder {
 	b.workingDir = dir
+
 	return b
 }
 
 // WithEmitter sets the event emitter.
 func (b *Builder) WithEmitter(emitter *events.EventEmitter) *Builder {
 	b.emitter = emitter
+
 	return b
 }
 
 // WithApprovalHandler sets the approval handler.
 func (b *Builder) WithApprovalHandler(handler security.ApprovalHandler) *Builder {
 	b.approvalHandler = handler
+
 	return b
 }
 
@@ -165,6 +170,7 @@ func (b *Builder) WithApprovalHandler(handler security.ApprovalHandler) *Builder
 // If set, the runtime's approval handler and tool registry are used.
 func (b *Builder) WithRuntime(rt runtime.Runtime) *Builder {
 	b.runtime = rt
+
 	return b
 }
 
@@ -176,33 +182,35 @@ func (b *Builder) BuildExecutor() *Executor {
 
 // buildExecutor creates an Executor with appropriate options based on configuration.
 func (b *Builder) buildExecutor() *Executor {
-	// Build SecurityService (which includes Validator internally)
+	// Build SecurityService (which includes Validator internally).
 	securityService := b.BuildSecurityService()
 	opts := []ExecutorOption{
 		WithSecurityService(securityService),
 	}
 
-	// Extract ApprovalService from SecurityService for Executor
+	// Extract ApprovalService from SecurityService for Executor.
 	approvalService := securityService.ApprovalService()
 	if approvalService != nil {
 		opts = append(opts, WithApprovalService(approvalService))
 	}
 
-	// Use unified config helpers
+	// Use unified config helpers.
 	if timeout := b.getTimeout(); timeout > 0 {
 		opts = append(opts, WithTimeout(timeout))
 	}
+
 	if b.getCacheCommands() {
-		cache := NewCommandCache(5*time.Minute, 10*1024*1024) // 5m TTL, 10MB cap
+		cache := NewCommandCache(5*time.Minute, 10*1024*1024) // 5m TTL, 10MB cap.
 		opts = append(opts, WithCache(cache))
 	}
 
 	exec, err := NewExecutor(b.workingDir, opts...)
 	if err != nil {
 		// In builder pattern, we panic on invalid configuration
-		// This should never happen with valid builder state
+		// This should never happen with valid builder state.
 		panic("failed to create executor: " + err.Error())
 	}
+
 	return exec
 }
 
@@ -215,11 +223,13 @@ func (b *Builder) BuildEnvironment() *Environment {
 // buildEnvironment gathers environment information for the working directory.
 func (b *Builder) buildEnvironment() *Environment {
 	opts := b.buildEnvironmentOptions()
+
 	env, err := GatherEnvironment(b.workingDir, opts...)
 	if err != nil {
-		// In builder pattern, we panic on invalid configuration
+		// In builder pattern, we panic on invalid configuration.
 		panic("failed to gather environment: " + err.Error())
 	}
+
 	return env
 }
 
@@ -229,12 +239,15 @@ func (b *Builder) buildEnvironmentOptions() []EnvironmentOption {
 	if maxFiles := b.getMaxFiles(); maxFiles > 0 {
 		opts = append(opts, WithMaxFiles(maxFiles))
 	}
+
 	if maxDepth := b.getMaxDepth(); maxDepth > 0 {
 		opts = append(opts, WithMaxDepth(maxDepth))
 	}
+
 	if b.getSkipGit() {
 		opts = append(opts, WithSkipGit(true))
 	}
+
 	return opts
 }
 
@@ -244,27 +257,30 @@ func (b *Builder) buildEnvironmentOptions() []EnvironmentOption {
 func (b *Builder) BuildSecurityService() *security.SecurityService {
 	validator := security.NewValidator()
 
-	// Use runtime's approval handler if available, otherwise use builder's
+	// Use runtime's approval handler if available, otherwise use builder's.
 	handler := b.approvalHandler
 	if b.runtime != nil {
 		handler = b.runtime.ApprovalHandler()
 	}
 
 	var approvalSvc *security.ApprovalService
-	// Configure policy store: prefer configured path; else default to user config dir
+	// Configure policy store: prefer configured path; else default to user config dir.
 	var store security.PolicyStore
+
 	policyPath := b.config.Security.PolicyFile
 	if b.config.Security.ApprovalPersistenceEnabled {
 		if policyPath != "" {
-			if fs, err := security.NewFilePolicyStore(policyPath, 30*time.Second); err == nil {
+			fs, err := security.NewFilePolicyStore(policyPath, 30*time.Second)
+			if err == nil {
 				store = fs
 			}
 		}
+
 		if store == nil {
 			store = security.NewMemoryPolicyStore(30 * time.Second)
 		}
 	}
-	// TTLs come solely from config defaults/overrides
+	// TTLs come solely from config defaults/overrides.
 	sessionTTL := b.config.Security.SessionPolicyTTL
 	globalTTL := b.config.Security.GlobalPolicyTTL
 	cfg := security.ApprovalServiceConfig{
@@ -315,12 +331,15 @@ func (b *Builder) BuildAgentOptions() []AgentOption {
 	if maxTurns := b.getMaxTurns(); maxTurns > 0 {
 		opts = append(opts, WithMaxTurns(maxTurns))
 	}
+
 	if timeout := b.getTimeout(); timeout > 0 {
 		opts = append(opts, WithAgentTimeout(timeout))
 	}
+
 	if temp := b.getTemperature(); temp > 0 {
 		opts = append(opts, WithTemperature(temp))
 	}
+
 	if maxTokens := b.getMaxTokens(); maxTokens > 0 {
 		opts = append(opts, WithMaxTokens(maxTokens))
 	}
@@ -333,7 +352,7 @@ func (b *Builder) BuildAgentOptions() []AgentOption {
 func (b *Builder) BuildACEService() (*ACEService, error) {
 	aceConfig := b.getACEConfig()
 	if aceConfig == nil || !aceConfig.Enabled {
-		return nil, fmt.Errorf("ACE not enabled")
+		return nil, errors.New("ACE not enabled")
 	}
 
 	return NewACEService(aceConfig, b.workingDir, b.provider, b.getModel(), b.getMaxTokens())

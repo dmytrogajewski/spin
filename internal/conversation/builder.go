@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strconv"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/agent/runtime"
@@ -22,27 +23,27 @@ import (
 // This pattern follows the service injection approach used in the tools package.
 // Runtime is REQUIRED - it provides approval handler, tool registration, and other runtime-specific behavior.
 type Builder struct {
-	// Core configuration
+	// Core configuration.
 	cfg     *config.ConfigV2
 	workDir string
 
-	// Services (injected from application layer)
+	// Services (injected from application layer).
 	gitService   *gitpkg.Service
 	shellService *shellpkg.Service
 	mcpService   *mcppkg.Service
 
-	// Required
-	runtime runtime.Runtime      // Runtime provides approval handler, tools, notifications
-	emitter *events.EventEmitter // Emitter MUST match runtime's emitter
+	// Required.
+	runtime runtime.Runtime      // Runtime provides approval handler, tools, notifications.
+	emitter *events.EventEmitter // Emitter MUST match runtime's emitter.
 
-	// Optional overrides
+	// Optional overrides.
 	llm          llm.Provider
 	storage      session.Storage
-	toolRegistry *tools.Registry     // Optional pre-built tool registry
-	toolSelector *agent.ToolSelector // Dynamic tool selection - optional
+	toolRegistry *tools.Registry     // Optional pre-built tool registry.
+	toolSelector *agent.ToolSelector // Dynamic tool selection - optional.
 	logger       *slog.Logger
 
-	// Managed resources
+	// Managed resources.
 	authManager   *auth.Manager
 	memoryService *MemoryService
 }
@@ -54,15 +55,19 @@ func NewBuilder(cfg *config.ConfigV2, workDir string, runtime runtime.Runtime, e
 	if cfg == nil {
 		panic("config cannot be nil")
 	}
+
 	if workDir == "" {
 		panic("workDir cannot be empty")
 	}
+
 	if runtime == nil {
 		panic("runtime cannot be nil")
 	}
+
 	if emitter == nil {
 		panic("emitter cannot be nil")
 	}
+
 	if provider == nil {
 		panic("provider cannot be nil")
 	}
@@ -79,44 +84,50 @@ func NewBuilder(cfg *config.ConfigV2, workDir string, runtime runtime.Runtime, e
 // WithGit sets the Git service.
 func (b *Builder) WithGit(service *gitpkg.Service) *Builder {
 	b.gitService = service
+
 	return b
 }
 
 // WithShell sets the Shell service.
 func (b *Builder) WithShell(service *shellpkg.Service) *Builder {
 	b.shellService = service
+
 	return b
 }
 
 // WithMCP sets the MCP service.
 func (b *Builder) WithMCP(service *mcppkg.Service) *Builder {
 	b.mcpService = service
+
 	return b
 }
 
 // WithToolSelector sets the dynamic tool selector.
 func (b *Builder) WithToolSelector(selector *agent.ToolSelector) *Builder {
 	b.toolSelector = selector
+
 	return b
 }
 
 // Build constructs and returns a fully initialized Conversation.
 func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
-	// Validate configuration
-	if err := b.validate(); err != nil {
+	// Validate configuration.
+	err := b.validate()
+	if err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
 	logger := b.getLogger()
 	logger.Info("building conversation", "work_dir", b.workDir)
 
-	// Initialize core dependencies
-	if err := b.initializeCoreDependencies(); err != nil {
+	// Initialize core dependencies.
+	err = b.initializeCoreDependencies()
+	if err != nil {
 		return nil, fmt.Errorf("initialize core dependencies: %w", err)
 	}
 
 	// Build executor using agent package helper with unified config
-	// Runtime provides approval handler via runtime.ApprovalHandler()
+	// Runtime provides approval handler via runtime.ApprovalHandler().
 	exec := agent.NewBuilder().
 		WithConfig(b.cfg).
 		WithWorkingDir(b.workDir).
@@ -124,38 +135,39 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 		WithRuntime(b.runtime).
 		BuildExecutor()
 
-	// Gather environment using agent package helper with unified config
+		// Gather environment using agent package helper with unified config.
 	env := agent.NewBuilder().
 		WithConfig(b.cfg).
 		WithWorkingDir(b.workDir).
 		BuildEnvironment()
 
-	// Enrich environment with Git/Shell context (conversation-level concern)
+		// Enrich environment with Git/Shell context (conversation-level concern).
 	b.enrichEnvironmentWithIntegrations(env)
 
-	// Create session early (ID is needed for memory initialization)
+	// Create session early (ID is needed for memory initialization).
 	sess := session.NewSession(b.workDir)
 	logger.Info("session created", "session_id", sess.ID)
 
-	// Initialize memory services if configured
-	if err := b.initializeMemory(sess.ID); err != nil {
+	// Initialize memory services if configured.
+	err = b.initializeMemory(sess.ID)
+	if err != nil {
 		return nil, fmt.Errorf("initialize memory: %w", err)
 	}
 
-	// Build agent (orchestration handled by conversation)
+	// Build agent (orchestration handled by conversation).
 	agentInstance, err := b.buildAgent(exec, env)
 	if err != nil {
 		return nil, fmt.Errorf("build agent: %w", err)
 	}
 
-	// Create history
+	// Create history.
 	hist := b.createHistory()
 
 	// Use session ID as conversation ID (both are UUID strings)
-	// This maintains clean dependency direction: conversation doesn't depend on protocol
+	// This maintains clean dependency direction: conversation doesn't depend on protocol.
 	convID := sess.ID
 
-	// Build the Conversation with unified ID
+	// Build the Conversation with unified ID.
 	conv := &Conversation{
 		gitService:    b.gitService,
 		shellService:  b.shellService,
@@ -169,21 +181,24 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 		workDir:       b.workDir,
 	}
 
-	// Attach JSONL event logger if debug mode
+	// Attach JSONL event logger if debug mode.
 	if b.cfg != nil && b.cfg.Agent.Debug {
 		b.attachJSONLEventLogger(ctx, convID)
 	}
 
 	logger.Info("conversation built successfully", "session_id", convID)
+
 	return conv, nil
 }
 
 // validate ensures the configuration is valid.
 // Required fields are already validated in NewBuilder constructor.
 func (b *Builder) validate() error {
-	if err := b.cfg.Validate(); err != nil {
+	err := b.cfg.Validate()
+	if err != nil {
 		return fmt.Errorf("invalid config: %w", err)
 	}
+
 	return nil
 }
 
@@ -192,15 +207,16 @@ func (b *Builder) getLogger() *slog.Logger {
 	if b.logger != nil {
 		return b.logger
 	}
+
 	return slog.Default()
 }
 
 // initializeCoreDependencies sets up optional dependencies (storage, auth).
 // Required dependencies (runtime, emitter, provider) are passed to constructor.
 func (b *Builder) initializeCoreDependencies() error {
-	// Session storage (optional - can use default)
+	// Session storage (optional - can use default).
 	if b.storage == nil {
-		// Use default session directory if not configured
+		// Use default session directory if not configured.
 		sessionDir := b.cfg.Agent.SessionDir
 		if sessionDir == "" {
 			sessionDir = "~/.spin/sessions"
@@ -210,10 +226,11 @@ func (b *Builder) initializeCoreDependencies() error {
 		if err != nil {
 			return fmt.Errorf("initialize storage: %w", err)
 		}
+
 		b.storage = fs
 	}
 
-	// Auth manager (internal resource)
+	// Auth manager (internal resource).
 	keystore := auth.NewKeystore()
 	b.authManager = auth.NewManager(keystore)
 
@@ -225,6 +242,7 @@ func (b *Builder) enrichEnvironmentWithIntegrations(env *agent.Environment) {
 	if b.gitService != nil && b.gitService.IsRepository() {
 		b.addGitContext(env)
 	}
+
 	if b.shellService != nil && b.shellService.IsEnabled() {
 		b.addShellContext(env)
 	}
@@ -237,36 +255,45 @@ func (b *Builder) addGitContext(env *agent.Environment) {
 
 	set("git_enabled", boolString(info.GitEnabled))
 	set("is_repo", boolString(info.IsRepo))
+
 	if !info.IsRepo {
 		if b.logger != nil {
 			b.logger.Debug("git context: not a repository")
 		}
+
 		return
 	}
 
 	if info.Branch != "" {
 		set("branch", info.Branch)
 	}
+
 	if info.Remote != "" {
 		set("remote", info.Remote)
 	}
+
 	if info.Commit != "" {
 		set("commit", info.Commit)
 	}
+
 	set("is_clean", boolString(info.IsClean))
 
 	if info.ModifiedFiles > 0 {
-		set("modified_files", fmt.Sprintf("%d", info.ModifiedFiles))
+		set("modified_files", strconv.Itoa(info.ModifiedFiles))
 	}
+
 	if info.UntrackedFiles > 0 {
-		set("untracked_files", fmt.Sprintf("%d", info.UntrackedFiles))
+		set("untracked_files", strconv.Itoa(info.UntrackedFiles))
 	}
+
 	if info.Ahead > 0 {
-		set("ahead", fmt.Sprintf("%d", info.Ahead))
+		set("ahead", strconv.Itoa(info.Ahead))
 	}
+
 	if info.Behind > 0 {
-		set("behind", fmt.Sprintf("%d", info.Behind))
+		set("behind", strconv.Itoa(info.Behind))
 	}
+
 	if info.Detached {
 		set("detached", "true")
 	}
@@ -282,15 +309,19 @@ func (b *Builder) addShellContext(env *agent.Environment) {
 	set := func(k, v string) { env.Environment[k] = v }
 
 	set("shell_enabled", boolString(info.ShellEnabled))
+
 	if !info.ShellEnabled {
 		return
 	}
+
 	if info.Shell != "" {
 		set("shell", info.Shell)
 	}
+
 	if info.ShellPath != "" {
 		set("shell_path", info.ShellPath)
 	}
+
 	if b.logger != nil {
 		b.logger.Debug("shell context added", "shell", info.Shell)
 	}
@@ -301,5 +332,6 @@ func boolString(b bool) string {
 	if b {
 		return "true"
 	}
+
 	return "false"
 }

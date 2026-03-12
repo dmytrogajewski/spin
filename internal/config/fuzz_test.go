@@ -10,7 +10,7 @@ import (
 // FuzzConfigV2_UnmarshalYAML fuzzes the YAML unmarshaling of ConfigV2.
 // This ensures that arbitrary YAML input doesn't cause panics or unexpected behavior.
 func FuzzConfigV2_UnmarshalYAML(f *testing.F) {
-	// Add seed corpus with known valid configs
+	// Add seed corpus with known valid configs.
 	f.Add([]byte(`version: "2.0"
 llm:
   provider: "ollama"
@@ -48,19 +48,20 @@ ace:
 	f.Add([]byte(`invalid yaml: [unclosed`))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		// Fuzzing should not panic
+		// Fuzzing should not panic.
 		var cfg ConfigV2
+
 		_ = yaml.Unmarshal(data, &cfg)
 
 		// If unmarshal succeeded, validation might fail (expected)
-		// But it should never panic
+		// But it should never panic.
 		_ = cfg.Validate()
 	})
 }
 
 // FuzzLoaderV2_LoadFromYAML fuzzes the loader's ability to handle arbitrary YAML.
 func FuzzLoaderV2_LoadFromYAML(f *testing.F) {
-	// Add seed corpus
+	// Add seed corpus.
 	f.Add([]byte(`version: "2.0"
 llm:
   provider: "ollama"
@@ -87,20 +88,21 @@ protocol:
 `))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		// Create a temp file
+		// Create a temp file.
 		tmpFile := t.TempDir() + "/config.yaml"
-		if err := writeFile(tmpFile, data); err != nil {
-			return // Skip if we can't write the file
+		err := writeFile(tmpFile, data)
+		if err != nil {
+			return // Skip if we can't write the file.
 		}
 
-		// Try to load it - should not panic
+		// Try to load it - should not panic.
 		loader := NewLoaderV2()
 		_, _ = loader.LoadFromFile(tmpFile)
-		// We don't care if it fails, just that it doesn't panic
+		// We don't care if it fails, just that it doesn't panic.
 	})
 }
 
-// writeFile is a helper for fuzz tests
+// writeFile is a helper for fuzz tests.
 func writeFile(path string, data []byte) error {
 	return os.WriteFile(path, data, 0644)
 }

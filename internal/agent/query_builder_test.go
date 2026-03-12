@@ -4,27 +4,28 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
-	"github.com/stretchr/testify/assert"
 )
 
 // TestBuildQueryFromContext_Initial verifies that TriggerInitial returns base query only.
 func TestBuildQueryFromContext_Initial(t *testing.T) {
-	// Setup
+	// Setup.
 	agent := &Agent{}
 	ctx := trajectory.NewTrajectoryContext("install nodejs")
 
-	// Execute
+	// Execute.
 	query := agent.buildQueryFromContext(ctx, trajectory.TriggerInitial)
 
-	// Verify
+	// Verify.
 	assert.Equal(t, "install nodejs", query)
 }
 
 // TestBuildQueryFromContext_Error verifies that TriggerError includes error patterns.
 func TestBuildQueryFromContext_Error(t *testing.T) {
-	// Setup
+	// Setup.
 	agent := &Agent{
 		aceConfig: &ACEConfig{
 			Retrieval: ACERetrievalConfig{
@@ -40,10 +41,10 @@ func TestBuildQueryFromContext_Error(t *testing.T) {
 		{StepNumber: 1, Type: "tool_result", Content: "Error: command not found"},
 	})
 
-	// Execute
+	// Execute.
 	query := agent.buildQueryFromContext(ctx, trajectory.TriggerError)
 
-	// Verify
+	// Verify.
 	assert.Contains(t, query, "install nodejs")
 	assert.True(t, strings.Contains(query, "command not found") || strings.Contains(query, "Error"),
 		"Query should include error pattern")
@@ -51,7 +52,7 @@ func TestBuildQueryFromContext_Error(t *testing.T) {
 
 // TestBuildQueryFromContext_ToolChange verifies that TriggerToolChange includes tool names.
 func TestBuildQueryFromContext_ToolChange(t *testing.T) {
-	// Setup
+	// Setup.
 	agent := &Agent{
 		aceConfig: &ACEConfig{
 			Retrieval: ACERetrievalConfig{
@@ -67,10 +68,10 @@ func TestBuildQueryFromContext_ToolChange(t *testing.T) {
 		{StepNumber: 1, Type: "tool_call", Content: "Tool: Bash"},
 	})
 
-	// Execute
+	// Execute.
 	query := agent.buildQueryFromContext(ctx, trajectory.TriggerToolChange)
 
-	// Verify
+	// Verify.
 	assert.Contains(t, query, "debug app")
 	assert.True(t, strings.Contains(query, "Read") || strings.Contains(query, "Bash"),
 		"Query should include tool names")
@@ -78,7 +79,7 @@ func TestBuildQueryFromContext_ToolChange(t *testing.T) {
 
 // TestBuildQueryFromContext_Interval verifies that TriggerInterval includes concepts.
 func TestBuildQueryFromContext_Interval(t *testing.T) {
-	// Setup
+	// Setup.
 	agent := &Agent{
 		aceConfig: &ACEConfig{},
 	}
@@ -88,10 +89,10 @@ func TestBuildQueryFromContext_Interval(t *testing.T) {
 		{StepNumber: 1, Type: "reasoning", Content: "BuildKit optimization needed"},
 	})
 
-	// Execute
+	// Execute.
 	query := agent.buildQueryFromContext(ctx, trajectory.TriggerInterval)
 
-	// Verify
+	// Verify.
 	assert.Contains(t, query, "fix build")
 	assert.True(t, strings.Contains(query, "Dockerfile") || strings.Contains(query, "BuildKit"),
 		"Query should include extracted concepts")
@@ -99,7 +100,7 @@ func TestBuildQueryFromContext_Interval(t *testing.T) {
 
 // TestBuildQueryFromContext_EmptySteps verifies fallback to base query when no steps.
 func TestBuildQueryFromContext_EmptySteps(t *testing.T) {
-	// Setup
+	// Setup.
 	agent := &Agent{
 		aceConfig: &ACEConfig{
 			Retrieval: ACERetrievalConfig{
@@ -110,18 +111,18 @@ func TestBuildQueryFromContext_EmptySteps(t *testing.T) {
 		},
 	}
 	ctx := trajectory.NewTrajectoryContext("test query")
-	// No steps appended
+	// No steps appended.
 
-	// Execute - try error trigger with no steps
+	// Execute - try error trigger with no steps.
 	query := agent.buildQueryFromContext(ctx, trajectory.TriggerError)
 
-	// Verify - should fall back to base query
+	// Verify - should fall back to base query.
 	assert.Equal(t, "test query", query)
 }
 
 // TestBuildQueryFromContext_AllTriggers verifies all triggers work.
 func TestBuildQueryFromContext_AllTriggers(t *testing.T) {
-	// Setup
+	// Setup.
 	agent := &Agent{
 		aceConfig: &ACEConfig{
 			Retrieval: ACERetrievalConfig{
@@ -153,9 +154,9 @@ func TestBuildQueryFromContext_AllTriggers(t *testing.T) {
 
 			query := agent.buildQueryFromContext(ctx, tt.trigger)
 
-			// All should at least contain base query
+			// All should at least contain base query.
 			assert.Contains(t, query, "base query")
-			// Query should not be empty
+			// Query should not be empty.
 			assert.NotEmpty(t, query)
 		})
 	}

@@ -4,12 +4,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/security"
 )
 
 func TestNewExecutor(t *testing.T) {
@@ -41,7 +43,7 @@ func TestNewExecutor_EmptyWorkDir(t *testing.T) {
 
 func TestNewExecutor_NonExistentWorkDir(t *testing.T) {
 	executor, err := NewExecutor("/non/existent/directory")
-	require.NoError(t, err) // NewExecutor doesn't validate directory existence
+	require.NoError(t, err) // NewExecutor doesn't validate directory existence.
 	assert.NotNil(t, executor)
 }
 
@@ -89,7 +91,7 @@ func TestExecutor_Execute_WithWorkingDirectory(t *testing.T) {
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	// Create a test file
+	// Create a test file.
 	testFile := filepath.Join(workDir, "test.txt")
 	err = os.WriteFile(testFile, []byte("test content"), 0644)
 	require.NoError(t, err)
@@ -156,7 +158,7 @@ func TestExecutor_Validate(t *testing.T) {
 	executor, err := NewExecutor(workDir, WithSecurityService(securityService))
 	require.NoError(t, err)
 
-	// Test valid command
+	// Test valid command.
 	cmd := &security.Command{
 		Program: "echo",
 		Args:    []string{"hello"},
@@ -166,7 +168,7 @@ func TestExecutor_Validate(t *testing.T) {
 	err = executor.Validate(cmd)
 	require.NoError(t, err)
 
-	// Test dangerous command
+	// Test dangerous command.
 	dangerousCmd := &security.Command{
 		Program: "rm",
 		Args:    []string{"-rf", "/"},
@@ -323,8 +325,8 @@ func TestResult_Output(t *testing.T) {
 func TestDefaultExecuteOptions(t *testing.T) {
 	opts := DefaultExecuteOptions()
 	assert.NotNil(t, opts)
-	assert.Equal(t, time.Duration(0), opts.Timeout) // 0 means use executor's default
-	assert.Equal(t, int64(0), opts.MaxOutputSize)   // 0 means use executor's default
+	assert.Equal(t, time.Duration(0), opts.Timeout) // 0 means use executor's default.
+	assert.Equal(t, int64(0), opts.MaxOutputSize)   // 0 means use executor's default.
 	assert.True(t, opts.InheritEnv)
 }
 
@@ -384,22 +386,24 @@ func TestExecutor_ConcurrentExecution(t *testing.T) {
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	// Run multiple commands concurrently
+	// Run multiple commands concurrently.
 	results := make(chan *Result, 10)
-	for i := 0; i < 10; i++ {
+
+	for i := range 10 {
 		go func(i int) {
 			cmd := &security.Command{
 				Program: "echo",
 				Args:    []string{"test", string(rune(i + '0'))},
 				WorkDir: workDir,
 			}
+
 			result, _ := executor.Execute(context.Background(), cmd, nil)
 			results <- result
 		}(i)
 	}
 
-	// Collect results
-	for i := 0; i < 10; i++ {
+	// Collect results.
+	for range 10 {
 		select {
 		case result := <-results:
 			assert.NotNil(t, result)
@@ -425,11 +429,13 @@ func TestExecutor_ExecuteStreaming(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, chunks)
 
-	// Collect chunks
+	// Collect chunks.
 	var output string
+	var outputSb433 strings.Builder
 	for chunk := range chunks {
-		output += string(chunk.Data)
+		outputSb433.WriteString(string(chunk.Data))
 	}
+	output += outputSb433.String()
 
 	assert.Contains(t, output, "hello world")
 }
@@ -449,16 +455,16 @@ func TestExecutor_ExecuteStreaming_WithTimeout(t *testing.T) {
 		Timeout: 100 * time.Millisecond,
 	}
 
-	// Create a context with timeout
+	// Create a context with timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
 	chunks, err := executor.ExecuteStreaming(ctx, cmd, opts)
-	require.NoError(t, err) // ExecuteStreaming may not return error immediately
+	require.NoError(t, err) // ExecuteStreaming may not return error immediately.
 	assert.NotNil(t, chunks)
 
 	// The timeout should be handled by the context, not the function
-	// We can't easily test this without mocking or more complex setup
+	// We can't easily test this without mocking or more complex setup.
 }
 
 func TestExecutor_ErrorHandling(t *testing.T) {
@@ -466,13 +472,13 @@ func TestExecutor_ErrorHandling(t *testing.T) {
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	// Test with nil command
+	// Test with nil command.
 	result, err := executor.Execute(context.Background(), nil, nil)
 	require.Error(t, err)
 	assert.NotNil(t, result)
 	assert.False(t, result.Success())
 
-	// Test with empty program
+	// Test with empty program.
 	cmd := &security.Command{
 		Program: "",
 		Args:    []string{"hello"},

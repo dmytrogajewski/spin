@@ -15,6 +15,7 @@ func createTestRegistry() *CommandRegistry {
 	registry.Register(NewSimpleCommand("New plan...", "Create plan block", "Edit", '📋', nil))
 	registry.Register(NewSimpleCommand("Toggle mode...", "Switch Auto/Manual", "System", '🔄', nil))
 	registry.Register(NewSimpleCommand("Change theme...", "Switch Dark/Light", "System", '🎨', nil))
+
 	return registry
 }
 
@@ -26,7 +27,7 @@ func TestNewPalette(t *testing.T) {
 	assert.False(t, palette.IsOpen())
 	assert.Equal(t, "", palette.Query())
 	assert.Equal(t, 0, palette.Selection())
-	// Should have all commands when query is empty
+	// Should have all commands when query is empty.
 	assert.Len(t, palette.FilteredCommands(), 6)
 }
 
@@ -34,16 +35,16 @@ func TestPalette_OpenClose(t *testing.T) {
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 
-	// Initially closed
+	// Initially closed.
 	assert.False(t, palette.IsOpen())
 
-	// Open
+	// Open.
 	palette.Open()
 	assert.True(t, palette.IsOpen())
 	assert.Equal(t, "", palette.Query())
 	assert.Equal(t, 0, palette.Selection())
 
-	// Close
+	// Close.
 	palette.Close()
 	assert.False(t, palette.IsOpen())
 }
@@ -85,7 +86,7 @@ func TestPalette_Backspace(t *testing.T) {
 	palette.Backspace()
 	assert.Equal(t, "", palette.Query())
 
-	// Backspace on empty does nothing
+	// Backspace on empty does nothing.
 	palette.Backspace()
 	assert.Equal(t, "", palette.Query())
 }
@@ -107,11 +108,11 @@ func TestPalette_ClearQuery(t *testing.T) {
 }
 
 func TestPalette_MoveUpDown_EmptyResults(t *testing.T) {
-	registry := NewCommandRegistry() // Empty registry
+	registry := NewCommandRegistry() // Empty registry.
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Movement on empty results should be no-op
+	// Movement on empty results should be no-op.
 	palette.MoveDown()
 	assert.Equal(t, 0, palette.Selection())
 
@@ -138,13 +139,14 @@ func TestPalette_MoveDown_Wrapping(t *testing.T) {
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Move to last item
-	for i := 0; i < 5; i++ {
+	// Move to last item.
+	for range 5 {
 		palette.MoveDown()
 	}
+
 	assert.Equal(t, 5, palette.Selection())
 
-	// Wrap to first
+	// Wrap to first.
 	palette.MoveDown()
 	assert.Equal(t, 0, palette.Selection())
 }
@@ -154,13 +156,13 @@ func TestPalette_MoveUp(t *testing.T) {
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Move down a few times
+	// Move down a few times.
 	palette.MoveDown()
 	palette.MoveDown()
 	palette.MoveDown()
 	assert.Equal(t, 3, palette.Selection())
 
-	// Move up
+	// Move up.
 	palette.MoveUp()
 	assert.Equal(t, 2, palette.Selection())
 
@@ -175,13 +177,13 @@ func TestPalette_MoveUp_Wrapping(t *testing.T) {
 
 	assert.Equal(t, 0, palette.Selection())
 
-	// Wrap to last
+	// Wrap to last.
 	palette.MoveUp()
 	assert.Equal(t, 5, palette.Selection())
 }
 
 func TestPalette_SelectedCommand_NoSelection(t *testing.T) {
-	registry := NewCommandRegistry() // Empty
+	registry := NewCommandRegistry() // Empty.
 	palette := NewPalette(registry)
 	palette.Open()
 
@@ -194,18 +196,18 @@ func TestPalette_SelectedCommand(t *testing.T) {
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Initially at 0
+	// Initially at 0.
 	cmd := palette.SelectedCommand()
 	assert.NotNil(t, cmd)
 	assert.Equal(t, "Run...", cmd.Name())
 
-	// Move to 1
+	// Move to 1.
 	palette.MoveDown()
 	cmd = palette.SelectedCommand()
 	assert.NotNil(t, cmd)
 	assert.Equal(t, "Search in repo...", cmd.Name())
 
-	// Move to 2
+	// Move to 2.
 	palette.MoveDown()
 	cmd = palette.SelectedCommand()
 	assert.NotNil(t, cmd)
@@ -217,7 +219,7 @@ func TestPalette_FuzzySearch_EmptyQuery(t *testing.T) {
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Empty query returns all commands
+	// Empty query returns all commands.
 	filtered := palette.FilteredCommands()
 	assert.Len(t, filtered, 6)
 }
@@ -227,7 +229,7 @@ func TestPalette_FuzzySearch_PartialMatch(t *testing.T) {
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Search for "search"
+	// Search for "search".
 	palette.Insert('s')
 	palette.Insert('e')
 	palette.Insert('a')
@@ -238,7 +240,7 @@ func TestPalette_FuzzySearch_PartialMatch(t *testing.T) {
 	filtered := palette.FilteredCommands()
 	assert.Greater(t, len(filtered), 0, "Should match at least 'Search in repo...'")
 
-	// First result should be "Search in repo..."
+	// First result should be "Search in repo...".
 	assert.Equal(t, "Search in repo...", filtered[0].Name())
 }
 
@@ -247,7 +249,7 @@ func TestPalette_FuzzySearch_MultipleMatches(t *testing.T) {
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Search for "mode" - should match "Toggle mode..."
+	// Search for "mode" - should match "Toggle mode...".
 	palette.Insert('m')
 	palette.Insert('o')
 	palette.Insert('d')
@@ -257,12 +259,15 @@ func TestPalette_FuzzySearch_MultipleMatches(t *testing.T) {
 	assert.Greater(t, len(filtered), 0)
 
 	found := false
+
 	for _, cmd := range filtered {
 		if cmd.Name() == "Toggle mode..." {
 			found = true
+
 			break
 		}
 	}
+
 	assert.True(t, found, "Should find 'Toggle mode...'")
 }
 
@@ -271,7 +276,7 @@ func TestPalette_FuzzySearch_NoMatch(t *testing.T) {
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Search for something that doesn't exist
+	// Search for something that doesn't exist.
 	palette.Insert('x')
 	palette.Insert('y')
 	palette.Insert('z')
@@ -287,7 +292,7 @@ func TestPalette_FuzzySearch_Description(t *testing.T) {
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Search for "grep" - should match description of "Search in repo..."
+	// Search for "grep" - should match description of "Search in repo...".
 	palette.Insert('g')
 	palette.Insert('r')
 	palette.Insert('e')
@@ -297,12 +302,15 @@ func TestPalette_FuzzySearch_Description(t *testing.T) {
 	assert.Greater(t, len(filtered), 0)
 
 	found := false
+
 	for _, cmd := range filtered {
 		if cmd.Name() == "Search in repo..." {
 			found = true
+
 			break
 		}
 	}
+
 	assert.True(t, found, "Should find 'Search in repo...' by description 'Grep/search files'")
 }
 
@@ -311,12 +319,12 @@ func TestPalette_SelectionResetOnQueryChange(t *testing.T) {
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Move selection down
+	// Move selection down.
 	palette.MoveDown()
 	palette.MoveDown()
 	assert.Equal(t, 2, palette.Selection())
 
-	// Insert character - selection should reset to 0
+	// Insert character - selection should reset to 0.
 	palette.Insert('s')
 	assert.Equal(t, 0, palette.Selection())
 }
@@ -326,18 +334,19 @@ func TestPalette_SelectionClampOnFilter(t *testing.T) {
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Move to last item
-	for i := 0; i < 5; i++ {
+	// Move to last item.
+	for range 5 {
 		palette.MoveDown()
 	}
+
 	assert.Equal(t, 5, palette.Selection())
 
-	// Filter down to 1 result
+	// Filter down to 1 result.
 	palette.Insert('r')
 	palette.Insert('u')
 	palette.Insert('n')
 
-	// Selection should be clamped to 0
+	// Selection should be clamped to 0.
 	assert.Equal(t, 0, palette.Selection())
 }
 
@@ -346,7 +355,7 @@ func TestPalette_FilteredCommands_Order(t *testing.T) {
 	palette := NewPalette(registry)
 	palette.Open()
 
-	// Empty query preserves order
+	// Empty query preserves order.
 	filtered := palette.FilteredCommands()
 	assert.Equal(t, "Run...", filtered[0].Name())
 	assert.Equal(t, "Search in repo...", filtered[1].Name())
@@ -360,7 +369,7 @@ func TestPalette_OpenResetsState(t *testing.T) {
 	registry := createTestRegistry()
 	palette := NewPalette(registry)
 
-	// Set some state
+	// Set some state.
 	palette.Open()
 	palette.Insert('t')
 	palette.Insert('e')
@@ -369,11 +378,11 @@ func TestPalette_OpenResetsState(t *testing.T) {
 	palette.MoveDown()
 	palette.MoveDown()
 
-	// Close and reopen
+	// Close and reopen.
 	palette.Close()
 	palette.Open()
 
-	// State should be reset
+	// State should be reset.
 	assert.Equal(t, "", palette.Query())
 	assert.Equal(t, 0, palette.Selection())
 	assert.Len(t, palette.FilteredCommands(), 6)
@@ -384,6 +393,7 @@ func TestPalette_ExecuteSelectedCommand(t *testing.T) {
 	registry := NewCommandRegistry()
 	registry.Register(NewSimpleCommand("Test", "Test command", "Test", 'T', func(ctx context.Context) error {
 		executed = true
+
 		return nil
 	}))
 

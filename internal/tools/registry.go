@@ -3,7 +3,9 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"sync"
 )
 
@@ -28,6 +30,7 @@ func NewRegistryWithBuiltins() *Registry {
 	for _, tool := range BuiltinTools {
 		_ = registry.Register(tool)
 	}
+
 	return registry
 }
 
@@ -45,13 +48,13 @@ func NewRegistryWithBuiltins() *Registry {
 // This is the recommended factory for most use cases where tools need proper configuration.
 // If workDir is empty, tools that require WorkDir are created with empty string.
 // If env is nil, get_context is created with nil.
-func NewDefaultRegistry(workDir string, env interface{}) *Registry {
-	// Create registry with builtin tools as base
+func NewDefaultRegistry(workDir string, env any) *Registry {
+	// Create registry with builtin tools as base.
 	registry := NewRegistryWithBuiltins()
 
 	// Replace tools that need configuration with properly configured versions
 	// Note: shell_command is left as-is (nil parameters) since it can be configured
-	// separately via RegisterOrReplace if needed
+	// separately via RegisterOrReplace if needed.
 	_ = registry.RegisterOrReplace(NewGetContextTool(env))
 	_ = registry.RegisterOrReplace(NewApplyPatchTool(workDir))
 	_ = registry.RegisterOrReplace(NewFileSearchTool(workDir))
@@ -72,6 +75,7 @@ func (r *Registry) Register(tool Tool) error {
 	}
 
 	r.tools[name] = tool
+
 	return nil
 }
 
@@ -82,6 +86,7 @@ func (r *Registry) RegisterOrReplace(tool Tool) error {
 	defer r.mu.Unlock()
 
 	r.tools[tool.Name()] = tool
+
 	return nil
 }
 
@@ -129,18 +134,19 @@ func (r *Registry) ListSchemas() []ToolSchema {
 // Execute runs a tool by name with the given parameters.
 // It validates parameters against the tool's schema before execution.
 func (r *Registry) Execute(ctx context.Context, name string, params ToolParameters) (ToolResult, error) {
-	// Get the tool
+	// Get the tool.
 	tool, err := r.Get(name)
 	if err != nil {
 		return ToolResult{}, err
 	}
 
-	// Validate parameters
-	if err := r.validateParams(tool.Schema(), params); err != nil {
+	// Validate parameters.
+	err = r.validateParams(tool.Schema(), params)
+	if err != nil {
 		return ToolResult{}, err
 	}
 
-	// Execute the tool
+	// Execute the tool.
 	result, err := tool.Execute(ctx, params)
 	if err != nil {
 		return ToolResult{}, fmt.Errorf("tool execution failed: %w", err)
@@ -153,7 +159,8 @@ func (r *Registry) Execute(ctx context.Context, name string, params ToolParamete
 func (r *Registry) validateParams(schema ToolSchema, params ToolParameters) error {
 	paramSchema := schema.Function.Parameters
 
-	if err := r.validateRequiredParams(paramSchema, params); err != nil {
+	err := r.validateRequiredParams(paramSchema, params)
+	if err != nil {
 		return err
 	}
 
@@ -167,16 +174,19 @@ func (r *Registry) validateRequiredParams(paramSchema ParameterSchema, params To
 			return fmt.Errorf("%w: missing required parameter %s", ErrInvalidParameters, required)
 		}
 	}
+
 	return nil
 }
 
 // validateParameterTypes validates the types and values of all parameters.
 func (r *Registry) validateParameterTypes(paramSchema ParameterSchema, params ToolParameters) error {
 	for _, name := range params.Keys() {
-		if err := r.validateParameter(paramSchema, name, params); err != nil {
+		err := r.validateParameter(paramSchema, name, params)
+		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -187,7 +197,7 @@ func (r *Registry) validateParameter(paramSchema ParameterSchema, name string, p
 		return r.createUnknownParameterError(name, paramSchema.Properties)
 	}
 
-	// Get the raw JSON value for this parameter
+	// Get the raw JSON value for this parameter.
 	rawValue, exists := params.raw[name]
 	if !exists {
 		return fmt.Errorf("%w: parameter %s not found", ErrInvalidParameters, name)
@@ -199,7 +209,8 @@ func (r *Registry) validateParameter(paramSchema ParameterSchema, name string, p
 	}
 
 	if len(propDef.Enum) > 0 {
-		if err := r.validateEnumFromJSON(rawValue, propDef.Enum); err != nil {
+		err := r.validateEnumFromJSON(rawValue, propDef.Enum)
+		if err != nil {
 			return fmt.Errorf("%w: parameter %s %v", ErrInvalidParameters, name, err)
 		}
 	}
@@ -213,6 +224,7 @@ func (r *Registry) createUnknownParameterError(name string, properties map[strin
 	for pname := range properties {
 		validParams = append(validParams, pname)
 	}
+
 	return fmt.Errorf("%w: unknown parameter %q (valid parameters: %v)",
 		ErrInvalidParameters, name, validParams)
 }
@@ -222,27 +234,31 @@ func (r *Registry) validateTypeFromJSON(rawValue json.RawMessage, expectedType s
 	switch expectedType {
 	case "string":
 		var s string
+
 		return json.Unmarshal(rawValue, &s) == nil && string(rawValue[0]) == `"`
 	case "number":
 		var f float64
+
 		return json.Unmarshal(rawValue, &f) == nil
 	case "integer":
-		// Check if it's a valid number
+		// Check if it's a valid number.
 		var f float64
-		if err := json.Unmarshal(rawValue, &f); err != nil {
+		err := json.Unmarshal(rawValue, &f)
+		if err != nil {
 			return false
 		}
-		// Check if it's an integer (no decimal point in JSON)
+		// Check if it's an integer (no decimal point in JSON).
 		return f == float64(int64(f))
 	case "boolean":
 		var b bool
+
 		return json.Unmarshal(rawValue, &b) == nil && (string(rawValue) == "true" || string(rawValue) == "false")
 	case "array":
 		return len(rawValue) > 0 && rawValue[0] == '['
 	case "object":
 		return len(rawValue) > 0 && rawValue[0] == '{'
 	default:
-		// Unknown type - accept
+		// Unknown type - accept.
 		return true
 	}
 }
@@ -250,14 +266,13 @@ func (r *Registry) validateTypeFromJSON(rawValue json.RawMessage, expectedType s
 // validateEnumFromJSON checks if a JSON value is in the allowed enum values.
 func (r *Registry) validateEnumFromJSON(rawValue json.RawMessage, enum []string) error {
 	var strValue string
-	if err := json.Unmarshal(rawValue, &strValue); err != nil {
-		return fmt.Errorf("enum value must be string")
+	err := json.Unmarshal(rawValue, &strValue)
+	if err != nil {
+		return errors.New("enum value must be string")
 	}
 
-	for _, allowed := range enum {
-		if strValue == allowed {
-			return nil
-		}
+	if slices.Contains(enum, strValue) {
+		return nil
 	}
 
 	return fmt.Errorf("value %q not in allowed values %v", strValue, enum)

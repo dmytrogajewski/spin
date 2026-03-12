@@ -2,8 +2,11 @@ package conversation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/google/uuid"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -14,77 +17,83 @@ import (
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
-	"github.com/google/uuid"
 )
 
 // Conversation represents an active conversation instance.
 type Conversation struct {
-	// Services (optional, can be nil)
+	// Services (optional, can be nil).
 	gitService    *gitpkg.Service
 	shellService  *shellpkg.Service
 	mcpService    *mcppkg.Service
 	memoryService *MemoryService
 
-	// Core components
+	// Core components.
 	agent    *agent.Agent
 	history  *history.History
 	emitter  *events.EventEmitter
-	taskMode string // Current task mode (regular, review, compact, planning)
-	id       string // Unified conversation ID (for both session and protocol)
-	workDir  string // Working directory for this conversation
+	taskMode string // Current task mode (regular, review, compact, planning).
+	id       string // Unified conversation ID (for both session and protocol).
+	workDir  string // Working directory for this conversation.
 
-	// Protocol-specific fields (optional, for protocol use)
-	turnID      string             // Current turn ID
-	cancel      context.CancelFunc // Cancellation context
-	transformer EventTransformer   // Optional event transformer for protocol adapters
-	protocolMu  sync.RWMutex       // Protects protocol fields (turnID, cancel, transformer)
+	// Protocol-specific fields (optional, for protocol use).
+	turnID      string             // Current turn ID.
+	cancel      context.CancelFunc // Cancellation context.
+	transformer EventTransformer   // Optional event transformer for protocol adapters.
+	protocolMu  sync.RWMutex       // Protects protocol fields (turnID, cancel, transformer).
 }
 
 // RunTurn executes a single turn in the conversation.
 func (c *Conversation) RunTurn(ctx context.Context, input string) error {
-	// Get conversation history for context
+	// Get conversation history for context.
 	historyMessages := c.history.MessagesForLLM()
 
-	// Create task instance from task mode (use default if not set)
-	var taskInstance task.Task
-	var err error
+	// Create task instance from task mode (use default if not set).
+	var (
+		taskInstance task.Task
+		err          error
+	)
+
 	if c.taskMode == "" {
 		taskInstance = task.DefaultTask()
 	} else {
 		taskInstance, err = task.NewTask(c.taskMode)
 	}
+
 	if err != nil {
 		return fmt.Errorf("invalid task mode %q: %w", c.taskMode, err)
 	}
 
-	// Create agent request with task and history
+	// Create agent request with task and history.
 	req := &agent.AgentRequest{
 		Input:   input,
 		Task:    taskInstance,
 		History: historyMessages,
 	}
 
-	// Execute agent (user message is in resp.Messages)
+	// Execute agent (user message is in resp.Messages).
 	resp, err := c.agent.Execute(ctx, req)
 	if err != nil {
-		// Add user message first (since it wasn't added before execution)
-		if err := c.history.AddUserMessage(input); err != nil {
+		// Add user message first (since it wasn't added before execution).
+		err := c.history.AddUserMessage(input)
+		if err != nil {
 			return fmt.Errorf("failed to add user message: %w", err)
 		}
-		// Add error message to history so it's preserved
+		// Add error message to history so it's preserved.
 		errorMsg := message.Message{
 			Role:    message.RoleAssistant,
 			Content: fmt.Sprintf("Error: %v", err),
 		}
 		_ = c.history.AddMessage(errorMsg)
+
 		return fmt.Errorf("agent execution failed: %w", err)
 	}
 
 	// Add all messages from the agent's execution to history
 	// This includes: user input, assistant messages with tool calls, tool results, final assistant
-	// This maintains proper OpenAI message format and ensures accurate token counting
+	// This maintains proper OpenAI message format and ensures accurate token counting.
 	for _, msg := range resp.Messages {
-		if err := c.history.AddMessage(msg); err != nil {
+		err := c.history.AddMessage(msg)
+		if err != nil {
 			return fmt.Errorf("failed to add message to history: %w", err)
 		}
 	}
@@ -94,12 +103,14 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 
 // SetTaskMode sets the task mode for the conversation.
 func (c *Conversation) SetTaskMode(mode string) error {
-	if err := task.ValidateMode(mode); err != nil {
+	err := task.ValidateMode(mode)
+	if err != nil {
 		return err
 	}
+
 	c.taskMode = mode
 
-	// Emit mode switch event
+	// Emit mode switch event.
 	if c.emitter != nil {
 		c.emitter.Emit(events.Event{
 			Type: events.EventInfo,
@@ -169,7 +180,7 @@ func (c *Conversation) Stream() <-chan events.Event {
 // and are NOT closed here - they can be shared across conversations.
 func (c *Conversation) Close() error {
 	// Close conversation-specific resources only
-	// Services are managed by the application layer
+	// Services are managed by the application layer.
 	return nil
 }
 
@@ -177,6 +188,7 @@ func (c *Conversation) Close() error {
 func (c *Conversation) GetTurnID() string {
 	c.protocolMu.RLock()
 	defer c.protocolMu.RUnlock()
+
 	return c.turnID
 }
 
@@ -184,6 +196,7 @@ func (c *Conversation) GetTurnID() string {
 func (c *Conversation) SetTurnID(turnID string) {
 	c.protocolMu.Lock()
 	defer c.protocolMu.Unlock()
+
 	c.turnID = turnID
 }
 
@@ -191,6 +204,7 @@ func (c *Conversation) SetTurnID(turnID string) {
 func (c *Conversation) GetCancel() context.CancelFunc {
 	c.protocolMu.RLock()
 	defer c.protocolMu.RUnlock()
+
 	return c.cancel
 }
 
@@ -198,6 +212,7 @@ func (c *Conversation) GetCancel() context.CancelFunc {
 func (c *Conversation) SetCancel(cancel context.CancelFunc) {
 	c.protocolMu.Lock()
 	defer c.protocolMu.Unlock()
+
 	c.cancel = cancel
 }
 
@@ -218,6 +233,7 @@ func (c *Conversation) Cancel() {
 func (c *Conversation) SetEventTransformer(transformer EventTransformer) {
 	c.protocolMu.Lock()
 	defer c.protocolMu.Unlock()
+
 	c.transformer = transformer
 }
 
@@ -225,6 +241,7 @@ func (c *Conversation) SetEventTransformer(transformer EventTransformer) {
 func (c *Conversation) GetEventTransformer() EventTransformer {
 	c.protocolMu.RLock()
 	defer c.protocolMu.RUnlock()
+
 	return c.transformer
 }
 
@@ -247,22 +264,22 @@ func (c *Conversation) GetMemoryService() *MemoryService {
 
 // NewFromAgentConfig holds configuration for NewFromAgent.
 type NewFromAgentConfig struct {
-	// Agent is the pre-built agent instance (required)
+	// Agent is the pre-built agent instance (required).
 	Agent *agent.Agent
 
-	// Emitter is the event emitter (required)
+	// Emitter is the event emitter (required).
 	Emitter *events.EventEmitter
 
-	// WorkDir is the working directory (required)
+	// WorkDir is the working directory (required).
 	WorkDir string
 
-	// ID is an optional conversation ID (generated if empty)
+	// ID is an optional conversation ID (generated if empty).
 	ID string
 
-	// History is an optional pre-existing history (new one created if nil)
+	// History is an optional pre-existing history (new one created if nil).
 	History *history.History
 
-	// MaxTokens is the maximum tokens for history (optional, uses default if 0)
+	// MaxTokens is the maximum tokens for history (optional, uses default if 0).
 	MaxTokens int
 }
 
@@ -275,13 +292,15 @@ func generateConversationID() string {
 // This is useful for modes like ACP where the agent is pre-built.
 func NewFromAgent(cfg NewFromAgentConfig) (*Conversation, error) {
 	if cfg.Agent == nil {
-		return nil, fmt.Errorf("agent is required")
+		return nil, errors.New("agent is required")
 	}
+
 	if cfg.Emitter == nil {
-		return nil, fmt.Errorf("emitter is required")
+		return nil, errors.New("emitter is required")
 	}
+
 	if cfg.WorkDir == "" {
-		return nil, fmt.Errorf("workDir is required")
+		return nil, errors.New("workDir is required")
 	}
 
 	hist := cfg.History

@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestACPCommandContext tests the ACP command context implementation.
@@ -50,7 +51,7 @@ func TestExecuteCommand(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Create a session first
+	// Create a session first.
 	sessionID := acp.SessionId("test-session")
 	req := acp.NewSessionRequest{
 		Cwd: "/tmp",
@@ -84,4 +85,3 @@ func TestExecuteCommand(t *testing.T) {
 		assert.Contains(t, err.Error(), "unknown command")
 	})
 }
-

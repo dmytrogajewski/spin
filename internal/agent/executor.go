@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"strings"
@@ -29,44 +30,44 @@ var (
 // Default values for execution.
 const (
 	DefaultExecutionTimeout = 5 * time.Minute
-	DefaultMaxOutputSize    = 10 * 1024 * 1024 // 10MB
+	DefaultMaxOutputSize    = 10 * 1024 * 1024 // 10MB.
 )
 
 // Result contains the outcome of command execution.
 type Result struct {
-	// Command is the executed command
+	// Command is the executed command.
 	Command *security.Command
 
-	// Stdout contains the standard output
+	// Stdout contains the standard output.
 	Stdout string
 
-	// Stderr contains the standard error
+	// Stderr contains the standard error.
 	Stderr string
 
-	// ExitCode is the process exit code
+	// ExitCode is the process exit code.
 	ExitCode int
 
-	// Duration is the execution time
+	// Duration is the execution time.
 	Duration time.Duration
 
-	// StartedAt is when execution started
+	// StartedAt is when execution started.
 	StartedAt time.Time
 
-	// CompletedAt is when execution completed
+	// CompletedAt is when execution completed.
 	CompletedAt time.Time
 
-	// Error contains any execution error
+	// Error contains any execution error.
 	Error error
 
-	// Truncated indicates if output was truncated
+	// Truncated indicates if output was truncated.
 	Truncated bool
 
-	// Metadata contains additional execution metadata
-	Metadata map[string]interface{}
+	// Metadata contains additional execution metadata.
+	Metadata map[string]any
 }
 
 // GetMetadata returns execution metadata.
-func (r *Result) GetMetadata() map[string]interface{} {
+func (r *Result) GetMetadata() map[string]any {
 	return r.Metadata
 }
 
@@ -94,50 +95,53 @@ func (r *Result) Output() string {
 	if r.Stdout == "" && r.Stderr == "" {
 		return ""
 	}
+
 	if r.Stdout == "" {
 		return r.Stderr
 	}
+
 	if r.Stderr == "" {
 		return r.Stdout
 	}
+
 	return r.Stdout + "\n" + r.Stderr
 }
 
 // ExecuteOptions configures command execution behavior.
 type ExecuteOptions struct {
-	// Timeout is the maximum execution duration
+	// Timeout is the maximum execution duration.
 	Timeout time.Duration
 
-	// WorkDir is the working directory
+	// WorkDir is the working directory.
 	WorkDir string
 
-	// Env contains environment variables
+	// Env contains environment variables.
 	Env map[string]string
 
-	// InheritEnv determines if parent env is inherited
+	// InheritEnv determines if parent env is inherited.
 	InheritEnv bool
 
-	// MaxOutputSize is the maximum output size in bytes (0 = use default)
+	// MaxOutputSize is the maximum output size in bytes (0 = use default).
 	MaxOutputSize int64
 
-	// StreamOutput enables real-time output streaming
+	// StreamOutput enables real-time output streaming.
 	StreamOutput bool
 
-	// ValidateFirst runs validator before execution
+	// ValidateFirst runs validator before execution.
 	ValidateFirst bool
 
-	// Sandbox enables sandboxing (if available)
+	// Sandbox enables sandboxing (if available).
 	Sandbox bool
 }
 
 // DefaultExecuteOptions returns default execution options.
 func DefaultExecuteOptions() *ExecuteOptions {
 	return &ExecuteOptions{
-		Timeout:       0, // Use executor's default timeout
+		Timeout:       0, // Use executor's default timeout.
 		WorkDir:       "",
 		Env:           make(map[string]string),
-		InheritEnv:    true, // Inherit environment by default
-		MaxOutputSize: 0,    // Use executor's default max output size
+		InheritEnv:    true, // Inherit environment by default.
+		MaxOutputSize: 0,    // Use executor's default max output size.
 		StreamOutput:  false,
 		ValidateFirst: false,
 		Sandbox:       false,
@@ -146,19 +150,19 @@ func DefaultExecuteOptions() *ExecuteOptions {
 
 // OutputChunk represents a chunk of streaming output.
 type OutputChunk struct {
-	// Stream identifies the stream (stdout/stderr)
+	// Stream identifies the stream (stdout/stderr).
 	Stream string
 
-	// Data is the output data
+	// Data is the output data.
 	Data []byte
 
-	// Timestamp is when this chunk was received
+	// Timestamp is when this chunk was received.
 	Timestamp time.Time
 
-	// Done indicates if the stream is complete
+	// Done indicates if the stream is complete.
 	Done bool
 
-	// Error contains any error
+	// Error contains any error.
 	Error error
 }
 
@@ -178,7 +182,7 @@ type OutputChunk struct {
 type Executor struct {
 	securityService *security.SecurityService
 	approvalService *security.ApprovalService
-	sandbox         any // sandbox.Sandbox interface (avoiding import cycle)
+	sandbox         any // sandbox.Sandbox interface (avoiding import cycle).
 	cache           *CommandCache
 	workDir         string
 	timeout         time.Duration
@@ -194,9 +198,11 @@ type ExecutorOption func(*Executor) error
 func WithSecurityService(s *security.SecurityService) ExecutorOption {
 	return func(e *Executor) error {
 		if s == nil {
-			return fmt.Errorf("security service cannot be nil")
+			return errors.New("security service cannot be nil")
 		}
+
 		e.securityService = s
+
 		return nil
 	}
 }
@@ -205,6 +211,7 @@ func WithSecurityService(s *security.SecurityService) ExecutorOption {
 func WithApprovalService(s *security.ApprovalService) ExecutorOption {
 	return func(e *Executor) error {
 		e.approvalService = s
+
 		return nil
 	}
 }
@@ -213,9 +220,11 @@ func WithApprovalService(s *security.ApprovalService) ExecutorOption {
 func WithTimeout(d time.Duration) ExecutorOption {
 	return func(e *Executor) error {
 		if d <= 0 {
-			return fmt.Errorf("timeout must be positive")
+			return errors.New("timeout must be positive")
 		}
+
 		e.timeout = d
+
 		return nil
 	}
 }
@@ -224,6 +233,7 @@ func WithTimeout(d time.Duration) ExecutorOption {
 func WithCache(c *CommandCache) ExecutorOption {
 	return func(e *Executor) error {
 		e.cache = c
+
 		return nil
 	}
 }
@@ -242,7 +252,8 @@ func NewExecutor(workDir string, opts ...ExecutorOption) (*Executor, error) {
 	}
 
 	for _, opt := range opts {
-		if err := opt(e); err != nil {
+		err := opt(e)
+		if err != nil {
 			return nil, fmt.Errorf("option failed: %w", err)
 		}
 	}
@@ -253,6 +264,7 @@ func NewExecutor(workDir string, opts ...ExecutorOption) (*Executor, error) {
 // errorResult creates an error result with proper timestamps.
 func (e *Executor) errorResult(cmd *security.Command, err error) *Result {
 	now := time.Now()
+
 	return &Result{
 		Command:     cmd,
 		Error:       err,
@@ -305,9 +317,10 @@ func (e *Executor) validateCommand(cmd *security.Command, opts *ExecuteOptions) 
 		return ErrEmptyProgram
 	}
 
-	// If ValidateFirst option is set, run full validation
+	// If ValidateFirst option is set, run full validation.
 	if opts.ValidateFirst {
-		if err := e.Validate(cmd); err != nil {
+		err := e.Validate(cmd)
+		if err != nil {
 			return err
 		}
 	}
@@ -321,9 +334,9 @@ func (e *Executor) requestApprovalIfNeeded(ctx context.Context, cmd *security.Co
 	securityService := e.securityService
 	e.mu.RUnlock()
 
-	// Use SecurityService's high-level approval method (handles validation + approval)
+	// Use SecurityService's high-level approval method (handles validation + approval).
 	if securityService == nil {
-		return nil // No security service, skip approval
+		return nil // No security service, skip approval.
 	}
 
 	workDir := opts.WorkDir
@@ -331,14 +344,14 @@ func (e *Executor) requestApprovalIfNeeded(ctx context.Context, cmd *security.Co
 		workDir = e.workDir
 	}
 
-	// Use SecurityService's canonical approval method (handles safe/forbidden/dangerous correctly)
+	// Use SecurityService's canonical approval method (handles safe/forbidden/dangerous correctly).
 	approved, err := securityService.ValidateAndApprove(ctx, cmd, workDir)
 	if err != nil {
 		return fmt.Errorf("approval request failed: %w", err)
 	}
 
 	if !approved {
-		return fmt.Errorf("command execution denied by user")
+		return errors.New("command execution denied by user")
 	}
 
 	return nil
@@ -362,7 +375,7 @@ func (e *Executor) Validate(cmd *security.Command) error {
 		return ErrEmptyProgram
 	}
 
-	// If security service is present, use it
+	// If security service is present, use it.
 	e.mu.RLock()
 	securityService := e.securityService
 	e.mu.RUnlock()
@@ -403,30 +416,32 @@ func (e *Executor) Validate(cmd *security.Command) error {
 //	}
 //	fmt.Println(result.Stdout)
 func (e *Executor) Execute(ctx context.Context, cmd *security.Command, opts *ExecuteOptions) (*Result, error) {
-	// Use default options if not provided
+	// Use default options if not provided.
 	if opts == nil {
 		opts = DefaultExecuteOptions()
 	}
 
-	// Validate command
-	if err := e.validateCommand(cmd, opts); err != nil {
+	// Validate command.
+	err := e.validateCommand(cmd, opts)
+	if err != nil {
 		return e.errorResult(cmd, err), err
 	}
 
-	// Check cache
+	// Check cache.
 	if cached := e.checkCache(cmd); cached != nil {
 		return cached, nil
 	}
 
-	// Request approval if needed
-	if err := e.requestApprovalIfNeeded(ctx, cmd, opts); err != nil {
+	// Request approval if needed.
+	err = e.requestApprovalIfNeeded(ctx, cmd, opts)
+	if err != nil {
 		return e.errorResult(cmd, err), err
 	}
 
-	// Execute command
+	// Execute command.
 	result := e.executeCommand(ctx, cmd, opts)
 
-	// Cache successful results
+	// Cache successful results.
 	e.cacheResultIfEligible(cmd, result)
 
 	return result, result.Error
@@ -434,64 +449,71 @@ func (e *Executor) Execute(ctx context.Context, cmd *security.Command, opts *Exe
 
 // executeCommand performs the actual command execution.
 func (e *Executor) executeCommand(ctx context.Context, cmd *security.Command, opts *ExecuteOptions) *Result {
-	// Create result
+	// Create result.
 	result := &Result{
 		Command:   cmd,
 		StartedAt: time.Now(),
 	}
 
-	// Apply timeout
+	// Apply timeout.
 	execCtx, cancel := e.applyTimeout(ctx, opts)
 	defer cancel()
 
-	// Prepare exec.Cmd
+	// Prepare exec.Cmd.
 	execCmd := exec.CommandContext(execCtx, cmd.Program, cmd.Args...)
 
-	// Set working directory
+	// Set working directory.
 	workDir := opts.WorkDir
 	if workDir == "" {
 		workDir = e.workDir
 	}
+
 	execCmd.Dir = workDir
 
-	// Set environment
+	// Set environment.
 	execCmd.Env = e.buildEnvironment(opts)
 
-	// Debug: check if PATH is set
+	// Debug: check if PATH is set.
 	hasPath := false
+
 	for _, env := range execCmd.Env {
 		if strings.HasPrefix(env, "PATH=") {
 			hasPath = true
+
 			break
 		}
 	}
+
 	if !hasPath {
-		// Add minimal PATH if not present
+		// Add minimal PATH if not present.
 		execCmd.Env = append(execCmd.Env, "PATH=/usr/bin:/bin")
 	}
 
-	// Capture output
+	// Capture output.
 	var stdoutBuf, stderrBuf bytes.Buffer
+
 	execCmd.Stdout = &stdoutBuf
 	execCmd.Stderr = &stderrBuf
 
-	// Start execution
-	if err := execCmd.Start(); err != nil {
+	// Start execution.
+	err := execCmd.Start()
+	if err != nil {
 		result.Error = fmt.Errorf("%w: %v", ErrCommandNotFound, err)
 		result.ExitCode = -1
 		result.CompletedAt = time.Now()
 		result.Duration = result.CompletedAt.Sub(result.StartedAt)
+
 		return result
 	}
 
-	// Wait for completion
-	err := execCmd.Wait()
+	// Wait for completion.
+	err = execCmd.Wait()
 
-	// Complete result
+	// Complete result.
 	result.CompletedAt = time.Now()
 	result.Duration = result.CompletedAt.Sub(result.StartedAt)
 
-	// Get max output size
+	// Get max output size.
 	maxSize := opts.MaxOutputSize
 	if maxSize == 0 {
 		e.mu.RLock()
@@ -499,37 +521,43 @@ func (e *Executor) executeCommand(ctx context.Context, cmd *security.Command, op
 		e.mu.RUnlock()
 	}
 
-	// Capture and limit output (always capture, even on error)
+	// Capture and limit output (always capture, even on error).
 	result.Stdout, result.Stderr, result.Truncated = e.captureOutput(
 		&stdoutBuf,
 		&stderrBuf,
 		maxSize,
 	)
 
-	// Handle execution error
+	// Handle execution error.
 	if err != nil {
 		if execCtx.Err() == context.DeadlineExceeded {
 			result.Error = ErrTimeout
 			result.ExitCode = -1
-			return result
-		}
-		if execCtx.Err() == context.Canceled {
-			result.Error = context.Canceled
-			result.ExitCode = -1
+
 			return result
 		}
 
-		// Extract exit code
+		if execCtx.Err() == context.Canceled {
+			result.Error = context.Canceled
+			result.ExitCode = -1
+
+			return result
+		}
+
+		// Extract exit code.
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
 		} else {
 			result.ExitCode = -1
 		}
+
 		result.Error = fmt.Errorf("%w: %v", ErrExecutionFailed, err)
+
 		return result
 	}
 
 	result.ExitCode = 0
+
 	return result
 }
 
@@ -557,14 +585,15 @@ func (e *Executor) executeCommand(ctx context.Context, cmd *security.Command, op
 //	    fmt.Print(string(chunk.Data))
 //	}
 func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *security.Command, opts *ExecuteOptions) (<-chan OutputChunk, error) {
-	// Use default options if not provided
+	// Use default options if not provided.
 	if opts == nil {
 		opts = DefaultExecuteOptions()
 	}
 
-	// Validate command
+	// Validate command.
 	if opts.ValidateFirst {
-		if err := e.Validate(cmd); err != nil {
+		err := e.Validate(cmd)
+		if err != nil {
 			return nil, err
 		}
 	} else if cmd == nil {
@@ -573,73 +602,82 @@ func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *security.Command, 
 		return nil, ErrEmptyProgram
 	}
 
-	// Apply timeout
+	// Apply timeout.
 	execCtx, cancel := e.applyTimeout(ctx, opts)
 
-	// Create output channel
+	// Create output channel.
 	chunks := make(chan OutputChunk, 10)
 
-	// Prepare exec.Cmd
+	// Prepare exec.Cmd.
 	execCmd := exec.CommandContext(execCtx, cmd.Program, cmd.Args...)
 
-	// Set working directory
+	// Set working directory.
 	workDir := opts.WorkDir
 	if workDir == "" {
 		workDir = e.workDir
 	}
+
 	execCmd.Dir = workDir
 
-	// Set environment
+	// Set environment.
 	execCmd.Env = e.buildEnvironment(opts)
 
-	// Get stdout and stderr pipes
+	// Get stdout and stderr pipes.
 	stdout, err := execCmd.StdoutPipe()
 	if err != nil {
 		cancel()
+
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
 	stderr, err := execCmd.StderrPipe()
 	if err != nil {
 		cancel()
+
 		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
-	// Start execution
-	if err := execCmd.Start(); err != nil {
+	// Start execution.
+	err = execCmd.Start()
+	if err != nil {
 		cancel()
+
 		return nil, fmt.Errorf("%w: %v", ErrCommandNotFound, err)
 	}
 
-	// Stream output in goroutines
+	// Stream output in goroutines.
 	var wg sync.WaitGroup
 
-	// Stream stdout
+	// Stream stdout.
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
+
 		e.streamOutput(execCtx, stdout, "stdout", chunks)
 	}()
 
-	// Stream stderr
+	// Stream stderr.
 	wg.Add(1)
+
 	go func() {
 		defer wg.Done()
+
 		e.streamOutput(execCtx, stderr, "stderr", chunks)
 	}()
 
-	// Wait for command and close channel
+	// Wait for command and close channel.
 	go func() {
 		defer cancel()
 		defer close(chunks)
 
-		// Wait for output streams to complete
+		// Wait for output streams to complete.
 		wg.Wait()
 
-		// Wait for command to complete
+		// Wait for command to complete.
 		err := execCmd.Wait()
 
-		// Send completion or error
+		// Send completion or error.
 		if err != nil {
 			if execCtx.Err() == context.DeadlineExceeded {
 				chunks <- OutputChunk{
@@ -661,7 +699,7 @@ func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *security.Command, 
 				}
 			}
 		} else {
-			// Success
+			// Success.
 			chunks <- OutputChunk{
 				Timestamp: time.Now(),
 				Done:      true,
@@ -689,7 +727,7 @@ func (e *Executor) applyTimeout(ctx context.Context, opts *ExecuteOptions) (cont
 func (e *Executor) buildEnvironment(opts *ExecuteOptions) []string {
 	env := make(map[string]string)
 
-	// Start with inherited environment (if enabled)
+	// Start with inherited environment (if enabled).
 	if opts.InheritEnv {
 		for _, kv := range os.Environ() {
 			parts := strings.SplitN(kv, "=", 2)
@@ -699,19 +737,17 @@ func (e *Executor) buildEnvironment(opts *ExecuteOptions) []string {
 		}
 	}
 
-	// Add executor environment
+	// Add executor environment.
 	e.mu.RLock()
-	for k, v := range e.env {
-		env[k] = v
-	}
+
+	maps.Copy(env, e.env)
+
 	e.mu.RUnlock()
 
-	// Add command-specific environment
-	for k, v := range opts.Env {
-		env[k] = v
-	}
+	// Add command-specific environment.
+	maps.Copy(env, opts.Env)
 
-	// Convert to slice
+	// Convert to slice.
 	result := make([]string, 0, len(env))
 	for k, v := range env {
 		result = append(result, fmt.Sprintf("%s=%s", k, v))
@@ -733,6 +769,7 @@ func isSensitive(key string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -740,23 +777,27 @@ func isSensitive(key string) bool {
 func (e *Executor) captureOutput(stdout, stderr io.Reader, maxSize int64) (string, string, bool) {
 	var truncated bool
 
-	// Read stdout
+	// Read stdout.
 	stdoutBytes, err := io.ReadAll(io.LimitReader(stdout, maxSize))
 	if err != nil {
 		truncated = true
 	}
+
 	if int64(len(stdoutBytes)) >= maxSize {
 		truncated = true
+
 		stdoutBytes = append(stdoutBytes, []byte("\n... (output truncated)")...)
 	}
 
-	// Read stderr
+	// Read stderr.
 	stderrBytes, err := io.ReadAll(io.LimitReader(stderr, maxSize))
 	if err != nil {
 		truncated = true
 	}
+
 	if int64(len(stderrBytes)) >= maxSize {
 		truncated = true
+
 		stderrBytes = append(stderrBytes, []byte("\n... (output truncated)")...)
 	}
 
@@ -767,8 +808,9 @@ func (e *Executor) captureOutput(stdout, stderr io.Reader, maxSize int64) (strin
 // It checks context cancellation periodically to allow graceful shutdown.
 func (e *Executor) streamOutput(ctx context.Context, r io.Reader, stream string, chunks chan<- OutputChunk) {
 	buf := make([]byte, 4096)
+
 	for {
-		// Check context cancellation before reading
+		// Check context cancellation before reading.
 		select {
 		case <-ctx.Done():
 			return
@@ -788,6 +830,7 @@ func (e *Executor) streamOutput(ctx context.Context, r io.Reader, stream string,
 				Error:     nil,
 			}
 		}
+
 		if err != nil {
 			if err != io.EOF {
 				chunks <- OutputChunk{
@@ -797,6 +840,7 @@ func (e *Executor) streamOutput(ctx context.Context, r io.Reader, stream string,
 					Error:     fmt.Errorf("stream error: %w", err),
 				}
 			}
+
 			break
 		}
 	}

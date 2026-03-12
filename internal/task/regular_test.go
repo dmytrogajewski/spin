@@ -15,7 +15,7 @@ func TestNewRegular(t *testing.T) {
 		t.Errorf("NewRegular().Name() = %v, want %v", regular.Name(), "regular")
 	}
 
-	// Test that it implements the Task interface
+	// Test that it implements the Task interface.
 	var _ Task = regular
 }
 
@@ -35,7 +35,7 @@ func TestRegular_SystemPrompt(t *testing.T) {
 		t.Error("Regular.SystemPrompt() returned empty string")
 	}
 
-	// Should be a reasonable length
+	// Should be a reasonable length.
 	if len(result) < 50 {
 		t.Errorf("Regular.SystemPrompt() too short: %d characters", len(result))
 	}
@@ -45,12 +45,12 @@ func TestRegular_AllowedTools(t *testing.T) {
 	regular := NewRegular()
 	tools := regular.AllowedTools()
 
-	// Regular mode allows all tools (empty slice means no restrictions)
+	// Regular mode allows all tools (empty slice means no restrictions).
 	if tools == nil {
 		t.Error("Regular.AllowedTools() returned nil")
 	}
 
-	// Empty slice means all tools are allowed
+	// Empty slice means all tools are allowed.
 	if len(tools) != 0 {
 		t.Errorf("Regular.AllowedTools() should return empty slice for all tools, got %d tools", len(tools))
 	}
@@ -71,8 +71,8 @@ func TestRegular_MaxTokens(t *testing.T) {
 
 func TestRegular_Validate(t *testing.T) {
 	regular := NewRegular()
-	err := regular.Validate()
 
+	err := regular.Validate()
 	if err != nil {
 		t.Errorf("Regular.Validate() unexpected error: %v", err)
 	}
@@ -81,21 +81,23 @@ func TestRegular_Validate(t *testing.T) {
 func TestRegular_Concurrency(t *testing.T) {
 	regular := NewRegular()
 
-	// Test concurrent access
+	// Test concurrent access.
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+
+	for range 10 {
 		go func() {
 			_ = regular.Name()
 			_ = regular.SystemPrompt()
 			_ = regular.AllowedTools()
 			_ = regular.MaxTokens()
 			_ = regular.Validate()
+
 			done <- true
 		}()
 	}
 
-	// Wait for all goroutines to complete
-	for i := 0; i < 10; i++ {
+	// Wait for all goroutines to complete.
+	for range 10 {
 		<-done
 	}
 }
@@ -103,7 +105,7 @@ func TestRegular_Concurrency(t *testing.T) {
 func TestRegular_TaskInterface(t *testing.T) {
 	regular := NewRegular()
 
-	// Verify all interface methods work
+	// Verify all interface methods work.
 	if regular.Name() == "" {
 		t.Error("Regular.Name() returned empty string")
 	}
@@ -120,7 +122,8 @@ func TestRegular_TaskInterface(t *testing.T) {
 		t.Error("Regular.MaxTokens() returned non-positive value")
 	}
 
-	if err := regular.Validate(); err != nil {
+	err := regular.Validate()
+	if err != nil {
 		t.Errorf("Regular.Validate() returned error: %v", err)
 	}
 }
@@ -139,7 +142,7 @@ func TestRegular_MaxTokensInRange(t *testing.T) {
 	regular := NewRegular()
 	maxTokens := regular.MaxTokens()
 
-	// Should be within reasonable bounds
+	// Should be within reasonable bounds.
 	if maxTokens < 1000 {
 		t.Errorf("Regular.MaxTokens() = %d, seems too small", maxTokens)
 	}

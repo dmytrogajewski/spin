@@ -23,8 +23,8 @@ type Loop struct {
 	renderer   PromptRenderer
 	keys       <-chan term.KeyEvent
 	out        chan string
-	onRender   func() // Callback to trigger re-render (for sticky coordination)
-	skipRender bool   // If true, skip direct rendering (use callback only)
+	onRender   func() // Callback to trigger re-render (for sticky coordination).
+	skipRender bool   // If true, skip direct rendering (use callback only).
 }
 
 // NewLoop creates a new input loop with the specified components.
@@ -44,6 +44,7 @@ func NewLoop(model *Model, renderer PromptRenderer, keys <-chan term.KeyEvent) *
 // Returns a channel that emits submitted lines.
 func (l *Loop) Run(ctx context.Context) <-chan string {
 	go l.loop(ctx)
+
 	return l.out
 }
 
@@ -117,6 +118,7 @@ func (l *Loop) dispatchKeyEvent(ctx context.Context, event term.KeyEvent) bool {
 func (l *Loop) handleRune(event term.KeyEvent) bool {
 	l.model.Insert(event.Rune)
 	l.redraw()
+
 	return false
 }
 
@@ -124,6 +126,7 @@ func (l *Loop) handleRune(event term.KeyEvent) bool {
 func (l *Loop) handleBackspace() bool {
 	l.model.Backspace()
 	l.redraw()
+
 	return false
 }
 
@@ -131,6 +134,7 @@ func (l *Loop) handleBackspace() bool {
 func (l *Loop) handleDelete() bool {
 	l.model.Delete()
 	l.redraw()
+
 	return false
 }
 
@@ -138,6 +142,7 @@ func (l *Loop) handleDelete() bool {
 func (l *Loop) handleLeft() bool {
 	l.model.MoveLeft()
 	l.redraw()
+
 	return false
 }
 
@@ -145,6 +150,7 @@ func (l *Loop) handleLeft() bool {
 func (l *Loop) handleRight() bool {
 	l.model.MoveRight()
 	l.redraw()
+
 	return false
 }
 
@@ -152,6 +158,7 @@ func (l *Loop) handleRight() bool {
 func (l *Loop) handleHome() bool {
 	l.model.MoveStart()
 	l.redraw()
+
 	return false
 }
 
@@ -159,6 +166,7 @@ func (l *Loop) handleHome() bool {
 func (l *Loop) handleEnd() bool {
 	l.model.MoveEnd()
 	l.redraw()
+
 	return false
 }
 
@@ -166,6 +174,7 @@ func (l *Loop) handleEnd() bool {
 func (l *Loop) handleUp() bool {
 	l.model.PrevHistory()
 	l.redraw()
+
 	return false
 }
 
@@ -173,6 +182,7 @@ func (l *Loop) handleUp() bool {
 func (l *Loop) handleDown() bool {
 	l.model.NextHistory()
 	l.redraw()
+
 	return false
 }
 
@@ -180,6 +190,7 @@ func (l *Loop) handleDown() bool {
 func (l *Loop) handleCtrlU() bool {
 	l.model.ClearLineLeft()
 	l.redraw()
+
 	return false
 }
 
@@ -187,6 +198,7 @@ func (l *Loop) handleCtrlU() bool {
 func (l *Loop) handleCtrlK() bool {
 	l.model.ClearLineRight()
 	l.redraw()
+
 	return false
 }
 
@@ -194,6 +206,7 @@ func (l *Loop) handleCtrlK() bool {
 func (l *Loop) handleCtrlW() bool {
 	l.model.DeleteWord()
 	l.redraw()
+
 	return false
 }
 
@@ -201,6 +214,7 @@ func (l *Loop) handleCtrlW() bool {
 func (l *Loop) handleCtrlL() bool {
 	l.renderer.ClearScreen()
 	l.redraw()
+
 	return false
 }
 
@@ -208,26 +222,30 @@ func (l *Loop) handleCtrlL() bool {
 func (l *Loop) handleEnter(ctx context.Context) bool {
 	line := l.model.Submit()
 	l.redraw()
+
 	select {
 	case l.out <- line:
 	case <-ctx.Done():
-		return true // Exit on context cancel
+		return true // Exit on context cancel.
 	}
+
 	return false
 }
 
 // handleCtrlC handles Ctrl+C (exit).
 func (l *Loop) handleCtrlC() bool {
-	return true // Exit loop on Ctrl-C
+	return true // Exit loop on Ctrl-C.
 }
 
 // handleCtrlD handles Ctrl+D (EOF or delete).
 func (l *Loop) handleCtrlD() bool {
 	if l.model.Text() == "" {
-		return true // Exit on EOF
+		return true // Exit on EOF.
 	}
+
 	l.model.Delete()
 	l.redraw()
+
 	return false
 }
 
@@ -236,23 +254,25 @@ func (l *Loop) handlePaste(event term.KeyEvent) bool {
 	for _, r := range []rune(string(event.Paste)) {
 		l.model.Insert(r)
 	}
+
 	l.redraw()
+
 	return false
 }
 
 // handleUnknown handles unknown keys.
 func (l *Loop) handleUnknown() bool {
-	// Unknown key, ignore
+	// Unknown key, ignore.
 	return false
 }
 
 // redraw triggers a prompt redraw, either via callback or directly.
 func (l *Loop) redraw() {
 	if l.skipRender && l.onRender != nil {
-		// Call callback to trigger coordinated render
+		// Call callback to trigger coordinated render.
 		l.onRender()
 	} else {
-		// Direct render (backward compatibility)
+		// Direct render (backward compatibility).
 		l.renderer.Redraw(l.model, "")
 	}
 }

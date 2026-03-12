@@ -7,9 +7,9 @@ import (
 
 // DeltaHistory manages versioned delta records.
 type DeltaHistory struct {
-	deltas   []Delta          // Ordered list of deltas (append-only)
-	byBullet map[string][]int // Index: bulletID → delta indices
-	mu       sync.RWMutex     // Thread-safe access
+	deltas   []Delta          // Ordered list of deltas (append-only).
+	byBullet map[string][]int // Index: bulletID → delta indices.
+	mu       sync.RWMutex     // Thread-safe access.
 }
 
 // DeltaHistoryStats contains history statistics.
@@ -34,11 +34,11 @@ func (h *DeltaHistory) Record(delta Delta) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Append to main list
+	// Append to main list.
 	index := len(h.deltas)
 	h.deltas = append(h.deltas, delta)
 
-	// Update bullet index
+	// Update bullet index.
 	h.byBullet[delta.BulletID] = append(h.byBullet[delta.BulletID], index)
 }
 
@@ -87,6 +87,7 @@ func (h *DeltaHistory) GetSince(since time.Time) []Delta {
 	defer h.mu.RUnlock()
 
 	result := make([]Delta, 0)
+
 	for i := range h.deltas {
 		if h.deltas[i].CreatedAt.After(since) || h.deltas[i].CreatedAt.Equal(since) {
 			result = append(result, h.deltas[i])
@@ -134,5 +135,6 @@ func (h *DeltaHistory) Clear() {
 func (h *DeltaHistory) Len() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+
 	return len(h.deltas)
 }

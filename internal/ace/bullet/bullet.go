@@ -1,6 +1,7 @@
 package bullet
 
 import (
+	"maps"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,29 +11,29 @@ import (
 // It stores reusable strategies, domain concepts, or failure modes
 // that can be accumulated and refined over time.
 type Bullet struct {
-	// ID is the unique identifier (UUID v4)
+	// ID is the unique identifier (UUID v4).
 	ID string `json:"id"`
 
-	// Content is the actual knowledge content
+	// Content is the actual knowledge content.
 	Content string `json:"content"`
 
-	// HelpfulCount tracks how often this bullet was marked helpful
+	// HelpfulCount tracks how often this bullet was marked helpful.
 	HelpfulCount int `json:"helpful_count"`
 
-	// HarmfulCount tracks how often this bullet was marked harmful
+	// HarmfulCount tracks how often this bullet was marked harmful.
 	HarmfulCount int `json:"harmful_count"`
 
 	// Embedding is the semantic vector (optional)
-	// Dimension: 1536 (OpenAI text-embedding-ada-002 compatible)
+	// Dimension: 1536 (OpenAI text-embedding-ada-002 compatible).
 	Embedding []float32 `json:"embedding,omitempty"`
 
-	// CreatedAt is when the bullet was created
+	// CreatedAt is when the bullet was created.
 	CreatedAt time.Time `json:"created_at"`
 
-	// UpdatedAt is when the bullet was last modified
+	// UpdatedAt is when the bullet was last modified.
 	UpdatedAt time.Time `json:"updated_at"`
 
-	// Tags are arbitrary metadata key-value pairs
+	// Tags are arbitrary metadata key-value pairs.
 	Tags map[string]string `json:"tags,omitempty"`
 }
 
@@ -52,8 +53,9 @@ func New(content string, opts ...Option) (*Bullet, error) {
 		opt(b)
 	}
 
-	// Validate before returning
-	if err := validate(b); err != nil {
+	// Validate before returning.
+	err := validate(b)
+	if err != nil {
 		return nil, err
 	}
 
@@ -78,6 +80,7 @@ func (b *Bullet) Score() float64 {
 	if total == 0 {
 		return 0.0
 	}
+
 	return float64(b.HelpfulCount-b.HarmfulCount) / float64(total)
 }
 
@@ -92,18 +95,16 @@ func (b *Bullet) Clone() *Bullet {
 		UpdatedAt:    b.UpdatedAt,
 	}
 
-	// Deep copy embedding if present
+	// Deep copy embedding if present.
 	if len(b.Embedding) > 0 {
 		clone.Embedding = make([]float32, len(b.Embedding))
 		copy(clone.Embedding, b.Embedding)
 	}
 
-	// Deep copy tags if present
+	// Deep copy tags if present.
 	if len(b.Tags) > 0 {
 		clone.Tags = make(map[string]string, len(b.Tags))
-		for k, v := range b.Tags {
-			clone.Tags[k] = v
-		}
+		maps.Copy(clone.Tags, b.Tags)
 	}
 
 	return clone

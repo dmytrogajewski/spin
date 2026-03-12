@@ -18,18 +18,19 @@ import (
 // TestUpdateBlock_PrintsCompletionStatus verifies that UpdateBlock prints the completion status line.
 // This is a regression test for the bug where UpdateBlock was storing updates but not displaying them.
 func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
-	// Setup with actual output capture
+	// Setup with actual output capture.
 	var buf bytes.Buffer
+
 	renderer := prompt.NewRenderer(&buf, 80, "> ")
 	model := prompt.NewModel(100)
 	blockRenderer := blocks.NewRenderer(80)
 
-	// Create coordinator
+	// Create coordinator.
 	printer := output.NewPrinter(&buf)
 	rendererAdapter := &rendererAdapter{renderer: renderer}
 	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
-	// Create status management
+	// Create status management.
 	statusManager := status.NewManager()
 	statusAggregator := status.NewAggregator(statusManager)
 
@@ -45,7 +46,7 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 		mode:             ModeInput,
 	}
 
-	// Create an initial EXECUTE block (tool starts)
+	// Create an initial EXECUTE block (tool starts).
 	block := blocks.NewBlock(blocks.BlockTypeExecute)
 	block.ID = "tool_123"
 
@@ -54,43 +55,50 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 		CWD:     ".",
 		Impact:  "low",
 	}
-	if err := blocks.SetExecuteMeta(block, meta); err != nil {
+	err := blocks.SetExecuteMeta(block, meta)
+	if err != nil {
 		t.Fatalf("SetExecuteMeta failed: %v", err)
 	}
 
-	// Append the initial block
-	if err := p.AppendBlock(block); err != nil {
+	// Append the initial block.
+	err = p.AppendBlock(block)
+	if err != nil {
 		t.Fatalf("AppendBlock failed: %v", err)
 	}
 
-	// Clear buffer after append
+	// Clear buffer after append.
 	buf.Reset()
 
-	// Update block with completion metadata (tool completes)
+	// Update block with completion metadata (tool completes).
 	exitCode := 0
 	lines := 42
 	meta.ExitCode = &exitCode
 	meta.LinesOut = &lines
+
 	block.Body = "file1\nfile2\n..."
-	if err := blocks.SetExecuteMeta(block, meta); err != nil {
+	err = blocks.SetExecuteMeta(block, meta)
+	if err != nil {
 		t.Fatalf("SetExecuteMeta (update) failed: %v", err)
 	}
 
-	// Call UpdateBlock - this should print the completion status line
-	if err := p.UpdateBlock("tool_123", block); err != nil {
+	// Call UpdateBlock - this should print the completion status line.
+	err = p.UpdateBlock("tool_123", block)
+	if err != nil {
 		t.Fatalf("UpdateBlock failed: %v", err)
 	}
 
-	// Capture output after update
+	// Capture output after update.
 	output := buf.String()
 
-	// CRITICAL: Verify completion status line was printed
+	// CRITICAL: Verify completion status line was printed.
 	if !strings.Contains(output, "⤷") {
 		t.Errorf("UpdateBlock MUST print completion status line (⤷)\nGot:\n%s", output)
 	}
+
 	if !strings.Contains(output, "Exit code: 0") {
 		t.Errorf("Completion status should contain 'Exit code: 0'\nGot:\n%s", output)
 	}
+
 	if !strings.Contains(output, "42 lines") {
 		t.Errorf("Completion status should contain '42 lines'\nGot:\n%s", output)
 	}
@@ -98,11 +106,11 @@ func TestUpdateBlock_PrintsCompletionStatus(t *testing.T) {
 
 // TestUpdateBlock_NoStatusForIncompleteBlock verifies that UpdateBlock doesn't print status for incomplete blocks.
 func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
-	// Setup
+	// Setup.
 	p := setupPureTTY(t)
 	defer p.Stop()
 
-	// Create a block without completion metadata
+	// Create a block without completion metadata.
 	block := blocks.NewBlock(blocks.BlockTypeExecute)
 	block.ID = "tool_456"
 
@@ -110,27 +118,30 @@ func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
 		Command: "go test ./...",
 		CWD:     ".",
 		Impact:  "medium",
-		// No ExitCode set - tool hasn't completed
+		// No ExitCode set - tool hasn't completed.
 	}
-	if err := blocks.SetExecuteMeta(block, meta); err != nil {
+	err := blocks.SetExecuteMeta(block, meta)
+	if err != nil {
 		t.Fatalf("SetExecuteMeta failed: %v", err)
 	}
 
-	// Append the block
-	if err := p.AppendBlock(block); err != nil {
+	// Append the block.
+	err = p.AppendBlock(block)
+	if err != nil {
 		t.Fatalf("AppendBlock failed: %v", err)
 	}
 
-	// Update with partial data (e.g., just body)
+	// Update with partial data (e.g., just body).
 	block.Body = "=== RUN TestFoo\n"
-	if err := p.UpdateBlock("tool_456", block); err != nil {
+	err = p.UpdateBlock("tool_456", block)
+	if err != nil {
 		t.Fatalf("UpdateBlock failed: %v", err)
 	}
 
-	// Capture output
+	// Capture output.
 	output := captureOutput(p)
 
-	// Should NOT print completion status since ExitCode is not set
+	// Should NOT print completion status since ExitCode is not set.
 	if strings.Contains(output, "⤷") && strings.Contains(output, "Exit code") {
 		t.Error("UpdateBlock should NOT print completion status for incomplete blocks")
 		t.Logf("Unexpected output:\n%s", output)
@@ -139,11 +150,11 @@ func TestUpdateBlock_NoStatusForIncompleteBlock(t *testing.T) {
 
 // TestUpdateBlock_HandlesReadBlocks verifies READ blocks don't print completion status.
 func TestUpdateBlock_HandlesReadBlocks(t *testing.T) {
-	// Setup
+	// Setup.
 	p := setupPureTTY(t)
 	defer p.Stop()
 
-	// Create a READ block
+	// Create a READ block.
 	block := blocks.NewBlock(blocks.BlockTypeRead)
 	block.ID = "tool_789"
 	block.Title = "test.go"
@@ -154,27 +165,30 @@ func TestUpdateBlock_HandlesReadBlocks(t *testing.T) {
 		Offset: 0,
 		Limit:  100,
 	}
-	if err := blocks.SetReadMeta(block, meta); err != nil {
+	err := blocks.SetReadMeta(block, meta)
+	if err != nil {
 		t.Fatalf("SetReadMeta failed: %v", err)
 	}
 
-	// Append and update
-	if err := p.AppendBlock(block); err != nil {
+	// Append and update.
+	err = p.AppendBlock(block)
+	if err != nil {
 		t.Fatalf("AppendBlock failed: %v", err)
 	}
 
-	if err := p.UpdateBlock("tool_789", block); err != nil {
+	err = p.UpdateBlock("tool_789", block)
+	if err != nil {
 		t.Fatalf("UpdateBlock failed: %v", err)
 	}
 
-	// READ blocks don't have completion status lines (per FRD)
+	// READ blocks don't have completion status lines (per FRD).
 	output := captureOutput(p)
 	if strings.Contains(output, "⤷") {
 		t.Error("READ blocks should NOT print completion status lines")
 	}
 }
 
-// Helper: setupPureTTY creates a test PureTTY instance
+// Helper: setupPureTTY creates a test PureTTY instance.
 func setupPureTTY(t *testing.T) *PureTTY {
 	t.Helper()
 
@@ -185,15 +199,15 @@ func setupPureTTY(t *testing.T) *PureTTY {
 	timeline := blocks.NewTimeline()
 	blockRenderer := blocks.NewRenderer(80)
 
-	// Create coordinator
+	// Create coordinator.
 	rendererAdapter := &rendererAdapter{renderer: renderer}
 	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
-	// Create status management
+	// Create status management.
 	statusManager := status.NewManager()
 	statusAggregator := status.NewAggregator(statusManager)
 
-	// Create PureTTY directly, bypassing constructor
+	// Create PureTTY directly, bypassing constructor.
 	ui := &PureTTY{
 		model:            model,
 		renderer:         renderer,
@@ -211,12 +225,12 @@ func setupPureTTY(t *testing.T) *PureTTY {
 	return ui
 }
 
-// Helper: captureOutput returns all output written to the PureTTY
+// Helper: captureOutput returns all output written to the PureTTY.
 func captureOutput(p *PureTTY) string {
 	// Placeholder: Output capture requires a test mode in PureTTY
 	// that intercepts writes instead of sending to terminal
 	// This would require refactoring PureTTY to accept an io.Writer
-	// that can be swapped for testing purposes
+	// that can be swapped for testing purposes.
 	return ""
 }
 
@@ -225,19 +239,19 @@ func captureOutput(p *PureTTY) string {
 // This is a regression test for the bug where arrow keys and A/D keys
 // didn't work because all keyboard events were consumed by the prompt loop.
 func TestApprovalDialog_KeyboardInput(t *testing.T) {
-	// Create a buffer for output
+	// Create a buffer for output.
 	var buf bytes.Buffer
 
-	// Create a keyboard event channel
+	// Create a keyboard event channel.
 	keyCh := make(chan term.KeyEvent, 10)
 
-	// Create mock TTY
+	// Create mock TTY.
 	mockTTY := &mockTerminalController{
 		width:  80,
 		height: 24,
 	}
 
-	// Create PureTTY with test options
+	// Create PureTTY with test options.
 	ui, err := NewPureTTY(&buf,
 		WithTTY(mockTTY),
 		withKeyboardEvents(keyCh),
@@ -246,7 +260,7 @@ func TestApprovalDialog_KeyboardInput(t *testing.T) {
 		t.Fatalf("NewPureTTY failed: %v", err)
 	}
 
-	// Start UI in background
+	// Start UI in background.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -254,10 +268,10 @@ func TestApprovalDialog_KeyboardInput(t *testing.T) {
 		_ = ui.Run(ctx)
 	}()
 
-	// Give UI time to start
+	// Give UI time to start.
 	time.Sleep(50 * time.Millisecond)
 
-	// Create approval request
+	// Create approval request.
 	cmd := &security.Command{
 		Program: "rm",
 		Args:    []string{"-rf", "/"},
@@ -270,17 +284,18 @@ func TestApprovalDialog_KeyboardInput(t *testing.T) {
 		WorkDir: "/tmp",
 	}
 
-	// Start ShowApprovalDialog in background (it blocks)
+	// Start ShowApprovalDialog in background (it blocks).
 	responseCh := make(chan security.ApprovalResponse, 1)
+
 	go func() {
 		resp := ui.ShowApprovalDialog(context.Background(), req)
 		responseCh <- resp
 	}()
 
-	// Give dialog time to render
+	// Give dialog time to render.
 	time.Sleep(50 * time.Millisecond)
 
-	// Verify mode is ModeApproval
+	// Verify mode is ModeApproval.
 	ui.mu.Lock()
 	mode := ui.mode
 	ui.mu.Unlock()
@@ -289,18 +304,19 @@ func TestApprovalDialog_KeyboardInput(t *testing.T) {
 		t.Fatalf("Expected mode to be ModeApproval, got %v", mode)
 	}
 
-	// Test 1: Send 'A' key to approve
+	// Test 1: Send 'A' key to approve.
 	keyCh <- term.KeyEvent{
 		Kind: term.KeyRune,
 		Rune: 'A',
 	}
 
-	// Wait for response with timeout
+	// Wait for response with timeout.
 	select {
 	case resp := <-responseCh:
 		if !resp.Approved {
 			t.Error("Expected approval to be approved after pressing 'A'")
 		}
+
 		if resp.Reason != "user approved" {
 			t.Errorf("Expected reason 'user approved', got '%s'", resp.Reason)
 		}
@@ -308,13 +324,14 @@ func TestApprovalDialog_KeyboardInput(t *testing.T) {
 		t.Fatal("BUG: Approval dialog did not respond to 'A' key press - keyboard events not routed to dialog")
 	}
 
-	// Cleanup
+	// Cleanup.
 	cancel()
 }
 
 // TestApprovalDialog_DenyKey tests that 'D' key denies the request.
 func TestApprovalDialog_DenyKey(t *testing.T) {
 	var buf bytes.Buffer
+
 	keyCh := make(chan term.KeyEvent, 10)
 	mockTTY := &mockTerminalController{width: 80, height: 24}
 
@@ -329,6 +346,7 @@ func TestApprovalDialog_DenyKey(t *testing.T) {
 	go func() {
 		_ = ui.Run(ctx)
 	}()
+
 	time.Sleep(50 * time.Millisecond)
 
 	req := security.ApprovalRequest{
@@ -339,13 +357,15 @@ func TestApprovalDialog_DenyKey(t *testing.T) {
 	}
 
 	responseCh := make(chan security.ApprovalResponse, 1)
+
 	go func() {
 		resp := ui.ShowApprovalDialog(context.Background(), req)
 		responseCh <- resp
 	}()
+
 	time.Sleep(50 * time.Millisecond)
 
-	// Send 'D' key to deny
+	// Send 'D' key to deny.
 	keyCh <- term.KeyEvent{
 		Kind: term.KeyRune,
 		Rune: 'D',
@@ -356,6 +376,7 @@ func TestApprovalDialog_DenyKey(t *testing.T) {
 		if resp.Approved {
 			t.Error("Expected approval to be denied after pressing 'D'")
 		}
+
 		if resp.Reason != "user denied" {
 			t.Errorf("Expected reason 'user denied', got '%s'", resp.Reason)
 		}
@@ -375,7 +396,7 @@ func TestApprovalDialog_ArrowKeys(t *testing.T) {
 	// 2. Press right arrow (\x1b[C) to move to "Deny" button
 	// 3. Verify selection changed
 	// 4. Press Enter to confirm
-	// 5. Verify denial
+	// 5. Verify denial.
 }
 
 // mockTerminalController is a mock implementation for testing.
@@ -388,11 +409,13 @@ type mockTerminalController struct {
 
 func (m *mockTerminalController) Enter() error {
 	m.entered = true
+
 	return nil
 }
 
 func (m *mockTerminalController) Exit() error {
 	m.entered = false
+
 	return nil
 }
 
@@ -408,6 +431,7 @@ func (m *mockTerminalController) OnResize(f func(int, int)) {
 func withKeyboardEvents(keyCh <-chan term.KeyEvent) PureTTYOption {
 	return func(p *PureTTY) error {
 		p.keyboardEvents = keyCh
+
 		return nil
 	}
 }
@@ -416,18 +440,19 @@ func withKeyboardEvents(keyCh <-chan term.KeyEvent) PureTTYOption {
 // This test simulates the exact scenario where a TOOL block is updated multiple times,
 // which was causing "Tool completed" to print twice.
 func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
-	// Setup with actual output capture
+	// Setup with actual output capture.
 	var buf bytes.Buffer
+
 	renderer := prompt.NewRenderer(&buf, 80, "> ")
 	model := prompt.NewModel(100)
 	blockRenderer := blocks.NewRenderer(80)
 
-	// Create coordinator
+	// Create coordinator.
 	printer := output.NewPrinter(&buf)
 	rendererAdapter := &rendererAdapter{renderer: renderer}
 	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
-	// Create status management
+	// Create status management.
 	statusManager := status.NewManager()
 	statusAggregator := status.NewAggregator(statusManager)
 
@@ -443,81 +468,87 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 		mode:             ModeInput,
 	}
 
-	// Create an initial TOOL block (like execute_command)
+	// Create an initial TOOL block (like execute_command).
 	block := blocks.NewBlock(blocks.BlockTypeTool)
 	block.ID = "tool_exec_123"
 	block.Title = "execute_command"
 
-	// Set initial metadata (tool starts)
+	// Set initial metadata (tool starts).
 	meta := &blocks.ToolMeta{
 		ToolName: "execute_command",
 	}
-	if err := blocks.SetToolMeta(block, meta); err != nil {
+	err := blocks.SetToolMeta(block, meta)
+	if err != nil {
 		t.Fatalf("SetToolMeta failed: %v", err)
 	}
 
-	// Append the initial block
-	if err := p.AppendBlock(block); err != nil {
+	// Append the initial block.
+	err = p.AppendBlock(block)
+	if err != nil {
 		t.Fatalf("AppendBlock failed: %v", err)
 	}
 
-	// Clear buffer after append
+	// Clear buffer after append.
 	buf.Reset()
 
-	// First update: tool completes with success
+	// First update: tool completes with success.
 	completedBlock := blocks.NewBlock(blocks.BlockTypeTool)
 	completedBlock.ID = "tool_exec_123"
 	completedBlock.Title = "execute_command"
-	completedBlock.Body = "Command executed successfully: итого 4\ndrwxr-xr-x. 1 dmitriy dmitriy 14 окт 25 16:17 .\ndrwxr-xr-x. 1 dmitriy dmitriy 54 окт 25 16:17 ..\n-rw-r--r--. 1 dmitriy dmitriy 45 окт 25 16:17 main.rs"
+	completedBlock.Body = "Command executed successfully: итого 4\ndrwxr-xr-x. 1 dmitriy 14 окт 25 16:17 .\ndrwxr-xr-x. 1 dmitriy 54 окт 25 16:17 ..\n-rw-r--r--. 1 dmitriy 45 окт 25 16:17 main.rs"
 
 	completedMeta := &blocks.ToolMeta{
 		ToolName: "execute_command",
 	}
-	if err := blocks.SetToolMeta(completedBlock, completedMeta); err != nil {
+	err = blocks.SetToolMeta(completedBlock, completedMeta)
+	if err != nil {
 		t.Fatalf("SetToolMeta (first update) failed: %v", err)
 	}
 
-	// First UpdateBlock call - should print "Tool completed" once
-	if err := p.UpdateBlock("tool_exec_123", completedBlock); err != nil {
+	// First UpdateBlock call - should print "Tool completed" once.
+	err = p.UpdateBlock("tool_exec_123", completedBlock)
+	if err != nil {
 		t.Fatalf("First UpdateBlock failed: %v", err)
 	}
 
-	// Second update: same tool, might be called again due to event processing
+	// Second update: same tool, might be called again due to event processing.
 	secondUpdateBlock := blocks.NewBlock(blocks.BlockTypeTool)
 	secondUpdateBlock.ID = "tool_exec_123"
 	secondUpdateBlock.Title = "execute_command"
-	secondUpdateBlock.Body = "Command executed successfully: итого 4\ndrwxr-xr-x. 1 dmitriy dmitriy 14 окт 25 16:17 .\ndrwxr-xr-x. 1 dmitriy dmitriy 54 окт 25 16:17 ..\n-rw-r--r--. 1 dmitriy dmitriy 45 окт 25 16:17 main.rs"
+	secondUpdateBlock.Body = "Command executed successfully: итого 4\ndrwxr-xr-x. 1 dmitriy 14 окт 25 16:17 .\ndrwxr-xr-x. 1 dmitriy 54 окт 25 16:17 ..\n-rw-r--r--. 1 dmitriy 45 окт 25 16:17 main.rs"
 
 	secondMeta := &blocks.ToolMeta{
 		ToolName: "execute_command",
 	}
-	if err := blocks.SetToolMeta(secondUpdateBlock, secondMeta); err != nil {
+	err = blocks.SetToolMeta(secondUpdateBlock, secondMeta)
+	if err != nil {
 		t.Fatalf("SetToolMeta (second update) failed: %v", err)
 	}
 
-	// Second UpdateBlock call - should NOT print "Tool completed" again
-	if err := p.UpdateBlock("tool_exec_123", secondUpdateBlock); err != nil {
+	// Second UpdateBlock call - should NOT print "Tool completed" again.
+	err = p.UpdateBlock("tool_exec_123", secondUpdateBlock)
+	if err != nil {
 		t.Fatalf("Second UpdateBlock failed: %v", err)
 	}
 
-	// Capture output after both updates
+	// Capture output after both updates.
 	output := buf.String()
 
-	// Count occurrences of "Tool completed"
+	// Count occurrences of "Tool completed".
 	toolCompletedCount := strings.Count(output, "Tool completed")
 	if toolCompletedCount > 1 {
 		t.Errorf("'Tool completed' should appear exactly once, but appeared %d times\nOutput:\n%s",
 			toolCompletedCount, output)
 	}
 
-	// Also count the arrow symbol
+	// Also count the arrow symbol.
 	arrowCount := strings.Count(output, "⤷")
-	if arrowCount > 2 { // One for the initial status, one for completion
+	if arrowCount > 2 { // One for the initial status, one for completion.
 		t.Errorf("Arrow '⤷' appearing too many times (%d), suggesting duplicate completion lines\nOutput:\n%s",
 			arrowCount, output)
 	}
 
-	// Ensure it printed at least once
+	// Ensure it printed at least once.
 	if toolCompletedCount == 0 {
 		t.Errorf("'Tool completed' should appear at least once\nOutput:\n%s", output)
 	}
@@ -525,18 +556,19 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 
 // TestExecuteBlock_NoDuplicateExitStatus tests that EXECUTE blocks also don't duplicate status.
 func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
-	// Setup with actual output capture
+	// Setup with actual output capture.
 	var buf bytes.Buffer
+
 	renderer := prompt.NewRenderer(&buf, 80, "> ")
 	model := prompt.NewModel(100)
 	blockRenderer := blocks.NewRenderer(80)
 
-	// Create coordinator
+	// Create coordinator.
 	printer := output.NewPrinter(&buf)
 	rendererAdapter := &rendererAdapter{renderer: renderer}
 	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
 
-	// Create status management
+	// Create status management.
 	statusManager := status.NewManager()
 	statusAggregator := status.NewAggregator(statusManager)
 
@@ -552,7 +584,7 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 		mode:             ModeInput,
 	}
 
-	// Create an initial EXECUTE block
+	// Create an initial EXECUTE block.
 	block := blocks.NewBlock(blocks.BlockTypeExecute)
 	block.ID = "exec_123"
 
@@ -561,19 +593,21 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 		CWD:     ".",
 		Impact:  "low",
 	}
-	if err := blocks.SetExecuteMeta(block, meta); err != nil {
+	err := blocks.SetExecuteMeta(block, meta)
+	if err != nil {
 		t.Fatalf("SetExecuteMeta failed: %v", err)
 	}
 
-	// Append the initial block
-	if err := p.AppendBlock(block); err != nil {
+	// Append the initial block.
+	err = p.AppendBlock(block)
+	if err != nil {
 		t.Fatalf("AppendBlock failed: %v", err)
 	}
 
-	// Clear buffer after append
+	// Clear buffer after append.
 	buf.Reset()
 
-	// First update with completion
+	// First update with completion.
 	exitCode := 0
 	lines := 3
 	firstUpdate := blocks.NewBlock(blocks.BlockTypeExecute)
@@ -587,16 +621,18 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 		ExitCode: &exitCode,
 		LinesOut: &lines,
 	}
-	if err := blocks.SetExecuteMeta(firstUpdate, firstMeta); err != nil {
+	err = blocks.SetExecuteMeta(firstUpdate, firstMeta)
+	if err != nil {
 		t.Fatalf("SetExecuteMeta (first update) failed: %v", err)
 	}
 
-	// First UpdateBlock call
-	if err := p.UpdateBlock("exec_123", firstUpdate); err != nil {
+	// First UpdateBlock call.
+	err = p.UpdateBlock("exec_123", firstUpdate)
+	if err != nil {
 		t.Fatalf("First UpdateBlock failed: %v", err)
 	}
 
-	// Second update with same completion status
+	// Second update with same completion status.
 	secondUpdate := blocks.NewBlock(blocks.BlockTypeExecute)
 	secondUpdate.ID = "exec_123"
 	secondUpdate.Body = "file1\nfile2\nfile3"
@@ -608,26 +644,28 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 		ExitCode: &exitCode,
 		LinesOut: &lines,
 	}
-	if err := blocks.SetExecuteMeta(secondUpdate, secondMeta); err != nil {
+	err = blocks.SetExecuteMeta(secondUpdate, secondMeta)
+	if err != nil {
 		t.Fatalf("SetExecuteMeta (second update) failed: %v", err)
 	}
 
-	// Second UpdateBlock call
-	if err := p.UpdateBlock("exec_123", secondUpdate); err != nil {
+	// Second UpdateBlock call.
+	err = p.UpdateBlock("exec_123", secondUpdate)
+	if err != nil {
 		t.Fatalf("Second UpdateBlock failed: %v", err)
 	}
 
-	// Capture output
+	// Capture output.
 	output := buf.String()
 
-	// Count occurrences of "Exit code"
+	// Count occurrences of "Exit code".
 	exitCodeCount := strings.Count(output, "Exit code: 0")
 	if exitCodeCount > 1 {
 		t.Errorf("'Exit code: 0' should appear exactly once, but appeared %d times\nOutput:\n%s",
 			exitCodeCount, output)
 	}
 
-	// Ensure it printed at least once
+	// Ensure it printed at least once.
 	if exitCodeCount == 0 {
 		t.Errorf("'Exit code: 0' should appear at least once\nOutput:\n%s", output)
 	}
@@ -637,20 +675,20 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 // is not overwritten by event-driven status updates.
 // This is a regression test for BUG-20251029001449.
 func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
-	// Create a buffer for output
+	// Create a buffer for output.
 	var buf bytes.Buffer
 
-	// Create mock TTY
+	// Create mock TTY.
 	mockTTY := &mockTerminalController{
 		width:  80,
 		height: 24,
 	}
 
-	// Create status renderer to capture status bar updates
+	// Create status renderer to capture status bar updates.
 	statusRenderer := status.NewRenderer(&buf, 80, 24)
 	statusManager := status.NewManager()
 
-	// Create PureTTY with test options
+	// Create PureTTY with test options.
 	ui := &PureTTY{
 		out:            &buf,
 		tty:            mockTTY,
@@ -660,25 +698,25 @@ func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
 		statusManager:  statusManager,
 	}
 
-	// Set initial status (simulating normal operation)
+	// Set initial status (simulating normal operation).
 	statusManager.SetAgentState("Ready")
 	ui.updateStatusBar()
 
-	// Verify initial status was rendered
+	// Verify initial status was rendered.
 	output := buf.String()
 	if !strings.Contains(output, "Ready") {
 		t.Errorf("Expected initial status 'Ready' to be rendered, got: %s", output)
 	}
 
-	// Clear buffer
+	// Clear buffer.
 	buf.Reset()
 
-	// Switch to approval mode
+	// Switch to approval mode.
 	ui.mu.Lock()
 	ui.mode = ModeApproval
 	ui.mu.Unlock()
 
-	// Simulate approval status being shown
+	// Simulate approval status being shown.
 	cmd := &security.Command{
 		Program: "rm",
 		Args:    []string{"-rf", "/tmp/build"},
@@ -693,46 +731,49 @@ func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
 
 	ui.showApprovalStatus(req)
 
-	// Capture approval prompt output
+	// Capture approval prompt output.
 	approvalOutput := buf.String()
 	if !strings.Contains(approvalOutput, "Executing:") {
 		t.Errorf("Expected approval prompt to contain 'Executing:', got: %s", approvalOutput)
 	}
+
 	if !strings.Contains(approvalOutput, "Key:") {
 		t.Errorf("Expected approval prompt to contain normalized key preview, got: %s", approvalOutput)
 	}
+
 	if !strings.Contains(approvalOutput, "TTLs:") {
 		t.Errorf("Expected approval prompt to contain TTL preview, got: %s", approvalOutput)
 	}
 
-	// Clear buffer
+	// Clear buffer.
 	buf.Reset()
 
-	// Simulate event-driven status update (this would normally overwrite the approval prompt)
+	// Simulate event-driven status update (this would normally overwrite the approval prompt).
 	statusManager.SetAgentState("Processing")
 	ui.updateStatusBar()
 
-	// Verify that updateStatusBar did NOT render anything (because we're in ModeApproval)
+	// Verify that updateStatusBar did NOT render anything (because we're in ModeApproval).
 	eventOutput := buf.String()
 	if strings.Contains(eventOutput, "Processing") {
 		t.Errorf("updateStatusBar should not render in ModeApproval, but rendered: %s", eventOutput)
 	}
+
 	if eventOutput != "" {
 		t.Errorf("updateStatusBar should not render anything in ModeApproval, but rendered: %s", eventOutput)
 	}
 
-	// Switch back to input mode
+	// Switch back to input mode.
 	ui.mu.Lock()
 	ui.mode = ModeInput
 	ui.mu.Unlock()
 
-	// Clear buffer
+	// Clear buffer.
 	buf.Reset()
 
-	// Verify that updateStatusBar works again after leaving approval mode
+	// Verify that updateStatusBar works again after leaving approval mode.
 	statusManager.SetAgentState("Approved")
 
-	// Need to reset lastStatusText to force a re-render since status changed
+	// Need to reset lastStatusText to force a re-render since status changed.
 	ui.mu.Lock()
 	ui.lastStatusText = ""
 	ui.mu.Unlock()

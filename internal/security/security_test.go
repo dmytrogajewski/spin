@@ -26,19 +26,19 @@ func TestNewSecurityService(t *testing.T) {
 			name:            "with nil validator",
 			validator:       nil,
 			approvalService: NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: nil, Emitter: nil, Validator: nil}),
-			wantNil:         false, // Service allows nil validator
+			wantNil:         false, // Service allows nil validator.
 		},
 		{
 			name:            "with nil approval service",
 			validator:       NewValidator(),
 			approvalService: nil,
-			wantNil:         false, // Service allows nil approval
+			wantNil:         false, // Service allows nil approval.
 		},
 		{
 			name:            "with both nil",
 			validator:       nil,
 			approvalService: nil,
-			wantNil:         false, // Service allows nil deps
+			wantNil:         false, // Service allows nil deps.
 		},
 	}
 
@@ -93,7 +93,7 @@ func TestSecurityService_ValidateCommand(t *testing.T) {
 				Program: "rm",
 				Args:    []string{"file.txt"},
 			},
-			wantClass: CommandUnverified, // rm without flags is unverified
+			wantClass: CommandUnverified, // rm without flags is unverified.
 			wantErr:   false,
 		},
 		{
@@ -124,6 +124,7 @@ func TestSecurityService_ValidateCommand(t *testing.T) {
 
 			if tt.wantErr {
 				assert.Error(t, err)
+
 				return
 			}
 
@@ -172,7 +173,7 @@ func TestSecurityService_NeedsApproval(t *testing.T) {
 				Program: "rm",
 				Args:    []string{"-rf", "/"},
 			},
-			wantApproval: false, // Forbidden commands should be blocked, not approved
+			wantApproval: false, // Forbidden commands should be blocked, not approved.
 		},
 		{
 			name: "interactive command - needs approval",
@@ -229,9 +230,9 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 		{
 			name: "approval granted",
 			operation: NewOperation(&Command{
-					Raw:     "rm -rf /tmp/test",
-					Program: "rm",
-					Args:    []string{"-rf", "/tmp/test"},
+				Raw:     "rm -rf /tmp/test",
+				Program: "rm",
+				Args:    []string{"-rf", "/tmp/test"},
 			}, "dangerous operation", "/tmp"),
 			setupHandler: func() ApprovalHandler {
 				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
@@ -249,9 +250,9 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 		{
 			name: "approval denied",
 			operation: NewOperation(&Command{
-					Raw:     "rm -rf /",
-					Program: "rm",
-					Args:    []string{"-rf", "/"},
+				Raw:     "rm -rf /",
+				Program: "rm",
+				Args:    []string{"-rf", "/"},
 			}, "extremely dangerous", "/"),
 			setupHandler: func() ApprovalHandler {
 				return func(ctx context.Context, req ApprovalRequest) ApprovalResponse {
@@ -269,9 +270,9 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 		{
 			name: "no approval handler",
 			operation: NewOperation(&Command{
-					Raw:     "rm test.txt",
-					Program: "rm",
-					Args:    []string{"test.txt"},
+				Raw:     "rm test.txt",
+				Program: "rm",
+				Args:    []string{"test.txt"},
 			}, "needs approval", "/tmp"),
 			setupHandler: func() ApprovalHandler {
 				return nil
@@ -293,9 +294,11 @@ func TestSecurityService_RequestApproval(t *testing.T) {
 
 			if tt.wantErr {
 				require.Error(t, err)
+
 				if tt.errContains != "" {
 					assert.Contains(t, err.Error(), tt.errContains)
 				}
+
 				return
 			}
 
@@ -310,9 +313,9 @@ func TestSecurityService_RequestApproval_NilApprovalService(t *testing.T) {
 	svc := NewSecurityService(validator, nil)
 
 	operation := NewOperation(&Command{
-			Raw:     "rm test",
-			Program: "rm",
-			Args:    []string{"test"},
+		Raw:     "rm test",
+		Program: "rm",
+		Args:    []string{"test"},
 	}, "needs approval", "/tmp")
 
 	ctx := context.Background()
@@ -332,7 +335,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 		setupHandler  func() ApprovalHandler
 		wantApproved  bool
 		wantErr       bool
-		shouldRequest bool // Whether approval request is expected
+		shouldRequest bool // Whether approval request is expected.
 	}{
 		{
 			name: "safe command - no approval needed",
@@ -364,7 +367,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 			},
 			wantApproved:  false,
 			wantErr:       false,
-			shouldRequest: false, // Forbidden commands are blocked, not approved
+			shouldRequest: false, // Forbidden commands are blocked, not approved.
 		},
 		{
 			name: "interactive command - approval granted",
@@ -440,6 +443,7 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 
 			if tt.wantErr {
 				require.Error(t, err)
+
 				return
 			}
 
@@ -449,13 +453,13 @@ func TestSecurityService_ValidateAndApprove(t *testing.T) {
 	}
 }
 
-// Benchmark tests
+// Benchmark tests.
 func TestSecurityService_ValidateAndApprove_ApprovalError(t *testing.T) {
 	validator := NewValidator()
-	// No approval service configured - will cause error
+	// No approval service configured - will cause error.
 	svc := NewSecurityService(validator, nil)
 
-	// Interactive command that needs approval
+	// Interactive command that needs approval.
 	cmd := &Command{
 		Raw:     "mkdir testdir",
 		Program: "mkdir",
@@ -510,7 +514,8 @@ func BenchmarkSecurityService_ValidateCommand(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_, _ = svc.ValidateCommand(cmd)
 	}
 }
@@ -526,7 +531,8 @@ func BenchmarkSecurityService_NeedsApproval(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for range b.N {
 		_ = svc.NeedsApproval(cmd)
 	}
 }

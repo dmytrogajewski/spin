@@ -18,5 +18,3 @@ func (f *Factory) addTestProvider(providers map[string]func(context.Context, Pro
 func (f *Factory) newTestProvider(ctx context.Context, cfg ProviderConfig) (llm.Provider, error) {
 	return testprovider.NewProvider(), nil
 }
-
-

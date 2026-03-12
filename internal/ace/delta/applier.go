@@ -2,6 +2,7 @@ package delta
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -21,8 +22,8 @@ type ApplyResult struct {
 	Success   bool
 	DeltaID   string
 	BulletID  string
-	OldValue  interface{}
-	NewValue  interface{}
+	OldValue  any
+	NewValue  any
 	Error     error
 	AppliedAt time.Time
 }
@@ -44,13 +45,14 @@ func (a *DeltaApplier) Apply(ctx context.Context, delta Delta) (*ApplyResult, er
 		"source", delta.Metadata.Source,
 		"reason", delta.Metadata.Reason)
 
-	// Get bullet from playbook
+	// Get bullet from playbook.
 	b, exists := a.playbook.Get(delta.BulletID)
 	if !exists {
 		err := fmt.Errorf("bullet %s not found", delta.BulletID)
 		slog.Warn("Delta apply failed: bullet not found",
 			"delta_id", delta.ID,
 			"bullet_id", delta.BulletID)
+
 		return &ApplyResult{
 			Success:   false,
 			DeltaID:   delta.ID,
@@ -60,16 +62,17 @@ func (a *DeltaApplier) Apply(ctx context.Context, delta Delta) (*ApplyResult, er
 		}, err
 	}
 
-	// Create clone for modification (copy-on-write)
+	// Create clone for modification (copy-on-write).
 	modified := b.Clone()
 
-	// Apply delta based on operation
+	// Apply delta based on operation.
 	oldValue, newValue, err := applyDeltaOperation(modified, delta)
 	if err != nil {
 		slog.Warn("Delta operation failed",
 			"delta_id", delta.ID,
 			"operation", delta.Operation,
 			"error", err)
+
 		return &ApplyResult{
 			Success:   false,
 			DeltaID:   delta.ID,
@@ -84,12 +87,14 @@ func (a *DeltaApplier) Apply(ctx context.Context, delta Delta) (*ApplyResult, er
 		"old_value", oldValue,
 		"new_value", newValue)
 
-	// Update bullet in playbook
-	if err := a.playbook.Update(ctx, modified); err != nil {
+	// Update bullet in playbook.
+	err = a.playbook.Update(ctx, modified)
+	if err != nil {
 		slog.Warn("Failed to update bullet in playbook",
 			"delta_id", delta.ID,
 			"bullet_id", delta.BulletID,
 			"error", err)
+
 		return &ApplyResult{
 			Success:   false,
 			DeltaID:   delta.ID,
@@ -99,7 +104,7 @@ func (a *DeltaApplier) Apply(ctx context.Context, delta Delta) (*ApplyResult, er
 		}, err
 	}
 
-	// Record delta in history
+	// Record delta in history.
 	a.history.Record(delta)
 
 	slog.Debug("Delta applied successfully",
@@ -123,12 +128,13 @@ func (a *DeltaApplier) GetHistory() *DeltaHistory {
 }
 
 // applyDeltaOperation applies a delta operation to a bullet (copy-on-write).
-func applyDeltaOperation(b *bullet.Bullet, delta Delta) (oldValue, newValue interface{}, err error) {
+func applyDeltaOperation(b *bullet.Bullet, delta Delta) (oldValue, newValue any, err error) {
 	switch delta.Operation {
 	case OpUpdateContent:
 		if delta.Fields.Content == nil {
-			return nil, nil, fmt.Errorf("content field is required for OpUpdateContent")
+			return nil, nil, errors.New("content field is required for OpUpdateContent")
 		}
+
 		oldValue = b.Content
 		b.Content = *delta.Fields.Content
 		newValue = b.Content
@@ -145,31 +151,36 @@ func applyDeltaOperation(b *bullet.Bullet, delta Delta) (oldValue, newValue inte
 
 	case OpAddTag:
 		if delta.Fields.TagKey == nil || delta.Fields.TagValue == nil {
-			return nil, nil, fmt.Errorf("tag_key and tag_value fields are required for OpAddTag")
+			return nil, nil, errors.New("tag_key and tag_value fields are required for OpAddTag")
 		}
+
 		if b.Tags == nil {
 			b.Tags = make(map[string]string)
 		}
+
 		oldValue = b.Tags[*delta.Fields.TagKey]
 		b.Tags[*delta.Fields.TagKey] = *delta.Fields.TagValue
 		newValue = *delta.Fields.TagValue
 
 	case OpRemoveTag:
 		if delta.Fields.TagKey == nil {
-			return nil, nil, fmt.Errorf("tag_key field is required for OpRemoveTag")
+			return nil, nil, errors.New("tag_key field is required for OpRemoveTag")
 		}
+
 		if b.Tags == nil {
 			oldValue = nil
 		} else {
 			oldValue = b.Tags[*delta.Fields.TagKey]
 			delete(b.Tags, *delta.Fields.TagKey)
 		}
+
 		newValue = nil
 
 	case OpUpdateEmbedding:
 		if delta.Fields.Embedding == nil {
-			return nil, nil, fmt.Errorf("embedding field is required for OpUpdateEmbedding")
+			return nil, nil, errors.New("embedding field is required for OpUpdateEmbedding")
 		}
+
 		oldValue = b.Embedding
 		b.Embedding = delta.Fields.Embedding
 		newValue = b.Embedding
@@ -178,7 +189,7 @@ func applyDeltaOperation(b *bullet.Bullet, delta Delta) (oldValue, newValue inte
 		return nil, nil, fmt.Errorf("unknown operation: %s", delta.Operation)
 	}
 
-	// Update timestamp
+	// Update timestamp.
 	b.UpdatedAt = time.Now()
 
 	return oldValue, newValue, nil

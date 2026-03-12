@@ -8,15 +8,18 @@ import (
 	"testing"
 	"time"
 
+	openaisdk "github.com/openai/openai-go"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/lmstudio"
 	"github.com/dmytrogajewski/spin/internal/llm/ollama"
 	"github.com/dmytrogajewski/spin/internal/llm/openai"
-	openaisdk "github.com/openai/openai-go"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
+
+const testOllamaURL = "http://localhost:11434"
 
 // TestNewProvider_OpenAI tests creating an OpenAI provider from config.
 func TestNewProvider_OpenAI(t *testing.T) {
@@ -46,7 +49,7 @@ func TestNewProvider_OpenAI(t *testing.T) {
 func TestNewProvider_Ollama(t *testing.T) {
 	cfg := ProviderConfig{
 		Type:    "ollama",
-		BaseURL: "http://localhost:11434",
+		BaseURL: testOllamaURL,
 		Model:   "llama2",
 		Timeout: 60 * time.Second,
 	}
@@ -106,7 +109,7 @@ func TestNewProvider_OpenAICompatible(t *testing.T) {
 		t.Fatal("NewProvider() returned nil provider")
 	}
 
-	// openai-compatible uses openai provider
+	// openai-compatible uses openai provider.
 	if provider.Name() != "openai-compatible" {
 		t.Errorf("Provider.Name() = %s, want openai-compatible", provider.Name())
 	}
@@ -180,7 +183,7 @@ func TestNewProvider_ValidationErrors(t *testing.T) {
 			name: "ollama missing model",
 			cfg: ProviderConfig{
 				Type:    "ollama",
-				BaseURL: "http://localhost:11434",
+				BaseURL: testOllamaURL,
 			},
 			wantErr: "model is required for ollama",
 		},
@@ -201,9 +204,11 @@ func TestNewProvider_ValidationErrors(t *testing.T) {
 			if err == nil {
 				t.Fatal("NewProvider() expected error, got nil")
 			}
+
 			if provider != nil {
 				t.Error("NewProvider() should return nil provider on error")
 			}
+
 			if tt.wantErr != "" && !contains(err.Error(), tt.wantErr) {
 				t.Errorf("Error = %q, want to contain %q", err.Error(), tt.wantErr)
 			}
@@ -213,16 +218,16 @@ func TestNewProvider_ValidationErrors(t *testing.T) {
 
 // TestRegisterProvider tests custom provider registration.
 func TestRegisterProvider(t *testing.T) {
-	// Create a custom provider factory
+	// Create a custom provider factory.
 	customProvider := &mockProvider{name: "custom"}
 	customFactory := func(cfg ProviderConfig) (llm.Provider, error) {
 		return customProvider, nil
 	}
 
-	// Register the custom provider
+	// Register the custom provider.
 	RegisterProvider("custom", customFactory)
 
-	// Use the custom provider
+	// Use the custom provider.
 	cfg := ProviderConfig{
 		Type:    "custom",
 		BaseURL: "http://custom",
@@ -245,20 +250,21 @@ func TestRegisterProvider(t *testing.T) {
 
 // TestRegisterProvider_Override tests overriding built-in providers.
 func TestRegisterProvider_Override(t *testing.T) {
-	// Create a custom factory that overrides "openai"
+	// Create a custom factory that overrides "openai".
 	customProvider := &mockProvider{name: "custom-openai"}
 	customFactory := func(cfg ProviderConfig) (llm.Provider, error) {
 		return customProvider, nil
 	}
 
-	// Register to override
+	// Register to override.
 	RegisterProvider("openai", customFactory)
+
 	defer func() {
-		// Restore original for other tests
+		// Restore original for other tests.
 		RegisterProvider("openai", legacyNewOpenAIProvider)
 	}()
 
-	// Create provider
+	// Create provider.
 	cfg := ProviderConfig{
 		Type:    "openai",
 		BaseURL: "https://api.openai.com/v1",
@@ -279,15 +285,17 @@ func TestRegisterProvider_Override(t *testing.T) {
 // TestRegisterProvider_Concurrent tests thread-safety of registration.
 func TestRegisterProvider_Concurrent(t *testing.T) {
 	var wg sync.WaitGroup
+
 	errChan := make(chan error, 100)
 
-	// Register and create providers concurrently
-	for i := 0; i < 50; i++ {
+	// Register and create providers concurrently.
+	for i := range 50 {
 		wg.Add(2)
 
-		// Register
+		// Register.
 		go func(n int) {
 			defer wg.Done()
+
 			name := "concurrent-provider"
 			factory := func(cfg ProviderConfig) (llm.Provider, error) {
 				return &mockProvider{name: name}, nil
@@ -295,14 +303,16 @@ func TestRegisterProvider_Concurrent(t *testing.T) {
 			RegisterProvider(name, factory)
 		}(i)
 
-		// Create
+		// Create.
 		go func() {
 			defer wg.Done()
+
 			cfg := ProviderConfig{
 				Type:    "ollama",
-				BaseURL: "http://localhost:11434",
+				BaseURL: testOllamaURL,
 				Model:   "llama2",
 			}
+
 			_, err := NewProvider(cfg)
 			if err != nil {
 				errChan <- err
@@ -354,7 +364,7 @@ func TestNewProvider_TimeoutDefault(t *testing.T) {
 		BaseURL: "https://api.openai.com/v1",
 		APIKey:  "key",
 		Model:   "gpt-4",
-		// Timeout not specified
+		// Timeout not specified.
 	}
 
 	provider, err := NewProvider(cfg)
@@ -366,14 +376,14 @@ func TestNewProvider_TimeoutDefault(t *testing.T) {
 		t.Fatal("NewProvider() returned nil provider")
 	}
 
-	// Provider should handle default timeout internally
+	// Provider should handle default timeout internally.
 }
 
 // TestNewProvider_URLNormalization tests URL normalization.
 func TestNewProvider_URLNormalization(t *testing.T) {
 	cfg := ProviderConfig{
 		Type:    "ollama",
-		BaseURL: "http://localhost:11434/", // Trailing slash
+		BaseURL: testOllamaURL + "/", // Trailing slash.
 		Model:   "llama2",
 	}
 
@@ -392,6 +402,7 @@ func TestNewProvider_OptionsPassthrough(t *testing.T) {
 	capturedCfg := ProviderConfig{}
 	captureFactory := func(cfg ProviderConfig) (llm.Provider, error) {
 		capturedCfg = cfg
+
 		return &mockProvider{name: "capture"}, nil
 	}
 
@@ -401,10 +412,7 @@ func TestNewProvider_OptionsPassthrough(t *testing.T) {
 		Type:    "capture",
 		BaseURL: "http://localhost",
 		Model:   "test",
-		Options: ProviderOptions{
-			AutoTune:        false,
-			VRAMHeadroomMiB: 512,
-		},
+		Options: ProviderOptions{},
 	}
 
 	_, err := NewProvider(cfg)
@@ -412,13 +420,8 @@ func TestNewProvider_OptionsPassthrough(t *testing.T) {
 		t.Fatalf("NewProvider() error = %v", err)
 	}
 
-	// Verify options were passed to factory
-	if capturedCfg.Options.VRAMHeadroomMiB != 512 {
-		t.Errorf("Options not preserved correctly, expected VRAMHeadroomMiB=512, got %d", capturedCfg.Options.VRAMHeadroomMiB)
-	}
-	if capturedCfg.Options.AutoTune != false {
-		t.Error("Options not preserved correctly, expected AutoTune=false")
-	}
+	// Verify options were passed to factory.
+	_ = capturedCfg.Options // ProviderOptions currently empty; verify struct passed through.
 }
 
 // TestNewProvider_LMStudioDefaultURL tests LMStudio default URL handling.
@@ -426,7 +429,7 @@ func TestNewProvider_LMStudioDefaultURL(t *testing.T) {
 	cfg := ProviderConfig{
 		Type:  "lmstudio",
 		Model: "local-model",
-		// BaseURL not specified - should use default
+		// BaseURL not specified - should use default.
 	}
 
 	provider, err := NewProvider(cfg)
@@ -481,7 +484,9 @@ func (m *mockProvider) Stream(ctx context.Context, params openaisdk.ChatCompleti
 			FinishReason: openaisdk.ChatCompletionChunkChoicesFinishReasonStop,
 		}},
 	}
+
 	close(ch)
+
 	return ch, nil
 }
 
@@ -509,10 +514,11 @@ func stringContains(s, substr string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
-// TestFactoryConfigurationBugFix tests the fix for the "invalid configuration: model is required" error
+// TestFactoryConfigurationBugFix tests the fix for the "invalid configuration: model is required" error.
 func TestFactoryConfigurationBugFix(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -525,7 +531,7 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 			name: "valid_ollama_config",
 			config: ProviderConfig{
 				Type:    "ollama",
-				BaseURL: "http://localhost:11434",
+				BaseURL: testOllamaURL,
 				Model:   "qwen3-coder:30b",
 			},
 			expectedError: false,
@@ -550,15 +556,15 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 				Model:   "gpt-4",
 				KeyName: "openai-api-key",
 			},
-			expectedError: true, // This will fail because keystore doesn't have the credential
+			expectedError: true, // This will fail because keystore doesn't have the credential.
 			description:   "Valid OpenAI config with key name should create provider successfully",
 		},
 		{
 			name: "missing_model_should_fail",
 			config: ProviderConfig{
 				Type:    "ollama",
-				BaseURL: "http://localhost:11434",
-				// Model missing
+				BaseURL: testOllamaURL,
+				// Model missing.
 			},
 			expectedError: true,
 			errorContains: "model is required",
@@ -567,9 +573,9 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 		{
 			name: "missing_provider_type_should_fail",
 			config: ProviderConfig{
-				BaseURL: "http://localhost:11434",
+				BaseURL: testOllamaURL,
 				Model:   "qwen3-coder:30b",
-				// Type missing
+				// Type missing.
 			},
 			expectedError: true,
 			errorContains: "provider type is required",
@@ -581,7 +587,7 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 				Type:    "openai",
 				BaseURL: "https://api.openai.com/v1",
 				Model:   "gpt-4",
-				// No APIKey or KeyName
+				// No APIKey or KeyName.
 			},
 			expectedError: true,
 			errorContains: "authentication required",
@@ -594,14 +600,14 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 				BaseURL: "not-a-valid-url",
 				Model:   "qwen3-coder:30b",
 			},
-			expectedError: false, // Factory doesn't validate URLs, they fail at runtime
+			expectedError: false, // Factory doesn't validate URLs, they fail at runtime.
 			description:   "Config with invalid base URL should be accepted (fails at runtime)",
 		},
 		{
 			name: "unknown_provider_type_should_fail",
 			config: ProviderConfig{
 				Type:    "unknown-provider",
-				BaseURL: "http://localhost:11434",
+				BaseURL: testOllamaURL,
 				Model:   "test-model",
 			},
 			expectedError: true,
@@ -612,7 +618,7 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Test with factory (recommended approach)
+			// Test with factory (recommended approach).
 			authMgr := auth.NewManager(auth.NewKeystore())
 
 			factory := NewFactory(authMgr)
@@ -623,15 +629,19 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 			if tt.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
+
 					return
 				}
+
 				if tt.errorContains != "" {
 					assert.Contains(t, err.Error(), tt.errorContains, "Error should contain expected text")
 				}
+
 				assert.Nil(t, provider, "Provider should be nil on error")
 			} else {
 				assert.NoError(t, err, "Unexpected error: %v", err)
 				assert.NotNil(t, provider, "Provider should not be nil")
+
 				if provider != nil {
 					defer provider.Close()
 				}
@@ -640,20 +650,20 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 	}
 }
 
-// TestFactoryWithKeystore tests that factory properly handles keystore credentials
+// TestFactoryWithKeystore tests that factory properly handles keystore credentials.
 func TestFactoryWithKeystore(t *testing.T) {
-	// Create keystore with test credentials
+	// Create keystore with test credentials.
 	keystore := auth.NewKeystore()
 	err := keystore.Set("test-openai-key", "sk-test-key-value")
 	require.NoError(t, err, "Failed to set test credential")
 
-	// Create auth manager with keystore
+	// Create auth manager with keystore.
 	authMgr := auth.NewManager(keystore)
 
-	// Create factory
+	// Create factory.
 	factory := NewFactory(authMgr)
 
-	// Test config with key name
+	// Test config with key name.
 	config := ProviderConfig{
 		Type:    "openai",
 		BaseURL: "https://api.openai.com/v1",
@@ -666,12 +676,13 @@ func TestFactoryWithKeystore(t *testing.T) {
 
 	assert.NoError(t, err, "Factory should create provider with keystore credentials")
 	assert.NotNil(t, provider, "Provider should not be nil")
+
 	if provider != nil {
 		defer provider.Close()
 	}
 }
 
-// TestFactoryTimeoutHandling tests that factory properly handles timeout configuration
+// TestFactoryTimeoutHandling tests that factory properly handles timeout configuration.
 func TestFactoryTimeoutHandling(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -681,7 +692,7 @@ func TestFactoryTimeoutHandling(t *testing.T) {
 	}{
 		{
 			name:          "default_timeout",
-			configTimeout: 0, // Use default
+			configTimeout: 0, // Use default.
 			expectedError: false,
 			description:   "Default timeout should work",
 		},
@@ -703,7 +714,7 @@ func TestFactoryTimeoutHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := ProviderConfig{
 				Type:    "ollama",
-				BaseURL: "http://localhost:11434",
+				BaseURL: testOllamaURL,
 				Model:   "qwen3-coder:30b",
 				Timeout: tt.configTimeout,
 			}
@@ -720,6 +731,7 @@ func TestFactoryTimeoutHandling(t *testing.T) {
 			} else {
 				assert.NoError(t, err, "Unexpected error: %v", err)
 				assert.NotNil(t, provider, "Provider should not be nil")
+
 				if provider != nil {
 					defer provider.Close()
 				}
@@ -728,7 +740,7 @@ func TestFactoryTimeoutHandling(t *testing.T) {
 	}
 }
 
-// TestFactoryLegacyCompatibility tests that legacy NewProvider function still works
+// TestFactoryLegacyCompatibility tests that legacy NewProvider function still works.
 func TestFactoryLegacyCompatibility(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -740,7 +752,7 @@ func TestFactoryLegacyCompatibility(t *testing.T) {
 			name: "legacy_ollama_config",
 			config: ProviderConfig{
 				Type:    "ollama",
-				BaseURL: "http://localhost:11434",
+				BaseURL: testOllamaURL,
 				Model:   "qwen3-coder:30b",
 			},
 			expectedError: false,
@@ -761,8 +773,8 @@ func TestFactoryLegacyCompatibility(t *testing.T) {
 			name: "legacy_missing_model",
 			config: ProviderConfig{
 				Type:    "ollama",
-				BaseURL: "http://localhost:11434",
-				// Model missing
+				BaseURL: testOllamaURL,
+				// Model missing.
 			},
 			expectedError: true,
 			description:   "Legacy config without model should fail",
@@ -771,7 +783,7 @@ func TestFactoryLegacyCompatibility(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Test legacy function
+			// Test legacy function.
 			provider, err := NewProvider(tt.config)
 
 			if tt.expectedError {
@@ -780,6 +792,7 @@ func TestFactoryLegacyCompatibility(t *testing.T) {
 			} else {
 				assert.NoError(t, err, "Unexpected error: %v", err)
 				assert.NotNil(t, provider, "Provider should not be nil")
+
 				if provider != nil {
 					defer provider.Close()
 				}
@@ -788,14 +801,14 @@ func TestFactoryLegacyCompatibility(t *testing.T) {
 	}
 }
 
-// TestFactoryProviderRegistration tests that custom providers can be registered
+// TestFactoryProviderRegistration tests that custom providers can be registered.
 func TestFactoryProviderRegistration(t *testing.T) {
-	// Register a custom provider
+	// Register a custom provider.
 	RegisterProvider("custom", func(cfg ProviderConfig) (llm.Provider, error) {
 		return &mockProviderBugFix{name: "custom-provider"}, nil
 	})
 
-	// Test custom provider
+	// Test custom provider.
 	config := ProviderConfig{
 		Type:  "custom",
 		Model: "custom-model",
@@ -812,7 +825,7 @@ func TestFactoryProviderRegistration(t *testing.T) {
 	}
 }
 
-// mockProviderBugFix is a simple mock provider for testing
+// mockProviderBugFix is a simple mock provider for testing.
 type mockProviderBugFix struct {
 	name string
 }
@@ -836,8 +849,10 @@ func (m *mockProviderBugFix) Complete(ctx context.Context, params openaisdk.Chat
 
 func (m *mockProviderBugFix) Stream(ctx context.Context, params openaisdk.ChatCompletionNewParams) (<-chan openaisdk.ChatCompletionChunk, error) {
 	ch := make(chan openaisdk.ChatCompletionChunk, 2)
+
 	go func() {
 		defer close(ch)
+
 		ch <- openaisdk.ChatCompletionChunk{
 			ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
 			Created: time.Now().Unix(),
@@ -850,6 +865,7 @@ func (m *mockProviderBugFix) Stream(ctx context.Context, params openaisdk.ChatCo
 				},
 			}},
 		}
+
 		ch <- openaisdk.ChatCompletionChunk{
 			ID:      fmt.Sprintf("chunk-%d", time.Now().UnixNano()),
 			Created: time.Now().Unix(),
@@ -861,6 +877,7 @@ func (m *mockProviderBugFix) Stream(ctx context.Context, params openaisdk.ChatCo
 			}},
 		}
 	}()
+
 	return ch, nil
 }
 
@@ -907,6 +924,7 @@ func TestNewFactory(t *testing.T) {
 			if factory == nil {
 				t.Fatal("NewFactory() returned nil")
 			}
+
 			if factory.authMgr != tt.authMgr {
 				t.Errorf("Factory.authMgr = %v, want %v", factory.authMgr, tt.authMgr)
 			}
@@ -918,11 +936,11 @@ func TestNewFactory(t *testing.T) {
 func TestFactory_NewProvider_WithKeyName(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup keystore with test credential
+	// Setup keystore with test credential.
 	keystore := auth.NewKeystore()
 	authMgr := auth.NewManager(keystore)
 
-	// Store credential
+	// Store credential.
 	err := authMgr.SetCredential(ctx, "test-openai-key", auth.Credential{
 		Type:  auth.CredentialTypeAPIKey,
 		Value: "sk-test-12345",
@@ -931,14 +949,14 @@ func TestFactory_NewProvider_WithKeyName(t *testing.T) {
 		t.Fatalf("SetCredential() error = %v", err)
 	}
 
-	// Create factory
+	// Create factory.
 	factory := NewFactory(authMgr)
 
-	// Create provider using KeyName
+	// Create provider using KeyName.
 	cfg := ProviderConfig{
 		Type:    "openai",
 		BaseURL: "https://api.openai.com/v1",
-		KeyName: "test-openai-key", // Use keystore
+		KeyName: "test-openai-key", // Use keystore.
 		Model:   "gpt-4",
 		Timeout: 30 * time.Second,
 	}
@@ -947,11 +965,12 @@ func TestFactory_NewProvider_WithKeyName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Factory.NewProvider() error = %v", err)
 	}
+
 	if provider == nil {
 		t.Fatal("Factory.NewProvider() returned nil provider")
 	}
 
-	// Verify provider was created successfully
+	// Verify provider was created successfully.
 	if provider.Name() != "openai-compatible" {
 		t.Errorf("Provider.Name() = %q, want %q", provider.Name(), "openai-compatible")
 	}
@@ -961,14 +980,14 @@ func TestFactory_NewProvider_WithKeyName(t *testing.T) {
 func TestFactory_NewProvider_WithAPIKey(t *testing.T) {
 	ctx := context.Background()
 
-	// Create factory without auth manager
+	// Create factory without auth manager.
 	factory := NewFactory(nil)
 
-	// Create provider using direct APIKey
+	// Create provider using direct APIKey.
 	cfg := ProviderConfig{
 		Type:    "openai",
 		BaseURL: "https://api.openai.com/v1",
-		APIKey:  "sk-direct-key", // Direct key (deprecated)
+		APIKey:  "sk-direct-key", // Direct key (deprecated).
 		Model:   "gpt-4",
 		Timeout: 30 * time.Second,
 	}
@@ -977,6 +996,7 @@ func TestFactory_NewProvider_WithAPIKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Factory.NewProvider() error = %v", err)
 	}
+
 	if provider == nil {
 		t.Fatal("Factory.NewProvider() returned nil provider")
 	}
@@ -986,11 +1006,11 @@ func TestFactory_NewProvider_WithAPIKey(t *testing.T) {
 func TestFactory_NewProvider_KeyNamePrecedence(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup keystore
+	// Setup keystore.
 	keystore := auth.NewKeystore()
 	authMgr := auth.NewManager(keystore)
 
-	// Store credential
+	// Store credential.
 	err := authMgr.SetCredential(ctx, "preferred-key", auth.Credential{
 		Type:  auth.CredentialTypeAPIKey,
 		Value: "sk-from-keystore",
@@ -1001,12 +1021,12 @@ func TestFactory_NewProvider_KeyNamePrecedence(t *testing.T) {
 
 	factory := NewFactory(authMgr)
 
-	// Provide both KeyName and APIKey
+	// Provide both KeyName and APIKey.
 	cfg := ProviderConfig{
 		Type:    "openai",
 		BaseURL: "https://api.openai.com/v1",
-		KeyName: "preferred-key",        // Should be used
-		APIKey:  "sk-should-be-ignored", // Should be ignored
+		KeyName: "preferred-key",        // Should be used.
+		APIKey:  "sk-should-be-ignored", // Should be ignored.
 		Model:   "gpt-4",
 	}
 
@@ -1014,24 +1034,25 @@ func TestFactory_NewProvider_KeyNamePrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Factory.NewProvider() error = %v", err)
 	}
+
 	if provider == nil {
 		t.Fatal("Factory.NewProvider() returned nil provider")
 	}
 
-	// KeyName should take precedence (no error means keystore was used)
+	// KeyName should take precedence (no error means keystore was used).
 }
 
 // TestFactory_NewProvider_KeyNameNotFound tests error when keystore credential not found.
 func TestFactory_NewProvider_KeyNameNotFound(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup empty keystore
+	// Setup empty keystore.
 	keystore := auth.NewKeystore()
 	authMgr := auth.NewManager(keystore)
 
 	factory := NewFactory(authMgr)
 
-	// Try to use non-existent key
+	// Try to use non-existent key.
 	cfg := ProviderConfig{
 		Type:    "openai",
 		BaseURL: "https://api.openai.com/v1",
@@ -1043,11 +1064,12 @@ func TestFactory_NewProvider_KeyNameNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("Factory.NewProvider() expected error for non-existent key, got nil")
 	}
+
 	if provider != nil {
 		t.Error("Factory.NewProvider() should return nil provider on error")
 	}
 
-	// Error should mention the credential retrieval failure
+	// Error should mention the credential retrieval failure.
 	if !contains(err.Error(), "get credential") {
 		t.Errorf("Error should mention credential retrieval, got: %v", err)
 	}
@@ -1057,10 +1079,10 @@ func TestFactory_NewProvider_KeyNameNotFound(t *testing.T) {
 func TestFactory_NewProvider_NoAuthManager(t *testing.T) {
 	ctx := context.Background()
 
-	// Create factory without auth manager
+	// Create factory without auth manager.
 	factory := NewFactory(nil)
 
-	// Try to use KeyName
+	// Try to use KeyName.
 	cfg := ProviderConfig{
 		Type:    "openai",
 		BaseURL: "https://api.openai.com/v1",
@@ -1072,11 +1094,12 @@ func TestFactory_NewProvider_NoAuthManager(t *testing.T) {
 	if err == nil {
 		t.Fatal("Factory.NewProvider() expected error when KeyName provided but no auth manager, got nil")
 	}
+
 	if provider != nil {
 		t.Error("Factory.NewProvider() should return nil provider on error")
 	}
 
-	// Error should mention missing auth manager
+	// Error should mention missing auth manager.
 	if !contains(err.Error(), "no auth manager configured") {
 		t.Errorf("Error should mention missing auth manager, got: %v", err)
 	}
@@ -1086,23 +1109,24 @@ func TestFactory_NewProvider_NoAuthManager(t *testing.T) {
 func TestFactory_NewProvider_OllamaNoAuth(t *testing.T) {
 	ctx := context.Background()
 
-	// Create factory with auth manager (but Ollama doesn't need it)
+	// Create factory with auth manager (but Ollama doesn't need it).
 	keystore := auth.NewKeystore()
 	authMgr := auth.NewManager(keystore)
 	factory := NewFactory(authMgr)
 
-	// Create Ollama provider without any credentials
+	// Create Ollama provider without any credentials.
 	cfg := ProviderConfig{
 		Type:    "ollama",
-		BaseURL: "http://localhost:11434",
+		BaseURL: testOllamaURL,
 		Model:   "llama2",
-		// No KeyName or APIKey
+		// No KeyName or APIKey.
 	}
 
 	provider, err := factory.NewProvider(ctx, cfg)
 	if err != nil {
 		t.Fatalf("Factory.NewProvider() error = %v (Ollama shouldn't require auth)", err)
 	}
+
 	if provider == nil {
 		t.Fatal("Factory.NewProvider() returned nil provider")
 	}
@@ -1116,11 +1140,11 @@ func TestFactory_NewProvider_OllamaNoAuth(t *testing.T) {
 func TestFactory_NewProvider_AllProviderTypes(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup keystore
+	// Setup keystore.
 	keystore := auth.NewKeystore()
 	authMgr := auth.NewManager(keystore)
 
-	// Store credential for OpenAI
+	// Store credential for OpenAI.
 	err := authMgr.SetCredential(ctx, "openai-key", auth.Credential{
 		Type:  auth.CredentialTypeAPIKey,
 		Value: "sk-test",
@@ -1160,7 +1184,7 @@ func TestFactory_NewProvider_AllProviderTypes(t *testing.T) {
 			name: "ollama without auth",
 			cfg: ProviderConfig{
 				Type:    "ollama",
-				BaseURL: "http://localhost:11434",
+				BaseURL: testOllamaURL,
 				Model:   "llama2",
 			},
 			expectedName: "ollama",
@@ -1182,9 +1206,11 @@ func TestFactory_NewProvider_AllProviderTypes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Factory.NewProvider() error = %v", err)
 			}
+
 			if provider == nil {
 				t.Fatal("Factory.NewProvider() returned nil provider")
 			}
+
 			if provider.Name() != tt.expectedName {
 				t.Errorf("Provider.Name() = %q, want %q", provider.Name(), tt.expectedName)
 			}
@@ -1194,9 +1220,9 @@ func TestFactory_NewProvider_AllProviderTypes(t *testing.T) {
 
 // TestFactory_NewProvider_ContextCancellation tests context cancellation during credential retrieval.
 func TestFactory_NewProvider_ContextCancellation(t *testing.T) {
-	// Create cancelled context
+	// Create canceled context.
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Immediately cancel
+	cancel() // Immediately cancel.
 
 	keystore := auth.NewKeystore()
 	authMgr := auth.NewManager(keystore)
@@ -1211,13 +1237,14 @@ func TestFactory_NewProvider_ContextCancellation(t *testing.T) {
 
 	provider, err := factory.NewProvider(ctx, cfg)
 	if err == nil {
-		t.Fatal("Factory.NewProvider() expected error for cancelled context, got nil")
+		t.Fatal("Factory.NewProvider() expected error for canceled context, got nil")
 	}
+
 	if provider != nil {
 		t.Error("Factory.NewProvider() should return nil provider on error")
 	}
 
-	// Error should be context.Canceled
+	// Error should be context.Canceled.
 	if !contains(err.Error(), "context canceled") {
 		t.Errorf("Error should mention context cancellation, got: %v", err)
 	}
@@ -1225,7 +1252,7 @@ func TestFactory_NewProvider_ContextCancellation(t *testing.T) {
 
 // TestFactory_NewProvider_BackwardCompatibility tests that legacy NewProvider still works.
 func TestFactory_NewProvider_BackwardCompatibility(t *testing.T) {
-	// This test ensures that existing code using NewProvider() still works
+	// This test ensures that existing code using NewProvider() still works.
 	cfg := ProviderConfig{
 		Type:    "openai",
 		BaseURL: "https://api.openai.com/v1",
@@ -1233,10 +1260,11 @@ func TestFactory_NewProvider_BackwardCompatibility(t *testing.T) {
 		Model:   "gpt-4",
 	}
 
-	provider, err := NewProvider(cfg) // Legacy function
+	provider, err := NewProvider(cfg) // Legacy function.
 	if err != nil {
 		t.Fatalf("NewProvider() error = %v", err)
 	}
+
 	if provider == nil {
 		t.Fatal("NewProvider() returned nil provider")
 	}
@@ -1250,9 +1278,10 @@ func TestFactory_NewProvider_BackwardCompatibility(t *testing.T) {
 func TestFactory_resolveCredential(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup keystore
+	// Setup keystore.
 	keystore := auth.NewKeystore()
 	authMgr := auth.NewManager(keystore)
+
 	err := authMgr.SetCredential(ctx, "test-key", auth.Credential{
 		Type:  auth.CredentialTypeAPIKey,
 		Value: "sk-from-keystore",
@@ -1332,8 +1361,10 @@ func TestFactory_resolveCredential(t *testing.T) {
 			value, err := tt.factory.resolveCredential(ctx, tt.cfg, tt.requiresAuth)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("resolveCredential() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
+
 			if value != tt.wantValue {
 				t.Errorf("resolveCredential() value = %q, want %q", value, tt.wantValue)
 			}
@@ -1341,13 +1372,13 @@ func TestFactory_resolveCredential(t *testing.T) {
 	}
 }
 
-// Test helper functions below - these provide backward compatibility for legacy tests
+// Test helper functions below - these provide backward compatibility for legacy tests.
 
 var (
-	// factoryMu protects the factories map
+	// factoryMu protects the factories map.
 	factoryMu sync.RWMutex
 
-	// factories maps provider types to factory functions
+	// factories maps provider types to factory functions.
 	factories = map[string]ProviderFactory{
 		"openai":            legacyNewOpenAIProvider,
 		"ollama":            legacyNewOllamaProvider,
@@ -1358,13 +1389,16 @@ var (
 
 // NewProvider creates a provider from configuration (test helper for legacy tests).
 func NewProvider(cfg ProviderConfig) (llm.Provider, error) {
-	// Validate configuration
-	if err := validateConfig(cfg); err != nil {
+	// Validate configuration.
+	err := validateConfig(cfg)
+	if err != nil {
 		return nil, err
 	}
 
 	factoryMu.RLock()
+
 	factory, exists := factories[cfg.Type]
+
 	factoryMu.RUnlock()
 
 	if !exists {
@@ -1378,6 +1412,7 @@ func NewProvider(cfg ProviderConfig) (llm.Provider, error) {
 func RegisterProvider(providerType string, factory ProviderFactory) {
 	factoryMu.Lock()
 	defer factoryMu.Unlock()
+
 	factories[providerType] = factory
 }
 

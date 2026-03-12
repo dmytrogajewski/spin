@@ -14,36 +14,36 @@ import (
 // 4. TriggerInterval - Cache TTL expired
 //
 // Requires: ctx != nil
-// Ensures: if shouldRetrieve, then triggerType is valid (not empty)
+// Ensures: if shouldRetrieve, then triggerType is valid (not empty).
 func (a *Agent) shouldRetrieveProgressive(ctx *trajectory.TrajectoryContext) (bool, trajectory.TriggerType) {
-	// Check if progressive context is enabled
+	// Check if progressive context is enabled.
 	if a.aceConfig == nil || !a.aceConfig.Retrieval.ProgressiveContext.Enabled {
 		return false, ""
 	}
 
-	// Trigger 1: Initial (Turn 0) - always retrieve on first turn
+	// Trigger 1: Initial (Turn 0) - always retrieve on first turn.
 	if ctx.CurrentTurn == 0 {
 		return true, trajectory.TriggerInitial
 	}
 
 	cfg := a.aceConfig.Retrieval.ProgressiveContext
 
-	// Trigger 2: Error - recent error detected
+	// Trigger 2: Error - recent error detected.
 	if ctx.HasRecentError(cfg.ErrorLookback) {
 		return true, trajectory.TriggerError
 	}
 
-	// Trigger 3: Tool Change - different tools used recently
+	// Trigger 3: Tool Change - different tools used recently.
 	tools := ctx.GetRecentTools(cfg.ToolChangeLookback)
 	if len(tools) > 1 {
 		return true, trajectory.TriggerToolChange
 	}
 
-	// Trigger 4: Interval - cache TTL expired
+	// Trigger 4: Interval - cache TTL expired.
 	if ctx.CurrentTurn-ctx.LastRetrievalTurn >= cfg.CacheTTL {
 		return true, trajectory.TriggerInterval
 	}
 
-	// No triggers activated
+	// No triggers activated.
 	return false, ""
 }

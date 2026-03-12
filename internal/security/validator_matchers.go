@@ -13,7 +13,7 @@ import (
 
 // checkSpecialForbiddenPatterns checks for special forbidden patterns that require raw command inspection.
 func (v *Validator) checkSpecialForbiddenPatterns(cmd *Command) *ValidationResult {
-	// Fork bomb check
+	// Fork bomb check.
 	if strings.Contains(cmd.Raw, ":(){ :|:& };:") || strings.Contains(cmd.Raw, ":()|:|&") {
 		return &ValidationResult{
 			Classification: CommandForbidden,
@@ -23,7 +23,7 @@ func (v *Validator) checkSpecialForbiddenPatterns(cmd *Command) *ValidationResul
 		}
 	}
 
-	// Disk overwrite check
+	// Disk overwrite check.
 	if strings.HasPrefix(cmd.Raw, ">") && strings.Contains(cmd.Raw, "/dev/") {
 		return &ValidationResult{
 			Classification: CommandForbidden,
@@ -33,7 +33,7 @@ func (v *Validator) checkSpecialForbiddenPatterns(cmd *Command) *ValidationResul
 		}
 	}
 
-	// mkfs check (any filesystem)
+	// mkfs check (any filesystem).
 	if strings.HasPrefix(cmd.Program, "mkfs") {
 		return &ValidationResult{
 			Classification: CommandForbidden,
@@ -58,6 +58,7 @@ func (v *Validator) checkPatternList(cmd *Command, patterns []Pattern, classific
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -78,42 +79,43 @@ func (v *Validator) checkPatternMap(cmd *Command, patternMap map[string][]Patter
 			}
 		}
 	}
+
 	return nil
 }
 
 // matchesPattern checks if a command matches a given pattern.
 func (v *Validator) matchesPattern(cmd *Command, pattern Pattern) bool {
-	// Check program name
+	// Check program name.
 	if cmd.Program != pattern.Program {
 		return false
 	}
 
-	// Combine all args into a single string for pattern matching
+	// Combine all args into a single string for pattern matching.
 	argsStr := strings.Join(cmd.Args, " ")
 
-	// Check forbidden patterns (must be present for forbidden matches)
+	// Check forbidden patterns (must be present for forbidden matches).
 	if len(pattern.ForbiddenPatterns) > 0 {
 		for _, forbiddenPattern := range pattern.ForbiddenPatterns {
 			if strings.Contains(argsStr, forbiddenPattern) {
-				return true // Matches forbidden pattern
+				return true // Matches forbidden pattern.
 			}
 		}
-		// If forbidden patterns specified but none found, no match
+		// If forbidden patterns specified but none found, no match.
 		return false
 	}
 
-	// Check arg patterns (all must be present)
+	// Check arg patterns (all must be present).
 	for _, argPattern := range pattern.ArgPatterns {
 		if !strings.Contains(argsStr, argPattern) {
 			return false
 		}
 	}
 
-	// If no arg patterns specified, any args match
+	// If no arg patterns specified, any args match.
 	if len(pattern.ArgPatterns) == 0 {
 		return true
 	}
 
-	// All arg patterns matched
+	// All arg patterns matched.
 	return true
 }

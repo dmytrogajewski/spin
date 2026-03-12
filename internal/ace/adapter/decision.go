@@ -30,6 +30,7 @@ var defaultDecision = decisionValue{ActionSkip, "Unknown signal type"}
 // decideAction determines what action to take for a given signal.
 func decideAction(signal ExecutionSignal) (AdaptationAction, string) {
 	decision := lookupDecision(signal.Outcome, signal.SignalType)
+
 	return decision.action, decision.reason
 }
 
@@ -38,6 +39,7 @@ func lookupDecision(outcome SignalOutcome, signalType SignalType) decisionValue 
 	if decision, ok := outcomeDecisions[outcome]; ok {
 		return decision
 	}
+
 	return lookupFailureDecision(signalType)
 }
 
@@ -46,5 +48,6 @@ func lookupFailureDecision(signalType SignalType) decisionValue {
 	if decision, ok := failureDecisions[signalType]; ok {
 		return decision
 	}
+
 	return defaultDecision
 }

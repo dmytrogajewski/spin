@@ -4,13 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/ace/generator"
-	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/ace/generator"
+	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
-// TestNewReflector tests creating a new reflector
+// TestNewReflector tests creating a new reflector.
 func TestNewReflector(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 
@@ -19,7 +20,7 @@ func TestNewReflector(t *testing.T) {
 	require.NotNil(t, reflector)
 }
 
-// TestReflector_Reflect tests reflection on a single trajectory
+// TestReflector_Reflect tests reflection on a single trajectory.
 func TestReflector_Reflect(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
@@ -55,7 +56,7 @@ func TestReflector_Reflect(t *testing.T) {
 	assert.Equal(t, CategorySuccessPattern, resp.Insights[0].Category)
 }
 
-// TestReflector_RefineInsights tests multi-iteration refinement
+// TestReflector_RefineInsights tests multi-iteration refinement.
 func TestReflector_RefineInsights(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
@@ -87,7 +88,7 @@ func TestReflector_RefineInsights(t *testing.T) {
 	assert.Equal(t, 2, refined[0].Iteration)
 }
 
-// TestReflector_RefineInsights_MaxIterations tests iteration limit
+// TestReflector_RefineInsights_MaxIterations tests iteration limit.
 func TestReflector_RefineInsights_MaxIterations(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
@@ -117,7 +118,7 @@ func TestReflector_RefineInsights_MaxIterations(t *testing.T) {
 	assert.LessOrEqual(t, refined[0].Iteration, 5)
 }
 
-// TestReflector_RefineInsights_EmptySlice tests empty input
+// TestReflector_RefineInsights_EmptySlice tests empty input.
 func TestReflector_RefineInsights_EmptySlice(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 	reflector := NewReflector(mockLLM)
@@ -129,7 +130,7 @@ func TestReflector_RefineInsights_EmptySlice(t *testing.T) {
 	assert.Empty(t, refined)
 }
 
-// TestReflector_Reflect_MultipleTrajectories tests batch trajectory analysis
+// TestReflector_Reflect_MultipleTrajectories tests batch trajectory analysis.
 func TestReflector_Reflect_MultipleTrajectories(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 	mockLLM.SetResponse(`[
@@ -174,7 +175,7 @@ func TestReflector_Reflect_MultipleTrajectories(t *testing.T) {
 	assert.GreaterOrEqual(t, len(resp.Insights), 1)
 }
 
-// TestReflector_Reflect_EmptyTrajectories tests empty trajectory list
+// TestReflector_Reflect_EmptyTrajectories tests empty trajectory list.
 func TestReflector_Reflect_EmptyTrajectories(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
 	reflector := NewReflector(mockLLM)
@@ -192,7 +193,7 @@ func TestReflector_Reflect_EmptyTrajectories(t *testing.T) {
 	assert.Equal(t, 0, resp.Iterations)
 }
 
-// TestCleanJSONResponse tests extraction of JSON from markdown code blocks
+// TestCleanJSONResponse tests extraction of JSON from markdown code blocks.
 func TestCleanJSONResponse(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -239,10 +240,10 @@ func TestCleanJSONResponse(t *testing.T) {
 	}
 }
 
-// TestReflector_Reflect_WithMarkdownJSON tests reflection with markdown-wrapped JSON
+// TestReflector_Reflect_WithMarkdownJSON tests reflection with markdown-wrapped JSON.
 func TestReflector_Reflect_WithMarkdownJSON(t *testing.T) {
 	mockLLM := llm.NewMockProvider("test")
-	// Simulate LLM returning JSON wrapped in markdown code block
+	// Simulate LLM returning JSON wrapped in markdown code block.
 	mockLLM.SetResponse("```json\n" + `[
 		{
 			"content": "Always use errors.Is for error type checking in Go",

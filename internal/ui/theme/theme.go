@@ -14,20 +14,20 @@ const (
 
 // Theme defines color values for the TUI.
 type Theme interface {
-	// Neutral colors
-	Fg() string     // Foreground text
-	Bg() string     // Background
-	Muted() string  // Muted/dimmed text
-	Border() string // Border characters
-	Shadow() string // Shadow/overlay background
+	// Neutral colors.
+	Fg() string     // Foreground text.
+	Bg() string     // Background.
+	Muted() string  // Muted/dimmed text.
+	Border() string // Border characters.
+	Shadow() string // Shadow/overlay background.
 
-	// Accent colors
-	Blue() string    // Primary accent
-	Green() string   // Success
-	Yellow() string  // Warning
-	Red() string     // Error/danger
-	Magenta() string // Secondary accent
-	Cyan() string    // Info/highlight
+	// Accent colors.
+	Blue() string    // Primary accent.
+	Green() string   // Success.
+	Yellow() string  // Warning.
+	Red() string     // Error/danger.
+	Magenta() string // Secondary accent.
+	Cyan() string    // Info/highlight.
 }
 
 // NewDarkTheme creates a dark theme using 256 colors.
@@ -49,7 +49,7 @@ type Theme interface {
 // The 256-color palette consists of:
 // - 0-15: Standard colors (same as 8/16 color mode)
 // - 16-231: 6x6x6 color cube (216 colors)
-// - 232-255: Grayscale ramp (24 shades)
+// - 232-255: Grayscale ramp (24 shades).
 
 // isGrayscale checks if RGB values are close enough to be considered grayscale.
 

@@ -37,7 +37,7 @@ func TestConfigV2_Validate_LLMProviderRequired(t *testing.T) {
 	cfg := &ConfigV2{
 		Version: "2.0",
 		LLM: LLMConfigV2{
-			Provider: "", // Empty provider should fail
+			Provider: "", // Empty provider should fail.
 			Model:    "qwen",
 		},
 	}
@@ -55,7 +55,7 @@ func TestConfigV2_Validate_LLMModelRequired(t *testing.T) {
 		Version: "2.0",
 		LLM: LLMConfigV2{
 			Provider: "ollama",
-			Model:    "", // Empty model should fail
+			Model:    "", // Empty model should fail.
 		},
 	}
 
@@ -194,7 +194,7 @@ func TestConfigV2_Validate_LLMValidRanges(t *testing.T) {
 // Kills mutant: removing the MaxTurns check would make this test fail.
 func TestConfigV2_Validate_AgentMaxTurnsRequired(t *testing.T) {
 	agent := validAgentConfig()
-	agent.MaxTurns = 0 // Invalid
+	agent.MaxTurns = 0 // Invalid.
 
 	cfg := &ConfigV2{
 		Version: "2.0",
@@ -211,7 +211,7 @@ func TestConfigV2_Validate_AgentMaxTurnsRequired(t *testing.T) {
 // Kills mutant: removing the Timeout check would make this test fail.
 func TestConfigV2_Validate_AgentTimeoutRequired(t *testing.T) {
 	agent := validAgentConfig()
-	agent.Timeout = 0 // Invalid
+	agent.Timeout = 0 // Invalid.
 
 	cfg := &ConfigV2{
 		Version: "2.0",
@@ -228,7 +228,7 @@ func TestConfigV2_Validate_AgentTimeoutRequired(t *testing.T) {
 // Kills mutant: removing the WorkDir check would make this test fail.
 func TestConfigV2_Validate_AgentWorkDirRequired(t *testing.T) {
 	agent := validAgentConfig()
-	agent.WorkDir = "" // Invalid
+	agent.WorkDir = "" // Invalid.
 
 	cfg := &ConfigV2{
 		Version: "2.0",
@@ -297,7 +297,7 @@ func validProtocolConfig() ProtocolConfigV2 {
 // Kills mutant: removing the PlaybookPath check would make this test fail.
 func TestConfigV2_Validate_ACEPlaybookPathRequired(t *testing.T) {
 	ace := validACEConfig()
-	ace.PlaybookPath = "" // Invalid
+	ace.PlaybookPath = "" // Invalid.
 
 	cfg := &ConfigV2{
 		Version: "2.0",
@@ -315,7 +315,7 @@ func TestConfigV2_Validate_ACEPlaybookPathRequired(t *testing.T) {
 // Kills mutant: removing the TrajectoryPath check would make this test fail.
 func TestConfigV2_Validate_ACETrajectoryPathRequired(t *testing.T) {
 	ace := validACEConfig()
-	ace.TrajectoryPath = "" // Invalid
+	ace.TrajectoryPath = "" // Invalid.
 
 	cfg := &ConfigV2{
 		Version: "2.0",
@@ -333,7 +333,7 @@ func TestConfigV2_Validate_ACETrajectoryPathRequired(t *testing.T) {
 // Kills mutant: removing the TopK check would make this test fail.
 func TestConfigV2_Validate_ACETopKPositive(t *testing.T) {
 	ace := validACEConfig()
-	ace.TopK = 0 // Invalid
+	ace.TopK = 0 // Invalid.
 
 	cfg := &ConfigV2{
 		Version: "2.0",
@@ -386,7 +386,7 @@ func TestConfigV2_Validate_ACEDisabled(t *testing.T) {
 		Agent:   validAgentConfig(),
 		ACE: ACEConfigV2{
 			Enabled: false,
-			// Empty paths should be OK when disabled
+			// Empty paths should be OK when disabled.
 			PlaybookPath:   "",
 			TrajectoryPath: "",
 			TopK:           0,
@@ -441,7 +441,7 @@ func TestConfigV2_Validate_SecuritySandboxModeInvalid(t *testing.T) {
 func TestConfigV2_Validate_ProtocolShellTimeoutPositive(t *testing.T) {
 	protocol := validProtocolConfig()
 	protocol.EnableShell = true
-	protocol.ShellTimeout = 0 // Invalid
+	protocol.ShellTimeout = 0 // Invalid.
 
 	cfg := &ConfigV2{
 		Version:  "2.0",
@@ -463,7 +463,7 @@ func TestConfigV2_Validate_ProtocolMCPServersValid(t *testing.T) {
 	protocol := validProtocolConfig()
 	protocol.EnableMCP = true
 	protocol.MCPServers = []MCPServerConfigV2{
-		{Name: "", Command: "/usr/bin/mcp"}, // Invalid: empty name
+		{Name: "", Command: "/usr/bin/mcp"}, // Invalid: empty name.
 	}
 
 	cfg := &ConfigV2{
@@ -485,11 +485,11 @@ func TestConfigV2_Validate_ProtocolMCPServersValid(t *testing.T) {
 func TestDefaultConfigV2(t *testing.T) {
 	cfg := DefaultConfigV2()
 
-	// Should be valid by default
+	// Should be valid by default.
 	err := cfg.Validate()
 	require.NoError(t, err, "default config should pass validation")
 
-	// Check some expected defaults
+	// Check some expected defaults.
 	assert.Equal(t, "2.0", cfg.Version, "version should be 2.0")
 	assert.Equal(t, "ollama", cfg.LLM.Provider, "default provider should be ollama")
 	assert.Equal(t, 0.7, cfg.LLM.Temperature, "default temperature should be 0.7")
@@ -506,7 +506,7 @@ func TestConfigV2_CrossSectionValidation_ACEPlaybookRequired(t *testing.T) {
 		Agent:   validAgentConfig(),
 		ACE: ACEConfigV2{
 			Enabled:      true,
-			PlaybookPath: "", // Invalid - required when enabled
+			PlaybookPath: "", // Invalid - required when enabled.
 		},
 		Security: validSecurityConfig(),
 		Protocol: validProtocolConfig(),
@@ -527,7 +527,7 @@ func TestConfigV2_CrossSectionValidation_ACETrajectoryRequired(t *testing.T) {
 		ACE: ACEConfigV2{
 			Enabled:        true,
 			PlaybookPath:   "/path/to/playbook.json",
-			TrajectoryPath: "", // Invalid - required when enabled
+			TrajectoryPath: "", // Invalid - required when enabled.
 		},
 		Security: validSecurityConfig(),
 		Protocol: validProtocolConfig(),
@@ -549,7 +549,7 @@ func TestConfigV2_CrossSectionValidation_ShellTimeoutRequired(t *testing.T) {
 		Security: validSecurityConfig(),
 		Protocol: ProtocolConfigV2{
 			EnableShell:  true,
-			ShellTimeout: 0, // Invalid - required when enabled
+			ShellTimeout: 0, // Invalid - required when enabled.
 		},
 	}
 
@@ -564,11 +564,11 @@ func TestConfigV2_Validation_AllErrors(t *testing.T) {
 	cfg := &ConfigV2{
 		Version: "2.0",
 		LLM: LLMConfigV2{
-			Provider:    "",  // Error 1
-			Model:       "",  // Error 2
-			Temperature: 3.0, // Error 3
-			MaxTokens:   -10, // Error 4
-			Timeout:     0,   // Error 5
+			Provider:    "",  // Error 1.
+			Model:       "",  // Error 2.
+			Temperature: 3.0, // Error 3.
+			MaxTokens:   -10, // Error 4.
+			Timeout:     0,   // Error 5.
 		},
 		Agent:    validAgentConfig(),
 		ACE:      validACEConfig(),
@@ -579,11 +579,11 @@ func TestConfigV2_Validation_AllErrors(t *testing.T) {
 	err := cfg.Validate()
 	require.Error(t, err, "validation should fail with multiple errors")
 
-	// Check that error message contains multiple issues
+	// Check that error message contains multiple issues.
 	errMsg := err.Error()
 	assert.Contains(t, errMsg, "provider", "should mention provider error")
 	assert.Contains(t, errMsg, "model", "should mention model error")
-	// Note: Current implementation is fail-fast, this test documents desired behavior
+	// Note: Current implementation is fail-fast, this test documents desired behavior.
 }
 
 // TestMCPServerConfigV2_Validate_SSE tests SSE transport validation.

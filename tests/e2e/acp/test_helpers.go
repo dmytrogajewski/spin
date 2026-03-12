@@ -17,50 +17,83 @@ import (
 )
 
 const (
-	// testTimeout is the default timeout for ACP E2E tests
+	// testTimeout is the default timeout for ACP E2E tests.
 	testTimeout = 120 * time.Second
 
-	// binPath is the path to the spin binary (relative to test file)
+	// binPath is the path to the spin binary (relative to test file).
 	binPath = "../../../bin/spin"
 )
 
 // getBinPath returns the absolute path to the spin binary.
 func getBinPath(t *testing.T) string {
 	t.Helper()
+
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	// From tests/e2e/acp/ -> tests/e2e/ -> tests/ -> root
+	// From tests/e2e/acp/ -> tests/e2e/ -> tests/ -> root.
 	root := filepath.Dir(filepath.Dir(filepath.Dir(wd)))
+
 	return filepath.Join(root, "bin", "spin")
+}
+
+// createTestConfig creates a minimal test config file without MCP servers.
+// Returns the path to the config file.
+func createTestConfig(t *testing.T) string {
+	t.Helper()
+
+	configContent := `version: "2.0"
+llm:
+  provider: test-llm
+  model: dummy
+protocol:
+  enable_mcp: false
+  enable_git: true
+  enable_shell: true
+`
+	configPath := filepath.Join(t.TempDir(), "test-config.yaml")
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	return configPath
 }
 
 // startACPAgent starts the spin acp command as a subprocess and returns the command,
 // stdin pipe (for writing to agent), and stdout pipe (for reading from agent).
+// The provider is always overridden to "test-llm" so no external LLM is required.
 func startACPAgent(t *testing.T, args ...string) (*exec.Cmd, io.WriteCloser, io.ReadCloser) {
 	t.Helper()
 
 	binPath := getBinPath(t)
 
-	// Build args: "acp" + additional args
+	// Create a minimal test config to avoid loading user's global config with MCP servers.
+	configPath := createTestConfig(t)
+
+	// Ensure we always end up with test-llm provider and a dummy model.
+	// If callers already passed --provider/--model, these flags will be
+	// overridden by the ones we append here (Cobra uses last occurrence).
+	override := []string{"--config-file", configPath, "--provider", "test-llm", "--model", "dummy"}
+
+	// Build args: "acp" + test-specific args + overrides.
 	cmdArgs := append([]string{"acp"}, args...)
+	cmdArgs = append(cmdArgs, override...)
 
 	cmd := exec.Command(binPath, cmdArgs...)
 
-	// Get stdin/stdout pipes
+	// Get stdin/stdout pipes.
 	stdin, err := cmd.StdinPipe()
 	require.NoError(t, err)
 
 	stdout, err := cmd.StdoutPipe()
 	require.NoError(t, err)
 
-	// Stderr goes to os.Stderr for debugging
+	// Stderr goes to os.Stderr for debugging.
 	cmd.Stderr = os.Stderr
 
-	// Start the process
+	// Start the process.
 	err = cmd.Start()
 	require.NoError(t, err, "Failed to start ACP agent")
 
-	// Give agent a moment to initialize
+	// Give agent a moment to initialize.
 	time.Sleep(50 * time.Millisecond)
 
 	return cmd, stdin, stdout
@@ -78,20 +111,21 @@ func cleanupAgent(t *testing.T, cmd *exec.Cmd, stdin io.WriteCloser) {
 		return
 	}
 
-	// Try graceful shutdown first
+	// Try graceful shutdown first.
 	cmd.Process.Signal(os.Interrupt)
 
-	// Wait with timeout
+	// Wait with timeout.
 	done := make(chan error, 1)
+
 	go func() {
 		done <- cmd.Wait()
 	}()
 
 	select {
 	case <-done:
-		// Process exited
+		// Process exited.
 	case <-time.After(2 * time.Second):
-		// Force kill after timeout
+		// Force kill after timeout.
 		cmd.Process.Kill()
 		<-done
 	}
@@ -101,6 +135,7 @@ func cleanupAgent(t *testing.T, cmd *exec.Cmd, stdin io.WriteCloser) {
 // The client implementation is a simple wrapper that handles requests.
 func createACPClient(t *testing.T, stdin io.Writer, stdout io.Reader) *acp.ClientSideConnection {
 	t.Helper()
+
 	return createACPClientWithClient(t, stdin, stdout, &testClient{})
 }
 
@@ -108,7 +143,7 @@ func createACPClient(t *testing.T, stdin io.Writer, stdout io.Reader) *acp.Clien
 func createACPClientWithClient(t *testing.T, stdin io.Writer, stdout io.Reader, client *testClient) *acp.ClientSideConnection {
 	t.Helper()
 
-	// Create client-side connection
+	// Create client-side connection.
 	conn := acp.NewClientSideConnection(client, stdin, stdout)
 
 	return conn
@@ -126,9 +161,10 @@ type testClient struct {
 func (c *testClient) getNotifications() []acp.SessionNotification {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	// Return a copy
+	// Return a copy.
 	result := make([]acp.SessionNotification, len(c.notifications))
 	copy(result, c.notifications)
+
 	return result
 }
 
@@ -136,6 +172,7 @@ func (c *testClient) getNotifications() []acp.SessionNotification {
 func (c *testClient) clearNotifications() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.notifications = nil
 }
 
@@ -152,16 +189,18 @@ func (c *testClient) WriteTextFile(ctx context.Context, params acp.WriteTextFile
 // RequestPermission implements acp.Client interface.
 func (c *testClient) RequestPermission(ctx context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
 	// For testing, we can auto-approve by selecting the first allow option
-	// Find an allow_once or allow_always option
+	// Find an allow_once or allow_always option.
 	var selectedOptionID acp.PermissionOptionId
+
 	for _, option := range params.Options {
 		if option.Kind == acp.PermissionOptionKindAllowOnce || option.Kind == acp.PermissionOptionKindAllowAlways {
 			selectedOptionID = option.OptionId
+
 			break
 		}
 	}
 
-	// If no allow option found, use first option (for testing)
+	// If no allow option found, use first option (for testing).
 	if selectedOptionID == "" && len(params.Options) > 0 {
 		selectedOptionID = params.Options[0].OptionId
 	}
@@ -174,10 +213,12 @@ func (c *testClient) RequestPermission(ctx context.Context, params acp.RequestPe
 // SessionUpdate implements acp.Client interface.
 // This is called by the agent to send notifications.
 func (c *testClient) SessionUpdate(ctx context.Context, params acp.SessionNotification) error {
-	// Store notifications for verification in tests
+	// Store notifications for verification in tests.
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.notifications = append(c.notifications, params)
+
 	return nil
 }
 
@@ -213,7 +254,7 @@ func waitForInitialization(t *testing.T, conn *acp.ClientSideConnection) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Try to initialize - this verifies the connection is working
+	// Try to initialize - this verifies the connection is working.
 	_, err := conn.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion:    acp.ProtocolVersionNumber,
 		ClientCapabilities: acp.ClientCapabilities{},

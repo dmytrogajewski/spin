@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Mock type that implements String() for testing
+// Mock type that implements String() for testing.
 type mockEnvironment struct {
 	data string
 }
@@ -16,7 +16,7 @@ func (m *mockEnvironment) String() string {
 }
 
 func TestGetContextTool_Success(t *testing.T) {
-	// Create a valid mock context with String() method
+	// Create a valid mock context with String() method.
 	env := &mockEnvironment{
 		data: `Environment Context:
 - OS: linux (amd64)
@@ -26,10 +26,9 @@ func TestGetContextTool_Success(t *testing.T) {
 	}
 
 	tool := NewGetContextTool(env)
-	params, _ := FromMap(map[string]interface{}{})
+	params, _ := FromMap(map[string]any{})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -38,7 +37,7 @@ func TestGetContextTool_Success(t *testing.T) {
 		t.Errorf("expected success, got error: %s", result.Error)
 	}
 
-	// Verify output contains expected sections
+	// Verify output contains expected sections.
 	expectedStrings := []string{
 		"Environment Context:",
 		"linux",
@@ -57,10 +56,9 @@ func TestGetContextTool_Success(t *testing.T) {
 
 func TestGetContextTool_NilContext(t *testing.T) {
 	tool := NewGetContextTool(nil)
-	params, _ := FromMap(map[string]interface{}{})
+	params, _ := FromMap(map[string]any{})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -75,16 +73,15 @@ func TestGetContextTool_NilContext(t *testing.T) {
 }
 
 func TestGetContextTool_InvalidType(t *testing.T) {
-	// Type without String() method
+	// Type without String() method.
 	type InvalidContext struct {
 		Data string
 	}
 
 	tool := NewGetContextTool(&InvalidContext{Data: "test"})
-	params, _ := FromMap(map[string]interface{}{})
+	params, _ := FromMap(map[string]any{})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -99,7 +96,7 @@ func TestGetContextTool_InvalidType(t *testing.T) {
 }
 
 func TestGetContextTool_WithGitInfo(t *testing.T) {
-	// Create mock environment with Git information
+	// Create mock environment with Git information.
 	env := &mockEnvironment{
 		data: `Environment Context:
 - OS: darwin (arm64)
@@ -110,10 +107,9 @@ func TestGetContextTool_WithGitInfo(t *testing.T) {
 	}
 
 	tool := NewGetContextTool(env)
-	params, _ := FromMap(map[string]interface{}{})
+	params, _ := FromMap(map[string]any{})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -122,7 +118,7 @@ func TestGetContextTool_WithGitInfo(t *testing.T) {
 		t.Errorf("expected success, got error: %s", result.Error)
 	}
 
-	// Verify Git information is in output
+	// Verify Git information is in output.
 	if !strings.Contains(result.Output, "master") {
 		t.Errorf("expected output to contain Git branch 'master', got: %q", result.Output)
 	}
@@ -133,7 +129,7 @@ func TestGetContextTool_WithGitInfo(t *testing.T) {
 }
 
 func TestGetContextTool_OutputFormat(t *testing.T) {
-	// Verify the String() method is called correctly via reflection
+	// Verify the String() method is called correctly via reflection.
 	env := &mockEnvironment{
 		data: `Environment Context:
 - OS: linux (amd64)
@@ -149,10 +145,9 @@ Project Structure: 2 files
 	}
 
 	tool := NewGetContextTool(env)
-	params, _ := FromMap(map[string]interface{}{})
+	params, _ := FromMap(map[string]any{})
 
 	result, err := tool.Execute(context.Background(), params)
-
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -161,7 +156,7 @@ Project Structure: 2 files
 		t.Errorf("expected success, got error: %s", result.Error)
 	}
 
-	// Verify output format matches Environment.String() structure
+	// Verify output format matches Environment.String() structure.
 	expectedSections := []string{
 		"Environment Context:",
 		"- OS:",
@@ -179,7 +174,7 @@ Project Structure: 2 files
 		}
 	}
 
-	// Verify specific values
+	// Verify specific values.
 	if !strings.Contains(result.Output, "6.16.8") {
 		t.Errorf("expected kernel version in output")
 	}
@@ -205,7 +200,7 @@ func TestGetContextTool_Schema(t *testing.T) {
 		t.Errorf("expected non-empty description")
 	}
 
-	// Tool should have no required parameters
+	// Tool should have no required parameters.
 	if len(schema.Function.Parameters.Required) != 0 {
 		t.Errorf("expected no required parameters, got: %d", len(schema.Function.Parameters.Required))
 	}
@@ -215,12 +210,13 @@ func TestGetContextTool_ErrorCases(t *testing.T) {
 	tool := NewGetContextTool(nil)
 
 	// GetContextTool has only optional parameters, so it doesn't fail on invalid params
-	// Testing that it handles defaults properly
-	params, _ := FromMap(map[string]interface{}{"query": 123})
+	// Testing that it handles defaults properly.
+	params, _ := FromMap(map[string]any{"query": 123})
+
 	_, err := tool.Execute(context.Background(), params)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	// get_context tool might succeed or fail depending on context availability,
-	// so we just check it doesn't panic
+	// so we just check it doesn't panic.
 }

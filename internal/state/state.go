@@ -1,18 +1,21 @@
 package state
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // State represents the current state of the system.
 type State string
 
-// State constants
+// State constants.
 const (
 	StateIdle            State = "idle"
 	StateRunning         State = "running"
 	StateWaitingApproval State = "waiting_approval"
 	StateCompleted       State = "completed"
 	StateFailed          State = "failed"
-	StateCancelled       State = "cancelled"
+	StateCancelled       State = "canceled"
 	StatePaused          State = "paused"
 	StateArchived        State = "archived"
 	StateActive          State = "active"
@@ -33,41 +36,41 @@ var validStates = map[State]bool{
 
 // CanTransitionTo returns true if transition to the target state is valid.
 func (s State) CanTransitionTo(target State) bool {
-	// Cannot transition from unknown states
+	// Cannot transition from unknown states.
 	if !validStates[s] {
 		return false
 	}
 
-	// Cannot transition to same state
+	// Cannot transition to same state.
 	if s == target {
 		return false
 	}
 
-	// State-specific transition rules
+	// State-specific transition rules.
 	switch s {
 	case StateIdle:
-		// Idle can only go to running or archived
+		// Idle can only go to running or archived.
 		return target == StateRunning || target == StateArchived
 
 	case StateRunning:
-		// Running can go to paused, waiting_approval, completed, failed, or cancelled
+		// Running can go to paused, waiting_approval, completed, failed, or canceled.
 		return target == StatePaused || target == StateWaitingApproval ||
 			target == StateCompleted || target == StateFailed || target == StateCancelled
 
 	case StatePaused:
-		// Paused can go to running, cancelled, or archived
+		// Paused can go to running, canceled, or archived.
 		return target == StateRunning || target == StateCancelled || target == StateArchived
 
 	case StateWaitingApproval:
-		// WaitingApproval can go to running or cancelled
+		// WaitingApproval can go to running or canceled.
 		return target == StateRunning || target == StateCancelled
 
 	case StateCompleted, StateFailed, StateCancelled:
-		// Terminal states can only go to archived
+		// Terminal states can only go to archived.
 		return target == StateArchived
 
 	case StateArchived:
-		// Archived is final - cannot transition anywhere
+		// Archived is final - cannot transition anywhere.
 		return false
 
 	default:
@@ -81,6 +84,7 @@ func (s State) String() string {
 	if validStates[s] {
 		return string(s)
 	}
+
 	return "unknown"
 }
 
@@ -94,16 +98,19 @@ func (s State) MarshalText() ([]byte, error) {
 func (s *State) UnmarshalText(text []byte) error {
 	state := State(text)
 	if len(text) == 0 {
-		return fmt.Errorf("state cannot be empty")
+		return errors.New("state cannot be empty")
 	}
+
 	if !validStates[state] {
 		return fmt.Errorf("invalid state: %s", text)
 	}
+
 	*s = state
+
 	return nil
 }
 
-// IsTerminal returns true if the state is terminal (completed, failed, cancelled, archived).
+// IsTerminal returns true if the state is terminal (completed, failed, canceled, archived).
 func (s State) IsTerminal() bool {
 	switch s {
 	case StateCompleted, StateFailed, StateCancelled, StateArchived:

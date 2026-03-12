@@ -4,22 +4,23 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/retrieval"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestNewGenerator_Success(t *testing.T) {
-	// Setup
+	// Setup.
 	mockLLM := llm.NewMockProvider("test-provider")
 	pb := playbook.New(nil, nil)
 	ret := retrieval.NewSemanticRetriever(pb, embedding.NewMockEmbedder(1536))
 
-	// Create generator
+	// Create generator.
 	gen, err := NewGenerator(Config{
 		LLM:       mockLLM,
 		Playbook:  pb,
@@ -76,7 +77,7 @@ func TestNewGenerator_MissingRetriever(t *testing.T) {
 func TestItemizedLearning_WithEmptyPlaybook(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup with empty playbook
+	// Setup with empty playbook.
 	mockLLM := llm.NewMockProvider("test-provider")
 	mockLLM.SetResponse("The answer is 42")
 
@@ -90,7 +91,7 @@ func TestItemizedLearning_WithEmptyPlaybook(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Execute ItemizedLearning
+	// Execute ItemizedLearning.
 	req := ItemizedLearningRequest{
 		Query:       "What is the answer?",
 		TopK:        5,
@@ -112,11 +113,11 @@ func TestItemizedLearning_WithEmptyPlaybook(t *testing.T) {
 func TestItemizedLearning_WithBullets(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup playbook with bullets
+	// Setup playbook with bullets.
 	embedder := embedding.NewMockEmbedder(1536)
 	pb := playbook.New(nil, embedder)
 
-	// Add bullets with embeddings
+	// Add bullets with embeddings.
 	emb1, err := embedder.Embed(ctx, "Always validate input")
 	require.NoError(t, err)
 	b1, err := bullet.New("Always validate input", bullet.WithEmbedding(emb1))
@@ -129,7 +130,7 @@ func TestItemizedLearning_WithBullets(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, pb.Add(ctx, b2))
 
-	// Setup mock LLM with feedback
+	// Setup mock LLM with feedback.
 	mockLLM := llm.NewMockProvider("test-provider")
 	mockLLM.SetResponse("Use proper validation.\n\nHELPFUL: [B0]\nHARMFUL: []")
 
@@ -141,7 +142,7 @@ func TestItemizedLearning_WithBullets(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Execute ItemizedLearning
+	// Execute ItemizedLearning.
 	req := ItemizedLearningRequest{
 		Query:       "How to validate?",
 		TopK:        2,
@@ -161,7 +162,7 @@ func TestItemizedLearning_WithBullets(t *testing.T) {
 	assert.Len(t, resp.Feedback.HelpfulBullets, 1)
 	assert.Equal(t, "B0", resp.Feedback.HelpfulBullets[0])
 
-	// Verify bullet counters were updated
+	// Verify bullet counters were updated.
 	updatedBullet, found := pb.Get(b1.ID)
 	require.True(t, found)
 	assert.Equal(t, 1, updatedBullet.HelpfulCount)
@@ -196,7 +197,7 @@ func TestItemizedLearning_WithGroundTruth(t *testing.T) {
 	resp, err := gen.ItemizedLearning(ctx, req)
 
 	require.NoError(t, err)
-	assert.True(t, resp.Success) // Has ground truth and non-empty output
+	assert.True(t, resp.Success) // Has ground truth and non-empty output.
 	assert.True(t, resp.Trajectory.Success)
 }
 
@@ -230,7 +231,7 @@ func TestItemizedLearning_TrajectoryMetadata(t *testing.T) {
 	assert.Equal(t, "gpt-4", resp.Trajectory.Metadata.Model)
 	assert.Equal(t, 0.8, resp.Trajectory.Metadata.Temperature)
 	assert.Equal(t, 2000, resp.Trajectory.Metadata.MaxTokens)
-	assert.GreaterOrEqual(t, resp.Trajectory.Metadata.TotalTokens, 0) // MockProvider generates usage
+	assert.GreaterOrEqual(t, resp.Trajectory.Metadata.TotalTokens, 0) // MockProvider generates usage.
 	assert.Equal(t, 1, resp.Trajectory.Metadata.Turns)
 	assert.GreaterOrEqual(t, resp.Trajectory.Metadata.Duration.Milliseconds(), int64(0))
 }
@@ -238,7 +239,7 @@ func TestItemizedLearning_TrajectoryMetadata(t *testing.T) {
 func TestItemizedLearning_HarmfulBulletUpdate(t *testing.T) {
 	ctx := context.Background()
 
-	// Setup playbook with bullets
+	// Setup playbook with bullets.
 	embedder := embedding.NewMockEmbedder(1536)
 	pb := playbook.New(nil, embedder)
 
@@ -248,7 +249,7 @@ func TestItemizedLearning_HarmfulBulletUpdate(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, pb.Add(ctx, b))
 
-	// Mock LLM marks bullet as harmful
+	// Mock LLM marks bullet as harmful.
 	mockLLM := llm.NewMockProvider("test-provider")
 	mockLLM.SetResponse("Don't use that advice.\n\nHELPFUL: []\nHARMFUL: [B0]")
 
@@ -273,7 +274,7 @@ func TestItemizedLearning_HarmfulBulletUpdate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, resp.Feedback.HarmfulBullets, 1)
 
-	// Verify harmful counter was incremented
+	// Verify harmful counter was incremented.
 	updatedBullet, found := pb.Get(b.ID)
 	require.True(t, found)
 	assert.Equal(t, 0, updatedBullet.HelpfulCount)
@@ -283,7 +284,7 @@ func TestItemizedLearning_HarmfulBulletUpdate(t *testing.T) {
 func TestItemizedLearning_InvalidFeedbackGraceful(t *testing.T) {
 	ctx := context.Background()
 
-	// Mock LLM with malformed feedback
+	// Mock LLM with malformed feedback.
 	mockLLM := llm.NewMockProvider("test-provider")
 	mockLLM.SetResponse("Just a response with no feedback markers")
 
@@ -307,7 +308,7 @@ func TestItemizedLearning_InvalidFeedbackGraceful(t *testing.T) {
 
 	resp, err := gen.ItemizedLearning(ctx, req)
 
-	// Should succeed even with invalid feedback
+	// Should succeed even with invalid feedback.
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 	assert.Empty(t, resp.Feedback.HelpfulBullets)
@@ -350,7 +351,7 @@ func TestGenerateBullets_FromTask(t *testing.T) {
 	assert.Contains(t, bullets[1].Content, "SQL injection")
 	assert.Contains(t, bullets[2].Content, "error handling")
 
-	// Check tags were applied
+	// Check tags were applied.
 	assert.Equal(t, "security", bullets[0].Tags["category"])
 	assert.Equal(t, "task", bullets[0].Tags["source"])
 }
@@ -530,13 +531,13 @@ func TestGenerateBullets_NoLimit(t *testing.T) {
 	req := BulletGenerationRequest{
 		Input:      "Test input",
 		SourceType: "task",
-		MaxBullets: 0, // No limit - model decides
+		MaxBullets: 0, // No limit - model decides.
 	}
 
 	bullets, err := gen.GenerateBullets(ctx, req)
 
 	require.NoError(t, err)
-	assert.Len(t, bullets, 6) // All 6 bullets returned, no truncation
+	assert.Len(t, bullets, 6) // All 6 bullets returned, no truncation.
 }
 
 func TestGenerateBullets_AllReturned(t *testing.T) {
@@ -564,13 +565,13 @@ func TestGenerateBullets_AllReturned(t *testing.T) {
 	req := BulletGenerationRequest{
 		Input:      "Test input",
 		SourceType: "task",
-		MaxBullets: 0, // No limit
+		MaxBullets: 0, // No limit.
 	}
 
 	bullets, err := gen.GenerateBullets(ctx, req)
 
 	require.NoError(t, err)
-	assert.Len(t, bullets, 7) // All 7 bullets returned
+	assert.Len(t, bullets, 7) // All 7 bullets returned.
 }
 
 func TestParseBulletCandidates(t *testing.T) {

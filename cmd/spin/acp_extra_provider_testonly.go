@@ -16,5 +16,3 @@ func createProviderForACPExtra(providerType, baseURL, model, apiKey string) (llm
 	}
 	return nil, false, nil
 }
-
-

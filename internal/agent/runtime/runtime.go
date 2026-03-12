@@ -11,7 +11,7 @@ import (
 // CommandExecutor is an interface for executing commands.
 // This breaks the import cycle between runtime and agent packages.
 type CommandExecutor interface {
-	Execute(ctx context.Context, cmd *security.Command, opts interface{}) (*CommandResult, error)
+	Execute(ctx context.Context, cmd *security.Command, opts any) (*CommandResult, error)
 }
 
 // CommandResult represents the result of command execution.
@@ -20,9 +20,9 @@ type CommandResult struct {
 	Stdout      string
 	Stderr      string
 	ExitCode    int
-	Duration    interface{} // Avoid importing time.Duration
-	StartedAt   interface{}
-	CompletedAt interface{}
+	Duration    any // Avoid importing time.Duration.
+	StartedAt   any
+	CompletedAt any
 	Error       error
 	Truncated   bool
 }

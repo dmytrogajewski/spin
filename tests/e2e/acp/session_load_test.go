@@ -42,8 +42,8 @@ func TestACP_LoadSession_Basic(t *testing.T) {
 	// Try to load the session
 	// Note: This may fail if session storage is not configured
 	loadReq := acp.LoadSessionRequest{
-		SessionId: sessionID,
-		Cwd:       workDir,
+		SessionId:  sessionID,
+		Cwd:        workDir,
 		McpServers: []acp.McpServer{},
 	}
 
@@ -98,8 +98,8 @@ func TestACP_LoadSession_ReplayHistory(t *testing.T) {
 
 	// Try to load the session
 	loadReq := acp.LoadSessionRequest{
-		SessionId: sessionID,
-		Cwd:       workDir,
+		SessionId:  sessionID,
+		Cwd:        workDir,
 		McpServers: []acp.McpServer{},
 	}
 
@@ -140,8 +140,8 @@ func TestACP_LoadSession_InvalidID(t *testing.T) {
 
 	// Try to load non-existent session
 	loadReq := acp.LoadSessionRequest{
-		SessionId: acp.SessionId("invalid-session-id"),
-		Cwd:       workDir,
+		SessionId:  acp.SessionId("invalid-session-id"),
+		Cwd:        workDir,
 		McpServers: []acp.McpServer{},
 	}
 
@@ -191,8 +191,8 @@ func TestACP_LoadSession_MCPReconnect(t *testing.T) {
 
 	// Try to load session with same MCP server
 	loadReq := acp.LoadSessionRequest{
-		SessionId: sessionID,
-		Cwd:       workDir,
+		SessionId:  sessionID,
+		Cwd:        workDir,
 		McpServers: []acp.McpServer{mcpServer},
 	}
 
@@ -242,8 +242,8 @@ func TestACP_LoadSession_ContinuePrompt(t *testing.T) {
 
 	// Try to load session
 	loadReq := acp.LoadSessionRequest{
-		SessionId: sessionID,
-		Cwd:       workDir,
+		SessionId:  sessionID,
+		Cwd:        workDir,
 		McpServers: []acp.McpServer{},
 	}
 
@@ -291,8 +291,8 @@ func TestACP_LoadSession_WithoutCapability(t *testing.T) {
 	if !initResp.AgentCapabilities.LoadSession {
 		// If not supported, LoadSession should return an error
 		loadReq := acp.LoadSessionRequest{
-			SessionId: acp.SessionId("test-session"),
-			Cwd:       workDir,
+			SessionId:  acp.SessionId("test-session"),
+			Cwd:        workDir,
 			McpServers: []acp.McpServer{},
 		}
 
@@ -303,5 +303,3 @@ func TestACP_LoadSession_WithoutCapability(t *testing.T) {
 		t.Log("LoadSession capability is supported, skipping test")
 	}
 }
-
-

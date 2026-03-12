@@ -19,6 +19,7 @@ type ToolParameters struct {
 // Has checks if a parameter key exists.
 func (p ToolParameters) Has(key string) bool {
 	_, exists := p.raw[key]
+
 	return exists
 }
 
@@ -31,8 +32,10 @@ func FromMap(m map[string]any) (ToolParameters, error) {
 		if err != nil {
 			return ToolParameters{}, fmt.Errorf("marshaling parameter %q: %w", key, err)
 		}
+
 		raw[key] = jsonData
 	}
+
 	return ToolParameters{raw: raw}, nil
 }
 
@@ -42,13 +45,15 @@ func (p ToolParameters) ToMap() map[string]any {
 	result := make(map[string]any, len(p.raw))
 	for key, rawValue := range p.raw {
 		var value any
-		if err := json.Unmarshal(rawValue, &value); err != nil {
-			// If unmarshal fails, store the raw JSON string
+		err := json.Unmarshal(rawValue, &value)
+		if err != nil {
+			// If unmarshal fails, store the raw JSON string.
 			result[key] = string(rawValue)
 		} else {
 			result[key] = value
 		}
 	}
+
 	return result
 }
 
@@ -58,7 +63,9 @@ func (p ToolParameters) Keys() []string {
 	for key := range p.raw {
 		keys = append(keys, key)
 	}
+
 	sort.Strings(keys)
+
 	return keys
 }
 
@@ -71,7 +78,8 @@ func (p ToolParameters) GetString(key string) (string, error) {
 	}
 
 	var value string
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
 		return "", fmt.Errorf("parameter %q is not a string: %w", key, err)
 	}
 
@@ -87,7 +95,8 @@ func (p ToolParameters) GetInt(key string) (int, error) {
 	}
 
 	var value int
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
 		return 0, fmt.Errorf("parameter %q is not an integer: %w", key, err)
 	}
 
@@ -103,7 +112,8 @@ func (p ToolParameters) GetBool(key string) (bool, error) {
 	}
 
 	var value bool
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
 		return false, fmt.Errorf("parameter %q is not a boolean: %w", key, err)
 	}
 
@@ -119,7 +129,8 @@ func (p ToolParameters) GetFloat64(key string) (float64, error) {
 	}
 
 	var value float64
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
 		return 0, fmt.Errorf("parameter %q is not a number: %w", key, err)
 	}
 
@@ -134,7 +145,8 @@ func (p ToolParameters) GetObject(key string, dest any) error {
 		return fmt.Errorf("parameter %q not found", key)
 	}
 
-	if err := json.Unmarshal(rawValue, dest); err != nil {
+	err := json.Unmarshal(rawValue, dest)
+	if err != nil {
 		return fmt.Errorf("parameter %q unmarshal failed: %w", key, err)
 	}
 
@@ -148,6 +160,7 @@ func (p ToolParameters) GetStringOr(key, defaultValue string) string {
 	if err != nil {
 		return defaultValue
 	}
+
 	return value
 }
 
@@ -158,6 +171,7 @@ func (p ToolParameters) GetIntOr(key string, defaultValue int) int {
 	if err != nil {
 		return defaultValue
 	}
+
 	return value
 }
 
@@ -168,6 +182,7 @@ func (p ToolParameters) GetBoolOr(key string, defaultValue bool) bool {
 	if err != nil {
 		return defaultValue
 	}
+
 	return value
 }
 
@@ -178,6 +193,7 @@ func (p ToolParameters) GetFloat64Or(key string, defaultValue float64) float64 {
 	if err != nil {
 		return defaultValue
 	}
+
 	return value
 }
 

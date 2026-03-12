@@ -7,8 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/openai/openai-go"
+
+	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
 // Provider is a deterministic test-only LLM provider used for E2E flows.

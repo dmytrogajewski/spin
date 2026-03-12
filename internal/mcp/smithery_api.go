@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -28,7 +29,7 @@ type SmitheryAPIConfig struct {
 // NewSmitheryAPIClient creates a new Smithery API client.
 func NewSmitheryAPIClient(config SmitheryAPIConfig) (*SmitheryAPIClient, error) {
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("smithery API key is required")
+		return nil, errors.New("smithery API key is required")
 	}
 
 	timeout := config.Timeout
@@ -103,11 +104,13 @@ func (c *SmitheryAPIClient) SearchTools(ctx context.Context, query string, limit
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
 		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	var result SmitherySearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	if err != nil {
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
 
@@ -124,6 +127,6 @@ func (c *SmitheryAPIClient) SearchTools(ctx context.Context, query string, limit
 // Note: The @ prefix is preserved if present - some servers require it.
 func (c *SmitheryAPIClient) GetServerMCPURL(serverPath string) string {
 	// Keep the serverPath as-is - the API returns the correct format
-	// Some servers are like "asana", others are like "@namespace/server"
+	// Some servers are like "asana", others are like "@namespace/server".
 	return fmt.Sprintf("https://server.smithery.ai/%s/mcp", serverPath)
 }

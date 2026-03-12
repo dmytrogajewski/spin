@@ -4,9 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/memory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/memory"
 )
 
 func TestScratchpadTool_Name(t *testing.T) {
@@ -29,12 +30,12 @@ func TestScratchpadTool_Schema(t *testing.T) {
 	assert.Equal(t, "function", schema.Type)
 	assert.Equal(t, "scratchpad", schema.Function.Name)
 
-	// Check required parameters
+	// Check required parameters.
 	props := schema.Function.Parameters.Properties
 	assert.Contains(t, props, "operation")
 	assert.Contains(t, props, "key")
 
-	// Check that operation is required
+	// Check that operation is required.
 	assert.Contains(t, schema.Function.Parameters.Required, "operation")
 }
 
@@ -55,7 +56,7 @@ func TestScratchpadTool_Put(t *testing.T) {
 	assert.True(t, result.Success)
 	assert.Contains(t, result.Output, "test-key")
 
-	// Verify entry was stored
+	// Verify entry was stored.
 	entry, err := pad.Get(ctx, "test-key")
 	require.NoError(t, err)
 	assert.Equal(t, "test-value", entry.Value)
@@ -66,7 +67,7 @@ func TestScratchpadTool_Get(t *testing.T) {
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
 
-	// First store an entry
+	// First store an entry.
 	err := pad.Put(ctx, "test-key", "test-value", memory.PutOptions{})
 	require.NoError(t, err)
 
@@ -104,7 +105,7 @@ func TestScratchpadTool_Delete(t *testing.T) {
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
 
-	// First store an entry
+	// First store an entry.
 	err := pad.Put(ctx, "test-key", "test-value", memory.PutOptions{})
 	require.NoError(t, err)
 
@@ -119,7 +120,7 @@ func TestScratchpadTool_Delete(t *testing.T) {
 	assert.True(t, result.Success)
 	assert.Contains(t, result.Output, "deleted")
 
-	// Verify entry was deleted
+	// Verify entry was deleted.
 	_, err = pad.Get(ctx, "test-key")
 	assert.ErrorIs(t, err, memory.ErrNotFound)
 }
@@ -129,7 +130,7 @@ func TestScratchpadTool_List(t *testing.T) {
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
 
-	// Store some entries
+	// Store some entries.
 	require.NoError(t, pad.Put(ctx, "key1", "value1", memory.PutOptions{}))
 	require.NoError(t, pad.Put(ctx, "key2", "value2", memory.PutOptions{}))
 	require.NoError(t, pad.Put(ctx, "other", "value3", memory.PutOptions{}))
@@ -153,7 +154,7 @@ func TestScratchpadTool_List_All(t *testing.T) {
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
 
-	// Store some entries
+	// Store some entries.
 	require.NoError(t, pad.Put(ctx, "key1", "value1", memory.PutOptions{}))
 	require.NoError(t, pad.Put(ctx, "key2", "value2", memory.PutOptions{}))
 
@@ -174,7 +175,7 @@ func TestScratchpadTool_Search(t *testing.T) {
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
 
-	// Store some entries
+	// Store some entries.
 	require.NoError(t, pad.Put(ctx, "api-response", "contains user data", memory.PutOptions{}))
 	require.NoError(t, pad.Put(ctx, "config", "database settings", memory.PutOptions{}))
 
@@ -195,7 +196,7 @@ func TestScratchpadTool_Pin(t *testing.T) {
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
 
-	// First store an entry
+	// First store an entry.
 	require.NoError(t, pad.Put(ctx, "important", "critical data", memory.PutOptions{}))
 
 	params, err := FromMap(map[string]any{
@@ -215,7 +216,7 @@ func TestScratchpadTool_Unpin(t *testing.T) {
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
 
-	// First store and pin an entry
+	// First store and pin an entry.
 	require.NoError(t, pad.Put(ctx, "important", "critical data", memory.PutOptions{}))
 	require.NoError(t, pad.Pin("important"))
 
@@ -236,7 +237,7 @@ func TestScratchpadTool_Clear(t *testing.T) {
 	pad := memory.NewScratchpad("test-session", 10)
 	tool := NewScratchpadTool(pad)
 
-	// Store some entries
+	// Store some entries.
 	require.NoError(t, pad.Put(ctx, "key1", "value1", memory.PutOptions{}))
 	require.NoError(t, pad.Put(ctx, "key2", "value2", memory.PutOptions{}))
 
@@ -250,7 +251,7 @@ func TestScratchpadTool_Clear(t *testing.T) {
 	assert.True(t, result.Success)
 	assert.Contains(t, result.Output, "cleared")
 
-	// Verify entries were deleted
+	// Verify entries were deleted.
 	keys, _ := pad.List(ctx, "*")
 	assert.Empty(t, keys)
 }
@@ -338,7 +339,7 @@ func TestScratchpadTool_Put_WithNamespace(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, result.Success)
 
-	// Verify namespace was set
+	// Verify namespace was set.
 	entry, err := pad.Get(ctx, "test-key")
 	require.NoError(t, err)
 	assert.Equal(t, "custom", entry.Namespace)
@@ -361,7 +362,7 @@ func TestScratchpadTool_Put_WithTags(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, result.Success)
 
-	// Verify tags were set
+	// Verify tags were set.
 	entry, err := pad.Get(ctx, "test-key")
 	require.NoError(t, err)
 	assert.Contains(t, entry.Tags, "important")

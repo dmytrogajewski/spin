@@ -2,9 +2,10 @@ package acp
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"github.com/coder/acp-go-sdk"
+
 	"github.com/dmytrogajewski/spin/internal/agent/runtime"
 )
 
@@ -23,10 +24,10 @@ func NewACPTerminalClient(conn *acp.AgentSideConnection) *ACPTerminalClient {
 // Create creates a new terminal and executes a command.
 func (c *ACPTerminalClient) Create(ctx context.Context, cmd string, args []string, env []runtime.EnvVar, cwd string, limit int) (string, error) {
 	if c.connection == nil {
-		return "", fmt.Errorf("ACP connection not available")
+		return "", errors.New("ACP connection not available")
 	}
 
-	// Convert env vars
+	// Convert env vars.
 	acpEnv := make([]acp.EnvVariable, len(env))
 	for i, e := range env {
 		acpEnv[i] = acp.EnvVariable{
@@ -35,15 +36,12 @@ func (c *ACPTerminalClient) Create(ctx context.Context, cmd string, args []strin
 		}
 	}
 
-	// Limit cannot be negative
-	byteLimit := 0
-	if limit > 0 {
-		byteLimit = limit
-	}
+	// Limit cannot be negative.
+	byteLimit := max(limit, 0)
 
 	sessionID := runtime.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return "", fmt.Errorf("session ID not found in context")
+		return "", errors.New("session ID not found in context")
 	}
 
 	params := acp.CreateTerminalRequest{
@@ -66,12 +64,12 @@ func (c *ACPTerminalClient) Create(ctx context.Context, cmd string, args []strin
 // WaitForExit waits for the terminal command to complete.
 func (c *ACPTerminalClient) WaitForExit(ctx context.Context, terminalID string) (int, *string, error) {
 	if c.connection == nil {
-		return -1, nil, fmt.Errorf("ACP connection not available")
+		return -1, nil, errors.New("ACP connection not available")
 	}
 
 	sessionID := runtime.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return -1, nil, fmt.Errorf("session ID not found in context")
+		return -1, nil, errors.New("session ID not found in context")
 	}
 
 	params := acp.WaitForTerminalExitRequest{
@@ -95,12 +93,12 @@ func (c *ACPTerminalClient) WaitForExit(ctx context.Context, terminalID string) 
 // GetOutput retrieves the current terminal output.
 func (c *ACPTerminalClient) GetOutput(ctx context.Context, terminalID string) (string, bool, *runtime.ExitStatus, error) {
 	if c.connection == nil {
-		return "", false, nil, fmt.Errorf("ACP connection not available")
+		return "", false, nil, errors.New("ACP connection not available")
 	}
 
 	sessionID := runtime.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return "", false, nil, fmt.Errorf("session ID not found in context")
+		return "", false, nil, errors.New("session ID not found in context")
 	}
 
 	params := acp.TerminalOutputRequest{
@@ -114,12 +112,15 @@ func (c *ACPTerminalClient) GetOutput(ctx context.Context, terminalID string) (s
 	}
 
 	var exitStatus *runtime.ExitStatus
+
 	if resp.ExitStatus != nil {
 		var code *int
+
 		if resp.ExitStatus.ExitCode != nil {
 			c := int(*resp.ExitStatus.ExitCode)
 			code = &c
 		}
+
 		exitStatus = &runtime.ExitStatus{
 			ExitCode: code,
 			Signal:   resp.ExitStatus.Signal,
@@ -132,12 +133,12 @@ func (c *ACPTerminalClient) GetOutput(ctx context.Context, terminalID string) (s
 // Release releases terminal resources.
 func (c *ACPTerminalClient) Release(ctx context.Context, terminalID string) error {
 	if c.connection == nil {
-		return fmt.Errorf("ACP connection not available")
+		return errors.New("ACP connection not available")
 	}
 
 	sessionID := runtime.GetSessionIDFromContext(ctx)
 	if sessionID == "" {
-		return fmt.Errorf("session ID not found in context")
+		return errors.New("session ID not found in context")
 	}
 
 	params := acp.ReleaseTerminalRequest{
@@ -146,5 +147,6 @@ func (c *ACPTerminalClient) Release(ctx context.Context, terminalID string) erro
 	}
 
 	_, err := c.connection.ReleaseTerminal(ctx, params)
+
 	return err
 }

@@ -18,32 +18,32 @@ import (
 type ToolPriority int
 
 const (
-	// PriorityCore is the highest priority for core builtin tools
+	// PriorityCore is the highest priority for core builtin tools.
 	PriorityCore ToolPriority = 100
-	// PriorityStaticMCP is for statically configured MCP tools
+	// PriorityStaticMCP is for statically configured MCP tools.
 	PriorityStaticMCP ToolPriority = 50
-	// PriorityDynamicMCP is for dynamically loaded MCP tools
+	// PriorityDynamicMCP is for dynamically loaded MCP tools.
 	PriorityDynamicMCP ToolPriority = 25
 )
 
 // ToolSelectionConfig configures dynamic tool selection behavior.
 type ToolSelectionConfig struct {
-	// Enabled controls whether dynamic tool selection is active
+	// Enabled controls whether dynamic tool selection is active.
 	Enabled bool
 
-	// MaxToolsPerTurn limits how many tools to include in each LLM turn
+	// MaxToolsPerTurn limits how many tools to include in each LLM turn.
 	MaxToolsPerTurn int
 
-	// MaxToolsPerSearch limits how many tools to return from each registry search
+	// MaxToolsPerSearch limits how many tools to return from each registry search.
 	MaxToolsPerSearch int
 
-	// MaxServersToLoad limits how many MCP servers to connect to per query
+	// MaxServersToLoad limits how many MCP servers to connect to per query.
 	MaxServersToLoad int
 
-	// SearchTimeout is the timeout for search operations
+	// SearchTimeout is the timeout for search operations.
 	SearchTimeout time.Duration
 
-	// CoreToolNames lists tools that are always included (highest priority)
+	// CoreToolNames lists tools that are always included (highest priority).
 	CoreToolNames []string
 }
 
@@ -62,15 +62,15 @@ func DefaultToolSelectionConfig() ToolSelectionConfig {
 // defaultCoreTools returns the list of core tools that should always be included.
 func defaultCoreTools() []string {
 	return []string{
-		// File operations
+		// File operations.
 		"Read", "Write", "Edit",
-		// Search
+		// Search.
 		"Glob", "Grep",
-		// Execution
+		// Execution.
 		"Bash",
-		// Agent tools
+		// Agent tools.
 		"Task", "TodoWrite",
-		// Planning
+		// Planning.
 		"EnterPlanMode", "ExitPlanMode",
 	}
 }
@@ -80,22 +80,22 @@ type ScoredTool struct {
 	Tool       tools.Tool
 	Score      float64
 	Priority   ToolPriority
-	Source     string // "core", "static_mcp", "dynamic_mcp"
-	ServerPath string // For dynamic MCP tools
-	IsLoadable bool   // True if tool needs to be loaded
+	Source     string // "core", "static_mcp", "dynamic_mcp".
+	ServerPath string // For dynamic MCP tools.
+	IsLoadable bool   // True if tool needs to be loaded.
 }
 
 // ToolSelectionResult contains the result of tool selection for a turn.
 type ToolSelectionResult struct {
-	// SelectedTools are the tools chosen for this turn
+	// SelectedTools are the tools chosen for this turn.
 	SelectedTools []tools.Tool
-	// NewlyLoaded are tools that were loaded this turn (subset of SelectedTools)
+	// NewlyLoaded are tools that were loaded this turn (subset of SelectedTools).
 	NewlyLoaded []tools.Tool
-	// TotalSearched is the number of tools considered
+	// TotalSearched is the number of tools considered.
 	TotalSearched int
-	// Query is the search query used
+	// Query is the search query used.
 	Query string
-	// OAuthRequired contains servers that failed to load due to OAuth requirements
+	// OAuthRequired contains servers that failed to load due to OAuth requirements.
 	OAuthRequired []OAuthRequiredServer
 }
 
@@ -112,19 +112,19 @@ type OAuthRequiredServer struct {
 // 3. Filter based on trajectory context
 // 4. Load dynamic tools as needed
 // 5. Register loaded tools to runtime registry
-// 6. Return prioritized tool list
+// 6. Return prioritized tool list.
 type ToolSelector struct {
 	mcpService      *mcp.Service
-	coreRegistry    *tools.Registry // Core builtin tools
-	runtimeRegistry *tools.Registry // Runtime registry where loaded tools are registered
+	coreRegistry    *tools.Registry // Core builtin tools.
+	runtimeRegistry *tools.Registry // Runtime registry where loaded tools are registered.
 	emitter         *events.EventEmitter
 	config          ToolSelectionConfig
 	logger          *slog.Logger
 
-	// Track loaded servers to avoid duplicates
+	// Track loaded servers to avoid duplicates.
 	loadedServers map[string]bool
 
-	// Sticky tools: tools selected in previous turns stay available
+	// Sticky tools: tools selected in previous turns stay available.
 	stickyTools map[string]tools.Tool
 
 	mu sync.RWMutex
@@ -154,6 +154,7 @@ func NewToolSelector(
 func (s *ToolSelector) SetRuntimeRegistry(registry *tools.Registry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.runtimeRegistry = registry
 }
 
@@ -166,21 +167,23 @@ func (s *ToolSelector) SetRuntimeRegistry(registry *tools.Registry) {
 // 3. All results joined WITH static MCP tools
 // 4. Filter based on trajectory context and priorities
 // 5. Load dynamic tools that were selected
-// 6. Emit tool selection event
+// 6. Emit tool selection event.
 func (s *ToolSelector) SelectToolsForTurn(ctx context.Context, query string, turn int) (*ToolSelectionResult, error) {
 	if !s.config.Enabled {
 		return s.fallbackSelection()
 	}
 
-	// Apply search timeout
+	// Apply search timeout.
 	searchCtx := ctx
+
 	if s.config.SearchTimeout > 0 {
 		var cancel context.CancelFunc
+
 		searchCtx, cancel = context.WithTimeout(ctx, s.config.SearchTimeout)
 		defer cancel()
 	}
 
-	// Step 1: Collect all candidate tools with scores
+	// Step 1: Collect all candidate tools with scores.
 	candidates := s.collectCandidates(searchCtx, query)
 
 	if s.logger != nil {
@@ -190,28 +193,28 @@ func (s *ToolSelector) SelectToolsForTurn(ctx context.Context, query string, tur
 			"turn", turn)
 	}
 
-	// Step 2: Add sticky tools (tools from previous turns)
+	// Step 2: Add sticky tools (tools from previous turns).
 	candidates = s.addStickyTools(candidates)
 
-	// Step 3: Sort by priority and score
+	// Step 3: Sort by priority and score.
 	s.sortCandidates(candidates)
 
-	// Step 4: Select top N tools respecting limit
+	// Step 4: Select top N tools respecting limit.
 	selected := s.selectTopTools(candidates)
 
-	// Step 5: Load any dynamic tools that need loading
+	// Step 5: Load any dynamic tools that need loading.
 	loadResult, err := s.loadDynamicTools(ctx, selected)
 	if err != nil && s.logger != nil {
 		s.logger.Warn("some dynamic tools failed to load", "error", err)
 	}
 
-	// Step 6: Build final tool list (includes newly loaded tools)
+	// Step 6: Build final tool list (includes newly loaded tools).
 	finalTools := s.buildFinalToolList(selected, loadResult.loaded)
 
-	// Step 7: Update sticky tools
+	// Step 7: Update sticky tools.
 	s.updateStickyTools(finalTools)
 
-	// Step 8: Emit selection event
+	// Step 8: Emit selection event.
 	result := &ToolSelectionResult{
 		SelectedTools: finalTools,
 		NewlyLoaded:   loadResult.loaded,
@@ -221,17 +224,18 @@ func (s *ToolSelector) SelectToolsForTurn(ctx context.Context, query string, tur
 	}
 	s.emitSelectionEvent(turn, result)
 
-	// Step 9: Emit info event about newly loaded tools (user-visible)
+	// Step 9: Emit info event about newly loaded tools (user-visible).
 	if len(loadResult.loaded) > 0 {
 		s.emitLoadedToolsEvent(loadResult.loaded)
 	}
 
-	// Log OAuth failures for debugging only (not user-visible)
+	// Log OAuth failures for debugging only (not user-visible).
 	if len(loadResult.oauthRequired) > 0 && s.logger != nil {
 		serverNames := make([]string, len(loadResult.oauthRequired))
 		for i, srv := range loadResult.oauthRequired {
 			serverNames[i] = srv.ServerPath
 		}
+
 		s.logger.Debug("some servers require OAuth authentication",
 			"servers", serverNames,
 			"hint", "configure these servers statically with OAuth credentials to use them")
@@ -253,10 +257,10 @@ func (s *ToolSelector) SelectToolsForTurn(ctx context.Context, query string, tur
 func (s *ToolSelector) collectCandidates(ctx context.Context, query string) []ScoredTool {
 	var candidates []ScoredTool
 
-	// 1. Add core tools (always highest priority)
+	// 1. Add core tools (always highest priority).
 	candidates = append(candidates, s.getCoreTools()...)
 
-	// 2. Search all MCP registries
+	// 2. Search all MCP registries.
 	if s.mcpService != nil {
 		mcpCandidates := s.searchMCPRegistries(ctx, query)
 		candidates = append(candidates, mcpCandidates...)
@@ -277,11 +281,12 @@ func (s *ToolSelector) getCoreTools() []ScoredTool {
 	}
 
 	var result []ScoredTool
+
 	for _, t := range s.coreRegistry.List() {
 		if coreSet[t.Name()] {
 			result = append(result, ScoredTool{
 				Tool:     t,
-				Score:    1.0, // Max score for core tools
+				Score:    1.0, // Max score for core tools.
 				Priority: PriorityCore,
 				Source:   "core",
 			})
@@ -306,19 +311,21 @@ func (s *ToolSelector) searchMCPRegistries(ctx context.Context, query string) []
 	var results []ScoredTool
 
 	for _, reg := range registryMgr.All() {
-		// Determine if this is a static or dynamic registry
+		// Determine if this is a static or dynamic registry.
 		isDynamic := false
+
 		var smitheryReg *mcp.SmitheryRegistry
+
 		if sr, ok := reg.(*mcp.SmitheryRegistry); ok && sr.IsDynamic() {
 			isDynamic = true
 			smitheryReg = sr
 		}
 
-		// Search the registry
+		// Search the registry.
 		foundTools := reg.Search(searchCtx, query, s.config.MaxToolsPerSearch)
 
 		for i, t := range foundTools {
-			// Calculate relevance score (higher index = lower relevance from search)
+			// Calculate relevance score (higher index = lower relevance from search).
 			score := 1.0 - (float64(i) / float64(len(foundTools)+1))
 
 			scored := ScoredTool{
@@ -331,28 +338,31 @@ func (s *ToolSelector) searchMCPRegistries(ctx context.Context, query string) []
 				scored.Priority = PriorityDynamicMCP
 				scored.Source = "dynamic_mcp"
 
-				// Check if this is a loadable tool stub
+				// Check if this is a loadable tool stub.
 				if loadable, ok := t.(interface{ ServerPath() string }); ok {
 					scored.ServerPath = loadable.ServerPath()
 				}
+
 				if loadable, ok := t.(interface{ IsLoadable() bool }); ok {
 					scored.IsLoadable = loadable.IsLoadable()
 				}
 			} else {
 				scored.Priority = PriorityStaticMCP
 
-				// Check if tool is already loaded (from static registry)
+				// Check if tool is already loaded (from static registry).
 				s.mu.RLock()
+
 				if _, exists := s.loadedServers[reg.Name()]; exists {
 					scored.IsLoadable = false
 				}
+
 				s.mu.RUnlock()
 			}
 
-			// For Smithery dynamic tools, get server verification status
+			// For Smithery dynamic tools, get server verification status.
 			if smitheryReg != nil && scored.IsLoadable {
 				// Verified servers get a small boost
-				// (verification info would come from search results)
+				// (verification info would come from search results).
 			}
 
 			results = append(results, scored)
@@ -367,21 +377,21 @@ func (s *ToolSelector) addStickyTools(candidates []ScoredTool) []ScoredTool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Build set of already-included tool names
+	// Build set of already-included tool names.
 	existing := make(map[string]bool)
 	for _, c := range candidates {
 		existing[c.Tool.Name()] = true
 	}
 
-	// Add sticky tools that aren't already in candidates
+	// Add sticky tools that aren't already in candidates.
 	for name, t := range s.stickyTools {
 		if !existing[name] {
 			candidates = append(candidates, ScoredTool{
 				Tool:       t,
-				Score:      0.5, // Medium score for sticky tools
+				Score:      0.5, // Medium score for sticky tools.
 				Priority:   PriorityStaticMCP,
 				Source:     "sticky",
-				IsLoadable: false, // Already loaded
+				IsLoadable: false, // Already loaded.
 			})
 		}
 	}
@@ -392,11 +402,11 @@ func (s *ToolSelector) addStickyTools(candidates []ScoredTool) []ScoredTool {
 // sortCandidates sorts tools by priority (desc) then score (desc).
 func (s *ToolSelector) sortCandidates(candidates []ScoredTool) {
 	sort.Slice(candidates, func(i, j int) bool {
-		// Higher priority first
+		// Higher priority first.
 		if candidates[i].Priority != candidates[j].Priority {
 			return candidates[i].Priority > candidates[j].Priority
 		}
-		// Then higher score
+		// Then higher score.
 		return candidates[i].Score > candidates[j].Score
 	})
 }
@@ -424,31 +434,34 @@ type loadDynamicToolsResult struct {
 // loadDynamicTools loads any selected dynamic tools that require server connection.
 func (s *ToolSelector) loadDynamicTools(ctx context.Context, selected []ScoredTool) (*loadDynamicToolsResult, error) {
 	result := &loadDynamicToolsResult{}
+
 	var loadErrors []error
 
-	// Group by server path
+	// Group by server path.
 	serverTools := make(map[string][]ScoredTool)
+
 	for _, st := range selected {
 		if st.IsLoadable && st.ServerPath != "" {
 			serverTools[st.ServerPath] = append(serverTools[st.ServerPath], st)
 		}
 	}
 
-	// Load each server
+	// Load each server.
 	for serverPath, tools := range serverTools {
 		loaded, err := s.loadServer(ctx, serverPath)
 		if err != nil {
-			// Check if this is an OAuth/authentication error (401)
+			// Check if this is an OAuth/authentication error (401).
 			if isOAuthError(err) {
 				toolNames := make([]string, len(tools))
 				for i, t := range tools {
 					toolNames[i] = t.Tool.Name()
 				}
+
 				result.oauthRequired = append(result.oauthRequired, OAuthRequiredServer{
 					ServerPath: serverPath,
 					ToolNames:  toolNames,
 				})
-				// Debug level only - not user visible
+				// Debug level only - not user visible.
 				if s.logger != nil {
 					s.logger.Debug("server requires OAuth authentication",
 						"server", serverPath,
@@ -456,14 +469,17 @@ func (s *ToolSelector) loadDynamicTools(ctx context.Context, selected []ScoredTo
 						"error", err.Error())
 				}
 			} else {
-				// Debug level for other errors too
+				// Debug level for other errors too.
 				if s.logger != nil {
 					s.logger.Debug("failed to load server", "server", serverPath, "error", err)
 				}
 			}
+
 			loadErrors = append(loadErrors, err)
+
 			continue
 		}
+
 		result.loaded = append(result.loaded, loaded...)
 	}
 
@@ -479,8 +495,9 @@ func isOAuthError(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	errStr := err.Error()
-	// Check for common OAuth/auth error indicators
+	// Check for common OAuth/auth error indicators.
 	return strings.Contains(errStr, "401") ||
 		strings.Contains(errStr, "Unauthorized") ||
 		strings.Contains(errStr, "unauthorized") ||
@@ -495,8 +512,10 @@ func (s *ToolSelector) loadServer(ctx context.Context, serverPath string) ([]too
 	s.mu.Lock()
 	if s.loadedServers[serverPath] {
 		s.mu.Unlock()
-		return nil, nil // Already loaded
+
+		return nil, nil // Already loaded.
 	}
+
 	s.loadedServers[serverPath] = true
 	s.mu.Unlock()
 
@@ -509,7 +528,7 @@ func (s *ToolSelector) loadServer(ctx context.Context, serverPath string) ([]too
 		return nil, nil
 	}
 
-	// Find a dynamic Smithery registry to use for loading
+	// Find a dynamic Smithery registry to use for loading.
 	for _, reg := range registryMgr.All() {
 		if sr, ok := reg.(*mcp.SmitheryRegistry); ok && sr.IsDynamic() {
 			return sr.LoadServer(ctx, serverPath)
@@ -531,39 +550,47 @@ func (s *ToolSelector) buildFinalToolList(selected []ScoredTool, newlyLoaded []t
 			"newly_loaded_count", len(newlyLoaded))
 	}
 
-	// First, add all non-loadable tools (core tools, static MCP tools)
+	// First, add all non-loadable tools (core tools, static MCP tools).
 	for _, st := range selected {
 		if st.IsLoadable {
-			// Skip loadable stubs - we'll add the actual loaded tools below
+			// Skip loadable stubs - we'll add the actual loaded tools below.
 			if s.logger != nil {
 				s.logger.Debug("skipping loadable stub", "tool", st.Tool.Name(), "server", st.ServerPath)
 			}
+
 			continue
 		}
+
 		name := st.Tool.Name()
 		if seen[name] {
 			continue
 		}
+
 		seen[name] = true
+
 		result = append(result, st.Tool)
 	}
 
 	// Then add all newly loaded tools (the actual implementations)
-	// Also register them to the runtime registry so they're available to the agent
+	// Also register them to the runtime registry so they're available to the agent.
 	for _, t := range newlyLoaded {
 		name := t.Name()
 		if s.logger != nil {
 			s.logger.Debug("adding newly loaded tool", "tool", name)
 		}
+
 		if seen[name] {
 			continue
 		}
+
 		seen[name] = true
+
 		result = append(result, t)
 
-		// Register to runtime registry so the agent can use this tool
+		// Register to runtime registry so the agent can use this tool.
 		if s.runtimeRegistry != nil {
-			if err := s.runtimeRegistry.RegisterOrReplace(t); err != nil {
+			err := s.runtimeRegistry.RegisterOrReplace(t)
+			if err != nil {
 				if s.logger != nil {
 					s.logger.Warn("failed to register dynamic tool", "tool", name, "error", err)
 				}
@@ -627,12 +654,13 @@ func (s *ToolSelector) emitLoadedToolsEvent(loadedTools []tools.Tool) {
 		return
 	}
 
-	// Group tools by server (extract server name from tool name pattern mcp_<server>_<tool>)
+	// Group tools by server (extract server name from tool name pattern mcp_<server>_<tool>).
 	serverTools := make(map[string][]string)
+
 	for _, t := range loadedTools {
 		name := t.Name()
 		// Tool names are like mcp_brave_brave_web_search or mcp_bh-rat_context-awesome_get_awesome_items
-		// Extract server part (everything between first mcp_ and the tool name)
+		// Extract server part (everything between first mcp_ and the tool name).
 		serverTools["dynamic"] = append(serverTools["dynamic"], name)
 	}
 
@@ -679,6 +707,7 @@ func (s *ToolSelector) GetLoadedServers() []string {
 	for server := range s.loadedServers {
 		servers = append(servers, server)
 	}
+
 	return servers
 }
 
@@ -691,5 +720,6 @@ func (s *ToolSelector) GetStickyTools() []string {
 	for name := range s.stickyTools {
 		names = append(names, name)
 	}
+
 	return names
 }

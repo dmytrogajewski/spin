@@ -76,6 +76,7 @@ func TestBuffer_Insert(t *testing.T) {
 			if got := b.Text(); got != tt.wantText {
 				t.Errorf("Text() = %q, want %q", got, tt.wantText)
 			}
+
 			if got := b.Cursor(); got != tt.wantCursor {
 				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
 			}
@@ -145,9 +146,11 @@ func TestBuffer_Backspace(t *testing.T) {
 			if ok != tt.wantOk {
 				t.Errorf("Backspace() = %v, want %v", ok, tt.wantOk)
 			}
+
 			if got := b.Text(); got != tt.wantText {
 				t.Errorf("Text() = %q, want %q", got, tt.wantText)
 			}
+
 			if got := b.Cursor(); got != tt.wantCursor {
 				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
 			}
@@ -217,9 +220,11 @@ func TestBuffer_Delete(t *testing.T) {
 			if ok != tt.wantOk {
 				t.Errorf("Delete() = %v, want %v", ok, tt.wantOk)
 			}
+
 			if got := b.Text(); got != tt.wantText {
 				t.Errorf("Text() = %q, want %q", got, tt.wantText)
 			}
+
 			if got := b.Cursor(); got != tt.wantCursor {
 				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
 			}
@@ -276,6 +281,7 @@ func TestBuffer_MoveLeft(t *testing.T) {
 			if ok != tt.wantOk {
 				t.Errorf("MoveLeft() = %v, want %v", ok, tt.wantOk)
 			}
+
 			if got := b.Cursor(); got != tt.wantCursor {
 				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
 			}
@@ -332,6 +338,7 @@ func TestBuffer_MoveRight(t *testing.T) {
 			if ok != tt.wantOk {
 				t.Errorf("MoveRight() = %v, want %v", ok, tt.wantOk)
 			}
+
 			if got := b.Cursor(); got != tt.wantCursor {
 				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
 			}
@@ -344,14 +351,16 @@ func TestBuffer_MoveStartEnd(t *testing.T) {
 	b.SetText("hello world")
 	b.SetCursor(5)
 
-	// Move to start
+	// Move to start.
 	b.MoveStart()
+
 	if got := b.Cursor(); got != 0 {
 		t.Errorf("After MoveStart(), Cursor() = %d, want 0", got)
 	}
 
-	// Move to end
+	// Move to end.
 	b.MoveEnd()
+
 	if got := b.Cursor(); got != 11 {
 		t.Errorf("After MoveEnd(), Cursor() = %d, want 11", got)
 	}
@@ -399,6 +408,7 @@ func TestBuffer_ClearLineLeft(t *testing.T) {
 			if got := b.Text(); got != tt.wantText {
 				t.Errorf("Text() = %q, want %q", got, tt.wantText)
 			}
+
 			if got := b.Cursor(); got != tt.wantCursor {
 				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
 			}
@@ -448,6 +458,7 @@ func TestBuffer_ClearLineRight(t *testing.T) {
 			if got := b.Text(); got != tt.wantText {
 				t.Errorf("Text() = %q, want %q", got, tt.wantText)
 			}
+
 			if got := b.Cursor(); got != tt.wantCursor {
 				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
 			}
@@ -511,6 +522,7 @@ func TestBuffer_DeleteWord(t *testing.T) {
 			if got := b.Text(); got != tt.wantText {
 				t.Errorf("Text() = %q, want %q", got, tt.wantText)
 			}
+
 			if got := b.Cursor(); got != tt.wantCursor {
 				t.Errorf("Cursor() = %d, want %d", got, tt.wantCursor)
 			}
@@ -528,6 +540,7 @@ func TestBuffer_Clear(t *testing.T) {
 	if got := b.Text(); got != "" {
 		t.Errorf("After Clear(), Text() = %q, want empty", got)
 	}
+
 	if got := b.Cursor(); got != 0 {
 		t.Errorf("After Clear(), Cursor() = %d, want 0", got)
 	}
@@ -560,20 +573,23 @@ func TestBuffer_SetCursor(t *testing.T) {
 	b := prompt.NewBuffer()
 	b.SetText("hello")
 
-	// Set to negative (should clamp to 0)
+	// Set to negative (should clamp to 0).
 	b.SetCursor(-1)
+
 	if got := b.Cursor(); got != 0 {
 		t.Errorf("SetCursor(-1) resulted in Cursor() = %d, want 0", got)
 	}
 
-	// Set beyond length (should clamp to len)
+	// Set beyond length (should clamp to len).
 	b.SetCursor(100)
+
 	if got := b.Cursor(); got != 5 {
 		t.Errorf("SetCursor(100) resulted in Cursor() = %d, want 5", got)
 	}
 
-	// Set to valid position
+	// Set to valid position.
 	b.SetCursor(3)
+
 	if got := b.Cursor(); got != 3 {
 		t.Errorf("SetCursor(3) resulted in Cursor() = %d, want 3", got)
 	}
@@ -590,35 +606,35 @@ func TestBuffer_DeleteWord_Punctuation(t *testing.T) {
 		{
 			name:       "delete punctuation word",
 			initial:    "hello!!!",
-			cursor:     8, // After all punctuation
+			cursor:     8, // After all punctuation.
 			wantText:   "hello",
 			wantCursor: 5,
 		},
 		{
 			name:       "delete mixed punctuation",
 			initial:    "test@#$%",
-			cursor:     7,       // After all punctuation
-			wantText:   "test%", // Only the last punctuation remains
+			cursor:     7,       // After all punctuation.
+			wantText:   "test%", // Only the last punctuation remains.
 			wantCursor: 4,
 		},
 		{
 			name:       "delete single punctuation",
 			initial:    "word!",
-			cursor:     5, // After '!'
+			cursor:     5, // After '!'.
 			wantText:   "word",
 			wantCursor: 4,
 		},
 		{
 			name:       "delete punctuation with spaces",
 			initial:    "word !@#",
-			cursor:     7,        // After '#'
-			wantText:   "word #", // Only the last punctuation remains
+			cursor:     7,        // After '#'.
+			wantText:   "word #", // Only the last punctuation remains.
 			wantCursor: 5,
 		},
 		{
 			name:       "delete only punctuation",
 			initial:    "!!!",
-			cursor:     3, // After all punctuation
+			cursor:     3, // After all punctuation.
 			wantText:   "",
 			wantCursor: 0,
 		},
@@ -630,6 +646,7 @@ func TestBuffer_DeleteWord_Punctuation(t *testing.T) {
 			for _, r := range tt.initial {
 				b.Insert(r)
 			}
+
 			b.SetCursor(tt.cursor)
 
 			b.DeleteWord()
@@ -637,6 +654,7 @@ func TestBuffer_DeleteWord_Punctuation(t *testing.T) {
 			if got := b.Text(); got != tt.wantText {
 				t.Errorf("DeleteWord() text = %q, want %q", got, tt.wantText)
 			}
+
 			if got := b.Cursor(); got != tt.wantCursor {
 				t.Errorf("DeleteWord() cursor = %d, want %d", got, tt.wantCursor)
 			}

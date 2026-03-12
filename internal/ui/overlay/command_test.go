@@ -67,6 +67,7 @@ func TestSimpleCommand_Execute(t *testing.T) {
 	executed := false
 	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context) error {
 		executed = true
+
 		return nil
 	})
 
@@ -90,11 +91,13 @@ func TestSimpleCommand_ExecuteError(t *testing.T) {
 
 func TestSimpleCommand_ExecuteWithContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+	cancel() // Cancel immediately.
 
 	var receivedCtx context.Context
+
 	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context) error {
 		receivedCtx = ctx
+
 		return ctx.Err()
 	})
 

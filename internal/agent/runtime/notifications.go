@@ -15,7 +15,7 @@ type NotificationSender interface {
 	// SendToolCallUpdate notifies about a tool call progress update.
 	// status: "pending", "in_progress", "completed", "failed"
 	// content: runtime-specific content (ACP ToolCallContent, TUI blocks, etc.)
-	SendToolCallUpdate(ctx context.Context, toolID string, status string, content interface{}) error
+	SendToolCallUpdate(ctx context.Context, toolID string, status string, content any) error
 
 	// SendToolCallComplete notifies about a tool call completion.
 	SendToolCallComplete(ctx context.Context, toolID string, success bool, output string, err error) error
@@ -30,8 +30,6 @@ type NotificationSender interface {
 // PlanEntry represents a plan entry for runtime notifications.
 type PlanEntry struct {
 	Content  string
-	Priority string // "high", "medium", "low"
-	Status   string // "pending", "in_progress", "completed"
+	Priority string // "high", "medium", "low".
+	Status   string // "pending", "in_progress", "completed".
 }
-
-

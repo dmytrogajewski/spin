@@ -89,6 +89,7 @@ Or bullet points.`,
 		t.Run(tt.name, func(t *testing.T) {
 			entries := detectPlanFromOutput(tt.output)
 			assert.Equal(t, tt.expectedCount, len(entries), tt.description)
+
 			if len(entries) > 0 {
 				t.Logf("Detected entries: %v", entries)
 			}
@@ -125,13 +126,14 @@ Let me analyze the codebase in detail.`
 	entries := detectPlanFromOutput(output)
 
 	// Should detect the 4-item numbered list, but NOT treat
-	// the "### 1. Model Architecture" or "### 2. Data Pipeline" headings as plan entries
+	// the "### 1. Model Architecture" or "### 2. Data Pipeline" headings as plan entries.
 	assert.LessOrEqual(t, len(entries), 4, "Should detect at most 4 plan entries from the numbered list")
+
 	if len(entries) > 4 {
 		t.Logf("ERROR: Detected too many entries (%d). Entries:", len(entries))
+
 		for i, entry := range entries {
 			t.Logf("  %d: %s", i+1, entry.Content)
 		}
 	}
 }
-

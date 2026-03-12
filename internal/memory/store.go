@@ -11,12 +11,14 @@
 //
 // Example usage:
 //
-//	// Create a scratchpad for the current session
+// Create a scratchpad for the current session
+//
 //	pad := memory.NewScratchpad("session-123", 50)
 //	pad.Put(ctx, "api_response", `{"status": "ok"}`, memory.PutOptions{})
 //	entry, _ := pad.Get(ctx, "api_response")
 //
-//	// Create a persistent store for cross-session memory
+// Create a persistent store for cross-session memory
+//
 //	store, _ := memory.NewPersistentStore("~/.spin/memory")
 //	store.Put(ctx, "preference", "tabs over spaces", memory.PutOptions{
 //	    Namespace: "preferences",

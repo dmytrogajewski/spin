@@ -10,34 +10,34 @@ import (
 
 // Metrics represents the current status metrics.
 type Metrics struct {
-	// Conversation metrics
+	// Conversation metrics.
 	TurnCount  int
 	TokenCount int64
 	MaxTokens  int64
-	TokenUsage float64 // Percentage (0-100)
+	TokenUsage float64 // Percentage (0-100).
 
-	// Performance metrics
+	// Performance metrics.
 	ResponseTime time.Duration
 	TokensPerSec float64
 
-	// Connection metrics
+	// Connection metrics.
 	Provider  string
 	Model     string
 	Connected bool
 
-	// Agent state
-	AgentState     string // Current agent activity (e.g., "Calling tools", "Thinking")
-	TaskMode       string // Task mode: regular, review, compact, planning
-	ConversationID string // Session/conversation identifier
+	// Agent state.
+	AgentState     string // Current agent activity (e.g., "Calling tools", "Thinking").
+	TaskMode       string // Task mode: regular, review, compact, planning.
+	ConversationID string // Session/conversation identifier.
 
-	// Timestamps
+	// Timestamps.
 	LastUpdate   time.Time
 	SessionStart time.Time
 }
 
 // Status represents the current status information.
 type Status struct {
-	Text    string // Human-readable status text
+	Text    string // Human-readable status text.
 	Metrics Metrics
 }
 
@@ -68,6 +68,7 @@ func NewManager() *Manager {
 func (m *Manager) GetStatus() Status {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return m.status
 }
 
@@ -75,6 +76,7 @@ func (m *Manager) GetStatus() Status {
 func (m *Manager) GetMetrics() Metrics {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return m.status.Metrics
 }
 
@@ -82,6 +84,7 @@ func (m *Manager) GetMetrics() Metrics {
 func (m *Manager) SetStatus(text string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.status.Text = text
 	m.status.Metrics.LastUpdate = time.Now()
 }
@@ -90,6 +93,7 @@ func (m *Manager) SetStatus(text string) {
 func (m *Manager) UpdateMetrics(updater func(*Metrics)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	updater(&m.status.Metrics)
 	m.status.Metrics.LastUpdate = time.Now()
 }
@@ -156,7 +160,7 @@ func (m *Manager) SetAgentState(state string) {
 	spinner := m.spinner
 	m.mu.Unlock()
 
-	// Update spinner state outside the lock to avoid deadlock
+	// Update spinner state outside the lock to avoid deadlock.
 	if spinner != nil {
 		spinner.UpdateState(context.Background(), state)
 	}
@@ -170,7 +174,7 @@ func (m *Manager) SetAgentStateWithContext(ctx context.Context, state string) {
 	spinner := m.spinner
 	m.mu.Unlock()
 
-	// Update spinner state outside the lock to avoid deadlock
+	// Update spinner state outside the lock to avoid deadlock.
 	if spinner != nil {
 		spinner.UpdateState(ctx, state)
 	}
@@ -203,18 +207,21 @@ func (m *Manager) CalculateTPS(tokens int64, duration time.Duration) {
 func (m *Manager) Enable() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.enabled = true
 }
 
 func (m *Manager) Disable() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.enabled = false
 }
 
 func (m *Manager) IsEnabled() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return m.enabled
 }
 
@@ -222,6 +229,7 @@ func (m *Manager) IsEnabled() bool {
 func (m *Manager) GetSpinner() *ActivitySpinner {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return m.spinner
 }
 
@@ -235,6 +243,7 @@ func (m *Manager) SpinnerFrame() string {
 	if spinner == nil {
 		return ""
 	}
+
 	return spinner.Frame()
 }
 
@@ -265,6 +274,7 @@ func (m *Manager) StopSpinner() {
 func (m *Manager) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.status = Status{
 		Metrics: Metrics{
 			SessionStart: time.Now(),
@@ -284,18 +294,19 @@ func (m *Manager) FormatCompact(width int) string {
 		return ""
 	}
 
-	// If there's explicit status text, return it (legacy behavior)
+	// If there's explicit status text, return it (legacy behavior).
 	if m.status.Text != "" {
 		return m.status.Text
 	}
 
 	parts := []string{}
 
-	// Activity indicator with spinner
+	// Activity indicator with spinner.
 	spinnerFrame := ""
 	if m.spinner != nil && m.spinner.IsRunning() {
 		spinnerFrame = m.spinner.Frame()
 	}
+
 	if spinnerFrame != "" {
 		parts = append(parts, "["+spinnerFrame+"]")
 	} else if m.status.Metrics.Connected {
@@ -304,21 +315,22 @@ func (m *Manager) FormatCompact(width int) string {
 		parts = append(parts, "[○]")
 	}
 
-	// Context percentage (if available)
+	// Context percentage (if available).
 	if m.status.Metrics.MaxTokens > 0 {
 		pct := fmt.Sprintf("%.0f%%", m.status.Metrics.TokenUsage)
 		parts = append(parts, pct)
 	}
 
-	// Agent state
+	// Agent state.
 	state := m.status.Metrics.AgentState
 	if state == "" {
 		state = "Ready"
 	}
-	// Truncate state to fit narrow terminal
+	// Truncate state to fit narrow terminal.
 	if len(state) > 15 {
 		state = state[:12] + "..."
 	}
+
 	parts = append(parts, state)
 
 	if len(parts) == 0 {

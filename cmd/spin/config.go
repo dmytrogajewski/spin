@@ -2,15 +2,17 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 
-	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+
+	"github.com/dmytrogajewski/spin/internal/config"
 )
 
 // newConfigCmd creates the config management command.
@@ -65,6 +67,7 @@ Examples:
 		RunE: runConfigShow,
 	}
 	cmd.Flags().String("format", "yaml", "Output format (text, json, yaml)")
+
 	return cmd
 }
 
@@ -86,6 +89,7 @@ Examples:
 		RunE: runConfigValidate,
 	}
 	cmd.Flags().String("file", "", "Config file to validate (default: use search paths)")
+
 	return cmd
 }
 
@@ -107,6 +111,7 @@ Examples:
 		RunE: runConfigEdit,
 	}
 	cmd.Flags().Bool("no-validate", false, "Skip validation after editing")
+
 	return cmd
 }
 
@@ -128,6 +133,7 @@ Examples:
 		RunE: runConfigPath,
 	}
 	cmd.Flags().Bool("all", false, "Show all search paths")
+
 	return cmd
 }
 
@@ -135,10 +141,13 @@ Examples:
 func runConfigShow(cmd *cobra.Command, args []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
-	// Use V2 loader with env override support
+	// Use V2 loader with env override support.
 	loaderV2 := config.NewLoaderV2()
-	var cfgV2 *config.ConfigV2
-	var errV2 error
+
+	var (
+		cfgV2 *config.ConfigV2
+		errV2 error
+	)
 
 	if flagConfigFile != "" {
 		cfgV2, errV2 = loaderV2.LoadFromFileWithEnv(flagConfigFile)
@@ -150,7 +159,7 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", errV2)
 	}
 
-	// Successfully loaded V2 config, show it
+	// Successfully loaded V2 config, show it.
 	if format == "text" || format == "yaml" {
 		fmt.Fprintf(cmd.OutOrStdout(), "# Configuration V2\n\n")
 	}
@@ -169,23 +178,27 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 func runConfigValidate(cmd *cobra.Command, args []string) error {
 	file, _ := cmd.Flags().GetString("file")
 
-	// Determine which file to load
+	// Determine which file to load.
 	configPath := flagConfigFile
 	if file != "" {
 		configPath = file
 	}
 
-	// Use V2 loader
+	// Use V2 loader.
 	loaderV2 := config.NewLoaderV2()
-	var cfgV2 *config.ConfigV2
-	var errV2 error
+
+	var (
+		cfgV2 *config.ConfigV2
+		errV2 error
+	)
+
 	if configPath != "" {
 		cfgV2, errV2 = loaderV2.LoadFromFile(configPath)
 	} else {
-		// Try loading with LoadWithEnv which uses default search paths
+		// Try loading with LoadWithEnv which uses default search paths.
 		cfgV2, errV2 = loaderV2.LoadWithEnv()
 		if errV2 != nil {
-			// Try plain Load() without env
+			// Try plain Load() without env.
 			cfgV2, errV2 = loaderV2.Load()
 		}
 	}
@@ -193,16 +206,21 @@ func runConfigValidate(cmd *cobra.Command, args []string) error {
 	if errV2 != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "✗ Configuration is invalid\n\n")
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", errV2)
-		return fmt.Errorf("validation failed")
+
+		return errors.New("validation failed")
 	}
 
-	// V2 config loaded successfully (possibly migrated from V1), validate it
-	if err := cfgV2.Validate(); err != nil {
+	// V2 config loaded successfully (possibly migrated from V1), validate it.
+	err := cfgV2.Validate()
+	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "✗ Configuration V2 is invalid\n\n")
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
-		return fmt.Errorf("validation failed")
+
+		return errors.New("validation failed")
 	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "✓ Configuration V2 is valid (version: %s)\n", cfgV2.Version)
+
 	return nil
 }
 
@@ -211,6 +229,7 @@ func runConfigPath(cmd *cobra.Command, args []string) error {
 	showAll, _ := cmd.Flags().GetBool("all")
 
 	loaderV2 := config.NewLoaderV2()
+
 	var errV2 error
 
 	if flagConfigFile != "" {
@@ -220,9 +239,10 @@ func runConfigPath(cmd *cobra.Command, args []string) error {
 	}
 
 	if errV2 != nil {
-		// Config not found - show search paths
+		// Config not found - show search paths.
 		if showAll {
 			fmt.Fprintf(cmd.OutOrStdout(), "No configuration file found. Search paths:\n")
+
 			for _, path := range getConfigSearchPaths() {
 				fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", path)
 			}
@@ -230,16 +250,19 @@ func runConfigPath(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(cmd.OutOrStdout(), "No configuration file found. Using defaults.\n")
 			fmt.Fprintf(cmd.OutOrStdout(), "Run 'spin config path --all' to see search paths.\n")
 		}
-		return fmt.Errorf("no config file")
+
+		return errors.New("no config file")
 	}
 
 	configPath := loaderV2.ConfigFileUsed()
 	if configPath == "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "No configuration file found. Using defaults.\n")
-		return fmt.Errorf("no config file")
+
+		return errors.New("no config file")
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "%s\n", configPath)
+
 	return nil
 }
 
@@ -247,13 +270,13 @@ func runConfigPath(cmd *cobra.Command, args []string) error {
 func runConfigEdit(cmd *cobra.Command, args []string) error {
 	noValidate, _ := cmd.Flags().GetBool("no-validate")
 
-	// Load or determine config path
+	// Load or determine config path.
 	loaderV2 := config.NewLoaderV2()
 	_, _ = loaderV2.Load()
 
 	configPath := loaderV2.ConfigFileUsed()
 	if configPath == "" {
-		// Create default config in home directory
+		// Create default config in home directory.
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return fmt.Errorf("failed to get home directory: %w", err)
@@ -262,42 +285,49 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 		configDir := filepath.Join(homeDir, ".spin")
 		configPath = filepath.Join(configDir, "spin.yaml")
 
-		// Create directory if needed
-		if err := os.MkdirAll(configDir, 0755); err != nil {
+		// Create directory if needed.
+		err = os.MkdirAll(configDir, 0755)
+		if err != nil {
 			return fmt.Errorf("failed to create config directory: %w", err)
 		}
 
-		// Create default config
-		if err := createDefaultConfig(configPath); err != nil {
+		// Create default config.
+		err = createDefaultConfig(configPath)
+		if err != nil {
 			return fmt.Errorf("failed to create default config: %w", err)
 		}
 
 		fmt.Fprintf(cmd.OutOrStdout(), "Created new configuration file: %s\n", configPath)
 	}
 
-	// Find editor
+	// Find editor.
 	editor := getEditor()
 	if editor == "" {
-		return fmt.Errorf("no editor found. Set $EDITOR or $VISUAL environment variable")
+		return errors.New("no editor found. Set $EDITOR or $VISUAL environment variable")
 	}
 
-	// Open editor
+	// Open editor.
 	editorCmd := exec.Command(editor, configPath)
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
 	editorCmd.Stderr = os.Stderr
 
-	if err := editorCmd.Run(); err != nil {
+	err := editorCmd.Run()
+	if err != nil {
 		return fmt.Errorf("editor failed: %w", err)
 	}
 
-	// Validate after editing
+	// Validate after editing.
 	if !noValidate {
 		newLoaderV2 := config.NewLoaderV2()
-		if cfgV2, err := newLoaderV2.LoadFromFile(configPath); err != nil {
+		cfgV2, err := newLoaderV2.LoadFromFile(configPath)
+		if err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "⚠ Warning: configuration has errors:\n%v\n", err)
 			fmt.Fprintf(cmd.ErrOrStderr(), "\nRun 'spin config validate' for details.\n")
-		} else if err := cfgV2.Validate(); err != nil {
+		}
+
+		err = cfgV2.Validate()
+		if err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "⚠ Warning: configuration validation failed:\n%v\n", err)
 			fmt.Fprintf(cmd.ErrOrStderr(), "\nRun 'spin config validate' for details.\n")
 		}
@@ -306,20 +336,23 @@ func runConfigEdit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// Helper functions
+// Helper functions.
 
 // printJSON prints data as JSON.
 func printJSON[T any](out io.Writer, data T) error {
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
+
 	return encoder.Encode(data)
 }
 
 // printYAML prints data as YAML.
 func printYAML[T any](out io.Writer, data T) error {
 	encoder := yaml.NewEncoder(out)
+
 	encoder.SetIndent(2)
 	defer encoder.Close()
+
 	return encoder.Encode(data)
 }
 
@@ -328,13 +361,15 @@ func getEditor() string {
 	if editor := os.Getenv("EDITOR"); editor != "" {
 		return editor
 	}
+
 	if visual := os.Getenv("VISUAL"); visual != "" {
 		return visual
 	}
 
-	// Try common editors
+	// Try common editors.
 	for _, editor := range []string{"vi", "vim", "nano", "emacs"} {
-		if _, err := exec.LookPath(editor); err == nil {
+		_, err := exec.LookPath(editor)
+		if err == nil {
 			return editor
 		}
 	}
@@ -386,7 +421,8 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 	key := args[0]
 
 	loaderV2 := config.NewLoaderV2()
-	if _, err := loaderV2.Load(); err != nil {
+	_, err := loaderV2.Load()
+	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
@@ -396,6 +432,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "%v\n", value)
+
 	return nil
 }
 
@@ -405,8 +442,9 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 	value := args[1]
 
 	loaderV2 := config.NewLoaderV2()
-	if _, err := loaderV2.Load(); err != nil {
-		// If config doesn't exist, that's okay - we'll create it
+	_, err := loaderV2.Load()
+	if err != nil {
+		// If config doesn't exist, that's okay - we'll create it.
 		_ = err
 	}
 
@@ -414,6 +452,7 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Set %s = %s\n", key, value)
 	fmt.Fprintf(cmd.OutOrStdout(), "Note: Changes are in-memory only. Use 'spin config edit' to persist.\n")
+
 	return nil
 }
 

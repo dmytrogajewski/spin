@@ -43,7 +43,9 @@
 //
 //	provider, _ := factory.NewProvider(factory.ProviderConfig{
 //	    Type: "custom",
-//	    // ...
+//
+// ...
+//
 //	})
 //
 // # Configuration Validation
@@ -59,9 +61,12 @@
 //
 //	provider, err := factory.NewProvider(factory.ProviderConfig{
 //	    Type: "openai",
-//	    // Missing required fields
+//
+// Missing required fields
+//
 //	})
-//	// err: "baseURL is required for openai"
+//
+// err: "baseURL is required for openai"
 //
 // # Thread Safety
 //

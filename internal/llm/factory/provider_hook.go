@@ -10,7 +10,5 @@ import (
 
 // addTestProvider is a no-op in production builds.
 func (f *Factory) addTestProvider(providers map[string]func(context.Context, ProviderConfig) (llm.Provider, error)) {
-	// No-op
+	// No-op.
 }
-
-

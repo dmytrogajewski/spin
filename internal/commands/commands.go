@@ -41,6 +41,7 @@ var (
 func RegisterCommand(cmd Command) {
 	mu.Lock()
 	defer mu.Unlock()
+
 	registry[cmd.Name()] = cmd
 }
 
@@ -49,7 +50,9 @@ func RegisterCommand(cmd Command) {
 func GetCommand(name string) (Command, bool) {
 	mu.RLock()
 	defer mu.RUnlock()
+
 	cmd, exists := registry[name]
+
 	return cmd, exists
 }
 
@@ -57,10 +60,12 @@ func GetCommand(name string) (Command, bool) {
 func ListCommands() []Command {
 	mu.RLock()
 	defer mu.RUnlock()
+
 	commands := make([]Command, 0, len(registry))
 	for _, cmd := range registry {
 		commands = append(commands, cmd)
 	}
+
 	return commands
 }
 
@@ -70,20 +75,21 @@ func ListCommands() []Command {
 func ParseCommand(input string) (command string, args []string, isCommand bool) {
 	trimmed := strings.TrimSpace(input)
 
-	// Check for slash prefix
+	// Check for slash prefix.
 	if !strings.HasPrefix(trimmed, "/") {
 		return "", nil, false
 	}
 
-	// Split into command and arguments
+	// Split into command and arguments.
 	parts := strings.Fields(trimmed)
 	if len(parts) == 0 || parts[0] == "/" {
-		// Just a slash or slash with whitespace - not a valid command
+		// Just a slash or slash with whitespace - not a valid command.
 		return "", nil, false
 	}
 
-	// Extract command (lowercase) and args (lowercase for mode names)
+	// Extract command (lowercase) and args (lowercase for mode names).
 	cmd := strings.ToLower(parts[0])
+
 	commandArgs := make([]string, 0, len(parts)-1)
 	for _, arg := range parts[1:] {
 		commandArgs = append(commandArgs, strings.ToLower(arg))
@@ -114,27 +120,31 @@ func (c *ModeCommand) Description() string {
 }
 
 func (c *ModeCommand) Execute(ctx context.Context, args []string, cmdCtx CommandContext) (string, error) {
-	// No arguments: show current mode
+	// No arguments: show current mode.
 	if len(args) == 0 {
 		currentMode := cmdCtx.GetCurrentMode()
+
 		return fmt.Sprintf("Current mode: %s", currentMode), nil
 	}
 
-	// One argument: switch mode
+	// One argument: switch mode.
 	newMode := args[0]
 
-	// Validate mode
-	if err := validateTaskMode(newMode); err != nil {
+	// Validate mode.
+	err := validateTaskMode(newMode)
+	if err != nil {
 		return "", fmt.Errorf("invalid mode: %w", err)
 	}
 
-	// Switch mode
-	if err := cmdCtx.SetMode(newMode); err != nil {
+	// Switch mode.
+	err = cmdCtx.SetMode(newMode)
+	if err != nil {
 		return "", fmt.Errorf("error switching mode: %w", err)
 	}
 
-	// Get mode description
+	// Get mode description.
 	description := getModeDescription(newMode)
+
 	result := fmt.Sprintf("✓ Switched to %s mode", newMode)
 	if description != "" {
 		result = result + "\n" + description
@@ -158,7 +168,7 @@ func (c *HelpCommand) Execute(ctx context.Context, args []string, cmdCtx Command
 	var help strings.Builder
 	help.WriteString("Available commands:\n\n")
 
-	// List all registered commands
+	// List all registered commands.
 	commands := ListCommands()
 	for _, cmd := range commands {
 		help.WriteString(fmt.Sprintf("  %s  - %s\n", cmd.Name(), cmd.Description()))
@@ -233,9 +243,11 @@ func validateTaskMode(mode string) error {
 	if mode == "" {
 		return errors.New("mode cannot be empty")
 	}
+
 	if !validTaskModes[mode] {
 		return fmt.Errorf("invalid mode: %s (valid modes: regular, review, compact, planning)", mode)
 	}
+
 	return nil
 }
 
@@ -247,6 +259,7 @@ func getModeDescription(mode string) string {
 		"compact":  "Quick queries with minimal tools (4K tokens)",
 		"planning": "Task planning and decomposition (4K tokens)",
 	}
+
 	return descriptions[mode]
 }
 

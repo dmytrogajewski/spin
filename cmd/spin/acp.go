@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/spf13/cobra"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/agent/runtime"
 	"github.com/dmytrogajewski/spin/internal/auth"
@@ -25,7 +27,6 @@ import (
 	acppkg "github.com/dmytrogajewski/spin/internal/protocol/acp"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tools"
-	"github.com/spf13/cobra"
 )
 
 // newACPCmd creates the ACP server command.
@@ -49,19 +50,21 @@ Examples:
   spin acp --provider openai --model gpt-4
   spin acp --workspace /path/to/project`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Only pass flag values if they were explicitly set
+			// Only pass flag values if they were explicitly set.
 			providerType, _ := cmd.Flags().GetString("provider")
 			baseURL, _ := cmd.Flags().GetString("base-url")
 			model, _ := cmd.Flags().GetString("model")
 
-			// Check if flags were explicitly set by user
+			// Check if flags were explicitly set by user.
 			flagOverrides := config.FlagOverrides{}
 			if cmd.Flags().Changed("provider") {
 				flagOverrides.Provider = providerType
 			}
+
 			if cmd.Flags().Changed("model") {
 				flagOverrides.Model = model
 			}
+
 			if cmd.Flags().Changed("base-url") {
 				flagOverrides.BaseURL = baseURL
 			}
@@ -70,7 +73,7 @@ Examples:
 		},
 	}
 
-	// Server-specific flags (empty defaults - config file values take precedence)
+	// Server-specific flags (empty defaults - config file values take precedence).
 	cmd.Flags().StringVar(&workDir, "workspace", ".", "Workspace directory path")
 	cmd.Flags().String("provider", "", "LLM provider type (ollama, openai)")
 	cmd.Flags().String("base-url", "", "Provider base URL")
@@ -82,8 +85,9 @@ Examples:
 
 // runACPServer starts the ACP server.
 func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey string) error {
-	// Ensure workDir is an absolute path
+	// Ensure workDir is an absolute path.
 	var err error
+
 	workDir, err = filepath.Abs(workDir)
 	if err != nil {
 		return fmt.Errorf("resolve workspace path: %w", err)
@@ -100,12 +104,13 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	// Apply --agents-md flag override
+	// Apply --agents-md flag override.
 	if flagAgentsMD != "" {
 		cfg.AgentsMD.Path = flagAgentsMD
 	}
 
 	ctx := context.Background()
+
 	provider, err := buildProviderForACP(
 		ctx,
 		cfg,
@@ -115,7 +120,6 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 		cfg.LLM.Model,
 		apiKey,
 	)
-
 	if err != nil {
 		return fmt.Errorf("failed to create provider: %w", err)
 	}
@@ -123,8 +127,8 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 	defer provider.Close()
 
 	logger := slog.Default()
-	protocolServices, cleanup, err := createServices(ctx, cfg, workDir, logger)
 
+	protocolServices, cleanup, err := createServices(ctx, cfg, workDir, logger)
 	if err != nil {
 		return fmt.Errorf("failed to create services: %w", err)
 	}
@@ -145,7 +149,6 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 	}
 
 	storage, err := session.NewFileStorage(storageDir)
-
 	if err != nil {
 		return fmt.Errorf("create session storage: %w", err)
 	}
@@ -158,40 +161,39 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 		GitService:   protocolServices.Git,
 		Logger:       logger,
 	})
-
 	if err != nil {
 		return fmt.Errorf("create ACP runtime: %w", err)
 	}
 
 	coreAgent, err := buildCoreAgent(cfg, provider, workDir, emitter, acpRuntime)
-
 	if err != nil {
 		return fmt.Errorf("build core agent: %w", err)
 	}
 
 	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(logger))
-	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreAgent, mcpService, emitter, storage)
 
+	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreAgent, mcpService, emitter, storage)
 	if err != nil {
 		return fmt.Errorf("create ACP protocol adapter: %w", err)
 	}
 
-	// Create history storage for conversation persistence
+	// Create history storage for conversation persistence.
 	historyDir := cfg.Agent.SessionDir
 	if historyDir == "" {
 		historyDir = "~/.spin/sessions"
 	}
+
 	histStorage, err := history.NewFileStorage(historyDir)
 	if err != nil {
 		return fmt.Errorf("create history storage: %w", err)
 	}
 
-	// Determine appropriate max tokens for history based on LLM context window
+	// Determine appropriate max tokens for history based on LLM context window.
 	maxTokens := getHistoryMaxTokens(cfg, provider)
 
-	// Create conversation factory that builds properly configured conversations
+	// Create conversation factory that builds properly configured conversations.
 	convFactory := func(ctx context.Context, sessionID string, sessWorkDir string) (*conversation.Conversation, error) {
-		// Create a new conversation with the core agent's provider and tools
+		// Create a new conversation with the core agent's provider and tools.
 		return conversation.NewFromAgent(conversation.NewFromAgentConfig{
 			Agent:     coreAgent,
 			Emitter:   emitter,
@@ -201,7 +203,7 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 		})
 	}
 
-	// Create conversation manager for multi-session support
+	// Create conversation manager for multi-session support.
 	convManager, err := conversation.NewManager(conversation.ManagerConfig{
 		Factory:        convFactory,
 		Storage:        storage,
@@ -212,7 +214,7 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 		return fmt.Errorf("create conversation manager: %w", err)
 	}
 
-	// Wire conversation manager to ACP agent for new prompt path
+	// Wire conversation manager to ACP agent for new prompt path.
 	acpAgent.SetConversationManager(convManager)
 	acpAgent.SetHistoryStorage(histStorage)
 
@@ -226,8 +228,10 @@ func runACPServer(workDir string, flagOverrides config.FlagOverrides, apiKey str
 	acpAgent.SetConnection(conn)
 	terminalClient := acppkg.NewACPTerminalClient(conn)
 	acpRuntime.SetTerminalClient(terminalClient)
+
 	filesystemClient := acppkg.NewACPFilesystemClient(conn)
 	acpRuntime.SetFilesystemClient(filesystemClient)
+
 	ctx, cancel := context.WithCancel(ctx)
 
 	defer cancel()
@@ -257,17 +261,17 @@ func getHistoryMaxTokens(cfg *config.ConfigV2, provider llm.Provider) int {
 	const (
 		defaultTokens = 8192
 		minTokens     = 2048
-		maxTokens     = 128000 // Cap to prevent excessive memory usage
+		maxTokens     = 128000 // Cap to prevent excessive memory usage.
 	)
 
 	var contextWindow int
 
-	// Priority 1: Config override for custom/fine-tuned models
+	// Priority 1: Config override for custom/fine-tuned models.
 	if cfg != nil && cfg.LLM.ContextWindow > 0 {
 		contextWindow = cfg.LLM.ContextWindow
 	}
 
-	// Priority 2: Provider's auto-detected context window (primary mechanism)
+	// Priority 2: Provider's auto-detected context window (primary mechanism).
 	if contextWindow == 0 && provider != nil {
 		caps := provider.Capabilities()
 		if caps.ContextWindow > 0 {
@@ -275,18 +279,16 @@ func getHistoryMaxTokens(cfg *config.ConfigV2, provider llm.Provider) int {
 		}
 	}
 
-	// Priority 3: Default
+	// Priority 3: Default.
 	if contextWindow == 0 {
 		return defaultTokens
 	}
 
-	// Use 75% of context window for history (leave room for responses)
-	historyTokens := int(float64(contextWindow) * 0.75)
+	// Use 75% of context window for history (leave room for responses).
+	historyTokens := min(
+		// Apply constraints.
+		int(float64(contextWindow)*0.75), maxTokens)
 
-	// Apply constraints
-	if historyTokens > maxTokens {
-		historyTokens = maxTokens
-	}
 	if historyTokens < minTokens {
 		historyTokens = defaultTokens
 	}
@@ -296,7 +298,8 @@ func getHistoryMaxTokens(cfg *config.ConfigV2, provider llm.Provider) int {
 
 // buildProviderForACP creates and configures an LLM provider for the ACP server.
 func buildProviderForACP(ctx context.Context, cfg *config.ConfigV2, authMgr *auth.Manager, providerType, baseURL, model, apiKey string) (llm.Provider, error) {
-	if extra, ok, err := createProviderForACPExtra(providerType, baseURL, model, apiKey); err != nil {
+	extra, ok, err := createProviderForACPExtra(providerType, baseURL, model, apiKey)
+	if err != nil {
 		return nil, err
 	} else if ok {
 		return extra, nil
@@ -349,7 +352,6 @@ func buildCoreAgent(
 
 	if cfg != nil && cfg.ACE.Enabled {
 		aceSvc, err := agentBuilder.BuildACEService()
-
 		if err == nil {
 			opts = append(opts, agent.WithACEService(aceSvc))
 			aceConfig := agent.ConvertACEConfig(&cfg.ACE)
@@ -358,7 +360,6 @@ func buildCoreAgent(
 	}
 
 	agentInstance, err := agent.NewAgent(provider, securityService, detectionService, toolRuntime, planningService, environment, emitter, opts...)
-
 	if err != nil {
 		return nil, fmt.Errorf("build agent: %w", err)
 	}
@@ -370,6 +371,7 @@ func buildCoreAgent(
 func setupACPServerSignalHandling(cancel context.CancelFunc) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
 	go func() {
 		<-sigChan
 		fmt.Fprintln(os.Stderr, "\nShutting down ACP server...")

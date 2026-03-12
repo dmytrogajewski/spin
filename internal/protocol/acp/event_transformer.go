@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/coder/acp-go-sdk"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/planning"
@@ -18,7 +19,7 @@ type ACPEventTransformer struct {
 	agent       *agent.Agent
 	fileTracker *fileContentTracker
 
-	// Track accumulated content for plan detection
+	// Track accumulated content for plan detection.
 	accumulatedContent string
 
 	mu sync.RWMutex
@@ -44,19 +45,20 @@ func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event)
 		return false
 	}
 
-	// Reset content on turn start
+	// Reset content on turn start.
 	if event.Type == events.EventTurnStart {
 		t.accumulatedContent = ""
-		return false // Don't consume, let others see it
+
+		return false // Don't consume, let others see it.
 	}
 
-	// Check for plan detection before tool call starts
+	// Check for plan detection before tool call starts.
 	if event.Type == events.EventToolCallStart {
 		if t.accumulatedContent != "" && t.agent != nil && t.agent.GetPlanner() == nil {
 			plan := planning.DetectPlanFromText(t.accumulatedContent)
 			if plan != nil {
 				t.agent.SetPlanner(plan)
-				// Send plan notification immediately
+				// Send plan notification immediately.
 				planEntries := convertOrchestrationPlanToACP(plan)
 				planUpdate := acp.UpdatePlan(planEntries...)
 				notification := acp.SessionNotification{
@@ -68,7 +70,7 @@ func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event)
 		}
 	}
 
-	// Handle content delta
+	// Handle content delta.
 	if event.Type == events.EventContentDelta {
 		data, ok := event.ContentDeltaData()
 		if !ok || data.Role != "assistant" {
@@ -83,10 +85,11 @@ func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event)
 			Update:    update,
 		}
 		_ = t.connection.SessionUpdate(ctx, notification)
+
 		return true
 	}
 
-	// Handle thinking delta
+	// Handle thinking delta.
 	if event.Type == events.EventThinkingDelta {
 		data, ok := event.ThinkingDeltaData()
 		if !ok {
@@ -99,10 +102,11 @@ func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event)
 			Update:    update,
 		}
 		_ = t.connection.SessionUpdate(ctx, notification)
+
 		return true
 	}
 
-	// Handle plan updates
+	// Handle plan updates.
 	if event.Type == events.EventPlanUpdate {
 		data, ok := event.PlanUpdateData()
 		if !ok {
@@ -120,31 +124,35 @@ func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event)
 			Update:    planUpdate,
 		}
 		_ = t.connection.SessionUpdate(ctx, notification)
+
 		return true
 	}
 
-	// Handle system events (info, warning)
+	// Handle system events (info, warning).
 	if event.Type == events.EventInfo || event.Type == events.EventWarning {
 		update, ok := convertSystemEvent(event)
 		if !ok {
 			return false
 		}
+
 		notification := acp.SessionNotification{
 			SessionId: t.sessionID,
 			Update:    update,
 		}
 		_ = t.connection.SessionUpdate(ctx, notification)
+
 		return true
 	}
 
-	// Convert other events to ACP notification
+	// Convert other events to ACP notification.
 	update, ok := convertEventToSessionUpdate(event, t.fileTracker)
 	if !ok {
 		return false
 	}
 
-	// Extract terminal ID for release after notification
+	// Extract terminal ID for release after notification.
 	var terminalIDToRelease string
+
 	if event.Type == events.EventToolCallComplete {
 		if data, ok := event.ToolCallCompleteData(); ok {
 			if terminalID, ok := data.Metadata["terminal_id"].(string); ok && terminalID != "" {
@@ -153,14 +161,14 @@ func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event)
 		}
 	}
 
-	// Send notification
+	// Send notification.
 	notification := acp.SessionNotification{
 		SessionId: t.sessionID,
 		Update:    update,
 	}
 	_ = t.connection.SessionUpdate(ctx, notification)
 
-	// Release terminal AFTER notification is sent (per ACP spec)
+	// Release terminal AFTER notification is sent (per ACP spec).
 	if terminalIDToRelease != "" {
 		if acpConn, ok := t.connection.(*acp.AgentSideConnection); ok {
 			terminalClient := NewACPTerminalClient(acpConn)
@@ -175,8 +183,10 @@ func (t *ACPEventTransformer) Transform(ctx context.Context, event events.Event)
 func (t *ACPEventTransformer) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	t.connection = nil
 	t.fileTracker = nil
+
 	return nil
 }
 
@@ -184,6 +194,7 @@ func (t *ACPEventTransformer) Close() error {
 func (t *ACPEventTransformer) SetConnection(conn notificationSender) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	t.connection = conn
 }
 

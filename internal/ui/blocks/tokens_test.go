@@ -58,12 +58,15 @@ func TestSpacingConstants(t *testing.T) {
 	if S0 != 0 {
 		t.Errorf("S0 = %d, want 0", S0)
 	}
+
 	if S1 != 1 {
 		t.Errorf("S1 = %d, want 1", S1)
 	}
+
 	if S2 != 2 {
 		t.Errorf("S2 = %d, want 2", S2)
 	}
+
 	if S4 != 4 {
 		t.Errorf("S4 = %d, want 4", S4)
 	}

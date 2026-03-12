@@ -17,12 +17,13 @@ func NewToolExecutorAdapter(exec *Executor) tools.CommandExecutor {
 	if exec == nil {
 		return nil
 	}
+
 	return &ToolExecutorAdapter{executor: exec}
 }
 
 // Execute implements tools.CommandExecutor interface.
-func (a *ToolExecutorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, opts interface{}) (tools.ExecutionResult, error) {
-	// Convert tools.CommandInfo to *security.Command
+func (a *ToolExecutorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, opts any) (tools.ExecutionResult, error) {
+	// Convert tools.CommandInfo to *security.Command.
 	secCmd := &security.Command{
 		Program: cmd.GetProgram(),
 		Args:    cmd.GetArgs(),
@@ -30,21 +31,22 @@ func (a *ToolExecutorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo
 		WorkDir: cmd.GetWorkDir(),
 	}
 
-	// Convert opts if provided
+	// Convert opts if provided.
 	var execOpts *ExecuteOptions
+
 	if opts != nil {
 		if eOpts, ok := opts.(*ExecuteOptions); ok {
 			execOpts = eOpts
 		}
 	}
 
-	// Execute using agent.Executor
+	// Execute using agent.Executor.
 	result, err := a.executor.Execute(ctx, secCmd, execOpts)
 	if err != nil {
 		return nil, err
 	}
 
-	// Return result adapted to tools.ExecutionResult
+	// Return result adapted to tools.ExecutionResult.
 	return &toolExecutionResult{result: result}, nil
 }
 
@@ -57,6 +59,7 @@ func (r *toolExecutionResult) GetStdout() string {
 	if r.result == nil {
 		return ""
 	}
+
 	return r.result.Stdout
 }
 
@@ -64,6 +67,7 @@ func (r *toolExecutionResult) GetStderr() string {
 	if r.result == nil {
 		return ""
 	}
+
 	return r.result.Stderr
 }
 
@@ -71,9 +75,10 @@ func (r *toolExecutionResult) GetExitCode() int {
 	if r.result == nil {
 		return -1
 	}
+
 	return r.result.ExitCode
 }
 
-func (r *toolExecutionResult) GetMetadata() map[string]interface{} {
+func (r *toolExecutionResult) GetMetadata() map[string]any {
 	return nil
 }

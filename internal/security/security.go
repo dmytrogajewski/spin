@@ -2,6 +2,7 @@ package security
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -33,11 +34,11 @@ func NewSecurityService(validator *Validator, approvalService *ApprovalService) 
 // Returns an error if the validator is not configured or if the command is nil.
 func (s *SecurityService) ValidateCommand(cmd *Command) (*ValidationResult, error) {
 	if cmd == nil {
-		return nil, fmt.Errorf("command cannot be nil")
+		return nil, errors.New("command cannot be nil")
 	}
 
 	if s.validator == nil {
-		return nil, fmt.Errorf("validator not configured")
+		return nil, errors.New("validator not configured")
 	}
 
 	result, err := s.validator.Classify(cmd)
@@ -69,10 +70,11 @@ func (s *SecurityService) NeedsApproval(cmd *Command) bool {
 // if the approval process failed (timeout, validation error, etc.).
 func (s *SecurityService) RequestApproval(ctx context.Context, operation Operation) (bool, error) {
 	if s.approvalService == nil {
-		return false, fmt.Errorf("approval service not configured")
+		return false, errors.New("approval service not configured")
 	}
 
 	_, approved, err := s.approvalService.RequestApproval(ctx, operation)
+
 	return approved, err
 }
 
@@ -90,28 +92,28 @@ func (s *SecurityService) RequestApproval(ctx context.Context, operation Operati
 // Returns true if the command is approved (either safe or explicitly approved),
 // false if denied or forbidden, and an error if validation or approval fails.
 func (s *SecurityService) ValidateAndApprove(ctx context.Context, cmd *Command, workDir string) (bool, error) {
-	// Validate the command first
+	// Validate the command first.
 	result, err := s.ValidateCommand(cmd)
 	if err != nil {
 		return false, fmt.Errorf("validation failed: %w", err)
 	}
 
-	// If the command is safe, no approval needed
+	// If the command is safe, no approval needed.
 	if result.Classification == CommandSafe {
 		return true, nil
 	}
 
-	// If the command is forbidden, block it (don't even request approval)
+	// If the command is forbidden, block it (don't even request approval).
 	if result.Classification == CommandForbidden {
 		return false, nil
 	}
 
-	// Check if approval is needed
+	// Check if approval is needed.
 	if !s.NeedsApproval(cmd) {
 		return true, nil
 	}
 
-	// Dangerous/interactive/unverified command that needs approval
+	// Dangerous/interactive/unverified command that needs approval.
 	operation := NewOperation(cmd, fmt.Sprintf("Command classified as %s: %s", result.Classification, result.Reason), workDir)
 
 	approved, err := s.RequestApproval(ctx, operation)

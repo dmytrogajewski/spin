@@ -40,7 +40,7 @@ func TestDetector_Record(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Record snapshots
+	// Record snapshots.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""},
 		{Turn: 2, Response: "Second response", ToolCalls: []string{"tool2"}, Error: ""},
@@ -53,13 +53,13 @@ func TestDetector_Record(t *testing.T) {
 		detector.Record(snapshot)
 	}
 
-	// Should maintain window size
+	// Should maintain window size.
 	if len(detector.history) != 3 {
 		t.Errorf("Detector.Record() history length = %d, want 3", len(detector.history))
 	}
 
-	// Should keep most recent snapshots
-	expected := snapshots[2:] // Last 3 snapshots
+	// Should keep most recent snapshots.
+	expected := snapshots[2:] // Last 3 snapshots.
 	for i, snapshot := range detector.history {
 		if snapshot.Turn != expected[i].Turn {
 			t.Errorf("Detector.Record() history[%d].Turn = %d, want %d", i, snapshot.Turn, expected[i].Turn)
@@ -70,7 +70,7 @@ func TestDetector_Record(t *testing.T) {
 func TestDetector_Record_ZeroWindowSize(t *testing.T) {
 	config := Config{
 		Enabled:          true,
-		WindowSize:       0, // Zero window size
+		WindowSize:       0, // Zero window size.
 		SimilarityThresh: 0.8,
 		ToolRepeatLimit:  3,
 		ErrorRepeatLimit: 2,
@@ -78,7 +78,7 @@ func TestDetector_Record_ZeroWindowSize(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Record more than default fallback (3)
+	// Record more than default fallback (3).
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""},
 		{Turn: 2, Response: "Second response", ToolCalls: []string{"tool2"}, Error: ""},
@@ -90,7 +90,7 @@ func TestDetector_Record_ZeroWindowSize(t *testing.T) {
 		detector.Record(snapshot)
 	}
 
-	// Should use fallback window size of 3
+	// Should use fallback window size of 3.
 	if len(detector.history) != 3 {
 		t.Errorf("Detector.Record() with zero window size, history length = %d, want 3", len(detector.history))
 	}
@@ -107,11 +107,10 @@ func TestDetector_Check_InsufficientHistory(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Record only one snapshot
+	// Record only one snapshot.
 	detector.Record(Snapshot{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""})
 
 	result, err := detector.Check()
-
 	if err != nil {
 		t.Errorf("Detector.Check() unexpected error: %v", err)
 	}
@@ -136,7 +135,7 @@ func TestDetector_Check_RepeatedTool(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Record snapshots with repeated tool
+	// Record snapshots with repeated tool.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""},
 		{Turn: 2, Response: "Second response", ToolCalls: []string{"tool1"}, Error: ""},
@@ -148,7 +147,6 @@ func TestDetector_Check_RepeatedTool(t *testing.T) {
 	}
 
 	result, err := detector.Check()
-
 	if err != nil {
 		t.Errorf("Detector.Check() unexpected error: %v", err)
 	}
@@ -177,7 +175,7 @@ func TestDetector_Check_SameError(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Record snapshots with same error
+	// Record snapshots with same error.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: "test error"},
 		{Turn: 2, Response: "Second response", ToolCalls: []string{"tool2"}, Error: "test error"},
@@ -188,7 +186,6 @@ func TestDetector_Check_SameError(t *testing.T) {
 	}
 
 	result, err := detector.Check()
-
 	if err != nil {
 		t.Errorf("Detector.Check() unexpected error: %v", err)
 	}
@@ -217,7 +214,7 @@ func TestDetector_Check_Oscillation(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Record snapshots with oscillation pattern - use identical responses for A and B groups
+	// Record snapshots with oscillation pattern - use identical responses for A and B groups.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "Response A", ToolCalls: []string{"tool1"}, Error: ""},
 		{Turn: 2, Response: "Response B", ToolCalls: []string{"tool2"}, Error: ""},
@@ -230,13 +227,12 @@ func TestDetector_Check_Oscillation(t *testing.T) {
 	}
 
 	result, err := detector.Check()
-
 	if err != nil {
 		t.Errorf("Detector.Check() unexpected error: %v", err)
 	}
 
 	// The detector might detect similar responses instead of oscillation
-	// Both are valid cycle detections
+	// Both are valid cycle detections.
 	if result.Type != CycleOscillation && result.Type != CycleSimilarResponses {
 		t.Errorf("Detector.Check() Type = %v, want %v or %v", result.Type, CycleOscillation, CycleSimilarResponses)
 	}
@@ -261,7 +257,7 @@ func TestDetector_Check_SimilarResponses(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Record snapshots with similar responses
+	// Record snapshots with similar responses.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "This is a test response", ToolCalls: []string{}, Error: ""},
 		{Turn: 2, Response: "This is a test response", ToolCalls: []string{}, Error: ""},
@@ -273,7 +269,6 @@ func TestDetector_Check_SimilarResponses(t *testing.T) {
 	}
 
 	result, err := detector.Check()
-
 	if err != nil {
 		t.Errorf("Detector.Check() unexpected error: %v", err)
 	}
@@ -302,7 +297,7 @@ func TestDetector_GetHistory(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Record some snapshots
+	// Record some snapshots.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""},
 		{Turn: 2, Response: "Second response", ToolCalls: []string{"tool2"}, Error: ""},
@@ -318,10 +313,10 @@ func TestDetector_GetHistory(t *testing.T) {
 		t.Errorf("Detector.GetHistory() length = %d, want %d", len(history), len(snapshots))
 	}
 
-	// Modify the returned history to ensure it's a copy
+	// Modify the returned history to ensure it's a copy.
 	history[0].Turn = 999
 
-	// Original detector history should not be affected
+	// Original detector history should not be affected.
 	originalHistory := detector.GetHistory()
 	if originalHistory[0].Turn != 1 {
 		t.Errorf("Detector.GetHistory() should return a copy, original modified")
@@ -339,7 +334,7 @@ func TestDetector_Reset(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Record some snapshots
+	// Record some snapshots.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""},
 		{Turn: 2, Response: "Second response", ToolCalls: []string{"tool2"}, Error: ""},
@@ -349,15 +344,15 @@ func TestDetector_Reset(t *testing.T) {
 		detector.Record(snapshot)
 	}
 
-	// Verify history is not empty
+	// Verify history is not empty.
 	if len(detector.history) == 0 {
 		t.Errorf("Detector history should not be empty before reset")
 	}
 
-	// Reset
+	// Reset.
 	detector.Reset()
 
-	// Verify history is empty
+	// Verify history is empty.
 	if len(detector.history) != 0 {
 		t.Errorf("Detector.Reset() history length = %d, want 0", len(detector.history))
 	}
@@ -374,9 +369,10 @@ func TestDetector_Concurrency(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Test concurrent access
+	// Test concurrent access.
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+
+	for i := range 10 {
 		go func(i int) {
 			snapshot := Snapshot{
 				Turn:      i,
@@ -385,16 +381,17 @@ func TestDetector_Concurrency(t *testing.T) {
 				Error:     "",
 			}
 			detector.Record(snapshot)
+
 			done <- true
 		}(i)
 	}
 
-	// Wait for all goroutines to complete
-	for i := 0; i < 10; i++ {
+	// Wait for all goroutines to complete.
+	for range 10 {
 		<-done
 	}
 
-	// Should have recorded all snapshots (up to window size)
+	// Should have recorded all snapshots (up to window size).
 	if len(detector.history) != 10 {
 		t.Errorf("Detector concurrent access, history length = %d, want 10", len(detector.history))
 	}
@@ -402,7 +399,7 @@ func TestDetector_Concurrency(t *testing.T) {
 
 func TestDetector_Check_Disabled(t *testing.T) {
 	config := Config{
-		Enabled:          false, // Disabled
+		Enabled:          false, // Disabled.
 		WindowSize:       5,
 		SimilarityThresh: 0.8,
 		ToolRepeatLimit:  3,
@@ -411,7 +408,7 @@ func TestDetector_Check_Disabled(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Record snapshots that would normally trigger detection
+	// Record snapshots that would normally trigger detection.
 	snapshots := []Snapshot{
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""},
 		{Turn: 2, Response: "Second response", ToolCalls: []string{"tool1"}, Error: ""},
@@ -423,7 +420,6 @@ func TestDetector_Check_Disabled(t *testing.T) {
 	}
 
 	result, err := detector.Check()
-
 	if err != nil {
 		t.Errorf("Detector.Check() unexpected error: %v", err)
 	}
@@ -453,35 +449,36 @@ func TestCheckRepeatedTool_SameToolDifferentParams(t *testing.T) {
 	detector := NewDetector(config)
 
 	// Simulate the user's exact scenario
-	// Turn 1: ls . (list current directory)
+	// Turn 1: ls . (list current directory).
 	detector.Record(Snapshot{
 		Turn:      1,
 		Response:  "Let me list the current directory",
-		ToolCalls: []string{`list_directory({"path":"."})`}, // Same tool, same params
+		ToolCalls: []string{`list_directory({"path":"."})`}, // Same tool, same params.
 		Timestamp: time.Now(),
 	})
 
-	// Turn 2: ls . (list current directory again - DUPLICATE)
+	// Turn 2: ls . (list current directory again - DUPLICATE).
 	detector.Record(Snapshot{
 		Turn:      2,
 		Response:  "Listing current directory again",
-		ToolCalls: []string{`list_directory({"path":"."})`}, // Same tool, same params
+		ToolCalls: []string{`list_directory({"path":"."})`}, // Same tool, same params.
 		Timestamp: time.Now(),
 	})
 
-	// Turn 3: ls . (list current directory again - DUPLICATE)
+	// Turn 3: ls . (list current directory again - DUPLICATE).
 	detector.Record(Snapshot{
 		Turn:      3,
 		Response:  "Listing current directory once more",
-		ToolCalls: []string{`list_directory({"path":"."})`}, // Same tool, same params
+		ToolCalls: []string{`list_directory({"path":"."})`}, // Same tool, same params.
 		Timestamp: time.Now(),
 	})
 
-	// At this point, cycle should be detected (3 identical calls)
+	// At this point, cycle should be detected (3 identical calls).
 	result, err := detector.Check()
 	if err != nil {
 		t.Fatalf("Check() failed: %v", err)
 	}
+
 	if result.Type != CycleRepeatedTool {
 		t.Errorf("Expected CycleRepeatedTool after 3 identical list_directory calls, got %v", result.Type)
 	}
@@ -490,15 +487,16 @@ func TestCheckRepeatedTool_SameToolDifferentParams(t *testing.T) {
 	detector.Record(Snapshot{
 		Turn:      4,
 		Response:  "Now listing subdirectory advanced-features-20251012",
-		ToolCalls: []string{`list_directory({"path":"advanced-features-20251012"})`}, // Same tool name, DIFFERENT params
+		ToolCalls: []string{`list_directory({"path":"advanced-features-20251012"})`}, // Same tool name, DIFFERENT params.
 		Timestamp: time.Now(),
 	})
 
-	// BUG TEST: Cycle should NOT be detected because parameters are different
+	// BUG TEST: Cycle should NOT be detected because parameters are different.
 	result, err = detector.Check()
 	if err != nil {
 		t.Fatalf("Check() failed: %v", err)
 	}
+
 	if result.Type == CycleRepeatedTool {
 		t.Error("BUG: Cycle detected when listing DIFFERENT directory")
 		t.Errorf("Tool: list_directory with different params should NOT trigger cycle")
@@ -520,21 +518,22 @@ func TestCheckRepeatedTool_SameToolSameParams(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Call the same tool with identical parameters 3 times
+	// Call the same tool with identical parameters 3 times.
 	for i := 1; i <= 3; i++ {
 		detector.Record(Snapshot{
 			Turn:      i,
 			Response:  "Listing current directory",
-			ToolCalls: []string{`list_directory({"path":"."})`}, // Same tool, same params
+			ToolCalls: []string{`list_directory({"path":"."})`}, // Same tool, same params.
 			Timestamp: time.Now(),
 		})
 	}
 
-	// This SHOULD trigger cycle detection
+	// This SHOULD trigger cycle detection.
 	result, err := detector.Check()
 	if err != nil {
 		t.Fatalf("Check() failed: %v", err)
 	}
+
 	if result.Type != CycleRepeatedTool {
 		t.Errorf("Expected CycleRepeatedTool for 3 identical calls, got %v", result.Type)
 	}
@@ -552,7 +551,7 @@ func TestCheckRepeatedTool_DifferentTools(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Call different tools
+	// Call different tools.
 	detector.Record(Snapshot{
 		Turn:      1,
 		ToolCalls: []string{`list_directory({"path":"."})`},
@@ -571,11 +570,12 @@ func TestCheckRepeatedTool_DifferentTools(t *testing.T) {
 		Timestamp: time.Now(),
 	})
 
-	// No cycle should be detected
+	// No cycle should be detected.
 	result, err := detector.Check()
 	if err != nil {
 		t.Fatalf("Check() failed: %v", err)
 	}
+
 	if result.Type == CycleRepeatedTool {
 		t.Error("Different tools should not trigger cycle detection")
 	}
@@ -595,7 +595,7 @@ func TestCheckRepeatedTool_ExploratoryPattern(t *testing.T) {
 
 	detector := NewDetector(config)
 
-	// Exploratory pattern - each call has different params
+	// Exploratory pattern - each call has different params.
 	explorations := []struct {
 		dir      string
 		response string
@@ -610,16 +610,17 @@ func TestCheckRepeatedTool_ExploratoryPattern(t *testing.T) {
 		detector.Record(Snapshot{
 			Turn:      i + 1,
 			Response:  exp.response,
-			ToolCalls: []string{`list_directory({"path":"` + exp.dir + `"})`}, // Each with different path param
+			ToolCalls: []string{`list_directory({"path":"` + exp.dir + `"})`}, // Each with different path param.
 			Timestamp: time.Now(),
 		})
 	}
 
-	// This should NOT trigger cycle because each call explores a different directory
+	// This should NOT trigger cycle because each call explores a different directory.
 	result, err := detector.Check()
 	if err != nil {
 		t.Fatalf("Check() failed: %v", err)
 	}
+
 	if result.Type == CycleRepeatedTool {
 		t.Error("BUG: Exploratory filesystem navigation incorrectly flagged as cycle")
 		t.Error("Each list_directory call had different parameters (different dirs)")

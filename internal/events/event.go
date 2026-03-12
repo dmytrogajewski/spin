@@ -2,35 +2,37 @@ package events
 
 import (
 	"errors"
+	"maps"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/tools"
-	"github.com/google/uuid"
 )
 
 // Event represents a conversation event that can be streamed to UI.
 // Events are emitted during agent execution to provide real-time feedback
 // about content generation, tool calls, and system status.
 type Event struct {
-	Type      EventType   `json:"type"`
-	Timestamp time.Time   `json:"timestamp"`
-	Data      interface{} `json:"data"`
+	Type      EventType `json:"type"`
+	Timestamp time.Time `json:"timestamp"`
+	Data      any       `json:"data"`
 }
 
-// GetType returns the event type (implements cycle.Event interface)
+// GetType returns the event type (implements cycle.Event interface).
 func (e Event) GetType() string {
 	return e.Type.String()
 }
 
-// GetTimestamp returns the event timestamp (implements cycle.Event interface)
+// GetTimestamp returns the event timestamp (implements cycle.Event interface).
 func (e Event) GetTimestamp() time.Time {
 	return e.Timestamp
 }
 
-// GetData returns the event data (implements cycle.Event interface)
-func (e Event) GetData() interface{} {
+// GetData returns the event data (implements cycle.Event interface).
+func (e Event) GetData() any {
 	return e.Data
 }
 
@@ -38,6 +40,7 @@ func (e Event) GetData() interface{} {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ToolCallStartData() (ToolCallStartData, bool) {
 	data, ok := e.Data.(ToolCallStartData)
+
 	return data, ok
 }
 
@@ -45,6 +48,7 @@ func (e Event) ToolCallStartData() (ToolCallStartData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ToolCallCompleteData() (ToolCallCompleteData, bool) {
 	data, ok := e.Data.(ToolCallCompleteData)
+
 	return data, ok
 }
 
@@ -52,6 +56,7 @@ func (e Event) ToolCallCompleteData() (ToolCallCompleteData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) PlanUpdateData() (PlanUpdateData, bool) {
 	data, ok := e.Data.(PlanUpdateData)
+
 	return data, ok
 }
 
@@ -59,6 +64,7 @@ func (e Event) PlanUpdateData() (PlanUpdateData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ToolProgressData() (ToolProgressData, bool) {
 	data, ok := e.Data.(ToolProgressData)
+
 	return data, ok
 }
 
@@ -66,6 +72,7 @@ func (e Event) ToolProgressData() (ToolProgressData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ContentDeltaData() (ContentDeltaData, bool) {
 	data, ok := e.Data.(ContentDeltaData)
+
 	return data, ok
 }
 
@@ -73,6 +80,7 @@ func (e Event) ContentDeltaData() (ContentDeltaData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ThinkingDeltaData() (ThinkingDeltaData, bool) {
 	data, ok := e.Data.(ThinkingDeltaData)
+
 	return data, ok
 }
 
@@ -80,6 +88,7 @@ func (e Event) ThinkingDeltaData() (ThinkingDeltaData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) TurnEventData() (TurnEventData, bool) {
 	data, ok := e.Data.(TurnEventData)
+
 	return data, ok
 }
 
@@ -87,6 +96,7 @@ func (e Event) TurnEventData() (TurnEventData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ApprovalEventData() (ApprovalEventData, bool) {
 	data, ok := e.Data.(ApprovalEventData)
+
 	return data, ok
 }
 
@@ -94,6 +104,7 @@ func (e Event) ApprovalEventData() (ApprovalEventData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) SystemEventData() (SystemEventData, bool) {
 	data, ok := e.Data.(SystemEventData)
+
 	return data, ok
 }
 
@@ -101,6 +112,7 @@ func (e Event) SystemEventData() (SystemEventData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ErrorData() (ErrorData, bool) {
 	data, ok := e.Data.(ErrorData)
+
 	return data, ok
 }
 
@@ -108,6 +120,7 @@ func (e Event) ErrorData() (ErrorData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ACERetrievalData() (ACERetrievalData, bool) {
 	data, ok := e.Data.(ACERetrievalData)
+
 	return data, ok
 }
 
@@ -115,6 +128,7 @@ func (e Event) ACERetrievalData() (ACERetrievalData, bool) {
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ACELearningData() (ACELearningData, bool) {
 	data, ok := e.Data.(ACELearningData)
+
 	return data, ok
 }
 
@@ -122,18 +136,18 @@ func (e Event) ACELearningData() (ACELearningData, bool) {
 type EventType int
 
 const (
-	// Content events - text generation from LLM
+	// Content events - text generation from LLM.
 	EventContentDelta EventType = iota
 	EventThinkingDelta
 	EventContentComplete
 
-	// Tool events - tool execution lifecycle
+	// Tool events - tool execution lifecycle.
 	EventToolCallStart
 	EventToolCallProgress
 	EventToolCallComplete
 	EventPlanUpdate
 
-	// Turn events - turn lifecycle
+	// Turn events - turn lifecycle.
 	EventTurnStart
 	EventTurnProgress
 	EventTurnComplete
@@ -141,20 +155,20 @@ const (
 	EventTurnPaused
 	EventTurnResumed
 
-	// Approval events - user approval required
+	// Approval events - user approval required.
 	EventCommandApproval
 	EventACERetrieval
 	EventACELearned
 	EventCommandApproved
 	EventCommandDenied
-	// Policy events - approval policy application and persistence
+	// Policy events - approval policy application and persistence.
 	EventPolicyApplied
 	EventPolicySaved
 
-	// Tool selection events - dynamic tool discovery
+	// Tool selection events - dynamic tool discovery.
 	EventTypeToolSelection
 
-	// System events - system-level messages
+	// System events - system-level messages.
 	EventError
 	EventWarning
 	EventInfo
@@ -192,6 +206,7 @@ func (e EventType) String() string {
 	if int(e) < len(names) {
 		return names[e]
 	}
+
 	return "unknown"
 }
 
@@ -223,15 +238,15 @@ type ToolProgressData struct {
 
 // ToolCallCompleteData contains tool execution results.
 type ToolCallCompleteData struct {
-	ToolID   string                 `json:"tool_id"`
-	ToolName string                 `json:"tool_name"`
-	Success  bool                   `json:"success"`
-	Output   string                 `json:"output"`
-	Error    string                 `json:"error,omitempty"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	ToolID   string         `json:"tool_id"`
+	ToolName string         `json:"tool_name"`
+	Success  bool           `json:"success"`
+	Output   string         `json:"output"`
+	Error    string         `json:"error,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
-// PlanUpdateData contains the updated plan with current step statuses
+// PlanUpdateData contains the updated plan with current step statuses.
 type PlanUpdateData struct {
 	Plan *planning.Plan `json:"plan"`
 }
@@ -282,13 +297,13 @@ type ACERetrievalData struct {
 	BulletsNew       int          `json:"bullets_new"`
 	CacheSize        int          `json:"cache_size"`
 	CacheHitRate     float64      `json:"cache_hit_rate"`
-	Bullets          []BulletData `json:"bullets"` // Actual bullet content for rendering
+	Bullets          []BulletData `json:"bullets"` // Actual bullet content for rendering.
 }
 
 // ACELearningData contains ACE learning information after trajectory execution.
 type ACELearningData struct {
-	Success bool         `json:"success"` // Whether the execution was successful
-	Bullets []BulletData `json:"bullets"` // Learned bullets to display
+	Success bool         `json:"success"` // Whether the execution was successful.
+	Bullets []BulletData `json:"bullets"` // Learned bullets to display.
 }
 
 // SystemEventData contains informational or warning messages.
@@ -310,15 +325,15 @@ type BackpressureMode int
 
 const (
 	// BackpressureDrop drops events when subscriber buffer is full (fire-and-forget)
-	// Best for: Non-critical events, high-throughput scenarios
+	// Best for: Non-critical events, high-throughput scenarios.
 	BackpressureDrop BackpressureMode = iota
 
 	// BackpressureBlock blocks the emitter until subscriber is ready
-	// Best for: Critical events that must be delivered (approvals, errors)
+	// Best for: Critical events that must be delivered (approvals, errors).
 	BackpressureBlock
 
 	// BackpressureBuffer uses dynamic buffer growth up to limit
-	// Best for: Bursty workloads where brief slowdowns are acceptable
+	// Best for: Bursty workloads where brief slowdowns are acceptable.
 	BackpressureBuffer
 )
 
@@ -338,14 +353,14 @@ func (m BackpressureMode) String() string {
 
 // EventEmitterConfig configures event emitter behavior.
 type EventEmitterConfig struct {
-	// BufferSize is the initial channel buffer size per subscriber
+	// BufferSize is the initial channel buffer size per subscriber.
 	BufferSize int
 
-	// BackpressureMode determines how to handle slow consumers
+	// BackpressureMode determines how to handle slow consumers.
 	BackpressureMode BackpressureMode
 
 	// BufferLimit is the maximum buffer size for BackpressureBuffer mode
-	// Ignored for other modes. Default: 10000 events
+	// Ignored for other modes. Default: 10000 events.
 	BufferLimit int
 }
 
@@ -358,10 +373,10 @@ type EventEmitter struct {
 	bufferSize  int
 	closed      bool
 
-	// Backpressure configuration
+	// Backpressure configuration.
 	config   EventEmitterConfig
-	buffers  map[string][]Event // Dynamic buffers for BackpressureBuffer mode
-	bufferMu sync.Mutex         // Protects buffers map
+	buffers  map[string][]Event // Dynamic buffers for BackpressureBuffer mode.
+	bufferMu sync.Mutex         // Protects buffers map.
 }
 
 // NewEventEmitter creates a new EventEmitter with default config (BackpressureDrop).
@@ -379,7 +394,7 @@ func NewEventEmitter(bufferSize int) *EventEmitter {
 // NewEventEmitterWithConfig creates a new EventEmitter with custom configuration.
 // This allows selecting different backpressure strategies for handling slow consumers.
 func NewEventEmitterWithConfig(config EventEmitterConfig) *EventEmitter {
-	// Set default buffer limit if not specified
+	// Set default buffer limit if not specified.
 	if config.BufferLimit == 0 {
 		config.BufferLimit = 10000
 	}
@@ -391,7 +406,7 @@ func NewEventEmitterWithConfig(config EventEmitterConfig) *EventEmitter {
 		closed:      false,
 	}
 
-	// Initialize buffers map for BackpressureBuffer mode
+	// Initialize buffers map for BackpressureBuffer mode.
 	if config.BackpressureMode == BackpressureBuffer {
 		emitter.buffers = make(map[string][]Event)
 	}
@@ -410,14 +425,14 @@ func (e *EventEmitter) Subscribe() (id string, events <-chan Event, err error) {
 		return "", nil, errors.New("emitter is closed")
 	}
 
-	// Generate unique subscriber ID
+	// Generate unique subscriber ID.
 	id = uuid.New().String()
 
-	// Create buffered channel for subscriber
+	// Create buffered channel for subscriber.
 	ch := make(chan Event, e.bufferSize)
 	e.subscribers[id] = ch
 
-	// Initialize buffer for BackpressureBuffer mode
+	// Initialize buffer for BackpressureBuffer mode.
 	if e.config.BackpressureMode == BackpressureBuffer {
 		e.bufferMu.Lock()
 		e.buffers[id] = make([]Event, 0)
@@ -437,7 +452,7 @@ func (e *EventEmitter) Unsubscribe(id string) {
 		close(ch)
 		delete(e.subscribers, id)
 
-		// Clean up buffer for BackpressureBuffer mode
+		// Clean up buffer for BackpressureBuffer mode.
 		if e.config.BackpressureMode == BackpressureBuffer {
 			e.bufferMu.Lock()
 			delete(e.buffers, id)
@@ -449,21 +464,22 @@ func (e *EventEmitter) Unsubscribe(id string) {
 // Emit sends an event to all active subscribers using the configured backpressure strategy.
 // The timestamp is automatically set if not provided.
 func (e *EventEmitter) Emit(event Event) {
-	// Set timestamp if not provided
+	// Set timestamp if not provided.
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
 
 	e.mu.RLock()
-	// Don't emit if closed
+	// Don't emit if closed.
 	if e.closed {
 		e.mu.RUnlock()
+
 		return
 	}
 
 	mode := e.config.BackpressureMode
 
-	// For non-blocking modes, keep lock and emit directly
+	// For non-blocking modes, keep lock and emit directly.
 	if mode == BackpressureDrop || mode == BackpressureBuffer {
 		for id, ch := range e.subscribers {
 			switch mode {
@@ -473,19 +489,20 @@ func (e *EventEmitter) Emit(event Event) {
 				e.emitBuffer(id, ch, event)
 			}
 		}
+
 		e.mu.RUnlock()
+
 		return
 	}
 
 	// For BackpressureBlock, we need to release the lock to avoid deadlock
-	// Take snapshot of subscribers
+	// Take snapshot of subscribers.
 	subscribers := make(map[string]chan Event)
-	for id, ch := range e.subscribers {
-		subscribers[id] = ch
-	}
+	maps.Copy(subscribers, e.subscribers)
+
 	e.mu.RUnlock()
 
-	// Emit with blocking (might take time)
+	// Emit with blocking (might take time).
 	for _, ch := range subscribers {
 		e.emitBlock(ch, event)
 	}
@@ -495,28 +512,28 @@ func (e *EventEmitter) Emit(event Event) {
 func (e *EventEmitter) emitDrop(ch chan Event, event Event) {
 	select {
 	case ch <- event:
-		// Successfully sent
+		// Successfully sent.
 	default:
-		// Subscriber slow/blocked, drop event
+		// Subscriber slow/blocked, drop event.
 	}
 }
 
 // emitBlock implements blocking send (ensures delivery).
 func (e *EventEmitter) emitBlock(ch chan Event, event Event) {
-	ch <- event // Blocks until consumer ready
+	ch <- event // Blocks until consumer ready.
 }
 
 // emitBuffer implements dynamic buffering (buffers events up to limit).
 func (e *EventEmitter) emitBuffer(id string, ch chan Event, event Event) {
-	// First try to flush any existing buffered events
+	// First try to flush any existing buffered events.
 	e.tryFlushBuffer(id, ch)
 
-	// Then try to send current event
+	// Then try to send current event.
 	select {
 	case ch <- event:
-		// Successfully sent
+		// Successfully sent.
 	default:
-		// Channel full, add to dynamic buffer
+		// Channel full, add to dynamic buffer.
 		e.addToBuffer(id, event)
 	}
 }
@@ -530,7 +547,7 @@ func (e *EventEmitter) addToBuffer(id string, event Event) {
 	if len(buffer) < e.config.BufferLimit {
 		e.buffers[id] = append(buffer, event)
 	}
-	// If over limit, drop event (similar to BackpressureDrop)
+	// If over limit, drop event (similar to BackpressureDrop).
 }
 
 // tryFlushBuffer attempts to flush buffered events to channel (non-blocking).
@@ -543,8 +560,9 @@ func (e *EventEmitter) tryFlushBuffer(id string, ch chan Event) {
 		return
 	}
 
-	// Try to send buffered events (non-blocking)
+	// Try to send buffered events (non-blocking).
 	sent := 0
+
 	for i, event := range buffer {
 		select {
 		case ch <- event:
@@ -553,9 +571,10 @@ func (e *EventEmitter) tryFlushBuffer(id string, ch chan Event) {
 			goto done
 		}
 	}
+
 done:
 
-	// Remove sent events from buffer
+	// Remove sent events from buffer.
 	if sent > 0 {
 		e.buffers[id] = buffer[sent:]
 	}
@@ -569,18 +588,18 @@ func (e *EventEmitter) Close() {
 	defer e.mu.Unlock()
 
 	if e.closed {
-		return // Already closed
+		return // Already closed.
 	}
 
 	e.closed = true
 
-	// Close all subscriber channels
+	// Close all subscriber channels.
 	for id, ch := range e.subscribers {
 		close(ch)
 		delete(e.subscribers, id)
 	}
 
-	// Clean up buffers for BackpressureBuffer mode
+	// Clean up buffers for BackpressureBuffer mode.
 	if e.config.BackpressureMode == BackpressureBuffer {
 		e.bufferMu.Lock()
 		for id := range e.buffers {
@@ -597,10 +616,12 @@ func (e *EventEmitter) Close() {
 func (e *EventEmitter) Events() <-chan Event {
 	_, ch, err := e.Subscribe()
 	if err != nil {
-		// Return closed channel if subscription fails
+		// Return closed channel if subscription fails.
 		closedCh := make(chan Event)
 		close(closedCh)
+
 		return closedCh
 	}
+
 	return ch
 }

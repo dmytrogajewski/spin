@@ -8,10 +8,12 @@ import (
 )
 
 func TestDiscover_WorkDir(t *testing.T) {
-	// Create temp directory with AGENTS.md
+	// Create temp directory with AGENTS.md.
 	tempDir := t.TempDir()
+
 	agentsPath := filepath.Join(tempDir, FileName)
-	if err := os.WriteFile(agentsPath, []byte("# Test Instructions"), 0644); err != nil {
+	err := os.WriteFile(agentsPath, []byte("# Test Instructions"), 0644)
+	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -22,58 +24,67 @@ func TestDiscover_WorkDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
+
 	if path != agentsPath {
 		t.Errorf("Discover() = %v, want %v", path, agentsPath)
 	}
 }
 
 func TestDiscover_GitRoot(t *testing.T) {
-	// Create temp directory structure
+	// Create temp directory structure.
 	tempDir := t.TempDir()
+
 	workDir := filepath.Join(tempDir, "subdir")
-	if err := os.MkdirAll(workDir, 0755); err != nil {
+	err := os.MkdirAll(workDir, 0755)
+	if err != nil {
 		t.Fatalf("failed to create workdir: %v", err)
 	}
 
-	// Put AGENTS.md in git root (tempDir), not workDir
+	// Put AGENTS.md in git root (tempDir), not workDir.
 	agentsPath := filepath.Join(tempDir, FileName)
-	if err := os.WriteFile(agentsPath, []byte("# Git Root Instructions"), 0644); err != nil {
+	err = os.WriteFile(agentsPath, []byte("# Git Root Instructions"), 0644)
+	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	d := NewDiscoverer(tempDir) // gitRoot = tempDir
+	d := NewDiscoverer(tempDir) // gitRoot = tempDir.
 	ctx := context.Background()
 
 	path, err := d.Discover(ctx, workDir)
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
+
 	if path != agentsPath {
 		t.Errorf("Discover() = %v, want %v", path, agentsPath)
 	}
 }
 
 func TestDiscover_ParentDir(t *testing.T) {
-	// Create temp directory structure
+	// Create temp directory structure.
 	tempDir := t.TempDir()
+
 	workDir := filepath.Join(tempDir, "level1", "level2")
-	if err := os.MkdirAll(workDir, 0755); err != nil {
+	err := os.MkdirAll(workDir, 0755)
+	if err != nil {
 		t.Fatalf("failed to create workdir: %v", err)
 	}
 
-	// Put AGENTS.md in parent (level1), not workDir
+	// Put AGENTS.md in parent (level1), not workDir.
 	agentsPath := filepath.Join(tempDir, "level1", FileName)
-	if err := os.WriteFile(agentsPath, []byte("# Parent Instructions"), 0644); err != nil {
+	err = os.WriteFile(agentsPath, []byte("# Parent Instructions"), 0644)
+	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	d := NewDiscoverer("") // no git root
+	d := NewDiscoverer("") // no git root.
 	ctx := context.Background()
 
 	path, err := d.Discover(ctx, workDir)
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
+
 	if path != agentsPath {
 		t.Errorf("Discover() = %v, want %v", path, agentsPath)
 	}
@@ -82,22 +93,25 @@ func TestDiscover_ParentDir(t *testing.T) {
 func TestDiscover_NotFound(t *testing.T) {
 	// Create temp directory without AGENTS.md
 	// Use a deeply nested path to avoid accidentally finding a real AGENTS.md
-	// when walking up the directory tree during tests
+	// when walking up the directory tree during tests.
 	tempDir := t.TempDir()
+
 	isolatedDir := filepath.Join(tempDir, "isolated", "deep", "path")
-	if err := os.MkdirAll(isolatedDir, 0755); err != nil {
+	err := os.MkdirAll(isolatedDir, 0755)
+	if err != nil {
 		t.Fatalf("failed to create isolated dir: %v", err)
 	}
 
 	// Create a marker file at tempDir to stop the walk-up
-	// by making tempDir look like a git root
-	d := NewDiscoverer(tempDir) // Set gitRoot to tempDir to limit walk-up
+	// by making tempDir look like a git root.
+	d := NewDiscoverer(tempDir) // Set gitRoot to tempDir to limit walk-up.
 	ctx := context.Background()
 
 	path, err := d.Discover(ctx, isolatedDir)
 	if err != nil {
 		t.Fatalf("Discover() error = %v, want nil", err)
 	}
+
 	if path != "" {
 		t.Errorf("Discover() = %v, want empty string", path)
 	}
@@ -108,7 +122,7 @@ func TestDiscover_ContextCanceled(t *testing.T) {
 
 	d := NewDiscoverer("")
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
+	cancel() // Cancel immediately.
 
 	_, err := d.Discover(ctx, tempDir)
 	if err == nil {
@@ -117,32 +131,38 @@ func TestDiscover_ContextCanceled(t *testing.T) {
 }
 
 func TestDiscover_WorkDirPriority(t *testing.T) {
-	// Create temp directory structure with AGENTS.md in both locations
+	// Create temp directory structure with AGENTS.md in both locations.
 	tempDir := t.TempDir()
+
 	workDir := filepath.Join(tempDir, "subdir")
-	if err := os.MkdirAll(workDir, 0755); err != nil {
+	err := os.MkdirAll(workDir, 0755)
+	if err != nil {
 		t.Fatalf("failed to create workdir: %v", err)
 	}
 
-	// AGENTS.md in both workDir and git root
+	// AGENTS.md in both workDir and git root.
 	workDirAgents := filepath.Join(workDir, FileName)
 	gitRootAgents := filepath.Join(tempDir, FileName)
 
-	if err := os.WriteFile(workDirAgents, []byte("# WorkDir"), 0644); err != nil {
+	err = os.WriteFile(workDirAgents, []byte("# WorkDir"), 0644)
+	if err != nil {
 		t.Fatalf("failed to create workdir file: %v", err)
 	}
-	if err := os.WriteFile(gitRootAgents, []byte("# GitRoot"), 0644); err != nil {
+
+	err = os.WriteFile(gitRootAgents, []byte("# GitRoot"), 0644)
+	if err != nil {
 		t.Fatalf("failed to create git root file: %v", err)
 	}
 
-	d := NewDiscoverer(tempDir) // gitRoot = tempDir
+	d := NewDiscoverer(tempDir) // gitRoot = tempDir.
 	ctx := context.Background()
 
-	// WorkDir should take priority
+	// WorkDir should take priority.
 	path, err := d.Discover(ctx, workDir)
 	if err != nil {
 		t.Fatalf("Discover() error = %v", err)
 	}
+
 	if path != workDirAgents {
 		t.Errorf("Discover() = %v, want %v (workDir should have priority)", path, workDirAgents)
 	}
@@ -151,9 +171,10 @@ func TestDiscover_WorkDirPriority(t *testing.T) {
 func TestFileExists(t *testing.T) {
 	tempDir := t.TempDir()
 
-	// Test file that exists
+	// Test file that exists.
 	existingFile := filepath.Join(tempDir, "exists.txt")
-	if err := os.WriteFile(existingFile, []byte("content"), 0644); err != nil {
+	err := os.WriteFile(existingFile, []byte("content"), 0644)
+	if err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -161,12 +182,12 @@ func TestFileExists(t *testing.T) {
 		t.Error("fileExists() = false for existing file")
 	}
 
-	// Test file that doesn't exist
+	// Test file that doesn't exist.
 	if fileExists(filepath.Join(tempDir, "nonexistent.txt")) {
 		t.Error("fileExists() = true for non-existent file")
 	}
 
-	// Test directory (should return false)
+	// Test directory (should return false).
 	if fileExists(tempDir) {
 		t.Error("fileExists() = true for directory")
 	}

@@ -17,7 +17,7 @@ func TestNewCachingSummarizer(t *testing.T) {
 		t.Fatal("NewCachingSummarizer returned nil")
 	}
 
-	// Verify it implements Summarizer
+	// Verify it implements Summarizer.
 	var _ Summarizer = cs
 }
 
@@ -26,6 +26,7 @@ func TestCachingSummarizer_CacheHit(t *testing.T) {
 	inner := &mockSummarizer{
 		summarizeFunc: func(ctx context.Context, content string, opts Options) (*Result, error) {
 			callCount++
+
 			return &Result{Summary: "inner summary"}, nil
 		},
 	}
@@ -35,26 +36,30 @@ func TestCachingSummarizer_CacheHit(t *testing.T) {
 	ctx := context.Background()
 	content := "test content"
 
-	// First call - should call inner
+	// First call - should call inner.
 	result1, err := cs.Summarize(ctx, content, Options{})
 	if err != nil {
 		t.Fatalf("First Summarize error: %v", err)
 	}
+
 	if result1.Summary != "inner summary" {
 		t.Errorf("result1.Summary = %q, want %q", result1.Summary, "inner summary")
 	}
+
 	if callCount != 1 {
 		t.Errorf("callCount after first call = %d, want 1", callCount)
 	}
 
-	// Second call - should use cache
+	// Second call - should use cache.
 	result2, err := cs.Summarize(ctx, content, Options{})
 	if err != nil {
 		t.Fatalf("Second Summarize error: %v", err)
 	}
+
 	if result2.Summary != "inner summary" {
 		t.Errorf("result2.Summary = %q, want %q", result2.Summary, "inner summary")
 	}
+
 	if callCount != 1 {
 		t.Errorf("callCount after second call = %d, want 1 (cache hit)", callCount)
 	}
@@ -65,6 +70,7 @@ func TestCachingSummarizer_MessagesNotCached(t *testing.T) {
 	inner := &mockSummarizer{
 		summarizeMessagesFunc: func(ctx context.Context, messages []message.Message, opts Options) (*MessageResult, error) {
 			callCount++
+
 			return &MessageResult{
 				Summary: message.Message{Role: message.RoleAssistant, Content: "summary"},
 			}, nil
@@ -76,17 +82,19 @@ func TestCachingSummarizer_MessagesNotCached(t *testing.T) {
 	ctx := context.Background()
 	messages := []message.Message{{Role: message.RoleUser, Content: "test"}}
 
-	// First call
+	// First call.
 	_, _ = cs.SummarizeMessages(ctx, messages, Options{})
+
 	if callCount != 1 {
 		t.Errorf("callCount after first call = %d, want 1", callCount)
 	}
 
-	// Second call - should still call inner (messages not cached)
+	// Second call - should still call inner (messages not cached).
 	_, _ = cs.SummarizeMessages(ctx, messages, Options{})
+
 	if callCount != 2 {
 		t.Errorf("callCount after second call = %d, want 2 (no caching)", callCount)
 	}
 }
 
-// mockSummarizer defined in summarizer_test.go
+// mockSummarizer defined in summarizer_test.go.

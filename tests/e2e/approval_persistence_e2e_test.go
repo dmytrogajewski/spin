@@ -13,6 +13,7 @@ func TestApprovalPersistence_SessionAndGlobalScopes(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
+
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -25,7 +26,8 @@ security:
   policy_file: ` + policyPath + `
   approval_persistence_enabled: true
 `
-	if err := writeFile(configPath, cfg); err != nil {
+	err := writeFile(configPath, cfg)
+	if err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
@@ -34,6 +36,7 @@ security:
 	if err != nil {
 		t.Fatalf("approval list failed: %v\nstderr: %s", err, stderr)
 	}
+
 	if !strings.Contains(stdout, "No policies found.") {
 		t.Fatalf("expected initial list to be empty, got: %s", stdout)
 	}

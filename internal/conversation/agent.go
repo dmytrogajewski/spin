@@ -13,40 +13,43 @@ import (
 func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*agent.Agent, error) {
 	// Use agent.Builder helper methods for service construction
 	// Runtime provides: approval handler, tool registration, notifications
-	// Emitter is passed from cmd layer and shared with runtime
+	// Emitter is passed from cmd layer and shared with runtime.
 	agentBuilder := agent.NewBuilder().
 		WithConfig(b.cfg).
 		WithProvider(b.llm).
 		WithWorkingDir(b.workDir).
 		WithEmitter(b.emitter).
-		WithRuntime(b.runtime) // Runtime ALWAYS provides approval handler
+		WithRuntime(b.runtime) // Runtime ALWAYS provides approval handler.
 
-	// Build detection using builder helper
+		// Build detection using builder helper.
 	detectionSvc := agentBuilder.BuildDetectionService()
 
 	// Shared validator + approval service for security + runtime
-	// Use agent.Builder helper to build security service (uses runtime's approval handler if set)
+	// Use agent.Builder helper to build security service (uses runtime's approval handler if set).
 	securitySvc := agentBuilder.BuildSecurityService()
 
-	// Extract ApprovalService and Validator from SecurityService for ToolRuntime
-	var approvalSvc *security.ApprovalService = securitySvc.ApprovalService()
-	var runtimeValidator *security.Validator = securitySvc.Validator()
+	// Extract ApprovalService and Validator from SecurityService for ToolRuntime.
+	var (
+		approvalSvc      *security.ApprovalService = securitySvc.ApprovalService()
+		runtimeValidator *security.Validator       = securitySvc.Validator()
+	)
 
-	// Build tool registry - use runtime's tool registration if available, otherwise build from integrations
+	// Build tool registry - use runtime's tool registration if available, otherwise build from integrations.
 	var toolReg *tools.Registry
 	if b.runtime != nil {
-		// Use runtime's tool registration
+		// Use runtime's tool registration.
 		toolReg = tools.NewRegistry()
 		b.runtime.RegisterTools(toolReg)
-		// Also register integration tools (MCP, Git)
+		// Also register integration tools (MCP, Git).
 		_ = b.registerIntegrationTools(toolReg)
 	} else {
-		// Fall back to conversation-level tool registry building
+		// Fall back to conversation-level tool registry building.
 		toolReg = b.buildToolRegistry(exec, securitySvc, env)
 	}
 
-	// Register memory tools if memory service is available
-	if err := b.registerMemoryTools(toolReg); err != nil {
+	// Register memory tools if memory service is available.
+	err := b.registerMemoryTools(toolReg)
+	if err != nil {
 		if b.logger != nil {
 			b.logger.Warn("memory tools registration failed", "err", err)
 		}
@@ -54,19 +57,19 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 
 	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
 		Registry:        toolReg,
-		Validator:       runtimeValidator, // *security.Validator
-		ApprovalService: approvalSvc,      // *security.ApprovalService
+		Validator:       runtimeValidator, // *security.Validator.
+		ApprovalService: approvalSvc,      // *security.ApprovalService.
 		Emitter:         b.emitter,
 		WorkDir:         env.WorkDir,
 	})
 
-	// Build PlanningService using builder helper
+	// Build PlanningService using builder helper.
 	planningSvc := agentBuilder.BuildPlanningService()
 
-	// Agent options using builder helper
+	// Agent options using builder helper.
 	opts := agentBuilder.BuildAgentOptions()
 
-	// ACE service using builder helper
+	// ACE service using builder helper.
 	if b.cfg != nil && b.cfg.ACE.Enabled {
 		aceSvc, err := agentBuilder.BuildACEService()
 		if err != nil {
@@ -76,28 +79,32 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 		} else {
 			opts = append(opts, agent.WithACEService(aceSvc))
 			// Also pass ACE config to agent so it can emit events
-			// Convert ConfigV2 ACE to agent.ACEConfig
+			// Convert ConfigV2 ACE to agent.ACEConfig.
 			aceConfig := agent.ConvertACEConfig(&b.cfg.ACE)
 			opts = append(opts, agent.WithACEConfig(aceConfig))
+
 			if b.logger != nil {
 				b.logger.Info("ACE enabled", "playbook", b.cfg.ACE.PlaybookPath, "model", b.cfg.LLM.Model)
 			}
 		}
 	}
 
-	// AGENTS.md service using builder helper
+	// AGENTS.md service using builder helper.
 	if b.cfg != nil && b.cfg.AgentsMD.Enabled {
-		// Get git root for discovery
+		// Get git root for discovery.
 		gitRoot := ""
+
 		if b.gitService != nil && b.gitService.IsRepository() {
 			if repo := b.gitService.GetIntegration().GetRepository(); repo != nil {
 				gitRoot = repo.Root()
 			}
 		}
+
 		agentsMDSvc := agentBuilder.BuildAgentsMDService(gitRoot)
 		if agentsMDSvc != nil {
-			// Load AGENTS.md content (errors are logged but don't fail startup)
-			if err := agentsMDSvc.Load(context.Background()); err != nil {
+			// Load AGENTS.md content (errors are logged but don't fail startup).
+			err := agentsMDSvc.Load(context.Background())
+			if err != nil {
 				if b.logger != nil {
 					b.logger.Warn("failed to load AGENTS.md", "error", err)
 				}
@@ -110,20 +117,22 @@ func (b *Builder) buildAgent(exec *agent.Executor, env *agent.Environment) (*age
 		}
 	}
 
-	// Dynamic tool selector (for MCP registries with dynamic_loadout)
+	// Dynamic tool selector (for MCP registries with dynamic_loadout).
 	if b.toolSelector != nil {
-		// Set the runtime registry so dynamically loaded tools can be registered
+		// Set the runtime registry so dynamically loaded tools can be registered.
 		b.toolSelector.SetRuntimeRegistry(toolReg)
+
 		opts = append(opts, agent.WithToolSelector(b.toolSelector))
 		if b.logger != nil {
 			b.logger.Info("dynamic tool selection enabled")
 		}
 	}
 
-	// Create agent
+	// Create agent.
 	ag, err := agent.NewAgent(b.llm, securitySvc, detectionSvc, toolRuntime, planningSvc, env, b.emitter, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("agent: %w", err)
 	}
+
 	return ag, nil
 }

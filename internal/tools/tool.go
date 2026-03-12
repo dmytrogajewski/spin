@@ -59,7 +59,7 @@ type ToolResult struct {
 	ExitCode int `json:"exit_code,omitempty"`
 
 	// Metadata contains additional tool-specific data.
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // NewToolResult creates a successful tool result with the given output.
@@ -92,18 +92,21 @@ func NewToolErrorWithID(id string, err error) ToolResult {
 // WithID returns a copy of the result with the given ID.
 func (r ToolResult) WithID(id string) ToolResult {
 	r.ID = id
+
 	return r
 }
 
 // WithExitCode returns a copy of the result with the given exit code.
 func (r ToolResult) WithExitCode(code int) ToolResult {
 	r.ExitCode = code
+
 	return r
 }
 
 // WithMetadata returns a copy of the result with the given metadata.
-func (r ToolResult) WithMetadata(metadata map[string]interface{}) ToolResult {
+func (r ToolResult) WithMetadata(metadata map[string]any) ToolResult {
 	r.Metadata = metadata
+
 	return r
 }
 
@@ -117,9 +120,11 @@ func (r ToolResult) String() string {
 	if r.Success {
 		return r.Output
 	}
+
 	if r.Err != nil {
 		return r.Err.Error()
 	}
+
 	return r.Error
 }
 

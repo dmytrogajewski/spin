@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -28,17 +29,19 @@ func NewStrictArgumentParser() *ArgumentParser {
 // - If raw is empty and AllowEmpty is true: returns empty ToolParameters, no error
 // - If raw is empty and AllowEmpty is false: returns zero ToolParameters, error
 // - If raw is invalid JSON: returns zero ToolParameters, error
-// - Otherwise: returns parsed ToolParameters, no error
+// - Otherwise: returns parsed ToolParameters, no error.
 func (p *ArgumentParser) Parse(raw string) (ToolParameters, error) {
 	if raw == "" {
 		if p.AllowEmpty {
 			return ToolParameters{}, nil
 		}
-		return ToolParameters{}, fmt.Errorf("tool arguments cannot be empty")
+
+		return ToolParameters{}, errors.New("tool arguments cannot be empty")
 	}
 
-	var args map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &args); err != nil {
+	var args map[string]any
+	err := json.Unmarshal([]byte(raw), &args)
+	if err != nil {
 		return ToolParameters{}, fmt.Errorf("failed to parse tool arguments: %w", err)
 	}
 

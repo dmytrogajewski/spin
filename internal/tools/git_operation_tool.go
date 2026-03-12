@@ -54,17 +54,19 @@ var gitOperationHandlers = map[string]gitOperationHandler{
 	"get_log":       handleGitLog,
 }
 
-// Handler functions
+// Handler functions.
 
 func handleGitStage(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
 	filePath, _ := params.GetString("file_path")
 	if filePath == "" {
 		return gitErrorResult("file_path is required for stage operation"), nil
 	}
+
 	err := t.gitIntegration.StageFile(filePath)
 	if err != nil {
 		return gitErrorResult(fmt.Sprintf("Failed to stage file: %v", err)), nil
 	}
+
 	return gitSuccessResult(fmt.Sprintf("Staged file: %s", filePath)), nil
 }
 
@@ -73,10 +75,12 @@ func handleGitCommit(ctx context.Context, t *GitOperationTool, params ToolParame
 	if message == "" {
 		return gitErrorResult("message is required for commit operation"), nil
 	}
+
 	err := t.gitIntegration.Commit(message)
 	if err != nil {
 		return gitErrorResult(fmt.Sprintf("Failed to commit: %v", err)), nil
 	}
+
 	return gitSuccessResult(fmt.Sprintf("Committed: %s", message)), nil
 }
 
@@ -85,6 +89,7 @@ func handleGitPush(ctx context.Context, t *GitOperationTool, params ToolParamete
 	if err != nil {
 		return gitErrorResult(fmt.Sprintf("Failed to push: %v", err)), nil
 	}
+
 	return gitSuccessResult("Pushed changes to remote"), nil
 }
 
@@ -93,6 +98,7 @@ func handleGitPull(ctx context.Context, t *GitOperationTool, params ToolParamete
 	if err != nil {
 		return gitErrorResult(fmt.Sprintf("Failed to pull: %v", err)), nil
 	}
+
 	return gitSuccessResult("Pulled changes from remote"), nil
 }
 
@@ -101,10 +107,12 @@ func handleGitCreateBranch(ctx context.Context, t *GitOperationTool, params Tool
 	if branchName == "" {
 		return gitErrorResult("branch_name is required for create_branch operation"), nil
 	}
+
 	err := t.gitIntegration.CreateBranch(branchName)
 	if err != nil {
 		return gitErrorResult(fmt.Sprintf("Failed to create branch: %v", err)), nil
 	}
+
 	return gitSuccessResult(fmt.Sprintf("Created branch: %s", branchName)), nil
 }
 
@@ -113,10 +121,12 @@ func handleGitSwitchBranch(ctx context.Context, t *GitOperationTool, params Tool
 	if branchName == "" {
 		return gitErrorResult("branch_name is required for switch_branch operation"), nil
 	}
+
 	err := t.gitIntegration.SwitchBranch(branchName)
 	if err != nil {
 		return gitErrorResult(fmt.Sprintf("Failed to switch branch: %v", err)), nil
 	}
+
 	return gitSuccessResult(fmt.Sprintf("Switched to branch: %s", branchName)), nil
 }
 
@@ -125,6 +135,7 @@ func handleGitListBranches(ctx context.Context, t *GitOperationTool, params Tool
 	if err != nil {
 		return gitErrorResult(fmt.Sprintf("Failed to list branches: %v", err)), nil
 	}
+
 	return gitSuccessResult(fmt.Sprintf("Branches: %s", strings.Join(branches, ", "))), nil
 }
 
@@ -133,6 +144,7 @@ func handleGitListRemotes(ctx context.Context, t *GitOperationTool, params ToolP
 	if err != nil {
 		return gitErrorResult(fmt.Sprintf("Failed to list remotes: %v", err)), nil
 	}
+
 	return gitSuccessResult(fmt.Sprintf("Remotes: %s", strings.Join(remotes, ", "))), nil
 }
 
@@ -141,33 +153,40 @@ func handleGitStatus(ctx context.Context, t *GitOperationTool, params ToolParame
 	if status == nil {
 		return gitErrorResult("Failed to get Git status"), nil
 	}
+
 	var output strings.Builder
 	output.WriteString(fmt.Sprintf("Branch: %s\n", status.Branch))
 	output.WriteString(fmt.Sprintf("Modified: %d files\n", len(status.ModifiedFiles)))
 	output.WriteString(fmt.Sprintf("Untracked: %d files\n", len(status.UntrackedFiles)))
 	output.WriteString(fmt.Sprintf("Ahead: %d, Behind: %d\n", status.Ahead, status.Behind))
+
 	return gitSuccessResult(output.String()), nil
 }
 
 func handleGitDiff(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
 	filePath, _ := params.GetString("file_path")
+
 	diff, err := t.gitIntegration.GetDiff(filePath)
 	if err != nil {
 		return gitErrorResult(fmt.Sprintf("Failed to get diff: %v", err)), nil
 	}
+
 	return gitSuccessResult(diff), nil
 }
 
 func handleGitLog(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
 	limit := params.GetIntOr("limit", 10)
+
 	logs, err := t.gitIntegration.GetLog(limit)
 	if err != nil {
 		return gitErrorResult(fmt.Sprintf("Failed to get log: %v", err)), nil
 	}
+
 	var output strings.Builder
 	for _, log := range logs {
 		output.WriteString(fmt.Sprintf("%s: %s\n", log.Hash[:7], log.Message))
 	}
+
 	return gitSuccessResult(output.String()), nil
 }
 
@@ -217,23 +236,23 @@ func (t *GitOperationTool) Schema() ToolSchema {
 }
 
 func (t *GitOperationTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	// Validate git integration
+	// Validate git integration.
 	if t.gitIntegration == nil || !t.gitIntegration.IsRepository() {
 		return gitErrorResult("Not a Git repository or Git integration not available"), nil
 	}
 
-	// Extract operation
+	// Extract operation.
 	operation, err := params.GetString("operation")
 	if err != nil {
 		return gitErrorResult("operation parameter is required"), nil
 	}
 
-	// Get handler from map
+	// Get handler from map.
 	handler, exists := gitOperationHandlers[operation]
 	if !exists {
 		return gitErrorResult(fmt.Sprintf("Unknown operation: %s", operation)), nil
 	}
 
-	// Execute handler
+	// Execute handler.
 	return handler(ctx, t, params)
 }

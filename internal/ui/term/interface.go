@@ -16,5 +16,5 @@ type TerminalController interface {
 	OnResize(cb func(w, h int))
 }
 
-// Ensure TTY implements TerminalController
+// Ensure TTY implements TerminalController.
 var _ TerminalController = (*TTY)(nil)

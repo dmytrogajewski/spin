@@ -17,31 +17,33 @@ func TestACP_SetSessionMode(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
 	client := createACPClient(t, stdin, stdout)
 	ctx := context.Background()
 
-	// Initialize
+	// Initialize.
 	_, err := client.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 	})
 	require.NoError(t, err)
 
-	// Create session
+	// Create session.
 	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
 		Cwd:        workDir,
 		McpServers: []acp.McpServer{},
 	})
 	require.NoError(t, err)
+
 	sessionID := sessionResp.SessionId
 
-	// Verify default mode is "regular"
+	// Verify default mode is "regular".
 	require.NotNil(t, sessionResp.Modes)
 	assert.Equal(t, acp.SessionModeId("regular"), sessionResp.Modes.CurrentModeId, "Default mode should be 'regular'")
 
-	// Set mode to "review"
+	// Set mode to "review".
 	setModeReq := acp.SetSessionModeRequest{
 		SessionId: sessionID,
 		ModeId:    acp.SessionModeId("review"),
@@ -51,7 +53,7 @@ func TestACP_SetSessionMode(t *testing.T) {
 	require.NoError(t, err, "SetSessionMode should succeed")
 	assert.NotNil(t, resp)
 
-	// Verify mode was set (we can't directly query, but if no error, it was set)
+	// Verify mode was set (we can't directly query, but if no error, it was set).
 }
 
 // TestACP_SetSessionMode_AllModes tests setting all available modes.
@@ -61,6 +63,7 @@ func TestACP_SetSessionMode_AllModes(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -116,7 +119,7 @@ func TestACP_SetSessionMode_InvalidSession(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Try to set mode with invalid session
+	// Try to set mode with invalid session.
 	setModeReq := acp.SetSessionModeRequest{
 		SessionId: acp.SessionId("invalid-session-id"),
 		ModeId:    acp.SessionModeId("regular"),
@@ -133,6 +136,7 @@ func TestACP_SetSessionMode_InvalidMode(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -150,7 +154,7 @@ func TestACP_SetSessionMode_InvalidMode(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Try to set invalid mode
+	// Try to set invalid mode.
 	setModeReq := acp.SetSessionModeRequest{
 		SessionId: sessionResp.SessionId,
 		ModeId:    acp.SessionModeId("invalid-mode"),
@@ -168,10 +172,11 @@ func TestACP_SetSessionMode_Notifications(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
-	// Create client with notification tracking
+	// Create client with notification tracking.
 	clientImpl := &testClient{}
 	client := createACPClientWithClient(t, stdin, stdout, clientImpl)
 	ctx := context.Background()
@@ -189,7 +194,7 @@ func TestACP_SetSessionMode_Notifications(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Set mode
+	// Set mode.
 	setModeReq := acp.SetSessionModeRequest{
 		SessionId: sessionResp.SessionId,
 		ModeId:    acp.SessionModeId("review"),
@@ -199,17 +204,20 @@ func TestACP_SetSessionMode_Notifications(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check for mode update notification
-	// Give a moment for notification to be sent (notifications are async)
+	// Give a moment for notification to be sent (notifications are async).
 	time.Sleep(100 * time.Millisecond)
+
 	notifications := clientImpl.getNotifications()
-	
+
 	hasModeUpdate := false
+
 	for _, notif := range notifications {
 		if notif.Update.CurrentModeUpdate != nil {
 			hasModeUpdate = true
 			modeUpdate := notif.Update.CurrentModeUpdate
 			assert.Equal(t, acp.SessionModeId("review"), modeUpdate.CurrentModeId, "Mode update should reflect new mode")
 			t.Logf("Found mode update notification: %s", modeUpdate.CurrentModeId)
+
 			break
 		}
 	}
@@ -219,7 +227,7 @@ func TestACP_SetSessionMode_Notifications(t *testing.T) {
 	// This is acceptable for e2e tests - the important part is that SetSessionMode succeeds.
 	if !hasModeUpdate {
 		t.Logf("Mode update notification not received (may be expected with test-llm provider)")
-		// Don't fail the test - SetSessionMode succeeded, which is the main behavior
+		// Don't fail the test - SetSessionMode succeeded, which is the main behavior.
 	}
 }
 
@@ -230,6 +238,7 @@ func TestACP_Mode_SetMode_Basic(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -247,7 +256,7 @@ func TestACP_Mode_SetMode_Basic(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Set mode
+	// Set mode.
 	setModeReq := acp.SetSessionModeRequest{
 		SessionId: sessionResp.SessionId,
 		ModeId:    acp.SessionModeId("review"),
@@ -265,6 +274,7 @@ func TestACP_Mode_CurrentModeUpdate(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -285,7 +295,7 @@ func TestACP_Mode_CurrentModeUpdate(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Set mode (may trigger notification)
+	// Set mode (may trigger notification).
 	setModeReq := acp.SetSessionModeRequest{
 		SessionId: sessionResp.SessionId,
 		ModeId:    acp.SessionModeId("compact"),
@@ -294,19 +304,21 @@ func TestACP_Mode_CurrentModeUpdate(t *testing.T) {
 	_, err = client.SetSessionMode(ctx, setModeReq)
 	require.NoError(t, err)
 
-	// Wait for notification
+	// Wait for notification.
 	time.Sleep(200 * time.Millisecond)
 
-	// Check for current_mode_update notification
+	// Check for current_mode_update notification.
 	notifications := clientImpl.getNotifications()
 	for _, notif := range notifications {
 		if notif.Update.CurrentModeUpdate != nil {
 			modeUpdate := notif.Update.CurrentModeUpdate
 			assert.NotEmpty(t, modeUpdate.CurrentModeId, "Mode update should have mode ID")
 			t.Logf("Found current_mode_update: %s", modeUpdate.CurrentModeId)
+
 			return
 		}
 	}
+
 	t.Log("No current_mode_update notification found (may be expected)")
 }
 
@@ -317,6 +329,7 @@ func TestACP_Mode_InitialState(t *testing.T) {
 	}
 
 	workDir := createTestWorkspace(t)
+
 	cmd, stdin, stdout := startACPAgent(t, "--workspace", workDir)
 	defer cleanupAgent(t, cmd, stdin)
 
@@ -334,20 +347,22 @@ func TestACP_Mode_InitialState(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Verify initial mode state
+	// Verify initial mode state.
 	require.NotNil(t, sessionResp.Modes, "Session should have mode state")
 	assert.NotEmpty(t, sessionResp.Modes.CurrentModeId, "Current mode should be set")
 	assert.NotEmpty(t, sessionResp.Modes.AvailableModes, "Available modes should be set")
-	
-	// Verify current mode is one of available modes
+
+	// Verify current mode is one of available modes.
 	currentMode := sessionResp.Modes.CurrentModeId
 	found := false
+
 	for _, mode := range sessionResp.Modes.AvailableModes {
 		if mode.Id == currentMode {
 			found = true
+
 			break
 		}
 	}
+
 	assert.True(t, found, "Current mode should be in available modes")
 }
-

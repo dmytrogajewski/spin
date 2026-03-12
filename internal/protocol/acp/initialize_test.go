@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	"github.com/coder/acp-go-sdk"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/session"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestSpinACPAgent_Initialize_Success tests successful initialization.
@@ -26,7 +27,7 @@ func TestSpinACPAgent_Initialize_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	req := acp.InitializeRequest{
-		ProtocolVersion: acp.ProtocolVersionNumber,
+		ProtocolVersion:    acp.ProtocolVersionNumber,
 		ClientCapabilities: acp.ClientCapabilities{},
 		ClientInfo: &acp.Implementation{
 			Name:    "test-client",
@@ -55,19 +56,19 @@ func TestSpinACPAgent_Initialize_ProtocolVersion(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name           string
-		clientVersion  acp.ProtocolVersion
+		name            string
+		clientVersion   acp.ProtocolVersion
 		expectedVersion acp.ProtocolVersion
 	}{
 		{
-			name:           "version 1 supported",
-			clientVersion:  acp.ProtocolVersion(1),
+			name:            "version 1 supported",
+			clientVersion:   acp.ProtocolVersion(1),
 			expectedVersion: acp.ProtocolVersion(1),
 		},
 		{
-			name:           "unsupported version returns version 1",
-			clientVersion:  acp.ProtocolVersion(2),
-			expectedVersion: acp.ProtocolVersion(1), // Return latest supported
+			name:            "unsupported version returns version 1",
+			clientVersion:   acp.ProtocolVersion(2),
+			expectedVersion: acp.ProtocolVersion(1), // Return latest supported.
 		},
 	}
 
@@ -103,12 +104,12 @@ func TestSpinACPAgent_Initialize_AgentCapabilities(t *testing.T) {
 	resp, err := acpAgent.Initialize(context.Background(), req)
 	require.NoError(t, err)
 
-	// Verify capabilities are set
+	// Verify capabilities are set.
 	caps := resp.AgentCapabilities
 	assert.True(t, caps.PromptCapabilities.Image, "should support images")
 	assert.True(t, caps.PromptCapabilities.Audio, "should support audio (converted to text description)")
 	assert.True(t, caps.PromptCapabilities.EmbeddedContext, "should support embedded context")
-	// MCP capabilities depend on manager support
+	// MCP capabilities depend on manager support.
 	assert.NotNil(t, caps.McpCapabilities)
 }
 
@@ -124,7 +125,7 @@ func TestSpinACPAgent_Initialize_ClientCapabilitiesStorage(t *testing.T) {
 	require.NoError(t, err)
 
 	clientCaps := acp.ClientCapabilities{
-		// Client capabilities
+		// Client capabilities.
 	}
 
 	req := acp.InitializeRequest{
@@ -135,7 +136,7 @@ func TestSpinACPAgent_Initialize_ClientCapabilitiesStorage(t *testing.T) {
 	_, err = acpAgent.Initialize(context.Background(), req)
 	require.NoError(t, err)
 
-	// Verify client capabilities are stored
+	// Verify client capabilities are stored.
 	assert.NotNil(t, acpAgent.clientCaps)
 	assert.Equal(t, clientCaps, *acpAgent.clientCaps)
 }
@@ -158,7 +159,7 @@ func TestSpinACPAgent_Initialize_AgentInfo(t *testing.T) {
 	resp, err := acpAgent.Initialize(context.Background(), req)
 	require.NoError(t, err)
 
-	// Verify agent info
+	// Verify agent info.
 	require.NotNil(t, resp.AgentInfo)
 	assert.Equal(t, "spin", resp.AgentInfo.Name)
 	assert.NotEmpty(t, resp.AgentInfo.Version)
@@ -182,8 +183,7 @@ func TestSpinACPAgent_Initialize_AuthMethods(t *testing.T) {
 	resp, err := acpAgent.Initialize(context.Background(), req)
 	require.NoError(t, err)
 
-	// Initially, no auth methods (empty list)
+	// Initially, no auth methods (empty list).
 	assert.NotNil(t, resp.AuthMethods)
 	assert.Empty(t, resp.AuthMethods, "should have no auth methods initially")
 }
-

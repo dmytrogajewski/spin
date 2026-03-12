@@ -607,4 +607,3 @@ func TestACP_Terminal_WithoutCapability(t *testing.T) {
 		t.Logf("Prompt returned error (expected if capability enforced): %v", err)
 	}
 }
-

@@ -13,9 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/mcp"
 )
 
 // testLogger returns a logger that discards all output.

@@ -13,8 +13,8 @@ import (
 // It loads patterns from .gitignore, .spinignore, and includes sensible defaults
 // to exclude common directories like .git, node_modules, vendor, etc.
 type IgnoreHandler struct {
-	patterns []string // All loaded ignore patterns
-	rootDir  string   // Root directory for pattern resolution
+	patterns []string // All loaded ignore patterns.
+	rootDir  string   // Root directory for pattern resolution.
 }
 
 // NewIgnoreHandler creates a new ignore handler for the given root directory.
@@ -27,22 +27,24 @@ func NewIgnoreHandler(rootDir string) (*IgnoreHandler, error) {
 		patterns: make([]string, 0),
 	}
 
-	// Load default patterns first
+	// Load default patterns first.
 	h.patterns = append(h.patterns, defaultPatterns()...)
 
-	// Try to load .gitignore
+	// Try to load .gitignore.
 	gitignorePath := filepath.Join(rootDir, ".gitignore")
-	if err := h.loadIgnoreFile(gitignorePath); err != nil {
-		// Only return error if file exists but cannot be read
+	err := h.loadIgnoreFile(gitignorePath)
+	if err != nil {
+		// Only return error if file exists but cannot be read.
 		if !os.IsNotExist(err) {
 			return nil, err
 		}
 	}
 
-	// Try to load .spinignore
+	// Try to load .spinignore.
 	spinignorePath := filepath.Join(rootDir, ".spinignore")
-	if err := h.loadIgnoreFile(spinignorePath); err != nil {
-		// Only return error if file exists but cannot be read
+	err = h.loadIgnoreFile(spinignorePath)
+	if err != nil {
+		// Only return error if file exists but cannot be read.
 		if !os.IsNotExist(err) {
 			return nil, err
 		}
@@ -56,21 +58,21 @@ func NewIgnoreHandler(rootDir string) (*IgnoreHandler, error) {
 // The isDir parameter indicates whether the path is a directory.
 // Returns true if the path matches any ignore pattern.
 func (h *IgnoreHandler) IsIgnored(relPath string, isDir bool) bool {
-	// Empty path is not ignored
+	// Empty path is not ignored.
 	if relPath == "" || relPath == "." || relPath == "./" {
 		return false
 	}
 
-	// Check each pattern
+	// Check each pattern.
 	for _, pattern := range h.patterns {
-		// Try exact match
+		// Try exact match.
 		matched, err := doublestar.Match(pattern, relPath)
 		if err == nil && matched {
 			return true
 		}
 
 		// For directories, also check with trailing slash
-		// This handles patterns like "build/" which should only match directories
+		// This handles patterns like "build/" which should only match directories.
 		if isDir {
 			matched, err = doublestar.Match(pattern, relPath+"/")
 			if err == nil && matched {
@@ -96,17 +98,17 @@ func (h *IgnoreHandler) loadIgnoreFile(path string) error {
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		// Skip empty lines
+		// Skip empty lines.
 		if line == "" {
 			continue
 		}
 
-		// Skip comment lines
+		// Skip comment lines.
 		if strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		// Add pattern
+		// Add pattern.
 		h.patterns = append(h.patterns, line)
 	}
 
@@ -123,7 +125,7 @@ func (h *IgnoreHandler) loadIgnoreFile(path string) error {
 // - .vscode, .idea: IDE settings
 // - *.pyc, *.pyo: Python bytecode
 // - .DS_Store, Thumbs.db: OS-specific files
-// - .gitignore, .spinignore: Ignore files themselves
+// - .gitignore, .spinignore: Ignore files themselves.
 func defaultPatterns() []string {
 	return []string{
 		".git/**",

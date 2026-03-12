@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 	// Note: Cannot import agent here due to import cycle
-	// CommandCache tests have been moved to internal/agent/cache_test.go
+	// CommandCache tests have been moved to internal/agent/cache_test.go.
 )
 
 func TestApprovalService_RequestApproval(t *testing.T) {
@@ -20,7 +20,7 @@ func TestApprovalService_RequestApproval(t *testing.T) {
 			service: &ApprovalService{
 				handler: nil,
 			},
-			operation: NewOperation(&Command{Program: "ls"}, "test operation", "/tmp"),
+			operation:    NewOperation(&Command{Program: "ls"}, "test operation", "/tmp"),
 			wantApproved: false,
 			wantErr:      true,
 		},
@@ -35,7 +35,7 @@ func TestApprovalService_RequestApproval(t *testing.T) {
 					}
 				},
 			},
-			operation: NewOperation(&Command{Program: "mkdir", Args: []string{"testdir"}}, "create directory", "/tmp"),
+			operation:    NewOperation(&Command{Program: "mkdir", Args: []string{"testdir"}}, "create directory", "/tmp"),
 			wantApproved: true,
 			wantErr:      false,
 		},
@@ -50,7 +50,7 @@ func TestApprovalService_RequestApproval(t *testing.T) {
 					}
 				},
 			},
-			operation: NewOperation(&Command{Program: "rm", Args: []string{"-rf", "/"}}, "dangerous operation", "/tmp"),
+			operation:    NewOperation(&Command{Program: "rm", Args: []string{"-rf", "/"}}, "dangerous operation", "/tmp"),
 			wantApproved: false,
 			wantErr:      false,
 		},
@@ -76,4 +76,3 @@ func TestApprovalService_RequestApproval(t *testing.T) {
 		})
 	}
 }
-
