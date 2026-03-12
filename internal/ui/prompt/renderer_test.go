@@ -6,119 +6,37 @@ import (
 	"testing"
 )
 
+// redrawCase is a test case for renderer redraw tests.
+type redrawCase struct {
+	name       string
+	prefix     string
+	bufferText string
+	cursor     int
+	status     string
+	width      int
+	want       string
+}
+
+// goldenRedrawCases returns test cases for exact ANSI output verification.
+func goldenRedrawCases() []redrawCase {
+	return []redrawCase{
+		{name: "empty buffer", prefix: "> ", width: 80, want: "\x1b[24;1H\x1b[2K> \x1b[3G"},
+		{name: "simple text cursor at start", prefix: "> ", bufferText: "hello", cursor: 0, width: 80, want: "\x1b[24;1H\x1b[2K> hello\x1b[3G"},
+		{name: "simple text cursor in middle", prefix: "> ", bufferText: "hello", cursor: 2, width: 80, want: "\x1b[24;1H\x1b[2K> hello\x1b[5G"},
+		{name: "simple text cursor at end", prefix: "> ", bufferText: "hello", cursor: 5, width: 80, want: "\x1b[24;1H\x1b[2K> hello\x1b[8G"},
+		{name: "right-aligned status with space", prefix: "> ", bufferText: "test", cursor: 4, status: "typing", width: 80, want: "\x1b[24;1H\x1b[2K> test" + repeatSpace(68) + "typing\x1b[7G"},
+		{name: "status omitted when no space", prefix: "> ", bufferText: "verylongtextthattakesupalmostallthespace", cursor: 10, status: "typing", width: 20},
+		{name: "wide character emoji", prefix: "> ", bufferText: "Hi 👋", cursor: 3, width: 80, want: "\x1b[24;1H\x1b[2K> Hi 👋\x1b[6G"},
+		{name: "wide character CJK", prefix: "> ", bufferText: "你好", cursor: 1, width: 80, want: "\x1b[24;1H\x1b[2K> 你好\x1b[5G"},
+		{name: "combining mark", prefix: "> ", bufferText: "e\u0301", cursor: 1, width: 80, want: "\x1b[24;1H\x1b[2K> e\u0301\x1b[4G"},
+		{name: "very narrow terminal", prefix: "> ", bufferText: "hello world this is a long line", cursor: 5, width: 20},
+	}
+}
+
 // TestRenderer_Redraw_Golden verifies exact ANSI output for various scenarios.
 func TestRenderer_Redraw_Golden(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name       string
-		prefix     string
-		bufferText string
-		cursor     int
-		status     string
-		width      int
-		want       string
-	}{
-		{
-			name:       "empty buffer",
-			prefix:     "> ",
-			bufferText: "",
-			cursor:     0,
-			status:     "",
-			width:      80,
-			want:       "\x1b[24;1H\x1b[2K> \x1b[3G", // Changed: absolute positioning.
-		},
-		{
-			name:       "simple text cursor at start",
-			prefix:     "> ",
-			bufferText: "hello",
-			cursor:     0,
-			status:     "",
-			width:      80,
-			want:       "\x1b[24;1H\x1b[2K> hello\x1b[3G", // Changed: absolute positioning.
-		},
-		{
-			name:       "simple text cursor in middle",
-			prefix:     "> ",
-			bufferText: "hello",
-			cursor:     2,
-			status:     "",
-			width:      80,
-			want:       "\x1b[24;1H\x1b[2K> hello\x1b[5G", // Changed: absolute positioning.
-		},
-		{
-			name:       "simple text cursor at end",
-			prefix:     "> ",
-			bufferText: "hello",
-			cursor:     5,
-			status:     "",
-			width:      80,
-			want:       "\x1b[24;1H\x1b[2K> hello\x1b[8G", // Changed: absolute positioning.
-		},
-		{
-			name:       "right-aligned status with space",
-			prefix:     "> ",
-			bufferText: "test",
-			cursor:     4,
-			status:     "typing",
-			width:      80,
-			// Changed: absolute positioning + "> test" + padding + "typing".
-			want: "\x1b[24;1H\x1b[2K> test" + repeatSpace(68) + "typing\x1b[7G",
-		},
-		{
-			name:       "status omitted when no space",
-			prefix:     "> ",
-			bufferText: "verylongtextthattakesupalmostallthespace",
-			cursor:     10,
-			status:     "typing",
-			width:      20,
-			// prefix=2, buffer=42 > 20, so scroll. Status won't fit.
-			// With scrolling, this is complex; for now just check no panic.
-			want: "", // we'll check separately for no panic.
-		},
-		{
-			name:       "wide character emoji",
-			prefix:     "> ",
-			bufferText: "Hi 👋",
-			cursor:     3,
-			status:     "",
-			width:      80,
-			// "Hi 👋" = "H"(1) + "i"(1) + " "(1) + "👋"(2) = 5 cells
-			// cursor at 3 = "Hi " = 3 cells, so column = 2 (prefix) + 3 = 5.
-			want: "\x1b[24;1H\x1b[2K> Hi 👋\x1b[6G", // Changed: absolute positioning.
-		},
-		{
-			name:       "wide character CJK",
-			prefix:     "> ",
-			bufferText: "你好",
-			cursor:     1,
-			status:     "",
-			width:      80,
-			// "你"(2) + "好"(2) = 4 cells
-			// cursor at 1 = "你" = 2 cells, column = 2 + 2 = 4.
-			want: "\x1b[24;1H\x1b[2K> 你好\x1b[5G", // Changed: absolute positioning.
-		},
-		{
-			name:       "combining mark",
-			prefix:     "> ",
-			bufferText: "e\u0301", // é as e + combining acute.
-			cursor:     1,
-			status:     "",
-			width:      80,
-			// "e\u0301" = 1 cell (combining mark is zero-width)
-			// cursor at 1 = "e\u0301" = 1 cell, column = 2 + 1 = 3.
-			want: "\x1b[24;1H\x1b[2K> e\u0301\x1b[4G", // Changed: absolute positioning.
-		},
-		{
-			name:       "very narrow terminal",
-			prefix:     "> ",
-			bufferText: "hello world this is a long line",
-			cursor:     5,
-			status:     "",
-			width:      20,
-			// Should scroll, show ellipses.
-			want: "", // complex, check separately.
-		},
-	}
+	tests := goldenRedrawCases()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -247,38 +165,52 @@ func TestRenderer_Redraw_StatusRendering(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			var buf bytes.Buffer
 
-			r := NewTermRenderer(&buf, tt.width, "> ")
-
-			model := NewModel(100)
-			if tt.bufferText != "" {
-				model.buffer.SetText(tt.bufferText)
-				model.buffer.SetCursor(len([]rune(tt.bufferText)))
-			}
-
-			_ = r.Redraw(model, tt.status)
-
-			got := buf.String()
-
-			if tt.wantStatusFull {
-				if !bytes.Contains([]byte(got), []byte(tt.status)) {
-					t.Errorf("Redraw() should contain full status %q, got: %q", tt.status, got)
-				}
-			}
-
-			if tt.wantEllipsis {
-				if !bytes.Contains([]byte(got), []byte("…")) {
-					t.Errorf("Redraw() should contain ellipsis for truncated status, got: %q", got)
-				}
-			}
-
-			if tt.wantOmitted {
-				if bytes.Contains([]byte(got), []byte(tt.status)) {
-					t.Errorf("Redraw() should omit status when no space, got: %q", got)
-				}
-			}
+			got := redrawWithStatus(tt.bufferText, tt.status, tt.width)
+			verifyStatusOutput(t, got, tt)
 		})
+	}
+}
+
+// redrawWithStatus renders a buffer with status and returns the output.
+func redrawWithStatus(text, status string, width int) string {
+	var buf bytes.Buffer
+
+	r := NewTermRenderer(&buf, width, "> ")
+	model := NewModel(100)
+
+	if text != "" {
+		model.buffer.SetText(text)
+		model.buffer.SetCursor(len([]rune(text)))
+	}
+
+	_ = r.Redraw(model, status)
+
+	return buf.String()
+}
+
+// verifyStatusOutput checks status rendering expectations.
+func verifyStatusOutput(t *testing.T, got string, tt struct {
+	name           string
+	bufferText     string
+	status         string
+	width          int
+	wantStatusFull bool
+	wantEllipsis   bool
+	wantOmitted    bool
+}) {
+	t.Helper()
+
+	if tt.wantStatusFull && !strings.Contains(got, tt.status) {
+		t.Errorf("Redraw() should contain full status %q, got: %q", tt.status, got)
+	}
+
+	if tt.wantEllipsis && !strings.Contains(got, "…") {
+		t.Errorf("Redraw() should contain ellipsis for truncated status, got: %q", got)
+	}
+
+	if tt.wantOmitted && strings.Contains(got, tt.status) {
+		t.Errorf("Redraw() should omit status when no space, got: %q", got)
 	}
 }
 
@@ -286,45 +218,17 @@ func TestRenderer_Redraw_StatusRendering(t *testing.T) {
 func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name              string
-		bufferText        string
-		cursor            int
-		width             int
-		wantLeftEllipsis  bool
-		wantRightEllipsis bool
+		name         string
+		bufferText   string
+		cursor       int
+		width        int
+		wantEllipsis bool // true if any ellipsis expected.
+		wantNone     bool // true if no ellipsis expected.
 	}{
-		{
-			name:              "no scroll short line",
-			bufferText:        "hello",
-			cursor:            2,
-			width:             80,
-			wantLeftEllipsis:  false,
-			wantRightEllipsis: false,
-		},
-		{
-			name:              "scroll long line cursor at start",
-			bufferText:        "this is a very long line that exceeds terminal width by a lot",
-			cursor:            0,
-			width:             20,
-			wantLeftEllipsis:  false, // cursor at start, no left scroll.
-			wantRightEllipsis: true,  // content continues right.
-		},
-		{
-			name:              "scroll long line cursor in middle",
-			bufferText:        "this is a very long line that exceeds terminal width by a lot",
-			cursor:            30,
-			width:             20,
-			wantLeftEllipsis:  true, // scrolled past start.
-			wantRightEllipsis: true, // content continues right.
-		},
-		{
-			name:              "scroll long line cursor at end",
-			bufferText:        "this is a very long line that exceeds terminal width by a lot",
-			cursor:            61,
-			width:             20,
-			wantLeftEllipsis:  true,  // scrolled past start.
-			wantRightEllipsis: false, // at end.
-		},
+		{name: "no scroll short line", bufferText: "hello", cursor: 2, width: 80, wantNone: true},
+		{name: "scroll long line cursor at start", bufferText: "this is a very long line that exceeds terminal width by a lot", cursor: 0, width: 20, wantEllipsis: true},
+		{name: "scroll long line cursor in middle", bufferText: "this is a very long line that exceeds terminal width by a lot", cursor: 30, width: 20, wantEllipsis: true},
+		{name: "scroll long line cursor at end", bufferText: "this is a very long line that exceeds terminal width by a lot", cursor: 61, width: 20, wantEllipsis: true},
 	}
 
 	for _, tt := range tests {
@@ -336,27 +240,17 @@ func TestRenderer_Redraw_HorizontalScrolling(t *testing.T) {
 			model := NewModel(100)
 			model.buffer.SetText(tt.bufferText)
 			model.buffer.SetCursor(tt.cursor)
-
 			_ = r.Redraw(model, "")
 
 			got := buf.String()
+			hasEllipsis := strings.Contains(got, "…")
 
-			if tt.wantLeftEllipsis {
-				if !bytes.Contains([]byte(got), []byte("…")) {
-					t.Errorf("Redraw() should contain left ellipsis, got: %q", got)
-				}
+			if tt.wantEllipsis && !hasEllipsis {
+				t.Errorf("Redraw() should contain ellipsis, got: %q", got)
 			}
 
-			if tt.wantRightEllipsis {
-				if !bytes.Contains([]byte(got), []byte("…")) {
-					t.Errorf("Redraw() should contain right ellipsis, got: %q", got)
-				}
-			}
-
-			if !tt.wantLeftEllipsis && !tt.wantRightEllipsis {
-				if bytes.Contains([]byte(got), []byte("…")) {
-					t.Errorf("Redraw() should not contain ellipsis, got: %q", got)
-				}
+			if tt.wantNone && hasEllipsis {
+				t.Errorf("Redraw() should not contain ellipsis, got: %q", got)
 			}
 		})
 	}
@@ -397,94 +291,41 @@ func TestRenderer_SetPrefix(t *testing.T) {
 // TestRenderer_Redraw_EdgeCases tests boundary conditions.
 func TestRenderer_Redraw_EdgeCases(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name string
-		fn   func(t *testing.T)
-	}{
-		{
-			name: "zero width terminal",
-			fn: func(t *testing.T) {
-				t.Helper()
 
-				var buf bytes.Buffer
+	t.Run("zero width terminal", func(t *testing.T) {
+		t.Parallel()
+		assertRedrawNoError(t, 0, "> ", "hello", 0)
+	})
 
-				r := NewTermRenderer(&buf, 0, "> ")
-				model := NewModel(100)
-				model.buffer.SetText("hello")
+	t.Run("negative width terminal", func(t *testing.T) {
+		t.Parallel()
+		assertRedrawNoError(t, -10, "> ", "hello", 0)
+	})
 
-				err := r.Redraw(model, "")
-				if err != nil {
-					t.Errorf("Redraw() should not panic on zero width, got error: %v", err)
-				}
-			},
-		},
-		{
-			name: "negative width terminal",
-			fn: func(t *testing.T) {
-				t.Helper()
+	t.Run("very long buffer", func(t *testing.T) {
+		t.Parallel()
+		assertRedrawNoError(t, 80, "> ", strings.Repeat("a", 1000), 500)
+	})
 
-				var buf bytes.Buffer
+	t.Run("empty prefix", func(t *testing.T) {
+		t.Parallel()
+		assertRedrawNoError(t, 80, "", "hello", 0)
+	})
+}
 
-				r := NewTermRenderer(&buf, -10, "> ")
-				model := NewModel(100)
-				model.buffer.SetText("hello")
+// assertRedrawNoError verifies that Redraw does not return an error.
+func assertRedrawNoError(t *testing.T, width int, prefix, text string, cursor int) {
+	t.Helper()
 
-				err := r.Redraw(model, "")
-				if err != nil {
-					t.Errorf("Redraw() should handle negative width, got error: %v", err)
-				}
-			},
-		},
-		{
-			name: "very long buffer",
-			fn: func(t *testing.T) {
-				t.Helper()
+	var buf bytes.Buffer
 
-				var buf bytes.Buffer
+	r := NewTermRenderer(&buf, width, prefix)
+	model := NewModel(100)
+	model.buffer.SetText(text)
+	model.buffer.SetCursor(cursor)
 
-				r := NewTermRenderer(&buf, 80, "> ")
-				model := NewModel(100)
-
-				longText := ""
-				var longTextSb431 strings.Builder
-				for range 1000 {
-					longTextSb431.WriteString("a")
-				}
-				longText += longTextSb431.String()
-
-				model.buffer.SetText(longText)
-				model.buffer.SetCursor(500)
-
-				err := r.Redraw(model, "")
-				if err != nil {
-					t.Errorf("Redraw() should handle very long buffer, got error: %v", err)
-				}
-			},
-		},
-		{
-			name: "empty prefix",
-			fn: func(t *testing.T) {
-				t.Helper()
-
-				var buf bytes.Buffer
-
-				r := NewTermRenderer(&buf, 80, "")
-				model := NewModel(100)
-				model.buffer.SetText("hello")
-
-				err := r.Redraw(model, "")
-				if err != nil {
-					t.Errorf("Redraw() should handle empty prefix, got error: %v", err)
-				}
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			tt.fn(t)
-		})
+	if err := r.Redraw(model, ""); err != nil {
+		t.Errorf("Redraw() unexpected error: %v", err)
 	}
 }
 

@@ -23,6 +23,16 @@ func NewPromptBuilder() *PromptBuilder {
 func (pb *PromptBuilder) BuildCurationPrompt(req CurationRequest) string {
 	var sb strings.Builder
 
+	pb.writeCurationHeader(&sb)
+	pb.writeCurationContext(&sb, req)
+	pb.writeCurationExamples(&sb)
+	pb.writeCurationResponseFormat(&sb)
+
+	return sb.String()
+}
+
+// writeCurationHeader writes the system instructions for the curation prompt.
+func (pb *PromptBuilder) writeCurationHeader(sb *strings.Builder) {
 	sb.WriteString("You are a master curator of knowledge. Your job is to identify what new insights should be ")
 	sb.WriteString("added to an existing playbook based on a reflection from a previous execution.\n\n")
 
@@ -43,69 +53,69 @@ func (pb *PromptBuilder) BuildCurationPrompt(req CurationRequest) string {
 	sb.WriteString("- If no new content to add, return an empty list for the operations field\n")
 	sb.WriteString("- Be concise and specific - each addition should be actionable\n")
 	sb.WriteString("- For coding tasks, explicitly curate API schemas, error patterns, and best practices\n\n")
+}
 
+// writeCurationContext writes the task context, playbook, and reflection sections.
+func (pb *PromptBuilder) writeCurationContext(sb *strings.Builder, req CurationRequest) {
 	sb.WriteString("**Task Context (the actual task instruction):**\n")
-	fmt.Fprintf(&sb, "%s\n\n", req.TaskContext)
+	fmt.Fprintf(sb, "%s\n\n", req.TaskContext)
 
 	sb.WriteString("**Current Playbook:**\n")
-
 	if req.CurrentPlaybook != "" {
-		fmt.Fprintf(&sb, "%s\n\n", req.CurrentPlaybook)
+		fmt.Fprintf(sb, "%s\n\n", req.CurrentPlaybook)
 	} else {
 		sb.WriteString("[Empty playbook - this is the first entry]\n\n")
 	}
 
 	sb.WriteString("**Current Reflection (insights from the execution):**\n")
-	fmt.Fprintf(&sb, "%s\n\n", req.Reflection)
+	fmt.Fprintf(sb, "%s\n\n", req.Reflection)
+}
 
-	// Add examples.
+// writeCurationExamples writes example prompts and responses.
+func (pb *PromptBuilder) writeCurationExamples(sb *strings.Builder) {
 	sb.WriteString("**Examples:**\n\n")
+	pb.writeNilCheckExample(sb)
+	pb.writePaginationExample(sb)
+}
+
+// writeNilCheckExample writes the nil-check error handling example.
+func (pb *PromptBuilder) writeNilCheckExample(sb *strings.Builder) {
 	sb.WriteString("**Example 1:**\n")
 	sb.WriteString("Task Context: \"Fix null pointer exception in user authentication\"\n\n")
 	sb.WriteString("Current Playbook: [Basic error handling guidelines]\n\n")
 	sb.WriteString("Reflection: \"The agent failed because it didn't check if the user object was nil before accessing ")
 	sb.WriteString("its properties, leading to a null pointer exception. This is a common pattern in authentication flows.\"\n\n")
-	sb.WriteString("Response:\n")
-	sb.WriteString("```\n")
-	sb.WriteString("{\n")
+	sb.WriteString("Response:\n```\n{\n")
 	sb.WriteString("  \"reasoning\": \"The reflection shows a critical error pattern where nil checks were skipped before ")
 	sb.WriteString("property access. This is a fundamental defensive programming principle that should be captured in the ")
 	sb.WriteString("playbook to prevent similar failures in authentication and user data handling.\",\n")
-	sb.WriteString("  \"operations\": [\n")
-	sb.WriteString("    {\n")
-	sb.WriteString("      \"type\": \"ADD\",\n")
-	sb.WriteString("      \"section\": \"error_handling\",\n")
+	sb.WriteString("  \"operations\": [\n    {\n      \"type\": \"ADD\",\n      \"section\": \"error_handling\",\n")
 	sb.WriteString("      \"content\": \"Always check if objects are nil before accessing properties\\n- In authentication flows, ")
 	sb.WriteString("verify user object is not nil before accessing user.Email, user.ID, etc.\\n- Use early returns with error ")
 	sb.WriteString("checks to avoid nested nil checks\\n- Pattern: if user == nil { return ErrUserNotFound }\"\n")
-	sb.WriteString("    }\n")
-	sb.WriteString("  ]\n")
-	sb.WriteString("}\n")
-	sb.WriteString("```\n\n")
+	sb.WriteString("    }\n  ]\n}\n```\n\n")
+}
 
+// writePaginationExample writes the cursor-based pagination example.
+func (pb *PromptBuilder) writePaginationExample(sb *strings.Builder) {
 	sb.WriteString("**Example 2:**\n")
 	sb.WriteString("Task Context: \"Implement pagination for large database queries\"\n\n")
 	sb.WriteString("Current Playbook: [Basic database query examples]\n\n")
 	sb.WriteString("Reflection: \"The agent used a fixed LIMIT 100 instead of proper cursor-based pagination, ")
 	sb.WriteString("causing inconsistent results when data changed between page requests.\"\n\n")
-	sb.WriteString("Response:\n")
-	sb.WriteString("```\n")
-	sb.WriteString("{\n")
+	sb.WriteString("Response:\n```\n{\n")
 	sb.WriteString("  \"reasoning\": \"The reflection identifies a pagination anti-pattern where offset-based ")
 	sb.WriteString("pagination was used instead of cursor-based. This is crucial for large datasets and should be ")
 	sb.WriteString("documented as a best practice.\",\n")
-	sb.WriteString("  \"operations\": [\n")
-	sb.WriteString("    {\n")
-	sb.WriteString("      \"type\": \"ADD\",\n")
-	sb.WriteString("      \"section\": \"database_patterns\",\n")
+	sb.WriteString("  \"operations\": [\n    {\n      \"type\": \"ADD\",\n      \"section\": \"database_patterns\",\n")
 	sb.WriteString("      \"content\": \"Use cursor-based pagination for large datasets\\n- Avoid OFFSET/LIMIT as ")
 	sb.WriteString("it's slow and inconsistent when data changes\\n- Use WHERE id > lastSeenId ORDER BY id LIMIT 100\\n- ")
 	sb.WriteString("Return the last ID as cursor for next page\\n- This ensures consistent results and better performance\"\n")
-	sb.WriteString("    }\n")
-	sb.WriteString("  ]\n")
-	sb.WriteString("}\n")
-	sb.WriteString("```\n\n")
+	sb.WriteString("    }\n  ]\n}\n```\n\n")
+}
 
+// writeCurationResponseFormat writes the expected response format instructions.
+func (pb *PromptBuilder) writeCurationResponseFormat(sb *strings.Builder) {
 	sb.WriteString("**Your Task:**\n")
 	sb.WriteString("Output ONLY a valid JSON object with these exact fields:\n")
 	sb.WriteString("- reasoning: Your chain of thought / reasoning / thinking process, detailed analysis\n")
@@ -131,8 +141,6 @@ func (pb *PromptBuilder) BuildCurationPrompt(req CurationRequest) string {
 	sb.WriteString("    }\n")
 	sb.WriteString("  ]\n")
 	sb.WriteString("}\n")
-
-	return sb.String()
 }
 
 // BuildRefinementPrompt creates a prompt for refining playbook quality.

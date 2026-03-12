@@ -17,90 +17,29 @@ func TestInsightValidator_New(t *testing.T) {
 	require.NotNil(t, validator)
 }
 
+// validatorValidateCases contains test cases for validator validation.
+var validatorValidateCases = []struct {
+	name    string
+	insight *Insight
+	wantErr bool
+	errMsg  string
+}{
+	{name: "valid insight", insight: &Insight{Content: "Always validate input parameters before processing them in Go", Confidence: 0.8, Category: CategorySuccessPattern}},
+	{name: "empty content", insight: &Insight{Content: "", Confidence: 0.8, Category: CategorySuccessPattern}, wantErr: true, errMsg: "content cannot be empty"},
+	{name: "content too short", insight: &Insight{Content: "short", Confidence: 0.8, Category: CategorySuccessPattern}, wantErr: true, errMsg: "content too short"},
+	{name: "content too long", insight: &Insight{Content: strings.Repeat("x", 501), Confidence: 0.8, Category: CategorySuccessPattern}, wantErr: true, errMsg: "content too long"},
+	{name: "confidence negative", insight: &Insight{Content: "Always validate input parameters before processing them", Confidence: -0.1, Category: CategorySuccessPattern}, wantErr: true, errMsg: "confidence"},
+	{name: "confidence too high", insight: &Insight{Content: "Always validate input parameters before processing them", Confidence: 1.5, Category: CategorySuccessPattern}, wantErr: true, errMsg: "confidence"},
+	{name: "invalid category", insight: &Insight{Content: "Always validate input parameters before processing them", Confidence: 0.8, Category: "invalid_category"}, wantErr: true, errMsg: "category"},
+}
+
 // TestInsightValidator_Validate tests insight validation with all rules.
 func TestInsightValidator_Validate(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name    string
-		insight *Insight
-		wantErr bool
-		errMsg  string
-	}{
-		{
-			name: "valid insight",
-			insight: &Insight{
-				Content:    "Always validate input parameters before processing them in Go",
-				Confidence: 0.8,
-				Category:   CategorySuccessPattern,
-			},
-			wantErr: false,
-		},
-		{
-			name: "empty content",
-			insight: &Insight{
-				Content:    "",
-				Confidence: 0.8,
-				Category:   CategorySuccessPattern,
-			},
-			wantErr: true,
-			errMsg:  "content cannot be empty",
-		},
-		{
-			name: "content too short",
-			insight: &Insight{
-				Content:    "short",
-				Confidence: 0.8,
-				Category:   CategorySuccessPattern,
-			},
-			wantErr: true,
-			errMsg:  "content too short",
-		},
-		{
-			name: "content too long",
-			insight: &Insight{
-				Content:    strings.Repeat("x", 501),
-				Confidence: 0.8,
-				Category:   CategorySuccessPattern,
-			},
-			wantErr: true,
-			errMsg:  "content too long",
-		},
-		{
-			name: "confidence negative",
-			insight: &Insight{
-				Content:    "Always validate input parameters before processing them",
-				Confidence: -0.1,
-				Category:   CategorySuccessPattern,
-			},
-			wantErr: true,
-			errMsg:  "confidence",
-		},
-		{
-			name: "confidence too high",
-			insight: &Insight{
-				Content:    "Always validate input parameters before processing them",
-				Confidence: 1.5,
-				Category:   CategorySuccessPattern,
-			},
-			wantErr: true,
-			errMsg:  "confidence",
-		},
-		{
-			name: "invalid category",
-			insight: &Insight{
-				Content:    "Always validate input parameters before processing them",
-				Confidence: 0.8,
-				Category:   "invalid_category",
-			},
-			wantErr: true,
-			errMsg:  "category",
-		},
-	}
-
 	validator := NewInsightValidator()
 
-	for _, tt := range tests {
+	for _, tt := range validatorValidateCases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

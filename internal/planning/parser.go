@@ -6,6 +6,13 @@ import (
 	"strings"
 )
 
+// planScanner tracks state while scanning text for plan sections.
+type planScanner struct {
+	inPlanSection           bool
+	consecutiveNonPlanLines int
+	steps                   []Step
+}
+
 // DetectPlanFromText detects plan-like structures in text output.
 // This is a conservative implementation that ONLY detects plans after explicit headers.
 func DetectPlanFromText(output string) *Plan {
@@ -13,95 +20,110 @@ func DetectPlanFromText(output string) *Plan {
 		return nil
 	}
 
-	var steps []Step
+	scanner := &planScanner{}
 
-	lines := strings.Split(output, "\n")
-
-	// Only enter plan section after explicit headers.
-	var (
-		inPlanSection           bool
-		consecutiveNonPlanLines int
-	)
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		if line == "" {
-			// Empty lines within plan section are OK, but count toward exit condition.
-			if inPlanSection {
-				consecutiveNonPlanLines++
-				if consecutiveNonPlanLines >= 2 {
-					inPlanSection = false
-					consecutiveNonPlanLines = 0
-				}
-			}
-
-			continue
-		}
-
-		// Check if this line starts an EXPLICIT plan section.
-		lowerLine := strings.ToLower(line)
-		isHeader := strings.HasPrefix(lowerLine, "plan:") || strings.HasPrefix(lowerLine, "steps:") ||
-			strings.HasPrefix(lowerLine, "task:") || strings.HasPrefix(lowerLine, "tasks:") ||
-			strings.HasPrefix(lowerLine, "## plan") || strings.HasPrefix(lowerLine, "## steps")
-
-		// Also accept lines ending with "plan:" or "steps:" (e.g. "Here's the plan:").
-		if !isHeader && strings.HasSuffix(lowerLine, ":") &&
-			(strings.Contains(lowerLine, "plan") || strings.Contains(lowerLine, "step") || strings.Contains(lowerLine, "task")) {
-			isHeader = true
-		}
-
-		if isHeader {
-			inPlanSection = true
-			consecutiveNonPlanLines = 0
-
-			continue
-		}
-
-		// Only process lines if we're in an explicitly declared plan section.
-		if !inPlanSection {
-			continue
-		}
-
-		// Check if current line matches plan pattern (numbered list or bullet).
-		isPlanPattern := matchesPlanPattern(line)
-
-		// If in plan section but no plan pattern, check if we should exit.
-		if !isPlanPattern {
-			consecutiveNonPlanLines++
-			// Exit plan section after 2 consecutive non-plan lines.
-			if consecutiveNonPlanLines >= 2 {
-				inPlanSection = false
-				consecutiveNonPlanLines = 0
-			}
-
-			continue
-		}
-
-		// Reset counter - we saw a plan pattern.
-		consecutiveNonPlanLines = 0
-
-		// Extract plan step from line.
-		step := extractPlanStep(line, len(steps)+1)
-		if step != nil {
-			// Chain steps sequentially: each step depends on the previous one.
-			if len(steps) > 0 {
-				prevStep := steps[len(steps)-1]
-				step.DependsOn = []string{prevStep.ID}
-			}
-
-			steps = append(steps, *step)
-		}
+	for _, line := range strings.Split(output, "\n") {
+		scanner.processLine(strings.TrimSpace(line))
 	}
 
-	if len(steps) == 0 {
+	if len(scanner.steps) == 0 {
 		return nil
 	}
 
 	plan := NewPlan()
-	plan.Steps = steps
+	plan.Steps = scanner.steps
 
 	return plan
+}
+
+// processLine handles a single line during plan scanning.
+func (ps *planScanner) processLine(line string) {
+	if line == "" {
+		ps.handleEmptyLine()
+
+		return
+	}
+
+	if isPlanHeader(line) {
+		ps.inPlanSection = true
+		ps.consecutiveNonPlanLines = 0
+
+		return
+	}
+
+	if !ps.inPlanSection {
+		return
+	}
+
+	if !matchesPlanPattern(line) {
+		ps.handleNonPlanLine()
+
+		return
+	}
+
+	ps.consecutiveNonPlanLines = 0
+	ps.addStep(line)
+}
+
+// handleEmptyLine processes an empty line within or outside a plan section.
+func (ps *planScanner) handleEmptyLine() {
+	if !ps.inPlanSection {
+		return
+	}
+
+	ps.consecutiveNonPlanLines++
+	if ps.consecutiveNonPlanLines >= 2 {
+		ps.inPlanSection = false
+		ps.consecutiveNonPlanLines = 0
+	}
+}
+
+// handleNonPlanLine processes a non-plan-pattern line within a plan section.
+func (ps *planScanner) handleNonPlanLine() {
+	ps.consecutiveNonPlanLines++
+	if ps.consecutiveNonPlanLines >= 2 {
+		ps.inPlanSection = false
+		ps.consecutiveNonPlanLines = 0
+	}
+}
+
+// addStep extracts and appends a plan step from the given line.
+func (ps *planScanner) addStep(line string) {
+	step := extractPlanStep(line, len(ps.steps)+1)
+	if step == nil {
+		return
+	}
+
+	if len(ps.steps) > 0 {
+		prevStep := ps.steps[len(ps.steps)-1]
+		step.DependsOn = []string{prevStep.ID}
+	}
+
+	ps.steps = append(ps.steps, *step)
+}
+
+// isPlanHeader checks if a line is an explicit plan section header.
+func isPlanHeader(line string) bool {
+	lowerLine := strings.ToLower(line)
+
+	headerPrefixes := []string{
+		"plan:", "steps:", "task:", "tasks:", "## plan", "## steps",
+	}
+
+	for _, prefix := range headerPrefixes {
+		if strings.HasPrefix(lowerLine, prefix) {
+			return true
+		}
+	}
+
+	// Also accept lines ending with ":" containing plan/step/task keywords.
+	if strings.HasSuffix(lowerLine, ":") {
+		return strings.Contains(lowerLine, "plan") ||
+			strings.Contains(lowerLine, "step") ||
+			strings.Contains(lowerLine, "task")
+	}
+
+	return false
 }
 
 // matchesPlanPattern checks if a line matches common plan patterns.

@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	termx "golang.org/x/term"
 
+	"github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
@@ -193,82 +194,30 @@ func parseDuration(s string) (time.Duration, error) {
 	return d, nil
 }
 
-// createConversationForExec creates a conversation configured for exec mode using the runtime pattern.
-func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *config.V2, autoApprove bool, _ bool) (*conversation.Conversation, error) {
-	workDir := cfg.Agent.WorkDir
-	logger := slog.Default()
-	emitter := events.NewEventEmitter(100)
-
-	var storage session.Storage
-
-	if cfg.Agent.SessionDir != "" {
-		var err error
-
-		storage, err = session.NewFileStorage(cfg.Agent.SessionDir)
-		if err != nil {
-			return nil, fmt.Errorf("create session storage: %w", err)
-		}
-	}
-
-	sessionID := ""
-
+// resolveSessionID determines the session ID based on storage availability.
+func resolveSessionID(storage session.Storage, workDir, prefix string) string {
 	if storage != nil {
 		sess := session.NewSession(workDir)
-		sessionID = sess.ID
-	} else {
-		sessionID = fmt.Sprintf("exec-%d", time.Now().UnixNano())
+		return sess.ID
 	}
 
-	services, cleanup, err := createServices(ctx, cfg, workDir, logger)
-	if err != nil {
-		return nil, err
-	}
+	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+}
 
-	var approvalHandler security.ApprovalHandler
+// createExecUI creates the UI adapter for exec mode.
+func createExecUI() (ports.UI, error) {
+	opts := []adapters.PureTTYOption{adapters.WithExecMode()}
 
-	if autoApprove {
-		approvalHandler = createAutoApproveHandler()
-	} else {
-		approvalHandler = createDenyHandler("exec mode requires --auto-approve for dangerous operations")
-	}
-
-	var ui ports.UI
-
-	if termx.IsTerminal(int(os.Stdout.Fd())) && termx.IsTerminal(int(os.Stdin.Fd())) {
-		ui, err = adapters.NewPureTTY(os.Stdout, adapters.WithExecMode())
-		if err != nil {
-			cleanup()
-
-			return nil, fmt.Errorf("create TUI: %w", err)
-		}
-	} else {
+	if !termx.IsTerminal(int(os.Stdout.Fd())) || !termx.IsTerminal(int(os.Stdin.Fd())) {
 		mockTty := &mockTTY{width: 120, height: 30}
-
-		ui, err = adapters.NewPureTTY(os.Stdout, adapters.WithExecMode(), adapters.WithTTY(mockTty))
-		if err != nil {
-			cleanup()
-
-			return nil, fmt.Errorf("create TUI: %w", err)
-		}
+		opts = append(opts, adapters.WithTTY(mockTty))
 	}
 
-	builtinRuntime, err := createBuiltinRuntime(
-		workDir,
-		emitter,
-		storage,
-		sessionID,
-		approvalHandler,
-		services,
-		ui,
-		logger,
-		cfg,
-	)
-	if err != nil {
-		cleanup()
+	return adapters.NewPureTTY(os.Stdout, opts...)
+}
 
-		return nil, fmt.Errorf("create builtin runtime: %w", err)
-	}
-
+// buildConversation wires services into a conversation builder and builds the conversation.
+func buildConversation(ctx context.Context, cfg *config.V2, workDir string, builtinRuntime *executor.BuiltinRuntime, emitter *events.EventEmitter, provider llm.Provider, services *ProtocolServices, cleanup func()) (*conversation.Conversation, error) {
 	builder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
 
 	if services.Git != nil {
@@ -282,7 +231,6 @@ func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *
 	if services.MCP != nil {
 		builder = builder.WithMCP(services.MCP)
 
-		// Create dynamic tool selector if any registry has dynamic_loadout.
 		if toolSelector := createToolSelector(services.MCP, nil, emitter, cfg, slog.Default()); toolSelector != nil {
 			builder = builder.WithToolSelector(toolSelector)
 		}
@@ -291,11 +239,50 @@ func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *
 	conv, err := builder.Build(ctx)
 	if err != nil {
 		cleanup()
-
 		return nil, fmt.Errorf("build conversation: %w", err)
 	}
 
 	return conv, nil
+}
+
+// createConversationForExec creates a conversation configured for exec mode using the runtime pattern.
+func createConversationForExec(ctx context.Context, provider llm.Provider, cfg *config.V2, autoApprove bool, _ bool) (*conversation.Conversation, error) {
+	workDir := cfg.Agent.WorkDir
+	logger := slog.Default()
+	emitter := events.NewEventEmitter(100)
+
+	storage, err := createSessionStorage(cfg.Agent.SessionDir)
+	if err != nil {
+		return nil, err
+	}
+
+	sessionID := resolveSessionID(storage, workDir, "exec")
+
+	services, cleanup, err := createServices(ctx, cfg, workDir, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	var approvalHandler security.ApprovalHandler
+	if autoApprove {
+		approvalHandler = createAutoApproveHandler()
+	} else {
+		approvalHandler = createDenyHandler("exec mode requires --auto-approve for dangerous operations")
+	}
+
+	ui, err := createExecUI()
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("create TUI: %w", err)
+	}
+
+	builtinRuntime, err := createBuiltinRuntime(workDir, emitter, storage, sessionID, approvalHandler, services, ui, logger, cfg)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("create builtin runtime: %w", err)
+	}
+
+	return buildConversation(ctx, cfg, workDir, builtinRuntime, emitter, provider, services, cleanup)
 }
 
 // mockTTY implements term.TerminalController for non-terminal environments.
@@ -308,51 +295,25 @@ func (m *mockTTY) Exit() error                { return nil }
 func (m *mockTTY) Size() (int, int)           { return m.width, m.height }
 func (m *mockTTY) OnResize(_ func(w, h int)) {}
 
-// executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
-func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, _ string, _, exitOnError bool) error {
-	// Create TUI adapter. Use real TTY when available; otherwise, mock one.
-	opts := []adapters.PureTTYOption{adapters.WithExecMode()}
-
-	if !termx.IsTerminal(int(os.Stdout.Fd())) || !termx.IsTerminal(int(os.Stdin.Fd())) {
-		mockTty := &mockTTY{width: 120, height: 30}
-		opts = append(opts, adapters.WithTTY(mockTty))
+// processExecEvent handles a single event in exec mode.
+func processExecEvent(event events.Event, mapper *tui.Mapper, ui *adapters.PureTTY, conv *conversation.Conversation) {
+	mapErr := mapper.MapEvent(event)
+	if mapErr != nil {
+		_ = ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", mapErr))
 	}
 
-	ui, err := adapters.NewPureTTY(os.Stdout, opts...)
-	if err != nil {
-		return fmt.Errorf("create TUI: %w", err)
+	switch event.Type {
+	case events.EventTurnComplete, events.EventContentComplete:
+		ui.SetTokenCount(int64(conv.GetTokenCount()))
+	case events.EventTurnProgress:
+		if data, ok := event.Data.(events.TurnEventData); ok && data.TokensUsed > 0 {
+			ui.SetTokenCount(int64(data.TokensUsed))
+		}
 	}
-	defer func() { _ = ui.Stop() }()
+}
 
-	// Initialize UI with conversation metadata.
-	ui.SetTaskMode(conv.GetTaskMode())
-
-	// Create event mapper.
-	mapper := tui.NewMapper(ui)
-	defer mapper.Close()
-
-	// Start streaming channel.
-	streamCh := mapper.StartStreaming()
-	streamDone := make(chan struct{})
-
-	go func() {
-		_ = ui.PrintChunks(ctx, streamCh)
-		close(streamDone)
-	}()
-
-	// Subscribe to conversation events.
-	eventStream := conv.Stream()
-
-	// Start turn in background.
-	errChan := make(chan error, 1)
-
-	go func() {
-		errChan <- conv.RunTurn(ctx, prompt)
-	}()
-
-	// Process events and map them to TUI
-	// NOTE: In exec mode, we process events but don't wait for the stream to close
-	// because the conversation's event stream stays open for potential future turns.
+// startExecEventLoop starts the event processing goroutine for exec mode.
+func startExecEventLoop(ctx context.Context, eventStream <-chan events.Event, mapper *tui.Mapper, ui *adapters.PureTTY, conv *conversation.Conversation) {
 	go func() {
 		for {
 			select {
@@ -362,46 +323,56 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 				if !ok {
 					return
 				}
-
-				mapErr := mapper.MapEvent(event)
-				if mapErr != nil {
-					_ = ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", mapErr))
-				}
-
-				// Update token count from conversation history after each event.
-				if event.Type == events.EventTurnComplete || event.Type == events.EventContentComplete {
-					tokenCount := int64(conv.GetTokenCount())
-					ui.SetTokenCount(tokenCount)
-				}
-
-				// Handle real-time token count updates during turn execution.
-				if event.Type == events.EventTurnProgress {
-					if data, okData := event.Data.(events.TurnEventData); okData {
-						if data.TokensUsed > 0 {
-							ui.SetTokenCount(int64(data.TokensUsed))
-						}
-					}
-				}
+				processExecEvent(event, mapper, ui, conv)
 			}
 		}
 	}()
+}
 
-	// Wait for completion.
+// executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
+func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, _ string, _, exitOnError bool) error {
+	ui, err := createExecUI()
+	if err != nil {
+		return fmt.Errorf("create TUI: %w", err)
+	}
+
+	pureTTY := ui.(*adapters.PureTTY)
+	defer func() { _ = pureTTY.Stop() }()
+
+	pureTTY.SetTaskMode(conv.GetTaskMode())
+
+	mapper := tui.NewMapper(pureTTY)
+	defer mapper.Close()
+
+	streamCh := mapper.StartStreaming()
+	streamDone := make(chan struct{})
+
+	go func() {
+		_ = pureTTY.PrintChunks(ctx, streamCh)
+		close(streamDone)
+	}()
+
+	startExecEventLoop(ctx, conv.Stream(), mapper, pureTTY, conv)
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- conv.RunTurn(ctx, prompt)
+	}()
+
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("execution canceled: %w", ctx.Err())
 
 	case err = <-errChan:
 		mapper.StopStreaming()
-
 		<-streamDone
 
-		if err != nil {
-			if exitOnError {
-				return err
-			}
+		if err != nil && exitOnError {
+			return err
+		}
 
-			_ = ui.PrintLine(fmt.Sprintf("✗ Error: %v\n", err))
+		if err != nil {
+			_ = pureTTY.PrintLine(fmt.Sprintf("✗ Error: %v\n", err))
 		}
 
 		return nil

@@ -451,50 +451,57 @@ func TestACP_ToolCall_Content_Diff(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that should trigger tool call with diff content.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
-		Prompt: []acp.ContentBlock{
-			acp.TextBlock("write file test.txt with content hello"),
-		},
+		Prompt:    []acp.ContentBlock{acp.TextBlock("write file test.txt with content hello")},
 	}
 
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for diff content in tool calls.
-	notifications := clientImpl.getNotifications()
-	for _, notif := range notifications {
-		if toolCall := notif.Update.ToolCall; toolCall != nil {
-			if toolCall.Content != nil {
-				for _, content := range toolCall.Content {
-					if content.Diff != nil {
-						assert.NotEmpty(t, content.Diff.Path, "Diff should have path")
-						assert.NotEmpty(t, content.Diff.NewText, "Diff should have newText")
-						t.Logf("Found diff content in tool call: %s", content.Diff.Path)
+	if findDiffInNotifications(t, clientImpl.getNotifications()) {
+		return
+	}
 
-						return
-					}
-				}
+	t.Log("No diff content in tool calls found (may be expected)")
+}
+
+// findDiffInNotifications searches for diff content in notifications and validates it.
+func findDiffInNotifications(t *testing.T, notifications []acp.SessionNotification) bool {
+	t.Helper()
+
+	for _, notif := range notifications {
+		if tc := notif.Update.ToolCall; tc != nil && tc.Content != nil {
+			if findDiffInContentList(t, tc.Content, "tool call") {
+				return true
 			}
 		}
 
-		if update := notif.Update.ToolCallUpdate; update != nil {
-			if update.Content != nil {
-				for _, content := range update.Content {
-					if content.Diff != nil {
-						assert.NotEmpty(t, content.Diff.Path, "Diff should have path")
-						assert.NotEmpty(t, content.Diff.NewText, "Diff should have newText")
-						t.Logf("Found diff content in tool call update: %s", content.Diff.Path)
-
-						return
-					}
-				}
+		if upd := notif.Update.ToolCallUpdate; upd != nil && upd.Content != nil {
+			if findDiffInContentList(t, upd.Content, "tool call update") {
+				return true
 			}
 		}
 	}
 
-	t.Log("No diff content in tool calls found (may be expected)")
+	return false
+}
+
+// findDiffInContentList checks a content list for diff entries.
+func findDiffInContentList(t *testing.T, content []acp.ToolCallContent, label string) bool {
+	t.Helper()
+
+	for _, c := range content {
+		if c.Diff != nil {
+			assert.NotEmpty(t, c.Diff.Path, "Diff should have path")
+			assert.NotEmpty(t, c.Diff.NewText, "Diff should have newText")
+			t.Logf("Found diff content in %s: %s", label, c.Diff.Path)
+
+			return true
+		}
+	}
+
+	return false
 }
 
 // TestACP_ToolCall_Locations tests file locations in tool calls.
@@ -527,44 +534,47 @@ func TestACP_ToolCall_Locations(t *testing.T) {
 
 	clientImpl.clearNotifications()
 
-	// Send prompt that should trigger tool call with file location.
 	promptReq := acp.PromptRequest{
 		SessionId: sessionResp.SessionId,
-		Prompt: []acp.ContentBlock{
-			acp.TextBlock("read file test.txt"),
-		},
+		Prompt:    []acp.ContentBlock{acp.TextBlock("read file test.txt")},
 	}
 
 	_, err = client.Prompt(ctx, promptReq)
 	require.NoError(t, err)
 
-	// Check for locations in tool calls.
-	notifications := clientImpl.getNotifications()
-	for _, notif := range notifications {
-		if toolCall := notif.Update.ToolCall; toolCall != nil {
-			if len(toolCall.Locations) > 0 {
-				for _, loc := range toolCall.Locations {
-					assert.NotEmpty(t, loc.Path, "Location should have path")
-					t.Logf("Found location in tool call: %s (line: %v)", loc.Path, loc.Line)
-
-					return
-				}
-			}
-		}
-
-		if update := notif.Update.ToolCallUpdate; update != nil {
-			if len(update.Locations) > 0 {
-				for _, loc := range update.Locations {
-					assert.NotEmpty(t, loc.Path, "Location should have path")
-					t.Logf("Found location in tool call update: %s (line: %v)", loc.Path, loc.Line)
-
-					return
-				}
-			}
-		}
+	if findLocationInNotifications(t, clientImpl.getNotifications()) {
+		return
 	}
 
 	t.Log("No locations in tool calls found (may be expected)")
+}
+
+// findLocationInNotifications searches for file locations in notifications.
+func findLocationInNotifications(t *testing.T, notifications []acp.SessionNotification) bool {
+	t.Helper()
+
+	for _, notif := range notifications {
+		if tc := notif.Update.ToolCall; tc != nil && len(tc.Locations) > 0 {
+			logFirstLocation(t, tc.Locations, "tool call")
+			return true
+		}
+
+		if upd := notif.Update.ToolCallUpdate; upd != nil && len(upd.Locations) > 0 {
+			logFirstLocation(t, upd.Locations, "tool call update")
+			return true
+		}
+	}
+
+	return false
+}
+
+// logFirstLocation logs the first location and validates it.
+func logFirstLocation(t *testing.T, locations []acp.ToolCallLocation, label string) {
+	t.Helper()
+
+	loc := locations[0]
+	assert.NotEmpty(t, loc.Path, "Location should have path")
+	t.Logf("Found location in %s: %s (line: %v)", label, loc.Path, loc.Line)
 }
 
 // TestACP_ToolCall_Kinds tests all tool kinds.

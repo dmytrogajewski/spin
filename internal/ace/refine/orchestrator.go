@@ -73,107 +73,127 @@ func (o *RefinementOrchestrator) Refine(ctx context.Context, req RefinementReque
 		req.MergeSimilarity = 0.90
 	}
 
-	// Step 1: Merge similar bullets (if enabled).
-	if req.MergeEnabled && o.mergeEngine != nil {
-		bullets := o.playbook.List(nil)
-
-		pairs, err := o.mergeEngine.FindMergeCandidates(ctx, bullets)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, pair := range pairs {
-			source, sourceExists := o.playbook.Get(pair.SourceID)
-			target, targetExists := o.playbook.Get(pair.TargetID)
-
-			if !sourceExists || !targetExists {
-				continue // Skip if bullet was already removed.
-			}
-
-			var mergeResult *MergeResult
-		mergeResult, err = o.mergeEngine.MergeBullets(ctx, source, target)
-			if err != nil {
-				continue // Skip failed merges.
-			}
-
-			// Archive removed bullet (if archival enabled).
-			if req.ArchiveEnabled && o.archive != nil {
-				o.archive.Archive(source, ReasonMerged, map[string]string{
-					"merged_into": mergeResult.KeptID,
-					"similarity":  formatFloat(pair.Similarity),
-				})
-
-				result.Archived++
-			}
-
-			// Update the kept bullet in playbook.
-			kept, _ := o.playbook.Get(mergeResult.KeptID)
-			kept.HelpfulCount += source.HelpfulCount
-			kept.HarmfulCount += source.HarmfulCount
-
-			// Merge tags.
-			if kept.Tags == nil {
-				kept.Tags = make(map[string]string)
-			}
-
-			for k, v := range source.Tags {
-				if _, exists := kept.Tags[k]; !exists {
-					kept.Tags[k] = v
-				}
-			}
-
-			_ = o.playbook.Update(ctx, kept)
-
-			// Remove source bullet from playbook.
-			_ = o.playbook.Delete(ctx, mergeResult.RemovedID)
-
-			result.Merged++
-			result.MergedPairs = append(result.MergedPairs, pair)
-		}
+	if err := o.executeMergeStep(ctx, req, result); err != nil {
+		return nil, err
 	}
 
-	// Step 2: Prune low-utility bullets (if enabled).
-	if req.PruneEnabled && o.pruneFunc != nil {
-		// Get bullets that would be pruned before actual pruning (for archival).
-		var bulletsToArchive []*bullet.Bullet
-
-		if req.ArchiveEnabled && o.archive != nil {
-			allBullets := o.playbook.List(nil)
-			for _, b := range allBullets {
-				if b.Score() < req.MinUtility {
-					bulletsToArchive = append(bulletsToArchive, b.Clone())
-				}
-			}
-		}
-
-		// Use prune function to remove low-utility bullets.
-		pruned, prunedIDs, err := o.pruneFunc(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		result.Pruned = pruned
-		result.PrunedIDs = prunedIDs
-
-		// Archive pruned bullets (if archival enabled).
-		if req.ArchiveEnabled && o.archive != nil && len(bulletsToArchive) > 0 {
-			for _, b := range bulletsToArchive {
-				metadata := map[string]string{
-					"utility_score": formatFloat(b.Score()),
-					"min_threshold": formatFloat(req.MinUtility),
-				}
-				o.archive.Archive(b, ReasonLowUtility, metadata)
-
-				result.Archived++
-			}
-		}
+	if err := o.executePruneStep(ctx, req, result); err != nil {
+		return nil, err
 	}
 
-	// Step 3: Calculate tokens saved (rough estimate).
+	// Calculate tokens saved (rough estimate).
 	result.TokensSaved = (result.Pruned + result.Merged) * 50 // ~50 tokens per bullet.
 	result.Duration = time.Since(start)
 
 	return result, nil
+}
+
+// executeMergeStep merges similar bullets if enabled.
+func (o *RefinementOrchestrator) executeMergeStep(ctx context.Context, req RefinementRequest, result *RefinementResult) error {
+	if !req.MergeEnabled || o.mergeEngine == nil {
+		return nil
+	}
+
+	bullets := o.playbook.List(nil)
+	pairs, err := o.mergeEngine.FindMergeCandidates(ctx, bullets)
+	if err != nil {
+		return err
+	}
+
+	for _, pair := range pairs {
+		o.processMergePair(ctx, req, pair, result)
+	}
+
+	return nil
+}
+
+// processMergePair handles merging a single pair of similar bullets.
+func (o *RefinementOrchestrator) processMergePair(ctx context.Context, req RefinementRequest, pair MergePair, result *RefinementResult) {
+	source, sourceExists := o.playbook.Get(pair.SourceID)
+	target, targetExists := o.playbook.Get(pair.TargetID)
+	if !sourceExists || !targetExists {
+		return
+	}
+
+	mergeResult, err := o.mergeEngine.MergeBullets(ctx, source, target)
+	if err != nil {
+		return
+	}
+
+	if req.ArchiveEnabled && o.archive != nil {
+		o.archive.Archive(source, ReasonMerged, map[string]string{
+			"merged_into": mergeResult.KeptID,
+			"similarity":  formatFloat(pair.Similarity),
+		})
+		result.Archived++
+	}
+
+	o.updateKeptBullet(ctx, mergeResult.KeptID, source)
+	_ = o.playbook.Delete(ctx, mergeResult.RemovedID)
+
+	result.Merged++
+	result.MergedPairs = append(result.MergedPairs, pair)
+}
+
+// updateKeptBullet transfers counts and tags from the source bullet to the kept bullet.
+func (o *RefinementOrchestrator) updateKeptBullet(ctx context.Context, keptID string, source *bullet.Bullet) {
+	kept, _ := o.playbook.Get(keptID)
+	kept.HelpfulCount += source.HelpfulCount
+	kept.HarmfulCount += source.HarmfulCount
+
+	if kept.Tags == nil {
+		kept.Tags = make(map[string]string)
+	}
+	for k, v := range source.Tags {
+		if _, exists := kept.Tags[k]; !exists {
+			kept.Tags[k] = v
+		}
+	}
+
+	_ = o.playbook.Update(ctx, kept)
+}
+
+// executePruneStep prunes low-utility bullets if enabled.
+func (o *RefinementOrchestrator) executePruneStep(ctx context.Context, req RefinementRequest, result *RefinementResult) error {
+	if !req.PruneEnabled || o.pruneFunc == nil {
+		return nil
+	}
+
+	bulletsToArchive := o.collectBulletsForArchival(req)
+
+	pruned, prunedIDs, err := o.pruneFunc(ctx)
+	if err != nil {
+		return err
+	}
+
+	result.Pruned = pruned
+	result.PrunedIDs = prunedIDs
+
+	// Archive pruned bullets.
+	for _, b := range bulletsToArchive {
+		o.archive.Archive(b, ReasonLowUtility, map[string]string{
+			"utility_score": formatFloat(b.Score()),
+			"min_threshold": formatFloat(req.MinUtility),
+		})
+		result.Archived++
+	}
+
+	return nil
+}
+
+// collectBulletsForArchival identifies low-utility bullets to archive before pruning.
+func (o *RefinementOrchestrator) collectBulletsForArchival(req RefinementRequest) []*bullet.Bullet {
+	if !req.ArchiveEnabled || o.archive == nil {
+		return nil
+	}
+
+	var bulletsToArchive []*bullet.Bullet
+	for _, b := range o.playbook.List(nil) {
+		if b.Score() < req.MinUtility {
+			bulletsToArchive = append(bulletsToArchive, b.Clone())
+		}
+	}
+	return bulletsToArchive
 }
 
 // formatFloat converts float64 to string for metadata.

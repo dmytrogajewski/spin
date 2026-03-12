@@ -50,102 +50,90 @@ func (h *ApprovalHandler) ClearActiveSession() {
 // HandleApprovalRequest handles an approval request by calling the client's RequestPermission
 // method and waiting for the client's response. This implements the security.ApprovalHandler interface.
 func (h *ApprovalHandler) HandleApprovalRequest(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-	// Get the active session ID.
+	sessionID, conn, err := h.getSessionAndConnection()
+	if err != nil {
+		return h.denyResponse(req.ID, err.Error())
+	}
+
+	toolName := extractToolName(req)
+
+	toolCall, err := h.convertApprovalRequestToToolCall(req)
+	if err != nil {
+		return h.denyResponse(req.ID, fmt.Sprintf("conversion error: %v", err))
+	}
+
+	options := buildPermissionOptions()
+
+	h.sendPendingNotification(sessionID, conn, toolCall.ToolCallId, toolName)
+
+	acpResp, err := h.requestPermission(ctx, conn, sessionID, toolCall, options)
+	if err != nil {
+		return h.handlePermissionError(req.ID, err, ctx)
+	}
+
+	return h.buildApprovalResponse(req.ID, acpResp, options)
+}
+
+// getSessionAndConnection returns the active session ID and connection, or an error.
+func (h *ApprovalHandler) getSessionAndConnection() (acp.SessionId, notificationSender, error) {
 	h.mu.RLock()
 	sessionID := h.activeSession
 	h.mu.RUnlock()
 
 	if sessionID == "" {
-		return security.ApprovalResponse{
-			RequestID: req.ID,
-			Approved:  false,
-			Reason:    "no active session",
-		}
+		return "", nil, fmt.Errorf("no active session")
 	}
 
-	// Extract tool name from command.
-	toolName := "unknown"
-	if req.Command != nil {
-		toolName = req.Command.Program
-	}
-
-	// Convert approval request to ACP tool call.
-	toolCall, err := h.convertApprovalRequestToToolCall(req)
-	if err != nil {
-		return security.ApprovalResponse{
-			RequestID: req.ID,
-			Approved:  false,
-			Reason:    fmt.Sprintf("conversion error: %v", err),
-		}
-	}
-
-	// Get connection to call client.
 	h.agent.mu.RLock()
 	conn := h.agent.connection
 	h.agent.mu.RUnlock()
 
 	if conn == nil {
-		return security.ApprovalResponse{
-			RequestID: req.ID,
-			Approved:  false,
-			Reason:    "no connection to client",
-		}
+		return "", nil, fmt.Errorf("no connection to client")
 	}
 
-	// Build permission options
-	// For write_file and other dangerous operations, provide allow/deny options.
-	options := []acp.PermissionOption{
-		{
-			OptionId: acp.PermissionOptionId("allow_once"),
-			Name:     "Allow Once",
-			Kind:     acp.PermissionOptionKindAllowOnce,
-		},
-		{
-			OptionId: acp.PermissionOptionId("allow_always"),
-			Name:     "Allow Always",
-			Kind:     acp.PermissionOptionKindAllowAlways,
-		},
-		{
-			OptionId: acp.PermissionOptionId("deny"),
-			Name:     "Deny",
-			Kind:     acp.PermissionOptionKindRejectOnce,
-		},
-		{
-			OptionId: acp.PermissionOptionId("reject_always"),
-			Name:     "Reject Always",
-			Kind:     acp.PermissionOptionKindRejectAlways,
-		},
+	return sessionID, conn, nil
+}
+
+// extractToolName extracts the tool name from a request.
+func extractToolName(req security.ApprovalRequest) string {
+	if req.Command != nil {
+		return req.Command.Program
 	}
+	return "unknown"
+}
 
-	// Send tool_call notification with status "pending" before requesting permission
-	// This follows the ACP spec: "When the language model requests a tool invocation,
-	// the Agent SHOULD report it to the Client" with status "pending" when awaiting approval
-	// conn is guaranteed to be non-nil here (checked above)
-	// Map tool name to kind (reuse logic from notifications.go).
-	var kind *acp.ToolKind
-
-	switch toolName {
-	case "read_file":
-		kind = acp.Ptr(acp.ToolKindRead)
-	case "write_file":
-		kind = acp.Ptr(acp.ToolKindEdit)
-	case "shell_command":
-		kind = acp.Ptr(acp.ToolKindExecute)
-	case "file_search":
-		kind = acp.Ptr(acp.ToolKindSearch)
-	case "list_directory":
-		kind = acp.Ptr(acp.ToolKindRead)
+// denyResponse creates a denied approval response.
+func (h *ApprovalHandler) denyResponse(reqID, reason string) security.ApprovalResponse {
+	return security.ApprovalResponse{
+		RequestID: reqID,
+		Approved:  false,
+		Reason:    reason,
 	}
+}
 
-	// Build update using SDK helper.
+// buildPermissionOptions returns the standard permission options.
+func buildPermissionOptions() []acp.PermissionOption {
+	return []acp.PermissionOption{
+		{OptionId: acp.PermissionOptionId("allow_once"), Name: "Allow Once", Kind: acp.PermissionOptionKindAllowOnce},
+		{OptionId: acp.PermissionOptionId("allow_always"), Name: "Allow Always", Kind: acp.PermissionOptionKindAllowAlways},
+		{OptionId: acp.PermissionOptionId("deny"), Name: "Deny", Kind: acp.PermissionOptionKindRejectOnce},
+		{OptionId: acp.PermissionOptionId("reject_always"), Name: "Reject Always", Kind: acp.PermissionOptionKindRejectAlways},
+	}
+}
+
+// sendPendingNotification sends a pending tool call notification.
+func (h *ApprovalHandler) sendPendingNotification(sessionID acp.SessionId, conn notificationSender, toolCallID acp.ToolCallId, toolName string) {
+	kind := mapToolNameToKind(toolName)
+
 	update := acp.UpdateToolCall(
-		toolCall.ToolCallId,
+		toolCallID,
 		acp.WithUpdateStatus(acp.ToolCallStatusPending),
 		acp.WithUpdateTitle(toolName),
 	)
 	if kind != nil {
 		update = acp.UpdateToolCall(
-			toolCall.ToolCallId,
+			toolCallID,
 			acp.WithUpdateStatus(acp.ToolCallStatusPending),
 			acp.WithUpdateKind(*kind),
 			acp.WithUpdateTitle(toolName),
@@ -156,77 +144,82 @@ func (h *ApprovalHandler) HandleApprovalRequest(ctx context.Context, req securit
 		SessionId: sessionID,
 		Update:    update,
 	}
-	// Use background context for notification (non-blocking).
 	_ = conn.SessionUpdate(context.Background(), notification)
+}
 
-	// Create ACP permission request.
+// mapToolNameToKind maps a tool name to an ACP tool kind.
+func mapToolNameToKind(toolName string) *acp.ToolKind {
+	switch toolName {
+	case "read_file", "list_directory":
+		return acp.Ptr(acp.ToolKindRead)
+	case "write_file":
+		return acp.Ptr(acp.ToolKindEdit)
+	case "shell_command":
+		return acp.Ptr(acp.ToolKindExecute)
+	case "file_search":
+		return acp.Ptr(acp.ToolKindSearch)
+	default:
+		return nil
+	}
+}
+
+// requestPermission sends the permission request to the client.
+func (h *ApprovalHandler) requestPermission(ctx context.Context, conn notificationSender, sessionID acp.SessionId, toolCall acp.RequestPermissionToolCall, options []acp.PermissionOption) (acp.RequestPermissionResponse, error) {
 	acpReq := acp.RequestPermissionRequest{
 		SessionId: sessionID,
 		ToolCall:  toolCall,
 		Options:   options,
 	}
 
-	// Call client's RequestPermission method
-	// Derive timeout context from parent context to propagate cancellation.
 	timeoutCtx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 
-	acpResp, err := conn.RequestPermission(timeoutCtx, acpReq)
-	if err != nil {
-		// Check if context was canceled (either parent or timeout).
-		if timeoutCtx.Err() != nil {
-			return security.ApprovalResponse{
-				RequestID: req.ID,
-				Approved:  false,
-				Reason:    "approval request canceled",
-			}
-		}
+	return conn.RequestPermission(timeoutCtx, acpReq)
+}
 
-		return security.ApprovalResponse{
-			RequestID: req.ID,
-			Approved:  false,
-			Reason:    fmt.Sprintf("client permission request failed: %v", err),
-		}
+// handlePermissionError handles errors from the permission request.
+func (h *ApprovalHandler) handlePermissionError(reqID string, err error, ctx context.Context) security.ApprovalResponse {
+	if ctx.Err() != nil {
+		return h.denyResponse(reqID, "approval request canceled")
 	}
+	return h.denyResponse(reqID, fmt.Sprintf("client permission request failed: %v", err))
+}
 
-	// Extract selected option from response.
-	approved := false
-
-	var scope string
-
-	if acpResp.Outcome.Selected != nil {
-		selectedID := acpResp.Outcome.Selected.OptionId
-		// Check if selected option is an allow option.
-		for _, opt := range options {
-			if opt.OptionId == selectedID {
-				switch opt.Kind {
-				case acp.PermissionOptionKindAllowOnce:
-					approved = true
-					scope = security.ScopeOnce
-				case acp.PermissionOptionKindAllowAlways:
-					approved = true
-					// Map "always" to global persistence by default.
-					scope = security.ScopeGlobal
-				case acp.PermissionOptionKindRejectOnce:
-					approved = false
-					scope = security.ScopeOnce
-				case acp.PermissionOptionKindRejectAlways:
-					approved = false
-					// For symmetry, treat as global persistent deny (not persisted yet).
-					scope = security.ScopeGlobal
-				}
-
-				break
-			}
-		}
-	}
-
+// buildApprovalResponse converts the ACP permission response to a security approval response.
+func (h *ApprovalHandler) buildApprovalResponse(reqID string, acpResp acp.RequestPermissionResponse, options []acp.PermissionOption) security.ApprovalResponse {
+	approved, scope := resolvePermissionOutcome(acpResp, options)
 	return security.ApprovalResponse{
-		RequestID: req.ID,
+		RequestID: reqID,
 		Approved:  approved,
 		Reason:    "client decision",
 		Scope:     scope,
 	}
+}
+
+// resolvePermissionOutcome determines the approval decision from the ACP response.
+func resolvePermissionOutcome(acpResp acp.RequestPermissionResponse, options []acp.PermissionOption) (bool, string) {
+	if acpResp.Outcome.Selected == nil {
+		return false, ""
+	}
+
+	selectedID := acpResp.Outcome.Selected.OptionId
+	for _, opt := range options {
+		if opt.OptionId != selectedID {
+			continue
+		}
+		switch opt.Kind {
+		case acp.PermissionOptionKindAllowOnce:
+			return true, security.ScopeOnce
+		case acp.PermissionOptionKindAllowAlways:
+			return true, security.ScopeGlobal
+		case acp.PermissionOptionKindRejectOnce:
+			return false, security.ScopeOnce
+		case acp.PermissionOptionKindRejectAlways:
+			return false, security.ScopeGlobal
+		}
+	}
+
+	return false, ""
 }
 
 // convertApprovalRequestToToolCall converts a security approval request to an ACP tool call.

@@ -441,40 +441,49 @@ func (m *mockTerminalController) OnResize(f func(int, int)) {
 	m.resizeFunc = f
 }
 
-// TestUpdateBlock_NoDuplicateToolCompleted reproduces and tests the fix for duplicate "Tool completed" messages.
-// This test simulates the exact scenario where a TOOL block is updated multiple times,
-// which was causing "Tool completed" to print twice.
-func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
-	t.Parallel(
-	// Setup with actual output capture.
-	)
+// testPureTTYSetup holds common test setup for PureTTY tests.
+type testPureTTYSetup struct {
+	buf              bytes.Buffer
+	p                *PureTTY
+	statusManager    *status.Manager
+	statusAggregator *status.Aggregator
+}
 
-	var buf bytes.Buffer
-
-	renderer := prompt.NewTermRenderer(&buf, 80, "> ")
+// newTestPureTTYSetup creates a PureTTY with standard test dependencies.
+func newTestPureTTYSetup() *testPureTTYSetup {
+	s := &testPureTTYSetup{}
+	renderer := prompt.NewTermRenderer(&s.buf, 80, "> ")
 	model := prompt.NewModel(100)
 	blockRenderer := blocks.NewRenderer(80)
+	printer := output.NewPrinter(&s.buf)
+	ra := &rendererAdapter{renderer: renderer}
+	coord := output.NewCoordinatedWriter(printer, ra, model)
+	s.statusManager = status.NewManager()
+	s.statusAggregator = status.NewAggregator(s.statusManager)
 
-	// Create coordinator.
-	printer := output.NewPrinter(&buf)
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
-
-	// Create status management.
-	statusManager := status.NewManager()
-	statusAggregator := status.NewAggregator(statusManager)
-
-	p := &PureTTY{
-		out:              &buf,
+	s.p = &PureTTY{
+		out:              &s.buf,
 		model:            model,
 		renderer:         renderer,
 		coord:            coord,
-		statusManager:    statusManager,
-		statusAggregator: statusAggregator,
+		statusManager:    s.statusManager,
+		statusAggregator: s.statusAggregator,
 		blockRenderer:    blockRenderer,
 		timeline:         blocks.NewTimeline(),
 		mode:             ModeInput,
 	}
+
+	return s
+}
+
+// TestUpdateBlock_NoDuplicateToolCompleted reproduces and tests the fix for duplicate "Tool completed" messages.
+// This test simulates the exact scenario where a TOOL block is updated multiple times,
+// which was causing "Tool completed" to print twice.
+func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
+	t.Parallel()
+
+	s := newTestPureTTYSetup()
+	p := s.p
 
 	// Create an initial TOOL block (like execute_command).
 	block := blocks.NewBlock(blocks.BlockTypeTool)
@@ -496,53 +505,26 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 		t.Fatalf("AppendBlock failed: %v", err)
 	}
 
-	// Clear buffer after append.
-	buf.Reset()
+	s.buf.Reset()
+
+	toolBody := "Command executed successfully: итого 4\ndrwxr-xr-x. 1 dmitriy 14 окт 25 16:17 .\ndrwxr-xr-x. 1 dmitriy 54 окт 25 16:17 ..\n-rw-r--r--. 1 dmitriy 45 окт 25 16:17 main.rs"
 
 	// First update: tool completes with success.
-	completedBlock := blocks.NewBlock(blocks.BlockTypeTool)
-	completedBlock.ID = "tool_exec_123"
-	completedBlock.Title = "execute_command"
-	completedBlock.Body = "Command executed successfully: итого 4\ndrwxr-xr-x. 1 dmitriy 14 окт 25 16:17 .\ndrwxr-xr-x. 1 dmitriy 54 окт 25 16:17 ..\n-rw-r--r--. 1 dmitriy 45 окт 25 16:17 main.rs"
-
-	completedMeta := &blocks.ToolMeta{
-		ToolName: "execute_command",
-	}
-	err = blocks.SetToolMeta(completedBlock, completedMeta)
-	if err != nil {
-		t.Fatalf("SetToolMeta (first update) failed: %v", err)
-	}
-
-	// First UpdateBlock call - should print "Tool completed" once.
+	completedBlock := createToolBlock(t, "tool_exec_123", "execute_command", toolBody)
 	err = p.UpdateBlock("tool_exec_123", completedBlock)
 	if err != nil {
 		t.Fatalf("First UpdateBlock failed: %v", err)
 	}
 
 	// Second update: same tool, might be called again due to event processing.
-	secondUpdateBlock := blocks.NewBlock(blocks.BlockTypeTool)
-	secondUpdateBlock.ID = "tool_exec_123"
-	secondUpdateBlock.Title = "execute_command"
-	secondUpdateBlock.Body = "Command executed successfully: итого 4\ndrwxr-xr-x. 1 dmitriy 14 окт 25 16:17 .\ndrwxr-xr-x. 1 dmitriy 54 окт 25 16:17 ..\n-rw-r--r--. 1 dmitriy 45 окт 25 16:17 main.rs"
-
-	secondMeta := &blocks.ToolMeta{
-		ToolName: "execute_command",
-	}
-	err = blocks.SetToolMeta(secondUpdateBlock, secondMeta)
-	if err != nil {
-		t.Fatalf("SetToolMeta (second update) failed: %v", err)
-	}
-
-	// Second UpdateBlock call - should NOT print "Tool completed" again.
+	secondUpdateBlock := createToolBlock(t, "tool_exec_123", "execute_command", toolBody)
 	err = p.UpdateBlock("tool_exec_123", secondUpdateBlock)
 	if err != nil {
 		t.Fatalf("Second UpdateBlock failed: %v", err)
 	}
 
-	// Capture output after both updates.
-	output := buf.String()
-
 	// Count occurrences of "Tool completed".
+	output := s.buf.String()
 	toolCompletedCount := strings.Count(output, "Tool completed")
 	if toolCompletedCount > 1 {
 		t.Errorf("'Tool completed' should appear exactly once, but appeared %d times\nOutput:\n%s",
@@ -564,36 +546,10 @@ func TestUpdateBlock_NoDuplicateToolCompleted(t *testing.T) {
 
 // TestExecuteBlock_NoDuplicateExitStatus tests that EXECUTE blocks also don't duplicate status.
 func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
-	t.Parallel(
-	// Setup with actual output capture.
-	)
+	t.Parallel()
 
-	var buf bytes.Buffer
-
-	renderer := prompt.NewTermRenderer(&buf, 80, "> ")
-	model := prompt.NewModel(100)
-	blockRenderer := blocks.NewRenderer(80)
-
-	// Create coordinator.
-	printer := output.NewPrinter(&buf)
-	rendererAdapter := &rendererAdapter{renderer: renderer}
-	coord := output.NewCoordinatedWriter(printer, rendererAdapter, model)
-
-	// Create status management.
-	statusManager := status.NewManager()
-	statusAggregator := status.NewAggregator(statusManager)
-
-	p := &PureTTY{
-		out:              &buf,
-		model:            model,
-		renderer:         renderer,
-		coord:            coord,
-		statusManager:    statusManager,
-		statusAggregator: statusAggregator,
-		blockRenderer:    blockRenderer,
-		timeline:         blocks.NewTimeline(),
-		mode:             ModeInput,
-	}
+	s := newTestPureTTYSetup()
+	p := s.p
 
 	// Create an initial EXECUTE block.
 	block := blocks.NewBlock(blocks.BlockTypeExecute)
@@ -615,94 +571,41 @@ func TestExecuteBlock_NoDuplicateExitStatus(t *testing.T) {
 		t.Fatalf("AppendBlock failed: %v", err)
 	}
 
-	// Clear buffer after append.
-	buf.Reset()
+	s.buf.Reset()
 
-	// First update with completion.
 	exitCode := 0
 	lines := 3
-	firstUpdate := blocks.NewBlock(blocks.BlockTypeExecute)
-	firstUpdate.ID = "exec_123"
-	firstUpdate.Body = "file1\nfile2\nfile3"
 
-	firstMeta := &blocks.ExecuteMeta{
-		Command:  "ls",
-		CWD:      ".",
-		Impact:   "low",
-		ExitCode: &exitCode,
-		LinesOut: &lines,
-	}
-	err = blocks.SetExecuteMeta(firstUpdate, firstMeta)
-	if err != nil {
-		t.Fatalf("SetExecuteMeta (first update) failed: %v", err)
-	}
-
-	// First UpdateBlock call.
+	// First update with completion.
+	firstUpdate := createExecuteBlock(t, "exec_123", "ls", ".", "low", &exitCode, &lines, "file1\nfile2\nfile3")
 	err = p.UpdateBlock("exec_123", firstUpdate)
 	if err != nil {
 		t.Fatalf("First UpdateBlock failed: %v", err)
 	}
 
 	// Second update with same completion status.
-	secondUpdate := blocks.NewBlock(blocks.BlockTypeExecute)
-	secondUpdate.ID = "exec_123"
-	secondUpdate.Body = "file1\nfile2\nfile3"
-
-	secondMeta := &blocks.ExecuteMeta{
-		Command:  "ls",
-		CWD:      ".",
-		Impact:   "low",
-		ExitCode: &exitCode,
-		LinesOut: &lines,
-	}
-	err = blocks.SetExecuteMeta(secondUpdate, secondMeta)
-	if err != nil {
-		t.Fatalf("SetExecuteMeta (second update) failed: %v", err)
-	}
-
-	// Second UpdateBlock call.
+	secondUpdate := createExecuteBlock(t, "exec_123", "ls", ".", "low", &exitCode, &lines, "file1\nfile2\nfile3")
 	err = p.UpdateBlock("exec_123", secondUpdate)
 	if err != nil {
 		t.Fatalf("Second UpdateBlock failed: %v", err)
 	}
 
-	// Capture output.
-	output := buf.String()
-
-	// Count occurrences of "Exit code".
-	exitCodeCount := strings.Count(output, "Exit code: 0")
-	if exitCodeCount > 1 {
-		t.Errorf("'Exit code: 0' should appear exactly once, but appeared %d times\nOutput:\n%s",
-			exitCodeCount, output)
-	}
-
-	// Ensure it printed at least once.
-	if exitCodeCount == 0 {
-		t.Errorf("'Exit code: 0' should appear at least once\nOutput:\n%s", output)
-	}
+	output := s.buf.String()
+	assertCountInRange(t, output, "Exit code: 0", 1, 1)
 }
 
 // TestApprovalDialog_StatusBarNotOverwritten verifies that the approval prompt in the status bar
 // is not overwritten by event-driven status updates.
 // This is a regression test for BUG-20251029001449.
 func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
-	t.Parallel(
-	// Create a buffer for output.
-	)
+	t.Parallel()
 
 	var buf bytes.Buffer
 
-	// Create mock TTY.
-	mockTTY := &mockTerminalController{
-		width:  80,
-		height: 24,
-	}
-
-	// Create status renderer to capture status bar updates.
+	mockTTY := &mockTerminalController{width: 80, height: 24}
 	statusRenderer := status.NewRenderer(&buf, 80, 24)
 	statusManager := status.NewManager()
 
-	// Create PureTTY with test options.
 	ui := &PureTTY{
 		out:            &buf,
 		tty:            mockTTY,
@@ -712,54 +615,29 @@ func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
 		statusManager:  statusManager,
 	}
 
-	// Set initial status (simulating normal operation).
+	// Verify initial status renders correctly.
 	statusManager.SetAgentState("Ready")
 	ui.updateStatusBar()
-
-	// Verify initial status was rendered.
-	output := buf.String()
-	if !strings.Contains(output, "Ready") {
-		t.Errorf("Expected initial status 'Ready' to be rendered, got: %s", output)
-	}
-
-	// Clear buffer.
+	assertContains(t, buf.String(), "Ready", "initial status")
 	buf.Reset()
 
-	// Switch to approval mode.
+	// Switch to approval mode and show approval status.
 	ui.mu.Lock()
 	ui.mode = ModeApproval
 	ui.mu.Unlock()
 
-	// Simulate approval status being shown.
-	cmd := &security.Command{
-		Program: "rm",
-		Args:    []string{"-rf", "/tmp/build"},
-		Raw:     "rm -rf /tmp/build",
-	}
 	req := security.ApprovalRequest{
 		ID:      "test-approval-123",
-		Command: cmd,
+		Command: &security.Command{Program: "rm", Args: []string{"-rf", "/tmp/build"}, Raw: "rm -rf /tmp/build"},
 		Reason:  "Testing status bar not overwritten",
 		WorkDir: "/tmp",
 	}
-
 	ui.showApprovalStatus(req)
 
-	// Capture approval prompt output.
 	approvalOutput := buf.String()
-	if !strings.Contains(approvalOutput, "Executing:") {
-		t.Errorf("Expected approval prompt to contain 'Executing:', got: %s", approvalOutput)
-	}
-
-	if !strings.Contains(approvalOutput, "Key:") {
-		t.Errorf("Expected approval prompt to contain normalized key preview, got: %s", approvalOutput)
-	}
-
-	if !strings.Contains(approvalOutput, "TTLs:") {
-		t.Errorf("Expected approval prompt to contain TTL preview, got: %s", approvalOutput)
-	}
-
-	// Clear buffer.
+	assertContains(t, approvalOutput, "Executing:", "approval prompt")
+	assertContains(t, approvalOutput, "Key:", "normalized key preview")
+	assertContains(t, approvalOutput, "TTLs:", "TTL preview")
 	buf.Reset()
 
 	// Simulate event-driven status update (this would normally overwrite the approval prompt).
@@ -797,5 +675,61 @@ func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
 	finalOutput := buf.String()
 	if !strings.Contains(finalOutput, "Approved") {
 		t.Errorf("Expected status 'Approved' after leaving approval mode, got: %s", finalOutput)
+	}
+}
+
+// createToolBlock creates a tool block with metadata for testing.
+func createToolBlock(t *testing.T, id, toolName, body string) *blocks.Block {
+	t.Helper()
+
+	b := blocks.NewBlock(blocks.BlockTypeTool)
+	b.ID = id
+	b.Title = toolName
+	b.Body = body
+
+	meta := &blocks.ToolMeta{ToolName: toolName}
+	if err := blocks.SetToolMeta(b, meta); err != nil {
+		t.Fatalf("SetToolMeta failed: %v", err)
+	}
+
+	return b
+}
+
+// createExecuteBlock creates an execute block with metadata for testing.
+func createExecuteBlock(t *testing.T, id, cmd, cwd, impact string, exitCode, lines *int, body string) *blocks.Block {
+	t.Helper()
+
+	b := blocks.NewBlock(blocks.BlockTypeExecute)
+	b.ID = id
+	b.Body = body
+
+	meta := &blocks.ExecuteMeta{Command: cmd, CWD: cwd, Impact: impact, ExitCode: exitCode, LinesOut: lines}
+	if err := blocks.SetExecuteMeta(b, meta); err != nil {
+		t.Fatalf("SetExecuteMeta failed: %v", err)
+	}
+
+	return b
+}
+
+// assertContains checks that s contains substr, or fails with a descriptive message.
+func assertContains(t *testing.T, s, substr, context string) {
+	t.Helper()
+
+	if !strings.Contains(s, substr) {
+		t.Errorf("Expected %s to contain '%s', got: %s", context, substr, s)
+	}
+}
+
+// assertCountInRange checks that substr appears between minCount and maxCount times in s.
+func assertCountInRange(t *testing.T, s, substr string, minCount, maxCount int) {
+	t.Helper()
+
+	count := strings.Count(s, substr)
+	if count < minCount {
+		t.Errorf("'%s' should appear at least %d time(s), but appeared %d\nOutput:\n%s", substr, minCount, count, s)
+	}
+
+	if count > maxCount {
+		t.Errorf("'%s' should appear at most %d time(s), but appeared %d\nOutput:\n%s", substr, maxCount, count, s)
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+
+	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 )
 
 // BatchApplyRequest contains multiple deltas to apply.
@@ -22,6 +24,19 @@ type BatchApplyResult struct {
 	RolledBack bool // True if atomic=true and rollback occurred.
 }
 
+// batchJob pairs an index with a delta for worker processing.
+type batchJob struct {
+	index int
+	delta Delta
+}
+
+// batchJobResult holds the outcome of applying a single delta.
+type batchJobResult struct {
+	index  int
+	result *ApplyResult
+	err    error
+}
+
 // ApplyBatch applies multiple deltas in parallel.
 func (a *Applier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*BatchApplyResult, error) {
 	workers := req.MaxWorkers
@@ -33,21 +48,19 @@ func (a *Applier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*Batch
 		Results: make([]ApplyResult, len(req.Deltas)),
 	}
 
-	// Worker pool with error collection.
-	type job struct {
-		index int
-		delta Delta
-	}
+	resultsChan := a.runBatchWorkers(ctx, req.Deltas, workers)
+	firstError, successfulIndices := collectBatchResults(result, resultsChan, req.Atomic)
 
-	jobs := make(chan job, len(req.Deltas))
-	results := make(chan struct {
-		index  int
-		result *ApplyResult
-		err    error
-	}, len(req.Deltas))
+	return a.finalizeBatch(ctx, result, req, firstError, successfulIndices)
+}
 
-	// Start workers.
+// runBatchWorkers starts worker goroutines and returns the results channel.
+func (a *Applier) runBatchWorkers(ctx context.Context, deltas []Delta, workers int) <-chan batchJobResult {
+	jobs := make(chan batchJob, len(deltas))
+	results := make(chan batchJobResult, len(deltas))
+
 	var wg sync.WaitGroup
+
 	for range workers {
 		wg.Add(1)
 
@@ -56,33 +69,32 @@ func (a *Applier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*Batch
 
 			for j := range jobs {
 				res, err := a.Apply(ctx, j.delta)
-				results <- struct {
-					index  int
-					result *ApplyResult
-					err    error
-				}{j.index, res, err}
+				results <- batchJobResult{j.index, res, err}
 			}
 		}()
 	}
 
-	// Submit jobs.
-	for i, delta := range req.Deltas {
-		jobs <- job{i, delta}
+	for i, d := range deltas {
+		jobs <- batchJob{i, d}
 	}
 
 	close(jobs)
 
-	// Collect results.
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
+	return results
+}
+
+// collectBatchResults processes results from workers, tracking successes and failures.
+func collectBatchResults(result *BatchApplyResult, resultsChan <-chan batchJobResult, atomic bool) (error, []int) {
 	var firstError error
 
 	successfulIndices := make([]int, 0)
 
-	for r := range results {
+	for r := range resultsChan {
 		if r.err != nil {
 			result.Failed++
 			result.Results[r.index] = ApplyResult{Success: false, Error: r.err}
@@ -91,8 +103,7 @@ func (a *Applier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*Batch
 				firstError = r.err
 			}
 
-			// Atomic mode: mark for rollback.
-			if req.Atomic {
+			if atomic {
 				result.RolledBack = true
 			}
 		} else {
@@ -102,18 +113,20 @@ func (a *Applier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*Batch
 		}
 	}
 
-	// If atomic mode and there were failures, rollback successful deltas.
-	if req.Atomic && firstError != nil {
-		err := a.rollbackDeltas(ctx, req.Deltas, successfulIndices)
-		if err != nil {
-			// Log rollback error but return original error.
-			return result, fmt.Errorf("rollback failed after error: %w (original error: %w)", err, firstError)
-		}
+	return firstError, successfulIndices
+}
 
-		return result, firstError
+// finalizeBatch handles atomic rollback if needed.
+func (a *Applier) finalizeBatch(ctx context.Context, result *BatchApplyResult, req BatchApplyRequest, firstError error, successfulIndices []int) (*BatchApplyResult, error) {
+	if !req.Atomic || firstError == nil {
+		return result, nil
 	}
 
-	return result, nil
+	if err := a.rollbackDeltas(ctx, req.Deltas, successfulIndices); err != nil {
+		return result, fmt.Errorf("rollback failed after error: %w (original error: %w)", err, firstError)
+	}
+
+	return result, firstError
 }
 
 // rollbackDeltas reverses the effects of successfully applied deltas.
@@ -125,60 +138,60 @@ func (a *Applier) rollbackDeltas(ctx context.Context, deltas []Delta, successful
 
 	// Create inverse deltas to undo the changes.
 	for _, idx := range successfulIndices {
-		delta := deltas[idx]
-
-		// Get the bullet.
-		b, exists := a.playbook.Get(delta.BulletID)
-		if !exists {
-			continue // Bullet may have been deleted, skip.
+		if err := a.rollbackSingleDelta(ctx, deltas[idx]); err != nil {
+			return err
 		}
+	}
 
-		// Apply inverse operation based on operation type.
-		switch delta.Operation {
-		case OpUpdateContent:
-			// Cannot reliably rollback content updates without storing old value
-			// This is a limitation of the current design.
-			continue
+	return nil
+}
 
-		case OpIncrementHelpful:
-			// Decrement helpful count.
-			if b.HelpfulCount > 0 {
-				b.HelpfulCount--
-				err := a.playbook.Update(ctx, b)
-				if err != nil {
-					return fmt.Errorf("failed to rollback helpful increment for bullet %s: %w", delta.BulletID, err)
-				}
-			}
+// rollbackSingleDelta reverses a single successfully applied delta.
+func (a *Applier) rollbackSingleDelta(ctx context.Context, d Delta) error {
+	b, exists := a.playbook.Get(d.BulletID)
+	if !exists {
+		return nil
+	}
 
-		case OpIncrementHarmful:
-			// Decrement harmful count.
-			if b.HarmfulCount > 0 {
-				b.HarmfulCount--
-				err := a.playbook.Update(ctx, b)
-				if err != nil {
-					return fmt.Errorf("failed to rollback harmful increment for bullet %s: %w", delta.BulletID, err)
-				}
-			}
+	switch d.Operation {
+	case OpUpdateContent, OpRemoveTag, OpUpdateEmbedding:
+		return nil
+	case OpIncrementHelpful:
+		return a.rollbackCounter(ctx, b, d.BulletID, &b.HelpfulCount, "helpful")
+	case OpIncrementHarmful:
+		return a.rollbackCounter(ctx, b, d.BulletID, &b.HarmfulCount, "harmful")
+	case OpAddTag:
+		return a.rollbackTagAdd(ctx, b, d)
+	}
 
-		case OpAddTag:
-			// Remove the tag that was added.
-			if delta.Fields.TagKey != nil && b.Tags != nil {
-				delete(b.Tags, *delta.Fields.TagKey)
+	return nil
+}
 
-				err := a.playbook.Update(ctx, b)
-				if err != nil {
-					return fmt.Errorf("failed to rollback tag addition for bullet %s: %w", delta.BulletID, err)
-				}
-			}
+// rollbackCounter decrements a counter and persists if it was positive.
+func (a *Applier) rollbackCounter(ctx context.Context, b *bullet.Bullet, bulletID string, counter *int, label string) error {
+	if *counter <= 0 {
+		return nil
+	}
 
-		case OpRemoveTag:
-			// Cannot reliably restore removed tag without storing old value.
-			continue
+	*counter--
 
-		case OpUpdateEmbedding:
-			// Cannot reliably rollback embedding updates without storing old value.
-			continue
-		}
+	if err := a.playbook.Update(ctx, b); err != nil {
+		return fmt.Errorf("failed to rollback %s increment for bullet %s: %w", label, bulletID, err)
+	}
+
+	return nil
+}
+
+// rollbackTagAdd removes a tag that was added.
+func (a *Applier) rollbackTagAdd(ctx context.Context, b *bullet.Bullet, d Delta) error {
+	if d.Fields.TagKey == nil || b.Tags == nil {
+		return nil
+	}
+
+	delete(b.Tags, *d.Fields.TagKey)
+
+	if err := a.playbook.Update(ctx, b); err != nil {
+		return fmt.Errorf("failed to rollback tag addition for bullet %s: %w", d.BulletID, err)
 	}
 
 	return nil

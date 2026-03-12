@@ -38,75 +38,19 @@ func TestParseCommand(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		input     string
-		wantCmd   string
-		wantArgs  []string
-		wantIsCmd bool
+		name, input, wantCmd string
+		wantArgs             []string
+		wantIsCmd            bool
 	}{
-		{
-			name:      "slash command with no args",
-			input:     "/mode",
-			wantCmd:   "/mode",
-			wantArgs:  []string{},
-			wantIsCmd: true,
-		},
-		{
-			name:      "slash command with one arg",
-			input:     "/mode review",
-			wantCmd:   "/mode",
-			wantArgs:  []string{"review"},
-			wantIsCmd: true,
-		},
-		{
-			name:      "slash command with multiple args",
-			input:     "/mode review test",
-			wantCmd:   "/mode",
-			wantArgs:  []string{"review", "test"},
-			wantIsCmd: true,
-		},
-		{
-			name:      "command with leading/trailing whitespace",
-			input:     "  /help  ",
-			wantCmd:   "/help",
-			wantArgs:  []string{},
-			wantIsCmd: true,
-		},
-		{
-			name:      "regular message",
-			input:     "Write a test for the auth module",
-			wantCmd:   "",
-			wantArgs:  nil,
-			wantIsCmd: false,
-		},
-		{
-			name:      "message with slash in middle",
-			input:     "Use the /api endpoint to fetch data",
-			wantCmd:   "",
-			wantArgs:  nil,
-			wantIsCmd: false,
-		},
-		{
-			name:      "empty input",
-			input:     "",
-			wantCmd:   "",
-			wantArgs:  nil,
-			wantIsCmd: false,
-		},
-		{
-			name:      "just slash",
-			input:     "/",
-			wantCmd:   "",
-			wantArgs:  nil,
-			wantIsCmd: false,
-		},
-		{
-			name:      "case insensitive command",
-			input:     "/MODE REVIEW",
-			wantCmd:   "/mode",
-			wantArgs:  []string{"review"},
-			wantIsCmd: true,
-		},
+		{"slash command with no args", "/mode", "/mode", []string{}, true},
+		{"slash command with one arg", "/mode review", "/mode", []string{"review"}, true},
+		{"slash command with multiple args", "/mode review test", "/mode", []string{"review", "test"}, true},
+		{"command with leading/trailing whitespace", "  /help  ", "/help", []string{}, true},
+		{"regular message", "Write a test for the auth module", "", nil, false},
+		{"message with slash in middle", "Use the /api endpoint to fetch data", "", nil, false},
+		{"empty input", "", "", nil, false},
+		{"just slash", "/", "", nil, false},
+		{"case insensitive command", "/MODE REVIEW", "/mode", []string{"review"}, true},
 	}
 
 	for _, tt := range tests {

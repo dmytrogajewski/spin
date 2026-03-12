@@ -81,22 +81,25 @@ func TestSanitizer_Process(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			s := New()
-
-			var content, thought string
-
-			var contentSb84 strings.Builder
-			var thoughtSb84 strings.Builder
-			for _, chunk := range tt.chunks {
-				c, th := s.Process(chunk)
-				contentSb84.WriteString(c)
-				thoughtSb84.WriteString(th)
-			}
-			content += contentSb84.String()
-			thought += thoughtSb84.String()
+			content, thought := processAllChunks(tt.chunks)
 
 			assert.Equal(t, tt.wantContent, content, "content mismatch")
 			assert.Equal(t, tt.wantThought, thought, "thought mismatch")
 		})
 	}
+}
+
+// processAllChunks runs all chunks through a fresh Sanitizer and returns accumulated content and thought.
+func processAllChunks(chunks []string) (string, string) {
+	s := New()
+
+	var contentSb, thoughtSb strings.Builder
+
+	for _, chunk := range chunks {
+		c, th := s.Process(chunk)
+		contentSb.WriteString(c)
+		thoughtSb.WriteString(th)
+	}
+
+	return contentSb.String(), thoughtSb.String()
 }

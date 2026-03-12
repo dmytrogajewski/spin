@@ -21,6 +21,20 @@ import (
 
 var ErrUnsupportedTransport = errors.New("unsupported transport")
 
+// createSessionStorage creates a session storage if a directory is configured.
+func createSessionStorage(sessionDir string) (session.Storage, error) {
+	if sessionDir == "" {
+		return nil, nil
+	}
+
+	storage, err := session.NewFileStorage(sessionDir)
+	if err != nil {
+		return nil, fmt.Errorf("create session storage: %w", err)
+	}
+
+	return storage, nil
+}
+
 // ProtocolServices holds the protocol services (Git, Shell, MCP).
 type ProtocolServices struct {
 	Git   *git.Service
@@ -58,7 +72,6 @@ func createServices(ctx context.Context, cfg *config.V2, workDir string, logger 
 		gitSvc, err = git.NewService(true, workDir, logger)
 		if err != nil {
 			cleanup()
-
 			return nil, nil, fmt.Errorf("create git service: %w", err)
 		}
 	}
@@ -69,55 +82,69 @@ func createServices(ctx context.Context, cfg *config.V2, workDir string, logger 
 		shellSvc, err = shell.NewService(true, workDir, logger, cfg.Protocol.ShellTimeout)
 		if err != nil {
 			cleanup()
-
 			return nil, nil, fmt.Errorf("create shell service: %w", err)
 		}
 	}
 
 	logger.DebugContext(ctx, "MCP config check", "enable_mcp", cfg.Protocol.EnableMCP, "servers_count", len(cfg.Protocol.MCPServers))
 
-	if cfg.Protocol.EnableMCP && len(cfg.Protocol.MCPServers) > 0 {
-		registryManager := mcp.NewDefaultRegistryManager(logger)
-
-		for _, srv := range cfg.Protocol.MCPServers {
-			logger.DebugContext(ctx, "creating MCP registry", "name", srv.Name, "transport", srv.Transport, "dynamic_loadout", srv.DynamicLoadout)
-
-			registry, err := createMCPRegistry(srv, logger)
-			if err != nil {
-				logger.WarnContext(ctx, "failed to create MCP registry", "name", srv.Name, "err", err)
-
-				continue
-			}
-
-			err = registryManager.Register(registry)
-			if err != nil {
-				logger.WarnContext(ctx, "failed to register MCP registry", "name", srv.Name, "err", err)
-
-				continue
-			}
-
-			logger.DebugContext(ctx, "MCP registry registered", "name", srv.Name)
-		}
-
-		// Initialize all registries.
-		for _, reg := range registryManager.All() {
-			err := reg.Initialize(ctx)
-			if err != nil {
-				logger.WarnContext(ctx, "failed to initialize MCP registry", "name", reg.Name(), "err", err)
-			} else {
-				logger.DebugContext(ctx, "MCP registry initialized", "name", reg.Name())
-			}
-		}
-
-		mcpSvc = mcp.NewService(registryManager)
-		logger.InfoContext(ctx, "MCP service created", "registry_count", registryManager.RegistryCount())
-	}
+	mcpSvc = createMCPService(ctx, cfg, logger)
 
 	return &ProtocolServices{
 		Git:   gitSvc,
 		Shell: shellSvc,
 		MCP:   mcpSvc,
 	}, cleanup, nil
+}
+
+// createMCPService creates the MCP service if MCP is enabled and servers are configured.
+func createMCPService(ctx context.Context, cfg *config.V2, logger *slog.Logger) *mcp.Service {
+	if !cfg.Protocol.EnableMCP || len(cfg.Protocol.MCPServers) == 0 {
+		return nil
+	}
+
+	registryManager := mcp.NewDefaultRegistryManager(logger)
+
+	for _, srv := range cfg.Protocol.MCPServers {
+		logger.DebugContext(ctx, "creating MCP registry", "name", srv.Name, "transport", srv.Transport, "dynamic_loadout", srv.DynamicLoadout)
+
+		registerMCPServer(ctx, registryManager, srv, logger)
+	}
+
+	initializeMCPRegistries(ctx, registryManager, logger)
+
+	logger.InfoContext(ctx, "MCP service created", "registry_count", registryManager.RegistryCount())
+
+	return mcp.NewService(registryManager)
+}
+
+// registerMCPServer creates and registers a single MCP server.
+func registerMCPServer(ctx context.Context, registryManager *mcp.DefaultRegistryManager, srv config.MCPServerConfigV2, logger *slog.Logger) {
+	registry, err := createMCPRegistry(srv, logger)
+	if err != nil {
+		logger.WarnContext(ctx, "failed to create MCP registry", "name", srv.Name, "err", err)
+		return
+	}
+
+	err = registryManager.Register(registry)
+	if err != nil {
+		logger.WarnContext(ctx, "failed to register MCP registry", "name", srv.Name, "err", err)
+		return
+	}
+
+	logger.DebugContext(ctx, "MCP registry registered", "name", srv.Name)
+}
+
+// initializeMCPRegistries initializes all registered MCP registries.
+func initializeMCPRegistries(ctx context.Context, registryManager *mcp.DefaultRegistryManager, logger *slog.Logger) {
+	for _, reg := range registryManager.All() {
+		err := reg.Initialize(ctx)
+		if err != nil {
+			logger.WarnContext(ctx, "failed to initialize MCP registry", "name", reg.Name(), "err", err)
+		} else {
+			logger.DebugContext(ctx, "MCP registry initialized", "name", reg.Name())
+		}
+	}
 }
 
 // createBuiltinRuntime creates a builtin runtime with all required dependencies.

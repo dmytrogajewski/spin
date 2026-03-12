@@ -93,79 +93,10 @@ func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion,
 	result := make(map[string]string)
 
 	// Pass 1: Extract from assistant messages.
-	for msgIdx, msg := range messages {
-		genericMsg, err := parseGenericMessage(msg)
-		if err != nil {
-			logger.DebugContext(ctx, "buildToolCallIDToNameMap: failed to parse message",
-				"index", msgIdx,
-				"error", err)
-
-			continue
-		}
-
-		if genericMsg.Role != "assistant" || len(genericMsg.ToolCalls) == 0 {
-			continue
-		}
-
-		logger.DebugContext(ctx, "buildToolCallIDToNameMap: found assistant message with tool_calls",
-			"index", msgIdx,
-			"tool_calls_raw_len", len(genericMsg.ToolCalls))
-
-		var toolCalls []struct {
-			ID       string `json:"id"`
-			Function struct {
-				Name string `json:"name"`
-			} `json:"function"`
-		}
-		err = json.Unmarshal(genericMsg.ToolCalls, &toolCalls)
-		if err != nil {
-			logger.DebugContext(ctx, "buildToolCallIDToNameMap: failed to unmarshal tool_calls",
-				"index", msgIdx,
-				"error", err,
-				"raw", string(genericMsg.ToolCalls))
-
-			continue
-		}
-
-		logger.DebugContext(ctx, "buildToolCallIDToNameMap: parsed tool_calls",
-			"index", msgIdx,
-			"count", len(toolCalls))
-
-		for _, tc := range toolCalls {
-			if tc.ID != "" && tc.Function.Name != "" {
-				result[tc.ID] = tc.Function.Name
-				logger.DebugContext(ctx, "buildToolCallIDToNameMap: added mapping",
-					"id", tc.ID,
-					"name", tc.Function.Name)
-			}
-		}
-	}
+	extractToolCallMappings(messages, result, logger, ctx)
 
 	// Pass 2: Positional fallback for tool messages with missing mapping.
-	for i, msg := range messages {
-		genericMsg, err := parseGenericMessage(msg)
-		if err != nil || genericMsg.Role != "tool" || genericMsg.ToolCallID == "" {
-			continue
-		}
-
-		if _, ok := result[genericMsg.ToolCallID]; ok {
-			continue // Already in mapping.
-		}
-
-		// Find preceding assistant with tool_calls and our position among following tool messages.
-		toolName := resolveToolNameByPosition(messages, i)
-		if toolName != "" {
-			result[genericMsg.ToolCallID] = toolName
-			logger.DebugContext(ctx, "buildToolCallIDToNameMap: positional fallback added mapping",
-				"index", i,
-				"tool_call_id", genericMsg.ToolCallID,
-				"tool_name", toolName)
-		} else {
-			logger.DebugContext(ctx, "buildToolCallIDToNameMap: positional fallback failed",
-				"index", i,
-				"tool_call_id", genericMsg.ToolCallID)
-		}
-	}
+	resolveUnmappedToolMessages(messages, result, logger, ctx)
 
 	logger.DebugContext(ctx, "buildToolCallIDToNameMap: complete",
 		"mapping_size", len(result),
@@ -174,15 +105,94 @@ func buildToolCallIDToNameMap(messages []openai.ChatCompletionMessageParamUnion,
 	return result
 }
 
+// extractToolCallMappings extracts tool_call_id -> tool_name from assistant messages.
+func extractToolCallMappings(messages []openai.ChatCompletionMessageParamUnion, result map[string]string, logger *slog.Logger, ctx context.Context) {
+	for msgIdx, msg := range messages {
+		genericMsg, err := parseGenericMessage(msg)
+		if err != nil {
+			logger.DebugContext(ctx, "buildToolCallIDToNameMap: failed to parse message",
+				"index", msgIdx, "error", err)
+			continue
+		}
+
+		if genericMsg.Role != "assistant" || len(genericMsg.ToolCalls) == 0 {
+			continue
+		}
+
+		logger.DebugContext(ctx, "buildToolCallIDToNameMap: found assistant message with tool_calls",
+			"index", msgIdx, "tool_calls_raw_len", len(genericMsg.ToolCalls))
+
+		extractMappingsFromToolCalls(genericMsg.ToolCalls, msgIdx, result, logger, ctx)
+	}
+}
+
+// extractMappingsFromToolCalls unmarshals and extracts id->name mappings from raw tool calls JSON.
+func extractMappingsFromToolCalls(toolCallsJSON json.RawMessage, msgIdx int, result map[string]string, logger *slog.Logger, ctx context.Context) {
+	var toolCalls []struct {
+		ID       string `json:"id"`
+		Function struct {
+			Name string `json:"name"`
+		} `json:"function"`
+	}
+
+	err := json.Unmarshal(toolCallsJSON, &toolCalls)
+	if err != nil {
+		logger.DebugContext(ctx, "buildToolCallIDToNameMap: failed to unmarshal tool_calls",
+			"index", msgIdx, "error", err, "raw", string(toolCallsJSON))
+		return
+	}
+
+	logger.DebugContext(ctx, "buildToolCallIDToNameMap: parsed tool_calls",
+		"index", msgIdx, "count", len(toolCalls))
+
+	for _, tc := range toolCalls {
+		if tc.ID != "" && tc.Function.Name != "" {
+			result[tc.ID] = tc.Function.Name
+			logger.DebugContext(ctx, "buildToolCallIDToNameMap: added mapping",
+				"id", tc.ID, "name", tc.Function.Name)
+		}
+	}
+}
+
+// resolveUnmappedToolMessages applies positional fallback for tool messages without a mapping.
+func resolveUnmappedToolMessages(messages []openai.ChatCompletionMessageParamUnion, result map[string]string, logger *slog.Logger, ctx context.Context) {
+	for i, msg := range messages {
+		genericMsg, err := parseGenericMessage(msg)
+		if err != nil || genericMsg.Role != "tool" || genericMsg.ToolCallID == "" {
+			continue
+		}
+
+		if _, ok := result[genericMsg.ToolCallID]; ok {
+			continue
+		}
+
+		toolName := resolveToolNameByPosition(messages, i)
+		if toolName != "" {
+			result[genericMsg.ToolCallID] = toolName
+			logger.DebugContext(ctx, "buildToolCallIDToNameMap: positional fallback added mapping",
+				"index", i, "tool_call_id", genericMsg.ToolCallID, "tool_name", toolName)
+		} else {
+			logger.DebugContext(ctx, "buildToolCallIDToNameMap: positional fallback failed",
+				"index", i, "tool_call_id", genericMsg.ToolCallID)
+		}
+	}
+}
+
 // resolveToolNameByPosition finds the tool name for a tool message at index i
 // by locating the preceding assistant message and using tool message order.
 func resolveToolNameByPosition(messages []openai.ChatCompletionMessageParamUnion, toolMsgIndex int) string {
-	// Walk backwards to find assistant with tool_calls.
-	var (
-		assistantToolNames []string
-		toolCountBeforeMe  int
-	)
+	toolCountBeforeMe, assistantToolNames := scanPrecedingMessages(messages, toolMsgIndex)
 
+	if toolCountBeforeMe >= len(assistantToolNames) {
+		return ""
+	}
+
+	return assistantToolNames[toolCountBeforeMe]
+}
+
+// scanPrecedingMessages walks backwards from toolMsgIndex to find the preceding
+// assistant message's tool names and count how many tool messages precede us.
+func scanPrecedingMessages(messages []openai.ChatCompletionMessageParamUnion, toolMsgIndex int) (toolCount int, toolNames []string) {
 	for j := toolMsgIndex - 1; j >= 0; j-- {
 		genericMsg, err := parseGenericMessage(messages[j])
 		if err != nil {
@@ -190,41 +200,42 @@ func resolveToolNameByPosition(messages []openai.ChatCompletionMessageParamUnion
 		}
 
 		if genericMsg.Role == "tool" {
-			toolCountBeforeMe++
-
+			toolCount++
 			continue
 		}
 
-		if genericMsg.Role == "assistant" && len(genericMsg.ToolCalls) > 0 {
-			var toolCalls []struct {
-				Function struct {
-					Name string `json:"name"`
-				} `json:"function"`
-			}
-			if json.Unmarshal(genericMsg.ToolCalls, &toolCalls) != nil {
-				return ""
-			}
-
-			for _, tc := range toolCalls {
-				assistantToolNames = append(assistantToolNames, tc.Function.Name)
-			}
-			// Reverse: we walked backwards so names are in reverse order.
-			for left, right := 0, len(assistantToolNames)-1; left < right; left, right = left+1, right-1 {
-				assistantToolNames[left], assistantToolNames[right] = assistantToolNames[right], assistantToolNames[left]
-			}
-
-			break
+		// Other role without tool_calls means no match.
+		if genericMsg.Role != "assistant" || len(genericMsg.ToolCalls) == 0 {
+			return toolCount, nil
 		}
 
-		// Other role (user, system) - no preceding assistant with tool_calls.
-		return ""
+		// Found assistant with tool_calls.
+		toolNames = extractAssistantToolNames(genericMsg.ToolCalls)
+
+		return toolCount, toolNames
 	}
 
-	if toolCountBeforeMe >= len(assistantToolNames) {
-		return ""
+	return toolCount, nil
+}
+
+// extractAssistantToolNames extracts tool function names from raw tool calls JSON.
+func extractAssistantToolNames(toolCallsJSON json.RawMessage) []string {
+	var toolCalls []struct {
+		Function struct {
+			Name string `json:"name"`
+		} `json:"function"`
 	}
 
-	return assistantToolNames[toolCountBeforeMe]
+	if json.Unmarshal(toolCallsJSON, &toolCalls) != nil {
+		return nil
+	}
+
+	names := make([]string, len(toolCalls))
+	for i, tc := range toolCalls {
+		names[i] = tc.Function.Name
+	}
+
+	return names
 }
 
 // parseGenericMessage converts an OpenAI message to a generic structure.
@@ -313,12 +324,24 @@ func inferToolName(args map[string]any, tools []api.Tool, logger *slog.Logger, c
 		return ""
 	}
 
-	// Build set of argument keys.
 	argKeys := make(map[string]bool, len(args))
 	for k := range args {
 		argKeys[k] = true
 	}
 
+	bestMatch, ambiguous := findBestToolMatch(argKeys, tools)
+
+	if ambiguous {
+		logger.DebugContext(ctx, "ollama: ambiguous tool name inference, using first match",
+			"name", bestMatch, "args_keys", argKeys)
+	}
+
+	return bestMatch
+}
+
+// findBestToolMatch finds the tool whose parameters best match the given argument keys.
+// Returns the best match name and whether the match was ambiguous.
+func findBestToolMatch(argKeys map[string]bool, tools []api.Tool) (string, bool) {
 	var (
 		bestMatch string
 		bestScore int
@@ -326,41 +349,44 @@ func inferToolName(args map[string]any, tools []api.Tool, logger *slog.Logger, c
 	)
 
 	for _, tool := range tools {
-		props := tool.Function.Parameters.Properties
-		if len(props) == 0 {
+		score := scoreToolMatch(argKeys, tool.Function.Parameters.Properties)
+		if score <= 0 {
 			continue
 		}
 
-		// Count how many argument keys match this tool's parameter names.
-		score := 0
-
-		for k := range argKeys {
-			if _, ok := props[k]; ok {
-				score++
-			}
-		}
-
-		// All arg keys must match (no extra unknown keys).
-		if score == len(argKeys) && score > 0 {
-			if score > bestScore {
-				bestMatch = tool.Function.Name
-				bestScore = score
-				ambiguous = false
-			} else if score == bestScore {
-				ambiguous = true
-			}
+		if score > bestScore {
+			bestMatch = tool.Function.Name
+			bestScore = score
+			ambiguous = false
+		} else if score == bestScore {
+			ambiguous = true
 		}
 	}
 
-	if ambiguous {
-		// Return best match even if ambiguous — a wrong tool call is recoverable
-		// (the model gets an error and retries), but a dropped tool call causes
-		// the agent to exit prematurely thinking there's nothing left to do.
-		logger.DebugContext(ctx, "ollama: ambiguous tool name inference, using first match",
-			"name", bestMatch, "args_keys", argKeys)
+	return bestMatch, ambiguous
+}
+
+// scoreToolMatch returns the match score (number of matching keys) if all arg keys
+// match the tool's properties. Returns 0 if not a full match or properties are empty.
+func scoreToolMatch(argKeys map[string]bool, props map[string]api.ToolProperty) int {
+	if len(props) == 0 {
+		return 0
 	}
 
-	return bestMatch
+	score := 0
+
+	for k := range argKeys {
+		if _, ok := props[k]; ok {
+			score++
+		}
+	}
+
+	// All arg keys must match (no extra unknown keys).
+	if score == len(argKeys) && score > 0 {
+		return score
+	}
+
+	return 0
 }
 
 // convertToolToOllama converts an OpenAI tool to Ollama format.
@@ -397,28 +423,37 @@ func convertToolToOllama(tool openai.ChatCompletionToolParam) api.Tool {
 }
 
 func extractProperties(params map[string]any) map[string]api.ToolProperty {
-	if props, propsOk := params["properties"].(map[string]any); propsOk {
-		result := make(map[string]api.ToolProperty)
-
-		for k, v := range props {
-			if propMap, mapOk := v.(map[string]any); mapOk {
-				prop := api.ToolProperty{}
-				if typ, typOk := propMap["type"].(string); typOk {
-					prop.Type = api.PropertyType{typ}
-				}
-
-				if desc, descOk := propMap["description"].(string); descOk {
-					prop.Description = desc
-				}
-
-				result[k] = prop
-			}
-		}
-
-		return result
+	props, propsOk := params["properties"].(map[string]any)
+	if !propsOk {
+		return nil
 	}
 
-	return nil
+	result := make(map[string]api.ToolProperty)
+
+	for k, v := range props {
+		propMap, mapOk := v.(map[string]any)
+		if !mapOk {
+			continue
+		}
+
+		result[k] = buildToolProperty(propMap)
+	}
+
+	return result
+}
+
+// buildToolProperty constructs an api.ToolProperty from a property map.
+func buildToolProperty(propMap map[string]any) api.ToolProperty {
+	prop := api.ToolProperty{}
+	if typ, typOk := propMap["type"].(string); typOk {
+		prop.Type = api.PropertyType{typ}
+	}
+
+	if desc, descOk := propMap["description"].(string); descOk {
+		prop.Description = desc
+	}
+
+	return prop
 }
 
 func extractRequired(params map[string]any) []string {

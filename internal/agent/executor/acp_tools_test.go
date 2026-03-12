@@ -37,89 +37,40 @@ func (m *mockFilesystemClient) WriteTextFile(_ context.Context, path, _ string) 
 	return m.writeErr
 }
 
+type pathResolutionCase struct {
+	name          string
+	workDir       string
+	inputPath     string
+	expectedPath  string
+	expectError   bool
+	errorContains string
+}
+
+func pathResolutionTestCases() []pathResolutionCase {
+	return []pathResolutionCase{
+		{name: "relative path is resolved to workDir", workDir: "/home/user/workspace", inputPath: "src/main.py", expectedPath: "/home/user/workspace/src/main.py"},
+		{name: "absolute path within workDir is allowed", workDir: "/home/user/workspace", inputPath: "/home/user/workspace/src/main.py", expectedPath: "/home/user/workspace/src/main.py"},
+		{name: "absolute path outside workDir is rejected", workDir: "/home/user/workspace", inputPath: "/tmp/file.py", expectError: true, errorContains: "outside the allowed workspace"},
+		{name: "path traversal with .. is rejected", workDir: "/home/user/workspace", inputPath: "../../../etc/passwd", expectError: true, errorContains: "outside the allowed workspace"},
+		{name: "absolute path with similar prefix but different dir is rejected", workDir: "/home/user/workspace", inputPath: "/home/user/workspace2/file.py", expectError: true, errorContains: "outside the allowed workspace"},
+		{name: "path with . components is cleaned", workDir: "/home/user/workspace", inputPath: "./src/../src/main.py", expectedPath: "/home/user/workspace/src/main.py"},
+		{name: "simple filename is resolved to workDir", workDir: "/home/user/workspace", inputPath: "file.txt", expectedPath: "/home/user/workspace/file.txt"},
+		{name: "nested relative path is resolved", workDir: "/home/user/workspace", inputPath: "src/components/Button.tsx", expectedPath: "/home/user/workspace/src/components/Button.tsx"},
+	}
+}
+
 func TestACPWriteFileTool_PathResolution(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name          string
-		workDir       string
-		inputPath     string
-		expectedPath  string
-		expectError   bool
-		errorContains string
-	}{
-		{
-			name:         "relative path is resolved to workDir",
-			workDir:      "/home/user/workspace",
-			inputPath:    "src/main.py",
-			expectedPath: "/home/user/workspace/src/main.py",
-			expectError:  false,
-		},
-		{
-			name:         "absolute path within workDir is allowed",
-			workDir:      "/home/user/workspace",
-			inputPath:    "/home/user/workspace/src/main.py",
-			expectedPath: "/home/user/workspace/src/main.py",
-			expectError:  false,
-		},
-		{
-			name:          "absolute path outside workDir is rejected",
-			workDir:       "/home/user/workspace",
-			inputPath:     "/tmp/file.py",
-			expectError:   true,
-			errorContains: "outside the allowed workspace",
-		},
-		{
-			name:          "path traversal with .. is rejected",
-			workDir:       "/home/user/workspace",
-			inputPath:     "../../../etc/passwd",
-			expectError:   true,
-			errorContains: "outside the allowed workspace",
-		},
-		{
-			name:          "absolute path with similar prefix but different dir is rejected",
-			workDir:       "/home/user/workspace",
-			inputPath:     "/home/user/workspace2/file.py",
-			expectError:   true,
-			errorContains: "outside the allowed workspace",
-		},
-		{
-			name:         "path with . components is cleaned",
-			workDir:      "/home/user/workspace",
-			inputPath:    "./src/../src/main.py",
-			expectedPath: "/home/user/workspace/src/main.py",
-			expectError:  false,
-		},
-		{
-			name:         "simple filename is resolved to workDir",
-			workDir:      "/home/user/workspace",
-			inputPath:    "file.txt",
-			expectedPath: "/home/user/workspace/file.txt",
-			expectError:  false,
-		},
-		{
-			name:         "nested relative path is resolved",
-			workDir:      "/home/user/workspace",
-			inputPath:    "src/components/Button.tsx",
-			expectedPath: "/home/user/workspace/src/components/Button.tsx",
-			expectError:  false,
-		},
-	}
 
-	for _, tt := range tests {
+	for _, tt := range pathResolutionTestCases() {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			mockFS := &mockFilesystemClient{}
-			runtime := &ACPRuntime{
-				workDir:          tt.workDir,
-				filesystemClient: mockFS,
-			}
+			runtime := &ACPRuntime{workDir: tt.workDir, filesystemClient: mockFS}
 			tool := NewACPWriteFileTool(runtime)
 
-			params, err := tools.FromMap(map[string]any{
-				"path":    tt.inputPath,
-				"content": "test content",
-			})
+			params, err := tools.FromMap(map[string]any{"path": tt.inputPath, "content": "test content"})
 			if err != nil {
 				t.Fatalf("failed to create params: %v", err)
 			}
@@ -129,23 +80,7 @@ func TestACPWriteFileTool_PathResolution(t *testing.T) {
 				t.Fatalf("unexpected error from Execute: %v", err)
 			}
 
-			if tt.expectError {
-				if result.Success {
-					t.Errorf("expected failure but got success")
-				}
-
-				if tt.errorContains != "" && !containsString(result.Error, tt.errorContains) {
-					t.Errorf("expected error to contain %q, got %q", tt.errorContains, result.Error)
-				}
-			} else {
-				if !result.Success {
-					t.Errorf("expected success but got error: %s", result.Error)
-				}
-
-				if mockFS.writePath != tt.expectedPath {
-					t.Errorf("expected path %q, got %q", tt.expectedPath, mockFS.writePath)
-				}
-			}
+			assertToolResult(t, result, tt.expectError, tt.errorContains, mockFS.writePath, tt.expectedPath)
 		})
 	}
 }
@@ -215,24 +150,40 @@ func TestACPReadFileTool_PathResolution(t *testing.T) {
 				t.Fatalf("unexpected error from Execute: %v", err)
 			}
 
-			if tt.expectError {
-				if result.Success {
-					t.Errorf("expected failure but got success")
-				}
-
-				if tt.errorContains != "" && !containsString(result.Error, tt.errorContains) {
-					t.Errorf("expected error to contain %q, got %q", tt.errorContains, result.Error)
-				}
-			} else {
-				if !result.Success {
-					t.Errorf("expected success but got error: %s", result.Error)
-				}
-
-				if mockFS.readPath != tt.expectedPath {
-					t.Errorf("expected path %q, got %q", tt.expectedPath, mockFS.readPath)
-				}
-			}
+			assertToolResult(t, result, tt.expectError, tt.errorContains, mockFS.readPath, tt.expectedPath)
 		})
+	}
+}
+
+// assertToolResult validates a tool result based on expected error or success conditions.
+func assertToolResult(t *testing.T, result tools.ToolResult, expectError bool, errorContains, actualPath, expectedPath string) {
+	t.Helper()
+
+	if expectError {
+		assertToolError(t, result, errorContains)
+
+		return
+	}
+
+	if !result.Success {
+		t.Errorf("expected success but got error: %s", result.Error)
+	}
+
+	if actualPath != expectedPath {
+		t.Errorf("expected path %q, got %q", expectedPath, actualPath)
+	}
+}
+
+// assertToolError validates that a tool result is an error with expected content.
+func assertToolError(t *testing.T, result tools.ToolResult, errorContains string) {
+	t.Helper()
+
+	if result.Success {
+		t.Errorf("expected failure but got success")
+	}
+
+	if errorContains != "" && !containsString(result.Error, errorContains) {
+		t.Errorf("expected error to contain %q, got %q", errorContains, result.Error)
 	}
 }
 

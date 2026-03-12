@@ -42,33 +42,40 @@ func (t *PlanTracker) OnToolCallComplete(event events.Event) {
 	for i := range t.plan.Steps {
 		step := &t.plan.Steps[i]
 
-		if t.matchesStep(step, data.ToolName) {
-			// Mark step as running if it was pending.
-			if step.Status == planning.StepStatusPending {
-				step.Status = planning.StepStatusRunning
-				now := time.Now()
-				step.StartedAt = &now
-				t.runningSteps[step.ID] = true
-				t.emitPlanUpdate()
-			}
-
-			// Mark as completed/failed based on tool result.
-			if t.runningSteps[step.ID] {
-				if data.Success {
-					step.Status = planning.StepStatusCompleted
-					now := time.Now()
-					step.CompletedAt = &now
-				} else {
-					step.Status = planning.StepStatusFailed
-				}
-
-				delete(t.runningSteps, step.ID)
-				t.emitPlanUpdate()
-			}
-
-			break // Only match first step.
+		if !t.matchesStep(step, data.ToolName) {
+			continue
 		}
+
+		t.transitionStepOnToolComplete(step, data.Success)
+
+		break // Only match first step.
 	}
+}
+
+// transitionStepOnToolComplete updates step status based on tool completion.
+func (t *PlanTracker) transitionStepOnToolComplete(step *planning.Step, success bool) {
+	if step.Status == planning.StepStatusPending {
+		step.Status = planning.StepStatusRunning
+		now := time.Now()
+		step.StartedAt = &now
+		t.runningSteps[step.ID] = true
+		t.emitPlanUpdate()
+	}
+
+	if !t.runningSteps[step.ID] {
+		return
+	}
+
+	if success {
+		step.Status = planning.StepStatusCompleted
+		now := time.Now()
+		step.CompletedAt = &now
+	} else {
+		step.Status = planning.StepStatusFailed
+	}
+
+	delete(t.runningSteps, step.ID)
+	t.emitPlanUpdate()
 }
 
 // matchesStep performs fuzzy matching between step and tool name.

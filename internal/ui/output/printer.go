@@ -239,52 +239,55 @@ func (p *Printer) resetTimer(timer *time.Timer) {
 func (p *Printer) printChunksImmediate(ctx context.Context, chunks <-chan string) error {
 	var buf strings.Builder
 
-	var wroteContent bool // Track if any content was written.
+	var wroteContent bool
 
 	for {
 		select {
 		case <-ctx.Done():
-			// Flush remaining buffer.
 			if buf.Len() > 0 {
-				str := buf.String()
-				output := strings.ReplaceAll(str, "\n", "\r\n")
+				p.flushBuffer(&buf)
 				wroteContent = true
-
-				p.mu.Lock()
-				_, _ = io.WriteString(p.out, output)
-				p.mu.Unlock()
 			}
 
 			return fmt.Errorf("print chunks immediate: %w", ctx.Err())
 
 		case chunk, ok := <-chunks:
 			if !ok {
-				// Channel closed, flush and ensure final newline.
-				if buf.Len() > 0 {
-					str := buf.String()
-					output := strings.ReplaceAll(str, "\n", "\r\n")
-					wroteContent = true
-
-					p.mu.Lock()
-					_, err := io.WriteString(p.out, output)
-					p.mu.Unlock()
-
-					if err != nil {
-						return fmt.Errorf("flush remaining output: %w", err)
-					}
-				}
-				// Always ensure output ends with newline to prevent prompt overlap
-				// This guarantees the prompt will appear on a fresh line.
-				if wroteContent {
-					p.mu.Lock()
-					_, _ = io.WriteString(p.out, "\r\n")
-					p.mu.Unlock()
-				}
-
-				return nil
+				return p.finalizeImmediate(&buf, wroteContent)
 			}
 
 			buf.WriteString(chunk)
 		}
 	}
+}
+
+// flushBuffer writes the buffer contents to the output, replacing newlines.
+func (p *Printer) flushBuffer(buf *strings.Builder) error {
+	str := buf.String()
+	output := strings.ReplaceAll(str, "\n", "\r\n")
+
+	p.mu.Lock()
+	_, err := io.WriteString(p.out, output)
+	p.mu.Unlock()
+
+	return err
+}
+
+// finalizeImmediate flushes remaining buffer and ensures a trailing newline.
+func (p *Printer) finalizeImmediate(buf *strings.Builder, wroteContent bool) error {
+	if buf.Len() > 0 {
+		wroteContent = true
+
+		if err := p.flushBuffer(buf); err != nil {
+			return fmt.Errorf("flush remaining output: %w", err)
+		}
+	}
+
+	if wroteContent {
+		p.mu.Lock()
+		_, _ = io.WriteString(p.out, "\r\n")
+		p.mu.Unlock()
+	}
+
+	return nil
 }

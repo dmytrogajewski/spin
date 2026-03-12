@@ -476,19 +476,24 @@ func (m *Mapper) updateBlockContent(block *blocks.Block, data events.ToolCallCom
 
 // updateBlockSeverity sets the block severity based on success/failure.
 func (m *Mapper) updateBlockSeverity(block *blocks.Block, data events.ToolCallCompleteData) {
-	if !data.Success {
-		block.Severity = blocks.SeverityError
-		if data.Error != "" {
-			// Avoid duplicating the error message in the body.
-			// updateBlockContent may have already set block.Body to "Error: <msg>".
-			if block.Body == "" {
-				block.Body = "Error: " + data.Error
-			} else if !strings.Contains(block.Body, data.Error) {
-				block.Body += "\n\nError: " + data.Error
-			}
-		}
-	} else {
+	if data.Success {
 		block.Severity = blocks.SeverityInfo
+
+		return
+	}
+
+	block.Severity = blocks.SeverityError
+
+	if data.Error == "" {
+		return
+	}
+
+	// Avoid duplicating the error message in the body.
+	switch {
+	case block.Body == "":
+		block.Body = "Error: " + data.Error
+	case !strings.Contains(block.Body, data.Error):
+		block.Body += "\n\nError: " + data.Error
 	}
 }
 

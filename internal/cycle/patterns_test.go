@@ -226,36 +226,16 @@ func TestPatternDetector_AnalyzePatterns_ErrorLoop(t *testing.T) {
 	}
 
 	results := detector.analyzeInternal(snapshots)
+	result := findPattern(results, PatternErrorLoop)
 
-	// Should detect error loop pattern.
-	found := false
-
-	for _, result := range results {
-		if result.Type == PatternErrorLoop {
-			found = true
-
-			if result.Confidence <= 0.0 {
-				t.Errorf("PatternDetector.AnalyzePatterns() error loop confidence = %f, want > 0.0", result.Confidence)
-			}
-
-			if result.Details == "" {
-				t.Errorf("PatternDetector.AnalyzePatterns() error loop details should not be empty")
-			}
-
-			if result.Suggestion == "" {
-				t.Errorf("PatternDetector.AnalyzePatterns() error loop suggestion should not be empty")
-			}
-
-			if len(result.AffectedTurns) == 0 {
-				t.Errorf("PatternDetector.AnalyzePatterns() error loop affected turns should not be empty")
-			}
-
-			break
-		}
+	if result == nil {
+		t.Fatal("PatternDetector.AnalyzePatterns() should detect error loop pattern")
 	}
 
-	if !found {
-		t.Errorf("PatternDetector.AnalyzePatterns() should detect error loop pattern")
+	assertPatternResult(t, *result, "error loop")
+
+	if len(result.AffectedTurns) == 0 {
+		t.Errorf("PatternDetector.AnalyzePatterns() error loop affected turns should not be empty")
 	}
 }
 
@@ -335,6 +315,34 @@ func TestPatternType_String(t *testing.T) {
 				t.Errorf("PatternType.String() = %s, want %s", got, tt.want)
 			}
 		})
+	}
+}
+
+// findPattern returns the first PatternResult matching the given type, or nil.
+func findPattern(results []PatternResult, pt PatternType) *PatternResult {
+	for i := range results {
+		if results[i].Type == pt {
+			return &results[i]
+		}
+	}
+
+	return nil
+}
+
+// assertPatternResult validates common fields of a pattern result.
+func assertPatternResult(t *testing.T, result PatternResult, label string) {
+	t.Helper()
+
+	if result.Confidence <= 0.0 {
+		t.Errorf("PatternDetector.AnalyzePatterns() %s confidence = %f, want > 0.0", label, result.Confidence)
+	}
+
+	if result.Details == "" {
+		t.Errorf("PatternDetector.AnalyzePatterns() %s details should not be empty", label)
+	}
+
+	if result.Suggestion == "" {
+		t.Errorf("PatternDetector.AnalyzePatterns() %s suggestion should not be empty", label)
 	}
 }
 

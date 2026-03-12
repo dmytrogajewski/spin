@@ -166,134 +166,128 @@ func (t *ShellCommandTool) Execute(ctx context.Context, params ToolParameters) (
 // executeCommand executes a shell command through the executor (which handles approval).
 func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	if t.executor == nil {
-		return ToolResult{
-			Success: false,
-			Error:   "executor not configured",
-		}, nil
+		return ToolResult{Success: false, Error: "executor not configured"}, nil
 	}
 
 	cmdStr, _ := params.GetString("command")
 	if cmdStr == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "command parameter is required for execute operation",
-		}, nil
+		return ToolResult{Success: false, Error: "command parameter is required for execute operation"}, nil
 	}
 
-	// Parse working directory.
+	workDir := t.resolveWorkDir(params)
+
+	cmd, err := t.buildCommand(cmdStr, workDir)
+	if err != nil {
+		return ToolResult{Success: false, Error: err.Error()}, nil
+	}
+
+	// Execute through executor (which handles validation and approval).
+	result, execErr := t.executor.Execute(ctx, cmd, nil)
+	if execErr != nil {
+		return t.buildErrorResult(result, execErr), nil
+	}
+
+	return t.buildSuccessResult(result), nil
+}
+
+// resolveWorkDir resolves the working directory from params, shell context, or os.
+func (t *ShellCommandTool) resolveWorkDir(params ToolParameters) string {
 	workDir, _ := params.GetString("working_directory")
-	if workDir == "" {
-		if t.shellCtx != nil {
-			workDir = t.shellCtx.GetWorkingDirectory()
-		} else {
-			workDir, _ = os.Getwd()
-		}
+	if workDir != "" {
+		return workDir
 	}
 
-	// Check if this is a shell command before parsing.
-	isShellCommand := false
 	if t.shellCtx != nil {
-		isShellCommand = t.shellCtx.IsShellCommand(cmdStr)
-	} else {
-		// Fallback detection.
-		isShellCommand = strings.Contains(cmdStr, "|") ||
-			strings.Contains(cmdStr, ">") ||
-			strings.Contains(cmdStr, "<") ||
-			strings.Contains(cmdStr, "$") ||
-			strings.Contains(cmdStr, "&&") ||
-			strings.Contains(cmdStr, "||") ||
-			strings.HasPrefix(cmdStr, "cd ") ||
-			strings.HasPrefix(cmdStr, "export ") ||
-			strings.HasPrefix(cmdStr, "source ")
+		return t.shellCtx.GetWorkingDirectory()
 	}
 
-	var cmd *simpleCommand
-	if isShellCommand {
-		// For shell commands, use raw command string
-		// Pass it via shell execution (sh -c "command").
-		cmd = &simpleCommand{
+	workDir, _ = os.Getwd()
+
+	return workDir
+}
+
+// isShellCmd detects whether a command string requires shell execution.
+func (t *ShellCommandTool) isShellCmd(cmdStr string) bool {
+	if t.shellCtx != nil {
+		return t.shellCtx.IsShellCommand(cmdStr)
+	}
+
+	return strings.Contains(cmdStr, "|") ||
+		strings.Contains(cmdStr, ">") ||
+		strings.Contains(cmdStr, "<") ||
+		strings.Contains(cmdStr, "$") ||
+		strings.Contains(cmdStr, "&&") ||
+		strings.Contains(cmdStr, "||") ||
+		strings.HasPrefix(cmdStr, "cd ") ||
+		strings.HasPrefix(cmdStr, "export ") ||
+		strings.HasPrefix(cmdStr, "source ")
+}
+
+// buildCommand builds a simpleCommand from the command string and working directory.
+func (t *ShellCommandTool) buildCommand(cmdStr, workDir string) (*simpleCommand, error) {
+	if t.isShellCmd(cmdStr) {
+		return &simpleCommand{
 			program: "/bin/sh",
 			args:    []string{"-c", cmdStr},
 			raw:     cmdStr,
 			workDir: workDir,
-		}
-	} else {
-		// Parse command with proper quote handling using shlex.
-		parts, err := shlex.Split(cmdStr)
-		if err != nil {
-			return ToolResult{
-				Success: false,
-				Error:   fmt.Sprintf("failed to parse command: %v", err),
-			}, nil
-		}
-
-		if len(parts) == 0 {
-			return ToolResult{
-				Success: false,
-				Error:   "command cannot be empty",
-			}, nil
-		}
-
-		cmd = &simpleCommand{
-			program: parts[0],
-			args:    parts[1:],
-			raw:     cmdStr,
-			workDir: workDir,
-		}
+		}, nil
 	}
 
-	// Execute through executor (which handles validation and approval).
-	result, err := t.executor.Execute(ctx, cmd, nil)
+	parts, err := shlex.Split(cmdStr)
 	if err != nil {
-		// Include both stdout and stderr when executor returns error.
-		stdout := ""
-		stderr := ""
-
-		if result != nil {
-			stdout = result.GetStdout()
-			stderr = result.GetStderr()
-		}
-		// Combine stdout and stderr.
-		output := stdout
-		if stderr != "" {
-			if output != "" {
-				output += "\n"
-			}
-
-			output += stderr
-		}
-
-		return ToolResult{
-			Success: false,
-			Output:  output,
-			Error:   err.Error(),
-		}, nil
+		return nil, fmt.Errorf("failed to parse command: %v", err)
 	}
 
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("command cannot be empty")
+	}
+
+	return &simpleCommand{
+		program: parts[0],
+		args:    parts[1:],
+		raw:     cmdStr,
+		workDir: workDir,
+	}, nil
+}
+
+// combineOutput merges stdout and stderr into a single string.
+func combineOutput(stdout, stderr string) string {
+	if stderr == "" {
+		return stdout
+	}
+
+	if stdout != "" {
+		return stdout + "\n" + stderr
+	}
+
+	return stderr
+}
+
+// buildErrorResult constructs a ToolResult from a failed execution.
+func (t *ShellCommandTool) buildErrorResult(result ExecutionResult, execErr error) ToolResult {
+	stdout, stderr := "", ""
+	if result != nil {
+		stdout = result.GetStdout()
+		stderr = result.GetStderr()
+	}
+
+	return ToolResult{
+		Success: false,
+		Output:  combineOutput(stdout, stderr),
+		Error:   execErr.Error(),
+	}
+}
+
+// buildSuccessResult constructs a ToolResult from a successful execution.
+func (t *ShellCommandTool) buildSuccessResult(result ExecutionResult) ToolResult {
 	if result == nil {
-		return ToolResult{
-			Success: true,
-			Output:  "",
-		}, nil
+		return ToolResult{Success: true, Output: ""}
 	}
 
-	// Get output and exit code.
-	stdout := result.GetStdout()
-	stderr := result.GetStderr()
 	exitCode := result.GetExitCode()
-	metadata := result.GetMetadata()
+	output := combineOutput(result.GetStdout(), result.GetStderr())
 
-	// Combine stdout and stderr.
-	output := stdout
-	if stderr != "" {
-		if output != "" {
-			output += "\n"
-		}
-
-		output += stderr
-	}
-
-	// Set error message if command failed.
 	var errorMsg string
 	if exitCode != 0 {
 		errorMsg = fmt.Sprintf("command failed with exit code %d", exitCode)
@@ -303,8 +297,8 @@ func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParame
 		Success:  exitCode == 0,
 		Output:   output,
 		Error:    errorMsg,
-		Metadata: metadata,
-	}, nil
+		Metadata: result.GetMetadata(),
+	}
 }
 
 // getEnvironment returns environment variables.
@@ -342,37 +336,47 @@ func (t *ShellCommandTool) getEnvironment() (ToolResult, error) {
 
 // getShellInfo returns shell information.
 func (t *ShellCommandTool) getShellInfo() (ToolResult, error) {
-	// Try to use shell context if available.
 	if t.shellCtx != nil {
-		contextInfo := t.shellCtx.GetContextInfo()
-
-		var output strings.Builder
-		output.WriteString("Shell Information:\n")
-		fmt.Fprintf(&output, "shell_enabled: %t\n", contextInfo.IsShellEnabled())
-
-		if contextInfo.IsShellEnabled() {
-			fmt.Fprintf(&output, "shell: %s\n", contextInfo.GetShell())
-
-			if shellPath := contextInfo.GetShellPath(); shellPath != "" {
-				fmt.Fprintf(&output, "shell_path: %s\n", shellPath)
-			}
-
-			if shellEnv := contextInfo.GetShellEnv(); len(shellEnv) > 0 {
-				output.WriteString("shell_env:\n")
-
-				for k, v := range shellEnv {
-					fmt.Fprintf(&output, "  %s=%s\n", k, v)
-				}
-			}
-		}
-
-		return ToolResult{
-			Success: true,
-			Output:  output.String(),
-		}, nil
+		return t.getShellInfoFromContext(), nil
 	}
 
-	// Fallback to basic info.
+	return t.getShellInfoFallback(), nil
+}
+
+// getShellInfoFromContext builds shell info from the shell context.
+func (t *ShellCommandTool) getShellInfoFromContext() ToolResult {
+	contextInfo := t.shellCtx.GetContextInfo()
+
+	var output strings.Builder
+	output.WriteString("Shell Information:\n")
+	fmt.Fprintf(&output, "shell_enabled: %t\n", contextInfo.IsShellEnabled())
+
+	if contextInfo.IsShellEnabled() {
+		writeShellDetails(&output, contextInfo)
+	}
+
+	return ToolResult{Success: true, Output: output.String()}
+}
+
+// writeShellDetails writes shell path and env details to the output.
+func writeShellDetails(output *strings.Builder, info ShellContextInfo) {
+	fmt.Fprintf(output, "shell: %s\n", info.GetShell())
+
+	if shellPath := info.GetShellPath(); shellPath != "" {
+		fmt.Fprintf(output, "shell_path: %s\n", shellPath)
+	}
+
+	if shellEnv := info.GetShellEnv(); len(shellEnv) > 0 {
+		output.WriteString("shell_env:\n")
+
+		for k, v := range shellEnv {
+			fmt.Fprintf(output, "  %s=%s\n", k, v)
+		}
+	}
+}
+
+// getShellInfoFallback builds shell info from environment variables.
+func (t *ShellCommandTool) getShellInfoFallback() ToolResult {
 	shell := os.Getenv("SHELL")
 
 	var output strings.Builder
@@ -385,10 +389,7 @@ func (t *ShellCommandTool) getShellInfo() (ToolResult, error) {
 		output.WriteString("shell_enabled: false\n")
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return ToolResult{Success: true, Output: output.String()}
 }
 
 // detectShell checks if a command requires shell execution.
@@ -432,39 +433,20 @@ func (t *ShellCommandTool) detectShell(params ToolParameters) (ToolResult, error
 func (t *ShellCommandTool) validateCommand(params ToolParameters) (ToolResult, error) {
 	command, _ := params.GetString("command")
 	if command == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "command parameter is required for validate operation",
-		}, nil
+		return ToolResult{Success: false, Error: "command parameter is required for validate operation"}, nil
 	}
 
 	if t.validator == nil {
-		return ToolResult{
-			Success: false,
-			Error:   "validator not configured",
-		}, nil
+		return ToolResult{Success: false, Error: "validator not configured"}, nil
 	}
 
-	// Parse command.
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
-		return ToolResult{
-			Success: false,
-			Error:   "command cannot be empty",
-		}, nil
+		return ToolResult{Success: false, Error: "command cannot be empty"}, nil
 	}
 
-	// Get working directory.
-	workDir, _ := params.GetString("working_directory")
-	if workDir == "" {
-		if t.shellCtx != nil {
-			workDir = t.shellCtx.GetWorkingDirectory()
-		} else {
-			workDir, _ = os.Getwd()
-		}
-	}
+	workDir := t.resolveWorkDir(params)
 
-	// Create command for validation.
 	cmd := &simpleCommand{
 		program: parts[0],
 		args:    parts[1:],
@@ -472,40 +454,37 @@ func (t *ShellCommandTool) validateCommand(params ToolParameters) (ToolResult, e
 		workDir: workDir,
 	}
 
-	// Call Classify using validator.
 	result, classifyErr := t.validator.Classify(cmd)
 	if classifyErr != nil {
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("classification failed: %v", classifyErr),
-		}, nil
+		return ToolResult{Success: false, Error: fmt.Sprintf("classification failed: %v", classifyErr)}, nil
 	}
 
-	// Extract classification and reason.
-	classification := result.GetClassification()
-	reason := result.GetReason()
+	return t.formatClassification(result), nil
+}
 
-	// Convert classification to string (matches security.CommandClass.String())
-	// CommandClass constants: 0=safe, 1=interactive, 2=dangerous, 3=forbidden, 4=unverified.
-	var classStr string
-
+// classificationToString converts a numeric classification to its string name.
+func classificationToString(classification int) string {
 	switch classification {
 	case 0:
-		classStr = "safe"
+		return "safe"
 	case 1:
-		classStr = "interactive"
+		return "interactive"
 	case 2:
-		classStr = "dangerous"
+		return "dangerous"
 	case 3:
-		classStr = "forbidden"
+		return "forbidden"
 	case 4:
-		classStr = "unverified"
+		return "unverified"
 	default:
-		classStr = "unknown"
+		return "unknown"
 	}
+}
 
-	// Check if approval needed (matches security.CommandClass.NeedsApproval())
-	// Interactive, Dangerous, Forbidden, Unverified all need approval.
+// formatClassification formats a validation result into a ToolResult.
+func (t *ShellCommandTool) formatClassification(result ValidationResult) ToolResult {
+	classification := result.GetClassification()
+	reason := result.GetReason()
+	classStr := classificationToString(classification)
 	needsApproval := classification >= 1 && classification <= 4
 
 	var output strings.Builder
@@ -517,8 +496,5 @@ func (t *ShellCommandTool) validateCommand(params ToolParameters) (ToolResult, e
 		fmt.Fprintf(&output, "Reason: %s\n", reason)
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return ToolResult{Success: true, Output: output.String()}
 }

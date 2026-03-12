@@ -10,93 +10,42 @@ import (
 // properly exits plan sections when encountering non-plan content.
 func TestDetectPlanFromOutput_ExitsPlanSection(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name          string
-		output        string
-		expectedCount int
-		description   string
-	}{
-		{
-			name: "Plan followed by regular text",
-			output: `Plan:
-1. First step
-2. Second step
-3. Third step
 
-This is regular text that explains something.
-More explanation here.`,
-			expectedCount: 3,
-			description:   "Should only detect 3 plan entries, not the explanation text",
-		},
-		{
-			name: "Plan followed by code example",
-			output: `Steps:
-1. Create file
-2. Write code
-3. Test code
+	t.Run("Plan followed by regular text", func(t *testing.T) {
+		t.Parallel()
+		entries := detectPlanFromOutput("Plan:\n1. First step\n2. Second step\n3. Third step\n\nThis is regular text that explains something.\nMore explanation here.")
+		assert.Len(t, entries, 3, "Should only detect 3 plan entries, not the explanation text")
+	})
 
-The code looks like this:
-1. func main() {
-2.     fmt.Println("hello")
-3. }`,
-			expectedCount: 3,
-			description:   "Should not treat code line numbers as plan entries",
-		},
-		{
-			name: "Multiple disconnected lists",
-			output: `Plan:
-1. Item A
-2. Item B
+	t.Run("Plan followed by code example", func(t *testing.T) {
+		t.Parallel()
+		entries := detectPlanFromOutput("Steps:\n1. Create file\n2. Write code\n3. Test code\n\nThe code looks like this:\n1. func main() {\n2.     fmt.Println(\"hello\")\n3. }")
+		assert.Len(t, entries, 3, "Should not treat code line numbers as plan entries")
+	})
 
-Some text in between.
+	t.Run("Multiple disconnected lists", func(t *testing.T) {
+		t.Parallel()
+		entries := detectPlanFromOutput("Plan:\n1. Item A\n2. Item B\n\nSome text in between.\n\nSteps:\n1. Item C\n2. Item D")
+		assert.Len(t, entries, 4, "Should detect both lists with explicit headers")
+	})
 
-Steps:
-1. Item C
-2. Item D`,
-			expectedCount: 4,
-			description:   "Should detect both lists with explicit headers",
-		},
-		{
-			name: "Plan with one non-plan line intermixed",
-			output: `Steps:
-1. First step
-(this is a note)
-2. Second step
-3. Third step`,
-			expectedCount: 3,
-			description:   "Should tolerate one non-plan line within plan",
-		},
-		{
-			name: "Plan with two non-plan lines exits",
-			output: `Steps:
-1. First step
-Some text
-More text
-2. This should not be detected`,
-			expectedCount: 1,
-			description:   "Should exit after 2 consecutive non-plan lines",
-		},
-		{
-			name: "No plan pattern",
-			output: `This is just regular text.
-It has no numbered lists.
-Or bullet points.`,
-			expectedCount: 0,
-			description:   "Should detect no plan entries",
-		},
-	}
+	t.Run("Plan with one non-plan line intermixed", func(t *testing.T) {
+		t.Parallel()
+		entries := detectPlanFromOutput("Steps:\n1. First step\n(this is a note)\n2. Second step\n3. Third step")
+		assert.Len(t, entries, 3, "Should tolerate one non-plan line within plan")
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			entries := detectPlanFromOutput(tt.output)
-			assert.Len(t, entries, tt.expectedCount, tt.description)
+	t.Run("Plan with two non-plan lines exits", func(t *testing.T) {
+		t.Parallel()
+		entries := detectPlanFromOutput("Steps:\n1. First step\nSome text\nMore text\n2. This should not be detected")
+		assert.Len(t, entries, 1, "Should exit after 2 consecutive non-plan lines")
+	})
 
-			if len(entries) > 0 {
-				t.Logf("Detected entries: %v", entries)
-			}
-		})
-	}
+	t.Run("No plan pattern", func(t *testing.T) {
+		t.Parallel()
+		entries := detectPlanFromOutput("This is just regular text.\nIt has no numbered lists.\nOr bullet points.")
+		assert.Len(t, entries, 0, "Should detect no plan entries")
+	})
 }
 
 // TestDetectPlanFromOutput_RealWorldScenario tests a realistic scenario

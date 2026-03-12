@@ -45,35 +45,39 @@ func TestListDirectoryTool(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			params, _ := FromMap(tt.params)
-			result, err := tool.Execute(context.Background(), params)
-
-			if tt.wantErr {
-				if err == nil && result.Success {
-					t.Error("expected error but got success")
-				}
-
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-
-				return
-			}
-
-			if !result.Success {
-				t.Errorf("expected success, got error: %s", result.Error)
-
-				return
-			}
-
-			for _, expected := range tt.wantContains {
-				if !strings.Contains(result.Output, expected) {
-					t.Errorf("expected output to contain %q, got %q", expected, result.Output)
-				}
-			}
+			runToolTest(t, tool, tt.params, tt.wantErr, tt.wantContains)
 		})
+	}
+}
+
+// runToolTest executes a tool and verifies the result.
+func runToolTest(t *testing.T, tool Tool, params map[string]any, wantErr bool, wantContains []string) {
+	t.Helper()
+
+	p, _ := FromMap(params)
+	result, err := tool.Execute(context.Background(), p)
+
+	if wantErr {
+		if err == nil && result.Success {
+			t.Error("expected error but got success")
+		}
+		return
+	}
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+		return
+	}
+
+	for _, expected := range wantContains {
+		if !strings.Contains(result.Output, expected) {
+			t.Errorf("expected output to contain %q, got %q", expected, result.Output)
+		}
 	}
 }
 

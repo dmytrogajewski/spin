@@ -72,34 +72,8 @@ func TestExtractNewSteps(t *testing.T) {
 		}
 
 		steps := extractNewSteps(messages, 0)
-
-		if len(steps) != 1 {
-			t.Fatalf("expected 1 step, got %d", len(steps))
-		}
-
-		want := generator.TrajectoryStep{
-			StepNumber: 0,
-			Type:       "reasoning",
-			Content:    "I'll check the file",
-			Timestamp:  ts,
-		}
-
-		got := steps[0]
-		if got.StepNumber != want.StepNumber {
-			t.Errorf("StepNumber = %d, want %d", got.StepNumber, want.StepNumber)
-		}
-
-		if got.Type != want.Type {
-			t.Errorf("Type = %q, want %q", got.Type, want.Type)
-		}
-
-		if got.Content != want.Content {
-			t.Errorf("Content = %q, want %q", got.Content, want.Content)
-		}
-
-		if !got.Timestamp.Equal(want.Timestamp) {
-			t.Errorf("Timestamp = %v, want %v", got.Timestamp, want.Timestamp)
-		}
+		requireSingleStep(t, steps)
+		assertStep(t, steps[0], 0, "reasoning", "I'll check the file", ts)
 	})
 
 	t.Run("extracts tool call from assistant message", func(t *testing.T) {
@@ -124,24 +98,8 @@ func TestExtractNewSteps(t *testing.T) {
 		}
 
 		steps := extractNewSteps(messages, 0)
-
-		if len(steps) != 1 {
-			t.Fatalf("expected 1 step, got %d", len(steps))
-		}
-
-		got := steps[0]
-		if got.StepNumber != 0 {
-			t.Errorf("StepNumber = %d, want 0", got.StepNumber)
-		}
-
-		if got.Type != "tool_call" {
-			t.Errorf("Type = %q, want %q", got.Type, "tool_call")
-		}
-
-		wantContent := "Tool: read_file\nArguments: {\"path\": \"main.go\"}"
-		if got.Content != wantContent {
-			t.Errorf("Content = %q, want %q", got.Content, wantContent)
-		}
+		requireSingleStep(t, steps)
+		assertStep(t, steps[0], 0, "tool_call", "Tool: read_file\nArguments: {\"path\": \"main.go\"}", ts)
 	})
 
 	t.Run("extracts tool result message", func(t *testing.T) {
@@ -158,25 +116,39 @@ func TestExtractNewSteps(t *testing.T) {
 		}
 
 		steps := extractNewSteps(messages, 0)
-
-		if len(steps) != 1 {
-			t.Fatalf("expected 1 step, got %d", len(steps))
-		}
-
-		got := steps[0]
-		if got.StepNumber != 0 {
-			t.Errorf("StepNumber = %d, want 0", got.StepNumber)
-		}
-
-		if got.Type != "tool_result" {
-			t.Errorf("Type = %q, want %q", got.Type, "tool_result")
-		}
-
-		wantContent := "Tool Result (ID: call_1):\npackage main\n\nfunc main() {}"
-		if got.Content != wantContent {
-			t.Errorf("Content = %q, want %q", got.Content, wantContent)
-		}
+		requireSingleStep(t, steps)
+		assertStep(t, steps[0], 0, "tool_result", "Tool Result (ID: call_1):\npackage main\n\nfunc main() {}", ts)
 	})
+}
+
+// requireSingleStep asserts exactly one step was extracted.
+func requireSingleStep(t *testing.T, steps []generator.TrajectoryStep) {
+	t.Helper()
+
+	if len(steps) != 1 {
+		t.Fatalf("expected 1 step, got %d", len(steps))
+	}
+}
+
+// assertStep asserts that a TrajectoryStep has the expected fields.
+func assertStep(t *testing.T, got generator.TrajectoryStep, wantNum int, wantType, wantContent string, wantTS time.Time) {
+	t.Helper()
+
+	if got.StepNumber != wantNum {
+		t.Errorf("StepNumber = %d, want %d", got.StepNumber, wantNum)
+	}
+
+	if got.Type != wantType {
+		t.Errorf("Type = %q, want %q", got.Type, wantType)
+	}
+
+	if got.Content != wantContent {
+		t.Errorf("Content = %q, want %q", got.Content, wantContent)
+	}
+
+	if !got.Timestamp.Equal(wantTS) {
+		t.Errorf("Timestamp = %v, want %v", got.Timestamp, wantTS)
+	}
 }
 
 func TestExtractBulletIDs(t *testing.T) {

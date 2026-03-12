@@ -15,128 +15,99 @@ import (
 // This test fails if any of these patterns are found in the codebase:
 // - TODO, FIXME, XXX, HACK comments
 // - "for now", "not yet", "will be", "later" patterns that indicate deferred work.
+// codeQualityPatterns returns the patterns to detect in code quality checks.
+var codeQualityPatterns = []struct {
+	name    string
+	pattern *regexp.Regexp
+	desc    string
+}{
+	{name: "TODO", pattern: regexp.MustCompile(`(?i)\bTODO\b`), desc: "TODO comments indicate incomplete work"},
+	{name: "FIXME", pattern: regexp.MustCompile(`(?i)\bFIXME\b`), desc: "FIXME comments indicate known issues"},
+	{name: "XXX", pattern: regexp.MustCompile(`(?i)\bXXX\b`), desc: "XXX comments indicate problematic code"},
+	{name: "HACK", pattern: regexp.MustCompile(`(?i)\bHACK\b`), desc: "HACK comments indicate workarounds"},
+	{name: "for now", pattern: regexp.MustCompile(`(?i)\bfor now\b`), desc: "\"for now\" indicates temporary implementation"},
+	{name: "not yet", pattern: regexp.MustCompile(`(?i)\bnot yet\b`), desc: "\"not yet\" indicates deferred implementation"},
+	{name: "will be", pattern: regexp.MustCompile(`(?i)\bwill be\b`), desc: "\"will be\" indicates future work"},
+	{name: "later", pattern: regexp.MustCompile(`(?i)\blater\b`), desc: "\"later\" indicates deferred work"},
+	{name: "temporary", pattern: regexp.MustCompile(`(?i)\btemporary\b`), desc: "\"temporary\" indicates non-permanent solution"},
+	{name: "eventually", pattern: regexp.MustCompile(`(?i)\beventually\b`), desc: "\"eventually\" indicates deferred implementation"},
+}
+
 func TestNoTODOsOrDeferredPatterns(t *testing.T) {
 	t.Parallel()
 
-	// Patterns to detect.
-	patterns := []struct {
-		name    string
-		pattern *regexp.Regexp
-		desc    string
-	}{
-		{
-			name:    "TODO",
-			pattern: regexp.MustCompile(`(?i)\bTODO\b`),
-			desc:    "TODO comments indicate incomplete work",
-		},
-		{
-			name:    "FIXME",
-			pattern: regexp.MustCompile(`(?i)\bFIXME\b`),
-			desc:    "FIXME comments indicate known issues",
-		},
-		{
-			name:    "XXX",
-			pattern: regexp.MustCompile(`(?i)\bXXX\b`),
-			desc:    "XXX comments indicate problematic code",
-		},
-		{
-			name:    "HACK",
-			pattern: regexp.MustCompile(`(?i)\bHACK\b`),
-			desc:    "HACK comments indicate workarounds",
-		},
-		{
-			name:    "for now",
-			pattern: regexp.MustCompile(`(?i)\bfor now\b`),
-			desc:    "\"for now\" indicates temporary implementation",
-		},
-		{
-			name:    "not yet",
-			pattern: regexp.MustCompile(`(?i)\bnot yet\b`),
-			desc:    "\"not yet\" indicates deferred implementation",
-		},
-		{
-			name:    "will be",
-			pattern: regexp.MustCompile(`(?i)\bwill be\b`),
-			desc:    "\"will be\" indicates future work",
-		},
-		{
-			name:    "later",
-			pattern: regexp.MustCompile(`(?i)\blater\b`),
-			desc:    "\"later\" indicates deferred work",
-		},
-		{
-			name:    "temporary",
-			pattern: regexp.MustCompile(`(?i)\btemporary\b`),
-			desc:    "\"temporary\" indicates non-permanent solution",
-		},
-		{
-			name:    "eventually",
-			pattern: regexp.MustCompile(`(?i)\beventually\b`),
-			desc:    "\"eventually\" indicates deferred implementation",
-		},
-	}
-
-	// Get workspace root.
 	workspaceRoot, err := getWorkspaceRoot()
 	if err != nil {
 		t.Fatalf("Failed to find workspace root: %v", err)
 	}
 
-	// Directories to scan (all Go code, excluding tests and vendor).
-	dirs := []string{
-		"internal",
-		"cmd",
+	violations := scanForViolations(t, workspaceRoot)
+	if len(violations) == 0 {
+		return
 	}
+
+	reportViolations(t, violations)
+}
+
+// scanForViolations walks the source directories and collects all violations.
+func scanForViolations(t *testing.T, workspaceRoot string) []violation {
+	t.Helper()
 
 	var violations []violation
 
-	for _, dir := range dirs {
+	for _, dir := range []string{"internal", "cmd"} {
 		fullPath := filepath.Join(workspaceRoot, dir)
 
 		walkErr := filepath.Walk(fullPath, func(path string, _ os.FileInfo, walkFnErr error) error {
 			if walkFnErr != nil {
 				return walkFnErr
 			}
-			// Skip vendor and test files.
-			if strings.Contains(path, "/vendor/") || strings.Contains(path, "/.git/") {
-				return nil
-			}
-			// Only check .go files.
-			if !strings.HasSuffix(path, ".go") {
-				return nil
-			}
-			// Skip test files (they may have examples).
-			if strings.HasSuffix(path, "_test.go") {
+
+			if !isCheckableGoFile(path) {
 				return nil
 			}
 
-			return checkFile(t, path, patterns, &violations)
+			return checkFile(t, path, codeQualityPatterns, &violations)
 		})
 		if walkErr != nil {
 			t.Fatalf("Failed to walk %s: %v", fullPath, walkErr)
 		}
 	}
 
-	if len(violations) > 0 {
-		t.Errorf("Found %d code quality violations:\n", len(violations))
+	return violations
+}
 
-		// Group violations by pattern type for better reporting.
-		byPattern := make(map[string][]violation)
-		for _, v := range violations {
-			byPattern[v.pattern] = append(byPattern[v.pattern], v)
-		}
-
-		// Print detailed violations.
-		for _, v := range violations {
-			t.Errorf("  %s:%d: %s - %s", v.file, v.line, v.pattern, v.desc)
-			t.Errorf("    %s", strings.TrimSpace(v.context))
-		}
-
-		// Print implementation instructions to stdout (for AI agents).
-		printImplementationInstructions(os.Stdout, byPattern, violations)
-
-		t.Fatalf("Code quality test failed: found %d violations", len(violations))
+// isCheckableGoFile returns true if the path is a non-test Go file outside vendor.
+func isCheckableGoFile(path string) bool {
+	if strings.Contains(path, "/vendor/") || strings.Contains(path, "/.git/") {
+		return false
 	}
+
+	if !strings.HasSuffix(path, ".go") {
+		return false
+	}
+
+	return !strings.HasSuffix(path, "_test.go")
+}
+
+// reportViolations prints all violations and fails the test.
+func reportViolations(t *testing.T, violations []violation) {
+	t.Helper()
+
+	t.Errorf("Found %d code quality violations:\n", len(violations))
+
+	byPattern := make(map[string][]violation)
+	for _, v := range violations {
+		byPattern[v.pattern] = append(byPattern[v.pattern], v)
+	}
+
+	for _, v := range violations {
+		t.Errorf("  %s:%d: %s - %s", v.file, v.line, v.pattern, v.desc)
+		t.Errorf("    %s", strings.TrimSpace(v.context))
+	}
+
+	printImplementationInstructions(os.Stdout, byPattern, violations)
+	t.Fatalf("Code quality test failed: found %d violations", len(violations))
 }
 
 // getWorkspaceRoot finds the workspace root by looking for go.mod.
@@ -209,23 +180,38 @@ func checkFile(_ *testing.T, filePath string, patterns []struct {
 	return nil
 }
 
+// patternGuidance maps pattern names to (action, doNot) guidance strings.
+var patternGuidance = map[string][2]string{
+	"TODO":      {"Implement the incomplete work described in the TODO comment.", "Remove the TODO or change it to a different comment."},
+	"FIXME":     {"Fix the known issue described in the FIXME comment.", "Remove the FIXME or ignore the issue."},
+	"XXX":       {"Resolve the problematic code marked with XXX.", "Leave problematic code in place."},
+	"HACK":      {"Replace the workaround with a proper implementation.", "Keep temporary workarounds."},
+	"for now":   {"Replace the temporary implementation with a permanent solution.", "Change 'for now' to different wording - implement properly."},
+	"not yet":   {"Implement the deferred functionality.", "Change 'not yet' to 'not implemented' - actually implement it."},
+	"will be":   {"Implement the future work described.", "Change 'will be' to present tense - make it happen now."},
+	"later":     {"Implement the deferred work now.", "Change 'later' to different wording - do it now."},
+	"temporary": {"Replace the temporary solution with a permanent one.", "Keep temporary solutions."},
+	"eventually": {"Implement the deferred functionality now.", "Change wording - implement the feature."},
+}
+
 // printImplementationInstructions writes actionable instructions to help AI agents fix violations.
 func printImplementationInstructions(w io.Writer, _ map[string][]violation, allViolations []violation) {
 	separator := strings.Repeat("=", 80)
-	fmt.Fprintf(w, "\n%s\n", separator)
-	fmt.Fprintf(w, "IMPLEMENTATION INSTRUCTIONS FOR AI AGENTS\n")
-	fmt.Fprintf(w, "%s\n\n", separator)
-
+	fmt.Fprintf(w, "\n%s\nIMPLEMENTATION INSTRUCTIONS FOR AI AGENTS\n%s\n\n", separator, separator)
 	fmt.Fprintf(w, "Found %d code quality violations that require implementation.\n", len(allViolations))
 	fmt.Fprintf(w, "DO NOT simply remove comments or change wording. IMPLEMENT the missing functionality.\n\n")
 
-	// Group by file for easier navigation.
+	printViolationsByFile(w, allViolations)
+	printChecklist(w, separator)
+}
+
+// printViolationsByFile groups and prints violations organized by file.
+func printViolationsByFile(w io.Writer, allViolations []violation) {
 	byFile := make(map[string][]violation)
 	for _, v := range allViolations {
 		byFile[v.file] = append(byFile[v.file], v)
 	}
 
-	// Sort files for consistent output.
 	files := make([]string, 0, len(byFile))
 	for f := range byFile {
 		files = append(files, f)
@@ -233,59 +219,34 @@ func printImplementationInstructions(w io.Writer, _ map[string][]violation, allV
 
 	sort.Strings(files)
 
-	fmt.Fprintf(w, "VIOLATIONS BY FILE:\n")
-	fmt.Fprintf(w, "%s\n", strings.Repeat("-", 80))
+	fmt.Fprintf(w, "VIOLATIONS BY FILE:\n%s\n", strings.Repeat("-", 80))
 
 	for _, file := range files {
 		viols := byFile[file]
 		fmt.Fprintf(w, "\n%s (%d violations):\n", file, len(viols))
 
 		for _, v := range viols {
-			fmt.Fprintf(w, "  Line %d [%s]: %s\n", v.line, v.pattern, v.desc)
-			fmt.Fprintf(w, "    Context: %s\n", strings.TrimSpace(v.context))
-
-			// Provide specific guidance based on pattern type.
-			switch v.pattern {
-			case "TODO":
-				fmt.Fprintf(w, "    ACTION: Implement the incomplete work described in the TODO comment.\n")
-				fmt.Fprintf(w, "    DO NOT: Remove the TODO or change it to a different comment.\n")
-			case "FIXME":
-				fmt.Fprintf(w, "    ACTION: Fix the known issue described in the FIXME comment.\n")
-				fmt.Fprintf(w, "    DO NOT: Remove the FIXME or ignore the issue.\n")
-			case "XXX":
-				fmt.Fprintf(w, "    ACTION: Resolve the problematic code marked with XXX.\n")
-				fmt.Fprintf(w, "    DO NOT: Leave problematic code in place.\n")
-			case "HACK":
-				fmt.Fprintf(w, "    ACTION: Replace the workaround with a proper implementation.\n")
-				fmt.Fprintf(w, "    DO NOT: Keep temporary workarounds.\n")
-			case "for now":
-				fmt.Fprintf(w, "    ACTION: Replace the temporary implementation with a permanent solution.\n")
-				fmt.Fprintf(w, "    DO NOT: Change 'for now' to different wording - implement properly.\n")
-			case "not yet":
-				fmt.Fprintf(w, "    ACTION: Implement the deferred functionality.\n")
-				fmt.Fprintf(w, "    DO NOT: Change 'not yet' to 'not implemented' - actually implement it.\n")
-			case "will be":
-				fmt.Fprintf(w, "    ACTION: Implement the future work described.\n")
-				fmt.Fprintf(w, "    DO NOT: Change 'will be' to present tense - make it happen now.\n")
-			case "later":
-				fmt.Fprintf(w, "    ACTION: Implement the deferred work now.\n")
-				fmt.Fprintf(w, "    DO NOT: Change 'later' to different wording - do it now.\n")
-			case "temporary":
-				fmt.Fprintf(w, "    ACTION: Replace the temporary solution with a permanent one.\n")
-				fmt.Fprintf(w, "    DO NOT: Keep temporary solutions.\n")
-			case "eventually":
-				fmt.Fprintf(w, "    ACTION: Implement the deferred functionality now.\n")
-				fmt.Fprintf(w, "    DO NOT: Change wording - implement the feature.\n")
-			}
-
-			fmt.Fprintf(w, "\n")
+			printViolationGuidance(w, v)
 		}
 	}
+}
 
-	fmt.Fprintf(w, "\n%s\n", separator)
-	fmt.Fprintf(w, "IMPLEMENTATION CHECKLIST:\n")
-	fmt.Fprintf(w, "%s\n\n", separator)
+// printViolationGuidance prints a single violation with its guidance.
+func printViolationGuidance(w io.Writer, v violation) {
+	fmt.Fprintf(w, "  Line %d [%s]: %s\n", v.line, v.pattern, v.desc)
+	fmt.Fprintf(w, "    Context: %s\n", strings.TrimSpace(v.context))
 
+	if guidance, ok := patternGuidance[v.pattern]; ok {
+		fmt.Fprintf(w, "    ACTION: %s\n", guidance[0])
+		fmt.Fprintf(w, "    DO NOT: %s\n", guidance[1])
+	}
+
+	fmt.Fprintf(w, "\n")
+}
+
+// printChecklist prints the implementation checklist footer.
+func printChecklist(w io.Writer, separator string) {
+	fmt.Fprintf(w, "\n%s\nIMPLEMENTATION CHECKLIST:\n%s\n\n", separator, separator)
 	fmt.Fprintf(w, "For each violation:\n")
 	fmt.Fprintf(w, "1. Read the violation context to understand what needs to be implemented\n")
 	fmt.Fprintf(w, "2. Check related code and dependencies\n")
@@ -294,12 +255,7 @@ func printImplementationInstructions(w io.Writer, _ map[string][]violation, allV
 	fmt.Fprintf(w, "5. Remove the violation comment/pattern (it's now implemented)\n")
 	fmt.Fprintf(w, "6. Run tests to ensure everything works\n")
 	fmt.Fprintf(w, "7. Verify this test passes\n\n")
-
-	fmt.Fprintf(w, "REMEMBER:\n")
-	fmt.Fprintf(w, "- Implementation > Comments\n")
-	fmt.Fprintf(w, "- Tests are required for new functionality\n")
-	fmt.Fprintf(w, "- No shortcuts or temporary solutions\n")
-	fmt.Fprintf(w, "- Complete the work, don't defer it\n\n")
-
+	fmt.Fprintf(w, "REMEMBER:\n- Implementation > Comments\n- Tests are required for new functionality\n")
+	fmt.Fprintf(w, "- No shortcuts or temporary solutions\n- Complete the work, don't defer it\n\n")
 	fmt.Fprintf(w, "%s\n\n", separator)
 }

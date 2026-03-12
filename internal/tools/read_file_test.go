@@ -49,33 +49,35 @@ func TestReadFileTool(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			params, _ := FromMap(tt.params)
-			var result ToolResult
-			result, err = tool.Execute(context.Background(), params)
-
-			if tt.wantErr {
-				if err == nil && result.Success {
-					t.Error("expected error but got success")
-				}
-
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-
-				return
-			}
-
-			if !result.Success {
-				t.Errorf("expected success, got error: %s", result.Error)
-
-				return
-			}
-
-			if result.Output != tt.wantOutput {
-				t.Errorf("expected output %q, got %q", tt.wantOutput, result.Output)
-			}
+			runReadFileSubtest(t, tool, tt.params, tt.wantErr, tt.wantOutput)
 		})
+	}
+}
+
+func runReadFileSubtest(t *testing.T, tool Tool, params map[string]any, wantErr bool, wantOutput string) {
+	t.Helper()
+
+	p, _ := FromMap(params)
+	result, err := tool.Execute(context.Background(), p)
+
+	if wantErr {
+		if err == nil && result.Success {
+			t.Error("expected error but got success")
+		}
+		return
+	}
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+		return
+	}
+
+	if result.Output != wantOutput {
+		t.Errorf("expected output %q, got %q", wantOutput, result.Output)
 	}
 }

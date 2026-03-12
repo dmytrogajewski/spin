@@ -172,7 +172,21 @@ func (l *LoaderV2) applyDefaults(cfg *V2) {
 		cfg.Version = defaults.Version
 	}
 
-	// Apply LLM defaults.
+	l.applyLLMDefaults(cfg, defaults)
+	l.applyAgentDefaults(cfg, defaults)
+	l.applyACEDefaults(cfg, defaults)
+
+	// Apply Security defaults.
+	if !l.viper.IsSet("security.sandbox_mode") {
+		cfg.Security.SandboxMode = defaults.Security.SandboxMode
+	}
+
+	l.applyProtocolDefaults(cfg, defaults)
+	l.applyAgentsMDDefaults(cfg, defaults)
+}
+
+// applyLLMDefaults applies default values for LLM fields.
+func (l *LoaderV2) applyLLMDefaults(cfg *V2, defaults *V2) {
 	if !l.viper.IsSet("llm.provider") {
 		cfg.LLM.Provider = defaults.LLM.Provider
 	}
@@ -192,8 +206,10 @@ func (l *LoaderV2) applyDefaults(cfg *V2) {
 	if !l.viper.IsSet("llm.timeout") {
 		cfg.LLM.Timeout = defaults.LLM.Timeout
 	}
+}
 
-	// Apply Agent defaults.
+// applyAgentDefaults applies default values for Agent fields.
+func (l *LoaderV2) applyAgentDefaults(cfg *V2, defaults *V2) {
 	if !l.viper.IsSet("agent.max_turns") {
 		cfg.Agent.MaxTurns = defaults.Agent.MaxTurns
 	}
@@ -205,80 +221,85 @@ func (l *LoaderV2) applyDefaults(cfg *V2) {
 	if !l.viper.IsSet("agent.work_dir") {
 		cfg.Agent.WorkDir = defaults.Agent.WorkDir
 	}
+}
 
-	// Apply ACE defaults
+// applyACEDefaults applies default values for ACE fields.
+func (l *LoaderV2) applyACEDefaults(cfg *V2, defaults *V2) {
 	// Check if any ACE field was explicitly set.
 	aceFieldsSet := l.viper.IsSet("ace.enabled") || l.viper.IsSet("ace.playbook_path") ||
 		l.viper.IsSet("ace.trajectory_path") || l.viper.IsSet("ace.top_k") || l.viper.IsSet("ace.min_score")
 
 	if !aceFieldsSet {
-		// No ACE fields set - apply full defaults.
 		cfg.ACE = defaults.ACE
-	} else {
-		// Some ACE fields set, apply field-level defaults.
-		if !l.viper.IsSet("ace.enabled") {
-			cfg.ACE.Enabled = defaults.ACE.Enabled
-		}
-
-		if cfg.ACE.Enabled {
-			// Only apply path defaults if ACE is enabled.
-			if !l.viper.IsSet("ace.playbook_path") {
-				cfg.ACE.PlaybookPath = defaults.ACE.PlaybookPath
-			}
-
-			if !l.viper.IsSet("ace.trajectory_path") {
-				cfg.ACE.TrajectoryPath = defaults.ACE.TrajectoryPath
-			}
-
-			if !l.viper.IsSet("ace.top_k") {
-				cfg.ACE.TopK = defaults.ACE.TopK
-			}
-
-			if !l.viper.IsSet("ace.min_score") {
-				cfg.ACE.MinScore = defaults.ACE.MinScore
-			}
-		}
+		return
 	}
 
-	// Apply Security defaults.
-	if !l.viper.IsSet("security.sandbox_mode") {
-		cfg.Security.SandboxMode = defaults.Security.SandboxMode
+	// Some ACE fields set, apply field-level defaults.
+	if !l.viper.IsSet("ace.enabled") {
+		cfg.ACE.Enabled = defaults.ACE.Enabled
 	}
 
-	// Apply Protocol defaults.
+	if !cfg.ACE.Enabled {
+		return
+	}
+
+	// Only apply path defaults if ACE is enabled.
+	if !l.viper.IsSet("ace.playbook_path") {
+		cfg.ACE.PlaybookPath = defaults.ACE.PlaybookPath
+	}
+
+	if !l.viper.IsSet("ace.trajectory_path") {
+		cfg.ACE.TrajectoryPath = defaults.ACE.TrajectoryPath
+	}
+
+	if !l.viper.IsSet("ace.top_k") {
+		cfg.ACE.TopK = defaults.ACE.TopK
+	}
+
+	if !l.viper.IsSet("ace.min_score") {
+		cfg.ACE.MinScore = defaults.ACE.MinScore
+	}
+}
+
+// applyProtocolDefaults applies default values for Protocol fields.
+func (l *LoaderV2) applyProtocolDefaults(cfg *V2, defaults *V2) {
 	if !l.viper.IsSet("protocol") {
 		cfg.Protocol = defaults.Protocol
-	} else {
-		if !l.viper.IsSet("protocol.enable_mcp") {
-			cfg.Protocol.EnableMCP = defaults.Protocol.EnableMCP
-		}
-
-		if !l.viper.IsSet("protocol.enable_git") {
-			cfg.Protocol.EnableGit = defaults.Protocol.EnableGit
-		}
-
-		if !l.viper.IsSet("protocol.enable_shell") {
-			cfg.Protocol.EnableShell = defaults.Protocol.EnableShell
-		}
-
-		if !l.viper.IsSet("protocol.shell_timeout") {
-			cfg.Protocol.ShellTimeout = defaults.Protocol.ShellTimeout
-		}
+		return
 	}
 
-	// Apply AgentsMD defaults.
+	if !l.viper.IsSet("protocol.enable_mcp") {
+		cfg.Protocol.EnableMCP = defaults.Protocol.EnableMCP
+	}
+
+	if !l.viper.IsSet("protocol.enable_git") {
+		cfg.Protocol.EnableGit = defaults.Protocol.EnableGit
+	}
+
+	if !l.viper.IsSet("protocol.enable_shell") {
+		cfg.Protocol.EnableShell = defaults.Protocol.EnableShell
+	}
+
+	if !l.viper.IsSet("protocol.shell_timeout") {
+		cfg.Protocol.ShellTimeout = defaults.Protocol.ShellTimeout
+	}
+}
+
+// applyAgentsMDDefaults applies default values for AgentsMD fields.
+func (l *LoaderV2) applyAgentsMDDefaults(cfg *V2, defaults *V2) {
 	if !l.viper.IsSet("agents_md") {
 		cfg.AgentsMD = defaults.AgentsMD
-	} else {
-		if !l.viper.IsSet("agents_md.enabled") {
-			cfg.AgentsMD.Enabled = defaults.AgentsMD.Enabled
-		}
-
-		if !l.viper.IsSet("agents_md.max_size") {
-			cfg.AgentsMD.MaxSize = defaults.AgentsMD.MaxSize
-		}
-		// Path default is empty string (auto-discover), no need to apply.
+		return
 	}
+
+	if !l.viper.IsSet("agents_md.enabled") {
+		cfg.AgentsMD.Enabled = defaults.AgentsMD.Enabled
+	}
+
+	if !l.viper.IsSet("agents_md.max_size") {
+		cfg.AgentsMD.MaxSize = defaults.AgentsMD.MaxSize
+	}
+	// Path default is empty string (auto-discover), no need to apply.
 }
 
 // Set sets a configuration value (useful for testing and programmatic config).

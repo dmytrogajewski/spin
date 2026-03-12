@@ -74,31 +74,62 @@ func (l *Loop) handleEvent(ctx context.Context, event term.KeyEvent) bool {
 
 // dispatchKeyEvent dispatches key events to appropriate handlers.
 func (l *Loop) dispatchKeyEvent(ctx context.Context, event term.KeyEvent) bool {
+	if done, ok := l.dispatchNavigation(event); ok {
+		return done
+	}
+
+	if done, ok := l.dispatchEditing(event); ok {
+		return done
+	}
+
+	return l.dispatchAction(ctx, event)
+}
+
+// dispatchNavigation handles cursor movement and history navigation keys.
+func (l *Loop) dispatchNavigation(event term.KeyEvent) (done bool, handled bool) {
+	switch event.Kind {
+	case term.KeyLeft:
+		return l.handleLeft(), true
+	case term.KeyRight:
+		return l.handleRight(), true
+	case term.KeyHome:
+		return l.handleHome(), true
+	case term.KeyEnd:
+		return l.handleEnd(), true
+	case term.KeyUp:
+		return l.handleUp(), true
+	case term.KeyDown:
+		return l.handleDown(), true
+	default:
+		return false, false
+	}
+}
+
+// dispatchEditing handles text insertion and deletion keys.
+func (l *Loop) dispatchEditing(event term.KeyEvent) (done bool, handled bool) {
 	switch event.Kind {
 	case term.KeyRune:
-		return l.handleRune(event)
+		return l.handleRune(event), true
 	case term.KeyBackspace:
-		return l.handleBackspace()
+		return l.handleBackspace(), true
 	case term.KeyDelete:
-		return l.handleDelete()
-	case term.KeyLeft:
-		return l.handleLeft()
-	case term.KeyRight:
-		return l.handleRight()
-	case term.KeyHome:
-		return l.handleHome()
-	case term.KeyEnd:
-		return l.handleEnd()
-	case term.KeyUp:
-		return l.handleUp()
-	case term.KeyDown:
-		return l.handleDown()
+		return l.handleDelete(), true
 	case term.KeyCtrlU:
-		return l.handleCtrlU()
+		return l.handleCtrlU(), true
 	case term.KeyCtrlK:
-		return l.handleCtrlK()
+		return l.handleCtrlK(), true
 	case term.KeyCtrlW:
-		return l.handleCtrlW()
+		return l.handleCtrlW(), true
+	case term.KeyPaste:
+		return l.handlePaste(event), true
+	default:
+		return false, false
+	}
+}
+
+// dispatchAction handles control keys that trigger actions (submit, cancel, clear).
+func (l *Loop) dispatchAction(ctx context.Context, event term.KeyEvent) bool {
+	switch event.Kind {
 	case term.KeyCtrlL:
 		return l.handleCtrlL()
 	case term.KeyEnter:
@@ -107,8 +138,6 @@ func (l *Loop) dispatchKeyEvent(ctx context.Context, event term.KeyEvent) bool {
 		return l.handleCtrlC()
 	case term.KeyCtrlD:
 		return l.handleCtrlD()
-	case term.KeyPaste:
-		return l.handlePaste(event)
 	default:
 		return l.handleUnknown()
 	}

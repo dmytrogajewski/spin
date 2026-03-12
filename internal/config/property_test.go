@@ -14,48 +14,44 @@ func TestV2_RoundTrip_YAML(t *testing.T) {
 	t.Parallel()
 
 	rapid.Check(t, func(t *rapid.T) {
-		// Generate a random valid V2.
 		cfg := genValidV2(t)
 
-		// Marshal to YAML.
 		yamlBytes, err := yaml.Marshal(cfg)
 		if err != nil {
 			t.Fatalf("failed to marshal config: %v", err)
 		}
 
-		// Unmarshal back.
 		var cfg2 V2
-
-		err = yaml.Unmarshal(yamlBytes, &cfg2)
-		if err != nil {
+		if err = yaml.Unmarshal(yamlBytes, &cfg2); err != nil {
 			t.Fatalf("failed to unmarshal config: %v", err)
 		}
 
-		// Verify fields match.
-		if cfg.Version != cfg2.Version {
-			t.Fatalf("Version mismatch: %v != %v", cfg.Version, cfg2.Version)
-		}
-
-		if cfg.LLM.Provider != cfg2.LLM.Provider {
-			t.Fatalf("LLM.Provider mismatch: %v != %v", cfg.LLM.Provider, cfg2.LLM.Provider)
-		}
-
-		if cfg.LLM.Model != cfg2.LLM.Model {
-			t.Fatalf("LLM.Model mismatch: %v != %v", cfg.LLM.Model, cfg2.LLM.Model)
-		}
-
-		if cfg.LLM.Temperature != cfg2.LLM.Temperature {
-			t.Fatalf("LLM.Temperature mismatch: %v != %v", cfg.LLM.Temperature, cfg2.LLM.Temperature)
-		}
-
-		if cfg.Agent.MaxTurns != cfg2.Agent.MaxTurns {
-			t.Fatalf("Agent.MaxTurns mismatch: %v != %v", cfg.Agent.MaxTurns, cfg2.Agent.MaxTurns)
-		}
-
-		if cfg.ACE.Enabled != cfg2.ACE.Enabled {
-			t.Fatalf("ACE.Enabled mismatch: %v != %v", cfg.ACE.Enabled, cfg2.ACE.Enabled)
-		}
+		assertConfigRoundTrip(t, cfg, &cfg2)
 	})
+}
+
+// assertConfigRoundTrip verifies key fields match between two configs.
+func assertConfigRoundTrip(t *rapid.T, cfg, cfg2 *V2) {
+	t.Helper()
+
+	checks := []struct {
+		name string
+		got  any
+		want any
+	}{
+		{"Version", cfg2.Version, cfg.Version},
+		{"LLM.Provider", cfg2.LLM.Provider, cfg.LLM.Provider},
+		{"LLM.Model", cfg2.LLM.Model, cfg.LLM.Model},
+		{"LLM.Temperature", cfg2.LLM.Temperature, cfg.LLM.Temperature},
+		{"Agent.MaxTurns", cfg2.Agent.MaxTurns, cfg.Agent.MaxTurns},
+		{"ACE.Enabled", cfg2.ACE.Enabled, cfg.ACE.Enabled},
+	}
+
+	for _, c := range checks {
+		if c.got != c.want {
+			t.Fatalf("%s mismatch: %v != %v", c.name, c.got, c.want)
+		}
+	}
 }
 
 // TestV2_Validation_GeneratedConfigs tests that generated configs pass validation.

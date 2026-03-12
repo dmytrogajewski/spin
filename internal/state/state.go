@@ -40,48 +40,26 @@ var validStates = map[State]bool{
 	StateActive:          true,
 }
 
+// allowedTransitions maps each state to the set of states it can transition to.
+var allowedTransitions = map[State]map[State]bool{
+	StateIdle:            {StateRunning: true, StateArchived: true},
+	StateRunning:         {StatePaused: true, StateWaitingApproval: true, StateCompleted: true, StateFailed: true, StateCancelled: true},
+	StatePaused:          {StateRunning: true, StateCancelled: true, StateArchived: true},
+	StateWaitingApproval: {StateRunning: true, StateCancelled: true},
+	StateCompleted:       {StateArchived: true},
+	StateFailed:          {StateArchived: true},
+	StateCancelled:       {StateArchived: true},
+	StateArchived:        {},
+	StateActive:          {},
+}
+
 // CanTransitionTo returns true if transition to the target state is valid.
 func (s State) CanTransitionTo(target State) bool {
-	// Cannot transition from unknown states.
-	if !validStates[s] {
+	if !validStates[s] || s == target {
 		return false
 	}
 
-	// Cannot transition to same state.
-	if s == target {
-		return false
-	}
-
-	// State-specific transition rules.
-	switch s {
-	case StateIdle:
-		// Idle can only go to running or archived.
-		return target == StateRunning || target == StateArchived
-
-	case StateRunning:
-		// Running can go to paused, waiting_approval, completed, failed, or canceled.
-		return target == StatePaused || target == StateWaitingApproval ||
-			target == StateCompleted || target == StateFailed || target == StateCancelled
-
-	case StatePaused:
-		// Paused can go to running, canceled, or archived.
-		return target == StateRunning || target == StateCancelled || target == StateArchived
-
-	case StateWaitingApproval:
-		// WaitingApproval can go to running or canceled.
-		return target == StateRunning || target == StateCancelled
-
-	case StateCompleted, StateFailed, StateCancelled:
-		// Terminal states can only go to archived.
-		return target == StateArchived
-
-	case StateArchived:
-		// Archived is final - cannot transition anywhere.
-		return false
-
-	default:
-		return false
-	}
+	return allowedTransitions[s][target]
 }
 
 // String returns the string representation of the state.

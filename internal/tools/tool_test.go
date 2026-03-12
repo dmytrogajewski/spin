@@ -302,86 +302,61 @@ func TestToolResult_String(t *testing.T) {
 	}
 }
 
+// marshalToolResult marshals a ToolResult to JSON and back to a map for verification.
+func marshalToolResult(t *testing.T, result ToolResult) map[string]any {
+	t.Helper()
+
+	jsonBytes, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	var data map[string]any
+	if err = json.Unmarshal(jsonBytes, &data); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	return data
+}
+
 // TestToolResult_JSONSerialization verifies JSON marshaling.
 func TestToolResult_JSONSerialization(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name   string
-		result ToolResult
-		check  func(t *testing.T, data map[string]any)
-	}{
-		{
-			name: "success result",
-			result: ToolResult{
-				ID:      "call_123",
-				Success: true,
-				Output:  "result data",
-			},
-			check: func(t *testing.T, data map[string]any) {
-				t.Helper()
 
-				if data["id"] != "call_123" {
-					t.Errorf("JSON id = %v, want call_123", data["id"])
-				}
+	t.Run("success result", func(t *testing.T) {
+		t.Parallel()
 
-				successVal, _ := data["success"].(bool)
-				if !successVal {
-					t.Errorf("JSON success = %v, want true", data["success"])
-				}
+		data := marshalToolResult(t, ToolResult{ID: "call_123", Success: true, Output: "result data"})
+		assertJSONField(t, data, "id", "call_123")
+		assertJSONField(t, data, "output", "result data")
 
-				if data["output"] != "result data" {
-					t.Errorf("JSON output = %v, want result data", data["output"])
-				}
-			},
-		},
-		{
-			name: "error result",
-			result: ToolResult{
-				Success: false,
-				Error:   "operation failed",
-			},
-			check: func(t *testing.T, data map[string]any) {
-				t.Helper()
+		if successVal, _ := data["success"].(bool); !successVal {
+			t.Errorf("JSON success = %v, want true", data["success"])
+		}
+	})
 
-				if data["error"] != "operation failed" {
-					t.Errorf("JSON error = %v, want operation failed", data["error"])
-				}
-			},
-		},
-		{
-			name: "with exit code",
-			result: ToolResult{
-				Success:  false,
-				ExitCode: 1,
-			},
-			check: func(t *testing.T, data map[string]any) {
-				t.Helper()
+	t.Run("error result", func(t *testing.T) {
+		t.Parallel()
 
-				// exit_code should be present when non-zero.
-				if code, ok := data["exit_code"]; ok {
-					if code != float64(1) {
-						t.Errorf("JSON exit_code = %v, want 1", code)
-					}
-				}
-			},
-		},
-	}
+		data := marshalToolResult(t, ToolResult{Success: false, Error: "operation failed"})
+		assertJSONField(t, data, "error", "operation failed")
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			jsonBytes, err := json.Marshal(tt.result)
-			if err != nil {
-				t.Fatalf("json.Marshal() error = %v", err)
-			}
+	t.Run("with exit code", func(t *testing.T) {
+		t.Parallel()
 
-			var data map[string]any
-			err = json.Unmarshal(jsonBytes, &data)
-			if err != nil {
-				t.Fatalf("json.Unmarshal() error = %v", err)
-			}
+		data := marshalToolResult(t, ToolResult{Success: false, ExitCode: 1})
+		if code, ok := data["exit_code"]; ok && code != float64(1) {
+			t.Errorf("JSON exit_code = %v, want 1", code)
+		}
+	})
+}
 
-			tt.check(t, data)
-		})
+// assertJSONField checks that a JSON field has the expected string value.
+func assertJSONField(t *testing.T, data map[string]any, key string, want string) {
+	t.Helper()
+
+	if data[key] != want {
+		t.Errorf("JSON %s = %v, want %s", key, data[key], want)
 	}
 }

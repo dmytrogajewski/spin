@@ -8,6 +8,42 @@ import (
 	"testing"
 )
 
+// verifyApplySuccess applies a patch and verifies no error occurred.
+func verifyApplySuccess(t *testing.T, applier *Applier, patch *Patch) *ApplyResult {
+	t.Helper()
+
+	result, err := applier.Apply(patch)
+	if err != nil {
+		t.Fatalf("Apply() unexpected error: %v", err)
+	}
+
+	return result
+}
+
+// verifyApplyError applies a patch and verifies the expected error.
+func verifyApplyError(t *testing.T, applier *Applier, patch *Patch, wantErr error) {
+	t.Helper()
+
+	_, err := applier.Apply(patch)
+	if err == nil {
+		t.Fatal("Apply() expected error, got nil")
+	}
+
+	if wantErr != nil && !errors.Is(err, wantErr) {
+		t.Errorf("error = %v, want %v", err, wantErr)
+	}
+}
+
+// verifyFileContent reads a file and asserts its content matches expected.
+func verifyFileContent(t *testing.T, workspace, path, expected string) {
+	t.Helper()
+
+	actual := readFile(t, workspace, path)
+	if actual != expected {
+		t.Errorf("file content = %q, want %q", actual, expected)
+	}
+}
+
 // Helper functions.
 
 func createTempWorkspace(t *testing.T) string {
@@ -183,57 +219,52 @@ func TestApplier_AddFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			workspace := createTempWorkspace(t)
-			applier, _ := NewApplier(workspace)
-			applier.SetForceOverwrite(tt.forceOverwrite)
-
-			// Create existing file if specified.
-			if tt.existingFile != "" {
-				createFile(t, workspace, tt.filePath, tt.existingFile)
-			}
-
-			patch := &Patch{
-				Operations: []FileOperation{
-					&AddFile{FilePath: tt.filePath, Lines: tt.lines},
-				},
-			}
-
-			result, err := applier.Apply(patch)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Apply(AddFile) error = %v, wantErr %v", err, tt.wantErr)
-
-				return
-			}
-
-			if tt.wantErr {
-				if tt.errIs != nil && !errors.Is(err, tt.errIs) {
-					t.Errorf("error = %v, want %v", err, tt.errIs)
-				}
-
-				return
-			}
-
-			// Verify file created.
-			if !fileExists(workspace, tt.filePath) {
-				t.Errorf("file %q not created", tt.filePath)
-
-				return
-			}
-
-			// Verify content.
-			expectedContent := strings.Join(tt.lines, "\n")
-
-			actualContent := readFile(t, workspace, tt.filePath)
-			if actualContent != expectedContent {
-				t.Errorf("file content = %q, want %q", actualContent, expectedContent)
-			}
-
-			// Verify result.
-			if len(result.FilesCreated) != 1 || result.FilesCreated[0] != tt.filePath {
-				t.Errorf("result.FilesCreated = %v, want [%s]", result.FilesCreated, tt.filePath)
-			}
+			runAddFileTest(t, tt)
 		})
+	}
+}
+
+func runAddFileTest(t *testing.T, tt struct {
+	name           string
+	filePath       string
+	lines          []string
+	existingFile   string
+	forceOverwrite bool
+	wantErr        bool
+	errIs          error
+}) {
+	t.Helper()
+
+	workspace := createTempWorkspace(t)
+	applier, _ := NewApplier(workspace)
+	applier.SetForceOverwrite(tt.forceOverwrite)
+
+	if tt.existingFile != "" {
+		createFile(t, workspace, tt.filePath, tt.existingFile)
+	}
+
+	patch := &Patch{
+		Operations: []FileOperation{
+			&AddFile{FilePath: tt.filePath, Lines: tt.lines},
+		},
+	}
+
+	if tt.wantErr {
+		verifyApplyError(t, applier, patch, tt.errIs)
+		return
+	}
+
+	result := verifyApplySuccess(t, applier, patch)
+
+	if !fileExists(workspace, tt.filePath) {
+		t.Errorf("file %q not created", tt.filePath)
+		return
+	}
+
+	verifyFileContent(t, workspace, tt.filePath, strings.Join(tt.lines, "\n"))
+
+	if len(result.FilesCreated) != 1 || result.FilesCreated[0] != tt.filePath {
+		t.Errorf("result.FilesCreated = %v, want [%s]", result.FilesCreated, tt.filePath)
 	}
 }
 
@@ -272,46 +303,46 @@ func TestApplier_DeleteFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			workspace := createTempWorkspace(t)
-			applier, _ := NewApplier(workspace)
-
-			// Create existing file if specified.
-			if tt.existingFile != "" {
-				createFile(t, workspace, tt.filePath, tt.existingFile)
-			}
-
-			patch := &Patch{
-				Operations: []FileOperation{
-					&DeleteFile{FilePath: tt.filePath},
-				},
-			}
-
-			result, err := applier.Apply(patch)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Apply(DeleteFile) error = %v, wantErr %v", err, tt.wantErr)
-
-				return
-			}
-
-			if tt.wantErr {
-				if tt.errIs != nil && !errors.Is(err, tt.errIs) {
-					t.Errorf("error = %v, want %v", err, tt.errIs)
-				}
-
-				return
-			}
-
-			// Verify file deleted.
-			if fileExists(workspace, tt.filePath) {
-				t.Errorf("file %q still exists after delete", tt.filePath)
-			}
-
-			// Verify result.
-			if len(result.FilesDeleted) != 1 || result.FilesDeleted[0] != tt.filePath {
-				t.Errorf("result.FilesDeleted = %v, want [%s]", result.FilesDeleted, tt.filePath)
-			}
+			runDeleteFileTest(t, tt)
 		})
+	}
+}
+
+func runDeleteFileTest(t *testing.T, tt struct {
+	name         string
+	filePath     string
+	existingFile string
+	wantErr      bool
+	errIs        error
+}) {
+	t.Helper()
+
+	workspace := createTempWorkspace(t)
+	applier, _ := NewApplier(workspace)
+
+	if tt.existingFile != "" {
+		createFile(t, workspace, tt.filePath, tt.existingFile)
+	}
+
+	patch := &Patch{
+		Operations: []FileOperation{
+			&DeleteFile{FilePath: tt.filePath},
+		},
+	}
+
+	if tt.wantErr {
+		verifyApplyError(t, applier, patch, tt.errIs)
+		return
+	}
+
+	result := verifyApplySuccess(t, applier, patch)
+
+	if fileExists(workspace, tt.filePath) {
+		t.Errorf("file %q still exists after delete", tt.filePath)
+	}
+
+	if len(result.FilesDeleted) != 1 || result.FilesDeleted[0] != tt.filePath {
+		t.Errorf("result.FilesDeleted = %v, want [%s]", result.FilesDeleted, tt.filePath)
 	}
 }
 
@@ -320,168 +351,75 @@ func TestApplier_DeleteFile(t *testing.T) {
 func TestApplier_UpdateFile(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		filePath string
-		original string
-		hunks    []Hunk
-		expected string
-		wantErr  bool
-		errIs    error
-	}{
-		{
-			name:     "simple replace",
-			filePath: "test.txt",
-			original: "line1\nline2\nline3",
-			hunks: []Hunk{
-				{
-					Header: "",
-					Changes: []LineChange{
-						{Type: LineContext, Text: "line1"},
-						{Type: LineDelete, Text: "line2"},
-						{Type: LineInsert, Text: "newline"},
-						{Type: LineContext, Text: "line3"},
-					},
-				},
-			},
-			expected: "line1\nnewline\nline3",
-			wantErr:  false,
-		},
-		{
-			name:     "insert at beginning",
-			filePath: "test.txt",
-			original: "line1\nline2",
-			hunks: []Hunk{
-				{
-					Header: "",
-					Changes: []LineChange{
-						{Type: LineInsert, Text: "newline"},
-						{Type: LineContext, Text: "line1"},
-					},
-				},
-			},
-			expected: "newline\nline1\nline2",
-			wantErr:  false,
-		},
-		{
-			name:     "delete line",
-			filePath: "test.txt",
-			original: "line1\nline2\nline3",
-			hunks: []Hunk{
-				{
-					Header: "",
-					Changes: []LineChange{
-						{Type: LineContext, Text: "line1"},
-						{Type: LineDelete, Text: "line2"},
-						{Type: LineContext, Text: "line3"},
-					},
-				},
-			},
-			expected: "line1\nline3",
-			wantErr:  false,
-		},
-		{
-			name:     "context not found",
-			filePath: "test.txt",
-			original: "line1\nline2\nline3",
-			hunks: []Hunk{
-				{
-					Header: "",
-					Changes: []LineChange{
-						{Type: LineContext, Text: "nonexistent"},
-						{Type: LineDelete, Text: "line2"},
-					},
-				},
-			},
-			wantErr: true,
-			errIs:   ErrContextNotFound,
-		},
-		{
-			name:     "update nonexistent file",
-			filePath: "missing.txt",
-			original: "",
-			hunks: []Hunk{
-				{
-					Changes: []LineChange{
-						{Type: LineContext, Text: "line1"},
-					},
-				},
-			},
-			wantErr: true,
-			errIs:   ErrFileNotFound,
-		},
-		{
-			name:     "multiple hunks",
-			filePath: "test.txt",
-			original: "a\nb\nc\nd\ne",
-			hunks: []Hunk{
-				{
-					Changes: []LineChange{
-						{Type: LineContext, Text: "a"},
-						{Type: LineDelete, Text: "b"},
-						{Type: LineInsert, Text: "B"},
-					},
-				},
-				{
-					Changes: []LineChange{
-						{Type: LineContext, Text: "d"},
-						{Type: LineDelete, Text: "e"},
-						{Type: LineInsert, Text: "E"},
-					},
-				},
-			},
-			expected: "a\nB\nc\nd\nE",
-			wantErr:  false,
-		},
+	tests := []updateFileTestCase{
+		{name: "simple replace", filePath: "test.txt", original: "line1\nline2\nline3", expected: "line1\nnewline\nline3", hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "line1"}, {Type: LineDelete, Text: "line2"}, {Type: LineInsert, Text: "newline"}, {Type: LineContext, Text: "line3"}}}}},
+		{name: "insert at beginning", filePath: "test.txt", original: "line1\nline2", expected: "newline\nline1\nline2", hunks: []Hunk{{Changes: []LineChange{{Type: LineInsert, Text: "newline"}, {Type: LineContext, Text: "line1"}}}}},
+		{name: "delete line", filePath: "test.txt", original: "line1\nline2\nline3", expected: "line1\nline3", hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "line1"}, {Type: LineDelete, Text: "line2"}, {Type: LineContext, Text: "line3"}}}}},
+		{name: "multiple hunks", filePath: "test.txt", original: "a\nb\nc\nd\ne", expected: "a\nB\nc\nd\nE", hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "a"}, {Type: LineDelete, Text: "b"}, {Type: LineInsert, Text: "B"}}}, {Changes: []LineChange{{Type: LineContext, Text: "d"}, {Type: LineDelete, Text: "e"}, {Type: LineInsert, Text: "E"}}}}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			workspace := createTempWorkspace(t)
-			applier, _ := NewApplier(workspace)
-
-			// Create original file if content specified.
-			if tt.original != "" {
-				createFile(t, workspace, tt.filePath, tt.original)
-			}
-
-			patch := &Patch{
-				Operations: []FileOperation{
-					&UpdateFile{
-						FilePath: tt.filePath,
-						Hunks:    tt.hunks,
-					},
-				},
-			}
-
-			result, err := applier.Apply(patch)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Apply(UpdateFile) error = %v, wantErr %v", err, tt.wantErr)
-
-				return
-			}
-
-			if tt.wantErr {
-				if tt.errIs != nil && !errors.Is(err, tt.errIs) {
-					t.Errorf("error = %v, want %v", err, tt.errIs)
-				}
-
-				return
-			}
-
-			// Verify content.
-			actualContent := readFile(t, workspace, tt.filePath)
-			if actualContent != tt.expected {
-				t.Errorf("file content = %q, want %q", actualContent, tt.expected)
-			}
-
-			// Verify result.
-			if len(result.FilesUpdated) != 1 || result.FilesUpdated[0] != tt.filePath {
-				t.Errorf("result.FilesUpdated = %v, want [%s]", result.FilesUpdated, tt.filePath)
-			}
+			runUpdateFileTest(t, tt)
 		})
+	}
+}
+
+func TestApplier_UpdateFile_Errors(t *testing.T) {
+	t.Parallel()
+
+	tests := []updateFileTestCase{
+		{name: "context not found", filePath: "test.txt", original: "line1\nline2\nline3", wantErr: true, errIs: ErrContextNotFound, hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "nonexistent"}, {Type: LineDelete, Text: "line2"}}}}},
+		{name: "update nonexistent file", filePath: "missing.txt", wantErr: true, errIs: ErrFileNotFound, hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "line1"}}}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			runUpdateFileTest(t, tt)
+		})
+	}
+}
+
+// updateFileTestCase holds test case data for update file tests.
+type updateFileTestCase struct {
+	name     string
+	filePath string
+	original string
+	hunks    []Hunk
+	expected string
+	wantErr  bool
+	errIs    error
+}
+
+func runUpdateFileTest(t *testing.T, tt updateFileTestCase) {
+	t.Helper()
+
+	workspace := createTempWorkspace(t)
+	applier, _ := NewApplier(workspace)
+
+	if tt.original != "" {
+		createFile(t, workspace, tt.filePath, tt.original)
+	}
+
+	patch := &Patch{
+		Operations: []FileOperation{
+			&UpdateFile{FilePath: tt.filePath, Hunks: tt.hunks},
+		},
+	}
+
+	if tt.wantErr {
+		verifyApplyError(t, applier, patch, tt.errIs)
+		return
+	}
+
+	result := verifyApplySuccess(t, applier, patch)
+
+	verifyFileContent(t, workspace, tt.filePath, tt.expected)
+
+	if len(result.FilesUpdated) != 1 || result.FilesUpdated[0] != tt.filePath {
+		t.Errorf("result.FilesUpdated = %v, want [%s]", result.FilesUpdated, tt.filePath)
 	}
 }
 
@@ -523,55 +461,50 @@ func TestApplier_MoveFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			workspace := createTempWorkspace(t)
-			applier, _ := NewApplier(workspace)
-
-			// Create original file.
-			createFile(t, workspace, tt.oldPath, tt.original)
-
-			patch := &Patch{
-				Operations: []FileOperation{
-					&UpdateFile{
-						FilePath: tt.oldPath,
-						NewPath:  tt.newPath,
-						Hunks:    []Hunk{}, // No content changes.
-					},
-				},
-			}
-
-			result, err := applier.Apply(patch)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Apply(Move) error = %v, wantErr %v", err, tt.wantErr)
-
-				return
-			}
-
-			if tt.wantErr {
-				return
-			}
-
-			// Verify old file deleted.
-			if fileExists(workspace, tt.oldPath) {
-				t.Errorf("old file %q still exists", tt.oldPath)
-			}
-
-			// Verify new file created.
-			if !fileExists(workspace, tt.newPath) {
-				t.Errorf("new file %q not created", tt.newPath)
-			}
-
-			// Verify content preserved.
-			actualContent := readFile(t, workspace, tt.newPath)
-			if actualContent != tt.original {
-				t.Errorf("file content = %q, want %q", actualContent, tt.original)
-			}
-
-			// Verify result.
-			if result.FilesMoved == nil || result.FilesMoved[tt.oldPath] != tt.newPath {
-				t.Errorf("result.FilesMoved = %v, want {%s: %s}", result.FilesMoved, tt.oldPath, tt.newPath)
-			}
+			runMoveFileTest(t, tt)
 		})
+	}
+}
+
+func runMoveFileTest(t *testing.T, tt struct {
+	name     string
+	oldPath  string
+	newPath  string
+	original string
+	wantErr  bool
+}) {
+	t.Helper()
+
+	workspace := createTempWorkspace(t)
+	applier, _ := NewApplier(workspace)
+
+	createFile(t, workspace, tt.oldPath, tt.original)
+
+	patch := &Patch{
+		Operations: []FileOperation{
+			&UpdateFile{FilePath: tt.oldPath, NewPath: tt.newPath, Hunks: []Hunk{}},
+		},
+	}
+
+	if tt.wantErr {
+		verifyApplyError(t, applier, patch, nil)
+		return
+	}
+
+	result := verifyApplySuccess(t, applier, patch)
+
+	if fileExists(workspace, tt.oldPath) {
+		t.Errorf("old file %q still exists", tt.oldPath)
+	}
+
+	if !fileExists(workspace, tt.newPath) {
+		t.Errorf("new file %q not created", tt.newPath)
+	}
+
+	verifyFileContent(t, workspace, tt.newPath, tt.original)
+
+	if result.FilesMoved == nil || result.FilesMoved[tt.oldPath] != tt.newPath {
+		t.Errorf("result.FilesMoved = %v, want {%s: %s}", result.FilesMoved, tt.oldPath, tt.newPath)
 	}
 }
 

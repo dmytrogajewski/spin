@@ -139,28 +139,36 @@ func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 
 	// Apply options.
 	for _, opt := range opts {
-		err := opt(p)
-		if err != nil {
+		if err := opt(p); err != nil {
 			return nil, err
 		}
 	}
 
-	// Create defaults if not provided.
+	if err := p.initCoreDeps(out); err != nil {
+		return nil, err
+	}
+
+	p.initRendering(out)
+	p.initPalette()
+	p.initStatus(out)
+
+	return p, nil
+}
+
+// initCoreDeps initializes the TTY, model, renderer, and coordinator.
+func (p *PureTTY) initCoreDeps(out io.Writer) error {
 	if p.tty == nil {
-		// Use real TTY (stdin/stdout).
 		tty, err := term.New(int(os.Stdin.Fd()), int(os.Stdout.Fd()))
 		if err != nil {
-			return nil, fmt.Errorf("create TTY: %w", err)
+			return fmt.Errorf("create TTY: %w", err)
 		}
-
 		p.tty = tty
 	}
 
 	if p.model == nil {
-		p.model = prompt.NewModel(100) // 100-entry history.
+		p.model = prompt.NewModel(100)
 	}
 
-	// Create renderer if not provided.
 	if p.renderer == nil {
 		w, h := p.tty.Size()
 		p.renderer = prompt.NewTermRenderer(out, w, "> ")
@@ -168,28 +176,28 @@ func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 	}
 
 	if p.coord == nil {
-		// Create printer.
 		printer := output.NewPrinter(out)
-
-		// Create adapter that wraps renderer to match output.PromptRenderer interface.
 		rendererAdapter := &rendererAdapter{renderer: p.renderer, noPrompt: p.execMode}
-
-		// Create coordinator.
 		p.coord = output.NewCoordinatedWriter(printer, rendererAdapter, p.model)
 	}
 
-	// Create timeline if not provided.
+	return nil
+}
+
+// initRendering initializes timeline, block renderer, and palette.
+func (p *PureTTY) initRendering(out io.Writer) {
 	if p.timeline == nil {
 		p.timeline = blocks.NewTimeline()
 	}
 
-	// Create block renderer if not provided.
 	if p.blockRenderer == nil {
 		w, _ := p.tty.Size()
 		p.blockRenderer = blocks.NewRenderer(w)
 	}
+}
 
-	// Create command palette (Phase 6.2).
+// initPalette initializes the command palette.
+func (p *PureTTY) initPalette() {
 	if p.paletteRegistry == nil {
 		p.paletteRegistry = overlay.NewCommandRegistry()
 		p.registerDefaultCommands()
@@ -203,8 +211,10 @@ func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 		w, h := p.tty.Size()
 		p.paletteRenderer = overlay.NewPaletteRenderer(w, h)
 	}
+}
 
-	// Create status management components (Phase 1).
+// initStatus initializes status management components.
+func (p *PureTTY) initStatus(out io.Writer) {
 	if p.statusManager == nil {
 		p.statusManager = status.NewManager()
 	}
@@ -213,26 +223,20 @@ func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 		p.statusAggregator = status.NewAggregator(p.statusManager)
 	}
 
-	if !p.execMode {
-		if p.statusRenderer == nil {
-			w, h := p.tty.Size()
-			p.statusRenderer = status.NewRenderer(p.out, w, h)
-		}
+	if !p.execMode && p.statusRenderer == nil {
+		w, h := p.tty.Size()
+		p.statusRenderer = status.NewRenderer(out, w, h)
 	}
 
-	// Connect scroll manager to coordinator (skip in exec mode).
 	if p.coord != nil && p.statusRenderer != nil {
 		p.coord.SetScrollManager(p.statusRenderer)
 	}
 
-	// Set up spinner callback to trigger status bar refresh on animation frames.
 	if p.statusManager != nil && !p.execMode {
 		p.statusManager.SetSpinnerCallback(func() {
 			p.updateStatusBar()
 		})
 	}
-
-	return p, nil
 }
 
 // Run starts the UI event loop and blocks until context cancel or quit.
@@ -275,76 +279,16 @@ func (u *PureTTY) Run(ctx context.Context) error {
 		_ = u.tty.Exit()
 	}()
 
-	// Start keyboard reader (or use injected events for testing).
-	var rawKeys <-chan term.KeyEvent
-	if u.keyboardEvents != nil {
-		// Use injected keyboard events (for testing).
-		rawKeys = u.keyboardEvents
-	} else {
-		// Use real keyboard reader.
-		var keysErr error
-
-		rawKeys, keysErr = term.ReadKeys(ctx, os.Stdin, nil)
-		if keysErr != nil {
-			return fmt.Errorf("start keyboard reader: %w", keysErr)
-		}
-	}
-
-	// Create routed keys channel for prompt loop.
-	routedKeys := make(chan term.KeyEvent)
-
-	// Start keyboard router that checks mode and routes keys appropriately.
-	go u.routeKeyboardEvents(ctx, rawKeys, routedKeys)
-
-	// Start prompt loop with routed keys.
-	inputs := u.startPromptLoop(ctx, routedKeys)
-	u.mu.Lock()
-	u.promptInputs = inputs
-	u.mu.Unlock()
-
-	// Setup SIGWINCH handler.
-	u.tty.OnResize(func(w, h int) {
-		u.handleResize(w, h)
-	})
-
-	// Initial prompt draw (skip in exec mode).
-	if !u.execMode {
-		_ = u.coord.RedrawPrompt()
-	}
-
-	// Initialize status bar with "Ready" message.
-	if u.statusManager != nil {
-		u.statusManager.SetStatus("Ready")
-		u.updateStatusBar()
+	// Start keyboard and prompt loop.
+	inputs, err2 := u.startEventLoop(ctx)
+	if err2 != nil {
+		return err2
 	}
 
 	// Ensure external inputs channel is closed on exit.
 	defer close(u.externalInputs)
 
-	// Event loop.
-	for {
-		select {
-		case line, ok := <-inputs:
-			if !ok {
-				// Prompt loop closed (Ctrl-C, Ctrl-D, or context cancel)
-				// Check if it was context cancel.
-				select {
-				case <-ctx.Done():
-					return fmt.Errorf("prompt loop: %w", ctx.Err())
-				default:
-					return nil
-				}
-			}
-			// Handle line internally.
-			u.handleSubmittedLine(line)
-
-			// Forward to external consumers (buffered, will block if full).
-			u.externalInputs <- line
-
-		case <-ctx.Done():
-			return fmt.Errorf("prompt loop context: %w", ctx.Err())
-		}
-	}
+	return u.runMainLoop(ctx, inputs)
 }
 
 // Stop gracefully shuts down the UI.
@@ -367,6 +311,74 @@ func (u *PureTTY) Stop() error {
 	}
 
 	return nil
+}
+
+// startEventLoop initializes keyboard routing, prompt loop, resize handler, and initial draw.
+func (u *PureTTY) startEventLoop(ctx context.Context) (<-chan string, error) {
+	rawKeys, err := u.resolveKeyboardSource(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	routedKeys := make(chan term.KeyEvent)
+	go u.routeKeyboardEvents(ctx, rawKeys, routedKeys)
+
+	inputs := u.startPromptLoop(ctx, routedKeys)
+	u.mu.Lock()
+	u.promptInputs = inputs
+	u.mu.Unlock()
+
+	u.tty.OnResize(func(w, h int) {
+		u.handleResize(w, h)
+	})
+
+	if !u.execMode {
+		_ = u.coord.RedrawPrompt()
+	}
+
+	if u.statusManager != nil {
+		u.statusManager.SetStatus("Ready")
+		u.updateStatusBar()
+	}
+
+	return inputs, nil
+}
+
+// resolveKeyboardSource returns injected or real keyboard events.
+func (u *PureTTY) resolveKeyboardSource(ctx context.Context) (<-chan term.KeyEvent, error) {
+	if u.keyboardEvents != nil {
+		return u.keyboardEvents, nil
+	}
+
+	rawKeys, err := term.ReadKeys(ctx, os.Stdin, nil)
+	if err != nil {
+		return nil, fmt.Errorf("start keyboard reader: %w", err)
+	}
+
+	return rawKeys, nil
+}
+
+// runMainLoop processes input lines and context cancellation.
+func (u *PureTTY) runMainLoop(ctx context.Context, inputs <-chan string) error {
+	for {
+		select {
+		case line, ok := <-inputs:
+			if !ok {
+				select {
+				case <-ctx.Done():
+					return fmt.Errorf("prompt loop: %w", ctx.Err())
+				default:
+					return nil
+				}
+			}
+
+			u.handleSubmittedLine(line)
+			u.externalInputs <- line
+
+		case <-ctx.Done():
+			return fmt.Errorf("prompt loop context: %w", ctx.Err())
+		}
+	}
 }
 
 // PrintLine prints a line to the transcript with newline.
@@ -923,49 +935,55 @@ func (u *PureTTY) UpdateBlock(blockID string, block *blocks.Block) error {
 		return err
 	}
 
-	// Print completion status line for tool blocks that have completed
+	// Print completion status line for tool blocks that have completed.
 	// Only print if we haven't already printed it (prevents duplicate "Tool completed" messages).
 	statusLine := u.blockRenderer.RenderCompletionStatus(block)
 	if statusLine != "" && !block.CompletionPrinted {
-		// Mark as printed before rendering to prevent duplicates.
 		block.CompletionPrinted = true
-
-		// Update the timeline with the flag set so future updates preserve it.
 		_ = u.timeline.Update(blockID, block)
-
-		if u.execMode {
-			// Exec mode: just append lines without cursor gymnastics.
-			_ = u.coord.PrintLine(strings.ReplaceAll(statusLine, "\n", "\r\n"))
-
-			if block.Body != "" {
-				body, renderErr := u.blockRenderer.RenderBody(block)
-				if renderErr == nil {
-					fmt.Fprint(u.out, strings.ReplaceAll(body, "\n", "\r\n"))
-				}
-			}
-		} else {
-			// Interactive: overwrite prompt line for status, then redraw prompt.
-			fmt.Fprint(u.out, "\x1b[1A\x1b[2K")                                    // Up + clear line.
-			fmt.Fprint(u.out, strings.ReplaceAll(statusLine, "\n", "\r\n")+"\r\n") // Write status.
-
-			// If tool produced output, render and print the body below the status line.
-			if block.Body != "" {
-				body, renderErr := u.blockRenderer.RenderBody(block)
-				if renderErr == nil {
-					fmt.Fprint(u.out, strings.ReplaceAll(body, "\n", "\r\n"))
-				}
-			}
-
-			// Redraw prompt after printing status (and optional body).
-			_ = u.renderer.Redraw(u.model, "")
-
-			if u.statusRenderer != nil {
-				_ = u.statusRenderer.MoveToScrollRegion()
-			}
-		}
+		u.printCompletionStatus(block, statusLine)
 	}
 
 	return nil
+}
+
+// printCompletionStatus prints a block's completion status line and optional body.
+func (u *PureTTY) printCompletionStatus(block *blocks.Block, statusLine string) {
+	if u.execMode {
+		u.printCompletionExecMode(block, statusLine)
+	} else {
+		u.printCompletionInteractive(block, statusLine)
+	}
+}
+
+// printCompletionExecMode prints completion status in exec (non-interactive) mode.
+func (u *PureTTY) printCompletionExecMode(block *blocks.Block, statusLine string) {
+	_ = u.coord.PrintLine(strings.ReplaceAll(statusLine, "\n", "\r\n"))
+	u.printBlockBody(block)
+}
+
+// printCompletionInteractive prints completion status in interactive mode.
+func (u *PureTTY) printCompletionInteractive(block *blocks.Block, statusLine string) {
+	fmt.Fprint(u.out, "\x1b[1A\x1b[2K")
+	fmt.Fprint(u.out, strings.ReplaceAll(statusLine, "\n", "\r\n")+"\r\n")
+	u.printBlockBody(block)
+	_ = u.renderer.Redraw(u.model, "")
+
+	if u.statusRenderer != nil {
+		_ = u.statusRenderer.MoveToScrollRegion()
+	}
+}
+
+// printBlockBody renders and prints a block's body if it has content.
+func (u *PureTTY) printBlockBody(block *blocks.Block) {
+	if block.Body == "" {
+		return
+	}
+
+	body, renderErr := u.blockRenderer.RenderBody(block)
+	if renderErr == nil {
+		fmt.Fprint(u.out, strings.ReplaceAll(body, "\n", "\r\n"))
+	}
 }
 
 // DeleteBlock deletes a block and re-renders.

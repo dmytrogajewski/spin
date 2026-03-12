@@ -2,8 +2,8 @@
 package main
 
 import (
-	"errors"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -15,18 +15,25 @@ import (
 )
 
 func main() {
-	// Create PureTTY adapter.
 	ui, err := adapters.NewPureTTY(os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create TUI: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Set up context with cancellation.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle OS signals.
+	startSignalHandler(cancel)
+	startTUI(ctx, ui, cancel)
+	printHeader(ui)
+	runDemos(ctx, ui)
+	printFooter(ui)
+	runInputLoop(ctx, ui, cancel)
+}
+
+// startSignalHandler listens for interrupt signals and cancels the context.
+func startSignalHandler(cancel context.CancelFunc) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
@@ -34,8 +41,10 @@ func main() {
 		<-sigChan
 		cancel()
 	}()
+}
 
-	// Start TUI.
+// startTUI runs the TUI adapter in a background goroutine.
+func startTUI(ctx context.Context, ui *adapters.PureTTY, cancel context.CancelFunc) {
 	go func() {
 		runErr := ui.Run(ctx)
 		if runErr != nil {
@@ -43,29 +52,37 @@ func main() {
 			cancel()
 		}
 	}()
+}
 
-	// Print header.
-	_ = ui.PrintLine("╔══════════════════════════════════════════╗")
-	_ = ui.PrintLine("║   Spin TUI - Streaming Demo             ║")
-	_ = ui.PrintLine("╚══════════════════════════════════════════╝")
-	_ = ui.PrintLine("")
-	_ = ui.PrintLine("This demo shows how to stream chunks (like LLM tokens).")
-	_ = ui.PrintLine("Watch how the output appears word-by-word with coalescing.")
-	_ = ui.PrintLine("")
+// printHeader prints the streaming demo header.
+func printHeader(ui *adapters.PureTTY) {
+	lines := []string{
+		"╔══════════════════════════════════════════╗",
+		"║   Spin TUI - Streaming Demo             ║",
+		"╚══════════════════════════════════════════╝",
+		"",
+		"This demo shows how to stream chunks (like LLM tokens).",
+		"Watch how the output appears word-by-word with coalescing.",
+		"",
+	}
 
-	// Demo 1: Word-by-word streaming.
+	for _, line := range lines {
+		_ = ui.PrintLine(line)
+	}
+}
+
+// runDemos runs all four streaming demonstrations.
+func runDemos(ctx context.Context, ui *adapters.PureTTY) {
 	_ = ui.PrintLine("━━━ Demo 1: Word-by-word streaming ━━━")
 	_ = ui.PrintLine("")
 	streamWords(ctx, ui, "The quick brown fox jumps over the lazy dog.")
 	_ = ui.PrintLine("")
 
-	// Demo 2: Character-by-character streaming.
 	_ = ui.PrintLine("━━━ Demo 2: Character-by-character streaming ━━━")
 	_ = ui.PrintLine("")
 	streamChars(ctx, ui, "Hello, world! This is character-level streaming.")
 	_ = ui.PrintLine("")
 
-	// Demo 3: Simulated LLM response.
 	_ = ui.PrintLine("━━━ Demo 3: Simulated LLM response ━━━")
 	_ = ui.PrintLine("")
 	_ = ui.PrintLine("User: Write a haiku about coding")
@@ -73,20 +90,29 @@ func main() {
 	streamLLM(ctx, ui)
 	_ = ui.PrintLine("")
 
-	// Demo 4: Fast streaming (shows coalescing).
 	_ = ui.PrintLine("━━━ Demo 4: Fast streaming (1000 chunks, shows coalescing) ━━━")
 	_ = ui.PrintLine("")
 	streamFast(ctx, ui)
 	_ = ui.PrintLine("")
+}
 
-	// Done.
-	_ = ui.PrintLine("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	_ = ui.PrintLine("")
-	_ = ui.PrintLine("Streaming demo complete!")
-	_ = ui.PrintLine("Press Ctrl-D or Ctrl-C to exit, or type 'quit'")
-	_ = ui.PrintLine("")
+// printFooter prints the closing instructions.
+func printFooter(ui *adapters.PureTTY) {
+	lines := []string{
+		"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+		"",
+		"Streaming demo complete!",
+		"Press Ctrl-D or Ctrl-C to exit, or type 'quit'",
+		"",
+	}
 
-	// Wait for exit.
+	for _, line := range lines {
+		_ = ui.PrintLine(line)
+	}
+}
+
+// runInputLoop handles user input until the context is cancelled.
+func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.CancelFunc) {
 	for {
 		select {
 		case <-ctx.Done():

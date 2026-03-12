@@ -22,7 +22,6 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 	pb := playbook.New(nil, nil)
 	applier := NewApplier(pb)
 
-	// Create initial bullets.
 	b1, _ := bullet.New("Initial content for bullet 1")
 	b2, _ := bullet.New("Initial content for bullet 2")
 	b3, _ := bullet.New("Initial content for bullet 3")
@@ -31,33 +30,28 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 	_ = pb.Add(ctx, b2)
 	_ = pb.Add(ctx, b3)
 
-	// Apply various deltas.
-	deltas := []Delta{
-		*NewContentUpdate(b1.ID, "Updated content", Metadata{
-			Source: "reflector",
-			Reason: "Content refinement",
-		}),
-		*NewIncrementHelpful(b1.ID, Metadata{
-			Source: "curator",
-			Reason: "Duplicate insight",
-		}),
-		*NewAddTag(b1.ID, "category", "testing", Metadata{
-			Source: "adapter",
-			Reason: "Categorization",
-		}),
-		*NewIncrementHelpful(b2.ID, Metadata{
-			Source: "curator",
-			Reason: "Useful pattern",
-		}),
-		*NewIncrementHarmful(b2.ID, Metadata{
-			Source: "feedback",
-			Reason: "Misleading advice",
-		}),
-		*NewUpdateEmbedding(b3.ID, []float32{0.1, 0.2, 0.3}, Metadata{
-			Source: "embedder",
-			Reason: "Re-embedding",
-		}),
+	deltas := buildTestDeltas(b1.ID, b2.ID, b3.ID)
+	applyAllDeltas(t, ctx, applier, deltas)
+
+	verifyBullet1(t, pb, b1.ID)
+	verifyBullet2(t, pb, b2.ID)
+	verifyBullet3(t, pb, b3.ID)
+	verifyWorkflowHistory(t, applier, b1.ID, b2.ID, b3.ID)
+}
+
+func buildTestDeltas(b1ID, b2ID, b3ID string) []Delta {
+	return []Delta{
+		*NewContentUpdate(b1ID, "Updated content", Metadata{Source: "reflector", Reason: "Content refinement"}),
+		*NewIncrementHelpful(b1ID, Metadata{Source: "curator", Reason: "Duplicate insight"}),
+		*NewAddTag(b1ID, "category", "testing", Metadata{Source: "adapter", Reason: "Categorization"}),
+		*NewIncrementHelpful(b2ID, Metadata{Source: "curator", Reason: "Useful pattern"}),
+		*NewIncrementHarmful(b2ID, Metadata{Source: "feedback", Reason: "Misleading advice"}),
+		*NewUpdateEmbedding(b3ID, []float32{0.1, 0.2, 0.3}, Metadata{Source: "embedder", Reason: "Re-embedding"}),
 	}
+}
+
+func applyAllDeltas(t *testing.T, ctx context.Context, applier *Applier, deltas []Delta) {
+	t.Helper()
 
 	for _, delta := range deltas {
 		result, err := applier.Apply(ctx, delta)
@@ -69,81 +63,62 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 			t.Errorf("delta application failed: %v", result.Error)
 		}
 	}
+}
 
-	// Verify bullet 1 state.
-	updated1, _ := pb.Get(b1.ID)
-	if updated1.Content != "Updated content" {
-		t.Errorf("bullet 1: expected content 'Updated content', got '%s'", updated1.Content)
-	}
+func verifyBullet1(t *testing.T, pb *playbook.Playbook, id string) {
+	t.Helper()
 
-	if updated1.HelpfulCount != 1 {
-		t.Errorf("bullet 1: expected helpful count 1, got %d", updated1.HelpfulCount)
-	}
+	b, _ := pb.Get(id)
+	expectEqual(t, "bullet 1 content", b.Content, "Updated content")
+	expectIntEqual(t, "bullet 1 helpful count", b.HelpfulCount, 1)
+	expectEqual(t, "bullet 1 tag category", b.Tags["category"], "testing")
+}
 
-	if updated1.Tags["category"] != "testing" {
-		t.Errorf("bullet 1: expected tag category=testing, got %s", updated1.Tags["category"])
-	}
+func verifyBullet2(t *testing.T, pb *playbook.Playbook, id string) {
+	t.Helper()
 
-	// Verify bullet 2 state.
-	updated2, _ := pb.Get(b2.ID)
-	if updated2.HelpfulCount != 1 {
-		t.Errorf("bullet 2: expected helpful count 1, got %d", updated2.HelpfulCount)
-	}
+	b, _ := pb.Get(id)
+	expectIntEqual(t, "bullet 2 helpful count", b.HelpfulCount, 1)
+	expectIntEqual(t, "bullet 2 harmful count", b.HarmfulCount, 1)
+}
 
-	if updated2.HarmfulCount != 1 {
-		t.Errorf("bullet 2: expected harmful count 1, got %d", updated2.HarmfulCount)
-	}
+func verifyBullet3(t *testing.T, pb *playbook.Playbook, id string) {
+	t.Helper()
 
-	// Verify bullet 3 state.
-	updated3, _ := pb.Get(b3.ID)
-	if len(updated3.Embedding) != 3 {
-		t.Errorf("bullet 3: expected embedding length 3, got %d", len(updated3.Embedding))
-	}
+	b, _ := pb.Get(id)
+	expectIntEqual(t, "bullet 3 embedding length", len(b.Embedding), 3)
+}
 
-	// Verify history tracking.
+func verifyWorkflowHistory(t *testing.T, applier *Applier, b1ID, b2ID, b3ID string) {
+	t.Helper()
+
 	history := applier.GetHistory()
-	if history.Len() != 6 {
-		t.Errorf("expected 6 deltas in history, got %d", history.Len())
-	}
+	expectIntEqual(t, "total deltas in history", history.Len(), 6)
+	expectIntEqual(t, "deltas for bullet 1", len(history.GetByBullet(b1ID)), 3)
+	expectIntEqual(t, "deltas for bullet 2", len(history.GetByBullet(b2ID)), 2)
+	expectIntEqual(t, "deltas for bullet 3", len(history.GetByBullet(b3ID)), 1)
+	expectIntEqual(t, "recent deltas", len(history.GetRecent(3)), 3)
 
-	// Query deltas by bullet.
-	b1Deltas := history.GetByBullet(b1.ID)
-	if len(b1Deltas) != 3 {
-		t.Errorf("expected 3 deltas for bullet 1, got %d", len(b1Deltas))
-	}
-
-	b2Deltas := history.GetByBullet(b2.ID)
-	if len(b2Deltas) != 2 {
-		t.Errorf("expected 2 deltas for bullet 2, got %d", len(b2Deltas))
-	}
-
-	b3Deltas := history.GetByBullet(b3.ID)
-	if len(b3Deltas) != 1 {
-		t.Errorf("expected 1 delta for bullet 3, got %d", len(b3Deltas))
-	}
-
-	// Get recent deltas.
-	recent := history.GetRecent(3)
-	if len(recent) != 3 {
-		t.Errorf("expected 3 recent deltas, got %d", len(recent))
-	}
-
-	// Verify stats.
 	stats := history.Stats()
-	if stats.TotalDeltas != 6 {
-		t.Errorf("stats: expected 6 total deltas, got %d", stats.TotalDeltas)
-	}
+	expectIntEqual(t, "stats total deltas", stats.TotalDeltas, 6)
+	expectIntEqual(t, "stats unique bullets", stats.UniqueBullets, 3)
+	expectIntEqual(t, "stats content updates", stats.DeltasByOperation[OpUpdateContent], 1)
+	expectIntEqual(t, "stats increment helpful", stats.DeltasByOperation[OpIncrementHelpful], 2)
+}
 
-	if stats.UniqueBullets != 3 {
-		t.Errorf("stats: expected 3 unique bullets, got %d", stats.UniqueBullets)
-	}
+func expectEqual(t *testing.T, name, got, want string) {
+	t.Helper()
 
-	if stats.DeltasByOperation[OpUpdateContent] != 1 {
-		t.Errorf("stats: expected 1 content update, got %d", stats.DeltasByOperation[OpUpdateContent])
+	if got != want {
+		t.Errorf("%s: expected '%s', got '%s'", name, want, got)
 	}
+}
 
-	if stats.DeltasByOperation[OpIncrementHelpful] != 2 {
-		t.Errorf("stats: expected 2 increment helpful, got %d", stats.DeltasByOperation[OpIncrementHelpful])
+func expectIntEqual(t *testing.T, name string, got, want int) {
+	t.Helper()
+
+	if got != want {
+		t.Errorf("%s: expected %d, got %d", name, want, got)
 	}
 }
 

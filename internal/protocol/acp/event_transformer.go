@@ -45,138 +45,123 @@ func (t *EventTransformer) Transform(ctx context.Context, event events.Event) bo
 		return false
 	}
 
-	// Reset content on turn start.
 	if event.Type == events.EventTurnStart {
 		t.accumulatedContent = ""
-
-		return false // Don't consume, let others see it.
+		return false
 	}
 
-	// Check for plan detection before tool call starts.
 	if event.Type == events.EventToolCallStart {
-		if t.accumulatedContent != "" && t.agent != nil && t.agent.GetPlanner() == nil {
-			plan := planning.DetectPlanFromText(t.accumulatedContent)
-			if plan != nil {
-				t.agent.SetPlanner(plan)
-				// Send plan notification immediately.
-				planEntries := convertOrchestrationPlanToACP(plan)
-				planUpdate := acp.UpdatePlan(planEntries...)
-				notification := acp.SessionNotification{
-					SessionId: t.sessionID,
-					Update:    planUpdate,
-				}
-				_ = t.connection.SessionUpdate(ctx, notification)
-			}
-		}
+		t.detectAndSendPlan(ctx)
 	}
 
-	// Handle content delta.
-	if event.Type == events.EventContentDelta {
-		data, ok := event.ContentDeltaData()
-		if !ok || data.Role != "assistant" {
-			return false
-		}
+	switch event.Type {
+	case events.EventContentDelta:
+		return t.transformContentDelta(ctx, event)
+	case events.EventThinkingDelta:
+		return t.transformThinkingDelta(ctx, event)
+	case events.EventPlanUpdate:
+		return t.transformPlanUpdate(ctx, event)
+	case events.EventInfo, events.EventWarning:
+		return t.transformSystemEvent(ctx, event)
+	default:
+		return t.transformGenericEvent(ctx, event)
+	}
+}
 
-		t.accumulatedContent += data.Content
-
-		update := acp.UpdateAgentMessageText(data.Content)
-		notification := acp.SessionNotification{
-			SessionId: t.sessionID,
-			Update:    update,
-		}
-		_ = t.connection.SessionUpdate(ctx, notification)
-
-		return true
+// detectAndSendPlan checks accumulated content for a plan and sends it.
+func (t *EventTransformer) detectAndSendPlan(ctx context.Context) {
+	if t.accumulatedContent == "" || t.agent == nil || t.agent.GetPlanner() != nil {
+		return
 	}
 
-	// Handle thinking delta.
-	if event.Type == events.EventThinkingDelta {
-		data, ok := event.ThinkingDeltaData()
-		if !ok {
-			return false
-		}
-
-		update := acp.UpdateAgentThoughtText(data.Content)
-		notification := acp.SessionNotification{
-			SessionId: t.sessionID,
-			Update:    update,
-		}
-		_ = t.connection.SessionUpdate(ctx, notification)
-
-		return true
+	plan := planning.DetectPlanFromText(t.accumulatedContent)
+	if plan == nil {
+		return
 	}
 
-	// Handle plan updates.
-	if event.Type == events.EventPlanUpdate {
-		data, ok := event.PlanUpdateData()
-		if !ok {
-			return false
-		}
+	t.agent.SetPlanner(plan)
+	planEntries := convertOrchestrationPlanToACP(plan)
+	t.sendUpdate(ctx, acp.UpdatePlan(planEntries...))
+}
 
-		planEntries := convertOrchestrationPlanToACP(data.Plan)
-		if len(planEntries) == 0 {
-			return false
-		}
-
-		planUpdate := acp.UpdatePlan(planEntries...)
-		notification := acp.SessionNotification{
-			SessionId: t.sessionID,
-			Update:    planUpdate,
-		}
-		_ = t.connection.SessionUpdate(ctx, notification)
-
-		return true
+// transformContentDelta handles content delta events.
+func (t *EventTransformer) transformContentDelta(ctx context.Context, event events.Event) bool {
+	data, ok := event.ContentDeltaData()
+	if !ok || data.Role != "assistant" {
+		return false
 	}
 
-	// Handle system events (info, warning).
-	if event.Type == events.EventInfo || event.Type == events.EventWarning {
-		update, ok := convertSystemEvent(event)
-		if !ok {
-			return false
-		}
+	t.accumulatedContent += data.Content
+	t.sendUpdate(ctx, acp.UpdateAgentMessageText(data.Content))
+	return true
+}
 
-		notification := acp.SessionNotification{
-			SessionId: t.sessionID,
-			Update:    update,
-		}
-		_ = t.connection.SessionUpdate(ctx, notification)
-
-		return true
+// transformThinkingDelta handles thinking delta events.
+func (t *EventTransformer) transformThinkingDelta(ctx context.Context, event events.Event) bool {
+	data, ok := event.ThinkingDeltaData()
+	if !ok {
+		return false
 	}
 
-	// Convert other events to ACP notification.
+	t.sendUpdate(ctx, acp.UpdateAgentThoughtText(data.Content))
+	return true
+}
+
+// transformPlanUpdate handles plan update events.
+func (t *EventTransformer) transformPlanUpdate(ctx context.Context, event events.Event) bool {
+	data, ok := event.PlanUpdateData()
+	if !ok {
+		return false
+	}
+
+	planEntries := convertOrchestrationPlanToACP(data.Plan)
+	if len(planEntries) == 0 {
+		return false
+	}
+
+	t.sendUpdate(ctx, acp.UpdatePlan(planEntries...))
+	return true
+}
+
+// transformSystemEvent handles system info/warning events.
+func (t *EventTransformer) transformSystemEvent(ctx context.Context, event events.Event) bool {
+	update, ok := convertSystemEvent(event)
+	if !ok {
+		return false
+	}
+
+	t.sendUpdate(ctx, update)
+	return true
+}
+
+// transformGenericEvent handles all other event types.
+func (t *EventTransformer) transformGenericEvent(ctx context.Context, event events.Event) bool {
 	update, ok := convertEventToSessionUpdate(event, t.fileTracker)
 	if !ok {
 		return false
 	}
 
-	// Extract terminal ID for release after notification.
-	var terminalIDToRelease string
+	terminalID := extractTerminalID(event)
 
-	if event.Type == events.EventToolCallComplete {
-		if data, hasComplete := event.ToolCallCompleteData(); hasComplete {
-			if terminalID, isStr := data.Metadata["terminal_id"].(string); isStr && terminalID != "" {
-				terminalIDToRelease = terminalID
-			}
+	t.sendUpdate(ctx, update)
+
+	if terminalID != "" {
+		if acpConn, isACPConn := t.connection.(*acp.AgentSideConnection); isACPConn {
+			terminalClient := NewTerminalClient(acpConn)
+			_ = terminalClient.Release(ctx, terminalID)
 		}
 	}
 
-	// Send notification.
+	return true
+}
+
+// sendUpdate sends a session update notification.
+func (t *EventTransformer) sendUpdate(ctx context.Context, update acp.SessionUpdate) {
 	notification := acp.SessionNotification{
 		SessionId: t.sessionID,
 		Update:    update,
 	}
 	_ = t.connection.SessionUpdate(ctx, notification)
-
-	// Release terminal AFTER notification is sent (per ACP spec).
-	if terminalIDToRelease != "" {
-		if acpConn, isACPConn := t.connection.(*acp.AgentSideConnection); isACPConn {
-			terminalClient := NewTerminalClient(acpConn)
-			_ = terminalClient.Release(ctx, terminalIDToRelease)
-		}
-	}
-
-	return true
 }
 
 // Close releases resources held by the transformer.

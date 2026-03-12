@@ -66,25 +66,39 @@ func TestGolden_ValidMinimal(t *testing.T) {
 func TestGolden_ValidFull(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join("golden", "valid_full.yaml")
+	cfg := loadGoldenConfig(t, "valid_full.yaml")
 
+	verifyFullLLMSection(t, &cfg)
+	verifyFullAgentSection(t, &cfg)
+	verifyFullACESection(t, &cfg)
+	verifyFullSecuritySection(t, &cfg)
+	verifyFullProtocolSection(t, &cfg)
+}
+
+func loadGoldenConfig(t *testing.T, filename string) V2 {
+	t.Helper()
+
+	path := filepath.Join("golden", filename)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("Failed to read golden file: %v", err)
 	}
 
 	var cfg V2
-	err = yaml.Unmarshal(data, &cfg)
-	if err != nil {
+	if err = yaml.Unmarshal(data, &cfg); err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}
 
-	err = cfg.Validate()
-	if err != nil {
+	if err = cfg.Validate(); err != nil {
 		t.Fatalf("Validation failed: %v", err)
 	}
 
-	// Verify LLM section.
+	return cfg
+}
+
+func verifyFullLLMSection(t *testing.T, cfg *V2) {
+	t.Helper()
+
 	if cfg.LLM.Provider != "openai" {
 		t.Errorf("Expected provider openai, got %s", cfg.LLM.Provider)
 	}
@@ -104,8 +118,11 @@ func TestGolden_ValidFull(t *testing.T) {
 	if cfg.LLM.Temperature != 0.8 {
 		t.Errorf("Expected temperature 0.8, got %f", cfg.LLM.Temperature)
 	}
+}
 
-	// Verify Agent section.
+func verifyFullAgentSection(t *testing.T, cfg *V2) {
+	t.Helper()
+
 	if cfg.Agent.MaxTurns != 50 {
 		t.Errorf("Expected max_turns 50, got %d", cfg.Agent.MaxTurns)
 	}
@@ -117,8 +134,11 @@ func TestGolden_ValidFull(t *testing.T) {
 	if !cfg.Agent.RequireApproval {
 		t.Error("Expected require_approval to be true")
 	}
+}
 
-	// Verify ACE section.
+func verifyFullACESection(t *testing.T, cfg *V2) {
+	t.Helper()
+
 	if !cfg.ACE.Enabled {
 		t.Error("Expected ACE to be enabled")
 	}
@@ -134,8 +154,11 @@ func TestGolden_ValidFull(t *testing.T) {
 	if cfg.ACE.MinScore != 0.7 {
 		t.Errorf("Expected min_score 0.7, got %f", cfg.ACE.MinScore)
 	}
+}
 
-	// Verify Security section.
+func verifyFullSecuritySection(t *testing.T, cfg *V2) {
+	t.Helper()
+
 	if cfg.Security.SandboxMode != "firejail" {
 		t.Errorf("Expected sandbox_mode firejail, got %s", cfg.Security.SandboxMode)
 	}
@@ -143,8 +166,11 @@ func TestGolden_ValidFull(t *testing.T) {
 	if len(cfg.Security.AllowedCommands) != 4 {
 		t.Errorf("Expected 4 allowed commands, got %d", len(cfg.Security.AllowedCommands))
 	}
+}
 
-	// Verify Protocol section.
+func verifyFullProtocolSection(t *testing.T, cfg *V2) {
+	t.Helper()
+
 	if !cfg.Protocol.EnableMCP {
 		t.Error("Expected enable_mcp to be true")
 	}

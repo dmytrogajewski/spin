@@ -15,54 +15,24 @@ func TestParseCommand(t *testing.T) {
 		{
 			name:   "simple command",
 			cmdStr: "ls",
-			expectedCmd: &Command{
-				Program: "ls",
-				Args:    []string{},
-				Raw:     "ls",
-			},
-			expectError: false,
+			expectedCmd: &Command{Program: "ls", Args: []string{}, Raw: "ls"},
 		},
 		{
 			name:   "command with args",
 			cmdStr: "ls -la /tmp",
-			expectedCmd: &Command{
-				Program: "ls",
-				Args:    []string{"-la", "/tmp"},
-				Raw:     "ls -la /tmp",
-			},
-			expectError: false,
+			expectedCmd: &Command{Program: "ls", Args: []string{"-la", "/tmp"}, Raw: "ls -la /tmp"},
 		},
 		{
 			name:   "command with multiple args",
 			cmdStr: "git commit -m 'test message'",
-			expectedCmd: &Command{
-				Program: "git",
-				Args:    []string{"commit", "-m", "'test", "message'"},
-				Raw:     "git commit -m 'test message'",
-			},
-			expectError: false,
+			expectedCmd: &Command{Program: "git", Args: []string{"commit", "-m", "'test", "message'"}, Raw: "git commit -m 'test message'"},
 		},
-		{
-			name:        "empty command",
-			cmdStr:      "",
-			expectedCmd: nil,
-			expectError: true,
-		},
-		{
-			name:        "whitespace only",
-			cmdStr:      "   \t\n  ",
-			expectedCmd: nil,
-			expectError: true,
-		},
+		{name: "empty command", cmdStr: "", expectedCmd: nil, expectError: true},
+		{name: "whitespace only", cmdStr: "   \t\n  ", expectedCmd: nil, expectError: true},
 		{
 			name:   "uppercase program",
 			cmdStr: "LS -LA",
-			expectedCmd: &Command{
-				Program: "ls",
-				Args:    []string{"-LA"},
-				Raw:     "LS -LA",
-			},
-			expectError: false,
+			expectedCmd: &Command{Program: "ls", Args: []string{"-LA"}, Raw: "LS -LA"},
 		},
 	}
 
@@ -70,47 +40,51 @@ func TestParseCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			cmd, err := ParseCommand(tt.cmdStr)
-
-			if tt.expectError && err == nil {
-				t.Errorf("ParseCommand() expected error but got none")
-			}
-
-			if !tt.expectError && err != nil {
-				t.Errorf("ParseCommand() unexpected error: %v", err)
-			}
-
-			if tt.expectedCmd == nil {
-				if cmd != nil {
-					t.Errorf("ParseCommand() = %v, want %v", cmd, tt.expectedCmd)
-				}
-
-				return
-			}
-
-			if cmd == nil {
-				t.Errorf("ParseCommand() = %v, want %v", cmd, tt.expectedCmd)
-
-				return
-			}
-
-			if cmd.Program != tt.expectedCmd.Program {
-				t.Errorf("ParseCommand().Program = %v, want %v", cmd.Program, tt.expectedCmd.Program)
-			}
-
-			if len(cmd.Args) != len(tt.expectedCmd.Args) {
-				t.Errorf("ParseCommand().Args length = %v, want %v", len(cmd.Args), len(tt.expectedCmd.Args))
-			} else {
-				for i, arg := range cmd.Args {
-					if arg != tt.expectedCmd.Args[i] {
-						t.Errorf("ParseCommand().Args[%d] = %v, want %v", i, arg, tt.expectedCmd.Args[i])
-					}
-				}
-			}
-
-			if cmd.Raw != tt.expectedCmd.Raw {
-				t.Errorf("ParseCommand().Raw = %v, want %v", cmd.Raw, tt.expectedCmd.Raw)
-			}
+			checkParseError(t, err, tt.expectError)
+			assertCommandEquals(t, cmd, tt.expectedCmd)
 		})
+	}
+}
+
+func checkParseError(t *testing.T, err error, expectError bool) {
+	t.Helper()
+	if expectError && err == nil {
+		t.Errorf("expected error but got none")
+	}
+	if !expectError && err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func assertCommandEquals(t *testing.T, got, want *Command) {
+	t.Helper()
+
+	if want == nil {
+		if got != nil {
+			t.Errorf("got %v, want nil", got)
+		}
+		return
+	}
+
+	if got == nil {
+		t.Errorf("got nil, want %v", want)
+		return
+	}
+
+	if got.Program != want.Program {
+		t.Errorf("Program = %v, want %v", got.Program, want.Program)
+	}
+	if got.Raw != want.Raw {
+		t.Errorf("Raw = %v, want %v", got.Raw, want.Raw)
+	}
+	if len(got.Args) != len(want.Args) {
+		t.Errorf("Args length = %v, want %v", len(got.Args), len(want.Args))
+		return
+	}
+	for i, arg := range got.Args {
+		if arg != want.Args[i] {
+			t.Errorf("Args[%d] = %v, want %v", i, arg, want.Args[i])
+		}
 	}
 }
 
@@ -175,86 +149,20 @@ func TestValidator_Classify(t *testing.T) {
 		expectedClass CommandClass
 		expectError   bool
 	}{
-		{
-			name: "safe command - ls",
-			cmd: &Command{
-				Program: "ls",
-				Args:    []string{"-la"},
-				Raw:     "ls -la",
-			},
-			expectedClass: CommandSafe,
-			expectError:   false,
-		},
-		{
-			name: "safe command - cat",
-			cmd: &Command{
-				Program: "cat",
-				Args:    []string{"file.txt"},
-				Raw:     "cat file.txt",
-			},
-			expectedClass: CommandSafe,
-			expectError:   false,
-		},
-		{
-			name: "interactive command - mkdir",
-			cmd: &Command{
-				Program: "mkdir",
-				Args:    []string{"newdir"},
-				Raw:     "mkdir newdir",
-			},
-			expectedClass: CommandInteractive,
-			expectError:   false,
-		},
-		{
-			name: "dangerous command - rm -rf",
-			cmd: &Command{
-				Program: "rm",
-				Args:    []string{"-rf", "test"},
-				Raw:     "rm -rf test",
-			},
-			expectedClass: CommandDangerous,
-			expectError:   false,
-		},
-		{
-			name: "forbidden command - rm -rf /",
-			cmd: &Command{
-				Program: "rm",
-				Args:    []string{"-rf", "/"},
-				Raw:     "rm -rf /",
-			},
-			expectedClass: CommandForbidden,
-			expectError:   false,
-		},
-		{
-			name: "unknown command",
-			cmd: &Command{
-				Program: "unknowncommand",
-				Args:    []string{"arg1"},
-				Raw:     "unknowncommand arg1",
-			},
-			expectedClass: CommandUnverified,
-			expectError:   false,
-		},
-		{
-			name:          "nil command",
-			cmd:           nil,
-			expectedClass: CommandUnverified,
-			expectError:   true,
-		},
+		{"safe command - ls", &Command{Program: "ls", Args: []string{"-la"}, Raw: "ls -la"}, CommandSafe, false},
+		{"safe command - cat", &Command{Program: "cat", Args: []string{"file.txt"}, Raw: "cat file.txt"}, CommandSafe, false},
+		{"interactive command - mkdir", &Command{Program: "mkdir", Args: []string{"newdir"}, Raw: "mkdir newdir"}, CommandInteractive, false},
+		{"dangerous command - rm -rf", &Command{Program: "rm", Args: []string{"-rf", "test"}, Raw: "rm -rf test"}, CommandDangerous, false},
+		{"forbidden command - rm -rf /", &Command{Program: "rm", Args: []string{"-rf", "/"}, Raw: "rm -rf /"}, CommandForbidden, false},
+		{"unknown command", &Command{Program: "unknowncommand", Args: []string{"arg1"}, Raw: "unknowncommand arg1"}, CommandUnverified, false},
+		{"nil command", nil, CommandUnverified, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			result, err := validator.Classify(tt.cmd)
-
-			if tt.expectError && err == nil {
-				t.Errorf("Classify() expected error but got none")
-			}
-
-			if !tt.expectError && err != nil {
-				t.Errorf("Classify() unexpected error: %v", err)
-			}
+			checkParseError(t, err, tt.expectError)
 
 			if result != nil && result.Classification != tt.expectedClass {
 				t.Errorf("Classify().Classification = %v, want %v", result.Classification, tt.expectedClass)

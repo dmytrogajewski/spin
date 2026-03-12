@@ -66,29 +66,18 @@ func TestTUIToolExecution(t *testing.T) {
 	// If fixed: will see actual file listing.
 	time.Sleep(10 * time.Second)
 
-	// Look for signs of successful tool execution
-	// Should NOT see cycle detection error
-	// Try multiple possible tool block headers (EXECUTE, TOOL, etc.)
-	var output string
+	// Look for signs of successful tool execution.
+	// Should NOT see cycle detection error.
+	output := expectAnyString(t, console, "EXECUTE", "TOOL", "list_directory")
+	if output == "" {
+		t.Logf("Did not see tool execution block, checking for cycle detection...")
 
-	output, err = console.ExpectString("EXECUTE")
-	if err != nil {
-		output, err = console.ExpectString("TOOL")
-		if err != nil {
-			output, err = console.ExpectString("list_directory")
-			if err != nil {
-				t.Logf("Did not see tool execution block, checking for cycle detection...")
-
-				// Check if cycle detection triggered (the bug).
-				_, cycleErr := console.ExpectString("Cycle detected")
-				if cycleErr == nil {
-					t.Fatal("BUG REPRODUCED: Cycle detection triggered instead of executing tool")
-				}
-
-				// Neither tool execution nor cycle - something else wrong.
-				t.Fatalf("Neither tool execution nor cycle detection found")
-			}
+		_, cycleErr := console.ExpectString("Cycle detected")
+		if cycleErr == nil {
+			t.Fatal("BUG REPRODUCED: Cycle detection triggered instead of executing tool")
 		}
+
+		t.Fatalf("Neither tool execution nor cycle detection found")
 	}
 
 	t.Log("Tool execution block found:", output)
@@ -407,4 +396,19 @@ func TestTUIToolWithoutCycleDetection(t *testing.T) {
 	}
 
 	require.NoError(t, err, "Should see tool execution even without cycle detection")
+}
+
+// expectAnyString tries to match any of the given strings in order.
+// Returns the matched output on first success, or empty string if none match.
+func expectAnyString(t *testing.T, console *expect.Console, candidates ...string) string {
+	t.Helper()
+
+	for _, s := range candidates {
+		output, err := console.ExpectString(s)
+		if err == nil {
+			return output
+		}
+	}
+
+	return ""
 }

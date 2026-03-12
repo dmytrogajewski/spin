@@ -311,56 +311,66 @@ func (s *ToolSelector) searchMCPRegistries(ctx context.Context, query string) []
 	var results []ScoredTool
 
 	for _, reg := range registryMgr.All() {
-		// Determine if this is a static or dynamic registry.
-		isDynamic := false
-
-		if sr, ok := reg.(*mcp.SmitheryRegistry); ok && sr.IsDynamic() {
-			isDynamic = true
-		}
-
-		// Search the registry.
+		isDynamic := isRegistryDynamic(reg)
 		foundTools := reg.Search(searchCtx, query, s.config.MaxToolsPerSearch)
 
 		for i, t := range foundTools {
-			// Calculate relevance score (higher index = lower relevance from search).
-			score := 1.0 - (float64(i) / float64(len(foundTools)+1))
-
-			scored := ScoredTool{
-				Tool:   t,
-				Score:  score,
-				Source: "static_mcp",
-			}
-
-			if isDynamic {
-				scored.Priority = PriorityDynamicMCP
-				scored.Source = "dynamic_mcp"
-
-				// Check if this is a loadable tool stub.
-				if loadable, ok := t.(interface{ ServerPath() string }); ok {
-					scored.ServerPath = loadable.ServerPath()
-				}
-
-				if loadable, ok := t.(interface{ IsLoadable() bool }); ok {
-					scored.IsLoadable = loadable.IsLoadable()
-				}
-			} else {
-				scored.Priority = PriorityStaticMCP
-
-				// Check if tool is already loaded (from static registry).
-				s.mu.RLock()
-
-				if _, exists := s.loadedServers[reg.Name()]; exists {
-					scored.IsLoadable = false
-				}
-
-				s.mu.RUnlock()
-			}
-
+			scored := s.scoreRegistryTool(t, i, len(foundTools), isDynamic, reg)
 			results = append(results, scored)
 		}
 	}
 
 	return results
+}
+
+// isRegistryDynamic checks if a registry is a dynamic Smithery registry.
+func isRegistryDynamic(reg mcp.Registry) bool {
+	sr, ok := reg.(*mcp.SmitheryRegistry)
+
+	return ok && sr.IsDynamic()
+}
+
+// scoreRegistryTool creates a ScoredTool from a registry search result.
+func (s *ToolSelector) scoreRegistryTool(t tools.Tool, index, total int, isDynamic bool, reg mcp.Registry) ScoredTool {
+	score := 1.0 - (float64(index) / float64(total+1))
+
+	scored := ScoredTool{
+		Tool:  t,
+		Score: score,
+	}
+
+	if isDynamic {
+		scored.Priority = PriorityDynamicMCP
+		scored.Source = "dynamic_mcp"
+		s.populateDynamicToolInfo(&scored, t)
+	} else {
+		scored.Priority = PriorityStaticMCP
+		scored.Source = "static_mcp"
+		s.checkIfAlreadyLoaded(&scored, reg)
+	}
+
+	return scored
+}
+
+// populateDynamicToolInfo fills in ServerPath and IsLoadable for dynamic tools.
+func (s *ToolSelector) populateDynamicToolInfo(scored *ScoredTool, t tools.Tool) {
+	if loadable, ok := t.(interface{ ServerPath() string }); ok {
+		scored.ServerPath = loadable.ServerPath()
+	}
+
+	if loadable, ok := t.(interface{ IsLoadable() bool }); ok {
+		scored.IsLoadable = loadable.IsLoadable()
+	}
+}
+
+// checkIfAlreadyLoaded marks a tool as not loadable if its server is already loaded.
+func (s *ToolSelector) checkIfAlreadyLoaded(scored *ScoredTool, reg mcp.Registry) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if _, exists := s.loadedServers[reg.Name()]; exists {
+		scored.IsLoadable = false
+	}
 }
 
 // addStickyTools adds tools from previous turns that should persist.
@@ -426,46 +436,15 @@ type loadDynamicToolsResult struct {
 func (s *ToolSelector) loadDynamicTools(ctx context.Context, selected []ScoredTool) (*loadDynamicToolsResult, error) {
 	result := &loadDynamicToolsResult{}
 
+	// Group by server path.
+	serverTools := s.groupByServerPath(selected)
+
 	var loadErrors []error
 
-	// Group by server path.
-	serverTools := make(map[string][]ScoredTool)
-
-	for _, st := range selected {
-		if st.IsLoadable && st.ServerPath != "" {
-			serverTools[st.ServerPath] = append(serverTools[st.ServerPath], st)
-		}
-	}
-
-	// Load each server.
-	for serverPath, tools := range serverTools {
+	for serverPath, scoredTools := range serverTools {
 		loaded, err := s.loadServer(ctx, serverPath)
 		if err != nil {
-			// Check if this is an OAuth/authentication error (401).
-			if isOAuthError(err) {
-				toolNames := make([]string, len(tools))
-				for i, t := range tools {
-					toolNames[i] = t.Tool.Name()
-				}
-
-				result.oauthRequired = append(result.oauthRequired, OAuthRequiredServer{
-					ServerPath: serverPath,
-					ToolNames:  toolNames,
-				})
-				// Debug level only - not user visible.
-				if s.logger != nil {
-					s.logger.DebugContext(ctx, "server requires OAuth authentication",
-						"server", serverPath,
-						"tools", toolNames,
-						"error", err.Error())
-				}
-			} else {
-				// Debug level for other errors too.
-				if s.logger != nil {
-					s.logger.DebugContext(ctx, "failed to load server", "server", serverPath, "error", err)
-				}
-			}
-
+			s.handleServerLoadError(ctx, err, serverPath, scoredTools, result)
 			loadErrors = append(loadErrors, err)
 
 			continue
@@ -479,6 +458,45 @@ func (s *ToolSelector) loadDynamicTools(ctx context.Context, selected []ScoredTo
 	}
 
 	return result, nil
+}
+
+// groupByServerPath groups loadable tools by their server path.
+func (s *ToolSelector) groupByServerPath(selected []ScoredTool) map[string][]ScoredTool {
+	serverTools := make(map[string][]ScoredTool)
+
+	for _, st := range selected {
+		if st.IsLoadable && st.ServerPath != "" {
+			serverTools[st.ServerPath] = append(serverTools[st.ServerPath], st)
+		}
+	}
+
+	return serverTools
+}
+
+// handleServerLoadError logs the error and records OAuth failures.
+func (s *ToolSelector) handleServerLoadError(ctx context.Context, err error, serverPath string, scoredTools []ScoredTool, result *loadDynamicToolsResult) {
+	if isOAuthError(err) {
+		toolNames := make([]string, len(scoredTools))
+		for i, t := range scoredTools {
+			toolNames[i] = t.Tool.Name()
+		}
+
+		result.oauthRequired = append(result.oauthRequired, OAuthRequiredServer{
+			ServerPath: serverPath,
+			ToolNames:  toolNames,
+		})
+
+		if s.logger != nil {
+			s.logger.DebugContext(ctx, "server requires OAuth authentication",
+				"server", serverPath, "tools", toolNames, "error", err.Error())
+		}
+
+		return
+	}
+
+	if s.logger != nil {
+		s.logger.DebugContext(ctx, "failed to load server", "server", serverPath, "error", err)
+	}
 }
 
 // isOAuthError checks if an error indicates OAuth/authentication is required.
@@ -543,9 +561,22 @@ func (s *ToolSelector) buildFinalToolList(selected []ScoredTool, newlyLoaded []t
 	}
 
 	// First, add all non-loadable tools (core tools, static MCP tools).
+	result = s.addNonLoadableTools(ctx, selected, seen, result)
+
+	// Then add all newly loaded tools and register them.
+	result = s.addAndRegisterNewTools(ctx, newlyLoaded, seen, result)
+
+	if s.logger != nil {
+		s.logger.DebugContext(ctx, "buildFinalToolList result", "total_tools", len(result))
+	}
+
+	return result
+}
+
+// addNonLoadableTools adds non-loadable tools from selected candidates, skipping stubs and duplicates.
+func (s *ToolSelector) addNonLoadableTools(ctx context.Context, selected []ScoredTool, seen map[string]bool, result []tools.Tool) []tools.Tool {
 	for _, st := range selected {
 		if st.IsLoadable {
-			// Skip loadable stubs - we'll add the actual loaded tools below.
 			if s.logger != nil {
 				s.logger.DebugContext(ctx, "skipping loadable stub", "tool", st.Tool.Name(), "server", st.ServerPath)
 			}
@@ -559,12 +590,14 @@ func (s *ToolSelector) buildFinalToolList(selected []ScoredTool, newlyLoaded []t
 		}
 
 		seen[name] = true
-
 		result = append(result, st.Tool)
 	}
 
-	// Then add all newly loaded tools (the actual implementations)
-	// Also register them to the runtime registry so they're available to the agent.
+	return result
+}
+
+// addAndRegisterNewTools adds newly loaded tools and registers them to the runtime registry.
+func (s *ToolSelector) addAndRegisterNewTools(ctx context.Context, newlyLoaded []tools.Tool, seen map[string]bool, result []tools.Tool) []tools.Tool {
 	for _, t := range newlyLoaded {
 		name := t.Name()
 		if s.logger != nil {
@@ -576,29 +609,31 @@ func (s *ToolSelector) buildFinalToolList(selected []ScoredTool, newlyLoaded []t
 		}
 
 		seen[name] = true
-
 		result = append(result, t)
-
-		// Register to runtime registry so the agent can use this tool.
-		if s.runtimeRegistry != nil {
-			err := s.runtimeRegistry.RegisterOrReplace(t)
-			if err != nil {
-				if s.logger != nil {
-					s.logger.WarnContext(ctx, "failed to register dynamic tool", "tool", name, "error", err)
-				}
-			} else {
-				if s.logger != nil {
-					s.logger.DebugContext(ctx, "registered dynamic tool to runtime", "tool", name)
-				}
-			}
-		}
-	}
-
-	if s.logger != nil {
-		s.logger.DebugContext(ctx, "buildFinalToolList result", "total_tools", len(result))
+		s.registerToRuntime(ctx, t)
 	}
 
 	return result
+}
+
+// registerToRuntime registers a tool to the runtime registry.
+func (s *ToolSelector) registerToRuntime(ctx context.Context, t tools.Tool) {
+	if s.runtimeRegistry == nil {
+		return
+	}
+
+	err := s.runtimeRegistry.RegisterOrReplace(t)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.WarnContext(ctx, "failed to register dynamic tool", "tool", t.Name(), "error", err)
+		}
+
+		return
+	}
+
+	if s.logger != nil {
+		s.logger.DebugContext(ctx, "registered dynamic tool to runtime", "tool", t.Name())
+	}
 }
 
 // updateStickyTools updates the sticky tools set with currently selected tools.

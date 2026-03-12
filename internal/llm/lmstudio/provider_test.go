@@ -65,31 +65,34 @@ func TestNewProvider(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			p, err := NewProvider(tt.cfg)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("NewProvider() expected error, got nil")
-				}
-
-				return
-			}
-
-			if err != nil {
-				t.Errorf("NewProvider() unexpected error = %v", err)
-
-				return
-			}
-
-			if p == nil {
-				t.Fatal("NewProvider() returned nil provider")
-			}
-
-			if tt.checkFn != nil {
-				tt.checkFn(t, p)
-			}
+			verifyNewProvider(t, tt.cfg, tt.wantErr, tt.checkFn)
 		})
+	}
+}
+
+func verifyNewProvider(t *testing.T, cfg Config, wantErr bool, checkFn func(*testing.T, *Provider)) {
+	t.Helper()
+
+	p, err := NewProvider(cfg)
+
+	if wantErr {
+		if err == nil {
+			t.Error("NewProvider() expected error, got nil")
+		}
+
+		return
+	}
+
+	if err != nil {
+		t.Fatalf("NewProvider() unexpected error = %v", err)
+	}
+
+	if p == nil {
+		t.Fatal("NewProvider() returned nil provider")
+	}
+
+	if checkFn != nil {
+		checkFn(t, p)
 	}
 }
 

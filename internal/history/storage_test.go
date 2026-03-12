@@ -13,7 +13,6 @@ import (
 func TestFileStorage_SaveAndLoad(t *testing.T) {
 	t.Parallel()
 
-	// Create temp directory.
 	tmpDir := t.TempDir()
 
 	storage, err := NewFileStorage(tmpDir)
@@ -22,44 +21,39 @@ func TestFileStorage_SaveAndLoad(t *testing.T) {
 	}
 
 	sessionID := "test-session-123"
+	data := newTestHistoryData(sessionID)
 
-	// Create history data.
-	data := Data{
-		Version:   CurrentHistoryVersion,
-		SessionID: sessionID,
-		MaxTokens: 4096,
-		Messages: []message.Message{
-			{
-				ID:        "msg-1",
-				Role:      message.RoleSystem,
-				Content:   "You are a helpful assistant.",
-				Timestamp: time.Now(),
-				Tokens:    10,
-			},
-			{
-				ID:        "msg-2",
-				Role:      message.RoleUser,
-				Content:   "Hello!",
-				Timestamp: time.Now(),
-				Tokens:    5,
-			},
-			{
-				ID:        "msg-3",
-				Role:      message.RoleAssistant,
-				Content:   "Hi there! How can I help you?",
-				Timestamp: time.Now(),
-				Tokens:    15,
-			},
-		},
-	}
-
-	// Save.
 	err = storage.Save(sessionID, data)
 	if err != nil {
 		t.Fatalf("save history: %v", err)
 	}
 
-	// Verify file exists.
+	assertStorageExists(t, storage, sessionID)
+
+	loaded, err := storage.Load(sessionID)
+	if err != nil {
+		t.Fatalf("load history: %v", err)
+	}
+
+	assertHistoryDataEqual(t, &loaded, data)
+}
+
+func newTestHistoryData(sessionID string) Data {
+	return Data{
+		Version:   CurrentHistoryVersion,
+		SessionID: sessionID,
+		MaxTokens: 4096,
+		Messages: []message.Message{
+			{ID: "msg-1", Role: message.RoleSystem, Content: "You are a helpful assistant.", Timestamp: time.Now(), Tokens: 10},
+			{ID: "msg-2", Role: message.RoleUser, Content: "Hello!", Timestamp: time.Now(), Tokens: 5},
+			{ID: "msg-3", Role: message.RoleAssistant, Content: "Hi there! How can I help you?", Timestamp: time.Now(), Tokens: 15},
+		},
+	}
+}
+
+func assertStorageExists(t *testing.T, storage Storage, sessionID string) {
+	t.Helper()
+
 	exists, err := storage.Exists(sessionID)
 	if err != nil {
 		t.Fatalf("check exists: %v", err)
@@ -68,43 +62,45 @@ func TestFileStorage_SaveAndLoad(t *testing.T) {
 	if !exists {
 		t.Fatal("history should exist after save")
 	}
+}
 
-	// Load.
-	loaded, err := storage.Load(sessionID)
-	if err != nil {
-		t.Fatalf("load history: %v", err)
+func assertHistoryDataEqual(t *testing.T, loaded *Data, original Data) {
+	t.Helper()
+
+	if loaded.SessionID != original.SessionID {
+		t.Errorf("session ID mismatch: got %q, want %q", loaded.SessionID, original.SessionID)
 	}
 
-	// Verify loaded data.
-	if loaded.SessionID != sessionID {
-		t.Errorf("session ID mismatch: got %q, want %q", loaded.SessionID, sessionID)
+	if loaded.MaxTokens != original.MaxTokens {
+		t.Errorf("max tokens mismatch: got %d, want %d", loaded.MaxTokens, original.MaxTokens)
 	}
 
-	if loaded.MaxTokens != data.MaxTokens {
-		t.Errorf("max tokens mismatch: got %d, want %d", loaded.MaxTokens, data.MaxTokens)
-	}
-
-	if len(loaded.Messages) != len(data.Messages) {
-		t.Fatalf("message count mismatch: got %d, want %d", len(loaded.Messages), len(data.Messages))
+	if len(loaded.Messages) != len(original.Messages) {
+		t.Fatalf("message count mismatch: got %d, want %d", len(loaded.Messages), len(original.Messages))
 	}
 
 	for i, msg := range loaded.Messages {
-		if msg.ID != data.Messages[i].ID {
-			t.Errorf("message[%d] ID mismatch: got %q, want %q", i, msg.ID, data.Messages[i].ID)
-		}
-
-		if msg.Role != data.Messages[i].Role {
-			t.Errorf("message[%d] role mismatch: got %q, want %q", i, msg.Role, data.Messages[i].Role)
-		}
-
-		if msg.Content != data.Messages[i].Content {
-			t.Errorf("message[%d] content mismatch: got %q, want %q", i, msg.Content, data.Messages[i].Content)
-		}
+		assertMessageEqual(t, i, msg, original.Messages[i])
 	}
 
-	// Verify version was set.
 	if loaded.Version != CurrentHistoryVersion {
 		t.Errorf("version mismatch: got %d, want %d", loaded.Version, CurrentHistoryVersion)
+	}
+}
+
+func assertMessageEqual(t *testing.T, idx int, got, want message.Message) {
+	t.Helper()
+
+	if got.ID != want.ID {
+		t.Errorf("message[%d] ID mismatch: got %q, want %q", idx, got.ID, want.ID)
+	}
+
+	if got.Role != want.Role {
+		t.Errorf("message[%d] role mismatch: got %q, want %q", idx, got.Role, want.Role)
+	}
+
+	if got.Content != want.Content {
+		t.Errorf("message[%d] content mismatch: got %q, want %q", idx, got.Content, want.Content)
 	}
 }
 

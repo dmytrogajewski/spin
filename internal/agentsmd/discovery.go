@@ -42,71 +42,89 @@ func NewDiscoverer(gitRoot string) *DefaultDiscoverer {
 //
 // Returns empty string if not found (this is not an error).
 func (d *DefaultDiscoverer) Discover(ctx context.Context, workDir string) (string, error) {
-	// Check context cancellation.
-	err := ctx.Err()
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("discover agents.md: %w", err)
 	}
 
-	// Normalize workDir to absolute path.
 	absWorkDir, err := filepath.Abs(workDir)
 	if err != nil {
 		return "", fmt.Errorf("resolve absolute path: %w", err)
 	}
 
 	// 1. Check working directory first.
-	path := filepath.Join(absWorkDir, FileName)
-	if fileExists(path) {
+	if path := filepath.Join(absWorkDir, FileName); fileExists(path) {
 		return path, nil
 	}
 
 	// 2. Check git root if available and different from workDir.
-	if d.gitRoot != "" {
-		var absGitRoot string
-		absGitRoot, err = filepath.Abs(d.gitRoot)
-		if err == nil && absGitRoot != absWorkDir {
-			path = filepath.Join(absGitRoot, FileName)
-			if fileExists(path) {
-				return path, nil
-			}
-		}
+	if path := d.checkGitRoot(absWorkDir); path != "" {
+		return path, nil
 	}
 
-	// 3. Walk up to filesystem root (but stop at gitRoot if specified).
-	var stopAt string
-	if d.gitRoot != "" {
-		stopAt, _ = filepath.Abs(d.gitRoot)
+	// 3. Walk parent directories.
+	return d.walkParents(ctx, absWorkDir)
+}
+
+// checkGitRoot checks the git root directory for AGENTS.md if it differs from workDir.
+func (d *DefaultDiscoverer) checkGitRoot(absWorkDir string) string {
+	if d.gitRoot == "" {
+		return ""
 	}
+
+	absGitRoot, err := filepath.Abs(d.gitRoot)
+	if err != nil || absGitRoot == absWorkDir {
+		return ""
+	}
+
+	if path := filepath.Join(absGitRoot, FileName); fileExists(path) {
+		return path
+	}
+
+	return ""
+}
+
+// walkParents walks parent directories looking for AGENTS.md, stopping at the
+// git root or filesystem root.
+func (d *DefaultDiscoverer) walkParents(ctx context.Context, absWorkDir string) (string, error) {
+	stopAt := d.absoluteGitRoot()
 
 	current := absWorkDir
 	for {
 		parent := filepath.Dir(current)
 		if parent == current {
-			// Reached filesystem root.
 			break
 		}
 
-		// Stop at git root if specified (already checked git root above).
 		if stopAt != "" && parent == stopAt {
 			break
 		}
 
-		// Check context cancellation periodically.
-		err = ctx.Err()
-		if err != nil {
+		if err := ctx.Err(); err != nil {
 			return "", fmt.Errorf("discover agents.md walk: %w", err)
 		}
 
-		path = filepath.Join(parent, FileName)
-		if fileExists(path) {
+		if path := filepath.Join(parent, FileName); fileExists(path) {
 			return path, nil
 		}
 
 		current = parent
 	}
 
-	// Not found (this is not an error).
 	return "", nil
+}
+
+// absoluteGitRoot returns the absolute path of the git root, or empty string.
+func (d *DefaultDiscoverer) absoluteGitRoot() string {
+	if d.gitRoot == "" {
+		return ""
+	}
+
+	abs, err := filepath.Abs(d.gitRoot)
+	if err != nil {
+		return ""
+	}
+
+	return abs
 }
 
 // fileExists checks if a file exists and is a regular file.

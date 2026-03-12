@@ -9,95 +9,76 @@ import (
 func TestStatus(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name   string
-		setup  func(t *testing.T) *Repository
-		verify func(t *testing.T, status *Status)
-	}{
-		{
-			name: "clean repo",
-			setup: func(t *testing.T) *Repository {
-				t.Helper()
+	t.Run("clean repo", func(t *testing.T) {
+		t.Parallel()
 
-				tmpDir := setupTestRepo(t)
+		status := getRepoStatus(t, setupTestRepo)
+		assertCleanStatus(t, status)
+	})
 
-				repo, err := Discover(context.Background(), tmpDir)
-				if err != nil {
-					t.Fatalf("Discover failed: %v", err)
-				}
+	t.Run("modified files", func(t *testing.T) {
+		t.Parallel()
 
-				return repo
-			},
-			verify: func(t *testing.T, s *Status) {
-				t.Helper()
+		status := getRepoStatus(t, setupTestRepoWithModifications)
+		assertDirtyStatus(t, status)
+	})
+}
 
-				if len(s.ModifiedFiles) != 0 {
-					t.Errorf("expected no modified files, got %d", len(s.ModifiedFiles))
-				}
+func getRepoStatus(t *testing.T, setup func(t *testing.T) string) *Status {
+	t.Helper()
 
-				if len(s.UntrackedFiles) != 0 {
-					t.Errorf("expected no untracked files, got %d", len(s.UntrackedFiles))
-				}
+	tmpDir := setup(t)
 
-				if s.Branch == "" {
-					t.Error("expected non-empty branch name")
-				}
-
-				if s.Hash == "" {
-					t.Error("expected non-empty hash")
-				}
-
-				if s.Detached {
-					t.Error("expected not detached")
-				}
-			},
-		},
-		{
-			name: "modified files",
-			setup: func(t *testing.T) *Repository {
-				t.Helper()
-
-				tmpDir := setupTestRepoWithModifications(t)
-
-				repo, err := Discover(context.Background(), tmpDir)
-				if err != nil {
-					t.Fatalf("Discover failed: %v", err)
-				}
-
-				return repo
-			},
-			verify: func(t *testing.T, s *Status) {
-				t.Helper()
-
-				if len(s.ModifiedFiles) == 0 {
-					t.Error("expected modified files")
-				}
-
-				if len(s.UntrackedFiles) == 0 {
-					t.Error("expected untracked files")
-				}
-			},
-		},
+	repo, err := Discover(context.Background(), tmpDir)
+	if err != nil {
+		t.Fatalf("Discover failed: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	status, err := repo.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status failed: %v", err)
+	}
 
-			repo := tt.setup(t)
-			ctx := context.Background()
+	if status == nil {
+		t.Fatal("expected status, got nil")
+	}
 
-			status, err := repo.Status(ctx)
-			if err != nil {
-				t.Fatalf("Status failed: %v", err)
-			}
+	return status
+}
 
-			if status == nil {
-				t.Fatal("expected status, got nil")
-			}
+func assertCleanStatus(t *testing.T, s *Status) {
+	t.Helper()
 
-			tt.verify(t, status)
-		})
+	if len(s.ModifiedFiles) != 0 {
+		t.Errorf("expected no modified files, got %d", len(s.ModifiedFiles))
+	}
+
+	if len(s.UntrackedFiles) != 0 {
+		t.Errorf("expected no untracked files, got %d", len(s.UntrackedFiles))
+	}
+
+	if s.Branch == "" {
+		t.Error("expected non-empty branch name")
+	}
+
+	if s.Hash == "" {
+		t.Error("expected non-empty hash")
+	}
+
+	if s.Detached {
+		t.Error("expected not detached")
+	}
+}
+
+func assertDirtyStatus(t *testing.T, s *Status) {
+	t.Helper()
+
+	if len(s.ModifiedFiles) == 0 {
+		t.Error("expected modified files")
+	}
+
+	if len(s.UntrackedFiles) == 0 {
+		t.Error("expected untracked files")
 	}
 }
 

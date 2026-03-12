@@ -181,24 +181,23 @@ func (s *filePolicyStore) Delete(_ context.Context, key PolicyKey, scope string)
 		return false, nil
 	}
 
-	if _, ok := m[keyStr]; ok {
-		delete(m, keyStr)
-
-		if len(m) == 0 {
-			delete(s.byScope, scope)
-		}
-
-		if scope == ScopeGlobal {
-			err := s.persistGlobalLocked()
-			if err != nil {
-				return true, err
-			}
-		}
-
-		return true, nil
+	if _, ok := m[keyStr]; !ok {
+		return false, nil
 	}
 
-	return false, nil
+	delete(m, keyStr)
+
+	if len(m) == 0 {
+		delete(s.byScope, scope)
+	}
+
+	if scope == ScopeGlobal {
+		if err := s.persistGlobalLocked(); err != nil {
+			return true, err
+		}
+	}
+
+	return true, nil
 }
 
 // Clear implements the Clear operation.

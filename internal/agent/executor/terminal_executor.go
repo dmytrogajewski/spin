@@ -46,39 +46,7 @@ func (e *TerminalExecutor) Execute(ctx context.Context, cmd tools.CommandInfo, o
 	}
 
 	// Extract env vars from opts if available.
-	var env []EnvVar
-
-	if opts != nil {
-		// Check if opts has Env field (struct-based, e.g., ExecuteOptions).
-		if envMap := extractEnvFromStruct(opts); envMap != nil {
-			env = envMap
-		} else if optsMap, optsOk := opts.(map[string]any); optsOk {
-			// Check if opts is a map with env vars.
-			if envVars, exists := optsMap["env"]; exists {
-				if envSlice, sliceOk := envVars.([]any); sliceOk {
-					env = make([]EnvVar, 0, len(envSlice))
-					for _, ev := range envSlice {
-						if evMap, mapOk := ev.(map[string]any); mapOk {
-							name, _ := evMap["name"].(string)
-
-							value, _ := evMap["value"].(string)
-							if name != "" {
-								env = append(env, EnvVar{Name: name, Value: value})
-							}
-						}
-					}
-				} else if envVarMap, mapOk := envVars.(map[string]any); mapOk {
-					// Handle map[string]string format.
-					env = make([]EnvVar, 0, len(envVarMap))
-					for name, value := range envVarMap {
-						if strValue, strOk := value.(string); strOk {
-							env = append(env, EnvVar{Name: name, Value: strValue})
-						}
-					}
-				}
-			}
-		}
-	}
+	env := extractEnvVars(opts)
 
 	// Use a default output limit (e.g. 1MB) to prevent 0-byte truncation.
 	const defaultOutputLimit = 1024 * 1024
@@ -122,6 +90,78 @@ func (e *TerminalExecutor) Execute(ctx context.Context, cmd tools.CommandInfo, o
 	}, nil
 }
 
+// extractEnvVars extracts environment variables from opts, handling struct, map, and slice formats.
+func extractEnvVars(opts any) []EnvVar {
+	if opts == nil {
+		return nil
+	}
+
+	// Try struct-based extraction first.
+	if envMap := extractEnvFromStruct(opts); envMap != nil {
+		return envMap
+	}
+
+	// Try map-based extraction.
+	optsMap, ok := opts.(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	return extractEnvFromMap(optsMap)
+}
+
+// extractEnvFromMap extracts env vars from a map[string]any options.
+func extractEnvFromMap(optsMap map[string]any) []EnvVar {
+	envVars, exists := optsMap["env"]
+	if !exists {
+		return nil
+	}
+
+	if envSlice, ok := envVars.([]any); ok {
+		return extractEnvFromSlice(envSlice)
+	}
+
+	if envVarMap, ok := envVars.(map[string]any); ok {
+		return extractEnvFromStringMap(envVarMap)
+	}
+
+	return nil
+}
+
+// extractEnvFromSlice extracts env vars from a []any slice.
+func extractEnvFromSlice(envSlice []any) []EnvVar {
+	env := make([]EnvVar, 0, len(envSlice))
+
+	for _, ev := range envSlice {
+		evMap, ok := ev.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		name, _ := evMap["name"].(string)
+		value, _ := evMap["value"].(string)
+
+		if name != "" {
+			env = append(env, EnvVar{Name: name, Value: value})
+		}
+	}
+
+	return env
+}
+
+// extractEnvFromStringMap extracts env vars from a map[string]any where values are strings.
+func extractEnvFromStringMap(envVarMap map[string]any) []EnvVar {
+	env := make([]EnvVar, 0, len(envVarMap))
+
+	for name, value := range envVarMap {
+		if strValue, ok := value.(string); ok {
+			env = append(env, EnvVar{Name: name, Value: strValue})
+		}
+	}
+
+	return env
+}
+
 // extractEnvFromStruct extracts environment variables from a struct using reflection.
 // Handles both map[string]string and []EnvVar formats.
 func extractEnvFromStruct(opts any) []EnvVar {
@@ -143,43 +183,54 @@ func extractEnvFromStruct(opts any) []EnvVar {
 		return nil
 	}
 
-	// Handle map[string]string format (e.g., ExecuteOptions.Env).
-	if envField.Kind() == reflect.Map {
-		env := make([]EnvVar, 0, envField.Len())
-		for _, key := range envField.MapKeys() {
-			value := envField.MapIndex(key)
-			if key.Kind() == reflect.String && value.Kind() == reflect.String {
-				env = append(env, EnvVar{Name: key.String(), Value: value.String()})
-			}
-		}
+	switch envField.Kind() {
+	case reflect.Map:
+		return extractEnvFromReflectMap(envField)
+	case reflect.Slice:
+		return extractEnvFromReflectSlice(envField)
+	default:
+		return nil
+	}
+}
 
-		return env
+// extractEnvFromReflectMap extracts env vars from a reflect.Value of kind Map.
+func extractEnvFromReflectMap(envField reflect.Value) []EnvVar {
+	env := make([]EnvVar, 0, envField.Len())
+
+	for _, key := range envField.MapKeys() {
+		value := envField.MapIndex(key)
+		if key.Kind() == reflect.String && value.Kind() == reflect.String {
+			env = append(env, EnvVar{Name: key.String(), Value: value.String()})
+		}
 	}
 
-	// Handle []EnvVar format.
-	if envField.Kind() == reflect.Slice {
-		env := make([]EnvVar, 0, envField.Len())
-		for i := range envField.Len() {
-			elem := envField.Index(i)
-			if elem.Kind() == reflect.Struct {
-				nameField := elem.FieldByName("Name")
+	return env
+}
 
-				valueField := elem.FieldByName("Value")
-				if nameField.IsValid() && valueField.IsValid() {
-					name := nameField.String()
+// extractEnvFromReflectSlice extracts env vars from a reflect.Value of kind Slice.
+func extractEnvFromReflectSlice(envField reflect.Value) []EnvVar {
+	env := make([]EnvVar, 0, envField.Len())
 
-					value := valueField.String()
-					if name != "" {
-						env = append(env, EnvVar{Name: name, Value: value})
-					}
-				}
-			}
+	for i := range envField.Len() {
+		elem := envField.Index(i)
+		if elem.Kind() != reflect.Struct {
+			continue
 		}
 
-		return env
+		nameField := elem.FieldByName("Name")
+		valueField := elem.FieldByName("Value")
+
+		if !nameField.IsValid() || !valueField.IsValid() {
+			continue
+		}
+
+		name := nameField.String()
+		if name != "" {
+			env = append(env, EnvVar{Name: name, Value: valueField.String()})
+		}
 	}
 
-	return nil
+	return env
 }
 
 // terminalExecutionResult implements tools.ExecutionResult for terminal output.

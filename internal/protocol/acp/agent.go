@@ -50,7 +50,6 @@ var (
 	ErrInvalidMode = errors.New("invalid mode")
 	ErrSessionNotFound4 = errors.New("session not found")
 	ErrApprovalServiceNotConfigured = errors.New("approval service not configured")
-	ErrSessionNotFound5 = errors.New("session not found")
 )
 
 // SpinACPAgent implements the acp.Agent interface, adapting Spin's components
@@ -280,65 +279,23 @@ func (a *SpinACPAgent) hasSessionPersistence() bool {
 }
 
 // NewSession creates a new session with working directory and MCP servers.
-//
-// Creates a session using the working directory, connects MCP servers if provided,
-// and returns the session ID.
 func (a *SpinACPAgent) NewSession(ctx context.Context, req acp.NewSessionRequest) (acp.NewSessionResponse, error) {
-	// Validate working directory.
 	if req.Cwd == "" {
 		return acp.NewSessionResponse{}, ErrWorkingDirectoryIsRequired
 	}
 
-	// Create session.
 	sess := session.NewSession(req.Cwd)
-
-	// Convert session ID to ACP format.
 	sessionID := acp.SessionId(sess.ID)
 
-	// Validate and convert MCP servers synchronously (to catch conversion errors)
-	// Connection happens in background to avoid blocking.
-	if len(req.McpServers) > 0 {
-		configs := make([]mcp.ServerConfig, 0, len(req.McpServers))
-		for _, server := range req.McpServers {
-			config, err := convertACPMcpServerToSpin(server)
-			if err != nil {
-				return acp.NewSessionResponse{}, fmt.Errorf("invalid MCP server config: %w", err)
-			}
-
-			configs = append(configs, config)
-		}
-
-		// Store session before connecting MCP servers.
-		a.mu.Lock()
-		a.sessions[sessionID] = sess
-		a.mu.Unlock()
-
-		// Connect servers in background (non-blocking - connection failures don't prevent session creation).
-		go func() {
-			for _, config := range configs {
-				err := a.mcpService.ConnectServer(ctx, config)
-				if err != nil {
-					// Log error but don't fail session creation
-					// In a real implementation, we'd use a logger here.
-					_ = err // Error logged but session still created.
-				}
-			}
-		}()
-	} else {
-		// Store session.
-		a.mu.Lock()
-		a.sessions[sessionID] = sess
-		a.mu.Unlock()
+	if err := a.storeSessionWithMCPServers(ctx, sessionID, sess, req.McpServers); err != nil {
+		return acp.NewSessionResponse{}, err
 	}
 
-	// Initialize default mode for session.
 	defaultMode := getDefaultMode()
-
 	a.mu.Lock()
 	a.sessionModes[sessionID] = defaultMode
 	a.mu.Unlock()
 
-	// Build response with mode state.
 	resp := acp.NewSessionResponse{
 		SessionId: sessionID,
 		Modes: &acp.SessionModeState{
@@ -347,12 +304,7 @@ func (a *SpinACPAgent) NewSession(ctx context.Context, req acp.NewSessionRequest
 		},
 	}
 
-	// Send available commands notification.
-	err := a.sendAvailableCommandsUpdate(ctx, sessionID)
-	if err != nil {
-		// Log error but don't fail session creation.
-		_ = err
-	}
+	_ = a.sendAvailableCommandsUpdate(ctx, sessionID)
 
 	return resp, nil
 }
@@ -388,115 +340,117 @@ func convertACPMcpServerToSpin(acpServer acp.McpServer) (mcp.ServerConfig, error
 
 // Prompt processes a user prompt and executes the agent loop.
 func (a *SpinACPAgent) Prompt(ctx context.Context, req acp.PromptRequest) (acp.PromptResponse, error) {
-	// Validate session exists and get session data.
-	a.mu.RLock()
-	sess, exists := a.sessions[req.SessionId]
-	a.mu.RUnlock()
-
-	if !exists {
-return acp.PromptResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound)
-	}
-
-	// Validate prompt is not empty.
-	if len(req.Prompt) == 0 {
-		return acp.PromptResponse{}, ErrPromptCannotBeEmpty
-	}
-
-	// Create cancellable context for this prompt execution
-	// This allows the Cancel method to cancel in-progress executions.
-	promptCtx, cancel := context.WithCancel(ctx)
-
-	// Add session ID and workDir to context so they're available for tools (e.g. TerminalExecutor, filesystem tools).
-	promptCtx = executor.ContextWithSessionID(promptCtx, string(req.SessionId))
-	if sess != nil && sess.WorkDir != "" {
-		promptCtx = executor.ContextWithWorkDir(promptCtx, sess.WorkDir)
-	}
-
-	// Store cancel function so Cancel method can cancel this execution.
-	a.mu.Lock()
-	// Cancel any existing in-progress execution for this session.
-	if existingCancel, cancelExists := a.cancels[req.SessionId]; cancelExists {
-		existingCancel()
-	}
-
-	a.cancels[req.SessionId] = cancel
-	a.mu.Unlock()
-
-	// Clean up cancel function when prompt completes.
-	defer func() {
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		// Remove cancel function (may have been removed by Cancel, but that's ok).
-		delete(a.cancels, req.SessionId)
-	}()
-
-	// Convert ACP content blocks to Spin messages.
-	messages, err := convertACPContentBlocksToMessages(req.Prompt)
+	sess, err := a.validatePromptRequest(req)
 	if err != nil {
-		return acp.PromptResponse{}, fmt.Errorf("failed to convert content blocks: %w", err)
+		return acp.PromptResponse{}, err
 	}
 
-	// Extract text input from messages.
-	input := extractTextFromMessages(messages)
+	promptCtx, cancel := a.setupPromptContext(ctx, req.SessionId, sess)
+	defer a.cleanupPromptCancel(req.SessionId)
 
-	// Check if input is a command.
-	if cmd, cmdArgs, isCmd := commands.ParseCommand(input); isCmd {
-		// Execute command.
-		var result string
-		result, err = a.executeCommand(promptCtx, cmd, cmdArgs, req.SessionId)
-		if err != nil {
-			// Return error response.
-			return acp.PromptResponse{
-				StopReason: acp.StopReasonRefusal,
-			}, fmt.Errorf("command execution failed: %w", err)
-		}
-
-		// Send command output as agent message chunk notification.
-		a.mu.RLock()
-		conn := a.connection
-		a.mu.RUnlock()
-
-		if conn != nil {
-			update := acp.UpdateAgentMessageText(result)
-			notification := acp.SessionNotification{
-				SessionId: req.SessionId,
-				Update:    update,
-			}
-			_ = conn.SessionUpdate(promptCtx, notification) // Log error but don't fail.
-		}
-
-		// Return success response with command output.
-		return acp.PromptResponse{
-			StopReason: acp.StopReasonEndTurn,
-		}, nil
+	input, err := a.extractPromptInput(req.Prompt)
+	if err != nil {
+		return acp.PromptResponse{}, err
 	}
 
-	// Note: We do NOT send user_message_chunk notifications here because:
-	// 1. The client already knows what they sent in the session/prompt request
-	// 2. Sending it back would cause duplication (client shows both request and notification)
-	// 3. user_message_chunk is only needed when replaying history in LoadSession.
+	// Handle slash commands.
+	if resp, handled, cmdErr := a.tryExecuteCommand(promptCtx, req.SessionId, input); handled {
+		return resp, cmdErr
+	}
 
-	// Get connection and manager for event processing.
 	a.mu.RLock()
 	approvalHandler := a.approvalHandler
 	convManager := a.convManager
 	sess = a.sessions[req.SessionId]
 	a.mu.RUnlock()
 
-	// Set active session in approval handler for this prompt execution.
 	if approvalHandler != nil {
 		approvalHandler.SetActiveSession(req.SessionId)
 		defer approvalHandler.ClearActiveSession()
 	}
 
-	// Use ConversationManager if available (new path).
 	if convManager != nil && sess != nil {
 		return a.promptWithConversation(promptCtx, req, input, sess.WorkDir, cancel)
 	}
 
-	// Fallback to direct agent execution (legacy path).
 	return a.promptWithAgent(promptCtx, req, input, cancel)
 }
+
+// validatePromptRequest validates the prompt request and returns the session.
+func (a *SpinACPAgent) validatePromptRequest(req acp.PromptRequest) (*session.Session, error) {
+	a.mu.RLock()
+	sess, exists := a.sessions[req.SessionId]
+	a.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound)
+	}
+
+	if len(req.Prompt) == 0 {
+		return nil, ErrPromptCannotBeEmpty
+	}
+
+	return sess, nil
+}
+
+// setupPromptContext creates a cancellable context with session metadata.
+func (a *SpinACPAgent) setupPromptContext(ctx context.Context, sessionID acp.SessionId, sess *session.Session) (context.Context, context.CancelFunc) {
+	promptCtx, cancel := context.WithCancel(ctx)
+	promptCtx = executor.ContextWithSessionID(promptCtx, string(sessionID))
+	if sess != nil && sess.WorkDir != "" {
+		promptCtx = executor.ContextWithWorkDir(promptCtx, sess.WorkDir)
+	}
+
+	a.mu.Lock()
+	if existingCancel, cancelExists := a.cancels[sessionID]; cancelExists {
+		existingCancel()
+	}
+	a.cancels[sessionID] = cancel
+	a.mu.Unlock()
+
+	return promptCtx, cancel
+}
+
+// cleanupPromptCancel removes the cancel function for the session.
+func (a *SpinACPAgent) cleanupPromptCancel(sessionID acp.SessionId) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.cancels, sessionID)
+}
+
+// extractPromptInput converts content blocks to text input.
+func (a *SpinACPAgent) extractPromptInput(blocks []acp.ContentBlock) (string, error) {
+	messages, err := convertACPContentBlocksToMessages(blocks)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert content blocks: %w", err)
+	}
+	return extractTextFromMessages(messages), nil
+}
+
+// tryExecuteCommand checks if input is a command and executes it.
+// Returns (response, handled, error).
+func (a *SpinACPAgent) tryExecuteCommand(ctx context.Context, sessionID acp.SessionId, input string) (acp.PromptResponse, bool, error) {
+	cmd, cmdArgs, isCmd := commands.ParseCommand(input)
+	if !isCmd {
+		return acp.PromptResponse{}, false, nil
+	}
+
+	result, err := a.executeCommand(ctx, cmd, cmdArgs, sessionID)
+	if err != nil {
+		return acp.PromptResponse{StopReason: acp.StopReasonRefusal}, true, fmt.Errorf("command execution failed: %w", err)
+	}
+
+	a.mu.RLock()
+	conn := a.connection
+	a.mu.RUnlock()
+
+	if conn != nil {
+		a.sendSessionUpdate(ctx, sessionID, conn, acp.UpdateAgentMessageText(result))
+	}
+
+	return acp.PromptResponse{StopReason: acp.StopReasonEndTurn}, true, nil
+}
+
 
 // promptWithConversation executes a prompt using ConversationManager.
 // This is the new path that uses Conversation.RunTurn() for proper history management.
@@ -510,63 +464,17 @@ func (a *SpinACPAgent) promptWithConversation(ctx context.Context, req acp.Promp
 		return acp.PromptResponse{}, ErrConversationManagerNotConfigured
 	}
 
-	// Get or create conversation for this session.
 	conv, err := convManager.GetOrCreate(ctx, string(req.SessionId), workDir)
 	if err != nil {
 		return acp.PromptResponse{}, fmt.Errorf("failed to get conversation: %w", err)
 	}
 
-	// Set up event transformer for this session.
-	a.mu.Lock()
+	transformer := a.ensureTransformer(req.SessionId, conn, conv)
 
-	transformer, exists := a.transformers[req.SessionId]
-	if !exists && conn != nil {
-		transformer = NewEventTransformer(req.SessionId, conn, a.agent)
-		a.transformers[req.SessionId] = transformer
-		conv.SetEventTransformer(transformer)
-	}
-	a.mu.Unlock()
-
-	// Set cancellation on conversation.
 	conv.SetCancel(cancel)
 	defer conv.SetCancel(nil)
 
-	// Subscribe to events for real-time notifications (via transformer).
-	var (
-		subID       string
-		eventCh     <-chan events.Event
-		unsubscribe func()
-		eventsDone  chan struct{}
-	)
-
-	if conn != nil && transformer != nil {
-		var subErr error
-
-		subID, eventCh, subErr = a.emitter.Subscribe()
-		if subErr == nil {
-			unsubscribe = func() {
-				a.emitter.Unsubscribe(subID)
-			}
-			eventsDone = make(chan struct{})
-
-			go func() {
-				defer close(eventsDone)
-
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case event, ok := <-eventCh:
-						if !ok {
-							return
-						}
-						// Use transformer to convert and send events.
-						transformer.Transform(ctx, event)
-					}
-				}
-			}()
-		}
-	}
+	unsubscribe, eventsDone := a.subscribeTransformerEvents(ctx, conn, transformer)
 
 	defer func() {
 		if unsubscribe != nil {
@@ -603,6 +511,54 @@ func (a *SpinACPAgent) promptWithConversation(ctx context.Context, req acp.Promp
 	return acp.PromptResponse{
 		StopReason: acp.StopReasonEndTurn,
 	}, nil
+}
+
+// ensureTransformer sets up an event transformer for the session if needed.
+func (a *SpinACPAgent) ensureTransformer(sessionID acp.SessionId, conn notificationSender, conv *conversation.Conversation) *EventTransformer {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	transformer, exists := a.transformers[sessionID]
+	if !exists && conn != nil {
+		transformer = NewEventTransformer(sessionID, conn, a.agent)
+		a.transformers[sessionID] = transformer
+		conv.SetEventTransformer(transformer)
+	}
+
+	return transformer
+}
+
+// subscribeTransformerEvents subscribes to events and forwards them through the transformer.
+// Returns an unsubscribe function and a done channel.
+func (a *SpinACPAgent) subscribeTransformerEvents(ctx context.Context, conn notificationSender, transformer *EventTransformer) (func(), chan struct{}) {
+	if conn == nil || transformer == nil {
+		return nil, nil
+	}
+
+	subID, eventCh, subErr := a.emitter.Subscribe()
+	if subErr != nil {
+		return nil, nil
+	}
+
+	eventsDone := make(chan struct{})
+
+	go func() {
+		defer close(eventsDone)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-eventCh:
+				if !ok {
+					return
+				}
+				transformer.Transform(ctx, event)
+			}
+		}
+	}()
+
+	unsubscribe := func() { a.emitter.Unsubscribe(subID) }
+	return unsubscribe, eventsDone
 }
 
 // promptWithAgent executes a prompt using direct agent execution (legacy path).
@@ -693,89 +649,8 @@ func convertACPContentBlocksToMessages(blocks []acp.ContentBlock) ([]message.Mes
 	var messages []message.Message
 
 	for _, block := range blocks {
-		if block.Text != nil {
-			messages = append(messages, message.Message{
-				Role:      message.RoleUser,
-				Content:   block.Text.Text,
-				Timestamp: time.Now(),
-			})
-		} else if block.ResourceLink != nil {
-			// Extract file path from URI (basic implementation).
-			uri := block.ResourceLink.Uri
-			path := extractPathFromURI(uri)
-			messages = append(messages, message.Message{
-				Role:      message.RoleUser,
-				Content:   fmt.Sprintf("File: %s", path),
-				Timestamp: time.Now(),
-			})
-		} else if block.Resource != nil {
-			// Embedded resource - extract text if available.
-			if block.Resource.Resource.TextResourceContents != nil {
-				// Extract resource name from URI if available.
-				uri := block.Resource.Resource.TextResourceContents.Uri
-				resourceName := extractResourceNameFromURI(uri)
-
-				content := block.Resource.Resource.TextResourceContents.Text
-				if resourceName != "" {
-					content = fmt.Sprintf("[Resource: %s]\n%s", resourceName, content)
-				}
-
-				messages = append(messages, message.Message{
-					Role:      message.RoleUser,
-					Content:   content,
-					Timestamp: time.Now(),
-				})
-			} else if block.Resource.Resource.BlobResourceContents != nil {
-				// Blob resource - reference by MIME type.
-				mimeType := "unknown"
-				if block.Resource.Resource.BlobResourceContents.MimeType != nil {
-					mimeType = *block.Resource.Resource.BlobResourceContents.MimeType
-				}
-				// Extract resource name from URI if available.
-				uri := block.Resource.Resource.BlobResourceContents.Uri
-				resourceName := extractResourceNameFromURI(uri)
-
-				content := fmt.Sprintf("Resource (blob, %s)", mimeType)
-				if resourceName != "" {
-					content = fmt.Sprintf("[Resource: %s] %s", resourceName, content)
-				}
-
-				messages = append(messages, message.Message{
-					Role:      message.RoleUser,
-					Content:   content,
-					Timestamp: time.Now(),
-				})
-			}
-		} else if block.Image != nil {
-			// Image block - convert to descriptive text since message.Message only supports text
-			// MimeType is a string, not a pointer.
-			mimeType := block.Image.MimeType
-			if mimeType == "" {
-				mimeType = "image/png" // Default.
-			}
-			// Include image data length in description.
-			dataLen := len(block.Image.Data)
-			content := fmt.Sprintf("[Image: %s, %d bytes]", mimeType, dataLen)
-			messages = append(messages, message.Message{
-				Role:      message.RoleUser,
-				Content:   content,
-				Timestamp: time.Now(),
-			})
-		} else if block.Audio != nil {
-			// Audio block - convert to descriptive text since message.Message only supports text
-			// MimeType is a string, not a pointer.
-			mimeType := block.Audio.MimeType
-			if mimeType == "" {
-				mimeType = "audio/mpeg" // Default.
-			}
-			// Include audio data length in description.
-			dataLen := len(block.Audio.Data)
-			content := fmt.Sprintf("[Audio: %s, %d bytes]", mimeType, dataLen)
-			messages = append(messages, message.Message{
-				Role:      message.RoleUser,
-				Content:   content,
-				Timestamp: time.Now(),
-			})
+		if msg, ok := convertContentBlock(block); ok {
+			messages = append(messages, msg)
 		}
 	}
 
@@ -784,6 +659,82 @@ func convertACPContentBlocksToMessages(blocks []acp.ContentBlock) ([]message.Mes
 	}
 
 	return messages, nil
+}
+
+// convertContentBlock converts a single ACP ContentBlock to a message.
+// Returns the message and true if conversion was successful.
+func convertContentBlock(block acp.ContentBlock) (message.Message, bool) {
+	switch {
+	case block.Text != nil:
+		return newUserMessage(block.Text.Text), true
+	case block.ResourceLink != nil:
+		path := extractPathFromURI(block.ResourceLink.Uri)
+		return newUserMessage(fmt.Sprintf("File: %s", path)), true
+	case block.Resource != nil:
+		return convertResourceBlock(block.Resource)
+	case block.Image != nil:
+		return convertImageBlock(block.Image), true
+	case block.Audio != nil:
+		return convertAudioBlock(block.Audio), true
+	default:
+		return message.Message{}, false
+	}
+}
+
+// newUserMessage creates a user message with the given content.
+func newUserMessage(content string) message.Message {
+	return message.Message{
+		Role:      message.RoleUser,
+		Content:   content,
+		Timestamp: time.Now(),
+	}
+}
+
+// convertResourceBlock converts an embedded resource block to a message.
+func convertResourceBlock(res *acp.ContentBlockResource) (message.Message, bool) {
+	if res.Resource.TextResourceContents != nil {
+		uri := res.Resource.TextResourceContents.Uri
+		resourceName := extractResourceNameFromURI(uri)
+		content := res.Resource.TextResourceContents.Text
+		if resourceName != "" {
+			content = fmt.Sprintf("[Resource: %s]\n%s", resourceName, content)
+		}
+		return newUserMessage(content), true
+	}
+
+	if res.Resource.BlobResourceContents != nil {
+		mimeType := "unknown"
+		if res.Resource.BlobResourceContents.MimeType != nil {
+			mimeType = *res.Resource.BlobResourceContents.MimeType
+		}
+		uri := res.Resource.BlobResourceContents.Uri
+		resourceName := extractResourceNameFromURI(uri)
+		content := fmt.Sprintf("Resource (blob, %s)", mimeType)
+		if resourceName != "" {
+			content = fmt.Sprintf("[Resource: %s] %s", resourceName, content)
+		}
+		return newUserMessage(content), true
+	}
+
+	return message.Message{}, false
+}
+
+// convertImageBlock converts an image content block to a descriptive message.
+func convertImageBlock(img *acp.ContentBlockImage) message.Message {
+	mimeType := img.MimeType
+	if mimeType == "" {
+		mimeType = "image/png"
+	}
+	return newUserMessage(fmt.Sprintf("[Image: %s, %d bytes]", mimeType, len(img.Data)))
+}
+
+// convertAudioBlock converts an audio content block to a descriptive message.
+func convertAudioBlock(audio *acp.ContentBlockAudio) message.Message {
+	mimeType := audio.MimeType
+	if mimeType == "" {
+		mimeType = "audio/mpeg"
+	}
+	return newUserMessage(fmt.Sprintf("[Audio: %s, %d bytes]", mimeType, len(audio.Data)))
 }
 
 // extractTextFromMessages extracts text content from messages.
@@ -891,22 +842,23 @@ func mapStopReasonFromError(err error, resp *agent.Response) acp.StopReason {
 
 // processEvents processes events from the event emitter and sends ACP notifications.
 // This runs in a goroutine and continues until the context is canceled or the channel is closed.
-// Tracks thinking blocks across multiple content deltas and file content for diff generation.
 func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionId, eventCh <-chan events.Event) {
-	// Track file content for diff generation.
 	fileTracker := newFileContentTracker()
-
-	// Track accumulated content for plan detection.
 	var accumulatedContent string
 
-	// Get connection once.
 	a.mu.RLock()
 	conn := a.connection
 	a.mu.RUnlock()
 
 	if conn == nil {
-		// No connection, can't send notifications.
 		return
+	}
+
+	proc := &eventProcessor{
+		agent:       a,
+		conn:        conn,
+		sessionID:   sessionID,
+		fileTracker: fileTracker,
 	}
 
 	for {
@@ -915,288 +867,264 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 			return
 		case event, ok := <-eventCh:
 			if !ok {
-				// Channel closed.
 				return
 			}
-
-			// Reset content on turn start.
-			if event.Type == events.EventTurnStart {
-				accumulatedContent = ""
-			}
-
-			// Check for plan detection before tool call starts.
-			if event.Type == events.EventToolCallStart {
-				// If we have content, try to detect plan.
-				if accumulatedContent != "" && a.agent != nil && a.agent.GetPlanner() == nil {
-					plan := planning.DetectPlanFromText(accumulatedContent)
-					if plan != nil {
-						a.agent.SetPlanner(plan)
-						// Send plan notification immediately.
-						planEntries := convertOrchestrationPlanToACP(plan)
-						planUpdate := acp.UpdatePlan(planEntries...)
-
-						notification := acp.SessionNotification{
-							SessionId: sessionID,
-							Update:    planUpdate,
-						}
-						sendErr := conn.SessionUpdate(ctx, notification)
-						if sendErr != nil {
-							_ = sendErr
-						}
-					}
-				}
-			}
-
-			// Handle content delta.
-			if event.Type == events.EventContentDelta {
-				data, hasData := event.ContentDeltaData()
-				if !hasData || data.Role != "assistant" {
-					continue
-				}
-
-				accumulatedContent += data.Content
-
-				update := acp.UpdateAgentMessageText(data.Content)
-
-				notification := acp.SessionNotification{
-					SessionId: sessionID,
-					Update:    update,
-				}
-				sendErr := conn.SessionUpdate(ctx, notification)
-				if sendErr != nil {
-					_ = sendErr
-				}
-
-				continue
-			}
-
-			// Handle thinking delta.
-			if event.Type == events.EventThinkingDelta {
-				data, hasThinking := event.ThinkingDeltaData()
-				if !hasThinking {
-					continue
-				}
-
-				update := acp.UpdateAgentThoughtText(data.Content)
-
-				notification := acp.SessionNotification{
-					SessionId: sessionID,
-					Update:    update,
-				}
-				sendErr := conn.SessionUpdate(ctx, notification)
-				if sendErr != nil {
-					_ = sendErr
-				}
-
-				continue
-			}
-
-			// Handle plan updates.
-			if event.Type == events.EventPlanUpdate {
-				data, hasPlan := event.PlanUpdateData()
-				if !hasPlan {
-					continue
-				}
-
-				// Convert plan to ACP entries.
-				planEntries := convertOrchestrationPlanToACP(data.Plan)
-				if len(planEntries) == 0 {
-					continue
-				}
-
-				// Send plan update notification.
-				planUpdate := acp.UpdatePlan(planEntries...)
-				notification := acp.SessionNotification{
-					SessionId: sessionID,
-					Update:    planUpdate,
-				}
-
-				sendErr := conn.SessionUpdate(ctx, notification)
-				if sendErr != nil {
-					_ = sendErr // Log but continue.
-				}
-
-				continue
-			}
-
-			// Convert other events to ACP notification (with file tracker for diff generation).
-			update, converted := convertEventToSessionUpdate(event, fileTracker)
-			if !converted {
-				// Event not mapped to ACP notification, skip.
-				continue
-			}
-
-			// Extract terminal ID from event metadata if this is a tool call complete event
-			// We need to release the terminal AFTER sending the notification (per ACP spec).
-			var terminalIDToRelease string
-
-			if event.Type == events.EventToolCallComplete {
-				if data, hasComplete := event.ToolCallCompleteData(); hasComplete {
-					if terminalID, isStr := data.Metadata["terminal_id"].(string); isStr && terminalID != "" {
-						terminalIDToRelease = terminalID
-					}
-				}
-			}
-
-			// Send notification via connection.
-			notification := acp.SessionNotification{
-				SessionId: sessionID,
-				Update:    update,
-			}
-			// Send notification (errors are logged but don't fail execution).
-			sendErr := conn.SessionUpdate(ctx, notification)
-			if sendErr != nil {
-				// Log error but continue processing.
-				_ = sendErr
-			}
-
-			// Release terminal AFTER notification is sent (per ACP spec requirement).
-			if terminalIDToRelease != "" {
-				// Type assert to get concrete connection type for terminal client.
-				if acpConn, isACPConn := conn.(*acp.AgentSideConnection); isACPConn {
-					terminalClient := NewTerminalClient(acpConn)
-					_ = terminalClient.Release(ctx, terminalIDToRelease)
-				}
-			}
+			accumulatedContent = proc.handleEvent(ctx, event, accumulatedContent)
 		}
 	}
 }
 
+// eventProcessor handles individual event processing for ACP notifications.
+type eventProcessor struct {
+	agent       *SpinACPAgent
+	conn        notificationSender
+	sessionID   acp.SessionId
+	fileTracker *fileContentTracker
+}
+
+// handleEvent processes a single event and returns the updated accumulated content.
+func (p *eventProcessor) handleEvent(ctx context.Context, event events.Event, accumulatedContent string) string {
+	if event.Type == events.EventTurnStart {
+		return ""
+	}
+
+	if event.Type == events.EventToolCallStart {
+		p.detectAndSendPlan(ctx, accumulatedContent)
+	}
+
+	switch event.Type {
+	case events.EventContentDelta:
+		return p.handleContentDelta(ctx, event, accumulatedContent)
+	case events.EventThinkingDelta:
+		p.handleThinkingDelta(ctx, event)
+	case events.EventPlanUpdate:
+		p.handlePlanUpdate(ctx, event)
+	default:
+		p.handleGenericEvent(ctx, event)
+	}
+
+	return accumulatedContent
+}
+
+// detectAndSendPlan attempts to detect a plan from accumulated content and sends it.
+func (p *eventProcessor) detectAndSendPlan(ctx context.Context, content string) {
+	if content == "" || p.agent.agent == nil || p.agent.agent.GetPlanner() != nil {
+		return
+	}
+
+	plan := planning.DetectPlanFromText(content)
+	if plan == nil {
+		return
+	}
+
+	p.agent.agent.SetPlanner(plan)
+	planEntries := convertOrchestrationPlanToACP(plan)
+	p.sendNotification(ctx, acp.UpdatePlan(planEntries...))
+}
+
+// handleContentDelta processes content delta events.
+func (p *eventProcessor) handleContentDelta(ctx context.Context, event events.Event, accumulatedContent string) string {
+	data, hasData := event.ContentDeltaData()
+	if !hasData || data.Role != "assistant" {
+		return accumulatedContent
+	}
+
+	p.sendNotification(ctx, acp.UpdateAgentMessageText(data.Content))
+	return accumulatedContent + data.Content
+}
+
+// handleThinkingDelta processes thinking delta events.
+func (p *eventProcessor) handleThinkingDelta(ctx context.Context, event events.Event) {
+	data, hasThinking := event.ThinkingDeltaData()
+	if !hasThinking {
+		return
+	}
+	p.sendNotification(ctx, acp.UpdateAgentThoughtText(data.Content))
+}
+
+// handlePlanUpdate processes plan update events.
+func (p *eventProcessor) handlePlanUpdate(ctx context.Context, event events.Event) {
+	data, hasPlan := event.PlanUpdateData()
+	if !hasPlan {
+		return
+	}
+
+	planEntries := convertOrchestrationPlanToACP(data.Plan)
+	if len(planEntries) == 0 {
+		return
+	}
+
+	p.sendNotification(ctx, acp.UpdatePlan(planEntries...))
+}
+
+// handleGenericEvent processes events that need conversion to ACP format.
+func (p *eventProcessor) handleGenericEvent(ctx context.Context, event events.Event) {
+	update, converted := convertEventToSessionUpdate(event, p.fileTracker)
+	if !converted {
+		return
+	}
+
+	terminalID := extractTerminalID(event)
+
+	p.sendNotification(ctx, update)
+
+	if terminalID != "" {
+		if acpConn, isACPConn := p.conn.(*acp.AgentSideConnection); isACPConn {
+			terminalClient := NewTerminalClient(acpConn)
+			_ = terminalClient.Release(ctx, terminalID)
+		}
+	}
+}
+
+// sendNotification sends an ACP session notification.
+func (p *eventProcessor) sendNotification(ctx context.Context, update acp.SessionUpdate) {
+	notification := acp.SessionNotification{
+		SessionId: p.sessionID,
+		Update:    update,
+	}
+	_ = p.conn.SessionUpdate(ctx, notification)
+}
+
+// extractTerminalID extracts the terminal ID from a tool call complete event.
+func extractTerminalID(event events.Event) string {
+	if event.Type != events.EventToolCallComplete {
+		return ""
+	}
+	data, hasComplete := event.ToolCallCompleteData()
+	if !hasComplete {
+		return ""
+	}
+	terminalID, isStr := data.Metadata["terminal_id"].(string)
+	if !isStr {
+		return ""
+	}
+	return terminalID
+}
+
 // LoadSession loads an existing session from storage.
 func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionRequest) (acp.LoadSessionResponse, error) {
-	// Check if storage is available.
 	if a.storage == nil {
 		return acp.LoadSessionResponse{}, ErrSessionPersistenceNotAvailable
 	}
 
-	// Load session from storage.
 	sessData, err := a.storage.Load(string(req.SessionId))
 	if err != nil {
 		return acp.LoadSessionResponse{}, fmt.Errorf("failed to load session: %w", err)
 	}
 
 	sess := &sessData
-
-	// Validate session.
-	err = sess.Validate()
-	if err != nil {
+	if err = sess.Validate(); err != nil {
 		return acp.LoadSessionResponse{}, fmt.Errorf("loaded session is invalid: %w", err)
 	}
 
-	// Convert session ID to ACP format.
 	sessionID := acp.SessionId(sess.ID)
 
-	// Validate and convert MCP servers synchronously (to catch conversion errors).
-	if len(req.McpServers) > 0 {
-		configs := make([]mcp.ServerConfig, 0, len(req.McpServers))
-		for _, server := range req.McpServers {
-			var config mcp.ServerConfig
-			config, err = convertACPMcpServerToSpin(server)
-			if err != nil {
-				return acp.LoadSessionResponse{}, fmt.Errorf("invalid MCP server config: %w", err)
-			}
+	if err = a.storeSessionWithMCPServers(ctx, sessionID, sess, req.McpServers); err != nil {
+		return acp.LoadSessionResponse{}, err
+	}
 
-			configs = append(configs, config)
+	a.replayConversationHistory(ctx, sessionID)
+
+	return acp.LoadSessionResponse{Models: nil, Modes: nil}, nil
+}
+
+// storeSessionWithMCPServers stores a session and connects MCP servers if provided.
+func (a *SpinACPAgent) storeSessionWithMCPServers(ctx context.Context, sessionID acp.SessionId, sess *session.Session, mcpServers []acp.McpServer) error {
+	if len(mcpServers) > 0 {
+		configs, err := convertMCPServers(mcpServers)
+		if err != nil {
+			return err
 		}
 
-		// Store session before connecting MCP servers.
 		a.mu.Lock()
 		a.sessions[sessionID] = sess
 		a.mu.Unlock()
 
-		// Connect servers in background (non-blocking - connection failures don't prevent session loading).
-		go func() {
-			for _, config := range configs {
-				connErr := a.mcpService.ConnectServer(ctx, config)
-				if connErr != nil {
-					// Log error but don't fail session loading.
-					_ = connErr // Error logged but session still loaded.
-				}
-			}
-		}()
+		go a.connectMCPServersBackground(ctx, configs)
 	} else {
-		// Store session.
 		a.mu.Lock()
 		a.sessions[sessionID] = sess
 		a.mu.Unlock()
 	}
 
-	// Replay conversation history if connection and history storage are available.
+	return nil
+}
+
+// convertMCPServers converts ACP MCP server configs to Spin format.
+func convertMCPServers(servers []acp.McpServer) ([]mcp.ServerConfig, error) {
+	configs := make([]mcp.ServerConfig, 0, len(servers))
+	for _, server := range servers {
+		config, err := convertACPMcpServerToSpin(server)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MCP server config: %w", err)
+		}
+		configs = append(configs, config)
+	}
+	return configs, nil
+}
+
+// connectMCPServersBackground connects MCP servers in background.
+func (a *SpinACPAgent) connectMCPServersBackground(ctx context.Context, configs []mcp.ServerConfig) {
+	for _, config := range configs {
+		_ = a.mcpService.ConnectServer(ctx, config)
+	}
+}
+
+// replayConversationHistory replays stored conversation history as ACP notifications.
+func (a *SpinACPAgent) replayConversationHistory(ctx context.Context, sessionID acp.SessionId) {
 	a.mu.RLock()
 	conn := a.connection
 	histStorage := a.histStorage
 	a.mu.RUnlock()
 
-	if conn != nil && histStorage != nil {
-		// Load history from storage.
-		histData, loadErr := histStorage.Load(string(sessionID))
-		if loadErr == nil {
-			// Send conversation history as notifications
-			// This allows clients to see the full conversation when loading a session.
-			for _, msg := range histData.Messages {
-				switch msg.Role {
-				case message.RoleUser:
-					// Send user message.
-					if msg.Content != "" {
-						userUpdate := acp.UpdateUserMessageText(msg.Content)
-
-						notification := acp.SessionNotification{
-							SessionId: sessionID,
-							Update:    userUpdate,
-						}
-						sendErr := conn.SessionUpdate(ctx, notification)
-						if sendErr != nil {
-							_ = sendErr // Log error but continue replaying.
-						}
-					}
-				case message.RoleAssistant:
-					// Send AI response.
-					if msg.Content != "" {
-						// Parse thinking blocks and filter protocol artifacts from AI response.
-						s := sanitizer.New()
-						cleanContent, thought := s.Process(msg.Content)
-
-						// Send thinking content if available.
-						if thought != "" {
-							thinkUpdate := acp.UpdateAgentThoughtText(thought)
-
-							notification := acp.SessionNotification{
-								SessionId: sessionID,
-								Update:    thinkUpdate,
-							}
-							sendErr := conn.SessionUpdate(ctx, notification)
-							if sendErr != nil {
-								_ = sendErr
-							}
-						}
-
-						// Send message content if available.
-						if cleanContent != "" {
-							messageUpdate := acp.UpdateAgentMessageText(cleanContent)
-
-							notification := acp.SessionNotification{
-								SessionId: sessionID,
-								Update:    messageUpdate,
-							}
-							sendErr := conn.SessionUpdate(ctx, notification)
-							if sendErr != nil {
-								_ = sendErr
-							}
-						}
-					}
-				}
-			}
-		}
+	if conn == nil || histStorage == nil {
+		return
 	}
 
-	// Build response.
-	resp := acp.LoadSessionResponse{
-		// Models and Modes are optional and are not implemented.
-		Models: nil,
-		Modes:  nil,
+	histData, loadErr := histStorage.Load(string(sessionID))
+	if loadErr != nil {
+		return
 	}
 
-	return resp, nil
+	for _, msg := range histData.Messages {
+		a.replayMessage(ctx, sessionID, conn, msg)
+	}
+}
+
+// replayMessage replays a single message as ACP notification(s).
+func (a *SpinACPAgent) replayMessage(ctx context.Context, sessionID acp.SessionId, conn notificationSender, msg message.Message) {
+	if msg.Content == "" {
+		return
+	}
+
+	switch msg.Role {
+	case message.RoleUser:
+		a.sendSessionUpdate(ctx, sessionID, conn, acp.UpdateUserMessageText(msg.Content))
+	case message.RoleAssistant:
+		a.replayAssistantMessage(ctx, sessionID, conn, msg.Content)
+	}
+}
+
+// replayAssistantMessage replays an assistant message, separating thinking from content.
+func (a *SpinACPAgent) replayAssistantMessage(ctx context.Context, sessionID acp.SessionId, conn notificationSender, content string) {
+	s := sanitizer.New()
+	cleanContent, thought := s.Process(content)
+
+	if thought != "" {
+		a.sendSessionUpdate(ctx, sessionID, conn, acp.UpdateAgentThoughtText(thought))
+	}
+	if cleanContent != "" {
+		a.sendSessionUpdate(ctx, sessionID, conn, acp.UpdateAgentMessageText(cleanContent))
+	}
+}
+
+// sendSessionUpdate sends a session update notification.
+func (a *SpinACPAgent) sendSessionUpdate(ctx context.Context, sessionID acp.SessionId, conn notificationSender, update acp.SessionUpdate) {
+	notification := acp.SessionNotification{
+		SessionId: sessionID,
+		Update:    update,
+	}
+	_ = conn.SessionUpdate(ctx, notification)
 }
 
 // sendPlanNotifications sends plan notifications if a plan is detected.
@@ -1432,92 +1360,48 @@ func (a *SpinACPAgent) Authenticate(_ context.Context, _ acp.AuthenticateRequest
 }
 
 // RequestPermission requests user permission for a tool call operation.
-//
-// This method integrates with Spin's ApprovalService to handle permission requests
-// from ACP clients. It converts ACP permission requests to Spin security operations
-// and returns ACP-formatted responses.
+// This handles the reverse flow where the client calls the agent to request permission.
 func (a *SpinACPAgent) RequestPermission(ctx context.Context, req acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
-	// Validate session exists and get approval service.
 	a.mu.RLock()
-	_, exists := a.sessions[req.SessionId]
+	sess, exists := a.sessions[req.SessionId]
 	approvalService := a.approvalService
 	a.mu.RUnlock()
 
 	if !exists {
-return acp.RequestPermissionResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound4)
+		return acp.RequestPermissionResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound4)
 	}
 
 	if approvalService == nil {
 		return acp.RequestPermissionResponse{}, ErrApprovalServiceNotConfigured
 	}
 
-	// The agent's RequestPermission method is called by the CLIENT.
-	// This is the reverse flow: the client is calling the agent to request permission.
-	// This happens when the client wants to proactively request permission for an operation.
-	//
-	// The normal flow (agent → client) is handled by the approval handler calling
-	// connection.RequestPermission() directly.
-	//
-	// For this reverse flow (client → agent), we need to:
-	// 1. Convert the ACP tool call to a security operation
-	// 2. Request approval through the approval service
-	// 3. Based on the approval response, select the appropriate option from the client's options
-	// 4. Return the selected option.
-
-	// Get session to extract work directory.
-	a.mu.RLock()
-	sess, exists := a.sessions[req.SessionId]
-	a.mu.RUnlock()
-
-	if !exists {
-return acp.RequestPermissionResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound5)
-	}
-
-	// Convert tool call to operation.
 	operation, err := a.convertToolCallToOperation(req.ToolCall, sess.WorkDir)
 	if err != nil {
 		return acp.RequestPermissionResponse{}, fmt.Errorf("failed to convert tool call: %w", err)
 	}
 
-	// Request approval through the approval service.
 	_, approved, approvalErr := approvalService.RequestApproval(ctx, operation)
 	if approvalErr != nil {
-		// If context was canceled, return canceled outcome.
-		select {
-		case <-ctx.Done():
-			return acp.RequestPermissionResponse{
-				Outcome: acp.NewRequestPermissionOutcomeCancelled(),
-			}, nil
-		default:
-			return acp.RequestPermissionResponse{}, fmt.Errorf("approval request failed: %w", approvalErr)
+		if ctx.Err() != nil {
+			return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
 		}
+		return acp.RequestPermissionResponse{}, fmt.Errorf("approval request failed: %w", approvalErr)
 	}
 
-	// Select appropriate option based on approval response.
-	if approved {
-		// Find first allow option.
-		for _, opt := range req.Options {
-			if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {
-				return acp.RequestPermissionResponse{
-					Outcome: acp.NewRequestPermissionOutcomeSelected(opt.OptionId),
-				}, nil
-			}
+	return selectPermissionOption(approved, req.Options), nil
+}
+
+// selectPermissionOption finds the matching option based on the approval decision.
+func selectPermissionOption(approved bool, options []acp.PermissionOption) acp.RequestPermissionResponse {
+	for _, opt := range options {
+		if approved && (opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways) {
+			return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeSelected(opt.OptionId)}
 		}
-	} else {
-		// Find first reject/deny option.
-		for _, opt := range req.Options {
-			if opt.Kind == acp.PermissionOptionKindRejectOnce || opt.Kind == acp.PermissionOptionKindRejectAlways {
-				return acp.RequestPermissionResponse{
-					Outcome: acp.NewRequestPermissionOutcomeSelected(opt.OptionId),
-				}, nil
-			}
+		if !approved && (opt.Kind == acp.PermissionOptionKindRejectOnce || opt.Kind == acp.PermissionOptionKindRejectAlways) {
+			return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeSelected(opt.OptionId)}
 		}
 	}
-
-	// No matching option found, return canceled.
-	return acp.RequestPermissionResponse{
-		Outcome: acp.NewRequestPermissionOutcomeCancelled(),
-	}, nil
+	return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}
 }
 
 // convertToolCallToOperation converts an ACP tool call to a Spin security operation.

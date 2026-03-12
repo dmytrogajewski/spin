@@ -602,97 +602,65 @@ func TestEvent_ToolCallStartData(t *testing.T) {
 func TestEvent_TypeSafeHelpers(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name      string
-		eventType EventType
-		data      any
-		checkFunc func(Event) bool
-	}{
-		{
-			name:      "ToolCallCompleteData",
-			eventType: EventToolCallComplete,
-			data:      ToolCallCompleteData{ToolID: "call_1", Success: true},
-			checkFunc: func(e Event) bool {
-				data, ok := e.ToolCallCompleteData()
+	t.Run("ToolCallCompleteData", func(t *testing.T) {
+		t.Parallel()
+		e := Event{Type: EventToolCallComplete, Data: ToolCallCompleteData{ToolID: "call_1", Success: true}}
+		data, ok := e.ToolCallCompleteData()
+		assertTypeSafeHelper(t, ok, data.ToolID == "call_1" && data.Success)
+	})
 
-				return ok && data.ToolID == "call_1" && data.Success
-			},
-		},
-		{
-			name:      "ToolProgressData",
-			eventType: EventToolCallProgress,
-			data:      ToolProgressData{ToolID: "call_1", Status: "running"},
-			checkFunc: func(e Event) bool {
-				data, ok := e.ToolProgressData()
+	t.Run("ToolProgressData", func(t *testing.T) {
+		t.Parallel()
+		e := Event{Type: EventToolCallProgress, Data: ToolProgressData{ToolID: "call_1", Status: "running"}}
+		data, ok := e.ToolProgressData()
+		assertTypeSafeHelper(t, ok, data.ToolID == "call_1" && data.Status == "running")
+	})
 
-				return ok && data.ToolID == "call_1" && data.Status == "running"
-			},
-		},
-		{
-			name:      "ContentDeltaData",
-			eventType: EventContentDelta,
-			data:      ContentDeltaData{Content: "test", Role: "assistant"},
-			checkFunc: func(e Event) bool {
-				data, ok := e.ContentDeltaData()
+	t.Run("ContentDeltaData", func(t *testing.T) {
+		t.Parallel()
+		e := Event{Type: EventContentDelta, Data: ContentDeltaData{Content: "test", Role: "assistant"}}
+		data, ok := e.ContentDeltaData()
+		assertTypeSafeHelper(t, ok, data.Content == "test" && data.Role == "assistant")
+	})
 
-				return ok && data.Content == "test" && data.Role == "assistant"
-			},
-		},
-		{
-			name:      "TurnEventData",
-			eventType: EventTurnStart,
-			data:      TurnEventData{Turn: 5, TurnID: "turn_5"},
-			checkFunc: func(e Event) bool {
-				data, ok := e.TurnEventData()
+	t.Run("TurnEventData", func(t *testing.T) {
+		t.Parallel()
+		e := Event{Type: EventTurnStart, Data: TurnEventData{Turn: 5, TurnID: "turn_5"}}
+		data, ok := e.TurnEventData()
+		assertTypeSafeHelper(t, ok, data.Turn == 5 && data.TurnID == "turn_5")
+	})
 
-				return ok && data.Turn == 5 && data.TurnID == "turn_5"
-			},
-		},
-		{
-			name:      "ApprovalEventData",
-			eventType: EventCommandApproval,
-			data:      ApprovalEventData{RequestID: "req_1", Command: "rm -rf /"},
-			checkFunc: func(e Event) bool {
-				data, ok := e.ApprovalEventData()
+	t.Run("ApprovalEventData", func(t *testing.T) {
+		t.Parallel()
+		e := Event{Type: EventCommandApproval, Data: ApprovalEventData{RequestID: "req_1", Command: "rm -rf /"}}
+		data, ok := e.ApprovalEventData()
+		assertTypeSafeHelper(t, ok, data.RequestID == "req_1" && data.Command == "rm -rf /")
+	})
 
-				return ok && data.RequestID == "req_1" && data.Command == "rm -rf /"
-			},
-		},
-		{
-			name:      "SystemEventData",
-			eventType: EventWarning,
-			data:      SystemEventData{Level: "warning", Message: "test warning"},
-			checkFunc: func(e Event) bool {
-				data, ok := e.SystemEventData()
+	t.Run("SystemEventData", func(t *testing.T) {
+		t.Parallel()
+		e := Event{Type: EventWarning, Data: SystemEventData{Level: "warning", Message: "test warning"}}
+		data, ok := e.SystemEventData()
+		assertTypeSafeHelper(t, ok, data.Level == "warning" && data.Message == "test warning")
+	})
 
-				return ok && data.Level == "warning" && data.Message == "test warning"
-			},
-		},
-		{
-			name:      "ErrorData",
-			eventType: EventError,
-			data:      ErrorData{Message: "test error", Code: "ERR_TEST"},
-			checkFunc: func(e Event) bool {
-				data, ok := e.ErrorData()
+	t.Run("ErrorData", func(t *testing.T) {
+		t.Parallel()
+		e := Event{Type: EventError, Data: ErrorData{Message: "test error", Code: "ERR_TEST"}}
+		data, ok := e.ErrorData()
+		assertTypeSafeHelper(t, ok, data.Message == "test error" && data.Code == "ERR_TEST")
+	})
+}
 
-				return ok && data.Message == "test error" && data.Code == "ERR_TEST"
-			},
-		},
+func assertTypeSafeHelper(t *testing.T, ok bool, fieldsMatch bool) {
+	t.Helper()
+
+	if !ok {
+		t.Error("type assertion returned false")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			event := Event{
-				Type: tt.eventType,
-				Data: tt.data,
-			}
-
-			if !tt.checkFunc(event) {
-				t.Errorf("%s helper failed validation", tt.name)
-			}
-		})
+	if !fieldsMatch {
+		t.Error("extracted fields do not match expected values")
 	}
 }
 

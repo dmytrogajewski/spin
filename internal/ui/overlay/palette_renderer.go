@@ -57,17 +57,25 @@ func (r *PaletteRenderer) SetSize(width, height int) {
 // Render returns ANSI sequences for the palette overlay.
 // Returns a multi-line string with embedded newlines.
 func (r *PaletteRenderer) Render(p *Palette) string {
-	// Calculate palette dimensions.
 	paletteWidth := min(80, r.width-2*s4)
-
 	maxHeight := max(int(float64(r.height)*0.6), 8)
-
-	// Calculate centering offset.
 	leftPad := (r.width - paletteWidth) / 2
 
 	var sb strings.Builder
 
-	// Top border with title.
+	r.renderTopBorder(&sb, paletteWidth, leftPad)
+	r.renderEmptyRow(&sb, paletteWidth, leftPad)
+	r.renderInputLine(&sb, p, paletteWidth, leftPad)
+	r.renderEmptyRow(&sb, paletteWidth, leftPad)
+	r.renderResultsList(&sb, p, paletteWidth, maxHeight, leftPad)
+	r.renderEmptyRow(&sb, paletteWidth, leftPad)
+	r.renderBottomBorder(&sb, paletteWidth, leftPad)
+
+	return sb.String()
+}
+
+// renderTopBorder writes the top border with title and escape hint.
+func (r *PaletteRenderer) renderTopBorder(sb *strings.Builder, paletteWidth, leftPad int) {
 	sb.WriteString(strings.Repeat(" ", leftPad))
 	sb.WriteString(colorBorder)
 	sb.WriteString("╭─")
@@ -81,8 +89,10 @@ func (r *PaletteRenderer) Render(p *Palette) string {
 	sb.WriteString("─╮")
 	sb.WriteString(colorReset)
 	sb.WriteString("\n")
+}
 
-	// Empty row.
+// renderEmptyRow writes an empty bordered row.
+func (r *PaletteRenderer) renderEmptyRow(sb *strings.Builder, paletteWidth, leftPad int) {
 	sb.WriteString(strings.Repeat(" ", leftPad))
 	sb.WriteString(colorBorder)
 	sb.WriteString("│")
@@ -91,78 +101,69 @@ func (r *PaletteRenderer) Render(p *Palette) string {
 	sb.WriteString("│")
 	sb.WriteString(colorReset)
 	sb.WriteString("\n")
+}
 
-	// Input line.
+// renderInputLine writes the query input line with cursor.
+func (r *PaletteRenderer) renderInputLine(sb *strings.Builder, p *Palette, paletteWidth, leftPad int) {
 	sb.WriteString(strings.Repeat(" ", leftPad))
 	sb.WriteString(colorBorder)
 	sb.WriteString("│")
-	sb.WriteString("  ") // s2 padding.
+	sb.WriteString("  ")
 	sb.WriteString(colorBlue)
 	sb.WriteString("❯ ")
 	sb.WriteString(colorReset + colorFg)
 
 	query := p.Query()
 	sb.WriteString(query)
-	sb.WriteString("_") // cursor.
-	// Padding to width.
-	usedWidth := 2 + 2 + uniseg.StringWidth(query) + 1 + 2 // padding + prompt + query + cursor + padding.
+	sb.WriteString("_")
+
+	usedWidth := 2 + 2 + uniseg.StringWidth(query) + 1 + 2
 	sb.WriteString(strings.Repeat(" ", paletteWidth-2-usedWidth))
 	sb.WriteString(colorBorder)
 	sb.WriteString("│")
 	sb.WriteString(colorReset)
 	sb.WriteString("\n")
+}
 
-	// Empty row.
-	sb.WriteString(strings.Repeat(" ", leftPad))
-	sb.WriteString(colorBorder)
-	sb.WriteString("│")
-	sb.WriteString(strings.Repeat(" ", paletteWidth-2))
-	sb.WriteString(colorBorder)
-	sb.WriteString("│")
-	sb.WriteString(colorReset)
-	sb.WriteString("\n")
-
-	// Results list.
+// renderResultsList writes the filtered command results or empty state.
+func (r *PaletteRenderer) renderResultsList(sb *strings.Builder, p *Palette, paletteWidth, maxHeight, leftPad int) {
 	filtered := p.FilteredCommands()
-	maxItems := min(len(filtered), maxHeight-6) // Reserve rows for border, input, empty rows.
+	maxItems := min(len(filtered), maxHeight-6)
 
 	if len(filtered) == 0 {
-		// Empty state.
-		emptyMsg := "No commands match '" + p.Query() + "'"
-		if p.Query() == "" {
-			emptyMsg = "No commands available"
-		}
-
-		sb.WriteString(strings.Repeat(" ", leftPad))
-		sb.WriteString(colorBorder)
-		sb.WriteString("│")
-		sb.WriteString("  ") // s2 padding.
-		sb.WriteString(colorMuted)
-		sb.WriteString(emptyMsg)
-		sb.WriteString(strings.Repeat(" ", paletteWidth-2-2-uniseg.StringWidth(emptyMsg)-2))
-		sb.WriteString(colorBorder)
-		sb.WriteString("│")
-		sb.WriteString(colorReset)
-		sb.WriteString("\n")
-	} else {
-		for i := range maxItems {
-			cmd := filtered[i]
-			selected := (i == p.Selection())
-			sb.WriteString(r.renderItem(cmd, selected, paletteWidth, leftPad))
-		}
+		r.renderEmptyState(sb, p, paletteWidth, leftPad)
+		return
 	}
 
-	// Empty row.
+	for i := range maxItems {
+		cmd := filtered[i]
+		selected := (i == p.Selection())
+		sb.WriteString(r.renderItem(cmd, selected, paletteWidth, leftPad))
+	}
+}
+
+// renderEmptyState writes the "no results" message.
+func (r *PaletteRenderer) renderEmptyState(sb *strings.Builder, p *Palette, paletteWidth, leftPad int) {
+	emptyMsg := "No commands match '" + p.Query() + "'"
+	if p.Query() == "" {
+		emptyMsg = "No commands available"
+	}
+
 	sb.WriteString(strings.Repeat(" ", leftPad))
 	sb.WriteString(colorBorder)
 	sb.WriteString("│")
-	sb.WriteString(strings.Repeat(" ", paletteWidth-2))
+	sb.WriteString("  ")
+	sb.WriteString(colorMuted)
+	sb.WriteString(emptyMsg)
+	sb.WriteString(strings.Repeat(" ", paletteWidth-2-2-uniseg.StringWidth(emptyMsg)-2))
 	sb.WriteString(colorBorder)
 	sb.WriteString("│")
 	sb.WriteString(colorReset)
 	sb.WriteString("\n")
+}
 
-	// Bottom border.
+// renderBottomBorder writes the bottom border.
+func (r *PaletteRenderer) renderBottomBorder(sb *strings.Builder, paletteWidth, leftPad int) {
 	sb.WriteString(strings.Repeat(" ", leftPad))
 	sb.WriteString(colorBorder)
 	sb.WriteString("╰")
@@ -170,8 +171,6 @@ func (r *PaletteRenderer) Render(p *Palette) string {
 	sb.WriteString("╯")
 	sb.WriteString(colorReset)
 	sb.WriteString("\n")
-
-	return sb.String()
 }
 
 // renderItem renders a single command item.

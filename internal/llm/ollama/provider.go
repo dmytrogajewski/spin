@@ -174,63 +174,10 @@ func (p *Provider) setContextOptions(ctx context.Context, opts map[string]any) m
 
 // Complete performs a non-streaming completion request using Ollama's native API.
 func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletionNewParams) (*openaisdk.ChatCompletion, error) {
-	// Convert OpenAI params to Ollama ChatRequest.
-	req := &api.ChatRequest{
-		Model: p.model,
-	}
-
-	// Convert messages, building tool_call_id -> tool_name mapping for tool result messages.
-	if params.Messages.Present {
-		toolCallIDToName := buildToolCallIDToNameMap(params.Messages.Value, p.logger, ctx)
-
-		req.Messages = make([]api.Message, len(params.Messages.Value))
-		for i, msg := range params.Messages.Value {
-			req.Messages[i] = convertMessageToOllama(msg, toolCallIDToName, p.logger, ctx)
-		}
-		// Debug: log the messages being sent.
-		for i, m := range req.Messages {
-			p.logger.DebugContext(ctx, "ollama stream message",
-				"index", i,
-				"role", m.Role,
-				"content_len", len(m.Content),
-				"tool_calls", len(m.ToolCalls),
-				"tool_name", m.ToolName)
-		}
-	}
-
-	// Convert tools if present.
-	if params.Tools.Present && len(params.Tools.Value) > 0 {
-		req.Tools = make([]api.Tool, len(params.Tools.Value))
-		for i, tool := range params.Tools.Value {
-			req.Tools[i] = convertToolToOllama(tool)
-		}
-
-		p.logger.DebugContext(ctx, "ollama request with tools", "tool_count", len(req.Tools), "model", p.model)
-	}
-
-	// Set options.
-	if params.Temperature.Present {
-		if req.Options == nil {
-			req.Options = make(map[string]any)
-		}
-
-		req.Options["temperature"] = params.Temperature.Value
-	}
-
-	if params.MaxTokens.Present {
-		if req.Options == nil {
-			req.Options = make(map[string]any)
-		}
-
-		req.Options["num_predict"] = params.MaxTokens.Value
-	}
-
-	// Set context window size.
-	req.Options = p.setContextOptions(ctx, req.Options)
+	req := p.buildChatRequest(ctx, params, false)
 
 	// Call Ollama API
-	// Note: Ollama sends multiple callbacks even for non-streaming requests
-	// We need to accumulate the content from all callbacks.
+	// Note: Ollama sends multiple callbacks even for non-streaming requests.
 	var (
 		resp         api.ChatResponse
 		fullContent  strings.Builder
@@ -242,7 +189,6 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 	err := p.client.Chat(ctx, req, func(r api.ChatResponse) error {
 		callbackCount++
 		resp = r // Keep the last response for metadata.
-		// Accumulate content and thinking from all callbacks.
 		if r.Message.Content != "" {
 			fullContent.WriteString(r.Message.Content)
 		}
@@ -258,119 +204,157 @@ func (p *Provider) Complete(ctx context.Context, params openaisdk.ChatCompletion
 	}
 
 	// Use accumulated content, merging thinking into <think> tags.
-	if fullThinking.Len() > 0 {
-		resp.Message.Content = "<think>" + fullThinking.String() + "</think>" + fullContent.String()
-	} else {
-		resp.Message.Content = fullContent.String()
-	}
-
+	resp.Message.Content = mergeThinkingContent(fullThinking.String(), fullContent.String())
 	resp.Message.Thinking = ""
 
-	// Fix tool calls with empty function names by inferring from arguments (same as streaming path).
-	if len(resp.Message.ToolCalls) > 0 {
-		filtered := resp.Message.ToolCalls[:0]
-		for _, tc := range resp.Message.ToolCalls {
-			if tc.Function.Name != "" {
-				filtered = append(filtered, tc)
-			} else if inferred := inferToolName(tc.Function.Arguments, req.Tools, p.logger, ctx); inferred != "" {
-				tc.Function.Name = inferred
-				p.logger.InfoContext(ctx, "ollama: inferred tool name for nameless tool call",
-					"name", inferred, "args", tc.Function.Arguments)
-				filtered = append(filtered, tc)
-			} else if len(tc.Function.Arguments) > 0 {
-				p.logger.WarnContext(ctx, "ollama: dropping tool call with empty name (could not infer)",
-					"args", tc.Function.Arguments)
-			} else {
-				p.logger.DebugContext(ctx, "ollama: filtering phantom tool call (empty name and args)")
-			}
-		}
-
-		resp.Message.ToolCalls = filtered
-	}
+	// Fix tool calls with empty function names.
+	resp.Message.ToolCalls = filterToolCalls(resp.Message.ToolCalls, req.Tools, p.logger, ctx)
 
 	// Debug: Log the Ollama response.
 	p.logger.DebugContext(ctx, "Ollama Complete", "callbacks", callbackCount, "content_length", len(resp.Message.Content))
+	logResponsePreview(p.logger, ctx, resp.Message.Content)
 
-	if len(resp.Message.Content) > 0 {
-		preview := resp.Message.Content
-		if len(preview) > 100 {
-			preview = preview[:100]
-		}
-
-		p.logger.DebugContext(ctx, "Ollama Complete response preview", "preview", preview)
-	}
-
-	// Convert response to OpenAI format.
 	return convertOllamaResponseToOpenAI(resp, p.model, p.logger, ctx), nil
 }
 
-// Stream performs a streaming completion request using Ollama's native API.
-func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNewParams) (<-chan openaisdk.ChatCompletionChunk, error) {
-	// Convert OpenAI params to Ollama ChatRequest.
+// buildChatRequest converts OpenAI params into an Ollama ChatRequest.
+func (p *Provider) buildChatRequest(ctx context.Context, params openaisdk.ChatCompletionNewParams, streaming bool) *api.ChatRequest {
 	req := &api.ChatRequest{
-		Model:  p.model,
-		Stream: new(bool),
-	}
-	*req.Stream = true
-
-	// Convert messages, building tool_call_id -> tool_name mapping for tool result messages.
-	if params.Messages.Present {
-		toolCallIDToName := buildToolCallIDToNameMap(params.Messages.Value, p.logger, ctx)
-
-		req.Messages = make([]api.Message, len(params.Messages.Value))
-		for i, msg := range params.Messages.Value {
-			req.Messages[i] = convertMessageToOllama(msg, toolCallIDToName, p.logger, ctx)
-		}
-		// Debug: log the messages being sent to Ollama.
-		for i, m := range req.Messages {
-			tcIDs := make([]string, len(m.ToolCalls))
-			for j, tc := range m.ToolCalls {
-				tcIDs[j] = tc.Function.Name
-			}
-
-			p.logger.DebugContext(ctx, "ollama stream msg",
-				"idx", i,
-				"role", m.Role,
-				"content_len", len(m.Content),
-				"tool_calls", tcIDs,
-				"tool_name", m.ToolName)
-		}
+		Model: p.model,
 	}
 
-	// Convert tools if present.
-	if params.Tools.Present && len(params.Tools.Value) > 0 {
-		req.Tools = make([]api.Tool, len(params.Tools.Value))
-		for i, tool := range params.Tools.Value {
-			req.Tools[i] = convertToolToOllama(tool)
-		}
-
-		p.logger.DebugContext(ctx, "ollama stream request with tools", "tool_count", len(req.Tools), "model", p.model)
+	if streaming {
+		req.Stream = new(bool)
+		*req.Stream = true
 	}
 
-	// Set options.
+	p.convertMessages(ctx, params, req)
+	p.convertTools(ctx, params, req)
+	p.setRequestOptions(ctx, params, req)
+
+	return req
+}
+
+// convertMessages converts OpenAI messages to Ollama format on the request.
+func (p *Provider) convertMessages(ctx context.Context, params openaisdk.ChatCompletionNewParams, req *api.ChatRequest) {
+	if !params.Messages.Present {
+		return
+	}
+
+	toolCallIDToName := buildToolCallIDToNameMap(params.Messages.Value, p.logger, ctx)
+
+	req.Messages = make([]api.Message, len(params.Messages.Value))
+	for i, msg := range params.Messages.Value {
+		req.Messages[i] = convertMessageToOllama(msg, toolCallIDToName, p.logger, ctx)
+	}
+
+	for i, m := range req.Messages {
+		p.logger.DebugContext(ctx, "ollama stream message",
+			"index", i,
+			"role", m.Role,
+			"content_len", len(m.Content),
+			"tool_calls", len(m.ToolCalls),
+			"tool_name", m.ToolName)
+	}
+}
+
+// convertTools converts OpenAI tools to Ollama format on the request.
+func (p *Provider) convertTools(ctx context.Context, params openaisdk.ChatCompletionNewParams, req *api.ChatRequest) {
+	if !params.Tools.Present || len(params.Tools.Value) == 0 {
+		return
+	}
+
+	req.Tools = make([]api.Tool, len(params.Tools.Value))
+	for i, tool := range params.Tools.Value {
+		req.Tools[i] = convertToolToOllama(tool)
+	}
+
+	p.logger.DebugContext(ctx, "ollama request with tools", "tool_count", len(req.Tools), "model", p.model)
+}
+
+// setRequestOptions sets temperature, max tokens, and context options on the request.
+func (p *Provider) setRequestOptions(ctx context.Context, params openaisdk.ChatCompletionNewParams, req *api.ChatRequest) {
 	if params.Temperature.Present {
-		if req.Options == nil {
-			req.Options = make(map[string]any)
-		}
-
+		req.Options = ensureOptionsMap(req.Options)
 		req.Options["temperature"] = params.Temperature.Value
 	}
 
 	if params.MaxTokens.Present {
-		if req.Options == nil {
-			req.Options = make(map[string]any)
-		}
-
+		req.Options = ensureOptionsMap(req.Options)
 		req.Options["num_predict"] = params.MaxTokens.Value
 	}
 
-	// Set context window size.
 	req.Options = p.setContextOptions(ctx, req.Options)
+}
 
-	// Create channel for chunks.
+// ensureOptionsMap returns the provided options map or creates a new one if nil.
+func ensureOptionsMap(opts map[string]any) map[string]any {
+	if opts == nil {
+		return make(map[string]any)
+	}
+
+	return opts
+}
+
+// mergeThinkingContent merges thinking and content strings into a single content string.
+func mergeThinkingContent(thinking, content string) string {
+	if thinking != "" {
+		return "<think>" + thinking + "</think>" + content
+	}
+
+	return content
+}
+
+// filterToolCalls filters tool calls, inferring names for nameless calls and removing phantom ones.
+func filterToolCalls(toolCalls []api.ToolCall, tools []api.Tool, logger *slog.Logger, ctx context.Context) []api.ToolCall {
+	if len(toolCalls) == 0 {
+		return toolCalls
+	}
+
+	filtered := toolCalls[:0]
+
+	for _, tc := range toolCalls {
+		if tc.Function.Name != "" {
+			filtered = append(filtered, tc)
+			continue
+		}
+
+		if inferred := inferToolName(tc.Function.Arguments, tools, logger, ctx); inferred != "" {
+			tc.Function.Name = inferred
+			logger.InfoContext(ctx, "ollama: inferred tool name for nameless tool call",
+				"name", inferred, "args", tc.Function.Arguments)
+			filtered = append(filtered, tc)
+		} else if len(tc.Function.Arguments) > 0 {
+			logger.WarnContext(ctx, "ollama: dropping tool call with empty name (could not infer)",
+				"args", tc.Function.Arguments)
+		} else {
+			logger.DebugContext(ctx, "ollama: filtering phantom tool call (empty name and args)")
+		}
+	}
+
+	return filtered
+}
+
+// logResponsePreview logs a preview of the response content for debugging.
+func logResponsePreview(logger *slog.Logger, ctx context.Context, content string) {
+	if len(content) == 0 {
+		return
+	}
+
+	preview := content
+	if len(preview) > 100 {
+		preview = preview[:100]
+	}
+
+	logger.DebugContext(ctx, "Ollama Complete response preview", "preview", preview)
+}
+
+// Stream performs a streaming completion request using Ollama's native API.
+func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNewParams) (<-chan openaisdk.ChatCompletionChunk, error) {
+	req := p.buildChatRequest(ctx, params, true)
+
 	chunks := make(chan openaisdk.ChatCompletionChunk, 10)
 
-	// Start streaming in background.
 	go func() {
 		defer close(chunks)
 
@@ -380,52 +364,21 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 		var lastDoneReason string
 
 		err := p.client.Chat(ctx, req, func(resp api.ChatResponse) error {
-			// Check context cancellation.
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 
-			// Merge Ollama's separate Thinking field into Content as <think> tags.
-			// Thinking models (qwen3, kimi2.5, etc.) put reasoning in Message.Thinking
-			// and only the final answer in Message.Content. Our sanitizer already handles
-			// <think> tags, so wrapping and prepending unifies the pipeline.
-			if resp.Message.Thinking != "" {
-				resp.Message.Content = "<think>" + resp.Message.Thinking + "</think>" + resp.Message.Content
-				resp.Message.Thinking = ""
-			}
+			// Merge thinking into content.
+			resp.Message.Content = mergeThinkingContent(resp.Message.Thinking, resp.Message.Content)
+			resp.Message.Thinking = ""
 
-			// Fix tool calls with empty function names by inferring from arguments.
-			// Some models emit tool calls with valid arguments but no function name.
-			// Only filter truly phantom calls (empty name AND empty arguments).
-			if len(resp.Message.ToolCalls) > 0 {
-				filtered := resp.Message.ToolCalls[:0]
-				for _, tc := range resp.Message.ToolCalls {
-					if tc.Function.Name != "" {
-						filtered = append(filtered, tc)
-					} else if inferred := inferToolName(tc.Function.Arguments, req.Tools, p.logger, ctx); inferred != "" {
-						tc.Function.Name = inferred
-						p.logger.InfoContext(ctx, "ollama: inferred tool name for nameless tool call",
-							"name", inferred, "args", tc.Function.Arguments)
-						filtered = append(filtered, tc)
-					} else if len(tc.Function.Arguments) > 0 {
-						p.logger.WarnContext(ctx, "ollama: dropping tool call with empty name (could not infer)",
-							"chunk_index", chunkIndex,
-							"args", tc.Function.Arguments)
-					} else {
-						p.logger.DebugContext(ctx, "ollama: filtering phantom tool call (empty name and args)",
-							"chunk_index", chunkIndex)
-					}
-				}
+			// Fix tool calls with empty function names.
+			resp.Message.ToolCalls = filterToolCalls(resp.Message.ToolCalls, req.Tools, p.logger, ctx)
 
-				resp.Message.ToolCalls = filtered
-			}
-
-			// Track done reason for final chunk handling.
 			if resp.Done && resp.DoneReason != "" {
 				lastDoneReason = resp.DoneReason
 			}
 
-			// Convert to OpenAI chunk and send.
 			chunk := convertOllamaChunkToOpenAI(resp, chunkID, p.model, p.logger, ctx)
 
 			select {
@@ -438,9 +391,6 @@ func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNe
 			return nil
 		})
 
-		// Handle error - log it and let the channel close with zero chunks.
-		// The caller (callLLM) detects 0-chunk streams and returns an error,
-		// which allows the retry loop to handle transient failures (e.g. HTTP 500).
 		if err != nil && ctx.Err() == nil {
 			p.logger.ErrorContext(ctx, "ollama stream error", "error", err, "chunks_sent", chunkIndex, "done_reason", lastDoneReason)
 		}

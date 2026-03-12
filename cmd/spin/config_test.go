@@ -8,118 +8,89 @@ import (
 	"testing"
 )
 
+// configShowTestCase defines a test case for config show.
+type configShowTestCase struct {
+	name       string
+	configYAML string
+	format     string
+	wantErr    bool
+	wantOutput []string
+}
+
+// runConfigShowTestCase runs a single config show test case.
+func runConfigShowTestCase(t *testing.T, tt configShowTestCase) {
+	t.Helper()
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	configFile := filepath.Join(tmpDir, "spin.yaml")
+	err := os.WriteFile(configFile, []byte(tt.configYAML), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create config file: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	root := newRootCmd()
+	root.SetArgs([]string{"--config-file", configFile, "config", "show", "--format", tt.format})
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+
+	err = root.Execute()
+
+	if (err != nil) != tt.wantErr {
+		t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
+		return
+	}
+
+	if !tt.wantErr {
+		output := stdout.String()
+		for _, want := range tt.wantOutput {
+			if !strings.Contains(output, want) {
+				t.Errorf("Output missing expected string %q\nGot: %s", want, output)
+			}
+		}
+	}
+}
+
 func TestConfigShow(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name       string
-		configYAML string
-		format     string
-		wantErr    bool
-		wantOutput []string // Strings that should appear in output.
-	}{
+	tests := []configShowTestCase{
 		{
 			name: "text format with valid config",
-			configYAML: `version: "2.0"
-llm:
-  provider: openai
-  model: gpt-4o
-security:
-  sandbox_mode: workspace-only
-`,
-			format:  "text",
-			wantErr: false,
-			wantOutput: []string{
-				"llm:",
-				"provider: openai",
-				"model: gpt-4o",
-				"security:",
-			},
+			configYAML: "version: \"2.0\"\nllm:\n  provider: openai\n  model: gpt-4o\nsecurity:\n  sandbox_mode: workspace-only\n",
+			format:     "text",
+			wantErr:    false,
+			wantOutput: []string{"llm:", "provider: openai", "model: gpt-4o", "security:"},
 		},
 		{
-			name: "json format with valid config",
-			configYAML: `version: "2.0"
-llm:
-  provider: openai
-  model: gpt-4o
-`,
-			format:  "json",
-			wantErr: false,
-			wantOutput: []string{
-				`"LLM"`,
-				`"Provider"`,
-				`"openai"`,
-			},
+			name:       "json format with valid config",
+			configYAML: "version: \"2.0\"\nllm:\n  provider: openai\n  model: gpt-4o\n",
+			format:     "json",
+			wantErr:    false,
+			wantOutput: []string{`"LLM"`, `"Provider"`, `"openai"`},
 		},
 		{
-			name: "yaml format with valid config",
-			configYAML: `version: "2.0"
-llm:
-  provider: openai
-  model: gpt-4o
-`,
-			format:  "yaml",
-			wantErr: false,
-			wantOutput: []string{
-				"llm:",
-				"provider: openai",
-			},
+			name:       "yaml format with valid config",
+			configYAML: "version: \"2.0\"\nllm:\n  provider: openai\n  model: gpt-4o\n",
+			format:     "yaml",
+			wantErr:    false,
+			wantOutput: []string{"llm:", "provider: openai"},
 		},
 		{
-			name: "redacts sensitive values",
-			configYAML: `version: "2.0"
-llm:
-  provider: openai
-  model: gpt-4o
-  api_key: sk-secret123
-`,
-			format:  "text",
-			wantErr: false,
-			wantOutput: []string{
-				"api_key:",
-			},
+			name:       "redacts sensitive values",
+			configYAML: "version: \"2.0\"\nllm:\n  provider: openai\n  model: gpt-4o\n  api_key: sk-secret123\n",
+			format:     "text",
+			wantErr:    false,
+			wantOutput: []string{"api_key:"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Create temp config file.
-			tmpDir := t.TempDir()
-
-			configFile := filepath.Join(tmpDir, "spin.yaml")
-			err := os.WriteFile(configFile, []byte(tt.configYAML), 0644)
-			if err != nil {
-				t.Fatalf("Failed to create config file: %v", err)
-			}
-
-			// Capture output.
-			var stdout, stderr bytes.Buffer
-
-			// Create root command with config subcommand (provides --config-file persistent flag).
-			root := newRootCmd()
-			root.SetArgs([]string{"--config-file", configFile, "config", "show", "--format", tt.format})
-			root.SetOut(&stdout)
-			root.SetErr(&stderr)
-
-			// Execute.
-			err = root.Execute()
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
-
-				return
-			}
-
-			if !tt.wantErr {
-				output := stdout.String()
-				for _, want := range tt.wantOutput {
-					if !strings.Contains(output, want) {
-						t.Errorf("Output missing expected string %q\nGot: %s", want, output)
-					}
-				}
-			}
+			runConfigShowTestCase(t, tt)
 		})
 	}
 }
@@ -205,84 +176,78 @@ llm:
 	}
 }
 
+// configPathTestCase defines a test case for config path.
+type configPathTestCase struct {
+	name       string
+	setupFile  bool
+	wantErr    bool
+	wantOutput []string
+}
+
+// runConfigPathTestCase runs a single config path test case.
+func runConfigPathTestCase(t *testing.T, tt configPathTestCase) {
+	t.Helper()
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "spin.yaml")
+
+	if tt.setupFile {
+		configYAML := "version: \"2.0\"\nllm:\n  provider: openai\n  model: gpt-4o\n"
+		err := os.WriteFile(configFile, []byte(configYAML), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create config file: %v", err)
+		}
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	cfgPath := configFile
+	if !tt.setupFile {
+		cfgPath = filepath.Join(tmpDir, "nonexistent.yaml")
+	}
+
+	root := newRootCmd()
+	root.SetArgs([]string{"--config-file", cfgPath, "config", "path"})
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+
+	err := root.Execute()
+
+	if (err != nil) != tt.wantErr {
+		t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
+		return
+	}
+
+	output := stdout.String() + stderr.String()
+	for _, want := range tt.wantOutput {
+		if !strings.Contains(output, want) {
+			t.Errorf("Output missing expected string %q\nGot: %s", want, output)
+		}
+	}
+}
+
 func TestConfigPath(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name       string
-		setupFile  bool
-		wantErr    bool
-		wantOutput []string
-	}{
+	tests := []configPathTestCase{
 		{
-			name:      "config file exists",
-			setupFile: true,
-			wantErr:   false,
-			wantOutput: []string{
-				"spin.yaml",
-			},
+			name:       "config file exists",
+			setupFile:  true,
+			wantErr:    false,
+			wantOutput: []string{"spin.yaml"},
 		},
 		{
-			name:      "config file not found",
-			setupFile: false,
-			wantErr:   true,
-			wantOutput: []string{
-				"No configuration file found",
-			},
+			name:       "config file not found",
+			setupFile:  false,
+			wantErr:    true,
+			wantOutput: []string{"No configuration file found"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Create temp dir.
-			tmpDir := t.TempDir()
-			configFile := filepath.Join(tmpDir, "spin.yaml")
-
-			if tt.setupFile {
-				// Create minimal valid config.
-				configYAML := `version: "2.0"
-llm:
-  provider: openai
-  model: gpt-4o
-`
-				err := os.WriteFile(configFile, []byte(configYAML), 0644)
-				if err != nil {
-					t.Fatalf("Failed to create config file: %v", err)
-				}
-			}
-
-			// Capture output.
-			var stdout, stderr bytes.Buffer
-
-			// Determine config file path.
-			cfgPath := configFile
-			if !tt.setupFile {
-				cfgPath = filepath.Join(tmpDir, "nonexistent.yaml")
-			}
-
-			// Create root command with config subcommand.
-			root := newRootCmd()
-			root.SetArgs([]string{"--config-file", cfgPath, "config", "path"})
-			root.SetOut(&stdout)
-			root.SetErr(&stderr)
-
-			// Execute.
-			err := root.Execute()
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
-
-				return
-			}
-
-			output := stdout.String() + stderr.String()
-			for _, want := range tt.wantOutput {
-				if !strings.Contains(output, want) {
-					t.Errorf("Output missing expected string %q\nGot: %s", want, output)
-				}
-			}
+			runConfigPathTestCase(t, tt)
 		})
 	}
 }

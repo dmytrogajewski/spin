@@ -12,18 +12,23 @@ import (
 )
 
 func main() {
-	// Create PureTTY adapter.
 	ui, err := adapters.NewPureTTY(os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create TUI: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Set up context with cancellation.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle OS signals for clean shutdown.
+	startSignalHandler(cancel)
+	startTUI(ctx, ui, cancel)
+	printWelcome(ui)
+	runInputLoop(ctx, ui, cancel)
+}
+
+// startSignalHandler listens for interrupt signals and cancels the context.
+func startSignalHandler(cancel context.CancelFunc) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
@@ -31,8 +36,10 @@ func main() {
 		<-sigChan
 		cancel()
 	}()
+}
 
-	// Start TUI in background.
+// startTUI runs the TUI adapter in a background goroutine.
+func startTUI(ctx context.Context, ui *adapters.PureTTY, cancel context.CancelFunc) {
 	go func() {
 		runErr := ui.Run(ctx)
 		if runErr != nil {
@@ -40,27 +47,52 @@ func main() {
 			cancel()
 		}
 	}()
+}
 
-	// Print welcome message.
-	_ = ui.PrintLine("╔══════════════════════════════════════════╗")
-	_ = ui.PrintLine("║   Spin TUI Demo - Minimal Example       ║")
-	_ = ui.PrintLine("╚══════════════════════════════════════════╝")
-	_ = ui.PrintLine("")
-	_ = ui.PrintLine("Welcome to the Spin TUI minimal demo!")
-	_ = ui.PrintLine("This example shows the simplest possible TUI usage.")
-	_ = ui.PrintLine("")
-	_ = ui.PrintLine("Commands:")
-	_ = ui.PrintLine("  help    - Show this message")
-	_ = ui.PrintLine("  hello   - Print a greeting")
-	_ = ui.PrintLine("  quit    - Exit the demo")
-	_ = ui.PrintLine("")
-	_ = ui.PrintLine("Type a command and press Enter:")
+// printWelcome prints the welcome message and available commands.
+func printWelcome(ui *adapters.PureTTY) {
+	lines := []string{
+		"╔══════════════════════════════════════════╗",
+		"║   Spin TUI Demo - Minimal Example       ║",
+		"╚══════════════════════════════════════════╝",
+		"",
+		"Welcome to the Spin TUI minimal demo!",
+		"This example shows the simplest possible TUI usage.",
+		"",
+		"Commands:",
+		"  help    - Show this message",
+		"  hello   - Print a greeting",
+		"  quit    - Exit the demo",
+		"",
+		"Type a command and press Enter:",
+	}
 
-	// Main input loop.
+	for _, line := range lines {
+		_ = ui.PrintLine(line)
+	}
+}
+
+// printHelp prints the help message.
+func printHelp(ui *adapters.PureTTY) {
+	lines := []string{
+		"",
+		"Available commands:",
+		"  help    - Show this message",
+		"  hello   - Print a greeting",
+		"  quit    - Exit the demo",
+		"",
+	}
+
+	for _, line := range lines {
+		_ = ui.PrintLine(line)
+	}
+}
+
+// runInputLoop handles user input until context is cancelled.
+func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.CancelFunc) {
 	for {
 		select {
 		case <-ctx.Done():
-			// Clean shutdown.
 			_ = ui.Stop()
 			_, _ = fmt.Fprintln(os.Stdout, "\nGoodbye!")
 
@@ -68,41 +100,39 @@ func main() {
 
 		case line, ok := <-ui.RequestInput():
 			if !ok {
-				// Input channel closed.
 				_ = ui.Stop()
 
 				return
 			}
 
-			// Handle commands.
-			switch line {
-			case "quit", "exit", "q":
-				_ = ui.PrintLine("Exiting demo...")
-				cancel()
-
-			case "help", "h", "?":
-				_ = ui.PrintLine("")
-				_ = ui.PrintLine("Available commands:")
-				_ = ui.PrintLine("  help    - Show this message")
-				_ = ui.PrintLine("  hello   - Print a greeting")
-				_ = ui.PrintLine("  quit    - Exit the demo")
-				_ = ui.PrintLine("")
-
-			case "hello":
-				_ = ui.PrintLine("")
-				_ = ui.PrintLine("Hello from Spin TUI! 👋")
-				_ = ui.PrintLine("The quick brown fox jumps over the lazy dog.")
-				_ = ui.PrintLine("")
-
-			case "":
-				// Empty line, do nothing.
-
-			default:
-				_ = ui.PrintLine("")
-				_ = ui.PrintLine(fmt.Sprintf("Unknown command: '%s'", line))
-				_ = ui.PrintLine("Type 'help' for available commands.")
-				_ = ui.PrintLine("")
-			}
+			handleCommand(ui, line, cancel)
 		}
+	}
+}
+
+// handleCommand processes a single user command.
+func handleCommand(ui *adapters.PureTTY, line string, cancel context.CancelFunc) {
+	switch line {
+	case "quit", "exit", "q":
+		_ = ui.PrintLine("Exiting demo...")
+		cancel()
+
+	case "help", "h", "?":
+		printHelp(ui)
+
+	case "hello":
+		_ = ui.PrintLine("")
+		_ = ui.PrintLine("Hello from Spin TUI! 👋")
+		_ = ui.PrintLine("The quick brown fox jumps over the lazy dog.")
+		_ = ui.PrintLine("")
+
+	case "":
+		// Empty line, do nothing.
+
+	default:
+		_ = ui.PrintLine("")
+		_ = ui.PrintLine(fmt.Sprintf("Unknown command: '%s'", line))
+		_ = ui.PrintLine("Type 'help' for available commands.")
+		_ = ui.PrintLine("")
 	}
 }

@@ -340,6 +340,30 @@ func TestEventEmitterConfig_Defaults(t *testing.T) {
 	}
 }
 
+// drainEvents consumes events from a channel until timeout.
+func drainEvents(events <-chan Event, wg *sync.WaitGroup, timeout time.Duration) {
+	defer wg.Done()
+
+	timer := time.After(timeout)
+
+	for {
+		select {
+		case <-events:
+		case <-timer:
+			return
+		}
+	}
+}
+
+// emitBatch emits a batch of events from a producer goroutine.
+func emitBatch(emitter *EventEmitter, id, count int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for j := range count {
+		emitter.Emit(Event{Type: EventInfo, Data: id*100 + j})
+	}
+}
+
 // Test concurrent emissions with different modes.
 func TestEventEmitter_ConcurrentEmissions(t *testing.T) {
 	t.Parallel()
@@ -350,57 +374,43 @@ func TestEventEmitter_ConcurrentEmissions(t *testing.T) {
 		t.Run(mode.String(), func(t *testing.T) {
 			t.Parallel()
 
-			emitter := NewEventEmitterWithConfig(EventEmitterConfig{
-				BufferSize:       10,
-				BackpressureMode: mode,
-				BufferLimit:      100,
-			})
-			defer emitter.Close()
-
-			_, events, err := emitter.Subscribe()
-			if err != nil {
-				t.Fatalf("Subscribe failed: %v", err)
-			}
-
-			// Consumer.
-			var wg sync.WaitGroup
-			wg.Add(1)
-
-			go func() {
-				defer wg.Done()
-
-				count := 0
-				timeout := time.After(500 * time.Millisecond)
-
-				for {
-					select {
-					case <-events:
-						count++
-					case <-timeout:
-						return
-					}
-				}
-			}()
-
-			// Multiple producers.
-			numProducers := 5
-			eventsPerProducer := 10
-
-			for i := range numProducers {
-				wg.Add(1)
-
-				go func(id int) {
-					defer wg.Done()
-
-					for j := range eventsPerProducer {
-						emitter.Emit(Event{Type: EventInfo, Data: id*100 + j})
-					}
-				}(i)
-			}
-
-			wg.Wait()
+			testConcurrentEmissions(t, mode)
 		})
 	}
+}
+
+func testConcurrentEmissions(t *testing.T, mode BackpressureMode) {
+	t.Helper()
+
+	emitter := NewEventEmitterWithConfig(EventEmitterConfig{
+		BufferSize:       10,
+		BackpressureMode: mode,
+		BufferLimit:      100,
+	})
+	defer emitter.Close()
+
+	_, events, err := emitter.Subscribe()
+	if err != nil {
+		t.Fatalf("Subscribe failed: %v", err)
+	}
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go drainEvents(events, &wg, 500*time.Millisecond)
+
+	// Multiple producers.
+	numProducers := 5
+	eventsPerProducer := 10
+
+	for i := range numProducers {
+		wg.Add(1)
+
+		go emitBatch(emitter, i, eventsPerProducer, &wg)
+	}
+
+	wg.Wait()
 }
 
 // Test Subscribe/Unsubscribe during emission.

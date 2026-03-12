@@ -219,7 +219,7 @@ High-value fixes that improve reliability.
 
 ## Wave 6: Complexity Reduction (est. ~500 issues)
 
-- [ ] **6.1 — `cyclop` + `gocyclo` + `gocognit` complexity** (~235 issues)
+- [x] **6.1 — `cyclop` + `gocyclo` + `gocognit` complexity** (~235 issues)
   - **Description:** Refactor high-complexity functions. Extract sub-functions, use early returns, table-driven patterns.
   - **DoR:** Wave 5 complete
   - **DoD:** 0 cyclop/gocyclo/gocognit issues; `make test` passes
@@ -233,19 +233,19 @@ High-value fixes that improve reliability.
   - **Strategy:** Extract helper functions, use strategy/handler patterns, break into sub-methods
   - **`//nolint` prohibited** — refactor functions to reduce complexity
 
-- [ ] **6.2 — `funlen` function length** (~117 issues)
+- [x] **6.2 — `funlen` function length** (~117 issues)
   - **Description:** Split long functions (>80 lines) into focused sub-functions.
   - **DoR:** 6.1 complete (complexity reduction already handles many)
   - **DoD:** 0 funlen issues
   - **`//nolint` prohibited** — split functions, do not suppress
 
-- [ ] **6.3 — `nestif` nested conditionals** (~65 issues)
+- [x] **6.3 — `nestif` nested conditionals** (~65 issues)
   - **Description:** Flatten nested ifs using early returns, guard clauses.
   - **DoR:** 6.2 complete
   - **DoD:** 0 nestif issues
   - **`//nolint` prohibited** — restructure control flow
 
-- [ ] **6.4 — `maintidx` maintainability index** (~5 issues)
+- [x] **6.4 — `maintidx` maintainability index** (~5 issues)
   - **Description:** Improve worst-scoring functions (likely overlap with 6.1).
   - **DoR:** 6.3 complete
   - **DoD:** 0 maintidx issues

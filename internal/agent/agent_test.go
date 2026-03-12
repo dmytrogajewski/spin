@@ -31,180 +31,72 @@ var (
 	errLlmProviderError = errors.New("LLM provider error")
 )
 
+// newTestSecurityService creates a security service for testing.
+func newTestSecurityService() *security.Service {
+	validator := security.NewValidator()
+	emitter := events.NewEventEmitter(100)
+	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
+
+	return security.NewService(validator, approvalService)
+}
+
 // TestNewAgent tests the refactored agent creation with services.
+// newAgentTestDeps creates a full set of valid dependencies for NewAgent tests.
+type newAgentTestDeps struct {
+	provider    llm.Provider
+	security    *security.Service
+	detection   *detection.Service
+	toolRuntime *ToolRuntime
+	planning    *planning.Service
+	environment *Environment
+	emitter     *events.EventEmitter
+}
+
+func validAgentDeps() newAgentTestDeps {
+	return newAgentTestDeps{
+		provider:    llm.NewMockProvider("test"),
+		security:    newTestSecurityService(),
+		detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
+		toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
+		planning:    planning.NewService(llm.NewMockProvider("test")),
+		environment: &Environment{WorkDir: "/tmp"},
+		emitter:     events.NewEventEmitter(100),
+	}
+}
+
 func TestNewAgent(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name        string
-		provider    llm.Provider
-		security    *security.Service
-		detection   *detection.Service
-		toolRuntime *ToolRuntime
-		planning    *planning.Service
-		environment *Environment
-		emitter     *events.EventEmitter
-		aceService  *ACEService
+		modify      func(*newAgentTestDeps)
 		wantErr     bool
 		errContains string
 	}{
-		{
-			name:     "valid agent",
-			provider: llm.NewMockProvider("test"),
-			security: func() *security.Service {
-				validator := security.NewValidator()
-				emitter := events.NewEventEmitter(100)
-				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-
-				return security.NewService(validator, approvalService)
-			}(),
-			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewService(llm.NewMockProvider("test")),
-			environment: &Environment{WorkDir: "/tmp"},
-			emitter:     events.NewEventEmitter(100),
-			wantErr:     false,
-		},
-		{
-			name:     "nil provider",
-			provider: nil,
-			security: func() *security.Service {
-				validator := security.NewValidator()
-				emitter := events.NewEventEmitter(100)
-				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-
-				return security.NewService(validator, approvalService)
-			}(),
-			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewService(llm.NewMockProvider("test")),
-			environment: &Environment{WorkDir: "/tmp"},
-			emitter:     events.NewEventEmitter(100),
-			wantErr:     true,
-			errContains: "LLM provider cannot be nil",
-		},
-		{
-			name:        "nil security",
-			provider:    llm.NewMockProvider("test"),
-			security:    nil,
-			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewService(llm.NewMockProvider("test")),
-			environment: &Environment{WorkDir: "/tmp"},
-			emitter:     events.NewEventEmitter(100),
-			wantErr:     true,
-			errContains: "security service cannot be nil",
-		},
-		{
-			name:     "nil detection",
-			provider: llm.NewMockProvider("test"),
-			security: func() *security.Service {
-				validator := security.NewValidator()
-				emitter := events.NewEventEmitter(100)
-				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-
-				return security.NewService(validator, approvalService)
-			}(),
-			detection:   nil,
-			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewService(llm.NewMockProvider("test")),
-			environment: &Environment{WorkDir: "/tmp"},
-			emitter:     events.NewEventEmitter(100),
-			wantErr:     true,
-			errContains: "detection service cannot be nil",
-		},
-		{
-			name:     "nil tool runtime",
-			provider: llm.NewMockProvider("test"),
-			security: func() *security.Service {
-				validator := security.NewValidator()
-				emitter := events.NewEventEmitter(100)
-				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-
-				return security.NewService(validator, approvalService)
-			}(),
-			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			toolRuntime: nil,
-			planning:    planning.NewService(llm.NewMockProvider("test")),
-			environment: &Environment{WorkDir: "/tmp"},
-			emitter:     events.NewEventEmitter(100),
-			wantErr:     true,
-			errContains: "tool runtime cannot be nil",
-		},
-		{
-			name:     "nil planning",
-			provider: llm.NewMockProvider("test"),
-			security: func() *security.Service {
-				validator := security.NewValidator()
-				emitter := events.NewEventEmitter(100)
-				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-
-				return security.NewService(validator, approvalService)
-			}(),
-			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    nil,
-			environment: &Environment{WorkDir: "/tmp"},
-			emitter:     events.NewEventEmitter(100),
-			wantErr:     true,
-			errContains: "planning service cannot be nil",
-		},
-		{
-			name:     "nil environment",
-			provider: llm.NewMockProvider("test"),
-			security: func() *security.Service {
-				validator := security.NewValidator()
-				emitter := events.NewEventEmitter(100)
-				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-
-				return security.NewService(validator, approvalService)
-			}(),
-			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewService(llm.NewMockProvider("test")),
-			environment: nil,
-			emitter:     events.NewEventEmitter(100),
-			wantErr:     true,
-			errContains: "context cannot be nil",
-		},
-		{
-			name:     "nil emitter",
-			provider: llm.NewMockProvider("test"),
-			security: func() *security.Service {
-				validator := security.NewValidator()
-				emitter := events.NewEventEmitter(100)
-				approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-
-				return security.NewService(validator, approvalService)
-			}(),
-			detection:   detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
-			toolRuntime: newTestToolRuntime(nil, tools.NewRegistry()),
-			planning:    planning.NewService(llm.NewMockProvider("test")),
-			environment: &Environment{WorkDir: "/tmp"},
-			emitter:     nil,
-			wantErr:     true,
-			errContains: "event emitter cannot be nil",
-		},
+		{name: "valid agent"},
+		{name: "nil provider", modify: func(d *newAgentTestDeps) { d.provider = nil }, wantErr: true, errContains: "LLM provider cannot be nil"},
+		{name: "nil security", modify: func(d *newAgentTestDeps) { d.security = nil }, wantErr: true, errContains: "security service cannot be nil"},
+		{name: "nil detection", modify: func(d *newAgentTestDeps) { d.detection = nil }, wantErr: true, errContains: "detection service cannot be nil"},
+		{name: "nil tool runtime", modify: func(d *newAgentTestDeps) { d.toolRuntime = nil }, wantErr: true, errContains: "tool runtime cannot be nil"},
+		{name: "nil planning", modify: func(d *newAgentTestDeps) { d.planning = nil }, wantErr: true, errContains: "planning service cannot be nil"},
+		{name: "nil environment", modify: func(d *newAgentTestDeps) { d.environment = nil }, wantErr: true, errContains: "context cannot be nil"},
+		{name: "nil emitter", modify: func(d *newAgentTestDeps) { d.emitter = nil }, wantErr: true, errContains: "event emitter cannot be nil"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			opts := []Option{}
-			if tt.aceService != nil {
-				opts = append(opts, WithACEService(tt.aceService))
+			deps := validAgentDeps()
+			if tt.modify != nil {
+				tt.modify(&deps)
 			}
 
-			agent, err := NewAgent(tt.provider, tt.security, tt.detection, tt.toolRuntime, tt.planning, tt.environment, tt.emitter, opts...)
+			agent, err := NewAgent(deps.provider, deps.security, deps.detection, deps.toolRuntime, deps.planning, deps.environment, deps.emitter)
 
 			if tt.wantErr {
 				require.Error(t, err)
-
-				if tt.errContains != "" {
-					assert.Contains(t, err.Error(), tt.errContains)
-				}
-
+				assert.Contains(t, err.Error(), tt.errContains)
 				assert.Nil(t, agent)
 			} else {
 				require.NoError(t, err)
@@ -235,13 +127,7 @@ func TestAgent_WithACEService(t *testing.T) {
 	// Create agent with ACE.
 	agent, err := NewAgent(
 		mockLLM,
-		func() *security.Service {
-			validator := security.NewValidator()
-			emitter := events.NewEventEmitter(100)
-			approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-
-			return security.NewService(validator, approvalService)
-		}(),
+		newTestSecurityService(),
 		detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil),
 		newTestToolRuntime(nil, tools.NewRegistry()),
 		planning.NewService(mockLLM),
@@ -589,88 +475,83 @@ func TestToolExecutionBugReproduction(t *testing.T) {
 
 	emitter := events.NewEventEmitter(100)
 
-	// Collect events.
+	agent, err := NewAgent(
+		mockLLM, securityService, detectionService, toolRuntime,
+		planning.NewService(mockLLM), env, emitter,
+		WithMaxTurns(10), WithAgentTimeout(30*time.Second),
+	)
+	require.NoError(t, err)
+
+	collector := newToolEventCollector(t, emitter)
+
+	resp, err := agent.Execute(ctx, &Request{
+		Input: "list files in current directory",
+		Task:  &simpleTask{name: "test", systemPrompt: "You are a test assistant", maxTokens: 4096},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+
+	collector.assertToolExecuted(t, "list_directory")
+}
+
+// toolEventCollector collects tool call events from an emitter.
+type toolEventCollector struct {
+	startEvents    []events.Event
+	completeEvents []events.Event
+	done           chan struct{}
+	emitter        *events.EventEmitter
+}
+
+// newToolEventCollector subscribes to an emitter and collects tool events.
+func newToolEventCollector(t *testing.T, emitter *events.EventEmitter) *toolEventCollector {
+	t.Helper()
+
 	subID, eventCh, err := emitter.Subscribe()
 	require.NoError(t, err)
 
-	defer emitter.Unsubscribe(subID)
+	t.Cleanup(func() { emitter.Unsubscribe(subID) })
 
-	var (
-		toolStartEvents    []events.Event
-		toolCompleteEvents []events.Event
-	)
-
-	done := make(chan struct{})
+	c := &toolEventCollector{
+		done:    make(chan struct{}),
+		emitter: emitter,
+	}
 
 	go func() {
-		defer close(done)
+		defer close(c.done)
 
 		for evt := range eventCh {
 			switch evt.Type {
 			case events.EventToolCallStart:
-				toolStartEvents = append(toolStartEvents, evt)
-				t.Logf("Tool start event: %+v", evt.Data)
+				c.startEvents = append(c.startEvents, evt)
 			case events.EventToolCallComplete:
-				toolCompleteEvents = append(toolCompleteEvents, evt)
-				t.Logf("Tool complete event: %+v", evt.Data)
+				c.completeEvents = append(c.completeEvents, evt)
 			}
 		}
 	}()
 
-	// Create agent.
-	agent, err := NewAgent(
-		mockLLM,
-		securityService,
-		detectionService,
-		toolRuntime,
-		planning.NewService(mockLLM),
-		env,
-		emitter,
-		WithMaxTurns(10),
-		WithAgentTimeout(30*time.Second),
-	)
-	require.NoError(t, err)
+	return c
+}
 
-	// Create a simple task.
-	task := &simpleTask{
-		name:         "test",
-		systemPrompt: "You are a test assistant",
-		allowedTools: []string{}, // Allow all tools.
-		maxTokens:    4096,
-	}
+// assertToolExecuted closes the emitter and asserts a tool was executed with the expected name.
+func (c *toolEventCollector) assertToolExecuted(t *testing.T, expectedTool string) {
+	t.Helper()
 
-	// Execute: Send request that should trigger tool call.
-	req := &Request{
-		Input: "list files in current directory",
-		Task:  task,
-	}
+	c.emitter.Close()
+	<-c.done
 
-	resp, err := agent.Execute(ctx, req)
-	require.NoError(t, err)
-	require.NotNil(t, resp)
+	assert.NotEmpty(t, c.startEvents, "Tool was called but no start event emitted")
+	assert.NotEmpty(t, c.completeEvents, "Tool was called but no complete event emitted")
 
-	// Close emitter and wait for event collection.
-	emitter.Close()
-	<-done
-
-	// Assert: Tool should have been executed.
-	t.Logf("Tool start events: %d", len(toolStartEvents))
-	t.Logf("Tool complete events: %d", len(toolCompleteEvents))
-
-	assert.NotEmpty(t, toolStartEvents, "BUG: Tool was called but no start event emitted")
-	assert.NotEmpty(t, toolCompleteEvents, "BUG: Tool was called but no complete event emitted")
-
-	// Check event data.
-	if len(toolStartEvents) > 0 {
-		startData, ok := toolStartEvents[0].Data.(events.ToolCallStartData)
+	if len(c.startEvents) > 0 {
+		startData, ok := c.startEvents[0].Data.(events.ToolCallStartData)
 		assert.True(t, ok, "Should have ToolCallStartData")
-		assert.Equal(t, "list_directory", startData.ToolName)
+		assert.Equal(t, expectedTool, startData.ToolName)
 	}
 
-	if len(toolCompleteEvents) > 0 {
-		completeData, ok := toolCompleteEvents[0].Data.(events.ToolCallCompleteData)
+	if len(c.completeEvents) > 0 {
+		completeData, ok := c.completeEvents[0].Data.(events.ToolCallCompleteData)
 		assert.True(t, ok, "Should have ToolCallCompleteData")
-		assert.Equal(t, "list_directory", completeData.ToolName)
+		assert.Equal(t, expectedTool, completeData.ToolName)
 		assert.True(t, completeData.Success, "Tool execution should succeed")
 	}
 }
@@ -892,79 +773,23 @@ func TestToolExecutionWithMockLLM(t *testing.T) {
 
 	emitter := events.NewEventEmitter(100)
 
-	// Collect events.
-	subID, eventCh, err := emitter.Subscribe()
-	require.NoError(t, err)
-
-	defer emitter.Unsubscribe(subID)
-
-	var (
-		toolStartEvents    []events.Event
-		toolCompleteEvents []events.Event
-	)
-
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-
-		for evt := range eventCh {
-			switch evt.Type {
-			case events.EventToolCallStart:
-				toolStartEvents = append(toolStartEvents, evt)
-				t.Logf("Tool start: %+v", evt.Data)
-			case events.EventToolCallComplete:
-				toolCompleteEvents = append(toolCompleteEvents, evt)
-				data, ok := evt.Data.(events.ToolCallCompleteData)
-			assert.True(t, ok, "expected ToolCallCompleteData type assertion to succeed")
-				t.Logf("Tool complete: success=%v tool=%s", data.Success, data.ToolName)
-			}
-		}
-	}()
-
-	// Create agent.
 	agent, err := NewAgent(
-		mockLLM,
-		securityService,
-		detectionService,
-		toolRuntime,
-		planning.NewService(mockLLM),
-		env,
-		emitter,
-		WithMaxTurns(10),
-		WithAgentTimeout(10*time.Second),
+		mockLLM, securityService, detectionService, toolRuntime,
+		planning.NewService(mockLLM), env, emitter,
+		WithMaxTurns(10), WithAgentTimeout(10*time.Second),
 	)
 	require.NoError(t, err)
 
-	task := &simpleTask{
-		name:         "test",
-		systemPrompt: "You are a helpful assistant.",
-		allowedTools: []string{},
-		maxTokens:    4096,
-	}
+	collector := newToolEventCollector(t, emitter)
 
-	req := &Request{
+	resp, err := agent.Execute(ctx, &Request{
 		Input: "list files in /tmp directory",
-		Task:  task,
-	}
-
-	resp, err := agent.Execute(ctx, req)
+		Task:  &simpleTask{name: "test", systemPrompt: "You are a helpful assistant.", maxTokens: 4096},
+	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 
-	emitter.Close()
-	<-done
-
-	assert.NotEmpty(t, toolStartEvents, "Tool should have been called")
-	assert.NotEmpty(t, toolCompleteEvents, "Tool should have completed")
-
-	if len(toolCompleteEvents) > 0 {
-		completeData, ok := toolCompleteEvents[0].Data.(events.ToolCallCompleteData)
-		assert.True(t, ok)
-		assert.True(t, completeData.Success, "Tool execution should succeed")
-		assert.Equal(t, "list_directory", completeData.ToolName)
-		assert.NotEmpty(t, completeData.Output, "Tool should produce output")
-	}
+	collector.assertToolExecuted(t, "list_directory")
 }
 
 // TestDirectToolCallWithMockLLM tests ProcessToolCall directly with a mock provider.
@@ -1398,182 +1223,101 @@ func (m *mockLLMProvider) Close() error {
 // This is a regression test for the bug where handleCycleDetection
 // modified messages locally but didn't return them, causing interventions
 // to be silently discarded.
+// cycleDetectionMessages creates a conversation with tool calls and results for cycle detection tests.
+func cycleDetectionMessages() []message.Message {
+	return []message.Message{
+		{Role: message.RoleUser, Content: "List files", Timestamp: time.Now()},
+		{
+			Role: message.RoleAssistant, Content: "I'll list the files",
+			ToolCalls: []message.ToolCall{
+				{ID: "call-abc-0", Type: "function", Function: message.ToolCallFunction{Name: "list_directory", Arguments: `{"path":"/"}`}},
+				{ID: "call-abc-1", Type: "function", Function: message.ToolCallFunction{Name: "shell_command", Arguments: `{"command":"ls"}`}},
+			},
+			Timestamp: time.Now(),
+		},
+		{Role: message.RoleTool, Content: "file1.txt\nfile2.txt", ToolCallID: "call-abc-0", Timestamp: time.Now()},
+		{Role: message.RoleTool, Content: "file1.txt  file2.txt", ToolCallID: "call-abc-1", Timestamp: time.Now()},
+	}
+}
+
+// recordRepeatedListDirSnapshots records 3 identical list_directory snapshots to trigger cycle detection.
+func recordRepeatedListDirSnapshots(det *detection.Service) {
+	for i := 1; i <= 3; i++ {
+		det.RecordSnapshot(detection.Snapshot{
+			Turn:      i,
+			Response:  "Calling list_directory",
+			ToolCalls: []string{`list_directory({"path": "/"})`},
+			Timestamp: time.Now(),
+		})
+	}
+}
+
+// cycleDetectionLLMResponse creates a mock LLM response that triggers cycle detection.
+func cycleDetectionLLMResponse() *openai.ChatCompletion {
+	return &openai.ChatCompletion{
+		ID: "cycle-detection-test", Model: "test-model",
+		Choices: []openai.ChatCompletionChoice{{
+			Message: openai.ChatCompletionMessage{
+				Content: "Calling list_directory", Role: openai.ChatCompletionMessageRoleAssistant,
+				ToolCalls: []openai.ChatCompletionMessageToolCall{{
+					ID: "call_123", Type: openai.ChatCompletionMessageToolCallTypeFunction,
+					Function: openai.ChatCompletionMessageToolCallFunction{Name: "list_directory", Arguments: `{"path": "/"}`},
+				}},
+			},
+			FinishReason: openai.ChatCompletionChoicesFinishReasonToolCalls,
+		}},
+	}
+}
+
 func TestHandleCycleDetection_InterventionMessagesApplied(t *testing.T) {
 	t.Parallel()
 	agent := createTestAgentWithServices(t)
-
-	// Enable cycle detection.
 	agent.cycleDetection = true
 
-	// Create initial conversation with tool calls and tool results to verify preservation.
-	initialMessages := []message.Message{
-		{
-			Role:      message.RoleUser,
-			Content:   "List files",
-			Timestamp: time.Now(),
-		},
-		{
-			Role:    message.RoleAssistant,
-			Content: "I'll list the files",
-			ToolCalls: []message.ToolCall{
-				{
-					ID:   "call-abc-0",
-					Type: "function",
-					Function: message.ToolCallFunction{
-						Name:      "list_directory",
-						Arguments: `{"path":"/"}`,
-					},
-				},
-				{
-					ID:   "call-abc-1",
-					Type: "function",
-					Function: message.ToolCallFunction{
-						Name:      "shell_command",
-						Arguments: `{"command":"ls"}`,
-					},
-				},
-			},
-			Timestamp: time.Now(),
-		},
-		{
-			Role:       message.RoleTool,
-			Content:    "file1.txt\nfile2.txt",
-			ToolCallID: "call-abc-0",
-			Timestamp:  time.Now(),
-		},
-		{
-			Role:       message.RoleTool,
-			Content:    "file1.txt  file2.txt",
-			ToolCallID: "call-abc-1",
-			Timestamp:  time.Now(),
-		},
-	}
+	initialMessages := cycleDetectionMessages()
+	recordRepeatedListDirSnapshots(agent.detection)
 
-	// Simulate repeated tool calls to trigger cycle detection
-	// Add 3 snapshots with same tool AND same params to trigger CycleRepeatedTool.
-	agent.detection.RecordSnapshot(detection.Snapshot{
-		Turn:      1,
-		Response:  "Calling list_directory",
-		ToolCalls: []string{`list_directory({"path": "/"})`},
-		Timestamp: time.Now(),
-	})
-	agent.detection.RecordSnapshot(detection.Snapshot{
-		Turn:      2,
-		Response:  "Calling list_directory again",
-		ToolCalls: []string{`list_directory({"path": "/"})`},
-		Timestamp: time.Now(),
-	})
-	agent.detection.RecordSnapshot(detection.Snapshot{
-		Turn:      3,
-		Response:  "Calling list_directory once more",
-		ToolCalls: []string{`list_directory({"path": "/"})`},
-		Timestamp: time.Now(),
-	})
-
-	// Create a mock LLM response that will trigger cycle detection.
-	llmResp := &openai.ChatCompletion{
-		ID:    "cycle-detection-test",
-		Model: "test-model",
-		Choices: []openai.ChatCompletionChoice{
-			{
-				Message: openai.ChatCompletionMessage{
-					Content: "Calling list_directory",
-					Role:    openai.ChatCompletionMessageRoleAssistant,
-					ToolCalls: []openai.ChatCompletionMessageToolCall{
-						{
-							ID:   "call_123",
-							Type: openai.ChatCompletionMessageToolCallTypeFunction,
-							Function: openai.ChatCompletionMessageToolCallFunction{
-								Name:      "list_directory",
-								Arguments: `{"path": "/"}`,
-							},
-						},
-					},
-				},
-				FinishReason: openai.ChatCompletionChoicesFinishReasonToolCalls,
-			},
-		},
-	}
-
-	// Call handleCycleDetection.
 	resp := &Response{}
-
 	modifiedMessages, shouldStop, err := agent.handleCycleDetection(
-		context.Background(),
-		initialMessages,
-		llmResp,
-		3, // turn count.
-		resp,
+		context.Background(), initialMessages, cycleDetectionLLMResponse(), 3, resp,
 	)
-	if err != nil {
-		t.Fatalf("handleCycleDetection returned error: %v", err)
-	}
+	require.NoError(t, err, "handleCycleDetection returned error")
+	assert.False(t, shouldStop, "handleCycleDetection should not stop (severity < 3)")
 
-	if shouldStop {
-		t.Fatal("handleCycleDetection should not stop (severity < 3)")
-	}
-
-	// Check if cycle was detected.
 	cycleResult, err := agent.detection.CheckCycle()
-	if err != nil {
-		t.Fatalf("CheckCycle failed: %v", err)
+	require.NoError(t, err, "CheckCycle failed")
+	assert.NotEqual(t, detection.CycleNone, cycleResult.Type, "Expected cycle to be detected")
+
+	assert.Greater(t, len(modifiedMessages), len(initialMessages),
+		"handleCycleDetection should have added intervention message")
+
+	assertOriginalMessagesPreserved(t, initialMessages, modifiedMessages)
+	assertInterventionMessageAdded(t, modifiedMessages, 5)
+}
+
+// assertOriginalMessagesPreserved verifies original messages retain their ToolCalls and ToolCallID.
+func assertOriginalMessagesPreserved(t *testing.T, initial, modified []message.Message) {
+	t.Helper()
+
+	for i := 0; i < len(initial) && i < len(modified); i++ {
+		assert.Equal(t, initial[i].Role, modified[i].Role, "message[%d] role changed", i)
+		assert.Equal(t, initial[i].Content, modified[i].Content, "message[%d] content changed", i)
+		assert.Equal(t, initial[i].ToolCallID, modified[i].ToolCallID, "message[%d] ToolCallID lost", i)
+		assert.Equal(t, len(initial[i].ToolCalls), len(modified[i].ToolCalls), "message[%d] ToolCalls count changed", i)
 	}
+}
 
-	if cycleResult.Type == detection.CycleNone {
-		t.Fatal("Expected cycle to be detected, but got CycleNone")
-	}
+// assertInterventionMessageAdded verifies the intervention added a reflection message.
+func assertInterventionMessageAdded(t *testing.T, messages []message.Message, expectedMinLen int) {
+	t.Helper()
 
-	// The critical assertion: modifiedMessages should have the intervention message added
-	// With the bug (before fix), modifiedMessages would equal initialMessages (unchanged)
-	// After the fix, modifiedMessages should be longer (reflection added).
-	if len(modifiedMessages) == len(initialMessages) {
-		t.Error("BUG DETECTED: handleCycleDetection did not modify the messages slice")
-		t.Error("Expected intervention message to be added, but messages unchanged")
-		t.Error("This indicates the intervention's message modifications were discarded")
-	}
+	require.GreaterOrEqual(t, len(messages), expectedMinLen, "Expected intervention message to be added")
 
-	// Verify original messages are preserved with their ToolCalls and ToolCallID intact.
-	// This is a regression test for the bug where handleCycleDetection reconstructed
-	// messages through the detection.Message interface, losing ToolCalls/ToolCallID fields.
-	for i := 0; i < len(initialMessages) && i < len(modifiedMessages); i++ {
-		if initialMessages[i].Role != modifiedMessages[i].Role {
-			t.Errorf("message[%d] role changed: %s -> %s", i, initialMessages[i].Role, modifiedMessages[i].Role)
-		}
-
-		if initialMessages[i].Content != modifiedMessages[i].Content {
-			t.Errorf("message[%d] content changed", i)
-		}
-
-		if initialMessages[i].ToolCallID != modifiedMessages[i].ToolCallID {
-			t.Errorf("message[%d] ToolCallID lost: %q -> %q", i, initialMessages[i].ToolCallID, modifiedMessages[i].ToolCallID)
-		}
-
-		if len(initialMessages[i].ToolCalls) != len(modifiedMessages[i].ToolCalls) {
-			t.Errorf("message[%d] ToolCalls lost: had %d, now %d", i, len(initialMessages[i].ToolCalls), len(modifiedMessages[i].ToolCalls))
-		}
-	}
-
-	// After the fix, this should pass.
-	expectedMinLen := 5 // original 4 + 1 reflection message.
-	if len(modifiedMessages) < expectedMinLen {
-		t.Errorf("Expected at least %d messages after intervention, got %d", expectedMinLen, len(modifiedMessages))
-	}
-
-	// Verify the last message is from the intervention (user role with reflection prompt).
-	if len(modifiedMessages) >= expectedMinLen {
-		lastMsg := modifiedMessages[len(modifiedMessages)-1]
-		if lastMsg.Role != message.RoleUser {
-			t.Errorf("Expected intervention message to have role 'user', got '%s'", lastMsg.Role)
-		}
-
-		if lastMsg.Content == "" {
-			t.Error("Expected intervention message to have content")
-		}
-		// Reflection intervention should mention "repeating" or "different".
-		if !containsAnySubstring(lastMsg.Content, []string{"repeating", "different", "perspective", "angles"}) {
-			t.Errorf("Expected reflection-style message, got: %s", lastMsg.Content)
-		}
-	}
+	lastMsg := messages[len(messages)-1]
+	assert.Equal(t, message.RoleUser, lastMsg.Role, "intervention message should be user role")
+	assert.NotEmpty(t, lastMsg.Content, "intervention message should have content")
+	assert.True(t, containsAnySubstring(lastMsg.Content, []string{"repeating", "different", "perspective", "angles"}),
+		"Expected reflection-style message, got: %s", lastMsg.Content)
 }
 
 // TestExecuteAgentLoop_CycleInterventionPropagated tests that the full agent loop
@@ -1823,59 +1567,33 @@ func TestAgent_ConcurrentTokenBudget(t *testing.T) {
 
 	wg.Wait()
 
-	// Verify all requests used correct token budgets.
-	if len(llmCapture.requests) == 0 {
-		t.Fatal("expected LLM to be called")
-	}
+	assertTokenBudgetDistribution(t, llmCapture, tasks, numRequests)
+}
 
-	// Collect all expected token budgets.
+// assertTokenBudgetDistribution verifies that captured LLM requests used expected token budgets.
+func assertTokenBudgetDistribution(t *testing.T, capture *capturingLLMProvider, tasks []task.Task, expectedTotal int) {
+	t.Helper()
+
+	require.NotEmpty(t, capture.requests, "expected LLM to be called")
+
 	expectedBudgets := make(map[int]bool)
-	for _, task := range tasks {
-		expectedBudgets[task.MaxTokens()] = true
+	for _, tk := range tasks {
+		expectedBudgets[tk.MaxTokens()] = true
 	}
 
-	// Track distribution of token budgets used.
 	budgetCounts := make(map[int]int)
-
-	for _, req := range llmCapture.requests {
-		// Verify the token budget is one of the expected values.
+	for _, req := range capture.requests {
 		maxTokens := int(req.MaxTokens.Value)
-		if !expectedBudgets[maxTokens] {
-			t.Errorf("request used unexpected MaxTokens %d, expected one of %v", maxTokens, expectedBudgets)
-		}
-
+		assert.True(t, expectedBudgets[maxTokens], "unexpected MaxTokens %d", maxTokens)
 		budgetCounts[maxTokens]++
 	}
 
-	// Verify we got roughly the expected distribution
-	// With 10 requests over 4 tasks (cycle 0,1,2,3,0,1,2,3,0,1), we expect:
-	// Regular(16K):  3 times
-	// Compact(4K):  3 times
-	// Review(12K):  2 times
-	// Planning(4K): 2 times
-	// Total for 4K should be Compact + Planning = 5 times.
+	assert.NotZero(t, budgetCounts[16384], "expected at least one Regular task (16K)")
+	assert.NotZero(t, budgetCounts[4096], "expected at least one Compact/Planning task (4K)")
+	assert.NotZero(t, budgetCounts[12288], "expected at least one Review task (12K)")
 
-	regularCount := budgetCounts[16384]
-	compactCount := budgetCounts[4096]
-	reviewCount := budgetCounts[12288]
-
-	if regularCount == 0 {
-		t.Error("expected at least one request with Regular task (16K tokens)")
-	}
-
-	if compactCount == 0 {
-		t.Error("expected at least one request with Compact or Planning task (4K tokens)")
-	}
-
-	if reviewCount == 0 {
-		t.Error("expected at least one request with Review task (12K tokens)")
-	}
-
-	// Verify we got all 10 requests.
-	totalRequests := regularCount + compactCount + reviewCount
-	if totalRequests != numRequests {
-		t.Errorf("expected %d total requests, got %d", numRequests, totalRequests)
-	}
+	totalRequests := budgetCounts[16384] + budgetCounts[4096] + budgetCounts[12288]
+	assert.Equal(t, expectedTotal, totalRequests, "total request count")
 }
 
 // zeroBudgetTask is a test task that returns 0 for MaxTokens.
@@ -2333,182 +2051,115 @@ func TestAgent_finalizeResponse(t *testing.T) {
 // TestAgentThinkingStateBugFix tests the fix for the agent getting stuck in thinking state.
 func TestAgentThinkingStateBugFix(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name          string
-		llmResponses  []openai.ChatCompletion
-		llmErrors     []error
-		timeout       time.Duration
-		expectedError bool
-		expectedStuck bool
-		description   string
-	}{
-		{
-			name: "normal_execution_without_thinking_stuck",
-			llmResponses: []openai.ChatCompletion{
-				{
-					ID:    "thinking-test-1",
-					Model: "test-model",
-					Choices: []openai.ChatCompletionChoice{
-						{
-							Message: openai.ChatCompletionMessage{
-								Content: "I'll help you create a Tetris game in Rust.",
-								Role:    openai.ChatCompletionMessageRoleAssistant,
-							},
-							FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
-						},
-					},
-				},
-			},
-			llmErrors:     []error{nil},
-			timeout:       30 * time.Second,
-			expectedError: false,
-			expectedStuck: false,
-			description:   "Normal execution should not get stuck in thinking state",
-		},
-		{
-			name: "llm_timeout_should_not_stuck_agent",
-			llmResponses: []openai.ChatCompletion{
-				{
-					ID:    "thinking-test-2",
-					Model: "test-model",
-					Choices: []openai.ChatCompletionChoice{
-						{
-							Message: openai.ChatCompletionMessage{
-								Content: "I'll help you create a Tetris game in Rust.",
-								Role:    openai.ChatCompletionMessageRoleAssistant,
-							},
-							FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
-						},
-					},
-				},
-			},
-			llmErrors:     []error{context.DeadlineExceeded},
-			timeout:       30 * time.Second,
-			expectedError: false, // Transient errors are retried; mock succeeds on retry.
-			expectedStuck: false,
-			description:   "LLM timeout should not cause agent to get stuck",
-		},
-		{
-			name: "llm_error_should_not_stuck_agent",
-			llmResponses: []openai.ChatCompletion{
-				{
-					ID:    "thinking-test-3",
-					Model: "test-model",
-					Choices: []openai.ChatCompletionChoice{
-						{
-							Message: openai.ChatCompletionMessage{
-								Content: "I'll help you create a Tetris game in Rust.",
-								Role:    openai.ChatCompletionMessageRoleAssistant,
-							},
-							FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
-						},
-					},
-				},
-			},
-			llmErrors:     []error{errLlmProviderError},
-			timeout:       30 * time.Second,
-			expectedError: false, // Transient errors are retried; mock succeeds on retry.
-			expectedStuck: false,
-			description:   "LLM error should not cause agent to get stuck",
-		},
-		{
-			name: "multiple_responses_should_not_stuck",
-			llmResponses: []openai.ChatCompletion{
-				{
-					ID:    "thinking-test-4a",
-					Model: "test-model",
-					Choices: []openai.ChatCompletionChoice{
-						{
-							Message: openai.ChatCompletionMessage{
-								Content: "I'll help you create a Tetris game in Rust.",
-								Role:    openai.ChatCompletionMessageRoleAssistant,
-								ToolCalls: []openai.ChatCompletionMessageToolCall{
-									{
-										ID:   "call_1",
-										Type: openai.ChatCompletionMessageToolCallTypeFunction,
-										Function: openai.ChatCompletionMessageToolCallFunction{
-											Name:      "write_file",
-											Arguments: `{"path": "Cargo.toml", "content": "[package]\nname = \"tetris\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ncrossterm = \"0.27\"\nrand = \"0.8\""}`,
-										},
-									},
-								},
-							},
-							FinishReason: openai.ChatCompletionChoicesFinishReasonToolCalls,
-						},
-					},
-				},
-				{
-					ID:    "thinking-test-4b",
-					Model: "test-model",
-					Choices: []openai.ChatCompletionChoice{
-						{
-							Message: openai.ChatCompletionMessage{
-								Content: "Great! I've created the Cargo.toml file. Now let me create the main.rs file.",
-								Role:    openai.ChatCompletionMessageRoleAssistant,
-							},
-							FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
-						},
-					},
-				},
-			},
-			llmErrors:     []error{nil, nil},
-			timeout:       30 * time.Second,
-			expectedError: false,
-			expectedStuck: false,
-			description:   "Multiple LLM responses should not cause agent to get stuck",
-		},
-	}
+	tests := thinkingStateBugFixTestCases()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Create mock LLM provider.
-			mockLLM := &MockLLMProvider{
-				responses: tt.llmResponses,
-				errors:    tt.llmErrors,
-			}
-
-			// Create agent with mock LLM.
+			mockLLM := &MockLLMProvider{responses: tt.llmResponses, errors: tt.llmErrors}
 			agent := createTestAgentWithMockLLM(t, mockLLM)
 
-			// Create context with timeout.
 			ctx, cancel := context.WithTimeout(context.Background(), tt.timeout)
 			defer cancel()
 
-			// Create request.
-			req := &Request{
-				Input: "Create a terminal Tetris game in Rust",
-				Task:  task.NewRegular(),
-			}
-
-			// Track execution time to detect if agent gets stuck.
 			start := time.Now()
-
-			// Execute agent.
-			resp, err := agent.Execute(ctx, req)
-
+			resp, err := agent.Execute(ctx, &Request{Input: "Create a terminal Tetris game in Rust", Task: task.NewRegular()})
 			executionTime := time.Since(start)
 
-			// Check if agent got stuck (execution time should be reasonable).
-			if tt.expectedStuck {
-				assert.Greater(t, executionTime, tt.timeout/2, "Agent should have gotten stuck")
-			} else {
-				assert.Less(t, executionTime, tt.timeout/2, "Agent should not have gotten stuck, execution time: %v", executionTime)
-			}
-
-			// Check error expectations.
-			if tt.expectedError {
-				require.Error(t, err, "Expected error but got none")
-			} else {
-				require.NoError(t, err, "Unexpected error: %v", err)
-			}
-
-			// Check response.
-			if resp != nil {
-				assert.NotNil(t, resp, "Response should not be nil")
-			}
+			assertThinkingStateResult(t, tt, executionTime, resp, err)
 		})
+	}
+}
+
+type thinkingStateTestCase struct {
+	name          string
+	llmResponses  []openai.ChatCompletion
+	llmErrors     []error
+	timeout       time.Duration
+	expectedError bool
+	expectedStuck bool
+}
+
+func assertThinkingStateResult(t *testing.T, tt thinkingStateTestCase, executionTime time.Duration, resp *Response, err error) {
+	t.Helper()
+
+	if tt.expectedStuck {
+		assert.Greater(t, executionTime, tt.timeout/2, "Agent should have gotten stuck")
+	} else {
+		assert.Less(t, executionTime, tt.timeout/2, "Agent should not have gotten stuck")
+	}
+
+	if tt.expectedError {
+		require.Error(t, err, "Expected error but got none")
+	} else {
+		require.NoError(t, err, "Unexpected error: %v", err)
+	}
+
+	if resp != nil {
+		assert.NotNil(t, resp)
+	}
+}
+
+func makeSimpleCompletion(id, content string) openai.ChatCompletion {
+	return openai.ChatCompletion{
+		ID: id, Model: "test-model",
+		Choices: []openai.ChatCompletionChoice{{
+			Message:      openai.ChatCompletionMessage{Content: content, Role: openai.ChatCompletionMessageRoleAssistant},
+			FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
+		}},
+	}
+}
+
+func thinkingStateBugFixTestCases() []thinkingStateTestCase {
+	helpMsg := "I'll help you create a Tetris game in Rust."
+
+	return []thinkingStateTestCase{
+		{
+			name:          "normal_execution_without_thinking_stuck",
+			llmResponses:  []openai.ChatCompletion{makeSimpleCompletion("thinking-test-1", helpMsg)},
+			llmErrors:     []error{nil},
+			timeout:       30 * time.Second,
+		},
+		{
+			name:          "llm_timeout_should_not_stuck_agent",
+			llmResponses:  []openai.ChatCompletion{makeSimpleCompletion("thinking-test-2", helpMsg)},
+			llmErrors:     []error{context.DeadlineExceeded},
+			timeout:       30 * time.Second,
+		},
+		{
+			name:          "llm_error_should_not_stuck_agent",
+			llmResponses:  []openai.ChatCompletion{makeSimpleCompletion("thinking-test-3", helpMsg)},
+			llmErrors:     []error{errLlmProviderError},
+			timeout:       30 * time.Second,
+		},
+		{
+			name: "multiple_responses_should_not_stuck",
+			llmResponses: []openai.ChatCompletion{
+				makeToolCallCompletion("thinking-test-4a", "write_file", `{"path": "Cargo.toml", "content": "test"}`),
+				makeSimpleCompletion("thinking-test-4b", "Great! I've created the Cargo.toml file."),
+			},
+			llmErrors: []error{nil, nil},
+			timeout:   30 * time.Second,
+		},
+	}
+}
+
+func makeToolCallCompletion(id, toolName, args string) openai.ChatCompletion {
+	return openai.ChatCompletion{
+		ID: id, Model: "test-model",
+		Choices: []openai.ChatCompletionChoice{{
+			Message: openai.ChatCompletionMessage{
+				Content: "I'll help you.",
+				Role:    openai.ChatCompletionMessageRoleAssistant,
+				ToolCalls: []openai.ChatCompletionMessageToolCall{{
+					ID:       "call_1",
+					Type:     openai.ChatCompletionMessageToolCallTypeFunction,
+					Function: openai.ChatCompletionMessageToolCallFunction{Name: toolName, Arguments: args},
+				}},
+			},
+			FinishReason: openai.ChatCompletionChoicesFinishReasonToolCalls,
+		}},
 	}
 }
 
@@ -2897,49 +2548,31 @@ func TestAgent_emitACERetrievalEvent(t *testing.T) {
 	// Verify event was emitted.
 	select {
 	case emittedEvent := <-eventCh:
-		if emittedEvent.Type != events.EventACERetrieval {
-			t.Errorf("Type = %v, want EventACERetrieval", emittedEvent.Type)
-		}
+		assert.Equal(t, events.EventACERetrieval, emittedEvent.Type)
 
 		data, ok := emittedEvent.ACERetrievalData()
-		if !ok {
-			t.Fatal("Expected ACERetrievalData")
-		}
+		require.True(t, ok, "Expected ACERetrievalData")
 
-		if data.Turn != 5 {
-			t.Errorf("Turn = %d, want 5", data.Turn)
-		}
+		assert.Equal(t, 5, data.Turn)
+		assert.Equal(t, "error", data.Trigger)
+		assert.Equal(t, "install nodejs error", data.Query)
+		assert.Equal(t, 2, data.BulletsRetrieved)
+		assert.Equal(t, 2, data.CacheSize)
 
-		if data.Trigger != "error" {
-			t.Errorf("Trigger = %q, want \"error\"", data.Trigger)
-		}
-
-		if data.Query != "install nodejs error" {
-			t.Errorf("Query = %q, want \"install nodejs error\"", data.Query)
-		}
-
-		if data.BulletsRetrieved != 2 {
-			t.Errorf("BulletsRetrieved = %d, want 2", data.BulletsRetrieved)
-		}
-
-		if data.CacheSize != 2 {
-			t.Errorf("CacheSize = %d, want 2", data.CacheSize)
-		}
-
-		// Verify cache hit rate calculation matches trajectory context.
-		total := ctx.CacheHits + ctx.CacheMisses
-
-		expectedHitRate := 0.0
-		if total > 0 {
-			expectedHitRate = float64(ctx.CacheHits) / float64(total)
-		}
-
-		if data.CacheHitRate != expectedHitRate {
-			t.Errorf("CacheHitRate = %f, want %f (from ctx: hits=%d, misses=%d)",
-				data.CacheHitRate, expectedHitRate, ctx.CacheHits, ctx.CacheMisses)
-		}
+		expectedHitRate := computeExpectedHitRate(ctx.CacheHits, ctx.CacheMisses)
+		assert.Equal(t, expectedHitRate, data.CacheHitRate)
 
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("Timeout waiting for ACE retrieval event")
 	}
+}
+
+// computeExpectedHitRate calculates the expected cache hit rate.
+func computeExpectedHitRate(hits, misses int) float64 {
+	total := hits + misses
+	if total == 0 {
+		return 0.0
+	}
+
+	return float64(hits) / float64(total)
 }

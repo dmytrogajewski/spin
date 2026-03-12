@@ -214,12 +214,11 @@ func TestDeltaHistory_Clear(t *testing.T) {
 	}
 }
 
-func TestDeltaHistory_Concurrency(t *testing.T) {
+func TestDeltaHistory_ConcurrentWrites(t *testing.T) {
 	t.Parallel()
 
 	h := NewHistory()
 
-	// Concurrent writes.
 	const (
 		goroutines         = 10
 		deltasPerGoroutine = 100
@@ -232,12 +231,10 @@ func TestDeltaHistory_Concurrency(t *testing.T) {
 				delta := NewContentUpdate("bullet-1", "content", Metadata{Source: "test"})
 				h.Record(*delta)
 			}
-
 			done <- true
 		}(g)
 	}
 
-	// Wait for all goroutines.
 	for range goroutines {
 		<-done
 	}
@@ -246,13 +243,34 @@ func TestDeltaHistory_Concurrency(t *testing.T) {
 	if h.Len() != expected {
 		t.Errorf("expected %d deltas after concurrent writes, got %d", expected, h.Len())
 	}
+}
 
-	// Concurrent reads while writing.
+func TestDeltaHistory_ConcurrentReadsAndWrites(t *testing.T) {
+	t.Parallel()
+
+	h := NewHistory()
+
+	const goroutines = 10
+
 	stop := make(chan bool)
-	errors := make(chan error, goroutines*2)
+	writerDone := make(chan error, goroutines)
 
-	// Start readers.
+	startConcurrentReaders(h, goroutines, stop)
+	startConcurrentWriters(h, goroutines, writerDone)
+
 	for range goroutines {
+		if err := <-writerDone; err != nil {
+			t.Errorf("writer error: %v", err)
+		}
+	}
+
+	close(stop)
+	time.Sleep(10 * time.Millisecond)
+}
+
+// startConcurrentReaders starts goroutines that continuously read from the history.
+func startConcurrentReaders(h *History, count int, stop chan bool) {
+	for range count {
 		go func() {
 			for {
 				select {
@@ -266,28 +284,17 @@ func TestDeltaHistory_Concurrency(t *testing.T) {
 			}
 		}()
 	}
+}
 
-	// Start writers.
-	for range goroutines {
+// startConcurrentWriters starts goroutines that write to the history.
+func startConcurrentWriters(h *History, count int, done chan error) {
+	for range count {
 		go func() {
 			for range 10 {
 				delta := NewContentUpdate("bullet-1", "content", Metadata{Source: "test"})
 				h.Record(*delta)
 			}
-
-			errors <- nil
+			done <- nil
 		}()
 	}
-
-	// Wait for writers.
-	for range goroutines {
-		err := <-errors
-		if err != nil {
-			t.Errorf("writer error: %v", err)
-		}
-	}
-
-	// Stop readers.
-	close(stop)
-	time.Sleep(10 * time.Millisecond)
 }

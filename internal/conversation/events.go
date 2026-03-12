@@ -36,26 +36,11 @@ type EventTransformer interface {
 // attachJSONLEventLogger sets up a JSONL event logger for the given session.
 // Events are written to {sessionDir}/{sessionID}/events.jsonl in append mode.
 func (b *Builder) attachJSONLEventLogger(ctx context.Context, sessionID string) {
-	base := b.cfg.Agent.SessionDir
-	if base == "" {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			base = filepath.Join(home, ".spin", "sessions")
-		}
-	} else if strings.HasPrefix(base, "~") {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			base = filepath.Join(home, base[1:])
-		}
-	}
+	base := b.resolveSessionDir()
 
 	dir := filepath.Join(base, sessionID)
-	err := os.MkdirAll(dir, 0o755)
-	if err != nil {
-		if b.logger != nil {
-			b.logger.WarnContext(ctx, "event logger mkdir failed", "dir", dir, "err", err)
-		}
-
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		b.logWarnCtx(ctx, "event logger mkdir failed", "dir", dir, "err", err)
 		return
 	}
 
@@ -63,50 +48,72 @@ func (b *Builder) attachJSONLEventLogger(ctx context.Context, sessionID string) 
 
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		if b.logger != nil {
-			b.logger.WarnContext(ctx, "event logger open failed", "path", logPath, "err", err)
-		}
-
+		b.logWarnCtx(ctx, "event logger open failed", "path", logPath, "err", err)
 		return
 	}
 
 	subID, ch, subErr := b.emitter.Subscribe()
 	if subErr != nil {
 		_ = f.Close()
-
-		if b.logger != nil {
-			b.logger.WarnContext(ctx, "event subscribe failed", "err", subErr)
-		}
-
+		b.logWarnCtx(ctx, "event subscribe failed", "err", subErr)
 		return
 	}
 
-	go func() {
-		defer func() {
-			b.emitter.Unsubscribe(subID)
+	go b.runEventLogger(ctx, sessionID, subID, ch, f)
+}
 
-			_ = f.Close()
-		}()
+// resolveSessionDir returns the base directory for session data.
+func (b *Builder) resolveSessionDir() string {
+	base := b.cfg.Agent.SessionDir
+	if base == "" {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			return filepath.Join(home, ".spin", "sessions")
+		}
+		return base
+	}
 
-		enc := json.NewEncoder(f)
+	if strings.HasPrefix(base, "~") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			return filepath.Join(home, base[1:])
+		}
+	}
 
-		for {
-			select {
-			case ev, ok := <-ch:
-				if !ok {
-					return
-				}
+	return base
+}
 
-				record := map[string]any{
-					"session_id": sessionID,
-					"timestamp":  ev.Timestamp.Format(time.RFC3339Nano),
-					"type":       ev.Type.String(),
-					"data":       ev.Data,
-				}
-				_ = enc.Encode(record) // best-effort.
-			case <-ctx.Done():
+// runEventLogger writes events to the JSONL file until context is done or channel closes.
+func (b *Builder) runEventLogger(ctx context.Context, sessionID, subID string, ch <-chan events.Event, f *os.File) {
+	defer func() {
+		b.emitter.Unsubscribe(subID)
+		_ = f.Close()
+	}()
+
+	enc := json.NewEncoder(f)
+
+	for {
+		select {
+		case ev, ok := <-ch:
+			if !ok {
 				return
 			}
+			record := map[string]any{
+				"session_id": sessionID,
+				"timestamp":  ev.Timestamp.Format(time.RFC3339Nano),
+				"type":       ev.Type.String(),
+				"data":       ev.Data,
+			}
+			_ = enc.Encode(record)
+		case <-ctx.Done():
+			return
 		}
-	}()
+	}
+}
+
+// logWarnCtx logs a warning with context if logger is available.
+func (b *Builder) logWarnCtx(ctx context.Context, msg string, args ...any) {
+	if b.logger != nil {
+		b.logger.WarnContext(ctx, msg, args...)
+	}
 }

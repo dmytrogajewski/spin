@@ -132,8 +132,7 @@ func TestMemoryPolicyStore_ConcurrentAccess(t *testing.T) {
 		Decision:  DecisionAllow,
 		CreatedAt: time.Now(),
 	}
-	err := store.Save(ctx, p)
-	if err != nil {
+	if err := store.Save(ctx, p); err != nil {
 		t.Fatalf("Save error: %v", err)
 	}
 
@@ -142,24 +141,29 @@ func TestMemoryPolicyStore_ConcurrentAccess(t *testing.T) {
 	done := make(chan struct{}, workers)
 
 	for range workers {
-		go func() {
-			defer func() { done <- struct{}{} }()
-
-			for range 100 {
-				_, _, getErr := store.Get(ctx, key, ScopeSession)
-				if getErr != nil {
-					t.Errorf("Get error: %v", getErr)
-				}
-
-				_, listErr := store.List(ctx, ScopeSession)
-				if listErr != nil {
-					t.Errorf("List error: %v", listErr)
-				}
-			}
-		}()
+		go concurrentPolicyWorker(t, store, ctx, key, done)
 	}
 
-	for range workers {
+	waitForWorkers(t, done, workers)
+}
+
+func concurrentPolicyWorker(t *testing.T, store PolicyStore, ctx context.Context, key PolicyKey, done chan<- struct{}) {
+	t.Helper()
+	defer func() { done <- struct{}{} }()
+
+	for range 100 {
+		if _, _, err := store.Get(ctx, key, ScopeSession); err != nil {
+			t.Errorf("Get error: %v", err)
+		}
+		if _, err := store.List(ctx, ScopeSession); err != nil {
+			t.Errorf("List error: %v", err)
+		}
+	}
+}
+
+func waitForWorkers(t *testing.T, done <-chan struct{}, count int) {
+	t.Helper()
+	for range count {
 		select {
 		case <-done:
 		case <-time.After(2 * time.Second):

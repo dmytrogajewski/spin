@@ -405,54 +405,33 @@ func TestConvertOllamaChunkToOpenAI_AfterPhantomFiltering(t *testing.T) {
 	assert.Equal(t, "chatcmpl-test-123-0", chunk.Choices[0].Delta.ToolCalls[0].ID)
 }
 
+// newTestTool creates an api.Tool with a single string property.
+func newTestTool(name, description, propName, propDesc string) api.Tool {
+	return api.Tool{
+		Type: "function",
+		Function: api.ToolFunction{
+			Name:        name,
+			Description: description,
+			Parameters: api.ToolFunctionParameters{
+				Type:     "object",
+				Required: []string{propName},
+				Properties: map[string]api.ToolProperty{
+					propName: {Type: api.PropertyType{"string"}, Description: propDesc},
+				},
+			},
+		},
+	}
+}
+
 // TestInferToolName verifies that inferToolName correctly matches argument keys
 // against tool parameter schemas to identify the intended tool.
 func TestInferToolName(t *testing.T) {
 	t.Parallel()
 
 	tools := []api.Tool{
-		{
-			Type: "function",
-			Function: api.ToolFunction{
-				Name:        "read_file",
-				Description: "Read a file",
-				Parameters: api.ToolFunctionParameters{
-					Type:     "object",
-					Required: []string{"path"},
-					Properties: map[string]api.ToolProperty{
-						"path": {Type: api.PropertyType{"string"}, Description: "File path"},
-					},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: api.ToolFunction{
-				Name:        "shell_command",
-				Description: "Run a shell command",
-				Parameters: api.ToolFunctionParameters{
-					Type:     "object",
-					Required: []string{"command"},
-					Properties: map[string]api.ToolProperty{
-						"command": {Type: api.PropertyType{"string"}, Description: "Command to run"},
-					},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: api.ToolFunction{
-				Name:        "list_directory",
-				Description: "List a directory",
-				Parameters: api.ToolFunctionParameters{
-					Type:     "object",
-					Required: []string{"path"},
-					Properties: map[string]api.ToolProperty{
-						"path": {Type: api.PropertyType{"string"}, Description: "Directory path"},
-					},
-				},
-			},
-		},
+		newTestTool("read_file", "Read a file", "path", "File path"),
+		newTestTool("shell_command", "Run a shell command", "command", "Command to run"),
+		newTestTool("list_directory", "List a directory", "path", "Directory path"),
 	}
 
 	tests := []struct {

@@ -265,37 +265,35 @@ func (b *Builder) BuildSecurityService() *security.Service {
 		handler = b.runtime.ApprovalHandler()
 	}
 
-	var approvalSvc *security.ApprovalService
-	// Configure policy store: prefer configured path; else default to user config dir.
-	var store security.PolicyStore
+	store := b.buildPolicyStore()
 
-	policyPath := b.config.Security.PolicyFile
-	if b.config.Security.ApprovalPersistenceEnabled {
-		if policyPath != "" {
-			fs, err := security.NewFilePolicyStore(policyPath, 30*time.Second)
-			if err == nil {
-				store = fs
-			}
-		}
-
-		if store == nil {
-			store = security.NewMemoryPolicyStore(30 * time.Second)
-		}
-	}
-	// TTLs come solely from config defaults/overrides.
-	sessionTTL := b.config.Security.SessionPolicyTTL
-	globalTTL := b.config.Security.GlobalPolicyTTL
 	cfg := security.ApprovalServiceConfig{
 		Handler:           handler,
 		Emitter:           b.emitter,
 		Validator:         validator,
 		Store:             store,
-		SessionDefaultTTL: sessionTTL,
-		GlobalDefaultTTL:  globalTTL,
+		SessionDefaultTTL: b.config.Security.SessionPolicyTTL,
+		GlobalDefaultTTL:  b.config.Security.GlobalPolicyTTL,
 	}
-	approvalSvc = security.NewApprovalServiceWithConfig(cfg)
+	approvalSvc := security.NewApprovalServiceWithConfig(cfg)
 
 	return security.NewService(validator, approvalSvc)
+}
+
+// buildPolicyStore creates the appropriate policy store based on configuration.
+func (b *Builder) buildPolicyStore() security.PolicyStore {
+	if !b.config.Security.ApprovalPersistenceEnabled {
+		return nil
+	}
+
+	if policyPath := b.config.Security.PolicyFile; policyPath != "" {
+		fs, err := security.NewFilePolicyStore(policyPath, 30*time.Second)
+		if err == nil {
+			return fs
+		}
+	}
+
+	return security.NewMemoryPolicyStore(30 * time.Second)
 }
 
 // BuildDetectionService creates detection service with cycle detection.

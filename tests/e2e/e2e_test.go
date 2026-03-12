@@ -105,183 +105,150 @@ func runSpinWithInput(t *testing.T, input string, args ...string) (stdout, stder
 	return outBuf.String(), errBuf.String(), err
 }
 
-// TestConfigCommands tests config-related functionality.
-func TestConfigCommands(t *testing.T) {
+func TestConfigCommands_ShowEmpty(t *testing.T) {
 	t.Parallel()
 
-	t.Run("config show without config file", func(t *testing.T) {
-		t.Parallel()
+	emptyConfig := filepath.Join(t.TempDir(), "spin.yaml")
+	if err := os.WriteFile(emptyConfig, []byte(""), 0644); err != nil {
+		t.Fatalf("Failed to create empty config: %v", err)
+	}
 
-		// Use an empty config file to simulate minimal/no config.
-		emptyConfig := filepath.Join(t.TempDir(), "spin.yaml")
-		writeErr := os.WriteFile(emptyConfig, []byte(""), 0644)
-		if writeErr != nil {
-			t.Fatalf("Failed to create empty config: %v", writeErr)
-		}
+	stdout, stderr, err := runSpin(t, "--config-file", emptyConfig, "config", "show")
+	if err != nil {
+		t.Fatalf("config show failed: %v\nstderr: %s", err, stderr)
+	}
 
-		stdout, stderr, err := runSpin(t, "--config-file", emptyConfig, "config", "show")
-
-		// Should not error with empty config.
-		if err != nil {
-			t.Fatalf("config show failed: %v\nstderr: %s", err, stderr)
-		}
-
-		// Should show empty or minimal config.
-		if len(stdout) == 0 && len(stderr) == 0 {
-			t.Errorf("Expected some output from config show, got nothing")
-		}
-	})
-
-	t.Run("config show with binary file in cwd", func(t *testing.T) {
-		t.Parallel()
-
-		// Create a temporary directory with a binary file named "spin".
-		tmpDir := t.TempDir()
-		binaryPath := filepath.Join(tmpDir, "spin")
-
-		// Create a fake binary file.
-		err := os.WriteFile(binaryPath, []byte{0x7f, 0x45, 0x4c, 0x46}, 0755)
-		if err != nil {
-			t.Fatalf("Failed to create fake binary: %v", err)
-		}
-
-		// Run config show from that directory.
-		cmd := exec.Command(binPath, "config", "show")
-		cmd.Dir = tmpDir
-
-		var outBuf, errBuf bytes.Buffer
-
-		cmd.Stdout = &outBuf
-		cmd.Stderr = &errBuf
-
-		err = cmd.Run()
-
-		// Should NOT fail with YAML parsing error (Bug #1 regression test).
-		stderr := errBuf.String()
-		if strings.Contains(stderr, "control characters are not allowed") {
-			t.Errorf("BUG #1 REGRESSION: Config loader tried to read binary file!\nstderr: %s", stderr)
-		}
-
-		// Should succeed or show no config.
-		if err != nil && !strings.Contains(stderr, "No configuration file") {
-			t.Logf("Warning: unexpected error (but not the binary-reading bug): %v\nstderr: %s", err, stderr)
-		}
-	})
-
-	t.Run("config validate", func(t *testing.T) {
-		t.Parallel()
-
-		stdout, stderr, _ := runSpin(t, "config", "validate")
-
-		// Should validate without crashing.
-		output := stdout + stderr
-		if !strings.Contains(output, "valid") && !strings.Contains(output, "invalid") {
-			t.Errorf("Expected validation result, got: %s", output)
-		}
-	})
-
-	t.Run("config path", func(t *testing.T) {
-		t.Parallel()
-
-		stdout, stderr, err := runSpin(t, "config", "path")
-
-		output := stdout + stderr
-
-		// Should show config path or indicate no config.
-		if err != nil && !strings.Contains(output, "no config file") {
-			t.Errorf("config path failed unexpectedly: %v\noutput: %s", err, output)
-		}
-	})
+	if len(stdout) == 0 && len(stderr) == 0 {
+		t.Errorf("Expected some output from config show, got nothing")
+	}
 }
 
-// TestMCPCommands tests MCP management commands.
-func TestMCPCommands(t *testing.T) {
+func TestConfigCommands_ShowWithBinaryInCwd(t *testing.T) {
 	t.Parallel()
 
-	// Use a temporary config file to avoid races with other tests on ~/.spin/spin.yaml.
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "spin.yaml")
+	if err := os.WriteFile(filepath.Join(tmpDir, "spin"), []byte{0x7f, 0x45, 0x4c, 0x46}, 0755); err != nil {
+		t.Fatalf("Failed to create fake binary: %v", err)
+	}
 
-	emptyConfig := []byte("# Spin configuration\n")
+	cmd := exec.Command(binPath, "config", "show")
+	cmd.Dir = tmpDir
 
-	err := os.WriteFile(configPath, emptyConfig, 0644)
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	err := cmd.Run()
+	stderr := errBuf.String()
+
+	if strings.Contains(stderr, "control characters are not allowed") {
+		t.Errorf("BUG #1 REGRESSION: Config loader tried to read binary file!\nstderr: %s", stderr)
+	}
+
+	if err != nil && !strings.Contains(stderr, "No configuration file") {
+		t.Logf("Warning: unexpected error (but not the binary-reading bug): %v\nstderr: %s", err, stderr)
+	}
+}
+
+func TestConfigCommands_Validate(t *testing.T) {
+	t.Parallel()
+
+	stdout, stderr, _ := runSpin(t, "config", "validate")
+	output := stdout + stderr
+
+	if !strings.Contains(output, "valid") && !strings.Contains(output, "invalid") {
+		t.Errorf("Expected validation result, got: %s", output)
+	}
+}
+
+func TestConfigCommands_Path(t *testing.T) {
+	t.Parallel()
+
+	stdout, stderr, err := runSpin(t, "config", "path")
+	output := stdout + stderr
+
+	if err != nil && !strings.Contains(output, "no config file") {
+		t.Errorf("config path failed unexpectedly: %v\noutput: %s", err, output)
+	}
+}
+
+func TestMCPCommands_ListEmpty(t *testing.T) {
+	t.Parallel()
+
+	configPath := createTempConfig(t)
+
+	stdout, stderr, err := runSpin(t, "--config-file", configPath, "mcp", "registry", "list")
 	if err != nil {
+		t.Fatalf("mcp registry list failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if !strings.Contains(stdout, "No registries configured") {
+		t.Errorf("Expected 'No registries configured', got: %s", stdout)
+	}
+}
+
+func TestMCPCommands_AddAndRemove(t *testing.T) {
+	t.Parallel()
+
+	configPath := createTempConfig(t)
+
+	// Add MCP registry.
+	assertSpinSuccess(t, configPath, "mcp", "registry", "local", "add", "test-server", "echo", "test")
+
+	// List should show the registry.
+	stdout := assertSpinContains(t, configPath, "test-server", "mcp", "registry", "list")
+	_ = stdout
+
+	// Get registry details.
+	assertSpinContains(t, configPath, "test-server", "mcp", "registry", "get", "test-server")
+
+	// Remove registry.
+	assertSpinSuccess(t, configPath, "mcp", "registry", "remove", "test-server", "--yes")
+
+	// List should be empty again.
+	assertSpinContains(t, configPath, "No registries configured", "mcp", "registry", "list")
+}
+
+// createTempConfig creates a temporary spin config file and returns its path.
+func createTempConfig(t *testing.T) string {
+	t.Helper()
+
+	configPath := filepath.Join(t.TempDir(), "spin.yaml")
+	if err := os.WriteFile(configPath, []byte("# Spin configuration\n"), 0644); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
 
-	t.Run("mcp registry list empty", func(t *testing.T) {
-		t.Parallel()
+	return configPath
+}
 
-		stdout, stderr, runErr := runSpin(t, "--config-file", configPath, "mcp", "registry", "list")
-		if runErr != nil {
-			t.Fatalf("mcp registry list failed: %v\nstderr: %s", runErr, stderr)
-		}
+// assertSpinSuccess runs spin with the given config and args, fataling on error.
+func assertSpinSuccess(t *testing.T, configPath string, args ...string) {
+	t.Helper()
 
-		if !strings.Contains(stdout, "No registries configured") {
-			t.Errorf("Expected 'No registries configured', got: %s", stdout)
-		}
-	})
+	fullArgs := append([]string{"--config-file", configPath}, args...)
+	_, stderr, err := runSpin(t, fullArgs...)
 
-	t.Run("mcp registry add and remove", func(t *testing.T) {
-		t.Parallel()
+	if err != nil {
+		t.Fatalf("spin %v failed: %v\nstderr: %s", args, err, stderr)
+	}
+}
 
-		// Use a separate config file for this subtest to avoid races.
-		subConfigPath := filepath.Join(t.TempDir(), "spin.yaml")
-		subConfig := []byte("# Spin configuration\n")
+// assertSpinContains runs spin and checks that stdout contains the expected string.
+func assertSpinContains(t *testing.T, configPath, expected string, args ...string) string {
+	t.Helper()
 
-		writeErr := os.WriteFile(subConfigPath, subConfig, 0644)
-		if writeErr != nil {
-			t.Fatalf("Failed to create subtest config: %v", writeErr)
-		}
+	fullArgs := append([]string{"--config-file", configPath}, args...)
+	stdout, stderr, err := runSpin(t, fullArgs...)
 
-		// Add MCP registry (local type).
-		var stdout, stderr string
-		var runErr error
-		stdout, stderr, runErr = runSpin(t, "--config-file", subConfigPath, "mcp", "registry", "local", "add", "test-server", "echo", "test")
-		if runErr != nil {
-			t.Fatalf("mcp registry local add failed: %v\nstderr: %s\nstdout: %s", runErr, stderr, stdout)
-		}
+	if err != nil {
+		t.Fatalf("spin %v failed: %v\nstderr: %s", args, err, stderr)
+	}
 
-		if !strings.Contains(stdout+stderr, "Added local registry 'test-server'") {
-			t.Errorf("Expected add confirmation, got stdout: %s, stderr: %s", stdout, stderr)
-		}
+	if !strings.Contains(stdout, expected) {
+		t.Errorf("Expected %q in output, got: %s", expected, stdout)
+	}
 
-		// List should show the registry.
-		stdout, stderr, runErr = runSpin(t, "--config-file", subConfigPath, "mcp", "registry", "list")
-		if runErr != nil {
-			t.Fatalf("mcp registry list failed: %v\nstderr: %s", runErr, stderr)
-		}
-
-		if !strings.Contains(stdout, "test-server") {
-			t.Errorf("Expected registry 'test-server' in list, got: %s", stdout)
-		}
-
-		// Get registry details.
-		stdout, stderr, runErr = runSpin(t, "--config-file", subConfigPath, "mcp", "registry", "get", "test-server")
-		if runErr != nil {
-			t.Fatalf("mcp registry get failed: %v\nstderr: %s", runErr, stderr)
-		}
-
-		if !strings.Contains(stdout, "test-server") || !strings.Contains(stdout, "echo") {
-			t.Errorf("Expected registry details, got: %s", stdout)
-		}
-
-		// Remove registry.
-		_, stderr, runErr = runSpin(t, "--config-file", subConfigPath, "mcp", "registry", "remove", "test-server", "--yes")
-		if runErr != nil {
-			t.Fatalf("mcp registry remove failed: %v\nstderr: %s", runErr, stderr)
-		}
-
-		// List should be empty again.
-		stdout, stderr, runErr = runSpin(t, "--config-file", subConfigPath, "mcp", "registry", "list")
-		if runErr != nil {
-			t.Fatalf("mcp registry list failed: %v\nstderr: %s", runErr, stderr)
-		}
-
-		if !strings.Contains(stdout, "No registries configured") {
-			t.Errorf("Expected empty list after removal, got: %s", stdout)
-		}
-	})
+	return stdout
 }
 
 // TestDebugCommands tests debug command functionality.
@@ -333,14 +300,11 @@ func TestDebugCommands(t *testing.T) {
 	})
 }
 
-// TestExecMode tests exec mode with test-llm provider (no external LLM required).
-func TestExecMode(t *testing.T) {
-	t.Parallel()
+// createExecConfig creates a temporary config for exec mode tests.
+func createExecConfig(t *testing.T) string {
+	t.Helper()
 
-	// Create temporary config with test-llm provider.
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "spin.yaml")
-
+	configPath := filepath.Join(t.TempDir(), "spin.yaml")
 	config := `llm:
   provider: test-llm
   model: dummy
@@ -351,80 +315,95 @@ sandbox:
   mode: workspace-write
 `
 
-	err := os.WriteFile(configPath, []byte(config), 0644)
-	if err != nil {
+	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
 	}
 
-	t.Run("exec basic prompt", func(t *testing.T) {
-		t.Parallel()
+	return configPath
+}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
+func TestExecMode_BasicPrompt(t *testing.T) {
+	t.Parallel()
 
-		cmd := exec.CommandContext(ctx, binPath, "--config-file", configPath, "exec", "what is 2+2? answer with just the number")
+	configPath := createExecConfig(t)
+	stdout, stderr := runExecCommand(t, configPath, "what is 2+2? answer with just the number")
 
-		var outBuf, errBuf bytes.Buffer
+	checkExecErrors(t, stderr)
 
-		cmd.Stdout = &outBuf
-		cmd.Stderr = &errBuf
+	if len(stdout) == 0 {
+		t.Errorf("BUG #3 REGRESSION: No output from exec mode!\nstderr: %s", stderr)
+	}
 
-		runErr := cmd.Run()
+	t.Logf("Exec output: %s", stdout)
+}
 
-		stdout := outBuf.String()
-		stderr := errBuf.String()
+func TestExecMode_FromStdin(t *testing.T) {
+	t.Parallel()
 
-		// Should not error (Bug #2 regression test).
-		if runErr != nil {
-			if strings.Contains(stderr, "provider is required") || strings.Contains(stderr, "model is required") {
-				t.Errorf("BUG #2 REGRESSION: Config integration broken!\nstderr: %s", stderr)
-			} else if strings.Contains(stderr, "context deadline exceeded") {
-				t.Skip("Test timed out")
-			} else {
-				t.Errorf("exec failed: %v\nstderr: %s\nstdout: %s", runErr, stderr, stdout)
-			}
-		}
+	configPath := createExecConfig(t)
 
-		// Should have some output (Bug #3 regression test).
-		if len(stdout) == 0 {
-			t.Errorf("BUG #3 REGRESSION: No output from exec mode!\nstderr: %s", stderr)
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
-		// Response should contain some output (test-llm provider returns "Task completed successfully.").
-		if len(stdout) == 0 {
-			t.Logf("Warning: No output from exec mode")
-		}
+	cmd := exec.CommandContext(ctx, binPath, "--config-file", configPath, "exec")
+	cmd.Stdin = strings.NewReader("what is 5+3? answer with just the number")
 
-		t.Logf("Exec output: %s", stdout)
-	})
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
 
-	t.Run("exec from stdin", func(t *testing.T) {
-		t.Parallel()
+	runErr := cmd.Run()
+	stdout, stderr := outBuf.String(), errBuf.String()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
+	if runErr != nil && !strings.Contains(stderr, "context deadline exceeded") {
+		t.Errorf("exec from stdin failed: %v\nstderr: %s", runErr, stderr)
+	}
 
-		cmd := exec.CommandContext(ctx, binPath, "--config-file", configPath, "exec")
-		cmd.Stdin = strings.NewReader("what is 5+3? answer with just the number")
+	if len(stdout) > 0 && !strings.Contains(stdout, "8") {
+		t.Logf("Warning: Expected answer '8', got: %s", stdout)
+	}
+}
 
-		var outBuf, errBuf bytes.Buffer
+// runExecCommand runs a spin exec command and returns stdout and stderr.
+func runExecCommand(t *testing.T, configPath, prompt string) (string, string) {
+	t.Helper()
 
-		cmd.Stdout = &outBuf
-		cmd.Stderr = &errBuf
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
-		runErr := cmd.Run()
+	cmd := exec.CommandContext(ctx, binPath, "--config-file", configPath, "exec", prompt)
 
-		stdout := outBuf.String()
-		stderr := errBuf.String()
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
 
-		if runErr != nil && !strings.Contains(stderr, "context deadline exceeded") {
-			t.Errorf("exec from stdin failed: %v\nstderr: %s", runErr, stderr)
-		}
+	if err := cmd.Run(); err != nil {
+		checkExecRunError(t, err, errBuf.String(), outBuf.String())
+	}
 
-		if len(stdout) > 0 && !strings.Contains(stdout, "8") {
-			t.Logf("Warning: Expected answer '8', got: %s", stdout)
-		}
-	})
+	return outBuf.String(), errBuf.String()
+}
+
+// checkExecRunError handles exec command run errors.
+func checkExecRunError(t *testing.T, err error, stderr, stdout string) {
+	t.Helper()
+
+	if strings.Contains(stderr, "provider is required") || strings.Contains(stderr, "model is required") {
+		t.Errorf("BUG #2 REGRESSION: Config integration broken!\nstderr: %s", stderr)
+	} else if strings.Contains(stderr, "context deadline exceeded") {
+		t.Skip("Test timed out")
+	} else {
+		t.Errorf("exec failed: %v\nstderr: %s\nstdout: %s", err, stderr, stdout)
+	}
+}
+
+// checkExecErrors checks for known regression bugs in exec output.
+func checkExecErrors(t *testing.T, stderr string) {
+	t.Helper()
+
+	if strings.Contains(stderr, "provider is required") || strings.Contains(stderr, "model is required") {
+		t.Errorf("BUG #2 REGRESSION: Config integration broken!\nstderr: %s", stderr)
+	}
 }
 
 // TestVersionAndHelp tests version and help commands.

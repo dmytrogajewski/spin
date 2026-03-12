@@ -20,11 +20,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
-// TestPrompt_CommandExecution tests command execution via Prompt method.
-func TestPrompt_CommandExecution(t *testing.T) {
-	t.Parallel(
-	// Create agent with all dependencies.
-	)
+// newTestACPAgent creates a fully configured ACP agent for testing.
+func newTestACPAgent(t *testing.T) (*SpinACPAgent, *mockConnectionForPlan, acp.SessionId) {
+	t.Helper()
 
 	validator := security.NewValidator()
 	emitter := events.NewEventEmitter(100)
@@ -41,108 +39,65 @@ func TestPrompt_CommandExecution(t *testing.T) {
 	mockProvider := llm.NewMockProvider("test")
 	planningService := planning.NewService(mockProvider)
 
-	agentInstance, err := agent.NewAgent(
-		mockProvider,
-		securityService,
-		detectionService,
-		toolRuntime,
-		planningService,
-		&agent.Environment{WorkDir: "/tmp"},
-		emitter,
-	)
+	agentInstance, err := agent.NewAgent(mockProvider, securityService, detectionService, toolRuntime, planningService, &agent.Environment{WorkDir: "/tmp"}, emitter)
 	require.NoError(t, err)
 
-	acpAgent, err := NewSpinACPAgentWithStorage(
-		agentInstance,
-		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
-		emitter,
-		nil,
-	)
+	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())), emitter, nil)
 	require.NoError(t, err)
 
 	mockConn := &mockConnectionForPlan{}
 	acpAgent.SetNotificationSender(mockConn)
 
-	// Create session.
-	sessionReq := acp.NewSessionRequest{
-		Cwd: "/tmp",
-	}
-	sessionResp, err := acpAgent.NewSession(context.Background(), sessionReq)
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{Cwd: "/tmp"})
 	require.NoError(t, err)
 
-	sessionID := sessionResp.SessionId
+	return acpAgent, mockConn, sessionResp.SessionId
+}
+
+// hasAgentMessageChunk checks if any notification has an AgentMessageChunk.
+func hasAgentMessageChunk(notifications []acp.SessionNotification) bool {
+	for _, notif := range notifications {
+		if notif.Update.AgentMessageChunk != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// TestPrompt_CommandExecution tests command execution via Prompt method.
+func TestPrompt_CommandExecution(t *testing.T) {
+	t.Parallel()
+
+	acpAgent, mockConn, sessionID := newTestACPAgent(t)
 
 	t.Run("execute_mode_command", func(t *testing.T) {
 		t.Parallel()
-		promptReq := acp.PromptRequest{
+		resp, err := acpAgent.Prompt(context.Background(), acp.PromptRequest{
 			SessionId: sessionID,
-			Prompt: []acp.ContentBlock{
-				acp.TextBlock("/mode review"),
-			},
-		}
-
-		var resp acp.PromptResponse
-		resp, err = acpAgent.Prompt(context.Background(), promptReq)
+			Prompt:    []acp.ContentBlock{acp.TextBlock("/mode review")},
+		})
 		require.NoError(t, err)
 		assert.Equal(t, acp.StopReasonEndTurn, resp.StopReason)
-
-		// Verify notification was sent.
-		notifications := mockConn.GetNotifications()
-		found := false
-
-		for _, notif := range notifications {
-			if notif.Update.AgentMessageChunk != nil {
-				// Check if it contains mode switch message
-				// The exact format depends on implementation.
-				found = true
-
-				break
-			}
-		}
-
-		assert.True(t, found, "should send agent message chunk notification")
+		assert.True(t, hasAgentMessageChunk(mockConn.GetNotifications()), "should send agent message chunk notification")
 	})
 
 	t.Run("execute_help_command", func(t *testing.T) {
 		t.Parallel()
-		promptReq := acp.PromptRequest{
+		resp, err := acpAgent.Prompt(context.Background(), acp.PromptRequest{
 			SessionId: sessionID,
-			Prompt: []acp.ContentBlock{
-				acp.TextBlock("/help"),
-			},
-		}
-
-		var resp acp.PromptResponse
-		resp, err = acpAgent.Prompt(context.Background(), promptReq)
+			Prompt:    []acp.ContentBlock{acp.TextBlock("/help")},
+		})
 		require.NoError(t, err)
 		assert.Equal(t, acp.StopReasonEndTurn, resp.StopReason)
-
-		// Verify notification was sent.
-		notifications := mockConn.GetNotifications()
-		found := false
-
-		for _, notif := range notifications {
-			if notif.Update.AgentMessageChunk != nil {
-				found = true
-
-				break
-			}
-		}
-
-		assert.True(t, found, "should send agent message chunk notification")
+		assert.True(t, hasAgentMessageChunk(mockConn.GetNotifications()), "should send agent message chunk notification")
 	})
 
 	t.Run("execute_exit_command_error", func(t *testing.T) {
 		t.Parallel()
-		promptReq := acp.PromptRequest{
+		resp, err := acpAgent.Prompt(context.Background(), acp.PromptRequest{
 			SessionId: sessionID,
-			Prompt: []acp.ContentBlock{
-				acp.TextBlock("/exit"),
-			},
-		}
-
-		var resp acp.PromptResponse
-		resp, err = acpAgent.Prompt(context.Background(), promptReq)
+			Prompt:    []acp.ContentBlock{acp.TextBlock("/exit")},
+		})
 		require.Error(t, err)
 		assert.Equal(t, acp.StopReasonRefusal, resp.StopReason)
 		assert.Contains(t, err.Error(), "not available via ACP")

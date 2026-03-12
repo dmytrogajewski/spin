@@ -29,31 +29,37 @@ func TestNewBlock(t *testing.T) {
 			if b == nil {
 				t.Fatal("NewBlock() returned nil")
 			}
-
-			if b.Type != tt.blockType {
-				t.Errorf("NewBlock() Type = %v, want %v", b.Type, tt.blockType)
-			}
-
-			if b.ID == "" {
-				t.Error("NewBlock() ID is empty")
-			}
-
-			if b.FoldState != FoldStateExpanded {
-				t.Errorf("NewBlock() FoldState = %v, want %v", b.FoldState, FoldStateExpanded)
-			}
-
-			if b.Severity != SeverityInfo {
-				t.Errorf("NewBlock() Severity = %v, want %v", b.Severity, SeverityInfo)
-			}
-			// Meta is now nil by default (json.RawMessage).
-			if b.Meta != nil {
-				t.Error("NewBlock() Meta should be nil by default")
-			}
-
-			if b.Timestamp <= 0 {
-				t.Error("NewBlock() Timestamp <= 0")
-			}
+			verifyNewBlockDefaults(t, b, tt.blockType)
 		})
+	}
+}
+
+// verifyNewBlockDefaults checks all default field values of a newly created block.
+func verifyNewBlockDefaults(t *testing.T, b *Block, expectedType BlockType) {
+	t.Helper()
+
+	if b.Type != expectedType {
+		t.Errorf("NewBlock() Type = %v, want %v", b.Type, expectedType)
+	}
+
+	if b.ID == "" {
+		t.Error("NewBlock() ID is empty")
+	}
+
+	if b.FoldState != FoldStateExpanded {
+		t.Errorf("NewBlock() FoldState = %v, want %v", b.FoldState, FoldStateExpanded)
+	}
+
+	if b.Severity != SeverityInfo {
+		t.Errorf("NewBlock() Severity = %v, want %v", b.Severity, SeverityInfo)
+	}
+
+	if b.Meta != nil {
+		t.Error("NewBlock() Meta should be nil by default")
+	}
+
+	if b.Timestamp <= 0 {
+		t.Error("NewBlock() Timestamp <= 0")
 	}
 }
 
@@ -247,91 +253,71 @@ func TestBlock_JSON_Format(t *testing.T) {
 	}
 }
 
-// TestBlock_TypeSafeMetadata tests the new type-safe metadata accessors.
-func TestBlock_TypeSafeMetadata(t *testing.T) {
+func TestBlock_TypeSafeMetadata_Execute(t *testing.T) {
 	t.Parallel()
-	t.Run("ExecuteMeta", func(t *testing.T) {
-		t.Parallel()
-		b := NewBlock(BlockTypeExecute)
 
-		// Set metadata.
-		meta := &ExecuteMeta{
-			Command:    "go test",
-			CWD:        "/tmp",
-			TimeoutSec: 30,
-			Impact:     "low",
-		}
+	b := NewBlock(BlockTypeExecute)
+	meta := &ExecuteMeta{Command: "go test", CWD: "/tmp", TimeoutSec: 30, Impact: "low"}
 
-		err := b.SetExecuteMeta(meta)
-		if err != nil {
-			t.Fatalf("SetExecuteMeta() error = %v", err)
-		}
+	err := b.SetExecuteMeta(meta)
+	if err != nil {
+		t.Fatalf("SetExecuteMeta() error = %v", err)
+	}
 
-		// Get metadata.
-		retrieved, err := b.GetExecuteMeta()
-		if err != nil {
-			t.Fatalf("GetExecuteMeta() error = %v", err)
-		}
+	retrieved, err := b.GetExecuteMeta()
+	if err != nil {
+		t.Fatalf("GetExecuteMeta() error = %v", err)
+	}
 
-		if retrieved.Command != "go test" {
-			t.Errorf("Command = %v, want 'go test'", retrieved.Command)
-		}
+	if retrieved.Command != "go test" {
+		t.Errorf("Command = %v, want 'go test'", retrieved.Command)
+	}
 
-		if retrieved.CWD != "/tmp" {
-			t.Errorf("CWD = %v, want '/tmp'", retrieved.CWD)
-		}
-	})
+	if retrieved.CWD != "/tmp" {
+		t.Errorf("CWD = %v, want '/tmp'", retrieved.CWD)
+	}
+}
 
-	t.Run("ReadMeta", func(t *testing.T) {
-		t.Parallel()
-		b := NewBlock(BlockTypeRead)
+func TestBlock_TypeSafeMetadata_Read(t *testing.T) {
+	t.Parallel()
 
-		meta := &ReadMeta{
-			File:   "main.go",
-			Offset: 10,
-			Limit:  50,
-		}
+	b := NewBlock(BlockTypeRead)
+	meta := &ReadMeta{File: "main.go", Offset: 10, Limit: 50}
 
-		err := b.SetReadMeta(meta)
-		if err != nil {
-			t.Fatalf("SetReadMeta() error = %v", err)
-		}
+	err := b.SetReadMeta(meta)
+	if err != nil {
+		t.Fatalf("SetReadMeta() error = %v", err)
+	}
 
-		retrieved, err := b.GetReadMeta()
-		if err != nil {
-			t.Fatalf("GetReadMeta() error = %v", err)
-		}
+	retrieved, err := b.GetReadMeta()
+	if err != nil {
+		t.Fatalf("GetReadMeta() error = %v", err)
+	}
 
-		if retrieved.File != "main.go" {
-			t.Errorf("File = %v, want 'main.go'", retrieved.File)
-		}
-	})
+	if retrieved.File != "main.go" {
+		t.Errorf("File = %v, want 'main.go'", retrieved.File)
+	}
+}
 
-	t.Run("ToolMeta", func(t *testing.T) {
-		t.Parallel()
-		b := NewBlock(BlockTypeTool)
+func TestBlock_TypeSafeMetadata_Tool(t *testing.T) {
+	t.Parallel()
 
-		meta := &ToolMeta{
-			ToolName: "execute_command",
-			Params: map[string]any{
-				"command": "ls -la",
-			},
-		}
+	b := NewBlock(BlockTypeTool)
+	meta := &ToolMeta{ToolName: "execute_command", Params: map[string]any{"command": "ls -la"}}
 
-		err := b.SetToolMeta(meta)
-		if err != nil {
-			t.Fatalf("SetToolMeta() error = %v", err)
-		}
+	err := b.SetToolMeta(meta)
+	if err != nil {
+		t.Fatalf("SetToolMeta() error = %v", err)
+	}
 
-		retrieved, err := b.GetToolMeta()
-		if err != nil {
-			t.Fatalf("GetToolMeta() error = %v", err)
-		}
+	retrieved, err := b.GetToolMeta()
+	if err != nil {
+		t.Fatalf("GetToolMeta() error = %v", err)
+	}
 
-		if retrieved.ToolName != "execute_command" {
-			t.Errorf("ToolName = %v, want 'execute_command'", retrieved.ToolName)
-		}
-	})
+	if retrieved.ToolName != "execute_command" {
+		t.Errorf("ToolName = %v, want 'execute_command'", retrieved.ToolName)
+	}
 }
 
 // TestBlock_MetadataValidation tests that invalid metadata is rejected.

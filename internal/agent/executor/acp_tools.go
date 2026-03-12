@@ -74,93 +74,100 @@ func (t *ACPTerminalTool) Schema() tools.ToolSchema {
 
 // Execute implements the Execute operation.
 func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParameters) (tools.ToolResult, error) {
-	operation, _ := params.GetString("operation")
-	if operation != "execute" {
-		return tools.ToolResult{
-			Success: false,
-			Error:   "operation must be 'execute' for ACP mode",
-		}, nil
+	if err := t.validateParams(params); err != "" {
+		return tools.ToolResult{Success: false, Error: err}, nil
 	}
 
 	cmdStr, _ := params.GetString("command")
-	if cmdStr == "" {
-		return tools.ToolResult{
-			Success: false,
-			Error:   "command parameter is required",
-		}, nil
-	}
-
-	// Get working directory.
 	workDir, _ := params.GetString("working_directory")
+
 	if workDir == "" {
 		workDir = t.runtime.workDir
 	}
 
-	// Check if terminal client is available.
 	if !t.runtime.SupportsTerminals() || t.runtime.terminalClient == nil {
-		return tools.ToolResult{
-			Success: false,
-			Error:   "ACP terminal protocol not available",
-		}, nil
+		return tools.ToolResult{Success: false, Error: "ACP terminal protocol not available"}, nil
 	}
 
-	// Create terminal executor.
+	cmd, parseErr := t.parseCommand(cmdStr, workDir)
+	if parseErr != "" {
+		return tools.ToolResult{Success: false, Error: parseErr}, nil
+	}
+
 	terminalExec := NewTerminalExecutor(t.runtime.terminalClient, t.runtime.sessionID, t.runtime.workDir)
 
-	// Parse command.
-	var cmd tools.CommandInfo
+	result, err := terminalExec.Execute(ctx, cmd, nil)
+	if err != nil {
+		return tools.ToolResult{Success: false, Error: fmt.Sprintf("execution failed: %v", err)}, nil
+	}
 
-	isShellCommand := strings.Contains(cmdStr, "|") ||
-		strings.Contains(cmdStr, ">") ||
-		strings.Contains(cmdStr, "<") ||
-		strings.Contains(cmdStr, "$") ||
-		strings.Contains(cmdStr, "&&") ||
-		strings.Contains(cmdStr, "||") ||
-		strings.HasPrefix(cmdStr, "cd ") ||
-		strings.HasPrefix(cmdStr, "export ") ||
-		strings.HasPrefix(cmdStr, "source ")
+	return t.buildResult(result), nil
+}
 
-	if isShellCommand {
-		cmd = &simpleCommand{
+// validateParams validates the required parameters for the ACP terminal tool.
+func (t *ACPTerminalTool) validateParams(params tools.ToolParameters) string {
+	operation, _ := params.GetString("operation")
+	if operation != "execute" {
+		return "operation must be 'execute' for ACP mode"
+	}
+
+	cmdStr, _ := params.GetString("command")
+	if cmdStr == "" {
+		return "command parameter is required"
+	}
+
+	return ""
+}
+
+// parseCommand parses a command string into a CommandInfo.
+func (t *ACPTerminalTool) parseCommand(cmdStr, workDir string) (tools.CommandInfo, string) {
+	if isShellCommand(cmdStr) {
+		return &simpleCommand{
 			program: "/bin/sh",
 			args:    []string{"-c", cmdStr},
 			raw:     cmdStr,
 			workDir: workDir,
-		}
-	} else {
-		parts, err := shlex.Split(cmdStr)
-		if err != nil {
-			return tools.ToolResult{
-				Success: false,
-				Error:   fmt.Sprintf("failed to parse command: %v", err),
-			}, nil
-		}
-
-		if len(parts) == 0 {
-			return tools.ToolResult{
-				Success: false,
-				Error:   "command cannot be empty",
-			}, nil
-		}
-
-		cmd = &simpleCommand{
-			program: parts[0],
-			args:    parts[1:],
-			raw:     cmdStr,
-			workDir: workDir,
-		}
+		}, ""
 	}
 
-	// Execute via terminal executor.
-	result, err := terminalExec.Execute(ctx, cmd, nil)
+	parts, err := shlex.Split(cmdStr)
 	if err != nil {
-		return tools.ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("execution failed: %v", err),
-		}, nil
+		return nil, fmt.Sprintf("failed to parse command: %v", err)
 	}
 
-	// Build output.
+	if len(parts) == 0 {
+		return nil, "command cannot be empty"
+	}
+
+	return &simpleCommand{
+		program: parts[0],
+		args:    parts[1:],
+		raw:     cmdStr,
+		workDir: workDir,
+	}, ""
+}
+
+// isShellCommand checks if a command string requires shell interpretation.
+func isShellCommand(cmdStr string) bool {
+	shellChars := []string{"|", ">", "<", "$", "&&", "||"}
+	for _, c := range shellChars {
+		if strings.Contains(cmdStr, c) {
+			return true
+		}
+	}
+
+	shellPrefixes := []string{"cd ", "export ", "source "}
+	for _, p := range shellPrefixes {
+		if strings.HasPrefix(cmdStr, p) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// buildResult converts an ExecutionResult into a ToolResult.
+func (t *ACPTerminalTool) buildResult(result tools.ExecutionResult) tools.ToolResult {
 	output := result.GetStdout()
 	if stderr := result.GetStderr(); stderr != "" {
 		if output != "" {
@@ -170,15 +177,12 @@ func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParamete
 		output += stderr
 	}
 
-	// Get metadata (includes terminal_id).
-	metadata := result.GetMetadata()
-
 	return tools.ToolResult{
 		Success:  result.GetExitCode() == 0,
 		Output:   output,
 		Error:    "",
-		Metadata: metadata,
-	}, nil
+		Metadata: result.GetMetadata(),
+	}
 }
 
 // simpleCommand implements tools.CommandInfo.

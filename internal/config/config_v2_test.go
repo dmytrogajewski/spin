@@ -71,6 +71,20 @@ func TestV2_Validate_LLMModelRequired(t *testing.T) {
 	assert.Contains(t, err.Error(), "required", "error should indicate field is required")
 }
 
+// newTestLLMConfig creates a base valid V2 config with the given LLM overrides.
+func newTestLLMConfig(temperature float64, maxTokens int, timeout time.Duration) V2 {
+	return V2{
+		Version: "2.0",
+		LLM: LLMV2{
+			Provider:    "ollama",
+			Model:       "qwen",
+			Temperature: temperature,
+			MaxTokens:   maxTokens,
+			Timeout:     timeout,
+		},
+	}
+}
+
 // TestV2_Validate_LLMFieldRanges tests validation of numeric field ranges.
 // Kills mutants: removing range checks would make these tests fail.
 func TestV2_Validate_LLMFieldRanges(t *testing.T) {
@@ -81,90 +95,12 @@ func TestV2_Validate_LLMFieldRanges(t *testing.T) {
 		cfg     V2
 		wantErr string
 	}{
-		{
-			name: "temperature too low",
-			cfg: V2{
-				Version: "2.0",
-				LLM: LLMV2{
-					Provider:    "ollama",
-					Model:       "qwen",
-					Temperature: -0.1,
-					MaxTokens:   4096,
-					Timeout:     30 * time.Second,
-				},
-			},
-			wantErr: "temperature",
-		},
-		{
-			name: "temperature too high",
-			cfg: V2{
-				Version: "2.0",
-				LLM: LLMV2{
-					Provider:    "ollama",
-					Model:       "qwen",
-					Temperature: 2.1,
-					MaxTokens:   4096,
-					Timeout:     30 * time.Second,
-				},
-			},
-			wantErr: "temperature",
-		},
-		{
-			name: "max_tokens zero",
-			cfg: V2{
-				Version: "2.0",
-				LLM: LLMV2{
-					Provider:    "ollama",
-					Model:       "qwen",
-					Temperature: 0.7,
-					MaxTokens:   0,
-					Timeout:     30 * time.Second,
-				},
-			},
-			wantErr: "max_tokens",
-		},
-		{
-			name: "max_tokens negative",
-			cfg: V2{
-				Version: "2.0",
-				LLM: LLMV2{
-					Provider:    "ollama",
-					Model:       "qwen",
-					Temperature: 0.7,
-					MaxTokens:   -100,
-					Timeout:     30 * time.Second,
-				},
-			},
-			wantErr: "max_tokens",
-		},
-		{
-			name: "timeout zero",
-			cfg: V2{
-				Version: "2.0",
-				LLM: LLMV2{
-					Provider:    "ollama",
-					Model:       "qwen",
-					Temperature: 0.7,
-					MaxTokens:   4096,
-					Timeout:     0,
-				},
-			},
-			wantErr: "timeout",
-		},
-		{
-			name: "timeout negative",
-			cfg: V2{
-				Version: "2.0",
-				LLM: LLMV2{
-					Provider:    "ollama",
-					Model:       "qwen",
-					Temperature: 0.7,
-					MaxTokens:   4096,
-					Timeout:     -5 * time.Second,
-				},
-			},
-			wantErr: "timeout",
-		},
+		{"temperature too low", newTestLLMConfig(-0.1, 4096, 30*time.Second), "temperature"},
+		{"temperature too high", newTestLLMConfig(2.1, 4096, 30*time.Second), "temperature"},
+		{"max_tokens zero", newTestLLMConfig(0.7, 0, 30*time.Second), "max_tokens"},
+		{"max_tokens negative", newTestLLMConfig(0.7, -100, 30*time.Second), "max_tokens"},
+		{"timeout zero", newTestLLMConfig(0.7, 4096, 0), "timeout"},
+		{"timeout negative", newTestLLMConfig(0.7, 4096, -5*time.Second), "timeout"},
 	}
 
 	for _, tt := range tests {

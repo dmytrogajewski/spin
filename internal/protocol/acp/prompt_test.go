@@ -472,155 +472,64 @@ func TestSpinACPAgent_Prompt_ContentBlockConversion(t *testing.T) {
 // TestConvertACPContentBlocksToMessages tests content block conversion directly.
 func TestConvertACPContentBlocksToMessages(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name    string
-		blocks  []acp.ContentBlock
-		wantErr bool
-	}{
-		{
-			name:    "text block",
-			blocks:  []acp.ContentBlock{acp.TextBlock("test")},
-			wantErr: false,
-		},
-		{
-			name:    "empty blocks",
-			blocks:  []acp.ContentBlock{},
-			wantErr: true,
-		},
-		{
-			name: "resource link",
-			blocks: []acp.ContentBlock{
-				{
-					ResourceLink: &acp.ContentBlockResourceLink{
-						Name: "file.txt",
-						Uri:  "file:///tmp/file.txt",
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "embedded resource with text",
-			blocks: []acp.ContentBlock{
-				{
-					Resource: &acp.ContentBlockResource{
-						Resource: acp.EmbeddedResourceResource{
-							TextResourceContents: &acp.TextResourceContents{
-								Text: "embedded text",
-								Uri:  "file:///tmp/test.txt",
-							},
-						},
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "embedded resource with blob",
-			blocks: []acp.ContentBlock{
-				{
-					Resource: &acp.ContentBlockResource{
-						Resource: acp.EmbeddedResourceResource{
-							BlobResourceContents: &acp.BlobResourceContents{
-								Blob: "base64data",
-								MimeType: func() *string {
-									s := "image/png"
 
-									return &s
-								}(),
-								Uri: "file:///tmp/image.png",
-							},
-						},
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "mixed blocks",
-			blocks: []acp.ContentBlock{
-				acp.TextBlock("first"),
-				{
-					ResourceLink: &acp.ContentBlockResourceLink{
-						Name: "file.txt",
-						Uri:  "file:///tmp/file.txt",
-					},
-				},
-				acp.TextBlock("second"),
-			},
-			wantErr: false,
-		},
-		{
-			name: "image block",
-			blocks: []acp.ContentBlock{
-				acp.ImageBlock("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "image/png"),
-			},
-			wantErr: false,
-		},
-		{
-			name: "image block with default mime type",
-			blocks: []acp.ContentBlock{
-				{
-					Image: &acp.ContentBlockImage{
-						Data: "base64imagedata",
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "audio block",
-			blocks: []acp.ContentBlock{
-				acp.AudioBlock("UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQAAAAA=", "audio/wav"),
-			},
-			wantErr: false,
-		},
-		{
-			name: "audio block with default mime type",
-			blocks: []acp.ContentBlock{
-				{
-					Audio: &acp.ContentBlockAudio{
-						Data: "base64audiodata",
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "mixed content types including image and audio",
-			blocks: []acp.ContentBlock{
-				acp.TextBlock("text content"),
-				acp.ImageBlock("base64image", "image/jpeg"),
-				acp.AudioBlock("base64audio", "audio/mpeg"),
-				{
-					ResourceLink: &acp.ContentBlockResourceLink{
-						Name: "file.txt",
-						Uri:  "file:///tmp/file.txt",
-					},
-				},
-			},
-			wantErr: false,
-		},
-	}
+	t.Run("basic types", func(t *testing.T) {
+		t.Parallel()
+		testConvertBlocks(t, contentBlockBasicCases())
+	})
 
+	t.Run("media types", func(t *testing.T) {
+		t.Parallel()
+		testConvertBlocks(t, contentBlockMediaCases())
+	})
+}
+
+func testConvertBlocks(t *testing.T, tests []contentBlockCase) {
+	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			messages, err := convertACPContentBlocksToMessages(tt.blocks)
-
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Nil(t, messages)
 			} else {
 				require.NoError(t, err)
 				assert.NotEmpty(t, messages)
-				// Verify all messages have user role.
 				for _, msg := range messages {
 					assert.Equal(t, message.RoleUser, msg.Role)
 					assert.NotEmpty(t, msg.Content)
 				}
 			}
 		})
+	}
+}
+
+type contentBlockCase struct {
+	name    string
+	blocks  []acp.ContentBlock
+	wantErr bool
+}
+
+func contentBlockBasicCases() []contentBlockCase {
+	pngMime := "image/png"
+	return []contentBlockCase{
+		{name: "text block", blocks: []acp.ContentBlock{acp.TextBlock("test")}},
+		{name: "empty blocks", blocks: []acp.ContentBlock{}, wantErr: true},
+		{name: "resource link", blocks: []acp.ContentBlock{{ResourceLink: &acp.ContentBlockResourceLink{Name: "file.txt", Uri: "file:///tmp/file.txt"}}}},
+		{name: "embedded resource with text", blocks: []acp.ContentBlock{{Resource: &acp.ContentBlockResource{Resource: acp.EmbeddedResourceResource{TextResourceContents: &acp.TextResourceContents{Text: "embedded text", Uri: "file:///tmp/test.txt"}}}}}},
+		{name: "embedded resource with blob", blocks: []acp.ContentBlock{{Resource: &acp.ContentBlockResource{Resource: acp.EmbeddedResourceResource{BlobResourceContents: &acp.BlobResourceContents{Blob: "base64data", MimeType: &pngMime, Uri: "file:///tmp/image.png"}}}}}},
+		{name: "mixed blocks", blocks: []acp.ContentBlock{acp.TextBlock("first"), {ResourceLink: &acp.ContentBlockResourceLink{Name: "file.txt", Uri: "file:///tmp/file.txt"}}, acp.TextBlock("second")}},
+	}
+}
+
+func contentBlockMediaCases() []contentBlockCase {
+	return []contentBlockCase{
+		{name: "image block", blocks: []acp.ContentBlock{acp.ImageBlock("iVBORw0KGgo=", "image/png")}},
+		{name: "image block with default mime type", blocks: []acp.ContentBlock{{Image: &acp.ContentBlockImage{Data: "base64imagedata"}}}},
+		{name: "audio block", blocks: []acp.ContentBlock{acp.AudioBlock("UklGRiQA", "audio/wav")}},
+		{name: "audio block with default mime type", blocks: []acp.ContentBlock{{Audio: &acp.ContentBlockAudio{Data: "base64audiodata"}}}},
+		{name: "mixed content types", blocks: []acp.ContentBlock{acp.TextBlock("text"), acp.ImageBlock("img", "image/jpeg"), acp.AudioBlock("aud", "audio/mpeg"), {ResourceLink: &acp.ContentBlockResourceLink{Name: "file.txt", Uri: "file:///tmp/file.txt"}}}},
 	}
 }
 

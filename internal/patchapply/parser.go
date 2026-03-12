@@ -213,13 +213,8 @@ return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, 
 
 // parseUpdateFile parses an update file operation.
 func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
-	// Validate path.
-	if strings.HasPrefix(path, "/") {
-return nil, fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, ErrInvalidPath5)
-	}
-
-	if strings.Contains(path, "..") {
-return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, ErrInvalidPath6)
+	if err := validatePath(path, ErrInvalidPath5, ErrInvalidPath6); err != nil {
+		return nil, err
 	}
 
 	update := &UpdateFile{
@@ -227,65 +222,86 @@ return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, 
 		Hunks:    make([]Hunk, 0),
 	}
 
-	// Check for optional move operation or first hunk.
+	if err := p.parseMoveDirective(update); err != nil {
+		return nil, err
+	}
+
+	if err := p.parseHunks(update); err != nil {
+		return nil, err
+	}
+
+	return update, nil
+}
+
+// validatePath checks a path for absolute paths and path traversal.
+func validatePath(path string, absErr, traversalErr error) error {
+	if strings.HasPrefix(path, "/") {
+		return fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, absErr)
+	}
+
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, traversalErr)
+	}
+
+	return nil
+}
+
+// parseMoveDirective parses an optional "*** Move to:" directive.
+func (p *Parser) parseMoveDirective(update *UpdateFile) error {
 	line, ok := p.peek()
 	if !ok {
-		return update, nil
+		return nil
 	}
 
 	line = strings.TrimSpace(line)
-
-	// Check for move operation.
-	if strings.HasPrefix(line, "*** Move to: ") {
-		p.nextLine() // consume the peeked line.
-
-		newPath := strings.TrimSpace(strings.TrimPrefix(line, "*** Move to: "))
-		if strings.HasPrefix(newPath, "/") {
-return nil, fmt.Errorf("invalid new path %q: absolute paths not allowed: %w", newPath, ErrInvalidNewPath)
-		}
-
-		if strings.Contains(newPath, "..") {
-return nil, fmt.Errorf("invalid new path %q: path traversal not allowed: %w", newPath, ErrInvalidNewPath2)
-		}
-
-		update.NewPath = newPath
-
-		// After move, check for hunks
-		// (checked in the parse hunks loop below).
+	if !strings.HasPrefix(line, "*** Move to: ") {
+		return nil
 	}
 
-	// Parse hunks.
+	p.nextLine()
+
+	newPath := strings.TrimSpace(strings.TrimPrefix(line, "*** Move to: "))
+	if err := validatePath(newPath, ErrInvalidNewPath, ErrInvalidNewPath2); err != nil {
+		return err
+	}
+
+	update.NewPath = newPath
+
+	return nil
+}
+
+// isOperationBoundary returns true if the line starts a new operation or ends the patch.
+func isOperationBoundary(line string) bool {
+	return strings.HasPrefix(line, "*** End Patch") ||
+		strings.HasPrefix(line, "*** Add File") ||
+		strings.HasPrefix(line, "*** Delete File") ||
+		strings.HasPrefix(line, "*** Update File")
+}
+
+// parseHunks parses all hunks for an update operation.
+func (p *Parser) parseHunks(update *UpdateFile) error {
 	for {
-		var hunkOk bool
-		line, hunkOk = p.peek()
-		if !hunkOk {
+		line, ok := p.peek()
+		if !ok {
 			break
 		}
 
 		line = strings.TrimSpace(line)
-
-		// Check for next operation or end.
-		if strings.HasPrefix(line, "*** End Patch") || strings.HasPrefix(line, "*** Add File") ||
-			strings.HasPrefix(line, "*** Delete File") || strings.HasPrefix(line, "*** Update File") {
+		if isOperationBoundary(line) || !strings.HasPrefix(line, "@@") {
 			break
 		}
 
-		if !strings.HasPrefix(line, "@@") {
-			// Unexpected line.
-			break
-		}
-
-		p.nextLine() // consume the peeked line.
+		p.nextLine()
 
 		hunk, err := p.parseHunk(line)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		update.Hunks = append(update.Hunks, *hunk)
 	}
 
-	return update, nil
+	return nil
 }
 
 // parseHunk parses a single hunk starting with @@.

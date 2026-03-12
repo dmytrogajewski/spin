@@ -355,99 +355,87 @@ func (g *generator) GenerateBullets(ctx context.Context, req BulletGenerationReq
 	if req.Input == "" {
 		return nil, ErrInputIsRequired
 	}
-	// Select prompt template based on source type.
-	systemPrompt := bulletGenerationSystemPrompt
 
-	var userPrompt string
+	userPrompt, err := selectBulletPrompt(req)
+	if err != nil {
+		return nil, err
+	}
 
+	output, err := g.callLLMForBullets(ctx, userPrompt, req.Model)
+	if err != nil {
+		return nil, err
+	}
+
+	return g.parseBulletsFromOutput(ctx, output, req.Tags)
+}
+
+// selectBulletPrompt selects the prompt template based on source type.
+func selectBulletPrompt(req BulletGenerationRequest) (string, error) {
 	switch req.SourceType {
 	case "task":
-		userPrompt = fmt.Sprintf(taskBulletPrompt, req.Input)
+		return fmt.Sprintf(taskBulletPrompt, req.Input), nil
 	case "trajectory":
-		userPrompt = fmt.Sprintf(trajectoryBulletPrompt, req.Input)
+		return fmt.Sprintf(trajectoryBulletPrompt, req.Input), nil
 	case "feedback":
-		userPrompt = fmt.Sprintf(feedbackBulletPrompt, req.Input)
+		return fmt.Sprintf(feedbackBulletPrompt, req.Input), nil
 	case "error":
-		userPrompt = fmt.Sprintf(errorBulletPrompt, req.Input)
+		return fmt.Sprintf(errorBulletPrompt, req.Input), nil
 	default:
-return nil, fmt.Errorf("unknown source type: %s: %w", req.SourceType, ErrUnknownSourceType)
+		return "", fmt.Errorf("unknown source type: %s: %w", req.SourceType, ErrUnknownSourceType)
 	}
+}
 
-	// Call LLM.
-	messages := []openai.ChatCompletionMessageParamUnion{
-		openai.SystemMessage(systemPrompt),
-		openai.UserMessage(userPrompt),
-	}
-
-	model := req.Model
+// callLLMForBullets calls the LLM with the bullet generation prompt.
+func (g *generator) callLLMForBullets(ctx context.Context, userPrompt, model string) (string, error) {
 	if model == "" {
-		model = "gpt-4" // Default model.
+		model = "gpt-4"
 	}
-
-	g.logger.DebugContext(ctx, "ACE Generator: Calling LLM", "model", model, "system_prompt_len", len(systemPrompt), "user_prompt_len", len(userPrompt))
 
 	params := openai.ChatCompletionNewParams{
-		Messages:    openai.F(messages),
+		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+			openai.SystemMessage(bulletGenerationSystemPrompt),
+			openai.UserMessage(userPrompt),
+		}),
 		Model:       openai.F(openai.ChatModel(model)),
-		Temperature: openai.Float(0.7), // Some creativity for generation.
+		Temperature: openai.Float(0.7),
 		MaxTokens:   openai.Int(2000),
 	}
 
 	resp, err := g.llm.Complete(ctx, params)
 	if err != nil {
-		g.logger.DebugContext(ctx, "ACE Generator: LLM call failed", "error", err)
-
-		return nil, fmt.Errorf("llm complete: %w", err)
+		return "", fmt.Errorf("llm complete: %w", err)
 	}
 
-	g.logger.DebugContext(ctx, "ACE Generator: LLM returned successfully", "choices", len(resp.Choices))
-
-	// Extract output.
-	output := ""
-	if len(resp.Choices) > 0 {
-		output = resp.Choices[0].Message.Content
-		g.logger.DebugContext(ctx, "ACE Generator: LLM response", "length", len(output))
-
-		if len(output) > 0 {
-			preview := output
-			if len(preview) > 200 {
-				preview = preview[:200]
-			}
-
-			g.logger.DebugContext(ctx, "ACE Generator: LLM response preview", "preview", preview)
-		}
-	} else {
+	if len(resp.Choices) == 0 {
 		g.logger.WarnContext(ctx, "ACE Generator: No choices in LLM response!")
+		return "", nil
 	}
 
-	// Parse bullet candidates from output.
+	return resp.Choices[0].Message.Content, nil
+}
+
+// parseBulletsFromOutput parses LLM output into bullet objects.
+func (g *generator) parseBulletsFromOutput(ctx context.Context, output string, tags map[string]string) ([]*bullet.Bullet, error) {
 	candidates := parseBulletCandidates(output)
 	g.logger.DebugContext(ctx, "ACE Generator: Parsed candidates", "count", len(candidates))
 
-	// Create bullet objects with tags.
 	bullets := make([]*bullet.Bullet, 0, len(candidates))
 	for _, content := range candidates {
-		// Validate content length.
 		if len(content) == 0 || len(content) > bullet.MaxContentLength {
-			continue // Skip invalid candidates.
-		}
-
-		opts := []bullet.Option{}
-		if len(req.Tags) > 0 {
-			opts = append(opts, bullet.WithTags(req.Tags))
-		}
-
-		var b *bullet.Bullet
-		b, err = bullet.New(content, opts...)
-		if err != nil {
-			// Log but continue with other bullets.
 			continue
 		}
 
+		var opts []bullet.Option
+		if len(tags) > 0 {
+			opts = append(opts, bullet.WithTags(tags))
+		}
+
+		b, err := bullet.New(content, opts...)
+		if err != nil {
+			continue
+		}
 		bullets = append(bullets, b)
 	}
-
-	g.logger.DebugContext(ctx, "ACE Generator: Created bullets", "count", len(bullets))
 
 	return bullets, nil
 }
@@ -503,29 +491,30 @@ func parseBulletCandidates(output string) []string {
 			continue
 		}
 
-		// Try to extract numbered items (1., 2., etc.)
-		// Pattern: "1. Content" or "1) Content" or "- Content".
-		content := line
-
-		// Remove common prefixes.
-		if len(line) > 2 {
-			if line[0] >= '0' && line[0] <= '9' {
-				// Starts with digit.
-				if line[1] == '.' || line[1] == ')' {
-					content = strings.TrimSpace(line[2:])
-				}
-			} else if strings.HasPrefix(line, "- ") {
-				content = strings.TrimSpace(line[2:])
-			} else if strings.HasPrefix(line, "* ") {
-				content = strings.TrimSpace(line[2:])
-			}
-		}
-
+		content := extractBulletContent(line)
 		if content != "" && content != line {
-			// Successfully extracted content.
 			candidates = append(candidates, content)
 		}
 	}
 
 	return candidates
+}
+
+// extractBulletContent strips list prefixes (1., 2., -, *) from a line.
+func extractBulletContent(line string) string {
+	if len(line) <= 2 {
+		return line
+	}
+
+	// Numbered items: "1. Content" or "1) Content".
+	if line[0] >= '0' && line[0] <= '9' && (line[1] == '.' || line[1] == ')') {
+		return strings.TrimSpace(line[2:])
+	}
+
+	// Bullet items: "- Content" or "* Content".
+	if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
+		return strings.TrimSpace(line[2:])
+	}
+
+	return line
 }

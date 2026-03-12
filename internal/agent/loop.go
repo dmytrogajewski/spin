@@ -55,282 +55,324 @@ func estimateTokenCount(messages []message.Message) int {
 // retrieval with caching. Otherwise falls back to simple retrieval.
 func (a *Agent) executeAgentLoop(ctx context.Context, messages []message.Message, t task.Task, resp *Response, trajCtx *trajectory.Context) ([]message.Message, *Response, error) {
 	maxTurns := a.maxTurns
-
-	// Initialize retrieved bullets slice to accumulate across turns.
 	allRetrievedBullets := make([]*bullet.Bullet, 0)
 
 	var lastErr error
 
 	for turn := range maxTurns {
-		// Check context cancellation.
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			resp.FinishReason = "timeout"
-
 			return messages, resp, fmt.Errorf("agent loop context canceled: %w", ctxErr)
 		}
 
 		a.emitTurnStart(turn + 1)
+		a.performDynamicToolSelection(ctx, trajCtx, turn)
+		a.updateTrajectoryContext(trajCtx, messages, turn)
 
-		// Dynamic tool selection on each turn based on current context.
-		if a.toolSelector != nil && trajCtx != nil {
-			query := trajCtx.Query // Use trajectory context's query.
-			_, err := a.toolSelector.SelectToolsForTurn(ctx, query, turn)
-			if err != nil {
-				a.logger.WarnContext(ctx, "dynamic tool selection failed", "turn", turn, "error", err)
-			}
+		currentTurnBullets := a.performProgressiveRetrieval(ctx, trajCtx, turn)
+
+		llmResp, content, toolCalls, finishReason, err := a.callLLMWithRetries(ctx, messages, t, currentTurnBullets, turn, resp)
+		if err != nil {
+			lastErr = err
+			return messages, resp, err
 		}
 
-		// Update trajectory context.
-		if trajCtx != nil {
-			trajCtx.CurrentTurn = turn
-
-			// Extract new steps from messages since last extraction.
-			newSteps := extractNewSteps(messages, len(trajCtx.Steps))
-			trajCtx.AppendSteps(newSteps)
-		}
-
-		// ACE: Progressive retrieval with caching.
-		var currentTurnBullets []*bullet.Bullet
-
-		if a.aceService != nil && trajCtx != nil && a.aceConfig != nil && a.aceConfig.Retrieval.ProgressiveContext.Enabled {
-			// Progressive retrieval path.
-			shouldRetrieve, trigger := a.shouldRetrieveProgressive(trajCtx)
-
-			if shouldRetrieve {
-				// Build dynamic query based on context and trigger.
-				query := a.buildQueryFromContext(trajCtx, trigger)
-				a.logger.DebugContext(ctx, "Progressive retrieval triggered",
-					"trigger", trigger,
-					"query", query,
-					"turn", turn+1)
-
-				// Retrieve bullets.
-				retrievedBullets, err := a.aceService.Retrieve(ctx, query)
-				if err != nil {
-					a.logger.WarnContext(ctx, "ACE retrieval failed", "error", err, "turn", turn+1)
-				} else {
-					// Record retrieval event.
-					event := trajectory.RetrievalEvent{
-						Turn:         turn,
-						Trigger:      trigger,
-						Query:        query,
-						BulletsAdded: extractBulletIDs(retrievedBullets),
-						Timestamp:    time.Now(),
-					}
-					trajCtx.RecordRetrieval(event, retrievedBullets)
-
-					a.logger.InfoContext(ctx, "Retrieved bullets",
-						"count", len(retrievedBullets),
-						"trigger", trigger,
-						"cached", len(trajCtx.BulletCache),
-						"hits", trajCtx.CacheHits,
-						"misses", trajCtx.CacheMisses)
-
-					// Emit ACE retrieval event for TUI.
-					if a.aceConfig.Retrieval.ProgressiveContext.EmitACEEvents {
-						a.emitACERetrievalEvent(trajCtx, trigger, query, retrievedBullets, turn)
-					}
-				}
-			}
-
-			// Get active bullets for this turn (TTL-filtered, from cache).
-			currentTurnBullets = trajCtx.GetActiveBullets()
-		}
-
-		// Call LLM with timeout protection and retry on transient errors or empty responses.
-		const maxRetries = 3
-
-		var (
-			llmResp      *openai.ChatCompletion
-			content      string
-			toolCalls    []ToolCall
-			finishReason string
-		)
-
-		for retry := 0; retry <= maxRetries; retry++ {
-			var err error
-
-			llmResp, err = a.callLLMWithTimeout(ctx, messages, t, currentTurnBullets)
-			if err != nil {
-				lastErr = err
-				// Check if context was canceled (non-retryable).
-				if ctx.Err() != nil {
-					a.logger.ErrorContext(ctx, "LLM call failed (context canceled)", "turn", turn+1, "error", err)
-					resp.Error = fmt.Errorf("llm call failed: %w", err)
-					resp.FinishReason = "error"
-
-					return messages, resp, err
-				}
-				// Transient error (e.g. HTTP 500, connection error) - retry.
-				if retry < maxRetries {
-					backoff := time.Duration(1<<uint(retry)) * time.Second // 1s, 2s, 4s.
-					a.logger.WarnContext(ctx, "LLM call failed, retrying",
-						"turn", turn+1, "retry", retry+1, "max_retries", maxRetries,
-						"backoff", backoff, "error", err)
-
-					select {
-					case <-ctx.Done():
-						resp.FinishReason = "timeout"
-
-						return messages, resp, fmt.Errorf("llm retry context canceled: %w", ctx.Err())
-					case <-time.After(backoff):
-					}
-
-					continue
-				}
-
-				a.logger.ErrorContext(ctx, "LLM call failed after retries", "turn", turn+1, "retries", maxRetries, "error", err)
-				resp.Error = fmt.Errorf("llm call failed: %w", err)
-				resp.FinishReason = "error"
-
-				return messages, resp, err
-			}
-
-			lastErr = nil
-
-			// Extract response data using helper functions.
-			content = getContent(llmResp)
-			toolCalls = getToolCalls(llmResp)
-			finishReason = getFinishReason(llmResp)
-
-			// Check for empty response.
-			if llmResp != nil && (content != "" || len(toolCalls) > 0) {
-				// Got a valid response, break out of retry loop.
-				if retry > 0 {
-					a.logger.InfoContext(ctx, "LLM retry succeeded", "turn", turn+1, "retry", retry)
-				}
-
-				break
-			}
-
-			// Empty response - retry if we have attempts left.
-			if retry < maxRetries {
-				backoff := time.Duration(1<<uint(retry)) * time.Second // 1s, 2s, 4s.
-				a.logger.WarnContext(ctx, "Received empty response from LLM, retrying",
-					"turn", turn+1, "retry", retry+1, "max_retries", maxRetries,
-					"backoff", backoff,
-					"llm_resp_nil", llmResp == nil, "content_len", len(content), "tool_calls", len(toolCalls))
-
-				select {
-				case <-ctx.Done():
-					resp.FinishReason = "timeout"
-
-					return messages, resp, fmt.Errorf("empty response retry context canceled: %w", ctx.Err())
-				case <-time.After(backoff):
-				}
-
-				continue
-			}
-
-			// All retries exhausted - break the agent loop.
-			a.logger.WarnContext(ctx, "Received empty response from LLM after retries, breaking loop",
-				"turn", turn+1, "retries_exhausted", maxRetries,
-				"llm_resp_nil", llmResp == nil, "content_len", len(content), "tool_calls", len(toolCalls))
-
-			resp.FinishReason = "empty_response"
-
-			// Emit warning event so UI can show the error state.
-			a.emitter.Emit(events.Event{
-				Type:      events.EventWarning,
-				Timestamp: time.Now(),
-				Data: events.SystemEventData{
-					Level:   "warning",
-					Message: "LLM returned empty response after retries",
-					Details: fmt.Sprintf("turn=%d, retries=%d", turn+1, maxRetries),
-				},
-			})
-
+		// If we exhausted retries and still have empty/error response, break.
+		if llmResp == nil || (content == "" && len(toolCalls) == 0) {
 			break
 		}
 
-		// If we exhausted retries and still have empty/error response, break outer loop.
-		if lastErr != nil || llmResp == nil || (content == "" && len(toolCalls) == 0) {
-			break
-		}
-
+		lastErr = nil
 		a.logger.DebugContext(ctx, "LLM response received", "turn", turn+1, "content_len", len(content), "tool_calls", len(toolCalls), "finish_reason", finishReason)
 
-		// Handle cycle detection via detection service.
-		if a.cycleDetection {
-			var (
-				shouldStop bool
-				err        error
-			)
-
-			messages, shouldStop, err = a.handleCycleDetection(ctx, messages, llmResp, turn+1, resp)
-			if err != nil {
-				a.logger.ErrorContext(ctx, "cycle detection failed", "turn", turn+1, "error", err)
-
-				return messages, resp, err
-			}
-
-			if shouldStop {
-				a.logger.InfoContext(ctx, "cycle detected, stopping agent", "turn", turn+1)
-
-				return messages, resp, nil
-			}
+		messages, shouldStop, err := a.runCycleDetectionIfEnabled(ctx, messages, llmResp, turn+1, resp)
+		if err != nil {
+			return messages, resp, err
 		}
 
-		// Process tool calls or finish.
-		if len(toolCalls) > 0 {
-			a.logger.DebugContext(ctx, "processing tool calls", "count", len(toolCalls), "turn", turn+1)
-
-			messages = a.processToolCallsFromCompletion(ctx, messages, llmResp, resp)
-
-			// Emit estimated token count for the UI to show progress
-			// This helps display accurate context percentage during execution.
-			estimatedTokens := estimateTokenCount(messages)
-			a.emitter.Emit(events.Event{
-				Type:      events.EventTurnProgress,
-				Timestamp: time.Now(),
-				Data: events.TurnEventData{
-					Turn:       turn + 1,
-					TokensUsed: estimatedTokens,
-				},
-			})
-			a.logger.DebugContext(ctx, "emitted token progress", "turn", turn+1, "estimated_tokens", estimatedTokens)
-
-			continue
+		if shouldStop {
+			return messages, resp, nil
 		}
 
-		// Handle truncated response: if finish_reason=length, the model was cut off
-		// by token/context limits. Add partial content as assistant message and continue
-		// so the model can finish its response on the next turn.
-		if finishReason == string(openai.ChatCompletionChoicesFinishReasonLength) {
-			a.logger.WarnContext(ctx, "LLM response truncated (finish_reason=length), continuing",
-				"turn", turn+1, "content_len", len(content))
+		shouldContinue, msgs := a.processLLMResponse(ctx, messages, llmResp, content, toolCalls, finishReason, turn, resp)
+		messages = msgs
 
-			if content != "" {
-				messages = append(messages, message.Message{
-					Role:      message.RoleAssistant,
-					Content:   content,
-					Timestamp: time.Now(),
-				})
-			}
-			// Add a user message to prompt continuation.
-			messages = append(messages, message.Message{
-				Role:      message.RoleUser,
-				Content:   "Your previous response was truncated. Please continue where you left off.",
-				Timestamp: time.Now(),
-			})
-
-			continue
+		if !shouldContinue {
+			break
 		}
-
-		messages = a.addFinalMessage(messages, content)
-
-		resp.FinishReason = finishReason
-		if resp.FinishReason == "" {
-			resp.FinishReason = "stop"
-		}
-
-		break
 	}
 
-	// Store accumulated retrieved bullets in response for trajectory building.
 	resp.RetrievedBullets = allRetrievedBullets
 
 	return messages, resp, lastErr
+}
+
+// performDynamicToolSelection runs dynamic tool selection for a turn.
+func (a *Agent) performDynamicToolSelection(ctx context.Context, trajCtx *trajectory.Context, turn int) {
+	if a.toolSelector == nil || trajCtx == nil {
+		return
+	}
+
+	_, err := a.toolSelector.SelectToolsForTurn(ctx, trajCtx.Query, turn)
+	if err != nil {
+		a.logger.WarnContext(ctx, "dynamic tool selection failed", "turn", turn, "error", err)
+	}
+}
+
+// updateTrajectoryContext updates the trajectory with new steps from messages.
+func (a *Agent) updateTrajectoryContext(trajCtx *trajectory.Context, messages []message.Message, turn int) {
+	if trajCtx == nil {
+		return
+	}
+
+	trajCtx.CurrentTurn = turn
+	newSteps := extractNewSteps(messages, len(trajCtx.Steps))
+	trajCtx.AppendSteps(newSteps)
+}
+
+// performProgressiveRetrieval retrieves ACE bullets using progressive context.
+func (a *Agent) performProgressiveRetrieval(ctx context.Context, trajCtx *trajectory.Context, turn int) []*bullet.Bullet {
+	if !a.isProgressiveRetrievalEnabled(trajCtx) {
+		return nil
+	}
+
+	shouldRetrieve, trigger := a.shouldRetrieveProgressive(trajCtx)
+	if shouldRetrieve {
+		a.retrieveAndRecordBullets(ctx, trajCtx, trigger, turn)
+	}
+
+	return trajCtx.GetActiveBullets()
+}
+
+// isProgressiveRetrievalEnabled checks if progressive retrieval is configured and enabled.
+func (a *Agent) isProgressiveRetrievalEnabled(trajCtx *trajectory.Context) bool {
+	return a.aceService != nil && trajCtx != nil && a.aceConfig != nil && a.aceConfig.Retrieval.ProgressiveContext.Enabled
+}
+
+// retrieveAndRecordBullets retrieves bullets and records the retrieval event.
+func (a *Agent) retrieveAndRecordBullets(ctx context.Context, trajCtx *trajectory.Context, trigger trajectory.TriggerType, turn int) {
+	query := a.buildQueryFromContext(trajCtx, trigger)
+	a.logger.DebugContext(ctx, "Progressive retrieval triggered", "trigger", trigger, "query", query, "turn", turn+1)
+
+	retrievedBullets, err := a.aceService.Retrieve(ctx, query)
+	if err != nil {
+		a.logger.WarnContext(ctx, "ACE retrieval failed", "error", err, "turn", turn+1)
+		return
+	}
+
+	event := trajectory.RetrievalEvent{
+		Turn:         turn,
+		Trigger:      trigger,
+		Query:        query,
+		BulletsAdded: extractBulletIDs(retrievedBullets),
+		Timestamp:    time.Now(),
+	}
+	trajCtx.RecordRetrieval(event, retrievedBullets)
+
+	a.logger.InfoContext(ctx, "Retrieved bullets",
+		"count", len(retrievedBullets), "trigger", trigger,
+		"cached", len(trajCtx.BulletCache), "hits", trajCtx.CacheHits, "misses", trajCtx.CacheMisses)
+
+	if a.aceConfig.Retrieval.ProgressiveContext.EmitACEEvents {
+		a.emitACERetrievalEvent(trajCtx, trigger, query, retrievedBullets, turn)
+	}
+}
+
+// llmRetryResult holds the result of an LLM call with retries.
+type llmRetryResult struct {
+	resp         *openai.ChatCompletion
+	content      string
+	toolCalls    []ToolCall
+	finishReason string
+}
+
+// callLLMWithRetries calls the LLM with retry logic for transient errors.
+func (a *Agent) callLLMWithRetries(ctx context.Context, messages []message.Message, t task.Task, bullets []*bullet.Bullet, turn int, resp *Response) (*openai.ChatCompletion, string, []ToolCall, string, error) {
+	const maxRetries = 3
+
+	for retry := 0; retry <= maxRetries; retry++ {
+		llmResp, err := a.callLLMWithTimeout(ctx, messages, t, bullets)
+		if err != nil {
+			shouldReturn, retErr := a.handleLLMError(ctx, err, retry, maxRetries, turn, resp)
+			if shouldReturn {
+				return nil, "", nil, "", retErr
+			}
+
+			continue
+		}
+
+		content := getContent(llmResp)
+		toolCalls := getToolCalls(llmResp)
+		finishReason := getFinishReason(llmResp)
+
+		if llmResp != nil && (content != "" || len(toolCalls) > 0) {
+			a.logRetrySuccess(ctx, retry, turn)
+
+			return llmResp, content, toolCalls, finishReason, nil
+		}
+
+		if done, retErr := a.handleEmptyResponse(ctx, retry, maxRetries, turn, resp, llmResp, content, toolCalls); done {
+			return nil, "", nil, "", retErr
+		}
+	}
+
+	return nil, "", nil, "", nil
+}
+
+// logRetrySuccess logs if a retry was needed and succeeded.
+func (a *Agent) logRetrySuccess(ctx context.Context, retry, turn int) {
+	if retry > 0 {
+		a.logger.InfoContext(ctx, "LLM retry succeeded", "turn", turn+1, "retry", retry)
+	}
+}
+
+// handleEmptyResponse handles an empty LLM response during retries.
+// Returns (true, err) if retries are done, (false, nil) to continue retrying.
+func (a *Agent) handleEmptyResponse(ctx context.Context, retry, maxRetries, turn int, resp *Response, llmResp *openai.ChatCompletion, content string, toolCalls []ToolCall) (bool, error) {
+	if retry < maxRetries {
+		if err := a.waitWithBackoff(ctx, retry, turn, resp, "Received empty response from LLM, retrying"); err != nil {
+			return true, err
+		}
+
+		return false, nil
+	}
+
+	a.emitEmptyResponseWarning(ctx, turn, maxRetries, llmResp, content, toolCalls)
+	resp.FinishReason = "empty_response"
+
+	return true, nil
+}
+
+// handleLLMError handles an error from the LLM call, deciding whether to retry.
+func (a *Agent) handleLLMError(ctx context.Context, err error, retry, maxRetries, turn int, resp *Response) (shouldReturn bool, retErr error) {
+	if ctx.Err() != nil {
+		a.logger.ErrorContext(ctx, "LLM call failed (context canceled)", "turn", turn+1, "error", err)
+		resp.Error = fmt.Errorf("llm call failed: %w", err)
+		resp.FinishReason = "error"
+
+		return true, err
+	}
+
+	if retry < maxRetries {
+		if waitErr := a.waitWithBackoff(ctx, retry, turn, resp, "LLM call failed, retrying"); waitErr != nil {
+			return true, waitErr
+		}
+
+		return false, nil
+	}
+
+	a.logger.ErrorContext(ctx, "LLM call failed after retries", "turn", turn+1, "retries", maxRetries, "error", err)
+	resp.Error = fmt.Errorf("llm call failed: %w", err)
+	resp.FinishReason = "error"
+
+	return true, err
+}
+
+// waitWithBackoff waits with exponential backoff, respecting context cancellation.
+func (a *Agent) waitWithBackoff(ctx context.Context, retry, turn int, resp *Response, logMsg string) error {
+	backoff := time.Duration(1<<uint(retry)) * time.Second
+	a.logger.WarnContext(ctx, logMsg, "turn", turn+1, "retry", retry+1, "backoff", backoff)
+
+	select {
+	case <-ctx.Done():
+		resp.FinishReason = "timeout"
+		return fmt.Errorf("retry context canceled: %w", ctx.Err())
+	case <-time.After(backoff):
+		return nil
+	}
+}
+
+// emitEmptyResponseWarning emits a warning event for empty LLM responses after retries.
+func (a *Agent) emitEmptyResponseWarning(ctx context.Context, turn, maxRetries int, llmResp *openai.ChatCompletion, content string, toolCalls []ToolCall) {
+	a.logger.WarnContext(ctx, "Received empty response from LLM after retries, breaking loop",
+		"turn", turn+1, "retries_exhausted", maxRetries,
+		"llm_resp_nil", llmResp == nil, "content_len", len(content), "tool_calls", len(toolCalls))
+
+	a.emitter.Emit(events.Event{
+		Type:      events.EventWarning,
+		Timestamp: time.Now(),
+		Data: events.SystemEventData{
+			Level:   "warning",
+			Message: "LLM returned empty response after retries",
+			Details: fmt.Sprintf("turn=%d, retries=%d", turn+1, maxRetries),
+		},
+	})
+}
+
+// processLLMResponse processes a valid LLM response, handling tool calls, truncation, and final messages.
+// Returns whether the loop should continue and the updated messages.
+func (a *Agent) processLLMResponse(ctx context.Context, messages []message.Message, llmResp *openai.ChatCompletion, content string, toolCalls []ToolCall, finishReason string, turn int, resp *Response) (bool, []message.Message) {
+	if len(toolCalls) > 0 {
+		a.logger.DebugContext(ctx, "processing tool calls", "count", len(toolCalls), "turn", turn+1)
+		messages = a.processToolCallsFromCompletion(ctx, messages, llmResp, resp)
+
+		estimatedTokens := estimateTokenCount(messages)
+		a.emitter.Emit(events.Event{
+			Type:      events.EventTurnProgress,
+			Timestamp: time.Now(),
+			Data: events.TurnEventData{
+				Turn:       turn + 1,
+				TokensUsed: estimatedTokens,
+			},
+		})
+		a.logger.DebugContext(ctx, "emitted token progress", "turn", turn+1, "estimated_tokens", estimatedTokens)
+
+		return true, messages
+	}
+
+	if finishReason == string(openai.ChatCompletionChoicesFinishReasonLength) {
+		return a.handleTruncatedResponse(ctx, messages, content, turn)
+	}
+
+	messages = a.addFinalMessage(messages, content)
+	resp.FinishReason = finishReason
+	if resp.FinishReason == "" {
+		resp.FinishReason = "stop"
+	}
+
+	return false, messages
+}
+
+// handleTruncatedResponse handles a truncated LLM response by adding continuation messages.
+func (a *Agent) handleTruncatedResponse(ctx context.Context, messages []message.Message, content string, turn int) (bool, []message.Message) {
+	a.logger.WarnContext(ctx, "LLM response truncated (finish_reason=length), continuing",
+		"turn", turn+1, "content_len", len(content))
+
+	if content != "" {
+		messages = append(messages, message.Message{
+			Role:      message.RoleAssistant,
+			Content:   content,
+			Timestamp: time.Now(),
+		})
+	}
+
+	messages = append(messages, message.Message{
+		Role:      message.RoleUser,
+		Content:   "Your previous response was truncated. Please continue where you left off.",
+		Timestamp: time.Now(),
+	})
+
+	return true, messages
+}
+
+// runCycleDetectionIfEnabled runs cycle detection if enabled, returning whether to stop.
+func (a *Agent) runCycleDetectionIfEnabled(ctx context.Context, messages []message.Message, llmResp *openai.ChatCompletion, turn int, resp *Response) ([]message.Message, bool, error) {
+	if !a.cycleDetection {
+		return messages, false, nil
+	}
+
+	messages, shouldStop, err := a.handleCycleDetection(ctx, messages, llmResp, turn, resp)
+	if err != nil {
+		a.logger.ErrorContext(ctx, "cycle detection failed", "turn", turn, "error", err)
+
+		return messages, false, err
+	}
+
+	if shouldStop {
+		a.logger.InfoContext(ctx, "cycle detected, stopping agent", "turn", turn)
+	}
+
+	return messages, shouldStop, nil
 }
 
 // handleCycleDetection processes cycle detection and interventions via detection service.
@@ -385,42 +427,7 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 		return messages, false, nil
 	}
 
-	// Reconstruct messages preserving original data (ToolCalls, ToolCallID, Metadata).
-	// Interventions typically only append new messages, so we keep originals intact
-	// and only convert genuinely new messages added by the intervention.
-	if len(modifiedDetectionMessages) >= len(messages) {
-		// Intervention appended message(s) — keep originals, convert only new ones.
-		newMessages := make([]message.Message, len(messages), len(modifiedDetectionMessages))
-		copy(newMessages, messages)
-
-		for i := len(messages); i < len(modifiedDetectionMessages); i++ {
-			dm := modifiedDetectionMessages[i]
-			newMessages = append(newMessages, message.Message{
-				Role:      message.Role(dm.GetRole()),
-				Content:   dm.GetContent(),
-				Timestamp: dm.GetTimestamp(),
-			})
-		}
-
-		messages = newMessages
-	} else {
-		// Intervention removed messages — fall back to full conversion but
-		// attempt to match originals by index to preserve ToolCalls/ToolCallID.
-		newMessages := make([]message.Message, len(modifiedDetectionMessages))
-		for i, dm := range modifiedDetectionMessages {
-			if i < len(messages) && messages[i].Role == message.Role(dm.GetRole()) && messages[i].Content == dm.GetContent() {
-				newMessages[i] = messages[i] // Preserve original with full data.
-			} else {
-				newMessages[i] = message.Message{
-					Role:      message.Role(dm.GetRole()),
-					Content:   dm.GetContent(),
-					Timestamp: dm.GetTimestamp(),
-				}
-			}
-		}
-
-		messages = newMessages
-	}
+	messages = reconstructMessagesFromIntervention(messages, modifiedDetectionMessages)
 
 	// Emit cycle detection event.
 	a.emitter.Emit(events.Event{
@@ -441,6 +448,52 @@ func (a *Agent) handleCycleDetection(ctx context.Context, messages []message.Mes
 	}
 
 	return messages, false, nil
+}
+
+// reconstructMessagesFromIntervention rebuilds the message list from detection messages,
+// preserving original data (ToolCalls, ToolCallID, Metadata) where possible.
+func reconstructMessagesFromIntervention(originals []message.Message, modified []detection.Message) []message.Message {
+	if len(modified) >= len(originals) {
+		return reconstructWithAppendedMessages(originals, modified)
+	}
+
+	return reconstructWithRemovedMessages(originals, modified)
+}
+
+// reconstructWithAppendedMessages keeps originals intact and converts only new appended messages.
+func reconstructWithAppendedMessages(originals []message.Message, modified []detection.Message) []message.Message {
+	result := make([]message.Message, len(originals), len(modified))
+	copy(result, originals)
+
+	for i := len(originals); i < len(modified); i++ {
+		dm := modified[i]
+		result = append(result, message.Message{
+			Role:      message.Role(dm.GetRole()),
+			Content:   dm.GetContent(),
+			Timestamp: dm.GetTimestamp(),
+		})
+	}
+
+	return result
+}
+
+// reconstructWithRemovedMessages attempts to match originals by index to preserve full data.
+func reconstructWithRemovedMessages(originals []message.Message, modified []detection.Message) []message.Message {
+	result := make([]message.Message, len(modified))
+
+	for i, dm := range modified {
+		if i < len(originals) && originals[i].Role == message.Role(dm.GetRole()) && originals[i].Content == dm.GetContent() {
+			result[i] = originals[i]
+		} else {
+			result[i] = message.Message{
+				Role:      message.Role(dm.GetRole()),
+				Content:   dm.GetContent(),
+				Timestamp: dm.GetTimestamp(),
+			}
+		}
+	}
+
+	return result
 }
 
 // emitTurnStart emits a turn start event.

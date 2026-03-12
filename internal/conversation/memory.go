@@ -120,34 +120,52 @@ func (b *Builder) registerMemoryTools(registry *tools.Registry) error {
 		return nil
 	}
 
-	// Register scratchpad tool if scratchpad is available.
-	if b.memoryService.scratchpad != nil {
-		scratchpadTool := tools.NewScratchpadTool(b.memoryService.scratchpad)
-		if scratchpadTool != nil {
-			err := registry.RegisterOrReplace(scratchpadTool)
-			if err != nil {
-				return fmt.Errorf("register scratchpad tool: %w", err)
-			}
-
-			if b.logger != nil {
-				b.logger.Debug("scratchpad tool registered")
-			}
-		}
+	if err := b.registerScratchpadTool(registry); err != nil {
+		return err
 	}
 
-	// Register memory tool if persistent store is available.
-	if b.memoryService.persistent != nil {
-		memoryTool := tools.NewMemoryTool(b.memoryService.persistent)
-		if memoryTool != nil {
-			err := registry.RegisterOrReplace(memoryTool)
-			if err != nil {
-				return fmt.Errorf("register memory tool: %w", err)
-			}
+	return b.registerPersistentMemoryTool(registry)
+}
 
-			if b.logger != nil {
-				b.logger.Debug("memory tool registered")
-			}
-		}
+// registerScratchpadTool registers the scratchpad tool if available.
+func (b *Builder) registerScratchpadTool(registry *tools.Registry) error {
+	if b.memoryService.scratchpad == nil {
+		return nil
+	}
+
+	scratchpadTool := tools.NewScratchpadTool(b.memoryService.scratchpad)
+	if scratchpadTool == nil {
+		return nil
+	}
+
+	if err := registry.RegisterOrReplace(scratchpadTool); err != nil {
+		return fmt.Errorf("register scratchpad tool: %w", err)
+	}
+
+	if b.logger != nil {
+		b.logger.Debug("scratchpad tool registered")
+	}
+
+	return nil
+}
+
+// registerPersistentMemoryTool registers the persistent memory tool if available.
+func (b *Builder) registerPersistentMemoryTool(registry *tools.Registry) error {
+	if b.memoryService.persistent == nil {
+		return nil
+	}
+
+	memoryTool := tools.NewMemoryTool(b.memoryService.persistent)
+	if memoryTool == nil {
+		return nil
+	}
+
+	if err := registry.RegisterOrReplace(memoryTool); err != nil {
+		return fmt.Errorf("register memory tool: %w", err)
+	}
+
+	if b.logger != nil {
+		b.logger.Debug("memory tool registered")
 	}
 
 	return nil

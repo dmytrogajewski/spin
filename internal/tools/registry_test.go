@@ -111,87 +111,81 @@ func TestNewRegistry(t *testing.T) {
 
 func TestRegistryRegisterOrReplace(t *testing.T) {
 	t.Parallel()
-	t.Run("register new tool", func(t *testing.T) {
-		t.Parallel()
-		reg := NewRegistry()
-		tool1 := newMockTool("tool1")
+	t.Run("register new tool", testRegisterOrReplaceNew)
+	t.Run("replace existing tool", testRegisterOrReplaceExisting)
+	t.Run("replace does not affect other tools", testRegisterOrReplaceIsolation)
+}
 
-		err := reg.RegisterOrReplace(tool1)
-		if err != nil {
-			t.Fatalf("RegisterOrReplace() unexpected error: %v", err)
-		}
+func testRegisterOrReplaceNew(t *testing.T) {
+	t.Parallel()
 
-		// Verify tool was registered.
-		retrieved, err := reg.Get("tool1")
-		if err != nil {
-			t.Fatalf("Get() error: %v", err)
-		}
+	reg := NewRegistry()
+	tool1 := newMockTool("tool1")
 
-		if retrieved.Name() != "tool1" {
-			t.Errorf("expected tool name 'tool1', got %q", retrieved.Name())
-		}
-	})
+	if err := reg.RegisterOrReplace(tool1); err != nil {
+		t.Fatalf("RegisterOrReplace() unexpected error: %v", err)
+	}
 
-	t.Run("replace existing tool", func(t *testing.T) {
-		t.Parallel()
-		reg := NewRegistry()
+	retrieved, err := reg.Get("tool1")
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
 
-		// Register initial tool.
-		tool1 := newMockTool("tool1")
-		tool1.description = "Original description"
-		_ = reg.Register(tool1)
+	if retrieved.Name() != "tool1" {
+		t.Errorf("expected tool name 'tool1', got %q", retrieved.Name())
+	}
+}
 
-		// Replace with new tool.
-		tool1Updated := newMockTool("tool1")
-		tool1Updated.description = "Updated description"
+func testRegisterOrReplaceExisting(t *testing.T) {
+	t.Parallel()
 
-		err := reg.RegisterOrReplace(tool1Updated)
-		if err != nil {
-			t.Fatalf("RegisterOrReplace() unexpected error: %v", err)
-		}
+	reg := NewRegistry()
+	tool1 := newMockTool("tool1")
+	tool1.description = "Original description"
+	_ = reg.Register(tool1)
 
-		// Verify tool was replaced.
-		retrieved, err := reg.Get("tool1")
-		if err != nil {
-			t.Fatalf("Get() error: %v", err)
-		}
+	tool1Updated := newMockTool("tool1")
+	tool1Updated.description = "Updated description"
 
-		if retrieved.Description() != "Updated description" {
-			t.Errorf("expected description 'Updated description', got %q", retrieved.Description())
-		}
-	})
+	if err := reg.RegisterOrReplace(tool1Updated); err != nil {
+		t.Fatalf("RegisterOrReplace() unexpected error: %v", err)
+	}
 
-	t.Run("replace does not affect other tools", func(t *testing.T) {
-		t.Parallel()
-		reg := NewRegistry()
+	retrieved, err := reg.Get("tool1")
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
 
-		// Register multiple tools.
-		_ = reg.Register(newMockTool("tool1"))
-		_ = reg.Register(newMockTool("tool2"))
-		_ = reg.Register(newMockTool("tool3"))
+	if retrieved.Description() != "Updated description" {
+		t.Errorf("expected description 'Updated description', got %q", retrieved.Description())
+	}
+}
 
-		// Replace tool2.
-		tool2Updated := newMockTool("tool2")
-		tool2Updated.description = "Updated tool2"
-		_ = reg.RegisterOrReplace(tool2Updated)
+func testRegisterOrReplaceIsolation(t *testing.T) {
+	t.Parallel()
 
-		// Verify all tools are still present.
-		tools := reg.List()
-		if len(tools) != 3 {
-			t.Errorf("expected 3 tools, got %d", len(tools))
-		}
+	reg := NewRegistry()
+	_ = reg.Register(newMockTool("tool1"))
+	_ = reg.Register(newMockTool("tool2"))
+	_ = reg.Register(newMockTool("tool3"))
 
-		// Verify tool1 and tool3 are unchanged.
-		tool1, _ := reg.Get("tool1")
-		if tool1.Description() != "Mock tool for testing" {
-			t.Error("tool1 should not have been modified")
-		}
+	tool2Updated := newMockTool("tool2")
+	tool2Updated.description = "Updated tool2"
+	_ = reg.RegisterOrReplace(tool2Updated)
 
-		tool3, _ := reg.Get("tool3")
-		if tool3.Description() != "Mock tool for testing" {
-			t.Error("tool3 should not have been modified")
-		}
-	})
+	if len(reg.List()) != 3 {
+		t.Errorf("expected 3 tools, got %d", len(reg.List()))
+	}
+
+	tool1, _ := reg.Get("tool1")
+	if tool1.Description() != "Mock tool for testing" {
+		t.Error("tool1 should not have been modified")
+	}
+
+	tool3, _ := reg.Get("tool3")
+	if tool3.Description() != "Mock tool for testing" {
+		t.Error("tool3 should not have been modified")
+	}
 }
 
 func TestRegistryRegister(t *testing.T) {
@@ -202,53 +196,44 @@ func TestRegistryRegister(t *testing.T) {
 		wantErr   error
 		wantCount int
 	}{
-		{
-			name:      "register single tool",
-			tools:     []Tool{newMockTool("tool1")},
-			wantCount: 1,
-		},
-		{
-			name:      "register multiple tools",
-			tools:     []Tool{newMockTool("tool1"), newMockTool("tool2"), newMockTool("tool3")},
-			wantCount: 3,
-		},
-		{
-			name:    "register duplicate tool",
-			tools:   []Tool{newMockTool("tool1"), newMockTool("tool1")},
-			wantErr: ErrDuplicateTool,
-		},
+		{name: "register single tool", tools: []Tool{newMockTool("tool1")}, wantCount: 1},
+		{name: "register multiple tools", tools: []Tool{newMockTool("tool1"), newMockTool("tool2"), newMockTool("tool3")}, wantCount: 3},
+		{name: "register duplicate tool", tools: []Tool{newMockTool("tool1"), newMockTool("tool1")}, wantErr: ErrDuplicateTool},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			reg := NewRegistry()
-
-			var lastErr error
-
-			for _, tool := range tt.tools {
-				err := reg.Register(tool)
-				if err != nil {
-					lastErr = err
-				}
-			}
-
-			if tt.wantErr != nil {
-				if !errors.Is(lastErr, tt.wantErr) {
-					t.Errorf("expected error %v, got %v", tt.wantErr, lastErr)
-				}
-
-				return
-			}
-
-			if lastErr != nil {
-				t.Errorf("unexpected error: %v", lastErr)
-			}
-
-			if len(reg.List()) != tt.wantCount {
-				t.Errorf("expected %d tools, got %d", tt.wantCount, len(reg.List()))
-			}
+			verifyRegisterTools(t, tt.tools, tt.wantErr, tt.wantCount)
 		})
+	}
+}
+
+func verifyRegisterTools(t *testing.T, tools []Tool, wantErr error, wantCount int) {
+	t.Helper()
+
+	reg := NewRegistry()
+
+	var lastErr error
+	for _, tool := range tools {
+		if err := reg.Register(tool); err != nil {
+			lastErr = err
+		}
+	}
+
+	if wantErr != nil {
+		if !errors.Is(lastErr, wantErr) {
+			t.Errorf("expected error %v, got %v", wantErr, lastErr)
+		}
+		return
+	}
+
+	if lastErr != nil {
+		t.Errorf("unexpected error: %v", lastErr)
+	}
+
+	if len(reg.List()) != wantCount {
+		t.Errorf("expected %d tools, got %d", wantCount, len(reg.List()))
 	}
 }
 
@@ -368,57 +353,7 @@ func TestRegistryListSchemas(t *testing.T) {
 
 func TestRegistryExecute(t *testing.T) {
 	t.Parallel()
-	reg := NewRegistry()
-
-	// Tool that returns success.
-	successTool := &mockTool{
-		name: "success_tool",
-		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
-			return ToolResult{
-				Success: true,
-				Output:  "success output",
-			}, nil
-		},
-	}
-
-	// Tool that returns error.
-	errorTool := &mockTool{
-		name: "error_tool",
-		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
-			return ToolResult{}, errExecutionFailed
-		},
-	}
-
-	// Tool that checks parameters.
-	paramTool := &mockTool{
-		name: "param_tool",
-		schema: ToolSchema{
-			Type: "function",
-			Function: FunctionSchema{
-				Name: "param_tool",
-				Parameters: ParameterSchema{
-					Type: "object",
-					Properties: map[string]PropertyDefinition{
-						"required_param": {Type: "string", Description: "Required parameter"},
-						"optional_param": {Type: "string", Description: "Optional parameter"},
-					},
-					Required: []string{"required_param"},
-				},
-			},
-		},
-		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
-			val, err := params.GetString("required_param")
-			if err == nil {
-				return ToolResult{Success: true, Output: "received: " + val}, nil
-			}
-
-			return ToolResult{Success: false, Error: "missing parameter"}, nil
-		},
-	}
-
-	_ = reg.Register(successTool)
-	_ = reg.Register(errorTool)
-	_ = reg.Register(paramTool)
+	reg := newRegistryWithTestTools(t)
 
 	tests := []struct {
 		name       string
@@ -427,94 +362,97 @@ func TestRegistryExecute(t *testing.T) {
 		wantErr    error
 		wantResult ToolResult
 	}{
-		{
-			name:     "execute success tool",
-			toolName: "success_tool",
-			params:   map[string]any{},
-			wantResult: ToolResult{
-				Success: true,
-				Output:  "success output",
-			},
-		},
-		{
-			name:     "execute error tool",
-			toolName: "error_tool",
-			params:   map[string]any{},
-			wantErr:  errExecutionFailed2,
-		},
-		{
-			name:     "execute non-existent tool",
-			toolName: "nonexistent",
-			params:   map[string]any{},
-			wantErr:  ErrToolNotFound,
-		},
-		{
-			name:     "execute with valid required params",
-			toolName: "param_tool",
-			params: map[string]any{
-				"required_param": "test_value",
-			},
-			wantResult: ToolResult{
-				Success: true,
-				Output:  "received: test_value",
-			},
-		},
-		{
-			name:     "execute with missing required params",
-			toolName: "param_tool",
-			params: map[string]any{
-				"optional_param": "test",
-			},
-			wantErr: ErrInvalidParameters,
-		},
-		{
-			name:     "execute with wrong param type",
-			toolName: "param_tool",
-			params: map[string]any{
-				"required_param": 123, // should be string.
-			},
-			wantErr: ErrInvalidParameters,
-		},
+		{name: "execute success tool", toolName: "success_tool", params: map[string]any{}, wantResult: ToolResult{Success: true, Output: "success output"}},
+		{name: "execute error tool", toolName: "error_tool", params: map[string]any{}, wantErr: errExecutionFailed2},
+		{name: "execute non-existent tool", toolName: "nonexistent", params: map[string]any{}, wantErr: ErrToolNotFound},
+		{name: "execute with valid required params", toolName: "param_tool", params: map[string]any{"required_param": "test_value"}, wantResult: ToolResult{Success: true, Output: "received: test_value"}},
+		{name: "execute with missing required params", toolName: "param_tool", params: map[string]any{"optional_param": "test"}, wantErr: ErrInvalidParameters},
+		{name: "execute with wrong param type", toolName: "param_tool", params: map[string]any{"required_param": 123}, wantErr: ErrInvalidParameters},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			ctx := context.Background()
-			params, _ := FromMap(tt.params)
-			result, err := reg.Execute(ctx, tt.toolName, params)
-
-			if tt.wantErr != nil {
-				if err == nil {
-					t.Errorf("expected error %v, got nil", tt.wantErr)
-
-					return
-				}
-				// Check if error matches expected (wrapped or direct).
-				if !errors.Is(err, tt.wantErr) {
-					// Also check if the wanted error message is contained.
-					if tt.wantErr.Error() != "" && !contains(err.Error(), tt.wantErr.Error()) {
-						t.Errorf("expected error containing %q, got %q", tt.wantErr.Error(), err.Error())
-					}
-				}
-
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-
-				return
-			}
-
-			if result.Success != tt.wantResult.Success {
-				t.Errorf("expected success %v, got %v", tt.wantResult.Success, result.Success)
-			}
-
-			if result.Output != tt.wantResult.Output {
-				t.Errorf("expected output %q, got %q", tt.wantResult.Output, result.Output)
-			}
+			verifyRegistryExecute(t, reg, tt.toolName, tt.params, tt.wantErr, tt.wantResult)
 		})
+	}
+}
+
+// newRegistryWithTestTools creates a registry with success, error, and param tools.
+func newRegistryWithTestTools(t *testing.T) *Registry {
+	t.Helper()
+
+	reg := NewRegistry()
+
+	_ = reg.Register(&mockTool{
+		name: "success_tool",
+		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
+			return ToolResult{Success: true, Output: "success output"}, nil
+		},
+	})
+
+	_ = reg.Register(&mockTool{
+		name: "error_tool",
+		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
+			return ToolResult{}, errExecutionFailed
+		},
+	})
+
+	_ = reg.Register(&mockTool{
+		name: "param_tool",
+		schema: ToolSchema{Type: "function", Function: FunctionSchema{
+			Name: "param_tool",
+			Parameters: ParameterSchema{
+				Type: "object",
+				Properties: map[string]PropertyDefinition{
+					"required_param": {Type: "string", Description: "Required parameter"},
+					"optional_param": {Type: "string", Description: "Optional parameter"},
+				},
+				Required: []string{"required_param"},
+			},
+		}},
+		executeFunc: func(_ context.Context, params ToolParameters) (ToolResult, error) {
+			val, err := params.GetString("required_param")
+			if err == nil {
+				return ToolResult{Success: true, Output: "received: " + val}, nil
+			}
+			return ToolResult{Success: false, Error: "missing parameter"}, nil
+		},
+	})
+
+	return reg
+}
+
+// verifyRegistryExecute runs Execute and checks result or error.
+func verifyRegistryExecute(t *testing.T, reg *Registry, toolName string, rawParams map[string]any, wantErr error, wantResult ToolResult) {
+	t.Helper()
+
+	params, _ := FromMap(rawParams)
+	result, err := reg.Execute(context.Background(), toolName, params)
+
+	if wantErr != nil {
+		if err == nil {
+			t.Errorf("expected error %v, got nil", wantErr)
+			return
+		}
+
+		if !errors.Is(err, wantErr) && !contains(err.Error(), wantErr.Error()) {
+			t.Errorf("expected error containing %q, got %q", wantErr.Error(), err.Error())
+		}
+		return
+	}
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	if result.Success != wantResult.Success {
+		t.Errorf("expected success %v, got %v", wantResult.Success, result.Success)
+	}
+
+	if result.Output != wantResult.Output {
+		t.Errorf("expected output %q, got %q", wantResult.Output, result.Output)
 	}
 }
 
@@ -612,122 +550,74 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 
 func TestRegistryTypeValidation(t *testing.T) {
 	t.Parallel()
-	reg := NewRegistry()
-
-	// Tool with various parameter types.
-	typeTool := &mockTool{
-		name: "type_tool",
-		schema: ToolSchema{
-			Type: "function",
-			Function: FunctionSchema{
-				Name: "type_tool",
-				Parameters: ParameterSchema{
-					Type: "object",
-					Properties: map[string]PropertyDefinition{
-						"str_param":   {Type: "string"},
-						"int_param":   {Type: "integer"},
-						"num_param":   {Type: "number"},
-						"bool_param":  {Type: "boolean"},
-						"array_param": {Type: "array"},
-						"obj_param":   {Type: "object"},
-					},
-					Required: []string{},
-				},
-			},
-		},
-		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
-			return ToolResult{Success: true, Output: "ok"}, nil
-		},
-	}
-
-	_ = reg.Register(typeTool)
+	reg := newRegistryWithTypeTool(t)
 
 	tests := []struct {
 		name    string
 		params  map[string]any
 		wantErr bool
 	}{
-		{
-			name: "valid string",
-			params: map[string]any{
-				"str_param": "test",
-			},
-		},
-		{
-			name: "valid integer",
-			params: map[string]any{
-				"int_param": 42,
-			},
-		},
-		{
-			name: "valid number - int",
-			params: map[string]any{
-				"num_param": 42,
-			},
-		},
-		{
-			name: "valid number - float",
-			params: map[string]any{
-				"num_param": 3.14,
-			},
-		},
-		{
-			name: "valid boolean",
-			params: map[string]any{
-				"bool_param": true,
-			},
-		},
-		{
-			name: "valid array",
-			params: map[string]any{
-				"array_param": []string{"a", "b", "c"},
-			},
-		},
-		{
-			name: "valid object",
-			params: map[string]any{
-				"obj_param": map[string]any{"key": "value"},
-			},
-		},
-		{
-			name: "invalid string type",
-			params: map[string]any{
-				"str_param": 123,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid integer type",
-			params: map[string]any{
-				"int_param": "not an int",
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid boolean type",
-			params: map[string]any{
-				"bool_param": "not a bool",
-			},
-			wantErr: true,
-		},
+		{name: "valid string", params: map[string]any{"str_param": "test"}},
+		{name: "valid integer", params: map[string]any{"int_param": 42}},
+		{name: "valid number - int", params: map[string]any{"num_param": 42}},
+		{name: "valid number - float", params: map[string]any{"num_param": 3.14}},
+		{name: "valid boolean", params: map[string]any{"bool_param": true}},
+		{name: "valid array", params: map[string]any{"array_param": []string{"a", "b", "c"}}},
+		{name: "valid object", params: map[string]any{"obj_param": map[string]any{"key": "value"}}},
+		{name: "invalid string type", params: map[string]any{"str_param": 123}, wantErr: true},
+		{name: "invalid integer type", params: map[string]any{"int_param": "not an int"}, wantErr: true},
+		{name: "invalid boolean type", params: map[string]any{"bool_param": "not a bool"}, wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			params, _ := FromMap(tt.params)
-			_, err := reg.Execute(context.Background(), "type_tool", params)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("expected error but got none")
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-			}
+			verifyExecuteWantErr(t, reg, "type_tool", tt.params, tt.wantErr)
 		})
+	}
+}
+
+// newRegistryWithTypeTool creates a registry with a tool that has various parameter types.
+func newRegistryWithTypeTool(t *testing.T) *Registry {
+	t.Helper()
+
+	reg := NewRegistry()
+
+	_ = reg.Register(&mockTool{
+		name: "type_tool",
+		schema: ToolSchema{Type: "function", Function: FunctionSchema{
+			Name: "type_tool",
+			Parameters: ParameterSchema{
+				Type: "object",
+				Properties: map[string]PropertyDefinition{
+					"str_param": {Type: "string"}, "int_param": {Type: "integer"},
+					"num_param": {Type: "number"}, "bool_param": {Type: "boolean"},
+					"array_param": {Type: "array"}, "obj_param": {Type: "object"},
+				},
+				Required: []string{},
+			},
+		}},
+		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
+			return ToolResult{Success: true, Output: "ok"}, nil
+		},
+	})
+
+	return reg
+}
+
+// verifyExecuteWantErr executes a tool and checks whether error matches expectation.
+func verifyExecuteWantErr(t *testing.T, reg *Registry, toolName string, rawParams map[string]any, wantErr bool) {
+	t.Helper()
+
+	params, _ := FromMap(rawParams)
+	_, err := reg.Execute(context.Background(), toolName, params)
+
+	if wantErr && err == nil {
+		t.Error("expected error but got none")
+	}
+
+	if !wantErr && err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
@@ -798,18 +688,7 @@ func TestRegistryEnumValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			params, _ := FromMap(tt.params)
-			_, err := reg.Execute(context.Background(), "enum_tool", params)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("expected error but got none")
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-			}
+			verifyExecuteWantErr(t, reg, "enum_tool", tt.params, tt.wantErr)
 		})
 	}
 }
@@ -818,31 +697,7 @@ func TestRegistryEnumValidation(t *testing.T) {
 // See FRD-8.12 for specification.
 func TestRegistryExecute_UnknownParameter(t *testing.T) {
 	t.Parallel()
-	reg := NewRegistry()
-
-	// Tool with defined parameters.
-	tool := &mockTool{
-		name: "test_tool",
-		schema: ToolSchema{
-			Type: "function",
-			Function: FunctionSchema{
-				Name: "test_tool",
-				Parameters: ParameterSchema{
-					Type: "object",
-					Properties: map[string]PropertyDefinition{
-						"param1": {Type: "string", Description: "First parameter"},
-						"param2": {Type: "string", Description: "Second parameter"},
-					},
-					Required: []string{}, // No required params.
-				},
-			},
-		},
-		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
-			return ToolResult{Success: true, Output: "ok"}, nil
-		},
-	}
-
-	_ = reg.Register(tool)
+	reg := newRegistryWithSimpleTool(t, "test_tool", []string{"param1", "param2"})
 
 	tests := []struct {
 		name    string
@@ -850,79 +705,72 @@ func TestRegistryExecute_UnknownParameter(t *testing.T) {
 		wantErr bool
 		errMsg  string
 	}{
-		{
-			name: "all known parameters",
-			params: map[string]any{
-				"param1": "value1",
-				"param2": "value2",
-			},
-			wantErr: false,
-		},
-		{
-			name: "subset of known parameters",
-			params: map[string]any{
-				"param1": "value1",
-			},
-			wantErr: false,
-		},
-		{
-			name:    "empty parameters",
-			params:  map[string]any{},
-			wantErr: false,
-		},
-		{
-			name: "single unknown parameter",
-			params: map[string]any{
-				"unknown_param": "value",
-			},
-			wantErr: true,
-			errMsg:  "unknown parameter \"unknown_param\"",
-		},
-		{
-			name: "known and unknown parameters",
-			params: map[string]any{
-				"param1":        "value1",
-				"unknown_param": "value",
-			},
-			wantErr: true,
-			errMsg:  "unknown parameter \"unknown_param\"",
-		},
-		{
-			name: "typo in parameter name",
-			params: map[string]any{
-				"parm1": "value", // typo: parm1 instead of param1
-			},
-			wantErr: true,
-			errMsg:  "unknown parameter \"parm1\"",
-		},
+		{name: "all known parameters", params: map[string]any{"param1": "value1", "param2": "value2"}},
+		{name: "subset of known parameters", params: map[string]any{"param1": "value1"}},
+		{name: "empty parameters", params: map[string]any{}},
+		{name: "single unknown parameter", params: map[string]any{"unknown_param": "value"}, wantErr: true, errMsg: "unknown parameter \"unknown_param\""},
+		{name: "known and unknown parameters", params: map[string]any{"param1": "value1", "unknown_param": "value"}, wantErr: true, errMsg: "unknown parameter \"unknown_param\""},
+		{name: "typo in parameter name", params: map[string]any{"parm1": "value"}, wantErr: true, errMsg: "unknown parameter \"parm1\""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			params, _ := FromMap(tt.params)
-			_, err := reg.Execute(context.Background(), "test_tool", params)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Error("expected error but got none")
-
-					return
-				}
-
-				if !errors.Is(err, ErrInvalidParameters) {
-					t.Errorf("expected ErrInvalidParameters, got %v", err)
-				}
-
-				if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
-					t.Errorf("expected error to contain %q, got %q", tt.errMsg, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-			}
+			verifyUnknownParamExecute(t, reg, "test_tool", tt.params, tt.wantErr, tt.errMsg)
 		})
+	}
+}
+
+// newRegistryWithSimpleTool creates a registry with a tool that has the given string parameters.
+func newRegistryWithSimpleTool(t *testing.T, name string, paramNames []string) *Registry {
+	t.Helper()
+
+	reg := NewRegistry()
+	props := make(map[string]PropertyDefinition)
+
+	for _, p := range paramNames {
+		props[p] = PropertyDefinition{Type: "string", Description: p}
+	}
+
+	_ = reg.Register(&mockTool{
+		name: name,
+		schema: ToolSchema{Type: "function", Function: FunctionSchema{
+			Name:       name,
+			Parameters: ParameterSchema{Type: "object", Properties: props, Required: []string{}},
+		}},
+		executeFunc: func(_ context.Context, _ ToolParameters) (ToolResult, error) {
+			return ToolResult{Success: true, Output: "ok"}, nil
+		},
+	})
+
+	return reg
+}
+
+// verifyUnknownParamExecute checks unknown parameter validation.
+func verifyUnknownParamExecute(t *testing.T, reg *Registry, toolName string, rawParams map[string]any, wantErr bool, errMsg string) {
+	t.Helper()
+
+	params, _ := FromMap(rawParams)
+	_, err := reg.Execute(context.Background(), toolName, params)
+
+	if !wantErr {
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		return
+	}
+
+	if err == nil {
+		t.Error("expected error but got none")
+		return
+	}
+
+	if !errors.Is(err, ErrInvalidParameters) {
+		t.Errorf("expected ErrInvalidParameters, got %v", err)
+	}
+
+	if errMsg != "" && !contains(err.Error(), errMsg) {
+		t.Errorf("expected error to contain %q, got %q", errMsg, err.Error())
 	}
 }
 

@@ -88,54 +88,15 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 		return &result, nil
 	}
 
-	tool, err := t.registry.Get(call.Function.Name)
+	tool, err := t.resolveTool(call)
 	if err != nil {
-		// Include available tool names to help the model self-correct.
-		available := t.registry.List()
-
-		names := make([]string, len(available))
-		for i, at := range available {
-			names[i] = at.Name()
-		}
-
-		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("tool not found: %q is not a valid tool. Available tools: %v: %w", call.Function.Name, names, ErrToolNotFound))
+		result := tools.NewToolErrorWithID(call.ID, err)
 
 		return &result, nil
 	}
 
-	if toolWithApproval, ok := tool.(tools.ToolWithApproval); ok {
-		needs := toolWithApproval.CheckApproval(args)
-		if needs.Required {
-			if t.approvalService == nil {
-				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval required but no approval handler configured: %s (risk: %s): %w", needs.Reason, needs.Risk, ErrApprovalRequiredButNoApprovalHandler))
-
-				return &result, nil
-			}
-
-			cmd := &security.Command{
-				Program: call.Function.Name,
-				Args:    []string{needs.Reason},
-				Raw:     fmt.Sprintf("%s: %s", call.Function.Name, needs.Reason),
-				WorkDir: t.workDir,
-			}
-
-			// Pass tool call ID to approval service so approval notifications
-			// use the same tool call ID as the tool call events.
-			operation := security.NewOperationWithToolCallID(cmd, needs.Reason, t.workDir, call.ID)
-
-			_, approved, approvalErr := t.approvalService.RequestApproval(ctx, operation)
-			if approvalErr != nil {
-				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval request failed: %w", approvalErr))
-
-				return &result, nil
-			}
-
-			if !approved {
-				result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("operation denied: %s (risk: %s): %w", needs.Reason, needs.Risk, ErrOperationDenied))
-
-				return &result, nil
-			}
-		}
+	if denied := t.checkToolApproval(ctx, tool, args, call); denied != nil {
+		return denied, nil
 	}
 
 	toolResult, err := tool.Execute(ctx, args)
@@ -149,6 +110,66 @@ func (t *ToolRuntime) Execute(ctx context.Context, call *ToolCall) (*ToolResult,
 	result := toolResult.WithID(call.ID)
 
 	return &result, nil
+}
+
+// resolveTool looks up the tool by name and returns a helpful error if not found.
+func (t *ToolRuntime) resolveTool(call *ToolCall) (tools.Tool, error) {
+	tool, err := t.registry.Get(call.Function.Name)
+	if err != nil {
+		available := t.registry.List()
+		names := make([]string, len(available))
+		for i, at := range available {
+			names[i] = at.Name()
+		}
+
+		return nil, fmt.Errorf("tool not found: %q is not a valid tool. Available tools: %v: %w", call.Function.Name, names, ErrToolNotFound)
+	}
+
+	return tool, nil
+}
+
+// checkToolApproval checks if a tool requires approval and requests it if needed.
+// Returns a non-nil ToolResult if the operation was denied or approval failed.
+func (t *ToolRuntime) checkToolApproval(ctx context.Context, tool tools.Tool, args tools.ToolParameters, call *ToolCall) *ToolResult {
+	toolWithApproval, ok := tool.(tools.ToolWithApproval)
+	if !ok {
+		return nil
+	}
+
+	needs := toolWithApproval.CheckApproval(args)
+	if !needs.Required {
+		return nil
+	}
+
+	if t.approvalService == nil {
+		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval required but no approval handler configured: %s (risk: %s): %w", needs.Reason, needs.Risk, ErrApprovalRequiredButNoApprovalHandler))
+
+		return &result
+	}
+
+	cmd := &security.Command{
+		Program: call.Function.Name,
+		Args:    []string{needs.Reason},
+		Raw:     fmt.Sprintf("%s: %s", call.Function.Name, needs.Reason),
+		WorkDir: t.workDir,
+	}
+
+	operation := security.NewOperationWithToolCallID(cmd, needs.Reason, t.workDir, call.ID)
+
+	_, approved, approvalErr := t.approvalService.RequestApproval(ctx, operation)
+	if approvalErr != nil {
+		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("approval request failed: %w", approvalErr))
+
+		return &result
+	}
+
+	if !approved {
+		result := tools.NewToolErrorWithID(call.ID, fmt.Errorf("operation denied: %s (risk: %s): %w", needs.Reason, needs.Risk, ErrOperationDenied))
+
+		return &result
+	}
+
+	return nil
 }
 
 // ExecuteBatch runs multiple tool calls concurrently.

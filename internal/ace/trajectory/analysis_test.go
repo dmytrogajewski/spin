@@ -9,162 +9,89 @@ import (
 func TestContainsError(t *testing.T) {
 	t.Parallel()
 
-	t.Run("detects lowercase error keyword", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{"detects lowercase error keyword", "command failed with error", true},
+		{"detects failed keyword", "operation failed", true},
+		{"detects exception keyword", "NullPointerException occurred", true},
+		{"detects panic keyword", "panic: runtime error", true},
+		{"detects fatal keyword", "fatal: cannot continue", true},
+		{"case insensitive detection", "ERROR occurred", true},
+		{"returns false when no error keywords", "everything is working fine", false},
+		{"handles empty string", "", false},
+	}
 
-		content := "command failed with error"
-		if !containsError(content) {
-			t.Error("expected true for content with 'error'")
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	t.Run("detects failed keyword", func(t *testing.T) {
-		t.Parallel()
+			if got := containsError(tt.content); got != tt.want {
+				t.Errorf("containsError(%q) = %v, want %v", tt.content, got, tt.want)
+			}
+		})
+	}
+}
 
-		content := "operation failed"
-		if !containsError(content) {
-			t.Error("expected true for content with 'failed'")
-		}
-	})
+// hasRecentErrorCase defines a test case for HasRecentError.
+type hasRecentErrorCase struct {
+	name     string
+	steps    []generator.TrajectoryStep
+	lookback int
+	want     bool
+}
 
-	t.Run("detects exception keyword", func(t *testing.T) {
-		t.Parallel()
-
-		content := "NullPointerException occurred"
-		if !containsError(content) {
-			t.Error("expected true for content with 'exception'")
-		}
-	})
-
-	t.Run("detects panic keyword", func(t *testing.T) {
-		t.Parallel()
-
-		content := "panic: runtime error"
-		if !containsError(content) {
-			t.Error("expected true for content with 'panic'")
-		}
-	})
-
-	t.Run("detects fatal keyword", func(t *testing.T) {
-		t.Parallel()
-
-		content := "fatal: cannot continue"
-		if !containsError(content) {
-			t.Error("expected true for content with 'fatal'")
-		}
-	})
-
-	t.Run("case insensitive detection", func(t *testing.T) {
-		t.Parallel()
-
-		content := "ERROR occurred"
-		if !containsError(content) {
-			t.Error("expected true for uppercase 'ERROR'")
-		}
-	})
-
-	t.Run("returns false when no error keywords", func(t *testing.T) {
-		t.Parallel()
-
-		content := "everything is working fine"
-		if containsError(content) {
-			t.Error("expected false for content without error keywords")
-		}
-	})
-
-	t.Run("handles empty string", func(t *testing.T) {
-		t.Parallel()
-
-		content := ""
-		if containsError(content) {
-			t.Error("expected false for empty string")
-		}
-	})
+// hasRecentErrorCases returns test cases for HasRecentError.
+func hasRecentErrorCases() []hasRecentErrorCase {
+	return []hasRecentErrorCase{
+		{
+			name:     "detects error in recent steps",
+			steps:    []generator.TrajectoryStep{{StepNumber: 0, Content: "starting task"}, {StepNumber: 1, Content: "error occurred"}},
+			lookback: 2, want: true,
+		},
+		{
+			name:     "returns false when error outside lookback window",
+			steps:    []generator.TrajectoryStep{{StepNumber: 0, Content: "error at start"}, {StepNumber: 1, Content: "step 2"}, {StepNumber: 2, Content: "step 3"}},
+			lookback: 2, want: false,
+		},
+		{
+			name:     "returns false when no errors",
+			steps:    []generator.TrajectoryStep{{StepNumber: 0, Content: "all good"}, {StepNumber: 1, Content: "working fine"}},
+			lookback: 2, want: false,
+		},
+		{name: "handles empty trajectory", lookback: 2, want: false},
+		{
+			name:     "checks all steps when lookback is 0",
+			steps:    []generator.TrajectoryStep{{StepNumber: 0, Content: "error at start"}, {StepNumber: 1, Content: "step 2"}, {StepNumber: 2, Content: "step 3"}},
+			lookback: 0, want: true,
+		},
+		{
+			name:     "checks all steps when lookback exceeds length",
+			steps:    []generator.TrajectoryStep{{StepNumber: 0, Content: "error here"}},
+			lookback: 100, want: true,
+		},
+	}
 }
 
 func TestHasRecentError(t *testing.T) {
 	t.Parallel()
 
-	t.Run("detects error in recent steps", func(t *testing.T) {
-		t.Parallel()
+	for _, tt := range hasRecentErrorCases() {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		ctx := NewContext("test query")
-		ctx.AppendSteps([]generator.TrajectoryStep{
-			{StepNumber: 0, Content: "starting task"},
-			{StepNumber: 1, Content: "error occurred"},
+			ctx := NewContext("test query")
+			if len(tt.steps) > 0 {
+				ctx.AppendSteps(tt.steps)
+			}
+
+			if got := ctx.HasRecentError(tt.lookback); got != tt.want {
+				t.Errorf("HasRecentError(%d) = %v, want %v", tt.lookback, got, tt.want)
+			}
 		})
-
-		if !ctx.HasRecentError(2) {
-			t.Error("expected true when error in last 2 steps")
-		}
-	})
-
-	t.Run("returns false when error outside lookback window", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := NewContext("test query")
-		ctx.AppendSteps([]generator.TrajectoryStep{
-			{StepNumber: 0, Content: "error at start"},
-			{StepNumber: 1, Content: "step 2"},
-			{StepNumber: 2, Content: "step 3"},
-		})
-
-		if ctx.HasRecentError(2) {
-			t.Error("expected false when error outside last 2 steps")
-		}
-	})
-
-	t.Run("returns false when no errors", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := NewContext("test query")
-		ctx.AppendSteps([]generator.TrajectoryStep{
-			{StepNumber: 0, Content: "all good"},
-			{StepNumber: 1, Content: "working fine"},
-		})
-
-		if ctx.HasRecentError(2) {
-			t.Error("expected false when no errors")
-		}
-	})
-
-	t.Run("handles empty trajectory", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := NewContext("test query")
-
-		if ctx.HasRecentError(2) {
-			t.Error("expected false for empty trajectory")
-		}
-	})
-
-	t.Run("checks all steps when lookback is 0", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := NewContext("test query")
-		ctx.AppendSteps([]generator.TrajectoryStep{
-			{StepNumber: 0, Content: "error at start"},
-			{StepNumber: 1, Content: "step 2"},
-			{StepNumber: 2, Content: "step 3"},
-		})
-
-		if !ctx.HasRecentError(0) {
-			t.Error("expected true when lookback=0 checks all steps")
-		}
-	})
-
-	t.Run("checks all steps when lookback exceeds length", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := NewContext("test query")
-		ctx.AppendSteps([]generator.TrajectoryStep{
-			{StepNumber: 0, Content: "error here"},
-		})
-
-		if !ctx.HasRecentError(100) {
-			t.Error("expected true when lookback > steps length")
-		}
-	})
+	}
 }
 
 func TestExtractErrorPatterns(t *testing.T) {
@@ -351,37 +278,13 @@ func TestExtractConcepts(t *testing.T) {
 		}
 
 		concepts := ExtractConcepts(steps, 0)
-		// Should extract: Dockerfile, BuildKit.
-		if len(concepts) < 2 {
-			t.Fatalf("expected at least 2 concepts, got %d: %v", len(concepts), concepts)
-		}
-
-		hasDockerfile := false
-		hasBuildKit := false
-
-		for _, c := range concepts {
-			if c == "Dockerfile" {
-				hasDockerfile = true
-			}
-
-			if c == "BuildKit" {
-				hasBuildKit = true
-			}
-		}
-
-		if !hasDockerfile || !hasBuildKit {
-			t.Errorf("expected Dockerfile and BuildKit in concepts, got %v", concepts)
-		}
+		requireConceptsContain(t, concepts, "Dockerfile", "BuildKit")
 	})
 
 	t.Run("returns empty for common words only", func(t *testing.T) {
 		t.Parallel()
 
-		steps := []generator.TrajectoryStep{
-			{Content: "the and or but"},
-		}
-
-		concepts := ExtractConcepts(steps, 0)
+		concepts := ExtractConcepts([]generator.TrajectoryStep{{Content: "the and or but"}}, 0)
 		if len(concepts) != 0 {
 			t.Errorf("expected no concepts from common words, got %v", concepts)
 		}
@@ -396,23 +299,33 @@ func TestExtractConcepts(t *testing.T) {
 		}
 
 		concepts := ExtractConcepts(steps, 1)
-		if len(concepts) != 1 {
-			t.Fatalf("expected 1 concept in lookback, got %d: %v", len(concepts), concepts)
-		}
-
-		if concepts[0] != "NewConcept" {
-			t.Errorf("expected NewConcept, got %q", concepts[0])
+		if len(concepts) != 1 || concepts[0] != "NewConcept" {
+			t.Errorf("expected [NewConcept], got %v", concepts)
 		}
 	})
 
 	t.Run("handles empty steps", func(t *testing.T) {
 		t.Parallel()
 
-		steps := []generator.TrajectoryStep{}
-
-		concepts := ExtractConcepts(steps, 0)
+		concepts := ExtractConcepts([]generator.TrajectoryStep{}, 0)
 		if len(concepts) != 0 {
-			t.Errorf("expected empty slice for empty steps, got %v", concepts)
+			t.Errorf("expected empty slice, got %v", concepts)
 		}
 	})
+}
+
+// requireConceptsContain checks that all expected concepts are present.
+func requireConceptsContain(t *testing.T, concepts []string, expected ...string) {
+	t.Helper()
+
+	conceptSet := make(map[string]bool, len(concepts))
+	for _, c := range concepts {
+		conceptSet[c] = true
+	}
+
+	for _, exp := range expected {
+		if !conceptSet[exp] {
+			t.Errorf("expected concept %q not found in %v", exp, concepts)
+		}
+	}
 }

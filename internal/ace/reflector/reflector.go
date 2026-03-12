@@ -135,8 +135,32 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 	// Clean response text to extract JSON from markdown code blocks.
 	responseText = cleanJSONResponse(responseText)
 
-	// Try to parse as detailed reflection response (object) first.
-	var reflectionResp struct {
+	insights, err := r.parseReflectionResponse(ctx, responseText, sourceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ReflectionResponse{
+		Insights:    insights,
+		Iterations:  1,
+		TotalTokens: int(completion.Usage.TotalTokens),
+		Duration:    time.Since(startTime),
+	}, nil
+}
+
+// parseReflectionResponse parses the LLM response into insights, trying detailed format first.
+func (r *reflector) parseReflectionResponse(ctx context.Context, responseText, sourceID string) ([]*Insight, error) {
+	insights, err := r.parseDetailedFormat(ctx, responseText, sourceID)
+	if err == nil {
+		return insights, nil
+	}
+
+	return r.parseSimplifiedFormat(ctx, responseText, sourceID)
+}
+
+// parseDetailedFormat parses response as a single detailed reflection object.
+func (r *reflector) parseDetailedFormat(ctx context.Context, responseText, sourceID string) ([]*Insight, error) {
+	var resp struct {
 		Reasoning           string  `json:"reasoning"`
 		ErrorIdentification string  `json:"error_identification"`
 		RootCauseAnalysis   string  `json:"root_cause_analysis"`
@@ -146,82 +170,72 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 		Confidence          float64 `json:"confidence"`
 	}
 
-	insights := make([]*Insight, 0, 1)
+	if err := json.Unmarshal([]byte(responseText), &resp); err != nil || resp.KeyInsight == "" {
+		return nil, fmt.Errorf("not detailed format")
+	}
 
-	err = json.Unmarshal([]byte(responseText), &reflectionResp)
-	if err == nil && reflectionResp.KeyInsight != "" {
-		// Successfully parsed as detailed object format.
-		insight := NewInsight(reflectionResp.KeyInsight, InsightCategory(reflectionResp.Category))
+	insight := NewInsight(resp.KeyInsight, InsightCategory(resp.Category))
+	insight.Source = sourceID
+	insight.Confidence = resp.Confidence
+	insight.Evidence = buildEvidence(resp.ErrorIdentification, resp.RootCauseAnalysis, resp.CorrectApproach)
+	insight.Iteration = 0
+	insight.CreatedAt = time.Now()
+
+	if err := r.validator.Validate(insight); err != nil {
+		r.logger.DebugContext(ctx, "Insight validation failed", "error", err, "content", insight.Content)
+		return []*Insight{}, nil
+	}
+
+	return []*Insight{insight}, nil
+}
+
+// buildEvidence collects non-empty evidence strings.
+func buildEvidence(errorID, rootCause, correctApproach string) []string {
+	evidence := make([]string, 0, 3)
+	if errorID != "" && errorID != "N/A" {
+		evidence = append(evidence, errorID)
+	}
+	if rootCause != "" {
+		evidence = append(evidence, rootCause)
+	}
+	if correctApproach != "" {
+		evidence = append(evidence, correctApproach)
+	}
+	return evidence
+}
+
+// parseSimplifiedFormat parses response as an array of simplified insights.
+func (r *reflector) parseSimplifiedFormat(ctx context.Context, responseText, sourceID string) ([]*Insight, error) {
+	type simplifiedInsight struct {
+		Content    string   `json:"content"`
+		Evidence   []string `json:"evidence"`
+		Confidence float64  `json:"confidence"`
+		Category   string   `json:"category"`
+	}
+
+	var simpleInsights []simplifiedInsight
+	if err := json.Unmarshal([]byte(responseText), &simpleInsights); err != nil {
+		r.logger.WarnContext(ctx, "Failed to parse reflection response in both formats", "error", err, "response", responseText)
+		return nil, fmt.Errorf("failed to parse reflection response: %w", err)
+	}
+
+	insights := make([]*Insight, 0, len(simpleInsights))
+	for _, simple := range simpleInsights {
+		insight := NewInsight(simple.Content, InsightCategory(simple.Category))
 		insight.Source = sourceID
-		insight.Confidence = reflectionResp.Confidence
-
-		// Build evidence from the analysis.
-		evidence := make([]string, 0, 3)
-		if reflectionResp.ErrorIdentification != "" && reflectionResp.ErrorIdentification != "N/A" {
-			evidence = append(evidence, reflectionResp.ErrorIdentification)
-		}
-
-		if reflectionResp.RootCauseAnalysis != "" {
-			evidence = append(evidence, reflectionResp.RootCauseAnalysis)
-		}
-
-		if reflectionResp.CorrectApproach != "" {
-			evidence = append(evidence, reflectionResp.CorrectApproach)
-		}
-
-		insight.Evidence = evidence
+		insight.Confidence = simple.Confidence
+		insight.Evidence = simple.Evidence
 		insight.Iteration = 0
 		insight.CreatedAt = time.Now()
 
-		// Validate insight before adding.
-		err = r.validator.Validate(insight)
-		if err == nil {
-			insights = append(insights, insight)
-		} else {
+		if err := r.validator.Validate(insight); err != nil {
 			r.logger.DebugContext(ctx, "Insight validation failed", "error", err, "content", insight.Content)
+			continue
 		}
-	} else {
-		// Try parsing as simplified array format (for compatibility with tests/simple responses).
-		type simplifiedInsight struct {
-			Content    string   `json:"content"`
-			Evidence   []string `json:"evidence"`
-			Confidence float64  `json:"confidence"`
-			Category   string   `json:"category"`
-		}
-
-		var simpleInsights []simplifiedInsight
-		err = json.Unmarshal([]byte(responseText), &simpleInsights)
-		if err != nil {
-			r.logger.WarnContext(ctx, "Failed to parse reflection response in both formats", "error", err, "response", responseText)
-
-			return nil, fmt.Errorf("failed to parse reflection response: %w", err)
-		}
-
-		// Convert simplified insights.
-		for _, simple := range simpleInsights {
-			insight := NewInsight(simple.Content, InsightCategory(simple.Category))
-			insight.Source = sourceID
-			insight.Confidence = simple.Confidence
-			insight.Evidence = simple.Evidence
-			insight.Iteration = 0
-			insight.CreatedAt = time.Now()
-
-			// Validate insight before adding.
-			err = r.validator.Validate(insight)
-			if err == nil {
-				insights = append(insights, insight)
-			} else {
-				r.logger.DebugContext(ctx, "Insight validation failed", "error", err, "content", insight.Content)
-			}
-		}
+		insights = append(insights, insight)
 	}
 
-	return &ReflectionResponse{
-		Insights:    insights,
-		Iterations:  1,
-		TotalTokens: int(completion.Usage.TotalTokens),
-		Duration:    time.Since(startTime),
-	}, nil
+	return insights, nil
 }
 
 // RefineInsights improves insights through multiple iterations.

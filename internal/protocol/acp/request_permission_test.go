@@ -387,95 +387,66 @@ func TestRequestPermission_AllowAlwaysOption(t *testing.T) {
 	assert.Equal(t, acp.PermissionOptionId("allow-once"), resp.Outcome.Selected.OptionId)
 }
 
-// TestRequestPermission_Integration tests end-to-end integration with ApprovalService.
-func TestRequestPermission_Integration(t *testing.T) {
-	t.Parallel()
+func setupPermissionIntegrationAgent(t *testing.T) (*SpinACPAgent, acp.SessionId) {
+	t.Helper()
+
 	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
+	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())), emitter, storage)
 	require.NoError(t, err)
 
-	// Create approval handler that simulates user interaction.
 	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		// Simulate approval based on command.
 		approved := req.Command.Program != "dangerous_command"
-
 		reason := "approved"
 		if !approved {
 			reason = "denied - dangerous command"
 		}
-
-		return security.ApprovalResponse{
-			RequestID: req.ID,
-			Approved:  approved,
-			Reason:    reason,
-		}
+		return security.ApprovalResponse{RequestID: req.ID, Approved: approved, Reason: reason}
 	}
 
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter, Validator: nil})
-	acpAgent.SetApprovalService(approvalService)
+	acpAgent.SetApprovalService(security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: approvalHandler, Emitter: emitter}))
 
-	// Create a session.
 	sess := session.NewSession("/tmp/test")
 	sessionID := acp.SessionId(sess.ID)
-
 	acpAgent.mu.Lock()
 	acpAgent.sessions[sessionID] = sess
 	acpAgent.mu.Unlock()
 
-	// Test approved case.
-	reqApproved := acp.RequestPermissionRequest{
+	return acpAgent, sessionID
+}
+
+func newPermissionRequest(sessionID acp.SessionId, toolCallID, toolName string) acp.RequestPermissionRequest {
+	return acp.RequestPermissionRequest{
 		SessionId: sessionID,
-		ToolCall: acp.RequestPermissionToolCall{
-			ToolCallId: acp.ToolCallId("tool-1"),
-			Title:      acp.Ptr("write_file"),
-		},
+		ToolCall:  acp.RequestPermissionToolCall{ToolCallId: acp.ToolCallId(toolCallID), Title: acp.Ptr(toolName)},
 		Options: []acp.PermissionOption{
-			{
-				OptionId: acp.PermissionOptionId("allow"),
-				Name:     "Allow",
-				Kind:     acp.PermissionOptionKindAllowOnce,
-			},
-			{
-				OptionId: acp.PermissionOptionId("reject"),
-				Name:     "Reject",
-				Kind:     acp.PermissionOptionKindRejectOnce,
-			},
+			{OptionId: "allow", Name: "Allow", Kind: acp.PermissionOptionKindAllowOnce},
+			{OptionId: "reject", Name: "Reject", Kind: acp.PermissionOptionKindRejectOnce},
 		},
 	}
+}
 
-	resp, err := acpAgent.RequestPermission(context.Background(), reqApproved)
-	require.NoError(t, err)
-	require.NotNil(t, resp.Outcome.Selected)
-	assert.Equal(t, acp.PermissionOptionId("allow"), resp.Outcome.Selected.OptionId)
+// TestRequestPermission_Integration tests end-to-end integration with ApprovalService.
+func TestRequestPermission_Integration(t *testing.T) {
+	t.Parallel()
+	acpAgent, sessionID := setupPermissionIntegrationAgent(t)
 
-	// Test denied case.
-	reqDenied := acp.RequestPermissionRequest{
-		SessionId: sessionID,
-		ToolCall: acp.RequestPermissionToolCall{
-			ToolCallId: acp.ToolCallId("tool-2"),
-			Title:      acp.Ptr("dangerous_command"),
-		},
-		Options: []acp.PermissionOption{
-			{
-				OptionId: acp.PermissionOptionId("allow"),
-				Name:     "Allow",
-				Kind:     acp.PermissionOptionKindAllowOnce,
-			},
-			{
-				OptionId: acp.PermissionOptionId("reject"),
-				Name:     "Reject",
-				Kind:     acp.PermissionOptionKindRejectOnce,
-			},
-		},
-	}
+	t.Run("approved", func(t *testing.T) {
+		t.Parallel()
+		resp, err := acpAgent.RequestPermission(context.Background(), newPermissionRequest(sessionID, "tool-1", "write_file"))
+		require.NoError(t, err)
+		require.NotNil(t, resp.Outcome.Selected)
+		assert.Equal(t, acp.PermissionOptionId("allow"), resp.Outcome.Selected.OptionId)
+	})
 
-	resp, err = acpAgent.RequestPermission(context.Background(), reqDenied)
-	require.NoError(t, err)
-	require.NotNil(t, resp.Outcome.Selected)
-	assert.Equal(t, acp.PermissionOptionId("reject"), resp.Outcome.Selected.OptionId)
+	t.Run("denied", func(t *testing.T) {
+		t.Parallel()
+		resp, err := acpAgent.RequestPermission(context.Background(), newPermissionRequest(sessionID, "tool-2", "dangerous_command"))
+		require.NoError(t, err)
+		require.NotNil(t, resp.Outcome.Selected)
+		assert.Equal(t, acp.PermissionOptionId("reject"), resp.Outcome.Selected.OptionId)
+	})
 }

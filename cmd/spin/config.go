@@ -475,9 +475,8 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// createDefaultConfig creates a default configuration file.
-func createDefaultConfig(path string) error {
-	defaultConfig := `# Spin Configuration File V2
+// defaultConfigTemplate is the default configuration file content.
+const defaultConfigTemplate = `# Spin Configuration File V2
 # See: https://docs.spin.dev/configuration
 
 version: "2.0"
@@ -575,7 +574,9 @@ protocol:
   shell_timeout: 5m
 `
 
-	if err := os.WriteFile(path, []byte(defaultConfig), 0644); err != nil {
+// createDefaultConfig creates a default configuration file.
+func createDefaultConfig(path string) error {
+	if err := os.WriteFile(path, []byte(defaultConfigTemplate), 0644); err != nil {
 		return fmt.Errorf("writing default config: %w", err)
 	}
 

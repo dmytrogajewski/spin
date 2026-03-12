@@ -16,70 +16,86 @@ type jobResult struct {
 
 // curateBatchParallel processes requests in parallel using a worker pool.
 func (c *curator) curateBatchParallel(ctx context.Context, requests []MergeRequest, maxWorkers int) (*BatchMergeResult, error) {
-	// Determine worker count.
-	numWorkers := maxWorkers
-	if numWorkers <= 0 {
-		numWorkers = runtime.NumCPU()
-	}
-	// Cap workers at number of requests.
-	if numWorkers > len(requests) {
-		numWorkers = len(requests)
-	}
+	numWorkers := effectiveWorkers(maxWorkers, len(requests))
 
-	// Create channels.
 	jobs := make(chan int, len(requests))
 	resultsChan := make(chan jobResult, len(requests))
 
-	// Start workers.
 	var wg sync.WaitGroup
+
+	c.startWorkers(ctx, &wg, numWorkers, requests, jobs, resultsChan)
+	go sendJobs(ctx, jobs, len(requests))
+	go closeOnDone(&wg, resultsChan)
+
+	return collectResults(ctx, resultsChan, len(requests))
+}
+
+// effectiveWorkers determines the number of workers capped by CPU count and request count.
+func effectiveWorkers(maxWorkers, numRequests int) int {
+	n := maxWorkers
+	if n <= 0 {
+		n = runtime.NumCPU()
+	}
+
+	if n > numRequests {
+		n = numRequests
+	}
+
+	return n
+}
+
+// startWorkers launches worker goroutines that process jobs.
+func (c *curator) startWorkers(ctx context.Context, wg *sync.WaitGroup, numWorkers int, requests []MergeRequest, jobs <-chan int, results chan<- jobResult) {
 	for range numWorkers {
 		wg.Add(1)
 
 		go func() {
 			defer wg.Done()
-
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case index, ok := <-jobs:
-					if !ok {
-						return
-					}
-
-					result, err := c.Curate(ctx, requests[index])
-					resultsChan <- jobResult{
-						index:  index,
-						result: result,
-						err:    err,
-					}
-				}
-			}
+			c.processJobs(ctx, requests, jobs, results)
 		}()
 	}
+}
 
-	// Send jobs.
-	go func() {
-		for i := range requests {
-			select {
-			case <-ctx.Done():
+// processJobs reads job indices from the channel and curates each request.
+func (c *curator) processJobs(ctx context.Context, requests []MergeRequest, jobs <-chan int, results chan<- jobResult) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case index, ok := <-jobs:
+			if !ok {
 				return
-			case jobs <- i:
 			}
+
+			result, err := c.Curate(ctx, requests[index])
+			results <- jobResult{index: index, result: result, err: err}
 		}
+	}
+}
 
-		close(jobs)
-	}()
+// sendJobs sends job indices to the jobs channel.
+func sendJobs(ctx context.Context, jobs chan<- int, count int) {
+	for i := range count {
+		select {
+		case <-ctx.Done():
+			return
+		case jobs <- i:
+		}
+	}
 
-	// Wait for all workers.
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
+	close(jobs)
+}
 
-	// Collect results.
-	results := make([]MergeResult, len(requests))
-	errors := make([]error, len(requests))
+// closeOnDone waits for the WaitGroup and closes the results channel.
+func closeOnDone(wg *sync.WaitGroup, results chan jobResult) {
+	wg.Wait()
+	close(results)
+}
+
+// collectResults gathers results from the results channel.
+func collectResults(ctx context.Context, resultsChan <-chan jobResult, count int) (*BatchMergeResult, error) {
+	results := make([]MergeResult, count)
+	errors := make([]error, count)
 
 	for jobRes := range resultsChan {
 		if jobRes.err != nil {
@@ -89,13 +105,9 @@ func (c *curator) curateBatchParallel(ctx context.Context, requests []MergeReque
 		}
 	}
 
-	// Check for context cancellation.
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("batch merge canceled: %w", ctx.Err())
 	}
 
-	return &BatchMergeResult{
-		Results: results,
-		Errors:  errors,
-	}, nil
+	return &BatchMergeResult{Results: results, Errors: errors}, nil
 }

@@ -84,16 +84,18 @@ Examples:
 	return cmd
 }
 
-// runACPServer starts the ACP server.
-func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagOverrides, apiKey string) error {
-	// Ensure workDir is an absolute path.
-	var err error
+// acpInfra holds the infrastructure components for the ACP server.
+type acpInfra struct {
+	emitter  *events.EventEmitter
+	storage  session.Storage
+	provider llm.Provider
+	services *ProtocolServices
+	cleanup  func()
+	logger   *slog.Logger
+}
 
-	workDir, err = filepath.Abs(workDir)
-	if err != nil {
-		return fmt.Errorf("resolve workspace path: %w", err)
-	}
-
+// createACPInfra creates the infrastructure components for the ACP server.
+func createACPInfra(ctx context.Context, cmd *cobra.Command, workDir string, flagOverrides config.FlagOverrides, apiKey string) (*config.V2, *acpInfra, error) {
 	authMgr := createAuthManager()
 
 	cfg, err := config.Load(config.Source{
@@ -102,83 +104,86 @@ func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagO
 		WorkDir: workDir,
 	})
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return nil, nil, fmt.Errorf("load config: %w", err)
 	}
 
-	// Apply --agents-md flag override.
 	if agentsMD := flagAgentsMD(cmd); agentsMD != "" {
 		cfg.AgentsMD.Path = agentsMD
 	}
 
-	ctx := context.Background()
-
-	provider, err := buildProviderForACP(
-		ctx,
-		cfg,
-		authMgr,
-		cfg.LLM.Provider,
-		cfg.LLM.BaseURL,
-		cfg.LLM.Model,
-		apiKey,
-	)
+	provider, err := buildProviderForACP(ctx, cfg, authMgr, cfg.LLM.Provider, cfg.LLM.BaseURL, cfg.LLM.Model, apiKey)
 	if err != nil {
-		return fmt.Errorf("failed to create provider: %w", err)
+		return nil, nil, fmt.Errorf("failed to create provider: %w", err)
 	}
-
-	defer provider.Close()
 
 	logger := slog.Default()
 
-	protocolServices, cleanup, err := createServices(ctx, cfg, workDir, logger)
+	services, cleanup, err := createServices(ctx, cfg, workDir, logger)
 	if err != nil {
-		return fmt.Errorf("failed to create services: %w", err)
+		provider.Close()
+		return nil, nil, fmt.Errorf("failed to create services: %w", err)
 	}
 
-	defer cleanup()
-
 	bufferSize := 100
-
 	if cfg.Agent.StreamBuffer > 0 {
 		bufferSize = cfg.Agent.StreamBuffer
 	}
 
-	emitter := events.NewEventEmitter(bufferSize)
 	storageDir := cfg.Agent.SessionDir
-
 	if storageDir == "" {
 		storageDir = "~/.spin/sessions"
 	}
 
 	storage, err := session.NewFileStorage(storageDir)
 	if err != nil {
-		return fmt.Errorf("create session storage: %w", err)
+		cleanup()
+		provider.Close()
+		return nil, nil, fmt.Errorf("create session storage: %w", err)
 	}
 
-	acpRuntime, err := agentexec.NewACP(agentexec.ACPConfig{
-		WorkDir:      workDir,
-		Emitter:      emitter,
-		Storage:      storage,
-		ShellService: protocolServices.Shell,
-		GitService:   protocolServices.Git,
-		Logger:       logger,
-	})
-	if err != nil {
-		return fmt.Errorf("create ACP runtime: %w", err)
-	}
+	return cfg, &acpInfra{
+		emitter:  events.NewEventEmitter(bufferSize),
+		storage:  storage,
+		provider: provider,
+		services: services,
+		cleanup:  cleanup,
+		logger:   logger,
+	}, nil
+}
 
-	coreAgent, err := buildCoreAgent(cfg, provider, workDir, emitter, acpRuntime)
-	if err != nil {
-		return fmt.Errorf("build core agent: %w", err)
-	}
+// wireACPAgent configures all the connections between ACP components.
+func wireACPAgent(
+	acpAgent *acppkg.SpinACPAgent,
+	acpRuntime *agentexec.ACPRuntime,
+	coreAgent *agent.Agent,
+	convManager *conversation.Manager,
+	histStorage history.Storage,
+) *acp.AgentSideConnection {
+	acpAgent.SetConversationManager(convManager)
+	acpAgent.SetHistoryStorage(histStorage)
 
-	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(logger))
+	acpRuntime.SetACPAgent(acpAgent)
+	acpAgent.SetACPRuntime(acpRuntime)
 
-	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreAgent, mcpService, emitter, storage)
-	if err != nil {
-		return fmt.Errorf("create ACP protocol adapter: %w", err)
-	}
+	acpApprovalHandler := acppkg.NewApprovalHandler(acpAgent, 60*time.Second)
+	acpRuntime.SetApprovalHandler(acpApprovalHandler.HandleApprovalRequest)
+	acpAgent.SetApprovalHandler(acpApprovalHandler)
+	acpAgent.SetApprovalService(coreAgent.GetSecurityService().ApprovalService())
 
-	// Create history storage for conversation persistence.
+	conn := acp.NewAgentSideConnection(acpAgent, os.Stdout, os.Stdin)
+	acpAgent.SetConnection(conn)
+
+	terminalClient := acppkg.NewTerminalClient(conn)
+	acpRuntime.SetTerminalClient(terminalClient)
+
+	filesystemClient := acppkg.NewFilesystemClient(conn)
+	acpRuntime.SetFilesystemClient(filesystemClient)
+
+	return conn
+}
+
+// createACPConversationManager creates the conversation manager for the ACP server.
+func createACPConversationManager(cfg *config.V2, coreAgent *agent.Agent, infra *acpInfra) (*conversation.Manager, history.Storage, error) {
 	historyDir := cfg.Agent.SessionDir
 	if historyDir == "" {
 		historyDir = "~/.spin/sessions"
@@ -186,55 +191,84 @@ func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagO
 
 	histStorage, err := history.NewFileStorage(historyDir)
 	if err != nil {
-		return fmt.Errorf("create history storage: %w", err)
+		return nil, nil, fmt.Errorf("create history storage: %w", err)
 	}
 
-	// Determine appropriate max tokens for history based on LLM context window.
-	maxTokens := getHistoryMaxTokens(cfg, provider)
+	maxTokens := getHistoryMaxTokens(cfg, infra.provider)
 
-	// Create conversation factory that builds properly configured conversations.
 	convFactory := func(_ context.Context, sessionID string, sessWorkDir string) (*conversation.Conversation, error) {
-		// Create a new conversation with the core agent's provider and tools.
 		return conversation.NewFromAgent(conversation.NewFromAgentConfig{
 			Agent:     coreAgent,
-			Emitter:   emitter,
+			Emitter:   infra.emitter,
 			WorkDir:   sessWorkDir,
 			ID:        sessionID,
 			MaxTokens: maxTokens,
 		})
 	}
 
-	// Create conversation manager for multi-session support.
 	convManager, err := conversation.NewManager(conversation.ManagerConfig{
 		Factory:        convFactory,
-		Storage:        storage,
+		Storage:        infra.storage,
 		HistoryStorage: histStorage,
-		Logger:         logger,
+		Logger:         infra.logger,
 	})
 	if err != nil {
-		return fmt.Errorf("create conversation manager: %w", err)
+		return nil, nil, fmt.Errorf("create conversation manager: %w", err)
 	}
 
-	// Wire conversation manager to ACP agent for new prompt path.
-	acpAgent.SetConversationManager(convManager)
-	acpAgent.SetHistoryStorage(histStorage)
+	return convManager, histStorage, nil
+}
 
-	acpRuntime.SetACPAgent(acpAgent)
-	acpAgent.SetACPRuntime(acpRuntime)
-	acpApprovalHandler := acppkg.NewApprovalHandler(acpAgent, 60*time.Second)
-	acpRuntime.SetApprovalHandler(acpApprovalHandler.HandleApprovalRequest)
-	acpAgent.SetApprovalHandler(acpApprovalHandler)
-	acpAgent.SetApprovalService(coreAgent.GetSecurityService().ApprovalService())
-	conn := acp.NewAgentSideConnection(acpAgent, os.Stdout, os.Stdin)
-	acpAgent.SetConnection(conn)
-	terminalClient := acppkg.NewTerminalClient(conn)
-	acpRuntime.SetTerminalClient(terminalClient)
+// runACPServer starts the ACP server.
+func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagOverrides, apiKey string) error {
+	var err error
 
-	filesystemClient := acppkg.NewFilesystemClient(conn)
-	acpRuntime.SetFilesystemClient(filesystemClient)
+	workDir, err = filepath.Abs(workDir)
+	if err != nil {
+		return fmt.Errorf("resolve workspace path: %w", err)
+	}
+
+	ctx := context.Background()
+
+	cfg, infra, err := createACPInfra(ctx, cmd, workDir, flagOverrides, apiKey)
+	if err != nil {
+		return err
+	}
+	defer infra.provider.Close()
+	defer infra.cleanup()
+
+	acpRuntime, err := agentexec.NewACP(agentexec.ACPConfig{
+		WorkDir:      workDir,
+		Emitter:      infra.emitter,
+		Storage:      infra.storage,
+		ShellService: infra.services.Shell,
+		GitService:   infra.services.Git,
+		Logger:       infra.logger,
+	})
+	if err != nil {
+		return fmt.Errorf("create ACP runtime: %w", err)
+	}
+
+	coreAgent, err := buildCoreAgent(cfg, infra.provider, workDir, infra.emitter, acpRuntime)
+	if err != nil {
+		return fmt.Errorf("build core agent: %w", err)
+	}
+
+	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(infra.logger))
+
+	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreAgent, mcpService, infra.emitter, infra.storage)
+	if err != nil {
+		return fmt.Errorf("create ACP protocol adapter: %w", err)
+	}
+
+	convManager, histStorage, err := createACPConversationManager(cfg, coreAgent, infra)
+	if err != nil {
+		return err
+	}
+
+	conn := wireACPAgent(acpAgent, acpRuntime, coreAgent, convManager, histStorage)
 
 	ctx, cancel := context.WithCancel(ctx)
-
 	defer cancel()
 
 	setupACPServerSignalHandling(cancel)

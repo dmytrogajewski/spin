@@ -158,25 +158,6 @@ func convertContentDelta(event events.Event) (acp.SessionUpdate, bool) {
 	return update, true
 }
 
-// mapToolNameToKind maps Spin tool names to ACP tool kinds.
-// Returns nil if the tool name is not recognized.
-func mapToolNameToKind(toolName string) *acp.ToolKind {
-	switch toolName {
-	case "read_file":
-		return acp.Ptr(acp.ToolKindRead)
-	case "write_file":
-		return acp.Ptr(acp.ToolKindEdit)
-	case "shell_command":
-		return acp.Ptr(acp.ToolKindExecute)
-	case "file_search":
-		return acp.Ptr(acp.ToolKindSearch)
-	case "list_directory":
-		return acp.Ptr(acp.ToolKindRead)
-	default:
-		return nil // No kind specified for unknown tools.
-	}
-}
-
 // extractFileLocations extracts file locations from tool parameters.
 // Returns a slice of ToolCallLocation objects with file paths.
 func extractFileLocations(toolName string, params tools.ToolParameters) []acp.ToolCallLocation {

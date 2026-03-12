@@ -445,63 +445,81 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 		return a.wrapError("Update", op.FilePath, err, "")
 	}
 
-	// Read file content.
-	originalContent, err := os.ReadFile(fullPath)
+	originalContent, err := a.readFileForUpdate(fullPath, op.FilePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return a.wrapError("Update", op.FilePath, ErrFileNotFound, "file must exist for update")
-		}
-
-		return a.wrapError("Update", op.FilePath, err, "failed to read file")
+		return err
 	}
 
-	// Parse lines.
 	lines := strings.Split(string(originalContent), "\n")
 
-	// Apply each hunk.
 	for i, hunk := range op.Hunks {
-		err = a.applyHunk(&lines, hunk, op.FilePath, i)
-		if err != nil {
+		if err = a.applyHunk(&lines, hunk, op.FilePath, i); err != nil {
 			return err
 		}
 	}
 
-	// Determine target path (original or new if moving).
-	targetPath := fullPath
-	if op.NewPath != "" {
-		targetPath, err = a.resolvePath(op.NewPath)
-		if err != nil {
-			return a.wrapError("Move", op.NewPath, err, "")
-		}
-
-		// Ensure parent directories exist.
-		err = os.MkdirAll(filepath.Dir(targetPath), 0755)
-		if err != nil {
-			return a.wrapError("Move", op.NewPath, err, "failed to create parent directories")
-		}
-
-		result.FilesMoved[op.FilePath] = op.NewPath
+	targetPath, err := a.resolveTargetPath(fullPath, op, result)
+	if err != nil {
+		return err
 	}
 
-	// Write modified content.
-	newContent := strings.Join(lines, "\n")
-	err = os.WriteFile(targetPath, []byte(newContent), 0644)
-	if err != nil {
+	if err = os.WriteFile(targetPath, []byte(strings.Join(lines, "\n")), 0644); err != nil {
 		return a.wrapError("Update", op.FilePath, err, "failed to write file")
 	}
 
-	// If moved, delete original.
-	if op.NewPath != "" && targetPath != fullPath {
-		err = os.Remove(fullPath)
-		if err != nil {
-			return a.wrapError("Move", op.FilePath, err, "failed to delete original file")
-		}
+	if err = a.deleteOriginalIfMoved(op, targetPath, fullPath); err != nil {
+		return err
 	}
 
-	// Track for rollback.
 	a.trackModification(op.FilePath, opUpdate, originalContent)
-
 	result.FilesUpdated = append(result.FilesUpdated, op.FilePath)
+
+	return nil
+}
+
+// readFileForUpdate reads a file's content, returning a descriptive error if not found.
+func (a *Applier) readFileForUpdate(fullPath, filePath string) ([]byte, error) {
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, a.wrapError("Update", filePath, ErrFileNotFound, "file must exist for update")
+		}
+
+		return nil, a.wrapError("Update", filePath, err, "failed to read file")
+	}
+
+	return content, nil
+}
+
+// resolveTargetPath resolves the target path for an update, handling move operations.
+func (a *Applier) resolveTargetPath(fullPath string, op *UpdateFile, result *ApplyResult) (string, error) {
+	if op.NewPath == "" {
+		return fullPath, nil
+	}
+
+	targetPath, err := a.resolvePath(op.NewPath)
+	if err != nil {
+		return "", a.wrapError("Move", op.NewPath, err, "")
+	}
+
+	if err = os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		return "", a.wrapError("Move", op.NewPath, err, "failed to create parent directories")
+	}
+
+	result.FilesMoved[op.FilePath] = op.NewPath
+
+	return targetPath, nil
+}
+
+// deleteOriginalIfMoved deletes the original file after a move operation.
+func (a *Applier) deleteOriginalIfMoved(op *UpdateFile, targetPath, fullPath string) error {
+	if op.NewPath == "" || targetPath == fullPath {
+		return nil
+	}
+
+	if err := os.Remove(fullPath); err != nil {
+		return a.wrapError("Move", op.FilePath, err, "failed to delete original file")
+	}
 
 	return nil
 }

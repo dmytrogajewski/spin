@@ -50,6 +50,20 @@ func TestRunSandboxMode(t *testing.T) {
 	}
 }
 
+// detectMode returns the mode based on binary name.
+func detectMode(binaryName string) string {
+	baseName := filepath.Base(binaryName)
+
+	switch baseName {
+	case "spin-apply-patch":
+		return "apply-patch"
+	case "spin-sandbox":
+		return "sandbox"
+	default:
+		return ""
+	}
+}
+
 func TestBinaryNameDetection(t *testing.T) {
 	t.Parallel()
 
@@ -58,42 +72,18 @@ func TestBinaryNameDetection(t *testing.T) {
 		binaryName string
 		wantMode   string
 	}{
-		{
-			name:       "spin-apply-patch",
-			binaryName: "spin-apply-patch",
-			wantMode:   "apply-patch",
-		},
-		{
-			name:       "spin-sandbox",
-			binaryName: "spin-sandbox",
-			wantMode:   "sandbox",
-		},
-		{
-			name:       "regular spin",
-			binaryName: "spin",
-			wantMode:   "",
-		},
+		{name: "spin-apply-patch", binaryName: "spin-apply-patch", wantMode: "apply-patch"},
+		{name: "spin-sandbox", binaryName: "spin-sandbox", wantMode: "sandbox"},
+		{name: "regular spin", binaryName: "spin", wantMode: ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			baseName := filepath.Base(tt.binaryName)
-
-			switch baseName {
-			case "spin-apply-patch":
-				if tt.wantMode != "apply-patch" {
-					t.Errorf("Expected apply-patch mode, got: %s", tt.wantMode)
-				}
-			case "spin-sandbox":
-				if tt.wantMode != "sandbox" {
-					t.Errorf("Expected sandbox mode, got: %s", tt.wantMode)
-				}
-			case "spin":
-				if tt.wantMode != "" {
-					t.Errorf("Expected regular mode, got: %s", tt.wantMode)
-				}
+			got := detectMode(tt.binaryName)
+			if got != tt.wantMode {
+				t.Errorf("detectMode(%q) = %q, want %q", tt.binaryName, got, tt.wantMode)
 			}
 		})
 	}

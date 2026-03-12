@@ -5,16 +5,60 @@ import (
 	"testing"
 )
 
-func TestParser_Parse(t *testing.T) {
+// parserTestCase defines a test case for parser tests.
+type parserTestCase struct {
+	name    string
+	input   string
+	want    *Patch
+	wantErr string
+}
+
+// runParserTests runs a slice of parser test cases.
+func runParserTests(t *testing.T, tests []parserTestCase) {
+	t.Helper()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			verifyParseResult(t, tt.input, tt.want, tt.wantErr)
+		})
+	}
+}
+
+// verifyParseResult parses input and verifies it matches expected result or error.
+func verifyParseResult(t *testing.T, input string, want *Patch, wantErr string) {
+	t.Helper()
+
+	p := NewParser(input)
+	got, err := p.Parse()
+
+	if wantErr != "" {
+		if err == nil {
+			t.Errorf("Parse() error = nil, wantErr %q", wantErr)
+			return
+		}
+
+		if !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("Parse() error = %v, wantErr substring %q", err, wantErr)
+		}
+
+		return
+	}
+
+	if err != nil {
+		t.Errorf("Parse() unexpected error = %v", err)
+		return
+	}
+
+	if !equalPatch(got, want) {
+		t.Errorf("Parse() mismatch:\ngot:  %+v\nwant: %+v", got, want)
+	}
+}
+
+func TestParser_Parse_ValidPatches(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name    string
-		input   string
-		want    *Patch
-		wantErr string
-	}{
-		// ========== Valid Patches ==========.
+	runParserTests(t, []parserTestCase{
 		{
 			name:  "empty patch",
 			input: "*** Begin Patch\n*** End Patch\n",
@@ -22,468 +66,156 @@ func TestParser_Parse(t *testing.T) {
 		},
 		{
 			name: "add file - simple",
-			input: `*** Begin Patch
-*** Add File: test.txt
-+hello
-+world
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&AddFile{
-						FilePath: "test.txt",
-						Lines:    []string{"hello", "world"},
-					},
-				},
-			},
+			input: "*** Begin Patch\n*** Add File: test.txt\n+hello\n+world\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{
+				&AddFile{FilePath: "test.txt", Lines: []string{"hello", "world"}},
+			}},
 		},
 		{
 			name: "add file - empty file",
-			input: `*** Begin Patch
-*** Add File: empty.txt
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&AddFile{
-						FilePath: "empty.txt",
-						Lines:    []string{},
-					},
-				},
-			},
+			input: "*** Begin Patch\n*** Add File: empty.txt\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{
+				&AddFile{FilePath: "empty.txt", Lines: []string{}},
+			}},
 		},
 		{
 			name: "add file - with empty lines",
-			input: `*** Begin Patch
-*** Add File: test.go
-+package main
-+
-+func main() {}
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&AddFile{
-						FilePath: "test.go",
-						Lines:    []string{"package main", "", "func main() {}"},
-					},
-				},
-			},
+			input: "*** Begin Patch\n*** Add File: test.go\n+package main\n+\n+func main() {}\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{
+				&AddFile{FilePath: "test.go", Lines: []string{"package main", "", "func main() {}"}},
+			}},
 		},
 		{
 			name: "delete file",
-			input: `*** Begin Patch
-*** Delete File: old.txt
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&DeleteFile{
-						FilePath: "old.txt",
-					},
-				},
-			},
+			input: "*** Begin Patch\n*** Delete File: old.txt\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{
+				&DeleteFile{FilePath: "old.txt"},
+			}},
 		},
+	})
+}
+
+func TestParser_Parse_UpdateFile_Simple(t *testing.T) {
+	t.Parallel()
+
+	runParserTests(t, []parserTestCase{
 		{
 			name: "update file - simple",
-			input: `*** Begin Patch
-*** Update File: main.go
-@@
- func main() {
--    fmt.Println("old")
-+    fmt.Println("new")
- }
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&UpdateFile{
-						FilePath: "main.go",
-						Hunks: []Hunk{{
-							Header: "",
-							Changes: []LineChange{
-								{Type: LineContext, Text: "func main() {"},
-								{Type: LineDelete, Text: "    fmt.Println(\"old\")"},
-								{Type: LineInsert, Text: "    fmt.Println(\"new\")"},
-								{Type: LineContext, Text: "}"},
-							},
-						}},
+			input: "*** Begin Patch\n*** Update File: main.go\n@@\n func main() {\n-    fmt.Println(\"old\")\n+    fmt.Println(\"new\")\n }\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{
+				&UpdateFile{FilePath: "main.go", Hunks: []Hunk{{
+					Changes: []LineChange{
+						{Type: LineContext, Text: "func main() {"},
+						{Type: LineDelete, Text: "    fmt.Println(\"old\")"},
+						{Type: LineInsert, Text: "    fmt.Println(\"new\")"},
+						{Type: LineContext, Text: "}"},
 					},
-				},
-			},
+				}}},
+			}},
 		},
 		{
 			name: "update file - with context header",
-			input: `*** Begin Patch
-*** Update File: handler.go
-@@ func (h *Handler) Process
- func (h *Handler) Process(data string) error {
--    return oldValue
-+    return newValue
- }
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&UpdateFile{
-						FilePath: "handler.go",
-						Hunks: []Hunk{{
-							Header: "func (h *Handler) Process",
-							Changes: []LineChange{
-								{Type: LineContext, Text: "func (h *Handler) Process(data string) error {"},
-								{Type: LineDelete, Text: "    return oldValue"},
-								{Type: LineInsert, Text: "    return newValue"},
-								{Type: LineContext, Text: "}"},
-							},
-						}},
+			input: "*** Begin Patch\n*** Update File: handler.go\n@@ func (h *Handler) Process\n func (h *Handler) Process(data string) error {\n-    return oldValue\n+    return newValue\n }\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{
+				&UpdateFile{FilePath: "handler.go", Hunks: []Hunk{{
+					Header: "func (h *Handler) Process",
+					Changes: []LineChange{
+						{Type: LineContext, Text: "func (h *Handler) Process(data string) error {"},
+						{Type: LineDelete, Text: "    return oldValue"},
+						{Type: LineInsert, Text: "    return newValue"},
+						{Type: LineContext, Text: "}"},
 					},
-				},
-			},
+				}}},
+			}},
 		},
 		{
-			name: "update file - move operation",
-			input: `*** Begin Patch
-*** Update File: old/path.go
-*** Move to: new/path.go
-@@
- package main
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&UpdateFile{
-						FilePath: "old/path.go",
-						NewPath:  "new/path.go",
-						Hunks: []Hunk{{
-							Header: "",
-							Changes: []LineChange{
-								{Type: LineContext, Text: "package main"},
-							},
-						}},
-					},
-				},
-			},
+			name:  "update file - move operation",
+			input: "*** Begin Patch\n*** Update File: old/path.go\n*** Move to: new/path.go\n@@\n package main\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{
+				&UpdateFile{FilePath: "old/path.go", NewPath: "new/path.go", Hunks: []Hunk{{
+					Changes: []LineChange{{Type: LineContext, Text: "package main"}},
+				}}},
+			}},
 		},
-		{
-			name: "update file - multiple hunks",
-			input: `*** Begin Patch
-*** Update File: multi.go
-@@
--old1
-+new1
-@@
--old2
-+new2
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&UpdateFile{
-						FilePath: "multi.go",
-						Hunks: []Hunk{
-							{
-								Header: "",
-								Changes: []LineChange{
-									{Type: LineDelete, Text: "old1"},
-									{Type: LineInsert, Text: "new1"},
-								},
-							},
-							{
-								Header: "",
-								Changes: []LineChange{
-									{Type: LineDelete, Text: "old2"},
-									{Type: LineInsert, Text: "new2"},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "update file - empty line in hunk",
-			input: `*** Begin Patch
-*** Update File: test.go
-@@
- line1
+	})
+}
 
--old
-+new
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&UpdateFile{
-						FilePath: "test.go",
-						Hunks: []Hunk{{
-							Header: "",
-							Changes: []LineChange{
-								{Type: LineContext, Text: "line1"},
-								{Type: LineContext, Text: ""},
-								{Type: LineDelete, Text: "old"},
-								{Type: LineInsert, Text: "new"},
-							},
-						}},
-					},
-				},
-			},
-		},
+func TestParser_Parse_UpdateFile_Variants(t *testing.T) {
+	t.Parallel()
+
+	runParserTests(t, []parserTestCase{
+		{name: "update file - multiple hunks", input: "*** Begin Patch\n*** Update File: multi.go\n@@\n-old1\n+new1\n@@\n-old2\n+new2\n*** End Patch", want: &Patch{Operations: []FileOperation{&UpdateFile{FilePath: "multi.go", Hunks: []Hunk{{Changes: []LineChange{{Type: LineDelete, Text: "old1"}, {Type: LineInsert, Text: "new1"}}}, {Changes: []LineChange{{Type: LineDelete, Text: "old2"}, {Type: LineInsert, Text: "new2"}}}}}}}},
+		{name: "update file - empty line in hunk", input: "*** Begin Patch\n*** Update File: test.go\n@@\n line1\n\n-old\n+new\n*** End Patch", want: &Patch{Operations: []FileOperation{&UpdateFile{FilePath: "test.go", Hunks: []Hunk{{Changes: []LineChange{{Type: LineContext, Text: "line1"}, {Type: LineContext, Text: ""}, {Type: LineDelete, Text: "old"}, {Type: LineInsert, Text: "new"}}}}}}}},
+		{name: "update file - only inserts", input: "*** Begin Patch\n*** Update File: test.txt\n@@\n+new line 1\n+new line 2\n*** End Patch", want: &Patch{Operations: []FileOperation{&UpdateFile{FilePath: "test.txt", Hunks: []Hunk{{Changes: []LineChange{{Type: LineInsert, Text: "new line 1"}, {Type: LineInsert, Text: "new line 2"}}}}}}}},
+		{name: "update file - only deletes", input: "*** Begin Patch\n*** Update File: test.txt\n@@\n-old line 1\n-old line 2\n*** End Patch", want: &Patch{Operations: []FileOperation{&UpdateFile{FilePath: "test.txt", Hunks: []Hunk{{Changes: []LineChange{{Type: LineDelete, Text: "old line 1"}, {Type: LineDelete, Text: "old line 2"}}}}}}}},
+	})
+}
+
+func TestParser_Parse_MultipleOperations(t *testing.T) {
+	t.Parallel()
+
+	runParserTests(t, []parserTestCase{
 		{
 			name: "multiple operations",
-			input: `*** Begin Patch
-*** Add File: new.txt
-+content
-*** Delete File: old.txt
-*** Update File: existing.txt
-@@
--old
-+new
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&AddFile{
-						FilePath: "new.txt",
-						Lines:    []string{"content"},
-					},
-					&DeleteFile{
-						FilePath: "old.txt",
-					},
-					&UpdateFile{
-						FilePath: "existing.txt",
-						Hunks: []Hunk{{
-							Header: "",
-							Changes: []LineChange{
-								{Type: LineDelete, Text: "old"},
-								{Type: LineInsert, Text: "new"},
-							},
-						}},
-					},
-				},
-			},
+			input: "*** Begin Patch\n*** Add File: new.txt\n+content\n*** Delete File: old.txt\n*** Update File: existing.txt\n@@\n-old\n+new\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{
+				&AddFile{FilePath: "new.txt", Lines: []string{"content"}},
+				&DeleteFile{FilePath: "old.txt"},
+				&UpdateFile{FilePath: "existing.txt", Hunks: []Hunk{{
+					Changes: []LineChange{{Type: LineDelete, Text: "old"}, {Type: LineInsert, Text: "new"}},
+				}}},
+			}},
 		},
+	})
+}
 
-		// ========== Syntax Errors ==========.
-		{
-			name:    "missing begin marker",
-			input:   "*** End Patch\n",
-			wantErr: "expected '*** Begin Patch'",
-		},
-		{
-			name:    "invalid begin marker",
-			input:   "*** Begin Patchh\n*** End Patch\n",
-			wantErr: "expected '*** Begin Patch'",
-		},
-		{
-			name:    "missing end marker",
-			input:   "*** Begin Patch\n",
-			wantErr: "missing '*** End Patch'",
-		},
-		{
-			name: "unknown operation",
-			input: `*** Begin Patch
-*** Unknown Operation: test.txt
-*** End Patch`,
-			wantErr: "unknown operation",
-		},
-		{
-			name: "add file - invalid line prefix",
-			input: `*** Begin Patch
-*** Add File: test.txt
-+line1
-invalid line without prefix
-+line2
-*** End Patch`,
-			wantErr: "invalid line format",
-		},
-		{
-			name: "update file - invalid hunk line prefix",
-			input: `*** Begin Patch
-*** Update File: test.txt
-@@
- context
-invalid prefix
-*** End Patch`,
-			wantErr: "invalid line prefix",
-		},
+func TestParser_Parse_SyntaxErrors(t *testing.T) {
+	t.Parallel()
 
-		// ========== Path Validation Errors ==========.
-		{
-			name: "add file - absolute path",
-			input: `*** Begin Patch
-*** Add File: /etc/passwd
-+malicious
-*** End Patch`,
-			wantErr: "absolute paths not allowed",
-		},
-		{
-			name: "add file - path traversal",
-			input: `*** Begin Patch
-*** Add File: ../../../etc/passwd
-+malicious
-*** End Patch`,
-			wantErr: "path traversal",
-		},
-		{
-			name: "delete file - absolute path",
-			input: `*** Begin Patch
-*** Delete File: /etc/passwd
-*** End Patch`,
-			wantErr: "absolute paths not allowed",
-		},
-		{
-			name: "delete file - path traversal",
-			input: `*** Begin Patch
-*** Delete File: ../../etc/passwd
-*** End Patch`,
-			wantErr: "path traversal",
-		},
-		{
-			name: "update file - absolute path",
-			input: `*** Begin Patch
-*** Update File: /etc/passwd
-@@
--old
-+new
-*** End Patch`,
-			wantErr: "absolute paths not allowed",
-		},
-		{
-			name: "update file - path traversal",
-			input: `*** Begin Patch
-*** Update File: ../../etc/passwd
-@@
--old
-+new
-*** End Patch`,
-			wantErr: "path traversal",
-		},
-		{
-			name: "update file - move to absolute path",
-			input: `*** Begin Patch
-*** Update File: test.txt
-*** Move to: /etc/passwd
-@@
- content
-*** End Patch`,
-			wantErr: "absolute paths not allowed",
-		},
-		{
-			name: "update file - move to path traversal",
-			input: `*** Begin Patch
-*** Update File: test.txt
-*** Move to: ../../etc/passwd
-@@
- content
-*** End Patch`,
-			wantErr: "path traversal",
-		},
+	runParserTests(t, []parserTestCase{
+		{name: "missing begin marker", input: "*** End Patch\n", wantErr: "expected '*** Begin Patch'"},
+		{name: "invalid begin marker", input: "*** Begin Patchh\n*** End Patch\n", wantErr: "expected '*** Begin Patch'"},
+		{name: "missing end marker", input: "*** Begin Patch\n", wantErr: "missing '*** End Patch'"},
+		{name: "unknown operation", input: "*** Begin Patch\n*** Unknown Operation: test.txt\n*** End Patch", wantErr: "unknown operation"},
+		{name: "add file - invalid line prefix", input: "*** Begin Patch\n*** Add File: test.txt\n+line1\ninvalid line without prefix\n+line2\n*** End Patch", wantErr: "invalid line format"},
+		{name: "update file - invalid hunk line prefix", input: "*** Begin Patch\n*** Update File: test.txt\n@@\n context\ninvalid prefix\n*** End Patch", wantErr: "invalid line prefix"},
+	})
+}
 
-		// ========== Edge Cases ==========.
+func TestParser_Parse_PathValidation(t *testing.T) {
+	t.Parallel()
+
+	runParserTests(t, []parserTestCase{
+		{name: "add file - absolute path", input: "*** Begin Patch\n*** Add File: /etc/passwd\n+malicious\n*** End Patch", wantErr: "absolute paths not allowed"},
+		{name: "add file - path traversal", input: "*** Begin Patch\n*** Add File: ../../../etc/passwd\n+malicious\n*** End Patch", wantErr: "path traversal"},
+		{name: "delete file - absolute path", input: "*** Begin Patch\n*** Delete File: /etc/passwd\n*** End Patch", wantErr: "absolute paths not allowed"},
+		{name: "delete file - path traversal", input: "*** Begin Patch\n*** Delete File: ../../etc/passwd\n*** End Patch", wantErr: "path traversal"},
+		{name: "update file - absolute path", input: "*** Begin Patch\n*** Update File: /etc/passwd\n@@\n-old\n+new\n*** End Patch", wantErr: "absolute paths not allowed"},
+		{name: "update file - path traversal", input: "*** Begin Patch\n*** Update File: ../../etc/passwd\n@@\n-old\n+new\n*** End Patch", wantErr: "path traversal"},
+		{name: "move to absolute path", input: "*** Begin Patch\n*** Update File: test.txt\n*** Move to: /etc/passwd\n@@\n content\n*** End Patch", wantErr: "absolute paths not allowed"},
+		{name: "move to path traversal", input: "*** Begin Patch\n*** Update File: test.txt\n*** Move to: ../../etc/passwd\n@@\n content\n*** End Patch", wantErr: "path traversal"},
+	})
+}
+
+func TestParser_Parse_EdgeCases(t *testing.T) {
+	t.Parallel()
+
+	runParserTests(t, []parserTestCase{
 		{
 			name: "add file - nested path",
-			input: `*** Begin Patch
-*** Add File: src/internal/handler/new.go
-+package handler
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&AddFile{
-						FilePath: "src/internal/handler/new.go",
-						Lines:    []string{"package handler"},
-					},
-				},
-			},
+			input: "*** Begin Patch\n*** Add File: src/internal/handler/new.go\n+package handler\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{
+				&AddFile{FilePath: "src/internal/handler/new.go", Lines: []string{"package handler"}},
+			}},
 		},
 		{
 			name: "add file - unicode content",
-			input: `*** Begin Patch
-*** Add File: unicode.txt
-+Hello 世界
-+🚀 Emoji
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&AddFile{
-						FilePath: "unicode.txt",
-						Lines:    []string{"Hello 世界", "🚀 Emoji"},
-					},
-				},
-			},
+			input: "*** Begin Patch\n*** Add File: unicode.txt\n+Hello \u4e16\u754c\n+\U0001f680 Emoji\n*** End Patch",
+			want: &Patch{Operations: []FileOperation{
+				&AddFile{FilePath: "unicode.txt", Lines: []string{"Hello \u4e16\u754c", "\U0001f680 Emoji"}},
+			}},
 		},
-		{
-			name: "update file - only inserts",
-			input: `*** Begin Patch
-*** Update File: test.txt
-@@
-+new line 1
-+new line 2
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&UpdateFile{
-						FilePath: "test.txt",
-						Hunks: []Hunk{{
-							Header: "",
-							Changes: []LineChange{
-								{Type: LineInsert, Text: "new line 1"},
-								{Type: LineInsert, Text: "new line 2"},
-							},
-						}},
-					},
-				},
-			},
-		},
-		{
-			name: "update file - only deletes",
-			input: `*** Begin Patch
-*** Update File: test.txt
-@@
--old line 1
--old line 2
-*** End Patch`,
-			want: &Patch{
-				Operations: []FileOperation{
-					&UpdateFile{
-						FilePath: "test.txt",
-						Hunks: []Hunk{{
-							Header: "",
-							Changes: []LineChange{
-								{Type: LineDelete, Text: "old line 1"},
-								{Type: LineDelete, Text: "old line 2"},
-							},
-						}},
-					},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			p := NewParser(tt.input)
-			got, err := p.Parse()
-
-			// Check error expectations.
-			if tt.wantErr != "" {
-				if err == nil {
-					t.Errorf("Parse() error = nil, wantErr %q", tt.wantErr)
-
-					return
-				}
-
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Errorf("Parse() error = %v, wantErr substring %q", err, tt.wantErr)
-				}
-
-				return
-			}
-
-			// Check for unexpected errors.
-			if err != nil {
-				t.Errorf("Parse() unexpected error = %v", err)
-
-				return
-			}
-
-			// Compare results.
-			if !equalPatch(got, tt.want) {
-				t.Errorf("Parse() mismatch:\ngot:  %+v\nwant: %+v", got, tt.want)
-			}
-		})
-	}
+	})
 }
 
 func TestParser_Parse_LineNumbers(t *testing.T) {

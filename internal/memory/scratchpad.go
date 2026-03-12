@@ -280,33 +280,41 @@ func (s *Scratchpad) evictLRU() {
 	}
 }
 
+// entryTypeRule maps keywords to an EntryType for inference.
+type entryTypeRule struct {
+	entryType EntryType
+	keywords  []string
+}
+
+// entryTypeRules defines pattern-matching rules for inferring entry types.
+// Rules are evaluated in order; the first match wins.
+var entryTypeRules = []entryTypeRule{
+	{EntryTypeCode, []string{"func ", "class ", "def ", "```"}},
+	{EntryTypeReference, []string{"http://", "https://", "file://"}},
+	{EntryTypeDecision, []string{"decided", "decision", "will use", "chose"}},
+	{EntryTypeTask, []string{"to-do", "task", "need to", "should"}},
+}
+
 // inferEntryType guesses the entry type from its value.
 func inferEntryType(value string) EntryType {
-	// Simple heuristics.
-	if len(value) > 0 {
-		// Check for code patterns.
-		if containsIgnoreCase(value, "func ") || containsIgnoreCase(value, "class ") ||
-			containsIgnoreCase(value, "def ") || containsIgnoreCase(value, "```") {
-			return EntryTypeCode
-		}
-		// Check for URL patterns.
-		if containsIgnoreCase(value, "http://") || containsIgnoreCase(value, "https://") ||
-			containsIgnoreCase(value, "file://") {
-			return EntryTypeReference
-		}
-		// Check for decision patterns.
-		if containsIgnoreCase(value, "decided") || containsIgnoreCase(value, "decision") ||
-			containsIgnoreCase(value, "will use") || containsIgnoreCase(value, "chose") {
-			return EntryTypeDecision
-		}
-		// Check for task patterns.
-		if containsIgnoreCase(value, "to-do") || containsIgnoreCase(value, "task") ||
-			containsIgnoreCase(value, "need to") || containsIgnoreCase(value, "should") {
-			return EntryTypeTask
+	for _, rule := range entryTypeRules {
+		if matchesAnyKeyword(value, rule.keywords) {
+			return rule.entryType
 		}
 	}
 
 	return EntryTypeNote
+}
+
+// matchesAnyKeyword returns true if value contains any of the keywords (case-insensitive).
+func matchesAnyKeyword(value string, keywords []string) bool {
+	for _, kw := range keywords {
+		if containsIgnoreCase(value, kw) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // containsIgnoreCase checks if s contains substr (case-insensitive).

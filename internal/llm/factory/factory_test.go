@@ -563,131 +563,51 @@ func TestFactoryConfigurationBugFix(t *testing.T) {
 		config        ProviderConfig
 		expectedError bool
 		errorContains string
-		description   string
 	}{
-		{
-			name: "valid_ollama_config",
-			config: ProviderConfig{
-				Type:    "ollama",
-				BaseURL: testOllamaURL,
-				Model:   "qwen3-coder:30b",
-			},
-			expectedError: false,
-			description:   "Valid Ollama config should create provider successfully",
-		},
-		{
-			name: "valid_openai_config_with_api_key",
-			config: ProviderConfig{
-				Type:    "openai",
-				BaseURL: "https://api.openai.com/v1",
-				Model:   "gpt-4",
-				APIKey:  "sk-test-key",
-			},
-			expectedError: false,
-			description:   "Valid OpenAI config with API key should create provider successfully",
-		},
-		{
-			name: "valid_openai_config_with_key_name",
-			config: ProviderConfig{
-				Type:    "openai",
-				BaseURL: "https://api.openai.com/v1",
-				Model:   "gpt-4",
-				KeyName: "openai-api-key",
-			},
-			expectedError: true, // This will fail because keystore doesn't have the credential.
-			description:   "Valid OpenAI config with key name should create provider successfully",
-		},
-		{
-			name: "missing_model_should_fail",
-			config: ProviderConfig{
-				Type:    "ollama",
-				BaseURL: testOllamaURL,
-				// Model missing.
-			},
-			expectedError: true,
-			errorContains: "model is required",
-			description:   "Config without model should fail validation",
-		},
-		{
-			name: "missing_provider_type_should_fail",
-			config: ProviderConfig{
-				BaseURL: testOllamaURL,
-				Model:   "qwen3-coder:30b",
-				// Type missing.
-			},
-			expectedError: true,
-			errorContains: "provider type is required",
-			description:   "Config without provider type should fail validation",
-		},
-		{
-			name: "missing_authentication_for_openai_should_fail",
-			config: ProviderConfig{
-				Type:    "openai",
-				BaseURL: "https://api.openai.com/v1",
-				Model:   "gpt-4",
-				// No APIKey or KeyName.
-			},
-			expectedError: true,
-			errorContains: "authentication required",
-			description:   "OpenAI config without authentication should fail validation",
-		},
-		{
-			name: "invalid_base_url_should_fail",
-			config: ProviderConfig{
-				Type:    "ollama",
-				BaseURL: "not-a-valid-url",
-				Model:   "qwen3-coder:30b",
-			},
-			expectedError: false, // Factory doesn't validate URLs, they fail at runtime.
-			description:   "Config with invalid base URL should be accepted (fails at runtime)",
-		},
-		{
-			name: "unknown_provider_type_should_fail",
-			config: ProviderConfig{
-				Type:    "unknown-provider",
-				BaseURL: testOllamaURL,
-				Model:   "test-model",
-			},
-			expectedError: true,
-			errorContains: "unknown provider type",
-			description:   "Config with unknown provider type should fail validation",
-		},
+		{name: "valid_ollama_config", config: ProviderConfig{Type: "ollama", BaseURL: testOllamaURL, Model: "qwen3-coder:30b"}},
+		{name: "valid_openai_config_with_api_key", config: ProviderConfig{Type: "openai", BaseURL: "https://api.openai.com/v1", Model: "gpt-4", APIKey: "sk-test-key"}},
+		{name: "valid_openai_config_with_key_name", config: ProviderConfig{Type: "openai", BaseURL: "https://api.openai.com/v1", Model: "gpt-4", KeyName: "openai-api-key"}, expectedError: true},
+		{name: "missing_model_should_fail", config: ProviderConfig{Type: "ollama", BaseURL: testOllamaURL}, expectedError: true, errorContains: "model is required"},
+		{name: "missing_provider_type_should_fail", config: ProviderConfig{BaseURL: testOllamaURL, Model: "qwen3-coder:30b"}, expectedError: true, errorContains: "provider type is required"},
+		{name: "missing_authentication_for_openai", config: ProviderConfig{Type: "openai", BaseURL: "https://api.openai.com/v1", Model: "gpt-4"}, expectedError: true, errorContains: "authentication required"},
+		{name: "invalid_base_url_accepted", config: ProviderConfig{Type: "ollama", BaseURL: "not-a-valid-url", Model: "qwen3-coder:30b"}},
+		{name: "unknown_provider_type_should_fail", config: ProviderConfig{Type: "unknown-provider", BaseURL: testOllamaURL, Model: "test-model"}, expectedError: true, errorContains: "unknown provider type"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			// Test with factory (recommended approach).
-			authMgr := auth.NewManager(auth.NewKeystore())
-
-			factory := NewFactory(authMgr)
-
-			ctx := context.Background()
-			provider, err := factory.NewProvider(ctx, tt.config)
-
-			if tt.expectedError {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-
-					return
-				}
-
-				if tt.errorContains != "" {
-					assert.Contains(t, err.Error(), tt.errorContains, "Error should contain expected text")
-				}
-
-				assert.Nil(t, provider, "Provider should be nil on error")
-			} else {
-				require.NoError(t, err, "Unexpected error: %v", err)
-				assert.NotNil(t, provider, "Provider should not be nil")
-
-				if provider != nil {
-					defer provider.Close()
-				}
-			}
+			verifyFactoryConfig(t, tt.config, tt.expectedError, tt.errorContains)
 		})
 	}
+}
+
+// verifyFactoryConfig creates a factory and verifies provider creation result.
+func verifyFactoryConfig(t *testing.T, config ProviderConfig, expectedError bool, errorContains string) {
+	t.Helper()
+
+	authMgr := auth.NewManager(auth.NewKeystore())
+	factory := NewFactory(authMgr)
+	provider, err := factory.NewProvider(context.Background(), config)
+
+	if !expectedError {
+		require.NoError(t, err, "Unexpected error: %v", err)
+		assert.NotNil(t, provider, "Provider should not be nil")
+
+		if provider != nil {
+			defer provider.Close()
+		}
+
+		return
+	}
+
+	require.Error(t, err, "Expected error but got none")
+
+	if errorContains != "" {
+		assert.Contains(t, err.Error(), errorContains, "Error should contain expected text")
+	}
+
+	assert.Nil(t, provider, "Provider should be nil on error")
 }
 
 // TestFactoryWithKeystore tests that factory properly handles keystore credentials.
@@ -1209,20 +1129,7 @@ func TestFactory_NewProvider_AllProviderTypes(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-
-	// Setup keystore.
-	keystore := auth.NewKeystore()
-	authMgr := auth.NewManager(keystore)
-
-	// Store credential for OpenAI.
-	err := authMgr.SetCredential(ctx, "openai-key", auth.Credential{
-		Type:  auth.CredentialTypeAPIKey,
-		Value: "sk-test",
-	})
-	if err != nil {
-		t.Fatalf("SetCredential() error = %v", err)
-	}
-
+	authMgr := setupTestAuthManagerWithKey(t, "openai-key", "sk-test")
 	factory := NewFactory(authMgr)
 
 	tests := []struct {
@@ -1274,8 +1181,7 @@ func TestFactory_NewProvider_AllProviderTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var provider llm.Provider
-			provider, err = factory.NewProvider(ctx, tt.cfg)
+			provider, err := factory.NewProvider(ctx, tt.cfg)
 			if err != nil {
 				t.Fatalf("Factory.NewProvider() error = %v", err)
 			}
@@ -1351,23 +1257,36 @@ func TestFactory_NewProvider_BackwardCompatibility(t *testing.T) {
 	}
 }
 
-// TestFactory_resolveCredential tests the credential resolution logic.
-func TestFactory_resolveCredential(t *testing.T) {
-	t.Parallel()
+// setupTestAuthManagerWithKey creates an auth manager with a named credential.
+func setupTestAuthManagerWithKey(t *testing.T, keyName, keyValue string) *auth.Manager {
+	t.Helper()
 
-	ctx := context.Background()
-
-	// Setup keystore.
 	keystore := auth.NewKeystore()
 	authMgr := auth.NewManager(keystore)
 
-	err := authMgr.SetCredential(ctx, "test-key", auth.Credential{
+	err := authMgr.SetCredential(context.Background(), keyName, auth.Credential{
 		Type:  auth.CredentialTypeAPIKey,
-		Value: "sk-from-keystore",
+		Value: keyValue,
 	})
 	if err != nil {
 		t.Fatalf("SetCredential() error = %v", err)
 	}
+
+	return authMgr
+}
+
+// setupTestAuthManager creates an auth manager with a "test-key" credential.
+func setupTestAuthManager(t *testing.T) *auth.Manager {
+	t.Helper()
+
+	return setupTestAuthManagerWithKey(t, "test-key", "sk-from-keystore")
+}
+
+// TestFactory_resolveCredential tests the credential resolution logic.
+func TestFactory_resolveCredential(t *testing.T) {
+	t.Parallel()
+
+	authMgr := setupTestAuthManager(t)
 
 	tests := []struct {
 		name         string
@@ -1377,72 +1296,22 @@ func TestFactory_resolveCredential(t *testing.T) {
 		wantValue    string
 		wantErr      bool
 	}{
-		{
-			name:         "keyName success",
-			factory:      NewFactory(authMgr),
-			cfg:          ProviderConfig{Type: "openai", KeyName: "test-key"},
-			requiresAuth: true,
-			wantValue:    "sk-from-keystore",
-			wantErr:      false,
-		},
-		{
-			name:         "apiKey fallback",
-			factory:      NewFactory(nil),
-			cfg:          ProviderConfig{Type: "openai", APIKey: "sk-direct"},
-			requiresAuth: true,
-			wantValue:    "sk-direct",
-			wantErr:      false,
-		},
-		{
-			name:         "keyName precedence",
-			factory:      NewFactory(authMgr),
-			cfg:          ProviderConfig{Type: "openai", KeyName: "test-key", APIKey: "sk-ignored"},
-			requiresAuth: true,
-			wantValue:    "sk-from-keystore",
-			wantErr:      false,
-		},
-		{
-			name:         "no auth required",
-			factory:      NewFactory(authMgr),
-			cfg:          ProviderConfig{Type: "ollama"},
-			requiresAuth: false,
-			wantValue:    "",
-			wantErr:      false,
-		},
-		{
-			name:         "auth required but missing",
-			factory:      NewFactory(authMgr),
-			cfg:          ProviderConfig{Type: "openai"},
-			requiresAuth: true,
-			wantValue:    "",
-			wantErr:      true,
-		},
-		{
-			name:         "keyName but no auth manager",
-			factory:      NewFactory(nil),
-			cfg:          ProviderConfig{Type: "openai", KeyName: "test-key"},
-			requiresAuth: true,
-			wantValue:    "",
-			wantErr:      true,
-		},
-		{
-			name:         "keyName not found",
-			factory:      NewFactory(authMgr),
-			cfg:          ProviderConfig{Type: "openai", KeyName: "nonexistent"},
-			requiresAuth: true,
-			wantValue:    "",
-			wantErr:      true,
-		},
+		{"keyName success", NewFactory(authMgr), ProviderConfig{Type: "openai", KeyName: "test-key"}, true, "sk-from-keystore", false},
+		{"apiKey fallback", NewFactory(nil), ProviderConfig{Type: "openai", APIKey: "sk-direct"}, true, "sk-direct", false},
+		{"keyName precedence", NewFactory(authMgr), ProviderConfig{Type: "openai", KeyName: "test-key", APIKey: "sk-ignored"}, true, "sk-from-keystore", false},
+		{"no auth required", NewFactory(authMgr), ProviderConfig{Type: "ollama"}, false, "", false},
+		{"auth required but missing", NewFactory(authMgr), ProviderConfig{Type: "openai"}, true, "", true},
+		{"keyName but no auth manager", NewFactory(nil), ProviderConfig{Type: "openai", KeyName: "test-key"}, true, "", true},
+		{"keyName not found", NewFactory(authMgr), ProviderConfig{Type: "openai", KeyName: "nonexistent"}, true, "", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			value, err := tt.factory.resolveCredential(ctx, tt.cfg, tt.requiresAuth)
+			value, err := tt.factory.resolveCredential(context.Background(), tt.cfg, tt.requiresAuth)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("resolveCredential() error = %v, wantErr %v", err, tt.wantErr)
-
 				return
 			}
 

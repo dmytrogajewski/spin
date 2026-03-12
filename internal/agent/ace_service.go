@@ -72,227 +72,27 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 	}
 
 	logger := slog.Default()
-
-	// Expand home directory in paths.
 	playbookPath := expandPath(cfg.PlaybookPath)
 
-	// Load or create playbook.
-	var (
-		pb  *playbook.Playbook
-		err error
-	)
+	embedder := createEmbedder(logger)
 
-	// Create embedder - try Ollama first, fall back to mock.
-	var embedder embedding.Embedder
-
-	ollamaConfig := embedding.DefaultOllamaEmbedderConfig()
-
-	ollamaEmbedder, err := embedding.NewOllamaEmbedder(ollamaConfig)
+	pb, err := loadOrCreatePlaybook(playbookPath, embedder, logger)
 	if err != nil {
-		logger.Warn("Failed to create Ollama embedder, using mock embedder", "error", err)
-
-		embedder = embedding.NewMockEmbedder(768) // Match nomic-embed-text dimension.
-	} else {
-		embedder = ollamaEmbedder
-
-		logger.Info(" Using Ollama embedder", "model", ollamaConfig.Model, "dimension", ollamaConfig.Dimension)
+		return nil, err
 	}
 
-	// Check if playbook file exists.
-	_, statErr := os.Stat(playbookPath)
-	if statErr == nil {
-		// Load existing playbook.
-		pb, err = playbook.Load(playbookPath, nil, embedder)
-		if err != nil {
-			// If load fails, create new playbook.
-			pb = playbook.New(nil, embedder)
-		}
-	} else {
-		// Create new playbook with seed bullets.
-		pb = playbook.New(nil, embedder)
-
-		// Ensure directory exists.
-		dir := filepath.Dir(playbookPath)
-		err = os.MkdirAll(dir, 0755)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create playbook directory: %w", err)
-		}
-
-		// Seed with initial bullets for Go/coding best practices.
-		err = seedInitialBullets(pb, embedder)
-		if err != nil {
-			// Log warning but continue - ACE can still learn from scratch.
-			logger.Warn("Failed to seed initial bullets", "error", err)
-		}
-
-		// Save the seeded playbook.
-		err = pb.Save(playbookPath)
-		if err != nil {
-			// Log warning but continue.
-			logger.Warn("Failed to save initial playbook", "error", err)
-		}
-	}
-
-	// Create components
-	// Use HNSW retriever by default for better performance, but fall back to semantic retriever if needed.
-	var retriever retrieval.Retriever
-	if embedder != nil {
-		retriever = retrieval.NewHNSWRetriever(pb, embedder)
-	} else {
-		// Fallback to semantic retriever when no embedder available.
-		retriever = retrieval.NewSemanticRetriever(pb, embedder)
-	}
-
+	retriever := createRetriever(pb, embedder)
 	feedbackParser := feedback.NewRegexParser()
 
-	// Create generator if LLM is provided and generation is enabled.
-	var gen generator.Generator
-	if llm != nil && cfg.Generation.Enabled {
-		gen, err = generator.NewGenerator(generator.Config{
-			LLM:       llm,
-			Playbook:  pb,
-			Retriever: retriever,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create generator: %w", err)
-		}
+	gen, err := createGenerator(llm, cfg, pb, retriever)
+	if err != nil {
+		return nil, err
 	}
 
-	// Create reflector for deep analysis (if LLM available).
-	var refl reflector.Reflector
-
-	if llm != nil {
-		reflectorOpts := []reflector.Option{}
-		if maxTokens > 0 {
-			reflectorOpts = append(reflectorOpts, reflector.WithMaxTokens(maxTokens))
-		}
-
-		refl = reflector.NewReflector(llm, reflectorOpts...)
-
-		logger.Debug("Created reflector for deep insight analysis", "max_tokens", maxTokens)
-	}
-
-	// Create curator for quality control and deduplication.
-	var cur curator.Curator
-
-	if embedder != nil {
-		// Configure curator based on config.
-		curatorOpts := []curator.Option{
-			curator.WithSimilarityThreshold(0.85), // High threshold for deduplication.
-		}
-
-		// Set max tokens for LLM calls.
-		if maxTokens > 0 {
-			curatorOpts = append(curatorOpts, curator.WithMaxTokens(maxTokens))
-		}
-
-		// Enable LLM-based curation if LLM is available and AutoReflect is enabled
-		// LLM-based curation provides intelligent filtering vs simple deduplication.
-		if llm != nil && cfg.Generation.AutoReflect {
-			curatorOpts = append(curatorOpts, curator.WithLLMProvider(llm))
-
-			logger.Debug("Enabled LLM-based intelligent curation")
-		}
-
-		// Set refinement mode based on config.
-		if cfg.Refine.Enabled {
-			// Enable merge engine for semantic deduplication (similarity-based merging).
-			curatorOpts = append(curatorOpts, curator.WithMergeEngine(0.90))
-
-			logger.Debug("Enabled merge engine for advanced bullet deduplication")
-
-			switch cfg.Refine.Mode {
-			case "proactive":
-				curatorOpts = append(curatorOpts, curator.WithRefinementMode(
-					curator.RefinementModeProactive,
-					curator.ProactiveRefinementConfig{
-						MaxBullets:      cfg.Refine.MaxBullets,
-						MaxSizeBytes:    int64(cfg.Refine.MaxTokens),
-						MinUtilityScore: cfg.Refine.MinUtilityScore,
-					},
-				))
-			case "lazy":
-				curatorOpts = append(curatorOpts, curator.WithRefinementMode(
-					curator.RefinementModeLazy,
-					curator.LazyRefinementConfig{
-						MinUtilityScore: cfg.Refine.MinUtilityScore,
-					},
-				))
-			}
-		} else {
-			curatorOpts = append(curatorOpts, curator.WithRefinementMode(curator.RefinementModeNone, nil))
-		}
-
-		cur = curator.NewCurator(pb, embedder, curatorOpts...)
-
-		logger.Debug("Created curator for quality control")
-	}
-
-	// Create adapter for online learning orchestration (if reflector and curator available).
-	var adp adapter.Adapter
-
-	if refl != nil && cur != nil {
-		// Check if we need custom configuration.
-		needsCustomConfig := cfg.Adapter.MaxMemorySize > 0 || cfg.Adapter.UtilityThreshold > 0 || gen != nil
-
-		if needsCustomConfig {
-			// Use default memory config as base, then override with user settings.
-			memConfig := adapter.DefaultMemoryConfig()
-			if cfg.Adapter.MaxMemorySize > 0 {
-				memConfig.MaxBullets = cfg.Adapter.MaxMemorySize
-				memConfig.RefinementAt = int(float64(cfg.Adapter.MaxMemorySize) * 0.9) // 90% of max.
-			}
-
-			if cfg.Adapter.UtilityThreshold > 0 {
-				memConfig.PruneThreshold = cfg.Adapter.UtilityThreshold
-			}
-
-			adapterConfig := adapter.Config{
-				Playbook:     pb,
-				Reflector:    refl,
-				Curator:      cur,
-				Generator:    gen,
-				MemoryConfig: memConfig,
-			}
-			adp = adapter.NewAdapterWithConfig(adapterConfig)
-		} else {
-			// Use simple constructor with defaults.
-			adp = adapter.NewAdapter(pb, refl, cur)
-		}
-
-		logger.Info("Created adapter for online learning orchestration")
-	}
-
-	// Create delta history for tracking bullet changes.
-	deltaHist := delta.NewHistory()
-
-	logger.Debug("Created delta history for change tracking")
-
-	// Create growth monitor for playbook management.
-	var growthMon *refine.GrowthMonitor
-
-	if cfg.Refine.Enabled {
-		// Start with defaults and override with config values.
-		thresholds := refine.DefaultGrowthThresholds()
-		if cfg.Refine.MaxBullets > 0 {
-			thresholds.MaxBullets = cfg.Refine.MaxBullets
-		}
-
-		if cfg.Refine.MaxTokens > 0 {
-			thresholds.MaxTokens = cfg.Refine.MaxTokens
-		}
-
-		if cfg.Refine.MinUtilityScore > 0 {
-			thresholds.MinUtility = cfg.Refine.MinUtilityScore
-		}
-
-		if cfg.Refine.CheckInterval > 0 {
-			thresholds.CheckInterval = time.Duration(cfg.Refine.CheckInterval) * time.Second
-		}
-
-		growthMon = refine.NewGrowthMonitor(pb, thresholds)
-		logger.Info("Created growth monitor", "max_bullets", thresholds.MaxBullets, "max_tokens", thresholds.MaxTokens)
-	}
+	refl := createReflector(llm, maxTokens, logger)
+	cur := createCurator(embedder, llm, cfg, maxTokens, pb, logger)
+	adp := createAdapter(refl, cur, gen, cfg, pb, logger)
+	growthMon := createGrowthMonitor(cfg, pb, logger)
 
 	return &ACEService{
 		config:         cfg,
@@ -302,7 +102,7 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 		reflector:      refl,
 		curator:        cur,
 		adapter:        adp,
-		deltaHistory:   deltaHist,
+		deltaHistory:   delta.NewHistory(),
 		growthMonitor:  growthMon,
 		feedbackParser: feedbackParser,
 		embedder:       embedder,
@@ -312,6 +112,212 @@ func NewACEService(cfg *ACEConfig, workDir string, llm llm.Provider, modelName s
 		llm:            llm,
 		modelName:      modelName,
 	}, nil
+}
+
+// createEmbedder creates an embedder, trying Ollama first and falling back to mock.
+func createEmbedder(logger *slog.Logger) embedding.Embedder {
+	ollamaConfig := embedding.DefaultOllamaEmbedderConfig()
+
+	ollamaEmbedder, err := embedding.NewOllamaEmbedder(ollamaConfig)
+	if err != nil {
+		logger.Warn("Failed to create Ollama embedder, using mock embedder", "error", err)
+		return embedding.NewMockEmbedder(768)
+	}
+
+	logger.Info(" Using Ollama embedder", "model", ollamaConfig.Model, "dimension", ollamaConfig.Dimension)
+
+	return ollamaEmbedder
+}
+
+// loadOrCreatePlaybook loads an existing playbook or creates a new one with seeds.
+func loadOrCreatePlaybook(playbookPath string, embedder embedding.Embedder, logger *slog.Logger) (*playbook.Playbook, error) {
+	_, statErr := os.Stat(playbookPath)
+	if statErr == nil {
+		pb, err := playbook.Load(playbookPath, nil, embedder)
+		if err != nil {
+			return playbook.New(nil, embedder), nil
+		}
+
+		return pb, nil
+	}
+
+	pb := playbook.New(nil, embedder)
+
+	dir := filepath.Dir(playbookPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create playbook directory: %w", err)
+	}
+
+	if err := seedInitialBullets(pb, embedder); err != nil {
+		logger.Warn("Failed to seed initial bullets", "error", err)
+	}
+
+	if err := pb.Save(playbookPath); err != nil {
+		logger.Warn("Failed to save initial playbook", "error", err)
+	}
+
+	return pb, nil
+}
+
+// createRetriever creates a retriever based on embedder availability.
+func createRetriever(pb *playbook.Playbook, embedder embedding.Embedder) retrieval.Retriever {
+	if embedder != nil {
+		return retrieval.NewHNSWRetriever(pb, embedder)
+	}
+
+	return retrieval.NewSemanticRetriever(pb, embedder)
+}
+
+// createGenerator creates a generator if LLM is provided and generation is enabled.
+func createGenerator(llm llm.Provider, cfg *ACEConfig, pb *playbook.Playbook, retriever retrieval.Retriever) (generator.Generator, error) {
+	if llm == nil || !cfg.Generation.Enabled {
+		return nil, nil
+	}
+
+	gen, err := generator.NewGenerator(generator.Config{
+		LLM:       llm,
+		Playbook:  pb,
+		Retriever: retriever,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create generator: %w", err)
+	}
+
+	return gen, nil
+}
+
+// createReflector creates a reflector for deep analysis if LLM is available.
+func createReflector(llm llm.Provider, maxTokens int, logger *slog.Logger) reflector.Reflector {
+	if llm == nil {
+		return nil
+	}
+
+	var reflectorOpts []reflector.Option
+	if maxTokens > 0 {
+		reflectorOpts = append(reflectorOpts, reflector.WithMaxTokens(maxTokens))
+	}
+
+	logger.Debug("Created reflector for deep insight analysis", "max_tokens", maxTokens)
+
+	return reflector.NewReflector(llm, reflectorOpts...)
+}
+
+// createCurator creates a curator for quality control and deduplication.
+func createCurator(embedder embedding.Embedder, llm llm.Provider, cfg *ACEConfig, maxTokens int, pb *playbook.Playbook, logger *slog.Logger) curator.Curator {
+	if embedder == nil {
+		return nil
+	}
+
+	curatorOpts := []curator.Option{
+		curator.WithSimilarityThreshold(0.85),
+	}
+
+	if maxTokens > 0 {
+		curatorOpts = append(curatorOpts, curator.WithMaxTokens(maxTokens))
+	}
+
+	if llm != nil && cfg.Generation.AutoReflect {
+		curatorOpts = append(curatorOpts, curator.WithLLMProvider(llm))
+		logger.Debug("Enabled LLM-based intelligent curation")
+	}
+
+	curatorOpts = appendRefinementOpts(curatorOpts, cfg, logger)
+
+	logger.Debug("Created curator for quality control")
+
+	return curator.NewCurator(pb, embedder, curatorOpts...)
+}
+
+// appendRefinementOpts appends refinement configuration to curator options.
+func appendRefinementOpts(opts []curator.Option, cfg *ACEConfig, logger *slog.Logger) []curator.Option {
+	if !cfg.Refine.Enabled {
+		return append(opts, curator.WithRefinementMode(curator.RefinementModeNone, nil))
+	}
+
+	opts = append(opts, curator.WithMergeEngine(0.90))
+	logger.Debug("Enabled merge engine for advanced bullet deduplication")
+
+	switch cfg.Refine.Mode {
+	case "proactive":
+		opts = append(opts, curator.WithRefinementMode(
+			curator.RefinementModeProactive,
+			curator.ProactiveRefinementConfig{
+				MaxBullets:      cfg.Refine.MaxBullets,
+				MaxSizeBytes:    int64(cfg.Refine.MaxTokens),
+				MinUtilityScore: cfg.Refine.MinUtilityScore,
+			},
+		))
+	case "lazy":
+		opts = append(opts, curator.WithRefinementMode(
+			curator.RefinementModeLazy,
+			curator.LazyRefinementConfig{
+				MinUtilityScore: cfg.Refine.MinUtilityScore,
+			},
+		))
+	}
+
+	return opts
+}
+
+// createAdapter creates an adapter for online learning orchestration.
+func createAdapter(refl reflector.Reflector, cur curator.Curator, gen generator.Generator, cfg *ACEConfig, pb *playbook.Playbook, logger *slog.Logger) adapter.Adapter {
+	if refl == nil || cur == nil {
+		return nil
+	}
+
+	needsCustomConfig := cfg.Adapter.MaxMemorySize > 0 || cfg.Adapter.UtilityThreshold > 0 || gen != nil
+	if !needsCustomConfig {
+		logger.Info("Created adapter for online learning orchestration")
+		return adapter.NewAdapter(pb, refl, cur)
+	}
+
+	memConfig := adapter.DefaultMemoryConfig()
+	if cfg.Adapter.MaxMemorySize > 0 {
+		memConfig.MaxBullets = cfg.Adapter.MaxMemorySize
+		memConfig.RefinementAt = int(float64(cfg.Adapter.MaxMemorySize) * 0.9)
+	}
+
+	if cfg.Adapter.UtilityThreshold > 0 {
+		memConfig.PruneThreshold = cfg.Adapter.UtilityThreshold
+	}
+
+	logger.Info("Created adapter for online learning orchestration")
+
+	return adapter.NewAdapterWithConfig(adapter.Config{
+		Playbook:     pb,
+		Reflector:    refl,
+		Curator:      cur,
+		Generator:    gen,
+		MemoryConfig: memConfig,
+	})
+}
+
+// createGrowthMonitor creates a growth monitor for playbook management.
+func createGrowthMonitor(cfg *ACEConfig, pb *playbook.Playbook, logger *slog.Logger) *refine.GrowthMonitor {
+	if !cfg.Refine.Enabled {
+		return nil
+	}
+
+	thresholds := refine.DefaultGrowthThresholds()
+	if cfg.Refine.MaxBullets > 0 {
+		thresholds.MaxBullets = cfg.Refine.MaxBullets
+	}
+
+	if cfg.Refine.MaxTokens > 0 {
+		thresholds.MaxTokens = cfg.Refine.MaxTokens
+	}
+
+	if cfg.Refine.MinUtilityScore > 0 {
+		thresholds.MinUtility = cfg.Refine.MinUtilityScore
+	}
+
+	if cfg.Refine.CheckInterval > 0 {
+		thresholds.CheckInterval = time.Duration(cfg.Refine.CheckInterval) * time.Second
+	}
+
+	logger.Info("Created growth monitor", "max_bullets", thresholds.MaxBullets, "max_tokens", thresholds.MaxTokens)
+
+	return refine.NewGrowthMonitor(pb, thresholds)
 }
 
 // Retrieve fetches top-K relevant bullets for the given query.
@@ -380,27 +386,8 @@ func (s *ACEService) UpdateBullets(ctx context.Context, bullets []*bullet.Bullet
 		return nil
 	}
 
-	// Build feedback map for batch delta application.
-	feedbackMap := make(map[string]string)
+	feedbackMap := buildFeedbackMap(bullets, fb)
 
-	// Map bullet markers (B0, B1, ...) to actual bullet IDs.
-	for _, marker := range fb.HelpfulBullets {
-		idx := parseBulletIndex(marker)
-		if idx >= 0 && idx < len(bullets) {
-			b := bullets[idx]
-			feedbackMap[b.ID] = "helpful"
-		}
-	}
-
-	for _, marker := range fb.HarmfulBullets {
-		idx := parseBulletIndex(marker)
-		if idx >= 0 && idx < len(bullets) {
-			b := bullets[idx]
-			feedbackMap[b.ID] = "harmful"
-		}
-	}
-
-	// Use curator's batch delta application for parallel updates.
 	if s.curator != nil {
 		err := s.curator.ApplyBulletFeedback(ctx, feedbackMap)
 		if err != nil {
@@ -408,14 +395,40 @@ func (s *ACEService) UpdateBullets(ctx context.Context, bullets []*bullet.Bullet
 		}
 	}
 
-	// Save playbook.
+	return s.savePlaybookAfterUpdate()
+}
+
+// buildFeedbackMap maps bullet feedback markers to bullet IDs with their feedback type.
+func buildFeedbackMap(bullets []*bullet.Bullet, fb *feedback.BulletFeedback) map[string]string {
+	feedbackMap := make(map[string]string)
+
+	mapMarkers(feedbackMap, bullets, fb.HelpfulBullets, "helpful")
+	mapMarkers(feedbackMap, bullets, fb.HarmfulBullets, "harmful")
+
+	return feedbackMap
+}
+
+// mapMarkers maps a list of bullet markers to their IDs with the given feedback type.
+func mapMarkers(feedbackMap map[string]string, bullets []*bullet.Bullet, markers []string, feedbackType string) {
+	for _, marker := range markers {
+		idx := parseBulletIndex(marker)
+		if idx >= 0 && idx < len(bullets) {
+			feedbackMap[bullets[idx].ID] = feedbackType
+		}
+	}
+}
+
+// savePlaybookAfterUpdate saves the playbook synchronously or asynchronously based on config.
+func (s *ACEService) savePlaybookAfterUpdate() error {
 	if s.config.ItemizedLearning.UpdateAsync {
 		go func() { _ = s.SavePlaybook() }()
-	} else {
-		err := s.SavePlaybook()
-		if err != nil {
-			return fmt.Errorf("failed to save playbook: %w", err)
-		}
+
+		return nil
+	}
+
+	err := s.SavePlaybook()
+	if err != nil {
+		return fmt.Errorf("failed to save playbook: %w", err)
 	}
 
 	return nil
@@ -556,12 +569,41 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 		return nil, nil
 	}
 
+	s.logTrajectoryDetails(ctx, trajectory)
+
+	insights, err := s.reflectOnTrajectory(ctx, trajectory)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(insights) == 0 {
+		s.logger.DebugContext(ctx, "No insights extracted from reflection")
+
+		return nil, nil
+	}
+
+	mergeResp, err := s.curateInsights(ctx, insights)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logCurationResults(ctx, mergeResp)
+
+	err = s.SavePlaybook()
+	if err != nil {
+		return nil, fmt.Errorf("failed to save playbook: %w", err)
+	}
+
+	return mergeResp.AddedBullets, nil
+}
+
+// logTrajectoryDetails logs trajectory information at debug level.
+func (s *ACEService) logTrajectoryDetails(ctx context.Context, trajectory *generator.Trajectory) {
 	s.logger.InfoContext(ctx, "Using Reflector+Curator pipeline with full trajectory",
 		"steps", len(trajectory.Steps),
 		"success", trajectory.Success,
 		"retrieved_bullets", len(trajectory.RetrievedBullets))
 
-	// Debug: Log full trajectory details.
 	s.logger.DebugContext(ctx, "Trajectory details",
 		"query", trajectory.Query,
 		"output", trajectory.Output,
@@ -575,8 +617,10 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 			"type", step.Type,
 			"content", step.Content)
 	}
+}
 
-	// Reflect on trajectory to extract insights.
+// reflectOnTrajectory runs the reflector on a trajectory and returns extracted insights.
+func (s *ACEService) reflectOnTrajectory(ctx context.Context, trajectory *generator.Trajectory) ([]*reflector.Insight, error) {
 	reflectionReq := reflector.ReflectionRequest{
 		Trajectories: []*generator.Trajectory{trajectory},
 	}
@@ -590,7 +634,6 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 
 	s.logger.InfoContext(ctx, "Reflector extracted insights", "count", len(reflectionResp.Insights))
 
-	// Debug: Log all extracted insights.
 	for i, insight := range reflectionResp.Insights {
 		s.logger.DebugContext(ctx, "Extracted insight",
 			"index", i,
@@ -600,15 +643,13 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 			"evidence_count", len(insight.Evidence))
 	}
 
-	if len(reflectionResp.Insights) == 0 {
-		s.logger.DebugContext(ctx, "No insights extracted from reflection")
+	return reflectionResp.Insights, nil
+}
 
-		return nil, nil
-	}
-
-	// Curate insights into bullets with deduplication.
+// curateInsights curates reflector insights into bullets with deduplication.
+func (s *ACEService) curateInsights(ctx context.Context, insights []*reflector.Insight) (*curator.MergeResult, error) {
 	mergeReq := curator.MergeRequest{
-		Insights:            reflectionResp.Insights,
+		Insights:            insights,
 		SimilarityThreshold: 0.85,
 	}
 
@@ -621,12 +662,16 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 		return nil, err
 	}
 
+	return mergeResp, nil
+}
+
+// logCurationResults logs the results of curation at appropriate levels.
+func (s *ACEService) logCurationResults(ctx context.Context, mergeResp *curator.MergeResult) {
 	s.logger.InfoContext(ctx, "Curator processed insights",
 		"added", mergeResp.Added,
 		"updated", mergeResp.Updated,
 		"duplicates", len(mergeResp.Duplicates))
 
-	// Debug: Log added bullets.
 	for i, b := range mergeResp.AddedBullets {
 		s.logger.DebugContext(ctx, "Added bullet",
 			"index", i,
@@ -636,19 +681,9 @@ func (s *ACEService) GenerateBulletsWithReflectionFromTrajectory(ctx context.Con
 			"harmful_count", b.HarmfulCount)
 	}
 
-	// Debug: Log duplicates.
 	if len(mergeResp.Duplicates) > 0 {
 		s.logger.DebugContext(ctx, "Found duplicates", "duplicate_ids", mergeResp.Duplicates)
 	}
-
-	// Save playbook.
-	err = s.SavePlaybook()
-	if err != nil {
-		return nil, fmt.Errorf("failed to save playbook: %w", err)
-	}
-
-	// Return the new bullets that were added.
-	return mergeResp.AddedBullets, nil
 }
 
 // ProcessExecutionSignal handles online learning via the Adapter.

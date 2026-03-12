@@ -164,33 +164,54 @@ func TestManager_GetCredential_CredentialTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ks := newMockKeystore()
-			ks.data["spin:cred:test"] = tt.stored
-
-			m := NewManager(ks)
-			ctx := context.Background()
-
-			cred, err := m.GetCredential(ctx, "test")
+			cred, err := getCredentialFromStored(t, tt.stored)
 			if tt.wantErr {
-				if err == nil {
-					t.Fatal("GetCredential() expected error, got nil")
-				}
-
+				requireError(t, err, "GetCredential()")
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("GetCredential() error = %v", err)
-			}
-
-			if cred.Type != tt.wantType {
-				t.Errorf("Credential.Type = %v, want %v", cred.Type, tt.wantType)
-			}
-
-			if cred.Value != tt.wantValue {
-				t.Errorf("Credential.Value = %q, want %q", cred.Value, tt.wantValue)
-			}
+			requireNoError(t, err, "GetCredential()")
+			assertCredential(t, cred, tt.wantType, tt.wantValue)
 		})
+	}
+}
+
+func getCredentialFromStored(t *testing.T, stored string) (Credential, error) {
+	t.Helper()
+
+	ks := newMockKeystore()
+	ks.data["spin:cred:test"] = stored
+
+	m := NewManager(ks)
+
+	return m.GetCredential(context.Background(), "test")
+}
+
+func requireError(t *testing.T, err error, op string) {
+	t.Helper()
+
+	if err == nil {
+		t.Fatalf("%s expected error, got nil", op)
+	}
+}
+
+func requireNoError(t *testing.T, err error, op string) {
+	t.Helper()
+
+	if err != nil {
+		t.Fatalf("%s error = %v", op, err)
+	}
+}
+
+func assertCredential(t *testing.T, cred Credential, wantType CredentialType, wantValue string) {
+	t.Helper()
+
+	if cred.Type != wantType {
+		t.Errorf("Credential.Type = %v, want %v", cred.Type, wantType)
+	}
+
+	if cred.Value != wantValue {
+		t.Errorf("Credential.Value = %q, want %q", cred.Value, wantValue)
 	}
 }
 

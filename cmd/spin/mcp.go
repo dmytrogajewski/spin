@@ -604,8 +604,27 @@ func runMCPRegistryGet(cmd *cobra.Command, args []string) error {
 		return outputJSON(server)
 	}
 
-	// Text format.
 	out := cmd.OutOrStdout()
+	printRegistryBasicInfo(out, server)
+
+	if server.Transport.IsRemote() {
+		printRemoteServerInfo(out, server)
+	} else {
+		printLocalServerInfo(out, server)
+	}
+
+	printOAuthInfo(out, server)
+
+	configFile := loader.ConfigFileUsed()
+	if configFile != "" {
+		fmt.Fprintf(out, "Source: %s\n", configFile)
+	}
+
+	return nil
+}
+
+// printRegistryBasicInfo prints the basic fields of a registry.
+func printRegistryBasicInfo(out io.Writer, server *config.MCPServer) {
 	fmt.Fprintf(out, "Name: %s\n", server.Name)
 	fmt.Fprintf(out, "Type: %s\n", config.GetRegistryTypeName(*server))
 	fmt.Fprintf(out, "Dynamic Loadout: %v\n", server.DynamicLoadout)
@@ -616,58 +635,60 @@ func runMCPRegistryGet(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Fprintf(out, "Transport: %s\n", transport)
+}
 
-	if server.Transport.IsRemote() {
-		fmt.Fprintf(out, "URL: %s\n", server.URL)
+// printRemoteServerInfo prints details specific to remote servers.
+func printRemoteServerInfo(out io.Writer, server *config.MCPServer) {
+	fmt.Fprintf(out, "URL: %s\n", server.URL)
 
-		if len(server.Headers) > 0 {
-			fmt.Fprintln(out, "Headers:")
+	if len(server.Headers) > 0 {
+		fmt.Fprintln(out, "Headers:")
 
-			for key, value := range server.Headers {
-				displayValue := value
-				if strings.EqualFold(key, "authorization") || strings.Contains(strings.ToLower(key), "secret") {
-					displayValue = "***"
-				}
-
-				fmt.Fprintf(out, "  %s: %s\n", key, displayValue)
+		for key, value := range server.Headers {
+			displayValue := value
+			if strings.EqualFold(key, "authorization") || strings.Contains(strings.ToLower(key), "secret") {
+				displayValue = "***"
 			}
-		}
 
-		if server.Transport == config.MCPTransportSmithery {
-			fmt.Fprintf(out, "Smithery Namespace: %s\n", server.SmitheryNamespace)
-			fmt.Fprintf(out, "Smithery API Key: %s\n", maskAPIKey(server.SmitheryAPIKey))
-		}
-	} else {
-		fmt.Fprintf(out, "Command: %s\n", server.Command)
-
-		if len(server.Args) > 0 {
-			fmt.Fprintf(out, "Args: %s\n", strings.Join(server.Args, " "))
-		}
-
-		if len(server.Env) > 0 {
-			fmt.Fprintln(out, "Environment:")
-
-			for key, value := range server.Env {
-				fmt.Fprintf(out, "  %s=%s\n", key, value)
-			}
+			fmt.Fprintf(out, "  %s: %s\n", key, displayValue)
 		}
 	}
 
-	if server.OAuth != nil {
-		fmt.Fprintln(out, "OAuth:")
-		fmt.Fprintf(out, "  Client ID: %s\n", server.OAuth.ClientID)
+	if server.Transport == config.MCPTransportSmithery {
+		fmt.Fprintf(out, "Smithery Namespace: %s\n", server.SmitheryNamespace)
+		fmt.Fprintf(out, "Smithery API Key: %s\n", maskAPIKey(server.SmitheryAPIKey))
+	}
+}
 
-		if server.OAuth.ClientSecret != "" {
-			fmt.Fprintln(out, "  Client Secret: ***")
+// printLocalServerInfo prints details specific to local servers.
+func printLocalServerInfo(out io.Writer, server *config.MCPServer) {
+	fmt.Fprintf(out, "Command: %s\n", server.Command)
+
+	if len(server.Args) > 0 {
+		fmt.Fprintf(out, "Args: %s\n", strings.Join(server.Args, " "))
+	}
+
+	if len(server.Env) > 0 {
+		fmt.Fprintln(out, "Environment:")
+
+		for key, value := range server.Env {
+			fmt.Fprintf(out, "  %s=%s\n", key, value)
 		}
 	}
+}
 
-	configFile := loader.ConfigFileUsed()
-	if configFile != "" {
-		fmt.Fprintf(out, "Source: %s\n", configFile)
+// printOAuthInfo prints OAuth configuration if present.
+func printOAuthInfo(out io.Writer, server *config.MCPServer) {
+	if server.OAuth == nil {
+		return
 	}
 
-	return nil
+	fmt.Fprintln(out, "OAuth:")
+	fmt.Fprintf(out, "  Client ID: %s\n", server.OAuth.ClientID)
+
+	if server.OAuth.ClientSecret != "" {
+		fmt.Fprintln(out, "  Client Secret: ***")
+	}
 }
 
 // newMCPRegistryRemoveCmd creates the command for removing a registry.
@@ -776,106 +797,101 @@ Examples:
 	return cmd
 }
 
-func runMCPSearch(cmd *cobra.Command, args []string) error {
-	query := args[0]
+// mcpSearchResult represents a tool found during MCP search.
+type mcpSearchResult struct {
+	ToolName    string `json:"tool_name"`
+	Registry    string `json:"registry"`
+	Type        string `json:"type"`
+	Verified    bool   `json:"verified,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// mcpSearchFlags holds parsed search command flags.
+type mcpSearchFlags struct {
+	query          string
+	registryFilter string
+	limit          int
+	verified       bool
+	format         string
+	apiKey         string
+}
+
+// parseMCPSearchFlags extracts search flags from the command.
+func parseMCPSearchFlags(cmd *cobra.Command, args []string) mcpSearchFlags {
 	registryFilter, _ := cmd.Flags().GetString("registry")
 	limit, _ := cmd.Flags().GetInt("limit")
 	verified, _ := cmd.Flags().GetBool("verified")
 	format, _ := cmd.Flags().GetString("format")
 	apiKey, _ := cmd.Flags().GetString("api-key")
 
-	// Get API key from env if not provided.
 	if apiKey == "" {
 		apiKey = os.Getenv("SMITHERY_API_KEY")
 	}
 
-	loader := config.NewLoaderV2()
-	_, err := loader.LoadFromFile(flagConfigFile(cmd))
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+	return mcpSearchFlags{
+		query:          args[0],
+		registryFilter: registryFilter,
+		limit:          limit,
+		verified:       verified,
+		format:         format,
+		apiKey:         apiKey,
+	}
+}
+
+// filterServersByRegistry filters servers by registry name if specified.
+func filterServersByRegistry(servers []config.MCPServer, registryFilter string) ([]config.MCPServer, error) {
+	if registryFilter == "" {
+		return servers, nil
 	}
 
-	mgr := config.NewMCPConfigStore(loader)
-
-	servers, err := mgr.List()
-	if err != nil {
-		return err
-	}
-
-	// Filter by registry if specified.
-	if registryFilter != "" {
-		var filtered []config.MCPServer
-
-		for _, s := range servers {
-			if s.Name == registryFilter {
-				filtered = append(filtered, s)
-			}
+	var filtered []config.MCPServer
+	for _, s := range servers {
+		if s.Name == registryFilter {
+			filtered = append(filtered, s)
 		}
-
-		if len(filtered) == 0 {
-return fmt.Errorf("registry '%s' not found: %w", registryFilter, ErrRegistryNotFound)
-		}
-
-		servers = filtered
 	}
 
-	// Collect search results.
-	type searchResult struct {
-		ToolName    string `json:"tool_name"`
-		Registry    string `json:"registry"`
-		Type        string `json:"type"`
-		Verified    bool   `json:"verified,omitempty"`
-		Description string `json:"description,omitempty"`
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("registry '%s' not found: %w", registryFilter, ErrRegistryNotFound)
 	}
 
-	var results []searchResult
+	return filtered, nil
+}
 
-	for _, server := range servers {
-		if server.Transport == config.MCPTransportSmithery {
-			// Search Smithery API.
-			key := apiKey
-			if key == "" {
-				key = server.SmitheryAPIKey
-			}
-
-			if key == "" {
-				fmt.Fprintf(os.Stderr, "Warning: No API key for Smithery registry '%s', skipping\n", server.Name)
-
-				continue
-			}
-
-			smitheryResults, searchErr := searchSmitheryAPI(query, key, limit, verified)
-			if searchErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: Failed to search Smithery registry '%s': %v\n", server.Name, searchErr)
-
-				continue
-			}
-
-			for _, r := range smitheryResults.Tools {
-				results = append(results, searchResult{
-					ToolName:    r.Tool.Name,
-					Registry:    server.Name,
-					Type:        "smithery",
-					Verified:    r.Server.Verified,
-					Description: r.Tool.Description,
-				})
-			}
-		}
-		// Local/remote registries require initialization to list tools.
-		// Currently only Smithery API search is implemented.
+// searchSmitheryServer searches a single Smithery server and returns results.
+func searchSmitheryServer(server config.MCPServer, flags mcpSearchFlags) []mcpSearchResult {
+	key := flags.apiKey
+	if key == "" {
+		key = server.SmitheryAPIKey
 	}
 
-	if len(results) == 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "No tools found for query: %s\n", query)
-
+	if key == "" {
+		fmt.Fprintf(os.Stderr, "Warning: No API key for Smithery registry '%s', skipping\n", server.Name)
 		return nil
 	}
 
-	if format == "json" {
-		return outputJSON(results)
+	smitheryResults, searchErr := searchSmitheryAPI(flags.query, key, flags.limit, flags.verified)
+	if searchErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Failed to search Smithery registry '%s': %v\n", server.Name, searchErr)
+		return nil
 	}
 
-	// Table format.
+	var results []mcpSearchResult
+	for _, r := range smitheryResults.Tools {
+		results = append(results, mcpSearchResult{
+			ToolName:    r.Tool.Name,
+			Registry:    server.Name,
+			Type:        "smithery",
+			Verified:    r.Server.Verified,
+			Description: r.Tool.Description,
+		})
+	}
+
+	return results
+}
+
+// printSearchResultsTable prints search results in table format.
+func printSearchResultsTable(cmd *cobra.Command, results []mcpSearchResult) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "TOOL\tREGISTRY\tTYPE\tVERIFIED\tDESCRIPTION")
 
@@ -891,7 +907,46 @@ return fmt.Errorf("registry '%s' not found: %w", registryFilter, ErrRegistryNotF
 	w.Flush()
 
 	fmt.Fprintf(cmd.OutOrStdout(), "\nFound %d tools.\n", len(results))
+}
 
+func runMCPSearch(cmd *cobra.Command, args []string) error {
+	flags := parseMCPSearchFlags(cmd, args)
+
+	loader := config.NewLoaderV2()
+	_, err := loader.LoadFromFile(flagConfigFile(cmd))
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	mgr := config.NewMCPConfigStore(loader)
+
+	servers, err := mgr.List()
+	if err != nil {
+		return err
+	}
+
+	servers, err = filterServersByRegistry(servers, flags.registryFilter)
+	if err != nil {
+		return err
+	}
+
+	var results []mcpSearchResult
+	for _, server := range servers {
+		if server.Transport == config.MCPTransportSmithery {
+			results = append(results, searchSmitheryServer(server, flags)...)
+		}
+	}
+
+	if len(results) == 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "No tools found for query: %s\n", flags.query)
+		return nil
+	}
+
+	if flags.format == "json" {
+		return outputJSON(results)
+	}
+
+	printSearchResultsTable(cmd, results)
 	return nil
 }
 
@@ -1079,27 +1134,43 @@ func formatEndpoint(server config.MCPServer) string {
 
 // parseSmitheryPath parses Smithery server path formats.
 func parseSmitheryPath(path string) (serverURL string, namespace string, err error) {
-	const baseURL = "https://server.smithery.ai"
-
 	if strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "http://") {
-		var parsedURL *url.URL
-		parsedURL, err = url.Parse(path)
-		if err != nil {
-			return "", "", fmt.Errorf("invalid URL: %w", err)
-		}
-
-		pathParts := strings.Split(strings.TrimPrefix(parsedURL.Path, "/"), "/")
-		if len(pathParts) >= 1 {
-			ns := pathParts[0]
-			if after, ok := strings.CutPrefix(ns, "@"); ok {
-				ns = after
-			}
-
-			namespace = ns
-		}
-
-		return path, namespace, nil
+		return parseSmitheryURL(path)
 	}
+
+	return parseSmitheryShortPath(path)
+}
+
+// parseSmitheryURL parses a full Smithery URL and extracts the namespace.
+func parseSmitheryURL(path string) (string, string, error) {
+	parsedURL, err := url.Parse(path)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid URL: %w", err)
+	}
+
+	namespace := extractNamespaceFromPath(parsedURL.Path)
+
+	return path, namespace, nil
+}
+
+// extractNamespaceFromPath extracts the namespace from a URL path component.
+func extractNamespaceFromPath(urlPath string) string {
+	pathParts := strings.Split(strings.TrimPrefix(urlPath, "/"), "/")
+	if len(pathParts) == 0 {
+		return ""
+	}
+
+	ns := pathParts[0]
+	if after, ok := strings.CutPrefix(ns, "@"); ok {
+		return after
+	}
+
+	return ns
+}
+
+// parseSmitheryShortPath parses a short-form Smithery path like @namespace/server-name.
+func parseSmitheryShortPath(path string) (string, string, error) {
+	const baseURL = "https://server.smithery.ai"
 
 	cleanPath := path
 	if after, ok := strings.CutPrefix(path, "@"); ok {
@@ -1108,12 +1179,12 @@ func parseSmitheryPath(path string) (serverURL string, namespace string, err err
 
 	parts := strings.SplitN(cleanPath, "/", 2)
 	if len(parts) != 2 {
-return "", "", fmt.Errorf("invalid server path format: %s (expected @namespace/server-name): %w", path, ErrInvalidServerPathFormat)
+		return "", "", fmt.Errorf("invalid server path format: %s (expected @namespace/server-name): %w", path, ErrInvalidServerPathFormat)
 	}
 
-	namespace = parts[0]
+	namespace := parts[0]
 	serverName := parts[1]
-	serverURL = fmt.Sprintf("%s/@%s/%s", baseURL, namespace, serverName)
+	serverURL := fmt.Sprintf("%s/@%s/%s", baseURL, namespace, serverName)
 
 	return serverURL, namespace, nil
 }

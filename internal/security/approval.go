@@ -63,10 +63,8 @@ func (s *ApprovalService) SetHandler(handler ApprovalHandler) {
 // RequestApproval requests approval for an operation with full event emission.
 // Returns the request ID, whether approved, and any error.
 func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operation) (reqID string, approved bool, err error) {
-	// Generate unique request ID.
 	reqID = uuid.New().String()
 
-	// Create approval request.
 	req := ApprovalRequest{
 		ID:         reqID,
 		Command:    operation.Command,
@@ -76,141 +74,145 @@ func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operati
 		ToolCallID: operation.ToolCallID,
 	}
 
-	// Short-circuit via persisted policy if available (session first, then global).
-	if s.store != nil && operation.Command != nil {
-		key := NewPolicyKey(operation.Command.Program, operation.Command.Args, operation.WorkDir)
-		if p, ok, _ := s.store.Get(ctx, key, ScopeSession); ok {
-			if s.emitter != nil {
-				s.emitter.Emit(events.Event{
-					Type:      events.EventPolicyApplied,
-					Timestamp: time.Now(),
-					Data: events.SystemEventData{
-						Level:   "info",
-						Message: "approval short-circuited by session policy",
-					},
-				})
-				s.emitApprovalApproved(reqID, operation.Command, "approved via policy (session)")
-			}
-
-			return reqID, p.Decision == DecisionAllow, nil
-		}
-
-		if p, ok, _ := s.store.Get(ctx, key, ScopeGlobal); ok {
-			if s.emitter != nil {
-				s.emitter.Emit(events.Event{
-					Type:      events.EventPolicyApplied,
-					Timestamp: time.Now(),
-					Data: events.SystemEventData{
-						Level:   "info",
-						Message: "approval short-circuited by global policy",
-					},
-				})
-				s.emitApprovalApproved(reqID, operation.Command, "approved via policy (global)")
-			}
-
-			return reqID, p.Decision == DecisionAllow, nil
-		}
+	// Short-circuit via persisted policy.
+	if ok, policyApproved := s.checkPolicyShortCircuit(ctx, reqID, operation); ok {
+		return reqID, policyApproved, nil
 	}
 
-	// Emit approval request event if emitter available.
-	if s.emitter != nil {
-		s.emitApprovalRequest(req)
-	}
+	s.emitIfPresent(func() { s.emitApprovalRequest(req) })
 
-	// If no handler, auto-deny.
 	if s.handler == nil {
-		if s.emitter != nil {
-			s.emitApprovalDenied(reqID, operation.Command, "no approval handler configured")
-		}
-
+		s.emitIfPresent(func() { s.emitApprovalDenied(reqID, operation.Command, "no approval handler configured") })
 		return reqID, false, ErrNoApprovalHandlerConfigured
 	}
 
-	// Invoke approval handler.
 	resp, canceled := s.invokeHandler(ctx, req)
 	if canceled {
-		if s.emitter != nil {
-			s.emitApprovalDenied(reqID, operation.Command, "context canceled")
-		}
-
+		s.emitIfPresent(func() { s.emitApprovalDenied(reqID, operation.Command, "context canceled") })
 		return reqID, false, ErrContextCanceled
 	}
 
-	// Validate response.
 	if resp.RequestID != reqID {
-		if s.emitter != nil {
-			s.emitApprovalDenied(reqID, operation.Command, "response request ID mismatch")
-		}
-
+		s.emitIfPresent(func() { s.emitApprovalDenied(reqID, operation.Command, "response request ID mismatch") })
 		return reqID, false, ErrRequestIDMismatch
 	}
 
-	// Handle command modification if needed.
 	if resp.Approved && resp.ModifiedCommand != "" {
 		return s.handleModifiedCommand(ctx, reqID, operation.Command, resp)
 	}
 
-	// Process approval decision.
 	if resp.Approved {
-		// Persist policy if scope requires it.
-		if s.store != nil && operation.Command != nil && (resp.Scope == ScopeSession || resp.Scope == ScopeGlobal) {
-			var expiresAt *time.Time
-
-			if resp.TTL != nil {
-				t := time.Now().Add(*resp.TTL)
-				expiresAt = &t
-			} else {
-				// Apply defaults per scope if configured.
-				var ttl time.Duration
-				if resp.Scope == ScopeSession && s.sessionDefaultTTL > 0 {
-					ttl = s.sessionDefaultTTL
-				}
-
-				if resp.Scope == ScopeGlobal && s.globalDefaultTTL > 0 {
-					ttl = s.globalDefaultTTL
-				}
-
-				if ttl > 0 {
-					t := time.Now().Add(ttl)
-					expiresAt = &t
-				}
-			}
-
-			p := Policy{
-				Version:    "1",
-				Scope:      resp.Scope,
-				Key:        NewPolicyKey(operation.Command.Program, operation.Command.Args, operation.WorkDir),
-				Decision:   DecisionAllow,
-				PolicyNote: resp.PolicyNote,
-				CreatedAt:  time.Now(),
-				ExpiresAt:  expiresAt,
-			}
-
-			_ = s.store.Save(ctx, p)
-			if s.emitter != nil {
-				s.emitter.Emit(events.Event{
-					Type:      events.EventPolicySaved,
-					Timestamp: time.Now(),
-					Data: events.SystemEventData{
-						Level:   "info",
-						Message: "approval policy persisted: " + resp.Scope,
-					},
-				})
-			}
-		}
-
-		if s.emitter != nil {
-			s.emitApprovalApproved(reqID, operation.Command, resp.Reason)
-		}
-
+		s.persistApprovalPolicy(ctx, operation, resp)
+		s.emitIfPresent(func() { s.emitApprovalApproved(reqID, operation.Command, resp.Reason) })
 		return reqID, true, nil
 	}
 
+	s.emitIfPresent(func() { s.emitApprovalDenied(reqID, operation.Command, resp.Reason) })
+	return reqID, false, nil
+}
+
+// emitIfPresent calls fn only if the emitter is configured.
+func (s *ApprovalService) emitIfPresent(fn func()) {
 	if s.emitter != nil {
-		s.emitApprovalDenied(reqID, operation.Command, resp.Reason)
+		fn()
+	}
+}
+
+// checkPolicyShortCircuit checks persisted policies for a short-circuit decision.
+// Returns (true, decision) if a policy was found, (false, false) otherwise.
+func (s *ApprovalService) checkPolicyShortCircuit(ctx context.Context, reqID string, operation Operation) (found bool, approved bool) {
+	if s.store == nil || operation.Command == nil {
+		return false, false
 	}
 
-	return reqID, false, nil
+	key := NewPolicyKey(operation.Command.Program, operation.Command.Args, operation.WorkDir)
+
+	if p, ok, _ := s.store.Get(ctx, key, ScopeSession); ok {
+		s.emitPolicyApplied("approval short-circuited by session policy")
+		s.emitIfPresent(func() { s.emitApprovalApproved(reqID, operation.Command, "approved via policy (session)") })
+		return true, p.Decision == DecisionAllow
+	}
+
+	if p, ok, _ := s.store.Get(ctx, key, ScopeGlobal); ok {
+		s.emitPolicyApplied("approval short-circuited by global policy")
+		s.emitIfPresent(func() { s.emitApprovalApproved(reqID, operation.Command, "approved via policy (global)") })
+		return true, p.Decision == DecisionAllow
+	}
+
+	return false, false
+}
+
+// emitPolicyApplied emits a policy applied event.
+func (s *ApprovalService) emitPolicyApplied(message string) {
+	if s.emitter == nil {
+		return
+	}
+	s.emitter.Emit(events.Event{
+		Type:      events.EventPolicyApplied,
+		Timestamp: time.Now(),
+		Data: events.SystemEventData{
+			Level:   "info",
+			Message: message,
+		},
+	})
+}
+
+// persistApprovalPolicy saves an approval policy if scope requires it.
+func (s *ApprovalService) persistApprovalPolicy(ctx context.Context, operation Operation, resp ApprovalResponse) {
+	if s.store == nil || operation.Command == nil {
+		return
+	}
+
+	if resp.Scope != ScopeSession && resp.Scope != ScopeGlobal {
+		return
+	}
+
+	expiresAt := s.resolveExpiry(resp)
+
+	p := Policy{
+		Version:    "1",
+		Scope:      resp.Scope,
+		Key:        NewPolicyKey(operation.Command.Program, operation.Command.Args, operation.WorkDir),
+		Decision:   DecisionAllow,
+		PolicyNote: resp.PolicyNote,
+		CreatedAt:  time.Now(),
+		ExpiresAt:  expiresAt,
+	}
+
+	_ = s.store.Save(ctx, p)
+	if s.emitter != nil {
+		s.emitter.Emit(events.Event{
+			Type:      events.EventPolicySaved,
+			Timestamp: time.Now(),
+			Data: events.SystemEventData{
+				Level:   "info",
+				Message: "approval policy persisted: " + resp.Scope,
+			},
+		})
+	}
+}
+
+// resolveExpiry computes the expiry time for a policy.
+func (s *ApprovalService) resolveExpiry(resp ApprovalResponse) *time.Time {
+	if resp.TTL != nil {
+		t := time.Now().Add(*resp.TTL)
+		return &t
+	}
+
+	var ttl time.Duration
+	if resp.Scope == ScopeSession && s.sessionDefaultTTL > 0 {
+		ttl = s.sessionDefaultTTL
+	}
+	if resp.Scope == ScopeGlobal && s.globalDefaultTTL > 0 {
+		ttl = s.globalDefaultTTL
+	}
+
+	if ttl > 0 {
+		t := time.Now().Add(ttl)
+		return &t
+	}
+
+	return nil
 }
 
 // invokeHandler invokes the approval handler.
@@ -246,23 +248,8 @@ func (s *ApprovalService) handleModifiedCommand(_ context.Context, reqID string,
 
 	// Re-validate modified command if validator available.
 	if s.validator != nil {
-		var result *ValidationResult
-		result, err = s.validator.Classify(modCmd)
-		if err != nil {
-			if s.emitter != nil {
-				s.emitApprovalDenied(reqID, originalCmd, "modified command validation error: "+err.Error())
-			}
-
-			return reqID, false, fmt.Errorf("validation error: %w", err)
-		}
-
-		// Check if modified command is not safe.
-		if result.Classification != CommandSafe {
-			if s.emitter != nil {
-				s.emitApprovalDenied(reqID, originalCmd, "modified command failed validation: "+result.Classification.String())
-			}
-
-return reqID, false, fmt.Errorf("modified command not safe: %s: %w", result.Classification, ErrModifiedCommandNotSafe)
+		if reqID, denied, validationErr := s.validateModifiedCommand(reqID, originalCmd, modCmd); validationErr != nil {
+			return reqID, denied, validationErr
 		}
 	}
 
@@ -287,6 +274,24 @@ return reqID, false, fmt.Errorf("modified command not safe: %s: %w", result.Clas
 	}
 
 	return reqID, true, nil
+}
+
+// validateModifiedCommand validates a modified command and returns an error if it's not safe.
+func (s *ApprovalService) validateModifiedCommand(reqID string, originalCmd, modCmd *Command) (string, bool, error) {
+	result, err := s.validator.Classify(modCmd)
+	if err != nil {
+		s.emitIfPresent(func() { s.emitApprovalDenied(reqID, originalCmd, "modified command validation error: "+err.Error()) })
+		return reqID, false, fmt.Errorf("validation error: %w", err)
+	}
+
+	if result.Classification != CommandSafe {
+		s.emitIfPresent(func() {
+			s.emitApprovalDenied(reqID, originalCmd, "modified command failed validation: "+result.Classification.String())
+		})
+		return reqID, false, fmt.Errorf("modified command not safe: %s: %w", result.Classification, ErrModifiedCommandNotSafe)
+	}
+
+	return reqID, false, nil
 }
 
 // emitApprovalRequest emits the approval request event.

@@ -24,7 +24,6 @@ var (
 	ErrShellCommandTimedOutAfter = errors.New("shell command timed out after")
 	ErrExecutionFailed = errors.New("execution failed")
 	ErrExecutionFailed2 = errors.New("execution failed")
-	ErrExecutionFailed3 = errors.New("execution failed")
 )
 
 // Context provides shell-aware functionality for the agent.
@@ -162,47 +161,15 @@ func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (stri
 		return "", ErrNoShellAvailable
 	}
 
-	// Create a context with timeout for the shell command
-	// Use the shell timeout, but respect parent context deadline if shorter.
-	effectiveTimeout := s.timeout
-
-	if deadline, hasDeadline := ctx.Deadline(); hasDeadline {
-		remaining := time.Until(deadline)
-		if remaining < effectiveTimeout && remaining > 0 {
-			effectiveTimeout = remaining
-		}
-	}
-
-	cmdCtx, cancel := context.WithTimeout(ctx, effectiveTimeout)
+	cmdCtx, cancel := context.WithTimeout(ctx, s.effectiveTimeout(ctx))
 	defer cancel()
 
-	// Determine shell arguments based on shell type.
-	var args []string
-
-	switch s.GetShell() {
-	case "bash":
-		args = []string{"-c", command}
-	case "zsh":
-		args = []string{"-c", command}
-	case "fish":
-		args = []string{"-c", command}
-	case "sh":
-		args = []string{"-c", command}
-	case "cmd":
-		args = []string{"/c", command}
-	case "powershell":
-		args = []string{"-Command", command}
-	default:
-		args = []string{"-c", command}
-	}
+	args := s.shellArgs(command)
 
 	cmd := exec.CommandContext(cmdCtx, shellPath, args...)
 	cmd.Dir = s.workDir
-
-	// Set environment variables.
 	cmd.Env = s.buildEnvironment()
 
-	// Capture stdout and stderr separately to detect duplicates.
 	var stdout, stderr bytes.Buffer
 
 	cmd.Stdout = &stdout
@@ -210,55 +177,93 @@ func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (stri
 
 	err := cmd.Run()
 	if err != nil {
-		// Check if it's a timeout error.
-		if errors.Is(cmdCtx.Err(), context.DeadlineExceeded) {
-			// Report the timeout that was configured (not remaining time which is negative).
-return "", fmt.Errorf("shell command timed out after %v: %s: %w", s.timeout, command, ErrShellCommandTimedOutAfter)
-		}
-		// Check if it's an ExitError to get exit code and stderr.
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			exitCode := exitErr.ExitCode()
-
-			// Get stdout and stderr as strings.
-			stdoutStr := strings.TrimSpace(stdout.String())
-			stderrStr := strings.TrimSpace(stderr.String())
-
-			// If stdout and stderr are identical, only show it once.
-			if stdoutStr == stderrStr && stderrStr != "" {
-return "", fmt.Errorf("execution failed: exit status %d\n%s: %w", exitCode, stderrStr, ErrExecutionFailed)
-			}
-
-			// If they're different, show both.
-			var output string
-			if stderrStr != "" && stdoutStr != "" {
-				// Both have content and are different.
-				output = fmt.Sprintf("Error: %s\nOutput: %s", stderrStr, stdoutStr)
-			} else if stderrStr != "" {
-				// Only stderr has content.
-				output = stderrStr
-			} else if stdoutStr != "" {
-				// Only stdout has content.
-				output = stdoutStr
-			}
-
-			if output != "" {
-return "", fmt.Errorf("execution failed: exit status %d\n%s: %w", exitCode, output, ErrExecutionFailed2)
-			}
-
-return "", fmt.Errorf("execution failed: exit status %d: %w", exitCode, ErrExecutionFailed3)
-		}
-
-		return "", fmt.Errorf("shell command failed: %w", err)
+		return s.handleRunError(err, cmdCtx, command, &stdout, &stderr)
 	}
 
-	// For successful commands, combine stdout and stderr.
 	output := stdout.String()
 	if stderr.String() != "" {
 		output += stderr.String()
 	}
 
 	return output, nil
+}
+
+// effectiveTimeout returns the timeout to use, respecting parent context deadline.
+func (s *Context) effectiveTimeout(ctx context.Context) time.Duration {
+	timeout := s.timeout
+
+	deadline, hasDeadline := ctx.Deadline()
+	if !hasDeadline {
+		return timeout
+	}
+
+	remaining := time.Until(deadline)
+	if remaining < timeout && remaining > 0 {
+		return remaining
+	}
+
+	return timeout
+}
+
+// shellArgs returns the appropriate command-line arguments for the detected shell.
+func (s *Context) shellArgs(command string) []string {
+	switch s.GetShell() {
+	case "cmd":
+		return []string{"/c", command}
+	case "powershell":
+		return []string{"-Command", command}
+	default:
+		return []string{"-c", command}
+	}
+}
+
+// handleRunError processes errors from cmd.Run and returns an appropriate error.
+func (s *Context) handleRunError(
+	err error, cmdCtx context.Context, command string,
+	stdout, stderr *bytes.Buffer,
+) (string, error) {
+	if errors.Is(cmdCtx.Err(), context.DeadlineExceeded) {
+		return "", fmt.Errorf("shell command timed out after %v: %s: %w", s.timeout, command, ErrShellCommandTimedOutAfter)
+	}
+
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		return "", fmt.Errorf("shell command failed: %w", err)
+	}
+
+	return "", s.formatExitError(exitErr, stdout, stderr)
+}
+
+// formatExitError builds the error message for a non-zero exit code.
+func (s *Context) formatExitError(exitErr *exec.ExitError, stdout, stderr *bytes.Buffer) error {
+	exitCode := exitErr.ExitCode()
+	stdoutStr := strings.TrimSpace(stdout.String())
+	stderrStr := strings.TrimSpace(stderr.String())
+
+	output := mergeOutputs(stdoutStr, stderrStr)
+
+	if output != "" {
+		return fmt.Errorf("execution failed: exit status %d\n%s: %w", exitCode, output, ErrExecutionFailed)
+	}
+
+	return fmt.Errorf("execution failed: exit status %d: %w", exitCode, ErrExecutionFailed2)
+}
+
+// mergeOutputs combines stdout and stderr, deduplicating when identical.
+func mergeOutputs(stdoutStr, stderrStr string) string {
+	if stdoutStr == stderrStr {
+		return stderrStr
+	}
+
+	if stderrStr != "" && stdoutStr != "" {
+		return fmt.Sprintf("Error: %s\nOutput: %s", stderrStr, stdoutStr)
+	}
+
+	if stderrStr != "" {
+		return stderrStr
+	}
+
+	return stdoutStr
 }
 
 // IsShellCommand checks if a command should be executed through the shell.
@@ -384,47 +389,36 @@ func (s *Context) extractShellName(shellPath string) string {
 	return baseName
 }
 
+// shellSpecificVars maps shell names to their specific environment variables.
+var shellSpecificVars = map[string][]string{
+	"bash": {"BASH_VERSION", "BASHOPTS", "BASHPID", "BASH_SOURCE"},
+	"zsh":  {"ZSH_VERSION", "ZDOTDIR", "ZSH_CACHE_DIR"},
+	"fish": {"FISH_VERSION", "XDG_CONFIG_HOME"},
+}
+
 // gatherEnvironmentVars gathers shell-specific environment variables.
 func (s *Context) gatherEnvironmentVars() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// Common shell environment variables.
-	shellVars := []string{
+	commonVars := []string{
 		"SHELL", "TERM", "COLUMNS", "LINES", "PS1", "PS2", "PS3", "PS4",
 		"HISTSIZE", "HISTFILESIZE", "HISTFILE", "HISTCONTROL", "HISTIGNORE",
 		"PATH", "HOME", "USER", "LOGNAME", "HOSTNAME", "PWD", "OLDPWD",
 		"EDITOR", "VISUAL", "PAGER", "MANPAGER", "LANG", "LC_ALL", "LC_CTYPE",
 	}
 
-	for _, varName := range shellVars {
+	s.collectEnvVars(commonVars)
+	s.collectEnvVars(shellSpecificVars[s.shell])
+}
+
+// collectEnvVars reads the given environment variable names and stores non-empty values.
+// Must be called with s.mu held.
+func (s *Context) collectEnvVars(varNames []string) {
+	for _, varName := range varNames {
 		if value := os.Getenv(varName); value != "" {
 			s.envVars[varName] = value
-		}
-	}
-
-	// Shell-specific variables.
-	switch s.shell {
-	case "bash":
-		bashVars := []string{"BASH_VERSION", "BASHOPTS", "BASHPID", "BASH_SOURCE"}
-		for _, varName := range bashVars {
-			if value := os.Getenv(varName); value != "" {
-				s.envVars[varName] = value
-			}
-		}
-	case "zsh":
-		zshVars := []string{"ZSH_VERSION", "ZDOTDIR", "ZSH_CACHE_DIR"}
-		for _, varName := range zshVars {
-			if value := os.Getenv(varName); value != "" {
-				s.envVars[varName] = value
-			}
-		}
-	case "fish":
-		fishVars := []string{"FISH_VERSION", "XDG_CONFIG_HOME"}
-		for _, varName := range fishVars {
-			if value := os.Getenv(varName); value != "" {
-				s.envVars[varName] = value
-			}
 		}
 	}
 }

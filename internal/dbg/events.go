@@ -25,7 +25,7 @@ import (
 
 var (
 	ErrPromptCannotBeEmpty = errors.New("prompt cannot be empty")
-	ErrTaskFailed = errors.New("task failed")
+	ErrTaskFailed          = errors.New("task failed")
 )
 
 // EventLogger captures and logs all core events for debugging.
@@ -52,15 +52,216 @@ func NewEventLogger(format string, filter []string) *EventLogger {
 	}
 }
 
+// debugServices holds the services created during debug setup.
+type debugServices struct {
+	gitSvc   *gitpkg.Service
+	shellSvc *shellpkg.Service
+	mcpSvc   *mcppkg.Service
+}
+
+// createGitService creates a git service if enabled by config.
+func createGitService(cfg *config.V2, workDir string, logger *slog.Logger) (*gitpkg.Service, error) {
+	if !cfg.Protocol.EnableGit {
+		return nil, nil
+	}
+
+	svc, err := gitpkg.NewService(true, workDir, logger)
+	if err != nil {
+		return nil, fmt.Errorf("create git service: %w", err)
+	}
+
+	return svc, nil
+}
+
+// createShellService creates a shell service if enabled by config.
+func createShellService(cfg *config.V2, workDir string, logger *slog.Logger) (*shellpkg.Service, error) {
+	if !cfg.Protocol.EnableShell {
+		return nil, nil
+	}
+
+	svc, err := shellpkg.NewService(true, workDir, logger, cfg.Protocol.ShellTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("create shell service: %w", err)
+	}
+
+	return svc, nil
+}
+
+// createMCPService creates an MCP service if enabled and configured.
+func createMCPService(ctx context.Context, cfg *config.V2, logger *slog.Logger) *mcppkg.Service {
+	if !cfg.Protocol.EnableMCP || len(cfg.Protocol.MCPServers) == 0 {
+		return nil
+	}
+
+	registryManager := mcppkg.NewDefaultRegistryManager(logger)
+
+	for _, srv := range cfg.Protocol.MCPServers {
+		registry, err := mcppkg.NewLocalRegistry(mcppkg.LocalRegistryConfig{
+			Name:    srv.Name,
+			Command: srv.Command,
+			Args:    srv.Args,
+			Env:     srv.Env,
+			Logger:  logger,
+		})
+		if err != nil {
+			logger.WarnContext(ctx, "failed to create MCP registry", "name", srv.Name, "err", err)
+
+			continue
+		}
+
+		if regErr := registryManager.Register(registry); regErr != nil {
+			logger.WarnContext(ctx, "failed to register MCP registry", "name", srv.Name, "err", regErr)
+
+			continue
+		}
+	}
+
+	for _, reg := range registryManager.All() {
+		if err := reg.Initialize(ctx); err != nil {
+			logger.WarnContext(ctx, "failed to initialize MCP registry", "name", reg.Name(), "err", err)
+		}
+	}
+
+	return mcppkg.NewService(registryManager)
+}
+
+// initServices creates all required services based on configuration.
+func initServices(ctx context.Context, cfg *config.V2, workDir string, logger *slog.Logger) (*debugServices, error) {
+	gitSvc, err := createGitService(cfg, workDir, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	shellSvc, err := createShellService(cfg, workDir, logger)
+	if err != nil {
+		if gitSvc != nil {
+			gitSvc.Close()
+		}
+
+		return nil, err
+	}
+
+	mcpSvc := createMCPService(ctx, cfg, logger)
+
+	return &debugServices{
+		gitSvc:   gitSvc,
+		shellSvc: shellSvc,
+		mcpSvc:   mcpSvc,
+	}, nil
+}
+
+// close closes all services.
+func (ds *debugServices) close() {
+	if ds.gitSvc != nil {
+		ds.gitSvc.Close()
+	}
+
+	if ds.shellSvc != nil {
+		ds.shellSvc.Close()
+	}
+
+	if ds.mcpSvc != nil {
+		ds.mcpSvc.Close()
+	}
+}
+
+// createBuiltinRuntime builds a minimal runtime for debug mode.
+func createBuiltinRuntime(
+	workDir string,
+	emitter *events.EventEmitter,
+	cfg *config.V2,
+	svcs *debugServices,
+	logger *slog.Logger,
+) (*agentexec.BuiltinRuntime, error) {
+	var storage session.Storage
+	if cfg.Agent.SessionDir != "" {
+		storage, _ = session.NewFileStorage(cfg.Agent.SessionDir)
+	}
+
+	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+		return security.ApprovalResponse{
+			RequestID: req.ID,
+			Approved:  true,
+			Reason:    "debug mode auto-approve",
+		}
+	}
+
+	executor, _ := agent.NewExecutor(workDir)
+	validator := security.NewValidator()
+
+	return agentexec.NewBuiltinRuntime(agentexec.BuiltinRuntimeConfig{
+		WorkDir:         workDir,
+		Emitter:         emitter,
+		Storage:         storage,
+		SessionID:       fmt.Sprintf("debug-%d", time.Now().UnixNano()),
+		Executor:        agent.NewExecutorRuntimeAdapter(executor),
+		Validator:       validator,
+		ShellService:    svcs.shellSvc,
+		GitService:      svcs.gitSvc,
+		UI:              nil,
+		ApprovalHandler: approvalHandler,
+		Logger:          logger,
+	})
+}
+
+// buildConversation creates and configures a conversation using the builder pattern.
+func buildConversation(
+	ctx context.Context,
+	cfg *config.V2,
+	workDir string,
+	runtime *agentexec.BuiltinRuntime,
+	emitter *events.EventEmitter,
+	provider llm.Provider,
+	svcs *debugServices,
+) (*conversation.Conversation, error) {
+	builder := conversation.NewBuilder(cfg, workDir, runtime, emitter, provider)
+
+	if svcs.gitSvc != nil {
+		builder = builder.WithGit(svcs.gitSvc)
+	}
+
+	if svcs.shellSvc != nil {
+		builder = builder.WithShell(svcs.shellSvc)
+	}
+
+	if svcs.mcpSvc != nil {
+		builder = builder.WithMCP(svcs.mcpSvc)
+	}
+
+	conv, err := builder.Build(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build conversation: %w", err)
+	}
+
+	return conv, nil
+}
+
+// processEvents reads and logs events from the stream, returning any error.
+func (el *EventLogger) processEvents(eventStream <-chan events.Event) error {
+	for event := range eventStream {
+		if el.shouldLog(event) {
+			el.logEvent(event)
+		}
+
+		if event.Type == events.EventError {
+			return fmt.Errorf("task failed: %v: %w", event.Data, ErrTaskFailed)
+		}
+
+		if event.Type == events.EventTurnComplete || event.Type == events.EventTurnFailed {
+			break
+		}
+	}
+
+	return nil
+}
+
 // Run executes a task with event logging enabled.
 func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	if prompt == "" {
 		return ErrPromptCannotBeEmpty
 	}
 
-	// Create conversation with default config using builder pattern.
 	cfg := config.DefaultV2()
-	// Set required fields for validation.
 	cfg.LLM.Provider = "mock"
 	cfg.LLM.Model = "test-model"
 
@@ -71,154 +272,37 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 
 	logger := slog.Default()
 
-	// Create services based on configuration.
-	var (
-		gitSvc   *gitpkg.Service
-		shellSvc *shellpkg.Service
-		mcpSvc   *mcppkg.Service
-	)
-
-	if cfg.Protocol.EnableGit {
-		gitSvc, err = gitpkg.NewService(true, workDir, logger)
-		if err != nil {
-			return fmt.Errorf("create git service: %w", err)
-		}
-		defer gitSvc.Close()
+	svcs, err := initServices(ctx, cfg, workDir, logger)
+	if err != nil {
+		return err
 	}
+	defer svcs.close()
 
-	if cfg.Protocol.EnableShell {
-		shellSvc, err = shellpkg.NewService(true, workDir, logger, cfg.Protocol.ShellTimeout)
-		if err != nil {
-			return fmt.Errorf("create shell service: %w", err)
-		}
-		defer shellSvc.Close()
-	}
-
-	if cfg.Protocol.EnableMCP && len(cfg.Protocol.MCPServers) > 0 {
-		registryManager := mcppkg.NewDefaultRegistryManager(logger)
-		for _, srv := range cfg.Protocol.MCPServers {
-			var registry *mcppkg.LocalRegistry
-			registry, err = mcppkg.NewLocalRegistry(mcppkg.LocalRegistryConfig{
-				Name:    srv.Name,
-				Command: srv.Command,
-				Args:    srv.Args,
-				Env:     srv.Env,
-				Logger:  logger,
-			})
-			if err != nil {
-				logger.WarnContext(ctx, "failed to create MCP registry", "name", srv.Name, "err", err)
-
-				continue
-			}
-
-			err = registryManager.Register(registry)
-			if err != nil {
-				logger.WarnContext(ctx, "failed to register MCP registry", "name", srv.Name, "err", err)
-
-				continue
-			}
-		}
-
-		for _, reg := range registryManager.All() {
-			err = reg.Initialize(ctx)
-			if err != nil {
-				logger.WarnContext(ctx, "failed to initialize MCP registry", "name", reg.Name(), "err", err)
-			}
-		}
-
-		mcpSvc = mcppkg.NewService(registryManager)
-		defer mcpSvc.Close()
-	}
-
-	// Create required dependencies for conversation.
 	emitter := events.NewEventEmitter(100)
 	provider := llm.NewMockProvider("debug")
 
-	// Create builtin runtime for debug mode.
-	var storage session.Storage
-	if cfg.Agent.SessionDir != "" {
-		storage, _ = session.NewFileStorage(cfg.Agent.SessionDir)
-	}
-
-	// Create auto-approve handler for debug (no approval needed for event logging).
-	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		return security.ApprovalResponse{
-			RequestID: req.ID,
-			Approved:  true,
-			Reason:    "debug mode auto-approve",
-		}
-	}
-
-	// Build a minimal executor for debug.
-	executor, _ := agent.NewExecutor(workDir)
-	validator := security.NewValidator()
-
-	builtinRuntime, err := agentexec.NewBuiltinRuntime(agentexec.BuiltinRuntimeConfig{
-		WorkDir:         workDir,
-		Emitter:         emitter,
-		Storage:         storage,
-		SessionID:       fmt.Sprintf("debug-%d", time.Now().UnixNano()),
-		Executor:        agent.NewExecutorRuntimeAdapter(executor),
-		Validator:       validator,
-		ShellService:    shellSvc,
-		GitService:      gitSvc,
-		UI:              nil, // No UI needed for debug event logging.
-		ApprovalHandler: approvalHandler,
-		Logger:          logger,
-	})
+	runtime, err := createBuiltinRuntime(workDir, emitter, cfg, svcs, logger)
 	if err != nil {
 		return fmt.Errorf("create builtin runtime: %w", err)
 	}
 
-	// Build conversation with required dependencies.
-	builder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
-
-	if gitSvc != nil {
-		builder = builder.WithGit(gitSvc)
-	}
-
-	if shellSvc != nil {
-		builder = builder.WithShell(shellSvc)
-	}
-
-	if mcpSvc != nil {
-		builder = builder.WithMCP(mcpSvc)
-	}
-
-	conv, err := builder.Build(ctx)
+	conv, err := buildConversation(ctx, cfg, workDir, runtime, emitter, provider, svcs)
 	if err != nil {
-		return fmt.Errorf("failed to build conversation: %w", err)
+		return err
 	}
 	defer conv.Close()
 
-	// Get event stream.
 	eventStream := conv.Stream()
-
-	// Start turn in goroutine.
 	errChan := make(chan error, 1)
 
 	go func() {
 		errChan <- conv.RunTurn(ctx, prompt)
 	}()
 
-	// Log all events.
-	for event := range eventStream {
-		if el.shouldLog(event) {
-			el.logEvent(event)
-		}
-
-		// Check for errors.
-		if event.Type == events.EventError {
-return fmt.Errorf("task failed: %v: %w", event.Data, ErrTaskFailed)
-		}
-
-		// Stop on turn complete or failed.
-		if event.Type == events.EventTurnComplete || event.Type == events.EventTurnFailed {
-			break
-		}
+	if evtErr := el.processEvents(eventStream); evtErr != nil {
+		return evtErr
 	}
 
-	// Check for turn execution error.
 	select {
 	case turnErr := <-errChan:
 		if turnErr != nil {

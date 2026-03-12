@@ -110,10 +110,6 @@ func (m *Matcher) findInRange(start, end int, contextLines []string) int {
 // This is used when a header is present to disambiguate multiple occurrences.
 // Returns the starting line index or -1 if not found.
 func (m *Matcher) findInRangeClosest(start, end, headerPos int, contextLines []string) int {
-	// Try to find all matches (both exact and fuzzy) in the range.
-	var matches []int
-
-	// Check for exact matches.
 	contextLen := len(contextLines)
 	if contextLen == 0 {
 		return start
@@ -124,65 +120,83 @@ func (m *Matcher) findInRangeClosest(start, end, headerPos int, contextLines []s
 		return -1
 	}
 
-	// Find all exact matches.
-	for i := start; i <= searchEnd; i++ {
-		match := true
-
-		for j := range contextLen {
-			if m.fileLines[i+j] != contextLines[j] {
-				match = false
-
-				break
-			}
-		}
-
-		if match {
-			matches = append(matches, i)
-		}
-	}
-
-	// If exact matches found, return the one closest to header.
+	// Try exact matches first.
+	matches := m.findAllExactInRange(start, searchEnd, contextLines)
 	if len(matches) > 0 {
 		return m.findClosestToHeader(matches, headerPos)
 	}
 
-	// Try fuzzy matching and collect all matches above threshold.
-	normalizedContext := m.normalizeLines(contextLines)
+	// Fall back to fuzzy matching.
+	return m.findClosestFuzzyInRange(start, searchEnd, headerPos, contextLines)
+}
 
-	type fuzzyMatch struct {
-		pos   int
-		score float64
+// findAllExactInRange finds all exact matches of contextLines within [start, searchEnd].
+func (m *Matcher) findAllExactInRange(start, searchEnd int, contextLines []string) []int {
+	var matches []int
+
+	for i := start; i <= searchEnd; i++ {
+		if m.isExactMatchAt(i, contextLines) {
+			matches = append(matches, i)
+		}
 	}
+
+	return matches
+}
+
+// isExactMatchAt checks whether contextLines match exactly at position pos.
+func (m *Matcher) isExactMatchAt(pos int, contextLines []string) bool {
+	for j, line := range contextLines {
+		if m.fileLines[pos+j] != line {
+			return false
+		}
+	}
+
+	return true
+}
+
+// fuzzyMatch stores a fuzzy match position and its similarity score.
+type fuzzyMatch struct {
+	pos   int
+	score float64
+}
+
+// findClosestFuzzyInRange finds the fuzzy match closest to headerPos within [start, searchEnd].
+func (m *Matcher) findClosestFuzzyInRange(start, searchEnd, headerPos int, contextLines []string) int {
+	normalizedContext := m.normalizeLines(contextLines)
+	contextLen := len(contextLines)
 
 	var fuzzyMatches []fuzzyMatch
 
 	for i := start; i <= searchEnd; i++ {
 		window := m.normalizedLines[i : i+contextLen]
-
 		score := m.computeSimilarity(normalizedContext, window)
+
 		if score >= m.threshold {
 			fuzzyMatches = append(fuzzyMatches, fuzzyMatch{pos: i, score: score})
 		}
 	}
 
-	// If fuzzy matches found, return the one closest to header.
-	if len(fuzzyMatches) > 0 {
-		closestMatch := fuzzyMatches[0]
-		minDistance := abs(fuzzyMatches[0].pos - headerPos)
-
-		for _, fm := range fuzzyMatches[1:] {
-			distance := abs(fm.pos - headerPos)
-			// Prefer closer matches, but if distance is similar, prefer higher score.
-			if distance < minDistance || (distance == minDistance && fm.score > closestMatch.score) {
-				closestMatch = fm
-				minDistance = distance
-			}
-		}
-
-		return closestMatch.pos
+	if len(fuzzyMatches) == 0 {
+		return -1
 	}
 
-	return -1
+	return closestFuzzyToHeader(fuzzyMatches, headerPos)
+}
+
+// closestFuzzyToHeader returns the position of the fuzzy match closest to headerPos.
+func closestFuzzyToHeader(matches []fuzzyMatch, headerPos int) int {
+	closest := matches[0]
+	minDistance := abs(matches[0].pos - headerPos)
+
+	for _, fm := range matches[1:] {
+		distance := abs(fm.pos - headerPos)
+		if distance < minDistance || (distance == minDistance && fm.score > closest.score) {
+			closest = fm
+			minDistance = distance
+		}
+	}
+
+	return closest.pos
 }
 
 // findClosestToHeader returns the position closest to the header from a list of positions.

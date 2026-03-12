@@ -45,91 +45,26 @@ func (s *Sanitizer) Process(chunk string) (content string, thought string) {
 
 	i := 0
 	for i < len(chunk) {
-		// If we have a potential start of a tag.
 		if chunk[i] == '<' {
-			// Look ahead to see if we match any known tags or prefixes
-			// We need to find the longest match or determine if it's not a tag.
 			remaining := chunk[i:]
+			advance, buffered := s.processTag(remaining, &contentBuilder, &thoughtBuilder)
 
-			// Check state transitions.
-			if s.state == StateNormal {
-				// Check for start tags.
-				if strings.HasPrefix(remaining, "<think>") {
-					s.state = StateInThink
-					i += len("<think>")
+			if buffered {
+				return contentBuilder.String(), thoughtBuilder.String()
+			}
 
-					continue
-				}
-
-				if strings.HasPrefix(remaining, "<function=") {
-					s.state = StateInDrop
-					s.dropUntil = "</function>"
-					i += len("<function=")
-
-					continue
-				}
-
-				if strings.HasPrefix(remaining, "<parameter=") {
-					s.state = StateInDrop
-					s.dropUntil = "</parameter>"
-					i += len("<parameter=")
-
-					continue
-				}
-				// Check for standalone tags to drop.
-				if strings.HasPrefix(remaining, "</tool_call>") {
-					i += len("</tool_call>")
-
-					continue
-				}
-
-				// Check partial matches (if we are at the end of the chunk).
-				if isPartialMatch(remaining, []string{"<think>", "<function=", "<parameter=", "</tool_call>"}) {
-					s.buffer.WriteString(remaining)
-
-					return contentBuilder.String(), thoughtBuilder.String()
-				}
-			} else if s.state == StateInThink {
-				// Check for end tag.
-				if strings.HasPrefix(remaining, "</think>") {
-					s.state = StateNormal
-					i += len("</think>")
-
-					continue
-				}
-				// Check partial match.
-				if isPartialMatch(remaining, []string{"</think>"}) {
-					s.buffer.WriteString(remaining)
-
-					return contentBuilder.String(), thoughtBuilder.String()
-				}
-			} else if s.state == StateInDrop {
-				// Check for end tag.
-				if strings.HasPrefix(remaining, s.dropUntil) {
-					matchLen := len(s.dropUntil)
-					s.state = StateNormal
-					s.dropUntil = ""
-					i += matchLen
-
-					continue
-				}
-				// Check partial match.
-				if isPartialMatch(remaining, []string{s.dropUntil}) {
-					s.buffer.WriteString(remaining)
-
-					return contentBuilder.String(), thoughtBuilder.String()
-				}
+			if advance > 0 {
+				i += advance
+				continue
 			}
 		}
 
 		// Process character based on state.
-		char := chunk[i]
-
 		switch s.state {
 		case StateNormal:
-			contentBuilder.WriteByte(char)
+			contentBuilder.WriteByte(chunk[i])
 		case StateInThink:
-			thoughtBuilder.WriteByte(char)
+			thoughtBuilder.WriteByte(chunk[i])
 		case StateInDrop:
 			// Drop character.
 		}
@@ -138,6 +73,93 @@ func (s *Sanitizer) Process(chunk string) (content string, thought string) {
 	}
 
 	return contentBuilder.String(), thoughtBuilder.String()
+}
+
+// processTag handles tag detection at the current position.
+// Returns the number of characters to advance (0 if no tag matched) and whether remaining was buffered.
+func (s *Sanitizer) processTag(remaining string, contentBuilder, thoughtBuilder *strings.Builder) (advance int, buffered bool) {
+	switch s.state {
+	case StateNormal:
+		return s.processTagNormal(remaining, contentBuilder, thoughtBuilder)
+	case StateInThink:
+		return s.processTagThink(remaining, contentBuilder, thoughtBuilder)
+	case StateInDrop:
+		return s.processTagDrop(remaining, contentBuilder, thoughtBuilder)
+	}
+
+	return 0, false
+}
+
+// processTagNormal handles tag detection in normal state.
+func (s *Sanitizer) processTagNormal(remaining string, contentBuilder, thoughtBuilder *strings.Builder) (int, bool) {
+	if strings.HasPrefix(remaining, "<think>") {
+		s.state = StateInThink
+		return len("<think>"), false
+	}
+
+	if strings.HasPrefix(remaining, "<function=") {
+		s.state = StateInDrop
+		s.dropUntil = "</function>"
+		return len("<function="), false
+	}
+
+	if strings.HasPrefix(remaining, "<parameter=") {
+		s.state = StateInDrop
+		s.dropUntil = "</parameter>"
+		return len("<parameter="), false
+	}
+
+	if strings.HasPrefix(remaining, "</tool_call>") {
+		return len("</tool_call>"), false
+	}
+
+	if isPartialMatch(remaining, []string{"<think>", "<function=", "<parameter=", "</tool_call>"}) {
+		s.buffer.WriteString(remaining)
+		return 0, true
+	}
+
+	_ = contentBuilder
+	_ = thoughtBuilder
+
+	return 0, false
+}
+
+// processTagThink handles tag detection in thinking state.
+func (s *Sanitizer) processTagThink(remaining string, contentBuilder, thoughtBuilder *strings.Builder) (int, bool) {
+	if strings.HasPrefix(remaining, "</think>") {
+		s.state = StateNormal
+		return len("</think>"), false
+	}
+
+	if isPartialMatch(remaining, []string{"</think>"}) {
+		s.buffer.WriteString(remaining)
+		return 0, true
+	}
+
+	_ = contentBuilder
+	_ = thoughtBuilder
+
+	return 0, false
+}
+
+// processTagDrop handles tag detection in drop state.
+func (s *Sanitizer) processTagDrop(remaining string, contentBuilder, thoughtBuilder *strings.Builder) (int, bool) {
+	if strings.HasPrefix(remaining, s.dropUntil) {
+		matchLen := len(s.dropUntil)
+		s.state = StateNormal
+		s.dropUntil = ""
+		return matchLen, false
+	}
+
+	if isPartialMatch(remaining, []string{s.dropUntil}) {
+		s.buffer.WriteString(remaining)
+		return 0, true
+	}
+
+	_ = contentBuilder
+	_ = thoughtBuilder
+
+	return 0, false
 }
 
 // isPartialMatch checks if s is a prefix of any candidate, but not a full match yet.

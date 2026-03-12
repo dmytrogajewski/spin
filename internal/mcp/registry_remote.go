@@ -78,7 +78,33 @@ func (r *RemoteRegistry) Initialize(ctx context.Context) error {
 		return nil
 	}
 
-	// Create client based on transport.
+	// Create and start the transport client.
+	if err := r.connectTransport(ctx); err != nil {
+		return err
+	}
+
+	// Initialize the MCP protocol and discover tools.
+	if err := r.initializeProtocol(ctx); err != nil {
+		r.mcpClient.Close()
+		return err
+	}
+
+	r.metadata.ToolCount = len(r.tools)
+	r.metadata.Connected = true
+	r.connected = true
+
+	if r.logger != nil {
+		r.logger.InfoContext(ctx, "remote registry initialized",
+			"name", r.name,
+			"transport", r.config.Transport,
+			"tools", len(r.tools))
+	}
+
+	return nil
+}
+
+// connectTransport creates the SDK client, starts its transport, and stores it.
+func (r *RemoteRegistry) connectTransport(ctx context.Context) error {
 	var (
 		sdkClient *client.Client
 		err       error
@@ -90,25 +116,26 @@ func (r *RemoteRegistry) Initialize(ctx context.Context) error {
 	case TransportStreamableHTTP:
 		sdkClient, err = r.createStreamableHTTPClient()
 	default:
-return fmt.Errorf("unsupported transport: %s: %w", r.config.Transport, ErrUnsupportedTransport)
+		return fmt.Errorf("unsupported transport: %s: %w", r.config.Transport, ErrUnsupportedTransport)
 	}
 
 	if err != nil {
 		return fmt.Errorf("create client: %w", err)
 	}
 
-	// Start the transport.
-	err = sdkClient.Start(ctx)
-	if err != nil {
+	if err = sdkClient.Start(ctx); err != nil {
 		sdkClient.Close()
-
 		return fmt.Errorf("start transport: %w", err)
 	}
 
 	r.sdkClient = sdkClient
 	r.mcpClient = &sdkClientWrapper{client: sdkClient}
 
-	// Initialize connection.
+	return nil
+}
+
+// initializeProtocol performs the MCP handshake and discovers tools.
+func (r *RemoteRegistry) initializeProtocol(ctx context.Context) error {
 	initReq := mcpSDK.InitializeRequest{
 		Params: mcpSDK.InitializeParams{
 			ProtocolVersion: "2024-11-05",
@@ -122,42 +149,23 @@ return fmt.Errorf("unsupported transport: %s: %w", r.config.Transport, ErrUnsupp
 
 	initResp, err := r.mcpClient.Initialize(ctx, initReq)
 	if err != nil {
-		r.mcpClient.Close()
-
 		return fmt.Errorf("initialize connection: %w", err)
 	}
 
 	r.metadata.ServerInfo = &initResp.ServerInfo
 	r.metadata.Capabilities = initResp.Capabilities
 
-	// List tools.
-	listReq := mcpSDK.ListToolsRequest{}
-
-	toolsResp, err := r.mcpClient.ListTools(ctx, listReq)
+	toolsResp, err := r.mcpClient.ListTools(ctx, mcpSDK.ListToolsRequest{})
 	if err != nil {
-		r.mcpClient.Close()
-
 		return fmt.Errorf("list tools: %w", err)
 	}
 
-	// Register tools.
 	for _, tool := range toolsResp.Tools {
 		r.tools[tool.Name] = &Tool{
 			ServerName: r.name,
 			Tool:       tool,
 			Client:     r.mcpClient,
 		}
-	}
-
-	r.metadata.ToolCount = len(r.tools)
-	r.metadata.Connected = true
-	r.connected = true
-
-	if r.logger != nil {
-		r.logger.InfoContext(ctx, "remote registry initialized",
-			"name", r.name,
-			"transport", r.config.Transport,
-			"tools", len(r.tools))
 	}
 
 	return nil

@@ -7,25 +7,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/security"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+// newTestToolRuntime is declared in agent_test.go.
+
 func TestToolRuntime_parseToolArguments(t *testing.T) {
 	t.Parallel()
-	validator := security.NewValidator()
-	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	toolRegistry := tools.NewRegistry()
-
-	toolRuntime := NewToolRuntime(ToolRuntimeConfig{
-		Registry:        toolRegistry,
-		Validator:       validator,
-		ApprovalService: approvalService,
-		Emitter:         emitter,
-		WorkDir:         "/tmp",
-	})
+	toolRuntime := newTestToolRuntime(nil, tools.NewRegistry())
 
 	tests := []struct {
 		name    string
@@ -108,18 +97,7 @@ func TestToolRuntime_parseToolArguments(t *testing.T) {
 
 func TestToolRuntime_Execute_EmptyArguments(t *testing.T) {
 	t.Parallel()
-	validator := security.NewValidator()
-	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
-	toolRegistry := tools.NewRegistry()
-
-	toolRuntime := NewToolRuntime(ToolRuntimeConfig{
-		Registry:        toolRegistry,
-		Validator:       validator,
-		ApprovalService: approvalService,
-		Emitter:         emitter,
-		WorkDir:         "/tmp",
-	})
+	toolRuntime := newTestToolRuntime(nil, tools.NewRegistry())
 
 	// Test that Execute returns error for empty arguments (strict parser).
 	call := &ToolCall{
@@ -142,22 +120,11 @@ func TestToolRuntime_Execute_EmptyArguments(t *testing.T) {
 
 func TestToolRuntime_Execute_ValidArguments(t *testing.T) {
 	t.Parallel()
-	validator := security.NewValidator()
-	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{Handler: nil, Emitter: emitter, Validator: validator})
 	toolRegistry := tools.NewRegistry()
-
-	// Register a simple test tool.
 	testTool := tools.NewReadFileTool()
 	_ = toolRegistry.Register(testTool)
 
-	toolRuntime := NewToolRuntime(ToolRuntimeConfig{
-		Registry:        toolRegistry,
-		Validator:       validator,
-		ApprovalService: approvalService,
-		Emitter:         emitter,
-		WorkDir:         "/tmp",
-	})
+	toolRuntime := newTestToolRuntime(nil, toolRegistry)
 
 	// Test that Execute succeeds with valid arguments.
 	call := &ToolCall{

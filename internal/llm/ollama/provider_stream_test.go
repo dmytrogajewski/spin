@@ -616,78 +616,64 @@ func TestConvertToolToOllama_RoundTrip(t *testing.T) {
 	assert.Equal(t, "read_file", name, "inferToolName must work with round-tripped tools (only read_file has path)")
 }
 
+// newOpenAIToolParam creates an OpenAI tool param with the given name, description, and properties.
+func newOpenAIToolParam(name, description string, required []any, properties map[string]any) openai.ChatCompletionToolParam {
+	return openai.ChatCompletionToolParam{
+		Type: openai.F(openai.ChatCompletionToolTypeFunction),
+		Function: openai.F(openai.FunctionDefinitionParam{
+			Name:        openai.F(name),
+			Description: openai.F(description),
+			Parameters: openai.F(openai.FunctionParameters{
+				"type":       "object",
+				"required":   required,
+				"properties": properties,
+			}),
+		}),
+	}
+}
+
+// makeStringProp creates a simple string property map for tool definitions.
+func makeStringProp(desc string) map[string]any {
+	return map[string]any{"type": "string", "description": desc}
+}
+
+// buildSpinToolSet returns the standard set of spin tools as OpenAI tool params.
+func buildSpinToolSet() []openai.ChatCompletionToolParam {
+	return []openai.ChatCompletionToolParam{
+		newOpenAIToolParam("read_file", "Read a file from the filesystem", []any{"path"}, map[string]any{
+			"path": makeStringProp("The path to the file to read"),
+		}),
+		newOpenAIToolParam("list_directory", "List directory contents", []any{"path"}, map[string]any{
+			"path": makeStringProp("The path to the directory to list"),
+		}),
+		newOpenAIToolParam("shell_command", "Execute a shell command", []any{"command"}, map[string]any{
+			"command":   makeStringProp("The command to execute"),
+			"operation": makeStringProp("The operation type"),
+		}),
+		newOpenAIToolParam("write_file", "Write content to a file", []any{"path", "content"}, map[string]any{
+			"path":    makeStringProp("The file path"),
+			"content": makeStringProp("The content to write"),
+		}),
+	}
+}
+
+// convertOpenAIToolsToOllama converts a slice of OpenAI tools to Ollama tools.
+func convertOpenAIToolsToOllama(tools []openai.ChatCompletionToolParam) []api.Tool {
+	result := make([]api.Tool, len(tools))
+	for i, tool := range tools {
+		result[i] = convertToolToOllama(tool)
+	}
+
+	return result
+}
+
 // TestConvertToolToOllama_RoundTripWithAllSpinTools mirrors the EXACT tool set
 // that spin sends to Ollama. This is the real-world scenario where ambiguity occurs.
 func TestConvertToolToOllama_RoundTripWithAllSpinTools(t *testing.T) {
 	t.Parallel()
 
-	// These match the actual tool definitions from internal/tools/*.go.
-	openaiTools := []openai.ChatCompletionToolParam{
-		{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F("read_file"),
-				Description: openai.F("Read a file from the filesystem"),
-				Parameters: openai.F(openai.FunctionParameters{
-					"type":     "object",
-					"required": []any{"path"},
-					"properties": map[string]any{
-						"path": map[string]any{"type": "string", "description": "The path to the file to read"},
-					},
-				}),
-			}),
-		},
-		{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F("list_directory"),
-				Description: openai.F("List directory contents"),
-				Parameters: openai.F(openai.FunctionParameters{
-					"type":     "object",
-					"required": []any{"path"},
-					"properties": map[string]any{
-						"path": map[string]any{"type": "string", "description": "The path to the directory to list"},
-					},
-				}),
-			}),
-		},
-		{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F("shell_command"),
-				Description: openai.F("Execute a shell command"),
-				Parameters: openai.F(openai.FunctionParameters{
-					"type":     "object",
-					"required": []any{"command"},
-					"properties": map[string]any{
-						"command":   map[string]any{"type": "string", "description": "The command to execute"},
-						"operation": map[string]any{"type": "string", "description": "The operation type"},
-					},
-				}),
-			}),
-		},
-		{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F("write_file"),
-				Description: openai.F("Write content to a file"),
-				Parameters: openai.F(openai.FunctionParameters{
-					"type":     "object",
-					"required": []any{"path", "content"},
-					"properties": map[string]any{
-						"path":    map[string]any{"type": "string", "description": "The file path"},
-						"content": map[string]any{"type": "string", "description": "The content to write"},
-					},
-				}),
-			}),
-		},
-	}
-
-	// Convert to Ollama (same path as provider.go).
-	ollamaTools := make([]api.Tool, len(openaiTools))
-	for i, tool := range openaiTools {
-		ollamaTools[i] = convertToolToOllama(tool)
-	}
+	openaiTools := buildSpinToolSet()
+	ollamaTools := convertOpenAIToolsToOllama(openaiTools)
 
 	// Verify properties survived conversion.
 	for _, tool := range ollamaTools {
@@ -761,54 +747,14 @@ func TestConvertToolToOllama_RoundTripWithAllSpinTools(t *testing.T) {
 func TestEndToEnd_NamelessToolCallSurvivesFullPipeline(t *testing.T) {
 	t.Parallel()
 
-	// Step 1: Build OpenAI tools (same as agent does).
+	// Step 1: Build and convert tools.
 	openaiTools := []openai.ChatCompletionToolParam{
-		{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name: openai.F("read_file"),
-				Parameters: openai.F(openai.FunctionParameters{
-					"type":     "object",
-					"required": []any{"path"},
-					"properties": map[string]any{
-						"path": map[string]any{"type": "string"},
-					},
-				}),
-			}),
-		},
-		{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name: openai.F("list_directory"),
-				Parameters: openai.F(openai.FunctionParameters{
-					"type":     "object",
-					"required": []any{"path"},
-					"properties": map[string]any{
-						"path": map[string]any{"type": "string"},
-					},
-				}),
-			}),
-		},
-		{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name: openai.F("shell_command"),
-				Parameters: openai.F(openai.FunctionParameters{
-					"type":     "object",
-					"required": []any{"command"},
-					"properties": map[string]any{
-						"command": map[string]any{"type": "string"},
-					},
-				}),
-			}),
-		},
+		newOpenAIToolParam("read_file", "", []any{"path"}, map[string]any{"path": map[string]any{"type": "string"}}),
+		newOpenAIToolParam("list_directory", "", []any{"path"}, map[string]any{"path": map[string]any{"type": "string"}}),
+		newOpenAIToolParam("shell_command", "", []any{"command"}, map[string]any{"command": map[string]any{"type": "string"}}),
 	}
 
-	// Convert to Ollama format (what provider.go does).
-	reqTools := make([]api.Tool, len(openaiTools))
-	for i, tool := range openaiTools {
-		reqTools[i] = convertToolToOllama(tool)
-	}
+	reqTools := convertOpenAIToolsToOllama(openaiTools)
 
 	// Step 2: Simulate Ollama response with nameless tool calls (what kimi2.5 sends).
 	ollamaResp := api.ChatResponse{

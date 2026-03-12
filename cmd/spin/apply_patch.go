@@ -155,44 +155,43 @@ func runDryRun(applier *patchapply.Applier, patch *patchapply.Patch) error {
 func printResults(result *patchapply.ApplyResult, verbose bool) {
 	fmt.Fprintln(os.Stdout, "✓ Applied patch successfully")
 
-	if len(result.FilesCreated) > 0 {
-		fmt.Fprintf(os.Stdout, "  Created: %d files\n", len(result.FilesCreated))
+	printFileList("Created", result.FilesCreated, verbose)
+	printFileList("Updated", result.FilesUpdated, verbose)
+	printFileList("Deleted", result.FilesDeleted, verbose)
+	printFileMovedList(result.FilesMoved, verbose)
+}
 
-		if verbose {
-			for _, f := range result.FilesCreated {
-				fmt.Fprintf(os.Stdout, "    - %s\n", f)
-			}
-		}
+// printFileList prints a summary and optional detail list of files.
+func printFileList(label string, files []string, verbose bool) {
+	if len(files) == 0 {
+		return
 	}
 
-	if len(result.FilesUpdated) > 0 {
-		fmt.Fprintf(os.Stdout, "  Updated: %d files\n", len(result.FilesUpdated))
+	fmt.Fprintf(os.Stdout, "  %s: %d files\n", label, len(files))
 
-		if verbose {
-			for _, f := range result.FilesUpdated {
-				fmt.Fprintf(os.Stdout, "    - %s\n", f)
-			}
-		}
+	if !verbose {
+		return
 	}
 
-	if len(result.FilesDeleted) > 0 {
-		fmt.Fprintf(os.Stdout, "  Deleted: %d files\n", len(result.FilesDeleted))
+	for _, f := range files {
+		fmt.Fprintf(os.Stdout, "    - %s\n", f)
+	}
+}
 
-		if verbose {
-			for _, f := range result.FilesDeleted {
-				fmt.Fprintf(os.Stdout, "    - %s\n", f)
-			}
-		}
+// printFileMovedList prints moved files summary and details.
+func printFileMovedList(files map[string]string, verbose bool) {
+	if len(files) == 0 {
+		return
 	}
 
-	if len(result.FilesMoved) > 0 {
-		fmt.Fprintf(os.Stdout, "  Moved: %d files\n", len(result.FilesMoved))
+	fmt.Fprintf(os.Stdout, "  Moved: %d files\n", len(files))
 
-		if verbose {
-			for old, new := range result.FilesMoved {
-				fmt.Fprintf(os.Stdout, "    - %s → %s\n", old, new)
-			}
-		}
+	if !verbose {
+		return
+	}
+
+	for old, newPath := range files {
+		fmt.Fprintf(os.Stdout, "    - %s → %s\n", old, newPath)
 	}
 }
 

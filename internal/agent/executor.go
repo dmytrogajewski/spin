@@ -453,117 +453,108 @@ func (e *Executor) Execute(ctx context.Context, cmd *security.Command, opts *Exe
 
 // executeCommand performs the actual command execution.
 func (e *Executor) executeCommand(ctx context.Context, cmd *security.Command, opts *ExecuteOptions) *Result {
-	// Create result.
 	result := &Result{
 		Command:   cmd,
 		StartedAt: time.Now(),
 	}
 
-	// Apply timeout.
 	execCtx, cancel := e.applyTimeout(ctx, opts)
 	defer cancel()
 
-	// Prepare exec.Cmd.
-	execCmd := exec.CommandContext(execCtx, cmd.Program, cmd.Args...)
+	return e.executeAndCapture(execCtx, cmd, opts, result)
+}
 
-	// Set working directory.
-	workDir := opts.WorkDir
-	if workDir == "" {
-		workDir = e.workDir
-	}
+// executeAndCapture runs the command, waits, and captures output.
+func (e *Executor) executeAndCapture(execCtx context.Context, cmd *security.Command, opts *ExecuteOptions, result *Result) *Result {
+	execCmd := e.prepareExecCmd(execCtx, cmd, opts)
 
-	execCmd.Dir = workDir
-
-	// Set environment.
-	execCmd.Env = e.buildEnvironment(opts)
-
-	// Debug: check if PATH is set.
-	hasPath := false
-
-	for _, env := range execCmd.Env {
-		if strings.HasPrefix(env, "PATH=") {
-			hasPath = true
-
-			break
-		}
-	}
-
-	if !hasPath {
-		// Add minimal PATH if not present.
-		execCmd.Env = append(execCmd.Env, "PATH=/usr/bin:/bin")
-	}
-
-	// Capture output.
 	var stdoutBuf, stderrBuf bytes.Buffer
-
 	execCmd.Stdout = &stdoutBuf
 	execCmd.Stderr = &stderrBuf
 
-	// Start execution.
 	err := execCmd.Start()
 	if err != nil {
 		result.Error = fmt.Errorf("%w: %w", ErrCommandNotFound, err)
 		result.ExitCode = -1
 		result.CompletedAt = time.Now()
 		result.Duration = result.CompletedAt.Sub(result.StartedAt)
-
 		return result
 	}
 
-	// Wait for completion.
 	err = execCmd.Wait()
-
-	// Complete result.
 	result.CompletedAt = time.Now()
 	result.Duration = result.CompletedAt.Sub(result.StartedAt)
 
-	// Get max output size.
-	maxSize := opts.MaxOutputSize
-	if maxSize == 0 {
-		e.mu.RLock()
-		maxSize = e.maxOutput
-		e.mu.RUnlock()
-	}
+	maxSize := e.getMaxOutputSize(opts)
+	result.Stdout, result.Stderr, result.Truncated = e.captureOutput(&stdoutBuf, &stderrBuf, maxSize)
 
-	// Capture and limit output (always capture, even on error).
-	result.Stdout, result.Stderr, result.Truncated = e.captureOutput(
-		&stdoutBuf,
-		&stderrBuf,
-		maxSize,
-	)
-
-	// Handle execution error.
 	if err != nil {
-		if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
-			result.Error = ErrTimeout
-			result.ExitCode = -1
-
-			return result
-		}
-
-		if errors.Is(execCtx.Err(), context.Canceled) {
-			result.Error = context.Canceled
-			result.ExitCode = -1
-
-			return result
-		}
-
-		// Extract exit code.
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			result.ExitCode = exitErr.ExitCode()
-		} else {
-			result.ExitCode = -1
-		}
-
-		result.Error = fmt.Errorf("%w: %w", ErrExecutionFailed, err)
-
+		e.handleExecError(execCtx, err, result)
 		return result
 	}
 
 	result.ExitCode = 0
-
 	return result
+}
+
+// prepareExecCmd creates and configures an exec.Cmd.
+func (e *Executor) prepareExecCmd(execCtx context.Context, cmd *security.Command, opts *ExecuteOptions) *exec.Cmd {
+	execCmd := exec.CommandContext(execCtx, cmd.Program, cmd.Args...)
+
+	workDir := opts.WorkDir
+	if workDir == "" {
+		workDir = e.workDir
+	}
+	execCmd.Dir = workDir
+	execCmd.Env = e.buildEnvironment(opts)
+
+	ensurePATH(execCmd)
+	return execCmd
+}
+
+// ensurePATH ensures the exec.Cmd has a PATH environment variable.
+func ensurePATH(execCmd *exec.Cmd) {
+	for _, env := range execCmd.Env {
+		if strings.HasPrefix(env, "PATH=") {
+			return
+		}
+	}
+	execCmd.Env = append(execCmd.Env, "PATH=/usr/bin:/bin")
+}
+
+// getMaxOutputSize returns the max output size from opts or the executor default.
+func (e *Executor) getMaxOutputSize(opts *ExecuteOptions) int64 {
+	if opts.MaxOutputSize > 0 {
+		return opts.MaxOutputSize
+	}
+	e.mu.RLock()
+	maxSize := e.maxOutput
+	e.mu.RUnlock()
+	return maxSize
+}
+
+// handleExecError sets error and exit code on the result based on exec error type.
+func (e *Executor) handleExecError(execCtx context.Context, err error, result *Result) {
+	if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
+		result.Error = ErrTimeout
+		result.ExitCode = -1
+		return
+	}
+
+	if errors.Is(execCtx.Err(), context.Canceled) {
+		result.Error = context.Canceled
+		result.ExitCode = -1
+		return
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		result.ExitCode = exitErr.ExitCode()
+	} else {
+		result.ExitCode = -1
+	}
+
+	result.Error = fmt.Errorf("%w: %w", ErrExecutionFailed, err)
 }
 
 // ExecuteStreaming runs a command and streams output in real-time.
@@ -596,53 +587,21 @@ func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *security.Command, 
 	}
 
 	// Validate command.
-	if opts.ValidateFirst {
-		err := e.Validate(cmd)
-		if err != nil {
-			return nil, err
-		}
-	} else if cmd == nil {
-		return nil, ErrNilCommand
-	} else if cmd.Program == "" {
-		return nil, ErrEmptyProgram
+	if err := e.validateStreamingCommand(cmd, opts); err != nil {
+		return nil, err
 	}
 
 	// Apply timeout.
 	execCtx, cancel := e.applyTimeout(ctx, opts)
 
-	// Create output channel.
-	chunks := make(chan OutputChunk, 10)
-
-	// Prepare exec.Cmd.
-	execCmd := exec.CommandContext(execCtx, cmd.Program, cmd.Args...)
-
-	// Set working directory.
-	workDir := opts.WorkDir
-	if workDir == "" {
-		workDir = e.workDir
-	}
-
-	execCmd.Dir = workDir
-
-	// Set environment.
-	execCmd.Env = e.buildEnvironment(opts)
-
-	// Get stdout and stderr pipes.
-	stdout, err := execCmd.StdoutPipe()
+	// Prepare and start the command with pipes.
+	execCmd, stdout, stderr, err := e.prepareStreamingCmd(execCtx, cmd, opts)
 	if err != nil {
 		cancel()
 
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+		return nil, err
 	}
 
-	stderr, err := execCmd.StderrPipe()
-	if err != nil {
-		cancel()
-
-		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	// Start execution.
 	err = execCmd.Start()
 	if err != nil {
 		cancel()
@@ -650,70 +609,96 @@ func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *security.Command, 
 		return nil, fmt.Errorf("%w: %w", ErrCommandNotFound, err)
 	}
 
-	// Stream output in goroutines.
+	// Create output channel and run streaming goroutines.
+	chunks := make(chan OutputChunk, 10)
+	e.runStreamingGoroutines(execCtx, execCmd, stdout, stderr, chunks, cancel)
+
+	return chunks, nil
+}
+
+// validateStreamingCommand validates a command for streaming execution.
+func (e *Executor) validateStreamingCommand(cmd *security.Command, opts *ExecuteOptions) error {
+	if opts.ValidateFirst {
+		return e.Validate(cmd)
+	}
+
+	if cmd == nil {
+		return ErrNilCommand
+	}
+
+	if cmd.Program == "" {
+		return ErrEmptyProgram
+	}
+
+	return nil
+}
+
+// prepareStreamingCmd creates an exec.Cmd with stdout/stderr pipes for streaming.
+func (e *Executor) prepareStreamingCmd(execCtx context.Context, cmd *security.Command, opts *ExecuteOptions) (*exec.Cmd, io.Reader, io.Reader, error) {
+	execCmd := e.prepareExecCmd(execCtx, cmd, opts)
+
+	stdout, err := execCmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+
+	stderr, err := execCmd.StderrPipe()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+
+	return execCmd, stdout, stderr, nil
+}
+
+// runStreamingGoroutines starts goroutines to stream stdout/stderr and wait for completion.
+func (e *Executor) runStreamingGoroutines(execCtx context.Context, execCmd *exec.Cmd, stdout, stderr io.Reader, chunks chan OutputChunk, cancel context.CancelFunc) {
 	var wg sync.WaitGroup
 
-	// Stream stdout.
-	wg.Add(1)
+	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-
 		e.streamOutput(execCtx, stdout, "stdout", chunks)
 	}()
 
-	// Stream stderr.
-	wg.Add(1)
-
 	go func() {
 		defer wg.Done()
-
 		e.streamOutput(execCtx, stderr, "stderr", chunks)
 	}()
 
-	// Wait for command and close channel.
 	go func() {
 		defer cancel()
 		defer close(chunks)
 
-		// Wait for output streams to complete.
 		wg.Wait()
 
-		// Wait for command to complete.
 		waitErr := execCmd.Wait()
-
-		// Send completion or error.
-		if waitErr != nil {
-			if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
-				chunks <- OutputChunk{
-					Timestamp: time.Now(),
-					Done:      true,
-					Error:     ErrTimeout,
-				}
-			} else if errors.Is(execCtx.Err(), context.Canceled) {
-				chunks <- OutputChunk{
-					Timestamp: time.Now(),
-					Done:      true,
-					Error:     context.Canceled,
-				}
-			} else {
-				chunks <- OutputChunk{
-					Timestamp: time.Now(),
-					Done:      true,
-					Error:     fmt.Errorf("%w: %w", ErrExecutionFailed, waitErr),
-				}
-			}
-		} else {
-			// Success.
-			chunks <- OutputChunk{
-				Timestamp: time.Now(),
-				Done:      true,
-				Error:     nil,
-			}
-		}
+		chunks <- e.buildStreamingCompletion(execCtx, waitErr)
 	}()
+}
 
-	return chunks, nil
+// buildStreamingCompletion creates the final OutputChunk for a streaming command.
+func (e *Executor) buildStreamingCompletion(execCtx context.Context, waitErr error) OutputChunk {
+	if waitErr == nil {
+		return OutputChunk{Timestamp: time.Now(), Done: true}
+	}
+
+	completionErr := e.classifyStreamingError(execCtx, waitErr)
+
+	return OutputChunk{Timestamp: time.Now(), Done: true, Error: completionErr}
+}
+
+// classifyStreamingError maps an exec wait error to the appropriate error type.
+func (e *Executor) classifyStreamingError(execCtx context.Context, waitErr error) error {
+	if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
+		return ErrTimeout
+	}
+
+	if errors.Is(execCtx.Err(), context.Canceled) {
+		return context.Canceled
+	}
+
+	return fmt.Errorf("%w: %w", ErrExecutionFailed, waitErr)
 }
 
 // applyTimeout applies a timeout to the context.

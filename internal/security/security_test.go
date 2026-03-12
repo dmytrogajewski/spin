@@ -228,94 +228,66 @@ func TestService_RequestApproval(t *testing.T) {
 	t.Parallel()
 	validator := NewValidator()
 
-	tests := []struct {
-		name         string
-		operation    Operation
-		setupHandler func() ApprovalHandler
-		wantApproved bool
-		wantErr      bool
-		errContains  string
-	}{
-		{
-			name: "approval granted",
-			operation: NewOperation(&Command{
-				Raw:     "rm -rf /tmp/test",
-				Program: "rm",
-				Args:    []string{"-rf", "/tmp/test"},
-			}, "dangerous operation", "/tmp"),
-			setupHandler: func() ApprovalHandler {
-				return func(_ context.Context, req ApprovalRequest) ApprovalResponse {
-					return ApprovalResponse{
-						RequestID: req.ID,
-						Approved:  true,
-						Reason:    "user approved",
-						Timestamp: time.Now(),
-					}
-				}
-			},
-			wantApproved: true,
-			wantErr:      false,
-		},
-		{
-			name: "approval denied",
-			operation: NewOperation(&Command{
-				Raw:     "rm -rf /",
-				Program: "rm",
-				Args:    []string{"-rf", "/"},
-			}, "extremely dangerous", "/"),
-			setupHandler: func() ApprovalHandler {
-				return func(_ context.Context, req ApprovalRequest) ApprovalResponse {
-					return ApprovalResponse{
-						RequestID: req.ID,
-						Approved:  false,
-						Reason:    "too dangerous",
-						Timestamp: time.Now(),
-					}
-				}
-			},
-			wantApproved: false,
-			wantErr:      false,
-		},
-		{
-			name: "no approval handler",
-			operation: NewOperation(&Command{
-				Raw:     "rm test.txt",
-				Program: "rm",
-				Args:    []string{"test.txt"},
-			}, "needs approval", "/tmp"),
-			setupHandler: func() ApprovalHandler {
-				return nil
-			},
-			wantApproved: false,
-			wantErr:      true,
-			errContains:  "no approval handler",
-		},
+	t.Run("approval granted", func(t *testing.T) {
+		t.Parallel()
+		handler := approvalHandlerFunc(true, "user approved")
+		svc := newServiceWithHandler(validator, handler)
+		approved, err := svc.RequestApproval(context.Background(), newTestOperation("rm", []string{"-rf", "/tmp/test"}, "/tmp"))
+		require.NoError(t, err)
+		assert.True(t, approved)
+	})
+
+	t.Run("approval denied", func(t *testing.T) {
+		t.Parallel()
+		handler := approvalHandlerFunc(false, "too dangerous")
+		svc := newServiceWithHandler(validator, handler)
+		approved, err := svc.RequestApproval(context.Background(), newTestOperation("rm", []string{"-rf", "/"}, "/"))
+		require.NoError(t, err)
+		assert.False(t, approved)
+	})
+
+	t.Run("no approval handler", func(t *testing.T) {
+		t.Parallel()
+		svc := newServiceWithHandler(validator, nil)
+		_, err := svc.RequestApproval(context.Background(), newTestOperation("rm", []string{"test.txt"}, "/tmp"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no approval handler")
+	})
+}
+
+func approvalHandlerFunc(approve bool, reason string) ApprovalHandler {
+	return func(_ context.Context, req ApprovalRequest) ApprovalResponse {
+		return ApprovalResponse{
+			RequestID: req.ID,
+			Approved:  approve,
+			Reason:    reason,
+			Timestamp: time.Now(),
+		}
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			handler := tt.setupHandler()
-			approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: handler, Emitter: nil, Validator: validator})
-			svc := NewService(validator, approvalService)
+func newServiceWithHandler(validator *Validator, handler ApprovalHandler) *Service {
+	approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: handler, Emitter: nil, Validator: validator})
+	return NewService(validator, approvalService)
+}
 
-			ctx := context.Background()
-			approved, err := svc.RequestApproval(ctx, tt.operation)
+func newTestOperation(program string, args []string, workDir string) Operation {
+	return NewOperation(&Command{
+		Raw:     program + " " + joinArgs(args),
+		Program: program,
+		Args:    args,
+	}, "test operation", workDir)
+}
 
-			if tt.wantErr {
-				require.Error(t, err)
-
-				if tt.errContains != "" {
-					assert.Contains(t, err.Error(), tt.errContains)
-				}
-
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantApproved, approved)
-		})
+func joinArgs(args []string) string {
+	result := ""
+	for i, arg := range args {
+		if i > 0 {
+			result += " "
+		}
+		result += arg
 	}
+	return result
 }
 
 func TestService_RequestApproval_NilApprovalService(t *testing.T) {
@@ -341,128 +313,50 @@ func TestService_ValidateAndApprove(t *testing.T) {
 	t.Parallel()
 	validator := NewValidator()
 
-	tests := []struct {
-		name          string
-		cmd           *Command
-		setupHandler  func() ApprovalHandler
-		wantApproved  bool
-		wantErr       bool
-		shouldRequest bool // Whether approval request is expected.
-	}{
-		{
-			name: "safe command - no approval needed",
-			cmd: &Command{
-				Raw:     "ls -la",
-				Program: "ls",
-				Args:    []string{"-la"},
-			},
-			setupHandler: func() ApprovalHandler {
-				return func(_ context.Context, _ ApprovalRequest) ApprovalResponse {
-					panic("should not be called for safe commands")
-				}
-			},
-			wantApproved:  true,
-			wantErr:       false,
-			shouldRequest: false,
-		},
-		{
-			name: "forbidden command - blocked without approval",
-			cmd: &Command{
-				Raw:     "rm -rf /",
-				Program: "rm",
-				Args:    []string{"-rf", "/"},
-			},
-			setupHandler: func() ApprovalHandler {
-				return func(_ context.Context, _ ApprovalRequest) ApprovalResponse {
-					panic("should not be called for forbidden commands")
-				}
-			},
-			wantApproved:  false,
-			wantErr:       false,
-			shouldRequest: false, // Forbidden commands are blocked, not approved.
-		},
-		{
-			name: "interactive command - approval granted",
-			cmd: &Command{
-				Raw:     "mkdir testdir",
-				Program: "mkdir",
-				Args:    []string{"testdir"},
-			},
-			setupHandler: func() ApprovalHandler {
-				return func(_ context.Context, req ApprovalRequest) ApprovalResponse {
-					return ApprovalResponse{
-						RequestID: req.ID,
-						Approved:  true,
-						Timestamp: time.Now(),
-					}
-				}
-			},
-			wantApproved:  true,
-			wantErr:       false,
-			shouldRequest: true,
-		},
-		{
-			name: "interactive command - approval denied",
-			cmd: &Command{
-				Raw:     "mkdir sensitive_dir",
-				Program: "mkdir",
-				Args:    []string{"sensitive_dir"},
-			},
-			setupHandler: func() ApprovalHandler {
-				return func(_ context.Context, req ApprovalRequest) ApprovalResponse {
-					return ApprovalResponse{
-						RequestID: req.ID,
-						Approved:  false,
-						Reason:    "user denied",
-						Timestamp: time.Now(),
-					}
-				}
-			},
-			wantApproved:  false,
-			wantErr:       false,
-			shouldRequest: true,
-		},
-		{
-			name: "unverified command - approval granted",
-			cmd: &Command{
-				Raw:     "somecommand arg",
-				Program: "somecommand",
-				Args:    []string{"arg"},
-			},
-			setupHandler: func() ApprovalHandler {
-				return func(_ context.Context, req ApprovalRequest) ApprovalResponse {
-					return ApprovalResponse{
-						RequestID: req.ID,
-						Approved:  true,
-						Timestamp: time.Now(),
-					}
-				}
-			},
-			wantApproved:  true,
-			wantErr:       false,
-			shouldRequest: true,
-		},
-	}
+	t.Run("safe command - no approval needed", func(t *testing.T) {
+		t.Parallel()
+		svc := newServiceWithHandler(validator, panicHandler("should not be called for safe commands"))
+		approved, err := svc.ValidateAndApprove(context.Background(), &Command{Raw: "ls -la", Program: "ls", Args: []string{"-la"}}, "/tmp")
+		require.NoError(t, err)
+		assert.True(t, approved)
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			handler := tt.setupHandler()
-			approvalService := NewApprovalServiceWithConfig(ApprovalServiceConfig{Handler: handler, Emitter: nil, Validator: validator})
-			svc := NewService(validator, approvalService)
+	t.Run("forbidden command - blocked without approval", func(t *testing.T) {
+		t.Parallel()
+		svc := newServiceWithHandler(validator, panicHandler("should not be called for forbidden commands"))
+		approved, err := svc.ValidateAndApprove(context.Background(), &Command{Raw: "rm -rf /", Program: "rm", Args: []string{"-rf", "/"}}, "/tmp")
+		require.NoError(t, err)
+		assert.False(t, approved)
+	})
 
-			ctx := context.Background()
-			approved, err := svc.ValidateAndApprove(ctx, tt.cmd, "/tmp")
+	t.Run("interactive command - approval granted", func(t *testing.T) {
+		t.Parallel()
+		svc := newServiceWithHandler(validator, approvalHandlerFunc(true, ""))
+		approved, err := svc.ValidateAndApprove(context.Background(), &Command{Raw: "mkdir testdir", Program: "mkdir", Args: []string{"testdir"}}, "/tmp")
+		require.NoError(t, err)
+		assert.True(t, approved)
+	})
 
-			if tt.wantErr {
-				require.Error(t, err)
+	t.Run("interactive command - approval denied", func(t *testing.T) {
+		t.Parallel()
+		svc := newServiceWithHandler(validator, approvalHandlerFunc(false, "user denied"))
+		approved, err := svc.ValidateAndApprove(context.Background(), &Command{Raw: "mkdir sensitive_dir", Program: "mkdir", Args: []string{"sensitive_dir"}}, "/tmp")
+		require.NoError(t, err)
+		assert.False(t, approved)
+	})
 
-				return
-			}
+	t.Run("unverified command - approval granted", func(t *testing.T) {
+		t.Parallel()
+		svc := newServiceWithHandler(validator, approvalHandlerFunc(true, ""))
+		approved, err := svc.ValidateAndApprove(context.Background(), &Command{Raw: "somecommand arg", Program: "somecommand", Args: []string{"arg"}}, "/tmp")
+		require.NoError(t, err)
+		assert.True(t, approved)
+	})
+}
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantApproved, approved)
-		})
+func panicHandler(msg string) ApprovalHandler {
+	return func(_ context.Context, _ ApprovalRequest) ApprovalResponse {
+		panic(msg)
 	}
 }
 

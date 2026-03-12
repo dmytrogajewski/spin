@@ -91,7 +91,7 @@ func (r *SmitheryRegistry) Initialize(ctx context.Context) error {
 		return nil
 	}
 
-	// Dynamic loadout mode: no specific server to connect to
+	// Dynamic loadout mode: no specific server to connect to.
 	// Tools are discovered via Smithery API search and loaded on-demand.
 	if r.config.MCPURL == "" {
 		r.connected = true
@@ -103,11 +103,31 @@ func (r *SmitheryRegistry) Initialize(ctx context.Context) error {
 	}
 
 	// Static mode: connect to a specific Smithery server.
+	if err := r.initializeStatic(ctx); err != nil {
+		return err
+	}
+
+	r.metadata.ToolCount = len(r.tools)
+	r.metadata.Connected = true
+	r.connected = true
+
+	if r.logger != nil {
+		r.logger.InfoContext(ctx, "smithery registry initialized",
+			"name", r.name,
+			"namespace", r.config.Namespace,
+			"tools", len(r.tools))
+	}
+
+	return nil
+}
+
+// initializeStatic connects to a specific Smithery server, performs the MCP handshake,
+// and discovers tools.
+func (r *SmitheryRegistry) initializeStatic(ctx context.Context) error {
 	if r.config.Namespace == "" {
 		return ErrNamespaceRequiredForSmithery
 	}
 
-	// Create Smithery client.
 	smitheryClient, err := NewSmitheryClient(SmitheryConfig{
 		APIKey:    r.config.APIKey,
 		MCPURL:    r.config.MCPURL,
@@ -120,7 +140,6 @@ func (r *SmitheryRegistry) Initialize(ctx context.Context) error {
 
 	r.client = smitheryClient
 
-	// Initialize connection.
 	initReq := mcpSDK.InitializeRequest{
 		Params: mcpSDK.InitializeParams{
 			ProtocolVersion: "2024-11-05",
@@ -135,41 +154,24 @@ func (r *SmitheryRegistry) Initialize(ctx context.Context) error {
 	initResp, err := r.client.Initialize(ctx, initReq)
 	if err != nil {
 		r.client.Close()
-
 		return fmt.Errorf("initialize connection: %w", err)
 	}
 
 	r.metadata.ServerInfo = &initResp.ServerInfo
 	r.metadata.Capabilities = initResp.Capabilities
 
-	// List tools.
-	listReq := mcpSDK.ListToolsRequest{}
-
-	toolsResp, err := r.client.ListTools(ctx, listReq)
+	toolsResp, err := r.client.ListTools(ctx, mcpSDK.ListToolsRequest{})
 	if err != nil {
 		r.client.Close()
-
 		return fmt.Errorf("list tools: %w", err)
 	}
 
-	// Register tools.
 	for _, tool := range toolsResp.Tools {
 		r.tools[tool.Name] = &Tool{
 			ServerName: r.name,
 			Tool:       tool,
 			Client:     r.client,
 		}
-	}
-
-	r.metadata.ToolCount = len(r.tools)
-	r.metadata.Connected = true
-	r.connected = true
-
-	if r.logger != nil {
-		r.logger.InfoContext(ctx, "smithery registry initialized",
-			"name", r.name,
-			"namespace", r.config.Namespace,
-			"tools", len(r.tools))
 	}
 
 	return nil

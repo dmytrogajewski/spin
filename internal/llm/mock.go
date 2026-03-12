@@ -136,129 +136,139 @@ func (p *MockProvider) Stream(ctx context.Context, _ openai.ChatCompletionNewPar
 		defer close(chunks)
 
 		// Send content chunks or tool calls.
-		if len(p.streamChunks) > 0 {
-			// Stream configured chunks.
-			for _, content := range p.streamChunks {
-				select {
-				case <-ctx.Done():
-					return
-				case chunks <- openai.ChatCompletionChunk{
-					ID:      chunkID,
-					Created: time.Now().Unix(),
-					Model:   "mock-model",
-					Object:  "chat.completion.chunk",
-					Choices: []openai.ChatCompletionChunkChoice{
-						{
-							Index: 0,
-							Delta: openai.ChatCompletionChunkChoicesDelta{
-								Content: content,
-								Role:    openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
-							},
-						},
-					},
-				}:
-				}
-
-				// Simulate delay between chunks.
-				if p.delay > 0 {
-					select {
-					case <-time.After(p.delay):
-					case <-ctx.Done():
-						return
-					}
-				}
-			}
-		} else if len(p.toolCalls) > 0 {
-			// Stream tool calls.
-			toolCallChunks := make([]openai.ChatCompletionChunkChoicesDeltaToolCall, len(p.toolCalls))
-			for i, tc := range p.toolCalls {
-				toolCallChunks[i] = openai.ChatCompletionChunkChoicesDeltaToolCall{
-					Index: int64(i),
-					ID:    tc.ID,
-					Type:  openai.ChatCompletionChunkChoicesDeltaToolCallsType(tc.Type),
-					Function: openai.ChatCompletionChunkChoicesDeltaToolCallsFunction{
-						Name:      tc.Function.Name,
-						Arguments: tc.Function.Arguments,
-					},
-				}
-			}
-
-			select {
-			case <-ctx.Done():
+		switch {
+		case len(p.streamChunks) > 0:
+			if !p.streamContentChunks(ctx, chunks, chunkID) {
 				return
-			case chunks <- openai.ChatCompletionChunk{
-				ID:      chunkID,
-				Created: time.Now().Unix(),
-				Model:   "mock-model",
-				Object:  "chat.completion.chunk",
-				Choices: []openai.ChatCompletionChunkChoice{
-					{
-						Index: 0,
-						Delta: openai.ChatCompletionChunkChoicesDelta{
-							Role:      openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
-							ToolCalls: toolCallChunks,
-						},
-					},
-				},
-			}:
 			}
-		} else {
-			// Stream response as single chunk
-			// Apply delay before sending if configured.
-			if p.delay > 0 {
-				select {
-				case <-time.After(p.delay):
-				case <-ctx.Done():
-					return
-				}
-			}
-
-			select {
-			case <-ctx.Done():
+		case len(p.toolCalls) > 0:
+			if !p.streamToolCallChunks(ctx, chunks, chunkID) {
 				return
-			case chunks <- openai.ChatCompletionChunk{
-				ID:      chunkID,
-				Created: time.Now().Unix(),
-				Model:   "mock-model",
-				Object:  "chat.completion.chunk",
-				Choices: []openai.ChatCompletionChunkChoice{
-					{
-						Index: 0,
-						Delta: openai.ChatCompletionChunkChoicesDelta{
-							Content: p.response,
-							Role:    openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
-						},
-					},
-				},
-			}:
+			}
+		default:
+			if !p.streamSingleChunk(ctx, chunks, chunkID) {
+				return
 			}
 		}
 
 		// Send done chunk with finish reason.
-		finishReason := openai.ChatCompletionChunkChoicesFinishReasonStop
-		if len(p.toolCalls) > 0 {
-			finishReason = openai.ChatCompletionChunkChoicesFinishReasonToolCalls
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case chunks <- openai.ChatCompletionChunk{
-			ID:      chunkID,
-			Created: time.Now().Unix(),
-			Model:   "mock-model",
-			Object:  "chat.completion.chunk",
-			Choices: []openai.ChatCompletionChunkChoice{
-				{
-					Index:        0,
-					FinishReason: finishReason,
-				},
-			},
-		}:
-		}
+		p.sendDoneChunk(ctx, chunks, chunkID)
 	}()
 
 	return chunks, nil
+}
+
+// streamContentChunks streams configured content chunks. Returns false if context cancelled.
+func (p *MockProvider) streamContentChunks(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
+	for _, content := range p.streamChunks {
+		chunk := newMockChunk(chunkID, content, openai.ChatCompletionChunkChoicesDeltaRoleAssistant, nil)
+
+		if !sendChunk(ctx, chunks, chunk) {
+			return false
+		}
+
+		if p.delay > 0 && !waitDelay(ctx, p.delay) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// streamToolCallChunks streams tool call chunks. Returns false if context cancelled.
+func (p *MockProvider) streamToolCallChunks(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
+	toolCallChunks := make([]openai.ChatCompletionChunkChoicesDeltaToolCall, len(p.toolCalls))
+	for i, tc := range p.toolCalls {
+		toolCallChunks[i] = openai.ChatCompletionChunkChoicesDeltaToolCall{
+			Index: int64(i),
+			ID:    tc.ID,
+			Type:  openai.ChatCompletionChunkChoicesDeltaToolCallsType(tc.Type),
+			Function: openai.ChatCompletionChunkChoicesDeltaToolCallsFunction{
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			},
+		}
+	}
+
+	chunk := newMockChunk(chunkID, "", openai.ChatCompletionChunkChoicesDeltaRoleAssistant, toolCallChunks)
+
+	return sendChunk(ctx, chunks, chunk)
+}
+
+// streamSingleChunk streams a single response chunk. Returns false if context cancelled.
+func (p *MockProvider) streamSingleChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
+	if p.delay > 0 && !waitDelay(ctx, p.delay) {
+		return false
+	}
+
+	chunk := newMockChunk(chunkID, p.response, openai.ChatCompletionChunkChoicesDeltaRoleAssistant, nil)
+
+	return sendChunk(ctx, chunks, chunk)
+}
+
+// sendDoneChunk sends the final done chunk with the appropriate finish reason.
+func (p *MockProvider) sendDoneChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) {
+	finishReason := openai.ChatCompletionChunkChoicesFinishReasonStop
+	if len(p.toolCalls) > 0 {
+		finishReason = openai.ChatCompletionChunkChoicesFinishReasonToolCalls
+	}
+
+	select {
+	case <-ctx.Done():
+		return
+	case chunks <- openai.ChatCompletionChunk{
+		ID:      chunkID,
+		Created: time.Now().Unix(),
+		Model:   "mock-model",
+		Object:  "chat.completion.chunk",
+		Choices: []openai.ChatCompletionChunkChoice{
+			{
+				Index:        0,
+				FinishReason: finishReason,
+			},
+		},
+	}:
+	}
+}
+
+// newMockChunk creates a new mock ChatCompletionChunk.
+func newMockChunk(chunkID, content string, role openai.ChatCompletionChunkChoicesDeltaRole, toolCalls []openai.ChatCompletionChunkChoicesDeltaToolCall) openai.ChatCompletionChunk {
+	return openai.ChatCompletionChunk{
+		ID:      chunkID,
+		Created: time.Now().Unix(),
+		Model:   "mock-model",
+		Object:  "chat.completion.chunk",
+		Choices: []openai.ChatCompletionChunkChoice{
+			{
+				Index: 0,
+				Delta: openai.ChatCompletionChunkChoicesDelta{
+					Content:   content,
+					Role:      role,
+					ToolCalls: toolCalls,
+				},
+			},
+		},
+	}
+}
+
+// sendChunk sends a chunk to the channel, returning false if context is cancelled.
+func sendChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunk openai.ChatCompletionChunk) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case chunks <- chunk:
+		return true
+	}
+}
+
+// waitDelay waits for the specified delay, returning false if context is cancelled.
+func waitDelay(ctx context.Context, delay time.Duration) bool {
+	select {
+	case <-time.After(delay):
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // Models implements Provider.Models.

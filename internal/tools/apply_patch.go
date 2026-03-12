@@ -114,32 +114,35 @@ func (t *ApplyPatchTool) Execute(_ context.Context, params ToolParameters) (Tool
 		}, nil
 	}
 
-	// Create applier.
-	applier, err := patchapply.NewApplier(workspaceRoot)
+	result, err := t.applyPatch(workspaceRoot, patch, dryRun, force)
 	if err != nil {
 		return ToolResult{
 			Success: false,
-			Error:   fmt.Sprintf("failed to create applier: %v", err),
+			Error:   fmt.Sprintf("failed to apply patch: %v", err),
 		}, nil
 	}
 
-	// Configure applier.
+	return ToolResult{
+		Success: true,
+		Output:  formatApplyResult(result, dryRun),
+	}, nil
+}
+
+// applyPatch creates an applier and applies the patch.
+func (t *ApplyPatchTool) applyPatch(workspaceRoot string, patch *patchapply.Patch, dryRun, force bool) (*patchapply.ApplyResult, error) {
+	applier, err := patchapply.NewApplier(workspaceRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create applier: %v", err)
+	}
+
 	applier.SetDryRun(dryRun)
 	applier.SetForceOverwrite(force)
 
-	// Apply the patch.
-	result, err := applier.Apply(patch)
-	if err != nil {
-		// Extract error message.
-		errMsg := err.Error()
+	return applier.Apply(patch)
+}
 
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to apply patch: %v", errMsg),
-		}, nil
-	}
-
-	// Format output.
+// formatApplyResult formats the apply result into a human-readable string.
+func formatApplyResult(result *patchapply.ApplyResult, dryRun bool) string {
 	var output strings.Builder
 	if dryRun {
 		output.WriteString("Dry run completed successfully. No files were modified.\n\n")
@@ -179,10 +182,7 @@ func (t *ApplyPatchTool) Execute(_ context.Context, params ToolParameters) (Tool
 		}
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return output.String()
 }
 
 // parsePatch parses a patch in standard diff format.
@@ -240,69 +240,65 @@ return nil, fmt.Errorf("could not extract filename from first line: %q: %w", fir
 	}
 
 	// Parse hunks.
+	updateOp := patch.Operations[0].(*patchapply.UpdateFile)
 	var currentHunk *patchapply.Hunk
 
 	for i := 2; i < len(lines); i++ {
 		line := lines[i]
 
 		if strings.HasPrefix(line, "@@") {
-			// Start of a new hunk.
 			if currentHunk != nil {
-				updateOp, ok := patch.Operations[0].(*patchapply.UpdateFile)
-				if ok {
-					updateOp.Hunks = append(updateOp.Hunks, *currentHunk)
-				}
+				updateOp.Hunks = append(updateOp.Hunks, *currentHunk)
 			}
 
 			currentHunk = &patchapply.Hunk{
 				Header:  strings.TrimSpace(strings.TrimPrefix(line, "@@")),
 				Changes: []patchapply.LineChange{},
 			}
-		} else if currentHunk != nil {
-			// Parse line change.
-			if len(line) == 0 {
-				currentHunk.Changes = append(currentHunk.Changes, patchapply.LineChange{
-					Type: patchapply.LineContext,
-					Text: "",
-				})
-			} else {
-				prefix := line[0]
 
-				text := ""
-				if len(line) > 1 {
-					text = line[1:]
-				}
+			continue
+		}
 
-				var changeType patchapply.LineChangeType
+		if currentHunk == nil {
+			continue
+		}
 
-				switch prefix {
-				case ' ':
-					changeType = patchapply.LineContext
-				case '-':
-					changeType = patchapply.LineDelete
-				case '+':
-					changeType = patchapply.LineInsert
-				default:
-					// Skip lines without proper prefixes.
-					continue
-				}
-
-				currentHunk.Changes = append(currentHunk.Changes, patchapply.LineChange{
-					Type: changeType,
-					Text: text,
-				})
-			}
+		change, ok := parseDiffLine(line)
+		if ok {
+			currentHunk.Changes = append(currentHunk.Changes, change)
 		}
 	}
 
 	// Add the last hunk.
 	if currentHunk != nil {
-		if updateOp, ok := patch.Operations[0].(*patchapply.UpdateFile); ok {
-			updateOp.Hunks = append(updateOp.Hunks, *currentHunk)
-		}
+		updateOp.Hunks = append(updateOp.Hunks, *currentHunk)
 	}
 
 	return patch, nil
+}
+
+// parseDiffLine parses a single diff line into a LineChange.
+// Returns the change and true if the line is valid, or false to skip.
+func parseDiffLine(line string) (patchapply.LineChange, bool) {
+	if len(line) == 0 {
+		return patchapply.LineChange{Type: patchapply.LineContext, Text: ""}, true
+	}
+
+	text := ""
+	if len(line) > 1 {
+		text = line[1:]
+	}
+
+	switch line[0] {
+	case ' ':
+		return patchapply.LineChange{Type: patchapply.LineContext, Text: text}, true
+	case '-':
+		return patchapply.LineChange{Type: patchapply.LineDelete, Text: text}, true
+	case '+':
+		return patchapply.LineChange{Type: patchapply.LineInsert, Text: text}, true
+	default:
+		return patchapply.LineChange{}, false
+	}
 }
 
 // CheckApproval assesses whether the patch operation requires approval.

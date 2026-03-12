@@ -23,7 +23,38 @@ func TestACP_ApprovalPersistence_PromptToToolCall(t *testing.T) {
 		t.Skip("Skipping E2E test in short mode")
 	}
 
-	// Prepare isolated workspace and config with approval persistence enabled.
+	env := setupApprovalPersistenceEnv(t)
+
+	// 1) First prompt should require approval and cause a policy to be persisted.
+	env.runPrompt(t)
+
+	if !env.hasToolCallNotifications(t) {
+		return
+	}
+
+	// 2) Second prompt: approval should be short-circuited via policy.
+	env.runPrompt(t)
+
+	// 3) Revocation via CLI.
+	clearApprovalPolicies(t, env.configPath)
+
+	// 4) Third prompt: after revocation, approval should no longer be short-circuited.
+	env.runPrompt(t)
+}
+
+// approvalPersistenceEnv holds the test environment for approval persistence tests.
+type approvalPersistenceEnv struct {
+	clientImpl *testClient
+	client     *acp.ClientSideConnection
+	ctx        context.Context
+	sessionID  acp.SessionId
+	configPath string
+}
+
+// setupApprovalPersistenceEnv creates the test environment for approval persistence.
+func setupApprovalPersistenceEnv(t *testing.T) *approvalPersistenceEnv {
+	t.Helper()
+
 	workDir := createTestWorkspace(t)
 	configPath := filepath.Join(workDir, "spin.yaml")
 	policyPath := filepath.Join(workDir, "policies.json")
@@ -36,114 +67,86 @@ security:
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(cfg), 0o644))
 
-	// Start ACP agent with config and workspace using the test-only provider.
-	// The "test-llm" provider is only available in binaries built with
-	// -tags e2e_llm_test and returns deterministic tool calls.
 	cmd, stdin, stdout := startACPAgent(t,
 		"--config-file", configPath,
 		"--provider", "test-llm",
 		"--model", "dummy",
 		"--workspace", workDir,
 	)
-	defer cleanupAgent(t, cmd, stdin)
+	t.Cleanup(func() { cleanupAgent(t, cmd, stdin) })
 
-	// Client that records notifications so we can observe tool calls.
 	clientImpl := &testClient{}
 	client := createACPClientWithClient(t, stdin, stdout, clientImpl)
 	ctx := context.Background()
 
-	// Initialize and create session.
-	_, err := client.Initialize(ctx, acp.InitializeRequest{
-		ProtocolVersion: acp.ProtocolVersionNumber,
-	})
+	_, err := client.Initialize(ctx, acp.InitializeRequest{ProtocolVersion: acp.ProtocolVersionNumber})
 	require.NoError(t, err)
 
-	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{
-		Cwd:        workDir,
-		McpServers: []acp.McpServer{},
-	})
+	sessionResp, err := client.NewSession(ctx, acp.NewSessionRequest{Cwd: workDir, McpServers: []acp.McpServer{}})
 	require.NoError(t, err)
 
-	sessionID := sessionResp.SessionId
+	return &approvalPersistenceEnv{
+		clientImpl: clientImpl, client: client, ctx: ctx,
+		sessionID: sessionResp.SessionId, configPath: configPath,
+	}
+}
 
-	// Helper: run a prompt that is likely to trigger a shell_command tool call.
-	runPrompt := func(t *testing.T) {
-		t.Helper()
-		clientImpl.clearNotifications()
+// runPrompt sends a prompt and waits for completion.
+func (e *approvalPersistenceEnv) runPrompt(t *testing.T) {
+	t.Helper()
+	e.clientImpl.clearNotifications()
 
-		req := acp.PromptRequest{
-			SessionId: sessionID,
-			Prompt: []acp.ContentBlock{
-				acp.TextBlock("Run a shell command that prints 'approval persistence test' and then stop."),
-			},
-		}
-
-		done := make(chan error, 1)
-
-		go func() {
-			_, promptErr := client.Prompt(ctx, req)
-			done <- promptErr
-		}()
-
-		select {
-		case promptErr := <-done:
-			require.NoError(t, promptErr, "Prompt should complete")
-		case <-time.After(60 * time.Second):
-			t.Fatal("Prompt timed out")
-		}
+	req := acp.PromptRequest{
+		SessionId: e.sessionID,
+		Prompt:    []acp.ContentBlock{acp.TextBlock("Run a shell command that prints 'approval persistence test' and then stop.")},
 	}
 
-	// 1) First prompt should require approval and cause a policy to be persisted.
-	runPrompt(t)
+	done := make(chan error, 1)
+	go func() {
+		_, promptErr := e.client.Prompt(e.ctx, req)
+		done <- promptErr
+	}()
 
-	firstNotifications := clientImpl.getNotifications()
-	if len(firstNotifications) == 0 {
-		// In environments without a functioning local LLM, we cannot assert the
-		// full prompt → tool call path. The wiring is still exercised up to the
-		// LLM boundary.
+	select {
+	case promptErr := <-done:
+		require.NoError(t, promptErr, "Prompt should complete")
+	case <-time.After(60 * time.Second):
+		t.Fatal("Prompt timed out")
+	}
+}
+
+// hasToolCallNotifications checks if any tool call notifications were received.
+func (e *approvalPersistenceEnv) hasToolCallNotifications(t *testing.T) bool {
+	t.Helper()
+
+	notifications := e.clientImpl.getNotifications()
+	if len(notifications) == 0 {
 		t.Skip("No notifications from first prompt; likely due to missing or incompatible local LLM")
 	}
 
-	// Heuristically assert that at least one tool call occurred; we rely on unit
-	// tests for precise tool kind classification.
-	hasToolCall := false
-
-	for _, notif := range firstNotifications {
+	for _, notif := range notifications {
 		if notif.Update.ToolCall != nil || notif.Update.ToolCallUpdate != nil {
-			hasToolCall = true
-
-			break
+			return true
 		}
 	}
 
-	if !hasToolCall {
-		t.Log("No tool calls observed; skipping persistence checking as LLM may have chosen a different strategy")
+	t.Log("No tool calls observed; skipping persistence checking as LLM may have chosen a different strategy")
 
-		return
-	}
+	return false
+}
 
-	// 2) Second prompt: with persistence enabled and the same request, approval
-	// should be short-circuited via policy; from the ACP side, we simply ensure
-	// the prompt still succeeds. Detailed policy hit is already covered in unit tests.
-	runPrompt(t)
+// clearApprovalPolicies runs the approval clear command.
+func clearApprovalPolicies(t *testing.T, configPath string) {
+	t.Helper()
 
-	// 3) Revocation via CLI: run "spin approval clear --scope global" in the same workspace.
 	bin := getBinPath(t)
-	clearCmd := filepath.Clean(bin)
-
-	clearResult := execCommand(t, clearCmd,
-		"--config-file", configPath,
-		"approval", "clear",
-		"--scope", "global",
+	clearResult := execCommand(t, filepath.Clean(bin),
+		"--config-file", configPath, "approval", "clear", "--scope", "global",
 	)
+
 	if !strings.Contains(clearResult.stdout, "Cleared") {
 		t.Fatalf("expected clear command to report cleared policies, got stdout=%s stderr=%s", clearResult.stdout, clearResult.stderr)
 	}
-
-	// 4) Third prompt: after revocation, approval should no longer be short-circuited.
-	// As above, we verify end-to-end success; detailed behavior is asserted in
-	// lower-level tests.
-	runPrompt(t)
 }
 
 type cmdResult struct {

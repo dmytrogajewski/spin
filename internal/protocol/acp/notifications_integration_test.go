@@ -250,8 +250,9 @@ func TestProcessEvents_ContextCancellation(t *testing.T) {
 }
 
 // TestProcessEvents_WriteFile_GeneratesDiff tests that write_file operations generate diff notifications.
-func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
-	t.Parallel()
+func setupWriteFileTest(t *testing.T) (*SpinACPAgent, *mockConnection, *events.EventEmitter, acp.SessionId) {
+	t.Helper()
+
 	agentInstance := &agent.Agent{}
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
 	emitter := events.NewEventEmitter(100)
@@ -264,17 +265,19 @@ func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 	mockConn := &mockConnection{}
 	acpAgent.SetNotificationSender(mockConn)
 
+	return acpAgent, mockConn, emitter, acp.SessionId("test-session")
+}
+
+func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
+	t.Parallel()
+
+	acpAgent, mockConn, emitter, sessionID := setupWriteFileTest(t)
+
 	ctx := t.Context()
-
-	sessionID := acp.SessionId("test-session")
-
-	// Subscribe to events.
 	subID, eventCh, err := emitter.Subscribe()
 	require.NoError(t, err)
-
 	defer emitter.Unsubscribe(subID)
 
-	// Start event processing.
 	go acpAgent.processEvents(ctx, sessionID, eventCh)
 
 	// Create a temporary file with existing content.

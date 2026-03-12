@@ -228,7 +228,18 @@ func (c *curator) Curate(ctx context.Context, req MergeRequest) (*MergeResult, e
 func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeResult, error) {
 	c.logger.DebugContext(ctx, "LLM-based curation starting", "num_insights", len(req.Insights))
 
-	// Format current playbook.
+	prompt := c.buildCurationPrompt(ctx, req)
+
+	curationResp, err := c.callLLMForCuration(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.applyCurationOperations(ctx, curationResp)
+}
+
+// buildCurationPrompt formats playbook and insights into a curation prompt.
+func (c *curator) buildCurationPrompt(ctx context.Context, req MergeRequest) string {
 	bullets := c.playbook.List(nil)
 	c.logger.DebugContext(ctx, "Current playbook state", "num_bullets", len(bullets))
 
@@ -237,33 +248,27 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 		fmt.Fprintf(&playbookBuilder, "[%s] %s\n", b.ID, b.Content)
 	}
 
-	currentPlaybook := playbookBuilder.String()
-
-	// Format insights into reflection text.
 	var reflectionBuilder strings.Builder
-
 	for i, insight := range req.Insights {
 		c.logger.DebugContext(ctx, "Formatting insight for curation",
-			"index", i,
-			"content", insight.Content,
-			"category", insight.Category)
+			"index", i, "content", insight.Content, "category", insight.Category)
 		reflectionBuilder.WriteString(FormatReflectionForCurator(insight))
 		reflectionBuilder.WriteString("\n---\n")
 	}
 
-	// Build curation prompt.
 	curationReq := CurationRequest{
 		TaskContext:     "Processing new insights from agent execution",
-		CurrentPlaybook: currentPlaybook,
+		CurrentPlaybook: playbookBuilder.String(),
 		Reflection:      reflectionBuilder.String(),
 	}
 
-	prompt := c.promptBuilder.BuildCurationPrompt(curationReq)
+	return c.promptBuilder.BuildCurationPrompt(curationReq)
+}
 
+// callLLMForCuration calls the LLM and parses the curation response.
+func (c *curator) callLLMForCuration(ctx context.Context, prompt string) (*CurationResponse, error) {
 	c.logger.DebugContext(ctx, "Curation prompt built", "length", len(prompt))
-	c.logger.DebugContext(ctx, "Curation prompt content", "prompt", prompt)
 
-	// Call LLM.
 	params := openai.ChatCompletionNewParams{
 		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
@@ -271,81 +276,43 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 		Temperature: openai.F(0.3),
 	}
 
-	// Set MaxTokens if configured.
 	if c.maxTokens > 0 {
 		params.MaxTokens = openai.F(int64(c.maxTokens))
 	}
 
-	c.logger.DebugContext(ctx, "Calling LLM for curation", "temperature", 0.3, "max_tokens", c.maxTokens)
-
 	completion, err := c.llmProvider.Complete(ctx, params)
 	if err != nil {
 		c.logger.WarnContext(ctx, "LLM call failed during curation", "error", err)
-
 		return nil, err
 	}
 
-	// Parse response.
-	responseText := completion.Choices[0].Message.Content
-
+	responseText := cleanJSONResponse(completion.Choices[0].Message.Content)
 	c.logger.DebugContext(ctx, "LLM curation response received",
-		"length", len(responseText),
-		"tokens", completion.Usage.TotalTokens)
-	c.logger.DebugContext(ctx, "LLM curation response content", "response", responseText)
-
-	responseText = cleanJSONResponse(responseText)
+		"length", len(responseText), "tokens", completion.Usage.TotalTokens)
 
 	var curationResp CurationResponse
-	err = json.Unmarshal([]byte(responseText), &curationResp)
-	if err != nil {
+	if err = json.Unmarshal([]byte(responseText), &curationResp); err != nil {
 		c.logger.WarnContext(ctx, "Failed to parse curation response", "error", err, "response", responseText)
-
 		return nil, fmt.Errorf("unmarshaling curation response: %w", err)
 	}
 
-	c.logger.DebugContext(ctx, "Parsed curation response", "num_operations", len(curationResp.Operations))
+	return &curationResp, nil
+}
 
-	// Apply operations.
-	addedBullets := make([]*bullet.Bullet, 0, len(curationResp.Operations))
-	for i, op := range curationResp.Operations {
-		c.logger.DebugContext(ctx, "Processing curation operation",
-			"index", i,
-			"type", op.Type,
-			"section", op.Section,
-			"content", op.Content)
-
-		if op.Type == "ADD" {
-			// Create bullet from operation.
-			var newBullet *bullet.Bullet
-			newBullet, err = bullet.New(op.Content)
-			if err != nil {
-				c.logger.WarnContext(ctx, "Failed to create bullet", "error", err, "content", op.Content)
-
-				return nil, err
-			}
-
-			// Get embedding.
-			var emb []float32
-			emb, err = c.embedder.Embed(ctx, newBullet.Content)
-			if err != nil {
-				c.logger.WarnContext(ctx, "Failed to generate embedding", "error", err)
-
-				return nil, err
-			}
-
-			newBullet.Embedding = emb
-
-			// Add to playbook.
-			err = c.playbook.Add(ctx, newBullet)
-			if err != nil {
-				c.logger.WarnContext(ctx, "Failed to add bullet to playbook", "error", err)
-
-				return nil, err
-			}
-
-			c.logger.DebugContext(ctx, "Added bullet via LLM curation", "id", newBullet.ID, "content", newBullet.Content)
-			addedBullets = append(addedBullets, newBullet)
+// applyCurationOperations applies ADD operations from the curation response.
+func (c *curator) applyCurationOperations(ctx context.Context, resp *CurationResponse) (*MergeResult, error) {
+	addedBullets := make([]*bullet.Bullet, 0, len(resp.Operations))
+	for _, op := range resp.Operations {
+		if op.Type != "ADD" {
+			continue
 		}
+
+		newBullet, err := c.createAndAddBullet(ctx, op.Content)
+		if err != nil {
+			return nil, err
+		}
+
+		addedBullets = append(addedBullets, newBullet)
 	}
 
 	return &MergeResult{
@@ -354,127 +321,124 @@ func (c *curator) curateLLMBased(ctx context.Context, req MergeRequest) (*MergeR
 	}, nil
 }
 
+// createAndAddBullet creates a bullet, generates its embedding, and adds it to the playbook.
+func (c *curator) createAndAddBullet(ctx context.Context, content string) (*bullet.Bullet, error) {
+	newBullet, err := bullet.New(content)
+	if err != nil {
+		c.logger.WarnContext(ctx, "Failed to create bullet", "error", err, "content", content)
+		return nil, err
+	}
+
+	emb, err := c.embedder.Embed(ctx, newBullet.Content)
+	if err != nil {
+		c.logger.WarnContext(ctx, "Failed to generate embedding", "error", err)
+		return nil, err
+	}
+
+	newBullet.Embedding = emb
+
+	if err = c.playbook.Add(ctx, newBullet); err != nil {
+		c.logger.WarnContext(ctx, "Failed to add bullet to playbook", "error", err)
+		return nil, err
+	}
+
+	c.logger.DebugContext(ctx, "Added bullet via LLM curation", "id", newBullet.ID, "content", newBullet.Content)
+	return newBullet, nil
+}
+
 // curateDeduplicationBased uses simple deduplication-based curation.
 func (c *curator) curateDeduplicationBased(ctx context.Context, req MergeRequest) (*MergeResult, error) {
 	c.logger.DebugContext(ctx, "Deduplication-based curation starting", "num_insights", len(req.Insights))
 
-	// Convert insights to bullets.
-	bullets, err := ConvertInsights(req.Insights)
+	bullets, err := c.convertAndEmbedInsights(ctx, req)
 	if err != nil {
-		c.logger.WarnContext(ctx, "Failed to convert insights to bullets", "error", err)
-
 		return nil, err
 	}
 
-	c.logger.DebugContext(ctx, "Converted insights to bullets", "count", len(bullets))
-
-	// Get embeddings for all bullets.
-	for i, b := range bullets {
-		c.logger.DebugContext(ctx, "Generating embedding for bullet", "index", i, "content", b.Content)
-
-		var emb []float32
-		emb, err = c.embedder.Embed(ctx, b.Content)
-		if err != nil {
-			c.logger.WarnContext(ctx, "Failed to generate embedding", "error", err, "bullet", b.Content)
-
-			return nil, err
-		}
-
-		b.Embedding = emb
-	}
-
-	// Find duplicates.
-	c.logger.DebugContext(ctx, "Searching for duplicates", "threshold", c.threshold)
-
-	var duplicates map[string]string
-	duplicates, err = c.FindDuplicates(ctx, bullets)
+	duplicates, err := c.FindDuplicates(ctx, bullets)
 	if err != nil {
 		c.logger.WarnContext(ctx, "Failed to find duplicates", "error", err)
-
 		return nil, err
 	}
 
 	c.logger.DebugContext(ctx, "Duplicate detection complete", "num_duplicates", len(duplicates))
 
-	// Process bullets: add new ones, update duplicates.
-	addedBullets := make([]*bullet.Bullet, 0, len(bullets))
-	skipped := 0
-	updated := 0
-	duplicateIDs := make([]string, 0, len(duplicates))
+	result := c.processBulletsWithDuplicates(ctx, bullets, duplicates)
 
-	for i, b := range bullets {
-		if existingID, isDuplicate := duplicates[b.ID]; isDuplicate {
-			c.logger.DebugContext(ctx, "Duplicate found",
-				"index", i,
-				"new_bullet", b.ID,
-				"existing_bullet", existingID,
-				"content", b.Content)
+	return c.maybeRefine(ctx, result)
+}
 
-			// Duplicate found - update existing bullet's helpful count using delta operation.
-			deltaOp := delta.NewIncrementHelpful(existingID, delta.Metadata{
-				Source: "curator",
-				Reason: "duplicate insight detected",
-			})
+// convertAndEmbedInsights converts insights to bullets and generates embeddings.
+func (c *curator) convertAndEmbedInsights(ctx context.Context, req MergeRequest) ([]*bullet.Bullet, error) {
+	bullets, err := ConvertInsights(req.Insights)
+	if err != nil {
+		c.logger.WarnContext(ctx, "Failed to convert insights to bullets", "error", err)
+		return nil, err
+	}
 
-			_, err = c.deltaApplier.Apply(ctx, *deltaOp)
-			if err == nil {
-				updated++
-
-				c.logger.DebugContext(ctx, "Updated duplicate bullet helpful count", "bullet_id", existingID)
-			} else {
-				c.logger.WarnContext(ctx, "Failed to update duplicate", "error", err, "bullet_id", existingID)
-			}
-
-			duplicateIDs = append(duplicateIDs, existingID)
-			skipped++
-		} else {
-			c.logger.DebugContext(ctx, "Adding new bullet",
-				"index", i,
-				"id", b.ID,
-				"content", b.Content)
-
-			// Not a duplicate - add to playbook.
-			err = c.playbook.Add(ctx, b)
-			if err != nil {
-				c.logger.WarnContext(ctx, "Failed to add bullet", "error", err, "bullet", b.Content)
-
-				return nil, err
-			}
-
-			addedBullets = append(addedBullets, b)
+	for _, b := range bullets {
+		emb, embErr := c.embedder.Embed(ctx, b.Content)
+		if embErr != nil {
+			c.logger.WarnContext(ctx, "Failed to generate embedding", "error", embErr, "bullet", b.Content)
+			return nil, embErr
 		}
+		b.Embedding = emb
 	}
 
-	c.logger.DebugContext(ctx, "Deduplication complete",
-		"added", len(addedBullets),
-		"skipped", skipped,
-		"updated", updated)
+	return bullets, nil
+}
 
-	result := &MergeResult{
-		Added:        len(addedBullets),
-		Skipped:      skipped,
-		Updated:      updated,
-		Duplicates:   duplicateIDs,
-		AddedBullets: addedBullets,
+// processBulletsWithDuplicates adds new bullets and updates duplicates, returning the merge result.
+func (c *curator) processBulletsWithDuplicates(ctx context.Context, bullets []*bullet.Bullet, duplicates map[string]string) *MergeResult {
+	addedBullets := make([]*bullet.Bullet, 0, len(bullets))
+	duplicateIDs := make([]string, 0, len(duplicates))
+	skipped, updated := 0, 0
+
+	for _, b := range bullets {
+		existingID, isDuplicate := duplicates[b.ID]
+		if !isDuplicate {
+			if err := c.playbook.Add(ctx, b); err != nil {
+				c.logger.WarnContext(ctx, "Failed to add bullet", "error", err, "bullet", b.Content)
+				continue
+			}
+			addedBullets = append(addedBullets, b)
+			continue
+		}
+
+		deltaOp := delta.NewIncrementHelpful(existingID, delta.Metadata{
+			Source: "curator", Reason: "duplicate insight detected",
+		})
+		if _, err := c.deltaApplier.Apply(ctx, *deltaOp); err == nil {
+			updated++
+		}
+		duplicateIDs = append(duplicateIDs, existingID)
+		skipped++
 	}
 
-	// Check if refinement should be triggered (proactive mode).
+	return &MergeResult{
+		Added: len(addedBullets), Skipped: skipped, Updated: updated,
+		Duplicates: duplicateIDs, AddedBullets: addedBullets,
+	}
+}
+
+// maybeRefine checks if proactive refinement should be triggered and applies it.
+func (c *curator) maybeRefine(ctx context.Context, result *MergeResult) (*MergeResult, error) {
 	shouldRefine, err := c.refinementStrategy.ShouldRefine(ctx, c.playbook)
 	if err != nil {
 		return nil, err
 	}
 
-	if shouldRefine {
-		var refinement *RefinementResult
-		refinement, err = c.refinementStrategy.Refine(ctx, c.playbook)
-		if err != nil {
-			return nil, err
-		}
-
-		result.Refined = true
-		result.Refinement = refinement
+	if !shouldRefine {
+		return result, nil
 	}
 
+	refinement, err := c.refinementStrategy.Refine(ctx, c.playbook)
+	if err != nil {
+		return nil, err
+	}
+
+	result.Refined = true
+	result.Refinement = refinement
 	return result, nil
 }
 

@@ -57,56 +57,53 @@ func TestWriteFileTool(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			params, _ := FromMap(tt.params)
-			result, err := tool.Execute(context.Background(), params)
-
-			if tt.wantErr {
-				if err == nil && result.Success {
-					t.Error("expected error but got success")
-				}
-
-				return
-			}
-
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-
-				return
-			}
-
-			if !result.Success {
-				t.Errorf("expected success, got error: %s", result.Error)
-
-				return
-			}
-
-			if tt.verifyWrite {
-				path, ok := tt.params["path"].(string)
-				if !ok {
-					t.Error("path parameter not found")
-
-					return
-				}
-
-				content, readErr := os.ReadFile(path)
-				if readErr != nil {
-					t.Errorf("failed to read written file: %v", readErr)
-
-					return
-				}
-
-				expectedContent, ok := tt.params["content"].(string)
-				if !ok {
-					t.Error("content parameter not found")
-
-					return
-				}
-
-				if string(content) != expectedContent {
-					t.Errorf("expected content %q, got %q", expectedContent, string(content))
-				}
-			}
+			runWriteFileSubtest(t, tool, tt.params, tt.wantErr, tt.verifyWrite)
 		})
+	}
+}
+
+func runWriteFileSubtest(t *testing.T, tool Tool, params map[string]any, wantErr, verifyWrite bool) {
+	t.Helper()
+
+	p, _ := FromMap(params)
+	result, err := tool.Execute(context.Background(), p)
+
+	if wantErr {
+		if err == nil && result.Success {
+			t.Error("expected error but got success")
+		}
+		return
+	}
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	if !result.Success {
+		t.Errorf("expected success, got error: %s", result.Error)
+		return
+	}
+
+	if verifyWrite {
+		verifyWrittenFile(t, params)
+	}
+}
+
+func verifyWrittenFile(t *testing.T, params map[string]any) {
+	t.Helper()
+
+	path, _ := params["path"].(string)
+	expectedContent, _ := params["content"].(string)
+
+	content, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Errorf("failed to read written file: %v", readErr)
+		return
+	}
+
+	if string(content) != expectedContent {
+		t.Errorf("expected content %q, got %q", expectedContent, string(content))
 	}
 }
 

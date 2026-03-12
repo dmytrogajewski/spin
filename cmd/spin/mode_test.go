@@ -58,6 +58,31 @@ func TestRunModeList(t *testing.T) {
 	// The actual output was verified manually above.
 }
 
+// verifyModeInfo validates that a mode's info is properly structured.
+func verifyModeInfo(t *testing.T, modeName string, info modeInfo) {
+	t.Helper()
+
+	if info.name != modeName {
+		t.Errorf("mode info has wrong name: got %s, want %s", info.name, modeName)
+	}
+
+	if info.description == "" {
+		t.Error("mode info has empty description")
+	}
+
+	if info.maxTokens <= 0 {
+		t.Error("mode info has invalid maxTokens")
+	}
+
+	if len(info.tools) == 0 {
+		t.Error("mode info has no tools")
+	}
+
+	if len(info.bestFor) == 0 {
+		t.Error("mode info has no bestFor cases")
+	}
+}
+
 func TestRunModeDescribe_ValidMode(t *testing.T) {
 	t.Parallel()
 
@@ -70,35 +95,12 @@ func TestRunModeDescribe_ValidMode(t *testing.T) {
 			cmd := newModeDescribeCmd()
 			cmd.SetArgs([]string{modeName})
 
-			// Execute command - should succeed.
 			err := cmd.Execute()
 			if err != nil {
 				t.Fatalf("unexpected error for mode '%s': %v", modeName, err)
 			}
 
-			// Since we can't easily capture fmt.Printf output in tests,
-			// we verify the command runs without error and that the mode
-			// info is properly structured in allModes.
-			info := allModes[modeName]
-			if info.name != modeName {
-				t.Errorf("mode info has wrong name: got %s, want %s", info.name, modeName)
-			}
-
-			if info.description == "" {
-				t.Error("mode info has empty description")
-			}
-
-			if info.maxTokens <= 0 {
-				t.Error("mode info has invalid maxTokens")
-			}
-
-			if len(info.tools) == 0 {
-				t.Error("mode info has no tools")
-			}
-
-			if len(info.bestFor) == 0 {
-				t.Error("mode info has no bestFor cases")
-			}
+			verifyModeInfo(t, modeName, allModes[modeName])
 		})
 	}
 }

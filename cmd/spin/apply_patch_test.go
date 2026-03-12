@@ -557,34 +557,32 @@ func TestRunDryRun(t *testing.T) {
 	}
 }
 
-// TestApplyPatch_Integration tests full end-to-end scenarios.
-func TestApplyPatch_Integration(t *testing.T) {
-	t.Parallel()
+// integrationTestCase defines a single integration test case for apply-patch.
+type integrationTestCase struct {
+	name       string
+	setup      func(dir string) error
+	patchText  string
+	wantErr    bool
+	errContain string
+	verify     func(dir string) error
+}
 
-	tests := []struct {
-		name       string
-		setup      func(dir string) error
-		patchText  string
-		wantErr    bool
-		errContain string
-		verify     func(dir string) error
-	}{
+// getIntegrationTestCases returns all integration test cases.
+func getIntegrationTestCases() []integrationTestCase {
+	return []integrationTestCase{
 		{
 			name: "add new file",
 			setup: func(_ string) error {
 				return nil
 			},
-			patchText: `*** Begin Patch
-*** Add File: hello.txt
-+Hello World
-*** End Patch`,
-			wantErr: false,
+			patchText: "*** Begin Patch\n*** Add File: hello.txt\n+Hello World\n*** End Patch",
+			wantErr:   false,
 			verify: func(dir string) error {
 				content, err := os.ReadFile(filepath.Join(dir, "hello.txt"))
 				if err != nil {
 					return fmt.Errorf("reading hello.txt: %w", err)
 				}
-				// Note: patch adds content as-is, no automatic trailing newline.
+
 				if string(content) != "Hello World" {
 					return errContentMismatch
 				}
@@ -597,10 +595,8 @@ func TestApplyPatch_Integration(t *testing.T) {
 			setup: func(dir string) error {
 				return os.WriteFile(filepath.Join(dir, "delete-me.txt"), []byte("content"), 0644)
 			},
-			patchText: `*** Begin Patch
-*** Delete File: delete-me.txt
-*** End Patch`,
-			wantErr: false,
+			patchText: "*** Begin Patch\n*** Delete File: delete-me.txt\n*** End Patch",
+			wantErr:   false,
 			verify: func(dir string) error {
 				_, err := os.Stat(filepath.Join(dir, "delete-me.txt"))
 				if !os.IsNotExist(err) {
@@ -616,23 +612,15 @@ func TestApplyPatch_Integration(t *testing.T) {
 				return os.WriteFile(filepath.Join(dir, "update.txt"),
 					[]byte("line 1\nline 2\nline 3\n"), 0644)
 			},
-			patchText: `*** Begin Patch
-*** Update File: update.txt
-@@
- line 1
--line 2
-+line 2 updated
- line 3
-*** End Patch`,
-			wantErr: false,
+			patchText: "*** Begin Patch\n*** Update File: update.txt\n@@\n line 1\n-line 2\n+line 2 updated\n line 3\n*** End Patch",
+			wantErr:   false,
 			verify: func(dir string) error {
 				content, err := os.ReadFile(filepath.Join(dir, "update.txt"))
 				if err != nil {
 					return fmt.Errorf("reading update.txt: %w", err)
 				}
 
-				expected := "line 1\nline 2 updated\nline 3\n"
-				if string(content) != expected {
+				if string(content) != "line 1\nline 2 updated\nline 3\n" {
 					return errContentMismatch2
 				}
 
@@ -645,63 +633,63 @@ func TestApplyPatch_Integration(t *testing.T) {
 				return os.WriteFile(filepath.Join(dir, "mismatch.txt"),
 					[]byte("different content\n"), 0644)
 			},
-			patchText: `*** Begin Patch
-*** Update File: mismatch.txt
-@@
- expected line
--old line
-+new line
-*** End Patch`,
+			patchText:  "*** Begin Patch\n*** Update File: mismatch.txt\n@@\n expected line\n-old line\n+new line\n*** End Patch",
 			wantErr:    true,
 			errContain: "context",
 		},
 	}
+}
 
-	for _, tt := range tests {
+// runIntegrationTestCase executes a single integration test case.
+func runIntegrationTestCase(t *testing.T, tt integrationTestCase) {
+	t.Helper()
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	if tt.setup != nil {
+		err := tt.setup(tmpDir)
+		if err != nil {
+			t.Fatalf("setup failed: %v", err)
+		}
+	}
+
+	patchFile := filepath.Join(tmpDir, "test.patch")
+	err := os.WriteFile(patchFile, []byte(tt.patchText), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newApplyPatchCmd()
+	cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+
+	err = cmd.Execute()
+
+	if (err != nil) != tt.wantErr {
+		t.Errorf("runApplyPatch() error = %v, wantErr %v", err, tt.wantErr)
+	}
+
+	if tt.wantErr && tt.errContain != "" && !strings.Contains(err.Error(), tt.errContain) {
+		t.Errorf("runApplyPatch() error = %v, want to contain %q", err, tt.errContain)
+	}
+
+	if !tt.wantErr && tt.verify != nil {
+		verifyErr := tt.verify(tmpDir)
+		if verifyErr != nil {
+			t.Errorf("verification failed: %v", verifyErr)
+		}
+	}
+}
+
+// TestApplyPatch_Integration tests full end-to-end scenarios.
+func TestApplyPatch_Integration(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range getIntegrationTestCases() {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			tmpDir := t.TempDir()
-
-			// Setup.
-			if tt.setup != nil {
-				err := tt.setup(tmpDir)
-				if err != nil {
-					t.Fatalf("setup failed: %v", err)
-				}
-			}
-
-			// Write patch.
-			patchFile := filepath.Join(tmpDir, "test.patch")
-			err := os.WriteFile(patchFile, []byte(tt.patchText), 0644)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			// Run via cobra command.
-			cmd := newApplyPatchCmd()
-			cmd.SetArgs([]string{"-f", patchFile, "-w", tmpDir})
-			cmd.SilenceUsage = true
-			cmd.SilenceErrors = true
-
-			err = cmd.Execute()
-
-			// Check error.
-			if (err != nil) != tt.wantErr {
-				t.Errorf("runApplyPatch() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			if tt.wantErr && tt.errContain != "" && !strings.Contains(err.Error(), tt.errContain) {
-				t.Errorf("runApplyPatch() error = %v, want to contain %q", err, tt.errContain)
-			}
-
-			// Verify.
-			if !tt.wantErr && tt.verify != nil {
-				err = tt.verify(tmpDir)
-				if err != nil {
-					t.Errorf("verification failed: %v", err)
-				}
-			}
+			runIntegrationTestCase(t, tt)
 		})
 	}
 }

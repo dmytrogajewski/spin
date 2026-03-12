@@ -11,6 +11,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
+	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
 	"github.com/dmytrogajewski/spin/internal/agentsmd"
@@ -365,72 +366,7 @@ func (a *Agent) Execute(ctx context.Context, req *Request) (*Response, error) {
 
 	// ACE: Generate bullets from execution (both success AND failure) if enabled
 	// Run synchronously to ensure bullets are learned before returning.
-	if a.aceService != nil {
-		a.logger.InfoContext(ctx, "Starting bullet generation from execution", "success", resp.Success)
-
-		// Use TrajectoryContext.ToTrajectory() instead of buildExecutionTrajectory().
-		trajectory := trajCtx.ToTrajectory()
-		trajectory.Success = resp.Success // Update success status from response.
-		a.logger.DebugContext(ctx, "Execution trajectory built", "steps", len(trajectory.Steps), "success", trajectory.Success)
-
-		// Use Reflector+Curator pipeline if AutoReflect is enabled, otherwise use simple generator.
-		var learnedBullets []*bullet.Bullet
-
-		if a.aceService.config.Generation.AutoReflect {
-			learnedBullets, err = a.aceService.GenerateBulletsWithReflectionFromTrajectory(ctx, trajectory)
-		} else {
-			// For simple generation without reflection, convert trajectory to string.
-			var summaryBuilder strings.Builder
-			summaryBuilder.WriteString("Task: ")
-			summaryBuilder.WriteString(trajectory.Query)
-			summaryBuilder.WriteString("\n\nExecution Steps:\n")
-
-			for _, step := range trajectory.Steps {
-				fmt.Fprintf(&summaryBuilder, "- [%s] %s\n", step.Type, step.Content)
-			}
-
-			summaryBuilder.WriteString("\nResult: ")
-			summaryBuilder.WriteString(trajectory.Output)
-
-			learnedBullets, err = a.aceService.GenerateBullets(ctx, summaryBuilder.String(), "trajectory")
-		}
-
-		if err != nil {
-			a.logger.WarnContext(ctx, "ACE bullet generation failed", "error", err)
-			// Don't fail the entire execution if bullet generation fails.
-		} else {
-			a.logger.InfoContext(ctx, "Successfully generated bullets from execution", "count", len(learnedBullets))
-
-			if len(learnedBullets) == 0 {
-				a.logger.DebugContext(ctx, "No bullets to display (empty result)")
-			}
-
-			// Only show learning messages if ACE events are enabled
-			// This prevents noise for users who don't want to see ACE internals.
-			if len(learnedBullets) > 0 && a.aceConfig != nil && a.aceConfig.Retrieval.ProgressiveContext.EmitACEEvents {
-				// Convert bullets to BulletData for event.
-				bulletData := make([]events.BulletData, len(learnedBullets))
-				for i, b := range learnedBullets {
-					bulletData[i] = events.BulletData{
-						Content: b.Content,
-						// Category is optional and not present in bullet.Bullet.
-					}
-				}
-
-				// Emit ACE learning event to show learned insights as compact hint.
-				a.emitter.Emit(events.Event{
-					Type:      events.EventACELearned,
-					Timestamp: time.Now(),
-					Data: events.ACELearningData{
-						Success: resp.Success,
-						Bullets: bulletData,
-					},
-				})
-			}
-		}
-	} else {
-		a.logger.DebugContext(ctx, "Bullet generation skipped", "ace_service_nil", a.aceService == nil)
-	}
+	a.generateACEBullets(ctx, trajCtx, resp)
 
 	// Emit turn complete event after all processing (including ACE) is done
 	// This ensures clients waiting for completion get all events before the signal.
@@ -597,32 +533,36 @@ func (a *Agent) determineRequiresApproval(toolName string, args map[string]any) 
 
 	// For execute_command, also check if the command itself requires approval.
 	if toolName == "execute_command" {
-		if cmd, ok := args["command"].(string); ok && cmd != "" {
-			cmdStruct := &security.Command{Program: cmd}
-
-			// Check Agent-level approval flag first.
-			if !a.requireApproval {
-				return false
-			}
-
-			// Validate command to check if forbidden (forbidden commands are blocked, not approved).
-			result, err := a.security.ValidateCommand(cmdStruct)
-			if err != nil {
-				// On validation error, require approval for safety (fail-safe behavior).
-				return true
-			}
-
-			// Forbidden commands are blocked, not approved.
-			if result.Classification == security.CommandForbidden {
-				return false
-			}
-
-			// Use SecurityService to check if approval is needed.
-			return a.security.NeedsApproval(cmdStruct)
-		}
+		return a.checkExecuteCommandApproval(args)
 	}
 
 	return false
+}
+
+// checkExecuteCommandApproval determines if an execute_command call needs approval.
+func (a *Agent) checkExecuteCommandApproval(args map[string]any) bool {
+	cmd, ok := args["command"].(string)
+	if !ok || cmd == "" {
+		return false
+	}
+
+	cmdStruct := &security.Command{Program: cmd}
+
+	if !a.requireApproval {
+		return false
+	}
+
+	result, err := a.security.ValidateCommand(cmdStruct)
+	if err != nil {
+		// On validation error, require approval for safety (fail-safe behavior).
+		return true
+	}
+
+	if result.Classification == security.CommandForbidden {
+		return false
+	}
+
+	return a.security.NeedsApproval(cmdStruct)
 }
 
 // processToolCalls handles all tool calls from an LLM response.
@@ -846,17 +786,75 @@ func getToolResultContent(toolCall *ToolCall, result *ToolResult, logger *slog.L
 // The bullets parameter contains ACE bullets already retrieved for this turn.
 // Note: ACE bullet display is now handled by EventACERetrieval emission in loop.go.
 func (a *Agent) callLLM(ctx context.Context, messages []message.Message, t task.Task, bullets []*bullet.Bullet) (*openai.ChatCompletion, error) {
-	// Start with system message from task.
+	openaiMessages := a.buildOpenAIMessages(ctx, messages, t, bullets)
+
+	// Debug: log assistant messages with tool calls being sent to LLM.
+	a.logToolCallMessages(ctx, messages)
+
+	params, err := a.buildLLMParams(ctx, openaiMessages, t)
+	if err != nil {
+		return nil, err
+	}
+
+	// Call LLM with streaming.
+	chunks, err := a.llm.Stream(ctx, params)
+	if err != nil {
+		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "failed to start LLM stream", err)
+	}
+
+	response, err := a.processStream(ctx, chunks)
+	if err != nil {
+		return nil, err
+	}
+
+	a.applyFinishReasonFallback(response)
+	a.recoverXMLToolCalls(ctx, response)
+	a.processACEFeedback(ctx, response, bullets)
+
+	return response, nil
+}
+
+// buildOpenAIMessages constructs the full OpenAI message list with system prompt.
+func (a *Agent) buildOpenAIMessages(ctx context.Context, messages []message.Message, t task.Task, bullets []*bullet.Bullet) []openai.ChatCompletionMessageParamUnion {
 	openaiMessages := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages)+1)
 
-	// Build system prompt with proper layering:
-	// 1. AGENTS.md project instructions (if available)
-	// 2. Task system prompt
-	// 3. Thinking instructions
-	// 4. ACE bullets (if enabled).
+	enhancedSystemPrompt := a.buildSystemPrompt(ctx, t)
+
+	// ACE: Enhance system prompt with retrieved bullets.
+	if enhancedSystemPrompt != "" {
+		enhancedSystemPrompt = a.applyACEPrompt(ctx, enhancedSystemPrompt, bullets)
+		openaiMessages = append(openaiMessages, openai.SystemMessage(enhancedSystemPrompt))
+	}
+
+	for _, msg := range messages {
+		openaiMessages = append(openaiMessages, convertMessageToOpenAI(msg))
+	}
+
+	return openaiMessages
+}
+
+// applyACEPrompt enhances the system prompt with ACE bullets if available.
+func (a *Agent) applyACEPrompt(ctx context.Context, prompt string, bullets []*bullet.Bullet) string {
+	if a.aceService == nil {
+		return prompt
+	}
+
+	acePrompt, err := a.aceService.BuildPrompt(ctx, prompt, bullets)
+	if err != nil {
+		a.logger.WarnContext(ctx, "ACE prompt building failed", "error", err)
+
+		return prompt
+	}
+
+	a.logger.DebugContext(ctx, "ACE enhanced system prompt", "bullets_count", len(bullets))
+
+	return acePrompt
+}
+
+// buildSystemPrompt constructs the layered system prompt.
+func (a *Agent) buildSystemPrompt(ctx context.Context, t task.Task) string {
 	var promptBuilder strings.Builder
 
-	// 1. AGENTS.md project instructions (placed first for context).
 	if a.agentsMD != nil && a.agentsMD.IsLoaded() {
 		promptBuilder.WriteString("# Project Instructions\n\n")
 		promptBuilder.WriteString(a.agentsMD.Content())
@@ -864,13 +862,10 @@ func (a *Agent) callLLM(ctx context.Context, messages []message.Message, t task.
 		a.logger.DebugContext(ctx, "injected AGENTS.md into system prompt", "path", a.agentsMD.Path(), "size", len(a.agentsMD.Content()))
 	}
 
-	// 2. Task system prompt.
-	systemPrompt := t.SystemPrompt()
-	if systemPrompt != "" {
+	if systemPrompt := t.SystemPrompt(); systemPrompt != "" {
 		promptBuilder.WriteString(systemPrompt)
 	}
 
-	// 3. Thinking instructions.
 	if promptBuilder.Len() > 0 {
 		promptBuilder.WriteString(`
 
@@ -883,183 +878,173 @@ I need to analyze this code to understand what it does. Let me break down the fu
 Then provide your response after the thinking block.`)
 	}
 
-	enhancedSystemPrompt := promptBuilder.String()
+	return promptBuilder.String()
+}
 
-	// 4. ACE: Enhance system prompt with retrieved bullets.
-	if enhancedSystemPrompt != "" {
-		if a.aceService != nil {
-			acePrompt, err := a.aceService.BuildPrompt(ctx, enhancedSystemPrompt, bullets)
-			if err != nil {
-				a.logger.WarnContext(ctx, "ACE prompt building failed", "error", err)
-				// Fall back to non-ACE prompt.
-			} else {
-				enhancedSystemPrompt = acePrompt
-
-				a.logger.DebugContext(ctx, "ACE enhanced system prompt", "bullets_count", len(bullets))
-			}
-		}
-
-		openaiMessages = append(openaiMessages, openai.SystemMessage(enhancedSystemPrompt))
-	}
-
-	// Convert conversation messages to OpenAI format.
-	for _, msg := range messages {
-		openaiMessages = append(openaiMessages, convertMessageToOpenAI(msg))
-	}
-
-	// Debug: log assistant messages with tool calls being sent to LLM.
+// logToolCallMessages logs assistant messages with tool calls for debugging.
+func (a *Agent) logToolCallMessages(ctx context.Context, messages []message.Message) {
 	for i, msg := range messages {
-		if msg.Role == message.RoleAssistant && len(msg.ToolCalls) > 0 {
-			ids := make([]string, len(msg.ToolCalls))
-			for j, tc := range msg.ToolCalls {
-				ids[j] = tc.ID
-			}
-
-			a.logger.DebugContext(ctx, "callLLM: assistant message with tool_calls",
-				"msg_index", i,
-				"tool_call_count", len(msg.ToolCalls),
-				"tool_call_ids", ids)
+		if msg.Role != message.RoleAssistant || len(msg.ToolCalls) == 0 {
+			continue
 		}
-	}
 
-	// Build filtered tool list for this task mode.
+		ids := make([]string, len(msg.ToolCalls))
+		for j, tc := range msg.ToolCalls {
+			ids[j] = tc.ID
+		}
+
+		a.logger.DebugContext(ctx, "callLLM: assistant message with tool_calls",
+			"msg_index", i,
+			"tool_call_count", len(msg.ToolCalls),
+			"tool_call_ids", ids)
+	}
+}
+
+// buildLLMParams builds the OpenAI request parameters.
+func (a *Agent) buildLLMParams(ctx context.Context, openaiMessages []openai.ChatCompletionMessageParamUnion, t task.Task) (openai.ChatCompletionNewParams, error) {
 	toolList, err := a.BuildToolsForTask(t)
 	if err != nil {
-		return nil, spinerrors.New(spinerrors.CodeInternal, "Agent.callLLM", "failed to build tools", err)
+		return openai.ChatCompletionNewParams{}, spinerrors.New(spinerrors.CodeInternal, "Agent.callLLM", "failed to build tools", err)
 	}
 
-	// Determine token budget: task overrides agent config.
 	maxTokens := a.maxTokens
-
 	if t != nil {
-		taskMaxTokens := t.MaxTokens()
-		if taskMaxTokens > 0 {
+		if taskMaxTokens := t.MaxTokens(); taskMaxTokens > 0 {
 			maxTokens = taskMaxTokens
 		}
 	}
 
-	// Build OpenAI request params.
 	params := openai.ChatCompletionNewParams{
 		Messages:    openai.F(openaiMessages),
 		Temperature: openai.F(a.temperature),
 		MaxTokens:   openai.F(int64(maxTokens)),
 	}
 
-	// Add tools if present.
 	if len(toolList) > 0 {
 		params.Tools = openai.F(convertToolsToOpenAI(toolList))
 	}
 
 	a.logger.DebugContext(ctx, "calling LLM", "tool_count", len(toolList), "message_count", len(openaiMessages))
 
-	// Call LLM with streaming.
-	chunks, err := a.llm.Stream(ctx, params)
-	if err != nil {
-		return nil, spinerrors.New(spinerrors.CodeLLM, "Agent.callLLM", "failed to start LLM stream", err)
-	}
+	return params, nil
+}
 
-	// Use ChatCompletionAccumulator to properly handle streaming chunks
-	// This handles tool call accumulation by index correctly.
+// processStream reads streaming chunks and returns the accumulated response.
+func (a *Agent) processStream(ctx context.Context, chunks <-chan openai.ChatCompletionChunk) (*openai.ChatCompletion, error) {
 	acc := openai.ChatCompletionAccumulator{}
-
-	// Initialize sanitizer for content stream.
 	streamSanitizer := sanitizer.New()
-
 	chunkCount := 0
+
 	for chunk := range chunks {
 		chunkCount++
 
-		// Check context cancellation.
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, spinerrors.New(spinerrors.CodeTimeout, "Agent.callLLM", "context canceled", ctxErr)
 		}
 
-		// Add chunk to accumulator - this handles proper merging of deltas.
 		acc.AddChunk(chunk)
 
-		// Handle empty chunk (shouldn't happen but be safe).
 		if len(chunk.Choices) == 0 {
 			continue
 		}
 
 		choice := chunk.Choices[0]
-		delta := choice.Delta
+		a.emitStreamDeltas(ctx, choice.Delta, streamSanitizer, chunkCount)
+		a.handleToolCallFinished(ctx, &acc, choice, chunkCount)
 
-		// Emit content delta immediately for real-time streaming
-		// Use sanitizer to filter out protocol artifacts and separate thoughts.
-		if delta.Content != "" {
-			content, thought := streamSanitizer.Process(delta.Content)
-
-			if content != "" {
-				a.emitter.Emit(events.Event{
-					Type:      events.EventContentDelta,
-					Timestamp: time.Now(),
-					Data: events.ContentDeltaData{
-						Content: content,
-						Role:    string(message.RoleAssistant),
-					},
-				})
-				a.logger.DebugContext(ctx, "received content chunk", "count", chunkCount, "content_len", len(content))
-			}
-
-			if thought != "" {
-				a.emitter.Emit(events.Event{
-					Type:      events.EventThinkingDelta,
-					Timestamp: time.Now(),
-					Data: events.ThinkingDeltaData{
-						Content: thought,
-					},
-				})
-				a.logger.DebugContext(ctx, "received thinking chunk", "count", chunkCount, "content_len", len(thought))
-			}
-		}
-
-		// Check if a tool call just finished being accumulated.
-		toolCall, finished := acc.JustFinishedToolCall()
-		if !finished && choice.FinishReason == openai.ChatCompletionChunkChoicesFinishReasonToolCalls {
-			finished = true
-		}
-
-		if finished {
-			if toolCall.Name != "" {
-				a.logger.DebugContext(ctx, "tool call finished", "index", toolCall.Index, "name", toolCall.Name, "args_len", len(toolCall.Arguments))
-			}
-			// Plan detection logic
-			// If we haven't set a planner yet, check the accumulated content for a plan.
-			// This handles the "Thinking/Planning -> ToolCall" pattern synchronously.
-			if a.planner == nil {
-				if len(acc.Choices) > 0 {
-					content := acc.Choices[0].Message.Content
-					if content != "" {
-						plan := planning.DetectPlanFromText(content)
-						if plan != nil {
-							a.SetPlanner(plan)
-							// Manually emit EventPlanUpdate so ACP agent sees it.
-							a.emitter.Emit(events.Event{
-								Type:      events.EventPlanUpdate,
-								Timestamp: time.Now(),
-								Data: events.PlanUpdateData{
-									Plan: plan,
-								},
-							})
-						}
-					}
-				}
-			}
-
-			a.logger.DebugContext(ctx, "tool call finished", "index", toolCall.Index, "name", toolCall.Name, "args_len", len(toolCall.Arguments))
-		}
-
-		// Log finish reason when received.
 		if choice.FinishReason != "" {
 			a.logger.DebugContext(ctx, "received finish chunk", "finish_reason", choice.FinishReason, "total_chunks", chunkCount)
 		}
 	}
 
-	// Get the accumulated response.
+	return a.finalizeStreamResponse(ctx, &acc, chunkCount)
+}
+
+// emitStreamDeltas emits content and thinking delta events from a stream chunk.
+func (a *Agent) emitStreamDeltas(ctx context.Context, delta openai.ChatCompletionChunkChoicesDelta, streamSanitizer *sanitizer.Sanitizer, chunkCount int) {
+	if delta.Content == "" {
+		return
+	}
+
+	content, thought := streamSanitizer.Process(delta.Content)
+
+	if content != "" {
+		a.emitter.Emit(events.Event{
+			Type:      events.EventContentDelta,
+			Timestamp: time.Now(),
+			Data: events.ContentDeltaData{
+				Content: content,
+				Role:    string(message.RoleAssistant),
+			},
+		})
+		a.logger.DebugContext(ctx, "received content chunk", "count", chunkCount, "content_len", len(content))
+	}
+
+	if thought != "" {
+		a.emitter.Emit(events.Event{
+			Type:      events.EventThinkingDelta,
+			Timestamp: time.Now(),
+			Data: events.ThinkingDeltaData{
+				Content: thought,
+			},
+		})
+		a.logger.DebugContext(ctx, "received thinking chunk", "count", chunkCount, "content_len", len(thought))
+	}
+}
+
+// handleToolCallFinished handles a completed tool call in the stream, including plan detection.
+func (a *Agent) handleToolCallFinished(ctx context.Context, acc *openai.ChatCompletionAccumulator, choice openai.ChatCompletionChunkChoice, chunkCount int) {
+	toolCall, finished := acc.JustFinishedToolCall()
+	if !finished && choice.FinishReason == openai.ChatCompletionChunkChoicesFinishReasonToolCalls {
+		finished = true
+	}
+
+	if !finished {
+		return
+	}
+
+	if toolCall.Name != "" {
+		a.logger.DebugContext(ctx, "tool call finished", "index", toolCall.Index, "name", toolCall.Name, "args_len", len(toolCall.Arguments))
+	}
+
+	a.detectPlanFromAccumulator(ctx, acc)
+	a.logger.DebugContext(ctx, "tool call finished", "index", toolCall.Index, "name", toolCall.Name, "args_len", len(toolCall.Arguments))
+
+	_ = chunkCount // used for logging context
+}
+
+// detectPlanFromAccumulator checks accumulated content for a plan and sets the planner.
+func (a *Agent) detectPlanFromAccumulator(ctx context.Context, acc *openai.ChatCompletionAccumulator) {
+	if a.planner != nil || len(acc.Choices) == 0 {
+		return
+	}
+
+	content := acc.Choices[0].Message.Content
+	if content == "" {
+		return
+	}
+
+	plan := planning.DetectPlanFromText(content)
+	if plan == nil {
+		return
+	}
+
+	a.SetPlanner(plan)
+	a.emitter.Emit(events.Event{
+		Type:      events.EventPlanUpdate,
+		Timestamp: time.Now(),
+		Data: events.PlanUpdateData{
+			Plan: plan,
+		},
+	})
+
+	_ = ctx // used for context propagation
+}
+
+// finalizeStreamResponse validates and returns the accumulated stream response.
+func (a *Agent) finalizeStreamResponse(ctx context.Context, acc *openai.ChatCompletionAccumulator, chunkCount int) (*openai.ChatCompletion, error) {
 	response := &acc.ChatCompletion
 
-	// Check if we have any choices (may be empty on timeout/error).
 	if len(response.Choices) == 0 {
 		a.logger.WarnContext(ctx, "stream ended with no choices", "total_chunks", chunkCount)
 
@@ -1075,72 +1060,155 @@ Then provide your response after the thinking block.`)
 		"content_len", len(response.Choices[0].Message.Content),
 		"tool_calls", len(response.Choices[0].Message.ToolCalls))
 
-	// Check if context was canceled after stream ended.
-	err = ctx.Err()
-	if err != nil {
+	if err := ctx.Err(); err != nil {
 		return nil, spinerrors.New(spinerrors.CodeTimeout, "Agent.callLLM", "context canceled", err)
 	}
 
-	// Fallback: if no finish reason was provided, set a default one.
-	if response.Choices[0].FinishReason == "" {
-		if len(response.Choices[0].Message.ToolCalls) > 0 {
-			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
-		} else {
-			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonStop
-		}
-	}
-
-	// XML Tool Call Recovery:
-	// If no structured tool calls were detected, check if the LLM output tool calls as XML in content.
-	// This handles models like Qwen that may fallback to XML output.
-	if len(response.Choices[0].Message.ToolCalls) == 0 {
-		content := response.Choices[0].Message.Content
-
-		xmlToolCalls := parseToolCallsFromXML(content)
-		if len(xmlToolCalls) > 0 {
-			a.logger.InfoContext(ctx, "detected XML tool calls in content", "count", len(xmlToolCalls))
-			response.Choices[0].Message.ToolCalls = xmlToolCalls
-			// Force finish reason to tool_calls so the loop processes them.
-			response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
-
-			// Clean up content to remove XML tags (avoid duplication in history)
-			// We reconstruct content preserving thoughts but removing function tags.
-			s := sanitizer.New()
-			cleanContent, cleanThought := s.Process(content)
-
-			var sb strings.Builder
-			if cleanThought != "" {
-				sb.WriteString("<think>")
-				sb.WriteString(cleanThought)
-				sb.WriteString("</think>\n")
-			}
-
-			sb.WriteString(cleanContent)
-			response.Choices[0].Message.Content = sb.String()
-		}
-	}
-
-	// ACE: Parse feedback and update bullets if retrieved any.
-	if a.aceService != nil && len(bullets) > 0 {
-		responseContent := response.Choices[0].Message.Content
-
-		feedback, parseErr := a.aceService.ParseFeedback(responseContent)
-		if parseErr != nil {
-			if !errors.Is(parseErr, ErrACEDisabled) {
-				a.logger.WarnContext(ctx, "ACE feedback parsing failed", "error", parseErr)
-			}
-		} else if feedback != nil {
-			// Update bullets asynchronously (based on config).
-			updateErr := a.aceService.UpdateBullets(ctx, bullets, feedback)
-			if updateErr != nil {
-				a.logger.WarnContext(ctx, "ACE bullet update failed", "error", updateErr)
-			} else {
-				a.logger.DebugContext(ctx, "ACE updated bullets", "helpful_count", len(feedback.HelpfulBullets), "harmful_count", len(feedback.HarmfulBullets))
-			}
-		}
-	}
-
 	return response, nil
+}
+
+// applyFinishReasonFallback sets a default finish reason if none was provided.
+func (a *Agent) applyFinishReasonFallback(response *openai.ChatCompletion) {
+	if response.Choices[0].FinishReason != "" {
+		return
+	}
+
+	if len(response.Choices[0].Message.ToolCalls) > 0 {
+		response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
+	} else {
+		response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonStop
+	}
+}
+
+// recoverXMLToolCalls checks for XML-formatted tool calls in content and converts them.
+func (a *Agent) recoverXMLToolCalls(ctx context.Context, response *openai.ChatCompletion) {
+	if len(response.Choices[0].Message.ToolCalls) > 0 {
+		return
+	}
+
+	content := response.Choices[0].Message.Content
+	xmlToolCalls := parseToolCallsFromXML(content)
+
+	if len(xmlToolCalls) == 0 {
+		return
+	}
+
+	a.logger.InfoContext(ctx, "detected XML tool calls in content", "count", len(xmlToolCalls))
+	response.Choices[0].Message.ToolCalls = xmlToolCalls
+	response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
+
+	s := sanitizer.New()
+	cleanContent, cleanThought := s.Process(content)
+
+	var sb strings.Builder
+	if cleanThought != "" {
+		sb.WriteString("<think>")
+		sb.WriteString(cleanThought)
+		sb.WriteString("</think>\n")
+	}
+
+	sb.WriteString(cleanContent)
+	response.Choices[0].Message.Content = sb.String()
+}
+
+// processACEFeedback parses and applies ACE feedback from the response.
+func (a *Agent) processACEFeedback(ctx context.Context, response *openai.ChatCompletion, bullets []*bullet.Bullet) {
+	if a.aceService == nil || len(bullets) == 0 {
+		return
+	}
+
+	responseContent := response.Choices[0].Message.Content
+
+	fb, parseErr := a.aceService.ParseFeedback(responseContent)
+	if parseErr != nil {
+		if !errors.Is(parseErr, ErrACEDisabled) {
+			a.logger.WarnContext(ctx, "ACE feedback parsing failed", "error", parseErr)
+		}
+
+		return
+	}
+
+	if fb == nil {
+		return
+	}
+
+	updateErr := a.aceService.UpdateBullets(ctx, bullets, fb)
+	if updateErr != nil {
+		a.logger.WarnContext(ctx, "ACE bullet update failed", "error", updateErr)
+	} else {
+		a.logger.DebugContext(ctx, "ACE updated bullets", "helpful_count", len(fb.HelpfulBullets), "harmful_count", len(fb.HarmfulBullets))
+	}
+}
+
+// generateACEBullets generates ACE bullets from execution trajectory.
+func (a *Agent) generateACEBullets(ctx context.Context, trajCtx *trajectory.Context, resp *Response) {
+	if a.aceService == nil {
+		a.logger.DebugContext(ctx, "Bullet generation skipped", "ace_service_nil", true)
+		return
+	}
+
+	a.logger.InfoContext(ctx, "Starting bullet generation from execution", "success", resp.Success)
+
+	traj := trajCtx.ToTrajectory()
+	traj.Success = resp.Success
+	a.logger.DebugContext(ctx, "Execution trajectory built", "steps", len(traj.Steps), "success", traj.Success)
+
+	learnedBullets, err := a.generateBulletsFromTrajectory(ctx, traj)
+	if err != nil {
+		a.logger.WarnContext(ctx, "ACE bullet generation failed", "error", err)
+		return
+	}
+
+	a.logger.InfoContext(ctx, "Successfully generated bullets from execution", "count", len(learnedBullets))
+	if len(learnedBullets) == 0 {
+		a.logger.DebugContext(ctx, "No bullets to display (empty result)")
+	}
+
+	a.emitACELearningEvent(resp, learnedBullets)
+}
+
+// generateBulletsFromTrajectory generates bullets using either reflection or simple generation.
+func (a *Agent) generateBulletsFromTrajectory(ctx context.Context, traj *generator.Trajectory) ([]*bullet.Bullet, error) {
+	if a.aceService.config.Generation.AutoReflect {
+		return a.aceService.GenerateBulletsWithReflectionFromTrajectory(ctx, traj)
+	}
+
+	var summaryBuilder strings.Builder
+	summaryBuilder.WriteString("Task: ")
+	summaryBuilder.WriteString(traj.Query)
+	summaryBuilder.WriteString("\n\nExecution Steps:\n")
+
+	for _, step := range traj.Steps {
+		fmt.Fprintf(&summaryBuilder, "- [%s] %s\n", step.Type, step.Content)
+	}
+
+	summaryBuilder.WriteString("\nResult: ")
+	summaryBuilder.WriteString(traj.Output)
+
+	return a.aceService.GenerateBullets(ctx, summaryBuilder.String(), "trajectory")
+}
+
+// emitACELearningEvent emits an ACE learning event if configured and bullets were generated.
+func (a *Agent) emitACELearningEvent(resp *Response, learnedBullets []*bullet.Bullet) {
+	if len(learnedBullets) == 0 || a.aceConfig == nil || !a.aceConfig.Retrieval.ProgressiveContext.EmitACEEvents {
+		return
+	}
+
+	bulletData := make([]events.BulletData, len(learnedBullets))
+	for i, b := range learnedBullets {
+		bulletData[i] = events.BulletData{
+			Content: b.Content,
+		}
+	}
+
+	a.emitter.Emit(events.Event{
+		Type:      events.EventACELearned,
+		Timestamp: time.Now(),
+		Data: events.ACELearningData{
+			Success: resp.Success,
+			Bullets: bulletData,
+		},
+	})
 }
 
 // messageAdapter adapts message.Message to detection.Message interface.

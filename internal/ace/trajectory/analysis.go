@@ -92,6 +92,14 @@ func extractToolName(content string) string {
 	return fields[0]
 }
 
+// Common stopwords to filter out in concept extraction.
+var stopwords = map[string]bool{
+	"the": true, "and": true, "or": true, "but": true, "in": true,
+	"on": true, "at": true, "to": true, "for": true, "of": true,
+	"with": true, "a": true, "an": true, "is": true, "are": true,
+	"was": true, "were": true, "be": true, "been": true, "being": true,
+}
+
 // ExtractConcepts extracts key concepts from step content.
 // Returns unique concepts (words) that appear significant.
 // Lookback of 0 or negative value checks all steps.
@@ -101,45 +109,40 @@ func ExtractConcepts(steps []generator.TrajectoryStep, lookback int) []string {
 	seen := make(map[string]bool)
 	concepts := make([]string, 0)
 
-	// Common stopwords to filter out.
-	stopwords := map[string]bool{
-		"the": true, "and": true, "or": true, "but": true, "in": true,
-		"on": true, "at": true, "to": true, "for": true, "of": true,
-		"with": true, "a": true, "an": true, "is": true, "are": true,
-		"was": true, "were": true, "be": true, "been": true, "being": true,
-	}
-
 	for _, step := range recentSteps {
-		// Split content into words.
 		words := strings.FieldsSeq(step.Content)
 		for word := range words {
-			// Clean up punctuation.
 			word = strings.Trim(word, ".,!?:;\"'()[]{}")
-
-			if word == "" {
-				continue
-			}
-
-			// Check if word is capitalized (potential concept).
-			if len(word) > 0 && word[0] >= 'A' && word[0] <= 'Z' {
-				lower := strings.ToLower(word)
-				if !stopwords[lower] && !seen[word] {
-					seen[word] = true
-					concepts = append(concepts, word)
-				}
-			}
-
-			// Also check for technical terms (contains _ or .)
-			if strings.Contains(word, "_") || strings.Contains(word, ".") {
-				if !seen[word] {
-					seen[word] = true
-					concepts = append(concepts, word)
-				}
+			if concept, ok := extractConcept(word, seen); ok {
+				concepts = append(concepts, concept)
 			}
 		}
 	}
 
 	return concepts
+}
+
+// extractConcept checks if a word is a concept (capitalized or technical term)
+// and returns it if not already seen.
+func extractConcept(word string, seen map[string]bool) (string, bool) {
+	if word == "" || seen[word] {
+		return "", false
+	}
+
+	isCapitalized := word[0] >= 'A' && word[0] <= 'Z'
+	isTechnical := strings.Contains(word, "_") || strings.Contains(word, ".")
+
+	if isCapitalized && !stopwords[strings.ToLower(word)] {
+		seen[word] = true
+		return word, true
+	}
+
+	if isTechnical {
+		seen[word] = true
+		return word, true
+	}
+
+	return "", false
 }
 
 // containsError checks if content contains error indicators.
