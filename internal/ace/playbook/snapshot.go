@@ -36,20 +36,40 @@ type BulletChange struct {
 
 // Snapshot creates an immutable snapshot of the current playbook state.
 // All bullets are deep copied to ensure immutability.
+// Bullets and stats are collected in a single pass for consistency.
 func (p *Playbook) Snapshot() *Snapshot {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	var (
+		bullets    []*bullet.Bullet
+		stats      Stats
+		totalScore float64
+	)
 
-	bullets := make([]*bullet.Bullet, 0, len(p.bullets))
-	for _, b := range p.bullets {
+	p.bullets.Range(func(_ string, b *bullet.Bullet) bool {
 		bullets = append(bullets, b.Clone())
+
+		stats.TotalBullets++
+		stats.TotalHelpful += b.HelpfulCount
+		stats.TotalHarmful += b.HarmfulCount
+		totalScore += b.Score()
+
+		stats.TotalSizeBytes += int64(len(b.ID) + len(b.Content) + 16 + len(b.Embedding)*bytesPerFloat32)
+
+		for k, v := range b.Tags {
+			stats.TotalSizeBytes += int64(len(k) + len(v))
+		}
+
+		return true
+	})
+
+	if stats.TotalBullets > 0 {
+		stats.AvgScore = totalScore / float64(stats.TotalBullets)
 	}
 
 	return &Snapshot{
 		ID:        uuid.New().String(),
 		Bullets:   bullets,
 		CreatedAt: time.Now(),
-		Stats:     p.statsLocked(),
+		Stats:     stats,
 	}
 }
 
@@ -60,15 +80,11 @@ func (p *Playbook) Restore(snapshot *Snapshot) error {
 		return ErrSnapshotCannotBeNil
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	// Clear current bullets.
-	p.bullets = make(map[string]*bullet.Bullet)
+	p.bullets.Clear()
 
 	// Add bullets from snapshot (deep copy).
 	for _, b := range snapshot.Bullets {
-		p.bullets[b.ID] = b.Clone()
+		p.bullets.Set(b.ID, b.Clone())
 	}
 
 	return nil
@@ -122,34 +138,6 @@ func (s *Snapshot) Diff(other *Snapshot) *Diff {
 	}
 
 	return diff
-}
-
-// statsLocked returns stats without acquiring lock (caller must hold lock).
-func (p *Playbook) statsLocked() Stats {
-	stats := Stats{
-		TotalBullets: len(p.bullets),
-	}
-
-	if stats.TotalBullets == 0 {
-		return stats
-	}
-
-	totalScore := 0.0
-
-	for _, b := range p.bullets {
-		stats.TotalHelpful += b.HelpfulCount
-		stats.TotalHarmful += b.HarmfulCount
-		totalScore += b.Score()
-
-		stats.TotalSizeBytes += int64(len(b.ID) + len(b.Content) + 16 + len(b.Embedding)*4)
-		for k, v := range b.Tags {
-			stats.TotalSizeBytes += int64(len(k) + len(v))
-		}
-	}
-
-	stats.AvgScore = totalScore / float64(stats.TotalBullets)
-
-	return stats
 }
 
 // bulletsEqual checks if two bullets are equal (for diff purposes).

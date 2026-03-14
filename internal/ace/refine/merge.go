@@ -3,10 +3,10 @@ package refine
 import (
 	"context"
 	"errors"
-	"math"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
+	"github.com/dmytrogajewski/spin/internal/mathutil"
 )
 
 // ErrSourceAndTargetBulletsCannotBe is a sentinel error.
@@ -117,7 +117,7 @@ func (m *MergeEngine) MergeBullets(_ context.Context, source, target *bullet.Bul
 func (m *MergeEngine) calculateSimilarity(ctx context.Context, b1, b2 *bullet.Bullet) (float64, error) {
 	// If both have embeddings, use them.
 	if len(b1.Embedding) > 0 && len(b2.Embedding) > 0 {
-		return m.cosineSimilarity(b1.Embedding, b2.Embedding), nil
+		return mathutil.CosineSimilarity(b1.Embedding, b2.Embedding), nil
 	}
 
 	// If embedder is available, generate embeddings.
@@ -132,31 +132,11 @@ func (m *MergeEngine) calculateSimilarity(ctx context.Context, b1, b2 *bullet.Bu
 			return 0.0, err
 		}
 
-		return m.cosineSimilarity(emb1, emb2), nil
+		return mathutil.CosineSimilarity(emb1, emb2), nil
 	}
 
 	// No embeddings available - fall back to simple content comparison.
 	return m.simpleSimilarity(b1.Content, b2.Content), nil
-}
-
-// cosineSimilarity calculates cosine similarity between two vectors.
-func (m *MergeEngine) cosineSimilarity(a, b []float32) float64 {
-	if len(a) != len(b) {
-		return 0.0
-	}
-
-	var dotProduct, normA, normB float64
-	for i := range a {
-		dotProduct += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
-	}
-
-	if normA == 0 || normB == 0 {
-		return 0.0
-	}
-
-	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
 }
 
 // simpleSimilarity provides basic content-based similarity when no embeddings available.

@@ -16,6 +16,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/refine"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/llmutil"
 )
 
 const (
@@ -30,14 +31,6 @@ const (
 var (
 	// ErrDeltaApplierNotInitialized is a sentinel error.
 	ErrDeltaApplierNotInitialized = errors.New("delta applier not initialized")
-	// ErrDeltaApplierNotInitialized2 is a sentinel error.
-	ErrDeltaApplierNotInitialized2 = errors.New("delta applier not initialized")
-	// ErrDeltaApplierNotInitialized3 is a sentinel error.
-	ErrDeltaApplierNotInitialized3 = errors.New("delta applier not initialized")
-	// ErrDeltaApplierNotInitialized4 is a sentinel error.
-	ErrDeltaApplierNotInitialized4 = errors.New("delta applier not initialized")
-	// ErrDeltaApplierNotInitialized5 is a sentinel error.
-	ErrDeltaApplierNotInitialized5 = errors.New("delta applier not initialized")
 )
 
 // BulletMerger handles insight-to-bullet conversion and playbook merging.
@@ -302,7 +295,7 @@ func (c *curator) callLLMForCuration(ctx context.Context, prompt string) (*Curat
 		return nil, err
 	}
 
-	responseText := cleanJSONResponse(completion.Choices[0].Message.Content)
+	responseText := llmutil.CleanJSONResponse(completion.Choices[0].Message.Content)
 	c.logger.DebugContext(ctx, "LLM curation response received",
 		"length", len(responseText), "tokens", completion.Usage.TotalTokens)
 
@@ -509,28 +502,6 @@ func (c *curator) CurateBatch(ctx context.Context, req BatchMergeRequest) (*Batc
 	return c.curateBatchParallel(ctx, req.Requests, req.MaxWorkers)
 }
 
-// cleanJSONResponse extracts JSON content from markdown code blocks.
-func cleanJSONResponse(response string) string {
-	response = strings.TrimSpace(response)
-
-	// Handle markdown code blocks.
-	if after, ok := strings.CutPrefix(response, "```json"); ok {
-		response = after
-		response = strings.TrimSpace(response)
-	} else if afterPlain, okPlain := strings.CutPrefix(response, "```"); okPlain {
-		response = afterPlain
-		response = strings.TrimSpace(response)
-	}
-
-	// Remove trailing code block markers.
-	if before, ok := strings.CutSuffix(response, "```"); ok {
-		response = before
-		response = strings.TrimSpace(response)
-	}
-
-	return response
-}
-
 // ApplyBulletFeedback applies feedback to multiple bullets using batch delta operations.
 // This is used for itemized learning where the LLM provides helpful/harmful feedback.
 func (c *curator) ApplyBulletFeedback(ctx context.Context, feedback map[string]string) error {
@@ -582,7 +553,7 @@ func (c *curator) ApplyBulletFeedback(ctx context.Context, feedback map[string]s
 // UpdateBulletContent updates bullet content using delta operation.
 func (c *curator) UpdateBulletContent(ctx context.Context, bulletID, newContent string) error {
 	if c.deltaApplier == nil {
-		return ErrDeltaApplierNotInitialized2
+		return ErrDeltaApplierNotInitialized
 	}
 
 	deltaOp := delta.NewContentUpdate(bulletID, newContent, delta.Metadata{
@@ -598,7 +569,7 @@ func (c *curator) UpdateBulletContent(ctx context.Context, bulletID, newContent 
 // AddBulletTag adds or updates a tag on a bullet using delta operation.
 func (c *curator) AddBulletTag(ctx context.Context, bulletID, key, value string) error {
 	if c.deltaApplier == nil {
-		return ErrDeltaApplierNotInitialized3
+		return ErrDeltaApplierNotInitialized
 	}
 
 	deltaOp := delta.NewAddTag(bulletID, key, value, delta.Metadata{
@@ -614,7 +585,7 @@ func (c *curator) AddBulletTag(ctx context.Context, bulletID, key, value string)
 // RemoveBulletTag removes a tag from a bullet using delta operation.
 func (c *curator) RemoveBulletTag(ctx context.Context, bulletID, key string) error {
 	if c.deltaApplier == nil {
-		return ErrDeltaApplierNotInitialized4
+		return ErrDeltaApplierNotInitialized
 	}
 
 	deltaOp := delta.NewRemoveTag(bulletID, key, delta.Metadata{
@@ -630,7 +601,7 @@ func (c *curator) RemoveBulletTag(ctx context.Context, bulletID, key string) err
 // UpdateBulletEmbedding updates bullet embedding using delta operation.
 func (c *curator) UpdateBulletEmbedding(ctx context.Context, bulletID string, vec []float32) error {
 	if c.deltaApplier == nil {
-		return ErrDeltaApplierNotInitialized5
+		return ErrDeltaApplierNotInitialized
 	}
 
 	deltaOp := delta.NewUpdateEmbedding(bulletID, vec, delta.Metadata{

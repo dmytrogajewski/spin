@@ -11,9 +11,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
+	"github.com/dmytrogajewski/spin/internal/mathutil"
 )
-
-const sqrtDivisor = 2
 
 // ErrBulletHasNoEmbedding is a sentinel error.
 var ErrBulletHasNoEmbedding = errors.New("bullet has no embedding")
@@ -116,7 +115,7 @@ func (r *HNSWRetriever) RetrieveWithScores(ctx context.Context, query string, to
 
 		// Calculate cosine similarity from L2 distance
 		// HNSW uses L2 distance by default, we need to convert to similarity.
-		similarity := cosineSimilarity(queryEmbed, b.Embedding)
+		similarity := mathutil.CosineSimilarity(queryEmbed, b.Embedding)
 
 		results = append(results, ScoredBullet{
 			Bullet: b,
@@ -158,38 +157,4 @@ func (r *HNSWRetriever) RemoveBullet(bulletID string) error {
 	delete(r.indexMap, bulletID)
 
 	return nil
-}
-
-// cosineSimilarity calculates cosine similarity between two vectors.
-func cosineSimilarity(a, b []float32) float64 {
-	if len(a) != len(b) || len(a) == 0 {
-		return 0
-	}
-
-	var dotProduct, normA, normB float64
-	for i := range a {
-		dotProduct += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
-	}
-
-	if normA == 0 || normB == 0 {
-		return 0
-	}
-
-	return dotProduct / (sqrt(normA) * sqrt(normB))
-}
-
-// sqrt is a simple square root implementation.
-func sqrt(x float64) float64 {
-	if x == 0 {
-		return 0
-	}
-	// Use Newton's method for square root.
-	z := x
-	for range 10 {
-		z = (z + x/z) / sqrtDivisor
-	}
-
-	return z
 }

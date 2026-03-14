@@ -2,10 +2,10 @@ package playbook
 
 import (
 	"context"
-	"math"
 	"sort"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
+	"github.com/dmytrogajewski/spin/internal/mathutil"
 )
 
 // searchResult holds a bullet with its similarity score.
@@ -28,18 +28,15 @@ func (p *Playbook) Search(ctx context.Context, query string, topK int) ([]*bulle
 		return nil, err
 	}
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
 	// Calculate similarities.
 	results := make([]searchResult, 0)
 
-	for _, b := range p.bullets {
+	p.bullets.Range(func(_ string, b *bullet.Bullet) bool {
 		if len(b.Embedding) == 0 {
-			continue
+			return true
 		}
 
-		similarity := cosineSimilarity(queryEmbed, b.Embedding)
+		similarity := mathutil.CosineSimilarity(queryEmbed, b.Embedding)
 		// Clamp similarity to [0, 1] to avoid floating point precision issues.
 		if similarity > 1.0 {
 			similarity = 1.0
@@ -51,7 +48,9 @@ func (p *Playbook) Search(ctx context.Context, query string, topK int) ([]*bulle
 			bullet:     b,
 			similarity: similarity,
 		})
-	}
+
+		return true
+	})
 
 	// Sort by similarity descending.
 	sort.Slice(results, func(i, j int) bool {
@@ -91,18 +90,15 @@ func (p *Playbook) SearchWithScores(ctx context.Context, query string, topK int)
 		return nil, err
 	}
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
 	// Calculate similarities.
 	results := make([]searchResult, 0)
 
-	for _, b := range p.bullets {
+	p.bullets.Range(func(_ string, b *bullet.Bullet) bool {
 		if len(b.Embedding) == 0 {
-			continue
+			return true
 		}
 
-		similarity := cosineSimilarity(queryEmbed, b.Embedding)
+		similarity := mathutil.CosineSimilarity(queryEmbed, b.Embedding)
 		// Clamp similarity to [0, 1] to avoid floating point precision issues.
 		if similarity > 1.0 {
 			similarity = 1.0
@@ -114,7 +110,9 @@ func (p *Playbook) SearchWithScores(ctx context.Context, query string, topK int)
 			bullet:     b,
 			similarity: similarity,
 		})
-	}
+
+		return true
+	})
 
 	// Sort by similarity descending.
 	sort.Slice(results, func(i, j int) bool {
@@ -135,24 +133,4 @@ func (p *Playbook) SearchWithScores(ctx context.Context, query string, topK int)
 	}
 
 	return searchResults, nil
-}
-
-// cosineSimilarity calculates cosine similarity between two vectors.
-func cosineSimilarity(a, b []float32) float64 {
-	if len(a) != len(b) {
-		return 0.0
-	}
-
-	var dotProduct, normA, normB float64
-	for i := range a {
-		dotProduct += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
-	}
-
-	if normA == 0 || normB == 0 {
-		return 0.0
-	}
-
-	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
 }

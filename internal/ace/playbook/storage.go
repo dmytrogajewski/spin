@@ -9,6 +9,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/storage"
 )
 
 // playbookJSON is the JSON representation of a playbook.
@@ -21,16 +22,7 @@ type playbookJSON struct {
 func (p *Playbook) Save(path string) error {
 	path = filepath.Clean(path)
 
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	// Collect all bullets.
-	bullets := make([]*bullet.Bullet, 0, len(p.bullets))
-	for _, b := range p.bullets {
-		bullets = append(bullets, b)
-	}
-
-	data := playbookJSON{Bullets: bullets}
+	data := playbookJSON{Bullets: p.bullets.Values()}
 
 	// Marshal to JSON.
 	jsonData, err := json.MarshalIndent(data, "", "  ")
@@ -38,41 +30,7 @@ func (p *Playbook) Save(path string) error {
 		return fmt.Errorf("failed to marshal playbook: %w", err)
 	}
 
-	// Atomic write: temp file + rename.
-	dir := filepath.Dir(path)
-
-	tmpFile, err := os.CreateTemp(dir, "playbook-*.tmp")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-
-	tmpPath := tmpFile.Name()
-
-	// Write data.
-	_, err = tmpFile.Write(jsonData)
-	if err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
-
-		return fmt.Errorf("failed to write temp file: %w", err)
-	}
-
-	err = tmpFile.Close()
-	if err != nil {
-		os.Remove(tmpPath)
-
-		return fmt.Errorf("failed to close temp file: %w", err)
-	}
-
-	// Atomic rename.
-	err = os.Rename(tmpPath, path)
-	if err != nil {
-		os.Remove(tmpPath)
-
-		return fmt.Errorf("failed to rename temp file: %w", err)
-	}
-
-	return nil
+	return storage.AtomicWriteFile(path, jsonData, 0o600)
 }
 
 // Load deserializes a playbook from a JSON file.
@@ -103,7 +61,7 @@ func Load(path string, emitter *events.EventEmitter, embedder embedding.Embedder
 			continue
 		}
 
-		pb.bullets[b.ID] = b
+		pb.bullets.Set(b.ID, b)
 	}
 
 	return pb, nil

@@ -17,38 +17,8 @@ const minDiffContextLines = 5
 var (
 	// ErrNoGitStatusAvailable is a sentinel error.
 	ErrNoGitStatusAvailable = errors.New("no Git status available")
-	// ErrNoGitStatusAvailable2 is a sentinel error.
-	ErrNoGitStatusAvailable2 = errors.New("no Git status available")
-	// ErrNoGitStatusAvailable3 is a sentinel error.
-	ErrNoGitStatusAvailable3 = errors.New("no Git status available")
-	// ErrNoGitStatusAvailable4 is a sentinel error.
-	ErrNoGitStatusAvailable4 = errors.New("no Git status available")
-	// ErrNoGitStatusAvailable5 is a sentinel error.
-	ErrNoGitStatusAvailable5 = errors.New("no Git status available")
-	// ErrNoGitStatusAvailable6 is a sentinel error.
-	ErrNoGitStatusAvailable6 = errors.New("no Git status available")
 	// ErrNotAGitRepository is a sentinel error.
 	ErrNotAGitRepository = errors.New("not a Git repository")
-	// ErrNotAGitRepository2 is a sentinel error.
-	ErrNotAGitRepository2 = errors.New("not a Git repository")
-	// ErrNotAGitRepository3 is a sentinel error.
-	ErrNotAGitRepository3 = errors.New("not a Git repository")
-	// ErrNotAGitRepository4 is a sentinel error.
-	ErrNotAGitRepository4 = errors.New("not a Git repository")
-	// ErrNotAGitRepository5 is a sentinel error.
-	ErrNotAGitRepository5 = errors.New("not a Git repository")
-	// ErrNotAGitRepository6 is a sentinel error.
-	ErrNotAGitRepository6 = errors.New("not a Git repository")
-	// ErrNotAGitRepository7 is a sentinel error.
-	ErrNotAGitRepository7 = errors.New("not a Git repository")
-	// ErrNotAGitRepository8 is a sentinel error.
-	ErrNotAGitRepository8 = errors.New("not a Git repository")
-	// ErrNotAGitRepository9 is a sentinel error.
-	ErrNotAGitRepository9 = errors.New("not a Git repository")
-	// ErrNotAGitRepository10 is a sentinel error.
-	ErrNotAGitRepository10 = errors.New("not a Git repository")
-	// ErrNotAGitRepository11 is a sentinel error.
-	ErrNotAGitRepository11 = errors.New("not a Git repository")
 )
 
 // Integration provides Git-aware functionality for the agent.
@@ -169,7 +139,7 @@ func (g *Integration) GetBranch() (string, error) {
 func (g *Integration) GetRemoteURL() (string, error) {
 	status := g.GetStatus()
 	if status == nil {
-		return "", ErrNoGitStatusAvailable2
+		return "", ErrNoGitStatusAvailable
 	}
 
 	return status.RemoteBranch, nil
@@ -179,7 +149,7 @@ func (g *Integration) GetRemoteURL() (string, error) {
 func (g *Integration) GetCommitHash() (string, error) {
 	status := g.GetStatus()
 	if status == nil {
-		return "", ErrNoGitStatusAvailable3
+		return "", ErrNoGitStatusAvailable
 	}
 
 	return status.Hash, nil
@@ -189,7 +159,7 @@ func (g *Integration) GetCommitHash() (string, error) {
 func (g *Integration) GetModifiedFiles() ([]string, error) {
 	status := g.GetStatus()
 	if status == nil {
-		return nil, ErrNoGitStatusAvailable4
+		return nil, ErrNoGitStatusAvailable
 	}
 
 	var files []string
@@ -208,7 +178,7 @@ func (g *Integration) GetModifiedFiles() ([]string, error) {
 func (g *Integration) GetStagedFiles() ([]string, error) {
 	status := g.GetStatus()
 	if status == nil {
-		return nil, ErrNoGitStatusAvailable5
+		return nil, ErrNoGitStatusAvailable
 	}
 
 	var files []string
@@ -227,7 +197,7 @@ func (g *Integration) GetStagedFiles() ([]string, error) {
 func (g *Integration) GetUntrackedFiles() ([]string, error) {
 	status := g.GetStatus()
 	if status == nil {
-		return nil, ErrNoGitStatusAvailable6
+		return nil, ErrNoGitStatusAvailable
 	}
 
 	return status.UntrackedFiles, nil
@@ -326,7 +296,7 @@ func (g *Integration) GetDiff(ctx context.Context, filePath string) (string, err
 // GetLog returns recent commit history.
 func (g *Integration) GetLog(ctx context.Context, limit int) ([]CommitInfo, error) {
 	if !g.IsRepository() {
-		return nil, ErrNotAGitRepository2
+		return nil, ErrNotAGitRepository
 	}
 
 	if limit <= 0 {
@@ -351,7 +321,7 @@ func (g *Integration) GetLog(ctx context.Context, limit int) ([]CommitInfo, erro
 // StageFile stages a file for commit.
 func (g *Integration) StageFile(ctx context.Context, filePath string) error {
 	if !g.IsRepository() {
-		return ErrNotAGitRepository3
+		return ErrNotAGitRepository
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "add", filePath)
@@ -367,7 +337,7 @@ func (g *Integration) StageFile(ctx context.Context, filePath string) error {
 // UnstageFile unstages a file.
 func (g *Integration) UnstageFile(ctx context.Context, filePath string) error {
 	if !g.IsRepository() {
-		return ErrNotAGitRepository4
+		return ErrNotAGitRepository
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "reset", "HEAD", filePath)
@@ -383,7 +353,7 @@ func (g *Integration) UnstageFile(ctx context.Context, filePath string) error {
 // Commit creates a commit with the given message.
 func (g *Integration) Commit(ctx context.Context, message string) error {
 	if !g.IsRepository() {
-		return ErrNotAGitRepository5
+		return ErrNotAGitRepository
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "commit", "-m", message)
@@ -399,7 +369,7 @@ func (g *Integration) Commit(ctx context.Context, message string) error {
 // Push pushes changes to the remote repository.
 func (g *Integration) Push(ctx context.Context) error {
 	if !g.IsRepository() {
-		return ErrNotAGitRepository6
+		return ErrNotAGitRepository
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "push")
@@ -415,7 +385,7 @@ func (g *Integration) Push(ctx context.Context) error {
 // Pull pulls changes from the remote repository.
 func (g *Integration) Pull(ctx context.Context) error {
 	if !g.IsRepository() {
-		return ErrNotAGitRepository7
+		return ErrNotAGitRepository
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "pull")
@@ -431,7 +401,7 @@ func (g *Integration) Pull(ctx context.Context) error {
 // CreateBranch creates a new branch.
 func (g *Integration) CreateBranch(ctx context.Context, branchName string) error {
 	if !g.IsRepository() {
-		return ErrNotAGitRepository8
+		return ErrNotAGitRepository
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "checkout", "-b", branchName)
@@ -447,7 +417,7 @@ func (g *Integration) CreateBranch(ctx context.Context, branchName string) error
 // SwitchBranch switches to an existing branch.
 func (g *Integration) SwitchBranch(ctx context.Context, branchName string) error {
 	if !g.IsRepository() {
-		return ErrNotAGitRepository9
+		return ErrNotAGitRepository
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "checkout", branchName)
@@ -463,7 +433,7 @@ func (g *Integration) SwitchBranch(ctx context.Context, branchName string) error
 // ListBranches returns the list of local and remote branches.
 func (g *Integration) ListBranches(ctx context.Context) ([]string, error) {
 	if !g.IsRepository() {
-		return nil, ErrNotAGitRepository10
+		return nil, ErrNotAGitRepository
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "branch", "--format=%(refname:short)")
@@ -491,7 +461,7 @@ func (g *Integration) ListBranches(ctx context.Context) ([]string, error) {
 // ListRemotes returns the list of remote repositories.
 func (g *Integration) ListRemotes(ctx context.Context) ([]string, error) {
 	if !g.IsRepository() {
-		return nil, ErrNotAGitRepository11
+		return nil, ErrNotAGitRepository
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "remote")

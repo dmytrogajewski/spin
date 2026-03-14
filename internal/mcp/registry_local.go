@@ -211,7 +211,7 @@ func (r *LocalRegistry) Execute(ctx context.Context, toolName string, args json.
 	r.mu.RUnlock()
 
 	if !exists {
-		return tools.ToolResult{}, fmt.Errorf("tool not found: %s: %w", toolName, ErrToolNotFound)
+		return tools.ToolResult{}, fmt.Errorf("tool not found: %s: %w", toolName, tools.ErrToolNotFound)
 	}
 
 	return executeMCPTool(ctx, mcpClient, mcpTool, args)

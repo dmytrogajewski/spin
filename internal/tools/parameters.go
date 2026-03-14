@@ -10,14 +10,6 @@ import (
 var (
 	// ErrParameterNotFound is a sentinel error.
 	ErrParameterNotFound = errors.New("parameter  not found")
-	// ErrParameterNotFound2 is a sentinel error.
-	ErrParameterNotFound2 = errors.New("parameter  not found")
-	// ErrParameterNotFound3 is a sentinel error.
-	ErrParameterNotFound3 = errors.New("parameter  not found")
-	// ErrParameterNotFound4 is a sentinel error.
-	ErrParameterNotFound4 = errors.New("parameter  not found")
-	// ErrParameterNotFound5 is a sentinel error.
-	ErrParameterNotFound5 = errors.New("parameter  not found")
 )
 
 // ToolParameters provides type-safe access to tool parameters.
@@ -107,7 +99,7 @@ func (p ToolParameters) GetString(key string) (string, error) {
 func (p ToolParameters) GetInt(key string) (int, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
-		return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound2)
+		return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
 	}
 
 	var value int
@@ -125,7 +117,7 @@ func (p ToolParameters) GetInt(key string) (int, error) {
 func (p ToolParameters) GetBool(key string) (bool, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
-		return false, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound3)
+		return false, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
 	}
 
 	var value bool
@@ -143,7 +135,7 @@ func (p ToolParameters) GetBool(key string) (bool, error) {
 func (p ToolParameters) GetFloat64(key string) (float64, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
-		return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound4)
+		return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
 	}
 
 	var value float64
@@ -161,7 +153,7 @@ func (p ToolParameters) GetFloat64(key string) (float64, error) {
 func (p ToolParameters) GetObject(key string, dest any) error {
 	rawValue, exists := p.raw[key]
 	if !exists {
-		return fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound5)
+		return fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
 	}
 
 	err := json.Unmarshal(rawValue, dest)

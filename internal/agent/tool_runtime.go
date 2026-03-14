@@ -13,8 +13,6 @@ import (
 )
 
 var (
-	// ErrToolNotFound is a sentinel error.
-	ErrToolNotFound = errors.New("tool not found")
 	// ErrApprovalRequiredButNoApprovalHandler is a sentinel error.
 	ErrApprovalRequiredButNoApprovalHandler = errors.New("approval required but no approval handler configured")
 	// ErrOperationDenied is a sentinel error.
@@ -128,7 +126,7 @@ func (t *ToolRuntime) resolveTool(call *ToolCall) (tools.Tool, error) {
 
 		return nil, fmt.Errorf(
 			"tool not found: %q is not a valid tool. Available tools: %v: %w",
-			call.Function.Name, names, ErrToolNotFound,
+			call.Function.Name, names, tools.ErrToolNotFound,
 		)
 	}
 

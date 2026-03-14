@@ -20,12 +20,8 @@ var (
 	ErrUnsupportedFormat = errors.New("unsupported format")
 	// ErrValidationFailed is a sentinel error.
 	ErrValidationFailed = errors.New("validation failed")
-	// ErrValidationFailed2 is a sentinel error.
-	ErrValidationFailed2 = errors.New("validation failed")
 	// ErrNoConfigFile is a sentinel error.
 	ErrNoConfigFile = errors.New("no config file")
-	// ErrNoConfigFile2 is a sentinel error.
-	ErrNoConfigFile2 = errors.New("no config file")
 	// ErrNoEditorFoundSetEditorOr is a sentinel error.
 	ErrNoEditorFoundSetEditorOr = errors.New("no editor found. Set $EDITOR or $VISUAL environment variable")
 	// ErrKeyNotFound is a sentinel error.
@@ -240,7 +236,7 @@ func runConfigValidate(cmd *cobra.Command, _ []string) error {
 		fmt.Fprintf(cmd.ErrOrStderr(), "✗ Configuration V2 is invalid\n\n")
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error: %v\n", err)
 
-		return ErrValidationFailed2
+		return ErrValidationFailed
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "✓ Configuration V2 is valid (version: %s)\n", cfgV2.Version)
@@ -282,7 +278,7 @@ func runConfigPath(cmd *cobra.Command, _ []string) error {
 	if configPath == "" {
 		fmt.Fprintf(cmd.OutOrStdout(), "No configuration file found. Using defaults.\n")
 
-		return ErrNoConfigFile2
+		return ErrNoConfigFile
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "%s\n", configPath)

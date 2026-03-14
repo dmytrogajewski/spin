@@ -20,13 +20,6 @@ var (
 		"path '' is outside the allowed workspace (). " +
 			"Use relative paths or absolute paths within the workspace",
 	)
-	// ErrSessionWorkingDirectoryNotSet2 is a sentinel error.
-	ErrSessionWorkingDirectoryNotSet2 = errors.New("session working directory not set")
-	// ErrPathIsOutsideTheAllowedWorkspace2 is a sentinel error.
-	ErrPathIsOutsideTheAllowedWorkspace2 = errors.New(
-		"path '' is outside the allowed workspace (). " +
-			"Use relative paths or absolute paths within the workspace",
-	)
 )
 
 // ACPTerminalTool exposes terminal/create as a tool to the LLM.
@@ -474,7 +467,7 @@ func (t *ACPWriteFileTool) resolvePathWithContext(ctx context.Context, path stri
 	}
 
 	if workDir == "" {
-		return "", ErrSessionWorkingDirectoryNotSet2
+		return "", ErrSessionWorkingDirectoryNotSet
 	}
 
 	// If path is relative, resolve it against workDir.
@@ -490,7 +483,7 @@ func (t *ACPWriteFileTool) resolvePathWithContext(ctx context.Context, path stri
 		return "", fmt.Errorf(
 			"path '%s' is outside the allowed workspace (%s). "+
 				"Use relative paths or absolute paths within the workspace: %w",
-			path, workDir, ErrPathIsOutsideTheAllowedWorkspace2,
+			path, workDir, ErrPathIsOutsideTheAllowedWorkspace,
 		)
 	}
 

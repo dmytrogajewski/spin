@@ -9,6 +9,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/llmutil"
 )
 
 // TestNewReflector tests creating a new reflector.
@@ -252,7 +253,7 @@ func TestCleanJSONResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := cleanJSONResponse(tt.input)
+			result := llmutil.CleanJSONResponse(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

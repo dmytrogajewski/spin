@@ -1,9 +1,5 @@
 package task
 
-import (
-	"fmt"
-)
-
 // Constants for Review mode configuration.
 const (
 	// DefaultReviewMaxTokens is the default token budget for Review mode
@@ -93,13 +89,5 @@ func (r *Review) MaxTokens() int {
 
 // Validate implements the Validate operation.
 func (r *Review) Validate() error {
-	if r.maxTokens <= 0 {
-		return ErrMaxTokensMustBePositive
-	}
-
-	if r.maxTokens > MaxAllowedTokens {
-		return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", r.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
-	}
-
-	return nil
+	return validateMaxTokens(r.maxTokens)
 }

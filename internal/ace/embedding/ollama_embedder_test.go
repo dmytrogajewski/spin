@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/internal/mathutil"
 )
 
 func TestNewOllamaEmbedder(t *testing.T) {
@@ -214,30 +216,10 @@ func TestOllamaEmbedder_Embed_Similarity(t *testing.T) {
 	require.NoError(t, err)
 
 	// Calculate cosine similarities.
-	sim12 := cosineSimilarity(e1, e2)
-	sim13 := cosineSimilarity(e1, e3)
+	sim12 := mathutil.CosineSimilarity(e1, e2)
+	sim13 := mathutil.CosineSimilarity(e1, e3)
 
 	// Similar texts should have higher similarity than dissimilar ones.
 	assert.Greater(t, sim12, sim13, "Similar texts should have higher cosine similarity")
 	assert.Greater(t, sim12, 0.5, "Similar texts should have similarity > 0.5")
-}
-
-// cosineSimilarity computes cosine similarity between two vectors.
-func cosineSimilarity(a, b []float32) float64 {
-	if len(a) != len(b) {
-		return 0
-	}
-
-	var dotProduct, normA, normB float64
-	for i := range a {
-		dotProduct += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
-	}
-
-	if normA == 0 || normB == 0 {
-		return 0
-	}
-
-	return dotProduct / (normA * normB)
 }

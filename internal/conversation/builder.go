@@ -253,8 +253,8 @@ func (b *Builder) addGitContext(ctx context.Context, env *agent.Environment) {
 	info := b.gitService.GetContextInfo()
 	set := func(k, v string) { env.Environment[k] = v }
 
-	set("git_enabled", boolString(info.GitEnabled))
-	set("is_repo", boolString(info.IsRepo))
+	set("git_enabled", strconv.FormatBool(info.GitEnabled))
+	set("is_repo", strconv.FormatBool(info.IsRepo))
 
 	if !info.IsRepo {
 		if b.logger != nil {
@@ -276,7 +276,7 @@ func (b *Builder) addGitContext(ctx context.Context, env *agent.Environment) {
 		set("commit", info.Commit)
 	}
 
-	set("is_clean", boolString(info.IsClean))
+	set("is_clean", strconv.FormatBool(info.IsClean))
 
 	if info.ModifiedFiles > 0 {
 		set("modified_files", strconv.Itoa(info.ModifiedFiles))
@@ -308,7 +308,7 @@ func (b *Builder) addShellContext(ctx context.Context, env *agent.Environment) {
 	info := b.shellService.GetContextInfo()
 	set := func(k, v string) { env.Environment[k] = v }
 
-	set("shell_enabled", boolString(info.ShellEnabled))
+	set("shell_enabled", strconv.FormatBool(info.ShellEnabled))
 
 	if !info.ShellEnabled {
 		return
@@ -325,13 +325,4 @@ func (b *Builder) addShellContext(ctx context.Context, env *agent.Environment) {
 	if b.logger != nil {
 		b.logger.DebugContext(ctx, "shell context added", "shell", info.Shell)
 	}
-}
-
-// boolString converts a boolean to "true" or "false" string.
-func boolString(b bool) string {
-	if b {
-		return "true"
-	}
-
-	return "false"
 }

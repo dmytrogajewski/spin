@@ -27,8 +27,6 @@ var (
 	ErrShellCommandTimedOutAfter = errors.New("shell command timed out after")
 	// ErrExecutionFailed is a sentinel error.
 	ErrExecutionFailed = errors.New("execution failed")
-	// ErrExecutionFailed2 is a sentinel error.
-	ErrExecutionFailed2 = errors.New("execution failed")
 )
 
 // Context provides shell-aware functionality for the agent.
@@ -251,7 +249,7 @@ func (s *Context) formatExitError(exitErr *exec.ExitError, stdout, stderr *bytes
 		return fmt.Errorf("execution failed: exit status %d\n%s: %w", exitCode, output, ErrExecutionFailed)
 	}
 
-	return fmt.Errorf("execution failed: exit status %d: %w", exitCode, ErrExecutionFailed2)
+	return fmt.Errorf("execution failed: exit status %d: %w", exitCode, ErrExecutionFailed)
 }
 
 // mergeOutputs combines stdout and stderr, deduplicating when identical.

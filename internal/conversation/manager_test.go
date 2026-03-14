@@ -169,9 +169,9 @@ func TestManager_Get(t *testing.T) {
 	t.Run("found", func(t *testing.T) {
 		t.Parallel()
 
-		_, err = mgr.GetOrCreate(ctx, "session-1", "/tmp")
-		if err != nil {
-			t.Fatalf("GetOrCreate failed: %v", err)
+		_, createErr := mgr.GetOrCreate(ctx, "session-1", "/tmp")
+		if createErr != nil {
+			t.Fatalf("GetOrCreate failed: %v", createErr)
 		}
 
 		conv, ok := mgr.Get("session-1")
@@ -198,14 +198,14 @@ func TestManager_Remove(t *testing.T) {
 	t.Run("remove existing", func(t *testing.T) {
 		t.Parallel()
 
-		_, err = mgr.GetOrCreate(ctx, "session-1", "/tmp")
-		if err != nil {
-			t.Fatalf("GetOrCreate failed: %v", err)
+		_, createErr := mgr.GetOrCreate(ctx, "session-1", "/tmp")
+		if createErr != nil {
+			t.Fatalf("GetOrCreate failed: %v", createErr)
 		}
 
-		err = mgr.Remove(ctx, "session-1")
-		if err != nil {
-			t.Fatalf("Remove failed: %v", err)
+		removeErr := mgr.Remove(ctx, "session-1")
+		if removeErr != nil {
+			t.Fatalf("Remove failed: %v", removeErr)
 		}
 
 		_, ok := mgr.Get("session-1")
@@ -217,7 +217,7 @@ func TestManager_Remove(t *testing.T) {
 	t.Run("remove non-existent", func(t *testing.T) {
 		t.Parallel()
 
-		err = mgr.Remove(ctx, "non-existent")
+		err := mgr.Remove(ctx, "non-existent")
 		if err == nil {
 			t.Fatal("should fail when removing non-existent")
 		}
@@ -377,20 +377,18 @@ func TestManager_SetTaskMode(t *testing.T) {
 	t.Run("set mode", func(t *testing.T) {
 		t.Parallel()
 
-		if _, err = mgr.GetOrCreate(ctx, "session-1", "/tmp"); err != nil {
-			t.Fatalf("GetOrCreate failed: %v", err)
+		if _, createErr := mgr.GetOrCreate(ctx, "session-1", "/tmp"); createErr != nil {
+			t.Fatalf("GetOrCreate failed: %v", createErr)
 		}
 
-		err = mgr.SetTaskMode("session-1", "compact")
-		if err != nil {
-			t.Fatalf("SetTaskMode failed: %v", err)
+		setErr := mgr.SetTaskMode("session-1", "compact")
+		if setErr != nil {
+			t.Fatalf("SetTaskMode failed: %v", setErr)
 		}
 
-		var mode string
-
-		mode, err = mgr.GetTaskMode("session-1")
-		if err != nil {
-			t.Fatalf("GetTaskMode failed: %v", err)
+		mode, getErr := mgr.GetTaskMode("session-1")
+		if getErr != nil {
+			t.Fatalf("GetTaskMode failed: %v", getErr)
 		}
 
 		if mode != "compact" {
@@ -401,7 +399,7 @@ func TestManager_SetTaskMode(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		t.Parallel()
 
-		err = mgr.SetTaskMode("non-existent", "compact")
+		err := mgr.SetTaskMode("non-existent", "compact")
 		if err == nil {
 			t.Fatal("should fail for non-existent session")
 		}
@@ -419,7 +417,7 @@ func TestManager_GetTaskMode(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		t.Parallel()
 
-		_, err = mgr.GetTaskMode("non-existent")
+		_, err := mgr.GetTaskMode("non-existent")
 		if err == nil {
 			t.Fatal("should fail for non-existent session")
 		}

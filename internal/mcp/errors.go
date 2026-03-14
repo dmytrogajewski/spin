@@ -6,8 +6,6 @@ import "errors"
 var (
 	// ErrRegistryNameRequired is returned when a registry name is missing.
 	ErrRegistryNameRequired = errors.New("registry name is required")
-	// ErrToolNotFound is a sentinel error.
-	ErrToolNotFound = errors.New("tool not found")
 	// ErrCommandRequiredForLocalRegistry is a sentinel error.
 	ErrCommandRequiredForLocalRegistry = errors.New("command is required for local registry")
 	// ErrURLRequiredForRemoteRegistry is a sentinel error.

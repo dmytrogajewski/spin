@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/dmytrogajewski/spin/internal/storage"
 )
 
 var (
@@ -264,18 +266,8 @@ func (m *MCPConfigStore) writeConfig() error {
 	}
 
 	// Write to file (atomic).
-	tmpFile := configFile + ".tmp"
-
-	err = os.WriteFile(tmpFile, data, 0o600)
+	err = storage.AtomicWriteFile(configFile, data, storage.DefaultFilePerm)
 	if err != nil {
-		return fmt.Errorf("failed to write config: %w", err)
-	}
-
-	// Rename (atomic operation).
-	err = os.Rename(tmpFile, configFile)
-	if err != nil {
-		os.Remove(tmpFile) // Cleanup.
-
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 

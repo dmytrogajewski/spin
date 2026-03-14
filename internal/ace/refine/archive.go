@@ -2,10 +2,10 @@
 package refine
 
 import (
-	"sync"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
+	"github.com/dmytrogajewski/spin/internal/syncmap"
 )
 
 // ArchiveReason explains why a bullet was archived.
@@ -32,8 +32,7 @@ type ArchivedBullet struct {
 
 // Archive stores removed bullets with metadata.
 type Archive struct {
-	bullets map[string]*ArchivedBullet
-	mu      sync.RWMutex
+	bullets *syncmap.Map[string, *ArchivedBullet]
 }
 
 // ArchiveStats contains archive statistics.
@@ -47,15 +46,12 @@ type ArchiveStats struct {
 // NewArchive creates a new archive.
 func NewArchive() *Archive {
 	return &Archive{
-		bullets: make(map[string]*ArchivedBullet),
+		bullets: syncmap.New[string, *ArchivedBullet](),
 	}
 }
 
 // Archive stores a removed bullet.
 func (a *Archive) Archive(b *bullet.Bullet, reason ArchiveReason, metadata map[string]string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	archived := &ArchivedBullet{
 		Bullet:    b.Clone(), // Clone to preserve state.
 		RemovedAt: time.Now(),
@@ -67,52 +63,43 @@ func (a *Archive) Archive(b *bullet.Bullet, reason ArchiveReason, metadata map[s
 		archived.Metadata = make(map[string]string)
 	}
 
-	a.bullets[b.ID] = archived
+	a.bullets.Set(b.ID, archived)
 }
 
 // Get retrieves an archived bullet by ID.
 func (a *Archive) Get(id string) (*ArchivedBullet, bool) {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	archived, exists := a.bullets[id]
-
-	return archived, exists
+	return a.bullets.Get(id)
 }
 
 // List returns all archived bullets, optionally filtered.
 func (a *Archive) List(filter func(*ArchivedBullet) bool) []*ArchivedBullet {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
+	if filter == nil {
+		return a.bullets.Values()
+	}
 
-	result := make([]*ArchivedBullet, 0, len(a.bullets))
+	var result []*ArchivedBullet
 
-	for _, archived := range a.bullets {
-		if filter == nil || filter(archived) {
+	a.bullets.Range(func(_ string, archived *ArchivedBullet) bool {
+		if filter(archived) {
 			result = append(result, archived)
 		}
-	}
+
+		return true
+	})
 
 	return result
 }
 
 // Stats returns archive statistics.
 func (a *Archive) Stats() ArchiveStats {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	stats := ArchiveStats{
-		TotalBullets: len(a.bullets),
-		ByReason:     make(map[ArchiveReason]int),
-	}
-
-	if stats.TotalBullets == 0 {
-		return stats
+		ByReason: make(map[ArchiveReason]int),
 	}
 
 	first := true
 
-	for _, archived := range a.bullets {
+	a.bullets.Range(func(_ string, archived *ArchivedBullet) bool {
+		stats.TotalBullets++
 		stats.ByReason[archived.Reason]++
 
 		if first || archived.RemovedAt.Before(stats.OldestArchive) {
@@ -124,23 +111,19 @@ func (a *Archive) Stats() ArchiveStats {
 		}
 
 		first = false
-	}
+
+		return true
+	})
 
 	return stats
 }
 
 // Clear removes all archived bullets.
 func (a *Archive) Clear() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	a.bullets = make(map[string]*ArchivedBullet)
+	a.bullets.Clear()
 }
 
 // Len returns the total number of archived bullets.
 func (a *Archive) Len() int {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	return len(a.bullets)
+	return a.bullets.Len()
 }

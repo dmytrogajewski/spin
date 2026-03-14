@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
+
+	"github.com/dmytrogajewski/spin/internal/syncmap"
 )
 
 var (
@@ -44,43 +45,23 @@ type CommandContext interface {
 	GetWorkDir() string
 }
 
-var (
-	// registry stores all registered commands.
-	registry = make(map[string]Command)
-	// mu protects the registry.
-	mu sync.RWMutex
-)
+// registry stores all registered commands.
+var registry = syncmap.New[string, Command]()
 
 // RegisterCommand registers a command in the global registry.
 func RegisterCommand(cmd Command) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	registry[cmd.Name()] = cmd
+	registry.Set(cmd.Name(), cmd)
 }
 
 // GetCommand retrieves a command by name from the registry.
 // Returns the command and true if found, nil and false otherwise.
 func GetCommand(name string) (Command, bool) {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	cmd, exists := registry[name]
-
-	return cmd, exists
+	return registry.Get(name)
 }
 
 // ListCommands returns all registered commands.
 func ListCommands() []Command {
-	mu.RLock()
-	defer mu.RUnlock()
-
-	commands := make([]Command, 0, len(registry))
-	for _, cmd := range registry {
-		commands = append(commands, cmd)
-	}
-
-	return commands
+	return registry.Values()
 }
 
 // ParseCommand checks if input is a command and extracts components.

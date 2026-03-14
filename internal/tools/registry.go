@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sync"
+
+	"github.com/dmytrogajewski/spin/internal/syncmap"
 )
 
 var (
@@ -19,14 +20,13 @@ var (
 // Registry manages tool registration, lookup, and execution.
 // It provides a centralized registry for all tools available to the agent.
 type Registry struct {
-	mu    sync.RWMutex
-	tools map[string]Tool
+	tools *syncmap.Map[string, Tool]
 }
 
 // NewRegistry creates a new empty tool registry.
 func NewRegistry() *Registry {
 	return &Registry{
-		tools: make(map[string]Tool),
+		tools: syncmap.New[string, Tool](),
 	}
 }
 
@@ -73,15 +73,9 @@ func NewDefaultRegistry(workDir string, env any) *Registry {
 // Register adds a tool to the registry.
 // Returns ErrDuplicateTool if a tool with the same name already exists.
 func (r *Registry) Register(tool Tool) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	name := tool.Name()
-	if _, exists := r.tools[name]; exists {
-		return fmt.Errorf("%w: %s", ErrDuplicateTool, name)
+	if !r.tools.SetIfAbsent(tool.Name(), tool) {
+		return fmt.Errorf("%w: %s", ErrDuplicateTool, tool.Name())
 	}
-
-	r.tools[name] = tool
 
 	return nil
 }
@@ -89,10 +83,7 @@ func (r *Registry) Register(tool Tool) error {
 // RegisterOrReplace adds a tool to the registry, replacing any existing tool with the same name.
 // This is useful when you want to override default tools with custom implementations.
 func (r *Registry) RegisterOrReplace(tool Tool) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	r.tools[tool.Name()] = tool
+	r.tools.Set(tool.Name(), tool)
 
 	return nil
 }
@@ -100,10 +91,7 @@ func (r *Registry) RegisterOrReplace(tool Tool) error {
 // Get retrieves a tool by name.
 // Returns ErrToolNotFound if the tool doesn't exist.
 func (r *Registry) Get(name string) (Tool, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	tool, exists := r.tools[name]
+	tool, exists := r.tools.Get(name)
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", ErrToolNotFound, name)
 	}
@@ -113,27 +101,19 @@ func (r *Registry) Get(name string) (Tool, error) {
 
 // List returns all registered tools.
 func (r *Registry) List() []Tool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	tools := make([]Tool, 0, len(r.tools))
-	for _, tool := range r.tools {
-		tools = append(tools, tool)
-	}
-
-	return tools
+	return r.tools.Values()
 }
 
 // ListSchemas returns the schemas for all registered tools.
 // This is used to provide available tools to the LLM.
 func (r *Registry) ListSchemas() []ToolSchema {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	var schemas []ToolSchema
 
-	schemas := make([]ToolSchema, 0, len(r.tools))
-	for _, tool := range r.tools {
+	r.tools.Range(func(_ string, tool Tool) bool {
 		schemas = append(schemas, tool.Schema())
-	}
+
+		return true
+	})
 
 	return schemas
 }

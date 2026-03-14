@@ -6,6 +6,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
+	"github.com/dmytrogajewski/spin/internal/mathutil"
 )
 
 func TestNewMergeEngine(t *testing.T) {
@@ -231,14 +232,11 @@ func TestMergeEngine_FindMergeCandidates_Single(t *testing.T) {
 func TestMergeEngine_CosineSimilarity(t *testing.T) {
 	t.Parallel()
 
-	embedder := embedding.NewMockEmbedder(384)
-	engine := NewMergeEngine(embedder, 0.90)
-
 	// Identical vectors.
 	v1 := []float32{1.0, 2.0, 3.0}
 	v2 := []float32{1.0, 2.0, 3.0}
 
-	sim := engine.cosineSimilarity(v1, v2)
+	sim := mathutil.CosineSimilarity(v1, v2)
 	if sim < 0.999 { // Allow for floating point error.
 		t.Errorf("expected similarity ~1.0 for identical vectors, got %f", sim)
 	}
@@ -247,7 +245,7 @@ func TestMergeEngine_CosineSimilarity(t *testing.T) {
 	v3 := []float32{1.0, 0.0, 0.0}
 	v4 := []float32{0.0, 1.0, 0.0}
 
-	sim = engine.cosineSimilarity(v3, v4)
+	sim = mathutil.CosineSimilarity(v3, v4)
 	if sim > 0.001 { // Should be very close to 0.
 		t.Errorf("expected similarity ~0.0 for orthogonal vectors, got %f", sim)
 	}
@@ -256,7 +254,7 @@ func TestMergeEngine_CosineSimilarity(t *testing.T) {
 	v5 := []float32{1.0, 2.0}
 	v6 := []float32{1.0, 2.0, 3.0}
 
-	sim = engine.cosineSimilarity(v5, v6)
+	sim = mathutil.CosineSimilarity(v5, v6)
 	if sim != 0.0 {
 		t.Errorf("expected similarity 0.0 for different length vectors, got %f", sim)
 	}
@@ -265,7 +263,7 @@ func TestMergeEngine_CosineSimilarity(t *testing.T) {
 	v7 := []float32{0.0, 0.0, 0.0}
 	v8 := []float32{0.0, 0.0, 0.0}
 
-	sim = engine.cosineSimilarity(v7, v8)
+	sim = mathutil.CosineSimilarity(v7, v8)
 	if sim != 0.0 {
 		t.Errorf("expected similarity 0.0 for zero vectors, got %f", sim)
 	}

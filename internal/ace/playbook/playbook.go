@@ -5,11 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/syncmap"
 )
 
 const bytesPerFloat32 = 4
@@ -19,8 +19,6 @@ var (
 	ErrBulletCannotBeNil = errors.New("bullet cannot be nil")
 	// ErrBulletWithIDAlreadyExists is a sentinel error.
 	ErrBulletWithIDAlreadyExists = errors.New("bullet with ID  already exists")
-	// ErrBulletCannotBeNil2 is a sentinel error.
-	ErrBulletCannotBeNil2 = errors.New("bullet cannot be nil")
 	// ErrBulletWithIDNotFound is a sentinel error.
 	ErrBulletWithIDNotFound = errors.New("bullet with ID  not found")
 )
@@ -29,10 +27,9 @@ var (
 // It provides thread-safe CRUD operations, semantic search,
 // serialization, and version control capabilities.
 type Playbook struct {
-	bullets  map[string]*bullet.Bullet // Index by ID for O(1) lookup.
-	mu       sync.RWMutex              // Thread-safe access.
-	emitter  *events.EventEmitter      // Event emission (optional).
-	embedder embedding.Embedder        // Semantic embedding provider (optional).
+	bullets  *syncmap.Map[string, *bullet.Bullet] // Index by ID for O(1) lookup.
+	emitter  *events.EventEmitter                 // Event emission (optional).
+	embedder embedding.Embedder                   // Semantic embedding provider (optional).
 }
 
 // Stats contains playbook statistics.
@@ -48,7 +45,7 @@ type Stats struct {
 // Both emitter and embedder are optional (can be nil).
 func New(emitter *events.EventEmitter, embedder embedding.Embedder) *Playbook {
 	return &Playbook{
-		bullets:  make(map[string]*bullet.Bullet),
+		bullets:  syncmap.New[string, *bullet.Bullet](),
 		emitter:  emitter,
 		embedder: embedder,
 	}
@@ -56,20 +53,12 @@ func New(emitter *events.EventEmitter, embedder embedding.Embedder) *Playbook {
 
 // Stats returns playbook statistics.
 func (p *Playbook) Stats() Stats {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	stats := Stats{
-		TotalBullets: len(p.bullets),
-	}
-
-	if stats.TotalBullets == 0 {
-		return stats
-	}
+	var stats Stats
 
 	totalScore := 0.0
 
-	for _, b := range p.bullets {
+	p.bullets.Range(func(_ string, b *bullet.Bullet) bool {
+		stats.TotalBullets++
 		stats.TotalHelpful += b.HelpfulCount
 		stats.TotalHarmful += b.HarmfulCount
 		totalScore += b.Score()
@@ -83,9 +72,13 @@ func (p *Playbook) Stats() Stats {
 		for k, v := range b.Tags {
 			stats.TotalSizeBytes += int64(len(k) + len(v))
 		}
-	}
 
-	stats.AvgScore = totalScore / float64(stats.TotalBullets)
+		return true
+	})
+
+	if stats.TotalBullets > 0 {
+		stats.AvgScore = totalScore / float64(stats.TotalBullets)
+	}
 
 	return stats
 }
@@ -97,15 +90,9 @@ func (p *Playbook) Add(_ context.Context, b *bullet.Bullet) error {
 		return ErrBulletCannotBeNil
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	// Check for duplicate ID.
-	if _, exists := p.bullets[b.ID]; exists {
+	if !p.bullets.SetIfAbsent(b.ID, b) {
 		return fmt.Errorf("bullet with ID %s already exists: %w", b.ID, ErrBulletWithIDAlreadyExists)
 	}
-
-	p.bullets[b.ID] = b
 
 	return nil
 }
@@ -113,29 +100,19 @@ func (p *Playbook) Add(_ context.Context, b *bullet.Bullet) error {
 // Get retrieves a bullet by ID.
 // Returns (bullet, true) if found, (nil, false) if not found.
 func (p *Playbook) Get(id string) (*bullet.Bullet, bool) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	b, found := p.bullets[id]
-
-	return b, found
+	return p.bullets.Get(id)
 }
 
 // Update updates an existing bullet in the playbook.
 // Returns an error if the bullet doesn't exist.
 func (p *Playbook) Update(_ context.Context, b *bullet.Bullet) error {
 	if b == nil {
-		return ErrBulletCannotBeNil2
+		return ErrBulletCannotBeNil
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if _, exists := p.bullets[b.ID]; !exists {
+	if !p.bullets.SetIfPresent(b.ID, b) {
 		return fmt.Errorf("bullet with ID %s not found: %w", b.ID, ErrBulletWithIDNotFound)
 	}
-
-	p.bullets[b.ID] = b
 
 	return nil
 }
@@ -143,10 +120,7 @@ func (p *Playbook) Update(_ context.Context, b *bullet.Bullet) error {
 // Delete removes a bullet by ID.
 // This operation is idempotent - no error if ID doesn't exist.
 func (p *Playbook) Delete(_ context.Context, id string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	delete(p.bullets, id)
+	p.bullets.Delete(id)
 
 	return nil
 }
@@ -157,16 +131,19 @@ type FilterFunc func(*bullet.Bullet) bool
 // List returns all bullets, optionally filtered.
 // If filter is nil, returns all bullets.
 func (p *Playbook) List(filter FilterFunc) []*bullet.Bullet {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	if filter == nil {
+		return p.bullets.Values()
+	}
 
-	result := make([]*bullet.Bullet, 0, len(p.bullets))
+	var result []*bullet.Bullet
 
-	for _, b := range p.bullets {
-		if filter == nil || filter(b) {
+	p.bullets.Range(func(_ string, b *bullet.Bullet) bool {
+		if filter(b) {
 			result = append(result, b)
 		}
-	}
+
+		return true
+	})
 
 	return result
 }

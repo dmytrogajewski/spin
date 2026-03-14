@@ -1,10 +1,6 @@
 // Package task provides task execution and compaction.
 package task
 
-import (
-	"fmt"
-)
-
 // Constants for Compact mode configuration.
 const (
 	// DefaultCompactMaxTokens is the default token budget for Compact mode
@@ -78,13 +74,5 @@ func (c *Compact) MaxTokens() int {
 
 // Validate implements the Validate operation.
 func (c *Compact) Validate() error {
-	if c.maxTokens <= 0 {
-		return ErrMaxTokensMustBePositive
-	}
-
-	if c.maxTokens > MaxAllowedTokens {
-		return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", c.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
-	}
-
-	return nil
+	return validateMaxTokens(c.maxTokens)
 }

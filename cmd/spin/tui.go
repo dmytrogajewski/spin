@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -79,12 +81,36 @@ func parseTUIFlags(cmd *cobra.Command) tuiFlags {
 }
 
 // configureTUILogging sets up logging based on the debug flag.
+// In TUI mode, logs must never go to stderr as they break the terminal display.
+// Debug mode writes logs to ~/.spin/spin.log; normal mode discards them.
 func configureTUILogging(debug bool) {
 	if debug {
-		slog.SetLogLoggerLevel(slog.LevelDebug)
+		logFile := openTUILogFile()
+		handler := slog.NewTextHandler(logFile, &slog.HandlerOptions{Level: slog.LevelDebug})
+		slog.SetDefault(slog.New(handler))
 	} else {
-		setupTUILogging()
+		slog.SetDefault(slog.New(slog.DiscardHandler))
 	}
+}
+
+// openTUILogFile opens the log file for debug mode, falling back to discard on error.
+func openTUILogFile() io.Writer {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return io.Discard
+	}
+
+	spinDir := filepath.Join(homeDir, ".spin")
+	if err := os.MkdirAll(spinDir, 0o700); err != nil {
+		return io.Discard
+	}
+
+	f, err := os.OpenFile(filepath.Join(spinDir, "spin.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return io.Discard
+	}
+
+	return f
 }
 
 // setupTUIProvider creates and configures the TUI provider and UI components.
@@ -122,25 +148,14 @@ func setupTUIProvider(ctx context.Context, cmd *cobra.Command, flags tuiFlags) (
 	}
 
 	ui.SetApprovalPolicyTTLs(cfg.Security.SessionPolicyTTL, cfg.Security.GlobalPolicyTTL)
-	configureMaxTokens(ctx, ui, provider, cfg.LLM.Model)
+	configureMaxTokens(ui)
 
 	return cfg, provider, ui, nil
 }
 
-// configureMaxTokens sets max tokens on the UI based on provider capabilities.
-func configureMaxTokens(ctx context.Context, ui *adapters.PureTTY, provider llm.Provider, currentModel string) {
-	maxTokens := int64(defaultMaxTokens)
-
-	models, err := provider.Models(ctx)
-	if err == nil && len(models) > 0 {
-		for _, m := range models {
-			if m.ID == currentModel {
-				break
-			}
-		}
-	}
-
-	ui.SetMaxTokens(maxTokens)
+// configureMaxTokens sets max tokens on the UI.
+func configureMaxTokens(ui *adapters.PureTTY) {
+	ui.SetMaxTokens(int64(defaultMaxTokens))
 }
 
 // startTUIBackground starts the UI and streaming in the background.
@@ -448,14 +463,6 @@ func setupSignalHandling(cancel context.CancelFunc) {
 		<-sigCh
 		cancel()
 	}()
-}
-
-// setupTUILogging configures logging for TUI mode to prevent stderr interference.
-func setupTUILogging() {
-	// Set slog level to WARN to suppress INFO level logs that interfere with TUI
-	// This prevents logs like "Shell integration initialized" from appearing in stderr
-	// while the TUI is running, which causes formatting conflicts.
-	slog.SetLogLoggerLevel(slog.LevelWarn)
 }
 
 // initializeUI initializes the UI with conversation metadata.

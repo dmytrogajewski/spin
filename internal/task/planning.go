@@ -1,9 +1,5 @@
 package task
 
-import (
-	"fmt"
-)
-
 // Constants for Planning mode configuration.
 const (
 	// PlanningMaxTokens is the token budget for Planning mode
@@ -98,13 +94,5 @@ func (p *Planning) MaxTokens() int {
 
 // Validate implements the Validate operation.
 func (p *Planning) Validate() error {
-	if p.maxTokens <= 0 {
-		return ErrMaxTokensMustBePositive
-	}
-
-	if p.maxTokens > MaxAllowedTokens {
-		return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", p.maxTokens, MaxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
-	}
-
-	return nil
+	return validateMaxTokens(p.maxTokens)
 }

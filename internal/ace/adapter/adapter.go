@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +15,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
+	"github.com/dmytrogajewski/spin/internal/syncmap"
 )
 
 const (
@@ -27,10 +27,6 @@ const (
 var (
 	// ErrSessionNotFound is a sentinel error.
 	ErrSessionNotFound = errors.New("session not found")
-	// ErrSessionNotFound2 is a sentinel error.
-	ErrSessionNotFound2 = errors.New("session not found")
-	// ErrSessionNotFound3 is a sentinel error.
-	ErrSessionNotFound3 = errors.New("session not found")
 )
 
 // Adapter handles online context adaptation.
@@ -57,8 +53,7 @@ type adapter struct {
 	memory    *MemoryManager
 	logger    *slog.Logger
 
-	sessions map[string]*Session
-	mu       sync.RWMutex
+	sessions *syncmap.Map[string, *Session]
 }
 
 // Config configures an adapter.
@@ -89,17 +84,14 @@ func NewAdapterWithConfig(cfg Config) Adapter {
 		generator: cfg.Generator,
 		memory:    NewMemoryManager(cfg.MemoryConfig),
 		logger:    slog.Default(),
-		sessions:  make(map[string]*Session),
+		sessions:  syncmap.New[string, *Session](),
 	}
 }
 
 // StartSession begins a new online learning session.
 func (a *adapter) StartSession(_ context.Context) (string, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	sessionID := uuid.New().String()
-	a.sessions[sessionID] = newSession(sessionID)
+	a.sessions.Set(sessionID, newSession(sessionID))
 
 	return sessionID, nil
 }
@@ -151,10 +143,7 @@ func (a *adapter) AdaptOnline(ctx context.Context, signal ExecutionSignal) (*Ada
 
 // getAndUpdateSession retrieves session and adds signal to it.
 func (a *adapter) getAndUpdateSession(signal ExecutionSignal) (*Session, error) {
-	a.mu.RLock()
-	session, exists := a.sessions[signal.SessionID]
-	a.mu.RUnlock()
-
+	session, exists := a.sessions.Get(signal.SessionID)
 	if !exists {
 		a.logger.Warn("Adapter: session not found", "session_id", signal.SessionID)
 
@@ -321,26 +310,19 @@ func (a *adapter) addBulletsToPlaybook(ctx context.Context, bullets []*bullet.Bu
 
 // EndSession finalizes session and persists state.
 func (a *adapter) EndSession(_ context.Context, sessionID string) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	if _, exists := a.sessions[sessionID]; !exists {
-		return fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound2)
+	_, ok := a.sessions.Pop(sessionID)
+	if !ok {
+		return fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound)
 	}
-
-	delete(a.sessions, sessionID)
 
 	return nil
 }
 
 // GetSession retrieves current session state.
 func (a *adapter) GetSession(sessionID string) (*Session, error) {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
-	session, exists := a.sessions[sessionID]
+	session, exists := a.sessions.Get(sessionID)
 	if !exists {
-		return nil, fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound3)
+		return nil, fmt.Errorf("session not found: %s: %w", sessionID, ErrSessionNotFound)
 	}
 
 	return session, nil

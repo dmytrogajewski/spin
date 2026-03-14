@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -935,20 +936,5 @@ func generateBlockID() string {
 	return fmt.Sprintf("block-%d", eventIDCounter.Add(1))
 }
 
-// Simple atomic counter for block IDs (thread-safe).
-var eventIDCounter = &atomicCounter{}
-
-type atomicCounter struct {
-	mu  sync.Mutex
-	val int
-}
-
-// Add implements the Add operation.
-func (c *atomicCounter) Add(delta int) int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.val += delta
-
-	return c.val
-}
+// eventIDCounter is a lock-free atomic counter for unique block IDs.
+var eventIDCounter atomic.Int64

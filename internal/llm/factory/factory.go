@@ -26,8 +26,6 @@ var (
 	ErrProviderTypeIsRequired = errors.New("provider type is required")
 	// ErrBaseurlIsRequiredFor is a sentinel error.
 	ErrBaseurlIsRequiredFor = errors.New("baseURL is required for")
-	// ErrAuthenticationRequiredFor2 is a sentinel error.
-	ErrAuthenticationRequiredFor2 = errors.New("authentication required for")
 	// ErrModelIsRequiredFor is a sentinel error.
 	ErrModelIsRequiredFor = errors.New("model is required for")
 	// ErrModelIsRequiredForOllama is a sentinel error.
@@ -221,7 +219,7 @@ func validateOpenAIConfig(cfg ProviderConfig) error {
 	if cfg.KeyName == "" && cfg.APIKey == "" {
 		return fmt.Errorf(
 			"authentication required for %s: provide either KeyName (recommended) or APIKey (deprecated): %w",
-			cfg.Type, ErrAuthenticationRequiredFor2)
+			cfg.Type, ErrAuthenticationRequiredFor)
 	}
 
 	if cfg.Model == "" {

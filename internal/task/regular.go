@@ -1,11 +1,5 @@
 package task
 
-import (
-	"fmt"
-)
-
-const maxAllowedTokens = 100000
-
 // Constants for Regular mode configuration.
 const (
 	// DefaultMaxTokens is the default token budget for Regular mode.
@@ -100,13 +94,5 @@ func (r *Regular) MaxTokens() int {
 
 // Validate implements the Validate operation.
 func (r *Regular) Validate() error {
-	if r.maxTokens <= 0 {
-		return ErrMaxTokensMustBePositive
-	}
-
-	if r.maxTokens > maxAllowedTokens { // MaxAllowedTokens.
-		return fmt.Errorf("max tokens %d exceeds maximum allowed %d: %w", r.maxTokens, maxAllowedTokens, ErrMaxTokensExceedsMaximumAllowed)
-	}
-
-	return nil
+	return validateMaxTokens(r.maxTokens)
 }

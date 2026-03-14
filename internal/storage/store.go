@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/dmytrogajewski/spin/internal/pathutil"
 )
 
 var (
@@ -18,14 +20,8 @@ var (
 	ErrPathExistsButIsNotA = errors.New("path exists but is not a directory")
 	// ErrKeyCannotBeEmpty is a sentinel error.
 	ErrKeyCannotBeEmpty = errors.New("key cannot be empty")
-	// ErrKeyCannotBeEmpty2 is a sentinel error.
-	ErrKeyCannotBeEmpty2 = errors.New("key cannot be empty")
 	// ErrNotFound is a sentinel error.
 	ErrNotFound = errors.New("not found")
-	// ErrKeyCannotBeEmpty3 is a sentinel error.
-	ErrKeyCannotBeEmpty3 = errors.New("key cannot be empty")
-	// ErrKeyCannotBeEmpty4 is a sentinel error.
-	ErrKeyCannotBeEmpty4 = errors.New("key cannot be empty")
 )
 
 // Store is a generic key-value store interface.
@@ -69,14 +65,12 @@ func NewFileStore[T any](cfg FileStoreConfig) (*FileStore[T], error) {
 	baseDir := cfg.BaseDir
 
 	// Expand home directory if needed.
-	if strings.HasPrefix(baseDir, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("get home directory: %w", err)
-		}
-
-		baseDir = filepath.Join(home, baseDir[2:])
+	expanded, err := pathutil.ExpandHome(baseDir)
+	if err != nil {
+		return nil, fmt.Errorf("expand home directory: %w", err)
 	}
+
+	baseDir = expanded
 
 	// Check if path exists and is a file (not directory).
 	info, err := os.Stat(baseDir)
@@ -116,23 +110,7 @@ func (fs *FileStore[T]) Save(key string, data T) error {
 		return fmt.Errorf("serialize data: %w", err)
 	}
 
-	// Atomic write: write to temp file first, then rename.
-	finalPath := fs.filePath(key)
-	tmpPath := finalPath + ".tmp"
-
-	err = os.WriteFile(tmpPath, jsonData, 0o600)
-	if err != nil {
-		return fmt.Errorf("write temp file: %w", err)
-	}
-
-	err = os.Rename(tmpPath, finalPath)
-	if err != nil {
-		os.Remove(tmpPath) // Clean up temp file on error.
-
-		return fmt.Errorf("atomic rename: %w", err)
-	}
-
-	return nil
+	return AtomicWriteFile(fs.filePath(key), jsonData, DefaultFilePerm)
 }
 
 // Load retrieves data by key.
@@ -140,7 +118,7 @@ func (fs *FileStore[T]) Load(key string) (T, error) {
 	var zero T
 
 	if key == "" {
-		return zero, ErrKeyCannotBeEmpty2
+		return zero, ErrKeyCannotBeEmpty
 	}
 
 	fs.mu.RLock()
@@ -170,7 +148,7 @@ func (fs *FileStore[T]) Load(key string) (T, error) {
 // Delete removes data by key.
 func (fs *FileStore[T]) Delete(key string) error {
 	if key == "" {
-		return ErrKeyCannotBeEmpty3
+		return ErrKeyCannotBeEmpty
 	}
 
 	fs.mu.Lock()
@@ -189,7 +167,7 @@ func (fs *FileStore[T]) Delete(key string) error {
 // Exists checks if key exists.
 func (fs *FileStore[T]) Exists(key string) (bool, error) {
 	if key == "" {
-		return false, ErrKeyCannotBeEmpty4
+		return false, ErrKeyCannotBeEmpty
 	}
 
 	fs.mu.RLock()

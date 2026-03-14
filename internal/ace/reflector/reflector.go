@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/openai/openai-go"
 
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/internal/llmutil"
 )
 
 // ErrNotDetailedFormat is returned when the reflector response cannot be parsed.
@@ -142,7 +142,7 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 	r.logger.DebugContext(ctx, "LLM response content", "response", responseText)
 
 	// Clean response text to extract JSON from markdown code blocks.
-	responseText = cleanJSONResponse(responseText)
+	responseText = llmutil.CleanJSONResponse(responseText)
 
 	insights, err := r.parseReflectionResponse(ctx, responseText, sourceID)
 	if err != nil {
@@ -305,7 +305,7 @@ func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iterati
 	responseText := completion.Choices[0].Message.Content
 
 	// Clean response text to extract JSON from markdown code blocks.
-	responseText = cleanJSONResponse(responseText)
+	responseText = llmutil.CleanJSONResponse(responseText)
 
 	// Parse refinement response as array of insights.
 	type refinedInsightResponse struct {
@@ -344,26 +344,4 @@ func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iterati
 	}
 
 	return refined, nil
-}
-
-// cleanJSONResponse extracts JSON content from markdown code blocks.
-// LLMs often wrap JSON responses in ```json ... ``` blocks, which need to be removed.
-func cleanJSONResponse(response string) string {
-	// Trim whitespace.
-	response = strings.TrimSpace(response)
-
-	// Check for markdown code block with ```json or just ```.
-	if after, ok := strings.CutPrefix(response, "```json"); ok {
-		// Remove ```json prefix and ``` suffix.
-		response = after
-		response = strings.TrimSuffix(response, "```")
-		response = strings.TrimSpace(response)
-	} else if afterPlain, okPlain := strings.CutPrefix(response, "```"); okPlain {
-		// Remove ``` prefix and ``` suffix.
-		response = afterPlain
-		response = strings.TrimSuffix(response, "```")
-		response = strings.TrimSpace(response)
-	}
-
-	return response
 }

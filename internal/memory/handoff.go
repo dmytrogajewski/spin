@@ -16,12 +16,6 @@ var (
 	ErrNoPersistentStoreConfigured = errors.New("no persistent store configured")
 	// ErrSessionIDIsRequired is a sentinel error.
 	ErrSessionIDIsRequired = errors.New("session ID is required")
-	// ErrNoPersistentStoreConfigured2 is a sentinel error.
-	ErrNoPersistentStoreConfigured2 = errors.New("no persistent store configured")
-	// ErrNoPersistentStoreConfigured3 is a sentinel error.
-	ErrNoPersistentStoreConfigured3 = errors.New("no persistent store configured")
-	// ErrNoPersistentStoreConfigured4 is a sentinel error.
-	ErrNoPersistentStoreConfigured4 = errors.New("no persistent store configured")
 )
 
 // SessionHandoff manages context transfer between sessions.
@@ -104,7 +98,7 @@ func (h *SessionHandoff) SaveSession(ctx context.Context, data HandoffData) erro
 // LoadSession retrieves a previously saved session state.
 func (h *SessionHandoff) LoadSession(ctx context.Context, sessionID string) (*HandoffData, error) {
 	if h.store == nil {
-		return nil, ErrNoPersistentStoreConfigured2
+		return nil, ErrNoPersistentStoreConfigured
 	}
 
 	key := "session_" + sessionID
@@ -127,7 +121,7 @@ func (h *SessionHandoff) LoadSession(ctx context.Context, sessionID string) (*Ha
 // ListSessions returns all saved session IDs.
 func (h *SessionHandoff) ListSessions(ctx context.Context) ([]string, error) {
 	if h.store == nil {
-		return nil, ErrNoPersistentStoreConfigured3
+		return nil, ErrNoPersistentStoreConfigured
 	}
 
 	keys, err := h.store.List(ctx, "session_*")
@@ -149,7 +143,7 @@ func (h *SessionHandoff) ListSessions(ctx context.Context) ([]string, error) {
 // DeleteSession removes a saved session.
 func (h *SessionHandoff) DeleteSession(ctx context.Context, sessionID string) error {
 	if h.store == nil {
-		return ErrNoPersistentStoreConfigured4
+		return ErrNoPersistentStoreConfigured
 	}
 
 	key := "session_" + sessionID

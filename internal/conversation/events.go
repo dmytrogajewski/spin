@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/pathutil"
 )
 
 // EventTransformer transforms internal events to protocol-specific formats.
@@ -78,14 +78,12 @@ func (b *Builder) resolveSessionDir() string {
 		return base
 	}
 
-	if strings.HasPrefix(base, "~") {
-		home, err := os.UserHomeDir()
-		if err == nil {
-			return filepath.Join(home, base[1:])
-		}
+	expanded, err := pathutil.ExpandHome(base)
+	if err != nil {
+		return base
 	}
 
-	return base
+	return expanded
 }
 
 // runEventLogger writes events to the JSONL file until context is done or channel closes.

@@ -61,14 +61,8 @@ var (
 	ErrNoValidContentBlocksFound = errors.New("no valid content blocks found")
 	// ErrSessionPersistenceNotAvailable is a sentinel error.
 	ErrSessionPersistenceNotAvailable = errors.New("session persistence not available")
-	// ErrSessionNotFound2 is a sentinel error.
-	ErrSessionNotFound2 = errors.New("session not found")
-	// ErrSessionNotFound3 is a sentinel error.
-	ErrSessionNotFound3 = errors.New("session not found")
 	// ErrInvalidMode is a sentinel error.
 	ErrInvalidMode = errors.New("invalid mode")
-	// ErrSessionNotFound4 is a sentinel error.
-	ErrSessionNotFound4 = errors.New("session not found")
 	// ErrApprovalServiceNotConfigured is a sentinel error.
 	ErrApprovalServiceNotConfigured = errors.New("approval service not configured")
 )
@@ -1253,7 +1247,7 @@ func (a *SpinACPAgent) Cancel(_ context.Context, notif acp.CancelNotification) e
 	a.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("session not found: %s: %w", notif.SessionId, ErrSessionNotFound2)
+		return fmt.Errorf("session not found: %s: %w", notif.SessionId, ErrSessionNotFound)
 	}
 
 	// Cancel in-progress execution for this session.
@@ -1365,7 +1359,7 @@ func (a *SpinACPAgent) SetSessionMode(ctx context.Context, req acp.SetSessionMod
 	a.mu.RUnlock()
 
 	if !exists {
-		return acp.SetSessionModeResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound3)
+		return acp.SetSessionModeResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound)
 	}
 
 	// Validate mode ID is in available modes.
@@ -1429,7 +1423,7 @@ func (a *SpinACPAgent) RequestPermission(ctx context.Context, req acp.RequestPer
 	a.mu.RUnlock()
 
 	if !exists {
-		return acp.RequestPermissionResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound4)
+		return acp.RequestPermissionResponse{}, fmt.Errorf("session not found: %s: %w", req.SessionId, ErrSessionNotFound)
 	}
 
 	if approvalService == nil {

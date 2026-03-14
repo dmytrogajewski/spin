@@ -2,9 +2,9 @@ package curator
 
 import (
 	"context"
-	"math"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
+	"github.com/dmytrogajewski/spin/internal/mathutil"
 )
 
 // FindDuplicates detects semantic duplicates using cosine similarity.
@@ -44,7 +44,7 @@ func (c *curator) FindDuplicates(_ context.Context, newBullets []*bullet.Bullet)
 			}
 
 			// Calculate cosine similarity.
-			similarity := cosineSimilarity(newBullet.Embedding, existingBullet.Embedding)
+			similarity := mathutil.CosineSimilarity(newBullet.Embedding, existingBullet.Embedding)
 
 			if similarity > maxSimilarity {
 				maxSimilarity = similarity
@@ -59,25 +59,4 @@ func (c *curator) FindDuplicates(_ context.Context, newBullets []*bullet.Bullet)
 	}
 
 	return duplicates, nil
-}
-
-// cosineSimilarity calculates cosine similarity between two embedding vectors.
-func cosineSimilarity(a, b []float32) float64 {
-	if len(a) != len(b) {
-		return 0.0
-	}
-
-	var dotProduct, normA, normB float64
-
-	for i := range a {
-		dotProduct += float64(a[i] * b[i])
-		normA += float64(a[i] * a[i])
-		normB += float64(b[i] * b[i])
-	}
-
-	if normA == 0.0 || normB == 0.0 {
-		return 0.0
-	}
-
-	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
 }

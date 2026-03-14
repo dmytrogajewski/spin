@@ -9,6 +9,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dmytrogajewski/spin/internal/pathutil"
+	"github.com/dmytrogajewski/spin/internal/storage"
 )
 
 // persistedEntry represents the JSON structure stored in files.
@@ -50,17 +53,15 @@ type PersistentStore struct {
 // the store scans the directory to rebuild its index of existing entries.
 func NewPersistentStore(basePath string) (*PersistentStore, error) {
 	// Expand home directory if needed.
-	if strings.HasPrefix(basePath, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("get home directory: %w", err)
-		}
-
-		basePath = filepath.Join(home, basePath[2:])
+	expanded, err := pathutil.ExpandHome(basePath)
+	if err != nil {
+		return nil, fmt.Errorf("expand home directory: %w", err)
 	}
 
+	basePath = expanded
+
 	// Create directory if it doesn't exist.
-	err := os.MkdirAll(basePath, 0o700)
+	err = os.MkdirAll(basePath, 0o700)
 	if err != nil {
 		return nil, fmt.Errorf("create directory: %w", err)
 	}
@@ -135,20 +136,12 @@ func (s *PersistentStore) Put(_ context.Context, key, value string, opts PutOpti
 		return fmt.Errorf("serialize entry: %w", err)
 	}
 
-	// Atomic write: temp file + rename.
+	// Atomic write.
 	filePath := s.filePath(namespace, key)
-	tmpPath := filePath + ".tmp"
 
-	err = os.WriteFile(tmpPath, data, 0o600)
+	err = storage.AtomicWriteFile(filePath, data, storage.DefaultFilePerm)
 	if err != nil {
-		return fmt.Errorf("write temp file: %w", err)
-	}
-
-	err = os.Rename(tmpPath, filePath)
-	if err != nil {
-		os.Remove(tmpPath) // Clean up on error.
-
-		return fmt.Errorf("atomic rename: %w", err)
+		return fmt.Errorf("write entry: %w", err)
 	}
 
 	// Update index.

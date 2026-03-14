@@ -33,8 +33,6 @@ var (
 	ErrContextMustBe0 = errors.New("context must be >= 0")
 	// ErrToolNameIsRequired is a sentinel error.
 	ErrToolNameIsRequired = errors.New("tool_name is required")
-	// ErrFileIsRequired2 is a sentinel error.
-	ErrFileIsRequired2 = errors.New("file is required")
 	// ErrLinesAddedMustBe0 is a sentinel error.
 	ErrLinesAddedMustBe0 = errors.New("lines_added must be >= 0")
 	// ErrLinesRemovedMustBe0 is a sentinel error.
@@ -51,16 +49,6 @@ var (
 	ErrPendingInProgressCompletedMustEqual = errors.New("pending + in_progress + completed () must equal total ()")
 	// ErrMetadataIsEmpty is a sentinel error.
 	ErrMetadataIsEmpty = errors.New("metadata is empty")
-	// ErrMetadataIsEmpty2 is a sentinel error.
-	ErrMetadataIsEmpty2 = errors.New("metadata is empty")
-	// ErrMetadataIsEmpty3 is a sentinel error.
-	ErrMetadataIsEmpty3 = errors.New("metadata is empty")
-	// ErrMetadataIsEmpty4 is a sentinel error.
-	ErrMetadataIsEmpty4 = errors.New("metadata is empty")
-	// ErrMetadataIsEmpty5 is a sentinel error.
-	ErrMetadataIsEmpty5 = errors.New("metadata is empty")
-	// ErrMetadataIsEmpty6 is a sentinel error.
-	ErrMetadataIsEmpty6 = errors.New("metadata is empty")
 )
 
 // ExecuteMeta holds metadata for EXECUTE blocks.
@@ -216,7 +204,7 @@ type PatchMeta struct {
 // Validate validates the patch metadata.
 func (m *PatchMeta) Validate() error {
 	if m.File == "" {
-		return ErrFileIsRequired2
+		return ErrFileIsRequired
 	}
 
 	if m.LinesAdded != nil && *m.LinesAdded < 0 {
@@ -290,7 +278,7 @@ func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) {
 // ParseReadMeta extracts ReadMeta from a block's metadata.
 func ParseReadMeta(b *Block) (*ReadMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, ErrMetadataIsEmpty2
+		return nil, ErrMetadataIsEmpty
 	}
 
 	var meta ReadMeta
@@ -306,7 +294,7 @@ func ParseReadMeta(b *Block) (*ReadMeta, error) {
 // ParseGrepMeta extracts GrepMeta from a block's metadata.
 func ParseGrepMeta(b *Block) (*GrepMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, ErrMetadataIsEmpty3
+		return nil, ErrMetadataIsEmpty
 	}
 
 	var meta GrepMeta
@@ -322,7 +310,7 @@ func ParseGrepMeta(b *Block) (*GrepMeta, error) {
 // ParseToolMeta extracts ToolMeta from a block's metadata.
 func ParseToolMeta(b *Block) (*ToolMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, ErrMetadataIsEmpty4
+		return nil, ErrMetadataIsEmpty
 	}
 
 	var meta ToolMeta
@@ -338,7 +326,7 @@ func ParseToolMeta(b *Block) (*ToolMeta, error) {
 // ParsePatchMeta extracts PatchMeta from a block's metadata.
 func ParsePatchMeta(b *Block) (*PatchMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, ErrMetadataIsEmpty5
+		return nil, ErrMetadataIsEmpty
 	}
 
 	var meta PatchMeta
@@ -354,7 +342,7 @@ func ParsePatchMeta(b *Block) (*PatchMeta, error) {
 // ParsePlanMeta extracts PlanMeta from a block's metadata.
 func ParsePlanMeta(b *Block) (*PlanMeta, error) {
 	if len(b.Meta) == 0 {
-		return nil, ErrMetadataIsEmpty6
+		return nil, ErrMetadataIsEmpty
 	}
 
 	var meta PlanMeta

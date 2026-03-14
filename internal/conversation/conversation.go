@@ -40,9 +40,10 @@ type Conversation struct {
 	agent    *agent.Agent
 	history  *history.History
 	emitter  *events.EventEmitter
-	taskMode string // Current task mode (regular, review, compact, planning).
-	id       string // Unified conversation ID (for both session and protocol).
-	workDir  string // Working directory for this conversation.
+	taskMode string       // Current task mode (regular, review, compact, planning).
+	taskMu   sync.RWMutex // Protects taskMode.
+	id       string       // Unified conversation ID (for both session and protocol).
+	workDir  string       // Working directory for this conversation.
 
 	// Protocol-specific fields (optional, for protocol use).
 	turnID      string             // Current turn ID.
@@ -62,14 +63,18 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 		err          error
 	)
 
-	if c.taskMode == "" {
+	c.taskMu.RLock()
+	currentMode := c.taskMode
+	c.taskMu.RUnlock()
+
+	if currentMode == "" {
 		taskInstance = task.DefaultTask()
 	} else {
-		taskInstance, err = task.NewTask(c.taskMode)
+		taskInstance, err = task.NewTask(currentMode)
 	}
 
 	if err != nil {
-		return fmt.Errorf("invalid task mode %q: %w", c.taskMode, err)
+		return fmt.Errorf("invalid task mode %q: %w", currentMode, err)
 	}
 
 	// Create agent request with task and history.
@@ -117,7 +122,9 @@ func (c *Conversation) SetTaskMode(mode string) error {
 		return err
 	}
 
+	c.taskMu.Lock()
 	c.taskMode = mode
+	c.taskMu.Unlock()
 
 	// Emit mode switch event.
 	if c.emitter != nil {
@@ -134,6 +141,9 @@ func (c *Conversation) SetTaskMode(mode string) error {
 
 // GetTaskMode returns the current task mode for the conversation.
 func (c *Conversation) GetTaskMode() string {
+	c.taskMu.RLock()
+	defer c.taskMu.RUnlock()
+
 	return c.taskMode
 }
 

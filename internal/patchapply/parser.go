@@ -16,22 +16,10 @@ var (
 	ErrUnknownOperation = errors.New("unknown operation")
 	// ErrInvalidPath is a sentinel error.
 	ErrInvalidPath = errors.New("invalid path")
-	// ErrInvalidPath2 is a sentinel error.
-	ErrInvalidPath2 = errors.New("invalid path")
 	// ErrInvalidLineFormat is a sentinel error.
 	ErrInvalidLineFormat = errors.New("invalid line format")
-	// ErrInvalidPath3 is a sentinel error.
-	ErrInvalidPath3 = errors.New("invalid path")
-	// ErrInvalidPath4 is a sentinel error.
-	ErrInvalidPath4 = errors.New("invalid path")
-	// ErrInvalidPath5 is a sentinel error.
-	ErrInvalidPath5 = errors.New("invalid path")
-	// ErrInvalidPath6 is a sentinel error.
-	ErrInvalidPath6 = errors.New("invalid path")
 	// ErrInvalidNewPath is a sentinel error.
 	ErrInvalidNewPath = errors.New("invalid new path")
-	// ErrInvalidNewPath2 is a sentinel error.
-	ErrInvalidNewPath2 = errors.New("invalid new path")
 	// ErrInvalidLinePrefix is a sentinel error.
 	ErrInvalidLinePrefix = errors.New("invalid line prefix")
 )
@@ -176,7 +164,7 @@ func (p *Parser) parseAddFile(path string) (*AddFile, error) {
 	}
 
 	if strings.Contains(path, "..") {
-		return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, ErrInvalidPath2)
+		return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, ErrInvalidPath)
 	}
 
 	lines := make([]string, 0)
@@ -212,11 +200,11 @@ func (p *Parser) parseAddFile(path string) (*AddFile, error) {
 func (p *Parser) parseDeleteFile(path string) (*DeleteFile, error) {
 	// Validate path.
 	if strings.HasPrefix(path, "/") {
-		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, ErrInvalidPath3)
+		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, ErrInvalidPath)
 	}
 
 	if strings.Contains(path, "..") {
-		return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, ErrInvalidPath4)
+		return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, ErrInvalidPath)
 	}
 
 	return &DeleteFile{
@@ -226,7 +214,7 @@ func (p *Parser) parseDeleteFile(path string) (*DeleteFile, error) {
 
 // parseUpdateFile parses an update file operation.
 func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
-	if err := validatePath(path, ErrInvalidPath5, ErrInvalidPath6); err != nil {
+	if err := validatePath(path, ErrInvalidPath); err != nil {
 		return nil, err
 	}
 
@@ -247,13 +235,13 @@ func (p *Parser) parseUpdateFile(path string) (*UpdateFile, error) {
 }
 
 // validatePath checks a path for absolute paths and path traversal.
-func validatePath(path string, absErr, traversalErr error) error {
+func validatePath(path string, sentinel error) error {
 	if strings.HasPrefix(path, "/") {
-		return fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, absErr)
+		return fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, sentinel)
 	}
 
 	if strings.Contains(path, "..") {
-		return fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, traversalErr)
+		return fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, sentinel)
 	}
 
 	return nil
@@ -274,7 +262,7 @@ func (p *Parser) parseMoveDirective(update *UpdateFile) error {
 	p.nextLine()
 
 	newPath := strings.TrimSpace(strings.TrimPrefix(line, "*** Move to: "))
-	if err := validatePath(newPath, ErrInvalidNewPath, ErrInvalidNewPath2); err != nil {
+	if err := validatePath(newPath, ErrInvalidNewPath); err != nil {
 		return err
 	}
 

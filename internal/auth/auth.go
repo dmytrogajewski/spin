@@ -92,8 +92,6 @@ var (
 	ErrNoneCredentialMustHaveEmptyValue = errors.New("none credential must have empty value")
 	// ErrCredentialValueCannotBeEmpty is a sentinel error.
 	ErrCredentialValueCannotBeEmpty = errors.New("credential value cannot be empty")
-	// ErrUnknownCredentialType2 is a sentinel error.
-	ErrUnknownCredentialType2 = errors.New("unknown credential type")
 )
 
 // Manager implements Auth interface using a Keystore.
@@ -285,7 +283,7 @@ func validateCredential(cred Credential) error {
 			return ErrCredentialValueCannotBeEmpty
 		}
 	default:
-		return fmt.Errorf("unknown credential type: %d: %w", cred.Type, ErrUnknownCredentialType2)
+		return fmt.Errorf("unknown credential type: %d: %w", cred.Type, ErrUnknownCredentialType)
 	}
 
 	return nil
