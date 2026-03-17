@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/dmytrogajewski/spin/internal/config"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 const (
@@ -77,7 +77,7 @@ func newApprovalListCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().String("scope", security.ScopeGlobal, "Scope to list (session|global)")
+	cmd.Flags().String("scope", safety.ScopeGlobal, "Scope to list (session|global)")
 
 	return cmd
 }
@@ -103,7 +103,7 @@ func newApprovalRevokeCmd() *cobra.Command {
 				return err
 			}
 
-			key := security.NewPolicyKey(prog, argList, workDir)
+			key := safety.NewPolicyKey(prog, argList, workDir)
 
 			ctx, cancel := context.WithTimeout(context.Background(), approvalTimeout)
 			defer cancel()
@@ -124,7 +124,7 @@ func newApprovalRevokeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().String("scope", security.ScopeGlobal, "Scope (session|global)")
+	cmd.Flags().String("scope", safety.ScopeGlobal, "Scope (session|global)")
 	cmd.Flags().String("program", "", "Program/binary of the approved command (required)")
 	cmd.Flags().StringArray("arg", nil, "Argument (repeatable)")
 	cmd.Flags().String("workdir", "", "Working directory used for the command")
@@ -158,13 +158,13 @@ func newApprovalClearCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().String("scope", security.ScopeGlobal, "Scope to clear (session|global)")
+	cmd.Flags().String("scope", safety.ScopeGlobal, "Scope to clear (session|global)")
 
 	return cmd
 }
 
 // buildPolicyStore constructs a PolicyStore consistent with agent builder logic.
-func buildPolicyStore(cmd *cobra.Command) (security.PolicyStore, error) {
+func buildPolicyStore(cmd *cobra.Command) (safety.PolicyStore, error) {
 	loader := config.NewLoaderV2()
 
 	cfg, err := func() (*config.V2, error) {
@@ -181,20 +181,20 @@ func buildPolicyStore(cmd *cobra.Command) (security.PolicyStore, error) {
 
 	// If approval persistence is disabled, operate purely in-memory.
 	if !cfg.Security.ApprovalPersistenceEnabled {
-		return security.NewMemoryPolicyStore(approvalPolicyTTL), nil
+		return safety.NewMemoryPolicyStore(approvalPolicyTTL), nil
 	}
 
 	// If policy file path not set, default under user config dir matching DefaultV2.
 	path := cfg.Security.PolicyFile
 	// Prefer file-backed store when path present; otherwise memory store.
 	if path != "" {
-		var store security.PolicyStore
+		var store safety.PolicyStore
 
-		store, err = security.NewFilePolicyStore(path, approvalPolicyTTL)
+		store, err = safety.NewFilePolicyStore(path, approvalPolicyTTL)
 		if err == nil {
 			return store, nil
 		}
 	}
 
-	return security.NewMemoryPolicyStore(approvalPolicyTTL), nil
+	return safety.NewMemoryPolicyStore(approvalPolicyTTL), nil
 }

@@ -2,31 +2,6 @@ package cycle
 
 import (
 	"time"
-
-	"github.com/dmytrogajewski/spin/internal/detection"
-)
-
-// Type is an alias to detection.CycleType.
-type Type = detection.CycleType
-
-// Snapshot is an alias to detection.Snapshot.
-type Snapshot = detection.Snapshot
-
-// Result is an alias to detection.CycleResult.
-type Result = detection.CycleResult
-
-// Re-export detection constants for backward compatibility.
-const (
-	// CycleNone is exported.
-	CycleNone = detection.CycleNone
-	// CycleSimilarResponses is exported.
-	CycleSimilarResponses = detection.CycleSimilarResponses
-	// CycleRepeatedTool is exported.
-	CycleRepeatedTool = detection.CycleRepeatedTool
-	// CycleOscillation is exported.
-	CycleOscillation = detection.CycleOscillation
-	// CycleSameError is exported.
-	CycleSameError = detection.CycleSameError
 )
 
 // Config contains configuration for cycle detection.

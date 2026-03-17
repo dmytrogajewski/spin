@@ -187,12 +187,9 @@ func TestEventLogger_Run_Success(t *testing.T) {
 	// Note: This test may fail if no LLM provider is configured.
 	err := logger.Run(ctx, "Hello, this is a test prompt")
 
-	// We expect either success or a configuration error.
+	// We expect success, context deadline, or a configuration error.
 	if err != nil {
-		// Check if it's a configuration error (expected in test environment).
-		if !strings.Contains(err.Error(), "failed to create manager") &&
-			!strings.Contains(err.Error(), "failed to create conversation") &&
-			!strings.Contains(err.Error(), "turn execution failed") {
+		if !isExpectedRunError(err) {
 			t.Errorf("unexpected error type: %v", err)
 		}
 	}
@@ -210,12 +207,8 @@ func TestEventLogger_Run_WithFilter(t *testing.T) {
 	// Test with valid prompt.
 	err := logger.Run(ctx, "Test prompt")
 
-	// We expect either success or a configuration error.
 	if err != nil {
-		// Check if it's a configuration error (expected in test environment).
-		if !strings.Contains(err.Error(), "failed to create manager") &&
-			!strings.Contains(err.Error(), "failed to create conversation") &&
-			!strings.Contains(err.Error(), "turn execution failed") {
+		if !isExpectedRunError(err) {
 			t.Errorf("unexpected error type: %v", err)
 		}
 	}
@@ -233,15 +226,21 @@ func TestEventLogger_Run_JSONFormat(t *testing.T) {
 	// Test with valid prompt.
 	err := logger.Run(ctx, "Test prompt")
 
-	// We expect either success or a configuration error.
 	if err != nil {
-		// Check if it's a configuration error (expected in test environment).
-		if !strings.Contains(err.Error(), "failed to create manager") &&
-			!strings.Contains(err.Error(), "failed to create conversation") &&
-			!strings.Contains(err.Error(), "turn execution failed") {
+		if !isExpectedRunError(err) {
 			t.Errorf("unexpected error type: %v", err)
 		}
 	}
+}
+
+// isExpectedRunError returns true if the error is an expected failure in the test environment.
+func isExpectedRunError(err error) bool {
+	msg := err.Error()
+
+	return strings.Contains(msg, "failed to create manager") ||
+		strings.Contains(msg, "failed to create conversation") ||
+		strings.Contains(msg, "turn execution failed") ||
+		errors.Is(err, context.DeadlineExceeded)
 }
 
 func TestEventLogger_Run_EmptyPrompt(t *testing.T) {

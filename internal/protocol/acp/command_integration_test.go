@@ -10,13 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/tool"
 	"github.com/dmytrogajewski/spin/internal/cycle"
-	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/planning"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -24,14 +23,14 @@ import (
 func newTestACPAgent(t *testing.T) (*SpinACPAgent, *mockConnectionForPlan, acp.SessionId) {
 	t.Helper()
 
-	validator := security.NewValidator()
+	validator := safety.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
 		Handler: nil, Emitter: emitter, Validator: validator,
 	})
-	securityService := security.NewService(validator, approvalService)
-	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
-	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
+	securityService := safety.NewService(validator, approvalService)
+	detectionService := cycle.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
+	toolRuntime := tool.NewRuntime(tool.RuntimeConfig{
 		Registry:        tools.NewRegistry(),
 		Validator:       validator,
 		ApprovalService: approvalService,
@@ -39,11 +38,10 @@ func newTestACPAgent(t *testing.T) (*SpinACPAgent, *mockConnectionForPlan, acp.S
 		WorkDir:         "/tmp",
 	})
 	mockProvider := llm.NewMockProvider("test")
-	planningService := planning.NewService(mockProvider)
 
 	agentInstance, err := agent.NewAgent(
 		mockProvider, securityService, detectionService, toolRuntime,
-		planningService, &agent.Environment{WorkDir: "/tmp"}, emitter,
+		&agent.Environment{WorkDir: "/tmp"}, emitter,
 	)
 	require.NoError(t, err)
 

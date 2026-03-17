@@ -3,9 +3,9 @@ package conversation
 import (
 	"context"
 
-	"github.com/dmytrogajewski/spin/internal/context/summarizer"
-	"github.com/dmytrogajewski/spin/internal/history"
-	"github.com/dmytrogajewski/spin/internal/history/compress"
+	"github.com/dmytrogajewski/spin/internal/contexteng/compress"
+	"github.com/dmytrogajewski/spin/internal/contexteng/history"
+	"github.com/dmytrogajewski/spin/internal/contexteng/summarizer"
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
 

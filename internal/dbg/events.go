@@ -12,13 +12,14 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/agent"
 	agentexec "github.com/dmytrogajewski/spin/internal/agent/executor"
+	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 )
@@ -182,8 +183,8 @@ func createBuiltinRuntime(
 		storage, _ = session.NewFileStorage(cfg.Agent.SessionDir)
 	}
 
-	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		return security.ApprovalResponse{
+	approvalHandler := func(_ context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
+		return safety.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
 			Reason:    "debug mode auto-approve",
@@ -191,7 +192,7 @@ func createBuiltinRuntime(
 	}
 
 	executor, _ := agent.NewExecutor(workDir)
-	validator := security.NewValidator()
+	validator := safety.NewValidator()
 
 	return agentexec.NewBuiltinRuntime(agentexec.BuiltinRuntimeConfig{
 		WorkDir:         workDir,
@@ -218,7 +219,11 @@ func buildConversation(
 	provider llm.Provider,
 	svcs *debugServices,
 ) (*conversation.Conversation, error) {
-	builder := conversation.NewBuilder(cfg, workDir, runtime, emitter, provider)
+	// Use a nil-keystore auth manager to avoid D-Bus goroutine leaks from go-keyring.
+	authMgr := auth.NewManager(nil)
+
+	builder := conversation.NewBuilder(cfg, workDir, runtime, emitter, provider).
+		WithAuthManager(authMgr)
 
 	if svcs.gitSvc != nil {
 		builder = builder.WithGit(svcs.gitSvc)
@@ -241,22 +246,31 @@ func buildConversation(
 }
 
 // processEvents reads and logs events from the stream, returning any error.
-func (el *EventLogger) processEvents(eventStream <-chan events.Event) error {
-	for event := range eventStream {
-		if el.shouldLog(event) {
-			el.logEvent(event)
-		}
+// It respects context cancellation to avoid blocking when the turn completes
+// without emitting a terminal event.
+func (el *EventLogger) processEvents(ctx context.Context, eventStream <-chan events.Event) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case event, ok := <-eventStream:
+			if !ok {
+				return nil
+			}
 
-		if event.Type == events.EventError {
-			return fmt.Errorf("task failed: %v: %w", event.Data, ErrTaskFailed)
-		}
+			if el.shouldLog(event) {
+				el.logEvent(event)
+			}
 
-		if event.Type == events.EventTurnComplete || event.Type == events.EventTurnFailed {
-			break
+			if event.Type == events.EventError {
+				return fmt.Errorf("task failed: %v: %w", event.Data, ErrTaskFailed)
+			}
+
+			if event.Type == events.EventTurnComplete || event.Type == events.EventTurnFailed {
+				return nil
+			}
 		}
 	}
-
-	return nil
 }
 
 // Run executes a task with event logging enabled.
@@ -268,6 +282,11 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	cfg := config.DefaultV2()
 	cfg.LLM.Provider = "mock"
 	cfg.LLM.Model = "test-model"
+	cfg.Security.ApprovalPersistenceEnabled = false // Prevent janitor goroutine leak.
+	cfg.Security.PolicyFile = ""                    // No file-backed policies in debug mode.
+	cfg.Protocol.EnableGit = false                  // Disable services that leak goroutines in tests.
+	cfg.Protocol.EnableShell = false
+	cfg.Protocol.EnableMCP = false
 
 	workDir, err := os.Getwd()
 	if err != nil {
@@ -303,7 +322,7 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 		errChan <- conv.RunTurn(ctx, prompt)
 	}()
 
-	if evtErr := el.processEvents(eventStream); evtErr != nil {
+	if evtErr := el.processEvents(ctx, eventStream); evtErr != nil {
 		return evtErr
 	}
 

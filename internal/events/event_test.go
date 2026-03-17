@@ -64,6 +64,19 @@ func TestEventType_String(t *testing.T) {
 		{EventError, "error"},
 		{EventWarning, "warning"},
 		{EventInfo, "info"},
+		{EventCompactionTriggered, "compaction_triggered"},
+		{EventDoomLoopDetected, "doom_loop_detected"},
+		{EventReminderInjected, "reminder_injected"},
+		{EventSubagentSpawn, "subagent_spawn"},
+		{EventSubagentComplete, "subagent_complete"},
+		{EventPhaseThinking, "phase_thinking"},
+		{EventPhaseCritique, "phase_critique"},
+		{EventUndoRecorded, "undo_recorded"},
+		{EventBackgroundTaskStarted, "background_task_started"},
+		{EventBackgroundTaskStopped, "background_task_stopped"},
+		{EventSnapshotTaken, "snapshot_taken"},
+		{EventSessionIndexRebuilt, "session_index_rebuilt"},
+		{EventLSPDiagnostics, "lsp_diagnostics"},
 	}
 
 	for _, tt := range tests {
@@ -773,5 +786,149 @@ func TestEvent_ACERetrievalData(t *testing.T) {
 
 	if _, errOk := event.ErrorData(); errOk {
 		t.Error("ErrorData() should return false for ACE event")
+	}
+}
+
+// Journey: specs/journeys/JOURNEY-7.6.md.
+
+// TestEvent_HarnessPhaseHelpers tests type-safe helpers for harness phase events.
+func TestEvent_HarnessPhaseHelpers(t *testing.T) {
+	t.Parallel()
+
+	t.Run("CompactionTriggeredData", func(t *testing.T) {
+		t.Parallel()
+
+		e := Event{
+			Type: EventCompactionTriggered,
+			Data: CompactionTriggeredData{Turn: 3, Stage: "compacted"},
+		}
+		data, ok := e.CompactionTriggeredData()
+		assertTypeSafeHelper(t, ok, data.Turn == 3 && data.Stage == "compacted")
+	})
+
+	t.Run("DoomLoopDetectedData", func(t *testing.T) {
+		t.Parallel()
+
+		e := Event{
+			Type: EventDoomLoopDetected,
+			Data: DoomLoopDetectedData{
+				Turn:        5,
+				Fingerprint: "abc123",
+				Count:       3,
+				ToolName:    "shell_command",
+			},
+		}
+		data, ok := e.DoomLoopDetectedData()
+		assertTypeSafeHelper(t, ok,
+			data.Turn == 5 &&
+				data.Fingerprint == "abc123" &&
+				data.Count == 3 &&
+				data.ToolName == "shell_command")
+	})
+
+	t.Run("ReminderInjectedData", func(t *testing.T) {
+		t.Parallel()
+
+		e := Event{
+			Type: EventReminderInjected,
+			Data: ReminderInjectedData{Turn: 2, Count: 1},
+		}
+		data, ok := e.ReminderInjectedData()
+		assertTypeSafeHelper(t, ok, data.Turn == 2 && data.Count == 1)
+	})
+
+	t.Run("SubagentSpawnData", func(t *testing.T) {
+		t.Parallel()
+
+		e := Event{
+			Type: EventSubagentSpawn,
+			Data: SubagentSpawnData{
+				AgentType: "research",
+				Query:     "find API docs",
+			},
+		}
+		data, ok := e.SubagentSpawnData()
+		assertTypeSafeHelper(t, ok,
+			data.AgentType == "research" && data.Query == "find API docs")
+	})
+
+	t.Run("SubagentCompleteData", func(t *testing.T) {
+		t.Parallel()
+
+		e := Event{
+			Type: EventSubagentComplete,
+			Data: SubagentCompleteData{
+				AgentType:    "research",
+				Summary:      "found docs",
+				InputTokens:  100,
+				OutputTokens: 50,
+			},
+		}
+		data, ok := e.SubagentCompleteData()
+		assertTypeSafeHelper(t, ok,
+			data.AgentType == "research" &&
+				data.Summary == "found docs" &&
+				data.InputTokens == 100 &&
+				data.OutputTokens == 50)
+	})
+
+	t.Run("PhaseThinkingData", func(t *testing.T) {
+		t.Parallel()
+
+		e := Event{
+			Type: EventPhaseThinking,
+			Data: PhaseThinkingData{Turn: 1, Status: "started"},
+		}
+		data, ok := e.PhaseThinkingData()
+		assertTypeSafeHelper(t, ok, data.Turn == 1 && data.Status == "started")
+	})
+
+	t.Run("PhaseCritiqueData", func(t *testing.T) {
+		t.Parallel()
+
+		e := Event{
+			Type: EventPhaseCritique,
+			Data: PhaseCritiqueData{Turn: 2, Status: "completed"},
+		}
+		data, ok := e.PhaseCritiqueData()
+		assertTypeSafeHelper(t, ok, data.Turn == 2 && data.Status == "completed")
+	})
+}
+
+// TestEvent_HarnessPhaseHelpers_WrongType tests helpers return false for wrong types.
+func TestEvent_HarnessPhaseHelpers_WrongType(t *testing.T) {
+	t.Parallel()
+
+	event := Event{
+		Type: EventContentDelta,
+		Data: ContentDeltaData{Content: "test"},
+	}
+
+	if _, ok := event.CompactionTriggeredData(); ok {
+		t.Error("CompactionTriggeredData() should return false")
+	}
+
+	if _, ok := event.DoomLoopDetectedData(); ok {
+		t.Error("DoomLoopDetectedData() should return false")
+	}
+
+	if _, ok := event.ReminderInjectedData(); ok {
+		t.Error("ReminderInjectedData() should return false")
+	}
+
+	if _, ok := event.SubagentSpawnData(); ok {
+		t.Error("SubagentSpawnData() should return false")
+	}
+
+	if _, ok := event.SubagentCompleteData(); ok {
+		t.Error("SubagentCompleteData() should return false")
+	}
+
+	if _, ok := event.PhaseThinkingData(); ok {
+		t.Error("PhaseThinkingData() should return false")
+	}
+
+	if _, ok := event.PhaseCritiqueData(); ok {
+		t.Error("PhaseCritiqueData() should return false")
 	}
 }

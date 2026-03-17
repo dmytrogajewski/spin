@@ -3,18 +3,20 @@ package executor
 import (
 	"context"
 	"log/slog"
+	"path/filepath"
 
 	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
+	"github.com/dmytrogajewski/spin/internal/undo"
 )
 
-const builtinToolCount = 4
+const builtinToolCount = 8
 
 // BuiltinRuntime implements Runtime for builtin/TUI/EXEC modes.
 // Uses local execution, TUI notifications, and TUI approval dialogs.
@@ -24,11 +26,11 @@ type BuiltinRuntime struct {
 	storage         session.Storage
 	sessionID       string
 	executor        CommandExecutor
-	validator       *security.Validator
+	validator       *safety.Validator
 	shellService    *shellpkg.Service
 	gitService      *gitpkg.Service
 	mapper          *tui.Mapper
-	approvalHandler security.ApprovalHandler
+	approvalHandler safety.ApprovalHandler
 	logger          *slog.Logger
 }
 
@@ -39,11 +41,11 @@ type BuiltinRuntimeConfig struct {
 	Storage         session.Storage
 	SessionID       string
 	Executor        CommandExecutor
-	Validator       *security.Validator
+	Validator       *safety.Validator
 	ShellService    *shellpkg.Service
 	GitService      *gitpkg.Service
 	UI              ports.UI
-	ApprovalHandler security.ApprovalHandler
+	ApprovalHandler safety.ApprovalHandler
 	Logger          *slog.Logger
 }
 
@@ -82,8 +84,23 @@ func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 // RegisterTools registers builtin-specific tools.
 func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
 	// File tools resolve relative paths against workDir.
-	_ = registry.Register(tools.NewReadFileTool(r.workDir))
-	_ = registry.Register(tools.NewWriteFileTool(r.workDir))
+	tracker := tools.NewFileTracker()
+	opLog := undo.NewOperationLog()
+
+	readTool := tools.NewReadFileTool(r.workDir)
+	readTool.SetTracker(tracker)
+
+	writeTool := tools.NewWriteFileTool(r.workDir)
+	writeTool.SetTracker(tracker)
+	writeTool.SetOperationLog(opLog)
+
+	editTool := tools.NewEditFileTool(r.workDir)
+	editTool.SetTracker(tracker)
+	editTool.SetOperationLog(opLog)
+
+	_ = registry.Register(readTool)
+	_ = registry.Register(writeTool)
+	_ = registry.Register(editTool)
 	_ = registry.Register(tools.NewListDirectoryTool(r.workDir))
 
 	// Builtin-specific shell command tool (uses local executor).
@@ -107,6 +124,20 @@ func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
 
 	_ = registry.Register(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
 
+	// Background task tools (process management).
+	taskOutputDir := filepath.Join(r.workDir, ".spin", "tasks")
+
+	taskMgr, taskErr := NewBackgroundTaskManager(taskOutputDir)
+	if taskErr != nil {
+		r.logger.Warn("failed to create background task manager", "error", taskErr)
+	}
+
+	taskAdapt := NewTaskManagerAdapter(taskMgr)
+
+	_ = registry.Register(tools.NewListProcessesTool(taskAdapt))
+	_ = registry.Register(tools.NewGetProcessOutputTool(taskAdapt))
+	_ = registry.Register(tools.NewKillProcessTool(taskAdapt))
+
 	r.logger.Debug("registered builtin tools", "count", builtinToolCount)
 }
 
@@ -116,7 +147,7 @@ func (r *BuiltinRuntime) NotificationSender() NotificationSender {
 }
 
 // ApprovalHandler returns the TUI approval handler.
-func (r *BuiltinRuntime) ApprovalHandler() security.ApprovalHandler {
+func (r *BuiltinRuntime) ApprovalHandler() safety.ApprovalHandler {
 	return r.approvalHandler
 }
 

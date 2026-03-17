@@ -6,8 +6,17 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/trajectory"
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/task"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
+
+// ToolCall is an alias for message.ToolCall to avoid duplication.
+type ToolCall = message.ToolCall
+
+// ToolCallFunction is an alias for message.ToolCallFunction to avoid duplication.
+type ToolCallFunction = message.ToolCallFunction
+
+// ToolResult is an alias for tools.ToolResult to provide a unified type.
+type ToolResult = tools.ToolResult
 
 // Request represents a request to the agent.
 type Request struct {
@@ -17,9 +26,8 @@ type Request struct {
 	// Context is the environment context.
 	Context *Environment
 
-	// Task is the task mode (required)
-	// Use task.NewTask(name) to create task instances.
-	Task task.Task
+	// CallParams holds pre-resolved system prompt and token budget.
+	CallParams CallParams
 
 	// Timeout for this request.
 	Timeout time.Duration
@@ -59,4 +67,10 @@ type Response struct {
 
 	// TrajectoryContext contains progressive execution context (for Reflector).
 	TrajectoryContext *trajectory.Context
+}
+
+// AppendToolCall adds a completed tool call to the response.
+// Implements tool.ResponseAccumulator.
+func (r *Response) AppendToolCall(tc message.ToolCall) {
+	r.ToolCalls = append(r.ToolCalls, tc)
 }

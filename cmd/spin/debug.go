@@ -221,7 +221,7 @@ func runDebugSandbox(_ context.Context, command string, args []string, mode, wor
 	fmt.Fprintf(os.Stderr, "⚠️  Command: %s %s\n\n", command, strings.Join(args, " "))
 
 	// Placeholder: Sandbox execution requires proper sandbox implementation
-	// via internal/security/sandbox with appropriate isolation (namespaces, chroot, etc.)
+	// via internal/safety/sandbox with appropriate isolation (namespaces, chroot, etc.)
 	// This is a complex feature that requires OS-specific implementations.
 	return ErrSandboxTestingNotImplemented
 }
@@ -234,7 +234,7 @@ func runDebugLandlock(_ context.Context, command string, args []string, mode, wo
 	fmt.Fprintf(os.Stderr, "⚠️  Command: %s %s\n\n", command, strings.Join(args, " "))
 
 	// Placeholder: Landlock execution requires Linux-specific implementation
-	// via internal/security/sandbox using Landlock ABI
+	// via internal/safety/sandbox using Landlock ABI
 	// This is a kernel feature that requires appropriate system calls.
 	return ErrLandlockTestingNotImplemented
 }

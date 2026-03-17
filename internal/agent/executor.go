@@ -13,7 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/agent/executor"
+	"github.com/dmytrogajewski/spin/internal/process"
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 const executorConcurrency = 2
@@ -55,7 +57,7 @@ const (
 // Result contains the outcome of command execution.
 type Result struct {
 	// Command is the executed command.
-	Command *security.Command
+	Command *safety.Command
 
 	// Stdout contains the standard output.
 	Stdout string
@@ -199,8 +201,8 @@ type OutputChunk struct {
 //
 //	Executor is thread-safe and can execute commands concurrently.
 type Executor struct {
-	securityService *security.Service
-	approvalService *security.ApprovalService
+	securityService *safety.Service
+	approvalService *safety.ApprovalService
 	cache           *CommandCache
 	workDir         string
 	timeout         time.Duration
@@ -213,7 +215,7 @@ type Executor struct {
 type ExecutorOption func(*Executor) error
 
 // WithSecurityService sets the security service.
-func WithSecurityService(s *security.Service) ExecutorOption {
+func WithSecurityService(s *safety.Service) ExecutorOption {
 	return func(e *Executor) error {
 		if s == nil {
 			return ErrSecurityServiceCannotBeNil
@@ -226,7 +228,7 @@ func WithSecurityService(s *security.Service) ExecutorOption {
 }
 
 // WithApprovalService sets the approval service for the executor.
-func WithApprovalService(s *security.ApprovalService) ExecutorOption {
+func WithApprovalService(s *safety.ApprovalService) ExecutorOption {
 	return func(e *Executor) error {
 		e.approvalService = s
 
@@ -280,7 +282,7 @@ func NewExecutor(workDir string, opts ...ExecutorOption) (*Executor, error) {
 }
 
 // errorResult creates an error result with proper timestamps.
-func (e *Executor) errorResult(cmd *security.Command, err error) *Result {
+func (e *Executor) errorResult(cmd *safety.Command, err error) *Result {
 	now := time.Now()
 
 	return &Result{
@@ -294,7 +296,7 @@ func (e *Executor) errorResult(cmd *security.Command, err error) *Result {
 }
 
 // checkCache checks for a cached result.
-func (e *Executor) checkCache(cmd *security.Command) *Result {
+func (e *Executor) checkCache(cmd *safety.Command) *Result {
 	e.mu.RLock()
 	cache := e.cache
 	e.mu.RUnlock()
@@ -312,7 +314,7 @@ func (e *Executor) checkCache(cmd *security.Command) *Result {
 }
 
 // cacheResultIfEligible caches the result if eligible.
-func (e *Executor) cacheResultIfEligible(cmd *security.Command, result *Result) {
+func (e *Executor) cacheResultIfEligible(cmd *safety.Command, result *Result) {
 	e.mu.RLock()
 	cache := e.cache
 	e.mu.RUnlock()
@@ -326,7 +328,7 @@ func (e *Executor) cacheResultIfEligible(cmd *security.Command, result *Result) 
 }
 
 // validateCommand runs the validation pipeline.
-func (e *Executor) validateCommand(cmd *security.Command, opts *ExecuteOptions) error {
+func (e *Executor) validateCommand(cmd *safety.Command, opts *ExecuteOptions) error {
 	if cmd == nil {
 		return ErrNilCommand
 	}
@@ -347,7 +349,7 @@ func (e *Executor) validateCommand(cmd *security.Command, opts *ExecuteOptions) 
 }
 
 // requestApprovalIfNeeded requests approval if command needs it.
-func (e *Executor) requestApprovalIfNeeded(ctx context.Context, cmd *security.Command, opts *ExecuteOptions) error {
+func (e *Executor) requestApprovalIfNeeded(ctx context.Context, cmd *safety.Command, opts *ExecuteOptions) error {
 	e.mu.RLock()
 	securityService := e.securityService
 	e.mu.RUnlock()
@@ -384,7 +386,7 @@ func (e *Executor) requestApprovalIfNeeded(ctx context.Context, cmd *security.Co
 //   - Working directory validation
 //
 // Returns an error if the command cannot be executed.
-func (e *Executor) Validate(cmd *security.Command) error {
+func (e *Executor) Validate(cmd *safety.Command) error {
 	if cmd == nil {
 		return ErrNilCommand
 	}
@@ -404,7 +406,7 @@ func (e *Executor) Validate(cmd *security.Command) error {
 			return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 		}
 
-		if result.Classification == security.CommandForbidden {
+		if result.Classification == safety.CommandForbidden {
 			return fmt.Errorf("%w: %s", ErrValidationFailed, result.Reason)
 		}
 	}
@@ -433,27 +435,27 @@ func (e *Executor) Validate(cmd *security.Command) error {
 //	    log.Fatal(err)
 //	}
 //	fmt.Println(result.Stdout)
-func (e *Executor) Execute(ctx context.Context, cmd *security.Command, opts *ExecuteOptions) (*Result, error) {
+func (e *Executor) Execute(ctx context.Context, cmd *safety.Command, opts *ExecuteOptions) (*Result, error) {
 	// Use default options if not provided.
 	if opts == nil {
 		opts = DefaultExecuteOptions()
 	}
 
-	// Validate command.
-	err := e.validateCommand(cmd, opts)
-	if err != nil {
+	// Run pre-execution pipeline (validation + approval).
+	pc := executor.NewPipelineContext(cmd)
+
+	pipeline := e.buildPipeline(opts)
+	if err := pipeline.Run(ctx, pc); err != nil {
 		return e.errorResult(cmd, err), err
+	}
+
+	if pc.Halted {
+		return e.errorResult(cmd, pc.HaltErr), pc.HaltErr
 	}
 
 	// Check cache.
 	if cached := e.checkCache(cmd); cached != nil {
 		return cached, nil
-	}
-
-	// Request approval if needed.
-	err = e.requestApprovalIfNeeded(ctx, cmd, opts)
-	if err != nil {
-		return e.errorResult(cmd, err), err
 	}
 
 	// Execute command.
@@ -465,8 +467,32 @@ func (e *Executor) Execute(ctx context.Context, cmd *security.Command, opts *Exe
 	return result, result.Error
 }
 
+// buildPipeline creates the pre-execution pipeline with configured stages.
+func (e *Executor) buildPipeline(opts *ExecuteOptions) *executor.Pipeline {
+	return executor.NewPipeline(
+		e.validationStage(opts),
+		executor.NewPrepareStage(),
+		executor.NewDetectStage(),
+		e.approvalStage(opts),
+	)
+}
+
+// validationStage wraps command validation as a pipeline stage.
+func (e *Executor) validationStage(opts *ExecuteOptions) executor.Stage {
+	return func(_ context.Context, pc *executor.PipelineContext) error {
+		return e.validateCommand(pc.Command, opts)
+	}
+}
+
+// approvalStage wraps approval request as a pipeline stage.
+func (e *Executor) approvalStage(opts *ExecuteOptions) executor.Stage {
+	return func(ctx context.Context, pc *executor.PipelineContext) error {
+		return e.requestApprovalIfNeeded(ctx, pc.Command, opts)
+	}
+}
+
 // executeCommand performs the actual command execution.
-func (e *Executor) executeCommand(ctx context.Context, cmd *security.Command, opts *ExecuteOptions) *Result {
+func (e *Executor) executeCommand(ctx context.Context, cmd *safety.Command, opts *ExecuteOptions) *Result {
 	result := &Result{
 		Command:   cmd,
 		StartedAt: time.Now(),
@@ -479,7 +505,7 @@ func (e *Executor) executeCommand(ctx context.Context, cmd *security.Command, op
 }
 
 // executeAndCapture runs the command, waits, and captures output.
-func (e *Executor) executeAndCapture(execCtx context.Context, cmd *security.Command, opts *ExecuteOptions, result *Result) *Result {
+func (e *Executor) executeAndCapture(execCtx context.Context, cmd *safety.Command, opts *ExecuteOptions, result *Result) *Result {
 	execCmd := e.prepareExecCmd(execCtx, cmd, opts)
 
 	var stdoutBuf, stderrBuf bytes.Buffer
@@ -516,7 +542,7 @@ func (e *Executor) executeAndCapture(execCtx context.Context, cmd *security.Comm
 }
 
 // prepareExecCmd creates and configures an [exec.Cmd].
-func (e *Executor) prepareExecCmd(execCtx context.Context, cmd *security.Command, opts *ExecuteOptions) *exec.Cmd {
+func (e *Executor) prepareExecCmd(execCtx context.Context, cmd *safety.Command, opts *ExecuteOptions) *exec.Cmd {
 	execCmd := exec.CommandContext(execCtx, cmd.Program, cmd.Args...)
 
 	workDir := opts.WorkDir
@@ -528,6 +554,12 @@ func (e *Executor) prepareExecCmd(execCtx context.Context, cmd *security.Command
 	execCmd.Env = e.buildEnvironment(opts)
 
 	ensurePATH(execCmd)
+	process.SetGroup(execCmd)
+
+	// Override context cancellation to kill the entire process group.
+	execCmd.Cancel = func() error {
+		return process.KillGroup(execCmd)
+	}
 
 	return execCmd
 }
@@ -605,7 +637,7 @@ func (e *Executor) handleExecError(execCtx context.Context, err error, result *R
 //	    }
 //	    fmt.Print(string(chunk.Data))
 //	}
-func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *security.Command, opts *ExecuteOptions) (<-chan OutputChunk, error) {
+func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *safety.Command, opts *ExecuteOptions) (<-chan OutputChunk, error) {
 	// Use default options if not provided.
 	if opts == nil {
 		opts = DefaultExecuteOptions()
@@ -642,7 +674,7 @@ func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *security.Command, 
 }
 
 // validateStreamingCommand validates a command for streaming execution.
-func (e *Executor) validateStreamingCommand(cmd *security.Command, opts *ExecuteOptions) error {
+func (e *Executor) validateStreamingCommand(cmd *safety.Command, opts *ExecuteOptions) error {
 	if opts.ValidateFirst {
 		return e.Validate(cmd)
 	}
@@ -660,7 +692,7 @@ func (e *Executor) validateStreamingCommand(cmd *security.Command, opts *Execute
 
 // prepareStreamingCmd creates an [exec.Cmd] with stdout/stderr pipes for streaming.
 func (e *Executor) prepareStreamingCmd(
-	execCtx context.Context, cmd *security.Command, opts *ExecuteOptions,
+	execCtx context.Context, cmd *safety.Command, opts *ExecuteOptions,
 ) (execCmd *exec.Cmd, stdout, stderr io.Reader, err error) {
 	execCmd = e.prepareExecCmd(execCtx, cmd, opts)
 

@@ -3,26 +3,26 @@ package overlay
 import (
 	"context"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 // ApprovalDialog represents a TUI approval dialog for command approval.
 type ApprovalDialog struct {
-	request    *security.ApprovalRequest
-	response   *security.ApprovalResponse
+	request    *safety.ApprovalRequest
+	response   *safety.ApprovalResponse
 	width      int
 	height     int
 	selected   int  // 0=Approve, 1=Deny, 2=Cancel.
 	shown      bool // tracks if Show() has been called.
-	responseCh chan security.ApprovalResponse
+	responseCh chan safety.ApprovalResponse
 }
 
 // NewApprovalDialog creates a new approval dialog.
-func NewApprovalDialog(request security.ApprovalRequest) *ApprovalDialog {
+func NewApprovalDialog(request safety.ApprovalRequest) *ApprovalDialog {
 	return &ApprovalDialog{
 		request:    &request,
 		selected:   0, // Default to Approve.
-		responseCh: make(chan security.ApprovalResponse, 1),
+		responseCh: make(chan safety.ApprovalResponse, 1),
 	}
 }
 
@@ -50,17 +50,17 @@ func (d *ApprovalDialog) HandleKey(key string) bool {
 	switch key[0] {
 	case 'A', 'a':
 		// Approve once.
-		d.approveWithScope(security.ScopeOnce)
+		d.approveWithScope(safety.ScopeOnce)
 
 		return true
 	case 'S', 's':
 		// Approve for session.
-		d.approveWithScope(security.ScopeSession)
+		d.approveWithScope(safety.ScopeSession)
 
 		return true
 	case 'G', 'g':
 		// Approve always (global).
-		d.approveWithScope(security.ScopeGlobal)
+		d.approveWithScope(safety.ScopeGlobal)
 
 		return true
 	case 'D', 'd':
@@ -69,7 +69,7 @@ func (d *ApprovalDialog) HandleKey(key string) bool {
 		return true
 	case '\x1b': // ESC.
 		// Cancel - deny with canceled reason.
-		resp := security.ApprovalResponse{
+		resp := safety.ApprovalResponse{
 			RequestID: d.request.ID,
 			Approved:  false,
 			Reason:    "canceled",
@@ -92,12 +92,12 @@ func (d *ApprovalDialog) HandleKey(key string) bool {
 }
 
 // GetResponse returns the user's response.
-func (d *ApprovalDialog) GetResponse() *security.ApprovalResponse {
+func (d *ApprovalDialog) GetResponse() *safety.ApprovalResponse {
 	return d.response
 }
 
 // Show displays the approval dialog and waits for user input.
-func (d *ApprovalDialog) Show(ctx context.Context) security.ApprovalResponse {
+func (d *ApprovalDialog) Show(ctx context.Context) safety.ApprovalResponse {
 	// Mark as shown.
 	d.shown = true
 
@@ -109,7 +109,7 @@ func (d *ApprovalDialog) Show(ctx context.Context) security.ApprovalResponse {
 		return resp
 	case <-ctx.Done():
 		// Context canceled.
-		resp := security.ApprovalResponse{
+		resp := safety.ApprovalResponse{
 			RequestID: d.request.ID,
 			Approved:  false,
 			Reason:    "canceled",
@@ -128,7 +128,7 @@ func (d *ApprovalDialog) IsVisible() bool {
 
 // Approve approves the request and closes the dialog.
 func (d *ApprovalDialog) Approve() {
-	resp := security.ApprovalResponse{
+	resp := safety.ApprovalResponse{
 		RequestID: d.request.ID,
 		Approved:  true,
 		Reason:    "user approved",
@@ -144,7 +144,7 @@ func (d *ApprovalDialog) Approve() {
 
 // approveWithScope approves the request with a specific persistence scope and closes the dialog.
 func (d *ApprovalDialog) approveWithScope(scope string) {
-	resp := security.ApprovalResponse{
+	resp := safety.ApprovalResponse{
 		RequestID: d.request.ID,
 		Approved:  true,
 		Reason:    "user approved",
@@ -161,7 +161,7 @@ func (d *ApprovalDialog) approveWithScope(scope string) {
 
 // Deny denies the request and closes the dialog.
 func (d *ApprovalDialog) Deny() {
-	resp := security.ApprovalResponse{
+	resp := safety.ApprovalResponse{
 		RequestID: d.request.ID,
 		Approved:  false,
 		Reason:    "user denied",

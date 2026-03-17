@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 // setupApprovalTest creates a test config and returns the config path, policy path, and tmpDir.
@@ -75,19 +75,19 @@ func TestApproval_List_WithData(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	store, err := security.NewFilePolicyStore(policyPath, 10*time.Millisecond)
+	store, err := safety.NewFilePolicyStore(policyPath, 10*time.Millisecond)
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
 
 	ctx := context.Background()
-	key := security.NewPolicyKey("/bin/echo", []string{"hello"}, tmpDir)
+	key := safety.NewPolicyKey("/bin/echo", []string{"hello"}, tmpDir)
 
-	p := security.Policy{
+	p := safety.Policy{
 		Version:   "1",
-		Scope:     security.ScopeGlobal,
+		Scope:     safety.ScopeGlobal,
 		Key:       key,
-		Decision:  security.DecisionAllow,
+		Decision:  safety.DecisionAllow,
 		CreatedAt: time.Now(),
 	}
 

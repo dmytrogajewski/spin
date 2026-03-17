@@ -9,6 +9,7 @@ import (
 // ReadFileTool implements file reading functionality.
 type ReadFileTool struct {
 	workDir string
+	tracker *FileTracker
 }
 
 // NewReadFileTool creates a new read file tool.
@@ -68,5 +69,16 @@ func (t *ReadFileTool) Execute(_ context.Context, params ToolParameters) (ToolRe
 		return ErrToResultf("failed to read file: %v", readErr)
 	}
 
+	if t.tracker != nil {
+		if recordErr := t.tracker.RecordRead(path); recordErr != nil {
+			return ErrToResultf("failed to record file read: %v", recordErr)
+		}
+	}
+
 	return NewToolResult(string(content)), nil
+}
+
+// SetTracker sets the file tracker for stale-read detection.
+func (t *ReadFileTool) SetTracker(tracker *FileTracker) {
+	t.tracker = tracker
 }

@@ -8,11 +8,12 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/agent/executor"
+	"github.com/dmytrogajewski/spin/internal/agent/tool"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tools"
@@ -164,7 +165,7 @@ func createBuiltinRuntime(
 	emitter *events.EventEmitter,
 	storage session.Storage,
 	sessionID string,
-	approvalHandler security.ApprovalHandler,
+	approvalHandler safety.ApprovalHandler,
 	services *ProtocolServices,
 	ui ports.UI,
 	logger *slog.Logger,
@@ -269,7 +270,7 @@ func createToolSelector(
 	ctx context.Context, mcpSvc *mcp.Service,
 	coreRegistry *tools.Registry, emitter *events.EventEmitter,
 	cfg *config.V2, logger *slog.Logger,
-) *agent.ToolSelector {
+) *tool.Selector {
 	if mcpSvc == nil {
 		logger.DebugContext(ctx, "tool selector: MCP service is nil")
 
@@ -284,11 +285,11 @@ func createToolSelector(
 
 	logger.InfoContext(ctx, "tool selector: creating with dynamic registries")
 
-	return agent.NewToolSelector(
+	return tool.NewSelector(
 		mcpSvc,
 		coreRegistry,
 		emitter,
-		agent.DefaultToolSelectionConfig(),
+		tool.DefaultSelectionConfig(),
 		logger,
 	)
 }

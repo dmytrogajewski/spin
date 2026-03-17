@@ -3,7 +3,7 @@ package executor
 import (
 	"context"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
@@ -66,13 +66,13 @@ func (a *shellContextInfoAdapter) GetShellEnv() map[string]string {
 	return a.info.GetShellEnv()
 }
 
-// ValidatorAdapter adapts security.Validator to tools.CommandValidator interface.
+// ValidatorAdapter adapts safety.Validator to tools.CommandValidator interface.
 type ValidatorAdapter struct {
-	validator *security.Validator
+	validator *safety.Validator
 }
 
-// NewValidatorAdapter creates a new adapter for security.Validator to tools.CommandValidator.
-func NewValidatorAdapter(v *security.Validator) tools.CommandValidator {
+// NewValidatorAdapter creates a new adapter for safety.Validator to tools.CommandValidator.
+func NewValidatorAdapter(v *safety.Validator) tools.CommandValidator {
 	if v == nil {
 		return nil
 	}
@@ -82,8 +82,8 @@ func NewValidatorAdapter(v *security.Validator) tools.CommandValidator {
 
 // Classify implements the Classify operation.
 func (a *ValidatorAdapter) Classify(cmd tools.CommandInfo) (tools.ValidationResult, error) {
-	// Convert tools.CommandInfo to *security.Command.
-	secCmd := &security.Command{
+	// Convert tools.CommandInfo to *safety.Command.
+	secCmd := &safety.Command{
 		Program: cmd.GetProgram(),
 		Args:    cmd.GetArgs(),
 		Raw:     cmd.GetRaw(),
@@ -98,9 +98,9 @@ func (a *ValidatorAdapter) Classify(cmd tools.CommandInfo) (tools.ValidationResu
 	return &validationResultAdapter{result: result}, nil
 }
 
-// validationResultAdapter adapts security.ValidationResult to tools.ValidationResult interface.
+// validationResultAdapter adapts safety.ValidationResult to tools.ValidationResult interface.
 type validationResultAdapter struct {
-	result *security.ValidationResult
+	result *safety.ValidationResult
 }
 
 // GetClassification implements the GetClassification operation.
@@ -113,6 +113,48 @@ func (a *validationResultAdapter) GetReason() string {
 	return a.result.Reason
 }
 
+// TaskManagerAdapter adapts [BackgroundTaskManager] to [tools.TaskManager] interface.
+type TaskManagerAdapter struct {
+	mgr *BackgroundTaskManager
+}
+
+// NewTaskManagerAdapter creates a new adapter for BackgroundTaskManager to [tools.TaskManager].
+func NewTaskManagerAdapter(mgr *BackgroundTaskManager) *TaskManagerAdapter {
+	if mgr == nil {
+		return nil
+	}
+
+	return &TaskManagerAdapter{mgr: mgr}
+}
+
+// List returns snapshots of all managed tasks.
+func (a *TaskManagerAdapter) List() []tools.TaskSnapshot {
+	infos := a.mgr.List()
+	snapshots := make([]tools.TaskSnapshot, len(infos))
+
+	for idx, info := range infos {
+		snapshots[idx] = tools.TaskSnapshot{
+			ID:        info.ID,
+			Command:   info.Command,
+			Status:    tools.TaskStatus(info.State),
+			StartedAt: info.StartedAt,
+			ExitCode:  info.ExitCode,
+		}
+	}
+
+	return snapshots
+}
+
+// GetOutput returns the last maxLines of output for a task.
+func (a *TaskManagerAdapter) GetOutput(taskID string, maxLines int) (string, error) {
+	return a.mgr.GetOutput(taskID, maxLines)
+}
+
+// Kill terminates a running task.
+func (a *TaskManagerAdapter) Kill(taskID string) error {
+	return a.mgr.Kill(taskID)
+}
+
 // Adapter adapts runtime.CommandExecutor to tools.CommandExecutor interface.
 // Used by builtin runtime.
 type Adapter struct {
@@ -121,7 +163,7 @@ type Adapter struct {
 
 // Execute implements the Execute operation.
 func (a *Adapter) Execute(ctx context.Context, cmd tools.CommandInfo, opts any) (tools.ExecutionResult, error) {
-	secCmd := &security.Command{
+	secCmd := &safety.Command{
 		Program: cmd.GetProgram(),
 		Args:    cmd.GetArgs(),
 		Raw:     cmd.GetRaw(),

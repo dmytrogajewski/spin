@@ -15,16 +15,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/tool"
+	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/cycle"
-	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/planning"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
-	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -98,14 +97,15 @@ func TestSpinACPAgent_Prompt_EmptyPrompt(t *testing.T) {
 // TestSpinACPAgent_Prompt_Success tests successful prompt execution.
 func TestSpinACPAgent_Prompt_Success(t *testing.T) {
 	t.Parallel()
-	agentInstance := createTestAgent(t)
+	agentInstance, emitter := createTestAgentWithEmitter(t)
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
+
+	setupConversationManager(t, acpAgent, agentInstance, emitter)
 
 	// Create a session first.
 	sessionReq := acp.NewSessionRequest{
@@ -126,77 +126,27 @@ func TestSpinACPAgent_Prompt_Success(t *testing.T) {
 	assert.Equal(t, acp.StopReasonEndTurn, resp.StopReason)
 }
 
-// TestAgentEmitterStreams ensures the underlying agent emits content delta events.
-func TestAgentEmitterStreams(t *testing.T) {
-	t.Parallel()
-	agentInstance, emitter := createTestAgentWithEmitter(t)
-
-	subID, ch, err := emitter.Subscribe()
-	require.NoError(t, err)
-
-	defer emitter.Unsubscribe(subID)
-
-	req := &agent.Request{
-		Input:   "hello emitter",
-		Task:    task.DefaultTask(),
-		History: []message.Message{},
-	}
-
-	ctx := t.Context()
-
-	done := make(chan struct{})
-
-	go func() {
-		_, _ = agentInstance.Execute(ctx, req)
-
-		close(done)
-	}()
-
-	require.Eventually(t, func() bool {
-		select {
-		case event := <-ch:
-			if event.Type == events.EventContentDelta {
-				return true
-			}
-		default:
-		}
-
-		return false
-	}, time.Second, 10*time.Millisecond, "expected EventContentDelta from agent emitter")
-	<-done
-}
-
-// TestEmitterManualSubscribe ensures subscribing before execution captures events.
-func TestEmitterManualSubscribe(t *testing.T) {
-	t.Parallel()
-	agentInstance, emitter := createTestAgentWithEmitter(t)
-
-	subID, ch, err := emitter.Subscribe()
-	require.NoError(t, err)
-
-	defer emitter.Unsubscribe(subID)
-
-	req := &agent.Request{
-		Input:   "manual subscribe",
-		Task:    task.DefaultTask(),
-		History: []message.Message{},
-	}
-
-	go func() {
-		_, _ = agentInstance.Execute(context.Background(), req)
-	}()
-
-	require.Eventually(t, func() bool {
-		select {
-		case event := <-ch:
-			return event.Type == events.EventContentDelta
-		default:
-			return false
-		}
-	}, time.Second, 10*time.Millisecond, "expected EventContentDelta event")
-}
-
 // createTestAgent creates a test agent with mock LLM provider.
+// mockHarnessExecutor is a test double for conversation.HarnessTurnExecutor.
+type mockHarnessExecutor struct {
+	emitter *events.EventEmitter
+}
+
+func (m *mockHarnessExecutor) Execute(
+	_ context.Context, _ string, _ []message.Message,
+) (string, []message.Message, error) {
+	if m.emitter != nil {
+		m.emitter.Emit(events.Event{
+			Type: events.EventContentDelta,
+			Data: events.ContentDeltaData{Content: "mock response", Role: "assistant"},
+		})
+	}
+
+	return "mock response", []message.Message{
+		{Role: message.RoleAssistant, Content: "mock response"},
+	}, nil
+}
+
 func createTestAgent(t *testing.T) *agent.Agent {
 	t.Helper()
 	agentInstance, _ := createTestAgentWithEmitter(t)
@@ -209,34 +159,54 @@ func createTestAgentWithEmitter(t *testing.T) (*agent.Agent, *events.EventEmitte
 	t.Helper()
 
 	mockProvider := llm.NewMockProvider("test response")
-	validator := security.NewValidator()
+	validator := safety.NewValidator()
 	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
 		Handler: nil, Emitter: emitter, Validator: validator,
 	})
-	securityService := security.NewService(validator, approvalService)
-	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
-	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
+	securityService := safety.NewService(validator, approvalService)
+	detectionService := cycle.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
+	toolRuntime := tool.NewRuntime(tool.RuntimeConfig{
 		Registry:        tools.NewRegistry(),
 		Validator:       validator,
 		ApprovalService: approvalService,
 		Emitter:         emitter,
 		WorkDir:         t.TempDir(),
 	})
-	planningService := planning.NewService(mockProvider)
 
 	agentInstance, err := agent.NewAgent(
 		mockProvider,
 		securityService,
 		detectionService,
 		toolRuntime,
-		planningService,
 		&agent.Environment{WorkDir: t.TempDir()},
 		emitter,
 	)
 	require.NoError(t, err)
 
 	return agentInstance, emitter
+}
+
+// setupConversationManager creates a ConversationManager with a mock harness
+// executor and attaches it to the ACP agent.
+func setupConversationManager(t *testing.T, acpAgent *SpinACPAgent, agentInstance *agent.Agent, emitter *events.EventEmitter) {
+	t.Helper()
+
+	factory := func(_ context.Context, _ string, workDir string) (*conversation.Conversation, error) {
+		return conversation.NewFromAgent(conversation.NewFromAgentConfig{
+			Agent:           agentInstance,
+			HarnessExecutor: &mockHarnessExecutor{emitter: emitter},
+			Emitter:         emitter,
+			WorkDir:         workDir,
+		})
+	}
+
+	mgr, err := conversation.NewManager(conversation.ManagerConfig{
+		Factory: factory,
+	})
+	require.NoError(t, err)
+
+	acpAgent.SetConversationManager(mgr)
 }
 
 // TestSpinACPAgent_Prompt_SendsNotifications ensures prompt execution emits agent message chunks.
@@ -250,6 +220,8 @@ func TestSpinACPAgent_Prompt_SendsNotifications(t *testing.T) {
 
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
+
+	setupConversationManager(t, acpAgent, agentInstance, emitter)
 
 	mockConn := &mockConnection{}
 	acpAgent.SetNotificationSender(mockConn)
@@ -292,6 +264,8 @@ func TestSpinACPAgent_EndToEndNotifications(t *testing.T) {
 
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
+
+	setupConversationManager(t, acpAgent, agentInstance, emitter)
 
 	agentReader, clientWriter := io.Pipe()
 	clientReader, agentWriter := io.Pipe()
@@ -404,14 +378,15 @@ func (c *stubClient) WaitForTerminalExit(_ context.Context, _ acp.WaitForTermina
 // TestSpinACPAgent_Prompt_ContentBlockConversion tests content block conversion.
 func TestSpinACPAgent_Prompt_ContentBlockConversion(t *testing.T) {
 	t.Parallel()
-	agentInstance := createTestAgent(t)
+	agentInstance, emitter := createTestAgentWithEmitter(t)
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
+
+	setupConversationManager(t, acpAgent, agentInstance, emitter)
 
 	// Create a session.
 	sessionReq := acp.NewSessionRequest{

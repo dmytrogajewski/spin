@@ -53,21 +53,32 @@ func buildSpinBinary() {
 	defer func() { _ = syscall.Flock(fd, syscall.LOCK_UN) }()
 
 	// Check if binary was already built by another package while we waited.
+	// Use 5-minute window to avoid unnecessary rebuilds during parallel test runs.
 	if info, statErr := os.Stat(binPath); statErr == nil {
-		if time.Since(info.ModTime()) < 30*time.Second {
+		if time.Since(info.ModTime()) < 5*time.Minute {
 			fmt.Fprintln(os.Stdout, "Using recently built spin binary for ACP e2e tests")
 
 			return
 		}
 	}
 
+	// Build to a temp file and atomically rename to avoid running a half-written binary.
 	fmt.Fprintln(os.Stdout, "Building spin binary for ACP e2e tests (with e2e_llm_test tag)...")
 
-	cmd := exec.CommandContext(context.Background(), "go", "build", "-tags", "e2e_llm_test", "-o", binPath, "../../../cmd/spin")
+	tmpBin := binPath + ".tmp"
+
+	cmd := exec.CommandContext(context.Background(), "go", "build", "-tags", "e2e_llm_test", "-o", tmpBin, "../../../cmd/spin")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		os.Remove(tmpBin)
 		fmt.Fprintf(os.Stderr, "Failed to build binary: %v\n%s\n", err, output)
+		os.Exit(1)
+	}
+
+	if err := os.Rename(tmpBin, binPath); err != nil {
+		os.Remove(tmpBin)
+		fmt.Fprintf(os.Stderr, "Failed to install binary: %v\n", err)
 		os.Exit(1)
 	}
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
 )
 
@@ -29,7 +29,7 @@ func TestRequestPermission_SessionNotFound(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
 		Handler: nil, Emitter: emitter, Validator: nil,
 	})
 	acpAgent.SetApprovalService(approvalService)
@@ -119,15 +119,15 @@ func runPermissionDecisionTests(t *testing.T, cases []permissionDecisionCase) {
 			acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 			require.NoError(t, err)
 
-			approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-				return security.ApprovalResponse{
+			approvalHandler := func(_ context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
+				return safety.ApprovalResponse{
 					RequestID: req.ID,
 					Approved:  tt.approved,
 					Reason:    tt.reason,
 				}
 			}
 
-			approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+			approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
 				Handler: approvalHandler, Emitter: emitter, Validator: nil,
 			})
 			acpAgent.SetApprovalService(approvalService)
@@ -197,18 +197,18 @@ func TestRequestPermission_Canceled(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create approval handler that blocks (simulating cancellation).
-	approvalHandler := func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	approvalHandler := func(ctx context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
 		// Block until context is canceled.
 		<-ctx.Done()
 
-		return security.ApprovalResponse{
+		return safety.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  false,
 			Reason:    "canceled",
 		}
 	}
 
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
 		Handler: approvalHandler, Emitter: emitter, Validator: nil,
 	})
 	acpAgent.SetApprovalService(approvalService)
@@ -259,19 +259,19 @@ func TestRequestPermission_WithRawInput(t *testing.T) {
 	require.NoError(t, err)
 
 	// Track the operation that was requested.
-	var capturedOperation security.Operation
+	var capturedOperation safety.Operation
 
-	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	approvalHandler := func(_ context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
 		// Capture the operation.
-		capturedOperation = security.NewOperation(req.Command, req.Reason, req.WorkDir)
+		capturedOperation = safety.NewOperation(req.Command, req.Reason, req.WorkDir)
 
-		return security.ApprovalResponse{
+		return safety.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
 		}
 	}
 
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
 		Handler: approvalHandler, Emitter: emitter, Validator: nil,
 	})
 	acpAgent.SetApprovalService(approvalService)
@@ -325,14 +325,14 @@ func TestRequestPermission_AllowAlwaysOption(t *testing.T) {
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		return security.ApprovalResponse{
+	approvalHandler := func(_ context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
+		return safety.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
 		}
 	}
 
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
 		Handler: approvalHandler, Emitter: emitter, Validator: nil,
 	})
 	acpAgent.SetApprovalService(approvalService)
@@ -385,7 +385,7 @@ func setupPermissionIntegrationAgent(t *testing.T) (*SpinACPAgent, acp.SessionId
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpSvc, emitter, storage)
 	require.NoError(t, err)
 
-	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	approvalHandler := func(_ context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
 		approved := req.Command.Program != "dangerous_command"
 
 		reason := "approved"
@@ -393,10 +393,10 @@ func setupPermissionIntegrationAgent(t *testing.T) (*SpinACPAgent, acp.SessionId
 			reason = "denied - dangerous command"
 		}
 
-		return security.ApprovalResponse{RequestID: req.ID, Approved: approved, Reason: reason}
+		return safety.ApprovalResponse{RequestID: req.ID, Approved: approved, Reason: reason}
 	}
 
-	acpAgent.SetApprovalService(security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+	acpAgent.SetApprovalService(safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
 		Handler: approvalHandler, Emitter: emitter,
 	}))
 

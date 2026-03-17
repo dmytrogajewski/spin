@@ -6,11 +6,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/dmytrogajewski/spin/internal/undo"
 )
 
 // WriteFileTool implements file writing functionality.
 type WriteFileTool struct {
 	workDir string
+	tracker *FileTracker
+	opLog   *undo.OperationLog
 }
 
 // NewWriteFileTool creates a new write file tool.
@@ -74,6 +78,19 @@ func (t *WriteFileTool) Execute(_ context.Context, params ToolParameters) (ToolR
 		return NewToolError(fmt.Errorf("content parameter required: %w", contentErr)), nil
 	}
 
+	if t.tracker != nil {
+		if freshErr := t.tracker.AssertFresh(path); freshErr != nil {
+			return NewToolError(freshErr), nil
+		}
+	}
+
+	// Record before-state for undo.
+	if t.opLog != nil {
+		if logErr := t.opLog.RecordFileChange(path); logErr != nil {
+			return ErrToResultf("failed to record operation: %v", logErr)
+		}
+	}
+
 	// Create parent directories if they don't exist.
 	dir := filepath.Dir(path)
 	if dir != "." && dir != "" {
@@ -89,6 +106,16 @@ func (t *WriteFileTool) Execute(_ context.Context, params ToolParameters) (ToolR
 	}
 
 	return NewToolResult(fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path)), nil
+}
+
+// SetTracker sets the file tracker for stale-read detection.
+func (t *WriteFileTool) SetTracker(tracker *FileTracker) {
+	t.tracker = tracker
+}
+
+// SetOperationLog sets the operation log for undo support.
+func (t *WriteFileTool) SetOperationLog(log *undo.OperationLog) {
+	t.opLog = log
 }
 
 // CheckApproval assesses whether the write operation requires approval.

@@ -95,6 +95,14 @@ func (s *Session) ensureMu() {
 	}
 }
 
+// MigrateVersion applies schema version defaults for deserialized sessions.
+// If Version is zero (absent in old JSON), it sets it to CurrentSchemaVersion.
+func (s *Session) MigrateVersion() {
+	if s.Version == 0 {
+		s.Version = CurrentSchemaVersion
+	}
+}
+
 // IncrementTurnCount increments the turn counter and updates tokens used.
 // This is called when a turn completes. The actual messages are stored in history.History.
 func (s *Session) IncrementTurnCount(tokensUsed int) {
@@ -104,6 +112,21 @@ func (s *Session) IncrementTurnCount(tokensUsed int) {
 
 	s.Metadata.TotalTurns++
 	s.Metadata.TokensUsed += tokensUsed
+	s.UpdatedAt = time.Now()
+}
+
+// RecordLLMCall records cost metrics from a single LLM API call.
+// It atomically updates input/output tokens, cost, call count, and TokensUsed.
+func (s *Session) RecordLLMCall(inputTokens, outputTokens int, costUSD float64) {
+	s.ensureMu()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.Metadata.CostTracking.InputTokens += inputTokens
+	s.Metadata.CostTracking.OutputTokens += outputTokens
+	s.Metadata.CostTracking.TotalCostUSD += costUSD
+	s.Metadata.CostTracking.APICallCount++
+	s.Metadata.TokensUsed += inputTokens + outputTokens
 	s.UpdatedAt = time.Now()
 }
 

@@ -6,6 +6,9 @@ import (
 	"fmt"
 )
 
+// unknownStatus is the fallback label for unrecognized enum values.
+const unknownStatus = "unknown"
+
 // Common errors for the tools package.
 var (
 	// ErrToolNotFound is returned when a requested tool is not registered.
@@ -187,6 +190,7 @@ type PropertyDefinition struct {
 var BuiltinTools = []Tool{
 	NewReadFileTool(),
 	NewWriteFileTool(),
+	NewEditFileTool(),
 	NewListDirectoryTool(),
 	NewShellCommandTool(nil, nil, nil),
 	NewGetContextTool(nil),

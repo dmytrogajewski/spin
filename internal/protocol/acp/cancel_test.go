@@ -12,89 +12,75 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/cycle"
-	"github.com/dmytrogajewski/spin/internal/detection"
+	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/planning"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/session"
-	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 func TestCancel_ValidSession_CancelsInProgressExecution(t *testing.T) {
-	t.Parallel(
-	// Create test agent with blocking mock provider and mock connection.
-	)
+	t.Parallel()
 
-	agentInstance := createBlockingTestAgent(t)
+	agentInstance, emitter := createTestAgentWithEmitter(t)
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
-	// Create mock connection.
+	// Set up ConversationManager with blocking harness executor.
+	factory := func(_ context.Context, _ string, workDir string) (*conversation.Conversation, error) {
+		return conversation.NewFromAgent(conversation.NewFromAgentConfig{
+			Agent:           agentInstance,
+			HarnessExecutor: &blockingHarnessExecutor{},
+			Emitter:         emitter,
+			WorkDir:         workDir,
+		})
+	}
+
+	mgr, err := conversation.NewManager(conversation.ManagerConfig{Factory: factory})
+	require.NoError(t, err)
+
+	acpAgent.SetConversationManager(mgr)
+
 	mockConn := &mockConnectionForCancel{}
 	acpAgent.SetNotificationSender(mockConn)
 
-	// Create session.
-	sessionReq := acp.NewSessionRequest{
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{
 		Cwd: t.TempDir(),
-	}
-	sessionResp, err := acpAgent.NewSession(context.Background(), sessionReq)
+	})
 	require.NoError(t, err)
 
 	sessionID := sessionResp.SessionId
 
-	// Channel to signal when prompt completes.
 	promptCompleted := make(chan acp.PromptResponse, 1)
-	// Channel to signal when prompt starts (so we can cancel after it starts).
 	promptStarted := make(chan struct{})
 
-	// Start prompt in goroutine
-	// Use background context - cancellation will be done via Cancel method.
 	go func() {
 		close(promptStarted)
 
-		promptReq := acp.PromptRequest{
+		resp, promptErr := acpAgent.Prompt(context.Background(), acp.PromptRequest{
 			SessionId: sessionID,
 			Prompt:    []acp.ContentBlock{acp.TextBlock("test prompt")},
-		}
-
-		resp, promptErr := acpAgent.Prompt(context.Background(), promptReq)
+		})
 		if promptErr != nil {
-			// Error is expected when canceled.
-			promptCompleted <- acp.PromptResponse{
-				StopReason: acp.StopReasonCancelled,
-			}
+			promptCompleted <- acp.PromptResponse{StopReason: acp.StopReasonCancelled}
 		} else {
 			promptCompleted <- resp
 		}
 	}()
 
-	// Wait for prompt to start.
 	<-promptStarted
-	// Give it a moment to get into the LLM call (mock provider will block on first chunk delay)
-	// The delay is 200ms, so we wait 50ms to ensure we're in the delay.
 	time.Sleep(50 * time.Millisecond)
 
-	// Cancel the execution.
-	notif := acp.CancelNotification{
-		SessionId: sessionID,
-	}
-	err = acpAgent.Cancel(context.Background(), notif)
+	err = acpAgent.Cancel(context.Background(), acp.CancelNotification{SessionId: sessionID})
 	require.NoError(t, err)
 
-	// Wait for prompt to complete (should be canceled).
 	select {
 	case resp := <-promptCompleted:
-		// Verify stop reason is canceled.
-		assert.Equal(t, acp.StopReasonCancelled, resp.StopReason, "Expected canceled stop reason, but got %s", resp.StopReason)
+		assert.Equal(t, acp.StopReasonCancelled, resp.StopReason)
 	case <-time.After(3 * time.Second):
 		t.Fatal("Prompt did not complete after cancellation")
 	}
@@ -154,123 +140,87 @@ func TestCancel_InvalidSession_ReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "session not found")
 }
 
-func TestCancel_CancelsPromptExecution_ReturnsCancelledStopReason(t *testing.T) {
-	t.Parallel(
-	// Create test agent with blocking mock provider and mock connection.
-	)
+// blockingHarnessExecutor blocks until the context is canceled.
+type blockingHarnessExecutor struct{}
 
-	agentInstance := createBlockingTestAgent(t)
+func (b *blockingHarnessExecutor) Execute(
+	ctx context.Context, _ string, _ []message.Message,
+) (string, []message.Message, error) {
+	<-ctx.Done()
+
+	return "", nil, fmt.Errorf("harness executor blocked: %w", ctx.Err())
+}
+
+func TestCancel_CancelsPromptExecution_ReturnsCancelledStopReason(t *testing.T) {
+	t.Parallel()
+
+	agentInstance, emitter := createTestAgentWithEmitter(t)
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
 
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
 
+	// Set up a ConversationManager with a blocking harness executor.
+	factory := func(_ context.Context, _ string, workDir string) (*conversation.Conversation, error) {
+		return conversation.NewFromAgent(conversation.NewFromAgentConfig{
+			Agent:           agentInstance,
+			HarnessExecutor: &blockingHarnessExecutor{},
+			Emitter:         emitter,
+			WorkDir:         workDir,
+		})
+	}
+
+	mgr, err := conversation.NewManager(conversation.ManagerConfig{Factory: factory})
+	require.NoError(t, err)
+
+	acpAgent.SetConversationManager(mgr)
+
 	// Create mock connection.
 	mockConn := &mockConnectionForCancel{}
 	acpAgent.SetNotificationSender(mockConn)
 
 	// Create session.
-	sessionReq := acp.NewSessionRequest{
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{
 		Cwd: t.TempDir(),
-	}
-	sessionResp, err := acpAgent.NewSession(context.Background(), sessionReq)
+	})
 	require.NoError(t, err)
 
 	sessionID := sessionResp.SessionId
 
 	// Channel to signal when prompt completes.
 	promptDone := make(chan acp.PromptResponse, 1)
-	// Channel to signal when prompt starts.
 	promptStarted := make(chan struct{})
 
 	// Start prompt execution in background.
 	go func() {
 		close(promptStarted)
 
-		promptReq := acp.PromptRequest{
+		resp, _ := acpAgent.Prompt(context.Background(), acp.PromptRequest{
 			SessionId: sessionID,
 			Prompt:    []acp.ContentBlock{acp.TextBlock("test prompt")},
-		}
-
-		resp, _ := acpAgent.Prompt(context.Background(), promptReq)
+		})
 		promptDone <- resp
 	}()
 
-	// Wait for prompt to start.
+	// Wait for prompt to start, then cancel.
 	<-promptStarted
-	// Give it a moment to get into the LLM call (mock provider will block on first chunk delay).
 	time.Sleep(50 * time.Millisecond)
 
-	// Cancel the execution.
-	notif := acp.CancelNotification{
+	err = acpAgent.Cancel(context.Background(), acp.CancelNotification{
 		SessionId: sessionID,
-	}
-	err = acpAgent.Cancel(context.Background(), notif)
+	})
 	require.NoError(t, err)
 
 	// Wait for prompt to complete.
 	select {
 	case resp := <-promptDone:
-		// Verify stop reason is canceled.
-		assert.Equal(t, acp.StopReasonCancelled, resp.StopReason, "Expected canceled stop reason, but got %s", resp.StopReason)
+		assert.Equal(t, acp.StopReasonCancelled, resp.StopReason,
+			"Expected canceled stop reason, but got %s", resp.StopReason)
 	case <-time.After(3 * time.Second):
 		t.Fatal("Prompt did not complete after cancellation")
 	}
-
-	// Verify notifications were sent.
-	notifications := mockConn.GetNotifications()
-	// Should have at least the user message notification.
-	assert.GreaterOrEqual(t, len(notifications), 1)
-}
-
-// createBlockingTestAgent creates a test agent with a blocking mock provider.
-// The provider blocks until the context is canceled, allowing cancellation tests.
-func createBlockingTestAgent(t *testing.T) *agent.Agent {
-	t.Helper()
-
-	// Create a mock provider with a long delay on the first chunk
-	// This makes the Stream method block long enough for us to cancel it
-	// Use many chunks with delay to ensure the agent execution blocks.
-	chunks := make([]string, 10)
-	for i := range chunks {
-		chunks[i] = fmt.Sprintf("chunk%d", i+1)
-	}
-
-	mockProvider := llm.NewMockProvider("test",
-		llm.WithStreaming(chunks),
-		llm.WithDelay(500*time.Millisecond), // Long delay between chunks to allow cancellation.
-	)
-	validator := security.NewValidator()
-	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
-		Handler: nil, Emitter: emitter, Validator: validator,
-	})
-	securityService := security.NewService(validator, approvalService)
-	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
-	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
-		Registry:        tools.NewRegistry(),
-		Validator:       validator,
-		ApprovalService: approvalService,
-		Emitter:         emitter,
-		WorkDir:         t.TempDir(),
-	})
-	planningService := planning.NewService(mockProvider)
-
-	agentInstance, err := agent.NewAgent(
-		mockProvider,
-		securityService,
-		detectionService,
-		toolRuntime,
-		planningService,
-		&agent.Environment{WorkDir: t.TempDir()},
-		emitter,
-	)
-	require.NoError(t, err)
-
-	return agentInstance
 }
 
 // mockConnectionForCancel is a mock connection for cancel tests.

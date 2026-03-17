@@ -226,14 +226,14 @@ linters:
         - github.com/dmytrogajewski/spin/internal/commands.Command
         - github.com/dmytrogajewski/spin/internal/conversation.EventTransformer
         - github.com/dmytrogajewski/spin/internal/detection.Intervention
-        - github.com/dmytrogajewski/spin/internal/history.Storage
+        - github.com/dmytrogajewski/spin/internal/contexteng/history.Storage
         - github.com/dmytrogajewski/spin/internal/llm.Provider
         - github.com/dmytrogajewski/spin/internal/mcp.Client
         - github.com/dmytrogajewski/spin/internal/mcp.Registry
         - github.com/dmytrogajewski/spin/internal/mcp.RegistryManager
         - github.com/dmytrogajewski/spin/internal/patchapply.FileOperation
         - github.com/dmytrogajewski/spin/internal/protocol/acp.notificationSender
-        - github.com/dmytrogajewski/spin/internal/security.PolicyStore
+        - github.com/dmytrogajewski/spin/internal/safety.PolicyStore
         - github.com/dmytrogajewski/spin/internal/session.Storage
         - github.com/dmytrogajewski/spin/internal/task.Task
         - github.com/dmytrogajewski/spin/internal/tools.CommandExecutor
@@ -559,7 +559,7 @@ linters:
 
       # funcorder: constructor ordering is stylistic; some files have constructors after related methods for readability.
       - linters: [funcorder]
-        path: "(internal/apperr/|internal/conversation/|internal/history/)"
+        path: "(internal/apperr/|internal/conversation/|internal/contexteng/history/)"
 
       # gocritic: test helper naming suggestions are stylistic.
       - linters: [gocritic]
@@ -581,7 +581,7 @@ linters:
 
       # musttag: some structs are marshaled with custom logic, not direct json.Marshal.
       - linters: [musttag]
-        path: "internal/security/"
+        path: "internal/safety/"
 
       # recvcheck: mixed receiver types are intentional for value/pointer semantics.
       - linters: [recvcheck]

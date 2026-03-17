@@ -11,30 +11,24 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/cycle"
-	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/planning"
-	"github.com/dmytrogajewski/spin/internal/security"
-	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
-// TestConvertOrchestrationPlanToACP tests conversion of planning.Plan to ACP PlanEntry[].
+// TestConvertOrchestrationPlanToACP tests conversion of Plan to ACP PlanEntry[].
 func TestConvertOrchestrationPlanToACP(t *testing.T) {
 	t.Parallel()
 
-	plan := &planning.Plan{
+	plan := &Plan{
 		ID:   "test-plan",
 		Task: "Test task",
-		Steps: []planning.Step{
+		Steps: []Step{
 			{
 				ID:                "step-1",
 				Description:       "First step",
 				Action:            "Do something",
 				DependsOn:         []string{},
-				Status:            planning.StepStatusPending,
+				Status:            StepStatusPending,
 				EstimatedDuration: 5 * time.Minute,
 			},
 			{
@@ -42,11 +36,11 @@ func TestConvertOrchestrationPlanToACP(t *testing.T) {
 				Description:       "Second step",
 				Action:            "Do something else",
 				DependsOn:         []string{"step-1"},
-				Status:            planning.StepStatusPending,
+				Status:            StepStatusPending,
 				EstimatedDuration: 10 * time.Minute,
 			},
 		},
-		Status: planning.PlanStatusPending,
+		Status: PlanStatusPending,
 	}
 
 	entries := convertOrchestrationPlanToACP(plan)
@@ -70,25 +64,25 @@ func TestConvertOrchestrationPlanToACP_StatusMapping(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		stepStatus     planning.StepStatus
+		stepStatus     StepStatus
 		expectedStatus acp.PlanEntryStatus
 	}{
-		{"pending", planning.StepStatusPending, acp.PlanEntryStatusPending},
-		{"ready", planning.StepStatusReady, acp.PlanEntryStatusPending},
-		{"running", planning.StepStatusRunning, acp.PlanEntryStatus("in_progress")},
-		{"completed", planning.StepStatusCompleted, acp.PlanEntryStatus("completed")},
-		{"failed", planning.StepStatusFailed, acp.PlanEntryStatus("failed")},
-		{"skipped", planning.StepStatusSkipped, acp.PlanEntryStatus("canceled")},
+		{"pending", StepStatusPending, acp.PlanEntryStatusPending},
+		{"ready", StepStatusReady, acp.PlanEntryStatusPending},
+		{"running", StepStatusRunning, acp.PlanEntryStatus("in_progress")},
+		{"completed", StepStatusCompleted, acp.PlanEntryStatus("completed")},
+		{"failed", StepStatusFailed, acp.PlanEntryStatus("failed")},
+		{"skipped", StepStatusSkipped, acp.PlanEntryStatus("canceled")},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			plan := &planning.Plan{
+			plan := &Plan{
 				ID:   "test-plan",
 				Task: "Test task",
-				Steps: []planning.Step{
+				Steps: []Step{
 					{
 						ID:          "step-1",
 						Description: "Test step",
@@ -109,10 +103,10 @@ func TestConvertOrchestrationPlanToACP_StatusMapping(t *testing.T) {
 func TestConvertOrchestrationPlanToACP_PriorityMapping(t *testing.T) {
 	t.Parallel()
 
-	plan := &planning.Plan{
+	plan := &Plan{
 		ID:   "test-plan",
 		Task: "Test task",
-		Steps: []planning.Step{
+		Steps: []Step{
 			{
 				ID:          "step-1",
 				Description: "No dependencies",
@@ -142,58 +136,14 @@ func TestConvertOrchestrationPlanToACP_PriorityMapping(t *testing.T) {
 	assert.Equal(t, acp.PlanEntryPriorityMedium, entries[2].Priority, "step with dependencies should be medium priority")
 }
 
-// TestSendPlanNotifications_WithOrchestrationPlan tests plan notification with agent plan.
-func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
-	t.Parallel(
-	// Create agent.
-	)
-
-	validator := security.NewValidator()
-	emitter := events.NewEventEmitter(100)
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
-		Handler: nil, Emitter: emitter, Validator: validator,
-	})
-	securityService := security.NewService(validator, approvalService)
-	detectionService := detection.NewService(cycle.NewDetector(cycle.Config{Enabled: false}), nil)
-	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
-		Registry:        tools.NewRegistry(),
-		Validator:       validator,
-		ApprovalService: approvalService,
-		Emitter:         emitter,
-		WorkDir:         "/tmp",
-	})
-
-	provider := llm.NewMockProvider("test")
-	agentInstance, err := agent.NewAgent(
-		provider,
-		securityService,
-		detectionService,
-		toolRuntime,
-		planning.NewService(provider),
-		&agent.Environment{WorkDir: "/tmp"},
-		emitter,
-	)
-	require.NoError(t, err)
-
-	// Set plan on agent.
-	plan := &planning.Plan{
-		ID:   "test-plan",
-		Task: "Test task",
-		Steps: []planning.Step{
-			{
-				ID:          "step-1",
-				Description: "First step",
-				Action:      "Do something",
-				Status:      planning.StepStatusPending,
-			},
-		},
-	}
-	agentInstance.SetPlanner(plan)
+// TestSendPlanNotifications_WithTextPlan tests plan notification with text-based plan detection.
+func TestSendPlanNotifications_WithTextPlan(t *testing.T) {
+	t.Parallel()
 
 	acpAgent, err := NewSpinACPAgentWithStorage(
-		agentInstance,
+		&agent.Agent{},
 		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
-		emitter,
+		events.NewEventEmitter(100),
 		nil,
 	)
 	require.NoError(t, err)
@@ -201,13 +151,15 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 	mockConn := &mockConnectionForPlan{}
 	acpAgent.SetNotificationSender(mockConn)
 
-	// Create agent response.
+	// Create agent response with plan-like text output.
 	agentResp := &agent.Response{
-		Output:  "Plan created",
+		Output: `Plan:
+1. First step
+`,
 		Success: true,
 	}
 
-	// Send plan notifications (should detect agent plan).
+	// Send plan notifications (should detect plan from text).
 	err = acpAgent.sendPlanNotifications(context.Background(), acp.SessionId("test-session"), agentResp)
 	require.NoError(t, err)
 
@@ -223,13 +175,13 @@ func TestSendPlanNotifications_WithOrchestrationPlan(t *testing.T) {
 			found = true
 
 			assert.Len(t, notif.Update.Plan.Entries, 1)
-			assert.Equal(t, "First step: Do something", notif.Update.Plan.Entries[0].Content)
+			assert.Equal(t, "First step", notif.Update.Plan.Entries[0].Content)
 
 			break
 		}
 	}
 
-	assert.True(t, found, "should send plan notification with agent plan")
+	assert.True(t, found, "should send plan notification with text-based plan")
 }
 
 // TestSendPlanNotifications_FallbackToTextDetection tests fallback to text-based detection.

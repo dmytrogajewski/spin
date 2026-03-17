@@ -6,9 +6,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/planning"
 )
 
 // EventTransformer transforms internal events to ACP protocol notifications.
@@ -16,21 +14,21 @@ import (
 type EventTransformer struct {
 	sessionID   acp.SessionId
 	connection  notificationSender
-	agent       *agent.Agent
 	fileTracker *fileContentTracker
 
 	// Track accumulated content for plan detection.
 	accumulatedContent string
+	// Track whether a plan has already been detected this turn.
+	planDetected bool
 
 	mu sync.RWMutex
 }
 
 // NewEventTransformer creates a new ACP event transformer.
-func NewEventTransformer(sessionID acp.SessionId, conn notificationSender, ag *agent.Agent) *EventTransformer {
+func NewEventTransformer(sessionID acp.SessionId, conn notificationSender) *EventTransformer {
 	return &EventTransformer{
 		sessionID:   sessionID,
 		connection:  conn,
-		agent:       ag,
 		fileTracker: newFileContentTracker(),
 	}
 }
@@ -47,6 +45,7 @@ func (t *EventTransformer) Transform(ctx context.Context, event events.Event) bo
 
 	if event.Type == events.EventTurnStart {
 		t.accumulatedContent = ""
+		t.planDetected = false
 
 		return false
 	}
@@ -71,16 +70,16 @@ func (t *EventTransformer) Transform(ctx context.Context, event events.Event) bo
 
 // detectAndSendPlan checks accumulated content for a plan and sends it.
 func (t *EventTransformer) detectAndSendPlan(ctx context.Context) {
-	if t.accumulatedContent == "" || t.agent == nil || t.agent.GetPlanner() != nil {
+	if t.accumulatedContent == "" || t.planDetected {
 		return
 	}
 
-	plan := planning.DetectPlanFromText(t.accumulatedContent)
+	plan := DetectPlanFromText(t.accumulatedContent)
 	if plan == nil {
 		return
 	}
 
-	t.agent.SetPlanner(plan)
+	t.planDetected = true
 	planEntries := convertOrchestrationPlanToACP(plan)
 	t.sendUpdate(ctx, acp.UpdatePlan(planEntries...))
 }
@@ -117,7 +116,12 @@ func (t *EventTransformer) transformPlanUpdate(ctx context.Context, event events
 		return false
 	}
 
-	planEntries := convertOrchestrationPlanToACP(data.Plan)
+	plan, isPlan := data.Plan.(*Plan)
+	if !isPlan || plan == nil {
+		return false
+	}
+
+	planEntries := convertOrchestrationPlanToACP(plan)
 	if len(planEntries) == 0 {
 		return false
 	}

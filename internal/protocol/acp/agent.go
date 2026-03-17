@@ -16,15 +16,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
 	"github.com/dmytrogajewski/spin/internal/appinfo"
 	"github.com/dmytrogajewski/spin/internal/commands"
+	"github.com/dmytrogajewski/spin/internal/contexteng/history"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/history"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/planning"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
-	"github.com/dmytrogajewski/spin/internal/task"
 )
 
 const (
@@ -79,9 +77,9 @@ type SpinACPAgent struct {
 	agent           *agent.Agent
 	mcpService      *mcp.Service
 	emitter         *events.EventEmitter
-	approvalService *security.ApprovalService // Optional approval service for permission requests.
-	approvalHandler *ApprovalHandler          // ACP-specific approval handler.
-	clientCaps      *acp.ClientCapabilities   // Stored after Initialize.
+	approvalService *safety.ApprovalService // Optional approval service for permission requests.
+	approvalHandler *ApprovalHandler        // ACP-specific approval handler.
+	clientCaps      *acp.ClientCapabilities // Stored after Initialize.
 	sessions        map[acp.SessionId]*session.Session
 	sessionModes    map[acp.SessionId]acp.SessionModeId  // Current mode per session.
 	storage         session.Storage                      // Optional session storage for persistence.
@@ -186,7 +184,7 @@ func (a *SpinACPAgent) SetNotificationSender(sender notificationSender) {
 // SetApprovalService sets the approval service for permission requests.
 // This should be called after the agent is created if approval service is available.
 // It also creates and sets up the ACP approval handler.
-func (a *SpinACPAgent) SetApprovalService(service *security.ApprovalService) {
+func (a *SpinACPAgent) SetApprovalService(service *safety.ApprovalService) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -237,7 +235,7 @@ func (a *SpinACPAgent) Initialize(_ context.Context, req acp.InitializeRequest) 
 	if rt != nil {
 		rt.SetClientCapabilities(&req.ClientCapabilities)
 		// Re-register tools now that we know client capabilities.
-		if toolRuntime := a.agent.GetToolRuntime(); toolRuntime != nil {
+		if toolRuntime := a.agent.ToolRuntime(); toolRuntime != nil {
 			rt.RegisterTools(toolRuntime.Registry())
 		}
 	}
@@ -545,7 +543,7 @@ func (a *SpinACPAgent) ensureTransformer(
 
 	transformer, exists := a.transformers[sessionID]
 	if !exists && conn != nil {
-		transformer = NewEventTransformer(sessionID, conn, a.agent)
+		transformer = NewEventTransformer(sessionID, conn)
 		a.transformers[sessionID] = transformer
 		conv.SetEventTransformer(transformer)
 	}
@@ -591,89 +589,14 @@ func (a *SpinACPAgent) subscribeTransformerEvents(
 	return unsubscribe, eventsDone
 }
 
-// promptWithAgent executes a prompt using direct agent execution (legacy path).
-// This is the fallback path when ConversationManager is not configured.
+// promptWithAgent is the fallback path when ConversationManager is not configured.
+// ConversationManager is now required — this returns an error.
 func (a *SpinACPAgent) promptWithAgent(
-	ctx context.Context, req acp.PromptRequest, input string, cancel context.CancelFunc,
+	_ context.Context, _ acp.PromptRequest, _ string, cancel context.CancelFunc,
 ) (acp.PromptResponse, error) {
-	a.mu.RLock()
-	conn := a.connection
-	a.mu.RUnlock()
+	defer cancel()
 
-	// Create agent request.
-	agentReq := &agent.Request{
-		Input:   input,
-		Task:    task.DefaultTask(),
-		History: []message.Message{},
-	}
-
-	// Subscribe to events for real-time notifications.
-	var (
-		subID       string
-		eventCh     <-chan events.Event
-		unsubscribe func()
-		eventsDone  chan struct{}
-	)
-
-	if conn != nil {
-		var err error
-
-		subID, eventCh, err = a.emitter.Subscribe()
-		if err != nil {
-			// Log error but continue without notifications.
-			_ = err
-		} else {
-			unsubscribe = func() {
-				a.emitter.Unsubscribe(subID)
-			}
-			eventsDone = make(chan struct{})
-
-			go func() {
-				defer close(eventsDone)
-
-				a.processEvents(ctx, req.SessionId, eventCh)
-			}()
-		}
-	}
-
-	defer func() {
-		if unsubscribe != nil {
-			unsubscribe()
-		}
-
-		if eventsDone != nil {
-			<-eventsDone
-		}
-
-		cancel()
-	}()
-
-	// Execute agent with cancellable context.
-	agentResp, err := a.agent.Execute(ctx, agentReq)
-	if err != nil {
-		// Map error to stop reason.
-		stopReason := mapStopReasonFromError(err, agentResp)
-
-		return acp.PromptResponse{
-			StopReason: stopReason,
-		}, nil // Return response with stop reason, not error.
-	}
-
-	// Send plan notifications if a plan is available.
-	if conn != nil && agentResp != nil {
-		planErr := a.sendPlanNotifications(ctx, req.SessionId, agentResp)
-		if planErr != nil {
-			// Log error but continue - plan notifications are non-critical.
-			_ = planErr
-		}
-	}
-
-	// Map finish reason to ACP stop reason.
-	stopReason := mapStopReason(agentResp.FinishReason)
-
-	return acp.PromptResponse{
-		StopReason: stopReason,
-	}, nil
+	return acp.PromptResponse{}, ErrConversationManagerNotConfigured
 }
 
 // convertACPContentBlocksToMessages converts ACP ContentBlock[] to Spin message.Message[].
@@ -918,10 +841,11 @@ func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionI
 
 // eventProcessor handles individual event processing for ACP notifications.
 type eventProcessor struct {
-	agent       *SpinACPAgent
-	conn        notificationSender
-	sessionID   acp.SessionId
-	fileTracker *fileContentTracker
+	agent        *SpinACPAgent
+	conn         notificationSender
+	sessionID    acp.SessionId
+	fileTracker  *fileContentTracker
+	planDetected bool
 }
 
 // handleEvent processes a single event and returns the updated accumulated content.
@@ -950,16 +874,16 @@ func (p *eventProcessor) handleEvent(ctx context.Context, event events.Event, ac
 
 // detectAndSendPlan attempts to detect a plan from accumulated content and sends it.
 func (p *eventProcessor) detectAndSendPlan(ctx context.Context, content string) {
-	if content == "" || p.agent.agent == nil || p.agent.agent.GetPlanner() != nil {
+	if content == "" || p.planDetected {
 		return
 	}
 
-	plan := planning.DetectPlanFromText(content)
+	plan := DetectPlanFromText(content)
 	if plan == nil {
 		return
 	}
 
-	p.agent.agent.SetPlanner(plan)
+	p.planDetected = true
 	planEntries := convertOrchestrationPlanToACP(plan)
 	p.sendNotification(ctx, acp.UpdatePlan(planEntries...))
 }
@@ -993,7 +917,12 @@ func (p *eventProcessor) handlePlanUpdate(ctx context.Context, event events.Even
 		return
 	}
 
-	planEntries := convertOrchestrationPlanToACP(data.Plan)
+	plan, isPlan := data.Plan.(*Plan)
+	if !isPlan || plan == nil {
+		return
+	}
+
+	planEntries := convertOrchestrationPlanToACP(plan)
 	if len(planEntries) == 0 {
 		return
 	}
@@ -1197,18 +1126,9 @@ func (a *SpinACPAgent) sendPlanNotifications(ctx context.Context, sessionID acp.
 
 	var planEntries []acp.PlanEntry
 
-	// First, try to get structured plan from agent.
-	if a.agent != nil {
-		agentPlan := a.agent.GetPlanner()
-		if agentPlan != nil {
-			// Convert agent plan to ACP plan entries.
-			planEntries = convertOrchestrationPlanToACP(agentPlan)
-		}
-	}
-
-	// Fallback to text-based detection if no structured plan found.
-	if len(planEntries) == 0 && agentResp.Output != "" {
-		plan := planning.DetectPlanFromText(agentResp.Output)
+	// Detect plan from text output.
+	if agentResp.Output != "" {
+		plan := DetectPlanFromText(agentResp.Output)
 		if plan != nil {
 			planEntries = convertOrchestrationPlanToACP(plan)
 		}
@@ -1463,7 +1383,7 @@ func selectPermissionOption(approved bool, options []acp.PermissionOption) acp.R
 }
 
 // convertToolCallToOperation converts an ACP tool call to a Spin security operation.
-func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.RequestPermissionToolCall, workDir string) (security.Operation, error) {
+func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.RequestPermissionToolCall, workDir string) (safety.Operation, error) {
 	// Extract tool name from title.
 	toolName := unknownValue
 	if toolCall.Title != nil {
@@ -1476,7 +1396,7 @@ func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.RequestPermission
 	// Create command from tool call
 	// Create a basic command structure
 	// Additional details may be extracted from RawInput if needed.
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: toolName,
 		Args:    []string{},
 		Raw:     toolName,
@@ -1498,7 +1418,7 @@ func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.RequestPermission
 		}
 	}
 
-	return security.NewOperation(cmd, reason, workDir), nil
+	return safety.NewOperation(cmd, reason, workDir), nil
 }
 
 // GetClientCapabilities returns the client capabilities stored after Initialize.

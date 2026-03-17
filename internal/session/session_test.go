@@ -370,3 +370,114 @@ func TestSession_ConcurrentTagOperations(t *testing.T) {
 		t.Errorf("Tags length = %d, want 1", len(session.Metadata.Tags))
 	}
 }
+
+// Test Cost Tracking.
+
+func TestRecordLLMCall_SingleCall(t *testing.T) {
+	t.Parallel()
+
+	sess := NewSession(testWorkDir)
+
+	inputTokens := 100
+	outputTokens := 50
+	costUSD := 0.005
+
+	sess.RecordLLMCall(inputTokens, outputTokens, costUSD)
+
+	ct := sess.Metadata.CostTracking
+	if ct.InputTokens != inputTokens {
+		t.Errorf("InputTokens = %d, want %d", ct.InputTokens, inputTokens)
+	}
+
+	if ct.OutputTokens != outputTokens {
+		t.Errorf("OutputTokens = %d, want %d", ct.OutputTokens, outputTokens)
+	}
+
+	if ct.TotalCostUSD != costUSD {
+		t.Errorf("TotalCostUSD = %f, want %f", ct.TotalCostUSD, costUSD)
+	}
+
+	if ct.APICallCount != 1 {
+		t.Errorf("APICallCount = %d, want 1", ct.APICallCount)
+	}
+
+	expectedTotal := inputTokens + outputTokens
+	if sess.Metadata.TokensUsed != expectedTotal {
+		t.Errorf("TokensUsed = %d, want %d", sess.Metadata.TokensUsed, expectedTotal)
+	}
+}
+
+func TestRecordLLMCall_MultipleCalls(t *testing.T) {
+	t.Parallel()
+
+	sess := NewSession(testWorkDir)
+
+	callCount := 3
+	inputPerCall := 100
+	outputPerCall := 50
+	costPerCall := 0.005
+
+	for range callCount {
+		sess.RecordLLMCall(inputPerCall, outputPerCall, costPerCall)
+	}
+
+	ct := sess.Metadata.CostTracking
+	if ct.InputTokens != inputPerCall*callCount {
+		t.Errorf("InputTokens = %d, want %d", ct.InputTokens, inputPerCall*callCount)
+	}
+
+	if ct.OutputTokens != outputPerCall*callCount {
+		t.Errorf("OutputTokens = %d, want %d", ct.OutputTokens, outputPerCall*callCount)
+	}
+
+	if ct.APICallCount != callCount {
+		t.Errorf("APICallCount = %d, want %d", ct.APICallCount, callCount)
+	}
+
+	expectedTokens := (inputPerCall + outputPerCall) * callCount
+	if sess.Metadata.TokensUsed != expectedTokens {
+		t.Errorf("TokensUsed = %d, want %d", sess.Metadata.TokensUsed, expectedTokens)
+	}
+}
+
+func TestRecordLLMCall_UpdatesTimestamp(t *testing.T) {
+	t.Parallel()
+
+	sess := NewSession(testWorkDir)
+	before := sess.UpdatedAt
+
+	time.Sleep(time.Millisecond)
+
+	sess.RecordLLMCall(10, 5, 0.001)
+
+	if !sess.UpdatedAt.After(before) {
+		t.Error("UpdatedAt not updated after RecordLLMCall")
+	}
+}
+
+func TestRecordLLMCall_ZeroValues(t *testing.T) {
+	t.Parallel()
+
+	sess := NewSession(testWorkDir)
+	sess.RecordLLMCall(0, 0, 0)
+
+	ct := sess.Metadata.CostTracking
+	if ct.APICallCount != 1 {
+		t.Errorf("APICallCount = %d, want 1 (even with zero tokens)", ct.APICallCount)
+	}
+
+	if ct.InputTokens != 0 {
+		t.Errorf("InputTokens = %d, want 0", ct.InputTokens)
+	}
+}
+
+func TestCostTracking_DefaultsToZero(t *testing.T) {
+	t.Parallel()
+
+	sess := NewSession(testWorkDir)
+
+	ct := sess.Metadata.CostTracking
+	if ct.InputTokens != 0 || ct.OutputTokens != 0 || ct.TotalCostUSD != 0 || ct.APICallCount != 0 {
+		t.Errorf("CostTracking should default to zero values, got %+v", ct)
+	}
+}

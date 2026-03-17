@@ -4,18 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/contexteng/history"
 	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
-	"github.com/dmytrogajewski/spin/internal/history"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/message"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
-	"github.com/dmytrogajewski/spin/internal/task"
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
 
@@ -26,7 +26,21 @@ var (
 	ErrEmitterIsRequired = errors.New("emitter is required")
 	// ErrWorkdirIsRequired is a sentinel error.
 	ErrWorkdirIsRequired = errors.New("workDir is required")
+	// ErrHarnessExecutorRequired is a sentinel error.
+	ErrHarnessExecutorRequired = errors.New("harness executor is required")
+	// ErrEmptyInput is a sentinel error.
+	ErrEmptyInput = errors.New("input cannot be empty")
 )
+
+// HarnessTurnExecutor is the interface for the harness execution path.
+// All conversations use this executor for turn execution.
+type HarnessTurnExecutor interface {
+	Execute(
+		ctx context.Context,
+		query string,
+		history []message.Message,
+	) (output string, messages []message.Message, err error)
+}
 
 // Conversation represents an active conversation instance.
 type Conversation struct {
@@ -45,6 +59,9 @@ type Conversation struct {
 	id       string       // Unified conversation ID (for both session and protocol).
 	workDir  string       // Working directory for this conversation.
 
+	// Harness executor for turn execution (required).
+	harnessExecutor HarnessTurnExecutor
+
 	// Protocol-specific fields (optional, for protocol use).
 	turnID      string             // Current turn ID.
 	cancel      context.CancelFunc // Cancellation context.
@@ -52,62 +69,31 @@ type Conversation struct {
 	protocolMu  sync.RWMutex       // Protects protocol fields (turnID, cancel, transformer).
 }
 
-// RunTurn executes a single turn in the conversation.
+// RunTurn executes a single turn in the conversation via the harness executor.
 func (c *Conversation) RunTurn(ctx context.Context, input string) error {
-	// Get conversation history for context.
+	if strings.TrimSpace(input) == "" {
+		return ErrEmptyInput
+	}
+
 	historyMessages := c.history.MessagesForLLM()
 
-	// Create task instance from task mode (use default if not set).
-	var (
-		taskInstance task.Task
-		err          error
-	)
-
-	c.taskMu.RLock()
-	currentMode := c.taskMode
-	c.taskMu.RUnlock()
-
-	if currentMode == "" {
-		taskInstance = task.DefaultTask()
-	} else {
-		taskInstance, err = task.NewTask(currentMode)
-	}
-
-	if err != nil {
-		return fmt.Errorf("invalid task mode %q: %w", currentMode, err)
-	}
-
-	// Create agent request with task and history.
-	req := &agent.Request{
-		Input:   input,
-		Task:    taskInstance,
-		History: historyMessages,
-	}
-
-	// Execute agent (user message is in resp.Messages).
-	resp, execErr := c.agent.Execute(ctx, req)
+	_, messages, execErr := c.harnessExecutor.Execute(ctx, input, historyMessages)
 	if execErr != nil {
-		// Add user message first (since it wasn't added before execution).
-		err = c.history.AddUserMessage(ctx, input)
-		if err != nil {
+		if err := c.history.AddUserMessage(ctx, input); err != nil {
 			return fmt.Errorf("failed to add user message: %w", err)
 		}
-		// Add error message to history so it's preserved.
+
 		errorMsg := message.Message{
 			Role:    message.RoleAssistant,
 			Content: fmt.Sprintf("Error: %v", execErr),
 		}
 		_ = c.history.AddMessage(ctx, errorMsg)
 
-		return fmt.Errorf("agent execution failed: %w", execErr)
+		return fmt.Errorf("harness execution failed: %w", execErr)
 	}
 
-	// Add all messages from the agent's execution to history
-	// This includes: user input, assistant messages with tool calls, tool results, final assistant
-	// This maintains proper OpenAI message format and ensures accurate token counting.
-	for _, msg := range resp.Messages {
-		err = c.history.AddMessage(ctx, msg)
-		if err != nil {
+	for _, msg := range messages {
+		if err := c.history.AddMessage(ctx, msg); err != nil {
 			return fmt.Errorf("failed to add message to history: %w", err)
 		}
 	}
@@ -117,7 +103,7 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 
 // SetTaskMode sets the task mode for the conversation.
 func (c *Conversation) SetTaskMode(mode string) error {
-	err := task.ValidateMode(mode)
+	err := agent.ValidateMode(mode)
 	if err != nil {
 		return err
 	}
@@ -286,6 +272,9 @@ type NewFromAgentConfig struct {
 	// Agent is the pre-built agent instance (required).
 	Agent *agent.Agent
 
+	// HarnessExecutor is the harness turn executor (required).
+	HarnessExecutor HarnessTurnExecutor
+
 	// Emitter is the event emitter (required).
 	Emitter *events.EventEmitter
 
@@ -307,11 +296,15 @@ func generateConversationID() string {
 	return uuid.New().String()
 }
 
-// NewFromAgent creates a Conversation from an existing agent.
+// NewFromAgent creates a Conversation from an existing agent and harness executor.
 // This is useful for modes like ACP where the agent is pre-built.
 func NewFromAgent(cfg NewFromAgentConfig) (*Conversation, error) {
 	if cfg.Agent == nil {
 		return nil, ErrAgentIsRequired
+	}
+
+	if cfg.HarnessExecutor == nil {
+		return nil, ErrHarnessExecutorRequired
 	}
 
 	if cfg.Emitter == nil {
@@ -337,11 +330,12 @@ func NewFromAgent(cfg NewFromAgentConfig) (*Conversation, error) {
 	}
 
 	return &Conversation{
-		agent:    cfg.Agent,
-		history:  hist,
-		emitter:  cfg.Emitter,
-		taskMode: "regular",
-		id:       id,
-		workDir:  cfg.WorkDir,
+		agent:           cfg.Agent,
+		harnessExecutor: cfg.HarnessExecutor,
+		history:         hist,
+		emitter:         cfg.Emitter,
+		taskMode:        "regular",
+		id:              id,
+		workDir:         cfg.WorkDir,
 	}, nil
 }

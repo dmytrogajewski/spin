@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/output"
 	"github.com/dmytrogajewski/spin/internal/ui/overlay"
@@ -746,7 +746,7 @@ func (p *PureTTY) renderFilterUI() {
 }
 
 // ShowApprovalDialog displays an approval dialog for the given request.
-func (p *PureTTY) ShowApprovalDialog(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+func (p *PureTTY) ShowApprovalDialog(ctx context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
 	// Set approval mode.
 	p.mode = ModeApproval
 
@@ -771,7 +771,7 @@ func (p *PureTTY) ShowApprovalDialog(ctx context.Context, req security.ApprovalR
 }
 
 // showApprovalStatus displays the approval prompt in the status bar.
-func (p *PureTTY) showApprovalStatus(req security.ApprovalRequest) {
+func (p *PureTTY) showApprovalStatus(req safety.ApprovalRequest) {
 	if p.statusRenderer == nil {
 		return
 	}
@@ -786,7 +786,7 @@ func (p *PureTTY) showApprovalStatus(req security.ApprovalRequest) {
 	keyPreview := ""
 
 	if req.Command != nil {
-		key := security.NewPolicyKey(req.Command.Program, req.Command.Args, req.WorkDir)
+		key := safety.NewPolicyKey(req.Command.Program, req.Command.Args, req.WorkDir)
 
 		args := strings.Join(key.Args, " ")
 		if args != "" {
@@ -857,7 +857,7 @@ func (p *PureTTY) clearApprovalStatus() {
 }
 
 // displayApprovalResult displays a message showing the approval decision.
-func (p *PureTTY) displayApprovalResult(req security.ApprovalRequest, resp security.ApprovalResponse) {
+func (p *PureTTY) displayApprovalResult(req safety.ApprovalRequest, resp safety.ApprovalResponse) {
 	var (
 		message      string
 		statusSymbol string

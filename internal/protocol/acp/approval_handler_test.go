@@ -8,7 +8,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 var errBoom = errors.New("boom")
@@ -34,7 +34,7 @@ func TestApprovalHandler_NoActiveSession(t *testing.T) {
 
 	handler := NewApprovalHandler(&SpinACPAgent{}, time.Second)
 
-	resp := handler.HandleApprovalRequest(context.Background(), security.ApprovalRequest{
+	resp := handler.HandleApprovalRequest(context.Background(), safety.ApprovalRequest{
 		ID: "test-no-session",
 	})
 
@@ -63,10 +63,10 @@ func TestApprovalHandler_MapsAllowOnceAndAlways(t *testing.T) {
 	handler.SetActiveSession(acp.SessionId("sess-1"))
 
 	// First: allow_once.
-	resp := handler.HandleApprovalRequest(context.Background(), security.ApprovalRequest{
+	resp := handler.HandleApprovalRequest(context.Background(), safety.ApprovalRequest{
 		ID: "req-allow-once",
 	})
-	if !resp.Approved || resp.Scope != security.ScopeOnce {
+	if !resp.Approved || resp.Scope != safety.ScopeOnce {
 		t.Fatalf("expected allow_once to approve with ScopeOnce, got approved=%v scope=%q", resp.Approved, resp.Scope)
 	}
 
@@ -75,10 +75,10 @@ func TestApprovalHandler_MapsAllowOnceAndAlways(t *testing.T) {
 		Outcome: acp.NewRequestPermissionOutcomeSelected(acp.PermissionOptionId("allow_always")),
 	}
 
-	resp = handler.HandleApprovalRequest(context.Background(), security.ApprovalRequest{
+	resp = handler.HandleApprovalRequest(context.Background(), safety.ApprovalRequest{
 		ID: "req-allow-always",
 	})
-	if !resp.Approved || resp.Scope != security.ScopeGlobal {
+	if !resp.Approved || resp.Scope != safety.ScopeGlobal {
 		t.Fatalf("expected allow_always to approve with ScopeGlobal, got approved=%v scope=%q", resp.Approved, resp.Scope)
 	}
 
@@ -103,7 +103,7 @@ func TestApprovalHandler_DenyAndCancelPaths(t *testing.T) {
 	handler.SetActiveSession(acp.SessionId("sess-2"))
 
 	// Deny path.
-	resp := handler.HandleApprovalRequest(context.Background(), security.ApprovalRequest{
+	resp := handler.HandleApprovalRequest(context.Background(), safety.ApprovalRequest{
 		ID: "req-deny",
 	})
 	if resp.Approved {
@@ -113,7 +113,7 @@ func TestApprovalHandler_DenyAndCancelPaths(t *testing.T) {
 	// Cancel / error path.
 	conn.err = errBoom
 
-	resp = handler.HandleApprovalRequest(context.Background(), security.ApprovalRequest{
+	resp = handler.HandleApprovalRequest(context.Background(), safety.ApprovalRequest{
 		ID: "req-error",
 	})
 	if resp.Approved {

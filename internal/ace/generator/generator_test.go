@@ -174,11 +174,17 @@ func TestItemizedLearning_WithBullets(t *testing.T) {
 	assert.Len(t, resp.Feedback.HelpfulBullets, 1)
 	assert.Equal(t, "B0", resp.Feedback.HelpfulBullets[0])
 
-	// Verify bullet counters were updated.
-	updatedBullet, found := pb.Get(b1.ID)
+	// Verify exactly one bullet had its helpful count incremented (B0 maps to
+	// whichever bullet was retrieved first — order depends on similarity tie-breaking).
+	updatedB1, found := pb.Get(b1.ID)
 	require.True(t, found)
-	assert.Equal(t, 1, updatedBullet.HelpfulCount)
-	assert.Equal(t, 0, updatedBullet.HarmfulCount)
+	updatedB2, found := pb.Get(b2.ID)
+	require.True(t, found)
+
+	totalHelpful := updatedB1.HelpfulCount + updatedB2.HelpfulCount
+	assert.Equal(t, 1, totalHelpful, "exactly one bullet should have been marked helpful")
+	assert.Equal(t, 0, updatedB1.HarmfulCount)
+	assert.Equal(t, 0, updatedB2.HarmfulCount)
 }
 
 func TestItemizedLearning_WithGroundTruth(t *testing.T) {

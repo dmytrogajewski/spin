@@ -105,7 +105,7 @@ func newAuthListCmd() *cobra.Command {
 		Short: "List all stored credentials",
 		Long: `List all providers with stored authentication credentials.
 
-Credential values are not displayed for security.
+Credential values are not displayed for safety.
 
 Note: On Linux, the Secret Service API does not support listing credentials.
 Use specific provider names with 'spin auth login' instead.

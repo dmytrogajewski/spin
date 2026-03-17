@@ -10,15 +10,12 @@ internal/auth/auth.go:66:25: CredentialType.String
 internal/git/errors.go:35:22: PatchError.Error
 
 # Test helpers and mock utilities
-internal/history/history.go:129:6: NewHistoryWithDefaults
+internal/contexteng/history/history.go:129:6: NewHistoryWithDefaults
 internal/agent/test_helpers.go:19:6: createTestAgentWithServices
 internal/agent/test_helpers.go:88:6: newAgentForTest
-internal/agent/agent_test.go:2693:20: mockTask.Name
-internal/agent/agent_test.go:2697:20: mockTask.SystemPrompt
-internal/agent/agent_test.go:2701:20: mockTask.AllowedTools
-internal/agent/agent_test.go:2705:20: mockTask.MaxTokens
-internal/agent/agent_test.go:2709:20: mockTask.Validate
 internal/conversation/test_helpers.go:19:6: setupTestConv
+internal/cycle/service_test.go: testEvent.GetType
+internal/cycle/service_test.go: testEvent.GetTimestamp
 internal/llm/mock.go:242:6: WithResponse
 internal/llm/mock.go:249:6: WithError
 internal/llm/mock.go:256:6: WithToolCalls
@@ -70,3 +67,22 @@ internal/ui/testkit/fake_writer.go:69:22: FakeWriter.Lines
 internal/ui/testkit/fake_writer.go:77:22: FakeWriter.WaitForContent
 internal/ui/testkit/fake_writer.go:95:22: FakeWriter.Len
 internal/ui/adapters/puretty.go:118:6: WithKeyboardEvents
+
+# LSP tool interface implementations (registered at runtime)
+internal/tools/find_symbol.go: FindSymbolTool.Description
+internal/tools/find_symbol.go: FindSymbolTool.Schema
+internal/tools/find_references.go: FindReferencesTool.Description
+internal/tools/find_references.go: FindReferencesTool.Schema
+internal/tools/rename_symbol.go: RenameSymbolTool.Description
+internal/tools/rename_symbol.go: RenameSymbolTool.Schema
+
+# Web tools interface implementations (registered at runtime)
+internal/tools/web_fetch.go: FetchURLTool.Description
+internal/tools/web_fetch.go: FetchURLTool.Schema
+internal/tools/web_search.go: WebSearchTool.Description
+internal/tools/web_search.go: WebSearchTool.Schema
+internal/tools/web_browser.go: OpenBrowserTool.Description
+internal/tools/web_browser.go: OpenBrowserTool.Schema
+internal/tools/web_screenshot.go: ScreenshotTool.Description
+internal/tools/web_screenshot.go: ScreenshotTool.Schema
+internal/tools/web_screenshot.go: screenshotProperties

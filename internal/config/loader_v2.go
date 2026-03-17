@@ -100,6 +100,13 @@ func bindEnvVars(v *viper.Viper) {
 	_ = v.BindEnv("agents_md.enabled")
 	_ = v.BindEnv("agents_md.path")
 	_ = v.BindEnv("agents_md.max_size")
+
+	// Workflows fields.
+	_ = v.BindEnv("workflows.action_model")
+	_ = v.BindEnv("workflows.thinking_model")
+	_ = v.BindEnv("workflows.critique_model")
+	_ = v.BindEnv("workflows.compact_model")
+	_ = v.BindEnv("workflows.vision_model")
 }
 
 // LoadFromFile loads configuration from a specific YAML file.

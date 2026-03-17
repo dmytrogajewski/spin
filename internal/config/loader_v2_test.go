@@ -366,3 +366,96 @@ func TestLoad_APIKeyFromEnv(t *testing.T) {
 
 	assert.Equal(t, "test-key-123", cfg.LLM.APIKey, "should load API key from env")
 }
+
+// Journey: specs/journeys/JOURNEY-1.1.md.
+
+// TestLoaderV2_LoadFromFile_WorkflowsAndSubagents tests loading workflows and subagents from YAML.
+// Kills mutant: removing workflows/subagents from config struct would make this test fail.
+func TestLoaderV2_LoadFromFile_WorkflowsAndSubagents(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configYAML := `version: "2.0"
+llm:
+  provider: "anthropic"
+  model: "claude-opus-4-6"
+  temperature: 0.7
+  max_tokens: 4096
+  timeout: 5m
+agent:
+  max_turns: 50
+  timeout: 60m
+  work_dir: "."
+workflows:
+  action_model: "claude-opus-4-6"
+  thinking_model: "deepseek-r1"
+  critique_model: "claude-sonnet-4-6"
+  compact_model: "claude-haiku-4-5"
+  vision_model: "claude-opus-4-6"
+subagents:
+  planner:
+    model: "claude-sonnet-4-6"
+    max_iterations: 50
+  explorer:
+    model: "claude-haiku-4-5"
+    max_iterations: 30
+`
+
+	err := os.WriteFile(configPath, []byte(configYAML), 0o600)
+	require.NoError(t, err, "failed to write test config file")
+
+	loader := NewLoaderV2()
+	cfg, err := loader.LoadFromFile(configPath)
+	require.NoError(t, err, "failed to load config with workflows and subagents")
+
+	// Verify workflows.
+	assert.Equal(t, "claude-opus-4-6", cfg.Workflows.ActionModel)
+	assert.Equal(t, "deepseek-r1", cfg.Workflows.ThinkingModel)
+	assert.Equal(t, "claude-sonnet-4-6", cfg.Workflows.CritiqueModel)
+	assert.Equal(t, "claude-haiku-4-5", cfg.Workflows.CompactModel)
+	assert.Equal(t, "claude-opus-4-6", cfg.Workflows.VisionModel)
+
+	// Verify subagents.
+	require.Len(t, cfg.Subagents, 2)
+	assert.Equal(t, "claude-sonnet-4-6", cfg.Subagents["planner"].Model)
+	assert.Equal(t, 50, cfg.Subagents["planner"].MaxIterations)
+	assert.Equal(t, "claude-haiku-4-5", cfg.Subagents["explorer"].Model)
+	assert.Equal(t, 30, cfg.Subagents["explorer"].MaxIterations)
+}
+
+// TestLoaderV2_LoadFromFile_MissingWorkflowsAndSubagents tests that missing sections use defaults.
+// Kills mutant: changing default behavior would make this test fail.
+func TestLoaderV2_LoadFromFile_MissingWorkflowsAndSubagents(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configYAML := `version: "2.0"
+llm:
+  provider: "ollama"
+  model: "qwen"
+  temperature: 0.7
+  max_tokens: 4096
+  timeout: 5m
+agent:
+  max_turns: 10
+  timeout: 60m
+  work_dir: "."
+`
+
+	err := os.WriteFile(configPath, []byte(configYAML), 0o600)
+	require.NoError(t, err, "failed to write test config file")
+
+	loader := NewLoaderV2()
+	cfg, err := loader.LoadFromFile(configPath)
+	require.NoError(t, err, "failed to load config without workflows and subagents")
+
+	// Workflows should be zero value.
+	assert.Equal(t, WorkflowsV2{}, cfg.Workflows, "workflows should be zero value when missing")
+
+	// Subagents should be nil.
+	assert.Nil(t, cfg.Subagents, "subagents should be nil when missing")
+}

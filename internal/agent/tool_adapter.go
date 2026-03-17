@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -23,8 +23,8 @@ func NewToolExecutorAdapter(exec *Executor) tools.CommandExecutor {
 
 // Execute implements tools.CommandExecutor interface.
 func (a *ToolExecutorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, opts any) (tools.ExecutionResult, error) {
-	// Convert tools.CommandInfo to *security.Command.
-	secCmd := &security.Command{
+	// Convert tools.CommandInfo to *safety.Command.
+	secCmd := &safety.Command{
 		Program: cmd.GetProgram(),
 		Args:    cmd.GetArgs(),
 		Raw:     cmd.GetRaw(),

@@ -288,7 +288,7 @@ func (t *ShellCommandTool) buildErrorResult(result ExecutionResult, execErr erro
 
 	return ToolResult{
 		Success: false,
-		Output:  combineOutput(stdout, stderr),
+		Output:  TruncateOutput(combineOutput(stdout, stderr)),
 		Error:   execErr.Error(),
 	}
 }
@@ -309,7 +309,7 @@ func (t *ShellCommandTool) buildSuccessResult(result ExecutionResult) ToolResult
 
 	return ToolResult{
 		Success:  exitCode == 0,
-		Output:   output,
+		Output:   TruncateOutput(output),
 		Error:    errorMsg,
 		Metadata: result.GetMetadata(),
 	}
@@ -490,7 +490,7 @@ func classificationToString(classification int) string {
 	case classificationHigh:
 		return "unverified"
 	default:
-		return "unknown"
+		return unknownStatus
 	}
 }
 

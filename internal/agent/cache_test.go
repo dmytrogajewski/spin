@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 const (
@@ -31,7 +31,7 @@ func TestCommandCache_SetAndGet(t *testing.T) {
 	// Test setting and getting a value.
 	key := testCacheKey
 	result := &Result{
-		Command:  &security.Command{Program: "echo", Args: []string{"hello"}},
+		Command:  &safety.Command{Program: "echo", Args: []string{"hello"}},
 		Stdout:   "test output",
 		Stderr:   "",
 		ExitCode: 0,
@@ -63,7 +63,7 @@ func TestCommandCache_Expiration(t *testing.T) {
 
 	key := testCacheKey
 	result := &Result{
-		Command:  &security.Command{Program: "echo", Args: []string{"hello"}},
+		Command:  &safety.Command{Program: "echo", Args: []string{"hello"}},
 		Stdout:   "test output",
 		Stderr:   "",
 		ExitCode: 0,
@@ -93,15 +93,15 @@ func TestCommandCache_Clear(t *testing.T) {
 
 	// Set multiple values.
 	result1 := &Result{
-		Command: &security.Command{Program: "echo", Args: []string{"1"}},
+		Command: &safety.Command{Program: "echo", Args: []string{"1"}},
 		Stdout:  "output1", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 	result2 := &Result{
-		Command: &security.Command{Program: "echo", Args: []string{"2"}},
+		Command: &safety.Command{Program: "echo", Args: []string{"2"}},
 		Stdout:  "output2", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 	result3 := &Result{
-		Command: &security.Command{Program: "echo", Args: []string{"3"}},
+		Command: &safety.Command{Program: "echo", Args: []string{"3"}},
 		Stdout:  "output3", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 
@@ -141,11 +141,11 @@ func TestCommandCache_Size(t *testing.T) {
 
 	// Add items.
 	result1 := &Result{
-		Command: &security.Command{Program: "echo", Args: []string{"1"}},
+		Command: &safety.Command{Program: "echo", Args: []string{"1"}},
 		Stdout:  "output1", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 	result2 := &Result{
-		Command: &security.Command{Program: "echo", Args: []string{"2"}},
+		Command: &safety.Command{Program: "echo", Args: []string{"2"}},
 		Stdout:  "output2", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 
@@ -165,19 +165,19 @@ func TestCommandCache_Key(t *testing.T) {
 
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
-	cmd1 := &security.Command{
+	cmd1 := &safety.Command{
 		Program: "echo",
 		Args:    []string{"hello", "world"},
 		WorkDir: "/tmp",
 	}
 
-	cmd2 := &security.Command{
+	cmd2 := &safety.Command{
 		Program: "echo",
 		Args:    []string{"hello", "world"},
 		WorkDir: "/tmp",
 	}
 
-	cmd3 := &security.Command{
+	cmd3 := &safety.Command{
 		Program: "echo",
 		Args:    []string{"hello", "universe"},
 		WorkDir: "/tmp",
@@ -202,12 +202,12 @@ func TestCommandCache_IsCacheable(t *testing.T) {
 
 	tests := []struct {
 		name string
-		cmd  *security.Command
+		cmd  *safety.Command
 		want bool
 	}{
 		{
 			name: "cacheable read-only command",
-			cmd: &security.Command{
+			cmd: &safety.Command{
 				Program: "ls",
 				Args:    []string{"-la"},
 				WorkDir: "/tmp",
@@ -216,7 +216,7 @@ func TestCommandCache_IsCacheable(t *testing.T) {
 		},
 		{
 			name: "non-cacheable write command",
-			cmd: &security.Command{
+			cmd: &safety.Command{
 				Program: "rm",
 				Args:    []string{"-rf", "/tmp/test"},
 				WorkDir: "/tmp",
@@ -225,7 +225,7 @@ func TestCommandCache_IsCacheable(t *testing.T) {
 		},
 		{
 			name: "non-cacheable interactive command",
-			cmd: &security.Command{
+			cmd: &safety.Command{
 				Program: "vim",
 				Args:    []string{"file.txt"},
 				WorkDir: "/tmp",
@@ -234,7 +234,7 @@ func TestCommandCache_IsCacheable(t *testing.T) {
 		},
 		{
 			name: "cacheable git command",
-			cmd: &security.Command{
+			cmd: &safety.Command{
 				Program: "git",
 				Args:    []string{"status"},
 				WorkDir: "/tmp",
@@ -243,7 +243,7 @@ func TestCommandCache_IsCacheable(t *testing.T) {
 		},
 		{
 			name: "non-cacheable git write command",
-			cmd: &security.Command{
+			cmd: &safety.Command{
 				Program: "git",
 				Args:    []string{"commit", "-m", "test"},
 				WorkDir: "/tmp",
@@ -274,11 +274,11 @@ func TestCommandCache_Stats(t *testing.T) {
 
 	// Add some items.
 	result1 := &Result{
-		Command: &security.Command{Program: "echo", Args: []string{"1"}},
+		Command: &safety.Command{Program: "echo", Args: []string{"1"}},
 		Stdout:  "output1", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 	result2 := &Result{
-		Command: &security.Command{Program: "echo", Args: []string{"2"}},
+		Command: &safety.Command{Program: "echo", Args: []string{"2"}},
 		Stdout:  "output2", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 
@@ -308,7 +308,7 @@ func TestCommandCache_ConcurrentAccess(t *testing.T) {
 	go func() {
 		for i := range 1000 {
 			result := &Result{
-				Command:  &security.Command{Program: "echo", Args: []string{string(rune(i))}},
+				Command:  &safety.Command{Program: "echo", Args: []string{string(rune(i))}},
 				Stdout:   string(rune(i)),
 				ExitCode: 0, Duration: 100 * time.Millisecond,
 			}
@@ -343,7 +343,7 @@ func TestCommandCache_SizeLimit(t *testing.T) {
 	// Add items that exceed the size limit.
 	for i := range 10 {
 		result := &Result{
-			Command:  &security.Command{Program: "echo", Args: []string{string(rune(i))}},
+			Command:  &safety.Command{Program: "echo", Args: []string{string(rune(i))}},
 			Stdout:   "This is a very long output that should exceed the size limit when multiple items are added",
 			ExitCode: 0,
 			Duration: 100 * time.Millisecond,
@@ -362,11 +362,11 @@ func TestCommandCache_UpdateExisting(t *testing.T) {
 
 	key := testCacheKey
 	originalResult := &Result{
-		Command: &security.Command{Program: "echo", Args: []string{"original"}},
+		Command: &safety.Command{Program: "echo", Args: []string{"original"}},
 		Stdout:  "original", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 	updatedResult := &Result{
-		Command: &security.Command{Program: "echo", Args: []string{"updated"}},
+		Command: &safety.Command{Program: "echo", Args: []string{"updated"}},
 		Stdout:  "updated", ExitCode: 0, Duration: 100 * time.Millisecond,
 	}
 
@@ -395,7 +395,7 @@ func TestCommandCache_Eviction(t *testing.T) {
 	// Add multiple items that will exceed the size limit.
 	for i := range 5 {
 		result := &Result{
-			Command:  &security.Command{Program: "echo", Args: []string{string(rune(i))}},
+			Command:  &safety.Command{Program: "echo", Args: []string{string(rune(i))}},
 			Stdout:   "This is a long output that will cause eviction",
 			ExitCode: 0,
 			Duration: 100 * time.Millisecond,
@@ -430,7 +430,7 @@ func TestCommandCache_KeyConsistency(t *testing.T) {
 
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "echo",
 		Args:    []string{"hello", "world"},
 		WorkDir: "/tmp",
@@ -452,19 +452,19 @@ func TestCommandCache_KeyUniqueness(t *testing.T) {
 
 	cache := NewCommandCache(5*time.Second, 1024*1024)
 
-	cmd1 := &security.Command{
+	cmd1 := &safety.Command{
 		Program: "echo",
 		Args:    []string{"hello"},
 		WorkDir: "/tmp",
 	}
 
-	cmd2 := &security.Command{
+	cmd2 := &safety.Command{
 		Program: "echo",
 		Args:    []string{"world"},
 		WorkDir: "/tmp",
 	}
 
-	cmd3 := &security.Command{
+	cmd3 := &safety.Command{
 		Program: "ls",
 		Args:    []string{"hello"},
 		WorkDir: "/tmp",
@@ -487,7 +487,7 @@ func TestCommandCache_ZeroTTL(t *testing.T) {
 
 	key := testCacheKey
 	result := &Result{
-		Command:  &security.Command{Program: "echo", Args: []string{"hello"}},
+		Command:  &safety.Command{Program: "echo", Args: []string{"hello"}},
 		Stdout:   "test output",
 		ExitCode: 0,
 		Duration: 100 * time.Millisecond,
@@ -507,7 +507,7 @@ func TestCommandCache_ZeroMaxSize(t *testing.T) {
 
 	key := testCacheKey
 	result := &Result{
-		Command:  &security.Command{Program: "echo", Args: []string{"hello"}},
+		Command:  &safety.Command{Program: "echo", Args: []string{"hello"}},
 		Stdout:   "test output",
 		ExitCode: 0,
 		Duration: 100 * time.Millisecond,

@@ -137,44 +137,10 @@ func TestBuilder_BuildHelpers(t *testing.T) {
 		t.Fatal("BuildDetectionService() returned nil")
 	}
 
-	planSvc := builder.BuildPlanningService()
-	if planSvc == nil {
-		t.Fatal("BuildPlanningService() returned nil")
-	}
-
 	opts := builder.BuildOptions()
 	if len(opts) == 0 {
 		t.Fatal("BuildOptions() returned empty options")
 	}
-}
-
-func TestBuilder_BuildPlanningService(t *testing.T) {
-	t.Parallel()
-
-	provider := llm.NewMockProvider("test")
-	builder := NewBuilder().WithProvider(provider)
-
-	planningService := builder.BuildPlanningService()
-
-	if planningService == nil {
-		t.Fatal("BuildPlanningService() returned nil")
-	}
-}
-
-func TestBuilder_BuildPlanningService_NilProvider(t *testing.T) {
-	t.Parallel()
-
-	builder := NewBuilder()
-	// Should handle nil provider gracefully
-	// BuildPlanningService will panic or return nil - test actual behavior
-	// For now, PlanningService creation requires provider, so this should panic.
-	defer func() {
-		if r := recover(); r == nil {
-			t.Log("BuildPlanningService with nil provider did not panic (may be acceptable)")
-		}
-	}()
-
-	_ = builder.BuildPlanningService()
 }
 
 // TestBuilder_Build was removed because Builder.Build() method was removed.

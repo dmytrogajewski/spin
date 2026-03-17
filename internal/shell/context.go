@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dmytrogajewski/spin/internal/process"
 )
 
 var (
@@ -172,6 +174,12 @@ func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (stri
 	cmd := exec.CommandContext(cmdCtx, shellPath, args...)
 	cmd.Dir = s.workDir
 	cmd.Env = s.buildEnvironment()
+
+	process.SetGroup(cmd)
+
+	cmd.Cancel = func() error {
+		return process.KillGroup(cmd)
+	}
 
 	var stdout, stderr bytes.Buffer
 

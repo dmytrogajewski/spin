@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 func TestNewExecutor(t *testing.T) {
@@ -28,11 +28,11 @@ func TestNewExecutor(t *testing.T) {
 func TestNewExecutor_WithOptions(t *testing.T) {
 	t.Parallel()
 	workDir := t.TempDir()
-	validator := security.NewValidator()
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+	validator := safety.NewValidator()
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
 		Handler: nil, Emitter: nil, Validator: validator,
 	})
-	securityService := security.NewService(validator, approvalService)
+	securityService := safety.NewService(validator, approvalService)
 
 	executor, err := NewExecutor(workDir, WithSecurityService(securityService))
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestExecutor_Execute(t *testing.T) {
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "echo",
 		Args:    []string{"hello", "world"},
 		WorkDir: workDir,
@@ -81,7 +81,7 @@ func TestExecutor_Execute_WithTimeout(t *testing.T) {
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "sleep",
 		Args:    []string{"2"},
 		WorkDir: workDir,
@@ -108,7 +108,7 @@ func TestExecutor_Execute_WithWorkingDirectory(t *testing.T) {
 	err = os.WriteFile(testFile, []byte("test content"), 0o600)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "ls",
 		Args:    []string{"test.txt"},
 		WorkDir: workDir,
@@ -127,7 +127,7 @@ func TestExecutor_Execute_WithEnvironment(t *testing.T) {
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "sh",
 		Args:    []string{"-c", "echo $TEST_VAR"},
 		WorkDir: workDir,
@@ -152,7 +152,7 @@ func TestExecutor_Execute_NonExistentCommand(t *testing.T) {
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "nonexistentcommand12345",
 		Args:    []string{},
 		WorkDir: workDir,
@@ -167,16 +167,16 @@ func TestExecutor_Execute_NonExistentCommand(t *testing.T) {
 func TestExecutor_Validate(t *testing.T) {
 	t.Parallel()
 	workDir := t.TempDir()
-	validator := security.NewValidator()
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+	validator := safety.NewValidator()
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
 		Handler: nil, Emitter: nil, Validator: validator,
 	})
-	securityService := security.NewService(validator, approvalService)
+	securityService := safety.NewService(validator, approvalService)
 	executor, err := NewExecutor(workDir, WithSecurityService(securityService))
 	require.NoError(t, err)
 
 	// Test valid command.
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "echo",
 		Args:    []string{"hello"},
 		WorkDir: workDir,
@@ -186,7 +186,7 @@ func TestExecutor_Validate(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test dangerous command.
-	dangerousCmd := &security.Command{
+	dangerousCmd := &safety.Command{
 		Program: "rm",
 		Args:    []string{"-rf", "/"},
 		WorkDir: workDir,
@@ -213,7 +213,7 @@ func TestExecutor_Validate_EmptyProgram(t *testing.T) {
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "",
 		Args:    []string{"hello"},
 		WorkDir: workDir,
@@ -366,11 +366,11 @@ func TestDefaultExecuteOptions(t *testing.T) {
 func TestExecutorOption_WithSecurityService(t *testing.T) {
 	t.Parallel()
 
-	validator := security.NewValidator()
-	approvalService := security.NewApprovalServiceWithConfig(security.ApprovalServiceConfig{
+	validator := safety.NewValidator()
+	approvalService := safety.NewApprovalServiceWithConfig(safety.ApprovalServiceConfig{
 		Handler: nil, Emitter: nil, Validator: validator,
 	})
-	securityService := security.NewService(validator, approvalService)
+	securityService := safety.NewService(validator, approvalService)
 	executor := &Executor{}
 
 	opt := WithSecurityService(securityService)
@@ -393,7 +393,7 @@ func TestExecutorOption_WithSecurityService_Nil(t *testing.T) {
 func TestExecutorOption_WithApprovalService(t *testing.T) {
 	t.Parallel()
 
-	approvalService := &security.ApprovalService{}
+	approvalService := &safety.ApprovalService{}
 	executor := &Executor{}
 
 	opt := WithApprovalService(approvalService)
@@ -437,7 +437,7 @@ func TestExecutor_ConcurrentExecution(t *testing.T) {
 
 	for i := range 10 {
 		go func(i int) {
-			cmd := &security.Command{
+			cmd := &safety.Command{
 				Program: "echo",
 				Args:    []string{"test", strconv.Itoa(i)},
 				WorkDir: workDir,
@@ -466,7 +466,7 @@ func TestExecutor_ExecuteStreaming(t *testing.T) {
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "echo",
 		Args:    []string{"hello", "world"},
 		WorkDir: workDir,
@@ -497,7 +497,7 @@ func TestExecutor_ExecuteStreaming_WithTimeout(t *testing.T) {
 	executor, err := NewExecutor(workDir)
 	require.NoError(t, err)
 
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "sleep",
 		Args:    []string{"2"},
 		WorkDir: workDir,
@@ -532,7 +532,7 @@ func TestExecutor_ErrorHandling(t *testing.T) {
 	assert.False(t, result.Success())
 
 	// Test with empty program.
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "",
 		Args:    []string{"hello"},
 		WorkDir: workDir,

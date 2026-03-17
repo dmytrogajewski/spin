@@ -5,15 +5,14 @@ import (
 	"errors"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/ace"
 	"github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/agentsmd"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/cycle"
-	"github.com/dmytrogajewski/spin/internal/detection"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/planning"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 const (
@@ -37,7 +36,7 @@ type Builder struct {
 	provider        llm.Provider
 	workingDir      string
 	emitter         *events.EventEmitter
-	approvalHandler security.ApprovalHandler
+	approvalHandler safety.ApprovalHandler
 	runtime         executor.Runtime // Optional runtime for tool registration and approval.
 }
 
@@ -117,33 +116,32 @@ func (b *Builder) getCycleDetectionConfig() cycle.Config {
 }
 
 // getACEConfig returns ACE config from unified config.
-// Converts V2 ACE config to nested ACEConfig.
-func (b *Builder) getACEConfig() *ACEConfig {
-	// Convert V2 config to nested ACEConfig.
-	return &ACEConfig{
+// Converts V2 ACE config to nested ace.Config.
+func (b *Builder) getACEConfig() *ace.Config {
+	return &ace.Config{
 		Enabled:        b.config.ACE.Enabled,
 		PlaybookPath:   b.config.ACE.PlaybookPath,
 		TrajectoryPath: b.config.ACE.TrajectoryPath,
-		Retrieval: ACERetrievalConfig{
+		Retrieval: ace.RetrievalConfig{
 			TopK:               b.config.ACE.TopK,
 			MinScore:           b.config.ACE.MinScore,
-			ProgressiveContext: DefaultProgressiveContextConfig(),
+			ProgressiveContext: ace.DefaultProgressiveContextConfig(),
 		},
-		ItemizedLearning: ACEItemizedLearningConfig{
+		ItemizedLearning: ace.ItemizedLearningConfig{
 			Enabled:       true,
 			ParseFeedback: true,
 			UpdateAsync:   true,
 		},
-		Generation: ACEGenerationConfig{
+		Generation: ace.GenerationConfig{
 			Enabled:     true,
 			AutoReflect: true,
 		},
-		Adapter: ACEAdapterConfig{
+		Adapter: ace.AdapterConfig{
 			Enabled:          true,
 			UtilityThreshold: builderAdapterUtilityThresh,
 			MaxMemorySize:    builderAdapterMaxMemSize,
 		},
-		Refine: ACERefineConfig{
+		Refine: ace.RefineConfig{
 			Enabled:         true,
 			Mode:            "proactive",
 			MaxBullets:      builderRefineMaxBullets,
@@ -176,7 +174,7 @@ func (b *Builder) WithEmitter(emitter *events.EventEmitter) *Builder {
 }
 
 // WithApprovalHandler sets the approval handler.
-func (b *Builder) WithApprovalHandler(handler security.ApprovalHandler) *Builder {
+func (b *Builder) WithApprovalHandler(handler safety.ApprovalHandler) *Builder {
 	b.approvalHandler = handler
 
 	return b
@@ -270,8 +268,8 @@ func (b *Builder) buildEnvironmentOptions() []EnvironmentOption {
 // BuildSecurityService creates security service with approval handling.
 // This is a public helper for use by conversation package.
 // If a runtime is set, uses the runtime's approval handler; otherwise uses the builder's approval handler.
-func (b *Builder) BuildSecurityService() *security.Service {
-	validator := security.NewValidator()
+func (b *Builder) BuildSecurityService() *safety.Service {
+	validator := safety.NewValidator()
 
 	// Use runtime's approval handler if available, otherwise use builder's.
 	handler := b.approvalHandler
@@ -281,7 +279,7 @@ func (b *Builder) BuildSecurityService() *security.Service {
 
 	store := b.buildPolicyStore()
 
-	cfg := security.ApprovalServiceConfig{
+	cfg := safety.ApprovalServiceConfig{
 		Handler:           handler,
 		Emitter:           b.emitter,
 		Validator:         validator,
@@ -289,33 +287,33 @@ func (b *Builder) BuildSecurityService() *security.Service {
 		SessionDefaultTTL: b.config.Security.SessionPolicyTTL,
 		GlobalDefaultTTL:  b.config.Security.GlobalPolicyTTL,
 	}
-	approvalSvc := security.NewApprovalServiceWithConfig(cfg)
+	approvalSvc := safety.NewApprovalServiceWithConfig(cfg)
 
-	return security.NewService(validator, approvalSvc)
+	return safety.NewService(validator, approvalSvc)
 }
 
 // buildPolicyStore creates the appropriate policy store based on configuration.
-func (b *Builder) buildPolicyStore() security.PolicyStore {
+func (b *Builder) buildPolicyStore() safety.PolicyStore {
 	if !b.config.Security.ApprovalPersistenceEnabled {
 		return nil
 	}
 
 	if policyPath := b.config.Security.PolicyFile; policyPath != "" {
-		fs, err := security.NewFilePolicyStore(policyPath, policyStoreTTL)
+		fs, err := safety.NewFilePolicyStore(policyPath, policyStoreTTL)
 		if err == nil {
 			return fs
 		}
 	}
 
-	return security.NewMemoryPolicyStore(policyStoreTTL)
+	return safety.NewMemoryPolicyStore(policyStoreTTL)
 }
 
 // BuildDetectionService creates detection service with cycle detection.
 // This is a public helper for use by conversation package.
-func (b *Builder) BuildDetectionService() *detection.Service {
+func (b *Builder) BuildDetectionService() *cycle.Service {
 	var (
-		cycleDetector   detection.CycleDetector
-		patternDetector detection.PatternDetector
+		cycleDetector   cycle.Tracker
+		patternDetector cycle.PatternAnalyzer
 	)
 
 	if b.isCycleDetectionEnabled() {
@@ -326,13 +324,7 @@ func (b *Builder) BuildDetectionService() *detection.Service {
 		cycleDetector = cycle.NewDetector(cycle.Config{Enabled: false})
 	}
 
-	return detection.NewService(cycleDetector, patternDetector)
-}
-
-// BuildPlanningService creates planning service with LLM provider.
-// This is a public helper for use by conversation package.
-func (b *Builder) BuildPlanningService() *planning.Service {
-	return planning.NewService(b.provider)
+	return cycle.NewService(cycleDetector, patternDetector)
 }
 
 // BuildOptions constructs agent options from configuration.
@@ -363,13 +355,13 @@ func (b *Builder) BuildOptions() []Option {
 
 // BuildACEService creates ACE service if enabled.
 // This is a public helper for use by conversation package.
-func (b *Builder) BuildACEService(ctx context.Context) (*ACEService, error) {
+func (b *Builder) BuildACEService(ctx context.Context) (*ace.Service, error) {
 	aceConfig := b.getACEConfig()
 	if aceConfig == nil || !aceConfig.Enabled {
 		return nil, ErrAceNotEnabled
 	}
 
-	return NewACEService(ctx, aceConfig, b.workingDir, b.provider, b.getModel(), b.getMaxTokens())
+	return ace.NewService(ctx, aceConfig, b.workingDir, b.provider, b.getModel(), b.getMaxTokens())
 }
 
 // BuildAgentsMDService creates AGENTS.md service if enabled.

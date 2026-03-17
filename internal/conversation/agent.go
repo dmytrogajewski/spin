@@ -4,13 +4,25 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dmytrogajewski/spin/internal/ace"
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/agent/tool"
+	"github.com/dmytrogajewski/spin/internal/agentsmd"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
+// agentBuildResult holds the outputs of buildAgent for downstream consumers.
+type agentBuildResult struct {
+	agent       *agent.Agent
+	toolRuntime *tool.Runtime
+	toolReg     *tools.Registry
+	aceService  *ace.Service
+	aceConfig   *ace.Config
+}
+
 // buildAgent constructs a fully configured agent with all services and integrations.
-func (b *Builder) buildAgent(ctx context.Context, exec *agent.Executor, env *agent.Environment) (*agent.Agent, error) {
+func (b *Builder) buildAgent(ctx context.Context, exec *agent.Executor, env *agent.Environment) (*agentBuildResult, error) {
 	agentBuilder := agent.NewBuilder().
 		WithConfig(b.cfg).
 		WithProvider(b.llm).
@@ -27,7 +39,7 @@ func (b *Builder) buildAgent(ctx context.Context, exec *agent.Executor, env *age
 		b.logWarn("memory tools registration failed", "err", err)
 	}
 
-	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
+	toolRuntime := tool.NewRuntime(tool.RuntimeConfig{
 		Registry:        toolReg,
 		Validator:       securitySvc.Validator(),
 		ApprovalService: securitySvc.ApprovalService(),
@@ -35,22 +47,37 @@ func (b *Builder) buildAgent(ctx context.Context, exec *agent.Executor, env *age
 		WorkDir:         env.WorkDir,
 	})
 
-	planningSvc := agentBuilder.BuildPlanningService()
 	opts := agentBuilder.BuildOptions()
-	opts = b.appendACEOptions(ctx, agentBuilder, opts)
-	opts = b.appendAgentsMDOptions(ctx, agentBuilder, opts)
+
+	// Build optional services for component wiring.
+	aceSvc, aceConfig := b.buildACEServices(ctx, agentBuilder)
+	if aceSvc != nil {
+		opts = append(opts, agent.WithACEService(aceSvc), agent.WithACEConfig(aceConfig))
+	}
+
+	agentsMDSvc := b.buildAgentsMDService(ctx, agentBuilder)
+	if agentsMDSvc != nil {
+		opts = append(opts, agent.WithAgentsMDService(agentsMDSvc))
+	}
+
 	opts = b.appendToolSelectorOptions(toolReg, opts)
 
-	ag, err := agent.NewAgent(b.llm, securitySvc, detectionSvc, toolRuntime, planningSvc, env, b.emitter, opts...)
+	ag, err := agent.NewAgent(b.llm, securitySvc, detectionSvc, toolRuntime, env, b.emitter, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("agent: %w", err)
 	}
 
-	return ag, nil
+	return &agentBuildResult{
+		agent:       ag,
+		toolRuntime: toolRuntime,
+		toolReg:     toolReg,
+		aceService:  aceSvc,
+		aceConfig:   aceConfig,
+	}, nil
 }
 
 // buildOrRegisterTools creates the tool registry, using runtime registration if available.
-func (b *Builder) buildOrRegisterTools(exec *agent.Executor, securitySvc *security.Service, env *agent.Environment) *tools.Registry {
+func (b *Builder) buildOrRegisterTools(exec *agent.Executor, securitySvc *safety.Service, env *agent.Environment) *tools.Registry {
 	if b.runtime != nil {
 		toolReg := tools.NewRegistry()
 		b.runtime.RegisterTools(toolReg)
@@ -62,53 +89,51 @@ func (b *Builder) buildOrRegisterTools(exec *agent.Executor, securitySvc *securi
 	return b.buildToolRegistry(exec, securitySvc, env)
 }
 
-// appendACEOptions adds ACE-related agent options if ACE is enabled.
-func (b *Builder) appendACEOptions(ctx context.Context, agentBuilder *agent.Builder, opts []agent.Option) []agent.Option {
+// buildACEServices creates ACE service and config if ACE is enabled.
+func (b *Builder) buildACEServices(ctx context.Context, agentBuilder *agent.Builder) (*ace.Service, *ace.Config) {
 	if b.cfg == nil || !b.cfg.ACE.Enabled {
-		return opts
+		return nil, nil
 	}
 
 	aceSvc, err := agentBuilder.BuildACEService(ctx)
 	if err != nil {
 		b.logWarn("ACE init failed, continuing", "err", err)
 
-		return opts
+		return nil, nil
 	}
 
-	opts = append(opts, agent.WithACEService(aceSvc))
-	aceConfig := agent.ConvertACEConfig(&b.cfg.ACE)
-	opts = append(opts, agent.WithACEConfig(aceConfig))
-
+	aceConfig := ace.ConvertConfig(&b.cfg.ACE)
 	b.logInfo("ACE enabled", "playbook", b.cfg.ACE.PlaybookPath, "model", b.cfg.LLM.Model)
 
-	return opts
+	return aceSvc, aceConfig
 }
 
-// appendAgentsMDOptions adds AGENTS.md-related agent options if enabled.
-func (b *Builder) appendAgentsMDOptions(ctx context.Context, agentBuilder *agent.Builder, opts []agent.Option) []agent.Option {
+// buildAgentsMDService creates the AGENTS.md service if enabled.
+func (b *Builder) buildAgentsMDService(ctx context.Context, agentBuilder *agent.Builder) *agentsmd.Service {
 	if b.cfg == nil || !b.cfg.AgentsMD.Enabled {
-		return opts
+		return nil
 	}
 
 	gitRoot := b.resolveGitRoot()
 
 	agentsMDSvc := agentBuilder.BuildAgentsMDService(gitRoot)
 	if agentsMDSvc == nil {
-		return opts
+		return nil
 	}
 
 	if err := agentsMDSvc.Load(ctx); err != nil {
 		b.logWarn("failed to load AGENTS.md", "error", err)
 
-		return opts
+		return nil
 	}
 
 	if agentsMDSvc.IsLoaded() {
-		opts = append(opts, agent.WithAgentsMDService(agentsMDSvc))
 		b.logInfo("AGENTS.md loaded", "path", agentsMDSvc.Path())
+
+		return agentsMDSvc
 	}
 
-	return opts
+	return nil
 }
 
 // resolveGitRoot returns the git repository root, or empty string if unavailable.

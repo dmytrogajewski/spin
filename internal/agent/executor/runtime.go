@@ -3,7 +3,7 @@ package executor
 import (
 	"context"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
@@ -11,12 +11,12 @@ import (
 // CommandExecutor is an interface for executing commands.
 // This breaks the import cycle between runtime and agent packages.
 type CommandExecutor interface {
-	Execute(ctx context.Context, cmd *security.Command, opts any) (*CommandResult, error)
+	Execute(ctx context.Context, cmd *safety.Command, opts any) (*CommandResult, error)
 }
 
 // CommandResult represents the result of command execution.
 type CommandResult struct {
-	Command     *security.Command
+	Command     *safety.Command
 	Stdout      string
 	Stderr      string
 	ExitCode    int
@@ -51,7 +51,7 @@ type ApprovalProvider interface {
 	// ApprovalHandler returns the approval handler for this runtime.
 	// Handles user approval requests in a runtime-specific way (ACP request_permission,
 	// TUI dialogs, etc.).
-	ApprovalHandler() security.ApprovalHandler
+	ApprovalHandler() safety.ApprovalHandler
 }
 
 // SessionProvider provides session management capability.

@@ -12,8 +12,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/storage"
 )
 
+// CurrentPlaybookVersion is the current playbook schema version.
+const CurrentPlaybookVersion = 1
+
 // playbookJSON is the JSON representation of a playbook.
 type playbookJSON struct {
+	Version int              `json:"version"`
 	Bullets []*bullet.Bullet `json:"bullets"`
 }
 
@@ -22,7 +26,10 @@ type playbookJSON struct {
 func (p *Playbook) Save(path string) error {
 	path = filepath.Clean(path)
 
-	data := playbookJSON{Bullets: p.bullets.Values()}
+	data := playbookJSON{
+		Version: CurrentPlaybookVersion,
+		Bullets: p.bullets.Values(),
+	}
 
 	// Marshal to JSON.
 	jsonData, err := json.MarshalIndent(data, "", "  ")

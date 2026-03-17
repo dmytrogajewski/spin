@@ -17,21 +17,35 @@ import (
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/testkit"
 )
 
-// skipTUITests skips TUI tests that require interactive terminal.
-// These tests are kept for reference but skipped in CI.
+// skipTUITests skips TUI tests when running in short mode.
+// These tests use FakeTTY and MockProvider so they do NOT require
+// an interactive terminal or a real LLM provider.
 func skipTUITests(t *testing.T) {
 	t.Helper()
 
 	if testing.Short() {
-		t.Skip("Skipping E2E test in short mode")
+		t.Skip("Skipping TUI test in short mode")
+	}
+}
+
+// skipPTYTests skips tests that require a real PTY via go-expect.
+// These tests launch the compiled binary and interact with it through
+// a pseudo-terminal, which is not available in all CI environments.
+func skipPTYTests(t *testing.T) {
+	t.Helper()
+
+	if testing.Short() {
+		t.Skip("Skipping PTY test in short mode")
 	}
 
-	t.Skip("TUI tests require an interactive terminal and real LLM provider")
+	if os.Getenv("SPIN_E2E_PTY") != "1" {
+		t.Skip("PTY tests require SPIN_E2E_PTY=1 (uses go-expect with real pseudo-terminal)")
+	}
 }
 
 // getBinPath returns absolute path to spin binary.
@@ -69,8 +83,8 @@ func setupTUITest(t *testing.T) (*testkit.TUITestHelper, *conversation.Conversat
 	emitter := events.NewEventEmitter(100)
 
 	// Auto-approve handler for tests.
-	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		return security.ApprovalResponse{
+	approvalHandler := func(_ context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
+		return safety.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
 			Reason:    "auto-approved",
@@ -81,7 +95,7 @@ func setupTUITest(t *testing.T) (*testkit.TUITestHelper, *conversation.Conversat
 	executor, err := agent.NewExecutor(cfg.Agent.WorkDir)
 	require.NoError(t, err)
 
-	validator := security.NewValidator()
+	validator := safety.NewValidator()
 
 	builtinRuntime, err := agentexec.NewBuiltinRuntime(agentexec.BuiltinRuntimeConfig{
 		WorkDir:         cfg.Agent.WorkDir,
@@ -178,16 +192,28 @@ func TestTUIBasicChat(t *testing.T) {
 	helper.Keyboard.InjectString("Say hello")
 	helper.Keyboard.InjectEnter()
 
-	// Run turn.
-	err := conv.RunTurn(ctx, "Say hello")
+	// Run turn in background so streaming can process concurrently.
+	turnErr := make(chan error, 1)
+
+	go func() {
+		turnErr <- conv.RunTurn(ctx, "Say hello")
+	}()
+
+	// Wait for output to appear (events flow through mapper → streaming → FakeWriter).
+	found := helper.WaitForOutput("Hello", 5*time.Second)
+
+	// Now collect turn result.
+	err := <-turnErr
 	require.NoError(t, err)
 
-	// Stop streaming.
 	mapper.StopStreaming()
 	<-streamDone
 
-	// Wait for output.
-	require.True(t, helper.WaitForOutput("Hello", 2*time.Second), "should receive response from LLM")
+	if !found {
+		t.Logf("FakeWriter content: %s", helper.Writer.StripANSI())
+	}
+
+	require.True(t, found, "should receive response from LLM")
 }
 
 // TestTUIFilePickerTrigger tests @ key triggers file picker.
@@ -315,8 +341,14 @@ func TestTUIMultiTurn(t *testing.T) {
 		}
 	}()
 
-	// First message.
-	err := conv.RunTurn(ctx, "My favorite number is 42")
+	// First message - run in background so streaming can process.
+	turnErr := make(chan error, 1)
+
+	go func() {
+		turnErr <- conv.RunTurn(ctx, "My favorite number is 42")
+	}()
+
+	err := <-turnErr
 	require.NoError(t, err)
 
 	mapper.StopStreaming()
@@ -332,15 +364,25 @@ func TestTUIMultiTurn(t *testing.T) {
 		close(streamDone)
 	}()
 
-	// Second message - test context retention.
-	err = conv.RunTurn(ctx, "What is my favorite number?")
+	// Second message - run in background so streaming can process.
+	go func() {
+		turnErr <- conv.RunTurn(ctx, "What is my favorite number?")
+	}()
+
+	// Wait for output to appear.
+	found := helper.WaitForOutput("42", 5*time.Second)
+
+	err = <-turnErr
 	require.NoError(t, err)
 
 	mapper.StopStreaming()
 	<-streamDone
 
-	// Should contain "42" in response.
-	require.True(t, helper.WaitForOutput("42", 2*time.Second), "should remember context from previous message")
+	if !found {
+		t.Logf("FakeWriter content: %s", helper.Writer.StripANSI())
+	}
+
+	require.True(t, found, "should remember context from previous message")
 }
 
 // TestTUIStopStreaming tests Ctrl+C stops streaming.

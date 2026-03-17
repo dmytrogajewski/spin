@@ -3,14 +3,14 @@ package main
 import (
 	"context"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 )
 
 // createAutoApproveHandler returns an approval handler that auto-approves all requests.
-func createAutoApproveHandler() security.ApprovalHandler {
-	return func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		return security.ApprovalResponse{
+func createAutoApproveHandler() safety.ApprovalHandler {
+	return func(_ context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
+		return safety.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
 			Reason:    "auto-approved",
@@ -19,9 +19,9 @@ func createAutoApproveHandler() security.ApprovalHandler {
 }
 
 // createDenyHandler returns an approval handler that denies all requests with given reason.
-func createDenyHandler(reason string) security.ApprovalHandler {
-	return func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		return security.ApprovalResponse{
+func createDenyHandler(reason string) safety.ApprovalHandler {
+	return func(_ context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
+		return safety.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  false,
 			Reason:    reason,
@@ -30,8 +30,8 @@ func createDenyHandler(reason string) security.ApprovalHandler {
 }
 
 // createTUIApprovalHandler returns an approval handler that shows TUI dialog.
-func createTUIApprovalHandler(ui *adapters.PureTTY) security.ApprovalHandler {
-	return func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+func createTUIApprovalHandler(ui *adapters.PureTTY) safety.ApprovalHandler {
+	return func(ctx context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
 		return ui.ShowApprovalDialog(ctx, req)
 	}
 }

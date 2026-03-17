@@ -40,7 +40,7 @@ func TestPatternDetector_AnalyzePatterns(t *testing.T) {
 	detector := NewPatternDetector(config)
 
 	// Test with empty snapshots.
-	results := detector.analyzeInternal([]Snapshot{})
+	results := detector.AnalyzePatterns([]Snapshot{})
 	if len(results) != 0 {
 		t.Errorf("PatternDetector.AnalyzePatterns() with empty snapshots, got %d results, want 0", len(results))
 	}
@@ -50,7 +50,7 @@ func TestPatternDetector_AnalyzePatterns(t *testing.T) {
 		{Turn: 1, Response: "First response", ToolCalls: []string{"tool1"}, Error: ""},
 	}
 
-	results = detector.analyzeInternal(snapshots)
+	results = detector.AnalyzePatterns(snapshots)
 	if len(results) != 0 {
 		t.Errorf("PatternDetector.AnalyzePatterns() with insufficient snapshots, got %d results, want 0", len(results))
 	}
@@ -80,7 +80,7 @@ func runPatternDetectionTests(t *testing.T, cases []patternDetectionCase) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			results := detector.analyzeInternal(tt.snapshots)
+			results := detector.AnalyzePatterns(tt.snapshots)
 
 			found := false
 
@@ -171,7 +171,7 @@ func TestPatternDetector_AnalyzePatterns_ToolStuck(t *testing.T) {
 		{Turn: 3, Response: "Third response", ToolCalls: []string{"tool1"}, Error: ""},
 	}
 
-	results := detector.analyzeInternal(snapshots)
+	results := detector.AnalyzePatterns(snapshots)
 
 	// Should detect tool stuck pattern.
 	found := false
@@ -222,7 +222,7 @@ func TestPatternDetector_AnalyzePatterns_ErrorLoop(t *testing.T) {
 		{Turn: 2, Response: "Second response", ToolCalls: []string{}, Error: "test error"},
 	}
 
-	results := detector.analyzeInternal(snapshots)
+	results := detector.AnalyzePatterns(snapshots)
 	result := findPattern(results, PatternErrorLoop)
 
 	if result == nil {
@@ -257,7 +257,7 @@ func TestPatternDetector_AnalyzePatterns_OscillatingTools(t *testing.T) {
 		{Turn: 4, Response: "Fourth response", ToolCalls: []string{"tool2"}, Error: ""},
 	}
 
-	results := detector.analyzeInternal(snapshots)
+	results := detector.AnalyzePatterns(snapshots)
 
 	// Should detect oscillating tools pattern.
 	found := false

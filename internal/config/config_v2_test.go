@@ -773,6 +773,314 @@ func TestMCPTransportType_IsValid(t *testing.T) {
 	}
 }
 
+// Journey: specs/journeys/JOURNEY-1.1.md.
+
+// TestV2_Validate_WorkflowsPresent tests that workflows section is parsed correctly.
+// Kills mutant: removing workflows struct fields would make this test fail.
+func TestV2_Validate_WorkflowsPresent(t *testing.T) {
+	t.Parallel()
+
+	cfg := &V2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   validAgentConfig(),
+		Workflows: WorkflowsV2{
+			ActionModel:   "claude-opus-4-6",
+			ThinkingModel: "deepseek-r1",
+			CritiqueModel: "claude-sonnet-4-6",
+			CompactModel:  "claude-haiku-4-5",
+			VisionModel:   "claude-opus-4-6",
+		},
+	}
+
+	err := cfg.Validate()
+	require.NoError(t, err, "config with workflows should pass validation")
+
+	assert.Equal(t, "claude-opus-4-6", cfg.Workflows.ActionModel)
+	assert.Equal(t, "deepseek-r1", cfg.Workflows.ThinkingModel)
+	assert.Equal(t, "claude-sonnet-4-6", cfg.Workflows.CritiqueModel)
+	assert.Equal(t, "claude-haiku-4-5", cfg.Workflows.CompactModel)
+	assert.Equal(t, "claude-opus-4-6", cfg.Workflows.VisionModel)
+}
+
+// TestV2_Validate_WorkflowsEmpty tests that empty workflows section passes validation.
+// Kills mutant: adding required-field validation for optional workflows would make this test fail.
+func TestV2_Validate_WorkflowsEmpty(t *testing.T) {
+	t.Parallel()
+
+	cfg := &V2{
+		Version:   "2.0",
+		LLM:       validLLMConfig(),
+		Agent:     validAgentConfig(),
+		Workflows: WorkflowsV2{},
+	}
+
+	err := cfg.Validate()
+	require.NoError(t, err, "config with empty workflows should pass validation")
+}
+
+// TestWorkflowsV2_ResolveThinkingModel tests the thinking model fallback chain.
+// Kills mutant: removing fallback logic would make this test fail.
+func TestWorkflowsV2_ResolveThinkingModel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		wf       WorkflowsV2
+		expected string
+	}{
+		{
+			name:     "explicit thinking model",
+			wf:       WorkflowsV2{ActionModel: "action", ThinkingModel: "thinking"},
+			expected: "thinking",
+		},
+		{
+			name:     "fallback to action model",
+			wf:       WorkflowsV2{ActionModel: "action", ThinkingModel: ""},
+			expected: "action",
+		},
+		{
+			name:     "both empty returns empty",
+			wf:       WorkflowsV2{},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, tt.wf.ResolveThinkingModel())
+		})
+	}
+}
+
+// TestWorkflowsV2_ResolveCritiqueModel tests the critique model fallback chain.
+// Kills mutant: removing two-level fallback would make this test fail.
+func TestWorkflowsV2_ResolveCritiqueModel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		wf       WorkflowsV2
+		expected string
+	}{
+		{
+			name:     "explicit critique model",
+			wf:       WorkflowsV2{ActionModel: "action", ThinkingModel: "thinking", CritiqueModel: "critique"},
+			expected: "critique",
+		},
+		{
+			name:     "fallback to thinking model",
+			wf:       WorkflowsV2{ActionModel: "action", ThinkingModel: "thinking", CritiqueModel: ""},
+			expected: "thinking",
+		},
+		{
+			name:     "fallback through thinking to action",
+			wf:       WorkflowsV2{ActionModel: "action"},
+			expected: "action",
+		},
+		{
+			name:     "all empty returns empty",
+			wf:       WorkflowsV2{},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, tt.wf.ResolveCritiqueModel())
+		})
+	}
+}
+
+// TestWorkflowsV2_ResolveCompactAndVisionModel tests compact and vision model fallback chains.
+// Kills mutant: removing fallback logic would make this test fail.
+func TestWorkflowsV2_ResolveCompactAndVisionModel(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		wf       WorkflowsV2
+		role     string
+		expected string
+	}{
+		{
+			name:     "explicit compact model",
+			wf:       WorkflowsV2{ActionModel: "action", CompactModel: "compact"},
+			role:     "compact",
+			expected: "compact",
+		},
+		{
+			name:     "compact fallback to action model",
+			wf:       WorkflowsV2{ActionModel: "action"},
+			role:     "compact",
+			expected: "action",
+		},
+		{
+			name:     "explicit vision model",
+			wf:       WorkflowsV2{ActionModel: "action", VisionModel: "vision"},
+			role:     "vision",
+			expected: "vision",
+		},
+		{
+			name:     "vision fallback to action model",
+			wf:       WorkflowsV2{ActionModel: "action"},
+			role:     "vision",
+			expected: "action",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var got string
+
+			switch tt.role {
+			case "compact":
+				got = tt.wf.ResolveCompactModel()
+			case "vision":
+				got = tt.wf.ResolveVisionModel()
+			}
+
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+// TestV2_Validate_SubagentsPresent tests that subagents section is parsed correctly.
+// Kills mutant: removing subagents field from V2 would make this test fail.
+func TestV2_Validate_SubagentsPresent(t *testing.T) {
+	t.Parallel()
+
+	cfg := &V2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   validAgentConfig(),
+		Subagents: map[string]SubagentConfigV2{
+			"planner": {
+				Model:         "claude-sonnet-4-6",
+				MaxIterations: 50,
+			},
+			"explorer": {
+				Model:         "claude-haiku-4-5",
+				MaxIterations: 30,
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	require.NoError(t, err, "config with valid subagents should pass validation")
+
+	require.Len(t, cfg.Subagents, 2)
+	assert.Equal(t, "claude-sonnet-4-6", cfg.Subagents["planner"].Model)
+	assert.Equal(t, 50, cfg.Subagents["planner"].MaxIterations)
+	assert.Equal(t, "claude-haiku-4-5", cfg.Subagents["explorer"].Model)
+	assert.Equal(t, 30, cfg.Subagents["explorer"].MaxIterations)
+}
+
+// TestV2_Validate_SubagentsNil tests that nil subagents map passes validation.
+// Kills mutant: requiring non-nil subagents would make this test fail.
+func TestV2_Validate_SubagentsNil(t *testing.T) {
+	t.Parallel()
+
+	cfg := &V2{
+		Version:   "2.0",
+		LLM:       validLLMConfig(),
+		Agent:     validAgentConfig(),
+		Subagents: nil,
+	}
+
+	err := cfg.Validate()
+	require.NoError(t, err, "config with nil subagents should pass validation")
+}
+
+// TestV2_Validate_SubagentsMaxIterationsNegative tests that negative MaxIterations fails.
+// Kills mutant: removing MaxIterations validation would make this test fail.
+func TestV2_Validate_SubagentsMaxIterationsNegative(t *testing.T) {
+	t.Parallel()
+
+	cfg := &V2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   validAgentConfig(),
+		Subagents: map[string]SubagentConfigV2{
+			"planner": {
+				Model:         "claude-sonnet-4-6",
+				MaxIterations: -1,
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err, "negative MaxIterations should fail validation")
+	assert.Contains(t, err.Error(), "max_iterations", "error should mention max_iterations")
+}
+
+// TestV2_Validate_SubagentsMaxIterationsZeroAllowed tests that zero MaxIterations passes
+// validation (consumers apply default of 30).
+// Kills mutant: rejecting zero MaxIterations would make this test fail.
+func TestV2_Validate_SubagentsMaxIterationsZeroAllowed(t *testing.T) {
+	t.Parallel()
+
+	cfg := &V2{
+		Version: "2.0",
+		LLM:     validLLMConfig(),
+		Agent:   validAgentConfig(),
+		Subagents: map[string]SubagentConfigV2{
+			"planner": {
+				Model:         "claude-sonnet-4-6",
+				MaxIterations: 0,
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	require.NoError(t, err, "zero MaxIterations should pass validation (consumers apply default)")
+}
+
+// TestSubagentConfigV2_EffectiveMaxIterations tests the default application.
+// Kills mutant: removing default logic would make this test fail.
+func TestSubagentConfigV2_EffectiveMaxIterations(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		cfg      SubagentConfigV2
+		expected int
+	}{
+		{
+			name:     "explicit value",
+			cfg:      SubagentConfigV2{MaxIterations: 50},
+			expected: 50,
+		},
+		{
+			name:     "zero uses default",
+			cfg:      SubagentConfigV2{MaxIterations: 0},
+			expected: 30,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, tt.cfg.EffectiveMaxIterations())
+		})
+	}
+}
+
+// TestDefaultV2_WorkflowsAndSubagents tests that defaults include empty workflows and nil subagents.
+// Kills mutant: changing defaults would make this test fail.
+func TestDefaultV2_WorkflowsAndSubagents(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultV2()
+
+	assert.Equal(t, WorkflowsV2{}, cfg.Workflows, "workflows should be zero value by default")
+	assert.Nil(t, cfg.Subagents, "subagents should be nil by default")
+}
+
 // TestMCPTransportType_IsRemote tests transport type remote detection.
 func TestMCPTransportType_IsRemote(t *testing.T) {
 	t.Parallel()

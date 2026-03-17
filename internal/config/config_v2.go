@@ -22,6 +22,8 @@ const (
 	defaultAgentStreamBuffer = 100
 	defaultAgentHistoryLimit = 1000
 
+	defaultSubagentMaxIterations = 30
+
 	defaultCycleWindowSize       = 3
 	defaultCycleSimilarityThresh = 0.8
 	defaultCycleToolRepeatLimit  = 3
@@ -94,6 +96,8 @@ var (
 	ErrScratchpadMaxEntriesPositive = errors.New("memory.scratchpad: max_entries must be positive")
 	// ErrPersistentBasePathRequired is a sentinel error.
 	ErrPersistentBasePathRequired = errors.New("memory.persistent: base_path is required when persistent memory is enabled")
+	// ErrSubagentMaxIterationsNegative is a sentinel error.
+	ErrSubagentMaxIterationsNegative = errors.New("subagents: max_iterations must not be negative")
 )
 
 // ValidationErrors collects multiple validation errors.
@@ -145,14 +149,16 @@ func (v *ValidationErrors) ToError() error {
 // V2 is the unified configuration for Spin v2.0.
 // This replaces the flat Config structure with organized sections.
 type V2 struct {
-	Version  string     `mapstructure:"version"   yaml:"version"`
-	LLM      LLMV2      `mapstructure:"llm"       yaml:"llm"`
-	Agent    AgentV2    `mapstructure:"agent"     yaml:"agent"`
-	ACE      ACEV2      `mapstructure:"ace"       yaml:"ace"`
-	Security SecurityV2 `mapstructure:"security"  yaml:"security"`
-	Protocol ProtocolV2 `mapstructure:"protocol"  yaml:"protocol"`
-	AgentsMD AgentsMDV2 `mapstructure:"agents_md" yaml:"agents_md"`
-	Memory   MemoryV2   `mapstructure:"memory"    yaml:"memory"`
+	Version   string                      `mapstructure:"version"   yaml:"version"`
+	LLM       LLMV2                       `mapstructure:"llm"       yaml:"llm"`
+	Agent     AgentV2                     `mapstructure:"agent"     yaml:"agent"`
+	ACE       ACEV2                       `mapstructure:"ace"       yaml:"ace"`
+	Security  SecurityV2                  `mapstructure:"security"  yaml:"security"`
+	Protocol  ProtocolV2                  `mapstructure:"protocol"  yaml:"protocol"`
+	AgentsMD  AgentsMDV2                  `mapstructure:"agents_md" yaml:"agents_md"`
+	Memory    MemoryV2                    `mapstructure:"memory"    yaml:"memory"`
+	Workflows WorkflowsV2                 `mapstructure:"workflows" yaml:"workflows"`
+	Subagents map[string]SubagentConfigV2 `mapstructure:"subagents" yaml:"subagents"`
 }
 
 // AgentsMDV2 configures AGENTS.md project instructions support.
@@ -348,6 +354,79 @@ type PersistentMemoryV2 struct {
 	BasePath string `mapstructure:"base_path" yaml:"base_path"`
 }
 
+// WorkflowsV2 configures per-workflow LLM model routing (§3.4.1).
+// All fields are optional strings; consumers use Resolve* methods for fallback chains.
+type WorkflowsV2 struct {
+	// ActionModel is the primary execution model (tool-based reasoning). Required, no fallback.
+	ActionModel string `mapstructure:"action_model" yaml:"action_model"`
+
+	// ThinkingModel is the extended reasoning model. Falls back to ActionModel.
+	ThinkingModel string `mapstructure:"thinking_model" yaml:"thinking_model"`
+
+	// CritiqueModel is the self-evaluation model. Falls back to ThinkingModel → ActionModel.
+	CritiqueModel string `mapstructure:"critique_model" yaml:"critique_model"`
+
+	// CompactModel is the context compaction model. Falls back to ActionModel.
+	CompactModel string `mapstructure:"compact_model" yaml:"compact_model"`
+
+	// VisionModel is the vision-language model. Falls back to ActionModel.
+	VisionModel string `mapstructure:"vision_model" yaml:"vision_model"`
+}
+
+// ResolveThinkingModel returns the thinking model, falling back to ActionModel.
+func (w *WorkflowsV2) ResolveThinkingModel() string {
+	if w.ThinkingModel != "" {
+		return w.ThinkingModel
+	}
+
+	return w.ActionModel
+}
+
+// ResolveCritiqueModel returns the critique model, falling back to ThinkingModel → ActionModel.
+func (w *WorkflowsV2) ResolveCritiqueModel() string {
+	if w.CritiqueModel != "" {
+		return w.CritiqueModel
+	}
+
+	return w.ResolveThinkingModel()
+}
+
+// ResolveCompactModel returns the compact model, falling back to ActionModel.
+func (w *WorkflowsV2) ResolveCompactModel() string {
+	if w.CompactModel != "" {
+		return w.CompactModel
+	}
+
+	return w.ActionModel
+}
+
+// ResolveVisionModel returns the vision model, falling back to ActionModel.
+func (w *WorkflowsV2) ResolveVisionModel() string {
+	if w.VisionModel != "" {
+		return w.VisionModel
+	}
+
+	return w.ActionModel
+}
+
+// SubagentConfigV2 configures a named subagent's behavior (§3.2.3, §3.4.3).
+type SubagentConfigV2 struct {
+	// Model overrides the LLM model for this subagent.
+	Model string `mapstructure:"model" yaml:"model"`
+
+	// MaxIterations is the maximum ReAct loop iterations (default: 30).
+	MaxIterations int `mapstructure:"max_iterations" yaml:"max_iterations"`
+}
+
+// EffectiveMaxIterations returns MaxIterations if set, otherwise the default (30).
+func (s *SubagentConfigV2) EffectiveMaxIterations() int {
+	if s.MaxIterations > 0 {
+		return s.MaxIterations
+	}
+
+	return defaultSubagentMaxIterations
+}
+
 // Validate performs validation on the config.
 func (c *V2) Validate() error {
 	errs := &ValidationErrors{}
@@ -386,6 +465,16 @@ func (c *V2) Validate() error {
 	err = c.Memory.Validate()
 	if err != nil {
 		errs.Add(err)
+	}
+
+	// Validate subagent entries.
+	for name, sa := range c.Subagents {
+		if sa.MaxIterations < 0 {
+			errs.Add(fmt.Errorf(
+				"subagents[%s]: max_iterations must not be negative, got %d: %w",
+				name, sa.MaxIterations, ErrSubagentMaxIterationsNegative,
+			))
+		}
 	}
 
 	return errs.ToError()

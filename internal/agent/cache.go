@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 const (
@@ -184,7 +184,7 @@ func (c *CommandCache) evictOldestLocked() bool {
 // ensuring that identical commands produce identical keys.
 //
 // Format: "program:args:dir".
-func (c *CommandCache) Key(cmd *security.Command) string {
+func (c *CommandCache) Key(cmd *safety.Command) string {
 	if cmd == nil {
 		return ""
 	}
@@ -209,7 +209,7 @@ func (c *CommandCache) Key(cmd *security.Command) string {
 //   - Read operations: ls, cat, grep, find
 //   - Git read operations: git status, git log, git diff
 //   - Info commands: pwd, whoami, which
-func (c *CommandCache) IsCacheable(cmd *security.Command) bool {
+func (c *CommandCache) IsCacheable(cmd *safety.Command) bool {
 	if cmd == nil {
 		return false
 	}

@@ -14,12 +14,13 @@ var (
 	errSomethingBroke     = errors.New("something broke")
 )
 
-// TestBuiltinTools_Count verifies that we have exactly 8 builtin tools.
+// TestBuiltinTools_Count verifies that we have exactly 9 builtin tools.
 func TestBuiltinTools_Count(t *testing.T) {
 	t.Parallel()
 
-	if len(BuiltinTools) != 8 {
-		t.Errorf("BuiltinTools count = %d, want 8", len(BuiltinTools))
+	const expectedBuiltinToolCount = 9
+	if len(BuiltinTools) != expectedBuiltinToolCount {
+		t.Errorf("BuiltinTools count = %d, want %d", len(BuiltinTools), expectedBuiltinToolCount)
 	}
 }
 
@@ -30,6 +31,7 @@ func TestBuiltinTools_Names(t *testing.T) {
 	expected := map[string]bool{
 		"read_file":      false,
 		"write_file":     false,
+		"edit_file":      false,
 		"list_directory": false,
 		"shell_command":  false,
 		"get_context":    false,

@@ -5,19 +5,19 @@ import (
 	"context"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
-// validatorAdapter adapts security.Service to tools.CommandValidator interface.
+// validatorAdapter adapts safety.Service to tools.CommandValidator interface.
 type validatorAdapter struct {
-	securityService *security.Service
+	securityService *safety.Service
 }
 
 // Classify implements the Classify operation.
 func (a *validatorAdapter) Classify(cmd tools.CommandInfo) (tools.ValidationResult, error) {
-	return a.securityService.ValidateCommand(&security.Command{
+	return a.securityService.ValidateCommand(&safety.Command{
 		Program: cmd.GetProgram(),
 		Args:    cmd.GetArgs(),
 		Raw:     cmd.GetRaw(),
@@ -57,7 +57,7 @@ type executorAdapter struct {
 
 // Execute implements the Execute operation.
 func (a *executorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, _ any) (tools.ExecutionResult, error) {
-	return a.executor.Execute(ctx, &security.Command{
+	return a.executor.Execute(ctx, &safety.Command{
 		Program: cmd.GetProgram(),
 		Args:    cmd.GetArgs(),
 		Raw:     cmd.GetRaw(),

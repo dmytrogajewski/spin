@@ -9,7 +9,7 @@ import (
 
 	"github.com/coder/acp-go-sdk"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 var (
@@ -56,8 +56,8 @@ func (h *ApprovalHandler) ClearActiveSession() {
 }
 
 // HandleApprovalRequest handles an approval request by calling the client's RequestPermission
-// method and waiting for the client's response. This implements the security.ApprovalHandler interface.
-func (h *ApprovalHandler) HandleApprovalRequest(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+// method and waiting for the client's response. This implements the safety.ApprovalHandler interface.
+func (h *ApprovalHandler) HandleApprovalRequest(ctx context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
 	sessionID, conn, err := h.getSessionAndConnection()
 	if err != nil {
 		return h.denyResponse(req.ID, err.Error())
@@ -104,7 +104,7 @@ func (h *ApprovalHandler) getSessionAndConnection() (acp.SessionId, notification
 }
 
 // extractToolName extracts the tool name from a request.
-func extractToolName(req security.ApprovalRequest) string {
+func extractToolName(req safety.ApprovalRequest) string {
 	if req.Command != nil {
 		return req.Command.Program
 	}
@@ -113,8 +113,8 @@ func extractToolName(req security.ApprovalRequest) string {
 }
 
 // denyResponse creates a denied approval response.
-func (h *ApprovalHandler) denyResponse(reqID, reason string) security.ApprovalResponse {
-	return security.ApprovalResponse{
+func (h *ApprovalHandler) denyResponse(reqID, reason string) safety.ApprovalResponse {
+	return safety.ApprovalResponse{
 		RequestID: reqID,
 		Approved:  false,
 		Reason:    reason,
@@ -193,7 +193,7 @@ func (h *ApprovalHandler) requestPermission(
 }
 
 // handlePermissionError handles errors from the permission request.
-func (h *ApprovalHandler) handlePermissionError(ctx context.Context, reqID string, err error) security.ApprovalResponse {
+func (h *ApprovalHandler) handlePermissionError(ctx context.Context, reqID string, err error) safety.ApprovalResponse {
 	if ctx.Err() != nil {
 		return h.denyResponse(reqID, "approval request canceled")
 	}
@@ -204,10 +204,10 @@ func (h *ApprovalHandler) handlePermissionError(ctx context.Context, reqID strin
 // buildApprovalResponse converts the ACP permission response to a security approval response.
 func (h *ApprovalHandler) buildApprovalResponse(
 	reqID string, acpResp acp.RequestPermissionResponse, options []acp.PermissionOption,
-) security.ApprovalResponse {
+) safety.ApprovalResponse {
 	approved, scope := resolvePermissionOutcome(acpResp, options)
 
-	return security.ApprovalResponse{
+	return safety.ApprovalResponse{
 		RequestID: reqID,
 		Approved:  approved,
 		Reason:    "client decision",
@@ -229,13 +229,13 @@ func resolvePermissionOutcome(acpResp acp.RequestPermissionResponse, options []a
 
 		switch opt.Kind {
 		case acp.PermissionOptionKindAllowOnce:
-			return true, security.ScopeOnce
+			return true, safety.ScopeOnce
 		case acp.PermissionOptionKindAllowAlways:
-			return true, security.ScopeGlobal
+			return true, safety.ScopeGlobal
 		case acp.PermissionOptionKindRejectOnce:
-			return false, security.ScopeOnce
+			return false, safety.ScopeOnce
 		case acp.PermissionOptionKindRejectAlways:
-			return false, security.ScopeGlobal
+			return false, safety.ScopeGlobal
 		}
 	}
 
@@ -243,7 +243,7 @@ func resolvePermissionOutcome(acpResp acp.RequestPermissionResponse, options []a
 }
 
 // convertApprovalRequestToToolCall converts a security approval request to an ACP tool call.
-func (h *ApprovalHandler) convertApprovalRequestToToolCall(req security.ApprovalRequest) (acp.RequestPermissionToolCall, error) {
+func (h *ApprovalHandler) convertApprovalRequestToToolCall(req safety.ApprovalRequest) (acp.RequestPermissionToolCall, error) {
 	// Extract tool name from command.
 	toolName := unknownValue
 	if req.Command != nil {

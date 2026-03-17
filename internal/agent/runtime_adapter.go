@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/dmytrogajewski/spin/internal/agent/executor"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
 // executorRuntimeAdapter adapts agent.Executor to executor.CommandExecutor interface.
@@ -22,7 +22,7 @@ func NewExecutorRuntimeAdapter(exec *Executor) executor.CommandExecutor {
 }
 
 // Execute implements executor.CommandExecutor interface.
-func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *security.Command, opts any) (*executor.CommandResult, error) {
+func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *safety.Command, opts any) (*executor.CommandResult, error) {
 	var execOpts *ExecuteOptions
 
 	if opts != nil {

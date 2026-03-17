@@ -18,7 +18,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
@@ -114,7 +114,8 @@ func openTUILogFile() io.Writer {
 }
 
 // setupTUIProvider creates and configures the TUI provider and UI components.
-func setupTUIProvider(ctx context.Context, cmd *cobra.Command, flags tuiFlags) (*config.V2, llm.Provider, *adapters.PureTTY, error) {
+// The out writer is used for TUI output; when nil it defaults to os.Stdout.
+func setupTUIProvider(ctx context.Context, cmd *cobra.Command, flags tuiFlags, out io.Writer) (*config.V2, llm.Provider, *adapters.PureTTY, error) {
 	cfg, err := config.Load(config.Source{
 		File: flagConfigFile(cmd),
 		Flags: config.FlagOverrides{
@@ -140,7 +141,11 @@ func setupTUIProvider(ctx context.Context, cmd *cobra.Command, flags tuiFlags) (
 		return nil, nil, nil, fmt.Errorf("create provider: %w", err)
 	}
 
-	ui, err := adapters.NewPureTTY(os.Stdout)
+	if out == nil {
+		out = os.Stdout
+	}
+
+	ui, err := adapters.NewPureTTY(out)
 	if err != nil {
 		provider.Close()
 
@@ -159,13 +164,18 @@ func configureMaxTokens(ui *adapters.PureTTY) {
 }
 
 // startTUIBackground starts the UI and streaming in the background.
-func startTUIBackground(ctx context.Context, ui *adapters.PureTTY) context.CancelFunc {
+// The errOut writer receives error messages; when nil it defaults to os.Stderr.
+func startTUIBackground(ctx context.Context, ui *adapters.PureTTY, errOut io.Writer) context.CancelFunc {
+	if errOut == nil {
+		errOut = os.Stderr
+	}
+
 	uiCtx, uiCancel := context.WithCancel(ctx)
 
 	go func() {
 		runErr := ui.Run(uiCtx)
 		if runErr != nil && !errors.Is(runErr, context.Canceled) {
-			fmt.Fprintf(os.Stderr, "TUI error: %v\n", runErr)
+			fmt.Fprintf(errOut, "TUI error: %v\n", runErr)
 		}
 	}()
 
@@ -294,13 +304,13 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 	flags := parseTUIFlags(cmd)
 	configureTUILogging(flags.debug)
 
-	cfg, provider, ui, err := setupTUIProvider(ctx, cmd, flags)
+	cfg, provider, ui, err := setupTUIProvider(ctx, cmd, flags, cmd.OutOrStdout())
 	if err != nil {
 		return err
 	}
 	defer provider.Close()
 
-	uiCancel := startTUIBackground(ctx, ui)
+	uiCancel := startTUIBackground(ctx, ui, cmd.ErrOrStderr())
 	defer uiCancel()
 	defer func() { _ = ui.Stop() }()
 
@@ -398,7 +408,7 @@ func createConversationForTUI(
 	}
 
 	// 3. Create approval handler (TUI-specific).
-	var approvalHandler security.ApprovalHandler
+	var approvalHandler safety.ApprovalHandler
 	if autoApprove {
 		approvalHandler = createAutoApproveHandler()
 	} else {

@@ -18,7 +18,7 @@ import (
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 )
 
@@ -39,8 +39,8 @@ func createTestRuntime(t *testing.T, workDir string) (agentexec.Runtime, *events
 	provider := llm.NewMockProvider("test")
 
 	// Auto-approve handler for tests.
-	approvalHandler := func(_ context.Context, req security.ApprovalRequest) security.ApprovalResponse {
-		return security.ApprovalResponse{
+	approvalHandler := func(_ context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
+		return safety.ApprovalResponse{
 			RequestID: req.ID,
 			Approved:  true,
 			Reason:    "test auto-approve",
@@ -50,7 +50,7 @@ func createTestRuntime(t *testing.T, workDir string) (agentexec.Runtime, *events
 	executor, err := agent.NewExecutor(workDir)
 	require.NoError(t, err)
 
-	validator := security.NewValidator()
+	validator := safety.NewValidator()
 
 	builtinRuntime, err := agentexec.NewBuiltinRuntime(agentexec.BuiltinRuntimeConfig{
 		WorkDir:         workDir,

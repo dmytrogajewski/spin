@@ -12,14 +12,13 @@ import (
 	"github.com/spf13/cobra"
 	termx "golang.org/x/term"
 
-	"github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
@@ -64,7 +63,7 @@ func runExec(cmd *cobra.Command, args []string) error {
 	setupSignalHandling(cancel)
 
 	// Parse prompt from args or stdin.
-	prompt, err := parsePrompt(args)
+	prompt, err := parsePrompt(args, cmd.InOrStdin())
 	if err != nil {
 		return err
 	}
@@ -76,7 +75,6 @@ func runExec(cmd *cobra.Command, args []string) error {
 	format, _ := cmd.Flags().GetString("format")
 	noStream, _ := cmd.Flags().GetBool("no-stream")
 	exitOnError, _ := cmd.Flags().GetBool("exit-on-error")
-
 	// Load configuration using new unified API.
 	cfg, err := config.Load(config.Source{
 		File: flagConfigFile(cmd),
@@ -166,15 +164,16 @@ func buildProvider(ctx context.Context, cfg *config.V2, authMgr *auth.Manager) (
 	return b.Build(ctx)
 }
 
-// parsePrompt parses the prompt from command line args or stdin.
-func parsePrompt(args []string) (string, error) {
+// parsePrompt parses the prompt from command line args or the given reader.
+// If no args are provided, it reads from r (typically os.Stdin).
+func parsePrompt(args []string, r io.Reader) (string, error) {
 	if len(args) > 0 {
 		// Join all args as prompt.
 		return args[0], nil
 	}
 
-	// Read from stdin.
-	data, err := io.ReadAll(os.Stdin)
+	// Read from the provided reader.
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return "", fmt.Errorf("read stdin: %w", err)
 	}
@@ -209,10 +208,16 @@ func resolveSessionID(storage session.Storage, workDir, prefix string) string {
 }
 
 // createExecUI creates the UI adapter for exec mode.
-func createExecUI() (ports.UI, error) {
+// The out writer is used for all output; when nil it defaults to os.Stdout.
+func createExecUI(out io.Writer) (ports.UI, error) {
+	if out == nil {
+		out = os.Stdout
+	}
+
 	opts := []adapters.PureTTYOption{adapters.WithExecMode()}
 
-	if !termx.IsTerminal(spinterm.SafeFd(os.Stdout.Fd())) || !termx.IsTerminal(spinterm.SafeFd(os.Stdin.Fd())) {
+	// Check if the writer is a real terminal; if not, use a mock TTY.
+	if f, ok := out.(*os.File); !ok || !termx.IsTerminal(spinterm.SafeFd(f.Fd())) {
 		const (
 			mockTermWidth  = 120
 			mockTermHeight = 30
@@ -222,41 +227,7 @@ func createExecUI() (ports.UI, error) {
 		opts = append(opts, adapters.WithTTY(mockTty))
 	}
 
-	return adapters.NewPureTTY(os.Stdout, opts...)
-}
-
-// buildConversation wires services into a conversation builder and builds the conversation.
-func buildConversation(
-	ctx context.Context, cfg *config.V2, workDir string,
-	builtinRuntime *executor.BuiltinRuntime, emitter *events.EventEmitter,
-	provider llm.Provider, services *ProtocolServices, cleanup func(),
-) (*conversation.Conversation, error) {
-	convBuilder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
-
-	if services.Git != nil {
-		convBuilder = convBuilder.WithGit(services.Git)
-	}
-
-	if services.Shell != nil {
-		convBuilder = convBuilder.WithShell(services.Shell)
-	}
-
-	if services.MCP != nil {
-		convBuilder = convBuilder.WithMCP(services.MCP)
-
-		if toolSelector := createToolSelector(ctx, services.MCP, nil, emitter, cfg, slog.Default()); toolSelector != nil {
-			convBuilder = convBuilder.WithToolSelector(toolSelector)
-		}
-	}
-
-	conv, err := convBuilder.Build(ctx)
-	if err != nil {
-		cleanup()
-
-		return nil, fmt.Errorf("build conversation: %w", err)
-	}
-
-	return conv, nil
+	return adapters.NewPureTTY(out, opts...)
 }
 
 // createConversationForExec creates a conversation configured for exec mode using the runtime pattern.
@@ -283,14 +254,14 @@ func createConversationForExec(
 		return nil, err
 	}
 
-	var approvalHandler security.ApprovalHandler
+	var approvalHandler safety.ApprovalHandler
 	if autoApprove {
 		approvalHandler = createAutoApproveHandler()
 	} else {
 		approvalHandler = createDenyHandler("exec mode requires --auto-approve for dangerous operations")
 	}
 
-	ui, err := createExecUI()
+	ui, err := createExecUI(nil)
 	if err != nil {
 		cleanup()
 
@@ -304,7 +275,34 @@ func createConversationForExec(
 		return nil, fmt.Errorf("create builtin runtime: %w", err)
 	}
 
-	return buildConversation(ctx, cfg, workDir, builtinRuntime, emitter, provider, services, cleanup)
+	convBuilder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
+
+	if services.Git != nil {
+		convBuilder = convBuilder.WithGit(services.Git)
+	}
+
+	if services.Shell != nil {
+		convBuilder = convBuilder.WithShell(services.Shell)
+	}
+
+	if services.MCP != nil {
+		convBuilder = convBuilder.WithMCP(services.MCP)
+
+		if toolSelector := createToolSelector(
+			ctx, services.MCP, nil, emitter, cfg, slog.Default(),
+		); toolSelector != nil {
+			convBuilder = convBuilder.WithToolSelector(toolSelector)
+		}
+	}
+
+	conv, convErr := convBuilder.Build(ctx)
+	if convErr != nil {
+		cleanup()
+
+		return nil, fmt.Errorf("build conversation: %w", convErr)
+	}
+
+	return conv, nil
 }
 
 // mockTTY implements term.TerminalController for non-terminal environments.
@@ -358,7 +356,7 @@ func startExecEventLoop(
 
 // executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
 func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, _ string, _, exitOnError bool) error {
-	ui, err := createExecUI()
+	ui, err := createExecUI(nil)
 	if err != nil {
 		return fmt.Errorf("create TUI: %w", err)
 	}

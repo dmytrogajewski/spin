@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/session"
 )
@@ -21,15 +20,16 @@ import (
 // user_message_chunk is only sent when replaying history in LoadSession.
 func TestPrompt_NoUserMessageChunk(t *testing.T) {
 	t.Parallel()
-	agentInstance := createTestAgent(t)
+	agentInstance, emitter := createTestAgentWithEmitter(t)
 
 	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
 	storage, err := session.NewFileStorage(t.TempDir())
 	require.NoError(t, err)
 
 	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
 	require.NoError(t, err)
+
+	setupConversationManager(t, acpAgent, agentInstance, emitter)
 
 	// Create a session.
 	sess := session.NewSession("/tmp/test")

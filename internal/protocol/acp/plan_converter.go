@@ -5,12 +5,10 @@ import (
 	"strings"
 
 	"github.com/coder/acp-go-sdk"
-
-	"github.com/dmytrogajewski/spin/internal/planning"
 )
 
-// convertOrchestrationPlanToACP converts a planning.Plan to ACP PlanEntry[].
-func convertOrchestrationPlanToACP(plan *planning.Plan) []acp.PlanEntry {
+// convertOrchestrationPlanToACP converts a Plan to ACP PlanEntry[].
+func convertOrchestrationPlanToACP(plan *Plan) []acp.PlanEntry {
 	if plan == nil || len(plan.Steps) == 0 {
 		return nil
 	}
@@ -19,7 +17,7 @@ func convertOrchestrationPlanToACP(plan *planning.Plan) []acp.PlanEntry {
 	for _, step := range plan.Steps {
 		entry := acp.PlanEntry{
 			Content:  buildStepContent(step),
-			Priority: mapStepPriority(step, plan),
+			Priority: mapStepPriority(step),
 			Status:   mapStepStatus(step.Status),
 		}
 		entries = append(entries, entry)
@@ -29,7 +27,7 @@ func convertOrchestrationPlanToACP(plan *planning.Plan) []acp.PlanEntry {
 }
 
 // buildStepContent builds the content string for a plan entry from a step.
-func buildStepContent(step planning.Step) string {
+func buildStepContent(step Step) string {
 	if step.Action != "" {
 		return fmt.Sprintf("%s: %s", step.Description, step.Action)
 	}
@@ -37,30 +35,30 @@ func buildStepContent(step planning.Step) string {
 	return step.Description
 }
 
-// mapStepStatus maps planning.StepStatus to acp.PlanEntryStatus.
-func mapStepStatus(status planning.StepStatus) acp.PlanEntryStatus {
+// mapStepStatus maps StepStatus to acp.PlanEntryStatus.
+func mapStepStatus(status StepStatus) acp.PlanEntryStatus {
 	switch status {
-	case planning.StepStatusPending:
+	case StepStatusPending:
 		return acp.PlanEntryStatusPending
-	case planning.StepStatusReady:
+	case StepStatusReady:
 		return acp.PlanEntryStatusPending // Ready steps are still pending from ACP perspective.
-	case planning.StepStatusRunning:
+	case StepStatusRunning:
 		return acp.PlanEntryStatus("in_progress") // ACP uses "in_progress" for running steps.
-	case planning.StepStatusCompleted:
+	case StepStatusCompleted:
 		return acp.PlanEntryStatus("completed")
-	case planning.StepStatusFailed:
+	case StepStatusFailed:
 		return acp.PlanEntryStatus("failed")
-	case planning.StepStatusSkipped:
+	case StepStatusSkipped:
 		return acp.PlanEntryStatus("canceled")
 	default:
 		return acp.PlanEntryStatusPending
 	}
 }
 
-// mapStepPriority maps step priority based on dependencies.
+// mapStepPriority maps step priority based on description heuristics.
 // Steps with no dependencies are high priority (can start immediately).
 // Steps with dependencies are medium priority.
-func mapStepPriority(step planning.Step, _ *planning.Plan) acp.PlanEntryPriority {
+func mapStepPriority(step Step) acp.PlanEntryPriority {
 	lowerDesc := strings.ToLower(step.Description)
 
 	// Heuristics: check for explicit priority keywords.

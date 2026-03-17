@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -136,6 +135,62 @@ func (e Event) ACELearningData() (ACELearningData, bool) {
 	return data, ok
 }
 
+// CompactionTriggeredData returns the event data as CompactionTriggeredData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) CompactionTriggeredData() (CompactionTriggeredData, bool) {
+	data, ok := e.Data.(CompactionTriggeredData)
+
+	return data, ok
+}
+
+// DoomLoopDetectedData returns the event data as DoomLoopDetectedData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) DoomLoopDetectedData() (DoomLoopDetectedData, bool) {
+	data, ok := e.Data.(DoomLoopDetectedData)
+
+	return data, ok
+}
+
+// ReminderInjectedData returns the event data as ReminderInjectedData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) ReminderInjectedData() (ReminderInjectedData, bool) {
+	data, ok := e.Data.(ReminderInjectedData)
+
+	return data, ok
+}
+
+// SubagentSpawnData returns the event data as SubagentSpawnData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) SubagentSpawnData() (SubagentSpawnData, bool) {
+	data, ok := e.Data.(SubagentSpawnData)
+
+	return data, ok
+}
+
+// SubagentCompleteData returns the event data as SubagentCompleteData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) SubagentCompleteData() (SubagentCompleteData, bool) {
+	data, ok := e.Data.(SubagentCompleteData)
+
+	return data, ok
+}
+
+// PhaseThinkingData returns the event data as PhaseThinkingData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) PhaseThinkingData() (PhaseThinkingData, bool) {
+	data, ok := e.Data.(PhaseThinkingData)
+
+	return data, ok
+}
+
+// PhaseCritiqueData returns the event data as PhaseCritiqueData if possible.
+// Returns the data and true if successful, zero value and false otherwise.
+func (e Event) PhaseCritiqueData() (PhaseCritiqueData, bool) {
+	data, ok := e.Data.(PhaseCritiqueData)
+
+	return data, ok
+}
+
 // EventType represents the category of event.
 type EventType int
 
@@ -193,6 +248,33 @@ const (
 	EventWarning
 	// EventInfo represents a system info event.
 	EventInfo
+
+	// EventCompactionTriggered indicates context compaction was activated.
+	EventCompactionTriggered
+	// EventDoomLoopDetected indicates a doom-loop fingerprint threshold was exceeded.
+	EventDoomLoopDetected
+	// EventReminderInjected indicates a system reminder was injected.
+	EventReminderInjected
+	// EventSubagentSpawn indicates a subagent was launched.
+	EventSubagentSpawn
+	// EventSubagentComplete indicates a subagent finished execution.
+	EventSubagentComplete
+	// EventPhaseThinking indicates a thinking LLM call started or completed.
+	EventPhaseThinking
+	// EventPhaseCritique indicates a critique evaluation started or completed.
+	EventPhaseCritique
+	// EventUndoRecorded indicates a file operation was recorded for undo.
+	EventUndoRecorded
+	// EventBackgroundTaskStarted indicates a background task was launched.
+	EventBackgroundTaskStarted
+	// EventBackgroundTaskStopped indicates a background task has stopped.
+	EventBackgroundTaskStopped
+	// EventSnapshotTaken indicates a working-tree snapshot was captured.
+	EventSnapshotTaken
+	// EventSessionIndexRebuilt indicates the session index was rebuilt from metadata files.
+	EventSessionIndexRebuilt
+	// EventLSPDiagnostics indicates LSP diagnostics were received from a language server.
+	EventLSPDiagnostics
 )
 
 // String returns the string representation of EventType.
@@ -222,6 +304,19 @@ func (e EventType) String() string {
 		"error",
 		"warning",
 		"info",
+		"compaction_triggered",
+		"doom_loop_detected",
+		"reminder_injected",
+		"subagent_spawn",
+		"subagent_complete",
+		"phase_thinking",
+		"phase_critique",
+		"undo_recorded",
+		"background_task_started",
+		"background_task_stopped",
+		"snapshot_taken",
+		"session_index_rebuilt",
+		"lsp_diagnostics",
 	}
 
 	if int(e) < len(names) {
@@ -269,7 +364,7 @@ type ToolCallCompleteData struct {
 
 // PlanUpdateData contains the updated plan with current step statuses.
 type PlanUpdateData struct {
-	Plan *planning.Plan `json:"plan"`
+	Plan any `json:"plan"`
 }
 
 // TurnEventData contains turn lifecycle information.
@@ -343,6 +438,52 @@ type ErrorData struct {
 	Message string `json:"message"`
 	Code    string `json:"code"`
 	Details string `json:"details,omitempty"`
+}
+
+// CompactionTriggeredData contains context compaction event information.
+type CompactionTriggeredData struct {
+	Turn  int    `json:"turn"`
+	Stage string `json:"stage"`
+}
+
+// DoomLoopDetectedData contains doom-loop detection event information.
+type DoomLoopDetectedData struct {
+	Turn        int    `json:"turn"`
+	Fingerprint string `json:"fingerprint"`
+	Count       int    `json:"count"`
+	ToolName    string `json:"tool_name"`
+}
+
+// ReminderInjectedData contains reminder injection event information.
+type ReminderInjectedData struct {
+	Turn  int `json:"turn"`
+	Count int `json:"count"`
+}
+
+// SubagentSpawnData contains subagent launch event information.
+type SubagentSpawnData struct {
+	AgentType string `json:"agent_type"`
+	Query     string `json:"query"`
+}
+
+// SubagentCompleteData contains subagent completion event information.
+type SubagentCompleteData struct {
+	AgentType    string `json:"agent_type"`
+	Summary      string `json:"summary"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
+}
+
+// PhaseThinkingData contains thinking phase event information.
+type PhaseThinkingData struct {
+	Turn   int    `json:"turn"`
+	Status string `json:"status"`
+}
+
+// PhaseCritiqueData contains critique phase event information.
+type PhaseCritiqueData struct {
+	Turn   int    `json:"turn"`
+	Status string `json:"status"`
 }
 
 // BackpressureMode defines how the emitter handles slow consumers.

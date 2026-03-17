@@ -124,8 +124,8 @@ func TestDetector_Check_InsufficientHistory(t *testing.T) {
 		t.Errorf("Detector.Check() unexpected error: %v", err)
 	}
 
-	if result.Type != CycleNone {
-		t.Errorf("Detector.Check() with insufficient history, Type = %v, want %v", result.Type, CycleNone)
+	if result.Type != None {
+		t.Errorf("Detector.Check() with insufficient history, Type = %v, want %v", result.Type, None)
 	}
 
 	if result.Confidence != 0.0 {
@@ -162,8 +162,8 @@ func TestDetector_Check_RepeatedTool(t *testing.T) {
 		t.Errorf("Detector.Check() unexpected error: %v", err)
 	}
 
-	if result.Type != CycleRepeatedTool {
-		t.Errorf("Detector.Check() Type = %v, want %v", result.Type, CycleRepeatedTool)
+	if result.Type != RepeatedTool {
+		t.Errorf("Detector.Check() Type = %v, want %v", result.Type, RepeatedTool)
 	}
 
 	if result.Confidence != 0.9 {
@@ -203,8 +203,8 @@ func TestDetector_Check_SameError(t *testing.T) {
 		t.Errorf("Detector.Check() unexpected error: %v", err)
 	}
 
-	if result.Type != CycleSameError {
-		t.Errorf("Detector.Check() Type = %v, want %v", result.Type, CycleSameError)
+	if result.Type != SameError {
+		t.Errorf("Detector.Check() Type = %v, want %v", result.Type, SameError)
 	}
 
 	if result.Confidence != 0.95 {
@@ -248,8 +248,8 @@ func TestDetector_Check_Oscillation(t *testing.T) {
 
 	// The detector might detect similar responses instead of oscillation
 	// Both are valid cycle detections.
-	if result.Type != CycleOscillation && result.Type != CycleSimilarResponses {
-		t.Errorf("Detector.Check() Type = %v, want %v or %v", result.Type, CycleOscillation, CycleSimilarResponses)
+	if result.Type != Oscillation && result.Type != SimilarResponses {
+		t.Errorf("Detector.Check() Type = %v, want %v or %v", result.Type, Oscillation, SimilarResponses)
 	}
 
 	if result.Confidence <= 0.0 {
@@ -290,8 +290,8 @@ func TestDetector_Check_SimilarResponses(t *testing.T) {
 		t.Errorf("Detector.Check() unexpected error: %v", err)
 	}
 
-	if result.Type != CycleSimilarResponses {
-		t.Errorf("Detector.Check() Type = %v, want %v", result.Type, CycleSimilarResponses)
+	if result.Type != SimilarResponses {
+		t.Errorf("Detector.Check() Type = %v, want %v", result.Type, SimilarResponses)
 	}
 
 	if result.Confidence <= 0.0 {
@@ -449,8 +449,8 @@ func TestDetector_Check_Disabled(t *testing.T) {
 		t.Errorf("Detector.Check() unexpected error: %v", err)
 	}
 
-	if result.Type != CycleNone {
-		t.Errorf("Detector.Check() with disabled detector, Type = %v, want %v", result.Type, CycleNone)
+	if result.Type != None {
+		t.Errorf("Detector.Check() with disabled detector, Type = %v, want %v", result.Type, None)
 	}
 }
 
@@ -506,8 +506,8 @@ func TestCheckRepeatedTool_SameToolDifferentParams(t *testing.T) {
 		t.Fatalf("Check() failed: %v", err)
 	}
 
-	if result.Type != CycleRepeatedTool {
-		t.Errorf("Expected CycleRepeatedTool after 3 identical list_directory calls, got %v", result.Type)
+	if result.Type != RepeatedTool {
+		t.Errorf("Expected RepeatedTool after 3 identical list_directory calls, got %v", result.Type)
 	}
 
 	// Turn 4: ls advanced-features-20251012 (list SUBDIRECTORY - DIFFERENT params!)
@@ -524,7 +524,7 @@ func TestCheckRepeatedTool_SameToolDifferentParams(t *testing.T) {
 		t.Fatalf("Check() failed: %v", err)
 	}
 
-	if result.Type == CycleRepeatedTool {
+	if result.Type == RepeatedTool {
 		t.Error("BUG: Cycle detected when listing DIFFERENT directory")
 		t.Errorf("Tool: list_directory with different params should NOT trigger cycle")
 		t.Errorf("Turn 1-3: ls .  Turn 4: ls advanced-features-20251012")
@@ -563,8 +563,8 @@ func TestCheckRepeatedTool_SameToolSameParams(t *testing.T) {
 		t.Fatalf("Check() failed: %v", err)
 	}
 
-	if result.Type != CycleRepeatedTool {
-		t.Errorf("Expected CycleRepeatedTool for 3 identical calls, got %v", result.Type)
+	if result.Type != RepeatedTool {
+		t.Errorf("Expected RepeatedTool for 3 identical calls, got %v", result.Type)
 	}
 }
 
@@ -607,7 +607,7 @@ func TestCheckRepeatedTool_DifferentTools(t *testing.T) {
 		t.Fatalf("Check() failed: %v", err)
 	}
 
-	if result.Type == CycleRepeatedTool {
+	if result.Type == RepeatedTool {
 		t.Error("Different tools should not trigger cycle detection")
 	}
 }
@@ -654,7 +654,7 @@ func TestCheckRepeatedTool_ExploratoryPattern(t *testing.T) {
 		t.Fatalf("Check() failed: %v", err)
 	}
 
-	if result.Type == CycleRepeatedTool {
+	if result.Type == RepeatedTool {
 		t.Error("BUG: Exploratory filesystem navigation incorrectly flagged as cycle")
 		t.Error("Each list_directory call had different parameters (different dirs)")
 		t.Error("This is normal agent behavior, not a stuck loop")

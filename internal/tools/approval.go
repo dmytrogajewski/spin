@@ -30,7 +30,7 @@ func (r RiskLevel) String() string {
 	case RiskCritical:
 		return "critical"
 	default:
-		return "unknown"
+		return unknownStatus
 	}
 }
 

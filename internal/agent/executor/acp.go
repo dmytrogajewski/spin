@@ -10,7 +10,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tools"
@@ -38,7 +38,7 @@ type ACPRuntime struct {
 	storage          session.Storage
 	sessionID        string
 	acpAgent         ACPAgentInterface // Use interface to avoid import cycle.
-	approvalHandler  security.ApprovalHandler
+	approvalHandler  safety.ApprovalHandler
 	clientCaps       *acpsdk.ClientCapabilities
 	shellService     *shellpkg.Service
 	gitService       *gitpkg.Service
@@ -56,7 +56,7 @@ type ACPConfig struct {
 	Storage          session.Storage
 	SessionID        string
 	ACPAgent         ACPAgentInterface
-	ApprovalHandler  security.ApprovalHandler
+	ApprovalHandler  safety.ApprovalHandler
 	ClientCaps       *acpsdk.ClientCapabilities
 	ShellService     *shellpkg.Service
 	GitService       *gitpkg.Service
@@ -145,13 +145,13 @@ func (r *ACPRuntime) NotificationSender() NotificationSender {
 }
 
 // ApprovalHandler returns the ACP approval handler.
-func (r *ACPRuntime) ApprovalHandler() security.ApprovalHandler {
+func (r *ACPRuntime) ApprovalHandler() safety.ApprovalHandler {
 	// Return a wrapper that delegates to the current handler.
-	return func(ctx context.Context, req security.ApprovalRequest) security.ApprovalResponse {
+	return func(ctx context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
 		handler := r.approvalHandler
 		if handler == nil {
 			// Fallback: auto-approve.
-			return security.ApprovalResponse{Approved: true}
+			return safety.ApprovalResponse{Approved: true}
 		}
 
 		return handler(ctx, req)
@@ -174,7 +174,7 @@ func (r *ACPRuntime) SetACPAgent(acpAgent ACPAgentInterface) {
 }
 
 // SetApprovalHandler updates the approval handler in the runtime.
-func (r *ACPRuntime) SetApprovalHandler(handler security.ApprovalHandler) {
+func (r *ACPRuntime) SetApprovalHandler(handler safety.ApprovalHandler) {
 	r.approvalHandler = handler
 }
 

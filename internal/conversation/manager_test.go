@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dmytrogajewski/spin/internal/history"
+	"github.com/dmytrogajewski/spin/internal/contexteng/history"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )

@@ -6,16 +6,28 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/dmytrogajewski/spin/internal/ace"
 	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/caller"
 	"github.com/dmytrogajewski/spin/internal/agent/executor"
+	"github.com/dmytrogajewski/spin/internal/agent/harness"
+	"github.com/dmytrogajewski/spin/internal/agent/harness/bridge"
+	acemw "github.com/dmytrogajewski/spin/internal/agent/middleware/ace"
+	"github.com/dmytrogajewski/spin/internal/agent/prompt"
+	"github.com/dmytrogajewski/spin/internal/agent/scaffold"
+	"github.com/dmytrogajewski/spin/internal/agent/tool"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/dmytrogajewski/spin/internal/contexteng/adapter"
+	"github.com/dmytrogajewski/spin/internal/contexteng/compactor"
+	"github.com/dmytrogajewski/spin/internal/contexteng/observation"
 	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
+	"github.com/dmytrogajewski/spin/internal/tokenizer"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -39,8 +51,8 @@ type Builder struct {
 	// Optional overrides.
 	llm          llm.Provider
 	storage      session.Storage
-	toolRegistry *tools.Registry     // Optional pre-built tool registry.
-	toolSelector *agent.ToolSelector // Dynamic tool selection - optional.
+	toolRegistry *tools.Registry // Optional pre-built tool registry.
+	toolSelector *tool.Selector  // Dynamic tool selection - optional.
 	logger       *slog.Logger
 
 	// Managed resources.
@@ -103,8 +115,17 @@ func (b *Builder) WithMCP(service *mcppkg.Service) *Builder {
 }
 
 // WithToolSelector sets the dynamic tool selector.
-func (b *Builder) WithToolSelector(selector *agent.ToolSelector) *Builder {
+func (b *Builder) WithToolSelector(selector *tool.Selector) *Builder {
 	b.toolSelector = selector
+
+	return b
+}
+
+// WithAuthManager sets a pre-configured auth manager, preventing the builder
+// from creating one internally. This is useful in tests to avoid side-effects
+// from the default keystore (e.g., D-Bus goroutine leaks on Linux).
+func (b *Builder) WithAuthManager(mgr *auth.Manager) *Builder {
+	b.authManager = mgr
 
 	return b
 }
@@ -155,9 +176,17 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	}
 
 	// Build agent (orchestration handled by conversation).
-	agentInstance, err := b.buildAgent(ctx, exec, env)
+	result, err := b.buildAgent(ctx, exec, env)
 	if err != nil {
 		return nil, fmt.Errorf("build agent: %w", err)
+	}
+
+	// Build harness executor for the conversation execution path.
+	harnessExec, err := b.buildHarnessExecutor(
+		result.toolReg, result.toolRuntime, result.aceService, result.aceConfig,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build harness executor: %w", err)
 	}
 
 	// Create history.
@@ -169,16 +198,17 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 
 	// Build the Conversation with unified ID.
 	conv := &Conversation{
-		gitService:    b.gitService,
-		shellService:  b.shellService,
-		mcpService:    b.mcpService,
-		memoryService: b.memoryService,
-		agent:         agentInstance,
-		history:       hist,
-		emitter:       b.emitter,
-		taskMode:      "regular",
-		id:            convID,
-		workDir:       b.workDir,
+		gitService:      b.gitService,
+		shellService:    b.shellService,
+		mcpService:      b.mcpService,
+		memoryService:   b.memoryService,
+		agent:           result.agent,
+		history:         hist,
+		emitter:         b.emitter,
+		taskMode:        "regular",
+		id:              convID,
+		workDir:         b.workDir,
+		harnessExecutor: harnessExec,
 	}
 
 	// Attach JSONL event logger if debug mode.
@@ -230,9 +260,11 @@ func (b *Builder) initializeCoreDependencies() error {
 		b.storage = fs
 	}
 
-	// Auth manager (internal resource).
-	keystore := auth.NewKeystore()
-	b.authManager = auth.NewManager(keystore)
+	// Auth manager (internal resource) - only create if not already set.
+	if b.authManager == nil {
+		keystore := auth.NewKeystore()
+		b.authManager = auth.NewManager(keystore)
+	}
 
 	return nil
 }
@@ -301,6 +333,96 @@ func (b *Builder) addGitContext(ctx context.Context, env *agent.Environment) {
 	if b.logger != nil {
 		b.logger.DebugContext(ctx, "git context added", "branch", info.Branch, "clean", info.IsClean)
 	}
+}
+
+// buildHarnessExecutor constructs the experimental harness executor from shared components.
+func (b *Builder) buildHarnessExecutor(
+	toolReg *tools.Registry,
+	toolRuntime *tool.Runtime,
+	aceSvc *ace.Service,
+	aceConfig *ace.Config,
+) (*bridge.TurnExecutor, error) {
+	logger := b.getLogger()
+
+	// Create a dedicated LLMCaller for the harness bridge with router support.
+	pb := prompt.New(b.llm, logger)
+	router := llm.NewSingleProviderRouter(b.llm)
+
+	llmCaller := caller.New(caller.Config{
+		Router:        router,
+		Role:          llm.RoleAction,
+		PromptBuilder: pb,
+		Emitter:       b.emitter,
+		Logger:        logger,
+		Temperature:   b.cfg.LLM.Temperature,
+		MaxTokens:     b.cfg.LLM.MaxTokens,
+	})
+
+	// Build a minimal scaffold.Spec from the tool registry.
+	spec := &scaffold.Spec{
+		ToolSchemas: toolReg.ListSchemas(),
+		Config: scaffold.SpecConfig{
+			MaxTurns: b.cfg.Agent.MaxTurns,
+		},
+	}
+
+	// Build middleware chain.
+	middlewares := b.buildHarnessMiddlewares(aceSvc, aceConfig, logger)
+
+	harnessOpts := b.buildHarnessOpts()
+
+	harnessExec, err := bridge.BuildExecutor(bridge.Config{
+		Spec:        spec,
+		LLMCaller:   llmCaller,
+		Registry:    toolReg,
+		Runtime:     toolRuntime,
+		Logger:      logger,
+		Middlewares: middlewares,
+		HarnessOpts: harnessOpts,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bridge build: %w", err)
+	}
+
+	return bridge.NewTurnExecutor(harnessExec), nil
+}
+
+// buildHarnessMiddlewares constructs the middleware chain for the harness executor.
+func (b *Builder) buildHarnessMiddlewares(
+	aceSvc *ace.Service,
+	aceConfig *ace.Config,
+	logger *slog.Logger,
+) []harness.Middleware {
+	var middlewares []harness.Middleware
+
+	if aceSvc != nil && aceConfig != nil {
+		inner := acemw.New(aceSvc, aceConfig, b.emitter, logger)
+		middlewares = append(middlewares, acemw.NewHarnessAdapter(inner))
+	}
+
+	return middlewares
+}
+
+// buildHarnessOpts creates harness options for contexteng adapters.
+func (b *Builder) buildHarnessOpts() []harness.Option {
+	var opts []harness.Option
+
+	// Wire compactor adapter with LLM context window from config.
+	if b.cfg.LLM.ContextWindow > 0 {
+		tok := &tokenizer.SimpleTokenizer{}
+		comp := compactor.NewCompactor(tok, b.cfg.LLM.ContextWindow)
+		opts = append(opts, harness.WithCompactor(
+			adapter.NewCompactorAdapter(comp),
+		))
+	}
+
+	// Wire observation summarizer (always available, no config dependency).
+	obs := observation.NewSummarizer()
+	opts = append(opts, harness.WithObservationSummarizer(
+		adapter.NewObservationAdapter(obs),
+	))
+
+	return opts
 }
 
 // addShellContext enriches environment with Shell context information.

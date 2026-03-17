@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/security"
+	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/output"
 	"github.com/dmytrogajewski/spin/internal/ui/prompt"
@@ -291,12 +291,12 @@ func TestApprovalDialog_KeyboardInput(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Create approval request.
-	cmd := &security.Command{
+	cmd := &safety.Command{
 		Program: "rm",
 		Args:    []string{"-rf", "/"},
 		Raw:     "rm -rf /",
 	}
-	req := security.ApprovalRequest{
+	req := safety.ApprovalRequest{
 		ID:      "test-123",
 		Command: cmd,
 		Reason:  "Testing approval dialog keyboard input",
@@ -304,7 +304,7 @@ func TestApprovalDialog_KeyboardInput(t *testing.T) {
 	}
 
 	// Start ShowApprovalDialog in background (it blocks).
-	responseCh := make(chan security.ApprovalResponse, 1)
+	responseCh := make(chan safety.ApprovalResponse, 1)
 
 	go func() {
 		resp := ui.ShowApprovalDialog(context.Background(), req)
@@ -370,14 +370,14 @@ func TestApprovalDialog_DenyKey(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	req := security.ApprovalRequest{
+	req := safety.ApprovalRequest{
 		ID:      "test-456",
-		Command: &security.Command{Program: "rm", Raw: "rm file.txt"},
+		Command: &safety.Command{Program: "rm", Raw: "rm file.txt"},
 		Reason:  "Testing deny",
 		WorkDir: "/tmp",
 	}
 
-	responseCh := make(chan security.ApprovalResponse, 1)
+	responseCh := make(chan safety.ApprovalResponse, 1)
 
 	go func() {
 		resp := ui.ShowApprovalDialog(context.Background(), req)
@@ -644,9 +644,9 @@ func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
 	ui.mode = ModeApproval
 	ui.mu.Unlock()
 
-	req := security.ApprovalRequest{
+	req := safety.ApprovalRequest{
 		ID:      "test-approval-123",
-		Command: &security.Command{Program: "rm", Args: []string{"-rf", "/tmp/build"}, Raw: "rm -rf /tmp/build"},
+		Command: &safety.Command{Program: "rm", Args: []string{"-rf", "/tmp/build"}, Raw: "rm -rf /tmp/build"},
 		Reason:  "Testing status bar not overwritten",
 		WorkDir: "/tmp",
 	}

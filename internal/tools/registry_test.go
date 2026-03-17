@@ -1023,6 +1023,7 @@ func TestNewDefaultRegistry_EquivalentToManual(t *testing.T) {
 	manual := NewRegistry()
 	_ = manual.Register(NewReadFileTool())
 	_ = manual.Register(NewWriteFileTool())
+	_ = manual.Register(NewEditFileTool())
 	_ = manual.Register(NewListDirectoryTool())
 	_ = manual.Register(NewShellCommandTool(nil, nil, nil))
 	_ = manual.Register(NewGetContextTool(env))
@@ -1078,14 +1079,14 @@ func TestNewDefaultRegistry_AllToolsRegistered(t *testing.T) {
 	env := &testEnv{WorkDir: workDir}
 	registry := NewDefaultRegistry(workDir, env)
 
-	// Verify we have exactly 8 tools (matching BuiltinTools count).
-	tools := registry.List()
-	if len(tools) != 8 {
-		t.Errorf("should have exactly 8 builtin tools, got %d", len(tools))
+	// Verify we have exactly 9 tools (matching BuiltinTools count).
+	allTools := registry.List()
+	if len(allTools) != 9 {
+		t.Errorf("should have exactly 9 builtin tools, got %d", len(allTools))
 	}
 
 	// Verify each tool has valid name, description, and schema.
-	for _, tool := range tools {
+	for _, tool := range allTools {
 		if tool.Name() == "" {
 			t.Error("tool should have non-empty name")
 		}

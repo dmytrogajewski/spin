@@ -13,7 +13,6 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/mcp"
-	"github.com/dmytrogajewski/spin/internal/planning"
 	"github.com/dmytrogajewski/spin/internal/session"
 )
 
@@ -193,9 +192,9 @@ func TestDetectPlanFromOutput_EmptyOutput(t *testing.T) {
 	assert.Empty(t, entries)
 }
 
-// Helper for tests to wrap planning.DetectPlanFromText.
+// Helper for tests to wrap DetectPlanFromText.
 func detectPlanFromOutput(output string) []acp.PlanEntry {
-	plan := planning.DetectPlanFromText(output)
+	plan := DetectPlanFromText(output)
 
 	return convertOrchestrationPlanToACP(plan)
 }

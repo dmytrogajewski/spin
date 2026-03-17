@@ -15,13 +15,19 @@ import (
 	"github.com/coder/acp-go-sdk"
 	"github.com/spf13/cobra"
 
+	"github.com/dmytrogajewski/spin/internal/ace"
 	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/caller"
 	agentexec "github.com/dmytrogajewski/spin/internal/agent/executor"
+	"github.com/dmytrogajewski/spin/internal/agent/harness/bridge"
+	"github.com/dmytrogajewski/spin/internal/agent/prompt"
+	"github.com/dmytrogajewski/spin/internal/agent/scaffold"
+	"github.com/dmytrogajewski/spin/internal/agent/tool"
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/dmytrogajewski/spin/internal/contexteng/history"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/history"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
 	"github.com/dmytrogajewski/spin/internal/mcp"
@@ -178,7 +184,7 @@ func wireACPAgent(
 	acpApprovalHandler := acppkg.NewApprovalHandler(acpAgent, acpApprovalTimeout)
 	acpRuntime.SetApprovalHandler(acpApprovalHandler.HandleApprovalRequest)
 	acpAgent.SetApprovalHandler(acpApprovalHandler)
-	acpAgent.SetApprovalService(coreAgent.GetSecurityService().ApprovalService())
+	acpAgent.SetApprovalService(coreAgent.SecurityService().ApprovalService())
 
 	conn := acp.NewAgentSideConnection(acpAgent, os.Stdout, os.Stdin)
 	acpAgent.SetConnection(conn)
@@ -193,7 +199,7 @@ func wireACPAgent(
 }
 
 // createACPConversationManager creates the conversation manager for the ACP server.
-func createACPConversationManager(cfg *config.V2, coreAgent *agent.Agent, infra *acpInfra) (*conversation.Manager, history.Storage, error) {
+func createACPConversationManager(cfg *config.V2, core *coreAgentResult, infra *acpInfra) (*conversation.Manager, history.Storage, error) {
 	historyDir := cfg.Agent.SessionDir
 	if historyDir == "" {
 		historyDir = "~/.spin/sessions"
@@ -208,11 +214,12 @@ func createACPConversationManager(cfg *config.V2, coreAgent *agent.Agent, infra 
 
 	convFactory := func(_ context.Context, sessionID string, sessWorkDir string) (*conversation.Conversation, error) {
 		return conversation.NewFromAgent(conversation.NewFromAgentConfig{
-			Agent:     coreAgent,
-			Emitter:   infra.emitter,
-			WorkDir:   sessWorkDir,
-			ID:        sessionID,
-			MaxTokens: maxTokens,
+			Agent:           core.agent,
+			HarnessExecutor: core.harnessExecutor,
+			Emitter:         infra.emitter,
+			WorkDir:         sessWorkDir,
+			ID:              sessionID,
+			MaxTokens:       maxTokens,
 		})
 	}
 
@@ -259,24 +266,24 @@ func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagO
 		return fmt.Errorf("create ACP runtime: %w", err)
 	}
 
-	coreAgent, err := buildCoreAgent(ctx, cfg, infra.provider, workDir, infra.emitter, acpRuntime)
+	coreResult, err := buildCoreAgent(ctx, cfg, infra.provider, workDir, infra.emitter, acpRuntime)
 	if err != nil {
 		return fmt.Errorf("build core agent: %w", err)
 	}
 
 	mcpService := mcp.NewService(mcp.NewDefaultRegistryManager(infra.logger))
 
-	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreAgent, mcpService, infra.emitter, infra.storage)
+	acpAgent, err := acppkg.NewSpinACPAgentWithStorage(coreResult.agent, mcpService, infra.emitter, infra.storage)
 	if err != nil {
 		return fmt.Errorf("create ACP protocol adapter: %w", err)
 	}
 
-	convManager, histStorage, err := createACPConversationManager(cfg, coreAgent, infra)
+	convManager, histStorage, err := createACPConversationManager(cfg, coreResult, infra)
 	if err != nil {
 		return err
 	}
 
-	conn := wireACPAgent(acpAgent, acpRuntime, coreAgent, convManager, histStorage)
+	conn := wireACPAgent(acpAgent, acpRuntime, coreResult.agent, convManager, histStorage)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -359,6 +366,12 @@ func buildProviderForACP(
 }
 
 // buildCoreAgent constructs the core agent with all required services and dependencies.
+// coreAgentResult holds the agent and harness executor built together.
+type coreAgentResult struct {
+	agent           *agent.Agent
+	harnessExecutor *bridge.TurnExecutor
+}
+
 func buildCoreAgent(
 	ctx context.Context,
 	cfg *config.V2,
@@ -366,7 +379,7 @@ func buildCoreAgent(
 	workDir string,
 	emitter *events.EventEmitter,
 	rt agentexec.Runtime,
-) (*agent.Agent, error) {
+) (*coreAgentResult, error) {
 	agentBuilder := agent.NewBuilder().
 		WithConfig(cfg).
 		WithProvider(provider).
@@ -377,7 +390,6 @@ func buildCoreAgent(
 	environment := agentBuilder.BuildEnvironment(ctx)
 	securityService := agentBuilder.BuildSecurityService()
 	detectionService := agentBuilder.BuildDetectionService()
-	planningService := agentBuilder.BuildPlanningService()
 	executor := agentBuilder.BuildExecutor()
 	toolExecutor := agent.NewToolExecutorAdapter(executor)
 
@@ -389,7 +401,7 @@ func buildCoreAgent(
 	toolRegistry := tools.NewRegistry()
 	rt.RegisterTools(toolRegistry)
 
-	toolRuntime := agent.NewToolRuntime(agent.ToolRuntimeConfig{
+	toolRuntime := tool.NewRuntime(tool.RuntimeConfig{
 		Registry:        toolRegistry,
 		Validator:       securityService.Validator(),
 		ApprovalService: securityService.ApprovalService(),
@@ -398,25 +410,84 @@ func buildCoreAgent(
 	})
 
 	opts := agentBuilder.BuildOptions()
+	aceSvc, aceConfig := buildACEServices(ctx, cfg, agentBuilder)
 
-	if cfg != nil && cfg.ACE.Enabled {
-		aceSvc, err := agentBuilder.BuildACEService(ctx)
-		if err == nil {
-			opts = append(opts, agent.WithACEService(aceSvc))
-			aceConfig := agent.ConvertACEConfig(&cfg.ACE)
-			opts = append(opts, agent.WithACEConfig(aceConfig))
-		}
+	if aceSvc != nil {
+		opts = append(opts, agent.WithACEService(aceSvc), agent.WithACEConfig(aceConfig))
 	}
 
 	agentInstance, err := agent.NewAgent(
 		provider, securityService, detectionService, toolRuntime,
-		planningService, environment, emitter, opts...,
+		environment, emitter, opts...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("build agent: %w", err)
 	}
 
-	return agentInstance, nil
+	// Build harness executor for conversation turn execution.
+	harnessExec, err := buildACPHarnessExecutor(cfg, provider, emitter, toolRegistry, toolRuntime)
+	if err != nil {
+		return nil, fmt.Errorf("build harness executor: %w", err)
+	}
+
+	return &coreAgentResult{
+		agent:           agentInstance,
+		harnessExecutor: harnessExec,
+	}, nil
+}
+
+// buildACPHarnessExecutor creates a harness executor for ACP conversations.
+func buildACPHarnessExecutor(
+	cfg *config.V2,
+	provider llm.Provider,
+	emitter *events.EventEmitter,
+	toolRegistry *tools.Registry,
+	toolRuntime *tool.Runtime,
+) (*bridge.TurnExecutor, error) {
+	logger := slog.Default()
+	pb := prompt.New(provider, logger)
+
+	llmCaller := caller.New(caller.Config{
+		Provider:      provider,
+		PromptBuilder: pb,
+		Emitter:       emitter,
+		Logger:        logger,
+		Temperature:   cfg.LLM.Temperature,
+		MaxTokens:     cfg.LLM.MaxTokens,
+	})
+
+	spec := &scaffold.Spec{
+		ToolSchemas: toolRegistry.ListSchemas(),
+		Config: scaffold.SpecConfig{
+			MaxTurns: cfg.Agent.MaxTurns,
+		},
+	}
+
+	harnessExec, err := bridge.BuildExecutor(bridge.Config{
+		Spec:      spec,
+		LLMCaller: llmCaller,
+		Registry:  toolRegistry,
+		Runtime:   toolRuntime,
+		Logger:    logger,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bridge build: %w", err)
+	}
+
+	return bridge.NewTurnExecutor(harnessExec), nil
+}
+
+func buildACEServices(ctx context.Context, cfg *config.V2, ab *agent.Builder) (*ace.Service, *ace.Config) {
+	if cfg == nil || !cfg.ACE.Enabled {
+		return nil, nil
+	}
+
+	svc, err := ab.BuildACEService(ctx)
+	if err != nil {
+		return nil, nil
+	}
+
+	return svc, ace.ConvertConfig(&cfg.ACE)
 }
 
 // setupACPServerSignalHandling configures signal handlers for graceful shutdown.

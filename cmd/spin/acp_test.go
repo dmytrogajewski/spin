@@ -62,7 +62,7 @@ func createACPAgentComponents(
 	coreAgent, err := buildCoreAgent(context.Background(), cfg, provider, workDir, emitter, acpRuntime)
 	require.NoError(t, err)
 
-	return coreAgent, emitter, acpRuntime
+	return coreAgent.agent, emitter, acpRuntime
 }
 
 // TestNewACPCmd tests ACP command creation.

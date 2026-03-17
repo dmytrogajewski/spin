@@ -58,7 +58,7 @@ func (d *Detector) Record(snapshot Snapshot) {
 }
 
 // Check analyzes the current history for cycle patterns.
-// Returns the type of cycle detected (or CycleNone) along with
+// Returns the type of cycle detected (or None) along with
 // confidence and details about the detection.
 func (d *Detector) Check() (Result, error) {
 	d.mu.RLock()
@@ -67,32 +67,32 @@ func (d *Detector) Check() (Result, error) {
 	// Need minimum history for meaningful analysis.
 	if len(d.history) < minHistoryForDetection {
 		return Result{
-			Type:       CycleNone,
+			Type:       None,
 			Confidence: 0.0,
 			Timestamp:  time.Now(),
 		}, nil
 	}
 
 	// Check each pattern type (order matters - more specific patterns first).
-	if result := d.checkRepeatedTool(); result.Type != CycleNone {
+	if result := d.checkRepeatedTool(); result.Type != None {
 		return result, nil
 	}
 
-	if result := d.checkSameError(); result.Type != CycleNone {
+	if result := d.checkSameError(); result.Type != None {
 		return result, nil
 	}
 
-	if result := d.checkOscillation(); result.Type != CycleNone {
+	if result := d.checkOscillation(); result.Type != None {
 		return result, nil
 	}
 
-	if result := d.checkSimilarResponses(); result.Type != CycleNone {
+	if result := d.checkSimilarResponses(); result.Type != None {
 		return result, nil
 	}
 
 	// No cycle detected.
 	return Result{
-		Type:       CycleNone,
+		Type:       None,
 		Confidence: 0.0,
 		Timestamp:  time.Now(),
 	}, nil
@@ -124,7 +124,7 @@ func (d *Detector) Reset() {
 // This uses text similarity to identify when the LLM is repeating itself.
 func (d *Detector) checkSimilarResponses() Result {
 	if !d.hasMinimumSnapshots() {
-		return Result{Type: CycleNone}
+		return Result{Type: None}
 	}
 
 	recent := d.getRecentSnapshots()
@@ -134,7 +134,7 @@ func (d *Detector) checkSimilarResponses() Result {
 		return d.createSimilarResponseResult(similarities)
 	}
 
-	return Result{Type: CycleNone}
+	return Result{Type: None}
 }
 
 // hasMinimumSnapshots checks if we have enough snapshots for detection.
@@ -189,7 +189,7 @@ func (d *Detector) isSimilarResponsePattern(similarities []float64) bool {
 // createSimilarResponseResult creates a cycle result for similar responses.
 func (d *Detector) createSimilarResponseResult(similarities []float64) Result {
 	return Result{
-		Type:       CycleSimilarResponses,
+		Type:       SimilarResponses,
 		Confidence: calculateAverageSimilarity(similarities),
 		Details:    fmt.Sprintf("detected %d similar consecutive responses", len(similarities)+1),
 		Timestamp:  time.Now(),
@@ -200,19 +200,19 @@ func (d *Detector) createSimilarResponseResult(similarities []float64) Result {
 // This indicates the agent may be stuck trying the same approach.
 func (d *Detector) checkRepeatedTool() Result {
 	if !d.hasEnoughHistoryForToolCheck() {
-		return Result{Type: CycleNone}
+		return Result{Type: None}
 	}
 
 	recent := d.getRecentSnapshotsForToolCheck()
 	if !d.hasValidToolCalls(recent) {
-		return Result{Type: CycleNone}
+		return Result{Type: None}
 	}
 
 	if d.allToolsAreSame(recent) {
 		return d.createRepeatedToolResult(recent)
 	}
 
-	return Result{Type: CycleNone}
+	return Result{Type: None}
 }
 
 // hasEnoughHistoryForToolCheck checks if we have enough history for tool analysis.
@@ -253,7 +253,7 @@ func (d *Detector) createRepeatedToolResult(recent []Snapshot) Result {
 	firstTool := recent[0].ToolCalls[0]
 
 	return Result{
-		Type:       CycleRepeatedTool,
+		Type:       RepeatedTool,
 		Confidence: exactMatchConfidence, // High confidence for exact tool name matches.
 		Details:    fmt.Sprintf("tool '%s' called %d times consecutively", firstTool, len(recent)),
 		Timestamp:  time.Now(),
@@ -265,7 +265,7 @@ func (d *Detector) createRepeatedToolResult(recent []Snapshot) Result {
 func (d *Detector) checkOscillation() Result {
 	// Need at least 4 snapshots for oscillation detection.
 	if !d.config.Enabled || len(d.history) < 4 {
-		return Result{Type: CycleNone}
+		return Result{Type: None}
 	}
 
 	recent := d.history[len(d.history)-4:]
@@ -284,33 +284,33 @@ func (d *Detector) checkOscillation() Result {
 	// but low similarity between groups (A vs B).
 	if withinGroupSimilarity >= d.config.SimilarityThresh && simAB < 0.5 {
 		return Result{
-			Type:       CycleOscillation,
+			Type:       Oscillation,
 			Confidence: withinGroupSimilarity,
 			Details:    fmt.Sprintf("detected oscillation pattern with within-group similarity %.2f", withinGroupSimilarity),
 			Timestamp:  time.Now(),
 		}
 	}
 
-	return Result{Type: CycleNone}
+	return Result{Type: None}
 }
 
 // checkSameError detects when the same error occurs repeatedly.
 // This indicates the agent is stuck in a failure loop.
 func (d *Detector) checkSameError() Result {
 	if !d.hasEnoughHistoryForErrorCheck() {
-		return Result{Type: CycleNone}
+		return Result{Type: None}
 	}
 
 	recent := d.getRecentSnapshotsForErrorCheck()
 	if !d.hasValidError(recent) {
-		return Result{Type: CycleNone}
+		return Result{Type: None}
 	}
 
 	if d.allErrorsAreSame(recent) {
 		return d.createSameErrorResult(recent)
 	}
 
-	return Result{Type: CycleNone}
+	return Result{Type: None}
 }
 
 // hasEnoughHistoryForErrorCheck checks if we have enough history for error analysis.
@@ -346,7 +346,7 @@ func (d *Detector) createSameErrorResult(recent []Snapshot) Result {
 	firstError := recent[0].Error
 
 	return Result{
-		Type:       CycleSameError,
+		Type:       SameError,
 		Confidence: exactErrorConfidence, // Very high confidence for exact error matches.
 		Details:    fmt.Sprintf("error '%s' occurred %d times consecutively", firstError, len(recent)),
 		Timestamp:  time.Now(),

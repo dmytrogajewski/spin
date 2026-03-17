@@ -52,9 +52,13 @@ func (p *Playbook) Search(ctx context.Context, query string, topK int) ([]*bulle
 		return true
 	})
 
-	// Sort by similarity descending.
+	// Sort by similarity descending, breaking ties by bullet ID for deterministic ordering.
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].similarity > results[j].similarity
+		if results[i].similarity != results[j].similarity {
+			return results[i].similarity > results[j].similarity
+		}
+
+		return results[i].bullet.ID < results[j].bullet.ID
 	})
 
 	// Return top-k.
@@ -114,9 +118,13 @@ func (p *Playbook) SearchWithScores(ctx context.Context, query string, topK int)
 		return true
 	})
 
-	// Sort by similarity descending.
+	// Sort by similarity descending, breaking ties by bullet ID for deterministic ordering.
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].similarity > results[j].similarity
+		if results[i].similarity != results[j].similarity {
+			return results[i].similarity > results[j].similarity
+		}
+
+		return results[i].bullet.ID < results[j].bullet.ID
 	})
 
 	// Return top-k.

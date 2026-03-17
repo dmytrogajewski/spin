@@ -15,7 +15,7 @@ import (
 func TestTUIToolExecution(t *testing.T) {
 	t.Parallel()
 
-	skipTUITests(t)
+	skipPTYTests(t)
 
 	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
 	require.NoError(t, err)
@@ -91,7 +91,7 @@ func TestTUIToolExecution(t *testing.T) {
 func TestTUIToolVisualization(t *testing.T) {
 	t.Parallel()
 
-	skipTUITests(t)
+	skipPTYTests(t)
 
 	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
 	require.NoError(t, err)
@@ -171,7 +171,7 @@ func runTUIToolTests(t *testing.T, cases []tuiToolCase) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			skipTUITests(t)
+			skipPTYTests(t)
 
 			console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
 			require.NoError(t, err)
@@ -261,7 +261,7 @@ func TestTUIMultipleToolCalls(t *testing.T) {
 func TestTUIReadFileTool(t *testing.T) {
 	t.Parallel()
 
-	skipTUITests(t)
+	skipPTYTests(t)
 
 	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
 	require.NoError(t, err)
@@ -326,7 +326,7 @@ func TestTUIReadFileTool(t *testing.T) {
 func TestTUIToolWithoutCycleDetection(t *testing.T) {
 	t.Parallel()
 
-	skipTUITests(t)
+	skipPTYTests(t)
 
 	console, err := expect.NewConsole(expect.WithStdout(os.Stdout))
 	require.NoError(t, err)
