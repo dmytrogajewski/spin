@@ -49,7 +49,7 @@ func newApprovalListCmd() *cobra.Command {
 				return err
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), approvalTimeout)
+			ctx, cancel := context.WithTimeout(cmd.Context(), approvalTimeout)
 			defer cancel()
 
 			items, err := store.List(ctx, scope)
@@ -105,7 +105,7 @@ func newApprovalRevokeCmd() *cobra.Command {
 
 			key := safety.NewPolicyKey(prog, argList, workDir)
 
-			ctx, cancel := context.WithTimeout(context.Background(), approvalTimeout)
+			ctx, cancel := context.WithTimeout(cmd.Context(), approvalTimeout)
 			defer cancel()
 
 			deleted, err := store.Delete(ctx, key, scope)
@@ -145,7 +145,7 @@ func newApprovalClearCmd() *cobra.Command {
 				return err
 			}
 
-			ctx, cancel := context.WithTimeout(context.Background(), approvalTimeout)
+			ctx, cancel := context.WithTimeout(cmd.Context(), approvalTimeout)
 			defer cancel()
 
 			n, err := store.Clear(ctx, scope)
@@ -190,7 +190,7 @@ func buildPolicyStore(cmd *cobra.Command) (safety.PolicyStore, error) {
 	if path != "" {
 		var store safety.PolicyStore
 
-		store, err = safety.NewFilePolicyStore(path, approvalPolicyTTL)
+		store, err = safety.NewFilePolicyStore(context.Background(), path, approvalPolicyTTL)
 		if err == nil {
 			return store, nil
 		}

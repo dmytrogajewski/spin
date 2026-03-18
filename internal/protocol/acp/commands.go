@@ -8,7 +8,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/commands"
 )
 
-// acpCommandContext implements commands.CommandContext for ACP protocol.
+// acpCommandContext implements [commands.CommandContext] for ACP protocol.
 type acpCommandContext struct {
 	agent     *SpinACPAgent
 	sessionID acp.SessionId
@@ -28,13 +28,13 @@ func (c *acpCommandContext) GetCurrentMode() string {
 }
 
 // SetMode sets the task mode for the session.
-func (c *acpCommandContext) SetMode(mode string) error {
+func (c *acpCommandContext) SetMode(ctx context.Context, mode string) error {
 	// Use SetSessionMode to change the mode.
 	req := acp.SetSessionModeRequest{
 		SessionId: c.sessionID,
 		ModeId:    acp.SessionModeId(mode),
 	}
-	_, err := c.agent.SetSessionMode(context.Background(), req)
+	_, err := c.agent.SetSessionMode(ctx, req)
 
 	return err
 }

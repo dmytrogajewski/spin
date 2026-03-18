@@ -175,8 +175,8 @@ func TestShellCommandTool_Execute_UnknownOperation(t *testing.T) {
 		t.Error("Expected failure for unknown operation")
 	}
 
-	if result.Error != "unknown operation: unknown_op" {
-		t.Errorf("Error = %q, want 'unknown operation: unknown_op'", result.Error)
+	if result.Error != "unknown operation: unknown_op: unknown operation" {
+		t.Errorf("Error = %q, want 'unknown operation: unknown_op: unknown operation'", result.Error)
 	}
 }
 
@@ -231,7 +231,7 @@ func TestShellCommandTool_Execute_MissingCommand(t *testing.T) {
 		t.Error("Expected failure for missing command")
 	}
 
-	if result.Error != "command parameter is required for execute operation" {
+	if result.Error != "execute operation: command parameter is required" {
 		t.Errorf("Error = %q", result.Error)
 	}
 }
@@ -540,7 +540,7 @@ func TestShellCommandTool_DetectShell_MissingCommand(t *testing.T) {
 		t.Error("Expected failure for missing command")
 	}
 
-	if result.Error != "command parameter is required for detect_shell operation" {
+	if result.Error != "detect_shell operation: command parameter is required" {
 		t.Errorf("Error = %q", result.Error)
 	}
 }
@@ -719,7 +719,7 @@ func TestShellCommandTool_Validate_MissingCommand(t *testing.T) {
 		t.Error("Expected failure for missing command")
 	}
 
-	if result.Error != "command parameter is required for validate operation" {
+	if result.Error != "validate operation: command parameter is required" {
 		t.Errorf("Error = %q", result.Error)
 	}
 }

@@ -74,7 +74,14 @@ func (pc *ProviderCache) Get(ctx context.Context, provider, model string) ModelC
 
 	if found {
 		// Stale — return immediately and refresh in background.
-		go pc.refreshInBackground(ctx, provider, model)
+		// Use a detached context so caller cancellation does not abort the refresh.
+		bgCtx, bgCancel := context.WithTimeout(context.WithoutCancel(ctx), BackgroundRefreshTimeout)
+
+		go func() {
+			defer bgCancel()
+
+			pc.refreshInBackground(bgCtx, provider, model)
+		}()
 
 		return entry.Capabilities
 	}
@@ -95,7 +102,7 @@ func (pc *ProviderCache) ContextLength(ctx context.Context, provider, model stri
 }
 
 // Put stores a cache entry for the given provider and model.
-func (pc *ProviderCache) Put(provider, model string, caps ModelCapabilities) error {
+func (pc *ProviderCache) Put(ctx context.Context, provider, model string, caps ModelCapabilities) error {
 	pc.mu.Lock()
 
 	pd := pc.ensureProviderData(provider)
@@ -106,7 +113,7 @@ func (pc *ProviderCache) Put(provider, model string, caps ModelCapabilities) err
 
 	pc.mu.Unlock()
 
-	return pc.persistProvider(provider)
+	return pc.persistProvider(ctx, provider)
 }
 
 // Load reads cached data for a provider from disk.
@@ -182,7 +189,7 @@ func (pc *ProviderCache) ensureProviderData(provider string) *ProviderData {
 }
 
 // persistProvider writes the provider data to disk atomically.
-func (pc *ProviderCache) persistProvider(provider string) error {
+func (pc *ProviderCache) persistProvider(ctx context.Context, provider string) error {
 	pc.mu.RLock()
 
 	pd, ok := pc.data[provider]
@@ -202,7 +209,7 @@ func (pc *ProviderCache) persistProvider(provider string) error {
 
 	path := pc.providerPath(provider)
 
-	if writeErr := storage.AtomicWriteFile(path, data, cacheFilePerm); writeErr != nil {
+	if writeErr := storage.AtomicWriteFile(ctx, path, data, cacheFilePerm); writeErr != nil {
 		return fmt.Errorf("write cache file: %w", writeErr)
 	}
 
@@ -225,7 +232,7 @@ func (pc *ProviderCache) refreshInBackground(ctx context.Context, provider, mode
 		return
 	}
 
-	_ = pc.Put(provider, model, caps)
+	_ = pc.Put(ctx, provider, model, caps)
 }
 
 // fetchOrDefault attempts a synchronous fetch; returns safe defaults on failure.
@@ -239,7 +246,7 @@ func (pc *ProviderCache) fetchOrDefault(ctx context.Context, provider, model str
 		return safeDefaults(provider, model)
 	}
 
-	_ = pc.Put(provider, model, caps)
+	_ = pc.Put(ctx, provider, model, caps)
 
 	return caps
 }

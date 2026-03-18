@@ -31,6 +31,8 @@ const (
 	highSimilarityThreshold  = 0.85
 	veryHighSimilarityThresh = 0.90
 	aceConfidenceThreshold   = 0.9
+	asyncSaveTimeout         = 30 * time.Second
+	refinementTimeout        = 60 * time.Second
 )
 
 // ErrConfigIsRequired is a sentinel error.
@@ -181,7 +183,7 @@ func loadOrCreatePlaybook(
 		logger.Warn("Failed to seed initial bullets", "error", err)
 	}
 
-	if err := pb.Save(playbookPath); err != nil {
+	if err := pb.Save(ctx, playbookPath); err != nil {
 		logger.Warn("Failed to save initial playbook", "error", err)
 	}
 
@@ -437,7 +439,7 @@ func (s *Service) UpdateBullets(ctx context.Context, bullets []*bullet.Bullet, f
 		}
 	}
 
-	return s.savePlaybookAfterUpdate()
+	return s.savePlaybookAfterUpdate(ctx)
 }
 
 // buildFeedbackMap maps bullet feedback markers to bullet IDs with their feedback type.
@@ -461,14 +463,20 @@ func mapMarkers(feedbackMap map[string]string, bullets []*bullet.Bullet, markers
 }
 
 // savePlaybookAfterUpdate saves the playbook synchronously or asynchronously based on config.
-func (s *Service) savePlaybookAfterUpdate() error {
+func (s *Service) savePlaybookAfterUpdate(ctx context.Context) error {
 	if s.config.ItemizedLearning.UpdateAsync {
-		go func() { _ = s.SavePlaybook() }()
+		bgCtx, bgCancel := context.WithTimeout(context.WithoutCancel(ctx), asyncSaveTimeout)
+
+		go func() {
+			defer bgCancel()
+
+			_ = s.SavePlaybook(bgCtx)
+		}()
 
 		return nil
 	}
 
-	err := s.SavePlaybook()
+	err := s.SavePlaybook(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to save playbook: %w", err)
 	}
@@ -478,14 +486,14 @@ func (s *Service) savePlaybookAfterUpdate() error {
 
 // SavePlaybook saves the playbook to disk.
 // Returns nil if ACE is disabled.
-func (s *Service) SavePlaybook() error {
+func (s *Service) SavePlaybook(ctx context.Context) error {
 	if !s.enabled {
 		return nil
 	}
 
 	playbookPath := expandPath(s.config.PlaybookPath)
 
-	return s.playbook.Save(playbookPath)
+	return s.playbook.Save(ctx, playbookPath)
 }
 
 // RestoreBullet creates a bullet with a specific ID for restoration/migration scenarios.
@@ -594,7 +602,7 @@ func (s *Service) GenerateBullets(ctx context.Context, input, sourceType string)
 	s.logger.InfoContext(ctx, "Playbook updated", "total_bullets", bulletCount)
 
 	// Save playbook with new bullets.
-	err = s.SavePlaybook()
+	err = s.SavePlaybook(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save playbook: %w", err)
 	}
@@ -637,7 +645,7 @@ func (s *Service) GenerateBulletsWithReflectionFromTrajectory(
 
 	s.logCurationResults(ctx, mergeResp)
 
-	err = s.SavePlaybook()
+	err = s.SavePlaybook(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to save playbook: %w", err)
 	}
@@ -807,10 +815,12 @@ func (s *Service) checkGrowthAndRefine(ctx context.Context) {
 			"bullet_count", metrics.BulletCount,
 			"estimated_tokens", metrics.EstimatedTokens)
 
-		// Trigger refinement asynchronously with a detached context.
-		bgCtx := context.WithoutCancel(ctx)
+		// Trigger refinement asynchronously with a detached context and timeout.
+		bgCtx, bgCancel := context.WithTimeout(context.WithoutCancel(ctx), refinementTimeout)
 
 		go func() {
+			defer bgCancel()
+
 			result, err := s.curator.Refine(bgCtx)
 			if err != nil {
 				s.logger.WarnContext(bgCtx, "Refinement failed", "error", err)
@@ -826,7 +836,7 @@ func (s *Service) checkGrowthAndRefine(ctx context.Context) {
 			s.growthMonitor.MarkRefinement()
 
 			// Save playbook after refinement.
-			err = s.SavePlaybook()
+			err = s.SavePlaybook(bgCtx)
 			if err != nil {
 				s.logger.WarnContext(bgCtx, "Failed to save playbook after refinement", "error", err)
 			}

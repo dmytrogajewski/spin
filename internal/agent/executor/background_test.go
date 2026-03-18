@@ -2,9 +2,10 @@
 
 package executor_test
 
-// Journey: specs/journeys/JOURNEY-R3.1.md.
+// Journey: specs/journeys/JOURNEY-CTX-1.3.md.
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,8 @@ const (
 	startupOutputWait     = 2 * time.Second
 	// testStartupTimeout is a short startup timeout for tests using sleep commands.
 	testStartupTimeout = 200 * time.Millisecond
+	// cancelGracePeriod is the maximum time to wait for a process to die after cancellation.
+	cancelGracePeriod = 10 * time.Second
 )
 
 func TestTaskState_String(t *testing.T) {
@@ -52,7 +55,7 @@ func TestBackgroundTask_StartsAndReportsRunning(t *testing.T) {
 
 	mgr := newTestManager(t)
 
-	taskID, _, err := mgr.Start("sleep", []string{"30"}, os.Environ(), t.TempDir())
+	taskID, _, err := mgr.Start(t.Context(), "sleep", []string{"30"}, os.Environ(), t.TempDir())
 	require.NoError(t, err)
 	require.Len(t, taskID, executor.TaskIDLength)
 
@@ -70,7 +73,7 @@ func TestBackgroundTask_CapturesOutput(t *testing.T) {
 	mgr := newTestManager(t)
 
 	taskID, initialOutput, err := mgr.Start(
-		"sh", []string{"-c", "echo hello && echo world"},
+		t.Context(), "sh", []string{"-c", "echo hello && echo world"},
 		os.Environ(), t.TempDir(),
 	)
 	require.NoError(t, err)
@@ -92,7 +95,7 @@ func TestBackgroundTask_CompletedState(t *testing.T) {
 
 	mgr := newTestManager(t)
 
-	taskID, _, err := mgr.Start("true", nil, os.Environ(), t.TempDir())
+	taskID, _, err := mgr.Start(t.Context(), "true", nil, os.Environ(), t.TempDir())
 	require.NoError(t, err)
 
 	waitForState(t, mgr, taskID, executor.TaskCompleted)
@@ -107,7 +110,7 @@ func TestBackgroundTask_FailedState(t *testing.T) {
 
 	mgr := newTestManager(t)
 
-	taskID, _, err := mgr.Start("false", nil, os.Environ(), t.TempDir())
+	taskID, _, err := mgr.Start(t.Context(), "false", nil, os.Environ(), t.TempDir())
 	require.NoError(t, err)
 
 	waitForState(t, mgr, taskID, executor.TaskFailed)
@@ -123,7 +126,7 @@ func TestBackgroundTask_GracefulKill(t *testing.T) {
 	mgr := newTestManager(t)
 
 	// Use a process that handles SIGTERM (sh traps it by default).
-	taskID, _, err := mgr.Start("sleep", []string{"300"}, os.Environ(), t.TempDir())
+	taskID, _, err := mgr.Start(t.Context(), "sleep", []string{"300"}, os.Environ(), t.TempDir())
 	require.NoError(t, err)
 
 	// Give process time to start.
@@ -144,7 +147,7 @@ func TestBackgroundTask_WaitStartup(t *testing.T) {
 	start := time.Now()
 
 	taskID, initial, err := mgr.Start(
-		"sh", []string{"-c", "echo started && sleep 300"},
+		t.Context(), "sh", []string{"-c", "echo started && sleep 300"},
 		os.Environ(), t.TempDir(),
 	)
 	require.NoError(t, err)
@@ -167,12 +170,12 @@ func TestBackgroundTaskManager_MaxConcurrent(t *testing.T) {
 
 	// Start max tasks.
 	for range executor.MaxConcurrentTasks {
-		_, _, err := mgr.Start("sleep", []string{"300"}, os.Environ(), t.TempDir())
+		_, _, err := mgr.Start(t.Context(), "sleep", []string{"300"}, os.Environ(), t.TempDir())
 		require.NoError(t, err)
 	}
 
 	// Next one should fail.
-	_, _, err := mgr.Start("sleep", []string{"300"}, os.Environ(), t.TempDir())
+	_, _, err := mgr.Start(t.Context(), "sleep", []string{"300"}, os.Environ(), t.TempDir())
 	require.ErrorIs(t, err, executor.ErrMaxConcurrentTasks)
 
 	t.Cleanup(func() { mgr.Cleanup() })
@@ -184,10 +187,10 @@ func TestBackgroundTaskManager_ListTasks(t *testing.T) {
 	mgr := newTestManager(t)
 
 	// Start two tasks.
-	idOne, _, err := mgr.Start("sleep", []string{"300"}, os.Environ(), t.TempDir())
+	idOne, _, err := mgr.Start(t.Context(), "sleep", []string{"300"}, os.Environ(), t.TempDir())
 	require.NoError(t, err)
 
-	idTwo, _, err := mgr.Start("sleep", []string{"300"}, os.Environ(), t.TempDir())
+	idTwo, _, err := mgr.Start(t.Context(), "sleep", []string{"300"}, os.Environ(), t.TempDir())
 	require.NoError(t, err)
 
 	tasks := mgr.List()
@@ -233,6 +236,7 @@ func TestBackgroundTaskManager_ConcurrentAccess(t *testing.T) {
 
 	wg.Add(goroutineCount)
 
+	ctx := t.Context()
 	taskIDs := make([]string, goroutineCount)
 	errs := make([]error, goroutineCount)
 
@@ -240,7 +244,7 @@ func TestBackgroundTaskManager_ConcurrentAccess(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			taskID, _, startErr := mgr.Start("sleep", []string{"300"}, os.Environ(), t.TempDir())
+			taskID, _, startErr := mgr.Start(ctx, "sleep", []string{"300"}, os.Environ(), t.TempDir())
 			taskIDs[idx] = taskID
 			errs[idx] = startErr
 		}()
@@ -263,10 +267,10 @@ func TestBackgroundTaskManager_Cleanup(t *testing.T) {
 
 	mgr := newTestManager(t)
 
-	_, _, err := mgr.Start("sleep", []string{"300"}, os.Environ(), t.TempDir())
+	_, _, err := mgr.Start(t.Context(), "sleep", []string{"300"}, os.Environ(), t.TempDir())
 	require.NoError(t, err)
 
-	_, _, err = mgr.Start("sleep", []string{"300"}, os.Environ(), t.TempDir())
+	_, _, err = mgr.Start(t.Context(), "sleep", []string{"300"}, os.Environ(), t.TempDir())
 	require.NoError(t, err)
 
 	mgr.Cleanup()
@@ -285,7 +289,7 @@ func TestBackgroundTaskManager_GetOutput_MaxLines(t *testing.T) {
 
 	// Generate 10 lines of output.
 	taskID, _, err := mgr.Start(
-		"sh", []string{"-c", "for i in $(seq 1 10); do echo line$i; done"},
+		t.Context(), "sh", []string{"-c", "for i in $(seq 1 10); do echo line$i; done"},
 		os.Environ(), t.TempDir(),
 	)
 	require.NoError(t, err)
@@ -307,13 +311,82 @@ func TestBackgroundTask_KillNonRunning(t *testing.T) {
 
 	mgr := newTestManager(t)
 
-	taskID, _, err := mgr.Start("true", nil, os.Environ(), t.TempDir())
+	taskID, _, err := mgr.Start(t.Context(), "true", nil, os.Environ(), t.TempDir())
 	require.NoError(t, err)
 
 	waitForState(t, mgr, taskID, executor.TaskCompleted)
 
 	killErr := mgr.Kill(taskID)
 	require.ErrorIs(t, killErr, executor.ErrTaskNotRunning)
+}
+
+func TestBackgroundTask_ContextCancellation_KillsProcess(t *testing.T) {
+	t.Parallel()
+
+	mgr := newTestManager(t)
+	ctx, cancel := context.WithCancel(t.Context())
+
+	taskID, _, err := mgr.Start(ctx, "sleep", []string{"300"}, os.Environ(), t.TempDir())
+	require.NoError(t, err)
+
+	// Give process time to start.
+	time.Sleep(testSleepDuration)
+
+	// Cancel the context — this should trigger graceful kill.
+	cancel()
+
+	// Wait for the task to be killed.
+	waitForState(t, mgr, taskID, executor.TaskKilled)
+
+	info := findTask(t, mgr, taskID)
+	require.Equal(t, executor.TaskKilled, info.State)
+}
+
+func TestBackgroundTask_ContextCancellation_DuringStartup(t *testing.T) {
+	t.Parallel()
+
+	mgr := newTestManager(t)
+	// Use a longer startup timeout so cancellation beats it.
+	mgr.SetStartupTimeout(cancelGracePeriod)
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	// Start a slow-starting process.
+	go func() {
+		// Cancel after a short delay, before startup completes.
+		time.Sleep(testSleepDuration)
+		cancel()
+	}()
+
+	start := time.Now()
+
+	taskID, _, err := mgr.Start(ctx, "sleep", []string{"300"}, os.Environ(), t.TempDir())
+	require.NoError(t, err)
+
+	elapsed := time.Since(start)
+
+	// Should have returned quickly due to cancellation, not waited 10s.
+	require.Less(t, elapsed, startupOutputWait)
+
+	// Task should eventually be killed.
+	waitForState(t, mgr, taskID, executor.TaskKilled)
+}
+
+func TestBackgroundTask_NormalCompletion_WithLiveContext(t *testing.T) {
+	t.Parallel()
+
+	mgr := newTestManager(t)
+
+	// Start a short-lived process with a live context.
+	taskID, _, err := mgr.Start(t.Context(), "sh", []string{"-c", "echo done"}, os.Environ(), t.TempDir())
+	require.NoError(t, err)
+
+	// Process should complete normally — not be killed.
+	waitForState(t, mgr, taskID, executor.TaskCompleted)
+
+	info := findTask(t, mgr, taskID)
+	require.Equal(t, executor.TaskCompleted, info.State)
+	require.Equal(t, 0, info.ExitCode)
 }
 
 // newTestManager creates a BackgroundTaskManager with a short startup timeout.

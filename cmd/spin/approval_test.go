@@ -75,7 +75,7 @@ func TestApproval_List_WithData(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	store, err := safety.NewFilePolicyStore(policyPath, 10*time.Millisecond)
+	store, err := safety.NewFilePolicyStore(context.Background(), policyPath, 10*time.Millisecond)
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}

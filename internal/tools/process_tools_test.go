@@ -20,15 +20,15 @@ type mockTaskManager struct {
 	err    error
 }
 
-func (m *mockTaskManager) List() []tools.TaskSnapshot {
+func (m *mockTaskManager) List(_ context.Context) []tools.TaskSnapshot {
 	return m.tasks
 }
 
-func (m *mockTaskManager) GetOutput(_ string, _ int) (string, error) {
+func (m *mockTaskManager) GetOutput(_ context.Context, _ string, _ int) (string, error) {
 	return m.output, m.err
 }
 
-func (m *mockTaskManager) Kill(_ string) error {
+func (m *mockTaskManager) Kill(_ context.Context, _ string) error {
 	return m.err
 }
 

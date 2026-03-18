@@ -257,11 +257,7 @@ func writeBlocks(ctx context.Context, timeline *Timeline, errors chan<- error, w
 // startScrollers launches concurrent scroller goroutines.
 func startScrollers(ctx context.Context, wg *sync.WaitGroup, timeline *Timeline, count int) {
 	for range count {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for {
 				select {
 				case <-ctx.Done():
@@ -278,18 +274,14 @@ func startScrollers(ctx context.Context, wg *sync.WaitGroup, timeline *Timeline,
 					}
 				}
 			}
-		}()
+		})
 	}
 }
 
 // startFilterers launches concurrent filter goroutines.
 func startFilterers(ctx context.Context, wg *sync.WaitGroup, timeline *Timeline, count int) {
 	for range count {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			for {
 				select {
 				case <-ctx.Done():
@@ -306,7 +298,7 @@ func startFilterers(ctx context.Context, wg *sync.WaitGroup, timeline *Timeline,
 					}
 				}
 			}
-		}()
+		})
 	}
 }
 

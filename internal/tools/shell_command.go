@@ -152,10 +152,7 @@ func (t *ShellCommandTool) Schema() ToolSchema {
 func (t *ShellCommandTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	operation, _ := params.GetString("operation")
 	if operation == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "operation parameter is required",
-		}, nil
+		return NewToolError(errOperationParameterRequired), nil
 	}
 
 	switch operation {
@@ -170,29 +167,26 @@ func (t *ShellCommandTool) Execute(ctx context.Context, params ToolParameters) (
 	case "validate":
 		return t.validateCommand(params)
 	default:
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("unknown operation: %s", operation),
-		}, nil
+		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, errUnknownOperation)), nil
 	}
 }
 
 // executeCommand executes a shell command through the executor (which handles approval).
 func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	if t.executor == nil {
-		return ToolResult{Success: false, Error: "executor not configured"}, nil
+		return NewToolError(errExecutorNotConfigured), nil
 	}
 
 	cmdStr, _ := params.GetString("command")
 	if cmdStr == "" {
-		return ToolResult{Success: false, Error: "command parameter is required for execute operation"}, nil
+		return NewToolError(fmt.Errorf("execute operation: %w", errCommandParameterRequired)), nil
 	}
 
 	workDir := t.resolveWorkDir(params)
 
 	cmd, err := t.buildCommand(cmdStr, workDir)
 	if err != nil {
-		return ToolResult{Success: false, Error: err.Error()}, nil
+		return NewToolError(err), nil
 	}
 
 	// Execute through executor (which handles validation and approval).
@@ -254,7 +248,7 @@ func (t *ShellCommandTool) buildCommand(cmdStr, workDir string) (*simpleCommand,
 	}
 
 	if len(parts) == 0 {
-		return nil, ErrCommandCannotBeEmpty
+		return nil, errCommandCannotBeEmpty
 	}
 
 	return &simpleCommand{
@@ -296,7 +290,7 @@ func (t *ShellCommandTool) buildErrorResult(result ExecutionResult, execErr erro
 // buildSuccessResult constructs a ToolResult from a successful execution.
 func (t *ShellCommandTool) buildSuccessResult(result ExecutionResult) ToolResult {
 	if result == nil {
-		return ToolResult{Success: true, Output: ""}
+		return NewToolResult("")
 	}
 
 	exitCode := result.GetExitCode()
@@ -328,10 +322,7 @@ func (t *ShellCommandTool) getEnvironment() (ToolResult, error) {
 			fmt.Fprintf(&output, "%s=%s\n", key, value)
 		}
 
-		return ToolResult{
-			Success: true,
-			Output:  output.String(),
-		}, nil
+		return NewToolResult(output.String()), nil
 	}
 
 	// Fallback to os.Environ().
@@ -342,10 +333,7 @@ func (t *ShellCommandTool) getEnvironment() (ToolResult, error) {
 		output.WriteString(env + "\n")
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return NewToolResult(output.String()), nil
 }
 
 // getShellInfo returns shell information.
@@ -369,7 +357,7 @@ func (t *ShellCommandTool) getShellInfoFromContext() ToolResult {
 		writeShellDetails(&output, contextInfo)
 	}
 
-	return ToolResult{Success: true, Output: output.String()}
+	return NewToolResult(output.String())
 }
 
 // writeShellDetails writes shell path and env details to the output.
@@ -403,52 +391,43 @@ func (t *ShellCommandTool) getShellInfoFallback() ToolResult {
 		output.WriteString("shell_enabled: false\n")
 	}
 
-	return ToolResult{Success: true, Output: output.String()}
+	return NewToolResult(output.String())
 }
 
 // detectShell checks if a command requires shell execution.
 func (t *ShellCommandTool) detectShell(params ToolParameters) (ToolResult, error) {
 	command, _ := params.GetString("command")
 	if command == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "command parameter is required for detect_shell operation",
-		}, nil
+		return NewToolError(fmt.Errorf("detect_shell operation: %w", errCommandParameterRequired)), nil
 	}
 
 	// Try to use shell context if available.
 	if t.shellCtx != nil {
 		isShell := t.shellCtx.IsShellCommand(command)
 
-		return ToolResult{
-			Success: true,
-			Output:  fmt.Sprintf("Is shell command: %t", isShell),
-		}, nil
+		return NewToolResult(fmt.Sprintf("Is shell command: %t", isShell)), nil
 	}
 
 	// Fallback to simple heuristics.
 	isShell := t.isShellCmd(command)
 
-	return ToolResult{
-		Success: true,
-		Output:  fmt.Sprintf("Is shell command: %t", isShell),
-	}, nil
+	return NewToolResult(fmt.Sprintf("Is shell command: %t", isShell)), nil
 }
 
 // validateCommand validates a command and returns its classification.
 func (t *ShellCommandTool) validateCommand(params ToolParameters) (ToolResult, error) {
 	command, _ := params.GetString("command")
 	if command == "" {
-		return ToolResult{Success: false, Error: "command parameter is required for validate operation"}, nil
+		return NewToolError(fmt.Errorf("validate operation: %w", errCommandParameterRequired)), nil
 	}
 
 	if t.validator == nil {
-		return ToolResult{Success: false, Error: "validator not configured"}, nil
+		return NewToolError(errValidatorNotConfigured), nil
 	}
 
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
-		return ToolResult{Success: false, Error: "command cannot be empty"}, nil
+		return NewToolError(errCommandCannotBeEmpty), nil
 	}
 
 	workDir := t.resolveWorkDir(params)
@@ -462,7 +441,7 @@ func (t *ShellCommandTool) validateCommand(params ToolParameters) (ToolResult, e
 
 	result, classifyErr := t.validator.Classify(cmd)
 	if classifyErr != nil {
-		return ToolResult{Success: false, Error: fmt.Sprintf("classification failed: %v", classifyErr)}, nil
+		return ErrToResultf("classification failed: %v", classifyErr)
 	}
 
 	return t.formatClassification(result), nil
@@ -502,5 +481,5 @@ func (t *ShellCommandTool) formatClassification(result ValidationResult) ToolRes
 		fmt.Fprintf(&output, "Reason: %s\n", reason)
 	}
 
-	return ToolResult{Success: true, Output: output.String()}
+	return NewToolResult(output.String())
 }

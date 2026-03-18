@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/ollama/ollama/api"
 )
 
-const defaultEmbeddingDimensions = 768
+const (
+	defaultEmbeddingDimensions = 768
+	// embeddingClientTimeout is the HTTP timeout for Ollama embedding requests.
+	embeddingClientTimeout = 60 * time.Second
+)
 
 var (
 	// ErrOllamaReturnedNoEmbeddings is a sentinel error.
@@ -74,7 +79,9 @@ func NewOllamaEmbedder(config OllamaEmbedderConfig) (*OllamaEmbedder, error) {
 	}
 
 	// Create Ollama client.
-	client := api.NewClient(baseURLParsed, &http.Client{})
+	client := api.NewClient(baseURLParsed, &http.Client{
+		Timeout: embeddingClientTimeout,
+	})
 
 	return &OllamaEmbedder{
 		client:    client,

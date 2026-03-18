@@ -51,7 +51,8 @@ type PersistentStore struct {
 //
 // The directory is created if it doesn't exist. On startup,
 // the store scans the directory to rebuild its index of existing entries.
-func NewPersistentStore(basePath string) (*PersistentStore, error) {
+// The context controls the startup index rebuild.
+func NewPersistentStore(ctx context.Context, basePath string) (*PersistentStore, error) {
 	// Expand home directory if needed.
 	expanded, err := pathutil.ExpandHome(basePath)
 	if err != nil {
@@ -72,7 +73,7 @@ func NewPersistentStore(basePath string) (*PersistentStore, error) {
 	}
 
 	// Rebuild index from existing files.
-	err = store.rebuildIndex()
+	err = store.rebuildIndex(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("rebuild index: %w", err)
 	}
@@ -81,9 +82,13 @@ func NewPersistentStore(basePath string) (*PersistentStore, error) {
 }
 
 // Put stores a value to the filesystem.
-func (s *PersistentStore) Put(_ context.Context, key, value string, opts PutOptions) error {
+func (s *PersistentStore) Put(ctx context.Context, key, value string, opts PutOptions) error {
 	if key == "" {
 		return ErrEmptyKey
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("put %s: %w", key, err)
 	}
 
 	s.mu.Lock()
@@ -139,7 +144,7 @@ func (s *PersistentStore) Put(_ context.Context, key, value string, opts PutOpti
 	// Atomic write.
 	filePath := s.filePath(namespace, key)
 
-	err = storage.AtomicWriteFile(filePath, data, storage.DefaultFilePerm)
+	err = storage.AtomicWriteFile(ctx, filePath, data, storage.DefaultFilePerm)
 	if err != nil {
 		return fmt.Errorf("write entry: %w", err)
 	}
@@ -159,9 +164,13 @@ func (s *PersistentStore) Put(_ context.Context, key, value string, opts PutOpti
 }
 
 // Get retrieves an entry from the filesystem.
-func (s *PersistentStore) Get(_ context.Context, key string) (*Entry, error) {
+func (s *PersistentStore) Get(ctx context.Context, key string) (*Entry, error) {
 	if key == "" {
 		return nil, ErrEmptyKey
+	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("get %s: %w", key, err)
 	}
 
 	s.mu.Lock()
@@ -223,9 +232,13 @@ func (s *PersistentStore) Get(_ context.Context, key string) (*Entry, error) {
 }
 
 // Delete removes an entry from the filesystem.
-func (s *PersistentStore) Delete(_ context.Context, key string) error {
+func (s *PersistentStore) Delete(ctx context.Context, key string) error {
 	if key == "" {
 		return ErrEmptyKey
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("delete %s: %w", key, err)
 	}
 
 	s.mu.Lock()
@@ -263,7 +276,11 @@ func (s *PersistentStore) Delete(_ context.Context, key string) error {
 }
 
 // List returns keys matching the pattern.
-func (s *PersistentStore) List(_ context.Context, pattern string) ([]string, error) {
+func (s *PersistentStore) List(ctx context.Context, pattern string) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("list: %w", err)
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -278,13 +295,22 @@ func (s *PersistentStore) List(_ context.Context, pattern string) ([]string, err
 }
 
 // Search finds entries containing the query string.
-func (s *PersistentStore) Search(_ context.Context, query string, topK int) ([]Entry, error) {
+func (s *PersistentStore) Search(ctx context.Context, query string, topK int) ([]Entry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("search: %w", err)
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	matches := make([]Entry, 0)
 
 	for _, indexEntry := range s.index {
+		// Check context between iterations (each may read a file).
+		if err := ctx.Err(); err != nil {
+			return matches, fmt.Errorf("search: %w", err)
+		}
+
 		// Check key match.
 		if containsIgnoreCase(indexEntry.Key, query) {
 			entry, err := s.readEntryUnsafe(indexEntry.FilePath)
@@ -325,9 +351,14 @@ func (s *PersistentStore) Close() error {
 }
 
 // rebuildIndex scans the directory structure and rebuilds the in-memory index.
-func (s *PersistentStore) rebuildIndex() error {
+func (s *PersistentStore) rebuildIndex(ctx context.Context) error {
 	// Walk directory looking for .json files.
 	walkErr := filepath.Walk(s.basePath, func(path string, info os.FileInfo, _ error) error {
+		// Check context between files.
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("rebuild index: %w", err)
+		}
+
 		if info == nil || info.IsDir() {
 			return nil
 		}

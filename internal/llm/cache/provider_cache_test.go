@@ -75,7 +75,7 @@ func TestProviderCache_FreshCacheReturnsImmediately(t *testing.T) {
 		Vision:        true,
 	}
 
-	require.NoError(t, pc.Put(testProvider, testModel, caps))
+	require.NoError(t, pc.Put(context.Background(), testProvider, testModel, caps))
 
 	ctx := context.Background()
 	got := pc.Get(ctx, testProvider, testModel)
@@ -121,7 +121,7 @@ func TestProviderCache_StaleCacheReturnsAndRefreshes(t *testing.T) {
 		Provider:      testProvider,
 		ContextLength: testContextAlt,
 	}
-	require.NoError(t, pc.Put(testProvider, testModel, staleCaps))
+	require.NoError(t, pc.Put(context.Background(), testProvider, testModel, staleCaps))
 
 	// Switch to current time so isFresh sees it as stale.
 	timeMu.Lock()
@@ -209,7 +209,7 @@ func TestProviderCache_ContextLengthLookup(t *testing.T) {
 		Provider:      testProvider,
 		ContextLength: testContextLen,
 	}
-	require.NoError(t, pc.Put(testProvider, testModel, caps))
+	require.NoError(t, pc.Put(context.Background(), testProvider, testModel, caps))
 
 	ctx := context.Background()
 	require.Equal(t, testContextLen, pc.ContextLength(ctx, testProvider, testModel))
@@ -242,7 +242,7 @@ func TestProviderCache_PersistAndReload(t *testing.T) {
 		Vision:        true,
 		Thinking:      true,
 	}
-	require.NoError(t, pc1.Put(testProvider, testModel, caps))
+	require.NoError(t, pc1.Put(context.Background(), testProvider, testModel, caps))
 
 	// Create new cache pointing to same dir.
 	pc2, reloadErr := cache.NewProviderCache(dir, nil)
@@ -268,7 +268,7 @@ func TestProviderCache_AtomicWrite(t *testing.T) {
 		Provider:      testProvider,
 		ContextLength: testContextLen,
 	}
-	require.NoError(t, pc.Put(testProvider, testModel, caps))
+	require.NoError(t, pc.Put(context.Background(), testProvider, testModel, caps))
 
 	// Verify file is valid JSON.
 	path := filepath.Join(dir, testProvider+".json")
@@ -300,8 +300,8 @@ func TestProviderCache_MultipleModels(t *testing.T) {
 		ContextLength: testContextAlt,
 	}
 
-	require.NoError(t, pc.Put(testProvider, testModel, caps1))
-	require.NoError(t, pc.Put(testProvider, testModelAlt, caps2))
+	require.NoError(t, pc.Put(context.Background(), testProvider, testModel, caps1))
+	require.NoError(t, pc.Put(context.Background(), testProvider, testModelAlt, caps2))
 
 	ctx := context.Background()
 	require.Equal(t, testContextLen, pc.Get(ctx, testProvider, testModel).ContextLength)
@@ -316,4 +316,90 @@ func TestEntry_IsFresh(t *testing.T) {
 
 	stale := cache.Entry{FetchedAt: time.Now().Add(-25 * time.Hour)}
 	require.False(t, stale.IsFresh())
+}
+
+func TestProviderCache_BackgroundRefresh_SurvivesCallerCancellation(t *testing.T) {
+	t.Parallel()
+
+	dir := filepath.Join(t.TempDir(), testCacheSubdir)
+
+	// This fetcher records whether its context was alive when called.
+	ctxAliveCh := make(chan bool, 1)
+	fetchDone := make(chan struct{})
+	fetcher := &contextAwareFetcher{
+		caps: cache.ModelCapabilities{
+			ModelID:       testModel,
+			Provider:      testProvider,
+			ContextLength: testContextLen,
+		},
+		ctxAliveCh: ctxAliveCh,
+		doneCh:     fetchDone,
+	}
+
+	// Use stale time for Put, then switch to now for Get.
+	var timeMu sync.Mutex
+
+	currentTime := staleTime()
+
+	timeFunc := func() time.Time {
+		timeMu.Lock()
+		defer timeMu.Unlock()
+
+		return currentTime
+	}
+
+	pc, err := cache.NewProviderCache(dir, fetcher, cache.WithTimeFunc(timeFunc))
+	require.NoError(t, err)
+
+	// Pre-populate with stale entry.
+	staleCaps := cache.ModelCapabilities{
+		ModelID:       testModel,
+		Provider:      testProvider,
+		ContextLength: testContextAlt,
+	}
+	require.NoError(t, pc.Put(context.Background(), testProvider, testModel, staleCaps))
+
+	// Switch to current time.
+	timeMu.Lock()
+	currentTime = time.Now()
+	timeMu.Unlock()
+
+	// Create a cancellable context and cancel it immediately after Get.
+	ctx, cancel := context.WithCancel(context.Background())
+
+	_ = pc.Get(ctx, testProvider, testModel)
+
+	cancel() // Cancel caller context immediately.
+
+	// Wait for background fetch to complete.
+	select {
+	case <-fetchDone:
+	case <-time.After(testFetchWaitTimeout):
+		t.Fatal("background refresh did not complete")
+	}
+
+	// The fetcher's context should still have been alive (not canceled).
+	select {
+	case alive := <-ctxAliveCh:
+		require.True(t, alive, "background refresh context should not be canceled by caller")
+	default:
+		t.Fatal("ctxAliveCh not populated")
+	}
+}
+
+const testFetchWaitTimeout = 5 * time.Second
+
+// contextAwareFetcher records whether the context was alive when FetchCapabilities was called.
+type contextAwareFetcher struct {
+	caps       cache.ModelCapabilities
+	ctxAliveCh chan bool
+	doneCh     chan struct{}
+}
+
+func (f *contextAwareFetcher) FetchCapabilities(ctx context.Context, _, _ string) (cache.ModelCapabilities, error) {
+	f.ctxAliveCh <- ctx.Err() == nil
+
+	close(f.doneCh)
+
+	return f.caps, nil
 }

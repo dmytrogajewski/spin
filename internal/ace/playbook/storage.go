@@ -1,6 +1,7 @@
 package playbook
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -23,7 +24,7 @@ type playbookJSON struct {
 
 // Save serializes the playbook to a JSON file.
 // Uses atomic writes (temp file + rename) for crash safety.
-func (p *Playbook) Save(path string) error {
+func (p *Playbook) Save(ctx context.Context, path string) error {
 	path = filepath.Clean(path)
 
 	data := playbookJSON{
@@ -37,7 +38,7 @@ func (p *Playbook) Save(path string) error {
 		return fmt.Errorf("failed to marshal playbook: %w", err)
 	}
 
-	return storage.AtomicWriteFile(path, jsonData, 0o600)
+	return storage.AtomicWriteFile(ctx, path, jsonData, 0o600)
 }
 
 // Load deserializes a playbook from a JSON file.

@@ -51,13 +51,9 @@ func (c *curator) startWorkers(
 	requests []MergeRequest, jobs <-chan int, results chan<- jobResult,
 ) {
 	for range numWorkers {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			c.processJobs(ctx, requests, jobs, results)
-		}()
+		})
 	}
 }
 

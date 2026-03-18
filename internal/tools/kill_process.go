@@ -52,25 +52,19 @@ func (t *KillProcessTool) Schema() ToolSchema {
 }
 
 // Execute kills a running background task.
-func (t *KillProcessTool) Execute(_ context.Context, params ToolParameters) (ToolResult, error) {
+func (t *KillProcessTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	if t.manager == nil {
 		return NewToolResult("task manager not available"), nil
 	}
 
 	taskID, _ := params.GetString("task_id")
 	if taskID == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "task_id parameter is required",
-		}, nil
+		return NewToolError(errTaskIDParameterRequired), nil
 	}
 
-	err := t.manager.Kill(taskID)
+	err := t.manager.Kill(ctx, taskID)
 	if err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to kill task: %s", err),
-		}, nil
+		return NewToolError(fmt.Errorf("failed to kill task: %w", err)), nil
 	}
 
 	return NewToolResult(fmt.Sprintf("Task %s killed successfully.", taskID)), nil

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -484,12 +485,8 @@ func TestManager_ThreadSafety(t *testing.T) {
 	errChan := make(chan error, 100)
 
 	// Concurrent sets.
-	for i := range 10 {
-		wg.Add(1)
-
-		go func(_ int) {
-			defer wg.Done()
-
+	for range 10 {
+		wg.Go(func() {
 			cred := Credential{
 				Type:  CredentialTypeAPIKey,
 				Value: "test",
@@ -499,35 +496,27 @@ func TestManager_ThreadSafety(t *testing.T) {
 			if err != nil {
 				errChan <- err
 			}
-		}(i)
+		})
 	}
 
 	// Concurrent gets.
 	for range 10 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			_, err := m.GetCredential(ctx, "test")
 			if err != nil && !errors.Is(err, ErrNotAuthenticated) {
 				errChan <- err
 			}
-		}()
+		})
 	}
 
 	// Concurrent lists.
 	for range 10 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			_, err := m.ListProviders(ctx)
 			if err != nil {
 				errChan <- err
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -698,19 +687,19 @@ type errorKeystore struct {
 	err error
 }
 
-func (e *errorKeystore) Get(_ string) (string, error) {
+func (e *errorKeystore) Get(_ context.Context, _ string) (string, error) {
 	return "", e.err
 }
 
-func (e *errorKeystore) Set(_, _ string) error {
+func (e *errorKeystore) Set(_ context.Context, _, _ string) error {
 	return e.err
 }
 
-func (e *errorKeystore) Delete(_ string) error {
+func (e *errorKeystore) Delete(_ context.Context, _ string) error {
 	return e.err
 }
 
-func (e *errorKeystore) List() ([]string, error) {
+func (e *errorKeystore) List(_ context.Context) ([]string, error) {
 	return nil, e.err
 }
 
@@ -726,7 +715,11 @@ func newMockKeystore() *mockKeystore {
 	}
 }
 
-func (m *mockKeystore) Get(key string) (string, error) {
+func (m *mockKeystore) Get(ctx context.Context, key string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("mock get: %w", err)
+	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -738,7 +731,11 @@ func (m *mockKeystore) Get(key string) (string, error) {
 	return value, nil
 }
 
-func (m *mockKeystore) Set(key, value string) error {
+func (m *mockKeystore) Set(ctx context.Context, key, value string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("mock set: %w", err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -747,7 +744,11 @@ func (m *mockKeystore) Set(key, value string) error {
 	return nil
 }
 
-func (m *mockKeystore) Delete(key string) error {
+func (m *mockKeystore) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("mock delete: %w", err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -756,7 +757,11 @@ func (m *mockKeystore) Delete(key string) error {
 	return nil
 }
 
-func (m *mockKeystore) List() ([]string, error) {
+func (m *mockKeystore) List(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("mock list: %w", err)
+	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

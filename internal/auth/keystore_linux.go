@@ -3,6 +3,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -38,7 +39,11 @@ func newPlatformKeystore() Keystore {
 // Get retrieves a value from the keyring.
 //
 // Returns ErrNotFound if the key doesn't exist.
-func (k *linuxKeystore) Get(key string) (string, error) {
+func (k *linuxKeystore) Get(ctx context.Context, key string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("keyring get: %w", err)
+	}
+
 	value, err := keyring.Get(serviceName, key)
 	if err != nil {
 		if errors.Is(err, keyring.ErrNotFound) {
@@ -54,7 +59,11 @@ func (k *linuxKeystore) Get(key string) (string, error) {
 // Set stores a value in the keyring.
 //
 // If the key already exists, it is overwritten.
-func (k *linuxKeystore) Set(key, value string) error {
+func (k *linuxKeystore) Set(ctx context.Context, key, value string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("keyring set: %w", err)
+	}
+
 	err := keyring.Set(serviceName, key, value)
 	if err != nil {
 		return fmt.Errorf("keyring set: %w", err)
@@ -66,7 +75,11 @@ func (k *linuxKeystore) Set(key, value string) error {
 // Delete removes a value from the keyring.
 //
 // This operation is idempotent - deleting a non-existent key succeeds.
-func (k *linuxKeystore) Delete(key string) error {
+func (k *linuxKeystore) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("keyring delete: %w", err)
+	}
+
 	err := keyring.Delete(serviceName, key)
 	if err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		return fmt.Errorf("keyring delete: %w", err)
@@ -79,7 +92,11 @@ func (k *linuxKeystore) Delete(key string) error {
 //
 // The freedesktop.org Secret Service specification does not provide
 // a way to list all keys for a service. Use specific key names instead.
-func (k *linuxKeystore) List() ([]string, error) {
+func (k *linuxKeystore) List(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("keyring list: %w", err)
+	}
+
 	return nil, fmt.Errorf("list not supported on Linux Secret Service: %w", ErrNoKeystore)
 }
 

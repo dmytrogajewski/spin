@@ -40,7 +40,7 @@ type CommandContext interface {
 	// GetCurrentMode returns the current task mode for the session.
 	GetCurrentMode() string
 	// SetMode sets the task mode for the session.
-	SetMode(mode string) error
+	SetMode(ctx context.Context, mode string) error
 	// GetWorkDir returns the working directory for the session.
 	GetWorkDir() string
 }
@@ -117,7 +117,7 @@ func (c *ModeCommand) Description() string {
 }
 
 // Execute implements the Execute operation.
-func (c *ModeCommand) Execute(_ context.Context, args []string, cmdCtx CommandContext) (string, error) {
+func (c *ModeCommand) Execute(ctx context.Context, args []string, cmdCtx CommandContext) (string, error) {
 	// No arguments: show current mode.
 	if len(args) == 0 {
 		currentMode := cmdCtx.GetCurrentMode()
@@ -135,7 +135,7 @@ func (c *ModeCommand) Execute(_ context.Context, args []string, cmdCtx CommandCo
 	}
 
 	// Switch mode.
-	err = cmdCtx.SetMode(newMode)
+	err = cmdCtx.SetMode(ctx, newMode)
 	if err != nil {
 		return "", fmt.Errorf("error switching mode: %w", err)
 	}

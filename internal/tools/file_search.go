@@ -69,10 +69,7 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 	// Extract query parameter.
 	query, _ := params.GetString("query")
 	if query == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "query parameter must be a non-empty string",
-		}, nil
+		return NewToolError(errQueryParameterRequired), nil
 	}
 
 	// Extract workspace_root parameter (optional).
@@ -89,20 +86,14 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 	// Get or create searcher for this workspace.
 	searcher, err := t.getOrCreateSearcher(workspaceRoot)
 	if err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to create searcher: %v", err),
-		}, nil
+		return NewToolError(fmt.Errorf("failed to create searcher: %w", err)), nil
 	}
 
 	// Index if not already indexed.
 	if !searcher.IsIndexed() {
 		indexErr := searcher.IndexAsync(ctx)
 		if indexErr != nil {
-			return ToolResult{
-				Success: false,
-				Error:   fmt.Sprintf("failed to index workspace: %v", indexErr),
-			}, nil
+			return NewToolError(fmt.Errorf("failed to index workspace: %w", indexErr)), nil
 		}
 	}
 
@@ -121,10 +112,7 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 		}
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return NewToolResult(output.String()), nil
 }
 
 // getOrCreateSearcher returns the searcher for the given workspace, creating it if needed.

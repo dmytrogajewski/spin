@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,7 +34,7 @@ type IndexData struct {
 
 // MetadataScanner scans session metadata files to build index entries.
 type MetadataScanner interface {
-	ScanSessions() ([]IndexEntry, error)
+	ScanSessions(ctx context.Context) ([]IndexEntry, error)
 }
 
 // RebuildCallback is called when the index is rebuilt from scratch.
@@ -65,7 +66,7 @@ type Index struct {
 
 // NewSessionIndex creates or loads a session index from the given path.
 // If the index file is missing or corrupted and a scanner is provided, it rebuilds automatically.
-func NewSessionIndex(path string, scanner MetadataScanner, opts ...IndexOption) (*Index, error) {
+func NewSessionIndex(ctx context.Context, path string, scanner MetadataScanner, opts ...IndexOption) (*Index, error) {
 	idx := &Index{
 		path:    path,
 		entries: make(map[string]IndexEntry),
@@ -76,14 +77,14 @@ func NewSessionIndex(path string, scanner MetadataScanner, opts ...IndexOption) 
 		opt(idx)
 	}
 
-	loadErr := idx.load()
+	loadErr := idx.load(ctx)
 	if loadErr == nil {
 		return idx, nil
 	}
 
 	// Auto-rebuild if scanner is available.
 	if scanner != nil {
-		if rebuildErr := idx.Rebuild(scanner); rebuildErr != nil {
+		if rebuildErr := idx.Rebuild(ctx, scanner); rebuildErr != nil {
 			return nil, fmt.Errorf("auto-rebuild index: %w", rebuildErr)
 		}
 
@@ -99,21 +100,21 @@ func NewSessionIndex(path string, scanner MetadataScanner, opts ...IndexOption) 
 }
 
 // Update upserts an entry in the index and persists to disk.
-func (idx *Index) Update(entry IndexEntry) error {
+func (idx *Index) Update(ctx context.Context, entry IndexEntry) error {
 	idx.mu.Lock()
 	idx.entries[entry.ID] = entry
 	idx.mu.Unlock()
 
-	return idx.save()
+	return idx.save(ctx)
 }
 
 // Remove deletes an entry from the index and persists to disk.
-func (idx *Index) Remove(sessionID string) error {
+func (idx *Index) Remove(ctx context.Context, sessionID string) error {
 	idx.mu.Lock()
 	delete(idx.entries, sessionID)
 	idx.mu.Unlock()
 
-	return idx.save()
+	return idx.save(ctx)
 }
 
 // List returns index entries, optionally filtered by workDir.
@@ -156,12 +157,12 @@ func (idx *Index) Count() int {
 }
 
 // Rebuild replaces all entries by scanning metadata files via the provided scanner.
-func (idx *Index) Rebuild(scanner MetadataScanner) error {
+func (idx *Index) Rebuild(ctx context.Context, scanner MetadataScanner) error {
 	if scanner == nil {
 		return ErrScannerRequired
 	}
 
-	scanned, err := scanner.ScanSessions()
+	scanned, err := scanner.ScanSessions(ctx)
 	if err != nil {
 		return fmt.Errorf("scan sessions: %w", err)
 	}
@@ -175,7 +176,7 @@ func (idx *Index) Rebuild(scanner MetadataScanner) error {
 
 	idx.mu.Unlock()
 
-	if saveErr := idx.save(); saveErr != nil {
+	if saveErr := idx.save(ctx); saveErr != nil {
 		return fmt.Errorf("save after rebuild: %w", saveErr)
 	}
 
@@ -187,7 +188,11 @@ func (idx *Index) Rebuild(scanner MetadataScanner) error {
 }
 
 // load reads the index from disk.
-func (idx *Index) load() error {
+func (idx *Index) load(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("load index: %w", err)
+	}
+
 	data, readErr := os.ReadFile(idx.path)
 	if readErr != nil {
 		return fmt.Errorf("read index file: %w", readErr)
@@ -211,7 +216,7 @@ func (idx *Index) load() error {
 }
 
 // save persists the index to disk atomically.
-func (idx *Index) save() error {
+func (idx *Index) save(ctx context.Context) error {
 	idx.mu.RLock()
 
 	entries := make([]IndexEntry, 0, len(idx.entries))
@@ -232,7 +237,7 @@ func (idx *Index) save() error {
 		return fmt.Errorf("marshal index: %w", err)
 	}
 
-	if writeErr := storage.AtomicWriteFile(idx.path, data, storage.DefaultFilePerm); writeErr != nil {
+	if writeErr := storage.AtomicWriteFile(ctx, idx.path, data, storage.DefaultFilePerm); writeErr != nil {
 		return fmt.Errorf("write index file: %w", writeErr)
 	}
 

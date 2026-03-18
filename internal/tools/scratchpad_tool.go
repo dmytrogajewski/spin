@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/memory"
 )
@@ -95,7 +94,7 @@ func (t *ScratchpadTool) Schema() ToolSchema {
 func (t *ScratchpadTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	operation, _ := params.GetString("operation")
 	if operation == "" {
-		return NewToolError(ErrOperationParameterRequired), nil
+		return NewToolError(errOperationParameterRequired), nil
 	}
 
 	switch operation {
@@ -116,89 +115,20 @@ func (t *ScratchpadTool) Execute(ctx context.Context, params ToolParameters) (To
 	case "clear":
 		return t.executeClear(ctx, params)
 	default:
-		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, ErrUnknownOperation)), nil
+		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, errUnknownOperation)), nil
 	}
 }
 
 func (t *ScratchpadTool) executePut(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, _ := params.GetString("key")
-	if key == "" {
-		return NewToolError(ErrKeyParameterRequiredForPut), nil
-	}
-
-	value, _ := params.GetString("value")
-	if value == "" {
-		return NewToolError(ErrValueParameterRequiredForPut), nil
-	}
-
-	opts := memory.PutOptions{
-		Overwrite: true,
-	}
-
-	ns, _ := params.GetString("namespace")
-	if ns != "" {
-		opts.Namespace = ns
-	}
-
-	// Handle tags - they come as an array.
-	if params.Has("tags") {
-		var tags []string
-
-		tagsErr := params.GetObject("tags", &tags)
-		if tagsErr == nil {
-			opts.Tags = tags
-		}
-	}
-
-	putErr := t.scratchpad.Put(ctx, key, value, opts)
-	if putErr != nil {
-		return ErrToResultf("failed to store entry: %v", putErr)
-	}
-
-	return NewToolResult(fmt.Sprintf("Stored entry with key '%s' (%d bytes)", key, len(value))), nil
+	return storePut(ctx, t.scratchpad, params, "")
 }
 
 func (t *ScratchpadTool) executeGet(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, _ := params.GetString("key")
-	if key == "" {
-		return NewToolError(ErrKeyParameterRequiredForGet), nil
-	}
-
-	entry, getErr := t.scratchpad.Get(ctx, key)
-	if getErr != nil {
-		if errors.Is(getErr, memory.ErrNotFound) {
-			return ErrToResultf("key '%s' not found in scratchpad", fmt.Errorf("%s: %w", key, ErrKeyNotFound))
-		}
-
-		return ErrToResultf("failed to get entry: %v", getErr)
-	}
-
-	// Format output with metadata.
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Key: %s\n", entry.Key)
-	fmt.Fprintf(&sb, "Namespace: %s\n", entry.Namespace)
-
-	if len(entry.Tags) > 0 {
-		fmt.Fprintf(&sb, "Tags: %s\n", strings.Join(entry.Tags, ", "))
-	}
-
-	fmt.Fprintf(&sb, "Value:\n%s", entry.Value)
-
-	return NewToolResult(sb.String()), nil
+	return storeGet(ctx, t.scratchpad, params, "scratchpad", nil)
 }
 
 func (t *ScratchpadTool) executeDelete(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, _ := params.GetString("key")
-	if key == "" {
-		return NewToolError(ErrKeyParameterRequiredForDelete), nil
-	}
-
-	delErr := t.scratchpad.Delete(ctx, key)
-	if delErr != nil {
-		return ErrToResultf("failed to delete entry: %v", delErr)
-	}
-
-	return NewToolResult(fmt.Sprintf("Entry '%s' deleted", key)), nil
+	return storeDelete(ctx, t.scratchpad, params, "")
 }
 
 func (t *ScratchpadTool) executeList(ctx context.Context, params ToolParameters) (ToolResult, error) {
@@ -212,13 +142,13 @@ func (t *ScratchpadTool) executeSearch(ctx context.Context, params ToolParameter
 func (t *ScratchpadTool) executePin(_ context.Context, params ToolParameters) (ToolResult, error) {
 	key, _ := params.GetString("key")
 	if key == "" {
-		return NewToolError(ErrKeyParameterRequiredForPin), nil
+		return NewToolError(errKeyParameterRequiredForPin), nil
 	}
 
 	pinErr := t.scratchpad.Pin(key)
 	if pinErr != nil {
 		if errors.Is(pinErr, memory.ErrNotFound) {
-			return ErrToResultf("key '%s' not found in scratchpad", fmt.Errorf("%s: %w", key, ErrKeyNotFound))
+			return ErrToResultf("key '%s' not found in scratchpad", fmt.Errorf("%s: %w", key, errKeyNotFound))
 		}
 
 		return ErrToResultf("failed to pin entry: %v", pinErr)
@@ -230,13 +160,13 @@ func (t *ScratchpadTool) executePin(_ context.Context, params ToolParameters) (T
 func (t *ScratchpadTool) executeUnpin(_ context.Context, params ToolParameters) (ToolResult, error) {
 	key, _ := params.GetString("key")
 	if key == "" {
-		return NewToolError(ErrKeyParameterRequiredForUnpin), nil
+		return NewToolError(errKeyParameterRequiredForUnpin), nil
 	}
 
 	unpinErr := t.scratchpad.Unpin(key)
 	if unpinErr != nil {
 		if errors.Is(unpinErr, memory.ErrNotFound) {
-			return ErrToResultf("key '%s' not found in scratchpad", fmt.Errorf("%s: %w", key, ErrKeyNotFound))
+			return ErrToResultf("key '%s' not found in scratchpad", fmt.Errorf("%s: %w", key, errKeyNotFound))
 		}
 
 		return ErrToResultf("failed to unpin entry: %v", unpinErr)

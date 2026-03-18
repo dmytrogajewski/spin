@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -44,7 +45,7 @@ func TestParsePrompt_EmptyReader(t *testing.T) {
 		t.Fatal("expected error for empty input")
 	}
 
-	if err != ErrNoPromptProvidedUseCommandLine {
+	if !errors.Is(err, ErrNoPromptProvidedUseCommandLine) {
 		t.Errorf("got %v, want %v", err, ErrNoPromptProvidedUseCommandLine)
 	}
 }

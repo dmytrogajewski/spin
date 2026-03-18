@@ -161,6 +161,7 @@ func initializeMCPRegistries(ctx context.Context, registryManager *mcp.DefaultRe
 // createBuiltinRuntime creates a builtin runtime with all required dependencies.
 // This is shared between TUI and EXEC modes to ensure consistent runtime setup.
 func createBuiltinRuntime(
+	ctx context.Context,
 	workDir string,
 	emitter *events.EventEmitter,
 	storage session.Storage,
@@ -179,8 +180,8 @@ func createBuiltinRuntime(
 		WithApprovalHandler(approvalHandler)
 
 		// Build security service and executor.
-	securitySvc := agentBuilder.BuildSecurityService()
-	exec := agentBuilder.BuildExecutor()
+	securitySvc := agentBuilder.BuildSecurityService(ctx)
+	exec := agentBuilder.BuildExecutor(ctx)
 	validator := securitySvc.Validator()
 
 	// Create builtin executor.

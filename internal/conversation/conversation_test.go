@@ -350,27 +350,19 @@ func TestConversation_TaskMode_Concurrent(t *testing.T) {
 
 	// 50 concurrent readers.
 	for range 50 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			_ = conv.GetTaskMode()
-		}()
+		})
 	}
 
 	// 10 concurrent writers.
 	modes := []string{testModeRegular, "review", testModeCompact, "planning"}
 
 	for i := range 10 {
-		wg.Add(1)
-
-		go func(i int) {
-			defer wg.Done()
-
+		wg.Go(func() {
 			mode := modes[i%len(modes)]
 			_ = conv.SetTaskMode(mode)
-		}(i)
+		})
 	}
 
 	wg.Wait()
@@ -636,42 +628,30 @@ func TestConversation_ProtocolFields_ThreadSafety(t *testing.T) {
 
 	// Concurrent writes to turnID.
 	for i := range iterations {
-		wg.Add(1)
-
-		go func(i int) {
-			defer wg.Done()
-
+		wg.Go(func() {
 			turnID := fmt.Sprintf("turn-%d", i)
 			conv.SetTurnID(turnID)
 			// Read back (may be different due to concurrent writes, but should not panic).
 			_ = conv.GetTurnID()
-		}(i)
+		})
 	}
 
 	// Concurrent reads to turnID.
 	for range iterations {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			_ = conv.GetTurnID()
-		}()
+		})
 	}
 
 	// Concurrent cancel operations.
 	for range iterations {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			ctx, cancel := context.WithCancel(context.Background())
 			conv.SetCancel(cancel)
 			conv.Cancel()
 
 			_ = ctx.Err()
-		}()
+		})
 	}
 
 	wg.Wait()

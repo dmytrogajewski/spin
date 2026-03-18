@@ -165,7 +165,7 @@ func buildProvider(ctx context.Context, cfg *config.V2, authMgr *auth.Manager) (
 }
 
 // parsePrompt parses the prompt from command line args or the given reader.
-// If no args are provided, it reads from r (typically os.Stdin).
+// If no args are provided, it reads from r (typically [os.Stdin]).
 func parsePrompt(args []string, r io.Reader) (string, error) {
 	if len(args) > 0 {
 		// Join all args as prompt.
@@ -208,7 +208,7 @@ func resolveSessionID(storage session.Storage, workDir, prefix string) string {
 }
 
 // createExecUI creates the UI adapter for exec mode.
-// The out writer is used for all output; when nil it defaults to os.Stdout.
+// The out writer is used for all output; when nil it defaults to [os.Stdout].
 func createExecUI(out io.Writer) (ports.UI, error) {
 	if out == nil {
 		out = os.Stdout
@@ -268,7 +268,7 @@ func createConversationForExec(
 		return nil, fmt.Errorf("create TUI: %w", err)
 	}
 
-	builtinRuntime, err := createBuiltinRuntime(workDir, emitter, storage, sessionID, approvalHandler, services, ui, logger, cfg)
+	builtinRuntime, err := createBuiltinRuntime(ctx, workDir, emitter, storage, sessionID, approvalHandler, services, ui, logger, cfg)
 	if err != nil {
 		cleanup()
 

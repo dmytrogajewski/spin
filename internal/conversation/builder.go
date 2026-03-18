@@ -154,7 +154,7 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 		WithWorkingDir(b.workDir).
 		WithEmitter(b.emitter).
 		WithRuntime(b.runtime).
-		BuildExecutor()
+		BuildExecutor(ctx)
 
 		// Gather environment using agent package helper with unified config.
 	env := agent.NewBuilder().
@@ -170,7 +170,7 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	logger.InfoContext(ctx, "session created", "session_id", sess.ID)
 
 	// Initialize memory services if configured.
-	err = b.initializeMemory(sess.ID)
+	err = b.initializeMemory(ctx, sess.ID)
 	if err != nil {
 		return nil, fmt.Errorf("initialize memory: %w", err)
 	}

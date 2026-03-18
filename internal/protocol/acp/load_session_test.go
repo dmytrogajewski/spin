@@ -79,7 +79,7 @@ func TestSpinACPAgent_LoadSession_Success(t *testing.T) {
 	// Create and save a session.
 	sess := session.NewSession("/tmp/test")
 	_ = sess.SetTitle("Test Session")
-	err = storage.Save(sess.ID, *sess)
+	err = storage.Save(context.Background(), sess.ID, *sess)
 	require.NoError(t, err)
 
 	req := acp.LoadSessionRequest{
@@ -118,7 +118,7 @@ func TestSpinACPAgent_LoadSession_WithMcpServers(t *testing.T) {
 
 	// Create and save a session.
 	sess := session.NewSession("/tmp/test")
-	err = storage.Save(sess.ID, *sess)
+	err = storage.Save(context.Background(), sess.ID, *sess)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -169,7 +169,7 @@ func TestSpinACPAgent_LoadSession_InvalidMcpServer(t *testing.T) {
 
 	// Create and save a session.
 	sess := session.NewSession("/tmp/test")
-	err = storage.Save(sess.ID, *sess)
+	err = storage.Save(context.Background(), sess.ID, *sess)
 	require.NoError(t, err)
 
 	req := acp.LoadSessionRequest{

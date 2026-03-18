@@ -78,11 +78,7 @@ func TestEventEmitter_BackpressureDrop_FastConsumer(t *testing.T) {
 
 	var mu sync.Mutex
 
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		timeout := time.After(200 * time.Millisecond)
 
 		for range 5 {
@@ -97,7 +93,7 @@ func TestEventEmitter_BackpressureDrop_FastConsumer(t *testing.T) {
 				return // Timeout - not all events received.
 			}
 		}
-	}()
+	})
 
 	// Emit events with small delay to let consumer keep up.
 	for i := 1; i <= 5; i++ {
@@ -496,16 +492,12 @@ func TestEventEmitter_CloseDuringEmit(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Emit continuously.
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
+	wg.Go(func() {
 		for i := range 100 {
 			emitter.Emit(Event{Type: EventInfo, Data: i})
 			time.Sleep(1 * time.Millisecond)
 		}
-	}()
+	})
 
 	// Close after a bit.
 	time.Sleep(50 * time.Millisecond)

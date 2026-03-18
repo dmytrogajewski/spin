@@ -25,7 +25,7 @@ func TestTUIToolExecution(t *testing.T) {
 	binPath := getBinPath(t)
 
 	// Use a model that supports tool calling.
-	cmd := exec.Command(binPath, "--model", "dummy", "--provider", "test-llm")
+	cmd := exec.CommandContext(t.Context(), binPath, "--model", "dummy", "--provider", "test-llm")
 	cmd.Stdin = console.Tty()
 	cmd.Stdout = console.Tty()
 	cmd.Stderr = console.Tty()
@@ -99,7 +99,7 @@ func TestTUIToolVisualization(t *testing.T) {
 	defer console.Close()
 
 	binPath := getBinPath(t)
-	cmd := exec.Command(binPath, "--model", "dummy", "--provider", "test-llm")
+	cmd := exec.CommandContext(t.Context(), binPath, "--model", "dummy", "--provider", "test-llm")
 	cmd.Stdin = console.Tty()
 	cmd.Stdout = console.Tty()
 	cmd.Stderr = console.Tty()
@@ -179,7 +179,7 @@ func runTUIToolTests(t *testing.T, cases []tuiToolCase) {
 			defer console.Close()
 
 			binPath := getBinPath(t)
-			cmd := exec.Command(binPath, "--model", "dummy", "--provider", "test-llm")
+			cmd := exec.CommandContext(t.Context(), binPath, "--model", "dummy", "--provider", "test-llm")
 			cmd.Stdin = console.Tty()
 			cmd.Stdout = console.Tty()
 			cmd.Stderr = console.Tty()
@@ -269,7 +269,7 @@ func TestTUIReadFileTool(t *testing.T) {
 	defer console.Close()
 
 	binPath := getBinPath(t)
-	cmd := exec.Command(binPath, "--model", "dummy", "--provider", "test-llm")
+	cmd := exec.CommandContext(t.Context(), binPath, "--model", "dummy", "--provider", "test-llm")
 	cmd.Stdin = console.Tty()
 	cmd.Stdout = console.Tty()
 	cmd.Stderr = console.Tty()
@@ -337,7 +337,7 @@ func TestTUIToolWithoutCycleDetection(t *testing.T) {
 
 	// Placeholder: Add flag to disable cycle detection if config supports it
 	// This would allow testing without cycle detection triggering.
-	cmd := exec.Command(binPath, "--model", "dummy", "--provider", "test-llm")
+	cmd := exec.CommandContext(t.Context(), binPath, "--model", "dummy", "--provider", "test-llm")
 	cmd.Stdin = console.Tty()
 	cmd.Stdout = console.Tty()
 	cmd.Stderr = console.Tty()

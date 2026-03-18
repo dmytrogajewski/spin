@@ -92,7 +92,10 @@ func (t *ApplyPatchTool) Schema() ToolSchema {
 }
 
 // Execute implements the Execute operation.
-func (t *ApplyPatchTool) Execute(_ context.Context, params ToolParameters) (ToolResult, error) {
+func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
+	if err := ctx.Err(); err != nil {
+		return NewToolError(err), nil
+	}
 	// Extract patch_text parameter.
 	patchText, _ := params.GetString("patch_text")
 	if patchText == "" {
@@ -125,7 +128,7 @@ func (t *ApplyPatchTool) Execute(_ context.Context, params ToolParameters) (Tool
 		}, nil
 	}
 
-	result, err := t.applyPatch(workspaceRoot, patch, dryRun, force)
+	result, err := t.applyPatch(ctx, workspaceRoot, patch, dryRun, force)
 	if err != nil {
 		return ToolResult{
 			Success: false,
@@ -140,7 +143,9 @@ func (t *ApplyPatchTool) Execute(_ context.Context, params ToolParameters) (Tool
 }
 
 // applyPatch creates an applier and applies the patch.
-func (t *ApplyPatchTool) applyPatch(workspaceRoot string, patch *patchapply.Patch, dryRun, force bool) (*patchapply.ApplyResult, error) {
+func (t *ApplyPatchTool) applyPatch(
+	ctx context.Context, workspaceRoot string, patch *patchapply.Patch, dryRun, force bool,
+) (*patchapply.ApplyResult, error) {
 	applier, err := patchapply.NewApplier(workspaceRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create applier: %w", err)
@@ -149,7 +154,7 @@ func (t *ApplyPatchTool) applyPatch(workspaceRoot string, patch *patchapply.Patc
 	applier.SetDryRun(dryRun)
 	applier.SetForceOverwrite(force)
 
-	return applier.Apply(patch)
+	return applier.Apply(ctx, patch)
 }
 
 // formatApplyResult formats the apply result into a human-readable string.

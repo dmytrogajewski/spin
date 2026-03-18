@@ -9,6 +9,8 @@ const (
 	DefaultContextWindow = 128_000
 	// CacheTTL is the duration a cache entry is considered fresh.
 	CacheTTL = 24 * time.Hour
+	// BackgroundRefreshTimeout is the maximum duration for a background refresh operation.
+	BackgroundRefreshTimeout = 30 * time.Second
 	// cacheFilePerm is the file permission for cache files.
 	cacheFilePerm = 0o600
 	// cacheDirPerm is the directory permission for the cache directory.

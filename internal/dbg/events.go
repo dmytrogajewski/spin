@@ -245,6 +245,23 @@ func buildConversation(
 	return conv, nil
 }
 
+// handleEvent processes a single event, returning whether to stop and any error.
+func (el *EventLogger) handleEvent(event events.Event) (bool, error) {
+	if el.shouldLog(event) {
+		el.logEvent(event)
+	}
+
+	if event.Type == events.EventError {
+		return true, fmt.Errorf("task failed: %v: %w", event.Data, ErrTaskFailed)
+	}
+
+	if event.Type == events.EventTurnComplete || event.Type == events.EventTurnFailed {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 // processEvents reads and logs events from the stream, returning any error.
 // It respects context cancellation to avoid blocking when the turn completes
 // without emitting a terminal event.
@@ -252,22 +269,14 @@ func (el *EventLogger) processEvents(ctx context.Context, eventStream <-chan eve
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("process events: %w", ctx.Err())
 		case event, ok := <-eventStream:
 			if !ok {
 				return nil
 			}
 
-			if el.shouldLog(event) {
-				el.logEvent(event)
-			}
-
-			if event.Type == events.EventError {
-				return fmt.Errorf("task failed: %v: %w", event.Data, ErrTaskFailed)
-			}
-
-			if event.Type == events.EventTurnComplete || event.Type == events.EventTurnFailed {
-				return nil
+			if done, err := el.handleEvent(event); done {
+				return err
 			}
 		}
 	}

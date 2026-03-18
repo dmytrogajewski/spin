@@ -65,7 +65,7 @@ func TestBuilder_BuildExecutor(t *testing.T) {
 		WithWorkingDir("/tmp/test").
 		WithEmitter(emitter)
 
-	exec := builder.BuildExecutor()
+	exec := builder.BuildExecutor(context.Background())
 
 	if exec == nil {
 		t.Fatal("BuildExecutor() returned nil")
@@ -127,7 +127,7 @@ func TestBuilder_BuildHelpers(t *testing.T) {
 		WithEmitter(emitter)
 
 		// Test individual builders.
-	secSvc := builder.BuildSecurityService()
+	secSvc := builder.BuildSecurityService(context.Background())
 	if secSvc == nil {
 		t.Fatal("BuildSecurityService() returned nil")
 	}

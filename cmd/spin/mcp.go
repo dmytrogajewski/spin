@@ -12,11 +12,15 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/dmytrogajewski/spin/internal/config"
 )
+
+// smitheryClientTimeout is the HTTP timeout for Smithery API search requests.
+const smitheryClientTimeout = 30 * time.Second
 
 var (
 	// ErrInvalidTransport is a sentinel error.
@@ -1000,7 +1004,9 @@ func searchSmitheryAPI(ctx context.Context, query, apiKey string, limit int, ver
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Accept", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: smitheryClientTimeout,
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {

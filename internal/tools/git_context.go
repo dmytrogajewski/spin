@@ -69,10 +69,7 @@ func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (To
 	repo, err := git.Discover(ctx, workspaceRoot)
 	if err != nil {
 		// Gracefully handle non-git directories.
-		return ToolResult{
-			Success: true,
-			Output:  fmt.Sprintf("Not a Git repository: %v\n", err),
-		}, nil
+		return NewToolResult(fmt.Sprintf("Not a Git repository: %v\n", err)), nil
 	}
 
 	var output strings.Builder
@@ -82,10 +79,7 @@ func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (To
 	// Get status (includes branch info).
 	status, err := repo.Status(ctx)
 	if err != nil {
-		return ToolResult{
-			Success: false,
-			Output:  fmt.Sprintf("Failed to get git status: %v\n", err),
-		}, nil
+		return NewToolError(fmt.Errorf("failed to get git status: %w", err)), nil
 	}
 
 	// Branch info.
@@ -127,8 +121,5 @@ func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (To
 		}
 	}
 
-	return ToolResult{
-		Success: true,
-		Output:  output.String(),
-	}, nil
+	return NewToolResult(output.String()), nil
 }

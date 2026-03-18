@@ -68,7 +68,7 @@ func TestPlaybook_SaveIncludesVersion(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "playbook.json")
 
-	err := pb.Save(path)
+	err := pb.Save(t.Context(), path)
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(path)

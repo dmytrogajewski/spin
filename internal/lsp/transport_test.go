@@ -285,3 +285,96 @@ func TestStdioTransport_CloseIdempotent(t *testing.T) {
 	// Second close should be a no-op.
 	require.NoError(t, transport.Close())
 }
+
+func TestStdioTransport_ServerCrash_UnblocksPendingSend(t *testing.T) {
+	t.Parallel()
+
+	clientToServer := newMockPipe()
+	serverToClient := newMockPipe()
+
+	// Drain client writes so they don't block.
+	go func() {
+		buf := make([]byte, 4096)
+
+		for {
+			if _, readErr := clientToServer.reader.Read(buf); readErr != nil {
+				return
+			}
+		}
+	}()
+
+	transport := lsp.NewStdioTransport(serverToClient.reader, clientToServer.writer)
+
+	defer func() { _ = transport.Close() }()
+
+	// Start a Send that will block waiting for response.
+	sendDone := make(chan error, 1)
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+		defer cancel()
+
+		_, sendErr := transport.Send(ctx, testMethod, nil)
+		sendDone <- sendErr
+	}()
+
+	// Give Send time to register the pending request.
+	time.Sleep(50 * time.Millisecond)
+
+	// Simulate server crash by closing the writer end of the server->client pipe.
+	serverToClient.writer.Close()
+
+	// Send should unblock quickly with an error (not wait for ctx timeout).
+	select {
+	case sendErr := <-sendDone:
+		require.Error(t, sendErr)
+		// Should NOT be a context error — it should be a transport read error.
+		require.NotErrorIs(t, sendErr, context.DeadlineExceeded)
+	case <-time.After(testTimeout):
+		t.Fatal("Send did not unblock after server crash")
+	}
+}
+
+func TestStdioTransport_CleanClose_ReturnsTransportClosed(t *testing.T) {
+	t.Parallel()
+
+	clientToServer := newMockPipe()
+	serverToClient := newMockPipe()
+
+	// Drain client writes so they don't block.
+	go func() {
+		buf := make([]byte, 4096)
+
+		for {
+			if _, readErr := clientToServer.reader.Read(buf); readErr != nil {
+				return
+			}
+		}
+	}()
+
+	transport := lsp.NewStdioTransport(serverToClient.reader, clientToServer.writer)
+
+	// Start a Send that will block waiting for response.
+	sendDone := make(chan error, 1)
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+		defer cancel()
+
+		_, sendErr := transport.Send(ctx, testMethod, nil)
+		sendDone <- sendErr
+	}()
+
+	// Give Send time to register.
+	time.Sleep(50 * time.Millisecond)
+
+	// Clean close.
+	require.NoError(t, transport.Close())
+
+	select {
+	case sendErr := <-sendDone:
+		require.ErrorIs(t, sendErr, lsp.ErrTransportClosed)
+	case <-time.After(testTimeout):
+		t.Fatal("Send did not unblock after Close")
+	}
+}

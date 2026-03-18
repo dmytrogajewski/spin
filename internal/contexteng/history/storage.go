@@ -1,6 +1,7 @@
 package history
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -36,7 +37,7 @@ func NewFileStorage(baseDir string) (Storage, error) {
 }
 
 // Save persists the history to storage.
-func (h *History) Save(store Storage, sessionID string) error {
+func (h *History) Save(ctx context.Context, store Storage, sessionID string) error {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -49,12 +50,12 @@ func (h *History) Save(store Storage, sessionID string) error {
 	}
 	copy(data.Messages, h.messages)
 
-	return store.Save(sessionID, data)
+	return store.Save(ctx, sessionID, data)
 }
 
 // Load restores history from storage.
-func (h *History) Load(store Storage, sessionID string) error {
-	data, err := store.Load(sessionID)
+func (h *History) Load(ctx context.Context, store Storage, sessionID string) error {
+	data, err := store.Load(ctx, sessionID)
 	if err != nil {
 		return err
 	}

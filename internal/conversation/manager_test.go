@@ -547,18 +547,14 @@ func TestManager_Concurrent(t *testing.T) {
 
 	// Concurrent GetOrCreate.
 	for i := range numGoroutines {
-		wg.Add(1)
-
-		go func(n int) {
-			defer wg.Done()
-
-			sessionID := fmt.Sprintf("session-%d", n%10) // 10 unique sessions.
+		wg.Go(func() {
+			sessionID := fmt.Sprintf("session-%d", i%10) // 10 unique sessions.
 
 			_, createErr := mgr.GetOrCreate(context.Background(), sessionID, "/tmp")
 			if createErr != nil {
 				t.Errorf("GetOrCreate failed: %v", createErr)
 			}
-		}(i)
+		})
 	}
 
 	wg.Wait()
@@ -570,27 +566,19 @@ func TestManager_Concurrent(t *testing.T) {
 
 	// Concurrent Get.
 	for i := range numGoroutines {
-		wg.Add(1)
-
-		go func(n int) {
-			defer wg.Done()
-
-			sessionID := fmt.Sprintf("session-%d", n%10)
+		wg.Go(func() {
+			sessionID := fmt.Sprintf("session-%d", i%10)
 			mgr.Get(sessionID)
-		}(i)
+		})
 	}
 
 	wg.Wait()
 
 	// Concurrent List.
 	for range numGoroutines {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			mgr.List()
-		}()
+		})
 	}
 
 	wg.Wait()

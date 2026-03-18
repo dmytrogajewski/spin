@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,7 +15,15 @@ const DefaultFilePerm = os.FileMode(0o600)
 // directory, then renamed to the final path. This ensures that readers
 // never see a partially-written file. The perm argument sets the file
 // mode on the staging file before rename.
-func AtomicWriteFile(path string, data []byte, perm os.FileMode) error {
+//
+// The context is checked before each I/O step. If the context is canceled,
+// any partially-written temp file is cleaned up and the target file remains
+// untouched.
+func AtomicWriteFile(ctx context.Context, path string, data []byte, perm os.FileMode) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("atomic write %s: %w", filepath.Base(path), err)
+	}
+
 	dir := filepath.Dir(path)
 
 	tmpFile, err := os.CreateTemp(dir, ".atomic-*")
@@ -23,6 +32,14 @@ func AtomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	}
 
 	tmpPath := tmpFile.Name()
+
+	// Check context before write.
+	if err := ctx.Err(); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+
+		return fmt.Errorf("atomic write %s: %w", filepath.Base(path), err)
+	}
 
 	// Write data to temp file.
 	_, err = tmpFile.Write(data)
@@ -47,6 +64,13 @@ func AtomicWriteFile(path string, data []byte, perm os.FileMode) error {
 		os.Remove(tmpPath)
 
 		return fmt.Errorf("close temp file: %w", err)
+	}
+
+	// Check context before rename.
+	if err := ctx.Err(); err != nil {
+		os.Remove(tmpPath)
+
+		return fmt.Errorf("atomic write %s: %w", filepath.Base(path), err)
 	}
 
 	// Atomic rename.

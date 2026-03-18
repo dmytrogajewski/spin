@@ -122,7 +122,7 @@ four tools call it.
 ---
 
 ## R-T5: Consolidate ToolResult Construction Patterns
-**Status**: Pending
+**Status**: Done
 **Spec Section**: F-6
 **Journey**: [JOURNEY-RT5.md](../../journeys/JOURNEY-RT5.md)
 
@@ -137,11 +137,12 @@ the standard `NewToolResult()`/`NewToolError()`/`ErrToResultf()` constructors.
   `file_search.go`, `apply_patch.go`, `kill_process.go`, `get_process_output.go`
 
 ### Definition of Done
-- [ ] `gitSuccessResult` and `gitErrorResult` deleted
-- [ ] All git operation handlers use `NewToolResult()` / `NewToolError()`
-- [ ] Inline `ToolResult{Success: false, Error: "msg"}` replaced with
-  `NewToolError(errors.New("msg"))` or `ErrToResultf`
-- [ ] All tests pass unchanged (behavioral equivalence)
+- [x] `gitSuccessResult` and `gitErrorResult` deleted (done in ctx lint fixes)
+- [x] All git operation handlers use `NewToolResult()` / `NewToolError()`
+- [x] Inline `ToolResult{Success: false, Error: "msg"}` replaced with sentinel errors + `NewToolError`
+- [x] Inline `errors.New(...)` extracted to package-level sentinels (fixes err113)
+- [x] `%v`/`%s` error format verbs fixed to `%w` (fixes errorlint)
+- [x] All tests pass (3 test expectations updated for new error format)
 
 ### Estimated Scope
 ~60 lines changed across 4-5 files.
@@ -149,7 +150,7 @@ the standard `NewToolResult()`/`NewToolError()`/`ErrToResultf()` constructors.
 ---
 
 ## R-T6: Move Registry Validation to Package Functions
-**Status**: Pending
+**Status**: Done
 **Spec Section**: F-7
 **Journey**: [JOURNEY-RT6.md](../../journeys/JOURNEY-RT6.md)
 
@@ -165,10 +166,10 @@ with no Registry side effects.
 - [x] None access `r.tools` or any Registry field
 
 ### Definition of Done
-- [ ] All 7 methods converted to package-level functions (remove receiver)
-- [ ] `Registry.Execute` and `Registry.validateParams` call the functions
-- [ ] All `registry_test.go` tests pass unchanged
-- [ ] No exported API changes (all 7 were unexported)
+- [x] All 7 methods converted to package-level functions (remove receiver)
+- [x] `Registry.Execute` calls `validateParams` (no receiver)
+- [x] All `registry_test.go` tests pass unchanged
+- [x] No exported API changes (all 7 were unexported)
 
 ### Estimated Scope
 ~40 lines changed in 1 file.
@@ -176,29 +177,21 @@ with no Registry side effects.
 ---
 
 ## R-T7: Unexport Internal-Only Sentinel Errors
-**Status**: Pending
+**Status**: Done
 **Spec Section**: F-8
 **Journey**: [JOURNEY-RT7.md](../../journeys/JOURNEY-RT7.md)
 
 ### Description
-11 sentinel errors in `errors.go` are exported but never used outside the
-`tools` package. Unexport them to reduce API surface.
-
-### Definition of Ready
-- [x] Verified via grep: none of these errors are referenced outside
-  `internal/tools/`
-- [x] List: `ErrPathParameterRequired`, `ErrContentParameterRequired`,
-  `ErrOperationParameterRequired`, `ErrUnknownOperation`,
-  `ErrKeyParameterRequiredForPut`, `ErrValueParameterRequiredForPut`,
-  `ErrKeyParameterRequiredForGet`, `ErrKeyParameterRequiredForDelete`,
-  `ErrQueryParameterRequiredForSearch`, `ErrKeyParameterRequiredForPin`,
-  `ErrKeyParameterRequiredForUnpin`
+All sentinel errors in `errors.go` and `git_operation_tool.go` are exported
+but never used outside the `tools` package. Unexport them to reduce API surface.
 
 ### Definition of Done
-- [ ] All 11 errors renamed from `ErrX` to `errX` (unexported)
-- [ ] All internal references updated
-- [ ] Package compiles, all tests pass
-- [ ] `go vet ./...` clean for the package
+- [x] All 17 errors in `errors.go` unexported (original 11 + 6 new from R-T5)
+- [x] All 8 errors in `git_operation_tool.go` unexported
+- [x] 1 unused error removed (`errContentParameterRequired`)
+- [x] All internal references updated across 12 files
+- [x] Package compiles, all tests pass
+- [x] `make lint` 0 issues
 
 ### Estimated Scope
 ~30 lines changed across 5-6 files.
@@ -226,17 +219,15 @@ unexporting) are done first, reducing merge surface.
 - [x] Duplication analysis complete (see SPEC F-1 table)
 
 ### Definition of Done
-- [ ] `storePut(ctx, store, params, label) (ToolResult, error)` added to
-  `store_helpers.go`
-- [ ] `storeGet(ctx, store, params, label, formatEntry) (ToolResult, error)`
-  added with optional entry formatter callback for timestamps
-- [ ] `storeDelete(ctx, store, params, label) (ToolResult, error)` added
-- [ ] `ScratchpadTool.executePut/Get/Delete` delegate to shared functions
-- [ ] `MemoryTool.executePut/Get/Delete` delegate to shared functions
-- [ ] MemoryTool passes a formatter that includes CreatedAt/UpdatedAt
-- [ ] ScratchpadTool retains its own `executePin/Unpin/Clear` (unique)
-- [ ] All scratchpad_tool_test.go and memory_tool_test.go tests pass
-- [ ] Net LOC reduction: ~80-100 lines
+- [x] `storePut` added to `store_helpers.go`
+- [x] `storeGet` added with optional `entryFormatter` callback
+- [x] `storeDelete` added
+- [x] `ScratchpadTool.executePut/Get/Delete` delegate to shared functions
+- [x] `MemoryTool.executePut/Get/Delete` delegate to shared functions
+- [x] MemoryTool passes `memoryEntryFormatter` that includes CreatedAt/UpdatedAt
+- [x] ScratchpadTool retains its own `executePin/Unpin/Clear` (unique)
+- [x] All tests pass
+- [x] `make lint` 0 issues
 
 ### Estimated Scope
 ~150 lines changed across 3 files.

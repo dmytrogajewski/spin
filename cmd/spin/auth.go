@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -151,9 +150,7 @@ func runAuthLogin(cmd *cobra.Command, args []string) error {
 		Value: apiKey,
 	}
 
-	ctx := context.Background()
-
-	err := authMgr.SetCredential(ctx, provider, cred)
+	err := authMgr.SetCredential(cmd.Context(), provider, cred)
 	if err != nil {
 		return fmt.Errorf("failed to store credential: %w", err)
 	}
@@ -171,9 +168,7 @@ func runAuthLogout(cmd *cobra.Command, args []string) error {
 	authMgr := createAuthManager()
 
 	// Delete credential.
-	ctx := context.Background()
-
-	err := authMgr.DeleteCredential(ctx, provider)
+	err := authMgr.DeleteCredential(cmd.Context(), provider)
 	if err != nil {
 		return fmt.Errorf("failed to delete credential: %w", err)
 	}
@@ -189,9 +184,7 @@ func runAuthList(cmd *cobra.Command, _ []string) error {
 	authMgr := createAuthManager()
 
 	// List providers.
-	ctx := context.Background()
-
-	providers, err := authMgr.ListProviders(ctx)
+	providers, err := authMgr.ListProviders(cmd.Context())
 	if err != nil {
 		// Check if this is the "list not supported" error on Linux.
 		if strings.Contains(err.Error(), "list not supported") {

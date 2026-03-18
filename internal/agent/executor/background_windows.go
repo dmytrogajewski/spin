@@ -3,6 +3,7 @@
 package executor
 
 import (
+	"context"
 	"errors"
 	"time"
 )
@@ -41,7 +42,7 @@ func NewBackgroundTaskManager(_ string) (*BackgroundTaskManager, error) {
 }
 
 // Start is not supported on Windows.
-func (m *BackgroundTaskManager) Start(_ string, _ []string, _ []string, _ string) (string, string, error) {
+func (m *BackgroundTaskManager) Start(_ context.Context, _ string, _ []string, _ []string, _ string) (string, string, error) {
 	return "", "", ErrUnsupportedPlatform
 }
 

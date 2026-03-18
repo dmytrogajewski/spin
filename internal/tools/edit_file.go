@@ -92,7 +92,11 @@ func (t *EditFileTool) Schema() ToolSchema {
 }
 
 // Execute implements the Execute operation.
-func (t *EditFileTool) Execute(_ context.Context, params ToolParameters) (ToolResult, error) {
+func (t *EditFileTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
+	if err := ctx.Err(); err != nil {
+		return NewToolError(err), nil
+	}
+
 	path, oldContent, newContent, extractErr := t.extractParams(params)
 	if extractErr != nil {
 		return NewToolError(extractErr), nil
@@ -137,7 +141,7 @@ func (t *EditFileTool) Execute(_ context.Context, params ToolParameters) (ToolRe
 func (t *EditFileTool) extractParams(params ToolParameters) (string, string, string, error) {
 	path, _ := params.GetString("path")
 	if path == "" {
-		return "", "", "", ErrPathParameterRequired
+		return "", "", "", errPathParameterRequired
 	}
 
 	path = resolvePath(path, t.workDir)

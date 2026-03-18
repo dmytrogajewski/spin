@@ -157,7 +157,7 @@ func (m *Manager) Load(ctx context.Context, sessionID, workDir string) (*Convers
 	}
 
 	// Check if history exists.
-	exists, err := m.histStorage.Exists(sessionID)
+	exists, err := m.histStorage.Exists(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("check history exists: %w", err)
 	}
@@ -175,7 +175,7 @@ func (m *Manager) Load(ctx context.Context, sessionID, workDir string) (*Convers
 	// Load history into the conversation.
 	hist := conv.history
 
-	err = hist.Load(m.histStorage, sessionID)
+	err = hist.Load(ctx, m.histStorage, sessionID)
 	if err != nil {
 		// Remove the conversation if loading fails.
 		_ = m.Remove(ctx, sessionID)
@@ -199,7 +199,7 @@ func (m *Manager) Save(ctx context.Context, sessionID string) error {
 		return fmt.Errorf("conversation not found: %s: %w", sessionID, ErrConversationNotFound)
 	}
 
-	err := conv.history.Save(m.histStorage, sessionID)
+	err := conv.history.Save(ctx, m.histStorage, sessionID)
 	if err != nil {
 		return fmt.Errorf("save history: %w", err)
 	}

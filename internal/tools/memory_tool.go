@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -96,7 +95,7 @@ func (t *MemoryTool) Schema() ToolSchema {
 func (t *MemoryTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	operation, _ := params.GetString("operation")
 	if operation == "" {
-		return NewToolError(ErrOperationParameterRequired), nil
+		return NewToolError(errOperationParameterRequired), nil
 	}
 
 	switch operation {
@@ -111,91 +110,26 @@ func (t *MemoryTool) Execute(ctx context.Context, params ToolParameters) (ToolRe
 	case "search":
 		return t.executeSearch(ctx, params)
 	default:
-		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, ErrUnknownOperation)), nil
+		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, errUnknownOperation)), nil
 	}
+}
+
+// memoryEntryFormatter adds timestamps to the get output for persistent memory entries.
+func memoryEntryFormatter(entry *memory.Entry, sb *strings.Builder) {
+	fmt.Fprintf(sb, "Created: %s\n", entry.CreatedAt.Format(time.DateTime))
+	fmt.Fprintf(sb, "Updated: %s\n", entry.UpdatedAt.Format(time.DateTime))
 }
 
 func (t *MemoryTool) executePut(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, _ := params.GetString("key")
-	if key == "" {
-		return NewToolError(ErrKeyParameterRequiredForPut), nil
-	}
-
-	value, _ := params.GetString("value")
-	if value == "" {
-		return NewToolError(ErrValueParameterRequiredForPut), nil
-	}
-
-	opts := memory.PutOptions{
-		Overwrite: true,
-	}
-
-	ns, _ := params.GetString("namespace")
-	if ns != "" {
-		opts.Namespace = ns
-	}
-
-	// Handle tags - they come as an array.
-	if params.Has("tags") {
-		var tags []string
-
-		tagsErr := params.GetObject("tags", &tags)
-		if tagsErr == nil {
-			opts.Tags = tags
-		}
-	}
-
-	putErr := t.store.Put(ctx, key, value, opts)
-	if putErr != nil {
-		return NewToolError(fmt.Errorf("failed to store entry: %w", putErr)), nil
-	}
-
-	return NewToolResult(fmt.Sprintf("Stored entry with key '%s' (%d bytes, persistent)", key, len(value))), nil
+	return storePut(ctx, t.store, params, "persistent")
 }
 
 func (t *MemoryTool) executeGet(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, _ := params.GetString("key")
-	if key == "" {
-		return NewToolError(ErrKeyParameterRequiredForGet), nil
-	}
-
-	entry, getErr := t.store.Get(ctx, key)
-	if getErr != nil {
-		if errors.Is(getErr, memory.ErrNotFound) {
-			return ErrToResultf("key '%s' not found in persistent memory", fmt.Errorf("%s: %w", key, ErrKeyNotFound))
-		}
-
-		return ErrToResultf("failed to get entry: %v", getErr)
-	}
-
-	// Format output with metadata.
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "Key: %s\n", entry.Key)
-	fmt.Fprintf(&sb, "Namespace: %s\n", entry.Namespace)
-
-	if len(entry.Tags) > 0 {
-		fmt.Fprintf(&sb, "Tags: %s\n", strings.Join(entry.Tags, ", "))
-	}
-
-	fmt.Fprintf(&sb, "Created: %s\n", entry.CreatedAt.Format(time.DateTime))
-	fmt.Fprintf(&sb, "Updated: %s\n", entry.UpdatedAt.Format(time.DateTime))
-	fmt.Fprintf(&sb, "Value:\n%s", entry.Value)
-
-	return NewToolResult(sb.String()), nil
+	return storeGet(ctx, t.store, params, "persistent memory", memoryEntryFormatter)
 }
 
 func (t *MemoryTool) executeDelete(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	key, _ := params.GetString("key")
-	if key == "" {
-		return NewToolError(ErrKeyParameterRequiredForDelete), nil
-	}
-
-	delErr := t.store.Delete(ctx, key)
-	if delErr != nil {
-		return ErrToResultf("failed to delete entry: %v", delErr)
-	}
-
-	return NewToolResult(fmt.Sprintf("Entry '%s' deleted from persistent memory", key)), nil
+	return storeDelete(ctx, t.store, params, "persistent memory")
 }
 
 func (t *MemoryTool) executeList(ctx context.Context, params ToolParameters) (ToolResult, error) {

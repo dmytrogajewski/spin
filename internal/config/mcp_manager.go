@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -266,7 +267,7 @@ func (m *MCPConfigStore) writeConfig() error {
 	}
 
 	// Write to file (atomic).
-	err = storage.AtomicWriteFile(configFile, data, storage.DefaultFilePerm)
+	err = storage.AtomicWriteFile(context.Background(), configFile, data, storage.DefaultFilePerm)
 	if err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}

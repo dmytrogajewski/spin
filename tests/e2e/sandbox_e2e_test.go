@@ -71,7 +71,7 @@ func buildLinuxBinary(t *testing.T) string {
 
 // spinContainer creates a container with the spin binary mounted.
 // Recovers from testcontainers panics (e.g., missing Docker socket) and skips the test.
-func spinContainer(ctx context.Context, t *testing.T, binPath string) testcontainers.Container {
+func spinContainer(ctx context.Context, t *testing.T, binPath string) *testcontainers.DockerContainer {
 	t.Helper()
 
 	req := testcontainers.ContainerRequest{
@@ -87,7 +87,7 @@ func spinContainer(ctx context.Context, t *testing.T, binPath string) testcontai
 		},
 	}
 
-	var container testcontainers.Container
+	var container *testcontainers.DockerContainer
 
 	func() {
 		defer func() {
@@ -96,13 +96,16 @@ func spinContainer(ctx context.Context, t *testing.T, binPath string) testcontai
 			}
 		}()
 
-		var err error
-
-		container, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 			ContainerRequest: req,
 			Started:          true,
 		})
 		require.NoError(t, err)
+
+		dc, ok := c.(*testcontainers.DockerContainer)
+		require.True(t, ok, "expected DockerContainer")
+
+		container = dc
 	}()
 
 	if container == nil {
@@ -110,7 +113,7 @@ func spinContainer(ctx context.Context, t *testing.T, binPath string) testcontai
 	}
 
 	t.Cleanup(func() {
-		_ = container.Terminate(context.Background())
+		_ = container.Terminate(context.WithoutCancel(ctx))
 	})
 
 	return container
@@ -124,6 +127,7 @@ func containerExec(ctx context.Context, t *testing.T, container testcontainers.C
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
+
 	_, _ = buf.ReadFrom(reader)
 
 	return exitCode, buf.String()

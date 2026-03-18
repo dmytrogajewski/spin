@@ -12,7 +12,7 @@ import (
 func verifyApplySuccess(t *testing.T, applier *Applier, patch *Patch) *ApplyResult {
 	t.Helper()
 
-	result, err := applier.Apply(patch)
+	result, err := applier.Apply(t.Context(), patch)
 	if err != nil {
 		t.Fatalf("Apply() unexpected error: %v", err)
 	}
@@ -24,7 +24,7 @@ func verifyApplySuccess(t *testing.T, applier *Applier, patch *Patch) *ApplyResu
 func verifyApplyError(t *testing.T, applier *Applier, patch *Patch, wantErr error) {
 	t.Helper()
 
-	_, err := applier.Apply(patch)
+	_, err := applier.Apply(t.Context(), patch)
 	if err == nil {
 		t.Fatal("Apply() expected error, got nil")
 	}
@@ -575,7 +575,7 @@ func TestApplier_DryRun(t *testing.T) {
 		},
 	}
 
-	result, err := applier.Apply(patch)
+	result, err := applier.Apply(t.Context(), patch)
 	if err != nil {
 		t.Errorf("Apply() in dry-run failed: %v", err)
 
@@ -623,7 +623,7 @@ func TestApplier_AtomicRollback(t *testing.T) {
 		},
 	}
 
-	_, err := applier.Apply(patch)
+	_, err := applier.Apply(t.Context(), patch)
 	if err == nil {
 		t.Error("Apply() should have failed")
 
@@ -678,7 +678,7 @@ func TestApplier_MultipleOperations(t *testing.T) {
 		},
 	}
 
-	result, err := applier.Apply(patch)
+	result, err := applier.Apply(t.Context(), patch)
 	if err != nil {
 		t.Fatalf("Apply() failed: %v", err)
 	}
@@ -826,7 +826,7 @@ func TestApplier_ErrorMessages(t *testing.T) {
 				createFile(t, workspace, "test.txt", "some content")
 			}
 
-			_, err := applier.Apply(tt.patch)
+			_, err := applier.Apply(t.Context(), tt.patch)
 			if err == nil {
 				t.Error("Apply() should have failed")
 
@@ -872,6 +872,6 @@ func BenchmarkApplier_SmallPatch(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_, _ = applier.Apply(patch)
+		_, _ = applier.Apply(b.Context(), patch)
 	}
 }

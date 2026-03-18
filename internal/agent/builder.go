@@ -190,14 +190,14 @@ func (b *Builder) WithRuntime(rt executor.Runtime) *Builder {
 
 // BuildExecutor creates an Executor with appropriate options based on configuration.
 // This is a public helper for use by conversation package.
-func (b *Builder) BuildExecutor() *Executor {
-	return b.newExecutor()
+func (b *Builder) BuildExecutor(ctx context.Context) *Executor {
+	return b.newExecutor(ctx)
 }
 
 // newExecutor creates an Executor with appropriate options based on configuration.
-func (b *Builder) newExecutor() *Executor {
+func (b *Builder) newExecutor(ctx context.Context) *Executor {
 	// Build SecurityService (which includes Validator internally).
-	securityService := b.BuildSecurityService()
+	securityService := b.BuildSecurityService(ctx)
 	opts := []ExecutorOption{
 		WithSecurityService(securityService),
 	}
@@ -268,7 +268,7 @@ func (b *Builder) buildEnvironmentOptions() []EnvironmentOption {
 // BuildSecurityService creates security service with approval handling.
 // This is a public helper for use by conversation package.
 // If a runtime is set, uses the runtime's approval handler; otherwise uses the builder's approval handler.
-func (b *Builder) BuildSecurityService() *safety.Service {
+func (b *Builder) BuildSecurityService(ctx context.Context) *safety.Service {
 	validator := safety.NewValidator()
 
 	// Use runtime's approval handler if available, otherwise use builder's.
@@ -277,7 +277,7 @@ func (b *Builder) BuildSecurityService() *safety.Service {
 		handler = b.runtime.ApprovalHandler()
 	}
 
-	store := b.buildPolicyStore()
+	store := b.buildPolicyStore(ctx)
 
 	cfg := safety.ApprovalServiceConfig{
 		Handler:           handler,
@@ -293,13 +293,13 @@ func (b *Builder) BuildSecurityService() *safety.Service {
 }
 
 // buildPolicyStore creates the appropriate policy store based on configuration.
-func (b *Builder) buildPolicyStore() safety.PolicyStore {
+func (b *Builder) buildPolicyStore(ctx context.Context) safety.PolicyStore {
 	if !b.config.Security.ApprovalPersistenceEnabled {
 		return nil
 	}
 
 	if policyPath := b.config.Security.PolicyFile; policyPath != "" {
-		fs, err := safety.NewFilePolicyStore(policyPath, policyStoreTTL)
+		fs, err := safety.NewFilePolicyStore(ctx, policyPath, policyStoreTTL)
 		if err == nil {
 			return fs
 		}

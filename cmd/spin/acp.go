@@ -245,7 +245,8 @@ func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagO
 		return fmt.Errorf("resolve workspace path: %w", err)
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	cfg, infra, err := createACPInfra(ctx, cmd, workDir, flagOverrides, apiKey)
 	if err != nil {
@@ -284,9 +285,6 @@ func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagO
 	}
 
 	conn := wireACPAgent(acpAgent, acpRuntime, coreResult.agent, convManager, histStorage)
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	setupACPServerSignalHandling(cancel)
 	logACPServerStart(cfg.LLM.Provider, cfg.LLM.Model, workDir)
@@ -388,9 +386,9 @@ func buildCoreAgent(
 		WithRuntime(rt)
 
 	environment := agentBuilder.BuildEnvironment(ctx)
-	securityService := agentBuilder.BuildSecurityService()
+	securityService := agentBuilder.BuildSecurityService(ctx)
 	detectionService := agentBuilder.BuildDetectionService()
-	executor := agentBuilder.BuildExecutor()
+	executor := agentBuilder.BuildExecutor(ctx)
 	toolExecutor := agent.NewToolExecutorAdapter(executor)
 
 	if acpRT, ok := rt.(*agentexec.ACPRuntime); ok {

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -294,7 +295,7 @@ func (r *SmitheryRegistry) Execute(ctx context.Context, toolName string, args js
 	return executeMCPTool(ctx, mcpClient, mcpTool, args)
 }
 
-// Close closes the registry and releases resources.
+// Close closes the registry, all dynamically loaded servers, and releases resources.
 func (r *SmitheryRegistry) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -306,11 +307,25 @@ func (r *SmitheryRegistry) Close() error {
 	r.connected = false
 	r.metadata.Connected = false
 
-	if r.client != nil {
-		return r.client.Close()
+	var errs []error
+
+	// Close all dynamically loaded servers.
+	for path, reg := range r.loadedServers {
+		if closeErr := reg.Close(); closeErr != nil {
+			errs = append(errs, fmt.Errorf("close loaded server %s: %w", path, closeErr))
+		}
 	}
 
-	return nil
+	clear(r.loadedServers)
+
+	// Close the static client.
+	if r.client != nil {
+		if closeErr := r.client.Close(); closeErr != nil {
+			errs = append(errs, fmt.Errorf("close static client: %w", closeErr))
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 // wrapTool wraps an Tool as a tools.Tool with qualified name.

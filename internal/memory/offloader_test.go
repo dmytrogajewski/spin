@@ -121,7 +121,7 @@ func TestAutoOffloader_Offload_Decision(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	persistent, err := NewPersistentStore(tmpDir)
+	persistent, err := NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	offloader := NewAutoOffloader(AutoOffloaderConfig{
@@ -193,7 +193,7 @@ func TestAutoOffloader_Recall_FromPersistent(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	persistent, err := NewPersistentStore(tmpDir)
+	persistent, err := NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	// Pre-populate persistent store.

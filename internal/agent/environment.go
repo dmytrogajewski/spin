@@ -135,7 +135,7 @@ func GatherEnvironment(ctx context.Context, workDir string, opts ...EnvironmentO
 	}
 
 	// Scan project files.
-	files, err := scanProjectFiles(workDir, cfg.maxFiles, cfg.maxDepth)
+	files, err := scanProjectFiles(ctx, workDir, cfg.maxFiles, cfg.maxDepth)
 	if err != nil {
 		// Continue with empty files on error.
 		files = []FileInfo{}
@@ -288,10 +288,16 @@ func newFileScanner(workDir string, maxFiles, maxDepth int) *fileScanner {
 }
 
 // scanProjectFiles scans the project directory and collects file information.
-func scanProjectFiles(workDir string, maxFiles, maxDepth int) ([]FileInfo, error) {
+func scanProjectFiles(ctx context.Context, workDir string, maxFiles, maxDepth int) ([]FileInfo, error) {
 	scanner := newFileScanner(workDir, maxFiles, maxDepth)
 
-	err := filepath.WalkDir(workDir, scanner.visit)
+	err := filepath.WalkDir(workDir, func(path string, d fs.DirEntry, walkErr error) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+
+		return scanner.visit(path, d, walkErr)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("walking directory: %w", err)
 	}

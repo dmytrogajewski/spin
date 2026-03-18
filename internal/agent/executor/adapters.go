@@ -128,7 +128,7 @@ func NewTaskManagerAdapter(mgr *BackgroundTaskManager) *TaskManagerAdapter {
 }
 
 // List returns snapshots of all managed tasks.
-func (a *TaskManagerAdapter) List() []tools.TaskSnapshot {
+func (a *TaskManagerAdapter) List(_ context.Context) []tools.TaskSnapshot {
 	infos := a.mgr.List()
 	snapshots := make([]tools.TaskSnapshot, len(infos))
 
@@ -146,12 +146,12 @@ func (a *TaskManagerAdapter) List() []tools.TaskSnapshot {
 }
 
 // GetOutput returns the last maxLines of output for a task.
-func (a *TaskManagerAdapter) GetOutput(taskID string, maxLines int) (string, error) {
+func (a *TaskManagerAdapter) GetOutput(_ context.Context, taskID string, maxLines int) (string, error) {
 	return a.mgr.GetOutput(taskID, maxLines)
 }
 
 // Kill terminates a running task.
-func (a *TaskManagerAdapter) Kill(taskID string) error {
+func (a *TaskManagerAdapter) Kill(_ context.Context, taskID string) error {
 	return a.mgr.Kill(taskID)
 }
 

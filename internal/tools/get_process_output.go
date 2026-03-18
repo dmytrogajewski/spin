@@ -57,27 +57,21 @@ func (t *GetProcessOutputTool) Schema() ToolSchema {
 }
 
 // Execute retrieves the output of a background task.
-func (t *GetProcessOutputTool) Execute(_ context.Context, params ToolParameters) (ToolResult, error) {
+func (t *GetProcessOutputTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	if t.manager == nil {
 		return NewToolResult("task manager not available"), nil
 	}
 
 	taskID, _ := params.GetString("task_id")
 	if taskID == "" {
-		return ToolResult{
-			Success: false,
-			Error:   "task_id parameter is required",
-		}, nil
+		return NewToolError(errTaskIDParameterRequired), nil
 	}
 
 	maxLines := params.GetIntOr("max_lines", defaultMaxOutputLines)
 
-	output, err := t.manager.GetOutput(taskID, maxLines)
+	output, err := t.manager.GetOutput(ctx, taskID, maxLines)
 	if err != nil {
-		return ToolResult{
-			Success: false,
-			Error:   fmt.Sprintf("failed to get output: %s", err),
-		}, nil
+		return NewToolError(fmt.Errorf("failed to get output: %w", err)), nil
 	}
 
 	if output == "" {

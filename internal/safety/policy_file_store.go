@@ -8,8 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
+
+	"github.com/dmytrogajewski/spin/internal/storage"
 )
 
 const fileStoreEvictionInterval = 30 * time.Second
@@ -30,7 +31,8 @@ type FilePolicyStore struct {
 // NewFilePolicyStore creates a file-backed policy store.
 // The janitor evictionInterval controls how often expired entries are pruned from memory.
 // If interval <= 0, a default of 30s is used.
-func NewFilePolicyStore(path string, evictionInterval time.Duration) (*FilePolicyStore, error) {
+// The context controls the initial load from disk.
+func NewFilePolicyStore(ctx context.Context, path string, evictionInterval time.Duration) (*FilePolicyStore, error) {
 	if path == "" {
 		return nil, ErrPathIsRequired
 	}
@@ -51,24 +53,24 @@ func NewFilePolicyStore(path string, evictionInterval time.Duration) (*FilePolic
 		interval: evictionInterval,
 	}
 	// Best-effort load existing file.
-	err = s.loadFromDisk()
+	err = s.loadFromDisk(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	go s.janitor()
+	go s.janitor(context.WithoutCancel(ctx))
 
 	return s, nil
 }
 
-func (s *FilePolicyStore) janitor() {
+func (s *FilePolicyStore) janitor(ctx context.Context) {
 	t := time.NewTicker(s.interval)
 	defer t.Stop()
 
 	for {
 		select {
 		case <-t.C:
-			s.removeExpired()
+			s.removeExpired(ctx)
 		case <-s.stopCh:
 			return
 		}
@@ -82,7 +84,7 @@ func (s *FilePolicyStore) Close() error {
 	return nil
 }
 
-func (s *FilePolicyStore) removeExpired() {
+func (s *FilePolicyStore) removeExpired(ctx context.Context) {
 	now := time.Now()
 
 	s.mu.Lock()
@@ -99,12 +101,12 @@ func (s *FilePolicyStore) removeExpired() {
 			delete(s.byScope, scope)
 		}
 	}
-	// Persist global scope after eviction.
-	_ = s.persistGlobalLocked()
+	// Persist global scope after eviction (best-effort).
+	_ = s.persistGlobalLocked(ctx)
 }
 
 // Save implements the Save operation.
-func (s *FilePolicyStore) Save(_ context.Context, p Policy) error {
+func (s *FilePolicyStore) Save(ctx context.Context, p Policy) error {
 	keyStr := keyString(p.Key)
 
 	s.mu.Lock()
@@ -118,14 +120,18 @@ func (s *FilePolicyStore) Save(_ context.Context, p Policy) error {
 
 	m[keyStr] = p
 	if p.Scope == ScopeGlobal {
-		return s.persistGlobalLocked()
+		return s.persistGlobalLocked(ctx)
 	}
 
 	return nil
 }
 
 // Get implements the Get operation.
-func (s *FilePolicyStore) Get(_ context.Context, key PolicyKey, scope string) (Policy, bool, error) {
+func (s *FilePolicyStore) Get(ctx context.Context, key PolicyKey, scope string) (Policy, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return Policy{}, false, fmt.Errorf("get policy: %w", err)
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -135,7 +141,11 @@ func (s *FilePolicyStore) Get(_ context.Context, key PolicyKey, scope string) (P
 }
 
 // List implements the List operation.
-func (s *FilePolicyStore) List(_ context.Context, scope string) ([]Policy, error) {
+func (s *FilePolicyStore) List(ctx context.Context, scope string) ([]Policy, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("list policies: %w", err)
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -143,7 +153,7 @@ func (s *FilePolicyStore) List(_ context.Context, scope string) ([]Policy, error
 }
 
 // Delete implements the Delete operation.
-func (s *FilePolicyStore) Delete(_ context.Context, key PolicyKey, scope string) (bool, error) {
+func (s *FilePolicyStore) Delete(ctx context.Context, key PolicyKey, scope string) (bool, error) {
 	keyStr := keyString(key)
 
 	s.mu.Lock()
@@ -165,7 +175,7 @@ func (s *FilePolicyStore) Delete(_ context.Context, key PolicyKey, scope string)
 	}
 
 	if scope == ScopeGlobal {
-		if err := s.persistGlobalLocked(); err != nil {
+		if err := s.persistGlobalLocked(ctx); err != nil {
 			return true, err
 		}
 	}
@@ -174,7 +184,7 @@ func (s *FilePolicyStore) Delete(_ context.Context, key PolicyKey, scope string)
 }
 
 // Clear implements the Clear operation.
-func (s *FilePolicyStore) Clear(_ context.Context, scope string) (int, error) {
+func (s *FilePolicyStore) Clear(ctx context.Context, scope string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -188,7 +198,7 @@ func (s *FilePolicyStore) Clear(_ context.Context, scope string) (int, error) {
 	delete(s.byScope, scope)
 
 	if scope == ScopeGlobal {
-		err := s.persistGlobalLocked()
+		err := s.persistGlobalLocked(ctx)
 		if err != nil {
 			return n, err
 		}
@@ -199,7 +209,7 @@ func (s *FilePolicyStore) Clear(_ context.Context, scope string) (int, error) {
 
 // persistGlobalLocked writes the global scope policies to disk atomically
 // with an advisory lock. Caller must hold s.mu.
-func (s *FilePolicyStore) persistGlobalLocked() error {
+func (s *FilePolicyStore) persistGlobalLocked(ctx context.Context) error {
 	global := s.byScope[ScopeGlobal]
 	if global == nil {
 		global = map[string]Policy{}
@@ -225,12 +235,14 @@ func (s *FilePolicyStore) persistGlobalLocked() error {
 	}
 	defer f.Close()
 
-	err = syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_EX)
+	fd := storage.SafeFlockFd(f.Fd())
+
+	err = storage.FlockExclusiveWithContext(ctx, fd)
 	if err != nil {
 		return fmt.Errorf("lock policy file: %w", err)
 	}
 
-	defer func() { _ = syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_UN) }()
+	defer func() { _ = storage.FlockUnlock(fd) }()
 
 	// Write temp, then rename over target for atomicity.
 	err = os.WriteFile(tmp, data, 0o600)
@@ -247,7 +259,7 @@ func (s *FilePolicyStore) persistGlobalLocked() error {
 }
 
 // loadFromDisk loads global scope from disk into memory (best-effort).
-func (s *FilePolicyStore) loadFromDisk() error {
+func (s *FilePolicyStore) loadFromDisk(ctx context.Context) error {
 	// Open with shared lock to read.
 	f, err := os.OpenFile(s.path, os.O_RDONLY, 0o600)
 	if err != nil {
@@ -259,12 +271,14 @@ func (s *FilePolicyStore) loadFromDisk() error {
 	}
 	defer f.Close()
 
-	err = syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_SH)
+	fd := storage.SafeFlockFd(f.Fd())
+
+	err = storage.FlockSharedWithContext(ctx, fd)
 	if err != nil {
 		return fmt.Errorf("shared lock policy file: %w", err)
 	}
 
-	defer func() { _ = syscall.Flock(safeFlockFd(f.Fd()), syscall.LOCK_UN) }()
+	defer func() { _ = storage.FlockUnlock(fd) }()
 
 	var payload struct {
 		Global map[string]Policy `json:"global"`
@@ -289,15 +303,4 @@ func (s *FilePolicyStore) loadFromDisk() error {
 	}
 
 	return nil
-}
-
-// safeFlockFd converts a file descriptor from uintptr to int for [syscall.Flock].
-// File descriptors are always small non-negative values on supported platforms.
-func safeFlockFd(fd uintptr) int {
-	const maxFd = int(^uint(0) >> 1)
-	if fd > uintptr(maxFd) {
-		return -1
-	}
-
-	return int(fd)
 }

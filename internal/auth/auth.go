@@ -109,17 +109,11 @@ func NewManager(keystore Keystore) *Manager {
 
 // GetCredential retrieves a credential for a provider.
 func (m *Manager) GetCredential(ctx context.Context, provider string) (Credential, error) {
-	// Check context.
-	err := ctx.Err()
-	if err != nil {
-		return Credential{}, fmt.Errorf("get credential: %w", err)
-	}
-
 	// Normalize provider name.
 	provider = normalizeProvider(provider)
 
-	// Get from keystore.
-	value, err := m.keystore.Get(credentialKey(provider))
+	// Get from keystore (keystore checks ctx internally).
+	value, err := m.keystore.Get(ctx, credentialKey(provider))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return Credential{}, fmt.Errorf("%s: %w", provider, ErrNotAuthenticated)
@@ -134,14 +128,8 @@ func (m *Manager) GetCredential(ctx context.Context, provider string) (Credentia
 
 // SetCredential stores a credential for a provider.
 func (m *Manager) SetCredential(ctx context.Context, provider string, cred Credential) error {
-	// Check context.
-	err := ctx.Err()
-	if err != nil {
-		return fmt.Errorf("set credential: %w", err)
-	}
-
 	// Validate credential.
-	err = validateCredential(cred)
+	err := validateCredential(cred)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidCredential, err)
 	}
@@ -152,8 +140,8 @@ func (m *Manager) SetCredential(ctx context.Context, provider string, cred Crede
 	// Format credential.
 	value := formatCredential(cred)
 
-	// Store in keystore.
-	err = m.keystore.Set(credentialKey(provider), value)
+	// Store in keystore (keystore checks ctx internally).
+	err = m.keystore.Set(ctx, credentialKey(provider), value)
 	if err != nil {
 		return fmt.Errorf("set credential: %w", err)
 	}
@@ -163,17 +151,11 @@ func (m *Manager) SetCredential(ctx context.Context, provider string, cred Crede
 
 // DeleteCredential removes a credential for a provider.
 func (m *Manager) DeleteCredential(ctx context.Context, provider string) error {
-	// Check context.
-	err := ctx.Err()
-	if err != nil {
-		return fmt.Errorf("delete credential: %w", err)
-	}
-
 	// Normalize provider name.
 	provider = normalizeProvider(provider)
 
-	// Delete from keystore.
-	err = m.keystore.Delete(credentialKey(provider))
+	// Delete from keystore (keystore checks ctx internally).
+	err := m.keystore.Delete(ctx, credentialKey(provider))
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			// Idempotent - no error if not found.
@@ -188,14 +170,8 @@ func (m *Manager) DeleteCredential(ctx context.Context, provider string) error {
 
 // ListProviders returns all providers with stored credentials.
 func (m *Manager) ListProviders(ctx context.Context) ([]string, error) {
-	// Check context.
-	err := ctx.Err()
-	if err != nil {
-		return nil, fmt.Errorf("list providers: %w", err)
-	}
-
-	// List all keys.
-	keys, err := m.keystore.List()
+	// List all keys (keystore checks ctx internally).
+	keys, err := m.keystore.List(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list providers: %w", err)
 	}

@@ -1,6 +1,9 @@
 package tools
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // TaskStatus represents the lifecycle state of a background task.
 // This mirrors executor.TaskState to avoid import cycles.
@@ -50,12 +53,12 @@ type TaskSnapshot struct {
 }
 
 // TaskManager manages background tasks (to avoid import cycle with executor package).
-// The concrete implementation is executor.BackgroundTaskManager.
+// The concrete implementation is [executor.BackgroundTaskManager].
 type TaskManager interface {
 	// List returns snapshots of all managed tasks.
-	List() []TaskSnapshot
+	List(ctx context.Context) []TaskSnapshot
 	// GetOutput returns the last maxLines of output for a task.
-	GetOutput(taskID string, maxLines int) (string, error)
+	GetOutput(ctx context.Context, taskID string, maxLines int) (string, error)
 	// Kill terminates a running task.
-	Kill(taskID string) error
+	Kill(ctx context.Context, taskID string) error
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -161,10 +162,9 @@ func (p *Provider) Stream(ctx context.Context, params openai.ChatCompletionNewPa
 		// but we check here for completeness. Consumers should check for channel close.
 		err := stream.Err()
 		if err != nil {
-			// We can't send errors in chunks anymore since we removed the abstraction
-			// Errors must be handled differently by consumers
-			// Just log and close the channel.
-			_ = mapError(err)
+			// Stream errors cannot be sent to consumers via the chunk channel.
+			// Log for diagnostics and close the channel.
+			slog.Warn("OpenAI stream error", "error", mapError(err))
 
 			return
 		}
@@ -185,9 +185,17 @@ func (p *Provider) Models(ctx context.Context) ([]openai.Model, error) {
 	// Add models from first page.
 	models = append(models, resp.Data...)
 
-	// Iterate through remaining pages.
+	// Iterate through remaining pages, respecting context cancellation.
 	for {
-		nextPage, _ := resp.GetNextPage()
+		if err := ctx.Err(); err != nil {
+			return models, fmt.Errorf("list models pagination: %w", err)
+		}
+
+		nextPage, pageErr := resp.GetNextPage()
+		if pageErr != nil {
+			return models, fmt.Errorf("get next page: %w", mapError(pageErr))
+		}
+
 		if nextPage == nil {
 			break
 		}

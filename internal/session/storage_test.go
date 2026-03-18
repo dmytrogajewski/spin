@@ -69,13 +69,13 @@ func TestFileStorage_Save(t *testing.T) {
 
 	session := NewSession("/test/workdir")
 
-	err = storage.Save(session.ID, *session)
+	err = storage.Save(t.Context(), session.ID, *session)
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 
 	// Verify session exists.
-	exists, err := storage.Exists(session.ID)
+	exists, err := storage.Exists(t.Context(), session.ID)
 	if err != nil {
 		t.Fatalf("Exists() error = %v", err)
 	}
@@ -96,7 +96,7 @@ func TestFileStorage_Save_Overwrite(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	// Save session.
-	err = storage.Save(session.ID, *session)
+	err = storage.Save(t.Context(), session.ID, *session)
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
@@ -104,13 +104,13 @@ func TestFileStorage_Save_Overwrite(t *testing.T) {
 	// Modify and save again.
 	_ = session.SetTitle("Updated Title")
 
-	err = storage.Save(session.ID, *session)
+	err = storage.Save(t.Context(), session.ID, *session)
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 
 	// Load and verify.
-	loaded, err := storage.Load(session.ID)
+	loaded, err := storage.Load(t.Context(), session.ID)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -131,7 +131,7 @@ func TestFileStorage_Save_InvalidSession(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	// Empty key should fail.
-	err = storage.Save("", *session)
+	err = storage.Save(t.Context(), "", *session)
 	if err == nil {
 		t.Error("Save() should return error for empty key")
 	}
@@ -151,13 +151,13 @@ func TestFileStorage_Load(t *testing.T) {
 	_ = original.SetTitle("Test Session")
 
 	// Save session.
-	err = storage.Save(original.ID, *original)
+	err = storage.Save(t.Context(), original.ID, *original)
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 
 	// Load session.
-	loaded, err := storage.Load(original.ID)
+	loaded, err := storage.Load(t.Context(), original.ID)
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -183,7 +183,7 @@ func TestFileStorage_Load_NotFound(t *testing.T) {
 		t.Fatalf("NewFileStorage() error = %v", err)
 	}
 
-	_, err = storage.Load("nonexistent-id")
+	_, err = storage.Load(t.Context(), "nonexistent-id")
 	if err == nil {
 		t.Error("Load() should return error for nonexistent session")
 	}
@@ -202,19 +202,19 @@ func TestFileStorage_Delete(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	// Save session.
-	err = storage.Save(session.ID, *session)
+	err = storage.Save(t.Context(), session.ID, *session)
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 
 	// Delete session.
-	err = storage.Delete(session.ID)
+	err = storage.Delete(t.Context(), session.ID)
 	if err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 
 	// Verify session was deleted.
-	exists, _ := storage.Exists(session.ID)
+	exists, _ := storage.Exists(t.Context(), session.ID)
 	if exists {
 		t.Error("Session was not deleted")
 	}
@@ -229,7 +229,7 @@ func TestFileStorage_Delete_NotFound(t *testing.T) {
 	}
 
 	// Deleting non-existent session should not error.
-	err = storage.Delete("nonexistent-id")
+	err = storage.Delete(t.Context(), "nonexistent-id")
 	if err != nil {
 		t.Errorf("Delete() error = %v, want nil", err)
 	}
@@ -248,7 +248,7 @@ func TestFileStorage_Exists(t *testing.T) {
 	session := NewSession("/test/workdir")
 
 	// Should not exist initially.
-	exists, err := storage.Exists(session.ID)
+	exists, err := storage.Exists(t.Context(), session.ID)
 	if err != nil {
 		t.Fatalf("Exists() error = %v", err)
 	}
@@ -258,13 +258,13 @@ func TestFileStorage_Exists(t *testing.T) {
 	}
 
 	// Save session.
-	err = storage.Save(session.ID, *session)
+	err = storage.Save(t.Context(), session.ID, *session)
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 
 	// Should exist now.
-	exists, err = storage.Exists(session.ID)
+	exists, err = storage.Exists(t.Context(), session.ID)
 	if err != nil {
 		t.Fatalf("Exists() error = %v", err)
 	}
@@ -288,14 +288,14 @@ func TestFileStorage_List(t *testing.T) {
 	for range 5 {
 		session := NewSession("/test/workdir")
 
-		err = storage.Save(session.ID, *session)
+		err = storage.Save(t.Context(), session.ID, *session)
 		if err != nil {
 			t.Fatalf("Save() error = %v", err)
 		}
 	}
 
 	// List all sessions (returns keys).
-	keys, err := storage.List()
+	keys, err := storage.List(t.Context())
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -313,7 +313,7 @@ func TestFileStorage_List_EmptyStorage(t *testing.T) {
 		t.Fatalf("NewFileStorage() error = %v", err)
 	}
 
-	keys, err := storage.List()
+	keys, err := storage.List(t.Context())
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -333,6 +333,7 @@ func TestFileStorage_ConcurrentSaves(t *testing.T) {
 		t.Fatalf("NewFileStorage() error = %v", err)
 	}
 
+	ctx := t.Context()
 	done := make(chan bool)
 
 	// Start multiple concurrent savers.
@@ -340,7 +341,7 @@ func TestFileStorage_ConcurrentSaves(t *testing.T) {
 		go func() {
 			session := NewSession("/test/workdir")
 
-			saveErr := storage.Save(session.ID, *session)
+			saveErr := storage.Save(ctx, session.ID, *session)
 			if saveErr != nil {
 				t.Errorf("Save() error = %v", saveErr)
 			}
@@ -355,7 +356,7 @@ func TestFileStorage_ConcurrentSaves(t *testing.T) {
 	}
 
 	// Should have 10 sessions.
-	keys, err := storage.List()
+	keys, err := storage.List(t.Context())
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -376,17 +377,18 @@ func TestFileStorage_ConcurrentReads(t *testing.T) {
 	// Create a session.
 	session := NewSession("/test/workdir")
 
-	err = storage.Save(session.ID, *session)
+	err = storage.Save(t.Context(), session.ID, *session)
 	if err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 
+	ctx := t.Context()
 	done := make(chan bool)
 
 	// Start multiple concurrent readers.
 	for range 10 {
 		go func() {
-			_, loadErr := storage.Load(session.ID)
+			_, loadErr := storage.Load(ctx, session.ID)
 			if loadErr != nil {
 				t.Errorf("Load() error = %v", loadErr)
 			}

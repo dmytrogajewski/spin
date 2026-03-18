@@ -526,7 +526,7 @@ func (a *SpinACPAgent) promptWithConversation(
 	a.mu.RUnlock()
 
 	if histStorage != nil {
-		_ = conv.GetHistory().Save(histStorage, string(req.SessionId))
+		_ = conv.GetHistory().Save(ctx, histStorage, string(req.SessionId))
 	}
 
 	return acp.PromptResponse{
@@ -983,7 +983,7 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 		return acp.LoadSessionResponse{}, ErrSessionPersistenceNotAvailable
 	}
 
-	sessData, err := a.storage.Load(string(req.SessionId))
+	sessData, err := a.storage.Load(ctx, string(req.SessionId))
 	if err != nil {
 		return acp.LoadSessionResponse{}, fmt.Errorf("failed to load session: %w", err)
 	}
@@ -1061,7 +1061,7 @@ func (a *SpinACPAgent) replayConversationHistory(ctx context.Context, sessionID 
 		return
 	}
 
-	histData, loadErr := histStorage.Load(string(sessionID))
+	histData, loadErr := histStorage.Load(ctx, string(sessionID))
 	if loadErr != nil {
 		return
 	}

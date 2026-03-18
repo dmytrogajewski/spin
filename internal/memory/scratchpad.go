@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -65,7 +66,11 @@ func (s *Scratchpad) Count() int {
 //
 // If the scratchpad is at capacity, the least recently used entry
 // is evicted (unless pinned) before adding the new entry.
-func (s *Scratchpad) Put(_ context.Context, key, value string, opts PutOptions) error {
+func (s *Scratchpad) Put(ctx context.Context, key, value string, opts PutOptions) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("scratchpad put: %w", err)
+	}
+
 	if key == "" {
 		return ErrEmptyKey
 	}
@@ -117,7 +122,11 @@ func (s *Scratchpad) Put(_ context.Context, key, value string, opts PutOptions) 
 }
 
 // Get retrieves an entry by key and increments its access count.
-func (s *Scratchpad) Get(_ context.Context, key string) (*Entry, error) {
+func (s *Scratchpad) Get(ctx context.Context, key string) (*Entry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("scratchpad get: %w", err)
+	}
+
 	if key == "" {
 		return nil, ErrEmptyKey
 	}
@@ -146,7 +155,11 @@ func (s *Scratchpad) Get(_ context.Context, key string) (*Entry, error) {
 // Delete removes an entry by key.
 //
 // Returns nil if the key does not exist (idempotent).
-func (s *Scratchpad) Delete(_ context.Context, key string) error {
+func (s *Scratchpad) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("scratchpad delete: %w", err)
+	}
+
 	if key == "" {
 		return ErrEmptyKey
 	}
@@ -162,7 +175,11 @@ func (s *Scratchpad) Delete(_ context.Context, key string) error {
 // List returns keys matching the pattern.
 //
 // Pattern supports * as wildcard. Use "*" to list all keys.
-func (s *Scratchpad) List(_ context.Context, pattern string) ([]string, error) {
+func (s *Scratchpad) List(ctx context.Context, pattern string) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("scratchpad list: %w", err)
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -180,7 +197,11 @@ func (s *Scratchpad) List(_ context.Context, pattern string) ([]string, error) {
 //
 // Searches both keys and values. Returns up to topK results,
 // sorted by access count (most accessed first).
-func (s *Scratchpad) Search(_ context.Context, query string, topK int) ([]Entry, error) {
+func (s *Scratchpad) Search(ctx context.Context, query string, topK int) ([]Entry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("scratchpad search: %w", err)
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

@@ -1,6 +1,7 @@
 package patchapply
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -66,7 +67,7 @@ type fileModification struct {
 //	    log.Fatal(err)
 //	}
 //	applier.SetDryRun(false)
-//	result, err := applier.Apply(patch)
+//	result, err := applier.Apply(ctx, patch)
 //	if err != nil {
 //	    log.Fatalf("patch failed: %v", err)
 //	}
@@ -172,7 +173,11 @@ func (a *Applier) SetForceOverwrite(enabled bool) {
 //  5. Return result summary
 //
 // Returns ApplyResult on success, Error on failure.
-func (a *Applier) Apply(patch *Patch) (*ApplyResult, error) {
+func (a *Applier) Apply(ctx context.Context, patch *Patch) (*ApplyResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("apply patch: %w", err)
+	}
+
 	a.resetModifications()
 
 	err := a.ValidatePatch(patch)
@@ -676,11 +681,11 @@ func (a *Applier) clearModifications() {
 }
 
 // wrapError wraps an error with context information.
-func (a *Applier) wrapError(op, path string, err error, context string) *Error {
+func (a *Applier) wrapError(op, path string, err error, ctx string) *Error {
 	return &Error{
 		Op:      op,
 		Path:    path,
 		Err:     err,
-		Context: context,
+		Context: ctx,
 	}
 }

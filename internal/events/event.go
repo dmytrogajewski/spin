@@ -684,9 +684,16 @@ func (e *EventEmitter) emitDrop(ch chan Event, event Event) {
 	}
 }
 
-// emitBlock implements blocking send (ensures delivery).
+// emitBlockTimeout is the maximum time to wait for a blocking emit before dropping.
+const emitBlockTimeout = 5 * time.Second
+
+// emitBlock implements blocking send with a safety timeout to prevent deadlock.
 func (e *EventEmitter) emitBlock(ch chan Event, event Event) {
-	ch <- event // Blocks until consumer ready.
+	select {
+	case ch <- event:
+	case <-time.After(emitBlockTimeout):
+		// Drop event to prevent deadlock from a stuck subscriber.
+	}
 }
 
 // emitBuffer implements dynamic buffering (buffers events up to limit).

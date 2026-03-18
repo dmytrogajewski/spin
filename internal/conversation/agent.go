@@ -31,7 +31,7 @@ func (b *Builder) buildAgent(ctx context.Context, exec *agent.Executor, env *age
 		WithRuntime(b.runtime)
 
 	detectionSvc := agentBuilder.BuildDetectionService()
-	securitySvc := agentBuilder.BuildSecurityService()
+	securitySvc := agentBuilder.BuildSecurityService(ctx)
 
 	toolReg := b.buildOrRegisterTools(exec, securitySvc, env)
 

@@ -3,6 +3,7 @@ package session_test
 // Journey: specs/journeys/JOURNEY-R6.2.md.
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -45,13 +46,13 @@ func TestSessionIndex_UpdateAndList(t *testing.T) {
 	dir := t.TempDir()
 	path := indexPath(dir)
 
-	idx, err := session.NewSessionIndex(path, nil)
+	idx, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
 
 	now := time.Now().Truncate(time.Second)
 
 	entry := testEntry(testSessionID1, testSessionTitle, testWorkDirA, testMsgCount, now)
-	require.NoError(t, idx.Update(entry))
+	require.NoError(t, idx.Update(t.Context(), entry))
 
 	entries := idx.List("")
 	require.Len(t, entries, 1)
@@ -66,20 +67,20 @@ func TestSessionIndex_UpdateUpserts(t *testing.T) {
 	dir := t.TempDir()
 	path := indexPath(dir)
 
-	idx, err := session.NewSessionIndex(path, nil)
+	idx, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
 
 	now := time.Now().Truncate(time.Second)
 	updatedTitle := "Updated Title"
 
 	entry := testEntry(testSessionID1, testSessionTitle, testWorkDirA, testMsgCount, now)
-	require.NoError(t, idx.Update(entry))
+	require.NoError(t, idx.Update(t.Context(), entry))
 
 	const updatedCount = 99
 
 	entry.Title = updatedTitle
 	entry.MessageCount = updatedCount
-	require.NoError(t, idx.Update(entry))
+	require.NoError(t, idx.Update(t.Context(), entry))
 
 	entries := idx.List("")
 	require.Len(t, entries, 1)
@@ -93,15 +94,15 @@ func TestSessionIndex_Remove(t *testing.T) {
 	dir := t.TempDir()
 	path := indexPath(dir)
 
-	idx, err := session.NewSessionIndex(path, nil)
+	idx, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
 
 	now := time.Now().Truncate(time.Second)
 
-	require.NoError(t, idx.Update(testEntry(testSessionID1, testSessionTitle, testWorkDirA, testMsgCount, now)))
-	require.NoError(t, idx.Update(testEntry(testSessionID2, testSessionTitle, testWorkDirA, testMsgCount, now)))
+	require.NoError(t, idx.Update(t.Context(), testEntry(testSessionID1, testSessionTitle, testWorkDirA, testMsgCount, now)))
+	require.NoError(t, idx.Update(t.Context(), testEntry(testSessionID2, testSessionTitle, testWorkDirA, testMsgCount, now)))
 
-	require.NoError(t, idx.Remove(testSessionID1))
+	require.NoError(t, idx.Remove(t.Context(), testSessionID1))
 
 	entries := idx.List("")
 	require.Len(t, entries, 1)
@@ -114,11 +115,11 @@ func TestSessionIndex_RemoveNonExistent(t *testing.T) {
 	dir := t.TempDir()
 	path := indexPath(dir)
 
-	idx, err := session.NewSessionIndex(path, nil)
+	idx, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
 
 	// Should not error.
-	require.NoError(t, idx.Remove("nonexistent"))
+	require.NoError(t, idx.Remove(t.Context(), "nonexistent"))
 }
 
 func TestSessionIndex_FilterByWorkDir(t *testing.T) {
@@ -127,14 +128,14 @@ func TestSessionIndex_FilterByWorkDir(t *testing.T) {
 	dir := t.TempDir()
 	path := indexPath(dir)
 
-	idx, err := session.NewSessionIndex(path, nil)
+	idx, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
 
 	now := time.Now().Truncate(time.Second)
 
-	require.NoError(t, idx.Update(testEntry(testSessionID1, "A1", testWorkDirA, testMsgCount, now)))
-	require.NoError(t, idx.Update(testEntry(testSessionID2, "B1", testWorkDirB, testMsgCount, now)))
-	require.NoError(t, idx.Update(testEntry(testSessionID3, "A2", testWorkDirA, testMsgCount, now)))
+	require.NoError(t, idx.Update(t.Context(), testEntry(testSessionID1, "A1", testWorkDirA, testMsgCount, now)))
+	require.NoError(t, idx.Update(t.Context(), testEntry(testSessionID2, "B1", testWorkDirB, testMsgCount, now)))
+	require.NoError(t, idx.Update(t.Context(), testEntry(testSessionID3, "A2", testWorkDirA, testMsgCount, now)))
 
 	entriesA := idx.List(testWorkDirA)
 	require.Len(t, entriesA, 2)
@@ -150,15 +151,15 @@ func TestSessionIndex_ListSortedByLastModifiedDesc(t *testing.T) {
 	dir := t.TempDir()
 	path := indexPath(dir)
 
-	idx, err := session.NewSessionIndex(path, nil)
+	idx, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
 
 	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	oneHour := time.Hour
 
-	require.NoError(t, idx.Update(testEntry(testSessionID1, "oldest", testWorkDirA, 1, base)))
-	require.NoError(t, idx.Update(testEntry(testSessionID2, "newest", testWorkDirA, 2, base.Add(2*oneHour))))
-	require.NoError(t, idx.Update(testEntry(testSessionID3, "middle", testWorkDirA, 3, base.Add(oneHour))))
+	require.NoError(t, idx.Update(t.Context(), testEntry(testSessionID1, "oldest", testWorkDirA, 1, base)))
+	require.NoError(t, idx.Update(t.Context(), testEntry(testSessionID2, "newest", testWorkDirA, 2, base.Add(2*oneHour))))
+	require.NoError(t, idx.Update(t.Context(), testEntry(testSessionID3, "middle", testWorkDirA, 3, base.Add(oneHour))))
 
 	entries := idx.List("")
 	require.Len(t, entries, 3)
@@ -176,12 +177,12 @@ func TestSessionIndex_PersistAndReload(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 
 	// Create and populate index.
-	idx1, err := session.NewSessionIndex(path, nil)
+	idx1, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
-	require.NoError(t, idx1.Update(testEntry(testSessionID1, testSessionTitle, testWorkDirA, testMsgCount, now)))
+	require.NoError(t, idx1.Update(t.Context(), testEntry(testSessionID1, testSessionTitle, testWorkDirA, testMsgCount, now)))
 
 	// Reload from disk.
-	idx2, reloadErr := session.NewSessionIndex(path, nil)
+	idx2, reloadErr := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, reloadErr)
 
 	entries := idx2.List("")
@@ -207,7 +208,7 @@ func TestSessionIndex_AutoRebuildOnCorruption(t *testing.T) {
 		},
 	}
 
-	idx, err := session.NewSessionIndex(path, scanner, session.WithRebuildCallback(func() {
+	idx, err := session.NewSessionIndex(t.Context(), path, scanner, session.WithRebuildCallback(func() {
 		rebuilt = true
 	}))
 	require.NoError(t, err)
@@ -232,7 +233,7 @@ func TestSessionIndex_AutoRebuildOnMissingFile(t *testing.T) {
 		},
 	}
 
-	idx, err := session.NewSessionIndex(path, scanner, session.WithRebuildCallback(func() {
+	idx, err := session.NewSessionIndex(t.Context(), path, scanner, session.WithRebuildCallback(func() {
 		rebuilt = true
 	}))
 	require.NoError(t, err)
@@ -251,11 +252,11 @@ func TestSessionIndex_RebuildFromMetadata(t *testing.T) {
 
 	now := time.Now().Truncate(time.Second)
 
-	idx, err := session.NewSessionIndex(path, nil)
+	idx, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
 
 	// Add stale entry.
-	require.NoError(t, idx.Update(testEntry("stale", "stale", testWorkDirA, 1, now)))
+	require.NoError(t, idx.Update(t.Context(), testEntry("stale", "stale", testWorkDirA, 1, now)))
 
 	scanner := &mockMetadataScanner{
 		entries: []session.IndexEntry{
@@ -264,7 +265,7 @@ func TestSessionIndex_RebuildFromMetadata(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, idx.Rebuild(scanner))
+	require.NoError(t, idx.Rebuild(t.Context(), scanner))
 
 	// Stale entry should be gone, fresh entries should be present.
 	entries := idx.List("")
@@ -286,11 +287,11 @@ func TestSessionIndex_AtomicWrite(t *testing.T) {
 	dir := t.TempDir()
 	path := indexPath(dir)
 
-	idx, err := session.NewSessionIndex(path, nil)
+	idx, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
 
 	now := time.Now().Truncate(time.Second)
-	require.NoError(t, idx.Update(testEntry(testSessionID1, testSessionTitle, testWorkDirA, testMsgCount, now)))
+	require.NoError(t, idx.Update(t.Context(), testEntry(testSessionID1, testSessionTitle, testWorkDirA, testMsgCount, now)))
 
 	// Verify the file is valid JSON.
 	data, readErr := os.ReadFile(path)
@@ -307,7 +308,7 @@ func TestSessionIndex_EmptyList(t *testing.T) {
 	dir := t.TempDir()
 	path := indexPath(dir)
 
-	idx, err := session.NewSessionIndex(path, nil)
+	idx, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
 
 	entries := idx.List("")
@@ -320,13 +321,13 @@ func TestSessionIndex_Count(t *testing.T) {
 	dir := t.TempDir()
 	path := indexPath(dir)
 
-	idx, err := session.NewSessionIndex(path, nil)
+	idx, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 0, idx.Count())
 
 	now := time.Now().Truncate(time.Second)
-	require.NoError(t, idx.Update(testEntry(testSessionID1, testSessionTitle, testWorkDirA, testMsgCount, now)))
+	require.NoError(t, idx.Update(t.Context(), testEntry(testSessionID1, testSessionTitle, testWorkDirA, testMsgCount, now)))
 	require.Equal(t, 1, idx.Count())
 }
 
@@ -336,11 +337,11 @@ func TestSessionIndex_RebuildNilScanner(t *testing.T) {
 	dir := t.TempDir()
 	path := indexPath(dir)
 
-	idx, err := session.NewSessionIndex(path, nil)
+	idx, err := session.NewSessionIndex(t.Context(), path, nil)
 	require.NoError(t, err)
 
 	// Rebuild with nil scanner should return error.
-	require.Error(t, idx.Rebuild(nil))
+	require.Error(t, idx.Rebuild(t.Context(), nil))
 }
 
 // mockMetadataScanner implements session.MetadataScanner for testing.
@@ -349,6 +350,6 @@ type mockMetadataScanner struct {
 	err     error
 }
 
-func (m *mockMetadataScanner) ScanSessions() ([]session.IndexEntry, error) {
+func (m *mockMetadataScanner) ScanSessions(_ context.Context) ([]session.IndexEntry, error) {
 	return m.entries, m.err
 }

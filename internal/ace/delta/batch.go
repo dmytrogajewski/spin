@@ -62,16 +62,21 @@ func (a *Applier) runBatchWorkers(ctx context.Context, deltas []Delta, workers i
 	var wg sync.WaitGroup
 
 	for range workers {
-		wg.Add(1)
+		wg.Go(func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case j, ok := <-jobs:
+					if !ok {
+						return
+					}
 
-		go func() {
-			defer wg.Done()
-
-			for j := range jobs {
-				res, err := a.Apply(ctx, j.delta)
-				results <- batchJobResult{j.index, res, err}
+					res, err := a.Apply(ctx, j.delta)
+					results <- batchJobResult{j.index, res, err}
+				}
 			}
-		}()
+		})
 	}
 
 	for i, d := range deltas {

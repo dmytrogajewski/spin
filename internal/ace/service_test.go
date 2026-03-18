@@ -90,7 +90,7 @@ func TestService_SavePlaybook(t *testing.T) {
 	}
 
 	// Save playbook.
-	err = svc.SavePlaybook()
+	err = svc.SavePlaybook(t.Context())
 	if err != nil {
 		t.Errorf("SavePlaybook() error = %v", err)
 	}

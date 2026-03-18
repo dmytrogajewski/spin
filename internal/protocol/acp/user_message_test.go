@@ -33,7 +33,7 @@ func TestPrompt_NoUserMessageChunk(t *testing.T) {
 
 	// Create a session.
 	sess := session.NewSession("/tmp/test")
-	err = storage.Save(sess.ID, *sess)
+	err = storage.Save(context.Background(), sess.ID, *sess)
 	require.NoError(t, err)
 
 	sessionID := acp.SessionId(sess.ID)

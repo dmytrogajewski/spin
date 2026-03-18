@@ -875,26 +875,31 @@ func (e *Executor) streamOutput(ctx context.Context, r io.Reader, stream string,
 			data := make([]byte, n)
 			copy(data, buf[:n])
 
-			chunks <- OutputChunk{
-				Stream:    stream,
-				Data:      data,
-				Timestamp: time.Now(),
-				Done:      false,
-				Error:     nil,
+			if !sendChunk(ctx, chunks, OutputChunk{Stream: stream, Data: data, Timestamp: time.Now()}) {
+				return
 			}
 		}
 
 		if err != nil {
 			if err != io.EOF {
-				chunks <- OutputChunk{
+				sendChunk(ctx, chunks, OutputChunk{
 					Stream:    stream,
 					Timestamp: time.Now(),
-					Done:      false,
 					Error:     fmt.Errorf("stream error: %w", err),
-				}
+				})
 			}
 
 			break
 		}
+	}
+}
+
+// sendChunk sends a chunk to the channel or returns false if context is canceled.
+func sendChunk(ctx context.Context, chunks chan<- OutputChunk, chunk OutputChunk) bool {
+	select {
+	case chunks <- chunk:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }

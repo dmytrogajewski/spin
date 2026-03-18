@@ -1,6 +1,10 @@
 package auth
 
-import "sync"
+import (
+	"context"
+	"fmt"
+	"sync"
+)
 
 // memoryKeystore implements Keystore using in-memory storage.
 // This is used as a fallback when platform-specific keystores are unavailable.
@@ -17,7 +21,11 @@ func newMemoryKeystore() Keystore {
 }
 
 // Get retrieves a value by key.
-func (m *memoryKeystore) Get(key string) (string, error) {
+func (m *memoryKeystore) Get(ctx context.Context, key string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("keystore get: %w", err)
+	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -30,7 +38,11 @@ func (m *memoryKeystore) Get(key string) (string, error) {
 }
 
 // Set stores a key-value pair.
-func (m *memoryKeystore) Set(key, value string) error {
+func (m *memoryKeystore) Set(ctx context.Context, key, value string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("keystore set: %w", err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -40,7 +52,11 @@ func (m *memoryKeystore) Set(key, value string) error {
 }
 
 // Delete removes a key-value pair.
-func (m *memoryKeystore) Delete(key string) error {
+func (m *memoryKeystore) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("keystore delete: %w", err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -50,7 +66,11 @@ func (m *memoryKeystore) Delete(key string) error {
 }
 
 // List returns all stored keys.
-func (m *memoryKeystore) List() ([]string, error) {
+func (m *memoryKeystore) List(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("keystore list: %w", err)
+	}
+
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

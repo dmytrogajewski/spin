@@ -16,7 +16,7 @@ func TestMemoryService_NewMemoryService(t *testing.T) {
 
 	scratchpad := memory.NewScratchpad("test-session", 10)
 	tmpDir := t.TempDir()
-	persistent, err := memory.NewPersistentStore(tmpDir)
+	persistent, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	service := NewMemoryService(scratchpad, persistent)
@@ -75,7 +75,7 @@ func TestBuilder_registerMemoryTools_WithPersistent(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
-	persistent, err := memory.NewPersistentStore(tmpDir)
+	persistent, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	service := NewMemoryService(nil, persistent)
@@ -100,7 +100,7 @@ func TestBuilder_registerMemoryTools_WithBoth(t *testing.T) {
 
 	scratchpad := memory.NewScratchpad("test-session", 10)
 	tmpDir := t.TempDir()
-	persistent, err := memory.NewPersistentStore(tmpDir)
+	persistent, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	service := NewMemoryService(scratchpad, persistent)
@@ -173,7 +173,7 @@ func TestMemoryService_NewSessionHandoff(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
-	persistent, err := memory.NewPersistentStore(tmpDir)
+	persistent, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	service := NewMemoryService(nil, persistent)

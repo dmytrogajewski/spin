@@ -1,4 +1,5 @@
-// Journey: specs/journeys/JOURNEY-RT4.md
+// Journey: specs/journeys/JOURNEY-RT4.md.
+
 package tools
 
 import "testing"

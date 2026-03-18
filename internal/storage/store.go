@@ -4,6 +4,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,19 +29,19 @@ var (
 // Domain packages can use this or define their own specialized interfaces.
 type Store[T any] interface {
 	// Save persists data with the given key.
-	Save(key string, data T) error
+	Save(ctx context.Context, key string, data T) error
 
 	// Load retrieves data by key.
-	Load(key string) (T, error)
+	Load(ctx context.Context, key string) (T, error)
 
 	// Delete removes data by key.
-	Delete(key string) error
+	Delete(ctx context.Context, key string) error
 
 	// Exists checks if key exists.
-	Exists(key string) (bool, error)
+	Exists(ctx context.Context, key string) (bool, error)
 
 	// List returns all keys.
-	List() ([]string, error)
+	List(ctx context.Context) ([]string, error)
 }
 
 // FileStore implements Store using the filesystem.
@@ -96,7 +97,7 @@ func NewFileStore[T any](cfg FileStoreConfig) (*FileStore[T], error) {
 }
 
 // Save persists data with atomic write.
-func (fs *FileStore[T]) Save(key string, data T) error {
+func (fs *FileStore[T]) Save(ctx context.Context, key string, data T) error {
 	if key == "" {
 		return ErrKeyCannotBeEmpty
 	}
@@ -110,11 +111,11 @@ func (fs *FileStore[T]) Save(key string, data T) error {
 		return fmt.Errorf("serialize data: %w", err)
 	}
 
-	return AtomicWriteFile(fs.filePath(key), jsonData, DefaultFilePerm)
+	return AtomicWriteFile(ctx, fs.filePath(key), jsonData, DefaultFilePerm)
 }
 
 // Load retrieves data by key.
-func (fs *FileStore[T]) Load(key string) (T, error) {
+func (fs *FileStore[T]) Load(ctx context.Context, key string) (T, error) {
 	var zero T
 
 	if key == "" {
@@ -123,6 +124,10 @@ func (fs *FileStore[T]) Load(key string) (T, error) {
 
 	fs.mu.RLock()
 	defer fs.mu.RUnlock()
+
+	if err := ctx.Err(); err != nil {
+		return zero, fmt.Errorf("load %s: %w", key, err)
+	}
 
 	path := fs.filePath(key)
 
@@ -146,13 +151,17 @@ func (fs *FileStore[T]) Load(key string) (T, error) {
 }
 
 // Delete removes data by key.
-func (fs *FileStore[T]) Delete(key string) error {
+func (fs *FileStore[T]) Delete(ctx context.Context, key string) error {
 	if key == "" {
 		return ErrKeyCannotBeEmpty
 	}
 
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("delete %s: %w", key, err)
+	}
 
 	path := fs.filePath(key)
 
@@ -165,13 +174,17 @@ func (fs *FileStore[T]) Delete(key string) error {
 }
 
 // Exists checks if key exists.
-func (fs *FileStore[T]) Exists(key string) (bool, error) {
+func (fs *FileStore[T]) Exists(ctx context.Context, key string) (bool, error) {
 	if key == "" {
 		return false, ErrKeyCannotBeEmpty
 	}
 
 	fs.mu.RLock()
 	defer fs.mu.RUnlock()
+
+	if err := ctx.Err(); err != nil {
+		return false, fmt.Errorf("exists %s: %w", key, err)
+	}
 
 	path := fs.filePath(key)
 
@@ -188,9 +201,13 @@ func (fs *FileStore[T]) Exists(key string) (bool, error) {
 }
 
 // List returns all keys.
-func (fs *FileStore[T]) List() ([]string, error) {
+func (fs *FileStore[T]) List(ctx context.Context) ([]string, error) {
 	fs.mu.RLock()
 	defer fs.mu.RUnlock()
+
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("list: %w", err)
+	}
 
 	entries, err := os.ReadDir(fs.baseDir)
 	if err != nil {

@@ -15,7 +15,7 @@ import (
 func TestMemoryTool_Name(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
+	store, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	tool := NewMemoryTool(store)
@@ -25,7 +25,7 @@ func TestMemoryTool_Name(t *testing.T) {
 func TestMemoryTool_Description(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
+	store, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	tool := NewMemoryTool(store)
@@ -35,7 +35,7 @@ func TestMemoryTool_Description(t *testing.T) {
 func TestMemoryTool_Schema(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
+	store, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	tool := NewMemoryTool(store)
@@ -58,7 +58,7 @@ func TestMemoryTool_Put(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
+	store, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	tool := NewMemoryTool(store)
@@ -91,7 +91,7 @@ func TestMemoryTool_Get(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
+	store, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	tool := NewMemoryTool(store)
@@ -117,7 +117,7 @@ func TestMemoryTool_Get_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
+	store, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	tool := NewMemoryTool(store)
@@ -139,7 +139,7 @@ func TestMemoryTool_Delete(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
+	store, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	tool := NewMemoryTool(store)
@@ -169,7 +169,7 @@ func TestMemoryTool_List(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
+	store, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	tool := NewMemoryTool(store)
@@ -198,7 +198,7 @@ func TestMemoryTool_Search(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
+	store, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	tool := NewMemoryTool(store)
@@ -245,7 +245,7 @@ func TestMemoryTool_BadOperation(t *testing.T) {
 
 			ctx := context.Background()
 			tmpDir := t.TempDir()
-			store, err := memory.NewPersistentStore(tmpDir)
+			store, err := memory.NewPersistentStore(t.Context(), tmpDir)
 			require.NoError(t, err)
 
 			tool := NewMemoryTool(store)
@@ -266,7 +266,7 @@ func TestMemoryTool_Put_WithNamespace(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := memory.NewPersistentStore(tmpDir)
+	store, err := memory.NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	tool := NewMemoryTool(store)

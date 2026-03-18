@@ -128,7 +128,7 @@ func (r *Registry) Execute(ctx context.Context, name string, params ToolParamete
 	}
 
 	// Validate parameters.
-	err = r.validateParams(tool.Schema(), params)
+	err = validateParams(tool.Schema(), params)
 	if err != nil {
 		return ToolResult{}, err
 	}
@@ -143,19 +143,19 @@ func (r *Registry) Execute(ctx context.Context, name string, params ToolParamete
 }
 
 // validateParams validates tool parameters against the schema.
-func (r *Registry) validateParams(schema ToolSchema, params ToolParameters) error {
+func validateParams(schema ToolSchema, params ToolParameters) error {
 	paramSchema := schema.Function.Parameters
 
-	err := r.validateRequiredParams(paramSchema, params)
+	err := validateRequiredParams(paramSchema, params)
 	if err != nil {
 		return err
 	}
 
-	return r.validateParameterTypes(paramSchema, params)
+	return validateParameterTypes(paramSchema, params)
 }
 
 // validateRequiredParams checks that all required parameters are present.
-func (r *Registry) validateRequiredParams(paramSchema ParameterSchema, params ToolParameters) error {
+func validateRequiredParams(paramSchema ParameterSchema, params ToolParameters) error {
 	for _, required := range paramSchema.Required {
 		if !params.Has(required) {
 			return fmt.Errorf("%w: missing required parameter %s", ErrInvalidParameters, required)
@@ -166,9 +166,9 @@ func (r *Registry) validateRequiredParams(paramSchema ParameterSchema, params To
 }
 
 // validateParameterTypes validates the types and values of all parameters.
-func (r *Registry) validateParameterTypes(paramSchema ParameterSchema, params ToolParameters) error {
+func validateParameterTypes(paramSchema ParameterSchema, params ToolParameters) error {
 	for _, name := range params.Keys() {
-		err := r.validateParameter(paramSchema, name, params)
+		err := validateParameter(paramSchema, name, params)
 		if err != nil {
 			return err
 		}
@@ -178,10 +178,10 @@ func (r *Registry) validateParameterTypes(paramSchema ParameterSchema, params To
 }
 
 // validateParameter validates a single parameter.
-func (r *Registry) validateParameter(paramSchema ParameterSchema, name string, params ToolParameters) error {
+func validateParameter(paramSchema ParameterSchema, name string, params ToolParameters) error {
 	propDef, exists := paramSchema.Properties[name]
 	if !exists {
-		return r.createUnknownParameterError(name, paramSchema.Properties)
+		return createUnknownParameterError(name, paramSchema.Properties)
 	}
 
 	// Get the raw JSON value for this parameter.
@@ -190,13 +190,13 @@ func (r *Registry) validateParameter(paramSchema ParameterSchema, name string, p
 		return fmt.Errorf("%w: parameter %s not found", ErrInvalidParameters, name)
 	}
 
-	if !r.validateTypeFromJSON(rawValue, propDef.Type) {
+	if !validateTypeFromJSON(rawValue, propDef.Type) {
 		return fmt.Errorf("%w: parameter %s has wrong type (expected %s)",
 			ErrInvalidParameters, name, propDef.Type)
 	}
 
 	if len(propDef.Enum) > 0 {
-		err := r.validateEnumFromJSON(rawValue, propDef.Enum)
+		err := validateEnumFromJSON(rawValue, propDef.Enum)
 		if err != nil {
 			return fmt.Errorf("%w: parameter %s %w", ErrInvalidParameters, name, err)
 		}
@@ -206,7 +206,7 @@ func (r *Registry) validateParameter(paramSchema ParameterSchema, name string, p
 }
 
 // createUnknownParameterError creates an error for unknown parameters.
-func (r *Registry) createUnknownParameterError(name string, properties map[string]PropertyDefinition) error {
+func createUnknownParameterError(name string, properties map[string]PropertyDefinition) error {
 	validParams := make([]string, 0, len(properties))
 	for pname := range properties {
 		validParams = append(validParams, pname)
@@ -217,7 +217,7 @@ func (r *Registry) createUnknownParameterError(name string, properties map[strin
 }
 
 // validateTypeFromJSON checks if a JSON value matches the expected JSON schema type.
-func (r *Registry) validateTypeFromJSON(rawValue json.RawMessage, expectedType string) bool {
+func validateTypeFromJSON(rawValue json.RawMessage, expectedType string) bool {
 	switch expectedType {
 	case "string":
 		var s string
@@ -252,7 +252,7 @@ func (r *Registry) validateTypeFromJSON(rawValue json.RawMessage, expectedType s
 }
 
 // validateEnumFromJSON checks if a JSON value is in the allowed enum values.
-func (r *Registry) validateEnumFromJSON(rawValue json.RawMessage, enum []string) error {
+func validateEnumFromJSON(rawValue json.RawMessage, enum []string) error {
 	var strValue string
 
 	err := json.Unmarshal(rawValue, &strValue)

@@ -401,16 +401,12 @@ func TestEventEmitter_ConcurrentSubscribe(t *testing.T) {
 	subscribers := 100
 
 	for range subscribers {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			_, _, err := emitter.Subscribe()
 			if err != nil {
 				t.Errorf("Subscribe() failed: %v", err)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -438,16 +434,12 @@ func TestEventEmitter_ConcurrentEmit(t *testing.T) {
 	emitCount := 100
 
 	for i := range emitCount {
-		wg.Add(1)
-
-		go func(n int) {
-			defer wg.Done()
-
+		wg.Go(func() {
 			emitter.Emit(Event{
 				Type: EventInfo,
-				Data: n,
+				Data: i,
 			})
-		}(i)
+		})
 	}
 
 	wg.Wait()
@@ -476,28 +468,20 @@ func TestEventEmitter_ConcurrentMixed(t *testing.T) {
 
 	// Concurrent subscribes and unsubscribes.
 	for range 10 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			id, _, err := emitter.Subscribe()
 			if err == nil {
 				time.Sleep(10 * time.Millisecond)
 				emitter.Unsubscribe(id)
 			}
-		}()
+		})
 	}
 
 	// Concurrent emits.
 	for range 50 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			emitter.Emit(Event{Type: EventInfo})
-		}()
+		})
 	}
 
 	wg.Wait()

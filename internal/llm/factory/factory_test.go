@@ -649,7 +649,7 @@ func TestFactoryWithKeystore(t *testing.T) {
 
 	// Create keystore with test credentials.
 	keystore := auth.NewKeystore()
-	err := keystore.Set("test-openai-key", "sk-test-key-value")
+	err := keystore.Set(t.Context(), "test-openai-key", "sk-test-key-value")
 	require.NoError(t, err, "Failed to set test credential")
 
 	// Create auth manager with keystore.

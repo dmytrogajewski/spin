@@ -1,7 +1,13 @@
 package storage
 
+// Journey: specs/journeys/JOURNEY-CTX-1.2.md.
+
 import (
+	"context"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestData is a simple struct for testing.
@@ -17,27 +23,18 @@ func TestFileStore_SaveLoad(t *testing.T) {
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	data := TestData{ID: "test-1", Name: "Test", Value: 42}
 
 	// Save.
-	err = store.Save("test-1", data)
-	if err != nil {
-		t.Fatalf("Save() error = %v", err)
-	}
+	err = store.Save(t.Context(), "test-1", data)
+	require.NoError(t, err)
 
 	// Load.
-	loaded, err := store.Load("test-1")
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-
-	if loaded.ID != data.ID || loaded.Name != data.Name || loaded.Value != data.Value {
-		t.Errorf("Load() = %+v, want %+v", loaded, data)
-	}
+	loaded, err := store.Load(t.Context(), "test-1")
+	require.NoError(t, err)
+	assert.Equal(t, data, loaded)
 }
 
 func TestFileStore_Delete(t *testing.T) {
@@ -46,24 +43,18 @@ func TestFileStore_Delete(t *testing.T) {
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	data := TestData{ID: "test-1", Name: "Test", Value: 42}
-	_ = store.Save("test-1", data)
+	_ = store.Save(t.Context(), "test-1", data)
 
 	// Delete.
-	err = store.Delete("test-1")
-	if err != nil {
-		t.Fatalf("Delete() error = %v", err)
-	}
+	err = store.Delete(t.Context(), "test-1")
+	require.NoError(t, err)
 
 	// Should not exist.
-	exists, _ := store.Exists("test-1")
-	if exists {
-		t.Error("Exists() = true after Delete(), want false")
-	}
+	exists, _ := store.Exists(t.Context(), "test-1")
+	assert.False(t, exists)
 }
 
 func TestFileStore_Exists(t *testing.T) {
@@ -72,31 +63,19 @@ func TestFileStore_Exists(t *testing.T) {
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	// Should not exist initially.
-	exists, err := store.Exists("test-1")
-	if err != nil {
-		t.Fatalf("Exists() error = %v", err)
-	}
-
-	if exists {
-		t.Error("Exists() = true, want false")
-	}
+	exists, err := store.Exists(t.Context(), "test-1")
+	require.NoError(t, err)
+	assert.False(t, exists)
 
 	// Save and check.
-	_ = store.Save("test-1", TestData{ID: "test-1"})
+	_ = store.Save(t.Context(), "test-1", TestData{ID: "test-1"})
 
-	exists, err = store.Exists("test-1")
-	if err != nil {
-		t.Fatalf("Exists() error = %v", err)
-	}
-
-	if !exists {
-		t.Error("Exists() = false, want true")
-	}
+	exists, err = store.Exists(t.Context(), "test-1")
+	require.NoError(t, err)
+	assert.True(t, exists)
 }
 
 func TestFileStore_List(t *testing.T) {
@@ -105,23 +84,16 @@ func TestFileStore_List(t *testing.T) {
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	// Save multiple items.
 	for i := range 5 {
-		_ = store.Save(string(rune('a'+i)), TestData{ID: string(rune('a' + i))})
+		_ = store.Save(t.Context(), string(rune('a'+i)), TestData{ID: string(rune('a' + i))})
 	}
 
-	keys, err := store.List()
-	if err != nil {
-		t.Fatalf("List() error = %v", err)
-	}
-
-	if len(keys) != 5 {
-		t.Errorf("List() returned %d keys, want 5", len(keys))
-	}
+	keys, err := store.List(t.Context())
+	require.NoError(t, err)
+	assert.Len(t, keys, 5)
 }
 
 func TestFileStore_CustomSuffix(t *testing.T) {
@@ -131,22 +103,15 @@ func TestFileStore_CustomSuffix(t *testing.T) {
 		BaseDir: t.TempDir(),
 		Suffix:  ".history.json",
 	})
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
+	require.NoError(t, err)
 
 	data := TestData{ID: "test-1", Name: "Test", Value: 42}
-	_ = store.Save("test-1", data)
+	_ = store.Save(t.Context(), "test-1", data)
 
 	// Load should work.
-	loaded, err := store.Load("test-1")
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-
-	if loaded.ID != data.ID {
-		t.Errorf("Load() ID = %s, want %s", loaded.ID, data.ID)
-	}
+	loaded, err := store.Load(t.Context(), "test-1")
+	require.NoError(t, err)
+	assert.Equal(t, data.ID, loaded.ID)
 }
 
 func TestFileStore_EmptyKey(t *testing.T) {
@@ -155,30 +120,22 @@ func TestFileStore_EmptyKey(t *testing.T) {
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
+	require.NoError(t, err)
+
+	ctx := t.Context()
 
 	// All operations should fail with empty key.
-	err = store.Save("", TestData{})
-	if err == nil {
-		t.Error("Save() with empty key should error")
-	}
+	err = store.Save(ctx, "", TestData{})
+	require.Error(t, err)
 
-	_, err = store.Load("")
-	if err == nil {
-		t.Error("Load() with empty key should error")
-	}
+	_, err = store.Load(ctx, "")
+	require.Error(t, err)
 
-	err = store.Delete("")
-	if err == nil {
-		t.Error("Delete() with empty key should error")
-	}
+	err = store.Delete(ctx, "")
+	require.Error(t, err)
 
-	_, err = store.Exists("")
-	if err == nil {
-		t.Error("Exists() with empty key should error")
-	}
+	_, err = store.Exists(ctx, "")
+	require.Error(t, err)
 }
 
 func TestFileStore_NotFound(t *testing.T) {
@@ -187,12 +144,82 @@ func TestFileStore_NotFound(t *testing.T) {
 	store, err := NewFileStore[TestData](FileStoreConfig{
 		BaseDir: t.TempDir(),
 	})
-	if err != nil {
-		t.Fatalf("NewFileStore() error = %v", err)
-	}
+	require.NoError(t, err)
 
-	_, err = store.Load("nonexistent")
-	if err == nil {
-		t.Error("Load() nonexistent key should error")
-	}
+	_, err = store.Load(t.Context(), "nonexistent")
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestFileStore_CanceledContext_Save(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewFileStore[TestData](FileStoreConfig{
+		BaseDir: t.TempDir(),
+	})
+	require.NoError(t, err)
+
+	ctx := canceledContext()
+
+	err = store.Save(ctx, "test-1", TestData{ID: "test-1"})
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestFileStore_CanceledContext_Load(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewFileStore[TestData](FileStoreConfig{
+		BaseDir: t.TempDir(),
+	})
+	require.NoError(t, err)
+
+	// Save with valid context first.
+	_ = store.Save(t.Context(), "test-1", TestData{ID: "test-1"})
+
+	ctx := canceledContext()
+
+	_, err = store.Load(ctx, "test-1")
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestFileStore_CanceledContext_Delete(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewFileStore[TestData](FileStoreConfig{
+		BaseDir: t.TempDir(),
+	})
+	require.NoError(t, err)
+
+	ctx := canceledContext()
+
+	err = store.Delete(ctx, "test-1")
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestFileStore_CanceledContext_Exists(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewFileStore[TestData](FileStoreConfig{
+		BaseDir: t.TempDir(),
+	})
+	require.NoError(t, err)
+
+	ctx := canceledContext()
+
+	_, err = store.Exists(ctx, "test-1")
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestFileStore_CanceledContext_List(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewFileStore[TestData](FileStoreConfig{
+		BaseDir: t.TempDir(),
+	})
+	require.NoError(t, err)
+
+	ctx := canceledContext()
+
+	_, err = store.List(ctx)
+	require.ErrorIs(t, err, context.Canceled)
 }

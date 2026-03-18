@@ -56,6 +56,7 @@ type backgroundTask struct {
 	startedAt  time.Time
 	exitCode   int
 	cmd        *exec.Cmd
+	cmdCancel  context.CancelFunc
 	outputFile *os.File
 	outputPath string
 	done       chan struct{}
@@ -106,8 +107,10 @@ func (m *BackgroundTaskManager) SetStartupTimeout(d time.Duration) {
 
 // Start launches a command in the background and returns the task ID and initial output.
 // It waits up to [StartupWaitTimeout] for the first output before returning.
+// The context controls the lifetime of the background process: when ctx is canceled,
+// the process receives SIGTERM followed by SIGKILL after [GracefulKillTimeout].
 func (m *BackgroundTaskManager) Start(
-	program string, args []string, env []string, workDir string,
+	ctx context.Context, program string, args []string, env []string, workDir string,
 ) (string, string, error) {
 	m.mu.Lock()
 
@@ -138,22 +141,14 @@ func (m *BackgroundTaskManager) Start(
 		done:       make(chan struct{}),
 	}
 
-	cmd := exec.CommandContext(context.Background(), program, args...)
-	cmd.Dir = workDir
-	cmd.Env = env
-
-	process.SetGroup(cmd)
-
-	// Pipe stdout+stderr to both the output file and a startup reader.
 	startupReader, startupWriter := io.Pipe()
-	multiWriter := io.MultiWriter(outFile, startupWriter)
-
-	cmd.Stdout = multiWriter
-	cmd.Stderr = multiWriter
+	cmd, cmdCancel := newCommand(ctx, program, args, env, workDir, outFile, startupWriter)
 
 	task.cmd = cmd
+	task.cmdCancel = cmdCancel
 
 	if startErr := cmd.Start(); startErr != nil {
+		cmdCancel()
 		outFile.Close()
 		os.Remove(outputPath)
 		m.mu.Unlock()
@@ -165,14 +160,14 @@ func (m *BackgroundTaskManager) Start(
 	m.mu.Unlock()
 
 	// Monitor the process in background.
-	go m.monitor(task, startupWriter)
+	go m.monitor(ctx, task, startupWriter)
 
 	// Wait for initial output.
 	m.mu.Lock()
 	timeout := m.startupTimeout
 	m.mu.Unlock()
 
-	initialOutput := m.waitStartup(startupReader, timeout)
+	initialOutput := m.waitStartup(ctx, startupReader, timeout)
 
 	return taskID, initialOutput, nil
 }
@@ -257,11 +252,47 @@ func (m *BackgroundTaskManager) runningCount() int {
 	return count
 }
 
+// newCommand creates an [exec.Cmd] with graceful cancellation support.
+// When the returned context cancel is called, cmd.Cancel sends SIGTERM to the
+// process group, and WaitDelay escalates to SIGKILL after [GracefulKillTimeout].
+func newCommand(
+	ctx context.Context, program string, args []string,
+	env []string, workDir string,
+	outFile *os.File, startupWriter *io.PipeWriter,
+) (*exec.Cmd, context.CancelFunc) {
+	cmdCtx, cmdCancel := context.WithCancel(ctx)
+
+	cmd := exec.CommandContext(cmdCtx, program, args...)
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	}
+	cmd.WaitDelay = GracefulKillTimeout
+	cmd.Dir = workDir
+	cmd.Env = env
+
+	process.SetGroup(cmd)
+
+	multiWriter := io.MultiWriter(outFile, startupWriter)
+	cmd.Stdout = multiWriter
+	cmd.Stderr = multiWriter
+
+	return cmd, cmdCancel
+}
+
 // monitor waits for the process to exit and updates task state.
-func (m *BackgroundTaskManager) monitor(task *backgroundTask, startupWriter *io.PipeWriter) {
+// When the parent context is canceled, exec.Cmd.Cancel sends SIGTERM and
+// WaitDelay escalates to SIGKILL, so cmd.Wait() returns with the right error.
+func (m *BackgroundTaskManager) monitor(ctx context.Context, task *backgroundTask, startupWriter *io.PipeWriter) {
 	defer close(task.done)
 
-	err := task.cmd.Wait()
+	waitErr := task.cmd.Wait()
+
+	// Cancel the derived command context to release resources.
+	task.cmdCancel()
 
 	// Close the startup writer so waitStartup unblocks.
 	startupWriter.Close()
@@ -272,16 +303,23 @@ func (m *BackgroundTaskManager) monitor(task *backgroundTask, startupWriter *io.
 	// Close the output file.
 	task.outputFile.Close()
 
-	// Only update state if not already killed.
+	// Only update state if not already killed (by explicit Kill call).
 	if task.state == TaskKilled {
 		return
 	}
 
-	if err != nil {
+	// If parent ctx was canceled, mark as killed.
+	if ctx.Err() != nil {
+		task.state = TaskKilled
+
+		return
+	}
+
+	if waitErr != nil {
 		task.state = TaskFailed
 
 		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if errors.As(waitErr, &exitErr) {
 			task.exitCode = exitErr.ExitCode()
 		}
 
@@ -293,8 +331,9 @@ func (m *BackgroundTaskManager) monitor(task *backgroundTask, startupWriter *io.
 }
 
 // waitStartup reads initial output up to the given timeout.
-// It returns as soon as the first line is received or the timeout expires.
-func (m *BackgroundTaskManager) waitStartup(reader *io.PipeReader, timeout time.Duration) string {
+// It returns as soon as the first line is received, the timeout expires,
+// or the context is canceled.
+func (m *BackgroundTaskManager) waitStartup(ctx context.Context, reader *io.PipeReader, timeout time.Duration) string {
 	firstLine := make(chan string, 1)
 
 	go func() {
@@ -323,29 +362,24 @@ func (m *BackgroundTaskManager) waitStartup(reader *io.PipeReader, timeout time.
 		return ""
 	case <-time.After(timeout):
 		return ""
+	case <-ctx.Done():
+		return ""
 	}
 }
 
-// killProcess sends SIGTERM then escalates to SIGKILL.
+// killProcess cancels the command context (triggering SIGTERM via cmd.Cancel),
+// then waits for the process to exit. Go's WaitDelay escalates to SIGKILL.
 func (m *BackgroundTaskManager) killProcess(task *backgroundTask) error {
 	if task.cmd.Process == nil {
 		return process.ErrProcessNotStarted
 	}
 
-	pid := task.cmd.Process.Pid
+	// Cancel the command context — this triggers cmd.Cancel (SIGTERM).
+	// After WaitDelay, Go escalates to SIGKILL automatically.
+	task.cmdCancel()
 
-	// Send SIGTERM to process group (best-effort, process may have already exited).
-	_ = syscall.Kill(-pid, syscall.SIGTERM)
-
-	// Wait for graceful shutdown or escalate to SIGKILL.
-	select {
-	case <-task.done:
-	case <-time.After(GracefulKillTimeout):
-		// Escalate to SIGKILL.
-		_ = syscall.Kill(-pid, syscall.SIGKILL)
-
-		<-task.done
-	}
+	// Wait for the process to exit.
+	<-task.done
 
 	task.mu.Lock()
 	task.state = TaskKilled

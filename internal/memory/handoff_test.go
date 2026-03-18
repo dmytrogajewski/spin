@@ -13,7 +13,7 @@ func TestNewSessionHandoff(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
-	store, err := NewPersistentStore(tmpDir)
+	store, err := NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	handoff := NewSessionHandoff(store, nil)
@@ -25,7 +25,7 @@ func TestSessionHandoff_SaveAndLoad(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := NewPersistentStore(tmpDir)
+	store, err := NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	handoff := NewSessionHandoff(store, nil)
@@ -74,7 +74,7 @@ func TestSessionHandoff_SaveSession_NoSessionID(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := NewPersistentStore(tmpDir)
+	store, err := NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	handoff := NewSessionHandoff(store, nil)
@@ -89,7 +89,7 @@ func TestSessionHandoff_LoadSession_NotFound(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := NewPersistentStore(tmpDir)
+	store, err := NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	handoff := NewSessionHandoff(store, nil)
@@ -103,7 +103,7 @@ func TestSessionHandoff_ListSessions(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := NewPersistentStore(tmpDir)
+	store, err := NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	handoff := NewSessionHandoff(store, nil)
@@ -131,7 +131,7 @@ func TestSessionHandoff_DeleteSession(t *testing.T) {
 
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	store, err := NewPersistentStore(tmpDir)
+	store, err := NewPersistentStore(t.Context(), tmpDir)
 	require.NoError(t, err)
 
 	handoff := NewSessionHandoff(store, nil)

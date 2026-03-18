@@ -89,7 +89,7 @@ func runApplyPatch(cmd *cobra.Command, _ []string) error {
 		return runDryRun(applier, patch)
 	}
 
-	result, err := applier.Apply(patch)
+	result, err := applier.Apply(cmd.Context(), patch)
 	if err != nil {
 		return formatApplyError(err)
 	}

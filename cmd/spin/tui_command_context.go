@@ -25,7 +25,7 @@ func (c *tuiCommandContext) GetCurrentMode() string {
 }
 
 // SetMode sets the task mode for the session.
-func (c *tuiCommandContext) SetMode(mode string) error {
+func (c *tuiCommandContext) SetMode(_ context.Context, mode string) error {
 	return c.conv.SetTaskMode(mode)
 }
 

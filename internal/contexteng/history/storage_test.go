@@ -24,14 +24,16 @@ func TestFileStorage_SaveAndLoad(t *testing.T) {
 	sessionID := "test-session-123"
 	data := newTestHistoryData(sessionID)
 
-	err = storage.Save(sessionID, data)
+	ctx := t.Context()
+
+	err = storage.Save(ctx, sessionID, data)
 	if err != nil {
 		t.Fatalf("save history: %v", err)
 	}
 
 	assertStorageExists(t, storage, sessionID)
 
-	loaded, err := storage.Load(sessionID)
+	loaded, err := storage.Load(ctx, sessionID)
 	if err != nil {
 		t.Fatalf("load history: %v", err)
 	}
@@ -55,7 +57,7 @@ func newTestHistoryData(sessionID string) Data {
 func assertStorageExists(t *testing.T, storage Storage, sessionID string) {
 	t.Helper()
 
-	exists, err := storage.Exists(sessionID)
+	exists, err := storage.Exists(t.Context(), sessionID)
 	if err != nil {
 		t.Fatalf("check exists: %v", err)
 	}
@@ -123,31 +125,33 @@ func TestFileStorage_Delete(t *testing.T) {
 		Messages:  []message.Message{},
 	}
 
-	err = storage.Save(sessionID, data)
+	ctx := t.Context()
+
+	err = storage.Save(ctx, sessionID, data)
 	if err != nil {
 		t.Fatalf("save history: %v", err)
 	}
 
 	// Verify exists.
-	exists, _ := storage.Exists(sessionID)
+	exists, _ := storage.Exists(ctx, sessionID)
 	if !exists {
 		t.Fatal("history should exist")
 	}
 
 	// Delete.
-	err = storage.Delete(sessionID)
+	err = storage.Delete(ctx, sessionID)
 	if err != nil {
 		t.Fatalf("delete history: %v", err)
 	}
 
 	// Verify deleted.
-	exists, _ = storage.Exists(sessionID)
+	exists, _ = storage.Exists(ctx, sessionID)
 	if exists {
 		t.Fatal("history should not exist after delete")
 	}
 
 	// Delete non-existent should not error.
-	err = storage.Delete("non-existent")
+	err = storage.Delete(ctx, "non-existent")
 	if err != nil {
 		t.Fatalf("delete non-existent should not error: %v", err)
 	}
@@ -163,7 +167,7 @@ func TestFileStorage_LoadNotFound(t *testing.T) {
 		t.Fatalf("create storage: %v", err)
 	}
 
-	_, err = storage.Load("non-existent-session")
+	_, err = storage.Load(t.Context(), "non-existent-session")
 	if err == nil {
 		t.Fatal("load should fail for non-existent session")
 	}
@@ -179,23 +183,25 @@ func TestFileStorage_EmptySessionID(t *testing.T) {
 		t.Fatalf("create storage: %v", err)
 	}
 
+	ctx := t.Context()
+
 	// All operations should fail with empty session ID.
-	err = storage.Save("", Data{})
+	err = storage.Save(ctx, "", Data{})
 	if err == nil {
 		t.Error("save with empty ID should fail")
 	}
 
-	_, err = storage.Load("")
+	_, err = storage.Load(ctx, "")
 	if err == nil {
 		t.Error("load with empty ID should fail")
 	}
 
-	err = storage.Delete("")
+	err = storage.Delete(ctx, "")
 	if err == nil {
 		t.Error("delete with empty ID should fail")
 	}
 
-	_, err = storage.Exists("")
+	_, err = storage.Exists(ctx, "")
 	if err == nil {
 		t.Error("exists with empty ID should fail")
 	}
@@ -219,10 +225,12 @@ func TestFileStorage_HomeExpansion(t *testing.T) {
 		t.Fatalf("create storage: %v", err)
 	}
 
+	ctx := t.Context()
+
 	// Verify storage works by saving and loading.
 	testData := Data{SessionID: "test", MaxTokens: 1000}
 
-	err = storage.Save("test", testData)
+	err = storage.Save(ctx, "test", testData)
 	if err != nil {
 		t.Fatalf("save failed: %v", err)
 	}
@@ -237,12 +245,12 @@ func TestFileStorage_HomeExpansion(t *testing.T) {
 	defer os.RemoveAll(homeTestDir)
 
 	// Verify home storage works.
-	err = homeStorage.Save("home-test", testData)
+	err = homeStorage.Save(ctx, "home-test", testData)
 	if err != nil {
 		t.Fatalf("home storage save failed: %v", err)
 	}
 
-	if exists, _ := homeStorage.Exists("home-test"); !exists {
+	if exists, _ := homeStorage.Exists(ctx, "home-test"); !exists {
 		t.Error("home storage: saved history should exist")
 	}
 }
@@ -262,10 +270,11 @@ func TestHistory_SaveAndLoad(t *testing.T) {
 	_ = history.AddSystemMessage(context.Background(), "You are helpful.")
 	_ = history.AddUserMessage(context.Background(), "Hello!")
 
+	ctx := t.Context()
 	sessionID := "test-history-save"
 
 	// Save via History method.
-	err = history.Save(storage, sessionID)
+	err = history.Save(ctx, storage, sessionID)
 	if err != nil {
 		t.Fatalf("save history: %v", err)
 	}
@@ -273,7 +282,7 @@ func TestHistory_SaveAndLoad(t *testing.T) {
 	// Create new history and load.
 	history2 := NewHistory(4096, &tokenizer.SimpleTokenizer{})
 
-	err = history2.Load(storage, sessionID)
+	err = history2.Load(ctx, storage, sessionID)
 	if err != nil {
 		t.Fatalf("load history: %v", err)
 	}
@@ -385,7 +394,9 @@ func TestFileStorage_AtomicWrite(t *testing.T) {
 		},
 	}
 
-	err = storage.Save(sessionID, data1)
+	ctx := t.Context()
+
+	err = storage.Save(ctx, sessionID, data1)
 	if err != nil {
 		t.Fatalf("save first: %v", err)
 	}
@@ -399,13 +410,13 @@ func TestFileStorage_AtomicWrite(t *testing.T) {
 		},
 	}
 
-	err = storage.Save(sessionID, data2)
+	err = storage.Save(ctx, sessionID, data2)
 	if err != nil {
 		t.Fatalf("save second: %v", err)
 	}
 
 	// Load and verify.
-	loaded, err := storage.Load(sessionID)
+	loaded, err := storage.Load(ctx, sessionID)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}

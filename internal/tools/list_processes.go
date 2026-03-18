@@ -47,12 +47,12 @@ func (t *ListProcessesTool) Schema() ToolSchema {
 }
 
 // Execute lists all background tasks.
-func (t *ListProcessesTool) Execute(_ context.Context, _ ToolParameters) (ToolResult, error) {
+func (t *ListProcessesTool) Execute(ctx context.Context, _ ToolParameters) (ToolResult, error) {
 	if t.manager == nil {
 		return NewToolResult("task manager not available"), nil
 	}
 
-	tasks := t.manager.List()
+	tasks := t.manager.List(ctx)
 	if len(tasks) == 0 {
 		return NewToolResult("No background tasks."), nil
 	}

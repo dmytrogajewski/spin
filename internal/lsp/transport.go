@@ -65,13 +65,15 @@ func (e *jsonrpcError) Error() string {
 
 // StdioTransport implements [Transport] over stdin/stdout using Content-Length framing.
 type StdioTransport struct {
-	nextID  atomic.Int64
-	writer  io.WriteCloser
-	reader  io.ReadCloser
-	writeMu sync.Mutex
-	pending sync.Map
-	closed  atomic.Bool
-	done    chan struct{}
+	nextID    atomic.Int64
+	writer    io.WriteCloser
+	reader    io.ReadCloser
+	writeMu   sync.Mutex
+	pending   sync.Map
+	closed    atomic.Bool
+	done      chan struct{}
+	closeOnce sync.Once
+	readErr   atomic.Pointer[error]
 }
 
 // NewStdioTransport creates a transport over the given reader/writer pair.
@@ -122,7 +124,7 @@ func (st *StdioTransport) Send(ctx context.Context, method string, params any) (
 
 		return resp.Result, nil
 	case <-st.done:
-		return nil, ErrTransportClosed
+		return nil, st.doneError()
 	}
 }
 
@@ -157,7 +159,7 @@ func (st *StdioTransport) Close() error {
 		return nil
 	}
 
-	close(st.done)
+	st.closeDone()
 
 	var errs []error
 
@@ -196,17 +198,23 @@ func (st *StdioTransport) writeMessage(msg any) error {
 }
 
 // readLoop reads JSON-RPC responses and dispatches them to pending request channels.
+// On unexpected read error (not from [Close]), it stores the error and closes done
+// to immediately unblock all pending callers.
 func (st *StdioTransport) readLoop() {
 	scanner := bufio.NewReader(st.reader)
 
 	for !st.closed.Load() {
 		contentLen, headerErr := readContentLength(scanner)
 		if headerErr != nil {
+			st.handleReadError(headerErr)
+
 			return
 		}
 
 		body := make([]byte, contentLen)
 		if _, readErr := io.ReadFull(scanner, body); readErr != nil {
+			st.handleReadError(readErr)
+
 			return
 		}
 
@@ -224,6 +232,41 @@ func (st *StdioTransport) readLoop() {
 			respCh <- resp
 		}
 	}
+}
+
+// handleReadError processes a read error from readLoop.
+// If the transport was already closed (clean shutdown), the error is ignored.
+// Otherwise it is stored and done is closed to unblock pending callers.
+func (st *StdioTransport) handleReadError(err error) {
+	if st.closed.Load() {
+		return
+	}
+
+	st.setReadErr(err)
+}
+
+// setReadErr stores the read error and closes done to unblock pending callers.
+func (st *StdioTransport) setReadErr(err error) {
+	st.readErr.Store(&err)
+	st.closeDone()
+}
+
+// closeDone closes the done channel exactly once, safe for concurrent callers.
+func (st *StdioTransport) closeDone() {
+	st.closeOnce.Do(func() {
+		close(st.done)
+	})
+}
+
+// doneError returns the appropriate error when done is closed.
+// If readLoop stored an error, it is returned wrapped.
+// Otherwise returns [ErrTransportClosed] (clean shutdown).
+func (st *StdioTransport) doneError() error {
+	if errPtr := st.readErr.Load(); errPtr != nil {
+		return fmt.Errorf("transport read: %w", *errPtr)
+	}
+
+	return ErrTransportClosed
 }
 
 // readContentLength reads the Content-Length header from the stream.

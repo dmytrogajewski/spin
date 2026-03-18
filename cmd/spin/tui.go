@@ -114,8 +114,11 @@ func openTUILogFile() io.Writer {
 }
 
 // setupTUIProvider creates and configures the TUI provider and UI components.
-// The out writer is used for TUI output; when nil it defaults to os.Stdout.
-func setupTUIProvider(ctx context.Context, cmd *cobra.Command, flags tuiFlags, out io.Writer) (*config.V2, llm.Provider, *adapters.PureTTY, error) {
+// The out writer is used for TUI output; when nil it defaults to
+// [os.Stdout].
+func setupTUIProvider(
+	ctx context.Context, cmd *cobra.Command, flags tuiFlags, out io.Writer,
+) (*config.V2, llm.Provider, *adapters.PureTTY, error) {
 	cfg, err := config.Load(config.Source{
 		File: flagConfigFile(cmd),
 		Flags: config.FlagOverrides{
@@ -164,7 +167,7 @@ func configureMaxTokens(ui *adapters.PureTTY) {
 }
 
 // startTUIBackground starts the UI and streaming in the background.
-// The errOut writer receives error messages; when nil it defaults to os.Stderr.
+// The errOut writer receives error messages; when nil it defaults to [os.Stderr].
 func startTUIBackground(ctx context.Context, ui *adapters.PureTTY, errOut io.Writer) context.CancelFunc {
 	if errOut == nil {
 		errOut = os.Stderr
@@ -377,8 +380,6 @@ func createConversationForTUI(
 ) (*conversation.Conversation, error) {
 	workDir := cfg.Agent.WorkDir
 	logger := slog.Default()
-
-	// 1. Create shared infrastructure.
 	emitter := events.NewEventEmitter(tuiEventBuffer)
 
 	var storage session.Storage
@@ -401,13 +402,11 @@ func createConversationForTUI(
 		sessionID = fmt.Sprintf("tui-%d", time.Now().UnixNano())
 	}
 
-	// 2. Create protocol services.
 	protocolServices, cleanup, err := createServices(ctx, cfg, workDir, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. Create approval handler (TUI-specific).
 	var approvalHandler safety.ApprovalHandler
 	if autoApprove {
 		approvalHandler = createAutoApproveHandler()
@@ -415,8 +414,8 @@ func createConversationForTUI(
 		approvalHandler = createTUIApprovalHandler(ui)
 	}
 
-	// 4. Create builtin runtime (complete, self-contained).
 	builtinRuntime, err := createBuiltinRuntime(
+		ctx,
 		workDir,
 		emitter,
 		storage,
@@ -433,7 +432,6 @@ func createConversationForTUI(
 		return nil, fmt.Errorf("create builtin runtime: %w", err)
 	}
 
-	// 5. Build conversation with runtime.
 	builder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
 
 	// Add optional services.

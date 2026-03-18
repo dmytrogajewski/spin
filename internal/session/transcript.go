@@ -2,14 +2,15 @@ package session
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"sync"
-	"syscall"
 
 	"github.com/dmytrogajewski/spin/internal/message"
+	"github.com/dmytrogajewski/spin/internal/storage"
 )
 
 const (
@@ -47,7 +48,8 @@ func NewTranscriptWriter(path string) (*TranscriptWriter, error) {
 }
 
 // Append serializes msg as a single JSON line and appends it under exclusive file lock.
-func (w *TranscriptWriter) Append(msg message.Message) error {
+// The context controls the lock acquisition timeout.
+func (w *TranscriptWriter) Append(ctx context.Context, msg message.Message) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -64,11 +66,12 @@ func (w *TranscriptWriter) Append(msg message.Message) error {
 	data = append(data, '\n')
 
 	// Acquire exclusive lock for the append.
-	if lockErr := syscall.Flock(safeFlockFd(w.file.Fd()), syscall.LOCK_EX); lockErr != nil {
+	fd := storage.SafeFlockFd(w.file.Fd())
+	if lockErr := storage.FlockExclusiveWithContext(ctx, fd); lockErr != nil {
 		return fmt.Errorf("lock transcript file: %w", lockErr)
 	}
 
-	defer func() { _ = syscall.Flock(safeFlockFd(w.file.Fd()), syscall.LOCK_UN) }()
+	defer func() { _ = storage.FlockUnlock(fd) }()
 
 	if _, writeErr := w.file.Write(data); writeErr != nil {
 		return fmt.Errorf("write transcript line: %w", writeErr)
@@ -81,7 +84,8 @@ func (w *TranscriptWriter) Append(msg message.Message) error {
 
 // ReadAll reads all valid messages from the transcript file.
 // Corrupted or empty lines are silently skipped.
-func (w *TranscriptWriter) ReadAll() ([]message.Message, error) {
+// The context controls the lock acquisition timeout.
+func (w *TranscriptWriter) ReadAll(ctx context.Context) ([]message.Message, error) {
 	// Open a separate file handle for reading.
 	file, err := os.Open(w.path)
 	if err != nil {
@@ -94,11 +98,12 @@ func (w *TranscriptWriter) ReadAll() ([]message.Message, error) {
 	defer file.Close()
 
 	// Acquire shared lock for reading.
-	if lockErr := syscall.Flock(safeFlockFd(file.Fd()), syscall.LOCK_SH); lockErr != nil {
+	fd := storage.SafeFlockFd(file.Fd())
+	if lockErr := storage.FlockSharedWithContext(ctx, fd); lockErr != nil {
 		return nil, fmt.Errorf("shared lock transcript file: %w", lockErr)
 	}
 
-	defer func() { _ = syscall.Flock(safeFlockFd(file.Fd()), syscall.LOCK_UN) }()
+	defer func() { _ = storage.FlockUnlock(fd) }()
 
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), scannerMaxLineSize)
@@ -154,15 +159,4 @@ func (w *TranscriptWriter) Close() error {
 	}
 
 	return nil
-}
-
-// safeFlockFd converts a file descriptor from uintptr to int for [syscall.Flock].
-// File descriptors are always small non-negative values on supported platforms.
-func safeFlockFd(fd uintptr) int {
-	const maxFd = int(^uint(0) >> 1)
-	if fd > uintptr(maxFd) {
-		return -1
-	}
-
-	return int(fd)
 }

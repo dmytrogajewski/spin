@@ -54,10 +54,14 @@ func (t *ListDirectoryTool) Schema() ToolSchema {
 }
 
 // Execute implements the Execute operation.
-func (t *ListDirectoryTool) Execute(_ context.Context, params ToolParameters) (ToolResult, error) {
+func (t *ListDirectoryTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
+	if err := ctx.Err(); err != nil {
+		return NewToolError(err), nil
+	}
+
 	path, _ := params.GetString("path")
 	if path == "" {
-		return NewToolError(ErrPathParameterRequired), nil
+		return NewToolError(errPathParameterRequired), nil
 	}
 
 	path = resolvePath(path, t.workDir)

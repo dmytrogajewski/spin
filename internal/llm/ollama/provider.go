@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ollama/ollama/api"
@@ -51,7 +52,8 @@ type Provider struct {
 	timeout time.Duration
 	logger  *slog.Logger
 
-	// Context length detected from model metadata.
+	// Context length detected from model metadata (guarded by ctxLenOnce).
+	ctxLenOnce     sync.Once
 	detectedCtxLen int
 }
 
@@ -163,10 +165,10 @@ func (p *Provider) setContextOptions(ctx context.Context, opts map[string]any) m
 		opts = make(map[string]any)
 	}
 
-	// Detect context length on first call.
-	if p.detectedCtxLen == 0 {
+	// Detect context length on first call (thread-safe via sync.Once).
+	p.ctxLenOnce.Do(func() {
 		p.detectedCtxLen = p.detectContextLength(ctx)
-	}
+	})
 
 	opts["num_ctx"] = p.detectedCtxLen
 

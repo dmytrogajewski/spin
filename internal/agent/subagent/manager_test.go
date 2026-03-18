@@ -125,14 +125,10 @@ func TestSpawn_ConcurrencyCap(t *testing.T) {
 	var wg sync.WaitGroup
 
 	for range totalSpawns {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			_, err := mgr.Spawn(context.Background(), NameExplorer, testQuery)
 			assert.NoError(t, err)
-		}()
+		})
 	}
 
 	wg.Wait()

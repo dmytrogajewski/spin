@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,18 @@ import (
 )
 
 const defaultGitLogLimit = 10
+
+// Sentinel errors for git operations (unexported — internal use only).
+var (
+	errFilePathRequired         = errors.New("file_path is required for stage operation")
+	errMessageRequired          = errors.New("message is required for commit operation")
+	errBranchNameRequiredCreate = errors.New("branch_name is required for create_branch operation")
+	errBranchNameRequiredSwitch = errors.New("branch_name is required for switch_branch operation")
+	errGitStatusFailed          = errors.New("failed to get git status")
+	errNotGitRepository         = errors.New("not a git repository or git integration not available")
+	errOperationRequired        = errors.New("operation parameter is required")
+	errUnknownGitOperation      = errors.New("unknown git operation")
+)
 
 // GitOperationTool implements Git operations using Integration.
 type GitOperationTool struct {
@@ -21,7 +34,6 @@ func NewGitOperationTool(gitIntegration *git.Integration) *GitOperationTool {
 		gitIntegration: gitIntegration,
 	}
 }
-
 
 // gitOperationHandler is the function signature for git operation handlers.
 type gitOperationHandler func(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error)
@@ -46,7 +58,7 @@ var gitOperationHandlers = map[string]gitOperationHandler{
 func handleGitStage(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
 	filePath, _ := params.GetString("file_path")
 	if filePath == "" {
-		return NewToolError(fmt.Errorf("file_path is required for stage operation")), nil
+		return NewToolError(errFilePathRequired), nil
 	}
 
 	err := t.gitIntegration.StageFile(ctx, filePath)
@@ -60,7 +72,7 @@ func handleGitStage(ctx context.Context, t *GitOperationTool, params ToolParamet
 func handleGitCommit(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
 	message, _ := params.GetString("message")
 	if message == "" {
-		return NewToolError(fmt.Errorf("message is required for commit operation")), nil
+		return NewToolError(errMessageRequired), nil
 	}
 
 	err := t.gitIntegration.Commit(ctx, message)
@@ -92,7 +104,7 @@ func handleGitPull(ctx context.Context, t *GitOperationTool, _ ToolParameters) (
 func handleGitCreateBranch(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
 	branchName, _ := params.GetString("branch_name")
 	if branchName == "" {
-		return NewToolError(fmt.Errorf("branch_name is required for create_branch operation")), nil
+		return NewToolError(errBranchNameRequiredCreate), nil
 	}
 
 	err := t.gitIntegration.CreateBranch(ctx, branchName)
@@ -106,7 +118,7 @@ func handleGitCreateBranch(ctx context.Context, t *GitOperationTool, params Tool
 func handleGitSwitchBranch(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
 	branchName, _ := params.GetString("branch_name")
 	if branchName == "" {
-		return NewToolError(fmt.Errorf("branch_name is required for switch_branch operation")), nil
+		return NewToolError(errBranchNameRequiredSwitch), nil
 	}
 
 	err := t.gitIntegration.SwitchBranch(ctx, branchName)
@@ -138,7 +150,7 @@ func handleGitListRemotes(ctx context.Context, t *GitOperationTool, _ ToolParame
 func handleGitStatus(_ context.Context, t *GitOperationTool, _ ToolParameters) (ToolResult, error) {
 	status := t.gitIntegration.GetStatus()
 	if status == nil {
-		return NewToolError(fmt.Errorf("Failed to get Git status")), nil
+		return NewToolError(errGitStatusFailed), nil
 	}
 
 	var output strings.Builder
@@ -234,19 +246,19 @@ func (t *GitOperationTool) Schema() ToolSchema {
 func (t *GitOperationTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	// Validate git integration.
 	if t.gitIntegration == nil || !t.gitIntegration.IsRepository() {
-		return NewToolError(fmt.Errorf("Not a Git repository or Git integration not available")), nil
+		return NewToolError(errNotGitRepository), nil
 	}
 
 	// Extract operation.
 	operation, _ := params.GetString("operation")
 	if operation == "" {
-		return NewToolError(fmt.Errorf("operation parameter is required")), nil
+		return NewToolError(errOperationRequired), nil
 	}
 
 	// Get handler from map.
 	handler, exists := gitOperationHandlers[operation]
 	if !exists {
-		return NewToolError(fmt.Errorf("unknown operation: %s", operation)), nil
+		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, errUnknownGitOperation)), nil
 	}
 
 	// Execute handler.

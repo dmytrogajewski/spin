@@ -1,6 +1,7 @@
 package conversation
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/dmytrogajewski/spin/internal/memory"
@@ -64,7 +65,7 @@ func (m *MemoryService) NewSessionHandoff(summarizer memory.Summarizer) *memory.
 
 // initializeMemory creates memory stores based on configuration.
 // This is called during Build() to set up memory services.
-func (b *Builder) initializeMemory(sessionID string) error {
+func (b *Builder) initializeMemory(ctx context.Context, sessionID string) error {
 	if b.cfg == nil {
 		return nil
 	}
@@ -87,7 +88,7 @@ func (b *Builder) initializeMemory(sessionID string) error {
 
 		scratchpad = memory.NewScratchpad(sessionID, maxEntries)
 		if b.logger != nil {
-			b.logger.Debug("scratchpad initialized", "session_id", sessionID, "max_entries", maxEntries)
+			b.logger.DebugContext(ctx, "scratchpad initialized", "session_id", sessionID, "max_entries", maxEntries)
 		}
 	}
 
@@ -98,13 +99,13 @@ func (b *Builder) initializeMemory(sessionID string) error {
 			basePath = "~/.spin/memory"
 		}
 
-		persistent, err = memory.NewPersistentStore(basePath)
+		persistent, err = memory.NewPersistentStore(ctx, basePath)
 		if err != nil {
 			return fmt.Errorf("initialize persistent memory: %w", err)
 		}
 
 		if b.logger != nil {
-			b.logger.Debug("persistent memory initialized", "base_path", basePath)
+			b.logger.DebugContext(ctx, "persistent memory initialized", "base_path", basePath)
 		}
 	}
 

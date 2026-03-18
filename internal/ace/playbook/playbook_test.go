@@ -244,7 +244,7 @@ func TestSaveAndLoad(t *testing.T) {
 
 	// Save to temp file.
 	tmpFile := t.TempDir() + "/playbook.json"
-	err = pb.Save(tmpFile)
+	err = pb.Save(t.Context(), tmpFile)
 	require.NoError(t, err)
 
 	// Load from file.
@@ -477,7 +477,7 @@ func TestSave_ErrorCases(t *testing.T) {
 	pb := playbook.New(nil, nil)
 
 	// Try to save to invalid directory.
-	err := pb.Save("/nonexistent/directory/file.json")
+	err := pb.Save(t.Context(), "/nonexistent/directory/file.json")
 	require.Error(t, err)
 }
 

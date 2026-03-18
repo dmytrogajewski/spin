@@ -19,7 +19,7 @@ func (m *mockCommandContext) GetCurrentMode() string {
 	return m.currentMode
 }
 
-func (m *mockCommandContext) SetMode(mode string) error {
+func (m *mockCommandContext) SetMode(_ context.Context, mode string) error {
 	if m.setModeErr != nil {
 		return m.setModeErr
 	}

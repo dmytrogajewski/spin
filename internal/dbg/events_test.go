@@ -206,7 +206,6 @@ func TestEventLogger_Run_WithFilter(t *testing.T) {
 
 	// Test with valid prompt.
 	err := logger.Run(ctx, "Test prompt")
-
 	if err != nil {
 		if !isExpectedRunError(err) {
 			t.Errorf("unexpected error type: %v", err)
@@ -225,7 +224,6 @@ func TestEventLogger_Run_JSONFormat(t *testing.T) {
 
 	// Test with valid prompt.
 	err := logger.Run(ctx, "Test prompt")
-
 	if err != nil {
 		if !isExpectedRunError(err) {
 			t.Errorf("unexpected error type: %v", err)

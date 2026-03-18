@@ -1,8 +1,9 @@
 package session_test
 
-// Journey: specs/journeys/JOURNEY-R6.1.md.
+// Journey: specs/journeys/JOURNEY-CTX-2.2.md.
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"sync"
@@ -50,9 +51,9 @@ func TestTranscriptWriter_AppendAndReadAll(t *testing.T) {
 
 	msg := newTestMessage(testMsgContent)
 
-	require.NoError(t, writer.Append(msg))
+	require.NoError(t, writer.Append(t.Context(), msg))
 
-	msgs, readErr := writer.ReadAll()
+	msgs, readErr := writer.ReadAll(t.Context())
 	require.NoError(t, readErr)
 	require.Len(t, msgs, 1)
 	require.Equal(t, testMsgContent, msgs[0].Content)
@@ -78,10 +79,10 @@ func TestTranscriptWriter_MultipleAppends(t *testing.T) {
 		Timestamp: time.Date(2024, 1, 1, 0, 0, 1, 0, time.UTC),
 	}
 
-	require.NoError(t, writer.Append(msg1))
-	require.NoError(t, writer.Append(msg2))
+	require.NoError(t, writer.Append(t.Context(), msg1))
+	require.NoError(t, writer.Append(t.Context(), msg2))
 
-	msgs, readErr := writer.ReadAll()
+	msgs, readErr := writer.ReadAll(t.Context())
 	require.NoError(t, readErr)
 	require.Len(t, msgs, 2)
 	require.Equal(t, testMsgContent, msgs[0].Content)
@@ -103,7 +104,7 @@ func TestTranscriptWriter_CorruptedLineSkipped(t *testing.T) {
 
 	defer writer.Close()
 
-	msgs, readErr := writer.ReadAll()
+	msgs, readErr := writer.ReadAll(t.Context())
 	require.NoError(t, readErr)
 	require.Len(t, msgs, 1)
 	require.Equal(t, "valid", msgs[0].Content)
@@ -120,7 +121,7 @@ func TestTranscriptWriter_EmptyFile(t *testing.T) {
 
 	defer writer.Close()
 
-	msgs, readErr := writer.ReadAll()
+	msgs, readErr := writer.ReadAll(t.Context())
 	require.NoError(t, readErr)
 	require.Empty(t, msgs)
 }
@@ -140,6 +141,7 @@ func TestTranscriptWriter_ConcurrentAppend(t *testing.T) {
 
 	var waitGroup sync.WaitGroup
 
+	ctx := t.Context()
 	errs := make([]error, goroutineCount)
 
 	waitGroup.Add(goroutineCount)
@@ -155,7 +157,7 @@ func TestTranscriptWriter_ConcurrentAppend(t *testing.T) {
 				Timestamp: time.Date(2024, 1, 1, 0, 0, index, 0, time.UTC),
 			}
 
-			errs[index] = writer.Append(msg)
+			errs[index] = writer.Append(ctx, msg)
 		}(idx)
 	}
 
@@ -165,7 +167,7 @@ func TestTranscriptWriter_ConcurrentAppend(t *testing.T) {
 		require.NoError(t, appendErr, "goroutine %d failed", idx)
 	}
 
-	msgs, readErr := writer.ReadAll()
+	msgs, readErr := writer.ReadAll(t.Context())
 	require.NoError(t, readErr)
 	require.Len(t, msgs, goroutineCount)
 }
@@ -194,7 +196,7 @@ func TestTranscriptWriter_AppendAfterClose(t *testing.T) {
 
 	require.NoError(t, writer.Close())
 
-	appendErr := writer.Append(newTestMessage(testMsgContent))
+	appendErr := writer.Append(t.Context(), newTestMessage(testMsgContent))
 	require.Error(t, appendErr)
 }
 
@@ -207,11 +209,11 @@ func TestTranscriptWriter_ReadAllAfterClose(t *testing.T) {
 	writer, err := session.NewTranscriptWriter(path)
 	require.NoError(t, err)
 
-	require.NoError(t, writer.Append(newTestMessage(testMsgContent)))
+	require.NoError(t, writer.Append(t.Context(), newTestMessage(testMsgContent)))
 	require.NoError(t, writer.Close())
 
 	// ReadAll should still work after close — it opens a new file handle.
-	msgs, readErr := writer.ReadAll()
+	msgs, readErr := writer.ReadAll(t.Context())
 	require.NoError(t, readErr)
 	require.Len(t, msgs, 1)
 }
@@ -244,9 +246,9 @@ func TestTranscriptWriter_PreservesToolCalls(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, writer.Append(msg))
+	require.NoError(t, writer.Append(t.Context(), msg))
 
-	msgs, readErr := writer.ReadAll()
+	msgs, readErr := writer.ReadAll(t.Context())
 	require.NoError(t, readErr)
 	require.Len(t, msgs, 1)
 	require.Len(t, msgs[0].ToolCalls, 1)
@@ -273,9 +275,9 @@ func TestTranscriptWriter_PreservesMetadata(t *testing.T) {
 		Metadata:  message.Metadata{"key": "value"},
 	}
 
-	require.NoError(t, writer.Append(msg))
+	require.NoError(t, writer.Append(t.Context(), msg))
 
-	msgs, readErr := writer.ReadAll()
+	msgs, readErr := writer.ReadAll(t.Context())
 	require.NoError(t, readErr)
 	require.Len(t, msgs, 1)
 
@@ -298,10 +300,10 @@ func TestTranscriptWriter_Count(t *testing.T) {
 
 	require.Equal(t, 0, writer.Count())
 
-	require.NoError(t, writer.Append(newTestMessage(testMsgContent)))
+	require.NoError(t, writer.Append(t.Context(), newTestMessage(testMsgContent)))
 	require.Equal(t, 1, writer.Count())
 
-	require.NoError(t, writer.Append(newTestMessage(testMsgUpdated)))
+	require.NoError(t, writer.Append(t.Context(), newTestMessage(testMsgUpdated)))
 	require.Equal(t, 2, writer.Count())
 }
 
@@ -322,7 +324,51 @@ func TestTranscriptWriter_EmptyLinesSkipped(t *testing.T) {
 
 	defer writer.Close()
 
-	msgs, readErr := writer.ReadAll()
+	msgs, readErr := writer.ReadAll(t.Context())
 	require.NoError(t, readErr)
 	require.Len(t, msgs, 1)
+}
+
+func TestTranscriptWriter_Append_CanceledContext(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := transcriptPath(dir)
+
+	writer, err := session.NewTranscriptWriter(path)
+	require.NoError(t, err)
+
+	defer writer.Close()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	appendErr := writer.Append(ctx, newTestMessage(testMsgContent))
+	require.ErrorIs(t, appendErr, context.Canceled)
+
+	// No data should have been written.
+	msgs, readErr := writer.ReadAll(t.Context())
+	require.NoError(t, readErr)
+	require.Empty(t, msgs)
+}
+
+func TestTranscriptWriter_ReadAll_CanceledContext(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := transcriptPath(dir)
+
+	writer, err := session.NewTranscriptWriter(path)
+	require.NoError(t, err)
+
+	defer writer.Close()
+
+	// Write something first.
+	require.NoError(t, writer.Append(t.Context(), newTestMessage(testMsgContent)))
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, readErr := writer.ReadAll(ctx)
+	require.ErrorIs(t, readErr, context.Canceled)
 }
