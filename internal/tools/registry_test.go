@@ -13,6 +13,15 @@ const (
 	testTmpPath = "/tmp"
 )
 
+// registryTestEnv implements [fmt.Stringer] for NewDefaultRegistry tests.
+type registryTestEnv struct {
+	WorkDir string
+}
+
+func (e *registryTestEnv) String() string {
+	return fmt.Sprintf("WorkDir: %s", e.WorkDir)
+}
+
 var (
 	errExecutionFailed  = errors.New("execution failed")
 	errExecutionFailed2 = errors.New("execution failed")
@@ -544,27 +553,19 @@ func TestRegistryConcurrentAccess(t *testing.T) {
 
 	// Concurrent reads.
 	for range 10 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			_ = reg.List()
 			_ = reg.ListSchemas()
 			_, _ = reg.Get("tool1")
-		}()
+		})
 	}
 
 	// Concurrent executions.
 	for range 10 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			params, _ := FromMap(map[string]any{"param1": "test"})
 			_, _ = reg.Execute(context.Background(), "tool1", params)
-		}()
+		})
 	}
 
 	// Concurrent registrations (should fail on duplicates, but shouldn't panic).
@@ -895,12 +896,7 @@ func TestNewDefaultRegistry(t *testing.T) {
 	t.Parallel()
 
 	workDir := testTmpPath
-	// Use a simple struct that implements the interface GetContextTool expects.
-	type testEnv struct {
-		WorkDir string
-	}
-
-	env := &testEnv{WorkDir: workDir}
+	env := &registryTestEnv{WorkDir: workDir}
 	registry := NewDefaultRegistry(workDir, env)
 
 	// Verify all tools are registered.
@@ -928,12 +924,7 @@ func TestNewDefaultRegistry_ToolsConfigured(t *testing.T) {
 	t.Parallel()
 
 	workDir := "/tmp/workdir"
-
-	type testEnv struct {
-		WorkDir string
-	}
-
-	env := &testEnv{WorkDir: workDir}
+	env := &registryTestEnv{WorkDir: workDir}
 	registry := NewDefaultRegistry(workDir, env)
 
 	// Verify tools that need WorkDir are configured correctly
@@ -1012,12 +1003,7 @@ func TestNewDefaultRegistry_EquivalentToManual(t *testing.T) {
 	t.Parallel()
 
 	workDir := "/tmp/test"
-
-	type testEnv struct {
-		WorkDir string
-	}
-
-	env := &testEnv{WorkDir: workDir}
+	env := &registryTestEnv{WorkDir: workDir}
 
 	// Manual construction (old way).
 	manual := NewRegistry()
@@ -1071,12 +1057,7 @@ func TestNewDefaultRegistry_AllToolsRegistered(t *testing.T) {
 	t.Parallel()
 
 	workDir := testTmpPath
-
-	type testEnv struct {
-		WorkDir string
-	}
-
-	env := &testEnv{WorkDir: workDir}
+	env := &registryTestEnv{WorkDir: workDir}
 	registry := NewDefaultRegistry(workDir, env)
 
 	// Verify we have exactly 9 tools (matching BuiltinTools count).
@@ -1114,12 +1095,7 @@ func TestNewDefaultRegistry_UniqueToolNames(t *testing.T) {
 	t.Parallel()
 
 	workDir := testTmpPath
-
-	type testEnv struct {
-		WorkDir string
-	}
-
-	env := &testEnv{WorkDir: workDir}
+	env := &registryTestEnv{WorkDir: workDir}
 	registry := NewDefaultRegistry(workDir, env)
 
 	// Verify all tool names are unique.

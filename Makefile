@@ -17,7 +17,8 @@ BUILD_DATE  = $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS     = -X $(VERSION_PKG).Version=$(GIT_VERSION) -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(BUILD_DATE)
 CGO_ENABLED=0
 
-all: ${GOBIN}/spin${EXE} 
+.PHONY: all
+all: ${GOBIN}/spin${EXE}
 
 # Build all binaries (alias for all)
 .PHONY: build
@@ -142,6 +143,8 @@ clean:
 # Binary build targets
 # =============================================================================
 
+# Always rebuild: Go's build cache handles incremental compilation efficiently.
+.PHONY: ${GOBIN}/spin${EXE}
 ${GOBIN}/spin${EXE}:
 	CGO_ENABLED=0 go build -tags "$(TAGS)" -ldflags "$(LDFLAGS)" -o ${GOBIN}/spin${EXE} ./cmd/spin
 

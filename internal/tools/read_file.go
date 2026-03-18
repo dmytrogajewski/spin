@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"os"
-	"path/filepath"
 )
 
 // ReadFileTool implements file reading functionality.
@@ -60,9 +59,7 @@ func (t *ReadFileTool) Execute(_ context.Context, params ToolParameters) (ToolRe
 		return NewToolError(ErrPathParameterRequired), nil
 	}
 
-	if !filepath.IsAbs(path) && t.workDir != "" {
-		path = filepath.Join(t.workDir, path)
-	}
+	path = resolvePath(path, t.workDir)
 
 	content, readErr := os.ReadFile(path)
 	if readErr != nil {

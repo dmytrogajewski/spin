@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/tools/fuzzy"
@@ -141,9 +140,7 @@ func (t *EditFileTool) extractParams(params ToolParameters) (string, string, str
 		return "", "", "", ErrPathParameterRequired
 	}
 
-	if !filepath.IsAbs(path) && t.workDir != "" {
-		path = filepath.Join(t.workDir, path)
-	}
+	path = resolvePath(path, t.workDir)
 
 	oldContent := params.GetStringOr("old_content", "")
 	if oldContent == "" {

@@ -96,8 +96,11 @@ func (e *Executor) runLoop(
 			return nil
 		}
 
+		// Record message count before dispatch so observation only
+		// summarizes tool results that the LLM has already seen.
+		preDispatchLen := len(iterCtx.Messages)
 		e.phaseDispatch(ctx, iterCtx, content, toolCalls)
-		e.phaseObservation(iterCtx)
+		e.phaseObservation(iterCtx, preDispatchLen)
 
 		resp.ToolCalls = append(resp.ToolCalls, toolCalls...)
 	}
@@ -229,15 +232,23 @@ func (e *Executor) phaseReminders(
 	}
 }
 
-// phaseObservation applies observation summarization to tool results after dispatch.
-func (e *Executor) phaseObservation(iterCtx *IterationContext) {
+// phaseObservation applies observation summarization to tool results that
+// the LLM has already seen (i.e. messages before preDispatchLen).
+// New tool results from the current dispatch are left raw so the LLM
+// can consume them on the next turn.
+func (e *Executor) phaseObservation(iterCtx *IterationContext, preDispatchLen int) {
 	if e.observationSummarizer == nil {
 		return
 	}
 
-	iterCtx.Messages = e.observationSummarizer.SummarizeToolResults(
-		iterCtx.Messages,
-	)
+	if preDispatchLen <= 0 || preDispatchLen > len(iterCtx.Messages) {
+		return
+	}
+
+	// Only summarize the portion the LLM has already seen.
+	older := iterCtx.Messages[:preDispatchLen]
+	older = e.observationSummarizer.SummarizeToolResults(older)
+	iterCtx.Messages = append(older, iterCtx.Messages[preDispatchLen:]...)
 }
 
 // emit sends an event through the emitter if one is configured.

@@ -69,9 +69,7 @@ func (t *WriteFileTool) Execute(_ context.Context, params ToolParameters) (ToolR
 		return NewToolError(ErrPathParameterRequired), nil
 	}
 
-	if !filepath.IsAbs(path) && t.workDir != "" {
-		path = filepath.Join(t.workDir, path)
-	}
+	path = resolvePath(path, t.workDir)
 
 	content, contentErr := params.GetString("content")
 	if contentErr != nil {

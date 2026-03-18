@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strings"
 )
 
 const (
@@ -68,7 +67,7 @@ func (t *ScreenshotTool) Execute(
 		return NewToolError(ErrInvalidParameters), nil
 	}
 
-	if !isScreenshotURL(rawURL) {
+	if !isValidURL(rawURL) {
 		return NewToolError(fmt.Errorf(
 			"%w: URL must start with %s or %s",
 			ErrInvalidParameters, httpScheme, httpsScheme,
@@ -113,11 +112,6 @@ func screenshotProperties() map[string]PropertyDefinition {
 			Description: "Capture the full scrollable page (default false)",
 		},
 	}
-}
-
-// isScreenshotURL checks if the URL is valid for screenshot capture.
-func isScreenshotURL(rawURL string) bool {
-	return strings.HasPrefix(rawURL, httpScheme) || strings.HasPrefix(rawURL, httpsScheme)
 }
 
 // clampViewport clamps a viewport dimension to a maximum value.

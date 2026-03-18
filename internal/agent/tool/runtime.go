@@ -93,19 +93,70 @@ func (t *Runtime) Execute(ctx context.Context, call *message.ToolCall) (*tools.T
 	}
 
 	if denied := t.checkToolApproval(ctx, tool, args, call); denied != nil {
+		t.emitToolComplete(call, tool.Name(), denied, nil)
+
 		return denied, nil
 	}
+
+	// Emit tool call start event.
+	t.emitToolStart(call, args)
 
 	toolResult, err := tool.Execute(ctx, args)
 	if err != nil {
 		result := tools.NewToolErrorWithID(call.ID, err)
+		t.emitToolComplete(call, tool.Name(), &result, err)
 
 		return &result, nil
 	}
 
 	result := toolResult.WithID(call.ID)
+	t.emitToolComplete(call, tool.Name(), &result, nil)
 
 	return &result, nil
+}
+
+// emitToolStart emits an EventToolCallStart event.
+func (t *Runtime) emitToolStart(call *message.ToolCall, args tools.ToolParameters) {
+	if t.emitter == nil {
+		return
+	}
+
+	t.emitter.Emit(events.Event{
+		Type: events.EventToolCallStart,
+		Data: events.ToolCallStartData{
+			ToolName:   call.Function.Name,
+			ToolID:     call.ID,
+			Parameters: args,
+		},
+	})
+}
+
+// emitToolComplete emits an EventToolCallComplete event.
+func (t *Runtime) emitToolComplete(call *message.ToolCall, toolName string, result *tools.ToolResult, err error) {
+	if t.emitter == nil {
+		return
+	}
+
+	data := events.ToolCallCompleteData{
+		ToolID:   call.ID,
+		ToolName: toolName,
+		Success:  result != nil && result.Success,
+	}
+
+	if result != nil {
+		data.Output = result.Output
+	}
+
+	if err != nil {
+		data.Error = err.Error()
+	} else if result != nil && result.Error != "" {
+		data.Error = result.Error
+	}
+
+	t.emitter.Emit(events.Event{
+		Type: events.EventToolCallComplete,
+		Data: data,
+	})
 }
 
 // resolveTool looks up the tool by name and returns a helpful error if not found.

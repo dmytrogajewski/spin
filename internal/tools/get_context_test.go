@@ -77,31 +77,8 @@ func TestGetContextTool_NilContext(t *testing.T) {
 	}
 }
 
-func TestGetContextTool_InvalidType(t *testing.T) {
-	t.Parallel(
-	// Type without String() method.
-	)
-
-	type InvalidContext struct {
-		Data string
-	}
-
-	tool := NewGetContextTool(&InvalidContext{Data: "test"})
-	params, _ := FromMap(map[string]any{})
-
-	result, err := tool.Execute(context.Background(), params)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result.Success {
-		t.Errorf("expected failure for invalid context type")
-	}
-
-	if result.Error != "context does not implement String() method" {
-		t.Errorf("expected error message about missing String() method, got: %s", result.Error)
-	}
-}
+// TestGetContextTool_InvalidType is no longer needed: the NewGetContextTool
+// parameter is now fmt.Stringer, so non-conforming types are caught at compile time.
 
 func TestGetContextTool_WithGitInfo(t *testing.T) {
 	t.Parallel(
@@ -141,7 +118,7 @@ func TestGetContextTool_WithGitInfo(t *testing.T) {
 
 func TestGetContextTool_OutputFormat(t *testing.T) {
 	t.Parallel(
-	// Verify the String() method is called correctly via reflection.
+	// Verify the fmt.Stringer interface is called correctly.
 	)
 
 	env := &mockEnvironment{

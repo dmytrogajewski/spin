@@ -427,15 +427,7 @@ func (t *ShellCommandTool) detectShell(params ToolParameters) (ToolResult, error
 	}
 
 	// Fallback to simple heuristics.
-	isShell := strings.Contains(command, "|") ||
-		strings.Contains(command, ">") ||
-		strings.Contains(command, "<") ||
-		strings.Contains(command, "$") ||
-		strings.Contains(command, "&&") ||
-		strings.Contains(command, "||") ||
-		strings.HasPrefix(command, "cd ") ||
-		strings.HasPrefix(command, "export ") ||
-		strings.HasPrefix(command, "source ")
+	isShell := t.isShellCmd(command)
 
 	return ToolResult{
 		Success: true,

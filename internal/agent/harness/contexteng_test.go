@@ -299,13 +299,15 @@ func TestExecute_CompactorReplacesMessages(t *testing.T) {
 	assert.True(t, found, "compacted marker should appear in response messages")
 }
 
-// TestExecute_ObservationModifiesDispatchedMessages verifies tool results are summarized.
-// Kills mutant: not applying summarization would keep verbose tool output.
+// TestExecute_ObservationModifiesDispatchedMessages verifies that tool results
+// from earlier turns are summarized while the latest turn's results remain raw.
+// Uses 2 tool turns: the first turn's tool result should be summarized before
+// the second LLM call, while the second turn's result stays raw.
 func TestExecute_ObservationModifiesDispatchedMessages(t *testing.T) {
 	t.Parallel()
 
 	obs := &fakeObservationSummarizer{}
-	caller := &multiTurnCaller{toolTurns: 1}
+	caller := &multiTurnCaller{toolTurns: 2}
 	exec := newContextEngExecutor(t, caller, &stubDispatcher{},
 		harness.WithObservationSummarizer(obs),
 	)
@@ -314,7 +316,7 @@ func TestExecute_ObservationModifiesDispatchedMessages(t *testing.T) {
 
 	require.NoError(t, err)
 
-	// After summarization, tool messages should have summarized content.
+	// The first tool result should be summarized (LLM already saw it).
 	found := false
 
 	for _, msg := range resp.Messages {
@@ -325,7 +327,7 @@ func TestExecute_ObservationModifiesDispatchedMessages(t *testing.T) {
 		}
 	}
 
-	assert.True(t, found, "summarized marker should appear in tool messages")
+	assert.True(t, found, "summarized marker should appear in earlier tool messages")
 }
 
 // TestExecute_ReminderBeforeLLMCall verifies reminders are in messages before the LLM sees them.

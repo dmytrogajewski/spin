@@ -55,7 +55,7 @@ func NewRegistryWithBuiltins() *Registry {
 // This is the recommended factory for most use cases where tools need proper configuration.
 // If workDir is empty, tools that require WorkDir are created with empty string.
 // If env is nil, get_context is created with nil.
-func NewDefaultRegistry(workDir string, env any) *Registry {
+func NewDefaultRegistry(workDir string, env fmt.Stringer) *Registry {
 	// Create registry with builtin tools as base.
 	registry := NewRegistryWithBuiltins()
 

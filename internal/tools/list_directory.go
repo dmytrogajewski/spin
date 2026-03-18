@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -61,9 +60,7 @@ func (t *ListDirectoryTool) Execute(_ context.Context, params ToolParameters) (T
 		return NewToolError(ErrPathParameterRequired), nil
 	}
 
-	if !filepath.IsAbs(path) && t.workDir != "" {
-		path = filepath.Join(t.workDir, path)
-	}
+	path = resolvePath(path, t.workDir)
 
 	entries, err := os.ReadDir(path)
 	if err != nil {
