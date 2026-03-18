@@ -68,7 +68,7 @@ func (c *Config) Validate() error {
 // - Each stream has its own independent goroutine and channel
 // - No shared mutable state between concurrent operations.
 type Provider struct {
-	client  *openai.Client
+	client  openai.Client
 	model   string
 	timeout time.Duration
 }
@@ -111,8 +111,8 @@ func NewProvider(cfg Config) (*Provider, error) {
 // Complete performs a synchronous completion request.
 func (p *Provider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	// Set model if not specified in request.
-	if !params.Model.Present {
-		params.Model = openai.F(openai.ChatModel(p.model))
+	if params.Model == "" {
+		params.Model = openai.ChatModel(p.model)
 	}
 
 	// Make completion request - returns *ChatCompletion directly.
@@ -127,8 +127,8 @@ func (p *Provider) Complete(ctx context.Context, params openai.ChatCompletionNew
 // Stream performs a streaming completion request.
 func (p *Provider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	// Set model if not specified in request.
-	if !params.Model.Present {
-		params.Model = openai.F(openai.ChatModel(p.model))
+	if params.Model == "" {
+		params.Model = openai.ChatModel(p.model)
 	}
 
 	// Create streaming request.

@@ -2,6 +2,7 @@ package caller
 
 import (
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/packages/param"
 	"github.com/openai/openai-go/shared"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
@@ -21,35 +22,20 @@ func convertMessageToOpenAI(msg message.Message) openai.ChatCompletionMessagePar
 
 	case "assistant":
 		if len(msg.ToolCalls) > 0 {
-			param := openai.ChatCompletionAssistantMessageParam{
-				Role:      openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
-				ToolCalls: openai.F(convertToolCallsToOpenAI(msg.ToolCalls)),
+			assistantParam := openai.ChatCompletionAssistantMessageParam{
+				ToolCalls: convertToolCallsToOpenAI(msg.ToolCalls),
 			}
 			if msg.Content != "" {
-				param.Content = openai.F([]openai.ChatCompletionAssistantMessageParamContentUnion{
-					openai.ChatCompletionAssistantMessageParamContent{
-						Type: openai.F(openai.ChatCompletionAssistantMessageParamContentTypeText),
-						Text: openai.F(msg.Content),
-					},
-				})
+				assistantParam.Content.OfString = openai.Opt(msg.Content)
 			}
 
-			return param
+			return openai.ChatCompletionMessageParamUnion{OfAssistant: &assistantParam}
 		}
 
 		return openai.AssistantMessage(msg.Content)
 
 	case "tool":
-		return openai.ChatCompletionToolMessageParam{
-			Role: openai.F(openai.ChatCompletionToolMessageParamRoleTool),
-			Content: openai.F([]openai.ChatCompletionContentPartTextParam{
-				{
-					Type: openai.F(openai.ChatCompletionContentPartTextTypeText),
-					Text: openai.F(msg.Content),
-				},
-			}),
-			ToolCallID: openai.F(msg.ToolCallID),
-		}
+		return openai.ToolMessage(msg.Content, msg.ToolCallID)
 
 	default:
 		return openai.UserMessage(msg.Content)
@@ -60,12 +46,11 @@ func convertToolCallsToOpenAI(toolCalls []message.ToolCall) []openai.ChatComplet
 	result := make([]openai.ChatCompletionMessageToolCallParam, len(toolCalls))
 	for i, tc := range toolCalls {
 		result[i] = openai.ChatCompletionMessageToolCallParam{
-			ID:   openai.F(tc.ID),
-			Type: openai.F(openai.ChatCompletionMessageToolCallType(tc.Type)),
-			Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{
-				Name:      openai.F(tc.Function.Name),
-				Arguments: openai.F(tc.Function.Arguments),
-			}),
+			ID: tc.ID,
+			Function: openai.ChatCompletionMessageToolCallFunctionParam{
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			},
 		}
 	}
 
@@ -84,12 +69,11 @@ func convertToolsToOpenAI(toolList []tools.Tool) []openai.ChatCompletionToolPara
 		}
 
 		result[i] = openai.ChatCompletionToolParam{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F(schema.Function.Name),
-				Description: openai.F(schema.Function.Description),
-				Parameters:  openai.F(shared.FunctionParameters(paramsMap)),
-			}),
+			Function: shared.FunctionDefinitionParam{
+				Name:        schema.Function.Name,
+				Description: param.NewOpt(schema.Function.Description),
+				Parameters:  shared.FunctionParameters(paramsMap),
+			},
 		}
 	}
 
@@ -137,5 +121,5 @@ func getFinishReason(completion *openai.ChatCompletion) string {
 		return ""
 	}
 
-	return string(completion.Choices[0].FinishReason)
+	return completion.Choices[0].FinishReason
 }

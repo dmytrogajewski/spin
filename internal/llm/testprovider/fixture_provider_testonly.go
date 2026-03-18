@@ -121,7 +121,7 @@ func (p *FixtureProvider) Stream(ctx context.Context, _ openai.ChatCompletionNew
 					ID:    fmt.Sprintf("fixture-error-%d", i),
 					Model: "fixture",
 					Choices: []openai.ChatCompletionChunkChoice{
-						{FinishReason: openai.ChatCompletionChunkChoicesFinishReasonStop},
+						{FinishReason: "stop"},
 					},
 				}
 				return

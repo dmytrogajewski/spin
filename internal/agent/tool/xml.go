@@ -121,7 +121,7 @@ func parseFunctionBlock(content string, pos int) (*openai.ChatCompletionMessageT
 
 	toolCall := &openai.ChatCompletionMessageToolCall{
 		ID:   "call_" + uuid.New().String(),
-		Type: openai.ChatCompletionMessageToolCallTypeFunction,
+		Type: "function",
 		Function: openai.ChatCompletionMessageToolCallFunction{
 			Name:      funcName,
 			Arguments: string(argsBytes),

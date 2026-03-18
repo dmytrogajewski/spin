@@ -16,15 +16,34 @@ import (
 var testLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 var testCtx = context.Background()
 
+// mkArgs creates a ToolCallFunctionArguments from a map.
+func mkArgs(m map[string]any) api.ToolCallFunctionArguments {
+	args := api.NewToolCallFunctionArguments()
+	for k, v := range m {
+		args.Set(k, v)
+	}
+
+	return args
+}
+
+// mkProps creates a *ToolPropertiesMap from a map.
+func mkProps(m map[string]api.ToolProperty) *api.ToolPropertiesMap {
+	props := api.NewToolPropertiesMap()
+	for k, v := range m {
+		props.Set(k, v)
+	}
+
+	return props
+}
+
 // mkTC creates an openai.ChatCompletionMessageToolCallParam for tests.
 func mkTC(id, name, args string) openai.ChatCompletionMessageToolCallParam {
 	return openai.ChatCompletionMessageToolCallParam{
-		ID:   openai.F(id),
-		Type: openai.F(openai.ChatCompletionMessageToolCallTypeFunction),
-		Function: openai.F(openai.ChatCompletionMessageToolCallFunctionParam{
-			Name:      openai.F(name),
-			Arguments: openai.F(args),
-		}),
+		ID: id,
+		Function: openai.ChatCompletionMessageToolCallFunctionParam{
+			Name:      name,
+			Arguments: args,
+		},
 	}
 }
 
@@ -48,24 +67,23 @@ func TestBuildToolCallIDToNameMap_ReproducesMissingMapping(t *testing.T) {
 	toolNames := []string{"read_file", "list_directory", "shell_command", "write_file", "read_file"}
 
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
-		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
-		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
+		ToolCalls: []openai.ChatCompletionMessageToolCallParam{
 			mkTC(toolCallIDs[0], toolNames[0], `{"path":"/tmp/a"}`),
 			mkTC(toolCallIDs[1], toolNames[1], `{}`),
 			mkTC(toolCallIDs[2], toolNames[2], `{"command":"ls"}`),
 			mkTC(toolCallIDs[3], toolNames[3], `{}`),
 			mkTC(toolCallIDs[4], toolNames[4], `{"path":"/tmp/b"}`),
-		}),
+		},
 	}
 
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.UserMessage("List files in /tmp"),
-		assistantMsg,
-		openai.ToolMessage(toolCallIDs[0], "file contents"),
-		openai.ToolMessage(toolCallIDs[1], "dir listing"),
-		openai.ToolMessage(toolCallIDs[2], "output"),
-		openai.ToolMessage(toolCallIDs[3], "written"),
-		openai.ToolMessage(toolCallIDs[4], "read contents"),
+		{OfAssistant: &assistantMsg},
+		openai.ToolMessage("file contents", toolCallIDs[0]),
+		openai.ToolMessage("dir listing", toolCallIDs[1]),
+		openai.ToolMessage("output", toolCallIDs[2]),
+		openai.ToolMessage("written", toolCallIDs[3]),
+		openai.ToolMessage("read contents", toolCallIDs[4]),
 	}
 
 	mapping := buildToolCallIDToNameMap(testCtx, messages, testLogger)
@@ -86,10 +104,9 @@ func TestBuildToolCallIDToNameMap_FromJSON(t *testing.T) {
 
 	// Marshal and unmarshal to simulate what parseGenericMessage does.
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
-		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
-		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
+		ToolCalls: []openai.ChatCompletionMessageToolCallParam{
 			mkTC("chatcmpl-1769975533529433976-1", "shell_command", `{"command":"ls"}`),
-		}),
+		},
 	}
 
 	jsonData, err := json.Marshal(assistantMsg)
@@ -125,19 +142,18 @@ func TestConvertMessageToOllama_ToolResultWithPositionalFallback(t *testing.T) {
 	// Scenario: mapping has only 2 entries (e.g. from compression) but we have
 	// 5 tool results. The positional fallback should resolve the missing ones.
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
-		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
-		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
+		ToolCalls: []openai.ChatCompletionMessageToolCallParam{
 			mkTC("call-0", "read_file", `{}`),
 			mkTC("call-1", "shell_command", `{}`),
 			mkTC("call-2", "list_directory", `{}`),
-		}),
+		},
 	}
 
 	messages := []openai.ChatCompletionMessageParamUnion{
-		assistantMsg,
-		openai.ToolMessage("call-0", "content0"),
-		openai.ToolMessage("call-1", "content1"),
-		openai.ToolMessage("call-2", "content2"),
+		{OfAssistant: &assistantMsg},
+		openai.ToolMessage("content0", "call-0"),
+		openai.ToolMessage("content1", "call-1"),
+		openai.ToolMessage("content2", "call-2"),
 	}
 
 	mapping := buildToolCallIDToNameMap(testCtx, messages, testLogger)
@@ -163,24 +179,23 @@ func TestBuildToolCallIDToNameMap_PositionalFallbackWhenPrimaryFails(t *testing.
 
 	// Assistant with 5 tool calls - use IDs that match the bug report format.
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
-		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
-		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
+		ToolCalls: []openai.ChatCompletionMessageToolCallParam{
 			mkTC("chatcmpl-1769975533529433976-1", "read_file", `{}`),
 			mkTC("chatcmpl-1769975533529433976-2", "list_directory", `{}`),
 			mkTC("chatcmpl-1769975533529433976-3", "shell_command", `{}`),
 			mkTC("chatcmpl-1769975533529433976-4", "write_file", `{}`),
 			mkTC("chatcmpl-1769975533529433976-5", "read_file", `{}`),
-		}),
+		},
 	}
 
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.UserMessage("Help with pipewire"),
-		assistantMsg,
-		openai.ToolMessage("chatcmpl-1769975533529433976-1", "content1"),
-		openai.ToolMessage("chatcmpl-1769975533529433976-2", "content2"),
-		openai.ToolMessage("chatcmpl-1769975533529433976-3", "content3"),
-		openai.ToolMessage("chatcmpl-1769975533529433976-4", "content4"),
-		openai.ToolMessage("chatcmpl-1769975533529433976-5", "content5"),
+		{OfAssistant: &assistantMsg},
+		openai.ToolMessage("content1", "chatcmpl-1769975533529433976-1"),
+		openai.ToolMessage("content2", "chatcmpl-1769975533529433976-2"),
+		openai.ToolMessage("content3", "chatcmpl-1769975533529433976-3"),
+		openai.ToolMessage("content4", "chatcmpl-1769975533529433976-4"),
+		openai.ToolMessage("content5", "chatcmpl-1769975533529433976-5"),
 	}
 
 	mapping := buildToolCallIDToNameMap(testCtx, messages, testLogger)
@@ -213,24 +228,25 @@ func TestBuildToolCallIDToNameMap_PositionalFallbackWhenPrimaryFails(t *testing.
 func TestBuildToolCallIDToNameMap_MultipleAssistantTurns(t *testing.T) {
 	t.Parallel()
 
+	assistant1 := openai.ChatCompletionAssistantMessageParam{
+		ToolCalls: []openai.ChatCompletionMessageToolCallParam{
+			mkTC("turn1-0", "read_file", `{}`),
+			mkTC("turn1-1", "shell_command", `{}`),
+		},
+	}
+	assistant2 := openai.ChatCompletionAssistantMessageParam{
+		ToolCalls: []openai.ChatCompletionMessageToolCallParam{
+			mkTC("turn2-0", "list_directory", `{}`),
+		},
+	}
+
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.UserMessage("Do something"),
-		openai.ChatCompletionAssistantMessageParam{
-			Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
-			ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
-				mkTC("turn1-0", "read_file", `{}`),
-				mkTC("turn1-1", "shell_command", `{}`),
-			}),
-		},
-		openai.ToolMessage("turn1-0", "c1"),
-		openai.ToolMessage("turn1-1", "c2"),
-		openai.ChatCompletionAssistantMessageParam{
-			Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
-			ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
-				mkTC("turn2-0", "list_directory", `{}`),
-			}),
-		},
-		openai.ToolMessage("turn2-0", "c3"),
+		{OfAssistant: &assistant1},
+		openai.ToolMessage("c1", "turn1-0"),
+		openai.ToolMessage("c2", "turn1-1"),
+		{OfAssistant: &assistant2},
+		openai.ToolMessage("c3", "turn2-0"),
 	}
 
 	mapping := buildToolCallIDToNameMap(testCtx, messages, testLogger)
@@ -248,23 +264,16 @@ func TestConvertMessageToOllama_ToolResultFallback(t *testing.T) {
 	t.Parallel()
 
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
-		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
-		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
+		ToolCalls: []openai.ChatCompletionMessageToolCallParam{
 			mkTC("call-0", "shell_command", `{"command":"ls"}`),
-		}),
+		},
 	}
-	toolMsg := openai.ChatCompletionToolMessageParam{
-		Role: openai.F(openai.ChatCompletionToolMessageParamRoleTool),
-		Content: openai.F([]openai.ChatCompletionContentPartTextParam{
-			{
-				Type: openai.F(openai.ChatCompletionContentPartTextTypeText),
-				Text: openai.F("output"),
-			},
-		}),
-		ToolCallID: openai.F("call-0"),
-	}
+	toolMsg := openai.ToolMessage("output", "call-0")
 
-	messages := []openai.ChatCompletionMessageParamUnion{assistantMsg, toolMsg}
+	messages := []openai.ChatCompletionMessageParamUnion{
+		{OfAssistant: &assistantMsg},
+		toolMsg,
+	}
 
 	mapping := buildToolCallIDToNameMap(testCtx, messages, testLogger)
 	require.NotEmpty(t, mapping, "mapping should have call-0 from assistant message")
@@ -283,22 +292,21 @@ func TestBuildToolCallIDToNameMap_PhantomToolCalls(t *testing.T) {
 	// Simulate the pattern observed: first tool call has empty name+args,
 	// subsequent tool calls are valid.
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
-		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
-		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
+		ToolCalls: []openai.ChatCompletionMessageToolCallParam{
 			// Phantom: empty name.
 			mkTC("chatcmpl-100-0", "", `{}`),
 			// Valid.
 			mkTC("chatcmpl-100-1", "shell_command", `{"command":"ls"}`),
 			// Valid.
 			mkTC("chatcmpl-100-2", "read_file", `{"path":"test.go"}`),
-		}),
+		},
 	}
 
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.UserMessage("Do something"),
-		assistantMsg,
-		openai.ToolMessage("chatcmpl-100-1", "output1"),
-		openai.ToolMessage("chatcmpl-100-2", "output2"),
+		{OfAssistant: &assistantMsg},
+		openai.ToolMessage("output1", "chatcmpl-100-1"),
+		openai.ToolMessage("output2", "chatcmpl-100-2"),
 	}
 
 	mapping := buildToolCallIDToNameMap(testCtx, messages, testLogger)
@@ -313,7 +321,7 @@ func TestBuildToolCallIDToNameMap_PhantomToolCalls(t *testing.T) {
 
 	// Tool messages should resolve correctly.
 	for _, id := range []string{"chatcmpl-100-1", "chatcmpl-100-2"} {
-		toolMsg := openai.ToolMessage(id, "result")
+		toolMsg := openai.ToolMessage("result", id)
 		result := convertMessageToOllama(testCtx, toolMsg, mapping, testLogger)
 		assert.NotEmpty(t, result.ToolName, "tool message %s should have ToolName", id)
 	}
@@ -325,16 +333,15 @@ func TestBuildToolCallIDToNameMap_AllPhantomToolCalls(t *testing.T) {
 	t.Parallel()
 
 	assistantMsg := openai.ChatCompletionAssistantMessageParam{
-		Role: openai.F(openai.ChatCompletionAssistantMessageParamRoleAssistant),
-		ToolCalls: openai.F([]openai.ChatCompletionMessageToolCallParam{
+		ToolCalls: []openai.ChatCompletionMessageToolCallParam{
 			mkTC("id-0", "", `{}`),
 			mkTC("id-1", "", `{}`),
-		}),
+		},
 	}
 
 	messages := []openai.ChatCompletionMessageParamUnion{
 		openai.UserMessage("test"),
-		assistantMsg,
+		{OfAssistant: &assistantMsg},
 	}
 
 	mapping := buildToolCallIDToNameMap(testCtx, messages, testLogger)
@@ -351,11 +358,11 @@ func TestConvertOllamaResponseToOpenAI_AfterPhantomFiltering(t *testing.T) {
 			Role: "assistant",
 			ToolCalls: []api.ToolCall{
 				// Phantom: empty name (should be filtered before conversion).
-				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{}}},
+				{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{})}},
 				// Valid.
-				{Function: api.ToolCallFunction{Name: "shell_command", Arguments: map[string]any{"command": "ls"}}},
+				{Function: api.ToolCallFunction{Name: "shell_command", Arguments: mkArgs(map[string]any{"command": "ls"})}},
 				// Valid.
-				{Function: api.ToolCallFunction{Name: "read_file", Arguments: map[string]any{"path": "test.go"}}},
+				{Function: api.ToolCallFunction{Name: "read_file", Arguments: mkArgs(map[string]any{"path": "test.go"})}},
 			},
 		},
 		Done:       true,
@@ -385,7 +392,7 @@ func TestConvertOllamaResponseToOpenAI_AfterPhantomFiltering(t *testing.T) {
 	assert.NotEmpty(t, result.Choices[0].Message.ToolCalls[1].ID)
 
 	// Finish reason should be tool_calls since there are valid tool calls.
-	assert.Equal(t, openai.ChatCompletionChoicesFinishReasonToolCalls, result.Choices[0].FinishReason)
+	assert.Equal(t, "tool_calls", result.Choices[0].FinishReason)
 }
 
 // TestConvertOllamaChunkToOpenAI_AfterPhantomFiltering verifies the streaming
@@ -397,8 +404,8 @@ func TestConvertOllamaChunkToOpenAI_AfterPhantomFiltering(t *testing.T) {
 		Message: api.Message{
 			Role: "assistant",
 			ToolCalls: []api.ToolCall{
-				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{}}},
-				{Function: api.ToolCallFunction{Name: "shell_command", Arguments: map[string]any{"command": "ls"}}},
+				{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{})}},
+				{Function: api.ToolCallFunction{Name: "shell_command", Arguments: mkArgs(map[string]any{"command": "ls"})}},
 			},
 		},
 		Done: false,
@@ -432,9 +439,9 @@ func newTestTool(name, description, propName, propDesc string) api.Tool {
 			Parameters: api.ToolFunctionParameters{
 				Type:     "object",
 				Required: []string{propName},
-				Properties: map[string]api.ToolProperty{
-					propName: {Type: api.PropertyType{"string"}, Description: propDesc},
-				},
+				Properties: mkProps(map[string]api.ToolProperty{
+					propName: {Type: api.PropertyType([]string{"string"}), Description: propDesc},
+				}),
 			},
 		},
 	}

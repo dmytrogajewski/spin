@@ -86,16 +86,13 @@ func (p *MockProvider) Complete(ctx context.Context, params openai.ChatCompletio
 	}
 
 	// Determine finish reason.
-	finishReason := openai.ChatCompletionChoicesFinishReasonStop
+	finishReason := FinishReasonStop
 	if len(p.toolCalls) > 0 {
-		finishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
+		finishReason = FinishReasonToolCalls
 	}
 
 	// Count messages for usage calculation.
-	messageCount := 0
-	if params.Messages.Present {
-		messageCount = len(params.Messages.Value)
-	}
+	messageCount := len(params.Messages)
 
 	// Build response.
 	resp := &openai.ChatCompletion{
@@ -107,7 +104,7 @@ func (p *MockProvider) Complete(ctx context.Context, params openai.ChatCompletio
 			{
 				Index: 0,
 				Message: openai.ChatCompletionMessage{
-					Role:      openai.ChatCompletionMessageRoleAssistant,
+					Role:      "assistant",
 					Content:   p.response,
 					ToolCalls: p.toolCalls,
 				},
@@ -166,7 +163,7 @@ func (p *MockProvider) Stream(ctx context.Context, _ openai.ChatCompletionNewPar
 // streamContentChunks streams configured content chunks. Returns false if context canceled.
 func (p *MockProvider) streamContentChunks(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
 	for _, content := range p.streamChunks {
-		chunk := newMockChunk(chunkID, content, openai.ChatCompletionChunkChoicesDeltaRoleAssistant, nil)
+		chunk := newMockChunk(chunkID, content, "assistant", nil)
 
 		if !sendChunk(ctx, chunks, chunk) {
 			return false
@@ -182,20 +179,20 @@ func (p *MockProvider) streamContentChunks(ctx context.Context, chunks chan<- op
 
 // streamToolCallChunks streams tool call chunks. Returns false if context canceled.
 func (p *MockProvider) streamToolCallChunks(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
-	toolCallChunks := make([]openai.ChatCompletionChunkChoicesDeltaToolCall, len(p.toolCalls))
+	toolCallChunks := make([]openai.ChatCompletionChunkChoiceDeltaToolCall, len(p.toolCalls))
 	for i, tc := range p.toolCalls {
-		toolCallChunks[i] = openai.ChatCompletionChunkChoicesDeltaToolCall{
+		toolCallChunks[i] = openai.ChatCompletionChunkChoiceDeltaToolCall{
 			Index: int64(i),
 			ID:    tc.ID,
-			Type:  openai.ChatCompletionChunkChoicesDeltaToolCallsType(tc.Type),
-			Function: openai.ChatCompletionChunkChoicesDeltaToolCallsFunction{
+			Type:  string(tc.Type),
+			Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
 				Name:      tc.Function.Name,
 				Arguments: tc.Function.Arguments,
 			},
 		}
 	}
 
-	chunk := newMockChunk(chunkID, "", openai.ChatCompletionChunkChoicesDeltaRoleAssistant, toolCallChunks)
+	chunk := newMockChunk(chunkID, "", "assistant", toolCallChunks)
 
 	return sendChunk(ctx, chunks, chunk)
 }
@@ -206,16 +203,16 @@ func (p *MockProvider) streamSingleChunk(ctx context.Context, chunks chan<- open
 		return false
 	}
 
-	chunk := newMockChunk(chunkID, p.response, openai.ChatCompletionChunkChoicesDeltaRoleAssistant, nil)
+	chunk := newMockChunk(chunkID, p.response, "assistant", nil)
 
 	return sendChunk(ctx, chunks, chunk)
 }
 
 // sendDoneChunk sends the final done chunk with the appropriate finish reason.
 func (p *MockProvider) sendDoneChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) {
-	finishReason := openai.ChatCompletionChunkChoicesFinishReasonStop
+	finishReason := FinishReasonStop
 	if len(p.toolCalls) > 0 {
-		finishReason = openai.ChatCompletionChunkChoicesFinishReasonToolCalls
+		finishReason = FinishReasonToolCalls
 	}
 
 	select {
@@ -239,8 +236,8 @@ func (p *MockProvider) sendDoneChunk(ctx context.Context, chunks chan<- openai.C
 // newMockChunk creates a new mock ChatCompletionChunk.
 func newMockChunk(
 	chunkID, content string,
-	role openai.ChatCompletionChunkChoicesDeltaRole,
-	toolCalls []openai.ChatCompletionChunkChoicesDeltaToolCall,
+	role string,
+	toolCalls []openai.ChatCompletionChunkChoiceDeltaToolCall,
 ) openai.ChatCompletionChunk {
 	return openai.ChatCompletionChunk{
 		ID:      chunkID,
@@ -250,7 +247,7 @@ func newMockChunk(
 		Choices: []openai.ChatCompletionChunkChoice{
 			{
 				Index: 0,
-				Delta: openai.ChatCompletionChunkChoicesDelta{
+				Delta: openai.ChatCompletionChunkChoiceDelta{
 					Content:   content,
 					Role:      role,
 					ToolCalls: toolCalls,

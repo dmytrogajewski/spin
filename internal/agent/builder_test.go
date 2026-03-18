@@ -157,10 +157,10 @@ func (m *mockProvider) Complete(_ context.Context, _ openai.ChatCompletionNewPar
 		Choices: []openai.ChatCompletionChoice{
 			{
 				Message: openai.ChatCompletionMessage{
-					Role:    openai.ChatCompletionMessageRoleAssistant,
+					Role:    "assistant",
 					Content: "test response",
 				},
-				FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
+				FinishReason: "stop",
 			},
 		},
 	}, nil

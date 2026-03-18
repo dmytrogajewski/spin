@@ -231,14 +231,14 @@ func (lc *LLMCaller) buildLLMParams(
 	}
 
 	params := openai.ChatCompletionNewParams{
-		Messages:    openai.F(openaiMessages),
-		Temperature: openai.F(lc.temperature),
-		MaxTokens:   openai.F(int64(maxTokens)),
+		Messages:    openaiMessages,
+		Temperature: openai.Float(lc.temperature),
+		MaxTokens:   openai.Int(int64(maxTokens)),
 	}
 
 	if len(toolList) > 0 {
 		if lc.provider.Capabilities().FunctionCalling {
-			params.Tools = openai.F(convertToolsToOpenAI(toolList))
+			params.Tools = convertToolsToOpenAI(toolList)
 		} else {
 			lc.logger.InfoContext(ctx, "using XML tool calling (provider does not support function calling)",
 				"provider", lc.provider.Name(), "tool_count", len(toolList))
@@ -281,7 +281,7 @@ func (lc *LLMCaller) processStream(ctx context.Context, chunks <-chan openai.Cha
 }
 
 func (lc *LLMCaller) emitStreamDeltas(
-	ctx context.Context, delta openai.ChatCompletionChunkChoicesDelta,
+	ctx context.Context, delta openai.ChatCompletionChunkChoiceDelta,
 	streamSanitizer *sanitizer.Sanitizer, chunkCount int,
 ) {
 	if delta.Content == "" {
@@ -319,7 +319,7 @@ func (lc *LLMCaller) handleToolCallFinished(
 	choice openai.ChatCompletionChunkChoice,
 ) {
 	toolCall, finished := acc.JustFinishedToolCall()
-	if !finished && choice.FinishReason == openai.ChatCompletionChunkChoicesFinishReasonToolCalls {
+	if !finished && choice.FinishReason == llm.FinishReasonToolCalls {
 		finished = true
 	}
 
@@ -371,9 +371,9 @@ func (lc *LLMCaller) applyFinishReasonFallback(response *openai.ChatCompletion) 
 	}
 
 	if len(response.Choices[0].Message.ToolCalls) > 0 {
-		response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
+		response.Choices[0].FinishReason = llm.FinishReasonToolCalls
 	} else {
-		response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonStop
+		response.Choices[0].FinishReason = llm.FinishReasonStop
 	}
 }
 
@@ -401,7 +401,7 @@ func (lc *LLMCaller) extractXMLToolCalls(ctx context.Context, response *openai.C
 	}
 
 	response.Choices[0].Message.ToolCalls = xmlToolCalls
-	response.Choices[0].FinishReason = openai.ChatCompletionChoicesFinishReasonToolCalls
+	response.Choices[0].FinishReason = llm.FinishReasonToolCalls
 
 	s := sanitizer.New()
 	cleanContent, cleanThought := s.Process(content)

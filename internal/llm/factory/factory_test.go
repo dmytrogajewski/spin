@@ -504,10 +504,10 @@ func (m *mockProvider) Complete(_ context.Context, _ openaisdk.ChatCompletionNew
 		Choices: []openaisdk.ChatCompletionChoice{{
 			Index: 0,
 			Message: openaisdk.ChatCompletionMessage{
-				Role:    openaisdk.ChatCompletionMessageRoleAssistant,
+				Role:    "assistant",
 				Content: "mock",
 			},
-			FinishReason: openaisdk.ChatCompletionChoicesFinishReasonStop,
+			FinishReason: "stop",
 		}},
 	}, nil
 }
@@ -521,7 +521,7 @@ func (m *mockProvider) Stream(_ context.Context, _ openaisdk.ChatCompletionNewPa
 		Object:  "chat.completion.chunk",
 		Choices: []openaisdk.ChatCompletionChunkChoice{{
 			Index:        0,
-			FinishReason: openaisdk.ChatCompletionChunkChoicesFinishReasonStop,
+			FinishReason: "stop",
 		}},
 	}
 
@@ -844,10 +844,10 @@ func (m *mockProviderBugFix) Complete(_ context.Context, _ openaisdk.ChatComplet
 		Choices: []openaisdk.ChatCompletionChoice{{
 			Index: 0,
 			Message: openaisdk.ChatCompletionMessage{
-				Role:    openaisdk.ChatCompletionMessageRoleAssistant,
+				Role:    "assistant",
 				Content: "Mock response",
 			},
-			FinishReason: openaisdk.ChatCompletionChoicesFinishReasonStop,
+			FinishReason: "stop",
 		}},
 	}, nil
 }
@@ -865,7 +865,7 @@ func (m *mockProviderBugFix) Stream(_ context.Context, _ openaisdk.ChatCompletio
 			Object:  "chat.completion.chunk",
 			Choices: []openaisdk.ChatCompletionChunkChoice{{
 				Index: 0,
-				Delta: openaisdk.ChatCompletionChunkChoicesDelta{
+				Delta: openaisdk.ChatCompletionChunkChoiceDelta{
 					Content: "Mock response",
 				},
 			}},
@@ -878,7 +878,7 @@ func (m *mockProviderBugFix) Stream(_ context.Context, _ openaisdk.ChatCompletio
 			Object:  "chat.completion.chunk",
 			Choices: []openaisdk.ChatCompletionChunkChoice{{
 				Index:        0,
-				FinishReason: openaisdk.ChatCompletionChunkChoicesFinishReasonStop,
+				FinishReason: "stop",
 			}},
 		}
 	}()

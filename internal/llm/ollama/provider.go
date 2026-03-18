@@ -241,14 +241,14 @@ func (p *Provider) buildChatRequest(ctx context.Context, params openaisdk.ChatCo
 
 // convertMessages converts OpenAI messages to Ollama format on the request.
 func (p *Provider) convertMessages(ctx context.Context, params openaisdk.ChatCompletionNewParams, req *api.ChatRequest) {
-	if !params.Messages.Present {
+	if len(params.Messages) == 0 {
 		return
 	}
 
-	toolCallIDToName := buildToolCallIDToNameMap(ctx, params.Messages.Value, p.logger)
+	toolCallIDToName := buildToolCallIDToNameMap(ctx, params.Messages, p.logger)
 
-	req.Messages = make([]api.Message, len(params.Messages.Value))
-	for i, msg := range params.Messages.Value {
+	req.Messages = make([]api.Message, len(params.Messages))
+	for i, msg := range params.Messages {
 		req.Messages[i] = convertMessageToOllama(ctx, msg, toolCallIDToName, p.logger)
 	}
 
@@ -264,12 +264,12 @@ func (p *Provider) convertMessages(ctx context.Context, params openaisdk.ChatCom
 
 // convertTools converts OpenAI tools to Ollama format on the request.
 func (p *Provider) convertTools(ctx context.Context, params openaisdk.ChatCompletionNewParams, req *api.ChatRequest) {
-	if !params.Tools.Present || len(params.Tools.Value) == 0 {
+	if len(params.Tools) == 0 {
 		return
 	}
 
-	req.Tools = make([]api.Tool, len(params.Tools.Value))
-	for i, tool := range params.Tools.Value {
+	req.Tools = make([]api.Tool, len(params.Tools))
+	for i, tool := range params.Tools {
 		req.Tools[i] = convertToolToOllama(tool)
 	}
 
@@ -278,12 +278,12 @@ func (p *Provider) convertTools(ctx context.Context, params openaisdk.ChatComple
 
 // setRequestOptions sets temperature, max tokens, and context options on the request.
 func (p *Provider) setRequestOptions(ctx context.Context, params openaisdk.ChatCompletionNewParams, req *api.ChatRequest) {
-	if params.Temperature.Present {
+	if params.Temperature.Valid() {
 		req.Options = ensureOptionsMap(req.Options)
 		req.Options["temperature"] = params.Temperature.Value
 	}
 
-	if params.MaxTokens.Present {
+	if params.MaxTokens.Valid() {
 		req.Options = ensureOptionsMap(req.Options)
 		req.Options["num_predict"] = params.MaxTokens.Value
 	}
@@ -324,12 +324,12 @@ func filterToolCalls(ctx context.Context, toolCalls []api.ToolCall, tools []api.
 			continue
 		}
 
-		if inferred := inferToolName(ctx, tc.Function.Arguments, tools, logger); inferred != "" {
+		if inferred := inferToolName(ctx, tc.Function.Arguments.ToMap(), tools, logger); inferred != "" {
 			tc.Function.Name = inferred
 			logger.InfoContext(ctx, "ollama: inferred tool name for nameless tool call",
 				"name", inferred, "args", tc.Function.Arguments)
 			filtered = append(filtered, tc)
-		} else if len(tc.Function.Arguments) > 0 {
+		} else if tc.Function.Arguments.Len() > 0 {
 			logger.WarnContext(ctx, "ollama: dropping tool call with empty name (could not infer)",
 				"args", tc.Function.Arguments)
 		} else {

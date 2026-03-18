@@ -95,10 +95,10 @@ func (s *LLMSummarizer) Summarize(ctx context.Context, content string, opts Opti
 
 	// Call LLM.
 	params := openai.ChatCompletionNewParams{
-		Model: openai.F(s.config.Model),
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Model: s.config.Model,
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
-		}),
+		},
 		MaxTokens: openai.Int(int64(opts.MaxTokens)),
 	}
 
@@ -216,10 +216,10 @@ func (s *LLMSummarizer) SummarizeMessages(ctx context.Context, messages []messag
 
 	// Call LLM.
 	params := openai.ChatCompletionNewParams{
-		Model: openai.F(s.config.Model),
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Model: s.config.Model,
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
-		}),
+		},
 		MaxTokens: openai.Int(int64(opts.MaxTokens)),
 	}
 

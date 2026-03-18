@@ -34,15 +34,11 @@ func (p *Provider) Complete(_ context.Context, params openai.ChatCompletionNewPa
 
 	// Check if there are tool results in the messages (indicates we're in a follow-up call)
 	hasToolResults := false
-	if params.Messages.Present {
-		for _, msg := range params.Messages.Value {
-			// Check if this is a tool message
-			if toolMsg, ok := msg.(openai.ChatCompletionToolMessageParam); ok {
-				if toolMsg.Role.Value == openai.ChatCompletionToolMessageParamRoleTool {
-					hasToolResults = true
-					break
-				}
-			}
+	for _, msg := range params.Messages {
+		// Check if this is a tool message
+		if msg.OfTool != nil {
+			hasToolResults = true
+			break
 		}
 	}
 
@@ -52,10 +48,9 @@ func (p *Provider) Complete(_ context.Context, params openai.ChatCompletionNewPa
 			Choices: []openai.ChatCompletionChoice{
 				{
 					Message: openai.ChatCompletionMessage{
-						Role:    openai.ChatCompletionMessageRoleAssistant,
 						Content: "Task completed successfully.",
 					},
-					FinishReason: openai.ChatCompletionChoicesFinishReasonStop,
+					FinishReason: "stop",
 				},
 			},
 		}, nil
@@ -63,20 +58,7 @@ func (p *Provider) Complete(_ context.Context, params openai.ChatCompletionNewPa
 
 	// Determine which tool to call based on the prompt
 	// Check if the prompt mentions file operations
-	promptText := ""
-	if params.Messages.Present && len(params.Messages.Value) > 0 {
-		lastMsg := params.Messages.Value[len(params.Messages.Value)-1]
-		// Extract text from user message
-		if userMsg, ok := lastMsg.(openai.ChatCompletionUserMessageParam); ok {
-			if userMsg.Content.Present {
-				for _, part := range userMsg.Content.Value {
-					if textPart, ok := part.(openai.ChatCompletionContentPartTextParam); ok && textPart.Text.Present {
-						promptText += textPart.Text.Value
-					}
-				}
-			}
-		}
-	}
+	promptText := extractPromptText(params.Messages)
 
 	// Choose tool based on prompt content
 	var toolCall openai.ChatCompletionMessageToolCall
@@ -86,8 +68,7 @@ func (p *Provider) Complete(_ context.Context, params openai.ChatCompletionNewPa
 	if strings.Contains(lowerPrompt, "execute plan test") {
 		// Plan execution test scenario - use shell_command which is always available in ACP mode
 		toolCall = openai.ChatCompletionMessageToolCall{
-			ID:   "test-plan-tool",
-			Type: openai.ChatCompletionMessageToolCallTypeFunction,
+			ID: "test-plan-tool",
 			Function: openai.ChatCompletionMessageToolCallFunction{
 				Name:      "shell_command",
 				Arguments: `{"command":"echo hello","cwd":"","operation":"execute"}`,
@@ -97,8 +78,7 @@ func (p *Provider) Complete(_ context.Context, params openai.ChatCompletionNewPa
 	} else if strings.Contains(lowerPrompt, "read") || strings.Contains(lowerPrompt, "file") && !strings.Contains(lowerPrompt, "write") && !strings.Contains(lowerPrompt, "create") {
 		// Read operation
 		toolCall = openai.ChatCompletionMessageToolCall{
-			ID:   "test-read-file",
-			Type: openai.ChatCompletionMessageToolCallTypeFunction,
+			ID: "test-read-file",
 			Function: openai.ChatCompletionMessageToolCallFunction{
 				Name:      "read_file",
 				Arguments: `{"path":"test.txt"}`,
@@ -108,8 +88,7 @@ func (p *Provider) Complete(_ context.Context, params openai.ChatCompletionNewPa
 	} else if strings.Contains(lowerPrompt, "list") || strings.Contains(lowerPrompt, "directory") {
 		// List operation
 		toolCall = openai.ChatCompletionMessageToolCall{
-			ID:   "test-list-dir",
-			Type: openai.ChatCompletionMessageToolCallTypeFunction,
+			ID: "test-list-dir",
 			Function: openai.ChatCompletionMessageToolCallFunction{
 				Name:      "list_directory",
 				Arguments: `{"path":"."}`,
@@ -120,8 +99,7 @@ func (p *Provider) Complete(_ context.Context, params openai.ChatCompletionNewPa
 		// Default: write operation (shell_command or write_file)
 		if strings.Contains(lowerPrompt, "create") || strings.Contains(lowerPrompt, "write") {
 			toolCall = openai.ChatCompletionMessageToolCall{
-				ID:   "test-write-file",
-				Type: openai.ChatCompletionMessageToolCallTypeFunction,
+				ID: "test-write-file",
 				Function: openai.ChatCompletionMessageToolCallFunction{
 					Name:      "write_file",
 					Arguments: `{"path":"should-not-exist.txt","content":"this should not be created"}`,
@@ -131,8 +109,7 @@ func (p *Provider) Complete(_ context.Context, params openai.ChatCompletionNewPa
 		} else {
 			// Default to shell_command
 			toolCall = openai.ChatCompletionMessageToolCall{
-				ID:   "test-shell-command",
-				Type: openai.ChatCompletionMessageToolCallTypeFunction,
+				ID: "test-shell-command",
 				Function: openai.ChatCompletionMessageToolCallFunction{
 					Name:      "shell_command",
 					Arguments: `{"command":"echo approval persistence test","cwd":"","operation":"execute"}`,
@@ -146,14 +123,39 @@ func (p *Provider) Complete(_ context.Context, params openai.ChatCompletionNewPa
 		Choices: []openai.ChatCompletionChoice{
 			{
 				Message: openai.ChatCompletionMessage{
-					Role:      openai.ChatCompletionMessageRoleAssistant,
 					Content:   content,
 					ToolCalls: []openai.ChatCompletionMessageToolCall{toolCall},
 				},
-				FinishReason: openai.ChatCompletionChoicesFinishReasonToolCalls,
+				FinishReason: "tool_calls",
 			},
 		},
 	}, nil
+}
+
+// extractPromptText extracts text content from the last user message in the message list.
+func extractPromptText(messages []openai.ChatCompletionMessageParamUnion) string {
+	if len(messages) == 0 {
+		return ""
+	}
+
+	lastMsg := messages[len(messages)-1]
+	if lastMsg.OfUser == nil {
+		return ""
+	}
+
+	// Try string content first
+	if lastMsg.OfUser.Content.OfString.Value != "" {
+		return lastMsg.OfUser.Content.OfString.Value
+	}
+
+	// Try array of content parts
+	var promptText string
+	for _, part := range lastMsg.OfUser.Content.OfArrayOfContentParts {
+		if part.OfText != nil {
+			promptText += part.OfText.Text
+		}
+	}
+	return promptText
 }
 
 // Stream returns chunks that represent the completion. On first call, returns a tool call.
@@ -166,15 +168,11 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 
 		// Check if there are tool results in the messages (indicates we're in a follow-up call)
 		hasToolResults := false
-		if params.Messages.Present {
-			for _, msg := range params.Messages.Value {
-				// Check if this is a tool message
-				if toolMsg, ok := msg.(openai.ChatCompletionToolMessageParam); ok {
-					if toolMsg.Role.Value == openai.ChatCompletionToolMessageParamRoleTool {
-						hasToolResults = true
-						break
-					}
-				}
+		for _, msg := range params.Messages {
+			// Check if this is a tool message
+			if msg.OfTool != nil {
+				hasToolResults = true
+				break
 			}
 		}
 
@@ -187,11 +185,11 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 				Choices: []openai.ChatCompletionChunkChoice{
 					{
 						Index: 0,
-						Delta: openai.ChatCompletionChunkChoicesDelta{
-							Role:    openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
+						Delta: openai.ChatCompletionChunkChoiceDelta{
+							Role:    "assistant",
 							Content: "Task completed successfully.",
 						},
-						FinishReason: openai.ChatCompletionChunkChoicesFinishReasonStop,
+						FinishReason: "stop",
 					},
 				},
 			}
@@ -202,20 +200,7 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 		p.mu.Lock()
 
 		// Determine which tool to call based on the prompt
-		promptText := ""
-		if params.Messages.Present && len(params.Messages.Value) > 0 {
-			lastMsg := params.Messages.Value[len(params.Messages.Value)-1]
-			// Extract text from user message
-			if userMsg, ok := lastMsg.(openai.ChatCompletionUserMessageParam); ok {
-				if userMsg.Content.Present {
-					for _, part := range userMsg.Content.Value {
-						if textPart, ok := part.(openai.ChatCompletionContentPartTextParam); ok && textPart.Text.Present {
-							promptText += textPart.Text.Value
-						}
-					}
-				}
-			}
-		}
+		promptText := extractPromptText(params.Messages)
 
 		// Choose tool based on prompt content
 		var toolCall openai.ChatCompletionMessageToolCall
@@ -225,8 +210,7 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 		if strings.Contains(lowerPrompt, "execute plan test") {
 			// Plan execution test scenario - use shell_command which is always available in ACP mode
 			toolCall = openai.ChatCompletionMessageToolCall{
-				ID:   "test-plan-tool",
-				Type: openai.ChatCompletionMessageToolCallTypeFunction,
+				ID: "test-plan-tool",
 				Function: openai.ChatCompletionMessageToolCallFunction{
 					Name:      "shell_command",
 					Arguments: `{"command":"echo hello","cwd":"","operation":"execute"}`,
@@ -236,8 +220,7 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 		} else if strings.Contains(lowerPrompt, "read") || strings.Contains(lowerPrompt, "file") && !strings.Contains(lowerPrompt, "write") && !strings.Contains(lowerPrompt, "create") {
 			// Read operation
 			toolCall = openai.ChatCompletionMessageToolCall{
-				ID:   "test-read-file",
-				Type: openai.ChatCompletionMessageToolCallTypeFunction,
+				ID: "test-read-file",
 				Function: openai.ChatCompletionMessageToolCallFunction{
 					Name:      "read_file",
 					Arguments: `{"path":"test.txt"}`,
@@ -247,8 +230,7 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 		} else if strings.Contains(lowerPrompt, "list") || strings.Contains(lowerPrompt, "directory") {
 			// List operation
 			toolCall = openai.ChatCompletionMessageToolCall{
-				ID:   "test-list-dir",
-				Type: openai.ChatCompletionMessageToolCallTypeFunction,
+				ID: "test-list-dir",
 				Function: openai.ChatCompletionMessageToolCallFunction{
 					Name:      "list_directory",
 					Arguments: `{"path":"."}`,
@@ -259,8 +241,7 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 			// Default: write operation (shell_command or write_file)
 			if strings.Contains(lowerPrompt, "create") || strings.Contains(lowerPrompt, "write") {
 				toolCall = openai.ChatCompletionMessageToolCall{
-					ID:   "test-write-file",
-					Type: openai.ChatCompletionMessageToolCallTypeFunction,
+					ID: "test-write-file",
 					Function: openai.ChatCompletionMessageToolCallFunction{
 						Name:      "write_file",
 						Arguments: `{"path":"should-not-exist.txt","content":"this should not be created"}`,
@@ -270,8 +251,7 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 			} else {
 				// Default to shell_command
 				toolCall = openai.ChatCompletionMessageToolCall{
-					ID:   "test-shell-command",
-					Type: openai.ChatCompletionMessageToolCallTypeFunction,
+					ID: "test-shell-command",
 					Function: openai.ChatCompletionMessageToolCallFunction{
 						Name:      "shell_command",
 						Arguments: `{"command":"echo approval persistence test","cwd":"","operation":"execute"}`,
@@ -283,12 +263,12 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 		p.mu.Unlock()
 
 		// Prepare tool call chunks
-		toolCallChunks := []openai.ChatCompletionChunkChoicesDeltaToolCall{
+		toolCallChunks := []openai.ChatCompletionChunkChoiceDeltaToolCall{
 			{
 				Index: 0,
 				ID:    toolCall.ID,
-				Type:  openai.ChatCompletionChunkChoicesDeltaToolCallsType(toolCall.Type),
-				Function: openai.ChatCompletionChunkChoicesDeltaToolCallsFunction{
+				Type:  string(toolCall.Type),
+				Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
 					Name:      toolCall.Function.Name,
 					Arguments: toolCall.Function.Arguments,
 				},
@@ -302,12 +282,12 @@ func (p *Provider) Stream(_ context.Context, params openai.ChatCompletionNewPara
 			Choices: []openai.ChatCompletionChunkChoice{
 				{
 					Index: 0,
-					Delta: openai.ChatCompletionChunkChoicesDelta{
-						Role:      openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
+					Delta: openai.ChatCompletionChunkChoiceDelta{
+						Role:      "assistant",
 						Content:   content,
 						ToolCalls: toolCallChunks,
 					},
-					FinishReason: openai.ChatCompletionChunkChoicesFinishReasonToolCalls,
+					FinishReason: "tool_calls",
 				},
 			},
 		}

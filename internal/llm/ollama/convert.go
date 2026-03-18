@@ -24,6 +24,8 @@ import (
 
 	"github.com/ollama/ollama/api"
 	"github.com/openai/openai-go"
+
+	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
 const roleToolResult = "tool"
@@ -332,13 +334,19 @@ func extractToolCalls(toolCallsJSON json.RawMessage) []api.ToolCall {
 
 	result := make([]api.ToolCall, len(toolCalls))
 	for i, tc := range toolCalls {
-		var args map[string]any
+		tcArgs := api.NewToolCallFunctionArguments()
 
-		_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
+		var args map[string]any
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
+			for k, v := range args {
+				tcArgs.Set(k, v)
+			}
+		}
+
 		result[i] = api.ToolCall{
 			Function: api.ToolCallFunction{
 				Name:      tc.Function.Name,
-				Arguments: args,
+				Arguments: tcArgs,
 			},
 		}
 	}
@@ -379,7 +387,7 @@ func findBestToolMatch(argKeys map[string]bool, tools []api.Tool) (string, bool)
 	)
 
 	for _, tool := range tools {
-		score := scoreToolMatch(argKeys, tool.Function.Parameters.Properties)
+		score := scoreToolMatch(argKeys, tool.Function.Parameters.Properties.ToMap())
 		if score <= 0 {
 			continue
 		}
@@ -438,6 +446,13 @@ func convertToolToOllama(tool openai.ChatCompletionToolParam) api.Tool {
 
 	_ = json.Unmarshal(jsonData, &genericTool)
 
+	propsMap := extractProperties(genericTool.Function.Parameters)
+
+	toolProps := api.NewToolPropertiesMap()
+	for k, v := range propsMap {
+		toolProps.Set(k, v)
+	}
+
 	return api.Tool{
 		Type: "function",
 		Function: api.ToolFunction{
@@ -445,7 +460,7 @@ func convertToolToOllama(tool openai.ChatCompletionToolParam) api.Tool {
 			Description: genericTool.Function.Description,
 			Parameters: api.ToolFunctionParameters{
 				Type:       "object",
-				Properties: extractProperties(genericTool.Function.Parameters),
+				Properties: toolProps,
 				Required:   extractRequired(genericTool.Function.Parameters),
 			},
 		},
@@ -476,7 +491,7 @@ func extractProperties(params map[string]any) map[string]api.ToolProperty {
 func buildToolProperty(propMap map[string]any) api.ToolProperty {
 	prop := api.ToolProperty{}
 	if typ, typOk := propMap["type"].(string); typOk {
-		prop.Type = api.PropertyType{typ}
+		prop.Type = api.PropertyType([]string{typ})
 	}
 
 	if desc, descOk := propMap["description"].(string); descOk {
@@ -505,22 +520,22 @@ func extractRequired(params map[string]any) []string {
 // This is separate from the chunk version because OpenAI uses different types for streaming vs non-streaming.
 func mapOllamaDoneReasonToOpenAICompletion(
 	ctx context.Context, doneReason string, hasToolCalls bool, logger *slog.Logger,
-) openai.ChatCompletionChoicesFinishReason {
+) string {
 	// Tool calls take precedence.
 	if hasToolCalls {
-		return openai.ChatCompletionChoicesFinishReasonToolCalls
+		return llm.FinishReasonToolCalls
 	}
 
 	switch doneReason {
 	case "length":
-		return openai.ChatCompletionChoicesFinishReasonLength
+		return llm.FinishReasonLength
 	case "stop", "load", "unload", "":
-		return openai.ChatCompletionChoicesFinishReasonStop
+		return llm.FinishReasonStop
 	default:
 		// Unknown reason, default to stop.
 		logger.DebugContext(ctx, "unknown ollama done_reason, defaulting to stop", "done_reason", doneReason)
 
-		return openai.ChatCompletionChoicesFinishReasonStop
+		return llm.FinishReasonStop
 	}
 }
 
@@ -535,7 +550,7 @@ func convertOllamaResponseToOpenAI(ctx context.Context, resp api.ChatResponse, m
 			{
 				Index: 0,
 				Message: openai.ChatCompletionMessage{
-					Role:    openai.ChatCompletionMessageRoleAssistant,
+					Role:    "assistant",
 					Content: resp.Message.Content,
 				},
 				FinishReason: mapOllamaDoneReasonToOpenAICompletion(ctx, resp.DoneReason, len(resp.Message.ToolCalls) > 0, logger),
@@ -564,7 +579,7 @@ func convertOllamaResponseToOpenAI(ctx context.Context, resp api.ChatResponse, m
 				"raw_arguments", fmt.Sprintf("%+v", tc.Function.Arguments))
 			result.Choices[0].Message.ToolCalls[i] = openai.ChatCompletionMessageToolCall{
 				ID:   fmt.Sprintf("%s-%d", result.ID, i),
-				Type: openai.ChatCompletionMessageToolCallTypeFunction,
+				Type: "function",
 				Function: openai.ChatCompletionMessageToolCallFunction{
 					Name:      tc.Function.Name,
 					Arguments: string(argsJSON),
@@ -591,22 +606,22 @@ func convertOllamaResponseToOpenAI(ctx context.Context, resp api.ChatResponse, m
 // OpenAI uses: "stop", "length", "tool_calls", "content_filter", "function_call".
 func mapOllamaDoneReasonToOpenAI(
 	ctx context.Context, doneReason string, hasToolCalls bool, logger *slog.Logger,
-) openai.ChatCompletionChunkChoicesFinishReason {
+) string {
 	// Tool calls take precedence.
 	if hasToolCalls {
-		return openai.ChatCompletionChunkChoicesFinishReasonToolCalls
+		return llm.FinishReasonToolCalls
 	}
 
 	switch doneReason {
 	case "length":
-		return openai.ChatCompletionChunkChoicesFinishReasonLength
+		return llm.FinishReasonLength
 	case "stop", "load", "unload", "":
-		return openai.ChatCompletionChunkChoicesFinishReasonStop
+		return llm.FinishReasonStop
 	default:
 		// Unknown reason, default to stop.
 		logger.DebugContext(ctx, "unknown ollama done_reason, defaulting to stop", "done_reason", doneReason)
 
-		return openai.ChatCompletionChunkChoicesFinishReasonStop
+		return llm.FinishReasonStop
 	}
 }
 
@@ -622,8 +637,8 @@ func convertOllamaChunkToOpenAI(
 		Choices: []openai.ChatCompletionChunkChoice{
 			{
 				Index: 0,
-				Delta: openai.ChatCompletionChunkChoicesDelta{
-					Role:    openai.ChatCompletionChunkChoicesDeltaRoleAssistant,
+				Delta: openai.ChatCompletionChunkChoiceDelta{
+					Role:    "assistant",
 					Content: resp.Message.Content,
 				},
 			},
@@ -637,7 +652,7 @@ func convertOllamaChunkToOpenAI(
 
 	// Convert tool calls if present.
 	if len(resp.Message.ToolCalls) > 0 {
-		chunk.Choices[0].Delta.ToolCalls = make([]openai.ChatCompletionChunkChoicesDeltaToolCall, len(resp.Message.ToolCalls))
+		chunk.Choices[0].Delta.ToolCalls = make([]openai.ChatCompletionChunkChoiceDeltaToolCall, len(resp.Message.ToolCalls))
 		for i, tc := range resp.Message.ToolCalls {
 			argsJSON, err := json.Marshal(tc.Function.Arguments)
 			if err != nil {
@@ -654,11 +669,11 @@ func convertOllamaChunkToOpenAI(
 				"tool", tc.Function.Name,
 				"arguments", string(argsJSON),
 				"raw_arguments", fmt.Sprintf("%+v", tc.Function.Arguments))
-			chunk.Choices[0].Delta.ToolCalls[i] = openai.ChatCompletionChunkChoicesDeltaToolCall{
+			chunk.Choices[0].Delta.ToolCalls[i] = openai.ChatCompletionChunkChoiceDeltaToolCall{
 				Index: int64(i),
 				ID:    fmt.Sprintf("%s-%d", chunkID, i),
-				Type:  openai.ChatCompletionChunkChoicesDeltaToolCallsTypeFunction,
-				Function: openai.ChatCompletionChunkChoicesDeltaToolCallsFunction{
+				Type:  "function",
+				Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
 					Name:      tc.Function.Name,
 					Arguments: string(argsJSON),
 				},

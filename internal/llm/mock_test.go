@@ -20,9 +20,9 @@ var (
 // testParams creates standard test params for mock provider tests.
 func testParams() openai.ChatCompletionNewParams {
 	return openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("test"),
-		}),
+		},
 	}
 }
 
@@ -113,7 +113,7 @@ func testNewMockProviderToolCalls(t *testing.T) {
 	toolCalls := []openai.ChatCompletionMessageToolCall{
 		{
 			ID:   "call_1",
-			Type: openai.ChatCompletionMessageToolCallTypeFunction,
+			Type: "function",
 			Function: openai.ChatCompletionMessageToolCallFunction{
 				Name:      "test_func",
 				Arguments: `{"arg":"value"}`,
@@ -136,7 +136,7 @@ func testNewMockProviderToolCalls(t *testing.T) {
 		t.Errorf("ToolCall ID = %s, want call_1", resp.Choices[0].Message.ToolCalls[0].ID)
 	}
 
-	if resp.Choices[0].FinishReason != openai.ChatCompletionChoicesFinishReasonToolCalls {
+	if resp.Choices[0].FinishReason != FinishReasonToolCalls {
 		t.Errorf("FinishReason = %s, want tool_calls", resp.Choices[0].FinishReason)
 	}
 }
@@ -239,8 +239,8 @@ func testCompleteBasic(t *testing.T) {
 
 	p := NewMockProvider("test", WithResponse("Hello, World!"))
 	params := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{openai.UserMessage("Hi")}),
-		Model:    openai.F("mock-model"),
+		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("Hi")},
+		Model:    "mock-model",
 	}
 
 	resp, err := p.Complete(context.Background(), params)
@@ -256,7 +256,7 @@ func testCompleteBasic(t *testing.T) {
 		t.Errorf("Model = %s, want mock-model", resp.Model)
 	}
 
-	if len(resp.Choices) > 0 && resp.Choices[0].FinishReason != openai.ChatCompletionChoicesFinishReasonStop {
+	if len(resp.Choices) > 0 && resp.Choices[0].FinishReason != FinishReasonStop {
 		t.Errorf("FinishReason = %s, want stop", resp.Choices[0].FinishReason)
 	}
 
@@ -382,8 +382,8 @@ func testStreamToolCalls(t *testing.T) {
 	t.Helper()
 
 	toolCalls := []openai.ChatCompletionMessageToolCall{
-		{ID: "call_1", Type: openai.ChatCompletionMessageToolCallTypeFunction},
-		{ID: "call_2", Type: openai.ChatCompletionMessageToolCallTypeFunction},
+		{ID: "call_1", Type: "function"},
+		{ID: "call_2", Type: "function"},
 	}
 	p := NewMockProvider("test", WithToolCalls(toolCalls))
 
@@ -393,8 +393,8 @@ func testStreamToolCalls(t *testing.T) {
 	}
 
 	var (
-		receivedToolCalls []openai.ChatCompletionChunkChoicesDeltaToolCall
-		finishReason      openai.ChatCompletionChunkChoicesFinishReason
+		receivedToolCalls []openai.ChatCompletionChunkChoiceDeltaToolCall
+		finishReason      string
 	)
 
 	for chunk := range stream {
@@ -412,7 +412,7 @@ func testStreamToolCalls(t *testing.T) {
 		t.Fatalf("Received %d tool calls, want 2", len(receivedToolCalls))
 	}
 
-	if finishReason != openai.ChatCompletionChunkChoicesFinishReasonToolCalls {
+	if finishReason != FinishReasonToolCalls {
 		t.Errorf("FinishReason = %s, want tool_calls", finishReason)
 	}
 }
@@ -505,9 +505,9 @@ func TestMockProvider_ThreadSafety(t *testing.T) {
 	for range 10 {
 		go func() {
 			params := openai.ChatCompletionNewParams{
-				Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+				Messages: []openai.ChatCompletionMessageParamUnion{
 					openai.UserMessage("test"),
-				}),
+				},
 			}
 
 			for range 100 {

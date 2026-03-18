@@ -180,9 +180,9 @@ func TestProvider_Complete(t *testing.T) {
 
 	// Call Complete.
 	params := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("Hello"),
-		}),
+		},
 	}
 
 	resp, err := p.Complete(context.Background(), params)
@@ -232,9 +232,9 @@ func TestProvider_Stream(t *testing.T) {
 	})
 
 	params := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("Hello"),
-		}),
+		},
 	}
 
 	chunks, err := p.Stream(context.Background(), params)
@@ -334,9 +334,9 @@ func TestProvider_ErrorHandling(t *testing.T) {
 	})
 
 	params := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("test"),
-		}),
+		},
 	}
 
 	_, err := p.Complete(context.Background(), params)
@@ -368,9 +368,9 @@ func TestProvider_ContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately.
 
 	params := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("test"),
-		}),
+		},
 	}
 
 	_, err := p.Complete(ctx, params)

@@ -126,9 +126,9 @@ func TestOllamaStreaming(t *testing.T) {
 	defer provider.Close()
 
 	params := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("Count to 3"),
-		}),
+		},
 	}
 
 	chunks, err := provider.Stream(context.Background(), params)

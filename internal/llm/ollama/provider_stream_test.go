@@ -8,6 +8,8 @@ import (
 
 	"github.com/ollama/ollama/api"
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/packages/param"
+	"github.com/openai/openai-go/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +28,7 @@ func simulateStreamFilter(toolCalls []api.ToolCall, tools []api.Tool) []api.Tool
 	for _, tc := range toolCalls {
 		if tc.Function.Name != "" {
 			filtered = append(filtered, tc)
-		} else if inferred := inferToolName(streamTestCtx, tc.Function.Arguments, tools, streamTestLogger); inferred != "" {
+		} else if inferred := inferToolName(streamTestCtx, tc.Function.Arguments.ToMap(), tools, streamTestLogger); inferred != "" {
 			tc.Function.Name = inferred
 			filtered = append(filtered, tc)
 		} else {
@@ -48,9 +50,9 @@ func standardTools() []api.Tool {
 				Parameters: api.ToolFunctionParameters{
 					Type:     "object",
 					Required: []string{"path"},
-					Properties: map[string]api.ToolProperty{
-						"path": {Type: api.PropertyType{"string"}, Description: "File path to read"},
-					},
+					Properties: mkProps(map[string]api.ToolProperty{
+						"path": {Type: api.PropertyType([]string{"string"}), Description: "File path to read"},
+					}),
 				},
 			},
 		},
@@ -62,9 +64,9 @@ func standardTools() []api.Tool {
 				Parameters: api.ToolFunctionParameters{
 					Type:     "object",
 					Required: []string{"path"},
-					Properties: map[string]api.ToolProperty{
-						"path": {Type: api.PropertyType{"string"}, Description: "Directory path"},
-					},
+					Properties: mkProps(map[string]api.ToolProperty{
+						"path": {Type: api.PropertyType([]string{"string"}), Description: "Directory path"},
+					}),
 				},
 			},
 		},
@@ -76,10 +78,10 @@ func standardTools() []api.Tool {
 				Parameters: api.ToolFunctionParameters{
 					Type:     "object",
 					Required: []string{"command"},
-					Properties: map[string]api.ToolProperty{
-						"command":   {Type: api.PropertyType{"string"}, Description: "Command to run"},
-						"operation": {Type: api.PropertyType{"string"}, Description: "Operation type"},
-					},
+					Properties: mkProps(map[string]api.ToolProperty{
+						"command":   {Type: api.PropertyType([]string{"string"}), Description: "Command to run"},
+						"operation": {Type: api.PropertyType([]string{"string"}), Description: "Operation type"},
+					}),
 				},
 			},
 		},
@@ -91,10 +93,10 @@ func standardTools() []api.Tool {
 				Parameters: api.ToolFunctionParameters{
 					Type:     "object",
 					Required: []string{"path", "content"},
-					Properties: map[string]api.ToolProperty{
-						"path":    {Type: api.PropertyType{"string"}, Description: "File path"},
-						"content": {Type: api.PropertyType{"string"}, Description: "File content"},
-					},
+					Properties: mkProps(map[string]api.ToolProperty{
+						"path":    {Type: api.PropertyType([]string{"string"}), Description: "File path"},
+						"content": {Type: api.PropertyType([]string{"string"}), Description: "File content"},
+					}),
 				},
 			},
 		},
@@ -107,8 +109,8 @@ func TestStreamFilter_NamedToolCallsPassThrough(t *testing.T) {
 
 	tools := standardTools()
 	input := []api.ToolCall{
-		{Function: api.ToolCallFunction{Name: "read_file", Arguments: map[string]any{"path": "main.go"}}},
-		{Function: api.ToolCallFunction{Name: "shell_command", Arguments: map[string]any{"command": "ls"}}},
+		{Function: api.ToolCallFunction{Name: "read_file", Arguments: mkArgs(map[string]any{"path": "main.go"})}},
+		{Function: api.ToolCallFunction{Name: "shell_command", Arguments: mkArgs(map[string]any{"command": "ls"})}},
 	}
 
 	result := simulateStreamFilter(input, tools)
@@ -124,8 +126,8 @@ func TestStreamFilter_PhantomToolCallsDropped(t *testing.T) {
 
 	tools := standardTools()
 	input := []api.ToolCall{
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{}}},
-		{Function: api.ToolCallFunction{Name: "", Arguments: nil}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{})}},
+		{Function: api.ToolCallFunction{Name: ""}},
 	}
 
 	result := simulateStreamFilter(input, tools)
@@ -141,22 +143,22 @@ func TestStreamFilter_NamelessWithUniqueArgs(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		args         map[string]any
+		args         api.ToolCallFunctionArguments
 		expectedName string
 	}{
 		{
 			name:         "shell_command inferred from command arg",
-			args:         map[string]any{"command": "ls -la"},
+			args:         mkArgs(map[string]any{"command": "ls -la"}),
 			expectedName: "shell_command",
 		},
 		{
 			name:         "shell_command inferred from command+operation args",
-			args:         map[string]any{"command": "ls -la", "operation": "execute"},
+			args:         mkArgs(map[string]any{"command": "ls -la", "operation": "execute"}),
 			expectedName: "shell_command",
 		},
 		{
 			name:         "write_file inferred from path+content args",
-			args:         map[string]any{"path": "test.go", "content": "package main"},
+			args:         mkArgs(map[string]any{"path": "test.go", "content": "package main"}),
 			expectedName: "write_file",
 		},
 	}
@@ -184,7 +186,7 @@ func TestStreamFilter_NamelessWithAmbiguousArgs(t *testing.T) {
 
 	tools := standardTools()
 	input := []api.ToolCall{
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "internal/llm"}}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"path": "internal/llm"})}},
 	}
 
 	result := simulateStreamFilter(input, tools)
@@ -202,13 +204,13 @@ func TestStreamFilter_MixedNamedAndNameless(t *testing.T) {
 	tools := standardTools()
 	input := []api.ToolCall{
 		// Phantom: empty name AND empty args.
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{}}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{})}},
 		// Named: should pass through.
-		{Function: api.ToolCallFunction{Name: "shell_command", Arguments: map[string]any{"command": "ls"}}},
+		{Function: api.ToolCallFunction{Name: "shell_command", Arguments: mkArgs(map[string]any{"command": "ls"})}},
 		// Nameless with unique args: should be inferred.
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"command": "pwd"}}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"command": "pwd"})}},
 		// Nameless with ambiguous args: should NOT be dropped.
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "foo.go"}}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"path": "foo.go"})}},
 	}
 
 	result := simulateStreamFilter(input, tools)
@@ -228,9 +230,9 @@ func TestStreamFilter_AllNamelessToolCalls(t *testing.T) {
 
 	// This is what kimi2.5 actually sends — 3 tool calls, all with empty names.
 	input := []api.ToolCall{
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "internal/llm/vram/nvidia.go"}}},
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "internal/llm/vram/amd.go"}}},
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "internal/llm/vram/calculator.go"}}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"path": "internal/llm/vram/nvidia.go"})}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"path": "internal/llm/vram/amd.go"})}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"path": "internal/llm/vram/calculator.go"})}},
 	}
 
 	result := simulateStreamFilter(input, tools)
@@ -248,7 +250,7 @@ func TestStreamFilter_NoToolsAvailable(t *testing.T) {
 	t.Parallel()
 
 	input := []api.ToolCall{
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "test.go"}}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"path": "test.go"})}},
 	}
 
 	result := simulateStreamFilter(input, nil)
@@ -264,8 +266,8 @@ func TestConvertOllamaChunkToOpenAI_ToolCallsPreserved(t *testing.T) {
 
 	// Simulate what Ollama sends.
 	toolCalls := []api.ToolCall{
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"command": "nvidia-smi"}}},
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "internal/llm/vram"}}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"command": "nvidia-smi"})}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"path": "internal/llm/vram"})}},
 	}
 
 	// Apply filter (same as provider.go Stream path).
@@ -301,8 +303,8 @@ func TestConvertOllamaResponseToOpenAI_ToolCallsPreserved(t *testing.T) {
 	tools := standardTools()
 
 	toolCalls := []api.ToolCall{
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"command": "nvidia-smi"}}},
-		{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "internal/llm/vram"}}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"command": "nvidia-smi"})}},
+		{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"path": "internal/llm/vram"})}},
 	}
 
 	filtered := simulateStreamFilter(toolCalls, tools)
@@ -325,7 +327,7 @@ func TestConvertOllamaResponseToOpenAI_ToolCallsPreserved(t *testing.T) {
 	assert.Equal(t, "shell_command", result.Choices[0].Message.ToolCalls[0].Function.Name)
 	assert.NotEmpty(t, result.Choices[0].Message.ToolCalls[1].Function.Name)
 	// finish_reason should be tool_calls since we have tool calls.
-	assert.Equal(t, openai.ChatCompletionChoicesFinishReasonToolCalls, result.Choices[0].FinishReason)
+	assert.Equal(t, "tool_calls", result.Choices[0].FinishReason)
 }
 
 // TestThinkingMergeWithToolCalls verifies that thinking content is merged
@@ -343,7 +345,7 @@ func TestThinkingMergeWithToolCalls(t *testing.T) {
 			Thinking: "I should read the vram detector file",
 			Content:  "Let me check the GPU detection code.",
 			ToolCalls: []api.ToolCall{
-				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "internal/llm/vram/detector.go"}}},
+				{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"path": "internal/llm/vram/detector.go"})}},
 			},
 		},
 		Done: true,
@@ -420,14 +422,14 @@ func TestFinishReasonMapping(t *testing.T) {
 		name         string
 		doneReason   string
 		hasToolCalls bool
-		expected     openai.ChatCompletionChoicesFinishReason
+		expected     string
 	}{
-		{"stop", "stop", false, openai.ChatCompletionChoicesFinishReasonStop},
-		{"length", "length", false, openai.ChatCompletionChoicesFinishReasonLength},
-		{"empty", "", false, openai.ChatCompletionChoicesFinishReasonStop},
-		{"tool_calls override stop", "stop", true, openai.ChatCompletionChoicesFinishReasonToolCalls},
-		{"tool_calls override length", "length", true, openai.ChatCompletionChoicesFinishReasonToolCalls},
-		{"load", "load", false, openai.ChatCompletionChoicesFinishReasonStop},
+		{"stop", "stop", false, "stop"},
+		{"length", "length", false, "length"},
+		{"empty", "", false, "stop"},
+		{"tool_calls override stop", "stop", true, "tool_calls"},
+		{"tool_calls override length", "length", true, "tool_calls"},
+		{"load", "load", false, "stop"},
 	}
 
 	for _, tt := range tests {
@@ -540,11 +542,10 @@ func TestConvertToolToOllama_PreservesProperties(t *testing.T) {
 	t.Parallel()
 
 	openaiTool := openai.ChatCompletionToolParam{
-		Type: openai.F(openai.ChatCompletionToolTypeFunction),
-		Function: openai.F(openai.FunctionDefinitionParam{
-			Name:        openai.F("read_file"),
-			Description: openai.F("Read a file"),
-			Parameters: openai.F(openai.FunctionParameters{
+		Function: shared.FunctionDefinitionParam{
+			Name:        "read_file",
+			Description: param.NewOpt("Read a file"),
+			Parameters: shared.FunctionParameters{
 				"type":     "object",
 				"required": []any{"path"},
 				"properties": map[string]any{
@@ -553,8 +554,8 @@ func TestConvertToolToOllama_PreservesProperties(t *testing.T) {
 						"description": "File path to read",
 					},
 				},
-			}),
-		}),
+			},
+		},
 	}
 
 	result := convertToolToOllama(openaiTool)
@@ -562,7 +563,7 @@ func TestConvertToolToOllama_PreservesProperties(t *testing.T) {
 	assert.Equal(t, "read_file", result.Function.Name)
 	assert.Equal(t, "Read a file", result.Function.Description)
 	require.NotNil(t, result.Function.Parameters.Properties)
-	_, hasPath := result.Function.Parameters.Properties["path"]
+	_, hasPath := result.Function.Parameters.Properties.Get("path")
 	assert.True(t, hasPath, "Properties must contain 'path' key for inferToolName to work")
 }
 
@@ -573,32 +574,30 @@ func TestConvertToolToOllama_RoundTrip(t *testing.T) {
 
 	openaiTools := []openai.ChatCompletionToolParam{
 		{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F("read_file"),
-				Description: openai.F("Read a file"),
-				Parameters: openai.F(openai.FunctionParameters{
+			Function: shared.FunctionDefinitionParam{
+				Name:        "read_file",
+				Description: param.NewOpt("Read a file"),
+				Parameters: shared.FunctionParameters{
 					"type":     "object",
 					"required": []any{"path"},
 					"properties": map[string]any{
 						"path": map[string]any{"type": "string", "description": "File path"},
 					},
-				}),
-			}),
+				},
+			},
 		},
 		{
-			Type: openai.F(openai.ChatCompletionToolTypeFunction),
-			Function: openai.F(openai.FunctionDefinitionParam{
-				Name:        openai.F("shell_command"),
-				Description: openai.F("Run a command"),
-				Parameters: openai.F(openai.FunctionParameters{
+			Function: shared.FunctionDefinitionParam{
+				Name:        "shell_command",
+				Description: param.NewOpt("Run a command"),
+				Parameters: shared.FunctionParameters{
 					"type":     "object",
 					"required": []any{"command"},
 					"properties": map[string]any{
 						"command": map[string]any{"type": "string", "description": "Command"},
 					},
-				}),
-			}),
+				},
+			},
 		},
 	}
 
@@ -619,16 +618,15 @@ func TestConvertToolToOllama_RoundTrip(t *testing.T) {
 // newOpenAIToolParam creates an OpenAI tool param with the given name, description, and properties.
 func newOpenAIToolParam(name, description string, required []any, properties map[string]any) openai.ChatCompletionToolParam {
 	return openai.ChatCompletionToolParam{
-		Type: openai.F(openai.ChatCompletionToolTypeFunction),
-		Function: openai.F(openai.FunctionDefinitionParam{
-			Name:        openai.F(name),
-			Description: openai.F(description),
-			Parameters: openai.F(openai.FunctionParameters{
+		Function: shared.FunctionDefinitionParam{
+			Name:        name,
+			Description: param.NewOpt(description),
+			Parameters: shared.FunctionParameters{
 				"type":       "object",
 				"required":   required,
 				"properties": properties,
-			}),
-		}),
+			},
+		},
 	}
 }
 
@@ -763,9 +761,9 @@ func TestEndToEnd_NamelessToolCallSurvivesFullPipeline(t *testing.T) {
 			Thinking: "I need to read these files to investigate GPU detection",
 			Content:  "Let me check the VRAM detection code.",
 			ToolCalls: []api.ToolCall{
-				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "internal/llm/vram/nvidia.go"}}},
-				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"path": "internal/llm/vram/amd.go"}}},
-				{Function: api.ToolCallFunction{Name: "", Arguments: map[string]any{"command": "nvidia-smi"}}},
+				{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"path": "internal/llm/vram/nvidia.go"})}},
+				{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"path": "internal/llm/vram/amd.go"})}},
+				{Function: api.ToolCallFunction{Name: "", Arguments: mkArgs(map[string]any{"command": "nvidia-smi"})}},
 			},
 		},
 		Done:       true,
@@ -813,6 +811,6 @@ func TestEndToEnd_NamelessToolCallSurvivesFullPipeline(t *testing.T) {
 	assert.True(t, foundShellCommand, "shell_command must be correctly inferred from 'command' arg")
 
 	// finish_reason must be tool_calls (not stop!)
-	assert.Equal(t, openai.ChatCompletionChoicesFinishReasonToolCalls, choice.FinishReason,
+	assert.Equal(t, "tool_calls", choice.FinishReason,
 		"finish_reason must be tool_calls when tool calls are present")
 }

@@ -278,14 +278,14 @@ func (c *curator) callLLMForCuration(ctx context.Context, prompt string) (*Curat
 	c.logger.DebugContext(ctx, "Curation prompt built", "length", len(prompt))
 
 	params := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
-		}),
-		Temperature: openai.F(minQualityThreshold),
+		},
+		Temperature: openai.Float(minQualityThreshold),
 	}
 
 	if c.maxTokens > 0 {
-		params.MaxTokens = openai.F(int64(c.maxTokens))
+		params.MaxTokens = openai.Int(int64(c.maxTokens))
 	}
 
 	completion, err := c.llmProvider.Complete(ctx, params)

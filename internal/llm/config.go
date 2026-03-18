@@ -40,3 +40,10 @@ type BaseConfig struct {
 
 // DefaultTimeout is the default timeout for all providers.
 const DefaultTimeout = 5 * time.Minute
+
+// OpenAI-compatible finish reason constants.
+const (
+	FinishReasonStop      = "stop"
+	FinishReasonToolCalls = "tool_calls"
+	FinishReasonLength    = "length"
+)

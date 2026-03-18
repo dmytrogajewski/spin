@@ -113,15 +113,15 @@ func (r *reflector) Reflect(ctx context.Context, req ReflectionRequest) (*Reflec
 
 	// Call LLM.
 	params := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
-		}),
-		Temperature: openai.F(reflectorTemperature),
+		},
+		Temperature: openai.Float(reflectorTemperature),
 	}
 
 	// Set MaxTokens if configured.
 	if r.maxTokens > 0 {
-		params.MaxTokens = openai.F(int64(r.maxTokens))
+		params.MaxTokens = openai.Int(int64(r.maxTokens))
 	}
 
 	r.logger.DebugContext(ctx, "Calling LLM for reflection", "temperature", reflectorTemperature, "max_tokens", r.maxTokens)
@@ -285,15 +285,15 @@ func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iterati
 
 	// Call LLM.
 	params := openai.ChatCompletionNewParams{
-		Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
+		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(prompt),
-		}),
-		Temperature: openai.F(reflectorTemperature),
+		},
+		Temperature: openai.Float(reflectorTemperature),
 	}
 
 	// Set MaxTokens if configured.
 	if r.maxTokens > 0 {
-		params.MaxTokens = openai.F(int64(r.maxTokens))
+		params.MaxTokens = openai.Int(int64(r.maxTokens))
 	}
 
 	completion, err := r.llm.Complete(ctx, params)
