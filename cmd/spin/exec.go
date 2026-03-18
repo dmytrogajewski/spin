@@ -333,12 +333,17 @@ func processExecEvent(ctx context.Context, event events.Event, mapper *tui.Mappe
 }
 
 // startExecEventLoop starts the event processing goroutine for exec mode.
+// Returns a channel that is closed when the event loop exits.
 func startExecEventLoop(
 	ctx context.Context, eventStream <-chan events.Event,
 	mapper *tui.Mapper, ui *adapters.PureTTY,
 	conv *conversation.Conversation,
-) {
+) <-chan struct{} {
+	done := make(chan struct{})
+
 	go func() {
+		defer close(done)
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -352,6 +357,8 @@ func startExecEventLoop(
 			}
 		}
 	}()
+
+	return done
 }
 
 // executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
@@ -379,7 +386,7 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 		close(streamDone)
 	}()
 
-	startExecEventLoop(ctx, conv.Stream(), mapper, pureTTY, conv)
+	eventsDone := startExecEventLoop(ctx, conv.Stream(), mapper, pureTTY, conv)
 
 	errChan := make(chan error, 1)
 
@@ -392,6 +399,10 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 		return fmt.Errorf("execution canceled: %w", ctx.Err())
 
 	case err = <-errChan:
+		// Close the emitter to flush all remaining events through the event loop,
+		// then wait for the event loop to finish processing before stopping the stream.
+		conv.GetEmitter().Close()
+		<-eventsDone
 		mapper.StopStreaming()
 		<-streamDone
 

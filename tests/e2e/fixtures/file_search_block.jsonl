@@ -1,0 +1,2 @@
+{"chunks":[{"id":"c1","model":"fix","object":"chat.completion.chunk","created":0,"choices":[{"index":0,"delta":{"role":"assistant","content":"Searching files.","tool_calls":[{"index":0,"id":"tc-1","type":"function","function":{"name":"file_search","arguments":"{\"query\":\"test_target\"}"}}]},"finish_reason":"tool_calls"}]}]}
+{"chunks":[{"id":"c2","model":"fix","object":"chat.completion.chunk","created":0,"choices":[{"index":0,"delta":{"role":"assistant","content":"Search complete."},"finish_reason":"stop"}]}]}

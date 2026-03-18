@@ -1,0 +1,1 @@
+{"delay_ms":5000,"chunks":[{"id":"c1","model":"fix","object":"chat.completion.chunk","created":0,"choices":[{"index":0,"delta":{"role":"assistant","content":"This should not appear."},"finish_reason":"stop"}]}]}
