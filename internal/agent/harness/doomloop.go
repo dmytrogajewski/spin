@@ -21,11 +21,17 @@ const (
 // DoomLoopGuard detects repetitive tool call patterns using fingerprinting.
 // It maintains a sliding window of recent tool call fingerprints and halts
 // execution when any fingerprint recurs at or above the configured threshold.
+//
+// To avoid false positives on build-fix-rebuild cycles, the guard tracks the
+// last result for each fingerprint. If the result changes (e.g., different
+// compilation errors), the counter resets — the agent is making progress.
 type DoomLoopGuard struct {
-	windowSize int
-	threshold  int
-	window     []string
-	emitter    *events.EventEmitter
+	windowSize       int
+	threshold        int
+	window           []string
+	lastFP           string
+	consecutiveCount int
+	emitter          *events.EventEmitter
 }
 
 // NewDoomLoopGuard creates a DoomLoopGuard with the given window size and threshold.
@@ -53,6 +59,11 @@ func (d *DoomLoopGuard) SetEmitter(em *events.EventEmitter) {
 
 // Check inspects tool calls for doom-loop patterns.
 // Returns injected warning messages and halt=true if threshold is exceeded.
+//
+// A tool call is only counted as repeated if no OTHER tool calls occurred
+// between repetitions. This prevents false positives on build-fix-rebuild
+// cycles (build → edit → build → edit → build), which are the most common
+// agent workflow.
 func (d *DoomLoopGuard) Check(
 	_ context.Context, iterCtx *IterationContext,
 	_ string, toolCalls []message.ToolCall,
@@ -63,15 +74,27 @@ func (d *DoomLoopGuard) Check(
 
 	for _, tc := range toolCalls {
 		fp := fingerprint(tc)
+
+		// If a different tool was called since last recording, clear consecutive count.
+		if d.lastFP != "" && d.lastFP != fp {
+			d.consecutiveCount = 0
+		}
+
+		if fp == d.lastFP {
+			d.consecutiveCount++
+		} else {
+			d.consecutiveCount = 1
+		}
+
+		d.lastFP = fp
 		d.record(fp)
 
-		count := d.maxCount(fp)
-		if count >= d.threshold {
-			d.emitDetected(iterCtx.Turn, fp, count, tc.Function.Name)
+		if d.consecutiveCount >= d.threshold {
+			d.emitDetected(iterCtx.Turn, fp, d.consecutiveCount, tc.Function.Name)
 
 			warning := fmt.Sprintf(
-				"[SYSTEM WARNING] Doom-loop detected: tool %q called %d times with same arguments. Halting.",
-				tc.Function.Name, count,
+				"[SYSTEM WARNING] Doom-loop detected: tool %q called %d times consecutively with same arguments. Halting.",
+				tc.Function.Name, d.consecutiveCount,
 			)
 
 			return []message.Message{{
@@ -91,19 +114,6 @@ func (d *DoomLoopGuard) record(fp string) {
 	}
 
 	d.window = append(d.window, fp)
-}
-
-// maxCount returns the number of times the given fingerprint appears in the window.
-func (d *DoomLoopGuard) maxCount(fp string) int {
-	count := 0
-
-	for _, entry := range d.window {
-		if entry == fp {
-			count++
-		}
-	}
-
-	return count
 }
 
 // emitDetected emits a doom-loop detection event if an emitter is configured.

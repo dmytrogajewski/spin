@@ -238,3 +238,49 @@ func TestDoomLoopGuard_NilEmitter_NoPanic(t *testing.T) {
 		require.NoError(t, err)
 	}
 }
+
+// TestDoomLoopGuard_BuildFixRebuildCycle verifies that the build-fix-rebuild
+// pattern (build → edit → build → edit → build) does NOT trigger the doom loop.
+// This is the most common agent workflow and was causing false positives.
+func TestDoomLoopGuard_BuildFixRebuildCycle(t *testing.T) {
+	t.Parallel()
+
+	guard := harness.NewDoomLoopGuard(0, 0)
+
+	buildCalls := makeDoomToolCalls("shell_command", `{"command":"cargo build 2>&1"}`)
+	editCalls := makeDoomToolCalls("edit_file", `{"path":"src/main.rs","old":"foo","new":"bar"}`)
+
+	ctx := harness.NewIterationContext(nil)
+
+	// Simulate: build, edit, build, edit, build, edit, build (4 builds with edits between).
+	for range 4 {
+		_, halt, err := guard.Check(t.Context(), ctx, "", buildCalls)
+		require.NoError(t, err)
+		assert.False(t, halt, "build-fix-rebuild cycle should NOT trigger doom loop")
+
+		_, _, _ = guard.Check(t.Context(), ctx, "", editCalls)
+	}
+}
+
+// TestDoomLoopGuard_ConsecutiveIdenticalCalls_DoesHalt verifies that truly
+// consecutive identical calls (no other tools between) DO trigger the doom loop.
+func TestDoomLoopGuard_ConsecutiveIdenticalCalls_DoesHalt(t *testing.T) {
+	t.Parallel()
+
+	guard := harness.NewDoomLoopGuard(0, 0)
+
+	calls := makeDoomToolCalls("shell_command", `{"command":"cargo build 2>&1"}`)
+	ctx := harness.NewIterationContext(nil)
+
+	// 3 consecutive identical calls with NO other tools between.
+	for i := range harness.DefaultThreshold {
+		_, halt, err := guard.Check(t.Context(), ctx, "", calls)
+		require.NoError(t, err)
+
+		if i < harness.DefaultThreshold-1 {
+			assert.False(t, halt, "should not halt before threshold")
+		} else {
+			assert.True(t, halt, "should halt at threshold for consecutive identical calls")
+		}
+	}
+}
