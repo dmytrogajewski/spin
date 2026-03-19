@@ -71,6 +71,10 @@ func (t *ListDirectoryTool) Execute(ctx context.Context, params ToolParameters) 
 		return NewToolError(fmt.Errorf("failed to read directory: %w", err)), nil
 	}
 
+	if len(entries) == 0 {
+		return NewToolResult(fmt.Sprintf("Directory is empty: %s", path)), nil
+	}
+
 	var output strings.Builder
 
 	for _, entry := range entries {

@@ -1,31 +1,22 @@
 // Package mathutil provides shared mathematical utilities for vector operations.
 package mathutil
 
-import "math"
+import (
+	"math"
+)
 
 // CosineSimilarity calculates the cosine similarity between two float32 vectors.
 // Returns 0.0 if vectors have different lengths, are empty, or either has zero magnitude.
 // Result is in the range [-1.0, 1.0].
 func CosineSimilarity(a, b []float32) float64 {
-	if len(a) != len(b) || len(a) == 0 {
+	magA := Magnitude(a)
+	magB := Magnitude(b)
+
+	if magA == 0 || magB == 0 {
 		return 0.0
 	}
 
-	var dotProduct, normA, normB float64
-
-	for i := range a {
-		ai := float64(a[i])
-		bi := float64(b[i])
-		dotProduct += ai * bi
-		normA += ai * ai
-		normB += bi * bi
-	}
-
-	if normA == 0 || normB == 0 {
-		return 0.0
-	}
-
-	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
+	return DotProduct(a, b) / (magA * magB)
 }
 
 // DotProduct calculates the dot product of two float32 vectors.

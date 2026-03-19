@@ -18,6 +18,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
+	llmrecorder "github.com/dmytrogajewski/spin/internal/llm/recorder"
 	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tui"
@@ -51,6 +52,7 @@ Examples:
 	cmd.Flags().Bool("no-stream", false, "Disable streaming output")
 	cmd.Flags().Bool("exit-on-error", true, "Exit immediately on first error")
 	cmd.Flags().Bool("debug", false, "Enable debug mode with detailed logging")
+	cmd.Flags().String("record-fixture", "", "Record LLM responses to JSONL fixture file for test replay")
 
 	return cmd
 }
@@ -102,6 +104,18 @@ func runExec(cmd *cobra.Command, args []string) error {
 	}
 
 	defer provider.Close()
+
+	// Wrap provider with recorder if --record-fixture is specified.
+	if recordPath, _ := cmd.Flags().GetString("record-fixture"); recordPath != "" {
+		rec, recErr := llmrecorder.New(provider, recordPath)
+		if recErr != nil {
+			return fmt.Errorf("create fixture recorder: %w", recErr)
+		}
+
+		provider = rec
+
+		defer rec.Close()
+	}
 
 	// Configure logging based on debug flag.
 	if debugFlag {

@@ -1,6 +1,7 @@
 package prompt_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,10 +79,11 @@ func TestProjectInstructionsSection_Format(t *testing.T) {
 	assert.False(t, s.Cacheable)
 }
 
-// TestComposer_WithProjectInstructions_DiffMatchesLegacyBuilder verifies
-// composed output with AGENTS.md matches the legacy builder layering.
-// Kills mutant: AGENTS.md ordering or format differs.
-func TestComposer_WithProjectInstructions_DiffMatchesLegacyBuilder(t *testing.T) {
+// TestComposer_WithProjectInstructions_CacheableFirst verifies that composed
+// output puts cacheable sections before dynamic (project instructions) sections.
+// This enables prompt caching: stable prefix + dynamic suffix.
+// Kills mutant: dynamic sections mixed into cacheable prefix.
+func TestComposer_WithProjectInstructions_CacheableFirst(t *testing.T) {
 	t.Parallel()
 
 	c := prompt.NewComposer()
@@ -93,11 +95,18 @@ func TestComposer_WithProjectInstructions_DiffMatchesLegacyBuilder(t *testing.T)
 
 	composed := c.Compose(nonGitEnv())
 
-	// Legacy builder format: "# Project Instructions\n\n{content}\n\n---\n\n{system prompt}".
-	expected := "# Project Instructions\n\n" + testAgentsMDContent +
-		"\n\n---\n\n" + agent.RegularSystemPrompt
+	// Cacheable sections (identity, tool principle, tool guidance, response style) come first.
+	// Dynamic section (project instructions) comes last.
+	assert.Contains(t, composed, agent.RegularSystemPrompt)
+	assert.Contains(t, composed, "# Project Instructions")
+	assert.Contains(t, composed, testAgentsMDContent)
 
-	assert.Equal(t, expected, composed)
+	// Project instructions should appear AFTER the cacheable system prompt.
+	sysPromptIdx := strings.Index(composed, "You are an expert")
+	projInstrIdx := strings.Index(composed, "# Project Instructions")
+
+	assert.Greater(t, projInstrIdx, sysPromptIdx,
+		"dynamic project instructions should follow cacheable system prompt")
 }
 
 // TestDefaultRegularSections_PlusProjInstr_AtLeastFive verifies total count

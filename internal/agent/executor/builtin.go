@@ -8,6 +8,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/safety"
+	"github.com/dmytrogajewski/spin/internal/safety/blocklist"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tools"
@@ -16,7 +17,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/undo"
 )
 
-const builtinToolCount = 8
+const builtinToolCount = 13
 
 // BuiltinRuntime implements Runtime for builtin/TUI/EXEC modes.
 // Uses local execution, TUI notifications, and TUI approval dialogs.
@@ -32,6 +33,7 @@ type BuiltinRuntime struct {
 	mapper          *tui.Mapper
 	approvalHandler safety.ApprovalHandler
 	logger          *slog.Logger
+	operationLog    *undo.OperationLog
 }
 
 // BuiltinRuntimeConfig configures the builtin runtime.
@@ -47,6 +49,9 @@ type BuiltinRuntimeConfig struct {
 	UI              ports.UI
 	ApprovalHandler safety.ApprovalHandler
 	Logger          *slog.Logger
+	// OperationLog is an optional pre-created operation log from undo.Service.
+	// If nil, RegisterTools creates a local one.
+	OperationLog *undo.OperationLog
 }
 
 // NewBuiltinRuntime creates a new builtin runtime.
@@ -66,6 +71,11 @@ func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 
 	mapper := tui.NewMapper(cfg.UI)
 
+	opLog := cfg.OperationLog
+	if opLog == nil {
+		opLog = undo.NewOperationLog()
+	}
+
 	return &BuiltinRuntime{
 		workDir:         cfg.WorkDir,
 		emitter:         cfg.Emitter,
@@ -78,6 +88,7 @@ func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 		mapper:          mapper,
 		approvalHandler: cfg.ApprovalHandler,
 		logger:          logger,
+		operationLog:    opLog,
 	}, nil
 }
 
@@ -85,7 +96,7 @@ func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
 	// File tools resolve relative paths against workDir.
 	tracker := tools.NewFileTracker()
-	opLog := undo.NewOperationLog()
+	opLog := r.operationLog
 
 	readTool := tools.NewReadFileTool(r.workDir)
 	readTool.SetTracker(tracker)
@@ -119,7 +130,11 @@ func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
 	}
 
 	if r.executor != nil {
-		execAdapt = &Adapter{executor: r.executor}
+		pipeline := NewPipeline(
+			NewBlocklistStage(blocklist.NewChecker(true)),
+			NewSafetyStage(r.validator),
+		)
+		execAdapt = NewAdapterWithPipeline(r.executor, pipeline)
 	}
 
 	_ = registry.Register(tools.NewShellCommandTool(validatorAdapt, shellCtxAdapt, execAdapt))
@@ -134,9 +149,16 @@ func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
 
 	taskAdapt := NewTaskManagerAdapter(taskMgr)
 
+	_ = registry.Register(tools.NewStartProcessTool(taskAdapt))
 	_ = registry.Register(tools.NewListProcessesTool(taskAdapt))
 	_ = registry.Register(tools.NewGetProcessOutputTool(taskAdapt))
 	_ = registry.Register(tools.NewKillProcessTool(taskAdapt))
+
+	// Utility tools (context, search, patching).
+	_ = registry.Register(tools.NewGetContextTool(nil))
+	_ = registry.Register(tools.NewApplyPatchTool(r.workDir))
+	_ = registry.Register(tools.NewFileSearchTool(r.workDir))
+	_ = registry.Register(tools.NewGitContextTool(r.workDir))
 
 	r.logger.Debug("registered builtin tools", "count", builtinToolCount)
 }

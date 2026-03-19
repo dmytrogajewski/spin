@@ -33,27 +33,19 @@ func (c *Composer) SetVar(name, value string) {
 }
 
 // Compose evaluates conditions, sorts by priority, resolves variables, and joins.
+// Equivalent to joining the two parts from ComposeTwoPart.
 func (c *Composer) Compose(env *agent.Environment) string {
-	active := c.activeSections(env)
-	if len(active) == 0 {
-		return ""
+	stable, dynamic := c.ComposeTwoPart(env)
+
+	if dynamic == "" {
+		return stable
 	}
 
-	sort.Slice(active, func(i, j int) bool {
-		return active[i].Priority < active[j].Priority
-	})
-
-	var sb strings.Builder
-
-	for i, s := range active {
-		if i > 0 {
-			sb.WriteString("\n\n")
-		}
-
-		sb.WriteString(c.resolve(s.Template))
+	if stable == "" {
+		return dynamic
 	}
 
-	return sb.String()
+	return stable + "\n\n" + dynamic
 }
 
 // ComposeTwoPart splits the prompt into stable (cacheable) and dynamic parts.

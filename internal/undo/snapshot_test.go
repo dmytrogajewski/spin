@@ -231,10 +231,11 @@ func TestSnapshotManager_SyncsGitignore(t *testing.T) {
 	mgr := undo.NewSnapshotManager(dir)
 	require.NoError(t, mgr.Init())
 
-	// Check that info/exclude has the gitignore content.
+	// Check that info/exclude has nested .git exclusion + user .gitignore content.
 	excludePath := filepath.Join(mgr.ShadowDir(), "info", "exclude")
 	content := readTestFile(t, filepath.Dir(excludePath), filepath.Base(excludePath))
-	require.Equal(t, gitignoreContent, content)
+	require.Contains(t, content, "**/.git", "should exclude nested .git dirs")
+	require.Contains(t, content, gitignoreContent, "should include user .gitignore content")
 }
 
 func TestSnapshotManager_Cleanup_Succeeds(t *testing.T) {

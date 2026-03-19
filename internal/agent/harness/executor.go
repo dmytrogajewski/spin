@@ -14,6 +14,7 @@ var (
 	ErrNilSpec       = errors.New("spec cannot be nil")
 	ErrNilCaller     = errors.New("caller cannot be nil")
 	ErrNilDispatcher = errors.New("tool dispatcher cannot be nil")
+	ErrEmptyResponse = errors.New("LLM returned empty response (no content, no tool calls)")
 )
 
 // Option configures an Executor.

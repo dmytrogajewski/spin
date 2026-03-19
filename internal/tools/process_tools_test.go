@@ -32,11 +32,30 @@ func (m *mockTaskManager) Kill(_ context.Context, _ string) error {
 	return m.err
 }
 
+// mockTaskStarter implements [tools.TaskStarter] for testing.
+type mockTaskStarter struct {
+	taskID        string
+	initialOutput string
+	err           error
+	lastCommand   string
+	lastWorkDir   string
+}
+
+func (m *mockTaskStarter) Start(_ context.Context, command string, workDir string) (string, string, error) {
+	m.lastCommand = command
+	m.lastWorkDir = workDir
+
+	return m.taskID, m.initialOutput, m.err
+}
+
 // errTaskNotFound is a test sentinel for task-not-found scenarios.
 var errTaskNotFound = errors.New("task not found")
 
 // errTaskNotRunning is a test sentinel for kill-on-completed scenarios.
 var errTaskNotRunning = errors.New("task is not running")
+
+// errMaxConcurrent is a test sentinel for max-tasks scenarios.
+var errMaxConcurrent = errors.New("maximum concurrent tasks reached")
 
 const (
 	testTaskID      = "abc1234"
@@ -372,6 +391,151 @@ func TestKillProcessTool_NilManager(t *testing.T) {
 
 	params, paramErr := tools.FromMap(map[string]any{
 		"task_id": testTaskID,
+	})
+	require.NoError(t, paramErr)
+
+	result, err := tool.Execute(context.Background(), params)
+
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.Contains(t, result.Output, "task manager not available")
+}
+
+// StartProcessTool tests follow.
+
+func TestStartProcessTool_Name(t *testing.T) {
+	t.Parallel()
+
+	tool := tools.NewStartProcessTool(nil)
+
+	require.Equal(t, "start_process", tool.Name())
+}
+
+func TestStartProcessTool_Schema(t *testing.T) {
+	t.Parallel()
+
+	tool := tools.NewStartProcessTool(nil)
+	schema := tool.Schema()
+
+	require.Equal(t, "function", schema.Type)
+	require.Equal(t, "start_process", schema.Function.Name)
+	require.Contains(t, schema.Function.Parameters.Properties, "command")
+	require.Contains(t, schema.Function.Parameters.Properties, "working_directory")
+	require.Contains(t, schema.Function.Parameters.Required, "command")
+}
+
+func TestStartProcessTool_StartsProcess(t *testing.T) {
+	t.Parallel()
+
+	starter := &mockTaskStarter{
+		taskID:        "bg12345",
+		initialOutput: "Server started on port 8080",
+	}
+
+	tool := tools.NewStartProcessTool(starter)
+
+	params, paramErr := tools.FromMap(map[string]any{
+		"command": "python3 server.py",
+	})
+	require.NoError(t, paramErr)
+
+	result, err := tool.Execute(context.Background(), params)
+
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.Contains(t, result.Output, "bg12345")
+	require.Contains(t, result.Output, "Background process started")
+	require.Contains(t, result.Output, "Server started on port 8080")
+	require.Equal(t, "python3 server.py", starter.lastCommand)
+}
+
+func TestStartProcessTool_WithWorkDir(t *testing.T) {
+	t.Parallel()
+
+	starter := &mockTaskStarter{
+		taskID: "bg99999",
+	}
+
+	tool := tools.NewStartProcessTool(starter)
+
+	params, paramErr := tools.FromMap(map[string]any{
+		"command":           "npm start",
+		"working_directory": "/home/user/project",
+	})
+	require.NoError(t, paramErr)
+
+	result, err := tool.Execute(context.Background(), params)
+
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.Contains(t, result.Output, "bg99999")
+	require.Equal(t, "/home/user/project", starter.lastWorkDir)
+}
+
+func TestStartProcessTool_NoInitialOutput(t *testing.T) {
+	t.Parallel()
+
+	starter := &mockTaskStarter{
+		taskID:        "bg00001",
+		initialOutput: "",
+	}
+
+	tool := tools.NewStartProcessTool(starter)
+
+	params, paramErr := tools.FromMap(map[string]any{
+		"command": "sleep 300",
+	})
+	require.NoError(t, paramErr)
+
+	result, err := tool.Execute(context.Background(), params)
+
+	require.NoError(t, err)
+	require.True(t, result.Success)
+	require.Contains(t, result.Output, "bg00001")
+	require.NotContains(t, result.Output, "Initial output")
+}
+
+func TestStartProcessTool_StartError(t *testing.T) {
+	t.Parallel()
+
+	starter := &mockTaskStarter{
+		err: errMaxConcurrent,
+	}
+
+	tool := tools.NewStartProcessTool(starter)
+
+	params, paramErr := tools.FromMap(map[string]any{
+		"command": "python3 server.py",
+	})
+	require.NoError(t, paramErr)
+
+	result, err := tool.Execute(context.Background(), params)
+
+	require.NoError(t, err)
+	require.False(t, result.Success)
+	require.Contains(t, result.Error, "maximum concurrent tasks reached")
+}
+
+func TestStartProcessTool_MissingCommand(t *testing.T) {
+	t.Parallel()
+
+	starter := &mockTaskStarter{taskID: "bg12345"}
+
+	tool := tools.NewStartProcessTool(starter)
+	result, err := tool.Execute(context.Background(), tools.ToolParameters{})
+
+	require.NoError(t, err)
+	require.False(t, result.Success)
+	require.Contains(t, result.Error, "command parameter is required")
+}
+
+func TestStartProcessTool_NilManager(t *testing.T) {
+	t.Parallel()
+
+	tool := tools.NewStartProcessTool(nil)
+
+	params, paramErr := tools.FromMap(map[string]any{
+		"command": "python3 server.py",
 	})
 	require.NoError(t, paramErr)
 

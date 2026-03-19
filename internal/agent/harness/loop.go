@@ -122,6 +122,12 @@ func (e *Executor) phaseAction(
 		return "", nil, false, fmt.Errorf("caller failed at turn %d: %w", iterCtx.Turn, err)
 	}
 
+	// Empty response (no content, no tool calls) is not a valid completion —
+	// the LLM likely returned nothing after retries were exhausted.
+	if content == "" && len(toolCalls) == 0 {
+		return "", nil, false, fmt.Errorf("caller returned empty response at turn %d: %w", iterCtx.Turn, ErrEmptyResponse)
+	}
+
 	// Implicit completion: text response with no tool calls.
 	if len(toolCalls) == 0 {
 		return content, nil, true, nil

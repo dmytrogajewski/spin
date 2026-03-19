@@ -19,6 +19,7 @@ type Config struct {
 	Registry    *tools.Registry
 	Runtime     *agenttool.Runtime
 	Logger      *slog.Logger
+	Guards      []harness.Guard
 	Middlewares []harness.Middleware
 	HarnessOpts []harness.Option
 }
@@ -34,7 +35,7 @@ func BuildExecutor(cfg Config) (*harness.Executor, error) {
 		cfg.Spec,
 		callerBridge,
 		dispatcherBridge,
-		nil,
+		cfg.Guards,
 		cfg.Middlewares,
 		cfg.Logger,
 		cfg.HarnessOpts...,

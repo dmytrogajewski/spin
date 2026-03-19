@@ -50,14 +50,19 @@ func (ft *FileTracker) RecordRead(path string) error {
 }
 
 // AssertFresh checks that a file has not been modified since the last recorded read.
-// Returns an error if the file was never read or if it has been modified.
+// If the file was never read through the tracker, the write is allowed — the agent
+// may know about the file through other means (e.g., it created the file via a shell
+// command). The tracker only blocks writes when a read WAS recorded and the file has
+// since been modified externally, preventing stale overwrites.
 func (ft *FileTracker) AssertFresh(path string) error {
 	ft.mu.RLock()
 	readTime, exists := ft.reads[path]
 	ft.mu.RUnlock()
 
+	// No recorded read — the agent never read this file through read_file.
+	// Allow the write: the file may be new, or created/known via shell commands.
 	if !exists {
-		return fmt.Errorf("%s: %w; read the file before editing", path, ErrFileNotPreviouslyRead)
+		return nil
 	}
 
 	info, err := os.Stat(path)

@@ -75,7 +75,7 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 
 	// Get tracking branch and ahead/behind
 	// This is a best-effort operation - if it fails, we continue without tracking info.
-	if head.Name().IsBranch() {
+	if head != nil && head.Name().IsBranch() {
 		remoteBranch, ahead, behind := r.getTrackingInfo(ctx, head.Name().Short())
 		status.RemoteBranch = remoteBranch
 		status.Ahead = ahead

@@ -173,3 +173,138 @@ func (t *testTool) Schema() tools.ToolSchema {
 func (t *testTool) Execute(_ context.Context, _ tools.ToolParameters) (tools.ToolResult, error) {
 	return tools.ToolResult{Output: t.output, Success: true}, nil
 }
+
+// errorTool returns a failed ToolResult with an error message.
+type errorTool struct {
+	name   string
+	errMsg string
+}
+
+func (t *errorTool) Name() string        { return t.name }
+func (t *errorTool) Description() string { return "error test tool" }
+func (t *errorTool) Schema() tools.ToolSchema {
+	return tools.ToolSchema{
+		Function: tools.FunctionSchema{Name: t.name},
+	}
+}
+
+func (t *errorTool) Execute(_ context.Context, _ tools.ToolParameters) (tools.ToolResult, error) {
+	return tools.ToolResult{Success: false, Error: t.errMsg}, nil
+}
+
+// TestDispatcherBridge_ToolError_SurfacesErrorMessage reproduces the bug where
+// tool errors (Success: false, Error: "...") were silently dropped because the
+// dispatcher only read toolResult.Output (empty for errors), causing the LLM to
+// receive an empty tool result and hallucinate success.
+func TestDispatcherBridge_ToolError_SurfacesErrorMessage(t *testing.T) {
+	t.Parallel()
+
+	const (
+		errToolName = "denied_tool"
+		errMessage  = "command execution denied by user"
+	)
+
+	reg := tools.NewRegistry()
+
+	regErr := reg.Register(&errorTool{name: errToolName, errMsg: errMessage})
+	require.NoError(t, regErr)
+
+	runtime := agenttool.NewRuntime(agenttool.RuntimeConfig{
+		Registry: reg,
+	})
+
+	db := bridge.NewDispatcherBridge(runtime)
+
+	toolCalls := []message.ToolCall{{
+		ID:   "call-denied",
+		Type: "function",
+		Function: message.ToolCallFunction{
+			Name:      errToolName,
+			Arguments: `{}`,
+		},
+	}}
+
+	result := db.Dispatch(t.Context(), nil, "", toolCalls)
+
+	// Should have: 1 assistant + 1 tool = 2.
+	require.Len(t, result, 2)
+
+	toolMsg := result[1]
+	assert.Equal(t, message.RoleTool, toolMsg.Role)
+
+	// The tool result MUST contain the error message — not be empty.
+	assert.Contains(t, toolMsg.Content, errMessage,
+		"tool error must be surfaced in message content so the LLM sees it")
+	assert.Contains(t, toolMsg.Content, "Error:",
+		"error prefix must be present for LLM to recognize failure")
+}
+
+// outputErrorTool returns a failed ToolResult with BOTH output and error.
+// This mimics shell_command where compilation output is in Output and the
+// exit status is in Error.
+type outputErrorTool struct {
+	name   string
+	output string
+	errMsg string
+}
+
+func (t *outputErrorTool) Name() string        { return t.name }
+func (t *outputErrorTool) Description() string { return "output+error test tool" }
+func (t *outputErrorTool) Schema() tools.ToolSchema {
+	return tools.ToolSchema{
+		Function: tools.FunctionSchema{Name: t.name},
+	}
+}
+
+func (t *outputErrorTool) Execute(_ context.Context, _ tools.ToolParameters) (tools.ToolResult, error) {
+	return tools.ToolResult{Success: false, Output: t.output, Error: t.errMsg}, nil
+}
+
+// TestDispatcherBridge_ToolErrorWithOutput_IncludesBoth reproduces the bug
+// where shell_command compilation errors (in Output) were lost because the
+// dispatcher only surfaced Error, discarding the actual compiler output.
+func TestDispatcherBridge_ToolErrorWithOutput_IncludesBoth(t *testing.T) {
+	t.Parallel()
+
+	const (
+		toolName        = "compile_tool"
+		compilerOutput  = "error[E0308]: mismatched types\n  --> src/main.rs:5:10"
+		exitStatusError = "execution failed: exit status 101"
+	)
+
+	reg := tools.NewRegistry()
+
+	regErr := reg.Register(&outputErrorTool{
+		name:   toolName,
+		output: compilerOutput,
+		errMsg: exitStatusError,
+	})
+	require.NoError(t, regErr)
+
+	runtime := agenttool.NewRuntime(agenttool.RuntimeConfig{
+		Registry: reg,
+	})
+
+	db := bridge.NewDispatcherBridge(runtime)
+
+	toolCalls := []message.ToolCall{{
+		ID:   "call-compile",
+		Type: "function",
+		Function: message.ToolCallFunction{
+			Name:      toolName,
+			Arguments: `{}`,
+		},
+	}}
+
+	result := db.Dispatch(t.Context(), nil, "", toolCalls)
+
+	require.Len(t, result, 2)
+
+	toolMsg := result[1]
+
+	// MUST contain BOTH the compiler output AND the error status.
+	assert.Contains(t, toolMsg.Content, compilerOutput,
+		"compiler output must be visible to the LLM")
+	assert.Contains(t, toolMsg.Content, exitStatusError,
+		"exit status must be visible to the LLM")
+}

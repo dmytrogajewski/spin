@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 )
 
@@ -16,6 +18,7 @@ type Server struct {
 	rootURI     string
 	initialized bool
 	alive       bool
+	cache       *Cache
 }
 
 // NewServer creates a server wrapping the given transport for the specified language.
@@ -24,6 +27,7 @@ func NewServer(transport Transport, langConfig LanguageConfig) *Server {
 		transport:  transport,
 		langConfig: langConfig,
 		alive:      true,
+		cache:      NewCache(),
 	}
 }
 
@@ -53,10 +57,36 @@ func (s *Server) Initialize(ctx context.Context, rootURI string) error {
 	return nil
 }
 
+// openFileForLSP reads a file from disk and sends textDocument/didOpen to the
+// language server with the actual content. This is required because LSP servers
+// need the full file text to provide accurate results.
+func (s *Server) openFileForLSP(ctx context.Context, uri string) {
+	filePath := strings.TrimPrefix(uri, "file://")
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		// Best-effort — DidOpen with empty content as fallback.
+		_ = s.DidOpen(ctx, uri, s.langConfig.ID, "")
+
+		return
+	}
+
+	_ = s.DidOpen(ctx, uri, s.langConfig.ID, string(content))
+}
+
 // FindDefinition sends textDocument/definition and returns locations.
 func (s *Server) FindDefinition(ctx context.Context, uri string, line, character int) ([]Location, error) {
 	if checkErr := s.checkReady(); checkErr != nil {
 		return nil, checkErr
+	}
+
+	// Ensure the file is opened in the language server with actual content.
+	s.openFileForLSP(ctx, uri)
+
+	// Check cache first.
+	hash := ContentHash([]byte(uri))
+	if cached := s.cache.GetRaw("textDocument/definition", uri, hash); cached != nil {
+		return parseLocations(cached)
 	}
 
 	params := buildPositionParams(uri, line, character)
@@ -66,6 +96,9 @@ func (s *Server) FindDefinition(ctx context.Context, uri string, line, character
 		return nil, fmt.Errorf("find definition: %w", sendErr)
 	}
 
+	// Cache the result.
+	s.cache.PutRaw("textDocument/definition", uri, hash, result)
+
 	return parseLocations(result)
 }
 
@@ -74,6 +107,9 @@ func (s *Server) FindReferences(ctx context.Context, uri string, line, character
 	if checkErr := s.checkReady(); checkErr != nil {
 		return nil, checkErr
 	}
+
+	// Ensure the file is opened with actual content.
+	s.openFileForLSP(ctx, uri)
 
 	params := buildPositionParams(uri, line, character)
 	params["context"] = map[string]any{
@@ -94,6 +130,9 @@ func (s *Server) Rename(ctx context.Context, uri string, line, character int, ne
 		return nil, checkErr
 	}
 
+	// Ensure file is opened with actual content.
+	s.openFileForLSP(ctx, uri)
+
 	params := buildPositionParams(uri, line, character)
 	params["newName"] = newName
 
@@ -108,6 +147,40 @@ func (s *Server) Rename(ctx context.Context, uri string, line, character int, ne
 	}
 
 	return &edit, nil
+}
+
+// SearchSymbols returns symbols matching the given pattern for the file URI.
+// Results are cached via the L2 symbol cache and filtered via ParseMatcher.
+func (s *Server) SearchSymbols(ctx context.Context, uri, pattern string) ([]Symbol, error) {
+	if checkErr := s.checkReady(); checkErr != nil {
+		return nil, checkErr
+	}
+
+	hash := ContentHash([]byte(uri))
+
+	if cached := s.cache.GetSymbols(uri, hash); cached != nil {
+		matcher := ParseMatcher(pattern)
+
+		return FilterSymbols(cached, matcher), nil
+	}
+
+	result, sendErr := s.transport.Send(ctx, "textDocument/documentSymbol", map[string]any{
+		"textDocument": map[string]any{"uri": uri},
+	})
+	if sendErr != nil {
+		return nil, fmt.Errorf("document symbols (%s): %w", SeverityError.String(), sendErr)
+	}
+
+	var symbols []Symbol
+	if unmarshalErr := json.Unmarshal(result, &symbols); unmarshalErr != nil {
+		return nil, fmt.Errorf("unmarshal symbols: %w", unmarshalErr)
+	}
+
+	s.cache.PutSymbols(uri, hash, symbols)
+
+	matcher := ParseMatcher(pattern)
+
+	return FilterSymbols(symbols, matcher), nil
 }
 
 // DidOpen sends textDocument/didOpen notification.
@@ -151,6 +224,9 @@ func (s *Server) DidChange(ctx context.Context, uri string, version int, text st
 	if notifyErr := s.transport.Notify(ctx, "textDocument/didChange", params); notifyErr != nil {
 		return fmt.Errorf("did change: %w", notifyErr)
 	}
+
+	// Invalidate cache for changed file.
+	s.cache.Invalidate(uri)
 
 	return nil
 }

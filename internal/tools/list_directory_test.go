@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestListDirectoryTool(t *testing.T) {
@@ -81,6 +83,37 @@ func runToolTest(t *testing.T, tool Tool, params map[string]any, wantErr bool, w
 		if !strings.Contains(result.Output, expected) {
 			t.Errorf("expected output to contain %q, got %q", expected, result.Output)
 		}
+	}
+}
+
+// TestListDirectoryTool_EmptyDirectory tests that listing an empty directory
+// returns a clear message instead of empty output.
+// Reproduces bug: `ls tetris/src` returned "Exit code: 0. No output." which
+// confused the agent into thinking the listing failed rather than the dir being empty.
+func TestListDirectoryTool_EmptyDirectory(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	emptyDir := filepath.Join(tmpDir, "empty")
+	require.NoError(t, os.Mkdir(emptyDir, 0o750))
+
+	tool := NewListDirectoryTool()
+	params, _ := FromMap(map[string]any{"path": emptyDir})
+
+	result, err := tool.Execute(context.Background(), params)
+	require.NoError(t, err)
+
+	if !result.Success {
+		t.Fatalf("expected success, got error: %s", result.Error)
+	}
+
+	// Output should explicitly indicate the directory is empty, not be blank.
+	if result.Output == "" {
+		t.Error("empty directory listing should return a descriptive message, not empty string")
+	}
+
+	if !strings.Contains(strings.ToLower(result.Output), "empty") {
+		t.Errorf("empty directory output should mention 'empty', got: %q", result.Output)
 	}
 }
 

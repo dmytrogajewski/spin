@@ -471,6 +471,33 @@ func TestExecute_MultiTurnDispatch(t *testing.T) {
 	assert.Equal(t, toolTurns, dispatcher.dispatchCount)
 }
 
+// TestExecute_EmptyResponseIsNotSilentCompletion verifies that an empty response
+// (no content, no tool calls, no error) from the caller does NOT silently complete
+// the loop. Reproduces bug: LLM returns empty response after retries, caller returns
+// ("", nil, "", nil), and phaseAction treats it as implicit completion with empty output.
+func TestExecute_EmptyResponseIsNotSilentCompletion(t *testing.T) {
+	t.Parallel()
+
+	// Caller returns empty content, no tool calls, no error — simulates
+	// exhausted retries for empty LLM response.
+	caller := &stubCaller{
+		content:      "",
+		toolCalls:    nil,
+		finishReason: "",
+		err:          nil,
+	}
+	exec := newTestExecutor(t, caller, &stubDispatcher{}, nil, nil)
+
+	resp, err := exec.Execute(t.Context(), testQuery, nil)
+
+	// The loop should NOT silently succeed with empty output.
+	// It should either return an error or set a non-stop finish reason.
+	if err == nil && resp.FinishReason == harness.FinishReasonStop && resp.Output == "" {
+		t.Error("empty LLM response should not silently complete the loop with FinishReasonStop; " +
+			"expected either an error or a non-stop finish reason (e.g., empty_response)")
+	}
+}
+
 // TestExecute_AfterExecutionCalledOnError verifies AfterExecution runs even on error.
 // Kills mutant: skipping AfterExecution on error would break cleanup hooks.
 func TestExecute_AfterExecutionCalledOnError(t *testing.T) {

@@ -17,14 +17,23 @@ const (
 // DefinitionFinder locates symbol definitions in the given file at a position.
 type DefinitionFinder func(ctx context.Context, filePath string, line, character int) ([]lsp.Location, error)
 
+// SymbolSearcher searches for symbols by name in the given file.
+type SymbolSearcher func(ctx context.Context, filePath string, pattern string) ([]lsp.Symbol, error)
+
 // FindSymbolTool looks up symbol definitions by name and file context.
 type FindSymbolTool struct {
-	find DefinitionFinder
+	find   DefinitionFinder
+	search SymbolSearcher
 }
 
 // NewFindSymbolTool creates a find_symbol tool backed by the given definition finder.
 func NewFindSymbolTool(find DefinitionFinder) *FindSymbolTool {
 	return &FindSymbolTool{find: find}
+}
+
+// NewFindSymbolToolWithSearch creates a find_symbol tool that uses symbol search.
+func NewFindSymbolToolWithSearch(find DefinitionFinder, search SymbolSearcher) *FindSymbolTool {
+	return &FindSymbolTool{find: find, search: search}
 }
 
 // Name returns the tool name.
@@ -74,6 +83,12 @@ func (t *FindSymbolTool) Execute(ctx context.Context, params ToolParameters) (To
 		return NewToolError(ErrInvalidParameters), nil
 	}
 
+	// Prefer symbol search by name when available (uses textDocument/documentSymbol).
+	if t.search != nil {
+		return t.executeSearch(ctx, filePath, name)
+	}
+
+	// Fallback to definition finder at position (0,0) — less accurate.
 	if t.find == nil {
 		return NewToolError(lsp.ErrServerNotFound), nil
 	}
@@ -88,6 +103,34 @@ func (t *FindSymbolTool) Execute(ctx context.Context, params ToolParameters) (To
 	}
 
 	return NewToolResult(formatLocations(locations)), nil
+}
+
+// executeSearch uses the SymbolSearcher to find symbols by name.
+func (t *FindSymbolTool) executeSearch(ctx context.Context, filePath, name string) (ToolResult, error) {
+	symbols, err := t.search(ctx, filePath, name)
+	if err != nil {
+		return ErrToResultf("search symbols: %s", err)
+	}
+
+	if len(symbols) == 0 {
+		return NewToolResult("No symbols found matching: " + name), nil
+	}
+
+	return NewToolResult(formatSymbols(symbols)), nil
+}
+
+// formatSymbols formats symbol search results.
+func formatSymbols(symbols []lsp.Symbol) string {
+	var builder strings.Builder
+
+	fmt.Fprintf(&builder, "Found %d symbol(s):\n", len(symbols))
+
+	for _, sym := range symbols {
+		fmt.Fprintf(&builder, "  %s %s (line %d)\n",
+			sym.Kind, sym.Name, sym.Location.Range.Start.Line+1)
+	}
+
+	return builder.String()
 }
 
 // formatLocations formats locations into a human-readable string.

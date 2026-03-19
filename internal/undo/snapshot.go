@@ -44,6 +44,10 @@ var (
 	ErrShadowRepoNotInitialized = errors.New("shadow repo not initialized; call Init() first")
 	// ErrSnapshotNotFound is returned when a snapshot hash is not found.
 	ErrSnapshotNotFound = errors.New("snapshot not found")
+	// ErrUnsafeWorkDir is returned when the work directory is too broad to snapshot safely
+	// (e.g., $HOME, /, /tmp). Snapshotting such directories would traverse thousands of
+	// files including container storage, caches, and other unrelated data.
+	ErrUnsafeWorkDir = errors.New("work directory is too broad for snapshotting")
 )
 
 // SnapshotManager maintains a shadow bare git repo that captures full working-tree
@@ -66,9 +70,14 @@ func NewSnapshotManager(workDir string) *SnapshotManager {
 }
 
 // Init creates the shadow bare git repo if it doesn't exist.
+// Returns [ErrUnsafeWorkDir] if the work directory is $HOME, /, or /tmp.
 func (m *SnapshotManager) Init() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if isUnsafeWorkDir(m.workDir) {
+		return ErrUnsafeWorkDir
+	}
 
 	if _, err := exec.LookPath("git"); err != nil {
 		return ErrGitNotFound
@@ -113,7 +122,10 @@ func (m *SnapshotManager) Snapshot() (string, error) {
 	}
 
 	// Stage all files in the shadow index.
-	if _, err := m.runGitWithEnv("add", "-A"); err != nil {
+	// Nested .git directories (e.g., `cargo new` projects) cause `git add -A`
+	// to fail with "does not have a commit checked out". We tolerate this
+	// specific error since the nested repo's files are still added individually.
+	if _, err := m.runGitWithEnvAllowNestedGit("add", "-A"); err != nil {
 		return "", fmt.Errorf("git add: %w", err)
 	}
 
@@ -200,23 +212,29 @@ func (m *SnapshotManager) ShadowDir() string {
 	return m.shadowDir
 }
 
-// syncGitignore copies .gitignore from workDir to shadow repo's info/exclude.
+// nestedGitExclude prevents `git add -A` from failing on nested .git directories.
+// Without this, directories containing their own .git (e.g., `cargo new` projects)
+// cause "does not have a commit checked out" errors.
+const nestedGitExclude = "**/.git\n"
+
+// syncGitignore copies .gitignore from workDir to shadow repo's info/exclude,
+// prepending rules to ignore nested .git directories.
 func (m *SnapshotManager) syncGitignore() error {
-	gitignorePath := filepath.Join(m.workDir, ".gitignore")
-
-	content, err := os.ReadFile(gitignorePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-
-		return fmt.Errorf("read .gitignore: %w", err)
-	}
-
 	infoDir := filepath.Join(m.shadowDir, "info")
 
 	if mkErr := os.MkdirAll(infoDir, shadowRepoPerm); mkErr != nil {
 		return fmt.Errorf("create info dir: %w", mkErr)
+	}
+
+	// Always exclude nested .git dirs to prevent submodule-like errors.
+	var content []byte
+
+	content = append(content, []byte(nestedGitExclude)...)
+
+	gitignorePath := filepath.Join(m.workDir, ".gitignore")
+
+	if userIgnore, err := os.ReadFile(gitignorePath); err == nil {
+		content = append(content, userIgnore...)
 	}
 
 	excludePath := filepath.Join(infoDir, "exclude")
@@ -307,6 +325,82 @@ func (m *SnapshotManager) runGit(args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
+// nestedGitErrSubstring is the error message git produces for nested repos without commits.
+const nestedGitErrSubstring = "does not have a commit checked out"
+
+// runGitWithEnvAllowNestedGit runs a git command, tolerating errors caused by
+// nested .git directories. If the only errors are about gitlink/submodule entries,
+// the command is considered successful (the other files were still staged).
+func (m *SnapshotManager) runGitWithEnvAllowNestedGit(args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = m.workDir
+	cmd.Env = append(os.Environ(),
+		"GIT_DIR="+m.shadowDir,
+		"GIT_WORK_TREE="+m.workDir,
+	)
+
+	var stdout, stderr bytes.Buffer
+
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		stderrStr := stderr.String()
+
+		// Tolerate errors caused solely by nested .git directories.
+		// Git produces lines like:
+		//   error: 'sub/' does not have a commit checked out
+		//   error: unable to index file 'sub/'
+		//   fatal: adding files failed  (or localized equivalent)
+		// These are safe to ignore — the other files were still staged.
+		if isOnlyNestedGitError(stderrStr) {
+			return stdout.String(), nil
+		}
+
+		return "", fmt.Errorf("%s: %w", stderrStr, err)
+	}
+
+	return stdout.String(), nil
+}
+
+// isOnlyNestedGitError returns true if all stderr lines are about nested .git dirs.
+// Returns false if there are any unrecognized error lines.
+func isOnlyNestedGitError(stderr string) bool {
+	if !strings.Contains(stderr, nestedGitErrSubstring) {
+		return false
+	}
+
+	hasNestedErr := false
+
+	for line := range strings.SplitSeq(stderr, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		if strings.Contains(line, nestedGitErrSubstring) {
+			hasNestedErr = true
+
+			continue
+		}
+
+		// These always accompany the nested git error.
+		if strings.Contains(line, "unable to index file") ||
+			strings.HasPrefix(line, "fatal:") ||
+			strings.HasPrefix(line, "error:") {
+			continue
+		}
+
+		// Unrecognized line — not safe to ignore.
+		return false
+	}
+
+	return hasNestedErr
+}
+
 // runGitWithEnv executes a git command with GIT_DIR and GIT_WORK_TREE set.
 func (m *SnapshotManager) runGitWithEnv(args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
@@ -329,6 +423,33 @@ func (m *SnapshotManager) runGitWithEnv(args ...string) (string, error) {
 	}
 
 	return stdout.String(), nil
+}
+
+// isUnsafeWorkDir returns true if the directory is too broad for snapshotting.
+// Snapshotting $HOME, /, or /tmp would traverse millions of unrelated files.
+func isUnsafeWorkDir(workDir string) bool {
+	absDir, err := filepath.Abs(workDir)
+	if err != nil {
+		return false
+	}
+
+	// Reject filesystem root.
+	if absDir == "/" {
+		return true
+	}
+
+	// Reject /tmp and /var (too broad).
+	if absDir == "/tmp" || absDir == "/var" {
+		return true
+	}
+
+	// Reject user's home directory.
+	homeDir, homeErr := os.UserHomeDir()
+	if homeErr == nil && absDir == homeDir {
+		return true
+	}
+
+	return false
 }
 
 // ProjectHash returns a deterministic hash of the given work directory path.

@@ -152,7 +152,14 @@ func (t *ShellCommandTool) Schema() ToolSchema {
 func (t *ShellCommandTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	operation, _ := params.GetString("operation")
 	if operation == "" {
-		return NewToolError(errOperationParameterRequired), nil
+		// Default to "execute" when a command is provided — LLMs frequently
+		// omit the operation parameter when they intend to run a command.
+		cmd, _ := params.GetString("command")
+		if cmd != "" {
+			operation = "execute"
+		} else {
+			return NewToolError(errOperationParameterRequired), nil
+		}
 	}
 
 	switch operation {

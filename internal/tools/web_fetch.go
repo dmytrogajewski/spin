@@ -7,14 +7,15 @@ import (
 )
 
 const (
-	fetchToolName   = "fetch_url"
-	paramURL        = "url"
-	maxOutputChars  = 50_000
-	httpScheme      = "http://"
-	httpsScheme     = "https://"
-	contentTypeHTML = "text/html"
-	contentTypeJSON = "application/json"
-	contentTypeText = "text/"
+	fetchToolName      = "fetch_url"
+	paramURL           = "url"
+	maxOutputChars     = 50_000
+	httpErrorThreshold = 400
+	httpScheme         = "http://"
+	httpsScheme        = "https://"
+	contentTypeHTML    = "text/html"
+	contentTypeJSON    = "application/json"
+	contentTypeText    = "text/"
 )
 
 // FetchResponse holds the result of an HTTP GET request.
@@ -93,6 +94,16 @@ func (t *FetchURLTool) Execute(ctx context.Context, params ToolParameters) (Tool
 	resp, fetchErr := t.fetch(ctx, rawURL)
 	if fetchErr != nil {
 		return ErrToResultf("fetch: %s", fetchErr)
+	}
+
+	// Report HTTP error status codes to the agent.
+	if resp.StatusCode >= httpErrorThreshold {
+		body := string(resp.Body)
+		if body == "" {
+			body = "(empty response body)"
+		}
+
+		return NewToolError(fmt.Errorf("HTTP %d: %s: %w", resp.StatusCode, capOutput(body, maxOutputChars), errHTTPError)), nil
 	}
 
 	if !isTextContent(resp.ContentType) {

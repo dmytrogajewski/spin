@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"path/filepath"
+
 	"github.com/dmytrogajewski/spin/internal/ace"
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/agent/tool"
 	"github.com/dmytrogajewski/spin/internal/agentsmd"
 	"github.com/dmytrogajewski/spin/internal/safety"
+	"github.com/dmytrogajewski/spin/internal/safety/hooks"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -19,6 +22,7 @@ type agentBuildResult struct {
 	toolReg     *tools.Registry
 	aceService  *ace.Service
 	aceConfig   *ace.Config
+	hookRunner  *hooks.Runner
 }
 
 // buildAgent constructs a fully configured agent with all services and integrations.
@@ -39,12 +43,19 @@ func (b *Builder) buildAgent(ctx context.Context, exec *agent.Executor, env *age
 		b.logWarn("memory tools registration failed", "err", err)
 	}
 
+	hookRunner := hooks.NewRunner(hooks.Config{
+		GlobalDir:  filepath.Join("~", ".spin", "hooks"),
+		ProjectDir: filepath.Join(b.workDir, ".spin", "hooks"),
+		Logger:     b.getLogger(),
+	})
+
 	toolRuntime := tool.NewRuntime(tool.RuntimeConfig{
 		Registry:        toolReg,
 		Validator:       securitySvc.Validator(),
 		ApprovalService: securitySvc.ApprovalService(),
 		Emitter:         b.emitter,
 		WorkDir:         env.WorkDir,
+		HookRunner:      hookRunner,
 	})
 
 	opts := agentBuilder.BuildOptions()
@@ -73,6 +84,7 @@ func (b *Builder) buildAgent(ctx context.Context, exec *agent.Executor, env *age
 		toolReg:     toolReg,
 		aceService:  aceSvc,
 		aceConfig:   aceConfig,
+		hookRunner:  hookRunner,
 	}, nil
 }
 

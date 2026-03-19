@@ -603,17 +603,39 @@ func (a *Applier) applyHunk(lines *[]string, hunk Hunk, filePath string, hunkIdx
 	return nil
 }
 
-// extractContextLines extracts context lines from a hunk for matching.
+// extractContextLines extracts context lines from a hunk for position matching.
+// It prefers the leading contiguous context block (before the first change),
+// which forms a contiguous sequence in the original file. If the hunk starts
+// with an insert/delete (no leading context), it falls back to the first
+// contiguous context block found anywhere in the hunk.
 func (a *Applier) extractContextLines(hunk Hunk) []string {
-	var contextLines []string
+	// Try leading context first.
+	var leading []string
+
+	for _, change := range hunk.Changes {
+		if change.Type != LineContext {
+			break
+		}
+
+		leading = append(leading, change.Text)
+	}
+
+	if len(leading) > 0 {
+		return leading
+	}
+
+	// No leading context — find the first contiguous context block.
+	var block []string
 
 	for _, change := range hunk.Changes {
 		if change.Type == LineContext {
-			contextLines = append(contextLines, change.Text)
+			block = append(block, change.Text)
+		} else if len(block) > 0 {
+			break
 		}
 	}
 
-	return contextLines
+	return block
 }
 
 // trackModification records a file modification for rollback.

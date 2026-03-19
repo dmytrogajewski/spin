@@ -4,7 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/dmytrogajewski/spin/internal/ace"
 	"github.com/dmytrogajewski/spin/internal/agent"
@@ -13,7 +17,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent/harness"
 	"github.com/dmytrogajewski/spin/internal/agent/harness/bridge"
 	acemw "github.com/dmytrogajewski/spin/internal/agent/middleware/ace"
+	snapshotmw "github.com/dmytrogajewski/spin/internal/agent/middleware/snapshot"
 	"github.com/dmytrogajewski/spin/internal/agent/prompt"
+	"github.com/dmytrogajewski/spin/internal/agent/subagent"
 	"github.com/dmytrogajewski/spin/internal/agent/scaffold"
 	"github.com/dmytrogajewski/spin/internal/agent/tool"
 	"github.com/dmytrogajewski/spin/internal/auth"
@@ -21,7 +27,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/contexteng/adapter"
 	"github.com/dmytrogajewski/spin/internal/contexteng/compactor"
 	"github.com/dmytrogajewski/spin/internal/contexteng/observation"
+	"github.com/dmytrogajewski/spin/internal/contexteng/reminder"
+	"github.com/dmytrogajewski/spin/internal/contexteng/retrieval"
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/lsp"
+	llmcache "github.com/dmytrogajewski/spin/internal/llm/cache"
+	"github.com/dmytrogajewski/spin/internal/safety/hooks"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
@@ -29,6 +40,7 @@ import (
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/internal/undo"
 )
 
 // Builder constructs a Conversation instance with all its dependencies.
@@ -43,6 +55,7 @@ type Builder struct {
 	gitService   *gitpkg.Service
 	shellService *shellpkg.Service
 	mcpService   *mcppkg.Service
+	lspManager   *lsp.Manager
 
 	// Required.
 	runtime executor.Runtime     // Runtime provides approval handler, tools, notifications.
@@ -165,6 +178,12 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 		// Enrich environment with Git/Shell context (conversation-level concern).
 	b.enrichEnvironmentWithIntegrations(ctx, env)
 
+	// Initialize LSP manager for code navigation tools.
+	b.lspManager = lsp.NewManager("file://"+b.workDir, lsp.DefaultServerFactory)
+
+	// Initialize provider cache for model capabilities (best-effort).
+	b.initProviderCache(ctx, logger)
+
 	// Create session early (ID is needed for memory initialization).
 	sess := session.NewSession(b.workDir)
 	logger.InfoContext(ctx, "session created", "session_id", sess.ID)
@@ -183,7 +202,7 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 
 	// Build harness executor for the conversation execution path.
 	harnessExec, err := b.buildHarnessExecutor(
-		result.toolReg, result.toolRuntime, result.aceService, result.aceConfig,
+		result.toolReg, result.toolRuntime, result.aceService, result.aceConfig, env,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("build harness executor: %w", err)
@@ -196,19 +215,80 @@ func (b *Builder) Build(ctx context.Context) (*Conversation, error) {
 	// This maintains clean dependency direction: conversation doesn't depend on protocol.
 	convID := sess.ID
 
+	// Create session index and update with new session (best-effort).
+	sessionIndexPath := filepath.Join(b.cfg.Agent.SessionDir, "index.json")
+
+	sessionIdx, idxErr := session.NewSessionIndex(ctx, sessionIndexPath, nil,
+		session.WithRebuildCallback(func() {
+			logger.Info("session index rebuilt from scratch")
+		}),
+	)
+	if idxErr != nil {
+		logger.Debug("session index creation failed, continuing without index", "error", idxErr)
+	}
+
+	if sessionIdx != nil {
+		_ = sessionIdx.Update(ctx, session.IndexEntry{
+			ID:           convID,
+			WorkDir:      b.workDir,
+			LastModified: sess.CreatedAt,
+		})
+	}
+
+	// Create transcript writer for JSONL persistence (best-effort).
+	transcriptPath := filepath.Join(b.cfg.Agent.SessionDir, convID, "transcript.jsonl")
+
+	var transcriptWriter *session.TranscriptWriter
+
+	if mkdirErr := os.MkdirAll(filepath.Dir(transcriptPath), 0o750); mkdirErr == nil {
+		tw, twErr := session.NewTranscriptWriter(transcriptPath)
+		if twErr != nil {
+			logger.Debug("transcript writer creation failed, continuing without persistence", "error", twErr)
+		} else {
+			transcriptWriter = tw
+		}
+	}
+
+	// Fire SESSION_START hook (non-blocking, best-effort).
+	if result.hookRunner != nil {
+		evtCtx := hooks.EventContext{
+			SessionID: convID,
+			WorkDir:   b.workDir,
+		}
+		result.hookRunner.Execute(ctx, hooks.EventSessionStart, evtCtx)
+	}
+
+	// Create context retrieval pipeline with bullet source.
+	retrievalPipe := retrieval.NewPipeline(retrieval.NewBulletSource())
+
+	// Create subagent manager with builtin specs.
+	// The executor returns unsupported until per-subagent harness loops are wired.
+	subagentMgr := subagent.NewManager(
+		func(_ context.Context, spec *subagent.Spec, _ string) (string, error) {
+			return "", fmt.Errorf("subagent %q: spawn requires per-subagent harness setup", spec.Name)
+		},
+		subagent.DefaultMaxConcurrent,
+	)
+
 	// Build the Conversation with unified ID.
 	conv := &Conversation{
-		gitService:      b.gitService,
-		shellService:    b.shellService,
-		mcpService:      b.mcpService,
-		memoryService:   b.memoryService,
-		agent:           result.agent,
-		history:         hist,
-		emitter:         b.emitter,
-		taskMode:        "regular",
-		id:              convID,
-		workDir:         b.workDir,
-		harnessExecutor: harnessExec,
+		gitService:       b.gitService,
+		shellService:     b.shellService,
+		mcpService:       b.mcpService,
+		memoryService:    b.memoryService,
+		agent:            result.agent,
+		history:          hist,
+		emitter:          b.emitter,
+		taskMode:         "regular",
+		id:               convID,
+		workDir:          b.workDir,
+		harnessExecutor:  harnessExec,
+		subagentManager:   subagentMgr,
+		retrievalPipeline: retrievalPipe,
+		lspManager:        b.lspManager,
+		hookRunner:       result.hookRunner,
+		transcriptWriter: transcriptWriter,
+		sessionIndex:    sessionIdx,
 	}
 
 	// Attach JSONL event logger if debug mode.
@@ -341,6 +421,7 @@ func (b *Builder) buildHarnessExecutor(
 	toolRuntime *tool.Runtime,
 	aceSvc *ace.Service,
 	aceConfig *ace.Config,
+	env *agent.Environment,
 ) (*bridge.TurnExecutor, error) {
 	logger := b.getLogger()
 
@@ -358,17 +439,47 @@ func (b *Builder) buildHarnessExecutor(
 		MaxTokens:     b.cfg.LLM.MaxTokens,
 	})
 
-	// Build a minimal scaffold.Spec from the tool registry.
-	spec := &scaffold.Spec{
-		ToolSchemas: toolReg.ListSchemas(),
-		Config: scaffold.SpecConfig{
-			MaxTurns: b.cfg.Agent.MaxTurns,
-		},
+	// Compose system prompt from modular sections.
+	composer := prompt.NewComposer()
+	for _, section := range prompt.DefaultRegularSections() {
+		composer.AddSection(section)
 	}
 
-	// Build middleware chain.
-	middlewares := b.buildHarnessMiddlewares(aceSvc, aceConfig, logger)
+	// Inject project instructions from AGENTS.md if available.
+	if agentsMD := b.resolveAgentsMDContent(); agentsMD != "" {
+		composer.AddSection(prompt.ProjectInstructionsSection(agentsMD))
+	}
 
+	// Set environment variables for ${VAR} substitution.
+	composer.SetVar("WORK_DIR", b.workDir)
+
+	if env != nil && env.ProjectType != "" {
+		composer.SetVar("PROJECT_TYPE", env.ProjectType)
+	}
+
+	// Compose system prompt from active sections (cacheable first, dynamic last).
+	systemPrompt := composer.Compose(env)
+
+	// Compile scaffold.Spec via Factory (replaces manual construction).
+	factory, factoryErr := scaffold.NewFactory(b.cfg, toolReg, nil)
+	if factoryErr != nil {
+		return nil, fmt.Errorf("scaffold factory: %w", factoryErr)
+	}
+
+	spec, compileErr := factory.Compile(scaffold.AgentTypeMain)
+	if compileErr != nil {
+		return nil, fmt.Errorf("compile main spec: %w", compileErr)
+	}
+
+	// Override Factory's default system prompt with Composer output (richer).
+	spec.SystemPrompt = systemPrompt
+
+	// Create undo service for snapshot middleware.
+	undoSvc := b.createUndoService(logger)
+
+	// Build guards, middleware chain, and harness options.
+	guards := b.buildHarnessGuards()
+	middlewares := b.buildHarnessMiddlewares(aceSvc, aceConfig, undoSvc, logger)
 	harnessOpts := b.buildHarnessOpts()
 
 	harnessExec, err := bridge.BuildExecutor(bridge.Config{
@@ -377,6 +488,7 @@ func (b *Builder) buildHarnessExecutor(
 		Registry:    toolReg,
 		Runtime:     toolRuntime,
 		Logger:      logger,
+		Guards:      guards,
 		Middlewares: middlewares,
 		HarnessOpts: harnessOpts,
 	})
@@ -391,6 +503,7 @@ func (b *Builder) buildHarnessExecutor(
 func (b *Builder) buildHarnessMiddlewares(
 	aceSvc *ace.Service,
 	aceConfig *ace.Config,
+	undoSvc *undo.Service,
 	logger *slog.Logger,
 ) []harness.Middleware {
 	var middlewares []harness.Middleware
@@ -400,7 +513,40 @@ func (b *Builder) buildHarnessMiddlewares(
 		middlewares = append(middlewares, acemw.NewHarnessAdapter(inner))
 	}
 
+	// Snapshot middleware captures working-tree state after each execution phase.
+	if undoSvc != nil {
+		middlewares = append(middlewares, snapshotmw.NewMiddleware(undoSvc, logger))
+	}
+
 	return middlewares
+}
+
+// createUndoService creates the undo service with snapshot support.
+// Returns nil if snapshot initialization fails (best-effort).
+func (b *Builder) createUndoService(logger *slog.Logger) *undo.Service {
+	opLog := undo.NewOperationLog()
+	snapshotMgr := undo.NewSnapshotManager(b.workDir)
+
+	if err := snapshotMgr.Init(); err != nil {
+		logger.Debug("snapshot manager init failed, undo service without snapshots",
+			"error", err)
+
+		return undo.NewService(opLog, nil)
+	}
+
+	return undo.NewService(opLog, snapshotMgr)
+}
+
+// buildHarnessGuards creates the guard chain for the harness executor.
+func (b *Builder) buildHarnessGuards() []harness.Guard {
+	var guards []harness.Guard
+
+	// Doom-loop detection: halt when the same tool call repeats excessively.
+	doomGuard := harness.NewDoomLoopGuard(harness.DefaultWindowSize, harness.DefaultThreshold)
+	doomGuard.SetEmitter(b.emitter)
+	guards = append(guards, doomGuard)
+
+	return guards
 }
 
 // buildHarnessOpts creates harness options for contexteng adapters.
@@ -410,7 +556,21 @@ func (b *Builder) buildHarnessOpts() []harness.Option {
 	// Wire compactor adapter with LLM context window from config.
 	if b.cfg.LLM.ContextWindow > 0 {
 		tok := &tokenizer.SimpleTokenizer{}
-		comp := compactor.NewCompactor(tok, b.cfg.LLM.ContextWindow)
+
+		var compactorOpts []compactor.Option
+		if b.cfg.LLM.CompactorWarning > 0 || b.cfg.LLM.CompactorObserve > 0 || b.cfg.LLM.CompactorPrune > 0 {
+			compactorOpts = append(compactorOpts, compactor.WithThresholds(
+				b.cfg.LLM.CompactorWarning,
+				b.cfg.LLM.CompactorObserve,
+				b.cfg.LLM.CompactorPrune,
+			))
+		}
+
+		if b.cfg.LLM.CompactorRecentProtected > 0 {
+			compactorOpts = append(compactorOpts, compactor.WithRecentProtected(b.cfg.LLM.CompactorRecentProtected))
+		}
+
+		comp := compactor.NewCompactor(tok, b.cfg.LLM.ContextWindow, compactorOpts...)
 		opts = append(opts, harness.WithCompactor(
 			adapter.NewCompactorAdapter(comp),
 		))
@@ -422,7 +582,71 @@ func (b *Builder) buildHarnessOpts() []harness.Option {
 		adapter.NewObservationAdapter(obs),
 	))
 
+	// Wire reminder injector with all default detectors.
+	inj := reminder.NewInjector(reminder.DefaultDetectors(), reminder.DefaultTemplates())
+	opts = append(opts, harness.WithReminderInjector(
+		adapter.NewReminderAdapter(inj),
+	))
+
+	// Wire event emitter so harness phases can emit structured events.
+	opts = append(opts, harness.WithEmitter(b.emitter))
+
 	return opts
+}
+
+// initProviderCache creates a provider cache and loads/caches model capabilities.
+// If the config doesn't set a context window, the cache is used to populate it.
+func (b *Builder) initProviderCache(ctx context.Context, logger *slog.Logger) {
+	cacheDir := filepath.Join(b.cfg.Agent.SessionDir, "..", "cache")
+
+	provCache, cacheErr := llmcache.NewProviderCache(cacheDir, nil, llmcache.WithTimeFunc(time.Now))
+	if cacheErr != nil {
+		logger.Debug("provider cache init failed, continuing without cache", "error", cacheErr)
+
+		return
+	}
+
+	providerName := b.cfg.LLM.Provider
+	modelName := b.cfg.LLM.Model
+
+	// Load cached data for the current provider.
+	if loadErr := provCache.Load(providerName); loadErr != nil {
+		logger.Debug("provider cache load failed", "provider", providerName, "error", loadErr)
+	}
+
+	// Use cached context length if config doesn't override.
+	if b.cfg.LLM.ContextWindow == 0 {
+		ctxLen := provCache.ContextLength(ctx, providerName, modelName)
+		if ctxLen > 0 {
+			b.cfg.LLM.ContextWindow = ctxLen
+			logger.Info("context window set from provider cache", "context_window", ctxLen)
+		}
+	}
+
+	// Cache current provider capabilities from LLM if available.
+	if b.llm != nil {
+		caps := b.llm.Capabilities()
+		_ = provCache.Put(ctx, providerName, modelName, llmcache.ModelCapabilities{
+			ModelID:         modelName,
+			Provider:        providerName,
+			ContextLength:   caps.ContextWindow,
+			Streaming:       caps.Streaming,
+			FunctionCalling: caps.FunctionCalling,
+		})
+	}
+}
+
+// resolveAgentsMDContent reads AGENTS.md from the work directory if it exists.
+// Returns empty string if not found or unreadable.
+func (b *Builder) resolveAgentsMDContent() string {
+	agentsMDPath := filepath.Join(b.workDir, "AGENTS.md")
+
+	content, err := os.ReadFile(agentsMDPath)
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(content))
 }
 
 // addShellContext enriches environment with Shell context information.

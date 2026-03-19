@@ -775,6 +775,42 @@ func TestShellCommandTool_Validate_Classifications(t *testing.T) {
 	}
 }
 
+// TestShellCommandTool_Execute_DefaultsOperationToExecute tests that when operation
+// is missing but command is provided, the tool defaults to "execute".
+// Reproduces bug: LLM omits "operation" param, sends only "command", tool rejects
+// with "operation parameter is required" instead of defaulting to execute.
+func TestShellCommandTool_Execute_DefaultsOperationToExecute(t *testing.T) {
+	t.Parallel()
+
+	executor := &mockExecutor{
+		executeFunc: func(_ context.Context, cmd CommandInfo, _ any) (ExecutionResult, error) {
+			return &mockResult{
+				Stdout:   "hello",
+				Stderr:   "",
+				ExitCode: 0,
+			}, nil
+		},
+	}
+	tool := NewShellCommandTool(nil, nil, executor)
+
+	// LLM sends command without operation — should default to "execute".
+	params, err := FromMap(map[string]any{
+		"command": "echo hello",
+	})
+	require.NoError(t, err)
+
+	result, err := tool.Execute(context.Background(), params)
+	require.NoError(t, err)
+
+	if !result.Success {
+		t.Errorf("Expected success when operation is missing but command is provided, got error: %s", result.Error)
+	}
+
+	if result.Output != "hello" {
+		t.Errorf("Output = %q, want %q", result.Output, "hello")
+	}
+}
+
 // TestShellCommandTool_Validate_EmptyCommand tests validate with empty command.
 func TestShellCommandTool_Validate_EmptyCommand(t *testing.T) {
 	t.Parallel()

@@ -46,10 +46,11 @@ type Config struct {
 
 // Runner discovers and executes lifecycle hook scripts.
 type Runner struct {
-	globalDir  string
-	projectDir string
-	timeout    time.Duration
-	logger     *slog.Logger
+	globalDir       string
+	projectDir      string
+	timeout         time.Duration
+	logger          *slog.Logger
+	validScriptNames map[string]bool
 }
 
 // NewRunner creates a Runner from the given configuration.
@@ -64,11 +65,18 @@ func NewRunner(cfg Config) *Runner {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
 
+	// Pre-build valid script name set for hook discovery validation.
+	validNames := make(map[string]bool, eventCount)
+	for _, evt := range AllEvents() {
+		validNames[evt.ScriptName()] = true
+	}
+
 	return &Runner{
-		globalDir:  cfg.GlobalDir,
-		projectDir: cfg.ProjectDir,
-		timeout:    timeout,
-		logger:     logger,
+		globalDir:        cfg.GlobalDir,
+		projectDir:       cfg.ProjectDir,
+		timeout:          timeout,
+		logger:           logger,
+		validScriptNames: validNames,
 	}
 }
 

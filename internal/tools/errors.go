@@ -21,4 +21,5 @@ var (
 	errValidatorNotConfigured       = errors.New("validator not configured")
 	errQueryParameterRequired       = errors.New("query parameter must be a non-empty string")
 	errTaskIDParameterRequired      = errors.New("task_id parameter is required")
+	errHTTPError                    = errors.New("HTTP error response")
 )

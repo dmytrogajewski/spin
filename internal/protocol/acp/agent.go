@@ -497,6 +497,19 @@ func (a *SpinACPAgent) promptWithConversation(
 
 	unsubscribe, eventsDone := a.subscribeTransformerEvents(ctx, conn, transformer)
 
+	// Subscribe a second event stream for plan detection and structured notifications.
+	procSubID, procEventCh, procSubErr := a.emitter.Subscribe()
+	if procSubErr == nil {
+		procCtx, procCancel := context.WithCancel(ctx)
+
+		go a.processEvents(procCtx, req.SessionId, procEventCh)
+
+		defer func() {
+			procCancel()
+			a.emitter.Unsubscribe(procSubID)
+		}()
+	}
+
 	defer func() {
 		if unsubscribe != nil {
 			unsubscribe()
@@ -518,6 +531,15 @@ func (a *SpinACPAgent) promptWithConversation(
 		return acp.PromptResponse{
 			StopReason: stopReason,
 		}, nil
+	}
+
+	// Send plan notifications from conversation output.
+	msgs := conv.GetHistoryMessages()
+	if len(msgs) > 0 {
+		lastMsg := msgs[len(msgs)-1]
+		_ = a.sendPlanNotifications(ctx, req.SessionId, &agent.Response{
+			Output: lastMsg.Content,
+		})
 	}
 
 	// Save history after successful turn (if storage configured).

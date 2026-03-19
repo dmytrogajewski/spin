@@ -55,7 +55,10 @@ func TestFileTracker_FailsAfterModification(t *testing.T) {
 	require.ErrorIs(t, err, ErrFileModifiedSinceRead)
 }
 
-func TestFileTracker_FailsWithoutPriorRead(t *testing.T) {
+// TestFileTracker_AllowsWriteWithoutPriorRead verifies that files never read
+// through the tracker can be written freely — the agent may know about them
+// through other means (shell commands, cargo new, etc.).
+func TestFileTracker_AllowsWriteWithoutPriorRead(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -66,7 +69,7 @@ func TestFileTracker_FailsWithoutPriorRead(t *testing.T) {
 	tracker := NewFileTracker()
 
 	err := tracker.AssertFresh(filePath)
-	require.ErrorIs(t, err, ErrFileNotPreviouslyRead)
+	require.NoError(t, err, "files not previously read should be writable")
 }
 
 func TestFileTracker_ConcurrentAccess(t *testing.T) {

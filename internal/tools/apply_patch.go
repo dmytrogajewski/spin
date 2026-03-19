@@ -96,8 +96,13 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 	if err := ctx.Err(); err != nil {
 		return NewToolError(err), nil
 	}
-	// Extract patch_text parameter.
+	// Extract patch_text parameter. Accept "patch" as alias since LLMs frequently
+	// use the shorter name despite the schema specifying "patch_text".
 	patchText, _ := params.GetString("patch_text")
+	if patchText == "" {
+		patchText, _ = params.GetString("patch")
+	}
+
 	if patchText == "" {
 		return ToolResult{
 			Success: false,
@@ -247,6 +252,9 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 		return nil, fmt.Errorf("could not extract filename from first line: %q: %w", firstLine, ErrCouldNotExtractFilenameFromFirst)
 	}
 
+	// Strip standard a/ or b/ prefix from git diff output.
+	filename = stripDiffPrefix(filename)
+
 	// Create patch with update file operation.
 	patch := &patchapply.Patch{
 		Operations: []patchapply.FileOperation{
@@ -270,8 +278,10 @@ func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, er
 				updateOp.Hunks = append(updateOp.Hunks, *currentHunk)
 			}
 
+			// The patchapply library uses context-matching (not line numbers)
+			// so we leave the header empty — unified diff line numbers are
+			// informational only.
 			currentHunk = &patchapply.Hunk{
-				Header:  strings.TrimSpace(strings.TrimPrefix(line, "@@")),
 				Changes: []patchapply.LineChange{},
 			}
 
@@ -318,6 +328,19 @@ func parseDiffLine(line string) (patchapply.LineChange, bool) {
 	default:
 		return patchapply.LineChange{}, false
 	}
+}
+
+// stripDiffPrefix removes the standard a/ or b/ prefix from git diff filenames.
+func stripDiffPrefix(filename string) string {
+	if after, ok := strings.CutPrefix(filename, "a/"); ok {
+		return after
+	}
+
+	if after, ok := strings.CutPrefix(filename, "b/"); ok {
+		return after
+	}
+
+	return filename
 }
 
 // CheckApproval assesses whether the patch operation requires approval.

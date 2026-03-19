@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
 	"github.com/dmytrogajewski/spin/internal/mcp"
 	acppkg "github.com/dmytrogajewski/spin/internal/protocol/acp"
+	"github.com/dmytrogajewski/spin/internal/safety/hooks"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
@@ -399,12 +401,20 @@ func buildCoreAgent(
 	toolRegistry := tools.NewRegistry()
 	rt.RegisterTools(toolRegistry)
 
+	// Create hook runner for lifecycle hooks (JOURNEY-1.3).
+	hookRunner := hooks.NewRunner(hooks.Config{
+		GlobalDir:  filepath.Join("~", ".spin", "hooks"),
+		ProjectDir: filepath.Join(workDir, ".spin", "hooks"),
+		Logger:     slog.Default(),
+	})
+
 	toolRuntime := tool.NewRuntime(tool.RuntimeConfig{
 		Registry:        toolRegistry,
 		Validator:       securityService.Validator(),
 		ApprovalService: securityService.ApprovalService(),
 		Emitter:         emitter,
 		WorkDir:         workDir,
+		HookRunner:      hookRunner,
 	})
 
 	opts := agentBuilder.BuildOptions()
@@ -423,7 +433,7 @@ func buildCoreAgent(
 	}
 
 	// Build harness executor for conversation turn execution.
-	harnessExec, err := buildACPHarnessExecutor(cfg, provider, emitter, toolRegistry, toolRuntime)
+	harnessExec, err := buildACPHarnessExecutor(cfg, provider, emitter, toolRegistry, toolRuntime, workDir)
 	if err != nil {
 		return nil, fmt.Errorf("build harness executor: %w", err)
 	}
@@ -441,6 +451,7 @@ func buildACPHarnessExecutor(
 	emitter *events.EventEmitter,
 	toolRegistry *tools.Registry,
 	toolRuntime *tool.Runtime,
+	workDir string,
 ) (*bridge.TurnExecutor, error) {
 	logger := slog.Default()
 	pb := prompt.New(provider, logger)
@@ -454,12 +465,34 @@ func buildACPHarnessExecutor(
 		MaxTokens:     cfg.LLM.MaxTokens,
 	})
 
-	spec := &scaffold.Spec{
-		ToolSchemas: toolRegistry.ListSchemas(),
-		Config: scaffold.SpecConfig{
-			MaxTurns: cfg.Agent.MaxTurns,
-		},
+	// Compose system prompt from modular sections (same as conversation/builder.go).
+	composer := prompt.NewComposer()
+	for _, section := range prompt.DefaultRegularSections() {
+		composer.AddSection(section)
 	}
+
+	// Inject project instructions from AGENTS.md if available.
+	if agentsMD := resolveAgentsMDForACP(workDir); agentsMD != "" {
+		composer.AddSection(prompt.ProjectInstructionsSection(agentsMD))
+	}
+
+	composer.SetVar("WORK_DIR", workDir)
+
+	systemPrompt := composer.Compose(nil)
+
+	// Compile scaffold.Spec via Factory (replaces manual construction).
+	factory, factoryErr := scaffold.NewFactory(cfg, toolRegistry, nil)
+	if factoryErr != nil {
+		return nil, fmt.Errorf("scaffold factory: %w", factoryErr)
+	}
+
+	spec, compileErr := factory.Compile(scaffold.AgentTypeMain)
+	if compileErr != nil {
+		return nil, fmt.Errorf("compile main spec: %w", compileErr)
+	}
+
+	// Override Factory's default system prompt with Composer output (richer).
+	spec.SystemPrompt = systemPrompt
 
 	harnessExec, err := bridge.BuildExecutor(bridge.Config{
 		Spec:      spec,
@@ -473,6 +506,16 @@ func buildACPHarnessExecutor(
 	}
 
 	return bridge.NewTurnExecutor(harnessExec), nil
+}
+
+// resolveAgentsMDForACP reads AGENTS.md from the workspace directory.
+func resolveAgentsMDForACP(workDir string) string {
+	content, err := os.ReadFile(filepath.Join(workDir, "AGENTS.md"))
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(string(content))
 }
 
 func buildACEServices(ctx context.Context, cfg *config.V2, ab *agent.Builder) (*ace.Service, *ace.Config) {

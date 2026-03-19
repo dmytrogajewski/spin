@@ -102,12 +102,75 @@ func (t *WriteFileTool) Execute(ctx context.Context, params ToolParameters) (Too
 		}
 	}
 
+	if reason := detectTruncation(content); reason != "" {
+		return NewToolError(fmt.Errorf("content appears truncated (%s) — refusing to write broken file to %s", reason, path)), nil
+	}
+
 	writeErr := os.WriteFile(path, []byte(content), 0o600)
 	if writeErr != nil {
 		return NewToolError(fmt.Errorf("failed to write file: %w", writeErr)), nil
 	}
 
 	return NewToolResult(fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path)), nil
+}
+
+// detectTruncation checks if content appears to have been truncated mid-output
+// (e.g., due to LLM max_tokens). Returns a reason string if truncated, empty if OK.
+//
+// Only double-quoted strings are tracked as string literals. Single quotes are
+// NOT treated as string delimiters because many languages use them for non-string
+// purposes (Rust lifetimes like 'a/'static, Go rune types, shell variables).
+func detectTruncation(content string) string {
+	if content == "" {
+		return ""
+	}
+
+	opens := 0
+	inString := false
+	escaped := false
+
+	for i := range len(content) {
+		c := content[i]
+
+		if escaped {
+			escaped = false
+
+			continue
+		}
+
+		if c == '\\' && inString {
+			escaped = true
+
+			continue
+		}
+
+		if inString {
+			if c == '"' {
+				inString = false
+			}
+
+			continue
+		}
+
+		switch c {
+		case '"':
+			inString = true
+		case '{', '(', '[':
+			opens++
+		case '}', ')', ']':
+			opens--
+		}
+	}
+
+	if inString {
+		return "unclosed string literal"
+	}
+
+	if opens > 0 {
+		return fmt.Sprintf("%d unclosed delimiter(s)", opens)
+	}
+
+	return ""
 }
 
 // SetTracker sets the file tracker for stale-read detection.

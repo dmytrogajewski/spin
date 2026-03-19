@@ -142,6 +142,31 @@ func TestSummarizeError_Long(t *testing.T) {
 	assert.Less(t, len(result), len(longErr))
 }
 
+// TestSummarizeError_NoCascade reproduces the bug where repeated summarization
+// of error tool results caused cascading error prefix duplication,
+// making the actual error unreadable to the LLM.
+func TestSummarizeError_NoCascade(t *testing.T) {
+	t.Parallel()
+
+	// Simulate what happens across multiple turns of observation summarization.
+	original := "execution failed: exit status 101"
+
+	once := observation.SummarizeError(original)
+	assert.Equal(t, "Error: execution failed: exit status 101", once)
+
+	// Second summarization should NOT double-prefix.
+	twice := observation.SummarizeError(once)
+	assert.Equal(t, once, twice, "re-summarizing should not add another Error: prefix")
+
+	// Even after many rounds, it should stay the same.
+	result := original
+	for range 10 {
+		result = observation.SummarizeError(result)
+	}
+
+	assert.Equal(t, once, result, "10 rounds of summarization should produce same result as 1")
+}
+
 // TestSummarize_EmptySearchResults verifies zero matches for empty search.
 // Kills mutant: counting 1 match for empty output would be wrong.
 func TestSummarize_EmptySearchResults(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 
 	agenttool "github.com/dmytrogajewski/spin/internal/agent/tool"
 	"github.com/dmytrogajewski/spin/internal/message"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 // DispatcherBridge adapts tool.Runtime to the harness.ToolDispatcher interface.
@@ -45,7 +46,7 @@ func (b *DispatcherBridge) Dispatch(
 		if err != nil {
 			resultContent = "Error: " + err.Error()
 		} else if toolResult != nil {
-			resultContent = toolResult.Output
+			resultContent = buildToolResultContent(toolResult)
 		}
 
 		result = append(result, message.Message{
@@ -56,4 +57,24 @@ func (b *DispatcherBridge) Dispatch(
 	}
 
 	return result
+}
+
+// buildToolResultContent constructs the message content from a tool result.
+// For failed tools, it includes both the output (e.g., compiler errors) and
+// the error summary so the LLM can see the full picture.
+func buildToolResultContent(r *tools.ToolResult) string {
+	if r.Success {
+		return r.Output
+	}
+
+	// Failed tool — combine output and error for the LLM.
+	if r.Output != "" && r.Error != "" {
+		return r.Output + "\nError: " + r.Error
+	}
+
+	if r.Error != "" {
+		return "Error: " + r.Error
+	}
+
+	return r.Output
 }

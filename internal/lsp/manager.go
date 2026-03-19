@@ -48,13 +48,14 @@ func (m *Manager) Close(ctx context.Context) error {
 
 	var firstErr error
 
-	for langID, srv := range m.servers {
+	for _, srv := range m.servers {
+		langID := srv.Language()
 		if closeErr := srv.Close(ctx); closeErr != nil && firstErr == nil {
 			firstErr = fmt.Errorf("close server %s: %w", langID, closeErr)
 		}
-
-		delete(m.servers, langID)
 	}
+
+	clear(m.servers)
 
 	return firstErr
 }
@@ -64,8 +65,13 @@ func (m *Manager) serverForLanguage(ctx context.Context, lang LanguageConfig) (*
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if srv, ok := m.servers[lang.ID]; ok && srv.IsAlive() {
-		return srv, nil
+	if srv, ok := m.servers[lang.ID]; ok {
+		if srv.IsAlive() {
+			return srv, nil
+		}
+
+		// Server died — mark it and create a fresh one.
+		srv.SetAlive(false)
 	}
 
 	srv, createErr := m.factory(ctx, lang, m.rootURI)

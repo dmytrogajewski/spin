@@ -155,10 +155,24 @@ func (a *TaskManagerAdapter) Kill(_ context.Context, taskID string) error {
 	return a.mgr.Kill(taskID)
 }
 
+// Start launches a command in the background.
+// The command string is passed to the shell for parsing (sh -c "command").
+func (a *TaskManagerAdapter) Start(ctx context.Context, command, workDir string) (string, string, error) {
+	return a.mgr.Start(ctx, "sh", []string{"-c", command}, nil, workDir)
+}
+
 // Adapter adapts runtime.CommandExecutor to tools.CommandExecutor interface.
-// Used by builtin runtime.
+// When a Pipeline is set, every command passes through its stages before execution.
+// A halted pipeline prevents the command from reaching the executor.
 type Adapter struct {
 	executor CommandExecutor
+	pipeline *Pipeline
+}
+
+// NewAdapterWithPipeline creates an Adapter that runs the given pipeline before
+// executing commands. A nil pipeline means commands execute directly.
+func NewAdapterWithPipeline(exec CommandExecutor, pipeline *Pipeline) *Adapter {
+	return &Adapter{executor: exec, pipeline: pipeline}
 }
 
 // Execute implements the Execute operation.
@@ -168,6 +182,19 @@ func (a *Adapter) Execute(ctx context.Context, cmd tools.CommandInfo, opts any) 
 		Args:    cmd.GetArgs(),
 		Raw:     cmd.GetRaw(),
 		WorkDir: cmd.GetWorkDir(),
+	}
+
+	// Run pipeline stages (safety, detection, etc.) before execution.
+	if a.pipeline != nil {
+		pc := NewPipelineContext(secCmd)
+
+		if err := a.pipeline.Run(ctx, pc); err != nil {
+			return &executionResultAdapter{}, err
+		}
+
+		if pc.Halted {
+			return &executionResultAdapter{}, pc.HaltErr
+		}
 	}
 
 	result, err := a.executor.Execute(ctx, secCmd, opts)

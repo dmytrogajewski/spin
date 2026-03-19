@@ -275,11 +275,13 @@ func (g *Integration) GetDiff(ctx context.Context, filePath string) (string, err
 		return "", ErrNotAGitRepository
 	}
 
+	// Use "git diff HEAD" to show both staged and unstaged changes.
+	// Plain "git diff" only shows unstaged, missing anything after "git add".
 	var args []string
 	if filePath != "" {
-		args = []string{"diff", filePath}
+		args = []string{"diff", "HEAD", "--", filePath}
 	} else {
-		args = []string{"diff"}
+		args = []string{"diff", "HEAD"}
 	}
 
 	cmd := exec.CommandContext(ctx, "git", args...)

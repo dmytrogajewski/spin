@@ -62,3 +62,12 @@ type TaskManager interface {
 	// Kill terminates a running task.
 	Kill(ctx context.Context, taskID string) error
 }
+
+// TaskStarter starts background tasks. Separated from [TaskManager] because
+// starting a process requires shell parsing and env setup that read-only
+// management tools do not need.
+type TaskStarter interface {
+	// Start launches a command in the background and returns the task ID
+	// and any initial output captured during startup.
+	Start(ctx context.Context, command string, workDir string) (taskID string, initialOutput string, err error)
+}

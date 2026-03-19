@@ -10,6 +10,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/safety"
+	"github.com/dmytrogajewski/spin/internal/safety/hooks"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -27,6 +28,7 @@ type RuntimeConfig struct {
 	ApprovalService *safety.ApprovalService
 	Emitter         *events.EventEmitter
 	WorkDir         string
+	HookRunner      *hooks.Runner
 }
 
 // Runtime executes tool calls with validation, approval, and event emission.
@@ -36,6 +38,7 @@ type Runtime struct {
 	approvalService *safety.ApprovalService
 	emitter         *events.EventEmitter
 	workDir         string
+	hookRunner      *hooks.Runner
 }
 
 // NewRuntime creates a new tool runtime from config.
@@ -46,6 +49,7 @@ func NewRuntime(cfg RuntimeConfig) *Runtime {
 		approvalService: cfg.ApprovalService,
 		emitter:         cfg.Emitter,
 		workDir:         cfg.WorkDir,
+		hookRunner:      cfg.HookRunner,
 	}
 }
 
@@ -98,6 +102,11 @@ func (t *Runtime) Execute(ctx context.Context, call *message.ToolCall) (*tools.T
 		return denied, nil
 	}
 
+	// Run PRE_TOOL_USE hook — may block execution.
+	if hookResult := t.runPreToolHook(ctx, call); hookResult != nil {
+		return hookResult, nil
+	}
+
 	// Emit tool call start event.
 	t.emitToolStart(call, args)
 
@@ -105,12 +114,14 @@ func (t *Runtime) Execute(ctx context.Context, call *message.ToolCall) (*tools.T
 	if err != nil {
 		result := tools.NewToolErrorWithID(call.ID, err)
 		t.emitToolComplete(call, tool.Name(), &result, err)
+		t.runPostToolHook(ctx, call, &result)
 
 		return &result, nil
 	}
 
 	result := toolResult.WithID(call.ID)
 	t.emitToolComplete(call, tool.Name(), &result, nil)
+	t.runPostToolHook(ctx, call, &result)
 
 	return &result, nil
 }
@@ -272,4 +283,43 @@ func (t *Runtime) parseToolArguments(call *message.ToolCall) (tools.ToolParamete
 	parser := tools.NewStrictArgumentParser()
 
 	return parser.Parse(call.Function.Arguments)
+}
+
+// runPreToolHook executes PRE_TOOL_USE hooks. Returns a ToolResult if blocked.
+func (t *Runtime) runPreToolHook(ctx context.Context, call *message.ToolCall) *tools.ToolResult {
+	if t.hookRunner == nil {
+		return nil
+	}
+
+	evtCtx := hooks.EventContext{
+		WorkDir:  t.workDir,
+		ToolName: call.Function.Name,
+		ToolInput: call.Function.Arguments,
+	}
+
+	hookResult := t.hookRunner.Execute(ctx, hooks.EventPreToolUse, evtCtx)
+	if hookResult.Blocked {
+		result := tools.NewToolErrorWithID(call.ID,
+			fmt.Errorf("blocked by hook: %s", hookResult.Reason))
+
+		return &result
+	}
+
+	return nil
+}
+
+// runPostToolHook fires POST_TOOL_USE hooks asynchronously (non-blocking).
+func (t *Runtime) runPostToolHook(ctx context.Context, call *message.ToolCall, result *tools.ToolResult) {
+	if t.hookRunner == nil {
+		return
+	}
+
+	evtCtx := hooks.EventContext{
+		WorkDir:      t.workDir,
+		ToolName:     call.Function.Name,
+		ToolInput:    call.Function.Arguments,
+		ToolResponse: result.Output,
+	}
+
+	t.hookRunner.Execute(ctx, hooks.EventPostToolUse, evtCtx)
 }

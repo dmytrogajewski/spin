@@ -15,6 +15,11 @@ import (
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/message"
+	"github.com/dmytrogajewski/spin/internal/agent/subagent"
+	"github.com/dmytrogajewski/spin/internal/contexteng/retrieval"
+	"github.com/dmytrogajewski/spin/internal/lsp"
+	"github.com/dmytrogajewski/spin/internal/safety/hooks"
+	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
 	"github.com/dmytrogajewski/spin/internal/tokenizer"
 )
@@ -62,6 +67,24 @@ type Conversation struct {
 	// Harness executor for turn execution (required).
 	harnessExecutor HarnessTurnExecutor
 
+	// Hook runner for lifecycle events (optional, nil = no hooks).
+	hookRunner *hooks.Runner
+
+	// Transcript writer for JSONL persistence (optional, nil = no persistence).
+	transcriptWriter *session.TranscriptWriter
+
+	// Session index for fast session listing (optional, nil = no index).
+	sessionIndex *session.Index
+
+	// SubAgent manager for spawning specialized subagents (optional).
+	subagentManager *subagent.Manager
+
+	// Context retrieval pipeline for assembling context fragments (optional).
+	retrievalPipeline *retrieval.Pipeline
+
+	// LSP manager for code navigation (optional, closed on conversation close).
+	lspManager *lsp.Manager
+
 	// Protocol-specific fields (optional, for protocol use).
 	turnID      string             // Current turn ID.
 	cancel      context.CancelFunc // Cancellation context.
@@ -73,6 +96,19 @@ type Conversation struct {
 func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 	if strings.TrimSpace(input) == "" {
 		return ErrEmptyInput
+	}
+
+	// Fire USER_PROMPT_SUBMIT hook — may block the turn.
+	if c.hookRunner != nil {
+		evtCtx := hooks.EventContext{
+			SessionID: c.id,
+			WorkDir:   c.workDir,
+		}
+
+		result := c.hookRunner.Execute(ctx, hooks.EventUserPromptSubmit, evtCtx)
+		if result.Blocked {
+			return fmt.Errorf("blocked by hook: %s", result.Reason)
+		}
 	}
 
 	historyMessages := c.history.MessagesForLLM()
@@ -95,6 +131,11 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 	for _, msg := range messages {
 		if err := c.history.AddMessage(ctx, msg); err != nil {
 			return fmt.Errorf("failed to add message to history: %w", err)
+		}
+
+		// Persist to transcript (best-effort).
+		if c.transcriptWriter != nil {
+			_ = c.transcriptWriter.Append(ctx, msg)
 		}
 	}
 
@@ -184,8 +225,14 @@ func (c *Conversation) Stream() <-chan events.Event {
 // Note: Services (git, shell, mcp) are owned by the application layer
 // and are NOT closed here - they can be shared across conversations.
 func (c *Conversation) Close() error {
-	// Close conversation-specific resources only
-	// Services are managed by the application layer.
+	if c.lspManager != nil {
+		_ = c.lspManager.Close(context.Background())
+	}
+
+	if c.transcriptWriter != nil {
+		return c.transcriptWriter.Close()
+	}
+
 	return nil
 }
 
@@ -265,6 +312,24 @@ func (c *Conversation) GetWorkDir() string {
 // Returns nil if memory is not enabled.
 func (c *Conversation) GetMemoryService() *MemoryService {
 	return c.memoryService
+}
+
+// GetSubagentManager returns the subagent manager for spawning specialized subagents.
+// Returns nil if subagents are not available.
+func (c *Conversation) GetSubagentManager() *subagent.Manager {
+	return c.subagentManager
+}
+
+// GetRetrievalPipeline returns the context retrieval pipeline.
+// Returns nil if no retrieval sources are configured.
+func (c *Conversation) GetRetrievalPipeline() *retrieval.Pipeline {
+	return c.retrievalPipeline
+}
+
+// GetSessionIndex returns the session index for session management operations
+// (List, Remove, Count). Returns nil if index is unavailable.
+func (c *Conversation) GetSessionIndex() *session.Index {
+	return c.sessionIndex
 }
 
 // NewFromAgentConfig holds configuration for NewFromAgent.

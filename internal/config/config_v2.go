@@ -192,6 +192,12 @@ type LLMV2 struct {
 	// provider doesn't know the context window for a particular model.
 	// If not set (0), the system will try to auto-detect from the provider.
 	ContextWindow int `mapstructure:"context_window" yaml:"context_window"`
+
+	// Compactor thresholds (ratio 0.0–1.0). Zero values use defaults.
+	CompactorWarning         float64 `mapstructure:"compactor_warning"          yaml:"compactor_warning"`
+	CompactorObserve         float64 `mapstructure:"compactor_observe"          yaml:"compactor_observe"`
+	CompactorPrune           float64 `mapstructure:"compactor_prune"            yaml:"compactor_prune"`
+	CompactorRecentProtected int     `mapstructure:"compactor_recent_protected" yaml:"compactor_recent_protected"`
 }
 
 // AgentV2 configures the agent behavior.

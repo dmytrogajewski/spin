@@ -461,3 +461,62 @@ func TestApplyPatchTool_CheckApproval_EmptyPatch(t *testing.T) {
 		t.Errorf("CheckApproval Risk = %v, want %v", needs.Risk, RiskSafe)
 	}
 }
+
+// TestApplyPatchTool_UnifiedDiff_ParameterNames reproduces the bug where LLMs
+// send "patch" instead of "patch_text" and the patch is silently ignored.
+// Also tests that unified diff format (--- a/file / +++ b/file) works with
+// the patchapply library (requires a/ b/ prefix stripping and leading context).
+func TestApplyPatchTool_UnifiedDiff_ParameterNames(t *testing.T) {
+	t.Parallel()
+
+	const (
+		originalContent = "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"
+		patchContent    = "--- main.go\n+++ main.go\n@@ -1,5 +1,5 @@\n package main\n \n func main() {\n-\tfmt.Println(\"hello\")\n+\tfmt.Println(\"greetings\")\n }\n"
+	)
+
+	tests := []struct {
+		name     string
+		paramKey string
+	}{
+		{name: "alias patch", paramKey: "patch"},
+		{name: "canonical patch_text", paramKey: "patch_text"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			workDir := t.TempDir()
+			filePath := filepath.Join(workDir, "main.go")
+
+			if err := os.WriteFile(filePath, []byte(originalContent), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			tool := NewApplyPatchTool(workDir)
+
+			params, err := FromMap(map[string]any{tt.paramKey: patchContent})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			result, execErr := tool.Execute(context.Background(), params)
+			if execErr != nil {
+				t.Fatal(execErr)
+			}
+
+			if !result.Success {
+				t.Fatalf("expected success, got error: %s", result.Error)
+			}
+
+			content, readErr := os.ReadFile(filePath)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+
+			if !strings.Contains(string(content), "greetings") {
+				t.Errorf("patch was not applied, file content: %s", content)
+			}
+		})
+	}
+}

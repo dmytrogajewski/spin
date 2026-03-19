@@ -191,6 +191,7 @@ func (l *LoaderV2) applyDefaults(cfg *V2) {
 
 	l.applyProtocolDefaults(cfg, defaults)
 	l.applyAgentsMDDefaults(cfg, defaults)
+	l.applyMemoryDefaults(cfg, defaults)
 }
 
 // applyLLMDefaults applies default values for LLM fields.
@@ -311,6 +312,28 @@ func (l *LoaderV2) applyAgentsMDDefaults(cfg, defaults *V2) {
 		cfg.AgentsMD.MaxSize = defaults.AgentsMD.MaxSize
 	}
 	// Path default is empty string (auto-discover), no need to apply.
+}
+
+// applyMemoryDefaults applies default values for Memory fields.
+// Scratchpad is enabled by default; persistent memory requires opt-in.
+func (l *LoaderV2) applyMemoryDefaults(cfg, defaults *V2) {
+	if !l.viper.IsSet("memory") {
+		cfg.Memory = defaults.Memory
+
+		return
+	}
+
+	if !l.viper.IsSet("memory.scratchpad.enabled") {
+		cfg.Memory.Scratchpad.Enabled = defaults.Memory.Scratchpad.Enabled
+	}
+
+	if !l.viper.IsSet("memory.scratchpad.max_entries") {
+		cfg.Memory.Scratchpad.MaxEntries = defaults.Memory.Scratchpad.MaxEntries
+	}
+
+	if !l.viper.IsSet("memory.scratchpad.auto_evict") {
+		cfg.Memory.Scratchpad.AutoEvict = defaults.Memory.Scratchpad.AutoEvict
+	}
 }
 
 // Set sets a configuration value (useful for testing and programmatic config).

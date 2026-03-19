@@ -1,6 +1,8 @@
 package adapter
 
 import (
+	"strings"
+
 	"github.com/dmytrogajewski/spin/internal/contexteng/observation"
 	"github.com/dmytrogajewski/spin/internal/message"
 )
@@ -15,6 +17,14 @@ type ObservationAdapter struct {
 // A nil summarizer produces a no-op adapter that returns messages unchanged.
 func NewObservationAdapter(s *observation.Summarizer) *ObservationAdapter {
 	return &ObservationAdapter{inner: s}
+}
+
+// errorContentPrefix is the prefix that indicates a tool result is an error.
+const errorContentPrefix = "Error:"
+
+// isErrorContent checks if tool output content indicates an error result.
+func isErrorContent(content string) bool {
+	return strings.HasPrefix(content, errorContentPrefix)
 }
 
 // SummarizeToolResults walks messages and applies per-tool summarization to
@@ -35,9 +45,14 @@ func (a *ObservationAdapter) SummarizeToolResults(
 			continue
 		}
 
-		result[idx].Content = a.inner.Summarize(
-			result[idx].Name, result[idx].Content,
-		)
+		// Use dedicated error summarization for failed tool results.
+		if isErrorContent(result[idx].Content) {
+			result[idx].Content = observation.SummarizeError(result[idx].Content)
+		} else {
+			result[idx].Content = a.inner.Summarize(
+				result[idx].Name, result[idx].Content,
+			)
+		}
 	}
 
 	return result

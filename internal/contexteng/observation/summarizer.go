@@ -129,11 +129,20 @@ func (d *defaultStrategy) Summarize(_, output string) string {
 	return fmt.Sprintf("Tool output (%d lines, %d chars)", lines, len(output))
 }
 
+// errorPrefix is the standard prefix for error tool results.
+const errorPrefix = "Error: "
+
 // SummarizeError truncates error output to a maximum length with a classified prefix.
+// If the output already starts with "Error: ", it is not double-prefixed.
 func SummarizeError(output string) string {
-	if len(output) <= ErrorTruncateMax {
-		return "Error: " + output
+	// Avoid cascading error prefixes when re-summarizing across turns.
+	if !strings.HasPrefix(output, errorPrefix) {
+		output = errorPrefix + output
 	}
 
-	return "Error: " + output[:ErrorTruncateMax] + "..."
+	if len(output) <= ErrorTruncateMax {
+		return output
+	}
+
+	return output[:ErrorTruncateMax] + "..."
 }
