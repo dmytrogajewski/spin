@@ -87,6 +87,38 @@ func TestNewSession_IncludesModeState(t *testing.T) {
 	assert.Equal(t, acp.SessionModeId("regular"), resp.Modes.CurrentModeId, "default mode should be regular")
 }
 
+// Journey: specs/journeys/JOURNEY-R1.3-acp-config-options-in-session.md.
+
+// TestNewSession_IncludesConfigOptions tests that NewSessionResponse includes ConfigOptions.
+func TestNewSession_IncludesConfigOptions(t *testing.T) {
+	t.Parallel()
+
+	acpAgent, err := NewSpinACPAgentWithStorage(
+		createTestAgent(t),
+		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
+		events.NewEventEmitter(100),
+		nil,
+	)
+	require.NoError(t, err)
+
+	resp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{Cwd: t.TempDir()})
+	require.NoError(t, err)
+
+	// Verify config options present.
+	require.NotEmpty(t, resp.ConfigOptions, "NewSessionResponse should include config options")
+	require.NotNil(t, resp.ConfigOptions[0].Select, "first config option must be select type")
+
+	modeOpt := resp.ConfigOptions[0].Select
+	assert.Equal(t, acp.SessionConfigId(configIDMode), modeOpt.Id)
+	assert.Equal(t, acp.SessionConfigValueId("regular"), modeOpt.CurrentValue, "default should be regular")
+
+	require.NotNil(t, modeOpt.Options.Ungrouped)
+	assert.Len(t, *modeOpt.Options.Ungrouped, 4, "should have 4 mode options")
+
+	// Verify backward compat: modes field still populated.
+	require.NotNil(t, resp.Modes, "legacy Modes field should still be populated")
+}
+
 // TestSetSessionMode_SessionNotFound tests error when session doesn't exist.
 func TestSetSessionMode_SessionNotFound(t *testing.T) {
 	t.Parallel()
@@ -267,4 +299,291 @@ func TestSetSessionMode_SendsNotification(t *testing.T) {
 	}
 
 	assert.True(t, found, "should send CurrentModeUpdate notification")
+}
+
+// Journey: specs/journeys/JOURNEY-R1.1-acp-config-option-mode.md.
+
+// TestSetSessionConfigOption_Success tests setting mode via config option.
+func TestSetSessionConfigOption_Success(t *testing.T) {
+	t.Parallel()
+
+	acpAgent, err := NewSpinACPAgentWithStorage(
+		createTestAgent(t),
+		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
+		events.NewEventEmitter(100),
+		nil,
+	)
+	require.NoError(t, err)
+
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{Cwd: t.TempDir()})
+	require.NoError(t, err)
+
+	resp, err := acpAgent.SetSessionConfigOption(context.Background(), acp.SetSessionConfigOptionRequest{
+		SessionId: sessionResp.SessionId,
+		ConfigId:  acp.SessionConfigId(configIDMode),
+		Value:     acp.SessionConfigValueId("review"),
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.ConfigOptions, "response must include config options")
+
+	// Verify mode was updated in internal state.
+	acpAgent.mu.RLock()
+	storedMode := acpAgent.sessionModes[sessionResp.SessionId]
+	acpAgent.mu.RUnlock()
+	assert.Equal(t, acp.SessionModeId("review"), storedMode)
+
+	// Verify response config options reflect new mode.
+	require.NotNil(t, resp.ConfigOptions[0].Select, "first config option must be select type")
+	assert.Equal(t, acp.SessionConfigValueId("review"), resp.ConfigOptions[0].Select.CurrentValue)
+}
+
+// TestSetSessionConfigOption_AllModes tests all valid modes via config option.
+func TestSetSessionConfigOption_AllModes(t *testing.T) {
+	t.Parallel()
+
+	acpAgent, err := NewSpinACPAgentWithStorage(
+		createTestAgent(t),
+		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
+		events.NewEventEmitter(100),
+		nil,
+	)
+	require.NoError(t, err)
+
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{Cwd: t.TempDir()})
+	require.NoError(t, err)
+
+	modes := []string{"regular", "review", "compact", "planning"}
+	for _, mode := range modes {
+		resp, setErr := acpAgent.SetSessionConfigOption(context.Background(), acp.SetSessionConfigOptionRequest{
+			SessionId: sessionResp.SessionId,
+			ConfigId:  acp.SessionConfigId(configIDMode),
+			Value:     acp.SessionConfigValueId(mode),
+		})
+		require.NoError(t, setErr, "should set mode %s", mode)
+		assert.Equal(t, acp.SessionConfigValueId(mode), resp.ConfigOptions[0].Select.CurrentValue)
+	}
+}
+
+// TestSetSessionConfigOption_SessionNotFound tests error for missing session.
+func TestSetSessionConfigOption_SessionNotFound(t *testing.T) {
+	t.Parallel()
+
+	acpAgent, err := NewSpinACPAgentWithStorage(
+		createTestAgent(t),
+		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
+		events.NewEventEmitter(100),
+		nil,
+	)
+	require.NoError(t, err)
+
+	_, err = acpAgent.SetSessionConfigOption(context.Background(), acp.SetSessionConfigOptionRequest{
+		SessionId: acp.SessionId("nonexistent"),
+		ConfigId:  acp.SessionConfigId(configIDMode),
+		Value:     acp.SessionConfigValueId("review"),
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrSessionNotFound)
+}
+
+// TestSetSessionConfigOption_InvalidMode tests error for invalid mode value.
+func TestSetSessionConfigOption_InvalidMode(t *testing.T) {
+	t.Parallel()
+
+	acpAgent, err := NewSpinACPAgentWithStorage(
+		createTestAgent(t),
+		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
+		events.NewEventEmitter(100),
+		nil,
+	)
+	require.NoError(t, err)
+
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{Cwd: t.TempDir()})
+	require.NoError(t, err)
+
+	_, err = acpAgent.SetSessionConfigOption(context.Background(), acp.SetSessionConfigOptionRequest{
+		SessionId: sessionResp.SessionId,
+		ConfigId:  acp.SessionConfigId(configIDMode),
+		Value:     acp.SessionConfigValueId("nonexistent-mode"),
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrInvalidMode)
+}
+
+// TestSetSessionConfigOption_UnknownConfigID tests error for unknown config option.
+func TestSetSessionConfigOption_UnknownConfigID(t *testing.T) {
+	t.Parallel()
+
+	acpAgent, err := NewSpinACPAgentWithStorage(
+		createTestAgent(t),
+		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
+		events.NewEventEmitter(100),
+		nil,
+	)
+	require.NoError(t, err)
+
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{Cwd: t.TempDir()})
+	require.NoError(t, err)
+
+	_, err = acpAgent.SetSessionConfigOption(context.Background(), acp.SetSessionConfigOptionRequest{
+		SessionId: sessionResp.SessionId,
+		ConfigId:  acp.SessionConfigId("model"),
+		Value:     acp.SessionConfigValueId("gpt-4"),
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrUnknownConfigOption)
+}
+
+// TestSetSessionConfigOption_SendsNotification tests that config option change sends notification.
+func TestSetSessionConfigOption_SendsNotification(t *testing.T) {
+	t.Parallel()
+
+	acpAgent, err := NewSpinACPAgentWithStorage(
+		&agent.Agent{},
+		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
+		events.NewEventEmitter(100),
+		nil,
+	)
+	require.NoError(t, err)
+
+	mockConn := &mockConnection{}
+	acpAgent.SetNotificationSender(mockConn)
+
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{Cwd: t.TempDir()})
+	require.NoError(t, err)
+
+	_, err = acpAgent.SetSessionConfigOption(context.Background(), acp.SetSessionConfigOptionRequest{
+		SessionId: sessionResp.SessionId,
+		ConfigId:  acp.SessionConfigId(configIDMode),
+		Value:     acp.SessionConfigValueId("review"),
+	})
+	require.NoError(t, err)
+
+	// Verify CurrentModeUpdate notification was sent (backward compat).
+	notifications := mockConn.GetNotifications()
+	found := false
+
+	for _, notif := range notifications {
+		if notif.Update.CurrentModeUpdate != nil {
+			found = true
+
+			assert.Equal(t, acp.SessionModeId("review"), notif.Update.CurrentModeUpdate.CurrentModeId)
+
+			break
+		}
+	}
+
+	assert.True(t, found, "should send CurrentModeUpdate notification for backward compat")
+}
+
+// TestBuildConfigOptions tests config options construction.
+func TestBuildConfigOptions(t *testing.T) {
+	t.Parallel()
+
+	opts := buildConfigOptions(acp.SessionModeId("review"))
+	require.Len(t, opts, 1, "should have one config option (mode)")
+
+	modeOpt := opts[0]
+	require.NotNil(t, modeOpt.Select, "config option must be select type")
+	assert.Equal(t, acp.SessionConfigId(configIDMode), modeOpt.Select.Id)
+	assert.Equal(t, "Mode", modeOpt.Select.Name)
+	assert.Equal(t, acp.SessionConfigValueId("review"), modeOpt.Select.CurrentValue)
+
+	// Verify all 4 modes are in options.
+	require.NotNil(t, modeOpt.Select.Options.Ungrouped)
+	assert.Len(t, *modeOpt.Select.Options.Ungrouped, 4)
+}
+
+// Journey: specs/journeys/JOURNEY-R1.2-acp-config-option-notify.md.
+
+// TestSetSessionConfigOption_EmitsConfigOptionUpdate tests config_option_update notification.
+func TestSetSessionConfigOption_EmitsConfigOptionUpdate(t *testing.T) {
+	t.Parallel()
+
+	acpAgent, err := NewSpinACPAgentWithStorage(
+		&agent.Agent{},
+		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
+		events.NewEventEmitter(100),
+		nil,
+	)
+	require.NoError(t, err)
+
+	mockConn := &mockConnection{}
+	acpAgent.SetNotificationSender(mockConn)
+
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{Cwd: t.TempDir()})
+	require.NoError(t, err)
+
+	_, err = acpAgent.SetSessionConfigOption(context.Background(), acp.SetSessionConfigOptionRequest{
+		SessionId: sessionResp.SessionId,
+		ConfigId:  acp.SessionConfigId(configIDMode),
+		Value:     acp.SessionConfigValueId("planning"),
+	})
+	require.NoError(t, err)
+
+	// Verify ConfigOptionUpdate notification.
+	notifications := mockConn.GetNotifications()
+	foundConfig := false
+	foundMode := false
+
+	for _, notif := range notifications {
+		if notif.Update.ConfigOptionUpdate != nil {
+			foundConfig = true
+
+			require.NotEmpty(t, notif.Update.ConfigOptionUpdate.ConfigOptions)
+			assert.Equal(t,
+				acp.SessionConfigValueId("planning"),
+				notif.Update.ConfigOptionUpdate.ConfigOptions[0].Select.CurrentValue,
+			)
+		}
+
+		if notif.Update.CurrentModeUpdate != nil {
+			foundMode = true
+		}
+	}
+
+	assert.True(t, foundConfig, "should send ConfigOptionUpdate notification")
+	assert.True(t, foundMode, "should also send CurrentModeUpdate for backward compat")
+}
+
+// TestSetSessionMode_EmitsConfigOptionUpdate tests that legacy set_mode also emits config_option_update.
+func TestSetSessionMode_EmitsConfigOptionUpdate(t *testing.T) {
+	t.Parallel()
+
+	acpAgent, err := NewSpinACPAgentWithStorage(
+		&agent.Agent{},
+		mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default())),
+		events.NewEventEmitter(100),
+		nil,
+	)
+	require.NoError(t, err)
+
+	mockConn := &mockConnection{}
+	acpAgent.SetNotificationSender(mockConn)
+
+	sessionResp, err := acpAgent.NewSession(context.Background(), acp.NewSessionRequest{Cwd: t.TempDir()})
+	require.NoError(t, err)
+
+	_, err = acpAgent.SetSessionMode(context.Background(), acp.SetSessionModeRequest{
+		SessionId: sessionResp.SessionId,
+		ModeId:    acp.SessionModeId("compact"),
+	})
+	require.NoError(t, err)
+
+	// Verify both notifications sent.
+	notifications := mockConn.GetNotifications()
+	foundConfig := false
+
+	for _, notif := range notifications {
+		if notif.Update.ConfigOptionUpdate != nil {
+			foundConfig = true
+
+			require.NotEmpty(t, notif.Update.ConfigOptionUpdate.ConfigOptions)
+			assert.Equal(t,
+				acp.SessionConfigValueId("compact"),
+				notif.Update.ConfigOptionUpdate.ConfigOptions[0].Select.CurrentValue,
+			)
+		}
+	}
+
+	assert.True(t, foundConfig, "legacy SetSessionMode should also emit ConfigOptionUpdate")
 }

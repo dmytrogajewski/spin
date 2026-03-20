@@ -201,6 +201,8 @@ func TestConvertEventToSessionUpdate_ContentDelta_UserRole(t *testing.T) {
 	assert.Equal(t, acp.SessionUpdate{}, update)
 }
 
+// Journey: specs/journeys/JOURNEY-R4.1-acp-tool-kind-mapping.md.
+
 // TestMapToolNameToKind tests tool name to ACP tool kind mapping.
 func TestMapToolNameToKind(t *testing.T) {
 	t.Parallel()
@@ -208,14 +210,47 @@ func TestMapToolNameToKind(t *testing.T) {
 	tests := []struct {
 		name     string
 		toolName string
-		want     *acp.ToolKind
+		want     acp.ToolKind
 	}{
-		{"read_file maps to read", "read_file", acp.Ptr(acp.ToolKindRead)},
-		{"write_file maps to edit", "write_file", acp.Ptr(acp.ToolKindEdit)},
-		{"shell_command maps to execute", "shell_command", acp.Ptr(acp.ToolKindExecute)},
-		{"file_search maps to search", "file_search", acp.Ptr(acp.ToolKindSearch)},
-		{"list_directory maps to read", "list_directory", acp.Ptr(acp.ToolKindRead)},
-		{"unknown tool returns nil", "unknown_tool", nil},
+		// read kind.
+		{"read_file maps to read", "read_file", acp.ToolKindRead},
+		{"list_directory maps to read", "list_directory", acp.ToolKindRead},
+		{"git_context maps to read", "git_context", acp.ToolKindRead},
+		{"get_context maps to read", "get_context", acp.ToolKindRead},
+		{"get_process_output maps to read", "get_process_output", acp.ToolKindRead},
+		{"list_processes maps to read", "list_processes", acp.ToolKindRead},
+
+		// edit kind.
+		{"write_file maps to edit", "write_file", acp.ToolKindEdit},
+		{"edit_file maps to edit", "edit_file", acp.ToolKindEdit},
+		{"apply_patch maps to edit", "apply_patch", acp.ToolKindEdit},
+
+		// execute kind.
+		{"shell_command maps to execute", "shell_command", acp.ToolKindExecute},
+		{"start_process maps to execute", "start_process", acp.ToolKindExecute},
+		{"git_operation maps to execute", "git_operation", acp.ToolKindExecute},
+		{"kill_process maps to execute", "kill_process", acp.ToolKindExecute},
+
+		// search kind.
+		{"file_search maps to search", "file_search", acp.ToolKindSearch},
+		{"find_symbol maps to search", "find_symbol", acp.ToolKindSearch},
+		{"find_references maps to search", "find_references", acp.ToolKindSearch},
+
+		// move kind.
+		{"rename_symbol maps to move", "rename_symbol", acp.ToolKindMove},
+
+		// fetch kind.
+		{"fetch_url maps to fetch", "fetch_url", acp.ToolKindFetch},
+		{"web_search maps to fetch", "web_search", acp.ToolKindFetch},
+		{"capture_web_screenshot maps to fetch", "capture_web_screenshot", acp.ToolKindFetch},
+		{"open_browser maps to fetch", "open_browser", acp.ToolKindFetch},
+
+		// think kind.
+		{"memory maps to think", "memory", acp.ToolKindThink},
+		{"scratchpad maps to think", "scratchpad", acp.ToolKindThink},
+
+		// unknown tools fall back to other.
+		{"unknown tool maps to other", "completely_unknown_tool", acp.ToolKindOther},
 	}
 
 	for _, tt := range tests {
@@ -223,13 +258,29 @@ func TestMapToolNameToKind(t *testing.T) {
 			t.Parallel()
 
 			got := mapToolNameToKind(tt.toolName)
-			if tt.want == nil {
-				assert.Nil(t, got)
-			} else {
-				require.NotNil(t, got)
-				assert.Equal(t, *tt.want, *got)
-			}
+			require.NotNil(t, got, "every tool must return a non-nil kind")
+			assert.Equal(t, tt.want, *got)
 		})
+	}
+}
+
+// TestMapToolNameToKind_AllNonNil verifies no tool returns nil.
+func TestMapToolNameToKind_AllNonNil(t *testing.T) {
+	t.Parallel()
+
+	toolNames := []string{
+		"read_file", "list_directory", "write_file", "edit_file",
+		"apply_patch", "shell_command", "start_process", "file_search",
+		"find_symbol", "find_references", "rename_symbol", "fetch_url",
+		"web_search", "capture_web_screenshot", "open_browser",
+		"git_context", "git_operation", "get_context", "memory",
+		"scratchpad", "get_process_output", "kill_process", "list_processes",
+		"some_future_tool",
+	}
+
+	for _, name := range toolNames {
+		got := mapToolNameToKind(name)
+		assert.NotNilf(t, got, "tool %q must return non-nil kind", name)
 	}
 }
 
@@ -591,6 +642,89 @@ func TestConvertToolCallComplete_NonWriteFile_NoDiff(t *testing.T) {
 	assert.True(t, ok, "should convert EventToolCallComplete")
 	assert.NotNil(t, update)
 	// Verify no diff was generated (tracker should not have been used).
+}
+
+// TestConvertToolCallStart_ShellCommand_TitleShowsCommand tests that shell_command
+// tool calls use the actual command string as title, not the tool name.
+func TestConvertToolCallStart_ShellCommand_TitleShowsCommand(t *testing.T) {
+	t.Parallel()
+
+	params, err := tools.FromMap(map[string]any{
+		"command":   "find . -name '*.go' | head -50",
+		"operation": "execute",
+	})
+	require.NoError(t, err)
+
+	event := events.Event{
+		Type:      events.EventToolCallStart,
+		Timestamp: time.Now(),
+		Data: events.ToolCallStartData{
+			ToolID:     "tool-shell-1",
+			ToolName:   "shell_command",
+			Parameters: params,
+		},
+	}
+
+	update, ok := convertToolCallStart(event, nil)
+
+	assert.True(t, ok, "should convert EventToolCallStart")
+	require.NotNil(t, update.ToolCall, "should have tool call")
+	assert.Equal(t, "find . -name '*.go' | head -50", update.ToolCall.Title,
+		"shell_command title should show the actual command, not 'shell_command'")
+}
+
+// TestConvertToolCallStart_ShellCommand_FallbackTitle tests that shell_command
+// falls back to tool name when command parameter is missing.
+func TestConvertToolCallStart_ShellCommand_FallbackTitle(t *testing.T) {
+	t.Parallel()
+
+	params, err := tools.FromMap(map[string]any{
+		"operation": "execute",
+	})
+	require.NoError(t, err)
+
+	event := events.Event{
+		Type:      events.EventToolCallStart,
+		Timestamp: time.Now(),
+		Data: events.ToolCallStartData{
+			ToolID:     "tool-shell-2",
+			ToolName:   "shell_command",
+			Parameters: params,
+		},
+	}
+
+	update, ok := convertToolCallStart(event, nil)
+
+	assert.True(t, ok, "should convert EventToolCallStart")
+	require.NotNil(t, update.ToolCall, "should have tool call")
+	assert.Equal(t, "shell_command", update.ToolCall.Title,
+		"should fall back to tool name when command is missing")
+}
+
+// TestConvertToolCallStart_NonShellCommand_KeepsToolName tests that non-shell tools
+// keep the tool name as title.
+func TestConvertToolCallStart_NonShellCommand_KeepsToolName(t *testing.T) {
+	t.Parallel()
+
+	params, err := tools.FromMap(map[string]any{"path": "/tmp/test.txt"})
+	require.NoError(t, err)
+
+	event := events.Event{
+		Type:      events.EventToolCallStart,
+		Timestamp: time.Now(),
+		Data: events.ToolCallStartData{
+			ToolID:     "tool-read-1",
+			ToolName:   "read_file",
+			Parameters: params,
+		},
+	}
+
+	update, ok := convertToolCallStart(event, nil)
+
+	assert.True(t, ok, "should convert EventToolCallStart")
+	require.NotNil(t, update.ToolCall, "should have tool call")
+	assert.Equal(t, "read_file", update.ToolCall.Title,
+		"non-shell tools should keep tool name as title")
 }
 
 // TestConvertSystemEvent_Info tests that EventInfo is converted to agent thought.

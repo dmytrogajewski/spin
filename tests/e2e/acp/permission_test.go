@@ -50,7 +50,7 @@ func (c *permissionTestClient) RequestPermission(ctx context.Context, params acp
 	}
 
 	return acp.RequestPermissionResponse{
-		Outcome: acp.NewRequestPermissionOutcomeSelected(selectedOptionID),
+		Outcome: newOutcomeSelected(selectedOptionID),
 	}, nil
 }
 

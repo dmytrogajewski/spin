@@ -191,8 +191,13 @@ func convertToolCallStart(event events.Event, tracker *fileContentTracker) (acp.
 		return acp.SessionUpdate{}, false
 	}
 
-	// Use tool name as title.
+	// Use tool name as title; for shell_command, show the actual command.
 	title := data.ToolName
+	if data.ToolName == "shell_command" {
+		if cmd, err := data.Parameters.GetString("command"); err == nil && cmd != "" {
+			title = cmd
+		}
+	}
 
 	// Convert Spin tool ID to ACP ToolCallId.
 	toolCallID := acp.ToolCallId(data.ToolID)

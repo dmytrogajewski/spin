@@ -232,7 +232,7 @@ func TestMcpTypes(t *testing.T) {
 		t.Parallel()
 
 		server := acp.McpServer{
-			Http: &acp.McpServerHttp{
+			Http: &acp.McpServerHttpInline{
 				Url: "https://example.com/mcp",
 			},
 		}

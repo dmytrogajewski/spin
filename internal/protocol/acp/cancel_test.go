@@ -245,7 +245,7 @@ func (m *mockConnectionForCancel) RequestPermission(
 	for _, opt := range params.Options {
 		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {
 			return acp.RequestPermissionResponse{
-				Outcome: acp.NewRequestPermissionOutcomeSelected(opt.OptionId),
+				Outcome: newOutcomeSelected(opt.OptionId),
 			}, nil
 		}
 	}

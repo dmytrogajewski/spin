@@ -140,6 +140,13 @@ Integration tests verify wiring between components. They live alongside the code
 | 3.2 Context | `internal/contexteng/retrieval/pipeline_integration_test.go` | Multi-source assembly, bullet source |
 | 3.3 Cache | `internal/llm/cache/persistence_integration_test.go` | Cross-instance persistence, staleness |
 | 4.2 Web | `internal/tools/web_fetch_integration_test.go` | HTTP fetch + HTML conversion |
+| R1.1 Config Options | `internal/protocol/acp/session_mode_test.go` | SetSessionConfigOption for mode category |
+| R1.2 Config Notify | `internal/protocol/acp/session_mode_test.go` | config_option_update notification from both endpoints |
+| R1.3 Session Config | `internal/protocol/acp/session_mode_test.go` | ConfigOptions in NewSessionResponse |
+| R2.1 Session List | `internal/protocol/acp/session_list_test.go` | UnstableListSessions with filter and pagination |
+| R2.2 List Capability | `internal/protocol/acp/session_list_test.go` | SessionCapabilities.List advertisement |
+| R3.1 Session Info | `internal/protocol/acp/session_info_test.go`, `title_test.go` | Session title generation and notification |
+| R4.1 Tool Kinds | `internal/protocol/acp/notifications_test.go` | ACP tool kind mapping for all 23 tools |
 
 ## Test Patterns
 

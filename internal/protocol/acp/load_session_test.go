@@ -177,7 +177,7 @@ func TestSpinACPAgent_LoadSession_InvalidMcpServer(t *testing.T) {
 		Cwd:       "/tmp/test",
 		McpServers: []acp.McpServer{
 			{
-				Http: &acp.McpServerHttp{
+				Http: &acp.McpServerHttpInline{
 					Url: "http://example.com",
 				},
 			},

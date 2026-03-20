@@ -21,6 +21,14 @@ const (
 	binPath     = "../../../bin/spin"
 )
 
+// newOutcomeSelected creates a RequestPermissionOutcome with the Selected variant and the given OptionId.
+func newOutcomeSelected(id acp.PermissionOptionId) acp.RequestPermissionOutcome {
+	outcome := acp.NewRequestPermissionOutcomeSelected()
+	outcome.Selected.OptionId = id
+
+	return outcome
+}
+
 // getBinPath returns the absolute path to the spin binary.
 func getBinPath(t *testing.T) string {
 	t.Helper()
@@ -199,7 +207,7 @@ func (c *testClient) RequestPermission(ctx context.Context, params acp.RequestPe
 	}
 
 	return acp.RequestPermissionResponse{
-		Outcome: acp.NewRequestPermissionOutcomeSelected(selectedOptionID),
+		Outcome: newOutcomeSelected(selectedOptionID),
 	}, nil
 }
 

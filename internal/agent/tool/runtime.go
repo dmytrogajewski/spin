@@ -156,6 +156,7 @@ func (t *Runtime) emitToolComplete(call *message.ToolCall, toolName string, resu
 
 	if result != nil {
 		data.Output = result.Output
+		data.Metadata = result.Metadata
 	}
 
 	if err != nil {

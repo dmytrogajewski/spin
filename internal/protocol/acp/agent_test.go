@@ -201,7 +201,7 @@ func TestSpinACPAgent_MethodStubs(t *testing.T) {
 		t.Parallel()
 
 		req := acp.AuthenticateRequest{
-			MethodId: acp.AuthMethodId("test"),
+			MethodId: "test",
 		}
 		_, authErr := acpAgent.Authenticate(ctx, req)
 		require.Error(t, authErr)

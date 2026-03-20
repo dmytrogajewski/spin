@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +32,12 @@ const (
 	mimeImagePNG  = "image/png"
 	roleAssistant = "assistant"
 	toolWriteFile = "write_file"
+
+	// configIDMode is the config option ID for session mode.
+	configIDMode = "mode"
+
+	// listSessionsPageSize is the max number of sessions per page.
+	listSessionsPageSize = 50
 )
 
 var (
@@ -63,6 +71,8 @@ var (
 	ErrInvalidMode = errors.New("invalid mode")
 	// ErrApprovalServiceNotConfigured is a sentinel error.
 	ErrApprovalServiceNotConfigured = errors.New("approval service not configured")
+	// ErrUnknownConfigOption is a sentinel error.
+	ErrUnknownConfigOption = errors.New("unknown config option")
 )
 
 // SpinACPAgent implements the acp.Agent interface, adapting Spin's components
@@ -271,7 +281,7 @@ func (a *SpinACPAgent) negotiateProtocolVersion(clientVersion acp.ProtocolVersio
 
 // buildAgentCapabilities builds agent capabilities based on Spin's features.
 func (a *SpinACPAgent) buildAgentCapabilities() acp.AgentCapabilities {
-	return acp.AgentCapabilities{
+	caps := acp.AgentCapabilities{
 		LoadSession: a.hasSessionPersistence(),
 		PromptCapabilities: acp.PromptCapabilities{
 			Image:           true, // Image blocks supported (converted to text description for agent processing).
@@ -283,6 +293,12 @@ func (a *SpinACPAgent) buildAgentCapabilities() acp.AgentCapabilities {
 			Sse:  false, // MCP manager currently only supports stdio.
 		},
 	}
+
+	if a.hasSessionPersistence() {
+		caps.SessionCapabilities.List = &acp.SessionListCapabilities{}
+	}
+
+	return caps
 }
 
 // hasSessionPersistence checks if session persistence is available.
@@ -316,6 +332,7 @@ func (a *SpinACPAgent) NewSession(ctx context.Context, req acp.NewSessionRequest
 			AvailableModes: getAvailableModes(),
 			CurrentModeId:  defaultMode,
 		},
+		ConfigOptions: buildConfigOptions(defaultMode),
 	}
 
 	_ = a.sendAvailableCommandsUpdate(ctx, sessionID)
@@ -497,20 +514,11 @@ func (a *SpinACPAgent) promptWithConversation(
 
 	unsubscribe, eventsDone := a.subscribeTransformerEvents(ctx, conn, transformer)
 
-	// Subscribe a second event stream for plan detection and structured notifications.
-	procSubID, procEventCh, procSubErr := a.emitter.Subscribe()
-	if procSubErr == nil {
-		procCtx, procCancel := context.WithCancel(ctx)
-
-		go a.processEvents(procCtx, req.SessionId, procEventCh)
-
-		defer func() {
-			procCancel()
-			a.emitter.Unsubscribe(procSubID)
-		}()
-	}
-
 	defer func() {
+		// Cancel context FIRST so the event goroutine can exit if blocked
+		// on a synchronous RPC (e.g., terminal/release).
+		cancel()
+
 		if unsubscribe != nil {
 			unsubscribe()
 		}
@@ -518,8 +526,6 @@ func (a *SpinACPAgent) promptWithConversation(
 		if eventsDone != nil {
 			<-eventsDone
 		}
-
-		cancel()
 	}()
 
 	// Execute turn via conversation (manages history automatically).
@@ -823,161 +829,6 @@ func mapStopReasonFromError(err error, resp *agent.Response) acp.StopReason {
 	}
 
 	return acp.StopReasonEndTurn
-}
-
-// processEvents processes events from the event emitter and sends ACP notifications.
-// This runs in a goroutine and continues until the context is canceled or the channel is closed.
-func (a *SpinACPAgent) processEvents(ctx context.Context, sessionID acp.SessionId, eventCh <-chan events.Event) {
-	fileTracker := newFileContentTracker()
-
-	var accumulatedContent string
-
-	a.mu.RLock()
-	conn := a.connection
-	a.mu.RUnlock()
-
-	if conn == nil {
-		return
-	}
-
-	proc := &eventProcessor{
-		agent:       a,
-		conn:        conn,
-		sessionID:   sessionID,
-		fileTracker: fileTracker,
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case event, ok := <-eventCh:
-			if !ok {
-				return
-			}
-
-			accumulatedContent = proc.handleEvent(ctx, event, accumulatedContent)
-		}
-	}
-}
-
-// eventProcessor handles individual event processing for ACP notifications.
-type eventProcessor struct {
-	agent        *SpinACPAgent
-	conn         notificationSender
-	sessionID    acp.SessionId
-	fileTracker  *fileContentTracker
-	planDetected bool
-}
-
-// handleEvent processes a single event and returns the updated accumulated content.
-func (p *eventProcessor) handleEvent(ctx context.Context, event events.Event, accumulatedContent string) string {
-	if event.Type == events.EventTurnStart {
-		return ""
-	}
-
-	if event.Type == events.EventToolCallStart {
-		p.detectAndSendPlan(ctx, accumulatedContent)
-	}
-
-	switch event.Type {
-	case events.EventContentDelta:
-		return p.handleContentDelta(ctx, event, accumulatedContent)
-	case events.EventThinkingDelta:
-		p.handleThinkingDelta(ctx, event)
-	case events.EventPlanUpdate:
-		p.handlePlanUpdate(ctx, event)
-	default:
-		p.handleGenericEvent(ctx, event)
-	}
-
-	return accumulatedContent
-}
-
-// detectAndSendPlan attempts to detect a plan from accumulated content and sends it.
-func (p *eventProcessor) detectAndSendPlan(ctx context.Context, content string) {
-	if content == "" || p.planDetected {
-		return
-	}
-
-	plan := DetectPlanFromText(content)
-	if plan == nil {
-		return
-	}
-
-	p.planDetected = true
-	planEntries := convertOrchestrationPlanToACP(plan)
-	p.sendNotification(ctx, acp.UpdatePlan(planEntries...))
-}
-
-// handleContentDelta processes content delta events.
-func (p *eventProcessor) handleContentDelta(ctx context.Context, event events.Event, accumulatedContent string) string {
-	data, hasData := event.ContentDeltaData()
-	if !hasData || data.Role != roleAssistant {
-		return accumulatedContent
-	}
-
-	p.sendNotification(ctx, acp.UpdateAgentMessageText(data.Content))
-
-	return accumulatedContent + data.Content
-}
-
-// handleThinkingDelta processes thinking delta events.
-func (p *eventProcessor) handleThinkingDelta(ctx context.Context, event events.Event) {
-	data, hasThinking := event.ThinkingDeltaData()
-	if !hasThinking {
-		return
-	}
-
-	p.sendNotification(ctx, acp.UpdateAgentThoughtText(data.Content))
-}
-
-// handlePlanUpdate processes plan update events.
-func (p *eventProcessor) handlePlanUpdate(ctx context.Context, event events.Event) {
-	data, hasPlan := event.PlanUpdateData()
-	if !hasPlan {
-		return
-	}
-
-	plan, isPlan := data.Plan.(*Plan)
-	if !isPlan || plan == nil {
-		return
-	}
-
-	planEntries := convertOrchestrationPlanToACP(plan)
-	if len(planEntries) == 0 {
-		return
-	}
-
-	p.sendNotification(ctx, acp.UpdatePlan(planEntries...))
-}
-
-// handleGenericEvent processes events that need conversion to ACP format.
-func (p *eventProcessor) handleGenericEvent(ctx context.Context, event events.Event) {
-	update, converted := convertEventToSessionUpdate(event, p.fileTracker)
-	if !converted {
-		return
-	}
-
-	terminalID := extractTerminalID(event)
-
-	p.sendNotification(ctx, update)
-
-	if terminalID != "" {
-		if acpConn, isACPConn := p.conn.(*acp.AgentSideConnection); isACPConn {
-			terminalClient := NewTerminalClient(acpConn)
-			_ = terminalClient.Release(ctx, terminalID)
-		}
-	}
-}
-
-// sendNotification sends an ACP session notification.
-func (p *eventProcessor) sendNotification(ctx context.Context, update acp.SessionUpdate) {
-	notification := acp.SessionNotification{
-		SessionId: p.sessionID,
-		Update:    update,
-	}
-	_ = p.conn.SessionUpdate(ctx, notification)
 }
 
 // extractTerminalID extracts the terminal ID from a tool call complete event.
@@ -1327,27 +1178,262 @@ func (a *SpinACPAgent) SetSessionMode(ctx context.Context, req acp.SetSessionMod
 	a.sessionModes[req.SessionId] = req.ModeId
 	a.mu.Unlock()
 
-	// Send mode update notification.
-	if a.connection != nil {
-		update := acp.SessionUpdate{
-			CurrentModeUpdate: &acp.SessionCurrentModeUpdate{
-				CurrentModeId: req.ModeId,
-			},
-		}
+	// Send mode update notifications.
+	a.sendCurrentModeUpdate(ctx, req.SessionId, req.ModeId)
+	a.sendConfigOptionUpdate(ctx, req.SessionId, buildConfigOptions(req.ModeId))
 
-		notif := acp.SessionNotification{
-			SessionId: req.SessionId,
-			Update:    update,
-		}
+	return acp.SetSessionModeResponse{}, nil
+}
 
-		err := a.connection.SessionUpdate(ctx, notif)
-		if err != nil {
-			// Log error but don't fail the mode change.
-			_ = err
+// SetSessionConfigOption sets a session configuration option.
+// Currently supports the "mode" config option.
+func (a *SpinACPAgent) SetSessionConfigOption(
+	ctx context.Context, req acp.SetSessionConfigOptionRequest,
+) (acp.SetSessionConfigOptionResponse, error) {
+	// Validate session exists.
+	a.mu.RLock()
+	_, exists := a.sessions[req.SessionId]
+	a.mu.RUnlock()
+
+	if !exists {
+		return acp.SetSessionConfigOptionResponse{}, fmt.Errorf(
+			"session not found: %s: %w", req.SessionId, ErrSessionNotFound)
+	}
+
+	configID := string(req.ConfigId)
+
+	switch configID {
+	case configIDMode:
+		return a.applyModeConfigOption(ctx, req.SessionId, acp.SessionModeId(req.Value))
+	default:
+		return acp.SetSessionConfigOptionResponse{}, fmt.Errorf(
+			"unknown config option: %s: %w", configID, ErrUnknownConfigOption)
+	}
+}
+
+// applyModeConfigOption validates and applies a mode change, returning config options.
+func (a *SpinACPAgent) applyModeConfigOption(
+	ctx context.Context, sessionID acp.SessionId, modeID acp.SessionModeId,
+) (acp.SetSessionConfigOptionResponse, error) {
+	// Validate mode ID.
+	availableModes := getAvailableModes()
+	validMode := false
+
+	for _, mode := range availableModes {
+		if mode.Id == modeID {
+			validMode = true
+
+			break
 		}
 	}
 
-	return acp.SetSessionModeResponse{}, nil
+	if !validMode {
+		return acp.SetSessionConfigOptionResponse{}, fmt.Errorf(
+			"invalid mode: %s: %w", modeID, ErrInvalidMode)
+	}
+
+	// Update stored mode.
+	a.mu.Lock()
+	a.sessionModes[sessionID] = modeID
+	a.mu.Unlock()
+
+	configOptions := buildConfigOptions(modeID)
+
+	// Send legacy current_mode_update notification for backward compat.
+	a.sendCurrentModeUpdate(ctx, sessionID, modeID)
+	// Send config_option_update notification.
+	a.sendConfigOptionUpdate(ctx, sessionID, configOptions)
+
+	return acp.SetSessionConfigOptionResponse{
+		ConfigOptions: configOptions,
+	}, nil
+}
+
+// sendCurrentModeUpdate sends a current_mode_update notification.
+func (a *SpinACPAgent) sendCurrentModeUpdate(
+	ctx context.Context, sessionID acp.SessionId, modeID acp.SessionModeId,
+) {
+	a.mu.RLock()
+	conn := a.connection
+	a.mu.RUnlock()
+
+	if conn == nil {
+		return
+	}
+
+	update := acp.SessionUpdate{
+		CurrentModeUpdate: &acp.SessionCurrentModeUpdate{
+			CurrentModeId: modeID,
+		},
+	}
+
+	notif := acp.SessionNotification{
+		SessionId: sessionID,
+		Update:    update,
+	}
+
+	// Best-effort notification.
+	_ = conn.SessionUpdate(ctx, notif)
+}
+
+// sendConfigOptionUpdate sends a config_option_update notification.
+func (a *SpinACPAgent) sendConfigOptionUpdate(
+	ctx context.Context, sessionID acp.SessionId, configOptions []acp.SessionConfigOption,
+) {
+	a.mu.RLock()
+	conn := a.connection
+	a.mu.RUnlock()
+
+	if conn == nil {
+		return
+	}
+
+	update := acp.SessionUpdate{
+		ConfigOptionUpdate: &acp.SessionConfigOptionUpdate{
+			ConfigOptions: configOptions,
+		},
+	}
+
+	notif := acp.SessionNotification{
+		SessionId: sessionID,
+		Update:    update,
+	}
+
+	// Best-effort notification.
+	_ = conn.SessionUpdate(ctx, notif)
+}
+
+// buildConfigOptions creates the config options array with current mode state.
+func buildConfigOptions(currentModeID acp.SessionModeId) []acp.SessionConfigOption {
+	availableModes := getAvailableModes()
+	options := make(acp.SessionConfigSelectOptionsUngrouped, 0, len(availableModes))
+
+	for _, mode := range availableModes {
+		opt := acp.SessionConfigSelectOption{
+			Value: acp.SessionConfigValueId(mode.Id),
+			Name:  mode.Name,
+		}
+
+		if mode.Description != nil {
+			opt.Description = mode.Description
+		}
+
+		options = append(options, opt)
+	}
+
+	modeCategory := acp.SessionConfigOptionCategoryOther(configIDMode)
+
+	return []acp.SessionConfigOption{
+		{
+			Select: &acp.SessionConfigOptionSelect{
+				Id:           acp.SessionConfigId(configIDMode),
+				Name:         "Mode",
+				CurrentValue: acp.SessionConfigValueId(currentModeID),
+				Category:     &acp.SessionConfigOptionCategory{Other: &modeCategory},
+				Options:      acp.SessionConfigSelectOptions{Ungrouped: &options},
+			},
+		},
+	}
+}
+
+// UnstableListSessions lists persisted sessions with optional cwd filter and pagination.
+func (a *SpinACPAgent) UnstableListSessions(
+	ctx context.Context, req acp.UnstableListSessionsRequest,
+) (acp.UnstableListSessionsResponse, error) {
+	if !a.hasSessionPersistence() {
+		return acp.UnstableListSessionsResponse{},
+			fmt.Errorf("list sessions: %w", ErrSessionPersistenceNotAvailable)
+	}
+
+	keys, err := a.storage.List(ctx)
+	if err != nil {
+		return acp.UnstableListSessionsResponse{},
+			fmt.Errorf("list session keys: %w", err)
+	}
+
+	// Sort keys for deterministic pagination.
+	sort.Strings(keys)
+
+	// Load sessions and apply cwd filter.
+	filtered := a.loadAndFilterSessions(ctx, keys, req.Cwd)
+
+	// Apply cursor-based pagination.
+	page, nextCursor := paginateSessions(filtered, req.Cursor)
+
+	return acp.UnstableListSessionsResponse{
+		Sessions:   page,
+		NextCursor: nextCursor,
+	}, nil
+}
+
+// loadAndFilterSessions loads sessions from storage and filters by cwd.
+func (a *SpinACPAgent) loadAndFilterSessions(
+	ctx context.Context, keys []string, cwdFilter *string,
+) []acp.UnstableSessionInfo {
+	result := make([]acp.UnstableSessionInfo, 0, len(keys))
+
+	for _, key := range keys {
+		sess, err := a.storage.Load(ctx, key)
+		if err != nil {
+			continue // Skip sessions that can't be loaded.
+		}
+
+		if cwdFilter != nil && sess.WorkDir != *cwdFilter {
+			continue
+		}
+
+		result = append(result, sessionToInfo(sess))
+	}
+
+	return result
+}
+
+// sessionToInfo maps a session to an ACP UnstableSessionInfo.
+func sessionToInfo(sess session.Session) acp.UnstableSessionInfo {
+	info := acp.UnstableSessionInfo{
+		SessionId: acp.SessionId(sess.ID),
+		Cwd:       sess.WorkDir,
+	}
+
+	if sess.Metadata.Title != "" {
+		info.Title = &sess.Metadata.Title
+	}
+
+	if !sess.UpdatedAt.IsZero() {
+		ts := sess.UpdatedAt.Format(time.RFC3339)
+		info.UpdatedAt = &ts
+	}
+
+	return info
+}
+
+// paginateSessions applies cursor-based pagination to a slice of sessions.
+func paginateSessions(
+	sessions []acp.UnstableSessionInfo, cursor *string,
+) (page []acp.UnstableSessionInfo, nextCursor *string) {
+	offset := 0
+
+	if cursor != nil {
+		parsed, err := strconv.Atoi(*cursor)
+		if err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	if offset >= len(sessions) {
+		return []acp.UnstableSessionInfo{}, nil
+	}
+
+	end := min(offset+listSessionsPageSize, len(sessions))
+
+	page = sessions[offset:end]
+
+	if end < len(sessions) {
+		cursorStr := strconv.Itoa(end)
+		nextCursor = &cursorStr
+	}
+
+	return page, nextCursor
 }
 
 // Authenticate handles authentication requests.
@@ -1393,11 +1479,17 @@ func (a *SpinACPAgent) RequestPermission(ctx context.Context, req acp.RequestPer
 func selectPermissionOption(approved bool, options []acp.PermissionOption) acp.RequestPermissionResponse {
 	for _, opt := range options {
 		if approved && (opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways) {
-			return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeSelected(opt.OptionId)}
+			outcome := acp.NewRequestPermissionOutcomeSelected()
+			outcome.Selected.OptionId = opt.OptionId
+
+			return acp.RequestPermissionResponse{Outcome: outcome}
 		}
 
 		if !approved && (opt.Kind == acp.PermissionOptionKindRejectOnce || opt.Kind == acp.PermissionOptionKindRejectAlways) {
-			return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeSelected(opt.OptionId)}
+			outcome := acp.NewRequestPermissionOutcomeSelected()
+			outcome.Selected.OptionId = opt.OptionId
+
+			return acp.RequestPermissionResponse{Outcome: outcome}
 		}
 	}
 
@@ -1405,7 +1497,7 @@ func selectPermissionOption(approved bool, options []acp.PermissionOption) acp.R
 }
 
 // convertToolCallToOperation converts an ACP tool call to a Spin security operation.
-func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.RequestPermissionToolCall, workDir string) (safety.Operation, error) {
+func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.ToolCallUpdate, workDir string) (safety.Operation, error) {
 	// Extract tool name from title.
 	toolName := unknownValue
 	if toolCall.Title != nil {

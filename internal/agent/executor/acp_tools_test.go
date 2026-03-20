@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	acpsdk "github.com/coder/acp-go-sdk"
+
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -437,6 +439,116 @@ func TestACPReadFileTool_ContextWorkDir(t *testing.T) {
 }
 
 // TestACPWriteFileTool_FallbackToRuntimeWorkDir tests that runtime.workDir is used when context has no workDir.
+// mockACPAgent implements ACPAgentInterface for testing.
+type mockACPAgent struct{}
+
+func (m *mockACPAgent) GetClientCapabilities() *acpsdk.ClientCapabilities {
+	return &acpsdk.ClientCapabilities{Terminal: true}
+}
+
+// mockTerminalClient implements TerminalClient for testing.
+type mockTerminalClient struct {
+	lastCwd string
+}
+
+func (m *mockTerminalClient) Create(_ context.Context, _ string, _ []string, _ []EnvVar, cwd string, _ int) (string, error) {
+	m.lastCwd = cwd
+	return "term-123", nil
+}
+
+func (m *mockTerminalClient) WaitForExit(_ context.Context, _ string) (int, *string, error) {
+	return 0, nil, nil
+}
+
+func (m *mockTerminalClient) GetOutput(_ context.Context, _ string) (string, bool, *ExitStatus, error) {
+	return "output", false, &ExitStatus{ExitCode: intPtr(0)}, nil
+}
+
+func (m *mockTerminalClient) Release(_ context.Context, _ string) error {
+	return nil
+}
+
+func intPtr(i int) *int { return &i }
+
+// TestACPTerminalTool_ContextWorkDir tests that workDir from context takes precedence over runtime.workDir.
+func TestACPTerminalTool_ContextWorkDir(t *testing.T) {
+	t.Parallel()
+
+	mockTerm := &mockTerminalClient{}
+	mockAgent := &mockACPAgent{}
+	runtime := &ACPRuntime{
+		workDir:        "/runtime/workspace",
+		terminalClient: mockTerm,
+		acpAgent:       mockAgent,
+	}
+	tool := NewACPTerminalTool(runtime)
+
+	// Create context with session-specific workDir (as ACP agent sets it).
+	ctx := ContextWithSessionID(context.Background(), "test-session")
+	ctx = ContextWithWorkDir(ctx, "/session/workspace")
+
+	params, err := tools.FromMap(map[string]any{
+		"operation": "execute",
+		"command":   "ls -la",
+	})
+	if err != nil {
+		t.Fatalf("failed to create params: %v", err)
+	}
+
+	result, execErr := tool.Execute(ctx, params)
+	if execErr != nil {
+		t.Fatalf("unexpected error from Execute: %v", execErr)
+	}
+
+	if !result.Success {
+		t.Errorf("expected success but got error: %s", result.Error)
+	}
+
+	// Verify that the terminal was created with context workDir, not runtime workDir.
+	if mockTerm.lastCwd != "/session/workspace" {
+		t.Errorf("expected cwd %q (from context workDir), got %q", "/session/workspace", mockTerm.lastCwd)
+	}
+}
+
+// TestACPTerminalTool_FallbackToRuntimeWorkDir tests that runtime.workDir is used when context has no workDir.
+func TestACPTerminalTool_FallbackToRuntimeWorkDir(t *testing.T) {
+	t.Parallel()
+
+	mockTerm := &mockTerminalClient{}
+	mockAgent := &mockACPAgent{}
+	runtime := &ACPRuntime{
+		workDir:        "/runtime/workspace",
+		terminalClient: mockTerm,
+		acpAgent:       mockAgent,
+	}
+	tool := NewACPTerminalTool(runtime)
+
+	// Context without workDir set.
+	ctx := ContextWithSessionID(context.Background(), "test-session")
+
+	params, err := tools.FromMap(map[string]any{
+		"operation": "execute",
+		"command":   "ls -la",
+	})
+	if err != nil {
+		t.Fatalf("failed to create params: %v", err)
+	}
+
+	result, execErr := tool.Execute(ctx, params)
+	if execErr != nil {
+		t.Fatalf("unexpected error from Execute: %v", execErr)
+	}
+
+	if !result.Success {
+		t.Errorf("expected success but got error: %s", result.Error)
+	}
+
+	// Verify that the terminal was created with runtime workDir.
+	if mockTerm.lastCwd != "/runtime/workspace" {
+		t.Errorf("expected cwd %q (from runtime workDir), got %q", "/runtime/workspace", mockTerm.lastCwd)
+	}
+}
+
 func TestACPWriteFileTool_FallbackToRuntimeWorkDir(t *testing.T) {
 	t.Parallel()
 

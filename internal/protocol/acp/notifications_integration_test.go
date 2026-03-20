@@ -2,7 +2,6 @@ package acp
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"sync"
 	"testing"
@@ -12,14 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
-// mockConnection is a mock AgentSideConnection for testing.
+// mockConnection is a mock notificationSender for testing.
 type mockConnection struct {
 	mu            sync.Mutex
 	notifications []acp.SessionNotification
@@ -35,15 +32,14 @@ func (m *mockConnection) SessionUpdate(_ context.Context, notification acp.Sessi
 }
 
 func (m *mockConnection) RequestPermission(_ context.Context, params acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
-	// Auto-approve for testing by selecting the first allow option.
 	for _, opt := range params.Options {
 		if opt.Kind == acp.PermissionOptionKindAllowOnce || opt.Kind == acp.PermissionOptionKindAllowAlways {
 			return acp.RequestPermissionResponse{
-				Outcome: acp.NewRequestPermissionOutcomeSelected(opt.OptionId),
+				Outcome: newOutcomeSelected(opt.OptionId),
 			}, nil
 		}
 	}
-	// No allow option found, return canceled.
+
 	return acp.RequestPermissionResponse{
 		Outcome: acp.NewRequestPermissionOutcomeCancelled(),
 	}, nil
@@ -66,219 +62,83 @@ func (m *mockConnection) Clear() {
 	m.notifications = nil
 }
 
-// processEventCase describes a test case for event processing.
-type processEventCase struct {
-	name  string
-	event events.Event
-}
-
-func runProcessEventTests(t *testing.T, cases []processEventCase) {
-	t.Helper()
-
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			agentInstance := &agent.Agent{}
-			mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-			emitter := events.NewEventEmitter(100)
-
-			storage, err := session.NewFileStorage(t.TempDir())
-			require.NoError(t, err)
-			acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
-			require.NoError(t, err)
-
-			mockConn := &mockConnection{}
-			acpAgent.SetNotificationSender(mockConn)
-
-			ctx := t.Context()
-
-			sessionID := acp.SessionId("test-session")
-
-			subID, eventCh, err := emitter.Subscribe()
-			require.NoError(t, err)
-
-			defer emitter.Unsubscribe(subID)
-
-			go acpAgent.processEvents(ctx, sessionID, eventCh)
-
-			emitter.Emit(tt.event)
-
-			time.Sleep(50 * time.Millisecond)
-
-			notifications := mockConn.GetNotifications()
-			require.Len(t, notifications, 1, "should have one notification")
-			assert.Equal(t, sessionID, notifications[0].SessionId)
-		})
-	}
-}
-
-// TestProcessEvents_ContentDelta tests event processing for content delta.
-func TestProcessEvents_ContentDelta(t *testing.T) {
-	t.Parallel()
-	runProcessEventTests(t, []processEventCase{
-		{
-			name: "content delta",
-			event: events.Event{
-				Type:      events.EventContentDelta,
-				Timestamp: time.Now(),
-				Data:      events.ContentDeltaData{Content: "Hello", Role: "assistant"},
-			},
-		},
-	})
-}
-
-// TestProcessEvents_ToolCallStart tests event processing for tool call start.
-func TestProcessEvents_ToolCallStart(t *testing.T) {
-	t.Parallel()
-	runProcessEventTests(t, []processEventCase{
-		{
-			name: "tool call start",
-			event: events.Event{
-				Type:      events.EventToolCallStart,
-				Timestamp: time.Now(),
-				Data:      events.ToolCallStartData{ToolID: "tool-123", ToolName: "read_file"},
-			},
-		},
-	})
-}
-
-// TestProcessEvents_NoConnection tests that events are not sent when connection is nil.
-func TestProcessEvents_NoConnection(t *testing.T) {
+// TestTransformer_ContentDelta tests that content delta events produce notifications.
+func TestTransformer_ContentDelta(t *testing.T) {
 	t.Parallel()
 
-	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
-
-	storage, err := session.NewFileStorage(t.TempDir())
-	require.NoError(t, err)
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
-	require.NoError(t, err)
-
-	// Don't set connection.
-
-	ctx := t.Context()
-
+	mockConn := &mockConnection{}
 	sessionID := acp.SessionId("test-session")
+	transformer := NewEventTransformer(sessionID, mockConn)
 
-	// Subscribe to events.
-	subID, eventCh, err := emitter.Subscribe()
-	require.NoError(t, err)
-
-	defer emitter.Unsubscribe(subID)
-
-	// Start event processing.
-	go acpAgent.processEvents(ctx, sessionID, eventCh)
-
-	// Emit an event.
-	emitter.Emit(events.Event{
+	transformer.Transform(context.Background(), events.Event{
 		Type:      events.EventContentDelta,
 		Timestamp: time.Now(),
-		Data: events.ContentDeltaData{
-			Content: "Hello",
-			Role:    "assistant",
-		},
+		Data:      events.ContentDeltaData{Content: "Hello", Role: "assistant"},
 	})
 
-	// Give it time to process.
-	time.Sleep(50 * time.Millisecond)
-
-	// No connection, so no notifications should be sent (no panic)
-	// This test just verifies graceful handling.
+	notifications := mockConn.GetNotifications()
+	require.Len(t, notifications, 1, "should have one notification")
+	assert.Equal(t, sessionID, notifications[0].SessionId)
 }
 
-// TestProcessEvents_ContextCancellation tests that event processing stops on context cancellation.
-func TestProcessEvents_ContextCancellation(t *testing.T) {
+// TestTransformer_ToolCallStart tests that tool call start events produce notifications.
+func TestTransformer_ToolCallStart(t *testing.T) {
 	t.Parallel()
 
-	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
-
-	storage, err := session.NewFileStorage(t.TempDir())
-	require.NoError(t, err)
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
-	require.NoError(t, err)
-
 	mockConn := &mockConnection{}
-	acpAgent.SetNotificationSender(mockConn)
-
-	ctx, cancel := context.WithCancel(context.Background())
-
 	sessionID := acp.SessionId("test-session")
+	transformer := NewEventTransformer(sessionID, mockConn)
 
-	// Subscribe to events.
-	subID, eventCh, err := emitter.Subscribe()
-	require.NoError(t, err)
+	transformer.Transform(context.Background(), events.Event{
+		Type:      events.EventToolCallStart,
+		Timestamp: time.Now(),
+		Data:      events.ToolCallStartData{ToolID: "tool-123", ToolName: "read_file"},
+	})
 
-	defer emitter.Unsubscribe(subID)
-
-	// Start event processing.
-	done := make(chan struct{})
-
-	go func() {
-		acpAgent.processEvents(ctx, sessionID, eventCh)
-		close(done)
-	}()
-
-	// Cancel context.
-	cancel()
-
-	// Wait for goroutine to finish.
-	select {
-	case <-done:
-		// Success.
-	case <-time.After(1 * time.Second):
-		t.Fatal("processEvents did not stop on context cancellation")
-	}
+	notifications := mockConn.GetNotifications()
+	require.Len(t, notifications, 1, "should have one notification")
+	assert.Equal(t, sessionID, notifications[0].SessionId)
 }
 
-// TestProcessEvents_WriteFile_GeneratesDiff tests that write_file operations generate diff notifications.
-func setupWriteFileTest(t *testing.T) (*SpinACPAgent, *mockConnection, *events.EventEmitter, acp.SessionId) {
-	t.Helper()
-
-	agentInstance := &agent.Agent{}
-	mcpManager := mcp.NewService(mcp.NewDefaultRegistryManager(slog.Default()))
-	emitter := events.NewEventEmitter(100)
-
-	storage, err := session.NewFileStorage(t.TempDir())
-	require.NoError(t, err)
-	acpAgent, err := NewSpinACPAgentWithStorage(agentInstance, mcpManager, emitter, storage)
-	require.NoError(t, err)
-
-	mockConn := &mockConnection{}
-	acpAgent.SetNotificationSender(mockConn)
-
-	return acpAgent, mockConn, emitter, acp.SessionId("test-session")
-}
-
-func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
+// TestTransformer_NilConnection tests that events are not sent when connection is nil.
+func TestTransformer_NilConnection(t *testing.T) {
 	t.Parallel()
 
-	acpAgent, mockConn, emitter, sessionID := setupWriteFileTest(t)
+	transformer := NewEventTransformer("test-session", nil)
 
-	ctx := t.Context()
-	subID, eventCh, err := emitter.Subscribe()
-	require.NoError(t, err)
+	handled := transformer.Transform(context.Background(), events.Event{
+		Type:      events.EventContentDelta,
+		Timestamp: time.Now(),
+		Data:      events.ContentDeltaData{Content: "Hello", Role: "assistant"},
+	})
 
-	defer emitter.Unsubscribe(subID)
+	assert.False(t, handled, "should not handle events without connection")
+}
 
-	go acpAgent.processEvents(ctx, sessionID, eventCh)
+// TestTransformer_WriteFile_GeneratesDiff tests that write_file operations generate diff notifications.
+func TestTransformer_WriteFile_GeneratesDiff(t *testing.T) {
+	t.Parallel()
+
+	mockConn := &mockConnection{}
+	sessionID := acp.SessionId("test-session")
+	transformer := NewEventTransformer(sessionID, mockConn)
+
+	ctx := context.Background()
 
 	// Create a temporary file with existing content.
 	tmpFile := t.TempDir() + "/test.txt"
-	err = os.WriteFile(tmpFile, []byte("old content\nline 2"), 0o600)
+
+	err := os.WriteFile(tmpFile, []byte("old content\nline 2"), 0o600)
 	require.NoError(t, err)
 
 	// Emit tool call start event for write_file.
-	params, err := tools.FromMap(map[string]any{
+	params, paramsErr := tools.FromMap(map[string]any{
 		"path":    tmpFile,
 		"content": "new content\nline 2\nline 3",
 	})
-	require.NoError(t, err)
+	require.NoError(t, paramsErr)
 
-	emitter.Emit(events.Event{
+	transformer.Transform(ctx, events.Event{
 		Type:      events.EventToolCallStart,
 		Timestamp: time.Now(),
 		Data: events.ToolCallStartData{
@@ -288,11 +148,8 @@ func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 		},
 	})
 
-	// Give it time to process.
-	time.Sleep(50 * time.Millisecond)
-
 	// Emit tool call complete event.
-	emitter.Emit(events.Event{
+	transformer.Transform(ctx, events.Event{
 		Type:      events.EventToolCallComplete,
 		Timestamp: time.Now(),
 		Data: events.ToolCallCompleteData{
@@ -303,14 +160,11 @@ func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 		},
 	})
 
-	// Give it time to process.
-	time.Sleep(50 * time.Millisecond)
-
-	// Verify notifications were sent (start and complete).
+	// Verify notifications were sent.
 	notifications := mockConn.GetNotifications()
 	require.GreaterOrEqual(t, len(notifications), 2, "should have at least start and complete notifications")
 
-	// Find the complete notification.
+	// Find the complete notification with tool call update.
 	var completeNotification *acp.SessionNotification
 
 	for i := range notifications {
@@ -330,7 +184,6 @@ func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 	require.NotNil(t, update.ToolCallUpdate.Content, "should have content")
 	require.NotEmpty(t, update.ToolCallUpdate.Content, "should have at least one content item")
 
-	// Check if diff content is present (ToolDiffContent).
 	hasDiff := false
 
 	for _, content := range update.ToolCallUpdate.Content {
@@ -344,4 +197,88 @@ func TestProcessEvents_WriteFile_GeneratesDiff(t *testing.T) {
 	}
 
 	assert.True(t, hasDiff, "should include diff content in notification")
+}
+
+// slowReleaseMockConnection is a mock that blocks on SessionUpdate when releasing terminals.
+// Used to test that the event goroutine doesn't hang when Release blocks.
+type slowReleaseMockConnection struct {
+	mu            sync.Mutex
+	notifications []acp.SessionNotification
+	releaseCh     chan struct{} // Blocks until closed.
+}
+
+func (m *slowReleaseMockConnection) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
+	m.mu.Lock()
+	m.notifications = append(m.notifications, notification)
+	m.mu.Unlock()
+
+	return nil
+}
+
+func (m *slowReleaseMockConnection) RequestPermission(_ context.Context, _ acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	return acp.RequestPermissionResponse{}, nil
+}
+
+// TestSubscribeTransformerEvents_NoHangOnSlowRelease tests that the event goroutine
+// cleanup doesn't hang when the context is canceled promptly.
+// This reproduces a bug where cancel() was called AFTER <-eventsDone, causing
+// the goroutine to hang if it was blocked on a synchronous RPC.
+func TestSubscribeTransformerEvents_NoHangOnSlowRelease(t *testing.T) {
+	t.Parallel()
+
+	emitter := events.NewEventEmitter(10)
+	defer emitter.Close()
+
+	mockConn := &mockConnection{}
+	sessionID := acp.SessionId("test-session")
+	transformer := NewEventTransformer(sessionID, mockConn)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	acpAgent := createTestACPAgent(t, emitter)
+	acpAgent.SetNotificationSender(mockConn)
+
+	unsubscribe, eventsDone := acpAgent.subscribeTransformerEvents(ctx, mockConn, transformer)
+	require.NotNil(t, unsubscribe)
+	require.NotNil(t, eventsDone)
+
+	// Emit a content event to prove the goroutine is running.
+	emitter.Emit(events.Event{
+		Type:      events.EventContentDelta,
+		Timestamp: time.Now(),
+		Data:      events.ContentDeltaData{Content: "Hello", Role: "assistant"},
+	})
+
+	// Give the goroutine time to process.
+	time.Sleep(50 * time.Millisecond)
+
+	// Now test that cleanup doesn't hang:
+	// cancel() first (so goroutine can exit via ctx.Done()), then unsubscribe, then wait.
+	done := make(chan struct{})
+	go func() {
+		cancel()
+		unsubscribe()
+		<-eventsDone
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Success - cleanup completed without hanging.
+	case <-time.After(2 * time.Second):
+		t.Fatal("cleanup hung - event goroutine did not exit within 2 seconds")
+	}
+}
+
+// createTestACPAgent creates a minimal SpinACPAgent for testing.
+func createTestACPAgent(t *testing.T, emitter *events.EventEmitter) *SpinACPAgent {
+	t.Helper()
+
+	return &SpinACPAgent{
+		emitter:      emitter,
+		sessions:     make(map[acp.SessionId]*session.Session),
+		sessionModes: make(map[acp.SessionId]acp.SessionModeId),
+		cancels:      make(map[acp.SessionId]context.CancelFunc),
+		transformers: make(map[acp.SessionId]*EventTransformer),
+	}
 }

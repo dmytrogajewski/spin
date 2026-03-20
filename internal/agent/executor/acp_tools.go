@@ -85,6 +85,11 @@ func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParamete
 	workDir, _ := params.GetString("working_directory")
 
 	if workDir == "" {
+		// Check context for session-specific workDir (set by ACP agent per-session).
+		workDir = GetWorkDirFromContext(ctx)
+	}
+
+	if workDir == "" {
 		workDir = t.runtime.workDir
 	}
 
@@ -97,7 +102,7 @@ func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParamete
 		return tools.ToolResult{Success: false, Error: parseErr}, nil
 	}
 
-	terminalExec := NewTerminalExecutor(t.runtime.terminalClient, t.runtime.sessionID, t.runtime.workDir)
+	terminalExec := NewTerminalExecutor(t.runtime.terminalClient, t.runtime.sessionID, workDir)
 
 	result, err := terminalExec.Execute(ctx, cmd, nil)
 	if err != nil {

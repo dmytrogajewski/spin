@@ -36,7 +36,7 @@ func TestRequestPermission_SessionNotFound(t *testing.T) {
 
 	req := acp.RequestPermissionRequest{
 		SessionId: acp.SessionId("non-existent"),
-		ToolCall: acp.RequestPermissionToolCall{
+		ToolCall: acp.ToolCallUpdate{
 			ToolCallId: acp.ToolCallId("tool-1"),
 			Title:      acp.Ptr("write_file"),
 		},
@@ -77,7 +77,7 @@ func TestRequestPermission_NoApprovalService(t *testing.T) {
 
 	req := acp.RequestPermissionRequest{
 		SessionId: sessionID,
-		ToolCall: acp.RequestPermissionToolCall{
+		ToolCall: acp.ToolCallUpdate{
 			ToolCallId: acp.ToolCallId("tool-1"),
 			Title:      acp.Ptr("write_file"),
 		},
@@ -141,7 +141,7 @@ func runPermissionDecisionTests(t *testing.T, cases []permissionDecisionCase) {
 
 			req := acp.RequestPermissionRequest{
 				SessionId: sessionID,
-				ToolCall: acp.RequestPermissionToolCall{
+				ToolCall: acp.ToolCallUpdate{
 					ToolCallId: acp.ToolCallId("tool-1"),
 					Title:      acp.Ptr("write_file"),
 				},
@@ -223,7 +223,7 @@ func TestRequestPermission_Canceled(t *testing.T) {
 
 	req := acp.RequestPermissionRequest{
 		SessionId: sessionID,
-		ToolCall: acp.RequestPermissionToolCall{
+		ToolCall: acp.ToolCallUpdate{
 			ToolCallId: acp.ToolCallId("tool-1"),
 			Title:      acp.Ptr("write_file"),
 		},
@@ -286,7 +286,7 @@ func TestRequestPermission_WithRawInput(t *testing.T) {
 
 	req := acp.RequestPermissionRequest{
 		SessionId: sessionID,
-		ToolCall: acp.RequestPermissionToolCall{
+		ToolCall: acp.ToolCallUpdate{
 			ToolCallId: acp.ToolCallId("tool-1"),
 			Title:      acp.Ptr("write_file"),
 			RawInput: map[string]any{
@@ -347,7 +347,7 @@ func TestRequestPermission_AllowAlwaysOption(t *testing.T) {
 
 	req := acp.RequestPermissionRequest{
 		SessionId: sessionID,
-		ToolCall: acp.RequestPermissionToolCall{
+		ToolCall: acp.ToolCallUpdate{
 			ToolCallId: acp.ToolCallId("tool-1"),
 			Title:      acp.Ptr("write_file"),
 		},
@@ -413,7 +413,7 @@ func setupPermissionIntegrationAgent(t *testing.T) (*SpinACPAgent, acp.SessionId
 func newPermissionRequest(sessionID acp.SessionId, toolCallID, toolName string) acp.RequestPermissionRequest {
 	return acp.RequestPermissionRequest{
 		SessionId: sessionID,
-		ToolCall:  acp.RequestPermissionToolCall{ToolCallId: acp.ToolCallId(toolCallID), Title: acp.Ptr(toolName)},
+		ToolCall:  acp.ToolCallUpdate{ToolCallId: acp.ToolCallId(toolCallID), Title: acp.Ptr(toolName)},
 		Options: []acp.PermissionOption{
 			{OptionId: "allow", Name: "Allow", Kind: acp.PermissionOptionKindAllowOnce},
 			{OptionId: "reject", Name: "Reject", Kind: acp.PermissionOptionKindRejectOnce},

@@ -160,25 +160,40 @@ func (h *ApprovalHandler) sendPendingNotification(
 }
 
 // mapToolNameToKind maps a tool name to an ACP tool kind.
+// Every tool returns a non-nil kind; unknown tools default to ToolKindOther.
 func mapToolNameToKind(toolName string) *acp.ToolKind {
 	switch toolName {
-	case "read_file", "list_directory":
+	case "read_file", "list_directory", "git_context", "get_context",
+		"get_process_output", "list_processes":
 		return acp.Ptr(acp.ToolKindRead)
-	case toolWriteFile:
+
+	case toolWriteFile, "edit_file", "apply_patch":
 		return acp.Ptr(acp.ToolKindEdit)
-	case "shell_command":
+
+	case "shell_command", "start_process", "git_operation", "kill_process":
 		return acp.Ptr(acp.ToolKindExecute)
-	case "file_search":
+
+	case "file_search", "find_symbol", "find_references":
 		return acp.Ptr(acp.ToolKindSearch)
+
+	case "rename_symbol":
+		return acp.Ptr(acp.ToolKindMove)
+
+	case "fetch_url", "web_search", "capture_web_screenshot", "open_browser":
+		return acp.Ptr(acp.ToolKindFetch)
+
+	case "memory", "scratchpad":
+		return acp.Ptr(acp.ToolKindThink)
+
 	default:
-		return nil
+		return acp.Ptr(acp.ToolKindOther)
 	}
 }
 
 // requestPermission sends the permission request to the client.
 func (h *ApprovalHandler) requestPermission(
 	ctx context.Context, conn notificationSender, sessionID acp.SessionId,
-	toolCall acp.RequestPermissionToolCall, options []acp.PermissionOption,
+	toolCall acp.ToolCallUpdate, options []acp.PermissionOption,
 ) (acp.RequestPermissionResponse, error) {
 	acpReq := acp.RequestPermissionRequest{
 		SessionId: sessionID,
@@ -243,7 +258,7 @@ func resolvePermissionOutcome(acpResp acp.RequestPermissionResponse, options []a
 }
 
 // convertApprovalRequestToToolCall converts a security approval request to an ACP tool call.
-func (h *ApprovalHandler) convertApprovalRequestToToolCall(req safety.ApprovalRequest) (acp.RequestPermissionToolCall, error) {
+func (h *ApprovalHandler) convertApprovalRequestToToolCall(req safety.ApprovalRequest) (acp.ToolCallUpdate, error) {
 	// Extract tool name from command.
 	toolName := unknownValue
 	if req.Command != nil {
@@ -256,14 +271,11 @@ func (h *ApprovalHandler) convertApprovalRequestToToolCall(req safety.ApprovalRe
 		toolCallID = req.ID
 	}
 
-	// Create tool call.
-	toolCall := acp.RequestPermissionToolCall{
+	// Create tool call update.
+	toolCall := acp.ToolCallUpdate{
 		ToolCallId: acp.ToolCallId(toolCallID),
 		Title:      acp.Ptr(toolName),
 	}
-
-	// Note: ACP RequestPermissionToolCall doesn't have a Description field
-	// The reason is typically included in the permission options or handled by the client.
 
 	return toolCall, nil
 }

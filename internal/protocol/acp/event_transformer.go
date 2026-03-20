@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/coder/acp-go-sdk"
 
@@ -20,6 +21,8 @@ type EventTransformer struct {
 	accumulatedContent string
 	// Track whether a plan has already been detected this turn.
 	planDetected bool
+	// Track whether a session title has been sent (once per session).
+	titleSent bool
 
 	mu sync.RWMutex
 }
@@ -63,6 +66,10 @@ func (t *EventTransformer) Transform(ctx context.Context, event events.Event) bo
 		return t.transformPlanUpdate(ctx, event)
 	case events.EventInfo, events.EventWarning:
 		return t.transformSystemEvent(ctx, event)
+	case events.EventTurnComplete:
+		t.sendSessionInfoIfNeeded(ctx)
+
+		return false
 	default:
 		return t.transformGenericEvent(ctx, event)
 	}
@@ -162,6 +169,29 @@ func (t *EventTransformer) transformGenericEvent(ctx context.Context, event even
 	}
 
 	return true
+}
+
+// sendSessionInfoIfNeeded sends a session_info_update if a title hasn't been sent yet.
+func (t *EventTransformer) sendSessionInfoIfNeeded(ctx context.Context) {
+	if t.titleSent || t.accumulatedContent == "" {
+		return
+	}
+
+	title := generateSessionTitle(t.accumulatedContent)
+	if title == "" {
+		return
+	}
+
+	t.titleSent = true
+
+	ts := time.Now().UTC().Format(time.RFC3339)
+
+	t.sendUpdate(ctx, acp.SessionUpdate{
+		SessionInfoUpdate: &acp.SessionSessionInfoUpdate{
+			Title:     &title,
+			UpdatedAt: &ts,
+		},
+	})
 }
 
 // sendUpdate sends a session update notification.

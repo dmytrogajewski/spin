@@ -142,7 +142,7 @@ func TestSpinACPAgent_NewSession_UnsupportedTransport(t *testing.T) {
 		Cwd: "/tmp/test",
 		McpServers: []acp.McpServer{
 			{
-				Http: &acp.McpServerHttp{
+				Http: &acp.McpServerHttpInline{
 					Url: "http://localhost:8080",
 				},
 			},

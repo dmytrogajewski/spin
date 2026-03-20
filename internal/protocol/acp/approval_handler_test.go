@@ -13,6 +13,14 @@ import (
 
 var errBoom = errors.New("boom")
 
+// newOutcomeSelected creates a RequestPermissionOutcome with the Selected variant and the given OptionId.
+func newOutcomeSelected(id acp.PermissionOptionId) acp.RequestPermissionOutcome {
+	outcome := acp.NewRequestPermissionOutcomeSelected()
+	outcome.Selected.OptionId = id
+
+	return outcome
+}
+
 type mockACPConnection struct {
 	requests []acp.RequestPermissionRequest
 	resp     acp.RequestPermissionResponse
@@ -52,7 +60,7 @@ func TestApprovalHandler_MapsAllowOnceAndAlways(t *testing.T) {
 
 	conn := &mockACPConnection{
 		resp: acp.RequestPermissionResponse{
-			Outcome: acp.NewRequestPermissionOutcomeSelected(acp.PermissionOptionId("allow_once")),
+			Outcome: newOutcomeSelected(acp.PermissionOptionId("allow_once")),
 		},
 	}
 
@@ -72,7 +80,7 @@ func TestApprovalHandler_MapsAllowOnceAndAlways(t *testing.T) {
 
 	// Second: allow_always.
 	conn.resp = acp.RequestPermissionResponse{
-		Outcome: acp.NewRequestPermissionOutcomeSelected(acp.PermissionOptionId("allow_always")),
+		Outcome: newOutcomeSelected(acp.PermissionOptionId("allow_always")),
 	}
 
 	resp = handler.HandleApprovalRequest(context.Background(), safety.ApprovalRequest{
@@ -92,7 +100,7 @@ func TestApprovalHandler_DenyAndCancelPaths(t *testing.T) {
 
 	conn := &mockACPConnection{
 		resp: acp.RequestPermissionResponse{
-			Outcome: acp.NewRequestPermissionOutcomeSelected(acp.PermissionOptionId("deny")),
+			Outcome: newOutcomeSelected(acp.PermissionOptionId("deny")),
 		},
 	}
 
