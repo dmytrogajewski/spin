@@ -116,7 +116,7 @@ func (e *Executor) phaseAction(
 	ctx context.Context, iterCtx *IterationContext,
 ) (string, []message.ToolCall, bool, error) {
 	content, toolCalls, _, err := e.caller.Call(
-		ctx, iterCtx.Messages, e.toolSchemas, iterCtx.Turn,
+		ctx, iterCtx.Messages, e.currentToolSchemas(), iterCtx.Turn,
 	)
 	if err != nil {
 		return "", nil, false, fmt.Errorf("caller failed at turn %d: %w", iterCtx.Turn, err)

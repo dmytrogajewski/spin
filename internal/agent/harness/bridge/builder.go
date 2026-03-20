@@ -31,6 +31,8 @@ func BuildExecutor(cfg Config) (*harness.Executor, error) {
 	callerBridge := NewCallerBridge(cfg.LLMCaller, cfg.Registry, callParams)
 	dispatcherBridge := NewDispatcherBridge(cfg.Runtime)
 
+	opts := append([]harness.Option{harness.WithRegistry(cfg.Registry)}, cfg.HarnessOpts...)
+
 	exec, err := harness.NewExecutor(
 		cfg.Spec,
 		callerBridge,
@@ -38,7 +40,7 @@ func BuildExecutor(cfg Config) (*harness.Executor, error) {
 		cfg.Guards,
 		cfg.Middlewares,
 		cfg.Logger,
-		cfg.HarnessOpts...,
+		opts...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("build harness executor: %w", err)

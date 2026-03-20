@@ -48,6 +48,15 @@ func WithEmitter(em *events.EventEmitter) Option {
 	}
 }
 
+// WithRegistry sets a live registry for dynamic tool schema resolution.
+// When set, tool schemas are read from the registry on each turn
+// instead of using the frozen snapshot from the spec.
+func WithRegistry(r *tools.Registry) Option {
+	return func(e *Executor) {
+		e.registry = r
+	}
+}
+
 // Executor runs the Extended ReAct execution loop.
 // It consumes a compiled scaffold.Spec and orchestrates LLM calls,
 // tool dispatch, guard checks, and middleware hooks.
@@ -58,6 +67,7 @@ type Executor struct {
 	guards                []Guard
 	middlewares           []Middleware
 	toolSchemas           []tools.ToolSchema
+	registry              *tools.Registry // Live registry for dynamic tool schemas.
 	maxTurns              int
 	logger                *slog.Logger
 	compactor             ContextCompactor
@@ -110,4 +120,14 @@ func NewExecutor(
 	}
 
 	return exec, nil
+}
+
+// currentToolSchemas returns live tool schemas from registry if available,
+// falling back to the frozen snapshot from the spec.
+func (e *Executor) currentToolSchemas() []tools.ToolSchema {
+	if e.registry != nil {
+		return e.registry.ListSchemas()
+	}
+
+	return e.toolSchemas
 }
