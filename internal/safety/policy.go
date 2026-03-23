@@ -2,10 +2,11 @@ package safety
 
 import (
 	"context"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 const policyEvictionInterval = 30 * time.Second
@@ -86,14 +87,8 @@ func NewPolicyKey(program string, args []string, workDir string) PolicyKey {
 // normalizeCommand normalizes a command string for consistent policy keys.
 // Collapses whitespace and removes leading/trailing spaces.
 func normalizeCommand(cmd string) string {
-	cmd = strings.TrimSpace(cmd)
-	// Collapse multiple spaces into one.
-	cmd = wsCollapse.ReplaceAllString(cmd, " ")
-
-	return cmd
+	return stringsx.CollapseWhitespace(cmd)
 }
-
-var wsCollapse = regexp.MustCompile(`\s+`)
 
 func normalizeArgs(args []string) []string {
 	if len(args) == 0 {
@@ -109,8 +104,7 @@ func normalizeArgs(args []string) []string {
 			continue
 		}
 
-		s = wsCollapse.ReplaceAllString(s, " ")
-		out = append(out, s)
+		out = append(out, stringsx.CollapseWhitespace(s))
 	}
 
 	return out

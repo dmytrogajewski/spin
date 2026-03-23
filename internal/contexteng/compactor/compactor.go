@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/tokenizer"
+	"github.com/dmytrogajewski/spin/pkg/tokenizer"
 )
 
 // Stage represents the compaction stage applied.

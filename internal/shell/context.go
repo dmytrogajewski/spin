@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 	"github.com/dmytrogajewski/spin/internal/process"
 )
 
@@ -166,7 +167,7 @@ func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (stri
 		return "", ErrNoShellAvailable
 	}
 
-	cmdCtx, cancel := context.WithTimeout(ctx, s.effectiveTimeout(ctx))
+	cmdCtx, cancel := context.WithTimeout(ctx, execx.EffectiveTimeout(ctx, s.timeout))
 	defer cancel()
 
 	args := s.shellArgs(command)
@@ -197,23 +198,6 @@ func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (stri
 	}
 
 	return output, nil
-}
-
-// effectiveTimeout returns the timeout to use, respecting parent context deadline.
-func (s *Context) effectiveTimeout(ctx context.Context) time.Duration {
-	timeout := s.timeout
-
-	deadline, hasDeadline := ctx.Deadline()
-	if !hasDeadline {
-		return timeout
-	}
-
-	remaining := time.Until(deadline)
-	if remaining < timeout && remaining > 0 {
-		return remaining
-	}
-
-	return timeout
 }
 
 // shellArgs returns the appropriate command-line arguments for the detected shell.

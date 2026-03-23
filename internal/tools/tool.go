@@ -3,7 +3,8 @@ package tools
 import (
 	"context"
 	"errors"
-	"fmt"
+
+	"github.com/dmytrogajewski/spin/pkg/llmutil/toolresult"
 )
 
 // unknownStatus is the fallback label for unrecognized enum values.
@@ -30,160 +31,38 @@ type Tool interface {
 	// Description returns a human-readable description of the tool.
 	Description() string
 
-	// Schema returns the OpenAI-compatible function schema for this tool.
+	// Schema returns the JSON schema for the tool's parameters.
 	Schema() ToolSchema
 
-	// Execute runs the tool with the given parameters and returns the result.
+	// Execute runs the tool with the given parameters.
 	Execute(ctx context.Context, params ToolParameters) (ToolResult, error)
 }
 
-// ToolResult represents the result of executing a tool.
-type ToolResult struct {
-	// ID is the unique identifier for this tool call.
-	// This links the result back to the original ToolCall.
-	ID string `json:"id,omitempty"`
+// Type aliases re-export result and schema types from the public package.
+type (
+	// ToolResult represents the result of executing a tool.
+	ToolResult = toolresult.Result
+	// ToolSchema defines the OpenAI-compatible tool schema.
+	ToolSchema = toolresult.Schema
+	// FunctionSchema defines the metadata for a function tool.
+	FunctionSchema = toolresult.FunctionSchema
+	// ParameterSchema defines the JSON schema for function parameters.
+	ParameterSchema = toolresult.ParameterSchema
+	// PropertyDefinition defines a single parameter property.
+	PropertyDefinition = toolresult.PropertyDefinition
+)
 
-	// Success indicates whether the tool execution succeeded.
-	Success bool `json:"success"`
-
-	// Output contains the tool's output message for the LLM.
-	Output string `json:"output"`
-
-	// Error contains an error message if the tool failed (for JSON serialization).
-	Error string `json:"error,omitempty"`
-
-	// Err contains the actual error if the tool failed.
-	// This field is not serialized to JSON.
-	Err error `json:"-"`
-
-	// ExitCode contains the exit code for command-based tools.
-	// Zero indicates success, non-zero indicates failure.
-	ExitCode int `json:"exit_code,omitempty"`
-
-	// Metadata contains additional tool-specific data.
-	Metadata map[string]any `json:"metadata,omitempty"`
-}
-
-// NewToolResult creates a successful tool result with the given output.
-func NewToolResult(output string) ToolResult {
-	return ToolResult{
-		Success: true,
-		Output:  output,
-	}
-}
-
-// NewToolError creates a failed tool result from an error.
-func NewToolError(err error) ToolResult {
-	return ToolResult{
-		Success: false,
-		Err:     err,
-		Error:   err.Error(),
-	}
-}
-
-// ErrToResultf converts an error into a failed ToolResult with a formatted message
-// and nil function error. This wraps the error message in a format string.
-func ErrToResultf(format string, err error) (ToolResult, error) {
-	return ToolResult{
-		Success: false,
-		Error:   fmt.Sprintf(format, err),
-	}, nil
-}
-
-// NewToolErrorWithID creates a failed tool result with ID from an error.
-func NewToolErrorWithID(id string, err error) ToolResult {
-	return ToolResult{
-		ID:      id,
-		Success: false,
-		Err:     err,
-		Error:   err.Error(),
-	}
-}
-
-// WithID returns a copy of the result with the given ID.
-func (r ToolResult) WithID(id string) ToolResult {
-	r.ID = id
-
-	return r
-}
-
-// WithExitCode returns a copy of the result with the given exit code.
-func (r ToolResult) WithExitCode(code int) ToolResult {
-	r.ExitCode = code
-
-	return r
-}
-
-// WithMetadata returns a copy of the result with the given metadata.
-func (r ToolResult) WithMetadata(metadata map[string]any) ToolResult {
-	r.Metadata = metadata
-
-	return r
-}
-
-// GetErr returns the error if present, or nil.
-func (r ToolResult) GetErr() error {
-	return r.Err
-}
-
-// String returns a string representation of the result.
-func (r ToolResult) String() string {
-	if r.Success {
-		return r.Output
-	}
-
-	if r.Err != nil {
-		return r.Err.Error()
-	}
-
-	return r.Error
-}
-
-// ToolSchema defines the OpenAI-compatible tool schema.
-// This matches the format expected by OpenAI's function calling API.
-type ToolSchema struct {
-	// Type is always "function" for function tools.
-	Type string `json:"type"`
-
-	// Function contains the function definition.
-	Function FunctionSchema `json:"function"`
-}
-
-// FunctionSchema defines the metadata for a function tool.
-type FunctionSchema struct {
-	// Name is the function name.
-	Name string `json:"name"`
-
-	// Description explains what the function does.
-	Description string `json:"description"`
-
-	// Parameters defines the function's parameter schema.
-	Parameters ParameterSchema `json:"parameters"`
-}
-
-// ParameterSchema defines the JSON schema for function parameters.
-type ParameterSchema struct {
-	// Type is always "object" for function parameters.
-	Type string `json:"type"`
-
-	// Properties maps parameter names to their definitions.
-	Properties map[string]PropertyDefinition `json:"properties"`
-
-	// Required lists the names of required parameters.
-	Required []string `json:"required,omitempty"`
-}
-
-// PropertyDefinition defines a single parameter property.
-type PropertyDefinition struct {
-	// Type is the JSON schema type (string, number, boolean, etc.).
-	Type string `json:"type"`
-
-	// Description explains the parameter.
-	Description string `json:"description"`
-
-	// Enum lists allowed values for string parameters (optional).
-	Enum []string `json:"enum,omitempty"`
-}
+// Constructor aliases re-export from the public package.
+var (
+	// NewToolResult creates a successful tool result.
+	NewToolResult = toolresult.NewResult
+	// NewToolError creates a failed tool result from an error.
+	NewToolError = toolresult.NewError
+	// ErrToResultf converts an error into a failed ToolResult.
+	ErrToResultf = toolresult.ErrToResult
+	// NewToolErrorWithID creates a failed tool result with ID.
+	NewToolErrorWithID = toolresult.NewErrorWithID
+)
 
 // BuiltinTools is a compile-time slice of all builtin tools.
 // These tools are always available and don't require runtime registration.
@@ -198,3 +77,4 @@ var BuiltinTools = []Tool{
 	NewFileSearchTool(""),
 	NewGitContextTool(""),
 }
+

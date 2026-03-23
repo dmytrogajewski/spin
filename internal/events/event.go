@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
@@ -650,7 +651,7 @@ func (e *EventEmitter) Emit(event Event) {
 		for id, ch := range e.subscribers {
 			switch mode {
 			case BackpressureDrop:
-				e.emitDrop(ch, event)
+				concurrency.TrySend(ch, event)
 			case BackpressureBuffer:
 				e.emitBuffer(id, ch, event)
 			}
@@ -670,31 +671,12 @@ func (e *EventEmitter) Emit(event Event) {
 
 	// Emit with blocking (might take time).
 	for _, ch := range subscribers {
-		e.emitBlock(ch, event)
-	}
-}
-
-// emitDrop implements fire-and-forget (drops events if channel full).
-func (e *EventEmitter) emitDrop(ch chan Event, event Event) {
-	select {
-	case ch <- event:
-		// Successfully sent.
-	default:
-		// Subscriber slow/blocked, drop event.
+		concurrency.SendWithTimeout(ch, event, emitBlockTimeout)
 	}
 }
 
 // emitBlockTimeout is the maximum time to wait for a blocking emit before dropping.
 const emitBlockTimeout = 5 * time.Second
-
-// emitBlock implements blocking send with a safety timeout to prevent deadlock.
-func (e *EventEmitter) emitBlock(ch chan Event, event Event) {
-	select {
-	case ch <- event:
-	case <-time.After(emitBlockTimeout):
-		// Drop event to prevent deadlock from a stuck subscriber.
-	}
-}
 
 // emitBuffer implements dynamic buffering (buffers events up to limit).
 func (e *EventEmitter) emitBuffer(id string, ch chan Event, event Event) {

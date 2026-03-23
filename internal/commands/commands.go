@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dmytrogajewski/spin/internal/syncmap"
+	"github.com/dmytrogajewski/spin/pkg/alg/ds/syncmap"
 )
 
 var (

@@ -21,7 +21,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/safety/hooks"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
-	"github.com/dmytrogajewski/spin/internal/tokenizer"
+	"github.com/dmytrogajewski/spin/pkg/tokenizer"
 )
 
 var (

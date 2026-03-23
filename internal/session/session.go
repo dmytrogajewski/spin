@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/dmytrogajewski/spin/pkg/apperr"
 	"github.com/dmytrogajewski/spin/internal/state"
 )
 
@@ -198,14 +199,13 @@ func (s *Session) RemoveTag(tag string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Find and remove tag.
-	for i, existingTag := range s.Metadata.Tags {
-		if existingTag == tag {
-			s.Metadata.Tags = append(s.Metadata.Tags[:i], s.Metadata.Tags[i+1:]...)
-			s.UpdatedAt = time.Now()
+	before := len(s.Metadata.Tags)
+	s.Metadata.Tags = slices.DeleteFunc(s.Metadata.Tags, func(existing string) bool {
+		return existing == tag
+	})
 
-			break
-		}
+	if len(s.Metadata.Tags) != before {
+		s.UpdatedAt = time.Now()
 	}
 
 	return nil
@@ -230,45 +230,39 @@ func (s *Session) Validate() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	errs := s.validateBasicFields()
+	var errs apperr.ErrorList
 
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
+	s.validateBasicFields(&errs)
 
-	return nil
+	return errs.Err()
 }
 
 // validateBasicFields validates basic session fields.
-func (s *Session) validateBasicFields() []error {
-	var errs []error
-
+func (s *Session) validateBasicFields(errs *apperr.ErrorList) {
 	// Validate ID.
 	if s.ID == "" {
-		errs = append(errs, ErrSessionIDIsEmpty)
+		errs.Add(ErrSessionIDIsEmpty)
 	}
 
 	_, err := uuid.Parse(s.ID)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("session ID is not a valid UUID: %w", err))
+		errs.Add(fmt.Errorf("session ID is not a valid UUID: %w", err))
 	}
 
 	// Validate WorkDir.
 	if s.WorkDir == "" {
-		errs = append(errs, ErrWorkDirectoryIsEmpty)
+		errs.Add(ErrWorkDirectoryIsEmpty)
 	}
 
 	// Validate timestamps.
 	if s.UpdatedAt.Before(s.CreatedAt) {
-		errs = append(errs, ErrUpdatedAtIsBeforeCreatedAt)
+		errs.Add(ErrUpdatedAtIsBeforeCreatedAt)
 	}
 
 	// Validate state.
 	if !isValidState(s.State) {
-		errs = append(errs, fmt.Errorf("invalid state: %s: %w", s.State, ErrInvalidState))
+		errs.Add(fmt.Errorf("invalid state: %s: %w", s.State, ErrInvalidState))
 	}
-
-	return errs
 }
 
 // isValidState checks if a state value is valid.

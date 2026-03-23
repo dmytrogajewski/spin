@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 )
 
 const (
@@ -512,66 +514,19 @@ func detectLanguages(files []FileInfo) []string {
 	return languages
 }
 
+// sensitivePrefixes lists env var prefixes that indicate sensitive data.
+var sensitivePrefixes = []string{
+	"AWS_", "GCP_", "AZURE_", "OPENAI_", "ANTHROPIC_", "HUGGINGFACE_",
+}
+
+// sensitiveSubstrings lists env var key substrings that indicate sensitive data.
+var sensitiveSubstrings = []string{
+	"TOKEN", "KEY", "SECRET", "PASSWORD", "AUTH", "CREDENTIAL", "PRIVATE",
+}
+
 // filterEnvironment filters environment variables to exclude sensitive information.
 func filterEnvironment(env []string) map[string]string {
-	filtered := make(map[string]string)
-
-	// Sensitive prefixes.
-	sensitivePrefixes := []string{
-		"AWS_",
-		"GCP_",
-		"AZURE_",
-		"OPENAI_",
-		"ANTHROPIC_",
-		"HUGGINGFACE_",
-	}
-
-	// Sensitive substrings.
-	sensitiveSubstrings := []string{
-		"TOKEN",
-		"KEY",
-		"SECRET",
-		"PASSWORD",
-		"AUTH",
-		"CREDENTIAL",
-		"PRIVATE",
-	}
-
-	isSensitive := func(key string) bool {
-		upperKey := strings.ToUpper(key)
-
-		// Check prefixes.
-		for _, prefix := range sensitivePrefixes {
-			if strings.HasPrefix(upperKey, prefix) {
-				return true
-			}
-		}
-
-		// Check substrings.
-		for _, substring := range sensitiveSubstrings {
-			if strings.Contains(upperKey, substring) {
-				return true
-			}
-		}
-
-		return false
-	}
-
-	for _, e := range env {
-		parts := strings.SplitN(e, "=", 2)
-		if len(parts) != minSplitParts {
-			continue
-		}
-
-		key := parts[0]
-		value := parts[1]
-
-		if !isSensitive(key) {
-			filtered[key] = value
-		}
-	}
-
-	return filtered
+	return execx.FilterEnvironment(env, sensitivePrefixes, sensitiveSubstrings)
 }
 
 // String returns a human-readable representation of the context.

@@ -3,6 +3,8 @@ package delta
 import (
 	"sync"
 	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 )
 
 // History manages versioned delta records.
@@ -65,20 +67,7 @@ func (h *History) GetRecent(count int) []Delta {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	if count <= 0 {
-		return nil
-	}
-
-	total := len(h.deltas)
-	if count > total {
-		count = total
-	}
-
-	start := total - count
-	result := make([]Delta, count)
-	copy(result, h.deltas[start:])
-
-	return result
+	return collections.TailN(h.deltas, count)
 }
 
 // GetSince returns all deltas since a timestamp.

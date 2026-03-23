@@ -3,8 +3,6 @@ package undo
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/hashx"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 const (
@@ -75,7 +76,7 @@ func (m *SnapshotManager) Init() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if isUnsafeWorkDir(m.workDir) {
+	if pathx.IsUnsafeWorkDir(m.workDir) {
 		return ErrUnsafeWorkDir
 	}
 
@@ -425,33 +426,6 @@ func (m *SnapshotManager) runGitWithEnv(args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
-// isUnsafeWorkDir returns true if the directory is too broad for snapshotting.
-// Snapshotting $HOME, /, or /tmp would traverse millions of unrelated files.
-func isUnsafeWorkDir(workDir string) bool {
-	absDir, err := filepath.Abs(workDir)
-	if err != nil {
-		return false
-	}
-
-	// Reject filesystem root.
-	if absDir == "/" {
-		return true
-	}
-
-	// Reject /tmp and /var (too broad).
-	if absDir == "/tmp" || absDir == "/var" {
-		return true
-	}
-
-	// Reject user's home directory.
-	homeDir, homeErr := os.UserHomeDir()
-	if homeErr == nil && absDir == homeDir {
-		return true
-	}
-
-	return false
-}
-
 // ProjectHash returns a deterministic hash of the given work directory path.
 // Uses SHA-256 truncated to projectHashLen hex characters.
 func ProjectHash(workDir string) string {
@@ -460,9 +434,7 @@ func ProjectHash(workDir string) string {
 		absPath = workDir
 	}
 
-	hash := sha256.Sum256([]byte(absPath))
-
-	return hex.EncodeToString(hash[:projectHashLen/2])
+	return hashx.SHA256Hex([]byte(absPath))[:projectHashLen]
 }
 
 // resolveShadowDir computes the shadow repo directory path.

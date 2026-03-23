@@ -49,7 +49,7 @@ func TestEventTransformer_ContentDelta_NoDuplication(t *testing.T) {
 	t.Parallel()
 
 	sender := &dedupTestNotifSender{}
-	transformer := NewEventTransformer("test-session", sender)
+	transformer := NewEventTransformer("test-session", sender, "")
 
 	ctx := context.Background()
 
@@ -76,7 +76,7 @@ func TestEventTransformer_ThinkingDelta_SentAsThought(t *testing.T) {
 	t.Parallel()
 
 	sender := &dedupTestNotifSender{}
-	transformer := NewEventTransformer("test-session", sender)
+	transformer := NewEventTransformer("test-session", sender, "")
 
 	ctx := context.Background()
 
@@ -104,7 +104,7 @@ func TestEventTransformer_MultipleDeltas_CountMatches(t *testing.T) {
 	t.Parallel()
 
 	sender := &dedupTestNotifSender{}
-	transformer := NewEventTransformer("test-session", sender)
+	transformer := NewEventTransformer("test-session", sender, "")
 
 	ctx := context.Background()
 

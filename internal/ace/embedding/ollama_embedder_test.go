@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dmytrogajewski/spin/internal/mathutil"
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
 )
 
 func TestNewOllamaEmbedder(t *testing.T) {
@@ -216,8 +216,8 @@ func TestOllamaEmbedder_Embed_Similarity(t *testing.T) {
 	require.NoError(t, err)
 
 	// Calculate cosine similarities.
-	sim12 := mathutil.CosineSimilarity(e1, e2)
-	sim13 := mathutil.CosineSimilarity(e1, e3)
+	sim12 := vector.CosineSimilarity(e1, e2)
+	sim13 := vector.CosineSimilarity(e1, e3)
 
 	// Similar texts should have higher similarity than dissimilar ones.
 	assert.Greater(t, sim12, sim13, "Similar texts should have higher cosine similarity")

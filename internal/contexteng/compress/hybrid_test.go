@@ -6,7 +6,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/contexteng/summarizer"
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/tokenizer"
+	"github.com/dmytrogajewski/spin/pkg/tokenizer"
 )
 
 const (

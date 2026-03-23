@@ -24,6 +24,7 @@ output:
       print-linter-name: true
       print-issued-lines: true
       colors: true
+  sort-results: true
   sort-order:
     - linter
     - file
@@ -57,19 +58,15 @@ linters:
 
     # --- Too noisy for most codebases ---
     - exhaustruct # Go idiom is zero-value initialization; this linter fights the language
-    - noinlineerr # Inline error returns (return fmt.Errorf(...)) are idiomatic Go; extracting to a variable adds verbosity without benefit
-    - gochecknoglobals # Package-level vars for registries, lookup tables, and test fixtures are idiomatic Go
-    - gochecknoinits # init() is used for command/test registration; refactoring would add complexity without benefit
-    - godox # TODO/BUG comments are legitimate development markers tracked in issue trackers
-    - gosmopolitan # Han script characters in test data are intentional for Unicode/i18n testing
-    - reassign # Reassigning os.Stdin/os.Stderr in tests is standard practice for capturing output
+    - gochecknoglobals # CLI pattern requires package-level vars (cobra commands, registries, lookup tables)
+    - gochecknoinits # CLI pattern uses init() for cobra command registration and ecosystem setup
+    - testpackage # White-box testing (package foo, not foo_test) is standard Go practice
 
     # --- Conflicting linters ---
     - whitespace # Conflicts with wsl_v5: multi-func requires blank lines that wsl_v5 forbids
     - nonamedreturns # Conflicts with gocritic(unnamedResult): forbids named returns that gocritic requires for clarity
-
-    # --- Stylistic preference: internal test packages are valid Go ---
-    - testpackage # Requiring _test packages for all tests is too invasive; Go stdlib uses internal test packages extensively
+    - nlreturn # Conflicts with wsl_v5; blank-line-before-return is purely stylistic
+    - noinlineerr # Inline error handling (if err := ...; err != nil) is idiomatic Go
 
   settings:
     cyclop:
@@ -101,7 +98,7 @@ linters:
 
     errcheck:
       check-type-assertions: true
-      check-blank: false
+      check-blank: true
 
     errorlint:
       errorf: true
@@ -111,7 +108,7 @@ linters:
 
     exhaustive:
       check: [switch, map]
-      default-signifies-exhaustive: true
+      default-signifies-exhaustive: false
 
     exhaustruct:
       exclude:
@@ -157,7 +154,6 @@ linters:
       disabled-checks:
         - hugeParam
         - rangeValCopy
-        - ptrToRefParam
       settings:
         captLocal:
           paramsOnly: false
@@ -181,7 +177,6 @@ linters:
 
     gosec:
       excludes:
-        - G117 # Struct fields named APIKey/ClientSecret are not secrets exposure - they hold config values
         - G204 # Subprocess launched with variable - needed for command execution
       severity: medium
       confidence: medium
@@ -195,13 +190,13 @@ linters:
           strict: true
 
     iface:
-      enable: [identical]
+      enable: [identical, unused, opaque]
 
     inamedparam:
       skip-single-param: true
 
     interfacebloat:
-      max: 12
+      max: 5
 
     ireturn:
       allow:
@@ -210,45 +205,6 @@ linters:
         - empty
         - stdlib
         - generic
-        # Internal project interfaces returned by factory/builder functions.
-        - github.com/dmytrogajewski/spin/internal/ace/adapter.Adapter
-        - github.com/dmytrogajewski/spin/internal/ace/curator.Curator
-        - github.com/dmytrogajewski/spin/internal/ace/curator.RefinementStrategy
-        - github.com/dmytrogajewski/spin/internal/ace/embedding.Embedder
-        - github.com/dmytrogajewski/spin/internal/ace/generator.Generator
-        - github.com/dmytrogajewski/spin/internal/ace/reflector.Reflector
-        - github.com/dmytrogajewski/spin/internal/ace/retrieval.Retriever
-        - github.com/dmytrogajewski/spin/internal/agent/executor.CommandExecutor
-        - github.com/dmytrogajewski/spin/internal/agent/executor.NotificationSender
-        - github.com/dmytrogajewski/spin/internal/agent/executor.Runtime
-        - github.com/dmytrogajewski/spin/internal/agent/executor.TerminalClient
-        - github.com/dmytrogajewski/spin/internal/auth.Keystore
-        - github.com/dmytrogajewski/spin/internal/commands.Command
-        - github.com/dmytrogajewski/spin/internal/conversation.EventTransformer
-        - github.com/dmytrogajewski/spin/internal/detection.Intervention
-        - github.com/dmytrogajewski/spin/internal/contexteng/history.Storage
-        - github.com/dmytrogajewski/spin/internal/llm.Provider
-        - github.com/dmytrogajewski/spin/internal/mcp.Client
-        - github.com/dmytrogajewski/spin/internal/mcp.Registry
-        - github.com/dmytrogajewski/spin/internal/mcp.RegistryManager
-        - github.com/dmytrogajewski/spin/internal/patchapply.FileOperation
-        - github.com/dmytrogajewski/spin/internal/protocol/acp.notificationSender
-        - github.com/dmytrogajewski/spin/internal/safety.PolicyStore
-        - github.com/dmytrogajewski/spin/internal/session.Storage
-        - github.com/dmytrogajewski/spin/internal/task.Task
-        - github.com/dmytrogajewski/spin/internal/tools.CommandExecutor
-        - github.com/dmytrogajewski/spin/internal/tools.CommandInfo
-        - github.com/dmytrogajewski/spin/internal/tools.CommandValidator
-        - github.com/dmytrogajewski/spin/internal/tools.ExecutionResult
-        - github.com/dmytrogajewski/spin/internal/tools.ShellContext
-        - github.com/dmytrogajewski/spin/internal/tools.ShellContextInfo
-        - github.com/dmytrogajewski/spin/internal/tools.Tool
-        - github.com/dmytrogajewski/spin/internal/tools.ValidationResult
-        - github.com/dmytrogajewski/spin/internal/ui/blocks.ToolParamsFormatter
-        - github.com/dmytrogajewski/spin/internal/ui/overlay.Command
-        - github.com/dmytrogajewski/spin/internal/ui/ports.UI
-        # External library interfaces.
-        - github.com/openai/openai-go.ChatCompletionMessageParamUnion
 
     lll:
       line-length: 140
@@ -259,34 +215,21 @@ linters:
 
     misspell:
       locale: US
-      ignore-words:
-        - cancelled # SDK field name: acp.RequestPermissionOutcome.Cancelled
 
     mnd:
       ignored-functions:
         - args.Error
-        - cobra.ExactArgs
-        - cobra.MaximumNArgs
-        - cobra.MinimumNArgs
-        - cobra.RangeArgs
         - flag.Arg
         - flag.Duration.*
         - flag.Float.*
         - flag.Int.*
         - flag.Uint.*
-        - make
-        - math.Max
-        - math.Min
-        - max
-        - min
         - os.Chmod
         - os.Mkdir.*
         - os.OpenFile
         - os.WriteFile
-        - strings.SplitN
         - strconv.Format*
         - strconv.Parse*
-        - tabwriter.NewWriter
 
     nakedret:
       max-func-lines: 0
@@ -418,6 +361,11 @@ linters:
         - ok
         - err
         - id
+        - a
+        - b
+        - d
+        - f
+        - h
         - wg
         - mu
         - db
@@ -445,25 +393,6 @@ linters:
         - gh
         - nd
         - hp
-        - a
-        - b
-        - c
-        - d
-        - e
-        - f
-        - g
-        - h
-        - k
-        - m
-        - n
-        - p
-        - r
-        - s
-        - t
-        - v
-        - w
-        - x
-        - T
       ignore-decls:
         - i int
         - j int
@@ -503,182 +432,24 @@ linters:
       - std-error-handling
       - common-false-positives
     rules:
-      - linters: [misspell]
-        text: "Cancelled"
-        path: ".*\\.go"
+      # Test files naturally have similar setup/assertion patterns and long test functions.
+      - path: _test\.go
+        linters: [dupl, funlen, gocognit, gocyclo, cyclop, nestif, errcheck, goconst]
 
-      # Tests that modify process-global state (os.Stdin, os.Args, os.Setenv) cannot be parallelized.
-      - linters: [paralleltest]
-        text: "TestReadPatchInput_Stdin"
-      - linters: [paralleltest]
-        text: "TestConfigEdit"
-      - linters: [paralleltest]
-        text: "TestGetEditor"
+      # CLI command handlers and config validation are inherently complex entry points.
+      # errcheck: interactive input (fmt.Fscanln) errors are intentionally ignored.
+      - path: (cmd/|internal/cli/|internal/config/|internal/prompt/)
+        linters: [forbidigo, funlen, cyclop, gocognit, gocyclo, errcheck]
 
-      # Smithery API uses camelCase JSON; these tags match the external API contract.
-      - linters: [tagliatelle]
-        path: "(cmd/spin/mcp\\.go|internal/mcp/smithery.*\\.go)"
+      # CLI and config validation errors are user-facing messages; dynamic formatting is appropriate.
+      - path: (internal/cli/|internal/config/|internal/prompt/|internal/scaffold/|internal/adapters/)
+        linters: [err113]
 
-      # SSRF false positives: URLs are validated or come from trusted config.
-      - linters: [gosec]
-        text: "G704"
-      - linters: [gosec]
-        text: "G703"
+      # Diff and apply functions are inherently complex.
+      - path: internal/scaffold/
+        linters: [cyclop, gocognit, gocyclo, errcheck, funlen]
 
-      # Exhaustive switches: many event/key/block type switches intentionally handle only relevant cases.
-      - linters: [exhaustive]
-        path: "(internal/ui/|internal/tui/|internal/protocol/acp/|cmd/spin/(exec|tui)\\.go)"
-      - linters: [exhaustive]
-        path: "internal/agent/executor/"
-      - linters: [exhaustive]
-        path: "_test\\.go"
-      - linters: [exhaustive]
-        path: "internal/(agent|config|cycle|detection|events|git|memory|patchapply|state)/"
-
-      # funlen: test functions and complex setup functions slightly exceeding limit.
-      - linters: [funlen]
-        path: "_test\\.go"
-      - linters: [funlen]
-        text: "createConversationForTUI"
-
-      # gocognit: test helper functions with many assertions are inherently complex.
-      - linters: [gocognit]
-        path: "_test\\.go"
-
-      # paralleltest: tests with shared state or process-global mutations.
-      - linters: [paralleltest]
-        text: "TestApplyPatch"
-      - linters: [paralleltest]
-        text: "TestConfigShow"
-      - linters: [paralleltest]
-        text: "TestConfigPath"
-
-      # govet shadow: strict shadow detection flags intentional re-declarations in nested scopes.
-      - linters: [govet]
-        text: "shadow"
-
-      # funcorder: constructor ordering is stylistic; some files have constructors after related methods for readability.
-      - linters: [funcorder]
-        path: "(internal/apperr/|internal/conversation/|internal/contexteng/history/)"
-
-      # gocritic: test helper naming suggestions are stylistic.
-      - linters: [gocritic]
-        path: "_test\\.go"
-      - linters: [gocritic]
-        text: "unnamedResult"
-
-      # unparam: functions with always-nil error returns maintain interface contracts for future use.
-      - linters: [unparam]
-        text: "result.*is always nil"
-      - linters: [unparam]
-        text: "result.*is always"
-      - linters: [unparam]
-        text: "always receives nil"
-      - linters: [unparam]
-        text: "is unused"
-      - linters: [unparam]
-        text: "is never used"
-
-      # musttag: some structs are marshaled with custom logic, not direct json.Marshal.
-      - linters: [musttag]
-        path: "internal/safety/"
-
-      # recvcheck: mixed receiver types are intentional for value/pointer semantics.
-      - linters: [recvcheck]
-        path: "(internal/state/|internal/tools/parameters\\.go)"
-
-      # errname: some error types don't follow XxxError naming for backward compatibility.
-      - linters: [errname]
-        path: "internal/config/"
-
-      # sloglint: warn/error context is used where context isn't available.
-      - linters: [sloglint]
-        text: "WarnContext"
-
-      # wrapcheck: error wrapping is handled at higher levels.
-      - linters: [wrapcheck]
-        path: "(internal/agent/environment\\.go|internal/ui/output/)"
-
-      # mnd: magic numbers in non-obvious places.
-      - linters: [mnd]
-        path: "internal/ace/"
-
-      # errchkjson: intentionally ignoring encode errors on best-effort logging.
-      - linters: [errchkjson]
-        path: "internal/conversation/"
-
-      # forcetypeassert: type assertions are safe in controlled contexts.
-      - linters: [forcetypeassert]
-        path: "(cmd/spin/exec\\.go|internal/tools/apply_patch\\.go)"
-
-      # fatcontext: nested contexts in test closures are acceptable.
-      - linters: [fatcontext]
-        path: "_test\\.go"
-
-      # nilerr: intentional nil error return on specific error conditions.
-      - linters: [nilerr]
-        path: "(internal/agent/ace_service\\.go|internal/protocol/acp/agent\\.go|internal/tools/shell_command\\.go)"
-
-      # nilnil: returning (nil, nil) is intentional for "not found" semantics.
-      - linters: [nilnil]
-        path: "(cmd/spin/services\\.go|internal/agent/ace_service\\.go|internal/dbg/)"
-
-      # staticcheck: specific false positives.
-      - linters: [staticcheck]
-        text: "SA4006"
-      - linters: [staticcheck]
-        text: "ST1003"
-
-      # testifylint: specific assertion style preferences.
-      - linters: [testifylint]
-        text: "float-compare"
-
-      # thelper: test helpers that don't need t.Helper.
-      - linters: [thelper]
-        path: "tests/e2e/"
-
-      # mirror: performance-oriented allocation avoidance in non-hot paths.
-      - linters: [mirror]
-        path: "_test\\.go"
-
-      # wastedassign: some assignments are intentional for readability or future use.
-      - linters: [wastedassign]
-        path: "(internal/agent/loop\\.go|internal/ui/|cmd/spin/tui\\.go)"
-      - linters: [wastedassign]
-        path: "_test\\.go"
-
-      # ineffassign: some assignments are for clarity or unused in specific branches.
-      - linters: [ineffassign]
-        path: "(internal/agent/loop\\.go|internal/ui/)"
-      - linters: [ineffassign]
-        path: "_test\\.go"
-
-      # errcheck: best-effort operations where errors are intentionally ignored.
-      - linters: [errcheck]
-        path: "(cmd/spin/exec\\.go|internal/tools/apply_patch\\.go|internal/ui/output/)"
-
-      # prealloc: pre-allocation suggestions in non-hot paths.
-      - linters: [prealloc]
-        path: "(cmd/spin/|internal/mcp/|internal/protocol/acp/|internal/ui/)"
-      - linters: [prealloc]
-        path: "_test\\.go"
-
-      # lll: long lines in test data and complex function signatures.
-      - linters: [lll]
-        path: "_test\\.go"
-      - linters: [lll]
-        path: "internal/agent/ace_config\\.go"
-      - linters: [lll]
-        path: "internal/ui/"
-
-      # inamedparam: test interface methods matching stdlib signatures.
-      - linters: [inamedparam]
-        path: "internal/ui/testkit/"
-
-      # unconvert: some conversions are explicit for clarity or platform safety.
-      - linters: [unconvert]
-        path: "(internal/ace/generator/|internal/llm/openai/|internal/protocol/acp/terminal_client\\.go)"
-
-      # exhaustive: remaining non-exhaustive switches handle only relevant cases.
-      - linters: [exhaustive]
-        path: "internal/ace/"
+      # CLI display code uses magic numbers for formatting (column widths, truncation limits).
+      # Config migration and scaffold logic has inherently nested/complex control flow.
+      - path: (internal/cli/|internal/scaffold/|internal/config/)
+        linters: [mnd, maintidx, nestif, wrapcheck]

@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 func TestParseToolCallsFromXML(t *testing.T) {
@@ -228,7 +229,7 @@ func TestFindClosingTag(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := findClosingTag(tt.content, tt.startPos, tt.openTag, tt.closeTag)
+			got := stringsx.FindMatchingClose(tt.content, tt.startPos, tt.openTag, tt.closeTag)
 			assert.Equal(t, tt.want, got)
 		})
 	}

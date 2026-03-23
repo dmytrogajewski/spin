@@ -2,6 +2,7 @@ package acp
 
 import (
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/coder/acp-go-sdk"
@@ -93,12 +94,12 @@ func (t *fileContentTracker) cleanup(toolID string) {
 // Returns the SessionUpdate and true if the event was converted, false otherwise.
 // For EventContentDelta, may return multiple updates (thought chunks and message chunks).
 // The fileContentTracker is optional - if nil, diff generation is skipped.
-func convertEventToSessionUpdate(event events.Event, tracker *fileContentTracker) (acp.SessionUpdate, bool) {
+func convertEventToSessionUpdate(event events.Event, tracker *fileContentTracker, workDir string) (acp.SessionUpdate, bool) {
 	switch event.Type {
 	case events.EventContentDelta:
 		return convertContentDelta(event)
 	case events.EventToolCallStart:
-		return convertToolCallStart(event, tracker)
+		return convertToolCallStart(event, tracker, workDir)
 	case events.EventToolCallProgress:
 		return convertToolCallProgress(event)
 	case events.EventToolCallComplete:
@@ -158,46 +159,87 @@ func convertContentDelta(event events.Event) (acp.SessionUpdate, bool) {
 	return update, true
 }
 
-// extractFileLocations extracts file locations from tool parameters.
-// Returns a slice of ToolCallLocation objects with file paths.
-func extractFileLocations(toolName string, params tools.ToolParameters) []acp.ToolCallLocation {
-	var locations []acp.ToolCallLocation
+// toolTitleParam maps tool names to the parameter used for the title suffix.
+var toolTitleParam = map[string]string{
+	"read_file":       "path",
+	toolWriteFile:     "path",
+	"edit_file":       "path",
+	"apply_patch":     "path",
+	"list_directory":  "path",
+	"find_symbol":     "name",
+	"find_references": "name",
+	"file_search":     "pattern",
+	"shell_command":   "command",
+}
 
-	switch toolName {
-	case "read_file", toolWriteFile, "list_directory":
-		path, err := params.GetString("path")
-		if err == nil && path != "" {
-			locations = append(locations, acp.ToolCallLocation{
-				Path: path,
-			})
-		}
-	case "file_search":
-		root, err := params.GetString("workspace_root")
-		if err == nil && root != "" {
-			locations = append(locations, acp.ToolCallLocation{
-				Path: root,
-			})
+// buildToolCallTitle creates a descriptive title for a tool call.
+func buildToolCallTitle(toolName string, params tools.ToolParameters) string {
+	paramKey, hasParam := toolTitleParam[toolName]
+	if !hasParam {
+		return toolName
+	}
+
+	val, err := params.GetString(paramKey)
+	if err != nil || val == "" {
+		return toolName
+	}
+
+	// Shell commands use the command as the full title.
+	if toolName == "shell_command" {
+		return val
+	}
+
+	return toolName + ": " + val
+}
+
+// toolsWithPathLocation lists tools that use the "path" parameter for file location.
+var toolsWithPathLocation = map[string]bool{
+	"read_file":       true,
+	toolWriteFile:     true,
+	"edit_file":       true,
+	"apply_patch":     true,
+	"list_directory":  true,
+	"find_symbol":     true,
+	"find_references": true,
+}
+
+// extractFileLocations extracts file locations from tool parameters.
+// Resolves relative paths against workDir to produce absolute paths for client navigation.
+func extractFileLocations(toolName string, params tools.ToolParameters, workDir string) []acp.ToolCallLocation {
+	if toolsWithPathLocation[toolName] {
+		if path, err := params.GetString("path"); err == nil && path != "" {
+			return []acp.ToolCallLocation{{Path: resolveToolPath(path, workDir)}}
 		}
 	}
 
-	return locations
+	if toolName == "file_search" {
+		if root, err := params.GetString("workspace_root"); err == nil && root != "" {
+			return []acp.ToolCallLocation{{Path: resolveToolPath(root, workDir)}}
+		}
+	}
+
+	return nil
+}
+
+// resolveToolPath resolves a relative path against workDir to produce an absolute path.
+func resolveToolPath(path, workDir string) string {
+	if filepath.IsAbs(path) || workDir == "" {
+		return path
+	}
+
+	return filepath.Join(workDir, path)
 }
 
 // convertToolCallStart converts EventToolCallStart to tool_call.
 // If tracker is provided and tool is write_file, stores old file content for diff generation.
-func convertToolCallStart(event events.Event, tracker *fileContentTracker) (acp.SessionUpdate, bool) {
+func convertToolCallStart(event events.Event, tracker *fileContentTracker, workDir string) (acp.SessionUpdate, bool) {
 	data, ok := event.ToolCallStartData()
 	if !ok {
 		return acp.SessionUpdate{}, false
 	}
 
 	// Use tool name as title; for shell_command, show the actual command.
-	title := data.ToolName
-	if data.ToolName == "shell_command" {
-		if cmd, err := data.Parameters.GetString("command"); err == nil && cmd != "" {
-			title = cmd
-		}
-	}
+	title := buildToolCallTitle(data.ToolName, data.Parameters)
 
 	// Convert Spin tool ID to ACP ToolCallId.
 	toolCallID := acp.ToolCallId(data.ToolID)
@@ -206,7 +248,7 @@ func convertToolCallStart(event events.Event, tracker *fileContentTracker) (acp.
 	kind := mapToolNameToKind(data.ToolName)
 
 	// Extract file locations.
-	locations := extractFileLocations(data.ToolName, data.Parameters)
+	locations := extractFileLocations(data.ToolName, data.Parameters, workDir)
 
 	// Extract raw input (parameters as map).
 	rawInput := data.Parameters.ToMap()

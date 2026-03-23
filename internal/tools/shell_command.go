@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/google/shlex"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 )
 
 const (
@@ -266,19 +268,6 @@ func (t *ShellCommandTool) buildCommand(cmdStr, workDir string) (*simpleCommand,
 	}, nil
 }
 
-// combineOutput merges stdout and stderr into a single string.
-func combineOutput(stdout, stderr string) string {
-	if stderr == "" {
-		return stdout
-	}
-
-	if stdout != "" {
-		return stdout + "\n" + stderr
-	}
-
-	return stderr
-}
-
 // buildErrorResult constructs a ToolResult from a failed execution.
 func (t *ShellCommandTool) buildErrorResult(result ExecutionResult, execErr error) ToolResult {
 	stdout, stderr := "", ""
@@ -289,7 +278,7 @@ func (t *ShellCommandTool) buildErrorResult(result ExecutionResult, execErr erro
 
 	return ToolResult{
 		Success: false,
-		Output:  TruncateOutput(combineOutput(stdout, stderr)),
+		Output:  TruncateOutput(execx.MergeOutputs(stdout, stderr)),
 		Error:   execErr.Error(),
 	}
 }
@@ -301,7 +290,7 @@ func (t *ShellCommandTool) buildSuccessResult(result ExecutionResult) ToolResult
 	}
 
 	exitCode := result.GetExitCode()
-	output := combineOutput(result.GetStdout(), result.GetStderr())
+	output := execx.MergeOutputs(result.GetStdout(), result.GetStderr())
 
 	var errorMsg string
 	if exitCode != 0 {

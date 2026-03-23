@@ -153,7 +153,10 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("connect failed with status %d (body unreadable): %w", resp.StatusCode, ErrConnectFailedWithStatus)
+		}
 
 		return fmt.Errorf("connect failed with status %d: %s: %w", resp.StatusCode, string(bodyBytes), ErrConnectFailedWithStatus)
 	}
@@ -307,7 +310,10 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("rpc failed with status %d (body unreadable): %w", resp.StatusCode, ErrRPCFailedWithStatus)
+		}
 
 		return nil, fmt.Errorf("rpc failed with status %d: %s: %w", resp.StatusCode, string(bodyBytes), ErrRPCFailedWithStatus)
 	}

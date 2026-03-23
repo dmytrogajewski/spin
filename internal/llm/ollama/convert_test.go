@@ -11,6 +11,8 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/pkg/llmutil"
 )
 
 var testLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -515,7 +517,7 @@ func TestExtractContent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := extractContent(tt.content)
+			got := llmutil.ExtractContent(tt.content)
 			assert.Equal(t, tt.expected, got)
 		})
 	}

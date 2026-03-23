@@ -69,29 +69,27 @@ func TestMemoryManager_CalculateUtility(t *testing.T) {
 			name:     "high utility",
 			helpful:  10,
 			harmful:  2,
-			expected: 0.6153846153846154, // (10-2)/(10+2+1)
+			expected: 0.6666666666666666, // (10-2)/(10+2)
 		},
 		{
 			name:     "zero utility",
 			helpful:  5,
 			harmful:  5,
-			expected: 0.0, // (5-5)/(5+5+1)
+			expected: 0.0, // (5-5)/(5+5)
 		},
 		{
 			name:     "negative utility",
 			helpful:  2,
 			harmful:  10,
-			expected: -0.6153846153846154, // (2-10)/(2+10+1)
+			expected: -0.6666666666666666, // (2-10)/(2+10)
 		},
 		{
 			name:     "no feedback",
 			helpful:  0,
 			harmful:  0,
-			expected: 0.0, // (0-0)/(0+0+1)
+			expected: 0.0, // Score() returns 0 when no feedback
 		},
 	}
-
-	manager := NewMemoryManager(DefaultMemoryConfig())
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -109,8 +107,8 @@ func TestMemoryManager_CalculateUtility(t *testing.T) {
 				b.IncrementHarmful()
 			}
 
-			utility := manager.CalculateUtility(b)
-			assert.InDelta(t, tt.expected, utility, 0.0001)
+			score := b.Score()
+			assert.InDelta(t, tt.expected, score, 0.0001)
 		})
 	}
 }

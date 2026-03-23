@@ -14,6 +14,7 @@ import (
 	"github.com/ollama/ollama/api"
 	openaisdk "github.com/openai/openai-go"
 
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 	"github.com/dmytrogajewski/spin/internal/llm"
 )
 
@@ -279,25 +280,16 @@ func (p *Provider) convertTools(ctx context.Context, params openaisdk.ChatComple
 // setRequestOptions sets temperature, max tokens, and context options on the request.
 func (p *Provider) setRequestOptions(ctx context.Context, params openaisdk.ChatCompletionNewParams, req *api.ChatRequest) {
 	if params.Temperature.Valid() {
-		req.Options = ensureOptionsMap(req.Options)
+		req.Options = collections.EnsureMap(req.Options)
 		req.Options["temperature"] = params.Temperature.Value
 	}
 
 	if params.MaxTokens.Valid() {
-		req.Options = ensureOptionsMap(req.Options)
+		req.Options = collections.EnsureMap(req.Options)
 		req.Options["num_predict"] = params.MaxTokens.Value
 	}
 
 	req.Options = p.setContextOptions(ctx, req.Options)
-}
-
-// ensureOptionsMap returns the provided options map or creates a new one if nil.
-func ensureOptionsMap(opts map[string]any) map[string]any {
-	if opts == nil {
-		return make(map[string]any)
-	}
-
-	return opts
 }
 
 // mergeThinkingContent merges thinking and content strings into a single content string.

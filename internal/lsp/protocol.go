@@ -2,7 +2,11 @@
 // It handles lazy process startup, JSON-RPC 2.0 communication, and response caching.
 package lsp
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/dmytrogajewski/spin/pkg/protocol/jsonrpc"
+)
 
 // SymbolKind classifies the kind of a programming symbol.
 type SymbolKind int
@@ -150,5 +154,5 @@ var (
 	ErrRequestTimeout = errors.New("request timeout")
 
 	// ErrTransportClosed is returned when the transport is closed.
-	ErrTransportClosed = errors.New("transport closed")
+	ErrTransportClosed = jsonrpc.ErrTransportClosed
 )

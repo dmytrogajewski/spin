@@ -5,13 +5,15 @@ import (
 	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 // HasRecentError checks if any step in the last 'lookback' steps contains an error.
 // Returns true if error detected, false otherwise.
 // Lookback of 0 or negative value checks all steps.
 func (tc *Context) HasRecentError(lookback int) bool {
-	steps := getRecentSteps(tc.Steps, lookback)
+	steps := collections.TailNOrAll(tc.Steps, lookback)
 	for _, step := range steps {
 		if containsError(step.Content) {
 			return true
@@ -21,21 +23,11 @@ func (tc *Context) HasRecentError(lookback int) bool {
 	return false
 }
 
-// getRecentSteps returns the last 'lookback' steps.
-// If lookback <= 0 or >= len(steps), returns all steps.
-func getRecentSteps(steps []generator.TrajectoryStep, lookback int) []generator.TrajectoryStep {
-	if lookback <= 0 || lookback >= len(steps) {
-		return steps
-	}
-
-	return steps[len(steps)-lookback:]
-}
-
 // ExtractErrorPatterns extracts error-related text from recent steps.
 // Returns slice of error descriptions (sentences containing error keywords).
 // Lookback of 0 or negative value checks all steps.
 func ExtractErrorPatterns(steps []generator.TrajectoryStep, lookback int) []string {
-	recentSteps := getRecentSteps(steps, lookback)
+	recentSteps := collections.TailNOrAll(steps, lookback)
 	patterns := make([]string, 0)
 
 	for _, step := range recentSteps {
@@ -51,7 +43,7 @@ func ExtractErrorPatterns(steps []generator.TrajectoryStep, lookback int) []stri
 // Returns unique tool names in order of first appearance.
 // Lookback of 0 or negative value checks all steps.
 func (tc *Context) GetRecentTools(lookback int) []string {
-	steps := getRecentSteps(tc.Steps, lookback)
+	steps := collections.TailNOrAll(tc.Steps, lookback)
 	seen := make(map[string]bool)
 	tools := make([]string, 0)
 
@@ -105,7 +97,7 @@ var stopwords = map[string]bool{
 // Lookback of 0 or negative value checks all steps.
 // Simple implementation: extract capitalized words and technical terms.
 func ExtractConcepts(steps []generator.TrajectoryStep, lookback int) []string {
-	recentSteps := getRecentSteps(steps, lookback)
+	recentSteps := collections.TailNOrAll(steps, lookback)
 	seen := make(map[string]bool)
 	concepts := make([]string, 0)
 
@@ -147,17 +139,11 @@ func extractConcept(word string, seen map[string]bool) (string, bool) {
 	return "", false
 }
 
+// errorKeywords are case-insensitive indicators of execution errors.
+var errorKeywords = []string{"error", "failed", "exception", "panic", "fatal"}
+
 // containsError checks if content contains error indicators.
 // Case-insensitive check for common error keywords.
 func containsError(content string) bool {
-	lower := strings.ToLower(content)
-
-	keywords := []string{"error", "failed", "exception", "panic", "fatal"}
-	for _, keyword := range keywords {
-		if strings.Contains(lower, keyword) {
-			return true
-		}
-	}
-
-	return false
+	return stringsx.ContainsAnyKeyword(content, errorKeywords)
 }

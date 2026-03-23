@@ -3,10 +3,9 @@ package delta
 import (
 	"context"
 	"fmt"
-	"runtime"
-	"sync"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
+	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 )
 
 // BatchApplyRequest contains multiple deltas to apply.
@@ -24,97 +23,52 @@ type BatchApplyResult struct {
 	RolledBack bool // True if atomic=true and rollback occurred.
 }
 
-// batchJob pairs an index with a delta for worker processing.
-type batchJob struct {
-	index int
-	delta Delta
-}
-
-// batchJobResult holds the outcome of applying a single delta.
-type batchJobResult struct {
-	index  int
+// applyResult holds the outcome of applying a single delta.
+type applyResult struct {
 	result *ApplyResult
 	err    error
 }
 
 // ApplyBatch applies multiple deltas in parallel.
 func (a *Applier) ApplyBatch(ctx context.Context, req BatchApplyRequest) (*BatchApplyResult, error) {
-	workers := req.MaxWorkers
-	if workers == 0 {
-		workers = runtime.NumCPU()
-	}
+	workers := concurrency.EffectiveWorkers(req.MaxWorkers, len(req.Deltas))
+
+	poolResults := concurrency.WorkerPool(ctx, workers, req.Deltas, func(ctx context.Context, d Delta) applyResult {
+		res, err := a.Apply(ctx, d)
+
+		return applyResult{result: res, err: err}
+	})
 
 	result := &BatchApplyResult{
 		Results: make([]ApplyResult, len(req.Deltas)),
 	}
 
-	resultsChan := a.runBatchWorkers(ctx, req.Deltas, workers)
-	successfulIndices, firstError := collectBatchResults(result, resultsChan, req.Atomic)
+	successfulIndices, firstError := collectBatchResults(result, poolResults, req.Atomic)
 
 	return a.finalizeBatch(ctx, result, req, firstError, successfulIndices)
 }
 
-// runBatchWorkers starts worker goroutines and returns the results channel.
-func (a *Applier) runBatchWorkers(ctx context.Context, deltas []Delta, workers int) <-chan batchJobResult {
-	jobs := make(chan batchJob, len(deltas))
-	results := make(chan batchJobResult, len(deltas))
-
-	var wg sync.WaitGroup
-
-	for range workers {
-		wg.Go(func() {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case j, ok := <-jobs:
-					if !ok {
-						return
-					}
-
-					res, err := a.Apply(ctx, j.delta)
-					results <- batchJobResult{j.index, res, err}
-				}
-			}
-		})
-	}
-
-	for i, d := range deltas {
-		jobs <- batchJob{i, d}
-	}
-
-	close(jobs)
-
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	return results
-}
-
 // collectBatchResults processes results from workers, tracking successes and failures.
-func collectBatchResults(result *BatchApplyResult, resultsChan <-chan batchJobResult, atomic bool) (failed []int, err error) {
-	var firstError error
+func collectBatchResults(result *BatchApplyResult, poolResults []applyResult, atomic bool) (successfulIndices []int, firstError error) {
+	successfulIndices = make([]int, 0)
 
-	successfulIndices := make([]int, 0)
-
-	for r := range resultsChan {
-		if r.err != nil {
+	for idx, res := range poolResults {
+		if res.err != nil {
 			result.Failed++
-			result.Results[r.index] = ApplyResult{Success: false, Error: r.err}
+			result.Results[idx] = ApplyResult{Success: false, Error: res.err}
 
 			if firstError == nil {
-				firstError = r.err
+				firstError = res.err
 			}
 
 			if atomic {
 				result.RolledBack = true
 			}
-		} else {
+		} else if res.result != nil {
 			result.Applied++
-			result.Results[r.index] = *r.result
-			successfulIndices = append(successfulIndices, r.index)
+			result.Results[idx] = *res.result
+
+			successfulIndices = append(successfulIndices, idx)
 		}
 	}
 

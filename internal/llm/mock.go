@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/openai/openai-go"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 )
 
 const (
@@ -165,11 +167,11 @@ func (p *MockProvider) streamContentChunks(ctx context.Context, chunks chan<- op
 	for _, content := range p.streamChunks {
 		chunk := newMockChunk(chunkID, content, "assistant", nil)
 
-		if !sendChunk(ctx, chunks, chunk) {
+		if !concurrency.SendOrCancel(ctx, chunks, chunk) {
 			return false
 		}
 
-		if p.delay > 0 && !waitDelay(ctx, p.delay) {
+		if p.delay > 0 && !concurrency.SleepCtx(ctx, p.delay) {
 			return false
 		}
 	}
@@ -194,18 +196,18 @@ func (p *MockProvider) streamToolCallChunks(ctx context.Context, chunks chan<- o
 
 	chunk := newMockChunk(chunkID, "", "assistant", toolCallChunks)
 
-	return sendChunk(ctx, chunks, chunk)
+	return concurrency.SendOrCancel(ctx, chunks, chunk)
 }
 
 // streamSingleChunk streams a single response chunk. Returns false if context canceled.
 func (p *MockProvider) streamSingleChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunkID string) bool {
-	if p.delay > 0 && !waitDelay(ctx, p.delay) {
+	if p.delay > 0 && !concurrency.SleepCtx(ctx, p.delay) {
 		return false
 	}
 
 	chunk := newMockChunk(chunkID, p.response, "assistant", nil)
 
-	return sendChunk(ctx, chunks, chunk)
+	return concurrency.SendOrCancel(ctx, chunks, chunk)
 }
 
 // sendDoneChunk sends the final done chunk with the appropriate finish reason.
@@ -257,25 +259,6 @@ func newMockChunk(
 	}
 }
 
-// sendChunk sends a chunk to the channel, returning false if context is canceled.
-func sendChunk(ctx context.Context, chunks chan<- openai.ChatCompletionChunk, chunk openai.ChatCompletionChunk) bool {
-	select {
-	case <-ctx.Done():
-		return false
-	case chunks <- chunk:
-		return true
-	}
-}
-
-// waitDelay waits for the specified delay, returning false if context is canceled.
-func waitDelay(ctx context.Context, delay time.Duration) bool {
-	select {
-	case <-time.After(delay):
-		return true
-	case <-ctx.Done():
-		return false
-	}
-}
 
 // Models implements Provider.Models.
 func (p *MockProvider) Models(_ context.Context) ([]openai.Model, error) {

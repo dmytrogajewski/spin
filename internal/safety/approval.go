@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 	"github.com/dmytrogajewski/spin/internal/events"
 )
 
@@ -91,8 +92,12 @@ func (s *ApprovalService) RequestApproval(ctx context.Context, operation Operati
 		return reqID, false, ErrNoApprovalHandlerConfigured
 	}
 
-	resp, canceled := s.invokeHandler(ctx, req)
-	if canceled {
+	handler := s.handler
+	resp, ok := concurrency.CallWithContext(ctx, func() ApprovalResponse {
+		return handler(ctx, req)
+	})
+
+	if !ok {
 		s.emitIfPresent(func() { s.emitApprovalDenied(reqID, operation.Command, "context canceled") })
 
 		return reqID, false, ErrContextCanceled
@@ -228,25 +233,6 @@ func (s *ApprovalService) resolveExpiry(resp ApprovalResponse) *time.Time {
 	}
 
 	return nil
-}
-
-// invokeHandler invokes the approval handler.
-func (s *ApprovalService) invokeHandler(ctx context.Context, req ApprovalRequest) (ApprovalResponse, bool) {
-	// Invoke handler in goroutine with context.
-	respChan := make(chan ApprovalResponse, 1)
-
-	go func() {
-		resp := s.handler(ctx, req)
-		respChan <- resp
-	}()
-
-	// Wait for response or context cancellation.
-	select {
-	case resp := <-respChan:
-		return resp, false
-	case <-ctx.Done():
-		return ApprovalResponse{}, true
-	}
 }
 
 // handleModifiedCommand handles approval with a modified command.

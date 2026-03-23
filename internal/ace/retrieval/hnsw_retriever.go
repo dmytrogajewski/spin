@@ -11,7 +11,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
-	"github.com/dmytrogajewski/spin/internal/mathutil"
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
 )
 
 // ErrBulletHasNoEmbedding is a sentinel error.
@@ -115,7 +115,7 @@ func (r *HNSWRetriever) RetrieveWithScores(ctx context.Context, query string, to
 
 		// Calculate cosine similarity from L2 distance
 		// HNSW uses L2 distance by default, we need to convert to similarity.
-		similarity := mathutil.CosineSimilarity(queryEmbed, b.Embedding)
+		similarity := vector.CosineSimilarity(queryEmbed, b.Embedding)
 
 		results = append(results, ScoredBullet{
 			Bullet: b,

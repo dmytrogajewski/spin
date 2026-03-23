@@ -16,7 +16,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/refine"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/llmutil"
+	"github.com/dmytrogajewski/spin/pkg/llmutil"
 )
 
 const (

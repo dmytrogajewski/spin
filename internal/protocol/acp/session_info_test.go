@@ -18,7 +18,7 @@ func TestEventTransformer_SessionInfoOnTurnComplete(t *testing.T) {
 	t.Parallel()
 
 	mockConn := &mockConnection{}
-	transformer := NewEventTransformer(acp.SessionId("test-session"), mockConn)
+	transformer := NewEventTransformer(acp.SessionId("test-session"), mockConn, "")
 
 	ctx := context.Background()
 
@@ -52,7 +52,7 @@ func TestEventTransformer_NoSessionInfoOnEmptyContent(t *testing.T) {
 	t.Parallel()
 
 	mockConn := &mockConnection{}
-	transformer := NewEventTransformer(acp.SessionId("test-session"), mockConn)
+	transformer := NewEventTransformer(acp.SessionId("test-session"), mockConn, "")
 
 	// Turn complete without any content.
 	turnCompleteEvent := events.Event{Type: events.EventTurnComplete}
@@ -69,7 +69,7 @@ func TestEventTransformer_SessionInfoSentOnce(t *testing.T) {
 	t.Parallel()
 
 	mockConn := &mockConnection{}
-	transformer := NewEventTransformer(acp.SessionId("test-session"), mockConn)
+	transformer := NewEventTransformer(acp.SessionId("test-session"), mockConn, "")
 
 	ctx := context.Background()
 

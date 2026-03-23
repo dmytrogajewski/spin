@@ -19,13 +19,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/ollama/ollama/api"
 	"github.com/openai/openai-go"
 
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/pkg/llmutil"
 )
 
 const roleToolResult = "tool"
@@ -45,7 +45,7 @@ func convertMessageToOllama(
 
 	result := api.Message{
 		Role:    genericMsg.Role,
-		Content: extractContent(genericMsg.Content),
+		Content: llmutil.ExtractContent(genericMsg.Content),
 	}
 
 	if len(genericMsg.ToolCalls) > 0 {
@@ -279,41 +279,6 @@ func parseGenericMessage(msg openai.ChatCompletionMessageParamUnion) (*genericMe
 	}
 
 	return &genericMsg, nil
-}
-
-// extractContent extracts content from raw JSON, handling both string and array formats.
-func extractContent(content json.RawMessage) string {
-	var contentStr string
-
-	err := json.Unmarshal(content, &contentStr)
-	if err == nil {
-		return contentStr
-	}
-
-	// Try as array of content parts.
-	var contentParts []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-
-	err = json.Unmarshal(content, &contentParts)
-	if err == nil {
-		var result string
-
-		var resultSb257 strings.Builder
-
-		for _, part := range contentParts {
-			if part.Type == "text" {
-				resultSb257.WriteString(part.Text)
-			}
-		}
-
-		result += resultSb257.String()
-
-		return result
-	}
-
-	return ""
 }
 
 // extractToolCalls converts tool calls from JSON to Ollama format.

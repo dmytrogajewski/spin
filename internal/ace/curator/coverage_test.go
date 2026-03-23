@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dmytrogajewski/spin/internal/mathutil"
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
@@ -42,7 +42,7 @@ func TestCosineSimilarity_DifferentLengths(t *testing.T) {
 	a := []float32{1.0, 2.0, 3.0}
 	b := []float32{1.0, 2.0}
 
-	similarity := mathutil.CosineSimilarity(a, b)
+	similarity := vector.CosineSimilarity(a, b)
 	assert.InDelta(t, 0.0, similarity, 1e-9)
 }
 
@@ -53,19 +53,19 @@ func TestCosineSimilarity_ZeroVectors(t *testing.T) {
 	// Test with first vector being zero.
 	a := []float32{0.0, 0.0, 0.0}
 	b := []float32{1.0, 2.0, 3.0}
-	similarity := mathutil.CosineSimilarity(a, b)
+	similarity := vector.CosineSimilarity(a, b)
 	assert.InDelta(t, 0.0, similarity, 1e-9)
 
 	// Test with second vector being zero.
 	a = []float32{1.0, 2.0, 3.0}
 	b = []float32{0.0, 0.0, 0.0}
-	similarity = mathutil.CosineSimilarity(a, b)
+	similarity = vector.CosineSimilarity(a, b)
 	assert.InDelta(t, 0.0, similarity, 1e-9)
 
 	// Test with both vectors being zero.
 	a = []float32{0.0, 0.0, 0.0}
 	b = []float32{0.0, 0.0, 0.0}
-	similarity = mathutil.CosineSimilarity(a, b)
+	similarity = vector.CosineSimilarity(a, b)
 	assert.InDelta(t, 0.0, similarity, 1e-9)
 }
 

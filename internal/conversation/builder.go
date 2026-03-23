@@ -38,7 +38,7 @@ import (
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
-	"github.com/dmytrogajewski/spin/internal/tokenizer"
+	"github.com/dmytrogajewski/spin/pkg/tokenizer"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/undo"
 )

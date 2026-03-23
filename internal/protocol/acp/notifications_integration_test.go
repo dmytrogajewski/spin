@@ -68,7 +68,7 @@ func TestTransformer_ContentDelta(t *testing.T) {
 
 	mockConn := &mockConnection{}
 	sessionID := acp.SessionId("test-session")
-	transformer := NewEventTransformer(sessionID, mockConn)
+	transformer := NewEventTransformer(sessionID, mockConn, "")
 
 	transformer.Transform(context.Background(), events.Event{
 		Type:      events.EventContentDelta,
@@ -87,7 +87,7 @@ func TestTransformer_ToolCallStart(t *testing.T) {
 
 	mockConn := &mockConnection{}
 	sessionID := acp.SessionId("test-session")
-	transformer := NewEventTransformer(sessionID, mockConn)
+	transformer := NewEventTransformer(sessionID, mockConn, "")
 
 	transformer.Transform(context.Background(), events.Event{
 		Type:      events.EventToolCallStart,
@@ -104,7 +104,7 @@ func TestTransformer_ToolCallStart(t *testing.T) {
 func TestTransformer_NilConnection(t *testing.T) {
 	t.Parallel()
 
-	transformer := NewEventTransformer("test-session", nil)
+	transformer := NewEventTransformer("test-session", nil, "")
 
 	handled := transformer.Transform(context.Background(), events.Event{
 		Type:      events.EventContentDelta,
@@ -121,7 +121,7 @@ func TestTransformer_WriteFile_GeneratesDiff(t *testing.T) {
 
 	mockConn := &mockConnection{}
 	sessionID := acp.SessionId("test-session")
-	transformer := NewEventTransformer(sessionID, mockConn)
+	transformer := NewEventTransformer(sessionID, mockConn, "")
 
 	ctx := context.Background()
 
@@ -231,7 +231,7 @@ func TestSubscribeTransformerEvents_NoHangOnSlowRelease(t *testing.T) {
 
 	mockConn := &mockConnection{}
 	sessionID := acp.SessionId("test-session")
-	transformer := NewEventTransformer(sessionID, mockConn)
+	transformer := NewEventTransformer(sessionID, mockConn, "")
 
 	ctx, cancel := context.WithCancel(context.Background())
 

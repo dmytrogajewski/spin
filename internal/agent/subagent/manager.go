@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 )
 
 const (
@@ -35,7 +37,7 @@ type Manager struct {
 	specs         map[string]*Spec
 	mu            sync.RWMutex
 	maxConcurrent int
-	semaphore     chan struct{}
+	semaphore     *concurrency.Semaphore
 }
 
 // NewManager creates a Manager with the given executor and concurrency cap.
@@ -49,7 +51,7 @@ func NewManager(executor Executor, maxConcurrent int) *Manager {
 		executor:      executor,
 		specs:         make(map[string]*Spec),
 		maxConcurrent: maxConcurrent,
-		semaphore:     make(chan struct{}, maxConcurrent),
+		semaphore:     concurrency.NewSemaphore(maxConcurrent),
 	}
 
 	// Register built-in subagent specs.
@@ -99,13 +101,11 @@ func (m *Manager) Spawn(ctx context.Context, specName, query string) (summary st
 	}
 
 	// Acquire concurrency slot (blocks if at capacity).
-	select {
-	case m.semaphore <- struct{}{}:
-	case <-ctx.Done():
-		return "", fmt.Errorf("subagent %q: semaphore wait: %w", specName, ctx.Err())
+	if err := m.semaphore.Acquire(ctx); err != nil {
+		return "", fmt.Errorf("subagent %q: %w", specName, err)
 	}
 
-	defer func() { <-m.semaphore }()
+	defer m.semaphore.Release()
 
 	// Recover from panics in the executor.
 	defer func() {

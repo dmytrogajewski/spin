@@ -113,7 +113,10 @@ func (c *SmitheryAPIClient) SearchTools(ctx context.Context, query string, limit
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("API error (status %d, body unreadable): %w", resp.StatusCode, ErrAPIErrorStatus)
+		}
 
 		return nil, fmt.Errorf("API error (status %d): %s: %w", resp.StatusCode, string(body), ErrAPIErrorStatus)
 	}

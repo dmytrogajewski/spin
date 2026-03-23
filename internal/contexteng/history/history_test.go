@@ -6,7 +6,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/contexteng/compress"
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/tokenizer"
+	"github.com/dmytrogajewski/spin/pkg/tokenizer"
 )
 
 func TestNewHistory(t *testing.T) {

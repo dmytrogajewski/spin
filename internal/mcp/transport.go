@@ -61,6 +61,8 @@ func (t TransportType) IsRemote() bool {
 	switch t {
 	case TransportSSE, TransportStreamableHTTP, TransportSmithery:
 		return true
+	case TransportStdio, "":
+		return false
 	default:
 		return false
 	}

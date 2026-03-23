@@ -147,6 +147,29 @@ Integration tests verify wiring between components. They live alongside the code
 | R2.2 List Capability | `internal/protocol/acp/session_list_test.go` | SessionCapabilities.List advertisement |
 | R3.1 Session Info | `internal/protocol/acp/session_info_test.go`, `title_test.go` | Session title generation and notification |
 | R4.1 Tool Kinds | `internal/protocol/acp/notifications_test.go` | ACP tool kind mapping for all 23 tools |
+| R1 stdlib Quick Wins | Existing tests in `session/`, `memory/`, `patchapply/` | stdlib replacements: slices.DeleteFunc, time.Compare, slices.SortFunc, strings.Fields |
+| R2 genutil | `internal/genutil/genutil_test.go` | TailN, ToSet, AllSame, Mean, Ratio, EnsureMap, Ptr — 28 tests, 100% coverage |
+| R3 stringutil | `internal/stringutil/stringutil_test.go` | CollapseWhitespace, CollapseBlankLines, TrimTrailingPerLine, TruncateWithEllipsis, ContainsAnyKeyword, CountLines, StripCodeFence, StripListPrefix — 56 tests, 97.9% coverage |
+| R4 chanutil | `internal/chanutil/chanutil_test.go` | TrySend, SendOrCancel, SendWithTimeout, DrainChannel, SleepCtx, CallWithContext — 14 tests, 100% coverage, race-clean |
+| R5 digest | `internal/digest/digest_test.go` | SHA256Hex, ShortHash, RandomHexID, NewAtomicIDGenerator — 14 tests, 93.3% coverage, NIST test vectors |
+| R6 pathutil | `internal/pathutil/*_test.go` | WalkUpFind, ResolvePath, IsUnsafeWorkDir, ReadFileWithLimit, ReadLastLines — 28 tests, 89.3% coverage |
+| R7 wire genutil | Existing tests in `ace/`, `cycle/`, `dbg/`, `llm/ollama/`, `tui/`, `agent/harness/` | Wire genutil.TailN/ToSet/EnsureMap/Ptr, delete 4 dead functions |
+| R8 wire stringutil | Existing tests in `safety/`, `patchapply/`, `tools/`, `memory/`, `ace/trajectory/` | Wire stringutil.CollapseWhitespace/CollapseBlankLines/ContainsAnyKeyword, delete 5 dead functions |
+| R9 wire chanutil | Existing tests in `events/`, `llm/`, `safety/` (with `-race`) | Wire chanutil.TrySend/SendWithTimeout/SendOrCancel/SleepCtx/CallWithContext, delete 5 dead functions |
+| R10 wire digest | Existing tests in `undo/`, `contexteng/summarizer/`, `lsp/`, `agent/executor/` | Wire digest.SHA256Hex/ShortHash/RandomHexID, remove MD5+nolint, delete dead const |
+| R11 wire pathutil | Existing tests in `tools/`, `undo/`, `agentsmd/`, `agent/executor/` | Wire pathutil.ResolvePath/IsUnsafeWorkDir/ReadFileWithLimit/ReadLastLines, delete 2 dead functions |
+| R12 executil | `internal/executil/executil_test.go` + existing tests in `tools/`, `shell/` | MergeOutputs, EffectiveTimeout — 8 tests, 100% coverage, delete 2 dead functions |
+| R13 mathutil generics | `internal/mathutil/vector_test.go` | CosineSimilarity/DotProduct/Magnitude parameterized with Float constraint, 4 float64 tests added, 100% coverage |
+| R14 similarity | `internal/similarity/similarity_test.go` + existing tests in `cycle/`, `mcp/` | Levenshtein, JaccardSimilarity, NGrams, MaxByFrequency — 22 tests, 98.6% coverage. Wire + 11 lint fixes |
+| R15 search | `internal/search/ranked_test.go` + existing tests in `mcp/`, `filesearch/` | RankedSearch[Item] — 9 tests, 100% coverage. Wire into SearchTools + Match |
+| R16 worker pool | `internal/chanutil/pool_test.go` + existing tests in `ace/curator/`, `ace/delta/` | WorkerPool[Job,Result], EffectiveWorkers — 11 tests, 98.4% coverage, race-clean. Delete 11 dead functions/types |
+| R17 event emitter | — | DEFERRED: blast radius too high (60+ test files, 20+ prod files) for theoretical benefit |
+| R18 JSONL writer | `internal/ds/jsonl_test.go` + existing tests in `session/` | JSONLWriter[T] — 7 tests, race-clean. TranscriptWriter refactored to compose ds.JSONLWriter |
+| R19 TTL cache | `internal/ds/cache_test.go` | Cache[K,V] with TTL + count eviction + injectable clock — 9 tests, race-clean |
+| R20 chain | `internal/ds/chain_test.go` + existing tests in `tools/fuzzy/` | Chain[Input,Output] with Find/FindAll — 6 tests. fuzzy.Chain refactored to compose ds.Chain |
+| R21 llmutil | `internal/llmutil/*_test.go` + existing tests in `llm/ollama/`, `llm/openai/` | ExtractContent + ModelContextWindow — 13 tests, 100% coverage |
+| R22 errlist | `internal/apperr/errlist_test.go` + existing tests in `session/` | ErrorList with Add/HasErrors/Err — 5 tests, 100% coverage |
+| Refactor | All `pkg/alg/*` tests + `pkg/apperr/`, `pkg/llmutil/`, `pkg/tokenizer/` | Package structure refactoring: internal → pkg/alg/{collections,stringsx,concurrency,hashx,similarity,search,vector,execx,pathx,ds,ds/syncmap} + pkg/{apperr,llmutil,tokenizer} |
 
 ## Test Patterns
 

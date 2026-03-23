@@ -1,7 +1,7 @@
 package llm
 
 import (
-	"github.com/dmytrogajewski/spin/internal/apperr"
+	"github.com/dmytrogajewski/spin/pkg/apperr"
 )
 
 // Common errors for LLM operations.

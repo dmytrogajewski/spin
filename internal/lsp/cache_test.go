@@ -135,7 +135,7 @@ func TestContentHash(t *testing.T) {
 
 	require.Equal(t, hash1, hash2, "same content should produce same hash")
 	require.NotEqual(t, hash1, hash3, "different content should produce different hash")
-	require.Len(t, hash1, 32, "MD5 hex string should be 32 chars")
+	require.Len(t, hash1, 32, "content hash hex string should be 32 chars")
 }
 
 func TestCache_OverwriteEntry(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
@@ -531,9 +532,9 @@ func (m *Mapper) updateExecuteBlockMetadata(block *blocks.Block, data events.Too
 	}
 
 	if !data.Success {
-		meta.ExitCode = intPtr(1)
+		meta.ExitCode = collections.Ptr(1)
 	} else {
-		meta.ExitCode = intPtr(0)
+		meta.ExitCode = collections.Ptr(0)
 	}
 
 	meta.LinesOut = countLinesPtr(block.Body)
@@ -910,15 +911,10 @@ func extractIntValue(params tools.ToolParameters, key string) int {
 	return params.GetIntOr(key, 0)
 }
 
-// intPtr returns a pointer to an int.
-func intPtr(i int) *int {
-	return &i
-}
-
 // countLinesPtr counts the number of lines in a string and returns a pointer.
 func countLinesPtr(s string) *int {
 	if s == "" {
-		return intPtr(0)
+		return collections.Ptr(0)
 	}
 
 	count := strings.Count(s, "\n")
@@ -926,7 +922,7 @@ func countLinesPtr(s string) *int {
 		count++
 	}
 
-	return intPtr(count)
+	return collections.Ptr(count)
 }
 
 // generateBlockID generates a unique block ID for blocks without tool IDs.

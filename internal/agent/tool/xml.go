@@ -9,6 +9,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 // XML tag constants used by the parser and prompt formatter.
@@ -96,7 +97,7 @@ func parseFunctionBlock(content string, pos int) (*openai.ChatCompletionMessageT
 	// Find matching </function> with depth tracking.
 	bodyStart := nameEnd + 1
 
-	funcClose := findClosingTag(content, bodyStart, xmlTagFunctionOpen, xmlTagFunctionClose)
+	funcClose := stringsx.FindMatchingClose(content, bodyStart, xmlTagFunctionOpen, xmlTagFunctionClose)
 	if funcClose == -1 {
 		warnings = append(warnings, fmt.Sprintf("unclosed <function=%s> block", funcName))
 
@@ -190,7 +191,7 @@ func parseOneParameter(body string, pos int) (string, any, int, []string) {
 	// Find matching </parameter> with depth tracking.
 	valueStart := nameEnd + 1
 
-	paramClose := findClosingTag(body, valueStart, xmlTagParamOpen, xmlTagParamClose)
+	paramClose := stringsx.FindMatchingClose(body, valueStart, xmlTagParamOpen, xmlTagParamClose)
 	if paramClose == -1 {
 		warnings = append(warnings, fmt.Sprintf("unclosed <parameter=%s> block", paramName))
 
@@ -200,45 +201,6 @@ func parseOneParameter(body string, pos int) (string, any, int, []string) {
 	rawValue := strings.TrimSpace(body[valueStart:paramClose])
 
 	return paramName, inferTypedValue(rawValue), paramClose + len(xmlTagParamClose), warnings
-}
-
-// findClosingTag finds the position of the matching closing tag, accounting for nesting depth.
-// Returns -1 if no matching close is found.
-func findClosingTag(content string, startPos int, openTag, closeTag string) int {
-	depth := 1
-	pos := startPos
-
-	for pos < len(content) && depth > 0 {
-		nextOpen := strings.Index(content[pos:], openTag)
-		nextClose := strings.Index(content[pos:], closeTag)
-
-		if nextClose == -1 {
-			return -1 // No closing tag found.
-		}
-
-		nextClose += pos
-
-		if nextOpen != -1 {
-			nextOpen += pos
-
-			if nextOpen < nextClose {
-				depth++
-				pos = nextOpen + len(openTag)
-
-				continue
-			}
-		}
-
-		depth--
-
-		if depth == 0 {
-			return nextClose
-		}
-
-		pos = nextClose + len(closeTag)
-	}
-
-	return -1
 }
 
 // inferTypedValue attempts to parse a string value as a JSON-native type.

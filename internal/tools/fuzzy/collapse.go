@@ -1,23 +1,15 @@
 package fuzzy
 
 import (
-	"regexp"
 	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
-
-var consecutiveBlankLines = regexp.MustCompile(`\n{3,}`)
-
-const doubleNewline = "\n\n"
-
-// collapseBlankLines replaces consecutive blank lines with a single blank line.
-func collapseBlankLines(str string) string {
-	return consecutiveBlankLines.ReplaceAllString(str, doubleNewline)
-}
 
 // CollapseFind collapses consecutive blank lines and finds matches.
 func CollapseFind(fileContent, oldContent string) []MatchResult {
-	normalizedOld := collapseBlankLines(oldContent)
-	normalizedFile := collapseBlankLines(fileContent)
+	normalizedOld := stringsx.CollapseBlankLines(oldContent)
+	normalizedFile := stringsx.CollapseBlankLines(fileContent)
 
 	matches := findByNormalized(fileContent, normalizedFile, normalizedOld)
 	if len(matches) > 0 {
@@ -25,8 +17,8 @@ func CollapseFind(fileContent, oldContent string) []MatchResult {
 	}
 
 	// Also try with stripped trailing whitespace per line + collapsed blanks.
-	normalizedOld = collapseBlankLines(trimLines(oldContent))
-	normalizedFile = collapseBlankLines(trimLines(fileContent))
+	normalizedOld = stringsx.CollapseBlankLines(trimLines(oldContent))
+	normalizedFile = stringsx.CollapseBlankLines(trimLines(fileContent))
 
 	return findByNormalized(fileContent, normalizedFile, normalizedOld)
 }

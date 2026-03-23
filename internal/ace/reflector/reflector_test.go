@@ -9,7 +9,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/llmutil"
+	"github.com/dmytrogajewski/spin/pkg/llmutil"
 )
 
 // TestNewReflector tests creating a new reflector.

@@ -1,5 +1,7 @@
 package fuzzy
 
+import "github.com/dmytrogajewski/spin/pkg/alg/ds"
+
 // MatchResult holds the result of a fuzzy match.
 type MatchResult struct {
 	// Start is the byte offset in file content where the match begins.
@@ -10,6 +12,12 @@ type MatchResult struct {
 	Original string
 	// PassName is the name of the pass that produced this match.
 	PassName string
+}
+
+// matchInput bundles the two string parameters for the generic chain.
+type matchInput struct {
+	fileContent string
+	oldContent  string
 }
 
 // PassFunc attempts to find oldContent in fileContent.
@@ -26,12 +34,25 @@ type Pass struct {
 
 // Chain runs passes in order, returning the first successful match.
 type Chain struct {
-	passes []Pass
+	inner *ds.Chain[matchInput, MatchResult]
 }
 
 // NewChain creates a chain with the given passes.
 func NewChain(passes ...Pass) *Chain {
-	return &Chain{passes: passes}
+	adapted := make([]ds.Pass[matchInput, MatchResult], len(passes))
+
+	for idx, pass := range passes {
+		fn := pass.Find // Capture for closure.
+
+		adapted[idx] = ds.Pass[matchInput, MatchResult]{
+			Name: pass.Name,
+			Find: func(input matchInput) []MatchResult {
+				return fn(input.fileContent, input.oldContent)
+			},
+		}
+	}
+
+	return &Chain{inner: ds.NewChain(adapted...)}
 }
 
 // DefaultChain creates the standard 9-pass fuzzy matching chain.
@@ -52,32 +73,31 @@ func DefaultChain() *Chain {
 // Find runs passes in order, returning the first successful result.
 // Returns nil if no pass matches.
 func (c *Chain) Find(fileContent, oldContent string) *MatchResult {
-	for _, pass := range c.passes {
-		matches := pass.Find(fileContent, oldContent)
-		if len(matches) > 0 {
-			result := matches[0]
-			result.PassName = pass.Name
+	result, passName := c.inner.Find(matchInput{
+		fileContent: fileContent,
+		oldContent:  oldContent,
+	})
 
-			return &result
-		}
+	if result == nil {
+		return nil
 	}
 
-	return nil
+	result.PassName = passName
+
+	return result
 }
 
 // FindAll runs passes in order, returning all matches from the first successful pass.
 // Returns nil if no pass matches.
 func (c *Chain) FindAll(fileContent, oldContent string) []MatchResult {
-	for _, pass := range c.passes {
-		matches := pass.Find(fileContent, oldContent)
-		if len(matches) > 0 {
-			for idx := range matches {
-				matches[idx].PassName = pass.Name
-			}
+	results, passName := c.inner.FindAll(matchInput{
+		fileContent: fileContent,
+		oldContent:  oldContent,
+	})
 
-			return matches
-		}
+	for idx := range results {
+		results[idx].PassName = passName
 	}
 
-	return nil
+	return results
 }

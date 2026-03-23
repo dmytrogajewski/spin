@@ -11,7 +11,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/llmutil"
+	"github.com/dmytrogajewski/spin/pkg/llmutil"
 )
 
 // ErrNotDetailedFormat is returned when the reflector response cannot be parsed.

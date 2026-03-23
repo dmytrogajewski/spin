@@ -1,6 +1,10 @@
 package adapter
 
-import "time"
+import (
+	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
+)
 
 const maxRecentSignals = 50
 
@@ -59,16 +63,7 @@ func (s *Session) AddSignal(signal *ExecutionSignal) {
 	s.SignalCount++
 	s.LastSignal = signal
 	s.RecentSignals = append(s.RecentSignals, signal)
-	s.RecentSignals = trimToLastN(s.RecentSignals, maxRecentSignals)
-}
-
-// trimToLastN keeps only the last n elements of a slice.
-func trimToLastN(signals []*ExecutionSignal, n int) []*ExecutionSignal {
-	if len(signals) <= n {
-		return signals
-	}
-
-	return signals[len(signals)-n:]
+	s.RecentSignals = collections.TailN(s.RecentSignals, maxRecentSignals)
 }
 
 // AdaptationAction describes what the adapter did.

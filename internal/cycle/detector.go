@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 )
 
 const (
@@ -190,7 +192,7 @@ func (d *Detector) isSimilarResponsePattern(similarities []float64) bool {
 func (d *Detector) createSimilarResponseResult(similarities []float64) Result {
 	return Result{
 		Type:       SimilarResponses,
-		Confidence: calculateAverageSimilarity(similarities),
+		Confidence: collections.Mean(similarities),
 		Details:    fmt.Sprintf("detected %d similar consecutive responses", len(similarities)+1),
 		Timestamp:  time.Now(),
 	}
@@ -353,16 +355,3 @@ func (d *Detector) createSameErrorResult(recent []Snapshot) Result {
 	}
 }
 
-// calculateAverageSimilarity computes the average of similarity values.
-func calculateAverageSimilarity(similarities []float64) float64 {
-	if len(similarities) == 0 {
-		return 0.0
-	}
-
-	sum := 0.0
-	for _, sim := range similarities {
-		sum += sim
-	}
-
-	return sum / float64(len(similarities))
-}

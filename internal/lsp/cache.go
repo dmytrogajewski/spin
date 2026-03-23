@@ -1,10 +1,10 @@
 package lsp
 
 import (
-	"crypto/md5" //nolint:gosec // MD5 is used for content hashing, not security.
-	"encoding/hex"
 	"encoding/json"
 	"sync"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/hashx"
 )
 
 // CacheEntry holds a cached response alongside its content hash.
@@ -108,11 +108,10 @@ func (c *Cache) Size() int {
 	return len(c.entries)
 }
 
-// ContentHash computes an MD5 hash of the given content for cache keying.
+// ContentHash computes a hash of the given content for cache keying.
+// Returns a 32-character hex string derived from SHA-256.
 func ContentHash(content []byte) string {
-	sum := md5.Sum(content) //nolint:gosec // MD5 is used for content hashing, not security.
-
-	return hex.EncodeToString(sum[:])
+	return hashx.ShortHash(content)
 }
 
 // rawKey builds the cache key for L1 entries.

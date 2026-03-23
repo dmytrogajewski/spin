@@ -7,6 +7,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent"
 )
 
+// sectionSeparator joins resolved sections.
+const sectionSeparator = "\n\n"
+
 // Composer assembles the system prompt from registered sections.
 // Sections are evaluated against the environment, sorted by priority,
 // and joined with variable substitution applied.
@@ -23,8 +26,8 @@ func NewComposer() *Composer {
 }
 
 // AddSection registers a prompt section.
-func (c *Composer) AddSection(s Section) {
-	c.sections = append(c.sections, s)
+func (c *Composer) AddSection(sec Section) {
+	c.sections = append(c.sections, sec)
 }
 
 // SetVar registers a variable for ${VAR} substitution.
@@ -33,7 +36,7 @@ func (c *Composer) SetVar(name, value string) {
 }
 
 // Compose evaluates conditions, sorts by priority, resolves variables, and joins.
-// Equivalent to joining the two parts from ComposeTwoPart.
+// Equivalent to joining the two parts from [Composer.ComposeTwoPart].
 func (c *Composer) Compose(env *agent.Environment) string {
 	stable, dynamic := c.ComposeTwoPart(env)
 
@@ -45,7 +48,7 @@ func (c *Composer) Compose(env *agent.Environment) string {
 		return dynamic
 	}
 
-	return stable + "\n\n" + dynamic
+	return stable + sectionSeparator + dynamic
 }
 
 // ComposeTwoPart splits the prompt into stable (cacheable) and dynamic parts.
@@ -62,25 +65,25 @@ func (c *Composer) ComposeTwoPart(env *agent.Environment) (stable, dynamic strin
 
 	var stableParts, dynamicParts []string
 
-	for _, s := range active {
-		resolved := c.resolve(s.Template)
-		if s.Cacheable {
+	for _, sec := range active {
+		resolved := c.resolve(sec.Template)
+		if sec.Cacheable {
 			stableParts = append(stableParts, resolved)
 		} else {
 			dynamicParts = append(dynamicParts, resolved)
 		}
 	}
 
-	return strings.Join(stableParts, "\n\n"), strings.Join(dynamicParts, "\n\n")
+	return strings.Join(stableParts, sectionSeparator), strings.Join(dynamicParts, sectionSeparator)
 }
 
 // activeSections returns sections whose conditions pass for the given environment.
 func (c *Composer) activeSections(env *agent.Environment) []Section {
 	active := make([]Section, 0, len(c.sections))
 
-	for _, s := range c.sections {
-		if s.Condition == nil || s.Condition(env) {
-			active = append(active, s)
+	for _, sec := range c.sections {
+		if sec.Condition == nil || sec.Condition(env) {
+			active = append(active, sec)
 		}
 	}
 

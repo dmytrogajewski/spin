@@ -26,7 +26,7 @@ func TestConvertEventToSessionUpdate_ContentDelta(t *testing.T) {
 		},
 	}
 
-	update, ok := convertEventToSessionUpdate(event, nil)
+	update, ok := convertEventToSessionUpdate(event, nil, "")
 
 	assert.True(t, ok, "should convert EventContentDelta")
 	assert.NotNil(t, update)
@@ -50,7 +50,7 @@ func TestConvertEventToSessionUpdate_ToolCallStart(t *testing.T) {
 		},
 	}
 
-	update, ok := convertEventToSessionUpdate(event, nil)
+	update, ok := convertEventToSessionUpdate(event, nil, "")
 
 	assert.True(t, ok, "should convert EventToolCallStart")
 	assert.NotNil(t, update)
@@ -73,7 +73,7 @@ func TestConvertToolCallStart_IncludesKind(t *testing.T) {
 		},
 	}
 
-	update, ok := convertToolCallStart(event, nil)
+	update, ok := convertToolCallStart(event, nil, "")
 
 	assert.True(t, ok, "should convert EventToolCallStart")
 	assert.NotNil(t, update)
@@ -91,7 +91,7 @@ func TestConvertEventToSessionUpdate_UnknownEvent(t *testing.T) {
 		Data:      "some data",
 	}
 
-	update, ok := convertEventToSessionUpdate(event, nil)
+	update, ok := convertEventToSessionUpdate(event, nil, "")
 
 	assert.False(t, ok, "should not convert unknown events")
 	// SessionUpdate is a struct, not a pointer, so check if it's empty.
@@ -112,7 +112,7 @@ func TestConvertEventToSessionUpdate_ToolCallProgress(t *testing.T) {
 		},
 	}
 
-	update, ok := convertEventToSessionUpdate(event, nil)
+	update, ok := convertEventToSessionUpdate(event, nil, "")
 
 	assert.True(t, ok, "should convert EventToolCallProgress")
 	assert.NotNil(t, update)
@@ -133,7 +133,7 @@ func TestConvertEventToSessionUpdate_ToolCallComplete_Success(t *testing.T) {
 		},
 	}
 
-	update, ok := convertEventToSessionUpdate(event, nil)
+	update, ok := convertEventToSessionUpdate(event, nil, "")
 
 	assert.True(t, ok, "should convert EventToolCallComplete")
 	assert.NotNil(t, update)
@@ -176,7 +176,7 @@ func TestConvertEventToSessionUpdate_ToolCallComplete_Failed(t *testing.T) {
 		},
 	}
 
-	update, ok := convertEventToSessionUpdate(event, nil)
+	update, ok := convertEventToSessionUpdate(event, nil, "")
 
 	assert.True(t, ok, "should convert EventToolCallComplete")
 	assert.NotNil(t, update)
@@ -195,7 +195,7 @@ func TestConvertEventToSessionUpdate_ContentDelta_UserRole(t *testing.T) {
 		},
 	}
 
-	update, ok := convertEventToSessionUpdate(event, nil)
+	update, ok := convertEventToSessionUpdate(event, nil, "")
 
 	assert.False(t, ok, "should not convert user content")
 	assert.Equal(t, acp.SessionUpdate{}, update)
@@ -339,7 +339,7 @@ func TestExtractFileLocations(t *testing.T) {
 			params, err := tools.FromMap(tt.params)
 			require.NoError(t, err)
 
-			got := extractFileLocations(tt.toolName, params)
+			got := extractFileLocations(tt.toolName, params, "")
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -362,7 +362,7 @@ func TestConvertToolCallStart_IncludesLocations(t *testing.T) {
 		},
 	}
 
-	update, ok := convertToolCallStart(event, nil)
+	update, ok := convertToolCallStart(event, nil, "")
 
 	assert.True(t, ok, "should convert EventToolCallStart")
 	assert.NotNil(t, update)
@@ -494,7 +494,7 @@ func TestConvertToolCallStart_WriteFile_TracksOldContent(t *testing.T) {
 		},
 	}
 
-	update, ok := convertToolCallStart(event, tracker)
+	update, ok := convertToolCallStart(event, tracker, "")
 
 	assert.True(t, ok, "should convert EventToolCallStart")
 	assert.NotNil(t, update)
@@ -533,7 +533,7 @@ func TestConvertToolCallStart_WriteFile_NewFile(t *testing.T) {
 		},
 	}
 
-	update, ok := convertToolCallStart(event, tracker)
+	update, ok := convertToolCallStart(event, tracker, "")
 
 	assert.True(t, ok, "should convert EventToolCallStart")
 	assert.NotNil(t, update)
@@ -665,7 +665,7 @@ func TestConvertToolCallStart_ShellCommand_TitleShowsCommand(t *testing.T) {
 		},
 	}
 
-	update, ok := convertToolCallStart(event, nil)
+	update, ok := convertToolCallStart(event, nil, "")
 
 	assert.True(t, ok, "should convert EventToolCallStart")
 	require.NotNil(t, update.ToolCall, "should have tool call")
@@ -693,7 +693,7 @@ func TestConvertToolCallStart_ShellCommand_FallbackTitle(t *testing.T) {
 		},
 	}
 
-	update, ok := convertToolCallStart(event, nil)
+	update, ok := convertToolCallStart(event, nil, "")
 
 	assert.True(t, ok, "should convert EventToolCallStart")
 	require.NotNil(t, update.ToolCall, "should have tool call")
@@ -701,9 +701,9 @@ func TestConvertToolCallStart_ShellCommand_FallbackTitle(t *testing.T) {
 		"should fall back to tool name when command is missing")
 }
 
-// TestConvertToolCallStart_NonShellCommand_KeepsToolName tests that non-shell tools
-// keep the tool name as title.
-func TestConvertToolCallStart_NonShellCommand_KeepsToolName(t *testing.T) {
+// TestConvertToolCallStart_FileToolIncludesPath tests that file tools
+// include the path in the title.
+func TestConvertToolCallStart_FileToolIncludesPath(t *testing.T) {
 	t.Parallel()
 
 	params, err := tools.FromMap(map[string]any{"path": "/tmp/test.txt"})
@@ -719,12 +719,12 @@ func TestConvertToolCallStart_NonShellCommand_KeepsToolName(t *testing.T) {
 		},
 	}
 
-	update, ok := convertToolCallStart(event, nil)
+	update, ok := convertToolCallStart(event, nil, "")
 
 	assert.True(t, ok, "should convert EventToolCallStart")
 	require.NotNil(t, update.ToolCall, "should have tool call")
-	assert.Equal(t, "read_file", update.ToolCall.Title,
-		"non-shell tools should keep tool name as title")
+	assert.Equal(t, "read_file: /tmp/test.txt", update.ToolCall.Title,
+		"file tools should include path in title")
 }
 
 // TestConvertSystemEvent_Info tests that EventInfo is converted to agent thought.

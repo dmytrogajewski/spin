@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"os"
 	"sync"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 // ErrAgentsMdNotFoundAtCustom is a sentinel error.
@@ -137,43 +137,16 @@ func (s *Service) Refresh(ctx context.Context) error {
 
 // readWithLimit reads file content up to MaxSize bytes.
 func (s *Service) readWithLimit(path string) (string, error) {
-	info, err := os.Stat(path)
+	content, truncated, err := pathx.ReadFileWithLimit(path, s.config.MaxSize)
 	if err != nil {
-		return "", fmt.Errorf("stat agents.md: %w", err)
-	}
-
-	// Determine read size.
-	readSize := info.Size()
-	truncated := false
-
-	if s.config.MaxSize > 0 && info.Size() > s.config.MaxSize {
-		readSize = s.config.MaxSize
-		truncated = true
-
-		s.logger.Warn("AGENTS.md exceeds size limit, truncating",
-			"path", path,
-			"size", info.Size(),
-			"limit", s.config.MaxSize)
-	}
-
-	file, err := os.Open(path)
-	if err != nil {
-		return "", fmt.Errorf("open agents.md: %w", err)
-	}
-	defer file.Close()
-
-	// Read up to readSize bytes.
-	buf := make([]byte, readSize)
-
-	n, err := io.ReadFull(file, buf)
-	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 		return "", fmt.Errorf("read agents.md: %w", err)
 	}
 
-	content := string(buf[:n])
-
-	// Add truncation notice if needed.
 	if truncated {
+		s.logger.Warn("AGENTS.md exceeds size limit, truncating",
+			"path", path,
+			"limit", s.config.MaxSize)
+
 		content += "\n\n[Content truncated due to size limit]"
 	}
 

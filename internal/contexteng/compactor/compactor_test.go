@@ -8,7 +8,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/contexteng/compactor"
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/tokenizer"
+	"github.com/dmytrogajewski/spin/pkg/tokenizer"
 )
 
 // Journey: specs/journeys/JOURNEY-2.3.md.

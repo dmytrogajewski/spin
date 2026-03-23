@@ -134,15 +134,7 @@ func (idx *Index) List(workDir string) []IndexEntry {
 
 	// Sort by LastModified descending.
 	slices.SortFunc(result, func(a, b IndexEntry) int {
-		if a.LastModified.After(b.LastModified) {
-			return -1
-		}
-
-		if a.LastModified.Before(b.LastModified) {
-			return 1
-		}
-
-		return 0
+		return b.LastModified.Compare(a.LastModified)
 	})
 
 	return result

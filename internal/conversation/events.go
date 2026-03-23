@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/pathutil"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 // EventTransformer transforms internal events to protocol-specific formats.
@@ -78,7 +78,7 @@ func (b *Builder) resolveSessionDir() string {
 		return base
 	}
 
-	expanded, err := pathutil.ExpandHome(base)
+	expanded, err := pathx.ExpandHome(base)
 	if err != nil {
 		return base
 	}

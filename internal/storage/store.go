@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dmytrogajewski/spin/internal/pathutil"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 var (
@@ -66,7 +66,7 @@ func NewFileStore[T any](cfg FileStoreConfig) (*FileStore[T], error) {
 	baseDir := cfg.BaseDir
 
 	// Expand home directory if needed.
-	expanded, err := pathutil.ExpandHome(baseDir)
+	expanded, err := pathx.ExpandHome(baseDir)
 	if err != nil {
 		return nil, fmt.Errorf("expand home directory: %w", err)
 	}

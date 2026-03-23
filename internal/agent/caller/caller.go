@@ -15,11 +15,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
 	"github.com/dmytrogajewski/spin/internal/agent/tool"
-	spinerrors "github.com/dmytrogajewski/spin/internal/apperr"
+	spinerrors "github.com/dmytrogajewski/spin/pkg/apperr"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 )
 
 const (
@@ -483,22 +484,15 @@ func (lc *LLMCaller) handleEmptyResponse(
 }
 
 func (lc *LLMCaller) waitWithBackoff(ctx context.Context, retry, turn int, resp *agent.Response, logMsg string) error {
-	retryUint := uint(0)
-	if retry > 0 {
-		retryUint = uint(retry)
-	}
+	lc.logger.WarnContext(ctx, logMsg, "turn", turn+1, "retry", retry+1)
 
-	backoff := time.Duration(1<<retryUint) * time.Second
-	lc.logger.WarnContext(ctx, logMsg, "turn", turn+1, "retry", retry+1, "backoff", backoff)
-
-	select {
-	case <-ctx.Done():
+	if err := concurrency.SleepWithBackoff(ctx, retry, time.Second); err != nil {
 		resp.FinishReason = "timeout"
 
 		return fmt.Errorf("retry context canceled: %w", ctx.Err())
-	case <-time.After(backoff):
-		return nil
 	}
+
+	return nil
 }
 
 func (lc *LLMCaller) emitEmptyResponseWarning(

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/tokenizer"
+	"github.com/dmytrogajewski/spin/pkg/tokenizer"
 )
 
 const defaultMinRetention = 0.3

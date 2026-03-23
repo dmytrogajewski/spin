@@ -8,7 +8,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
-	"github.com/dmytrogajewski/spin/internal/mathutil"
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
 )
 
 // BenchmarkConvertInsights benchmarks insight to bullet conversion.
@@ -151,6 +151,6 @@ func BenchmarkCosineSimilarity(b *testing.B) {
 	b.ResetTimer()
 
 	for range b.N {
-		_ = mathutil.CosineSimilarity(a, bVec)
+		_ = vector.CosineSimilarity(a, bVec)
 	}
 }

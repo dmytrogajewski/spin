@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
-	"github.com/dmytrogajewski/spin/internal/syncmap"
+	"github.com/dmytrogajewski/spin/pkg/alg/ds/syncmap"
 )
 
 // ArchiveReason explains why a bullet was archived.

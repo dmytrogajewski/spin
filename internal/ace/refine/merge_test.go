@@ -6,7 +6,8 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
-	"github.com/dmytrogajewski/spin/internal/mathutil"
+	"github.com/dmytrogajewski/spin/pkg/alg/similarity"
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
 )
 
 func TestNewMergeEngine(t *testing.T) {
@@ -236,7 +237,7 @@ func TestMergeEngine_CosineSimilarity(t *testing.T) {
 	v1 := []float32{1.0, 2.0, 3.0}
 	v2 := []float32{1.0, 2.0, 3.0}
 
-	sim := mathutil.CosineSimilarity(v1, v2)
+	sim := vector.CosineSimilarity(v1, v2)
 	if sim < 0.999 { // Allow for floating point error.
 		t.Errorf("expected similarity ~1.0 for identical vectors, got %f", sim)
 	}
@@ -245,7 +246,7 @@ func TestMergeEngine_CosineSimilarity(t *testing.T) {
 	v3 := []float32{1.0, 0.0, 0.0}
 	v4 := []float32{0.0, 1.0, 0.0}
 
-	sim = mathutil.CosineSimilarity(v3, v4)
+	sim = vector.CosineSimilarity(v3, v4)
 	if sim > 0.001 { // Should be very close to 0.
 		t.Errorf("expected similarity ~0.0 for orthogonal vectors, got %f", sim)
 	}
@@ -254,7 +255,7 @@ func TestMergeEngine_CosineSimilarity(t *testing.T) {
 	v5 := []float32{1.0, 2.0}
 	v6 := []float32{1.0, 2.0, 3.0}
 
-	sim = mathutil.CosineSimilarity(v5, v6)
+	sim = vector.CosineSimilarity(v5, v6)
 	if sim != 0.0 {
 		t.Errorf("expected similarity 0.0 for different length vectors, got %f", sim)
 	}
@@ -263,7 +264,7 @@ func TestMergeEngine_CosineSimilarity(t *testing.T) {
 	v7 := []float32{0.0, 0.0, 0.0}
 	v8 := []float32{0.0, 0.0, 0.0}
 
-	sim = mathutil.CosineSimilarity(v7, v8)
+	sim = vector.CosineSimilarity(v7, v8)
 	if sim != 0.0 {
 		t.Errorf("expected similarity 0.0 for zero vectors, got %f", sim)
 	}
@@ -272,29 +273,26 @@ func TestMergeEngine_CosineSimilarity(t *testing.T) {
 func TestMergeEngine_SimpleSimilarity(t *testing.T) {
 	t.Parallel()
 
-	embedder := embedding.NewMockEmbedder(384)
-	engine := NewMergeEngine(embedder, 0.90)
-
-	// Exact match.
-	sim := engine.simpleSimilarity("test", "test")
+	// Exact match via Jaccard.
+	sim := similarity.JaccardSimilarity("test content here", "test content here")
 	if sim != 1.0 {
 		t.Errorf("expected similarity 1.0 for exact match, got %f", sim)
 	}
 
-	// Different lengths.
-	sim = engine.simpleSimilarity("short", "longer string")
+	// Different content — partial overlap.
+	sim = similarity.JaccardSimilarity("short words here", "longer string with words")
 	if sim <= 0.0 || sim >= 1.0 {
 		t.Errorf("expected similarity between 0 and 1, got %f", sim)
 	}
 
 	// Empty strings.
-	sim = engine.simpleSimilarity("", "")
+	sim = similarity.JaccardSimilarity("", "")
 	if sim != 1.0 {
 		t.Errorf("expected similarity 1.0 for both empty, got %f", sim)
 	}
 
 	// One empty.
-	sim = engine.simpleSimilarity("", "non-empty")
+	sim = similarity.JaccardSimilarity("", "non-empty content")
 	if sim != 0.0 {
 		t.Errorf("expected similarity 0.0 for one empty, got %f", sim)
 	}

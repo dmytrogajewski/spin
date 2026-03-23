@@ -518,7 +518,7 @@ func TestCheckRepeatedTool_SameToolDifferentParams(t *testing.T) {
 		Timestamp: time.Now(),
 	})
 
-	// BUG TEST: Cycle should NOT be detected because parameters are different.
+	// Regression: cycle should NOT be detected because parameters are different.
 	result, err = detector.Check()
 	if err != nil {
 		t.Fatalf("Check() failed: %v", err)

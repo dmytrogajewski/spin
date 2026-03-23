@@ -11,6 +11,7 @@ import (
 	"github.com/openai/openai-go/option"
 
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/pkg/llmutil"
 )
 
 var (
@@ -213,7 +214,7 @@ func (p *Provider) Capabilities() llm.Capabilities {
 		Streaming:       true,
 		FunctionCalling: true,
 		Vision:          false, // Not implemented yet.
-		ContextWindow:   getModelContextWindow(p.model),
+		ContextWindow:   llmutil.ModelContextWindow(p.model),
 	}
 }
 
@@ -226,130 +227,4 @@ func (p *Provider) Name() string {
 func (p *Provider) Close() error {
 	// SDK client doesn't require explicit cleanup.
 	return nil
-}
-
-// Context window size constants for known LLM models.
-const (
-	ctxWindow4K   = 4096
-	ctxWindow8K   = 8192
-	ctxWindow16K  = 16385
-	ctxWindow32K  = 32768
-	ctxWindow64K  = 64000
-	ctxWindow65K  = 65536
-	ctxWindow128K = 128000
-	ctxWindow131K = 131072
-	ctxWindow200K = 200000
-	ctxWindow1M   = 1000000
-)
-
-// knownContextWindows maps model names to their context window sizes.
-// This is a best-effort lookup - not all models are listed.
-var knownContextWindows = map[string]int{
-	// OpenAI GPT-4 models.
-	"gpt-4":                  ctxWindow8K,
-	"gpt-4-32k":              ctxWindow32K,
-	"gpt-4-turbo":            ctxWindow128K,
-	"gpt-4-turbo-preview":    ctxWindow128K,
-	"gpt-4-0125-preview":     ctxWindow128K,
-	"gpt-4-1106-preview":     ctxWindow128K,
-	"gpt-4o":                 ctxWindow128K,
-	"gpt-4o-mini":            ctxWindow128K,
-	"gpt-4o-2024-05-13":      ctxWindow128K,
-	"gpt-4o-2024-08-06":      ctxWindow128K,
-	"gpt-4o-2024-11-20":      ctxWindow128K,
-	"gpt-4o-mini-2024-07-18": ctxWindow128K,
-	"gpt-4.1":                ctxWindow1M,
-	"gpt-4.1-mini":           ctxWindow1M,
-	"gpt-4.1-nano":           ctxWindow1M,
-	"o1":                     ctxWindow200K,
-	"o1-mini":                ctxWindow128K,
-	"o1-preview":             ctxWindow128K,
-	"o3":                     ctxWindow200K,
-	"o3-mini":                ctxWindow200K,
-	"o4-mini":                ctxWindow200K,
-
-	// OpenAI GPT-3.5 models.
-	"gpt-3.5-turbo":          ctxWindow16K,
-	"gpt-3.5-turbo-16k":      ctxWindow16K,
-	"gpt-3.5-turbo-0125":     ctxWindow16K,
-	"gpt-3.5-turbo-1106":     ctxWindow16K,
-	"gpt-3.5-turbo-instruct": ctxWindow4K,
-
-	// Anthropic Claude models (for OpenAI-compatible endpoints).
-	"claude-3-opus":            ctxWindow200K,
-	"claude-3-opus-20240229":   ctxWindow200K,
-	"claude-3-sonnet":          ctxWindow200K,
-	"claude-3-sonnet-20240229": ctxWindow200K,
-	"claude-3-haiku":           ctxWindow200K,
-	"claude-3-haiku-20240307":  ctxWindow200K,
-	"claude-3.5-sonnet":        ctxWindow200K,
-	"claude-3-5-sonnet":        ctxWindow200K,
-	"claude-3.5-haiku":         ctxWindow200K,
-	"claude-3-5-haiku":         ctxWindow200K,
-	"claude-sonnet-4":          ctxWindow200K,
-	"claude-opus-4":            ctxWindow200K,
-
-	// DeepSeek models.
-	"deepseek-chat":     ctxWindow64K,
-	"deepseek-coder":    ctxWindow64K,
-	"deepseek-r1":       ctxWindow64K,
-	"deepseek-v3":       ctxWindow64K,
-	"deepseek-v2":       ctxWindow128K,
-	"deepseek-v2.5":     ctxWindow128K,
-	"deepseek-reasoner": ctxWindow64K,
-
-	// Google Gemini models (for OpenAI-compatible endpoints).
-	"gemini-pro":       ctxWindow32K,
-	"gemini-1.5-pro":   ctxWindow1M,
-	"gemini-1.5-flash": ctxWindow1M,
-	"gemini-2.0-flash": ctxWindow1M,
-	"gemini-2.0-pro":   ctxWindow1M,
-	"gemini-2.5-pro":   ctxWindow1M,
-	"gemini-2.5-flash": ctxWindow1M,
-
-	// Mistral models.
-	"mistral-tiny":       ctxWindow32K,
-	"mistral-small":      ctxWindow32K,
-	"mistral-medium":     ctxWindow32K,
-	"mistral-large":      ctxWindow128K,
-	"mistral-nemo":       ctxWindow128K,
-	"codestral":          ctxWindow32K,
-	"codestral-latest":   ctxWindow32K,
-	"open-mistral-7b":    ctxWindow32K,
-	"open-mixtral-8x7b":  ctxWindow32K,
-	"open-mixtral-8x22b": ctxWindow65K,
-
-	// Groq-hosted models.
-	"llama3-8b-8192":     ctxWindow8K,
-	"llama3-70b-8192":    ctxWindow8K,
-	"llama-3.1-8b":       ctxWindow131K,
-	"llama-3.1-70b":      ctxWindow131K,
-	"llama-3.1-405b":     ctxWindow131K,
-	"llama-3.2-1b":       ctxWindow131K,
-	"llama-3.2-3b":       ctxWindow131K,
-	"llama-3.2-11b":      ctxWindow131K,
-	"llama-3.2-90b":      ctxWindow131K,
-	"llama-3.3-70b":      ctxWindow131K,
-	"mixtral-8x7b-32768": ctxWindow32K,
-	"gemma-7b-it":        ctxWindow8K,
-	"gemma2-9b-it":       ctxWindow8K,
-
-	// Qwen models.
-	"qwen-turbo":    ctxWindow8K,
-	"qwen-plus":     ctxWindow32K,
-	"qwen-max":      ctxWindow32K,
-	"qwen2-72b":     ctxWindow131K,
-	"qwen2.5-72b":   ctxWindow131K,
-	"qwen2.5-coder": ctxWindow131K,
-	"qwq-32b":       ctxWindow131K,
-}
-
-// getModelContextWindow returns the context window size for a model.
-// Returns 0 if unknown (callers should use a sensible default).
-func getModelContextWindow(model string) int {
-	if ctxLen, ok := knownContextWindows[model]; ok {
-		return ctxLen
-	}
-
-	return 0
 }

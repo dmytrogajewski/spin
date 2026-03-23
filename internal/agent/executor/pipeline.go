@@ -1,10 +1,10 @@
 package executor
 
 import (
-	"context"
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/safety"
+	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 )
 
 // PipelineContext carries data through pipeline stages.
@@ -63,33 +63,14 @@ func (pc *PipelineContext) GetValue(key string) (any, bool) {
 }
 
 // Stage processes a PipelineContext and may modify it.
-// Returning an error stops the pipeline.
-// Setting Halted on the context stops the pipeline without error.
-type Stage func(ctx context.Context, pc *PipelineContext) error
+type Stage = concurrency.PipelineStage[PipelineContext]
 
 // Pipeline runs a sequence of stages.
-type Pipeline struct {
-	stages []Stage
-}
+type Pipeline = concurrency.Pipeline[PipelineContext]
 
-// NewPipeline creates a pipeline with the given stages.
+// NewPipeline creates a pipeline with halt detection for the given stages.
 func NewPipeline(stages ...Stage) *Pipeline {
-	return &Pipeline{stages: stages}
-}
-
-// Run executes all stages in order.
-// Stops on the first error or when the context is halted.
-func (p *Pipeline) Run(ctx context.Context, pc *PipelineContext) error {
-	for _, stage := range p.stages {
-		if pc.Halted {
-			return nil
-		}
-
-		err := stage(ctx, pc)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return concurrency.NewPipeline(concurrency.PipelineConfig[PipelineContext]{
+		Halted: func(pc *PipelineContext) bool { return pc.Halted },
+	}, stages...)
 }

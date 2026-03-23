@@ -16,6 +16,7 @@ type EventTransformer struct {
 	sessionID   acp.SessionId
 	connection  notificationSender
 	fileTracker *fileContentTracker
+	workDir     string // Session working directory for resolving relative paths.
 
 	// Track accumulated content for plan detection.
 	accumulatedContent string
@@ -28,11 +29,12 @@ type EventTransformer struct {
 }
 
 // NewEventTransformer creates a new ACP event transformer.
-func NewEventTransformer(sessionID acp.SessionId, conn notificationSender) *EventTransformer {
+func NewEventTransformer(sessionID acp.SessionId, conn notificationSender, workDir string) *EventTransformer {
 	return &EventTransformer{
 		sessionID:   sessionID,
 		connection:  conn,
 		fileTracker: newFileContentTracker(),
+		workDir:     workDir,
 	}
 }
 
@@ -152,7 +154,7 @@ func (t *EventTransformer) transformSystemEvent(ctx context.Context, event event
 
 // transformGenericEvent handles all other event types.
 func (t *EventTransformer) transformGenericEvent(ctx context.Context, event events.Event) bool {
-	update, ok := convertEventToSessionUpdate(event, t.fileTracker)
+	update, ok := convertEventToSessionUpdate(event, t.fileTracker, t.workDir)
 	if !ok {
 		return false
 	}

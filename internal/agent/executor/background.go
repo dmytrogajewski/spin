@@ -5,19 +5,18 @@ package executor
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/dmytrogajewski/spin/pkg/alg/hashx"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 	"github.com/dmytrogajewski/spin/internal/process"
 )
 
@@ -33,8 +32,6 @@ const (
 	GracefulKillTimeout = 5 * time.Second
 	// outputDirPerm is the permission for the output directory.
 	outputDirPerm = 0o750
-	// taskIDRandomBytes is the number of random bytes for task ID generation.
-	taskIDRandomBytes = 4
 )
 
 // Background task manager errors.
@@ -195,7 +192,7 @@ func (m *BackgroundTaskManager) GetOutput(taskID string, maxLines int) (string, 
 		return "", fmt.Errorf("%w: %s", ErrTaskNotFound, taskID)
 	}
 
-	return readLastLines(task.outputPath, maxLines)
+	return pathx.ReadLastLines(task.outputPath, maxLines)
 }
 
 // Kill sends SIGTERM to the task, then SIGKILL after [GracefulKillTimeout].
@@ -390,35 +387,6 @@ func (m *BackgroundTaskManager) killProcess(task *backgroundTask) error {
 
 // generateTaskID creates a 7-char hex task identifier.
 func generateTaskID() string {
-	buf := make([]byte, taskIDRandomBytes)
-
-	_, _ = rand.Read(buf)
-
-	return hex.EncodeToString(buf)[:TaskIDLength]
+	return hashx.RandomHexID(TaskIDLength)
 }
 
-// readLastLines reads the last n lines from a file.
-func readLastLines(path string, maxLines int) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", fmt.Errorf("open output file: %w", err)
-	}
-	defer file.Close()
-
-	var lines []string
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-
-	if scanErr := scanner.Err(); scanErr != nil {
-		return "", fmt.Errorf("read output file: %w", scanErr)
-	}
-
-	if len(lines) > maxLines {
-		lines = lines[len(lines)-maxLines:]
-	}
-
-	return strings.Join(lines, "\n"), nil
-}

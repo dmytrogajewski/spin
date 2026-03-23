@@ -44,14 +44,6 @@ func (m *MemoryManager) ShouldRefine(bulletCount int) bool {
 	return bulletCount >= m.config.RefinementAt
 }
 
-// CalculateUtility computes utility score for a bullet.
-func (m *MemoryManager) CalculateUtility(b *bullet.Bullet) float64 {
-	helpful := float64(b.HelpfulCount)
-	harmful := float64(b.HarmfulCount)
-
-	return (helpful - harmful) / (helpful + harmful + 1)
-}
-
 // Prune removes low-utility bullets from playbook.
 func (m *MemoryManager) Prune(ctx context.Context, pb *playbook.Playbook) (int, error) {
 	toPrune := m.findLowUtilityBullets(pb.List(nil))
@@ -64,7 +56,7 @@ func (m *MemoryManager) findLowUtilityBullets(bullets []*bullet.Bullet) []string
 	var ids []string
 
 	for _, b := range bullets {
-		if m.CalculateUtility(b) < m.config.PruneThreshold {
+		if b.Score() < m.config.PruneThreshold {
 			ids = append(ids, b.ID)
 		}
 	}

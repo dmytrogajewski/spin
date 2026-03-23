@@ -10,7 +10,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace"
 	"github.com/dmytrogajewski/spin/internal/agent/tool"
 	"github.com/dmytrogajewski/spin/internal/agentsmd"
-	spinerrors "github.com/dmytrogajewski/spin/internal/apperr"
+	spinerrors "github.com/dmytrogajewski/spin/pkg/apperr"
 	"github.com/dmytrogajewski/spin/internal/cycle"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"

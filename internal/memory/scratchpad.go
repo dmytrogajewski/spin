@@ -3,6 +3,8 @@ package memory
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -340,47 +342,7 @@ func matchesAnyKeyword(value string, keywords []string) bool {
 
 // containsIgnoreCase checks if s contains substr (case-insensitive).
 func containsIgnoreCase(s, substr string) bool {
-	return len(s) >= len(substr) && (substr == "" ||
-		findIgnoreCase(s, substr) >= 0)
-}
-
-// findIgnoreCase finds substr in s (case-insensitive).
-func findIgnoreCase(s, substr string) int {
-	if substr == "" {
-		return 0
-	}
-
-	if len(s) < len(substr) {
-		return -1
-	}
-
-	// Simple case-insensitive search.
-	for i := 0; i <= len(s)-len(substr); i++ {
-		match := true
-
-		for j := range len(substr) {
-			if toLower(s[i+j]) != toLower(substr[j]) {
-				match = false
-
-				break
-			}
-		}
-
-		if match {
-			return i
-		}
-	}
-
-	return -1
-}
-
-// toLower converts a byte to lowercase.
-func toLower(b byte) byte {
-	if b >= 'A' && b <= 'Z' {
-		return b + ('a' - 'A')
-	}
-
-	return b
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
 // matchPattern checks if key matches the glob pattern.
@@ -391,10 +353,8 @@ func matchPattern(pattern, key string) bool {
 	}
 
 	// Simple prefix matching for patterns like "prefix*".
-	if pattern != "" && pattern[len(pattern)-1] == '*' {
-		prefix := pattern[:len(pattern)-1]
-
-		return len(key) >= len(prefix) && key[:len(prefix)] == prefix
+	if prefix, found := strings.CutSuffix(pattern, "*"); found {
+		return strings.HasPrefix(key, prefix)
 	}
 
 	// Exact match.
@@ -403,15 +363,10 @@ func matchPattern(pattern, key string) bool {
 
 // sortByAccessCount sorts entries by access count (descending).
 func sortByAccessCount(entries []Entry, lookup map[string]*ScratchpadEntry) {
-	// Simple bubble sort for small lists.
-	for i := range len(entries) - 1 {
-		for j := range len(entries) - i - 1 {
-			countJ := lookup[entries[j].Key].AccessCount
+	slices.SortFunc(entries, func(a, b Entry) int {
+		countA := lookup[a.Key].AccessCount
+		countB := lookup[b.Key].AccessCount
 
-			countJ1 := lookup[entries[j+1].Key].AccessCount
-			if countJ < countJ1 {
-				entries[j], entries[j+1] = entries[j+1], entries[j]
-			}
-		}
-	}
+		return countB - countA
+	})
 }

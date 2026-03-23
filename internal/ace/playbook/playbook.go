@@ -9,7 +9,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/syncmap"
+	"github.com/dmytrogajewski/spin/pkg/alg/ds/syncmap"
 )
 
 const bytesPerFloat32 = 4

@@ -115,6 +115,8 @@ func (r *RemoteRegistry) connectTransport(ctx context.Context) error {
 		sdkClient, err = r.createSSEClient()
 	case TransportStreamableHTTP:
 		sdkClient, err = r.createStreamableHTTPClient()
+	case TransportStdio, TransportSmithery, "":
+		return fmt.Errorf("unsupported transport: %s: %w", r.config.Transport, ErrUnsupportedTransport)
 	default:
 		return fmt.Errorf("unsupported transport: %s: %w", r.config.Transport, ErrUnsupportedTransport)
 	}
@@ -208,8 +210,8 @@ func (r *RemoteRegistry) createMCPClient(
 
 // sseClientFactories returns plain and OAuth factory functions for SSE transport.
 func sseClientFactories(headers map[string]string) (
-	func(string) (*client.Client, error),
-	func(string, transport.OAuthConfig) (*client.Client, error),
+	plainFactory func(string) (*client.Client, error),
+	oauthFactory func(string, transport.OAuthConfig) (*client.Client, error),
 ) {
 	var opts []transport.ClientOption
 	if len(headers) > 0 {

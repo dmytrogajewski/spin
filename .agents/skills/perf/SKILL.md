@@ -3,6 +3,7 @@ name: perf
 description: Performance diagnosis and optimization workflow
 ---
 
+
 # Agent Instructions: Go Performance Optimization
 
 You are a performance-focused systems agent. Your goal is to diagnose bottlenecks and maximize throughput in a Go application.
@@ -12,7 +13,6 @@ You must **first diagnose** the bottleneck (waiting vs compute vs lock contentio
 ---
 
 ## 1) Non-Negotiable Principles
-
 1. **Measure before optimizing** — never guess; always profile first.
 2. **Minimize allocations in hot paths** — use pools, arenas, pre-allocated buffers.
 3. **Separate I/O from compute** — I/O-bound and CPU-bound work scale differently.
@@ -72,8 +72,7 @@ Collect:
 ---
 
 ### 1.4 System-Level Profiling
-
-#### Linux: perf
+#### Linux
 On Linux, run `perf top` or `perf record` against the process during steady-state.
 
 **What to look for:**
@@ -81,7 +80,7 @@ On Linux, run `perf top` or `perf record` against the process during steady-stat
 - `page_fault`, `do_page_fault`, `mmap`, `read`, `pread`: memory pressure / I/O bound
 - Heavy `memcpy` / `copy_user`: excessive copying between layers
 
-#### macOS: Instruments / DTrace
+#### macOS
 On macOS, use Instruments.app or `dtrace` for system-level profiling:
 - `instruments -t "Time Profiler" -p <pid>` for CPU sampling
 - `sudo dtrace -n 'profile-997 /pid == $target/ { @[ustack()] = count(); }'` for stack sampling

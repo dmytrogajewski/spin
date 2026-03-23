@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
-	"github.com/dmytrogajewski/spin/internal/mathutil"
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
 )
 
 // FindDuplicates detects semantic duplicates using cosine similarity.
@@ -44,7 +44,7 @@ func (c *curator) FindDuplicates(_ context.Context, newBullets []*bullet.Bullet)
 			}
 
 			// Calculate cosine similarity.
-			similarity := mathutil.CosineSimilarity(newBullet.Embedding, existingBullet.Embedding)
+			similarity := vector.CosineSimilarity(newBullet.Embedding, existingBullet.Embedding)
 
 			if similarity > maxSimilarity {
 				maxSimilarity = similarity

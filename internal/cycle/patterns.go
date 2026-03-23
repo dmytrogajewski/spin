@@ -79,6 +79,8 @@ type PatternResult struct {
 // String returns the string representation of the pattern type.
 func (pt PatternType) String() string {
 	switch pt {
+	case PatternNone:
+		return noneLabel
 	case PatternRepeatedPhrase:
 		return "repeated_phrase"
 	case PatternCircularReasoning:
@@ -90,7 +92,7 @@ func (pt PatternType) String() string {
 	case PatternOscillatingTools:
 		return "oscillating_tools"
 	default:
-		return "none"
+		return noneLabel
 	}
 }
 

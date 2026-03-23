@@ -571,7 +571,12 @@ func (a *SpinACPAgent) ensureTransformer(
 
 	transformer, exists := a.transformers[sessionID]
 	if !exists && conn != nil {
-		transformer = NewEventTransformer(sessionID, conn)
+		workDir := ""
+		if sess, ok := a.sessions[sessionID]; ok {
+			workDir = sess.WorkDir
+		}
+
+		transformer = NewEventTransformer(sessionID, conn, workDir)
 		a.transformers[sessionID] = transformer
 		conv.SetEventTransformer(transformer)
 	}

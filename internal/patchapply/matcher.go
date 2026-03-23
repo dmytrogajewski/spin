@@ -2,6 +2,8 @@ package patchapply
 
 import (
 	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 const defaultSimilarityThreshold = 0.85
@@ -338,7 +340,7 @@ func (m *Matcher) computeSimilarity(contextLines, windowLines []string) float64 
 func (m *Matcher) normalizeLines(lines []string) []string {
 	normalized := make([]string, len(lines))
 	for i, line := range lines {
-		normalized[i] = normalizeWhitespace(line)
+		normalized[i] = stringsx.CollapseWhitespace(line)
 	}
 
 	return normalized
@@ -366,17 +368,6 @@ func calculateSimilarity(s1, s2 string) float64 {
 	}
 
 	return float64(common) / float64(maxLen)
-}
-
-// normalizeWhitespace normalizes whitespace in a string.
-func normalizeWhitespace(s string) string {
-	// Replace multiple spaces with single space and trim.
-	result := strings.ReplaceAll(s, "\t", " ")
-	for strings.Contains(result, "  ") {
-		result = strings.ReplaceAll(result, "  ", " ")
-	}
-
-	return strings.TrimSpace(result)
 }
 
 func abs(a int) int {

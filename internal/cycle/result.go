@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+const (
+	// noneLabel is the display label for undetected/unknown cycle types.
+	noneLabel = "none"
+)
+
 var (
 	// ErrDetectorNotConfigured is a sentinel error.
 	ErrDetectorNotConfigured = errors.New("cycle detector not configured")
@@ -37,6 +42,8 @@ const (
 // String returns the string representation of the cycle type.
 func (ct Type) String() string {
 	switch ct {
+	case None:
+		return noneLabel
 	case SimilarResponses:
 		return "similar_responses"
 	case RepeatedTool:
@@ -46,7 +53,7 @@ func (ct Type) String() string {
 	case SameError:
 		return "same_error"
 	default:
-		return "none"
+		return noneLabel
 	}
 }
 

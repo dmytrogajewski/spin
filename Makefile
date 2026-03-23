@@ -17,8 +17,7 @@ BUILD_DATE  = $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS     = -X $(VERSION_PKG).Version=$(GIT_VERSION) -X $(VERSION_PKG).Commit=$(GIT_COMMIT) -X $(VERSION_PKG).Date=$(BUILD_DATE)
 CGO_ENABLED=0
 
-.PHONY: all
-all: ${GOBIN}/spin${EXE}
+all: ${GOBIN}/spin${EXE} 
 
 # Build all binaries (alias for all)
 .PHONY: build
@@ -36,6 +35,7 @@ help:
 	@echo "  lint             - Run linters and deadcode analysis"
 	@echo "  fmt              - Format code"
 	@echo "  deadcode         - Run deadcode analysis with detailed output"
+	@echo "  deadcode-prod    - Run deadcode analysis excluding tests"
 	@echo "  deadcode-why     - Show why a function is not dead (FUNC=name)"
 	@echo "  clean            - Clean build artifacts"
 	@echo "  bench            - Run benchmarks"
@@ -93,13 +93,20 @@ lint:
 	GOLANGCI_LINT_CACHE=$(LINT_GOLANGCI_CACHE) \
 	CGO_ENABLED=0 $(GOLINT) run $(INTERNAL_PKGS)
 	@echo "Running deadcode analysis..."
-	@GOCACHE=$(LINT_GOCACHE) ./scripts/deadcode-filter.sh $(DEADCODE_PKGS)
+	@GOCACHE=$(LINT_GOCACHE) ./scripts/deadcode-filter.sh -test $(DEADCODE_PKGS)
 	@echo "Linting complete"
 
 ## deadcode: Run deadcode analysis with whitelist filter (fails if dead code found)
 .PHONY: deadcode
 deadcode:
 	@echo "Running deadcode analysis with whitelist..."
+	@GOCACHE=$(LINT_GOCACHE) ./scripts/deadcode-filter.sh -test $(DEADCODE_PKGS)
+
+## deadcode-prod: Run deadcode analysis excluding tests (production-only dead code)
+.PHONY: deadcode-prod
+deadcode-prod:
+	@echo "Running deadcode analysis (production only)..."
+	@echo "================================================================"
 	@GOCACHE=$(LINT_GOCACHE) ./scripts/deadcode-filter.sh $(DEADCODE_PKGS)
 
 ## deadcode-json: Run deadcode analysis with JSON output
@@ -135,8 +142,6 @@ clean:
 # Binary build targets
 # =============================================================================
 
-# Always rebuild: Go's build cache handles incremental compilation efficiently.
-.PHONY: ${GOBIN}/spin${EXE}
 ${GOBIN}/spin${EXE}:
 	CGO_ENABLED=0 go build -tags "$(TAGS)" -ldflags "$(LDFLAGS)" -o ${GOBIN}/spin${EXE} ./cmd/spin
 

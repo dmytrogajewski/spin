@@ -9,7 +9,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/contexteng/history"
 	"github.com/dmytrogajewski/spin/internal/session"
-	"github.com/dmytrogajewski/spin/internal/syncmap"
+	"github.com/dmytrogajewski/spin/pkg/alg/ds/syncmap"
 )
 
 var (

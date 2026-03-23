@@ -24,7 +24,7 @@ func ConvertInsights(insights []*reflector.Insight) ([]*bullet.Bullet, error) {
 
 		tags["source"] = insight.Source
 		if len(insight.Evidence) > 0 {
-			tags["evidence"] = joinEvidence(insight.Evidence)
+			tags["evidence"] = strings.Join(insight.Evidence, "; ")
 		}
 
 		// Create bullet from insight with tags.
@@ -44,21 +44,3 @@ func ConvertInsights(insights []*reflector.Insight) ([]*bullet.Bullet, error) {
 	return bullets, nil
 }
 
-// joinEvidence concatenates evidence strings with separator.
-func joinEvidence(evidence []string) string {
-	result := ""
-
-	var resultSb46 strings.Builder
-
-	for i, e := range evidence {
-		if i > 0 {
-			resultSb46.WriteString("; ")
-		}
-
-		resultSb46.WriteString(e)
-	}
-
-	result += resultSb46.String()
-
-	return result
-}

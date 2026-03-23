@@ -2,12 +2,12 @@ package harness
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/message"
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
+	"github.com/dmytrogajewski/spin/pkg/alg/hashx"
 )
 
 const (
@@ -109,11 +109,7 @@ func (d *DoomLoopGuard) Check(
 
 // record adds a fingerprint to the sliding window, evicting the oldest if full.
 func (d *DoomLoopGuard) record(fp string) {
-	if len(d.window) >= d.windowSize {
-		d.window = d.window[1:]
-	}
-
-	d.window = append(d.window, fp)
+	d.window = collections.TailN(append(d.window, fp), d.windowSize)
 }
 
 // emitDetected emits a doom-loop detection event if an emitter is configured.
@@ -137,7 +133,5 @@ func (d *DoomLoopGuard) emitDetected(
 
 // fingerprint computes a SHA-256 hash of the tool call name and arguments.
 func fingerprint(tc message.ToolCall) string {
-	hash := sha256.Sum256([]byte(tc.Function.Name + "|" + tc.Function.Arguments))
-
-	return hex.EncodeToString(hash[:])
+	return hashx.SHA256Hex([]byte(tc.Function.Name + "|" + tc.Function.Arguments))
 }

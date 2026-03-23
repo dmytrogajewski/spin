@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/pathutil"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 	"github.com/dmytrogajewski/spin/internal/storage"
 )
 
@@ -54,7 +54,7 @@ type PersistentStore struct {
 // The context controls the startup index rebuild.
 func NewPersistentStore(ctx context.Context, basePath string) (*PersistentStore, error) {
 	// Expand home directory if needed.
-	expanded, err := pathutil.ExpandHome(basePath)
+	expanded, err := pathx.ExpandHome(basePath)
 	if err != nil {
 		return nil, fmt.Errorf("expand home directory: %w", err)
 	}

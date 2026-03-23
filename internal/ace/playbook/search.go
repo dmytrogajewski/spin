@@ -5,7 +5,7 @@ import (
 	"sort"
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
-	"github.com/dmytrogajewski/spin/internal/mathutil"
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
 )
 
 // searchResult holds a bullet with its similarity score.
@@ -36,7 +36,7 @@ func (p *Playbook) Search(ctx context.Context, query string, topK int) ([]*bulle
 			return true
 		}
 
-		similarity := mathutil.CosineSimilarity(queryEmbed, b.Embedding)
+		similarity := vector.CosineSimilarity(queryEmbed, b.Embedding)
 		// Clamp similarity to [0, 1] to avoid floating point precision issues.
 		if similarity > 1.0 {
 			similarity = 1.0
@@ -102,7 +102,7 @@ func (p *Playbook) SearchWithScores(ctx context.Context, query string, topK int)
 			return true
 		}
 
-		similarity := mathutil.CosineSimilarity(queryEmbed, b.Embedding)
+		similarity := vector.CosineSimilarity(queryEmbed, b.Embedding)
 		// Clamp similarity to [0, 1] to avoid floating point precision issues.
 		if similarity > 1.0 {
 			similarity = 1.0

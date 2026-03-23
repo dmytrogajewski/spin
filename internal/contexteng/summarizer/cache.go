@@ -1,10 +1,10 @@
 package summarizer
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"sync"
 	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/hashx"
 )
 
 const defaultCacheMaxSize = 100
@@ -144,8 +144,5 @@ func (c *Cache) evictLRU() {
 }
 
 func hashContent(content string) string {
-	h := sha256.New()
-	h.Write([]byte(content))
-
-	return hex.EncodeToString(h.Sum(nil))
+	return hashx.SHA256Hex([]byte(content))
 }

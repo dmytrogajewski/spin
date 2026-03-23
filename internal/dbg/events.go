@@ -16,6 +16,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
@@ -45,10 +46,7 @@ type EventLogger struct {
 // format: "text" or "json"
 // filter: list of event types to log (empty = log all)
 func NewEventLogger(format string, filter []string) *EventLogger {
-	filterMap := make(map[string]bool)
-	for _, f := range filter {
-		filterMap[f] = true
-	}
+	filterMap := collections.ToSet(filter)
 
 	return &EventLogger{
 		format: format,

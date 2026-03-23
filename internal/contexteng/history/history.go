@@ -13,7 +13,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/contexteng/compress"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/tokenizer"
+	"github.com/dmytrogajewski/spin/pkg/tokenizer"
 )
 
 const (

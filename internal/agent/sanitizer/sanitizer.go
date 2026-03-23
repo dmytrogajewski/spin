@@ -3,6 +3,8 @@ package sanitizer
 
 import (
 	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 // State represents the current state of the sanitizer.
@@ -117,7 +119,7 @@ func (s *Sanitizer) processTagNormal(remaining string, contentBuilder, thoughtBu
 		return len("</tool_call>"), false
 	}
 
-	if isPartialMatch(remaining, []string{"<think>", "<function=", "<parameter=", "</tool_call>"}) {
+	if stringsx.IsPartialPrefix(remaining, []string{"<think>", "<function=", "<parameter=", "</tool_call>"}) {
 		s.buffer.WriteString(remaining)
 
 		return 0, true
@@ -137,7 +139,7 @@ func (s *Sanitizer) processTagThink(remaining string, contentBuilder, thoughtBui
 		return len("</think>"), false
 	}
 
-	if isPartialMatch(remaining, []string{"</think>"}) {
+	if stringsx.IsPartialPrefix(remaining, []string{"</think>"}) {
 		s.buffer.WriteString(remaining)
 
 		return 0, true
@@ -159,7 +161,7 @@ func (s *Sanitizer) processTagDrop(remaining string, contentBuilder, thoughtBuil
 		return matchLen, false
 	}
 
-	if isPartialMatch(remaining, []string{s.dropUntil}) {
+	if stringsx.IsPartialPrefix(remaining, []string{s.dropUntil}) {
 		s.buffer.WriteString(remaining)
 
 		return 0, true
@@ -171,14 +173,3 @@ func (s *Sanitizer) processTagDrop(remaining string, contentBuilder, thoughtBuil
 	return 0, false
 }
 
-// isPartialMatch checks if s is a prefix of any candidate, but not a full match yet.
-// It assumes s is potentially shorter than candidates.
-func isPartialMatch(s string, candidates []string) bool {
-	for _, c := range candidates {
-		if strings.HasPrefix(c, s) && len(s) < len(c) {
-			return true
-		}
-	}
-
-	return false
-}

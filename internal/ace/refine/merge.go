@@ -6,7 +6,8 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
-	"github.com/dmytrogajewski/spin/internal/mathutil"
+	"github.com/dmytrogajewski/spin/pkg/alg/similarity"
+	"github.com/dmytrogajewski/spin/pkg/alg/vector"
 )
 
 // ErrSourceAndTargetBulletsCannotBe is a sentinel error.
@@ -117,7 +118,7 @@ func (m *MergeEngine) MergeBullets(_ context.Context, source, target *bullet.Bul
 func (m *MergeEngine) calculateSimilarity(ctx context.Context, b1, b2 *bullet.Bullet) (float64, error) {
 	// If both have embeddings, use them.
 	if len(b1.Embedding) > 0 && len(b2.Embedding) > 0 {
-		return mathutil.CosineSimilarity(b1.Embedding, b2.Embedding), nil
+		return vector.CosineSimilarity(b1.Embedding, b2.Embedding), nil
 	}
 
 	// If embedder is available, generate embeddings.
@@ -132,35 +133,13 @@ func (m *MergeEngine) calculateSimilarity(ctx context.Context, b1, b2 *bullet.Bu
 			return 0.0, err
 		}
 
-		return mathutil.CosineSimilarity(emb1, emb2), nil
+		return vector.CosineSimilarity(emb1, emb2), nil
 	}
 
-	// No embeddings available - fall back to simple content comparison.
-	return m.simpleSimilarity(b1.Content, b2.Content), nil
+	// No embeddings available — fall back to word-set (Jaccard) comparison.
+	return similarity.JaccardSimilarity(b1.Content, b2.Content), nil
 }
 
-// simpleSimilarity provides basic content-based similarity when no embeddings available.
-func (m *MergeEngine) simpleSimilarity(content1, content2 string) float64 {
-	// Exact match.
-	if content1 == content2 {
-		return 1.0
-	}
-
-	// Length-based heuristic (very basic).
-	minLen := len(content1)
-
-	maxLen := len(content2)
-	if maxLen < minLen {
-		minLen, maxLen = maxLen, minLen
-	}
-
-	if maxLen == 0 {
-		return 0.0
-	}
-
-	// Simple ratio (not very accurate, but better than nothing).
-	return float64(minLen) / float64(maxLen)
-}
 
 // chooseMergeDirection determines which bullet should be kept.
 // Returns (sourceID, targetID) where source is merged into target.

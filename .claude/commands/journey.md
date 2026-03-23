@@ -79,6 +79,14 @@ When **<user persona and context>** I want to **<action or capability>** so I ca
 - [ ] <Checkpoint: does the happy path work end-to-end?>
 - [ ] <Checkpoint: is the output correct and complete?>
 
+### Decision Load
+- [ ] <Checkpoint: are choices minimized to what matters?>
+- [ ] <Checkpoint: do sensible defaults reduce decisions?>
+
+### Progressive Complexity
+- [ ] <Checkpoint: does the simple case stay simple?>
+- [ ] <Checkpoint: are advanced features opt-in, not in the way?>
+
 ### Error Quality
 - [ ] <Checkpoint: do errors name the problem and suggest a fix?>
 - [ ] <Checkpoint: are edge cases handled gracefully?>
@@ -87,12 +95,53 @@ When **<user persona and context>** I want to **<action or capability>** so I ca
 - [ ] <Checkpoint: is the feature recoverable from mistakes?>
 - [ ] <Checkpoint: are destructive operations guarded?>
 
-<!-- Add more assessment categories as needed:
-     Decision Load, Progressive Complexity, Runtime Transparency,
-     Debuggability, Cross-Surface Consistency, Workflow Consistency,
-     Change Safety, Experimentation Safety, Interaction Latency,
-     Developer Feedback Speed, Team Scale, System Scale,
-     Right Behavior by Default, Anti-Bypass Design -->
+### Runtime Transparency
+- [ ] <Checkpoint: can the user see what is happening during execution?>
+- [ ] <Checkpoint: is there no hidden state or silent side effects?>
+
+### Debuggability
+- [ ] <Checkpoint: can the user trace output back to input?>
+- [ ] <Checkpoint: are intermediate artifacts inspectable?>
+
+### Cross-Surface Consistency
+- [ ] <Checkpoint: does the feature behave the same across agents/surfaces?>
+- [ ] <Checkpoint: is terminology consistent across all generated files?>
+
+### Workflow Consistency
+- [ ] <Checkpoint: does the feature follow established patterns in the project?>
+- [ ] <Checkpoint: are artifact structures predictable across invocations?>
+
+### Change Safety
+- [ ] <Checkpoint: are changes previewed before applying?>
+- [ ] <Checkpoint: do updates avoid silently overwriting user customizations?>
+
+### Experimentation Safety
+- [ ] <Checkpoint: can the user try things without risk to production state?>
+- [ ] <Checkpoint: are experimental changes measurable and revertible?>
+
+### Interaction Latency
+- [ ] <Checkpoint: does the feature complete without unnecessary delays?>
+- [ ] <Checkpoint: is feedback immediate at each step?>
+
+### Developer Feedback Speed
+- [ ] <Checkpoint: are errors and results reported as they occur?>
+- [ ] <Checkpoint: can the user course-correct without restarting?>
+
+### Team Scale
+- [ ] <Checkpoint: can config and artifacts be shared via version control?>
+- [ ] <Checkpoint: do standards apply uniformly across team members?>
+
+### System Scale
+- [ ] <Checkpoint: does the feature work as the codebase grows?>
+- [ ] <Checkpoint: is the architecture extensible without structural changes?>
+
+### Right Behavior by Default
+- [ ] <Checkpoint: does the feature do the right thing without configuration?>
+- [ ] <Checkpoint: are safe defaults chosen over permissive ones?>
+
+### Anti-Bypass Design
+- [ ] <Checkpoint: are quality gates enforced, not optional?>
+- [ ] <Checkpoint: is there no easy way to skip safety checks?>
 
 ## 4. Tests
 

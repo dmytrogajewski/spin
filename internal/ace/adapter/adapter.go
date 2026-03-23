@@ -15,7 +15,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
-	"github.com/dmytrogajewski/spin/internal/syncmap"
+	"github.com/dmytrogajewski/spin/pkg/alg/ds/syncmap"
 )
 
 const (

@@ -7,6 +7,8 @@ import (
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 // HTMLConverter converts HTML content to markdown-formatted text.
@@ -55,7 +57,7 @@ func ConvertHTML(htmlContent []byte) string {
 
 	walkNode(&builder, doc)
 
-	return collapseBlankLines(builder.String())
+	return stringsx.CollapseBlankLines(strings.TrimSpace(builder.String()))
 }
 
 // walkNode recursively walks the HTML tree and writes markdown to the builder.
@@ -224,15 +226,4 @@ func getAttr(node *html.Node, name string) string {
 	}
 
 	return ""
-}
-
-// collapseBlankLines collapses runs of 3+ consecutive newlines to 2.
-func collapseBlankLines(text string) string {
-	result := strings.TrimSpace(text)
-
-	for strings.Contains(result, "\n\n\n") {
-		result = strings.ReplaceAll(result, "\n\n\n", "\n\n")
-	}
-
-	return result
 }
