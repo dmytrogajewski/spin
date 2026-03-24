@@ -14,8 +14,8 @@ import (
 // Journey: specs/journeys/JOURNEY-3.2.md.
 
 const (
-	minSectionCount     = 5
-	regularSectionCount = 4
+	minSectionCount     = 6
+	regularSectionCount = 5
 	testAgentsMDContent = "Follow TDD.\nUse Go 1.26."
 )
 

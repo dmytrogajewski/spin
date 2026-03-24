@@ -211,10 +211,10 @@ func TestModeInfo_ToolCounts(t *testing.T) {
 
 	// Verify tool counts for each mode.
 	expectedToolCounts := map[string]int{
-		"regular":  8, // all tools.
-		"review":   5, // read-only tools.
-		"compact":  3, // minimal tools.
-		"planning": 3, // context tools.
+		"regular":  19, // all tools.
+		"review":   8,  // read-only + code intelligence tools.
+		"compact":  5,  // read + search + symbol lookup tools.
+		"planning": 7,  // read + search + code intelligence tools.
 	}
 
 	for mode, expectedCount := range expectedToolCounts {
@@ -235,12 +235,20 @@ func TestModeInfo_RegularModeHasAllTools(t *testing.T) {
 	expectedTools := []string{
 		"read_file",
 		"write_file",
-		"list_directory",
-		"execute_command",
-		"get_context",
-		"file_search",
+		"edit_file",
 		"apply_patch",
+		"list_directory",
+		"file_search",
+		"find_symbol",
+		"find_references",
+		"rename_symbol",
+		"get_context",
 		"git_context",
+		"git_operation",
+		"execute_command",
+		"start_process",
+		"memory",
+		"scratchpad",
 	}
 
 	toolSet := make(map[string]bool)
@@ -291,13 +299,13 @@ func TestModeInfo_CompactModeIsMinimal(t *testing.T) {
 
 	info := allModes["compact"]
 
-	// Compact mode should have exactly 3 tools.
-	if len(info.tools) != 3 {
-		t.Errorf("compact mode should have exactly 3 tools, got %d", len(info.tools))
+	// Compact mode should have limited tools for fast queries.
+	if len(info.tools) != 5 {
+		t.Errorf("compact mode should have exactly 5 tools, got %d", len(info.tools))
 	}
 
 	// Verify compact mode has essential tools.
-	requiredTools := []string{"read_file", "get_context", "file_search"}
+	requiredTools := []string{"read_file", "get_context", "file_search", "find_symbol"}
 
 	toolSet := make(map[string]bool)
 	for _, tool := range info.tools {
@@ -311,36 +319,36 @@ func TestModeInfo_CompactModeIsMinimal(t *testing.T) {
 	}
 }
 
-func TestModeInfo_PlanningModeIsContextOnly(t *testing.T) {
+func TestModeInfo_PlanningModeIsReadOnly(t *testing.T) {
 	t.Parallel()
 
 	info := allModes["planning"]
 
-	// Planning mode should have exactly 3 context tools.
-	if len(info.tools) != 3 {
-		t.Errorf("planning mode should have exactly 3 tools, got %d", len(info.tools))
+	// Planning mode has read + code intelligence tools for analysis.
+	if len(info.tools) != 7 {
+		t.Errorf("planning mode should have exactly 7 tools, got %d", len(info.tools))
 	}
 
-	// Verify planning mode has only context tools.
-	expectedTools := []string{"get_context", "file_search", "git_context"}
+	// Verify planning mode has context and code intelligence tools.
+	requiredTools := []string{"get_context", "file_search", "git_context", "find_symbol", "find_references"}
 
 	toolSet := make(map[string]bool)
 	for _, tool := range info.tools {
 		toolSet[tool] = true
 	}
 
-	for _, expected := range expectedTools {
-		if !toolSet[expected] {
-			t.Errorf("planning mode missing context tool: %s", expected)
+	for _, required := range requiredTools {
+		if !toolSet[required] {
+			t.Errorf("planning mode missing required tool: %s", required)
 		}
 	}
 
-	// Verify no file operations.
-	prohibitedTools := []string{"read_file", "write_file", "list_directory"}
+	// Verify no write or execution tools.
+	prohibitedTools := []string{"write_file", "edit_file", "apply_patch", "execute_command"}
 	for _, tool := range info.tools {
 		for _, prohibited := range prohibitedTools {
 			if tool == prohibited {
-				t.Errorf("planning mode should not have file operation tool: %s", tool)
+				t.Errorf("planning mode should not have write/execute tool: %s", tool)
 			}
 		}
 	}
