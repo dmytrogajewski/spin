@@ -66,12 +66,16 @@ func (s *Server) openFileForLSP(ctx context.Context, uri string) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		// Best-effort — DidOpen with empty content as fallback.
-		_ = s.DidOpen(ctx, uri, s.langConfig.ID, "")
+		if openErr := s.DidOpen(ctx, uri, s.langConfig.ID, ""); openErr != nil {
+			return
+		}
 
 		return
 	}
 
-	_ = s.DidOpen(ctx, uri, s.langConfig.ID, string(content))
+	if openErr := s.DidOpen(ctx, uri, s.langConfig.ID, string(content)); openErr != nil {
+		return
+	}
 }
 
 // FindDefinition sends textDocument/definition and returns locations.

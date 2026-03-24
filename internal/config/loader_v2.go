@@ -39,74 +39,74 @@ type LoaderV2 struct {
 
 // NewLoaderV2 creates a new configuration loader for V2.
 func NewLoaderV2() *LoaderV2 {
-	v := viper.New()
+	viperInst := viper.New()
 
 	// Set config file properties.
-	v.SetConfigName("spin")
-	v.SetConfigType("yaml")
-	v.AddConfigPath(".")
-	v.AddConfigPath("$HOME/.spin")
-	v.AddConfigPath("/etc/spin")
+	viperInst.SetConfigName("spin")
+	viperInst.SetConfigType("yaml")
+	viperInst.AddConfigPath(".")
+	viperInst.AddConfigPath("$HOME/.spin")
+	viperInst.AddConfigPath("/etc/spin")
 
 	// Set environment variable prefix.
-	v.SetEnvPrefix("SPIN")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
+	viperInst.SetEnvPrefix("SPIN")
+	viperInst.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viperInst.AutomaticEnv()
 
 	// Bind all config keys to environment variables
 	// This is required for Unmarshal to pick up env vars.
-	bindEnvVars(v)
+	bindEnvVars(viperInst)
 
-	return &LoaderV2{viper: v}
+	return &LoaderV2{viper: viperInst}
 }
 
 // bindEnvVars explicitly binds all config keys to environment variables.
 // This is required because Viper's AutomaticEnv only works with Get(), not Unmarshal.
-func bindEnvVars(v *viper.Viper) {
+func bindEnvVars(viperInst *viper.Viper) {
 	// LLM fields.
-	_ = v.BindEnv("llm.provider")
-	_ = v.BindEnv("llm.model")
-	_ = v.BindEnv("llm.temperature")
-	_ = v.BindEnv("llm.max_tokens")
-	_ = v.BindEnv("llm.timeout")
-	_ = v.BindEnv("llm.base_url")
-	_ = v.BindEnv("llm.api_key")
+	_ = viperInst.BindEnv("llm.provider")
+	_ = viperInst.BindEnv("llm.model")
+	_ = viperInst.BindEnv("llm.temperature")
+	_ = viperInst.BindEnv("llm.max_tokens")
+	_ = viperInst.BindEnv("llm.timeout")
+	_ = viperInst.BindEnv("llm.base_url")
+	_ = viperInst.BindEnv("llm.api_key")
 
 	// Agent fields.
-	_ = v.BindEnv("agent.max_turns")
-	_ = v.BindEnv("agent.timeout")
-	_ = v.BindEnv("agent.work_dir")
-	_ = v.BindEnv("agent.require_approval")
+	_ = viperInst.BindEnv("agent.max_turns")
+	_ = viperInst.BindEnv("agent.timeout")
+	_ = viperInst.BindEnv("agent.work_dir")
+	_ = viperInst.BindEnv("agent.require_approval")
 
 	// ACE fields.
-	_ = v.BindEnv("ace.enabled")
-	_ = v.BindEnv("ace.playbook_path")
-	_ = v.BindEnv("ace.trajectory_path")
-	_ = v.BindEnv("ace.top_k")
-	_ = v.BindEnv("ace.min_score")
+	_ = viperInst.BindEnv("ace.enabled")
+	_ = viperInst.BindEnv("ace.playbook_path")
+	_ = viperInst.BindEnv("ace.trajectory_path")
+	_ = viperInst.BindEnv("ace.top_k")
+	_ = viperInst.BindEnv("ace.min_score")
 
 	// Security fields.
-	_ = v.BindEnv("security.sandbox_mode")
-	_ = v.BindEnv("security.policy_file")
-	_ = v.BindEnv("security.allowed_commands")
+	_ = viperInst.BindEnv("security.sandbox_mode")
+	_ = viperInst.BindEnv("security.policy_file")
+	_ = viperInst.BindEnv("security.allowed_commands")
 
 	// Protocol fields.
-	_ = v.BindEnv("protocol.enable_mcp")
-	_ = v.BindEnv("protocol.enable_git")
-	_ = v.BindEnv("protocol.enable_shell")
-	_ = v.BindEnv("protocol.shell_timeout")
+	_ = viperInst.BindEnv("protocol.enable_mcp")
+	_ = viperInst.BindEnv("protocol.enable_git")
+	_ = viperInst.BindEnv("protocol.enable_shell")
+	_ = viperInst.BindEnv("protocol.shell_timeout")
 
 	// AgentsMD fields.
-	_ = v.BindEnv("agents_md.enabled")
-	_ = v.BindEnv("agents_md.path")
-	_ = v.BindEnv("agents_md.max_size")
+	_ = viperInst.BindEnv("agents_md.enabled")
+	_ = viperInst.BindEnv("agents_md.path")
+	_ = viperInst.BindEnv("agents_md.max_size")
 
 	// Workflows fields.
-	_ = v.BindEnv("workflows.action_model")
-	_ = v.BindEnv("workflows.thinking_model")
-	_ = v.BindEnv("workflows.critique_model")
-	_ = v.BindEnv("workflows.compact_model")
-	_ = v.BindEnv("workflows.vision_model")
+	_ = viperInst.BindEnv("workflows.action_model")
+	_ = viperInst.BindEnv("workflows.thinking_model")
+	_ = viperInst.BindEnv("workflows.critique_model")
+	_ = viperInst.BindEnv("workflows.compact_model")
+	_ = viperInst.BindEnv("workflows.vision_model")
 }
 
 // LoadFromFile loads configuration from a specific YAML file.

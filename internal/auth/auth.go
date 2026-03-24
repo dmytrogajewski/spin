@@ -222,7 +222,7 @@ func parseCredential(s string) (Credential, error) {
 
 // splitCredentialString splits a credential string into type and value.
 func splitCredentialString(s string) (key, value string, err error) {
-	parts := strings.SplitN(s, ":", 2)
+	parts := strings.SplitN(s, ":", authTokenParts)
 	if len(parts) != authTokenParts {
 		return "", "", fmt.Errorf("invalid credential format: %q: %w", s, ErrInvalidCredentialFormat)
 	}

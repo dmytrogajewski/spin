@@ -199,26 +199,6 @@ func TestTransformer_WriteFile_GeneratesDiff(t *testing.T) {
 	assert.True(t, hasDiff, "should include diff content in notification")
 }
 
-// slowReleaseMockConnection is a mock that blocks on SessionUpdate when releasing terminals.
-// Used to test that the event goroutine doesn't hang when Release blocks.
-type slowReleaseMockConnection struct {
-	mu            sync.Mutex
-	notifications []acp.SessionNotification
-	releaseCh     chan struct{} // Blocks until closed.
-}
-
-func (m *slowReleaseMockConnection) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
-	m.mu.Lock()
-	m.notifications = append(m.notifications, notification)
-	m.mu.Unlock()
-
-	return nil
-}
-
-func (m *slowReleaseMockConnection) RequestPermission(_ context.Context, _ acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
-	return acp.RequestPermissionResponse{}, nil
-}
-
 // TestSubscribeTransformerEvents_NoHangOnSlowRelease tests that the event goroutine
 // cleanup doesn't hang when the context is canceled promptly.
 // This reproduces a bug where cancel() was called AFTER <-eventsDone, causing
@@ -255,6 +235,7 @@ func TestSubscribeTransformerEvents_NoHangOnSlowRelease(t *testing.T) {
 	// Now test that cleanup doesn't hang:
 	// cancel() first (so goroutine can exit via ctx.Done()), then unsubscribe, then wait.
 	done := make(chan struct{})
+
 	go func() {
 		cancel()
 		unsubscribe()

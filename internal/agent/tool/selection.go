@@ -178,7 +178,7 @@ func (s *Selector) SetRuntimeRegistry(registry *tools.Registry) {
 // 6. Emit tool selection event.
 func (s *Selector) SelectToolsForTurn(ctx context.Context, query string, turn int) (*SelectionResult, error) {
 	if !s.config.Enabled {
-		return s.fallbackSelection()
+		return s.fallbackSelection(), nil
 	}
 
 	// Apply search timeout.
@@ -211,10 +211,7 @@ func (s *Selector) SelectToolsForTurn(ctx context.Context, query string, turn in
 	selected := s.selectTopTools(candidates)
 
 	// Step 5: Load any dynamic tools that need loading.
-	loadResult, err := s.loadDynamicTools(ctx, selected)
-	if err != nil && s.logger != nil {
-		s.logger.WarnContext(ctx, "some dynamic tools failed to load", "error", err)
-	}
+	loadResult := s.loadDynamicTools(ctx, selected)
 
 	// Step 6: Build final tool list (includes newly loaded tools).
 	finalTools := s.buildFinalToolList(ctx, selected, loadResult.loaded)
@@ -338,18 +335,18 @@ func isRegistryDynamic(reg mcp.Registry) bool {
 }
 
 // scoreRegistryTool creates a Scored from a registry search result.
-func (s *Selector) scoreRegistryTool(t tools.Tool, index, total int, isDynamic bool, reg mcp.Registry) Scored {
+func (s *Selector) scoreRegistryTool(tool tools.Tool, index, total int, isDynamic bool, reg mcp.Registry) Scored {
 	score := 1.0 - (float64(index) / float64(total+1))
 
 	scored := Scored{
-		Tool:  t,
+		Tool:  tool,
 		Score: score,
 	}
 
 	if isDynamic {
 		scored.Priority = PriorityDynamicMCP
 		scored.Source = "dynamic_mcp"
-		s.populateDynamicToolInfo(&scored, t)
+		s.populateDynamicToolInfo(&scored, tool)
 	} else {
 		scored.Priority = PriorityStaticMCP
 		scored.Source = "static_mcp"
@@ -440,7 +437,7 @@ type loadDynamicToolsResult struct {
 }
 
 // loadDynamicTools loads any selected dynamic tools that require server connection.
-func (s *Selector) loadDynamicTools(ctx context.Context, selected []Scored) (*loadDynamicToolsResult, error) {
+func (s *Selector) loadDynamicTools(ctx context.Context, selected []Scored) *loadDynamicToolsResult {
 	result := &loadDynamicToolsResult{}
 
 	// Group by server path.
@@ -464,7 +461,7 @@ func (s *Selector) loadDynamicTools(ctx context.Context, selected []Scored) (*lo
 		s.logger.DebugContext(ctx, "some servers failed to load", "errors", len(loadErrors))
 	}
 
-	return result, nil
+	return result
 }
 
 // groupByServerPath groups loadable tools by their server path.
@@ -614,8 +611,8 @@ func (s *Selector) addAndRegisterNewTools(
 	ctx context.Context, newlyLoaded []tools.Tool,
 	seen map[string]bool, result []tools.Tool,
 ) []tools.Tool {
-	for _, t := range newlyLoaded {
-		name := t.Name()
+	for _, tool := range newlyLoaded {
+		name := tool.Name()
 		if s.logger != nil {
 			s.logger.DebugContext(ctx, "adding newly loaded tool", "tool", name)
 		}
@@ -626,30 +623,30 @@ func (s *Selector) addAndRegisterNewTools(
 
 		seen[name] = true
 
-		result = append(result, t)
-		s.registerToRuntime(ctx, t)
+		result = append(result, tool)
+		s.registerToRuntime(ctx, tool)
 	}
 
 	return result
 }
 
 // registerToRuntime registers a tool to the runtime registry.
-func (s *Selector) registerToRuntime(ctx context.Context, t tools.Tool) {
+func (s *Selector) registerToRuntime(ctx context.Context, tool tools.Tool) {
 	if s.runtimeRegistry == nil {
 		return
 	}
 
-	err := s.runtimeRegistry.RegisterOrReplace(t)
+	err := s.runtimeRegistry.RegisterOrReplace(tool)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.WarnContext(ctx, "failed to register dynamic tool", "tool", t.Name(), "error", err)
+			s.logger.WarnContext(ctx, "failed to register dynamic tool", "tool", tool.Name(), "error", err)
 		}
 
 		return
 	}
 
 	if s.logger != nil {
-		s.logger.DebugContext(ctx, "registered dynamic tool to runtime", "tool", t.Name())
+		s.logger.DebugContext(ctx, "registered dynamic tool to runtime", "tool", tool.Name())
 	}
 }
 
@@ -727,7 +724,7 @@ func (s *Selector) emitLoadedToolsEvent(loadedTools []tools.Tool) {
 }
 
 // fallbackSelection returns all core tools when selection is disabled.
-func (s *Selector) fallbackSelection() (*SelectionResult, error) {
+func (s *Selector) fallbackSelection() *SelectionResult {
 	var allTools []tools.Tool
 
 	if s.coreRegistry != nil {
@@ -739,7 +736,7 @@ func (s *Selector) fallbackSelection() (*SelectionResult, error) {
 		NewlyLoaded:   nil,
 		TotalSearched: len(allTools),
 		Query:         "",
-	}, nil
+	}
 }
 
 // GetLoadedServers returns the list of servers that have been loaded.

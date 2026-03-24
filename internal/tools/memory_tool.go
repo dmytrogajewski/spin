@@ -93,7 +93,7 @@ func (t *MemoryTool) Schema() ToolSchema {
 
 // Execute implements the Execute operation.
 func (t *MemoryTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	operation, _ := params.GetString("operation")
+	operation := params.GetStringOr("operation", "")
 	if operation == "" {
 		return NewToolError(errOperationParameterRequired), nil
 	}

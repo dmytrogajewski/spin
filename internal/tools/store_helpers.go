@@ -12,23 +12,21 @@ import (
 // entryFormatter appends tool-specific fields to the get output.
 type entryFormatter func(entry *memory.Entry, sb *strings.Builder)
 
-const previewTruncateLen = 100
-
 // storePut stores a key-value pair in a memory store.
 func storePut(ctx context.Context, store memory.Store, params ToolParameters, label string) (ToolResult, error) {
-	key, _ := params.GetString("key")
+	key := params.GetStringOr("key", "")
 	if key == "" {
 		return NewToolError(errKeyParameterRequiredForPut), nil
 	}
 
-	value, _ := params.GetString("value")
+	value := params.GetStringOr("value", "")
 	if value == "" {
 		return NewToolError(errValueParameterRequiredForPut), nil
 	}
 
 	opts := memory.PutOptions{Overwrite: true}
 
-	ns, _ := params.GetString("namespace")
+	ns := params.GetStringOr("namespace", "")
 	if ns != "" {
 		opts.Namespace = ns
 	}
@@ -56,7 +54,7 @@ func storeGet(
 	ctx context.Context, store memory.Store, params ToolParameters,
 	label string, formatter entryFormatter,
 ) (ToolResult, error) {
-	key, _ := params.GetString("key")
+	key := params.GetStringOr("key", "")
 	if key == "" {
 		return NewToolError(errKeyParameterRequiredForGet), nil
 	}
@@ -90,7 +88,7 @@ func storeGet(
 
 // storeDelete removes an entry from a memory store.
 func storeDelete(ctx context.Context, store memory.Store, params ToolParameters, label string) (ToolResult, error) {
-	key, _ := params.GetString("key")
+	key := params.GetStringOr("key", "")
 	if key == "" {
 		return NewToolError(errKeyParameterRequiredForDel), nil
 	}
@@ -144,7 +142,7 @@ func storeSearch(
 	maxPreview int,
 	label string,
 ) (ToolResult, error) {
-	query, _ := params.GetString("query")
+	query := params.GetStringOr("query", "")
 	if query == "" {
 		return NewToolError(errQueryParamRequiredForSearch), nil
 	}
@@ -164,7 +162,7 @@ func storeSearch(
 	for _, entry := range entries {
 		preview := entry.Value
 		if len(preview) > maxPreview {
-			preview = preview[:previewTruncateLen] + "..."
+			preview = preview[:maxPreview] + "..."
 		}
 
 		fmt.Fprintf(&sb, "  - %s: %s\n", entry.Key, preview)

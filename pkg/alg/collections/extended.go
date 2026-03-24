@@ -1,6 +1,10 @@
 package collections
 
-import "time"
+import (
+	"cmp"
+	"errors"
+	"time"
+)
 
 // TailNOrAll returns the last n elements of a slice.
 // Unlike [TailN], returns the full slice (copy) when n <= 0.
@@ -10,17 +14,11 @@ func TailNOrAll[Elem any](input []Elem, n int) []Elem {
 		return nil
 	}
 
-	if n <= 0 || n >= len(input) {
-		result := make([]Elem, len(input))
-		copy(result, input)
-
-		return result
+	if n <= 0 {
+		n = len(input)
 	}
 
-	result := make([]Elem, n)
-	copy(result, input[len(input)-n:])
-
-	return result
+	return TailN(input, n)
 }
 
 // DiffMaps compares two maps and returns the keys that were added, removed,
@@ -55,4 +53,42 @@ func FilterSince[Elem any](items []Elem, ts func(Elem) time.Time, since time.Tim
 	}
 
 	return result
+}
+
+// Filter returns elements for which the predicate returns true.
+// Returns nil if input is nil or empty.
+func Filter[Elem any](items []Elem, pred func(Elem) bool) []Elem {
+	if len(items) == 0 {
+		return nil
+	}
+
+	var result []Elem
+
+	for _, item := range items {
+		if pred(item) {
+			result = append(result, item)
+		}
+	}
+
+	return result
+}
+
+// Clamp restricts val to the range [lo, hi].
+// Returns lo if val < lo, hi if val > hi, otherwise val.
+func Clamp[Num cmp.Ordered](val, lo, hi Num) Num {
+	return max(lo, min(hi, val))
+}
+
+// ValidateAll runs validate on each item and returns a combined error.
+// Returns nil if all validations pass.
+func ValidateAll[Elem any](items []Elem, validate func(Elem) error) error {
+	var errs []error
+
+	for _, item := range items {
+		if err := validate(item); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
 }

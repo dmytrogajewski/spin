@@ -43,8 +43,11 @@ func (r *Repository) Status(ctx context.Context) (*Status, error) {
 		return nil, fmt.Errorf("get status: %w", err)
 	}
 
-	// Get current HEAD.
-	head, _ := r.repo.Head()
+	// Get current HEAD. A nil head means empty repo or detached HEAD.
+	head, headErr := r.repo.Head()
+	if headErr != nil {
+		head = nil
+	}
 
 	status := &Status{
 		ModifiedFiles:  make([]FileStatus, 0),
@@ -136,8 +139,15 @@ func (r *Repository) getTrackingInfo(ctx context.Context, branchName string) (re
 	// Parse output: "ahead\tbehind".
 	parts := strings.Fields(strings.TrimSpace(string(output)))
 	if len(parts) == statusFieldParts {
-		ahead, _ = strconv.Atoi(parts[0])
-		behind, _ = strconv.Atoi(parts[1])
+		parsedAhead, aheadErr := strconv.Atoi(parts[0])
+		if aheadErr == nil {
+			ahead = parsedAhead
+		}
+
+		parsedBehind, behindErr := strconv.Atoi(parts[1])
+		if behindErr == nil {
+			behind = parsedBehind
+		}
 	}
 
 	return remoteBranch, ahead, behind

@@ -302,7 +302,7 @@ func extractToolCalls(toolCallsJSON json.RawMessage) []api.ToolCall {
 		tcArgs := api.NewToolCallFunctionArguments()
 
 		var args map[string]any
-		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
+		if unmarshalErr := json.Unmarshal([]byte(tc.Function.Arguments), &args); unmarshalErr == nil {
 			for k, v := range args {
 				tcArgs.Set(k, v)
 			}
@@ -409,7 +409,9 @@ func convertToolToOllama(tool openai.ChatCompletionToolParam) api.Tool {
 		} `json:"function"`
 	}
 
-	_ = json.Unmarshal(jsonData, &genericTool)
+	if unmarshalErr := json.Unmarshal(jsonData, &genericTool); unmarshalErr != nil {
+		return api.Tool{}
+	}
 
 	propsMap := extractProperties(genericTool.Function.Parameters)
 

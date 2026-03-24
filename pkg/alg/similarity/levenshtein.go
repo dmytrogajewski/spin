@@ -17,15 +17,15 @@ func Levenshtein(a, b string) int {
 	aLen := len(a)
 	bLen := len(b)
 
-	// Use a single row for space optimization.
+	// Use two pre-allocated rows, swapped each iteration (O(min(m,n)) space).
 	prev := make([]int, bLen+1)
+	curr := make([]int, bLen+1)
 
 	for col := range bLen + 1 {
 		prev[col] = col
 	}
 
 	for row := 1; row <= aLen; row++ {
-		curr := make([]int, bLen+1)
 		curr[0] = row
 
 		for col := 1; col <= bLen; col++ {
@@ -41,7 +41,7 @@ func Levenshtein(a, b string) int {
 			curr[col] = min(deletion, min(insertion, substitution))
 		}
 
-		prev = curr
+		prev, curr = curr, prev
 	}
 
 	return prev[bLen]

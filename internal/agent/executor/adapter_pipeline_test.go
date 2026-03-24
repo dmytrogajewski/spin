@@ -1,4 +1,4 @@
-// Journey: specs/journeys/JOURNEY-1.1.md
+// Package executor_test tests the executor pipeline adapters.
 package executor_test
 
 import (

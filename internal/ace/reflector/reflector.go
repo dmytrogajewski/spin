@@ -201,7 +201,10 @@ func (r *reflector) parseDetailedFormat(ctx context.Context, responseText, sourc
 
 // buildEvidence collects non-empty evidence strings.
 func buildEvidence(errorID, rootCause, correctApproach string) []string {
-	evidence := make([]string, 0, 3)
+	const maxEvidenceFields = 3
+
+	evidence := make([]string, 0, maxEvidenceFields)
+
 	if errorID != "" && errorID != "N/A" {
 		evidence = append(evidence, errorID)
 	}

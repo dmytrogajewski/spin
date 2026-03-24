@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/storage"
+	"github.com/dmytrogajewski/spin/pkg/storage"
 )
 
 // CapabilityFetcher retrieves model capabilities from a remote source.
@@ -232,7 +233,9 @@ func (pc *ProviderCache) refreshInBackground(ctx context.Context, provider, mode
 		return
 	}
 
-	_ = pc.Put(ctx, provider, model, caps)
+	if putErr := pc.Put(ctx, provider, model, caps); putErr != nil {
+		slog.WarnContext(ctx, "failed to persist refreshed cache", "provider", provider, "model", model, "error", putErr)
+	}
 }
 
 // fetchOrDefault attempts a synchronous fetch; returns safe defaults on failure.
@@ -246,7 +249,9 @@ func (pc *ProviderCache) fetchOrDefault(ctx context.Context, provider, model str
 		return safeDefaults(provider, model)
 	}
 
-	_ = pc.Put(ctx, provider, model, caps)
+	if putErr := pc.Put(ctx, provider, model, caps); putErr != nil {
+		slog.WarnContext(ctx, "failed to persist fetched cache", "provider", provider, "model", model, "error", putErr)
+	}
 
 	return caps
 }

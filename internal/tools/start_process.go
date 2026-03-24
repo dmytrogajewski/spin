@@ -62,12 +62,12 @@ func (t *StartProcessTool) Execute(ctx context.Context, params ToolParameters) (
 		return NewToolResult("task manager not available"), nil
 	}
 
-	command, _ := params.GetString("command")
+	command := params.GetStringOr("command", "")
 	if command == "" {
 		return NewToolError(errCommandParameterRequired), nil
 	}
 
-	workDir, _ := params.GetString("working_directory")
+	workDir := params.GetStringOr("working_directory", "")
 
 	taskID, initialOutput, err := t.manager.Start(ctx, command, workDir)
 	if err != nil {

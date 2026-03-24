@@ -33,10 +33,7 @@ func (b *Builder) registerIntegrationTools(registry *tools.Registry) error {
 	}
 
 	if b.mcpService != nil {
-		err := b.registerMCPTools(registry)
-		if err != nil {
-			return fmt.Errorf("mcp tools: %w", err)
-		}
+		b.registerMCPTools(registry)
 	}
 
 	if b.gitService != nil {
@@ -105,32 +102,30 @@ func (b *Builder) registerLSPTools(registry *tools.Registry) {
 }
 
 // registerMCPTools registers all tools provided by MCP servers.
-func (b *Builder) registerMCPTools(registry *tools.Registry) error {
+func (b *Builder) registerMCPTools(registry *tools.Registry) {
 	mcpTools := b.mcpService.GetTools()
 	if len(mcpTools) == 0 {
-		return nil
+		return
 	}
 
 	var names []string
 
-	for _, t := range mcpTools {
-		err := registry.Register(t)
+	for _, tool := range mcpTools {
+		err := registry.Register(tool)
 		if err != nil {
 			if b.logger != nil {
-				b.logger.Warn("mcp tool register failed", "tool", t.Name(), "err", err)
+				b.logger.Warn("mcp tool register failed", "tool", tool.Name(), "err", err)
 			}
 
 			continue
 		}
 
-		names = append(names, t.Name())
+		names = append(names, tool.Name())
 	}
 
 	if len(names) > 0 && b.logger != nil {
 		b.logger.Info("mcp tools registered", "tools", strings.Join(names, ", "))
 	}
-
-	return nil
 }
 
 // httpFetchTimeout is the timeout for HTTP fetch operations.

@@ -3,6 +3,7 @@ package syncmap
 // Journey: specs/journeys/JOURNEY-create-syncmap.md.
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -508,4 +509,48 @@ func TestMap_Concurrent_Range(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+// Journey: specs/journeys/JOURNEY-R-REF-7.md.
+
+var errCreateFailed = errors.New("create failed")
+
+func TestMap_GetOrCreateErr_Miss_Success(t *testing.T) {
+	t.Parallel()
+
+	sm := New[string, int]()
+
+	val, err := sm.GetOrCreateErr("key", func() (int, error) { return 42, nil })
+	require.NoError(t, err)
+	assert.Equal(t, 42, val)
+	assert.Equal(t, 1, sm.Len())
+}
+
+func TestMap_GetOrCreateErr_Miss_Error(t *testing.T) {
+	t.Parallel()
+
+	sm := New[string, int]()
+
+	_, err := sm.GetOrCreateErr("key", func() (int, error) { return 0, errCreateFailed })
+	require.ErrorIs(t, err, errCreateFailed)
+	assert.Equal(t, 0, sm.Len()) // Not stored on error.
+}
+
+func TestMap_GetOrCreateErr_Hit(t *testing.T) {
+	t.Parallel()
+
+	sm := New[string, int]()
+	sm.Set("key", 10)
+
+	called := false
+
+	val, err := sm.GetOrCreateErr("key", func() (int, error) {
+		called = true
+
+		return 99, nil
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, 10, val) // Returns existing.
+	assert.False(t, called)  // Factory not called.
 }

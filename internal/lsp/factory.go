@@ -15,7 +15,7 @@ func DefaultServerFactory(ctx context.Context, lang LanguageConfig, rootURI stri
 
 	// Check that the server binary is available.
 	if _, lookupErr := exec.LookPath(lang.ServerCommand); lookupErr != nil {
-		return nil, fmt.Errorf("%w: %s: %s", ErrServerNotFound, lang.ServerCommand, lookupErr)
+		return nil, fmt.Errorf("%w: %s: %w", ErrServerNotFound, lang.ServerCommand, lookupErr)
 	}
 
 	cmd := exec.CommandContext(ctx, lang.ServerCommand, lang.ServerArgs...)

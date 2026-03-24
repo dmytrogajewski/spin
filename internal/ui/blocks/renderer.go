@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rivo/uniseg"
+	"github.com/dmytrogajewski/spin/pkg/ui/textwidth"
 )
 
 // ErrBlockIsNil is a sentinel error.
@@ -13,18 +13,7 @@ var ErrBlockIsNil = errors.New("block is nil")
 
 // Rendering constants.
 const (
-	msPerSecond       = 1000.0 // milliseconds per second for duration formatting.
-	ellipsisSplitLeft = 0.6    // left portion ratio for mid-ellipsis splitting.
-
-	// Gutter width thresholds for line numbers.
-	gutterThreshold10   = 10
-	gutterThreshold100  = 100
-	gutterThreshold1000 = 1000
-	gutterWidth3        = 3
-	gutterWidth4        = 4
-	gutterWidth5        = 5
-	gutterWidth6        = 6
-
+	msPerSecond = 1000.0 // milliseconds per second for duration formatting.
 	// ANSI 256-color codes for block type badges.
 	colorBlue256    = 63
 	colorOrange256  = 208
@@ -38,6 +27,11 @@ const (
 
 	// Block ID generation.
 	blockIDSeqMod = 100
+
+	// Header layout constants.
+	minTitleWidth      = 10
+	rightMetaReserved  = 20
+	labelPaddingSpaces = 2
 )
 
 // Renderer renders blocks to ANSI terminal output.
@@ -156,10 +150,9 @@ func (r *Renderer) RenderHeader(b *Block) string {
 	title := r.formatTitle(b)
 	// Calculate available width: total - bar - spacing - label - spacing - rightmeta.
 	maxTitleWidth := max(
-		// -2 for spaces around label.
-		r.width-1-S2-len(label)-2-S2-S3-20, 10)
+		r.width-1-S2-len(label)-labelPaddingSpaces-S2-S3-rightMetaReserved, minTitleWidth)
 
-	title = midEllipsize(title, maxTitleWidth)
+	title = textwidth.MidEllipsize(title, maxTitleWidth)
 	out.WriteString(title)
 
 	return out.String()
@@ -214,24 +207,20 @@ func (r *Renderer) RenderBody(b *Block) (string, error) {
 		return "", nil
 	}
 
-	renderers := map[BlockType]func(*Block) (string, error){
-		BlockTypeExecute:    r.renderTranscript,
-		BlockTypeNotice:     r.renderTranscript,
-		BlockTypeRead:       r.renderCode,
-		BlockTypeApplyPatch: r.renderDiff,
-		BlockTypePlan:       r.renderList,
-		BlockTypeSummary:    r.renderList,
-		BlockTypeTesting:    r.renderList,
-		BlockTypeGrep:       r.renderCode,
-		BlockTypeError:      r.renderError,
-		BlockTypeTool:       r.renderToolBody,
+	switch b.Type {
+	case BlockTypeExecute, BlockTypeNotice, BlockTypeTool:
+		return r.renderTranscript(b)
+	case BlockTypeRead, BlockTypeGrep:
+		return r.renderCode(b)
+	case BlockTypeApplyPatch:
+		return r.renderDiff(b)
+	case BlockTypePlan, BlockTypeSummary, BlockTypeTesting:
+		return r.renderList(b)
+	case BlockTypeError:
+		return r.renderError(b)
+	default:
+		return r.renderTranscript(b)
 	}
-
-	if renderer, exists := renderers[b.Type]; exists {
-		return renderer(b)
-	}
-	// Fallback: plain text.
-	return r.renderTranscript(b)
 }
 
 // RenderFooter renders only the block footer.
@@ -350,7 +339,7 @@ func (r *Renderer) renderTranscript(b *Block) (string, error) {
 func (r *Renderer) renderCode(b *Block) (string, error) {
 	lines := strings.Split(b.Body, "\n")
 	lineCount := len(lines)
-	gutterWidth := calcGutterWidth(lineCount)
+	gutterWidth := textwidth.GutterWidth(lineCount)
 
 	var out strings.Builder
 
@@ -499,127 +488,27 @@ func (r *Renderer) renderError(b *Block) (string, error) {
 	return out.String(), nil
 }
 
-// midEllipsize truncates a string with middle ellipsis (60/40 split).
-// Example: "very long filename.go" → "very long…name.go".
-func midEllipsize(s string, maxWidth int) string {
-	graphemes := extractGraphemes(s)
-	totalWidth := calculateTotalWidth(graphemes)
-
-	if totalWidth <= maxWidth {
-		return s
-	}
-
-	leftWidth, rightWidth := calculateSplitWidths(maxWidth)
-	left := buildLeftPart(graphemes, leftWidth)
-	right := buildRightPart(graphemes, rightWidth)
-
-	return strings.Join(left, "") + "…" + strings.Join(right, "")
-}
-
-// extractGraphemes extracts graphemes from a string.
-func extractGraphemes(s string) []string {
-	gr := uniseg.NewGraphemes(s)
-
-	var graphemes []string
-	for gr.Next() {
-		graphemes = append(graphemes, gr.Str())
-	}
-
-	return graphemes
-}
-
-// calculateTotalWidth calculates the total width of graphemes.
-func calculateTotalWidth(graphemes []string) int {
-	totalWidth := 0
-	for _, g := range graphemes {
-		totalWidth += uniseg.StringWidth(g)
-	}
-
-	return totalWidth
-}
-
-// calculateSplitWidths calculates left and right widths for splitting.
-func calculateSplitWidths(maxWidth int) (leftWidth, rightWidth int) {
-	leftWidth = int(float64(maxWidth-1) * ellipsisSplitLeft) // -1 for ellipsis.
-	rightWidth = maxWidth - leftWidth - 1
-
-	return leftWidth, rightWidth
-}
-
-// buildLeftPart builds the left part of the ellipsized string.
-func buildLeftPart(graphemes []string, leftWidth int) []string {
-	var left []string
-
-	currentWidth := 0
-
-	for _, g := range graphemes {
-		w := uniseg.StringWidth(g)
-		if currentWidth+w > leftWidth {
-			break
-		}
-
-		left = append(left, g)
-		currentWidth += w
-	}
-
-	return left
-}
-
-// buildRightPart builds the right part of the ellipsized string.
-func buildRightPart(graphemes []string, rightWidth int) []string {
-	var right []string
-
-	currentWidth := 0
-
-	for i := len(graphemes) - 1; i >= 0; i-- {
-		g := graphemes[i]
-
-		w := uniseg.StringWidth(g)
-		if currentWidth+w > rightWidth {
-			break
-		}
-
-		right = append([]string{g}, right...)
-		currentWidth += w
-	}
-
-	return right
-}
-
-// calcGutterWidth calculates the gutter width for line numbers.
-// Returns 3-6 characters based on line count.
-func calcGutterWidth(lineCount int) int {
-	switch {
-	case lineCount < gutterThreshold10:
-		return gutterWidth3
-	case lineCount < gutterThreshold100:
-		return gutterWidth4
-	case lineCount < gutterThreshold1000:
-		return gutterWidth5
-	default:
-		return gutterWidth6
-	}
+// blockTypeColors maps block types to 256-color background codes for badges.
+var blockTypeColors = map[BlockType]int{
+	BlockTypeExecute:    colorBlue256,
+	BlockTypeRead:       colorOrange256,
+	BlockTypeGrep:       colorYellow256,
+	BlockTypeApplyPatch: colorMagenta256,
+	BlockTypePlan:       colorPurple256,
+	BlockTypeSummary:    colorCyan256,
+	BlockTypeTesting:    colorGreen256,
+	BlockTypeNotice:     colorGray256,
+	BlockTypeError:      colorRed256,
+	BlockTypeTool:       colorCyan256,
 }
 
 // getBlockTypeColor returns the 256-color background color for a block type badge.
 func (r *Renderer) getBlockTypeColor(blockType BlockType) int {
-	colorMap := map[BlockType]int{
-		BlockTypeExecute:    colorBlue256,
-		BlockTypeRead:       colorOrange256,
-		BlockTypeGrep:       colorYellow256,
-		BlockTypeApplyPatch: colorMagenta256,
-		BlockTypePlan:       colorPurple256,
-		BlockTypeSummary:    colorCyan256,
-		BlockTypeTesting:    colorGreen256,
-		BlockTypeNotice:     colorGray256,
-		BlockTypeError:      colorRed256,
-	}
-
-	if color, exists := colorMap[blockType]; exists {
+	if color, exists := blockTypeColors[blockType]; exists {
 		return color
 	}
 
-	return colorGray256 // fallback.
+	return colorGray256
 }
 
 // getBlockTypeLabel returns the display label for a block type.
@@ -644,19 +533,16 @@ func (r *Renderer) RenderCompletionStatus(b *Block) string {
 		return ""
 	}
 
-	renderers := map[BlockType]func(*Block) string{
-		BlockTypeExecute:    r.renderExecuteCompletionStatus,
-		BlockTypeRead:       r.renderReadCompletionStatus,
-		BlockTypeApplyPatch: r.renderWriteCompletionStatus,
-		BlockTypeGrep:       r.renderGrepCompletionStatus,
-		BlockTypeTool:       r.renderToolCompletionStatus,
+	switch b.Type {
+	case BlockTypeExecute:
+		return r.renderExecuteCompletionStatus(b)
+	case BlockTypeApplyPatch:
+		return r.renderWriteCompletionStatus(b)
+	case BlockTypeTool:
+		return r.renderToolCompletionStatus(b)
+	default:
+		return ""
 	}
-
-	if renderer, exists := renderers[b.Type]; exists {
-		return renderer(b)
-	}
-
-	return ""
 }
 
 // renderExecuteCompletionStatus renders completion status for EXECUTE blocks.
@@ -698,13 +584,6 @@ func (r *Renderer) renderExecuteCompletionStatus(b *Block) string {
 	return fmt.Sprintf("%s %s", string(ColorMuted)+"⤷"+string(ColorReset), result)
 }
 
-// renderReadCompletionStatus renders completion status for READ blocks.
-func (r *Renderer) renderReadCompletionStatus(_ *Block) string {
-	// Read blocks typically don't show completion status
-	// (the body contains the file content).
-	return ""
-}
-
 // renderWriteCompletionStatus renders completion status for WRITE blocks.
 func (r *Renderer) renderWriteCompletionStatus(b *Block) string {
 	meta, err := ParsePatchMeta(b)
@@ -722,19 +601,6 @@ func (r *Renderer) renderWriteCompletionStatus(b *Block) string {
 	}
 
 	return fmt.Sprintf("%s Failed to write file.", string(ColorMuted)+"⤷"+string(ColorReset))
-}
-
-// renderGrepCompletionStatus renders completion status for GREP blocks.
-func (r *Renderer) renderGrepCompletionStatus(_ *Block) string {
-	// Grep blocks typically don't show completion status
-	// (the body contains the matches).
-	return ""
-}
-
-// renderToolBody renders the body content for TOOL blocks.
-func (r *Renderer) renderToolBody(b *Block) (string, error) {
-	// Tool blocks typically show their raw output/result.
-	return r.renderTranscript(b)
 }
 
 // renderToolCompletionStatus renders completion status for TOOL blocks.

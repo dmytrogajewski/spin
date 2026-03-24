@@ -101,7 +101,7 @@ func openTUILogFile() io.Writer {
 	}
 
 	spinDir := filepath.Join(homeDir, ".spin")
-	if err := os.MkdirAll(spinDir, 0o700); err != nil {
+	if mkdirErr := os.MkdirAll(spinDir, 0o700); mkdirErr != nil {
 		return io.Discard
 	}
 
@@ -204,6 +204,8 @@ func updateTokensFromEvent(event events.Event, ui *adapters.PureTTY, conv *conve
 		if data, ok := event.Data.(events.TurnEventData); ok && data.TokensUsed > 0 {
 			ui.SetTokenCount(int64(data.TokensUsed))
 		}
+	default:
+		// Other event types don't require token count updates.
 	}
 }
 
@@ -235,64 +237,70 @@ func startEventLoop(
 	return eventDone
 }
 
-// handleTUIInput processes a single line of TUI input. Returns true if the loop should exit.
+// handleTUIInput processes a single line of TUI input.
+// Returns whether to exit and the new streamDone channel (unchanged if command).
 func handleTUIInput(
 	ctx context.Context, line string, ui *adapters.PureTTY,
 	conv *conversation.Conversation, mapper *tui.Mapper,
-	streamDone *chan struct{},
-) (bool, error) {
+	streamDone chan struct{},
+) (shouldExit bool, newStreamDone chan struct{}) {
 	cmdResult := parseCommand(line)
 	if cmdResult.isCommand {
-		return handleTUICommand(ctx, ui, conv, cmdResult)
+		exit := handleTUICommand(ctx, ui, conv, cmdResult)
+
+		return exit, streamDone
 	}
 
-	return false, executeTurn(ctx, line, conv, mapper, ui, streamDone)
+	newDone := executeTurn(ctx, line, conv, mapper, ui, streamDone)
+
+	return false, newDone
 }
 
 // handleTUICommand handles a parsed command input. Returns true if exit is requested.
-func handleTUICommand(ctx context.Context, ui *adapters.PureTTY, conv *conversation.Conversation, cmdResult commandResult) (bool, error) {
-	_, cmdErr := handleCommand(ctx, ui, conv, cmdResult.command, cmdResult.args)
+func handleTUICommand(ctx context.Context, ui *adapters.PureTTY, conv *conversation.Conversation, cmdResult commandResult) bool {
+	cmdErr := handleCommand(ctx, ui, conv, cmdResult.command, cmdResult.args)
 	if cmdErr == nil {
-		return false, nil
+		return false
 	}
 
 	if cmdErr.Error() == "exit requested" {
-		return true, nil
+		return true
 	}
 
 	_ = ui.PrintLine(fmt.Sprintf("Command error: %v\n", cmdErr))
 
-	return false, nil
+	return false
 }
 
 // executeTurn runs a conversation turn and resets streaming.
+// Returns the new streamDone channel for the next turn.
 func executeTurn(
 	ctx context.Context, line string,
 	conv *conversation.Conversation, mapper *tui.Mapper,
-	ui *adapters.PureTTY, streamDone *chan struct{},
-) error {
+	ui *adapters.PureTTY, streamDone chan struct{},
+) chan struct{} {
 	turnCtx, turnCancel := context.WithCancel(ctx)
 	turnErr := conv.RunTurn(turnCtx, line)
 
 	turnCancel()
 
 	mapper.StopStreaming()
-	<-*streamDone
+	<-streamDone
 
-	*streamDone = make(chan struct{})
+	newDone := make(chan struct{})
 	streamCh := mapper.StartStreaming()
 
 	go func() {
 		_ = ui.PrintChunks(ctx, streamCh)
 
-		close(*streamDone)
+		close(newDone)
 	}()
 
 	if turnErr != nil {
 		_ = ui.PrintLine(fmt.Sprintf("✗ Error: %v\n", turnErr))
 	}
 
-	return nil
+	return newDone
 }
 
 // runTUI executes the TUI mode.
@@ -321,7 +329,7 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
-	defer conv.Close()
+	defer conv.Close(ctx)
 
 	initializeUI(ui, conv, provider, cfg.LLM.Model)
 
@@ -363,7 +371,9 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 				continue
 			}
 
-			shouldExit, _ := handleTUIInput(ctx, line, ui, conv, mapper, &streamDone)
+			shouldExit, newDone := handleTUIInput(ctx, line, ui, conv, mapper, streamDone)
+			streamDone = newDone
+
 			if shouldExit {
 				<-eventDone
 
@@ -393,7 +403,7 @@ func createConversationForTUI(
 		}
 	}
 
-	sessionID := ""
+	var sessionID string
 
 	if storage != nil {
 		sess := session.NewSession(workDir)

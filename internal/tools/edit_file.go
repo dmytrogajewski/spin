@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/tools/fuzzy"
 	"github.com/dmytrogajewski/spin/internal/undo"
+	"github.com/dmytrogajewski/spin/pkg/alg/diff"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 // Sentinel errors for edit file tool.
@@ -131,27 +132,27 @@ func (t *EditFileTool) Execute(ctx context.Context, params ToolParameters) (Tool
 		return ErrToResultf("edit succeeded but failed to record read: %v", err)
 	}
 
-	diff := buildSimpleDiff(match.Original, newContent, path)
-	output := fmt.Sprintf("Edit applied via %q pass.\n\n%s", match.PassName, diff)
+	diffOutput := diff.Generate(path, match.Original, newContent)
+	output := fmt.Sprintf("Edit applied via %q pass.\n\n%s", match.PassName, diffOutput)
 
 	return NewToolResult(output), nil
 }
 
 // extractParams validates and extracts the required parameters.
-func (t *EditFileTool) extractParams(params ToolParameters) (string, string, string, error) {
-	path, _ := params.GetString("path")
+func (t *EditFileTool) extractParams(params ToolParameters) (path, oldContent, newContent string, err error) {
+	path = params.GetStringOr("path", "")
 	if path == "" {
 		return "", "", "", errPathParameterRequired
 	}
 
-	path = resolvePath(path, t.workDir)
+	path = pathx.ResolvePath(t.workDir, path)
 
-	oldContent := params.GetStringOr("old_content", "")
+	oldContent = params.GetStringOr("old_content", "")
 	if oldContent == "" {
 		return "", "", "", ErrOldContentRequired
 	}
 
-	newContent := params.GetStringOr("new_content", "")
+	newContent = params.GetStringOr("new_content", "")
 
 	return path, oldContent, newContent, nil
 }
@@ -210,27 +211,6 @@ func (t *EditFileTool) recordRead(path string) error {
 	}
 
 	return t.tracker.RecordRead(path)
-}
-
-// buildSimpleDiff creates a simple unified-style diff output.
-func buildSimpleDiff(oldText, newText, filePath string) string {
-	var sb strings.Builder
-
-	fmt.Fprintf(&sb, "--- %s\n+++ %s\n", filePath, filePath)
-
-	for line := range strings.SplitSeq(oldText, "\n") {
-		sb.WriteString("-")
-		sb.WriteString(line)
-		sb.WriteString("\n")
-	}
-
-	for line := range strings.SplitSeq(newText, "\n") {
-		sb.WriteString("+")
-		sb.WriteString(line)
-		sb.WriteString("\n")
-	}
-
-	return sb.String()
 }
 
 // CheckApproval assesses whether the edit operation requires approval.

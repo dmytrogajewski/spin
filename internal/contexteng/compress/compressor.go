@@ -9,6 +9,9 @@ import (
 
 const defaultMinRetention = 0.3
 
+// Verify HybridCompressor implements Compressor at compile time.
+var _ Compressor = (*HybridCompressor)(nil)
+
 // Compressor compresses conversation history to fit within token budget.
 type Compressor interface {
 	// Compress reduces messages to fit target token count.

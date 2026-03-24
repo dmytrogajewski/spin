@@ -20,18 +20,6 @@ const (
 	TruncatedSuffix = "... [truncated]"
 )
 
-// TruncateHeadTail truncates s to at most maxTotal characters,
-// preserving the first head and last tail characters with an
-// omission marker between them.
-func TruncateHeadTail(input string, maxTotal, head, tail int) string {
-	return stringsx.TruncateHeadTail(input, maxTotal, head, tail)
-}
-
-// TruncateLines truncates individual lines exceeding maxLen.
-func TruncateLines(input string, maxLen int) string {
-	return stringsx.TruncateLines(input, maxLen)
-}
-
 // TruncateOutput applies both line truncation and head-tail truncation
 // using the default constants.
 func TruncateOutput(input string) string {

@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 )
 
 const (
@@ -62,16 +64,9 @@ func (t *ScreenshotTool) Schema() ToolSchema {
 func (t *ScreenshotTool) Execute(
 	ctx context.Context, params ToolParameters,
 ) (ToolResult, error) {
-	rawURL, _ := params.GetString(paramURL)
-	if rawURL == "" {
-		return NewToolError(ErrInvalidParameters), nil
-	}
-
-	if !isValidURL(rawURL) {
-		return NewToolError(fmt.Errorf(
-			"%w: URL must start with %s or %s",
-			ErrInvalidParameters, httpScheme, httpsScheme,
-		)), nil
+	rawURL, urlErr := requireURL(params)
+	if urlErr != nil {
+		return NewToolError(urlErr), nil
 	}
 
 	if t.capture == nil {
@@ -114,15 +109,12 @@ func screenshotProperties() map[string]PropertyDefinition {
 	}
 }
 
-// clampViewport clamps a viewport dimension to a maximum value.
+// clampViewport clamps a viewport dimension to [1, maxValue].
+// Values <= 0 are treated as "use maximum" and return maxValue.
 func clampViewport(value, maxValue int) int {
-	if value > maxValue {
-		return maxValue
-	}
-
 	if value <= 0 {
 		return maxValue
 	}
 
-	return value
+	return collections.Clamp(value, 1, maxValue)
 }

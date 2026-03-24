@@ -89,11 +89,17 @@ func TestToolWithApproval_Interface(t *testing.T) {
 		},
 	}
 
-	// Verify it implements ToolWithApproval.
-	var _ ToolWithApproval = tool
+	// Verify it implements ToolWithApproval and call through interface.
+	var iface ToolWithApproval = tool
+
+	// Verify base Tool methods are accessible through the interface.
+	_ = iface.Name()
+	_ = iface.Description()
+	_ = iface.Schema()
+	_, _ = iface.Execute(context.Background(), ToolParameters{})
 
 	// Call CheckApproval.
-	needs := tool.CheckApproval(ToolParameters{})
+	needs := iface.CheckApproval(ToolParameters{})
 	if !needs.Required {
 		t.Error("CheckApproval should return Required=true")
 	}

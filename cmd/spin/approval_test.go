@@ -12,22 +12,22 @@ import (
 	"github.com/dmytrogajewski/spin/internal/safety"
 )
 
-// setupApprovalTest creates a test config and returns the config path, policy path, and tmpDir.
-func setupApprovalTest(t *testing.T, extraConfig string) (configPath, policyPath, tmpDir string) {
+// setupApprovalTest creates a test config and returns the config path.
+func setupApprovalTest(t *testing.T, extraConfig string) (configPath string) {
 	t.Helper()
 
-	tmpDir = t.TempDir()
+	tmpDir := t.TempDir()
 	configPath = filepath.Join(tmpDir, "spin.yaml")
-	policyPath = filepath.Join(tmpDir, "policies.json")
+	policyFile := filepath.Join(tmpDir, "policies.json")
 
-	configContent := "version: \"2.0\"\nsecurity:\n  policy_file: " + policyPath + "\n" + extraConfig
+	configContent := "version: \"2.0\"\nsecurity:\n  policy_file: " + policyFile + "\n" + extraConfig
 
 	err := os.WriteFile(configPath, []byte(configContent), 0o600)
 	if err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
-	return configPath, policyPath, tmpDir
+	return configPath
 }
 
 // runApprovalCmd executes an approval subcommand and returns the output.
@@ -52,7 +52,7 @@ func runApprovalCmd(t *testing.T, configPath string, args ...string) string {
 func TestApproval_List_Empty(t *testing.T) {
 	t.Parallel()
 
-	configPath, _, _ := setupApprovalTest(t, "")
+	configPath := setupApprovalTest(t, "")
 	got := runApprovalCmd(t, configPath, "approval", "list", "--scope", "global")
 
 	if !strings.Contains(got, "No policies found.") {
@@ -83,7 +83,7 @@ func TestApproval_List_WithData(t *testing.T) {
 	ctx := context.Background()
 	key := safety.NewPolicyKey("/bin/echo", []string{"hello"}, tmpDir)
 
-	p := safety.Policy{
+	policy := safety.Policy{
 		Version:   "1",
 		Scope:     safety.ScopeGlobal,
 		Key:       key,
@@ -91,7 +91,7 @@ func TestApproval_List_WithData(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	err = store.Save(ctx, p)
+	err = store.Save(ctx, policy)
 	if err != nil {
 		t.Fatalf("save policy: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestApproval_Revoke_NonExistent(t *testing.T) {
 func TestApproval_Clear_Empty(t *testing.T) {
 	t.Parallel()
 
-	configPath, _, _ := setupApprovalTest(t, "")
+	configPath := setupApprovalTest(t, "")
 	got := runApprovalCmd(t, configPath, "approval", "clear", "--scope", "global")
 
 	if !strings.Contains(got, "Cleared 0 policies.") {

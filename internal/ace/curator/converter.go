@@ -43,4 +43,3 @@ func ConvertInsights(insights []*reflector.Insight) ([]*bullet.Bullet, error) {
 
 	return bullets, nil
 }
-

@@ -20,7 +20,6 @@ type configShowTestCase struct {
 // runConfigShowTestCase runs a single config show test case.
 func runConfigShowTestCase(t *testing.T, tt configShowTestCase) {
 	t.Helper()
-	t.Parallel()
 
 	tmpDir := t.TempDir()
 
@@ -92,6 +91,8 @@ func TestConfigShow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			runConfigShowTestCase(t, tt)
 		})
 	}
@@ -190,7 +191,6 @@ type configPathTestCase struct {
 // runConfigPathTestCase runs a single config path test case.
 func runConfigPathTestCase(t *testing.T, tt configPathTestCase) {
 	t.Helper()
-	t.Parallel()
 
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "spin.yaml")
@@ -252,6 +252,8 @@ func TestConfigPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			runConfigPathTestCase(t, tt)
 		})
 	}

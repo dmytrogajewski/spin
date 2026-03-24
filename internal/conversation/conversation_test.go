@@ -67,9 +67,9 @@ func TestConversation_Close_MultipleTimes(t *testing.T) {
 	conv := setupTestConv(t)
 
 	// Close multiple times.
-	err1 := conv.Close()
-	err2 := conv.Close()
-	err3 := conv.Close()
+	err1 := conv.Close(context.Background())
+	err2 := conv.Close(context.Background())
+	err3 := conv.Close(context.Background())
 
 	// All should succeed (or at least not panic).
 	_ = err1
@@ -90,7 +90,7 @@ func TestConversation_Close_WithRunningTurn(t *testing.T) {
 	}()
 
 	// Close while turn may be running.
-	err := conv.Close()
+	err := conv.Close(context.Background())
 	// Should handle gracefully.
 	_ = err
 }
@@ -155,19 +155,19 @@ func TestConversation_Close_MultipleCalls(t *testing.T) {
 	conv := setupTestConv(t)
 
 	// First close.
-	err := conv.Close()
+	err := conv.Close(context.Background())
 	if err != nil {
 		t.Errorf("First Close() error = %v", err)
 	}
 
 	// Second close should not error.
-	err = conv.Close()
+	err = conv.Close(context.Background())
 	if err != nil {
 		t.Errorf("Second Close() should handle gracefully, got error: %v", err)
 	}
 
 	// Third close.
-	err = conv.Close()
+	err = conv.Close(context.Background())
 	if err != nil {
 		t.Errorf("Third Close() should handle gracefully, got error: %v", err)
 	}
@@ -179,8 +179,8 @@ func TestConversation_Close_CanceledContext(t *testing.T) {
 
 	conv := setupTestConv(t)
 
-	// Close (note: Close doesn't take a context parameter).
-	err := conv.Close()
+	// Close with background context.
+	err := conv.Close(context.Background())
 	// Should handle gracefully.
 	_ = err // May or may not error depending on implementation.
 }
@@ -191,18 +191,17 @@ func TestConversation_Close_TimeoutContext(t *testing.T) {
 
 	conv := setupTestConv(t)
 
-	// Create context with very short timeout (not used by Close).
+	// Create context with very short timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
 
 	// Wait for timeout.
 	time.Sleep(10 * time.Millisecond)
 
-	// Close.
-	err := conv.Close()
+	// Close with expired context.
+	err := conv.Close(ctx)
 	// Should handle timeout gracefully.
 	_ = err
-	_ = ctx // Not used but created for test completeness.
 }
 
 // TestConversation_SetTaskMode_AllValidModes tests SetTaskMode with all built-in modes.

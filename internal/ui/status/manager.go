@@ -2,7 +2,6 @@ package status
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -314,19 +313,11 @@ func (m *Manager) FormatCompact(_ int) string {
 		spinnerFrame = m.spinner.Frame()
 	}
 
-	switch {
-	case spinnerFrame != "":
-		parts = append(parts, "["+spinnerFrame+"]")
-	case m.status.Metrics.Connected:
-		parts = append(parts, "[●]")
-	default:
-		parts = append(parts, "[○]")
-	}
+	parts = append(parts, activityIndicatorWithSpinner(m.status.Metrics.Connected, spinnerFrame))
 
 	// Context percentage (if available).
 	if m.status.Metrics.MaxTokens > 0 {
-		pct := fmt.Sprintf("%.0f%%", m.status.Metrics.TokenUsage)
-		parts = append(parts, pct)
+		parts = append(parts, formatPercentage(m.status.Metrics.TokenUsage))
 	}
 
 	// Agent state.
@@ -334,12 +325,8 @@ func (m *Manager) FormatCompact(_ int) string {
 	if state == "" {
 		state = StateReady
 	}
-	// Truncate state to fit narrow terminal.
-	if len(state) > maxStateDisplayLen {
-		state = state[:12] + "..."
-	}
 
-	parts = append(parts, state)
+	parts = append(parts, truncate(state, maxStateDisplayLen))
 
 	if len(parts) == 0 {
 		return ""

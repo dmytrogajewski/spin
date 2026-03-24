@@ -3,6 +3,7 @@ package undo_test
 // Journey: specs/journeys/JOURNEY-R5.2.md.
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -47,7 +48,7 @@ func TestUndoService_TakeSnapshot_RecordsHash(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	svc := undo.NewService(undo.NewOperationLog(), mgr)
 
@@ -72,7 +73,7 @@ func TestUndoService_UndoToStep_RestoresSnapshot(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	svc := undo.NewService(undo.NewOperationLog(), mgr)
 
@@ -101,7 +102,7 @@ func TestUndoService_UndoToStep_InvalidStep(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	svc := undo.NewService(undo.NewOperationLog(), mgr)
 

@@ -164,7 +164,7 @@ func loadOrCreatePlaybook(
 	if statErr == nil {
 		pb, err := playbook.Load(playbookPath, nil, embedder)
 		if err != nil {
-			logger.Warn("Failed to load playbook, creating new one", "path", playbookPath, "error", err)
+			logger.WarnContext(ctx, "Failed to load playbook, creating new one", "path", playbookPath, "error", err)
 
 			return playbook.New(nil, embedder), nil
 		}
@@ -180,11 +180,11 @@ func loadOrCreatePlaybook(
 	}
 
 	if err := seedInitialBullets(ctx, pb, embedder); err != nil {
-		logger.Warn("Failed to seed initial bullets", "error", err)
+		logger.WarnContext(ctx, "Failed to seed initial bullets", "error", err)
 	}
 
 	if err := pb.Save(ctx, playbookPath); err != nil {
-		logger.Warn("Failed to save initial playbook", "error", err)
+		logger.WarnContext(ctx, "Failed to save initial playbook", "error", err)
 	}
 
 	return pb, nil

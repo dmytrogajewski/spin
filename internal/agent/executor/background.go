@@ -15,9 +15,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dmytrogajewski/spin/internal/process"
 	"github.com/dmytrogajewski/spin/pkg/alg/hashx"
 	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
-	"github.com/dmytrogajewski/spin/internal/process"
 )
 
 // Background task manager constants.
@@ -108,7 +108,7 @@ func (m *BackgroundTaskManager) SetStartupTimeout(d time.Duration) {
 // the process receives SIGTERM followed by SIGKILL after [GracefulKillTimeout].
 func (m *BackgroundTaskManager) Start(
 	ctx context.Context, program string, args []string, env []string, workDir string,
-) (string, string, error) {
+) (taskID, initialOutput string, err error) {
 	m.mu.Lock()
 
 	if m.runningCount() >= MaxConcurrentTasks {
@@ -117,7 +117,7 @@ func (m *BackgroundTaskManager) Start(
 		return "", "", ErrMaxConcurrentTasks
 	}
 
-	taskID := generateTaskID()
+	taskID = generateTaskID()
 	outputPath := filepath.Join(m.outputDir, taskID+".output")
 
 	outFile, err := os.Create(outputPath)
@@ -164,7 +164,7 @@ func (m *BackgroundTaskManager) Start(
 	timeout := m.startupTimeout
 	m.mu.Unlock()
 
-	initialOutput := m.waitStartup(ctx, startupReader, timeout)
+	initialOutput = m.waitStartup(ctx, startupReader, timeout)
 
 	return taskID, initialOutput, nil
 }
@@ -389,4 +389,3 @@ func (m *BackgroundTaskManager) killProcess(task *backgroundTask) error {
 func generateTaskID() string {
 	return hashx.RandomHexID(TaskIDLength)
 }
-

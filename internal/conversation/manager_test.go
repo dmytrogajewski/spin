@@ -217,8 +217,8 @@ func TestManager_Remove(t *testing.T) {
 	t.Run("remove non-existent", func(t *testing.T) {
 		t.Parallel()
 
-		err := mgr.Remove(ctx, "non-existent")
-		if err == nil {
+		removeErr := mgr.Remove(ctx, "non-existent")
+		if removeErr == nil {
 			t.Fatal("should fail when removing non-existent")
 		}
 	})
@@ -354,7 +354,7 @@ func TestManager_Close(t *testing.T) {
 		t.Fatalf("GetOrCreate failed: %v", err)
 	}
 
-	err = mgr.Close()
+	err = mgr.Close(ctx)
 	if err != nil {
 		t.Fatalf("Close failed: %v", err)
 	}
@@ -399,8 +399,8 @@ func TestManager_SetTaskMode(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		t.Parallel()
 
-		err := mgr.SetTaskMode("non-existent", "compact")
-		if err == nil {
+		setErr := mgr.SetTaskMode("non-existent", "compact")
+		if setErr == nil {
 			t.Fatal("should fail for non-existent session")
 		}
 	})
@@ -417,8 +417,8 @@ func TestManager_GetTaskMode(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := mgr.GetTaskMode("non-existent")
-		if err == nil {
+		_, getErr := mgr.GetTaskMode("non-existent")
+		if getErr == nil {
 			t.Fatal("should fail for non-existent session")
 		}
 	})

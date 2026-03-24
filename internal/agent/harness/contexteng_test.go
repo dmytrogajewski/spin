@@ -455,7 +455,7 @@ type messageCheckCaller struct {
 
 func (m *messageCheckCaller) Call(
 	_ context.Context, msgs []message.Message, _ []tools.ToolSchema, _ int,
-) (string, []message.ToolCall, string, error) {
+) (content string, toolCalls []message.ToolCall, finishReason string, err error) {
 	m.callCount++
 
 	// Check on second call onwards (after reminder could have been injected).

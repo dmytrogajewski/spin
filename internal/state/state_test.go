@@ -116,14 +116,16 @@ type statePredicateCase struct {
 	expected bool
 }
 
-func runStatePredicateTests(t *testing.T, cases []statePredicateCase, opName string, op func(State) bool) {
+func runStatePredicateTests(t *testing.T, cases []statePredicateCase, opName string, op func(*State) bool) {
 	t.Helper()
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := op(tt.state)
+			state := tt.state
+			result := op(&state)
+
 			if result != tt.expected {
 				t.Errorf("State.%s() = %v, want %v", opName, result, tt.expected)
 			}
@@ -143,7 +145,7 @@ func TestState_IsTerminal(t *testing.T) {
 		{"StateCancelled", StateCancelled, true},
 		{"StateArchived", StateArchived, true},
 		{"Unknown", "invalid-state", false},
-	}, "IsTerminal", State.IsTerminal)
+	}, "IsTerminal", (*State).IsTerminal)
 }
 
 func TestState_IsActive(t *testing.T) {
@@ -158,7 +160,7 @@ func TestState_IsActive(t *testing.T) {
 		{"StateCancelled", StateCancelled, false},
 		{"StateArchived", StateArchived, false},
 		{"Unknown", "invalid-state", false},
-	}, "IsActive", State.IsActive)
+	}, "IsActive", (*State).IsActive)
 }
 
 func TestState_CanTransitionTo(t *testing.T) {

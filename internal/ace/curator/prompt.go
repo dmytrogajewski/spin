@@ -7,6 +7,8 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
 )
 
+const paginationExampleNumber = 2
+
 // PromptBuilder constructs curator prompts for integrating insights into playbook.
 // Aligned with ACE paper Figures 10, 11, 13, 14 (Curator prompts).
 type PromptBuilder struct {
@@ -128,7 +130,7 @@ func (pb *PromptBuilder) writeNilCheckExample(sb *strings.Builder) {
 // writePaginationExample writes the cursor-based pagination example.
 func (pb *PromptBuilder) writePaginationExample(sb *strings.Builder) {
 	pb.writeCurationExample(sb, curationExample{
-		number:   2,
+		number:   paginationExampleNumber,
 		taskCtx:  "Implement pagination for large database queries",
 		playbook: "Basic database query examples",
 		reflection: "The agent used a fixed LIMIT 100 instead of proper cursor-based pagination, " +

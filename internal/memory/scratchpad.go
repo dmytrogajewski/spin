@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 // ScratchpadEntry represents a session-scoped memory item with tracking.
@@ -211,7 +213,7 @@ func (s *Scratchpad) Search(ctx context.Context, query string, topK int) ([]Entr
 	matches := make([]Entry, 0)
 
 	for _, entry := range s.entries {
-		if containsIgnoreCase(entry.Key, query) || containsIgnoreCase(entry.Value, query) {
+		if stringsx.ContainsIgnoreCase(entry.Key, query) || stringsx.ContainsIgnoreCase(entry.Value, query) {
 			matches = append(matches, Entry{
 				Key:       entry.Key,
 				Value:     entry.Value,
@@ -321,28 +323,12 @@ var entryTypeRules = []entryTypeRule{
 // inferEntryType guesses the entry type from its value.
 func inferEntryType(value string) EntryType {
 	for _, rule := range entryTypeRules {
-		if matchesAnyKeyword(value, rule.keywords) {
+		if stringsx.ContainsAnyKeyword(value, rule.keywords) {
 			return rule.entryType
 		}
 	}
 
 	return EntryTypeNote
-}
-
-// matchesAnyKeyword returns true if value contains any of the keywords (case-insensitive).
-func matchesAnyKeyword(value string, keywords []string) bool {
-	for _, kw := range keywords {
-		if containsIgnoreCase(value, kw) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// containsIgnoreCase checks if s contains substr (case-insensitive).
-func containsIgnoreCase(s, substr string) bool {
-	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
 // matchPattern checks if key matches the glob pattern.

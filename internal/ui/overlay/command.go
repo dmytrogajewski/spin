@@ -3,6 +3,8 @@ package overlay
 
 import "context"
 
+const initialCommandCapacity = 16
+
 // Command represents an executable action in the palette.
 type Command interface {
 	// Name returns the primary display name (e.g., "Run...").
@@ -29,7 +31,7 @@ type CommandRegistry struct {
 // NewCommandRegistry creates a new command registry.
 func NewCommandRegistry() *CommandRegistry {
 	return &CommandRegistry{
-		commands: make([]Command, 0, 16),
+		commands: make([]Command, 0, initialCommandCapacity),
 	}
 }
 

@@ -13,7 +13,7 @@ type ToolExecutorAdapter struct {
 }
 
 // NewToolExecutorAdapter creates a new adapter for agent.Executor to tools.CommandExecutor.
-func NewToolExecutorAdapter(exec *Executor) tools.CommandExecutor {
+func NewToolExecutorAdapter(exec *Executor) *ToolExecutorAdapter {
 	if exec == nil {
 		return nil
 	}
@@ -23,25 +23,10 @@ func NewToolExecutorAdapter(exec *Executor) tools.CommandExecutor {
 
 // Execute implements tools.CommandExecutor interface.
 func (a *ToolExecutorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, opts any) (tools.ExecutionResult, error) {
-	// Convert tools.CommandInfo to *safety.Command.
-	secCmd := &safety.Command{
-		Program: cmd.GetProgram(),
-		Args:    cmd.GetArgs(),
-		Raw:     cmd.GetRaw(),
-		WorkDir: cmd.GetWorkDir(),
-	}
-
-	// Convert opts if provided.
-	var execOpts *ExecuteOptions
-
-	if opts != nil {
-		if eOpts, ok := opts.(*ExecuteOptions); ok {
-			execOpts = eOpts
-		}
-	}
+	secCmd := safety.CommandFrom(cmd)
 
 	// Execute using agent.Executor.
-	result, err := a.executor.Execute(ctx, secCmd, execOpts)
+	result, err := a.executor.Execute(ctx, secCmd, asExecuteOptions(opts))
 	if err != nil {
 		return nil, err
 	}

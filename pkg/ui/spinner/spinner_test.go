@@ -10,7 +10,7 @@ import (
 func TestSpinner_Frame(t *testing.T) {
 	t.Parallel()
 
-	s := NewSpinner(SpinnerDots)
+	s := NewSpinner(StyleDots)
 
 	// Not running - should return empty.
 	frame := s.Frame()
@@ -46,7 +46,7 @@ func TestSpinner_Frame(t *testing.T) {
 func TestSpinner_StartStop(t *testing.T) {
 	t.Parallel()
 
-	s := NewSpinner(SpinnerCircle)
+	s := NewSpinner(StyleCircle)
 
 	if s.IsRunning() {
 		t.Error("spinner should not be running initially")
@@ -72,7 +72,7 @@ func TestSpinner_StartStop(t *testing.T) {
 func TestSpinner_DoubleStart(t *testing.T) {
 	t.Parallel()
 
-	s := NewSpinner(SpinnerBraille)
+	s := NewSpinner(StyleBraille)
 
 	ctx := t.Context()
 
@@ -90,7 +90,7 @@ func TestSpinner_DoubleStart(t *testing.T) {
 func TestSpinner_UpdateCallback(t *testing.T) {
 	t.Parallel()
 
-	s := NewSpinner(SpinnerDots)
+	s := NewSpinner(StyleDots)
 	s.SetInterval(20 * time.Millisecond)
 
 	var callCount atomic.Int32
@@ -117,10 +117,10 @@ func TestSpinner_UpdateCallback(t *testing.T) {
 func TestSpinner_Styles(t *testing.T) {
 	t.Parallel()
 
-	styles := []SpinnerStyle{
-		SpinnerDots,
-		SpinnerBraille,
-		SpinnerCircle,
+	styles := []Style{
+		StyleDots,
+		StyleBraille,
+		StyleCircle,
 		SpinnerPulse,
 	}
 
@@ -144,10 +144,10 @@ func TestSpinner_Styles(t *testing.T) {
 func TestSpinner_SetStyle(t *testing.T) {
 	t.Parallel()
 
-	s := NewSpinner(SpinnerDots)
+	s := NewSpinner(StyleDots)
 
 	// Change style.
-	s.SetStyle(SpinnerCircle)
+	s.SetStyle(StyleCircle)
 
 	ctx := t.Context()
 
@@ -170,7 +170,7 @@ func TestSpinner_SetStyle(t *testing.T) {
 func TestSpinner_ContextCancel(t *testing.T) {
 	t.Parallel()
 
-	s := NewSpinner(SpinnerDots)
+	s := NewSpinner(StyleDots)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -195,7 +195,7 @@ func TestSpinner_ContextCancel(t *testing.T) {
 func TestActivitySpinner_ShouldAnimate(t *testing.T) {
 	t.Parallel()
 
-	as := NewActivitySpinner(SpinnerDots)
+	as := NewActivitySpinner(StyleDots)
 
 	tests := []struct {
 		state    string
@@ -224,7 +224,7 @@ func TestActivitySpinner_ShouldAnimate(t *testing.T) {
 func TestActivitySpinner_UpdateState(t *testing.T) {
 	t.Parallel()
 
-	as := NewActivitySpinner(SpinnerDots)
+	as := NewActivitySpinner(StyleDots)
 
 	ctx := t.Context()
 
@@ -253,7 +253,7 @@ func TestActivitySpinner_UpdateState(t *testing.T) {
 func TestActivitySpinner_AddActiveState(t *testing.T) {
 	t.Parallel()
 
-	as := NewActivitySpinner(SpinnerDots)
+	as := NewActivitySpinner(StyleDots)
 
 	// Custom state not active by default.
 	if as.ShouldAnimate("CustomState") {

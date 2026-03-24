@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
 
 	"github.com/dmytrogajewski/spin/internal/contexteng/history"
 	"github.com/dmytrogajewski/spin/internal/session"
@@ -41,7 +40,6 @@ type Manager struct {
 	storage       session.Storage
 	histStorage   history.Storage
 	logger        *slog.Logger
-	createMu      sync.Mutex // Serializes conversation creation in GetOrCreate.
 }
 
 // ManagerConfig contains configuration for creating a Manager.
@@ -87,33 +85,17 @@ func (m *Manager) GetOrCreate(ctx context.Context, sessionID, workDir string) (*
 		return nil, ErrSessionIDCannotBeEmpty
 	}
 
-	// Fast path: check if conversation exists.
-	if conv, ok := m.conversations.Get(sessionID); ok {
+	return m.conversations.GetOrCreateErr(sessionID, func() (*Conversation, error) {
+		conv, err := m.factory(ctx, sessionID, workDir)
+		if err != nil {
+			return nil, fmt.Errorf("create conversation: %w", err)
+		}
+
+		conv.SetID(sessionID)
+		m.logger.InfoContext(ctx, "conversation created", "session_id", sessionID, "work_dir", workDir)
+
 		return conv, nil
-	}
-
-	// Slow path: serialize creation to avoid duplicate factory calls.
-	m.createMu.Lock()
-	defer m.createMu.Unlock()
-
-	// Double-check after acquiring lock.
-	if conv, ok := m.conversations.Get(sessionID); ok {
-		return conv, nil
-	}
-
-	// Create new conversation via factory.
-	conv, err := m.factory(ctx, sessionID, workDir)
-	if err != nil {
-		return nil, fmt.Errorf("create conversation: %w", err)
-	}
-
-	// Set the ID to match the session ID.
-	conv.SetID(sessionID)
-
-	m.conversations.Set(sessionID, conv)
-	m.logger.InfoContext(ctx, "conversation created", "session_id", sessionID, "work_dir", workDir)
-
-	return conv, nil
+	})
 }
 
 // Get returns a conversation by session ID, or nil if not found.
@@ -130,7 +112,7 @@ func (m *Manager) Remove(ctx context.Context, sessionID string) error {
 	}
 
 	// Close the conversation after atomic removal from the map.
-	err := conv.Close()
+	err := conv.Close(ctx)
 	if err != nil {
 		m.logger.WarnContext(ctx, "error closing conversation", "session_id", sessionID, "error", err)
 	}
@@ -220,12 +202,13 @@ func (m *Manager) Count() int {
 }
 
 // Close closes all conversations and cleans up resources.
-func (m *Manager) Close() error {
+func (m *Manager) Close(ctx context.Context) error {
 	var errs []error
 
 	m.conversations.Range(func(id string, conv *Conversation) bool {
-		err := conv.Close()
+		err := conv.Close(ctx)
 		if err != nil {
+			m.logger.WarnContext(ctx, "error closing conversation during manager close", "session_id", id, "error", err)
 			errs = append(errs, fmt.Errorf("close %s: %w", id, err))
 		}
 

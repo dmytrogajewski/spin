@@ -14,7 +14,7 @@ type memoryKeystore struct {
 }
 
 // newMemoryKeystore creates a new in-memory keystore.
-func newMemoryKeystore() Keystore {
+func newMemoryKeystore() *memoryKeystore {
 	return &memoryKeystore{
 		data: make(map[string]string),
 	}

@@ -17,12 +17,7 @@ type validatorAdapter struct {
 
 // Classify implements the Classify operation.
 func (a *validatorAdapter) Classify(cmd tools.CommandInfo) (tools.ValidationResult, error) {
-	return a.securityService.ValidateCommand(&safety.Command{
-		Program: cmd.GetProgram(),
-		Args:    cmd.GetArgs(),
-		Raw:     cmd.GetRaw(),
-		WorkDir: cmd.GetWorkDir(),
-	})
+	return a.securityService.ValidateCommand(safety.CommandFrom(cmd))
 }
 
 // shellContextAdapter adapts shell.Context to tools.ShellContext interface.
@@ -57,10 +52,5 @@ type executorAdapter struct {
 
 // Execute implements the Execute operation.
 func (a *executorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo, _ any) (tools.ExecutionResult, error) {
-	return a.executor.Execute(ctx, &safety.Command{
-		Program: cmd.GetProgram(),
-		Args:    cmd.GetArgs(),
-		Raw:     cmd.GetRaw(),
-		WorkDir: cmd.GetWorkDir(),
-	}, nil)
+	return a.executor.Execute(ctx, safety.CommandFrom(cmd), nil)
 }

@@ -205,7 +205,7 @@ Examples:
 
   # Add with environment variables
   spin mcp registry local add my-server ./my-mcp-server --env DEBUG=true --env PORT=8080`,
-		Args: cobra.MinimumNArgs(2),
+		Args: cobra.MinimumNArgs(minAddArgs),
 		RunE: runMCPRegistryLocalAdd,
 	}
 	cmd.Flags().StringToString("env", nil, "Environment variables (KEY=VALUE)")
@@ -415,7 +415,7 @@ Examples:
 
   # Enable dynamic tool discovery
   spin mcp registry smithery add paper-search @adamamer20/paper-search-mcp --dynamic`,
-		Args: cobra.ExactArgs(2),
+		Args: cobra.ExactArgs(minAddArgs),
 		RunE: runMCPRegistrySmitheryAdd,
 	}
 	cmd.Flags().String("api-key", "", "Smithery API key (or use SMITHERY_API_KEY env var)")
@@ -559,8 +559,8 @@ func runMCPRegistryList(cmd *cobra.Command, _ []string) error {
 		return outputJSON(servers)
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tTYPE\tDYNAMIC\tENDPOINT")
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, tabPadding, ' ', 0)
+	fmt.Fprintln(tw, "NAME\tTYPE\tDYNAMIC\tENDPOINT")
 
 	for _, server := range servers {
 		regType := config.GetRegistryTypeName(server)
@@ -571,10 +571,10 @@ func runMCPRegistryList(cmd *cobra.Command, _ []string) error {
 		}
 
 		endpoint := formatEndpoint(server)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", server.Name, regType, dynamic, endpoint)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", server.Name, regType, dynamic, endpoint)
 	}
 
-	w.Flush()
+	tw.Flush()
 
 	return nil
 }
@@ -917,8 +917,8 @@ func searchSmitheryServer(ctx context.Context, server config.MCPServer, flags mc
 
 // printSearchResultsTable prints search results in table format.
 func printSearchResultsTable(cmd *cobra.Command, results []mcpSearchResult) {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "TOOL\tREGISTRY\tTYPE\tVERIFIED\tDESCRIPTION")
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, tabPadding, ' ', 0)
+	fmt.Fprintln(tw, "TOOL\tREGISTRY\tTYPE\tVERIFIED\tDESCRIPTION")
 
 	for _, r := range results {
 		verifiedStr := ""
@@ -926,10 +926,10 @@ func printSearchResultsTable(cmd *cobra.Command, results []mcpSearchResult) {
 			verifiedStr = answerYes
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.ToolName, r.Registry, r.Type, verifiedStr, r.Description)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", r.ToolName, r.Registry, r.Type, verifiedStr, r.Description)
 	}
 
-	w.Flush()
+	tw.Flush()
 
 	fmt.Fprintf(cmd.OutOrStdout(), "\nFound %d tools.\n", len(results))
 }
@@ -1125,14 +1125,14 @@ func runMCPListTools(cmd *cobra.Command, _ []string) error {
 		return outputJSON(tools)
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "TOOL\tSOURCE\tTYPE\tSTATUS")
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, tabPadding, ' ', 0)
+	fmt.Fprintln(tw, "TOOL\tSOURCE\tTYPE\tSTATUS")
 
 	for _, t := range tools {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", t.Tool, t.Source, t.Type, t.Status)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", t.Tool, t.Source, t.Type, t.Status)
 	}
 
-	w.Flush()
+	tw.Flush()
 
 	fmt.Fprintf(cmd.OutOrStdout(), "\n%d registries configured.\n", len(servers))
 	fmt.Fprintln(cmd.OutOrStdout(), "Note: Use 'spin mcp search <query>' to discover available tools.")
@@ -1150,6 +1150,8 @@ const (
 	keyValueParts    = 2
 	namespaceParts   = 2
 	minKeyDisplayLen = 8
+	minAddArgs       = 2
+	tabPadding       = 2
 )
 
 func parseHeaders(headers []string) map[string]string {
@@ -1160,7 +1162,7 @@ func parseHeaders(headers []string) map[string]string {
 	result := make(map[string]string)
 
 	for _, h := range headers {
-		parts := strings.SplitN(h, "=", 2)
+		parts := strings.SplitN(h, "=", keyValueParts)
 		if len(parts) == keyValueParts {
 			result[parts[0]] = parts[1]
 		}
@@ -1175,7 +1177,8 @@ func formatEndpoint(server config.MCPServer) string {
 		return server.URL
 	}
 
-	parts := []string{server.Command}
+	parts := make([]string, 0, 1+len(server.Args))
+	parts = append(parts, server.Command)
 	parts = append(parts, server.Args...)
 
 	return strings.Join(parts, " ")
@@ -1226,7 +1229,7 @@ func parseSmitheryShortPath(path string) (serverURL, namespace string, err error
 		cleanPath = after
 	}
 
-	parts := strings.SplitN(cleanPath, "/", 2)
+	parts := strings.SplitN(cleanPath, "/", namespaceParts)
 	if len(parts) != namespaceParts {
 		return "", "", fmt.Errorf("invalid server path format: %s (expected @namespace/server-name): %w", path, ErrInvalidServerPathFormat)
 	}

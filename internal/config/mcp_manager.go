@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/dmytrogajewski/spin/internal/storage"
+	"github.com/dmytrogajewski/spin/pkg/storage"
 )
 
 var (
@@ -282,6 +282,8 @@ func GetRegistryTypeName(server MCPServer) string {
 		return "local"
 	case MCPTransportSmithery:
 		return "smithery"
+	case MCPTransportSSE, MCPTransportStreamableHTTP:
+		return "remote"
 	default:
 		return "remote"
 	}

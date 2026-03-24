@@ -485,14 +485,17 @@ type getOrCase[T comparable] struct {
 	want         T
 }
 
-func runGetOrTests[T comparable](t *testing.T, params ToolParameters, cases []getOrCase[T], opName string, op func(ToolParameters, string, T) T) {
+func runGetOrTests[T comparable](
+	t *testing.T, params ToolParameters, cases []getOrCase[T],
+	opName string, op func(*ToolParameters, string, T) T,
+) {
 	t.Helper()
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := op(params, tt.key, tt.defaultValue)
+			got := op(&params, tt.key, tt.defaultValue)
 			if got != tt.want {
 				t.Errorf("%s() = %v, want %v", opName, got, tt.want)
 			}
@@ -508,7 +511,7 @@ func TestGetStringOr(t *testing.T) {
 		{"valid string", "valid", "default", "hello"},
 		{"missing key", "missing", "default", "default"},
 		{"wrong type", "number", "default", "default"},
-	}, "GetStringOr", ToolParameters.GetStringOr)
+	}, "GetStringOr", (*ToolParameters).GetStringOr)
 }
 
 func TestGetIntOr(t *testing.T) {
@@ -519,7 +522,7 @@ func TestGetIntOr(t *testing.T) {
 		{"valid int", "valid", 10, 42},
 		{"missing key", "missing", 10, 10},
 		{"wrong type", "string", 10, 10},
-	}, "GetIntOr", ToolParameters.GetIntOr)
+	}, "GetIntOr", (*ToolParameters).GetIntOr)
 }
 
 func TestGetBoolOr(t *testing.T) {
@@ -530,7 +533,7 @@ func TestGetBoolOr(t *testing.T) {
 		{"valid bool", "valid", false, true},
 		{"missing key", "missing", false, false},
 		{"wrong type", "string", false, false},
-	}, "GetBoolOr", ToolParameters.GetBoolOr)
+	}, "GetBoolOr", (*ToolParameters).GetBoolOr)
 }
 
 func TestGetFloat64Or(t *testing.T) {
@@ -541,7 +544,7 @@ func TestGetFloat64Or(t *testing.T) {
 		{"valid float", "valid", 1.0, 3.14},
 		{"missing key", "missing", 1.0, 1.0},
 		{"wrong type", "string", 1.0, 1.0},
-	}, "GetFloat64Or", ToolParameters.GetFloat64Or)
+	}, "GetFloat64Or", (*ToolParameters).GetFloat64Or)
 }
 
 func TestMarshalJSON(t *testing.T) {
@@ -553,7 +556,7 @@ func TestMarshalJSON(t *testing.T) {
 		"bool":   true,
 	})
 
-	data, err := json.Marshal(params)
+	data, err := json.Marshal(&params)
 	if err != nil {
 		t.Fatalf("MarshalJSON() error = %v", err)
 	}

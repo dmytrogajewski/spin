@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/storage"
+	"github.com/dmytrogajewski/spin/pkg/storage"
 )
 
 const fileStoreEvictionInterval = 30 * time.Second

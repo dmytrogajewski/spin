@@ -267,15 +267,15 @@ func TestAggregator_ProcessEvent_ContentComplete_ResetsStreaming(t *testing.T) {
 	}
 	aggregator.ProcessEvent(event)
 
-	// Verify TPS was calculated.
-	metrics := manager.GetMetrics()
+	// Verify TPS was calculated (GetMetrics called to ensure state is updated).
+	manager.GetMetrics()
 	// TPS might be 0 or positive, just verify it's set.
 
 	// Now complete the content.
 	event = &events.Event{Type: events.EventContentComplete}
 	aggregator.ProcessEvent(event)
 
-	metrics = manager.GetMetrics()
+	metrics := manager.GetMetrics()
 	if metrics.AgentState != "Ready" {
 		t.Errorf("Expected agent state 'Ready' after content complete, got %q", metrics.AgentState)
 	}

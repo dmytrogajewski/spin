@@ -24,10 +24,15 @@ type Matcher struct {
 // Match returns true if the given symbol name matches the pattern.
 func (m Matcher) Match(name string) bool {
 	switch m.mode {
+	case matchExact:
+		return name == m.pattern
 	case matchPrefix:
 		return strings.HasPrefix(name, m.pattern)
 	case matchWildcard:
-		matched, _ := filepath.Match(m.pattern, name)
+		matched, matchErr := filepath.Match(m.pattern, name)
+		if matchErr != nil {
+			return false
+		}
 
 		return matched
 	default:

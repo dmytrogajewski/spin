@@ -56,6 +56,13 @@ func TestTruncateLines(t *testing.T) {
 		got := TruncateLines("", 10)
 		require.Empty(t, got)
 	})
+
+	t.Run("maxLen_smaller_than_suffix", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateLines("a very long line here", 5)
+		require.Equal(t, "a ver", got)
+	})
 }
 
 func TestIsPartialPrefix(t *testing.T) {
@@ -143,6 +150,93 @@ func TestContainsIgnoreCase(t *testing.T) {
 			t.Parallel()
 
 			got := ContainsIgnoreCase(tt.input, tt.substr)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// Journey: specs/journeys/JOURNEY-R-REF-6.md.
+
+func TestTruncateWithSuffix(t *testing.T) {
+	t.Parallel()
+
+	const (
+		maxLen = 10
+		suffix = "\n\n... [truncated]"
+	)
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "under_limit", input: "short", want: "short"},
+		{name: "at_limit", input: "0123456789", want: "0123456789"},
+		{name: "over_limit", input: "0123456789EXTRA", want: "0123456789" + suffix},
+		{name: "empty_input", input: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := TruncateWithSuffix(tt.input, maxLen, suffix)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// Journey: specs/journeys/JOURNEY-R-REF-17.md.
+
+func TestNormalizeEscapes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "newline", input: `hello\nworld`, want: "hello\nworld"},
+		{name: "tab", input: `col1\tcol2`, want: "col1\tcol2"},
+		{name: "quote", input: `say \"hi\"`, want: `say "hi"`},
+		{name: "backslash", input: `path\\to\\file`, want: `path\to\file`},
+		{name: "mixed", input: `line1\nline2\t\"ok\"`, want: "line1\nline2\t\"ok\""},
+		{name: "no_escapes", input: "plain text", want: "plain text"},
+		{name: "empty", input: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := NormalizeEscapes(tt.input)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestDetectTruncation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{name: "empty", input: "", want: ""},
+		{name: "balanced", input: `func main() { fmt.Println("hi") }`, want: ""},
+		{name: "unclosed_brace", input: `func main() {`, want: "1 unclosed delimiter(s)"},
+		{name: "unclosed_string", input: `var s = "hello`, want: "unclosed string literal"},
+		{name: "unclosed_paren", input: `foo(bar(`, want: "2 unclosed delimiter(s)"},
+		{name: "nested_balanced", input: `a(b[c{d}e]f)`, want: ""},
+		{name: "string_with_braces", input: `fmt.Println("{")`, want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := DetectTruncation(tt.input)
 			require.Equal(t, tt.want, got)
 		})
 	}

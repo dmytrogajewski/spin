@@ -179,3 +179,89 @@ func TestLongestCommonSubstring(t *testing.T) {
 		})
 	}
 }
+
+// Journey: specs/journeys/JOURNEY-R-REF-15.md.
+
+func TestMultiStrategySimilarity(t *testing.T) {
+	t.Parallel()
+
+	alwaysHalf := func(_, _ string) float64 { return 0.5 }
+	alwaysHigh := func(_, _ string) float64 { return 0.9 }
+
+	t.Run("no_strategies", func(t *testing.T) {
+		t.Parallel()
+
+		got := MultiStrategySimilarity("a", "b")
+		require.InDelta(t, 0.0, got, 0.001)
+	})
+
+	t.Run("single_strategy", func(t *testing.T) {
+		t.Parallel()
+
+		got := MultiStrategySimilarity("a", "b", alwaysHalf)
+		require.InDelta(t, 0.5, got, 0.001)
+	})
+
+	t.Run("takes_max", func(t *testing.T) {
+		t.Parallel()
+
+		got := MultiStrategySimilarity("a", "b", alwaysHalf, alwaysHigh)
+		require.InDelta(t, 0.9, got, 0.001)
+	})
+
+	t.Run("with_jaccard", func(t *testing.T) {
+		t.Parallel()
+
+		got := MultiStrategySimilarity("hello world", "hello world", JaccardSimilarity)
+		require.InDelta(t, 1.0, got, 0.001)
+	})
+}
+
+func TestFindSimilarPairs(t *testing.T) {
+	t.Parallel()
+
+	identity := func(s string) string { return s }
+
+	t.Run("empty_input", func(t *testing.T) {
+		t.Parallel()
+
+		pairs := FindSimilarPairs([]string{}, identity, 0.5, JaccardSimilarity)
+		require.Empty(t, pairs)
+	})
+
+	t.Run("single_item", func(t *testing.T) {
+		t.Parallel()
+
+		pairs := FindSimilarPairs([]string{"hello"}, identity, 0.5, JaccardSimilarity)
+		require.Empty(t, pairs)
+	})
+
+	t.Run("finds_similar", func(t *testing.T) {
+		t.Parallel()
+
+		items := []string{
+			"the quick brown fox jumps over the lazy dog",
+			"the quick brown fox leaps over the lazy dog",
+			"completely different sentence about coding",
+		}
+
+		pairs := FindSimilarPairs(items, identity, 0.5, JaccardSimilarity)
+		require.Len(t, pairs, 1)
+		require.Equal(t, 0, pairs[0].Left)
+		require.Equal(t, 1, pairs[0].Right)
+		require.Greater(t, pairs[0].Score, 0.5)
+	})
+
+	t.Run("threshold_zero_finds_all", func(t *testing.T) {
+		t.Parallel()
+
+		items := []string{"aaa bbb", "ccc ddd", "eee fff"}
+
+		// With threshold 0, all pairs with score >= 0 are returned.
+		// JaccardSimilarity of completely different words is 0.0,
+		// so threshold 0 still requires score >= 0.
+		pairs := FindSimilarPairs(items, identity, 0.0, JaccardSimilarity)
+		// 3 items = 3 pairs (0,1), (0,2), (1,2) — all with 0.0 score >= 0.0.
+		require.Len(t, pairs, 3)
+	})
+}

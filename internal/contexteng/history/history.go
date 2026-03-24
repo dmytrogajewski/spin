@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -113,6 +114,15 @@ func NewHistory(maxTokens int, tok tokenizer.Tokenizer) *History {
 	}
 }
 
+// NewHistoryWithDefaults creates a history with sensible default values.
+//
+// Default settings:
+//   - maxTokens: 4096
+//   - tokenizer: SimpleTokenizer
+func NewHistoryWithDefaults() *History {
+	return NewHistory(defaultHistBufSize, &tokenizer.SimpleTokenizer{})
+}
+
 // SetEventEmitter sets the event emitter for notifications.
 func (h *History) SetEventEmitter(emitter *events.EventEmitter) {
 	h.mu.Lock()
@@ -135,15 +145,6 @@ func (h *History) SetCompressionConfig(cfg CompressionConfig) {
 	defer h.mu.Unlock()
 
 	h.config = cfg
-}
-
-// NewHistoryWithDefaults creates a history with sensible default values.
-//
-// Default settings:
-//   - maxTokens: 4096
-//   - tokenizer: SimpleTokenizer
-func NewHistoryWithDefaults() *History {
-	return NewHistory(defaultHistBufSize, &tokenizer.SimpleTokenizer{})
 }
 
 // MaxTokens returns the maximum token limit for this history.
@@ -205,7 +206,9 @@ func (h *History) AddMessage(ctx context.Context, msg message.Message) error {
 	// Check if compression needed.
 	if h.shouldCompressLocked() {
 		// Compression is best-effort; errors are logged but don't fail AddMessage.
-		_ = h.compressLocked(ctx)
+		if compressErr := h.compressLocked(ctx); compressErr != nil {
+			slog.WarnContext(ctx, "history compression failed", "error", compressErr)
+		}
 	}
 
 	return nil

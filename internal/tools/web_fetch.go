@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 const (
 	fetchToolName      = "fetch_url"
 	paramURL           = "url"
 	maxOutputChars     = 50_000
+	outputTruncSuffix  = "\n\n... [truncated]"
 	httpErrorThreshold = 400
 	httpScheme         = "http://"
 	httpsScheme        = "https://"
@@ -75,16 +78,9 @@ func (t *FetchURLTool) Schema() ToolSchema {
 
 // Execute fetches the URL, converts HTML to markdown, and returns the content.
 func (t *FetchURLTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	rawURL, _ := params.GetString(paramURL)
-	if rawURL == "" {
-		return NewToolError(ErrInvalidParameters), nil
-	}
-
-	if !isValidURL(rawURL) {
-		return NewToolError(fmt.Errorf(
-			"%w: URL must start with %s or %s",
-			ErrInvalidParameters, httpScheme, httpsScheme,
-		)), nil
+	rawURL, urlErr := requireURL(params)
+	if urlErr != nil {
+		return NewToolError(urlErr), nil
 	}
 
 	if t.fetch == nil {
@@ -103,7 +99,9 @@ func (t *FetchURLTool) Execute(ctx context.Context, params ToolParameters) (Tool
 			body = "(empty response body)"
 		}
 
-		return NewToolError(fmt.Errorf("HTTP %d: %s: %w", resp.StatusCode, capOutput(body, maxOutputChars), errHTTPError)), nil
+		truncBody := stringsx.TruncateWithSuffix(body, maxOutputChars, outputTruncSuffix)
+
+		return NewToolError(fmt.Errorf("HTTP %d: %s: %w", resp.StatusCode, truncBody, errHTTPError)), nil
 	}
 
 	if !isTextContent(resp.ContentType) {
@@ -114,12 +112,30 @@ func (t *FetchURLTool) Execute(ctx context.Context, params ToolParameters) (Tool
 
 	content := convertResponse(resp, t.convert)
 
-	return NewToolResult(capOutput(content, maxOutputChars)), nil
+	return NewToolResult(stringsx.TruncateWithSuffix(content, maxOutputChars, outputTruncSuffix)), nil
 }
 
 // isValidURL checks if the URL starts with http:// or https://.
 func isValidURL(rawURL string) bool {
 	return strings.HasPrefix(rawURL, httpScheme) || strings.HasPrefix(rawURL, httpsScheme)
+}
+
+// requireURL extracts and validates the URL parameter.
+// Returns ErrInvalidParameters if the URL is empty or has an invalid scheme.
+func requireURL(params ToolParameters) (string, error) {
+	rawURL := params.GetStringOr(paramURL, "")
+	if rawURL == "" {
+		return "", ErrInvalidParameters
+	}
+
+	if !isValidURL(rawURL) {
+		return "", fmt.Errorf(
+			"%w: URL must start with %s or %s",
+			ErrInvalidParameters, httpScheme, httpsScheme,
+		)
+	}
+
+	return rawURL, nil
 }
 
 // isTextContent checks if the Content-Type header indicates text content.
@@ -140,13 +156,4 @@ func convertResponse(resp *FetchResponse, convert HTMLConverter) string {
 	}
 
 	return string(resp.Body)
-}
-
-// capOutput truncates text to maxChars, appending a marker if truncated.
-func capOutput(text string, maxChars int) string {
-	if len(text) <= maxChars {
-		return text
-	}
-
-	return text[:maxChars] + "\n\n... [truncated]"
 }

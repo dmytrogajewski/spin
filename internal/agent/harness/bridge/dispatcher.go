@@ -62,19 +62,19 @@ func (b *DispatcherBridge) Dispatch(
 // buildToolResultContent constructs the message content from a tool result.
 // For failed tools, it includes both the output (e.g., compiler errors) and
 // the error summary so the LLM can see the full picture.
-func buildToolResultContent(r *tools.ToolResult) string {
-	if r.Success {
-		return r.Output
+func buildToolResultContent(result *tools.ToolResult) string {
+	if result.Success {
+		return result.Output
 	}
 
 	// Failed tool — combine output and error for the LLM.
-	if r.Output != "" && r.Error != "" {
-		return r.Output + "\nError: " + r.Error
+	if result.Output != "" && result.Error != "" {
+		return result.Output + "\nError: " + result.Error
 	}
 
-	if r.Error != "" {
-		return "Error: " + r.Error
+	if result.Error != "" {
+		return "Error: " + result.Error
 	}
 
-	return r.Output
+	return result.Output
 }

@@ -1,7 +1,7 @@
 package status
 
 import (
-	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/dmytrogajewski/spin/internal/events"
@@ -116,5 +116,5 @@ func TestIntegration_EmptyStatus(t *testing.T) {
 
 // Helper function.
 func contains(s, substr string) bool {
-	return bytes.Contains([]byte(s), []byte(substr))
+	return strings.Contains(s, substr)
 }

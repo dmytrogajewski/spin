@@ -783,7 +783,7 @@ func TestShellCommandTool_Execute_DefaultsOperationToExecute(t *testing.T) {
 	t.Parallel()
 
 	executor := &mockExecutor{
-		executeFunc: func(_ context.Context, cmd CommandInfo, _ any) (ExecutionResult, error) {
+		executeFunc: func(_ context.Context, _ CommandInfo, _ any) (ExecutionResult, error) {
 			return &mockResult{
 				Stdout:   "hello",
 				Stderr:   "",

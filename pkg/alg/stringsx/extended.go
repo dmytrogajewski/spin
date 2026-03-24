@@ -42,7 +42,12 @@ func TruncateLines(input string, maxLen int) string {
 
 	for idx, line := range lines {
 		if len(line) > maxLen {
-			lines[idx] = line[:maxLen-suffixLen] + truncatedSuffix
+			if maxLen <= suffixLen {
+				lines[idx] = line[:maxLen]
+			} else {
+				lines[idx] = line[:maxLen-suffixLen] + truncatedSuffix
+			}
+
 			changed = true
 		}
 	}
@@ -109,4 +114,100 @@ func FindMatchingClose(content string, startPos int, openTag, closeTag string) i
 // ContainsIgnoreCase checks if s contains substr, ignoring case.
 func ContainsIgnoreCase(input, substr string) bool {
 	return strings.Contains(strings.ToLower(input), strings.ToLower(substr))
+}
+
+// TruncateWithSuffix truncates input to maxLen bytes and appends suffix.
+// The suffix is added beyond maxLen (total may exceed maxLen).
+// Returns input unchanged if len(input) <= maxLen.
+func TruncateWithSuffix(input string, maxLen int, suffix string) string {
+	if len(input) <= maxLen {
+		return input
+	}
+
+	return input[:maxLen] + suffix
+}
+
+// escapeBackslashPlaceholder is a sentinel used during escape normalization
+// to avoid double-replacement of backslash sequences.
+const escapeBackslashPlaceholder = "\x00ESCAPE_BACKSLASH\x00"
+
+// NormalizeEscapes replaces literal escape sequences (\\n, \\t, \\", \\\\)
+// with their actual characters (\n, \t, ", \).
+func NormalizeEscapes(input string) string {
+	// Replace \\\\ first with placeholder to avoid double-replacement.
+	result := strings.ReplaceAll(input, `\\`, escapeBackslashPlaceholder)
+	result = strings.ReplaceAll(result, `\n`, "\n")
+	result = strings.ReplaceAll(result, `\t`, "\t")
+	result = strings.ReplaceAll(result, `\"`, `"`)
+
+	return strings.ReplaceAll(result, escapeBackslashPlaceholder, `\`)
+}
+
+// truncationState tracks delimiter and string-literal state during truncation detection.
+type truncationState struct {
+	opens    int
+	inString bool
+	escaped  bool
+}
+
+// processByte updates state for a single byte during truncation scanning.
+func (ts *truncationState) processByte(ch byte) {
+	if ts.escaped {
+		ts.escaped = false
+
+		return
+	}
+
+	if ch == '\\' && ts.inString {
+		ts.escaped = true
+
+		return
+	}
+
+	if ts.inString {
+		if ch == '"' {
+			ts.inString = false
+		}
+
+		return
+	}
+
+	ts.processOutsideString(ch)
+}
+
+// processOutsideString handles delimiter counting outside string literals.
+func (ts *truncationState) processOutsideString(ch byte) {
+	switch ch {
+	case '"':
+		ts.inString = true
+	case '{', '(', '[':
+		ts.opens++
+	case '}', ')', ']':
+		ts.opens--
+	}
+}
+
+// DetectTruncation checks if content appears to be truncated source code.
+// Returns a reason string describing the truncation, or empty if not truncated.
+// Detects unclosed string literals and unmatched delimiters ({, (, [).
+func DetectTruncation(content string) string {
+	if content == "" {
+		return ""
+	}
+
+	var state truncationState
+
+	for i := range len(content) {
+		state.processByte(content[i])
+	}
+
+	if state.inString {
+		return "unclosed string literal"
+	}
+
+	if state.opens > 0 {
+		return fmt.Sprintf("%d unclosed delimiter(s)", state.opens)
+	}
+
+	return ""
 }

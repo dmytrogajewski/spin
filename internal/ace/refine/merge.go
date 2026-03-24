@@ -52,19 +52,19 @@ func (m *MergeEngine) FindMergeCandidates(ctx context.Context, bullets []*bullet
 	// O(n²) similarity comparison (acceptable for < 1000 bullets).
 	for i := range bullets {
 		for j := i + 1; j < len(bullets); j++ {
-			similarity, err := m.calculateSimilarity(ctx, bullets[i], bullets[j])
+			simScore, err := m.calculateSimilarity(ctx, bullets[i], bullets[j])
 			if err != nil {
 				continue // Skip on error.
 			}
 
-			if similarity >= m.similarity {
+			if simScore >= m.similarity {
 				// Choose which to keep based on utility score.
 				sourceID, targetID := m.chooseMergeDirection(bullets[i], bullets[j])
 
 				pairs = append(pairs, MergePair{
 					SourceID:   sourceID,
 					TargetID:   targetID,
-					Similarity: similarity,
+					Similarity: simScore,
 				})
 			}
 		}
@@ -139,7 +139,6 @@ func (m *MergeEngine) calculateSimilarity(ctx context.Context, b1, b2 *bullet.Bu
 	// No embeddings available — fall back to word-set (Jaccard) comparison.
 	return similarity.JaccardSimilarity(b1.Content, b2.Content), nil
 }
-
 
 // chooseMergeDirection determines which bullet should be kept.
 // Returns (sourceID, targetID) where source is merged into target.

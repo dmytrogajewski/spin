@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
-	"github.com/dmytrogajewski/spin/internal/storage"
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
+	"github.com/dmytrogajewski/spin/pkg/storage"
 )
 
 // persistedEntry represents the JSON structure stored in files.
@@ -176,17 +177,8 @@ func (s *PersistentStore) Get(ctx context.Context, key string) (*Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Find in index (search all namespaces if key doesn't include namespace).
-	var indexEntry *IndexEntry
-
-	for _, entry := range s.index {
-		if entry.Key == key {
-			indexEntry = entry
-
-			break
-		}
-	}
-
+	// Find in index (search all namespaces).
+	_, indexEntry := s.findByKey(key)
 	if indexEntry == nil {
 		return nil, ErrNotFound
 	}
@@ -245,20 +237,7 @@ func (s *PersistentStore) Delete(ctx context.Context, key string) error {
 	defer s.mu.Unlock()
 
 	// Find in index.
-	var (
-		indexKey   string
-		indexEntry *IndexEntry
-	)
-
-	for k, entry := range s.index {
-		if entry.Key == key {
-			indexKey = k
-			indexEntry = entry
-
-			break
-		}
-	}
-
+	indexKey, indexEntry := s.findByKey(key)
 	if indexEntry == nil {
 		return nil // Idempotent - no error if doesn't exist.
 	}
@@ -312,7 +291,7 @@ func (s *PersistentStore) Search(ctx context.Context, query string, topK int) ([
 		}
 
 		// Check key match.
-		if containsIgnoreCase(indexEntry.Key, query) {
+		if stringsx.ContainsIgnoreCase(indexEntry.Key, query) {
 			entry, err := s.readEntryUnsafe(indexEntry.FilePath)
 			if err == nil {
 				matches = append(matches, *entry)
@@ -323,7 +302,7 @@ func (s *PersistentStore) Search(ctx context.Context, query string, topK int) ([
 
 		// Check value match (need to read file).
 		entry, err := s.readEntryUnsafe(indexEntry.FilePath)
-		if err == nil && containsIgnoreCase(entry.Value, query) {
+		if err == nil && stringsx.ContainsIgnoreCase(entry.Value, query) {
 			matches = append(matches, *entry)
 		}
 	}
@@ -353,13 +332,17 @@ func (s *PersistentStore) Close() error {
 // rebuildIndex scans the directory structure and rebuilds the in-memory index.
 func (s *PersistentStore) rebuildIndex(ctx context.Context) error {
 	// Walk directory looking for .json files.
-	walkErr := filepath.Walk(s.basePath, func(path string, info os.FileInfo, _ error) error {
+	walkErr := filepath.WalkDir(s.basePath, func(path string, dirEntry os.DirEntry, walkDirErr error) error {
+		if walkDirErr != nil {
+			return walkDirErr
+		}
+
 		// Check context between files.
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("rebuild index: %w", err)
 		}
 
-		if info == nil || info.IsDir() {
+		if dirEntry.IsDir() {
 			return nil
 		}
 
@@ -367,32 +350,7 @@ func (s *PersistentStore) rebuildIndex(ctx context.Context) error {
 			return nil
 		}
 
-		// Read and parse entry — skip files that cannot be read or parsed.
-		data, _ := os.ReadFile(path)
-		if data == nil {
-			return nil
-		}
-
-		var entry persistedEntry
-
-		_ = json.Unmarshal(data, &entry)
-
-		// Skip entries with empty keys (unmarshal failed or invalid data).
-		if entry.Key == "" {
-			return nil
-		}
-
-		// Add to index.
-		indexKey := s.indexKey(entry.Namespace, entry.Key)
-		s.index[indexKey] = &IndexEntry{
-			Key:       entry.Key,
-			Namespace: entry.Namespace,
-			Tags:      entry.Tags,
-			FilePath:  path,
-			CreatedAt: entry.CreatedAt,
-			UpdatedAt: entry.UpdatedAt,
-			Size:      info.Size(),
-		}
+		s.indexFileEntry(path, dirEntry)
 
 		return nil
 	})
@@ -401,6 +359,37 @@ func (s *PersistentStore) rebuildIndex(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// indexFileEntry reads and indexes a single file entry. Silently skips unreadable or invalid files.
+func (s *PersistentStore) indexFileEntry(path string, dirEntry os.DirEntry) {
+	cleanPath := filepath.Clean(path)
+
+	data, readErr := os.ReadFile(cleanPath)
+	if readErr != nil || len(data) == 0 {
+		return
+	}
+
+	var entry persistedEntry
+	if unmarshalErr := json.Unmarshal(data, &entry); unmarshalErr != nil || entry.Key == "" {
+		return
+	}
+
+	info, infoErr := dirEntry.Info()
+	if infoErr != nil {
+		return
+	}
+
+	indexKey := s.indexKey(entry.Namespace, entry.Key)
+	s.index[indexKey] = &IndexEntry{
+		Key:       entry.Key,
+		Namespace: entry.Namespace,
+		Tags:      entry.Tags,
+		FilePath:  cleanPath,
+		CreatedAt: entry.CreatedAt,
+		UpdatedAt: entry.UpdatedAt,
+		Size:      info.Size(),
+	}
 }
 
 // readEntryUnsafe reads an entry without locking. Must be called with lock held.
@@ -431,6 +420,18 @@ func (s *PersistentStore) readEntryUnsafe(filePath string) (*Entry, error) {
 		UpdatedAt: entry.UpdatedAt,
 		TTL:       ttl,
 	}, nil
+}
+
+// findByKey locates an index entry by its key across all namespaces.
+// Must be called with lock held. Returns ("", nil) if not found.
+func (s *PersistentStore) findByKey(key string) (string, *IndexEntry) {
+	for k, entry := range s.index {
+		if entry.Key == key {
+			return k, entry
+		}
+	}
+
+	return "", nil
 }
 
 // indexKey creates a unique key for the index from namespace and key.

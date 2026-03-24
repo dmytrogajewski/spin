@@ -108,10 +108,17 @@ func printInstructions(ui *adapters.PureTTY) {
 	printLines(ui, lines)
 }
 
+// check panics if err is non-nil. Used in example/demo programs only.
+func check(err error) {
+	if err != nil {
+		log.Fatalf("TUI error: %v", err)
+	}
+}
+
 // printLines prints multiple lines to the TUI.
 func printLines(ui *adapters.PureTTY, lines []string) {
 	for _, line := range lines {
-		_ = ui.PrintLine(line)
+		check(ui.PrintLine(line))
 	}
 }
 
@@ -120,14 +127,15 @@ func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.Canc
 	for {
 		select {
 		case <-ctx.Done():
-			_ = ui.Stop()
+			check(ui.Stop())
+
 			_, _ = fmt.Fprintln(os.Stdout, "\nGoodbye!")
 
 			return
 
 		case line, ok := <-ui.RequestInput():
 			if !ok {
-				_ = ui.Stop()
+				check(ui.Stop())
 
 				return
 			}
@@ -143,13 +151,13 @@ func handleInput(ui *adapters.PureTTY, line string, cancel context.CancelFunc) {
 	case "quit", "exit", "q":
 		cancel()
 	case "help", "h", "?":
-		_ = ui.PrintLine("")
-		_ = ui.PrintLine("See navigation and block actions above.")
-		_ = ui.PrintLine("")
+		check(ui.PrintLine(""))
+		check(ui.PrintLine("See navigation and block actions above."))
+		check(ui.PrintLine(""))
 	case "":
 		// Ignore empty lines.
 	default:
-		_ = ui.PrintLine(fmt.Sprintf("Echo: %s", line))
+		check(ui.PrintLine(fmt.Sprintf("Echo: %s", line)))
 	}
 }
 
@@ -171,8 +179,8 @@ func createBlocks(ui *adapters.PureTTY) {
 	createNoticeBlock(ui)
 	createErrorBlock(ui)
 
-	_ = ui.PrintLine("")
-	_ = ui.PrintLine("✅ Created 9 blocks (one of each type)")
+	check(ui.PrintLine(""))
+	check(ui.PrintLine("✅ Created 9 blocks (one of each type)"))
 }
 
 // createExecuteBlock creates a sample EXECUTE block.
@@ -200,7 +208,7 @@ ok      github.com/user/project    0.051s`
 		fmt.Fprintf(os.Stderr, "Error setting execute meta: %v\n", err)
 	}
 
-	_ = ui.AppendBlock(execBlock)
+	check(ui.AppendBlock(execBlock))
 }
 
 // createPlanBlock creates a sample PLAN block.
@@ -225,7 +233,7 @@ func createPlanBlock(ui *adapters.PureTTY) {
 		log.Printf("Failed to set plan metadata: %v", err)
 	}
 
-	_ = ui.AppendBlock(planBlock)
+	check(ui.AppendBlock(planBlock))
 }
 
 // createReadBlock creates a sample READ block.
@@ -264,7 +272,7 @@ func NewInput() *Input {
 		fmt.Fprintf(os.Stderr, "Error setting read meta: %v\n", err)
 	}
 
-	_ = ui.AppendBlock(readBlock)
+	check(ui.AppendBlock(readBlock))
 }
 
 // createGrepBlock creates a sample GREP block.
@@ -293,7 +301,7 @@ utils.go:18:
 		fmt.Fprintf(os.Stderr, "Error setting grep meta: %v\n", err)
 	}
 
-	_ = ui.AppendBlock(grepBlock)
+	check(ui.AppendBlock(grepBlock))
 }
 
 // createPatchBlock creates a sample APPLY_PATCH block.
@@ -321,7 +329,7 @@ func createPatchBlock(ui *adapters.PureTTY) {
 		fmt.Fprintf(os.Stderr, "Error setting patch meta: %v\n", err)
 	}
 
-	_ = ui.AppendBlock(patchBlock)
+	check(ui.AppendBlock(patchBlock))
 }
 
 // createSummaryBlock creates a sample SUMMARY block.
@@ -338,7 +346,7 @@ Files modified:
 • main.go (+3 lines)
 • No breaking changes`
 
-	_ = ui.AppendBlock(summaryBlock)
+	check(ui.AppendBlock(summaryBlock))
 }
 
 // createTestingBlock creates a sample TESTING block.
@@ -351,7 +359,7 @@ func createTestingBlock(ui *adapters.PureTTY) {
     Error: database connection timeout
     Re-run: make test-integration`
 
-	_ = ui.AppendBlock(testingBlock)
+	check(ui.AppendBlock(testingBlock))
 }
 
 // createNoticeBlock creates a sample NOTICE block.
@@ -364,7 +372,7 @@ Previous messages have been summarized. Full history available in:
 ~/.spin/sessions/20251011-103042.json`
 	noticeBlock.Severity = blocks.SeverityInfo
 
-	_ = ui.AppendBlock(noticeBlock)
+	check(ui.AppendBlock(noticeBlock))
 }
 
 // createErrorBlock creates a sample ERROR block.
@@ -390,5 +398,5 @@ Suggestion: Check file permissions and retry with sudo`
 		fmt.Fprintf(os.Stderr, "Error setting error meta: %v\n", err)
 	}
 
-	_ = ui.AppendBlock(errorBlock)
+	check(ui.AppendBlock(errorBlock))
 }

@@ -16,15 +16,13 @@ import (
 
 // writeScript creates a hook script file. The runner invokes scripts via
 // /bin/sh so the file does not need the executable bit (avoids ETXTBSY).
-func writeScript(t *testing.T, dir, name, content string) string {
+func writeScript(t *testing.T, dir, name, content string) {
 	t.Helper()
 
 	target := filepath.Join(dir, name)
 
 	err := os.WriteFile(target, []byte(content+"\n"), 0o600)
 	require.NoError(t, err)
-
-	return target
 }
 
 func TestAllEvents_Count(t *testing.T) {

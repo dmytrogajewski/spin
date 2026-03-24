@@ -291,8 +291,12 @@ func mapSignalTypeToSource(st SignalType) string {
 	switch st {
 	case SignalTypeBuild, SignalTypeLint, SignalTypeError:
 		return "error"
+	case SignalTypeTest, SignalTypeUser:
+		return "feedback"
+	case SignalTypeToolUse:
+		return "tool"
 	default:
-		return "error"
+		return "unknown"
 	}
 }
 

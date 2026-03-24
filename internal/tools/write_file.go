@@ -2,13 +2,19 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/undo"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
+
+// errContentTruncated is returned when content appears truncated.
+var errContentTruncated = errors.New("content appears truncated")
 
 // WriteFileTool implements file writing functionality.
 type WriteFileTool struct {
@@ -68,12 +74,12 @@ func (t *WriteFileTool) Execute(ctx context.Context, params ToolParameters) (Too
 		return NewToolError(err), nil
 	}
 
-	path, _ := params.GetString("path")
+	path := params.GetStringOr("path", "")
 	if path == "" {
 		return NewToolError(errPathParameterRequired), nil
 	}
 
-	path = resolvePath(path, t.workDir)
+	path = pathx.ResolvePath(t.workDir, path)
 
 	content, contentErr := params.GetString("content")
 	if contentErr != nil {
@@ -102,8 +108,8 @@ func (t *WriteFileTool) Execute(ctx context.Context, params ToolParameters) (Too
 		}
 	}
 
-	if reason := detectTruncation(content); reason != "" {
-		return NewToolError(fmt.Errorf("content appears truncated (%s) — refusing to write broken file to %s", reason, path)), nil
+	if reason := stringsx.DetectTruncation(content); reason != "" {
+		return NewToolError(fmt.Errorf("%w (%s) — refusing to write broken file to %s", errContentTruncated, reason, path)), nil
 	}
 
 	writeErr := os.WriteFile(path, []byte(content), 0o600)
@@ -112,65 +118,6 @@ func (t *WriteFileTool) Execute(ctx context.Context, params ToolParameters) (Too
 	}
 
 	return NewToolResult(fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path)), nil
-}
-
-// detectTruncation checks if content appears to have been truncated mid-output
-// (e.g., due to LLM max_tokens). Returns a reason string if truncated, empty if OK.
-//
-// Only double-quoted strings are tracked as string literals. Single quotes are
-// NOT treated as string delimiters because many languages use them for non-string
-// purposes (Rust lifetimes like 'a/'static, Go rune types, shell variables).
-func detectTruncation(content string) string {
-	if content == "" {
-		return ""
-	}
-
-	opens := 0
-	inString := false
-	escaped := false
-
-	for i := range len(content) {
-		c := content[i]
-
-		if escaped {
-			escaped = false
-
-			continue
-		}
-
-		if c == '\\' && inString {
-			escaped = true
-
-			continue
-		}
-
-		if inString {
-			if c == '"' {
-				inString = false
-			}
-
-			continue
-		}
-
-		switch c {
-		case '"':
-			inString = true
-		case '{', '(', '[':
-			opens++
-		case '}', ')', ']':
-			opens--
-		}
-	}
-
-	if inString {
-		return "unclosed string literal"
-	}
-
-	if opens > 0 {
-		return fmt.Sprintf("%d unclosed delimiter(s)", opens)
-	}
-
-	return ""
 }
 
 // SetTracker sets the file tracker for stale-read detection.

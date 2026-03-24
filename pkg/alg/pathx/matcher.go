@@ -63,13 +63,13 @@ func (m *Matcher) Score(query, path string) (score int, indices []int) {
 	filename := filepath.Base(pathLower)
 
 	// Try filename matches first (highest priority).
-	if score, indices := m.scoreFilenameMatch(queryLower, filename, path); score > 0 {
-		return score, indices
+	if fileScore, fileIndices := m.scoreFilenameMatch(queryLower, filename, path); fileScore > 0 {
+		return fileScore, fileIndices
 	}
 
 	// Try path segment matches.
-	if score, indices := m.scorePathSegmentMatch(queryLower, pathLower, path); score > 0 {
-		return score, indices
+	if segScore, segIndices := m.scorePathSegmentMatch(queryLower, pathLower, path); segScore > 0 {
+		return segScore, segIndices
 	}
 
 	// Fall back to fuzzy matching.
@@ -80,22 +80,22 @@ func (m *Matcher) Score(query, path string) (score int, indices []int) {
 func (m *Matcher) scoreFilenameMatch(queryLower, filename, path string) (score int, indices []int) {
 	// 1. Exact filename match - highest priority.
 	if filename == queryLower {
-		return scoreExactFilename, m.allIndicesInPath(path, len(path)-len(filename), len(filename))
+		return scoreExactFilename, consecutiveIndices(len(path)-len(filename), len(filename))
 	}
 
 	// 2. Filename starts with query.
 	if strings.HasPrefix(filename, queryLower) {
 		startIdx := len(path) - len(filename)
 
-		return scorePrefixFilename, m.prefixIndices(startIdx, len(queryLower))
+		return scorePrefixFilename, consecutiveIndices(startIdx, len(queryLower))
 	}
 
 	// 3. Filename contains query (position-weighted).
 	if idx := strings.Index(filename, queryLower); idx >= 0 {
-		score := m.calculatePositionScore(idx, len(filename))
+		posScore := m.calculatePositionScore(idx, len(filename))
 		startIdx := len(path) - len(filename) + idx
 
-		return score, m.prefixIndices(startIdx, len(queryLower))
+		return posScore, consecutiveIndices(startIdx, len(queryLower))
 	}
 
 	return 0, nil
@@ -153,18 +153,8 @@ func (m *Matcher) scoreFuzzyMatch(queryLower, pathLower, path string) (score int
 	return score, indices
 }
 
-// allIndicesInPath returns indices for all characters in a substring.
-func (m *Matcher) allIndicesInPath(_ string, start, length int) []int {
-	indices := make([]int, length)
-	for i := range length {
-		indices[i] = start + i
-	}
-
-	return indices
-}
-
-// prefixIndices returns indices for prefix match starting at given position.
-func (m *Matcher) prefixIndices(start, length int) []int {
+// consecutiveIndices returns indices [start, start+1, ..., start+length-1].
+func consecutiveIndices(start, length int) []int {
 	indices := make([]int, length)
 	for i := range length {
 		indices[i] = start + i
@@ -183,12 +173,7 @@ func (m *Matcher) findSegmentIndices(path, segment string) []int {
 		return nil
 	}
 
-	indices := make([]int, len(segment))
-	for i := range len(segment) {
-		indices[i] = idx + i
-	}
-
-	return indices
+	return consecutiveIndices(idx, len(segment))
 }
 
 // isMatchInFilename checks if most of the matched indices are in the filename.

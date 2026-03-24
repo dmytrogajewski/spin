@@ -73,4 +73,3 @@ func scoreTool(t tools.Tool, query string, opts SearchOptions) float64 {
 
 	return maxScore
 }
-

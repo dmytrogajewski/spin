@@ -32,7 +32,7 @@ func testConfig() *config.V2 {
 }
 
 // createTestRuntime creates a builtin runtime for testing with auto-approve handler.
-func createTestRuntime(t *testing.T, workDir string) (agentexec.Runtime, *events.EventEmitter, llm.Provider) {
+func createTestRuntime(t *testing.T, workDir string) (*agentexec.BuiltinRuntime, *events.EventEmitter, *llm.MockProvider) {
 	t.Helper()
 
 	emitter := events.NewEventEmitter(100)
@@ -153,7 +153,7 @@ func TestBuilder_Build_Minimal(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, conv)
-	defer conv.Close()
+	defer conv.Close(context.Background())
 
 	// Verify conversation structure.
 	assert.Equal(t, tempDir, conv.workDir)
@@ -201,7 +201,7 @@ func TestBuilder_Build_WithServices(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, conv)
-	defer conv.Close()
+	defer conv.Close(context.Background())
 
 	// Verify all services are set.
 	assert.NotNil(t, conv.gitService)
@@ -254,7 +254,7 @@ func TestBuilder_FluentAPI(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NotNil(t, conv)
-	defer conv.Close()
+	defer conv.Close(context.Background())
 
 	assert.NotNil(t, conv.gitService)
 	assert.NotNil(t, conv.shellService)
@@ -280,7 +280,7 @@ func TestBuilder_ServiceReuse(t *testing.T) {
 		Build(context.Background())
 	require.NoError(t, err)
 
-	defer conv1.Close()
+	defer conv1.Close(context.Background())
 
 	rt2, emitter2, provider2 := createTestRuntime(t, tempDir)
 	conv2, err := NewBuilder(cfg, tempDir, rt2, emitter2, provider2).
@@ -288,13 +288,13 @@ func TestBuilder_ServiceReuse(t *testing.T) {
 		Build(context.Background())
 	require.NoError(t, err)
 
-	defer conv2.Close()
+	defer conv2.Close(context.Background())
 
 	// Both should reference the same service.
 	assert.Equal(t, conv1.gitService, conv2.gitService)
 
 	// Closing conv1 should not close the service.
-	err = conv1.Close()
+	err = conv1.Close(context.Background())
 	require.NoError(t, err)
 
 	// Service should still be usable by conv2.

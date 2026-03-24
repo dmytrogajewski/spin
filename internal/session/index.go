@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/internal/storage"
+	"github.com/dmytrogajewski/spin/pkg/storage"
 )
 
 // ErrScannerRequired is returned when Rebuild is called with a nil scanner.

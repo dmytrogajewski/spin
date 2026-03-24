@@ -62,7 +62,7 @@ func runFixtureExec(t *testing.T, fixtureName, prompt string, opts ...fixtureOpt
 		t.Fatalf("resolve fixture path: %v", err)
 	}
 
-	if _, err := os.Stat(fixturePath); err != nil {
+	if _, statErr := os.Stat(fixturePath); statErr != nil {
 		t.Fatalf("fixture not found: %s", fixturePath)
 	}
 

@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"os"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 // ReadFileTool implements file reading functionality.
@@ -58,12 +60,12 @@ func (t *ReadFileTool) Execute(ctx context.Context, params ToolParameters) (Tool
 		return NewToolError(err), nil
 	}
 
-	path, _ := params.GetString("path")
+	path := params.GetStringOr("path", "")
 	if path == "" {
 		return NewToolError(errPathParameterRequired), nil
 	}
 
-	path = resolvePath(path, t.workDir)
+	path = pathx.ResolvePath(t.workDir, path)
 
 	content, readErr := os.ReadFile(path)
 	if readErr != nil {

@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 )
 
 var (
@@ -141,18 +141,18 @@ func (s *ApprovalService) checkPolicyShortCircuit(ctx context.Context, reqID str
 
 	key := NewPolicyKey(operation.Command.Program, operation.Command.Args, operation.WorkDir)
 
-	if p, ok, _ := s.store.Get(ctx, key, ScopeSession); ok {
+	if policy, ok, getErr := s.store.Get(ctx, key, ScopeSession); ok && getErr == nil {
 		s.emitPolicyApplied("approval short-circuited by session policy")
 		s.emitIfPresent(func() { s.emitApprovalApproved(reqID, operation.Command, "approved via policy (session)") })
 
-		return true, p.Decision == DecisionAllow
+		return true, policy.Decision == DecisionAllow
 	}
 
-	if p, ok, _ := s.store.Get(ctx, key, ScopeGlobal); ok {
+	if policy, ok, getErr := s.store.Get(ctx, key, ScopeGlobal); ok && getErr == nil {
 		s.emitPolicyApplied("approval short-circuited by global policy")
 		s.emitIfPresent(func() { s.emitApprovalApproved(reqID, operation.Command, "approved via policy (global)") })
 
-		return true, p.Decision == DecisionAllow
+		return true, policy.Decision == DecisionAllow
 	}
 
 	return false, false
@@ -186,7 +186,7 @@ func (s *ApprovalService) persistApprovalPolicy(ctx context.Context, operation O
 
 	expiresAt := s.resolveExpiry(resp)
 
-	p := Policy{
+	policy := Policy{
 		Version:    "1",
 		Scope:      resp.Scope,
 		Key:        NewPolicyKey(operation.Command.Program, operation.Command.Args, operation.WorkDir),
@@ -196,7 +196,10 @@ func (s *ApprovalService) persistApprovalPolicy(ctx context.Context, operation O
 		ExpiresAt:  expiresAt,
 	}
 
-	_ = s.store.Save(ctx, p)
+	if saveErr := s.store.Save(ctx, policy); saveErr != nil {
+		return
+	}
+
 	if s.emitter != nil {
 		s.emitter.Emit(events.Event{
 			Type:      events.EventPolicySaved,
@@ -251,8 +254,8 @@ func (s *ApprovalService) handleModifiedCommand(
 
 	// Re-validate modified command if validator available.
 	if s.validator != nil {
-		if reqID, denied, validationErr := s.validateModifiedCommand(reqID, originalCmd, modCmd); validationErr != nil {
-			return reqID, denied, validationErr
+		if validatedID, validationErr := s.validateModifiedCommand(reqID, originalCmd, modCmd); validationErr != nil {
+			return validatedID, false, validationErr
 		}
 	}
 
@@ -280,12 +283,14 @@ func (s *ApprovalService) handleModifiedCommand(
 }
 
 // validateModifiedCommand validates a modified command and returns an error if it's not safe.
-func (s *ApprovalService) validateModifiedCommand(reqID string, originalCmd, modCmd *Command) (id string, approved bool, err error) {
-	classifyResult, err := s.validator.Classify(modCmd)
-	if err != nil {
-		s.emitIfPresent(func() { s.emitApprovalDenied(reqID, originalCmd, "modified command validation error: "+err.Error()) })
+func (s *ApprovalService) validateModifiedCommand(reqID string, originalCmd, modCmd *Command) (id string, validationErr error) {
+	classifyResult, classErr := s.validator.Classify(modCmd)
+	if classErr != nil {
+		s.emitIfPresent(func() {
+			s.emitApprovalDenied(reqID, originalCmd, "modified command validation error: "+classErr.Error())
+		})
 
-		return reqID, false, fmt.Errorf("validation error: %w", err)
+		return reqID, fmt.Errorf("validation error: %w", classErr)
 	}
 
 	if classifyResult.Classification != CommandSafe {
@@ -293,10 +298,10 @@ func (s *ApprovalService) validateModifiedCommand(reqID string, originalCmd, mod
 			s.emitApprovalDenied(reqID, originalCmd, "modified command failed validation: "+classifyResult.Classification.String())
 		})
 
-		return reqID, false, fmt.Errorf("modified command not safe: %s: %w", classifyResult.Classification, ErrModifiedCommandNotSafe)
+		return reqID, fmt.Errorf("modified command not safe: %s: %w", classifyResult.Classification, ErrModifiedCommandNotSafe)
 	}
 
-	return reqID, false, nil
+	return reqID, nil
 }
 
 // emitApprovalRequest emits the approval request event.

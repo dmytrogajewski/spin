@@ -46,10 +46,10 @@ type Config struct {
 
 // Runner discovers and executes lifecycle hook scripts.
 type Runner struct {
-	globalDir       string
-	projectDir      string
-	timeout         time.Duration
-	logger          *slog.Logger
+	globalDir        string
+	projectDir       string
+	timeout          time.Duration
+	logger           *slog.Logger
 	validScriptNames map[string]bool
 }
 

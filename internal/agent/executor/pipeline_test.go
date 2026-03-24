@@ -1,4 +1,3 @@
-// Journey: specs/journeys/JOURNEY-R2.1.md.
 package executor_test
 
 import (

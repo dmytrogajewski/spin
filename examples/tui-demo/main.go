@@ -4,12 +4,20 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 )
+
+// check panics if err is non-nil. Used in example/demo programs only.
+func check(err error) {
+	if err != nil {
+		log.Fatalf("TUI error: %v", err)
+	}
+}
 
 func main() {
 	ui, err := adapters.NewPureTTY(os.Stdout)
@@ -68,7 +76,7 @@ func printWelcome(ui *adapters.PureTTY) {
 	}
 
 	for _, line := range lines {
-		_ = ui.PrintLine(line)
+		check(ui.PrintLine(line))
 	}
 }
 
@@ -84,7 +92,7 @@ func printHelp(ui *adapters.PureTTY) {
 	}
 
 	for _, line := range lines {
-		_ = ui.PrintLine(line)
+		check(ui.PrintLine(line))
 	}
 }
 
@@ -93,14 +101,15 @@ func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.Canc
 	for {
 		select {
 		case <-ctx.Done():
-			_ = ui.Stop()
+			check(ui.Stop())
+
 			_, _ = fmt.Fprintln(os.Stdout, "\nGoodbye!")
 
 			return
 
 		case line, ok := <-ui.RequestInput():
 			if !ok {
-				_ = ui.Stop()
+				check(ui.Stop())
 
 				return
 			}
@@ -114,7 +123,7 @@ func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.Canc
 func handleCommand(ui *adapters.PureTTY, line string, cancel context.CancelFunc) {
 	switch line {
 	case "quit", "exit", "q":
-		_ = ui.PrintLine("Exiting demo...")
+		check(ui.PrintLine("Exiting demo..."))
 
 		cancel()
 
@@ -122,18 +131,18 @@ func handleCommand(ui *adapters.PureTTY, line string, cancel context.CancelFunc)
 		printHelp(ui)
 
 	case "hello":
-		_ = ui.PrintLine("")
-		_ = ui.PrintLine("Hello from Spin TUI! 👋")
-		_ = ui.PrintLine("The quick brown fox jumps over the lazy dog.")
-		_ = ui.PrintLine("")
+		check(ui.PrintLine(""))
+		check(ui.PrintLine("Hello from Spin TUI! 👋"))
+		check(ui.PrintLine("The quick brown fox jumps over the lazy dog."))
+		check(ui.PrintLine(""))
 
 	case "":
 		// Empty line, do nothing.
 
 	default:
-		_ = ui.PrintLine("")
-		_ = ui.PrintLine(fmt.Sprintf("Unknown command: '%s'", line))
-		_ = ui.PrintLine("Type 'help' for available commands.")
-		_ = ui.PrintLine("")
+		check(ui.PrintLine(""))
+		check(ui.PrintLine(fmt.Sprintf("Unknown command: '%s'", line)))
+		check(ui.PrintLine("Type 'help' for available commands."))
+		check(ui.PrintLine(""))
 	}
 }

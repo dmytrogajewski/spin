@@ -552,64 +552,36 @@ func (c *curator) ApplyBulletFeedback(ctx context.Context, feedback map[string]s
 
 // UpdateBulletContent updates bullet content using delta operation.
 func (c *curator) UpdateBulletContent(ctx context.Context, bulletID, newContent string) error {
-	if c.deltaApplier == nil {
-		return ErrDeltaApplierNotInitialized
-	}
-
-	deltaOp := delta.NewContentUpdate(bulletID, newContent, delta.Metadata{
-		Source: "curator",
-		Reason: "content update",
-	})
-
-	_, err := c.deltaApplier.Apply(ctx, *deltaOp)
-
-	return err
+	return c.applyDelta(ctx, delta.NewContentUpdate(bulletID, newContent, curatorMeta("content update")))
 }
 
 // AddBulletTag adds or updates a tag on a bullet using delta operation.
 func (c *curator) AddBulletTag(ctx context.Context, bulletID, key, value string) error {
-	if c.deltaApplier == nil {
-		return ErrDeltaApplierNotInitialized
-	}
-
-	deltaOp := delta.NewAddTag(bulletID, key, value, delta.Metadata{
-		Source: "curator",
-		Reason: "tag added",
-	})
-
-	_, err := c.deltaApplier.Apply(ctx, *deltaOp)
-
-	return err
+	return c.applyDelta(ctx, delta.NewAddTag(bulletID, key, value, curatorMeta("tag added")))
 }
 
 // RemoveBulletTag removes a tag from a bullet using delta operation.
 func (c *curator) RemoveBulletTag(ctx context.Context, bulletID, key string) error {
-	if c.deltaApplier == nil {
-		return ErrDeltaApplierNotInitialized
-	}
-
-	deltaOp := delta.NewRemoveTag(bulletID, key, delta.Metadata{
-		Source: "curator",
-		Reason: "tag removed",
-	})
-
-	_, err := c.deltaApplier.Apply(ctx, *deltaOp)
-
-	return err
+	return c.applyDelta(ctx, delta.NewRemoveTag(bulletID, key, curatorMeta("tag removed")))
 }
 
 // UpdateBulletEmbedding updates bullet embedding using delta operation.
 func (c *curator) UpdateBulletEmbedding(ctx context.Context, bulletID string, vec []float32) error {
+	return c.applyDelta(ctx, delta.NewUpdateEmbedding(bulletID, vec, curatorMeta("embedding updated")))
+}
+
+// applyDelta applies a single delta operation, checking that the applier is initialized.
+func (c *curator) applyDelta(ctx context.Context, op *delta.Delta) error {
 	if c.deltaApplier == nil {
 		return ErrDeltaApplierNotInitialized
 	}
 
-	deltaOp := delta.NewUpdateEmbedding(bulletID, vec, delta.Metadata{
-		Source: "curator",
-		Reason: "embedding updated",
-	})
-
-	_, err := c.deltaApplier.Apply(ctx, *deltaOp)
+	_, err := c.deltaApplier.Apply(ctx, *op)
 
 	return err
+}
+
+// curatorMeta returns standard metadata for curator-originated deltas.
+func curatorMeta(reason string) delta.Metadata {
+	return delta.Metadata{Source: "curator", Reason: reason}
 }

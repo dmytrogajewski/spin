@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
 )
 
 // ErrEmitterIsClosed is a sentinel error.
@@ -654,6 +654,8 @@ func (e *EventEmitter) Emit(event Event) {
 				concurrency.TrySend(ch, event)
 			case BackpressureBuffer:
 				e.emitBuffer(id, ch, event)
+			default:
+				// BackpressureBlock handled below after lock release.
 			}
 		}
 

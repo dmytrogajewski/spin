@@ -134,16 +134,16 @@ func runDryRun(applier *patchapply.Applier, patch *patchapply.Patch) error {
 	fmt.Fprintln(os.Stdout, "[DRY RUN] Would apply the following changes:")
 
 	for _, op := range patch.Operations {
-		switch v := op.(type) {
+		switch patchOp := op.(type) {
 		case *patchapply.AddFile:
-			fmt.Fprintf(os.Stdout, "  Would create: %s (%d lines)\n", v.FilePath, len(v.Lines))
+			fmt.Fprintf(os.Stdout, "  Would create: %s (%d lines)\n", patchOp.FilePath, len(patchOp.Lines))
 		case *patchapply.DeleteFile:
-			fmt.Fprintf(os.Stdout, "  Would delete: %s\n", v.FilePath)
+			fmt.Fprintf(os.Stdout, "  Would delete: %s\n", patchOp.FilePath)
 		case *patchapply.UpdateFile:
-			if v.NewPath != "" {
-				fmt.Fprintf(os.Stdout, "  Would move: %s → %s (%d hunks)\n", v.FilePath, v.NewPath, len(v.Hunks))
+			if patchOp.NewPath != "" {
+				fmt.Fprintf(os.Stdout, "  Would move: %s → %s (%d hunks)\n", patchOp.FilePath, patchOp.NewPath, len(patchOp.Hunks))
 			} else {
-				fmt.Fprintf(os.Stdout, "  Would update: %s (%d hunks)\n", v.FilePath, len(v.Hunks))
+				fmt.Fprintf(os.Stdout, "  Would update: %s (%d hunks)\n", patchOp.FilePath, len(patchOp.Hunks))
 			}
 		}
 	}

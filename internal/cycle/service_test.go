@@ -2,7 +2,6 @@ package cycle
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,13 +10,10 @@ import (
 // testEvent implements the Event interface for testing.
 type testEvent struct {
 	eventType string
-	timestamp time.Time
 	data      EventData
 }
 
-func (e *testEvent) GetType() string         { return e.eventType }
-func (e *testEvent) GetTimestamp() time.Time { return e.timestamp }
-func (e *testEvent) GetData() any            { return e.data }
+func (e *testEvent) GetData() any { return e.data }
 
 // Mock implementations for testing.
 

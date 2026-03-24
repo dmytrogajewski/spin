@@ -32,7 +32,7 @@ func NewRenderer(out io.Writer, width, height int) *Renderer {
 		width:  width,
 		height: height,
 	}
-	_ = r.setupScrollingRegion()
+	r.setupScrollingRegion()
 
 	return r
 }
@@ -40,31 +40,29 @@ func NewRenderer(out io.Writer, width, height int) *Renderer {
 // setupScrollingRegion sets up the terminal scrolling region.
 // This reserves the bottom 2 lines for status bar and prompt,
 // allowing content to scroll only in the top area.
-func (r *Renderer) setupScrollingRegion() error {
+func (r *Renderer) setupScrollingRegion() {
 	if r.height < minTermHeight {
 		// Terminal too small.
-		return nil
+		return
 	}
 
-	// Set scrolling region to lines 1 through (height - 2)
+	// Set scrolling region to lines 1 through (height - 2).
 	// This leaves the last 2 lines for status bar and prompt.
 	scrollableLines := r.height - statusBarLines
 	fmt.Fprintf(r.out, "\x1b[1;%dr", scrollableLines)
 
-	// Move cursor to the bottom of the scrolling region
+	// Move cursor to the bottom of the scrolling region.
 	// This ensures new content appears at the bottom of the scrollable area.
 	fmt.Fprintf(r.out, "\x1b[%d;1H", scrollableLines)
 
 	r.scrollingSetup = true
-
-	return nil
 }
 
 // SetSize updates the terminal dimensions and re-establishes scrolling region.
 func (r *Renderer) SetSize(width, height int) {
 	r.width = width
 	r.height = height
-	_ = r.setupScrollingRegion()
+	r.setupScrollingRegion()
 }
 
 // Render renders the status bar at the bottom of the terminal.

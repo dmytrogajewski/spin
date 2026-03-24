@@ -31,7 +31,7 @@ func NewChecker(enabled bool) *Checker {
 // Returns true and a reason if the command is blocked.
 // Returns false and empty reason if the command is allowed.
 // A disabled checker always returns false.
-func (c *Checker) Check(command string) (bool, string) {
+func (c *Checker) Check(command string) (blocked bool, reason string) {
 	if !c.enabled {
 		return false, ""
 	}

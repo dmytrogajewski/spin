@@ -120,7 +120,7 @@ func spinContainer(ctx context.Context, t *testing.T, binPath string) *testconta
 }
 
 // containerExec runs a command inside the container and returns exit code + output.
-func containerExec(ctx context.Context, t *testing.T, container testcontainers.Container, cmd []string) (int, string) {
+func containerExec(ctx context.Context, t *testing.T, container testcontainers.Container, cmd []string) (exitCode int, output string) {
 	t.Helper()
 
 	exitCode, reader, err := container.Exec(ctx, cmd)

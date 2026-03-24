@@ -2,13 +2,13 @@ package acp
 
 import (
 	"os"
-	"path/filepath"
 	"sync"
 
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 // fileContentTracker tracks old file content for write_file operations.
@@ -223,11 +223,7 @@ func extractFileLocations(toolName string, params tools.ToolParameters, workDir 
 
 // resolveToolPath resolves a relative path against workDir to produce an absolute path.
 func resolveToolPath(path, workDir string) string {
-	if filepath.IsAbs(path) || workDir == "" {
-		return path
-	}
-
-	return filepath.Join(workDir, path)
+	return pathx.ResolvePath(workDir, path)
 }
 
 // convertToolCallStart converts EventToolCallStart to tool_call.

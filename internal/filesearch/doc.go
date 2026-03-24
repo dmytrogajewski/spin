@@ -3,9 +3,9 @@
 //
 // The package includes:
 //   - Scanner: Scans directories recursively for files with .gitignore/.spinignore support
-//   - Matcher: Advanced 7-tier fuzzy matching algorithm for intelligent ranking
 //   - Searcher: High-level API with async indexing and context cancellation
-//   - IgnoreHandler: Gitignore pattern matching using doublestar glob syntax
+//   - Matching via [github.com/dmytrogajewski/spin/pkg/alg/pathx] (7-tier fuzzy algorithm)
+//   - Ignore patterns via [github.com/dmytrogajewski/spin/pkg/alg/pathx] (gitignore syntax)
 //
 // Quick Start (Recommended - Searcher API):
 //
@@ -27,7 +27,7 @@
 //	scanner := filesearch.NewScanner(".", false)
 //	files, _ := scanner.Scan()  // Automatically respects .gitignore and .spinignore
 //
-//	matcher := filesearch.NewMatcher(false)
+//	matcher := pathx.NewMatcher(false)
 //	matches := matcher.Match("test", files)  // Uses advanced 7-tier scoring
 //
 // Features:

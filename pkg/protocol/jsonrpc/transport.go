@@ -1,3 +1,4 @@
+// Package jsonrpc provides JSON-RPC 2.0 transport with Content-Length framing.
 package jsonrpc
 
 import (
@@ -231,8 +232,10 @@ func (st *StdioTransport) readLoop() {
 		}
 
 		if ch, ok := st.pending.Load(*resp.ID); ok {
-			respCh, _ := ch.(chan jsonrpcResponse)
-			respCh <- resp
+			respCh, assertOk := ch.(chan jsonrpcResponse)
+			if assertOk {
+				respCh <- resp
+			}
 		}
 	}
 }

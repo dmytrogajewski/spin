@@ -86,7 +86,7 @@ func TestSnapshotManager_Init_CreatesShadowRepo(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	err := mgr.Init()
+	err := mgr.Init(context.Background())
 	require.NoError(t, err)
 
 	// Shadow dir should exist with a HEAD file (bare repo marker).
@@ -103,7 +103,7 @@ func TestSnapshotManager_Snapshot_ReturnsHash(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	hash, err := mgr.Snapshot()
 	require.NoError(t, err)
@@ -121,7 +121,7 @@ func TestSnapshotManager_Snapshot_CapturesFileChanges(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	// Take snapshot of initial state.
 	hash1, err := mgr.Snapshot()
@@ -144,7 +144,7 @@ func TestSnapshotManager_Restore_RevertsChanges(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	// Take snapshot of initial state.
 	hash1, err := mgr.Snapshot()
@@ -171,7 +171,7 @@ func TestSnapshotManager_Restore_HandlesNewFiles(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	// Take snapshot before new file.
 	hash1, err := mgr.Snapshot()
@@ -198,7 +198,7 @@ func TestSnapshotManager_Restore_HandlesDeletedFiles(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	// Take snapshot with the file.
 	hash1, err := mgr.Snapshot()
@@ -229,7 +229,7 @@ func TestSnapshotManager_SyncsGitignore(t *testing.T) {
 	writeTestFile(t, dir, ".gitignore", gitignoreContent)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	// Check that info/exclude has nested .git exclusion + user .gitignore content.
 	excludePath := filepath.Join(mgr.ShadowDir(), "info", "exclude")
@@ -244,7 +244,7 @@ func TestSnapshotManager_Cleanup_Succeeds(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	// Take a snapshot so there's something to GC.
 	_, err := mgr.Snapshot()
@@ -300,7 +300,7 @@ func TestSnapshotManager_SnapshotCount(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 	require.Equal(t, 0, mgr.SnapshotCount())
 
 	_, err := mgr.Snapshot()
@@ -314,7 +314,7 @@ func TestSnapshotManager_GetSnapshot(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	hash, err := mgr.Snapshot()
 	require.NoError(t, err)

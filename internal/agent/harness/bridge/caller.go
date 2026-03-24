@@ -39,11 +39,11 @@ func (b *CallerBridge) Call(
 	messages []message.Message,
 	toolSchemas []tools.ToolSchema,
 	turn int,
-) (string, []message.ToolCall, string, error) {
+) (content string, toolCalls []message.ToolCall, finishReason string, err error) {
 	toolList := b.resolveTools(toolSchemas)
 	resp := &agent.Response{}
 
-	content, toolCalls, finishReason, err := b.llmCaller.CallWithRetries(
+	content, toolCalls, finishReason, err = b.llmCaller.CallWithRetries(
 		ctx, messages, b.callParams, toolList, nil, turn, resp,
 	)
 	if err != nil {

@@ -253,7 +253,10 @@ func (m *PlanMeta) Validate() error {
 
 	sum := m.Pending + m.InProgress + m.Completed
 	if sum != m.Total {
-		return fmt.Errorf("pending + in_progress + completed (%d) must equal total (%d): %w", sum, m.Total, ErrPendingInProgressCompletedMustEqual)
+		return fmt.Errorf(
+			"pending + in_progress + completed (%d) must equal total (%d): %w",
+			sum, m.Total, ErrPendingInProgressCompletedMustEqual,
+		)
 	}
 
 	return nil

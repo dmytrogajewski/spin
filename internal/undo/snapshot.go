@@ -72,7 +72,7 @@ func NewSnapshotManager(workDir string) *SnapshotManager {
 
 // Init creates the shadow bare git repo if it doesn't exist.
 // Returns [ErrUnsafeWorkDir] if the work directory is $HOME, /, or /tmp.
-func (m *SnapshotManager) Init() error {
+func (m *SnapshotManager) Init(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -97,7 +97,7 @@ func (m *SnapshotManager) Init() error {
 
 	// Initialize bare repo if not already done.
 	if _, statErr := os.Stat(filepath.Join(m.shadowDir, "HEAD")); os.IsNotExist(statErr) {
-		if _, err := m.runGit("init", "--bare", m.shadowDir); err != nil {
+		if err := m.runGit(ctx, "init", "--bare", m.shadowDir); err != nil {
 			return fmt.Errorf("init shadow repo: %w", err)
 		}
 	}
@@ -178,7 +178,7 @@ func (m *SnapshotManager) Cleanup() error {
 		return ErrShadowRepoNotInitialized
 	}
 
-	if _, err := m.runGit("--git-dir", m.shadowDir, "gc", "--prune="+gcPruneAge); err != nil {
+	if err := m.runGit(context.Background(), "--git-dir", m.shadowDir, "gc", "--prune="+gcPruneAge); err != nil {
 		return fmt.Errorf("git gc: %w", err)
 	}
 
@@ -238,7 +238,7 @@ func (m *SnapshotManager) syncGitignore() error {
 		content = append(content, userIgnore...)
 	}
 
-	excludePath := filepath.Join(infoDir, "exclude")
+	excludePath := filepath.Clean(filepath.Join(infoDir, "exclude"))
 
 	if writeErr := os.WriteFile(excludePath, content, excludeFilePerm); writeErr != nil {
 		return fmt.Errorf("write exclude: %w", writeErr)
@@ -308,22 +308,21 @@ func (m *SnapshotManager) restoreFileFromTree(treeHash, relativePath, fullPath s
 }
 
 // runGit executes a git command with timeout.
-func (m *SnapshotManager) runGit(args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
+func (m *SnapshotManager) runGit(ctx context.Context, args ...string) error {
+	ctx, cancel := context.WithTimeout(ctx, gitCommandTimeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "git", args...)
 
-	var stdout, stderr bytes.Buffer
+	var stderr bytes.Buffer
 
-	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%s: %w", stderr.String(), err)
+		return fmt.Errorf("%s: %w", stderr.String(), err)
 	}
 
-	return stdout.String(), nil
+	return nil
 }
 
 // nestedGitErrSubstring is the error message git produces for nested repos without commits.

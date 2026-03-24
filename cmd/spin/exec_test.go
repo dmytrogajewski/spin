@@ -148,23 +148,23 @@ func TestParseDuration(t *testing.T) {
 func TestMockTTY(t *testing.T) {
 	t.Parallel()
 
-	m := &mockTTY{width: 120, height: 30}
+	mock := &mockTTY{width: 120, height: 30}
 
-	if err := m.Enter(); err != nil {
+	if err := mock.Enter(); err != nil {
 		t.Errorf("Enter() = %v", err)
 	}
 
-	if err := m.Exit(); err != nil {
+	if err := mock.Exit(); err != nil {
 		t.Errorf("Exit() = %v", err)
 	}
 
-	w, h := m.Size()
+	w, h := mock.Size()
 	if w != 120 || h != 30 {
 		t.Errorf("Size() = (%d, %d), want (120, 30)", w, h)
 	}
 
 	// OnResize should not panic.
-	m.OnResize(func(_, _ int) {})
+	mock.OnResize(func(_, _ int) {})
 }
 
 func TestResolveSessionID_WithStorage(t *testing.T) {

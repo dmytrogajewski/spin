@@ -16,7 +16,7 @@ type TerminalExecutor struct {
 }
 
 // NewTerminalExecutor creates a new terminal executor.
-func NewTerminalExecutor(terminalClient TerminalClient, sessionID, workDir string) tools.CommandExecutor {
+func NewTerminalExecutor(terminalClient TerminalClient, sessionID, workDir string) *TerminalExecutor {
 	if terminalClient == nil {
 		return nil
 	}
@@ -138,10 +138,10 @@ func extractEnvFromSlice(envSlice []any) []EnvVar {
 			continue
 		}
 
-		name, _ := evMap["name"].(string)
+		name, nameOk := evMap["name"].(string)
 		value, _ := evMap["value"].(string)
 
-		if name != "" {
+		if nameOk && name != "" {
 			env = append(env, EnvVar{Name: name, Value: value})
 		}
 	}
@@ -169,16 +169,16 @@ func extractEnvFromStruct(opts any) []EnvVar {
 		return nil
 	}
 
-	v := reflect.ValueOf(opts)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
+	value := reflect.ValueOf(opts)
+	if value.Kind() == reflect.Ptr {
+		value = value.Elem()
 	}
 
-	if v.Kind() != reflect.Struct {
+	if value.Kind() != reflect.Struct {
 		return nil
 	}
 
-	envField := v.FieldByName("Env")
+	envField := value.FieldByName("Env")
 	if !envField.IsValid() {
 		return nil
 	}

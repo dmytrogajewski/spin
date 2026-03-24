@@ -73,12 +73,12 @@ func (t *FindSymbolTool) Schema() ToolSchema {
 
 // Execute runs the symbol lookup.
 func (t *FindSymbolTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	name, _ := params.GetString(paramName)
+	name := params.GetStringOr(paramName, "")
 	if name == "" {
 		return NewToolError(ErrInvalidParameters), nil
 	}
 
-	filePath, _ := params.GetString(paramFilePath)
+	filePath := params.GetStringOr(paramFilePath, "")
 	if filePath == "" {
 		return NewToolError(ErrInvalidParameters), nil
 	}

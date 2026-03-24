@@ -131,7 +131,7 @@ func TestRenderer_Redraw_CursorPositioning(t *testing.T) {
 			// Expected format: "\r\x1b[2K> <text>\x1b[<col>G".
 			wantSeq := "\x1b[" + strconv.Itoa(tt.wantCol) + "G"
 			// Simple check: output should end with cursor positioning.
-			if !bytes.HasSuffix([]byte(got), []byte(wantSeq)) {
+			if !strings.HasSuffix(got, wantSeq) {
 				t.Errorf("Redraw() cursor position mismatch\ngot output: %q\nwant cursor at col %d (seq %q)", got, tt.wantCol, wantSeq)
 			}
 		})
@@ -318,7 +318,7 @@ func TestRenderer_SetPrefix(t *testing.T) {
 	_ = r.Redraw(model, "")
 
 	got := buf.String()
-	if !bytes.Contains([]byte(got), []byte("$ hello")) {
+	if !strings.Contains(got, "$ hello") {
 		t.Errorf("Redraw() should use new prefix '$ ', got: %q", got)
 	}
 }

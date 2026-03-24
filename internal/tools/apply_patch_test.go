@@ -471,7 +471,8 @@ func TestApplyPatchTool_UnifiedDiff_ParameterNames(t *testing.T) {
 
 	const (
 		originalContent = "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"
-		patchContent    = "--- main.go\n+++ main.go\n@@ -1,5 +1,5 @@\n package main\n \n func main() {\n-\tfmt.Println(\"hello\")\n+\tfmt.Println(\"greetings\")\n }\n"
+		patchContent    = "--- main.go\n+++ main.go\n@@ -1,5 +1,5 @@\n package main\n \n func main() {\n" +
+			"-\tfmt.Println(\"hello\")\n+\tfmt.Println(\"greetings\")\n }\n"
 	)
 
 	tests := []struct {

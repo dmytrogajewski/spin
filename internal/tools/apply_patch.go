@@ -7,9 +7,8 @@ import (
 	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/patchapply"
+	"github.com/dmytrogajewski/spin/pkg/alg/diff"
 )
-
-const minPatchLines = 3
 
 var (
 	// ErrEmptyPatch is a sentinel error.
@@ -18,10 +17,6 @@ var (
 	ErrPatchMustBeInStandardDiff = errors.New(
 		"patch must be in standard diff format. Expected to start with '*** filename' or '--- filename'",
 	)
-	// ErrDiffFormatTooShort is a sentinel error.
-	ErrDiffFormatTooShort = errors.New("diff format too short")
-	// ErrCouldNotExtractFilenameFromFirst is a sentinel error.
-	ErrCouldNotExtractFilenameFromFirst = errors.New("could not extract filename from first line")
 )
 
 // ApplyPatchTool implements structured patch application functionality.
@@ -98,9 +93,9 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 	}
 	// Extract patch_text parameter. Accept "patch" as alias since LLMs frequently
 	// use the shorter name despite the schema specifying "patch_text".
-	patchText, _ := params.GetString("patch_text")
+	patchText := params.GetStringOr("patch_text", "")
 	if patchText == "" {
-		patchText, _ = params.GetString("patch")
+		patchText = params.GetStringOr("patch", "")
 	}
 
 	if patchText == "" {
@@ -233,114 +228,55 @@ func (t *ApplyPatchTool) parsePatch(patchText string) (*patchapply.Patch, error)
 	return t.parseDiffFormat(patchText)
 }
 
-// parseDiffFormat parses a patch in standard diff format directly.
+// parseDiffFormat parses a patch in standard diff format using pkg/alg/diff.
 func (t *ApplyPatchTool) parseDiffFormat(diffText string) (*patchapply.Patch, error) {
-	lines := strings.Split(diffText, "\n")
-	if len(lines) < minPatchLines {
-		return nil, ErrDiffFormatTooShort
+	filename, hunks, err := diff.Parse(diffText)
+	if err != nil {
+		return nil, fmt.Errorf("parse diff: %w", err)
 	}
 
-	// Extract filename from the first line.
-	firstLine := strings.TrimSpace(lines[0])
-
-	var filename string
-	if after, ok := strings.CutPrefix(firstLine, "*** "); ok {
-		filename = strings.TrimSpace(after)
-	} else if afterDash, hasDash := strings.CutPrefix(firstLine, "--- "); hasDash {
-		filename = strings.TrimSpace(afterDash)
-	} else {
-		return nil, fmt.Errorf("could not extract filename from first line: %q: %w", firstLine, ErrCouldNotExtractFilenameFromFirst)
-	}
-
-	// Strip standard a/ or b/ prefix from git diff output.
-	filename = stripDiffPrefix(filename)
-
-	// Create patch with update file operation.
-	patch := &patchapply.Patch{
+	return &patchapply.Patch{
 		Operations: []patchapply.FileOperation{
 			&patchapply.UpdateFile{
 				FilePath: filename,
-				Hunks:    []patchapply.Hunk{},
+				Hunks:    convertHunks(hunks),
 			},
 		},
-	}
-
-	// Parse hunks.
-	updateOp := patch.Operations[0].(*patchapply.UpdateFile)
-
-	var currentHunk *patchapply.Hunk
-
-	for i := 2; i < len(lines); i++ {
-		line := lines[i]
-
-		if strings.HasPrefix(line, "@@") {
-			if currentHunk != nil {
-				updateOp.Hunks = append(updateOp.Hunks, *currentHunk)
-			}
-
-			// The patchapply library uses context-matching (not line numbers)
-			// so we leave the header empty — unified diff line numbers are
-			// informational only.
-			currentHunk = &patchapply.Hunk{
-				Changes: []patchapply.LineChange{},
-			}
-
-			continue
-		}
-
-		if currentHunk == nil {
-			continue
-		}
-
-		change, ok := parseDiffLine(line)
-		if ok {
-			currentHunk.Changes = append(currentHunk.Changes, change)
-		}
-	}
-
-	// Add the last hunk.
-	if currentHunk != nil {
-		updateOp.Hunks = append(updateOp.Hunks, *currentHunk)
-	}
-
-	return patch, nil
+	}, nil
 }
 
-// parseDiffLine parses a single diff line into a LineChange.
-// Returns the change and true if the line is valid, or false to skip.
-func parseDiffLine(line string) (patchapply.LineChange, bool) {
-	if line == "" {
-		return patchapply.LineChange{Type: patchapply.LineContext, Text: ""}, true
+// convertHunks converts diff.Hunk slices to patchapply.Hunk slices.
+func convertHunks(hunks []diff.Hunk) []patchapply.Hunk {
+	result := make([]patchapply.Hunk, len(hunks))
+
+	for idx, hunk := range hunks {
+		result[idx] = patchapply.Hunk{
+			Changes: convertChanges(hunk.Changes),
+		}
 	}
 
-	text := ""
-	if len(line) > 1 {
-		text = line[1:]
-	}
-
-	switch line[0] {
-	case ' ':
-		return patchapply.LineChange{Type: patchapply.LineContext, Text: text}, true
-	case '-':
-		return patchapply.LineChange{Type: patchapply.LineDelete, Text: text}, true
-	case '+':
-		return patchapply.LineChange{Type: patchapply.LineInsert, Text: text}, true
-	default:
-		return patchapply.LineChange{}, false
-	}
+	return result
 }
 
-// stripDiffPrefix removes the standard a/ or b/ prefix from git diff filenames.
-func stripDiffPrefix(filename string) string {
-	if after, ok := strings.CutPrefix(filename, "a/"); ok {
-		return after
+// lineTypeMap maps diff.LineType to patchapply.LineChangeType.
+var lineTypeMap = map[diff.LineType]patchapply.LineChangeType{
+	diff.LineContext: patchapply.LineContext,
+	diff.LineInsert:  patchapply.LineInsert,
+	diff.LineDelete:  patchapply.LineDelete,
+}
+
+// convertChanges converts diff.LineChange slices to patchapply.LineChange slices.
+func convertChanges(changes []diff.LineChange) []patchapply.LineChange {
+	result := make([]patchapply.LineChange, len(changes))
+
+	for idx, change := range changes {
+		result[idx] = patchapply.LineChange{
+			Type: lineTypeMap[change.Type],
+			Text: change.Text,
+		}
 	}
 
-	if after, ok := strings.CutPrefix(filename, "b/"); ok {
-		return after
-	}
-
-	return filename
+	return result
 }
 
 // CheckApproval assesses whether the patch operation requires approval.

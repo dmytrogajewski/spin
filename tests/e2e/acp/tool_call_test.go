@@ -489,6 +489,8 @@ func TestACP_ToolCall_Content_Diff(t *testing.T) {
 			name:       "diff content",
 			promptText: "write file test.txt with content hello",
 			checkFunc: func(t *testing.T, notifications []acp.SessionNotification) bool {
+				t.Helper()
+
 				return findDiffInNotifications(t, notifications)
 			},
 			notFoundMsg: "No diff content in tool calls found (may be expected)",
@@ -542,6 +544,8 @@ func TestACP_ToolCall_Locations(t *testing.T) {
 			name:       "locations",
 			promptText: "read file test.txt",
 			checkFunc: func(t *testing.T, notifications []acp.SessionNotification) bool {
+				t.Helper()
+
 				return findLocationInNotifications(t, notifications)
 			},
 			notFoundMsg: "No locations in tool calls found (may be expected)",

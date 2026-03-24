@@ -13,26 +13,26 @@ import (
 func TestV2_RoundTrip_YAML(t *testing.T) {
 	t.Parallel()
 
-	rapid.Check(t, func(t *rapid.T) {
-		cfg := genValidV2(t)
+	rapid.Check(t, func(tcase *rapid.T) {
+		cfg := genValidV2(tcase)
 
 		yamlBytes, err := yaml.Marshal(cfg)
 		if err != nil {
-			t.Fatalf("failed to marshal config: %v", err)
+			tcase.Fatalf("failed to marshal config: %v", err)
 		}
 
 		var cfg2 V2
 		if err = yaml.Unmarshal(yamlBytes, &cfg2); err != nil {
-			t.Fatalf("failed to unmarshal config: %v", err)
+			tcase.Fatalf("failed to unmarshal config: %v", err)
 		}
 
-		assertConfigRoundTrip(t, cfg, &cfg2)
+		assertConfigRoundTrip(tcase, cfg, &cfg2)
 	})
 }
 
 // assertConfigRoundTrip verifies key fields match between two configs.
-func assertConfigRoundTrip(t *rapid.T, cfg, cfg2 *V2) {
-	t.Helper()
+func assertConfigRoundTrip(tcase *rapid.T, cfg, cfg2 *V2) {
+	tcase.Helper()
 
 	checks := []struct {
 		name string
@@ -47,9 +47,9 @@ func assertConfigRoundTrip(t *rapid.T, cfg, cfg2 *V2) {
 		{"ACE.Enabled", cfg2.ACE.Enabled, cfg.ACE.Enabled},
 	}
 
-	for _, c := range checks {
-		if c.got != c.want {
-			t.Fatalf("%s mismatch: %v != %v", c.name, c.got, c.want)
+	for _, check := range checks {
+		if check.got != check.want {
+			tcase.Fatalf("%s mismatch: %v != %v", check.name, check.got, check.want)
 		}
 	}
 }
@@ -59,62 +59,62 @@ func assertConfigRoundTrip(t *rapid.T, cfg, cfg2 *V2) {
 func TestV2_Validation_GeneratedConfigs(t *testing.T) {
 	t.Parallel()
 
-	rapid.Check(t, func(t *rapid.T) {
-		cfg := genValidV2(t)
+	rapid.Check(t, func(tcase *rapid.T) {
+		cfg := genValidV2(tcase)
 
 		err := cfg.Validate()
 		if err != nil {
-			t.Fatalf("generated valid config failed validation: %v\nConfig: %+v", err, cfg)
+			tcase.Fatalf("generated valid config failed validation: %v\nConfig: %+v", err, cfg)
 		}
 	})
 }
 
 // genValidV2 generates a random valid V2 using rapid.
-func genValidV2(t *rapid.T) *V2 {
+func genValidV2(tcase *rapid.T) *V2 {
 	return &V2{
 		Version: "2.0",
-		LLM:     genValidLLMConfig(t),
-		Agent:   genValidAgentConfig(t),
-		ACE:     genValidACEConfig(t),
+		LLM:     genValidLLMConfig(tcase),
+		Agent:   genValidAgentConfig(tcase),
+		ACE:     genValidACEConfig(tcase),
 		Security: SecurityV2{
-			SandboxMode:     rapid.SampledFrom([]string{"none", "docker", "firejail"}).Draw(t, "sandbox_mode"),
-			PolicyFile:      rapid.StringMatching(`^[-a-zA-Z0-9_./]*$`).Draw(t, "policy_file"),
-			AllowedCommands: rapid.SliceOfN(rapid.StringMatching(`^[a-z]+$`), 0, 10).Draw(t, "allowed_commands"),
+			SandboxMode:     rapid.SampledFrom([]string{"none", "docker", "firejail"}).Draw(tcase, "sandbox_mode"),
+			PolicyFile:      rapid.StringMatching(`^[-a-zA-Z0-9_./]*$`).Draw(tcase, "policy_file"),
+			AllowedCommands: rapid.SliceOfN(rapid.StringMatching(`^[a-z]+$`), 0, 10).Draw(tcase, "allowed_commands"),
 		},
-		Protocol: genValidProtocolConfig(t),
+		Protocol: genValidProtocolConfig(tcase),
 	}
 }
 
 // genValidLLMConfig generates a random valid LLMV2.
-func genValidLLMConfig(t *rapid.T) LLMV2 {
-	timeoutSec := rapid.Int64Range(1, 3600).Draw(t, "llm_timeout_sec")
+func genValidLLMConfig(tcase *rapid.T) LLMV2 {
+	timeoutSec := rapid.Int64Range(1, 3600).Draw(tcase, "llm_timeout_sec")
 
 	return LLMV2{
-		Provider:    rapid.SampledFrom([]string{"ollama", "openai", "anthropic"}).Draw(t, "llm_provider"),
-		Model:       rapid.StringMatching(`^[a-z0-9.-]+$`).Draw(t, "llm_model"),
-		Temperature: rapid.Float64Range(0, 2).Draw(t, "llm_temperature"),
-		MaxTokens:   rapid.IntRange(1, 100000).Draw(t, "llm_max_tokens"),
+		Provider:    rapid.SampledFrom([]string{"ollama", "openai", "anthropic"}).Draw(tcase, "llm_provider"),
+		Model:       rapid.StringMatching(`^[a-z0-9.-]+$`).Draw(tcase, "llm_model"),
+		Temperature: rapid.Float64Range(0, 2).Draw(tcase, "llm_temperature"),
+		MaxTokens:   rapid.IntRange(1, 100000).Draw(tcase, "llm_max_tokens"),
 		Timeout:     time.Duration(timeoutSec) * time.Second,
-		BaseURL:     rapid.StringMatching(`^(https?://)?[-a-zA-Z0-9.:]*$`).Draw(t, "llm_base_url"),
-		APIKey:      rapid.StringMatching(`^[a-zA-Z0-9_-]*$`).Draw(t, "llm_api_key"),
+		BaseURL:     rapid.StringMatching(`^(https?://)?[-a-zA-Z0-9.:]*$`).Draw(tcase, "llm_base_url"),
+		APIKey:      rapid.StringMatching(`^[a-zA-Z0-9_-]*$`).Draw(tcase, "llm_api_key"),
 	}
 }
 
 // genValidAgentConfig generates a random valid AgentV2.
-func genValidAgentConfig(t *rapid.T) AgentV2 {
-	timeoutSec := rapid.Int64Range(1, 7200).Draw(t, "agent_timeout_sec")
+func genValidAgentConfig(tcase *rapid.T) AgentV2 {
+	timeoutSec := rapid.Int64Range(1, 7200).Draw(tcase, "agent_timeout_sec")
 
 	return AgentV2{
-		MaxTurns:        rapid.IntRange(1, 1000).Draw(t, "agent_max_turns"),
+		MaxTurns:        rapid.IntRange(1, 1000).Draw(tcase, "agent_max_turns"),
 		Timeout:         time.Duration(timeoutSec) * time.Second,
-		WorkDir:         rapid.StringMatching(`^[/.][-a-zA-Z0-9_./]*$`).Draw(t, "agent_work_dir"),
-		RequireApproval: rapid.Bool().Draw(t, "agent_require_approval"),
+		WorkDir:         rapid.StringMatching(`^[/.][-a-zA-Z0-9_./]*$`).Draw(tcase, "agent_work_dir"),
+		RequireApproval: rapid.Bool().Draw(tcase, "agent_require_approval"),
 	}
 }
 
 // genValidACEConfig generates a random valid ACEV2.
-func genValidACEConfig(t *rapid.T) ACEV2 {
-	enabled := rapid.Bool().Draw(t, "ace_enabled")
+func genValidACEConfig(tcase *rapid.T) ACEV2 {
+	enabled := rapid.Bool().Draw(tcase, "ace_enabled")
 
 	if !enabled {
 		return ACEV2{
@@ -124,30 +124,30 @@ func genValidACEConfig(t *rapid.T) ACEV2 {
 
 	return ACEV2{
 		Enabled:        true,
-		PlaybookPath:   rapid.StringMatching(`^[/~][-a-zA-Z0-9_./]+\.json$`).Draw(t, "ace_playbook_path"),
-		TrajectoryPath: rapid.StringMatching(`^[/~][-a-zA-Z0-9_./]+/?$`).Draw(t, "ace_trajectory_path"),
-		TopK:           rapid.IntRange(1, 100).Draw(t, "ace_top_k"),
-		MinScore:       rapid.Float64Range(0, 1).Draw(t, "ace_min_score"),
+		PlaybookPath:   rapid.StringMatching(`^[/~][-a-zA-Z0-9_./]+\.json$`).Draw(tcase, "ace_playbook_path"),
+		TrajectoryPath: rapid.StringMatching(`^[/~][-a-zA-Z0-9_./]+/?$`).Draw(tcase, "ace_trajectory_path"),
+		TopK:           rapid.IntRange(1, 100).Draw(tcase, "ace_top_k"),
+		MinScore:       rapid.Float64Range(0, 1).Draw(tcase, "ace_min_score"),
 	}
 }
 
 // genValidProtocolConfig generates a random valid ProtocolV2.
-func genValidProtocolConfig(t *rapid.T) ProtocolV2 {
-	enableShell := rapid.Bool().Draw(t, "protocol_enable_shell")
+func genValidProtocolConfig(tcase *rapid.T) ProtocolV2 {
+	enableShell := rapid.Bool().Draw(tcase, "protocol_enable_shell")
 
 	var shellTimeout time.Duration
 
 	if enableShell {
-		timeoutSec := rapid.Int64Range(1, 3600).Draw(t, "protocol_shell_timeout_sec")
+		timeoutSec := rapid.Int64Range(1, 3600).Draw(tcase, "protocol_shell_timeout_sec")
 		shellTimeout = time.Duration(timeoutSec) * time.Second
 	} else {
 		shellTimeout = 0
 	}
 
 	return ProtocolV2{
-		EnableMCP:    rapid.Bool().Draw(t, "protocol_enable_mcp"),
+		EnableMCP:    rapid.Bool().Draw(tcase, "protocol_enable_mcp"),
 		MCPServers:   []MCPServerConfigV2{}, // Keep simple for now.
-		EnableGit:    rapid.Bool().Draw(t, "protocol_enable_git"),
+		EnableGit:    rapid.Bool().Draw(tcase, "protocol_enable_git"),
 		EnableShell:  enableShell,
 		ShellTimeout: shellTimeout,
 	}

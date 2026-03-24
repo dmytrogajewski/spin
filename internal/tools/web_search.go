@@ -73,7 +73,7 @@ func (t *WebSearchTool) Schema() ToolSchema {
 
 // Execute runs the web search and returns formatted results.
 func (t *WebSearchTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	query, _ := params.GetString(paramQuery)
+	query := params.GetStringOr(paramQuery, "")
 	if query == "" {
 		return NewToolError(ErrInvalidParameters), nil
 	}

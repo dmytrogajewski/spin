@@ -37,19 +37,17 @@ func (c *tuiCommandContext) GetWorkDir() string {
 }
 
 // handleCommand processes slash commands using the command system.
-// Returns:
-//   - handled: true if command was recognized and processed
-//   - error: non-nil if command execution failed or exit was requested
+// Returns an error if exit was requested ([ErrExitRequested]) or the command failed.
 func handleCommand(
 	ctx context.Context, ui *adapters.PureTTY,
 	conv *conversation.Conversation, cmdName string, args []string,
-) (handled bool, err error) {
+) error {
 	// Create command context.
 	cmdCtx := &tuiCommandContext{conv: conv}
 
 	// Special handling for exit/quit commands (TUI-only).
 	if cmdName == "/exit" || cmdName == "/quit" {
-		return true, ErrExitRequested
+		return ErrExitRequested
 	}
 
 	// Execute command via command system.
@@ -59,12 +57,12 @@ func handleCommand(
 		if strings.Contains(err.Error(), "unknown command") {
 			_ = ui.PrintLine(fmt.Sprintf("Unknown command: %s (type /help for available commands)\n", cmdName))
 
-			return true, nil
+			return nil
 		}
 		// Other errors.
 		_ = ui.PrintLine(fmt.Sprintf("Error: %v\n", err))
 
-		return true, nil
+		return nil
 	}
 
 	// Print command output.
@@ -74,5 +72,5 @@ func handleCommand(
 		_ = ui.PrintLine("")
 	}
 
-	return true, nil
+	return nil
 }

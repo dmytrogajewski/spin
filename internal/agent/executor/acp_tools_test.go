@@ -456,11 +456,11 @@ func (m *mockTerminalClient) Create(_ context.Context, _ string, _ []string, _ [
 	return "term-123", nil
 }
 
-func (m *mockTerminalClient) WaitForExit(_ context.Context, _ string) (int, *string, error) {
+func (m *mockTerminalClient) WaitForExit(_ context.Context, _ string) (exitCode int, signal *string, err error) {
 	return 0, nil, nil
 }
 
-func (m *mockTerminalClient) GetOutput(_ context.Context, _ string) (string, bool, *ExitStatus, error) {
+func (m *mockTerminalClient) GetOutput(_ context.Context, _ string) (output string, truncated bool, status *ExitStatus, err error) {
 	return "output", false, &ExitStatus{ExitCode: intPtr(0)}, nil
 }
 

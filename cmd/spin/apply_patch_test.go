@@ -20,25 +20,27 @@ var (
 
 // TestReadPatchInput_Stdin tests reading patch from stdin.
 func TestReadPatchInput_Stdin(t *testing.T) {
+	t.Parallel()
+
 	// Save original stdin.
 	oldStdin := os.Stdin
 
 	defer func() { os.Stdin = oldStdin }()
 
 	// Create a pipe to simulate stdin.
-	r, w, err := os.Pipe()
+	pipeReader, pipeWriter, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	os.Stdin = r
+	os.Stdin = pipeReader
 
 	// Write test data.
 	testPatch := "*** Begin Patch\n*** End Patch"
 
 	go func() {
-		_, _ = w.WriteString(testPatch)
-		w.Close()
+		_, _ = pipeWriter.WriteString(testPatch)
+		pipeWriter.Close()
 	}()
 
 	// Test with empty patchFile (reads from stdin).
@@ -341,7 +343,6 @@ func TestApplyPatch_DryRun(t *testing.T) {
 // runApplyPatchErrorCase is a test helper for error cases in apply patch.
 func runApplyPatchErrorCase(t *testing.T, patchText, patchFileName, wantErrSubstr string) {
 	t.Helper()
-	t.Parallel()
 
 	tmpDir := t.TempDir()
 
@@ -369,6 +370,8 @@ func runApplyPatchErrorCase(t *testing.T, patchText, patchFileName, wantErrSubst
 
 // TestApplyPatch_ParseError tests invalid patch syntax.
 func TestApplyPatch_ParseError(t *testing.T) {
+	t.Parallel()
+
 	runApplyPatchErrorCase(t,
 		"*** Begin Patch\n*** Invalid Operation: test.txt\n*** End Patch",
 		"invalid.patch",
@@ -378,6 +381,8 @@ func TestApplyPatch_ParseError(t *testing.T) {
 
 // TestApplyPatch_PathTraversal tests path traversal rejection.
 func TestApplyPatch_PathTraversal(t *testing.T) {
+	t.Parallel()
+
 	runApplyPatchErrorCase(t,
 		"*** Begin Patch\n*** Add File: ../../etc/passwd\n+malicious content\n*** End Patch",
 		"malicious.patch",
@@ -631,7 +636,6 @@ func getIntegrationTestCases() []integrationTestCase {
 // runIntegrationTestCase executes a single integration test case.
 func runIntegrationTestCase(t *testing.T, tt integrationTestCase) {
 	t.Helper()
-	t.Parallel()
 
 	tmpDir := t.TempDir()
 
@@ -678,6 +682,8 @@ func TestApplyPatch_Integration(t *testing.T) {
 
 	for _, tt := range getIntegrationTestCases() {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			runIntegrationTestCase(t, tt)
 		})
 	}

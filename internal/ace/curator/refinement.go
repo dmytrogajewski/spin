@@ -72,7 +72,7 @@ type lazyRefinementStrategy struct {
 	orchestrator    *refine.RefinementOrchestrator
 }
 
-func newLazyRefinementStrategy(cfg LazyRefinementConfig) RefinementStrategy {
+func newLazyRefinementStrategy(cfg LazyRefinementConfig) *lazyRefinementStrategy {
 	minScore := cfg.MinUtilityScore
 	if minScore == 0 {
 		minScore = 0.1
@@ -119,7 +119,7 @@ type proactiveRefinementStrategy struct {
 	orchestrator    *refine.RefinementOrchestrator
 }
 
-func newProactiveRefinementStrategy(cfg ProactiveRefinementConfig) RefinementStrategy {
+func newProactiveRefinementStrategy(cfg ProactiveRefinementConfig) *proactiveRefinementStrategy {
 	maxBullets := cfg.MaxBullets
 	if maxBullets == 0 {
 		maxBullets = 1000

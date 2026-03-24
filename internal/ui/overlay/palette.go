@@ -6,6 +6,8 @@ import (
 	"github.com/sahilm/fuzzy"
 )
 
+const initialQueryCapacity = 64
+
 // Palette state machine for command search/selection.
 type Palette struct {
 	registry  *CommandRegistry
@@ -20,7 +22,7 @@ type Palette struct {
 func NewPalette(registry *CommandRegistry) *Palette {
 	p := &Palette{
 		registry:  registry,
-		query:     make([]rune, 0, 64),
+		query:     make([]rune, 0, initialQueryCapacity),
 		cursor:    0,
 		filtered:  make([]fuzzy.Match, 0),
 		selection: 0,

@@ -56,7 +56,7 @@ var gitOperationHandlers = map[string]gitOperationHandler{
 // Handler functions.
 
 func handleGitStage(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
-	filePath, _ := params.GetString("file_path")
+	filePath := params.GetStringOr("file_path", "")
 	if filePath == "" {
 		return NewToolError(errFilePathRequired), nil
 	}
@@ -70,7 +70,7 @@ func handleGitStage(ctx context.Context, t *GitOperationTool, params ToolParamet
 }
 
 func handleGitCommit(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
-	message, _ := params.GetString("message")
+	message := params.GetStringOr("message", "")
 	if message == "" {
 		return NewToolError(errMessageRequired), nil
 	}
@@ -102,7 +102,7 @@ func handleGitPull(ctx context.Context, t *GitOperationTool, _ ToolParameters) (
 }
 
 func handleGitCreateBranch(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
-	branchName, _ := params.GetString("branch_name")
+	branchName := params.GetStringOr("branch_name", "")
 	if branchName == "" {
 		return NewToolError(errBranchNameRequiredCreate), nil
 	}
@@ -116,7 +116,7 @@ func handleGitCreateBranch(ctx context.Context, t *GitOperationTool, params Tool
 }
 
 func handleGitSwitchBranch(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
-	branchName, _ := params.GetString("branch_name")
+	branchName := params.GetStringOr("branch_name", "")
 	if branchName == "" {
 		return NewToolError(errBranchNameRequiredSwitch), nil
 	}
@@ -163,7 +163,7 @@ func handleGitStatus(_ context.Context, t *GitOperationTool, _ ToolParameters) (
 }
 
 func handleGitDiff(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
-	filePath, _ := params.GetString("file_path")
+	filePath := params.GetStringOr("file_path", "")
 
 	diff, err := t.gitIntegration.GetDiff(ctx, filePath)
 	if err != nil {
@@ -250,7 +250,7 @@ func (t *GitOperationTool) Execute(ctx context.Context, params ToolParameters) (
 	}
 
 	// Extract operation.
-	operation, _ := params.GetString("operation")
+	operation := params.GetStringOr("operation", "")
 	if operation == "" {
 		return NewToolError(errOperationRequired), nil
 	}

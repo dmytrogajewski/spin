@@ -82,6 +82,10 @@ func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParamete
 	}
 
 	cmdStr, _ := params.GetString("command")
+	if cmdStr == "" {
+		return tools.ToolResult{Success: false, Error: "command parameter must be a non-empty string"}, nil
+	}
+
 	workDir, _ := params.GetString("working_directory")
 
 	if workDir == "" {
@@ -114,13 +118,13 @@ func (t *ACPTerminalTool) Execute(ctx context.Context, params tools.ToolParamete
 
 // validateParams validates the required parameters for the ACP terminal tool.
 func (t *ACPTerminalTool) validateParams(params tools.ToolParameters) string {
-	operation, _ := params.GetString("operation")
-	if operation != "execute" {
+	operation, opErr := params.GetString("operation")
+	if opErr != nil || operation != "execute" {
 		return "operation must be 'execute' for ACP mode"
 	}
 
-	cmdStr, _ := params.GetString("command")
-	if cmdStr == "" {
+	cmdStr, cmdErr := params.GetString("command")
+	if cmdErr != nil || cmdStr == "" {
 		return "command parameter is required"
 	}
 
@@ -128,7 +132,7 @@ func (t *ACPTerminalTool) validateParams(params tools.ToolParameters) string {
 }
 
 // parseCommand parses a command string into a CommandInfo.
-func (t *ACPTerminalTool) parseCommand(cmdStr, workDir string) (cmdInfo tools.CommandInfo, parsedCmd string) {
+func (t *ACPTerminalTool) parseCommand(cmdStr, workDir string) (cmdInfo *simpleCommand, parsedCmd string) {
 	if isShellCommand(cmdStr) {
 		return &simpleCommand{
 			program: "/bin/sh",

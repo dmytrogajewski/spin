@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	enry "github.com/go-enry/go-enry/v2"
+
 	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 )
 
@@ -133,7 +135,10 @@ func GatherEnvironment(ctx context.Context, workDir string, opts ...EnvironmentO
 	// Gather Git information (if not skipped).
 	var gitInfo *GitInfo
 	if !cfg.skipGit {
-		gitInfo, _ = gatherGitInfo(ctx, workDir) // Ignore errors, Git may not be available.
+		gitInfo, err = gatherGitInfo(ctx, workDir)
+		if err != nil {
+			gitInfo = nil // Git may not be available — proceed without it.
+		}
 	}
 
 	// Scan project files.
@@ -148,7 +153,7 @@ func GatherEnvironment(ctx context.Context, workDir string, opts ...EnvironmentO
 	languages := detectLanguages(files)
 
 	// Filter environment variables.
-	environment := filterEnvironment(os.Environ())
+	environment := execx.FilterEnvironment(os.Environ(), sensitivePrefixes, sensitiveSubstrings)
 
 	return &Environment{
 		OS:          osInfo,
@@ -218,7 +223,7 @@ func gitCommand(ctx context.Context, workDir string, args ...string) (string, er
 
 	output, err := cmd.Output()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}
 
 	return string(output), nil
@@ -295,7 +300,7 @@ func scanProjectFiles(ctx context.Context, workDir string, maxFiles, maxDepth in
 
 	err := filepath.WalkDir(workDir, func(path string, d fs.DirEntry, walkErr error) error {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
+			return fmt.Errorf("scan canceled: %w", ctxErr)
 		}
 
 		return scanner.visit(path, d, walkErr)
@@ -366,7 +371,7 @@ func (s *fileScanner) handleFile(path, relPath string, d fs.DirEntry) error {
 	s.files = append(s.files, FileInfo{
 		Path:     relPath,
 		Size:     info.Size(),
-		Language: detectLanguageFromExt(filepath.Ext(path)),
+		Language: detectLanguage(path, filepath.Base(path)),
 		Lines:    countLines(path),
 	})
 
@@ -382,45 +387,55 @@ func isNonNil(err error) bool {
 	return err != nil
 }
 
-// detectLanguageFromExt detects programming language from file extension.
-func detectLanguageFromExt(ext string) string {
-	languageMap := map[string]string{
-		".go":   "go",
-		".py":   "python",
-		".js":   "javascript",
-		".ts":   "typescript",
-		".jsx":  "javascript",
-		".tsx":  "typescript",
-		".rs":   "rust",
-		".rb":   "ruby",
-		".java": "java",
-		".c":    "c",
-		".cpp":  "cpp",
-		".cc":   "cpp",
-		".cxx":  "cpp",
-		".h":    "c",
-		".hpp":  "cpp",
-		".cs":   "csharp",
-		".php":  "php",
-		".sh":   "shell",
-		".bash": "shell",
-		".zsh":  "shell",
-		".yaml": "yaml",
-		".yml":  "yaml",
-		".json": "json",
-		".xml":  "xml",
-		".html": "html",
-		".css":  "css",
-		".md":   "markdown",
-		".txt":  "text",
-		".toml": "toml",
+// maxLanguageDetectionBytes is the max bytes read for language detection.
+const maxLanguageDetectionBytes = 512
+
+// detectLanguage detects the programming language of a file using go-enry.
+// It reads the first bytes of the file when the extension alone is ambiguous.
+func detectLanguage(path, filename string) string {
+	lang, safe := enry.GetLanguageByFilename(filename)
+	if safe {
+		return lang
 	}
 
-	if lang, exists := languageMap[ext]; exists {
+	lang, safe = enry.GetLanguageByExtension(filename)
+	if safe {
+		return lang
+	}
+
+	// Extension is ambiguous — read a small sample for content-based detection.
+	content, err := readHead(path, maxLanguageDetectionBytes)
+	if err == nil && len(content) > 0 {
+		lang = enry.GetLanguage(filename, content)
+		if lang != "" {
+			return lang
+		}
+	}
+
+	// Fall back to the first extension match if any.
+	if lang != "" {
 		return lang
 	}
 
 	return languageUnknown
+}
+
+// readHead reads up to n bytes from the beginning of a file.
+func readHead(path string, n int) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	buf := make([]byte, n)
+
+	read, err := f.Read(buf)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	return buf[:read], nil
 }
 
 // countLines counts the number of lines in a file.
@@ -492,13 +507,12 @@ func detectProjectType(files []FileInfo) string {
 }
 
 // detectLanguages detects programming languages used in the project.
+// Only includes languages classified as "programming" by go-enry.
 func detectLanguages(files []FileInfo) []string {
 	languageSet := make(map[string]bool)
 
 	for _, file := range files {
-		if file.Language != languageUnknown && file.Language != "Text" &&
-			file.Language != "JSON" && file.Language != "YAML" &&
-			file.Language != "TOML" && file.Language != "Markdown" {
+		if file.Language != languageUnknown && enry.GetLanguageType(file.Language) == enry.Programming {
 			languageSet[file.Language] = true
 		}
 	}
@@ -522,11 +536,6 @@ var sensitivePrefixes = []string{
 // sensitiveSubstrings lists env var key substrings that indicate sensitive data.
 var sensitiveSubstrings = []string{
 	"TOKEN", "KEY", "SECRET", "PASSWORD", "AUTH", "CREDENTIAL", "PRIVATE",
-}
-
-// filterEnvironment filters environment variables to exclude sensitive information.
-func filterEnvironment(env []string) map[string]string {
-	return execx.FilterEnvironment(env, sensitivePrefixes, sensitiveSubstrings)
 }
 
 // String returns a human-readable representation of the context.

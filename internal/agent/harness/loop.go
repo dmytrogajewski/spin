@@ -114,8 +114,8 @@ func (e *Executor) runLoop(
 // Returns (content, toolCalls, finished, error).
 func (e *Executor) phaseAction(
 	ctx context.Context, iterCtx *IterationContext,
-) (string, []message.ToolCall, bool, error) {
-	content, toolCalls, _, err := e.caller.Call(
+) (content string, toolCalls []message.ToolCall, finished bool, err error) {
+	content, toolCalls, _, err = e.caller.Call(
 		ctx, iterCtx.Messages, e.currentToolSchemas(), iterCtx.Turn,
 	)
 	if err != nil {

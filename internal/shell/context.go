@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 	"github.com/dmytrogajewski/spin/internal/process"
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 )
 
 var (
@@ -189,7 +189,7 @@ func (s *Context) ExecuteShellCommand(ctx context.Context, command string) (stri
 
 	err := cmd.Run()
 	if err != nil {
-		return s.handleRunError(cmdCtx, err, command, &stdout, &stderr)
+		return "", s.handleRunError(cmdCtx, err, command, &stdout, &stderr)
 	}
 
 	output := stdout.String()
@@ -216,17 +216,17 @@ func (s *Context) shellArgs(command string) []string {
 func (s *Context) handleRunError(
 	cmdCtx context.Context, err error, command string,
 	stdout, stderr *bytes.Buffer,
-) (string, error) {
+) error {
 	if errors.Is(cmdCtx.Err(), context.DeadlineExceeded) {
-		return "", fmt.Errorf("shell command timed out after %v: %s: %w", s.timeout, command, ErrShellCommandTimedOutAfter)
+		return fmt.Errorf("shell command timed out after %v: %s: %w", s.timeout, command, ErrShellCommandTimedOutAfter)
 	}
 
 	var exitErr *exec.ExitError
 	if !errors.As(err, &exitErr) {
-		return "", fmt.Errorf("shell command failed: %w", err)
+		return fmt.Errorf("shell command failed: %w", err)
 	}
 
-	return "", s.formatExitError(exitErr, stdout, stderr)
+	return s.formatExitError(exitErr, stdout, stderr)
 }
 
 // formatExitError builds the error message for a non-zero exit code.

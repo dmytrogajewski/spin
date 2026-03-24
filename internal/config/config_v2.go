@@ -100,13 +100,13 @@ var (
 	ErrSubagentMaxIterationsNegative = errors.New("subagents: max_iterations must not be negative")
 )
 
-// ValidationErrors collects multiple validation errors.
-type ValidationErrors struct {
+// ValidationError collects multiple validation errors.
+type ValidationError struct {
 	errors []error
 }
 
 // Error implements the error interface.
-func (v *ValidationErrors) Error() string {
+func (v *ValidationError) Error() string {
 	if len(v.errors) == 0 {
 		return ""
 	}
@@ -126,19 +126,19 @@ func (v *ValidationErrors) Error() string {
 }
 
 // Add adds an error to the collection.
-func (v *ValidationErrors) Add(err error) {
+func (v *ValidationError) Add(err error) {
 	if err != nil {
 		v.errors = append(v.errors, err)
 	}
 }
 
 // HasErrors returns true if there are any errors.
-func (v *ValidationErrors) HasErrors() bool {
+func (v *ValidationError) HasErrors() bool {
 	return len(v.errors) > 0
 }
 
-// ToError returns nil if no errors, otherwise returns the ValidationErrors itself.
-func (v *ValidationErrors) ToError() error {
+// ToError returns nil if no errors, otherwise returns the ValidationError itself.
+func (v *ValidationError) ToError() error {
 	if !v.HasErrors() {
 		return nil
 	}
@@ -435,7 +435,7 @@ func (s *SubagentConfigV2) EffectiveMaxIterations() int {
 
 // Validate performs validation on the config.
 func (c *V2) Validate() error {
-	errs := &ValidationErrors{}
+	errs := &ValidationError{}
 
 	// Validate each section (collect all errors, don't fail fast).
 	err := c.LLM.Validate()
@@ -498,7 +498,7 @@ func (a *AgentsMDV2) Validate() error {
 
 // Validate performs validation on the LLM configuration.
 func (l *LLMV2) Validate() error {
-	errs := &ValidationErrors{}
+	errs := &ValidationError{}
 
 	// Required fields.
 	if l.Provider == "" {
@@ -527,7 +527,7 @@ func (l *LLMV2) Validate() error {
 
 // Validate performs validation on the Agent configuration.
 func (a *AgentV2) Validate() error {
-	errs := &ValidationErrors{}
+	errs := &ValidationError{}
 
 	// Required fields.
 	if a.MaxTurns <= 0 {
@@ -552,7 +552,7 @@ func (ace *ACEV2) Validate() error {
 		return nil
 	}
 
-	errs := &ValidationErrors{}
+	errs := &ValidationError{}
 
 	// Required fields when enabled.
 	if ace.PlaybookPath == "" {
@@ -598,7 +598,7 @@ func (s *SecurityV2) Validate() error {
 
 // Validate performs validation on the Protocol configuration.
 func (p *ProtocolV2) Validate() error {
-	errs := &ValidationErrors{}
+	errs := &ValidationError{}
 
 	// Validate shell timeout if shell is enabled.
 	if p.EnableShell && p.ShellTimeout <= 0 {
@@ -623,7 +623,7 @@ func (p *ProtocolV2) Validate() error {
 
 // Validate performs validation on the MCP server configuration.
 func (m *MCPServerConfigV2) Validate() error {
-	errs := &ValidationErrors{}
+	errs := &ValidationError{}
 
 	// Name is always required.
 	if m.Name == "" {
@@ -657,7 +657,7 @@ func (m *MCPServerConfigV2) Validate() error {
 }
 
 // validateSmithery validates Smithery transport configuration.
-func (m *MCPServerConfigV2) validateSmithery(errs *ValidationErrors) {
+func (m *MCPServerConfigV2) validateSmithery(errs *ValidationError) {
 	// API key is always required for Smithery.
 	if m.SmitheryAPIKey == "" {
 		errs.Add(ErrSmitheryAPIKeyRequired)
@@ -690,13 +690,15 @@ func (t MCPTransportType) IsRemote() bool {
 	switch t {
 	case MCPTransportSSE, MCPTransportStreamableHTTP, MCPTransportSmithery:
 		return true
+	case MCPTransportStdio, "":
+		return false
 	default:
 		return false
 	}
 }
 
 // validateStdio validates stdio transport configuration.
-func (m *MCPServerConfigV2) validateStdio(errs *ValidationErrors) {
+func (m *MCPServerConfigV2) validateStdio(errs *ValidationError) {
 	// Command is required for stdio.
 	if m.Command == "" {
 		errs.Add(ErrCommandRequiredForStdio)
@@ -714,7 +716,7 @@ func (m *MCPServerConfigV2) validateStdio(errs *ValidationErrors) {
 }
 
 // validateRemote validates remote transport configuration.
-func (m *MCPServerConfigV2) validateRemote(transport MCPTransportType, errs *ValidationErrors) {
+func (m *MCPServerConfigV2) validateRemote(transport MCPTransportType, errs *ValidationError) {
 	// URL is required for remote transports.
 	if m.URL == "" {
 		errs.Add(fmt.Errorf("url is required for %s transport: %w", transport, ErrURLRequiredForTransport))
@@ -741,7 +743,7 @@ func (m *MCPServerConfigV2) validateRemote(transport MCPTransportType, errs *Val
 
 // Validate performs validation on the Memory configuration.
 func (m *MemoryV2) Validate() error {
-	errs := &ValidationErrors{}
+	errs := &ValidationError{}
 
 	// Validate scratchpad config.
 	err := m.Scratchpad.Validate()
@@ -765,7 +767,7 @@ func (s *ScratchpadV2) Validate() error {
 		return nil
 	}
 
-	errs := &ValidationErrors{}
+	errs := &ValidationError{}
 
 	if s.MaxEntries <= 0 {
 		errs.Add(fmt.Errorf("memory.scratchpad: max_entries must be positive, got %d: %w", s.MaxEntries, ErrScratchpadMaxEntriesPositive))
@@ -781,7 +783,7 @@ func (p *PersistentMemoryV2) Validate() error {
 		return nil
 	}
 
-	errs := &ValidationErrors{}
+	errs := &ValidationError{}
 
 	if p.BasePath == "" {
 		errs.Add(ErrPersistentBasePathRequired)

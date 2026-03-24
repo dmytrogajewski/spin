@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 // Searcher provides high-level file search with async indexing and advanced ranking.
 type Searcher struct {
 	root    string
 	scanner *Scanner
-	matcher *Matcher
+	matcher *pathx.Matcher
 
 	indexMu  sync.RWMutex
 	index    []string
@@ -31,7 +33,7 @@ func NewSearcher(root string) (*Searcher, error) {
 	return &Searcher{
 		root:    root,
 		scanner: NewScanner(root, false), // Will auto-load .gitignore/.spinignore.
-		matcher: NewMatcher(false),       // Case-insensitive by default.
+		matcher: pathx.NewMatcher(false), // Case-insensitive by default.
 		indexed: false,
 	}, nil
 }
@@ -98,9 +100,9 @@ func (s *Searcher) scanWithContext(ctx context.Context) ([]string, error) {
 // Returns top matches sorted by score (highest first).
 // If limit is 0 or negative, returns all matches.
 // Returns empty slice if not indexed or query is empty.
-func (s *Searcher) Search(query string, limit int) []Match {
+func (s *Searcher) Search(query string, limit int) []pathx.Match {
 	if query == "" {
-		return []Match{}
+		return []pathx.Match{}
 	}
 
 	// Read lock for concurrent search.
@@ -108,7 +110,7 @@ func (s *Searcher) Search(query string, limit int) []Match {
 	defer s.indexMu.RUnlock()
 
 	if !s.indexed {
-		return []Match{}
+		return []pathx.Match{}
 	}
 
 	// Perform fuzzy matching with advanced scoring.

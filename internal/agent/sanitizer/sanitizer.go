@@ -172,4 +172,3 @@ func (s *Sanitizer) processTagDrop(remaining string, contentBuilder, thoughtBuil
 
 	return 0, false
 }
-

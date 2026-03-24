@@ -60,7 +60,7 @@ func (c *TerminalClient) Create(
 		return "", fmt.Errorf("acp create terminal: %w", err)
 	}
 
-	return string(resp.TerminalId), nil
+	return resp.TerminalId, nil
 }
 
 // WaitForExit waits for the terminal command to complete.
@@ -85,7 +85,7 @@ func (c *TerminalClient) WaitForExit(ctx context.Context, terminalID string) (ex
 	}
 
 	if resp.ExitCode != nil {
-		exitCode = int(*resp.ExitCode)
+		exitCode = *resp.ExitCode
 	}
 
 	return exitCode, resp.Signal, nil
@@ -118,7 +118,7 @@ func (c *TerminalClient) GetOutput(
 		var code *int
 
 		if resp.ExitStatus.ExitCode != nil {
-			ec := int(*resp.ExitStatus.ExitCode)
+			ec := *resp.ExitStatus.ExitCode
 			code = &ec
 		}
 

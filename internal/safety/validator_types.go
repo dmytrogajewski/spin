@@ -100,6 +100,26 @@ func (c *Command) GetRaw() string { return c.Raw }
 // GetWorkDir returns the working directory.
 func (c *Command) GetWorkDir() string { return c.WorkDir }
 
+// commandSource describes anything that can provide command fields.
+// This avoids importing the tools package (which defines CommandInfo).
+type commandSource interface {
+	GetProgram() string
+	GetArgs() []string
+	GetRaw() string
+	GetWorkDir() string
+}
+
+// CommandFrom creates a Command from any source that provides the four standard getters.
+// This is the single conversion point used by all adapters.
+func CommandFrom(src commandSource) *Command {
+	return &Command{
+		Program: src.GetProgram(),
+		Args:    src.GetArgs(),
+		Raw:     src.GetRaw(),
+		WorkDir: src.GetWorkDir(),
+	}
+}
+
 // ValidationResult contains the result of command validation.
 type ValidationResult struct {
 	// Classification is the determined safety level.

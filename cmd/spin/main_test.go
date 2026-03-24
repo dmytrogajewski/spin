@@ -92,20 +92,20 @@ func TestBinaryNameDetection(t *testing.T) {
 func TestMain(m *testing.M) {
 	// Redirect stderr to suppress error messages during tests.
 	oldStderr := os.Stderr
-	r, w, _ := os.Pipe()
-	os.Stderr = w
+	pipeReader, pipeWriter, _ := os.Pipe()
+	os.Stderr = pipeWriter
 
 	code := m.Run()
 
 	// Restore stderr.
-	w.Close()
+	pipeWriter.Close()
 
 	os.Stderr = oldStderr
 
 	// Drain pipe.
 	var buf bytes.Buffer
 
-	_, _ = buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(pipeReader)
 
 	os.Exit(code)
 }

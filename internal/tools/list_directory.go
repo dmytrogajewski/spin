@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 // ListDirectoryTool implements directory listing functionality.
@@ -59,12 +61,12 @@ func (t *ListDirectoryTool) Execute(ctx context.Context, params ToolParameters) 
 		return NewToolError(err), nil
 	}
 
-	path, _ := params.GetString("path")
+	path := params.GetStringOr("path", "")
 	if path == "" {
 		return NewToolError(errPathParameterRequired), nil
 	}
 
-	path = resolvePath(path, t.workDir)
+	path = pathx.ResolvePath(t.workDir, path)
 
 	entries, err := os.ReadDir(path)
 	if err != nil {

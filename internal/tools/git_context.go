@@ -8,6 +8,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/git"
 )
 
+// Git context display constants.
+const (
+	commitHashDisplayLen  = 8
+	maxUntrackedFilesList = 20
+)
+
 // GitContextTool implements Git repository context retrieval.
 type GitContextTool struct {
 	workspaceRoot string
@@ -96,7 +102,7 @@ func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (To
 
 	// Commit hash.
 	if status.Hash != "" {
-		hashLen := min(len(status.Hash), 8)
+		hashLen := min(len(status.Hash), commitHashDisplayLen)
 
 		fmt.Fprintf(&output, "Commit: %s\n", status.Hash[:hashLen])
 	}
@@ -113,7 +119,7 @@ func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (To
 		}
 	}
 
-	if len(status.UntrackedFiles) > 0 && len(status.UntrackedFiles) < 20 {
+	if len(status.UntrackedFiles) > 0 && len(status.UntrackedFiles) < maxUntrackedFilesList {
 		output.WriteString("\nUntracked:\n")
 
 		for _, file := range status.UntrackedFiles {

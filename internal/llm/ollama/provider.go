@@ -14,8 +14,8 @@ import (
 	"github.com/ollama/ollama/api"
 	openaisdk "github.com/openai/openai-go"
 
-	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 )
 
 const maxPreviewLen = 100
@@ -26,6 +26,9 @@ var ErrModelIsRequired = errors.New("model is required")
 const (
 	// DefaultBaseURL is the default Ollama API endpoint.
 	DefaultBaseURL = "http://localhost:11434"
+
+	// streamChunkBuffer is the buffer size for streaming chunk channels.
+	streamChunkBuffer = 10
 )
 
 // Config configures the Ollama provider.
@@ -350,7 +353,7 @@ func logResponsePreview(ctx context.Context, logger *slog.Logger, content string
 func (p *Provider) Stream(ctx context.Context, params openaisdk.ChatCompletionNewParams) (<-chan openaisdk.ChatCompletionChunk, error) {
 	req := p.buildChatRequest(ctx, params, true)
 
-	chunks := make(chan openaisdk.ChatCompletionChunk, 10)
+	chunks := make(chan openaisdk.ChatCompletionChunk, streamChunkBuffer)
 
 	go func() {
 		defer close(chunks)

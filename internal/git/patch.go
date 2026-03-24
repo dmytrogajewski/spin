@@ -52,12 +52,12 @@ func (r *Repository) ApplyPatch(ctx context.Context, patchText string, opts Appl
 
 		// Patch failed to apply.
 		return &ApplyPatchResult{
-			Success: false,
-			Message: fmt.Sprintf("failed to apply patch: %s", stderr.String()),
-		}, &PatchError{
-			Message: "git apply failed",
-			Reason:  strings.TrimSpace(stderr.String()),
-		}
+				Success: false,
+				Message: fmt.Sprintf("failed to apply patch: %s", stderr.String()),
+			}, &PatchError{
+				Message: "git apply failed",
+				Reason:  strings.TrimSpace(stderr.String()),
+			}
 	}
 
 	// Success.

@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/dmytrogajewski/spin/pkg/apperr"
 	"github.com/dmytrogajewski/spin/internal/state"
+	"github.com/dmytrogajewski/spin/pkg/apperr"
 )
 
 var (

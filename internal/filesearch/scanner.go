@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 const defaultMaxScanDepth = 20
@@ -12,14 +14,14 @@ const defaultMaxScanDepth = 20
 // Scanner scans directories for files with gitignore support.
 type Scanner struct {
 	baseDir       string
-	ignoreGit     bool // Deprecated: use IgnoreHandler instead.
+	ignoreGit     bool // Deprecated: use pathx.IgnoreHandler instead.
 	maxDepth      int
-	ignoreHandler *IgnoreHandler // Handles .gitignore and .spinignore patterns.
+	ignoreHandler *pathx.IgnoreHandler // Handles .gitignore and .spinignore patterns.
 }
 
 // NewScanner creates a new file scanner with gitignore support.
 // If ignoreGit is true, basic .git exclusion is enabled (for backward compatibility).
-// The Scanner will automatically create an IgnoreHandler to respect .gitignore and .spinignore files.
+// The Scanner will automatically create a pathx.IgnoreHandler to respect .gitignore and .spinignore files.
 func NewScanner(baseDir string, ignoreGit bool) *Scanner {
 	return &Scanner{
 		baseDir:   baseDir,
@@ -74,11 +76,13 @@ func (s *Scanner) ScanWithContext(ctx context.Context) ([]string, error) {
 	return files, nil
 }
 
-// ensureIgnoreHandler creates an IgnoreHandler if not provided.
+// ensureIgnoreHandler creates a pathx.IgnoreHandler if not provided.
 func (s *Scanner) ensureIgnoreHandler() {
 	if s.ignoreHandler == nil && s.baseDir != "" {
-		handler, _ := NewIgnoreHandler(s.baseDir)
-		s.ignoreHandler = handler
+		handler, handlerErr := pathx.NewIgnoreHandler(s.baseDir)
+		if handlerErr == nil {
+			s.ignoreHandler = handler
+		}
 	}
 }
 

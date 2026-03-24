@@ -1,4 +1,3 @@
-// Journey: specs/journeys/JOURNEY-1.2.md
 package executor_test
 
 import (
@@ -29,7 +28,7 @@ func TestBlocklistStage_BlocksForbiddenCommand(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, pc.Halted, "pipeline should be halted for dangerous command")
-	require.NotNil(t, pc.HaltErr)
+	require.Error(t, pc.HaltErr)
 	require.ErrorIs(t, pc.HaltErr, executor.ErrCommandBlocklisted)
 }
 

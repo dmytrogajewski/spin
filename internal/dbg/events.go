@@ -16,13 +16,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/safety"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 )
 
 const debugEventBufferSize = 100
@@ -32,6 +32,8 @@ var (
 	ErrPromptCannotBeEmpty = errors.New("prompt cannot be empty")
 	// ErrTaskFailed is a sentinel error.
 	ErrTaskFailed = errors.New("task failed")
+	// ErrServiceNotEnabled is returned when a service is not enabled.
+	ErrServiceNotEnabled = errors.New("service not enabled")
 )
 
 // EventLogger captures and logs all core events for debugging.
@@ -65,7 +67,7 @@ type debugServices struct {
 // createGitService creates a git service if enabled by config.
 func createGitService(ctx context.Context, cfg *config.V2, workDir string, logger *slog.Logger) (*gitpkg.Service, error) {
 	if !cfg.Protocol.EnableGit {
-		return nil, nil
+		return nil, ErrServiceNotEnabled
 	}
 
 	svc, err := gitpkg.NewService(ctx, true, workDir, logger)
@@ -79,7 +81,7 @@ func createGitService(ctx context.Context, cfg *config.V2, workDir string, logge
 // createShellService creates a shell service if enabled by config.
 func createShellService(ctx context.Context, cfg *config.V2, workDir string, logger *slog.Logger) (*shellpkg.Service, error) {
 	if !cfg.Protocol.EnableShell {
-		return nil, nil
+		return nil, ErrServiceNotEnabled
 	}
 
 	svc, err := shellpkg.NewService(ctx, true, workDir, logger, cfg.Protocol.ShellTimeout)
@@ -131,12 +133,12 @@ func createMCPService(ctx context.Context, cfg *config.V2, logger *slog.Logger) 
 // initServices creates all required services based on configuration.
 func initServices(ctx context.Context, cfg *config.V2, workDir string, logger *slog.Logger) (*debugServices, error) {
 	gitSvc, err := createGitService(ctx, cfg, workDir, logger)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrServiceNotEnabled) {
 		return nil, err
 	}
 
 	shellSvc, err := createShellService(ctx, cfg, workDir, logger)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrServiceNotEnabled) {
 		if gitSvc != nil {
 			gitSvc.Close()
 		}
@@ -176,9 +178,15 @@ func createBuiltinRuntime(
 	svcs *debugServices,
 	logger *slog.Logger,
 ) (*agentexec.BuiltinRuntime, error) {
-	var storage session.Storage
+	var sessionStorage session.Storage
+
 	if cfg.Agent.SessionDir != "" {
-		storage, _ = session.NewFileStorage(cfg.Agent.SessionDir)
+		var storageErr error
+
+		sessionStorage, storageErr = session.NewFileStorage(cfg.Agent.SessionDir)
+		if storageErr != nil {
+			logger.WarnContext(context.Background(), "failed to create session storage", "err", storageErr)
+		}
 	}
 
 	approvalHandler := func(_ context.Context, req safety.ApprovalRequest) safety.ApprovalResponse {
@@ -189,13 +197,17 @@ func createBuiltinRuntime(
 		}
 	}
 
-	executor, _ := agent.NewExecutor(workDir)
+	executor, execErr := agent.NewExecutor(workDir)
+	if execErr != nil {
+		return nil, fmt.Errorf("create executor: %w", execErr)
+	}
+
 	validator := safety.NewValidator()
 
 	return agentexec.NewBuiltinRuntime(agentexec.BuiltinRuntimeConfig{
 		WorkDir:         workDir,
 		Emitter:         emitter,
-		Storage:         storage,
+		Storage:         sessionStorage,
 		SessionID:       fmt.Sprintf("debug-%d", time.Now().UnixNano()),
 		Executor:        agent.NewExecutorRuntimeAdapter(executor),
 		Validator:       validator,
@@ -320,7 +332,7 @@ func (el *EventLogger) Run(ctx context.Context, prompt string) error {
 	if err != nil {
 		return err
 	}
-	defer conv.Close()
+	defer conv.Close(ctx)
 
 	eventStream := conv.Stream()
 	errChan := make(chan error, 1)

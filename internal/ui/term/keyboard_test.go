@@ -573,8 +573,10 @@ func TestReadKeys_RapidInput(t *testing.T) {
 	defer cancel()
 
 	// 100 rapid keypresses.
-	var input []byte
-	for i := range 100 {
+	const rapidKeyCount = 100
+
+	input := make([]byte, 0, rapidKeyCount)
+	for i := range rapidKeyCount {
 		input = append(input, byte('a'+(i%26)))
 	}
 

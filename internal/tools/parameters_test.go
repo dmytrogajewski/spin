@@ -485,7 +485,10 @@ type getOrCase[T comparable] struct {
 	want         T
 }
 
-func runGetOrTests[T comparable](t *testing.T, params ToolParameters, cases []getOrCase[T], opName string, op func(ToolParameters, string, T) T) {
+func runGetOrTests[T comparable](
+	t *testing.T, params ToolParameters, cases []getOrCase[T],
+	opName string, op func(ToolParameters, string, T) T,
+) {
 	t.Helper()
 
 	for _, tt := range cases {

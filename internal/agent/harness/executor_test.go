@@ -43,7 +43,7 @@ type stubCaller struct {
 
 func (s *stubCaller) Call(
 	_ context.Context, _ []message.Message, _ []tools.ToolSchema, _ int,
-) (string, []message.ToolCall, string, error) {
+) (content string, toolCalls []message.ToolCall, finishReason string, err error) {
 	s.callCount++
 
 	return s.content, s.toolCalls, s.finishReason, s.err
@@ -57,7 +57,7 @@ type multiTurnCaller struct {
 
 func (m *multiTurnCaller) Call(
 	_ context.Context, _ []message.Message, _ []tools.ToolSchema, _ int,
-) (string, []message.ToolCall, string, error) {
+) (content string, toolCalls []message.ToolCall, finishReason string, err error) {
 	m.callCount++
 
 	if m.callCount <= m.toolTurns {

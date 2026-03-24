@@ -23,32 +23,9 @@ func NewExecutorRuntimeAdapter(exec *Executor) executor.CommandExecutor {
 
 // Execute implements executor.CommandExecutor interface.
 func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *safety.Command, opts any) (*executor.CommandResult, error) {
-	var execOpts *ExecuteOptions
+	result, err := a.executor.Execute(ctx, cmd, asExecuteOptions(opts))
 
-	if opts != nil {
-		if eOpts, ok := opts.(*ExecuteOptions); ok {
-			execOpts = eOpts
-		}
-	}
-
-	result, err := a.executor.Execute(ctx, cmd, execOpts)
-	if err != nil {
-		// Convert agent.Result to executor.CommandResult.
-		return &executor.CommandResult{
-			Command:     result.Command,
-			Stdout:      result.Stdout,
-			Stderr:      result.Stderr,
-			ExitCode:    result.ExitCode,
-			Duration:    result.Duration,
-			StartedAt:   result.StartedAt,
-			CompletedAt: result.CompletedAt,
-			Error:       err,
-			Truncated:   result.Truncated,
-		}, err
-	}
-
-	// Convert agent.Result to executor.CommandResult.
-	return &executor.CommandResult{
+	cmdResult := &executor.CommandResult{
 		Command:     result.Command,
 		Stdout:      result.Stdout,
 		Stderr:      result.Stderr,
@@ -58,5 +35,26 @@ func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *safety.Comman
 		CompletedAt: result.CompletedAt,
 		Error:       result.Error,
 		Truncated:   result.Truncated,
-	}, nil
+	}
+
+	if err != nil {
+		cmdResult.Error = err
+
+		return cmdResult, err
+	}
+
+	return cmdResult, nil
+}
+
+// asExecuteOptions extracts *ExecuteOptions from an untyped opts value.
+func asExecuteOptions(opts any) *ExecuteOptions {
+	if opts == nil {
+		return nil
+	}
+
+	if eOpts, ok := opts.(*ExecuteOptions); ok {
+		return eOpts
+	}
+
+	return nil
 }

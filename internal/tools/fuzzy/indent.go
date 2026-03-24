@@ -1,24 +1,36 @@
 package fuzzy
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/search"
+)
 
 // IndentFind strips leading whitespace from each line and compares line-by-line.
 func IndentFind(fileContent, oldContent string) []MatchResult {
+	return findByLineTransform(fileContent, oldContent, func(line string) string {
+		return strings.TrimLeft(line, " \t")
+	})
+}
+
+// findByLineTransform applies a per-line transform to both inputs and finds
+// matching line sequences. Shared by passes that differ only in line normalization.
+func findByLineTransform(fileContent, oldContent string, transform func(string) string) []MatchResult {
 	oldLines := strings.Split(oldContent, "\n")
-	strippedOld := make([]string, len(oldLines))
+	transformedOld := make([]string, len(oldLines))
 
 	for idx, line := range oldLines {
-		strippedOld[idx] = strings.TrimLeft(line, " \t")
+		transformedOld[idx] = transform(line)
 	}
 
 	fileLines := strings.Split(fileContent, "\n")
-	strippedFile := make([]string, len(fileLines))
+	transformedFile := make([]string, len(fileLines))
 
 	for idx, line := range fileLines {
-		strippedFile[idx] = strings.TrimLeft(line, " \t")
+		transformedFile[idx] = transform(line)
 	}
 
-	return findLineSequence(fileContent, fileLines, strippedFile, strippedOld)
+	return findLineSequence(fileContent, fileLines, transformedFile, transformedOld)
 }
 
 // findLineSequence finds where strippedTarget appears as a consecutive subsequence in strippedFile.
@@ -34,10 +46,12 @@ func findLineSequence(
 
 	targetLen := len(strippedTarget)
 
+	strEq := func(a, b string) bool { return a == b }
+
 	for idx := 0; idx <= len(strippedFile)-targetLen; idx++ {
-		if matchesAt(strippedFile, strippedTarget, idx) {
-			start := lineOffset(originalLines, idx)
-			end := lineOffsetEnd(originalLines, idx+targetLen-1)
+		if search.MatchesAt(strippedFile, strippedTarget, idx, strEq) {
+			start := search.LineOffset(originalLines, idx)
+			end := search.LineOffsetEnd(originalLines, idx+targetLen-1)
 
 			results = append(results, MatchResult{
 				Start:    start,
@@ -48,31 +62,4 @@ func findLineSequence(
 	}
 
 	return results
-}
-
-// matchesAt checks if target matches file lines starting at position.
-func matchesAt(fileLines, targetLines []string, pos int) bool {
-	for idx, target := range targetLines {
-		if fileLines[pos+idx] != target {
-			return false
-		}
-	}
-
-	return true
-}
-
-// lineOffset returns byte offset of line at given index.
-func lineOffset(lines []string, lineIdx int) int {
-	offset := 0
-
-	for idx := range lineIdx {
-		offset += len(lines[idx]) + 1 // +1 for newline.
-	}
-
-	return offset
-}
-
-// lineOffsetEnd returns byte offset at end of line at given index.
-func lineOffsetEnd(lines []string, lineIdx int) int {
-	return lineOffset(lines, lineIdx) + len(lines[lineIdx])
 }

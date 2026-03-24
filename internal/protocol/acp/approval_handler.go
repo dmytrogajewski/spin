@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -65,10 +66,7 @@ func (h *ApprovalHandler) HandleApprovalRequest(ctx context.Context, req safety.
 
 	toolName := extractToolName(req)
 
-	toolCall, err := h.convertApprovalRequestToToolCall(req)
-	if err != nil {
-		return h.denyResponse(req.ID, fmt.Sprintf("conversion error: %v", err))
-	}
+	toolCall := h.convertApprovalRequestToToolCall(req)
 
 	options := buildPermissionOptions()
 
@@ -156,7 +154,9 @@ func (h *ApprovalHandler) sendPendingNotification(
 		SessionId: sessionID,
 		Update:    update,
 	}
-	_ = conn.SessionUpdate(ctx, notification)
+	if err := conn.SessionUpdate(ctx, notification); err != nil {
+		slog.WarnContext(ctx, "failed to send pending notification", "tool_call_id", toolCallID, "error", err)
+	}
 }
 
 // mapToolNameToKind maps a tool name to an ACP tool kind.
@@ -258,7 +258,7 @@ func resolvePermissionOutcome(acpResp acp.RequestPermissionResponse, options []a
 }
 
 // convertApprovalRequestToToolCall converts a security approval request to an ACP tool call.
-func (h *ApprovalHandler) convertApprovalRequestToToolCall(req safety.ApprovalRequest) (acp.ToolCallUpdate, error) {
+func (h *ApprovalHandler) convertApprovalRequestToToolCall(req safety.ApprovalRequest) acp.ToolCallUpdate {
 	// Extract tool name from command.
 	toolName := unknownValue
 	if req.Command != nil {
@@ -277,5 +277,5 @@ func (h *ApprovalHandler) convertApprovalRequestToToolCall(req safety.ApprovalRe
 		Title:      acp.Ptr(toolName),
 	}
 
-	return toolCall, nil
+	return toolCall
 }

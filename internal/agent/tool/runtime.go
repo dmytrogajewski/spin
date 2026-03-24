@@ -19,6 +19,8 @@ var (
 	ErrApprovalRequiredButNoApprovalHandler = errors.New("approval required but no approval handler configured")
 	// ErrOperationDenied is a sentinel error.
 	ErrOperationDenied = errors.New("operation denied")
+	// ErrBlockedByHook is a sentinel error for hook-blocked tool calls.
+	ErrBlockedByHook = errors.New("blocked by hook")
 )
 
 // RuntimeConfig configures the tool runtime.
@@ -293,15 +295,15 @@ func (t *Runtime) runPreToolHook(ctx context.Context, call *message.ToolCall) *t
 	}
 
 	evtCtx := hooks.EventContext{
-		WorkDir:  t.workDir,
-		ToolName: call.Function.Name,
+		WorkDir:   t.workDir,
+		ToolName:  call.Function.Name,
 		ToolInput: call.Function.Arguments,
 	}
 
 	hookResult := t.hookRunner.Execute(ctx, hooks.EventPreToolUse, evtCtx)
 	if hookResult.Blocked {
 		result := tools.NewToolErrorWithID(call.ID,
-			fmt.Errorf("blocked by hook: %s", hookResult.Reason))
+			fmt.Errorf("%w: %s", ErrBlockedByHook, hookResult.Reason))
 
 		return &result
 	}

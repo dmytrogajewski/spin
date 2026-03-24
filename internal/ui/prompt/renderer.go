@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	defaultTermHeight = 24
-	minStatusGap      = 3 // minimum gap between content and status.
+	defaultTermHeight    = 24
+	minStatusGap         = 3 // minimum gap between content and status.
+	scrollEllipsisWidth  = 2 // space reserved for scroll indicator ellipses.
+	minScrollWindowWidth = 1 // minimum width of scroll window.
 )
 
 // TermRenderer renders a prompt model to a terminal using ANSI escape sequences.
@@ -109,8 +111,7 @@ func (r *TermRenderer) calculateVisibleContent(bufferText string, cursorInfo cur
 // calculateScrolledContent calculates content when scrolling is needed.
 func (r *TermRenderer) calculateScrolledContent(bufferText string, cursorInfo cursorInfo, widths widthInfo) visibleInfo {
 	scrollWindowWidth := max(
-		// reserve for ellipses.
-		widths.availableWidth-2, 1)
+		widths.availableWidth-scrollEllipsisWidth, minScrollWindowWidth)
 
 	scrollStart, scrollEnd := r.calculateScrollBounds(cursorInfo.cursorOffset, scrollWindowWidth, widths.bufferWidth)
 	visibleBuffer, scrollOffset := extractVisibleSlice(bufferText, scrollStart, scrollEnd)

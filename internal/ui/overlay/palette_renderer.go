@@ -10,6 +10,9 @@ const (
 	paletteHeightRatio   = 0.6
 	paletteBorderWidth   = 2
 	paletteBorderPadding = 4
+	paletteMaxWidth      = 80
+	paletteMinHeight     = 8
+	paletteFrameRows     = 6
 )
 
 // Design tokens (matching blocks package).
@@ -63,8 +66,8 @@ func (r *PaletteRenderer) SetSize(width, height int) {
 // Render returns ANSI sequences for the palette overlay.
 // Returns a multi-line string with embedded newlines.
 func (r *PaletteRenderer) Render(p *Palette) string {
-	paletteWidth := min(80, r.width-2*s4)
-	maxHeight := max(int(float64(r.height)*paletteHeightRatio), 8)
+	paletteWidth := min(paletteMaxWidth, r.width-2*s4)
+	maxHeight := max(int(float64(r.height)*paletteHeightRatio), paletteMinHeight)
 	leftPad := (r.width - paletteWidth) / paletteBorderWidth
 
 	var sb strings.Builder
@@ -134,7 +137,7 @@ func (r *PaletteRenderer) renderInputLine(sb *strings.Builder, p *Palette, palet
 // renderResultsList writes the filtered command results or empty state.
 func (r *PaletteRenderer) renderResultsList(sb *strings.Builder, p *Palette, paletteWidth, maxHeight, leftPad int) {
 	filtered := p.FilteredCommands()
-	maxItems := min(len(filtered), maxHeight-6)
+	maxItems := min(len(filtered), maxHeight-paletteFrameRows)
 
 	if len(filtered) == 0 {
 		r.renderEmptyState(sb, p, paletteWidth, leftPad)

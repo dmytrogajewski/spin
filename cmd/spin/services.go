@@ -20,13 +20,17 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 )
 
-// ErrUnsupportedTransport is a sentinel error.
-var ErrUnsupportedTransport = errors.New("unsupported transport")
+var (
+	// ErrUnsupportedTransport is a sentinel error.
+	ErrUnsupportedTransport = errors.New("unsupported transport")
+	// ErrNoSessionDir is returned when no session directory is configured.
+	ErrNoSessionDir = errors.New("no session directory configured")
+)
 
 // createSessionStorage creates a session storage if a directory is configured.
 func createSessionStorage(sessionDir string) (session.Storage, error) {
 	if sessionDir == "" {
-		return nil, nil
+		return nil, ErrNoSessionDir
 	}
 
 	storage, err := session.NewFileStorage(sessionDir)

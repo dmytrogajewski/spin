@@ -50,7 +50,7 @@ func TestSnapshotManager_NestedGitNoCommit_SnapshotSucceeds(t *testing.T) {
 
 	// Now try to snapshot — this MUST NOT fail.
 	mgr := undo.NewSnapshotManager(workDir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	hash, snapErr := mgr.Snapshot()
 	require.NoError(t, snapErr, "Snapshot should succeed even with nested .git dir that has no commits")
@@ -80,7 +80,7 @@ func TestSnapshotManager_NestedGitWithCommit_TracksRootFiles(t *testing.T) {
 	initGitWithCommit(t, nestedDir)
 
 	mgr := undo.NewSnapshotManager(workDir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	// Snapshot 1.
 	hash1, err := mgr.Snapshot()
@@ -112,7 +112,7 @@ func TestSnapshotManager_UnsafeWorkDir_RejectsHome(t *testing.T) {
 	require.NoError(t, err)
 
 	mgr := undo.NewSnapshotManager(homeDir)
-	initErr := mgr.Init()
+	initErr := mgr.Init(context.Background())
 
 	require.ErrorIs(t, initErr, undo.ErrUnsafeWorkDir)
 }
@@ -122,7 +122,7 @@ func TestSnapshotManager_UnsafeWorkDir_RejectsRoot(t *testing.T) {
 	t.Parallel()
 
 	mgr := undo.NewSnapshotManager("/")
-	initErr := mgr.Init()
+	initErr := mgr.Init(context.Background())
 
 	require.ErrorIs(t, initErr, undo.ErrUnsafeWorkDir)
 }

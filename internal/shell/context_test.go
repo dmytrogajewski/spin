@@ -62,8 +62,8 @@ func TestExecuteShellCommand_FailedCommand(t *testing.T) {
 	errMsg := err.Error()
 	t.Logf("Error message: %s", errMsg)
 
-	// BUG TEST: The error should include helpful information
-	// Currently, it just says "shell command failed" without explaining WHY
+	// Verify: The error should include helpful information.
+	// Currently, it just says "shell command failed" without explaining WHY.
 	// Check for various languages' "not found" messages.
 	notFoundPhrases := []string{"not found", "No such", "не найдена", "команда не найдена", "command not found"}
 	foundAny := false
@@ -109,8 +109,8 @@ func TestExecuteShellCommand_CommandWithStderr(t *testing.T) {
 	errMsg := err.Error()
 	t.Logf("Error message: %s", errMsg)
 
-	// BUG TEST: The error should include the stderr output explaining the problem
-	// Currently, stderr is discarded by using cmd.Output() instead of cmd.CombinedOutput()
+	// Verify: The error should include the stderr output explaining the problem.
+	// Currently, stderr is discarded by using cmd.Output() instead of cmd.CombinedOutput().
 	// Check for various languages' "no such file" messages.
 	noSuchFilePhrases := []string{"no such file", "cannot access", "not found", "Нет такого файла", "невозможно получить доступ"}
 	foundAny := false
@@ -154,7 +154,7 @@ func TestExecuteShellCommand_ExitCode(t *testing.T) {
 	errMsg := err.Error()
 	t.Logf("Error message: %s", errMsg)
 
-	// BUG TEST: The error should include the exit code
+	// Verify: The error should include the exit code.
 	// Currently, we lose this information.
 	if !strings.Contains(errMsg, "42") && !strings.Contains(errMsg, "exit") {
 		t.Error("BUG: Error message doesn't include exit code information")
@@ -190,8 +190,8 @@ func TestExecuteShellCommand_MissingTool(t *testing.T) {
 	errMsg := err.Error()
 	t.Logf("Error message for missing 'alien' tool: %s", errMsg)
 
-	// BUG TEST: The error should clearly indicate that the tool is not found
-	// This is critical for the agent to understand and suggest installing the tool
+	// Verify: The error should clearly indicate that the tool is not found.
+	// This is critical for the agent to understand and suggest installing the tool.
 	// Check for various languages' "not found" messages.
 	notFoundPhrases := []string{"not found", "no such", "command not found", "не найдена", "команда не найдена"}
 	foundAny := false

@@ -26,6 +26,7 @@ const (
 	promptModelCapacity  = 100
 	percentMulPuretty    = 100
 	maxCommandDisplayLen = 50
+	externalInputBufSize = 100
 )
 
 // ErrAlreadyRunning is a sentinel error.
@@ -140,8 +141,8 @@ func WithKeyboardEvents(keyEvents <-chan term.KeyEvent) PureTTYOption {
 func NewPureTTY(out io.Writer, opts ...PureTTYOption) (*PureTTY, error) {
 	p := &PureTTY{
 		out:            out,
-		mode:           ModeInput,              // Start in input mode (backward compat).
-		externalInputs: make(chan string, 100), // Buffered channel for RequestInput() callers.
+		mode:           ModeInput,                               // Start in input mode (backward compat).
+		externalInputs: make(chan string, externalInputBufSize), // Buffered channel for RequestInput() callers.
 	}
 
 	// Apply options.
@@ -656,7 +657,9 @@ func (a *rendererAdapter) Redraw(model output.PromptModel, statusText string) er
 
 // formatFilterChips formats active filter as colored chips.
 func (p *PureTTY) formatFilterChips(f *blocks.Filter) string {
-	var chips []string
+	const maxExtraChips = 3 // file, exit code, impact.
+
+	chips := make([]string, 0, len(f.Types)+maxExtraChips)
 
 	chips = append(chips, p.formatTypeChips(f.Types)...)
 	chips = append(chips, p.formatFileChip(f.File)...)
@@ -668,7 +671,7 @@ func (p *PureTTY) formatFilterChips(f *blocks.Filter) string {
 
 // formatTypeChips formats type filter chips.
 func (p *PureTTY) formatTypeChips(types []blocks.BlockType) []string {
-	var chips []string
+	chips := make([]string, 0, len(types))
 	for _, typ := range types {
 		chips = append(chips, fmt.Sprintf("[type:%s]", typ))
 	}

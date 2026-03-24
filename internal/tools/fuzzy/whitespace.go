@@ -2,7 +2,8 @@ package fuzzy
 
 import (
 	"regexp"
-	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/search"
 )
 
 var whitespaceRunPattern = regexp.MustCompile(`[ \t]+`)
@@ -22,48 +23,16 @@ func WhitespaceFind(fileContent, oldContent string) []MatchResult {
 
 // findByNormalized maps matches found in normalized content back to original content.
 func findByNormalized(original, normalizedFile, normalizedOld string) []MatchResult {
-	var results []MatchResult
+	offsets := search.FindAllNormalized(original, normalizedFile, normalizedOld)
+	results := make([]MatchResult, 0, len(offsets))
 
-	searchFrom := 0
-
-	for {
-		idx := strings.Index(normalizedFile[searchFrom:], normalizedOld)
-		if idx < 0 {
-			break
-		}
-
-		absIdx := searchFrom + idx
-
-		// Map normalized offsets back to original offsets.
-		origStart := mapNormalizedOffset(original, normalizedFile, absIdx)
-		origEnd := mapNormalizedOffset(original, normalizedFile, absIdx+len(normalizedOld))
-
+	for _, pair := range offsets {
 		results = append(results, MatchResult{
-			Start:    origStart,
-			End:      origEnd,
-			Original: original[origStart:origEnd],
+			Start:    pair[0],
+			End:      pair[1],
+			Original: original[pair[0]:pair[1]],
 		})
-
-		searchFrom = absIdx + 1
 	}
 
 	return results
-}
-
-// mapNormalizedOffset maps an offset in normalized string back to the original string.
-func mapNormalizedOffset(original, normalized string, normOffset int) int {
-	origIdx := 0
-	normIdx := 0
-
-	for normIdx < normOffset && origIdx < len(original) {
-		if normIdx < len(normalized) && original[origIdx] == normalized[normIdx] {
-			origIdx++
-			normIdx++
-		} else {
-			// Original has extra whitespace that was collapsed.
-			origIdx++
-		}
-	}
-
-	return origIdx
 }

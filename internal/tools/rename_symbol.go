@@ -73,7 +73,7 @@ func (t *RenameSymbolTool) Schema() ToolSchema {
 
 // Execute performs the rename operation.
 func (t *RenameSymbolTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	filePath, _ := params.GetString(paramFilePath)
+	filePath := params.GetStringOr(paramFilePath, "")
 	if filePath == "" {
 		return NewToolError(ErrInvalidParameters), nil
 	}
@@ -85,7 +85,7 @@ func (t *RenameSymbolTool) Execute(ctx context.Context, params ToolParameters) (
 	line := params.GetIntOr(paramLine, 0)
 	char := params.GetIntOr(paramCharacter, 0)
 
-	newName, _ := params.GetString(paramNewName)
+	newName := params.GetStringOr(paramNewName, "")
 	if newName == "" {
 		return NewToolError(ErrInvalidParameters), nil
 	}

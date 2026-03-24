@@ -45,8 +45,8 @@ func isGitRepo(env *agent.Environment) bool {
 func TestComposer_EmptyReturnsEmpty(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
-	result := c.Compose(nonGitEnv())
+	composer := prompt.NewComposer()
+	result := composer.Compose(nonGitEnv())
 
 	assert.Empty(t, result)
 }
@@ -56,14 +56,14 @@ func TestComposer_EmptyReturnsEmpty(t *testing.T) {
 func TestComposer_SingleSection(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
-	c.AddSection(prompt.Section{
+	composer := prompt.NewComposer()
+	composer.AddSection(prompt.Section{
 		Name:     "identity",
 		Priority: prompt.PriorityIdentityMin,
 		Template: testCoreIdentity,
 	})
 
-	result := c.Compose(nonGitEnv())
+	result := composer.Compose(nonGitEnv())
 
 	assert.Equal(t, testCoreIdentity, result)
 }
@@ -73,21 +73,21 @@ func TestComposer_SingleSection(t *testing.T) {
 func TestComposer_SortedByPriority(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
+	composer := prompt.NewComposer()
 
 	// Add in reverse order to verify sorting.
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name:     "dynamic",
 		Priority: prompt.PriorityDynamicMin,
 		Template: testDynamicContext,
 	})
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name:     "identity",
 		Priority: prompt.PriorityIdentityMin,
 		Template: testCoreIdentity,
 	})
 
-	result := c.Compose(nonGitEnv())
+	result := composer.Compose(nonGitEnv())
 
 	assert.Equal(t, testCoreIdentity+"\n\n"+testDynamicContext, result)
 }
@@ -97,20 +97,20 @@ func TestComposer_SortedByPriority(t *testing.T) {
 func TestComposer_ConditionExcludesSection(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
-	c.AddSection(prompt.Section{
+	composer := prompt.NewComposer()
+	composer.AddSection(prompt.Section{
 		Name:     "identity",
 		Priority: prompt.PriorityIdentityMin,
 		Template: testCoreIdentity,
 	})
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name:      "git",
 		Priority:  prompt.PrioritySafetyMin,
 		Condition: isGitRepo,
 		Template:  testGitWorkflow,
 	})
 
-	result := c.Compose(nonGitEnv())
+	result := composer.Compose(nonGitEnv())
 
 	assert.Equal(t, testCoreIdentity, result)
 	assert.NotContains(t, result, testGitWorkflow)
@@ -121,20 +121,20 @@ func TestComposer_ConditionExcludesSection(t *testing.T) {
 func TestComposer_ConditionIncludesSection(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
-	c.AddSection(prompt.Section{
+	composer := prompt.NewComposer()
+	composer.AddSection(prompt.Section{
 		Name:     "identity",
 		Priority: prompt.PriorityIdentityMin,
 		Template: testCoreIdentity,
 	})
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name:      "git",
 		Priority:  prompt.PrioritySafetyMin,
 		Condition: isGitRepo,
 		Template:  testGitWorkflow,
 	})
 
-	result := c.Compose(gitEnv())
+	result := composer.Compose(gitEnv())
 
 	assert.Contains(t, result, testCoreIdentity)
 	assert.Contains(t, result, testGitWorkflow)
@@ -145,20 +145,20 @@ func TestComposer_ConditionIncludesSection(t *testing.T) {
 func TestComposer_NonGitExcludesGitSections(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
-	c.AddSection(prompt.Section{
+	composer := prompt.NewComposer()
+	composer.AddSection(prompt.Section{
 		Name:     "identity",
 		Priority: prompt.PriorityIdentityMin,
 		Template: testCoreIdentity,
 	})
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name:      "git-workflow",
 		Priority:  prompt.PrioritySafetyMin,
 		Condition: isGitRepo,
 		Template:  testGitWorkflow,
 	})
 
-	result := c.Compose(nonGitEnv())
+	result := composer.Compose(nonGitEnv())
 
 	require.NotContains(t, result, testGitWorkflow)
 	require.Contains(t, result, testCoreIdentity)
@@ -169,15 +169,15 @@ func TestComposer_NonGitExcludesGitSections(t *testing.T) {
 func TestComposer_VariableSubstitution(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
-	c.SetVar("EDIT_TOOL.name", testEditToolName)
-	c.AddSection(prompt.Section{
+	composer := prompt.NewComposer()
+	composer.SetVar("EDIT_TOOL.name", testEditToolName)
+	composer.AddSection(prompt.Section{
 		Name:     "tools",
 		Priority: prompt.PriorityToolsMin,
 		Template: testToolGuidance,
 	})
 
-	result := c.Compose(nonGitEnv())
+	result := composer.Compose(nonGitEnv())
 
 	assert.Equal(t, testResolvedToolRef, result)
 	assert.NotContains(t, result, "${EDIT_TOOL.name}")
@@ -188,26 +188,26 @@ func TestComposer_VariableSubstitution(t *testing.T) {
 func TestComposer_ComposeTwoPart(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
-	c.AddSection(prompt.Section{
+	composer := prompt.NewComposer()
+	composer.AddSection(prompt.Section{
 		Name:      "identity",
 		Priority:  prompt.PriorityIdentityMin,
 		Cacheable: true,
 		Template:  testCoreIdentity,
 	})
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name:      "safety",
 		Priority:  prompt.PrioritySafetyMin,
 		Cacheable: true,
 		Template:  testSafetyRules,
 	})
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name:     "dynamic",
 		Priority: prompt.PriorityDynamicMin,
 		Template: testDynamicContext,
 	})
 
-	stable, dynamic := c.ComposeTwoPart(nonGitEnv())
+	stable, dynamic := composer.ComposeTwoPart(nonGitEnv())
 
 	assert.Contains(t, stable, testCoreIdentity)
 	assert.Contains(t, stable, testSafetyRules)
@@ -222,9 +222,9 @@ func TestComposer_ComposeTwoPart(t *testing.T) {
 func TestComposer_ComposeTwoPartEmpty(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
+	composer := prompt.NewComposer()
 
-	stable, dynamic := c.ComposeTwoPart(nonGitEnv())
+	stable, dynamic := composer.ComposeTwoPart(nonGitEnv())
 
 	assert.Empty(t, stable)
 	assert.Empty(t, dynamic)
@@ -235,31 +235,31 @@ func TestComposer_ComposeTwoPartEmpty(t *testing.T) {
 func TestComposer_FiveTiers(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
+	composer := prompt.NewComposer()
 
 	// Add in mixed order.
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name: "provider", Priority: prompt.PriorityProviderMin,
 		Template: testProviderHint,
 	})
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name: "safety", Priority: prompt.PrioritySafetyMin,
 		Template: testSafetyRules,
 	})
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name: "dynamic", Priority: prompt.PriorityDynamicMin,
 		Template: testDynamicContext,
 	})
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name: "identity", Priority: prompt.PriorityIdentityMin,
 		Template: testCoreIdentity,
 	})
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name: "tools", Priority: prompt.PriorityToolsMin,
 		Template: testToolGuidance,
 	})
 
-	result := c.Compose(nonGitEnv())
+	result := composer.Compose(nonGitEnv())
 
 	// Verify ordering by checking index positions.
 	idIdx := indexOf(result, testCoreIdentity)
@@ -283,13 +283,13 @@ func TestComposer_ThinkingModeExcludesToolGuidance(t *testing.T) {
 		return env.Environment["mode"] != "thinking"
 	}
 
-	c := prompt.NewComposer()
-	c.AddSection(prompt.Section{
+	composer := prompt.NewComposer()
+	composer.AddSection(prompt.Section{
 		Name:     "identity",
 		Priority: prompt.PriorityIdentityMin,
 		Template: testCoreIdentity,
 	})
-	c.AddSection(prompt.Section{
+	composer.AddSection(prompt.Section{
 		Name:      "tool-guidance",
 		Priority:  prompt.PriorityToolsMin,
 		Condition: isActionMode,
@@ -300,7 +300,7 @@ func TestComposer_ThinkingModeExcludesToolGuidance(t *testing.T) {
 		Environment: map[string]string{"mode": "thinking"},
 	}
 
-	result := c.Compose(thinkingEnv)
+	result := composer.Compose(thinkingEnv)
 
 	assert.Contains(t, result, testCoreIdentity)
 	assert.NotContains(t, result, testToolGuidance)
@@ -311,16 +311,16 @@ func TestComposer_ThinkingModeExcludesToolGuidance(t *testing.T) {
 func TestComposer_MultipleVars(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
-	c.SetVar("TOOL_A", "read_file")
-	c.SetVar("TOOL_B", "write_file")
-	c.AddSection(prompt.Section{
+	composer := prompt.NewComposer()
+	composer.SetVar("TOOL_A", "read_file")
+	composer.SetVar("TOOL_B", "write_file")
+	composer.AddSection(prompt.Section{
 		Name:     "multi",
 		Priority: prompt.PriorityToolsMin,
 		Template: "Use ${TOOL_A} and ${TOOL_B}.",
 	})
 
-	result := c.Compose(nonGitEnv())
+	result := composer.Compose(nonGitEnv())
 
 	assert.Equal(t, "Use read_file and write_file.", result)
 }

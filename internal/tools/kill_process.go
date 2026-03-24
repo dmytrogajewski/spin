@@ -57,7 +57,7 @@ func (t *KillProcessTool) Execute(ctx context.Context, params ToolParameters) (T
 		return NewToolResult("task manager not available"), nil
 	}
 
-	taskID, _ := params.GetString("task_id")
+	taskID := params.GetStringOr("task_id", "")
 	if taskID == "" {
 		return NewToolError(errTaskIDParameterRequired), nil
 	}

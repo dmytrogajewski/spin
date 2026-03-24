@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/dmytrogajewski/spin/pkg/alg/ds/syncmap"
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/pkg/alg/ds/syncmap"
 )
 
 var (

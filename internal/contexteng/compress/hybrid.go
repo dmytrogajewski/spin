@@ -10,8 +10,10 @@ import (
 )
 
 const (
-	tokenOverhead       = 4 // token overhead per message.
-	compressTargetRatio = 0.2
+	tokenOverhead             = 4 // token overhead per message.
+	compressTargetRatio       = 0.2
+	summaryCompressionDivisor = 5   // divide total tokens by this for summary target.
+	summaryMinTokens          = 100 // minimum tokens for summary target.
 )
 
 // HybridCompressor uses importance-weighted greedy selection
@@ -191,7 +193,7 @@ func (c *HybridCompressor) summarizeRemoved(
 		totalTokens += cm.Tokens
 	}
 
-	targetTokens := max(totalTokens/5, 100)
+	targetTokens := max(totalTokens/summaryCompressionDivisor, summaryMinTokens)
 
 	// Use summarizer.
 	result, err := c.summarizer.SummarizeMessages(ctx, msgs, summarizer.Options{

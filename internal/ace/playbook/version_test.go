@@ -81,7 +81,7 @@ func TestPlaybook_SaveIncludesVersion(t *testing.T) {
 
 	version, exists := raw["version"]
 	assert.True(t, exists, "JSON should contain version field")
-	assert.Equal(t, float64(CurrentPlaybookVersion), version)
+	assert.InEpsilon(t, float64(CurrentPlaybookVersion), version, 0.001)
 }
 
 // TestPlaybook_ForwardCompatibility tests that unknown fields in JSON

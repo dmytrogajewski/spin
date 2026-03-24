@@ -87,7 +87,7 @@ func TestMemoryManager_CalculateUtility(t *testing.T) {
 			name:     "no feedback",
 			helpful:  0,
 			harmful:  0,
-			expected: 0.0, // Score() returns 0 when no feedback
+			expected: 0.0, // Score() returns 0 when no feedback.
 		},
 	}
 

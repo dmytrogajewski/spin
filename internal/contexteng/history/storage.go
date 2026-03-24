@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/storage"
+	"github.com/dmytrogajewski/spin/pkg/storage"
 )
 
 // ErrHistoryDataCannotBeNil is a sentinel error.

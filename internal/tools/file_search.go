@@ -67,7 +67,7 @@ func (t *FileSearchTool) Schema() ToolSchema {
 // Execute implements the Execute operation.
 func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	// Extract query parameter.
-	query, _ := params.GetString("query")
+	query := params.GetStringOr("query", "")
 	if query == "" {
 		return NewToolError(errQueryParameterRequired), nil
 	}

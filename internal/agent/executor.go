@@ -16,9 +16,15 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent/executor"
 	"github.com/dmytrogajewski/spin/internal/process"
 	"github.com/dmytrogajewski/spin/internal/safety"
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 )
 
-const executorConcurrency = 2
+const (
+	executorConcurrency    = 2
+	streamingChannelBuffer = 10
+	streamReadBufferSize   = 4096
+	envKeyValueParts       = 2
+)
 
 // Executor-specific errors.
 var (
@@ -264,7 +270,7 @@ func NewExecutor(workDir string, opts ...ExecutorOption) (*Executor, error) {
 		return nil, ErrWorkdirCannotBeEmpty
 	}
 
-	e := &Executor{
+	cmdExecutor := &Executor{
 		workDir:   workDir,
 		timeout:   DefaultExecutionTimeout,
 		maxOutput: DefaultMaxOutputSize,
@@ -272,13 +278,13 @@ func NewExecutor(workDir string, opts ...ExecutorOption) (*Executor, error) {
 	}
 
 	for _, opt := range opts {
-		err := opt(e)
+		err := opt(cmdExecutor)
 		if err != nil {
 			return nil, fmt.Errorf("option failed: %w", err)
 		}
 	}
 
-	return e, nil
+	return cmdExecutor, nil
 }
 
 // errorResult creates an error result with proper timestamps.
@@ -667,7 +673,7 @@ func (e *Executor) ExecuteStreaming(ctx context.Context, cmd *safety.Command, op
 	}
 
 	// Create output channel and run streaming goroutines.
-	chunks := make(chan OutputChunk, 10)
+	chunks := make(chan OutputChunk, streamingChannelBuffer)
 	e.runStreamingGoroutines(execCtx, execCmd, stdout, stderr, chunks, cancel)
 
 	return chunks, nil
@@ -785,8 +791,8 @@ func (e *Executor) buildEnvironment(opts *ExecuteOptions) []string {
 	// Start with inherited environment (if enabled).
 	if opts.InheritEnv {
 		for _, kv := range os.Environ() {
-			parts := strings.SplitN(kv, "=", 2)
-			if len(parts) == 2 && !isSensitive(parts[0]) {
+			parts := strings.SplitN(kv, "=", envKeyValueParts)
+			if len(parts) == envKeyValueParts && !isSensitive(parts[0]) {
 				env[parts[0]] = parts[1]
 			}
 		}
@@ -812,55 +818,37 @@ func (e *Executor) buildEnvironment(opts *ExecuteOptions) []string {
 }
 
 // isSensitive checks if an environment variable is sensitive.
+// Delegates to execx.IsSensitiveKey using the canonical lists from environment.go.
 func isSensitive(key string) bool {
-	sensitive := []string{
-		"TOKEN", "SECRET", "PASSWORD", "KEY", "CREDENTIAL",
-		"AWS_SECRET", "API_KEY", "PRIVATE_KEY",
-	}
-
-	upper := strings.ToUpper(key)
-	for _, pattern := range sensitive {
-		if strings.Contains(upper, pattern) {
-			return true
-		}
-	}
-
-	return false
+	return execx.IsSensitiveKey(key, sensitivePrefixes, sensitiveSubstrings)
 }
 
 // captureOutput captures command output with size limits.
 func (e *Executor) captureOutput(stdout, stderr io.Reader, maxSize int64) (stdoutStr, stderrStr string, truncated bool) {
-	// Read stdout.
-	stdoutBytes, err := io.ReadAll(io.LimitReader(stdout, maxSize))
-	if err != nil {
-		truncated = true
-	}
+	stdoutStr, t1 := captureLimited(stdout, maxSize)
+	stderrStr, t2 := captureLimited(stderr, maxSize)
 
-	if int64(len(stdoutBytes)) >= maxSize {
-		truncated = true
+	return stdoutStr, stderrStr, t1 || t2
+}
 
-		stdoutBytes = append(stdoutBytes, []byte("\n... (output truncated)")...)
-	}
+// captureLimited reads up to maxSize bytes from r, marking output as truncated if exceeded.
+func captureLimited(r io.Reader, maxSize int64) (string, bool) {
+	data, err := io.ReadAll(io.LimitReader(r, maxSize))
+	truncated := err != nil
 
-	// Read stderr.
-	stderrBytes, err := io.ReadAll(io.LimitReader(stderr, maxSize))
-	if err != nil {
-		truncated = true
-	}
-
-	if int64(len(stderrBytes)) >= maxSize {
+	if int64(len(data)) >= maxSize {
 		truncated = true
 
-		stderrBytes = append(stderrBytes, []byte("\n... (output truncated)")...)
+		data = append(data, []byte("\n... (output truncated)")...)
 	}
 
-	return string(stdoutBytes), string(stderrBytes), truncated
+	return string(data), truncated
 }
 
 // streamOutput streams data from a reader to the output channel.
 // It checks context cancellation periodically to allow graceful shutdown.
 func (e *Executor) streamOutput(ctx context.Context, r io.Reader, stream string, chunks chan<- OutputChunk) {
-	buf := make([]byte, 4096)
+	buf := make([]byte, streamReadBufferSize)
 
 	for {
 		// Check context cancellation before reading.

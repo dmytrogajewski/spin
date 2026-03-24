@@ -10,8 +10,10 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/internal/storage"
+	"github.com/dmytrogajewski/spin/pkg/storage"
 )
+
+const playbookFilePerm = 0o600
 
 // CurrentPlaybookVersion is the current playbook schema version.
 const CurrentPlaybookVersion = 1
@@ -38,7 +40,7 @@ func (p *Playbook) Save(ctx context.Context, path string) error {
 		return fmt.Errorf("failed to marshal playbook: %w", err)
 	}
 
-	return storage.AtomicWriteFile(ctx, path, jsonData, 0o600)
+	return storage.AtomicWriteFile(ctx, path, jsonData, playbookFilePerm)
 }
 
 // Load deserializes a playbook from a JSON file.

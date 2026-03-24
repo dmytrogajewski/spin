@@ -140,8 +140,8 @@ func TestStatus_EmptyRepoFromSubdir(t *testing.T) {
 
 	// Create a nested subdirectory (simulating tetris/tetris/).
 	subDir := filepath.Join(tmpDir, "subproject")
-	if err := os.MkdirAll(subDir, 0o750); err != nil {
-		t.Fatalf("failed to create subdir: %v", err)
+	if mkdirErr := os.MkdirAll(subDir, 0o750); mkdirErr != nil {
+		t.Fatalf("failed to create subdir: %v", mkdirErr)
 	}
 
 	// Discover from the subdirectory — walks up to find .git.

@@ -223,6 +223,8 @@ func BenchmarkRenderViewport_40Blocks(b *testing.B) {
 			block.Body = generateUnifiedDiff(20)
 		case blocks.BlockTypeRead:
 			block.Body = generateCodeSnippet(30)
+		default:
+			block.Body = "Sample content"
 		}
 
 		_ = tl.Append(block)

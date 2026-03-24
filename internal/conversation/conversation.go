@@ -10,14 +10,14 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/dmytrogajewski/spin/internal/agent"
+	"github.com/dmytrogajewski/spin/internal/agent/subagent"
 	"github.com/dmytrogajewski/spin/internal/contexteng/history"
+	"github.com/dmytrogajewski/spin/internal/contexteng/retrieval"
 	"github.com/dmytrogajewski/spin/internal/events"
 	gitpkg "github.com/dmytrogajewski/spin/internal/git"
+	"github.com/dmytrogajewski/spin/internal/lsp"
 	mcppkg "github.com/dmytrogajewski/spin/internal/mcp"
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/agent/subagent"
-	"github.com/dmytrogajewski/spin/internal/contexteng/retrieval"
-	"github.com/dmytrogajewski/spin/internal/lsp"
 	"github.com/dmytrogajewski/spin/internal/safety/hooks"
 	"github.com/dmytrogajewski/spin/internal/session"
 	shellpkg "github.com/dmytrogajewski/spin/internal/shell"
@@ -35,6 +35,8 @@ var (
 	ErrHarnessExecutorRequired = errors.New("harness executor is required")
 	// ErrEmptyInput is a sentinel error.
 	ErrEmptyInput = errors.New("input cannot be empty")
+	// ErrBlockedByHook is a sentinel error for hook-blocked turns.
+	ErrBlockedByHook = errors.New("blocked by hook")
 )
 
 // HarnessTurnExecutor is the interface for the harness execution path.
@@ -92,6 +94,79 @@ type Conversation struct {
 	protocolMu  sync.RWMutex       // Protects protocol fields (turnID, cancel, transformer).
 }
 
+// generateConversationID creates a new unique conversation ID.
+func generateConversationID() string {
+	return uuid.New().String()
+}
+
+// NewFromAgentConfig holds configuration for NewFromAgent.
+type NewFromAgentConfig struct {
+	// Agent is the pre-built agent instance (required).
+	Agent *agent.Agent
+
+	// HarnessExecutor is the harness turn executor (required).
+	HarnessExecutor HarnessTurnExecutor
+
+	// Emitter is the event emitter (required).
+	Emitter *events.EventEmitter
+
+	// WorkDir is the working directory (required).
+	WorkDir string
+
+	// ID is an optional conversation ID (generated if empty).
+	ID string
+
+	// History is an optional pre-existing history (new one created if nil).
+	History *history.History
+
+	// MaxTokens is the maximum tokens for history (optional, uses default if 0).
+	MaxTokens int
+}
+
+// NewFromAgent creates a Conversation from an existing agent and harness executor.
+// This is useful for modes like ACP where the agent is pre-built.
+func NewFromAgent(cfg NewFromAgentConfig) (*Conversation, error) {
+	if cfg.Agent == nil {
+		return nil, ErrAgentIsRequired
+	}
+
+	if cfg.HarnessExecutor == nil {
+		return nil, ErrHarnessExecutorRequired
+	}
+
+	if cfg.Emitter == nil {
+		return nil, ErrEmitterIsRequired
+	}
+
+	if cfg.WorkDir == "" {
+		return nil, ErrWorkdirIsRequired
+	}
+
+	hist := cfg.History
+	if hist == nil {
+		if cfg.MaxTokens > 0 {
+			hist = history.NewHistory(cfg.MaxTokens, &tokenizer.SimpleTokenizer{})
+		} else {
+			hist = history.NewHistoryWithDefaults()
+		}
+	}
+
+	id := cfg.ID
+	if id == "" {
+		id = generateConversationID()
+	}
+
+	return &Conversation{
+		agent:           cfg.Agent,
+		harnessExecutor: cfg.HarnessExecutor,
+		history:         hist,
+		emitter:         cfg.Emitter,
+		taskMode:        "regular",
+		id:              id,
+		workDir:         cfg.WorkDir,
+	}, nil
+}
+
 // RunTurn executes a single turn in the conversation via the harness executor.
 func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 	if strings.TrimSpace(input) == "" {
@@ -107,7 +182,7 @@ func (c *Conversation) RunTurn(ctx context.Context, input string) error {
 
 		result := c.hookRunner.Execute(ctx, hooks.EventUserPromptSubmit, evtCtx)
 		if result.Blocked {
-			return fmt.Errorf("blocked by hook: %s", result.Reason)
+			return fmt.Errorf("%w: %s", ErrBlockedByHook, result.Reason)
 		}
 	}
 
@@ -224,9 +299,9 @@ func (c *Conversation) Stream() <-chan events.Event {
 // Close closes the conversation and cleans up resources.
 // Note: Services (git, shell, mcp) are owned by the application layer
 // and are NOT closed here - they can be shared across conversations.
-func (c *Conversation) Close() error {
+func (c *Conversation) Close(ctx context.Context) error {
 	if c.lspManager != nil {
-		_ = c.lspManager.Close(context.Background())
+		_ = c.lspManager.Close(ctx)
 	}
 
 	if c.transcriptWriter != nil {
@@ -330,77 +405,4 @@ func (c *Conversation) GetRetrievalPipeline() *retrieval.Pipeline {
 // (List, Remove, Count). Returns nil if index is unavailable.
 func (c *Conversation) GetSessionIndex() *session.Index {
 	return c.sessionIndex
-}
-
-// NewFromAgentConfig holds configuration for NewFromAgent.
-type NewFromAgentConfig struct {
-	// Agent is the pre-built agent instance (required).
-	Agent *agent.Agent
-
-	// HarnessExecutor is the harness turn executor (required).
-	HarnessExecutor HarnessTurnExecutor
-
-	// Emitter is the event emitter (required).
-	Emitter *events.EventEmitter
-
-	// WorkDir is the working directory (required).
-	WorkDir string
-
-	// ID is an optional conversation ID (generated if empty).
-	ID string
-
-	// History is an optional pre-existing history (new one created if nil).
-	History *history.History
-
-	// MaxTokens is the maximum tokens for history (optional, uses default if 0).
-	MaxTokens int
-}
-
-// generateConversationID creates a new unique conversation ID.
-func generateConversationID() string {
-	return uuid.New().String()
-}
-
-// NewFromAgent creates a Conversation from an existing agent and harness executor.
-// This is useful for modes like ACP where the agent is pre-built.
-func NewFromAgent(cfg NewFromAgentConfig) (*Conversation, error) {
-	if cfg.Agent == nil {
-		return nil, ErrAgentIsRequired
-	}
-
-	if cfg.HarnessExecutor == nil {
-		return nil, ErrHarnessExecutorRequired
-	}
-
-	if cfg.Emitter == nil {
-		return nil, ErrEmitterIsRequired
-	}
-
-	if cfg.WorkDir == "" {
-		return nil, ErrWorkdirIsRequired
-	}
-
-	hist := cfg.History
-	if hist == nil {
-		if cfg.MaxTokens > 0 {
-			hist = history.NewHistory(cfg.MaxTokens, &tokenizer.SimpleTokenizer{})
-		} else {
-			hist = history.NewHistoryWithDefaults()
-		}
-	}
-
-	id := cfg.ID
-	if id == "" {
-		id = generateConversationID()
-	}
-
-	return &Conversation{
-		agent:           cfg.Agent,
-		harnessExecutor: cfg.HarnessExecutor,
-		history:         hist,
-		emitter:         cfg.Emitter,
-		taskMode:        "regular",
-		id:              id,
-		workDir:         cfg.WorkDir,
-	}, nil
 }

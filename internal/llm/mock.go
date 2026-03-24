@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	mockTokensPerMessage = 10
-	mockCharsPerToken    = 4
+	mockTokensPerMessage  = 10
+	mockCharsPerToken     = 4
+	mockStreamChunkBuffer = 10
 )
 
 // MockProvider implements Provider for testing.
@@ -133,7 +134,7 @@ func (p *MockProvider) Stream(ctx context.Context, _ openai.ChatCompletionNewPar
 		return nil, p.err
 	}
 
-	chunks := make(chan openai.ChatCompletionChunk, 10)
+	chunks := make(chan openai.ChatCompletionChunk, mockStreamChunkBuffer)
 	chunkID := fmt.Sprintf("mock-chunk-%d", time.Now().UnixNano())
 
 	go func() {
@@ -258,7 +259,6 @@ func newMockChunk(
 		},
 	}
 }
-
 
 // Models implements Provider.Models.
 func (p *MockProvider) Models(_ context.Context) ([]openai.Model, error) {

@@ -1,3 +1,4 @@
+// Package textbuffer provides a text editing buffer with cursor management.
 package textbuffer
 
 import (

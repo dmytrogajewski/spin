@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/pkg/alg/collections"
+	"github.com/dmytrogajewski/spin/pkg/alg/search"
+	"github.com/dmytrogajewski/spin/pkg/alg/similarity"
 )
 
 const (
@@ -148,12 +150,7 @@ func (d *Detector) hasMinimumSnapshots() bool {
 
 // getRecentSnapshots returns recent snapshots up to WindowSize.
 func (d *Detector) getRecentSnapshots() []Snapshot {
-	maxToCheck := d.config.WindowSize
-	if maxToCheck <= 0 || maxToCheck > len(d.history) {
-		maxToCheck = len(d.history)
-	}
-
-	return d.history[len(d.history)-maxToCheck:]
+	return collections.TailNOrAll(d.history, d.config.WindowSize)
 }
 
 // calculateResponseSimilarities calculates similarities between consecutive responses.
@@ -165,7 +162,7 @@ func (d *Detector) calculateResponseSimilarities(recent []Snapshot) []float64 {
 			break
 		}
 
-		sim := calculateSimilarity(recent[i-1].Response, recent[i].Response)
+		sim := similarity.JaccardSimilarity(recent[i-1].Response, recent[i].Response)
 		similarities = append(similarities, sim)
 
 		if sim < d.config.SimilarityThresh {
@@ -199,67 +196,19 @@ func (d *Detector) createSimilarResponseResult(similarities []float64) Result {
 }
 
 // checkRepeatedTool detects when the same tool is called repeatedly.
-// This indicates the agent may be stuck trying the same approach.
 func (d *Detector) checkRepeatedTool() Result {
-	if !d.hasEnoughHistoryForToolCheck() {
-		return Result{Type: None}
-	}
-
-	recent := d.getRecentSnapshotsForToolCheck()
-	if !d.hasValidToolCalls(recent) {
-		return Result{Type: None}
-	}
-
-	if d.allToolsAreSame(recent) {
-		return d.createRepeatedToolResult(recent)
-	}
-
-	return Result{Type: None}
-}
-
-// hasEnoughHistoryForToolCheck checks if we have enough history for tool analysis.
-func (d *Detector) hasEnoughHistoryForToolCheck() bool {
-	return d.config.Enabled && len(d.history) >= d.config.ToolRepeatLimit
-}
-
-// getRecentSnapshotsForToolCheck returns recent snapshots for tool analysis.
-func (d *Detector) getRecentSnapshotsForToolCheck() []Snapshot {
-	return d.history[len(d.history)-d.config.ToolRepeatLimit:]
-}
-
-// hasValidToolCalls checks if the first snapshot has valid tool calls.
-func (d *Detector) hasValidToolCalls(recent []Snapshot) bool {
-	return len(recent) > 0 && len(recent[0].ToolCalls) > 0
-}
-
-// allToolsAreSame checks if all recent snapshots use the same tool.
-func (d *Detector) allToolsAreSame(recent []Snapshot) bool {
-	firstTool := recent[0].ToolCalls[0]
-
-	for i := 1; i < len(recent); i++ {
-		if !d.snapshotUsesTool(recent[i], firstTool) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// snapshotUsesTool checks if a snapshot uses the specified tool.
-func (d *Detector) snapshotUsesTool(snapshot Snapshot, tool string) bool {
-	return len(snapshot.ToolCalls) > 0 && snapshot.ToolCalls[0] == tool
-}
-
-// createRepeatedToolResult creates a cycle result for repeated tool usage.
-func (d *Detector) createRepeatedToolResult(recent []Snapshot) Result {
-	firstTool := recent[0].ToolCalls[0]
-
-	return Result{
-		Type:       RepeatedTool,
-		Confidence: exactMatchConfidence, // High confidence for exact tool name matches.
-		Details:    fmt.Sprintf("tool '%s' called %d times consecutively", firstTool, len(recent)),
-		Timestamp:  time.Now(),
-	}
+	return d.detectRepeatPattern(repeatSpec{
+		minCount: d.config.ToolRepeatLimit,
+		isValid:  func(s Snapshot) bool { return len(s.ToolCalls) > 0 },
+		areSame: func(a, b Snapshot) bool {
+			return len(a.ToolCalls) > 0 && len(b.ToolCalls) > 0 && a.ToolCalls[0] == b.ToolCalls[0]
+		},
+		resultType: RepeatedTool,
+		confidence: exactMatchConfidence,
+		details: func(recent []Snapshot) string {
+			return fmt.Sprintf("tool '%s' called %d times consecutively", recent[0].ToolCalls[0], len(recent))
+		},
+	})
 }
 
 // checkOscillation detects A→B→A→B oscillation patterns in responses.
@@ -275,9 +224,9 @@ func (d *Detector) checkOscillation() Result {
 	// Check for A→B→A→B pattern where A responses are similar to each other
 	// and B responses are similar to each other, but A and B are different
 	// recent[0] = A1, recent[1] = B1, recent[2] = A2, recent[3] = B2.
-	simAA := calculateSimilarity(recent[0].Response, recent[2].Response) // A1 vs A2.
-	simBB := calculateSimilarity(recent[1].Response, recent[3].Response) // B1 vs B2.
-	simAB := calculateSimilarity(recent[0].Response, recent[1].Response) // A1 vs B1.
+	simAA := similarity.JaccardSimilarity(recent[0].Response, recent[2].Response) // A1 vs A2.
+	simBB := similarity.JaccardSimilarity(recent[1].Response, recent[3].Response) // B1 vs B2.
+	simAB := similarity.JaccardSimilarity(recent[0].Response, recent[1].Response) // A1 vs B1.
 
 	// Average similarity within same groups (A's and B's).
 	withinGroupSimilarity := (simAA + simBB) / groupSimilarityDivisor
@@ -297,61 +246,49 @@ func (d *Detector) checkOscillation() Result {
 }
 
 // checkSameError detects when the same error occurs repeatedly.
-// This indicates the agent is stuck in a failure loop.
 func (d *Detector) checkSameError() Result {
-	if !d.hasEnoughHistoryForErrorCheck() {
+	return d.detectRepeatPattern(repeatSpec{
+		minCount:   d.config.ErrorRepeatLimit,
+		isValid:    func(s Snapshot) bool { return s.Error != "" },
+		areSame:    func(a, b Snapshot) bool { return a.Error == b.Error },
+		resultType: SameError,
+		confidence: exactErrorConfidence,
+		details: func(recent []Snapshot) string {
+			return fmt.Sprintf("error '%s' occurred %d times consecutively", recent[0].Error, len(recent))
+		},
+	})
+}
+
+// repeatSpec describes a repeat-detection pattern that checks if the last N items all match.
+type repeatSpec struct {
+	minCount   int
+	isValid    func(Snapshot) bool
+	areSame    func(Snapshot, Snapshot) bool
+	resultType Type
+	confidence float64
+	details    func([]Snapshot) string
+}
+
+// detectRepeatPattern is the shared protocol for checkRepeatedTool and checkSameError:
+// check enabled → check minimum count → get tail → validate first → check all same → build result.
+func (d *Detector) detectRepeatPattern(spec repeatSpec) Result {
+	if !d.config.Enabled || len(d.history) < spec.minCount {
 		return Result{Type: None}
 	}
 
-	recent := d.getRecentSnapshotsForErrorCheck()
-	if !d.hasValidError(recent) {
+	recent := collections.TailN(d.history, spec.minCount)
+	if len(recent) == 0 || !spec.isValid(recent[0]) {
 		return Result{Type: None}
 	}
 
-	if d.allErrorsAreSame(recent) {
-		return d.createSameErrorResult(recent)
+	if !search.DetectRepeat(recent, spec.areSame) {
+		return Result{Type: None}
 	}
-
-	return Result{Type: None}
-}
-
-// hasEnoughHistoryForErrorCheck checks if we have enough history for error analysis.
-func (d *Detector) hasEnoughHistoryForErrorCheck() bool {
-	return d.config.Enabled && len(d.history) >= d.config.ErrorRepeatLimit
-}
-
-// getRecentSnapshotsForErrorCheck returns recent snapshots for error analysis.
-func (d *Detector) getRecentSnapshotsForErrorCheck() []Snapshot {
-	return d.history[len(d.history)-d.config.ErrorRepeatLimit:]
-}
-
-// hasValidError checks if the first snapshot has a valid error.
-func (d *Detector) hasValidError(recent []Snapshot) bool {
-	return len(recent) > 0 && recent[0].Error != ""
-}
-
-// allErrorsAreSame checks if all recent snapshots have the same error.
-func (d *Detector) allErrorsAreSame(recent []Snapshot) bool {
-	firstError := recent[0].Error
-
-	for i := 1; i < len(recent); i++ {
-		if recent[i].Error != firstError {
-			return false
-		}
-	}
-
-	return true
-}
-
-// createSameErrorResult creates a cycle result for repeated errors.
-func (d *Detector) createSameErrorResult(recent []Snapshot) Result {
-	firstError := recent[0].Error
 
 	return Result{
-		Type:       SameError,
-		Confidence: exactErrorConfidence, // Very high confidence for exact error matches.
-		Details:    fmt.Sprintf("error '%s' occurred %d times consecutively", firstError, len(recent)),
+		Type:       spec.resultType,
+		Confidence: spec.confidence,
+		Details:    spec.details(recent),
 		Timestamp:  time.Now(),
 	}
 }
-

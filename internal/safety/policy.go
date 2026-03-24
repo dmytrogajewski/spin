@@ -13,21 +13,21 @@ const policyEvictionInterval = 30 * time.Second
 
 // PolicyKey identifies a decision using normalized command and context.
 type PolicyKey struct {
-	Program string
-	Args    []string
-	WorkDir string
+	Program string   `json:"program"`
+	Args    []string `json:"args"`
+	WorkDir string   `json:"work_dir"`
 }
 
 // Policy is the persisted approval decision.
 type Policy struct {
-	Version    string
-	Scope      string // "session" | "global".
-	Key        PolicyKey
-	Decision   string // "allow" (future-proof for "deny").
-	PolicyNote string
-	CreatedAt  time.Time
-	ExpiresAt  *time.Time
-	Meta       map[string]string
+	Version    string            `json:"version"`
+	Scope      string            `json:"scope"` // "session" | "global".
+	Key        PolicyKey         `json:"key"`
+	Decision   string            `json:"decision"` // "allow" (future-proof for "deny").
+	PolicyNote string            `json:"policy_note"`
+	CreatedAt  time.Time         `json:"created_at"`
+	ExpiresAt  *time.Time        `json:"expires_at"`
+	Meta       map[string]string `json:"meta"`
 }
 
 // Approval scope constants (kept in policy module as they define policy semantics).
@@ -294,13 +294,13 @@ func (s *MemoryPolicyStore) Close() error {
 	return nil
 }
 
-func keyString(k PolicyKey) string {
+func keyString(key PolicyKey) string {
 	// Deterministic encoding with non-printable delimiters to avoid collisions.
 	sep := "\x1F" // unit separator.
 
 	return strings.Join([]string{
-		k.Program,
-		strings.Join(k.Args, sep),
-		k.WorkDir,
+		key.Program,
+		strings.Join(key.Args, sep),
+		key.WorkDir,
 	}, sep)
 }

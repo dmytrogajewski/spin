@@ -90,7 +90,9 @@ var builtinLanguages = []LanguageConfig{
 var extensionIndex map[string]*LanguageConfig
 
 func init() {
-	extensionIndex = make(map[string]*LanguageConfig, len(builtinLanguages)*2)
+	const extensionsPerLanguage = 2
+
+	extensionIndex = make(map[string]*LanguageConfig, len(builtinLanguages)*extensionsPerLanguage)
 
 	for idx := range builtinLanguages {
 		lang := &builtinLanguages[idx]

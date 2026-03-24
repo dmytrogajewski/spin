@@ -77,4 +77,3 @@ var BuiltinTools = []Tool{
 	NewFileSearchTool(""),
 	NewGitContextTool(""),
 }
-

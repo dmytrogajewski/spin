@@ -1,3 +1,4 @@
+// Package params provides LLM parameter handling and validation.
 package params
 
 import (
@@ -23,7 +24,7 @@ type ToolParameters struct {
 }
 
 // Has checks if a parameter key exists.
-func (p ToolParameters) Has(key string) bool {
+func (p *ToolParameters) Has(key string) bool {
 	_, exists := p.raw[key]
 
 	return exists
@@ -47,7 +48,7 @@ func FromMap(m map[string]any) (ToolParameters, error) {
 
 // ToMap converts ToolParameters back to map[string]interface{}.
 // This is useful for backwards compatibility or debugging.
-func (p ToolParameters) ToMap() map[string]any {
+func (p *ToolParameters) ToMap() map[string]any {
 	result := make(map[string]any, len(p.raw))
 	for key, rawValue := range p.raw {
 		var value any
@@ -65,7 +66,7 @@ func (p ToolParameters) ToMap() map[string]any {
 }
 
 // Keys returns all parameter keys in sorted order.
-func (p ToolParameters) Keys() []string {
+func (p *ToolParameters) Keys() []string {
 	keys := make([]string, 0, len(p.raw))
 	for key := range p.raw {
 		keys = append(keys, key)
@@ -78,7 +79,7 @@ func (p ToolParameters) Keys() []string {
 
 // GetString retrieves a string parameter.
 // Returns an error if the key doesn't exist or the value is not a string.
-func (p ToolParameters) GetString(key string) (string, error) {
+func (p *ToolParameters) GetString(key string) (string, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
 		return "", fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
@@ -96,7 +97,7 @@ func (p ToolParameters) GetString(key string) (string, error) {
 
 // GetInt retrieves an integer parameter.
 // Returns an error if the key doesn't exist or the value is not an integer.
-func (p ToolParameters) GetInt(key string) (int, error) {
+func (p *ToolParameters) GetInt(key string) (int, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
 		return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
@@ -114,7 +115,7 @@ func (p ToolParameters) GetInt(key string) (int, error) {
 
 // GetBool retrieves a boolean parameter.
 // Returns an error if the key doesn't exist or the value is not a boolean.
-func (p ToolParameters) GetBool(key string) (bool, error) {
+func (p *ToolParameters) GetBool(key string) (bool, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
 		return false, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
@@ -132,7 +133,7 @@ func (p ToolParameters) GetBool(key string) (bool, error) {
 
 // GetFloat64 retrieves a float64 parameter.
 // Returns an error if the key doesn't exist or the value is not a number.
-func (p ToolParameters) GetFloat64(key string) (float64, error) {
+func (p *ToolParameters) GetFloat64(key string) (float64, error) {
 	rawValue, exists := p.raw[key]
 	if !exists {
 		return 0, fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
@@ -150,7 +151,7 @@ func (p ToolParameters) GetFloat64(key string) (float64, error) {
 
 // GetObject retrieves a complex object parameter and unmarshals it into dest.
 // Returns an error if the key doesn't exist or unmarshaling fails.
-func (p ToolParameters) GetObject(key string, dest any) error {
+func (p *ToolParameters) GetObject(key string, dest any) error {
 	rawValue, exists := p.raw[key]
 	if !exists {
 		return fmt.Errorf("parameter %q not found: %w", key, ErrParameterNotFound)
@@ -166,7 +167,7 @@ func (p ToolParameters) GetObject(key string, dest any) error {
 
 // GetStringOr retrieves a string parameter with a default value.
 // Returns the default if the key doesn't exist or the value is not a string.
-func (p ToolParameters) GetStringOr(key, defaultValue string) string {
+func (p *ToolParameters) GetStringOr(key, defaultValue string) string {
 	value, err := p.GetString(key)
 	if err != nil {
 		return defaultValue
@@ -177,7 +178,7 @@ func (p ToolParameters) GetStringOr(key, defaultValue string) string {
 
 // GetIntOr retrieves an integer parameter with a default value.
 // Returns the default if the key doesn't exist or the value is not an integer.
-func (p ToolParameters) GetIntOr(key string, defaultValue int) int {
+func (p *ToolParameters) GetIntOr(key string, defaultValue int) int {
 	value, err := p.GetInt(key)
 	if err != nil {
 		return defaultValue
@@ -188,7 +189,7 @@ func (p ToolParameters) GetIntOr(key string, defaultValue int) int {
 
 // GetBoolOr retrieves a boolean parameter with a default value.
 // Returns the default if the key doesn't exist or the value is not a boolean.
-func (p ToolParameters) GetBoolOr(key string, defaultValue bool) bool {
+func (p *ToolParameters) GetBoolOr(key string, defaultValue bool) bool {
 	value, err := p.GetBool(key)
 	if err != nil {
 		return defaultValue
@@ -199,7 +200,7 @@ func (p ToolParameters) GetBoolOr(key string, defaultValue bool) bool {
 
 // GetFloat64Or retrieves a float64 parameter with a default value.
 // Returns the default if the key doesn't exist or the value is not a number.
-func (p ToolParameters) GetFloat64Or(key string, defaultValue float64) float64 {
+func (p *ToolParameters) GetFloat64Or(key string, defaultValue float64) float64 {
 	value, err := p.GetFloat64(key)
 	if err != nil {
 		return defaultValue
@@ -209,7 +210,7 @@ func (p ToolParameters) GetFloat64Or(key string, defaultValue float64) float64 {
 }
 
 // MarshalJSON implements [json.Marshaler].
-func (p ToolParameters) MarshalJSON() ([]byte, error) {
+func (p *ToolParameters) MarshalJSON() ([]byte, error) {
 	data, err := json.Marshal(p.raw)
 	if err != nil {
 		return nil, fmt.Errorf("marshal tool parameters: %w", err)

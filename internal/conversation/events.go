@@ -109,7 +109,10 @@ func (b *Builder) runEventLogger(ctx context.Context, sessionID, subID string, c
 				"type":       ev.Type.String(),
 				"data":       ev.Data,
 			}
-			_ = enc.Encode(record)
+
+			if encErr := enc.Encode(record); encErr != nil {
+				b.logWarnCtx(ctx, "event encode failed", "err", encErr)
+			}
 		case <-ctx.Done():
 			return
 		}

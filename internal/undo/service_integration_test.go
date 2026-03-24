@@ -3,6 +3,7 @@ package undo_test
 // Journey: specs/journeys/JOURNEY-2.1.md.
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,7 +19,7 @@ func TestUndoService_FullRollbackFlow(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	svc := undo.NewService(undo.NewOperationLog(), mgr)
 
@@ -49,7 +50,7 @@ func TestUndoService_MultipleSnapshots_RollbackToMiddle(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	svc := undo.NewService(undo.NewOperationLog(), mgr)
 
@@ -86,7 +87,7 @@ func TestUndoService_OperationLog_IntegratedWithSnapshot(t *testing.T) {
 	dir := setupTestWorkDir(t)
 
 	mgr := undo.NewSnapshotManager(dir)
-	require.NoError(t, mgr.Init())
+	require.NoError(t, mgr.Init(context.Background()))
 
 	opLog := undo.NewOperationLog()
 	svc := undo.NewService(opLog, mgr)

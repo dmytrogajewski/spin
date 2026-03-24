@@ -187,7 +187,8 @@ func TestServer_FindReferences(t *testing.T) {
 func TestServer_Rename(t *testing.T) {
 	t.Parallel()
 
-	editJSON := `{"changes":{"file:///test.go":[{"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":5}},"new_text":"NewName"}]}}`
+	editJSON := `{"changes":{"file:///test.go":[{"range":{"start":` +
+		`{"line":1,"character":0},"end":{"line":1,"character":5}},"new_text":"NewName"}]}}`
 
 	transport := &mockTransport{
 		sendFunc: func(_ context.Context, method string, _ any) (json.RawMessage, error) {

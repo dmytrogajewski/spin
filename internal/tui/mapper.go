@@ -12,15 +12,15 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
-	"github.com/dmytrogajewski/spin/pkg/alg/collections"
-	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 )
 
 const (
-	maxContentLineLen   = 120
-	truncatedContentLen = 117
+	maxContentLineLen    = 120
+	truncatedContentLen  = 117
+	streamChannelBufSize = 100
 )
 
 // Mapper maps core agent events to TUI blocks.
@@ -195,10 +195,10 @@ func (m *Mapper) createExecuteBlock(data events.ToolCallStartData) *blocks.Block
 	block.ID = data.ToolID
 
 	// Extract command from parameters (or path for list_directory).
-	command := extractString(data.Parameters, "command")
+	command := data.Parameters.GetStringOr("command", "")
 	if command == "" && data.ToolName == "list_directory" {
 		// For list_directory, use the path as the command.
-		command = "ls " + extractString(data.Parameters, "path")
+		command = "ls " + data.Parameters.GetStringOr("path", "")
 	}
 
 	// Don't set block.Title for execute blocks - the renderer will use the
@@ -206,7 +206,7 @@ func (m *Mapper) createExecuteBlock(data events.ToolCallStartData) *blocks.Block
 	// causes duplication in the block header.
 
 	// Store metadata.
-	cwd := extractString(data.Parameters, "cwd")
+	cwd := data.Parameters.GetStringOr("cwd", "")
 	if cwd == "" {
 		cwd = "."
 	}
@@ -217,18 +217,8 @@ func (m *Mapper) createExecuteBlock(data events.ToolCallStartData) *blocks.Block
 		Impact:  "medium", // Default impact level.
 	}
 
-	err := blocks.SetExecuteMeta(block, meta)
-	if err != nil {
-		// Validation failed, marshal map to JSON to preserve data.
-		fallback := map[string]any{
-			"command": command,
-			"cwd":     cwd,
-		}
-
-		data, marshalErr := json.Marshal(fallback)
-		if marshalErr == nil {
-			block.Meta = data
-		}
+	if err := blocks.SetExecuteMeta(block, meta); err != nil {
+		setMetaFallback(block, map[string]any{"command": command, "cwd": cwd})
 	}
 
 	return block
@@ -239,26 +229,17 @@ func (m *Mapper) createReadBlock(data events.ToolCallStartData) *blocks.Block {
 	block := blocks.NewBlock(blocks.BlockTypeRead)
 	block.ID = data.ToolID
 
-	path := extractString(data.Parameters, "path")
+	path := data.Parameters.GetStringOr("path", "")
 	block.Title = path
 
 	meta := &blocks.ReadMeta{
 		File:   path,
-		Offset: extractIntValue(data.Parameters, "offset"),
-		Limit:  extractIntValue(data.Parameters, "limit"),
+		Offset: data.Parameters.GetIntOr("offset", 0),
+		Limit:  data.Parameters.GetIntOr("limit", 0),
 	}
 
-	err := blocks.SetReadMeta(block, meta)
-	if err != nil {
-		// Validation failed, marshal map to JSON.
-		fallback := map[string]any{
-			"file": path,
-		}
-
-		data, marshalErr := json.Marshal(fallback)
-		if marshalErr == nil {
-			block.Meta = data
-		}
+	if err := blocks.SetReadMeta(block, meta); err != nil {
+		setMetaFallback(block, map[string]any{"file": path})
 	}
 
 	return block
@@ -272,7 +253,7 @@ func (m *Mapper) createToolBlock(data events.ToolCallStartData) *blocks.Block {
 	// Prefer the actual tool name from the event; fall back to param.
 	toolName := data.ToolName
 	if toolName == "" {
-		toolName = extractString(data.Parameters, "tool_name")
+		toolName = data.Parameters.GetStringOr("tool_name", "")
 	}
 
 	// Convert parameters to a simple map for display (best-effort).
@@ -283,17 +264,8 @@ func (m *Mapper) createToolBlock(data events.ToolCallStartData) *blocks.Block {
 		Params:   params,
 	}
 
-	err := blocks.SetToolMeta(block, meta)
-	if err != nil {
-		// Validation failed, marshal map to JSON to preserve data.
-		fallback := map[string]any{
-			"tool_name": toolName,
-		}
-
-		data, marshalErr := json.Marshal(fallback)
-		if marshalErr == nil {
-			block.Meta = data
-		}
+	if err := blocks.SetToolMeta(block, meta); err != nil {
+		setMetaFallback(block, map[string]any{"tool_name": toolName})
 	}
 
 	return block
@@ -303,8 +275,8 @@ func (m *Mapper) createToolBlock(data events.ToolCallStartData) *blocks.Block {
 // If a block for the same path exists, it updates and reuses it, and registers
 // the current tool ID to point to that existing block for completion updates.
 func (m *Mapper) createOrReuseApplyPatchBlock(data events.ToolCallStartData) *blocks.Block {
-	path := extractString(data.Parameters, "path")
-	content := extractString(data.Parameters, "content")
+	path := data.Parameters.GetStringOr("path", "")
+	content := data.Parameters.GetStringOr("content", "")
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -358,7 +330,7 @@ func (m *Mapper) createApplyPatchFromPatchTool(data events.ToolCallStartData) *b
 	block.ID = data.ToolID
 
 	// Title: show workspace root if provided, otherwise generic label.
-	workspaceRoot := extractString(data.Parameters, "workspace_root")
+	workspaceRoot := data.Parameters.GetStringOr("workspace_root", "")
 	if workspaceRoot == "" {
 		workspaceRoot = "."
 	}
@@ -366,7 +338,7 @@ func (m *Mapper) createApplyPatchFromPatchTool(data events.ToolCallStartData) *b
 	block.Title = workspaceRoot
 
 	// Body: show the raw patch text so the user sees exactly what is applied.
-	patchText := extractString(data.Parameters, "patch_text")
+	patchText := data.Parameters.GetStringOr("patch_text", "")
 	block.Body = patchText
 
 	// Metadata: PatchMeta requires a non-empty File; use workspace root as scope indicator.
@@ -375,17 +347,8 @@ func (m *Mapper) createApplyPatchFromPatchTool(data events.ToolCallStartData) *b
 		Completed: false,
 	}
 
-	err := blocks.SetPatchMeta(block, meta)
-	if err != nil {
-		// Fallback to JSON if validation fails for any reason.
-		fallback := map[string]any{
-			"file": workspaceRoot,
-		}
-
-		data, marshalErr := json.Marshal(fallback)
-		if marshalErr == nil {
-			block.Meta = data
-		}
+	if err := blocks.SetPatchMeta(block, meta); err != nil {
+		setMetaFallback(block, map[string]any{"file": workspaceRoot})
 	}
 
 	return block
@@ -396,24 +359,15 @@ func (m *Mapper) createGrepBlockFromSearch(data events.ToolCallStartData) *block
 	block := blocks.NewBlock(blocks.BlockTypeGrep)
 	block.ID = data.ToolID
 
-	query := extractString(data.Parameters, "query")
+	query := data.Parameters.GetStringOr("query", "")
 	// Map file_search semantics to GREP meta for consistent rendering.
 	meta := &blocks.GrepMeta{
 		Pattern: query,
 		Mode:    "files_with_matches",
 	}
 
-	err := blocks.SetGrepMeta(block, meta)
-	if err != nil {
-		fallback := map[string]any{
-			"pattern": query,
-			"mode":    "files_with_matches",
-		}
-
-		data, marshalErr := json.Marshal(fallback)
-		if marshalErr == nil {
-			block.Meta = data
-		}
+	if err := blocks.SetGrepMeta(block, meta); err != nil {
+		setMetaFallback(block, map[string]any{"pattern": query, "mode": "files_with_matches"})
 	}
 
 	return block
@@ -521,6 +475,8 @@ func (m *Mapper) updateBlockMetadata(block *blocks.Block, data events.ToolCallCo
 		m.updateExecuteBlockMetadata(block, data)
 	case blocks.BlockTypeApplyPatch:
 		m.updatePatchBlockMetadata(block, data)
+	default:
+		// No metadata updates for other block types.
 	}
 }
 
@@ -858,7 +814,7 @@ func (m *Mapper) StartStreaming() <-chan string {
 		return m.streamCh // Already started.
 	}
 
-	m.streamCh = make(chan string, 100)
+	m.streamCh = make(chan string, streamChannelBufSize)
 	m.streamDone = make(chan struct{})
 
 	return m.streamCh
@@ -899,18 +855,6 @@ func (m *Mapper) Close() error {
 	return nil
 }
 
-// Helper functions.
-
-// extractString safely extracts a string parameter from ToolCallArguments.
-func extractString(params tools.ToolParameters, key string) string {
-	return params.GetStringOr(key, "")
-}
-
-// extractIntValue safely extracts an int parameter from ToolCallArguments.
-func extractIntValue(params tools.ToolParameters, key string) int {
-	return params.GetIntOr(key, 0)
-}
-
 // countLinesPtr counts the number of lines in a string and returns a pointer.
 func countLinesPtr(s string) *int {
 	if s == "" {
@@ -934,3 +878,12 @@ func generateBlockID() string {
 
 // eventIDCounter is a lock-free atomic counter for unique block IDs.
 var eventIDCounter atomic.Int64
+
+// setMetaFallback marshals the fallback map as JSON and assigns it to block.Meta.
+// Used when typed metadata validation fails — preserves data as raw JSON.
+func setMetaFallback(block *blocks.Block, fallback map[string]any) {
+	data, err := json.Marshal(fallback)
+	if err == nil {
+		block.Meta = data
+	}
+}

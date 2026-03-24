@@ -33,21 +33,26 @@ func shouldSkipBuild() bool {
 }
 
 func buildSpinBinary() {
+	if buildErr := doBuildSpinBinary(); buildErr != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", buildErr)
+		os.Exit(1)
+	}
+}
+
+func doBuildSpinBinary() error {
 	// Use file lock to prevent concurrent builds from parallel test packages.
 	lockPath := binPath + ".lock"
 
 	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create lock file: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create lock file: %w", err)
 	}
 	defer lockFile.Close()
 
 	// Acquire exclusive lock (blocks until available).
-	fd := int(lockFile.Fd()) //nolint:gosec // fd is always a small positive int
-	if err := syscall.Flock(fd, syscall.LOCK_EX); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to acquire build lock: %v\n", err)
-		os.Exit(1)
+	fd := int(lockFile.Fd())
+	if flockErr := syscall.Flock(fd, syscall.LOCK_EX); flockErr != nil {
+		return fmt.Errorf("failed to acquire build lock: %w", flockErr)
 	}
 
 	defer func() { _ = syscall.Flock(fd, syscall.LOCK_UN) }()
@@ -58,7 +63,7 @@ func buildSpinBinary() {
 		if time.Since(info.ModTime()) < 5*time.Minute {
 			fmt.Fprintln(os.Stdout, "Using recently built spin binary for ACP e2e tests")
 
-			return
+			return nil
 		}
 	}
 
@@ -69,16 +74,18 @@ func buildSpinBinary() {
 
 	cmd := exec.CommandContext(context.Background(), "go", "build", "-tags", "e2e_llm_test", "-o", tmpBin, "../../../cmd/spin")
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+	output, buildErr := cmd.CombinedOutput()
+	if buildErr != nil {
 		os.Remove(tmpBin)
-		fmt.Fprintf(os.Stderr, "Failed to build binary: %v\n%s\n", err, output)
-		os.Exit(1)
+
+		return fmt.Errorf("failed to build binary: %w\n%s", buildErr, output)
 	}
 
-	if err := os.Rename(tmpBin, binPath); err != nil {
+	if renameErr := os.Rename(tmpBin, binPath); renameErr != nil {
 		os.Remove(tmpBin)
-		fmt.Fprintf(os.Stderr, "Failed to install binary: %v\n", err)
-		os.Exit(1)
+
+		return fmt.Errorf("failed to install binary: %w", renameErr)
 	}
+
+	return nil
 }

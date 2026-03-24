@@ -68,7 +68,7 @@ func (t *FindReferencesTool) Schema() ToolSchema {
 
 // Execute runs the references search.
 func (t *FindReferencesTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	filePath, _ := params.GetString(paramFilePath)
+	filePath := params.GetStringOr(paramFilePath, "")
 	if filePath == "" {
 		return NewToolError(ErrInvalidParameters), nil
 	}

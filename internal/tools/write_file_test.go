@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 func TestWriteFileTool(t *testing.T) {
@@ -400,8 +402,8 @@ func TestFileTracker_StillBlocksStaleOverwrite(t *testing.T) {
 	}
 
 	tracker := NewFileTracker()
-	if err := tracker.RecordRead(filePath); err != nil {
-		t.Fatalf("RecordRead failed: %v", err)
+	if recordErr := tracker.RecordRead(filePath); recordErr != nil {
+		t.Fatalf("RecordRead failed: %v", recordErr)
 	}
 
 	// External modification after the read.
@@ -464,7 +466,7 @@ func TestWriteFileTool_CheckApproval_ExecutableFiles(t *testing.T) {
 	})
 }
 
-// --- Truncation Detection Tests ---
+// Truncation Detection Tests.
 
 func TestDetectTruncation_ValidCode_NoFalsePositive(t *testing.T) {
 	t.Parallel()
@@ -527,7 +529,7 @@ impl<'input> Parser<'input> {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := detectTruncation(tt.content)
+			result := stringsx.DetectTruncation(tt.content)
 			if result != "" {
 				t.Errorf("detectTruncation false positive for %q: got %q, want empty", tt.name, result)
 			}
@@ -564,11 +566,11 @@ func TestDetectTruncation_TruncatedContent_Detected(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := detectTruncation(tt.content)
+			result := stringsx.DetectTruncation(tt.content)
 			if result == "" {
 				t.Errorf("detectTruncation missed truncation for %q", tt.name)
 			} else if !strings.Contains(result, tt.wantMsg) {
-				t.Errorf("detectTruncation(%q) = %q, want containing %q", tt.name, result, tt.wantMsg)
+				t.Errorf("stringsx.DetectTruncation(%q) = %q, want containing %q", tt.name, result, tt.wantMsg)
 			}
 		})
 	}

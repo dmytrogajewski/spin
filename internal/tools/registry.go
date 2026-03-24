@@ -35,7 +35,9 @@ func NewRegistry() *Registry {
 func NewRegistryWithBuiltins() *Registry {
 	registry := NewRegistry()
 	for _, tool := range BuiltinTools {
-		_ = registry.Register(tool)
+		if regErr := registry.Register(tool); regErr != nil {
+			panic(fmt.Sprintf("failed to register builtin tool %q: %v", tool.Name(), regErr))
+		}
 	}
 
 	return registry
@@ -62,10 +64,21 @@ func NewDefaultRegistry(workDir string, env fmt.Stringer) *Registry {
 	// Replace tools that need configuration with properly configured versions
 	// Note: shell_command is left as-is (nil parameters) since it can be configured
 	// separately via RegisterOrReplace if needed.
-	_ = registry.RegisterOrReplace(NewGetContextTool(env))
-	_ = registry.RegisterOrReplace(NewApplyPatchTool(workDir))
-	_ = registry.RegisterOrReplace(NewFileSearchTool(workDir))
-	_ = registry.RegisterOrReplace(NewGitContextTool(workDir))
+	if err := registry.RegisterOrReplace(NewGetContextTool(env)); err != nil {
+		panic(fmt.Sprintf("failed to register get_context tool: %v", err))
+	}
+
+	if err := registry.RegisterOrReplace(NewApplyPatchTool(workDir)); err != nil {
+		panic(fmt.Sprintf("failed to register apply_patch tool: %v", err))
+	}
+
+	if err := registry.RegisterOrReplace(NewFileSearchTool(workDir)); err != nil {
+		panic(fmt.Sprintf("failed to register file_search tool: %v", err))
+	}
+
+	if err := registry.RegisterOrReplace(NewGitContextTool(workDir)); err != nil {
+		panic(fmt.Sprintf("failed to register git_context tool: %v", err))
+	}
 
 	return registry
 }

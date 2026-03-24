@@ -41,7 +41,7 @@ type mockTaskStarter struct {
 	lastWorkDir   string
 }
 
-func (m *mockTaskStarter) Start(_ context.Context, command string, workDir string) (string, string, error) {
+func (m *mockTaskStarter) Start(_ context.Context, command, workDir string) (taskID, initialOutput string, err error) {
 	m.lastCommand = command
 	m.lastWorkDir = workDir
 

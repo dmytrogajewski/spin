@@ -246,9 +246,7 @@ func (p *Printer) printChunksImmediate(ctx context.Context, chunks <-chan string
 		select {
 		case <-ctx.Done():
 			if buf.Len() > 0 {
-				p.flushBuffer(&buf)
-
-				wroteContent = true
+				_ = p.flushBuffer(&buf)
 			}
 
 			return fmt.Errorf("print chunks immediate: %w", ctx.Err())
@@ -272,7 +270,11 @@ func (p *Printer) flushBuffer(buf *strings.Builder) error {
 	_, err := io.WriteString(p.out, output)
 	p.mu.Unlock()
 
-	return err
+	if err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
+
+	return nil
 }
 
 // finalizeImmediate flushes remaining buffer and ensures a trailing newline.

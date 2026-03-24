@@ -86,14 +86,14 @@ func TestProjectInstructionsSection_Format(t *testing.T) {
 func TestComposer_WithProjectInstructions_CacheableFirst(t *testing.T) {
 	t.Parallel()
 
-	c := prompt.NewComposer()
-	c.AddSection(prompt.ProjectInstructionsSection(testAgentsMDContent))
+	composer := prompt.NewComposer()
+	composer.AddSection(prompt.ProjectInstructionsSection(testAgentsMDContent))
 
 	for _, s := range prompt.DefaultRegularSections() {
-		c.AddSection(s)
+		composer.AddSection(s)
 	}
 
-	composed := c.Compose(nonGitEnv())
+	composed := composer.Compose(nonGitEnv())
 
 	// Cacheable sections (identity, tool principle, tool guidance, response style) come first.
 	// Dynamic section (project instructions) comes last.

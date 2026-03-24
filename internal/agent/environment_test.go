@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 )
 
 func TestGatherEnvironment(t *testing.T) {
@@ -129,31 +131,43 @@ func TestGatherOSInfo(t *testing.T) {
 	assert.NotEmpty(t, osInfo.Arch)
 }
 
-func TestDetectLanguageFromExt(t *testing.T) {
+func TestDetectLanguage(t *testing.T) {
 	t.Parallel()
+
+	dir := t.TempDir()
+
+	// Create sample files so content-based detection works for ambiguous extensions.
+	writeFile := func(name, content string) string {
+		p := filepath.Join(dir, name)
+		require.NoError(t, os.WriteFile(p, []byte(content), 0o600))
+
+		return p
+	}
 
 	tests := []struct {
 		name     string
-		ext      string
+		path     string
+		filename string
 		expected string
 	}{
-		{"Go file", ".go", "go"},
-		{"Python file", ".py", "python"},
-		{"JavaScript file", ".js", "javascript"},
-		{"TypeScript file", ".ts", "typescript"},
-		{"Java file", ".java", "java"},
-		{"C file", ".c", "c"},
-		{"C++ file", ".cpp", "cpp"},
-		{"Rust file", ".rs", "rust"},
-		{"Unknown extension", ".xyz", "Unknown"},
-		{"Empty extension", "", "Unknown"},
+		{"Go file", writeFile("main.go", "package main"), "main.go", "Go"},
+		{"Python file", writeFile("main.py", "print('hi')"), "main.py", "Python"},
+		{"JavaScript file", writeFile("app.js", "console.log('hi')"), "app.js", "JavaScript"},
+		{"TypeScript file", writeFile("app.ts", "const x: string = 'hi'"), "app.ts", "TypeScript"},
+		{"Java file", writeFile("Main.java", "class Main {}"), "Main.java", "Java"},
+		{"C file", writeFile("main.c", "#include <stdio.h>"), "main.c", "C"},
+		{"C++ file", writeFile("main.cpp", "#include <iostream>"), "main.cpp", "C++"},
+		{"Rust file", writeFile("main.rs", "fn main() {}"), "main.rs", "Rust"},
+		{"Makefile", writeFile("Makefile", "all:\n\techo hi"), "Makefile", "Makefile"},
+		{"Dockerfile", writeFile("Dockerfile", "FROM alpine"), "Dockerfile", "Dockerfile"},
+		{"Unknown extension", writeFile("file.xyz", ""), "file.xyz", "Unknown"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := detectLanguageFromExt(tt.ext)
+			result := detectLanguage(tt.path, tt.filename)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -191,7 +205,7 @@ func TestDetectProjectType(t *testing.T) {
 		{
 			name: "Go project",
 			files: []FileInfo{
-				{Path: "main.go", Language: "go"},
+				{Path: "main.go", Language: "Go"},
 				{Path: "go.mod", Language: ""},
 			},
 			expected: "go",
@@ -199,7 +213,7 @@ func TestDetectProjectType(t *testing.T) {
 		{
 			name: "Python project",
 			files: []FileInfo{
-				{Path: "main.py", Language: "python"},
+				{Path: "main.py", Language: "Python"},
 				{Path: "requirements.txt", Language: ""},
 			},
 			expected: "python",
@@ -207,7 +221,7 @@ func TestDetectProjectType(t *testing.T) {
 		{
 			name: "JavaScript project",
 			files: []FileInfo{
-				{Path: "index.js", Language: "javascript"},
+				{Path: "index.js", Language: "JavaScript"},
 				{Path: "package.json", Language: ""},
 			},
 			expected: "nodejs",
@@ -235,18 +249,18 @@ func TestDetectLanguages(t *testing.T) {
 	t.Parallel()
 
 	files := []FileInfo{
-		{Path: "main.go", Language: "go"},
-		{Path: "test.py", Language: "python"},
-		{Path: "script.js", Language: "javascript"},
-		{Path: "README.md", Language: ""},
+		{Path: "main.go", Language: "Go"},
+		{Path: "test.py", Language: "Python"},
+		{Path: "script.js", Language: "JavaScript"},
+		{Path: "README.md", Language: "Markdown"},
 	}
 
 	languages := detectLanguages(files)
-	assert.Contains(t, languages, "go")
-	assert.Contains(t, languages, "python")
-	assert.Contains(t, languages, "javascript")
-	// README.md with empty language might add an entry, so check at least 3.
-	assert.GreaterOrEqual(t, len(languages), 3)
+	assert.Contains(t, languages, "Go")
+	assert.Contains(t, languages, "Python")
+	assert.Contains(t, languages, "JavaScript")
+	assert.NotContains(t, languages, "Markdown") // Markup, not programming.
+	assert.Len(t, languages, 3)
 }
 
 func TestDetectLanguages_EmptyFiles(t *testing.T) {
@@ -269,7 +283,7 @@ func TestFilterEnvironment(t *testing.T) {
 		"PORT=8080",
 	}
 
-	filtered := filterEnvironment(env)
+	filtered := execx.FilterEnvironment(env, sensitivePrefixes, sensitiveSubstrings)
 
 	// Should include non-sensitive variables.
 	assert.Contains(t, filtered, "PATH")
@@ -311,7 +325,7 @@ func TestEnvironment_Structure(t *testing.T) {
 		ProjectType: "go",
 		Languages:   []string{"go"},
 		Files: []FileInfo{
-			{Path: "main.go", Size: 100, Language: "go", Lines: 10},
+			{Path: "main.go", Size: 100, Language: "Go", Lines: 10},
 		},
 		Environment: map[string]string{
 			"PATH": "/usr/bin",
@@ -385,13 +399,13 @@ func TestFileInfo_Structure(t *testing.T) {
 	fileInfo := FileInfo{
 		Path:     "test.go",
 		Size:     1024,
-		Language: "go",
+		Language: "Go",
 		Lines:    50,
 	}
 
 	assert.Equal(t, "test.go", fileInfo.Path)
 	assert.Equal(t, int64(1024), fileInfo.Size)
-	assert.Equal(t, "go", fileInfo.Language)
+	assert.Equal(t, "Go", fileInfo.Language)
 	assert.Equal(t, 50, fileInfo.Lines)
 }
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -226,8 +227,8 @@ func (a *SpinACPAgent) SetACPRuntime(rt *executor.ACPRuntime) {
 // Negotiates protocol version, advertises agent capabilities based on Spin's
 // features, stores client capabilities, and exchanges client/agent info.
 func (a *SpinACPAgent) Initialize(_ context.Context, req acp.InitializeRequest) (acp.InitializeResponse, error) {
-	// Negotiate protocol version.
-	negotiatedVersion := a.negotiateProtocolVersion(req.ProtocolVersion)
+	// Negotiate protocol version (currently only version 1 supported).
+	negotiatedVersion := acp.ProtocolVersion(acp.ProtocolVersionNumber)
 
 	// Build agent capabilities.
 	agentCaps := a.buildAgentCapabilities()
@@ -265,18 +266,6 @@ func (a *SpinACPAgent) Initialize(_ context.Context, req acp.InitializeRequest) 
 	}
 
 	return resp, nil
-}
-
-// negotiateProtocolVersion negotiates the protocol version with the client.
-// Currently only supports version 1. Returns version 1 if client requests
-// a supported version, otherwise returns the latest supported version.
-func (a *SpinACPAgent) negotiateProtocolVersion(clientVersion acp.ProtocolVersion) acp.ProtocolVersion {
-	// Currently only support version 1.
-	if clientVersion == acp.ProtocolVersionNumber {
-		return acp.ProtocolVersionNumber
-	}
-	// Return latest supported version (currently only version 1).
-	return acp.ProtocolVersionNumber
 }
 
 // buildAgentCapabilities builds agent capabilities based on Spin's features.
@@ -335,7 +324,9 @@ func (a *SpinACPAgent) NewSession(ctx context.Context, req acp.NewSessionRequest
 		ConfigOptions: buildConfigOptions(defaultMode),
 	}
 
-	_ = a.sendAvailableCommandsUpdate(ctx, sessionID)
+	if cmdErr := a.sendAvailableCommandsUpdate(ctx, sessionID); cmdErr != nil {
+		slog.WarnContext(ctx, "failed to send available commands update", "error", cmdErr)
+	}
 
 	return resp, nil
 }
@@ -515,10 +506,8 @@ func (a *SpinACPAgent) promptWithConversation(
 	unsubscribe, eventsDone := a.subscribeTransformerEvents(ctx, conn, transformer)
 
 	defer func() {
-		// Cancel context FIRST so the event goroutine can exit if blocked
-		// on a synchronous RPC (e.g., terminal/release).
-		cancel()
-
+		// Unsubscribe FIRST to close the event channel, letting the goroutine
+		// drain remaining events before exiting. Then cancel context and wait.
 		if unsubscribe != nil {
 			unsubscribe()
 		}
@@ -526,6 +515,8 @@ func (a *SpinACPAgent) promptWithConversation(
 		if eventsDone != nil {
 			<-eventsDone
 		}
+
+		cancel()
 	}()
 
 	// Execute turn via conversation (manages history automatically).
@@ -543,9 +534,12 @@ func (a *SpinACPAgent) promptWithConversation(
 	msgs := conv.GetHistoryMessages()
 	if len(msgs) > 0 {
 		lastMsg := msgs[len(msgs)-1]
-		_ = a.sendPlanNotifications(ctx, req.SessionId, &agent.Response{
+
+		if planErr := a.sendPlanNotifications(ctx, req.SessionId, &agent.Response{
 			Output: lastMsg.Content,
-		})
+		}); planErr != nil {
+			slog.WarnContext(ctx, "failed to send plan notifications", "error", planErr)
+		}
 	}
 
 	// Save history after successful turn (if storage configured).
@@ -554,7 +548,9 @@ func (a *SpinACPAgent) promptWithConversation(
 	a.mu.RUnlock()
 
 	if histStorage != nil {
-		_ = conv.GetHistory().Save(ctx, histStorage, string(req.SessionId))
+		if saveErr := conv.GetHistory().Save(ctx, histStorage, string(req.SessionId)); saveErr != nil {
+			slog.WarnContext(ctx, "failed to save history", "session_id", req.SessionId, "error", saveErr)
+		}
 	}
 
 	return acp.PromptResponse{
@@ -873,8 +869,8 @@ func (a *SpinACPAgent) LoadSession(ctx context.Context, req acp.LoadSessionReque
 
 	sessionID := acp.SessionId(sess.ID)
 
-	if err := a.storeSessionWithMCPServers(ctx, sessionID, sess, req.McpServers); err != nil {
-		return acp.LoadSessionResponse{}, err
+	if storeErr := a.storeSessionWithMCPServers(ctx, sessionID, sess, req.McpServers); storeErr != nil {
+		return acp.LoadSessionResponse{}, storeErr
 	}
 
 	a.replayConversationHistory(ctx, sessionID)
@@ -924,7 +920,9 @@ func convertMCPServers(servers []acp.McpServer) ([]mcp.ServerConfig, error) {
 // connectMCPServersBackground connects MCP servers in background.
 func (a *SpinACPAgent) connectMCPServersBackground(ctx context.Context, configs []mcp.ServerConfig) {
 	for _, config := range configs {
-		_ = a.mcpService.ConnectServer(ctx, config)
+		if connErr := a.mcpService.ConnectServer(ctx, config); connErr != nil {
+			slog.WarnContext(ctx, "failed to connect MCP server", "name", config.Name, "error", connErr)
+		}
 	}
 }
 
@@ -960,6 +958,8 @@ func (a *SpinACPAgent) replayMessage(ctx context.Context, sessionID acp.SessionI
 		a.sendSessionUpdate(ctx, sessionID, conn, acp.UpdateUserMessageText(msg.Content))
 	case message.RoleAssistant:
 		a.replayAssistantMessage(ctx, sessionID, conn, msg.Content)
+	default:
+		// Other roles (system, tool) are not replayed as ACP notifications.
 	}
 }
 
@@ -978,12 +978,18 @@ func (a *SpinACPAgent) replayAssistantMessage(ctx context.Context, sessionID acp
 }
 
 // sendSessionUpdate sends a session update notification.
+// Uses [context.WithoutCancel] so notifications are delivered even after the
+// prompt context is cancelled.
 func (a *SpinACPAgent) sendSessionUpdate(ctx context.Context, sessionID acp.SessionId, conn notificationSender, update acp.SessionUpdate) {
 	notification := acp.SessionNotification{
 		SessionId: sessionID,
 		Update:    update,
 	}
-	_ = conn.SessionUpdate(ctx, notification)
+
+	sendCtx := context.WithoutCancel(ctx)
+	if err := conn.SessionUpdate(sendCtx, notification); err != nil {
+		slog.WarnContext(ctx, "failed to send session update", "session_id", sessionID, "error", err)
+	}
 }
 
 // sendPlanNotifications sends plan notifications if a plan is detected.
@@ -1278,7 +1284,9 @@ func (a *SpinACPAgent) sendCurrentModeUpdate(
 	}
 
 	// Best-effort notification.
-	_ = conn.SessionUpdate(ctx, notif)
+	if err := conn.SessionUpdate(ctx, notif); err != nil {
+		slog.WarnContext(ctx, "failed to send mode update", "session_id", sessionID, "error", err)
+	}
 }
 
 // sendConfigOptionUpdate sends a config_option_update notification.
@@ -1305,7 +1313,9 @@ func (a *SpinACPAgent) sendConfigOptionUpdate(
 	}
 
 	// Best-effort notification.
-	_ = conn.SessionUpdate(ctx, notif)
+	if err := conn.SessionUpdate(ctx, notif); err != nil {
+		slog.WarnContext(ctx, "failed to send config option update", "session_id", sessionID, "error", err)
+	}
 }
 
 // buildConfigOptions creates the config options array with current mode state.
@@ -1463,21 +1473,26 @@ func (a *SpinACPAgent) RequestPermission(ctx context.Context, req acp.RequestPer
 		return acp.RequestPermissionResponse{}, ErrApprovalServiceNotConfigured
 	}
 
-	operation, err := a.convertToolCallToOperation(req.ToolCall, sess.WorkDir)
-	if err != nil {
-		return acp.RequestPermissionResponse{}, fmt.Errorf("failed to convert tool call: %w", err)
-	}
+	operation := a.convertToolCallToOperation(req.ToolCall, sess.WorkDir)
 
 	_, approved, approvalErr := approvalService.RequestApproval(ctx, operation)
 	if approvalErr != nil {
-		if ctx.Err() != nil {
-			return acp.RequestPermissionResponse{Outcome: acp.NewRequestPermissionOutcomeCancelled()}, nil
-		}
-
-		return acp.RequestPermissionResponse{}, fmt.Errorf("approval request failed: %w", approvalErr)
+		return handleApprovalError(ctx.Err() != nil, approvalErr)
 	}
 
 	return selectPermissionOption(approved, req.Options), nil
+}
+
+// handleApprovalError maps an approval error to the appropriate response.
+// When contextCancelled is true, returns a Cancelled outcome (not an error).
+func handleApprovalError(contextCancelled bool, approvalErr error) (acp.RequestPermissionResponse, error) {
+	if !contextCancelled {
+		return acp.RequestPermissionResponse{}, fmt.Errorf("approval request failed: %w", approvalErr)
+	}
+
+	return acp.RequestPermissionResponse{
+		Outcome: acp.NewRequestPermissionOutcomeCancelled(),
+	}, nil
 }
 
 // selectPermissionOption finds the matching option based on the approval decision.
@@ -1502,7 +1517,7 @@ func selectPermissionOption(approved bool, options []acp.PermissionOption) acp.R
 }
 
 // convertToolCallToOperation converts an ACP tool call to a Spin security operation.
-func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.ToolCallUpdate, workDir string) (safety.Operation, error) {
+func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.ToolCallUpdate, workDir string) safety.Operation {
 	// Extract tool name from title.
 	toolName := unknownValue
 	if toolCall.Title != nil {
@@ -1526,7 +1541,7 @@ func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.ToolCallUpdate, w
 	if toolCall.RawInput != nil {
 		if rawInputMap, ok := toolCall.RawInput.(map[string]any); ok {
 			// Build args from raw input.
-			var args []string
+			args := make([]string, 0, len(rawInputMap))
 			for key, value := range rawInputMap {
 				args = append(args, fmt.Sprintf("--%s=%v", key, value))
 			}
@@ -1537,7 +1552,7 @@ func (a *SpinACPAgent) convertToolCallToOperation(toolCall acp.ToolCallUpdate, w
 		}
 	}
 
-	return safety.NewOperation(cmd, reason, workDir), nil
+	return safety.NewOperation(cmd, reason, workDir)
 }
 
 // GetClientCapabilities returns the client capabilities stored after Initialize.

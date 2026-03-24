@@ -23,7 +23,6 @@ import (
 	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
-	"github.com/dmytrogajewski/spin/internal/ui/ports"
 	spinterm "github.com/dmytrogajewski/spin/internal/ui/term"
 )
 
@@ -144,7 +143,7 @@ func runExec(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
-	defer conv.Close()
+	defer conv.Close(ctx)
 
 	// Execute the prompt non-interactively with TUI display.
 	err = executePromptWithTUI(ctx, conv, prompt, format, noStream, exitOnError)
@@ -223,7 +222,7 @@ func resolveSessionID(storage session.Storage, workDir, prefix string) string {
 
 // createExecUI creates the UI adapter for exec mode.
 // The out writer is used for all output; when nil it defaults to [os.Stdout].
-func createExecUI(out io.Writer) (ports.UI, error) {
+func createExecUI(out io.Writer) (*adapters.PureTTY, error) {
 	if out == nil {
 		out = os.Stdout
 	}
@@ -257,7 +256,7 @@ func createConversationForExec(
 	emitter := events.NewEventEmitter(eventBufferSize)
 
 	storage, err := createSessionStorage(cfg.Agent.SessionDir)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrNoSessionDir) {
 		return nil, err
 	}
 
@@ -343,6 +342,8 @@ func processExecEvent(ctx context.Context, event events.Event, mapper *tui.Mappe
 		if data, ok := event.Data.(events.TurnEventData); ok && data.TokensUsed > 0 {
 			ui.SetTokenCount(int64(data.TokensUsed))
 		}
+	default:
+		// Other event types don't require token count updates.
 	}
 }
 
@@ -377,12 +378,10 @@ func startExecEventLoop(
 
 // executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
 func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, _ string, _, exitOnError bool) error {
-	ui, err := createExecUI(nil)
+	pureTTY, err := createExecUI(nil)
 	if err != nil {
 		return fmt.Errorf("create TUI: %w", err)
 	}
-
-	pureTTY := ui.(*adapters.PureTTY)
 
 	defer func() { _ = pureTTY.Stop() }()
 

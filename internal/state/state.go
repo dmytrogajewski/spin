@@ -56,27 +56,27 @@ var allowedTransitions = map[State]map[State]bool{
 }
 
 // CanTransitionTo returns true if transition to the target state is valid.
-func (s State) CanTransitionTo(target State) bool {
-	if !validStates[s] || s == target {
+func (s *State) CanTransitionTo(target State) bool {
+	if !validStates[*s] || *s == target {
 		return false
 	}
 
-	return allowedTransitions[s][target]
+	return allowedTransitions[*s][target]
 }
 
 // String returns the string representation of the state.
 // Returns "unknown" for unrecognized states.
-func (s State) String() string {
-	if validStates[s] {
-		return string(s)
+func (s *State) String() string {
+	if validStates[*s] {
+		return string(*s)
 	}
 
 	return "unknown"
 }
 
 // MarshalText implements [encoding.TextMarshaler].
-func (s State) MarshalText() ([]byte, error) {
-	return []byte(s), nil
+func (s *State) MarshalText() ([]byte, error) {
+	return []byte(*s), nil
 }
 
 // UnmarshalText implements [encoding.TextUnmarshaler].
@@ -97,8 +97,8 @@ func (s *State) UnmarshalText(text []byte) error {
 }
 
 // IsTerminal returns true if the state is terminal (completed, failed, canceled, archived).
-func (s State) IsTerminal() bool {
-	switch s {
+func (s *State) IsTerminal() bool {
+	switch *s {
 	case StateCompleted, StateFailed, StateCancelled, StateArchived:
 		return true
 	default:
@@ -107,8 +107,8 @@ func (s State) IsTerminal() bool {
 }
 
 // IsActive returns true if the state is actively working (running, paused, or waiting for approval).
-func (s State) IsActive() bool {
-	switch s {
+func (s *State) IsActive() bool {
+	switch *s {
 	case StateRunning, StatePaused, StateWaitingApproval:
 		return true
 	default:

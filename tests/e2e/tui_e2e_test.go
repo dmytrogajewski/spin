@@ -145,7 +145,7 @@ func TestTUIBasicChat(t *testing.T) {
 
 	helper, conv, mockLLM := setupTUITest(t)
 	defer helper.Stop()
-	defer conv.Close()
+	defer conv.Close(context.Background())
 
 	// Set mock response.
 	mockLLM.SetResponse("Hello from test!")
@@ -298,7 +298,7 @@ func TestTUIMultiTurn(t *testing.T) {
 
 	helper, conv, mockLLM := setupTUITest(t)
 	defer helper.Stop()
-	defer conv.Close()
+	defer conv.Close(context.Background())
 
 	// Set mock response for second turn that references context.
 	mockLLM.SetResponse("Your favorite number is 42")

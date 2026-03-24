@@ -167,7 +167,7 @@ func (g *generator) ItemizedLearning(ctx context.Context, req ItemizedLearningRe
 	// 4. Call LLM.
 	params := openai.ChatCompletionNewParams{
 		Messages:    messages,
-		Model:       openai.ChatModel(req.Model),
+		Model:       req.Model,
 		Temperature: openai.Float(req.Temperature),
 		MaxTokens:   openai.Int(int64(req.MaxTokens)),
 	}
@@ -408,7 +408,7 @@ func (g *generator) callLLMForBullets(ctx context.Context, userPrompt, model str
 			openai.SystemMessage(bulletGenerationSystemPrompt),
 			openai.UserMessage(userPrompt),
 		},
-		Model:       openai.ChatModel(model),
+		Model:       model,
 		Temperature: openai.Float(generationTemperature),
 		MaxTokens:   openai.Int(generationMaxTokens),
 	}

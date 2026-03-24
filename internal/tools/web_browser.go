@@ -60,7 +60,7 @@ func (t *OpenBrowserTool) Schema() ToolSchema {
 func (t *OpenBrowserTool) Execute(
 	ctx context.Context, params ToolParameters,
 ) (ToolResult, error) {
-	rawURL, _ := params.GetString(paramURL)
+	rawURL := params.GetStringOr(paramURL, "")
 	if rawURL == "" {
 		return NewToolError(ErrInvalidParameters), nil
 	}

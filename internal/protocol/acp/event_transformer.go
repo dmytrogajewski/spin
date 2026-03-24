@@ -2,6 +2,7 @@ package acp
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -166,7 +167,10 @@ func (t *EventTransformer) transformGenericEvent(ctx context.Context, event even
 	if terminalID != "" {
 		if acpConn, isACPConn := t.connection.(*acp.AgentSideConnection); isACPConn {
 			terminalClient := NewTerminalClient(acpConn)
-			_ = terminalClient.Release(ctx, terminalID)
+
+			if releaseErr := terminalClient.Release(ctx, terminalID); releaseErr != nil {
+				slog.WarnContext(ctx, "failed to release terminal", "terminal_id", terminalID, "error", releaseErr)
+			}
 		}
 	}
 
@@ -197,12 +201,19 @@ func (t *EventTransformer) sendSessionInfoIfNeeded(ctx context.Context) {
 }
 
 // sendUpdate sends a session update notification.
+// Uses [context.WithoutCancel] so notifications are delivered even after the
+// request context is cancelled (the prompt defer cancels context before
+// draining events).
 func (t *EventTransformer) sendUpdate(ctx context.Context, update acp.SessionUpdate) {
 	notification := acp.SessionNotification{
 		SessionId: t.sessionID,
 		Update:    update,
 	}
-	_ = t.connection.SessionUpdate(ctx, notification)
+
+	sendCtx := context.WithoutCancel(ctx)
+	if err := t.connection.SessionUpdate(sendCtx, notification); err != nil {
+		slog.WarnContext(ctx, "failed to send session update", "session_id", t.sessionID, "error", err)
+	}
 }
 
 // Close releases resources held by the transformer.

@@ -3,11 +3,14 @@ package collections
 // Journey: specs/journeys/JOURNEY-R2.md.
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+var errNegativeValue = errors.New("negative value")
 
 func TestTailN(t *testing.T) {
 	t.Parallel()
@@ -370,5 +373,119 @@ func TestFilterSince(t *testing.T) {
 
 		got := FilterSince[entry](nil, tsFunc, base)
 		require.Empty(t, got)
+	})
+}
+
+// Journey: specs/journeys/JOURNEY-R-REF-9.md.
+
+func TestFilter(t *testing.T) {
+	t.Parallel()
+
+	isEven := func(n int) bool { return n%2 == 0 }
+
+	tests := []struct {
+		name  string
+		input []int
+		want  []int
+	}{
+		{name: "nil_slice", input: nil, want: nil},
+		{name: "empty_slice", input: []int{}, want: nil},
+		{name: "all_match", input: []int{2, 4, 6}, want: []int{2, 4, 6}},
+		{name: "none_match", input: []int{1, 3, 5}, want: nil},
+		{name: "some_match", input: []int{1, 2, 3, 4}, want: []int{2, 4}},
+		{name: "single_match", input: []int{7}, want: nil},
+		{name: "single_pass", input: []int{8}, want: []int{8}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := Filter(tt.input, isEven)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestClamp(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		val      int
+		lo       int
+		hi       int
+		expected int
+	}{
+		{name: "within_range", val: 5, lo: 0, hi: 10, expected: 5},
+		{name: "below_lo", val: -3, lo: 0, hi: 10, expected: 0},
+		{name: "above_hi", val: 15, lo: 0, hi: 10, expected: 10},
+		{name: "at_lo", val: 0, lo: 0, hi: 10, expected: 0},
+		{name: "at_hi", val: 10, lo: 0, hi: 10, expected: 10},
+		{name: "equal_bounds", val: 5, lo: 5, hi: 5, expected: 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := Clamp(tt.val, tt.lo, tt.hi)
+			require.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func TestClamp_Float(t *testing.T) {
+	t.Parallel()
+
+	got := Clamp(1.5, 0.0, 1.0)
+	require.InDelta(t, 1.0, got, 0.001)
+}
+
+func TestValidateAll(t *testing.T) {
+	t.Parallel()
+
+	validatePositive := func(n int) error {
+		if n < 0 {
+			return errNegativeValue
+		}
+
+		return nil
+	}
+
+	t.Run("all_valid", func(t *testing.T) {
+		t.Parallel()
+
+		err := ValidateAll([]int{1, 2, 3}, validatePositive)
+		require.NoError(t, err)
+	})
+
+	t.Run("some_invalid", func(t *testing.T) {
+		t.Parallel()
+
+		err := ValidateAll([]int{1, -2, 3, -4}, validatePositive)
+		require.Error(t, err)
+		require.ErrorIs(t, err, errNegativeValue)
+	})
+
+	t.Run("all_invalid", func(t *testing.T) {
+		t.Parallel()
+
+		err := ValidateAll([]int{-1, -2}, validatePositive)
+		require.Error(t, err)
+	})
+
+	t.Run("nil_input", func(t *testing.T) {
+		t.Parallel()
+
+		err := ValidateAll[int](nil, validatePositive)
+		require.NoError(t, err)
+	})
+
+	t.Run("empty_input", func(t *testing.T) {
+		t.Parallel()
+
+		err := ValidateAll([]int{}, validatePositive)
+		require.NoError(t, err)
 	})
 }

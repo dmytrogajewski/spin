@@ -152,16 +152,16 @@ func (t *ShellCommandTool) Schema() ToolSchema {
 
 // Execute handles all shell operations.
 func (t *ShellCommandTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	operation, _ := params.GetString("operation")
+	operation := params.GetStringOr("operation", "")
 	if operation == "" {
 		// Default to "execute" when a command is provided — LLMs frequently
 		// omit the operation parameter when they intend to run a command.
-		cmd, _ := params.GetString("command")
-		if cmd != "" {
-			operation = "execute"
-		} else {
+		cmd := params.GetStringOr("command", "")
+		if cmd == "" {
 			return NewToolError(errOperationParameterRequired), nil
 		}
+
+		operation = "execute"
 	}
 
 	switch operation {
@@ -186,7 +186,7 @@ func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParame
 		return NewToolError(errExecutorNotConfigured), nil
 	}
 
-	cmdStr, _ := params.GetString("command")
+	cmdStr := params.GetStringOr("command", "")
 	if cmdStr == "" {
 		return NewToolError(fmt.Errorf("execute operation: %w", errCommandParameterRequired)), nil
 	}
@@ -209,7 +209,7 @@ func (t *ShellCommandTool) executeCommand(ctx context.Context, params ToolParame
 
 // resolveWorkDir resolves the working directory from params, shell context, or os.
 func (t *ShellCommandTool) resolveWorkDir(params ToolParameters) string {
-	workDir, _ := params.GetString("working_directory")
+	workDir := params.GetStringOr("working_directory", "")
 	if workDir != "" {
 		return workDir
 	}
@@ -218,9 +218,12 @@ func (t *ShellCommandTool) resolveWorkDir(params ToolParameters) string {
 		return t.shellCtx.GetWorkingDirectory()
 	}
 
-	workDir, _ = os.Getwd()
+	cwd, cwdErr := os.Getwd()
+	if cwdErr != nil {
+		return "."
+	}
 
-	return workDir
+	return cwd
 }
 
 // isShellCmd detects whether a command string requires shell execution.
@@ -392,7 +395,7 @@ func (t *ShellCommandTool) getShellInfoFallback() ToolResult {
 
 // detectShell checks if a command requires shell execution.
 func (t *ShellCommandTool) detectShell(params ToolParameters) (ToolResult, error) {
-	command, _ := params.GetString("command")
+	command := params.GetStringOr("command", "")
 	if command == "" {
 		return NewToolError(fmt.Errorf("detect_shell operation: %w", errCommandParameterRequired)), nil
 	}
@@ -412,7 +415,7 @@ func (t *ShellCommandTool) detectShell(params ToolParameters) (ToolResult, error
 
 // validateCommand validates a command and returns its classification.
 func (t *ShellCommandTool) validateCommand(params ToolParameters) (ToolResult, error) {
-	command, _ := params.GetString("command")
+	command := params.GetStringOr("command", "")
 	if command == "" {
 		return NewToolError(fmt.Errorf("validate operation: %w", errCommandParameterRequired)), nil
 	}

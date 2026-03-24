@@ -57,7 +57,7 @@ func TestACEMiddleware_EmitRetrievalEvent(t *testing.T) {
 		assert.Equal(t, 2, data.CacheSize)
 
 		expectedHitRate := computeExpectedHitRate(ctx.CacheHits, ctx.CacheMisses)
-		assert.Equal(t, expectedHitRate, data.CacheHitRate)
+		assert.InDelta(t, expectedHitRate, data.CacheHitRate, 1e-9)
 
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("Timeout waiting for ACE retrieval event")

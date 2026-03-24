@@ -114,10 +114,10 @@ func TestSimpleCommand_ExecuteWithContext(t *testing.T) {
 
 	var receivedCtx context.Context
 
-	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(ctx context.Context) error {
-		receivedCtx = ctx
+	cmd := NewSimpleCommand("Test", "Test", "Test", 'T', func(execCtx context.Context) error {
+		receivedCtx = execCtx
 
-		return ctx.Err()
+		return execCtx.Err()
 	})
 
 	err := cmd.Execute(ctx)

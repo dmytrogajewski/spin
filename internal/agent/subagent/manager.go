@@ -101,8 +101,8 @@ func (m *Manager) Spawn(ctx context.Context, specName, query string) (summary st
 	}
 
 	// Acquire concurrency slot (blocks if at capacity).
-	if err := m.semaphore.Acquire(ctx); err != nil {
-		return "", fmt.Errorf("subagent %q: %w", specName, err)
+	if acquireErr := m.semaphore.Acquire(ctx); acquireErr != nil {
+		return "", fmt.Errorf("subagent %q: %w", specName, acquireErr)
 	}
 
 	defer m.semaphore.Release()

@@ -62,7 +62,7 @@ func TestPressure_EmptyMessages(t *testing.T) {
 
 	pressure := comp.Pressure(nil)
 
-	assert.Equal(t, 0.0, pressure)
+	assert.InDelta(t, 0.0, pressure, 1e-9)
 }
 
 // TestPressure_ZeroMaxContext verifies zero pressure when max context is zero.
@@ -75,7 +75,7 @@ func TestPressure_ZeroMaxContext(t *testing.T) {
 
 	pressure := comp.Pressure(makeMessages(1, message.RoleUser, "hello"))
 
-	assert.Equal(t, 0.0, pressure)
+	assert.InDelta(t, 0.0, pressure, 1e-9)
 }
 
 // TestCompact_BelowWarning verifies StageNone when pressure is low.
@@ -188,13 +188,13 @@ func TestCompact_ObservationMask_PreservesNonToolMessages(t *testing.T) {
 	tok := &fixedTokenizer{countPerCall: 63}
 	comp := compactor.NewCompactor(tok, testMaxContext)
 
-	msgs := []message.Message{
-		{Role: message.RoleUser, Content: "question"},
-		{Role: message.RoleTool, Content: "tool output"},
-		{Role: message.RoleAssistant, Content: "answer"},
-		{Role: message.RoleTool, Content: "another tool output"},
-		// Recent protected (6 slots, so with 4 messages all could be protected).
-	}
+	msgs := make([]message.Message, 0, 12)
+	msgs = append(msgs,
+		message.Message{Role: message.RoleUser, Content: "question"},
+		message.Message{Role: message.RoleTool, Content: "tool output"},
+		message.Message{Role: message.RoleAssistant, Content: "answer"},
+		message.Message{Role: message.RoleTool, Content: "another tool output"},
+	)
 
 	// Need enough messages to have some outside the protection window.
 	// With 4 messages and protection=6, all are protected. Add more.
@@ -226,11 +226,12 @@ func TestCompact_FastPrune_PreservesNonToolMessages(t *testing.T) {
 	tok := &fixedTokenizer{countPerCall: 83}
 	comp := compactor.NewCompactor(tok, testMaxContext)
 
-	msgs := []message.Message{
-		{Role: message.RoleUser, Content: "question"},
-		{Role: message.RoleTool, Content: "tool output"},
-		{Role: message.RoleAssistant, Content: "answer"},
-	}
+	msgs := make([]message.Message, 0, 11)
+	msgs = append(msgs,
+		message.Message{Role: message.RoleUser, Content: "question"},
+		message.Message{Role: message.RoleTool, Content: "tool output"},
+		message.Message{Role: message.RoleAssistant, Content: "answer"},
+	)
 
 	for range 8 {
 		msgs = append(msgs, message.Message{

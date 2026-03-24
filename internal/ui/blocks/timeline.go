@@ -564,6 +564,8 @@ func extractFile(block *Block) string {
 		if err == nil {
 			return meta.File
 		}
+	default:
+		// Other block types don't have file metadata.
 	}
 
 	return ""

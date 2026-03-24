@@ -6,7 +6,10 @@ import (
 	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
-const defaultSimilarityThreshold = 0.85
+const (
+	defaultSimilarityThreshold = 0.85
+	headerSearchWindow         = 50
+)
 
 // Matcher finds hunk context in file content using fuzzy matching algorithms.
 //
@@ -84,9 +87,9 @@ func (m *Matcher) FindContext(contextLines []string, header string) int {
 		headerPos := m.findHeader(header)
 		if headerPos >= 0 {
 			// Search in window around header (±50 lines) and return closest match.
-			start := max(0, headerPos-50)
+			start := max(0, headerPos-headerSearchWindow)
 
-			end := min(len(m.fileLines), headerPos+50)
+			end := min(len(m.fileLines), headerPos+headerSearchWindow)
 			if pos := m.findInRangeClosest(start, end, headerPos, contextLines); pos >= 0 {
 				return pos
 			}

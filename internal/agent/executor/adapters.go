@@ -14,7 +14,7 @@ type ShellContextAdapter struct {
 }
 
 // NewShellContextAdapter creates a new adapter for shell.Context to tools.ShellContext.
-func NewShellContextAdapter(ctx *shellpkg.Context) tools.ShellContext {
+func NewShellContextAdapter(ctx *shellpkg.Context) *ShellContextAdapter {
 	if ctx == nil {
 		return nil
 	}
@@ -72,7 +72,7 @@ type ValidatorAdapter struct {
 }
 
 // NewValidatorAdapter creates a new adapter for safety.Validator to tools.CommandValidator.
-func NewValidatorAdapter(v *safety.Validator) tools.CommandValidator {
+func NewValidatorAdapter(v *safety.Validator) *ValidatorAdapter {
 	if v == nil {
 		return nil
 	}
@@ -82,15 +82,7 @@ func NewValidatorAdapter(v *safety.Validator) tools.CommandValidator {
 
 // Classify implements the Classify operation.
 func (a *ValidatorAdapter) Classify(cmd tools.CommandInfo) (tools.ValidationResult, error) {
-	// Convert tools.CommandInfo to *safety.Command.
-	secCmd := &safety.Command{
-		Program: cmd.GetProgram(),
-		Args:    cmd.GetArgs(),
-		Raw:     cmd.GetRaw(),
-		WorkDir: cmd.GetWorkDir(),
-	}
-
-	result, err := a.validator.Classify(secCmd)
+	result, err := a.validator.Classify(safety.CommandFrom(cmd))
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +149,7 @@ func (a *TaskManagerAdapter) Kill(_ context.Context, taskID string) error {
 
 // Start launches a command in the background.
 // The command string is passed to the shell for parsing (sh -c "command").
-func (a *TaskManagerAdapter) Start(ctx context.Context, command, workDir string) (string, string, error) {
+func (a *TaskManagerAdapter) Start(ctx context.Context, command, workDir string) (taskID, initialOutput string, err error) {
 	return a.mgr.Start(ctx, "sh", []string{"-c", command}, nil, workDir)
 }
 
@@ -177,12 +169,7 @@ func NewAdapterWithPipeline(exec CommandExecutor, pipeline *Pipeline) *Adapter {
 
 // Execute implements the Execute operation.
 func (a *Adapter) Execute(ctx context.Context, cmd tools.CommandInfo, opts any) (tools.ExecutionResult, error) {
-	secCmd := &safety.Command{
-		Program: cmd.GetProgram(),
-		Args:    cmd.GetArgs(),
-		Raw:     cmd.GetRaw(),
-		WorkDir: cmd.GetWorkDir(),
-	}
+	secCmd := safety.CommandFrom(cmd)
 
 	// Run pipeline stages (safety, detection, etc.) before execution.
 	if a.pipeline != nil {

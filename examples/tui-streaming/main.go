@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -14,6 +15,13 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 )
 
+// check panics if err is non-nil. Used in example/demo programs only.
+func check(err error) {
+	if err != nil {
+		log.Fatalf("TUI error: %v", err)
+	}
+}
+
 const (
 	tokenArrivalDelay = 100 * time.Millisecond
 	fastTokenDelay    = 20 * time.Millisecond
@@ -21,6 +29,8 @@ const (
 	spacePause        = 30 * time.Millisecond
 	normalTokenDelay  = 60 * time.Millisecond
 	msPerSecondFloat  = 1000.0
+	chunkBufferSize   = 100
+	fastChunkCount    = 1000
 )
 
 func main() {
@@ -76,33 +86,33 @@ func printHeader(ui *adapters.PureTTY) {
 	}
 
 	for _, line := range lines {
-		_ = ui.PrintLine(line)
+		check(ui.PrintLine(line))
 	}
 }
 
 // runDemos runs all four streaming demonstrations.
 func runDemos(ctx context.Context, ui *adapters.PureTTY) {
-	_ = ui.PrintLine("━━━ Demo 1: Word-by-word streaming ━━━")
-	_ = ui.PrintLine("")
+	check(ui.PrintLine("━━━ Demo 1: Word-by-word streaming ━━━"))
+	check(ui.PrintLine(""))
 	streamWords(ctx, ui, "The quick brown fox jumps over the lazy dog.")
-	_ = ui.PrintLine("")
+	check(ui.PrintLine(""))
 
-	_ = ui.PrintLine("━━━ Demo 2: Character-by-character streaming ━━━")
-	_ = ui.PrintLine("")
+	check(ui.PrintLine("━━━ Demo 2: Character-by-character streaming ━━━"))
+	check(ui.PrintLine(""))
 	streamChars(ctx, ui, "Hello, world! This is character-level streaming.")
-	_ = ui.PrintLine("")
+	check(ui.PrintLine(""))
 
-	_ = ui.PrintLine("━━━ Demo 3: Simulated LLM response ━━━")
-	_ = ui.PrintLine("")
-	_ = ui.PrintLine("User: Write a haiku about coding")
-	_ = ui.PrintLine("")
+	check(ui.PrintLine("━━━ Demo 3: Simulated LLM response ━━━"))
+	check(ui.PrintLine(""))
+	check(ui.PrintLine("User: Write a haiku about coding"))
+	check(ui.PrintLine(""))
 	streamLLM(ctx, ui)
-	_ = ui.PrintLine("")
+	check(ui.PrintLine(""))
 
-	_ = ui.PrintLine("━━━ Demo 4: Fast streaming (1000 chunks, shows coalescing) ━━━")
-	_ = ui.PrintLine("")
+	check(ui.PrintLine("━━━ Demo 4: Fast streaming (1000 chunks, shows coalescing) ━━━"))
+	check(ui.PrintLine(""))
 	streamFast(ctx, ui)
-	_ = ui.PrintLine("")
+	check(ui.PrintLine(""))
 }
 
 // printFooter prints the closing instructions.
@@ -116,7 +126,7 @@ func printFooter(ui *adapters.PureTTY) {
 	}
 
 	for _, line := range lines {
-		_ = ui.PrintLine(line)
+		check(ui.PrintLine(line))
 	}
 }
 
@@ -125,14 +135,15 @@ func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.Canc
 	for {
 		select {
 		case <-ctx.Done():
-			_ = ui.Stop()
+			check(ui.Stop())
+
 			_, _ = fmt.Fprintln(os.Stdout, "\nGoodbye!")
 
 			return
 
 		case line, ok := <-ui.RequestInput():
 			if !ok {
-				_ = ui.Stop()
+				check(ui.Stop())
 
 				return
 			}
@@ -140,7 +151,7 @@ func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.Canc
 			if line == "quit" || line == "exit" {
 				cancel()
 			} else if line != "" {
-				_ = ui.PrintLine(fmt.Sprintf("Echo: %s", line))
+				check(ui.PrintLine(fmt.Sprintf("Echo: %s", line)))
 			}
 		}
 	}
@@ -148,7 +159,7 @@ func runInputLoop(ctx context.Context, ui *adapters.PureTTY, cancel context.Canc
 
 // streamWords streams text word by word.
 func streamWords(ctx context.Context, ui *adapters.PureTTY, text string) {
-	chunks := make(chan string, 100)
+	chunks := make(chan string, chunkBufferSize)
 
 	go func() {
 		defer close(chunks)
@@ -172,13 +183,13 @@ func streamWords(ctx context.Context, ui *adapters.PureTTY, text string) {
 
 	err := ui.PrintChunks(ctx, chunks)
 	if err != nil && !errors.Is(err, context.Canceled) {
-		_ = ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
+		check(ui.PrintLine(fmt.Sprintf("Streaming error: %v", err)))
 	}
 }
 
 // streamChars streams text character by character.
 func streamChars(ctx context.Context, ui *adapters.PureTTY, text string) {
-	chunks := make(chan string, 100)
+	chunks := make(chan string, chunkBufferSize)
 
 	go func() {
 		defer close(chunks)
@@ -197,13 +208,13 @@ func streamChars(ctx context.Context, ui *adapters.PureTTY, text string) {
 
 	err := ui.PrintChunks(ctx, chunks)
 	if err != nil && !errors.Is(err, context.Canceled) {
-		_ = ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
+		check(ui.PrintLine(fmt.Sprintf("Streaming error: %v", err)))
 	}
 }
 
 // streamLLM simulates an LLM response with variable token timing.
 func streamLLM(ctx context.Context, ui *adapters.PureTTY) {
-	chunks := make(chan string, 100)
+	chunks := make(chan string, chunkBufferSize)
 
 	// Simulated haiku response.
 	response := []string{
@@ -215,7 +226,7 @@ func streamLLM(ctx context.Context, ui *adapters.PureTTY) {
 	go func() {
 		defer close(chunks)
 
-		_ = ui.SetStatus("generating...") // Show status during generation.
+		check(ui.SetStatus("generating...")) // Show status during generation.
 
 		for _, token := range response {
 			select {
@@ -234,23 +245,23 @@ func streamLLM(ctx context.Context, ui *adapters.PureTTY) {
 			}
 		}
 
-		_ = ui.SetStatus("") // Clear status when done.
+		check(ui.SetStatus("")) // Clear status when done.
 	}()
 
 	err := ui.PrintChunks(ctx, chunks)
 	if err != nil && !errors.Is(err, context.Canceled) {
-		_ = ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
+		check(ui.PrintLine(fmt.Sprintf("Streaming error: %v", err)))
 	}
 }
 
 // streamFast demonstrates coalescing with many rapid chunks.
 func streamFast(ctx context.Context, ui *adapters.PureTTY) {
-	chunks := make(chan string, 1000)
+	chunks := make(chan string, fastChunkCount)
 
 	go func() {
 		defer close(chunks)
 
-		for i := range 1000 {
+		for i := range fastChunkCount {
 			select {
 			case <-ctx.Done():
 				return
@@ -267,11 +278,11 @@ func streamFast(ctx context.Context, ui *adapters.PureTTY) {
 
 	err := ui.PrintChunks(ctx, chunks)
 	if err != nil && !errors.Is(err, context.Canceled) {
-		_ = ui.PrintLine(fmt.Sprintf("Streaming error: %v", err))
+		check(ui.PrintLine(fmt.Sprintf("Streaming error: %v", err)))
 	}
 
 	elapsed := time.Since(start)
 
-	_ = ui.PrintLine(fmt.Sprintf("Streamed 1000 chunks in %v (throughput: %.0f chunks/sec)",
-		elapsed, msPerSecondFloat/elapsed.Seconds()))
+	check(ui.PrintLine(fmt.Sprintf("Streamed 1000 chunks in %v (throughput: %.0f chunks/sec)",
+		elapsed, msPerSecondFloat/elapsed.Seconds())))
 }

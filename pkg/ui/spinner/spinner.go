@@ -1,3 +1,4 @@
+// Package spinner provides terminal spinner animations for indicating progress.
 package spinner
 
 import (
@@ -9,32 +10,32 @@ import (
 
 const defaultSpinnerInterval = 100 * time.Millisecond
 
-// SpinnerStyle defines the animation frames for the spinner.
-type SpinnerStyle int
+// Style defines the animation frames for the spinner.
+type Style int
 
 const (
-	// SpinnerDots uses a dots animation: ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏.
-	SpinnerDots SpinnerStyle = iota
-	// SpinnerBraille uses a braille spinner: ⣾ ⣽ ⣻ ⢿ ⡿ ⣟ ⣯ ⣷.
-	SpinnerBraille
-	// SpinnerCircle uses a simple circle: ◐ ◓ ◑ ◒.
-	SpinnerCircle
+	// StyleDots uses a dots animation: ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏.
+	StyleDots Style = iota
+	// StyleBraille uses a braille spinner: ⣾ ⣽ ⣻ ⢿ ⡿ ⣟ ⣯ ⣷.
+	StyleBraille
+	// StyleCircle uses a simple circle: ◐ ◓ ◑ ◒.
+	StyleCircle
 	// SpinnerPulse uses a pulsing dot: · • ● ◉ ● • ·.
 	SpinnerPulse
 )
 
 // spinnerFrames defines animation frames for each style.
-var spinnerFrames = map[SpinnerStyle][]string{
-	SpinnerDots:    {"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
-	SpinnerBraille: {"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"},
-	SpinnerCircle:  {"◐", "◓", "◑", "◒"},
-	SpinnerPulse:   {"·", "•", "●", "◉", "●", "•", "·", " "},
+var spinnerFrames = map[Style][]string{
+	StyleDots:    {"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
+	StyleBraille: {"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"},
+	StyleCircle:  {"◐", "◓", "◑", "◒"},
+	SpinnerPulse: {"·", "•", "●", "◉", "●", "•", "·", " "},
 }
 
 // Spinner provides an animated loading indicator for the TUI.
 type Spinner struct {
 	mu       sync.RWMutex
-	style    SpinnerStyle
+	style    Style
 	frames   []string
 	index    int
 	running  bool
@@ -45,10 +46,10 @@ type Spinner struct {
 }
 
 // NewSpinner creates a new spinner with the given style.
-func NewSpinner(style SpinnerStyle) *Spinner {
+func NewSpinner(style Style) *Spinner {
 	frames, ok := spinnerFrames[style]
 	if !ok {
-		frames = spinnerFrames[SpinnerDots]
+		frames = spinnerFrames[StyleDots]
 	}
 
 	return &Spinner{
@@ -59,7 +60,7 @@ func NewSpinner(style SpinnerStyle) *Spinner {
 }
 
 // SetStyle changes the spinner animation style.
-func (s *Spinner) SetStyle(style SpinnerStyle) {
+func (s *Spinner) SetStyle(style Style) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -190,7 +191,7 @@ type ActivitySpinner struct {
 }
 
 // NewActivitySpinner creates a spinner that activates for certain states.
-func NewActivitySpinner(style SpinnerStyle) *ActivitySpinner {
+func NewActivitySpinner(style Style) *ActivitySpinner {
 	return &ActivitySpinner{
 		Spinner: NewSpinner(style),
 		activeStates: map[string]bool{

@@ -3,6 +3,7 @@ package lsp_test
 // Journey: specs/journeys/JOURNEY-R8.1.md.
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -90,7 +91,7 @@ func findBodyStart(data []byte) int {
 	separator := []byte("\r\n\r\n")
 
 	for i := range len(data) - len(separator) + 1 {
-		if string(data[i:i+len(separator)]) == string(separator) {
+		if bytes.Equal(data[i:i+len(separator)], separator) {
 			return i + len(separator)
 		}
 	}

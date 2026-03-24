@@ -44,10 +44,7 @@ func newApprovalListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope, _ := cmd.Flags().GetString("scope")
 
-			store, err := buildPolicyStore(cmd)
-			if err != nil {
-				return err
-			}
+			store := buildPolicyStore(cmd)
 
 			ctx, cancel := context.WithTimeout(cmd.Context(), approvalTimeout)
 			defer cancel()
@@ -63,15 +60,15 @@ func newApprovalListCmd() *cobra.Command {
 				return nil
 			}
 
-			for _, p := range items {
+			for _, policy := range items {
 				exp := "never"
-				if p.ExpiresAt != nil {
-					exp = p.ExpiresAt.UTC().Format(time.RFC3339)
+				if policy.ExpiresAt != nil {
+					exp = policy.ExpiresAt.UTC().Format(time.RFC3339)
 				}
 
-				args := strings.Join(p.Key.Args, " ")
+				args := strings.Join(policy.Key.Args, " ")
 				fmt.Fprintf(cmd.OutOrStdout(), "[%s] %s %s (wd=%s) decision=%s expires=%s\n",
-					p.Scope, p.Key.Program, args, p.Key.WorkDir, p.Decision, exp)
+					policy.Scope, policy.Key.Program, args, policy.Key.WorkDir, policy.Decision, exp)
 			}
 
 			return nil
@@ -98,10 +95,7 @@ func newApprovalRevokeCmd() *cobra.Command {
 				return ErrProgramIsRequired
 			}
 
-			store, err := buildPolicyStore(cmd)
-			if err != nil {
-				return err
-			}
+			store := buildPolicyStore(cmd)
 
 			key := safety.NewPolicyKey(prog, argList, workDir)
 
@@ -140,10 +134,7 @@ func newApprovalClearCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope, _ := cmd.Flags().GetString("scope")
 
-			store, err := buildPolicyStore(cmd)
-			if err != nil {
-				return err
-			}
+			store := buildPolicyStore(cmd)
 
 			ctx, cancel := context.WithTimeout(cmd.Context(), approvalTimeout)
 			defer cancel()
@@ -164,7 +155,7 @@ func newApprovalClearCmd() *cobra.Command {
 }
 
 // buildPolicyStore constructs a PolicyStore consistent with agent builder logic.
-func buildPolicyStore(cmd *cobra.Command) (safety.PolicyStore, error) {
+func buildPolicyStore(cmd *cobra.Command) safety.PolicyStore {
 	loader := config.NewLoaderV2()
 
 	cfg, err := func() (*config.V2, error) {
@@ -181,20 +172,18 @@ func buildPolicyStore(cmd *cobra.Command) (safety.PolicyStore, error) {
 
 	// If approval persistence is disabled, operate purely in-memory.
 	if !cfg.Security.ApprovalPersistenceEnabled {
-		return safety.NewMemoryPolicyStore(approvalPolicyTTL), nil
+		return safety.NewMemoryPolicyStore(approvalPolicyTTL)
 	}
 
 	// If policy file path not set, default under user config dir matching DefaultV2.
-	path := cfg.Security.PolicyFile
+	policyPath := cfg.Security.PolicyFile
 	// Prefer file-backed store when path present; otherwise memory store.
-	if path != "" {
-		var store safety.PolicyStore
-
-		store, err = safety.NewFilePolicyStore(context.Background(), path, approvalPolicyTTL)
-		if err == nil {
-			return store, nil
+	if policyPath != "" {
+		store, storeErr := safety.NewFilePolicyStore(context.Background(), policyPath, approvalPolicyTTL)
+		if storeErr == nil {
+			return store
 		}
 	}
 
-	return safety.NewMemoryPolicyStore(approvalPolicyTTL), nil
+	return safety.NewMemoryPolicyStore(approvalPolicyTTL)
 }

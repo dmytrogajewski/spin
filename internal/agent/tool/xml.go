@@ -29,11 +29,7 @@ const maxXMLToolCalls = 64
 //
 // The parser handles nested content correctly — parameter values containing
 // </parameter> or other XML-like content are handled via depth tracking.
-func ParseToolCallsFromXML(content string) ([]openai.ChatCompletionMessageToolCall, []string) {
-	var toolCalls []openai.ChatCompletionMessageToolCall
-
-	var warnings []string
-
+func ParseToolCallsFromXML(content string) (toolCalls []openai.ChatCompletionMessageToolCall, warnings []string) {
 	pos := 0
 	for pos < len(content) && len(toolCalls) < maxXMLToolCalls {
 		toolCall, newPos, funcWarnings := parseFunctionBlock(content, pos)
@@ -64,9 +60,7 @@ func ParseToolCallsFromXML(content string) ([]openai.ChatCompletionMessageToolCa
 
 // parseFunctionBlock extracts a single <function=NAME>...</function> block starting from pos.
 // Returns nil toolCall if no function block is found.
-func parseFunctionBlock(content string, pos int) (*openai.ChatCompletionMessageToolCall, int, []string) {
-	var warnings []string
-
+func parseFunctionBlock(content string, pos int) (toolCall *openai.ChatCompletionMessageToolCall, newPos int, warnings []string) {
 	// Scan for next <function= tag.
 	funcStart := strings.Index(content[pos:], xmlTagFunctionOpen)
 	if funcStart == -1 {
@@ -120,7 +114,7 @@ func parseFunctionBlock(content string, pos int) (*openai.ChatCompletionMessageT
 		return nil, funcClose + len(xmlTagFunctionClose), warnings
 	}
 
-	toolCall := &openai.ChatCompletionMessageToolCall{
+	toolCall = &openai.ChatCompletionMessageToolCall{
 		ID:   "call_" + uuid.New().String(),
 		Type: "function",
 		Function: openai.ChatCompletionMessageToolCallFunction{
@@ -133,10 +127,8 @@ func parseFunctionBlock(content string, pos int) (*openai.ChatCompletionMessageT
 }
 
 // parseParameters extracts parameter key-value pairs from a function body.
-func parseParameters(body string) (map[string]any, []string) {
-	args := make(map[string]any)
-
-	var warnings []string
+func parseParameters(body string) (args map[string]any, warnings []string) {
+	args = make(map[string]any)
 
 	pos := 0
 	for pos < len(body) {
@@ -159,9 +151,7 @@ func parseParameters(body string) (map[string]any, []string) {
 
 // parseOneParameter extracts a single <parameter=NAME>value</parameter> from body at pos.
 // Returns empty name if no parameter found or on error.
-func parseOneParameter(body string, pos int) (string, any, int, []string) {
-	var warnings []string
-
+func parseOneParameter(body string, pos int) (name string, value any, newPos int, warnings []string) {
 	paramStart := strings.Index(body[pos:], xmlTagParamOpen)
 	if paramStart == -1 {
 		return "", nil, pos, nil

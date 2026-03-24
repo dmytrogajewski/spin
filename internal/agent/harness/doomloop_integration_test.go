@@ -32,7 +32,7 @@ type doomLoopCaller struct {
 
 func (d *doomLoopCaller) Call(
 	_ context.Context, _ []message.Message, _ []tools.ToolSchema, _ int,
-) (string, []message.ToolCall, string, error) {
+) (content string, toolCalls []message.ToolCall, finishReason string, err error) {
 	d.callCount++
 
 	if d.callCount > d.toolTurns {
@@ -261,7 +261,7 @@ type multiPhaseResetCaller struct {
 
 func (m *multiPhaseResetCaller) Call(
 	_ context.Context, _ []message.Message, _ []tools.ToolSchema, _ int,
-) (string, []message.ToolCall, string, error) {
+) (content string, toolCalls []message.ToolCall, finishReason string, err error) {
 	m.callCount++
 
 	if m.callCount > m.totalToolTurns {

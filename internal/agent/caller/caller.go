@@ -15,12 +15,12 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/agent/sanitizer"
 	"github.com/dmytrogajewski/spin/internal/agent/tool"
-	spinerrors "github.com/dmytrogajewski/spin/pkg/apperr"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/pkg/alg/concurrency"
+	spinerrors "github.com/dmytrogajewski/spin/pkg/apperr"
 )
 
 const (
@@ -103,10 +103,7 @@ func (lc *LLMCaller) Call(
 
 	lc.logToolCallMessages(ctx, messages)
 
-	params, err := lc.buildLLMParams(ctx, openaiMessages, cp, toolList)
-	if err != nil {
-		return nil, err
-	}
+	params := lc.buildLLMParams(ctx, openaiMessages, cp, toolList)
 
 	chunks, err := lc.provider.Stream(ctx, params)
 	if err != nil {
@@ -224,7 +221,7 @@ func (lc *LLMCaller) buildLLMParams(
 	openaiMessages []openai.ChatCompletionMessageParamUnion,
 	cp agent.CallParams,
 	toolList []tools.Tool,
-) (openai.ChatCompletionNewParams, error) {
+) openai.ChatCompletionNewParams {
 	maxTokens := lc.maxTokens
 
 	if cp.MaxTokens > 0 {
@@ -248,7 +245,7 @@ func (lc *LLMCaller) buildLLMParams(
 
 	lc.logger.DebugContext(ctx, "calling LLM", "tool_count", len(toolList), "message_count", len(openaiMessages))
 
-	return params, nil
+	return params
 }
 
 func (lc *LLMCaller) processStream(ctx context.Context, chunks <-chan openai.ChatCompletionChunk) (*openai.ChatCompletion, error) {

@@ -46,13 +46,29 @@ func (m *Map[K, V]) Get(key K) (V, bool) {
 // it calls create, stores the result, and returns it. The create function
 // is called under the write lock — it must not call back into the Map.
 func (m *Map[K, V]) GetOrCreate(key K, create func() V) V {
+	val, getErr := m.GetOrCreateErr(key, func() (V, error) {
+		return create(), nil
+	})
+	if getErr != nil {
+		var zero V
+
+		return zero
+	}
+
+	return val
+}
+
+// GetOrCreateErr is like [GetOrCreate] but the create function may return an error.
+// If the key already exists, returns the existing value with nil error.
+// If create returns an error, the key is not stored and the error is returned.
+func (m *Map[K, V]) GetOrCreateErr(key K, create func() (V, error)) (V, error) {
 	// Fast path: read lock.
 	m.mu.RLock()
 
 	if val, ok := m.data[key]; ok {
 		m.mu.RUnlock()
 
-		return val
+		return val, nil
 	}
 
 	m.mu.RUnlock()
@@ -64,17 +80,21 @@ func (m *Map[K, V]) GetOrCreate(key K, create func() V) V {
 	if m.closed {
 		var zero V
 
-		return zero
+		return zero, nil
 	}
 
 	if val, ok := m.data[key]; ok {
-		return val
+		return val, nil
 	}
 
-	val := create()
+	val, err := create()
+	if err != nil {
+		return val, err
+	}
+
 	m.data[key] = val
 
-	return val
+	return val, nil
 }
 
 // SetIfAbsent atomically stores the key-value pair only if the key does

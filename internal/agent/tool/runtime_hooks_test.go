@@ -1,4 +1,3 @@
-// Journey: specs/journeys/JOURNEY-1.3.md
 package tool
 
 import (
@@ -21,7 +20,7 @@ type echoTool struct {
 }
 
 func (e *echoTool) Name() string        { return "echo_test" }
-func (e *echoTool) Description() string  { return "test tool" }
+func (e *echoTool) Description() string { return "test tool" }
 func (e *echoTool) Schema() tools.ToolSchema {
 	return tools.ToolSchema{
 		Type: "function",
@@ -97,8 +96,9 @@ func TestRuntime_CallsPreToolHookBeforeExecution(t *testing.T) {
 	scriptPath := filepath.Join(hookDir, "pre-tool-use")
 	script := "#!/bin/sh\ntouch " + markerFile + "\n"
 
-	err := os.WriteFile(scriptPath, []byte(script), 0o755)
+	err := os.WriteFile(scriptPath, []byte(script), 0o600)
 	require.NoError(t, err)
+	require.NoError(t, os.Chmod(scriptPath, 0o700))
 
 	runner := hooks.NewRunner(hooks.Config{
 		ProjectDir: hookDir,
@@ -130,8 +130,9 @@ echo '{"reason":"policy violation"}'
 exit 2
 `
 
-	err := os.WriteFile(scriptPath, []byte(script), 0o755)
+	err := os.WriteFile(scriptPath, []byte(script), 0o600)
 	require.NoError(t, err)
+	require.NoError(t, os.Chmod(scriptPath, 0o700))
 
 	runner := hooks.NewRunner(hooks.Config{
 		ProjectDir: hookDir,

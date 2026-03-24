@@ -33,6 +33,7 @@ const (
 	formatText       = "text"
 	answerYes        = "yes"
 	binaryApplyPatch = "spin-apply-patch"
+	keyValueArgCount = 2
 )
 
 // newConfigCmd creates the config management command.
@@ -444,7 +445,7 @@ func newConfigSetCmd() *cobra.Command {
 Examples:
   spin config set llm.model gpt-4
   spin config set ace.enabled true`,
-		Args: cobra.ExactArgs(2),
+		Args: cobra.ExactArgs(keyValueArgCount),
 		RunE: runConfigSet,
 	}
 }

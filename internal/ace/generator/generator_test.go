@@ -533,7 +533,9 @@ func TestGenerateBullets_NoLimit(t *testing.T) {
 	t.Parallel()
 
 	mockLLM := llm.NewMockProvider("test-provider")
-	mockLLM.SetResponse("1. First strategy\n2. Second strategy\n3. Third strategy\n4. Fourth strategy\n5. Fifth strategy\n6. Sixth strategy")
+	mockLLM.SetResponse(
+		"1. First strategy\n2. Second strategy\n3. Third strategy\n" +
+			"4. Fourth strategy\n5. Fifth strategy\n6. Sixth strategy")
 
 	gen := newTestGenerator(t, mockLLM)
 
@@ -553,7 +555,9 @@ func TestGenerateBullets_AllReturned(t *testing.T) {
 	t.Parallel()
 
 	mockLLM := llm.NewMockProvider("test-provider")
-	mockLLM.SetResponse("1. Strategy one\n2. Strategy two\n3. Strategy three\n4. Strategy four\n5. Strategy five\n6. Strategy six\n7. Strategy seven")
+	mockLLM.SetResponse(
+		"1. Strategy one\n2. Strategy two\n3. Strategy three\n" +
+			"4. Strategy four\n5. Strategy five\n6. Strategy six\n7. Strategy seven")
 
 	gen := newTestGenerator(t, mockLLM)
 

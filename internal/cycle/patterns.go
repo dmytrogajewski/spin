@@ -2,7 +2,11 @@ package cycle
 
 import (
 	"fmt"
+	"slices"
 	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/search"
+	"github.com/dmytrogajewski/spin/pkg/alg/similarity"
 )
 
 const (
@@ -13,6 +17,7 @@ const (
 	errorCycleConfidence    = 0.8
 	minPatternsForOscill    = 2
 	minPatternsForABBA      = 4
+	ngramSize               = 3
 )
 
 // PatternDetector provides additional pattern detection methods
@@ -102,37 +107,19 @@ func (pd *PatternDetector) analyzeResponsePatterns(snapshots []Snapshot) Pattern
 		return PatternResult{Type: PatternNone}
 	}
 
-	// Look for repeated phrases across responses.
-	phraseCounts := make(map[string]int)
-	totalWords := 0
+	// Collect all 3-word phrases across responses.
+	var allPhrases []string
 
 	for _, snapshot := range snapshots {
 		if snapshot.Response == "" {
 			continue
 		}
 
-		words := extractWords(snapshot.Response)
-		totalWords += len(words)
-
-		// Count 3-word phrases (n-grams).
-		for i := range len(words) - 2 {
-			phrase := strings.Join(words[i:i+3], " ")
-			phraseCounts[phrase]++
-		}
+		words := similarity.ExtractWords(snapshot.Response)
+		allPhrases = append(allPhrases, similarity.NGrams(words, ngramSize)...)
 	}
 
-	// Find most frequent phrases.
-	var (
-		mostFrequentPhrase string
-		maxCount           int
-	)
-
-	for phrase, count := range phraseCounts {
-		if count > maxCount {
-			maxCount = count
-			mostFrequentPhrase = phrase
-		}
-	}
+	mostFrequentPhrase, maxCount := similarity.MaxByFrequency(allPhrases)
 
 	// If a phrase appears in most responses, it might indicate repetition.
 	if maxCount >= len(snapshots)/2 && maxCount >= 2 {
@@ -165,27 +152,14 @@ func (pd *PatternDetector) analyzeToolPatterns(snapshots []Snapshot) PatternResu
 		return PatternResult{Type: PatternNone}
 	}
 
-	// Count tool usage frequency.
-	toolCounts := make(map[string]int)
+	// Collect all tool calls and find the dominant tool.
+	var allTools []string
 
 	for _, snapshot := range snapshots {
-		for _, tool := range snapshot.ToolCalls {
-			toolCounts[tool]++
-		}
+		allTools = append(allTools, snapshot.ToolCalls...)
 	}
 
-	// Find most frequently used tool.
-	var (
-		mostUsedTool string
-		maxCount     int
-	)
-
-	for tool, count := range toolCounts {
-		if count > maxCount {
-			maxCount = count
-			mostUsedTool = tool
-		}
-	}
+	mostUsedTool, maxCount := similarity.MaxByFrequency(allTools)
 
 	// If one tool dominates, it might indicate being stuck.
 	if maxCount >= len(snapshots) && maxCount >= pd.config.ToolRepeatLimit {
@@ -216,29 +190,19 @@ func (pd *PatternDetector) analyzeErrorPatterns(snapshots []Snapshot) PatternRes
 		return PatternResult{Type: PatternNone}
 	}
 
-	// Count error frequency.
-	errorCounts := make(map[string]int)
-	errorTurns := make([]int, 0)
+	// Collect errors and affected turns.
+	var allErrors []string
+
+	var errorTurns []int
 
 	for _, snapshot := range snapshots {
 		if snapshot.Error != "" {
-			errorCounts[snapshot.Error]++
+			allErrors = append(allErrors, snapshot.Error)
 			errorTurns = append(errorTurns, snapshot.Turn)
 		}
 	}
 
-	// Find most frequent error.
-	var (
-		mostFrequentError string
-		maxCount          int
-	)
-
-	for error, count := range errorCounts {
-		if count > maxCount {
-			maxCount = count
-			mostFrequentError = error
-		}
-	}
+	mostFrequentError, maxCount := similarity.MaxByFrequency(allErrors)
 
 	// If errors are repeating, it indicates a loop.
 	if maxCount >= pd.config.ErrorRepeatLimit {
@@ -285,26 +249,18 @@ func (pd *PatternDetector) detectOscillatingTools(snapshots []Snapshot) bool {
 		return false
 	}
 
-	// Look for A→B→A→B pattern in tool usage
-	// This is a simplified check - a more sophisticated version would
-	// look for semantic oscillation rather than just different tools.
-	toolPattern := make([]string, len(snapshots))
-	for i, snapshot := range snapshots {
-		if len(snapshot.ToolCalls) > 0 {
-			toolPattern[i] = snapshot.ToolCalls[0]
-		} else {
-			toolPattern[i] = ""
+	// Extract first tool name from each snapshot.
+	toolNames := make([]string, minPatternsForABBA)
+	for idx := range minPatternsForABBA {
+		if len(snapshots[idx].ToolCalls) > 0 {
+			toolNames[idx] = snapshots[idx].ToolCalls[0]
 		}
 	}
 
-	// Check for alternating pattern: toolA, toolB, toolA, toolB.
-	if len(snapshots) >= minPatternsForABBA {
-		pattern := []string{toolPattern[0], toolPattern[1], toolPattern[2], toolPattern[3]}
-		if pattern[0] != "" && pattern[1] != "" && pattern[0] != pattern[1] &&
-			pattern[2] != "" && pattern[3] != "" && pattern[2] == pattern[0] && pattern[3] == pattern[1] {
-			return true
-		}
+	// Empty tool names cannot form a valid pattern.
+	if slices.Contains(toolNames, "") {
+		return false
 	}
 
-	return false
+	return search.DetectAlternating(toolNames)
 }

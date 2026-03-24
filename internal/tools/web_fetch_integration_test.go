@@ -18,7 +18,7 @@ import (
 // realFetcher returns a PageFetcher that performs actual HTTP requests.
 func realFetcher() tools.PageFetcher {
 	return func(ctx context.Context, url string) (*tools.FetchResponse, error) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 		if err != nil {
 			return nil, fmt.Errorf("create request: %w", err)
 		}

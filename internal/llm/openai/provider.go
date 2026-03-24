@@ -113,7 +113,7 @@ func NewProvider(cfg Config) (*Provider, error) {
 func (p *Provider) Complete(ctx context.Context, params openai.ChatCompletionNewParams) (*openai.ChatCompletion, error) {
 	// Set model if not specified in request.
 	if params.Model == "" {
-		params.Model = openai.ChatModel(p.model)
+		params.Model = p.model
 	}
 
 	// Make completion request - returns *ChatCompletion directly.
@@ -129,7 +129,7 @@ func (p *Provider) Complete(ctx context.Context, params openai.ChatCompletionNew
 func (p *Provider) Stream(ctx context.Context, params openai.ChatCompletionNewParams) (<-chan openai.ChatCompletionChunk, error) {
 	// Set model if not specified in request.
 	if params.Model == "" {
-		params.Model = openai.ChatModel(p.model)
+		params.Model = p.model
 	}
 
 	// Create streaming request.
@@ -188,8 +188,8 @@ func (p *Provider) Models(ctx context.Context) ([]openai.Model, error) {
 
 	// Iterate through remaining pages, respecting context cancellation.
 	for {
-		if err := ctx.Err(); err != nil {
-			return models, fmt.Errorf("list models pagination: %w", err)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return models, fmt.Errorf("list models pagination: %w", ctxErr)
 		}
 
 		nextPage, pageErr := resp.GetNextPage()

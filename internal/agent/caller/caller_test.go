@@ -21,6 +21,9 @@ func TestNew_WithRouter_ResolvesProvider(t *testing.T) {
 		Providers: map[llm.Role]llm.Provider{
 			llm.RoleAction:   action,
 			llm.RoleThinking: thinking,
+			llm.RoleCritique: nil,
+			llm.RoleCompact:  nil,
+			llm.RoleVision:   nil,
 		},
 	})
 
@@ -41,7 +44,11 @@ func TestNew_WithRouter_DefaultsToAction(t *testing.T) {
 
 	router := llm.NewRouter(llm.RouterConfig{
 		Providers: map[llm.Role]llm.Provider{
-			llm.RoleAction: action,
+			llm.RoleAction:   action,
+			llm.RoleThinking: nil,
+			llm.RoleCritique: nil,
+			llm.RoleCompact:  nil,
+			llm.RoleVision:   nil,
 		},
 	})
 
@@ -75,7 +82,11 @@ func TestNew_WithRouter_FallbackChain(t *testing.T) {
 
 	router := llm.NewRouter(llm.RouterConfig{
 		Providers: map[llm.Role]llm.Provider{
-			llm.RoleAction: action,
+			llm.RoleAction:   action,
+			llm.RoleThinking: nil,
+			llm.RoleCritique: nil,
+			llm.RoleCompact:  nil,
+			llm.RoleVision:   nil,
 		},
 	})
 

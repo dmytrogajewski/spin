@@ -1,7 +1,7 @@
 package session
 
 import (
-	"github.com/dmytrogajewski/spin/internal/storage"
+	"github.com/dmytrogajewski/spin/pkg/storage"
 )
 
 // Storage is a type alias for the generic store with Session type.
@@ -10,7 +10,7 @@ import (
 type Storage = storage.Store[Session]
 
 // NewFileStorage creates file-based session storage.
-func NewFileStorage(baseDir string) (Storage, error) {
+func NewFileStorage(baseDir string) (*storage.FileStore[Session], error) {
 	return storage.NewFileStore[Session](storage.FileStoreConfig{
 		BaseDir: baseDir,
 		Suffix:  ".json",

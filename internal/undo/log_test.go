@@ -3,6 +3,7 @@ package undo_test
 // Journey: specs/journeys/JOURNEY-R5.1.md.
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -88,7 +89,7 @@ func TestOperationLog_FIFOEviction(t *testing.T) {
 	for idx := range undo.MaxEntries + 1 {
 		log.Record(undo.Operation{
 			Type: undo.OpModify,
-			Path: filepath.Join("/tmp", "file"+string(rune('a'+idx%26))),
+			Path: filepath.Join(t.TempDir(), fmt.Sprintf("file%c", rune('a'+idx%26))),
 		})
 	}
 

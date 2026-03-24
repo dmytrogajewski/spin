@@ -170,6 +170,27 @@ Integration tests verify wiring between components. They live alongside the code
 | R21 llmutil | `internal/llmutil/*_test.go` + existing tests in `llm/ollama/`, `llm/openai/` | ExtractContent + ModelContextWindow — 13 tests, 100% coverage |
 | R22 errlist | `internal/apperr/errlist_test.go` + existing tests in `session/` | ErrorList with Add/HasErrors/Err — 5 tests, 100% coverage |
 | Refactor | All `pkg/alg/*` tests + `pkg/apperr/`, `pkg/llmutil/`, `pkg/tokenizer/` | Package structure refactoring: internal → pkg/alg/{collections,stringsx,concurrency,hashx,similarity,search,vector,execx,pathx,ds,ds/syncmap} + pkg/{apperr,llmutil,tokenizer} |
+| R-REF-1 Inline truncation wrappers | `internal/tools/truncate_test.go` | Remove pure pass-through TruncateHeadTail/TruncateLines, keep TruncateOutput composition |
+| R-REF-2 Inline path wrapper | — (tests deleted, covered by `pkg/alg/pathx/`) | Remove resolvePath wrapper, 4 callers use pathx.ResolvePath directly |
+| R-REF-3 Inline fuzzy helpers | `internal/tools/fuzzy/*_test.go` | Replace trimLines/countNonBlankLines with stringsx; keep collapseWhitespace (different semantics) |
+| R-REF-4 Inline TUI mapper helpers | `internal/tui/*_test.go` | Replace extractString/extractIntValue with direct GetStringOr/GetIntOr calls |
+| R-REF-5 Inline filterEnvironment + filesearch aliases | `internal/agent/environment_test.go` | Remove filterEnvironment wrapper, remove filesearch type aliases, use pathx directly |
+| R-REF-8 Migrate cycle detection to TailN | `internal/cycle/*_test.go` | Replace rolling-window helpers with collections.TailN/TailNOrAll |
+| R-REF-9 Add Filter/Clamp/ValidateAll | `pkg/alg/collections/genutil_test.go` | Filter[T], Clamp[T], ValidateAll[T] — 15 tests, 100% coverage |
+| R-REF-11 Generic pattern detection | `pkg/alg/search/pattern_test.go` | DetectRepeat[T], DetectAlternating[T] — 20 tests, 95.6% coverage |
+| R-REF-12 Wire cycle detection | `internal/cycle/*_test.go` | Migrate allToolsAreSame/allErrorsAreSame/detectOscillatingTools to search generics |
+| R-REF-14 Migrate summarizer cache | `internal/contexteng/summarizer/cache_test.go` | Compose ds.Cache[string, *Result] with LRU — 7 tests pass unchanged |
+| R-REF-16 Inline cycle similarity | `internal/cycle/*_test.go` | Delete similarity.go wrapper, inline JaccardSimilarity/ExtractWords calls |
+| R-REF-6 Inline capOutput | `pkg/alg/stringsx/extended_test.go` | TruncateWithSuffix — 4 tests |
+| R-REF-7 syncmap.GetOrCreateErr | `pkg/alg/ds/syncmap/syncmap_map_test.go` | GetOrCreateErr — 3 tests; conversation/manager migrated |
+| R-REF-15 MultiStrategySimilarity | `pkg/alg/similarity/similarity_test.go` | MultiStrategySimilarity + FindSimilarPairs — 8 tests, 99% coverage |
+| R-REF-17 Text analysis | `pkg/alg/stringsx/extended_test.go` | NormalizeEscapes + DetectTruncation — 14 tests, 96% coverage |
+| R-REF-18 Wire text analysis | `internal/tools/*_test.go` | escape.go → stringsx.NormalizeEscapes, write_file.go → stringsx.DetectTruncation |
+| R-REF-19 diff package | `pkg/alg/diff/diff_test.go` | Generate + Parse — 10 tests, 92.9% coverage |
+| R-REF-21 fuzzy search | `pkg/alg/search/fuzzy_test.go` | MapNormalizedOffset, FindAllNormalized, MatchesAt, LineOffset — 11 tests |
+| R-REF-23 textwidth | `pkg/ui/textwidth/textwidth_test.go` | ExtractGraphemes, TotalWidth, MidEllipsize, GutterWidth — 100% coverage |
+| R-REF-25 Registry+StateMachine | `pkg/alg/ds/registry_test.go`, `statemachine_test.go` | Generic Registry[K,V] + StateMachine[S] |
+| R-REF-26 storage promotion | `pkg/storage/*_test.go` | FileStore[T], AtomicWriteFile, FileLock promoted to pkg/storage |
 
 ## Test Patterns
 

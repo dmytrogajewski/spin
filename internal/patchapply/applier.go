@@ -379,7 +379,10 @@ func (a *Applier) applyAddFile(op *AddFile, result *ApplyResult) error {
 			return a.wrapError("Add", op.FilePath, ErrFileExists, "use force mode to overwrite")
 		}
 		// Read existing content for rollback.
-		existingContent, _ = os.ReadFile(fullPath)
+		readContent, readErr := os.ReadFile(fullPath)
+		if readErr == nil {
+			existingContent = readContent
+		}
 	}
 
 	// Create parent directories.
@@ -470,8 +473,8 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 	lines := strings.Split(string(originalContent), "\n")
 
 	for i, hunk := range op.Hunks {
-		if err := a.applyHunk(&lines, hunk, op.FilePath, i); err != nil {
-			return err
+		if hunkErr := a.applyHunk(&lines, hunk, op.FilePath, i); hunkErr != nil {
+			return hunkErr
 		}
 	}
 
@@ -484,8 +487,8 @@ func (a *Applier) applyUpdateFile(op *UpdateFile, result *ApplyResult) error {
 		return a.wrapError("Update", op.FilePath, err, "failed to write file")
 	}
 
-	if err := a.deleteOriginalIfMoved(op, targetPath, fullPath); err != nil {
-		return err
+	if delErr := a.deleteOriginalIfMoved(op, targetPath, fullPath); delErr != nil {
+		return delErr
 	}
 
 	a.trackModification(op.FilePath, opUpdate, originalContent)
@@ -679,6 +682,8 @@ func (a *Applier) rollbackModification(mod *fileModification, fullPath string) {
 		a.rollbackUpdate(fullPath, mod.originalContent)
 	case opDelete:
 		a.rollbackDelete(fullPath, mod.originalContent)
+	default:
+		// opMove and unknown operations do not need rollback.
 	}
 }
 

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dmytrogajewski/spin/pkg/alg/ds"
 	"github.com/dmytrogajewski/spin/internal/message"
-	"github.com/dmytrogajewski/spin/internal/storage"
+	"github.com/dmytrogajewski/spin/pkg/alg/ds"
+	"github.com/dmytrogajewski/spin/pkg/storage"
 )
 
 var (

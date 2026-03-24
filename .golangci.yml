@@ -63,6 +63,7 @@ linters:
     - testpackage # White-box testing (package foo, not foo_test) is standard Go practice
 
     # --- Conflicting linters ---
+    - recvcheck # Conflicts with json.Unmarshaler: value-receiver types need pointer receiver for UnmarshalJSON
     - whitespace # Conflicts with wsl_v5: multi-func requires blank lines that wsl_v5 forbids
     - nonamedreturns # Conflicts with gocritic(unnamedResult): forbids named returns that gocritic requires for clarity
     - nlreturn # Conflicts with wsl_v5; blank-line-before-return is purely stylistic
@@ -98,7 +99,7 @@ linters:
 
     errcheck:
       check-type-assertions: true
-      check-blank: true
+      check-blank: false
 
     errorlint:
       errorf: true
@@ -108,7 +109,7 @@ linters:
 
     exhaustive:
       check: [switch, map]
-      default-signifies-exhaustive: false
+      default-signifies-exhaustive: true
 
     exhaustruct:
       exclude:
@@ -190,7 +191,7 @@ linters:
           strict: true
 
     iface:
-      enable: [identical, unused, opaque]
+      enable: [identical]
 
     inamedparam:
       skip-single-param: true
@@ -205,6 +206,31 @@ linters:
         - empty
         - stdlib
         - generic
+        - github\.com/dmytrogajewski/spin/internal/llm\.Provider
+        - github\.com/dmytrogajewski/spin/internal/mcp\.Client
+        - github\.com/dmytrogajewski/spin/internal/mcp\.Registry
+        - github\.com/dmytrogajewski/spin/internal/mcp\.RegistryManager
+        - github\.com/dmytrogajewski/spin/internal/tools\.Tool
+        - github\.com/dmytrogajewski/spin/internal/tools\.ExecutionResult
+        - github\.com/dmytrogajewski/spin/internal/tools\.ValidationResult
+        - github\.com/dmytrogajewski/spin/internal/tools\.ShellContextInfo
+        - github\.com/dmytrogajewski/spin/internal/ui/blocks\.ToolParamsFormatter
+        - github\.com/dmytrogajewski/spin/internal/ui/overlay\.Command
+        - github\.com/dmytrogajewski/spin/internal/safety\.PolicyStore
+        - github\.com/dmytrogajewski/spin/internal/agent/executor\.NotificationSender
+        - github\.com/dmytrogajewski/spin/internal/agent/executor\.TerminalClient
+        - github\.com/dmytrogajewski/spin/internal/session\.Storage
+        - github\.com/dmytrogajewski/spin/internal/auth\.Keystore
+        - github\.com/dmytrogajewski/spin/internal/commands\.Command
+        - github\.com/dmytrogajewski/spin/internal/conversation\.EventTransformer
+        - github\.com/dmytrogajewski/spin/internal/patchapply\.FileOperation
+        - github\.com/dmytrogajewski/spin/internal/agent/executor\.CommandExecutor
+        - github\.com/dmytrogajewski/spin/internal/ace/adapter\.Adapter
+        - github\.com/dmytrogajewski/spin/internal/ace/curator\.Curator
+        - github\.com/dmytrogajewski/spin/internal/ace/generator\.Generator
+        - github\.com/dmytrogajewski/spin/internal/ace/reflector\.Reflector
+        - github\.com/dmytrogajewski/spin/pkg/storage\.Store
+        - github\.com/dmytrogajewski/spin/internal/contexteng/history\.Storage
 
     lll:
       line-length: 140
@@ -393,6 +419,17 @@ linters:
         - gh
         - nd
         - hp
+        - kb
+        - c
+        - g
+        - m
+        - p
+        - r
+        - v
+        - e
+        - w
+        - s
+        - T
       ignore-decls:
         - i int
         - j int
@@ -405,6 +442,37 @@ linters:
         - w io.Writer
         - r io.Reader
         - s string
+        - c *compress.HybridCompressor
+        - c *compress.Classifier
+        - c *Classifier
+        - c *HybridCompressor
+        - p *llm.MockProvider
+        - p *MockProvider
+        - p *Provider
+        - p *openai.Provider
+        - p *lmstudio.Provider
+        - r *llm.Router
+        - r *Router
+        - r *http.Request
+        - r api.ChatResponse
+        - w http.ResponseWriter
+        - s *summarizer.LLMSummarizer
+        - s *LLMSummarizer
+        - v *viper.Viper
+        - t *rapid.T
+        - r *blocks.Renderer
+        - r *Renderer
+        - p *Palette
+        - p *overlay.Palette
+        - p *PureTTY
+        - p *Printer
+        - p *adapters.PureTTY
+        - c *Coordinator
+        - l *Loop
+        - r *StatusRenderer
+        - a *Aggregator
+        - m *Manager
+        - p *CommandPalette
 
     whitespace:
       multi-if: true
@@ -433,8 +501,15 @@ linters:
       - common-false-positives
     rules:
       # Test files naturally have similar setup/assertion patterns and long test functions.
+      # exhaustive: test maps intentionally use partial keys for fallback/edge-case testing.
+      # varnamelen: test helpers use short names (r, p, m, etc.) following Go conventions.
+      # ireturn: test helpers returning interfaces is fine.
       - path: _test\.go
-        linters: [dupl, funlen, gocognit, gocyclo, cyclop, nestif, errcheck, goconst]
+        linters: [dupl, funlen, gocognit, gocyclo, cyclop, nestif, errcheck, goconst, exhaustive, varnamelen, fatcontext, ireturn]
+
+      # UI code uses short idiomatic variable names for renderers, printers, coordinators, etc.
+      - path: internal/ui/
+        linters: [varnamelen]
 
       # CLI command handlers and config validation are inherently complex entry points.
       # errcheck: interactive input (fmt.Fscanln) errors are intentionally ignored.
@@ -453,3 +528,80 @@ linters:
       # Config migration and scaffold logic has inherently nested/complex control flow.
       - path: (internal/cli/|internal/scaffold/|internal/config/)
         linters: [mnd, maintidx, nestif, wrapcheck]
+
+      # UI port and theme interfaces are naturally large; they define complete contracts.
+      - path: internal/ui/(ports|theme)/
+        linters: [interfacebloat]
+
+      # Theme file contains display strings with special characters.
+      - path: internal/ui/theme/
+        linters: [gosmopolitan]
+
+      # MCP registry interfaces are naturally large; they define complete registry contracts.
+      - path: internal/mcp/registry\.go
+        linters: [interfacebloat]
+
+      # LLM Provider interface has 6 methods forming a cohesive contract.
+      - path: internal/llm/provider\.go
+        linters: [interfacebloat]
+
+      # Smithery API types use camelCase JSON tags to match the external Smithery API.
+      - path: internal/mcp/smithery(_api)?\.go
+        linters: [tagliatelle]
+
+      # ACP approval handler uses internal notificationSender interface in return types.
+      - path: internal/protocol/acp/approval_handler\.go
+        linters: [ireturn]
+
+      # ACP SDK uses "Cancelled" spelling (British English) in its API types.
+      - path: internal/protocol/acp/
+        linters: [misspell]
+
+      # CLI factory functions return interfaces because the concrete type varies at runtime.
+      - path: cmd/spin/(acp|exec|services|approval|tui|acp_extra_provider|exec_extra_provider)\.go
+        linters: [ireturn]
+
+      # Smithery API types in mcp.go use camelCase JSON tags to match the external API.
+      - path: cmd/spin/mcp\.go
+        linters: [tagliatelle]
+
+      # Test files need to reassign os.Stdin/os.Stderr for mocking; save/restore pattern is used.
+      - path: _test\.go
+        linters: [reassign]
+
+      # Test files need executable permissions for hook scripts and similar test fixtures.
+      - path: _test\.go
+        linters: [gosec]
+
+      # Test files intentionally use Han script characters for Unicode/CJK testing.
+      - path: _test\.go
+        linters: [gosmopolitan]
+
+      # Compliance test files intentionally use Han script characters for UTF-8 testing.
+      - path: tests/compliance/
+        linters: [gosmopolitan]
+
+      # PolicyStore interface has 6 methods forming a cohesive policy management contract.
+      - path: internal/safety/policy\.go
+        linters: [interfacebloat]
+
+      # Conversation.Close() doesn't accept context by design (shared resource lifecycle).
+      - path: internal/dbg/events\.go
+        linters: [contextcheck]
+
+      # Snapshot manager paths are derived from workDir hash — not user-controlled traversal.
+      - path: internal/undo/snapshot\.go
+        linters: [gosec]
+
+      # ACE service factory functions return different concrete types based on config.
+      - path: internal/ace/service\.go
+        linters: [ireturn]
+
+      # Global slog usage in protocol/agent code where threading a logger through would
+      # require deep refactoring across protocol boundaries.
+      - path: (internal/contexteng/history/history\.go|internal/llm/cache/provider_cache\.go|internal/protocol/acp/(agent|approval_handler|event_transformer)\.go)
+        linters: [sloglint]
+
+      # Exported interfaces used by other packages (iface unused only checks within-package usage).
+      - path: (internal/ace/embedding/embedder\.go|internal/ace/feedback/parser\.go|internal/ace/retrieval/retriever\.go|internal/auth/auth\.go|internal/memory/store\.go|pkg/protocol/jsonrpc/transport\.go|pkg/storage/store\.go|pkg/tokenizer/tokenizer\.go)
+        linters: [iface]

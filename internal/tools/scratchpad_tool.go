@@ -92,7 +92,7 @@ func (t *ScratchpadTool) Schema() ToolSchema {
 
 // Execute implements the Execute operation.
 func (t *ScratchpadTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
-	operation, _ := params.GetString("operation")
+	operation := params.GetStringOr("operation", "")
 	if operation == "" {
 		return NewToolError(errOperationParameterRequired), nil
 	}
@@ -140,7 +140,7 @@ func (t *ScratchpadTool) executeSearch(ctx context.Context, params ToolParameter
 }
 
 func (t *ScratchpadTool) executePin(_ context.Context, params ToolParameters) (ToolResult, error) {
-	key, _ := params.GetString("key")
+	key := params.GetStringOr("key", "")
 	if key == "" {
 		return NewToolError(errKeyParameterRequiredForPin), nil
 	}
@@ -158,7 +158,7 @@ func (t *ScratchpadTool) executePin(_ context.Context, params ToolParameters) (T
 }
 
 func (t *ScratchpadTool) executeUnpin(_ context.Context, params ToolParameters) (ToolResult, error) {
-	key, _ := params.GetString("key")
+	key := params.GetStringOr("key", "")
 	if key == "" {
 		return NewToolError(errKeyParameterRequiredForUnpin), nil
 	}

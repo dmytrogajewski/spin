@@ -99,6 +99,8 @@ func (o *AutoOffloader) Offload(ctx context.Context, messages []AnalyzableMessag
 					Namespace: "offloaded",
 				})
 			}
+		default:
+			// Unknown scope, skip.
 		}
 
 		if err != nil {
