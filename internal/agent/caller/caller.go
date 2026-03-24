@@ -360,6 +360,14 @@ func (lc *LLMCaller) finalizeStreamResponse(
 		return nil, spinerrors.New(spinerrors.CodeTimeout, "LLMCaller.Call", "context canceled", err)
 	}
 
+	// Signal that content generation is complete so the UI can
+	// transition out of the "Thinking" state.
+	lc.emitter.Emit(events.Event{
+		Type:      events.EventContentComplete,
+		Timestamp: time.Now(),
+		Data:      "done",
+	})
+
 	return response, nil
 }
 

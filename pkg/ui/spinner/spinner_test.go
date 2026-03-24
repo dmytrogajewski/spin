@@ -192,6 +192,74 @@ func TestSpinner_ContextCancel(t *testing.T) {
 	}
 }
 
+func TestSpinner_ZeroInterval_NoPanic(t *testing.T) {
+	t.Parallel()
+
+	s := NewSpinner(StyleDots)
+	s.SetInterval(0) // Would panic in NewTicker without guard.
+
+	ctx := t.Context()
+
+	s.Start(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	// Goroutine should exit cleanly, not panic.
+	if s.IsRunning() {
+		t.Fatal("spinner should not be running with zero interval")
+	}
+
+	// Stop should not hang or panic.
+	s.Stop()
+}
+
+func TestSpinner_NegativeInterval_NoPanic(t *testing.T) {
+	t.Parallel()
+
+	s := NewSpinner(StyleDots)
+	s.SetInterval(-time.Second) // Would panic in NewTicker without guard.
+
+	ctx := t.Context()
+
+	s.Start(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	if s.IsRunning() {
+		t.Fatal("spinner should not be running with negative interval")
+	}
+
+	s.Stop()
+}
+
+func TestSpinner_StopStartRace(t *testing.T) {
+	t.Parallel()
+
+	s := NewSpinner(StyleDots)
+	s.SetInterval(5 * time.Millisecond)
+
+	ctx := t.Context()
+
+	// Rapid Stop/Start cycles should not leave the spinner in a broken state.
+	for range 20 {
+		s.Start(ctx)
+		s.Stop()
+	}
+
+	// Final Start should work.
+	s.Start(ctx)
+	time.Sleep(50 * time.Millisecond)
+
+	if !s.IsRunning() {
+		t.Error("spinner should be running after final Start, stale goroutine may have clobbered running flag")
+	}
+
+	frame := s.Frame()
+	if frame == "" {
+		t.Error("expected non-empty frame from running spinner")
+	}
+
+	s.Stop()
+}
+
 func TestActivitySpinner_ShouldAnimate(t *testing.T) {
 	t.Parallel()
 
@@ -205,12 +273,19 @@ func TestActivitySpinner_ShouldAnimate(t *testing.T) {
 		{"Thinking", true},
 		{"Executing", true},
 		{"Calling tools", true},
-		{"Calling: Bash", true}, // Prefix match.
+		{"Calling: Bash", true}, // Prefix match (delimiter-based).
 		{"Waiting approval", true},
 		{"Ready", false},
 		{"Idle", false},
 		{"Complete", false},
 		{"Error", false},
+		// Non-delimiter states must NOT prefix-match.
+		{"StartingCleanup", false},
+		{"ExecutingShutdown", false},
+		{"ThinkingAboutStopping", false},
+		// Delimiter-based prefix matching still works.
+		{"Calling: Read", true},
+		{"Calling: Write", true},
 	}
 
 	for _, tt := range tests {
@@ -265,5 +340,134 @@ func TestActivitySpinner_AddActiveState(t *testing.T) {
 
 	if !as.ShouldAnimate("CustomState") {
 		t.Error("CustomState should be active after AddActiveState")
+	}
+}
+
+func TestSpinner_ContextCancel_NoContextLeak(t *testing.T) {
+	t.Parallel()
+
+	s := NewSpinner(StyleDots)
+
+	// Start many spinners with zero interval — each should clean up its context.
+	for range 100 {
+		ctx, cancel := context.WithCancel(context.Background())
+
+		s.Start(ctx)
+		time.Sleep(5 * time.Millisecond) // Let animate exit due to zero interval... but we have default interval.
+
+		s.Stop()
+		cancel()
+	}
+
+	// After Stop+cancel, the spinner should not be running and cancel should be nil.
+	s.mu.RLock()
+	cancelIsNil := s.cancel == nil
+	s.mu.RUnlock()
+
+	if !cancelIsNil {
+		t.Error("cancel function should be nil after Stop, potential context leak")
+	}
+}
+
+func TestSpinner_ZeroInterval_NoContextLeak(t *testing.T) {
+	t.Parallel()
+
+	s := NewSpinner(StyleDots)
+	s.SetInterval(0)
+
+	// Start with zero interval — animate exits immediately.
+	s.Start(context.Background())
+	time.Sleep(50 * time.Millisecond)
+
+	// animate's defer should have cleaned up.
+	s.mu.RLock()
+	cancelIsNil := s.cancel == nil
+	running := s.running
+	s.mu.RUnlock()
+
+	if running {
+		t.Error("spinner should not be running with zero interval")
+	}
+
+	if !cancelIsNil {
+		t.Error("cancel function should be nil after animate exits, context leak")
+	}
+}
+
+func TestSpinner_SetInterval_WhileRunning(t *testing.T) {
+	t.Parallel()
+
+	s := NewSpinner(StyleDots)
+	s.SetInterval(50 * time.Millisecond) // Initial interval.
+
+	var callCount atomic.Int32
+
+	s.SetUpdateCallback(func() {
+		callCount.Add(1)
+	})
+
+	ctx := t.Context()
+
+	s.Start(ctx)
+
+	// Wait for the initial interval's in-flight timer to fire.
+	time.Sleep(70 * time.Millisecond)
+
+	// Change to fast interval.
+	s.SetInterval(5 * time.Millisecond)
+
+	callCount.Store(0) // Reset counter after interval change.
+
+	// Wait long enough for the in-flight timer to expire and fast ticks to accumulate.
+	time.Sleep(150 * time.Millisecond)
+
+	s.Stop()
+
+	count := callCount.Load()
+	if count < 5 {
+		t.Errorf("expected multiple fast callbacks after SetInterval, got %d", count)
+	}
+}
+
+func TestActivitySpinner_UpdateState_Concurrent(t *testing.T) {
+	t.Parallel()
+
+	as := NewActivitySpinner(StyleDots)
+	as.SetInterval(5 * time.Millisecond)
+
+	ctx := t.Context()
+
+	// Run many concurrent UpdateState calls to verify no races.
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		for range 100 {
+			as.UpdateState(ctx, "Thinking")
+			as.UpdateState(ctx, "Ready")
+		}
+	}()
+
+	for range 100 {
+		as.UpdateState(ctx, "Executing")
+		as.UpdateState(ctx, "Idle")
+	}
+
+	<-done
+
+	// Final state: set to a known state and verify.
+	as.UpdateState(ctx, "Thinking")
+	time.Sleep(20 * time.Millisecond)
+
+	if !as.IsRunning() {
+		t.Error("spinner should be running after final UpdateState(Thinking)")
+	}
+
+	as.UpdateState(ctx, "Ready")
+	time.Sleep(20 * time.Millisecond)
+
+	if as.IsRunning() {
+		t.Error("spinner should be stopped after final UpdateState(Ready)")
 	}
 }

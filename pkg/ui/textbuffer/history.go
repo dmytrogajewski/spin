@@ -9,7 +9,12 @@ type History struct {
 }
 
 // NewHistory creates a new history with the specified limit.
+// Limit is clamped to a minimum of 1.
 func NewHistory(limit int) *History {
+	if limit < 1 {
+		limit = 1
+	}
+
 	return &History{
 		entries: []string{},
 		limit:   limit,
@@ -90,7 +95,10 @@ func (h *History) Reset() {
 	h.draft = ""
 }
 
-// Entries returns all history entries (newest first).
+// Entries returns a copy of all history entries (newest first).
 func (h *History) Entries() []string {
-	return h.entries
+	result := make([]string, len(h.entries))
+	copy(result, h.entries)
+
+	return result
 }

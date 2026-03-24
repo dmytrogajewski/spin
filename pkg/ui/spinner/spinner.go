@@ -41,6 +41,7 @@ type Spinner struct {
 	running  bool
 	interval time.Duration
 	onUpdate func() // Callback to trigger UI refresh.
+	gen      uint64 // Generation counter to prevent stale goroutine cleanup.
 
 	cancel context.CancelFunc
 }
@@ -72,6 +73,7 @@ func (s *Spinner) SetStyle(style Style) {
 }
 
 // SetInterval sets the animation interval.
+// Takes effect on the next animation tick if the spinner is running.
 func (s *Spinner) SetInterval(d time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -88,33 +90,27 @@ func (s *Spinner) SetUpdateCallback(callback func()) {
 	s.onUpdate = callback
 }
 
-// Start begins the spinner animation.
-func (s *Spinner) Start(ctx context.Context) {
-	s.mu.Lock()
+// startLocked begins the spinner animation. Caller must hold s.mu.
+func (s *Spinner) startLocked(ctx context.Context) {
 	if s.running {
-		s.mu.Unlock()
-
 		return
 	}
 
 	s.running = true
 	s.index = 0
+	s.gen++
 
 	// Create cancelable context.
 	ctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
-	interval := s.interval
-	s.mu.Unlock()
+	gen := s.gen
 
 	// Start animation goroutine.
-	go s.animate(ctx, interval)
+	go s.animate(ctx, gen)
 }
 
-// Stop stops the spinner animation.
-func (s *Spinner) Stop() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+// stopLocked stops the spinner animation. Caller must hold s.mu.
+func (s *Spinner) stopLocked() {
 	if !s.running {
 		return
 	}
@@ -124,6 +120,22 @@ func (s *Spinner) Stop() {
 		s.cancel()
 		s.cancel = nil
 	}
+}
+
+// Start begins the spinner animation.
+func (s *Spinner) Start(ctx context.Context) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.startLocked(ctx)
+}
+
+// Stop stops the spinner animation.
+func (s *Spinner) Stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.stopLocked()
 }
 
 // IsRunning returns true if the spinner is animating.
@@ -147,39 +159,69 @@ func (s *Spinner) Frame() string {
 }
 
 // animate runs the animation loop.
-func (s *Spinner) animate(ctx context.Context, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	// Ensure running is set to false when animation stops.
-	defer func() {
-		s.mu.Lock()
-		s.running = false
-		s.mu.Unlock()
-	}()
+func (s *Spinner) animate(ctx context.Context, gen uint64) {
+	// Cleanup must run even on early exit to release the child context
+	// and reset state for this generation.
+	defer s.cleanupGeneration(gen)
 
 	for {
+		// Read current interval each tick so SetInterval takes effect dynamically.
+		s.mu.RLock()
+		interval := s.interval
+		s.mu.RUnlock()
+
+		if interval <= 0 {
+			return
+		}
+
+		timer := time.NewTimer(interval)
+
 		select {
 		case <-ctx.Done():
+			timer.Stop()
+
 			return
-		case <-ticker.C:
-			s.mu.Lock()
-			if !s.running {
-				s.mu.Unlock()
-
+		case <-timer.C:
+			if !s.tick() {
 				return
-			}
-
-			s.index = (s.index + 1) % len(s.frames)
-			callback := s.onUpdate
-			s.mu.Unlock()
-
-			// Trigger UI refresh if callback is set.
-			if callback != nil {
-				callback()
 			}
 		}
 	}
+}
+
+// cleanupGeneration resets state for the given generation on goroutine exit.
+func (s *Spinner) cleanupGeneration(gen uint64) {
+	s.mu.Lock()
+	if s.gen == gen {
+		s.running = false
+		if s.cancel != nil {
+			s.cancel()
+			s.cancel = nil
+		}
+	}
+
+	s.mu.Unlock()
+}
+
+// tick advances the animation frame and triggers the update callback.
+// Returns false if the spinner was stopped and the loop should exit.
+func (s *Spinner) tick() bool {
+	s.mu.Lock()
+	if !s.running {
+		s.mu.Unlock()
+
+		return false
+	}
+
+	s.index = (s.index + 1) % len(s.frames)
+	callback := s.onUpdate
+	s.mu.Unlock()
+
+	if callback != nil {
+		callback()
+	}
+
+	return true
 }
 
 // ActivitySpinner wraps Spinner with activity state awareness.
@@ -213,19 +255,17 @@ func (a *ActivitySpinner) AddActiveState(state string) {
 	a.activeStates[state] = true
 }
 
-// ShouldAnimate returns true if the given state should trigger animation.
-func (a *ActivitySpinner) ShouldAnimate(state string) bool {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
+// shouldAnimateLocked returns true if the given state should trigger animation.
+// Caller must hold a.mu (at least RLock).
+func (a *ActivitySpinner) shouldAnimateLocked(state string) bool {
 	// Check exact match.
 	if a.activeStates[state] {
 		return true
 	}
 
-	// Check prefix match for states like "Calling: <toolname>".
+	// Only prefix-match states that end with a delimiter (e.g. "Calling:").
 	for activeState := range a.activeStates {
-		if strings.HasPrefix(state, activeState) {
+		if strings.HasSuffix(activeState, ":") && strings.HasPrefix(state, activeState) {
 			return true
 		}
 	}
@@ -233,15 +273,26 @@ func (a *ActivitySpinner) ShouldAnimate(state string) bool {
 	return false
 }
 
+// ShouldAnimate returns true if the given state should trigger animation.
+func (a *ActivitySpinner) ShouldAnimate(state string) bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
+	return a.shouldAnimateLocked(state)
+}
+
 // UpdateState updates the spinner based on the new agent state.
 // Starts animation for active states, stops for idle states.
+// The entire check-and-act is atomic to prevent TOCTOU races.
 func (a *ActivitySpinner) UpdateState(ctx context.Context, state string) {
-	shouldAnimate := a.ShouldAnimate(state)
-	isRunning := a.IsRunning()
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-	if shouldAnimate && !isRunning {
-		a.Start(ctx)
-	} else if !shouldAnimate && isRunning {
-		a.Stop()
+	shouldAnimate := a.shouldAnimateLocked(state)
+
+	if shouldAnimate && !a.running {
+		a.startLocked(ctx)
+	} else if !shouldAnimate && a.running {
+		a.stopLocked()
 	}
 }

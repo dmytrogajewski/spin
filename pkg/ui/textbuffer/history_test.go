@@ -268,3 +268,44 @@ func TestHistory_DuplicateEntries(t *testing.T) {
 		t.Errorf("After two duplicates, len(Entries()) = %d, want 2", len(entries))
 	}
 }
+
+func TestHistory_ZeroLimit_NoPanic(t *testing.T) {
+	t.Parallel()
+
+	h := textbuffer.NewHistory(0) // Should clamp to 1.
+	h.Submit("a")
+	h.Submit("b")
+
+	entries := h.Entries()
+	if len(entries) != 1 {
+		t.Errorf("len(Entries()) = %d, want 1 (clamped limit)", len(entries))
+	}
+}
+
+func TestHistory_NegativeLimit_NoPanic(t *testing.T) {
+	t.Parallel()
+
+	h := textbuffer.NewHistory(-5) // Should clamp to 1.
+	h.Submit("a")
+
+	entries := h.Entries()
+	if len(entries) != 1 {
+		t.Errorf("len(Entries()) = %d, want 1", len(entries))
+	}
+}
+
+func TestHistory_Entries_ReturnsCopy(t *testing.T) {
+	t.Parallel()
+
+	h := textbuffer.NewHistory(10)
+	h.Submit("original")
+
+	entries := h.Entries()
+	entries[0] = "CORRUPTED"
+
+	// Internal state should be unaffected.
+	fresh := h.Entries()
+	if fresh[0] != "original" {
+		t.Errorf("Entries() mutation leaked: got %q, want %q", fresh[0], "original")
+	}
+}

@@ -25,6 +25,13 @@ func (e *Executor) Execute(
 	resp.Duration = time.Since(start)
 	resp.Messages = iterCtx.Messages
 
+	// Signal turn completion so the UI can stop the spinner.
+	e.emit(events.Event{
+		Type:      events.EventTurnComplete,
+		Timestamp: time.Now(),
+		Data:      "done",
+	})
+
 	e.runAfterExecution(ctx, iterCtx, resp)
 
 	return resp, err

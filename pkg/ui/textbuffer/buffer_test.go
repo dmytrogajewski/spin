@@ -438,3 +438,65 @@ func TestBuffer_DeleteWord_Punctuation(t *testing.T) {
 		})
 	}
 }
+
+func TestBuffer_GraphemeClusters_CombiningCharacters(t *testing.T) {
+	t.Parallel()
+
+	// "e" + combining acute accent (U+0301) forms a single grapheme "é".
+	b := textbuffer.NewBuffer()
+	b.Insert('e')
+	b.Insert('\u0301') // Combining acute accent.
+
+	if got := b.Len(); got != 1 {
+		t.Errorf("Len() = %d, want 1 (combining char should merge)", got)
+	}
+
+	if got := b.Cursor(); got != 1 {
+		t.Errorf("Cursor() = %d, want 1", got)
+	}
+
+	if got := b.Text(); got != "e\u0301" {
+		t.Errorf("Text() = %q, want %q", got, "e\u0301")
+	}
+
+	// Backspace should delete entire grapheme cluster.
+	b.Backspace()
+
+	if got := b.Len(); got != 0 {
+		t.Errorf("After Backspace, Len() = %d, want 0", got)
+	}
+
+	if got := b.Text(); got != "" {
+		t.Errorf("After Backspace, Text() = %q, want empty", got)
+	}
+}
+
+func TestBuffer_GraphemeClusters_SetText(t *testing.T) {
+	t.Parallel()
+
+	// Family emoji is a single grapheme cluster but multiple runes.
+	b := textbuffer.NewBuffer()
+	b.SetText("a\U0001F468\u200D\U0001F469\u200D\U0001F467b") // a + family emoji + b.
+
+	if got := b.Len(); got != 3 {
+		t.Errorf("Len() = %d, want 3 (a, family emoji, b)", got)
+	}
+
+	// Backspace should delete 'b' as a single grapheme.
+	b.Backspace()
+
+	if got := b.Len(); got != 2 {
+		t.Errorf("After first Backspace, Len() = %d, want 2", got)
+	}
+
+	// Backspace should delete entire family emoji as one grapheme.
+	b.Backspace()
+
+	if got := b.Len(); got != 1 {
+		t.Errorf("After second Backspace, Len() = %d, want 1", got)
+	}
+
+	if got := b.Text(); got != "a" {
+		t.Errorf("After two Backspaces, Text() = %q, want %q", got, "a")
+	}
+}

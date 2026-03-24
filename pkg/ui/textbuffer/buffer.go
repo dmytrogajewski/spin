@@ -2,60 +2,100 @@
 package textbuffer
 
 import (
+	"strings"
 	"unicode"
+
+	"github.com/rivo/uniseg"
 )
 
 // Buffer represents the editable text buffer with cursor position.
-// It stores text as a slice of runes and maintains a cursor index.
-// The cursor position is always valid: 0 <= cursor <= len(runes).
+// It stores text as a slice of grapheme clusters and maintains a cursor index.
+// The cursor position is always valid: 0 <= cursor <= len(graphemes).
 type Buffer struct {
-	runes  []rune // text content.
-	cursor int    // cursor position (0-based).
+	graphemes []string // text content as grapheme clusters.
+	cursor    int      // cursor position (0-based, in grapheme clusters).
 }
 
 // NewBuffer creates a new empty buffer.
 func NewBuffer() *Buffer {
 	return &Buffer{
-		runes:  []rune{},
-		cursor: 0,
+		graphemes: []string{},
+		cursor:    0,
 	}
 }
 
+// extractGraphemes splits a string into its Unicode grapheme clusters.
+func extractGraphemes(s string) []string {
+	gr := uniseg.NewGraphemes(s)
+
+	var result []string
+	for gr.Next() {
+		result = append(result, gr.Str())
+	}
+
+	return result
+}
+
+// firstRune returns the first rune of a grapheme cluster.
+func firstRune(grapheme string) rune {
+	for _, r := range grapheme {
+		return r
+	}
+
+	return 0
+}
+
 // Insert inserts a rune at the cursor position and advances the cursor.
+// If the rune is a combining character, it merges with the preceding grapheme.
 func (b *Buffer) Insert(r rune) {
-	// Insert at cursor position.
-	b.runes = append(b.runes[:b.cursor], append([]rune{r}, b.runes[b.cursor:]...)...)
+	s := string(r)
+
+	// Try to combine with previous grapheme cluster (for combining characters).
+	if b.cursor > 0 {
+		combined := b.graphemes[b.cursor-1] + s
+		clusters := extractGraphemes(combined)
+
+		if len(clusters) == 1 {
+			// Rune combines with previous grapheme (e.g., combining accent).
+			b.graphemes[b.cursor-1] = clusters[0]
+
+			return
+		}
+	}
+
+	// Insert as new grapheme cluster.
+	b.graphemes = append(b.graphemes[:b.cursor], append([]string{s}, b.graphemes[b.cursor:]...)...)
 	b.cursor++
 }
 
-// Backspace deletes the rune before the cursor if possible.
-// Returns true if a character was deleted, false otherwise.
+// Backspace deletes the grapheme cluster before the cursor if possible.
+// Returns true if a cluster was deleted, false otherwise.
 func (b *Buffer) Backspace() bool {
 	if b.cursor == 0 {
 		return false
 	}
 
-	// Delete character before cursor.
-	b.runes = append(b.runes[:b.cursor-1], b.runes[b.cursor:]...)
+	// Delete grapheme cluster before cursor.
+	b.graphemes = append(b.graphemes[:b.cursor-1], b.graphemes[b.cursor:]...)
 	b.cursor--
 
 	return true
 }
 
-// Delete deletes the rune at the cursor position if possible.
-// Returns true if a character was deleted, false otherwise.
+// Delete deletes the grapheme cluster at the cursor position if possible.
+// Returns true if a cluster was deleted, false otherwise.
 func (b *Buffer) Delete() bool {
-	if b.cursor >= len(b.runes) {
+	if b.cursor >= len(b.graphemes) {
 		return false
 	}
 
-	// Delete character at cursor.
-	b.runes = append(b.runes[:b.cursor], b.runes[b.cursor+1:]...)
+	// Delete grapheme cluster at cursor.
+	b.graphemes = append(b.graphemes[:b.cursor], b.graphemes[b.cursor+1:]...)
 
 	return true
 }
 
-// MoveLeft moves the cursor left by one position.
+// MoveLeft moves the cursor left by one grapheme cluster.
 // Returns true if the cursor moved, false if already at start.
 func (b *Buffer) MoveLeft() bool {
 	if b.cursor == 0 {
@@ -67,10 +107,10 @@ func (b *Buffer) MoveLeft() bool {
 	return true
 }
 
-// MoveRight moves the cursor right by one position.
+// MoveRight moves the cursor right by one grapheme cluster.
 // Returns true if the cursor moved, false if already at end.
 func (b *Buffer) MoveRight() bool {
-	if b.cursor >= len(b.runes) {
+	if b.cursor >= len(b.graphemes) {
 		return false
 	}
 
@@ -86,7 +126,7 @@ func (b *Buffer) MoveStart() {
 
 // MoveEnd moves the cursor to the end of the buffer.
 func (b *Buffer) MoveEnd() {
-	b.cursor = len(b.runes)
+	b.cursor = len(b.graphemes)
 }
 
 // ClearLineLeft deletes from the start of the line to the cursor (Ctrl-U).
@@ -96,18 +136,18 @@ func (b *Buffer) ClearLineLeft() {
 		return
 	}
 
-	b.runes = b.runes[b.cursor:]
+	b.graphemes = b.graphemes[b.cursor:]
 	b.cursor = 0
 }
 
 // ClearLineRight deletes from the cursor to the end of the line (Ctrl-K).
 // Cursor position remains unchanged.
 func (b *Buffer) ClearLineRight() {
-	if b.cursor >= len(b.runes) {
+	if b.cursor >= len(b.graphemes) {
 		return
 	}
 
-	b.runes = b.runes[:b.cursor]
+	b.graphemes = b.graphemes[:b.cursor]
 }
 
 // DeleteWord deletes the previous word (Ctrl-W).
@@ -135,7 +175,7 @@ func (b *Buffer) findWordStart() int {
 
 // skipTrailingSpaces skips trailing spaces before the word.
 func (b *Buffer) skipTrailingSpaces(pos int) int {
-	for pos >= 0 && unicode.IsSpace(b.runes[pos]) {
+	for pos >= 0 && unicode.IsSpace(firstRune(b.graphemes[pos])) {
 		pos--
 	}
 
@@ -144,7 +184,8 @@ func (b *Buffer) skipTrailingSpaces(pos int) int {
 
 // skipWordCharacters skips characters of the current word type.
 func (b *Buffer) skipWordCharacters(pos int) int {
-	isAlnum := unicode.IsLetter(b.runes[pos]) || unicode.IsDigit(b.runes[pos])
+	r := firstRune(b.graphemes[pos])
+	isAlnum := unicode.IsLetter(r) || unicode.IsDigit(r)
 
 	if isAlnum {
 		return b.skipAlphanumericCharacters(pos)
@@ -155,7 +196,12 @@ func (b *Buffer) skipWordCharacters(pos int) int {
 
 // skipAlphanumericCharacters skips alphanumeric characters.
 func (b *Buffer) skipAlphanumericCharacters(pos int) int {
-	for pos >= 0 && (unicode.IsLetter(b.runes[pos]) || unicode.IsDigit(b.runes[pos])) {
+	for pos >= 0 {
+		r := firstRune(b.graphemes[pos])
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			break
+		}
+
 		pos--
 	}
 
@@ -164,7 +210,12 @@ func (b *Buffer) skipAlphanumericCharacters(pos int) int {
 
 // skipPunctuationCharacters skips punctuation/symbol characters.
 func (b *Buffer) skipPunctuationCharacters(pos int) int {
-	for pos >= 0 && !unicode.IsSpace(b.runes[pos]) && !unicode.IsLetter(b.runes[pos]) && !unicode.IsDigit(b.runes[pos]) {
+	for pos >= 0 {
+		r := firstRune(b.graphemes[pos])
+		if unicode.IsSpace(r) || unicode.IsLetter(r) || unicode.IsDigit(r) {
+			break
+		}
+
 		pos--
 	}
 
@@ -174,46 +225,46 @@ func (b *Buffer) skipPunctuationCharacters(pos int) int {
 // deleteFromPosition deletes characters from the given position to the cursor.
 func (b *Buffer) deleteFromPosition(deleteFrom int) {
 	deleteFrom++ // Adjust for 0-based indexing.
-	b.runes = append(b.runes[:deleteFrom], b.runes[b.cursor:]...)
+	b.graphemes = append(b.graphemes[:deleteFrom], b.graphemes[b.cursor:]...)
 	b.cursor = deleteFrom
 }
 
 // Clear resets the buffer to empty state.
 func (b *Buffer) Clear() {
-	b.runes = []rune{}
+	b.graphemes = []string{}
 	b.cursor = 0
 }
 
 // Text returns the current buffer text as a string.
 func (b *Buffer) Text() string {
-	return string(b.runes)
+	return strings.Join(b.graphemes, "")
 }
 
-// Cursor returns the current cursor position.
+// Cursor returns the current cursor position (in grapheme clusters).
 func (b *Buffer) Cursor() int {
 	return b.cursor
 }
 
-// Len returns the length of the buffer in runes.
+// Len returns the length of the buffer in grapheme clusters.
 func (b *Buffer) Len() int {
-	return len(b.runes)
+	return len(b.graphemes)
 }
 
 // SetText sets the buffer text and moves cursor to the end.
 func (b *Buffer) SetText(s string) {
-	b.runes = []rune(s)
-	b.cursor = len(b.runes)
+	b.graphemes = extractGraphemes(s)
+	b.cursor = len(b.graphemes)
 }
 
 // SetCursor sets the cursor position.
-// The position is clamped to valid range [0, len(runes)].
+// The position is clamped to valid range [0, len(graphemes)].
 func (b *Buffer) SetCursor(pos int) {
 	if pos < 0 {
 		pos = 0
 	}
 
-	if pos > len(b.runes) {
-		pos = len(b.runes)
+	if pos > len(b.graphemes) {
+		pos = len(b.graphemes)
 	}
 
 	b.cursor = pos

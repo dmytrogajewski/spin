@@ -3,6 +3,7 @@
 package textwidth
 
 import (
+	"math"
 	"strings"
 
 	"github.com/rivo/uniseg"
@@ -36,6 +37,10 @@ func TotalWidth(graphemes []string) int {
 // MidEllipsize truncates a string in the middle, preserving the start and end,
 // with an ellipsis ("…") in between. Returns the original string if it fits.
 func MidEllipsize(input string, maxWidth int) string {
+	if maxWidth < 1 {
+		return ""
+	}
+
 	graphemes := ExtractGraphemes(input)
 	total := TotalWidth(graphemes)
 
@@ -47,31 +52,38 @@ func MidEllipsize(input string, maxWidth int) string {
 	left := buildLeft(graphemes, leftWidth)
 	right := buildRight(graphemes, rightWidth)
 
+	// Reclaim unused width from either side and give to the other.
+	// This prevents wasted space when wide characters (e.g. CJK) don't fit
+	// in the initially allocated width.
+	leftUsed := TotalWidth(left)
+	rightUsed := TotalWidth(right)
+
+	if leftUsed < leftWidth {
+		// Left has unused width, expand right.
+		right = buildRight(graphemes, maxWidth-1-leftUsed)
+	} else if rightUsed < rightWidth {
+		// Right has unused width, expand left.
+		left = buildLeft(graphemes, maxWidth-1-rightUsed)
+	}
+
 	return strings.Join(left, "") + "…" + strings.Join(right, "")
 }
 
 // GutterWidth returns the appropriate gutter width for displaying line numbers.
+// Scales logarithmically to support any line count.
 func GutterWidth(lineCount int) int {
-	const (
-		threshold10   = 10
-		threshold100  = 100
-		threshold1000 = 1000
-		width3        = 3
-		width4        = 4
-		width5        = 5
-		width6        = 6
-	)
+	const minWidth = 3
 
-	switch {
-	case lineCount < threshold10:
-		return width3
-	case lineCount < threshold100:
-		return width4
-	case lineCount < threshold1000:
-		return width5
-	default:
-		return width6
+	if lineCount < 1 {
+		lineCount = 1
 	}
+
+	const paddingWidth = 2
+
+	digits := int(math.Log10(float64(lineCount))) + 1
+	width := digits + paddingWidth
+
+	return max(width, minWidth)
 }
 
 // splitWidths calculates left and right widths for mid-ellipsis splitting.
@@ -103,7 +115,7 @@ func buildLeft(graphemes []string, maxWidth int) []string {
 
 // buildRight builds the right portion of the ellipsized string.
 func buildRight(graphemes []string, maxWidth int) []string {
-	var result []string
+	var reversed []string
 
 	currentWidth := 0
 
@@ -115,9 +127,14 @@ func buildRight(graphemes []string, maxWidth int) []string {
 			break
 		}
 
-		result = append([]string{cluster}, result...)
+		reversed = append(reversed, cluster)
 		currentWidth += cw
 	}
 
-	return result
+	// Reverse to restore original order.
+	for i, j := 0, len(reversed)-1; i < j; i, j = i+1, j-1 {
+		reversed[i], reversed[j] = reversed[j], reversed[i]
+	}
+
+	return reversed
 }
