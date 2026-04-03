@@ -10,6 +10,7 @@ import (
 
 	"github.com/openai/openai-go"
 
+	"github.com/dmytrogajewski/spin/internal/ace/llmcall"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/pkg/llmutil"
 )
@@ -281,62 +282,48 @@ func (r *reflector) RefineInsights(ctx context.Context, insights []*Insight, ite
 	return current, nil
 }
 
+// refinedInsightResponse is the JSON structure for a refined insight from LLM.
+type refinedInsightResponse struct {
+	Content    string   `json:"content"`
+	Evidence   []string `json:"evidence"`
+	Confidence float64  `json:"confidence"`
+	Category   string   `json:"category"`
+}
+
 // refineOnce performs one refinement iteration on insights.
 func (r *reflector) refineOnce(ctx context.Context, insights []*Insight, iteration int) ([]*Insight, error) {
-	// Build refinement prompt.
 	prompt := r.promptBuilder.BuildRefinementPrompt(insights)
 
-	// Call LLM.
-	params := openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage(prompt),
+	rawInsights, err := llmcall.Call(
+		ctx,
+		r.llm,
+		[]openai.ChatCompletionMessageParamUnion{openai.UserMessage(prompt)},
+		func(text string) ([]refinedInsightResponse, error) {
+			var result []refinedInsightResponse
+			if unmarshalErr := json.Unmarshal([]byte(text), &result); unmarshalErr != nil {
+				return nil, fmt.Errorf("failed to parse refinement response: %w", unmarshalErr)
+			}
+
+			return result, nil
 		},
-		Temperature: openai.Float(reflectorTemperature),
-	}
-
-	// Set MaxTokens if configured.
-	if r.maxTokens > 0 {
-		params.MaxTokens = openai.Int(int64(r.maxTokens))
-	}
-
-	completion, err := r.llm.Complete(ctx, params)
+		llmcall.Options{
+			Temperature: reflectorTemperature,
+			MaxTokens:   r.maxTokens,
+			CleanJSON:   true,
+		},
+	)
 	if err != nil {
 		return nil, err
-	}
-
-	// Parse JSON response.
-	responseText := completion.Choices[0].Message.Content
-
-	// Clean response text to extract JSON from markdown code blocks.
-	responseText = llmutil.CleanJSONResponse(responseText)
-
-	// Parse refinement response as array of insights.
-	type refinedInsightResponse struct {
-		Content    string   `json:"content"`
-		Evidence   []string `json:"evidence"`
-		Confidence float64  `json:"confidence"`
-		Category   string   `json:"category"`
-	}
-
-	var rawInsights []refinedInsightResponse
-
-	err = json.Unmarshal([]byte(responseText), &rawInsights)
-	if err != nil {
-		r.logger.WarnContext(ctx, "Failed to parse refinement response", "error", err)
-
-		return nil, fmt.Errorf("failed to parse refinement response: %w", err)
 	}
 
 	// Convert to Insight structs with updated iteration.
 	refined := make([]*Insight, 0, len(rawInsights))
 	for i, raw := range rawInsights {
-		// Use source from original insight if available.
 		source := ""
 		if i < len(insights) {
 			source = insights[i].Source
 		}
 
-		// Create insight using constructor.
 		insight := NewInsight(raw.Content, InsightCategory(raw.Category))
 		insight.Source = source
 		insight.Confidence = raw.Confidence

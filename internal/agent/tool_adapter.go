@@ -26,48 +26,11 @@ func (a *ToolExecutorAdapter) Execute(ctx context.Context, cmd tools.CommandInfo
 	secCmd := safety.CommandFrom(cmd)
 
 	// Execute using agent.Executor.
+	// *Result satisfies tools.ExecutionResult directly.
 	result, err := a.executor.Execute(ctx, secCmd, asExecuteOptions(opts))
 	if err != nil {
 		return nil, err
 	}
 
-	// Return result adapted to tools.ExecutionResult.
-	return &toolExecutionResult{result: result}, nil
-}
-
-// toolExecutionResult adapts agent.Result to tools.ExecutionResult interface.
-type toolExecutionResult struct {
-	result *Result
-}
-
-// GetStdout implements the GetStdout operation.
-func (r *toolExecutionResult) GetStdout() string {
-	if r.result == nil {
-		return ""
-	}
-
-	return r.result.Stdout
-}
-
-// GetStderr implements the GetStderr operation.
-func (r *toolExecutionResult) GetStderr() string {
-	if r.result == nil {
-		return ""
-	}
-
-	return r.result.Stderr
-}
-
-// GetExitCode implements the GetExitCode operation.
-func (r *toolExecutionResult) GetExitCode() int {
-	if r.result == nil {
-		return -1
-	}
-
-	return r.result.ExitCode
-}
-
-// GetMetadata implements the GetMetadata operation.
-func (r *toolExecutionResult) GetMetadata() map[string]any {
-	return nil
+	return result, nil
 }

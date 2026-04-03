@@ -307,7 +307,7 @@ func (c *ProgressiveContextConfig) Validate() error {
 	}
 
 	validStrategies := []string{"lru", "lfu", "fifo"}
-	if !stringSliceContains(validStrategies, c.EvictionStrategy) {
+	if !slices.Contains(validStrategies, c.EvictionStrategy) {
 		errs = append(errs, fmt.Errorf(
 			"eviction_strategy must be one of %v, got %q: %w",
 			validStrategies, c.EvictionStrategy, ErrInvalidEvictionStrategy,
@@ -378,9 +378,4 @@ func (q *QueryWeights) Validate() error {
 	}
 
 	return nil
-}
-
-// stringSliceContains checks if a string slice contains a given string.
-func stringSliceContains(slice []string, str string) bool {
-	return slices.Contains(slice, str)
 }

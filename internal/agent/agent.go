@@ -19,11 +19,10 @@ import (
 
 // Default agent configuration values.
 const (
-	DefaultMaxTurns        = 50
-	DefaultAgentTimeout    = 60 * time.Minute
-	DefaultTemperature     = 0.7
-	DefaultMaxTokens       = 8192
-	DefaultEventBufferSize = 100
+	DefaultMaxTurns     = 50
+	DefaultAgentTimeout = 60 * time.Minute
+	DefaultTemperature  = 0.7
+	DefaultMaxTokens    = 8192
 )
 
 // Common agent errors.

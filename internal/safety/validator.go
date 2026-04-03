@@ -106,42 +106,32 @@ func (v *Validator) Classify(cmd *Command) (*ValidationResult, error) {
 
 // IsSafe returns true if the command is classified as safe.
 func (v *Validator) IsSafe(cmd *Command) bool {
-	result, err := v.Classify(cmd)
-	if err != nil {
-		return false
-	}
-
-	return result.Classification == CommandSafe
+	return v.isClassification(cmd, CommandSafe)
 }
 
 // IsInteractive returns true if the command is classified as interactive.
 func (v *Validator) IsInteractive(cmd *Command) bool {
-	result, err := v.Classify(cmd)
-	if err != nil {
-		return false
-	}
-
-	return result.Classification == CommandInteractive
+	return v.isClassification(cmd, CommandInteractive)
 }
 
 // IsDangerous returns true if the command is classified as dangerous.
 func (v *Validator) IsDangerous(cmd *Command) bool {
-	result, err := v.Classify(cmd)
-	if err != nil {
-		return false
-	}
-
-	return result.Classification == CommandDangerous
+	return v.isClassification(cmd, CommandDangerous)
 }
 
 // IsForbidden returns true if the command is classified as forbidden.
 func (v *Validator) IsForbidden(cmd *Command) bool {
+	return v.isClassification(cmd, CommandForbidden)
+}
+
+// isClassification returns true if the command's classification matches the given class.
+func (v *Validator) isClassification(cmd *Command, class CommandClass) bool {
 	result, err := v.Classify(cmd)
 	if err != nil {
 		return false
 	}
 
-	return result.Classification == CommandForbidden
+	return result.Classification == class
 }
 
 // NeedsApproval returns true if the command needs user approval before execution.

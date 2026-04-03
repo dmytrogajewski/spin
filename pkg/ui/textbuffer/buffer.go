@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/rivo/uniseg"
+	"github.com/dmytrogajewski/spin/pkg/ui/textwidth"
 )
 
 // Buffer represents the editable text buffer with cursor position.
@@ -22,18 +22,6 @@ func NewBuffer() *Buffer {
 		graphemes: []string{},
 		cursor:    0,
 	}
-}
-
-// extractGraphemes splits a string into its Unicode grapheme clusters.
-func extractGraphemes(s string) []string {
-	gr := uniseg.NewGraphemes(s)
-
-	var result []string
-	for gr.Next() {
-		result = append(result, gr.Str())
-	}
-
-	return result
 }
 
 // firstRune returns the first rune of a grapheme cluster.
@@ -53,7 +41,7 @@ func (b *Buffer) Insert(r rune) {
 	// Try to combine with previous grapheme cluster (for combining characters).
 	if b.cursor > 0 {
 		combined := b.graphemes[b.cursor-1] + s
-		clusters := extractGraphemes(combined)
+		clusters := textwidth.ExtractGraphemes(combined)
 
 		if len(clusters) == 1 {
 			// Rune combines with previous grapheme (e.g., combining accent).
@@ -252,7 +240,7 @@ func (b *Buffer) Len() int {
 
 // SetText sets the buffer text and moves cursor to the end.
 func (b *Buffer) SetText(s string) {
-	b.graphemes = extractGraphemes(s)
+	b.graphemes = textwidth.ExtractGraphemes(s)
 	b.cursor = len(b.graphemes)
 }
 

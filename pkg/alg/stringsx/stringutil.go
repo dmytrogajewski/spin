@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+// CharsPerToken is a rough estimate of how many characters correspond to one
+// LLM token. Used across the codebase for quick token-count approximations.
+const CharsPerToken = 4
+
 // ellipsis is the suffix appended when truncating.
 const ellipsis = "..."
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/feedback"
+	"github.com/dmytrogajewski/spin/internal/ace/llmcall"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/prompt"
 	"github.com/dmytrogajewski/spin/internal/ace/retrieval"
@@ -25,6 +26,7 @@ const (
 	generationTemperature         = 0.7
 	generationMaxTokens           = 2000
 	minBulletLineLength           = 2
+	defaultModel                  = "gpt-4"
 )
 
 var (
@@ -400,31 +402,23 @@ func selectBulletPrompt(req BulletGenerationRequest) (string, error) {
 // callLLMForBullets calls the LLM with the bullet generation prompt.
 func (g *generator) callLLMForBullets(ctx context.Context, userPrompt, model string) (string, error) {
 	if model == "" {
-		model = "gpt-4"
+		model = defaultModel
 	}
 
-	params := openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
+	return llmcall.Call(
+		ctx,
+		g.llm,
+		[]openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(bulletGenerationSystemPrompt),
 			openai.UserMessage(userPrompt),
 		},
-		Model:       model,
-		Temperature: openai.Float(generationTemperature),
-		MaxTokens:   openai.Int(generationMaxTokens),
-	}
-
-	resp, err := g.llm.Complete(ctx, params)
-	if err != nil {
-		return "", fmt.Errorf("llm complete: %w", err)
-	}
-
-	if len(resp.Choices) == 0 {
-		g.logger.WarnContext(ctx, "ACE Generator: No choices in LLM response!")
-
-		return "", nil
-	}
-
-	return resp.Choices[0].Message.Content, nil
+		llmcall.TextParser,
+		llmcall.Options{
+			Temperature: generationTemperature,
+			MaxTokens:   int(generationMaxTokens),
+			Model:       model,
+		},
+	)
 }
 
 // parseBulletsFromOutput parses LLM output into bullet objects.
@@ -453,8 +447,6 @@ func (g *generator) parseBulletsFromOutput(ctx context.Context, output string, t
 
 	return bullets, nil
 }
-
-// min returns the smaller of two ints.
 
 // Prompt templates for bullet generation.
 

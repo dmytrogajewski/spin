@@ -3,7 +3,6 @@ package adapter
 import (
 	"context"
 
-	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 )
 
@@ -46,36 +45,7 @@ func (m *MemoryManager) ShouldRefine(bulletCount int) bool {
 
 // Prune removes low-utility bullets from playbook.
 func (m *MemoryManager) Prune(ctx context.Context, pb *playbook.Playbook) (int, error) {
-	toPrune := m.findLowUtilityBullets(pb.List(nil))
+	pruned, _, err := playbook.PruneLowUtility(ctx, pb, m.config.PruneThreshold)
 
-	return m.deleteBullets(ctx, pb, toPrune)
-}
-
-// findLowUtilityBullets returns IDs of bullets below the utility threshold.
-func (m *MemoryManager) findLowUtilityBullets(bullets []*bullet.Bullet) []string {
-	var ids []string
-
-	for _, b := range bullets {
-		if b.Score() < m.config.PruneThreshold {
-			ids = append(ids, b.ID)
-		}
-	}
-
-	return ids
-}
-
-// deleteBullets removes bullets by ID from the playbook.
-func (m *MemoryManager) deleteBullets(ctx context.Context, pb *playbook.Playbook, ids []string) (int, error) {
-	deleted := 0
-
-	for _, id := range ids {
-		err := pb.Delete(ctx, id)
-		if err != nil {
-			return deleted, err
-		}
-
-		deleted++
-	}
-
-	return deleted, nil
+	return pruned, err
 }

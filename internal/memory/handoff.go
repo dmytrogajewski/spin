@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
-)
 
-const charsPerToken = 4
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
+)
 
 var (
 	// ErrNoPersistentStoreConfigured is a sentinel error.
@@ -237,7 +237,7 @@ func (s *SimpleSummarizer) Summarize(_ context.Context, content string, maxToken
 	limit := s.maxLength
 	if maxTokens > 0 {
 		// Rough conversion: 1 token ≈ 4 characters.
-		limit = maxTokens * charsPerToken
+		limit = maxTokens * stringsx.CharsPerToken
 	}
 
 	if len(content) <= limit {

@@ -150,34 +150,11 @@ func (c *Compactor) countTokens(messages []message.Message) int {
 	return total
 }
 
-// applyObservationMask replaces old tool outputs with compact references.
-// Recent messages within the protection window are preserved.
-func (c *Compactor) applyObservationMask(messages []message.Message) []message.Message {
-	result := make([]message.Message, len(messages))
-	copy(result, messages)
-
-	protectFrom := max(len(result)-c.recentProtected, 0)
-
-	for idx := range result {
-		if idx >= protectFrom {
-			break
-		}
-
-		if result[idx].Role == message.RoleTool && result[idx].Content != "" {
-			tokenCount := c.tokenizer.Count(result[idx].Content)
-			result[idx].Content = fmt.Sprintf(
-				"%s%d tokens%s",
-				observationMaskPrefix, tokenCount, observationMaskSuffix,
-			)
-		}
-	}
-
-	return result
-}
-
-// applyFastPrune walks backward and replaces old tool results with pruned markers.
-// Recent messages within the protection window are preserved.
-func (c *Compactor) applyFastPrune(messages []message.Message) []message.Message {
+// walkUnprotected copies messages and calls fn on each tool message outside
+// the recent protection window. The callback may mutate the message in place.
+func (c *Compactor) walkUnprotected(
+	messages []message.Message, fn func(*message.Message),
+) []message.Message {
 	result := make([]message.Message, len(messages))
 	copy(result, messages)
 
@@ -189,9 +166,31 @@ func (c *Compactor) applyFastPrune(messages []message.Message) []message.Message
 		}
 
 		if result[idx].Role == message.RoleTool {
-			result[idx].Content = prunedMarker
+			fn(&result[idx])
 		}
 	}
 
 	return result
+}
+
+// applyObservationMask replaces old tool outputs with compact references.
+// Recent messages within the protection window are preserved.
+func (c *Compactor) applyObservationMask(messages []message.Message) []message.Message {
+	return c.walkUnprotected(messages, func(msg *message.Message) {
+		if msg.Content != "" {
+			tokenCount := c.tokenizer.Count(msg.Content)
+			msg.Content = fmt.Sprintf(
+				"%s%d tokens%s",
+				observationMaskPrefix, tokenCount, observationMaskSuffix,
+			)
+		}
+	})
+}
+
+// applyFastPrune walks backward and replaces old tool results with pruned markers.
+// Recent messages within the protection window are preserved.
+func (c *Compactor) applyFastPrune(messages []message.Message) []message.Message {
+	return c.walkUnprotected(messages, func(msg *message.Message) {
+		msg.Content = prunedMarker
+	})
 }

@@ -215,6 +215,97 @@ func TestNormalizeEscapes(t *testing.T) {
 	}
 }
 
+func TestMaskSecret(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		key          string
+		visibleChars int
+		want         string
+	}{
+		{name: "normal_key", key: "sk-1234567890abcdef", visibleChars: 4, want: "sk-1...cdef"},
+		{name: "short_key_masked", key: "abcd1234", visibleChars: 4, want: "***"},
+		{name: "empty_key", key: "", visibleChars: 4, want: "***"},
+		{name: "very_short_key", key: "abc", visibleChars: 4, want: "***"},
+		{name: "zero_visible", key: "sk-1234567890abcdef", visibleChars: 0, want: "***"},
+		{name: "visible_too_large", key: "abcdefghij", visibleChars: 5, want: "***"},
+		{name: "one_visible_char", key: "abcdefghij", visibleChars: 1, want: "a...j"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := MaskSecret(tt.key, tt.visibleChars)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestParseKeyValuePairs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		items []string
+		sep   string
+		want  map[string]string
+	}{
+		{
+			name:  "simple_pairs",
+			items: []string{"Content-Type=application/json", "Authorization=Bearer token"},
+			sep:   "=",
+			want:  map[string]string{"Content-Type": "application/json", "Authorization": "Bearer token"},
+		},
+		{
+			name:  "colon_separator",
+			items: []string{"host:example.com", "port:8080"},
+			sep:   ":",
+			want:  map[string]string{"host": "example.com", "port": "8080"},
+		},
+		{
+			name:  "value_with_separator",
+			items: []string{"url=https://example.com"},
+			sep:   "=",
+			want:  map[string]string{"url": "https://example.com"},
+		},
+		{
+			name:  "skip_invalid",
+			items: []string{"valid=pair", "noseparator"},
+			sep:   "=",
+			want:  map[string]string{"valid": "pair"},
+		},
+		{
+			name:  "empty_input",
+			items: []string{},
+			sep:   "=",
+			want:  nil,
+		},
+		{
+			name:  "nil_input",
+			items: nil,
+			sep:   "=",
+			want:  nil,
+		},
+		{
+			name:  "all_invalid",
+			items: []string{"nosep1", "nosep2"},
+			sep:   "=",
+			want:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := ParseKeyValuePairs(tt.items, tt.sep)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestDetectTruncation(t *testing.T) {
 	t.Parallel()
 

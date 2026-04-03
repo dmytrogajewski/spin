@@ -128,43 +128,26 @@ func (d *ApprovalDialog) IsVisible() bool {
 
 // Approve approves the request and closes the dialog.
 func (d *ApprovalDialog) Approve() {
-	resp := safety.ApprovalResponse{
-		RequestID: d.request.ID,
-		Approved:  true,
-		Reason:    "user approved",
-	}
-	d.response = &resp
-	// Send to channel if Show() is waiting.
-	select {
-	case d.responseCh <- resp:
-	default:
-		// Channel already has a response or not being read.
-	}
+	d.respond(true, "user approved", "")
 }
 
 // approveWithScope approves the request with a specific persistence scope and closes the dialog.
 func (d *ApprovalDialog) approveWithScope(scope string) {
-	resp := safety.ApprovalResponse{
-		RequestID: d.request.ID,
-		Approved:  true,
-		Reason:    "user approved",
-		Scope:     scope,
-	}
-	d.response = &resp
-	// Send to channel if Show() is waiting.
-	select {
-	case d.responseCh <- resp:
-	default:
-		// Channel already has a response or not being read.
-	}
+	d.respond(true, "user approved", scope)
 }
 
 // Deny denies the request and closes the dialog.
 func (d *ApprovalDialog) Deny() {
+	d.respond(false, "user denied", "")
+}
+
+// respond sends an approval response and closes the dialog.
+func (d *ApprovalDialog) respond(approved bool, reason, scope string) {
 	resp := safety.ApprovalResponse{
 		RequestID: d.request.ID,
-		Approved:  false,
-		Reason:    "user denied",
+		Approved:  approved,
+		Reason:    reason,
+		Scope:     scope,
 	}
 	d.response = &resp
 	// Send to channel if Show() is waiting.

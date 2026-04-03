@@ -6,9 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/zalando/go-keyring"
 )
+
+// secretServiceTimeout is the maximum time to wait for D-Bus Secret Service availability check.
+const secretServiceTimeout = 3 * time.Second
 
 const (
 	// serviceName is the service name used for keyring operations.
@@ -103,15 +107,20 @@ func (k *linuxKeystore) List(ctx context.Context) ([]string, error) {
 // isSecretServiceAvailable checks if Secret Service is available.
 //
 // It attempts a simple operation to determine if the D-Bus service
-// is accessible and working.
+// is accessible and working. A timeout prevents hanging when D-Bus
+// is present but the Secret Service daemon is unresponsive.
 func isSecretServiceAvailable() bool {
-	// Try to get a non-existent key
-	// If we get ErrNotFound, the service is available
-	// If we get any other error, assume unavailable.
-	_, err := keyring.Get(serviceName, "spin-availability-check")
-	if err != nil && !errors.Is(err, keyring.ErrNotFound) {
+	resultCh := make(chan bool, 1)
+
+	go func() {
+		_, err := keyring.Get(serviceName, "spin-availability-check")
+		resultCh <- err == nil || errors.Is(err, keyring.ErrNotFound)
+	}()
+
+	select {
+	case available := <-resultCh:
+		return available
+	case <-time.After(secretServiceTimeout):
 		return false
 	}
-
-	return true
 }

@@ -10,6 +10,44 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestFindEditor(t *testing.T) {
+	// Cannot use t.Parallel — subtests modify process-global env vars.
+	tests := []struct {
+		name         string
+		editorEnv    string
+		visualEnv    string
+		wantNonEmpty bool
+	}{
+		{
+			name:         "uses EDITOR",
+			editorEnv:    "vim",
+			wantNonEmpty: true,
+		},
+		{
+			name:         "uses VISUAL when EDITOR not set",
+			visualEnv:    "emacs",
+			wantNonEmpty: true,
+		},
+		{
+			name:         "falls back to common editor",
+			wantNonEmpty: true, // vi should exist on most systems.
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("EDITOR", tt.editorEnv)
+			t.Setenv("VISUAL", tt.visualEnv)
+
+			editor := FindEditor()
+
+			if tt.wantNonEmpty && editor == "" {
+				t.Error("FindEditor() returned empty, want non-empty")
+			}
+		})
+	}
+}
+
 func TestMergeOutputs(t *testing.T) {
 	t.Parallel()
 

@@ -107,6 +107,21 @@ func (r *Result) GetStderr() string { return r.Stderr }
 // GetExitCode returns the exit code.
 func (r *Result) GetExitCode() int { return r.ExitCode }
 
+// ToCommandResult converts Result to executor.CommandResult.
+func (r *Result) ToCommandResult() *executor.CommandResult {
+	return &executor.CommandResult{
+		Command:     r.Command,
+		Stdout:      r.Stdout,
+		Stderr:      r.Stderr,
+		ExitCode:    r.ExitCode,
+		Duration:    r.Duration,
+		StartedAt:   r.StartedAt,
+		CompletedAt: r.CompletedAt,
+		Error:       r.Error,
+		Truncated:   r.Truncated,
+	}
+}
+
 // Success returns true if the command executed successfully.
 func (r *Result) Success() bool {
 	return r.ExitCode == 0 && r.Error == nil
@@ -594,17 +609,27 @@ func (e *Executor) getMaxOutputSize(opts *ExecuteOptions) int64 {
 	return maxSize
 }
 
-// handleExecError sets error and exit code on the result based on exec error type.
-func (e *Executor) handleExecError(execCtx context.Context, err error, result *Result) {
+// classifyExecError maps a context and exec error to the appropriate sentinel error.
+// It checks for timeout and cancellation via the context, and falls back to wrapping
+// the original error as an execution failure.
+func classifyExecError(execCtx context.Context, err error) error {
 	if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
-		result.Error = ErrTimeout
-		result.ExitCode = -1
-
-		return
+		return ErrTimeout
 	}
 
 	if errors.Is(execCtx.Err(), context.Canceled) {
-		result.Error = context.Canceled
+		return context.Canceled
+	}
+
+	return fmt.Errorf("%w: %w", ErrExecutionFailed, err)
+}
+
+// handleExecError sets error and exit code on the result based on exec error type.
+func (e *Executor) handleExecError(execCtx context.Context, err error, result *Result) {
+	result.Error = classifyExecError(execCtx, err)
+
+	classified := result.Error
+	if errors.Is(classified, ErrTimeout) || errors.Is(classified, context.Canceled) {
 		result.ExitCode = -1
 
 		return
@@ -616,8 +641,6 @@ func (e *Executor) handleExecError(execCtx context.Context, err error, result *R
 	} else {
 		result.ExitCode = -1
 	}
-
-	result.Error = fmt.Errorf("%w: %w", ErrExecutionFailed, err)
 }
 
 // ExecuteStreaming runs a command and streams output in real-time.
@@ -754,22 +777,9 @@ func (e *Executor) buildStreamingCompletion(execCtx context.Context, waitErr err
 		return OutputChunk{Timestamp: time.Now(), Done: true}
 	}
 
-	completionErr := e.classifyStreamingError(execCtx, waitErr)
+	completionErr := classifyExecError(execCtx, waitErr)
 
 	return OutputChunk{Timestamp: time.Now(), Done: true, Error: completionErr}
-}
-
-// classifyStreamingError maps an exec wait error to the appropriate error type.
-func (e *Executor) classifyStreamingError(execCtx context.Context, waitErr error) error {
-	if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
-		return ErrTimeout
-	}
-
-	if errors.Is(execCtx.Err(), context.Canceled) {
-		return context.Canceled
-	}
-
-	return fmt.Errorf("%w: %w", ErrExecutionFailed, waitErr)
 }
 
 // applyTimeout applies a timeout to the context.

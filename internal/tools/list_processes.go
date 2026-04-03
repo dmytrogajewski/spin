@@ -2,8 +2,9 @@ package tools
 
 import (
 	"context"
-	"fmt"
-	"strings"
+	"strconv"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 const (
@@ -49,7 +50,7 @@ func (t *ListProcessesTool) Schema() ToolSchema {
 // Execute lists all background tasks.
 func (t *ListProcessesTool) Execute(ctx context.Context, _ ToolParameters) (ToolResult, error) {
 	if t.manager == nil {
-		return NewToolResult("task manager not available"), nil
+		return NewToolResult(errTaskManagerNotAvailable), nil
 	}
 
 	tasks := t.manager.List(ctx)
@@ -60,34 +61,32 @@ func (t *ListProcessesTool) Execute(ctx context.Context, _ ToolParameters) (Tool
 	return NewToolResult(formatTaskTable(tasks)), nil
 }
 
-// formatTaskTable formats task snapshots as a human-readable table.
-func formatTaskTable(tasks []TaskSnapshot) string {
-	var buf strings.Builder
-
-	buf.WriteString("ID       | Command              | State     | Exit Code\n")
-	buf.WriteString("---------+----------------------+-----------+----------\n")
-
-	for _, task := range tasks {
-		fmt.Fprintf(&buf, "%-8s | %-20s | %-9s | %d\n",
-			task.ID,
-			truncateCommand(task.Command),
-			task.Status.String(),
-			task.ExitCode,
-		)
-	}
-
-	return buf.String()
-}
+// Column width constants for task table formatting.
+const (
+	colWidthID       = 8
+	colWidthCommand  = 20
+	colWidthState    = 9
+	colWidthExitCode = 9
+)
 
 const maxCommandDisplayLen = 20
 
-// truncateCommand shortens a command string for table display.
-func truncateCommand(cmd string) string {
-	if len(cmd) <= maxCommandDisplayLen {
-		return cmd
-	}
+// taskTableColumns defines the column layout for task table formatting.
+var taskTableColumns = []stringsx.Column{
+	{Name: "ID", Width: colWidthID},
+	{Name: "Command", Width: colWidthCommand},
+	{Name: "State", Width: colWidthState},
+	{Name: "Exit Code", Width: colWidthExitCode},
+}
 
-	const ellipsisSuffix = "..."
-
-	return cmd[:maxCommandDisplayLen-len(ellipsisSuffix)] + ellipsisSuffix
+// formatTaskTable formats task snapshots as a human-readable table.
+func formatTaskTable(tasks []TaskSnapshot) string {
+	return stringsx.FormatTable(tasks, taskTableColumns, func(task TaskSnapshot) []string {
+		return []string{
+			task.ID,
+			stringsx.TruncateWithSuffix(task.Command, maxCommandDisplayLen, "..."),
+			task.Status.String(),
+			strconv.Itoa(task.ExitCode),
+		}
+	})
 }

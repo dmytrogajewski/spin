@@ -24,7 +24,6 @@ import (
 
 const (
 	promptModelCapacity  = 100
-	percentMulPuretty    = 100
 	maxCommandDisplayLen = 50
 	externalInputBufSize = 100
 )
@@ -446,7 +445,7 @@ func (p *PureTTY) SetTokenCount(tokenCount int64) {
 		p.statusManager.UpdateMetrics(func(m *status.Metrics) {
 			m.TokenCount = tokenCount
 			if m.MaxTokens > 0 {
-				m.TokenUsage = float64(tokenCount) / float64(m.MaxTokens) * percentMulPuretty
+				m.TokenUsage = float64(tokenCount) / float64(m.MaxTokens) * status.PercentMultiplier
 			}
 		})
 		p.updateStatusBar()

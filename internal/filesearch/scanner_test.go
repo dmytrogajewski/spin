@@ -12,11 +12,10 @@ import (
 func TestNewScanner(t *testing.T) {
 	t.Parallel()
 
-	s := NewScanner(".", true)
+	s := NewScanner(".")
 
 	assert.NotNil(t, s)
 	assert.Equal(t, ".", s.baseDir)
-	assert.True(t, s.ignoreGit)
 }
 
 func TestScanner_Scan_EmptyDir(t *testing.T) {
@@ -24,7 +23,7 @@ func TestScanner_Scan_EmptyDir(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -41,7 +40,7 @@ func TestScanner_Scan_SingleFile(t *testing.T) {
 	err := os.WriteFile(testFile, []byte("test"), 0o600)
 	require.NoError(t, err)
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -62,7 +61,7 @@ func TestScanner_Scan_MultipleFiles(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	scanned, err := s.Scan()
 
 	require.NoError(t, err)
@@ -81,7 +80,7 @@ func TestScanner_Scan_NestedDirectories(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "dir1", "file1.txt"), []byte(""), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "dir1", "dir2", "file2.txt"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -102,7 +101,7 @@ func TestScanner_Scan_IgnoreGit(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "config"), []byte(""), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "regular.txt"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, true)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -124,7 +123,7 @@ func TestScanner_Scan_IncludeGit(t *testing.T) {
 
 	// NOTE: With IgnoreHandler, .git is ALWAYS ignored by default patterns
 	// This test now verifies that default ignore patterns are applied.
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -141,7 +140,7 @@ func TestScanner_Scan_RelativePaths(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "subdir"), 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "subdir", "file.txt"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -170,7 +169,7 @@ func TestScanner_Scan_SymlinkHandling(t *testing.T) {
 		t.Skip("Symlinks not supported on this system")
 	}
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -187,7 +186,7 @@ func TestScanner_Scan_HiddenFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".hidden"), []byte(""), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "visible.txt"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -205,7 +204,7 @@ func BenchmarkScanner_Scan_100Files(b *testing.B) {
 		_ = os.WriteFile(path, []byte(""), 0o600)
 	}
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 
 	b.ResetTimer()
 
@@ -228,7 +227,7 @@ func BenchmarkScanner_Scan_1000Files(b *testing.B) {
 		}
 	}
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 
 	b.ResetTimer()
 
@@ -253,7 +252,7 @@ func TestScanner_WithGitignore_SimplePattern(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "debug.log"), []byte(""), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "app.txt"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -278,7 +277,7 @@ func TestScanner_WithGitignore_DirectoryPattern(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "src"), 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "src", "main.go"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -296,7 +295,7 @@ func TestScanner_WithGitignore_NodeModules(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "node_modules", "pkg", "index.js"), []byte(""), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "app.js"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -318,7 +317,7 @@ func TestScanner_WithSpinignore(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.tmp"), []byte(""), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -346,7 +345,7 @@ func TestScanner_WithBothIgnoreFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.tmp"), []byte(""), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "app.txt"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -369,7 +368,7 @@ func TestScanner_RealWorldNodeProject(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "package.json"), []byte(""), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".DS_Store"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -393,7 +392,7 @@ func TestScanner_RealWorldGoProject(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".git", "config"), []byte(""), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -416,7 +415,7 @@ func TestScanner_RealWorldPythonProject(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "module.pyc"), []byte(""), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "requirements.txt"), []byte(""), 0o600))
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -437,7 +436,7 @@ func TestScanner_BackwardCompatibility_IgnoreGitFlag(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte(""), 0o600))
 
 	// Test with ignoreGit=true (old behavior should still work).
-	s := NewScanner(tmpDir, true)
+	s := NewScanner(tmpDir)
 	files, err := s.Scan()
 
 	require.NoError(t, err)
@@ -470,7 +469,7 @@ func BenchmarkScanner_WithIgnore_10kFiles(b *testing.B) {
 		_ = os.WriteFile(path, []byte(""), 0o600)
 	}
 
-	s := NewScanner(tmpDir, false)
+	s := NewScanner(tmpDir)
 
 	b.ResetTimer()
 

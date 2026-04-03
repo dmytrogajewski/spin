@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/dmytrogajewski/spin/pkg/storage"
@@ -21,11 +20,9 @@ var ErrPathIsRequired = errors.New("path is required")
 // FilePolicyStore persists global-scope policies to a single JSON file with
 // atomic writes and advisory locking. Non-global scopes are kept in-memory only.
 type FilePolicyStore struct {
-	path     string
-	mu       sync.RWMutex
-	byScope  map[string]map[string]Policy // scope -> keyStr -> policy (in-memory view).
-	stopCh   chan struct{}
-	interval time.Duration
+	*MemoryPolicyStore
+
+	path string
 }
 
 // NewFilePolicyStore creates a file-backed policy store.
@@ -47,10 +44,8 @@ func NewFilePolicyStore(ctx context.Context, path string, evictionInterval time.
 	}
 
 	s := &FilePolicyStore{
-		path:     path,
-		byScope:  make(map[string]map[string]Policy),
-		stopCh:   make(chan struct{}),
-		interval: evictionInterval,
+		MemoryPolicyStore: initMemoryPolicyStore(evictionInterval),
+		path:              path,
 	}
 	// Best-effort load existing file.
 	err = s.loadFromDisk(ctx)
@@ -70,21 +65,14 @@ func (s *FilePolicyStore) janitor(ctx context.Context) {
 	for {
 		select {
 		case <-t.C:
-			s.removeExpired(ctx)
+			s.removeExpiredAndPersist(ctx)
 		case <-s.stopCh:
 			return
 		}
 	}
 }
 
-// Close stops the janitor goroutine and releases resources.
-func (s *FilePolicyStore) Close() error {
-	close(s.stopCh)
-
-	return nil
-}
-
-func (s *FilePolicyStore) removeExpired(ctx context.Context) {
+func (s *FilePolicyStore) removeExpiredAndPersist(ctx context.Context) {
 	now := time.Now()
 
 	s.mu.Lock()
@@ -132,12 +120,7 @@ func (s *FilePolicyStore) Get(ctx context.Context, key PolicyKey, scope string) 
 		return Policy{}, false, fmt.Errorf("get policy: %w", err)
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	p, ok := getFromScopeMap(s.byScope, key, scope)
-
-	return p, ok, nil
+	return s.MemoryPolicyStore.Get(ctx, key, scope)
 }
 
 // List implements the List operation.
@@ -146,10 +129,7 @@ func (s *FilePolicyStore) List(ctx context.Context, scope string) ([]Policy, err
 		return nil, fmt.Errorf("list policies: %w", err)
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return listFromScopeMap(s.byScope, scope), nil
+	return s.MemoryPolicyStore.List(ctx, scope)
 }
 
 // Delete implements the Delete operation.

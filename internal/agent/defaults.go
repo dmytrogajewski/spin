@@ -112,7 +112,7 @@ After every change, verify it works:
 
 ## Remembering Context
 - memory to store and recall facts that persist across turns
-- scratchpad as a temporary workspace for drafting plans or intermediate results
+- scratchpad as a transient workspace for drafting plans or intermediate results
 
 ## Web Resources (when configured)
 - web_search to find documentation, solutions, or API references

@@ -523,12 +523,6 @@ func TestConversation_ID(t *testing.T) {
 	if got != id {
 		t.Errorf("ID() = %q, want %q", got, id)
 	}
-
-	// Test GetSessionID returns same ID.
-	sessionID := conv.GetSessionID()
-	if sessionID != id {
-		t.Errorf("GetSessionID() = %q, want %q", sessionID, id)
-	}
 }
 
 // TestConversation_UnifiedID tests that sessionID and protocolID are unified.
@@ -546,8 +540,8 @@ func TestConversation_UnifiedID(t *testing.T) {
 		t.Error("ID() should return set ID")
 	}
 
-	if conv.GetSessionID() != id {
-		t.Error("GetSessionID() should return same ID")
+	if conv.ID() != id {
+		t.Error("ID() should return set ID after SetID")
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
@@ -283,7 +284,7 @@ func TestWriteFileTool_CreatesNewFileWithTracker(t *testing.T) {
 	newFilePath := filepath.Join(tmpDir, "brand_new_file.rs")
 
 	tool := NewWriteFileTool()
-	tracker := NewFileTracker()
+	tracker := pathx.NewFileTracker()
 	tool.SetTracker(tracker)
 
 	// File does not exist — no prior read is possible.
@@ -321,7 +322,7 @@ func TestWriteFileTool_CreatesNewFileInSubdirWithTracker(t *testing.T) {
 	newFilePath := filepath.Join(tmpDir, "src", "main.rs")
 
 	tool := NewWriteFileTool()
-	tracker := NewFileTracker()
+	tracker := pathx.NewFileTracker()
 	tool.SetTracker(tracker)
 
 	params, _ := FromMap(map[string]any{
@@ -358,7 +359,7 @@ func TestWriteFileTool_OverwritesFileCreatedByShellCommand(t *testing.T) {
 	}
 
 	tool := NewWriteFileTool()
-	tracker := NewFileTracker()
+	tracker := pathx.NewFileTracker()
 	tool.SetTracker(tracker)
 
 	// Agent tries to overwrite without having read it first.
@@ -401,7 +402,7 @@ func TestFileTracker_StillBlocksStaleOverwrite(t *testing.T) {
 		t.Fatalf("failed to create file: %v", err)
 	}
 
-	tracker := NewFileTracker()
+	tracker := pathx.NewFileTracker()
 	if recordErr := tracker.RecordRead(filePath); recordErr != nil {
 		t.Fatalf("RecordRead failed: %v", recordErr)
 	}

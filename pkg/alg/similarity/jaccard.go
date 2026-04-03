@@ -3,6 +3,8 @@ package similarity
 import (
 	"strings"
 	"unicode"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 )
 
 // minWordLength is the minimum character count for a word to be included
@@ -25,8 +27,8 @@ func JaccardSimilarity(a, b string) float64 {
 		return 0.0
 	}
 
-	setA := toWordSet(wordsA)
-	setB := toWordSet(wordsB)
+	setA := collections.ToSet[string](wordsA)
+	setB := collections.ToSet[string](wordsB)
 
 	intersection := countIntersection(setA, setB)
 	union := len(setA) + len(setB) - intersection
@@ -52,17 +54,6 @@ func ExtractWords(text string) []string {
 		if len(word) > minWordLength {
 			result = append(result, word)
 		}
-	}
-
-	return result
-}
-
-// toWordSet converts a word slice to a membership set.
-func toWordSet(words []string) map[string]bool {
-	result := make(map[string]bool, len(words))
-
-	for _, word := range words {
-		result[word] = true
 	}
 
 	return result

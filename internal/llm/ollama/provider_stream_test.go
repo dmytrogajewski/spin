@@ -436,7 +436,7 @@ func TestFinishReasonMapping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := mapOllamaDoneReasonToOpenAICompletion(streamTestCtx, tt.doneReason, tt.hasToolCalls, streamTestLogger)
+			result := mapOllamaDoneReasonToOpenAI(streamTestCtx, tt.doneReason, tt.hasToolCalls, streamTestLogger)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

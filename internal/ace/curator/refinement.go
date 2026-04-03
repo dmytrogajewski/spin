@@ -61,6 +61,25 @@ func (n *noRefinementStrategy) SetOrchestrator(_ *refine.RefinementOrchestrator)
 	// No-op.
 }
 
+// orchestratorHolder embeds the shared orchestrator field and its
+// refineWithOrchestrator method used by both lazy and proactive strategies.
+type orchestratorHolder struct {
+	orchestrator *refine.RefinementOrchestrator
+}
+
+// SetOrchestrator sets the refinement orchestrator for advanced refinement.
+func (h *orchestratorHolder) SetOrchestrator(orchestrator *refine.RefinementOrchestrator) {
+	h.orchestrator = orchestrator
+}
+
+// refineWithOrchestrator delegates to the package-level helper.
+func (h *orchestratorHolder) refineWithOrchestrator(
+	ctx context.Context, _ *playbook.Playbook,
+	minUtilityScore float64, reason string,
+) (*RefinementResult, error) {
+	return refineWithOrchestrator(ctx, h.orchestrator, minUtilityScore, reason)
+}
+
 // LazyRefinementConfig configures lazy refinement.
 type LazyRefinementConfig struct {
 	MinUtilityScore float64 // Prune bullets below this score (default: 0.1).
@@ -68,8 +87,9 @@ type LazyRefinementConfig struct {
 
 // lazyRefinementStrategy refines only on explicit call.
 type lazyRefinementStrategy struct {
+	orchestratorHolder
+
 	minUtilityScore float64
-	orchestrator    *refine.RefinementOrchestrator
 }
 
 func newLazyRefinementStrategy(cfg LazyRefinementConfig) *lazyRefinementStrategy {
@@ -99,11 +119,6 @@ func (l *lazyRefinementStrategy) Refine(ctx context.Context, pb *playbook.Playbo
 	return refinePlaybook(ctx, pb, l.minUtilityScore, "manual refinement")
 }
 
-// SetOrchestrator implements the SetOrchestrator operation.
-func (l *lazyRefinementStrategy) SetOrchestrator(orchestrator *refine.RefinementOrchestrator) {
-	l.orchestrator = orchestrator
-}
-
 // ProactiveRefinementConfig configures proactive refinement.
 type ProactiveRefinementConfig struct {
 	MaxBullets      int     // Trigger at N bullets (default: 1000).
@@ -113,10 +128,11 @@ type ProactiveRefinementConfig struct {
 
 // proactiveRefinementStrategy refines after each curate.
 type proactiveRefinementStrategy struct {
+	orchestratorHolder
+
 	maxBullets      int
 	maxSizeBytes    int64
 	minUtilityScore float64
-	orchestrator    *refine.RefinementOrchestrator
 }
 
 func newProactiveRefinementStrategy(cfg ProactiveRefinementConfig) *proactiveRefinementStrategy {
@@ -159,30 +175,15 @@ func (p *proactiveRefinementStrategy) Refine(ctx context.Context, pb *playbook.P
 	return refinePlaybook(ctx, pb, p.minUtilityScore, "proactive refinement")
 }
 
-// SetOrchestrator implements the SetOrchestrator operation.
-func (p *proactiveRefinementStrategy) SetOrchestrator(orchestrator *refine.RefinementOrchestrator) {
-	p.orchestrator = orchestrator
-}
-
 // refinePlaybook is the common refinement logic.
 func refinePlaybook(ctx context.Context, pb *playbook.Playbook, minUtilityScore float64, reason string) (*RefinementResult, error) {
-	bullets := pb.List(nil)
-	prunedIDs := make([]string, 0)
-
-	for _, b := range bullets {
-		score := b.Score()
-		if score < minUtilityScore {
-			err := pb.Delete(ctx, b.ID)
-			if err != nil {
-				return nil, err
-			}
-
-			prunedIDs = append(prunedIDs, b.ID)
-		}
+	pruned, prunedIDs, err := playbook.PruneLowUtility(ctx, pb, minUtilityScore)
+	if err != nil {
+		return nil, err
 	}
 
 	return &RefinementResult{
-		Pruned:    len(prunedIDs),
+		Pruned:    pruned,
 		PrunedIDs: prunedIDs,
 		Reason:    reason,
 	}, nil
@@ -211,18 +212,4 @@ func refineWithOrchestrator(
 		PrunedIDs: result.PrunedIDs,
 		Reason:    reason,
 	}, nil
-}
-
-func (l *lazyRefinementStrategy) refineWithOrchestrator(
-	ctx context.Context, _ *playbook.Playbook,
-	minUtilityScore float64, reason string,
-) (*RefinementResult, error) {
-	return refineWithOrchestrator(ctx, l.orchestrator, minUtilityScore, reason)
-}
-
-func (p *proactiveRefinementStrategy) refineWithOrchestrator(
-	ctx context.Context, _ *playbook.Playbook,
-	minUtilityScore float64, reason string,
-) (*RefinementResult, error) {
-	return refineWithOrchestrator(ctx, p.orchestrator, minUtilityScore, reason)
 }

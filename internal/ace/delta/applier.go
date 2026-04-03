@@ -14,7 +14,7 @@ import (
 
 var (
 	// ErrBulletNotFound is a sentinel error.
-	ErrBulletNotFound = errors.New("bullet  not found")
+	ErrBulletNotFound = errors.New("bullet not found")
 	// ErrContentFieldIsRequiredForOpupdatecontent is a sentinel error.
 	ErrContentFieldIsRequiredForOpupdatecontent = errors.New("content field is required for OpUpdateContent")
 	// ErrTagKeyAndTagValueFields is a sentinel error.

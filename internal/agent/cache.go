@@ -15,6 +15,38 @@ const (
 	percentMultiplierCache = 100
 )
 
+// cacheableCommands lists programs whose output can be cached.
+var cacheableCommands = map[string]bool{
+	"ls":     true,
+	"cat":    true,
+	"grep":   true,
+	"find":   true,
+	"pwd":    true,
+	"whoami": true,
+	"which":  true,
+	"git":    true, // Check args separately.
+	"echo":   true,
+	"printf": true,
+	"head":   true,
+	"tail":   true,
+	"wc":     true,
+	"stat":   true,
+	"file":   true,
+	"tree":   true,
+}
+
+// readOnlyGitCmds lists git sub-commands that are read-only and cacheable.
+var readOnlyGitCmds = map[string]bool{
+	"status":    true,
+	"log":       true,
+	"diff":      true,
+	"show":      true,
+	"branch":    true,
+	"remote":    true,
+	"ls-files":  true,
+	"rev-parse": true,
+}
+
 // CommandCache provides thread-safe caching of command execution results
 // with TTL (time-to-live) and size-based eviction.
 //
@@ -214,26 +246,6 @@ func (c *CommandCache) IsCacheable(cmd *safety.Command) bool {
 		return false
 	}
 
-	// List of cacheable programs.
-	cacheableCommands := map[string]bool{
-		"ls":     true,
-		"cat":    true,
-		"grep":   true,
-		"find":   true,
-		"pwd":    true,
-		"whoami": true,
-		"which":  true,
-		"git":    true, // Check args separately.
-		"echo":   true,
-		"printf": true,
-		"head":   true,
-		"tail":   true,
-		"wc":     true,
-		"stat":   true,
-		"file":   true,
-		"tree":   true,
-	}
-
 	if !cacheableCommands[cmd.Program] {
 		return false
 	}
@@ -242,17 +254,6 @@ func (c *CommandCache) IsCacheable(cmd *safety.Command) bool {
 	if cmd.Program == "git" {
 		if len(cmd.Args) == 0 {
 			return false
-		}
-
-		readOnlyGitCmds := map[string]bool{
-			"status":    true,
-			"log":       true,
-			"diff":      true,
-			"show":      true,
-			"branch":    true,
-			"remote":    true,
-			"ls-files":  true,
-			"rev-parse": true,
 		}
 
 		return readOnlyGitCmds[cmd.Args[0]]

@@ -59,7 +59,7 @@ func (t *StartProcessTool) Schema() ToolSchema {
 // Execute starts a command as a background process.
 func (t *StartProcessTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	if t.manager == nil {
-		return NewToolResult("task manager not available"), nil
+		return NewToolResult(errTaskManagerNotAvailable), nil
 	}
 
 	command := params.GetStringOr("command", "")

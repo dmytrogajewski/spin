@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/ace/generator"
+	"github.com/dmytrogajewski/spin/internal/message"
 	"github.com/dmytrogajewski/spin/pkg/alg/collections"
-	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 // HasRecentError checks if any step in the last 'lookback' steps contains an error.
@@ -139,11 +139,8 @@ func extractConcept(word string, seen map[string]bool) (string, bool) {
 	return "", false
 }
 
-// errorKeywords are case-insensitive indicators of execution errors.
-var errorKeywords = []string{"error", "failed", "exception", "panic", "fatal"}
-
 // containsError checks if content contains error indicators.
-// Case-insensitive check for common error keywords.
+// Delegates to the shared message.IsErrorContent detector.
 func containsError(content string) bool {
-	return stringsx.ContainsAnyKeyword(content, errorKeywords)
+	return message.IsErrorContent(content)
 }

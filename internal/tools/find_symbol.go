@@ -140,7 +140,7 @@ func formatLocations(locations []lsp.Location) string {
 	fmt.Fprintf(&builder, "Found %d location(s):\n", len(locations))
 
 	for _, loc := range locations {
-		uri := strings.TrimPrefix(loc.URI, "file://")
+		uri := lsp.URIToPath(loc.URI)
 
 		fmt.Fprintf(&builder, "  %s:%d:%d\n",
 			uri,

@@ -47,13 +47,13 @@ func TestAggregator_ProcessEvent(t *testing.T) {
 		t.Errorf("Expected agent state 'Calling tools', got %q", metrics.AgentState)
 	}
 
-	// Test content complete.
+	// Test content complete — state stays unchanged (will be set to "Idle" by TurnComplete).
 	event = &events.Event{Type: events.EventContentComplete}
 	aggregator.ProcessEvent(event)
 
 	metrics = manager.GetMetrics()
-	if metrics.AgentState != "Ready" {
-		t.Errorf("Expected agent state 'Ready', got %q", metrics.AgentState)
+	if metrics.AgentState != "Calling tools" {
+		t.Errorf("Expected agent state 'Calling tools' (unchanged), got %q", metrics.AgentState)
 	}
 }
 
@@ -276,8 +276,8 @@ func TestAggregator_ProcessEvent_ContentComplete_ResetsStreaming(t *testing.T) {
 	aggregator.ProcessEvent(event)
 
 	metrics := manager.GetMetrics()
-	if metrics.AgentState != "Ready" {
-		t.Errorf("Expected agent state 'Ready' after content complete, got %q", metrics.AgentState)
+	if metrics.AgentState != "Thinking" {
+		t.Errorf("Expected agent state 'Thinking' after content complete (unchanged), got %q", metrics.AgentState)
 	}
 	// TPS should be reset to 0.
 	if metrics.TokensPerSec != 0 {

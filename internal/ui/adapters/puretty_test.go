@@ -620,8 +620,8 @@ func TestApprovalDialog_StatusBarNotOverwritten(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	mockTTY := &mockTerminalController{width: 80, height: 24}
-	statusRenderer := status.NewRenderer(&buf, 80, 24)
+	mockTTY := &mockTerminalController{width: 160, height: 24}
+	statusRenderer := status.NewRenderer(&buf, 160, 24)
 	statusManager := status.NewManager()
 
 	ui := &PureTTY{

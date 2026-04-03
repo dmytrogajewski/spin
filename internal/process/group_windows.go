@@ -4,16 +4,9 @@
 package process
 
 import (
-	"errors"
 	"fmt"
 	"os/exec"
 )
-
-// ErrProcessNotStarted is returned when trying to kill a process that hasn't been started.
-var ErrProcessNotStarted = errors.New("process not started")
-
-// ErrKillGroup is returned when killing the process group fails.
-var ErrKillGroup = errors.New("failed to kill process group")
 
 // SetGroup is a no-op on Windows.
 // Process-group isolation via Setpgid is not available on Windows.

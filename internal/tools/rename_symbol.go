@@ -141,7 +141,7 @@ func formatWorkspaceEdit(edit *lsp.WorkspaceEdit) string {
 	fmt.Fprintf(&builder, "Renamed across %d file(s), %d edit(s):\n", len(edit.Changes), totalEdits)
 
 	for uri, edits := range edit.Changes {
-		filePath := strings.TrimPrefix(uri, "file://")
+		filePath := lsp.URIToPath(uri)
 
 		fmt.Fprintf(&builder, "\n%s: %d edit(s)\n", filePath, len(edits))
 

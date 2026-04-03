@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParsePrompt_FromArgs(t *testing.T) {
@@ -137,9 +138,9 @@ func TestParseDuration(t *testing.T) {
 		t.Run(tt.input, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := parseDuration(tt.input)
+			_, err := time.ParseDuration(tt.input)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("parseDuration(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				t.Errorf("time.ParseDuration(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
 			}
 		})
 	}

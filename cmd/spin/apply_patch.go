@@ -84,9 +84,11 @@ func runApplyPatch(cmd *cobra.Command, _ []string) error {
 	applier.SetDryRun(dryRun)
 	applier.SetForceOverwrite(force)
 
+	out := cmd.OutOrStdout()
+
 	// Apply or validate.
 	if dryRun {
-		return runDryRun(applier, patch)
+		return runDryRun(out, applier, patch)
 	}
 
 	result, err := applier.Apply(cmd.Context(), patch)
@@ -95,7 +97,7 @@ func runApplyPatch(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Output results.
-	printResults(result, verbose)
+	printResults(out, result, verbose)
 
 	return nil
 }
@@ -125,25 +127,25 @@ func readPatchInput(patchFile string) (string, error) {
 }
 
 // runDryRun performs dry-run validation.
-func runDryRun(applier *patchapply.Applier, patch *patchapply.Patch) error {
+func runDryRun(out io.Writer, applier *patchapply.Applier, patch *patchapply.Patch) error {
 	err := applier.ValidatePatch(patch)
 	if err != nil {
 		return formatApplyError(err)
 	}
 
-	fmt.Fprintln(os.Stdout, "[DRY RUN] Would apply the following changes:")
+	fmt.Fprintln(out, "[DRY RUN] Would apply the following changes:")
 
 	for _, op := range patch.Operations {
 		switch patchOp := op.(type) {
 		case *patchapply.AddFile:
-			fmt.Fprintf(os.Stdout, "  Would create: %s (%d lines)\n", patchOp.FilePath, len(patchOp.Lines))
+			fmt.Fprintf(out, "  Would create: %s (%d lines)\n", patchOp.FilePath, len(patchOp.Lines))
 		case *patchapply.DeleteFile:
-			fmt.Fprintf(os.Stdout, "  Would delete: %s\n", patchOp.FilePath)
+			fmt.Fprintf(out, "  Would delete: %s\n", patchOp.FilePath)
 		case *patchapply.UpdateFile:
 			if patchOp.NewPath != "" {
-				fmt.Fprintf(os.Stdout, "  Would move: %s → %s (%d hunks)\n", patchOp.FilePath, patchOp.NewPath, len(patchOp.Hunks))
+				fmt.Fprintf(out, "  Would move: %s → %s (%d hunks)\n", patchOp.FilePath, patchOp.NewPath, len(patchOp.Hunks))
 			} else {
-				fmt.Fprintf(os.Stdout, "  Would update: %s (%d hunks)\n", patchOp.FilePath, len(patchOp.Hunks))
+				fmt.Fprintf(out, "  Would update: %s (%d hunks)\n", patchOp.FilePath, len(patchOp.Hunks))
 			}
 		}
 	}
@@ -152,46 +154,46 @@ func runDryRun(applier *patchapply.Applier, patch *patchapply.Patch) error {
 }
 
 // printResults prints successful application results.
-func printResults(result *patchapply.ApplyResult, verbose bool) {
-	fmt.Fprintln(os.Stdout, "✓ Applied patch successfully")
+func printResults(out io.Writer, result *patchapply.ApplyResult, verbose bool) {
+	fmt.Fprintln(out, "✓ Applied patch successfully")
 
-	printFileList("Created", result.FilesCreated, verbose)
-	printFileList("Updated", result.FilesUpdated, verbose)
-	printFileList("Deleted", result.FilesDeleted, verbose)
-	printFileMovedList(result.FilesMoved, verbose)
+	printFileList(out, "Created", result.FilesCreated, verbose)
+	printFileList(out, "Updated", result.FilesUpdated, verbose)
+	printFileList(out, "Deleted", result.FilesDeleted, verbose)
+	printFileMovedList(out, result.FilesMoved, verbose)
 }
 
 // printFileList prints a summary and optional detail list of files.
-func printFileList(label string, files []string, verbose bool) {
+func printFileList(out io.Writer, label string, files []string, verbose bool) {
 	if len(files) == 0 {
 		return
 	}
 
-	fmt.Fprintf(os.Stdout, "  %s: %d files\n", label, len(files))
+	fmt.Fprintf(out, "  %s: %d files\n", label, len(files))
 
 	if !verbose {
 		return
 	}
 
 	for _, f := range files {
-		fmt.Fprintf(os.Stdout, "    - %s\n", f)
+		fmt.Fprintf(out, "    - %s\n", f)
 	}
 }
 
 // printFileMovedList prints moved files summary and details.
-func printFileMovedList(files map[string]string, verbose bool) {
+func printFileMovedList(out io.Writer, files map[string]string, verbose bool) {
 	if len(files) == 0 {
 		return
 	}
 
-	fmt.Fprintf(os.Stdout, "  Moved: %d files\n", len(files))
+	fmt.Fprintf(out, "  Moved: %d files\n", len(files))
 
 	if !verbose {
 		return
 	}
 
 	for old, newPath := range files {
-		fmt.Fprintf(os.Stdout, "    - %s → %s\n", old, newPath)
+		fmt.Fprintf(out, "    - %s → %s\n", old, newPath)
 	}
 }
 

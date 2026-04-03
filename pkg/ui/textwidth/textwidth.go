@@ -4,10 +4,22 @@ package textwidth
 
 import (
 	"math"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/rivo/uniseg"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
+
+// ansiEscapeRe matches ANSI escape sequences (CSI sequences like colors, cursor movement).
+var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// StripANSI removes ANSI escape sequences from text.
+func StripANSI(s string) string {
+	return ansiEscapeRe.ReplaceAllString(s, "")
+}
 
 // ellipsisSplitRatio is the proportion of width allocated to the left side.
 const ellipsisSplitRatio = 0.6
@@ -113,6 +125,64 @@ func buildLeft(graphemes []string, maxWidth int) []string {
 	return result
 }
 
+// TruncateRight truncates a string from the right to fit maxWidth,
+// appending "..." if truncated. Uses byte length for ASCII-safe truncation.
+func TruncateRight(s string, maxWidth int) string {
+	return stringsx.TruncateWithEllipsis(s, maxWidth)
+}
+
+// TruncateLeft truncates a string from the left to fit maxWidth,
+// prepending "…" if truncated. Uses Unicode-aware grapheme width.
+func TruncateLeft(s string, maxWidth int) string {
+	width := uniseg.StringWidth(s)
+	if width <= maxWidth {
+		return s
+	}
+
+	// Reserve 1 cell for ellipsis.
+	targetWidth := maxWidth - 1
+	if targetWidth < 0 {
+		return "…"
+	}
+
+	// Extract from right.
+	currentWidth := 0
+
+	var result strings.Builder
+
+	runes := []rune(s)
+	for i := len(runes) - 1; i >= 0; i-- {
+		r := runes[i]
+
+		rWidth := uniseg.StringWidth(string(r))
+		if currentWidth+rWidth > targetWidth {
+			break
+		}
+
+		currentWidth += rWidth
+	}
+
+	// Rebuild from right.
+	start := len(runes) - 1
+	for currentWidth > 0 {
+		start--
+		if start < 0 {
+			break
+		}
+
+		currentWidth -= uniseg.StringWidth(string(runes[start]))
+	}
+
+	if start < 0 {
+		start = 0
+	}
+
+	result.WriteString("…")
+	result.WriteString(string(runes[start+1:]))
+
+	return result.String()
+}
+
 // buildRight builds the right portion of the ellipsized string.
 func buildRight(graphemes []string, maxWidth int) []string {
 	var reversed []string
@@ -132,9 +202,7 @@ func buildRight(graphemes []string, maxWidth int) []string {
 	}
 
 	// Reverse to restore original order.
-	for i, j := 0, len(reversed)-1; i < j; i, j = i+1, j-1 {
-		reversed[i], reversed[j] = reversed[j], reversed[i]
-	}
+	slices.Reverse(reversed)
 
 	return reversed
 }

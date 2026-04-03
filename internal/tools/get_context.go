@@ -18,9 +18,11 @@ func NewGetContextTool(env fmt.Stringer) *GetContextTool {
 	}
 }
 
+const getContextName = "get_context"
+
 // Name implements the Name operation.
 func (t *GetContextTool) Name() string {
-	return "get_context"
+	return getContextName
 }
 
 // Description implements the Description operation.

@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -188,28 +187,30 @@ Example:
 }
 
 // runModeList handles the 'spin mode list' command.
-func runModeList(_ *cobra.Command, _ []string) error {
-	fmt.Fprintln(os.Stdout, "Available task modes:")
-	fmt.Fprintln(os.Stdout)
+func runModeList(cmd *cobra.Command, _ []string) error {
+	out := cmd.OutOrStdout()
+
+	fmt.Fprintln(out, "Available task modes:")
+	fmt.Fprintln(out)
 
 	// Print modes in a consistent order.
 	modeOrder := []string{"regular", "review", "compact", "planning"}
 	for _, name := range modeOrder {
 		info := allModes[name]
-		fmt.Fprintf(os.Stdout, "  %s\n", name)
-		fmt.Fprintf(os.Stdout, "    %s\n", info.description)
-		fmt.Fprintf(os.Stdout, "    Token budget: %d | Tools: %d\n", info.maxTokens, len(info.tools))
-		fmt.Fprintln(os.Stdout)
+		fmt.Fprintf(out, "  %s\n", name)
+		fmt.Fprintf(out, "    %s\n", info.description)
+		fmt.Fprintf(out, "    Token budget: %d | Tools: %d\n", info.maxTokens, len(info.tools))
+		fmt.Fprintln(out)
 	}
 
-	fmt.Fprintln(os.Stdout, "Use 'spin mode describe <mode-name>' for detailed information.")
-	fmt.Fprintln(os.Stdout, "Use 'spin --mode <mode-name>' to start with a specific mode.")
+	fmt.Fprintln(out, "Use 'spin mode describe <mode-name>' for detailed information.")
+	fmt.Fprintln(out, "Use 'spin --mode <mode-name>' to start with a specific mode.")
 
 	return nil
 }
 
 // runModeDescribe handles the 'spin mode describe <mode-name>' command.
-func runModeDescribe(_ *cobra.Command, args []string) error {
+func runModeDescribe(cmd *cobra.Command, args []string) error {
 	modeName := args[0]
 
 	// Validate mode name.
@@ -218,37 +219,39 @@ func runModeDescribe(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown mode: %s (valid modes: regular, review, compact, planning): %w", modeName, ErrUnknownMode)
 	}
 
+	out := cmd.OutOrStdout()
+
 	// Print detailed mode information.
-	fmt.Fprintf(os.Stdout, "Mode: %s\n", info.name)
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintf(os.Stdout, "Description:\n  %s\n", info.description)
-	fmt.Fprintln(os.Stdout)
-	fmt.Fprintf(os.Stdout, "Token Budget: %d tokens\n", info.maxTokens)
-	fmt.Fprintln(os.Stdout)
+	fmt.Fprintf(out, "Mode: %s\n", info.name)
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "Description:\n  %s\n", info.description)
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "Token Budget: %d tokens\n", info.maxTokens)
+	fmt.Fprintln(out)
 
 	// Print tools.
-	fmt.Fprintf(os.Stdout, "Available Tools (%d):\n", len(info.tools))
+	fmt.Fprintf(out, "Available Tools (%d):\n", len(info.tools))
 
 	for _, tool := range info.tools {
-		fmt.Fprintf(os.Stdout, "  - %s\n", tool)
+		fmt.Fprintf(out, "  - %s\n", tool)
 	}
 
-	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(out)
 
 	// Print best use cases.
-	fmt.Fprintln(os.Stdout, "Best For:")
+	fmt.Fprintln(out, "Best For:")
 
 	for _, useCase := range info.bestFor {
-		fmt.Fprintf(os.Stdout, "  • %s\n", useCase)
+		fmt.Fprintf(out, "  • %s\n", useCase)
 	}
 
-	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(out)
 
 	// Print usage examples.
-	fmt.Fprintln(os.Stdout, "Usage:")
-	fmt.Fprintf(os.Stdout, "  spin --mode %s              # Start TUI in %s mode\n", modeName, modeName)
-	fmt.Fprintf(os.Stdout, "  spin --mode %s exec <task>  # Execute task in %s mode\n", modeName, modeName)
-	fmt.Fprintln(os.Stdout)
+	fmt.Fprintln(out, "Usage:")
+	fmt.Fprintf(out, "  spin --mode %s              # Start TUI in %s mode\n", modeName, modeName)
+	fmt.Fprintf(out, "  spin --mode %s exec <task>  # Execute task in %s mode\n", modeName, modeName)
+	fmt.Fprintln(out)
 
 	return nil
 }

@@ -110,7 +110,7 @@ func (t *MemoryTool) Execute(ctx context.Context, params ToolParameters) (ToolRe
 	case "search":
 		return t.executeSearch(ctx, params)
 	default:
-		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, errUnknownOperation)), nil
+		return NewToolError(unknownOperationError(operation)), nil
 	}
 }
 

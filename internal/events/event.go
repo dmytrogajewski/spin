@@ -40,156 +40,127 @@ func (e Event) GetData() any {
 	return e.Data
 }
 
+// TypedData extracts the event's Data field as type T via a type assertion.
+// Returns the typed value and true if the assertion succeeds, or the zero
+// value of T and false otherwise.
+func TypedData[T any](e Event) (T, bool) {
+	data, ok := e.Data.(T)
+
+	return data, ok
+}
+
 // ToolCallStartData returns the event data as ToolCallStartData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ToolCallStartData() (ToolCallStartData, bool) {
-	data, ok := e.Data.(ToolCallStartData)
-
-	return data, ok
+	return TypedData[ToolCallStartData](e)
 }
 
 // ToolCallCompleteData returns the event data as ToolCallCompleteData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ToolCallCompleteData() (ToolCallCompleteData, bool) {
-	data, ok := e.Data.(ToolCallCompleteData)
-
-	return data, ok
+	return TypedData[ToolCallCompleteData](e)
 }
 
 // PlanUpdateData returns the event data as PlanUpdateData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) PlanUpdateData() (PlanUpdateData, bool) {
-	data, ok := e.Data.(PlanUpdateData)
-
-	return data, ok
+	return TypedData[PlanUpdateData](e)
 }
 
 // ToolProgressData returns the event data as ToolProgressData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ToolProgressData() (ToolProgressData, bool) {
-	data, ok := e.Data.(ToolProgressData)
-
-	return data, ok
+	return TypedData[ToolProgressData](e)
 }
 
 // ContentDeltaData returns the event data as ContentDeltaData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ContentDeltaData() (ContentDeltaData, bool) {
-	data, ok := e.Data.(ContentDeltaData)
-
-	return data, ok
+	return TypedData[ContentDeltaData](e)
 }
 
 // ThinkingDeltaData returns the event data as ThinkingDeltaData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ThinkingDeltaData() (ThinkingDeltaData, bool) {
-	data, ok := e.Data.(ThinkingDeltaData)
-
-	return data, ok
+	return TypedData[ThinkingDeltaData](e)
 }
 
 // TurnEventData returns the event data as TurnEventData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) TurnEventData() (TurnEventData, bool) {
-	data, ok := e.Data.(TurnEventData)
-
-	return data, ok
+	return TypedData[TurnEventData](e)
 }
 
 // ApprovalEventData returns the event data as ApprovalEventData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ApprovalEventData() (ApprovalEventData, bool) {
-	data, ok := e.Data.(ApprovalEventData)
-
-	return data, ok
+	return TypedData[ApprovalEventData](e)
 }
 
 // SystemEventData returns the event data as SystemEventData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) SystemEventData() (SystemEventData, bool) {
-	data, ok := e.Data.(SystemEventData)
-
-	return data, ok
+	return TypedData[SystemEventData](e)
 }
 
 // ErrorData returns the event data as ErrorData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ErrorData() (ErrorData, bool) {
-	data, ok := e.Data.(ErrorData)
-
-	return data, ok
+	return TypedData[ErrorData](e)
 }
 
 // ACERetrievalData returns the event data as ACERetrievalData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ACERetrievalData() (ACERetrievalData, bool) {
-	data, ok := e.Data.(ACERetrievalData)
-
-	return data, ok
+	return TypedData[ACERetrievalData](e)
 }
 
 // ACELearningData returns the event data as ACELearningData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ACELearningData() (ACELearningData, bool) {
-	data, ok := e.Data.(ACELearningData)
-
-	return data, ok
+	return TypedData[ACELearningData](e)
 }
 
 // CompactionTriggeredData returns the event data as CompactionTriggeredData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) CompactionTriggeredData() (CompactionTriggeredData, bool) {
-	data, ok := e.Data.(CompactionTriggeredData)
-
-	return data, ok
+	return TypedData[CompactionTriggeredData](e)
 }
 
 // DoomLoopDetectedData returns the event data as DoomLoopDetectedData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) DoomLoopDetectedData() (DoomLoopDetectedData, bool) {
-	data, ok := e.Data.(DoomLoopDetectedData)
-
-	return data, ok
+	return TypedData[DoomLoopDetectedData](e)
 }
 
 // ReminderInjectedData returns the event data as ReminderInjectedData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) ReminderInjectedData() (ReminderInjectedData, bool) {
-	data, ok := e.Data.(ReminderInjectedData)
-
-	return data, ok
+	return TypedData[ReminderInjectedData](e)
 }
 
 // SubagentSpawnData returns the event data as SubagentSpawnData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) SubagentSpawnData() (SubagentSpawnData, bool) {
-	data, ok := e.Data.(SubagentSpawnData)
-
-	return data, ok
+	return TypedData[SubagentSpawnData](e)
 }
 
 // SubagentCompleteData returns the event data as SubagentCompleteData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) SubagentCompleteData() (SubagentCompleteData, bool) {
-	data, ok := e.Data.(SubagentCompleteData)
-
-	return data, ok
+	return TypedData[SubagentCompleteData](e)
 }
 
 // PhaseThinkingData returns the event data as PhaseThinkingData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) PhaseThinkingData() (PhaseThinkingData, bool) {
-	data, ok := e.Data.(PhaseThinkingData)
-
-	return data, ok
+	return TypedData[PhaseThinkingData](e)
 }
 
 // PhaseCritiqueData returns the event data as PhaseCritiqueData if possible.
 // Returns the data and true if successful, zero value and false otherwise.
 func (e Event) PhaseCritiqueData() (PhaseCritiqueData, bool) {
-	data, ok := e.Data.(PhaseCritiqueData)
-
-	return data, ok
+	return TypedData[PhaseCritiqueData](e)
 }
 
 // EventType represents the category of event.

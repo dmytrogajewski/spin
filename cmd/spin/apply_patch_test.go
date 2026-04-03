@@ -487,10 +487,10 @@ func TestPrintResults(t *testing.T) {
 	}
 
 	// Test with verbose=false. Just ensure it doesn't panic.
-	printResults(result, false)
+	printResults(os.Stdout, result, false)
 
 	// Test with verbose=true.
-	printResults(result, true)
+	printResults(os.Stdout, result, true)
 }
 
 // TestRunDryRun tests dry-run output.
@@ -544,7 +544,7 @@ func TestRunDryRun(t *testing.T) {
 	}
 
 	// Run dry-run (should not error).
-	err = runDryRun(applier, patch)
+	err = runDryRun(os.Stdout, applier, patch)
 	if err != nil {
 		t.Errorf("runDryRun() error = %v", err)
 	}

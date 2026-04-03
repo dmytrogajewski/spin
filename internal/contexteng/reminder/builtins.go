@@ -38,127 +38,114 @@ const (
 		"Please review and incorporate the subagent output."
 )
 
-// ToolFailureDetector fires when the last tool call failed.
-type ToolFailureDetector struct{}
-
-// Name returns the detector identifier.
-func (d *ToolFailureDetector) Name() string { return NameToolFailure }
-
-// Check returns true when the last tool call failed.
-func (d *ToolFailureDetector) Check(ctx CheckContext) bool { return ctx.LastToolFailed }
-
-// MaxFires returns the fire cap.
-func (d *ToolFailureDetector) MaxFires() int { return defaultMaxFires }
-
-// ExplorationSpiralDetector fires when too many consecutive reads occur.
-type ExplorationSpiralDetector struct{}
-
-// Name returns the detector identifier.
-func (d *ExplorationSpiralDetector) Name() string { return NameExplorationSpiral }
-
-// Check returns true when consecutive reads reach the threshold.
-func (d *ExplorationSpiralDetector) Check(ctx CheckContext) bool {
-	return ctx.ConsecutiveReads >= explorationSpiralMinReads
+// SimpleDetector is a generic detector driven by a name, fire cap, and
+// check function. It replaces the 8 zero-size detector structs that all
+// followed the same pattern.
+type SimpleDetector struct {
+	name     string
+	maxFires int
+	check    func(CheckContext) bool
 }
 
-// MaxFires returns the fire cap.
-func (d *ExplorationSpiralDetector) MaxFires() int { return defaultMaxFires }
-
-// PrematureCompletionDetector fires when the agent appears done but has incomplete todos.
-type PrematureCompletionDetector struct{}
-
-// Name returns the detector identifier.
-func (d *PrematureCompletionDetector) Name() string { return NamePrematureComplete }
-
-// Check returns true when incomplete todos are detected.
-func (d *PrematureCompletionDetector) Check(ctx CheckContext) bool {
-	return ctx.HasIncompleteTodos
+// NewToolFailureDetector returns a detector that fires when the last tool call failed.
+func NewToolFailureDetector() *SimpleDetector {
+	return &SimpleDetector{
+		name:     NameToolFailure,
+		maxFires: defaultMaxFires,
+		check:    func(ctx CheckContext) bool { return ctx.LastToolFailed },
+	}
 }
 
-// MaxFires returns the fire cap.
-func (d *PrematureCompletionDetector) MaxFires() int { return defaultMaxFires }
-
-// EmptyCompletionDetector fires when the last assistant message was empty.
-type EmptyCompletionDetector struct{}
-
-// Name returns the detector identifier.
-func (d *EmptyCompletionDetector) Name() string { return NameEmptyCompletion }
-
-// Check returns true when the last assistant message was empty.
-func (d *EmptyCompletionDetector) Check(ctx CheckContext) bool {
-	return ctx.LastAssistantEmpty
+// NewExplorationSpiralDetector returns a detector that fires when too many
+// consecutive reads occur.
+func NewExplorationSpiralDetector() *SimpleDetector {
+	return &SimpleDetector{
+		name:     NameExplorationSpiral,
+		maxFires: defaultMaxFires,
+		check:    func(ctx CheckContext) bool { return ctx.ConsecutiveReads >= explorationSpiralMinReads },
+	}
 }
 
-// MaxFires returns the fire cap.
-func (d *EmptyCompletionDetector) MaxFires() int { return defaultMaxFires }
-
-// DeniedToolRetryDetector fires when the agent retries a tool call denied by approval.
-type DeniedToolRetryDetector struct{}
-
-// Name returns the detector identifier.
-func (d *DeniedToolRetryDetector) Name() string { return NameDeniedToolRetry }
-
-// Check returns true when a denied tool was retried.
-func (d *DeniedToolRetryDetector) Check(ctx CheckContext) bool {
-	return ctx.LastToolDenied
+// NewPrematureCompletionDetector returns a detector that fires when the agent
+// appears done but has incomplete todos.
+func NewPrematureCompletionDetector() *SimpleDetector {
+	return &SimpleDetector{
+		name:     NamePrematureComplete,
+		maxFires: defaultMaxFires,
+		check:    func(ctx CheckContext) bool { return ctx.HasIncompleteTodos },
+	}
 }
 
-// MaxFires returns the fire cap.
-func (d *DeniedToolRetryDetector) MaxFires() int { return defaultMaxFires }
-
-// CompletedTodosDetector fires when the agent continues working after all todos are done.
-type CompletedTodosDetector struct{}
-
-// Name returns the detector identifier.
-func (d *CompletedTodosDetector) Name() string { return NameCompletedTodos }
-
-// Check returns true when all todos are complete but the agent is still working.
-func (d *CompletedTodosDetector) Check(ctx CheckContext) bool {
-	return ctx.AllTodosComplete
+// NewEmptyCompletionDetector returns a detector that fires when the last
+// assistant message was empty.
+func NewEmptyCompletionDetector() *SimpleDetector {
+	return &SimpleDetector{
+		name:     NameEmptyCompletion,
+		maxFires: defaultMaxFires,
+		check:    func(ctx CheckContext) bool { return ctx.LastAssistantEmpty },
+	}
 }
 
-// MaxFires returns the fire cap.
-func (d *CompletedTodosDetector) MaxFires() int { return defaultMaxFires }
-
-// PlanNotExecutedDetector fires when a plan was approved but remains unexecuted.
-type PlanNotExecutedDetector struct{}
-
-// Name returns the detector identifier.
-func (d *PlanNotExecutedDetector) Name() string { return NamePlanNotExecuted }
-
-// Check returns true when an approved plan has not been executed.
-func (d *PlanNotExecutedDetector) Check(ctx CheckContext) bool {
-	return ctx.PlanApprovedNotExecuted
+// NewDeniedToolRetryDetector returns a detector that fires when the agent
+// retries a tool call denied by approval.
+func NewDeniedToolRetryDetector() *SimpleDetector {
+	return &SimpleDetector{
+		name:     NameDeniedToolRetry,
+		maxFires: defaultMaxFires,
+		check:    func(ctx CheckContext) bool { return ctx.LastToolDenied },
+	}
 }
 
-// MaxFires returns the fire cap.
-func (d *PlanNotExecutedDetector) MaxFires() int { return defaultMaxFires }
-
-// UnprocessedSubagentDetector fires when subagent results were returned but not processed.
-type UnprocessedSubagentDetector struct{}
-
-// Name returns the detector identifier.
-func (d *UnprocessedSubagentDetector) Name() string { return NameUnprocessedSubagent }
-
-// Check returns true when unprocessed subagent results exist.
-func (d *UnprocessedSubagentDetector) Check(ctx CheckContext) bool {
-	return ctx.HasUnprocessedSubagentResults
+// NewCompletedTodosDetector returns a detector that fires when the agent
+// continues working after all todos are done.
+func NewCompletedTodosDetector() *SimpleDetector {
+	return &SimpleDetector{
+		name:     NameCompletedTodos,
+		maxFires: defaultMaxFires,
+		check:    func(ctx CheckContext) bool { return ctx.AllTodosComplete },
+	}
 }
 
+// NewPlanNotExecutedDetector returns a detector that fires when a plan was
+// approved but remains unexecuted.
+func NewPlanNotExecutedDetector() *SimpleDetector {
+	return &SimpleDetector{
+		name:     NamePlanNotExecuted,
+		maxFires: defaultMaxFires,
+		check:    func(ctx CheckContext) bool { return ctx.PlanApprovedNotExecuted },
+	}
+}
+
+// NewUnprocessedSubagentDetector returns a detector that fires when subagent
+// results were returned but not processed.
+func NewUnprocessedSubagentDetector() *SimpleDetector {
+	return &SimpleDetector{
+		name:     NameUnprocessedSubagent,
+		maxFires: defaultMaxFires,
+		check:    func(ctx CheckContext) bool { return ctx.HasUnprocessedSubagentResults },
+	}
+}
+
+// Name returns the detector identifier.
+func (d *SimpleDetector) Name() string { return d.name }
+
 // MaxFires returns the fire cap.
-func (d *UnprocessedSubagentDetector) MaxFires() int { return defaultMaxFires }
+func (d *SimpleDetector) MaxFires() int { return d.maxFires }
+
+// Check evaluates the detector's condition against the given context.
+func (d *SimpleDetector) Check(ctx CheckContext) bool { return d.check(ctx) }
 
 // DefaultDetectors returns all 8 event-pattern detectors.
 func DefaultDetectors() []Detector {
 	return []Detector{
-		&ToolFailureDetector{},
-		&ExplorationSpiralDetector{},
-		&PrematureCompletionDetector{},
-		&EmptyCompletionDetector{},
-		&DeniedToolRetryDetector{},
-		&CompletedTodosDetector{},
-		&PlanNotExecutedDetector{},
-		&UnprocessedSubagentDetector{},
+		NewToolFailureDetector(),
+		NewExplorationSpiralDetector(),
+		NewPrematureCompletionDetector(),
+		NewEmptyCompletionDetector(),
+		NewDeniedToolRetryDetector(),
+		NewCompletedTodosDetector(),
+		NewPlanNotExecutedDetector(),
+		NewUnprocessedSubagentDetector(),
 	}
 }
 

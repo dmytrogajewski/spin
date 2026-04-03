@@ -3,6 +3,10 @@ package status
 import (
 	"bytes"
 	"testing"
+
+	"github.com/rivo/uniseg"
+
+	"github.com/dmytrogajewski/spin/pkg/ui/textwidth"
 )
 
 func TestRenderer_Render(t *testing.T) {
@@ -112,9 +116,9 @@ func TestRenderer_Render_LongText(t *testing.T) {
 	}
 
 	output := buf.String()
-	// Should contain truncation indicator.
-	if !containsRenderer(output, "...") {
-		t.Error("Expected truncation indicator '...' for long text")
+	// Should contain truncation indicator (unicode ellipsis from MidEllipsize).
+	if !containsRenderer(output, "…") {
+		t.Error("Expected truncation indicator '…' for long text")
 	}
 }
 
@@ -331,11 +335,12 @@ func TestRenderer_BuildMetricsLine(t *testing.T) {
 				Model:          "gpt-4",
 				TokenCount:     1000,
 				MaxTokens:      8000,
+				TokenUsage:     12.5,
 				TokensPerSec:   50.5,
 				AgentState:     "thinking",
 				ConversationID: "abc123def456",
 			},
-			contains: []string{"[●]", "openai/gpt-4", "50 tok/s", "conv:abc123de", "?:help"},
+			contains: []string{"[○]", "openai/gpt-4", "50 tok/s", "conv:abc123"},
 		},
 		{
 			name: "minimal metrics",
@@ -343,13 +348,14 @@ func TestRenderer_BuildMetricsLine(t *testing.T) {
 				Provider: "",
 				Model:    "",
 			},
-			contains: []string{"[○]", "N/A", "?:help"},
+			contains: []string{"[○]", "Ready"},
 		},
 		{
 			name: "high token usage",
 			metrics: &Metrics{
 				TokenCount: 8500,
 				MaxTokens:  10000,
+				TokenUsage: 85.0,
 			},
 			contains: []string{"[○]", "85%"},
 		},
@@ -358,7 +364,15 @@ func TestRenderer_BuildMetricsLine(t *testing.T) {
 			metrics: &Metrics{
 				AgentState: "executing",
 			},
-			contains: []string{"[●]", "executing"},
+			contains: []string{"[○]", "executing"},
+		},
+		{
+			name: "with connected state",
+			metrics: &Metrics{
+				AgentState: "thinking",
+				Connected:  true,
+			},
+			contains: []string{"[●]", "thinking"},
 		},
 	}
 
@@ -394,13 +408,13 @@ func TestRenderer_BuildMetricsLine_Truncation(t *testing.T) {
 	}
 
 	line := renderer.buildMetricsLine(metrics)
-	// Should be truncated to fit width.
-	if len(line) > renderer.width-2 {
-		t.Errorf("Expected line to be truncated to %d chars, got %d", renderer.width-2, len(line))
+	// Should be truncated to fit width (using display width, not byte length).
+	if uniseg.StringWidth(line) > renderer.width-2 {
+		t.Errorf("Expected line display width to be at most %d, got %d", renderer.width-2, uniseg.StringWidth(line))
 	}
 
-	if !containsRenderer(line, "...") {
-		t.Error("Expected truncation indicator '...'")
+	if !containsRenderer(line, "…") {
+		t.Error("Expected truncation indicator '…'")
 	}
 }
 
@@ -468,9 +482,9 @@ func TestRenderer_StripANSI(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := stripANSI(tt.input)
+			result := textwidth.StripANSI(tt.input)
 			if result != tt.expected {
-				t.Errorf("stripANSI(%q) = %q, expected %q", tt.input, result, tt.expected)
+				t.Errorf("StripANSI(%q) = %q, expected %q", tt.input, result, tt.expected)
 			}
 		})
 	}

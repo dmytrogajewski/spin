@@ -54,7 +54,7 @@ func (t *KillProcessTool) Schema() ToolSchema {
 // Execute kills a running background task.
 func (t *KillProcessTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	if t.manager == nil {
-		return NewToolResult("task manager not available"), nil
+		return NewToolResult(errTaskManagerNotAvailable), nil
 	}
 
 	taskID := params.GetStringOr("task_id", "")

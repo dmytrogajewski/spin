@@ -15,6 +15,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 	"github.com/dmytrogajewski/spin/internal/undo"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 const builtinToolCount = 13
@@ -95,7 +96,7 @@ func NewBuiltinRuntime(cfg BuiltinRuntimeConfig) (*BuiltinRuntime, error) {
 // RegisterTools registers builtin-specific tools.
 func (r *BuiltinRuntime) RegisterTools(registry *tools.Registry) {
 	// File tools resolve relative paths against workDir.
-	tracker := tools.NewFileTracker()
+	tracker := pathx.NewFileTracker()
 	opLog := r.operationLog
 
 	readTool := tools.NewReadFileTool(r.workDir)

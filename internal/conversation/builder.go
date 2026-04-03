@@ -388,13 +388,23 @@ func (b *Builder) enrichEnvironmentWithIntegrations(ctx context.Context, env *ag
 	}
 }
 
+// enrichEnvironment sets non-empty values from fields into the environment map.
+func enrichEnvironment(env *agent.Environment, fields map[string]string) {
+	for k, v := range fields {
+		if v != "" {
+			env.Environment[k] = v
+		}
+	}
+}
+
 // addGitContext enriches environment with Git repository information.
 func (b *Builder) addGitContext(ctx context.Context, env *agent.Environment) {
 	info := b.gitService.GetContextInfo()
-	set := func(k, v string) { env.Environment[k] = v }
 
-	set("git_enabled", strconv.FormatBool(info.GitEnabled))
-	set("is_repo", strconv.FormatBool(info.IsRepo))
+	enrichEnvironment(env, map[string]string{
+		"git_enabled": strconv.FormatBool(info.GitEnabled),
+		"is_repo":     strconv.FormatBool(info.IsRepo),
+	})
 
 	if !info.IsRepo {
 		if b.logger != nil {
@@ -404,43 +414,33 @@ func (b *Builder) addGitContext(ctx context.Context, env *agent.Environment) {
 		return
 	}
 
-	if info.Branch != "" {
-		set("branch", info.Branch)
-	}
-
-	if info.Remote != "" {
-		set("remote", info.Remote)
-	}
-
-	if info.Commit != "" {
-		set("commit", info.Commit)
-	}
-
-	set("is_clean", strconv.FormatBool(info.IsClean))
-
-	if info.ModifiedFiles > 0 {
-		set("modified_files", strconv.Itoa(info.ModifiedFiles))
-	}
-
-	if info.UntrackedFiles > 0 {
-		set("untracked_files", strconv.Itoa(info.UntrackedFiles))
-	}
-
-	if info.Ahead > 0 {
-		set("ahead", strconv.Itoa(info.Ahead))
-	}
-
-	if info.Behind > 0 {
-		set("behind", strconv.Itoa(info.Behind))
-	}
+	enrichEnvironment(env, map[string]string{
+		"branch":          info.Branch,
+		"remote":          info.Remote,
+		"commit":          info.Commit,
+		"is_clean":        strconv.FormatBool(info.IsClean),
+		"modified_files":  nonZeroItoa(info.ModifiedFiles),
+		"untracked_files": nonZeroItoa(info.UntrackedFiles),
+		"ahead":           nonZeroItoa(info.Ahead),
+		"behind":          nonZeroItoa(info.Behind),
+	})
 
 	if info.Detached {
-		set("detached", "true")
+		env.Environment["detached"] = "true"
 	}
 
 	if b.logger != nil {
 		b.logger.DebugContext(ctx, "git context added", "branch", info.Branch, "clean", info.IsClean)
 	}
+}
+
+// nonZeroItoa returns the string representation of n, or "" if n is zero.
+func nonZeroItoa(n int) string {
+	if n == 0 {
+		return ""
+	}
+
+	return strconv.Itoa(n)
 }
 
 // buildHarnessExecutor constructs the experimental harness executor from shared components.
@@ -681,21 +681,19 @@ func (b *Builder) resolveAgentsMDContent() string {
 // addShellContext enriches environment with Shell context information.
 func (b *Builder) addShellContext(ctx context.Context, env *agent.Environment) {
 	info := b.shellService.GetContextInfo()
-	set := func(k, v string) { env.Environment[k] = v }
 
-	set("shell_enabled", strconv.FormatBool(info.ShellEnabled))
+	enrichEnvironment(env, map[string]string{
+		"shell_enabled": strconv.FormatBool(info.ShellEnabled),
+	})
 
 	if !info.ShellEnabled {
 		return
 	}
 
-	if info.Shell != "" {
-		set("shell", info.Shell)
-	}
-
-	if info.ShellPath != "" {
-		set("shell_path", info.ShellPath)
-	}
+	enrichEnvironment(env, map[string]string{
+		"shell":      info.Shell,
+		"shell_path": info.ShellPath,
+	})
 
 	if b.logger != nil {
 		b.logger.DebugContext(ctx, "shell context added", "shell", info.Shell)

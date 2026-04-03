@@ -4,9 +4,16 @@ package lsp
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/dmytrogajewski/spin/pkg/protocol/jsonrpc"
 )
+
+// URIToPath strips the "file://" prefix from an LSP document URI,
+// returning the local filesystem path.
+func URIToPath(uri string) string {
+	return strings.TrimPrefix(uri, "file://")
+}
 
 // SymbolKind classifies the kind of a programming symbol.
 type SymbolKind int

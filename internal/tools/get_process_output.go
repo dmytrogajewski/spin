@@ -59,7 +59,7 @@ func (t *GetProcessOutputTool) Schema() ToolSchema {
 // Execute retrieves the output of a background task.
 func (t *GetProcessOutputTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	if t.manager == nil {
-		return NewToolResult("task manager not available"), nil
+		return NewToolResult(errTaskManagerNotAvailable), nil
 	}
 
 	taskID := params.GetStringOr("task_id", "")

@@ -25,9 +25,11 @@ func NewFileSearchTool(workspaceRoot string) *FileSearchTool {
 	}
 }
 
+const fileSearchName = "file_search"
+
 // Name implements the Name operation.
 func (t *FileSearchTool) Name() string {
-	return "file_search"
+	return fileSearchName
 }
 
 // Description implements the Description operation.
@@ -73,12 +75,7 @@ func (t *FileSearchTool) Execute(ctx context.Context, params ToolParameters) (To
 	}
 
 	// Extract workspace_root parameter (optional).
-	workspaceRoot := t.workspaceRoot
-
-	customRoot, err := params.GetString("workspace_root")
-	if err == nil && customRoot != "" {
-		workspaceRoot = customRoot
-	}
+	workspaceRoot := resolveWorkspaceRoot(t.workspaceRoot, params)
 
 	// Extract limit parameter (optional, default 10).
 	limit := params.GetIntOr("limit", defaultFileSearchLimit)

@@ -7,8 +7,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/apperr"
 )
 
 // Default configuration constants.
@@ -99,52 +100,6 @@ var (
 	// ErrSubagentMaxIterationsNegative is a sentinel error.
 	ErrSubagentMaxIterationsNegative = errors.New("subagents: max_iterations must not be negative")
 )
-
-// ValidationError collects multiple validation errors.
-type ValidationError struct {
-	errors []error
-}
-
-// Error implements the error interface.
-func (v *ValidationError) Error() string {
-	if len(v.errors) == 0 {
-		return ""
-	}
-
-	if len(v.errors) == 1 {
-		return v.errors[0].Error()
-	}
-
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "validation failed: %d errors found:\n", len(v.errors))
-
-	for i, err := range v.errors {
-		fmt.Fprintf(&sb, "  %d. %s\n", i+1, err.Error())
-	}
-
-	return strings.TrimSuffix(sb.String(), "\n")
-}
-
-// Add adds an error to the collection.
-func (v *ValidationError) Add(err error) {
-	if err != nil {
-		v.errors = append(v.errors, err)
-	}
-}
-
-// HasErrors returns true if there are any errors.
-func (v *ValidationError) HasErrors() bool {
-	return len(v.errors) > 0
-}
-
-// ToError returns nil if no errors, otherwise returns the ValidationError itself.
-func (v *ValidationError) ToError() error {
-	if !v.HasErrors() {
-		return nil
-	}
-
-	return v
-}
 
 // V2 is the unified configuration for Spin v2.0.
 // This replaces the flat Config structure with organized sections.
@@ -435,7 +390,7 @@ func (s *SubagentConfigV2) EffectiveMaxIterations() int {
 
 // Validate performs validation on the config.
 func (c *V2) Validate() error {
-	errs := &ValidationError{}
+	errs := &apperr.ErrorList{}
 
 	// Validate each section (collect all errors, don't fail fast).
 	err := c.LLM.Validate()
@@ -483,7 +438,7 @@ func (c *V2) Validate() error {
 		}
 	}
 
-	return errs.ToError()
+	return errs.Err()
 }
 
 // Validate performs validation on the AgentsMD configuration.
@@ -498,7 +453,7 @@ func (a *AgentsMDV2) Validate() error {
 
 // Validate performs validation on the LLM configuration.
 func (l *LLMV2) Validate() error {
-	errs := &ValidationError{}
+	errs := &apperr.ErrorList{}
 
 	// Required fields.
 	if l.Provider == "" {
@@ -522,12 +477,12 @@ func (l *LLMV2) Validate() error {
 		errs.Add(fmt.Errorf("llm: timeout must be positive, got %v: %w", l.Timeout, ErrLlmTimeoutPositive))
 	}
 
-	return errs.ToError()
+	return errs.Err()
 }
 
 // Validate performs validation on the Agent configuration.
 func (a *AgentV2) Validate() error {
-	errs := &ValidationError{}
+	errs := &apperr.ErrorList{}
 
 	// Required fields.
 	if a.MaxTurns <= 0 {
@@ -542,7 +497,7 @@ func (a *AgentV2) Validate() error {
 		errs.Add(ErrAgentWorkDirIsRequired)
 	}
 
-	return errs.ToError()
+	return errs.Err()
 }
 
 // Validate performs validation on the ACE configuration.
@@ -552,7 +507,7 @@ func (ace *ACEV2) Validate() error {
 		return nil
 	}
 
-	errs := &ValidationError{}
+	errs := &apperr.ErrorList{}
 
 	// Required fields when enabled.
 	if ace.PlaybookPath == "" {
@@ -572,7 +527,7 @@ func (ace *ACEV2) Validate() error {
 		errs.Add(fmt.Errorf("ace: min_score must be between 0 and 1, got %.2f: %w", ace.MinScore, ErrAceMinScoreRange))
 	}
 
-	return errs.ToError()
+	return errs.Err()
 }
 
 // Validate performs validation on the Security configuration.
@@ -598,7 +553,7 @@ func (s *SecurityV2) Validate() error {
 
 // Validate performs validation on the Protocol configuration.
 func (p *ProtocolV2) Validate() error {
-	errs := &ValidationError{}
+	errs := &apperr.ErrorList{}
 
 	// Validate shell timeout if shell is enabled.
 	if p.EnableShell && p.ShellTimeout <= 0 {
@@ -618,12 +573,12 @@ func (p *ProtocolV2) Validate() error {
 		}
 	}
 
-	return errs.ToError()
+	return errs.Err()
 }
 
 // Validate performs validation on the MCP server configuration.
 func (m *MCPServerConfigV2) Validate() error {
-	errs := &ValidationError{}
+	errs := &apperr.ErrorList{}
 
 	// Name is always required.
 	if m.Name == "" {
@@ -634,7 +589,7 @@ func (m *MCPServerConfigV2) Validate() error {
 	if !m.Transport.IsValid() {
 		errs.Add(fmt.Errorf("invalid transport: %s: %w", m.Transport, ErrInvalidTransport))
 
-		return errs.ToError()
+		return errs.Err()
 	}
 
 	// Determine effective transport (empty defaults to stdio).
@@ -653,11 +608,11 @@ func (m *MCPServerConfigV2) Validate() error {
 		m.validateStdio(errs)
 	}
 
-	return errs.ToError()
+	return errs.Err()
 }
 
 // validateSmithery validates Smithery transport configuration.
-func (m *MCPServerConfigV2) validateSmithery(errs *ValidationError) {
+func (m *MCPServerConfigV2) validateSmithery(errs *apperr.ErrorList) {
 	// API key is always required for Smithery.
 	if m.SmitheryAPIKey == "" {
 		errs.Add(ErrSmitheryAPIKeyRequired)
@@ -698,7 +653,7 @@ func (t MCPTransportType) IsRemote() bool {
 }
 
 // validateStdio validates stdio transport configuration.
-func (m *MCPServerConfigV2) validateStdio(errs *ValidationError) {
+func (m *MCPServerConfigV2) validateStdio(errs *apperr.ErrorList) {
 	// Command is required for stdio.
 	if m.Command == "" {
 		errs.Add(ErrCommandRequiredForStdio)
@@ -716,7 +671,7 @@ func (m *MCPServerConfigV2) validateStdio(errs *ValidationError) {
 }
 
 // validateRemote validates remote transport configuration.
-func (m *MCPServerConfigV2) validateRemote(transport MCPTransportType, errs *ValidationError) {
+func (m *MCPServerConfigV2) validateRemote(transport MCPTransportType, errs *apperr.ErrorList) {
 	// URL is required for remote transports.
 	if m.URL == "" {
 		errs.Add(fmt.Errorf("url is required for %s transport: %w", transport, ErrURLRequiredForTransport))
@@ -743,7 +698,7 @@ func (m *MCPServerConfigV2) validateRemote(transport MCPTransportType, errs *Val
 
 // Validate performs validation on the Memory configuration.
 func (m *MemoryV2) Validate() error {
-	errs := &ValidationError{}
+	errs := &apperr.ErrorList{}
 
 	// Validate scratchpad config.
 	err := m.Scratchpad.Validate()
@@ -757,7 +712,7 @@ func (m *MemoryV2) Validate() error {
 		errs.Add(err)
 	}
 
-	return errs.ToError()
+	return errs.Err()
 }
 
 // Validate performs validation on the Scratchpad configuration.
@@ -767,13 +722,13 @@ func (s *ScratchpadV2) Validate() error {
 		return nil
 	}
 
-	errs := &ValidationError{}
+	errs := &apperr.ErrorList{}
 
 	if s.MaxEntries <= 0 {
 		errs.Add(fmt.Errorf("memory.scratchpad: max_entries must be positive, got %d: %w", s.MaxEntries, ErrScratchpadMaxEntriesPositive))
 	}
 
-	return errs.ToError()
+	return errs.Err()
 }
 
 // Validate performs validation on the PersistentMemory configuration.
@@ -783,13 +738,13 @@ func (p *PersistentMemoryV2) Validate() error {
 		return nil
 	}
 
-	errs := &ValidationError{}
+	errs := &apperr.ErrorList{}
 
 	if p.BasePath == "" {
 		errs.Add(ErrPersistentBasePathRequired)
 	}
 
-	return errs.ToError()
+	return errs.Err()
 }
 
 // DefaultV2 returns a V2 with sensible defaults.

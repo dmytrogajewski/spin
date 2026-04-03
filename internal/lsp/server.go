@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
-	"strings"
 	"sync"
 )
 
@@ -61,7 +61,7 @@ func (s *Server) Initialize(ctx context.Context, rootURI string) error {
 // language server with the actual content. This is required because LSP servers
 // need the full file text to provide accurate results.
 func (s *Server) openFileForLSP(ctx context.Context, uri string) {
-	filePath := strings.TrimPrefix(uri, "file://")
+	filePath := URIToPath(uri)
 
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -78,8 +78,12 @@ func (s *Server) openFileForLSP(ctx context.Context, uri string) {
 	}
 }
 
-// FindDefinition sends textDocument/definition and returns locations.
-func (s *Server) FindDefinition(ctx context.Context, uri string, line, character int) ([]Location, error) {
+// queryLocations is the shared implementation for location-based LSP requests
+// (definition, references). It handles readiness checks, file opening, param
+// construction, transport send, and result parsing.
+func (s *Server) queryLocations(
+	ctx context.Context, method, uri string, line, character int, extraParams map[string]any,
+) (json.RawMessage, error) {
 	if checkErr := s.checkReady(); checkErr != nil {
 		return nil, checkErr
 	}
@@ -87,17 +91,28 @@ func (s *Server) FindDefinition(ctx context.Context, uri string, line, character
 	// Ensure the file is opened in the language server with actual content.
 	s.openFileForLSP(ctx, uri)
 
+	params := buildPositionParams(uri, line, character)
+	maps.Copy(params, extraParams)
+
+	result, sendErr := s.transport.Send(ctx, method, params)
+	if sendErr != nil {
+		return nil, fmt.Errorf("%s: %w", method, sendErr)
+	}
+
+	return result, nil
+}
+
+// FindDefinition sends textDocument/definition and returns locations.
+func (s *Server) FindDefinition(ctx context.Context, uri string, line, character int) ([]Location, error) {
 	// Check cache first.
 	hash := ContentHash([]byte(uri))
 	if cached := s.cache.GetRaw("textDocument/definition", uri, hash); cached != nil {
 		return parseLocations(cached)
 	}
 
-	params := buildPositionParams(uri, line, character)
-
-	result, sendErr := s.transport.Send(ctx, "textDocument/definition", params)
-	if sendErr != nil {
-		return nil, fmt.Errorf("find definition: %w", sendErr)
+	result, err := s.queryLocations(ctx, "textDocument/definition", uri, line, character, nil)
+	if err != nil {
+		return nil, err
 	}
 
 	// Cache the result.
@@ -108,21 +123,13 @@ func (s *Server) FindDefinition(ctx context.Context, uri string, line, character
 
 // FindReferences sends textDocument/references and returns locations.
 func (s *Server) FindReferences(ctx context.Context, uri string, line, character int) ([]Location, error) {
-	if checkErr := s.checkReady(); checkErr != nil {
-		return nil, checkErr
-	}
-
-	// Ensure the file is opened with actual content.
-	s.openFileForLSP(ctx, uri)
-
-	params := buildPositionParams(uri, line, character)
-	params["context"] = map[string]any{
-		"includeDeclaration": true,
-	}
-
-	result, sendErr := s.transport.Send(ctx, "textDocument/references", params)
-	if sendErr != nil {
-		return nil, fmt.Errorf("find references: %w", sendErr)
+	result, err := s.queryLocations(ctx, "textDocument/references", uri, line, character, map[string]any{
+		"context": map[string]any{
+			"includeDeclaration": true,
+		},
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return parseLocations(result)

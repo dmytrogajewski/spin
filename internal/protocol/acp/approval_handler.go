@@ -11,6 +11,7 @@ import (
 	"github.com/coder/acp-go-sdk"
 
 	"github.com/dmytrogajewski/spin/internal/safety"
+	"github.com/dmytrogajewski/spin/internal/tools"
 )
 
 var (
@@ -160,31 +161,27 @@ func (h *ApprovalHandler) sendPendingNotification(
 }
 
 // mapToolNameToKind maps a tool name to an ACP tool kind.
+// It delegates to the shared tools.ClassifyTool classification and converts
+// the category to the corresponding ACP ToolKind.
 // Every tool returns a non-nil kind; unknown tools default to ToolKindOther.
 func mapToolNameToKind(toolName string) *acp.ToolKind {
-	switch toolName {
-	case "read_file", "list_directory", "git_context", "get_context",
-		"get_process_output", "list_processes":
+	category := tools.ClassifyTool(toolName)
+
+	switch category {
+	case tools.CategoryRead, tools.CategoryNotice:
 		return acp.Ptr(acp.ToolKindRead)
-
-	case toolWriteFile, "edit_file", "apply_patch":
+	case tools.CategoryEdit:
 		return acp.Ptr(acp.ToolKindEdit)
-
-	case "shell_command", "start_process", "git_operation", "kill_process":
+	case tools.CategoryExecute:
 		return acp.Ptr(acp.ToolKindExecute)
-
-	case "file_search", "find_symbol", "find_references":
+	case tools.CategorySearch:
 		return acp.Ptr(acp.ToolKindSearch)
-
-	case "rename_symbol":
+	case tools.CategoryMove:
 		return acp.Ptr(acp.ToolKindMove)
-
-	case "fetch_url", "web_search", "capture_web_screenshot", "open_browser":
+	case tools.CategoryFetch:
 		return acp.Ptr(acp.ToolKindFetch)
-
-	case "memory", "scratchpad":
+	case tools.CategoryThink:
 		return acp.Ptr(acp.ToolKindThink)
-
 	default:
 		return acp.Ptr(acp.ToolKindOther)
 	}

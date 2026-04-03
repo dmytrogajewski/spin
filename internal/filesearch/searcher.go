@@ -32,7 +32,7 @@ func NewSearcher(root string) (*Searcher, error) {
 
 	return &Searcher{
 		root:    root,
-		scanner: NewScanner(root, false), // Will auto-load .gitignore/.spinignore.
+		scanner: NewScanner(root),        // Will auto-load .gitignore/.spinignore.
 		matcher: pathx.NewMatcher(false), // Case-insensitive by default.
 		indexed: false,
 	}, nil

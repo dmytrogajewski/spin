@@ -59,11 +59,16 @@ type sdkClientWrapper struct {
 	client *client.Client
 }
 
+// wrapErr wraps an error with an MCP operation prefix.
+func wrapErr(op string, err error) error {
+	return fmt.Errorf("mcp %s: %w", op, err)
+}
+
 // Initialize implements the Initialize operation.
 func (w *sdkClientWrapper) Initialize(ctx context.Context, request mcpSDK.InitializeRequest) (*mcpSDK.InitializeResult, error) {
 	result, err := w.client.Initialize(ctx, request)
 	if err != nil {
-		return nil, fmt.Errorf("mcp initialize: %w", err)
+		return nil, wrapErr("initialize", err)
 	}
 
 	return result, nil
@@ -73,7 +78,7 @@ func (w *sdkClientWrapper) Initialize(ctx context.Context, request mcpSDK.Initia
 func (w *sdkClientWrapper) ListTools(ctx context.Context, request mcpSDK.ListToolsRequest) (*mcpSDK.ListToolsResult, error) {
 	result, err := w.client.ListTools(ctx, request)
 	if err != nil {
-		return nil, fmt.Errorf("mcp list tools: %w", err)
+		return nil, wrapErr("list tools", err)
 	}
 
 	return result, nil
@@ -83,7 +88,7 @@ func (w *sdkClientWrapper) ListTools(ctx context.Context, request mcpSDK.ListToo
 func (w *sdkClientWrapper) CallTool(ctx context.Context, request mcpSDK.CallToolRequest) (*mcpSDK.CallToolResult, error) {
 	result, err := w.client.CallTool(ctx, request)
 	if err != nil {
-		return nil, fmt.Errorf("mcp call tool: %w", err)
+		return nil, wrapErr("call tool", err)
 	}
 
 	return result, nil
@@ -92,7 +97,7 @@ func (w *sdkClientWrapper) CallTool(ctx context.Context, request mcpSDK.CallTool
 // Close implements the Close operation.
 func (w *sdkClientWrapper) Close() error {
 	if err := w.client.Close(); err != nil {
-		return fmt.Errorf("mcp close: %w", err)
+		return wrapErr("close", err)
 	}
 
 	return nil

@@ -3,10 +3,11 @@ package testkit
 import (
 	"bytes"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dmytrogajewski/spin/pkg/ui/textwidth"
 )
 
 const writerTickInterval = 10 * time.Millisecond
@@ -73,11 +74,7 @@ func (f *FakeWriter) StripANSI() string {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	content := f.buf.String()
-	// Remove ANSI escape sequences.
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
-
-	return ansiRegex.ReplaceAllString(content, "")
+	return textwidth.StripANSI(f.buf.String())
 }
 
 // Lines returns the output split by newlines.

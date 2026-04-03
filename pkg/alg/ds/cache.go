@@ -150,46 +150,35 @@ func (c *Cache[Key, Val]) evictIfNeeded() {
 
 // evictFIFO removes the oldest entry by creation time.
 func (c *Cache[Key, Val]) evictFIFO() {
-	var victimKey Key
-
-	var victimTime time.Time
-
-	found := false
-
-	for key, entry := range c.entries {
-		if !found || entry.createdAt.Before(victimTime) {
-			victimKey = key
-			victimTime = entry.createdAt
-			found = true
-		}
-	}
-
-	if found {
-		delete(c.entries, victimKey)
-	}
+	c.evictByComparator(func(candidate, victim *cacheEntry[Val]) bool {
+		return candidate.createdAt.Before(victim.createdAt)
+	})
 }
 
 // evictLRU removes the least-recently-used entry (lowest access count,
 // ties broken by oldest creation time).
 func (c *Cache[Key, Val]) evictLRU() {
+	c.evictByComparator(func(candidate, victim *cacheEntry[Val]) bool {
+		return candidate.accessCount < victim.accessCount ||
+			(candidate.accessCount == victim.accessCount && candidate.createdAt.Before(victim.createdAt))
+	})
+}
+
+// evictByComparator removes the entry selected by the comparator.
+// The comparator returns true if candidate should replace the current victim.
+func (c *Cache[Key, Val]) evictByComparator(shouldReplace func(candidate, victim *cacheEntry[Val]) bool) {
 	var victimKey Key
 
-	victimCount := -1
-	found := false
-
-	var victimTime time.Time
+	var victim *cacheEntry[Val]
 
 	for key, entry := range c.entries {
-		if !found || entry.accessCount < victimCount ||
-			(entry.accessCount == victimCount && entry.createdAt.Before(victimTime)) {
+		if victim == nil || shouldReplace(entry, victim) {
 			victimKey = key
-			victimCount = entry.accessCount
-			victimTime = entry.createdAt
-			found = true
+			victim = entry
 		}
 	}
 
-	if found {
+	if victim != nil {
 		delete(c.entries, victimKey)
 	}
 }

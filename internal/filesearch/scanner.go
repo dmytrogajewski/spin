@@ -14,19 +14,16 @@ const defaultMaxScanDepth = 20
 // Scanner scans directories for files with gitignore support.
 type Scanner struct {
 	baseDir       string
-	ignoreGit     bool // Deprecated: use pathx.IgnoreHandler instead.
 	maxDepth      int
 	ignoreHandler *pathx.IgnoreHandler // Handles .gitignore and .spinignore patterns.
 }
 
 // NewScanner creates a new file scanner with gitignore support.
-// If ignoreGit is true, basic .git exclusion is enabled (for backward compatibility).
 // The Scanner will automatically create a pathx.IgnoreHandler to respect .gitignore and .spinignore files.
-func NewScanner(baseDir string, ignoreGit bool) *Scanner {
+func NewScanner(baseDir string) *Scanner {
 	return &Scanner{
-		baseDir:   baseDir,
-		ignoreGit: ignoreGit,
-		maxDepth:  defaultMaxScanDepth, // Reasonable default to prevent deep recursion.
+		baseDir:  baseDir,
+		maxDepth: defaultMaxScanDepth, // Reasonable default to prevent deep recursion.
 		// ignoreHandler is lazily created in Scan().
 	}
 }
@@ -108,13 +105,8 @@ func (s *Scanner) processPath(path string, d os.DirEntry) (string, bool) {
 
 // shouldIgnorePath checks if a path should be ignored.
 func (s *Scanner) shouldIgnorePath(relPath string, d os.DirEntry) bool {
-	// Check ignore handler first.
+	// Check ignore handler.
 	if s.ignoreHandler != nil && s.ignoreHandler.IsIgnored(relPath, d.IsDir()) {
-		return true
-	}
-
-	// Legacy ignoreGit support (for backward compatibility).
-	if d.IsDir() && s.ignoreGit && d.Name() == ".git" {
 		return true
 	}
 

@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 )
 
 var (
@@ -322,7 +323,7 @@ func runConfigEdit(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Find editor.
-	editor := getEditor()
+	editor := execx.FindEditor()
 	if editor == "" {
 		return ErrNoEditorFoundSetEditorOr
 	}
@@ -388,27 +389,6 @@ func printYAML[T any](out io.Writer, data T) error {
 	}
 
 	return nil
-}
-
-// getEditor returns the preferred editor.
-func getEditor() string {
-	if editor := os.Getenv("EDITOR"); editor != "" {
-		return editor
-	}
-
-	if visual := os.Getenv("VISUAL"); visual != "" {
-		return visual
-	}
-
-	// Try common editors.
-	for _, editor := range []string{"vi", "vim", "nano", "emacs"} {
-		_, err := exec.LookPath(editor)
-		if err == nil {
-			return editor
-		}
-	}
-
-	return ""
 }
 
 // getConfigSearchPaths returns the list of config search paths.

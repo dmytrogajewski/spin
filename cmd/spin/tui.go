@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -18,8 +17,6 @@ import (
 	"github.com/dmytrogajewski/spin/internal/conversation"
 	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/internal/safety"
-	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 )
@@ -214,7 +211,7 @@ func startEventLoop(
 	ctx context.Context, eventStream <-chan events.Event,
 	mapper *tui.Mapper, ui *adapters.PureTTY,
 	conv *conversation.Conversation,
-) chan struct{} {
+) <-chan struct{} {
 	eventDone := make(chan struct{})
 
 	go func() {
@@ -263,7 +260,7 @@ func handleTUICommand(ctx context.Context, ui *adapters.PureTTY, conv *conversat
 		return false
 	}
 
-	if cmdErr.Error() == "exit requested" {
+	if errors.Is(cmdErr, ErrExitRequested) {
 		return true
 	}
 
@@ -325,7 +322,17 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 	defer uiCancel()
 	defer func() { _ = ui.Stop() }()
 
-	conv, err := createConversationForTUI(ctx, provider, cfg, ui, flags.autoApprove)
+	var approvalHandler = createTUIApprovalHandler(ui)
+	if flags.autoApprove {
+		approvalHandler = createAutoApproveHandler()
+	}
+
+	conv, err := createConversation(ctx, provider, cfg, conversationConfig{
+		approvalHandler: approvalHandler,
+		ui:              ui,
+		sessionPrefix:   "tui",
+		eventBufferSize: tuiEventBuffer,
+	})
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
@@ -383,102 +390,19 @@ func runTUI(cmd *cobra.Command, _ []string) error {
 	}
 }
 
-// createConversationForTUI creates a conversation configured for TUI mode using the runtime pattern.
-func createConversationForTUI(
-	ctx context.Context, provider llm.Provider,
-	cfg *config.V2, ui *adapters.PureTTY, autoApprove bool,
-) (*conversation.Conversation, error) {
-	workDir := cfg.Agent.WorkDir
-	logger := slog.Default()
-	emitter := events.NewEventEmitter(tuiEventBuffer)
-
-	var storage session.Storage
-
-	if cfg.Agent.SessionDir != "" {
-		var err error
-
-		storage, err = session.NewFileStorage(cfg.Agent.SessionDir)
-		if err != nil {
-			return nil, fmt.Errorf("create session storage: %w", err)
-		}
-	}
-
-	var sessionID string
-
-	if storage != nil {
-		sess := session.NewSession(workDir)
-		sessionID = sess.ID
-	} else {
-		sessionID = fmt.Sprintf("tui-%d", time.Now().UnixNano())
-	}
-
-	protocolServices, cleanup, err := createServices(ctx, cfg, workDir, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	var approvalHandler safety.ApprovalHandler
-	if autoApprove {
-		approvalHandler = createAutoApproveHandler()
-	} else {
-		approvalHandler = createTUIApprovalHandler(ui)
-	}
-
-	builtinRuntime, err := createBuiltinRuntime(
-		ctx,
-		workDir,
-		emitter,
-		storage,
-		sessionID,
-		approvalHandler,
-		protocolServices,
-		ui,
-		logger,
-		cfg,
-	)
-	if err != nil {
-		cleanup()
-
-		return nil, fmt.Errorf("create builtin runtime: %w", err)
-	}
-
-	builder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
-
-	// Add optional services.
-	if protocolServices.Git != nil {
-		builder = builder.WithGit(protocolServices.Git)
-	}
-
-	if protocolServices.Shell != nil {
-		builder = builder.WithShell(protocolServices.Shell)
-	}
-
-	if protocolServices.MCP != nil {
-		builder = builder.WithMCP(protocolServices.MCP)
-
-		// Create dynamic tool selector if any registry has dynamic_loadout.
-		if toolSelector := createToolSelector(ctx, protocolServices.MCP, nil, emitter, cfg, slog.Default()); toolSelector != nil {
-			builder = builder.WithToolSelector(toolSelector)
-		}
-	}
-
-	conv, err := builder.Build(ctx)
-	if err != nil {
-		cleanup()
-
-		return nil, fmt.Errorf("build conversation: %w", err)
-	}
-
-	return conv, nil
-}
-
 // setupSignalHandling sets up signal handling for graceful shutdown.
-func setupSignalHandling(cancel context.CancelFunc) {
+// An optional shutdownMsg is printed to stderr when a signal is received.
+func setupSignalHandling(cancel context.CancelFunc, shutdownMsg ...string) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-sigCh
+
+		if len(shutdownMsg) > 0 && shutdownMsg[0] != "" {
+			fmt.Fprintln(os.Stderr, shutdownMsg[0])
+		}
+
 		cancel()
 	}()
 }
@@ -494,6 +418,6 @@ func initializeUI(ui *adapters.PureTTY, conv *conversation.Conversation, provide
 	tokenCount := int64(conv.GetTokenCount())
 	ui.SetTokenCount(tokenCount)
 
-	sessionID := conv.GetSessionID()
+	sessionID := conv.ID()
 	ui.SetConversationID(sessionID)
 }

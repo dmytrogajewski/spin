@@ -17,10 +17,13 @@ func SleepWithBackoff(ctx context.Context, attempt int, base time.Duration) erro
 
 	backoff := base << shift
 
+	timer := time.NewTimer(backoff)
+	defer timer.Stop()
+
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("backoff sleep canceled: %w", ctx.Err())
-	case <-time.After(backoff):
+	case <-timer.C:
 		return nil
 	}
 }

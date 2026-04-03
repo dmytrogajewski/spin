@@ -38,11 +38,6 @@ func NewProvider(cfg Config) (*Provider, error) {
 		baseURL = DefaultBaseURL
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	model := cfg.Model
 	// If model is empty, use a placeholder - LMStudio can accept empty model
 	// as it may use the loaded model automatically.
@@ -55,7 +50,7 @@ func NewProvider(cfg Config) (*Provider, error) {
 		BaseURL: baseURL,
 		APIKey:  "", // No API key for local LMStudio.
 		Model:   model,
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	}
 
 	openaiProvider, err := openai.NewProvider(openaiCfg)

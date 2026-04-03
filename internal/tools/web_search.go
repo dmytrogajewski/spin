@@ -3,7 +3,8 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 const (
@@ -101,17 +102,16 @@ func (t *WebSearchTool) Execute(ctx context.Context, params ToolParameters) (Too
 
 // formatSearchResults formats search results as a numbered list.
 func formatSearchResults(results []SearchResult) string {
-	var builder strings.Builder
+	return stringsx.FormatNumberedList(
+		results,
+		func(n int) string { return fmt.Sprintf("Found %d result(s):\n", n) },
+		func(_ int, r SearchResult) string {
+			line := fmt.Sprintf("%s\n   %s", r.Title, r.URL)
+			if r.Snippet != "" {
+				line += fmt.Sprintf("\n   %s", r.Snippet)
+			}
 
-	fmt.Fprintf(&builder, "Found %d result(s):\n", len(results))
-
-	for idx, result := range results {
-		fmt.Fprintf(&builder, "\n%d. %s\n   %s\n", idx+1, result.Title, result.URL)
-
-		if result.Snippet != "" {
-			fmt.Fprintf(&builder, "   %s\n", result.Snippet)
-		}
-	}
-
-	return builder.String()
+			return line
+		},
+	)
 }

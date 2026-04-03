@@ -113,7 +113,7 @@ func FindMatchingClose(content string, startPos int, openTag, closeTag string) i
 
 // ContainsIgnoreCase checks if s contains substr, ignoring case.
 func ContainsIgnoreCase(input, substr string) bool {
-	return strings.Contains(strings.ToLower(input), strings.ToLower(substr))
+	return ContainsAnyKeyword(input, []string{substr})
 }
 
 // TruncateWithSuffix truncates input to maxLen bytes and appends suffix.
@@ -141,6 +141,57 @@ func NormalizeEscapes(input string) string {
 	result = strings.ReplaceAll(result, `\"`, `"`)
 
 	return strings.ReplaceAll(result, escapeBackslashPlaceholder, `\`)
+}
+
+// maskedPlaceholder is returned when a secret is too short to safely reveal.
+const maskedPlaceholder = "***"
+
+// minSecretLen is the minimum length a secret must have before any
+// characters are revealed; shorter secrets are fully masked.
+const minSecretLen = 8
+
+// MaskSecret masks a secret string for display, showing only the first and last
+// visibleChars characters with "..." in between. If the string is too short
+// (8 characters or fewer), it returns "***" to avoid leaking the secret.
+func MaskSecret(key string, visibleChars int) string {
+	if len(key) <= minSecretLen {
+		return maskedPlaceholder
+	}
+
+	if visibleChars <= 0 {
+		return maskedPlaceholder
+	}
+
+	// Ensure we don't try to show more characters than available.
+	if visibleChars*2 >= len(key) {
+		return maskedPlaceholder
+	}
+
+	return key[:visibleChars] + "..." + key[len(key)-visibleChars:]
+}
+
+// ParseKeyValuePairs splits each item in items around the first occurrence of
+// sep and returns the resulting key-value map. Items that do not contain sep
+// are silently skipped. Returns nil for an empty input slice.
+func ParseKeyValuePairs(items []string, sep string) map[string]string {
+	if len(items) == 0 {
+		return nil
+	}
+
+	result := make(map[string]string, len(items))
+
+	for _, item := range items {
+		key, value, ok := strings.Cut(item, sep)
+		if ok {
+			result[key] = value
+		}
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+
+	return result
 }
 
 // truncationState tracks delimiter and string-literal state during truncation detection.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 )
 
 var (
@@ -262,200 +263,76 @@ func (m *PlanMeta) Validate() error {
 	return nil
 }
 
-// ParseExecuteMeta extracts ExecuteMeta from a block's metadata.
-func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) {
+// ParseMeta is a generic function that extracts a typed metadata struct from
+// a block's raw JSON metadata. It handles nil-check and JSON unmarshalling.
+func ParseMeta[T any](b *Block) (*T, error) {
 	if len(b.Meta) == 0 {
 		return nil, ErrMetadataIsEmpty
 	}
 
-	var meta ExecuteMeta
+	var meta T
 
 	err := json.Unmarshal(b.Meta, &meta)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal ExecuteMeta: %w", err)
+		typeName := reflect.TypeOf(meta).Name()
+		return nil, fmt.Errorf("failed to unmarshal %s: %w", typeName, err)
 	}
 
 	return &meta, nil
 }
+
+// SetMeta is a generic function that validates a metadata struct and assigns
+// its JSON representation to the block's Meta field.
+func SetMeta[T interface{ Validate() error }](b *Block, m T) error {
+	err := m.Validate()
+	if err != nil {
+		typeName := reflect.TypeOf(m).Elem().Name()
+		return fmt.Errorf("invalid %s: %w", typeName, err)
+	}
+
+	data, err := json.Marshal(m)
+	if err != nil {
+		typeName := reflect.TypeOf(m).Elem().Name()
+		return fmt.Errorf("failed to marshal %s: %w", typeName, err)
+	}
+
+	b.Meta = data
+
+	return nil
+}
+
+// ParseExecuteMeta extracts ExecuteMeta from a block's metadata.
+func ParseExecuteMeta(b *Block) (*ExecuteMeta, error) { return ParseMeta[ExecuteMeta](b) }
 
 // ParseReadMeta extracts ReadMeta from a block's metadata.
-func ParseReadMeta(b *Block) (*ReadMeta, error) {
-	if len(b.Meta) == 0 {
-		return nil, ErrMetadataIsEmpty
-	}
-
-	var meta ReadMeta
-
-	err := json.Unmarshal(b.Meta, &meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal ReadMeta: %w", err)
-	}
-
-	return &meta, nil
-}
+func ParseReadMeta(b *Block) (*ReadMeta, error) { return ParseMeta[ReadMeta](b) }
 
 // ParseGrepMeta extracts GrepMeta from a block's metadata.
-func ParseGrepMeta(b *Block) (*GrepMeta, error) {
-	if len(b.Meta) == 0 {
-		return nil, ErrMetadataIsEmpty
-	}
-
-	var meta GrepMeta
-
-	err := json.Unmarshal(b.Meta, &meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal GrepMeta: %w", err)
-	}
-
-	return &meta, nil
-}
+func ParseGrepMeta(b *Block) (*GrepMeta, error) { return ParseMeta[GrepMeta](b) }
 
 // ParseToolMeta extracts ToolMeta from a block's metadata.
-func ParseToolMeta(b *Block) (*ToolMeta, error) {
-	if len(b.Meta) == 0 {
-		return nil, ErrMetadataIsEmpty
-	}
-
-	var meta ToolMeta
-
-	err := json.Unmarshal(b.Meta, &meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal ToolMeta: %w", err)
-	}
-
-	return &meta, nil
-}
+func ParseToolMeta(b *Block) (*ToolMeta, error) { return ParseMeta[ToolMeta](b) }
 
 // ParsePatchMeta extracts PatchMeta from a block's metadata.
-func ParsePatchMeta(b *Block) (*PatchMeta, error) {
-	if len(b.Meta) == 0 {
-		return nil, ErrMetadataIsEmpty
-	}
-
-	var meta PatchMeta
-
-	err := json.Unmarshal(b.Meta, &meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal PatchMeta: %w", err)
-	}
-
-	return &meta, nil
-}
+func ParsePatchMeta(b *Block) (*PatchMeta, error) { return ParseMeta[PatchMeta](b) }
 
 // ParsePlanMeta extracts PlanMeta from a block's metadata.
-func ParsePlanMeta(b *Block) (*PlanMeta, error) {
-	if len(b.Meta) == 0 {
-		return nil, ErrMetadataIsEmpty
-	}
-
-	var meta PlanMeta
-
-	err := json.Unmarshal(b.Meta, &meta)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal PlanMeta: %w", err)
-	}
-
-	return &meta, nil
-}
+func ParsePlanMeta(b *Block) (*PlanMeta, error) { return ParseMeta[PlanMeta](b) }
 
 // SetExecuteMeta sets ExecuteMeta on a block.
-func SetExecuteMeta(b *Block, m *ExecuteMeta) error {
-	err := m.Validate()
-	if err != nil {
-		return fmt.Errorf("invalid ExecuteMeta: %w", err)
-	}
-
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal ExecuteMeta: %w", err)
-	}
-
-	b.Meta = data
-
-	return nil
-}
+func SetExecuteMeta(b *Block, m *ExecuteMeta) error { return SetMeta(b, m) }
 
 // SetReadMeta sets ReadMeta on a block.
-func SetReadMeta(b *Block, m *ReadMeta) error {
-	err := m.Validate()
-	if err != nil {
-		return fmt.Errorf("invalid ReadMeta: %w", err)
-	}
-
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal ReadMeta: %w", err)
-	}
-
-	b.Meta = data
-
-	return nil
-}
+func SetReadMeta(b *Block, m *ReadMeta) error { return SetMeta(b, m) }
 
 // SetGrepMeta sets GrepMeta on a block.
-func SetGrepMeta(b *Block, m *GrepMeta) error {
-	err := m.Validate()
-	if err != nil {
-		return fmt.Errorf("invalid GrepMeta: %w", err)
-	}
-
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal GrepMeta: %w", err)
-	}
-
-	b.Meta = data
-
-	return nil
-}
+func SetGrepMeta(b *Block, m *GrepMeta) error { return SetMeta(b, m) }
 
 // SetToolMeta sets ToolMeta on a block.
-func SetToolMeta(b *Block, m *ToolMeta) error {
-	err := m.Validate()
-	if err != nil {
-		return fmt.Errorf("invalid ToolMeta: %w", err)
-	}
-
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal ToolMeta: %w", err)
-	}
-
-	b.Meta = data
-
-	return nil
-}
+func SetToolMeta(b *Block, m *ToolMeta) error { return SetMeta(b, m) }
 
 // SetPatchMeta sets PatchMeta on a block.
-func SetPatchMeta(b *Block, m *PatchMeta) error {
-	err := m.Validate()
-	if err != nil {
-		return fmt.Errorf("invalid PatchMeta: %w", err)
-	}
-
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal PatchMeta: %w", err)
-	}
-
-	b.Meta = data
-
-	return nil
-}
+func SetPatchMeta(b *Block, m *PatchMeta) error { return SetMeta(b, m) }
 
 // SetPlanMeta sets PlanMeta on a block.
-func SetPlanMeta(b *Block, m *PlanMeta) error {
-	err := m.Validate()
-	if err != nil {
-		return fmt.Errorf("invalid PlanMeta: %w", err)
-	}
-
-	data, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("failed to marshal PlanMeta: %w", err)
-	}
-
-	b.Meta = data
-
-	return nil
-}
+func SetPlanMeta(b *Block, m *PlanMeta) error { return SetMeta(b, m) }

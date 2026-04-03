@@ -91,48 +91,43 @@ func (e *TerminalExecutor) Execute(ctx context.Context, cmd tools.CommandInfo, o
 }
 
 // extractEnvVars extracts environment variables from opts, handling struct, map, and slice formats.
+// It tries direct type assertions first, then falls back to reflection for struct types.
 func extractEnvVars(opts any) []EnvVar {
 	if opts == nil {
 		return nil
 	}
 
-	// Try struct-based extraction first.
-	if envMap := extractEnvFromStruct(opts); envMap != nil {
-		return envMap
+	// Try map[string]any with "env" key (JSON-decoded options).
+	if optsMap, ok := opts.(map[string]any); ok {
+		return extractEnvFromAny(optsMap["env"])
 	}
 
-	// Try map-based extraction.
-	optsMap, ok := opts.(map[string]any)
-	if !ok {
+	// Try struct reflection for typed options with an Env field.
+	return extractEnvFromStructField(opts)
+}
+
+// extractEnvFromAny converts an untyped value to env vars.
+// Supports: []any (slice of {name, value} maps) and map[string]any (key=value).
+func extractEnvFromAny(envVal any) []EnvVar {
+	if envVal == nil {
 		return nil
 	}
 
-	return extractEnvFromMap(optsMap)
-}
-
-// extractEnvFromMap extracts env vars from a map[string]any options.
-func extractEnvFromMap(optsMap map[string]any) []EnvVar {
-	envVars, exists := optsMap["env"]
-	if !exists {
+	switch v := envVal.(type) {
+	case []any:
+		return extractEnvFromSlice(v)
+	case map[string]any:
+		return extractEnvFromMap(v)
+	default:
 		return nil
 	}
-
-	if envSlice, ok := envVars.([]any); ok {
-		return extractEnvFromSlice(envSlice)
-	}
-
-	if envVarMap, ok := envVars.(map[string]any); ok {
-		return extractEnvFromStringMap(envVarMap)
-	}
-
-	return nil
 }
 
-// extractEnvFromSlice extracts env vars from a []any slice.
-func extractEnvFromSlice(envSlice []any) []EnvVar {
-	env := make([]EnvVar, 0, len(envSlice))
+// extractEnvFromSlice converts a []any of {name, value} maps to env vars.
+func extractEnvFromSlice(items []any) []EnvVar {
+	env := make([]EnvVar, 0, len(items))
 
-	for _, ev := range envSlice {
+	for _, ev := range items {
 		evMap, ok := ev.(map[string]any)
 		if !ok {
 			continue
@@ -149,11 +144,11 @@ func extractEnvFromSlice(envSlice []any) []EnvVar {
 	return env
 }
 
-// extractEnvFromStringMap extracts env vars from a map[string]any where values are strings.
-func extractEnvFromStringMap(envVarMap map[string]any) []EnvVar {
-	env := make([]EnvVar, 0, len(envVarMap))
+// extractEnvFromMap converts a map[string]any of key=value pairs to env vars.
+func extractEnvFromMap(m map[string]any) []EnvVar {
+	env := make([]EnvVar, 0, len(m))
 
-	for name, value := range envVarMap {
+	for name, value := range m {
 		if strValue, ok := value.(string); ok {
 			env = append(env, EnvVar{Name: name, Value: strValue})
 		}
@@ -162,13 +157,9 @@ func extractEnvFromStringMap(envVarMap map[string]any) []EnvVar {
 	return env
 }
 
-// extractEnvFromStruct extracts environment variables from a struct using reflection.
+// extractEnvFromStructField uses reflection to extract env vars from a struct's Env field.
 // Handles both map[string]string and []EnvVar formats.
-func extractEnvFromStruct(opts any) []EnvVar {
-	if opts == nil {
-		return nil
-	}
-
+func extractEnvFromStructField(opts any) []EnvVar {
 	value := reflect.ValueOf(opts)
 	if value.Kind() == reflect.Ptr {
 		value = value.Elem()
@@ -193,21 +184,21 @@ func extractEnvFromStruct(opts any) []EnvVar {
 	}
 }
 
-// extractEnvFromReflectMap extracts env vars from a [reflect.Value] of kind Map.
+// extractEnvFromReflectMap extracts env vars from a reflected map value.
 func extractEnvFromReflectMap(envField reflect.Value) []EnvVar {
 	env := make([]EnvVar, 0, envField.Len())
 
 	for _, key := range envField.MapKeys() {
-		value := envField.MapIndex(key)
-		if key.Kind() == reflect.String && value.Kind() == reflect.String {
-			env = append(env, EnvVar{Name: key.String(), Value: value.String()})
+		val := envField.MapIndex(key)
+		if key.Kind() == reflect.String && val.Kind() == reflect.String {
+			env = append(env, EnvVar{Name: key.String(), Value: val.String()})
 		}
 	}
 
 	return env
 }
 
-// extractEnvFromReflectSlice extracts env vars from a [reflect.Value] of kind Slice.
+// extractEnvFromReflectSlice extracts env vars from a reflected slice value.
 func extractEnvFromReflectSlice(envField reflect.Value) []EnvVar {
 	env := make([]EnvVar, 0, envField.Len())
 

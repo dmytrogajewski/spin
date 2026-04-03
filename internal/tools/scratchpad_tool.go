@@ -115,7 +115,7 @@ func (t *ScratchpadTool) Execute(ctx context.Context, params ToolParameters) (To
 	case "clear":
 		return t.executeClear(ctx, params)
 	default:
-		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, errUnknownOperation)), nil
+		return NewToolError(unknownOperationError(operation)), nil
 	}
 }
 

@@ -328,10 +328,9 @@ func (m *SnapshotManager) runGit(ctx context.Context, args ...string) error {
 // nestedGitErrSubstring is the error message git produces for nested repos without commits.
 const nestedGitErrSubstring = "does not have a commit checked out"
 
-// runGitWithEnvAllowNestedGit runs a git command, tolerating errors caused by
-// nested .git directories. If the only errors are about gitlink/submodule entries,
-// the command is considered successful (the other files were still staged).
-func (m *SnapshotManager) runGitWithEnvAllowNestedGit(args ...string) (string, error) {
+// runGitWithEnvCore executes a git command with GIT_DIR and GIT_WORK_TREE set,
+// returning stdout, stderr, and any execution error. Callers handle error policy.
+func (m *SnapshotManager) runGitWithEnvCore(args ...string) (stdout, stderr string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
 	defer cancel()
 
@@ -342,28 +341,36 @@ func (m *SnapshotManager) runGitWithEnvAllowNestedGit(args ...string) (string, e
 		"GIT_WORK_TREE="+m.workDir,
 	)
 
-	var stdout, stderr bytes.Buffer
+	var outBuf, errBuf bytes.Buffer
 
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
 
-	if err := cmd.Run(); err != nil {
-		stderrStr := stderr.String()
+	err = cmd.Run()
 
+	return outBuf.String(), errBuf.String(), err
+}
+
+// runGitWithEnvAllowNestedGit runs a git command, tolerating errors caused by
+// nested .git directories. If the only errors are about gitlink/submodule entries,
+// the command is considered successful (the other files were still staged).
+func (m *SnapshotManager) runGitWithEnvAllowNestedGit(args ...string) (string, error) {
+	stdout, stderr, err := m.runGitWithEnvCore(args...)
+	if err != nil {
 		// Tolerate errors caused solely by nested .git directories.
 		// Git produces lines like:
 		//   error: 'sub/' does not have a commit checked out
 		//   error: unable to index file 'sub/'
 		//   fatal: adding files failed  (or localized equivalent)
 		// These are safe to ignore — the other files were still staged.
-		if isOnlyNestedGitError(stderrStr) {
-			return stdout.String(), nil
+		if isOnlyNestedGitError(stderr) {
+			return stdout, nil
 		}
 
-		return "", fmt.Errorf("%s: %w", stderrStr, err)
+		return "", fmt.Errorf("%s: %w", stderr, err)
 	}
 
-	return stdout.String(), nil
+	return stdout, nil
 }
 
 // isOnlyNestedGitError returns true if all stderr lines are about nested .git dirs.
@@ -403,26 +410,12 @@ func isOnlyNestedGitError(stderr string) bool {
 
 // runGitWithEnv executes a git command with GIT_DIR and GIT_WORK_TREE set.
 func (m *SnapshotManager) runGitWithEnv(args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = m.workDir
-	cmd.Env = append(os.Environ(),
-		"GIT_DIR="+m.shadowDir,
-		"GIT_WORK_TREE="+m.workDir,
-	)
-
-	var stdout, stderr bytes.Buffer
-
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%s: %w", stderr.String(), err)
+	stdout, stderr, err := m.runGitWithEnvCore(args...)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", stderr, err)
 	}
 
-	return stdout.String(), nil
+	return stdout, nil
 }
 
 // ProjectHash returns a deterministic hash of the given work directory path.

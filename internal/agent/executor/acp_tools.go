@@ -10,6 +10,7 @@ import (
 	"github.com/google/shlex"
 
 	"github.com/dmytrogajewski/spin/internal/tools"
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 )
 
 var (
@@ -133,7 +134,7 @@ func (t *ACPTerminalTool) validateParams(params tools.ToolParameters) string {
 
 // parseCommand parses a command string into a CommandInfo.
 func (t *ACPTerminalTool) parseCommand(cmdStr, workDir string) (cmdInfo *simpleCommand, parsedCmd string) {
-	if isShellCommand(cmdStr) {
+	if execx.IsShellCommand(cmdStr) {
 		return &simpleCommand{
 			program: "/bin/sh",
 			args:    []string{"-c", cmdStr},
@@ -157,25 +158,6 @@ func (t *ACPTerminalTool) parseCommand(cmdStr, workDir string) (cmdInfo *simpleC
 		raw:     cmdStr,
 		workDir: workDir,
 	}, ""
-}
-
-// isShellCommand checks if a command string requires shell interpretation.
-func isShellCommand(cmdStr string) bool {
-	shellChars := []string{"|", ">", "<", "$", "&&", "||"}
-	for _, c := range shellChars {
-		if strings.Contains(cmdStr, c) {
-			return true
-		}
-	}
-
-	shellPrefixes := []string{"cd ", "export ", "source "}
-	for _, p := range shellPrefixes {
-		if strings.HasPrefix(cmdStr, p) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // buildResult converts an ExecutionResult into a ToolResult.

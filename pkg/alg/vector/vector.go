@@ -3,17 +3,14 @@ package vector
 
 import (
 	"math"
-)
 
-// Float is a constraint for floating-point types supported by vector operations.
-type Float interface {
-	~float32 | ~float64
-}
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
+)
 
 // CosineSimilarity calculates the cosine similarity between two vectors.
 // Returns 0.0 if vectors have different lengths, are empty, or either has zero magnitude.
 // Result is in the range [-1.0, 1.0].
-func CosineSimilarity[Num Float](a, b []Num) float64 {
+func CosineSimilarity[Num collections.Float](a, b []Num) float64 {
 	magA := Magnitude(a)
 	magB := Magnitude(b)
 
@@ -26,7 +23,7 @@ func CosineSimilarity[Num Float](a, b []Num) float64 {
 
 // DotProduct calculates the dot product of two vectors.
 // Returns 0.0 if vectors have different lengths or are empty.
-func DotProduct[Num Float](a, b []Num) float64 {
+func DotProduct[Num collections.Float](a, b []Num) float64 {
 	if len(a) != len(b) || len(a) == 0 {
 		return 0.0
 	}
@@ -42,7 +39,7 @@ func DotProduct[Num Float](a, b []Num) float64 {
 
 // Magnitude calculates the Euclidean magnitude (L2 norm) of a vector.
 // Returns 0.0 for empty vectors.
-func Magnitude[Num Float](vec []Num) float64 {
+func Magnitude[Num collections.Float](vec []Num) float64 {
 	if len(vec) == 0 {
 		return 0.0
 	}

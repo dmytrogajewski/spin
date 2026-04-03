@@ -158,7 +158,7 @@ func TestBuilder_Build_Minimal(t *testing.T) {
 	// Verify conversation structure.
 	assert.Equal(t, tempDir, conv.workDir)
 	assert.Equal(t, "regular", conv.taskMode)
-	assert.NotEmpty(t, conv.GetSessionID())
+	assert.NotEmpty(t, conv.ID())
 	assert.NotNil(t, conv.agent)
 	assert.NotNil(t, conv.history)
 	assert.NotNil(t, conv.emitter)

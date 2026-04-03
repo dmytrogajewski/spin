@@ -158,13 +158,8 @@ func (p *Parser) parseOperation(line string) (FileOperation, error) {
 
 // parseAddFile parses an add file operation.
 func (p *Parser) parseAddFile(path string) (*AddFile, error) {
-	// Validate path.
-	if strings.HasPrefix(path, "/") {
-		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, ErrInvalidPath)
-	}
-
-	if strings.Contains(path, "..") {
-		return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, ErrInvalidPath)
+	if err := validatePath(path, ErrInvalidPath); err != nil {
+		return nil, err
 	}
 
 	lines := make([]string, 0)
@@ -198,13 +193,8 @@ func (p *Parser) parseAddFile(path string) (*AddFile, error) {
 
 // parseDeleteFile parses a delete file operation.
 func (p *Parser) parseDeleteFile(path string) (*DeleteFile, error) {
-	// Validate path.
-	if strings.HasPrefix(path, "/") {
-		return nil, fmt.Errorf("invalid path %q: absolute paths not allowed: %w", path, ErrInvalidPath)
-	}
-
-	if strings.Contains(path, "..") {
-		return nil, fmt.Errorf("invalid path %q: path traversal not allowed: %w", path, ErrInvalidPath)
+	if err := validatePath(path, ErrInvalidPath); err != nil {
+		return nil, err
 	}
 
 	return &DeleteFile{

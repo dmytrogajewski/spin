@@ -265,16 +265,11 @@ func (f *Factory) newOpenAIProvider(ctx context.Context, cfg ProviderConfig) (ll
 		return nil, err
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	openaiCfg := openai.Config{
 		BaseURL: cfg.BaseURL,
 		APIKey:  apiKey,
 		Model:   cfg.Model,
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	}
 
 	return openai.NewProvider(openaiCfg)
@@ -289,15 +284,10 @@ func (f *Factory) newOllamaProvider(ctx context.Context, cfg ProviderConfig) (ll
 		return nil, err
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	ollamaCfg := ollama.Config{
 		BaseURL: cfg.BaseURL,
 		Model:   cfg.Model,
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	}
 
 	p, err := ollama.NewProvider(ollamaCfg)
@@ -316,15 +306,10 @@ func (f *Factory) newLMStudioProvider(ctx context.Context, cfg ProviderConfig) (
 		return nil, err
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	lmstudioCfg := lmstudio.Config{
 		BaseURL: cfg.BaseURL,
 		Model:   cfg.Model,
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	}
 
 	return lmstudio.NewProvider(lmstudioCfg)

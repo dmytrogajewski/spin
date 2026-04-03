@@ -89,23 +89,17 @@ func NewProvider(cfg Config) (*Provider, error) {
 	// With trailing slash: http://host/v1/ + "chat/completions" = http://host/v1/chat/completions (CORRECT).
 	baseURL := cfg.BaseURL
 
-	// Use timeout from config or default.
-	timeout := cfg.Timeout
-	if timeout == 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	// Create SDK client.
 	client := openai.NewClient(
 		option.WithAPIKey(cfg.APIKey),
 		option.WithBaseURL(baseURL),
-		option.WithRequestTimeout(timeout),
+		option.WithRequestTimeout(llm.ResolveTimeout(cfg.Timeout)),
 	)
 
 	return &Provider{
 		client:  client,
 		model:   cfg.Model,
-		timeout: timeout,
+		timeout: llm.ResolveTimeout(cfg.Timeout),
 	}, nil
 }
 

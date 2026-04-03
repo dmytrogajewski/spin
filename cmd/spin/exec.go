@@ -15,12 +15,9 @@ import (
 	"github.com/dmytrogajewski/spin/internal/auth"
 	"github.com/dmytrogajewski/spin/internal/config"
 	"github.com/dmytrogajewski/spin/internal/conversation"
-	"github.com/dmytrogajewski/spin/internal/events"
 	"github.com/dmytrogajewski/spin/internal/llm"
 	"github.com/dmytrogajewski/spin/internal/llm/builder"
 	llmrecorder "github.com/dmytrogajewski/spin/internal/llm/recorder"
-	"github.com/dmytrogajewski/spin/internal/safety"
-	"github.com/dmytrogajewski/spin/internal/session"
 	"github.com/dmytrogajewski/spin/internal/tui"
 	"github.com/dmytrogajewski/spin/internal/ui/adapters"
 	spinterm "github.com/dmytrogajewski/spin/internal/ui/term"
@@ -129,7 +126,7 @@ func runExec(cmd *cobra.Command, args []string) error {
 	if timeout != "" {
 		var duration time.Duration
 
-		duration, err = parseDuration(timeout)
+		duration, err = time.ParseDuration(timeout)
 		if err != nil {
 			return fmt.Errorf("invalid timeout: %w", err)
 		}
@@ -138,8 +135,25 @@ func runExec(cmd *cobra.Command, args []string) error {
 		defer cancel()
 	}
 
-	// Create conversation using builder pattern.
-	conv, err := createConversationForExec(ctx, provider, cfg, autoApprove, debugFlag)
+	// Create conversation using shared builder pattern.
+	ui, uiErr := createExecUI(cmd.OutOrStdout())
+	if uiErr != nil {
+		return fmt.Errorf("create TUI: %w", uiErr)
+	}
+
+	var approvalHandler = createDenyHandler("exec mode requires --auto-approve for dangerous operations")
+	if autoApprove {
+		approvalHandler = createAutoApproveHandler()
+	}
+
+	const eventBufferSize = 100
+
+	conv, err := createConversation(ctx, provider, cfg, conversationConfig{
+		approvalHandler: approvalHandler,
+		ui:              ui,
+		sessionPrefix:   "exec",
+		eventBufferSize: eventBufferSize,
+	})
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
@@ -199,27 +213,6 @@ func parsePrompt(args []string, r io.Reader) (string, error) {
 	return prompt, nil
 }
 
-// parseDuration parses a duration string like "5m", "1h", etc.
-func parseDuration(s string) (time.Duration, error) {
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		return 0, fmt.Errorf("parsing duration %q: %w", s, err)
-	}
-
-	return d, nil
-}
-
-// resolveSessionID determines the session ID based on storage availability.
-func resolveSessionID(storage session.Storage, workDir, prefix string) string {
-	if storage != nil {
-		sess := session.NewSession(workDir)
-
-		return sess.ID
-	}
-
-	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
-}
-
 // createExecUI creates the UI adapter for exec mode.
 // The out writer is used for all output; when nil it defaults to [os.Stdout].
 func createExecUI(out io.Writer) (*adapters.PureTTY, error) {
@@ -243,81 +236,6 @@ func createExecUI(out io.Writer) (*adapters.PureTTY, error) {
 	return adapters.NewPureTTY(out, opts...)
 }
 
-// createConversationForExec creates a conversation configured for exec mode using the runtime pattern.
-func createConversationForExec(
-	ctx context.Context, provider llm.Provider,
-	cfg *config.V2, autoApprove, _ bool,
-) (*conversation.Conversation, error) {
-	workDir := cfg.Agent.WorkDir
-	logger := slog.Default()
-
-	const eventBufferSize = 100
-
-	emitter := events.NewEventEmitter(eventBufferSize)
-
-	storage, err := createSessionStorage(cfg.Agent.SessionDir)
-	if err != nil && !errors.Is(err, ErrNoSessionDir) {
-		return nil, err
-	}
-
-	sessionID := resolveSessionID(storage, workDir, "exec")
-
-	services, cleanup, err := createServices(ctx, cfg, workDir, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	var approvalHandler safety.ApprovalHandler
-	if autoApprove {
-		approvalHandler = createAutoApproveHandler()
-	} else {
-		approvalHandler = createDenyHandler("exec mode requires --auto-approve for dangerous operations")
-	}
-
-	ui, err := createExecUI(nil)
-	if err != nil {
-		cleanup()
-
-		return nil, fmt.Errorf("create TUI: %w", err)
-	}
-
-	builtinRuntime, err := createBuiltinRuntime(ctx, workDir, emitter, storage, sessionID, approvalHandler, services, ui, logger, cfg)
-	if err != nil {
-		cleanup()
-
-		return nil, fmt.Errorf("create builtin runtime: %w", err)
-	}
-
-	convBuilder := conversation.NewBuilder(cfg, workDir, builtinRuntime, emitter, provider)
-
-	if services.Git != nil {
-		convBuilder = convBuilder.WithGit(services.Git)
-	}
-
-	if services.Shell != nil {
-		convBuilder = convBuilder.WithShell(services.Shell)
-	}
-
-	if services.MCP != nil {
-		convBuilder = convBuilder.WithMCP(services.MCP)
-
-		if toolSelector := createToolSelector(
-			ctx, services.MCP, nil, emitter, cfg, slog.Default(),
-		); toolSelector != nil {
-			convBuilder = convBuilder.WithToolSelector(toolSelector)
-		}
-	}
-
-	conv, convErr := convBuilder.Build(ctx)
-	if convErr != nil {
-		cleanup()
-
-		return nil, fmt.Errorf("build conversation: %w", convErr)
-	}
-
-	return conv, nil
-}
-
 // mockTTY implements term.TerminalController for non-terminal environments.
 type mockTTY struct {
 	width, height int
@@ -327,54 +245,6 @@ func (m *mockTTY) Enter() error              { return nil }
 func (m *mockTTY) Exit() error               { return nil }
 func (m *mockTTY) Size() (width, height int) { return m.width, m.height }
 func (m *mockTTY) OnResize(_ func(w, h int)) {}
-
-// processExecEvent handles a single event in exec mode.
-func processExecEvent(ctx context.Context, event events.Event, mapper *tui.Mapper, ui *adapters.PureTTY, conv *conversation.Conversation) {
-	mapErr := mapper.MapEvent(ctx, event)
-	if mapErr != nil {
-		_ = ui.PrintLine(fmt.Sprintf("⚠ Mapper error: %v", mapErr))
-	}
-
-	switch event.Type {
-	case events.EventTurnComplete, events.EventContentComplete:
-		ui.SetTokenCount(int64(conv.GetTokenCount()))
-	case events.EventTurnProgress:
-		if data, ok := event.Data.(events.TurnEventData); ok && data.TokensUsed > 0 {
-			ui.SetTokenCount(int64(data.TokensUsed))
-		}
-	default:
-		// Other event types don't require token count updates.
-	}
-}
-
-// startExecEventLoop starts the event processing goroutine for exec mode.
-// Returns a channel that is closed when the event loop exits.
-func startExecEventLoop(
-	ctx context.Context, eventStream <-chan events.Event,
-	mapper *tui.Mapper, ui *adapters.PureTTY,
-	conv *conversation.Conversation,
-) <-chan struct{} {
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-eventStream:
-				if !ok {
-					return
-				}
-
-				processExecEvent(ctx, event, mapper, ui, conv)
-			}
-		}
-	}()
-
-	return done
-}
 
 // executePromptWithTUI executes a prompt non-interactively but shows TUI interface.
 func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, prompt, _ string, _, exitOnError bool) error {
@@ -399,7 +269,7 @@ func executePromptWithTUI(ctx context.Context, conv *conversation.Conversation, 
 		close(streamDone)
 	}()
 
-	eventsDone := startExecEventLoop(ctx, conv.Stream(), mapper, pureTTY, conv)
+	eventsDone := startEventLoop(ctx, conv.Stream(), mapper, pureTTY, conv)
 
 	errChan := make(chan error, 1)
 

@@ -647,13 +647,15 @@ func verifyFactoryConfig(t *testing.T, config ProviderConfig, expectedError bool
 func TestFactoryWithKeystore(t *testing.T) {
 	t.Parallel()
 
-	// Create keystore with test credentials.
+	// Create auth manager with keystore and set credential via the manager
+	// so it uses the correct key prefix and storage format.
 	keystore := auth.NewKeystore()
-	err := keystore.Set(t.Context(), "test-openai-key", "sk-test-key-value")
-	require.NoError(t, err, "Failed to set test credential")
-
-	// Create auth manager with keystore.
 	authMgr := auth.NewManager(keystore)
+	err := authMgr.SetCredential(t.Context(), "test-openai-key", auth.Credential{
+		Type:  auth.CredentialTypeAPIKey,
+		Value: "sk-test-key-value",
+	})
+	require.NoError(t, err, "Failed to set test credential")
 
 	// Create factory.
 	factory := NewFactory(authMgr)
@@ -1405,16 +1407,11 @@ func RegisterProvider(providerType string, factory ProviderFactory) {
 
 // legacyNewOpenAIProvider creates an OpenAI provider from config (test helper).
 func legacyNewOpenAIProvider(cfg ProviderConfig) (llm.Provider, error) {
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	openaiCfg := openai.Config{
 		BaseURL: cfg.BaseURL,
 		APIKey:  cfg.APIKey,
 		Model:   cfg.Model,
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	}
 
 	return openai.NewProvider(openaiCfg)
@@ -1422,15 +1419,10 @@ func legacyNewOpenAIProvider(cfg ProviderConfig) (llm.Provider, error) {
 
 // legacyNewOllamaProvider creates an Ollama provider from config (test helper).
 func legacyNewOllamaProvider(cfg ProviderConfig) (llm.Provider, error) {
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	ollamaCfg := ollama.Config{
 		BaseURL: cfg.BaseURL,
 		Model:   cfg.Model,
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	}
 
 	return ollama.NewProvider(ollamaCfg)
@@ -1438,11 +1430,6 @@ func legacyNewOllamaProvider(cfg ProviderConfig) (llm.Provider, error) {
 
 // legacyNewLMStudioProvider creates an LMStudio provider from config (test helper).
 func legacyNewLMStudioProvider(cfg ProviderConfig) (llm.Provider, error) {
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	baseURL := cfg.BaseURL
 	if baseURL == "" {
 		baseURL = lmstudio.DefaultBaseURL
@@ -1451,7 +1438,7 @@ func legacyNewLMStudioProvider(cfg ProviderConfig) (llm.Provider, error) {
 	lmstudioCfg := lmstudio.Config{
 		BaseURL: baseURL,
 		Model:   cfg.Model,
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	}
 
 	return lmstudio.NewProvider(lmstudioCfg)

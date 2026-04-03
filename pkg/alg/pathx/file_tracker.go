@@ -11,13 +11,8 @@ import (
 // modTimeTolerance is the tolerance window for filesystem timestamp granularity.
 const modTimeTolerance = 50 * time.Millisecond
 
-// Sentinel errors for file tracking.
-var (
-	// ErrFileNotPreviouslyRead is returned when asserting freshness on a file that was never read.
-	ErrFileNotPreviouslyRead = errors.New("file not previously read")
-	// ErrFileModifiedSinceRead is returned when a file has been modified since the last read.
-	ErrFileModifiedSinceRead = errors.New("file modified since last read")
-)
+// ErrFileModifiedSinceRead is returned when a file has been modified since the last read.
+var ErrFileModifiedSinceRead = errors.New("file modified since last read")
 
 // FileTracker tracks file read timestamps to detect stale reads.
 // It records when each file was last read and can assert that a file

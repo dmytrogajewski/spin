@@ -20,6 +20,11 @@ const (
 	largeChunkThreshold = 10 * 1024 // 10KB.
 )
 
+// toRawTerminal converts \n to \r\n for raw terminal mode.
+func toRawTerminal(s string) string {
+	return strings.ReplaceAll(s, "\n", "\r\n")
+}
+
 // Printer handles append-only output to stdout for chat transcript.
 // It supports both immediate line printing and streaming chunks with
 // optional coalescing to reduce flicker.
@@ -66,7 +71,7 @@ func (p *Printer) PrintLine(s string) error {
 	defer p.mu.Unlock()
 
 	// Convert \n to \r\n for raw terminal mode.
-	output := strings.ReplaceAll(s+"\n", "\n", "\r\n")
+	output := toRawTerminal(s + "\n")
 
 	_, err := io.WriteString(p.out, output)
 	if err != nil {
@@ -140,7 +145,7 @@ func (p *Printer) createFlushFunc(buf *strings.Builder, wroteContent *bool) func
 		}
 
 		*wroteContent = true
-		output := strings.ReplaceAll(buf.String(), "\n", "\r\n")
+		output := toRawTerminal(buf.String())
 
 		p.mu.Lock()
 		_, err := io.WriteString(p.out, output)
@@ -210,7 +215,7 @@ func (p *Printer) handleLargeChunk(chunk string, wroteContent *bool, flush func(
 		*wroteContent = true
 	}
 
-	output := strings.ReplaceAll(chunk, "\n", "\r\n")
+	output := toRawTerminal(chunk)
 
 	p.mu.Lock()
 	_, err = io.WriteString(p.out, output)
@@ -264,7 +269,7 @@ func (p *Printer) printChunksImmediate(ctx context.Context, chunks <-chan string
 // flushBuffer writes the buffer contents to the output, replacing newlines.
 func (p *Printer) flushBuffer(buf *strings.Builder) error {
 	str := buf.String()
-	output := strings.ReplaceAll(str, "\n", "\r\n")
+	output := toRawTerminal(str)
 
 	p.mu.Lock()
 	_, err := io.WriteString(p.out, output)

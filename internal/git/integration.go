@@ -320,116 +320,55 @@ func (g *Integration) GetLog(ctx context.Context, limit int) ([]CommitInfo, erro
 	return []CommitInfo{}, nil
 }
 
-// StageFile stages a file for commit.
-func (g *Integration) StageFile(ctx context.Context, filePath string) error {
+// runGitCmd executes a git command in the working directory, guarding on IsRepository.
+func (g *Integration) runGitCmd(ctx context.Context, errPrefix string, args ...string) error {
 	if !g.IsRepository() {
 		return ErrNotAGitRepository
 	}
 
-	cmd := exec.CommandContext(ctx, "git", "add", filePath)
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = g.workDir
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git add: %w", err)
+		return fmt.Errorf("%s: %w", errPrefix, err)
 	}
 
 	return nil
+}
+
+// StageFile stages a file for commit.
+func (g *Integration) StageFile(ctx context.Context, filePath string) error {
+	return g.runGitCmd(ctx, "git add", "add", filePath)
 }
 
 // UnstageFile unstages a file.
 func (g *Integration) UnstageFile(ctx context.Context, filePath string) error {
-	if !g.IsRepository() {
-		return ErrNotAGitRepository
-	}
-
-	cmd := exec.CommandContext(ctx, "git", "reset", "HEAD", filePath)
-	cmd.Dir = g.workDir
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git reset: %w", err)
-	}
-
-	return nil
+	return g.runGitCmd(ctx, "git reset", "reset", "HEAD", filePath)
 }
 
 // Commit creates a commit with the given message.
 func (g *Integration) Commit(ctx context.Context, message string) error {
-	if !g.IsRepository() {
-		return ErrNotAGitRepository
-	}
-
-	cmd := exec.CommandContext(ctx, "git", "commit", "-m", message)
-	cmd.Dir = g.workDir
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git commit: %w", err)
-	}
-
-	return nil
+	return g.runGitCmd(ctx, "git commit", "commit", "-m", message)
 }
 
 // Push pushes changes to the remote repository.
 func (g *Integration) Push(ctx context.Context) error {
-	if !g.IsRepository() {
-		return ErrNotAGitRepository
-	}
-
-	cmd := exec.CommandContext(ctx, "git", "push")
-	cmd.Dir = g.workDir
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git push: %w", err)
-	}
-
-	return nil
+	return g.runGitCmd(ctx, "git push", "push")
 }
 
 // Pull pulls changes from the remote repository.
 func (g *Integration) Pull(ctx context.Context) error {
-	if !g.IsRepository() {
-		return ErrNotAGitRepository
-	}
-
-	cmd := exec.CommandContext(ctx, "git", "pull")
-	cmd.Dir = g.workDir
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git pull: %w", err)
-	}
-
-	return nil
+	return g.runGitCmd(ctx, "git pull", "pull")
 }
 
 // CreateBranch creates a new branch.
 func (g *Integration) CreateBranch(ctx context.Context, branchName string) error {
-	if !g.IsRepository() {
-		return ErrNotAGitRepository
-	}
-
-	cmd := exec.CommandContext(ctx, "git", "checkout", "-b", branchName)
-	cmd.Dir = g.workDir
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git checkout -b: %w", err)
-	}
-
-	return nil
+	return g.runGitCmd(ctx, "git checkout -b", "checkout", "-b", branchName)
 }
 
 // SwitchBranch switches to an existing branch.
 func (g *Integration) SwitchBranch(ctx context.Context, branchName string) error {
-	if !g.IsRepository() {
-		return ErrNotAGitRepository
-	}
-
-	cmd := exec.CommandContext(ctx, "git", "checkout", branchName)
-	cmd.Dir = g.workDir
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git checkout: %w", err)
-	}
-
-	return nil
+	return g.runGitCmd(ctx, "git checkout", "checkout", branchName)
 }
 
 // ListBranches returns the list of local and remote branches.

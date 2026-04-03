@@ -533,10 +533,6 @@ linters:
       - path: internal/ui/(ports|theme)/
         linters: [interfacebloat]
 
-      # Theme file contains display strings with special characters.
-      - path: internal/ui/theme/
-        linters: [gosmopolitan]
-
       # MCP registry interfaces are naturally large; they define complete registry contracts.
       - path: internal/mcp/registry\.go
         linters: [interfacebloat]
@@ -558,7 +554,7 @@ linters:
         linters: [misspell]
 
       # CLI factory functions return interfaces because the concrete type varies at runtime.
-      - path: cmd/spin/(acp|exec|services|approval|tui|acp_extra_provider|exec_extra_provider)\.go
+      - path: cmd/spin/(acp|exec|services|approval|tui|conversation_builder|acp_extra_provider|exec_extra_provider)\.go
         linters: [ireturn]
 
       # Smithery API types in mcp.go use camelCase JSON tags to match the external API.

@@ -4,23 +4,19 @@ import (
 	"context"
 	"os"
 
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 // ReadFileTool implements file reading functionality.
 type ReadFileTool struct {
 	workDir string
-	tracker *FileTracker
+	tracker *pathx.FileTracker
 }
 
 // NewReadFileTool creates a new read file tool.
 func NewReadFileTool(workDir ...string) *ReadFileTool {
-	var wd string
-	if len(workDir) > 0 {
-		wd = workDir[0]
-	}
-
-	return &ReadFileTool{workDir: wd}
+	return &ReadFileTool{workDir: collections.FirstNonZero(workDir...)}
 }
 
 // Name implements the Name operation.
@@ -82,6 +78,6 @@ func (t *ReadFileTool) Execute(ctx context.Context, params ToolParameters) (Tool
 }
 
 // SetTracker sets the file tracker for stale-read detection.
-func (t *ReadFileTool) SetTracker(tracker *FileTracker) {
+func (t *ReadFileTool) SetTracker(tracker *pathx.FileTracker) {
 	t.tracker = tracker
 }

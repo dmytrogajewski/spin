@@ -2,14 +2,8 @@ package status
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
-)
-
-const (
-	percentMulManager  = 100
-	maxStateDisplayLen = 15
 )
 
 // Metrics represents the current status metrics.
@@ -123,7 +117,7 @@ func (m *Manager) AddTokens(prompt, completion int64) {
 	m.UpdateMetrics(func(m *Metrics) {
 		m.TokenCount += prompt + completion
 		if m.MaxTokens > 0 {
-			m.TokenUsage = float64(m.TokenCount) / float64(m.MaxTokens) * percentMulManager
+			m.TokenUsage = calculateTokenUsage(m.TokenCount, m.MaxTokens)
 		}
 	})
 }
@@ -143,7 +137,7 @@ func (m *Manager) SetMaxTokens(maxTokens int64) {
 	m.UpdateMetrics(func(m *Metrics) {
 		m.MaxTokens = maxTokens
 		if m.MaxTokens > 0 {
-			m.TokenUsage = float64(m.TokenCount) / float64(m.MaxTokens) * percentMulManager
+			m.TokenUsage = calculateTokenUsage(m.TokenCount, m.MaxTokens)
 		}
 	})
 }
@@ -158,16 +152,7 @@ func (m *Manager) SetConnected(connected bool) {
 // SetAgentState sets the current agent activity state.
 // Also updates the spinner animation based on the state.
 func (m *Manager) SetAgentState(state string) {
-	m.mu.Lock()
-	m.status.Metrics.AgentState = state
-	m.status.Metrics.LastUpdate = time.Now()
-	spinner := m.spinner
-	m.mu.Unlock()
-
-	// Update spinner state outside the lock to avoid deadlock.
-	if spinner != nil {
-		spinner.UpdateState(context.Background(), state)
-	}
+	m.SetAgentStateWithContext(context.Background(), state)
 }
 
 // SetAgentStateWithContext sets the agent state with a context for spinner control.
@@ -289,48 +274,10 @@ func (m *Manager) Reset() {
 	}
 }
 
-// FormatCompact formats status for narrow terminals (<60 columns).
-// Shows: activity indicator, context%, and agent state only.
-// NOTE: This replaces the old FormatCompact() implementation.
-func (m *Manager) FormatCompact(_ int) string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if !m.enabled {
-		return ""
-	}
-
-	// If there's explicit status text, return it (legacy behavior).
-	if m.status.Text != "" {
-		return m.status.Text
-	}
-
-	parts := []string{}
-
-	// Activity indicator with spinner.
-	spinnerFrame := ""
-	if m.spinner != nil && m.spinner.IsRunning() {
-		spinnerFrame = m.spinner.Frame()
-	}
-
-	parts = append(parts, activityIndicatorWithSpinner(m.status.Metrics.Connected, spinnerFrame))
-
-	// Context percentage (if available).
-	if m.status.Metrics.MaxTokens > 0 {
-		parts = append(parts, formatPercentage(m.status.Metrics.TokenUsage))
-	}
-
-	// Agent state.
-	state := m.status.Metrics.AgentState
-	if state == "" {
-		state = StateReady
-	}
-
-	parts = append(parts, truncate(state, maxStateDisplayLen))
-
-	if len(parts) == 0 {
-		return ""
-	}
-
-	return strings.Join(parts, " ")
+// calculateTokenUsage computes the token usage percentage from count and max.
+// Returns a value between 0 and 100.
+func calculateTokenUsage(count, limit int64) float64 {
+	return float64(count) / float64(limit) * PercentMultiplier
 }
+
+// FormatCompact, FormatMedium, FormatFull, and Format are defined in formatter.go.

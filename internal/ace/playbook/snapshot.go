@@ -39,37 +39,22 @@ type BulletChange struct {
 // Bullets and stats are collected in a single pass for consistency.
 func (p *Playbook) Snapshot() *Snapshot {
 	var (
-		bullets    []*bullet.Bullet
-		stats      Stats
-		totalScore float64
+		bullets []*bullet.Bullet
+		acc     statsAccumulator
 	)
 
 	p.bullets.Range(func(_ string, b *bullet.Bullet) bool {
 		bullets = append(bullets, b.Clone())
-
-		stats.TotalBullets++
-		stats.TotalHelpful += b.HelpfulCount
-		stats.TotalHarmful += b.HarmfulCount
-		totalScore += b.Score()
-
-		stats.TotalSizeBytes += int64(len(b.ID) + len(b.Content) + 16 + len(b.Embedding)*bytesPerFloat32)
-
-		for k, v := range b.Tags {
-			stats.TotalSizeBytes += int64(len(k) + len(v))
-		}
+		acc.add(b)
 
 		return true
 	})
-
-	if stats.TotalBullets > 0 {
-		stats.AvgScore = totalScore / float64(stats.TotalBullets)
-	}
 
 	return &Snapshot{
 		ID:        uuid.New().String(),
 		Bullets:   bullets,
 		CreatedAt: time.Now(),
-		Stats:     stats,
+		Stats:     acc.finalize(),
 	}
 }
 

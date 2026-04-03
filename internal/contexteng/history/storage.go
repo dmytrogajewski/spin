@@ -38,19 +38,9 @@ func NewFileStorage(baseDir string) (Storage, error) {
 
 // Save persists the history to storage.
 func (h *History) Save(ctx context.Context, store Storage, sessionID string) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	data := h.ToData(sessionID)
 
-	data := Data{
-		Version:   CurrentHistoryVersion,
-		SessionID: sessionID,
-		Messages:  make([]message.Message, len(h.messages)),
-		MaxTokens: h.maxTokens,
-		UpdatedAt: time.Now(),
-	}
-	copy(data.Messages, h.messages)
-
-	return store.Save(ctx, sessionID, data)
+	return store.Save(ctx, sessionID, *data)
 }
 
 // Load restores history from storage.
@@ -60,17 +50,7 @@ func (h *History) Load(ctx context.Context, store Storage, sessionID string) err
 		return err
 	}
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	h.messages = make([]message.Message, len(data.Messages))
-	copy(h.messages, data.Messages)
-
-	if data.MaxTokens > 0 {
-		h.maxTokens = data.MaxTokens
-	}
-
-	return nil
+	return h.FromData(&data)
 }
 
 // ToData exports the current history state as Data.

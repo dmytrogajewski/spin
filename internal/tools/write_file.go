@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/undo"
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
@@ -16,21 +17,22 @@ import (
 // errContentTruncated is returned when content appears truncated.
 var errContentTruncated = errors.New("content appears truncated")
 
+// systemPaths lists path prefixes that require critical approval.
+var systemPaths = []string{"/etc/", "/sys/", "/usr/"}
+
+// executableExts lists file extensions that require high approval.
+var executableExts = []string{".sh", ".go", ".py", ".rb", ".pl", ".js", ".ts"}
+
 // WriteFileTool implements file writing functionality.
 type WriteFileTool struct {
 	workDir string
-	tracker *FileTracker
+	tracker *pathx.FileTracker
 	opLog   *undo.OperationLog
 }
 
 // NewWriteFileTool creates a new write file tool.
 func NewWriteFileTool(workDir ...string) *WriteFileTool {
-	var wd string
-	if len(workDir) > 0 {
-		wd = workDir[0]
-	}
-
-	return &WriteFileTool{workDir: wd}
+	return &WriteFileTool{workDir: collections.FirstNonZero(workDir...)}
 }
 
 // Name implements the Name operation.
@@ -121,7 +123,7 @@ func (t *WriteFileTool) Execute(ctx context.Context, params ToolParameters) (Too
 }
 
 // SetTracker sets the file tracker for stale-read detection.
-func (t *WriteFileTool) SetTracker(tracker *FileTracker) {
+func (t *WriteFileTool) SetTracker(tracker *pathx.FileTracker) {
 	t.tracker = tracker
 }
 
@@ -137,12 +139,11 @@ func (t *WriteFileTool) CheckApproval(params ToolParameters) ApprovalNeeds {
 		return ApprovalNeeds{
 			Required: true,
 			Risk:     RiskMedium,
-			Reason:   fmt.Sprintf("Writing file: %s", path),
+			Reason:   "Writing file: unknown path",
 		}
 	}
 
 	// System paths require critical approval.
-	systemPaths := []string{"/etc/", "/sys/", "/usr/"}
 	for _, sysPath := range systemPaths {
 		if strings.HasPrefix(path, sysPath) {
 			return ApprovalNeeds{
@@ -154,7 +155,6 @@ func (t *WriteFileTool) CheckApproval(params ToolParameters) ApprovalNeeds {
 	}
 
 	// Executable file extensions require high approval.
-	executableExts := []string{".sh", ".go", ".py", ".rb", ".pl", ".js", ".ts"}
 	for _, ext := range executableExts {
 		if strings.HasSuffix(path, ext) {
 			return ApprovalNeeds{

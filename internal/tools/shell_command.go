@@ -176,7 +176,7 @@ func (t *ShellCommandTool) Execute(ctx context.Context, params ToolParameters) (
 	case "validate":
 		return t.validateCommand(params)
 	default:
-		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, errUnknownOperation)), nil
+		return NewToolError(unknownOperationError(operation)), nil
 	}
 }
 
@@ -232,15 +232,7 @@ func (t *ShellCommandTool) isShellCmd(cmdStr string) bool {
 		return t.shellCtx.IsShellCommand(cmdStr)
 	}
 
-	return strings.Contains(cmdStr, "|") ||
-		strings.Contains(cmdStr, ">") ||
-		strings.Contains(cmdStr, "<") ||
-		strings.Contains(cmdStr, "$") ||
-		strings.Contains(cmdStr, "&&") ||
-		strings.Contains(cmdStr, "||") ||
-		strings.HasPrefix(cmdStr, "cd ") ||
-		strings.HasPrefix(cmdStr, "export ") ||
-		strings.HasPrefix(cmdStr, "source ")
+	return execx.IsShellCommand(cmdStr)
 }
 
 // buildCommand builds a simpleCommand from the command string and working directory.

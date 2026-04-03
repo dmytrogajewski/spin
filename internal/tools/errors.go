@@ -1,6 +1,9 @@
 package tools
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // Sentinel errors for tools package (unexported — internal use only).
 var (
@@ -23,3 +26,10 @@ var (
 	errTaskIDParameterRequired      = errors.New("task_id parameter is required")
 	errHTTPError                    = errors.New("HTTP error response")
 )
+
+const errTaskManagerNotAvailable = "task manager not available"
+
+// unknownOperationError returns a formatted error for unknown operations.
+func unknownOperationError(operation string) error {
+	return fmt.Errorf("unknown operation: %s: %w", operation, errUnknownOperation)
+}

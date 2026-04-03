@@ -3,6 +3,8 @@ package status
 import (
 	"strings"
 	"testing"
+
+	"github.com/dmytrogajewski/spin/pkg/ui/textwidth"
 )
 
 func TestFormatCompact(t *testing.T) {
@@ -366,9 +368,9 @@ func TestTruncate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := truncate(tt.input, tt.maxLen)
+		result := textwidth.TruncateRight(tt.input, tt.maxLen)
 		if result != tt.expected {
-			t.Errorf("truncate(%q, %d) = %q, expected %q", tt.input, tt.maxLen, result, tt.expected)
+			t.Errorf("TruncateRight(%q, %d) = %q, expected %q", tt.input, tt.maxLen, result, tt.expected)
 		}
 	}
 }

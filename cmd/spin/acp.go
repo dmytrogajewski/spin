@@ -7,10 +7,8 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/coder/acp-go-sdk"
@@ -146,12 +144,7 @@ func createACPInfra(
 		bufferSize = cfg.Agent.StreamBuffer
 	}
 
-	storageDir := cfg.Agent.SessionDir
-	if storageDir == "" {
-		storageDir = "~/.spin/sessions"
-	}
-
-	storage, err := session.NewFileStorage(storageDir)
+	storage, err := session.NewFileStorage(defaultSessionDir(cfg))
 	if err != nil {
 		cleanup()
 		provider.Close()
@@ -202,12 +195,7 @@ func wireACPAgent(
 
 // createACPConversationManager creates the conversation manager for the ACP server.
 func createACPConversationManager(cfg *config.V2, core *coreAgentResult, infra *acpInfra) (*conversation.Manager, history.Storage, error) {
-	historyDir := cfg.Agent.SessionDir
-	if historyDir == "" {
-		historyDir = "~/.spin/sessions"
-	}
-
-	histStorage, err := history.NewFileStorage(historyDir)
+	histStorage, err := history.NewFileStorage(defaultSessionDir(cfg))
 	if err != nil {
 		return nil, nil, fmt.Errorf("create history storage: %w", err)
 	}
@@ -288,7 +276,7 @@ func runACPServer(cmd *cobra.Command, workDir string, flagOverrides config.FlagO
 
 	conn := wireACPAgent(acpAgent, acpRuntime, coreResult.agent, convManager, histStorage)
 
-	setupACPServerSignalHandling(cancel)
+	setupSignalHandling(cancel, "\nShutting down ACP server...")
 	logACPServerStart(cfg.LLM.Provider, cfg.LLM.Model, workDir)
 
 	select {
@@ -531,16 +519,14 @@ func buildACEServices(ctx context.Context, cfg *config.V2, ab *agent.Builder) (*
 	return svc, ace.ConvertConfig(&cfg.ACE)
 }
 
-// setupACPServerSignalHandling configures signal handlers for graceful shutdown.
-func setupACPServerSignalHandling(cancel context.CancelFunc) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+// defaultSessionDir returns the session directory from config,
+// falling back to "~/.spin/sessions" when unset.
+func defaultSessionDir(cfg *config.V2) string {
+	if cfg.Agent.SessionDir != "" {
+		return cfg.Agent.SessionDir
+	}
 
-	go func() {
-		<-sigChan
-		fmt.Fprintln(os.Stderr, "\nShutting down ACP server...")
-		cancel()
-	}()
+	return "~/.spin/sessions"
 }
 
 // logACPServerStart logs the ACP server startup information.

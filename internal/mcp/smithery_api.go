@@ -85,21 +85,11 @@ func (c *SmitheryAPIClient) SearchTools(ctx context.Context, query string, limit
 	apiURL := fmt.Sprintf("https://api.smithery.ai/tools?q=%s&pageSize=%d",
 		url.QueryEscape(query), limit)
 
-	parsedURL, err := url.Parse(apiURL)
+	req, err := newAuthedRequest(ctx, http.MethodGet, apiURL, c.apiKey, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("parse API URL: %w", err)
+		return nil, fmt.Errorf("search: %w", err)
 	}
 
-	if parsedURL.Scheme != schemeHTTPS {
-		return nil, fmt.Errorf("%w: got %q", ErrInvalidURLScheme, parsedURL.Scheme)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), http.NoBody)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Accept", "application/json")
 
 	if c.logger != nil {

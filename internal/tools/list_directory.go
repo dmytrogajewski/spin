@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
@@ -16,12 +17,7 @@ type ListDirectoryTool struct {
 
 // NewListDirectoryTool creates a new list directory tool.
 func NewListDirectoryTool(workDir ...string) *ListDirectoryTool {
-	var wd string
-	if len(workDir) > 0 {
-		wd = workDir[0]
-	}
-
-	return &ListDirectoryTool{workDir: wd}
+	return &ListDirectoryTool{workDir: collections.FirstNonZero(workDir...)}
 }
 
 // Name implements the Name operation.

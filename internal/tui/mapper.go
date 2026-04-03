@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/internal/tools"
 	"github.com/dmytrogajewski/spin/internal/ui/blocks"
 	"github.com/dmytrogajewski/spin/internal/ui/ports"
 	"github.com/dmytrogajewski/spin/pkg/alg/collections"
@@ -162,28 +163,39 @@ func (m *Mapper) handleToolStart(ctx context.Context, event events.Event) error 
 }
 
 // createBlockForTool creates the appropriate block type for a tool call.
+// It uses the shared tools.ClassifyTool for category-based routing, with
+// tool-specific overrides for tools that need special block rendering.
 func (m *Mapper) createBlockForTool(data events.ToolCallStartData) *blocks.Block {
+	// Tool-specific overrides that need special block types or rendering.
 	switch data.ToolName {
-	case "execute_command":
-		return m.createExecuteBlock(data)
-	case "read_file":
-		return m.createReadBlock(data)
 	case "write_file":
 		return m.createOrReuseApplyPatchBlock(data)
-	case "list_directory":
-		return m.createExecuteBlock(data) // Treat as EXECUTE.
 	case "apply_patch":
-		// Dedicated apply_patch tool (structured patch). Show the patch text as a diff.
 		return m.createApplyPatchFromPatchTool(data)
 	case "file_search":
-		// Map file_search to GREP block type (files_with_matches style).
 		return m.createGrepBlockFromSearch(data)
 	case "git_context":
-		// Map to NOTICE block; details are filled on completion.
 		return m.createNoticeBlock(data, "Git Context")
 	case "get_context":
-		// Map to NOTICE block for environment context.
 		return m.createNoticeBlock(data, "Environment Context")
+	}
+
+	// Category-based routing via shared classification.
+	category := tools.ClassifyTool(data.ToolName)
+
+	switch category {
+	case tools.CategoryExecute:
+		return m.createExecuteBlock(data)
+	case tools.CategoryRead:
+		if data.ToolName == "read_file" {
+			return m.createReadBlock(data)
+		}
+
+		return m.createExecuteBlock(data) // list_directory etc. render as EXECUTE.
+	case tools.CategorySearch:
+		return m.createGrepBlockFromSearch(data)
+	case tools.CategoryNotice:
+		return m.createNoticeBlock(data, data.ToolName)
 	default:
 		return m.createToolBlock(data)
 	}
@@ -217,9 +229,7 @@ func (m *Mapper) createExecuteBlock(data events.ToolCallStartData) *blocks.Block
 		Impact:  "medium", // Default impact level.
 	}
 
-	if err := blocks.SetExecuteMeta(block, meta); err != nil {
-		setMetaFallback(block, map[string]any{"command": command, "cwd": cwd})
-	}
+	trySetMeta(block, func() error { return blocks.SetExecuteMeta(block, meta) }, map[string]any{"command": command, "cwd": cwd})
 
 	return block
 }
@@ -238,9 +248,7 @@ func (m *Mapper) createReadBlock(data events.ToolCallStartData) *blocks.Block {
 		Limit:  data.Parameters.GetIntOr("limit", 0),
 	}
 
-	if err := blocks.SetReadMeta(block, meta); err != nil {
-		setMetaFallback(block, map[string]any{"file": path})
-	}
+	trySetMeta(block, func() error { return blocks.SetReadMeta(block, meta) }, map[string]any{"file": path})
 
 	return block
 }
@@ -264,9 +272,7 @@ func (m *Mapper) createToolBlock(data events.ToolCallStartData) *blocks.Block {
 		Params:   params,
 	}
 
-	if err := blocks.SetToolMeta(block, meta); err != nil {
-		setMetaFallback(block, map[string]any{"tool_name": toolName})
-	}
+	trySetMeta(block, func() error { return blocks.SetToolMeta(block, meta) }, map[string]any{"tool_name": toolName})
 
 	return block
 }
@@ -347,9 +353,7 @@ func (m *Mapper) createApplyPatchFromPatchTool(data events.ToolCallStartData) *b
 		Completed: false,
 	}
 
-	if err := blocks.SetPatchMeta(block, meta); err != nil {
-		setMetaFallback(block, map[string]any{"file": workspaceRoot})
-	}
+	trySetMeta(block, func() error { return blocks.SetPatchMeta(block, meta) }, map[string]any{"file": workspaceRoot})
 
 	return block
 }
@@ -366,9 +370,8 @@ func (m *Mapper) createGrepBlockFromSearch(data events.ToolCallStartData) *block
 		Mode:    "files_with_matches",
 	}
 
-	if err := blocks.SetGrepMeta(block, meta); err != nil {
-		setMetaFallback(block, map[string]any{"pattern": query, "mode": "files_with_matches"})
-	}
+	trySetMeta(block, func() error { return blocks.SetGrepMeta(block, meta) },
+		map[string]any{"pattern": query, "mode": "files_with_matches"})
 
 	return block
 }
@@ -544,7 +547,7 @@ func (m *Mapper) handleContentDelta(event events.Event) error {
 	return nil
 }
 
-// handleThinkingDelta streams thinking content to the UI with dim formatting.
+// handleThinkingDelta tracks thinking metrics without displaying content.
 func (m *Mapper) handleThinkingDelta(event events.Event) error {
 	data, ok := event.ThinkingDeltaData()
 	if !ok {
@@ -559,13 +562,6 @@ func (m *Mapper) handleThinkingDelta(event events.Event) error {
 		m.thinking = true
 		m.thinkStart = time.Now()
 		m.thinkTokens = 0
-		// Send dim gray start code.
-		if m.streamCh != nil {
-			select {
-			case m.streamCh <- "\x1b[2m\x1b[38;5;244m":
-			default:
-			}
-		}
 	}
 
 	// Update metrics
@@ -573,14 +569,6 @@ func (m *Mapper) handleThinkingDelta(event events.Event) error {
 	for _, char := range data.Content {
 		if char == ' ' || char == '\n' || char == '\t' {
 			m.thinkTokens++
-		}
-	}
-
-	// Send content.
-	if m.streamCh != nil && data.Content != "" {
-		select {
-		case m.streamCh <- data.Content:
-		default:
 		}
 	}
 
@@ -601,11 +589,7 @@ func (m *Mapper) checkCloseThinking() {
 	m.thinking = false
 
 	if m.streamCh != nil {
-		// Reset dim gray formatting.
 		var out strings.Builder
-		out.WriteString("\x1b[0m") // Reset.
-
-		// Summary.
 		out.WriteString("\x1b[2m\x1b[38;5;242m")
 		fmt.Fprintf(&out, " [thought for %.2fs, ~%d tokens]",
 			duration.Seconds(), m.thinkTokens)
@@ -676,6 +660,31 @@ func (m *Mapper) handleSystemEvent(event events.Event) error {
 	return m.ui.AppendBlock(block)
 }
 
+// renderBulletHint builds a formatted hint string from a list of bullets.
+// It truncates long bullets, applies the given ANSI color to bullet symbols,
+// and prepends the provided header line.
+func renderBulletHint(bullets []events.BulletData, header, color string) string {
+	var hintText strings.Builder
+
+	hintText.WriteString(header)
+
+	for _, bullet := range bullets {
+		// Truncate long bullets to first line for compact display.
+		content := bullet.Content
+		if idx := strings.Index(content, "\n"); idx != -1 {
+			content = content[:idx] + "..."
+		}
+		// Limit to 120 chars per line.
+		if len(content) > maxContentLineLen {
+			content = content[:truncatedContentLen] + "..."
+		}
+
+		fmt.Fprintf(&hintText, "  %s•\x1b[0m \x1b[90m%s\x1b[0m\n", color, content)
+	}
+
+	return hintText.String()
+}
+
 // handleACERetrieval formats and displays ACE bullets with special symbols and colors.
 func (m *Mapper) handleACERetrieval(event events.Event) error {
 	data, ok := event.ACERetrievalData()
@@ -706,34 +715,15 @@ func (m *Mapper) handleACERetrieval(event events.Event) error {
 		return nil
 	}
 
-	// Build hint with actual bullet content.
-	var hintText strings.Builder
-
 	// Header.
 	pluralS := "ies"
 	if len(newBullets) == 1 {
 		pluralS = "y"
 	}
 
-	fmt.Fprintf(&hintText, "\x1b[32m⟐\x1b[0m \x1b[90mRetrieved %d new strateg%s:\x1b[0m\n", len(newBullets), pluralS)
+	header := fmt.Sprintf("\x1b[32m⟐\x1b[0m \x1b[90mRetrieved %d new strateg%s:\x1b[0m\n", len(newBullets), pluralS)
 
-	// Show each new bullet.
-	for _, bullet := range newBullets {
-		// Truncate long bullets to first line for compact display.
-		content := bullet.Content
-		if idx := strings.Index(content, "\n"); idx != -1 {
-			content = content[:idx] + "..."
-		}
-		// Limit to 120 chars per line.
-		if len(content) > maxContentLineLen {
-			content = content[:truncatedContentLen] + "..."
-		}
-
-		fmt.Fprintf(&hintText, "  \x1b[32m•\x1b[0m \x1b[90m%s\x1b[0m\n", content)
-	}
-
-	// Use PrintLine to show as a simple status message (not a block).
-	_ = m.ui.PrintLine(hintText.String())
+	_ = m.ui.PrintLine(renderBulletHint(newBullets, header, "\x1b[32m"))
 
 	return nil
 }
@@ -764,9 +754,6 @@ func (m *Mapper) handleACELearned(event events.Event) error {
 		return nil
 	}
 
-	// Build hint with actual bullet content.
-	var hintText strings.Builder
-
 	// Header with success/failure indicator.
 	pluralS := "s"
 	if len(newBullets) == 1 {
@@ -781,25 +768,10 @@ func (m *Mapper) handleACELearned(event events.Event) error {
 		statusText = "failed"
 	}
 
-	fmt.Fprintf(&hintText, "\x1b[34m◆\x1b[0m \x1b[90mLearned %d new insight%s from %s%s\x1b[0m\x1b[90m execution:\x1b[0m\n",
+	header := fmt.Sprintf("\x1b[34m◆\x1b[0m \x1b[90mLearned %d new insight%s from %s%s\x1b[0m\x1b[90m execution:\x1b[0m\n",
 		len(newBullets), pluralS, statusColor, statusText)
 
-	// Show each new learned bullet.
-	for _, bullet := range newBullets {
-		// Truncate long bullets to first line for compact display.
-		content := bullet.Content
-		if idx := strings.Index(content, "\n"); idx != -1 {
-			content = content[:idx] + "..."
-		}
-		// Limit to 120 chars per line.
-		if len(content) > maxContentLineLen {
-			content = content[:truncatedContentLen] + "..."
-		}
-
-		fmt.Fprintf(&hintText, "  \x1b[34m•\x1b[0m \x1b[90m%s\x1b[0m\n", content)
-	}
-
-	_ = m.ui.PrintLine(hintText.String())
+	_ = m.ui.PrintLine(renderBulletHint(newBullets, header, "\x1b[34m"))
 
 	return nil
 }
@@ -885,5 +857,13 @@ func setMetaFallback(block *blocks.Block, fallback map[string]any) {
 	data, err := json.Marshal(fallback)
 	if err == nil {
 		block.Meta = data
+	}
+}
+
+// trySetMeta attempts to set typed metadata on a block via setter.
+// On failure it falls back to storing fallbackMap as raw JSON.
+func trySetMeta(block *blocks.Block, setter func() error, fallbackMap map[string]any) {
+	if err := setter(); err != nil {
+		setMetaFallback(block, fallbackMap)
 	}
 }

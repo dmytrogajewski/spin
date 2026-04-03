@@ -5,9 +5,8 @@ import (
 	"time"
 
 	"github.com/dmytrogajewski/spin/internal/events"
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
-
-const charsPerTokenAgg = 4
 
 // Aggregator processes core events and updates the status manager.
 // This is a simple event processor with no rendering responsibilities.
@@ -81,7 +80,7 @@ func (a *Aggregator) handleContentDelta(event *events.Event) {
 		return
 	}
 
-	estimatedTokens := max(int64(len(data.Content)/charsPerTokenAgg), 1)
+	estimatedTokens := max(int64(len(data.Content)/stringsx.CharsPerToken), 1)
 	a.streamTokens += estimatedTokens
 
 	duration := time.Since(a.streamStart)
@@ -91,7 +90,9 @@ func (a *Aggregator) handleContentDelta(event *events.Event) {
 }
 
 func (a *Aggregator) handleContentComplete() {
-	a.manager.SetAgentState(StateReady)
+	// Don't change agent state here — EventTurnComplete will set "Idle".
+	// Setting "Ready" here causes a redundant status bar render between
+	// ContentComplete and TurnComplete.
 	a.streamStart = time.Time{}
 	a.streamTokens = 0
 	a.manager.CalculateTPS(0, 1)

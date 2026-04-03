@@ -131,30 +131,11 @@ func (o *RefinementOrchestrator) processMergePair(ctx context.Context, req Refin
 		result.Archived++
 	}
 
-	o.updateKeptBullet(ctx, mergeResult.KeptID, source)
+	_ = o.playbook.Update(ctx, mergeResult.MergedBullet)
 	_ = o.playbook.Delete(ctx, mergeResult.RemovedID)
 
 	result.Merged++
 	result.MergedPairs = append(result.MergedPairs, pair)
-}
-
-// updateKeptBullet transfers counts and tags from the source bullet to the kept bullet.
-func (o *RefinementOrchestrator) updateKeptBullet(ctx context.Context, keptID string, source *bullet.Bullet) {
-	kept, _ := o.playbook.Get(keptID)
-	kept.HelpfulCount += source.HelpfulCount
-	kept.HarmfulCount += source.HarmfulCount
-
-	if kept.Tags == nil {
-		kept.Tags = make(map[string]string)
-	}
-
-	for k, v := range source.Tags {
-		if _, exists := kept.Tags[k]; !exists {
-			kept.Tags[k] = v
-		}
-	}
-
-	_ = o.playbook.Update(ctx, kept)
 }
 
 // executePruneStep prunes low-utility bullets if enabled.

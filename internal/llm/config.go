@@ -22,6 +22,15 @@ type BaseConfig struct {
 // DefaultTimeout is the default timeout for all providers.
 const DefaultTimeout = 5 * time.Minute
 
+// ResolveTimeout returns the given timeout if it is positive, otherwise DefaultTimeout.
+func ResolveTimeout(t time.Duration) time.Duration {
+	if t <= 0 {
+		return DefaultTimeout
+	}
+
+	return t
+}
+
 // OpenAI-compatible finish reason constants.
 const (
 	FinishReasonStop      = "stop"

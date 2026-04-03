@@ -125,25 +125,15 @@ func (c *SmitheryClient) Connect(ctx context.Context) error {
 
 	rawURL := fmt.Sprintf("https://api.smithery.ai/connect/%s", c.namespace)
 
-	parsedURL, err := url.Parse(rawURL)
+	req, err := newAuthedRequest(ctx, http.MethodPost, rawURL, c.apiKey, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("parse connect URL: %w", err)
+		return fmt.Errorf("connect: %w", err)
 	}
 
-	if parsedURL.Scheme != schemeHTTPS {
-		return fmt.Errorf("%w: got %q", ErrInvalidURLScheme, parsedURL.Scheme)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, parsedURL.String(), bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create connect request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	if c.logger != nil {
-		c.logger.DebugContext(ctx, "Creating Smithery connection", "url", parsedURL.String(), "mcpUrl", c.mcpURL)
+		c.logger.DebugContext(ctx, "Creating Smithery connection", "url", rawURL, "mcpUrl", c.mcpURL)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -260,6 +250,30 @@ func (c *SmitheryClient) IsInitialized() bool {
 	return c.initialized
 }
 
+// newAuthedRequest builds an [http.Request] with URL validation and Bearer auth.
+// It parses rawURL, verifies the scheme is HTTPS, creates the request, and sets
+// the Authorization header. The caller is responsible for setting Content-Type
+// or any other headers.
+func newAuthedRequest(ctx context.Context, method, rawURL, apiKey string, body io.Reader) (*http.Request, error) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse URL: %w", err)
+	}
+
+	if parsedURL.Scheme != schemeHTTPS {
+		return nil, fmt.Errorf("%w: got %q", ErrInvalidURLScheme, parsedURL.Scheme)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, parsedURL.String(), body)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	return req, nil
+}
+
 // rpc makes an RPC call to the Smithery server.
 func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	c.mu.RLock()
@@ -282,25 +296,15 @@ func (c *SmitheryClient) rpc(ctx context.Context, method string, params any) (js
 
 	rawURL := fmt.Sprintf("https://api.smithery.ai/connect/%s/%s/rpc", c.namespace, connectionID)
 
-	parsedURL, err := url.Parse(rawURL)
+	req, err := newAuthedRequest(ctx, http.MethodPost, rawURL, c.apiKey, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("parse rpc URL: %w", err)
+		return nil, fmt.Errorf("rpc: %w", err)
 	}
 
-	if parsedURL.Scheme != schemeHTTPS {
-		return nil, fmt.Errorf("%w: got %q", ErrInvalidURLScheme, parsedURL.Scheme)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, parsedURL.String(), bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("create rpc request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	if c.logger != nil {
-		c.logger.DebugContext(ctx, "Smithery RPC call", "method", method, "url", parsedURL.String())
+		c.logger.DebugContext(ctx, "Smithery RPC call", "method", method, "url", rawURL)
 	}
 
 	resp, err := c.httpClient.Do(req)

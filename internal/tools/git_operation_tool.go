@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/dmytrogajewski/spin/internal/git"
+	"github.com/dmytrogajewski/spin/internal/tools/dispatch"
 )
 
 const defaultGitLogLimit = 10
@@ -19,8 +20,7 @@ var (
 	errBranchNameRequiredSwitch = errors.New("branch_name is required for switch_branch operation")
 	errGitStatusFailed          = errors.New("failed to get git status")
 	errNotGitRepository         = errors.New("not a git repository or git integration not available")
-	errOperationRequired        = errors.New("operation parameter is required")
-	errUnknownGitOperation      = errors.New("unknown git operation")
+	errDispatchFailed           = errors.New("dispatch failed")
 )
 
 // GitOperationTool implements Git operations using Integration.
@@ -35,122 +35,124 @@ func NewGitOperationTool(gitIntegration *git.Integration) *GitOperationTool {
 	}
 }
 
-// gitOperationHandler is the function signature for git operation handlers.
-type gitOperationHandler func(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error)
+// gitDispatcher routes git operations to their handlers.
+var gitDispatcher = buildGitDispatcher()
 
-// gitOperationHandlers maps operation names to their handler functions.
-var gitOperationHandlers = map[string]gitOperationHandler{
-	"stage":         handleGitStage,
-	"commit":        handleGitCommit,
-	"push":          handleGitPush,
-	"pull":          handleGitPull,
-	"create_branch": handleGitCreateBranch,
-	"switch_branch": handleGitSwitchBranch,
-	"list_branches": handleGitListBranches,
-	"list_remotes":  handleGitListRemotes,
-	"get_status":    handleGitStatus,
-	"get_diff":      handleGitDiff,
-	"get_log":       handleGitLog,
+func buildGitDispatcher() *dispatch.Dispatcher[*GitOperationTool] {
+	d := dispatch.New[*GitOperationTool]()
+	d.Register("stage", handleGitStage)
+	d.Register("commit", handleGitCommit)
+	d.Register("push", handleGitPush)
+	d.Register("pull", handleGitPull)
+	d.Register("create_branch", handleGitCreateBranch)
+	d.Register("switch_branch", handleGitSwitchBranch)
+	d.Register("list_branches", handleGitListBranches)
+	d.Register("list_remotes", handleGitListRemotes)
+	d.Register("get_status", handleGitStatus)
+	d.Register("get_diff", handleGitDiff)
+	d.Register("get_log", handleGitLog)
+
+	return d
 }
 
 // Handler functions.
 
-func handleGitStage(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
+func handleGitStage(ctx context.Context, t *GitOperationTool, params dispatch.Params) (dispatch.Result, error) {
 	filePath := params.GetStringOr("file_path", "")
 	if filePath == "" {
-		return NewToolError(errFilePathRequired), nil
+		return dispatch.Errorf("%v", errFilePathRequired)
 	}
 
 	err := t.gitIntegration.StageFile(ctx, filePath)
 	if err != nil {
-		return ErrToResultf("Failed to stage file: %v", err)
+		return dispatch.Errorf("Failed to stage file: %v", err)
 	}
 
-	return NewToolResult(fmt.Sprintf("Staged file: %s", filePath)), nil
+	return dispatch.OK(fmt.Sprintf("Staged file: %s", filePath))
 }
 
-func handleGitCommit(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
+func handleGitCommit(ctx context.Context, t *GitOperationTool, params dispatch.Params) (dispatch.Result, error) {
 	message := params.GetStringOr("message", "")
 	if message == "" {
-		return NewToolError(errMessageRequired), nil
+		return dispatch.Errorf("%v", errMessageRequired)
 	}
 
 	err := t.gitIntegration.Commit(ctx, message)
 	if err != nil {
-		return ErrToResultf("Failed to commit: %v", err)
+		return dispatch.Errorf("Failed to commit: %v", err)
 	}
 
-	return NewToolResult(fmt.Sprintf("Committed: %s", message)), nil
+	return dispatch.OK(fmt.Sprintf("Committed: %s", message))
 }
 
-func handleGitPush(ctx context.Context, t *GitOperationTool, _ ToolParameters) (ToolResult, error) {
+func handleGitPush(ctx context.Context, t *GitOperationTool, _ dispatch.Params) (dispatch.Result, error) {
 	err := t.gitIntegration.Push(ctx)
 	if err != nil {
-		return ErrToResultf("Failed to push: %v", err)
+		return dispatch.Errorf("Failed to push: %v", err)
 	}
 
-	return NewToolResult("Pushed changes to remote"), nil
+	return dispatch.OK("Pushed changes to remote")
 }
 
-func handleGitPull(ctx context.Context, t *GitOperationTool, _ ToolParameters) (ToolResult, error) {
+func handleGitPull(ctx context.Context, t *GitOperationTool, _ dispatch.Params) (dispatch.Result, error) {
 	err := t.gitIntegration.Pull(ctx)
 	if err != nil {
-		return ErrToResultf("Failed to pull: %v", err)
+		return dispatch.Errorf("Failed to pull: %v", err)
 	}
 
-	return NewToolResult("Pulled changes from remote"), nil
+	return dispatch.OK("Pulled changes from remote")
 }
 
-func handleGitCreateBranch(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
+func handleGitCreateBranch(ctx context.Context, t *GitOperationTool, params dispatch.Params) (dispatch.Result, error) {
 	branchName := params.GetStringOr("branch_name", "")
 	if branchName == "" {
-		return NewToolError(errBranchNameRequiredCreate), nil
+		return dispatch.Errorf("%v", errBranchNameRequiredCreate)
 	}
 
 	err := t.gitIntegration.CreateBranch(ctx, branchName)
 	if err != nil {
-		return ErrToResultf("Failed to create branch: %v", err)
+		return dispatch.Errorf("Failed to create branch: %v", err)
 	}
 
-	return NewToolResult(fmt.Sprintf("Created branch: %s", branchName)), nil
+	return dispatch.OK(fmt.Sprintf("Created branch: %s", branchName))
 }
 
-func handleGitSwitchBranch(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
+func handleGitSwitchBranch(ctx context.Context, t *GitOperationTool, params dispatch.Params) (dispatch.Result, error) {
 	branchName := params.GetStringOr("branch_name", "")
 	if branchName == "" {
-		return NewToolError(errBranchNameRequiredSwitch), nil
+		return dispatch.Errorf("%v", errBranchNameRequiredSwitch)
 	}
 
 	err := t.gitIntegration.SwitchBranch(ctx, branchName)
 	if err != nil {
-		return ErrToResultf("Failed to switch branch: %v", err)
+		return dispatch.Errorf("Failed to switch branch: %v", err)
 	}
 
-	return NewToolResult(fmt.Sprintf("Switched to branch: %s", branchName)), nil
+	return dispatch.OK(fmt.Sprintf("Switched to branch: %s", branchName))
 }
 
-func handleGitListBranches(ctx context.Context, t *GitOperationTool, _ ToolParameters) (ToolResult, error) {
+func handleGitListBranches(ctx context.Context, t *GitOperationTool, _ dispatch.Params) (dispatch.Result, error) {
 	branches, err := t.gitIntegration.ListBranches(ctx)
 	if err != nil {
-		return ErrToResultf("Failed to list branches: %v", err)
+		return dispatch.Errorf("Failed to list branches: %v", err)
 	}
 
-	return NewToolResult(fmt.Sprintf("Branches: %s", strings.Join(branches, ", "))), nil
+	return dispatch.OK(fmt.Sprintf("Branches: %s", strings.Join(branches, ", ")))
 }
 
-func handleGitListRemotes(ctx context.Context, t *GitOperationTool, _ ToolParameters) (ToolResult, error) {
+func handleGitListRemotes(ctx context.Context, t *GitOperationTool, _ dispatch.Params) (dispatch.Result, error) {
 	remotes, err := t.gitIntegration.ListRemotes(ctx)
 	if err != nil {
-		return ErrToResultf("Failed to list remotes: %v", err)
+		return dispatch.Errorf("Failed to list remotes: %v", err)
 	}
 
-	return NewToolResult(fmt.Sprintf("Remotes: %s", strings.Join(remotes, ", "))), nil
+	return dispatch.OK(fmt.Sprintf("Remotes: %s", strings.Join(remotes, ", ")))
 }
 
-func handleGitStatus(_ context.Context, t *GitOperationTool, _ ToolParameters) (ToolResult, error) {
+func handleGitStatus(_ context.Context, t *GitOperationTool, _ dispatch.Params) (dispatch.Result, error) {
 	status := t.gitIntegration.GetStatus()
 	if status == nil {
-		return NewToolError(errGitStatusFailed), nil
+		return dispatch.Errorf("%v", errGitStatusFailed)
 	}
 
 	var output strings.Builder
@@ -159,26 +161,26 @@ func handleGitStatus(_ context.Context, t *GitOperationTool, _ ToolParameters) (
 	fmt.Fprintf(&output, "Untracked: %d files\n", len(status.UntrackedFiles))
 	fmt.Fprintf(&output, "Ahead: %d, Behind: %d\n", status.Ahead, status.Behind)
 
-	return NewToolResult(output.String()), nil
+	return dispatch.OK(output.String())
 }
 
-func handleGitDiff(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
+func handleGitDiff(ctx context.Context, t *GitOperationTool, params dispatch.Params) (dispatch.Result, error) {
 	filePath := params.GetStringOr("file_path", "")
 
 	diff, err := t.gitIntegration.GetDiff(ctx, filePath)
 	if err != nil {
-		return ErrToResultf("Failed to get diff: %v", err)
+		return dispatch.Errorf("Failed to get diff: %v", err)
 	}
 
-	return NewToolResult(diff), nil
+	return dispatch.OK(diff)
 }
 
-func handleGitLog(ctx context.Context, t *GitOperationTool, params ToolParameters) (ToolResult, error) {
+func handleGitLog(ctx context.Context, t *GitOperationTool, params dispatch.Params) (dispatch.Result, error) {
 	limit := params.GetIntOr("limit", defaultGitLogLimit)
 
 	logs, err := t.gitIntegration.GetLog(ctx, limit)
 	if err != nil {
-		return ErrToResultf("Failed to get log: %v", err)
+		return dispatch.Errorf("Failed to get log: %v", err)
 	}
 
 	var output strings.Builder
@@ -186,7 +188,7 @@ func handleGitLog(ctx context.Context, t *GitOperationTool, params ToolParameter
 		fmt.Fprintf(&output, "%s: %s\n", log.Hash[:7], log.Message)
 	}
 
-	return NewToolResult(output.String()), nil
+	return dispatch.OK(output.String())
 }
 
 // Name implements the Name operation.
@@ -249,18 +251,15 @@ func (t *GitOperationTool) Execute(ctx context.Context, params ToolParameters) (
 		return NewToolError(errNotGitRepository), nil
 	}
 
-	// Extract operation.
-	operation := params.GetStringOr("operation", "")
-	if operation == "" {
-		return NewToolError(errOperationRequired), nil
+	// Dispatch to the appropriate handler.
+	result, err := gitDispatcher.Dispatch(ctx, t, "operation", params)
+	if err != nil {
+		return ToolResult{}, err
 	}
 
-	// Get handler from map.
-	handler, exists := gitOperationHandlers[operation]
-	if !exists {
-		return NewToolError(fmt.Errorf("unknown operation: %s: %w", operation, errUnknownGitOperation)), nil
+	if result.IsError {
+		return NewToolError(fmt.Errorf("%w: %s", errDispatchFailed, result.Content)), nil
 	}
 
-	// Execute handler.
-	return handler(ctx, t, params)
+	return NewToolResult(result.Content), nil
 }

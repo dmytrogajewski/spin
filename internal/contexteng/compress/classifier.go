@@ -126,26 +126,9 @@ func (c *Classifier) Classify(msg message.Message) Importance {
 
 // isErrorMessage checks if a message contains error content.
 func (c *Classifier) isErrorMessage(msg message.Message) bool {
-	content := strings.ToLower(msg.Content)
-
-	// Check for common error indicators.
-	errorIndicators := []string{
-		"error:",
-		"error ",
-		"failed:",
-		"failed ",
-		"exception:",
-		"panic:",
-		"fatal:",
-		"cannot ",
-		"could not ",
-		"unable to ",
-	}
-
-	for _, indicator := range errorIndicators {
-		if strings.Contains(content, indicator) {
-			return true
-		}
+	// Delegate keyword detection to the shared helper.
+	if message.IsErrorContent(msg.Content) {
+		return true
 	}
 
 	// Check metadata for error flag (Metadata is map[string]string).

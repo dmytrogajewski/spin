@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/dmytrogajewski/spin/internal/config"
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 // smitheryClientTimeout is the HTTP timeout for Smithery API search requests.
@@ -221,14 +223,10 @@ func runMCPRegistryLocalAdd(cmd *cobra.Command, args []string) error {
 	env, _ := cmd.Flags().GetStringToString("env")
 
 	// Load config.
-	loader := config.NewLoaderV2()
-
-	_, err := loader.LoadFromFile(flagConfigFile(cmd))
+	mgr, loader, err := loadMCPStore(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
-
-	mgr := config.NewMCPConfigStore(loader)
 
 	server := config.MCPServer{
 		Name:      name,
@@ -243,13 +241,7 @@ func runMCPRegistryLocalAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	configFile := loader.ConfigFileUsed()
-	if configFile == "" {
-		homeDir, _ := os.UserHomeDir()
-		configFile = homeDir + "/.spin/spin.yaml"
-	}
-
-	fmt.Fprintf(cmd.OutOrStdout(), "Added local registry '%s' to %s\n", name, configFile)
+	fmt.Fprintf(cmd.OutOrStdout(), "Added local registry '%s' to %s\n", name, resolveConfigFile(loader))
 
 	return nil
 }
@@ -331,20 +323,16 @@ func runMCPRegistryRemoteAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load config.
-	loader := config.NewLoaderV2()
-
-	_, err := loader.LoadFromFile(flagConfigFile(cmd))
+	mgr, loader, err := loadMCPStore(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
-
-	mgr := config.NewMCPConfigStore(loader)
 
 	server := config.MCPServer{
 		Name:           name,
 		Transport:      transportType,
 		URL:            urlStr,
-		Headers:        parseHeaders(headerFlags),
+		Headers:        stringsx.ParseKeyValuePairs(headerFlags, "="),
 		DynamicLoadout: dynamic,
 	}
 
@@ -363,13 +351,7 @@ func runMCPRegistryRemoteAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	configFile := loader.ConfigFileUsed()
-	if configFile == "" {
-		homeDir, _ := os.UserHomeDir()
-		configFile = homeDir + "/.spin/spin.yaml"
-	}
-
-	fmt.Fprintf(cmd.OutOrStdout(), "Added remote registry '%s' to %s\n", name, configFile)
+	fmt.Fprintf(cmd.OutOrStdout(), "Added remote registry '%s' to %s\n", name, resolveConfigFile(loader))
 
 	return nil
 }
@@ -468,14 +450,10 @@ func runMCPRegistrySmitheryAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load config.
-	loader := config.NewLoaderV2()
-
-	_, err = loader.LoadFromFile(flagConfigFile(cmd))
+	mgr, loader, err := loadMCPStore(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
-
-	mgr := config.NewMCPConfigStore(loader)
 
 	server := config.MCPServer{
 		Name:              name,
@@ -491,11 +469,7 @@ func runMCPRegistrySmitheryAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	configFile := loader.ConfigFileUsed()
-	if configFile == "" {
-		homeDir, _ := os.UserHomeDir()
-		configFile = homeDir + "/.spin/spin.yaml"
-	}
+	configFile := resolveConfigFile(loader)
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Added Smithery registry '%s' to %s\n", name, configFile)
 	fmt.Fprintf(cmd.OutOrStdout(), "  URL: %s\n", serverURL)
@@ -531,14 +505,10 @@ Examples:
 func runMCPRegistryList(cmd *cobra.Command, _ []string) error {
 	format, _ := cmd.Flags().GetString("format")
 
-	loader := config.NewLoaderV2()
-
-	_, err := loader.LoadFromFile(flagConfigFile(cmd))
+	mgr, _, err := loadMCPStore(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
-
-	mgr := config.NewMCPConfigStore(loader)
 
 	servers, err := mgr.List()
 	if err != nil {
@@ -556,10 +526,10 @@ func runMCPRegistryList(cmd *cobra.Command, _ []string) error {
 	}
 
 	if format == formatJSON {
-		return outputJSON(servers)
+		return printJSON(cmd.OutOrStdout(), servers)
 	}
 
-	tw := tabwriter.NewWriter(os.Stdout, 0, 0, tabPadding, ' ', 0)
+	tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, tabPadding, ' ', 0)
 	fmt.Fprintln(tw, "NAME\tTYPE\tDYNAMIC\tENDPOINT")
 
 	for _, server := range servers {
@@ -604,14 +574,10 @@ func runMCPRegistryGet(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	format, _ := cmd.Flags().GetString("format")
 
-	loader := config.NewLoaderV2()
-
-	_, err := loader.LoadFromFile(flagConfigFile(cmd))
+	mgr, loader, err := loadMCPStore(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
-
-	mgr := config.NewMCPConfigStore(loader)
 
 	server, err := mgr.Get(name)
 	if err != nil {
@@ -619,7 +585,7 @@ func runMCPRegistryGet(cmd *cobra.Command, args []string) error {
 	}
 
 	if format == formatJSON {
-		return outputJSON(server)
+		return printJSON(cmd.OutOrStdout(), server)
 	}
 
 	out := cmd.OutOrStdout()
@@ -674,7 +640,7 @@ func printRemoteServerInfo(out io.Writer, server *config.MCPServer) {
 
 	if server.Transport == config.MCPTransportSmithery {
 		fmt.Fprintf(out, "Smithery Namespace: %s\n", server.SmitheryNamespace)
-		fmt.Fprintf(out, "Smithery API Key: %s\n", maskAPIKey(server.SmitheryAPIKey))
+		fmt.Fprintf(out, "Smithery API Key: %s\n", stringsx.MaskSecret(server.SmitheryAPIKey, maskVisibleChars))
 	}
 }
 
@@ -734,14 +700,10 @@ func runMCPRegistryRemove(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	yes, _ := cmd.Flags().GetBool("yes")
 
-	loader := config.NewLoaderV2()
-
-	_, err := loader.LoadFromFile(flagConfigFile(cmd))
+	mgr, loader, err := loadMCPStore(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
-
-	mgr := config.NewMCPConfigStore(loader)
 
 	_, err = mgr.Get(name)
 	if err != nil {
@@ -768,13 +730,7 @@ func runMCPRegistryRemove(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	configFile := loader.ConfigFileUsed()
-	if configFile == "" {
-		homeDir, _ := os.UserHomeDir()
-		configFile = homeDir + "/.spin/spin.yaml"
-	}
-
-	fmt.Fprintf(cmd.OutOrStdout(), "Removed registry '%s' from %s\n", name, configFile)
+	fmt.Fprintf(cmd.OutOrStdout(), "Removed registry '%s' from %s\n", name, resolveConfigFile(loader))
 
 	return nil
 }
@@ -882,21 +838,21 @@ func filterServersByRegistry(servers []config.MCPServer, registryFilter string) 
 }
 
 // searchSmitheryServer searches a single Smithery server and returns results.
-func searchSmitheryServer(ctx context.Context, server config.MCPServer, flags mcpSearchFlags) []mcpSearchResult {
+func searchSmitheryServer(ctx context.Context, errOut io.Writer, server config.MCPServer, flags mcpSearchFlags) []mcpSearchResult {
 	key := flags.apiKey
 	if key == "" {
 		key = server.SmitheryAPIKey
 	}
 
 	if key == "" {
-		fmt.Fprintf(os.Stderr, "Warning: No API key for Smithery registry '%s', skipping\n", server.Name)
+		fmt.Fprintf(errOut, "Warning: No API key for Smithery registry '%s', skipping\n", server.Name)
 
 		return nil
 	}
 
 	smitheryResults, searchErr := searchSmitheryAPI(ctx, flags.query, key, flags.limit, flags.verified)
 	if searchErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: Failed to search Smithery registry '%s': %v\n", server.Name, searchErr)
+		fmt.Fprintf(errOut, "Warning: Failed to search Smithery registry '%s': %v\n", server.Name, searchErr)
 
 		return nil
 	}
@@ -917,7 +873,7 @@ func searchSmitheryServer(ctx context.Context, server config.MCPServer, flags mc
 
 // printSearchResultsTable prints search results in table format.
 func printSearchResultsTable(cmd *cobra.Command, results []mcpSearchResult) {
-	tw := tabwriter.NewWriter(os.Stdout, 0, 0, tabPadding, ' ', 0)
+	tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, tabPadding, ' ', 0)
 	fmt.Fprintln(tw, "TOOL\tREGISTRY\tTYPE\tVERIFIED\tDESCRIPTION")
 
 	for _, r := range results {
@@ -937,14 +893,10 @@ func printSearchResultsTable(cmd *cobra.Command, results []mcpSearchResult) {
 func runMCPSearch(cmd *cobra.Command, args []string) error {
 	flags := parseMCPSearchFlags(cmd, args)
 
-	loader := config.NewLoaderV2()
-
-	_, err := loader.LoadFromFile(flagConfigFile(cmd))
+	mgr, _, err := loadMCPStore(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
-
-	mgr := config.NewMCPConfigStore(loader)
 
 	servers, err := mgr.List()
 	if err != nil {
@@ -960,7 +912,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 
 	for _, server := range servers {
 		if server.Transport == config.MCPTransportSmithery {
-			results = append(results, searchSmitheryServer(cmd.Context(), server, flags)...)
+			results = append(results, searchSmitheryServer(cmd.Context(), cmd.ErrOrStderr(), server, flags)...)
 		}
 	}
 
@@ -971,7 +923,7 @@ func runMCPSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	if flags.format == formatJSON {
-		return outputJSON(results)
+		return printJSON(cmd.OutOrStdout(), results)
 	}
 
 	printSearchResultsTable(cmd, results)
@@ -1065,14 +1017,10 @@ func runMCPListTools(cmd *cobra.Command, _ []string) error {
 	registryFilter, _ := cmd.Flags().GetString("registry")
 	format, _ := cmd.Flags().GetString("format")
 
-	loader := config.NewLoaderV2()
-
-	_, err := loader.LoadFromFile(flagConfigFile(cmd))
+	mgr, _, err := loadMCPStore(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return err
 	}
-
-	mgr := config.NewMCPConfigStore(loader)
 
 	servers, err := mgr.List()
 	if err != nil {
@@ -1080,24 +1028,15 @@ func runMCPListTools(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Filter by registry if specified.
-	if registryFilter != "" {
-		var filtered []config.MCPServer
+	servers, err = filterServersByRegistry(servers, registryFilter)
+	if err != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "No registry found with name '%s'.\n", registryFilter)
 
-		for _, s := range servers {
-			if s.Name == registryFilter {
-				filtered = append(filtered, s)
-			}
-		}
-
-		servers = filtered
+		return err
 	}
 
 	if len(servers) == 0 {
-		if registryFilter != "" {
-			fmt.Fprintf(cmd.OutOrStdout(), "No registry found with name '%s'.\n", registryFilter)
-		} else {
-			fmt.Fprintln(cmd.OutOrStdout(), "No registries configured.")
-		}
+		fmt.Fprintln(cmd.OutOrStdout(), "No registries configured.")
 
 		return nil
 	}
@@ -1122,10 +1061,10 @@ func runMCPListTools(cmd *cobra.Command, _ []string) error {
 	}
 
 	if format == formatJSON {
-		return outputJSON(tools)
+		return printJSON(cmd.OutOrStdout(), tools)
 	}
 
-	tw := tabwriter.NewWriter(os.Stdout, 0, 0, tabPadding, ' ', 0)
+	tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, tabPadding, ' ', 0)
 	fmt.Fprintln(tw, "TOOL\tSOURCE\tTYPE\tSTATUS")
 
 	for _, t := range tools {
@@ -1144,32 +1083,40 @@ func runMCPListTools(cmd *cobra.Command, _ []string) error {
 // Helper Functions
 // ============================================================================.
 
-// parseHeaders parses header flags in format "Key=Value" into a map.
+// loadMCPStore creates a config loader, loads the config file, and returns
+// the MCPConfigStore together with the loader. This replaces the repeated
+// boilerplate: NewLoaderV2 -> LoadFromFile -> NewMCPConfigStore.
+func loadMCPStore(cmd *cobra.Command) (*config.MCPConfigStore, *config.LoaderV2, error) {
+	loader := config.NewLoaderV2()
+
+	_, err := loader.LoadFromFile(flagConfigFile(cmd))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	mgr := config.NewMCPConfigStore(loader)
+
+	return mgr, loader, nil
+}
+
+// resolveConfigFile returns the config file path used by the loader.
+// If the loader has no config file, it falls back to ~/.spin/spin.yaml.
+func resolveConfigFile(loader *config.LoaderV2) string {
+	configFile := loader.ConfigFileUsed()
+	if configFile == "" {
+		homeDir, _ := os.UserHomeDir()
+		configFile = filepath.Join(homeDir, ".spin", "spin.yaml")
+	}
+
+	return configFile
+}
 
 const (
-	keyValueParts    = 2
 	namespaceParts   = 2
-	minKeyDisplayLen = 8
 	minAddArgs       = 2
 	tabPadding       = 2
+	maskVisibleChars = 4
 )
-
-func parseHeaders(headers []string) map[string]string {
-	if len(headers) == 0 {
-		return nil
-	}
-
-	result := make(map[string]string)
-
-	for _, h := range headers {
-		parts := strings.SplitN(h, "=", keyValueParts)
-		if len(parts) == keyValueParts {
-			result[parts[0]] = parts[1]
-		}
-	}
-
-	return result
-}
 
 // formatEndpoint formats the server endpoint for display (URL or command).
 func formatEndpoint(server config.MCPServer) string {
@@ -1239,25 +1186,4 @@ func parseSmitheryShortPath(path string) (serverURL, namespace string, err error
 	serverURL = fmt.Sprintf("%s/@%s/%s", baseURL, namespace, srvName)
 
 	return serverURL, namespace, nil
-}
-
-// maskAPIKey masks an API key for display.
-func maskAPIKey(key string) string {
-	if len(key) <= minKeyDisplayLen {
-		return "***"
-	}
-
-	return key[:4] + "..." + key[len(key)-4:]
-}
-
-// outputJSON outputs data as JSON.
-func outputJSON[T any](data T) error {
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetIndent("", "  ")
-
-	if err := encoder.Encode(data); err != nil {
-		return fmt.Errorf("encoding JSON output: %w", err)
-	}
-
-	return nil
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/reflector"
 	"github.com/dmytrogajewski/spin/internal/ace/retrieval"
 	"github.com/dmytrogajewski/spin/internal/llm"
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 const (
@@ -87,7 +88,11 @@ func NewService(
 	}
 
 	logger := slog.Default()
-	playbookPath := expandPath(cfg.PlaybookPath)
+
+	playbookPath, err := pathx.ExpandHome(cfg.PlaybookPath)
+	if err != nil {
+		return nil, fmt.Errorf("expand playbook path: %w", err)
+	}
 
 	embedder := createEmbedder(logger)
 
@@ -177,10 +182,6 @@ func loadOrCreatePlaybook(
 	dir := filepath.Dir(playbookPath)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create playbook directory: %w", err)
-	}
-
-	if err := seedInitialBullets(ctx, pb, embedder); err != nil {
-		logger.WarnContext(ctx, "Failed to seed initial bullets", "error", err)
 	}
 
 	if err := pb.Save(ctx, playbookPath); err != nil {
@@ -491,7 +492,10 @@ func (s *Service) SavePlaybook(ctx context.Context) error {
 		return nil
 	}
 
-	playbookPath := expandPath(s.config.PlaybookPath)
+	playbookPath, err := pathx.ExpandHome(s.config.PlaybookPath)
+	if err != nil {
+		return fmt.Errorf("expand playbook path: %w", err)
+	}
 
 	return s.playbook.Save(ctx, playbookPath)
 }
@@ -504,28 +508,9 @@ func (s *Service) RestoreBullet(ctx context.Context, id, content string) (*bulle
 		return nil, ErrDisabled
 	}
 
-	// Create bullet with custom ID.
-	b, err := bullet.New(content, bullet.WithID(id))
+	b, err := playbook.EmbedAndAdd(ctx, s.playbook, s.embedder, content, s.logger, bullet.WithID(id))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create bullet: %w", err)
-	}
-
-	// Get embedding if embedder available.
-	if s.embedder != nil {
-		var emb []float32
-
-		emb, err = s.embedder.Embed(ctx, content)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate embedding: %w", err)
-		}
-
-		b.Embedding = emb
-	}
-
-	// Add to playbook.
-	err = s.playbook.Add(ctx, b)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add bullet to playbook: %w", err)
+		return nil, fmt.Errorf("failed to restore bullet: %w", err)
 	}
 
 	return b, nil
@@ -892,61 +877,4 @@ func parseBulletIndex(marker string) int {
 	}
 
 	return idx
-}
-
-// expandPath expands ~ to home directory in file paths.
-func expandPath(path string) string {
-	if path == "" || path[0] != '~' {
-		return path
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-
-	if len(path) == 1 {
-		return home
-	}
-
-	return filepath.Join(home, path[1:])
-}
-
-// seedInitialBullets seeds the playbook with initial Go/coding best practices.
-// This provides a starting point for ACE to learn from.
-func seedInitialBullets(ctx context.Context, pb *playbook.Playbook, embedder embedding.Embedder) error {
-	// Seed bullets covering common Go patterns and best practices.
-	seeds := []struct {
-		content  string
-		category string
-	}{}
-
-	for _, seed := range seeds {
-		// Compute embedding for the bullet content.
-		emb, err := embedder.Embed(ctx, seed.content)
-		if err != nil {
-			return fmt.Errorf("failed to compute embedding: %w", err)
-		}
-
-		// Create bullet with embedding.
-		b, err := bullet.New(seed.content, bullet.WithEmbedding(emb))
-		if err != nil {
-			return fmt.Errorf("failed to create seed bullet: %w", err)
-		}
-
-		// Initialize Tags map if needed.
-		if b.Tags == nil {
-			b.Tags = make(map[string]string)
-		}
-
-		b.Tags["category"] = seed.category
-		b.Tags["source"] = "initial-seed"
-
-		err = pb.Add(ctx, b)
-		if err != nil {
-			return fmt.Errorf("failed to add seed bullet: %w", err)
-		}
-	}
-
-	return nil
 }

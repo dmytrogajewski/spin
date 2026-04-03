@@ -18,9 +18,9 @@ var (
 	// ErrBulletCannotBeNil is a sentinel error.
 	ErrBulletCannotBeNil = errors.New("bullet cannot be nil")
 	// ErrBulletWithIDAlreadyExists is a sentinel error.
-	ErrBulletWithIDAlreadyExists = errors.New("bullet with ID  already exists")
+	ErrBulletWithIDAlreadyExists = errors.New("bullet with ID already exists")
 	// ErrBulletWithIDNotFound is a sentinel error.
-	ErrBulletWithIDNotFound = errors.New("bullet with ID  not found")
+	ErrBulletWithIDNotFound = errors.New("bullet with ID not found")
 )
 
 // Playbook manages a collection of context bullets.
@@ -51,36 +51,52 @@ func New(emitter *events.EventEmitter, embedder embedding.Embedder) *Playbook {
 	}
 }
 
-// Stats returns playbook statistics.
-func (p *Playbook) Stats() Stats {
-	var stats Stats
+// statsAccumulator collects running totals for computing Stats.
+type statsAccumulator struct {
+	stats      Stats
+	totalScore float64
+}
 
-	totalScore := 0.0
+// add accumulates a single bullet's contribution to the stats.
+func (a *statsAccumulator) add(b *bullet.Bullet) {
+	a.stats.TotalBullets++
+	a.stats.TotalHelpful += b.HelpfulCount
+	a.stats.TotalHarmful += b.HarmfulCount
+	a.totalScore += b.Score()
 
-	p.bullets.Range(func(_ string, b *bullet.Bullet) bool {
-		stats.TotalBullets++
-		stats.TotalHelpful += b.HelpfulCount
-		stats.TotalHarmful += b.HarmfulCount
-		totalScore += b.Score()
+	// Estimate size: ID + Content + counters + timestamps + embedding + tags.
+	a.stats.TotalSizeBytes += int64(len(b.ID) + len(b.Content) + 16 + len(b.Embedding)*bytesPerFloat32)
 
-		// Estimate size: ID + Content + counters + timestamps.
-		stats.TotalSizeBytes += int64(len(b.ID))
-		stats.TotalSizeBytes += int64(len(b.Content))
-		stats.TotalSizeBytes += 16 // counters + timestamps.
+	for k, v := range b.Tags {
+		a.stats.TotalSizeBytes += int64(len(k) + len(v))
+	}
+}
 
-		stats.TotalSizeBytes += int64(len(b.Embedding) * bytesPerFloat32) // float32 = 4 bytes.
-		for k, v := range b.Tags {
-			stats.TotalSizeBytes += int64(len(k) + len(v))
-		}
+// finalize computes derived fields (e.g. average) and returns the result.
+func (a *statsAccumulator) finalize() Stats {
+	if a.stats.TotalBullets > 0 {
+		a.stats.AvgScore = a.totalScore / float64(a.stats.TotalBullets)
+	}
+
+	return a.stats
+}
+
+// computeStats computes statistics across all bullets in the map.
+func computeStats(bullets *syncmap.Map[string, *bullet.Bullet]) Stats {
+	var acc statsAccumulator
+
+	bullets.Range(func(_ string, b *bullet.Bullet) bool {
+		acc.add(b)
 
 		return true
 	})
 
-	if stats.TotalBullets > 0 {
-		stats.AvgScore = totalScore / float64(stats.TotalBullets)
-	}
+	return acc.finalize()
+}
 
-	return stats
+// Stats returns playbook statistics.
+func (p *Playbook) Stats() Stats {
+	return computeStats(p.bullets)
 }
 
 // Add adds a new bullet to the playbook.

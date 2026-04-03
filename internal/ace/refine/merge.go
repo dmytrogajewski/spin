@@ -22,9 +22,10 @@ type MergePair struct {
 
 // MergeResult contains merge operation outcome.
 type MergeResult struct {
-	KeptID        string // ID of kept bullet.
-	RemovedID     string // ID of removed bullet.
-	MergedContent string // Content of kept bullet.
+	KeptID        string         // ID of kept bullet.
+	RemovedID     string         // ID of removed bullet.
+	MergedContent string         // Content of kept bullet.
+	MergedBullet  *bullet.Bullet // The merged bullet with combined counters and tags.
 }
 
 // MergeEngine identifies and merges similar bullets.
@@ -111,6 +112,7 @@ func (m *MergeEngine) MergeBullets(_ context.Context, source, target *bullet.Bul
 		KeptID:        merged.ID,
 		RemovedID:     removed.ID,
 		MergedContent: merged.Content,
+		MergedBullet:  merged,
 	}, nil
 }
 

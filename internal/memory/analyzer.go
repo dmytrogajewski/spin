@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/stringsx"
 )
 
 const (
@@ -12,7 +14,7 @@ const (
 	priorityCritical      = 100
 	priorityHigh          = 80
 	priorityMedium        = 50
-	charsPerTokenEstimate = 4
+	charsPerTokenEstimate = stringsx.CharsPerToken
 )
 
 // OffloadCandidate represents content that can be offloaded from context.
@@ -117,11 +119,11 @@ func (a *DefaultContextAnalyzer) Analyze(messages []AnalyzableMessage) []Offload
 	return candidates
 }
 
+var codeBlockPattern = regexp.MustCompile("(?s)```[a-zA-Z]*\n?(.*?)```")
+
 // extractCodeBlocks finds code blocks in markdown content.
 func extractCodeBlocks(content string) []string {
-	// Match fenced code blocks (```...```).
-	re := regexp.MustCompile("(?s)```[a-zA-Z]*\n?(.*?)```")
-	matches := re.FindAllStringSubmatch(content, -1)
+	matches := codeBlockPattern.FindAllStringSubmatch(content, -1)
 
 	blocks := make([]string, 0, len(matches))
 	for _, match := range matches {

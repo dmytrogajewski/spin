@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 
@@ -16,10 +17,6 @@ var (
 	ErrMcpServerNotFound = errors.New("mcp server not found")
 	// ErrMcpServerAlreadyExists is a sentinel error.
 	ErrMcpServerAlreadyExists = errors.New("mcp server already exists")
-	// ErrServerNameIsRequired is a sentinel error.
-	ErrServerNameIsRequired = errors.New("server name is required")
-	// ErrServerCommandRequiredForStdio is a sentinel error.
-	ErrServerCommandRequiredForStdio = errors.New("server command is required for stdio transport")
 )
 
 // MCPServer represents an MCP server configuration.
@@ -47,6 +44,23 @@ type MCPServer struct {
 
 	// DynamicLoadout enables dynamic tool discovery via search.
 	DynamicLoadout bool `json:"dynamic_loadout,omitempty" mapstructure:"dynamic_loadout" yaml:"dynamic_loadout,omitempty"`
+}
+
+// toConfigV2 converts an MCPServer to an MCPServerConfigV2 for validation.
+func (s MCPServer) toConfigV2() *MCPServerConfigV2 {
+	return &MCPServerConfigV2{
+		Name:              s.Name,
+		Transport:         s.Transport,
+		Command:           s.Command,
+		Args:              s.Args,
+		Env:               s.Env,
+		URL:               s.URL,
+		Headers:           s.Headers,
+		OAuth:             s.OAuth,
+		SmitheryAPIKey:    s.SmitheryAPIKey,
+		SmitheryNamespace: s.SmitheryNamespace,
+		DynamicLoadout:    s.DynamicLoadout,
+	}
 }
 
 // MCPConfigStore manages MCP server configurations.
@@ -156,83 +170,9 @@ func (m *MCPConfigStore) Remove(name string) error {
 	return m.writeConfig()
 }
 
-// validate validates an MCP server configuration.
+// validate validates an MCP server configuration by delegating to MCPServerConfigV2.Validate.
 func (m *MCPConfigStore) validate(server MCPServer) error {
-	if server.Name == "" {
-		return ErrServerNameIsRequired
-	}
-
-	// Validate transport type.
-	if !server.Transport.IsValid() {
-		return fmt.Errorf("invalid transport: %s: %w", server.Transport, ErrInvalidTransport)
-	}
-
-	// Determine effective transport (empty defaults to stdio).
-	transport := server.Transport
-	if transport == "" {
-		transport = MCPTransportStdio
-	}
-
-	// Validate based on transport type.
-	if transport == MCPTransportSmithery {
-		return m.validateSmithery(server)
-	} else if transport.IsRemote() {
-		return m.validateRemote(server, transport)
-	}
-
-	return m.validateStdio(server)
-}
-
-// validateStdio validates stdio transport configuration.
-func (m *MCPConfigStore) validateStdio(server MCPServer) error {
-	if server.Command == "" {
-		return ErrServerCommandRequiredForStdio
-	}
-
-	if server.URL != "" {
-		return ErrURLNotAllowedForStdio
-	}
-
-	if server.OAuth != nil {
-		return ErrOauthNotAllowedForStdio
-	}
-
-	return nil
-}
-
-// validateRemote validates remote transport configuration.
-func (m *MCPConfigStore) validateRemote(server MCPServer, transport MCPTransportType) error {
-	if server.URL == "" {
-		return fmt.Errorf("url is required for %s transport: %w", transport, ErrURLRequiredForTransport)
-	}
-
-	if server.Command != "" {
-		return ErrCommandNotAllowedForRemote
-	}
-
-	if server.OAuth != nil && server.OAuth.ClientID == "" {
-		return ErrOauthClientIDRequired
-	}
-
-	return nil
-}
-
-// validateSmithery validates Smithery transport configuration.
-func (m *MCPConfigStore) validateSmithery(server MCPServer) error {
-	// API key is always required.
-	if server.SmitheryAPIKey == "" {
-		return ErrSmitheryAPIKeyRequired
-	}
-	// For static mode (URL provided), namespace is also required.
-	if server.URL != "" && server.SmitheryNamespace == "" {
-		return ErrSmitheryNamespaceRequired
-	}
-	// Command is not allowed.
-	if server.Command != "" {
-		return ErrCommandNotAllowedForSmithery
-	}
-
-	return nil
+	return server.toConfigV2().Validate()
 }
 
 // writeConfig writes the configuration to file.
@@ -246,12 +186,12 @@ func (m *MCPConfigStore) writeConfig() error {
 			return fmt.Errorf("failed to get home directory: %w", err)
 		}
 
-		spinDir := homeDir + "/.spin"
-		configFile = spinDir + "/spin.yaml"
+		spinDir := filepath.Join(homeDir, ".spin")
+		configFile = filepath.Join(spinDir, "spin.yaml")
 		m.configFile = configFile
 
 		// Create directory if needed.
-		err = os.MkdirAll(spinDir, 0o750)
+		err = os.MkdirAll(spinDir, 0o700)
 		if err != nil {
 			return fmt.Errorf("failed to create config directory: %w", err)
 		}

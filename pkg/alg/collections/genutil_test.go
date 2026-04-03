@@ -122,8 +122,8 @@ func TestAllSame_with_key_extractor(t *testing.T) {
 	}
 
 	// All same value via key extractor.
-	got := AllSame(items, func(it item) item {
-		return item{value: it.value}
+	got := AllSame(items, func(it item) int {
+		return it.value
 	})
 	require.True(t, got)
 }
@@ -236,6 +236,73 @@ func TestPtr(t *testing.T) {
 		got := Ptr("hello")
 		require.NotNil(t, got)
 		require.Equal(t, "hello", *got)
+	})
+}
+
+func TestFirstNonZero(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no_args_returns_zero", func(t *testing.T) {
+		t.Parallel()
+
+		got := FirstNonZero[string]()
+		require.Empty(t, got)
+	})
+
+	t.Run("all_zero_returns_zero", func(t *testing.T) {
+		t.Parallel()
+
+		got := FirstNonZero("", "", "")
+		require.Empty(t, got)
+	})
+
+	t.Run("first_non_zero_string", func(t *testing.T) {
+		t.Parallel()
+
+		got := FirstNonZero("", "hello", "world")
+		require.Equal(t, "hello", got)
+	})
+
+	t.Run("first_arg_non_zero", func(t *testing.T) {
+		t.Parallel()
+
+		got := FirstNonZero("first", "second")
+		require.Equal(t, "first", got)
+	})
+
+	t.Run("single_non_zero", func(t *testing.T) {
+		t.Parallel()
+
+		got := FirstNonZero("only")
+		require.Equal(t, "only", got)
+	})
+
+	t.Run("single_zero", func(t *testing.T) {
+		t.Parallel()
+
+		got := FirstNonZero("")
+		require.Empty(t, got)
+	})
+
+	t.Run("int_values", func(t *testing.T) {
+		t.Parallel()
+
+		got := FirstNonZero(0, 0, 42, 7)
+		require.Equal(t, 42, got)
+	})
+
+	t.Run("int_all_zero", func(t *testing.T) {
+		t.Parallel()
+
+		got := FirstNonZero(0, 0, 0)
+		require.Equal(t, 0, got)
+	})
+
+	t.Run("bool_values", func(t *testing.T) {
+		t.Parallel()
+
+		got := FirstNonZero(false, true, false)
+		require.True(t, got)
 	})
 }
 

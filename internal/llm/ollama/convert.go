@@ -483,27 +483,25 @@ func extractRequired(params map[string]any) []string {
 	return nil
 }
 
-// mapOllamaDoneReasonToOpenAICompletion maps Ollama's done_reason to OpenAI's finish_reason for non-streaming.
-// This is separate from the chunk version because OpenAI uses different types for streaming vs non-streaming.
-func mapOllamaDoneReasonToOpenAICompletion(
-	ctx context.Context, doneReason string, hasToolCalls bool, logger *slog.Logger,
-) string {
-	// Tool calls take precedence.
-	if hasToolCalls {
-		return llm.FinishReasonToolCalls
+// marshalToolCallArgs marshals an Ollama tool call's arguments to a JSON string.
+// On failure it logs a warning and returns "{}".
+func marshalToolCallArgs(ctx context.Context, tc api.ToolCall, logger *slog.Logger) string {
+	argsJSON, err := json.Marshal(tc.Function.Arguments)
+	if err != nil {
+		logger.WarnContext(ctx, "failed to marshal tool call arguments",
+			"tool", tc.Function.Name,
+			"error", err,
+			"arguments", fmt.Sprintf("%v", tc.Function.Arguments))
+
+		return "{}"
 	}
 
-	switch doneReason {
-	case "length":
-		return llm.FinishReasonLength
-	case "stop", "load", "unload", "":
-		return llm.FinishReasonStop
-	default:
-		// Unknown reason, default to stop.
-		logger.DebugContext(ctx, "unknown ollama done_reason, defaulting to stop", "done_reason", doneReason)
+	logger.DebugContext(ctx, "ollama tool call received",
+		"tool", tc.Function.Name,
+		"arguments", string(argsJSON),
+		"raw_arguments", fmt.Sprintf("%+v", tc.Function.Arguments))
 
-		return llm.FinishReasonStop
-	}
+	return string(argsJSON)
 }
 
 // convertOllamaResponseToOpenAI converts an Ollama ChatResponse to OpenAI ChatCompletion.
@@ -520,7 +518,7 @@ func convertOllamaResponseToOpenAI(ctx context.Context, resp api.ChatResponse, m
 					Role:    "assistant",
 					Content: resp.Message.Content,
 				},
-				FinishReason: mapOllamaDoneReasonToOpenAICompletion(ctx, resp.DoneReason, len(resp.Message.ToolCalls) > 0, logger),
+				FinishReason: mapOllamaDoneReasonToOpenAI(ctx, resp.DoneReason, len(resp.Message.ToolCalls) > 0, logger),
 			},
 		},
 	}
@@ -529,31 +527,17 @@ func convertOllamaResponseToOpenAI(ctx context.Context, resp api.ChatResponse, m
 	if len(resp.Message.ToolCalls) > 0 {
 		result.Choices[0].Message.ToolCalls = make([]openai.ChatCompletionMessageToolCall, len(resp.Message.ToolCalls))
 		for i, tc := range resp.Message.ToolCalls {
-			argsJSON, err := json.Marshal(tc.Function.Arguments)
-			if err != nil {
-				// Log the error and use empty object as fallback.
-				logger.WarnContext(ctx, "failed to marshal tool call arguments",
-					"tool", tc.Function.Name,
-					"error", err,
-					"arguments", fmt.Sprintf("%v", tc.Function.Arguments))
-
-				argsJSON = []byte("{}")
-			}
-			// Debug: Log tool call arguments from Ollama.
-			logger.DebugContext(ctx, "ollama tool call received",
-				"tool", tc.Function.Name,
-				"arguments", string(argsJSON),
-				"raw_arguments", fmt.Sprintf("%+v", tc.Function.Arguments))
+			args := marshalToolCallArgs(ctx, tc, logger)
 			result.Choices[0].Message.ToolCalls[i] = openai.ChatCompletionMessageToolCall{
 				ID:   fmt.Sprintf("%s-%d", result.ID, i),
 				Type: "function",
 				Function: openai.ChatCompletionMessageToolCallFunction{
 					Name:      tc.Function.Name,
-					Arguments: string(argsJSON),
+					Arguments: args,
 				},
 			}
 		}
-		// FinishReason already set by mapOllamaDoneReasonToOpenAICompletion above.
+		// FinishReason already set by mapOllamaDoneReasonToOpenAI above.
 	}
 
 	// Add usage information if available.
@@ -621,28 +605,14 @@ func convertOllamaChunkToOpenAI(
 	if len(resp.Message.ToolCalls) > 0 {
 		chunk.Choices[0].Delta.ToolCalls = make([]openai.ChatCompletionChunkChoiceDeltaToolCall, len(resp.Message.ToolCalls))
 		for i, tc := range resp.Message.ToolCalls {
-			argsJSON, err := json.Marshal(tc.Function.Arguments)
-			if err != nil {
-				// Log the error and use empty object as fallback.
-				logger.WarnContext(ctx, "failed to marshal tool call arguments",
-					"tool", tc.Function.Name,
-					"error", err,
-					"arguments", fmt.Sprintf("%v", tc.Function.Arguments))
-
-				argsJSON = []byte("{}")
-			}
-			// Debug: Log tool call arguments from Ollama streaming.
-			logger.DebugContext(ctx, "ollama stream tool call received",
-				"tool", tc.Function.Name,
-				"arguments", string(argsJSON),
-				"raw_arguments", fmt.Sprintf("%+v", tc.Function.Arguments))
+			args := marshalToolCallArgs(ctx, tc, logger)
 			chunk.Choices[0].Delta.ToolCalls[i] = openai.ChatCompletionChunkChoiceDeltaToolCall{
 				Index: int64(i),
 				ID:    fmt.Sprintf("%s-%d", chunkID, i),
 				Type:  "function",
 				Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
 					Name:      tc.Function.Name,
-					Arguments: string(argsJSON),
+					Arguments: args,
 				},
 			}
 		}

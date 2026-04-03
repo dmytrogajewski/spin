@@ -158,3 +158,127 @@ func TestGutterWidth(t *testing.T) {
 		})
 	}
 }
+
+func TestTruncateRight(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fits", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateRight("hello", 10)
+		require.Equal(t, "hello", got)
+	})
+
+	t.Run("exact_fit", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateRight("hello", 5)
+		require.Equal(t, "hello", got)
+	})
+
+	t.Run("truncated", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateRight("hello world", 8)
+		require.Equal(t, "hello...", got)
+	})
+
+	t.Run("very_short_maxwidth", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateRight("hello", 2)
+		require.Equal(t, "he", got)
+	})
+
+	t.Run("maxwidth_3", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateRight("hello", 3)
+		require.Equal(t, "...", got)
+	})
+
+	t.Run("empty_string", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateRight("", 5)
+		require.Empty(t, got)
+	})
+}
+
+func TestTruncateLeft(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fits", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateLeft("hello", 10)
+		require.Equal(t, "hello", got)
+	})
+
+	t.Run("exact_fit", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateLeft("hello", 5)
+		require.Equal(t, "hello", got)
+	})
+
+	t.Run("truncated", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateLeft("hello world", 6)
+		require.Equal(t, "…world", got)
+	})
+
+	t.Run("very_short_maxwidth", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateLeft("hello", 0)
+		require.Equal(t, "…", got)
+	})
+
+	t.Run("empty_string", func(t *testing.T) {
+		t.Parallel()
+
+		got := TruncateLeft("", 5)
+		require.Empty(t, got)
+	})
+
+	t.Run("wide_chars", func(t *testing.T) {
+		t.Parallel()
+
+		// "\uff21\uff22\uff23" = 3 fullwidth chars (width 6), maxWidth=5.
+		got := TruncateLeft("\uff21\uff22\uff23", 5)
+		require.Contains(t, got, "…")
+		w := TotalWidth(ExtractGraphemes(got))
+		require.LessOrEqual(t, w, 5)
+	})
+}
+
+func TestStripANSI(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{name: "no_ansi", input: "hello world", expected: "hello world"},
+		{name: "empty", input: "", expected: ""},
+		{name: "color_codes", input: "\x1b[31mred text\x1b[0m", expected: "red text"},
+		{name: "bold", input: "\x1b[1mbold\x1b[0m", expected: "bold"},
+		{name: "multiple_sequences", input: "\x1b[31m\x1b[1mred bold\x1b[0m", expected: "red bold"},
+		{name: "256_color", input: "\x1b[38;5;196mtext\x1b[0m", expected: "text"},
+		{name: "cursor_movement", input: "\x1b[2Kline cleared", expected: "line cleared"},
+		{name: "mixed_text", input: "before\x1b[32mgreen\x1b[0mafter", expected: "beforegreenafter"},
+		{name: "only_ansi", input: "\x1b[31m\x1b[0m", expected: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := StripANSI(tt.input)
+			require.Equal(t, tt.expected, got)
+		})
+	}
+}

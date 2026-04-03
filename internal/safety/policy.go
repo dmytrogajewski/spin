@@ -120,18 +120,24 @@ type MemoryPolicyStore struct {
 
 // NewMemoryPolicyStore creates an in-memory store with a janitor running at interval.
 func NewMemoryPolicyStore(evictionInterval time.Duration) *MemoryPolicyStore {
+	s := initMemoryPolicyStore(evictionInterval)
+	go s.janitor()
+
+	return s
+}
+
+// initMemoryPolicyStore creates the store without starting the janitor goroutine.
+// This is used by FilePolicyStore which runs its own janitor.
+func initMemoryPolicyStore(evictionInterval time.Duration) *MemoryPolicyStore {
 	if evictionInterval <= 0 {
 		evictionInterval = policyEvictionInterval
 	}
 
-	s := &MemoryPolicyStore{
+	return &MemoryPolicyStore{
 		byScope:  make(map[string]map[string]Policy),
 		stopCh:   make(chan struct{}),
 		interval: evictionInterval,
 	}
-	go s.janitor()
-
-	return s
 }
 
 func (s *MemoryPolicyStore) janitor() {

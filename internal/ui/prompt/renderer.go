@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/rivo/uniseg"
+
+	"github.com/dmytrogajewski/spin/pkg/ui/textwidth"
 )
 
 const (
@@ -218,7 +220,7 @@ func (r *TermRenderer) writeFullStatus(out *strings.Builder, contentWidth int, s
 // writeTruncatedStatus writes a truncated status text.
 func (r *TermRenderer) writeTruncatedStatus(out *strings.Builder, contentWidth int, status string) {
 	availableStatusWidth := r.width - contentWidth - minStatusGap
-	truncatedStatus := truncateLeft(status, availableStatusWidth)
+	truncatedStatus := textwidth.TruncateLeft(status, availableStatusWidth)
 
 	out.WriteString(strings.Repeat(" ", minStatusGap))
 	out.WriteString(truncatedStatus)
@@ -300,55 +302,4 @@ func extractVisibleSlice(text string, startWidth, endWidth int) (visible string,
 	}
 
 	return result.String(), actualStart
-}
-
-// truncateLeft truncates a string from the left to fit maxWidth, prepending "…".
-func truncateLeft(s string, maxWidth int) string {
-	width := uniseg.StringWidth(s)
-	if width <= maxWidth {
-		return s
-	}
-
-	// Reserve 1 cell for ellipsis.
-	targetWidth := maxWidth - 1
-	if targetWidth < 0 {
-		return "…"
-	}
-
-	// Extract from right.
-	currentWidth := 0
-
-	var result strings.Builder
-
-	runes := []rune(s)
-	for i := len(runes) - 1; i >= 0; i-- {
-		r := runes[i]
-
-		rWidth := uniseg.StringWidth(string(r))
-		if currentWidth+rWidth > targetWidth {
-			break
-		}
-
-		currentWidth += rWidth
-	}
-
-	// Rebuild from right.
-	start := len(runes) - 1
-	for currentWidth > 0 {
-		start--
-		if start < 0 {
-			break
-		}
-
-		currentWidth -= uniseg.StringWidth(string(runes[start]))
-	}
-
-	if start < 0 {
-		start = 0
-	}
-
-	result.WriteString("…")
-	result.WriteString(string(runes[start+1:]))
-
-	return result.String()
 }

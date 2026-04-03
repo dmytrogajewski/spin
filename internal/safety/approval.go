@@ -306,48 +306,34 @@ func (s *ApprovalService) validateModifiedCommand(reqID string, originalCmd, mod
 
 // emitApprovalRequest emits the approval request event.
 func (s *ApprovalService) emitApprovalRequest(req ApprovalRequest) {
-	s.emitter.Emit(events.Event{
-		Type:      events.EventCommandApproval,
-		Timestamp: req.Timestamp,
-		Data: events.ApprovalEventData{
-			RequestID: req.ID,
-			Command:   req.Command.Program,
-			WorkDir:   req.WorkDir,
-			Reason:    req.Reason,
-			Status:    events.ApprovalStatusPending,
-			Timestamp: req.Timestamp,
-		},
-	})
+	s.emitApprovalEvent(events.EventCommandApproval, req.ID, req.Command, req.Reason, events.ApprovalStatusPending, req.Timestamp)
 }
 
 // emitApprovalDenied emits the approval denied event.
 func (s *ApprovalService) emitApprovalDenied(reqID string, cmd *Command, reason string) {
-	s.emitter.Emit(events.Event{
-		Type:      events.EventCommandDenied,
-		Timestamp: time.Now(),
-		Data: events.ApprovalEventData{
-			RequestID: reqID,
-			Command:   cmd.Program,
-			WorkDir:   cmd.WorkDir,
-			Reason:    reason,
-			Status:    events.ApprovalStatusDenied,
-			Timestamp: time.Now(),
-		},
-	})
+	s.emitApprovalEvent(events.EventCommandDenied, reqID, cmd, reason, events.ApprovalStatusDenied, time.Now())
 }
 
 // emitApprovalApproved emits the approval approved event.
 func (s *ApprovalService) emitApprovalApproved(reqID string, cmd *Command, reason string) {
+	s.emitApprovalEvent(events.EventCommandApproved, reqID, cmd, reason, events.ApprovalStatusApproved, time.Now())
+}
+
+// emitApprovalEvent emits an approval-related event with the given parameters.
+func (s *ApprovalService) emitApprovalEvent(
+	eventType events.EventType, reqID string, cmd *Command,
+	reason string, status events.ApprovalStatus, ts time.Time,
+) {
 	s.emitter.Emit(events.Event{
-		Type:      events.EventCommandApproved,
-		Timestamp: time.Now(),
+		Type:      eventType,
+		Timestamp: ts,
 		Data: events.ApprovalEventData{
 			RequestID: reqID,
 			Command:   cmd.Program,
 			WorkDir:   cmd.WorkDir,
 			Reason:    reason,
-			Status:    events.ApprovalStatusApproved,
-			Timestamp: time.Now(),
+			Status:    status,
+			Timestamp: ts,
 		},
 	})
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/dmytrogajewski/spin/internal/tools/fuzzy"
 	"github.com/dmytrogajewski/spin/internal/undo"
+	"github.com/dmytrogajewski/spin/pkg/alg/collections"
 	"github.com/dmytrogajewski/spin/pkg/alg/diff"
 	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
@@ -25,26 +26,21 @@ var (
 // EditFileTool implements fuzzy file editing functionality.
 type EditFileTool struct {
 	workDir string
-	tracker *FileTracker
+	tracker *pathx.FileTracker
 	chain   *fuzzy.Chain
 	opLog   *undo.OperationLog
 }
 
 // NewEditFileTool creates a new edit file tool.
 func NewEditFileTool(workDir ...string) *EditFileTool {
-	var wd string
-	if len(workDir) > 0 {
-		wd = workDir[0]
-	}
-
 	return &EditFileTool{
-		workDir: wd,
+		workDir: collections.FirstNonZero(workDir...),
 		chain:   fuzzy.DefaultChain(),
 	}
 }
 
 // SetTracker sets the file tracker for stale-read detection.
-func (t *EditFileTool) SetTracker(tracker *FileTracker) {
+func (t *EditFileTool) SetTracker(tracker *pathx.FileTracker) {
 	t.tracker = tracker
 }
 
@@ -220,7 +216,7 @@ func (t *EditFileTool) CheckApproval(params ToolParameters) ApprovalNeeds {
 		return ApprovalNeeds{
 			Required: true,
 			Risk:     RiskMedium,
-			Reason:   fmt.Sprintf("Editing file: %s", path),
+			Reason:   "Editing file: unknown path",
 		}
 	}
 

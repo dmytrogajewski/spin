@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/pathx"
 )
 
 func TestEditFileTool_SuccessfulEdit(t *testing.T) {
@@ -21,7 +23,7 @@ func TestEditFileTool_SuccessfulEdit(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filePath, []byte(originalContent), 0o600))
 
-	tracker := NewFileTracker()
+	tracker := pathx.NewFileTracker()
 	require.NoError(t, tracker.RecordRead(filePath))
 
 	tool := NewEditFileTool()
@@ -51,7 +53,7 @@ func TestEditFileTool_StaleReadRejection(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filePath, []byte("original"), 0o600))
 
-	tracker := NewFileTracker()
+	tracker := pathx.NewFileTracker()
 	require.NoError(t, tracker.RecordRead(filePath))
 
 	// Wait and modify to make it stale.
@@ -83,7 +85,7 @@ func TestEditFileTool_AmbiguousMatchRejection(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filePath, []byte(content), 0o600))
 
-	tracker := NewFileTracker()
+	tracker := pathx.NewFileTracker()
 	require.NoError(t, tracker.RecordRead(filePath))
 
 	tool := NewEditFileTool()
@@ -110,7 +112,7 @@ func TestEditFileTool_ReturnsDiff(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filePath, []byte("hello world"), 0o600))
 
-	tracker := NewFileTracker()
+	tracker := pathx.NewFileTracker()
 	require.NoError(t, tracker.RecordRead(filePath))
 
 	tool := NewEditFileTool()
@@ -138,7 +140,7 @@ func TestEditFileTool_NoMatch(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filePath, []byte("hello world"), 0o600))
 
-	tracker := NewFileTracker()
+	tracker := pathx.NewFileTracker()
 	require.NoError(t, tracker.RecordRead(filePath))
 
 	tool := NewEditFileTool()
@@ -165,7 +167,7 @@ func TestEditFileTool_FuzzyMatchIndent(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filePath, []byte(content), 0o600))
 
-	tracker := NewFileTracker()
+	tracker := pathx.NewFileTracker()
 	require.NoError(t, tracker.RecordRead(filePath))
 
 	tool := NewEditFileTool()

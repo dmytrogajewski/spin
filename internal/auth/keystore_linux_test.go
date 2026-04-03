@@ -9,9 +9,19 @@ import (
 	"github.com/zalando/go-keyring"
 )
 
+// requireSecretService skips the test if Secret Service is unavailable.
+func requireSecretService(t *testing.T) {
+	t.Helper()
+
+	if !isSecretServiceAvailable() {
+		t.Skip("Secret Service unavailable (D-Bus unresponsive or not running)")
+	}
+}
+
 // TestLinuxKeystore_Get tests retrieving values.
 func TestLinuxKeystore_Get(t *testing.T) {
 	t.Parallel()
+	requireSecretService(t)
 
 	ks := &linuxKeystore{}
 
@@ -40,6 +50,7 @@ func TestLinuxKeystore_Get(t *testing.T) {
 // TestLinuxKeystore_Get_NotFound tests getting non-existent values.
 func TestLinuxKeystore_Get_NotFound(t *testing.T) {
 	t.Parallel()
+	requireSecretService(t)
 
 	ks := &linuxKeystore{}
 
@@ -59,6 +70,7 @@ func TestLinuxKeystore_Get_NotFound(t *testing.T) {
 // TestLinuxKeystore_Set tests storing values.
 func TestLinuxKeystore_Set(t *testing.T) {
 	t.Parallel()
+	requireSecretService(t)
 
 	ks := &linuxKeystore{}
 
@@ -87,6 +99,7 @@ func TestLinuxKeystore_Set(t *testing.T) {
 // TestLinuxKeystore_Set_Overwrite tests overwriting values.
 func TestLinuxKeystore_Set_Overwrite(t *testing.T) {
 	t.Parallel()
+	requireSecretService(t)
 
 	ks := &linuxKeystore{}
 
@@ -121,6 +134,7 @@ func TestLinuxKeystore_Set_Overwrite(t *testing.T) {
 // TestLinuxKeystore_Delete tests deleting values.
 func TestLinuxKeystore_Delete(t *testing.T) {
 	t.Parallel()
+	requireSecretService(t)
 
 	ks := &linuxKeystore{}
 
@@ -149,6 +163,7 @@ func TestLinuxKeystore_Delete(t *testing.T) {
 // TestLinuxKeystore_Delete_Idempotent tests deleting non-existent values.
 func TestLinuxKeystore_Delete_Idempotent(t *testing.T) {
 	t.Parallel()
+	requireSecretService(t)
 
 	ks := &linuxKeystore{}
 
@@ -182,6 +197,7 @@ func TestLinuxKeystore_List(t *testing.T) {
 // TestLinuxKeystore_Integration tests full workflow.
 func TestLinuxKeystore_Integration(t *testing.T) {
 	t.Parallel()
+	requireSecretService(t)
 
 	ks := &linuxKeystore{}
 
@@ -284,6 +300,7 @@ func TestIsSecretServiceAvailable(t *testing.T) {
 // TestLinuxKeystore_EmptyValue tests storing empty values.
 func TestLinuxKeystore_EmptyValue(t *testing.T) {
 	t.Parallel()
+	requireSecretService(t)
 
 	ks := &linuxKeystore{}
 
@@ -314,6 +331,7 @@ func TestLinuxKeystore_EmptyValue(t *testing.T) {
 // TestLinuxKeystore_SpecialCharacters tests keys with special characters.
 func TestLinuxKeystore_SpecialCharacters(t *testing.T) {
 	t.Parallel()
+	requireSecretService(t)
 
 	ks := &linuxKeystore{}
 

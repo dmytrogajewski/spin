@@ -25,17 +25,7 @@ func NewExecutorRuntimeAdapter(exec *Executor) executor.CommandExecutor {
 func (a *executorRuntimeAdapter) Execute(ctx context.Context, cmd *safety.Command, opts any) (*executor.CommandResult, error) {
 	result, err := a.executor.Execute(ctx, cmd, asExecuteOptions(opts))
 
-	cmdResult := &executor.CommandResult{
-		Command:     result.Command,
-		Stdout:      result.Stdout,
-		Stderr:      result.Stderr,
-		ExitCode:    result.ExitCode,
-		Duration:    result.Duration,
-		StartedAt:   result.StartedAt,
-		CompletedAt: result.CompletedAt,
-		Error:       result.Error,
-		Truncated:   result.Truncated,
-	}
+	cmdResult := result.ToCommandResult()
 
 	if err != nil {
 		cmdResult.Error = err

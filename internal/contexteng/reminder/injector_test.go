@@ -100,7 +100,7 @@ func TestInject_NoConditionMet(t *testing.T) {
 func TestInject_MaxFiresCap(t *testing.T) {
 	t.Parallel()
 
-	det := &reminder.ToolFailureDetector{}
+	det := reminder.NewToolFailureDetector()
 	inj := reminder.NewInjector(
 		[]reminder.Detector{det},
 		reminder.DefaultTemplates(),
@@ -141,7 +141,7 @@ func TestInject_MultipleDetectorsFire(t *testing.T) {
 func TestInject_Reset(t *testing.T) {
 	t.Parallel()
 
-	det := &reminder.ToolFailureDetector{}
+	det := reminder.NewToolFailureDetector()
 	inj := reminder.NewInjector(
 		[]reminder.Detector{det},
 		reminder.DefaultTemplates(),
@@ -182,7 +182,7 @@ func TestInject_DeniedToolRetry(t *testing.T) {
 func TestInject_DeniedToolRetry_NotTriggered(t *testing.T) {
 	t.Parallel()
 
-	det := &reminder.DeniedToolRetryDetector{}
+	det := reminder.NewDeniedToolRetryDetector()
 	result := det.Check(reminder.CheckContext{LastToolDenied: false})
 
 	assert.False(t, result)
@@ -207,7 +207,7 @@ func TestInject_CompletedTodos(t *testing.T) {
 func TestInject_CompletedTodos_NotTriggered(t *testing.T) {
 	t.Parallel()
 
-	det := &reminder.CompletedTodosDetector{}
+	det := reminder.NewCompletedTodosDetector()
 	result := det.Check(reminder.CheckContext{AllTodosComplete: false})
 
 	assert.False(t, result)
@@ -232,7 +232,7 @@ func TestInject_PlanNotExecuted(t *testing.T) {
 func TestInject_PlanNotExecuted_NotTriggered(t *testing.T) {
 	t.Parallel()
 
-	det := &reminder.PlanNotExecutedDetector{}
+	det := reminder.NewPlanNotExecutedDetector()
 	result := det.Check(reminder.CheckContext{PlanApprovedNotExecuted: false})
 
 	assert.False(t, result)
@@ -257,7 +257,7 @@ func TestInject_UnprocessedSubagent(t *testing.T) {
 func TestInject_UnprocessedSubagent_NotTriggered(t *testing.T) {
 	t.Parallel()
 
-	det := &reminder.UnprocessedSubagentDetector{}
+	det := reminder.NewUnprocessedSubagentDetector()
 	result := det.Check(reminder.CheckContext{HasUnprocessedSubagentResults: false})
 
 	assert.False(t, result)
@@ -276,49 +276,49 @@ func TestNewDetectors_TableDriven(t *testing.T) {
 	}{
 		{
 			name:     "denied_tool_retry_fires",
-			detector: &reminder.DeniedToolRetryDetector{},
+			detector: reminder.NewDeniedToolRetryDetector(),
 			ctx:      reminder.CheckContext{LastToolDenied: true},
 			expected: true,
 		},
 		{
 			name:     "denied_tool_retry_silent",
-			detector: &reminder.DeniedToolRetryDetector{},
+			detector: reminder.NewDeniedToolRetryDetector(),
 			ctx:      reminder.CheckContext{},
 			expected: false,
 		},
 		{
 			name:     "completed_todos_fires",
-			detector: &reminder.CompletedTodosDetector{},
+			detector: reminder.NewCompletedTodosDetector(),
 			ctx:      reminder.CheckContext{AllTodosComplete: true},
 			expected: true,
 		},
 		{
 			name:     "completed_todos_silent",
-			detector: &reminder.CompletedTodosDetector{},
+			detector: reminder.NewCompletedTodosDetector(),
 			ctx:      reminder.CheckContext{},
 			expected: false,
 		},
 		{
 			name:     "plan_not_executed_fires",
-			detector: &reminder.PlanNotExecutedDetector{},
+			detector: reminder.NewPlanNotExecutedDetector(),
 			ctx:      reminder.CheckContext{PlanApprovedNotExecuted: true},
 			expected: true,
 		},
 		{
 			name:     "plan_not_executed_silent",
-			detector: &reminder.PlanNotExecutedDetector{},
+			detector: reminder.NewPlanNotExecutedDetector(),
 			ctx:      reminder.CheckContext{},
 			expected: false,
 		},
 		{
 			name:     "unprocessed_subagent_fires",
-			detector: &reminder.UnprocessedSubagentDetector{},
+			detector: reminder.NewUnprocessedSubagentDetector(),
 			ctx:      reminder.CheckContext{HasUnprocessedSubagentResults: true},
 			expected: true,
 		},
 		{
 			name:     "unprocessed_subagent_silent",
-			detector: &reminder.UnprocessedSubagentDetector{},
+			detector: reminder.NewUnprocessedSubagentDetector(),
 			ctx:      reminder.CheckContext{},
 			expected: false,
 		},
@@ -340,10 +340,10 @@ func TestNewDetectors_MaxFires(t *testing.T) {
 	t.Parallel()
 
 	detectors := []reminder.Detector{
-		&reminder.DeniedToolRetryDetector{},
-		&reminder.CompletedTodosDetector{},
-		&reminder.PlanNotExecutedDetector{},
-		&reminder.UnprocessedSubagentDetector{},
+		reminder.NewDeniedToolRetryDetector(),
+		reminder.NewCompletedTodosDetector(),
+		reminder.NewPlanNotExecutedDetector(),
+		reminder.NewUnprocessedSubagentDetector(),
 	}
 
 	for _, det := range detectors {
@@ -361,10 +361,10 @@ func TestNewDetectors_Names(t *testing.T) {
 	t.Parallel()
 
 	expected := map[string]reminder.Detector{
-		"denied_tool_retry":    &reminder.DeniedToolRetryDetector{},
-		"completed_todos":      &reminder.CompletedTodosDetector{},
-		"plan_not_executed":    &reminder.PlanNotExecutedDetector{},
-		"unprocessed_subagent": &reminder.UnprocessedSubagentDetector{},
+		"denied_tool_retry":    reminder.NewDeniedToolRetryDetector(),
+		"completed_todos":      reminder.NewCompletedTodosDetector(),
+		"plan_not_executed":    reminder.NewPlanNotExecutedDetector(),
+		"unprocessed_subagent": reminder.NewUnprocessedSubagentDetector(),
 	}
 
 	for name, det := range expected {

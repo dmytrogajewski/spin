@@ -4,17 +4,10 @@
 package process
 
 import (
-	"errors"
 	"fmt"
 	"os/exec"
 	"syscall"
 )
-
-// ErrProcessNotStarted is returned when trying to kill a process that hasn't been started.
-var ErrProcessNotStarted = errors.New("process not started")
-
-// ErrKillGroup is returned when killing the process group fails.
-var ErrKillGroup = errors.New("failed to kill process group")
 
 // SetGroup configures cmd to run in its own process group.
 // This ensures that killing the group kills all child processes.

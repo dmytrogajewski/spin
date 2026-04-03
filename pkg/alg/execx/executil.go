@@ -4,6 +4,9 @@ package execx
 
 import (
 	"context"
+	"os"
+	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -38,4 +41,47 @@ func EffectiveTimeout(ctx context.Context, defaultTimeout time.Duration) time.Du
 	}
 
 	return defaultTimeout
+}
+
+// FindEditor returns the preferred text editor by checking $EDITOR, $VISUAL,
+// and then looking for common editors (vi, vim, nano, emacs) on the PATH.
+// Returns an empty string if no editor is found.
+func FindEditor() string {
+	if editor := os.Getenv("EDITOR"); editor != "" {
+		return editor
+	}
+
+	if visual := os.Getenv("VISUAL"); visual != "" {
+		return visual
+	}
+
+	// Try common editors.
+	for _, editor := range []string{"vi", "vim", "nano", "emacs"} {
+		if _, err := exec.LookPath(editor); err == nil {
+			return editor
+		}
+	}
+
+	return ""
+}
+
+// IsShellCommand checks if a command string requires shell interpretation.
+// It returns true when the command contains shell metacharacters (|, >, <, $, &&, ||)
+// or starts with a shell built-in (cd, export, source).
+func IsShellCommand(cmdStr string) bool {
+	shellChars := []string{"|", ">", "<", "$", "&&", "||"}
+	for _, c := range shellChars {
+		if strings.Contains(cmdStr, c) {
+			return true
+		}
+	}
+
+	shellPrefixes := []string{"cd ", "export ", "source "}
+	for _, p := range shellPrefixes {
+		if strings.HasPrefix(cmdStr, p) {
+			return true
+		}
+	}
+
+	return false
 }

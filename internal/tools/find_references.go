@@ -109,7 +109,7 @@ func formatReferencesGrouped(locations []lsp.Location) string {
 	fmt.Fprintf(&builder, "Found %d reference(s) across %d file(s):\n", len(locations), len(grouped))
 
 	for uri, locs := range grouped {
-		filePath := strings.TrimPrefix(uri, "file://")
+		filePath := lsp.URIToPath(uri)
 
 		fmt.Fprintf(&builder, "\n%s:\n", filePath)
 

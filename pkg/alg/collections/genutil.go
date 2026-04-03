@@ -42,7 +42,7 @@ func ToSet[Key comparable](items []Key) map[Key]bool {
 
 // AllSame returns true if all elements yield the same value via the key extractor.
 // Returns true for empty or single-element slices (vacuous truth).
-func AllSame[Elem comparable](items []Elem, key func(Elem) Elem) bool {
+func AllSame[Elem any, K comparable](items []Elem, key func(Elem) K) bool {
 	if len(items) <= 1 {
 		return true
 	}
@@ -103,4 +103,18 @@ func EnsureMap[Key comparable, Val any](m map[Key]Val) map[Key]Val {
 // Ptr returns a pointer to the given value.
 func Ptr[Elem any](v Elem) *Elem {
 	return &v
+}
+
+// FirstNonZero returns the first non-zero value from the arguments.
+// Returns the zero value of T if no non-zero argument is found.
+func FirstNonZero[T comparable](values ...T) T {
+	var zero T
+
+	for _, v := range values {
+		if v != zero {
+			return v
+		}
+	}
+
+	return zero
 }

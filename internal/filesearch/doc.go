@@ -24,7 +24,7 @@
 //
 // Lower-Level API (Scanner + Matcher):
 //
-//	scanner := filesearch.NewScanner(".", false)
+//	scanner := filesearch.NewScanner(".")
 //	files, _ := scanner.Scan()  // Automatically respects .gitignore and .spinignore
 //
 //	matcher := pathx.NewMatcher(false)

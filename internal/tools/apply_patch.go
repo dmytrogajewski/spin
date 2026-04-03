@@ -31,9 +31,11 @@ func NewApplyPatchTool(workspaceRoot string) *ApplyPatchTool {
 	}
 }
 
+const applyPatchName = "apply_patch"
+
 // Name implements the Name operation.
 func (t *ApplyPatchTool) Name() string {
-	return "apply_patch"
+	return applyPatchName
 }
 
 // Description implements the Description operation.
@@ -106,12 +108,7 @@ func (t *ApplyPatchTool) Execute(ctx context.Context, params ToolParameters) (To
 	}
 
 	// Extract workspace_root parameter (optional).
-	workspaceRoot := t.workspaceRoot
-
-	customRoot, err := params.GetString("workspace_root")
-	if err == nil && customRoot != "" {
-		workspaceRoot = customRoot
-	}
+	workspaceRoot := resolveWorkspaceRoot(t.workspaceRoot, params)
 
 	// Extract dry_run parameter (optional).
 	dryRun := params.GetBoolOr("dry_run", false)

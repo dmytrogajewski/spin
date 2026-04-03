@@ -78,21 +78,16 @@ func NewProvider(cfg Config) (*Provider, error) {
 		return nil, fmt.Errorf("parse base URL: %w", err)
 	}
 
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = llm.DefaultTimeout
-	}
-
 	// Create Ollama SDK client.
 	ollamaClient := api.NewClient(baseURLParsed, &http.Client{
-		Timeout: timeout,
+		Timeout: llm.ResolveTimeout(cfg.Timeout),
 	})
 
 	return &Provider{
 		client:  ollamaClient,
 		model:   cfg.Model,
 		baseURL: baseURL,
-		timeout: timeout,
+		timeout: llm.ResolveTimeout(cfg.Timeout),
 		logger:  slog.Default(),
 	}, nil
 }

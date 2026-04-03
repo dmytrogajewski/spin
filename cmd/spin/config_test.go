@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dmytrogajewski/spin/pkg/alg/execx"
 )
 
 // configShowTestCase defines a test case for config show.
@@ -332,7 +334,7 @@ llm:
 	})
 }
 
-func TestGetEditor(t *testing.T) {
+func TestFindEditor(t *testing.T) {
 	// Cannot use t.Parallel — subtests modify process-global env vars.
 	tests := []struct {
 		name         string
@@ -362,10 +364,10 @@ func TestGetEditor(t *testing.T) {
 			t.Setenv("EDITOR", tt.editorEnv)
 			t.Setenv("VISUAL", tt.visualEnv)
 
-			editor := getEditor()
+			editor := execx.FindEditor()
 
 			if tt.wantNonEmpty && editor == "" {
-				t.Error("getEditor() returned empty, want non-empty")
+				t.Error("FindEditor() returned empty, want non-empty")
 			}
 		})
 	}

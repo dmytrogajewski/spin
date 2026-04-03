@@ -269,11 +269,6 @@ func (c *Conversation) ID() string {
 	return c.id
 }
 
-// GetSessionID returns the session identifier for this conversation.
-func (c *Conversation) GetSessionID() string {
-	return c.id
-}
-
 // GetAgent returns the underlying agent instance.
 // This is useful for modes like ACP that need direct access to the agent.
 func (c *Conversation) GetAgent() *agent.Agent {

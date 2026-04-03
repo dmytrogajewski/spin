@@ -26,9 +26,11 @@ func NewGitContextTool(workspaceRoot string) *GitContextTool {
 	}
 }
 
+const gitContextName = "git_context"
+
 // Name implements the Name operation.
 func (t *GitContextTool) Name() string {
-	return "git_context"
+	return gitContextName
 }
 
 // Description implements the Description operation.
@@ -64,12 +66,7 @@ func (t *GitContextTool) Schema() ToolSchema {
 // Execute implements the Execute operation.
 func (t *GitContextTool) Execute(ctx context.Context, params ToolParameters) (ToolResult, error) {
 	// Get workspace root.
-	workspaceRoot := t.workspaceRoot
-
-	root, err := params.GetString("workspace_root")
-	if err == nil && root != "" {
-		workspaceRoot = root
-	}
+	workspaceRoot := resolveWorkspaceRoot(t.workspaceRoot, params)
 
 	// Discover git repository.
 	repo, err := git.Discover(ctx, workspaceRoot)

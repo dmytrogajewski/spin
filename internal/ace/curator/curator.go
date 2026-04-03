@@ -13,10 +13,10 @@ import (
 	"github.com/dmytrogajewski/spin/internal/ace/bullet"
 	"github.com/dmytrogajewski/spin/internal/ace/delta"
 	"github.com/dmytrogajewski/spin/internal/ace/embedding"
+	"github.com/dmytrogajewski/spin/internal/ace/llmcall"
 	"github.com/dmytrogajewski/spin/internal/ace/playbook"
 	"github.com/dmytrogajewski/spin/internal/ace/refine"
 	"github.com/dmytrogajewski/spin/internal/llm"
-	"github.com/dmytrogajewski/spin/pkg/llmutil"
 )
 
 const (
@@ -182,24 +182,7 @@ func NewCurator(pb *playbook.Playbook, emb embedding.Embedder, opts ...Option) C
 	if c.useMergeEngine && c.mergeEngine != nil {
 		// Create prune function that calls basic refinement.
 		pruneFunc := func(ctx context.Context) (int, []string, error) {
-			// Use basic pruning logic from refinement strategies.
-			bullets := pb.List(nil)
-			prunedIDs := make([]string, 0)
-			minUtilityScore := 0.1 // Default threshold.
-
-			for _, b := range bullets {
-				score := b.Score()
-				if score < minUtilityScore {
-					err := pb.Delete(ctx, b.ID)
-					if err != nil {
-						return 0, nil, err
-					}
-
-					prunedIDs = append(prunedIDs, b.ID)
-				}
-			}
-
-			return len(prunedIDs), prunedIDs, nil
+			return playbook.PruneLowUtility(ctx, pb, defaultMinUtilityScore)
 		}
 
 		// Create archive for storing removed bullets.
@@ -277,36 +260,29 @@ func (c *curator) buildCurationPrompt(ctx context.Context, req MergeRequest) str
 func (c *curator) callLLMForCuration(ctx context.Context, prompt string) (*CurationResponse, error) {
 	c.logger.DebugContext(ctx, "Curation prompt built", "length", len(prompt))
 
-	params := openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage(prompt),
+	resp, err := llmcall.Call(
+		ctx,
+		c.llmProvider,
+		[]openai.ChatCompletionMessageParamUnion{openai.UserMessage(prompt)},
+		func(text string) (*CurationResponse, error) {
+			var r CurationResponse
+			if unmarshalErr := json.Unmarshal([]byte(text), &r); unmarshalErr != nil {
+				return nil, fmt.Errorf("unmarshaling curation response: %w", unmarshalErr)
+			}
+
+			return &r, nil
 		},
-		Temperature: openai.Float(minQualityThreshold),
-	}
-
-	if c.maxTokens > 0 {
-		params.MaxTokens = openai.Int(int64(c.maxTokens))
-	}
-
-	completion, err := c.llmProvider.Complete(ctx, params)
+		llmcall.Options{
+			Temperature: minQualityThreshold,
+			MaxTokens:   c.maxTokens,
+			CleanJSON:   true,
+		},
+	)
 	if err != nil {
-		c.logger.WarnContext(ctx, "LLM call failed during curation", "error", err)
-
 		return nil, err
 	}
 
-	responseText := llmutil.CleanJSONResponse(completion.Choices[0].Message.Content)
-	c.logger.DebugContext(ctx, "LLM curation response received",
-		"length", len(responseText), "tokens", completion.Usage.TotalTokens)
-
-	var curationResp CurationResponse
-	if err = json.Unmarshal([]byte(responseText), &curationResp); err != nil {
-		c.logger.WarnContext(ctx, "Failed to parse curation response", "error", err, "response", responseText)
-
-		return nil, fmt.Errorf("unmarshaling curation response: %w", err)
-	}
-
-	return &curationResp, nil
+	return resp, nil
 }
 
 // applyCurationOperations applies ADD operations from the curation response.
@@ -333,25 +309,8 @@ func (c *curator) applyCurationOperations(ctx context.Context, resp *CurationRes
 
 // createAndAddBullet creates a bullet, generates its embedding, and adds it to the playbook.
 func (c *curator) createAndAddBullet(ctx context.Context, content string) (*bullet.Bullet, error) {
-	newBullet, err := bullet.New(content)
+	newBullet, err := playbook.EmbedAndAdd(ctx, c.playbook, c.embedder, content, c.logger)
 	if err != nil {
-		c.logger.WarnContext(ctx, "Failed to create bullet", "error", err, "content", content)
-
-		return nil, err
-	}
-
-	emb, err := c.embedder.Embed(ctx, newBullet.Content)
-	if err != nil {
-		c.logger.WarnContext(ctx, "Failed to generate embedding", "error", err)
-
-		return nil, err
-	}
-
-	newBullet.Embedding = emb
-
-	if err = c.playbook.Add(ctx, newBullet); err != nil {
-		c.logger.WarnContext(ctx, "Failed to add bullet to playbook", "error", err)
-
 		return nil, err
 	}
 
