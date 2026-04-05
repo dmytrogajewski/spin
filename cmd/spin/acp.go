@@ -18,6 +18,7 @@ import (
 	"github.com/dmytrogajewski/spin/internal/agent"
 	"github.com/dmytrogajewski/spin/internal/agent/caller"
 	agentexec "github.com/dmytrogajewski/spin/internal/agent/executor"
+	"github.com/dmytrogajewski/spin/internal/agent/harness"
 	"github.com/dmytrogajewski/spin/internal/agent/harness/bridge"
 	"github.com/dmytrogajewski/spin/internal/agent/prompt"
 	"github.com/dmytrogajewski/spin/internal/agent/scaffold"
@@ -483,11 +484,12 @@ func buildACPHarnessExecutor(
 	spec.SystemPrompt = systemPrompt
 
 	harnessExec, err := bridge.BuildExecutor(bridge.Config{
-		Spec:      spec,
-		LLMCaller: llmCaller,
-		Registry:  toolRegistry,
-		Runtime:   toolRuntime,
-		Logger:    logger,
+		Spec:        spec,
+		LLMCaller:   llmCaller,
+		Registry:    toolRegistry,
+		Runtime:     toolRuntime,
+		Logger:      logger,
+		HarnessOpts: []harness.Option{harness.WithEmitter(emitter)},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("bridge build: %w", err)
